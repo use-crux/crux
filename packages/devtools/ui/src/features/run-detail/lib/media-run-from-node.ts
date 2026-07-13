@@ -1,6 +1,10 @@
 /**
  * Bridge ObservabilityRunDetailNode trees into the pure media run projection.
  *
+ * Live Runs pass the complete run-detail graph (`detail.root`) plus the exact
+ * selected media span identity so lineage can include relation-connected
+ * ingest/index/retrieval nodes outside the media subtree.
+ *
  * @module
  */
 
@@ -12,22 +16,31 @@ import {
 } from "./media-run-projection";
 
 /**
- * Project a selected media span (and its descendants/relations/artifacts) into
+ * Project a selected media span from a full (or partial) run-detail tree into
  * the Runs media view model.
+ *
+ * @param root - Complete run-detail graph root (or a mounted media subtree).
+ * @param selectedMediaSpanId - Exact media span identity (`spanId` preferred).
  */
 export function projectMediaRunFromNode(
-  node: ObservabilityRunDetailNode,
+  root: ObservabilityRunDetailNode,
+  selectedMediaSpanId: string,
   options: Readonly<{ exportMode?: boolean; catalogJoinId?: string }> = {},
 ): MediaRunView | undefined {
-  if (!node.primitive?.startsWith("media.")) return undefined;
-  return projectMediaRunView(flattenNodeGraph(node), options);
+  return projectMediaRunView(flattenNodeGraph(root), {
+    ...options,
+    selectedSpanId: selectedMediaSpanId,
+  });
 }
 
 function flattenNodeGraph(
   root: ObservabilityRunDetailNode,
 ): readonly GraphLikeRecord[] {
   const records: GraphLikeRecord[] = [];
-  const walk = (node: ObservabilityRunDetailNode): void => {
+  const walk = (
+    node: ObservabilityRunDetailNode,
+    parentSpanId: string | null,
+  ): void => {
     const spanId = typeof node.spanId === "string" ? node.spanId : node.id;
     const attributes = {
       ...(node.attributes ?? {}),
@@ -37,7 +50,7 @@ function flattenNodeGraph(
     records.push({
       type: "span:start",
       spanId,
-      parentSpanId: node.parentId || null,
+      parentSpanId,
       primitive: node.primitive,
       name: node.name ?? node.display?.label ?? node.primitive,
       attributes,
@@ -78,8 +91,14 @@ function flattenNodeGraph(
         attributes: relation.attributes ?? undefined,
       });
     }
-    for (const child of node.children ?? []) walk(child);
+    for (const child of node.children ?? []) walk(child, spanId);
   };
-  walk(root);
+  // Prefer recorded parent identity on the root when present; tree walk then
+  // rewrites every child parentSpanId to the parent's canonical spanId.
+  const rootParent =
+    typeof root.parentId === "string" && root.parentId.length > 0
+      ? root.parentId
+      : null;
+  walk(root, rootParent);
   return records;
 }

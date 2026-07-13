@@ -1,5 +1,15 @@
 /** View-model types for multimodal Runs panels. */
 
+/** Canonical observability source categories (matches SafeMediaDescriptor). */
+export type SafeRunMediaSourceCategory =
+  | "data"
+  | "url"
+  | "provider-file"
+  | "asset-ref"
+  | "bytes"
+  | "blob"
+  | "unknown";
+
 export type SafeRunMediaDescriptor = Readonly<{
   kind: "image" | "audio" | "video" | "file";
   mediaType?: string;
@@ -9,7 +19,7 @@ export type SafeRunMediaDescriptor = Readonly<{
   durationSeconds?: number;
   pageCount?: number;
   digestPrefix?: string;
-  sourceCategory: string;
+  sourceCategory: SafeRunMediaSourceCategory;
 }>;
 
 export type MediaRunSummary = Readonly<{
@@ -48,17 +58,58 @@ export type TranscriptTimelineView = Readonly<{
   segments: readonly TranscriptSegmentView[];
 }>;
 
+/** Structured page/time facts only — never locators, ids, or filenames. */
+export type MediaAttribution =
+  | Readonly<{ type: "page"; pageNumber: number }>
+  | Readonly<{ type: "pages"; pageCount: number }>
+  | Readonly<{ type: "time"; start: number; end: number }>;
+
+export type MediaLineageNodeKind =
+  | "input"
+  | "operation"
+  | "output"
+  | "report"
+  | "catalog"
+  | "ingest"
+  | "index"
+  | "retrieval";
+
 export type MediaLineageNode = Readonly<{
   id: string;
-  kind: "input" | "operation" | "output" | "report" | "catalog";
+  kind: MediaLineageNodeKind;
   label: string;
+  attribution?: MediaAttribution;
 }>;
 
 export type MediaLineageEdge = Readonly<{
   from: string;
   to: string;
   type: string;
+  attribution?: MediaAttribution;
 }>;
+
+/**
+ * Runtime → Catalog source join for a media run.
+ *
+ * `definitionId` is lookup-only and must never be rendered. When status is
+ * `unavailable`, completed-media spans did not record an exact Catalog
+ * definition identity (see media-run-catalog-join.ts).
+ */
+export type MediaCatalogJoin =
+  | Readonly<{
+      status: "joined";
+      /** Internal Catalog definition id for navigation/lookup only. */
+      definitionId: string;
+      /**
+       * Safe human label — never the raw definition id or any id-derived
+       * suffix. Falls back to a fixed generic when no safe display name exists.
+       */
+      label: string;
+    }>
+  | Readonly<{
+      status: "unavailable";
+      reason: "missing-runtime-join";
+    }>;
 
 export type MediaRunView = Readonly<{
   summary: MediaRunSummary;
@@ -70,7 +121,7 @@ export type MediaRunView = Readonly<{
     nodes: readonly MediaLineageNode[];
     edges: readonly MediaLineageEdge[];
   }>;
-  catalogJoinId?: string;
+  catalogJoin: MediaCatalogJoin;
 }>;
 
 export type GraphLikeRecord = Readonly<{

@@ -7,6 +7,8 @@
  * @module
  */
 
+import { resolveMediaCatalogJoin } from "./media-run-catalog-join";
+import { projectMediaLineage } from "./media-run-lineage";
 import {
   asRecord,
   collectDescriptors,
@@ -16,8 +18,6 @@ import {
 } from "./media-run-helpers";
 import type {
   GraphLikeRecord,
-  MediaLineageEdge,
-  MediaLineageNode,
   MediaRunView,
   TranscriptSegmentView,
   TranscriptTimelineView,
@@ -25,6 +25,8 @@ import type {
 
 export type {
   GraphLikeRecord,
+  MediaAttribution,
+  MediaCatalogJoin,
   MediaLineageEdge,
   MediaLineageNode,
   MediaRunAttempt,
@@ -40,112 +42,92 @@ export type {
  *
  * @param records - Graph records already sanitized by capture/retention.
  * @param options.exportMode - When true, transcripts are absent by default.
+ * @param options.selectedSpanId - Exact media span when the graph has many.
  */
 export function projectMediaRunView(
   records: readonly GraphLikeRecord[],
-  options: Readonly<{ exportMode?: boolean; catalogJoinId?: string }> = {},
+  options: Readonly<{
+    exportMode?: boolean;
+    catalogJoinId?: string;
+    selectedSpanId?: string;
+  }> = {},
 ): MediaRunView | undefined {
-  const mediaStart = records.find(
-    (record) =>
-      record.type === "span:start" &&
-      typeof record.primitive === "string" &&
-      record.primitive.startsWith("media."),
-  );
+  const mediaStart = selectMediaStart(records, options.selectedSpanId);
   if (!mediaStart || !mediaStart.spanId || !mediaStart.primitive) return undefined;
 
+  const mediaSpanId = mediaStart.spanId;
   const mediaEnd = records.find(
-    (record) =>
-      record.type === "span:end" && record.spanId === mediaStart.spanId,
+    (record) => record.type === "span:end" && record.spanId === mediaSpanId,
   );
   const attributes = {
     ...(mediaStart.attributes ?? {}),
     ...(mediaEnd?.attributes ?? {}),
   };
 
-  const artifacts = records.filter((record) => record.type === "artifact");
+  const attemptSpanIds = collectDescendantSpanIds(records, mediaSpanId);
+  // Artifacts with a spanId stay on that span's media subtree. Legacy records
+  // without spanId attach to the selected media operation (single-media graphs).
+  const scopedArtifacts = records.filter((record) => {
+    if (record.type !== "artifact") return false;
+    if (typeof record.spanId === "string" && record.spanId.length > 0) {
+      return attemptSpanIds.has(record.spanId);
+    }
+    return true;
+  });
   const inputs = collectDescriptors(
-    artifacts.filter((artifact) => artifact.kind === "input"),
+    scopedArtifacts.filter((artifact) => artifact.kind === "input"),
   );
   const outputs = collectDescriptors(
-    artifacts.filter((artifact) => artifact.kind === "output"),
+    scopedArtifacts.filter((artifact) => artifact.kind === "output"),
   );
 
-  const attempts = records
-    .filter(
-      (record) =>
-        record.type === "span:start" &&
-        typeof record.spanId === "string" &&
-        typeof record.primitive === "string",
-    )
-    .map((start) => {
-      const end = records.find(
+  const attempts = Object.freeze(
+    records
+      .filter(
         (record) =>
-          record.type === "span:end" && record.spanId === start.spanId,
-      );
-      return Object.freeze({
-        spanId: start.spanId!,
-        primitive: start.primitive!,
-        name: start.name ?? start.primitive!,
-        status: end?.status ?? "running",
-        parentSpanId: start.parentSpanId,
-        ...(stringValue(start.attributes?.provider)
-          ? { provider: stringValue(start.attributes?.provider) }
-          : {}),
-        ...(stringValue(start.attributes?.model)
-          ? { model: stringValue(start.attributes?.model) }
-          : {}),
-        ...(numberValue(end?.durationMs) !== undefined
-          ? { durationMs: numberValue(end?.durationMs) }
-          : {}),
-      });
-    });
-
-  const inputIds = artifacts
-    .filter((artifact) => artifact.kind === "input" && artifact.artifactId)
-    .map((artifact) => artifact.artifactId!);
-  const outputIds = artifacts
-    .filter((artifact) => artifact.kind === "output" && artifact.artifactId)
-    .map((artifact) => artifact.artifactId!);
-  const reportIds = artifacts
-    .filter(
-      (artifact) => artifact.kind === "media.report" && artifact.artifactId,
-    )
-    .map((artifact) => artifact.artifactId!);
-
-  const nodes: MediaLineageNode[] = [
-    ...inputIds.map((id) =>
-      Object.freeze({ id, kind: "input" as const, label: "input" }),
-    ),
-    Object.freeze({
-      id: mediaStart.spanId,
-      kind: "operation" as const,
-      label: mediaStart.primitive,
-    }),
-    ...outputIds.map((id) =>
-      Object.freeze({ id, kind: "output" as const, label: "output" }),
-    ),
-    ...reportIds.map((id) =>
-      Object.freeze({ id, kind: "report" as const, label: "media.report" }),
-    ),
-  ];
-  if (options.catalogJoinId) {
-    nodes.push(
-      Object.freeze({
-        id: options.catalogJoinId,
-        kind: "catalog",
-        label: "catalog",
+          record.type === "span:start" &&
+          typeof record.spanId === "string" &&
+          typeof record.primitive === "string" &&
+          attemptSpanIds.has(record.spanId),
+      )
+      .map((start) => {
+        const end = records.find(
+          (record) =>
+            record.type === "span:end" && record.spanId === start.spanId,
+        );
+        const provider =
+          stringValue(start.attributes?.provider) ??
+          stringValue(start.provider);
+        const model =
+          stringValue(start.attributes?.model) ?? stringValue(start.model);
+        return Object.freeze({
+          spanId: start.spanId!,
+          primitive: start.primitive!,
+          name: start.name ?? start.primitive!,
+          status: end?.status ?? "running",
+          parentSpanId: start.parentSpanId,
+          ...(provider ? { provider } : {}),
+          ...(model ? { model } : {}),
+          ...(numberValue(end?.durationMs) !== undefined
+            ? { durationMs: numberValue(end?.durationMs) }
+            : {}),
+        });
       }),
-    );
-  }
+  );
 
-  const edges: MediaLineageEdge[] = records
-    .filter((record) => record.type === "edge")
-    .flatMap((edge) => {
-      const from = edge.from?.id;
-      const to = edge.to?.id;
-      if (!from || !to || !edge.edgeType) return [];
-      return [Object.freeze({ from, to, type: edge.edgeType })];
-    });
+  const catalogJoin = resolveMediaCatalogJoin(attributes, {
+    catalogJoinId: options.catalogJoinId,
+  });
+
+  const lineage = projectMediaLineage(
+    records,
+    mediaSpanId,
+    mediaStart.primitive,
+    {
+      catalogDefinitionId:
+        catalogJoin.status === "joined" ? catalogJoin.definitionId : undefined,
+    },
+  );
 
   return Object.freeze({
     summary: Object.freeze({
@@ -175,17 +157,14 @@ export function projectMediaRunView(
     }),
     inputs,
     outputs,
-    attempts: Object.freeze(attempts),
+    attempts,
     transcript: projectTranscript(
       mediaStart.primitive,
-      artifacts,
+      scopedArtifacts,
       options.exportMode === true,
     ),
-    lineage: Object.freeze({
-      nodes: Object.freeze(nodes),
-      edges: Object.freeze(edges),
-    }),
-    ...(options.catalogJoinId ? { catalogJoinId: options.catalogJoinId } : {}),
+    lineage,
+    catalogJoin,
   });
 }
 
@@ -203,6 +182,60 @@ export function assertNoRetainedMediaSecrets(value: unknown): readonly string[] 
     "<video",
     "blob:",
   ].filter((token) => serialized.toLowerCase().includes(token.toLowerCase()));
+}
+
+function selectMediaStart(
+  records: readonly GraphLikeRecord[],
+  selectedSpanId: string | undefined,
+): GraphLikeRecord | undefined {
+  if (selectedSpanId) {
+    return records.find(
+      (record) =>
+        record.type === "span:start" &&
+        record.spanId === selectedSpanId &&
+        typeof record.primitive === "string" &&
+        record.primitive.startsWith("media."),
+    );
+  }
+  return records.find(
+    (record) =>
+      record.type === "span:start" &&
+      typeof record.primitive === "string" &&
+      record.primitive.startsWith("media."),
+  );
+}
+
+/** Selected media span plus descendants linked by parentSpanId. */
+export function collectDescendantSpanIds(
+  records: readonly GraphLikeRecord[],
+  rootSpanId: string,
+): ReadonlySet<string> {
+  const childrenByParent = new Map<string, string[]>();
+  for (const record of records) {
+    if (
+      record.type !== "span:start" ||
+      typeof record.spanId !== "string" ||
+      typeof record.parentSpanId !== "string" ||
+      record.parentSpanId.length === 0
+    ) {
+      continue;
+    }
+    const list = childrenByParent.get(record.parentSpanId) ?? [];
+    list.push(record.spanId);
+    childrenByParent.set(record.parentSpanId, list);
+  }
+
+  const included = new Set<string>([rootSpanId]);
+  const queue = [rootSpanId];
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    for (const child of childrenByParent.get(current) ?? []) {
+      if (included.has(child)) continue;
+      included.add(child);
+      queue.push(child);
+    }
+  }
+  return included;
 }
 
 function projectTranscript(

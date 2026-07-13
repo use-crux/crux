@@ -251,6 +251,56 @@ describe('GenAI semconv projection', () => {
     expect(JSON.stringify(inputMessages)).not.toContain('AQID')
   })
 
+  it('rejects non-canonical sourceCategory values as unsafe descriptors', () => {
+    const attributes = messageContentAttributesForArtifact(
+      {
+        ...messageArtifact('fallback'),
+        preview: {
+          messages: [
+            {
+              role: 'user',
+              content: [
+                textPart('inspect'),
+                {
+                  kind: 'image',
+                  mediaType: 'image/png',
+                  sourceCategory: 'data-url',
+                },
+                {
+                  kind: 'image',
+                  mediaType: 'image/png',
+                  sourceCategory: 'arbitrary-locator',
+                },
+                {
+                  kind: 'image',
+                  mediaType: 'image/png',
+                  sizeBytes: 3,
+                  sourceCategory: 'data',
+                },
+              ],
+            },
+          ],
+        },
+      },
+      { captureMessageContent: true },
+    )
+
+    const inputMessages = JSON.parse(String(attributes['gen_ai.input.messages']))
+    expect(inputMessages).toEqual([
+      {
+        role: 'user',
+        parts: [
+          {
+            type: 'text',
+            content: 'inspect\n[image image/png 3B]',
+          },
+        ],
+      },
+    ])
+    expect(JSON.stringify(inputMessages)).not.toContain('data-url')
+    expect(JSON.stringify(inputMessages)).not.toContain('arbitrary-locator')
+  })
+
   it('receives only sanitized media descriptors from the graph stream', async () => {
     const spans: TraceSpan[] = []
     const installed = withTelemetry({

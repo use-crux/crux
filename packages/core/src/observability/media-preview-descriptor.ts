@@ -5,15 +5,15 @@ const MIME_ESSENCE = /^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/i;
 
 export type MediaKind = "image" | "audio" | "video" | "file";
 
-type SourceCategory =
-  | "asset-ref"
-  | "blob"
-  | "bytes"
+/** Canonical observability source categories (pre-v1; no compatibility aliases). */
+export type SafeMediaSourceCategory =
   | "data"
-  | "data-url"
+  | "url"
   | "provider-file"
-  | "unknown"
-  | "url";
+  | "asset-ref"
+  | "bytes"
+  | "blob"
+  | "unknown";
 
 export type SafeMediaDescriptor = Readonly<{
   kind: MediaKind;
@@ -24,8 +24,29 @@ export type SafeMediaDescriptor = Readonly<{
   durationSeconds?: number;
   pageCount?: number;
   digestPrefix?: string;
-  sourceCategory: SourceCategory;
+  sourceCategory: SafeMediaSourceCategory;
 }>;
+
+const SAFE_SOURCE_CATEGORIES = new Set<string>([
+  "data",
+  "url",
+  "provider-file",
+  "asset-ref",
+  "bytes",
+  "blob",
+  "unknown",
+]);
+
+/** Normalize a source-category token to the canonical allowlist. */
+export function normalizeSourceCategory(
+  value: unknown,
+): SafeMediaSourceCategory {
+  if (value === "data-url") return "data";
+  if (typeof value === "string" && SAFE_SOURCE_CATEGORIES.has(value)) {
+    return value as SafeMediaSourceCategory;
+  }
+  return "unknown";
+}
 
 /** Project a media part or asset into bounded, non-sensitive facts. */
 export function mediaDescriptor(
@@ -130,10 +151,10 @@ export function isBlob(value: unknown): value is Blob {
   return typeof Blob !== "undefined" && value instanceof Blob;
 }
 
-function sourceCategory(source: unknown): SourceCategory {
+function sourceCategory(source: unknown): SafeMediaSourceCategory {
   if (typeof source === "string")
     return source.trimStart().toLowerCase().startsWith("data:")
-      ? "data-url"
+      ? "data"
       : "url";
   if (source instanceof URL) return "url";
   if (source instanceof Uint8Array || source instanceof ArrayBuffer)

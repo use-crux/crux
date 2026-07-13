@@ -2878,6 +2878,56 @@ function ChildrenTab({ node, onSelect }: { node: ObservabilityRunDetailNode; onS
   )
 }
 
+// ─── Multimodal completed-operation detail ──────────────────────────
+
+/**
+ * Live Runs media panel. Passes the complete run-detail graph plus the exact
+ * selected media span identity so lineage includes relation-connected
+ * ingest/index/retrieval nodes outside the media subtree. Catalog join is
+ * resolved inside `projectMediaRunFromNode` from exact recorded `definitionId`
+ * attributes only; when identity is absent the panel shows unavailable.
+ */
+function MediaRunDetailSection({
+  node,
+  detail,
+  kind,
+  isRoot,
+  trace,
+}: {
+  node: ObservabilityRunDetailNode
+  detail: ObservabilityRunDetail
+  kind: PrimitiveKind
+  isRoot: boolean
+  trace: Trace | undefined
+}) {
+  const { navigate } = useNavigation()
+  const selectedMediaSpanId =
+    typeof node.spanId === 'string' && node.spanId.length > 0 ? node.spanId : node.id
+  const mediaView = projectMediaRunFromNode(detail.root, selectedMediaSpanId)
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <SelectedSpanHeader node={node} detail={detail} kind={kind} isRoot={isRoot} trace={trace} />
+      <div className="flex-1 overflow-auto px-4 py-4">
+        <SectionErrorBoundary title="Media" compact resetKey={node.id}>
+          {mediaView ? (
+            <MediaRunPanel
+              view={mediaView}
+              onOpenCatalog={
+                mediaView.catalogJoin.status === 'joined'
+                  ? (definitionId) =>
+                      navigate({ view: 'library-index', promptId: definitionId })
+                  : undefined
+              }
+            />
+          ) : (
+            <OperationReportCard node={node} />
+          )}
+        </SectionErrorBoundary>
+      </div>
+    </div>
+  )
+}
+
 // ─── Header + KPI strip ─────────────────────────────────────────────
 
 function SelectedSpanHeader({
@@ -3260,21 +3310,18 @@ export function SpanDetailPanel({ detail, selectedNodeId, onSelectSpan, trace, j
   // Multimodal completed operations get a purpose-built panel: summary,
   // safe descriptors, attempts, transcript/absence, and lineage. Never
   // falls through to generic JSON / media playback surfaces.
+  // Catalog join is resolved from exact recorded definition identity on the
+  // media span (definitionId); when absent, the panel shows an explicit
+  // unavailable state — completed-media capture does not invent Catalog ids.
   if (node.primitive?.startsWith('media.')) {
-    const mediaView = projectMediaRunFromNode(node)
     return (
-      <div className="flex h-full min-h-0 flex-col">
-        <SelectedSpanHeader node={node} detail={detail} kind={kind} isRoot={isRoot} trace={trace} />
-        <div className="flex-1 overflow-auto px-4 py-4">
-          <SectionErrorBoundary title="Media" compact resetKey={node.id}>
-            {mediaView ? (
-              <MediaRunPanel view={mediaView} />
-            ) : (
-              <OperationReportCard node={node} />
-            )}
-          </SectionErrorBoundary>
-        </div>
-      </div>
+      <MediaRunDetailSection
+        node={node}
+        detail={detail}
+        kind={kind}
+        isRoot={isRoot}
+        trace={trace}
+      />
     )
   }
 

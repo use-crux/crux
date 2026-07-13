@@ -8,7 +8,7 @@
  */
 
 import { Icon } from '@/qw/shell/Icon'
-import { InjectStateChip } from '@/features/index/v2/kit'
+import { InjectStateChip } from '@/shared/components/InjectionState'
 import { fmtTokens } from '@/features/run-detail/lib/span-detail-inspection'
 import { evidenceIsDegraded, freshnessIsNotable } from '@/features/run-detail/lib/explain/registries'
 import type { TurnConsideredItem, TurnSawItem } from '@/types'

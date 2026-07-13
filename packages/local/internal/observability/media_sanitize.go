@@ -94,10 +94,10 @@ func sanitizeRetainedMap(value map[string]any, depth int) map[string]any {
 
 func retainedMediaDescriptor(value map[string]any) (map[string]any, bool) {
 	kind, _ := value["kind"].(string)
-	if kind != "image" && kind != "file" {
+	if !isRetainedMediaKind(kind) {
 		kind, _ = value["type"].(string)
 	}
-	if kind != "image" && kind != "file" {
+	if !isRetainedMediaKind(kind) {
 		return nil, false
 	}
 	source := value["source"]
@@ -121,12 +121,14 @@ func retainedMediaDescriptor(value map[string]any) (map[string]any, bool) {
 }
 
 func retainedSourceCategory(value map[string]any, source any) string {
-	if category, ok := value["sourceCategory"].(string); ok && safeSourceCategory(category) {
-		return category
+	if category, ok := value["sourceCategory"].(string); ok {
+		if normalized := normalizeSourceCategory(category); normalized != "" {
+			return normalized
+		}
 	}
 	if text, ok := source.(string); ok {
 		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(text)), "data:") {
-			return "data-url"
+			return "data"
 		}
 		return "url"
 	}
@@ -134,8 +136,10 @@ func retainedSourceCategory(value map[string]any, source any) string {
 		if _, exists := record["ref"]; exists {
 			return "asset-ref"
 		}
-		if category, ok := record["type"].(string); ok && safeSourceCategory(category) {
-			return category
+		if category, ok := record["type"].(string); ok {
+			if normalized := normalizeSourceCategory(category); normalized != "" {
+				return normalized
+			}
 		}
 	}
 	return "unknown"
@@ -227,11 +231,25 @@ func retainedURLLike(value string) bool {
 	return false
 }
 
-func safeSourceCategory(value string) bool {
+func isRetainedMediaKind(value string) bool {
 	switch value {
-	case "asset-ref", "blob", "bytes", "data", "data-url", "provider-file", "unknown", "url":
+	case "image", "audio", "video", "file":
 		return true
 	default:
 		return false
+	}
+}
+
+// normalizeSourceCategory maps inbound category tokens to the canonical
+// observability allowlist. Legacy "data-url" normalizes to "data"; unknown
+// tokens return empty so callers fall through to inference or "unknown".
+func normalizeSourceCategory(value string) string {
+	switch value {
+	case "data-url":
+		return "data"
+	case "asset-ref", "blob", "bytes", "data", "provider-file", "unknown", "url":
+		return value
+	default:
+		return ""
 	}
 }

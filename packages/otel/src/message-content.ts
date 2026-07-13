@@ -141,6 +141,16 @@ function safePartText(value: unknown): readonly string[] {
   return [`[${facts.join(' ')}]`]
 }
 
+const SAFE_SOURCE_CATEGORIES = new Set([
+  'data',
+  'url',
+  'provider-file',
+  'asset-ref',
+  'bytes',
+  'blob',
+  'unknown',
+])
+
 function isSafeMediaDescriptor(value: Record<string, unknown>): boolean {
   return (
     (value.kind === 'image' ||
@@ -148,6 +158,7 @@ function isSafeMediaDescriptor(value: Record<string, unknown>): boolean {
       value.kind === 'video' ||
       value.kind === 'file') &&
     typeof value.sourceCategory === 'string' &&
+    SAFE_SOURCE_CATEGORIES.has(value.sourceCategory) &&
     !('source' in value) &&
     !('data' in value) &&
     !('url' in value) &&

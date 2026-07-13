@@ -39,6 +39,37 @@ describe("observability media privacy", () => {
     expect(JSON.stringify(preview)).not.toContain("opaque-secret-payload");
   });
 
+  it("normalizes data URLs and legacy data-url aliases to canonical data", () => {
+    expect(
+      sanitizeMediaPreview({
+        type: "image",
+        source: "data:image/png;base64,SECRET",
+        mediaType: "image/png",
+      }),
+    ).toMatchObject({ kind: "image", sourceCategory: "data" });
+    expect(
+      sanitizeMediaPreview({
+        kind: "image",
+        mediaType: "image/png",
+        sourceCategory: "data-url",
+      }),
+    ).toEqual({
+      kind: "image",
+      mediaType: "image/png",
+      sourceCategory: "data",
+    });
+    expect(
+      sanitizeMediaPreview({
+        kind: "file",
+        sourceCategory: "not-a-real-category",
+      }),
+    ).toEqual({ kind: "file", sourceCategory: "unknown" });
+    expect(JSON.stringify(sanitizeMediaPreview({
+      type: "image",
+      source: "data:image/png;base64,SECRET",
+    }))).not.toContain("data-url");
+  });
+
   it("uses semantic audio and video descriptors without retaining sources", () => {
     expect(
       sanitizeMediaPreview([
@@ -224,7 +255,7 @@ describe("observability media privacy", () => {
         expect.objectContaining({
           kind: "image",
           mediaType: "image/png",
-          sourceCategory: "data-url",
+          sourceCategory: "data",
         }),
         expect.objectContaining({
           kind: "image",

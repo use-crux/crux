@@ -1,6 +1,30 @@
 /** Shared scalar/descriptor helpers for media run projection. */
 
-import type { SafeRunMediaDescriptor } from "./media-run-projection-types";
+import type {
+  SafeRunMediaDescriptor,
+  SafeRunMediaSourceCategory,
+} from "./media-run-projection-types";
+
+const SAFE_SOURCE_CATEGORIES = new Set<string>([
+  "data",
+  "url",
+  "provider-file",
+  "asset-ref",
+  "bytes",
+  "blob",
+  "unknown",
+]);
+
+/** Map inbound sourceCategory tokens to the canonical observability allowlist. */
+export function normalizeSourceCategory(
+  value: unknown,
+): SafeRunMediaSourceCategory {
+  if (value === "data-url") return "data";
+  if (typeof value === "string" && SAFE_SOURCE_CATEGORIES.has(value)) {
+    return value as SafeRunMediaSourceCategory;
+  }
+  return "unknown";
+}
 
 export function collectDescriptors(
   artifacts: readonly Readonly<{ preview?: unknown }>[],
@@ -69,7 +93,7 @@ function walkDescriptors(
         ...(stringValue(record.digestPrefix)
           ? { digestPrefix: stringValue(record.digestPrefix) }
           : {}),
-        sourceCategory: record.sourceCategory,
+        sourceCategory: normalizeSourceCategory(record.sourceCategory),
       }),
     );
     return;
@@ -81,14 +105,14 @@ function isDescriptor(
   value: Record<string, unknown>,
 ): value is Record<string, unknown> & {
   kind: SafeRunMediaDescriptor["kind"];
-  sourceCategory: string;
+  sourceCategory: unknown;
 } {
   return (
     (value.kind === "image" ||
       value.kind === "audio" ||
       value.kind === "video" ||
       value.kind === "file") &&
-    typeof value.sourceCategory === "string" &&
+    "sourceCategory" in value &&
     !("source" in value) &&
     !("url" in value) &&
     !("fileId" in value) &&

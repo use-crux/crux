@@ -1,5 +1,25 @@
 type MediaKind = 'image' | 'audio' | 'video' | 'file'
 
+/** Canonical observability source categories (matches SafeMediaDescriptor). */
+export type MediaSourceCategory =
+  | 'data'
+  | 'url'
+  | 'provider-file'
+  | 'asset-ref'
+  | 'bytes'
+  | 'blob'
+  | 'unknown'
+
+const SAFE_SOURCE_CATEGORIES = new Set<string>([
+  'data',
+  'url',
+  'provider-file',
+  'asset-ref',
+  'bytes',
+  'blob',
+  'unknown',
+])
+
 export type MediaContentDescriptor = Readonly<{
   kind: MediaKind
   mediaType?: string
@@ -9,7 +29,7 @@ export type MediaContentDescriptor = Readonly<{
   durationSeconds?: number
   pageCount?: number
   digestPrefix?: string
-  sourceCategory: string
+  sourceCategory: MediaSourceCategory
 }>
 
 interface MediaContentPreviewProps {
@@ -70,7 +90,12 @@ export function isMediaContentDescriptor(value: unknown): value is MediaContentD
   ) {
     return false
   }
-  if (typeof value.sourceCategory !== 'string') return false
+  if (
+    typeof value.sourceCategory !== 'string' ||
+    !SAFE_SOURCE_CATEGORIES.has(value.sourceCategory)
+  ) {
+    return false
+  }
   return (
     optionalString(value.mediaType) &&
     optionalNumber(value.sizeBytes) &&

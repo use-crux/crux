@@ -85,7 +85,7 @@ func TestServiceRetentionSanitizesLegacyMediaBeforeCaps(t *testing.T) {
 			t.Fatalf("preview leaked %q: %s", secret, got)
 		}
 	}
-	want := `{"content":[{"kind":"image","mediaType":"image/png","sourceCategory":"data-url"},{"digestPrefix":"abcdef123456","kind":"file","mediaType":"application/pdf","pageCount":2,"sizeBytes":42,"sourceCategory":"asset-ref"}],"nested":{"signed":"[url]"}}`
+	want := `{"content":[{"kind":"image","mediaType":"image/png","sourceCategory":"data"},{"digestPrefix":"abcdef123456","kind":"file","mediaType":"application/pdf","pageCount":2,"sizeBytes":42,"sourceCategory":"asset-ref"}],"nested":{"signed":"[url]"}}`
 	if got != want {
 		t.Fatalf("preview = %s, want %s", got, want)
 	}

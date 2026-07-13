@@ -196,10 +196,10 @@ describe('observability privacy capture policy', () => {
       kind: 'output',
       preview: {
         content: [
-          { kind: 'image', sourceCategory: 'data-url', mediaType: 'image/png' },
+          { kind: 'image', sourceCategory: 'data', mediaType: 'image/png' },
           {
             kind: 'file',
-            sourceCategory: 'data-url',
+            sourceCategory: 'data',
             mediaType: 'application/pdf',
           },
         ],

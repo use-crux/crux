@@ -6,6 +6,9 @@ import {
   isMediaPart,
   kindFromMediaType,
   mediaDescriptor,
+  normalizeSourceCategory,
+  type MediaKind,
+  type SafeMediaDescriptor,
 } from "./media-preview-descriptor";
 
 const MAX_DEPTH = 8;
@@ -57,6 +60,7 @@ function sanitizeValue(
     return mediaDescriptor(value.type, value.source, value);
   if (isAsset(value))
     return mediaDescriptor(kindFromMediaType(value.mediaType), value, value);
+  if (isRetainedDescriptor(value)) return retainDescriptor(value);
 
   state.seen.add(value);
   try {
@@ -151,4 +155,51 @@ function safeProperty(value: Record<string, unknown>, key: string): unknown {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function isRetainedDescriptor(value: Record<string, unknown>): boolean {
+  return (
+    (value.kind === "image" ||
+      value.kind === "audio" ||
+      value.kind === "video" ||
+      value.kind === "file") &&
+    "sourceCategory" in value &&
+    !("source" in value) &&
+    !("data" in value)
+  );
+}
+
+/** Rebuild an inbound descriptor through the canonical allowlist. */
+function retainDescriptor(
+  value: Record<string, unknown>,
+): SafeMediaDescriptor {
+  const mediaType =
+    typeof value.mediaType === "string" ? value.mediaType : undefined;
+  const sizeBytes = nonNegNumber(value.sizeBytes);
+  const width = nonNegNumber(value.width);
+  const height = nonNegNumber(value.height);
+  const durationSeconds = nonNegNumber(value.durationSeconds);
+  const pageCount = nonNegNumber(value.pageCount);
+  const digestPrefix =
+    typeof value.digestPrefix === "string" &&
+    /^[a-f0-9]{8,}$/i.test(value.digestPrefix)
+      ? value.digestPrefix.slice(0, 12).toLowerCase()
+      : undefined;
+  return Object.freeze({
+    kind: value.kind as MediaKind,
+    ...(mediaType ? { mediaType } : {}),
+    ...(sizeBytes !== undefined ? { sizeBytes } : {}),
+    ...(width !== undefined ? { width } : {}),
+    ...(height !== undefined ? { height } : {}),
+    ...(durationSeconds !== undefined ? { durationSeconds } : {}),
+    ...(pageCount !== undefined ? { pageCount } : {}),
+    ...(digestPrefix ? { digestPrefix } : {}),
+    sourceCategory: normalizeSourceCategory(value.sourceCategory),
+  });
+}
+
+function nonNegNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0
+    ? value
+    : undefined;
 }
