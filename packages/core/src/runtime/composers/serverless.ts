@@ -39,7 +39,10 @@ export interface ServerlessRuntimeOptions<
   readonly endpoint?: string
   /** Explicit public base URL. Wins over environment inference. */
   readonly publicUrl?: string
-  /** Runtime namespace. Wins over environment configuration and host inference. */
+  /**
+   * Runtime namespace. Wins over environment configuration and host
+   * inference. Blank values are treated as unset.
+   */
   readonly namespace?: string
   /** Environment override for tests and non-Node hosts. */
   readonly env?: ServerlessRuntimeEnvironment

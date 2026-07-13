@@ -28,6 +28,21 @@ describe('serverless() Runtime Engine composer', () => {
     })
   })
 
+  it('treats a blank explicit namespace as unset', () => {
+    const definition = serverless({
+      store: inMemoryRuntimeStore(),
+      publicUrl: 'https://app.example.com',
+      namespace: ' \t ',
+      env: { CRUX_RUNTIME_NAMESPACE: 'tenant-b' },
+      wake: genericQueue({ enqueue: async () => undefined }),
+    })
+
+    expect(definition).toMatchObject({
+      namespace: 'tenant-b',
+      namespaceSource: 'env',
+    })
+  })
+
   it('uses a non-empty environment namespace and treats blank values as unset', () => {
     const configured = serverless({
       store: inMemoryRuntimeStore(),

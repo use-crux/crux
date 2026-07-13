@@ -28,9 +28,8 @@ export function resolveRuntimeNamespace(options: {
   readonly namespace?: string
   readonly env: RuntimeNamespaceEnvironment
 }): RuntimeNamespaceResolution {
-  if (options.namespace !== undefined) {
-    return resolved(options.namespace, 'explicit')
-  }
+  const explicit = nonEmpty(options.namespace)
+  if (explicit !== undefined) return resolved(explicit, 'explicit')
 
   const configured = nonEmpty(options.env.CRUX_RUNTIME_NAMESPACE)
   if (configured !== undefined) return resolved(configured, 'env')
