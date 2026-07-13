@@ -22,6 +22,9 @@ export const DEFERRED_REQUIRED_COLUMNS = {
     'work_id',
     'target_id',
     'input',
+    // Nullable JSON; older rows decode as undefined when the column is null.
+    // ADD COLUMN IF NOT EXISTS keeps upgrades additive for pre-provenance DBs.
+    'provenance',
     'state',
     'created_at',
     'updated_at',
@@ -55,11 +58,14 @@ export function deferredDdlStatements(schema: string): readonly string[] {
       work_id text NOT NULL,
       target_id text NOT NULL,
       input jsonb NOT NULL,
+      provenance jsonb,
       state text NOT NULL,
       created_at timestamptz NOT NULL,
       updated_at timestamptz NOT NULL,
       PRIMARY KEY (namespace, intent_id)
     )`,
+    `ALTER TABLE ${intents}
+      ADD COLUMN IF NOT EXISTS provenance jsonb`,
     `CREATE INDEX IF NOT EXISTS "defer_scopes_terminal_lease_idx"
       ON ${scopes} (namespace, (finalization->>'state'), lease_expires_at)`,
     `CREATE INDEX IF NOT EXISTS "defer_intents_scope_state_idx"

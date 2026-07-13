@@ -43,6 +43,7 @@ type Request struct {
 	RuntimeOperation              string                                   `json:"runtimeOperation,omitempty"`
 	RuntimeWorkID                 string                                   `json:"runtimeWorkId,omitempty"`
 	RuntimeIncludeDetails         bool                                     `json:"runtimeIncludeDetails,omitempty"`
+	SetupMode                     string                                   `json:"setupMode,omitempty"`
 	StaticCacheHits               []projectindex.StaticCacheHit            `json:"staticCacheHits,omitempty"`
 	NativeCompilerProtocolVersion int                                      `json:"nativeCompilerProtocolVersion,omitempty"`
 }

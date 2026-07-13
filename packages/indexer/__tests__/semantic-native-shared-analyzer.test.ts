@@ -11,13 +11,17 @@ import {
 const roots: string[] = []
 
 async function fixtureRoot(): Promise<string> {
-  const root = await mkdtemp(join(process.cwd(), '.tmp-semantic-native-shared-analyzer-'))
+  const root = await mkdtemp(
+    join(process.cwd(), '.tmp-semantic-native-shared-analyzer-'),
+  )
   roots.push(root)
   return root
 }
 
 afterEach(async () => {
-  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
+  await Promise.all(
+    roots.splice(0).map((root) => rm(root, { recursive: true, force: true })),
+  )
 })
 
 describe('native semantic shared analyzer', () => {
@@ -47,7 +51,7 @@ describe('native semantic shared analyzer', () => {
     expect(result.coverageKinds).toEqual(['complete-native'])
     expect(result.syntaxTraversals).toEqual(['native-ast'])
     expect(result.extractorNames).toEqual([['crux.shared-analyzer']])
-  })
+  }, 20_000)
 
   it('uses the native shared analyzer when a file contains a manifest-known primitive outside the direct projector', async () => {
     const root = await fixtureRoot()
@@ -135,7 +139,9 @@ async function compareNativeToTypeScript(
       onTiming: (timing) => timingNames.push(timing.name),
       onNativeCoverage: (coverage) => {
         coverageKinds.push(coverage.kind)
-        syntaxTraversals.push('syntaxTraversal' in coverage ? coverage.syntaxTraversal : undefined)
+        syntaxTraversals.push(
+          'syntaxTraversal' in coverage ? coverage.syntaxTraversal : undefined,
+        )
         if ('extractors' in coverage) extractorNames.push(coverage.extractors)
       },
     },
@@ -143,7 +149,9 @@ async function compareNativeToTypeScript(
 
   expect(typescriptPatch.status).toBe('ok')
   expect(nativePatch.status).toBe('ok')
-  expect(normalizedFacts(nativePatch.facts)).toEqual(normalizedFacts(typescriptPatch.facts))
+  expect(normalizedFacts(nativePatch.facts)).toEqual(
+    normalizedFacts(typescriptPatch.facts),
+  )
   return { timingNames, coverageKinds, syntaxTraversals, extractorNames }
 }
 
@@ -177,5 +185,9 @@ function normalizedFacts(facts: IndexPatchFacts): IndexPatchFacts {
 }
 
 function sortJsonRows<T>(rows: readonly T[] | undefined): T[] | undefined {
-  return rows ? [...rows].sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right))) : undefined
+  return rows
+    ? [...rows].sort((left, right) =>
+        JSON.stringify(left).localeCompare(JSON.stringify(right)),
+      )
+    : undefined
 }

@@ -114,7 +114,8 @@ export function createMemoryStatePort(
     ): Promise<WorkItem | null> {
       const key = scopedKey(options.namespace, workId)
       const existing = data.work.get(key)
-      if (!existing || !statusAllowed(existing.status, options.from)) return null
+      if (!existing || !statusAllowed(existing.status, options.from))
+        return null
 
       recordWrite?.()
       const updated: WorkItem = Object.freeze({
@@ -240,11 +241,15 @@ export function createMemoryStatePort(
 }
 
 function isPrunableWorkStatus(status: WorkItem['status']): boolean {
-  return status === 'completed' || status === 'cancelled' || status === 'dead-letter'
+  return (
+    status === 'completed' || status === 'cancelled' || status === 'dead-letter'
+  )
 }
 
 function isPrunableSnapshotStatus(status: FlowSnapshot['status']): boolean {
-  return status === 'completed' || status === 'blocked' || status === 'cancelled'
+  return (
+    status === 'completed' || status === 'blocked' || status === 'cancelled'
+  )
 }
 
 export function cloneWorkItem(work: WorkItem): WorkItem {
@@ -295,9 +300,11 @@ function statusAllowed(
 export function cloneFlowSnapshot(snapshot: FlowSnapshot): FlowSnapshot {
   const scheduledWork =
     snapshot.scheduledWork ??
-    (snapshot as FlowSnapshot & {
-      readonly scheduledEffects?: FlowSnapshot['scheduledWork']
-    }).scheduledEffects
+    (
+      snapshot as FlowSnapshot & {
+        readonly scheduledEffects?: FlowSnapshot['scheduledWork']
+      }
+    ).scheduledEffects
   return Object.freeze({
     flowId: snapshot.flowId,
     workId: snapshot.workId,
@@ -316,15 +323,17 @@ export function cloneFlowSnapshot(snapshot: FlowSnapshot): FlowSnapshot {
     deliveredSuspends: snapshot.deliveredSuspends
       ? Object.freeze(
           Object.fromEntries(
-            Object.entries(snapshot.deliveredSuspends).map(([deliveryKey, delivery]) => [
-              deliveryKey,
-              delivery
-                ? cloneDeliveredSuspend(
-                    delivery,
-                    `flow snapshot deliveredSuspends.${deliveryKey}.payload`,
-                  )
-                : undefined,
-            ]),
+            Object.entries(snapshot.deliveredSuspends).map(
+              ([deliveryKey, delivery]) => [
+                deliveryKey,
+                delivery
+                  ? cloneDeliveredSuspend(
+                      delivery,
+                      `flow snapshot deliveredSuspends.${deliveryKey}.payload`,
+                    )
+                  : undefined,
+              ],
+            ),
           ),
         )
       : undefined,
@@ -391,7 +400,9 @@ function mergeDeliveredSuspend(
   snapshot: FlowSnapshot,
   options: MarkSnapshotDeliveredOptions,
 ): FlowSnapshot['deliveredSuspends'] {
-  const suspend = snapshot.pendingSuspends.find((pending) => pending.waiterId === options.waiterId)
+  const suspend = snapshot.pendingSuspends.find(
+    (pending) => pending.waiterId === options.waiterId,
+  )
   const deliveryKey = suspend?.deliveryKey ?? suspend?.label
   if (!deliveryKey) return snapshot.deliveredSuspends
   return Object.freeze({
@@ -428,6 +439,11 @@ export function cloneRuntimeWork(work: RuntimeWork): RuntimeWork {
           work.input === undefined
             ? undefined
             : cloneJsonValue(work.input, 'durable task input'),
+        ...(work.defer === undefined
+          ? {}
+          : {
+              defer: cloneJsonValue(work.defer, 'named defer provenance'),
+            }),
       }
     case 'watch.deliver':
       return {

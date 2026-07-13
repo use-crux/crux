@@ -25,6 +25,7 @@ export function createCompositeDeferredStore(
       const scope = await scopeRecord(ctx, options.namespace, scopeId)
       return scope ? decodeDeferredScope(scope) : null
     },
+    createScope: (scope) => createScopeRecord(ctx, scope),
     putScope: (scope) => putScopeRecord(ctx, scope),
     listScopes: async (options) => {
       const rows = options.state
@@ -55,6 +56,7 @@ export function createCompositeDeferredStore(
       const intent = await intentRecord(ctx, options.namespace, intentId)
       return intent ? decodeDeferredIntent(intent) : null
     },
+    createIntent: (intent) => createIntentRecord(ctx, intent),
     putIntent: (intent) => putIntentRecord(ctx, intent),
     listIntents: async (options) => {
       const rows = await ctx.db
@@ -71,14 +73,55 @@ export function createCompositeDeferredStore(
   }
 }
 
+async function createScopeRecord(
+  ctx: MutationCtx,
+  scope: RuntimeDeferredScope,
+): Promise<RuntimeDeferredScope> {
+  const existing = await scopeRecord(ctx, scope.namespace, scope.scopeId)
+  if (existing) return decodeDeferredScope(existing)
+  const encoded = encodeDeferredScope(scope) as DeferredScopeRow
+  await ctx.db.insert('runtimeDeferredScopes', encoded)
+  return decodeDeferredScope(encoded)
+}
+
 async function putScopeRecord(
   ctx: MutationCtx,
   scope: RuntimeDeferredScope,
 ): Promise<void> {
   const existing = await scopeRecord(ctx, scope.namespace, scope.scopeId)
+  if (!existing) return
+  // Scope lifecycle is monotonic: open may renew or close; terminal never
+  // reopens or flips to the opposite terminal. Illegal writes no-op.
+  if (
+    !isScopeLifecycleAllowed(
+      existing.finalizationState,
+      scope.finalization.state,
+    )
+  ) {
+    return
+  }
   const encoded = encodeDeferredScope(scope) as DeferredScopeRow
-  if (existing) await ctx.db.replace(existing._id, encoded)
-  else await ctx.db.insert('runtimeDeferredScopes', encoded)
+  await ctx.db.replace(existing._id, encoded)
+}
+
+function isScopeLifecycleAllowed(
+  fromState: string | null | undefined,
+  toState: string,
+): boolean {
+  if (fromState === 'open') return true
+  if (toState === 'open') return false
+  return fromState === toState
+}
+
+async function createIntentRecord(
+  ctx: MutationCtx,
+  intent: RuntimeDeferredIntent,
+): Promise<RuntimeDeferredIntent> {
+  const existing = await intentRecord(ctx, intent.namespace, intent.intentId)
+  if (existing) return decodeDeferredIntent(existing)
+  const encoded = encodeDeferredIntent(intent) as DeferredIntentRow
+  await ctx.db.insert('runtimeDeferredIntents', encoded)
+  return decodeDeferredIntent(encoded)
 }
 
 async function putIntentRecord(
@@ -86,9 +129,16 @@ async function putIntentRecord(
   intent: RuntimeDeferredIntent,
 ): Promise<void> {
   const existing = await intentRecord(ctx, intent.namespace, intent.intentId)
-  const encoded = encodeDeferredIntent(intent) as DeferredIntentRow
-  if (existing) await ctx.db.replace(existing._id, encoded)
-  else await ctx.db.insert('runtimeDeferredIntents', encoded)
+  // Updates only — creation is createIntent. Preserve identity columns and
+  // never switch an intent after it chooses a terminal state.
+  if (!existing) return
+  if (existing.state !== 'staged' && intent.state !== existing.state) return
+  const encoded = encodeDeferredIntent({
+    ...decodeDeferredIntent(existing),
+    state: intent.state,
+    updatedAt: intent.updatedAt,
+  }) as DeferredIntentRow
+  await ctx.db.replace(existing._id, encoded)
 }
 
 async function scopeRecord(

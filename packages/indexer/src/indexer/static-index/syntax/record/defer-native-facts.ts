@@ -1,7 +1,15 @@
 import { createHash } from 'node:crypto'
-import type { ProjectDefinition, ProjectSourceRef } from '@use-crux/core/project-index'
+import type {
+  ProjectDefinition,
+  ProjectSourceRef,
+} from '@use-crux/core/project-index'
 import { fingerprint, safeId } from '../../../definitions'
-import type { StaticCallSourceMatch, StaticNativeFactProjection, StaticSourceMatch, StaticSyntaxValue } from './types'
+import type {
+  StaticCallSourceMatch,
+  StaticNativeFactProjection,
+  StaticSourceMatch,
+  StaticSyntaxValue,
+} from './types'
 
 /** Projects public defer calls through the TypeScript syntax frontend with Rust/Oxc-identical facts. */
 export function typeScriptDeferNativeFacts(
@@ -14,7 +22,16 @@ export function typeScriptDeferNativeFacts(
   return matches.flatMap((match, matchIndex) => {
     if (!isPublicDeferCall(match)) return []
     ordinal += 1
-    return [deferProjection(file, relativePath, sourceText, match, matchIndex, ordinal)]
+    return [
+      deferProjection(
+        file,
+        relativePath,
+        sourceText,
+        match,
+        matchIndex,
+        ordinal,
+      ),
+    ]
   })
 }
 
@@ -40,7 +57,12 @@ function deferProjection(
     .join('\n')
     .slice(-512)
   const metadata = {
-    runtimeJoin: { definitionId: id, kind: 'deferred-work' as const, name, spanAttributes: {} },
+    runtimeJoin: {
+      definitionId: id,
+      kind: 'deferred-work' as const,
+      name,
+      spanAttributes: {},
+    },
     mode,
     indexPresentation: { standalone: true },
     facts: { kind: 'deferred-work' as const, mode },
@@ -67,14 +89,43 @@ function deferProjection(
     }),
     metadata,
   }
-  const callbackSymbol = !named ? identifier(match.args[0]) ?? 'inline' : undefined
+  const callbackSymbol = !named
+    ? (identifier(match.args[0]) ?? 'inline')
+    : undefined
   return {
     matchIndex,
-    replaces: [{ extension: '@use-crux/indexer/crux-core', extractor: 'defer' }],
+    replaces: [
+      { extension: '@use-crux/indexer/crux-core', extractor: 'defer' },
+    ],
     facts: {
       definitions: [{ variableName: `defer_${ordinal}`, definition }],
-      references: target ? [{ type: 'defer.targets_task', fromId: id, toVariable: target }] : [],
-      sourceRefs: callbackSymbol ? [callbackSourceRef(id, callbackSymbol, match)] : [],
+      references: target
+        ? [{ type: 'defer.targets_task', fromId: id, toVariable: target }]
+        : [],
+      sourceRefs: target
+        ? [targetSourceRef(id, target, match)]
+        : callbackSymbol
+          ? [callbackSourceRef(id, callbackSymbol, match)]
+          : [],
+    },
+  }
+}
+
+function targetSourceRef(
+  definitionId: string,
+  symbol: string,
+  match: StaticCallSourceMatch,
+): { readonly definitionId: string; readonly ref: ProjectSourceRef } {
+  return {
+    definitionId,
+    ref: {
+      id: `${definitionId}:source:config:target:${symbol}`,
+      role: 'config',
+      property: 'target',
+      symbol,
+      source: { ...match.source, function: symbol },
+      ...(match.snippet ? { snippet: match.snippet } : {}),
+      fidelity: 'resolved',
     },
   }
 }
@@ -91,14 +142,19 @@ function callbackSourceRef(
       role: 'callback',
       property: 'callback',
       symbol,
-      source: { ...match.source, ...(symbol !== 'inline' ? { function: symbol } : {}) },
+      source: {
+        ...match.source,
+        ...(symbol !== 'inline' ? { function: symbol } : {}),
+      },
       ...(match.snippet ? { snippet: match.snippet } : {}),
       fidelity: 'resolved',
     },
   }
 }
 
-function isPublicDeferCall(match: StaticSourceMatch): match is StaticCallSourceMatch {
+function isPublicDeferCall(
+  match: StaticSourceMatch,
+): match is StaticCallSourceMatch {
   return (
     match.kind === 'call' &&
     match.callee.name === 'defer' &&
@@ -113,7 +169,9 @@ function identifier(value: StaticSyntaxValue | undefined): string | undefined {
 
 function isConsumed(beforeCall: string): boolean {
   const expression = beforeCall.split(/[;{}]/).at(-1) ?? ''
-  return /(?:\bawait\s|\breturn\s|Promise\.(?:all|allSettled|race|any)\s*\()/.test(expression)
+  return /(?:\bawait\s|\breturn\s|Promise\.(?:all|allSettled|race|any)\s*\()/.test(
+    expression,
+  )
 }
 
 function sha256(value: string): string {

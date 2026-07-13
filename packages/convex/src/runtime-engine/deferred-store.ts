@@ -31,6 +31,12 @@ export function createConvexDeferredStore(options: {
       })
       return result ? decodeDeferredScope(result) : null
     },
+    createScope: async (scope) => {
+      const result = await options.run<unknown>(ref('createScope'), {
+        scope: encodeDeferredScope(scope),
+      })
+      return decodeDeferredScope(result)
+    },
     putScope: (scope) =>
       options
         .run(ref('putScope'), { scope: encodeDeferredScope(scope) })
@@ -48,6 +54,12 @@ export function createConvexDeferredStore(options: {
         namespace: read.namespace,
       })
       return result ? decodeDeferredIntent(result) : null
+    },
+    createIntent: async (intent) => {
+      const result = await options.run<unknown>(ref('createIntent'), {
+        intent: encodeDeferredIntent(intent),
+      })
+      return decodeDeferredIntent(result)
     },
     putIntent: (intent) =>
       options

@@ -36,3 +36,6 @@ at-least-once edges, cancellation limits, and the distinction from
 The defer setup contributor now participates in `crux setup`, reporting host
 integration and named Runtime durability readiness without redefining the
 shared `@use-crux/core/setup` contract.
+Deferred intent stores now preserve the first terminal state across memory,
+Postgres, and Convex, and setup distinguishes inline host wrapping from literal
+named-work `durableFinalization: true` capability.

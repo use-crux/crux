@@ -25,6 +25,11 @@ export type RuntimeWork =
       readonly targetId: RuntimeTargetId
       /** JSON input persisted with the durable work item, never sent in wake envelopes. */
       readonly input?: JsonValue
+      /**
+       * Provider-neutral named-defer provenance for execution-time `defer.run`
+       * evidence. Absent for ordinary `flow.defer()` / task work.
+       */
+      readonly defer?: JsonValue
     }
   | {
       readonly kind: 'watch.deliver'

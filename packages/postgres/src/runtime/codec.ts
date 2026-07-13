@@ -79,13 +79,14 @@ export function decodeFlowSnapshot(row: JsonRecord): FlowSnapshot {
           >,
         )
       : undefined,
-    scheduledWork: row.scheduled_work ?? row.scheduled_effects
-      ? Object.freeze(
-          (row.scheduled_work ?? row.scheduled_effects) as NonNullable<
-            FlowSnapshot['scheduledWork']
-          >,
-        )
-      : undefined,
+    scheduledWork:
+      (row.scheduled_work ?? row.scheduled_effects)
+        ? Object.freeze(
+            (row.scheduled_work ?? row.scheduled_effects) as NonNullable<
+              FlowSnapshot['scheduledWork']
+            >,
+          )
+        : undefined,
     updatedAt: new Date(row.updated_at as string),
   })
 }
@@ -180,6 +181,13 @@ export function decodeDeferredIntent(row: JsonRecord): RuntimeDeferredIntent {
     workId: row.work_id as WorkId,
     targetId: row.target_id as RuntimeTargetId,
     input: row.input as RuntimeDeferredIntent['input'],
+    ...(row.provenance !== null && row.provenance !== undefined
+      ? {
+          provenance: row.provenance as NonNullable<
+            RuntimeDeferredIntent['provenance']
+          >,
+        }
+      : {}),
     state: row.state as RuntimeDeferredIntent['state'],
     createdAt: new Date(row.created_at as string),
     updatedAt: new Date(row.updated_at as string),

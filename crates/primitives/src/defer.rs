@@ -81,8 +81,16 @@ pub(crate) fn defer_facts(input: &CustomProjectionInput<'_>) -> Option<Value> {
             })]
         })
         .unwrap_or_default();
-    let source_refs = if named {
-        Vec::new()
+    let source_refs = if let Some(target) = target {
+        vec![source_ref(
+            &id,
+            "config",
+            "target",
+            target,
+            parts.source,
+            Some(target),
+            parts.snippet,
+        )]
     } else {
         let symbol = parts.args.first().and_then(identifier).unwrap_or("inline");
         vec![source_ref(

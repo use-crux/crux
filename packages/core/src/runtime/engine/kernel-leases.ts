@@ -56,7 +56,7 @@ export function startLeaseExtensionHeartbeat(
     readonly leaseExtension?: false | RuntimeLeaseExtensionOptions
   },
   initialLease: Lease,
-  onExtended: (lease: Lease) => void,
+  onExtended: (lease: Lease) => void | Promise<void>,
 ): LeaseExtensionHeartbeat {
   if (options.leaseExtension === false) return NOOP_HEARTBEAT
 
@@ -69,14 +69,22 @@ export function startLeaseExtensionHeartbeat(
   let extending = false
   let loggedFailure = false
 
-  const stop = schedule(() => {
+  const cancelSchedule = schedule(() => {
     if (stopped || extending) return
     extending = true
     void options.store.leases
       .extend(activeLease, options.leaseTtlMs)
-      .then((extended) => {
-        activeLease = extended
-        onExtended(extended)
+      .then(async (extended) => {
+        // Advance the internal active lease only after onExtended succeeds.
+        // A failed post-extend callback must not leave this heartbeat owning a
+        // fresher lease-store token than the durable fencing state it publishes.
+        try {
+          await onExtended(extended)
+        } catch (error) {
+          stopHeartbeat()
+          throw error
+        }
+        if (!stopped) activeLease = extended
       })
       .catch((error: unknown) => {
         if (loggedFailure) return
@@ -88,10 +96,14 @@ export function startLeaseExtensionHeartbeat(
       })
   }, intervalMs)
 
+  const stopHeartbeat = () => {
+    stopped = true
+    cancelSchedule()
+  }
+
   return Object.freeze({
     stop() {
-      stopped = true
-      stop()
+      stopHeartbeat()
     },
   })
 }
@@ -113,7 +125,10 @@ const NOOP_HEARTBEAT: LeaseExtensionHeartbeat = Object.freeze({
 })
 
 function defaultSchedule(fn: () => void, intervalMs: number): () => void {
-  if (typeof setInterval !== 'function' || typeof clearInterval !== 'function') {
+  if (
+    typeof setInterval !== 'function' ||
+    typeof clearInterval !== 'function'
+  ) {
     return () => {}
   }
   const timer = setInterval(fn, intervalMs)

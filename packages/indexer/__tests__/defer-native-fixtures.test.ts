@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { createStaticExtraction, type SourceReader } from '../src/indexer/static/extraction/engine'
+import {
+  createStaticExtraction,
+  type SourceReader,
+} from '../src/indexer/static/extraction/engine'
 import { createTypeScriptStaticSyntaxFrontend } from '../src/indexer/static-index/syntax'
 import {
   extractNativeAndFallback,
@@ -14,10 +17,12 @@ describe('defer native projection', () => {
     const source = [
       "import { defer } from '@use-crux/core'",
       'defer(() => undefined)',
+      'defer(sendEmail, { id: 1 })',
     ].join('\n')
     const sources: SourceReader = {
       read: async (requestedFile) => {
-        if (requestedFile !== file) throw new Error(`Unexpected source: ${requestedFile}`)
+        if (requestedFile !== file)
+          throw new Error(`Unexpected source: ${requestedFile}`)
         return source
       },
     }
@@ -31,6 +36,18 @@ describe('defer native projection', () => {
     const out = await extraction.extractFile(file)
     expect(out.definitions.map((definition) => definition.id)).toContain(
       'deferred-work:inline:src-api.ts:769911c416ccf851:1',
+    )
+    expect(
+      out.definitions.find(
+        (definition) =>
+          definition.id === 'deferred-work:named:src-api.ts:769911c416ccf851:2',
+      )?.sourceRefs,
+    ).toContainEqual(
+      expect.objectContaining({
+        role: 'config',
+        property: 'target',
+        symbol: 'sendEmail',
+      }),
     )
   })
 
@@ -156,6 +173,21 @@ describe('defer native projection', () => {
           to: 'task:send-email',
         }),
       ])
+      expect(
+        nativeOut.definitions.find(
+          (definition) =>
+            definition.id ===
+            'deferred-work:named:src-fixture.ts:be4c7cffd8136a5a:2',
+        )?.sourceRefs,
+      ).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            role: 'config',
+            property: 'target',
+            symbol: 'sendEmail',
+          }),
+        ]),
+      )
     },
     30_000,
   )

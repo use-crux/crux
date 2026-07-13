@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { cp, mkdtemp, rm, symlink } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -14,9 +14,18 @@ const PROJECT = resolve(__dirname, '__fixtures__/quality-project')
 const CONFIG = resolve(PROJECT, 'crux.config.ts')
 const REPLAY_DEFAULT_CONFIG = resolve(PROJECT, 'crux.replay-default.config.ts')
 const IMPLICIT_MODEL_CONFIG = resolve(PROJECT, 'crux.implicit-model.config.ts')
-const MISSING_BINDING_CONFIG = resolve(PROJECT, 'crux.missing-binding.config.ts')
-const NO_CONFIG_PROMPT_PROJECT = resolve(__dirname, '__fixtures__/quality-no-config-prompt-tests')
-const NO_CONFIG_BROKEN_PROMPT_PROJECT = resolve(__dirname, '__fixtures__/quality-no-config-broken-prompt-tests')
+const MISSING_BINDING_CONFIG = resolve(
+  PROJECT,
+  'crux.missing-binding.config.ts',
+)
+const NO_CONFIG_PROMPT_PROJECT = resolve(
+  __dirname,
+  '__fixtures__/quality-no-config-prompt-tests',
+)
+const NO_CONFIG_BROKEN_PROMPT_PROJECT = resolve(
+  __dirname,
+  '__fixtures__/quality-no-config-broken-prompt-tests',
+)
 
 interface RunnerResult {
   exitCode: number
@@ -24,11 +33,21 @@ interface RunnerResult {
   stderr: string
 }
 
-function runWorker(args: string[], options: { config?: string; env?: NodeJS.ProcessEnv } = {}): Promise<RunnerResult> {
+function runWorker(
+  args: string[],
+  options: { config?: string; env?: NodeJS.ProcessEnv } = {},
+): Promise<RunnerResult> {
   return new Promise((resolveRun, rejectRun) => {
     const child = spawn(
       process.execPath,
-      [TSX_CLI, RUNNER, '--config', options.config ?? CONFIG, '--no-persist', ...args],
+      [
+        TSX_CLI,
+        RUNNER,
+        '--config',
+        options.config ?? CONFIG,
+        '--no-persist',
+        ...args,
+      ],
       {
         cwd: PROJECT,
         env: { ...process.env, ...options.env },
@@ -55,11 +74,15 @@ function runNoConfigWorker(
   options: { cwd: string; env?: NodeJS.ProcessEnv },
 ): Promise<RunnerResult> {
   return new Promise((resolveRun, rejectRun) => {
-    const child = spawn(process.execPath, [TSX_CLI, RUNNER, '--no-persist', ...args], {
-      cwd: options.cwd,
-      env: { ...process.env, ...options.env },
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
+    const child = spawn(
+      process.execPath,
+      [TSX_CLI, RUNNER, '--no-persist', ...args],
+      {
+        cwd: options.cwd,
+        env: { ...process.env, ...options.env },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      },
+    )
     let stdout = ''
     let stderr = ''
     child.stdout.on('data', (chunk: Buffer) => (stdout += chunk.toString()))
@@ -75,39 +98,70 @@ function runNoConfigWorker(
   })
 }
 
+async function isolatedNoConfigFixture(source: string): Promise<string> {
+  const root = await mkdtemp(join(tmpdir(), 'crux-quality-no-config-'))
+  await cp(source, root, { recursive: true })
+  await symlink(
+    resolve(__dirname, '../node_modules'),
+    join(root, 'node_modules'),
+    'dir',
+  )
+  return root
+}
+
 describe('quality-runner worker (subprocess e2e)', () => {
   it('does not source-project colocated prompt tests without crux.config.ts', async () => {
-    const { exitCode, events, stderr } = await runNoConfigWorker(['--collect-only'], {
-      cwd: NO_CONFIG_PROMPT_PROJECT,
-    })
+    const root = await isolatedNoConfigFixture(NO_CONFIG_PROMPT_PROJECT)
+    const { exitCode, events, stderr } = await runNoConfigWorker(
+      ['--collect-only'],
+      { cwd: root },
+    )
+    await rm(root, { recursive: true, force: true })
 
     expect(exitCode, stderr).toBe(0)
     const collectDone = events.find((event) => event.type === 'collect:done')
-    if (collectDone?.type !== 'collect:done') throw new Error(`no collect:done; stderr: ${stderr}`)
+    if (collectDone?.type !== 'collect:done')
+      throw new Error(`no collect:done; stderr: ${stderr}`)
 
     expect(collectDone.errors).toEqual([])
-    expect(collectDone.evaluations.map((manifest) => manifest.id)).not.toContain('prompt:support.answer')
+    expect(
+      collectDone.evaluations.map((manifest) => manifest.id),
+    ).not.toContain('prompt:support.answer')
   }, 60_000)
 
   it('does not synthesize prompt-test dependency diagnostics without native Project Model evidence', async () => {
-    const { exitCode, events, stderr } = await runNoConfigWorker(['--collect-only'], {
-      cwd: NO_CONFIG_BROKEN_PROMPT_PROJECT,
-    })
+    const root = await isolatedNoConfigFixture(NO_CONFIG_BROKEN_PROMPT_PROJECT)
+    const { exitCode, events, stderr } = await runNoConfigWorker(
+      ['--collect-only'],
+      { cwd: root },
+    )
+    await rm(root, { recursive: true, force: true })
 
     expect(exitCode, stderr).toBe(0)
     const collectDone = events.find((event) => event.type === 'collect:done')
-    if (collectDone?.type !== 'collect:done') throw new Error(`no collect:done; stderr: ${stderr}`)
+    if (collectDone?.type !== 'collect:done')
+      throw new Error(`no collect:done; stderr: ${stderr}`)
     expect(collectDone.errors).toEqual([])
     expect(events.some((event) => event.type === 'error')).toBe(false)
   }, 60_000)
 
   it('collects file + colocated evaluations and runs selected file evals without ambient model setup', async () => {
-    const { exitCode, events, stderr } = await runWorker(['evals.bakeoff', 'evals.failing', 'evals.passing'])
+    const { exitCode, events, stderr } = await runWorker([
+      'evals.bakeoff',
+      'evals.failing',
+      'evals.passing',
+    ])
 
     const collectDone = events.find((event) => event.type === 'collect:done')
-    if (collectDone?.type !== 'collect:done') throw new Error(`no collect:done; stderr: ${stderr}`)
+    if (collectDone?.type !== 'collect:done')
+      throw new Error(`no collect:done; stderr: ${stderr}`)
     const ids = collectDone.evaluations.map((manifest) => manifest.id).sort()
-    expect(ids).toEqual(['evals.bakeoff', 'evals.failing', 'evals.passing', 'prompt:fixture.greeter'])
+    expect(ids).toEqual([
+      'evals.bakeoff',
+      'evals.failing',
+      'evals.passing',
+      'prompt:fixture.greeter',
+    ])
     expect(collectDone.errors).toEqual([])
 
     expect(exitCode).toBe(1)
@@ -131,7 +185,11 @@ describe('quality-runner worker (subprocess e2e)', () => {
     if (evalDone?.type !== 'eval:done') throw new Error('expected eval:done')
 
     // All three variants executed; aggregates are per variant.
-    expect(Object.keys(evalDone.aggregates.perVariant).sort()).toEqual(['candidate', 'cheap', 'current'])
+    expect(Object.keys(evalDone.aggregates.perVariant).sort()).toEqual([
+      'candidate',
+      'cheap',
+      'current',
+    ])
 
     // Paired deltas against the declared baseline variant, zero variance.
     expect(evalDone.comparison).toBeDefined()
@@ -139,7 +197,8 @@ describe('quality-runner worker (subprocess e2e)', () => {
     expect(comparison.kind).toBe('variant')
     expect(comparison.baseline).toBe('current')
     const candidateQuality = comparison.deltas.find(
-      (delta) => delta.variantName === 'candidate' && delta.scoreName === 'quality',
+      (delta) =>
+        delta.variantName === 'candidate' && delta.scoreName === 'quality',
     )!
     expect(candidateQuality.meanDelta).toBeCloseTo(-0.1, 10)
     expect(candidateQuality.sem).toBeCloseTo(0, 10)
@@ -147,8 +206,15 @@ describe('quality-runner worker (subprocess e2e)', () => {
 
     // The delta gate evaluates per non-baseline variant and reds the run.
     const gateResults = evalDone.gates.results
-    expect(gateResults.map((result) => result.variantName).sort()).toEqual(['candidate', 'cheap'])
-    expect(gateResults.every((result) => result.gate === 'scores.quality.minDeltaVsBaseline')).toBe(true)
+    expect(gateResults.map((result) => result.variantName).sort()).toEqual([
+      'candidate',
+      'cheap',
+    ])
+    expect(
+      gateResults.every(
+        (result) => result.gate === 'scores.quality.minDeltaVsBaseline',
+      ),
+    ).toBe(true)
     expect(gateResults.every((result) => result.passed === false)).toBe(true)
     expect(evalDone.gates.passed).toBe(false)
     expect(evalDone.gates.informational).toBe(false)
@@ -160,14 +226,17 @@ describe('quality-runner worker (subprocess e2e)', () => {
     expect(exitCode, stderr).toBe(0)
     const evalDones = events.filter((event) => event.type === 'eval:done')
     expect(evalDones).toHaveLength(1)
-    if (evalDones[0]!.type !== 'eval:done') throw new Error('expected eval:done')
+    if (evalDones[0]!.type !== 'eval:done')
+      throw new Error('expected eval:done')
     expect(evalDones[0]!.evaluationId).toBe('evals.passing')
     expect(evalDones[0]!.filteredRun).toBe(false)
     expect(evalDones[0]!.gates.informational).toBe(false)
   }, 60_000)
 
   it('lowered prompt-tests fail closed when no explicit model runtime is bound', async () => {
-    const { exitCode, events, stderr } = await runWorker(['prompt:fixture.greeter'])
+    const { exitCode, events, stderr } = await runWorker([
+      'prompt:fixture.greeter',
+    ])
 
     expect(exitCode, stderr).toBe(2)
     const error = events.find((event) => event.type === 'error')
@@ -189,7 +258,11 @@ describe('quality-runner worker (subprocess e2e)', () => {
   }, 60_000)
 
   it('--sample without --seed fails closed before execution', async () => {
-    const { exitCode, events } = await runWorker(['evals.passing', '--sample', '1'])
+    const { exitCode, events } = await runWorker([
+      'evals.passing',
+      '--sample',
+      '1',
+    ])
 
     expect(exitCode).toBe(2)
     expect(events).toContainEqual(
@@ -203,16 +276,24 @@ describe('quality-runner worker (subprocess e2e)', () => {
   }, 60_000)
 
   it('--replay wins over project config replay defaults', async () => {
-    const defaulted = await runWorker(['evals.passing'], { config: REPLAY_DEFAULT_CONFIG })
+    const defaulted = await runWorker(['evals.passing'], {
+      config: REPLAY_DEFAULT_CONFIG,
+    })
     expect(defaulted.exitCode, defaulted.stderr).toBe(0)
-    const defaultedDone = defaulted.events.find((event) => event.type === 'eval:done')
-    if (defaultedDone?.type !== 'eval:done') throw new Error('expected eval:done from config-default run')
+    const defaultedDone = defaulted.events.find(
+      (event) => event.type === 'eval:done',
+    )
+    if (defaultedDone?.type !== 'eval:done')
+      throw new Error('expected eval:done from config-default run')
     expect(defaultedDone.replay?.mode).toBe('record-new')
 
-    const live = await runWorker(['evals.passing', '--replay', 'live'], { config: REPLAY_DEFAULT_CONFIG })
+    const live = await runWorker(['evals.passing', '--replay', 'live'], {
+      config: REPLAY_DEFAULT_CONFIG,
+    })
     expect(live.exitCode, live.stderr).toBe(0)
     const liveDone = live.events.find((event) => event.type === 'eval:done')
-    if (liveDone?.type !== 'eval:done') throw new Error('expected eval:done from CLI-replay run')
+    if (liveDone?.type !== 'eval:done')
+      throw new Error('expected eval:done from CLI-replay run')
     expect(liveDone.replay).toBeUndefined()
   }, 60_000)
 
@@ -221,10 +302,13 @@ describe('quality-runner worker (subprocess e2e)', () => {
     const markerPath = join(markerDir, 'setup-called.txt')
 
     try {
-      const { exitCode, events, stderr } = await runWorker(['evals.implicit-model'], {
-        config: IMPLICIT_MODEL_CONFIG,
-        env: { CRUX_QUALITY_SETUP_MARKER: markerPath },
-      })
+      const { exitCode, events, stderr } = await runWorker(
+        ['evals.implicit-model'],
+        {
+          config: IMPLICIT_MODEL_CONFIG,
+          env: { CRUX_QUALITY_SETUP_MARKER: markerPath },
+        },
+      )
 
       expect(exitCode, stderr).toBe(2)
       const error = events.find((event) => event.type === 'error')
@@ -242,9 +326,12 @@ describe('quality-runner worker (subprocess e2e)', () => {
   }, 60_000)
 
   it('file-discovered judge scorers fail closed with a missing-binding diagnostic', async () => {
-    const { exitCode, events, stderr } = await runWorker(['evals.judge-missing-binding'], {
-      config: MISSING_BINDING_CONFIG,
-    })
+    const { exitCode, events, stderr } = await runWorker(
+      ['evals.judge-missing-binding'],
+      {
+        config: MISSING_BINDING_CONFIG,
+      },
+    )
 
     expect(exitCode, stderr).toBe(2)
     const error = events.find((event) => event.type === 'error')
@@ -258,9 +345,12 @@ describe('quality-runner worker (subprocess e2e)', () => {
   }, 60_000)
 
   it('file-discovered embedding scorers fail closed with a missing-binding diagnostic', async () => {
-    const { exitCode, events, stderr } = await runWorker(['evals.embedding-missing-binding'], {
-      config: MISSING_BINDING_CONFIG,
-    })
+    const { exitCode, events, stderr } = await runWorker(
+      ['evals.embedding-missing-binding'],
+      {
+        config: MISSING_BINDING_CONFIG,
+      },
+    )
 
     expect(exitCode, stderr).toBe(2)
     const error = events.find((event) => event.type === 'error')

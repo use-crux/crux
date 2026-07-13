@@ -61,6 +61,11 @@ export interface RuntimeDeferredIntent {
   readonly workId: WorkId
   readonly targetId: RuntimeTargetId
   readonly input: JsonValue
+  /**
+   * Optional JSON-safe observability provenance carried into released
+   * `task.run` work so execution can emit `defer.run` evidence.
+   */
+  readonly provenance?: JsonValue
   readonly state: RuntimeDeferredIntentState
   readonly createdAt: Date
   readonly updatedAt: Date
@@ -86,6 +91,27 @@ export interface RuntimeDeferredStorePort {
     scopeId: DeferredScopeId,
     options: RuntimeStateReadOptions,
   ): Promise<RuntimeDeferredScope | null>
+  /**
+   * Insert a scope only when absent.
+   *
+   * Concurrent first-stage races and delayed creators must not overwrite an
+   * existing row's lease token, expiry, or finalization. Returns the durable
+   * row after the attempt (newly created or the pre-existing record).
+   */
+  createScope(scope: RuntimeDeferredScope): Promise<RuntimeDeferredScope>
+  /**
+   * Replace fields on an existing scope row under a locked transaction.
+   *
+   * Kernel callers must already hold the row (via {@link getScope}) and prove
+   * open/fencing state before writing renew/finalize/abandon updates.
+   *
+   * Lifecycle is monotonic (analogous to {@link putIntent}):
+   * - missing rows are a no-op
+   * - open may renew (open→open) or move to a terminal state
+   * - finalized/abandoned must never reopen to open
+   * - finalized and abandoned must not switch to the other terminal state
+   * Illegal transitions are no-ops so the kernel CAS can detect conflict.
+   */
   putScope(scope: RuntimeDeferredScope): Promise<void>
   listScopes(
     options: ListRuntimeDeferredScopesOptions,
@@ -94,6 +120,22 @@ export interface RuntimeDeferredStorePort {
     intentId: DeferredIntentId,
     options: RuntimeStateReadOptions,
   ): Promise<RuntimeDeferredIntent | null>
+  /**
+   * Insert an intent only when absent.
+   *
+   * Concurrent staging races must preserve the first accepted workId, target,
+   * and input. Returns the durable row after the attempt (newly created or the
+   * pre-existing record).
+   */
+  createIntent(intent: RuntimeDeferredIntent): Promise<RuntimeDeferredIntent>
+  /**
+   * Update an existing intent's lifecycle fields under a locked transaction.
+   *
+   * Kernel callers use this for staged → released/abandoned transitions only.
+   * Identity columns (workId, targetId, input, scopeId) must not change. A
+   * terminal row may only receive an idempotent write of the same terminal
+   * state; released and abandoned must never switch. Missing rows are a no-op.
+   */
   putIntent(intent: RuntimeDeferredIntent): Promise<void>
   listIntents(
     options: ListRuntimeDeferredIntentsOptions,

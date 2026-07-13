@@ -23,16 +23,6 @@ func TestRuntimeOperationCommandsRouteToWorker(t *testing.T) {
 		workID    string
 	}{
 		{
-			name:      "setup check",
-			args:      []string{"--json", "--cwd", root, "setup", "--check"},
-			operation: "setup-check",
-		},
-		{
-			name:      "setup apply",
-			args:      []string{"--json", "--cwd", root, "setup", "--apply"},
-			operation: "setup-apply",
-		},
-		{
 			name:      "status",
 			args:      []string{"--json", "--cwd", root, "status"},
 			operation: "status",
@@ -100,6 +90,52 @@ func TestRuntimeOperationCommandsRouteToWorker(t *testing.T) {
 				t.Fatalf("decoded output = %#v, want operation %q and ok", decoded, tc.operation)
 			}
 		})
+	}
+}
+
+func TestRuntimeSetupDelegatesWithOneDeprecationWarning(t *testing.T) {
+	old := runSetupOperationForCommand
+	defer func() { runSetupOperationForCommand = old }()
+	runSetupOperationForCommand = func(_ context.Context, _, mode string) (json.RawMessage, error) {
+		if mode != "check" {
+			t.Fatalf("mode = %q", mode)
+		}
+		return json.RawMessage(`{"ok":true,"mode":"check","findings":[],"actions":[],"applied":[]}`), nil
+	}
+
+	cmd := NewRuntimeCmd(&cli.Factory{})
+	var out, errOut strings.Builder
+	cmd.SetOut(&out)
+	cmd.SetErr(&errOut)
+	cmd.SetArgs([]string{"--json", "setup", "--check"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if count := strings.Count(errOut.String(), "deprecated"); count != 1 {
+		t.Fatalf("deprecation warning count = %d:\n%s", count, errOut.String())
+	}
+}
+
+func TestRuntimeSetupUnhealthyReportKeepsOnlyTheDeprecationWarning(t *testing.T) {
+	old := runSetupOperationForCommand
+	defer func() { runSetupOperationForCommand = old }()
+	runSetupOperationForCommand = func(context.Context, string, string) (json.RawMessage, error) {
+		return json.RawMessage(`{"ok":false,"mode":"check","findings":[],"actions":[],"applied":[]}`), nil
+	}
+
+	cmd := NewRuntimeCmd(&cli.Factory{})
+	var out, errOut strings.Builder
+	cmd.SetOut(&out)
+	cmd.SetErr(&errOut)
+	cmd.SetArgs([]string{"--json", "setup", "--check"})
+	if err := cmd.Execute(); err == nil {
+		t.Fatal("unhealthy compatibility setup succeeded")
+	}
+	if count := strings.Count(errOut.String(), "deprecated"); count != 1 {
+		t.Fatalf("deprecation warning count = %d:\n%s", count, errOut.String())
+	}
+	if strings.Contains(errOut.String(), "Usage:") || strings.Contains(errOut.String(), "exit 1") {
+		t.Fatalf("intentional setup exit wrote error noise:\n%s", errOut.String())
 	}
 }
 

@@ -16,22 +16,18 @@ func newRuntimeSetupCmd(f *cli.Factory, opts *runtimeGenerateOptions) *cobra.Com
 	var apply bool
 	cmd := &cobra.Command{
 		Use:   "setup (--check | --apply)",
-		Short: "Verify or apply Runtime Engine adapter setup",
+		Short: "Deprecated alias for crux setup",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if check == apply {
 				return fmt.Errorf("choose exactly one of --check or --apply")
 			}
 			fmt.Fprintln(cmd.ErrOrStderr(), "warning: `crux runtime setup` is deprecated; use `crux setup` instead")
-			operation := "setup-check"
-			if apply {
-				operation = "setup-apply"
-			}
-			return runAndPrintRuntimeOperation(cmd, f, opts, operation, "")
+			return runSetupCommand(cmd, f, opts.cwd, opts.jsonOutput, apply)
 		},
 	}
-	cmd.Flags().BoolVar(&check, "check", false, "Verify resources without mutating")
-	cmd.Flags().BoolVar(&apply, "apply", false, "Apply safe additive setup")
+	cmd.Flags().BoolVar(&check, "check", false, "Check project setup without mutating")
+	cmd.Flags().BoolVar(&apply, "apply", false, "Apply safe additive project setup")
 	return cmd
 }
 
@@ -106,8 +102,6 @@ func printRuntimeOperationResult(io *output.IO, raw json.RawMessage) error {
 		return fmt.Errorf("decode runtime operation result: %w", err)
 	}
 	switch header.Operation {
-	case "setup-check", "setup-apply":
-		return printRuntimeSetupResult(io, raw, header)
 	case "status":
 		return printRuntimeStatusResult(io, raw)
 	case "inspect":
@@ -119,37 +113,6 @@ func printRuntimeOperationResult(io *output.IO, raw json.RawMessage) error {
 	default:
 		return writePrettyJSON(io.Out, raw)
 	}
-}
-
-func printRuntimeSetupResult(io *output.IO, raw json.RawMessage, header struct {
-	Operation string `json:"operation"`
-	OK        bool   `json:"ok"`
-}) error {
-	var result struct {
-		Setup struct {
-			Findings []struct {
-				Code        string `json:"code"`
-				Resource    string `json:"resource"`
-				Message     string `json:"message"`
-				Remediation string `json:"remediation,omitempty"`
-			} `json:"findings"`
-		} `json:"setup"`
-	}
-	if err := json.Unmarshal(raw, &result); err != nil {
-		return fmt.Errorf("decode runtime setup result: %w", err)
-	}
-	status := io.Sprint(output.Green, "passed")
-	if !header.OK {
-		status = io.Sprint(output.Yellow, "needs setup")
-	}
-	fmt.Fprintf(io.Out, "Runtime %s %s\n", header.Operation, status)
-	for _, finding := range result.Setup.Findings {
-		fmt.Fprintf(io.Out, "%s %s: %s\n", io.Sprint(output.Dim, finding.Code), finding.Resource, finding.Message)
-		if finding.Remediation != "" {
-			fmt.Fprintf(io.Out, "  %s %s\n", io.Sprint(output.Dim, "fix:"), finding.Remediation)
-		}
-	}
-	return nil
 }
 
 func printRuntimeStatusResult(io *output.IO, raw json.RawMessage) error {

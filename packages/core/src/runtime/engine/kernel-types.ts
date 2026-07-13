@@ -34,6 +34,8 @@ import type {
   AbandonDeferredScopeInput,
   DeferredScopeTransitionResult,
   FinalizeDeferredScopeInput,
+  RenewDeferredScopeLeaseInput,
+  RenewDeferredScopeLeaseResult,
   StageDeferredIntentInput,
 } from './kernel-deferred'
 
@@ -381,6 +383,10 @@ export interface RuntimeKernel {
   abandonDeferredScope(
     input: AbandonDeferredScopeInput,
   ): Promise<DeferredScopeTransitionResult>
+  /** Renew or fence the durable deferred scope lease token/expiry. */
+  renewDeferredScopeLease(
+    input: RenewDeferredScopeLeaseInput,
+  ): Promise<RenewDeferredScopeLeaseResult>
   /** Create pending task work and write its wake envelope to the outbox. */
   enqueueTask(input: EnqueueTaskInput): Promise<WorkItem>
   /** Persist a flow suspension and owned waiter registrations atomically. */

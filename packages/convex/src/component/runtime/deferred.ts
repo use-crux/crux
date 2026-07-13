@@ -14,6 +14,22 @@ export const getScope = mutation({
       .first(),
 })
 
+export const createScope = mutation({
+  args: { scope: v.any() },
+  returns: v.any(),
+  handler: async (ctx, { scope }) => {
+    const existing = await ctx.db
+      .query('runtimeDeferredScopes')
+      .withIndex('by_scope', (q) =>
+        q.eq('namespace', scope.namespace).eq('scopeId', scope.scopeId),
+      )
+      .first()
+    if (existing) return existing
+    await ctx.db.insert('runtimeDeferredScopes', scope)
+    return scope
+  },
+})
+
 export const putScope = mutation({
   args: { scope: v.any() },
   returns: v.null(),
@@ -24,8 +40,17 @@ export const putScope = mutation({
         q.eq('namespace', scope.namespace).eq('scopeId', scope.scopeId),
       )
       .first()
-    if (existing) await ctx.db.replace(existing._id, scope)
-    else await ctx.db.insert('runtimeDeferredScopes', scope)
+    // Updates only — creation is createScope. Scope lifecycle is monotonic:
+    // open may renew or close; terminal never reopens or flips terminals.
+    if (!existing) return null
+    const nextState =
+      typeof scope.finalizationState === 'string'
+        ? scope.finalizationState
+        : scope.finalization?.state
+    if (!isScopeLifecycleAllowed(existing.finalizationState, nextState)) {
+      return null
+    }
+    await ctx.db.replace(existing._id, scope)
     return null
   },
 })
@@ -75,6 +100,22 @@ export const getIntent = mutation({
       .first(),
 })
 
+export const createIntent = mutation({
+  args: { intent: v.any() },
+  returns: v.any(),
+  handler: async (ctx, { intent }) => {
+    const existing = await ctx.db
+      .query('runtimeDeferredIntents')
+      .withIndex('by_intent', (q) =>
+        q.eq('namespace', intent.namespace).eq('intentId', intent.intentId),
+      )
+      .first()
+    if (existing) return existing
+    await ctx.db.insert('runtimeDeferredIntents', intent)
+    return intent
+  },
+})
+
 export const putIntent = mutation({
   args: { intent: v.any() },
   returns: v.null(),
@@ -85,8 +126,17 @@ export const putIntent = mutation({
         q.eq('namespace', intent.namespace).eq('intentId', intent.intentId),
       )
       .first()
-    if (existing) await ctx.db.replace(existing._id, intent)
-    else await ctx.db.insert('runtimeDeferredIntents', intent)
+    // Updates only — creation is createIntent. Preserve identity columns and
+    // never switch an intent after it chooses a terminal state.
+    if (!existing) return null
+    if (existing.state !== 'staged' && intent.state !== existing.state) {
+      return null
+    }
+    await ctx.db.replace(existing._id, {
+      ...existing,
+      state: intent.state,
+      updatedAt: intent.updatedAt,
+    })
     return null
   },
 })
@@ -112,3 +162,13 @@ export const listIntents = mutation({
     return limitRows(rows, options.limit)
   },
 })
+
+/** Open may renew or close; terminal must not reopen or flip. */
+function isScopeLifecycleAllowed(
+  fromState: string | null | undefined,
+  toState: string | null | undefined,
+): boolean {
+  if (fromState === 'open') return true
+  if (toState === 'open') return false
+  return fromState === toState && fromState !== undefined && fromState !== null
+}

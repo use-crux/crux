@@ -53,11 +53,17 @@ import type { WorkItem } from './work'
 import type { RuntimeDeferredIntent } from '../ports/deferred'
 import {
   abandonDeferredScopeInTransaction,
+  expireDeferredScopeInTransaction,
   finalizeDeferredScopeInTransaction,
+  renewDeferredScopeLeaseInTransaction,
   stageDeferredIntentInTransaction,
   type AbandonDeferredScopeInput,
   type DeferredScopeTransitionResult,
+  type ExpireDeferredScopeInput,
+  type ExpireDeferredScopeResult,
   type FinalizeDeferredScopeInput,
+  type RenewDeferredScopeLeaseInput,
+  type RenewDeferredScopeLeaseResult,
   type StageDeferredIntentInput,
 } from './kernel-deferred'
 
@@ -87,6 +93,8 @@ export type RuntimeCompositeKind =
   | 'defer.stage'
   | 'defer.finalize'
   | 'defer.abandon'
+  | 'defer.renew'
+  | 'defer.expire'
 
 /** Input payloads accepted by named composite operations. */
 export interface RuntimeCompositeInput {
@@ -145,6 +153,14 @@ export interface RuntimeCompositeInput {
   readonly 'defer.finalize': FinalizeDeferredScopeInput
   /** Atomically abandon an unfinalized scope and all staged siblings. */
   readonly 'defer.abandon': AbandonDeferredScopeInput
+  /** Renew an open deferred scope lease for a live owner heartbeat. */
+  readonly 'defer.renew': RenewDeferredScopeLeaseInput
+  /**
+   * Atomically expire-and-abandon an open scope under maintenance takeover.
+   * One transaction proves the observed fence/expiry, abandons siblings, and
+   * ends terminal — never leaves an open scope under the maintenance token.
+   */
+  readonly 'defer.expire': ExpireDeferredScopeInput
 }
 
 /** Results returned by named composite operations. */
@@ -181,6 +197,10 @@ export interface RuntimeCompositeResult {
   readonly 'defer.finalize': DeferredScopeTransitionResult
   /** Result of the terminal abandonment compare-and-set. */
   readonly 'defer.abandon': DeferredScopeTransitionResult
+  /** Result of a deferred scope lease renew. */
+  readonly 'defer.renew': RenewDeferredScopeLeaseResult
+  /** Result of the atomic expire-and-abandon maintenance composite. */
+  readonly 'defer.expire': ExpireDeferredScopeResult
 }
 
 /** Execute a named composite operation. */
@@ -216,6 +236,8 @@ export const runtimeCompositeBodies: {
   'defer.stage': stageDeferredIntentInTransaction,
   'defer.finalize': finalizeDeferredScopeInTransaction,
   'defer.abandon': abandonDeferredScopeInTransaction,
+  'defer.renew': renewDeferredScopeLeaseInTransaction,
+  'defer.expire': expireDeferredScopeInTransaction,
 })
 
 /**

@@ -25,7 +25,9 @@ const TABLES = [
 
 export type RuntimePostgresTable = (typeof TABLES)[number]
 
-export const REQUIRED_COLUMNS: Readonly<Record<RuntimePostgresTable, readonly string[]>> = {
+export const REQUIRED_COLUMNS: Readonly<
+  Record<RuntimePostgresTable, readonly string[]>
+> = {
   work: [
     'namespace',
     'work_id',
@@ -56,7 +58,14 @@ export const REQUIRED_COLUMNS: Readonly<Record<RuntimePostgresTable, readonly st
     'scheduled_work',
     'updated_at',
   ],
-  events: ['event_id', 'namespace', 'name', 'payload', 'duplicate_key', 'appended_at'],
+  events: [
+    'event_id',
+    'namespace',
+    'name',
+    'payload',
+    'duplicate_key',
+    'appended_at',
+  ],
   waiters: [
     'waiter_id',
     'namespace',
@@ -81,7 +90,16 @@ export const REQUIRED_COLUMNS: Readonly<Record<RuntimePostgresTable, readonly st
     'state',
     'settled_at',
   ],
-  outbox: ['outbox_id', 'namespace', 'work_id', 'envelope', 'state', 'attempts', 'next_attempt_at', 'confirmed_at'],
+  outbox: [
+    'outbox_id',
+    'namespace',
+    'work_id',
+    'envelope',
+    'state',
+    'attempts',
+    'next_attempt_at',
+    'confirmed_at',
+  ],
   idempotency: ['namespace', 'key', 'completed_at'],
   leases: ['resource', 'token', 'expires_at', 'owner_id'],
   idle_counters: ['namespace', 'scope', 'count'],
@@ -251,14 +269,22 @@ export function ddlStatements(schema: string): readonly string[] {
   ]
 }
 
-export async function applyDdl(client: PgExecutor, schema: string): Promise<void> {
-  await client.query('SELECT pg_advisory_xact_lock($1)', [advisoryLockKey(schema)])
+export async function applyDdl(
+  client: PgExecutor,
+  schema: string,
+): Promise<void> {
+  await client.query('SELECT pg_advisory_xact_lock($1)', [
+    advisoryLockKey(schema),
+  ])
   for (const statement of ddlStatements(schema)) {
     await client.query(statement)
   }
 }
 
-export async function checkDdl(client: PgExecutor, schema: string): Promise<readonly RuntimeSetupFinding[]> {
+export async function checkDdl(
+  client: PgExecutor,
+  schema: string,
+): Promise<readonly RuntimeSetupFinding[]> {
   const tableResult = await client.query<{ table_name: string }>(
     `SELECT table_name
        FROM information_schema.tables
@@ -320,7 +346,9 @@ export async function checkDdl(client: PgExecutor, schema: string): Promise<read
     'idempotency_completed_at_idx',
     ...DEFERRED_REQUIRED_INDEXES,
   ]
-  const missingIndexes = requiredIndexes.filter((name) => !existingIndexes.has(name))
+  const missingIndexes = requiredIndexes.filter(
+    (name) => !existingIndexes.has(name),
+  )
 
   return [
     ...missingTables.map((name) =>
@@ -347,12 +375,16 @@ export async function checkDdl(client: PgExecutor, schema: string): Promise<read
   ]
 }
 
-function setupFinding(resource: string, message: string, schema: string): RuntimeSetupFinding {
+function setupFinding(
+  resource: string,
+  message: string,
+  schema: string,
+): RuntimeSetupFinding {
   return {
     code: 'SETUP_REQUIRED',
     resource,
     message,
-    remediation: `Run crux runtime setup --apply or call postgres({ schema: ${JSON.stringify(schema)} }).setup.apply().`,
+    remediation: `Run crux setup --apply or call postgres({ schema: ${JSON.stringify(schema)} }).setup.apply().`,
   }
 }
 

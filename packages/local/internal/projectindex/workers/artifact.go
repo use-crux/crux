@@ -69,3 +69,13 @@ func (w *Bundle) RunRuntimeOperation(ctx context.Context, root, operation, workI
 	}
 	return w.streamArtifact(ctx, req, projectindex.ProjectIndexArtifactRuntimeOperation)
 }
+
+// RunSetupOperation executes aggregate project setup in the TypeScript worker.
+func (w *Bundle) RunSetupOperation(ctx context.Context, root, mode string) (json.RawMessage, error) {
+	req := requestwire.Request{
+		Method:    "runSetupOperation",
+		Root:      root,
+		SetupMode: mode,
+	}
+	return w.streamArtifact(ctx, req, projectindex.ProjectIndexArtifactSetupOperation)
+}

@@ -41,11 +41,11 @@ The adapter stores work items, flow snapshots, durable events, waiters, timers, 
 
 ## Setup
 
-`postgres()` exposes a setup port used by `crux runtime setup`:
+`postgres()` exposes a setup port used by `crux setup`:
 
 ```bash
-crux runtime setup --check
-crux runtime setup --apply
+crux setup --check
+crux setup --apply
 ```
 
 `--check` never mutates resources. `--apply` performs additive setup only: schema, tables, indexes, and advisory-lock migration state owned by Crux. Destructive migrations are not automatic.

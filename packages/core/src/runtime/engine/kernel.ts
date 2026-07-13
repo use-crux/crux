@@ -34,6 +34,7 @@ import { runDefaultRuntimeComposite } from './composites'
 import type {
   AbandonDeferredScopeInput,
   FinalizeDeferredScopeInput,
+  RenewDeferredScopeLeaseInput,
   StageDeferredIntentInput,
 } from './kernel-deferred'
 
@@ -108,6 +109,8 @@ export function createRuntimeKernel(
       runComposite('defer.finalize', input),
     abandonDeferredScope: (input: AbandonDeferredScopeInput) =>
       runComposite('defer.abandon', input),
+    renewDeferredScopeLease: (input: RenewDeferredScopeLeaseInput) =>
+      runComposite('defer.renew', input),
     enqueueTask: (input: EnqueueTaskInput) => enqueueTask(deps, input),
     recordSuspension: (input: RecordSuspensionInput) =>
       recordSuspension(deps, input),

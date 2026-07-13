@@ -14,6 +14,69 @@ import type { RunStoreAdapterTestsOptions } from './store-types'
 export function registerDeferredRecoveryTests<
   TStore extends RuntimeStoreAdapter,
 >(options: RunStoreAdapterTestsOptions<TStore>): void {
+  it('invariant: deferred intents choose exactly one terminal state', async () => {
+    const store = await options.createStore()
+    const now = new Date('2026-07-12T00:00:00.000Z')
+    const released = await store.transact((tx) =>
+      tx.deferred.createIntent({
+        namespace: 'tenant-a',
+        scopeId: 'scope_terminal_released' as DeferredScopeId,
+        intentId: 'intent_terminal_released' as DeferredIntentId,
+        workId: 'work_terminal_released' as WorkId,
+        targetId: 'send-email' as RuntimeTargetId,
+        input: { terminal: 'released' },
+        state: 'staged',
+        createdAt: now,
+        updatedAt: now,
+      }),
+    )
+    const abandoned = await store.transact((tx) =>
+      tx.deferred.createIntent({
+        namespace: 'tenant-a',
+        scopeId: 'scope_terminal_abandoned' as DeferredScopeId,
+        intentId: 'intent_terminal_abandoned' as DeferredIntentId,
+        workId: 'work_terminal_abandoned' as WorkId,
+        targetId: 'send-email' as RuntimeTargetId,
+        input: { terminal: 'abandoned' },
+        state: 'staged',
+        createdAt: now,
+        updatedAt: now,
+      }),
+    )
+
+    await store.transact(async (tx) => {
+      await tx.deferred.putIntent({
+        ...released,
+        state: 'released',
+        updatedAt: new Date('2026-07-12T00:00:01.000Z'),
+      })
+      await tx.deferred.putIntent({
+        ...abandoned,
+        state: 'abandoned',
+        updatedAt: new Date('2026-07-12T00:00:01.000Z'),
+      })
+    })
+    await store.transact(async (tx) => {
+      await tx.deferred.putIntent({
+        ...released,
+        state: 'abandoned',
+        updatedAt: new Date('2026-07-12T00:00:02.000Z'),
+      })
+      await tx.deferred.putIntent({
+        ...abandoned,
+        state: 'released',
+        updatedAt: new Date('2026-07-12T00:00:02.000Z'),
+      })
+    })
+
+    await expect(
+      store.deferred.getIntent(released.intentId, { namespace: 'tenant-a' }),
+    ).resolves.toMatchObject({ state: 'released' })
+    await expect(
+      store.deferred.getIntent(abandoned.intentId, { namespace: 'tenant-a' }),
+    ).resolves.toMatchObject({ state: 'abandoned' })
+  })
+
   it('invariant: staged work survives kernel reconstruction and is abandoned after liveness expiry', async () => {
     vi.useFakeTimers()
     try {

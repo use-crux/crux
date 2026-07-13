@@ -10,7 +10,9 @@ export default defineSchema({
     embedding: v.optional(v.array(v.float64())),
     createdAt: v.number(),
     updatedAt: v.number(),
-  }).index(STORE_DOC_COMPONENT_SPEC.indexes.byKey, [STORE_DOC_COMPONENT_SPEC.fields.key]),
+  }).index(STORE_DOC_COMPONENT_SPEC.indexes.byKey, [
+    STORE_DOC_COMPONENT_SPEC.fields.key,
+  ]),
 
   swarmRuns: defineTable({
     swarmRunId: v.string(),
@@ -19,7 +21,11 @@ export default defineSchema({
     handoffCount: v.number(),
     currentInput: v.any(),
     originalInput: v.any(),
-    status: v.union(v.literal('running'), v.literal('completed'), v.literal('error')),
+    status: v.union(
+      v.literal('running'),
+      v.literal('completed'),
+      v.literal('error'),
+    ),
     output: v.optional(v.any()),
     error: v.optional(v.string()),
     flowId: v.string(),
@@ -140,8 +146,17 @@ export default defineSchema({
     .index('by_outbox_id', ['outboxId'])
     .index('by_namespace_state_next', ['namespace', 'state', 'nextAttemptAt'])
     .index('by_work_state_next', ['workId', 'state', 'nextAttemptAt'])
-    .index('by_work_namespace_state_next', ['workId', 'namespace', 'state', 'nextAttemptAt'])
-    .index('by_namespace_state_confirmed', ['namespace', 'state', 'confirmedAt'])
+    .index('by_work_namespace_state_next', [
+      'workId',
+      'namespace',
+      'state',
+      'nextAttemptAt',
+    ])
+    .index('by_namespace_state_confirmed', [
+      'namespace',
+      'state',
+      'confirmedAt',
+    ])
     .index('by_state_confirmed', ['state', 'confirmedAt']),
 
   runtimeIdempotency: defineTable({
@@ -177,7 +192,11 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index('by_scope', ['namespace', 'scopeId'])
-    .index('by_namespace_state_expiry', ['namespace', 'finalizationState', 'leaseExpiresAt']),
+    .index('by_namespace_state_expiry', [
+      'namespace',
+      'finalizationState',
+      'leaseExpiresAt',
+    ]),
 
   runtimeDeferredIntents: defineTable({
     namespace: v.string(),
@@ -186,6 +205,7 @@ export default defineSchema({
     workId: v.string(),
     targetId: v.string(),
     input: v.any(),
+    provenance: v.optional(v.any()),
     state: v.string(),
     createdAt: v.number(),
     updatedAt: v.number(),
