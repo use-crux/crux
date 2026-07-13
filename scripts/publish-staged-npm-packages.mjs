@@ -181,7 +181,8 @@ function parseNpmViewVersion(stdout) {
   const trimmed = stdout.trim()
   if (!trimmed) return undefined
   try {
-    return JSON.parse(trimmed)
+    const parsed = JSON.parse(trimmed)
+    return Array.isArray(parsed) ? parsed[0] : parsed
   } catch {
     return trimmed
   }
