@@ -262,7 +262,7 @@ export {
   validateTranscribeOptions,
   validateAudioBytes,
   validateTranscriptionResult,
-} from './transcription'
+} from "./transcription";
 export type {
   AudioSource,
   NativeTranscriptionResult,
@@ -272,16 +272,16 @@ export type {
   TranscribeOptions,
   TranscriptionResult,
   TranscriptInterval,
-} from './transcription'
+} from "./transcription";
 export {
   createGenerateSpeechResult,
   validateGenerateSpeechOptions,
-} from './speech'
+} from "./speech";
 export type {
   GenerateSpeech,
   GenerateSpeechOptions,
   GenerateSpeechResult,
-} from './speech'
+} from "./speech";
 
 // Request-scoped deferred work
 export { defer, CruxDeferError, DEFER_ERROR_CODES } from "./defer";
@@ -407,6 +407,8 @@ export type {
 export type {
   ToolApprovalDecision,
   ToolApprovalDecisionEvent,
+  ToolApprovalPolicyIdentity,
+  ToolApprovalReplayProvenance,
   ToolApprovalRequest,
   ToolApprovalRequestPart,
   ToolApprovalRequestPayload,

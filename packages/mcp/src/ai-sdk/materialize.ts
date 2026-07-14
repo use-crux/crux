@@ -15,6 +15,7 @@ import type {
   ToolSource,
   ToolSourceMaterializationContext,
 } from "@use-crux/core/tools";
+import { withToolSourceReplayIdentity } from "@use-crux/core/tools";
 
 import type {
   McpToolSource,
@@ -34,6 +35,7 @@ import {
 import { normalizeMcpToolResult } from "../official-client/result";
 import { mcpInputSchema, mcpOutputSchema } from "../official-client/schema";
 import { canonicalFingerprint } from "../official-client/canonical";
+import { mcpApprovalReplayIdentity } from "../official-client/approval-replay";
 import { createSafeRedirectFetch } from "../official-client/transport";
 import {
   createAiSdkMcpClient,
@@ -190,41 +192,44 @@ function wrapNativeTool(
     throw mcpToolSourceError("schema", errorContext, error);
   }
 
-  return {
-    ...nativeTool,
-    description: projected.tool.description ?? projected.tool.name,
-    parameters,
-    async execute(input, options) {
-      const validatedInput = await parameters.parseAsync(input);
-      const abortSignal = options.abortSignal ?? context.abortSignal;
-      abortSignal?.throwIfAborted();
-      const result = await nativeTool.execute!(validatedInput, {
-        ...options,
-        messages: options.messages ?? [],
-        abortSignal,
-      } as never);
-      const normalized = normalizeMcpToolResult(result);
-      if (outputSchema && normalized.structuredContent === undefined) {
-        if (!normalized.isError) {
-          throw new TypeError(
-            `MCP tool "${projected.tool.name}" advertised an output schema but returned no structured content.`,
+  return withToolSourceReplayIdentity(
+    {
+      ...nativeTool,
+      description: projected.tool.description ?? projected.tool.name,
+      parameters,
+      async execute(input, options) {
+        const validatedInput = await parameters.parseAsync(input);
+        const abortSignal = options.abortSignal ?? context.abortSignal;
+        abortSignal?.throwIfAborted();
+        const result = await nativeTool.execute!(validatedInput, {
+          ...options,
+          messages: options.messages ?? [],
+          abortSignal,
+        } as never);
+        const normalized = normalizeMcpToolResult(result);
+        if (outputSchema && normalized.structuredContent === undefined) {
+          if (!normalized.isError) {
+            throw new TypeError(
+              `MCP tool "${projected.tool.name}" advertised an output schema but returned no structured content.`,
+            );
+          }
+        } else if (outputSchema && normalized.structuredContent !== undefined) {
+          const validation = await outputSchema.safeParseAsync(
+            normalized.structuredContent,
           );
+          if (!validation.success) {
+            throw new TypeError(
+              `MCP tool "${projected.tool.name}" returned structured content that does not match its output schema.`,
+              { cause: validation.error },
+            );
+          }
         }
-      } else if (outputSchema && normalized.structuredContent !== undefined) {
-        const validation = await outputSchema.safeParseAsync(
-          normalized.structuredContent,
-        );
-        if (!validation.success) {
-          throw new TypeError(
-            `MCP tool "${projected.tool.name}" returned structured content that does not match its output schema.`,
-            { cause: validation.error },
-          );
-        }
-      }
-      return normalized;
-    },
-    mcp: projected.metadata,
-  } as AiSdkMcpMaterializedTool;
+        return normalized;
+      },
+      mcp: projected.metadata,
+    } as AiSdkMcpMaterializedTool,
+    mcpApprovalReplayIdentity(projected.metadata),
+  );
 }
 
 function createNativeTransport(config: McpTransportConfig):

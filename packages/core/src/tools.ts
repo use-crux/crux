@@ -11,11 +11,14 @@
 export { tool } from './tools/define-tool'
 export {
   TOOL_SOURCE,
+  TOOL_SOURCE_REPLAY_IDENTITY,
   ToolSourceUnsupportedError,
   isToolSource,
+  toolSourceReplayIdentity,
+  withToolSourceReplayIdentity,
 } from './tools/tool-source'
 export { toolPolicy } from './safety/toolPolicy'
-export type { ToolConfig, NamedToolDef } from './tools/types'
+export type { ToolApprovalPolicyIdentity, ToolApprovalReplayProvenance, ToolConfig, NamedToolDef } from './tools/types'
 export type {
   KnownToolsFor,
   MergeKnownTools,

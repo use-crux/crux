@@ -11,6 +11,7 @@ import {
   approvalMiddleware,
   toolMiddleware,
   withApprovalMiddlewareRequestObserver,
+  withApprovalMiddlewarePolicyIdentity,
   withToolMiddlewareDefinitionRef,
 } from '../../tools/middleware'
 import type { ToolCallContext, ToolMatcher, ToolMiddleware, ToolMiddlewareNext } from '../../tools/types'
@@ -38,32 +39,35 @@ interface ToolPolicyFactory {
 /** Create a Safety-owned tool policy mounted through the tool middleware seam. */
 function defineToolPolicy(config: ToolPolicyConfig): ToolMiddleware {
   if (config.action === 'requestApproval') {
-    const middleware = withApprovalMiddlewareRequestObserver(
-      approvalMiddleware({
-        id: config.id,
-        match: normalizeMatch(config.match),
-        onRequest: config.reason
-          ? () => {
-              // Approval request copy is carried by docs/devtools in Phase 5.
-            }
-          : undefined,
-      }),
-      (call) => {
-        recordToolPolicyDecision(
-          createToolPolicyDecision({
-            policyId: config.id,
-            boundary: 'approval.request',
-            action: 'request_approval',
-            severity: 'info',
-            reason: config.reason,
-            subject: {
-              toolCallId: call.toolCallId,
-              toolName: call.toolName,
-              input: call.input,
-            },
-          }),
-        )
-      },
+    const middleware = withApprovalMiddlewarePolicyIdentity(
+      withApprovalMiddlewareRequestObserver(
+        approvalMiddleware({
+          id: config.id,
+          match: normalizeMatch(config.match),
+          onRequest: config.reason
+            ? () => {
+                // Approval request copy is carried by docs/devtools in Phase 5.
+              }
+            : undefined,
+        }),
+        (call) => {
+          recordToolPolicyDecision(
+            createToolPolicyDecision({
+              policyId: config.id,
+              boundary: 'approval.request',
+              action: 'request_approval',
+              severity: 'info',
+              reason: config.reason,
+              subject: {
+                toolCallId: call.toolCallId,
+                toolName: call.toolName,
+                input: call.input,
+              },
+            }),
+          )
+        },
+      ),
+      { kind: 'toolPolicy', id: config.id },
     )
     return withToolMiddlewareDefinitionRef(middleware, toolPolicyDefinitionRef(config.id))
   }

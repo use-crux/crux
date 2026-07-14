@@ -14,11 +14,9 @@
 
 import type { ContentPart, Message, MessageContent } from '@use-crux/core'
 import type { AiSdkContentPartOptions } from './content-parts'
-import {
-  decodeContentFromAiSdkParts,
-  encodeContentForAiSdk,
-} from './content-parts'
+import { decodeContentFromAiSdkParts, encodeContentForAiSdk } from './content-parts'
 import { decodeAssistantContentFromAiSdkParts } from './assistant-content'
+import { approvalRequestFromAiSdkPart } from './approval-messages'
 import { isRecord, readString } from './object-utils'
 
 interface CanonicalToolCall {
@@ -106,9 +104,7 @@ type AiSdkToolResultOutput =
   | { readonly type: 'content'; readonly value: readonly ContentPart[] }
 
 function toolResultOutputFromContent(content: MessageContent): AiSdkToolResultOutput {
-  return typeof content === 'string'
-    ? { type: 'text', value: content }
-    : { type: 'content', value: content }
+  return typeof content === 'string' ? { type: 'text', value: content } : { type: 'content', value: content }
 }
 
 interface ResponseMessagePart {
@@ -223,6 +219,11 @@ export function normalizeAiSdkMessages(
     const role = normalizeRole(msg.role)
     const metadata: Record<string, unknown> = {}
 
+    // Crux messages are also accepted by the AI adapter. Preserve their
+    // durable bookkeeping metadata before enriching native AI SDK shapes so
+    // approval requests survive a cross-process resume unchanged.
+    if (isRecord(msg.metadata)) Object.assign(metadata, msg.metadata)
+
     if (msg.toolCallId) metadata.toolCallId = msg.toolCallId
     if (msg.toolName) metadata.toolName = msg.toolName
     const providerMeta = (msg as { experimental_providerMetadata?: unknown }).experimental_providerMetadata
@@ -243,20 +244,7 @@ export function normalizeAiSdkMessages(
       }
       const approvalRequests = parts.filter((p) => p.type === 'tool-approval-request')
       if (role === 'assistant' && approvalRequests.length > 0) {
-        metadata.toolApprovalRequests = approvalRequests.map((request) => {
-          const toolCall = readRecord(request.toolCall)
-          return {
-            approvalId: readString(request, 'approvalId') ?? '',
-            toolCallId: readString(request, 'toolCallId') ?? readString(toolCall, 'toolCallId') ?? '',
-            ...(readString(request, 'toolName') ?? readString(toolCall, 'toolName')
-              ? { toolName: readString(request, 'toolName') ?? readString(toolCall, 'toolName') }
-              : {}),
-            ...(request.input !== undefined || toolCall?.input !== undefined
-              ? { input: request.input ?? toolCall?.input }
-              : {}),
-            ...(readString(request, 'approvalToken') ? { approvalToken: readString(request, 'approvalToken') } : {}),
-          }
-        })
+        metadata.toolApprovalRequests = approvalRequests.map(approvalRequestFromAiSdkPart)
       }
       const approvalResponse = parts.find((p) => p.type === 'tool-approval-response')
       if (role === 'tool' && approvalResponse) {
@@ -291,8 +279,4 @@ function toolResultContentFromResponsePart(part: ResponseMessagePart): MessageCo
   if (typeof value === 'string') return value
   if (Array.isArray(value)) return decodeContentFromAiSdkParts(value.filter(isRecord))
   return JSON.stringify(value ?? null)
-}
-
-function readRecord(value: unknown): Record<string, unknown> | undefined {
-  return isRecord(value) ? value : undefined
 }

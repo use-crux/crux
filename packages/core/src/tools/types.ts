@@ -17,13 +17,7 @@
  */
 
 import type { z } from 'zod'
-import type {
-  JsonValue,
-  ToolDef,
-  ToolExecutionOptions,
-  ToolModelOutput,
-  ToModelOutputArgs,
-} from '../types/tool'
+import type { JsonValue, ToolDef, ToolExecutionOptions, ToolModelOutput, ToModelOutputArgs } from '../types/tool'
 
 // ─────────────────────────────────────────────────────────────────
 // Tool authoring
@@ -57,9 +51,7 @@ export interface ToolConfig<
   contextSchema?: TContextSchema
   execute: (
     input: z.infer<TInputSchema>,
-    options: ToolExecutionOptions<
-      TContextSchema extends z.ZodType ? z.infer<TContextSchema> : never
-    >,
+    options: ToolExecutionOptions<TContextSchema extends z.ZodType ? z.infer<TContextSchema> : never>,
   ) => TOutput | Promise<TOutput>
   toModelOutput?: (
     args: ToModelOutputArgs<z.infer<TInputSchema>, TOutput>,
@@ -95,6 +87,28 @@ export interface ToolApprovalRequestPayload {
   readonly details?: JsonValue
 }
 
+/** Stable identity of one policy that positively requested approval. */
+export type ToolApprovalPolicyIdentity =
+  | {
+      readonly kind: 'declaration'
+      readonly layer: 'call' | 'prompt' | 'context'
+      readonly key: string
+      readonly policyKind: 'always' | 'function'
+      readonly owner?: string
+    }
+  | { readonly kind: 'approvalMiddleware'; readonly id: string }
+  | { readonly kind: 'toolPolicy'; readonly id: string }
+
+/** Versioned, request-local identity used to validate stateless replay. */
+export interface ToolApprovalReplayProvenance {
+  readonly version: 1
+  /** Source-owned, secret-free tool identity. Core treats this as opaque JSON. */
+  readonly tool: JsonValue
+  readonly policies: readonly ToolApprovalPolicyIdentity[]
+  /** Lowercase HMAC-SHA256 over the canonical approved request. */
+  readonly commitment: string
+}
+
 /** Message part emitted when a tool call is suspended pending approval. */
 export interface ToolApprovalRequestPart {
   readonly type: 'tool-approval-request'
@@ -104,6 +118,7 @@ export interface ToolApprovalRequestPart {
   readonly input: JsonValue
   readonly request?: ToolApprovalRequestPayload
   readonly approvalToken?: string
+  readonly replay?: ToolApprovalReplayProvenance
 }
 
 /** Message part carrying a user's decision on a pending approval. */
@@ -123,6 +138,7 @@ export interface ToolApprovalRequest {
   readonly input: unknown
   readonly request?: ToolApprovalRequestPayload
   readonly approvalToken?: string
+  readonly replay?: ToolApprovalReplayProvenance
 }
 
 /** Normalized approval decision, resolved from message history. */
@@ -144,19 +160,12 @@ export interface ToolApprovalDecision {
  * exposed as an optional field here even though authored tool `execute`
  * functions receive the stricter {@link ToolExecutionOptions} shape.
  */
-export type ToolCallExecutionOptions<
-  TContext = unknown,
-  TRuntimeContext = unknown,
-> =
+export type ToolCallExecutionOptions<TContext = unknown, TRuntimeContext = unknown> =
   | ToolExecutionOptions<TContext, TRuntimeContext>
   | (ToolExecutionOptions<never, TRuntimeContext> & { readonly context?: TContext })
 
 /** Context describing a single tool invocation, passed to middleware hooks. */
-export interface ToolCallContext<
-  TInput = unknown,
-  TContext = unknown,
-  TRuntimeContext = unknown,
-> {
+export interface ToolCallContext<TInput = unknown, TContext = unknown, TRuntimeContext = unknown> {
   readonly toolName: string
   readonly toolCallId: string
   readonly input: TInput
@@ -207,12 +216,7 @@ export type ToolMiddlewareNext<TInput, TOutput> = (
 ) => TOutput | PromiseLike<TOutput>
 
 /** The shape of a tool's `execute` function. */
-export type ToolExecuteFunction<
-  TInput = unknown,
-  TOutput = unknown,
-  TContext = never,
-  TRuntimeContext = unknown,
-> = (
+export type ToolExecuteFunction<TInput = unknown, TOutput = unknown, TContext = never, TRuntimeContext = unknown> = (
   input: TInput,
   options: ToolExecutionOptions<TContext, TRuntimeContext>,
 ) => TOutput | PromiseLike<TOutput>
@@ -223,12 +227,7 @@ export type ToolExecuteFunction<
  * Kept intentionally loose (index signature) so middleware composes over
  * tools authored by any SDK, not just Crux's {@link NamedToolDef}.
  */
-export interface ToolLike<
-  TInput = unknown,
-  TOutput = unknown,
-  TContext = never,
-  TRuntimeContext = unknown,
-> {
+export interface ToolLike<TInput = unknown, TOutput = unknown, TContext = never, TRuntimeContext = unknown> {
   readonly description?: string
   readonly title?: string
   readonly execute?: ToolExecuteFunction<TInput, TOutput, TContext, TRuntimeContext>
@@ -249,10 +248,7 @@ export interface ToolLike<
 export interface ToolMiddleware {
   readonly _tag: 'ToolMiddleware'
   readonly id: string
-  wrapTool<TInput, TOutput>(
-    toolName: string,
-    tool: ToolLike<TInput, TOutput>,
-  ): ToolLike<TInput, TOutput>
+  wrapTool<TInput, TOutput>(toolName: string, tool: ToolLike<TInput, TOutput>): ToolLike<TInput, TOutput>
 }
 
 /** Configuration for {@link "./middleware".toolMiddleware | toolMiddleware()}. */

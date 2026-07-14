@@ -46,6 +46,10 @@ export interface McpHttpFixture {
     readonly name: string;
     readonly arguments: Readonly<Record<string, unknown>>;
   }[];
+  /** Replace subsequent `tools/list` pages to model server drift on reconnect. */
+  replaceToolPages(pages: readonly McpToolPage[]): void;
+  /** Reset server-side protocol state so the next client performs a fresh initialize. */
+  resetConnection(): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -68,42 +72,12 @@ export async function startMcpHttpFixture(
     readonly name: string;
     readonly arguments: Readonly<Record<string, unknown>>;
   }[] = [];
-  const protocol = new Server(
-    { name: "crux-mcp-test", version: "1.0.0" },
-    { capabilities: { tools: {} } },
-  );
-
-  protocol.setRequestHandler(ListToolsRequestSchema, ({ params }) => {
-    const cursor = params?.cursor;
-    requestedCursors.push(cursor);
-    if (scenario.unsafeListToolsResult) {
-      return scenario.unsafeListToolsResult(cursor) as ListToolsResult;
-    }
-    const page = pages.get(cursor);
-    if (!page) throw new Error(`Unexpected tools/list cursor: ${cursor}`);
-    return {
-      tools: [...page.tools],
-      ...(page.nextCursor !== undefined ? { nextCursor: page.nextCursor } : {}),
-    };
+  let { protocol, transport } = await createProtocolConnection({
+    pages,
+    requestedCursors,
+    scenario,
+    toolCalls,
   });
-
-  protocol.setRequestHandler(CallToolRequestSchema, async ({ params }) => {
-    if (!scenario.callTool) {
-      throw new Error(`Unexpected tools/call request for ${params.name}`);
-    }
-    const call = {
-      name: params.name,
-      arguments: params.arguments ?? {},
-    };
-    toolCalls.push(call);
-    return scenario.callTool(call);
-  });
-
-  const transport = new StreamableHTTPServerTransport({
-    sessionIdGenerator: randomUUID,
-    enableJsonResponse: true,
-  });
-  await protocol.connect(transport);
 
   const server = createServer((request, response) => {
     requestMethods.push(request.method ?? "UNKNOWN");
@@ -147,6 +121,19 @@ export async function startMcpHttpFixture(
     requestHeaders,
     requestedCursors,
     toolCalls,
+    replaceToolPages(nextPages) {
+      pages.clear();
+      for (const page of nextPages) pages.set(page.cursor, page);
+    },
+    async resetConnection() {
+      await protocol.close();
+      ({ protocol, transport } = await createProtocolConnection({
+        pages,
+        requestedCursors,
+        scenario,
+        toolCalls,
+      }));
+    },
     async close() {
       if (closed) return;
       closed = true;
@@ -154,6 +141,50 @@ export async function startMcpHttpFixture(
       await closeServer(server);
     },
   };
+}
+
+interface ProtocolConnectionOptions {
+  readonly pages: ReadonlyMap<string | undefined, McpToolPage>;
+  readonly requestedCursors: (string | undefined)[];
+  readonly scenario: McpHttpFixtureScenario;
+  readonly toolCalls: {
+    readonly name: string;
+    readonly arguments: Readonly<Record<string, unknown>>;
+  }[];
+}
+
+async function createProtocolConnection(options: ProtocolConnectionOptions) {
+  const protocol = new Server(
+    { name: "crux-mcp-test", version: "1.0.0" },
+    { capabilities: { tools: {} } },
+  );
+  protocol.setRequestHandler(ListToolsRequestSchema, ({ params }) => {
+    const cursor = params?.cursor;
+    options.requestedCursors.push(cursor);
+    if (options.scenario.unsafeListToolsResult) {
+      return options.scenario.unsafeListToolsResult(cursor) as ListToolsResult;
+    }
+    const page = options.pages.get(cursor);
+    if (!page) throw new Error(`Unexpected tools/list cursor: ${cursor}`);
+    return {
+      tools: [...page.tools],
+      ...(page.nextCursor !== undefined ? { nextCursor: page.nextCursor } : {}),
+    };
+  });
+  protocol.setRequestHandler(CallToolRequestSchema, async ({ params }) => {
+    if (!options.scenario.callTool) {
+      throw new Error(`Unexpected tools/call request for ${params.name}`);
+    }
+    const call = { name: params.name, arguments: params.arguments ?? {} };
+    options.toolCalls.push(call);
+    return options.scenario.callTool(call);
+  });
+  const transport = new StreamableHTTPServerTransport({
+    sessionIdGenerator: randomUUID,
+    enableJsonResponse: true,
+  });
+  await protocol.connect(transport);
+  return { protocol, transport };
 }
 
 async function handleRequest(

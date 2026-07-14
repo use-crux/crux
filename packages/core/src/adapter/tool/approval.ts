@@ -13,6 +13,7 @@ import { observe } from '../../observability'
 import { findToolApprovalDecision, findToolApprovalRequests } from '../../tools/approvals'
 import type { Message } from '../../generation/messages'
 import type { JsonValue, ToolModelOutput } from '../../types/tool'
+import type { ToolApprovalReplayProvenance } from '../../tools/types'
 import type { AdapterResponse } from '../types'
 import { emitToolArgsArtifact, emitToolResultArtifact, measureModelOutput } from './emission'
 import { collectToolApprovalDecisions } from '../../tools/internal/message-parsing'
@@ -42,6 +43,8 @@ export interface ApprovalRequestInfo {
   readonly input: JsonValue
   /** Random token that must round-trip through the approval response. */
   readonly approvalToken: string
+  /** Source/policy commitment required to authorize a rediscovered tool. */
+  readonly replay?: ToolApprovalReplayProvenance
 }
 
 /** Invalid approval response paired with the tool call it tried to decide. */
@@ -218,14 +221,14 @@ export function findInvalidApprovalToolCalls(messages: readonly Message[]): read
         name: toolName,
         args: request?.input ?? call?.args,
         approvalId: decision.approvalId,
-        message: invalidApprovalMessage(toolName, decision.approvalId),
+        message: invalidApprovalMessage(),
       },
     ]
   })
 }
 
-function invalidApprovalMessage(toolName: string, approvalId: string): string {
-  return `Tool approval response for "${toolName}" (${approvalId}) has no matching request or an invalid token; treating as denied.`
+function invalidApprovalMessage(): string {
+  return 'The approved tool request changed and was not executed. Request approval again.'
 }
 
 function toolCallIdFromApprovalId(approvalId: string): string | undefined {

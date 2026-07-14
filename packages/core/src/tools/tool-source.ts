@@ -8,8 +8,15 @@
  * @module
  */
 
+import type { JsonValue } from "../types/tool";
+
 /** Brand applied to tool sources created by integration packages. */
 export const TOOL_SOURCE: unique symbol = Symbol.for("crux.toolSource");
+
+/** Internal symbol carrying a source-owned, secret-free replay identity. */
+export const TOOL_SOURCE_REPLAY_IDENTITY: unique symbol = Symbol.for(
+  "crux.toolSourceReplayIdentity",
+);
 
 /**
  * An inert source of tools that an execution dialect can materialize.
@@ -42,6 +49,22 @@ export type ToolSourceMaterializer = (
   source: ToolSource,
   context: ToolSourceMaterializationContext,
 ) => ToolSourceSession | Promise<ToolSourceSession>;
+
+/** Attach opaque, JSON-safe identity used to validate approval replay. */
+export function withToolSourceReplayIdentity<TTool extends object>(
+  tool: TTool,
+  identity: JsonValue,
+): TTool {
+  return Object.assign(tool, { [TOOL_SOURCE_REPLAY_IDENTITY]: identity });
+}
+
+/** Read a materialized tool's opaque replay identity. @internal */
+export function toolSourceReplayIdentity(tool: unknown): JsonValue | undefined {
+  if (typeof tool !== "object" || tool === null) return undefined;
+  return (tool as { readonly [TOOL_SOURCE_REPLAY_IDENTITY]?: JsonValue })[
+    TOOL_SOURCE_REPLAY_IDENTITY
+  ];
+}
 
 /** Return whether a value carries Core's tool-source brand. */
 export function isToolSource(value: unknown): value is ToolSource {

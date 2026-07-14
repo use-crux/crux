@@ -35,6 +35,7 @@ import type {
   ToolMiddleware,
   ToolMiddlewareConfig,
   ToolMiddlewareNext,
+  ToolApprovalPolicyIdentity,
 } from './types'
 
 interface ApprovalMetadata<TInput = unknown> {
@@ -45,10 +46,12 @@ interface ApprovalMetadata<TInput = unknown> {
   readonly observeRequest?: (call: ToolCallContext<TInput>) => void
   readonly onApproved?: (event: ToolApprovalDecisionEvent<TInput>) => void | PromiseLike<void>
   readonly onDenied?: (event: ToolApprovalDecisionEvent<TInput>) => void | PromiseLike<void>
+  readonly policyIdentity: ToolApprovalPolicyIdentity
 }
 
-const approvalMetadata = new WeakMap<object, ApprovalMetadata>()
+const approvalMetadata = new WeakMap<object, readonly ApprovalMetadata[]>()
 const approvalRequestObservers = new WeakMap<object, (call: ToolCallContext) => void>()
+const approvalPolicyIdentities = new WeakMap<object, ToolApprovalPolicyIdentity>()
 const middlewareDefinitionRefs = new WeakMap<object, readonly DefinitionRef[]>()
 const wrappedToolDefinitionRefs = new WeakMap<object, readonly DefinitionRef[]>()
 const handledApprovals = new Set<string>()
@@ -72,6 +75,15 @@ export function withApprovalMiddlewareRequestObserver(
   observer: (call: ToolCallContext) => void,
 ): ToolMiddleware {
   approvalRequestObservers.set(middleware, observer)
+  return middleware
+}
+
+/** Override an approval middleware's canonical requesting identity. @internal */
+export function withApprovalMiddlewarePolicyIdentity(
+  middleware: ToolMiddleware,
+  identity: ToolApprovalPolicyIdentity,
+): ToolMiddleware {
+  approvalPolicyIdentities.set(middleware, identity)
   return middleware
 }
 
@@ -172,7 +184,10 @@ export function approvalMiddleware<TInput = unknown>(config: ApprovalMiddlewareC
   const middleware: ToolMiddleware = {
     _tag: 'ToolMiddleware',
     id: config.id,
-    wrapTool<TToolInput, TOutput>(toolName: string, tool: ToolLike<TToolInput, TOutput>): ToolLike<TToolInput, TOutput> {
+    wrapTool<TToolInput, TOutput>(
+      toolName: string,
+      tool: ToolLike<TToolInput, TOutput>,
+    ): ToolLike<TToolInput, TOutput> {
       const originalExecute = tool.execute
 
       const wrapped: ToolLike<TToolInput, TOutput> = {
@@ -206,15 +221,22 @@ export function approvalMiddleware<TInput = unknown>(config: ApprovalMiddlewareC
           : {}),
       }
 
-      approvalMetadata.set(wrapped, {
-        middlewareId: config.id,
-        toolName,
-        match: config.match as readonly ToolMatcher[],
-        onRequest: config.onRequest as ApprovalMetadata['onRequest'],
-        observeRequest: approvalRequestObservers.get(middleware),
-        onApproved: config.onApproved as ApprovalMetadata['onApproved'],
-        onDenied: config.onDenied as ApprovalMetadata['onDenied'],
-      })
+      approvalMetadata.set(wrapped, [
+        ...(approvalMetadata.get(tool) ?? []),
+        {
+          middlewareId: config.id,
+          toolName,
+          match: config.match as readonly ToolMatcher[],
+          onRequest: config.onRequest as ApprovalMetadata['onRequest'],
+          observeRequest: approvalRequestObservers.get(middleware),
+          onApproved: config.onApproved as ApprovalMetadata['onApproved'],
+          onDenied: config.onDenied as ApprovalMetadata['onDenied'],
+          policyIdentity: approvalPolicyIdentities.get(middleware) ?? {
+            kind: 'approvalMiddleware',
+            id: config.id,
+          },
+        },
+      ])
       return wrapped
     },
   }
@@ -224,6 +246,7 @@ export function approvalMiddleware<TInput = unknown>(config: ApprovalMiddlewareC
 /** Result of evaluating approval middleware for one concrete call. @internal */
 export interface ApprovalMiddlewareEvaluation {
   readonly requiresApproval: boolean
+  readonly policies: readonly ToolApprovalPolicyIdentity[]
   readonly observeRequest?: () => void
 }
 
@@ -231,16 +254,28 @@ export interface ApprovalMiddlewareEvaluation {
 export async function evaluateApprovalMiddlewareRequest(
   tool: unknown,
   call: ToolCallContext,
+  options: { readonly notifyRequest?: boolean } = {},
 ): Promise<ApprovalMiddlewareEvaluation> {
-  if (!isToolLike(tool)) return { requiresApproval: false }
-  const metadata = approvalMetadata.get(tool)
-  if (!metadata) return { requiresApproval: false }
-  const matched = await matchesAny(metadata.match, call)
-  if (!matched) return { requiresApproval: false }
-  await metadata.onRequest?.(call)
+  if (!isToolLike(tool)) return { requiresApproval: false, policies: [] }
+  const metadata = approvalMetadata.get(tool) ?? []
+  const matched: ApprovalMetadata[] = []
+  for (const candidate of metadata) {
+    if (await matchesAny(candidate.match, call)) matched.push(candidate)
+  }
+  if (matched.length === 0) return { requiresApproval: false, policies: [] }
+  if (options.notifyRequest !== false) {
+    for (const candidate of matched) await candidate.onRequest?.(call)
+  }
   return {
     requiresApproval: true,
-    ...(metadata.observeRequest ? { observeRequest: () => metadata.observeRequest?.(call) } : {}),
+    policies: matched.map((candidate) => candidate.policyIdentity),
+    ...(matched.some((candidate) => candidate.observeRequest)
+      ? {
+          observeRequest: () => {
+            for (const candidate of matched) candidate.observeRequest?.(call)
+          },
+        }
+      : {}),
   }
 }
 
@@ -266,10 +301,7 @@ export function applyToolMiddleware<TTools extends Record<string, unknown>>(
 
     wrapped[toolName] = chain.reduce<ToolLike>((current, item) => {
       const next = item.wrapTool(toolName, current)
-      const refs = [
-        ...toolMiddlewareDefinitionRefs(current),
-        ...(middlewareDefinitionRefs.get(item) ?? []),
-      ]
+      const refs = [...toolMiddlewareDefinitionRefs(current), ...(middlewareDefinitionRefs.get(item) ?? [])]
       if (refs.length > 0) wrappedToolDefinitionRefs.set(next, refs)
       return next
     }, tool)
@@ -291,8 +323,8 @@ export async function notifyToolApprovalResponses(
   for (const approval of approvals) {
     const tool = tools[approval.toolName]
     if (!isToolLike(tool)) continue
-    const metadata = approvalMetadata.get(tool)
-    if (!metadata) continue
+    const metadata = approvalMetadata.get(tool) ?? []
+    if (metadata.length === 0) continue
 
     const key = approvalDecisionKey(approval.approvalId, approval.approved ? 'approved' : 'denied')
     if (handledApprovals.has(key)) continue
@@ -308,11 +340,17 @@ export async function notifyToolApprovalResponses(
       status: approval.approved ? 'approved' : 'denied',
       ...(approval.reason ? { reason: approval.reason } : {}),
     }
-    if (!(await matchesAny(metadata.match, event))) continue
+    const matched: ApprovalMetadata[] = []
+    for (const candidate of metadata) {
+      if (await matchesAny(candidate.match, event)) matched.push(candidate)
+    }
+    if (matched.length === 0) continue
     handledApprovals.add(key)
 
-    if (approval.approved) await metadata.onApproved?.(event)
-    else await metadata.onDenied?.(event)
+    for (const candidate of matched) {
+      if (approval.approved) await candidate.onApproved?.(event)
+      else await candidate.onDenied?.(event)
+    }
   }
 }
 

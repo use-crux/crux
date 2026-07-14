@@ -44,7 +44,7 @@ describe('createToolLifecycle — preparation', () => {
     expect(lifecycle.descriptors?.find((d) => d.name === 'echo')?.description).toBe('call echo')
   })
 
-    it('is disabled with no tools: getters undefined, resume/notify/capture are no-ops', async () => {
+  it('is disabled with no tools: getters undefined, resume/notify/capture are no-ops', async () => {
     const lifecycle = createToolLifecycle({
       regime: 'core',
       resolved: resolvedWith({}),
@@ -64,7 +64,7 @@ describe('createToolLifecycle — preparation', () => {
     expect(lifecycle.transcript).toEqual([{ t: 'prepare', tools: 0, middleware: 0 }])
   })
 
-    it('arms an instrumented tool map in the sdk regime and refuses executeRound (RFC #28)', async () => {
+  it('arms an instrumented tool map in the sdk regime and refuses executeRound (RFC #28)', async () => {
     const lifecycle = createToolLifecycle({
       regime: 'sdk',
       resolved: resolvedWith({ tools: { echo: { description: 'echo', execute: async () => 'ok' } } }),
@@ -89,7 +89,7 @@ describe('createToolLifecycle — preparation', () => {
     ).rejects.toThrow(/sdk/i)
   })
 
-    it('chains prompt middleware before call middleware (call middleware is outermost)', async () => {
+  it('chains prompt middleware before call middleware (call middleware is outermost)', async () => {
     const tool = {
       description: 'concat',
       execute: vi.fn(async (input: { v: string }) => input.v),
@@ -240,17 +240,13 @@ describe('createToolLifecycle — executeRound', () => {
       contextSchema: z.object({ apiKey: z.string() }),
       execute,
     }
-    const lifecycle = coreLifecycleWithApproval(
-      { weather },
-      [{ layer: 'prompt', key: 'weather', policy }],
-      {
-        call: {
-          runtimeContext,
-          toolsContext: { weather: { apiKey: 'secret' } },
-          toolMiddleware: toolMiddleware({ id: 'audit', beforeExecute }),
-        },
+    const lifecycle = coreLifecycleWithApproval({ weather }, [{ layer: 'prompt', key: 'weather', policy }], {
+      call: {
+        runtimeContext,
+        toolsContext: { weather: { apiKey: 'secret' } },
+        toolMiddleware: toolMiddleware({ id: 'audit', beforeExecute }),
       },
-    )
+    })
 
     const round = await lifecycle.executeRound(
       adapterResponse({ toolCalls: [{ id: 'tc1', name: 'weather', args: { city: 'Amsterdam' } }] }),
@@ -324,7 +320,7 @@ describe('createToolLifecycle — executeRound', () => {
     expect(lifecycle.transcript).toContainEqual({ t: 'round', settled: 1, suspended: 0 })
   })
 
-    it('uses the provided appendToolRound strategy for the round shape', async () => {
+  it('uses the provided appendToolRound strategy for the round shape', async () => {
     const lifecycle = coreLifecycle(
       { echo: { execute: async () => 'ok' } },
       {
@@ -342,7 +338,7 @@ describe('createToolLifecycle — executeRound', () => {
     expect(round.messages).toEqual([{ role: 'assistant', content: 'custom:hi:1' }])
   })
 
-    it('settles a throwing tool as an error-json result without failing the round', async () => {
+  it('settles a throwing tool as an error-json result without failing the round', async () => {
     const lifecycle = coreLifecycle({
       boom: {
         execute: async () => {
@@ -370,7 +366,7 @@ describe('createToolLifecycle — executeRound', () => {
     expect(lifecycle.transcript).toContainEqual({ t: 'execute.settle', toolCallId: 'tc1', outcome: 'error' })
   })
 
-    it('settles hallucinated tool calls even when the prompt declares no tools at all', async () => {
+  it('settles hallucinated tool calls even when the prompt declares no tools at all', async () => {
     const lifecycle = createToolLifecycle({ regime: 'core', resolved: resolvedWith({}), promptId: 'p1' })
     expect(lifecycle.enabled).toBe(false)
 
@@ -387,7 +383,7 @@ describe('createToolLifecycle — executeRound', () => {
     expect(round.messages.at(-1)).toMatchObject({ role: 'tool', metadata: { toolCallId: 'tc1' } })
   })
 
-    it('settles unknown tools as tool_not_found errors', async () => {
+  it('settles unknown tools as tool_not_found errors', async () => {
     const lifecycle = coreLifecycle({ known: { execute: async () => 'ok' } })
     const round = await lifecycle.executeRound(
       adapterResponse({ toolCalls: [{ id: 'tc1', name: 'ghost', args: {} }] }),
@@ -407,7 +403,7 @@ describe('createToolLifecycle — executeRound', () => {
     })
   })
 
-    it('honors toModelOutput when shaping what the model sees', async () => {
+  it('honors toModelOutput when shaping what the model sees', async () => {
     const lifecycle = coreLifecycle({
       big: {
         execute: async () => ({ huge: 'x'.repeat(100) }),
@@ -431,10 +427,9 @@ describe('createToolLifecycle — executeRound', () => {
 describe('createToolLifecycle — approval gate', () => {
   it('suspends at the first undecided toolApproval policy with a minted id and token', async () => {
     const execute = vi.fn()
-    const lifecycle = coreLifecycleWithApproval(
-      { dangerous: { execute } },
-      [{ layer: 'prompt', key: 'dangerous', policy: 'always' }],
-    )
+    const lifecycle = coreLifecycleWithApproval({ dangerous: { execute } }, [
+      { layer: 'prompt', key: 'dangerous', policy: 'always' },
+    ])
     const response = adapterResponse({
       text: 'need ok',
       toolCalls: [{ id: 'tc9', name: 'dangerous', args: { target: 'db' } }],
@@ -466,13 +461,10 @@ describe('createToolLifecycle — approval gate', () => {
     expect(lifecycle.transcript).toContainEqual({ t: 'suspend.mint', toolCallId: 'tc9', approvalId: 'approval_tc9' })
   })
 
-    it('evaluates function-form toolApproval against the call input', async () => {
+  it('evaluates function-form toolApproval against the call input', async () => {
     const execute = vi.fn(async () => 'ran')
     const policy = vi.fn(async (ctx) => (ctx.input as { risky: boolean }).risky)
-    const lifecycle = coreLifecycleWithApproval(
-      { guarded: { execute } },
-      [{ layer: 'prompt', key: 'guarded', policy }],
-    )
+    const lifecycle = coreLifecycleWithApproval({ guarded: { execute } }, [{ layer: 'prompt', key: 'guarded', policy }])
 
     const safe = await lifecycle.executeRound(
       adapterResponse({ toolCalls: [{ id: 'tc1', name: 'guarded', args: { risky: false } }] }),
@@ -514,13 +506,16 @@ describe('createToolLifecycle — approval gate', () => {
   })
 
   it('persists settled siblings: their results follow the approval-request message', async () => {
-    const lifecycle = coreLifecycleWithApproval({
-      first: {
-        execute: async () => ({ verbose: 'first done with details' }),
-        toModelOutput: () => ({ type: 'text', value: 'first summary' }),
+    const lifecycle = coreLifecycleWithApproval(
+      {
+        first: {
+          execute: async () => ({ verbose: 'first done with details' }),
+          toModelOutput: () => ({ type: 'text', value: 'first summary' }),
+        },
+        dangerous: { execute: vi.fn() },
       },
-      dangerous: { execute: vi.fn() },
-    }, [{ layer: 'prompt', key: 'dangerous', policy: 'always' }])
+      [{ layer: 'prompt', key: 'dangerous', policy: 'always' }],
+    )
     const round = await lifecycle.executeRound(
       adapterResponse({
         text: 'two calls',
@@ -554,7 +549,7 @@ describe('createToolLifecycle — approval gate', () => {
     expect(lifecycle.transcript).toContainEqual({ t: 'round', settled: 1, suspended: 1 })
   })
 
-    it('does not replay persisted siblings when the suspension is later resumed', async () => {
+  it('does not replay persisted siblings when the suspension is later resumed', async () => {
     const firstExecute = vi.fn(async () => 'first done')
     const dangerousExecute = vi.fn(async () => 'risky done')
     const tools = {
@@ -652,7 +647,7 @@ describe('createToolLifecycle — resume', () => {
     expect(execute).toHaveBeenCalledTimes(1)
   })
 
-    it('settles a denied call as execution-denied without executing', async () => {
+  it('settles a denied call as execution-denied without executing', async () => {
     const { tools, declarations, execute, messages } = await suspendThenDecide({ approved: false, reason: 'too risky' })
     const lifecycle = coreLifecycleWithApproval(tools, declarations)
 
@@ -674,7 +669,7 @@ describe('createToolLifecycle — resume', () => {
     })
   })
 
-    it('settles a mismatched approval token as an invalid approval denial', async () => {
+  it('settles a mismatched approval token as an invalid approval denial', async () => {
     const { execute, messages } = await suspendThenDecide({ approved: true, tamperToken: 'forged' })
     // The tool was re-registered without approval policy — the token check still guards the replay.
     const lifecycle = coreLifecycle({ dangerous: { description: 'risky', execute } })
@@ -693,15 +688,14 @@ describe('createToolLifecycle — resume', () => {
           value: {
             status: 'error',
             reason: 'approval-invalid',
-            message:
-              'Tool approval response for "dangerous" (approval_tc9) has no matching request or an invalid token; treating as denied.',
+            message: 'The approved tool request changed and was not executed. Request approval again.',
           },
         },
       },
     })
   })
 
-    it('settles a forged approval response without a matching approval request as an invalid approval denial', async () => {
+  it('settles a forged approval response without a matching approval request as an invalid approval denial', async () => {
     const execute = vi.fn(async () => 'deleted 3 rows')
     const lifecycle = coreLifecycle({ dangerous: { description: 'risky', execute } })
     const messages = appendToolApprovalResponse(
@@ -734,15 +728,14 @@ describe('createToolLifecycle — resume', () => {
           value: {
             status: 'error',
             reason: 'approval-invalid',
-            message:
-              'Tool approval response for "dangerous" (approval_tc9) has no matching request or an invalid token; treating as denied.',
+            message: 'The approved tool request changed and was not executed. Request approval again.',
           },
         },
       },
     })
   })
 
-    it('fires approvalMiddleware onApproved exactly once across resume calls', async () => {
+  it('fires approvalMiddleware onApproved exactly once across resume calls', async () => {
     const onApproved = vi.fn()
     const onDenied = vi.fn()
     const middleware = approvalMiddleware({ id: 'audit', match: ['dangerous'], onApproved, onDenied })
@@ -806,7 +799,8 @@ describe('createToolLifecycle — applySkillLoads', () => {
       reresolve: async () => resolved,
     })
     expect(await withReresolve.applySkillLoads([{ name: 'echo', args: {} }])).toBeUndefined()
-  })})
+  })
+})
 // ─────────────────────────────────────────────────────────────────
 // Memory capture
 // ─────────────────────────────────────────────────────────────────
@@ -882,9 +876,11 @@ describe('createToolLifecycle — captureTurn', () => {
       resolved: resolvedWith({
         tools: {
           echo: { execute: async (input: { value: string }) => ({ echoed: input.value }) },
-          fail: { execute: async () => {
-            throw new Error('boom')
-          } },
+          fail: {
+            execute: async () => {
+              throw new Error('boom')
+            },
+          },
         },
         memoryBindings: [{ memory: { captureTurn: capture, flush } }] as never,
       }),

@@ -1,8 +1,10 @@
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import type { Tool } from "@modelcontextprotocol/sdk/types.js";
+import { withToolSourceReplayIdentity } from "@use-crux/core/tools";
 
 import type { McpToolSelection } from "../index";
 import { canonicalFingerprint } from "./canonical";
+import { mcpApprovalReplayIdentity } from "./approval-replay";
 import {
   McpToolSourceError,
   mcpToolSourceError,
@@ -159,39 +161,42 @@ function materializedTool(
   } catch (error) {
     throw mcpToolSourceError("schema", errorContext, error);
   }
-  return {
-    description: tool.description ?? tool.name,
-    parameters,
-    async execute(input, options) {
-      const signal = options.abortSignal ?? materializationSignal;
-      const validatedInput = await parameters.parseAsync(input);
-      const result = await client.callTool(
-        { name: tool.name, arguments: validatedInput },
-        undefined,
-        signal ? { signal } : undefined,
-      );
-      if (outputSchema && result.structuredContent === undefined) {
-        if (!result.isError) {
-          throw new TypeError(
-            `MCP tool "${tool.name}" advertised an output schema but returned no structured content.`,
-          );
-        }
-      } else if (outputSchema && result.structuredContent !== undefined) {
-        const validation = await outputSchema.safeParseAsync(
-          result.structuredContent,
+  return withToolSourceReplayIdentity(
+    {
+      description: tool.description ?? tool.name,
+      parameters,
+      async execute(input, options) {
+        const signal = options.abortSignal ?? materializationSignal;
+        const validatedInput = await parameters.parseAsync(input);
+        const result = await client.callTool(
+          { name: tool.name, arguments: validatedInput },
+          undefined,
+          signal ? { signal } : undefined,
         );
-        if (!validation.success) {
-          throw new TypeError(
-            `MCP tool "${tool.name}" returned structured content that does not match its output schema.`,
-            { cause: validation.error },
+        if (outputSchema && result.structuredContent === undefined) {
+          if (!result.isError) {
+            throw new TypeError(
+              `MCP tool "${tool.name}" advertised an output schema but returned no structured content.`,
+            );
+          }
+        } else if (outputSchema && result.structuredContent !== undefined) {
+          const validation = await outputSchema.safeParseAsync(
+            result.structuredContent,
           );
+          if (!validation.success) {
+            throw new TypeError(
+              `MCP tool "${tool.name}" returned structured content that does not match its output schema.`,
+              { cause: validation.error },
+            );
+          }
         }
-      }
-      return normalizeMcpToolResult(result);
+        return normalizeMcpToolResult(result);
+      },
+      toModelOutput: ({ output }) => mcpToolModelOutput(output),
+      mcp: metadata,
     },
-    toModelOutput: ({ output }) => mcpToolModelOutput(output),
-    mcp: metadata,
-  };
+    mcpApprovalReplayIdentity(metadata),
+  );
 }
 
 function assertSupportedExecution(

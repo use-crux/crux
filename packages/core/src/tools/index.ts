@@ -26,11 +26,7 @@ export {
   findToolApprovalDecision,
   deniedToolModelOutput,
 } from './approvals'
-export {
-  approvalPolicyKind,
-  inspectToolApprovalPolicies,
-  resolveApprovalPolicy,
-} from './approval-policy'
+export { approvalPolicyKind, inspectToolApprovalPolicies, resolveApprovalPolicy } from './approval-policy'
 export type {
   ApprovalDeclaration,
   ResolvedApprovalPolicy,
@@ -50,6 +46,8 @@ export type {
   ToolConfig,
   NamedToolDef,
   ToolApprovalStatus,
+  ToolApprovalPolicyIdentity,
+  ToolApprovalReplayProvenance,
   ToolApprovalRequestPayload,
   ToolApprovalRequestPart,
   ToolApprovalResponsePart,
