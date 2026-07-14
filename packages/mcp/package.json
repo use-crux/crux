@@ -13,8 +13,8 @@
       "import": "./src/index.ts"
     },
     "./testing/vitest": {
-      "types": "./src/testing/materializer-conformance.ts",
-      "import": "./src/testing/materializer-conformance.ts"
+      "types": "./src/testing/vitest.ts",
+      "import": "./src/testing/vitest.ts"
     }
   },
   "dependencies": {
