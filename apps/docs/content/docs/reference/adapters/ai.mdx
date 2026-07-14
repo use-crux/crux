@@ -68,6 +68,30 @@ export async function POST(req: Request) {
 
 Hallucinated tool calls are part of that parity: where the raw AI SDK throws `NoSuchToolError`/`InvalidToolInputError` and aborts the loop, `@use-crux/ai` uses the SDK's native `experimental_repairToolCall` to feed the model the same error tool result core-driven adapters produce (`{"error":"Tool \"x\" not found"}`), so the model self-corrects and the loop continues. The SDK's tool-error taxonomy never reaches your code.
 
+### Portable and Node transcription
+
+The `@use-crux/ai` root is portable and performs no hidden audio download.
+`transcribe()` accepts bytes, `ArrayBuffer`, `Blob`, data URLs, and data assets.
+The AI SDK adapter currently rejects provider-file assets before gateway I/O;
+hydrate them to bytes first. If an HTTPS source requires Crux to materialize
+it, the portable operation throws `UnsupportedCapabilityError` before gateway
+I/O. Provide bytes, or use the explicit Node entrypoint:
+
+```ts
+import {
+  transcribe,
+  createAiSdkTranscribe,
+} from "@use-crux/ai/transcription/node";
+
+const result = await transcribe({ model, audio: remoteAudioUrl });
+const custom = createAiSdkTranscribe(scriptedGateway);
+```
+
+The Node entrypoint uses the bounded, DNS-pinned Crux downloader. It exports
+only those two runtime values plus the existing transcription types. The
+portable root keeps custom gateway binding on `createCruxAi({ gateway })` and
+does not export `createAiSdkTranscribe`.
+
 ### `@use-crux/ai/agent`
 
 Use `@use-crux/ai/agent` for AI SDK-compatible agent frameworks that own their own model loop, such as Convex Agent or Mastra. It composes instructions through the normal core prompt pipeline, then wraps the model with AI SDK middleware when Crux execution hooks are installed.

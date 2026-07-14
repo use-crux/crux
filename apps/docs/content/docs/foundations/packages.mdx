@@ -57,6 +57,12 @@ The base package. Contains all SDK-agnostic primitives, organized into subpath e
 
 All adapters run the same Crux prompt and policy layer. OpenAI, Google, and Anthropic are `single-turn` adapters: Crux owns the tool loop and the adapter translates one provider turn at a time. `@use-crux/ai` is a `loop-owned` adapter because the Vercel AI SDK owns the multi-step model/tool loop natively. The public execution shape stays the same either way.
 
+`@use-crux/ai` and its root transcription operation are portable. Import
+`@use-crux/ai/transcription/node` only when Crux must securely materialize an
+HTTPS audio source; portable runtimes should provide bytes, a `Blob`, or a data
+URL instead. Core follows the same explicit split for `defer/node`,
+`observability/node`, `transcription/node`, and `skill/node`.
+
 ```ts
 // Vercel AI SDK
 import { generate, stream } from "@use-crux/ai";

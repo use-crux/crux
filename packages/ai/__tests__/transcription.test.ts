@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createCruxAi, transcribe } from "../src";
 import { transcriptionConformanceRow } from "@use-crux/core/adapter/testing";
 import { fallback } from "@use-crux/core";
@@ -116,11 +116,33 @@ describe("AI SDK transcription", () => {
     expect(scripted.calls.transcribe).toHaveLength(0);
   });
 
-  it("always supplies the Crux-bounded downloader for URL audio", async () => {
+  it("rejects portable URL materialization with actionable remediation", async () => {
+    const scripted = scriptedGateway();
+
+    await expect(
+      createCruxAi({ gateway: scripted.gateway }).transcribe({
+        model: { provider: "test", modelId: "audio" } as never,
+        audio: new URL("https://example.com/audio.wav"),
+      }),
+    ).rejects.toMatchObject({
+      code: "unsupported_capability",
+      capability: "transcription.url-materialization",
+      issues: [
+        expect.objectContaining({
+          remediation: expect.stringContaining(
+            "@use-crux/ai/transcription/node",
+          ),
+        }),
+      ],
+    });
+    expect(scripted.calls.transcribe).toHaveLength(0);
+  });
+
+  it("normalizes data URLs without a Node Buffer global", async () => {
     const scripted = scriptedGateway({
       transcribe: [
         {
-          text: "Remote",
+          text: "Portable",
           segments: [],
           warnings: [],
           responses: [],
@@ -128,14 +150,66 @@ describe("AI SDK transcription", () => {
         },
       ],
     });
+    vi.stubGlobal("Buffer", undefined);
+
+    try {
+      await createCruxAi({ gateway: scripted.gateway }).transcribe({
+        model: { provider: "test", modelId: "audio" } as never,
+        audio: "data:audio/wav;base64,UklGRgAAAABXQVZF",
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    expect(scripted.calls.transcribe[0]?.audio).toEqual(wav);
+  });
+
+  it.each([
+    ["ArrayBuffer", wav.buffer.slice(0)],
+    ["Blob", new Blob([wav], { type: "audio/wav" })],
+    [
+      "data asset",
+      { type: "data" as const, data: wav, mediaType: "audio/wav" },
+    ],
+  ])("accepts portable %s audio", async (_label, audio) => {
+    const scripted = scriptedGateway({
+      transcribe: [
+        {
+          text: "Portable",
+          segments: [],
+          warnings: [],
+          responses: [],
+          providerMetadata: {},
+        },
+      ],
+    });
+
     await createCruxAi({ gateway: scripted.gateway }).transcribe({
       model: { provider: "test", modelId: "audio" } as never,
-      audio: new URL("https://example.com/audio.wav"),
+      audio,
     });
-    expect(scripted.calls.transcribe[0]).toMatchObject({
-      audio: new URL("https://example.com/audio.wav"),
+
+    expect(scripted.calls.transcribe[0]?.audio).toEqual(wav);
+  });
+
+  it("rejects unsupported provider-file audio before gateway I/O", async () => {
+    const scripted = scriptedGateway();
+
+    await expect(
+      createCruxAi({ gateway: scripted.gateway }).transcribe({
+        model: { provider: "test", modelId: "audio" } as never,
+        audio: {
+          type: "provider-file",
+          provider: "test",
+          fileId: "file_audio",
+          mediaType: "audio/wav",
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: "unsupported_capability",
+      capability: "transcription.provider-file",
     });
-    expect(scripted.calls.transcribe[0]?.download).toBeTypeOf("function");
+    expect(scripted.calls.transcribe).toHaveLength(0);
   });
 
   it("preserves native gateway failures unchanged", async () => {

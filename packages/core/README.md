@@ -13,7 +13,11 @@ Your app still owns product logic, routing, deployment, and data. Your model SDK
 
 ## Install
 
-Crux packages are ESM-only and require Node.js 22 or newer. Most apps install `@use-crux/core` with an execution adapter. For the Vercel AI SDK:
+Crux packages are ESM-only. The `@use-crux/core` root and portable runtime
+subpaths work in web-standard runtimes, including Workers-style isolates. Node
+22 or newer is required only for the explicitly Node/build-time subpaths noted
+below. Most apps install `@use-crux/core` with an execution adapter. For the
+Vercel AI SDK:
 
 ```bash
 pnpm add @use-crux/core @use-crux/ai ai @ai-sdk/openai zod
@@ -137,6 +141,11 @@ Now the same call has memory, retrieval, input screening, structured output, ret
 | `@use-crux/core/runtime`         | The durable Runtime Engine composers, ports, and diagnostics.                                    |
 | `@use-crux/core/observability`   | Canonical graph records, transports, and the per-turn decision report read model.               |
 | `@use-crux/core/skill`           | Skill authoring with inline and registry loaders.                                                |
+
+Node-only/build-time subpaths are explicit: `quality`, `setup`,
+`runtime/next`, `defer/node`, `observability/node`, `transcription/node`,
+`skill/node`, and the Vitest testing helpers. Portable application code should
+not re-export them from a Workers or browser entrypoint.
 
 ## Documentation
 

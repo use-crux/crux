@@ -81,6 +81,24 @@ shared Crux result tail, cancellation, timeout, and descriptor-only reporting.
 Provider-native controls remain in typed `extra`; persistence is a separate
 application `assetStore.put()` call.
 
+The package root is portable across web-standard runtimes. `transcribe()`
+accepts bytes, `ArrayBuffer`, `Blob`, data URLs, and data assets without hidden
+network I/O. The AI SDK adapter currently rejects provider-file assets before
+gateway I/O; hydrate them to bytes first. An HTTPS source that Crux must
+materialize fails with `UnsupportedCapabilityError`; provide bytes in a
+portable runtime, or use the explicit Node subpath:
+
+```ts
+import { transcribe } from "@use-crux/ai/transcription/node";
+
+const result = await transcribe({ model, audio: remoteAudioUrl });
+```
+
+The Node subpath uses Crux's bounded, DNS-pinned downloader. It also exports
+`createAiSdkTranscribe(gateway)` for custom/test gateways; the package root
+keeps gateway injection on `createCruxAi({ gateway })` and does not export a
+second transcription creator.
+
 For Anthropic AI SDK models, Crux converts the stable provider-cache prefix into system messages and places `providerOptions.anthropic.cacheControl` on the single `cacheBoundary` block.
 
 ## Agent frameworks

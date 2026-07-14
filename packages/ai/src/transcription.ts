@@ -14,10 +14,12 @@ import {
   bindCompletedOperation,
   defineCompletedOperation,
 } from "@use-crux/core/adapter";
-import { downloadAudio } from "@use-crux/core/transcription/node";
 import type { SdkGateway } from "./gateway";
 
 type NativeArgs = Parameters<SdkGateway["transcribe"]>[0];
+
+/** Internal audio materializer used only by explicit host-specific entrypoints. */
+export type AITranscriptionMaterializer = NonNullable<NativeArgs["download"]>;
 
 /** AI SDK-native transcription controls forwarded unchanged. */
 export interface AITranscriptionExtra extends Record<string, unknown> {
@@ -46,16 +48,22 @@ type AITranscriptionInput = TranscribeOptions<
 >;
 
 /** Bind one native AI SDK transcription operation to an injectable gateway. */
-export function createAiSdkTranscribe(gateway: SdkGateway): AITranscribe {
+export function createAiSdkTranscribe(
+  gateway: SdkGateway,
+  materialize?: AITranscriptionMaterializer,
+): AITranscribe {
   return bindCompletedOperation({
-    definition: createAiSdkTranscriptionOperation(gateway),
+    definition: createAiSdkTranscriptionOperation(gateway, materialize),
     provider: "ai-sdk",
     operation: "transcribe",
   });
 }
 
 /** Define AI SDK transcription mechanics for first-class provider-runtime compilation. */
-export function createAiSdkTranscriptionOperation(gateway: SdkGateway) {
+export function createAiSdkTranscriptionOperation(
+  gateway: SdkGateway,
+  materialize?: AITranscriptionMaterializer,
+) {
   const definition = defineCompletedOperation({
     async normalize(input: AITranscriptionInput, context) {
       const options = { ...input, model: context.model };
@@ -109,25 +117,42 @@ export function createAiSdkTranscriptionOperation(gateway: SdkGateway) {
           ],
         });
       }
+      if (audio.type === "url" && materialize === undefined) {
+        throw createUnsupportedCapabilityError({
+          adapter: "ai-sdk",
+          model: modelId(options.model),
+          issues: [
+            {
+              capability: "transcription.url-materialization",
+              path: "audio",
+              mediaType: audio.mediaType,
+              remediation:
+                "Import transcribe from @use-crux/ai/transcription/node or provide audio bytes.",
+            },
+          ],
+        });
+      }
       return { options, audio };
     },
     support: () => "unknown" as const,
     async invoke({ options, audio }, { signal, call }) {
-      return call("audio.transcribe", async () => gateway.transcribe({
-        model: options.model,
-        audio: audio.type === "url" ? audio.url : await dataBytes(audio.data),
-        ...(audio.type === "url" ? { download: secureDownload } : {}),
-        abortSignal: signal,
-        ...(options.extra?.providerOptions === undefined
-          ? {}
-          : { providerOptions: options.extra.providerOptions }),
-        ...(options.extra?.maxRetries === undefined
-          ? {}
-          : { maxRetries: options.extra.maxRetries }),
-        ...(options.extra?.headers === undefined
-          ? {}
-          : { headers: options.extra.headers }),
-      }));
+      return call("audio.transcribe", async () =>
+        gateway.transcribe({
+          model: options.model,
+          audio: audio.type === "url" ? audio.url : await dataBytes(audio.data),
+          ...(audio.type === "url" ? { download: materialize } : {}),
+          abortSignal: signal,
+          ...(options.extra?.providerOptions === undefined
+            ? {}
+            : { providerOptions: options.extra.providerOptions }),
+          ...(options.extra?.maxRetries === undefined
+            ? {}
+            : { maxRetries: options.extra.maxRetries }),
+          ...(options.extra?.headers === undefined
+            ? {}
+            : { headers: options.extra.headers }),
+        }),
+      );
     },
     validate(raw) {
       return validateTranscriptionResult(
@@ -170,11 +195,6 @@ function unsupportedDetail(capability: string, path: string) {
     remediation:
       "Pass this control through extra.providerOptions only when the selected AI SDK provider supports it.",
   };
-}
-
-async function secureDownload(input: { url: URL; abortSignal?: AbortSignal }) {
-  const asset = await downloadAudio(input.url, { signal: input.abortSignal });
-  return { data: asset.data as Uint8Array, mediaType: asset.mediaType };
 }
 
 async function dataBytes(data: Uint8Array | Blob): Promise<Uint8Array> {
