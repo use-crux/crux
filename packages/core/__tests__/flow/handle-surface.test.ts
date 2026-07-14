@@ -9,6 +9,13 @@ describe('flow handle surface', () => {
     resetHooks()
   })
 
+  it('treats cancelling an unknown flow id as an idempotent no-op', async () => {
+    updateHooks({ records: inMemoryRecordStore() })
+    const review = flow('missing cancel', async () => 'done')
+
+    await expect(review.cancel('missing_flow')).resolves.toBeUndefined()
+  })
+
   it('persists run input and restores it for resume', async () => {
     const store = inMemoryRecordStore()
     updateHooks({ records: store })
@@ -269,10 +276,9 @@ describe('flow handle surface', () => {
 
     const suspended = await externalCancel.run({ flowId: 'flow-external-cancel-metadata' })
     expect(suspended.status).toBe('suspended')
-    await cancelFlow(suspended.flowId, 'Admin cancelled')
+    await externalCancel.cancel(suspended.flowId)
     await expect(store.get(`crux:flow:${suspended.flowId}`)).resolves.toMatchObject({
       status: 'cancelled',
-      cancelReason: 'Admin cancelled',
       cancelledAt: expect.any(Number),
       completedSteps: {
         plan: {

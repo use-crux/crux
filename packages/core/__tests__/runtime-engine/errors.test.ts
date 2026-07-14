@@ -34,6 +34,7 @@ describe('CruxRuntimeError', () => {
     expect(error.message).toContain('flow.waitFor() requires a Crux runtime engine.')
     expect(error.message).toContain('This flow can still use flow.suspend() with manual resume:')
     expect(error.message).toContain('await reviewFlow.signal(flowId, "approval", payload)')
+    expect(error.message).toContain('await reviewFlow.resume(flowId)')
     expect(error.message).toContain('runtime: serverless({ store: postgres(), wake: qstash() })')
   })
 

@@ -32,7 +32,7 @@ export function runtimeRequiredError(
     whatStillWorks: [
       'This flow can still use flow.suspend() with manual resume:',
       '  await reviewFlow.signal(flowId, "approval", payload)',
-      '  await reviewFlow.run({ resume: flowId })',
+      '  await reviewFlow.resume(flowId)',
     ].join('\n'),
     nextStep: [
       'To enable durable auto-resume, configure runtime in crux.config.ts:',

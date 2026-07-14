@@ -23,6 +23,7 @@ import {
   runtimeFlowNotResumableError,
   runtimeFlowWorkNotFoundError,
 } from "../runtime/api/flow-errors";
+import { cancelRuntimeFlow } from "../runtime/api/flows";
 import { runtimeRequiredError } from "../runtime/api/runtime-required";
 import {
   registerRuntimeTarget,
@@ -1507,6 +1508,14 @@ export function flow(
         return;
       }
       await signalFlow(flowId, signalName, parsedPayload as JsonValue);
+    },
+
+    async cancel(flowId: string): Promise<void> {
+      if (getHooks().runtimeEngine) {
+        await cancelRuntimeFlow({ api: `${name}.cancel()`, flowId });
+        return;
+      }
+      await cancelFlow(flowId);
     },
   };
 

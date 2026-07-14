@@ -23,6 +23,8 @@ expectTypeOf(review.run).parameter(0).toEqualTypeOf<{ docId: string; priority?: 
 expectTypeOf(review.run).parameter(1).toMatchTypeOf<{ goal?: string } | undefined>()
 expectTypeOf(review.resume).parameter(0).toEqualTypeOf<string>()
 expectTypeOf(review.resume).parameter(1).toMatchTypeOf<{ goal?: string } | undefined>()
+expectTypeOf(review.cancel).parameter(0).toEqualTypeOf<string>()
+expectTypeOf(review.cancel('flow_123')).toEqualTypeOf<Promise<void>>()
 
 const reviewResult = await review.run({ docId: 'doc_123', priority: 'high' }, { goal: 'Publish review' })
 if (reviewResult.status === 'completed') {

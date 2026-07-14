@@ -141,6 +141,14 @@ export interface FlowHandle<T, TInput = void, TSignals extends FlowSignalMap | u
    * @param options — Runtime delivery options. Use `{ resume: false }` to store the signal without nudging resume.
    */
   signal: FlowHandleSignal<TSignals>
+
+  /**
+   * Cancel a flow instance by id.
+   *
+   * Cancellation is idempotent. Runtime-backed cancellation atomically marks
+   * both the durable work and flow snapshot terminal.
+   */
+  cancel(flowId: string): Promise<void>
 }
 
 export type { FlowSignalOptions }
