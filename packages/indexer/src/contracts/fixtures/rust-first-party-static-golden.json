@@ -9,8 +9,8 @@
     "definitions": 66,
     "relations": 2,
     "diagnostics": 17,
-    "dependencies": 1250,
-    "canonicalBytes": 177228
+    "dependencies": 1251,
+    "canonicalBytes": 177276
   },
   "files": [
     {
@@ -2166,12 +2166,12 @@
     },
     {
       "file": "packages/core/src/flow/scope.ts",
-      "sha256": "c2451ba69359ced448032df5012e4e1f348641fa5894368d1abd54c645915072",
-      "bytes": 1245,
+      "sha256": "e5a9c3f23d424bca1776a9e38069ec286051ab2f9a8735faa7535d2dab843a95",
+      "bytes": 1293,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 23
+      "dependencies": 24
     },
     {
       "file": "packages/core/src/flow/signals.ts",
