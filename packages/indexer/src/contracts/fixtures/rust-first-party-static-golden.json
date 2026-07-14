@@ -5,12 +5,12 @@
   "fileSelection": "staticDefinitionFiles(root)",
   "projection": "canonicalStaticExtractionJson(definitions,relations,diagnostics,dependencies)",
   "totals": {
-    "files": 660,
+    "files": 662,
     "definitions": 66,
     "relations": 2,
     "diagnostics": 17,
-    "dependencies": 1251,
-    "canonicalBytes": 177276
+    "dependencies": 1255,
+    "canonicalBytes": 177601
   },
   "files": [
     {
@@ -132,6 +132,15 @@
     },
     {
       "file": "packages/ai/__type_tests__/adapter-law-public-surface.ts",
+      "sha256": "7961c3da7907134ca110dac3de5b13286a05db01a3806dea6b834147801b22f8",
+      "bytes": 101,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/ai/__type_tests__/grounded-prompt-public-surface.ts",
       "sha256": "7961c3da7907134ca110dac3de5b13286a05db01a3806dea6b834147801b22f8",
       "bytes": 101,
       "definitions": 0,
@@ -2562,12 +2571,12 @@
     },
     {
       "file": "packages/core/src/quality/internal/cassette.ts",
-      "sha256": "d776f7729cf3eaeb86aaa92571d5e3b71d13c475c8a57ed357f68fc7bbbc682a",
-      "bytes": 460,
+      "sha256": "a3b0c7935e5b99c787a1796454bb465802dcb24e9602b43ce5047639fa591b05",
+      "bytes": 507,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 7
+      "dependencies": 8
     },
     {
       "file": "packages/core/src/quality/internal/compare.ts",
@@ -3021,12 +3030,12 @@
     },
     {
       "file": "packages/core/src/runtime/config.ts",
-      "sha256": "8736177a8c561a159efc05ce50b984fad0602ebe9ba55323cb7c9fd48a330504",
-      "bytes": 178,
+      "sha256": "6d4f4f64531baf2cf7425f7c607e69c7c7fe13d6379b08c56a3a18043ada505b",
+      "bytes": 233,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 2
+      "dependencies": 3
     },
     {
       "file": "packages/core/src/runtime/configure.ts",
@@ -3137,6 +3146,15 @@
       "dependencies": 0
     },
     {
+      "file": "packages/core/src/runtime/process-registry.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
       "file": "packages/core/src/runtime/public.ts",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
@@ -3147,12 +3165,12 @@
     },
     {
       "file": "packages/core/src/runtime/runtime.ts",
-      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
-      "bytes": 68,
+      "sha256": "8d94502071e239af536048f22b207a6a3969b1d5d0f5e602b7afd75e2724395c",
+      "bytes": 122,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 0
+      "dependencies": 1
     },
     {
       "file": "packages/core/src/runtime/testing/test-runtime.ts",
