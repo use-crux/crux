@@ -536,7 +536,9 @@ jobs:
               exit 1
             fi
           else
-            tag_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${tag}" --jq .object.sha 2>/dev/null || true)"
+            if ! tag_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${tag}" --jq .object.sha 2>/dev/null)"; then
+              tag_sha=''
+            fi
             if [ -n "$tag_sha" ] && [ "$tag_sha" != "$GITHUB_SHA" ]; then
               echo "Git tag $tag does not match nightly source $GITHUB_SHA." >&2
               exit 1
