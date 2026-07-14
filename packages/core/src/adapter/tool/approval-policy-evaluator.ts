@@ -17,7 +17,7 @@ import {
   type ToolApprovalContext,
   type ToolApprovalMap,
 } from '../../tools/approval-policy'
-import { evaluateApprovalMiddleware } from '../../tools/middleware'
+import { evaluateApprovalMiddlewareRequest } from '../../tools/middleware'
 
 /** The call shape needed to evaluate approval requirements. */
 export interface ApprovalPolicyToolCall {
@@ -58,13 +58,23 @@ export interface RequiresToolApprovalOptions {
   readonly onPolicyTrace?: (trace: ApprovalPolicyTrace) => void
 }
 
+/** Approval verdict plus optional evidence callback for the request span. */
+export interface ToolApprovalRequirement {
+  readonly requiresApproval: boolean
+  readonly observeRequest?: () => void
+}
+
 /**
  * Convert per-call `toolApproval` options into the same declaration shape
  * used by resolved context and prompt declarations.
  */
 export function callApprovalDeclarations(map: ToolApprovalMap | undefined): ApprovalDeclaration[] {
   if (!map) return []
-  return Object.entries(map).map(([key, policy]) => ({ layer: 'call' as const, key, policy }))
+  return Object.entries(map).map(([key, policy]) => ({
+    layer: 'call' as const,
+    key,
+    policy,
+  }))
 }
 
 /**
@@ -75,9 +85,9 @@ export function callApprovalDeclarations(map: ToolApprovalMap | undefined): Appr
  * OR'd with declarations so existing `approvalMiddleware()` users retain the
  * ability to request approval without mutating the tool object.
  */
-export async function requiresToolApproval(options: RequiresToolApprovalOptions): Promise<boolean> {
+export async function requiresToolApproval(options: RequiresToolApprovalOptions): Promise<ToolApprovalRequirement> {
   const { tool, toolCall, messages, declarations } = options
-  if (!tool || typeof tool !== 'object') return false
+  if (!tool || typeof tool !== 'object') return { requiresApproval: false }
 
   const policyRequiresApproval = await evaluateDeclaredApprovalPolicy(toolCall, messages, declarations, options)
   const middlewareOptions = {
@@ -86,7 +96,7 @@ export async function requiresToolApproval(options: RequiresToolApprovalOptions)
     runtimeContext: options.runtimeContext,
     ...(options.toolContext !== undefined ? { context: options.toolContext } : {}),
   }
-  const middlewareRequiresApproval = await evaluateApprovalMiddleware(tool, {
+  const middleware = await evaluateApprovalMiddlewareRequest(tool, {
     toolName: toolCall.name,
     toolCallId: toolCall.id,
     input: toolCall.args,
@@ -95,7 +105,10 @@ export async function requiresToolApproval(options: RequiresToolApprovalOptions)
     runtimeContext: options.runtimeContext,
     messages,
   })
-  return policyRequiresApproval || middlewareRequiresApproval
+  return {
+    requiresApproval: policyRequiresApproval || middleware.requiresApproval,
+    ...(middleware.observeRequest ? { observeRequest: middleware.observeRequest } : {}),
+  }
 }
 
 async function evaluateDeclaredApprovalPolicy(

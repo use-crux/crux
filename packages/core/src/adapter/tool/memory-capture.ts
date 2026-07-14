@@ -75,6 +75,9 @@ export function enrichToolCallsFromMessages(
   if (toolMessages.size === 0) return toolCalls.map((toolCall) => ({ ...toolCall }))
 
   return toolCalls.map((toolCall) => {
+    if (toolCall.result !== undefined || toolCall.error !== undefined) {
+      return { ...toolCall }
+    }
     const message = toolCall.id ? toolMessages.get(toolCall.id) : undefined
     if (!message) return { ...toolCall }
     return {

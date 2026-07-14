@@ -6,9 +6,13 @@ import { prompt } from "../../src/prompt/prompt";
 import { toolPolicy } from "../../src/safety/toolPolicy";
 import { registerMcpMiddlewareConformanceTests } from "./mcp-middleware-conformance";
 import { createMcpPolicyFixture } from "./mcp-policy-fixture";
+import { registerMcpSafetyConformanceTests } from "./mcp-safety-conformance";
+import { registerMcpToolPolicyObservabilityConformanceTests } from "./mcp-tool-policy-observability-conformance";
 
 describe("MCP policy conformance", () => {
   registerMcpMiddlewareConformanceTests();
+  registerMcpSafetyConformanceTests();
+  registerMcpToolPolicyObservabilityConformanceTests();
 
   it("rewrites tool arguments before materialized transport execution", async () => {
     const transport = vi.fn(async (input: { query: string }) => ({

@@ -15,13 +15,16 @@ export function createMcpPolicyFixture(options: {
   readonly tools: Readonly<Record<string, unknown>>;
   readonly toolName: string;
   readonly input: Readonly<Record<string, unknown>>;
+  /** Final provider text, optionally varied by one-based provider call index. */
+  readonly finalText?: string | ((providerCall: number) => string);
 }) {
   let providerCalls = 0;
   const close = vi.fn(async () => {});
   const capturedResults: ToolResultEntry[] = [];
+  const materialize = vi.fn(async () => ({ tools: options.tools, close }));
   const create = adapter({
     providerId: "mcp-policy-fixture",
-    materializeToolSource: async () => ({ tools: options.tools, close }),
+    materializeToolSource: materialize,
     mapSettings: () => ({}),
     async call() {
       providerCalls += 1;
@@ -32,7 +35,14 @@ export function createMcpPolicyFixture(options: {
               { id: "mcp-call-1", name: options.toolName, args: options.input },
             ]),
           }
-        : { raw: { step: 2 }, extracted: response("done") };
+        : {
+            raw: { step: providerCalls },
+            extracted: response(
+              typeof options.finalText === "function"
+                ? options.finalText(providerCalls)
+                : (options.finalText ?? "done"),
+            ),
+          };
     },
     async stream() {
       throw new Error("stream is not used by this fixture");
@@ -62,6 +72,7 @@ export function createMcpPolicyFixture(options: {
   return {
     adapter: create({}),
     close,
+    materialize,
     results: () => [...capturedResults],
   };
 }

@@ -77,6 +77,7 @@ import {
 } from './approval'
 import type { ApprovalRequestInfo } from './approval'
 import { callApprovalDeclarations, requiresToolApproval } from './approval-policy-evaluator'
+import type { ToolApprovalRequirement } from './approval-policy-evaluator'
 import { resolveToolsContext, type ResolvedToolsContext } from './context'
 import {
   withToolLifecycleExecutionOptions,
@@ -509,6 +510,7 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
   let memoryCaptured = false
   let lastMessages: readonly Message[] | undefined
   const settledToolResults = new Map<string, ToolResultEntry>()
+  const pendingApprovalPolicyObservers = new Map<string, () => void>()
   const announcedSkills = new Set<string>()
 
   // Snapshot runtime hooks once — a mid-call setHooks() cannot
@@ -740,7 +742,10 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
     }
   }
 
-  async function requiresApproval(toolCall: SessionToolCall, messages: readonly Message[]): Promise<boolean> {
+  async function approvalRequirement(
+    toolCall: SessionToolCall,
+    messages: readonly Message[],
+  ): Promise<ToolApprovalRequirement> {
     const tool = wrappedTools[toolCall.name]
     return requiresToolApproval({
       tool,
@@ -825,7 +830,8 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
       return { kind: 'execute', run: () => runTool(toolCall, shaped, messages, traceId) }
     }
 
-    if (await requiresApproval(toolCall, messages)) {
+    const requirement = await approvalRequirement(toolCall, messages)
+    if (requirement.requiresApproval) {
       const minted: ApprovalRequestInfo = {
         approvalId,
         toolCallId: toolCall.id,
@@ -838,6 +844,7 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
         toolCallId: toolCall.id,
         toolName: toolCall.name,
         input: toolCall.args,
+        ...(requirement.observeRequest ? { observePolicyDecision: requirement.observeRequest } : {}),
       })
       transcript.push({ t: 'gate', toolCallId: toolCall.id, toolName: toolCall.name, verdict: 'suspend', origin })
       transcript.push({ t: 'suspend.mint', toolCallId: toolCall.id, approvalId })
@@ -871,7 +878,13 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
       return descriptors
     },
 
-    requiresApproval,
+    requiresApproval: async (toolCall, messages) => {
+      const requirement = await approvalRequirement(toolCall, messages)
+      if (requirement.observeRequest) {
+        pendingApprovalPolicyObservers.set(toolCall.id, requirement.observeRequest)
+      }
+      return requirement.requiresApproval
+    },
 
     notifyDecisions,
 
@@ -985,11 +998,14 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
 
       let sealedMessages = [...messages]
       for (const request of requests) {
+        const observePolicyDecision = pendingApprovalPolicyObservers.get(request.toolCallId)
+        pendingApprovalPolicyObservers.delete(request.toolCallId)
         emitToolApprovalObservation('request', {
           approvalId: request.approvalId,
           toolCallId: request.toolCallId,
           toolName: request.toolName,
           input: request.input,
+          ...(observePolicyDecision ? { observePolicyDecision } : {}),
         })
         transcript.push({ t: 'suspend.mint', toolCallId: request.toolCallId, approvalId: request.approvalId })
         sealedMessages = [...sealedMessages, createApprovalRequestMessage(assistantResponse, request)]

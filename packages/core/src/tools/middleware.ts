@@ -42,11 +42,13 @@ interface ApprovalMetadata<TInput = unknown> {
   readonly toolName: string
   readonly match: readonly ToolMatcher[]
   readonly onRequest?: (call: ToolCallContext<TInput>) => void | PromiseLike<void>
+  readonly observeRequest?: (call: ToolCallContext<TInput>) => void
   readonly onApproved?: (event: ToolApprovalDecisionEvent<TInput>) => void | PromiseLike<void>
   readonly onDenied?: (event: ToolApprovalDecisionEvent<TInput>) => void | PromiseLike<void>
 }
 
 const approvalMetadata = new WeakMap<object, ApprovalMetadata>()
+const approvalRequestObservers = new WeakMap<object, (call: ToolCallContext) => void>()
 const middlewareDefinitionRefs = new WeakMap<object, readonly DefinitionRef[]>()
 const wrappedToolDefinitionRefs = new WeakMap<object, readonly DefinitionRef[]>()
 const handledApprovals = new Set<string>()
@@ -61,6 +63,15 @@ export function withToolMiddlewareDefinitionRef(
   definitionRef: DefinitionRef,
 ): ToolMiddleware {
   middlewareDefinitionRefs.set(middleware, [definitionRef])
+  return middleware
+}
+
+/** Attach an internal observer that runs inside the eventual approval span. @internal */
+export function withApprovalMiddlewareRequestObserver(
+  middleware: ToolMiddleware,
+  observer: (call: ToolCallContext) => void,
+): ToolMiddleware {
+  approvalRequestObservers.set(middleware, observer)
   return middleware
 }
 
@@ -158,7 +169,7 @@ export function approvalMiddleware<TInput = unknown>(config: ApprovalMiddlewareC
   assertNonEmptyId(config.id, 'approvalMiddleware')
   if (config.match.length === 0) throw new Error('approvalMiddleware() requires at least one matcher.')
 
-  return {
+  const middleware: ToolMiddleware = {
     _tag: 'ToolMiddleware',
     id: config.id,
     wrapTool<TToolInput, TOutput>(toolName: string, tool: ToolLike<TToolInput, TOutput>): ToolLike<TToolInput, TOutput> {
@@ -200,26 +211,42 @@ export function approvalMiddleware<TInput = unknown>(config: ApprovalMiddlewareC
         toolName,
         match: config.match as readonly ToolMatcher[],
         onRequest: config.onRequest as ApprovalMetadata['onRequest'],
+        observeRequest: approvalRequestObservers.get(middleware),
         onApproved: config.onApproved as ApprovalMetadata['onApproved'],
         onDenied: config.onDenied as ApprovalMetadata['onDenied'],
       })
       return wrapped
     },
   }
+  return middleware
+}
+
+/** Result of evaluating approval middleware for one concrete call. @internal */
+export interface ApprovalMiddlewareEvaluation {
+  readonly requiresApproval: boolean
+  readonly observeRequest?: () => void
+}
+
+/** Evaluate approval metadata and retain its span-bound observation callback. @internal */
+export async function evaluateApprovalMiddlewareRequest(
+  tool: unknown,
+  call: ToolCallContext,
+): Promise<ApprovalMiddlewareEvaluation> {
+  if (!isToolLike(tool)) return { requiresApproval: false }
+  const metadata = approvalMetadata.get(tool)
+  if (!metadata) return { requiresApproval: false }
+  const matched = await matchesAny(metadata.match, call)
+  if (!matched) return { requiresApproval: false }
+  await metadata.onRequest?.(call)
+  return {
+    requiresApproval: true,
+    ...(metadata.observeRequest ? { observeRequest: () => metadata.observeRequest?.(call) } : {}),
+  }
 }
 
 /** Evaluate approval middleware metadata attached to a wrapped tool. */
-export async function evaluateApprovalMiddleware(
-  tool: unknown,
-  call: ToolCallContext,
-): Promise<boolean> {
-  if (!isToolLike(tool)) return false
-  const metadata = approvalMetadata.get(tool)
-  if (!metadata) return false
-  const matched = await matchesAny(metadata.match, call)
-  if (!matched) return false
-  await metadata.onRequest?.(call)
-  return true
+export async function evaluateApprovalMiddleware(tool: unknown, call: ToolCallContext): Promise<boolean> {
+  return (await evaluateApprovalMiddlewareRequest(tool, call)).requiresApproval
 }
 
 /** Apply a middleware chain across an entire tool set, preserving non-tool values. */
@@ -283,7 +310,6 @@ export async function notifyToolApprovalResponses(
     }
     if (!(await matchesAny(metadata.match, event))) continue
     handledApprovals.add(key)
-
 
     if (approval.approved) await metadata.onApproved?.(event)
     else await metadata.onDenied?.(event)

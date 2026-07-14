@@ -232,7 +232,9 @@ function toolCallIdFromApprovalId(approvalId: string): string | undefined {
   return approvalId.startsWith('approval_') ? approvalId.slice('approval_'.length) : undefined
 }
 
-function collectAssistantToolCalls(messages: readonly Message[]): Map<string, { readonly name: string; readonly args: unknown }> {
+function collectAssistantToolCalls(
+  messages: readonly Message[],
+): Map<string, { readonly name: string; readonly args: unknown }> {
   const calls = new Map<string, { readonly name: string; readonly args: unknown }>()
   for (const message of messages) {
     if (message.role !== 'assistant') continue
@@ -241,7 +243,11 @@ function collectAssistantToolCalls(messages: readonly Message[]): Map<string, { 
       for (const call of metadataCalls) {
         const id = readString(call, 'id') ?? readString(call, 'toolCallId')
         const name = readString(call, 'name') ?? readString(call, 'toolName')
-        if (id && name) calls.set(id, { name, args: readProperty(call, 'args') ?? readProperty(call, 'input') })
+        if (id && name)
+          calls.set(id, {
+            name,
+            args: readProperty(call, 'args') ?? readProperty(call, 'input'),
+          })
       }
     }
     if (!Array.isArray(message.content)) continue
@@ -249,7 +255,11 @@ function collectAssistantToolCalls(messages: readonly Message[]): Map<string, { 
       if (readString(part, 'type') !== 'tool-call') continue
       const id = readString(part, 'toolCallId')
       const name = readString(part, 'toolName')
-      if (id && name) calls.set(id, { name, args: readProperty(part, 'input') ?? readProperty(part, 'args') })
+      if (id && name)
+        calls.set(id, {
+          name,
+          args: readProperty(part, 'input') ?? readProperty(part, 'args'),
+        })
     }
   }
   return calls
@@ -281,6 +291,8 @@ export function emitToolApprovalObservation(
     modelOutput?: ToolModelOutput
     modelOutputSize?: number
     error?: unknown
+    /** Internal policy evidence emitted within this approval span. */
+    observePolicyDecision?: () => void
   },
 ): void {
   const span = observe.openSpan({
@@ -299,6 +311,7 @@ export function emitToolApprovalObservation(
   try {
     span.withContext(() => {
       emitToolArgsArtifact(span.spanId, args.toolName, args.toolCallId, args.input)
+      args.observePolicyDecision?.()
       if (args.modelOutput) {
         emitToolResultArtifact(span.spanId, args.toolName, args.toolCallId, args.modelOutput, {
           resultKind: 'model',
@@ -316,7 +329,11 @@ export function emitToolApprovalObservation(
           toolCallId: args.toolCallId,
           toolName: args.toolName,
           ...(args.reason ? { reason: args.reason } : {}),
-          ...(args.error ? { error: args.error instanceof Error ? args.error.message : String(args.error) } : {}),
+          ...(args.error
+            ? {
+                error: args.error instanceof Error ? args.error.message : String(args.error),
+              }
+            : {}),
         },
       })
     })

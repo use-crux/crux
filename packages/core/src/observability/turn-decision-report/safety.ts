@@ -1,11 +1,7 @@
 import type { SafetyDecision } from '../../safety/decision'
 import type { TurnDecision, TurnDecisionPhase } from './report'
 import type { TurnDecisionReasonCode } from './shared'
-import type {
-  TurnDecisionSubject,
-  TurnDeepTabTarget,
-  TurnEvidenceRef,
-} from './targets'
+import type { TurnDecisionSubject, TurnDeepTabTarget, TurnEvidenceRef } from './targets'
 
 /** Options for projecting one Safety decision into a turn report row. */
 export interface SafetyDecisionProjectionOptions {
@@ -56,9 +52,7 @@ export function safetyDecisionsToTurnDecisions(
   decisions: readonly SafetyDecision[],
   options: Omit<SafetyDecisionProjectionOptions, 'index'> = {},
 ): TurnDecision[] {
-  return decisions.map((decision, index) =>
-    safetyDecisionToTurnDecision(decision, { ...options, index }),
-  )
+  return decisions.map((decision, index) => safetyDecisionToTurnDecision(decision, { ...options, index }))
 }
 
 function safetyDecisionRowId(decision: SafetyDecision, index: number): string {
@@ -163,9 +157,7 @@ function toolPolicyReasonCode(decision: SafetyDecision): TurnDecisionReasonCode 
 }
 
 function defaultReasonText(decision: SafetyDecision): string {
-  const findingSummary = decision.findings?.length
-    ? ` with ${decision.findings.length} finding type(s)`
-    : ''
+  const findingSummary = decision.findings?.length ? ` with ${decision.findings.length} finding type(s)` : ''
   return `${decision.kind} '${decision.policyId}' returned ${decision.action} on ${decision.boundary}${findingSummary}.`
 }
 
@@ -210,11 +202,11 @@ function evidenceForSafetyDecision(
 function artifactKindForSafetyDecision(decision: SafetyDecision): string {
   if (decision.kind === 'guardrail') return 'guardrail.report'
   if (decision.kind === 'constraint') return 'constraint.report'
-  return 'approval.request'
+  return 'security.report'
 }
 
 function primitiveForSafetyDecision(decision: SafetyDecision): string {
   if (decision.kind === 'guardrail') return 'guardrail.run'
   if (decision.kind === 'constraint') return 'constraint.check'
-  return 'tool.approval'
+  return decision.boundary === 'approval.request' ? 'tool.approval' : 'tool.call'
 }

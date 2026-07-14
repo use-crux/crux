@@ -49,6 +49,7 @@ import {
   withSkillActivationInput,
 } from "./shared";
 import { materializeToolSources } from "./tool-sources";
+import { replaceResponseText } from "./response-text";
 
 /**
  * Execute one prompt through the core-owned provider loop.
@@ -255,7 +256,7 @@ export async function generateCore<
           if (validationResult.valid) {
             const validText = validationResult.repairedText ?? extracted.text;
             if (validText !== extracted.text) {
-              lastExtracted = { ...extracted, text: validText };
+              lastExtracted = replaceResponseText(extracted, validText);
             }
             rememberStep(lastExtracted);
             break;
@@ -277,7 +278,7 @@ export async function generateCore<
                 ),
               },
             ];
-            rememberStep({ ...lastExtracted, text: "" });
+            rememberStep(replaceResponseText(lastExtracted, ""));
             continue;
           }
           validationRetry.onExhausted?.(
@@ -340,7 +341,7 @@ export async function generateCore<
         const finalOutput = await safety.finalizeOutput(
           { text: lastExtracted.text, parsed },
           async (corrective) => {
-            replaceLastStep({ ...lastExtracted!, text: "" });
+            replaceLastStep(replaceResponseText(lastExtracted!, ""));
             messages = dialect.appendToolRound(messages, lastExtracted!, []);
             messages = [...messages, ...corrective];
             const providerMessages = await prepareProviderMessages(messages);
@@ -361,7 +362,7 @@ export async function generateCore<
                 ? (reVal.repairedText ?? regen.extracted.text)
                 : regen.extracted.text;
               if (reText !== regen.extracted.text) {
-                lastExtracted = { ...regen.extracted, text: reText };
+                lastExtracted = replaceResponseText(regen.extracted, reText);
                 replaceLastStep(lastExtracted);
               }
               let reParsed: unknown;
@@ -377,7 +378,7 @@ export async function generateCore<
           { suspended, messages, schema: resolved.schema },
         );
         if (finalOutput.text !== lastExtracted.text) {
-          lastExtracted = { ...lastExtracted, text: finalOutput.text };
+          lastExtracted = replaceResponseText(lastExtracted, finalOutput.text);
           replaceLastStep(lastExtracted);
         }
         parsedObject = finalOutput.parsed;
@@ -423,7 +424,7 @@ export async function generateCore<
     await lifecycle.captureTurn({
       messages,
       assistantText: generated.text,
-      toolCalls: generated._meta.toolCalls,
+      toolCalls: stepFacts.flatMap((step) => step.toolCalls ?? []),
     });
     return generated;
   } finally {
