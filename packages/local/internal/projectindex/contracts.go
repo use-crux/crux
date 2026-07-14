@@ -12,6 +12,18 @@ type ProjectIndexer interface {
 	IndexProjectAstPatch(ctx context.Context, root, configPath, projectName string) (IndexPatch, error)
 }
 
+// DeploymentManifestProjectionInput is the privacy-sensitive compiler snapshot
+// forwarded to the TypeScript-authoritative deployment-manifest projector.
+type DeploymentManifestProjectionInput struct {
+	Root            string
+	ProjectID       string
+	Definitions     []store.ProjectDefinition
+	Relations       []store.ProjectRelation
+	StaticFrontend  string
+	SemanticBackend string
+	SemanticStatus  string
+}
+
 // ProjectAstIndexResult is the per-run AST/source indexing result. Optional
 // metadata here is carried into later phases instead of reading mutable worker
 // diagnostics such as "last timing" state.

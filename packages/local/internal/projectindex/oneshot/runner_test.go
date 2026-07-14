@@ -105,6 +105,15 @@ func TestRunnerRejectsCacheIntegrityFailureBeforeCompiling(t *testing.T) {
 	}
 }
 
+func TestRunnerRejectsCacheCommitFailure(t *testing.T) {
+	indexer := &parityIndexer{root: t.TempDir()}
+	_, err := New(indexer, commitFailingCacheStore{err: errors.New("cache write failed")}).
+		Run(context.Background(), Options{Root: indexer.root, ProjectID: "fixture"})
+	if err == nil || !strings.Contains(err.Error(), "cache write failed") {
+		t.Fatalf("error = %v, want cache write failure", err)
+	}
+}
+
 type parityIndexer struct {
 	root        string
 	semanticErr error
@@ -175,6 +184,18 @@ func (failingCacheStore) CommitPhase(context.Context, projectindex.IndexFactTran
 	return nil
 }
 func (failingCacheStore) ProjectSnapshot(context.Context, string, string) (store.IndexData, bool, error) {
+	return store.IndexData{}, false, nil
+}
+
+type commitFailingCacheStore struct{ err error }
+
+func (commitFailingCacheStore) LoadSnapshot(context.Context, string, string, time.Time) (store.IndexData, bool, error) {
+	return store.IndexData{}, false, nil
+}
+func (s commitFailingCacheStore) CommitPhase(context.Context, projectindex.IndexFactTransaction) error {
+	return s.err
+}
+func (commitFailingCacheStore) ProjectSnapshot(context.Context, string, string) (store.IndexData, bool, error) {
 	return store.IndexData{}, false, nil
 }
 

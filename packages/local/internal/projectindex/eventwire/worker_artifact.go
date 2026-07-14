@@ -31,6 +31,8 @@ const (
 	ProjectIndexArtifactRuntimeOperation ProjectIndexArtifactKind = "runtimeOperation"
 	// ProjectIndexArtifactSetupOperation is an aggregate project setup result.
 	ProjectIndexArtifactSetupOperation ProjectIndexArtifactKind = "setupOperation"
+	// ProjectIndexArtifactDeploymentManifest is a privacy-safe content-addressed Catalog projection.
+	ProjectIndexArtifactDeploymentManifest ProjectIndexArtifactKind = "deploymentManifest"
 )
 
 // ProjectIndexArtifactStreamOptions configures host-side validation for a JSON

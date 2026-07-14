@@ -19,6 +19,7 @@ const (
 	ProjectIndexArtifactRuntimeArtifacts             = eventwire.ProjectIndexArtifactRuntimeArtifacts
 	ProjectIndexArtifactRuntimeOperation             = eventwire.ProjectIndexArtifactRuntimeOperation
 	ProjectIndexArtifactSetupOperation               = eventwire.ProjectIndexArtifactSetupOperation
+	ProjectIndexArtifactDeploymentManifest           = eventwire.ProjectIndexArtifactDeploymentManifest
 )
 
 type ProjectIndexArtifactStreamOptions = eventwire.ProjectIndexArtifactStreamOptions

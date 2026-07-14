@@ -9,6 +9,7 @@
  */
 
 import type {
+  ProjectIndexDeploymentManifestV1,
   ProjectModelProvenance,
   ResolvedProjectModel,
 } from '@use-crux/core/project-index'
@@ -143,6 +144,8 @@ export interface ProjectIndexArtifactMap {
   readonly runtimeOperation: RuntimeOperationResult
   /** Aggregate project setup result emitted for `crux setup`. */
   readonly setupOperation: SetupReport
+  /** Privacy-safe content-addressed Catalog projection for deployment joins. */
+  readonly deploymentManifest: ProjectIndexDeploymentManifestV1
 }
 
 /** JSON artifact kinds supported by the V2 worker stream. */

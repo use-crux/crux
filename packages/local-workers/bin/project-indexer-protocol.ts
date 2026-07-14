@@ -157,6 +157,8 @@ export function errorContextForMethod(
       return { kind: 'artifact', method, artifact: 'staticRuleCheck' }
     case 'generateRuntimeArtifacts':
       return { kind: 'artifact', method, artifact: 'runtimeArtifacts' }
+    case 'createDeploymentManifest':
+      return { kind: 'artifact', method, artifact: 'deploymentManifest' }
     case 'runRuntimeOperation':
       return { kind: 'artifact', method, artifact: 'runtimeOperation' }
     case 'runSetupOperation':

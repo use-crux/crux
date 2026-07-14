@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -20,16 +21,20 @@ var lintSeverityRank = map[string]int{
 	"info":    2,
 }
 
+type lintOptions struct {
+	root              string
+	configPath        string
+	projectID         string
+	profile           string
+	includeSuppressed bool
+	failOn            string
+	json              bool
+	server            bool
+}
+
 // NewLintCmd creates the "crux lint" command for authored-system health findings.
 func NewLintCmd(f *cli.Factory) *cobra.Command {
-	var jsonOutput bool
-	var profile string
-	var includeSuppressed bool
-	var failOn string
-	var root string
-	var configPath string
-	var projectID string
-	var server bool
+	opts := lintOptions{}
 
 	cmd := &cobra.Command{
 		Use:   "lint",
@@ -39,68 +44,69 @@ func NewLintCmd(f *cli.Factory) *cobra.Command {
   crux lint --fail-on warning
   crux lint --json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			var index api.IndexData
-			if server {
+			if opts.server {
+				var index api.IndexData
 				if err := f.Client().GetJSON(cmd.Context(), "/api/index", &index); err != nil {
 					return err
 				}
-			} else {
-				result, err := runProjectIndexForCommand(cmd.Context(), oneshot.Options{
-					Root: root, ConfigPath: configPath, ProjectID: projectID,
-				})
-				if err != nil {
-					fmt.Fprintf(f.Streams().Err, "crux lint: %v\n", err)
-					return domain.ExitError{Code: 2}
-				}
-				index, err = projectIndexAPI(result.Index)
-				if err != nil {
-					fmt.Fprintf(f.Streams().Err, "crux lint: %v\n", err)
-					return domain.ExitError{Code: 2}
-				}
+				return writeLintResult(f.Streams(), index, opts)
 			}
-
-			findings, err := selectLintFindings(index.LintFindings, lintSelectionOptions{
-				profile:           profile,
-				includeSuppressed: includeSuppressed,
-			})
-			if err != nil {
-				return err
-			}
-
-			io := f.Streams()
-			if jsonOutput {
-				encoder := json.NewEncoder(io.Out)
-				encoder.SetIndent("", "  ")
-				if err := encoder.Encode(findings); err != nil {
-					return err
-				}
-			} else {
-				printLintFindings(io, findings, profile, includeSuppressed)
-			}
-
-			failures, err := lintGateFailures(findings, failOn)
-			if err != nil {
-				return err
-			}
-			if len(failures) > 0 {
-				if !jsonOutput {
-					fmt.Fprintf(io.Out, "%s %d finding(s) matched --fail-on=%s\n", io.Sprint(output.Red, "gate failed:"), len(failures), failOn)
-				}
-				return domain.ExitError{Code: 1}
-			}
-			return nil
+			return runLint(cmd.Context(), f.Streams(), opts, runProjectIndexForCommand)
 		},
 	}
 
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
-	cmd.Flags().StringVar(&profile, "profile", "recommended", "Lint profile: off, recommended, strict, experimental")
-	cmd.Flags().BoolVar(&includeSuppressed, "include-suppressed", false, "Include source-comment suppressed findings")
-	cmd.Flags().StringVar(&failOn, "fail-on", "", "Exit 1 when selected findings include severity: error, warning, or info")
-	cmd.Flags().StringVar(&root, "root", ".", "Project root (default current directory)")
-	cmd.Flags().StringVar(&configPath, "config", "", "Optional absolute or root-relative Crux config path")
-	cmd.Flags().StringVar(&projectID, "project-id", "", "Optional project identity for display and cache scoping")
-	cmd.Flags().BoolVar(&server, "server", false, "Read findings from the running devtools server instead of indexing once")
+	cmd.Flags().BoolVar(&opts.json, "json", false, "Output as JSON")
+	cmd.Flags().StringVar(&opts.profile, "profile", "recommended", "Lint profile: off, recommended, strict, experimental")
+	cmd.Flags().BoolVar(&opts.includeSuppressed, "include-suppressed", false, "Include source-comment suppressed findings")
+	cmd.Flags().StringVar(&opts.failOn, "fail-on", "", "Exit 1 when selected findings include severity: error, warning, or info")
+	cmd.Flags().StringVar(&opts.root, "root", ".", "Project root (default current directory)")
+	cmd.Flags().StringVar(&opts.configPath, "config", "", "Optional absolute or root-relative Crux config path")
+	cmd.Flags().StringVar(&opts.projectID, "project-id", "", "Optional project identity for display and cache scoping")
+	cmd.Flags().BoolVar(&opts.server, "server", false, "Read findings from the running devtools server instead of indexing once")
 	return cmd
+}
+
+func runLint(ctx context.Context, io *output.IO, opts lintOptions, run projectIndexRunFunc) error {
+	result, err := run(ctx, oneshot.Options{Root: opts.root, ConfigPath: opts.configPath, ProjectID: opts.projectID})
+	if err != nil {
+		fmt.Fprintf(io.Err, "crux lint: %v\n", err)
+		return domain.ExitError{Code: 2}
+	}
+	index, err := projectIndexAPI(result.Index)
+	if err != nil {
+		fmt.Fprintf(io.Err, "crux lint: %v\n", err)
+		return domain.ExitError{Code: 2}
+	}
+	return writeLintResult(io, index, opts)
+}
+
+func writeLintResult(io *output.IO, index api.IndexData, opts lintOptions) error {
+	findings, err := selectLintFindings(index.LintFindings, lintSelectionOptions{
+		profile: opts.profile, includeSuppressed: opts.includeSuppressed,
+	})
+	if err != nil {
+		return err
+	}
+	if opts.json {
+		encoder := json.NewEncoder(io.Out)
+		encoder.SetIndent("", "  ")
+		if err := encoder.Encode(findings); err != nil {
+			return err
+		}
+	} else {
+		printLintFindings(io, findings, opts.profile, opts.includeSuppressed)
+	}
+	failures, err := lintGateFailures(findings, opts.failOn)
+	if err != nil {
+		return err
+	}
+	if len(failures) == 0 {
+		return nil
+	}
+	if !opts.json {
+		fmt.Fprintf(io.Out, "%s %d finding(s) matched --fail-on=%s\n", io.Sprint(output.Red, "gate failed:"), len(failures), opts.failOn)
+	}
+	return domain.ExitError{Code: 1}
 }
 
 type lintSelectionOptions struct {

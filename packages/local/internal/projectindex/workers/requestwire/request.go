@@ -29,6 +29,11 @@ type Request struct {
 	PreviousDefinitions           []store.ProjectDefinition                `json:"previousIndexDefinitions,omitempty"`
 	PreviousSources               []store.IndexSourceFile                  `json:"previousIndexSources,omitempty"`
 	Definitions                   []store.ProjectDefinition                `json:"definitions,omitempty"`
+	Relations                     []store.ProjectRelation                  `json:"relations,omitempty"`
+	ProjectID                     string                                   `json:"projectId,omitempty"`
+	StaticFrontend                string                                   `json:"staticFrontend,omitempty"`
+	ManifestSemanticBackend       string                                   `json:"manifestSemanticBackend,omitempty"`
+	SemanticStatus                string                                   `json:"semanticStatus,omitempty"`
 	Files                         []string                                 `json:"files,omitempty"`
 	DeletedFiles                  []string                                 `json:"deletedFiles,omitempty"`
 	Jobs                          []json.RawMessage                        `json:"jobs,omitempty"`
