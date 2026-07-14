@@ -55,10 +55,10 @@ packages with required gate environment.
 ## Cache Identity Review
 
 The static output contract changed during stable-beta hardening, so the static
-cache namespace is `static-parse-v61`. Go Static Index cache replay is pinned to
+cache namespace is `static-parse-v62`. Go Static Index cache replay is pinned to
 the same namespace through the shared fixture. Semantic facts use
-`semantic-facts-v27`, and the Go Project Index snapshot cache lives under
-`.crux/cache/index-v2/epoch-33/` so restart warm loads cannot mask renamed or
+`semantic-facts-v28`, and the Go Project Index snapshot cache lives under
+`.crux/cache/index-v2/epoch-34/` so restart warm loads cannot mask renamed or
 schema-shifted read-model output.
 
 `nativeAst` is the static AST/source frontend experiment and remains independent

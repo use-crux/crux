@@ -83,7 +83,7 @@ func (s *Service) applyLintPatchIfCurrent(ctx context.Context, patch projectinde
 	if err := s.indexCache.Commit(ctx, patch); err != nil {
 		return store.IndexData{}, err
 	}
-	return s.applyIndexPatchLocked(patch), nil
+	return s.applyIndexPatchLocked(ctx, patch), nil
 }
 
 func isEmptyIndexPatch(patch projectindex.IndexPatch) bool {

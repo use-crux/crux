@@ -771,7 +771,7 @@ export interface ProjectDefinition {
   sourceSnippet?: SourceSnippet;
   sourceRefs?: ProjectSourceRef[];
   fidelity: "resolved" | "partial" | "error";
-  status?: "active" | "missing" | "stale";
+  status?: "active" | "missing" | "stale" | "removed";
   fingerprint?: string;
   metadata?: ProjectDefinitionMetadata;
   quality?: ProjectDefinitionQuality;

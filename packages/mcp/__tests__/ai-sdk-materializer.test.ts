@@ -1,4 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { resetHooks, setHooks } from "@use-crux/core";
+import type { ProjectIndexRuntimeUpdate } from "@use-crux/core/project-index/runtime";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { mcp, streamableHttp } from "../src";
 import { createAiSdkMcpClient } from "../src/ai-sdk/client";
@@ -12,10 +14,26 @@ const createClientMock = vi.mocked(createAiSdkMcpClient);
 
 describe("AI SDK-native MCP client boundary", () => {
   beforeEach(() => {
+    resetHooks();
     createClientMock.mockReset();
   });
 
+  afterEach(() => {
+    resetHooks();
+  });
+
   it("uses native discovery and tool construction while preserving native model output", async () => {
+    const runtimeUpdates: ProjectIndexRuntimeUpdate[] = [];
+    setHooks({
+      projectIndexRuntimeTransport: {
+        enqueue(update) {
+          runtimeUpdates.push(update);
+        },
+        async flush() {
+          return "ok";
+        },
+      },
+    });
     const nativeToModelOutput = vi.fn(({ output }: { output: unknown }) => ({
       type: "json",
       value: output,
@@ -89,6 +107,13 @@ describe("AI SDK-native MCP client boundary", () => {
       }),
     ).toEqual({ type: "json", value: output });
     expect(nativeToModelOutput).toHaveBeenCalledTimes(1);
+    expect(runtimeUpdates).toEqual([
+      expect.objectContaining({
+        operation: "replace",
+        owner: { definitionId: "mcp.server:catalog", kind: "mcp.server" },
+        definitions: [expect.objectContaining({ id: "tool:lookup" })],
+      }),
+    ]);
 
     await session.close();
     expect(close).toHaveBeenCalledTimes(1);

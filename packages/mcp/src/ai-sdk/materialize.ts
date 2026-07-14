@@ -54,6 +54,10 @@ import {
   withMcpSessionProvenance,
   withMcpToolProvenance,
 } from "../observability";
+import {
+  enqueueMcpDiscoveryFailure,
+  enqueueMcpDiscoveryUpdate,
+} from "../project-index";
 
 const MAX_DISCOVERY_PAGES = 64;
 
@@ -74,6 +78,12 @@ export async function materializeAiSdkMcpToolSource(
       error,
     );
     connect.error(failure, { failurePhase: failure.phase });
+    enqueueMcpDiscoveryFailure({
+      serverId: mcpSource.id,
+      updateId: `mcp:${connect.spanId}:failure`,
+      phase: failure.phase,
+      category: "mcp-transport",
+    });
     throw failure;
   }
   const errorContext = mcpTransportErrorContext(source.id, config);
@@ -88,6 +98,12 @@ export async function materializeAiSdkMcpToolSource(
       error,
     );
     connect.error(failure, { failurePhase: failure.phase });
+    enqueueMcpDiscoveryFailure({
+      serverId: mcpSource.id,
+      updateId: `mcp:${connect.spanId}:failure`,
+      phase: failure.phase,
+      category: "mcp-transport",
+    });
     throw failure;
   }
 
@@ -101,6 +117,12 @@ export async function materializeAiSdkMcpToolSource(
   } catch (error) {
     const failure = mcpToolSourceError("connect", errorContext, error);
     connect.error(failure, { failurePhase: failure.phase });
+    enqueueMcpDiscoveryFailure({
+      serverId: mcpSource.id,
+      updateId: `mcp:${connect.spanId}:failure`,
+      phase: failure.phase,
+      category: "mcp-connect",
+    });
     throw failure;
   }
   connect.end({
@@ -174,6 +196,12 @@ export async function materializeAiSdkMcpToolSource(
         toolListFingerprint,
       },
     });
+    enqueueMcpDiscoveryUpdate({
+      serverId: mcpSource.id,
+      sourceSessionId: preparation.sourceSessionId,
+      toolListFingerprint,
+      tools: projected,
+    });
     let closed = false;
     return withMcpSessionProvenance(
       {
@@ -198,6 +226,12 @@ export async function materializeAiSdkMcpToolSource(
     await client.close().catch(() => {});
     const failure = mcpToolSourceError("discover", errorContext, error);
     discover.error(failure, { failurePhase: failure.phase });
+    enqueueMcpDiscoveryFailure({
+      serverId: mcpSource.id,
+      updateId: `${preparation.sourceSessionId}:failure`,
+      phase: failure.phase,
+      category: "mcp-discovery",
+    });
     throw failure;
   }
 }

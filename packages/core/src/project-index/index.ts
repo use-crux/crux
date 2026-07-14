@@ -1009,7 +1009,7 @@ export interface ProjectDefinition {
   sourceSnippet?: SourceSnippet;
   sourceRefs?: ProjectSourceRef[];
   fidelity: DefinitionFidelity;
-  status?: "active" | "missing" | "stale";
+  status?: "active" | "missing" | "stale" | "removed";
   fingerprint?: string;
   metadata?: ProjectDefinitionMetadata;
   quality?: ProjectDefinitionQuality;
@@ -1900,7 +1900,7 @@ export const ProjectDefinitionSchema = z.object({
   sourceSnippet: SourceSnippetSchema.optional(),
   sourceRefs: z.array(ProjectSourceRefSchema).optional(),
   fidelity: DefinitionFidelitySchema,
-  status: z.enum(["active", "missing", "stale"]).optional(),
+  status: z.enum(["active", "missing", "stale", "removed"]).optional(),
   fingerprint: z.string().optional(),
   metadata: ProjectDefinitionMetadataSchema.optional(),
   quality: ProjectDefinitionQualitySchema.optional(),

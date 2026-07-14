@@ -24,6 +24,7 @@ export interface DiscoveredTools {
   readonly tools: Readonly<Record<string, McpMaterializedTool>>;
   readonly discovery: McpDiscoveryMetadata;
   readonly observation: McpDiscoveryObservation;
+  readonly projected: readonly ProjectedMcpTool[];
 }
 
 export interface McpDiscoverySource {
@@ -95,6 +96,7 @@ export async function discoverMcpTools(
       allowedToolCount: projected.length,
       deniedToolCount: remoteTools.length - projected.length,
     },
+    projected,
   };
 }
 

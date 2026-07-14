@@ -49,7 +49,7 @@ describe("static extraction engine", () => {
         {
           kind: "compiler-profile",
           name: "@use-crux/indexer/crux-core-profile",
-          version: "2",
+          version: "3",
         },
         { kind: "syntax-frontend", name: "typescript", version: ts.version },
       ]),

@@ -25,6 +25,10 @@ import {
   withMcpSessionProvenance,
   withMcpToolProvenance,
 } from "../observability";
+import {
+  enqueueMcpDiscoveryFailure,
+  enqueueMcpDiscoveryUpdate,
+} from "../project-index";
 
 /**
  * Materialize one MCP source through the official TypeScript client.
@@ -56,6 +60,12 @@ export async function materializeMcpToolSource(
       error,
     );
     connect.error(failure, { failurePhase: failure.phase });
+    enqueueMcpDiscoveryFailure({
+      serverId: mcpSource.id,
+      updateId: `mcp:${connect.spanId}:failure`,
+      phase: failure.phase,
+      category: "mcp-transport",
+    });
     throw failure;
   }
   const errorContext = mcpTransportErrorContext(mcpSource.id, config);
@@ -72,6 +82,12 @@ export async function materializeMcpToolSource(
       error,
     );
     connect.error(failure, { failurePhase: failure.phase });
+    enqueueMcpDiscoveryFailure({
+      serverId: mcpSource.id,
+      updateId: `mcp:${connect.spanId}:failure`,
+      phase: failure.phase,
+      category: "mcp-transport",
+    });
     throw failure;
   }
 
@@ -84,6 +100,12 @@ export async function materializeMcpToolSource(
     } catch (error) {
       const failure = mcpToolSourceError("connect", errorContext, error);
       connect.error(failure, { failurePhase: failure.phase });
+      enqueueMcpDiscoveryFailure({
+        serverId: mcpSource.id,
+        updateId: `mcp:${connect.spanId}:failure`,
+        phase: failure.phase,
+        category: "mcp-connect",
+      });
       throw failure;
     }
     const server = client.getServerVersion();
@@ -121,6 +143,12 @@ export async function materializeMcpToolSource(
     } catch (error) {
       const failure = mcpToolSourceError("discover", errorContext, error);
       discover.error(failure, { failurePhase: failure.phase });
+      enqueueMcpDiscoveryFailure({
+        serverId: mcpSource.id,
+        updateId: `${preparation.sourceSessionId}:failure`,
+        phase: failure.phase,
+        category: "mcp-discovery",
+      });
       throw failure;
     }
     discover.end({
@@ -129,6 +157,12 @@ export async function materializeMcpToolSource(
         exposedToolCount: discovered.discovery.tools.length,
         toolListFingerprint: discovered.discovery.toolListFingerprint,
       },
+    });
+    enqueueMcpDiscoveryUpdate({
+      serverId: mcpSource.id,
+      sourceSessionId: preparation.sourceSessionId,
+      toolListFingerprint: discovered.discovery.toolListFingerprint,
+      tools: discovered.projected,
     });
     const tools = Object.fromEntries(
       Object.entries(discovered.tools).map(([name, tool]) => [

@@ -21,29 +21,30 @@
  * @module
  */
 
-import type { z } from 'zod'
-import type { FlowToolDef } from '../types'
-import type { AnyPrompt } from '../prompt/prompt-types'
-import type { Context } from '../prompt/context-types'
-import type { CruxPlugin, CruxPluginResult } from '../runtime/plugin'
-import type { RuntimeBridgeOptions } from '../runtime-bridge'
+import type { z } from "zod";
+import type { FlowToolDef } from "../types";
+import type { AnyPrompt } from "../prompt/prompt-types";
+import type { Context } from "../prompt/context-types";
+import type { CruxPlugin, CruxPluginResult } from "../runtime/plugin";
+import type { RuntimeBridgeOptions } from "../runtime-bridge";
 import {
   getHooks,
   pushHooksLayer,
   restoreHooksLayer,
   type CruxHooks,
   type HooksLayerToken,
-} from '../runtime/runtime'
-import { configureObservability, observe } from './observe'
-import { createHttpObservabilityTransport } from './transport'
-import { IndexSnapshotSchema } from '../project-index'
-import { serializeIndex } from '../project-index/serializers'
+} from "../runtime/runtime";
+import { configureObservability, observe } from "./observe";
+import { createHttpObservabilityTransport } from "./transport";
+import { IndexSnapshotSchema } from "../project-index";
+import { serializeIndex } from "../project-index/serializers";
+import { createProjectIndexRuntimeTransport } from "../project-index/runtime";
 
 export interface EnableDevtoolsOptions {
   /** Prompt instances to register in the devtools index. */
-  prompts: AnyPrompt[]
+  prompts: AnyPrompt[];
   /** Context instances to register (contexts used by prompts are auto-included). */
-  contexts?: Context<z.ZodType>[]
+  contexts?: Context<z.ZodType>[];
   /**
    * URL of the local devtools server or tunnel.
    *
@@ -53,7 +54,7 @@ export interface EnableDevtoolsOptions {
    * Accepts http://, https://, ws://, or wss:// — automatically normalized.
    * @default 'http://localhost:4400'
    */
-  serverUrl?: string
+  serverUrl?: string;
   /**
    * Enable the Runtime Bridge command plane.
    *
@@ -61,20 +62,20 @@ export interface EnableDevtoolsOptions {
    * Framework integrations such as `@use-crux/convex` can register HTTP bridge
    * endpoints from their setup helpers. Explicit bridge config wins.
    */
-  bridge?: RuntimeBridgeOptions
+  bridge?: RuntimeBridgeOptions;
   /**
    * Namespace paths from tree builders (id → path segments).
    * When provided, the index includes tree structure for the devtools UI.
    * Set automatically by `configure()` when trees are passed.
    */
-  paths?: Map<string, string[]>
+  paths?: Map<string, string[]>;
   /**
    * Optional session ID for grouping traces into logical sessions.
    * All traces emitted while this devtools instance is active will carry this ID.
    */
-  sessionId?: string
+  sessionId?: string;
   /** Tool definitions to register in the devtools index. */
-  tools?: FlowToolDef[]
+  tools?: FlowToolDef[];
 }
 
 /**
@@ -96,22 +97,22 @@ export interface EnableDevtoolsOptions {
  */
 export function withDevtools(options: EnableDevtoolsOptions): CruxPlugin {
   return {
-    name: 'crux:devtools',
+    name: "crux:devtools",
     install(hooks) {
-      return buildDevtoolsRuntime(options, hooks)
+      return buildDevtoolsRuntime(options, hooks);
     },
-  }
+  };
 }
 
 interface DevtoolsRuntimeLayer {
-  layerToken: HooksLayerToken
-  dispose: () => void | Promise<void>
-  parentToken: number
+  layerToken: HooksLayerToken;
+  dispose: () => void | Promise<void>;
+  parentToken: number;
 }
 
-let nextDevtoolsToken = 1
-let activeDevtoolsToken = 0
-const devtoolsRuntimeLayers = new Map<number, DevtoolsRuntimeLayer>()
+let nextDevtoolsToken = 1;
+let activeDevtoolsToken = 0;
+const devtoolsRuntimeLayers = new Map<number, DevtoolsRuntimeLayer>();
 
 /**
  * Enable devtools instrumentation.
@@ -134,42 +135,77 @@ function buildDevtoolsRuntime(
 ): CruxPluginResult {
   const transport = createHttpObservabilityTransport({
     serverUrl: options.serverUrl,
-  })
+  });
   const restoreObservability = configureObservability({
     transport,
     ...(options.sessionId
       ? { defaultCorrelators: { sessionId: options.sessionId } }
       : {}),
-  })
-  void registerIndexSnapshot(options)
+  });
+  const snapshotRegistration = registerIndexSnapshot(options);
+  const projectIndexRuntimeTransport = createProjectIndexRuntimeTransport({
+    deliver: async (update) => {
+      await snapshotRegistration;
+      const fetchImpl = globalThis.fetch;
+      if (!fetchImpl) throw new Error("fetch unavailable");
+      const response = await fetchImpl(
+        joinUrl(
+          options.serverUrl ?? "http://localhost:4400",
+          "/api/index/runtime-update",
+        ),
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Bypass-Tunnel-Reminder": "true",
+          },
+          body: JSON.stringify(update),
+        },
+      );
+      if (!response.ok) {
+        throw new Error(
+          `Project Index runtime update returned HTTP ${response.status}`,
+        );
+      }
+    },
+    onDeliveryError() {
+      if (typeof console !== "undefined") {
+        console.warn("[crux] project index runtime update delivery failed");
+      }
+    },
+  });
 
   return {
     observabilityTransport: transport,
+    projectIndexRuntimeTransport,
     dispose() {
-      const flushed = observe.flush({ timeoutMs: 2000 })
-      restoreObservability()
-      return flushed.then(() => undefined)
+      const flushed = Promise.all([
+        observe.flush({ timeoutMs: 2000 }),
+        projectIndexRuntimeTransport.flush({ timeoutMs: 2000 }),
+      ]);
+      restoreObservability();
+      return flushed.then(() => undefined);
     },
-  }
+  };
 }
 
 function normalizeServerUrl(serverUrl: string): string {
-  if (serverUrl.startsWith('ws://'))
-    return `http://${serverUrl.slice('ws://'.length)}`
-  if (serverUrl.startsWith('wss://'))
-    return `https://${serverUrl.slice('wss://'.length)}`
-  return serverUrl
+  if (serverUrl.startsWith("ws://"))
+    return `http://${serverUrl.slice("ws://".length)}`;
+  if (serverUrl.startsWith("wss://"))
+    return `https://${serverUrl.slice("wss://".length)}`;
+  return serverUrl;
 }
 
 function joinUrl(serverUrl: string, endpoint: string): string {
-  return `${normalizeServerUrl(serverUrl).replace(/\/+$/u, '')}/${endpoint.replace(/^\/+/u, '')}`
+  return `${normalizeServerUrl(serverUrl).replace(/\/+$/u, "")}/${endpoint.replace(/^\/+/u, "")}`;
 }
 
 async function registerIndexSnapshot(
   options: EnableDevtoolsOptions,
 ): Promise<void> {
-  const fetchImpl = globalThis.fetch
-  if (!fetchImpl) return
+  const fetchImpl = globalThis.fetch;
+  if (!fetchImpl) return;
 
   const snapshot = IndexSnapshotSchema.parse({
     schemaVersion: 1,
@@ -179,53 +215,53 @@ async function registerIndexSnapshot(
       options.paths,
       options.tools,
     ),
-  })
+  });
 
   try {
     const response = await fetchImpl(
       joinUrl(
-        options.serverUrl ?? 'http://localhost:4400',
-        '/api/index/snapshot',
+        options.serverUrl ?? "http://localhost:4400",
+        "/api/index/snapshot",
       ),
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          'Bypass-Tunnel-Reminder': 'true',
+          "Content-Type": "application/json",
+          "Bypass-Tunnel-Reminder": "true",
         },
         body: JSON.stringify(snapshot),
       },
-    )
-    if (!response.ok && typeof console !== 'undefined') {
+    );
+    if (!response.ok && typeof console !== "undefined") {
       console.warn(
         `[crux] devtools index registration failed with HTTP ${response.status}`,
-      )
+      );
     }
   } catch (error) {
-    if (typeof console !== 'undefined') {
-      const message = error instanceof Error ? error.message : String(error)
-      console.warn(`[crux] devtools index registration failed: ${message}`)
+    if (typeof console !== "undefined") {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`[crux] devtools index registration failed: ${message}`);
     }
   }
 }
 
 export function enableDevtools(options: EnableDevtoolsOptions): () => void {
-  const token = nextDevtoolsToken++
-  const previousRuntime = getHooks()
+  const token = nextDevtoolsToken++;
+  const previousRuntime = getHooks();
 
   const { dispose, ...runtimePatch } = buildDevtoolsRuntime(
     options,
     previousRuntime,
-  )
-  const layerToken = pushHooksLayer(runtimePatch)
+  );
+  const layerToken = pushHooksLayer(runtimePatch);
   devtoolsRuntimeLayers.set(token, {
     layerToken,
     dispose: dispose ?? (() => undefined),
     parentToken: activeDevtoolsToken,
-  })
-  activeDevtoolsToken = token
+  });
+  activeDevtoolsToken = token;
 
-  return () => disableDevtools(token)
+  return () => disableDevtools(token);
 }
 
 /**
@@ -236,37 +272,37 @@ export function enableDevtools(options: EnableDevtoolsOptions): () => void {
  * disposed first and invalidated with the parent restore.
  */
 export function disableDevtools(token = activeDevtoolsToken): void {
-  if (token === 0) return
+  if (token === 0) return;
 
-  const layer = devtoolsRuntimeLayers.get(token)
-  if (!layer || !isActiveDevtoolsLayer(token)) return
+  const layer = devtoolsRuntimeLayers.get(token);
+  if (!layer || !isActiveDevtoolsLayer(token)) return;
 
-  const tokensToDispose = activeDevtoolsTokensThrough(token)
+  const tokensToDispose = activeDevtoolsTokensThrough(token);
   for (const activeToken of tokensToDispose) {
-    const activeLayer = devtoolsRuntimeLayers.get(activeToken)
-    if (!activeLayer) continue
-    void activeLayer.dispose()
-    restoreHooksLayer(activeLayer.layerToken)
-    devtoolsRuntimeLayers.delete(activeToken)
+    const activeLayer = devtoolsRuntimeLayers.get(activeToken);
+    if (!activeLayer) continue;
+    void activeLayer.dispose();
+    restoreHooksLayer(activeLayer.layerToken);
+    devtoolsRuntimeLayers.delete(activeToken);
   }
 
-  activeDevtoolsToken = layer.parentToken
+  activeDevtoolsToken = layer.parentToken;
 }
 
 function isActiveDevtoolsLayer(token: number): boolean {
   for (let currentToken = activeDevtoolsToken; currentToken !== 0; ) {
-    if (currentToken === token) return true
-    currentToken = devtoolsRuntimeLayers.get(currentToken)?.parentToken ?? 0
+    if (currentToken === token) return true;
+    currentToken = devtoolsRuntimeLayers.get(currentToken)?.parentToken ?? 0;
   }
-  return false
+  return false;
 }
 
 function activeDevtoolsTokensThrough(token: number): number[] {
-  const tokens: number[] = []
+  const tokens: number[] = [];
   for (let currentToken = activeDevtoolsToken; currentToken !== 0; ) {
-    tokens.push(currentToken)
-    if (currentToken === token) return tokens
-    currentToken = devtoolsRuntimeLayers.get(currentToken)?.parentToken ?? 0
+    tokens.push(currentToken);
+    if (currentToken === token) return tokens;
+    currentToken = devtoolsRuntimeLayers.get(currentToken)?.parentToken ?? 0;
   }
-  return []
+  return [];
 }

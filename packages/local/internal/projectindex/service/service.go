@@ -37,15 +37,18 @@ type Options struct {
 // Service owns Project Index reindex, watch, semantic, lint, and runtime
 // orchestration for the local runtime.
 type Service struct {
-	ctx         context.Context
-	store       SnapshotStore
-	indexer     ASTClient
-	indexCache  *cache.Cache
-	indexMu     sync.Mutex
-	indexState  *projectindex.State
-	watchStatus projectIndexWatchStatusStore
-	readModel   ReadModelFunc
-	publish     PublishFunc
+	ctx                      context.Context
+	store                    SnapshotStore
+	indexer                  ASTClient
+	indexCache               *cache.Cache
+	indexMu                  sync.Mutex
+	indexState               *projectindex.State
+	runtimeSnapshot          *store.IndexData
+	runtimeOverlays          *projectindex.RuntimeOverlayState
+	authoritativeASTObserved bool
+	watchStatus              projectIndexWatchStatusStore
+	readModel                ReadModelFunc
+	publish                  PublishFunc
 
 	backgroundSemanticMu     sync.Mutex
 	backgroundSemanticCancel func()
@@ -67,13 +70,14 @@ func New(options Options) *Service {
 		facts = cache.NewSQLiteIndexFactStore()
 	}
 	return &Service{
-		ctx:        ctx,
-		store:      indexStore,
-		indexer:    options.Indexer,
-		indexCache: cache.NewCache(facts),
-		indexState: projectindex.NewState(),
-		readModel:  options.ReadModel,
-		publish:    options.Publish,
+		ctx:             ctx,
+		store:           indexStore,
+		indexer:         options.Indexer,
+		indexCache:      cache.NewCache(facts),
+		indexState:      projectindex.NewState(),
+		runtimeOverlays: projectindex.NewRuntimeOverlayState(),
+		readModel:       options.ReadModel,
+		publish:         options.Publish,
 	}
 }
 

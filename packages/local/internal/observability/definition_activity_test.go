@@ -100,6 +100,41 @@ func TestDefinitionActivityProjectsContributorChildAndScorerRefsWithoutKindSpeci
 	}
 }
 
+func TestDefinitionActivityJoinsExactMCPServerAndOrdinaryToolIDs(t *testing.T) {
+	service := newTestService(t)
+	mustIngest(t, service,
+		spanWithRefsJSON(
+			"r-mcp-tool",
+			"run-mcp-tool",
+			"seg-mcp-tool",
+			1,
+			"sp-mcp-tool",
+			"2026-01-01T00:00:00.000Z",
+			definitionRefJSON("mcp.server:catalog", "mcp.server", "resolved-mcp-server"),
+			definitionRefJSON("tool:remote_lookup", "tool", "invoked-tool"),
+		),
+	)
+
+	got := definitionActivity(t, service, "run-mcp-tool")
+	want := []DefinitionActivity{
+		{DefinitionID: "mcp.server:catalog", DefinitionKind: "mcp.server", Role: "resolved-mcp-server", FirstSeenAt: "2026-01-01T00:00:00.000Z", LastSeenAt: "2026-01-01T00:00:00.000Z", OccurrenceCount: 1},
+		{DefinitionID: "tool:remote_lookup", DefinitionKind: "tool", Role: "invoked-tool", FirstSeenAt: "2026-01-01T00:00:00.000Z", LastSeenAt: "2026-01-01T00:00:00.000Z", OccurrenceCount: 1},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("MCP definition activity mismatch:\n got %+v\nwant %+v", got, want)
+	}
+
+	for _, definitionID := range []string{"mcp.server:catalog", "tool:remote_lookup"} {
+		summary, err := service.DefinitionActivitySummary(context.Background(), definitionID)
+		if err != nil {
+			t.Fatalf("DefinitionActivitySummary(%s): %v", definitionID, err)
+		}
+		if summary.RunCount != 1 || summary.LastRun == nil || summary.LastRun.RunID != "run-mcp-tool" {
+			t.Fatalf("DefinitionActivitySummary(%s) = %+v", definitionID, summary)
+		}
+	}
+}
+
 func TestRunDetailCarriesCanonicalDefinitionRefsWithLastKnownSource(t *testing.T) {
 	service := newTestService(t)
 	mustIngest(t, service,
