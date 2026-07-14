@@ -23,6 +23,7 @@ import type { CapturedObservabilityContext } from '../observability/context'
 import type { CruxPropagationCarrier } from '../observability/continuation'
 import type { RecordStore } from '../storage'
 import type { RuntimeEngineDefinition } from './api/runtime-definition'
+import { getCruxProcessRegistry } from './process-registry'
 
 /**
  * Activates the real execution context (e.g. an OTel span) around the actual
@@ -139,14 +140,7 @@ export interface HooksLayerToken {
   readonly id: number
 }
 
-interface HooksLayer {
-  readonly keys: readonly (keyof CruxHooks)[]
-  readonly previousHooks: Readonly<CruxHooks>
-}
-
-let currentHooks: CruxHooks = {}
-let nextHooksLayerId = 1
-const hooksLayers = new Map<number, HooksLayer>()
+const runtimeRegistry = getCruxProcessRegistry().runtime
 
 /**
  * Get the current hook state.
@@ -159,7 +153,7 @@ const hooksLayers = new Map<number, HooksLayer>()
  * ```
  */
 export function getHooks(): Readonly<CruxHooks> {
-  return Object.freeze({ ...currentHooks })
+  return Object.freeze({ ...runtimeRegistry.currentHooks })
 }
 
 /**
@@ -179,7 +173,7 @@ export function getHooks(): Readonly<CruxHooks> {
  * ```
  */
 export function setHooks(hooks: CruxHooks): void {
-  currentHooks = { ...hooks }
+  runtimeRegistry.currentHooks = { ...hooks }
 }
 
 /**
@@ -197,7 +191,7 @@ export function setHooks(hooks: CruxHooks): void {
  * ```
  */
 export function updateHooks(patch: Partial<CruxHooks>): void {
-  currentHooks = { ...currentHooks, ...patch }
+  runtimeRegistry.currentHooks = { ...runtimeRegistry.currentHooks, ...patch }
 }
 
 /**
@@ -218,13 +212,13 @@ export function updateHooks(patch: Partial<CruxHooks>): void {
  * ```
  */
 export function pushHooksLayer(patch: Partial<CruxHooks>): HooksLayerToken {
-  const id = nextHooksLayerId++
+  const id = runtimeRegistry.nextHooksLayerId++
   const keys = Object.keys(patch) as (keyof CruxHooks)[]
-  hooksLayers.set(id, {
+  runtimeRegistry.hooksLayers.set(id, {
     keys,
-    previousHooks: { ...currentHooks },
+    previousHooks: { ...runtimeRegistry.currentHooks },
   })
-  currentHooks = { ...currentHooks, ...patch }
+  runtimeRegistry.currentHooks = { ...runtimeRegistry.currentHooks, ...patch }
   return { id, [hooksLayerBrand]: true }
 }
 
@@ -236,11 +230,11 @@ export function pushHooksLayer(patch: Partial<CruxHooks>): HooksLayerToken {
  * previous value for each key and leaves all other keys untouched.
  */
 export function restoreHooksLayer(token: HooksLayerToken): void {
-  const layer = hooksLayers.get(token.id)
+  const layer = runtimeRegistry.hooksLayers.get(token.id)
   if (!layer) return
 
-  hooksLayers.delete(token.id)
-  const nextHooks: CruxHooks = { ...currentHooks }
+  runtimeRegistry.hooksLayers.delete(token.id)
+  const nextHooks: CruxHooks = { ...runtimeRegistry.currentHooks }
   for (const key of layer.keys) {
     if (Object.prototype.hasOwnProperty.call(layer.previousHooks, key)) {
       copyHookField(nextHooks, layer.previousHooks, key)
@@ -248,7 +242,7 @@ export function restoreHooksLayer(token: HooksLayerToken): void {
       delete nextHooks[key]
     }
   }
-  currentHooks = nextHooks
+  runtimeRegistry.currentHooks = nextHooks
 }
 
 /**
@@ -258,8 +252,8 @@ export function restoreHooksLayer(token: HooksLayerToken): void {
  * when tearing down devtools.
  */
 export function resetHooks(): void {
-  currentHooks = {}
-  hooksLayers.clear()
+  runtimeRegistry.currentHooks = {}
+  runtimeRegistry.hooksLayers.clear()
 }
 
 /**
@@ -277,7 +271,7 @@ export function resetHooks(): void {
  * ```
  */
 export function resolveRecords(): RecordStore {
-  const records = currentHooks.records
+  const records = runtimeRegistry.currentHooks.records
   if (!records) {
     throw new Error(
       'No RecordStore configured. Call config({ persistence: { records } }) before using plans, tasks, or flows.',

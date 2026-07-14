@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/observability"
 	"github.com/use-crux/crux/packages/local/internal/quality"
@@ -52,6 +53,56 @@ func TestServiceStatsRoutesPreferObservability(t *testing.T) {
 	sessions := service.Sessions(ctx)
 	if len(sessions) != 1 || sessions[0].SessionID != "default" || sessions[0].TraceCount != 1 {
 		t.Fatalf("sessions = %#v", sessions)
+	}
+}
+
+func TestObservabilityStatsExcludeIncompleteFromExecutionDenominators(t *testing.T) {
+	ctx := context.Background()
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	obs, err := observability.NewService(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().Add(-2 * time.Minute).UTC().Format(time.RFC3339Nano)
+	fresh := time.Now().UTC().Format(time.RFC3339Nano)
+	var batch observability.Batch
+	if err := json.Unmarshal([]byte(`{"schemaVersion":2,"records":[
+		{"schemaVersion":2,"recordId":"success-start","type":"run:start","runId":"success","segmentId":"success-segment","segmentSeq":1,"name":"success","rootPrimitive":"agent.run","startedAt":"`+old+`","status":"running"},
+		{"schemaVersion":2,"recordId":"success-end","type":"run:end","runId":"success","segmentId":"success-segment","segmentSeq":2,"endedAt":"`+old+`","status":"ok"},
+		{"schemaVersion":2,"recordId":"error-start","type":"run:start","runId":"error","segmentId":"error-segment","segmentSeq":1,"name":"error","rootPrimitive":"agent.run","startedAt":"`+old+`","status":"running"},
+		{"schemaVersion":2,"recordId":"error-end","type":"run:end","runId":"error","segmentId":"error-segment","segmentSeq":2,"endedAt":"`+old+`","status":"error"},
+		{"schemaVersion":2,"recordId":"running-start","type":"run:start","runId":"running","segmentId":"running-segment","segmentSeq":1,"name":"running","rootPrimitive":"agent.run","startedAt":"`+fresh+`","status":"running"},
+		{"schemaVersion":2,"recordId":"incomplete-start","type":"run:start","runId":"incomplete","segmentId":"incomplete-segment","segmentSeq":1,"name":"incomplete","rootPrimitive":"agent.run","startedAt":"`+old+`","status":"running"}
+	]}`), &batch); err != nil {
+		t.Fatal(err)
+	}
+	if err := obs.Ingest(ctx, batch); err != nil {
+		t.Fatal(err)
+	}
+	if err := obs.PublishLifecycleReconciliations(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `
+		UPDATE runs
+		SET total_input_tokens = 400, total_output_tokens = 600, total_cost_usd = 9
+		WHERE run_id = 'incomplete'
+	`); err != nil {
+		t.Fatal(err)
+	}
+
+	stats := observabilityStats(ctx, obs)
+	if stats.TotalExecutions != 3 || stats.SuccessCount != 1 || stats.ErrorCount != 1 || stats.RunningCount != 1 {
+		t.Fatalf("stats = %#v, want total=3 success=1 error=1 running=1", stats)
+	}
+	if stats.ErrorRate != 1.0/3.0 {
+		t.Fatalf("error rate = %v, want %v", stats.ErrorRate, 1.0/3.0)
+	}
+	if stats.TotalCost != 0 || stats.TotalTokens != 0 || stats.AvgCost != 0 {
+		t.Fatalf("usage = cost:%v tokens:%d avg:%v, want incomplete usage excluded", stats.TotalCost, stats.TotalTokens, stats.AvgCost)
 	}
 }
 

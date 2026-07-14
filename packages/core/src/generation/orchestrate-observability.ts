@@ -22,7 +22,12 @@ import { createStreamTokenCoalescer } from './stream-token-coalescer'
 export function generationAttributes(
   spec: Pick<
     OrchestrationSpec<Record<string, unknown>>,
-    'promptId' | 'provider' | 'model' | 'outputMode' | 'timeout'
+    | 'promptId'
+    | 'provider'
+    | 'model'
+    | 'traceModel'
+    | 'outputMode'
+    | 'timeout'
   >,
   operation: 'generate' | 'stream',
 ): Record<string, unknown> {
@@ -31,7 +36,11 @@ export function generationAttributes(
     operation,
     ...(spec.promptId ? { promptId: spec.promptId } : {}),
     ...(spec.provider ? { provider: spec.provider } : {}),
-    ...(typeof spec.model === 'string' ? { model: spec.model } : {}),
+    ...(spec.traceModel
+      ? { model: spec.traceModel }
+      : typeof spec.model === 'string'
+        ? { model: spec.model }
+        : {}),
     ...(spec.outputMode ? { outputMode: spec.outputMode } : {}),
     ...(totalTimeoutMs ? { totalTimeoutMs, deadlineAt: new Date(Date.now() + totalTimeoutMs).toISOString() } : {}),
   }

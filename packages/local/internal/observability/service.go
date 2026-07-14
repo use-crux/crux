@@ -926,7 +926,7 @@ func (s *Service) lifecycleCandidateRuns(ctx context.Context) ([]lifecycleRunSum
 }
 
 func (s *Service) persistLifecycleReconciliation(ctx context.Context, reconciliation lifecycleReconciliation) (bool, error) {
-	status := "reconciled-terminal"
+	status := "reconciled-terminal:" + reconciliation.Status
 	if reconciliation.Status == "incomplete" {
 		status = "reconciled-incomplete"
 	}

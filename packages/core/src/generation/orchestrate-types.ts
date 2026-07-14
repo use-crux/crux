@@ -35,6 +35,8 @@ export interface OrchestrationSpec<TPreparedArgs extends Record<string, unknown>
   preparedArgs: TPreparedArgs
   /** The model being used. */
   model: unknown
+  /** Normalized model identity used only for internal observability. */
+  traceModel?: string
   /** The input passed to generate(). */
   input: Record<string, unknown>
   /** Operation being orchestrated. Defaults to generate. */

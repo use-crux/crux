@@ -59,6 +59,9 @@ func Inspect(
 		}
 		timings = AppendTiming(timings, TimingConfig, configStarted, 1)
 	}
+	if !config.StaticSyntaxConfigured {
+		config.StaticSyntaxEnabled = true
+	}
 
 	var extensionManifest *projectindex.StaticExtensionHostManifestResult
 	if len(config.Extensions) > 0 && config.StaticSyntaxEnabled {

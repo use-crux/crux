@@ -175,6 +175,7 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
         input: args.input ?? {},
         provider: modelInfo.provider || dialect.id,
         model: args.model,
+        traceModel: modelInfo.modelId || undefined,
         resolved,
         outputMode: resolved.schema ? "object" : "text",
         timeout: args.timeout,

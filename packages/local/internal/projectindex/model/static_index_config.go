@@ -10,6 +10,8 @@ type ProjectStaticIndexConfig struct {
 	// StaticSyntaxEnabled preserves the historical nativeAstEnabled JSON field
 	// while normalizing Go code to Static Syntax vocabulary.
 	StaticSyntaxEnabled bool `json:"nativeAstEnabled"`
+	// StaticSyntaxConfigured distinguishes an absent option from explicit false.
+	StaticSyntaxConfigured bool `json:"nativeAstConfigured"`
 	// StaticSyntaxFrontend preserves the historical nativeAstFrontend JSON field
 	// while normalizing Go code to Static Syntax vocabulary.
 	StaticSyntaxFrontend string                                 `json:"nativeAstFrontend,omitempty"`
@@ -25,8 +27,9 @@ func (c *ProjectStaticIndexConfig) UnmarshalJSON(data []byte) error {
 	type projectStaticIndexConfigAlias ProjectStaticIndexConfig
 	var decoded struct {
 		projectStaticIndexConfigAlias
-		StaticSyntaxEnabledAlias  *bool   `json:"staticSyntaxEnabled,omitempty"`
-		StaticSyntaxFrontendAlias *string `json:"staticSyntaxFrontend,omitempty"`
+		StaticSyntaxEnabledAlias    *bool   `json:"staticSyntaxEnabled,omitempty"`
+		StaticSyntaxConfiguredAlias *bool   `json:"staticSyntaxConfigured,omitempty"`
+		StaticSyntaxFrontendAlias   *string `json:"staticSyntaxFrontend,omitempty"`
 	}
 	if err := json.Unmarshal(data, &decoded); err != nil {
 		return err
@@ -34,6 +37,9 @@ func (c *ProjectStaticIndexConfig) UnmarshalJSON(data []byte) error {
 	*c = ProjectStaticIndexConfig(decoded.projectStaticIndexConfigAlias)
 	if decoded.StaticSyntaxEnabledAlias != nil {
 		c.StaticSyntaxEnabled = *decoded.StaticSyntaxEnabledAlias
+	}
+	if decoded.StaticSyntaxConfiguredAlias != nil {
+		c.StaticSyntaxConfigured = *decoded.StaticSyntaxConfiguredAlias
 	}
 	if decoded.StaticSyntaxFrontendAlias != nil {
 		c.StaticSyntaxFrontend = *decoded.StaticSyntaxFrontendAlias

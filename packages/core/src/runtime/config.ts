@@ -34,7 +34,7 @@ import type { CruxConfig } from './config-types'
 import { configure } from './configure'
 import { createRuntimeConfigTransaction } from './config-transaction'
 import type { CruxFlowRuntimeControls } from './api/flows'
-import type { RuntimeConfigInstallation } from './config-transaction'
+import { getCruxProcessRegistry } from './process-registry'
 
 // ─────────────────────────────────────────────────────────────────
 // Types
@@ -76,7 +76,7 @@ export interface Crux extends PromptRegistry {
 // Main
 // ─────────────────────────────────────────────────────────────────
 
-let activeInstallation: RuntimeConfigInstallation | undefined
+const runtimeRegistry = getCruxProcessRegistry().runtime
 
 /**
  * Define and apply Crux configuration.
@@ -106,10 +106,10 @@ export function config(config: CruxConfig): Crux {
   const transaction = createRuntimeConfigTransaction({ config })
   if (transaction.inert) return transaction.createCrux()
 
-  activeInstallation?.restore()
-  activeInstallation = undefined
+  runtimeRegistry.activeInstallation?.restore()
+  runtimeRegistry.activeInstallation = undefined
   const installation = transaction.apply()
-  activeInstallation = installation
+  runtimeRegistry.activeInstallation = installation
   const registry = configure(transaction.configureOptions)
   const bridgeConnection = installation.connectBridge(registry)
   const crux = installation.createCrux(registry, bridgeConnection)
@@ -118,8 +118,8 @@ export function config(config: CruxConfig): Crux {
     ...crux,
     dispose() {
       crux.dispose()
-      if (activeInstallation === installation) {
-        activeInstallation = undefined
+      if (runtimeRegistry.activeInstallation === installation) {
+        runtimeRegistry.activeInstallation = undefined
       }
     },
   }) as Crux

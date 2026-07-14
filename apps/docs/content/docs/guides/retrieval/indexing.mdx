@@ -164,6 +164,8 @@ indexingPipeline({
 
 ## Cache Expensive Stages
 
+Pipeline caching covers document and chunk preparation stages. It does not cache dense or sparse embedding calls; those calls still run when the indexer writes a fresh generation. See [Embeddings](/docs/guides/retrieval/embeddings) for embedding configuration.
+
 Enable stage caching on the indexer:
 
 ```ts

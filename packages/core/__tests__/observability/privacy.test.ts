@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   CRUX_CANONICAL_ARTIFACT_KINDS,
   createInMemoryObservabilityTransport,
@@ -27,6 +27,8 @@ describe('observability privacy capture policy', () => {
   afterEach(() => {
     resetObservabilityRuntime()
     resetHooks()
+    vi.restoreAllMocks()
+    vi.unstubAllEnvs()
   })
 
   it('keeps disabled output payloads out of subscribers and transports', async () => {
@@ -376,6 +378,39 @@ describe('observability privacy capture policy', () => {
       expect.objectContaining({ type: 'artifact', kind: 'output' }),
     )
     expect(observabilityDiagnostics().redactedRecords).toBe(2)
+  })
+
+  it('warns without an absent privacy detail and retains an actual detail', () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const warning =
+      '[crux] observability record redacted or dropped by privacy policy.'
+
+    setObservabilityTransport(createInMemoryObservabilityTransport())
+    updateHooks({
+      observabilityCapture: {
+        redactRecord: () => null,
+      },
+    })
+    observe.openRun({ name: 'drop', rootPrimitive: 'custom.operation' })
+
+    expect(warn).toHaveBeenCalledExactlyOnceWith(warning)
+
+    resetObservabilityRuntime()
+    resetHooks()
+    warn.mockClear()
+    const detail = new Error('redactor failed')
+    setObservabilityTransport(createInMemoryObservabilityTransport())
+    updateHooks({
+      observabilityCapture: {
+        redactRecord: () => {
+          throw detail
+        },
+      },
+    })
+    observe.openRun({ name: 'throw', rootPrimitive: 'custom.operation' })
+
+    expect(warn).toHaveBeenCalledExactlyOnceWith(warning, detail)
   })
 
   it('bounds delivery diagnostics without retaining URLs, tokens, or payloads', async () => {
