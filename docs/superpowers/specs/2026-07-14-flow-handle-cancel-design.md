@@ -43,6 +43,11 @@ object-bound `cancelFlow(flowId)` behavior in both modes. The name-bound
 `crux.flows.cancel(name, flowId)` entry point supplies an expected target name
 to the same helper and retains its target-mismatch validation.
 
+Handle cancellation is idempotent for an unknown flow id and resolves without
+error in both modes, matching `cancelFlow()`. Name-bound
+`crux.flows.cancel()` remains strict: an unknown id throws `TARGET_NOT_FOUND`
+because callers without a handle must prove the target identity explicitly.
+
 The Runtime Engine cancellation composite atomically marks both the owning work
 item and its flow snapshot `cancelled`, cancels owned waiter/timer
 registrations, updates scoped-idle accounting, and appends the cancellation
@@ -67,6 +72,8 @@ Use vertical TDD slices through public interfaces:
 4. Extend the shared store-composite conformance case to prove Runtime Engine
    cancellation atomically terminalizes the flow snapshot across memory,
    Postgres, and Convex-backed stores.
+5. Test the handle's missing-id no-op without and with a Runtime Engine, while
+   preserving strict missing-id behavior for `crux.flows.cancel()`.
 
 Existing Runtime Engine conformance tests continue to cover cancellation
 idempotency, waiter/timer races, and scoped-idle accounting.
