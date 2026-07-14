@@ -180,6 +180,7 @@ async function validateLocalPackedInstall(stagedPackages, failures) {
         cwd: packageDir,
         encoding: 'utf8',
         shell: process.platform === 'win32',
+        timeout: 30_000,
       })
       if (pack.status !== 0) {
         failures.push(`${name}: npm pack failed during installed CLI smoke test\n${pack.stderr || pack.stdout}`)
@@ -201,6 +202,7 @@ async function validateLocalPackedInstall(stagedPackages, failures) {
         cwd: installDir,
         encoding: 'utf8',
         shell: process.platform === 'win32',
+        timeout: 30_000,
       },
     )
     if (install.status !== 0) {

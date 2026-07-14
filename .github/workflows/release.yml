@@ -277,11 +277,12 @@ jobs:
         env:
           NIGHTLY_SHA: ${{ steps.version.outputs.sha }}
           EVENT_NAME: ${{ github.event_name }}
+          CREATED_VERSION: ${{ steps.version.outputs.version }}
         run: |
           should_publish=true
           latest_nightly=''
           complete_nightly=false
-          release_version='${{ steps.version.outputs.version }}'
+          release_version="$CREATED_VERSION"
 
           if [ "$EVENT_NAME" = "schedule" ]; then
             latest_nightly="$(npm view @use-crux/core@nightly version --json 2>/dev/null | tr -d '"' || true)"
@@ -328,7 +329,7 @@ jobs:
           echo "release_version=$release_version" >> "$GITHUB_OUTPUT"
           echo "latest_nightly=$latest_nightly" >> "$GITHUB_OUTPUT"
           {
-            echo "Nightly version: ${{ steps.version.outputs.version }}"
+            echo "Nightly version: $CREATED_VERSION"
             echo "Latest published nightly: ${latest_nightly:-none}"
             echo "Complete published nightly: $complete_nightly"
             echo "Should publish: $should_publish"
@@ -545,5 +546,7 @@ jobs:
           fi
 
       - name: Summary
+        env:
+          NIGHTLY_VERSION: ${{ needs.nightly.outputs.version }}
         run: |
-          echo "GitHub pre-release: v${{ needs.nightly.outputs.version }}." >> "$GITHUB_STEP_SUMMARY"
+          echo "GitHub pre-release: v${NIGHTLY_VERSION}." >> "$GITHUB_STEP_SUMMARY"
