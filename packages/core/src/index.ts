@@ -131,6 +131,7 @@ export type {
 export { CONTRIBUTOR } from "./resolver/contract";
 export {
   TOOL_SOURCE,
+  ToolSourceCollisionError,
   ToolSourceUnsupportedError,
   isToolSource,
 } from "./tools/tool-source";

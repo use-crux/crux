@@ -69,3 +69,26 @@ export class ToolSourceUnsupportedError extends Error {
     this.dialect = dialect;
   }
 }
+
+/** Failure raised when materialized source tools collide during the merge. */
+export class ToolSourceCollisionError extends Error {
+  readonly code = "TOOL_SOURCE_COLLISION" as const;
+  readonly phase = "merge" as const;
+  /** Final exposed name that was contributed more than once. */
+  readonly toolName: string;
+  /** Source whose contribution conflicted with an earlier owner. */
+  readonly sourceId: string;
+  /** Human-readable identity of the earlier contribution. */
+  readonly previousOwner: string;
+
+  constructor(toolName: string, sourceId: string, previousOwner: string) {
+    super(
+      `Tool name collision for "${toolName}" between ${previousOwner} and tool source "${sourceId}". ` +
+        "Configure an explicit source prefix.",
+    );
+    this.name = "ToolSourceCollisionError";
+    this.toolName = toolName;
+    this.sourceId = sourceId;
+    this.previousOwner = previousOwner;
+  }
+}

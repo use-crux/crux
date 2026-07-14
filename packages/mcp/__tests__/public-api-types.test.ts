@@ -2,6 +2,7 @@ import { prompt, type ContextEntry } from "@use-crux/core";
 import { describe, expect, expectTypeOf, it } from "vitest";
 
 import {
+  materializeMcpToolSource,
   mcp,
   stdio,
   streamableHttp,
@@ -54,6 +55,15 @@ describe("MCP public types", () => {
     };
 
     expect(describeTransport(stdio({ command: "node" }))).toBe("node");
+  });
+
+  it("types dynamic tool input as a record rather than any", () => {
+    type Session = Awaited<ReturnType<typeof materializeMcpToolSource>>;
+    type DynamicInput = Parameters<
+      Session["tools"][string]["execute"]
+    >[0];
+
+    expectTypeOf<DynamicInput>().toEqualTypeOf<Record<string, unknown>>();
   });
 });
 

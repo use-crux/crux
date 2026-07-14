@@ -166,4 +166,51 @@ describe("portable tool sources", () => {
     });
     expect(call).not.toHaveBeenCalled();
   });
+
+  it("reports source collisions with structured merge ownership", async () => {
+    const first = mcp({
+      id: "first-server",
+      transport: stdio({ command: "first-server" }),
+    });
+    const second = mcp({
+      id: "second-server",
+      transport: stdio({ command: "second-server" }),
+    });
+    const materializeToolSource = vi.fn(async () => ({
+      tools: { lookup: { description: "duplicate" } },
+      close: vi.fn(),
+    }));
+    const call = vi.fn();
+    const createCollisionAdapter = adapter({
+      providerId: "collision-provider",
+      materializeToolSource,
+      call,
+      mapSettings: () => ({}),
+      async stream() {
+        throw new Error("stream is not used by this test");
+      },
+      appendToolRound(messages) {
+        return messages;
+      },
+    });
+    const assistant = prompt({
+      id: "colliding-tool-sources",
+      use: [first, second],
+      prompt: "Do not call the provider.",
+    });
+
+    await expect(
+      createCollisionAdapter({}).generate(assistant, {
+        model: "fixture-model",
+      }),
+    ).rejects.toMatchObject({
+      name: "ToolSourceCollisionError",
+      code: "TOOL_SOURCE_COLLISION",
+      phase: "merge",
+      toolName: "lookup",
+      sourceId: "second-server",
+      previousOwner: 'tool source "first-server"',
+    });
+    expect(call).not.toHaveBeenCalled();
+  });
 });

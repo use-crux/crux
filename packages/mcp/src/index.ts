@@ -91,10 +91,7 @@ export function mcp<TRuntimeContext = unknown>(
   if (typeof config.id !== "string" || !config.id.trim()) {
     throw new Error("mcp(): id must be non-empty.");
   }
-  if (
-    config.tools?.allow !== undefined &&
-    config.tools.deny !== undefined
-  ) {
+  if (config.tools?.allow !== undefined && config.tools.deny !== undefined) {
     throw new Error(
       "mcp(): tools.allow and tools.deny are mutually exclusive.",
     );
@@ -173,3 +170,18 @@ function copySelection(selection: McpToolSelection): McpToolSelection {
     ...(selection.prefix !== undefined ? { prefix: selection.prefix } : {}),
   });
 }
+
+export { materializeMcpToolSource } from "./official-client/materialize";
+export { McpToolSourceError } from "./official-client/errors";
+export type {
+  McpToolSourceErrorContext,
+  McpToolSourceErrorPhase,
+  McpTransportKind,
+} from "./official-client/errors";
+export type { McpContent, McpToolResult } from "./official-client/result";
+export type {
+  McpDiscoveredToolMetadata,
+  McpDiscoveryMetadata,
+  McpMaterializedTool,
+  McpToolSourceSession,
+} from "./official-client/types";

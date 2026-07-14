@@ -7,6 +7,7 @@
 
 import type { ResolvedPrompt } from "../../resolver/types";
 import {
+  ToolSourceCollisionError,
   ToolSourceUnsupportedError,
   type ToolSourceMaterializer,
   type ToolSourceSession,
@@ -57,10 +58,7 @@ export async function materializeToolSources(options: {
       for (const [name, tool] of Object.entries(session.tools)) {
         const previousOwner = owners.get(name);
         if (previousOwner) {
-          throw new Error(
-            `Tool name collision for "${name}" between ${previousOwner} and tool source "${source.id}". ` +
-              "Configure an explicit source prefix.",
-          );
+          throw new ToolSourceCollisionError(name, source.id, previousOwner);
         }
         tools[name] = tool;
         owners.set(name, `tool source "${source.id}"`);
