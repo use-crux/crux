@@ -3,6 +3,10 @@ import type { CruxConfig } from '../config-types'
 import type { CruxPlugin } from '../plugin'
 import type { CruxHooks } from '../runtime'
 import { withDevtools } from '../../observability'
+import {
+  CruxDeploymentIdentitySchema,
+  type CruxDeploymentIdentity,
+} from '../../project-index'
 import type { RuntimeConfigEnvironment, RuntimeConfigPlan, RuntimeConfigTransactionInput } from './types'
 
 /**
@@ -17,6 +21,10 @@ export function planRuntimeConfig(input: RuntimeConfigTransactionInput): Runtime
   const inert = isIndexMode(input.env)
   const records = config.persistence?.records
   const observability = config.observability
+  const hasIdentity = observability !== undefined && Object.hasOwn(observability, 'identity')
+  const identity = hasIdentity
+    ? validateDeploymentIdentity(observability.identity)
+    : undefined
   const observabilityCapture = observabilityCapturePolicy(observability)
   const ownsObservability =
     observability?.enabled === false ||
@@ -49,7 +57,7 @@ export function planRuntimeConfig(input: RuntimeConfigTransactionInput): Runtime
     config,
     hooksPatch,
     ownsObservability,
-    observability: planObservability(config),
+    observability: planObservability(config, hasIdentity, identity),
     configureOptions,
     bridgeOptions: {
       devtools: config.devtools,
@@ -65,14 +73,24 @@ function isIndexMode(env: RuntimeConfigEnvironment | undefined): boolean {
   return typeof process !== 'undefined' && typeof process.env === 'object' && process.env.CRUX_INDEX === '1'
 }
 
-function planObservability(config: Readonly<CruxConfig>): RuntimeConfigPlan['observability'] {
+function planObservability(
+  config: Readonly<CruxConfig>,
+  hasIdentity: boolean,
+  identity: CruxDeploymentIdentity | undefined,
+): RuntimeConfigPlan['observability'] {
   const observability = config.observability
-  if (observability?.enabled === false) return { kind: 'owned' }
+  if (observability?.enabled === false) {
+    return {
+      kind: 'owned',
+      ...(hasIdentity ? { identity } : {}),
+    }
+  }
   if (observability?.transport) {
     return {
       kind: 'owned',
       transport: observability.transport,
       delivery: observability.delivery,
+      ...(hasIdentity ? { identity } : {}),
     }
   }
   if (observability?.serverUrl) {
@@ -81,9 +99,18 @@ function planObservability(config: Readonly<CruxConfig>): RuntimeConfigPlan['obs
       serverUrl: observability.serverUrl,
       token: observability.token,
       delivery: observability.delivery,
+      ...(hasIdentity ? { identity } : {}),
     }
   }
+  if (hasIdentity) return { kind: 'identity', identity }
   return { kind: 'none' }
+}
+
+function validateDeploymentIdentity(
+  identity: CruxDeploymentIdentity | undefined,
+): CruxDeploymentIdentity | undefined {
+  if (identity === undefined) return undefined
+  return Object.freeze({ ...CruxDeploymentIdentitySchema.parse(identity) })
 }
 
 function planPlugins(

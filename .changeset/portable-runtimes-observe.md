@@ -3,7 +3,7 @@
 "@use-crux/core": minor
 "@use-crux/convex": patch
 "@use-crux/next": patch
-"@use-crux/otel": patch
+"@use-crux/otel": minor
 "@use-crux/react": patch
 "@use-crux/upstash": patch
 ---
@@ -26,3 +26,9 @@ while unsafe asynchronous ambient host scopes fail closed.
 Add portable deployment identity and privacy-safe Project Index manifest
 contracts to Core. The build-time Indexer now projects and verifies the same
 deterministic artifact internally.
+
+Carry immutable deployment identity through v3 observability graph records,
+suspend/resume propagation, and local run detail while retaining persisted v2
+reads as deployment-unspecified. `@use-crux/otel` now exports a portable
+Resource-attribute mapper, maps lightweight identity per span, and projects
+DefinitionRefs through bounded attributes and events.

@@ -495,6 +495,14 @@ the host lifecycle wrappers above also force-flush the installed telemetry manag
 work, bounded by the same deadline, so a serverless/Workers freeze does not orphan pending OTel export
 calls either.
 
+Deployment identity follows OTel Resource ownership. Construct the
+application's immutable Resource with
+`createCruxResourceAttributes(identity)` before starting its provider, then
+pass the same object to `config({ observability: { identity } })`. Standard OTel
+spans inherit those values from the Resource only; lightweight exporters carry
+them per span. DefinitionRefs map to bounded primary attributes and up to 16
+ordered `crux.definition.ref` events without source or prompt content.
+
 ### Local development vs. production telemetry
 
 The HTTP transport and local SQLite read model described in this page are a **development** topology:
@@ -504,10 +512,12 @@ integration) rather than pointing production traffic at a local devtools server.
 `observability.serverUrl` for local inspection, `withTelemetry()` for your production APM, since they
 are complementary sinks over the same graph-record spine, not competing sources of truth.
 
-### Pre-launch v2 migration
+### Graph v3 deployment identity migration
 
-The graph record schema is v2-only (`CRUX_OBSERVABILITY_SCHEMA_VERSION === 2`); there is no dual-read
-compatibility window. On first startup against an older local database, the Go backend transactionally
+Writers emit graph v3 (`CRUX_OBSERVABILITY_SCHEMA_VERSION === 3`) with optional
+validated deployment identity. TypeScript and Go readers retain persisted v2
+as explicitly deployment-unspecified and reject a v2 record that attempts to
+carry the new field. On first startup against a pre-v2 local database, the Go backend transactionally
 discards pre-v2 observability rows (they carry no truthful execution-segment identity to migrate)
 and rebuilds the schema automatically. Every other SQLite table (Quality, workspace, etc.) is
 untouched, and you never need to delete `.crux` by hand.

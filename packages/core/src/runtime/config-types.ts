@@ -162,6 +162,8 @@ export interface CruxDevtoolsConfig {
 }
 
 export interface CruxObservabilityConfig {
+  /** Deployment identity captured by each logical observability run. */
+  readonly identity?: import('../project-index').CruxDeploymentIdentity
   /** Set `false` to explicitly disable an already configured observability transport. */
   readonly enabled?: boolean
   /**

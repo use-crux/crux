@@ -18,6 +18,12 @@ Built-in edge types and artifact kinds are closed canonical lists. User-defined 
 
 Run, segment, record, event, edge, and artifact IDs keep Crux prefixes with crypto-random hex suffixes. Every graph record includes `segmentId` plus a positive `segmentSeq`; the sequence is monotonic only inside that execution segment.
 
+`config({ observability: { identity } })` captures a validated project,
+manifest, and optional host deployment identity when a logical run starts.
+Every v3 record for that run carries the same immutable `deployment` value,
+including records emitted after configuration changes or suspend/resume. The
+owned continuation payload preserves it separately from untrusted W3C baggage.
+
 ## Generation Metrics
 
 Generation terminal span records use the existing `metrics` field for client-side performance values:

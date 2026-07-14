@@ -35,9 +35,21 @@ For long-lived servers (Next.js, Express, Fastify), set up the OTel SDK once in 
 
 ```ts title="instrumentation.ts"
 import { NodeSDK } from '@opentelemetry/sdk-node'
+import { resourceFromAttributes } from '@opentelemetry/resources'
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http'
+import { createCruxResourceAttributes } from '@use-crux/otel'
+import type { CruxDeploymentIdentity } from '@use-crux/core/project-index'
+
+export const identity = {
+  projectId: 'checkout',
+  manifestId: 'pim_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+  deploymentId: 'production-42',
+} satisfies CruxDeploymentIdentity
 
 const sdk = new NodeSDK({
+  resource: resourceFromAttributes({
+    ...createCruxResourceAttributes(identity),
+  }),
   traceExporter: new OTLPTraceExporter({
     url: 'https://otel-collector.example.com/v1/traces',
     headers: { 'DD-API-KEY': process.env.DD_API_KEY },
@@ -48,9 +60,11 @@ sdk.start()
 
 ```ts title="crux.config.ts"
 import { withTelemetry } from '@use-crux/otel'
+import { identity } from './instrumentation'
 
 // No exporter needed: uses the global TracerProvider
 config({
+  observability: { identity },
   plugins: [withTelemetry({ serviceName: 'my-app' })],
 })
 ```
@@ -62,6 +76,13 @@ config({
 <Callout type="warning">
   Install and start your `TracerProvider` before `withTelemetry()`. If Crux sees invalid OTel span contexts, it warns once and falls back to lightweight span tracking so application code keeps running.
 </Callout>
+
+The Resource is immutable application-owned setup. Use the same validated
+identity for the Resource and `observability.identity`; changing a process-wide
+deployment identity requires reconstructing and restarting the provider. Crux
+does not mutate a registered Resource, access SDK-private state, or install a
+second provider. Lightweight exporters have no Resource object, so they carry
+the same three semantic identity keys on each span.
 
 ### Lightweight (Lambda, Convex, Cloudflare Workers)
 

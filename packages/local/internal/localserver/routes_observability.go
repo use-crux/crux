@@ -33,7 +33,7 @@ func registerObservabilityRoutes(mux *http.ServeMux, service *observability.Serv
 			http.Error(w, http.StatusText(status), status)
 			return
 		}
-		if batch.SchemaVersion != observability.SchemaVersion {
+		if !observability.IsSupportedSchemaVersion(batch.SchemaVersion) {
 			writeUnsupportedObservabilitySchema(w, batch)
 			return
 		}

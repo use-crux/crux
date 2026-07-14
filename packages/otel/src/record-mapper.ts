@@ -28,6 +28,10 @@ import {
 } from './semconv'
 import { messageContentAttributesForArtifact } from './message-content'
 import { createTtlMap } from './ttl-map'
+import {
+  addDefinitionRefEvents,
+  definitionRefProjection,
+} from './definition-ref-mapper'
 
 const RECENTLY_ENDED_SPAN_TTL_MS = 30_000
 const RECENTLY_ENDED_SPAN_MAX_ENTRIES = 1_000
@@ -121,6 +125,7 @@ export function createOtelRecordSubscriber(
   return (record) => {
     switch (record.type) {
       case 'run:start': {
+        const definitionRefs = definitionRefProjection(record.definitionRefs)
         const ref = spanManager.startSpan(
           record.name,
           {
@@ -128,10 +133,12 @@ export function createOtelRecordSubscriber(
             'crux.run.id': record.runId,
             'crux.run.root_primitive': record.rootPrimitive,
             ...attributesFor(record.attributes),
+            ...definitionRefs.attributes,
           },
           undefined,
-          { traceId: record.traceId },
+          { traceId: record.traceId, deployment: record.deployment },
         )
+        addDefinitionRefEvents(spanManager, ref, definitionRefs)
         openRuns.set(record.runId, ref)
         break
       }
@@ -173,12 +180,13 @@ export function createOtelRecordSubscriber(
             ...attributesFor(record.attributes),
           },
           undefined,
-          { traceId: record.traceId },
+          { traceId: record.traceId, deployment: record.deployment },
         )
         openRuns.set(record.runId, ref)
         break
       }
       case 'span:start': {
+        const definitionRefs = definitionRefProjection(record.definitionRefs)
         const parent =
           (record.parentSpanId
             ? openSpans.get(record.parentSpanId)
@@ -199,10 +207,16 @@ export function createOtelRecordSubscriber(
             ...(record.promptId ? { 'crux.prompt.id': record.promptId } : {}),
             ...(record.toolName ? { [CRUX_TOOL_NAME]: record.toolName } : {}),
             ...attributesFor(record.attributes),
+            ...definitionRefs.attributes,
           },
           parent?.spanId,
-          { spanId: record.spanId, traceId: record.traceId },
+          {
+            spanId: record.spanId,
+            traceId: record.traceId,
+            deployment: record.deployment,
+          },
         )
+        addDefinitionRefEvents(spanManager, ref, definitionRefs)
         openSpans.set(record.spanId, ref)
         break
       }
@@ -214,6 +228,7 @@ export function createOtelRecordSubscriber(
         break
       }
       case 'span': {
+        const definitionRefs = definitionRefProjection(record.definitionRefs)
         const parent =
           (record.parentSpanId
             ? openSpans.get(record.parentSpanId)
@@ -228,10 +243,16 @@ export function createOtelRecordSubscriber(
             'crux.primitive.name': record.primitive,
             ...operationAttributes(record),
             ...attributesFor(record.attributes),
+            ...definitionRefs.attributes,
           },
           parent?.spanId,
-          { spanId: record.spanId, traceId: record.traceId },
+          {
+            spanId: record.spanId,
+            traceId: record.traceId,
+            deployment: record.deployment,
+          },
         )
+        addDefinitionRefEvents(spanManager, ref, definitionRefs)
         finishSpan(spanManager, ref, record)
         break
       }

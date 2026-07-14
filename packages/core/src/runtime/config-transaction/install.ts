@@ -19,10 +19,17 @@ export function installRuntimeConfigPlan(
   const previousHooks = ports.hooks.get()
   const hooksPatch = { ...plan.hooksPatch }
 
-  if (plan.observability.kind === 'owned') {
+  if (plan.observability.kind === 'identity') {
+    restoreObservability = ports.observability.configure({
+      identity: plan.observability.identity,
+    })
+  } else if (plan.observability.kind === 'owned') {
     restoreObservability = ports.observability.configure({
       transport: plan.observability.transport,
       delivery: plan.observability.delivery,
+      ...(Object.hasOwn(plan.observability, 'identity')
+        ? { identity: plan.observability.identity }
+        : {}),
     })
   } else if (plan.observability.kind === 'http') {
     const transport = ports.observability.createHttpTransport({
@@ -34,6 +41,9 @@ export function installRuntimeConfigPlan(
     restoreObservability = ports.observability.configure({
       transport,
       delivery: plan.observability.delivery,
+      ...(Object.hasOwn(plan.observability, 'identity')
+        ? { identity: plan.observability.identity }
+        : {}),
     })
   }
 

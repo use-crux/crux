@@ -1,4 +1,7 @@
-import type { CruxGraphRecord } from '../contract'
+import {
+  CRUX_OBSERVABILITY_SCHEMA_VERSION,
+  type CruxGraphRecord,
+} from '../contract'
 import type { CruxDeliveryAttemptContext } from './receipt'
 
 const encoder = new TextEncoder()
@@ -9,19 +12,19 @@ export function utf8ByteLength(value: string): number {
   return encoder.encode(value).byteLength
 }
 
-/** Serialize the exact v2 HTTP request envelope. */
+/** Serialize the exact current-version HTTP request envelope. */
 export function serializeDeliveryEnvelope(
   records: readonly CruxGraphRecord[],
   context?: CruxDeliveryAttemptContext,
 ): string {
   return JSON.stringify({
-    schemaVersion: 2,
+    schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
     records,
     ...(context ? { sourceHealth: context.sourceHealth } : {}),
   })
 }
 
-/** Exact UTF-8 bytes used by the v2 HTTP request envelope. */
+/** Exact UTF-8 bytes used by the current-version HTTP request envelope. */
 export function deliveryEnvelopeBytes(
   records: readonly CruxGraphRecord[],
   context?: CruxDeliveryAttemptContext,

@@ -8,8 +8,10 @@
  */
 
 import type { TraceAttributeValue, TraceSpan, SpanStatus } from './types'
+import type { CruxDeploymentIdentity } from '@use-crux/core/project-index'
 import type { SpanExporter } from './exporter'
 import { createBoundedRegistry } from './bounded-registry'
+import { createCruxResourceAttributes } from './resource-attributes'
 
 let spanCounter = 0
 
@@ -26,6 +28,8 @@ interface MutableSpan {
   name: string
   startTime: number
   attributes: Record<string, TraceAttributeValue>
+  /** Authoritative deployment attributes reapplied after mutable attributes. */
+  identityAttributes?: Record<string, TraceAttributeValue>
   status: SpanStatus
   events: Array<{
     name: string
@@ -51,6 +55,8 @@ export interface SpanIdentity {
   readonly spanId?: string
   /** W3C trace ID to use when the manager owns trace identity. */
   readonly traceId?: string
+  /** Identity mapped per span only by lightweight managers. */
+  readonly deployment?: CruxDeploymentIdentity
 }
 
 /** Span manager for creating and managing spans. */
@@ -156,13 +162,21 @@ export function createLightweightSpanManager(exporter: SpanExporter): SpanManage
       const spanId = identity?.spanId ?? generateId()
       const traceId = identity?.traceId ?? parent?.traceId ?? generateId()
 
+      const identityAttributes: Record<string, TraceAttributeValue> | undefined =
+        identity?.deployment
+        ? { ...createCruxResourceAttributes(identity.deployment) }
+        : undefined
       const span: MutableSpan = {
         spanId,
         traceId,
         parentSpanId,
         name,
         startTime: Date.now(),
-        attributes: { ...attributes },
+        attributes: {
+          ...attributes,
+          ...identityAttributes,
+        },
+        identityAttributes,
         status: { code: 'UNSET' },
         events: [],
       }
@@ -175,6 +189,9 @@ export function createLightweightSpanManager(exporter: SpanExporter): SpanManage
       const span = activeSpans.get(ref.spanId)
       if (span) {
         Object.assign(span.attributes, attributes)
+        if (span.identityAttributes) {
+          Object.assign(span.attributes, span.identityAttributes)
+        }
       }
     },
 

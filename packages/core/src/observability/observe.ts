@@ -77,6 +77,10 @@ import {
   createPropagationCarrier,
   type CruxPropagationCarrier,
 } from './continuation'
+import {
+  CruxDeploymentIdentitySchema,
+  type CruxDeploymentIdentity,
+} from '../project-index'
 
 export {
   subscribeObservability,
@@ -102,6 +106,8 @@ export interface ConfigureObservabilityOptions {
    * `propagateAttributes()` scopes override these defaults.
    */
   defaultCorrelators?: CruxCorrelators
+  /** Deployment identity captured by each logical run created by this layer. */
+  identity?: CruxDeploymentIdentity
 }
 
 export interface ObservabilityDiagnostics {
@@ -207,6 +213,8 @@ export interface ObserveRunOptions {
   name: string
   rootPrimitive: CruxPrimitiveName
   attributes?: CruxAttributes
+  /** Authored definitions directly associated with this run boundary. */
+  definitionRefs?: DefinitionRef[]
 }
 
 export interface EndObservedRunOptions {
@@ -296,6 +304,7 @@ interface ObservabilityConfigurationLayer {
     typeof deliveryEngine.deliveryOptions
   >
   readonly previousDefaultCorrelators: CruxCorrelators | undefined
+  readonly previousDeploymentIdentity: CruxDeploymentIdentity | undefined
 }
 
 let nextConfigurationToken = 0
@@ -306,6 +315,14 @@ const maxEndedRunIds = 10_000
 type EndedRunStatus = Exclude<CruxRunStatus, 'running'>
 const endedRunStatuses = new Map<CruxRunId, EndedRunStatus>()
 let defaultCorrelators: CruxCorrelators | undefined
+let deploymentIdentity: CruxDeploymentIdentity | undefined
+// `null` is an authoritative deployment-unspecified run identity. Retaining the
+// sentinel prevents a later continuation from attaching identity to a run that
+// began without one.
+const runDeploymentIdentities = new Map<
+  CruxRunId,
+  CruxDeploymentIdentity | null
+>()
 
 function currentContext(): ObservabilityContext | undefined {
   return currentObservabilityContext()
@@ -365,12 +382,22 @@ function emit(
   record: UnsequencedCruxGraphRecord,
   correlators = effectiveCorrelators(),
 ): void {
+  const runDeployment = runDeploymentIdentities.get(record.runId)
+  const recordWithDeployment = runDeployment
+    ? { ...record, deployment: runDeployment }
+    : record
   const sequencedRecord = recordSequencer.assign(
-    applyCruxCorrelators(record, correlators),
+    applyCruxCorrelators(recordWithDeployment, correlators),
   )
   const privacy = applyObservabilityCapturePolicyToRecord(sequencedRecord)
   if (!privacy.ok) {
     recordRedactedRecord(privacy.error)
+    return
+  }
+  if (!sameDeploymentIdentity(sequencedRecord, privacy.record)) {
+    recordRedactedRecord(
+      new Error('Observability redaction cannot rewrite deployment identity'),
+    )
     return
   }
 
@@ -392,6 +419,15 @@ function emit(
   publishObservabilitySubscribers(validated.record)
   publishObservabilityChannel(validated.record)
   deliveryEngine.enqueue(validated.record)
+}
+
+function sameDeploymentIdentity(
+  before: { readonly deployment?: CruxDeploymentIdentity },
+  after: { readonly deployment?: CruxDeploymentIdentity },
+): boolean {
+  return before.deployment?.projectId === after.deployment?.projectId &&
+    before.deployment?.manifestId === after.deployment?.manifestId &&
+    before.deployment?.deploymentId === after.deployment?.deploymentId
 }
 
 function emitObserved(
@@ -604,6 +640,9 @@ function captureContextValue(
     ...(context.correlators !== undefined
       ? { correlators: context.correlators }
       : {}),
+    ...(context.deployment !== undefined
+      ? { deployment: context.deployment }
+      : {}),
     spanStack: [...spanStack],
     ...(currentSpanId ? { currentSpanId } : {}),
   }
@@ -612,23 +651,34 @@ function captureContextValue(
 export function configureObservability(
   options: ConfigureObservabilityOptions,
 ): () => void {
+  const nextDeploymentIdentity = Object.hasOwn(options, 'identity')
+    ? cloneDeploymentIdentity(options.identity)
+    : deploymentIdentity
   const layer: ObservabilityConfigurationLayer = {
     token: nextConfigurationToken + 1,
     parentToken: activeConfigurationToken,
     previousTransport: deliveryEngine.currentTransport(),
     previousDeliveryOptions: deliveryEngine.deliveryOptions(),
     previousDefaultCorrelators: defaultCorrelators,
+    previousDeploymentIdentity: deploymentIdentity,
   }
   nextConfigurationToken = layer.token
   configurationParents.set(layer.token, layer.parentToken)
   activeConfigurationToken = layer.token
-  deliveryEngine.setTransport(options.transport)
-  deliveryEngine.configureDelivery(options.delivery)
+  if (Object.hasOwn(options, 'transport')) {
+    deliveryEngine.setTransport(options.transport)
+  }
+  if (Object.hasOwn(options, 'delivery')) {
+    deliveryEngine.configureDelivery(options.delivery)
+  }
   if (Object.hasOwn(options, 'defaultCorrelators')) {
     defaultCorrelators = mergeCruxCorrelators(
       undefined,
       options.defaultCorrelators,
     )
+  }
+  if (Object.hasOwn(options, 'identity')) {
+    deploymentIdentity = nextDeploymentIdentity
   }
   let restored = false
   return () => {
@@ -644,7 +694,15 @@ export function configureObservability(
     deliveryEngine.setTransport(layer.previousTransport)
     deliveryEngine.configureDelivery(layer.previousDeliveryOptions)
     defaultCorrelators = layer.previousDefaultCorrelators
+    deploymentIdentity = layer.previousDeploymentIdentity
   }
+}
+
+function cloneDeploymentIdentity(
+  identity: CruxDeploymentIdentity | undefined,
+): CruxDeploymentIdentity | undefined {
+  if (identity === undefined) return undefined
+  return Object.freeze({ ...CruxDeploymentIdentitySchema.parse(identity) })
 }
 
 /**
@@ -742,8 +800,10 @@ export function resetObservabilityRuntime(): void {
   warnedAboutRedactedRecord = false
   warnedAboutContextlessRecord = false
   endedRunStatuses.clear()
+  runDeploymentIdentities.clear()
   recordSequencer.reset()
   defaultCorrelators = undefined
+  deploymentIdentity = undefined
   telemetryFlushFailures = 0
 }
 
@@ -791,13 +851,16 @@ export const observe = {
       startedAtMs,
       spanStack: [],
       correlators: effectiveCorrelators(),
+      deployment: cloneDeploymentIdentity(deploymentIdentity),
     }
+    rememberRunDeployment(runId, context.deployment)
     let closed = false
     const continuation = createPropagationCarrier({
       runId,
       traceId,
       previousSegmentId: segmentId,
       correlators: context.correlators,
+      deployment: context.deployment,
     })
 
     emitObserved(
@@ -813,6 +876,9 @@ export const observe = {
         startedAt: now(),
         status: 'running',
         ...(options.attributes ? { attributes: options.attributes } : {}),
+        ...(options.definitionRefs && options.definitionRefs.length > 0
+          ? { definitionRefs: options.definitionRefs }
+          : {}),
       }),
       context.correlators ?? null,
     )
@@ -914,13 +980,16 @@ export const observe = {
       startedAtMs,
       spanStack: [],
       correlators: effectiveCorrelators(),
+      deployment: cloneDeploymentIdentity(identity.deployment),
     }
+    rememberRunDeployment(identity.runId, context.deployment)
     let closed = false
     const continuation = createPropagationCarrier({
       runId: identity.runId,
       traceId: identity.traceId,
       previousSegmentId: segmentId,
       correlators: context.correlators,
+      deployment: context.deployment,
     })
     const resumeAttributes = resumeAttributesFor(carrier, options.attributes)
 
@@ -1017,7 +1086,9 @@ export const observe = {
       startedAtMs,
       spanStack: [],
       correlators: effectiveCorrelators(),
+      deployment: cloneDeploymentIdentity(deploymentIdentity),
     }
+    rememberRunDeployment(runId, context.deployment)
 
     emitObserved(
       () => ({
@@ -1032,6 +1103,9 @@ export const observe = {
         startedAt: now(),
         status: 'running',
         ...(options.attributes ? { attributes: options.attributes } : {}),
+        ...(options.definitionRefs && options.definitionRefs.length > 0
+          ? { definitionRefs: options.definitionRefs }
+          : {}),
       }),
       context.correlators ?? null,
     )
@@ -1203,7 +1277,9 @@ export const observe = {
         startedAtMs: implicitRunStartedAtMs,
         spanStack: [],
         correlators: effectiveCorrelators(),
+        deployment: cloneDeploymentIdentity(deploymentIdentity),
       }
+      rememberRunDeployment(implicitContext.runId, implicitContext.deployment)
       context = implicitContext
       emitObserved(
         () => ({
@@ -1472,6 +1548,7 @@ export const observe = {
         segmentId: context.segmentId,
         startedAtMs: context.startedAtMs,
         correlators: context.correlators,
+        deployment: context.deployment,
         spanStack: [...context.spanStack],
       },
       fn,
@@ -1552,8 +1629,28 @@ function rememberEndedRun(runId: CruxRunId, status: EndedRunStatus): boolean {
   if (endedRunStatuses.size <= maxEndedRunIds) return true
 
   const oldestRunId = endedRunStatuses.keys().next().value
-  if (oldestRunId) endedRunStatuses.delete(oldestRunId)
+  if (oldestRunId) {
+    endedRunStatuses.delete(oldestRunId)
+    runDeploymentIdentities.delete(oldestRunId)
+  }
   return true
+}
+
+function rememberRunDeployment(
+  runId: CruxRunId,
+  identity: CruxDeploymentIdentity | undefined,
+): void {
+  if (runDeploymentIdentities.has(runId)) {
+    const current = runDeploymentIdentities.get(runId) ?? undefined
+    if (!sameDeploymentIdentity({ deployment: current }, { deployment: identity })) {
+      throw new Error('Cannot change an observed run deployment identity')
+    }
+    return
+  }
+  runDeploymentIdentities.set(
+    runId,
+    identity ? cloneDeploymentIdentity(identity)! : null,
+  )
 }
 
 function recordContextlessRecord(kind: 'event' | 'artifact' | 'edge'): void {

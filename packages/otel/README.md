@@ -14,7 +14,7 @@ pnpm add @use-crux/otel @use-crux/core
 
 ```ts
 import { config } from '@use-crux/core'
-import { withTelemetry } from '@use-crux/otel'
+import { createCruxResourceAttributes, withTelemetry } from '@use-crux/otel'
 
 config({
   prompts,
@@ -37,17 +37,38 @@ When no `exporter` is configured, spans flow through the globally registered OTe
 ```ts
 // instrumentation.ts (your code)
 import { NodeSDK } from '@opentelemetry/sdk-node'
+import { resourceFromAttributes } from '@opentelemetry/resources'
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http'
+import { config } from '@use-crux/core'
+import type { CruxDeploymentIdentity } from '@use-crux/core/project-index'
+import { createCruxResourceAttributes, withTelemetry } from '@use-crux/otel'
+
+const identity = {
+  projectId: 'checkout',
+  manifestId: 'pim_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+  deploymentId: 'production-42',
+} satisfies CruxDeploymentIdentity
 
 const sdk = new NodeSDK({
+  resource: resourceFromAttributes({
+    ...createCruxResourceAttributes(identity),
+  }),
   traceExporter: new OTLPTraceExporter({
     url: 'https://otel-collector.example.com/v1/traces',
   }),
 })
 sdk.start()
+
+config({
+  observability: { identity },
+  plugins: [withTelemetry({ serviceName: 'my-app' })],
+})
 ```
 
 Then `@use-crux/otel` spans automatically appear in Datadog, Honeycomb, Grafana, etc.
+The application owns this immutable Resource and must construct it before
+`NodeSDK.start()`. `withTelemetry()` never replaces the provider or mutates or
+inspects SDK-private Resource state after registration.
 
 ### Lightweight (Lambda, Convex, Cloudflare Workers)
 
@@ -68,6 +89,9 @@ withTelemetry({
 ```
 
 The lightweight path uses internal `TraceSpan` objects instead of the OTel SDK. `@opentelemetry/api` is an optional peer dependency — only needed for the standard path.
+When `observability.identity` is configured, lightweight exporters carry the
+same `crux.project.id`, `crux.manifest.id`, and `crux.deployment.id` values on
+every root and child span because they have no separate Resource object.
 
 ## Runtime Safety
 
@@ -110,6 +134,11 @@ GenAI attributes such as `gen_ai.client.operation.duration` and `gen_ai.server.t
 so custom subscribers, devtools, and OTel see one source of truth.
 
 Tool spans intentionally record only shape and size metadata for `toModelOutput()` conversions. Raw tool output and model-facing tool output are not emitted to OTel.
+
+Validated DefinitionRefs map the primary authored definition to
+`crux.definition.id`, `.kind`, and `.role`. Up to 16 ordered
+`crux.definition.ref` events retain safe source locations; total reference text
+is capped at 8 KiB per span and reports truncation without exporting content.
 
 ## Options
 

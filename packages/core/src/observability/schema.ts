@@ -25,7 +25,10 @@ import {
   type DefinitionRefRole,
   type SanitizedSourceRef,
 } from './contract'
-import { ProjectDefinitionKindSchema } from '../project-index'
+import {
+  CruxDeploymentIdentitySchema,
+  ProjectDefinitionKindSchema,
+} from '../project-index'
 
 const nonEmptyString = z.string().min(1)
 const isoTimestamp = z.string().refine((value) => !Number.isNaN(Date.parse(value)), {
@@ -157,6 +160,7 @@ const CruxRecordBaseSchema = z.object({
   sessionId: z.string().optional(),
   userId: z.string().optional(),
   traceId: CruxTraceIdSchema.optional(),
+  deployment: CruxDeploymentIdentitySchema.readonly().optional(),
 })
 
 export const CruxRunStartRecordSchema = CruxRecordBaseSchema.extend({
@@ -300,7 +304,7 @@ export const CruxArtifactRecordSchema = CruxRecordBaseSchema.extend({
   attributes: CruxAttributesSchema.optional(),
 })
 
-export const CruxGraphRecordSchema = z.discriminatedUnion('type', [
+const CruxGraphRecordV3Schema = z.discriminatedUnion('type', [
   CruxRunStartRecordSchema,
   CruxRunSuspendRecordSchema,
   CruxRunResumeRecordSchema,
@@ -311,6 +315,33 @@ export const CruxGraphRecordSchema = z.discriminatedUnion('type', [
   CruxSpanEventRecordSchema,
   CruxEdgeRecordSchema,
   CruxArtifactRecordSchema,
+])
+
+const CruxGraphRecordV2Schema = z
+  .preprocess((value) => {
+    if (
+      typeof value !== 'object' ||
+      value === null ||
+      !('schemaVersion' in value) ||
+      value.schemaVersion !== 2 ||
+      ('deployment' in value && value.deployment !== undefined)
+    ) {
+      return value
+    }
+    return { ...value, schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION }
+  }, CruxGraphRecordV3Schema)
+  .transform((record) => ({ ...record, schemaVersion: 2 as const }))
+
+/**
+ * Parse current v3 records and persisted deployment-unspecified v2 records.
+ *
+ * Named record schemas remain writer-current (v3) so compile-time emission
+ * types cannot accidentally regress. Only this aggregate reader carries the
+ * deliberate legacy compatibility branch.
+ */
+export const CruxGraphRecordSchema = z.union([
+  CruxGraphRecordV3Schema,
+  CruxGraphRecordV2Schema,
 ])
 
 export const CruxGraphRecordBatchSchema = z.object({

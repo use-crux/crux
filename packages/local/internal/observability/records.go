@@ -1,12 +1,46 @@
 package observability
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
+	"regexp"
 	"strings"
+	"unicode/utf8"
 )
 
-const SchemaVersion = 2
+const (
+	LegacySchemaVersion = 2
+	SchemaVersion       = 3
+)
+
+var deploymentManifestIDPattern = regexp.MustCompile(`^pim_[0-9a-f]{64}$`)
+
+// DeploymentIdentity connects runtime evidence to one compiled project.
+type DeploymentIdentity struct {
+	ProjectID    string `json:"projectId"`
+	ManifestID   string `json:"manifestId,omitempty"`
+	DeploymentID string `json:"deploymentId,omitempty"`
+}
+
+func (identity *DeploymentIdentity) UnmarshalJSON(data []byte) error {
+	type wire DeploymentIdentity
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	var decoded wire
+	if err := decoder.Decode(&decoded); err != nil {
+		return err
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		if err == nil {
+			return fmt.Errorf("deployment identity contains trailing JSON")
+		}
+		return err
+	}
+	*identity = DeploymentIdentity(decoded)
+	return nil
+}
 
 type RecordType string
 
@@ -47,14 +81,16 @@ type SourceHealthError struct {
 }
 
 type Record struct {
-	SchemaVersion int             `json:"schemaVersion"`
-	RecordID      string          `json:"recordId"`
-	Type          RecordType      `json:"type"`
-	RunID         string          `json:"runId"`
-	SegmentID     string          `json:"segmentId,omitempty"`
-	SegmentSeq    int             `json:"segmentSeq,omitempty"`
-	TraceID       string          `json:"traceId,omitempty"`
-	Payload       json.RawMessage `json:"-"`
+	SchemaVersion     int                 `json:"schemaVersion"`
+	RecordID          string              `json:"recordId"`
+	Type              RecordType          `json:"type"`
+	RunID             string              `json:"runId"`
+	SegmentID         string              `json:"segmentId,omitempty"`
+	SegmentSeq        int                 `json:"segmentSeq,omitempty"`
+	TraceID           string              `json:"traceId,omitempty"`
+	Deployment        *DeploymentIdentity `json:"deployment,omitempty"`
+	Payload           json.RawMessage     `json:"-"`
+	deploymentPresent bool
 }
 
 func (r *Record) UnmarshalJSON(data []byte) error {
@@ -64,6 +100,11 @@ func (r *Record) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	*r = Record(decoded)
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	_, r.deploymentPresent = fields["deployment"]
 	r.Payload = append(r.Payload[:0], data...)
 	return nil
 }
@@ -426,8 +467,17 @@ func ValidateRecord(record Record) error {
 }
 
 func ValidateRecordBase(record Record) error {
-	if record.SchemaVersion != SchemaVersion {
+	if !IsSupportedSchemaVersion(record.SchemaVersion) {
 		return fmt.Errorf("record %s schemaVersion %d is not supported", record.RecordID, record.SchemaVersion)
+	}
+	if record.SchemaVersion == LegacySchemaVersion && (record.deploymentPresent || record.Deployment != nil) {
+		return fmt.Errorf("record %s schemaVersion 2 cannot carry deployment identity", record.RecordID)
+	}
+	if record.SchemaVersion == SchemaVersion && record.deploymentPresent && record.Deployment == nil {
+		return fmt.Errorf("record %s deployment identity is invalid", record.RecordID)
+	}
+	if record.Deployment != nil && !validDeploymentIdentity(*record.Deployment) {
+		return fmt.Errorf("record %s deployment identity is invalid", record.RecordID)
 	}
 	if record.RecordID == "" || record.RunID == "" {
 		return fmt.Errorf("record is missing required identity")
@@ -439,6 +489,45 @@ func ValidateRecordBase(record Record) error {
 		return fmt.Errorf("%s record %s must use segmentSeq 1", record.Type, record.RecordID)
 	}
 	return nil
+}
+
+// IsSupportedSchemaVersion reports whether persisted records can be ingested.
+func IsSupportedSchemaVersion(version int) bool {
+	return version == LegacySchemaVersion || version == SchemaVersion
+}
+
+func validDeploymentIdentity(identity DeploymentIdentity) bool {
+	return validDeploymentIdentityText(identity.ProjectID) &&
+		(identity.ManifestID == "" || deploymentManifestIDPattern.MatchString(identity.ManifestID)) &&
+		(identity.DeploymentID == "" || validDeploymentIdentityText(identity.DeploymentID))
+}
+
+func validDeploymentIdentityText(value string) bool {
+	return utf8.ValidString(value) &&
+		value == strings.TrimFunc(value, isECMAScriptWhitespace) &&
+		len(value) >= 1 && len(value) <= 200 && !hasControlCharacter(value)
+}
+
+func isECMAScriptWhitespace(character rune) bool {
+	if character >= '\u2000' && character <= '\u200a' {
+		return true
+	}
+	switch character {
+	case '\u0009', '\u000a', '\u000b', '\u000c', '\u000d', '\u0020',
+		'\u00a0', '\u1680', '\u2028', '\u2029', '\u202f', '\u205f', '\u3000', '\ufeff':
+		return true
+	default:
+		return false
+	}
+}
+
+func hasControlCharacter(value string) bool {
+	for _, character := range value {
+		if character <= 0x1f || character == 0x7f {
+			return true
+		}
+	}
+	return false
 }
 
 func isKnownRecordType(recordType RecordType) bool {

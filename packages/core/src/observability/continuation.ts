@@ -2,6 +2,10 @@ import type { CruxRunId, CruxSegmentId, CruxSpanId, CruxTraceId } from './contra
 import type { CruxCorrelators } from './correlators'
 import { createCruxSpanId } from './ids'
 import type { JsonObject } from '../storage'
+import {
+  CruxDeploymentIdentitySchema,
+  type CruxDeploymentIdentity,
+} from '../project-index'
 
 const MAX_TRACE_STATE_LENGTH = 512
 const MAX_BAGGAGE_LENGTH = 8_192
@@ -15,6 +19,8 @@ export interface CruxPropagationFields extends JsonObject {
   readonly parentSpanId?: CruxSpanId
   readonly sessionId?: string
   readonly userId?: string
+  /** Validated deployment identity owned by Crux, never derived from baggage. */
+  readonly deployment?: CruxDeploymentIdentity & JsonObject
 }
 
 export interface CruxPropagationCarrier extends JsonObject {
@@ -34,6 +40,7 @@ export interface CruxContinuationIdentity {
   readonly runId: CruxRunId
   readonly traceId: CruxTraceId
   readonly previousSegmentId?: CruxSegmentId
+  readonly deployment?: CruxDeploymentIdentity
 }
 
 /**
@@ -48,6 +55,7 @@ export function createPropagationCarrier(identity: {
   readonly previousSegmentId?: CruxSegmentId
   readonly parentSpanId?: CruxSpanId
   readonly correlators?: CruxCorrelators
+  readonly deployment?: CruxDeploymentIdentity
 }): CruxPropagationCarrier {
   return sanitizePropagationCarrier({
     traceparent: `00-${identity.traceId}-${createCruxSpanId()}-01`,
@@ -57,6 +65,7 @@ export function createPropagationCarrier(identity: {
       ...(identity.parentSpanId ? { parentSpanId: identity.parentSpanId } : {}),
       ...(boundedCorrelator(identity.correlators?.sessionId) ? { sessionId: identity.correlators?.sessionId } : {}),
       ...(boundedCorrelator(identity.correlators?.userId) ? { userId: identity.correlators?.userId } : {}),
+      ...(identity.deployment ? { deployment: identity.deployment } : {}),
     },
   })
 }
@@ -79,6 +88,7 @@ export function sanitizePropagationCarrier(value: unknown): CruxPropagationCarri
   const baggage = optionalBaggage(carrier.baggage)
   const sessionId = optionalCorrelator(crux.sessionId, 'sessionId')
   const userId = optionalCorrelator(crux.userId, 'userId')
+  const deployment = optionalDeploymentIdentity(crux.deployment)
 
   return {
     traceparent,
@@ -90,6 +100,7 @@ export function sanitizePropagationCarrier(value: unknown): CruxPropagationCarri
       ...(parentSpanId ? { parentSpanId } : {}),
       ...(sessionId ? { sessionId } : {}),
       ...(userId ? { userId } : {}),
+      ...(deployment ? { deployment } : {}),
     },
   }
 }
@@ -131,7 +142,17 @@ export function continuationIdentity(carrier: CruxPropagationCarrier): CruxConti
     runId: safe.crux.runId,
     traceId: traceIdFromTraceparent(safe.traceparent!),
     ...(safe.crux.previousSegmentId ? { previousSegmentId: safe.crux.previousSegmentId } : {}),
+    ...(safe.crux.deployment ? { deployment: safe.crux.deployment } : {}),
   }
+}
+
+function optionalDeploymentIdentity(
+  value: unknown,
+): (CruxDeploymentIdentity & JsonObject) | undefined {
+  if (value === undefined) return undefined
+  return Object.freeze({
+    ...CruxDeploymentIdentitySchema.parse(value),
+  }) as CruxDeploymentIdentity & JsonObject
 }
 
 function objectValue(value: unknown, message: string): Record<string, unknown> {

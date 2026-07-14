@@ -263,6 +263,9 @@ func (s *Service) ingestRecord(ctx context.Context, tx *sql.Tx, statements *inge
 	if !storedInserted {
 		return nil
 	}
+	if err := upsertRunDeployment(ctx, statements, record.RunID, record.Deployment); err != nil {
+		return err
+	}
 	statements.markAffected(record.RunID, record.SegmentID)
 	// Project the runtime↔definition join in the same transaction as the record
 	// ingest and the run-revision bump. A rollback undoes this write with
@@ -389,6 +392,52 @@ func (s *Service) ingestRecord(ctx context.Context, tx *sql.Tx, statements *inge
 	default:
 		return updateRunRollups(ctx, statements, rollupDeltaForUnknown(record, storedInserted))
 	}
+}
+
+func upsertRunDeployment(
+	ctx context.Context,
+	statements *ingestStatements,
+	runID string,
+	deployment *DeploymentIdentity,
+) error {
+	var projectID, manifestID, deploymentID sql.NullString
+	err := statements.queryRow(ctx, `
+		SELECT project_id, manifest_id, deployment_id FROM runs WHERE run_id = ?
+	`, runID).Scan(&projectID, &manifestID, &deploymentID)
+	if err != nil && err != sql.ErrNoRows {
+		return fmt.Errorf("load deployment identity for run %q: %w", runID, err)
+	}
+	if err == nil {
+		if deployment == nil {
+			if projectID.Valid || manifestID.Valid || deploymentID.Valid {
+				return fmt.Errorf("deployment_identity_conflict: run %s removed deployment identity", runID)
+			}
+			return nil
+		}
+		if !projectID.Valid ||
+			projectID.String != deployment.ProjectID ||
+			manifestID.String != deployment.ManifestID ||
+			deploymentID.String != deployment.DeploymentID {
+			return fmt.Errorf("deployment_identity_conflict: run %s changed deployment identity", runID)
+		}
+		return nil
+	}
+	if deployment == nil {
+		_, err = statements.exec(ctx, `
+			INSERT INTO runs (run_id) VALUES (?)
+			ON CONFLICT(run_id) DO NOTHING
+		`, runID)
+		return err
+	}
+	_, err = statements.exec(ctx, `
+		INSERT INTO runs (run_id, project_id, manifest_id, deployment_id)
+		VALUES (?, ?, ?, ?)
+		ON CONFLICT(run_id) DO UPDATE SET
+			project_id = excluded.project_id,
+			manifest_id = excluded.manifest_id,
+			deployment_id = excluded.deployment_id
+	`, runID, deployment.ProjectID, nullIfEmpty(deployment.ManifestID), nullIfEmpty(deployment.DeploymentID))
+	return err
 }
 
 func reserveSpanRollup(ctx context.Context, statements *ingestStatements, runID string, spanID string) (bool, error) {

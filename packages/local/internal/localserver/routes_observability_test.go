@@ -121,7 +121,7 @@ func TestObservabilityIngestRouteRejectsUnsupportedBatchSchemaPerRecord(t *testi
 	t.Cleanup(func() { _ = service.Close() })
 	mux := http.NewServeMux()
 	registerObservabilityRoutes(mux, service, nil)
-	body := []byte(`{"schemaVersion":3,"records":[{"recordId":"rec_future"}]}`)
+	body := []byte(`{"schemaVersion":4,"records":[{"recordId":"rec_future"}]}`)
 
 	response := performObservabilityIngestRequest(mux, body)
 

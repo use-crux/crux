@@ -53,6 +53,10 @@ function hasTraversal(path: string): boolean {
   return path.split("/").some((segment) => segment === "..");
 }
 
+function hasControlCharacters(path: string): boolean {
+  return /[\u0000-\u001f\u007f-\u009f]/u.test(path);
+}
+
 /**
  * Convert a compiled/runtime source location into a repo-relative
  * {@link SanitizedSourceRef}, or `undefined` when a safe repo-relative form
@@ -70,7 +74,7 @@ export function sanitizeDefinitionSource(
   }
 
   let file = normalizeSeparators(source.file);
-  if (isDriveRelative(file)) return undefined;
+  if (isDriveRelative(file) || hasControlCharacters(file)) return undefined;
 
   if (isAbsolute(file)) {
     const root = options?.projectRoot
