@@ -107,6 +107,11 @@ function runtimeJoinMetadata(
       spanAttributes.toolName = name;
       runtimeJoin.toolName = name;
       break;
+    case "mcp.server":
+      runtimeJoin.primitive = "mcp.connect";
+      spanAttributes.serverId = name;
+      runtimeJoin.serverId = name;
+      break;
     case "agent":
       runtimeJoin.primitive = "agent.run";
       runtimeJoin.spanName = name;

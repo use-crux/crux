@@ -35,21 +35,21 @@ import type {
   DefinitionRef,
   DefinitionRefRole,
   SanitizedSourceRef,
-} from './contract'
-import type { DirectlyObservedKind } from '../project-index/definition-kind-coverage'
-import { safeDefinitionId } from './definition-ref-safe-id'
+} from "./contract";
+import type { DirectlyObservedKind } from "../project-index/definition-kind-coverage";
+import { safeDefinitionId } from "./definition-ref-safe-id";
 import {
   sanitizeDefinitionSource,
   type DefinitionSourceInput,
   type SanitizeDefinitionSourceOptions,
-} from './definition-ref-source'
+} from "./definition-ref-source";
 
 export {
   sanitizeDefinitionSource,
   type DefinitionSourceInput,
   type SanitizeDefinitionSourceOptions,
-}
-export { safeDefinitionId } from './definition-ref-safe-id'
+};
+export { safeDefinitionId } from "./definition-ref-safe-id";
 
 /**
  * Closed map from every directly-observed `ProjectDefinitionKind` to the single
@@ -64,31 +64,32 @@ export const DIRECTLY_OBSERVED_DEFINITION_REF_ROLES: Record<
   DirectlyObservedKind,
   DefinitionRefRole
 > = {
-  prompt: 'resolved-prompt',
-  context: 'resolved-context',
-  tool: 'invoked-tool',
-  agent: 'invoked-agent',
-  flow: 'invoked-flow',
-  task: 'invoked-task',
-  'composition.parallel': 'invoked-composition',
-  'composition.pipeline': 'invoked-composition',
-  'composition.consensus': 'invoked-composition',
-  'composition.swarm': 'invoked-composition',
-  'routing.router': 'invoked-routing',
-  'routing.split': 'invoked-routing',
-  'routing.retry': 'invoked-routing',
-  'routing.cascade': 'invoked-routing',
-  'routing.fallback': 'invoked-routing',
-  'rag.recipe': 'invoked-recipe',
-  'rag.reranker': 'invoked-reranker',
-  'rag.retriever': 'invoked-retriever',
-  skill: 'loaded-skill',
-  memory: 'invoked-memory',
-  workspace: 'invoked-workspace',
-  constraint: 'invoked-constraint',
-  guardrail: 'invoked-guardrail',
-  blackboard: 'invoked-blackboard',
-}
+  prompt: "resolved-prompt",
+  context: "resolved-context",
+  tool: "invoked-tool",
+  "mcp.server": "resolved-mcp-server",
+  agent: "invoked-agent",
+  flow: "invoked-flow",
+  task: "invoked-task",
+  "composition.parallel": "invoked-composition",
+  "composition.pipeline": "invoked-composition",
+  "composition.consensus": "invoked-composition",
+  "composition.swarm": "invoked-composition",
+  "routing.router": "invoked-routing",
+  "routing.split": "invoked-routing",
+  "routing.retry": "invoked-routing",
+  "routing.cascade": "invoked-routing",
+  "routing.fallback": "invoked-routing",
+  "rag.recipe": "invoked-recipe",
+  "rag.reranker": "invoked-reranker",
+  "rag.retriever": "invoked-retriever",
+  skill: "loaded-skill",
+  memory: "invoked-memory",
+  workspace: "invoked-workspace",
+  constraint: "invoked-constraint",
+  guardrail: "invoked-guardrail",
+  blackboard: "invoked-blackboard",
+};
 
 /**
  * Build the canonical {@link DefinitionRef} for a directly-observed kind.
@@ -108,53 +109,121 @@ export function definitionRef<K extends DirectlyObservedKind>(
     kind,
     role: DIRECTLY_OBSERVED_DEFINITION_REF_ROLES[kind],
     ...(source ? { source } : {}),
-  }
+  };
 }
 
 function relatedDefinitionRef(
-  kind: DefinitionRef['kind'],
+  kind: DefinitionRef["kind"],
   id: string,
   role: DefinitionRefRole,
   source?: SanitizedSourceRef,
 ): DefinitionRef {
-  return { id, kind, role, ...(source ? { source } : {}) }
+  return { id, kind, role, ...(source ? { source } : {}) };
 }
 
 /** Build an authored knowledge-base contributor ref. */
-export function knowledgeBaseDefinitionRef(id: string, source?: SanitizedSourceRef): DefinitionRef {
-  return relatedDefinitionRef('rag.knowledgeBase', `rag.knowledgeBase:${safeDefinitionId(id)}`, 'contributed-knowledge-base', source)
+export function knowledgeBaseDefinitionRef(
+  id: string,
+  source?: SanitizedSourceRef,
+): DefinitionRef {
+  return relatedDefinitionRef(
+    "rag.knowledgeBase",
+    `rag.knowledgeBase:${safeDefinitionId(id)}`,
+    "contributed-knowledge-base",
+    source,
+  );
 }
 
 /** Build an authored tool-policy contributor ref. */
-export function toolPolicyDefinitionRef(id: string, source?: SanitizedSourceRef): DefinitionRef {
-  return relatedDefinitionRef('toolPolicy', `toolPolicy:${safeDefinitionId(id)}`, 'contributed-tool-policy', source)
+export function toolPolicyDefinitionRef(
+  id: string,
+  source?: SanitizedSourceRef,
+): DefinitionRef {
+  return relatedDefinitionRef(
+    "toolPolicy",
+    `toolPolicy:${safeDefinitionId(id)}`,
+    "contributed-tool-policy",
+    source,
+  );
+}
+
+/** Build the canonical server ref carried by MCP preparation and tool spans. */
+export function mcpServerDefinitionRef(
+  id: string,
+  source?: SanitizedSourceRef,
+): DefinitionRef {
+  return definitionRef("mcp.server", id, source);
 }
 
 /** Build the canonical child ref for an executed authored flow step. */
-export function flowStepDefinitionRef(flowName: string, stepLabel: string, source?: SanitizedSourceRef): DefinitionRef {
-  return relatedDefinitionRef('flow.step', `flow.step:${safeDefinitionId(flowName)}:${safeDefinitionId(stepLabel)}`, 'invoked-flow-step', source)
+export function flowStepDefinitionRef(
+  flowName: string,
+  stepLabel: string,
+  source?: SanitizedSourceRef,
+): DefinitionRef {
+  return relatedDefinitionRef(
+    "flow.step",
+    `flow.step:${safeDefinitionId(flowName)}:${safeDefinitionId(stepLabel)}`,
+    "invoked-flow-step",
+    source,
+  );
 }
 
 /** Build the canonical child ref for an executed parallel-composition branch. */
-export function parallelBranchDefinitionRef(compositionId: string, branchId: string, source?: SanitizedSourceRef): DefinitionRef {
-  return relatedDefinitionRef('composition.parallel.branch', `composition.parallel:${safeDefinitionId(compositionId)}:branch:${safeDefinitionId(branchId)}`, 'invoked-composition-branch', source)
+export function parallelBranchDefinitionRef(
+  compositionId: string,
+  branchId: string,
+  source?: SanitizedSourceRef,
+): DefinitionRef {
+  return relatedDefinitionRef(
+    "composition.parallel.branch",
+    `composition.parallel:${safeDefinitionId(compositionId)}:branch:${safeDefinitionId(branchId)}`,
+    "invoked-composition-branch",
+    source,
+  );
 }
 
 /** Build the canonical child ref for an executed retrieval-recipe step. */
-export function recipeStepDefinitionRef(recipeId: string, stepId: string, source?: SanitizedSourceRef): DefinitionRef {
-  return relatedDefinitionRef('rag.recipe.step', `rag.recipe:${safeDefinitionId(recipeId)}:step:${safeDefinitionId(stepId)}`, 'invoked-recipe-step', source)
+export function recipeStepDefinitionRef(
+  recipeId: string,
+  stepId: string,
+  source?: SanitizedSourceRef,
+): DefinitionRef {
+  return relatedDefinitionRef(
+    "rag.recipe.step",
+    `rag.recipe:${safeDefinitionId(recipeId)}:step:${safeDefinitionId(stepId)}`,
+    "invoked-recipe-step",
+    source,
+  );
 }
 
 /** Build an authored scorer ref for a live scoring invocation. */
-export function scorerDefinitionRef(id: string, source?: SanitizedSourceRef): DefinitionRef {
-  return relatedDefinitionRef('scorer', `scorer:${safeDefinitionId(id)}`, 'invoked-scorer', source)
+export function scorerDefinitionRef(
+  id: string,
+  source?: SanitizedSourceRef,
+): DefinitionRef {
+  return relatedDefinitionRef(
+    "scorer",
+    `scorer:${safeDefinitionId(id)}`,
+    "invoked-scorer",
+    source,
+  );
 }
 
 /** Composition modes that own a canonical `composition.<kind>` definition. */
-export type CompositionRefKind = 'parallel' | 'pipeline' | 'consensus' | 'swarm'
+export type CompositionRefKind =
+  | "parallel"
+  | "pipeline"
+  | "consensus"
+  | "swarm";
 
 /** Routing modes that own a canonical `routing.<kind>` definition. */
-export type RoutingRefKind = 'router' | 'split' | 'retry' | 'cascade' | 'fallback'
+export type RoutingRefKind =
+  | "router"
+  | "split"
+  | "retry"
+  | "cascade"
+  | "fallback";
 
 /**
  * Build the `resolved-prompt` ref for a prompt-resolution span. Matches the
@@ -162,8 +231,11 @@ export type RoutingRefKind = 'router' | 'split' | 'retry' | 'cascade' | 'fallbac
  * Pass the authored `id`; an absent id means the indexer used the local
  * variable name, so callers must skip the ref rather than guess.
  */
-export function promptDefinitionRef(id: string, source?: SanitizedSourceRef): DefinitionRef {
-  return definitionRef('prompt', id, source)
+export function promptDefinitionRef(
+  id: string,
+  source?: SanitizedSourceRef,
+): DefinitionRef {
+  return definitionRef("prompt", id, source);
 }
 
 /**
@@ -172,8 +244,11 @@ export function promptDefinitionRef(id: string, source?: SanitizedSourceRef): De
  * An absent authored `id` means the indexer used the local variable name;
  * callers must skip the ref rather than guess.
  */
-export function contextDefinitionRef(id: string, source?: SanitizedSourceRef): DefinitionRef {
-  return definitionRef('context', id, source)
+export function contextDefinitionRef(
+  id: string,
+  source?: SanitizedSourceRef,
+): DefinitionRef {
+  return definitionRef("context", id, source);
 }
 
 /**
@@ -181,8 +256,11 @@ export function contextDefinitionRef(id: string, source?: SanitizedSourceRef): D
  * `tool:<safeId(name || title)>` (`crates/primitives/src/tool/facts.rs`). Pass
  * the authored `name`/`title`, not the model-facing tool-map key.
  */
-export function toolDefinitionRef(name: string, source?: SanitizedSourceRef): DefinitionRef {
-  return definitionRef('tool', name, source)
+export function toolDefinitionRef(
+  name: string,
+  source?: SanitizedSourceRef,
+): DefinitionRef {
+  return definitionRef("tool", name, source);
 }
 
 /**
@@ -191,8 +269,11 @@ export function toolDefinitionRef(name: string, source?: SanitizedSourceRef): De
  * stages backed by a plain function have no compiled agent identity; skip the
  * ref for those.
  */
-export function agentDefinitionRef(id: string, source?: SanitizedSourceRef): DefinitionRef {
-  return definitionRef('agent', id, source)
+export function agentDefinitionRef(
+  id: string,
+  source?: SanitizedSourceRef,
+): DefinitionRef {
+  return definitionRef("agent", id, source);
 }
 
 /**
@@ -200,8 +281,11 @@ export function agentDefinitionRef(id: string, source?: SanitizedSourceRef): Def
  * `flow:<safeId(name)>` (`crates/primitives/src/flow/facts.rs`). Pass the
  * authored first-arg name, not the random per-execution `flowId`.
  */
-export function flowDefinitionRef(name: string, source?: SanitizedSourceRef): DefinitionRef {
-  return definitionRef('flow', name, source)
+export function flowDefinitionRef(
+  name: string,
+  source?: SanitizedSourceRef,
+): DefinitionRef {
+  return definitionRef("flow", name, source);
 }
 
 /**
@@ -213,8 +297,11 @@ export function flowDefinitionRef(name: string, source?: SanitizedSourceRef): De
  * records (`../plan/tasks.ts`) have no compiled Project Index definition and
  * must never carry this ref.
  */
-export function taskDefinitionRef(name: string, source?: SanitizedSourceRef): DefinitionRef {
-  return definitionRef('task', name, source)
+export function taskDefinitionRef(
+  name: string,
+  source?: SanitizedSourceRef,
+): DefinitionRef {
+  return definitionRef("task", name, source);
 }
 
 /**
@@ -222,8 +309,11 @@ export function taskDefinitionRef(name: string, source?: SanitizedSourceRef): De
  * span. Matches the indexer's `rag.retriever:<safeId(id)>`
  * (`crates/primitives/src/rag/facts.rs`). Pass the authored `config.id`.
  */
-export function retrieverDefinitionRef(id: string, source?: SanitizedSourceRef): DefinitionRef {
-  return definitionRef('rag.retriever', id, source)
+export function retrieverDefinitionRef(
+  id: string,
+  source?: SanitizedSourceRef,
+): DefinitionRef {
+  return definitionRef("rag.retriever", id, source);
 }
 
 /**
@@ -231,8 +321,11 @@ export function retrieverDefinitionRef(id: string, source?: SanitizedSourceRef):
  * indexer's `rag.recipe:<safeId(name)>` (`crates/primitives/src/rag/facts.rs`).
  * Pass the authored recipe name.
  */
-export function recipeDefinitionRef(name: string, source?: SanitizedSourceRef): DefinitionRef {
-  return definitionRef('rag.recipe', name, source)
+export function recipeDefinitionRef(
+  name: string,
+  source?: SanitizedSourceRef,
+): DefinitionRef {
+  return definitionRef("rag.recipe", name, source);
 }
 
 /**
@@ -241,8 +334,11 @@ export function recipeDefinitionRef(name: string, source?: SanitizedSourceRef): 
  * (`crates/primitives/src/rag/facts.rs`). The authored reranker id is required:
  * an anonymous reranker has no stable shared identity, so there is no ref.
  */
-export function rerankerDefinitionRef(id: string, source?: SanitizedSourceRef): DefinitionRef {
-  return definitionRef('rag.reranker', id, source)
+export function rerankerDefinitionRef(
+  id: string,
+  source?: SanitizedSourceRef,
+): DefinitionRef {
+  return definitionRef("rag.reranker", id, source);
 }
 
 /**
@@ -251,8 +347,11 @@ export function rerankerDefinitionRef(id: string, source?: SanitizedSourceRef): 
  * where `identifier` is `"<registryName>:<path>"`. Pass that composite
  * identifier exactly as the indexer assembled it.
  */
-export function skillDefinitionRef(identifier: string, source?: SanitizedSourceRef): DefinitionRef {
-  return definitionRef('skill', identifier, source)
+export function skillDefinitionRef(
+  identifier: string,
+  source?: SanitizedSourceRef,
+): DefinitionRef {
+  return definitionRef("skill", identifier, source);
 }
 
 /**
@@ -265,7 +364,7 @@ export function memoryDefinitionRef(
   definitionKey: string,
   source?: SanitizedSourceRef,
 ): DefinitionRef {
-  return definitionRef('memory', definitionKey, source)
+  return definitionRef("memory", definitionKey, source);
 }
 
 /**
@@ -273,8 +372,11 @@ export function memoryDefinitionRef(
  * the indexer's `workspace:<safeId(id)>`
  * (`crates/primitives/src/workspace/facts.rs`). Pass the authored `config.id`.
  */
-export function workspaceDefinitionRef(id: string, source?: SanitizedSourceRef): DefinitionRef {
-  return definitionRef('workspace', id, source)
+export function workspaceDefinitionRef(
+  id: string,
+  source?: SanitizedSourceRef,
+): DefinitionRef {
+  return definitionRef("workspace", id, source);
 }
 
 /**
@@ -283,8 +385,11 @@ export function workspaceDefinitionRef(id: string, source?: SanitizedSourceRef):
  * (`crates/primitives/src/safety/facts.rs`). `id` is a required field on
  * `guardrail()`, so this ref is always canonical.
  */
-export function guardrailDefinitionRef(id: string, source?: SanitizedSourceRef): DefinitionRef {
-  return definitionRef('guardrail', id, source)
+export function guardrailDefinitionRef(
+  id: string,
+  source?: SanitizedSourceRef,
+): DefinitionRef {
+  return definitionRef("guardrail", id, source);
 }
 
 /**
@@ -293,8 +398,11 @@ export function guardrailDefinitionRef(id: string, source?: SanitizedSourceRef):
  * (`crates/primitives/src/safety/facts.rs`). `id` is a required field on
  * `constraint()`, so this ref is always canonical.
  */
-export function constraintDefinitionRef(id: string, source?: SanitizedSourceRef): DefinitionRef {
-  return definitionRef('constraint', id, source)
+export function constraintDefinitionRef(
+  id: string,
+  source?: SanitizedSourceRef,
+): DefinitionRef {
+  return definitionRef("constraint", id, source);
 }
 
 /**
@@ -308,7 +416,7 @@ export function routingDefinitionRef(
   id: string,
   source?: SanitizedSourceRef,
 ): DefinitionRef {
-  return definitionRef(`routing.${kind}`, id, source)
+  return definitionRef(`routing.${kind}`, id, source);
 }
 
 /**
@@ -321,7 +429,7 @@ export function compositionDefinitionRef(
   id: string,
   source?: SanitizedSourceRef,
 ): DefinitionRef {
-  return definitionRef(`composition.${kind}`, id, source)
+  return definitionRef(`composition.${kind}`, id, source);
 }
 
 /**
@@ -330,6 +438,9 @@ export function compositionDefinitionRef(
  * (`crates/primitives/src/blackboard/facts.rs`). `config.id` is required and in
  * hand at every blackboard span.
  */
-export function blackboardDefinitionRef(id: string, source?: SanitizedSourceRef): DefinitionRef {
-  return definitionRef('blackboard', id, source)
+export function blackboardDefinitionRef(
+  id: string,
+  source?: SanitizedSourceRef,
+): DefinitionRef {
+  return definitionRef("blackboard", id, source);
 }

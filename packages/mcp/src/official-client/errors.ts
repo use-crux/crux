@@ -8,6 +8,7 @@ export type McpToolSourceErrorPhase =
   | "discover"
   | "filter"
   | "schema"
+  | "execute"
   | "merge"
   | "close"
   | "resume-validation";
@@ -96,6 +97,7 @@ function sanitizeCauseMessage(cause: unknown): string {
   return message
     .replace(/https?:\/\/[^\s"'<>]+/giu, sanitizeMatchedUrl)
     .replace(/\bBearer\s+\S+/giu, "Bearer [REDACTED]")
+    .replace(/\b(?:sk|pk|rk|key|token)-[A-Za-z0-9_-]{3,}\b/giu, "[REDACTED]")
     .replace(
       /\b(authorization|api[-_]?key|token|secret|password)\s*[:=]\s*\S+/giu,
       "$1=[REDACTED]",

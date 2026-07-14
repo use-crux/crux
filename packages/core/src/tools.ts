@@ -8,17 +8,30 @@
  * @module
  */
 
-export { tool } from './tools/define-tool'
+export { tool } from "./tools/define-tool";
 export {
   TOOL_SOURCE,
+  TOOL_SOURCE_PROVENANCE,
+  TOOL_SOURCE_QUALITY_IDENTITY,
   TOOL_SOURCE_REPLAY_IDENTITY,
+  TOOL_SOURCE_SESSION_PROVENANCE,
   ToolSourceUnsupportedError,
   isToolSource,
   toolSourceReplayIdentity,
+  toolSourceProvenance,
+  toolSourceQualityIdentity,
+  toolSourceSessionProvenance,
   withToolSourceReplayIdentity,
-} from './tools/tool-source'
-export { toolPolicy } from './safety/toolPolicy'
-export type { ToolApprovalPolicyIdentity, ToolApprovalReplayProvenance, ToolConfig, NamedToolDef } from './tools/types'
+  withToolSourceProvenance,
+  withToolSourceSessionProvenance,
+} from "./tools/tool-source";
+export { toolPolicy } from "./safety/toolPolicy";
+export type {
+  ToolApprovalPolicyIdentity,
+  ToolApprovalReplayProvenance,
+  ToolConfig,
+  NamedToolDef,
+} from "./tools/types";
 export type {
   KnownToolsFor,
   MergeKnownTools,
@@ -26,11 +39,14 @@ export type {
   ToolContextOf,
   ToolsContextOf,
   ToolsContextOption,
-} from './tools/context-types'
-export type { ToolDef, ToolModelOutput, ToModelOutputArgs } from './types/tool'
+} from "./tools/context-types";
+export type { ToolDef, ToolModelOutput, ToModelOutputArgs } from "./types/tool";
 export type {
   ToolSource,
   ToolSourceMaterializationContext,
   ToolSourceMaterializer,
+  ToolSourceProvenance,
+  ToolSourceQualityIdentity,
+  ToolSourceSessionProvenance,
   ToolSourceSession,
-} from './tools/tool-source'
+} from "./tools/tool-source";

@@ -233,61 +233,63 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
   };
 
   try {
-    const generated = await orchestrateGenerate<
-      Record<string, unknown>,
-      AdapterExecutionGenerateResult<TRawResponse>
-    >(
-      {
-        promptId: prompt.id,
-        promptConfig:
-          prompt.config ?? ({} as NonNullable<typeof prompt.config>),
-        preparedArgs: {
-          model: modelInfo.modelId,
-          system: currentSystem,
-          systemBlocks: currentSystemBlocks,
-          prompt: promptText,
-          messages,
-          settings: mappedSettings,
-          schema: resolved.schema,
-          tools: lifecycle.tools,
+    const generated = await sourceSession.withContext(async () =>
+      orchestrateGenerate<
+        Record<string, unknown>,
+        AdapterExecutionGenerateResult<TRawResponse>
+      >(
+        {
+          promptId: prompt.id,
+          promptConfig:
+            prompt.config ?? ({} as NonNullable<typeof prompt.config>),
+          preparedArgs: {
+            model: modelInfo.modelId,
+            system: currentSystem,
+            systemBlocks: currentSystemBlocks,
+            prompt: promptText,
+            messages,
+            settings: mappedSettings,
+            schema: resolved.schema,
+            tools: lifecycle.tools,
+            input: args.input ?? {},
+            ...(await inspectForDevtools(prompt, resolveOpts, lifecycle.tools)),
+          },
+          model: args.model,
+          traceModel: modelInfo.modelId || undefined,
           input: args.input ?? {},
-          ...(await inspectForDevtools(prompt, resolveOpts, lifecycle.tools)),
+          provider: modelInfo.provider || dialect.id,
+          resolved,
+          outputMode: resolved.schema ? "object" : "text",
+          timeout: args.timeout,
         },
-        model: args.model,
-        traceModel: modelInfo.modelId || undefined,
-        input: args.input ?? {},
-        provider: modelInfo.provider || dialect.id,
-        resolved,
-        outputMode: resolved.schema ? "object" : "text",
-        timeout: args.timeout,
-      },
-      async () => {
-        try {
-          const result = resolved.schema
-            ? await generateSdkStructured({
-                dialect,
-                args,
-                request: await buildRequest(undefined),
-                schema: resolved.schema,
-                safety,
-                retryId,
-                promptId: prompt.id,
-                describeCall,
-                stepFacts,
-              })
-            : await (async () => {
-                stepBudget = createBudgetSignal({
-                  budget: "step",
-                  limitMs: args.timeout?.stepMs,
-                });
-                return generateLoop(await buildRequest(stepBudget.signal));
-              })();
-          result._meta = safety.stamp(result._meta);
-          return result;
-        } finally {
-          stepBudget.dispose();
-        }
-      },
+        async () => {
+          try {
+            const result = resolved.schema
+              ? await generateSdkStructured({
+                  dialect,
+                  args,
+                  request: await buildRequest(undefined),
+                  schema: resolved.schema,
+                  safety,
+                  retryId,
+                  promptId: prompt.id,
+                  describeCall,
+                  stepFacts,
+                })
+              : await (async () => {
+                  stepBudget = createBudgetSignal({
+                    budget: "step",
+                    limitMs: args.timeout?.stepMs,
+                  });
+                  return generateLoop(await buildRequest(stepBudget.signal));
+                })();
+            result._meta = safety.stamp(result._meta);
+            return result;
+          } finally {
+            stepBudget.dispose();
+          }
+        },
+      ),
     );
 
     await lifecycle.captureTurn({

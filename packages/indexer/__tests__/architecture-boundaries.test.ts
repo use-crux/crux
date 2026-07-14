@@ -122,6 +122,9 @@ describe("indexer architecture boundaries", () => {
     expect(
       nativeDirectPrimitiveManifest.some((spec) => spec.callName === "prompt"),
     ).toBe(true);
+    expect(
+      nativeDirectPrimitiveManifest.some((spec) => spec.callName === "mcp"),
+    ).toBe(true);
 
     for (const file of [
       "evidence.ts",

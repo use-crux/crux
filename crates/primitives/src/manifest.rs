@@ -51,10 +51,11 @@ pub const FIRST_PARTY_PRIMITIVE_MANIFEST_NAME: &str = "crux-first-party-primitiv
 ///
 /// Bump this whenever the declared first-party projection contract changes and
 /// update the Static Index primitive-manifest cache identity in the same change.
-pub const FIRST_PARTY_PRIMITIVE_MANIFEST_VERSION: &str = "11";
+pub const FIRST_PARTY_PRIMITIVE_MANIFEST_VERSION: &str = "12";
 
 const CRUX_CORE_EXTENSION: &str = "@use-crux/indexer/crux-core";
 const CRUX_MEDIA_EXTENSION: &str = "@use-crux/indexer/crux-core-media";
+const CRUX_MCP_EXTENSION: &str = "@use-crux/indexer/crux-core-mcp";
 
 /// A local reference form a projector can resolve from Static Syntax evidence.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -190,6 +191,29 @@ const fn media_party(
         definition_id_prefixes,
         schema_properties,
         local_reference_forms: &[],
+        projector,
+        skip_legacy_indirect: false,
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+const fn mcp_party(
+    extractor: &'static str,
+    call_names: &'static [&'static str],
+    definition_kinds: &'static [&'static str],
+    definition_id_prefixes: &'static [&'static str],
+    projector: Projector,
+) -> FirstPartyPrimitive {
+    FirstPartyPrimitive {
+        extension: CRUX_MCP_EXTENSION,
+        extractor,
+        family: extractor,
+        call_names,
+        constructor_names: &[],
+        definition_kinds,
+        definition_id_prefixes,
+        schema_properties: &[],
+        local_reference_forms: &[LocalReferenceForm::LocalInitializer],
         projector,
         skip_legacy_indirect: false,
     }

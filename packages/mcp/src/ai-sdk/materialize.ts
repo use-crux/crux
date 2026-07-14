@@ -46,6 +46,14 @@ import type {
   AiSdkMcpMaterializedTool,
   AiSdkMcpToolSourceSession,
 } from "./types";
+import {
+  mcpPreparationObservation,
+  openMcpConnectSpan,
+  openMcpDiscoverSpan,
+  setMcpTransportAttributes,
+  withMcpSessionProvenance,
+  withMcpToolProvenance,
+} from "../observability";
 
 const MAX_DISCOVERY_PAGES = 64;
 
@@ -55,22 +63,32 @@ export async function materializeAiSdkMcpToolSource(
   context: ToolSourceMaterializationContext,
 ): Promise<AiSdkMcpToolSourceSession> {
   const mcpSource = assertMcpSource(source);
+  const connect = openMcpConnectSpan(source.id, "ai-sdk-native");
   let config: McpTransportConfig;
   try {
     config = await resolveTransport(mcpSource, context);
   } catch (error) {
-    throw new McpToolSourceError(
+    const failure = new McpToolSourceError(
       "transport-configuration",
       { serverId: source.id },
       error,
     );
+    connect.error(failure, { failurePhase: failure.phase });
+    throw failure;
   }
   const errorContext = mcpTransportErrorContext(source.id, config);
+  setMcpTransportAttributes(connect, errorContext);
   let transport: ReturnType<typeof createNativeTransport>;
   try {
     transport = createNativeTransport(config);
   } catch (error) {
-    throw mcpToolSourceError("transport-configuration", errorContext, error);
+    const failure = mcpToolSourceError(
+      "transport-configuration",
+      errorContext,
+      error,
+    );
+    connect.error(failure, { failurePhase: failure.phase });
+    throw failure;
   }
 
   let client: MCPClient;
@@ -81,8 +99,38 @@ export async function materializeAiSdkMcpToolSource(
       transport,
     });
   } catch (error) {
-    throw mcpToolSourceError("connect", errorContext, error);
+    const failure = mcpToolSourceError("connect", errorContext, error);
+    connect.error(failure, { failurePhase: failure.phase });
+    throw failure;
   }
+  connect.end({
+    attributes: {
+      ...(typeof transport === "object" &&
+      "protocolVersion" in transport &&
+      typeof transport.protocolVersion === "string"
+        ? { protocolVersion: transport.protocolVersion }
+        : {}),
+      ...(client.serverInfo?.name
+        ? { serverName: client.serverInfo.name }
+        : {}),
+      ...(client.serverInfo?.version
+        ? { serverVersion: client.serverInfo.version }
+        : {}),
+    },
+  });
+  const discover = openMcpDiscoverSpan(
+    connect,
+    source.id,
+    "ai-sdk-native",
+    errorContext,
+  );
+  const preparation = mcpPreparationObservation({
+    sourceId: source.id,
+    implementation: "ai-sdk-native",
+    connect,
+    discover,
+    transport: errorContext,
+  });
 
   try {
     const definitions = await discoverNativeTools(client, context.abortSignal);
@@ -92,7 +140,6 @@ export async function materializeAiSdkMcpToolSource(
       errorContext,
     );
     const selectedDefinitions = {
-      ...definitions,
       tools: projected.map(({ tool }) => tool),
       nextCursor: undefined,
     };
@@ -102,43 +149,66 @@ export async function materializeAiSdkMcpToolSource(
     const tools = Object.fromEntries(
       projected.map((entry) => [
         entry.exposedName,
-        wrapNativeTool(
-          entry,
-          nativeTools[entry.tool.name]!,
-          context,
-          errorContext,
+        withMcpToolProvenance(
+          wrapNativeTool(
+            entry,
+            nativeTools[entry.tool.name]!,
+            context,
+            errorContext,
+          ),
+          entry.metadata,
+          preparation,
         ),
       ]),
     );
+    const toolListFingerprint =
+      projected[0]?.metadata.toolListFingerprint ?? canonicalFingerprint([]);
+    discover.end({
+      attributes: {
+        pageCount: definitions.pageCount,
+        discoveredToolCount: definitions.tools.length,
+        selectedToolCount: projected.length,
+        allowedToolCount: projected.length,
+        deniedToolCount: definitions.tools.length - projected.length,
+        exposedToolCount: projected.length,
+        toolListFingerprint,
+      },
+    });
     let closed = false;
-    return {
-      tools,
-      discovery: {
-        toolListFingerprint:
-          projected[0]?.metadata.toolListFingerprint ??
-          canonicalFingerprint([]),
-        tools: projected.map(({ metadata }) => metadata),
+    return withMcpSessionProvenance(
+      {
+        tools,
+        discovery: {
+          toolListFingerprint,
+          tools: projected.map(({ metadata }) => metadata),
+        },
+        async close() {
+          if (closed) return;
+          closed = true;
+          try {
+            await client.close();
+          } catch (error) {
+            throw mcpToolSourceError("close", errorContext, error);
+          }
+        },
       },
-      async close() {
-        if (closed) return;
-        closed = true;
-        try {
-          await client.close();
-        } catch (error) {
-          throw mcpToolSourceError("close", errorContext, error);
-        }
-      },
-    };
+      preparation,
+    );
   } catch (error) {
     await client.close().catch(() => {});
-    throw mcpToolSourceError("discover", errorContext, error);
+    const failure = mcpToolSourceError("discover", errorContext, error);
+    discover.error(failure, { failurePhase: failure.phase });
+    throw failure;
   }
 }
 
 async function discoverNativeTools(
   client: MCPClient,
   abortSignal?: AbortSignal,
-): Promise<Awaited<ReturnType<MCPClient["listTools"]>>> {
+): Promise<{
+  readonly tools: Awaited<ReturnType<MCPClient["listTools"]>>["tools"];
+  readonly pageCount: number;
+}> {
   const tools: Awaited<ReturnType<MCPClient["listTools"]>>["tools"] = [];
   const requestedCursors = new Set<string>();
   let pageCount = 0;
@@ -165,7 +235,7 @@ async function discoverNativeTools(
     cursor = page.nextCursor;
   } while (cursor !== undefined);
 
-  return { tools };
+  return { tools, pageCount };
 }
 
 function wrapNativeTool(
@@ -201,11 +271,16 @@ function wrapNativeTool(
         const validatedInput = await parameters.parseAsync(input);
         const abortSignal = options.abortSignal ?? context.abortSignal;
         abortSignal?.throwIfAborted();
-        const result = await nativeTool.execute!(validatedInput, {
-          ...options,
-          messages: options.messages ?? [],
-          abortSignal,
-        } as never);
+        let result: unknown;
+        try {
+          result = await nativeTool.execute!(validatedInput, {
+            ...options,
+            messages: options.messages ?? [],
+            abortSignal,
+          } as never);
+        } catch (error) {
+          throw mcpToolSourceError("execute", errorContext, error);
+        }
         const normalized = normalizeMcpToolResult(result);
         if (outputSchema && normalized.structuredContent === undefined) {
           if (!normalized.isError) {

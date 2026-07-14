@@ -142,45 +142,47 @@ export async function streamCore<
       extra: (args.extra ?? {}) as TExtra,
     };
 
-    const handle = await orchestrateStream(
-      {
-        promptId: prompt.id,
-        promptConfig: prompt.config ?? ({} as typeof prompt.config),
-        preparedArgs: { ...callArgs, input: args.input ?? {} },
-        input: args.input ?? {},
-        provider: modelInfo.provider,
-        model: modelInfo.modelId,
-        resolved,
-        outputMode: resolved.schema ? "object" : "text",
-        timeout: args.timeout,
-        createCachedStreamResult: (cached) =>
-          createCachedStreamHandle(cached) as unknown as MiddlewareResult,
-      },
-      async () => {
-        emitInputTokenEstimate({
-          messages: providerMessages,
+    const handle = await sourceSession.withContext(() =>
+      orchestrateStream(
+        {
+          promptId: prompt.id,
+          promptConfig: prompt.config ?? ({} as typeof prompt.config),
+          preparedArgs: { ...callArgs, input: args.input ?? {} },
+          input: args.input ?? {},
           provider: modelInfo.provider,
           model: modelInfo.modelId,
-          media: dialect.media,
-          tokenBudget: args.tokenBudget,
-        });
-        return withBudget(
-          (signal) =>
-            dialect.stream(dialect.client, callArgs, {
-              signal: composeAbortSignals(args.signal, signal),
-            }),
-          {
-            budget: "step",
-            limitMs: args.timeout?.stepMs,
-          },
-        ).catch((error: unknown) => {
-          throw normalizeAdapterCallError(error, {
-            providerId: modelInfo.provider,
-            signal: args.signal,
-            mapError: dialect.mapError,
+          resolved,
+          outputMode: resolved.schema ? "object" : "text",
+          timeout: args.timeout,
+          createCachedStreamResult: (cached) =>
+            createCachedStreamHandle(cached) as unknown as MiddlewareResult,
+        },
+        async () => {
+          emitInputTokenEstimate({
+            messages: providerMessages,
+            provider: modelInfo.provider,
+            model: modelInfo.modelId,
+            media: dialect.media,
+            tokenBudget: args.tokenBudget,
           });
-        });
-      },
+          return withBudget(
+            (signal) =>
+              dialect.stream(dialect.client, callArgs, {
+                signal: composeAbortSignals(args.signal, signal),
+              }),
+            {
+              budget: "step",
+              limitMs: args.timeout?.stepMs,
+            },
+          ).catch((error: unknown) => {
+            throw normalizeAdapterCallError(error, {
+              providerId: modelInfo.provider,
+              signal: args.signal,
+              mapError: dialect.mapError,
+            });
+          });
+        },
+      ),
     );
 
     const safetyStream = safety.enabled ? safety.openStream() : undefined;

@@ -92,11 +92,20 @@ export interface NativeDirectStaticIdArrayDependencySpec {
   readonly relationOrigin: NativeDirectRelationOriginSpec
 }
 
+/** Statically known MCP allowlist edges emitted without fabricating tools. */
+export interface NativeDirectMcpExpectedToolsDependencySpec {
+  readonly kind: 'mcpExpectedTools'
+  readonly property: 'tools'
+  readonly relationType: 'mcp.server.provides_tool'
+  readonly relationOrigin: Extract<NativeDirectRelationOriginSpec, { readonly kind: 'owner' }>
+}
+
 export type NativeDirectDependencySpec =
   | NativeDirectIdentifierDependencySpec
   | NativeDirectArrayDependencySpec
   | NativeDirectObjectDependencySpec
   | NativeDirectStaticIdArrayDependencySpec
+  | NativeDirectMcpExpectedToolsDependencySpec
 
 export interface NativeDirectPrimitiveSpec {
   readonly callName: string
@@ -150,6 +159,22 @@ export const nativeDirectPrimitiveManifest = [
   ...nativeDirectRoutingPrimitiveManifest,
   ...nativeDirectAgentPrimitiveManifest,
   {
+    callName: 'mcp',
+    definitionKind: 'mcp.server',
+    nameProperties: ['id'],
+    emitDefinition: 'withMetadata',
+    schema: [],
+    sourceRefs: [],
+    dependencies: [
+      {
+        kind: 'mcpExpectedTools',
+        property: 'tools',
+        relationType: 'mcp.server.provides_tool',
+        relationOrigin: { kind: 'owner' },
+      },
+    ],
+  },
+  {
     callName: 'context',
     definitionKind: 'context',
     nameProperties: ['id'],
@@ -173,6 +198,20 @@ export const nativeDirectPrimitiveManifest = [
           kind: 'injectionUseEntries',
           metadataKey: 'useEntries',
           relationHint: 'context',
+          conditionality: 'always',
+          via: 'direct',
+        },
+      },
+      {
+        kind: 'arrayIdentifier',
+        property: 'use',
+        targetKind: 'mcp.server',
+        relationType: 'context.uses_mcp_server',
+        relationOrigin: { kind: 'indexedOwnerChild', segment: 'use' },
+        fact: {
+          kind: 'injectionUseEntries',
+          metadataKey: 'useEntries',
+          relationHint: 'unknown',
           conditionality: 'always',
           via: 'direct',
         },
@@ -218,6 +257,20 @@ export const nativeDirectPrimitiveManifest = [
           kind: 'injectionUseEntries',
           metadataKey: 'useEntries',
           relationHint: 'context',
+          conditionality: 'always',
+          via: 'direct',
+        },
+      },
+      {
+        kind: 'arrayIdentifier',
+        property: 'use',
+        targetKind: 'mcp.server',
+        relationType: 'prompt.uses_mcp_server',
+        relationOrigin: { kind: 'indexedOwnerChild', segment: 'use' },
+        fact: {
+          kind: 'injectionUseEntries',
+          metadataKey: 'useEntries',
+          relationHint: 'unknown',
           conditionality: 'always',
           via: 'direct',
         },

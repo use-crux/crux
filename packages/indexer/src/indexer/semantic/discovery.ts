@@ -175,6 +175,18 @@ function semanticDefinitionCandidateForCall<
         object,
       };
     }
+    case "mcp": {
+      const name =
+        semanticStringLiteralProperty(object, "id", syntax) ??
+        variableName ??
+        "anonymous";
+      return {
+        definitionId: `mcp.server:${safeId(name)}`,
+        kind: "mcp.server",
+        name,
+        object,
+      };
+    }
     case "injectable": {
       const name =
         semanticStringLiteralProperty(object, "id", syntax) ??

@@ -21,6 +21,7 @@ const firstPartySemanticCallNames = [
   "llmJudge",
   "match",
   "memory",
+  "mcp",
   "parallel",
   "pipeline",
   "registry",

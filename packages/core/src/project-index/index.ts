@@ -326,6 +326,8 @@ export interface ProjectRuntimeJoin {
   contextId?: string;
   agentId?: string;
   toolName?: string;
+  /** Runtime join key for an authored MCP server definition. */
+  serverId?: string;
   retrieverId?: string;
   memoryId?: string;
   memoryStoreId?: string;
@@ -412,6 +414,7 @@ export type ProjectDefinitionKind =
   | "context"
   | "injectable"
   | "tool"
+  | "mcp.server"
   | "agent"
   | "flow"
   | "flow.step"
@@ -613,12 +616,66 @@ export interface InjectionToolFacts {
   variables?: string[];
 }
 
+/** Secret-free authored transport facts for an MCP server definition. */
+export type McpTransportFacts =
+  | {
+      readonly kind: "stdio";
+      /** Statically known lexical command basename. */
+      readonly executable?: string;
+    }
+  | {
+      readonly kind: "streamable-http";
+      /** URL origin without userinfo, query, or fragment. */
+      readonly origin?: string;
+      /** Percent-encoded URL pathname without query or fragment. */
+      readonly pathname?: string;
+    }
+  | {
+      readonly kind: "resolver";
+    };
+
+/** Statically known MCP tool selection, preserving allow/deny exclusivity. */
+export type McpToolSelectionFacts =
+  | {
+      readonly allow: readonly string[];
+      readonly deny?: never;
+      readonly prefix?: string;
+    }
+  | {
+      readonly deny: readonly string[];
+      readonly allow?: never;
+      readonly prefix?: string;
+    }
+  | {
+      readonly allow?: never;
+      readonly deny?: never;
+      readonly prefix?: string;
+    };
+
+/** Project Index facts for one authored MCP server. */
+export interface McpServerFacts {
+  readonly kind: "mcp.server";
+  readonly serverId: string;
+  readonly transport?: McpTransportFacts;
+  readonly tools?: McpToolSelectionFacts;
+}
+
+/** Secret-free MCP origin facts carried by an ordinary tool definition. */
+export interface McpToolProvenanceFacts {
+  readonly serverId: string;
+  readonly remoteName: string;
+  readonly exposedName: string;
+  readonly provenance: "authored-expected" | "runtime-discovered";
+}
+
 export interface ToolFacts {
   kind: "tool";
   toolName?: string;
   hasExecute?: boolean;
   hasToModelOutput?: boolean;
   approvalRequired?: boolean;
+  /** MCP origin when this ordinary tool is expected or runtime-discovered. */
+  mcp?: McpToolProvenanceFacts;
 }
 
 export interface RegistryFacts {
@@ -902,6 +959,7 @@ export type PrimitiveSpecificFacts =
   | PromptFacts
   | ContextFacts
   | InjectableFacts
+  | McpServerFacts
   | ToolFacts
   | RegistryFacts
   | SkillFacts
@@ -1321,6 +1379,7 @@ export const ProjectDefinitionKindSchema = z.enum([
   "context",
   "injectable",
   "tool",
+  "mcp.server",
   "agent",
   "flow",
   "flow.step",
@@ -1690,6 +1749,7 @@ export const ProjectRuntimeJoinSchema = z
     contextId: z.string().optional(),
     agentId: z.string().optional(),
     toolName: z.string().optional(),
+    serverId: z.string().optional(),
     retrieverId: z.string().optional(),
     memoryId: z.string().optional(),
     memoryStoreId: z.string().optional(),

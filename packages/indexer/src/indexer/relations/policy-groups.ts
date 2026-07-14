@@ -104,6 +104,34 @@ export const injectableUseRelationPolicies = (
     ] satisfies IndexRelationPolicy[],
 );
 
+/** Compiler-owned authored MCP relation vocabulary. */
+export const mcpRelationPolicies = [
+  {
+    type: "prompt.uses_mcp_server",
+    fromKinds: ["prompt"],
+    toKinds: ["mcp.server"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true,
+  },
+  {
+    type: "context.uses_mcp_server",
+    fromKinds: ["context"],
+    toKinds: ["mcp.server"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true,
+  },
+  {
+    type: "mcp.server.provides_tool",
+    fromKinds: ["mcp.server"],
+    toKinds: ["tool"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: true,
+  },
+] satisfies IndexRelationPolicy[];
+
 export const injectableContributionRelationPolicies = [
   {
     type: "injectable.uses_context",

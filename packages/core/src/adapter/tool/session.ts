@@ -32,22 +32,36 @@
  * @module
  */
 
-import { z } from 'zod'
-import type { ResolvedPrompt } from '../../resolver/types'
-import type { TimeoutOptions } from '../../generation/timeout'
-import { TimeoutError, toolBudgetMs, withBudget } from '../../generation/timeout'
-import type { Message } from '../../generation/messages'
-import type { JsonValue, ToolModelOutput } from '../../types/tool'
-import type { SystemBlock } from '../../resolver/types'
-import type { AdapterResponse, CallArgs, ToolResultEntry } from '../types'
-import { responseContent } from '../assistant-output'
-import { applyToolMiddleware, notifyToolApprovalResponses } from '../../tools/middleware'
-import { findToolApprovalRequests, findToolApprovalDecision, deniedToolModelOutput } from '../../tools/approvals'
-import type { ToolMiddleware } from '../../tools/types'
-import type { ApprovalDeclaration, ToolApprovalMap } from '../../tools/approval-policy'
-import { getHooks } from '../../runtime/runtime'
-import { getExecutionContext } from '../../runtime/execution-context'
-import { observe } from '../../observability'
+import { z } from "zod";
+import type { ResolvedPrompt } from "../../resolver/types";
+import type { TimeoutOptions } from "../../generation/timeout";
+import {
+  TimeoutError,
+  toolBudgetMs,
+  withBudget,
+} from "../../generation/timeout";
+import type { Message } from "../../generation/messages";
+import type { JsonValue, ToolModelOutput } from "../../types/tool";
+import type { SystemBlock } from "../../resolver/types";
+import type { AdapterResponse, CallArgs, ToolResultEntry } from "../types";
+import { responseContent } from "../assistant-output";
+import {
+  applyToolMiddleware,
+  notifyToolApprovalResponses,
+} from "../../tools/middleware";
+import {
+  findToolApprovalRequests,
+  findToolApprovalDecision,
+  deniedToolModelOutput,
+} from "../../tools/approvals";
+import type { ToolMiddleware } from "../../tools/types";
+import type {
+  ApprovalDeclaration,
+  ToolApprovalMap,
+} from "../../tools/approval-policy";
+import { getHooks } from "../../runtime/runtime";
+import { getExecutionContext } from "../../runtime/execution-context";
+import { observe } from "../../observability";
 import {
   instrumentToolSet,
   createToolModelOutput,
@@ -59,12 +73,22 @@ import {
   openToolCallSpan,
   emitToolArgsArtifact,
   emitToolResultArtifact,
+  sourceResultPreview,
+  toolCallProvenance,
   emitToolRequestArtifacts,
-} from './emission'
-import { captureMemoryTurn, readSkillActivationSession } from './resolved'
-import { enrichToolCallsFromMessages, enrichToolCallsWithResults } from './memory-capture'
-import type { SkillActivationSession } from '../../skill/session'
-import { LOAD_SKILL_TOOL_NAME } from '../../skill/tools'
+} from "./emission";
+import { captureMemoryTurn, readSkillActivationSession } from "./resolved";
+import {
+  enrichToolCallsFromMessages,
+  enrichToolCallsWithResults,
+} from "./memory-capture";
+import type { SkillActivationSession } from "../../skill/session";
+import {
+  toolSourceProvenance,
+  withToolSourceProvenance,
+} from "../../tools/tool-source";
+import { isToolExecutionMock } from "../../tools/mock";
+import { LOAD_SKILL_TOOL_NAME } from "../../skill/tools";
 import {
   createApprovalId,
   createApprovalToken as defaultCreateApprovalToken,
@@ -74,36 +98,39 @@ import {
   findApprovedOrDeniedToolCalls,
   findInvalidApprovalToolCalls,
   emitToolApprovalObservation,
-} from './approval'
-import type { ApprovalRequestInfo } from './approval'
-import { callApprovalDeclarations, requiresToolApproval } from './approval-policy-evaluator'
-import type { ToolApprovalRequirement } from './approval-policy-evaluator'
+} from "./approval";
+import type { ApprovalRequestInfo } from "./approval";
+import {
+  callApprovalDeclarations,
+  requiresToolApproval,
+} from "./approval-policy-evaluator";
+import type { ToolApprovalRequirement } from "./approval-policy-evaluator";
 import {
   createApprovalReplayProvenance,
   matchesApprovalReplayIdentity,
   verifyApprovalReplayCommitment,
-} from './approval-replay'
-import { toolSourceReplayIdentity } from '../../tools/tool-source'
-import { resolveToolsContext, type ResolvedToolsContext } from './context'
+} from "./approval-replay";
+import { toolSourceReplayIdentity } from "../../tools/tool-source";
+import { resolveToolsContext, type ResolvedToolsContext } from "./context";
 import {
   withToolLifecycleExecutionOptions,
   type PartialToolLifecycleExecutionOptions,
   type ToolLifecycleExecutionOptions,
-} from './execution-options'
+} from "./execution-options";
 
 // ─────────────────────────────────────────────────────────────────
 // Public types
 // ─────────────────────────────────────────────────────────────────
 
 /** One canonical, schema-sanitized tool descriptor for a provider call. */
-export type ToolDescriptor = NonNullable<CallArgs['tools']>[number]
+export type ToolDescriptor = NonNullable<CallArgs["tools"]>[number];
 
 /** How to append a tool round (assistant tool calls + results) to history. */
 export type AppendToolRound = (
   messages: Message[],
   assistantResponse: AdapterResponse,
   toolResults: ToolResultEntry[],
-) => Message[]
+) => Message[];
 
 /** Options for {@link createToolLifecycle} — one session per generate/stream call. */
 export interface ToolLifecycleOptions {
@@ -120,88 +147,92 @@ export interface ToolLifecycleOptions {
    * pre-session dialects (resume replays use the full core profile in both
    * regimes).
    */
-  readonly regime: 'core' | 'sdk'
+  readonly regime: "core" | "sdk";
   /** The resolved prompt — tools, toolMiddleware, `_skillSession`, and memory bindings are read internally. */
-  readonly resolved: ResolvedPrompt
+  readonly resolved: ResolvedPrompt;
   /** Per-call additions (highest precedence), straight from generate/stream opts. */
   readonly call?: {
-    readonly tools?: Record<string, unknown>
-    readonly toolMiddleware?: ToolMiddleware | readonly ToolMiddleware[]
-    readonly toolApproval?: ToolApprovalMap
-    readonly toolsContext?: Readonly<Record<string, unknown>>
-    readonly runtimeContext?: unknown
-  }
+    readonly tools?: Record<string, unknown>;
+    readonly toolMiddleware?: ToolMiddleware | readonly ToolMiddleware[];
+    readonly toolApproval?: ToolApprovalMap;
+    readonly toolsContext?: Readonly<Record<string, unknown>>;
+    readonly runtimeContext?: unknown;
+  };
   /** Identity threaded into spans, hooks, and memory capture. */
-  readonly promptId: string | undefined
-  readonly input?: Record<string, unknown>
+  readonly promptId: string | undefined;
+  readonly input?: Record<string, unknown>;
   /** Structured timeout budgets for tool execution in this session. */
-  readonly timeout?: TimeoutOptions
+  readonly timeout?: TimeoutOptions;
   /**
    * Dialect-owned re-resolution closure: how to resolve the prompt again
    * after `LoadSkill` activates a skill. The session owns everything else
    * about the skill round. When omitted, `applySkillLoads()` is inert.
    */
-  readonly reresolve?: (skillSession: SkillActivationSession) => Promise<ResolvedPrompt>
+  readonly reresolve?: (
+    skillSession: SkillActivationSession,
+  ) => Promise<ResolvedPrompt>;
   /**
    * Provider message-shape for a tool round (from `AdapterSpec`). Core
    * regime; the sdk regime always uses the canonical default.
    */
-  readonly appendToolRound?: AppendToolRound
+  readonly appendToolRound?: AppendToolRound;
   /** Provider-specific JSON Schema sanitization (from `AdapterSpec`). Core regime. */
-  readonly sanitizeToolSchema?: (schema: Record<string, unknown>) => Record<string, unknown>
+  readonly sanitizeToolSchema?: (
+    schema: Record<string, unknown>,
+  ) => Record<string, unknown>;
   /** Determinism seam for golden transcript tests. @defaultValue `Date.now` */
-  readonly now?: () => number
+  readonly now?: () => number;
   /** Determinism seam for golden transcript tests. @defaultValue crypto random */
-  readonly createApprovalToken?: () => string
+  readonly createApprovalToken?: () => string;
 }
 
 /** Outcome of {@link ToolLifecycle.resume}. */
 export interface ToolResumeOutcome {
   /** History with the synthetic tool round appended (unchanged when nothing replayed). */
-  readonly messages: Message[]
+  readonly messages: Message[];
   /** How many decided calls were replayed through the gates. */
-  readonly replayed: number
+  readonly replayed: number;
 }
 
 /** Outcome of {@link ToolLifecycle.executeRound}. */
 export type ToolRoundOutcome =
   | {
-      readonly kind: 'completed'
-      readonly results: readonly ToolResultEntry[]
+      readonly kind: "completed";
+      readonly results: readonly ToolResultEntry[];
       /** History with the tool round appended via the appendToolRound strategy. */
-      readonly messages: Message[]
+      readonly messages: Message[];
     }
   | {
-      readonly kind: 'suspended'
+      readonly kind: "suspended";
       /** First call that required approval. */
-      readonly request: ApprovalRequestInfo
+      readonly request: ApprovalRequestInfo;
       /** Siblings settled before suspension — already executed, side effects included. */
-      readonly settled: readonly ToolResultEntry[]
+      readonly settled: readonly ToolResultEntry[];
       /**
        * History with the approval-request message appended, followed by one
        * tool message per settled sibling (their side effects happened — the
        * model must hear about them, and their presence keeps `resume()`
        * from replaying them). Persist as-is.
        */
-      readonly messages: Message[]
-    }
+      readonly messages: Message[];
+    };
 
 /** A skill amendment reported by {@link ToolLifecycle.applySkillLoads}. */
 export interface SkillAmendment {
   /** The re-resolved system prompt with loaded skill instructions appended. */
-  readonly system: string | undefined
+  readonly system: string | undefined;
   /** The re-resolved system blocks. */
-  readonly systemBlocks: readonly SystemBlock[] | undefined
+  readonly systemBlocks: readonly SystemBlock[] | undefined;
   /** Always `true` — `LoadSkill` never consumes loop budget. */
-  readonly refundStep: true
+  readonly refundStep: true;
 }
 
 /** A sealed SDK suspension from {@link ToolLifecycle.suspend}. */
 export interface SuspendedRound {
   /** History ending in the approval-request message(s) — persist as-is. */
-  readonly messages: Message[]
+  readonly messages: Message[];
   /** The minted approval requests, one per pending call. */
-  readonly requests: readonly ApprovalRequestInfo[]
+  readonly requests: readonly ApprovalRequestInfo[];
 }
 
 /**
@@ -211,45 +242,61 @@ export interface SuspendedRound {
  * the push regime, so `executeRound()` is what emits them.)
  */
 export type ToolProtocolEvent =
-  | { readonly t: 'prepare'; readonly tools: number; readonly middleware: number }
-  | { readonly t: 'decision.notify'; readonly decisions: number }
-  | { readonly t: 'resume'; readonly replayed: number }
   | {
-      readonly t: 'gate'
-      readonly toolCallId: string
-      readonly toolName: string
-      readonly verdict: 'execute' | 'denied' | 'suspend' | 'not-found'
-      readonly origin: 'live' | 'replay'
+      readonly t: "prepare";
+      readonly tools: number;
+      readonly middleware: number;
+    }
+  | { readonly t: "decision.notify"; readonly decisions: number }
+  | { readonly t: "resume"; readonly replayed: number }
+  | {
+      readonly t: "gate";
+      readonly toolCallId: string;
+      readonly toolName: string;
+      readonly verdict: "execute" | "denied" | "suspend" | "not-found";
+      readonly origin: "live" | "replay";
     }
   | {
-      readonly t: 'approval.policy'
-      readonly toolCallId: string
-      readonly toolName: string
-      readonly policy: 'always' | 'never' | 'function'
-      readonly result: 'approve' | 'suspend'
-      readonly layer?: 'call' | 'prompt' | 'context'
-      readonly key?: string
-      readonly owner?: string
+      readonly t: "approval.policy";
+      readonly toolCallId: string;
+      readonly toolName: string;
+      readonly policy: "always" | "never" | "function";
+      readonly result: "approve" | "suspend";
+      readonly layer?: "call" | "prompt" | "context";
+      readonly key?: string;
+      readonly owner?: string;
     }
-  | { readonly t: 'execute.settle'; readonly toolCallId: string; readonly outcome: 'ok' | 'error' }
-  | { readonly t: 'suspend.mint'; readonly toolCallId: string; readonly approvalId: string }
-  | { readonly t: 'skill.load'; readonly skillId: string }
-  | { readonly t: 'round'; readonly settled: number; readonly suspended: number }
-  | { readonly t: 'memory.capture'; readonly bindings: number }
+  | {
+      readonly t: "execute.settle";
+      readonly toolCallId: string;
+      readonly outcome: "ok" | "error";
+    }
+  | {
+      readonly t: "suspend.mint";
+      readonly toolCallId: string;
+      readonly approvalId: string;
+    }
+  | { readonly t: "skill.load"; readonly skillId: string }
+  | {
+      readonly t: "round";
+      readonly settled: number;
+      readonly suspended: number;
+    }
+  | { readonly t: "memory.capture"; readonly bindings: number };
 
 /**
  * A per-call tool-lifecycle session. Create with {@link createToolLifecycle}.
  */
 export interface ToolLifecycle {
   /** False when no tools apply — all methods become no-op passthroughs. */
-  readonly enabled: boolean
+  readonly enabled: boolean;
 
   /**
    * SDK regime: the merged → middleware-wrapped → instrumented tool map to
    * hand to the SDK. Rebuilt (and approval-middleware re-notified) after a
    * skill amendment. `undefined` in the core regime or when no tools apply.
    */
-  readonly tools: Record<string, unknown> | undefined
+  readonly tools: Record<string, unknown> | undefined;
 
   /**
    * Core regime: the canonical, schema-sanitized descriptor array for the
@@ -257,23 +304,27 @@ export interface ToolLifecycle {
    * keeping a dialect-local copy. `undefined` in the sdk regime or when no
    * tools apply.
    */
-  readonly descriptors: readonly ToolDescriptor[] | undefined
+  readonly descriptors: readonly ToolDescriptor[] | undefined;
 
   /**
    * SDK regime: evaluate the effective approval policy for one tool call.
    * Core regime uses the same logic inside `executeRound()`.
    */
   requiresApproval(
-    toolCall: { readonly id: string; readonly name: string; readonly args: unknown },
+    toolCall: {
+      readonly id: string;
+      readonly name: string;
+      readonly args: unknown;
+    },
     messages: readonly Message[],
-  ): Promise<boolean>
+  ): Promise<boolean>;
 
   /**
    * Fire approvalMiddleware `onApproved`/`onDenied` callbacks for decisions
    * found in history, exactly once. Stream paths call this alone; generate
    * paths get it implicitly via `resume()`.
    */
-  notifyDecisions(messages: readonly Message[] | undefined): Promise<void>
+  notifyDecisions(messages: readonly Message[] | undefined): Promise<void>;
 
   /**
    * Resume protocol — once before the first provider call. Finds approval
@@ -283,7 +334,7 @@ export interface ToolLifecycle {
    * denied calls as execution-denied outputs, and returns history with the
    * synthetic tool round appended. Idempotent over the same history.
    */
-  resume(messages: readonly Message[]): Promise<ToolResumeOutcome>
+  resume(messages: readonly Message[]): Promise<ToolResumeOutcome>;
 
   /**
    * Core regime only — one full round for the calls the dialect extracted:
@@ -292,7 +343,10 @@ export interface ToolLifecycle {
    * approval policy and returns the minted request + suspension message.
    * @throws in the `'sdk'` regime (the SDK owns the loop — RFC #28).
    */
-  executeRound(response: AdapterResponse, messages: readonly Message[]): Promise<ToolRoundOutcome>
+  executeRound(
+    response: AdapterResponse,
+    messages: readonly Message[],
+  ): Promise<ToolRoundOutcome>;
 
   /**
    * Skill-load side effect, shared verbatim by both regimes: detect
@@ -304,7 +358,7 @@ export interface ToolLifecycle {
    */
   applySkillLoads(
     toolCalls: ReadonlyArray<{ readonly name: string; readonly args: unknown }>,
-  ): Promise<SkillAmendment | undefined>
+  ): Promise<SkillAmendment | undefined>;
 
   /**
    * SDK regime: seal an SDK-reported suspension — mint approval ids and
@@ -312,10 +366,14 @@ export interface ToolLifecycle {
    * call, emit request observations and `onToolApprovalRequest` hooks.
    */
   suspend(
-    pending: ReadonlyArray<{ readonly toolCallId: string; readonly toolName: string; readonly input: JsonValue }>,
+    pending: ReadonlyArray<{
+      readonly toolCallId: string;
+      readonly toolName: string;
+      readonly input: JsonValue;
+    }>,
     assistantResponse: AdapterResponse,
     messages: readonly Message[],
-  ): SuspendedRound
+  ): SuspendedRound;
 
   /**
    * Post-generation memory capture: fan the completed turn into every
@@ -324,13 +382,17 @@ export interface ToolLifecycle {
    * dialect keeping a `memoryCaptured` flag. No-op without bindings.
    */
   captureTurn(args: {
-    readonly messages: readonly Message[]
-    readonly assistantText?: string
-    readonly toolCalls?: ReadonlyArray<{ readonly id?: string; readonly name: string; readonly args: unknown }>
-  }): Promise<void>
+    readonly messages: readonly Message[];
+    readonly assistantText?: string;
+    readonly toolCalls?: ReadonlyArray<{
+      readonly id?: string;
+      readonly name: string;
+      readonly args: unknown;
+    }>;
+  }): Promise<void>;
 
   /** Protocol transcript — see {@link ToolProtocolEvent}. */
-  readonly transcript: readonly ToolProtocolEvent[]
+  readonly transcript: readonly ToolProtocolEvent[];
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -344,45 +406,58 @@ export interface ToolLifecycle {
  */
 function convertTools(
   resolvedTools: Record<string, unknown> | undefined,
-  sanitizeToolSchema?: (schema: Record<string, unknown>) => Record<string, unknown>,
+  sanitizeToolSchema?: (
+    schema: Record<string, unknown>,
+  ) => Record<string, unknown>,
 ): ToolDescriptor[] | undefined {
-  if (!resolvedTools || Object.keys(resolvedTools).length === 0) return undefined
+  if (!resolvedTools || Object.keys(resolvedTools).length === 0)
+    return undefined;
 
   return Object.entries(resolvedTools).map(([name, tool]) => {
     const t = tool as {
-      description?: string
-      parameters?: unknown
-      execute?: ToolDescriptor['execute']
-      toModelOutput?: ToolDescriptor['toModelOutput']
-    }
+      description?: string;
+      parameters?: unknown;
+      execute?: ToolDescriptor["execute"];
+      toModelOutput?: ToolDescriptor["toModelOutput"];
+    };
 
     // Convert Zod schema to JSON Schema if present
-    let parameters: Record<string, unknown> = {}
-    if (t.parameters && typeof t.parameters === 'object' && '_zod' in (t.parameters as object)) {
+    let parameters: Record<string, unknown> = {};
+    if (
+      t.parameters &&
+      typeof t.parameters === "object" &&
+      "_zod" in (t.parameters as object)
+    ) {
       // Zod v4 schema -- use z.toJSONSchema(). Fail closed: an empty `{}`
       // fallback would advertise a wrong tool contract to the provider.
       try {
-        parameters = z.toJSONSchema(t.parameters as z.ZodType) as Record<string, unknown>
+        parameters = z.toJSONSchema(t.parameters as z.ZodType) as Record<
+          string,
+          unknown
+        >;
       } catch (error) {
-        throw new Error(`Tool "${name}": failed to convert Zod parameters to JSON Schema`, { cause: error })
+        throw new Error(
+          `Tool "${name}": failed to convert Zod parameters to JSON Schema`,
+          { cause: error },
+        );
       }
-    } else if (t.parameters && typeof t.parameters === 'object') {
-      parameters = t.parameters as Record<string, unknown>
+    } else if (t.parameters && typeof t.parameters === "object") {
+      parameters = t.parameters as Record<string, unknown>;
     }
 
     // Apply provider-specific schema sanitization
     if (sanitizeToolSchema) {
-      parameters = sanitizeToolSchema(parameters)
+      parameters = sanitizeToolSchema(parameters);
     }
 
     return {
       name,
-      description: t.description ?? '',
+      description: t.description ?? "",
       parameters,
       execute: t.execute ?? (() => undefined),
       toModelOutput: t.toModelOutput,
-    }
-  })
+    };
+  });
 }
 
 /**
@@ -391,12 +466,15 @@ function convertTools(
  * these three members, so structural typing is sufficient.
  */
 interface SessionToolShape {
-  readonly execute?: (input: unknown, options: ToolLifecycleExecutionOptions) => unknown
+  readonly execute?: (
+    input: unknown,
+    options: ToolLifecycleExecutionOptions,
+  ) => unknown;
   readonly toModelOutput?: (args: {
-    toolCallId: string
-    input: Record<string, unknown>
-    output: unknown
-  }) => ToolModelOutput | Promise<ToolModelOutput>
+    toolCallId: string;
+    input: Record<string, unknown>;
+    output: unknown;
+  }) => ToolModelOutput | Promise<ToolModelOutput>;
 }
 
 /** The canonical tool-round message shape (the sdk regime's only shape). */
@@ -408,26 +486,30 @@ function canonicalAppendToolRound(
   return [
     ...messages,
     {
-      role: 'assistant' as const,
+      role: "assistant" as const,
       content: responseContent(response),
-      ...(response.toolCalls ? { metadata: { toolCalls: response.toolCalls } } : {}),
+      ...(response.toolCalls
+        ? { metadata: { toolCalls: response.toolCalls } }
+        : {}),
     },
     ...results.map(canonicalToolResultMessage),
-  ]
+  ];
 }
 
 function canonicalToolResultMessage(result: ToolResultEntry): Message {
   return {
-    role: 'tool' as const,
+    role: "tool" as const,
     content: result.content,
     metadata: {
       toolCallId: result.toolCallId,
       toolName: result.name,
       modelOutput: result.modelOutput,
-      ...(result.modelOutputError !== undefined ? { modelOutputError: result.modelOutputError } : {}),
+      ...(result.modelOutputError !== undefined
+        ? { modelOutputError: result.modelOutputError }
+        : {}),
       ...(result.isError !== undefined ? { isError: result.isError } : {}),
     },
-  }
+  };
 }
 
 /**
@@ -438,15 +520,15 @@ function canonicalToolResultMessage(result: ToolResultEntry): Message {
  * hand-orchestration.
  */
 type ToolGateVerdict =
-  | { readonly kind: 'execute'; readonly run: () => Promise<ToolResultEntry> }
-  | { readonly kind: 'denied'; readonly settled: ToolResultEntry }
-  | { readonly kind: 'suspend'; readonly request: ApprovalRequestInfo }
-  | { readonly kind: 'not-found'; readonly settled: ToolResultEntry }
+  | { readonly kind: "execute"; readonly run: () => Promise<ToolResultEntry> }
+  | { readonly kind: "denied"; readonly settled: ToolResultEntry }
+  | { readonly kind: "suspend"; readonly request: ApprovalRequestInfo }
+  | { readonly kind: "not-found"; readonly settled: ToolResultEntry };
 
 interface SessionToolCall {
-  readonly id: string
-  readonly name: string
-  readonly args: unknown
+  readonly id: string;
+  readonly name: string;
+  readonly args: unknown;
 }
 
 function normalizeMiddlewareChain(
@@ -454,9 +536,38 @@ function normalizeMiddlewareChain(
   callMiddleware: ToolMiddleware | readonly ToolMiddleware[] | undefined,
 ): readonly ToolMiddleware[] {
   return [
-    ...(Array.isArray(promptMiddleware) ? promptMiddleware : promptMiddleware ? [promptMiddleware] : []),
-    ...(Array.isArray(callMiddleware) ? callMiddleware : callMiddleware ? [callMiddleware] : []),
-  ]
+    ...(Array.isArray(promptMiddleware)
+      ? promptMiddleware
+      : promptMiddleware
+        ? [promptMiddleware]
+        : []),
+    ...(Array.isArray(callMiddleware)
+      ? callMiddleware
+      : callMiddleware
+        ? [callMiddleware]
+        : []),
+  ];
+}
+
+/** Preserve discovered origin when an explicit Quality mock shadows execution. */
+function inheritMockSourceProvenance(
+  resolvedTools: Readonly<Record<string, unknown>> | undefined,
+  callTools: Readonly<Record<string, unknown>> | undefined,
+): Record<string, unknown> | undefined {
+  if (!callTools) return undefined;
+  const inherited = { ...callTools };
+  for (const [name, callTool] of Object.entries(inherited)) {
+    if (
+      !isToolExecutionMock(callTool) ||
+      typeof callTool !== "object" ||
+      callTool === null
+    ) {
+      continue;
+    }
+    const provenance = toolSourceProvenance(resolvedTools?.[name]);
+    if (provenance) withToolSourceProvenance(callTool, provenance);
+  }
+  return inherited;
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -469,71 +580,100 @@ function normalizeMiddlewareChain(
  * Reads runtime instrumentation hooks once at creation and snapshots them,
  * so a mid-call `setHooks()` cannot half-instrument a run.
  */
-export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycle {
-  const transcript: ToolProtocolEvent[] = []
+export function createToolLifecycle(
+  options: ToolLifecycleOptions,
+): ToolLifecycle {
+  const transcript: ToolProtocolEvent[] = [];
 
   // ── Preparation: merge precedence + middleware chain order ──────
-  let wrappedTools: Record<string, unknown> = {}
-  let armedTools: Record<string, unknown> | undefined
-  let descriptors: ToolDescriptor[] | undefined
-  let middlewareCount = 0
-  let skillSession: SkillActivationSession | undefined
-  let approvalDeclarations: readonly ApprovalDeclaration[] = []
-  let toolContexts: ResolvedToolsContext = {}
+  let wrappedTools: Record<string, unknown> = {};
+  let armedTools: Record<string, unknown> | undefined;
+  let descriptors: ToolDescriptor[] | undefined;
+  let middlewareCount = 0;
+  let skillSession: SkillActivationSession | undefined;
+  let approvalDeclarations: readonly ApprovalDeclaration[] = [];
+  let toolContexts: ResolvedToolsContext = {};
 
   function arm(resolved: ResolvedPrompt): void {
-    skillSession = readSkillActivationSession(resolved)
+    skillSession = readSkillActivationSession(resolved);
     // Recomputed per arm: a re-resolved prompt (skill load) can contribute
     // a different middleware chain, and rebuilt tools must wear it.
-    const middlewareChain = normalizeMiddlewareChain(resolved.toolMiddleware, options.call?.toolMiddleware)
-    const middleware = middlewareChain.length > 0 ? middlewareChain : undefined
-    middlewareCount = middlewareChain.length
-    const merged = { ...(resolved.tools ?? {}), ...(options.call?.tools ?? {}) }
-    wrappedTools = applyToolMiddleware(merged, middleware)
-    toolContexts = resolveToolsContext(wrappedTools, options.call?.toolsContext)
+    const middlewareChain = normalizeMiddlewareChain(
+      resolved.toolMiddleware,
+      options.call?.toolMiddleware,
+    );
+    const middleware = middlewareChain.length > 0 ? middlewareChain : undefined;
+    middlewareCount = middlewareChain.length;
+    const callTools = inheritMockSourceProvenance(
+      resolved.tools,
+      options.call?.tools,
+    );
+    const merged = { ...(resolved.tools ?? {}), ...(callTools ?? {}) };
+    wrappedTools = applyToolMiddleware(merged, middleware);
+    toolContexts = resolveToolsContext(
+      wrappedTools,
+      options.call?.toolsContext,
+    );
     approvalDeclarations = [
       ...(resolved.toolApprovalDeclarations ?? []),
       ...callApprovalDeclarations(options.call?.toolApproval),
-    ]
-    if (options.regime === 'core') {
-      descriptors = convertTools(wrappedTools, options.sanitizeToolSchema)
+    ];
+    if (options.regime === "core") {
+      descriptors = convertTools(wrappedTools, options.sanitizeToolSchema);
     } else {
-      const keys = Object.keys(wrappedTools)
+      const keys = Object.keys(wrappedTools);
       armedTools =
         keys.length > 0
-          ? instrumentToolSet(withToolLifecycleExecutionOptions(wrappedTools, executionOptionsForSdkTool))
-          : undefined
+          ? instrumentToolSet(
+              withToolLifecycleExecutionOptions(
+                wrappedTools,
+                executionOptionsForSdkTool,
+              ),
+            )
+          : undefined;
     }
   }
 
-  arm(options.resolved)
+  arm(options.resolved);
 
-  const enabled = Object.keys(wrappedTools).length > 0
-  transcript.push({ t: 'prepare', tools: Object.keys(wrappedTools).length, middleware: middlewareCount })
+  const enabled = Object.keys(wrappedTools).length > 0;
+  transcript.push({
+    t: "prepare",
+    tools: Object.keys(wrappedTools).length,
+    middleware: middlewareCount,
+  });
 
-  let memoryCaptured = false
-  let lastMessages: readonly Message[] | undefined
-  const settledToolResults = new Map<string, ToolResultEntry>()
-  const pendingApprovalRequirements = new Map<string, ToolApprovalRequirement>()
-  const announcedSkills = new Set<string>()
+  let memoryCaptured = false;
+  let lastMessages: readonly Message[] | undefined;
+  const settledToolResults = new Map<string, ToolResultEntry>();
+  const pendingApprovalRequirements = new Map<
+    string,
+    ToolApprovalRequirement
+  >();
+  const announcedSkills = new Set<string>();
 
   // Snapshot runtime hooks once — a mid-call setHooks() cannot
   // half-instrument this run (same rule as createSafety).
-  const now = options.now ?? (() => Date.now())
-  const mintToken = options.createApprovalToken ?? defaultCreateApprovalToken
-  const appendRound: AppendToolRound = options.appendToolRound ?? canonicalAppendToolRound
+  const now = options.now ?? (() => Date.now());
+  const mintToken = options.createApprovalToken ?? defaultCreateApprovalToken;
+  const appendRound: AppendToolRound =
+    options.appendToolRound ?? canonicalAppendToolRound;
 
-  const currentTraceId = (): string | undefined => getExecutionContext()?.traceId ?? observe.captureContext()?.traceId
+  const currentTraceId = (): string | undefined =>
+    getExecutionContext()?.traceId ?? observe.captureContext()?.traceId;
 
-  function executionOptionsFor(toolCall: SessionToolCall, messages: readonly Message[]): ToolLifecycleExecutionOptions {
+  function executionOptionsFor(
+    toolCall: SessionToolCall,
+    messages: readonly Message[],
+  ): ToolLifecycleExecutionOptions {
     const base = {
       toolCallId: toolCall.id,
       messages,
       runtimeContext: options.call?.runtimeContext,
-    }
+    };
     return Object.prototype.hasOwnProperty.call(toolContexts, toolCall.name)
       ? { ...base, context: toolContexts[toolCall.name] }
-      : base
+      : base;
   }
 
   function executionOptionsForSdkTool(
@@ -544,39 +684,53 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
       ...(rawOptions ?? {}),
       toolCallId: rawOptions?.toolCallId ?? `tc_${now()}`,
       runtimeContext: options.call?.runtimeContext,
-    }
+    };
     return Object.prototype.hasOwnProperty.call(toolContexts, toolName)
       ? { ...base, context: toolContexts[toolName] }
-      : base
+      : base;
   }
 
   // ── The kernel: gate → execute → settle ─────────────────────────
 
-  function settleNotFound(toolCall: SessionToolCall, traceId: string | undefined): ToolResultEntry {
-    const startedAt = now()
-    const span = openToolCallSpan(toolCall.name, toolCall.id, toolCall.args)
+  function settleNotFound(
+    toolCall: SessionToolCall,
+    traceId: string | undefined,
+  ): ToolResultEntry {
+    const startedAt = now();
+    const span = openToolCallSpan(toolCall.name, toolCall.id, toolCall.args);
     const modelOutput: ToolModelOutput = {
-      type: 'error-json',
+      type: "error-json",
       value: { error: `Tool "${toolCall.name}" not found` },
-    }
-    const modelOutputSize = measureModelOutput(modelOutput)
+    };
+    const modelOutputSize = measureModelOutput(modelOutput);
     span.withContext(() => {
-      emitToolArgsArtifact(span.spanId, toolCall.name, toolCall.id, toolCall.args)
-      emitToolResultArtifact(span.spanId, toolCall.name, toolCall.id, modelOutput, {
-        resultKind: 'model',
-        modelOutputType: modelOutput.type,
-        modelOutputSize,
-        isError: true,
-        errorKind: 'tool_not_found',
-      })
-    })
+      emitToolArgsArtifact(
+        span.spanId,
+        toolCall.name,
+        toolCall.id,
+        toolCall.args,
+      );
+      emitToolResultArtifact(
+        span.spanId,
+        toolCall.name,
+        toolCall.id,
+        modelOutput,
+        {
+          resultKind: "model",
+          modelOutputType: modelOutput.type,
+          modelOutputSize,
+          isError: true,
+          errorKind: "tool_not_found",
+        },
+      );
+    });
     span.error(new Error(`Tool "${toolCall.name}" not found`), {
       isError: true,
-      phase: 'tool.lookup',
-      errorKind: 'tool_not_found',
+      phase: "tool.lookup",
+      errorKind: "tool_not_found",
       outputSize: 0,
       modelOutputSize,
-    })
+    });
     return {
       toolCallId: toolCall.id,
       name: toolCall.name,
@@ -586,26 +740,26 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
       modelOutputSize,
       modelOutputError: `Tool "${toolCall.name}" not found`,
       isError: true,
-    }
+    };
   }
 
   function settleInvalidApproval(toolCall: {
-    readonly id: string
-    readonly name: string
-    readonly args: unknown
-    readonly approvalId: string
-    readonly message: string
+    readonly id: string;
+    readonly name: string;
+    readonly args: unknown;
+    readonly approvalId: string;
+    readonly message: string;
   }): ToolResultEntry {
     const modelOutput: ToolModelOutput = {
-      type: 'error-json',
+      type: "error-json",
       value: {
-        status: 'error',
-        reason: 'approval-invalid',
+        status: "error",
+        reason: "approval-invalid",
         message: toolCall.message,
       },
-    }
-    const modelOutputSize = measureModelOutput(modelOutput)
-    emitToolApprovalObservation('token-mismatch', {
+    };
+    const modelOutputSize = measureModelOutput(modelOutput);
+    emitToolApprovalObservation("token-mismatch", {
       approvalId: toolCall.approvalId,
       toolCallId: toolCall.id,
       toolName: toolCall.name,
@@ -613,14 +767,14 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
       modelOutput,
       modelOutputSize,
       error: new Error(toolCall.message),
-    })
+    });
     transcript.push({
-      t: 'gate',
+      t: "gate",
       toolCallId: toolCall.id,
       toolName: toolCall.name,
-      verdict: 'denied',
-      origin: 'replay',
-    })
+      verdict: "denied",
+      origin: "replay",
+    });
     return {
       toolCallId: toolCall.id,
       name: toolCall.name,
@@ -630,12 +784,12 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
       modelOutputSize,
       modelOutputError: toolCall.message,
       isError: true,
-    }
+    };
   }
 
   function rememberToolResults(results: readonly ToolResultEntry[]): void {
     for (const result of results) {
-      settledToolResults.set(result.toolCallId, result)
+      settledToolResults.set(result.toolCallId, result);
     }
   }
 
@@ -645,19 +799,33 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
     messages: readonly Message[],
     traceId: string | undefined,
   ): Promise<ToolResultEntry> {
-    const startedAt = now()
-    const span = openToolCallSpan(toolCall.name, toolCall.id, toolCall.args)
+    const startedAt = now();
+    const provenance = toolCallProvenance(tool);
+    const span = openToolCallSpan(
+      toolCall.name,
+      toolCall.id,
+      toolCall.args,
+      provenance?.definitionRefs,
+      provenance,
+    );
     try {
-      span.withContext(() => emitToolArgsArtifact(span.spanId, toolCall.name, toolCall.id, toolCall.args))
-      const execute = tool.execute ?? (() => undefined)
-      const toolOptions = executionOptionsFor(toolCall, messages)
+      span.withContext(() =>
+        emitToolArgsArtifact(
+          span.spanId,
+          toolCall.name,
+          toolCall.id,
+          toolCall.args,
+        ),
+      );
+      const execute = tool.execute ?? (() => undefined);
+      const toolOptions = executionOptionsFor(toolCall, messages);
       const result = await span.withContext(() =>
         withBudget(() => Promise.resolve(execute(toolCall.args, toolOptions)), {
-          budget: 'tool',
+          budget: "tool",
           limitMs: toolBudgetMs(options.timeout, toolCall.name),
           toolName: toolCall.name,
         }),
-      )
+      );
       const modelOutput = await span.withContext(() =>
         createToolModelOutput({
           tool,
@@ -665,24 +833,38 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
           input: normalizeToolInput(toolCall.args),
           output: result,
         }),
-      )
-      const outputSize = measureUnknown(result)
-      const modelOutputSize = measureModelOutput(modelOutput)
-      const content = renderToolModelOutput(modelOutput)
+      );
+      const outputSize = measureUnknown(result);
+      const modelOutputSize = measureModelOutput(modelOutput);
+      const content = renderToolModelOutput(modelOutput);
       span.withContext(() => {
-        emitToolResultArtifact(span.spanId, toolCall.name, toolCall.id, result, {
-          resultKind: 'raw',
-          outputSize,
-          isError: false,
-        })
-        emitToolResultArtifact(span.spanId, toolCall.name, toolCall.id, modelOutput, {
-          resultKind: 'model',
-          modelOutputType: modelOutput.type,
-          modelOutputSize,
-          tokenSavingsEstimate: Math.max(0, outputSize - modelOutputSize),
-          isError: false,
-        })
-      })
+        emitToolResultArtifact(
+          span.spanId,
+          toolCall.name,
+          toolCall.id,
+          result,
+          {
+            resultKind: "raw",
+            outputSize,
+            isError: false,
+          },
+          sourceResultPreview(provenance, result),
+        );
+        emitToolResultArtifact(
+          span.spanId,
+          toolCall.name,
+          toolCall.id,
+          modelOutput,
+          {
+            resultKind: "model",
+            modelOutputType: modelOutput.type,
+            modelOutputSize,
+            tokenSavingsEstimate: Math.max(0, outputSize - modelOutputSize),
+            isError: false,
+          },
+          sourceResultPreview(provenance, modelOutput),
+        );
+      });
       span.end({
         attributes: {
           isError: false,
@@ -691,8 +873,12 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
           modelOutputType: modelOutput.type,
           tokenSavingsEstimate: Math.max(0, outputSize - modelOutputSize),
         },
-      })
-      transcript.push({ t: 'execute.settle', toolCallId: toolCall.id, outcome: 'ok' })
+      });
+      transcript.push({
+        t: "execute.settle",
+        toolCallId: toolCall.id,
+        outcome: "ok",
+      });
       return {
         toolCallId: toolCall.id,
         name: toolCall.name,
@@ -701,41 +887,54 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
         content,
         outputSize,
         modelOutputSize,
-      }
+      };
     } catch (err) {
       if (err instanceof TimeoutError) {
         span.error(err, {
+          ...provenance?.errorAttributes,
           isError: true,
-          phase: 'tool.execute',
-          errorKind: 'timeout',
-        })
-        throw err
+          phase: "tool.execute",
+          errorKind: "timeout",
+        });
+        throw err;
       }
       const modelOutput: ToolModelOutput = {
-        type: 'error-json',
+        type: "error-json",
         value: { error: err instanceof Error ? err.message : String(err) },
-      }
-      const modelOutputSize = measureModelOutput(modelOutput)
+      };
+      const modelOutputSize = measureModelOutput(modelOutput);
       span.withContext(() => {
-        emitToolResultArtifact(span.spanId, toolCall.name, toolCall.id, modelOutput, {
-          resultKind: 'model',
-          modelOutputType: modelOutput.type,
-          modelOutputSize,
-          tokenSavingsEstimate: 0,
-          isError: true,
-          errorKind: 'execute_error',
-        })
-      })
+        emitToolResultArtifact(
+          span.spanId,
+          toolCall.name,
+          toolCall.id,
+          modelOutput,
+          {
+            resultKind: "model",
+            modelOutputType: modelOutput.type,
+            modelOutputSize,
+            tokenSavingsEstimate: 0,
+            isError: true,
+            errorKind: "execute_error",
+          },
+          sourceResultPreview(provenance, modelOutput),
+        );
+      });
       span.error(err, {
+        ...provenance?.errorAttributes,
         isError: true,
-        phase: 'tool.execute',
-        errorKind: 'execute_error',
+        phase: "tool.execute",
+        errorKind: "execute_error",
         outputSize: 0,
         modelOutputSize,
         modelOutputType: modelOutput.type,
         tokenSavingsEstimate: 0,
-      })
-      transcript.push({ t: 'execute.settle', toolCallId: toolCall.id, outcome: 'error' })
+      });
+      transcript.push({
+        t: "execute.settle",
+        toolCallId: toolCall.id,
+        outcome: "error",
+      });
       return {
         toolCallId: toolCall.id,
         name: toolCall.name,
@@ -745,7 +944,7 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
         modelOutputSize,
         modelOutputError: err instanceof Error ? err.message : String(err),
         isError: true,
-      }
+      };
     }
   }
 
@@ -754,7 +953,7 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
     messages: readonly Message[],
     notifyRequest = true,
   ): Promise<ToolApprovalRequirement> {
-    const tool = wrappedTools[toolCall.name]
+    const tool = wrappedTools[toolCall.name];
     return requiresToolApproval({
       tool,
       toolCall,
@@ -762,19 +961,20 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
       runtimeContext: options.call?.runtimeContext,
       toolContext: toolContexts[toolCall.name],
       declarations: approvalDeclarations,
-      onPolicyTrace: (trace) => transcript.push({ t: 'approval.policy', ...trace }),
+      onPolicyTrace: (trace) =>
+        transcript.push({ t: "approval.policy", ...trace }),
       notifyRequest,
-    })
+    });
   }
 
   function approvalRequest(
-    toolCall: Pick<SessionToolCall, 'id' | 'name' | 'args'>,
+    toolCall: Pick<SessionToolCall, "id" | "name" | "args">,
     requirement: ToolApprovalRequirement,
   ): ApprovalRequestInfo {
-    const approvalId = createApprovalId(toolCall.id)
-    const input = toJsonValue(toolCall.args)
-    const approvalToken = mintToken()
-    const toolIdentity = toolSourceReplayIdentity(wrappedTools[toolCall.name])
+    const approvalId = createApprovalId(toolCall.id);
+    const input = toJsonValue(toolCall.args);
+    const approvalToken = mintToken();
+    const toolIdentity = toolSourceReplayIdentity(wrappedTools[toolCall.name]);
     return {
       approvalId,
       toolCallId: toolCall.id,
@@ -784,14 +984,19 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
       ...(toolIdentity !== undefined
         ? {
             replay: createApprovalReplayProvenance(
-              { approvalId, toolCallId: toolCall.id, toolName: toolCall.name, input },
+              {
+                approvalId,
+                toolCallId: toolCall.id,
+                toolName: toolCall.name,
+                input,
+              },
               approvalToken,
               toolIdentity,
               requirement.policies,
             ),
           }
         : {}),
-    }
+    };
   }
 
   /**
@@ -802,23 +1007,25 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
   async function gate(
     toolCall: SessionToolCall,
     messages: readonly Message[],
-    origin: 'live' | 'replay',
+    origin: "live" | "replay",
   ): Promise<ToolGateVerdict> {
-    const traceId = currentTraceId()
-    const approvalId = createApprovalId(toolCall.id)
-    const request = findToolApprovalRequests(messages).find((candidate) => candidate.approvalId === approvalId)
-    let decision: ReturnType<typeof findValidApprovalDecision>
+    const traceId = currentTraceId();
+    const approvalId = createApprovalId(toolCall.id);
+    const request = findToolApprovalRequests(messages).find(
+      (candidate) => candidate.approvalId === approvalId,
+    );
+    let decision: ReturnType<typeof findValidApprovalDecision>;
     try {
-      decision = findValidApprovalDecision(messages, request)
+      decision = findValidApprovalDecision(messages, request);
     } catch (error) {
-      emitToolApprovalObservation('token-mismatch', {
+      emitToolApprovalObservation("token-mismatch", {
         approvalId,
         toolCallId: toolCall.id,
         toolName: toolCall.name,
         input: toolCall.args,
         error,
-      })
-      throw error
+      });
+      throw error;
     }
     if (
       decision &&
@@ -830,35 +1037,49 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
           toolName: request.toolName,
           input: toJsonValue(request.input),
         },
-        request.approvalToken ?? '',
+        request.approvalToken ?? "",
         request.replay,
       )
     ) {
-      return changedApprovalVerdict(toolCall, approvalId)
+      return changedApprovalVerdict(toolCall, approvalId);
     }
-    const tool = wrappedTools[toolCall.name]
-    if (!tool || typeof tool !== 'object') {
+    const tool = wrappedTools[toolCall.name];
+    if (!tool || typeof tool !== "object") {
       if (decision && request?.replay) {
-        return changedApprovalVerdict(toolCall, approvalId)
+        return changedApprovalVerdict(toolCall, approvalId);
       }
-      transcript.push({ t: 'gate', toolCallId: toolCall.id, toolName: toolCall.name, verdict: 'not-found', origin })
-      return { kind: 'not-found', settled: settleNotFound(toolCall, traceId) }
+      transcript.push({
+        t: "gate",
+        toolCallId: toolCall.id,
+        toolName: toolCall.name,
+        verdict: "not-found",
+        origin,
+      });
+      return { kind: "not-found", settled: settleNotFound(toolCall, traceId) };
     }
-    const shaped = tool as SessionToolShape
+    const shaped = tool as SessionToolShape;
 
     if (decision) {
       if (request?.replay) {
-        const currentRequirement = await approvalRequirement(toolCall, messages, false)
+        const currentRequirement = await approvalRequirement(
+          toolCall,
+          messages,
+          false,
+        );
         if (
-          !matchesApprovalReplayIdentity(request.replay, toolSourceReplayIdentity(tool), currentRequirement.policies)
+          !matchesApprovalReplayIdentity(
+            request.replay,
+            toolSourceReplayIdentity(tool),
+            currentRequirement.policies,
+          )
         ) {
-          return changedApprovalVerdict(toolCall, approvalId)
+          return changedApprovalVerdict(toolCall, approvalId);
         }
       }
       if (!decision.approved) {
-        const modelOutput = deniedToolModelOutput(decision.reason)
-        const modelOutputSize = measureModelOutput(modelOutput)
-        emitToolApprovalObservation('denied', {
+        const modelOutput = deniedToolModelOutput(decision.reason);
+        const modelOutputSize = measureModelOutput(modelOutput);
+        emitToolApprovalObservation("denied", {
           approvalId,
           toolCallId: toolCall.id,
           toolName: toolCall.name,
@@ -866,10 +1087,16 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
           reason: decision.reason,
           modelOutput,
           modelOutputSize,
-        })
-        transcript.push({ t: 'gate', toolCallId: toolCall.id, toolName: toolCall.name, verdict: 'denied', origin })
+        });
+        transcript.push({
+          t: "gate",
+          toolCallId: toolCall.id,
+          toolName: toolCall.name,
+          verdict: "denied",
+          origin,
+        });
         return {
-          kind: 'denied',
+          kind: "denied",
           settled: {
             toolCallId: toolCall.id,
             name: toolCall.name,
@@ -877,240 +1104,319 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
             content: renderToolModelOutput(modelOutput),
             outputSize: 0,
             modelOutputSize,
-            modelOutputError: decision.reason ?? 'Tool execution was denied.',
+            modelOutputError: decision.reason ?? "Tool execution was denied.",
             isError: true,
           },
-        }
+        };
       }
-      emitToolApprovalObservation('approved', {
+      emitToolApprovalObservation("approved", {
         approvalId,
         toolCallId: toolCall.id,
         toolName: toolCall.name,
         input: toolCall.args,
-      })
-      transcript.push({ t: 'gate', toolCallId: toolCall.id, toolName: toolCall.name, verdict: 'execute', origin })
-      return { kind: 'execute', run: () => runTool(toolCall, shaped, messages, traceId) }
+      });
+      transcript.push({
+        t: "gate",
+        toolCallId: toolCall.id,
+        toolName: toolCall.name,
+        verdict: "execute",
+        origin,
+      });
+      return {
+        kind: "execute",
+        run: () => runTool(toolCall, shaped, messages, traceId),
+      };
     }
 
-    const requirement = await approvalRequirement(toolCall, messages)
+    const requirement = await approvalRequirement(toolCall, messages);
     if (requirement.requiresApproval) {
-      const minted = approvalRequest(toolCall, requirement)
-      emitToolApprovalObservation('request', {
+      const minted = approvalRequest(toolCall, requirement);
+      emitToolApprovalObservation("request", {
         approvalId,
         toolCallId: toolCall.id,
         toolName: toolCall.name,
         input: toolCall.args,
-        ...(requirement.observeRequest ? { observePolicyDecision: requirement.observeRequest } : {}),
-      })
-      transcript.push({ t: 'gate', toolCallId: toolCall.id, toolName: toolCall.name, verdict: 'suspend', origin })
-      transcript.push({ t: 'suspend.mint', toolCallId: toolCall.id, approvalId })
-      return { kind: 'suspend', request: minted }
+        ...(requirement.observeRequest
+          ? { observePolicyDecision: requirement.observeRequest }
+          : {}),
+      });
+      transcript.push({
+        t: "gate",
+        toolCallId: toolCall.id,
+        toolName: toolCall.name,
+        verdict: "suspend",
+        origin,
+      });
+      transcript.push({
+        t: "suspend.mint",
+        toolCallId: toolCall.id,
+        approvalId,
+      });
+      return { kind: "suspend", request: minted };
     }
 
-    transcript.push({ t: 'gate', toolCallId: toolCall.id, toolName: toolCall.name, verdict: 'execute', origin })
-    return { kind: 'execute', run: () => runTool(toolCall, shaped, messages, traceId) }
+    transcript.push({
+      t: "gate",
+      toolCallId: toolCall.id,
+      toolName: toolCall.name,
+      verdict: "execute",
+      origin,
+    });
+    return {
+      kind: "execute",
+      run: () => runTool(toolCall, shaped, messages, traceId),
+    };
   }
 
   function changedApprovalVerdict(
     toolCall: SessionToolCall,
     approvalId: string,
-  ): Extract<ToolGateVerdict, { kind: 'denied' }> {
+  ): Extract<ToolGateVerdict, { kind: "denied" }> {
     return {
-      kind: 'denied',
+      kind: "denied",
       settled: settleInvalidApproval({
         id: toolCall.id,
         name: toolCall.name,
         args: toolCall.args,
         approvalId,
-        message: 'The approved tool request changed and was not executed. Request approval again.',
+        message:
+          "The approved tool request changed and was not executed. Request approval again.",
       }),
-    }
+    };
   }
 
   // ── Session methods ──────────────────────────────────────────────
 
-  async function notifyDecisions(messages: readonly Message[] | undefined): Promise<void> {
-    if (!enabled || !messages) return
-    lastMessages = messages
+  async function notifyDecisions(
+    messages: readonly Message[] | undefined,
+  ): Promise<void> {
+    if (!enabled || !messages) return;
+    lastMessages = messages;
     const decisions = findToolApprovalRequests(messages).filter(
-      (request) => findToolApprovalDecision(messages, request.approvalId) !== undefined,
-    ).length
-    transcript.push({ t: 'decision.notify', decisions })
-    await notifyToolApprovalResponses(wrappedTools, messages)
+      (request) =>
+        findToolApprovalDecision(messages, request.approvalId) !== undefined,
+    ).length;
+    transcript.push({ t: "decision.notify", decisions });
+    await notifyToolApprovalResponses(wrappedTools, messages);
   }
 
   return {
     enabled,
 
     get tools() {
-      return armedTools
+      return armedTools;
     },
 
     get descriptors() {
-      return descriptors
+      return descriptors;
     },
 
     requiresApproval: async (toolCall, messages) => {
-      const requirement = await approvalRequirement(toolCall, messages)
-      if (requirement.requiresApproval) pendingApprovalRequirements.set(toolCall.id, requirement)
-      return requirement.requiresApproval
+      const requirement = await approvalRequirement(toolCall, messages);
+      if (requirement.requiresApproval)
+        pendingApprovalRequirements.set(toolCall.id, requirement);
+      return requirement.requiresApproval;
     },
 
     notifyDecisions,
 
     async resume(messages) {
-      if (!enabled) return { messages: [...messages], replayed: 0 }
-      await notifyDecisions(messages)
-      const invalidApprovalCalls = findInvalidApprovalToolCalls(messages)
-      const replayCalls = findApprovedOrDeniedToolCalls(messages)
-      const replayed = invalidApprovalCalls.length + replayCalls.length
-      transcript.push({ t: 'resume', replayed })
-      if (replayed === 0) return { messages: [...messages], replayed: 0 }
+      if (!enabled) return { messages: [...messages], replayed: 0 };
+      await notifyDecisions(messages);
+      const invalidApprovalCalls = findInvalidApprovalToolCalls(messages);
+      const replayCalls = findApprovedOrDeniedToolCalls(messages);
+      const replayed = invalidApprovalCalls.length + replayCalls.length;
+      transcript.push({ t: "resume", replayed });
+      if (replayed === 0) return { messages: [...messages], replayed: 0 };
 
-      const results: ToolResultEntry[] = []
+      const results: ToolResultEntry[] = [];
       for (const toolCall of invalidApprovalCalls) {
-        results.push(settleInvalidApproval(toolCall))
+        results.push(settleInvalidApproval(toolCall));
       }
       for (const toolCall of replayCalls) {
-        const verdict = await gate(toolCall, messages, 'replay')
+        const verdict = await gate(toolCall, messages, "replay");
         // `suspend` is unreachable here: the scan only returns decided calls
         // and the gate consults the decision before approval policy.
-        if (verdict.kind === 'execute') results.push(await verdict.run())
-        else if (verdict.kind !== 'suspend') results.push(verdict.settled)
+        if (verdict.kind === "execute") results.push(await verdict.run());
+        else if (verdict.kind !== "suspend") results.push(verdict.settled);
       }
-      rememberToolResults(results)
-      const synthetic = createSyntheticToolCallResponse([...invalidApprovalCalls, ...replayCalls])
-      return { messages: appendRound([...messages], synthetic, results), replayed }
+      rememberToolResults(results);
+      const synthetic = createSyntheticToolCallResponse([
+        ...invalidApprovalCalls,
+        ...replayCalls,
+      ]);
+      return {
+        messages: appendRound([...messages], synthetic, results),
+        replayed,
+      };
     },
 
     async executeRound(response, messages) {
-      if (options.regime === 'sdk') {
+      if (options.regime === "sdk") {
         throw new Error(
-          'executeRound() is unavailable in the sdk regime — the SDK owns the tool loop (RFC #28). Hand lifecycle.tools to the SDK instead.',
-        )
+          "executeRound() is unavailable in the sdk regime — the SDK owns the tool loop (RFC #28). Hand lifecycle.tools to the SDK instead.",
+        );
       }
       // NOT gated on `enabled`: a model can hallucinate a tool call against
       // a tool-less prompt, and the round must settle it as tool_not_found
       // so the model hears the failure.
-      const toolCalls = response.toolCalls ?? []
+      const toolCalls = response.toolCalls ?? [];
       if (toolCalls.length === 0) {
-        return { kind: 'completed', results: [], messages: [...messages] }
+        return { kind: "completed", results: [], messages: [...messages] };
       }
-      emitToolRequestArtifacts(toolCalls)
+      emitToolRequestArtifacts(toolCalls);
 
-      const results: ToolResultEntry[] = []
+      const results: ToolResultEntry[] = [];
       for (const toolCall of toolCalls) {
-        const verdict = await gate(toolCall, messages, 'live')
-        if (verdict.kind === 'suspend') {
-          rememberToolResults(results)
-          transcript.push({ t: 'round', settled: results.length, suspended: 1 })
+        const verdict = await gate(toolCall, messages, "live");
+        if (verdict.kind === "suspend") {
+          rememberToolResults(results);
+          transcript.push({
+            t: "round",
+            settled: results.length,
+            suspended: 1,
+          });
           // Settled siblings already executed — persist their results after
           // the approval-request message (which carries the assistant turn
           // and tool calls) so the model hears about the side effects and
           // resume() treats them as completed.
-          const siblingMessages = results.map(canonicalToolResultMessage)
+          const siblingMessages = results.map(canonicalToolResultMessage);
           return {
-            kind: 'suspended',
+            kind: "suspended",
             request: verdict.request,
             settled: results,
-            messages: [...messages, createApprovalRequestMessage(response, verdict.request), ...siblingMessages],
-          }
+            messages: [
+              ...messages,
+              createApprovalRequestMessage(response, verdict.request),
+              ...siblingMessages,
+            ],
+          };
         }
-        results.push(verdict.kind === 'execute' ? await verdict.run() : verdict.settled)
+        results.push(
+          verdict.kind === "execute" ? await verdict.run() : verdict.settled,
+        );
       }
-      transcript.push({ t: 'round', settled: results.length, suspended: 0 })
-      rememberToolResults(results)
-      return { kind: 'completed', results, messages: appendRound([...messages], response, results) }
+      transcript.push({ t: "round", settled: results.length, suspended: 0 });
+      rememberToolResults(results);
+      return {
+        kind: "completed",
+        results,
+        messages: appendRound([...messages], response, results),
+      };
     },
 
     async applySkillLoads(toolCalls) {
-      if (!skillSession || !options.reresolve) return undefined
-      const loadCalls = toolCalls.filter((toolCall) => toolCall.name === LOAD_SKILL_TOOL_NAME)
-      if (loadCalls.length === 0) return undefined
+      if (!skillSession || !options.reresolve) return undefined;
+      const loadCalls = toolCalls.filter(
+        (toolCall) => toolCall.name === LOAD_SKILL_TOOL_NAME,
+      );
+      if (loadCalls.length === 0) return undefined;
 
       // Announce newly active skills exactly once per session.
-      const newSkills = skillSession.newlyActivated()
+      const newSkills = skillSession.newlyActivated();
       for (const loadedSkill of newSkills) {
-        if (announcedSkills.has(loadedSkill.id)) continue
-        announcedSkills.add(loadedSkill.id)
-        transcript.push({ t: 'skill.load', skillId: loadedSkill.id })
+        if (announcedSkills.has(loadedSkill.id)) continue;
+        announcedSkills.add(loadedSkill.id);
+        transcript.push({ t: "skill.load", skillId: loadedSkill.id });
       }
 
       // Re-resolve — activated skills now contribute their full instructions.
-      const reResolved = await options.reresolve(skillSession)
-      const updatedSystem = reResolved.system ?? ''
+      const reResolved = await options.reresolve(skillSession);
+      const updatedSystem = reResolved.system ?? "";
       for (const loadedSkill of newSkills) {
       }
-      skillSession.markInjected(newSkills.map((entry) => entry.id))
+      skillSession.markInjected(newSkills.map((entry) => entry.id));
 
       // Re-arm the surface and re-notify approval middleware against the
       // REBUILT tool instances (decision dedup keeps this idempotent).
-      arm(reResolved)
-      await notifyToolApprovalResponses(wrappedTools, lastMessages)
+      arm(reResolved);
+      await notifyToolApprovalResponses(wrappedTools, lastMessages);
 
-      return { system: updatedSystem, systemBlocks: reResolved.systemBlocks, refundStep: true }
+      return {
+        system: updatedSystem,
+        systemBlocks: reResolved.systemBlocks,
+        refundStep: true,
+      };
     },
 
     suspend(pending, assistantResponse, messages) {
-      if (options.regime === 'core') {
+      if (options.regime === "core") {
         throw new Error(
-          'suspend() is unavailable in the core regime — executeRound() returns suspension as a value instead.',
-        )
+          "suspend() is unavailable in the core regime — executeRound() returns suspension as a value instead.",
+        );
       }
-      const traceId = currentTraceId()
-      const requestObservers = new Map<string, () => void>()
+      const traceId = currentTraceId();
+      const requestObservers = new Map<string, () => void>();
       const requests: ApprovalRequestInfo[] = pending.map((pendingCall) => {
-        const requirement = pendingApprovalRequirements.get(pendingCall.toolCallId) ?? {
+        const requirement = pendingApprovalRequirements.get(
+          pendingCall.toolCallId,
+        ) ?? {
           requiresApproval: true,
           policies: [],
-        }
-        pendingApprovalRequirements.delete(pendingCall.toolCallId)
+        };
+        pendingApprovalRequirements.delete(pendingCall.toolCallId);
         if (requirement.observeRequest) {
-          requestObservers.set(pendingCall.toolCallId, requirement.observeRequest)
+          requestObservers.set(
+            pendingCall.toolCallId,
+            requirement.observeRequest,
+          );
         }
         return approvalRequest(
-          { id: pendingCall.toolCallId, name: pendingCall.toolName, args: pendingCall.input },
+          {
+            id: pendingCall.toolCallId,
+            name: pendingCall.toolName,
+            args: pendingCall.input,
+          },
           requirement,
-        )
-      })
+        );
+      });
 
-      let sealedMessages = [...messages]
+      let sealedMessages = [...messages];
       for (const request of requests) {
-        const observePolicyDecision = requestObservers.get(request.toolCallId)
-        emitToolApprovalObservation('request', {
+        const observePolicyDecision = requestObservers.get(request.toolCallId);
+        emitToolApprovalObservation("request", {
           approvalId: request.approvalId,
           toolCallId: request.toolCallId,
           toolName: request.toolName,
           input: request.input,
           ...(observePolicyDecision ? { observePolicyDecision } : {}),
-        })
-        transcript.push({ t: 'suspend.mint', toolCallId: request.toolCallId, approvalId: request.approvalId })
-        sealedMessages = [...sealedMessages, createApprovalRequestMessage(assistantResponse, request)]
+        });
+        transcript.push({
+          t: "suspend.mint",
+          toolCallId: request.toolCallId,
+          approvalId: request.approvalId,
+        });
+        sealedMessages = [
+          ...sealedMessages,
+          createApprovalRequestMessage(assistantResponse, request),
+        ];
       }
-      return { messages: sealedMessages, requests }
+      return { messages: sealedMessages, requests };
     },
 
     // Keyed on memory bindings, not `enabled` — a prompt can bind memory
     // without declaring any tools.
     async captureTurn(args) {
-      if (memoryCaptured) return
-      memoryCaptured = true
-      const bindings = options.resolved.memoryBindings?.length ?? 0
-      if (bindings === 0) return
-      transcript.push({ t: 'memory.capture', bindings })
+      if (memoryCaptured) return;
+      memoryCaptured = true;
+      const bindings = options.resolved.memoryBindings?.length ?? 0;
+      if (bindings === 0) return;
+      transcript.push({ t: "memory.capture", bindings });
       const toolCalls = enrichToolCallsFromMessages(
-        enrichToolCallsWithResults(args.toolCalls, [...settledToolResults.values()]),
+        enrichToolCallsWithResults(args.toolCalls, [
+          ...settledToolResults.values(),
+        ]),
         args.messages,
-      )
+      );
       await captureMemoryTurn(options.resolved, {
         promptId: options.promptId,
         input: options.input ?? {},
         messages: [...args.messages],
         assistantText: args.assistantText,
         toolCalls,
-      })
+      });
     },
 
     transcript,
-  }
+  };
 }

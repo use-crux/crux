@@ -131,14 +131,25 @@ export type {
 export { CONTRIBUTOR } from "./resolver/contract";
 export {
   TOOL_SOURCE,
+  TOOL_SOURCE_PROVENANCE,
+  TOOL_SOURCE_QUALITY_IDENTITY,
+  TOOL_SOURCE_SESSION_PROVENANCE,
   ToolSourceCollisionError,
   ToolSourceUnsupportedError,
   isToolSource,
+  toolSourceProvenance,
+  toolSourceQualityIdentity,
+  toolSourceSessionProvenance,
+  withToolSourceProvenance,
+  withToolSourceSessionProvenance,
 } from "./tools/tool-source";
 export type {
   ToolSource,
   ToolSourceMaterializationContext,
   ToolSourceMaterializer,
+  ToolSourceProvenance,
+  ToolSourceQualityIdentity,
+  ToolSourceSessionProvenance,
   ToolSourceSession,
 } from "./tools/tool-source";
 export type {

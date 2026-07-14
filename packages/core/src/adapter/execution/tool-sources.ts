@@ -6,9 +6,11 @@
  */
 
 import type { ResolvedPrompt } from "../../resolver/types";
+import { observe } from "../../observability";
 import {
   ToolSourceCollisionError,
   ToolSourceUnsupportedError,
+  toolSourceSessionProvenance,
   type ToolSourceMaterializer,
   type ToolSourceSession,
 } from "../../tools/tool-source";
@@ -16,10 +18,12 @@ import {
 /** A resolved prompt augmented with materialized tools and owned cleanup. */
 export interface MaterializedToolSources {
   readonly resolved: ResolvedPrompt;
+  /** Run subsequent provider/tool work under the source invocation context. */
+  withContext<T>(fn: () => T | Promise<T>): Promise<T>;
   close(): Promise<void>;
 }
 
-/** Internal cleanup failure evidence used until canonical MCP records land. */
+/** Compatibility diagnostic for cleanup failures in lifecycle tests. */
 export interface ToolSourceCleanupFailure {
   readonly sourceId: string;
   readonly kind: "error" | "timeout";
@@ -32,10 +36,9 @@ const TOOL_SOURCE_CLEANUP_TIMEOUT_MS = 5_000;
 let cleanupFailureHook: CleanupFailureHook | undefined;
 
 /**
- * Install the temporary internal cleanup evidence hook used by lifecycle tests.
- *
- * Phase 8 replaces this seam with canonical observability records. The
- * returned disposer restores the previous hook so tests cannot leak state.
+ * Install the internal cleanup diagnostic hook used by lifecycle tests.
+ * Canonical source cleanup evidence is emitted independently. The returned
+ * disposer restores the previous hook so tests cannot leak state.
  *
  * @internal
  */
@@ -65,7 +68,11 @@ export async function materializeToolSources(options: {
 }): Promise<MaterializedToolSources> {
   const sources = options.resolved.toolSources ?? [];
   if (sources.length === 0) {
-    return { resolved: options.resolved, close: async () => {} };
+    return {
+      resolved: options.resolved,
+      withContext: async (fn) => fn(),
+      close: async () => {},
+    };
   }
 
   if (!options.materialize) {
@@ -80,25 +87,40 @@ export async function materializeToolSources(options: {
   const owners = new Map<string, string>(
     Object.keys(tools).map((name) => [name, "prompt-authored tools"] as const),
   );
+  const ambientContext = observe.captureContext();
+  const invocationRun = ambientContext
+    ? undefined
+    : observe.openRun({
+        name: `${options.dialect} tool sources`,
+        rootPrimitive: "run",
+        attributes: {
+          dialect: options.dialect,
+          toolSourceCount: sources.length,
+        },
+      });
+  const invocationContext = ambientContext ?? invocationRun?.captureContext();
 
   try {
-    for (const source of sources) {
-      const session = await options.materialize(source, {
-        runtimeContext: options.runtimeContext,
-        abortSignal: options.abortSignal,
-      });
-      sessions.push({ sourceId: source.id, session });
-      for (const [name, tool] of Object.entries(session.tools)) {
-        const previousOwner = owners.get(name);
-        if (previousOwner) {
-          throw new ToolSourceCollisionError(name, source.id, previousOwner);
+    await observe.withContext(invocationContext, async () => {
+      for (const source of sources) {
+        const session = await options.materialize!(source, {
+          runtimeContext: options.runtimeContext,
+          abortSignal: options.abortSignal,
+        });
+        sessions.push({ sourceId: source.id, session });
+        for (const [name, tool] of Object.entries(session.tools)) {
+          const previousOwner = owners.get(name);
+          if (previousOwner) {
+            throw new ToolSourceCollisionError(name, source.id, previousOwner);
+          }
+          tools[name] = tool;
+          owners.set(name, `tool source "${source.id}"`);
         }
-        tools[name] = tool;
-        owners.set(name, `tool source "${source.id}"`);
       }
-    }
+    });
   } catch (error) {
-    await closeReverse(sessions);
+    await observe.withContext(invocationContext, () => closeReverse(sessions));
+    invocationRun?.error(error);
     throw error;
   }
 
@@ -108,10 +130,16 @@ export async function materializeToolSources(options: {
       ...options.resolved,
       ...(Object.keys(tools).length > 0 ? { tools } : {}),
     },
+    async withContext<T>(fn: () => T | Promise<T>): Promise<T> {
+      return await observe.withContext(invocationContext, fn);
+    },
     async close() {
       if (closed) return;
       closed = true;
-      await closeReverse(sessions);
+      await observe.withContext(invocationContext, () =>
+        closeReverse(sessions),
+      );
+      invocationRun?.end();
     },
   };
 }
@@ -125,16 +153,52 @@ async function closeReverse(
   for (let index = sessions.length - 1; index >= 0; index -= 1) {
     const entry = sessions[index];
     if (!entry) continue;
+    const startedAt = Date.now();
     try {
       await closeBounded(entry.session);
+      emitCleanupEvent(entry.session, "ok", Date.now() - startedAt);
     } catch (error) {
+      const outcome =
+        error instanceof ToolSourceCleanupTimeoutError ? "timeout" : "error";
+      emitCleanupEvent(entry.session, outcome, Date.now() - startedAt, error);
       reportCleanupFailure({
         sourceId: entry.sourceId,
-        kind:
-          error instanceof ToolSourceCleanupTimeoutError ? "timeout" : "error",
+        kind: outcome === "timeout" ? "timeout" : "error",
         ...(error instanceof ToolSourceCleanupTimeoutError ? {} : { error }),
       });
     }
+  }
+}
+
+function emitCleanupEvent(
+  session: ToolSourceSession,
+  outcome: "ok" | "error" | "timeout",
+  durationMs: number,
+  error?: unknown,
+): void {
+  const provenance = toolSourceSessionProvenance(session)?.cleanupEvent;
+  if (!provenance) return;
+  try {
+    observe.withContext(provenance.context, () => {
+      observe.event({
+        name: provenance.name,
+        attributes: {
+          ...provenance.attributes,
+          outcome,
+          durationMs,
+          ...(outcome === "error"
+            ? {
+                errorCategory:
+                  provenance.errorCategory?.(error) ?? "cleanup-error",
+              }
+            : outcome === "timeout"
+              ? { errorCategory: "timeout" }
+              : {}),
+        },
+      });
+    });
+  } catch {
+    // Cleanup evidence is fail-open and never changes invocation control flow.
   }
 }
 

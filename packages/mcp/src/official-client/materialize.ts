@@ -17,6 +17,14 @@ import {
 } from "./errors";
 import { createOfficialClientTransport } from "./transport";
 import type { McpToolSourceSession } from "./types";
+import {
+  mcpPreparationObservation,
+  openMcpConnectSpan,
+  openMcpDiscoverSpan,
+  setMcpTransportAttributes,
+  withMcpSessionProvenance,
+  withMcpToolProvenance,
+} from "../observability";
 
 /**
  * Materialize one MCP source through the official TypeScript client.
@@ -37,24 +45,34 @@ export async function materializeMcpToolSource(
   context: ToolSourceMaterializationContext,
 ): Promise<McpToolSourceSession> {
   const mcpSource = assertMcpSource(source);
+  const connect = openMcpConnectSpan(mcpSource.id, "official-client");
   let config: McpTransportConfig;
   try {
     config = await resolveTransport(mcpSource, context);
   } catch (error) {
-    throw new McpToolSourceError(
+    const failure = new McpToolSourceError(
       "transport-configuration",
       { serverId: mcpSource.id },
       error,
     );
+    connect.error(failure, { failurePhase: failure.phase });
+    throw failure;
   }
   const errorContext = mcpTransportErrorContext(mcpSource.id, config);
+  setMcpTransportAttributes(connect, errorContext);
 
   const client = new Client({ name: "@use-crux/mcp", version: "0.5.0" });
   let transport: ReturnType<typeof createOfficialClientTransport>;
   try {
     transport = createOfficialClientTransport(config);
   } catch (error) {
-    throw mcpToolSourceError("transport-configuration", errorContext, error);
+    const failure = mcpToolSourceError(
+      "transport-configuration",
+      errorContext,
+      error,
+    );
+    connect.error(failure, { failurePhase: failure.phase });
+    throw failure;
   }
 
   try {
@@ -64,8 +82,34 @@ export async function materializeMcpToolSource(
         context.abortSignal ? { signal: context.abortSignal } : undefined,
       );
     } catch (error) {
-      throw mcpToolSourceError("connect", errorContext, error);
+      const failure = mcpToolSourceError("connect", errorContext, error);
+      connect.error(failure, { failurePhase: failure.phase });
+      throw failure;
     }
+    const server = client.getServerVersion();
+    connect.end({
+      attributes: {
+        ...("protocolVersion" in transport &&
+        typeof transport.protocolVersion === "string"
+          ? { protocolVersion: transport.protocolVersion }
+          : {}),
+        ...(server?.name ? { serverName: server.name } : {}),
+        ...(server?.version ? { serverVersion: server.version } : {}),
+      },
+    });
+    const discover = openMcpDiscoverSpan(
+      connect,
+      mcpSource.id,
+      "official-client",
+      errorContext,
+    );
+    const preparation = mcpPreparationObservation({
+      sourceId: mcpSource.id,
+      implementation: "official-client",
+      connect,
+      discover,
+      transport: errorContext,
+    });
     let discovered: Awaited<ReturnType<typeof discoverMcpTools>>;
     try {
       discovered = await discoverMcpTools(
@@ -75,21 +119,40 @@ export async function materializeMcpToolSource(
         context.abortSignal,
       );
     } catch (error) {
-      throw mcpToolSourceError("discover", errorContext, error);
+      const failure = mcpToolSourceError("discover", errorContext, error);
+      discover.error(failure, { failurePhase: failure.phase });
+      throw failure;
     }
-    let closed = false;
-    return {
-      ...discovered,
-      async close() {
-        if (closed) return;
-        closed = true;
-        try {
-          await client.close();
-        } catch (error) {
-          throw mcpToolSourceError("close", errorContext, error);
-        }
+    discover.end({
+      attributes: {
+        ...discovered.observation,
+        exposedToolCount: discovered.discovery.tools.length,
+        toolListFingerprint: discovered.discovery.toolListFingerprint,
       },
-    };
+    });
+    const tools = Object.fromEntries(
+      Object.entries(discovered.tools).map(([name, tool]) => [
+        name,
+        withMcpToolProvenance(tool, tool.mcp, preparation),
+      ]),
+    );
+    let closed = false;
+    return withMcpSessionProvenance(
+      {
+        tools,
+        discovery: discovered.discovery,
+        async close() {
+          if (closed) return;
+          closed = true;
+          try {
+            await client.close();
+          } catch (error) {
+            throw mcpToolSourceError("close", errorContext, error);
+          }
+        },
+      },
+      preparation,
+    );
   } catch (error) {
     await client.close().catch(() => {});
     throw error;

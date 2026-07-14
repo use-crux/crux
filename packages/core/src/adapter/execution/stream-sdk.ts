@@ -183,54 +183,56 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
 
   let handle: ExecutorStreamHandle<TRawStream>;
   try {
-    handle = await orchestrateStream<
-      Record<string, unknown>,
-      ExecutorStreamHandle<TRawStream>
-    >(
-      {
-        promptId: prompt.id,
-        promptConfig:
-          prompt.config ?? ({} as NonNullable<typeof prompt.config>),
-        preparedArgs: {
-          model: modelInfo.modelId,
-          system: resolved.system,
-          systemBlocks: resolved.systemBlocks,
-          prompt: promptText,
-          messages,
-          settings: mappedSettings,
-          schema: resolved.schema,
-          tools,
+    handle = await sourceSession.withContext(async () =>
+      orchestrateStream<
+        Record<string, unknown>,
+        ExecutorStreamHandle<TRawStream>
+      >(
+        {
+          promptId: prompt.id,
+          promptConfig:
+            prompt.config ?? ({} as NonNullable<typeof prompt.config>),
+          preparedArgs: {
+            model: modelInfo.modelId,
+            system: resolved.system,
+            systemBlocks: resolved.systemBlocks,
+            prompt: promptText,
+            messages,
+            settings: mappedSettings,
+            schema: resolved.schema,
+            tools,
+            input: args.input ?? {},
+            ...(await inspectForDevtools(prompt, resolveOpts, tools)),
+          },
           input: args.input ?? {},
-          ...(await inspectForDevtools(prompt, resolveOpts, tools)),
+          provider: modelInfo.provider || dialect.id,
+          model: args.model,
+          traceModel: modelInfo.modelId || undefined,
+          resolved,
+          outputMode: resolved.schema ? "object" : "text",
+          timeout: args.timeout,
+          ...(dialect.replayStream
+            ? {
+                createCachedStreamResult: (cached: {
+                  text?: string;
+                  object?: unknown;
+                  meta?: Record<string, unknown>;
+                }) =>
+                  dialect.replayStream!(cached) as unknown as MiddlewareResult,
+              }
+            : {}),
         },
-        input: args.input ?? {},
-        provider: modelInfo.provider || dialect.id,
-        model: args.model,
-        traceModel: modelInfo.modelId || undefined,
-        resolved,
-        outputMode: resolved.schema ? "object" : "text",
-        timeout: args.timeout,
-        ...(dialect.replayStream
-          ? {
-              createCachedStreamResult: (cached: {
-                text?: string;
-                object?: unknown;
-                meta?: Record<string, unknown>;
-              }) =>
-                dialect.replayStream!(cached) as unknown as MiddlewareResult,
-            }
-          : {}),
-      },
-      async () => {
-        emitInputTokenEstimate({
-          messages: providerMessages ?? [],
-          provider: modelInfo.provider,
-          model: modelInfo.modelId,
-          media: dialect.media,
-          tokenBudget: args.tokenBudget,
-        });
-        return dialect.runStream(request);
-      },
+        async () => {
+          emitInputTokenEstimate({
+            messages: providerMessages ?? [],
+            provider: modelInfo.provider,
+            model: modelInfo.modelId,
+            media: dialect.media,
+            tokenBudget: args.tokenBudget,
+          });
+          return dialect.runStream(request);
+        },
+      ),
     );
   } catch (error) {
     stepBudget.dispose();

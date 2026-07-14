@@ -69,10 +69,15 @@ describe("first-party shared static index fixtures", () => {
       coverage.identities.map((identity) => identity.extractor).sort(),
     ).toEqual(coveredExtractors);
     for (const identity of coverage.identities) {
-      expect(identity.extension).toBe(
+      const media =
         identity.extractor === "media.operation" ||
-          identity.extractor === "ingest.source"
+        identity.extractor === "ingest.source";
+      const mcp = identity.extractor === "mcp.server";
+      expect(identity.extension).toBe(
+        media
           ? "@use-crux/indexer/crux-core-media"
+          : mcp
+            ? "@use-crux/indexer/crux-core-mcp"
           : "@use-crux/indexer/crux-core",
       );
       expect(identity.family).toBe(identity.extractor);
@@ -85,9 +90,10 @@ describe("first-party shared static index fixtures", () => {
         identity.parityFixtures.negative,
         `${identity.extractor} negative parity fixture`,
       ).toBe(
-        identity.extractor === "media.operation" ||
-          identity.extractor === "ingest.source"
+        media
           ? "media-native-static.test.ts"
+          : mcp
+            ? "mcp-native-static.test.ts"
           : "first-party-native-negative-fixtures.test.ts",
       );
       for (const fixtureClass of coverage.requiredFixtureClasses) {

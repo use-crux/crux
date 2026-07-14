@@ -18,10 +18,12 @@ import type {
   McpDiscoveryMetadata,
   McpMaterializedTool,
 } from "./types";
+import type { McpDiscoveryObservation } from "../observability";
 
 export interface DiscoveredTools {
   readonly tools: Readonly<Record<string, McpMaterializedTool>>;
   readonly discovery: McpDiscoveryMetadata;
+  readonly observation: McpDiscoveryObservation;
 }
 
 export interface McpDiscoverySource {
@@ -85,6 +87,13 @@ export async function discoverMcpTools(
       toolListFingerprint:
         projected[0]?.metadata.toolListFingerprint ?? canonicalFingerprint([]),
       tools: projected.map(({ metadata }) => metadata),
+    },
+    observation: {
+      pageCount,
+      discoveredToolCount: remoteTools.length,
+      selectedToolCount: projected.length,
+      allowedToolCount: projected.length,
+      deniedToolCount: remoteTools.length - projected.length,
     },
   };
 }
@@ -168,11 +177,16 @@ function materializedTool(
       async execute(input, options) {
         const signal = options.abortSignal ?? materializationSignal;
         const validatedInput = await parameters.parseAsync(input);
-        const result = await client.callTool(
-          { name: tool.name, arguments: validatedInput },
-          undefined,
-          signal ? { signal } : undefined,
-        );
+        let result: Awaited<ReturnType<Client["callTool"]>>;
+        try {
+          result = await client.callTool(
+            { name: tool.name, arguments: validatedInput },
+            undefined,
+            signal ? { signal } : undefined,
+          );
+        } catch (error) {
+          throw mcpToolSourceError("execute", errorContext, error);
+        }
         if (outputSchema && result.structuredContent === undefined) {
           if (!result.isError) {
             throw new TypeError(

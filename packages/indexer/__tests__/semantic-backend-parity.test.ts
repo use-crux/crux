@@ -49,9 +49,12 @@ describe('semantic backend parity', () => {
       expect(normalizedFacts(nativePatch.facts)).toEqual(
         normalizedFacts(typescriptPatch.facts),
       )
-      if (fixture.name === 'authored-media-shared-analyzer') {
+      if (
+        fixture.name === 'authored-media-shared-analyzer' ||
+        fixture.name === 'authored-mcp-shared-analyzer'
+      ) {
         expect(JSON.stringify(nativePatch.facts)).not.toMatch(
-          /private-file-id|private-ref|SECRET_LANGUAGE/,
+          /private-file-id|private-ref|SECRET_LANGUAGE|SECRET_MCP_PARITY_TOKEN/,
         )
       }
     }, 20_000)

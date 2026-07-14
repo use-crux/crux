@@ -74,6 +74,7 @@ export type SemanticDefinitionKind = Extract<
   | "context"
   | "injectable"
   | "tool"
+  | "mcp.server"
   | "agent"
   | "flow"
   | "composition.parallel"

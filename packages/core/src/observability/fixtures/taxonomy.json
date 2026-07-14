@@ -35,6 +35,8 @@
     "handoff.prepare": "handoff",
     "indexing.pipeline": "indexing",
     "ingest.parse": "ingest",
+    "mcp.connect": "mcp",
+    "mcp.discover": "mcp",
     "media.describe": "media",
     "media.generate_image": "media",
     "media.generate_speech": "media",
