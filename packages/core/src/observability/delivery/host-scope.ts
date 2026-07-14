@@ -12,24 +12,38 @@
  * @module
  */
 
-import { createContextStorageResolver, runWithSynchronousContext } from '../../shared/context-storage'
+import { createAsyncScopeFacet } from '../../async-scope'
+import { asyncScopeStorageAvailable } from '../../async-scope/internal/carrier'
 import type { CruxHostLifecycle } from '../../runtime/api/host-lifecycle'
 
-const contextStorage = createContextStorageResolver<CruxHostLifecycle>()
-const fallbackStack: CruxHostLifecycle[] = []
+const hostLifecycleScope = createAsyncScopeFacet<CruxHostLifecycle>(
+  'core.observability-host-lifecycle',
+)
 
 /** Run `fn` with a host lifecycle scoped to its call tree. */
 export function runWithHostLifecycle<R>(lifecycle: CruxHostLifecycle, fn: () => R): R {
-  const activeStorage = contextStorage.getStorage()
-  if (activeStorage) return activeStorage.run(lifecycle, fn)
-  return runWithSynchronousContext(fallbackStack, lifecycle, fn, fallbackAsyncHostLifecycleError)
+  const supportsAsyncPropagation = asyncScopeStorageAvailable()
+  return hostLifecycleScope.run(lifecycle, () => {
+    const result = fn()
+    if (!supportsAsyncPropagation && isPromiseLike(result)) {
+      void Promise.resolve(result).catch(() => undefined)
+      return Promise.reject(fallbackAsyncHostLifecycleError()) as R
+    }
+    return result
+  })
 }
 
 /** The innermost host lifecycle bound by {@link runWithHostLifecycle}, if any. */
 export function activeHostLifecycle(): CruxHostLifecycle | undefined {
-  const activeStorage = contextStorage.getStorage()
-  if (activeStorage) return activeStorage.get()
-  return fallbackStack[fallbackStack.length - 1]
+  return hostLifecycleScope.current()
+}
+
+function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
+  return (
+    value !== null &&
+    (typeof value === 'object' || typeof value === 'function') &&
+    typeof (value as { then?: unknown }).then === 'function'
+  )
 }
 
 function fallbackAsyncHostLifecycleError(): Error {

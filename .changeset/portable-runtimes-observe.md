@@ -1,5 +1,5 @@
 ---
-'@use-crux/ai': minor
+'@use-crux/ai': major
 '@use-crux/core': patch
 '@use-crux/convex': patch
 '@use-crux/next': patch
@@ -17,3 +17,7 @@ import `transcribe` or `createAiSdkTranscribe` from the new
 `@use-crux/ai/transcription/node` subpath to retain the bounded, DNS-pinned
 download behavior. Portable data-URL transcription no longer relies on the
 Node `Buffer` global.
+
+Unify observability and host-lifecycle async scoping on Core's canonical
+carrier so no-AsyncLocalStorage runtimes retain synchronous fallback behavior
+while unsafe asynchronous ambient host scopes fail closed.

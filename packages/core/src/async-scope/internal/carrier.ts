@@ -28,6 +28,7 @@ let storageInitialized = false;
 let synchronousFrame: AsyncScopeFrame | undefined;
 let configuredResolver: AsyncLocalStorageResolver | undefined;
 const capturedFrames = new WeakMap<object, AsyncScopeFrame | undefined>();
+const registeredFacets = new Set<string>();
 
 /** Opaque handle for one immutable carrier frame. */
 export interface CapturedAsyncScope {
@@ -37,6 +38,7 @@ export interface CapturedAsyncScope {
 /** Create an opaque typed view over one private carrier slot. */
 export function createFacet<T>(debugName: string): AsyncScopeFacet<T> {
   const key = Symbol(debugName);
+  registeredFacets.add(debugName);
 
   return Object.freeze({
     current(): T | undefined {
@@ -46,6 +48,11 @@ export function createFacet<T>(debugName: string): AsyncScopeFacet<T> {
       return runWithFrame({ parent: currentFrame(), key, value }, callback);
     },
   });
+}
+
+/** Return stable diagnostics names for every facet created in this module graph. @internal */
+export function registeredAsyncScopeFacetsForTesting(): readonly string[] {
+  return [...registeredFacets].sort();
 }
 
 function valueFor<T>(key: symbol): T | undefined {
@@ -79,7 +86,9 @@ function getStorage(): AsyncLocalStorageLike<AsyncScopeFrame> | null {
 
   storageInitialized = true;
   try {
-    const AsyncLocalStorage = (configuredResolver ?? resolveAsyncLocalStorage)();
+    const AsyncLocalStorage = (
+      configuredResolver ?? resolveAsyncLocalStorage
+    )();
     storage = AsyncLocalStorage
       ? new AsyncLocalStorage<AsyncScopeFrame>()
       : null;
