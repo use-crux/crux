@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -95,6 +96,15 @@ func TestRunnerReportsWarmCacheHit(t *testing.T) {
 	}
 }
 
+func TestRunnerRejectsCacheIntegrityFailureBeforeCompiling(t *testing.T) {
+	indexer := &parityIndexer{root: t.TempDir()}
+	_, err := New(indexer, failingCacheStore{err: errors.New("cache integrity mismatch")}).
+		Run(context.Background(), Options{Root: indexer.root, ProjectID: "fixture"})
+	if err == nil || !strings.Contains(err.Error(), "cache integrity mismatch") {
+		t.Fatalf("error = %v, want cache integrity failure", err)
+	}
+}
+
 type parityIndexer struct {
 	root        string
 	semanticErr error
@@ -154,6 +164,18 @@ func (snapshotCacheStore) CommitPhase(context.Context, projectindex.IndexFactTra
 }
 func (s snapshotCacheStore) ProjectSnapshot(context.Context, string, string) (store.IndexData, bool, error) {
 	return s.index, true, nil
+}
+
+type failingCacheStore struct{ err error }
+
+func (s failingCacheStore) LoadSnapshot(context.Context, string, string, time.Time) (store.IndexData, bool, error) {
+	return store.IndexData{}, false, s.err
+}
+func (failingCacheStore) CommitPhase(context.Context, projectindex.IndexFactTransaction) error {
+	return nil
+}
+func (failingCacheStore) ProjectSnapshot(context.Context, string, string) (store.IndexData, bool, error) {
+	return store.IndexData{}, false, nil
 }
 
 func normalizedIndex(t *testing.T, index store.IndexData) any {

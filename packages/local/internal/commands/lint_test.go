@@ -85,6 +85,16 @@ func TestLintGateFailuresRejectsUnknownSeverity(t *testing.T) {
 	}
 }
 
+func TestLintGateFailuresTreatsNoneAsExplicitNoGate(t *testing.T) {
+	failures, err := lintGateFailures([]api.IndexLintFinding{{Severity: "error"}}, "none")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(failures) != 0 {
+		t.Fatalf("failures = %#v, want none", failures)
+	}
+}
+
 func TestSortLintFindingsOrdersBySeverityCategoryRuleAndTarget(t *testing.T) {
 	findings := []api.IndexLintFinding{
 		{ID: "info", Severity: "info", Category: "eval", RuleID: "b", PrimaryDefinitionID: "z"},

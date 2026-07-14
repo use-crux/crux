@@ -13,11 +13,12 @@ import (
 // intentionally best-effort so read-only or fake project roots do not fail an
 // otherwise valid source indexing run.
 type Cache struct {
-	facts FactStore
+	facts  FactStore
+	strict bool
 }
 
-func NewCache(facts FactStore) *Cache {
-	return &Cache{facts: facts}
+func NewCache(facts FactStore, strict ...bool) *Cache {
+	return &Cache{facts: facts, strict: len(strict) > 0 && strict[0]}
 }
 
 func (c *Cache) SetFactStore(facts FactStore) {
@@ -27,15 +28,18 @@ func (c *Cache) SetFactStore(facts FactStore) {
 	c.facts = facts
 }
 
-func (c *Cache) LoadSnapshot(ctx context.Context, root, projectName string, loadedAt time.Time) (store.IndexData, bool) {
+func (c *Cache) LoadSnapshot(ctx context.Context, root, projectName string, loadedAt time.Time) (store.IndexData, bool, error) {
 	if c == nil || c.facts == nil {
-		return store.IndexData{}, false
+		return store.IndexData{}, false, nil
 	}
 	index, ok, err := c.facts.LoadSnapshot(ctx, root, projectName, loadedAt)
 	if err != nil {
-		return store.IndexData{}, false
+		if c.strict {
+			return store.IndexData{}, false, err
+		}
+		return store.IndexData{}, false, nil
 	}
-	return index, ok
+	return index, ok, nil
 }
 
 func (c *Cache) Commit(ctx context.Context, patch IndexPatch) error {
@@ -43,6 +47,9 @@ func (c *Cache) Commit(ctx context.Context, patch IndexPatch) error {
 		return nil
 	}
 	if err := c.facts.CommitPhase(ctx, FactTransactionFromPatch(patch)); err != nil {
+		if c.strict {
+			return err
+		}
 		return nil
 	}
 	return nil

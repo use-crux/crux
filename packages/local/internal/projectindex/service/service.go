@@ -27,6 +27,9 @@ type Options struct {
 	Indexer ASTClient
 	// FactStore persists phase transactions for cache warm starts.
 	FactStore CacheStore
+	// StrictCache turns cache read/write failures into indexing failures. It is
+	// used by bounded CI commands whose exit contract reports integrity errors.
+	StrictCache bool
 	// ReadModel returns the host-enriched read model. When omitted, Store is read
 	// directly.
 	ReadModel ReadModelFunc
@@ -70,7 +73,7 @@ func New(options Options) *Service {
 		ctx:        ctx,
 		store:      indexStore,
 		indexer:    options.Indexer,
-		indexCache: cache.NewCache(facts),
+		indexCache: cache.NewCache(facts, options.StrictCache),
 		indexState: projectindex.NewState(),
 		readModel:  options.ReadModel,
 		publish:    options.Publish,

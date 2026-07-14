@@ -5,6 +5,16 @@ description: Configure, fix, and suppress Crux's authored-graph lint findings.
 
 Index Lint is the Project Health checklist for authored AI systems. It is not a TypeScript style linter. It looks for design issues that matter to prompts, agents, tools, flows, routing, memory, workspaces, and eval coverage.
 
+For CI, run `crux check`. It compiles the Project Index without a daemon and
+defaults to gating error findings. `crux lint` uses the same one-shot compiler
+and finding selection but keeps its compatibility default of no gate.
+
+```bash
+crux check --profile recommended
+crux check --profile strict --fail-on warning --json
+crux lint                         # inspect without gating by default
+```
+
 Use it when Devtools or the TUI shows findings such as:
 
 - a tool or prompt is missing an inspectable schema
@@ -119,8 +129,9 @@ First check whether Crux can fully see the project:
 
 1. Fix parse or import diagnostics.
 2. Make sure the relevant definition is exported from normal TypeScript source with a stable id when needed.
-3. Check whether `crux dev` is still in the fast static pass.
-4. Re-run indexing after config changes.
+3. Run `crux check --fail-on none` to reproduce through the complete one-shot pipeline.
+4. If comparing with Devtools, use `crux lint --server` explicitly and confirm the same profile/suppression settings.
+5. Re-run indexing after config changes.
 
 If Crux can see the project and the finding is still wrong, suppress it with a reason and open a rule issue with the finding evidence.
 

@@ -56,10 +56,11 @@ func (r *Runner) Run(ctx context.Context, options Options) (Result, error) {
 
 	indexStore := store.NewStore()
 	indexService := service.New(service.Options{
-		Context:   ctx,
-		Store:     indexStore,
-		Indexer:   r.indexer,
-		FactStore: r.factStore,
+		Context:     ctx,
+		Store:       indexStore,
+		Indexer:     r.indexer,
+		FactStore:   r.factStore,
+		StrictCache: true,
 	})
 	index, err := indexService.ReindexProjectWithOptions(
 		ctx,

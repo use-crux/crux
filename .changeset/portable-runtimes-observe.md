@@ -4,6 +4,7 @@
 "@use-crux/convex": patch
 "@use-crux/next": patch
 "@use-crux/otel": minor
+"@use-crux/local": minor
 "@use-crux/react": patch
 "@use-crux/upstash": patch
 ---
@@ -32,3 +33,8 @@ suspend/resume propagation, and local run detail while retaining persisted v2
 reads as deployment-unspecified. `@use-crux/otel` now exports a portable
 Resource-attribute mapper, maps lightweight identity per span, and projects
 DefinitionRefs through bounded attributes and events.
+
+Add daemon-free `crux check` with deterministic JSON and explicit CI exit
+codes. `crux lint` now uses the same one-shot Project Index service and embedded
+worker pipeline by default while retaining its no-gate compatibility behavior
+and an explicit `--server` path.

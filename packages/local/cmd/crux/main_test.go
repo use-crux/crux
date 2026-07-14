@@ -67,6 +67,22 @@ func TestRootCommandDoesNotRegisterLegacyEvalCommands(t *testing.T) {
 	}
 }
 
+func TestRootCommandRegistersDaemonFreeCheck(t *testing.T) {
+	root := newRootCommand(&cli.Factory{})
+	check, _, err := root.Find([]string{"check"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if check == nil || check.Name() != "check" {
+		t.Fatalf("check command = %#v", check)
+	}
+	for _, flag := range []string{"root", "config", "project-id", "profile", "include-suppressed", "fail-on", "json"} {
+		if check.Flags().Lookup(flag) == nil {
+			t.Fatalf("check missing --%s", flag)
+		}
+	}
+}
+
 func TestRootCompletionCommandIsDiscoverable(t *testing.T) {
 	root := newRootCommand(&cli.Factory{})
 	// Cobra adds the completion command lazily; materialize it the same way

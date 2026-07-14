@@ -236,7 +236,9 @@ Finds the most recent successful trace for the given prompt ID and displays: sys
 
 ## `crux lint`
 
-Check authored Crux project health against a lint profile.
+Check authored Crux project health against a lint profile. The default path
+indexes the project once and does not require `crux dev`; use `--server` only
+for compatibility when you intentionally want the running daemon snapshot.
 
 ```bash
 crux lint                          # Run the recommended profile
@@ -244,6 +246,8 @@ crux lint --profile strict         # Use a stricter profile
 crux lint --fail-on warning        # Exit 1 if any warning (or error) is found
 crux lint --include-suppressed     # Also show source-comment suppressed findings
 crux lint --json                   # Output as JSON
+crux lint --root packages/app      # Check another project without a daemon
+crux lint --server                 # Read the running devtools snapshot
 ```
 
 | Flag                   | Description                                                            |
@@ -252,11 +256,45 @@ crux lint --json                   # Output as JSON
 | `--fail-on <severity>` | Exit `1` when selected findings include `error`, `warning`, or `info`  |
 | `--include-suppressed` | Include source-comment suppressed findings                             |
 | `--json`               | Output as JSON                                                         |
+| `--root <path>`        | Project root; defaults to the current directory                         |
+| `--config <path>`      | Optional absolute or root-relative Crux config                          |
+| `--project-id <id>`    | Optional display/cache identity                                         |
+| `--server`             | Use the running devtools server instead of one-shot indexing            |
 
 Lists findings sorted by severity (`error` · `warning` · `info`), each with its
 rule id, target definition, source `file:line`, and (when available) the
 problem, rationale, suggested fix, and docs link. With `--fail-on`, a matching
 finding sets exit code `1` so the command can gate CI.
+
+## `crux check`
+
+Compile the same Project Index pipeline once and apply an explicit CI gate.
+Unlike `crux lint`, `check` defaults to `--fail-on error`. It groups compiler
+diagnostics separately from authored-system findings and never requires a
+running daemon.
+
+```bash
+crux check
+crux check --profile strict --fail-on warning
+crux check --root packages/app --config crux.config.ts
+crux check --project-id storefront --json
+```
+
+| Flag                       | Description                                                            |
+| -------------------------- | ---------------------------------------------------------------------- |
+| `--root <path>`            | Project root; defaults to the current directory                         |
+| `--config <path>`          | Optional absolute or root-relative Crux config                          |
+| `--project-id <id>`        | Optional display/cache identity                                         |
+| `--profile <name>`         | `off`, `recommended`, `strict`, or `experimental`                       |
+| `--include-suppressed`     | Include source-comment suppressed findings                             |
+| `--fail-on <level>`        | `error` (default), `warning`, `info`, or `none`                         |
+| `--json`                   | Write exactly one deterministic JSON v1 value to stdout                 |
+
+Exit `0` means compilation completed without a selected finding meeting the
+gate. Exit `1` means the gate matched. Exit `2` means configuration, compiler,
+protocol, cache integrity, or another operational failure prevented a
+trustworthy check. JSON v1 excludes timestamps and durations; incidental
+worker diagnostics remain on stderr.
 
 ## `crux quality`
 

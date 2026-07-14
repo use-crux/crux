@@ -30,8 +30,15 @@ This package is a thin Node wrapper. On install it resolves the matching prebuil
 
 ```bash
 crux dev        # start the local dev server, devtools UI, and TUI
+crux check      # compile and gate Project Index health without a daemon
+crux lint       # inspect Project Index lint findings without gating by default
 crux --help     # list all commands
 ```
+
+`crux check --json` writes one deterministic JSON v1 report and exits `0` for
+a passing gate, `1` when selected findings meet `--fail-on`, or `2` when a
+trustworthy compile could not complete. Both `check` and `lint` use the same
+embedded Project Index service/worker pipeline as development.
 
 ## Supported platforms
 
