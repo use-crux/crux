@@ -17,6 +17,10 @@ function replacement(
     owner: { definitionId: owner, kind: "mcp.server" },
     observedAt: "2026-07-14T10:00:00Z",
     revision: updateId,
+    ownerFacts: {
+      kind: "mcp.discovery",
+      implementation: "official-client",
+    },
     definitions: [],
     relations: [],
   };
@@ -57,6 +61,33 @@ describe("Project Index runtime update transport", () => {
         definitions: [],
       }).success,
     ).toBe(false);
+    const { ownerFacts: _ownerFacts, ...missingOwnerFacts } = replacement(
+      "missing-owner-facts",
+    );
+    expect(
+      ProjectIndexRuntimeUpdateSchema.safeParse(missingOwnerFacts).success,
+    ).toBe(false);
+    expect(
+      ProjectIndexRuntimeUpdateSchema.safeParse({
+        schemaVersion: 1,
+        operation: "failure",
+        updateId: "failure-with-owner-facts",
+        owner: { definitionId: "mcp.server:catalog", kind: "mcp.server" },
+        observedAt: "2026-07-14T10:00:00Z",
+        error: { phase: "discover", category: "mcp-discovery" },
+        ownerFacts: replacement("unused").ownerFacts,
+      }).success,
+    ).toBe(false);
+    expect(
+      ProjectIndexRuntimeUpdateSchema.safeParse({
+        ...replacement("invalid-owner-facts"),
+        ownerFacts: {
+          kind: "mcp.discovery",
+          implementation: "official-client",
+          protocolVersion: "bad\u0000version",
+        },
+      }).success,
+    ).toBe(false);
   });
 
   it("isolates delivery queues by owner and survives error reporters", async () => {
@@ -69,7 +100,8 @@ describe("Project Index runtime update transport", () => {
       async deliver(update) {
         delivered.push(update.updateId);
         if (update.updateId === "catalog-1") await catalogDelivery;
-        if (update.updateId === "orders-1") throw new Error("local unavailable");
+        if (update.updateId === "orders-1")
+          throw new Error("local unavailable");
       },
       onDeliveryError() {
         throw new Error("diagnostic reporter failed");

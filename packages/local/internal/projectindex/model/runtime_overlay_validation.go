@@ -7,6 +7,9 @@ import (
 )
 
 func validateRuntimeFailure(update ProjectIndexRuntimeUpdate) error {
+	if err := normalizeRuntimeOwnerFacts(update); err != nil {
+		return err
+	}
 	if update.SchemaVersion != 1 {
 		return fmt.Errorf("runtime update schemaVersion must be 1")
 	}
@@ -26,6 +29,9 @@ func validateRuntimeFailure(update ProjectIndexRuntimeUpdate) error {
 }
 
 func validateRuntimeReplace(update ProjectIndexRuntimeUpdate) error {
+	if err := normalizeRuntimeOwnerFacts(update); err != nil {
+		return err
+	}
 	if update.SchemaVersion != 1 {
 		return fmt.Errorf("runtime update schemaVersion must be 1")
 	}

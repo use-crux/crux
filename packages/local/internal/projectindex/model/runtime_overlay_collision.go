@@ -36,12 +36,13 @@ func (s *RuntimeOverlayState) ApplyConflict(
 ) {
 	previous := s.byOwner[update.Owner.DefinitionID]
 	next := RuntimeOverlay{
-		Owner:       update.Owner,
-		ObservedAt:  update.ObservedAt,
-		Revision:    previous.Revision,
-		Error:       &RuntimeUpdateError{Phase: "discover", Category: "tool-name-collision"},
-		Definitions: append([]store.ProjectDefinition(nil), previous.Definitions...),
-		Relations:   append([]store.ProjectRelation(nil), previous.Relations...),
+		Owner:                   update.Owner,
+		ObservedAt:              update.ObservedAt,
+		Revision:                previous.Revision,
+		Error:                   &RuntimeUpdateError{Phase: "discover", Category: "tool-name-collision"},
+		Definitions:             append([]store.ProjectDefinition(nil), previous.Definitions...),
+		Relations:               append([]store.ProjectRelation(nil), previous.Relations...),
+		LastSuccessfulDiscovery: previous.LastSuccessfulDiscovery,
 	}
 	for index, definition := range next.Definitions {
 		if definition.Status == "active" {

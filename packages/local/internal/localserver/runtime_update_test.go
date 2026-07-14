@@ -45,6 +45,7 @@ func TestRuntimeUpdateRouteAppliesOwnerScopedReplacement(t *testing.T) {
     "operation": "replace",
     "updateId": "runtime-route-1",
     "owner": {"definitionId": "mcp.server:catalog", "kind": "mcp.server"},
+    "ownerFacts": {"kind":"mcp.discovery","implementation":"official-client","protocolVersion":" 2025-06-18 ","server":{"untrusted":true,"name":" catalog server ","version":" 1.0.0 "}},
     "observedAt": "2026-07-14T10:00:00Z",
     "revision": "discovery-v1",
     "definitions": [{
@@ -83,6 +84,7 @@ func TestRuntimeUpdateRouteAppliesOwnerScopedReplacement(t *testing.T) {
     "operation": "replace",
     "updateId": "runtime-route-collision",
     "owner": {"definitionId": "mcp.server:catalog", "kind": "mcp.server"},
+    "ownerFacts": {"kind":"mcp.discovery","implementation":"ai-sdk-native"},
     "observedAt": "2026-07-14T10:05:00Z",
     "revision": "discovery-v2",
     "definitions": [{"id":"tool:authored","kind":"tool","name":"authored","fidelity":"resolved","fingerprint":"authored-v1",
@@ -95,15 +97,42 @@ func TestRuntimeUpdateRouteAppliesOwnerScopedReplacement(t *testing.T) {
 	missingRelation := []byte(`{
     "schemaVersion":1,"operation":"replace","updateId":"missing-relation",
     "owner":{"definitionId":"mcp.server:catalog","kind":"mcp.server"},
+    "ownerFacts":{"kind":"mcp.discovery","implementation":"official-client"},
     "observedAt":"2026-07-14T10:06:00Z","revision":"v3",
     "definitions":[{"id":"tool:orphan","kind":"tool","name":"orphan","fidelity":"resolved"}],
     "relations":[]
   }`)
 	assertRejectedRuntimeUpdate(t, server.URL, missingRelation, "")
 
+	missingOwnerFacts := []byte(`{
+    "schemaVersion":1,"operation":"replace","updateId":"missing-owner-facts",
+    "owner":{"definitionId":"mcp.server:catalog","kind":"mcp.server"},
+    "observedAt":"2026-07-14T10:06:00Z","revision":"v3",
+    "definitions":[],"relations":[]
+  }`)
+	assertRejectedRuntimeUpdate(t, server.URL, missingOwnerFacts, "")
+
+	unsafeOwnerFacts := []byte(`{
+    "schemaVersion":1,"operation":"replace","updateId":"unsafe-owner-facts",
+    "owner":{"definitionId":"mcp.server:catalog","kind":"mcp.server"},
+    "ownerFacts":{"kind":"mcp.discovery","implementation":"official-client","server":{"untrusted":true,"name":"unsafe\nname"}},
+    "observedAt":"2026-07-14T10:06:00Z","revision":"v3",
+    "definitions":[],"relations":[]
+  }`)
+	assertRejectedRuntimeUpdate(t, server.URL, unsafeOwnerFacts, "")
+
+	failureOwnerFacts := []byte(`{
+    "schemaVersion":1,"operation":"failure","updateId":"failure-owner-facts",
+    "owner":{"definitionId":"mcp.server:catalog","kind":"mcp.server"},
+    "ownerFacts":{"kind":"mcp.discovery","implementation":"official-client"},
+    "observedAt":"2026-07-14T10:06:00Z","error":{"phase":"discover","category":"mcp-discovery"}
+  }`)
+	assertRejectedRuntimeUpdate(t, server.URL, failureOwnerFacts, "")
+
 	secretMetadata := []byte(`{
     "schemaVersion":1,"operation":"replace","updateId":"secret-metadata",
     "owner":{"definitionId":"mcp.server:catalog","kind":"mcp.server"},
+    "ownerFacts":{"kind":"mcp.discovery","implementation":"official-client"},
     "observedAt":"2026-07-14T10:07:00Z","revision":"v4",
     "definitions":[{"id":"tool:secret","kind":"tool","name":"secret","fidelity":"resolved",
       "metadata":{"headers":{"Authorization":"runtime-secret-canary"}}}],
@@ -114,6 +143,7 @@ func TestRuntimeUpdateRouteAppliesOwnerScopedReplacement(t *testing.T) {
 	nestedSecretMetadata := []byte(`{
     "schemaVersion":1,"operation":"replace","updateId":"nested-secret-metadata",
     "owner":{"definitionId":"mcp.server:catalog","kind":"mcp.server"},
+    "ownerFacts":{"kind":"mcp.discovery","implementation":"official-client"},
     "observedAt":"2026-07-14T10:08:00Z","revision":"v5",
     "definitions":[{"id":"tool:secret","kind":"tool","name":"secret","fidelity":"resolved",
       "metadata":{"facts":{"kind":"tool","toolName":"secret","mcp":{"serverId":"catalog","remoteName":"secret","exposedName":"secret","provenance":"runtime-discovered"}},

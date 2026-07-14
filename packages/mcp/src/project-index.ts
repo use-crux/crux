@@ -9,6 +9,7 @@
 
 import {
   enqueueProjectIndexRuntimeUpdate,
+  type ProjectIndexRuntimeOwnerFacts,
   type ProjectIndexRuntimeUpdate,
 } from "@use-crux/core/project-index/runtime";
 import type { ProjectDefinition } from "@use-crux/core/project-index";
@@ -20,12 +21,73 @@ import {
 import { canonicalFingerprint } from "./official-client/canonical";
 import type { ProjectedMcpTool } from "./official-client/discovery";
 
+const OWNER_FACT_LIMITS = {
+  protocolVersion: 64,
+  serverName: 256,
+  serverVersion: 128,
+} as const;
+
+interface McpDiscoveryOwnerFactsInput {
+  readonly implementation: "official-client" | "ai-sdk-native";
+  readonly protocolVersion?: string;
+  readonly server?: {
+    readonly name?: string;
+    readonly version?: string;
+  };
+}
+
+/**
+ * Normalize the intentionally narrow, presentation-only handshake identity.
+ * Invalid optional values are omitted rather than truncated or exposed raw.
+ */
+export function mcpDiscoveryOwnerFacts(
+  input: McpDiscoveryOwnerFactsInput,
+): ProjectIndexRuntimeOwnerFacts {
+  const protocolVersion = safeOwnerFactText(
+    input.protocolVersion,
+    OWNER_FACT_LIMITS.protocolVersion,
+  );
+  const name = safeOwnerFactText(
+    input.server?.name,
+    OWNER_FACT_LIMITS.serverName,
+  );
+  const version = safeOwnerFactText(
+    input.server?.version,
+    OWNER_FACT_LIMITS.serverVersion,
+  );
+  return {
+    kind: "mcp.discovery",
+    implementation: input.implementation,
+    ...(protocolVersion ? { protocolVersion } : {}),
+    ...(name || version
+      ? {
+          server: {
+            untrusted: true as const,
+            ...(name ? { name } : {}),
+            ...(version ? { version } : {}),
+          },
+        }
+      : {}),
+  };
+}
+
+function safeOwnerFactText(value: string | undefined, limit: number) {
+  if (value === undefined) return undefined;
+  const normalized = value.trim();
+  return normalized.length > 0 &&
+    Array.from(normalized).length <= limit &&
+    !/\p{Cc}/u.test(normalized)
+    ? normalized
+    : undefined;
+}
+
 /** Enqueue one complete, successful MCP discovery replacement. */
 export function enqueueMcpDiscoveryUpdate(options: {
   readonly serverId: string;
   readonly sourceSessionId: string;
   readonly toolListFingerprint: string;
   readonly tools: readonly ProjectedMcpTool[];
+  readonly ownerFacts: McpDiscoveryOwnerFactsInput;
   readonly observedAt?: string;
 }): void {
   const observedAt = options.observedAt ?? new Date().toISOString();
@@ -88,6 +150,7 @@ export function enqueueMcpDiscoveryUpdate(options: {
     operation: "replace",
     updateId: `${options.sourceSessionId}:discovery`,
     owner: { definitionId: ownerId, kind: "mcp.server" },
+    ownerFacts: mcpDiscoveryOwnerFacts(options.ownerFacts),
     observedAt,
     revision: options.toolListFingerprint,
     definitions,

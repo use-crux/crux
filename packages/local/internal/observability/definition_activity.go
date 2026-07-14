@@ -45,6 +45,7 @@ type DefinitionActivity struct {
 // DefinitionRefs. Every other field is ignored so the projection never depends
 // on the full record shape.
 type definitionRefsEnvelope struct {
+	SpanID         string          `json:"spanId"`
 	StartedAt      string          `json:"startedAt"`
 	DefinitionRefs []DefinitionRef `json:"definitionRefs"`
 }
@@ -175,7 +176,28 @@ func (s *Service) RunDefinitionActivity(ctx context.Context, runID string) ([]De
 // from authoritative raw records. Source pointers deliberately stay out of the
 // derived activity table, so this read-time projection is also the only place
 // a since-deleted definition's last-known repo-relative source is recovered.
-func (s *Service) runDefinitionRefs(ctx context.Context, runID string) ([]DefinitionRef, error) {
+type runDefinitionRefsProjection struct {
+	Run    []DefinitionRef
+	BySpan map[string][]DefinitionRef
+}
+
+func appendDefinitionRef(
+	refs []DefinitionRef,
+	positions map[definitionRefKey]int,
+	ref DefinitionRef,
+) ([]DefinitionRef, map[definitionRefKey]int) {
+	key := definitionRefKey{id: ref.ID, role: ref.Role}
+	if position, ok := positions[key]; ok {
+		if ref.Source != nil {
+			refs[position].Source = ref.Source
+		}
+		return refs, positions
+	}
+	positions[key] = len(refs)
+	return append(refs, ref), positions
+}
+
+func (s *Service) projectRunDefinitionRefs(ctx context.Context, runID string) (runDefinitionRefsProjection, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT payload_json
 		FROM records
@@ -183,17 +205,17 @@ func (s *Service) runDefinitionRefs(ctx context.Context, runID string) ([]Defini
 		ORDER BY segment_seq, record_id
 	`, runID)
 	if err != nil {
-		return nil, err
+		return runDefinitionRefsProjection{}, err
 	}
 	defer rows.Close()
 
-	type refKey struct{ id, role string }
-	refs := make([]DefinitionRef, 0)
-	positions := make(map[refKey]int)
+	projection := runDefinitionRefsProjection{BySpan: make(map[string][]DefinitionRef)}
+	runPositions := make(map[definitionRefKey]int)
+	spanPositions := make(map[string]map[definitionRefKey]int)
 	for rows.Next() {
 		var payload []byte
 		if err := rows.Scan(&payload); err != nil {
-			return nil, err
+			return runDefinitionRefsProjection{}, err
 		}
 		var envelope definitionRefsEnvelope
 		if err := json.Unmarshal(payload, &envelope); err != nil {
@@ -203,21 +225,25 @@ func (s *Service) runDefinitionRefs(ctx context.Context, runID string) ([]Defini
 			if ref.ID == "" {
 				continue
 			}
-			key := refKey{id: ref.ID, role: ref.Role}
-			if position, ok := positions[key]; ok {
-				if ref.Source != nil {
-					refs[position].Source = ref.Source
+			projection.Run, runPositions = appendDefinitionRef(projection.Run, runPositions, ref)
+			if envelope.SpanID != "" {
+				positions := spanPositions[envelope.SpanID]
+				if positions == nil {
+					positions = make(map[definitionRefKey]int)
 				}
-				continue
+				projection.BySpan[envelope.SpanID], positions = appendDefinitionRef(
+					projection.BySpan[envelope.SpanID],
+					positions,
+					ref,
+				)
+				spanPositions[envelope.SpanID] = positions
 			}
-			positions[key] = len(refs)
-			refs = append(refs, ref)
 		}
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return runDefinitionRefsProjection{}, err
 	}
-	return refs, nil
+	return projection, nil
 }
 
 // DefinitionActivitySummary is the per-definition Catalog rollup: how many

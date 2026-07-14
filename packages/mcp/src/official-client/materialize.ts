@@ -109,12 +109,14 @@ export async function materializeMcpToolSource(
       throw failure;
     }
     const server = client.getServerVersion();
+    const protocolVersion =
+      "protocolVersion" in transport &&
+      typeof transport.protocolVersion === "string"
+        ? transport.protocolVersion
+        : undefined;
     connect.end({
       attributes: {
-        ...("protocolVersion" in transport &&
-        typeof transport.protocolVersion === "string"
-          ? { protocolVersion: transport.protocolVersion }
-          : {}),
+        ...(protocolVersion ? { protocolVersion } : {}),
         ...(server?.name ? { serverName: server.name } : {}),
         ...(server?.version ? { serverVersion: server.version } : {}),
       },
@@ -163,6 +165,11 @@ export async function materializeMcpToolSource(
       sourceSessionId: preparation.sourceSessionId,
       toolListFingerprint: discovered.discovery.toolListFingerprint,
       tools: discovered.projected,
+      ownerFacts: {
+        implementation: "official-client",
+        ...(protocolVersion ? { protocolVersion } : {}),
+        ...(server ? { server } : {}),
+      },
     });
     const tools = Object.fromEntries(
       Object.entries(discovered.tools).map(([name, tool]) => [

@@ -314,6 +314,7 @@ type RunDetailCounts struct {
 
 type RunDetailNode struct {
 	SpanSummary
+	DefinitionRefs []DefinitionRef        `json:"definitionRefs,omitempty"`
 	ID             string                 `json:"id"`
 	Virtual        bool                   `json:"virtual"`
 	ParentID       string                 `json:"parentId"`
@@ -340,6 +341,7 @@ type RunDetailNode struct {
 
 type RunDetailDetail struct {
 	SpanSummary
+	DefinitionRefs []DefinitionRef       `json:"definitionRefs,omitempty"`
 	ID             string                `json:"id"`
 	Kind           string                `json:"kind"`
 	Role           string                `json:"role,omitempty"`

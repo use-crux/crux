@@ -16,6 +16,12 @@ const replacement = {
   owner: { definitionId: "mcp.server:catalog", kind: "mcp.server" },
   observedAt: "2026-07-14T10:00:00Z",
   revision: "discovery-v1",
+  ownerFacts: {
+    kind: "mcp.discovery",
+    implementation: "official-client",
+    protocolVersion: "2025-11-25",
+    server: { untrusted: true, name: "catalog", version: "1.0.0" },
+  },
   definitions: [removedTool],
   relations: [],
 } as const satisfies ProjectIndexRuntimeUpdate;
@@ -40,6 +46,17 @@ const invalidFailure = {
   definitions: [],
 } as const satisfies ProjectIndexRuntimeUpdate;
 
+const invalidFailureOwnerFacts = {
+  schemaVersion: 1,
+  operation: "failure",
+  updateId: "failure-with-owner-facts",
+  owner: { definitionId: "mcp.server:catalog", kind: "mcp.server" },
+  observedAt: "2026-07-14T10:01:00Z",
+  error: { phase: "discover", category: "mcp-discovery" },
+  // @ts-expect-error Failure operations cannot carry successful owner facts.
+  ownerFacts: { kind: "mcp.discovery", implementation: "official-client" },
+} as const satisfies ProjectIndexRuntimeUpdate;
+
 const invalidReplacement = {
   schemaVersion: 1,
   operation: "replace",
@@ -47,6 +64,7 @@ const invalidReplacement = {
   owner: { definitionId: "mcp.server:catalog", kind: "mcp.server" },
   observedAt: "2026-07-14T10:01:00Z",
   revision: "discovery-v2",
+  ownerFacts: { kind: "mcp.discovery", implementation: "ai-sdk-native" },
   definitions: [],
   relations: [],
   // @ts-expect-error Successful replacements cannot carry failure state.
@@ -56,4 +74,5 @@ const invalidReplacement = {
 void replacement;
 void failure;
 void invalidFailure;
+void invalidFailureOwnerFacts;
 void invalidReplacement;

@@ -98,6 +98,10 @@ describe("withDevtools — CruxPlugin", () => {
       owner: { definitionId: "mcp.server:catalog", kind: "mcp.server" },
       observedAt: "2026-07-14T10:00:00Z",
       revision: "discovery-v1",
+      ownerFacts: {
+        kind: "mcp.discovery",
+        implementation: "official-client",
+      },
       definitions: [],
       relations: [],
     });

@@ -18,6 +18,10 @@ func TestSQLiteStorePersistsRuntimeOverlaysAndHydratesActiveChildrenAsStale(t *t
 		Owner:      model.RuntimeUpdateOwner{DefinitionID: "mcp.server:catalog", Kind: "mcp.server"},
 		ObservedAt: "2026-07-14T10:00:00Z",
 		Revision:   "discovery-v1",
+		LastSuccessfulDiscovery: &model.RuntimeSuccessfulDiscovery{
+			ObservedAt:     "2026-07-14T09:59:00Z",
+			Implementation: "official-client",
+		},
 		Definitions: []store.ProjectDefinition{
 			{ID: "tool:lookup", Kind: "tool", Name: "lookup", Fidelity: "resolved", Status: "active"},
 		},
@@ -35,6 +39,10 @@ func TestSQLiteStorePersistsRuntimeOverlaysAndHydratesActiveChildrenAsStale(t *t
 	}
 	if len(loaded) != 1 || loaded[0].Revision != "discovery-v1" {
 		t.Fatalf("loaded overlays = %+v", loaded)
+	}
+	if loaded[0].LastSuccessfulDiscovery == nil ||
+		loaded[0].LastSuccessfulDiscovery.ObservedAt != "2026-07-14T09:59:00Z" {
+		t.Fatalf("loaded discovery identity = %+v", loaded[0].LastSuccessfulDiscovery)
 	}
 
 	restarted := model.NewRuntimeOverlayState()

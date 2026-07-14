@@ -28,6 +28,32 @@ type RuntimeUpdateError struct {
 	Category string `json:"category"`
 }
 
+// RuntimeOwnerServerIdentity is self-reported by the remote MCP server. It is
+// presentation-only and must never be treated as a trusted owner identifier.
+type RuntimeOwnerServerIdentity struct {
+	Untrusted bool    `json:"untrusted"`
+	Name      *string `json:"name,omitempty"`
+	Version   *string `json:"version,omitempty"`
+}
+
+// RuntimeOwnerFacts carries the closed, secret-safe facts learned while
+// materializing one runtime owner.
+type RuntimeOwnerFacts struct {
+	Kind            string                      `json:"kind"`
+	Implementation  string                      `json:"implementation"`
+	ProtocolVersion *string                     `json:"protocolVersion,omitempty"`
+	Server          *RuntimeOwnerServerIdentity `json:"server,omitempty"`
+}
+
+// RuntimeSuccessfulDiscovery records identity from one complete handshake.
+// Its timestamp is independent from the overlay's latest-attempt timestamp.
+type RuntimeSuccessfulDiscovery struct {
+	ObservedAt      string                      `json:"observedAt"`
+	Implementation  string                      `json:"implementation"`
+	ProtocolVersion *string                     `json:"protocolVersion,omitempty"`
+	Server          *RuntimeOwnerServerIdentity `json:"server,omitempty"`
+}
+
 // ProjectIndexRuntimeUpdate replaces one owner's complete runtime contribution
 // or records a discovery failure without carrying partial facts.
 type ProjectIndexRuntimeUpdate struct {
@@ -35,6 +61,7 @@ type ProjectIndexRuntimeUpdate struct {
 	Operation     RuntimeUpdateOperation    `json:"operation"`
 	UpdateID      string                    `json:"updateId"`
 	Owner         RuntimeUpdateOwner        `json:"owner"`
+	OwnerFacts    *RuntimeOwnerFacts        `json:"ownerFacts,omitempty"`
 	ObservedAt    string                    `json:"observedAt"`
 	Revision      string                    `json:"revision,omitempty"`
 	Definitions   []store.ProjectDefinition `json:"definitions,omitempty"`
@@ -43,14 +70,15 @@ type ProjectIndexRuntimeUpdate struct {
 }
 
 type RuntimeOverlay struct {
-	Owner            RuntimeUpdateOwner        `json:"owner"`
-	OwnerFingerprint string                    `json:"ownerFingerprint,omitempty"`
-	ObservedAt       string                    `json:"observedAt"`
-	Revision         string                    `json:"revision,omitempty"`
-	Error            *RuntimeUpdateError       `json:"error,omitempty"`
-	Definitions      []store.ProjectDefinition `json:"definitions,omitempty"`
-	Relations        []store.ProjectRelation   `json:"relations,omitempty"`
-	Diagnostics      []store.IndexDiagnostic   `json:"diagnostics,omitempty"`
+	Owner                   RuntimeUpdateOwner          `json:"owner"`
+	OwnerFingerprint        string                      `json:"ownerFingerprint,omitempty"`
+	ObservedAt              string                      `json:"observedAt"`
+	Revision                string                      `json:"revision,omitempty"`
+	Error                   *RuntimeUpdateError         `json:"error,omitempty"`
+	LastSuccessfulDiscovery *RuntimeSuccessfulDiscovery `json:"lastSuccessfulDiscovery,omitempty"`
+	Definitions             []store.ProjectDefinition   `json:"definitions,omitempty"`
+	Relations               []store.ProjectRelation     `json:"relations,omitempty"`
+	Diagnostics             []store.IndexDiagnostic     `json:"diagnostics,omitempty"`
 }
 
 // RuntimeUpdateConflictError reports a globally ambiguous tool definition ID.

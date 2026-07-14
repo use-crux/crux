@@ -201,6 +201,15 @@ export async function materializeAiSdkMcpToolSource(
       sourceSessionId: preparation.sourceSessionId,
       toolListFingerprint,
       tools: projected,
+      ownerFacts: {
+        implementation: "ai-sdk-native",
+        ...(typeof transport === "object" &&
+        "protocolVersion" in transport &&
+        typeof transport.protocolVersion === "string"
+          ? { protocolVersion: transport.protocolVersion }
+          : {}),
+        ...(client.serverInfo ? { server: client.serverInfo } : {}),
+      },
     });
     let closed = false;
     return withMcpSessionProvenance(
@@ -305,16 +314,11 @@ function wrapNativeTool(
         const validatedInput = await parameters.parseAsync(input);
         const abortSignal = options.abortSignal ?? context.abortSignal;
         abortSignal?.throwIfAborted();
-        let result: unknown;
-        try {
-          result = await nativeTool.execute!(validatedInput, {
-            ...options,
-            messages: options.messages ?? [],
-            abortSignal,
-          } as never);
-        } catch (error) {
-          throw mcpToolSourceError("execute", errorContext, error);
-        }
+        const result = await nativeTool.execute!(validatedInput, {
+          ...options,
+          messages: options.messages ?? [],
+          abortSignal,
+        } as never);
         const normalized = normalizeMcpToolResult(result);
         if (outputSchema && normalized.structuredContent === undefined) {
           if (!normalized.isError) {

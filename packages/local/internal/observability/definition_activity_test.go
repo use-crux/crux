@@ -157,6 +157,29 @@ func TestRunDetailCarriesCanonicalDefinitionRefsWithLastKnownSource(t *testing.T
 	}
 }
 
+func TestRunDetailCarriesCanonicalDefinitionRefsOnTheirExactSpan(t *testing.T) {
+	service := newTestService(t)
+	mustIngest(t, service,
+		fmt.Sprintf(`{"schemaVersion":2,"recordId":"r-span-server-a","type":"span","runId":"run-span-refs","segmentId":"seg-span-refs","segmentSeq":1,"spanId":"sp-server-a","family":"mcp","primitive":"mcp.connect","name":"connect","startedAt":"2026-01-01T00:00:01.000Z","status":"ok","definitionRefs":[%s]}`,
+			definitionRefJSON("mcp.server:server-a", "mcp.server", "resolved-mcp-server")),
+		fmt.Sprintf(`{"schemaVersion":2,"recordId":"r-span-server-b","type":"span","runId":"run-span-refs","segmentId":"seg-span-refs","segmentSeq":2,"spanId":"sp-server-b","family":"mcp","primitive":"mcp.connect","name":"connect","startedAt":"2026-01-01T00:00:02.000Z","status":"ok","definitionRefs":[%s]}`,
+			definitionRefJSON("mcp.server:server-b", "mcp.server", "resolved-mcp-server")),
+	)
+
+	detail, err := service.RunDetail(context.Background(), "run-span-refs")
+	if err != nil {
+		t.Fatalf("run detail: %v", err)
+	}
+	serverA := findRunDetailNode(&detail.Root, "sp-server-a")
+	if serverA == nil {
+		t.Fatal("server-a span missing from run detail")
+	}
+	want := []DefinitionRef{{ID: "mcp.server:server-a", Kind: "mcp.server", Role: "resolved-mcp-server"}}
+	if !reflect.DeepEqual(serverA.DefinitionRefs, want) {
+		t.Fatalf("server-a span refs mismatch:\n got %+v\nwant %+v", serverA.DefinitionRefs, want)
+	}
+}
+
 func TestDefinitionActivitySummaryReportsDistinctRunsAndLatestRun(t *testing.T) {
 	service := newTestService(t)
 	ref := definitionRefJSON("agent:planner", "agent", "invoked-agent")

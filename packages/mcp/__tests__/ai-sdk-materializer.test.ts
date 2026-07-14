@@ -68,6 +68,7 @@ describe("AI SDK-native MCP client boundary", () => {
       listTools,
       toolsFromDefinitions,
       close,
+      serverInfo: { name: " native server ", version: " 2.0.0 " },
     } as never);
 
     const session = await materializeAiSdkMcpToolSource(
@@ -111,6 +112,15 @@ describe("AI SDK-native MCP client boundary", () => {
       expect.objectContaining({
         operation: "replace",
         owner: { definitionId: "mcp.server:catalog", kind: "mcp.server" },
+        ownerFacts: {
+          kind: "mcp.discovery",
+          implementation: "ai-sdk-native",
+          server: {
+            untrusted: true,
+            name: "native server",
+            version: "2.0.0",
+          },
+        },
         definitions: [expect.objectContaining({ id: "tool:lookup" })],
       }),
     ]);

@@ -123,7 +123,10 @@ func (s *RuntimeOverlayState) applyReplace(update ProjectIndexRuntimeUpdate) err
 		return err
 	}
 	previous := s.byOwner[update.Owner.DefinitionID]
-	next := RuntimeOverlay{Owner: update.Owner, ObservedAt: update.ObservedAt, Revision: update.Revision}
+	next := RuntimeOverlay{
+		Owner: update.Owner, ObservedAt: update.ObservedAt, Revision: update.Revision,
+		LastSuccessfulDiscovery: successfulDiscovery(update),
+	}
 	currentIDs := map[string]bool{}
 	for _, definition := range update.Definitions {
 		definition.Status = "active"
@@ -155,7 +158,8 @@ func (s *RuntimeOverlayState) applyFailure(update ProjectIndexRuntimeUpdate) err
 	next := RuntimeOverlay{
 		Owner: update.Owner, ObservedAt: update.ObservedAt, Revision: previous.Revision,
 		Error: update.Error, Definitions: append([]store.ProjectDefinition(nil), previous.Definitions...),
-		Relations: append([]store.ProjectRelation(nil), previous.Relations...),
+		Relations:               append([]store.ProjectRelation(nil), previous.Relations...),
+		LastSuccessfulDiscovery: previous.LastSuccessfulDiscovery,
 	}
 	staleActiveDefinitions(next.Definitions)
 	s.byOwner[update.Owner.DefinitionID] = next

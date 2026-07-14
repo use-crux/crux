@@ -36,6 +36,7 @@ func TestApplyRuntimeUpdateReplacesOneMCPServerOverlay(t *testing.T) {
 			DefinitionID: "mcp.server:catalog",
 			Kind:         "mcp.server",
 		},
+		OwnerFacts: runtimeOwnerFacts("official-client", "catalog server", "1.0.0"),
 		ObservedAt: "2026-07-14T10:00:00Z",
 		Revision:   "discovery-v1",
 		Definitions: []store.ProjectDefinition{
@@ -61,6 +62,7 @@ func TestApplyRuntimeUpdateReplacesOneMCPServerOverlay(t *testing.T) {
 			DefinitionID: "mcp.server:catalog",
 			Kind:         "mcp.server",
 		},
+		OwnerFacts: runtimeOwnerFacts("ai-sdk-native", "replacement server", "2.0.0"),
 		ObservedAt: "2026-07-14T10:05:00Z",
 		Revision:   "discovery-v2",
 		Definitions: []store.ProjectDefinition{
@@ -141,6 +143,60 @@ func TestApplyRuntimeUpdateRejectsContradictoryDiscoveryEnvelope(t *testing.T) {
 	}
 }
 
+func TestRuntimeOwnerFactsTrackOnlyTheLastSuccessfulDiscovery(t *testing.T) {
+	t.Parallel()
+
+	service := New(Options{Store: store.NewStore()})
+	service.ApplyIndexPatch(context.Background(), projectindex.PatchFromSnapshot(store.IndexData{
+		SchemaVersion: 1,
+		Project:       &store.ProjectIdentity{Root: t.TempDir()},
+		Definitions: []store.ProjectDefinition{
+			{ID: "mcp.server:catalog", Kind: "mcp.server", Name: "catalog", Fidelity: "partial"},
+		},
+	}, projectindex.PhaseAST, "ok"))
+
+	firstFailure, err := service.ApplyRuntimeUpdate(context.Background(), projectindex.ProjectIndexRuntimeUpdate{
+		SchemaVersion: 1,
+		Operation:     projectindex.RuntimeUpdateFailure,
+		UpdateID:      "failure-before-success",
+		Owner:         projectindex.RuntimeUpdateOwner{DefinitionID: "mcp.server:catalog", Kind: "mcp.server"},
+		ObservedAt:    "2026-07-14T09:00:00Z",
+		Error:         &projectindex.RuntimeUpdateError{Phase: "connect", Category: "mcp-connect"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if runtimeOverlayMetadata(t, firstFailure, "mcp.server:catalog").LastSuccessfulDiscovery != nil {
+		t.Fatal("first failure fabricated a successful discovery")
+	}
+
+	zeroTools := runtimeToolUpdate("catalog", "zero-tools")
+	zeroTools.ObservedAt = "2026-07-14T10:00:00Z"
+	zeroTools.OwnerFacts = runtimeOwnerFacts("ai-sdk-native", "  catalog server  ", " 2.0.0 ")
+	firstSuccess, err := service.ApplyRuntimeUpdate(context.Background(), zeroTools)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertLastSuccessfulDiscovery(t, firstSuccess, "mcp.server:catalog", zeroTools.ObservedAt, "ai-sdk-native", "catalog server")
+
+	withoutOptionalIdentity := runtimeToolUpdate("catalog", "zero-tools-v2")
+	withoutOptionalIdentity.ObservedAt = "2026-07-14T11:00:00Z"
+	withoutOptionalIdentity.OwnerFacts = &projectindex.RuntimeOwnerFacts{
+		Kind: "mcp.discovery", Implementation: "official-client",
+	}
+	latest, err := service.ApplyRuntimeUpdate(context.Background(), withoutOptionalIdentity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	overlay := runtimeOverlayMetadata(t, latest, "mcp.server:catalog")
+	if overlay.Revision != "zero-tools-v2" || overlay.LastSuccessfulDiscovery == nil ||
+		overlay.LastSuccessfulDiscovery.ObservedAt != "2026-07-14T11:00:00Z" ||
+		overlay.LastSuccessfulDiscovery.Implementation != "official-client" ||
+		overlay.LastSuccessfulDiscovery.ProtocolVersion != nil || overlay.LastSuccessfulDiscovery.Server != nil {
+		t.Fatalf("latest successful discovery combined handshake identities: %+v", overlay)
+	}
+}
+
 func TestApplyRuntimeUpdateFailurePreservesAndStalesLastKnownChildren(t *testing.T) {
 	t.Parallel()
 
@@ -157,6 +213,7 @@ func TestApplyRuntimeUpdateFailurePreservesAndStalesLastKnownChildren(t *testing
 		Operation:     projectindex.RuntimeUpdateReplace,
 		UpdateID:      "success-1",
 		Owner:         projectindex.RuntimeUpdateOwner{DefinitionID: "mcp.server:catalog", Kind: "mcp.server"},
+		OwnerFacts:    runtimeOwnerFacts("official-client", "catalog server", "1.0.0"),
 		ObservedAt:    "2026-07-14T10:00:00Z",
 		Revision:      "discovery-v1",
 		Definitions: []store.ProjectDefinition{
@@ -184,6 +241,7 @@ func TestApplyRuntimeUpdateFailurePreservesAndStalesLastKnownChildren(t *testing
 	assertDefinitionStatus(t, failed, "tool:alpha", "stale")
 	assertRelation(t, failed, "mcp.server:catalog", "tool:alpha")
 	assertServerRuntimeHealth(t, failed, "mcp.server:catalog", "error")
+	assertLastSuccessfulDiscovery(t, failed, "mcp.server:catalog", "2026-07-14T10:00:00Z", "official-client", "catalog server")
 
 	_, err = service.ApplyRuntimeUpdate(context.Background(), projectindex.ProjectIndexRuntimeUpdate{
 		SchemaVersion: 1,
@@ -222,12 +280,25 @@ func runtimeToolUpdate(serverID, updateID string, names ...string) projectindex.
 		Operation:     projectindex.RuntimeUpdateReplace,
 		UpdateID:      updateID,
 		Owner:         projectindex.RuntimeUpdateOwner{DefinitionID: "mcp.server:" + serverID, Kind: "mcp.server"},
+		OwnerFacts:    runtimeOwnerFacts("official-client", serverID+" server", "1.0.0"),
 		ObservedAt:    "2026-07-14T10:00:00Z",
 		Revision:      updateID,
 		Definitions:   definitions,
 		Relations:     relations,
 	}
 }
+
+func runtimeOwnerFacts(implementation, name, version string) *projectindex.RuntimeOwnerFacts {
+	return &projectindex.RuntimeOwnerFacts{
+		Kind: "mcp.discovery", Implementation: implementation,
+		ProtocolVersion: stringPointer("2025-06-18"),
+		Server: &projectindex.RuntimeOwnerServerIdentity{
+			Untrusted: true, Name: stringPointer(name), Version: stringPointer(version),
+		},
+	}
+}
+
+func stringPointer(value string) *string { return &value }
 
 func mcpToolDefinition(id, serverID, remoteName, fidelity, fingerprint, revision, observedAt string) store.ProjectDefinition {
 	metadata, _ := json.Marshal(map[string]any{
@@ -311,4 +382,51 @@ func assertServerRuntimeHealth(t *testing.T, index store.IndexData, id, status s
 	if metadata.RuntimeOverlay.Status != status {
 		t.Fatalf("server %s runtime health = %q, want %q", id, metadata.RuntimeOverlay.Status, status)
 	}
+}
+
+func assertLastSuccessfulDiscovery(
+	t *testing.T,
+	index store.IndexData,
+	id, observedAt, implementation, serverName string,
+) {
+	t.Helper()
+	definition := definitionByID(t, index, id)
+	var metadata struct {
+		RuntimeOverlay struct {
+			ObservedAt              string `json:"observedAt"`
+			LastSuccessfulDiscovery struct {
+				ObservedAt     string `json:"observedAt"`
+				Implementation string `json:"implementation"`
+				Server         struct {
+					Name string `json:"name"`
+				} `json:"server"`
+			} `json:"lastSuccessfulDiscovery"`
+		} `json:"runtimeOverlay"`
+	}
+	if err := json.Unmarshal(definition.Metadata, &metadata); err != nil {
+		t.Fatalf("decode %s metadata: %v", id, err)
+	}
+	discovery := metadata.RuntimeOverlay.LastSuccessfulDiscovery
+	if discovery.ObservedAt != observedAt || discovery.Implementation != implementation || discovery.Server.Name != serverName {
+		t.Fatalf("server %s last successful discovery = %+v", id, discovery)
+	}
+}
+
+type projectedRuntimeOverlay struct {
+	Status                  string                                   `json:"status"`
+	ObservedAt              string                                   `json:"observedAt"`
+	Revision                string                                   `json:"revision"`
+	LastSuccessfulDiscovery *projectindex.RuntimeSuccessfulDiscovery `json:"lastSuccessfulDiscovery"`
+}
+
+func runtimeOverlayMetadata(t *testing.T, index store.IndexData, id string) projectedRuntimeOverlay {
+	t.Helper()
+	definition := definitionByID(t, index, id)
+	var metadata struct {
+		RuntimeOverlay projectedRuntimeOverlay `json:"runtimeOverlay"`
+	}
+	if err := json.Unmarshal(definition.Metadata, &metadata); err != nil {
+		t.Fatalf("decode %s metadata: %v", id, err)
+	}
+	return metadata.RuntimeOverlay
 }

@@ -3,6 +3,7 @@ import type { ProjectIndexRuntimeUpdate } from "@use-crux/core/project-index/run
 import { afterEach, describe, expect, it } from "vitest";
 
 import { materializeMcpToolSource, mcp, streamableHttp } from "../src/index";
+import { mcpDiscoveryOwnerFacts } from "../src/project-index";
 import {
   startMcpHttpFixture,
   type McpHttpFixture,
@@ -16,6 +17,23 @@ afterEach(async () => {
 });
 
 describe("MCP Project Index runtime updates", () => {
+  it("normalizes safe optional identity and omits invalid values", () => {
+    expect(
+      mcpDiscoveryOwnerFacts({
+        implementation: "official-client",
+        protocolVersion: " protocol\u0000version ",
+        server: {
+          name: ` ${"n".repeat(257)} `,
+          version: " 1.0.0 ",
+        },
+      }),
+    ).toEqual({
+      kind: "mcp.discovery",
+      implementation: "official-client",
+      server: { untrusted: true, version: "1.0.0" },
+    });
+  });
+
   it("enqueues one complete replacement after successful discovery", async () => {
     const fixture = await startMcpHttpFixture({
       pages: [
@@ -61,6 +79,16 @@ describe("MCP Project Index runtime updates", () => {
       schemaVersion: 1,
       operation: "replace",
       owner: { definitionId: "mcp.server:catalog", kind: "mcp.server" },
+      ownerFacts: {
+        kind: "mcp.discovery",
+        implementation: "official-client",
+        protocolVersion: expect.any(String),
+        server: {
+          untrusted: true,
+          name: "crux-mcp-test",
+          version: "1.0.0",
+        },
+      },
       revision: session.discovery.toolListFingerprint,
       definitions: [
         {
@@ -95,6 +123,45 @@ describe("MCP Project Index runtime updates", () => {
         },
       ],
     });
+    await session.close();
+  });
+
+  it("retains handshake identity for a successful zero-tool discovery", async () => {
+    const fixture = await startMcpHttpFixture({ pages: [{ tools: [] }] });
+    fixtures.push(fixture);
+    const updates: ProjectIndexRuntimeUpdate[] = [];
+    setHooks({
+      projectIndexRuntimeTransport: {
+        enqueue(update) {
+          updates.push(update);
+        },
+        async flush() {
+          return "ok";
+        },
+      },
+    });
+
+    const session = await materializeMcpToolSource(
+      mcp({ id: "empty", transport: streamableHttp({ url: fixture.url }) }),
+      { runtimeContext: undefined },
+    );
+
+    expect(updates).toEqual([
+      expect.objectContaining({
+        operation: "replace",
+        ownerFacts: expect.objectContaining({
+          kind: "mcp.discovery",
+          implementation: "official-client",
+          server: {
+            untrusted: true,
+            name: "crux-mcp-test",
+            version: "1.0.0",
+          },
+        }),
+        definitions: [],
+        relations: [],
+      }),
+    ]);
     await session.close();
   });
 

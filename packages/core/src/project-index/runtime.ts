@@ -29,6 +29,21 @@ export interface ProjectIndexRuntimeError {
   readonly category: string;
 }
 
+/** Safe owner-level facts associated with one successful runtime replacement. */
+export type ProjectIndexRuntimeOwnerFacts = {
+  readonly kind: "mcp.discovery";
+  /** Crux materialization path, not the remote server implementation. */
+  readonly implementation: "official-client" | "ai-sdk-native";
+  /** Negotiated MCP protocol version. */
+  readonly protocolVersion?: string;
+  /** Self-reported, presentation-only identity from MCP initialization. */
+  readonly server?: {
+    readonly untrusted: true;
+    readonly name?: string;
+    readonly version?: string;
+  };
+};
+
 export type ProjectIndexRuntimeUpdate =
   | {
       readonly schemaVersion: 1;
@@ -37,6 +52,7 @@ export type ProjectIndexRuntimeUpdate =
       readonly owner: ProjectIndexRuntimeOwner;
       readonly observedAt: string;
       readonly revision: string;
+      readonly ownerFacts: ProjectIndexRuntimeOwnerFacts;
       readonly definitions: readonly ProjectDefinition[];
       readonly relations: readonly ProjectRelation[];
     }
@@ -59,6 +75,40 @@ const ProjectIndexRuntimeErrorSchema = z.object({
   category: z.string().min(1),
 }) satisfies z.ZodType<ProjectIndexRuntimeError>;
 
+const CONTROL_CHARACTER = /\p{Cc}/u;
+
+function normalizedBoundedText(maxCodePoints: number) {
+  return z
+    .string()
+    .transform((value) => value.trim())
+    .pipe(
+      z
+        .string()
+        .min(1)
+        .refine((value) => !CONTROL_CHARACTER.test(value))
+        .refine((value) => Array.from(value).length <= maxCodePoints),
+    );
+}
+
+const ProjectIndexRuntimeOwnerFactsSchema = z
+  .object({
+    kind: z.literal("mcp.discovery"),
+    implementation: z.enum(["official-client", "ai-sdk-native"]),
+    protocolVersion: normalizedBoundedText(64).optional(),
+    server: z
+      .object({
+        untrusted: z.literal(true),
+        name: normalizedBoundedText(256).optional(),
+        version: normalizedBoundedText(128).optional(),
+      })
+      .strict()
+      .refine(
+        (server) => server.name !== undefined || server.version !== undefined,
+      )
+      .optional(),
+  })
+  .strict() satisfies z.ZodType<ProjectIndexRuntimeOwnerFacts>;
+
 /** Runtime-update wire schema shared by producers and delivery transports. */
 export const ProjectIndexRuntimeUpdateSchema = z.discriminatedUnion(
   "operation",
@@ -71,6 +121,7 @@ export const ProjectIndexRuntimeUpdateSchema = z.discriminatedUnion(
         owner: ProjectIndexRuntimeOwnerSchema,
         observedAt: z.string().min(1),
         revision: z.string().min(1),
+        ownerFacts: ProjectIndexRuntimeOwnerFactsSchema,
         definitions: z.array(ProjectDefinitionSchema),
         relations: z.array(ProjectRelationSchema),
       })

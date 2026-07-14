@@ -99,6 +99,9 @@ func projectRuntimeOwnerHealth(definitions []store.ProjectDefinition, overlay Ru
 		if overlay.Error != nil {
 			health["error"] = overlay.Error
 		}
+		if overlay.LastSuccessfulDiscovery != nil {
+			health["lastSuccessfulDiscovery"] = overlay.LastSuccessfulDiscovery
+		}
 		metadata, err := json.Marshal(map[string]any{"runtimeOverlay": health})
 		if err == nil {
 			next[index].Metadata = mergeMetadataRaw(definition.Metadata, metadata)
