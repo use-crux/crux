@@ -39,6 +39,7 @@ import type { ExcludedContext } from './types'
 import type { Constraint } from '../safety/constraint/types'
 import type { Guardrail } from '../safety/guardrail/types'
 import type { ToolMiddleware } from '../tools/types'
+import type { ToolSource } from '../tools/tool-source'
 import type { ToolOwnerLabel } from './tool-merge'
 import type {
   CruxContextContributionPreview,
@@ -148,6 +149,7 @@ export interface Contribution {
   appendContexts?: readonly Context<z.ZodType>[]
   use?: readonly ContextEntry[]
   tools?: AnyToolSet
+  toolSources?: readonly ToolSource[]
   toolMiddleware?: ToolMiddleware | readonly ToolMiddleware[]
   constraints?: readonly Constraint[]
   guardrails?: readonly Guardrail[]
@@ -226,6 +228,7 @@ export interface MergedResolution {
   memories: MemoryEntry[]
   blackboards: BlackboardEntry[]
   tools: AnyToolSet
+  toolSources: ToolSource[]
   toolOwners: Map<string, ToolOwnerLabel>
   toolMiddleware: ToolMiddleware[]
   constraints: Constraint[]
@@ -242,6 +245,7 @@ export function emptyMergedResolution(): MergedResolution {
     memories: [],
     blackboards: [],
     tools: {},
+    toolSources: [],
     toolOwners: new Map(),
     toolMiddleware: [],
     constraints: [],

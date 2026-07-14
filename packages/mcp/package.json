@@ -1,0 +1,31 @@
+{
+  "name": "@use-crux/mcp",
+  "version": "0.5.0",
+  "description": "Portable Model Context Protocol tool sources for Crux.",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    }
+  },
+  "dependencies": {
+    "@ai-sdk/mcp": "^1.0.61",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@use-crux/core": "workspace:*",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.12.4",
+    "typescript": "5.9.3",
+    "vitest": "^4.1.7"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  }
+}

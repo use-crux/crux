@@ -97,6 +97,7 @@ function mergeNested(out: MergedResolution, nested: MergedResolution): void {
   out.skills.push(...nested.skills)
   out.memories.push(...nested.memories)
   out.blackboards.push(...nested.blackboards)
+  out.toolSources.push(...nested.toolSources)
   mergeOwnedToolSet(out.tools, out.toolOwners, nested.tools, nested.toolOwners)
   out.toolMiddleware.push(...nested.toolMiddleware)
   out.constraints.push(...nested.constraints)
@@ -252,6 +253,7 @@ async function runContributor(
   if (contribution.tools && contributor.toolOwnerLabel) {
     mergeToolSet(out.tools, out.toolOwners, contribution.tools, contributor.toolOwnerLabel)
   }
+  if (contribution.toolSources) out.toolSources.push(...contribution.toolSources)
   if (contribution.toolMiddleware) out.toolMiddleware.push(...normalizeToolMiddleware(contribution.toolMiddleware))
   if (contribution.constraints) out.constraints.push(...contribution.constraints)
   if (contribution.guardrails) out.guardrails.push(...contribution.guardrails)

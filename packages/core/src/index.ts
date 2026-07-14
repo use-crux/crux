@@ -129,6 +129,17 @@ export type {
 // resolves through internally. App code composes entries with the factories
 // above and never touches lowering/driver functions directly.
 export { CONTRIBUTOR } from "./resolver/contract";
+export {
+  TOOL_SOURCE,
+  ToolSourceUnsupportedError,
+  isToolSource,
+} from "./tools/tool-source";
+export type {
+  ToolSource,
+  ToolSourceMaterializationContext,
+  ToolSourceMaterializer,
+  ToolSourceSession,
+} from "./tools/tool-source";
 export type {
   ContributeArgs,
   Contribution as LoweredContribution,

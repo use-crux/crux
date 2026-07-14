@@ -9,6 +9,11 @@
  */
 
 export { tool } from './tools/define-tool'
+export {
+  TOOL_SOURCE,
+  ToolSourceUnsupportedError,
+  isToolSource,
+} from './tools/tool-source'
 export { toolPolicy } from './safety/toolPolicy'
 export type { ToolConfig, NamedToolDef } from './tools/types'
 export type {
@@ -20,3 +25,9 @@ export type {
   ToolsContextOption,
 } from './tools/context-types'
 export type { ToolDef, ToolModelOutput, ToModelOutputArgs } from './types/tool'
+export type {
+  ToolSource,
+  ToolSourceMaterializationContext,
+  ToolSourceMaterializer,
+  ToolSourceSession,
+} from './tools/tool-source'

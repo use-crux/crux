@@ -39,6 +39,7 @@ export function coreStepDialect<
     id: spec.providerId,
     media: providerMediaHooksFor(spec),
     client,
+    materializeToolSource: spec.materializeToolSource,
     mapSettings: spec.mapSettings,
     mapError: spec.mapError,
     call: spec.call,

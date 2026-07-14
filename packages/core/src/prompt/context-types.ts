@@ -20,6 +20,7 @@ import type { ToolMiddleware } from '../tools/types'
 import type { ToolApprovalMap } from '../tools/approval-policy'
 import type { AnyToolSet } from '../types'
 import type { InternalInjectableEntry } from './internal-injection'
+import type { ToolSource } from '../tools/tool-source'
 
 // ─────────────────────────────────────────────────────────────────
 // Definition warnings
@@ -292,6 +293,7 @@ export type ContextEntry =
   | BlackboardEntry
   | InternalInjectableEntry
   | ContributorEntry<z.ZodType>
+  | ToolSource
   | false
   | null
   | undefined
@@ -310,6 +312,8 @@ export interface Contribution {
   use?: readonly ContextEntry[]
   /** Tools to merge — name collisions with other entries throw at resolve time. */
   tools?: AnyToolSet
+  /** Inert tool sources to materialize when an adapter executes the prompt. */
+  toolSources?: readonly ToolSource[]
   /** Middleware applied to tools contributed by the resolved prompt. */
   toolMiddleware?: ToolMiddleware | readonly ToolMiddleware[]
   constraints?: readonly Constraint[]

@@ -48,6 +48,7 @@ import {
   DEFAULT_MAX_STEPS,
   withSkillActivationInput,
 } from "./shared";
+import { materializeToolSources } from "./tool-sources";
 
 /**
  * Execute one prompt through the core-owned provider loop.
@@ -82,26 +83,8 @@ export async function generateCore<
     tokenBudget: args.tokenBudget,
     settings: args.settings,
   });
-  const resolved = await prompt.resolve(resolveOpts);
+  let resolved = await prompt.resolve(resolveOpts);
   const mappedSettings = dialect.mapSettings(resolved.settings);
-  const lifecycle = createToolLifecycle({
-    regime: "core",
-    resolved,
-    call: {
-      tools: args.tools,
-      toolsContext: args.toolsContext,
-      runtimeContext: args.runtimeContext,
-      toolMiddleware: args.toolMiddleware,
-      toolApproval: args.toolApproval,
-    },
-    promptId: prompt.id,
-    input: args.input ?? {},
-    timeout: args.timeout,
-    reresolve: (skillSession) =>
-      prompt.resolve(withSkillActivationInput(resolveOpts, skillSession)),
-    appendToolRound: dialect.appendToolRound,
-    sanitizeToolSchema: dialect.sanitizeToolSchema,
-  });
 
   let messages = initialCoreMessages(resolved, args.messages);
   let schemaParams: Record<string, unknown> | undefined;
@@ -159,6 +142,33 @@ export async function generateCore<
     );
     return normalized;
   };
+  messages = [...(await safety.guardInput({ messages })).messages];
+  const sourceSession = await materializeToolSources({
+    dialect: dialect.id,
+    resolved,
+    materialize: dialect.materializeToolSource,
+    runtimeContext: args.runtimeContext,
+    abortSignal: args.signal,
+  });
+  resolved = sourceSession.resolved;
+  const lifecycle = createToolLifecycle({
+    regime: "core",
+    resolved,
+    call: {
+      tools: args.tools,
+      toolsContext: args.toolsContext,
+      runtimeContext: args.runtimeContext,
+      toolMiddleware: args.toolMiddleware,
+      toolApproval: args.toolApproval,
+    },
+    promptId: prompt.id,
+    input: args.input ?? {},
+    timeout: args.timeout,
+    reresolve: (skillSession) =>
+      prompt.resolve(withSkillActivationInput(resolveOpts, skillSession)),
+    appendToolRound: dialect.appendToolRound,
+    sanitizeToolSchema: dialect.sanitizeToolSchema,
+  });
   messages = (await lifecycle.resume(messages)).messages;
 
   /**
@@ -205,7 +215,6 @@ export async function generateCore<
       timeout: args.timeout,
     },
     async () => {
-      messages = [...(await safety.guardInput({ messages })).messages];
       let lastCallArgs: CallArgs<TExtra> | undefined;
       let suspendedApproval = false;
 
@@ -405,15 +414,21 @@ export async function generateCore<
         ...(pendingApprovals ? { pendingApprovals } : {}),
       });
     },
-  );
-
-  await lifecycle.captureTurn({
-    messages,
-    assistantText: generated.text,
-    toolCalls: generated._meta.toolCalls,
+  ).catch(async (error: unknown) => {
+    await sourceSession.close();
+    throw error;
   });
 
-  return generated;
+  try {
+    await lifecycle.captureTurn({
+      messages,
+      assistantText: generated.text,
+      toolCalls: generated._meta.toolCalls,
+    });
+    return generated;
+  } finally {
+    await sourceSession.close();
+  }
 
   function rememberStep(response: AdapterResponse | undefined): void {
     if (!response) return;

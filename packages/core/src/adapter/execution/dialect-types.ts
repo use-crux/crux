@@ -21,6 +21,7 @@ import type {
   ToolResultEntry,
 } from "../types";
 import type { CruxProviderError } from "../normalized-outcome";
+import type { ToolSourceMaterializer } from "../../tools/tool-source";
 
 /** Per-call context passed to provider wire hooks. */
 export interface CoreStepCallContext {
@@ -72,6 +73,9 @@ export interface CoreStepDialect<
 
   /** Client bound by the public adapter factory. */
   readonly client: TClient;
+
+  /** Dialect-owned source dispatch and connection boundary. */
+  readonly materializeToolSource?: ToolSourceMaterializer;
 
   /** Convert canonical generation settings to provider-native parameters. */
   mapSettings(settings: GenerationSettings): Record<string, unknown>;
