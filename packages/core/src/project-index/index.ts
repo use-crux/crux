@@ -22,6 +22,7 @@ import {
 
 export { captureSource } from "./source";
 export * from "./definition-kind-coverage";
+export * from "./manifest";
 export * from "./project-model";
 export * from "./rule-manifest";
 

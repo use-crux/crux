@@ -1,12 +1,13 @@
 ---
-'@use-crux/ai': major
-'@use-crux/core': patch
-'@use-crux/convex': patch
-'@use-crux/next': patch
-'@use-crux/otel': patch
-'@use-crux/react': patch
-'@use-crux/upstash': patch
+"@use-crux/ai": minor
+"@use-crux/core": minor
+"@use-crux/convex": patch
+"@use-crux/next": patch
+"@use-crux/otel": patch
+"@use-crux/react": patch
+"@use-crux/upstash": patch
 ---
+
 Make portable application entrypoints verifiable in both source and staged npm
 packages, remove package-wide Node engine restrictions where the primary graph
 is portable, and include the Next integration in TypeScript release staging.
@@ -21,3 +22,7 @@ Node `Buffer` global.
 Unify observability and host-lifecycle async scoping on Core's canonical
 carrier so no-AsyncLocalStorage runtimes retain synchronous fallback behavior
 while unsafe asynchronous ambient host scopes fail closed.
+
+Add portable deployment identity and privacy-safe Project Index manifest
+contracts to Core. The build-time Indexer now projects and verifies the same
+deterministic artifact internally.
