@@ -37,11 +37,22 @@ to use `cancelFlow(flowId, reason)`.
 Without a Runtime Engine, `handle.cancel(flowId)` delegates to the existing
 `cancelFlow(flowId)` record-store operation.
 
-With a Runtime Engine, it delegates to the same name-validated cancellation
-operation used by `crux.flows.cancel(name, flowId)`. A shared internal function
-will keep not-found, target-mismatch, idempotency, waiter/timer cleanup, and
-kernel cancellation behavior identical across both public entry points. The
-handle discards the kernel's internal `CancelWorkResult` and resolves to `void`.
+With a Runtime Engine, it delegates to a shared runtime cancellation operation
+by flow id. Handle cancellation remains id-bound, matching the existing
+object-bound `cancelFlow(flowId)` behavior in both modes. The name-bound
+`crux.flows.cancel(name, flowId)` entry point supplies an expected target name
+to the same helper and retains its target-mismatch validation.
+
+The Runtime Engine cancellation composite atomically marks both the owning work
+item and its flow snapshot `cancelled`, cancels owned waiter/timer
+registrations, updates scoped-idle accounting, and appends the cancellation
+event. This closes the existing stale-snapshot gap for both handle-bound and
+name-bound cancellation.
+
+`FlowHandle.cancel()` intentionally discards the public `CancelWorkResult` and
+resolves to `void`, matching `cancelFlow()`. Name-bound
+`crux.flows.cancel()` continues returning `CancelWorkResult` so callers that
+operate without a handle can inspect whether they won the idempotent transition.
 
 ## Tests
 
@@ -53,6 +64,9 @@ Use vertical TDD slices through public interfaces:
    cancelled without a Runtime Engine.
 3. Add a Runtime Engine behavior test proving the handle cancels durable work
    through the kernel and leaves the snapshot/work terminal.
+4. Extend the shared store-composite conformance case to prove Runtime Engine
+   cancellation atomically terminalizes the flow snapshot across memory,
+   Postgres, and Convex-backed stores.
 
 Existing Runtime Engine conformance tests continue to cover cancellation
 idempotency, waiter/timer races, and scoped-idle accounting.
