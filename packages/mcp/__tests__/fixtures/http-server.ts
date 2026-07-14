@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import {
   createServer,
   type IncomingMessage,
+  type IncomingHttpHeaders,
   type Server as HttpServer,
 } from "node:http";
 
@@ -25,6 +26,8 @@ export interface McpToolPage {
 /** Scenario controls exposed as real MCP server behavior. */
 export interface McpHttpFixtureScenario {
   readonly pages: readonly McpToolPage[];
+  /** Optional same-origin endpoint that redirects to the fixture's `/mcp`. */
+  readonly redirectFromPath?: string;
   /** Emit an intentionally malformed response for client-boundary tests. */
   readonly unsafeListToolsResult?: (cursor: string | undefined) => unknown;
   readonly callTool?: (input: {
@@ -36,6 +39,8 @@ export interface McpHttpFixtureScenario {
 /** Running in-process Streamable HTTP MCP fixture. */
 export interface McpHttpFixture {
   readonly url: string;
+  readonly requestMethods: readonly string[];
+  readonly requestHeaders: readonly IncomingHttpHeaders[];
   readonly requestedCursors: readonly (string | undefined)[];
   readonly toolCalls: readonly {
     readonly name: string;
@@ -57,6 +62,8 @@ export async function startMcpHttpFixture(
     scenario.pages.map((page) => [page.cursor, page] as const),
   );
   const requestedCursors: (string | undefined)[] = [];
+  const requestMethods: string[] = [];
+  const requestHeaders: IncomingHttpHeaders[] = [];
   const toolCalls: {
     readonly name: string;
     readonly arguments: Readonly<Record<string, unknown>>;
@@ -99,6 +106,13 @@ export async function startMcpHttpFixture(
   await protocol.connect(transport);
 
   const server = createServer((request, response) => {
+    requestMethods.push(request.method ?? "UNKNOWN");
+    requestHeaders.push({ ...request.headers });
+    if (scenario.redirectFromPath === request.url) {
+      response.writeHead(307, { location: "/mcp" });
+      response.end();
+      return;
+    }
     void handleRequest(transport, request, response).catch((error: unknown) => {
       if (response.headersSent) {
         response.destroy(error instanceof Error ? error : undefined);
@@ -128,7 +142,9 @@ export async function startMcpHttpFixture(
 
   let closed = false;
   return {
-    url: `http://127.0.0.1:${address.port}/mcp`,
+    url: `http://127.0.0.1:${address.port}${scenario.redirectFromPath ?? "/mcp"}`,
+    requestMethods,
+    requestHeaders,
     requestedCursors,
     toolCalls,
     async close() {

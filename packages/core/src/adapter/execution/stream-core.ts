@@ -22,11 +22,14 @@ import type { AdapterExecutionStreamArgs, CoreStepDialect } from "./types";
 import { initialCoreMessages } from "./messages";
 import { createCachedStreamHandle } from "./metadata";
 import { buildResolveOpts } from "./shared";
-import { createSafetyTextChunk, isSafetyTextChunk } from "./stream-safety";
+import { isSafetyTextChunk } from "./stream-safety";
 import { emitInputTokenEstimate } from "./media-token-budget";
 import { responseContent } from "../assistant-output";
 import type { Message } from "../../generation/messages";
 import { replaceTextSlots } from "./stream-content";
+import { materializeToolSources } from "./tool-sources";
+import { createStreamSourceCleanup } from "./stream-source-cleanup";
+import { trackRawStream } from "./stream-tracking";
 
 /**
  * Start one provider stream through the core-owned adapter dialect.
@@ -60,27 +63,9 @@ export async function streamCore<
     tokenBudget: args.tokenBudget,
     settings: args.settings,
   });
-  const resolved = await prompt.resolve(resolveOpts);
+  let resolved = await prompt.resolve(resolveOpts);
   const mappedSettings = dialect.mapSettings(resolved.settings);
-  const lifecycle = createToolLifecycle({
-    regime: "core",
-    resolved,
-    call: {
-      tools: args.tools,
-      toolsContext: args.toolsContext,
-      runtimeContext: args.runtimeContext,
-      toolMiddleware: args.toolMiddleware,
-      toolApproval: args.toolApproval,
-    },
-    promptId: prompt.id,
-    input: args.input ?? {},
-    timeout: args.timeout,
-    appendToolRound: dialect.appendToolRound,
-    sanitizeToolSchema: dialect.sanitizeToolSchema,
-  });
-  const tools = lifecycle.descriptors ? [...lifecycle.descriptors] : undefined;
   let messages = initialCoreMessages(resolved, args.messages);
-  messages = (await lifecycle.resume(messages)).messages;
   const safety = createSafety({
     call: {
       constraints: args.constraints,
@@ -98,171 +83,191 @@ export async function streamCore<
     systemPrompt: resolved.system,
   });
   messages = [...(await safety.guardInput({ messages })).messages];
-
-  let schemaParams: Record<string, unknown> | undefined;
-  if (resolved.schema && dialect.wrapOutputSchema) {
-    schemaParams = dialect.wrapOutputSchema(resolved.schema);
-  }
-  const providerMessages = await normalizeInvocationMessages(messages, {
-    provider: modelInfo.provider,
+  const sourceSession = await materializeToolSources({
+    dialect: dialect.id,
+    resolved,
+    materialize: dialect.materializeToolSource,
+    runtimeContext: args.runtimeContext,
+    abortSignal: args.signal,
   });
-  assertProviderMediaSupported(
-    { providerId: dialect.id, media: dialect.media },
-    {
-      provider: modelInfo.provider,
-      model: modelInfo.modelId,
-      messages: providerMessages,
-    },
-  );
+  resolved = sourceSession.resolved;
 
-  const callArgs: CallArgs<TExtra> = {
-    model: modelInfo.modelId,
-    system: resolved.system,
-    systemBlocks: resolved.systemBlocks,
-    messages: providerMessages,
-    settings: mappedSettings,
-    schema: resolved.schema,
-    schemaParams,
-    tools,
-    extra: (args.extra ?? {}) as TExtra,
-  };
-
-  const handle = await orchestrateStream(
-    {
-      promptId: prompt.id,
-      promptConfig: prompt.config ?? ({} as typeof prompt.config),
-      preparedArgs: { ...callArgs, input: args.input ?? {} },
-      input: args.input ?? {},
-      provider: modelInfo.provider,
-      model: modelInfo.modelId,
+  try {
+    const lifecycle = createToolLifecycle({
+      regime: "core",
       resolved,
-      outputMode: resolved.schema ? "object" : "text",
+      call: {
+        tools: args.tools,
+        toolsContext: args.toolsContext,
+        runtimeContext: args.runtimeContext,
+        toolMiddleware: args.toolMiddleware,
+        toolApproval: args.toolApproval,
+      },
+      promptId: prompt.id,
+      input: args.input ?? {},
       timeout: args.timeout,
-      createCachedStreamResult: (cached) =>
-        createCachedStreamHandle(cached) as unknown as MiddlewareResult,
-    },
-    async () => {
-      emitInputTokenEstimate({
-        messages: providerMessages,
+      appendToolRound: dialect.appendToolRound,
+      sanitizeToolSchema: dialect.sanitizeToolSchema,
+    });
+    const tools = lifecycle.descriptors
+      ? [...lifecycle.descriptors]
+      : undefined;
+    messages = (await lifecycle.resume(messages)).messages;
+
+    let schemaParams: Record<string, unknown> | undefined;
+    if (resolved.schema && dialect.wrapOutputSchema) {
+      schemaParams = dialect.wrapOutputSchema(resolved.schema);
+    }
+    const providerMessages = await normalizeInvocationMessages(messages, {
+      provider: modelInfo.provider,
+    });
+    assertProviderMediaSupported(
+      { providerId: dialect.id, media: dialect.media },
+      {
         provider: modelInfo.provider,
         model: modelInfo.modelId,
-        media: dialect.media,
-        tokenBudget: args.tokenBudget,
-      });
-      return withBudget(
-        (signal) =>
-          dialect.stream(dialect.client, callArgs, {
-            signal: composeAbortSignals(args.signal, signal),
-          }),
-        {
-          budget: "step",
-          limitMs: args.timeout?.stepMs,
-        },
-      ).catch((error: unknown) => {
-        throw normalizeAdapterCallError(error, {
-          providerId: modelInfo.provider,
-          signal: args.signal,
-          mapError: dialect.mapError,
+        messages: providerMessages,
+      },
+    );
+
+    const callArgs: CallArgs<TExtra> = {
+      model: modelInfo.modelId,
+      system: resolved.system,
+      systemBlocks: resolved.systemBlocks,
+      messages: providerMessages,
+      settings: mappedSettings,
+      schema: resolved.schema,
+      schemaParams,
+      tools,
+      extra: (args.extra ?? {}) as TExtra,
+    };
+
+    const handle = await orchestrateStream(
+      {
+        promptId: prompt.id,
+        promptConfig: prompt.config ?? ({} as typeof prompt.config),
+        preparedArgs: { ...callArgs, input: args.input ?? {} },
+        input: args.input ?? {},
+        provider: modelInfo.provider,
+        model: modelInfo.modelId,
+        resolved,
+        outputMode: resolved.schema ? "object" : "text",
+        timeout: args.timeout,
+        createCachedStreamResult: (cached) =>
+          createCachedStreamHandle(cached) as unknown as MiddlewareResult,
+      },
+      async () => {
+        emitInputTokenEstimate({
+          messages: providerMessages,
+          provider: modelInfo.provider,
+          model: modelInfo.modelId,
+          media: dialect.media,
+          tokenBudget: args.tokenBudget,
         });
-      });
-    },
-  );
+        return withBudget(
+          (signal) =>
+            dialect.stream(dialect.client, callArgs, {
+              signal: composeAbortSignals(args.signal, signal),
+            }),
+          {
+            budget: "step",
+            limitMs: args.timeout?.stepMs,
+          },
+        ).catch((error: unknown) => {
+          throw normalizeAdapterCallError(error, {
+            providerId: modelInfo.provider,
+            signal: args.signal,
+            mapError: dialect.mapError,
+          });
+        });
+      },
+    );
 
-  const safetyStream = safety.enabled ? safety.openStream() : undefined;
-  let streamedAssistantText = "";
+    const safetyStream = safety.enabled ? safety.openStream() : undefined;
+    const streamedAssistant = { text: "" };
+    const closeSources = createStreamSourceCleanup(sourceSession, args.signal);
 
-  /** Yield provider chunks while replacing held/transformed safety text deltas. */
-  async function* trackedRawStream() {
-    type Chunk = Awaited<TRawStream extends AsyncIterable<infer T> ? T : never>;
-    for await (const chunk of handle.rawStream as AsyncIterable<unknown>) {
-      const delta = handle.extractTextDelta(chunk);
-      if (!safetyStream || delta === undefined || delta === "") {
-        if (delta) streamedAssistantText += delta;
-        yield chunk as Chunk;
-        continue;
-      }
-      const directive = await safetyStream.feed(delta);
-      if (directive.kind === "hold") continue;
-      streamedAssistantText += directive.content;
-      if (directive.content === delta) {
-        yield chunk as Chunk;
-      } else if (directive.content.length > 0) {
-        yield createSafetyTextChunk(directive.content) as Chunk;
-      }
-    }
-    if (safetyStream) {
-      const seal = await safetyStream.finish();
-      if (seal.pending.length > 0) {
-        streamedAssistantText += seal.pending;
-        yield createSafetyTextChunk(seal.pending) as Chunk;
-      }
-    }
+    return {
+      ...handle,
+      rawStream: trackRawStream<TRawStream>({
+        rawStream: handle.rawStream as AsyncIterable<unknown>,
+        extractTextDelta: handle.extractTextDelta,
+        safetyStream,
+        appendText: (text) => {
+          streamedAssistant.text += text;
+        },
+        close: closeSources,
+      }),
+      extractTextDelta: (chunk: unknown) =>
+        isSafetyTextChunk(chunk) ? chunk.text : handle.extractTextDelta(chunk),
+      completion: async () => {
+        try {
+          const meta = await handle.completion();
+          const providerContent = responseContent({
+            content: meta?.content,
+            text: meta?.text ?? "",
+            toolCalls: meta?.toolCalls?.flatMap((call) =>
+              typeof call.id === "string"
+                ? [{ id: call.id, name: call.name, args: call.args }]
+                : [],
+            ),
+          });
+          const providerTextSlots = providerContent.flatMap((part) =>
+            part.type === "text" ? [part.text] : [],
+          );
+          const hasMixedProviderText =
+            providerTextSlots.length > 1 ||
+            (providerTextSlots.length > 0 &&
+              providerContent.some((part) => part.type !== "text"));
+          const guardedSlots =
+            safety.enabled && hasMixedProviderText
+              ? await safety.guardOutputTextParts(providerTextSlots)
+              : undefined;
+          const text = guardedSlots
+            ? guardedSlots.join("")
+            : safety.enabled
+              ? streamedAssistant.text
+              : (meta?.text ?? streamedAssistant.text);
+          const content = guardedSlots
+            ? replaceTextSlots(providerContent, guardedSlots)
+            : safety.enabled
+              ? replaceTextSlots(
+                  providerContent,
+                  providerTextSlots.length === 0 ? [] : [text],
+                  text,
+                )
+              : providerContent;
+          const stamped = meta ? safety.stamp(meta) : meta;
+          const assistantMessage: Message = {
+            role: "assistant",
+            content,
+            ...(meta?.toolCalls
+              ? { metadata: { toolCalls: meta.toolCalls } }
+              : {}),
+          };
+          const completionMessages = meta?.messages
+            ? replaceFinalAssistant(meta.messages, assistantMessage)
+            : [...messages, assistantMessage];
+          await lifecycle.captureTurn({
+            messages,
+            assistantText: streamedAssistant.text || undefined,
+            toolCalls: meta?.toolCalls,
+          });
+          return {
+            ...stamped,
+            text,
+            content,
+            messages: completionMessages,
+          };
+        } finally {
+          await closeSources();
+        }
+      },
+    };
+  } catch (error) {
+    await sourceSession.close();
+    throw error;
   }
-
-  return {
-    ...handle,
-    rawStream: trackedRawStream() as unknown as TRawStream &
-      AsyncIterable<unknown>,
-    extractTextDelta: (chunk: unknown) =>
-      isSafetyTextChunk(chunk) ? chunk.text : handle.extractTextDelta(chunk),
-    completion: async () => {
-      const meta = await handle.completion();
-      const providerContent = responseContent({
-        content: meta?.content,
-        text: meta?.text ?? "",
-        toolCalls: meta?.toolCalls?.flatMap((call) =>
-          typeof call.id === "string"
-            ? [{ id: call.id, name: call.name, args: call.args }]
-            : [],
-        ),
-      });
-      const providerTextSlots = providerContent.flatMap((part) =>
-        part.type === "text" ? [part.text] : [],
-      );
-      const hasMixedProviderText =
-        providerTextSlots.length > 1 ||
-        (providerTextSlots.length > 0 &&
-          providerContent.some((part) => part.type !== "text"));
-      const guardedSlots =
-        safety.enabled && hasMixedProviderText
-          ? await safety.guardOutputTextParts(providerTextSlots)
-          : undefined;
-      const text = guardedSlots
-        ? guardedSlots.join("")
-        : safety.enabled
-          ? streamedAssistantText
-          : (meta?.text ?? streamedAssistantText);
-      const content = guardedSlots
-        ? replaceTextSlots(providerContent, guardedSlots)
-        : safety.enabled
-          ? replaceTextSlots(
-              providerContent,
-              providerTextSlots.length === 0 ? [] : [text],
-              text,
-            )
-          : providerContent;
-      const stamped = meta ? safety.stamp(meta) : meta;
-      const assistantMessage: Message = {
-        role: "assistant",
-        content,
-        ...(meta?.toolCalls ? { metadata: { toolCalls: meta.toolCalls } } : {}),
-      };
-      const completionMessages = meta?.messages
-        ? replaceFinalAssistant(meta.messages, assistantMessage)
-        : [...messages, assistantMessage];
-      await lifecycle.captureTurn({
-        messages,
-        assistantText: streamedAssistantText || undefined,
-        toolCalls: meta?.toolCalls,
-      });
-      return {
-        ...stamped,
-        text,
-        content,
-        messages: completionMessages,
-      };
-    },
-  };
 }
 
 /** Stamp authoritative assistant output into a provider-completed transcript. */

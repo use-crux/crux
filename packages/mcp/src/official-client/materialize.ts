@@ -1,5 +1,4 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
 import type {
   McpToolSource,
@@ -12,6 +11,7 @@ import {
   mcpToolSourceError,
   mcpTransportErrorContext,
 } from "./errors";
+import { createOfficialClientTransport } from "./transport";
 import type { McpToolSourceSession } from "./types";
 
 /**
@@ -35,22 +35,11 @@ export async function materializeMcpToolSource<TRuntimeContext>(
     );
   }
   const errorContext = mcpTransportErrorContext(source.id, config);
-  if (config.type !== "streamable-http") {
-    throw new McpToolSourceError(
-      "transport-configuration",
-      errorContext,
-      new Error("Official MCP stdio materialization is added in Phase 3."),
-    );
-  }
 
   const client = new Client({ name: "@use-crux/mcp", version: "0.5.0" });
-  let transport: StreamableHTTPClientTransport;
+  let transport: ReturnType<typeof createOfficialClientTransport>;
   try {
-    transport = new StreamableHTTPClientTransport(new URL(config.url), {
-      ...(config.headers
-        ? { requestInit: { headers: { ...config.headers } } }
-        : {}),
-    });
+    transport = createOfficialClientTransport(config);
   } catch (error) {
     throw mcpToolSourceError("transport-configuration", errorContext, error);
   }
