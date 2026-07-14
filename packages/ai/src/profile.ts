@@ -32,9 +32,20 @@ export const aiSdkProviderRuntime = defineProviderRuntime({
     settings: mapAiSdkSettings,
     media: aiSdkMediaHooks,
     bind: (gateway: SdkGateway) => {
-      const { runTextLoop, runStructuredAttempt, runStream, replayStream } =
-        createAiSdkLoopRuntime(gateway);
-      return { runTextLoop, runStructuredAttempt, runStream, replayStream };
+      const {
+        materializeToolSource,
+        runTextLoop,
+        runStructuredAttempt,
+        runStream,
+        replayStream,
+      } = createAiSdkLoopRuntime(gateway);
+      return {
+        materializeToolSource,
+        runTextLoop,
+        runStructuredAttempt,
+        runStream,
+        replayStream,
+      };
     },
   },
   image: createAiSdkImageOperation,

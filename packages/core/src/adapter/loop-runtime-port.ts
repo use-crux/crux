@@ -25,6 +25,7 @@ import type { ModelInfo } from '../types'
 import type { GenerationSettings } from '../generation/types'
 import type { AdapterSpec } from './spec'
 import type { ProviderMediaHooks } from './native-chat/media-hooks'
+import type { ToolSourceMaterializer } from '../tools/tool-source'
 import type {
   ExecutorOutcome,
   ExecutorRequest,
@@ -90,6 +91,9 @@ export interface LoopRuntimePort<TModel, TRawResponse = unknown, TRawStream = un
 
   /** Provider-authored media validation consumed privately before SDK I/O. */
   readonly media?: ProviderMediaHooks
+
+  /** Materialize an inert prompt tool source for one SDK-loop invocation. */
+  readonly materializeToolSource?: ToolSourceMaterializer
 
   /**
    * Extract provider/model identity from an SDK model reference.

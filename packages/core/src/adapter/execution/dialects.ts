@@ -71,6 +71,7 @@ export function sdkLoopDialect<TModel, TRawResponse, TRawStream>(
     kind: 'sdk-loop',
     id: port.id,
     media: port.media,
+    materializeToolSource: port.materializeToolSource,
     describeModel: (model) => port.describeModel(model),
     mapSettings: (settings, model) => port.mapSettings(settings, model),
     runTextLoop: (request) => port.runTextLoop(request),

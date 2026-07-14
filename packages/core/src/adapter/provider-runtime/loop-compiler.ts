@@ -75,6 +75,7 @@ function portForBoundLoop(
   const port: LoopRuntimePort<unknown, unknown, unknown> = {
     id,
     media: loop.media,
+    materializeToolSource: bound.materializeToolSource,
     describeModel:
       loop.describeModel ?? ((model) => describeModelFallback(id, model)),
     mapSettings: loop.settings ?? (() => ({})),

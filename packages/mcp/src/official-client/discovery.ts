@@ -17,17 +17,24 @@ import type {
   McpMaterializedTool,
 } from "./types";
 
-interface DiscoveredTools {
+export interface DiscoveredTools {
   readonly tools: Readonly<Record<string, McpMaterializedTool>>;
   readonly discovery: McpDiscoveryMetadata;
 }
 
-interface McpDiscoverySource {
+export interface McpDiscoverySource {
   readonly id: string;
   readonly tools?: McpToolSelection;
 }
 
 const MAX_DISCOVERY_PAGES = 64;
+
+/** One selected remote definition with its final name and stable metadata. */
+export interface ProjectedMcpTool {
+  readonly tool: Tool;
+  readonly exposedName: string;
+  readonly metadata: McpDiscoveredToolMetadata;
+}
 
 /** Discover all pages and project selected tools into deterministic Crux names. */
 export async function discoverMcpTools(
@@ -62,6 +69,30 @@ export async function discoverMcpTools(
     cursor = page.nextCursor;
   } while (cursor !== undefined);
 
+  const projected = projectMcpTools(remoteTools, source, errorContext);
+  const tools = Object.fromEntries(
+    projected.map(({ tool, exposedName, metadata }) => [
+      exposedName,
+      materializedTool(client, tool, metadata, errorContext, abortSignal),
+    ]),
+  );
+
+  return {
+    tools,
+    discovery: {
+      toolListFingerprint:
+        projected[0]?.metadata.toolListFingerprint ?? canonicalFingerprint([]),
+      tools: projected.map(({ metadata }) => metadata),
+    },
+  };
+}
+
+/** Apply shared filtering, portable naming, and identity to MCP definitions. */
+export function projectMcpTools(
+  remoteTools: readonly Tool[],
+  source: McpDiscoverySource,
+  errorContext: McpToolSourceErrorContext,
+): readonly ProjectedMcpTool[] {
   const selected = remoteTools
     .filter((tool) => isSelected(tool.name, source.tools))
     .map((tool) => {
@@ -104,23 +135,11 @@ export async function discoverMcpTools(
         : {}),
     }),
   );
-  const tools = Object.fromEntries(
-    selected.map(({ tool, exposedName }, index) => [
-      exposedName,
-      materializedTool(
-        client,
-        tool,
-        metadata[index]!,
-        errorContext,
-        abortSignal,
-      ),
-    ]),
-  );
-
-  return {
-    tools,
-    discovery: { toolListFingerprint, tools: metadata },
-  };
+  return selected.map(({ tool, exposedName }, index) => ({
+    tool,
+    exposedName,
+    metadata: metadata[index]!,
+  }));
 }
 
 function materializedTool(

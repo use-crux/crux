@@ -172,6 +172,11 @@ function copySelection(selection: McpToolSelection): McpToolSelection {
 }
 
 export { materializeMcpToolSource } from "./official-client/materialize";
+export { materializeAiSdkMcpToolSource } from "./ai-sdk/materialize";
+export type {
+  AiSdkMcpMaterializedTool,
+  AiSdkMcpToolSourceSession,
+} from "./ai-sdk/types";
 export { McpToolSourceError } from "./official-client/errors";
 export type {
   McpToolSourceErrorContext,

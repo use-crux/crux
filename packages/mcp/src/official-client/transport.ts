@@ -41,7 +41,7 @@ const CROSS_ORIGIN_CREDENTIAL_HEADERS = [
 ] as const;
 
 /** Follow redirects while dropping caller credentials at an origin boundary. */
-function createSafeRedirectFetch(
+export function createSafeRedirectFetch(
   configuredHeaderNames: readonly string[],
 ): typeof globalThis.fetch {
   const nativeFetch = globalThis.fetch;
