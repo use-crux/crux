@@ -91,6 +91,120 @@ describe('local worker package architecture', () => {
       rmSync(stageDir, { recursive: true, force: true })
     }
   }, 30_000)
+
+  it('rejects staged local platform packages with non-executable binaries', () => {
+    const stageDir = mkdtempSync(join(tmpdir(), 'crux-npm-stage-'))
+    try {
+      const packageDir = join(stageDir, '@use-crux', 'local-linux-x64')
+      mkdirSync(join(packageDir, 'bin'), { recursive: true })
+      writeFileSync(join(packageDir, 'bin', 'crux'), 'test binary\n', {
+        mode: 0o644,
+      })
+      writeFileSync(join(packageDir, 'bin', 'crux-static-index-worker'), 'test worker\n', {
+        mode: 0o644,
+      })
+      writeJson(join(packageDir, 'package.json'), {
+        name: '@use-crux/local-linux-x64',
+        version: '0.5.0',
+        description: 'Crux local runtime binary for linux-x64',
+        os: ['linux'],
+        cpu: ['x64'],
+        files: ['bin'],
+        license: 'Apache-2.0',
+      })
+      writeJson(join(stageDir, 'packages.json'), {
+        packages: [
+          {
+            name: '@use-crux/local-linux-x64',
+            version: '0.5.0',
+            path: '@use-crux/local-linux-x64',
+          },
+        ],
+      })
+
+      const result = spawnSync(
+        process.execPath,
+        [join(repoRoot, 'scripts', 'validate-staged-npm-packages.mjs'), stageDir],
+        {
+          cwd: repoRoot,
+          encoding: 'utf8',
+        },
+      )
+
+      expect(result.status).not.toBe(0)
+      expect(`${result.stdout}\n${result.stderr}`).toContain('bin/crux must be executable')
+      expect(`${result.stdout}\n${result.stderr}`).toContain('bin/crux-static-index-worker must be executable')
+    } finally {
+      rmSync(stageDir, { recursive: true, force: true })
+    }
+  }, 30_000)
+
+  it('installs packed host packages and runs crux --help', () => {
+    if (process.platform !== 'linux' || process.arch !== 'x64') return
+
+    const stageDir = mkdtempSync(join(tmpdir(), 'crux-npm-stage-'))
+    try {
+      const wrapperDir = join(stageDir, '@use-crux', 'local')
+      const platformDir = join(stageDir, '@use-crux', 'local-linux-x64')
+      mkdirSync(join(wrapperDir, 'bin'), { recursive: true })
+      mkdirSync(join(platformDir, 'bin'), { recursive: true })
+
+      writeFileSync(
+        join(wrapperDir, 'bin', 'crux.cjs'),
+        readFileSync(join(repoRoot, 'packages', 'local', 'npm', 'local', 'bin', 'crux.cjs')),
+        { mode: 0o755 },
+      )
+      writeFileSync(join(platformDir, 'bin', 'crux'), '#!/bin/sh\necho "Crux help"\n', {
+        mode: 0o755,
+      })
+      writeFileSync(join(platformDir, 'bin', 'crux-static-index-worker'), '#!/bin/sh\nexit 0\n', { mode: 0o755 })
+
+      const version = '0.5.0-smoke'
+      writeJson(join(wrapperDir, 'package.json'), {
+        name: '@use-crux/local',
+        version,
+        bin: { crux: './bin/crux.cjs' },
+        files: ['bin'],
+        optionalDependencies: Object.fromEntries(
+          ['linux-x64', 'linux-arm64', 'darwin-x64', 'darwin-arm64', 'win32-x64', 'win32-arm64'].map((platform) => [
+            `@use-crux/local-${platform}`,
+            version,
+          ]),
+        ),
+      })
+      writeJson(join(platformDir, 'package.json'), {
+        name: '@use-crux/local-linux-x64',
+        version,
+        os: ['linux'],
+        cpu: ['x64'],
+        files: ['bin'],
+      })
+      writeJson(join(stageDir, 'packages.json'), {
+        packages: [
+          { name: '@use-crux/local', version, path: '@use-crux/local' },
+          {
+            name: '@use-crux/local-linux-x64',
+            version,
+            path: '@use-crux/local-linux-x64',
+          },
+        ],
+      })
+
+      const result = spawnSync(
+        process.execPath,
+        [join(repoRoot, 'scripts', 'validate-staged-npm-packages.mjs'), stageDir],
+        {
+          cwd: repoRoot,
+          encoding: 'utf8',
+        },
+      )
+
+      expect(`${result.stdout}\n${result.stderr}`).toContain('ran crux --help')
+      expect(result.status).toBe(0)
+    } finally {
+      rmSync(stageDir, { recursive: true, force: true })
+    }
+  }, 30_000)
 })
 
 interface WorkspacePackageJson {

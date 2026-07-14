@@ -255,7 +255,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       shouldPublish: ${{ steps.should-publish.outputs.should_publish }}
-      version: ${{ steps.version.outputs.version }}
+      version: ${{ steps.should-publish.outputs.release_version }}
       sha: ${{ steps.version.outputs.sha }}
     steps:
       - name: Checkout
@@ -266,6 +266,7 @@ jobs:
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
+          package-manager-cache: false
 
       - name: Create nightly version
         id: version
@@ -279,19 +280,57 @@ jobs:
         run: |
           should_publish=true
           latest_nightly=''
+          complete_nightly=false
+          release_version='${{ steps.version.outputs.version }}'
 
           if [ "$EVENT_NAME" = "schedule" ]; then
             latest_nightly="$(npm view @use-crux/core@nightly version --json 2>/dev/null | tr -d '"' || true)"
             if [[ "$latest_nightly" == *"sha${NIGHTLY_SHA}"* ]]; then
-              should_publish=false
+              complete_nightly=true
+              nightly_packages=(
+                @use-crux/core
+                @use-crux/ai
+                @use-crux/anthropic
+                @use-crux/convex
+                @use-crux/google
+                @use-crux/indexer
+                @use-crux/ingest
+                @use-crux/openai
+                @use-crux/otel
+                @use-crux/postgres
+                @use-crux/react
+                @use-crux/upstash
+                @use-crux/local
+                @use-crux/local-linux-x64
+                @use-crux/local-linux-arm64
+                @use-crux/local-darwin-x64
+                @use-crux/local-darwin-arm64
+                @use-crux/local-win32-x64
+                @use-crux/local-win32-arm64
+              )
+
+              for package in "${nightly_packages[@]}"; do
+                published_version="$(npm view "${package}@nightly" version --json 2>/dev/null | tr -d '"' || true)"
+                if [ "$published_version" != "$latest_nightly" ]; then
+                  complete_nightly=false
+                  break
+                fi
+              done
+
+              if [ "$complete_nightly" = "true" ]; then
+                should_publish=false
+                release_version="$latest_nightly"
+              fi
             fi
           fi
 
           echo "should_publish=$should_publish" >> "$GITHUB_OUTPUT"
+          echo "release_version=$release_version" >> "$GITHUB_OUTPUT"
           echo "latest_nightly=$latest_nightly" >> "$GITHUB_OUTPUT"
           {
             echo "Nightly version: ${{ steps.version.outputs.version }}"
             echo "Latest published nightly: ${latest_nightly:-none}"
+            echo "Complete published nightly: $complete_nightly"
             echo "Should publish: $should_publish"
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -470,3 +509,41 @@ jobs:
 
       - name: Summary
         run: echo "Published @use-crux packages at ${{ needs.nightly.outputs.version }} with npm tag nightly." >> "$GITHUB_STEP_SUMMARY"
+
+  nightly-github-release:
+    name: Nightly GitHub Release
+    needs: [nightly, nightly-publish]
+    if: always() && needs.nightly.result == 'success' && (needs.nightly.outputs.shouldPublish == 'false' || needs.nightly-publish.result == 'success')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Reconcile GitHub nightly pre-release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NIGHTLY_VERSION: ${{ needs.nightly.outputs.version }}
+        run: |
+          tag="v${NIGHTLY_VERSION}"
+          title="Crux ${NIGHTLY_VERSION}"
+          notes="Automated nightly build from main at ${GITHUB_SHA}. Install from npm with: npm install @use-crux/local@nightly"
+
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            prerelease="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json isPrerelease --jq .isPrerelease)"
+            draft="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)"
+            tag_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${tag}" --jq .object.sha)"
+
+            if [ "$prerelease" != "true" ] || [ "$draft" != "false" ] || [ "$tag_sha" != "$GITHUB_SHA" ]; then
+              echo "GitHub release $tag does not match nightly source $GITHUB_SHA." >&2
+              exit 1
+            fi
+          else
+            tag_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${tag}" --jq .object.sha 2>/dev/null || true)"
+            if [ -n "$tag_sha" ] && [ "$tag_sha" != "$GITHUB_SHA" ]; then
+              echo "Git tag $tag does not match nightly source $GITHUB_SHA." >&2
+              exit 1
+            fi
+
+            gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$title" --notes "$notes" --prerelease --latest=false
+          fi
+
+      - name: Summary
+        run: |
+          echo "GitHub pre-release: v${{ needs.nightly.outputs.version }}." >> "$GITHUB_STEP_SUMMARY"
