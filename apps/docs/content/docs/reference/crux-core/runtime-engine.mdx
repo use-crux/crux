@@ -111,6 +111,18 @@ With `config({ runtime })`, flows can use:
 
 Durable payloads must be JSON-compatible. Complex data should live in application storage with ids or URLs passed through runtime payloads.
 
+`flow.defer()` and `flow.after()` are positionally identified durable effects.
+Each call contributes an ordered replay-fingerprint entry and becomes durable
+only when the flow reaches its next suspension or completion barrier. The
+effect and that flow progress commit in one transaction, so replay returns the
+recorded child work id or timer instead of scheduling a duplicate. Calls after
+the last committed barrier are buffered again on replay.
+
+Deferred and scheduled children share the parent's current-flow idle scope but
+remain independent work. Cancelling the parent does not cancel those children;
+use `flow.untilIdle({ scope: 'current-flow' })` or cancel the child work
+explicitly when coordination is required.
+
 Delivered event payloads are embedded in the flow snapshot at delivery time. Runtime-backed replay reads the snapshot payload, not the event log, so delivered flows do not depend on unbounded event history.
 
 ## Retention

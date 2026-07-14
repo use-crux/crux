@@ -28,6 +28,7 @@ export interface StoreCompositeRollbackCase {
   readonly kind: RuntimeCompositeKind
   readonly writesBeforeFailure: number
   readonly prepare?: (store: RuntimeStoreAdapter) => Promise<void>
+  readonly verifySuccess?: (store: RuntimeStoreAdapter) => Promise<void>
   readonly verifyRollback: (store: RuntimeStoreAdapter) => Promise<void>
   readonly run: (store: RuntimeStoreAdapter) => Promise<void>
 }

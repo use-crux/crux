@@ -13,7 +13,7 @@ Crux needs a runtime to resolve durable target names, persist waiter/timer/task 
 
 ## What still works
 
-Object-bound flow APIs still work when your code has the flow handle: `flow.suspend()`, `reviewFlow.signal(...)`, and `reviewFlow.run({ resume: flowId })`.
+Object-bound flow APIs still work when your code has the flow handle: `flow.suspend()`, `reviewFlow.signal(...)`, `reviewFlow.resume(flowId)`, and `reviewFlow.cancel(flowId)`.
 
 ## Fix
 

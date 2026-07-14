@@ -19,6 +19,7 @@ export function registerStoreCompositeTests<
       const store = await options.createStore()
       await testCase.prepare?.(store)
       await expect(testCase.run(store), testCase.kind).resolves.toBeUndefined()
+      await testCase.verifySuccess?.(store)
     }
   })
 

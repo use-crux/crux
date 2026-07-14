@@ -280,6 +280,56 @@ describe('runtime-backed flows', () => {
     await expect(crux.flows.cancel('review', cancellable.flowId)).resolves.toEqual({
       cancelled: true,
     })
+    await expect(
+      runtime.store.state.getSnapshot(cancellable.flowId as FlowId, {
+        namespace: 'tenant-a',
+      }),
+    ).resolves.toMatchObject({ status: 'cancelled' })
+
+    crux.dispose()
+  })
+
+  it('cancels runtime work and its flow snapshot through the flow handle', async () => {
+    const runtime = node({
+      namespace: 'tenant-a',
+      autoStartMaintenance: false,
+    })
+    const crux = config({ runtime })
+    const reviewFlow = flow('handle-cancel-review', async (scope) => {
+      await scope.suspend('approval')
+      return 'done'
+    })
+
+    const suspended = await reviewFlow.run({ flowId: 'flow_cancel_via_handle' })
+    const before = await runtime.store.state.getSnapshot(suspended.flowId as FlowId, {
+      namespace: 'tenant-a',
+    })
+
+    await expect(reviewFlow.cancel(suspended.flowId)).resolves.toBeUndefined()
+    await expect(
+      runtime.store.state.getWork(before!.workId as WorkId, {
+        namespace: 'tenant-a',
+      }),
+    ).resolves.toMatchObject({ status: 'cancelled' })
+    await expect(
+      runtime.store.state.getSnapshot(suspended.flowId as FlowId, {
+        namespace: 'tenant-a',
+      }),
+    ).resolves.toMatchObject({ status: 'cancelled' })
+
+    crux.dispose()
+  })
+
+  it('keeps handle cancellation idempotent for an unknown runtime flow id', async () => {
+    const crux = config({
+      runtime: node({ namespace: 'tenant-a', autoStartMaintenance: false }),
+    })
+    const reviewFlow = flow('missing-handle-cancel', async () => 'done')
+
+    await expect(reviewFlow.cancel('missing_flow')).resolves.toBeUndefined()
+    await expect(
+      crux.flows.cancel('missing-handle-cancel', 'missing_flow'),
+    ).rejects.toMatchObject({ code: 'TARGET_NOT_FOUND' })
 
     crux.dispose()
   })

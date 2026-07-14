@@ -31,7 +31,7 @@ Define a named flow and return a frozen `FlowHandle`. Separates definition from 
 | `name`    | `string`                                               | Human-readable flow name                                                                             |
 | `handler` | `(flow: FlowScope<TInput>, input?: TInput) => T \| ...` | Flow function with access to `flow.step()`, `flow.suspend()`, `flow.cancel()`, and optional input data |
 
-**Returns:** `FlowHandle<T, TInput>` -- frozen handle with `.run()`, `.resume()`, `.signal()`, and `.name`
+**Returns:** `FlowHandle<T, TInput>` -- frozen handle with `.run()`, `.resume()`, `.signal()`, `.cancel()`, and `.name`
 
 ```ts
 import { flow } from '@use-crux/core/flow'
@@ -232,6 +232,16 @@ Cancel a suspended flow by updating its stored snapshot status to `'cancelled'`.
 | --------- | --------- | ------------------- |
 | `flowId`  | `string`  | The flow's ID       |
 | `reason`  | `string?` | Cancellation reason |
+
+### `handle.cancel(flowId)`
+
+Cancel a flow through the handle that defined it. Without a Runtime Engine,
+this delegates to `cancelFlow()`. With a Runtime Engine, it atomically marks the
+durable work and flow snapshot cancelled and cleans up the flow's waiter/timer
+registrations. Repeated calls and unknown flow ids are idempotent no-ops.
+
+Cancelling a parent flow does not cancel independent child work created through
+`flow.defer()` or `flow.after()`.
 
 ### `listFlows(options?)`
 

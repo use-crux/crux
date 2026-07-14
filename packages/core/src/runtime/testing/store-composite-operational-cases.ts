@@ -125,12 +125,26 @@ function timersFireDueCase(): StoreCompositeRollbackCase {
 }
 
 function workCancelCase(): StoreCompositeRollbackCase {
-  const work = makeConformanceWorkItem()
+  const work = makeConformanceWorkItem({
+    work: { kind: 'flow.resume', flowId: FLOW_ID },
+  })
   return {
     kind: 'work.cancel',
     writesBeforeFailure: 1,
     prepare: async (store) => {
       await store.state.putWork(work)
+      await store.state.putSnapshot({
+        flowId: FLOW_ID,
+        workId: work.workId,
+        targetId: work.targetId,
+        namespace: work.namespace,
+        status: 'suspended',
+        input: {},
+        completedSteps: {},
+        fingerprint: [],
+        pendingSuspends: [],
+        updatedAt: LATER,
+      })
       await store.waiters.register({
         namespace: work.namespace,
         eventName: 'approved',
@@ -145,10 +159,21 @@ function workCancelCase(): StoreCompositeRollbackCase {
         workId: work.workId,
       })
     },
+    verifySuccess: async (store) => {
+      await expect(
+        store.state.getWork(work.workId, { namespace: work.namespace }),
+      ).resolves.toMatchObject({ status: 'cancelled' })
+      await expect(
+        store.state.getSnapshot(FLOW_ID, { namespace: work.namespace }),
+      ).resolves.toMatchObject({ status: 'cancelled' })
+    },
     verifyRollback: async (store) => {
       await expect(store.state.getWork(work.workId, { namespace: work.namespace })).resolves.toMatchObject({
         status: 'pending',
       })
+      await expect(
+        store.state.getSnapshot(FLOW_ID, { namespace: work.namespace }),
+      ).resolves.toMatchObject({ status: 'suspended' })
       const waiters = await store.waiters.listByWork(work.workId)
       expect(waiters).toEqual([expect.objectContaining({ state: 'armed' })])
     },

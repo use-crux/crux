@@ -14,7 +14,7 @@ import { putWorkWithIdleAccounting } from './kernel-idle'
 import type { CancelWorkInput, CancelWorkResult } from './kernel-types'
 import { isTerminalWork } from './kernel-shared'
 import type { RuntimeCompositeDeps, RuntimeCompositeRunner } from './composites'
-import { transition } from './work'
+import { transition, type WorkItem } from './work'
 
 /** Dependencies for cancellation. */
 export interface KernelCancellationDeps extends RuntimeCompositeDeps {
@@ -39,7 +39,12 @@ export async function cancelWorkInTransaction(
   const current = await tx.state.getWork(input.workId, {
     namespace: input.namespace,
   })
-  if (!current || isTerminalWork(current)) return { cancelled: false }
+  if (!current) return { cancelled: false }
+  if (current.status === 'cancelled') {
+    await cancelFlowSnapshot(tx, current, deps.now())
+    return { cancelled: false }
+  }
+  if (isTerminalWork(current)) return { cancelled: false }
 
   await putWorkWithIdleAccounting(
     tx,
@@ -47,6 +52,7 @@ export async function cancelWorkInTransaction(
     current,
     transition(current, { status: 'cancelled' }),
   )
+  await cancelFlowSnapshot(tx, current, deps.now())
 
   const waiters = await tx.waiters.listByWork(input.workId)
   for (const waiter of waiters) {
@@ -64,4 +70,23 @@ export async function cancelWorkInTransaction(
     payload: { workId: input.workId },
   })
   return { cancelled: true }
+}
+
+async function cancelFlowSnapshot(
+  tx: RuntimeStoreTransaction,
+  work: WorkItem,
+  now: Date,
+): Promise<void> {
+  if (work.work.kind !== 'flow.resume' && work.work.kind !== 'flow.timeout') return
+
+  const snapshot = await tx.state.getSnapshot(work.work.flowId, {
+    namespace: work.namespace,
+  })
+  if (!snapshot || snapshot.status === 'cancelled') return
+
+  await tx.state.putSnapshot({
+    ...snapshot,
+    status: 'cancelled',
+    updatedAt: now,
+  })
 }

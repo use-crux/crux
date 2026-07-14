@@ -158,29 +158,48 @@ export function createCruxFlowRuntimeControls(): CruxFlowRuntimeControls {
       }),
 
     cancel: (targetName: string, flowId: string) =>
-      withRuntime('crux.flows.cancel()', async ({ runtime }) => {
-        const snapshot = await runtime.store.state.getSnapshot(flowId as FlowId, {
-          namespace: runtime.namespace,
-        })
-        if (!snapshot) {
-          throw runtimeFlowNotFoundError({
-            api: 'crux.flows.cancel()',
-            flowId,
-          })
-        }
-        if (snapshot.targetId !== (targetName as RuntimeTargetId)) {
-          throw runtimeFlowTargetMismatchError({
-            api: 'crux.flows.cancel()',
-            flowId,
-            expected: snapshot.targetId,
-            actual: targetName,
-          })
-        }
-        return await runtime.kernel.cancelWork({
-          namespace: runtime.namespace,
-          workId: snapshot.workId,
-        })
+      cancelRuntimeFlow({
+        api: 'crux.flows.cancel()',
+        flowId,
+        targetName,
+        strictMissing: true,
       }),
+  })
+}
+
+/** @internal Cancel runtime-backed flow work by id. */
+export function cancelRuntimeFlow(options: {
+  readonly api: string
+  readonly flowId: string
+  readonly targetName?: string
+  readonly strictMissing?: boolean
+}): Promise<CancelWorkResult> {
+  return withRuntime(options.api, async ({ runtime }) => {
+    const snapshot = await runtime.store.state.getSnapshot(options.flowId as FlowId, {
+      namespace: runtime.namespace,
+    })
+    if (!snapshot) {
+      if (!options.strictMissing) return { cancelled: false }
+      throw runtimeFlowNotFoundError({
+        api: options.api,
+        flowId: options.flowId,
+      })
+    }
+    if (
+      options.targetName !== undefined &&
+      snapshot.targetId !== (options.targetName as RuntimeTargetId)
+    ) {
+      throw runtimeFlowTargetMismatchError({
+        api: options.api,
+        flowId: options.flowId,
+        expected: snapshot.targetId,
+        actual: options.targetName,
+      })
+    }
+    return await runtime.kernel.cancelWork({
+      namespace: runtime.namespace,
+      workId: snapshot.workId,
+    })
   })
 }
 
