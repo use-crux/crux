@@ -2,7 +2,7 @@
 
 import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { cp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { chmod, cp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname, extname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -405,6 +405,9 @@ async function stageLocalPlatform(platform) {
   const stageDir = packageStageDir(packageName)
   await mkdir(join(stageDir, 'bin'), { recursive: true })
   await cp(sourceBinDir, join(stageDir, 'bin'), { recursive: true })
+  if (platform.os !== 'win32') {
+    await Promise.all([platform.crux, platform.worker].map((binary) => chmod(join(stageDir, 'bin', binary), 0o755)))
+  }
   await copyIfExists(join(repoRoot, 'packages/local/npm/local/LICENSE'), join(stageDir, 'LICENSE'))
   await copyIfExists(join(repoRoot, 'packages/local/npm/local/README.md'), join(stageDir, 'README.md'))
 
