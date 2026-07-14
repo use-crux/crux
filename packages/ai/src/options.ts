@@ -16,7 +16,7 @@ import type {
 } from "ai";
 import type { z } from "zod";
 import type {
-  Context,
+  ContextEntry,
   GenerationSettings,
   KnownToolsFor,
   Message,
@@ -99,7 +99,7 @@ export interface AIExtra extends Record<string, unknown> {
 
 type AIPromptForOptions<
   TOwnInput extends z.ZodType,
-  TContexts extends readonly Context<z.ZodType>[],
+  TContexts extends readonly ContextEntry[],
   TPromptTools extends Record<string, unknown> | undefined = Record<string, unknown> | undefined,
 > = Prompt<TOwnInput, z.ZodType | undefined, TContexts, TPromptTools>;
 
@@ -166,7 +166,7 @@ interface AIGenerateBaseOptions<
 /** Options for `generate()` and `stream()` with AI SDK models. */
 export type AIGenerateOptions<
   TOwnInput extends z.ZodType,
-  TContexts extends readonly Context<z.ZodType>[],
+  TContexts extends readonly ContextEntry[],
   TCallTools extends ToolSet | undefined = ToolSet | undefined,
   TPrompt extends AIPromptForOptions<TOwnInput, TContexts> | undefined = undefined,
   TRuntimeContext = unknown,

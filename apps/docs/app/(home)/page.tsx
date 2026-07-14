@@ -677,7 +677,7 @@ export default function HomePage() {
           </div>
           <div className="mt-10 inline-flex items-center gap-3 rounded-lg border border-fd-border bg-fd-card/50 px-5 py-2.5 font-mono text-[13px]">
             <span className="select-none text-crux/50">$</span>
-            <span className="text-fd-foreground/80">alpha: public packages pending</span>
+            <span className="text-fd-foreground/80">alpha · available on npm</span>
           </div>
         </div>
       </section>

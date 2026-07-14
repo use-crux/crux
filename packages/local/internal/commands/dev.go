@@ -3,9 +3,12 @@ package commands
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -105,11 +108,21 @@ func NewDevCmd(f *cli.Factory) *cobra.Command {
 				serverURL = fmt.Sprintf("http://localhost:%d", port)
 			}
 
+			root, err := resolveConfigInspectRoot("")
+			if err != nil {
+				return err
+			}
+			qualityDir, err := resolveDevQualityDir(ctx, root)
+			if err != nil {
+				devStatusf(io, "%s Warning: %s\n", devBullet(io), err)
+			}
+
 			// Start the Go HTTP/WS server directly (no Node.js subprocess).
 			devSrv := server.NewDevServer(server.DevServerOptions{
-				Port:   port,
-				Tunnel: tunnel,
-				Quiet:  tuiMode,
+				Port:       port,
+				Tunnel:     tunnel,
+				Quiet:      tuiMode,
+				QualityDir: qualityDir,
 			})
 			if err := devSrv.Start(); err != nil {
 				return err
@@ -190,6 +203,34 @@ func NewDevCmd(f *cli.Factory) *cobra.Command {
 	cmd.Flags().BoolVar(&startupDebug, "startup-debug", false, "Show startup timing diagnostics")
 
 	return cmd
+}
+
+func resolveDevQualityDir(ctx context.Context, root string) (string, error) {
+	fallback := filepath.Join(root, ".crux", "quality")
+	raw, err := resolveProjectConfigForInspect(ctx, root, "", "")
+	if err != nil {
+		return fallback, fmt.Errorf("config inspection failed; using default quality directory: %w", err)
+	}
+	var config struct {
+		Root    string `json:"root"`
+		Quality struct {
+			Dir configSetting `json:"dir"`
+		} `json:"quality"`
+	}
+	if err := json.Unmarshal(raw, &config); err != nil {
+		return fallback, fmt.Errorf("invalid config inspection result; using default quality directory: %w", err)
+	}
+	dir := config.Quality.Dir.Value
+	if strings.TrimSpace(dir) == "" {
+		return fallback, fmt.Errorf("invalid config inspection result; using default quality directory: quality.dir.value is missing or empty")
+	}
+	if filepath.IsAbs(dir) {
+		return dir, nil
+	}
+	if config.Root != "" {
+		root = config.Root
+	}
+	return filepath.Join(root, dir), nil
 }
 
 func printIngestTokenHint(io *output.IO, devSrv *server.DevServer) {

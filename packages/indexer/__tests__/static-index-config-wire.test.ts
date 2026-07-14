@@ -27,8 +27,10 @@ describe('Static Index config wire artifact', () => {
 
     await expect(inspectProjectStaticIndexConfig({ root })).resolves.toMatchObject({
       nativeAstEnabled: true,
+      nativeAstConfigured: true,
       nativeAstFrontend: 'oxc',
       staticSyntaxEnabled: true,
+      staticSyntaxConfigured: true,
       staticSyntaxFrontend: 'oxc',
     })
   }, 30_000)

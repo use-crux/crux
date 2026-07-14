@@ -24,6 +24,7 @@ func observabilityStats(ctx context.Context, obs *observability.Service) store.S
 	var totalTokens int
 
 	for _, run := range runs {
+		headline := true
 		switch normalizedStatus(run.Status) {
 		case "ok":
 			successCount++
@@ -33,12 +34,16 @@ func observabilityStats(ctx context.Context, obs *observability.Service) store.S
 			errorCount++
 			totalDuration += run.DurationMs
 			completedCount++
-		default:
+		case "running":
 			runningCount++
+		default:
+			headline = false
 		}
-		metrics := rawMap(run.Metrics)
-		totalCost += floatMetric(metrics, "costUsd", "cost")
-		totalTokens += intMetric(metrics, "totalTokens", "tokens")
+		if headline {
+			metrics := rawMap(run.Metrics)
+			totalCost += floatMetric(metrics, "costUsd", "cost")
+			totalTokens += intMetric(metrics, "totalTokens", "tokens")
+		}
 	}
 
 	totalExecutions := successCount + errorCount + runningCount

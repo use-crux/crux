@@ -193,6 +193,7 @@ export async function orchestrateStream<TArgs extends Record<string, unknown>, T
     | 'input'
     | 'provider'
     | 'model'
+    | 'traceModel'
     | 'resolved'
     | 'outputMode'
     | 'createCachedStreamResult'

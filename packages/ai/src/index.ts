@@ -43,7 +43,7 @@ import type {
   Prompt,
   AnyPrompt,
   AnyToolSet,
-  Context,
+  ContextEntry,
   MergedInput,
   GenerationSettings,
   Message,
@@ -255,7 +255,7 @@ export interface CruxAi {
   generate<
     TOwnInput extends z.ZodType,
     TOutput extends z.ZodType | undefined,
-    TContexts extends readonly Context<z.ZodType>[],
+    TContexts extends readonly ContextEntry[],
     TPromptTools extends AnyToolSet | undefined = undefined,
     TCallTools extends ToolSet | undefined = undefined,
     TRuntimeContext = unknown,
@@ -278,7 +278,7 @@ export interface CruxAi {
   stream<
     TOwnInput extends z.ZodType,
     TOutput extends z.ZodType | undefined,
-    TContexts extends readonly Context<z.ZodType>[],
+    TContexts extends readonly ContextEntry[],
     TPromptTools extends AnyToolSet | undefined = undefined,
     TCallTools extends ToolSet | undefined = undefined,
     TRuntimeContext = unknown,
@@ -301,7 +301,7 @@ export interface CruxAi {
   prepare?<
     TOwnInput extends z.ZodType,
     TOutput extends z.ZodType | undefined,
-    TContexts extends readonly Context<z.ZodType>[],
+    TContexts extends readonly ContextEntry[],
     TPromptTools extends AnyToolSet | undefined = undefined,
     TCallTools extends ToolSet | undefined = undefined,
     TRuntimeContext = unknown,
@@ -366,7 +366,7 @@ type CallOpts = Record<string, unknown> & {
 type AiPromptInstance<
   TOwnInput extends z.ZodType,
   TOutput extends z.ZodType | undefined,
-  TContexts extends readonly Context<z.ZodType>[],
+  TContexts extends readonly ContextEntry[],
   TPromptTools extends AnyToolSet | undefined,
 > = Prompt<TOwnInput, TOutput, TContexts, TPromptTools>;
 

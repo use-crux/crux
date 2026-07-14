@@ -86,6 +86,12 @@ func deriveInsights(in qualityInsightInputs) []qualityInsightRecord {
 	}
 
 	patternInsights, suppressedRunSignals := qualityPatternInsights(runs)
+	latestSuccessByTarget := map[string]int64{}
+	for _, run := range runs {
+		if run.TargetID != "" && (run.Status == "ok" || run.Status == "success") && run.StartedAt > latestSuccessByTarget[run.TargetID] {
+			latestSuccessByTarget[run.TargetID] = run.StartedAt
+		}
+	}
 
 	for _, run := range runs {
 		if run.ToolCallCount < 8 {
@@ -108,11 +114,16 @@ func deriveInsights(in qualityInsightInputs) []qualityInsightRecord {
 
 	for _, run := range runs {
 		if (run.Status == "stale" || run.Status == "incomplete") && !suppressedRunSignals.has("lifecycle", run.TraceID) {
+			severity := "high"
+			latestSuccess := latestSuccessByTarget[run.TargetID]
+			if run.Status == "incomplete" && run.TargetID != "" && run.StartedAt > 0 && latestSuccess > 0 && latestSuccess > run.StartedAt {
+				severity = "medium"
+			}
 			insights = append(insights, qualityInsightRecord{
 				Tag:            "QualityInsight",
 				InsightID:      "run-lifecycle-" + qualityfs.SafeFileName(run.TraceID),
 				Title:          "Run did not close cleanly",
-				Severity:       "high",
+				Severity:       severity,
 				Tags:           []string{"Observability", "Runtime"},
 				Summary:        fmt.Sprintf("%s is %s and may have missing terminal records.", run.TargetID, run.Status),
 				TargetID:       run.TargetID,

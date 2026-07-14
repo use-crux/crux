@@ -17,6 +17,86 @@ func TestDeriveInsightsPureBehavior(t *testing.T) {
 		assert func(*testing.T, []qualityInsightRecord)
 	}{
 		{
+			name: "historical incomplete run is medium after later success",
+			input: qualityInsightInputs{
+				Quality: &qualityfs.Snapshot{},
+				Now:     now,
+				Runs: []qualityRunRecord{
+					{TraceID: "successful-smoke", TargetID: "smoke", Status: "ok", StartedAt: now.UnixMilli()},
+					{TraceID: "stale-smoke", TargetID: "smoke", Status: "incomplete", StartedAt: now.Add(-time.Minute).UnixMilli()},
+					{TraceID: "successful-other", TargetID: "other", Status: "success", StartedAt: now.Add(time.Minute).UnixMilli()},
+				},
+			},
+			assert: func(t *testing.T, insights []qualityInsightRecord) {
+				t.Helper()
+				insight := derivedInsightByID(insights, "run-lifecycle-stale-smoke")
+				if insight == nil {
+					t.Fatalf("missing inspectable lifecycle insight in %#v", insights)
+				}
+				if insight.Severity != "medium" {
+					t.Fatalf("lifecycle insight severity = %q, want medium", insight.Severity)
+				}
+			},
+		},
+		{
+			name: "unmitigated incomplete run remains high",
+			input: qualityInsightInputs{
+				Quality: &qualityfs.Snapshot{},
+				Now:     now,
+				Runs: []qualityRunRecord{
+					{TraceID: "incomplete-smoke", TargetID: "smoke", Status: "incomplete", StartedAt: now.UnixMilli()},
+					{TraceID: "simultaneous-smoke", TargetID: "smoke", Status: "success", StartedAt: now.UnixMilli()},
+					{TraceID: "successful-other", TargetID: "other", Status: "success", StartedAt: now.Add(time.Minute).UnixMilli()},
+				},
+			},
+			assert: func(t *testing.T, insights []qualityInsightRecord) {
+				t.Helper()
+				insight := derivedInsightByID(insights, "run-lifecycle-incomplete-smoke")
+				if insight == nil {
+					t.Fatalf("missing inspectable lifecycle insight in %#v", insights)
+				}
+				if insight.Severity != "high" {
+					t.Fatalf("lifecycle insight severity = %q, want high", insight.Severity)
+				}
+			},
+		},
+		{
+			name: "incomplete run with unknown timestamp remains high",
+			input: qualityInsightInputs{
+				Quality: &qualityfs.Snapshot{},
+				Now:     now,
+				Runs: []qualityRunRecord{
+					{TraceID: "incomplete-unknown", TargetID: "smoke", Status: "incomplete", StartedAt: 0},
+					{TraceID: "successful-smoke", TargetID: "smoke", Status: "success", StartedAt: now.UnixMilli()},
+				},
+			},
+			assert: func(t *testing.T, insights []qualityInsightRecord) {
+				t.Helper()
+				insight := derivedInsightByID(insights, "run-lifecycle-incomplete-unknown")
+				if insight == nil || insight.Severity != "high" {
+					t.Fatalf("lifecycle insight = %#v, want high severity", insight)
+				}
+			},
+		},
+		{
+			name: "invalid success timestamp does not mitigate incomplete run",
+			input: qualityInsightInputs{
+				Quality: &qualityfs.Snapshot{},
+				Now:     now,
+				Runs: []qualityRunRecord{
+					{TraceID: "incomplete-invalid", TargetID: "smoke", Status: "incomplete", StartedAt: -1},
+					{TraceID: "successful-unknown", TargetID: "smoke", Status: "success", StartedAt: 0},
+				},
+			},
+			assert: func(t *testing.T, insights []qualityInsightRecord) {
+				t.Helper()
+				insight := derivedInsightByID(insights, "run-lifecycle-incomplete-invalid")
+				if insight == nil || insight.Severity != "high" {
+					t.Fatalf("lifecycle insight = %#v, want high severity", insight)
+				}
+			},
+		},
+		{
 			name: "patterns suppress covered per-run signals",
 			input: qualityInsightInputs{
 				Quality: &qualityfs.Snapshot{},

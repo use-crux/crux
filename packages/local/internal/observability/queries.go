@@ -12,6 +12,12 @@ import (
 
 const runSummaryRollupBatchSize = 100
 
+const effectiveRunStatusSQL = `CASE
+	WHEN r.lifecycle_status = 'reconciled-incomplete' THEN 'incomplete'
+	WHEN r.lifecycle_status LIKE 'reconciled-terminal:%' THEN substr(r.lifecycle_status, length('reconciled-terminal:') + 1)
+	ELSE ifnull(r.status, '')
+END`
+
 func (s *Service) Run(ctx context.Context, runID string) (RunSummary, error) {
 	queryCtx, cancel := s.queryContext(ctx)
 	defer cancel()
@@ -57,7 +63,7 @@ func (s *Service) loadRunSummary(ctx context.Context, runID string, includeCount
 		SELECT
 			r.run_id, ifnull(r.trace_id, ''), ifnull(r.session_id, ''), ifnull(r.user_id, ''),
 			ifnull(r.name, ''), ifnull(r.root_primitive, ''),
-			ifnull(r.status, ''), ifnull(r.started_at, ''), ifnull(r.ended_at, ''),
+			`+effectiveRunStatusSQL+`, ifnull(r.started_at, ''), ifnull(r.ended_at, ''),
 			ifnull(r.duration_ms, 0),
 			'', '', '',`+countProjection+`,
 			ifnull(r.last_activity_at, ''), r.revision,
@@ -130,7 +136,7 @@ func (s *Service) runsWithOptions(ctx context.Context, opts RunListOptions) ([]R
 		SELECT
 			r.run_id, ifnull(r.trace_id, ''), ifnull(r.session_id, ''), ifnull(r.user_id, ''),
 			ifnull(r.name, ''), ifnull(r.root_primitive, ''),
-			ifnull(r.status, ''), ifnull(r.started_at, ''), ifnull(r.ended_at, ''),
+			` + effectiveRunStatusSQL + `, ifnull(r.started_at, ''), ifnull(r.ended_at, ''),
 			ifnull(r.duration_ms, 0),
 			'', '', '',
 			r.record_count, r.span_count, r.event_count, r.artifact_count, r.edge_count,
@@ -220,7 +226,7 @@ func runListWhereClause(opts RunListOptions) (string, []any, error) {
 		args = append(args, opts.SessionID)
 	}
 	if len(opts.Status) > 0 {
-		clauses = append(clauses, `r.status IN (`+queryPlaceholders(len(opts.Status))+`)`)
+		clauses = append(clauses, effectiveRunStatusSQL+` IN (`+queryPlaceholders(len(opts.Status))+`)`)
 		args = append(args, queryArgs(opts.Status)...)
 	}
 	if opts.Since != "" {

@@ -226,6 +226,7 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
         ...(await inspectForDevtools(prompt, resolveOpts, lifecycle.tools)),
       },
       model: args.model,
+      traceModel: modelInfo.modelId || undefined,
       input: args.input ?? {},
       provider: modelInfo.provider || dialect.id,
       resolved,

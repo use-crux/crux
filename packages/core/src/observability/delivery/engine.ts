@@ -28,6 +28,8 @@ import {
 export type { DeliveryDiagnostic, DeliveryEngineDiagnostics } from './state'
 
 export interface DeliveryEngine {
+  anchorLifetime(anchor: object): void
+  lifetimeAnchor(): object | undefined
   currentTransport(): CruxObservabilityTransport | undefined
   setTransport(transport: CruxObservabilityTransport | undefined): void
   deliveryOptions(): NormalizedObservabilityDeliveryOptions
@@ -58,11 +60,16 @@ export function createDeliveryEngine(): DeliveryEngine {
   const dispatch = () => dispatchQueuedRecords(state, scheduleDispatch)
 
   return {
+    anchorLifetime: (anchor) => {
+      state.lifetimeAnchor = anchor
+    },
+    lifetimeAnchor: () => state.lifetimeAnchor,
     currentTransport: () => state.transport,
     setTransport(transport) {
       advanceEpoch(state)
       state.transport = transport
       state.accepting = true
+      if (!transport) dropQueueForReconfiguration(state)
     },
     deliveryOptions: () => state.options,
     configureDelivery(options) {
@@ -278,6 +285,7 @@ function resetState(state: DeliveryState): void {
   advanceEpoch(state)
   const fresh = initialDeliveryState()
   Object.assign(state, fresh, {
+    lifetimeAnchor: state.lifetimeAnchor,
     sourceId: state.sourceId,
     epoch: state.epoch,
     generation: nextGeneration,

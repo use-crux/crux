@@ -57,6 +57,11 @@ import { activeHostLifecycle, runWithHostLifecycle } from './delivery/host-scope
 import { remainingHostDeadlineMs, type CruxHostLifecycle } from '../runtime/api/host-lifecycle'
 import { getHooks } from '../runtime/runtime'
 import {
+  addObservabilityRegistryListener,
+  getCruxProcessRegistry,
+  notifyObservabilityRegistryListeners,
+} from '../runtime/process-registry'
+import {
   currentCruxCorrelators,
   currentObservabilityContext,
   withCruxCorrelators,
@@ -281,6 +286,9 @@ export interface ObserveEdgeOptions {
 
 const deliveryEngine = createDeliveryEngine()
 const recordSequencer = createRecordSequencer()
+const observabilityRegistry = getCruxProcessRegistry().observability
+let appliedObservabilityConfigurationGeneration = -1
+let appliedObservabilityResetGeneration = observabilityRegistry.resetGeneration
 let invalidRecords = 0
 let redactedRecords = 0
 let contextlessRecords = 0
@@ -292,20 +300,48 @@ interface ObservabilityConfigurationLayer {
   readonly token: number
   readonly parentToken: number
   readonly previousTransport: CruxObservabilityTransport | undefined
-  readonly previousDeliveryOptions: ReturnType<
-    typeof deliveryEngine.deliveryOptions
-  >
+  readonly previousDeliveryOptions: ObservabilityDeliveryOptions | undefined
   readonly previousDefaultCorrelators: CruxCorrelators | undefined
 }
-
-let nextConfigurationToken = 0
-let activeConfigurationToken = 0
-const configurationParents = new Map<number, number>()
 
 const maxEndedRunIds = 10_000
 type EndedRunStatus = Exclude<CruxRunStatus, 'running'>
 const endedRunStatuses = new Map<CruxRunId, EndedRunStatus>()
-let defaultCorrelators: CruxCorrelators | undefined
+
+function syncDeliveryEngineWithProcessRegistry(): void {
+  if (
+    appliedObservabilityResetGeneration !==
+    observabilityRegistry.resetGeneration
+  ) {
+    resetModuleObservabilityState()
+    appliedObservabilityResetGeneration = observabilityRegistry.resetGeneration
+    appliedObservabilityConfigurationGeneration = -1
+  }
+  if (
+    appliedObservabilityConfigurationGeneration ===
+    observabilityRegistry.configurationGeneration
+  ) {
+    return
+  }
+
+  if (deliveryEngine.currentTransport() !== observabilityRegistry.transport) {
+    deliveryEngine.setTransport(observabilityRegistry.transport)
+  }
+  deliveryEngine.configureDelivery(observabilityRegistry.delivery)
+  appliedObservabilityConfigurationGeneration =
+    observabilityRegistry.configurationGeneration
+}
+
+addObservabilityRegistryListener(
+  observabilityRegistry,
+  syncDeliveryEngineWithProcessRegistry,
+)
+deliveryEngine.anchorLifetime(syncDeliveryEngineWithProcessRegistry)
+
+function markObservabilityConfigurationChanged(): void {
+  observabilityRegistry.configurationGeneration += 1
+  notifyObservabilityRegistryListeners(observabilityRegistry)
+}
 
 function currentContext(): ObservabilityContext | undefined {
   return currentObservabilityContext()
@@ -391,6 +427,7 @@ function emit(
   currentQualityObservabilityCaptureSession()?.send([validated.record])
   publishObservabilitySubscribers(validated.record)
   publishObservabilityChannel(validated.record)
+  syncDeliveryEngineWithProcessRegistry()
   deliveryEngine.enqueue(validated.record)
 }
 
@@ -413,6 +450,7 @@ function emitObserved(
 }
 
 function hasActiveObservabilitySinks(): boolean {
+  syncDeliveryEngineWithProcessRegistry()
   return (
     deliveryEngine.currentTransport() !== undefined ||
     currentQualityObservabilityCaptureSession() !== undefined ||
@@ -424,7 +462,11 @@ function hasActiveObservabilitySinks(): boolean {
 function effectiveCorrelators(
   preferred?: CruxCorrelators,
 ): CruxCorrelators | undefined {
-  return preferred ?? currentCruxCorrelators() ?? defaultCorrelators
+  return (
+    preferred ??
+    currentCruxCorrelators() ??
+    observabilityRegistry.defaultCorrelators
+  )
 }
 
 function recordInvalidRecord(issues: readonly string[]): void {
@@ -445,10 +487,10 @@ function recordRedactedRecord(error: unknown): void {
   if (!shouldWarnAboutInvalidRecords()) return
 
   warnedAboutRedactedRecord = true
-  console.warn(
-    '[crux] observability record redacted or dropped by privacy policy.',
-    error,
-  )
+  const message =
+    '[crux] observability record redacted or dropped by privacy policy.'
+  if (error === undefined) console.warn(message)
+  else console.warn(message, error)
 }
 
 function shouldWarnAboutInvalidRecords(): boolean {
@@ -613,23 +655,24 @@ export function configureObservability(
   options: ConfigureObservabilityOptions,
 ): () => void {
   const layer: ObservabilityConfigurationLayer = {
-    token: nextConfigurationToken + 1,
-    parentToken: activeConfigurationToken,
-    previousTransport: deliveryEngine.currentTransport(),
-    previousDeliveryOptions: deliveryEngine.deliveryOptions(),
-    previousDefaultCorrelators: defaultCorrelators,
+    token: observabilityRegistry.nextConfigurationToken + 1,
+    parentToken: observabilityRegistry.activeConfigurationToken,
+    previousTransport: observabilityRegistry.transport,
+    previousDeliveryOptions: observabilityRegistry.delivery,
+    previousDefaultCorrelators: observabilityRegistry.defaultCorrelators,
   }
-  nextConfigurationToken = layer.token
-  configurationParents.set(layer.token, layer.parentToken)
-  activeConfigurationToken = layer.token
-  deliveryEngine.setTransport(options.transport)
-  deliveryEngine.configureDelivery(options.delivery)
+  observabilityRegistry.nextConfigurationToken = layer.token
+  observabilityRegistry.configurationParents.set(layer.token, layer.parentToken)
+  observabilityRegistry.activeConfigurationToken = layer.token
+  observabilityRegistry.transport = options.transport
+  observabilityRegistry.delivery = options.delivery
   if (Object.hasOwn(options, 'defaultCorrelators')) {
-    defaultCorrelators = mergeCruxCorrelators(
+    observabilityRegistry.defaultCorrelators = mergeCruxCorrelators(
       undefined,
       options.defaultCorrelators,
     )
   }
+  markObservabilityConfigurationChanged()
   let restored = false
   return () => {
     if (restored) return
@@ -639,11 +682,12 @@ export function configureObservability(
       return
     }
 
-    activeConfigurationToken = layer.parentToken
+    observabilityRegistry.activeConfigurationToken = layer.parentToken
     deleteConfigurationLayerAndDescendants(layer.token)
-    deliveryEngine.setTransport(layer.previousTransport)
-    deliveryEngine.configureDelivery(layer.previousDeliveryOptions)
-    defaultCorrelators = layer.previousDefaultCorrelators
+    observabilityRegistry.transport = layer.previousTransport
+    observabilityRegistry.delivery = layer.previousDeliveryOptions
+    observabilityRegistry.defaultCorrelators = layer.previousDefaultCorrelators
+    markObservabilityConfigurationChanged()
   }
 }
 
@@ -675,22 +719,28 @@ export function propagateAttributes<T>(
 }
 
 function isActiveConfigurationLayer(token: number): boolean {
-  for (let currentToken = activeConfigurationToken; currentToken !== 0; ) {
+  for (
+    let currentToken = observabilityRegistry.activeConfigurationToken;
+    currentToken !== 0;
+  ) {
     if (currentToken === token) return true
-    currentToken = configurationParents.get(currentToken) ?? 0
+    currentToken =
+      observabilityRegistry.configurationParents.get(currentToken) ?? 0
   }
   return false
 }
 
 function deleteConfigurationLayerAndDescendants(token: number): void {
   const tokensToDelete = new Set<number>([token])
-  for (const childToken of [...configurationParents.keys()]) {
+  for (const childToken of [
+    ...observabilityRegistry.configurationParents.keys(),
+  ]) {
     if (isDescendantConfigurationLayer(childToken, token)) {
       tokensToDelete.add(childToken)
     }
   }
   for (const tokenToDelete of tokensToDelete)
-    configurationParents.delete(tokenToDelete)
+    observabilityRegistry.configurationParents.delete(tokenToDelete)
 }
 
 function isDescendantConfigurationLayer(
@@ -698,11 +748,13 @@ function isDescendantConfigurationLayer(
   ancestorToken: number,
 ): boolean {
   for (
-    let currentToken = configurationParents.get(candidateToken) ?? 0;
+    let currentToken =
+      observabilityRegistry.configurationParents.get(candidateToken) ?? 0;
     currentToken !== 0;
   ) {
     if (currentToken === ancestorToken) return true
-    currentToken = configurationParents.get(currentToken) ?? 0
+    currentToken =
+      observabilityRegistry.configurationParents.get(currentToken) ?? 0
   }
   return false
 }
@@ -726,15 +778,28 @@ export function setObservabilityTransport(
 export function currentObservabilityTransport():
   | CruxObservabilityTransport
   | undefined {
-  return deliveryEngine.currentTransport()
+  syncDeliveryEngineWithProcessRegistry()
+  return observabilityRegistry.transport
 }
 
 export function resetObservabilityRuntime(): void {
+  observabilityRegistry.activeConfigurationToken = 0
+  observabilityRegistry.configurationParents.clear()
+  observabilityRegistry.transport = undefined
+  observabilityRegistry.delivery = undefined
+  observabilityRegistry.defaultCorrelators = undefined
+  observabilityRegistry.resetGeneration += 1
+  observabilityRegistry.configurationGeneration += 1
+  resetModuleObservabilityState()
+  appliedObservabilityResetGeneration = observabilityRegistry.resetGeneration
+  appliedObservabilityConfigurationGeneration =
+    observabilityRegistry.configurationGeneration
+  notifyObservabilityRegistryListeners(observabilityRegistry)
+}
+
+function resetModuleObservabilityState(): void {
   deliveryEngine.reset()
   resetObservabilitySubscribers()
-  activeConfigurationToken = 0
-  nextConfigurationToken = 0
-  configurationParents.clear()
   invalidRecords = 0
   redactedRecords = 0
   contextlessRecords = 0
@@ -743,15 +808,16 @@ export function resetObservabilityRuntime(): void {
   warnedAboutContextlessRecord = false
   endedRunStatuses.clear()
   recordSequencer.reset()
-  defaultCorrelators = undefined
   telemetryFlushFailures = 0
 }
 
 export function observabilityDeliveryErrors(): readonly unknown[] {
+  syncDeliveryEngineWithProcessRegistry()
   return deliveryEngine.errors()
 }
 
 export function observabilityDiagnostics(): ObservabilityDiagnostics {
+  syncDeliveryEngineWithProcessRegistry()
   const deliveryDiagnostics = deliveryEngine.diagnostics()
   return {
     pendingDeliveries: deliveryDiagnostics.pendingDeliveries,
@@ -1494,6 +1560,7 @@ export const observe = {
   async flush(
     options: ObservabilityFlushOptions = {},
   ): Promise<ObservabilityFlushResult> {
+    syncDeliveryEngineWithProcessRegistry()
     const [result] = await Promise.all([
       deliveryEngine.flush(options),
       runTelemetryFlushHook(options),
@@ -1504,6 +1571,7 @@ export const observe = {
   async shutdown(
     options: ObservabilityFlushOptions = {},
   ): Promise<ObservabilityFlushResult> {
+    syncDeliveryEngineWithProcessRegistry()
     const [result] = await Promise.all([
       deliveryEngine.shutdown(options),
       runTelemetryFlushHook(options),

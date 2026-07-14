@@ -167,6 +167,9 @@ func TestWorker_indexProjectAstPatchErrorsWhenNativeAstConfigDisabled(t *testing
 	}
 
 	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "crux.config.ts"), []byte("export default config({ experimental: { indexer: { nativeAst: false } } })"), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
 	dir := t.TempDir()
 	script := filepath.Join(dir, "native-disabled-indexer.mjs")
 	if err := os.WriteFile(script, []byte(`
@@ -174,22 +177,19 @@ func TestWorker_indexProjectAstPatchErrorsWhenNativeAstConfigDisabled(t *testing
 		const rl = readline.createInterface({ input: process.stdin, terminal: false })
 		rl.on('line', (line) => {
 			const req = JSON.parse(line)
-			if (req.method === 'inspectProjectStaticSyntaxPlan') {
+			if (req.method === 'inspectProjectStaticIndexConfig') {
 				process.stdout.write(JSON.stringify({
 					protocolVersion: 2,
 					type: 'artifact:done',
-					transactionId: 'artifact-static-plan',
-					artifact: 'projectStaticSyntaxPlan',
+					transactionId: 'artifact-static-index-config',
+					artifact: 'projectStaticIndexConfig',
 					root: req.root,
 					payload: {
 						root: req.root,
-						projectName: req.projectName,
-						files: [req.root + '/src/writer.ts'],
-						skipped: [],
-						callNames: ['prompt'],
-						constructorNames: ['Agent'],
-						syntaxFrontend: { name: 'oxc-rust', version: 'test' },
-						staticInterests: {}
+						nativeAstConfigured: true,
+						nativeAstEnabled: false,
+						extensions: [],
+						diagnostics: []
 					}
 				}) + '\n')
 				return

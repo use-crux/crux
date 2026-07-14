@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/frontend"
@@ -37,7 +38,7 @@ func TestWorkerStaticIndexBuildsPlanWithoutNodeStaticPlan(t *testing.T) {
 		t.Fatalf("write script: %v", err)
 	}
 
-	compiler := &staticIndexConfigOnlyCompiler{root: root, sourceFile: sourceFile}
+	compiler := &staticIndexConfigOnlyCompiler{root: root, sourceFile: sourceFile, requireConfig: true}
 	worker := newTestWorkerWithProjectScript(t, script)
 	worker.WithSyntaxParser(compiler)
 	defer worker.Close()
@@ -64,6 +65,44 @@ func TestWorkerStaticIndexBuildsPlanWithoutNodeStaticPlan(t *testing.T) {
 	}
 	if containsTimingReason(timing.NodeReasons, projectIndexNodeReasonStaticIndexRules) {
 		t.Fatalf("timing.NodeReasons = %v, want no first-party rule worker", timing.NodeReasons)
+	}
+}
+
+func TestWorkerStaticIndexDefaultsToDiscoveredCompiler(t *testing.T) {
+	root := t.TempDir()
+	sourceFile := filepath.Join(root, "src", "writer.ts")
+	if err := os.MkdirAll(filepath.Dir(sourceFile), 0o755); err != nil {
+		t.Fatalf("mkdir src: %v", err)
+	}
+	if err := os.WriteFile(sourceFile, []byte("export const writer = prompt({ id: 'static-index-default' })"), 0o600); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+
+	compiler := &staticIndexConfigOnlyCompiler{root: root, sourceFile: sourceFile}
+	worker := newTestWorker(t)
+	worker.WithSyntaxParser(compiler)
+	defer worker.Close()
+
+	patch, err := worker.IndexProjectAstPatch(context.Background(), root, "", "static-index-default")
+	if err != nil {
+		t.Fatalf("IndexProjectAstPatch error = %v", err)
+	}
+	if len(patch.Facts.Definitions) != 1 {
+		t.Fatalf("definitions = %+v, want Static Index facts from discovered compiler", patch.Facts.Definitions)
+	}
+}
+
+func TestWorkerStaticIndexDefaultFailsWhenCompilerIsUnavailable(t *testing.T) {
+	worker := newTestWorker(t)
+	worker.WithSyntaxParser(nil)
+	defer worker.Close()
+
+	_, err := worker.IndexProjectAstPatch(context.Background(), t.TempDir(), "", "static-index-default-missing")
+	if err == nil {
+		t.Fatal("IndexProjectAstPatch error = nil, want missing Static Index compiler diagnostic")
+	}
+	if !strings.Contains(err.Error(), "requires a Static Index compiler") {
+		t.Fatalf("IndexProjectAstPatch error = %v, want actionable missing Static Index compiler diagnostic", err)
 	}
 }
 
@@ -157,6 +196,7 @@ type staticIndexConfigOnlyCompiler struct {
 	finalizeCalls int
 	sawWriter     bool
 	sawConfig     bool
+	requireConfig bool
 }
 
 func (c *staticIndexConfigOnlyCompiler) StaticIndexPrepare(_ context.Context, request protocol.PrepareRequest) (protocol.PrepareResponse, error) {
@@ -178,7 +218,7 @@ func (c *staticIndexConfigOnlyCompiler) StaticIndexPrepare(_ context.Context, re
 			c.sawConfig = true
 		}
 	}
-	if !c.sawWriter || !c.sawConfig {
+	if !c.sawWriter || (c.requireConfig && !c.sawConfig) {
 		return protocol.PrepareResponse{}, fmt.Errorf("prepare files = %+v, want writer and config", request.Files)
 	}
 	return protocol.PrepareResponse{
