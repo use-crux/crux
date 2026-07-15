@@ -54,9 +54,9 @@ describe("stable beta docs", () => {
     const guide = readRepoFile(
       "apps/docs/content/docs/guides/advanced/writing-indexer-extension.mdx",
     );
-    const supportedRange = "^0.5.0 || ^1.0.0";
+    const supportedRange = "^0.5.0 || ^0.6.0";
 
-    expect(guide.match(/\^0\.5\.0 \|\| \^1\.0\.0/g)).toHaveLength(3);
+    expect(guide.match(/\^0\.5\.0 \|\| \^0\.6\.0/g)).toHaveLength(3);
     expect(guide.replaceAll(supportedRange, "")).not.toContain("^0.5.0");
   });
 

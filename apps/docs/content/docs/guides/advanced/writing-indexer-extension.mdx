@@ -28,7 +28,7 @@ export default {
   name: "@acme/crux-indexer",
   version: "1",
   crux: {
-    indexer: "^0.5.0 || ^1.0.0",
+    indexer: "^0.5.0 || ^0.6.0",
     projectIndexSchema: 1,
   },
   extractors: [
@@ -97,7 +97,7 @@ Use an ordinary ESM package. The package name is what projects allowlist.
     ".": "./dist/index.js"
   },
   "peerDependencies": {
-    "@use-crux/indexer": "^0.5.0 || ^1.0.0"
+    "@use-crux/indexer": "^0.5.0 || ^0.6.0"
   }
 }
 ```
@@ -172,7 +172,7 @@ import type { IndexerExtension } from "@use-crux/indexer/extensions";
 export default {
   name: "@acme/crux-indexer",
   version: "1",
-  crux: { indexer: "^0.5.0 || ^1.0.0", projectIndexSchema: 1 },
+  crux: { indexer: "^0.5.0 || ^0.6.0", projectIndexSchema: 1 },
   relations: [
     {
       type: "@acme/crux-indexer/workflow.uses_tool",
