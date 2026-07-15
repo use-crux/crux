@@ -24,6 +24,7 @@ const SAFETY_BOUNDARY_IDS: &[&str] = &[
 const HELPER_BOUNDARY_IDS: &[(&str, &str)] = &[
     ("boundary.input.user", "user.input"),
     ("boundary.input.text", "user.input"),
+    ("boundary.input.media", "user.input.media"),
     ("boundary.input.model", "model.input"),
     ("boundary.output.text", "model.output.text"),
     ("boundary.output.object", "model.output.object"),

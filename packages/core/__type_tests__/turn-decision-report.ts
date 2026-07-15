@@ -155,6 +155,7 @@ expectTypeOf(report.freshness[0]).toMatchTypeOf<TurnFreshnessEvidence>();
 expectTypeOf(report.cache[0]).toMatchTypeOf<TurnCacheEvidence>();
 expectTypeOf<"custom.billing_policy">().toExtend<TurnDecisionReasonCode>();
 expectTypeOf<"unknown.provider_specific">().toExtend<TurnDecisionReasonCode>();
+expectTypeOf<"guardrail.stripped">().toExtend<TurnDecisionReasonCode>();
 expectTypeOf<TurnEvidenceLevel>().toEqualTypeOf<
   "declared" | "observed" | "inferred" | "missing"
 >();

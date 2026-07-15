@@ -53,20 +53,21 @@ describe('native semantic shared analyzer', () => {
     expect(result.extractorNames).toEqual([['crux.shared-analyzer']])
   }, 20_000)
 
-  it('uses the native shared analyzer when a file contains a manifest-known primitive outside the direct projector', async () => {
+  it('matches TypeScript facts for an input media guardrail through the native shared analyzer', async () => {
     const root = await fixtureRoot()
     await writeTsconfig(root)
     const file = join(root, 'src/safety.ts')
     await writeFile(
       file,
       `
-        import { guardrail, prompt } from '@use-crux/core'
+        import { boundary, guardrail } from '@use-crux/core/safety'
 
-        export const writerPrompt = prompt({ id: 'writer-direct' })
-        export const outputGuard = guardrail({
-          name: 'output-guard',
-          phase: 'output',
-          validate: () => ({ action: 'pass' }),
+        const inspectUpload = () => ({ action: 'allow' as const })
+
+        export const mediaUpload = guardrail({
+          id: 'media-upload',
+          on: boundary.input.media(),
+          run: inspectUpload,
         })
       `,
     )

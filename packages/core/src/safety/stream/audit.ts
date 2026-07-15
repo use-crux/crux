@@ -1,16 +1,20 @@
-import type { Guardrail, GuardrailAudit, GuardrailAuditEntry, GuardrailRunResult } from '../guardrail/types'
+import type { GuardrailAudit, GuardrailAuditEntry, GuardrailRunResult } from '../guardrail/types'
+import type { GuardrailBinding } from '../registry'
 
 type AppendGuardrailAudit = (audit: GuardrailAudit) => void
 
 /** Record output guardrails that intentionally opt out of stream-time checks. */
 export function auditDisabledStreamGuards(
-  guards: readonly Guardrail[],
+  bindings: readonly GuardrailBinding[],
   appendGuardrailAudit: AppendGuardrailAudit,
 ): void {
-  for (const guard of guards) {
+  for (const binding of bindings) {
+    const guard = binding.policy
     const entry: GuardrailAuditEntry = {
       guard: guard.id,
       ...(guard.category !== undefined ? { category: guard.category } : {}),
+      boundary: binding.boundary.id,
+      mode: binding.mode,
       phase: 'output',
       action: 'allow',
       reason: 'stream: false',
@@ -23,16 +27,19 @@ export function auditDisabledStreamGuards(
 /** Record a stream segment action that changed, warned on, or blocked output. */
 export function recordStreamChunkAction(
   appendGuardrailAudit: AppendGuardrailAudit,
-  guard: Guardrail,
+  binding: GuardrailBinding,
   result: GuardrailRunResult<unknown>,
   reason?: string,
   options?: { readonly blocked?: boolean },
 ): void {
   if (result.action === 'allow' || result.action === 'hold') return
 
+  const guard = binding.policy
   const entry: GuardrailAuditEntry = {
     guard: guard.id,
     ...(guard.category !== undefined ? { category: guard.category } : {}),
+    boundary: binding.boundary.id,
+    mode: binding.mode,
     phase: 'output',
     action: auditAction(result),
     ...(reason ? { reason } : {}),

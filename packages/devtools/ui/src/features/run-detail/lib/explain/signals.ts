@@ -31,7 +31,7 @@ function hasFiredFallback(report: TurnDecisionReport): boolean {
 /** True when a safety policy blocked, rewrote, or rejected a turn artifact. */
 function hasSafetyIntervention(report: TurnDecisionReport): boolean {
   return report.decisions.some((d) =>
-    ['guardrail.blocked', 'guardrail.redacted', 'constraint.failed', 'security.blocked'].includes(
+    ['guardrail.blocked', 'guardrail.redacted', 'guardrail.stripped', 'constraint.failed', 'security.blocked'].includes(
       d.reason.code,
     ),
   )

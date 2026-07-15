@@ -108,11 +108,17 @@ fn guardrail_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>) -> Opt
     let id = format!("guardrail:{}", safe_id(&policy_id));
     let targets = applies_to_refs(config, context);
     let phase = direct_string_property(config, "phase");
+    let boundaries = safety_boundaries(config);
+    let boundary = boundaries.first().cloned();
 
     let mut facts = Map::new();
     facts.insert("kind".to_string(), Value::String("guardrail".to_string()));
     facts.insert("policyId".to_string(), Value::String(policy_id.clone()));
     insert_string(&mut facts, "policy", phase.clone());
+    if let Some(boundary) = boundary.clone() {
+        facts.insert("boundary".to_string(), Value::String(boundary));
+    }
+    insert_string_array(&mut facts, "boundaries", &boundaries);
     if let Some(applies_to) = targets.metadata.clone() {
         facts.insert("appliesTo".to_string(), applies_to);
     }
@@ -124,6 +130,10 @@ fn guardrail_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>) -> Opt
     );
     metadata.insert("policyId".to_string(), Value::String(policy_id.clone()));
     insert_string(&mut metadata, "phase", phase);
+    if let Some(boundary) = boundary {
+        metadata.insert("boundary".to_string(), Value::String(boundary));
+    }
+    insert_string_array(&mut metadata, "boundaries", &boundaries);
     insert_string(
         &mut metadata,
         "mode",

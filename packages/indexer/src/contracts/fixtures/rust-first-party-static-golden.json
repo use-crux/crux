@@ -5,12 +5,12 @@
   "fileSelection": "staticDefinitionFiles(root)",
   "projection": "canonicalStaticExtractionJson(definitions,relations,diagnostics,dependencies)",
   "totals": {
-    "files": 694,
+    "files": 699,
     "definitions": 71,
     "relations": 4,
     "diagnostics": 17,
-    "dependencies": 1315,
-    "canonicalBytes": 185805
+    "dependencies": 1326,
+    "canonicalBytes": 186716
   },
   "files": [
     {
@@ -1634,6 +1634,15 @@
       "dependencies": 1
     },
     {
+      "file": "packages/core/__type_tests__/safety-media-contract.ts",
+      "sha256": "edbc7989d3940c5013763a64ee4710014e3d52b101c6da964ae14d8686ee90b8",
+      "bytes": 110,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
       "file": "packages/core/__type_tests__/setup-contract.ts",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
@@ -3227,6 +3236,24 @@
       "dependencies": 6
     },
     {
+      "file": "packages/core/src/safety/boundary.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/src/safety/constraint/boundary.ts",
+      "sha256": "fede6a02b3e8e6959769af26f5ee8e9b27aeed6087774fffa039c1e487ecaf51",
+      "bytes": 111,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
       "file": "packages/core/src/safety/constraint/runner.ts",
       "sha256": "221ab3c6a086a924f0fb3aceea46e95bbcf4b8efc6fe2e516d8a27cf85685520",
       "bytes": 285,
@@ -3246,12 +3273,12 @@
     },
     {
       "file": "packages/core/src/safety/guardrail/pipeline.ts",
-      "sha256": "fad6ced2394c7c87a2fd5d8efed73fc8281c8e7bee2b79bf1ee28169c5da0530",
-      "bytes": 327,
+      "sha256": "5f7f6dcf5feebbe2c08974cdda8fb09c5c327443ec16d9ac42003247668510f2",
+      "bytes": 388,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 5
+      "dependencies": 6
     },
     {
       "file": "packages/core/src/safety/index.ts",
@@ -3263,13 +3290,31 @@
       "dependencies": 0
     },
     {
-      "file": "packages/core/src/safety/session.ts",
-      "sha256": "01164c2a6e621f8fe6306e296a510321f5585824fa106929f29ee05272ccde4d",
-      "bytes": 512,
+      "file": "packages/core/src/safety/input/media.ts",
+      "sha256": "5f7f6dcf5feebbe2c08974cdda8fb09c5c327443ec16d9ac42003247668510f2",
+      "bytes": 388,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 9
+      "dependencies": 6
+    },
+    {
+      "file": "packages/core/src/safety/input/projected-text.ts",
+      "sha256": "5f3a699f29b19892567044a7045bd5c9cada6761e3565647108fcf424e51d2a1",
+      "bytes": 211,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/core/src/safety/session.ts",
+      "sha256": "3c0018727eccb0ab4491083d9d2361ce4429e86bc7fad8da51e9873da211f84c",
+      "bytes": 474,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 8
     },
     {
       "file": "packages/core/src/safety/toolPolicy/types.ts",

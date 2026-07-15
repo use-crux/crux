@@ -60,6 +60,7 @@ Supported result actions:
 | `warn` | Record a Safety decision without changing content. |
 | `rewrite` | Replace the subject. Use `rewrite.kind` for `redact`, `mask`, `hash`, or `normalize`. |
 | `hold` | Streaming only. Wait for more text before releasing the segment. |
+| `strip` | Input media only. Remove the current part in enforce mode; report intent without mutation in report mode. |
 
 Malformed or unknown results fail closed with `SafetyResultError`, including
 when JavaScript callers escape the TypeScript result type.
@@ -90,6 +91,7 @@ Common boundaries:
 | Boundary | Subject |
 | --- | --- |
 | `boundary.input.text()` | User input text before the provider call. |
+| `boundary.input.media()` | One canonical non-text part and its original message/part indexes. |
 | `boundary.output.text()` | Model output text before the caller sees it. |
 | `boundary.output.object<T>()` | Parsed structured output. |
 | `boundary.output.path<T>()('a.b')` | One typed structured-output path. |
@@ -105,8 +107,64 @@ boundaries when the same policy should apply in several places.
 
 ## Multimodal Input
 
-Input guardrails evaluate the text projection returned by `messageText()`.
-Text parts pass through verbatim. Media parts become bounded descriptors:
+Use `boundary.input.media()` when a policy needs the real canonical image,
+audio, video, or file part. Crux invokes the policy before provider
+normalization and before provider I/O. The callback type is inferred from the
+boundary; no type arguments are needed:
+
+```ts title="upload-guard.ts"
+import { boundary, guardrail } from '@use-crux/core/safety'
+
+export const uploadGuard = guardrail({
+  id: 'upload-policy',
+  on: boundary.input.media(),
+  run: ({ part }) => {
+    if (part.type === 'image') {
+      if (part.mediaType !== 'image/png' && part.mediaType !== 'image/jpeg') {
+        return {
+          action: 'block',
+          reason: 'Images require a known PNG or JPEG MIME type.',
+        }
+      }
+    }
+
+    if (part.type === 'file' && part.mediaType === 'application/x-msdownload') {
+      return {
+        action: 'strip',
+        reason: 'Executable attachments are not sent to the model.',
+      }
+    }
+
+    return { action: 'allow' }
+  },
+})
+```
+
+Narrowing `part.type` exposes that canonical variant's fields. The example
+blocks image parts whose MIME type is missing or unsupported, and strips only a
+disallowed file; sibling text and image parts stay in order. Crux does not
+guess missing MIME types or sizes, so unknown values remain `undefined` or
+otherwise absent on the canonical source.
+
+The callback also receives `messageIndex` and `partIndex`. These are coordinates
+in the caller's original arrays, before any earlier policy stripped a part, and
+the same coordinates appear in audit and safe observability records. The
+original part object is passed through unchanged for inspection.
+
+In the default `mode: 'enforce'`, `strip` changes the messages sent to the
+provider. With `mode: 'report'`, it records a would-strip decision but sends the
+original part. If an enforced strip removes the final part of a media-only
+message, Crux blocks immediately and attributes the block to that policy and
+original location.
+
+Media policies accept `allow`, `warn`, `block`, and `strip`. They cannot stream,
+return text actions such as `rewrite` or `hold`, or share an `on` tuple with a
+text boundary. Model-produced media is not covered by this input boundary; see
+[#228](https://github.com/use-crux/crux/issues/228) for output-media safety.
+
+Use `boundary.input.text()` when a policy instead needs the `messageText()`
+projection. Text parts pass through verbatim and media parts become bounded
+descriptors:
 
 - URL sources include the full URL, such as
   `[image image/png https://example.com/chart.png]`.
@@ -117,7 +175,7 @@ Text parts pass through verbatim. Media parts become bounded descriptors:
 - File descriptors include the filename, such as
   `[file application/pdf "report.pdf" ...]`.
 
-For example, this guard receives both the text and the image URL:
+For example, this text guard receives both the text and the image URL:
 
 ```ts
 const mediaSourceGuard = guardrail({
@@ -132,15 +190,13 @@ const mediaSourceGuard = guardrail({
 })
 ```
 
-`block` and `warn` apply to the complete projection. `rewrite` applies only to
+`block` and `warn` apply to the complete text projection. `rewrite` applies only to
 text segments: every media placeholder must remain verbatim so Crux can write
 the rewritten text back around the original media parts. A rewrite fails
 closed with `SafetyResultError` if it changes a placeholder, targets a
-media-only message, or cannot be redistributed unambiguously. If a policy must
-act on a media source, such as a signed URL containing a token, use `block`
-instead. Media bytes, pixels, and other media content are not evaluated. See
-the [media rewrite actions RFC](https://github.com/use-crux/crux/issues/212)
-for planned media-specific rewrite behavior.
+media-only message, or cannot be redistributed unambiguously. Use
+`boundary.input.media()` to inspect or strip the canonical source instead of
+rewriting its text placeholder.
 
 ## Execution
 
