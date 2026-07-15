@@ -11,4 +11,5 @@ abandoned activity without treating it as currently running.
 
 Also harden Quality cassette identity and failure replay, preserve provider
 model metadata and grounded prompt types, and make omitted Static Index
-configuration use the documented default.
+configuration use the documented default. Reject malformed shared runtime
+registry ancestry and hook layers before duplicate module copies adopt them.
