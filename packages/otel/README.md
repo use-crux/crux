@@ -84,7 +84,7 @@ withTelemetry({
 // Callback exporter — custom handling
 withTelemetry({
   serviceName: 'my-app',
-  exporter: (spans) => ctx.runAction(sendTraces, { spans }),
+  exporter: (spans) => sendTelemetry(spans),
 })
 ```
 

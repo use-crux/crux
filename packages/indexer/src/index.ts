@@ -1,68 +1,14 @@
 /**
- * Crux Indexer SDK entry point.
+ * Crux-owned Indexer compiler contract entry point.
  *
- * This barrel exposes extension-authoring primitives and stable record
- * contracts. Bundled first-party indexing is a Crux Local/CLI binary feature
- * implemented by the native Static Index pipeline.
+ * This barrel contains only data contracts shared by Crux's bundled compiler
+ * workers. Application code should use `@use-crux/core/project-index` for
+ * Catalog data. Experimental third-party authoring lives exclusively at
+ * `@use-crux/indexer/extensions`.
  *
  * @module
  */
 
-export {
-  callPattern,
-  facts,
-  INDEXER_EXTENSION_API_VERSION,
-  isIndexerExtensionAllowed,
-  loadIndexerExtensionReferences,
-  newPattern,
-  none,
-  PROJECT_INDEX_SCHEMA_VERSION,
-  projectDefinition,
-  resolveIndexerExtensionReferences,
-  validateIndexerExtensionManifest,
-} from './indexer/extensions'
-export type {
-  ArgumentReader,
-  ConfigCallReader,
-  ConfigReader,
-  ConfiguredObjectReader,
-  DefinitionBuilder,
-  DefinitionBuilderInput,
-  ExtensionIdentity,
-  ExtensionReference,
-  ExtensionTrustMode,
-  ExtensionTrustPolicy,
-  ExtractContext,
-  ExtractMatch,
-  ExtractPattern,
-  ExtractResult,
-  ExtractedDefinition,
-  ExtractedFacts,
-  ExtractedSourceRef,
-  IndexDependency,
-  IndexerCompatibility,
-  IndexerExtension,
-  IndexerExtensionConfig,
-  IndexRule,
-  IndexRuleContext,
-  InstalledIndexerExtension,
-  LoadIndexerExtensionReferencesInput,
-  RelationSpec,
-  ReferenceBuilder,
-  ResolvedIndexerExtension,
-  ResolveIndexerExtensionReferencesInput,
-  ResolveIndexerExtensionReferencesResult,
-  SemanticReadModel,
-  SemanticSymbol,
-  SemanticType,
-  SourceReference,
-  SourceRefBuilder,
-  SourceView,
-  StaticObjectReader,
-  StaticObjectMapIdentifierEntry,
-  UnresolvedReference,
-} from './indexer/extensions'
-export type { IndexerExtensionManifestValidation } from './indexer/extensions/loading/manifest'
 export type {
   IndexPatch,
   IndexPatchBudget,

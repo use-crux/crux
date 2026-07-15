@@ -117,5 +117,10 @@ describe("native AST beta readiness docs", () => {
     expect(benchmarkScript).toContain("CRUX_INDEXER_BENCH_TIER_A_MS");
     expect(benchmarkScript).toContain("go test");
     expect(readiness).toContain("pnpm benchmark:native-ast");
+    expect(readiness).toContain("Future native direct-projector expansion");
+    expect(readiness).toContain("measured user-visible bottleneck");
+    expect(readiness).toContain("exact normalized parity fixture");
+    expect(readiness).toContain("complete fallback for unsupported syntax");
+    expect(readiness).toContain("Phase 9 one-shot baselines");
   });
 });

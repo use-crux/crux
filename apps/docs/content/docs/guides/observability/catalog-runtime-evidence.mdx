@@ -7,7 +7,7 @@ You authored a prompt three weeks ago. Is anything still calling it? Open it in 
 
 ## See the runs behind a definition
 
-1. Run `crux dev` and open the definition in **Catalog / Index**.
+1. Run `crux dev` and open the definition in **Catalog**.
 2. Scroll to its **Observability** section: latest run status, timestamp, and delivery-health badge.
 3. Click **View N runs** to open Runs pre-filtered to that definition.
 
@@ -25,7 +25,12 @@ The section adapts to what Crux can truthfully prove for the definition's kind:
 
 ## Run Detail links back
 
-Run Detail lists every definition reference on the run or span, and resolved ids link into Catalog. If a definition was renamed or deleted since the run, the row keeps its role, kind, id, and any sanitized source, and is marked **unresolved** instead of becoming a dead navigation target. Runs whose refs point at a since-deleted definition still appear in the filtered Runs list.
+Run Detail lists every definition reference on the run or span. When the run's
+exact `(projectId, manifestId)` artifact is available, ids resolve against that
+historical Catalog even if the current source was renamed or deleted. A missing
+manifest or missing definition remains explicitly unresolved; Crux never
+substitutes the current checkout. Current-Catalog comparison is shown
+separately, and historical ids still filter the Runs list.
 
 ## Honest gaps
 

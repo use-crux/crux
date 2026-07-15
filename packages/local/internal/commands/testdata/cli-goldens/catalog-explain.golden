@@ -1,0 +1,19 @@
+◇ crux catalog explain
+
+  ID: agent:writer
+  Kind: agent
+  Fidelity: resolved
+  Status: partial
+
+  Evidence
+    semantic  @use-crux/indexer/project-indexer@0.5.0  definition fact from source export writer via prompt, @acme/indexer@1.2.3/custom
+
+  Unresolved relations
+    diag:missing  child target could not be resolved
+
+  Health
+    warn  index.relation_unresolved  child target could not be resolved
+
+  Cache: hit
+  Fallback: missing-source-graph
+  Partial: semantic evidence partial

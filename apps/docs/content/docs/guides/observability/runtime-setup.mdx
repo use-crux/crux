@@ -12,8 +12,9 @@ Your code ran fine on Lambda or Workers, but the run shows up as `incomplete` in
 | Long-lived Node | Background batching is fine; flush on graceful shutdown. | `observe.flush()` / `observe.shutdown()` |
 | Generic serverless | Wrap each invocation; await a bounded drain before return. | `withObservableInvocation()` from `@use-crux/core/observability` |
 | Node Lambda-style | Same, with `context.getRemainingTimeInMillis()` derived automatically. | `withNodeObservableInvocation()` from `@use-crux/core/observability/node` |
-| Cloudflare Workers | Register drain with `ctx.waitUntil` (no added response latency; no `nodejs_compat` required). | `withWorkersObservableInvocation()` from `@use-crux/core/observability/workers` |
-| Convex | First-party wrappers bind automatically. | `createCruxConvex()`, `action` / `internalAction` from `@use-crux/convex/server` |
+| Cloudflare Workers | Install defer and drain through `ctx.waitUntil` (no added response latency; no `nodejs_compat` required). | `withCrux()` from `@use-crux/core/observability/workers` |
+| Next.js | Install response-finished defer and drain through the same `after()` port. | `withCrux()` from `@use-crux/next` |
+| Convex | Use the profile-owned boundary or first-party function wrappers. | `createCruxConvex().run()`, `action` / `internalAction` from `@use-crux/convex/server` |
 
 Every wrapper reports a structured `ObservabilityFlushResult`. Pass `onDrain` to inspect it; the default reporter logs a console warning when a drain does not fully complete so incomplete flushes are never silent. Field breakdown: [host lifecycle adapters](/docs/reference/crux-core/observability#host-lifecycle-adapters).
 
@@ -52,7 +53,12 @@ export const handler = withObservableInvocation(
   async (event) => {
     // Crux work
   },
-  () => ({ remainingTimeMs: 5_000 }),
+  () => ({
+    remainingTimeMs: 5_000,
+    onDrain(result) {
+      if (result.status !== 'drained') console.warn('incomplete Crux drain', result)
+    },
+  }),
 )
 ```
 
@@ -61,44 +67,85 @@ export const handler = withObservableInvocation(
 ```ts
 import { withNodeObservableInvocation } from '@use-crux/core/observability/node'
 
-export const handler = withNodeObservableInvocation(async (event, context) => {
-  // remaining time is read from context.getRemainingTimeInMillis() when present
-})
+export const handler = withNodeObservableInvocation(
+  async (event, context) => {
+    // remaining time is read from context.getRemainingTimeInMillis() when present
+  },
+  {
+    onDrain(result) {
+      if (result.status !== 'drained') console.warn('incomplete Crux drain', result)
+    },
+  },
+)
 ```
 
 ## Cloudflare Workers
 
 ```ts
-import { withWorkersObservableInvocation } from '@use-crux/core/observability/workers'
+import { defer } from '@use-crux/core'
+import { withCrux } from '@use-crux/core/observability/workers'
 
-const fetch = withWorkersObservableInvocation(
+const fetch = withCrux(
   async (request, env, ctx) => {
-    // Crux work
+    defer(() => env.ANALYTICS.writeDataPoint({ blobs: [request.url] }))
     return new Response('ok')
   },
-  // resolveContext: return the ExecutionContext (structural { waitUntil })
-  (_request, _env, ctx) => ctx,
-  // resolveInvocation(ctx, ...args): optional drain knobs
-  (_ctx) => ({ flushTimeoutMs: 5_000 }),
+  {
+    context: (_request, _env, ctx) => ctx,
+    invocation: () => ({ flushTimeoutMs: 5_000 }),
+  },
 )
 
 export default { fetch }
 ```
 
-Workers isolates may serve concurrent requests without ambient async storage. The Workers wrapper drains the shared delivery queue via `waitUntil` after the handler settles, coarser than per-request host scoping, but lossless for concurrent in-flight work. It does **not** call `observe.withHostLifecycle()` around the handler.
+Workers isolates may serve concurrent requests without ambient async storage. The Workers wrapper drains the shared delivery queue via `waitUntil` after the handler settles, coarser than per-request host scoping, but lossless for concurrent in-flight work. It does **not** call `observe.withHostLifecycle()` around the handler. `withWorkersObservableInvocation()` remains available when only the low-level observability drain is wanted.
 
 Cross-request logical continuity still uses explicit suspend/resume carriers (`observe.openRun().suspend()` → persist carrier → `observe.resumeRun(carrier)`), not isolate-local ambient context.
+
+## Next.js
+
+```ts
+import { defer } from '@use-crux/core'
+import { withCrux } from '@use-crux/next'
+
+export const POST = withCrux(
+  async () => {
+    defer(() => updateSearchIndex())
+    return Response.json({ ok: true })
+  },
+  {
+    onDrain(result) {
+      if (result.status !== 'drained') console.warn('incomplete Crux drain', result)
+    },
+  },
+)
+```
+
+Next's resolved `after()` port owns one retained task: it starts deferred callbacks only after the response finishes, then performs the bounded terminal observability drain. Exporter or reporter failure never replaces a returned response, redirect, not-found signal, or application error. `withNextDefer()` remains available for low-level defer-only composition.
 
 ## Convex
 
 ```ts
 import { createCruxConvex } from '@use-crux/convex'
+import { internalAction } from './_generated/server'
 import { components } from './_generated/api'
+import { v } from 'convex/values'
 
-export const crux = createCruxConvex({ components: { crux: components.crux } })
+export const crux = createCruxConvex({
+  components: { crux: components.crux, agent: components.agent },
+})
+
+export const indexDocument = internalAction({
+  args: { documentId: v.string() },
+  handler: (ctx, args) =>
+    crux.run(ctx, { documentId: args.documentId }, async ({ records }) => {
+      await records.put(`document:${args.documentId}`, { indexed: true })
+    }),
+})
 ```
 
-`createCruxConvex()`, `action` / `internalAction` from `@use-crux/convex/server`, and the agent/swarm wrappers bind a bounded final flush automatically. The default budget is a short fixed window (`DEFAULT_CONVEX_OBSERVABILITY_FLUSH_TIMEOUT_MS`, 3 seconds) because Convex exposes no per-invocation remaining-time API.
+`createCruxConvex().run()`, `action` / `internalAction` from `@use-crux/convex/server`, and the agent/swarm wrappers bind a bounded final flush automatically. The default budget is a short fixed window (`DEFAULT_CONVEX_OBSERVABILITY_FLUSH_TIMEOUT_MS`, 3 seconds) because Convex exposes no per-invocation remaining-time API. A partial drain is reported through diagnostics and never replaces the application result or error.
 
 For a raw Convex function not created through those helpers:
 

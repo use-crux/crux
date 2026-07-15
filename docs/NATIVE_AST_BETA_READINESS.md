@@ -46,20 +46,19 @@ packages with required gate environment.
   against the Rust-owned static golden across definitions, relations, source
   refs, diagnostics, dependencies, source rows/source graph, runtime metadata,
   degraded behavior, and provided records where present.
-- TypeScript extension host coverage remains for third-party extensions with a
-  TS-authored extractor, a TS-authored lint rule, and mixed native plus
-  extension output.
+- TypeScript extension host coverage remains for an experimental third-party
+  extractor and mixed native plus extension output. Internal rule-slot fixtures
+  do not constitute a public third-party rule promise.
 - Warm cache, incremental source edits, config/lint-profile fallback, static
   cache identity, and the non-skipping CI parity command are covered.
 
 ## Cache Identity Review
 
-The static output contract changed during stable-beta hardening, so the static
-cache namespace is `static-parse-v61`. Go Static Index cache replay is pinned to
-the same namespace through the shared fixture. Semantic facts use
-`semantic-facts-v27`, and the Go Project Index snapshot cache lives under
-`.crux/cache/index-v2/epoch-33/` so restart warm loads cannot mask renamed or
-schema-shifted read-model output.
+The current static cache namespace is `static-parse-v64`; semantic facts use
+`semantic-facts-v28`; and the Go Project Index snapshot cache lives under
+`.crux/cache/index-v2/epoch-36/`. These identities include the later
+root-stable fingerprint, backend-state, and durable extractor-provenance
+migrations so restart warm loads cannot mask changed Catalog evidence.
 
 `nativeAst` is the static AST/source frontend experiment and remains independent
 from `experimental.indexer.native`, which selects the semantic backend.
@@ -114,6 +113,42 @@ CRUX_INDEXER_BENCH_COUNT=5 CRUX_INDEXER_BENCH_BENCHTIME=10s pnpm benchmark:nativ
 Archive the raw Go benchmark output and compare runs with `benchstat` when
 possible. Default promotion still needs a material end-to-end native win, with
 at least a `2x` cold-indexing target on release corpora.
+
+### Phase 9 one-shot baselines
+
+Recorded 2026-07-15 on Linux/amd64 with an Intel i7-1360P, the release
+Rust/Oxc worker, the production one-shot Go service, and exactly two iterations
+per fixture. These are non-gating end-to-end context; the 100 ms Tier-A leaf
+budget measures a different watch path.
+
+| Fixture | TypeScript files | Cold | Warm | Peak process-tree RSS |
+| --- | ---: | ---: | ---: | ---: |
+| Small manifest fixture | 3 | 435.8 ms | 85.49 ms | 184.3 MiB |
+| Indexer package | 430 | 1.701 s | 340.7 ms | 477.8 MiB |
+| Crux repository | 2,579 | 23.484 s | 6.036 s | 3,752 MiB |
+
+Reproduce the same measurement shape with
+`BenchmarkOneShotProjectIndexBaselines`, setting
+`CRUX_INDEXER_BENCH_ROOT_SMALL`, `_MEDIUM`, and `_LARGE`, plus
+`CRUX_STATIC_INDEX_WORKER`. Fixture contents and machine identity must accompany
+future comparisons; these numbers are a baseline, not a cross-machine gate.
+
+## Future native direct-projector expansion
+
+Do not add another native direct projector merely because a source shape is
+available. Expansion requires all of the following in the same proposal:
+
+1. A measured user-visible bottleneck on a representative production path and
+   a written latency or memory target.
+2. An exact normalized parity fixture against the JavaScript TypeScript
+   correctness baseline for every supported shape.
+3. A complete fallback for unsupported syntax through the native shared
+   analyzer, never partial native-only facts.
+4. Cache-identity review and backend-neutral diagnostics proving users can tell
+   which path ran.
+
+The current native experiment must not be expanded or deleted without this
+evidence and a separate decision.
 
 ## Known Residual Risks
 

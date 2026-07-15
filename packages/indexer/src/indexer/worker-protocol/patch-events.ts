@@ -5,11 +5,12 @@ import {
   type ProjectIndexFactEnvelopeFor,
   type ProjectIndexFactFidelity,
   type ProjectIndexFactProducer,
+  type ProjectIndexFactProvenance,
   type ProjectIndexPatchFactKind,
   type ProjectIndexPatchFactMap,
   type ProjectIndexWorkerEvent,
 } from './types'
-import type { ProjectModelProvenance } from '@use-crux/core/project-index'
+import { canonicalFactExtractors } from '../fact-provenance'
 import { projectIndexFactBatchEvents, projectIndexSourceProfileBatchEvents } from './event-batches'
 import { semanticSourceProfileFromStreamFiles } from './source-profile-events'
 
@@ -37,7 +38,7 @@ export interface IndexPatchToWorkerEventsOptions {
   /** Evidence fidelity attached to each emitted fact. Defaults from the patch phase. */
   readonly fidelity?: ProjectIndexFactFidelity
   /** Provenance attached to each emitted fact. Defaults from the patch phase. */
-  readonly provenance?: ProjectModelProvenance
+  readonly provenance?: ProjectIndexFactProvenance
   /** Maximum facts per `fact:batch` event. Defaults to 100. */
   readonly maxFactsPerBatch?: number
   /**
@@ -99,7 +100,7 @@ export function* indexPatchToWorkerEventStream(
     yield event
   }
 
-  const { facts: _facts, ...patchMetadata } = patch
+  const { facts: _facts, definitionExtractors: _definitionExtractors, ...patchMetadata } = patch
   yield {
     protocolVersion: PROJECT_INDEX_WORKER_PROTOCOL_VERSION,
     type: 'phase:done',
@@ -215,7 +216,7 @@ function factEnvelopeForKind<TKind extends ProjectIndexPatchFactKind>(
     projectRoot: patch.project.root,
     producer: options.producer,
     fidelity: options.fidelity ?? defaultFactFidelity(patch),
-    provenance: options.provenance ?? defaultFactProvenance(patch),
+    provenance: factProvenance(patch, options, kind, fact),
     fact,
   }
 }
@@ -224,10 +225,24 @@ function defaultFactFidelity(patch: IndexPatch): ProjectIndexFactFidelity {
   return patch.phase === 'runtime' ? 'runtime-observed' : 'inferred'
 }
 
-function defaultFactProvenance(patch: IndexPatch): ProjectModelProvenance {
+function defaultFactProvenance(patch: IndexPatch): ProjectIndexFactProvenance {
   return patch.phase === 'runtime'
     ? { kind: 'runtime', attribute: 'project-index.runtime' }
     : { kind: 'runtime', attribute: `project-index.${patch.phase}` }
+}
+
+function factProvenance<TKind extends ProjectIndexPatchFactKind>(
+  patch: IndexPatch,
+  options: IndexPatchToWorkerEventsOptions,
+  kind: TKind,
+  fact: ProjectIndexPatchFactMap[TKind],
+): ProjectIndexFactProvenance {
+  const base = options.provenance ?? defaultFactProvenance(patch)
+  if (kind !== 'definitions') return base
+  const id = objectRecord(fact).id
+  if (typeof id !== 'string') return base
+  const extractors = canonicalFactExtractors(patch.definitionExtractors?.[id] ?? [])
+  return extractors.length > 0 ? { ...base, extractors } : base
 }
 
 function indexPatchFactId(kind: ProjectIndexPatchFactKind, fact: unknown, index: number): string {

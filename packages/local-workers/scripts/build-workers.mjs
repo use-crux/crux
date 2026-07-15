@@ -1,10 +1,15 @@
 import { build } from 'esbuild'
+import { readFile } from 'node:fs/promises'
 import { builtinModules } from 'node:module'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const scriptDir = dirname(fileURLToPath(import.meta.url))
 const rootDir = resolve(scriptDir, '..')
+const indexerPackage = JSON.parse(await readFile(resolve(rootDir, '../indexer/package.json'), 'utf8'))
+if (typeof indexerPackage.version !== 'string' || indexerPackage.version.length === 0) {
+  throw new Error('@use-crux/indexer package version is missing')
+}
 
 /** Shared esbuild options for self-contained Node.js bundles. */
 const shared = {
@@ -54,6 +59,9 @@ try {
       ...shared,
       entryPoints: [resolve(rootDir, 'bin/project-indexer.ts')],
       outfile: resolve(rootDir, 'dist/project-indexer.mjs'),
+      define: {
+        __CRUX_INDEXER_VERSION__: JSON.stringify(indexerPackage.version),
+      },
     }),
     build({
       ...shared,

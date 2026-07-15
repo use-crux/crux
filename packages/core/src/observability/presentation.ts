@@ -10,4 +10,5 @@
 
 export * from './presentation/base'
 export * from './presentation/run-detail-request'
+export * from './presentation/manifest-resolution'
 export * from './presentation/run-detail'

@@ -29,6 +29,7 @@ type Service struct {
 	indexEvents   *IndexEventBus
 	indexService  *service.Service
 	indexModel    *readmodel.Model
+	manifestStore catalogManifestCounter
 
 	publishMu          sync.Mutex
 	hasPublishedIndex  bool

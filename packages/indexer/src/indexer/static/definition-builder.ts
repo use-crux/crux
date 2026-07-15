@@ -7,7 +7,7 @@ import type {
   SourceSnippet,
 } from "@use-crux/core/project-index";
 import { stringArrayProperty, stringProperty } from "../ast/literals";
-import { fingerprint } from "../definitions";
+import { definitionFingerprintFile, fingerprint } from "../definitions";
 
 /**
  * Builds a resolved Project Index definition from static syntax facts.
@@ -17,6 +17,7 @@ import { fingerprint } from "../definitions";
  * runtime-join metadata.
  */
 export function staticDefinition(
+  root: string,
   file: string,
   id: string,
   kind: ProjectDefinitionKind,
@@ -42,7 +43,7 @@ export function staticDefinition(
     fingerprint: fingerprint({
       kind,
       name,
-      file,
+      file: definitionFingerprintFile(root, file),
       text: sourceSnippetValue?.source,
     }),
     metadata: {
@@ -55,6 +56,7 @@ export function staticDefinition(
 
 /** Builds a static Project Index definition with the same metadata defaults as parser extraction. */
 export function staticDefinitionForTesting(
+  root: string,
   file: string,
   id: string,
   kind: ProjectDefinitionKind,
@@ -65,6 +67,7 @@ export function staticDefinitionForTesting(
   metadata: Record<string, unknown>,
 ): ProjectDefinition {
   return staticDefinition(
+    root,
     file,
     id,
     kind,

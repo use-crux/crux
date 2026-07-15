@@ -10,7 +10,7 @@ that might omit affected facts.
 
 ## Accepted Target Architecture
 
-The accepted pre-launch direction is to use **Crux Indexer** for the public system and
+The accepted direction is to use **Crux Indexer** for the public system and
 **Project Index** for the output/read model. `@use-crux/indexer` is the package name, while
 `ProjectIndex*` identifiers are artifact/read-model names rather than legacy system names. New
 architecture decisions should use this language:
@@ -22,7 +22,7 @@ architecture decisions should use this language:
 - Extension ecosystem: **Indexer Extensions**.
 
 The Indexer is a compiler-style project intelligence system, not an AST plugin framework. The public
-extension contract should expose facts, relation specs, diagnostics, rules, and read models. The Rust
+extension contract exposes facts, relation specs, and compiler-owned diagnostics through extractors. Rules, resolvers, emitters, queries, and read-model execution remain reserved. The Rust
 Static Index compiler owns first-party parser traversal, graph assembly, bundled lint finalization,
 and source patch projection. TypeScript owns third-party extension hosting, semantic backends,
 config/runtime host work, cache identity helpers, and JSON-safe contract mirrors.
@@ -33,14 +33,14 @@ the bundled first-party implementation. Cache identity includes extension and ex
 profile/projection inputs, and the selected syntax frontend identity, so parser/frontend upgrades
 invalidate fixture extraction structurally instead of relying only on manual epoch bumps.
 
-Accepted public package surfaces after the rename:
+Published package surfaces:
 
 - `@use-crux/indexer`
 - `@use-crux/indexer/extensions`
 - `@use-crux/indexer/testing`
 - `@use-crux/indexer/source-resolver`
 
-Accepted host-only surfaces while the package remains private:
+Crux-owned host and contract surfaces:
 
 - `@use-crux/indexer/host`
 - `@use-crux/indexer/host/static-index`
@@ -62,19 +62,17 @@ default and reports the selected producer on `trace.syntaxFrontend`.
 Static Index, and Semantic Evidence protocols. The contract manifest records the canonical fixture,
 version, and Go/Rust mirror inventory that `scripts/check-indexer-contracts.mjs` validates.
 `@use-crux/indexer/host/*` exposes focused Crux-owned worker bridges for static planning/config,
-semantic enrichment, runtime patching, and Static Index compatibility-host calls. Before public
-release, each host-only surface must be removed, made intentionally public, or kept package-private
-through build output.
+semantic enrichment, runtime patching, and Static Index compatibility-host calls. They are published
+compiler/build boundaries, not application SDK or third-party authoring promises.
 
 The stability promise is granular:
 
-- `@use-crux/indexer`, `@use-crux/indexer/testing`, `@use-crux/indexer/source-resolver`, and
-  JSON-safe `contracts/*` subpaths are stable-beta surfaces once this kit finishes. Breaking shape
-  changes are not planned after the pre-launch rename/cache-bump phase.
+- The root, `host/*`, and JSON-safe `contracts/*` subpaths are Crux-owned compiler/build contracts.
+  `testing` and `source-resolver` are focused public facades rather than broad compiler APIs.
 - `@use-crux/indexer/extensions` remains experimental. Its `ExtractContext` reader/builder shape is
-  frozen, but third-party loading, trust UX, rule execution, and fixture package contracts are not
+  frozen, but third-party loading, trust UX, reserved execution slots, and fixture package contracts are not
   stable plugin ecosystem promises yet.
-- `@use-crux/indexer/host/*` is host-only. `host/static-index` owns static config/plan inspection.
+- `@use-crux/indexer/host/*` is Crux-owned. `host/static-index` owns static config/plan inspection.
   `host/static-compat` owns the Node calls used by the Rust Static Index compiler for third-party
   extension evidence and rule checks.
 

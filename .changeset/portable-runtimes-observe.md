@@ -2,7 +2,8 @@
 "@use-crux/ai": minor
 "@use-crux/core": minor
 "@use-crux/convex": patch
-"@use-crux/next": patch
+"@use-crux/indexer": major
+"@use-crux/next": minor
 "@use-crux/otel": minor
 "@use-crux/local": minor
 "@use-crux/react": patch
@@ -38,3 +39,30 @@ Add daemon-free `crux check` with deterministic JSON and explicit CI exit
 codes. `crux lint` now uses the same one-shot Project Index service and embedded
 worker pipeline by default while retaining its no-gate compatibility behavior
 and an explicit `--server` path.
+
+Add daemon-free `crux manifest` artifact generation and verified, idempotent
+`crux catalog import`. Local observability now resolves runtime definition
+references only against the exact immutable deployment manifest named by a run
+and labels current-checkout comparisons separately.
+Definition fingerprints now use normalized project-relative source identity so
+identical checkouts produce the same manifest ID; static, semantic, and Go
+snapshot cache epochs invalidate root-dependent historical fingerprints.
+
+Add deterministic `crux catalog` list, show, status, and explain projections
+with compiler provenance, safe source paths, Health/Quality/runtime joins, and
+truthful partial or unknown state. The beta `crux index` list/show paths now
+delegate to Catalog while category keywords and explicit reindex remain.
+Durable definition evidence now retains canonical extractor and resolved
+extension provenance, and Catalog explanations name every actual contributor
+without changing the public evidence shape or phase producer identity.
+
+Add opinionated `withCrux` lifecycle boundaries for Cloudflare Workers and
+Next.js while retaining their low-level adapters. Workers and Next now compose
+deferred work with contained, bounded post-response observability drains;
+`createCruxConvex().run()` owns the corresponding bounded terminal drain and
+preserves deployment identity across durable continuation boundaries.
+
+Align public documentation around Catalog, Runs, Quality, and Health. Narrow
+the published Indexer root to Crux-owned compiler contracts; third-party
+authoring stays on the experimental `/extensions` subpath and is declarative,
+limited to extractors plus relation declarations.

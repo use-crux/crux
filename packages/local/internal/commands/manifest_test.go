@@ -12,6 +12,7 @@ import (
 
 	"github.com/use-crux/crux/packages/local/internal/domain"
 	"github.com/use-crux/crux/packages/local/internal/output"
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
 )
 
 func TestRunManifestWritesVerifiedArtifactAndStableJSONSummary(t *testing.T) {
@@ -76,6 +77,37 @@ func TestRunManifestRejectsInvalidArtifactBeforeReplacement(t *testing.T) {
 	}
 }
 
+func TestCompileDeploymentManifestIsStableAcrossCheckoutRoots(t *testing.T) {
+	workerPath := filepath.Join(filepath.Dir(deploymentManifestGoldenPath(t)), "..", "..", "..", "..", "local", "crux-static-index-worker")
+	workerPath = filepath.Clean(workerPath)
+	if _, err := os.Stat(workerPath); err != nil {
+		t.Skip("build crux-static-index-worker to exercise the production manifest pipeline")
+	}
+	t.Setenv("CRUX_STATIC_INDEX_WORKER", workerPath)
+	fixture := filepath.Dir(deploymentManifestGoldenPath(t))
+	manifestIDs := make([]string, 0, 2)
+	for range 2 {
+		root := t.TempDir()
+		if err := os.CopyFS(root, os.DirFS(fixture)); err != nil {
+			t.Fatal(err)
+		}
+		artifact, err := compileDeploymentManifest(context.Background(), manifestOptions{
+			root: root, projectID: "fixture",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		manifest, err := projectindex.ParseDeploymentManifest(artifact)
+		if err != nil {
+			t.Fatal(err)
+		}
+		manifestIDs = append(manifestIDs, manifest.ManifestID)
+	}
+	if manifestIDs[0] != manifestIDs[1] {
+		t.Fatalf("manifest IDs differ across roots: %q != %q", manifestIDs[0], manifestIDs[1])
+	}
+}
+
 func assertExitCode(t *testing.T, err error, want int) {
 	t.Helper()
 	var exit domain.ExitError
@@ -86,14 +118,19 @@ func assertExitCode(t *testing.T, err error, want int) {
 
 func deploymentManifestGolden(t *testing.T) []byte {
 	t.Helper()
-	_, filename, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("locate manifest test")
-	}
-	path := filepath.Join(filepath.Dir(filename), "..", "..", "..", "indexer", "__tests__", "fixtures", "deployment-manifest-project", "manifest.golden.json")
+	path := deploymentManifestGoldenPath(t)
 	artifact, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return artifact
+}
+
+func deploymentManifestGoldenPath(t *testing.T) string {
+	t.Helper()
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("locate manifest test")
+	}
+	return filepath.Join(filepath.Dir(filename), "..", "..", "..", "indexer", "__tests__", "fixtures", "deployment-manifest-project", "manifest.golden.json")
 }

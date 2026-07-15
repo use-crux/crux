@@ -45,6 +45,8 @@ describe('semantic backend parity', () => {
 
       expect(typescriptPatch.status).toBe('ok')
       expect(nativePatch.status).toBe('ok')
+      expect(typescriptPatch.semanticBackend).toBe('typescript')
+      expect(nativePatch.semanticBackend).toBe('native')
       assertFixtureCoverage(fixture, typescriptPatch.facts)
       expect(normalizedFacts(nativePatch.facts)).toEqual(
         normalizedFacts(typescriptPatch.facts),
@@ -78,6 +80,8 @@ describe('semantic backend parity', () => {
 
       expect(typescriptPatch.status).toBe('ok')
       expect(nativePatch.status).toBe('ok')
+      expect(typescriptPatch.semanticBackend).toBe('typescript')
+      expect(nativePatch.semanticBackend).toBe('native')
       expect(cachedTypescriptPatch.status).toBe('ok')
       expect(cachedNativePatch.status).toBe('ok')
       assertFixtureCoverage(fixture, typescriptPatch.facts)

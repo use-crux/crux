@@ -39,6 +39,7 @@ pub(crate) fn tool_native_facts(input: &CustomProjectionInput<'_>) -> Option<Val
             let object = call.object_arg?;
             let context = PrimitiveContext::new_with_records(
                 input.file,
+                input.relative_path,
                 input.imports,
                 input.local_initializers,
                 &call,
@@ -68,6 +69,7 @@ pub(crate) fn tool_native_facts(input: &CustomProjectionInput<'_>) -> Option<Val
             }
             let context = PrimitiveContext::from_initializers_with_records(
                 input.file,
+                input.relative_path,
                 input.imports,
                 input.local_initializers,
                 match_initializers,
@@ -167,7 +169,7 @@ fn tool_facts(context: &PrimitiveContext<'_>, parts: &ToolParts<'_>) -> Option<V
             id: id.clone(),
             kind: "tool",
             name,
-            file: context.file,
+            file: context.fingerprint_file,
             source: parts.source,
             snippet: parts.snippet,
             metadata,

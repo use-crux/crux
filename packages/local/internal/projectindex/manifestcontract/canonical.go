@@ -1,4 +1,4 @@
-package projectindex
+package manifestcontract
 
 import (
 	"bytes"
@@ -6,7 +6,7 @@ import (
 	"fmt"
 )
 
-func canonicalManifestJSON(content ProjectIndexManifestContent) ([]byte, error) {
+func canonicalManifestJSON(content ManifestContent) ([]byte, error) {
 	encoded, err := json.Marshal(content)
 	if err != nil {
 		return nil, fmt.Errorf("encode deployment manifest content: %w", err)

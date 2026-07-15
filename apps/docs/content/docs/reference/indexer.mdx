@@ -1,11 +1,11 @@
 ---
 title: "@use-crux/indexer"
-description: Internal TypeScript source intelligence package for Project Index indexing.
+description: Crux-owned Catalog compiler contracts and experimental extension tooling.
 ---
 
-`@use-crux/indexer` owns the TypeScript source analysis used by `@use-crux/local` during `crux dev`, `crux index reindex`, and related index/lint flows.
+`@use-crux/indexer` owns compiler contracts and TypeScript source analysis used internally by `@use-crux/local` during `crux dev`, `crux catalog`, `crux check`, and the compatibility `crux index reindex` flow.
 
-It is an internal package, not a user-facing SDK surface. The public contract for index data remains `@use-crux/core/project-index`, and users interact with the read model through `crux dev`, `crux lint`, `GET /api/project/index`, or `GET /api/index`.
+It is a published compiler package, not an application SDK. The application-facing contract for Catalog data remains `@use-crux/core/project-index`; most users interact through Crux Local and the CLI, while compiler and extension integrations opt into the package's explicit subpaths.
 
 ## TypeScript compiler runtime
 
@@ -143,21 +143,22 @@ for custom contributions is `contributor()`.
 
 The indexer is intentionally layered. The fast AST/source pass should return a useful Project Index quickly, while deeper TypeScript semantic analysis is background enrichment. Semantic analysis may use a long-lived `ts.Program` / `TypeChecker` to resolve aliases, barrels, imported symbols, nested schemas, callbacks, and primitive graph edges that are not safe to infer from syntax alone. For injection intelligence, that includes imported contributor-family definitions serialized as `injectable`, imported injectable input schemas and `inject` callback source refs, import-safe prompt/context/injectable `use` arrays with spreads, resolved `useEntries` for imported/spread arrays and helper-shaped conditional entries, condition-specific source refs for `when(...)`, `match(...)`, and guarded `&&` use entries, imported/spread tool maps, simple injectable `inject` functions that return tool maps, and returned constraints/guardrails/metadata keys. Computed semantic use/tool shapes are kept as dynamic or partial facts where possible, so clients can show that the indexer saw the injection surface even when it could not safely resolve every target.
 
-Bundled source indexing is owned by Crux Local: Go drives the Rust/Oxc Static Index compiler, Rust emits first-party facts and bundled lint findings, and Node is used for config/runtime/semantic work plus third-party Static Index extension evidence. The `@use-crux/indexer` package is the extension-authoring SDK and JSON-safe contract package, not a public in-process bundled indexer.
+Bundled source indexing is owned by Crux Local: Go drives the Rust/Oxc Static Index compiler, Rust emits first-party facts and bundled lint findings, and Node is used for config/runtime/semantic work plus experimental third-party extension evidence. The published `@use-crux/indexer` root is a Crux-owned compiler-contract boundary, not an application in-process indexer or broad extension SDK; authoring is isolated on `/extensions`.
 
 `resolveProjectModel(...)` returns the `ResolvedProjectModel` read model from `@use-crux/core/project-index`. It is the config-inspection surface used by `crux config inspect`: selected root, package name, config status, source roots, ignored conventions, definitions, Quality discovery defaults, and diagnostics all carry provenance so config remains policy/override state rather than a duplicate primitive registry. Missing config is reported as source-only discovery, while selected lint findings such as missing stable ids and runtime-dependent tool maps become Project Model diagnostics with source provenance.
 
-`@use-crux/indexer/extensions` is an experimental extension boundary. It models the Project Index compiler with role-based slots such as extractors, resolvers, rules, and emitters. Extractors return immutable intermediate facts and unresolved references; Crux resolves, validates, merges, projects, caches, and emits index snapshots or patches. Explicit allowlisted package loading is supported for extractor/relation-spec manifests. Compiler profiles, compiler-owned projections, runtime construction details, custom third-party rules, resolvers, emitters, sources, parsers, and sandboxing remain internal/reserved.
+`@use-crux/indexer/extensions` is an experimental declarative extension boundary. Extractors return immutable intermediate facts and unresolved references; relation declarations describe their edges; Crux resolves, validates, merges, diagnoses, caches, and emits snapshots or patches. Explicit allowlisted package loading is supported for extractor/relation manifests. Compiler profiles, compiler-owned projections, runtime construction details, custom third-party rules, resolvers, emitters, sources, parsers, raw compiler objects, side-effect registration, implicit discovery, and sandboxing remain internal/reserved.
 
 ## Stability
 
-Stable beta surfaces are granular. The package root, `@use-crux/indexer/testing`,
-`@use-crux/indexer/source-resolver`, and JSON-safe `contracts/*` subpaths are intended to avoid
-breaking shape changes after the pre-launch rename/cache-bump phase. `@use-crux/indexer/extensions`
-remains experimental: its `ExtractContext` reader/builder object is frozen, but third-party loading,
-trust UX, custom rule execution, and fixture package contracts are not stable plugin ecosystem
-promises yet. `@use-crux/indexer/host/*` subpaths are Crux-owned worker bridges and should not be
-treated as application SDK APIs.
+Stability is explicit per boundary. The root, JSON-safe `contracts/*`, and
+`host/*` subpaths are Crux-owned compiler/worker contracts, not application SDK
+promises. `@use-crux/indexer/source-resolver` is a focused source-map lookup
+facade, and `testing` is the source-text fixture surface.
+`@use-crux/indexer/extensions` remains experimental: its narrow `ExtractContext`
+reader/builder object is frozen for the current experiment, but loading, trust UX,
+fixture packages, and every reserved compiler slot are not stable ecosystem
+promises. Graduation requires a separate public RFC.
 
 The loading model is config-first and trust-aware. `@use-crux/core` accepts inert `indexer`
 configuration for extension references, trust policy, and rule options. The indexer exposes
@@ -167,16 +168,11 @@ package-name trust before import, reads installed package metadata, checks reque
 and reports trust, version, manifest, or compatibility diagnostics before a compiler profile receives
 an extension.
 
-The package export map is intentionally small: `@use-crux/indexer`, `@use-crux/indexer/extensions`, `@use-crux/indexer/testing`, and `@use-crux/indexer/source-resolver`. Internal `indexer/*` modules are not public package entry points.
+The export map is intentionally explicit: the Crux-owned root, `host/*`, and
+`contracts/*` boundaries; experimental `extensions`; and focused `testing` and
+`source-resolver` facades. Internal `indexer/*` modules are not package entry points.
 
-The host package exposes Crux-owned worker bridges for static planning/config, semantic enrichment, runtime patching, and Static Index extension-host calls.
-It also exports the relation model facade used internally: `resolveRelationModel`,
-`relationIdentity`, `mergeRelationsByIdentity`, `createRelationPolicyTable`, and
-`relationDiagnosticsFromReport`, plus `withResolvedRelationReadModel` for callers that already have
-resolved relations and only need the compiler's definition projection. These helpers are the supported way to keep relation identity,
-fidelity-aware replacement, policy-table validation, and unresolved-reference accounting aligned
-with compiler behavior. Semantic analyzer output is merged with the same relation identity contract,
-so resolved semantic facts replace provisional static facts instead of producing duplicate graph edges.
+The host package exposes Crux-owned worker bridges for static planning/config, semantic enrichment, runtime patching, and Static Index extension-host calls. Relation identity, fidelity-aware replacement, policy validation, and unresolved-reference accounting remain compiler-internal; they are deliberately not root, host, or third-party authoring exports. Semantic analyzer output uses that one internal relation identity contract so resolved semantic facts replace provisional static facts instead of producing duplicate graph edges.
 Relation types are expected to be declared in the active policy table before they reach compiler
 output. Undeclared relation refs or pre-resolved relations are preserved as evidence but reported
 through `RelationResolutionReport.policyGaps` and `relation.policy_gap` diagnostics.
@@ -196,8 +192,8 @@ The local Go service can now call the incremental worker with a previous index p
 
 Semantic enrichment is organized as focused analyzers with a shared semantic evidence contract. `semanticIndexFacts(root, files)` remains the top-level behavior, while analyzers handle narrower responsibilities such as schema enrichment, source references, relations, and definition enrichment. Shared semantic infrastructure lives under `indexer/semantic/`: program setup, candidate discovery, analyzer input selection, registry wiring, result merging, and evidence projection are separate from the analyzer implementations. Analyzer-level tests should use real temporary TypeScript source when compiler resolution is part of the behavior.
 
-Indexer Extensions remain backend-neutral. Extension authors use Crux manifests, extractors, rules,
-facts, and read models; semantic backends do not expose raw TypeScript or TypeScript-Go AST/checker
+Indexer Extensions remain backend-neutral. Extension authors use declarative manifests, extractors,
+facts, relation declarations, and unresolved references; semantic backends do not expose raw TypeScript or TypeScript-Go AST/checker
 objects as a public extension API. Extension primitives that do not have native projector coverage
 still work through the native shared analyzer path when native indexing is enabled.
 
@@ -220,7 +216,7 @@ Every `ProjectDefinition` can expose the following fact buckets:
 - `definition.sourceRefs` for source-backed schema, callback, handler, constant, template, prompt fragment, tool-map, store, block, evaluator, classifier, injection condition, and route-target declarations.
 - `index.relations` for architecture edges such as `agent.uses_prompt`, `flow.includes_step`, `flow.step.reads_memory`, `memory.includes_block`, `router.includes_route`, and `eval.covers_definition`.
 - `index.lintFindings` for backend-owned authored-graph issues produced from those facts.
-- `index.ruleDescriptors` for backend-owned rule metadata, including built-in rules and extension-provided rules that did not fire a concrete finding.
+- `index.ruleDescriptors` for backend-owned rule metadata, including built-in and compiler-owned extension rules that did not fire a concrete finding. This read-model field does not open public third-party rule execution.
 
 Known fact fields are typed in `@use-crux/core/project-index`. Future integrations may use explicit `extensions` bags, but core Crux primitives should prefer typed fields whenever the indexer can prove the fact.
 

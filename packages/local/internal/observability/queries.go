@@ -1073,6 +1073,11 @@ func (s *Service) RunDetail(ctx context.Context, runID string) (RunDetail, error
 	if err != nil {
 		return RunDetail{}, fmt.Errorf("list definition refs for run %q: %w", runID, err)
 	}
+	resolution, err := s.resolveRunManifest(ctx, graph.Run, detail.DefinitionRefs, "")
+	if err != nil {
+		return RunDetail{}, err
+	}
+	detail.Manifest = &resolution
 	return detail, nil
 }
 

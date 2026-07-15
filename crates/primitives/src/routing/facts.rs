@@ -20,8 +20,13 @@ pub(crate) fn routing_native_facts(input: &CustomProjectionInput<'_>) -> Option<
     if parts.callee_direct == Some(false) {
         return None;
     }
-    let context =
-        PrimitiveContext::new(input.file, input.imports, input.local_initializers, &parts);
+    let context = PrimitiveContext::new(
+        input.file,
+        input.relative_path,
+        input.imports,
+        input.local_initializers,
+        &parts,
+    );
     match parts.callee_name {
         "router" => router_facts(&context, &parts),
         "split" => split_facts(&context, &parts),

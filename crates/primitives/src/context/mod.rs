@@ -25,6 +25,7 @@ pub(crate) mod facts;
 
 pub(crate) struct PrimitiveContext<'a> {
     pub file: &'a str,
+    pub fingerprint_file: &'a str,
     pub initializers: HashMap<&'a str, &'a StaticInitializerRecord>,
     imports: &'a [StaticImportRecord],
     records_by_file: Option<&'a HashMap<String, StaticSyntaxFileRecord>>,
@@ -65,15 +66,23 @@ enum ResolveOutcome<'a> {
 impl<'a> PrimitiveContext<'a> {
     pub fn new(
         file: &'a str,
+        fingerprint_file: &'a str,
         imports: &'a [StaticImportRecord],
         local_initializers: &'a [StaticInitializerRecord],
         parts: &CallParts<'a>,
     ) -> Self {
-        Self::from_initializers(file, imports, local_initializers, parts.local_initializers)
+        Self::from_initializers(
+            file,
+            fingerprint_file,
+            imports,
+            local_initializers,
+            parts.local_initializers,
+        )
     }
 
     pub fn new_with_records(
         file: &'a str,
+        fingerprint_file: &'a str,
         imports: &'a [StaticImportRecord],
         local_initializers: &'a [StaticInitializerRecord],
         parts: &CallParts<'a>,
@@ -81,6 +90,7 @@ impl<'a> PrimitiveContext<'a> {
     ) -> Self {
         Self::from_initializers_with_records(
             file,
+            fingerprint_file,
             imports,
             local_initializers,
             parts.local_initializers,
@@ -90,12 +100,14 @@ impl<'a> PrimitiveContext<'a> {
 
     pub(crate) fn from_initializers(
         file: &'a str,
+        fingerprint_file: &'a str,
         imports: &'a [StaticImportRecord],
         local_initializers: &'a [StaticInitializerRecord],
         match_initializers: &'a [StaticInitializerRecord],
     ) -> Self {
         Self::from_initializers_with_records(
             file,
+            fingerprint_file,
             imports,
             local_initializers,
             match_initializers,
@@ -105,6 +117,7 @@ impl<'a> PrimitiveContext<'a> {
 
     pub(crate) fn from_initializers_with_records(
         file: &'a str,
+        fingerprint_file: &'a str,
         imports: &'a [StaticImportRecord],
         local_initializers: &'a [StaticInitializerRecord],
         match_initializers: &'a [StaticInitializerRecord],
@@ -117,6 +130,7 @@ impl<'a> PrimitiveContext<'a> {
             .collect();
         Self {
             file,
+            fingerprint_file,
             initializers,
             imports,
             records_by_file,
@@ -231,6 +245,24 @@ impl<'a> PrimitiveContext<'a> {
             snippet: snippet_for_value(current, None),
             function_name: function_name_for_value(current, path.last().map(String::as_str)),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PrimitiveContext;
+
+    #[test]
+    fn keeps_absolute_source_and_relative_fingerprint_identity_separate() {
+        let context = PrimitiveContext::from_initializers(
+            "/tmp/checkout/src/catalog.ts",
+            "src/catalog.ts",
+            &[],
+            &[],
+            &[],
+        );
+        assert_eq!(context.file, "/tmp/checkout/src/catalog.ts");
+        assert_eq!(context.fingerprint_file, "src/catalog.ts");
     }
 }
 

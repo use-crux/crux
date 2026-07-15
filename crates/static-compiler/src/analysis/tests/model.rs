@@ -27,6 +27,10 @@ fn analyze_uses_plan_call_names_instead_of_prompt_hardcode() {
         analyze_static_index_facts(&request_with_call_names(vec!["prompt".to_string()], source));
     let facts = facts.into_wire_values();
     assert_eq!(facts[0]["definitions"][0]["id"], "prompt:refund");
+    assert_eq!(
+        facts[0]["definitionExtractors"]["prompt:refund"],
+        json!([{ "name": "prompt" }])
+    );
 }
 
 #[test]
@@ -210,13 +214,17 @@ fn analyze_evaluation_after_scores_assertion_sites_match_quality_authoring_api()
         "})",
     ]
     .join("\n");
-    let facts = analyze_static_index_facts(&request_with_call_names(vec!["evaluate".to_string()], &source));
+    let facts = analyze_static_index_facts(&request_with_call_names(
+        vec!["evaluate".to_string()],
+        &source,
+    ));
     let facts = facts.into_wire_values();
-    let evaluation_group = facts
+    let evaluation = facts
         .iter()
-        .find(|fact| fact["definitions"][0]["id"] == "evaluation:support.answer")
-        .expect("evaluation fact group");
-    let assertion_sites = evaluation_group["definitions"][0]["metadata"]["facts"]["assertionSites"]
+        .flat_map(|fact| fact["definitions"].as_array().into_iter().flatten())
+        .find(|definition| definition["id"] == "evaluation:support.answer")
+        .expect("evaluation definition");
+    let assertion_sites = evaluation["metadata"]["facts"]["assertionSites"]
         .as_array()
         .expect("evaluation should expose assertion sites");
 
@@ -244,7 +252,10 @@ fn analyze_evaluation_emits_catalog_facts_from_literal_config() {
         "})",
     ]
     .join("\n");
-    let facts = analyze_static_index_facts(&request_with_call_names(vec!["evaluate".to_string()], &source));
+    let facts = analyze_static_index_facts(&request_with_call_names(
+        vec!["evaluate".to_string()],
+        &source,
+    ));
     let facts = facts.into_wire_values();
     let evaluation_group = facts
         .iter()

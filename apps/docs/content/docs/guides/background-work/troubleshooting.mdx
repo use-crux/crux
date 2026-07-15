@@ -36,8 +36,8 @@ Runtime-bound failures still use Runtime codes such as
 
 ## Checklist
 
-1. Is the handler wrapped (`withNodeDefer`, `withNextDefer`, `withWaitUntilDefer`,
-   Convex `bridge.run`, …)?
+1. Is the handler wrapped (`withNodeDefer`, Next/Workers `withCrux`,
+   `withWaitUntilDefer`, Convex `createCruxConvex().run`, …)?
 2. For inline work: does the host advertise a real lifetime capability?
 3. For named work: is `config({ runtime })` present and is
    `durableFinalization: true` on the host lifetime?

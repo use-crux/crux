@@ -47,6 +47,7 @@ export function createSemanticIndexService(options: SemanticIndexServiceOptions 
       configPath: input.configPath,
       projectName: input.projectName,
       startedAt,
+      semanticBackend: backend.identity.name,
     })
 
     const selectionBudgetPatch = enforceIndexPatchBudget(basePatch, semanticBudget, {
@@ -219,6 +220,7 @@ interface SemanticBasePatchInput {
   readonly configPath?: string
   readonly projectName?: string
   readonly startedAt: string
+  readonly semanticBackend: string
 }
 
 function semanticBasePatch(input: SemanticBasePatchInput): IndexPatch {
@@ -232,6 +234,7 @@ function semanticBasePatch(input: SemanticBasePatchInput): IndexPatch {
     },
     startedAt: input.startedAt,
     status: 'ok',
+    semanticBackend: input.semanticBackend,
     facts: {},
   }
 }

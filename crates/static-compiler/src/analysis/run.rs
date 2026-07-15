@@ -87,7 +87,7 @@ fn analyze_parsed_file(
     let mut seen_definition_ids = HashSet::<String>::new();
     let mut groups = Vec::new();
     for projection in &native_facts {
-        let Some(grouped) = grouped_finalize_facts_from_extracted(
+        let Some(mut grouped) = grouped_finalize_facts_from_extracted(
             &projection.facts,
             &request.plan.root,
             request.plan.project_name.as_deref(),
@@ -95,6 +95,19 @@ fn analyze_parsed_file(
         ) else {
             continue;
         };
+        for definition in &grouped.definitions {
+            let extractors = grouped
+                .definition_extractors
+                .entry(definition.id.clone())
+                .or_default();
+            extractors.extend(projection.replaces.iter().map(|replaced| {
+                crate::core::facts::StaticIndexFactExtractorProvenance {
+                    name: replaced.extractor.clone(),
+                    extension: None,
+                }
+            }));
+        }
+        grouped.canonicalize();
         if let Some(id) = primary_definition_id(&grouped) {
             if !seen_definition_ids.insert(id) {
                 continue;

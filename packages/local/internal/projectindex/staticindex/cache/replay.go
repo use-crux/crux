@@ -7,6 +7,7 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/protocol"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
@@ -82,18 +83,20 @@ func replayFact(root string, projectName string, hit protocol.SourceFile) (json.
 	}
 
 	group := struct {
-		Root        string                  `json:"root,omitempty"`
-		ProjectName string                  `json:"projectName,omitempty"`
-		Definitions []json.RawMessage       `json:"definitions,omitempty"`
-		Relations   []json.RawMessage       `json:"relations,omitempty"`
-		Diagnostics []json.RawMessage       `json:"diagnostics,omitempty"`
-		Sources     []store.IndexSourceFile `json:"sources,omitempty"`
+		Root                 string                                                 `json:"root,omitempty"`
+		ProjectName          string                                                 `json:"projectName,omitempty"`
+		Definitions          []json.RawMessage                                      `json:"definitions,omitempty"`
+		DefinitionExtractors map[string][]projectindex.IndexFactExtractorProvenance `json:"definitionExtractors,omitempty"`
+		Relations            []json.RawMessage                                      `json:"relations,omitempty"`
+		Diagnostics          []json.RawMessage                                      `json:"diagnostics,omitempty"`
+		Sources              []store.IndexSourceFile                                `json:"sources,omitempty"`
 	}{
-		Root:        root,
-		ProjectName: projectName,
-		Definitions: extraction.Definitions,
-		Relations:   extraction.Relations,
-		Diagnostics: extraction.Diagnostics,
+		Root:                 root,
+		ProjectName:          projectName,
+		Definitions:          extraction.Definitions,
+		DefinitionExtractors: extraction.DefinitionExtractors,
+		Relations:            extraction.Relations,
+		Diagnostics:          extraction.Diagnostics,
 		Sources: []store.IndexSourceFile{{
 			File:          file,
 			Status:        "indexed",

@@ -42,6 +42,7 @@ type Service struct {
 	mutationTO    time.Duration
 	maintenanceTO time.Duration
 	mutationMu    sync.Mutex
+	manifestStore deploymentManifestReader
 
 	retentionSettings  retentionSettings
 	lifecycleRunDetail func(context.Context, string) (RunDetail, error)
@@ -303,6 +304,8 @@ type RunDetail struct {
 	Diagnostics    []RunDetailDiagnostic         `json:"diagnostics"`
 	Counts         RunDetailCounts               `json:"counts"`
 	DefinitionRefs []DefinitionRef               `json:"definitionRefs"`
+	Manifest       *RunManifestResolution        `json:"manifest,omitempty"`
+	CurrentCatalog *CurrentCatalogComparison     `json:"currentCatalog,omitempty"`
 	Debug          *Graph                        `json:"debug,omitempty"`
 }
 

@@ -77,7 +77,7 @@ pub(crate) fn media_operation_facts(
         id: format!("media.operation:{}", safe_id(parts.variable_name)),
         kind: "media.operation",
         name: parts.variable_name.to_string(),
-        file: context.file,
+        file: context.fingerprint_file,
         source: parts.source,
         snippet: parts.snippet,
         metadata,

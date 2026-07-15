@@ -27,6 +27,10 @@
 
 import { observabilityDiagnostics, observe } from './observe'
 import type { ObservabilityFlushResult } from './delivery/options'
+import {
+  withWaitUntilDefer,
+  type ServerlessDeferClassifyOutcome,
+} from '../defer/serverless'
 
 const DEFAULT_WORKERS_FLUSH_TIMEOUT_MS = 5000
 
@@ -51,6 +55,83 @@ export interface CruxWorkersInvocation {
    * discarded either way.
    */
   readonly onDrain?: (result: ObservabilityFlushResult) => void
+}
+
+/** Options for the opinionated Workers lifecycle boundary created by {@link withCrux}. */
+export interface CruxWorkersOptions<TArgs extends readonly unknown[], TResult> {
+  /** Resolve the structural Workers execution context for this call. */
+  readonly context: (...args: TArgs) => CruxExecutionContext
+  /** Resolve optional per-invocation observability drain controls. */
+  readonly invocation?: (
+    context: CruxExecutionContext,
+    ...args: TArgs
+  ) => CruxWorkersInvocation | undefined
+  /** Classify the handler settlement for deferred-work finalization. */
+  readonly classifyOutcome?: ServerlessDeferClassifyOutcome<Awaited<TResult>>
+  /** Whether named deferred work may finalize before the response. */
+  readonly durableFinalization?: boolean
+  /** Whether inline deferred callbacks may register. Defaults to `true`. */
+  readonly supportsInline?: boolean
+}
+
+/**
+ * Wrap a Workers handler with the canonical Crux defer and observability lifecycle.
+ *
+ * The handler result settles without waiting for telemetry. Both deferred work
+ * and the bounded final drain are retained through the same structural
+ * `ExecutionContext.waitUntil()` capability.
+ *
+ * @param handler - Workers handler to invoke.
+ * @param options - Per-call context resolution and lifecycle controls.
+ * @returns A handler preserving the original argument tuple and awaited result.
+ *
+ * @example
+ * ```ts
+ * import { defer } from '@use-crux/core'
+ * import { withCrux } from '@use-crux/core/observability/workers'
+ *
+ * export default {
+ *   fetch: withCrux(
+ *     async (_request, _env, _ctx) => {
+ *       defer(() => flushAnalytics())
+ *       return new Response('ok')
+ *     },
+ *     { context: (_request, _env, ctx) => ctx },
+ *   ),
+ * }
+ * ```
+ */
+export function withCrux<TArgs extends readonly unknown[], TResult>(
+  handler: (...args: TArgs) => TResult | PromiseLike<TResult>,
+  options: CruxWorkersOptions<TArgs, TResult>,
+): (...args: TArgs) => Promise<Awaited<TResult>> {
+  return (...args: TArgs): Promise<Awaited<TResult>> => {
+    const context = options.context(...args)
+    const invocation = options.invocation?.(context, ...args)
+    const deferredHandler = withWaitUntilDefer(() => handler(...args), {
+      waitUntil: (promise) => context.waitUntil(drainAfterDeferredWork(promise, invocation)),
+      ...(options.classifyOutcome ? { classifyOutcome: options.classifyOutcome } : {}),
+      ...(options.durableFinalization !== undefined
+        ? { durableFinalization: options.durableFinalization }
+        : {}),
+      ...(options.supportsInline !== undefined ? { supportsInline: options.supportsInline } : {}),
+    })
+    return deferredHandler()
+  }
+}
+
+async function drainAfterDeferredWork(
+  deferredWork: Promise<void>,
+  invocation: CruxWorkersInvocation | undefined,
+): Promise<void> {
+  try {
+    await deferredWork
+  } finally {
+    // One retained host task owns the complete terminal sequence. This keeps
+    // the drain ordered after defer's own evidence and flush without delaying
+    // the handler result.
+    await reportDrain(invocation)
+  }
 }
 
 /**

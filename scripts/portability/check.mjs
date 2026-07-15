@@ -38,6 +38,7 @@ export async function checkPortableEntrypoints(context) {
 
   await runGuardedFallbackSmokes(context)
   if (context.mode === 'source') await runNegativeFixtures(context)
+  else await runStagedDependencyDeclarationNegativeFixtures(context)
   return { checked }
 }
 
@@ -240,17 +241,67 @@ function workspaceResolver(context, externals, runtime) {
     name: 'crux-portability-workspaces',
     setup(buildApi) {
       buildApi.onResolve({ filter: /^@use-crux\// }, (args) => {
+        const installed = context.resolveInstalledDependency(args.path, args.importer)
+        if (installed?.error) return { errors: [{ text: installed.error }] }
         if (isExternal(args.path, externals)) return { path: args.path, external: true }
         const path = context.resolveWorkspaceSpecifier(args.path, runtime)
         return path ? { path } : { errors: [{ text: `Unknown workspace import ${args.path}.` }] }
       })
-      buildApi.onResolve({ filter: /^[^./]/ }, (args) => {
+      buildApi.onResolve({ filter: /^[^./]/ }, async (args) => {
+        if (args.pluginData?.cruxStagedDependency) return undefined
         if (isNodeBuiltin(args.path)) return undefined
+        const installed = context.resolveInstalledDependency(args.path, args.importer)
+        if (installed?.error) return { errors: [{ text: installed.error }] }
         if (isExternal(args.path, externals)) return { path: args.path, external: true }
+        if (installed) {
+          return buildApi.resolve(args.path, {
+            importer: args.importer,
+            kind: args.kind,
+            resolveDir: installed.resolveDir,
+            pluginData: { cruxStagedDependency: true },
+          })
+        }
         return undefined
       })
     },
   }
+}
+
+async function runStagedDependencyDeclarationNegativeFixtures(context) {
+  const state = context.packages.get('@use-crux/next')
+  if (!state) return
+
+  for (const dependency of ['@use-crux/core', 'next']) {
+    const original = state.sourceManifest
+    state.sourceManifest = withoutDeclaredDependency(original, dependency)
+    try {
+      await expectNegativeFailure(
+        `staged undeclared dependency ${dependency}`,
+        () =>
+          bundleEntry(
+            context,
+            context.resolveEntrypoint('@use-crux/next', '.', 'next-server'),
+            'next-server',
+            { externals: state.declaration.externals ?? [] },
+          ),
+        new RegExp(`@use-crux/next staged output imports undeclared dependency ${escapeRegExp(dependency)}`),
+      )
+    } finally {
+      state.sourceManifest = original
+    }
+  }
+}
+
+function withoutDeclaredDependency(manifest, dependency) {
+  return Object.fromEntries(
+    Object.entries(manifest).map(([field, value]) => {
+      if (!['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies'].includes(field)) {
+        return [field, value]
+      }
+      const { [dependency]: _removed, ...remaining } = value ?? {}
+      return [field, remaining]
+    }),
+  )
 }
 
 function rejectNodeBuiltinExternals(patterns) {

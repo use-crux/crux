@@ -113,7 +113,7 @@ pub(crate) fn scorer_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>
             id,
             kind: "scorer",
             name: explicit_id.unwrap_or_else(|| parts.variable_name.to_string()),
-            file: context.file,
+            file: context.fingerprint_file,
             source: parts.source,
             snippet: parts.snippet,
             metadata,

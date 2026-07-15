@@ -130,14 +130,18 @@ fn fact_envelopes(
     phase: &str,
 ) -> Vec<Value> {
     let mut envelopes = Vec::new();
-    append_array_facts(
-        &mut envelopes,
-        "definitions",
-        &facts.definitions,
-        project_root,
-        producer_version,
-        phase,
-    );
+    for definition in &facts.definitions {
+        let fact_id = index_patch_fact_id("definitions", definition, envelopes.len());
+        envelopes.push(fact_envelope_with_extractors(
+            "definitions",
+            &fact_id,
+            definition,
+            project_root,
+            producer_version,
+            phase,
+            facts.definition_extractors.get(&definition.id),
+        ));
+    }
     append_array_facts(
         &mut envelopes,
         "relations",
@@ -233,6 +237,36 @@ fn fact_envelope<T>(
 where
     T: serde::Serialize,
 {
+    fact_envelope_with_extractors(
+        kind,
+        fact_id,
+        fact,
+        project_root,
+        producer_version,
+        phase,
+        None,
+    )
+}
+
+fn fact_envelope_with_extractors<T>(
+    kind: &str,
+    fact_id: &str,
+    fact: &T,
+    project_root: &str,
+    producer_version: &str,
+    phase: &str,
+    extractors: Option<&Vec<crate::core::facts::StaticIndexFactExtractorProvenance>>,
+) -> Value
+where
+    T: serde::Serialize,
+{
+    let mut provenance = json!({
+        "kind": "runtime",
+        "attribute": format!("project-index.{phase}"),
+    });
+    if let Some(extractors) = extractors.filter(|extractors| !extractors.is_empty()) {
+        provenance["extractors"] = json!(extractors);
+    }
     json!({
         "schemaVersion": 1,
         "factId": fact_id,
@@ -241,7 +275,7 @@ where
         "projectRoot": project_root,
         "producer": { "name": PROJECT_INDEX_PRODUCER_NAME, "version": producer_version },
         "fidelity": "inferred",
-        "provenance": { "kind": "runtime", "attribute": format!("project-index.{phase}") },
+        "provenance": provenance,
         "fact": fact,
     })
 }

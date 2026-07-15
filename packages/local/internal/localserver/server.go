@@ -63,6 +63,7 @@ func New(options Options) http.Handler {
 	mux := http.NewServeMux()
 	readmodel.Mount(mux, endpoints.Deps{
 		Devtools: options.Devtools,
+		Catalog:  options.Devtools,
 		Quality:  options.Quality,
 		Evaluations: qualityserver.NewEvaluationCollector(
 			options.ProjectRoot,
@@ -77,7 +78,7 @@ func New(options Options) http.Handler {
 	}
 	registerRuntimeBridgeRoutes(mux, runtimeBridge, originAllowed)
 	registerResourceRoutes(mux, resourceInspection)
-	registerObservabilityRoutes(mux, options.Observability, qualityEvents(options.Quality))
+	registerObservabilityRoutesWithCatalog(mux, options.Observability, qualityEvents(options.Quality), options.Devtools)
 	registerIndexRoutes(mux, options.Devtools)
 	registerRuntimeRoutes(mux, options.Devtools, options.ProjectRoot)
 

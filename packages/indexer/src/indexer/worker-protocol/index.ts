@@ -7,6 +7,8 @@ export type {
   ProjectIndexFactEnvelope,
   ProjectIndexFactEnvelopeFor,
   ProjectIndexFactFidelity,
+  ProjectIndexFactExtractorProvenance,
+  ProjectIndexFactProvenance,
   ProjectIndexFactProducer,
   ProjectIndexPatchFactKind,
   ProjectIndexPatchFactMap,

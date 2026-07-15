@@ -147,7 +147,7 @@ fn recipe_step(
             id: definition_id,
             kind: "rag.recipe.step",
             name: step_id,
-            file: context.file,
+            file: context.fingerprint_file,
             source: parts.source,
             snippet: parts.snippet,
             metadata,

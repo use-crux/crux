@@ -448,6 +448,39 @@ func testDefinitionFact(id string) map[string]any {
 	}
 }
 
+func TestProjectIndexPatchStreamCollectorRejectsInvalidExtractorProvenance(t *testing.T) {
+	tests := []struct {
+		name       string
+		extractors []map[string]any
+	}{
+		{name: "empty name", extractors: []map[string]any{{"name": ""}}},
+		{name: "control character", extractors: []map[string]any{{"name": "bad\nname"}}},
+		{name: "non canonical order", extractors: []map[string]any{{"name": "zeta"}, {"name": "alpha"}}},
+		{name: "non BMP order", extractors: []map[string]any{{"name": "\U00010000"}, {"name": "\uE000"}}},
+		{name: "duplicate", extractors: []map[string]any{{"name": "alpha"}, {"name": "alpha"}}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			collector := NewProjectIndexPatchStreamCollector(ProjectIndexPatchStreamOptions{Root: "/repo"})
+			if err := collector.Handle(mustMarshalWorkerEvent(t, map[string]any{
+				"protocolVersion": 2, "type": "phase:start", "transactionId": "tx-ast",
+				"phase": "ast", "root": "/repo", "startedAt": "2026-06-18T10:00:00.000Z",
+			})); err != nil {
+				t.Fatal(err)
+			}
+			fact := testDefinitionFact("prompt:writer")
+			fact["provenance"].(map[string]any)["extractors"] = test.extractors
+			err := collector.Handle(mustMarshalWorkerEvent(t, map[string]any{
+				"protocolVersion": 2, "type": "fact:batch", "transactionId": "tx-ast",
+				"sequence": 0, "facts": []map[string]any{fact},
+			}))
+			if err == nil || !strings.Contains(err.Error(), "extractor") {
+				t.Fatalf("Handle invalid extractors error = %v", err)
+			}
+		})
+	}
+}
+
 func mustMarshalWorkerEvent(t *testing.T, value any) json.RawMessage {
 	t.Helper()
 	data, err := json.Marshal(value)

@@ -148,6 +148,40 @@ func TestSQLiteIndexFactStoreProjectsCommittedPhaseFacts(t *testing.T) {
 	}
 }
 
+func TestSQLiteIndexFactStoreReturnsDefinitionEvidenceInPhaseOrder(t *testing.T) {
+	root := t.TempDir()
+	ctx := context.Background()
+	facts := NewSQLiteIndexFactStore()
+	definition := testDefinition("prompt:writer", "src/writer.ts")
+	for _, phase := range []IndexPatchPhase{PhaseSemantic, PhaseAST} {
+		patch := IndexPatch{
+			SchemaVersion: 1,
+			Phase:         phase,
+			Project:       store.ProjectIdentity{Root: root},
+			Status:        "ok",
+		}
+		envelope := testIndexFactEnvelope(t, patch, "definitions:prompt:writer", "definitions", definition)
+		envelope.Provenance = IndexFactProvenance{
+			Kind: "source", File: "src/writer.ts", ExportName: "writer",
+			Extractors: []IndexFactExtractorProvenance{{Name: "prompt"}},
+		}
+		if err := facts.CommitPhase(ctx, IndexFactTransaction{Patch: patch, Facts: []IndexFactEnvelope{envelope}}); err != nil {
+			t.Fatalf("commit %s evidence: %v", phase, err)
+		}
+	}
+
+	got, err := NewSQLiteIndexFactStore().DefinitionEvidence(ctx, root, "prompt:writer")
+	if err != nil {
+		t.Fatalf("definition evidence: %v", err)
+	}
+	if len(got) != 2 || got[0].Phase != PhaseAST || got[1].Phase != PhaseSemantic {
+		t.Fatalf("definition evidence = %+v, want ast then semantic", got)
+	}
+	if len(got[0].Provenance.Extractors) != 1 || got[0].Provenance.Extractors[0].Name != "prompt" {
+		t.Fatalf("restarted definition evidence provenance = %+v", got[0].Provenance)
+	}
+}
+
 func TestSQLiteIndexFactStoreClearsFactsWithoutEnvelopeMetadata(t *testing.T) {
 	root := t.TempDir()
 	ctx := context.Background()

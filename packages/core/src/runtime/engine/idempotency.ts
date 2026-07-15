@@ -57,10 +57,11 @@ function epochMsBase36(now: Date): string {
 }
 
 let invocationCounter = 0
-const invocationNonce = createInvocationNonce()
+let invocationNonce: string | undefined
 
 function uniqueInvocationSuffix(now: Date): string {
   invocationCounter += 1
+  invocationNonce ??= createInvocationNonce()
   return `${epochMsBase36(now)}:${invocationNonce}:${invocationCounter.toString(36)}`
 }
 

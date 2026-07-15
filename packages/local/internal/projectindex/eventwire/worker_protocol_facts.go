@@ -2,6 +2,8 @@ package eventwire
 
 import (
 	"fmt"
+
+	"github.com/use-crux/crux/packages/local/internal/projectindex/model"
 )
 
 func (c *ProjectIndexPatchStreamCollector) addEnvelopeFact(tx *projectIndexPatchTransaction, envelope IndexFactEnvelope) error {
@@ -59,31 +61,5 @@ func validateIndexFactFidelity(envelope IndexFactEnvelope) error {
 }
 
 func validateIndexFactProvenance(envelope IndexFactEnvelope) error {
-	switch envelope.Provenance.Kind {
-	case "source":
-		if envelope.Provenance.File == "" {
-			return fmt.Errorf("project index fact %q source provenance missing file", envelope.FactID)
-		}
-	case "runtime":
-		if envelope.Provenance.Attribute == "" {
-			return fmt.Errorf("project index fact %q runtime provenance missing attribute", envelope.FactID)
-		}
-	case "filesystem":
-		if envelope.Provenance.Path == "" || envelope.Provenance.Convention == "" {
-			return fmt.Errorf("project index fact %q filesystem provenance missing path or convention", envelope.FactID)
-		}
-	case "config":
-		if envelope.Provenance.Path == "" || envelope.Provenance.Key == "" {
-			return fmt.Errorf("project index fact %q config provenance missing path or key", envelope.FactID)
-		}
-	case "cli":
-		if envelope.Provenance.Flag == "" {
-			return fmt.Errorf("project index fact %q cli provenance missing flag", envelope.FactID)
-		}
-	case "":
-		return fmt.Errorf("project index fact %q missing provenance", envelope.FactID)
-	default:
-		return fmt.Errorf("project index fact %q has unsupported provenance kind %q", envelope.FactID, envelope.Provenance.Kind)
-	}
-	return nil
+	return model.ValidateIndexFactProvenance(envelope)
 }

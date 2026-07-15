@@ -21,6 +21,7 @@ describe("project index worker protocol", () => {
       project: { root: "/repo", name: "media" },
       startedAt: "2026-07-12T00:00:00.000Z",
       status: "ok",
+      semanticBackend: "native",
       facts: {
         definitions: [
           {

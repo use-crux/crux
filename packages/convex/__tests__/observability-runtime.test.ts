@@ -5,6 +5,7 @@ import { prompt as makePrompt } from '@use-crux/core'
 import { agent as makeAgent } from '@use-crux/core/agent'
 import {
   acceptedDeliveryReceipt,
+  configureObservability,
   createInMemoryObservabilityTransport,
   observe,
   resetObservabilityRuntime,
@@ -269,6 +270,12 @@ describe('@use-crux/convex observability runtime binding (Phase 8)', () => {
     it('carries the suspended run through a real Convex durable boundary: saved via convex-test, read back by the next scheduled swarm.resume() invocation', async () => {
       const transport = createInMemoryObservabilityTransport()
       setObservabilityTransport(transport)
+      const deployment = {
+        projectId: 'convex-swarm-project',
+        manifestId: `pim_${'b'.repeat(64)}` as const,
+        deploymentId: 'convex-swarm-production-42',
+      }
+      configureObservability({ identity: deployment })
       const t = convexTest({ schema, modules })
       const component = componentRef()
       const scheduled: Array<{ delayMs: number; ref: unknown; args: Record<string, unknown> }> = []
@@ -334,6 +341,7 @@ describe('@use-crux/convex observability runtime binding (Phase 8)', () => {
       expect(finalState!.output).toBe('billing resolved')
       const resumeRecord = transport.records.find((record) => record.type === 'run:resume' && record.runId === runId)
       expect(resumeRecord).toBeDefined()
+      expect(resumeRecord).toEqual(expect.objectContaining({ deployment }))
       expect(resumeRecord && 'segmentId' in resumeRecord ? resumeRecord.segmentId : undefined).not.toBe(
         swarmStart && 'segmentId' in swarmStart ? swarmStart.segmentId : undefined,
       )

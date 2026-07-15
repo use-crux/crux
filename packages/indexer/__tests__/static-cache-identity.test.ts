@@ -37,11 +37,11 @@ describe("static cache identity", () => {
     );
 
     expect(STATIC_PARSE_CACHE_EPOCH).toBe(identity.staticParseCacheEpoch);
-    expect(STATIC_PARSE_CACHE_EPOCH).toBe("static-parse-v61");
+    expect(STATIC_PARSE_CACHE_EPOCH).toBe("static-parse-v64");
   });
 
   it("takes the pre-launch semantic facts cache migration epoch", () => {
-    expect(SEMANTIC_FACTS_CACHE_EPOCH).toBe("semantic-facts-v27");
+    expect(SEMANTIC_FACTS_CACHE_EPOCH).toBe("semantic-facts-v28");
   });
 
   it("projects static host manifest facets into extraction identity", () => {

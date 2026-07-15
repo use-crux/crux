@@ -6,7 +6,7 @@ import {
   type ProjectIndexWorkerWriter,
 } from "./project-indexer-protocol";
 
-const PROJECT_INDEXER_PRODUCER_VERSION = "0.5.0";
+declare const __CRUX_INDEXER_VERSION__: string;
 
 /** Projects one completed worker snapshot through the authoritative manifest compiler. */
 export async function writeDeploymentManifestArtifact(
@@ -32,7 +32,7 @@ export async function writeDeploymentManifestArtifact(
     definitions: req.definitions ?? [],
     relations: req.relations ?? [],
     provenance: {
-      producerVersion: PROJECT_INDEXER_PRODUCER_VERSION,
+      producerVersion: __CRUX_INDEXER_VERSION__,
       staticFrontend: req.staticFrontend,
       ...(req.manifestSemanticBackend
         ? { semanticBackend: req.manifestSemanticBackend }

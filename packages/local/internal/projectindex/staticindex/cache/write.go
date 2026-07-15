@@ -22,13 +22,14 @@ type entryMetadata struct {
 }
 
 type WritableExtraction struct {
-	File            string                                  `json:"file"`
-	InterfaceHash   string                                  `json:"interfaceHash,omitempty"`
-	Definitions     []store.ProjectDefinition               `json:"definitions"`
-	Relations       []store.ProjectRelation                 `json:"relations"`
-	Diagnostics     []store.IndexDiagnostic                 `json:"diagnostics"`
-	Dependencies    []string                                `json:"dependencies"`
-	SemanticProfile *projectindex.SemanticSourceProfileFile `json:"semanticProfile,omitempty"`
+	File                 string                                                 `json:"file"`
+	InterfaceHash        string                                                 `json:"interfaceHash,omitempty"`
+	Definitions          []store.ProjectDefinition                              `json:"definitions"`
+	DefinitionExtractors map[string][]projectindex.IndexFactExtractorProvenance `json:"definitionExtractors,omitempty"`
+	Relations            []store.ProjectRelation                                `json:"relations"`
+	Diagnostics          []store.IndexDiagnostic                                `json:"diagnostics"`
+	Dependencies         []string                                               `json:"dependencies"`
+	SemanticProfile      *projectindex.SemanticSourceProfileFile                `json:"semanticProfile,omitempty"`
 }
 
 func WriteFromPatch(
@@ -61,28 +62,30 @@ func WriteFromPatch(
 			continue
 		}
 		write := writeForFile{
-			Root:            root,
-			File:            file,
-			SourceHash:      sourceFile.SourceHash,
-			Source:          source,
-			ConfigFiles:     configFiles,
-			CompilerInputs:  cacheInputs,
-			SemanticProfile: sourceProfiles[file],
-			Patch:           patch.Facts,
+			Root:                 root,
+			File:                 file,
+			SourceHash:           sourceFile.SourceHash,
+			Source:               source,
+			ConfigFiles:          configFiles,
+			CompilerInputs:       cacheInputs,
+			SemanticProfile:      sourceProfiles[file],
+			Patch:                patch.Facts,
+			DefinitionExtractors: definitionExtractorsFromEnvelopes(patch.FactEnvelopes),
 		}
 		_ = writeFile(write)
 	}
 }
 
 type writeForFile struct {
-	Root            string
-	File            string
-	SourceHash      string
-	Source          store.IndexSourceFile
-	ConfigFiles     []sourceHashRecord
-	CompilerInputs  []json.RawMessage
-	SemanticProfile *projectindex.SemanticSourceProfileFile
-	Patch           projectindex.IndexPatchFacts
+	Root                 string
+	File                 string
+	SourceHash           string
+	Source               store.IndexSourceFile
+	ConfigFiles          []sourceHashRecord
+	CompilerInputs       []json.RawMessage
+	SemanticProfile      *projectindex.SemanticSourceProfileFile
+	Patch                projectindex.IndexPatchFacts
+	DefinitionExtractors map[string][]projectindex.IndexFactExtractorProvenance
 }
 
 func writeFile(input writeForFile) error {
@@ -118,14 +121,50 @@ func extractionForFile(input writeForFile) WritableExtraction {
 		ids = definitionIDs(definitions)
 	}
 	return WritableExtraction{
-		File:            input.File,
-		InterfaceHash:   input.Source.InterfaceHash,
-		Definitions:     definitions,
-		Relations:       relationsForCache(input.File, ids, input.Patch.Relations),
-		Diagnostics:     diagnosticsForCache(input.File, ids, input.Source.Diagnostics, input.Patch.Diagnostics),
-		Dependencies:    uniqueStrings(input.Source.Dependencies),
-		SemanticProfile: input.SemanticProfile,
+		File:                 input.File,
+		InterfaceHash:        input.Source.InterfaceHash,
+		Definitions:          definitions,
+		DefinitionExtractors: definitionExtractorsForCache(ids, input.DefinitionExtractors),
+		Relations:            relationsForCache(input.File, ids, input.Patch.Relations),
+		Diagnostics:          diagnosticsForCache(input.File, ids, input.Source.Diagnostics, input.Patch.Diagnostics),
+		Dependencies:         uniqueStrings(input.Source.Dependencies),
+		SemanticProfile:      input.SemanticProfile,
 	}
+}
+
+func definitionExtractorsFromEnvelopes(
+	envelopes []projectindex.IndexFactEnvelope,
+) map[string][]projectindex.IndexFactExtractorProvenance {
+	result := map[string][]projectindex.IndexFactExtractorProvenance{}
+	for _, envelope := range envelopes {
+		if envelope.Kind != "definitions" || len(envelope.Provenance.Extractors) == 0 {
+			continue
+		}
+		var definition struct {
+			ID string `json:"id"`
+		}
+		if json.Unmarshal(envelope.Fact, &definition) != nil || definition.ID == "" {
+			continue
+		}
+		result[definition.ID] = append(
+			[]projectindex.IndexFactExtractorProvenance(nil),
+			envelope.Provenance.Extractors...,
+		)
+	}
+	return result
+}
+
+func definitionExtractorsForCache(
+	ids map[string]bool,
+	extractors map[string][]projectindex.IndexFactExtractorProvenance,
+) map[string][]projectindex.IndexFactExtractorProvenance {
+	result := map[string][]projectindex.IndexFactExtractorProvenance{}
+	for id := range ids {
+		if contributors := extractors[id]; len(contributors) > 0 {
+			result[id] = append([]projectindex.IndexFactExtractorProvenance(nil), contributors...)
+		}
+	}
+	return result
 }
 
 func WriteExtraction(root string, cacheKey string, extraction WritableExtraction) error {

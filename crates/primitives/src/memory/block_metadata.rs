@@ -43,7 +43,7 @@ pub(crate) fn block_definition(
         id,
         kind: "memory.block",
         name: block_key.to_string(),
-        file: context.file,
+        file: context.fingerprint_file,
         source: parts.source,
         snippet: parts.snippet,
         metadata,

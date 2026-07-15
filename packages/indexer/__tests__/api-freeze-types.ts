@@ -45,6 +45,6 @@ type ExtractContextShapeIsFrozen = Expect<
 type PublicIndexerExtensionKeysAreFrozen = Expect<
   Equal<
     keyof IndexerExtension,
-    "name" | "version" | "crux" | "relations" | "rules" | "extractors"
+    "name" | "version" | "crux" | "relations" | "extractors"
   >
 >;

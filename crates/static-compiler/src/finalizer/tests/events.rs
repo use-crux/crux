@@ -120,3 +120,60 @@ fn project_patch_events_can_materialize_quality_phase_without_invalidation() {
         "project-index.quality"
     );
 }
+
+#[test]
+fn project_patch_events_attach_canonical_definition_extractors() {
+    let policies = built_in_relation_policy_table();
+    let output = finalize_static_index_values_with_policies(
+        &[json!({
+            "definitions": [{
+                "id": "prompt:writer",
+                "kind": "prompt",
+                "name": "writer",
+                "fidelity": "resolved"
+            }],
+            "definitionExtractors": {
+                "prompt:writer": [
+                    { "name": "zeta", "extension": { "name": "pkg", "version": "2.0.0" } },
+                    { "name": "alpha" },
+                    { "name": "zeta", "extension": { "name": "pkg", "version": "2.0.0" } }
+                ]
+            }
+        })],
+        &[],
+        &policies,
+    );
+    let events = project_patch_events(
+        &output,
+        &StaticIndexFinalizeProject {
+            root: "/repo".to_string(),
+            project_name: None,
+        },
+        "test",
+        StaticIndexFinalizeEventOptions {
+            phase: "ast",
+            invalidates: None,
+        },
+    );
+    let definition = events
+        .iter()
+        .find(|event| event["type"] == "fact:batch")
+        .expect("fact batch")["facts"]
+        .as_array()
+        .expect("batch facts")
+        .iter()
+        .find(|fact| fact["kind"] == "definitions")
+        .expect("definition envelope");
+
+    assert_eq!(
+        definition["provenance"]["extractors"],
+        json!([
+            { "name": "alpha" },
+            { "name": "zeta", "extension": { "name": "pkg", "version": "2.0.0" } }
+        ])
+    );
+    assert_eq!(
+        definition["producer"]["name"],
+        "@use-crux/indexer/project-indexer"
+    );
+}

@@ -89,22 +89,20 @@ the same three semantic identity keys on each span.
 For ephemeral runtimes where the full OTel SDK isn't available, pass an `exporter` option:
 
 ```ts title="URL exporter"
-withTelemetry({
+export const telemetry = withTelemetry({
   serviceName: 'my-app',
   exporter: {
     url: 'https://collector.example.com/v1/traces',
-    headers: { 'X-Api-Key': process.env.COLLECTOR_KEY },
+    headers: { 'X-Api-Key': collectorApiKey }, // supplied by this host
   },
 })
 ```
 
 ```ts title="Callback exporter"
-withTelemetry({
+export const telemetry = withTelemetry({
   serviceName: 'my-app',
-  exporter: (spans) => {
-    // Send to PostHog, Convex action, or any custom endpoint
-    ctx.runAction(internal.telemetry.sendTraces, { spans })
-  },
+  // `sendTelemetry` is an application-injected host adapter.
+  exporter: (spans) => sendTelemetry(spans),
 })
 ```
 

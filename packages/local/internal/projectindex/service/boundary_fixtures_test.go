@@ -40,10 +40,11 @@ func (i *boundaryIndexer) IndexProjectAstPatch(context.Context, string, string, 
 func (i *boundaryIndexer) IndexProjectSemanticPatch(context.Context, projectindex.ProjectSemanticIndexRequest) (projectindex.IndexPatch, error) {
 	i.semanticCalls++
 	return projectindex.IndexPatch{
-		SchemaVersion: 1,
-		Phase:         projectindex.PhaseSemantic,
-		Project:       store.ProjectIdentity{Root: "/repo", Name: "project", ConfigFile: "crux.config.ts"},
-		Status:        "ok",
+		SchemaVersion:   1,
+		Phase:           projectindex.PhaseSemantic,
+		Project:         store.ProjectIdentity{Root: "/repo", Name: "project", ConfigFile: "crux.config.ts"},
+		Status:          "ok",
+		SemanticBackend: "native",
 		Facts: projectindex.IndexPatchFacts{
 			Definitions: []store.ProjectDefinition{{
 				ID:          "prompt:writer",

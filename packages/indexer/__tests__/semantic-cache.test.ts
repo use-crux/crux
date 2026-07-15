@@ -34,7 +34,7 @@ afterEach(async () => {
 
 describe("semantic facts cache", () => {
   it("uses the complete media-lint semantic epoch instead of stale v24 artifacts", () => {
-    expect(SEMANTIC_FACTS_CACHE_EPOCH).toBe("semantic-facts-v27");
+    expect(SEMANTIC_FACTS_CACHE_EPOCH).toBe("semantic-facts-v28");
   });
 
   it("does not reuse a valid cache artifact from the pre-lint v24 namespace", async () => {

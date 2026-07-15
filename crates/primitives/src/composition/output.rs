@@ -165,7 +165,7 @@ fn child_definition(
         id,
         kind,
         name,
-        file: context.file,
+        file: context.fingerprint_file,
         source: parts.source,
         snippet: parts.snippet,
         metadata,

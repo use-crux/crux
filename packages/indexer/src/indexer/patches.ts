@@ -15,6 +15,7 @@ import type {
   ToolMeta,
 } from '@use-crux/core/project-index'
 import type { SemanticSourceProfile } from './semantic/source-profile'
+import type { ProjectIndexDefinitionExtractors } from './fact-provenance'
 import { relationIdentity, withResolvedRelationReadModel } from './relations'
 import { compareCodepoint } from './sort'
 
@@ -91,6 +92,10 @@ export interface IndexPatch {
   readonly startedAt: string
   readonly finishedAt?: string
   readonly status: IndexPatchStatus
+  /** Semantic backend that produced this patch, when the phase is semantic. */
+  readonly semanticBackend?: string
+  /** Compiler-owned extractor attribution consumed when definition envelopes are emitted. */
+  readonly definitionExtractors?: ProjectIndexDefinitionExtractors
   readonly indexing?: ProjectIndexingStatus
   readonly facts: IndexPatchFacts
   /** Internal compiler handoff from AST/source indexing to semantic indexing; not part of the read model. */

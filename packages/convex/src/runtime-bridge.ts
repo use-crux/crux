@@ -36,6 +36,7 @@ import { createConvexWorkIdGenerator } from './runtime-engine/helpers'
 import { convexRuntimeStore, type ConvexRuntimeComponent } from './runtime-engine/store'
 import type { ComponentApi } from './component/_generated/component'
 import type { ConvexCtxPort } from './store'
+import { flushObservability } from './observability'
 
 const DEFAULT_TARGET_EXECUTOR = '_crux/targets:executeTarget'
 
@@ -68,7 +69,8 @@ export interface ConvexRuntimeBridge<TCtx extends ConvexCtxPort = ConvexCtxPort>
    * Run lower-level Crux work with the Convex runtime bound.
    *
    * Memory, tools, namespace resolution, and `convexRuntimeRecords` all read the
-   * active runtime while `fn` is executing.
+   * active runtime while `fn` is executing. Before returning or rethrowing,
+   * the boundary awaits Convex's fixed bounded terminal observability drain.
    */
   run<TTarget extends ConvexRuntimeTarget = ConvexRuntimeTarget, TResult = unknown>(
     ctx: TCtx,
@@ -165,34 +167,41 @@ export function createConvexRuntimeBridge<TCtx extends ConvexCtxPort = ConvexCtx
       target: TTarget | undefined,
       fn: (scope: ConvexRunScope<TCtx, TTarget>) => TResult | Promise<TResult>,
     ): Promise<Awaited<TResult>> {
-      const storage = await storageForCtx(ctx)
-      const runtime = runtimeFor(ctx, target, storage)
-      return await runWithConvexCruxRuntime(runtime, () =>
-        runWithRuntimeHost(
-          {
-            host: runtimeDeclaration.host,
-            bind: createRuntimeHostBinder({
-              ctx,
-              component: options.component,
-              targetExecutor,
-            }),
-          },
-          () =>
-            // Convex has no reliable post-return inline drain. Named Runtime
-            // work remains available; inline defer(callback) throws.
-            withNamedOnlyDefer(
-              () =>
-                fn({
-                  ctx,
-                  target,
-                  storage,
-                  records: storage.records,
-                  runtime,
-                }),
-              { host: 'convex', durableFinalization: true },
-            )(),
-        ),
-      )
+      try {
+        const storage = await storageForCtx(ctx)
+        const runtime = runtimeFor(ctx, target, storage)
+        return await runWithConvexCruxRuntime(runtime, () =>
+          runWithRuntimeHost(
+            {
+              host: runtimeDeclaration.host,
+              bind: createRuntimeHostBinder({
+                ctx,
+                component: options.component,
+                targetExecutor,
+              }),
+            },
+            () =>
+              // Convex has no reliable post-return inline drain. Named Runtime
+              // work remains available; inline defer(callback) throws.
+              withNamedOnlyDefer(
+                () =>
+                  fn({
+                    ctx,
+                    target,
+                    storage,
+                    records: storage.records,
+                    runtime,
+                  }),
+                { host: 'convex', durableFinalization: true },
+              )(),
+          ),
+        )
+      } finally {
+        // Convex freezes an action after return, so this owning boundary must
+        // await the fixed bounded terminal drain. The helper contains exporter
+        // and reporter failures, preserving the application's exact outcome.
+        await flushObservability()
+      }
     },
     bridge(http: CruxConvexBridgeHttpRouter, crux: Crux, bridgeOptions?: ConvexRuntimeBridgeSetupOptions): void {
       setupBridge(http, crux, {

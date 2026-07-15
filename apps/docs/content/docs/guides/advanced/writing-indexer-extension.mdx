@@ -170,9 +170,9 @@ Third-party relation types should be package-namespaced. Built-in Crux relation 
 
 ## About Lint Rules
 
-Extension manifests can declare rule metadata so the compiler can validate rule descriptors and Devtools can show stable metadata. Executable third-party rule checks are not public yet.
+Internal compiler manifests can carry rule metadata for validation and Devtools descriptors. The experimental third-party `IndexerExtension` type does not expose a rule slot.
 
-When rule execution opens, third-party rules will read immutable Project Index facts, optionally declare semantic requirements, and return lint findings. They will not receive mutable graph builders, cache handles, or raw TypeScript compiler objects.
+Custom third-party rule execution is reserved. If a separate public RFC graduates it, rules must remain immutable analyses with explicit requirements and compiler-owned diagnostics; the current extension contract makes no promise that this slot will open or retain its internal shape.
 
 ## Test With Source Fixtures
 

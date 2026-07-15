@@ -7,9 +7,9 @@ Where does `defer()` work? Find your platform below and add one wrapper. Applica
 
 ```ts
 import { defer } from '@use-crux/core'
-import { withNextDefer } from '@use-crux/next'
+import { withCrux } from '@use-crux/next'
 
-export const POST = withNextDefer(async () => {
+export const POST = withCrux(async () => {
   defer(() => {
     // After response finishes (Next after())
   })
@@ -87,7 +87,7 @@ Convex bridge runs install a named-only lifetime automatically. Use
 | Environment | Integration | Completion class | Inline `defer(callback)` | Named `await defer(target, input)` |
 | --- | --- | --- | --- | --- |
 | Node HTTP | `@use-crux/core/defer/node` | `response-finished` | Yes (process-local) | Optional Runtime; raw Node advertises `durableFinalization: false` |
-| Next.js 15.1+ | `@use-crux/next` (`after`) | `response-finished` | Yes | Runtime + `durableFinalization: true` |
+| Next.js 15.1+ | `@use-crux/next` `withCrux` (`after`) | `response-finished` | Yes | Runtime + `durableFinalization: true` |
 | Vercel Functions | inject `waitUntil` into `@use-crux/core/defer/serverless` | `handler-returned` (may overlap stream) | Yes | Runtime + durable finalization |
 | Cloudflare Workers | inject `ctx.waitUntil` the same way | `handler-returned` | Yes | Runtime + durable finalization |
 | Generic serverless | explicit lifetime port only | Host-declared | Only when a port is installed | Runtime when durability is required |

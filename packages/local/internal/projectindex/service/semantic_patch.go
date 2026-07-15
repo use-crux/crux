@@ -79,7 +79,7 @@ func (s *Service) applyProjectSemanticPatchResult(
 	if patch.FinishedAt == "" {
 		patch.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	}
-	index, applied, err := s.applyReadySemanticPatchIfCurrent(ctx, patch, request.IndexGeneration, semanticStartedAt)
+	index, applied, err := s.applyCompletedSemanticPatchIfCurrent(ctx, patch, request.IndexGeneration, semanticStartedAt)
 	if !applied {
 		s.watchStatus.SemanticStaleDropped(request.WatchRunID)
 		return index, nil
@@ -87,10 +87,10 @@ func (s *Service) applyProjectSemanticPatchResult(
 	if err != nil {
 		return store.IndexData{}, err
 	}
-	if patch.Status == "degraded" {
-		s.watchStatus.SemanticDegraded(request.WatchRunID)
-	} else {
+	if semanticPatchIsReady(patch.Status) {
 		s.watchStatus.SemanticReady(request.WatchRunID)
+	} else {
+		s.watchStatus.SemanticDegraded(request.WatchRunID)
 	}
 	lintRequest := projectLintIndexRequest(
 		request.Root,
@@ -197,7 +197,9 @@ func (s *Service) applyProjectSemanticDegradedPatch(
 		StartedAt:     startedAt.UTC().Format(time.RFC3339Nano),
 		FinishedAt:    finishedAt,
 		Status:        "degraded",
-		Indexing:      store.IndexIndexingWithSemanticDegraded(current.Indexing, time.Since(startedAt), message),
+		Indexing: store.IndexIndexingWithSemanticDegraded(
+			current.Indexing, "", finishedAt, time.Since(startedAt), 1, 0, message,
+		),
 		Facts: projectindex.IndexPatchFacts{
 			Diagnostics: []store.IndexDiagnostic{
 				{
@@ -225,7 +227,7 @@ func (s *Service) applySemanticPatchIfCurrent(ctx context.Context, patch project
 	return s.applyIndexPatchLocked(patch), true, nil
 }
 
-func (s *Service) applyReadySemanticPatchIfCurrent(
+func (s *Service) applyCompletedSemanticPatchIfCurrent(
 	ctx context.Context,
 	patch projectindex.IndexPatch,
 	generation uint64,
@@ -237,14 +239,29 @@ func (s *Service) applyReadySemanticPatchIfCurrent(
 		return s.indexReadModel(), false, nil
 	}
 	current := s.store.GetIndex()
-	clearsSourceOnly := projectindex.HasSourceOnlyDiagnostic(current.Diagnostics) && (patch.Status == "" || patch.Status == "ok")
-	indexing := store.IndexIndexingWithSemanticReady(
-		current.Indexing,
-		patch.FinishedAt,
-		time.Since(startedAt),
-		len(patch.Facts.Diagnostics),
-		len(patch.Facts.Definitions),
-	)
+	semanticReady := semanticPatchIsReady(patch.Status)
+	clearsSourceOnly := projectindex.HasSourceOnlyDiagnostic(current.Diagnostics) && semanticReady
+	var indexing *store.ProjectIndexingStatus
+	if semanticReady {
+		indexing = store.IndexIndexingWithSemanticReady(
+			current.Indexing,
+			patch.SemanticBackend,
+			patch.FinishedAt,
+			time.Since(startedAt),
+			len(patch.Facts.Diagnostics),
+			len(patch.Facts.Definitions),
+		)
+	} else {
+		indexing = store.IndexIndexingWithSemanticDegraded(
+			current.Indexing,
+			patch.SemanticBackend,
+			patch.FinishedAt,
+			time.Since(startedAt),
+			len(patch.Facts.Diagnostics),
+			len(patch.Facts.Definitions),
+			semanticPatchDegradedMessage(patch),
+		)
+	}
 	if clearsSourceOnly {
 		indexing.Status = "ready"
 		indexing.Error = ""
@@ -263,4 +280,27 @@ func (s *Service) applyReadySemanticPatchIfCurrent(
 		return store.IndexData{}, true, err
 	}
 	return s.applyIndexPatchLocked(patch), true, nil
+}
+
+func semanticPatchIsReady(status string) bool {
+	return status == "" || status == "ok"
+}
+
+func semanticPatchDegradedMessage(patch projectindex.IndexPatch) string {
+	message := ""
+	key := ""
+	for _, diagnostic := range patch.Facts.Diagnostics {
+		if diagnostic.Message == "" {
+			continue
+		}
+		candidateKey := diagnostic.ID + "\x00" + diagnostic.Code + "\x00" + diagnostic.Message
+		if message == "" || candidateKey < key {
+			message = diagnostic.Message
+			key = candidateKey
+		}
+	}
+	if message != "" {
+		return message
+	}
+	return "Semantic enrichment completed with degraded evidence."
 }

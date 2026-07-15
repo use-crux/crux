@@ -1,0 +1,7 @@
+◇ crux catalog
+
+ID            KIND    FIDELITY  STATUS   SOURCE
+────────────  ──────  ────────  ───────  ────────────────
+agent:writer  agent   resolved  active   src/writer.ts:3
+prompt:brief  prompt  inferred  partial  unknown
+tool:publish  tool    resolved  active   src/publish.ts:9

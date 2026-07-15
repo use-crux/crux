@@ -4,8 +4,13 @@ import (
 	"context"
 	"time"
 
+	"github.com/use-crux/crux/packages/local/internal/projectindex/model"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
+
+type definitionEvidenceStore interface {
+	DefinitionEvidence(context.Context, string, string) ([]model.IndexFactEnvelope, error)
+}
 
 // Cache owns best-effort local Project Index snapshot caching for service runs.
 //
@@ -53,4 +58,18 @@ func (c *Cache) Commit(ctx context.Context, patch IndexPatch) error {
 		return nil
 	}
 	return nil
+}
+
+// DefinitionEvidence returns durable provenance when the configured fact store
+// supports explanation reads. Stores without that capability remain truthful
+// by returning an empty evidence set.
+func (c *Cache) DefinitionEvidence(ctx context.Context, root, definitionID string) ([]model.IndexFactEnvelope, error) {
+	if c == nil || c.facts == nil {
+		return []model.IndexFactEnvelope{}, nil
+	}
+	store, ok := c.facts.(definitionEvidenceStore)
+	if !ok {
+		return []model.IndexFactEnvelope{}, nil
+	}
+	return store.DefinitionEvidence(ctx, root, definitionID)
 }

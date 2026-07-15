@@ -110,7 +110,7 @@ pub(crate) fn defer_facts(input: &CustomProjectionInput<'_>) -> Option<Value> {
             id,
             kind: "deferred-work",
             name: format!("{mode} deferred work"),
-            file: input.file,
+            file: input.relative_path,
             source: parts.source,
             snippet: parts.snippet,
             metadata,
