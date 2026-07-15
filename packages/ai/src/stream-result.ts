@@ -126,6 +126,7 @@ function completionFromMeta(
   });
   return accumulator.finalizeCompletion({
     messages: meta?.messages ? [...meta.messages] : [],
+    ...(meta?.object !== undefined ? { object: meta.object } : {}),
     ...(meta?.cost !== undefined ? { cost: meta.cost } : {}),
     ...(routing !== undefined ? { routing } : {}),
   });

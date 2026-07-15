@@ -11,16 +11,14 @@
  * @module
  */
 
-import { canonicalJson } from './json'
-import {
-  REDACTED,
-} from '../../shared/redaction'
+import { canonicalJson } from "./canonical-json";
+import { REDACTED } from "../../shared/redaction";
 
 /** Per-cell output snapshot size limit in bytes (spec 02 §1). @internal */
-export const OUTPUT_TRUNCATION_LIMIT = 32 * 1024
+export const OUTPUT_TRUNCATION_LIMIT = 32 * 1024;
 
 /** Truncation marker appended to oversized snapshots. @internal */
-export const TRUNCATION_MARKER = '…[truncated]'
+export const TRUNCATION_MARKER = "…[truncated]";
 
 /**
  * Feedback payload roots accepted by `quality.redact` root-qualified paths.
@@ -32,40 +30,46 @@ export const TRUNCATION_MARKER = '…[truncated]'
  *
  * @internal
  */
-export type QualityRedactionRoot = 'metadata' | 'expected' | 'proposal'
+export type QualityRedactionRoot = "metadata" | "expected" | "proposal";
 
 /**
  * Always-on redaction: key names that are redacted at every depth regardless
  * of configuration — authorization headers and API keys (spec 01 §9).
  */
 const QUALITY_SENSITIVE_KEY_PATTERN =
-  /^(authorization|proxy[-_]?authorization|api[-_]?key|x[-_]?api[-_]?key)$/i
+  /^(authorization|proxy[-_]?authorization|api[-_]?key|x[-_]?api[-_]?key)$/i;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object'
+  return value !== null && typeof value === "object";
 }
 
-function redactNode(value: unknown, paths: ReadonlyArray<readonly string[]>): unknown {
+function redactNode(
+  value: unknown,
+  paths: ReadonlyArray<readonly string[]>,
+): unknown {
   if (Array.isArray(value)) {
     // Arrays are transparent to dot-paths: the same segments apply per item.
-    return value.map((item) => redactNode(item, paths))
+    return value.map((item) => redactNode(item, paths));
   }
-  if (!isRecord(value)) return value
-  const out: Record<string, unknown> = {}
+  if (!isRecord(value)) return value;
+  const out: Record<string, unknown> = {};
   for (const [key, entry] of Object.entries(value)) {
     if (QUALITY_SENSITIVE_KEY_PATTERN.test(key)) {
-      out[key] = REDACTED
-      continue
+      out[key] = REDACTED;
+      continue;
     }
-    const matching = paths.filter((path) => path[0] === key)
+    const matching = paths.filter((path) => path[0] === key);
     if (matching.some((path) => path.length === 1)) {
-      out[key] = REDACTED
-      continue
+      out[key] = REDACTED;
+      continue;
     }
-    const remaining = matching.map((path) => path.slice(1))
-    out[key] = remaining.length > 0 ? redactNode(entry, remaining) : redactNode(entry, [])
+    const remaining = matching.map((path) => path.slice(1));
+    out[key] =
+      remaining.length > 0
+        ? redactNode(entry, remaining)
+        : redactNode(entry, []);
   }
-  return out
+  return out;
 }
 
 /**
@@ -78,9 +82,14 @@ function redactNode(value: unknown, paths: ReadonlyArray<readonly string[]>): un
  *
  * @internal
  */
-export function applyRedaction(value: unknown, paths: readonly string[]): unknown {
-  const split = paths.map((path) => path.split('.').filter((segment) => segment !== ''))
-  return redactNode(value, split)
+export function applyRedaction(
+  value: unknown,
+  paths: readonly string[],
+): unknown {
+  const split = paths.map((path) =>
+    path.split(".").filter((segment) => segment !== ""),
+  );
+  return redactNode(value, split);
 }
 
 /**
@@ -99,10 +108,10 @@ export function applyRootRedaction<TValue>(
   paths: readonly string[],
 ): TValue {
   const scopedPaths = paths.flatMap((path) => {
-    const [head, ...tail] = path.split('.').filter((segment) => segment !== '')
-    return head === root && tail.length > 0 ? [tail.join('.')] : []
-  })
-  return applyRedaction(value, scopedPaths) as TValue
+    const [head, ...tail] = path.split(".").filter((segment) => segment !== "");
+    return head === root && tail.length > 0 ? [tail.join(".")] : [];
+  });
+  return applyRedaction(value, scopedPaths) as TValue;
 }
 
 /**
@@ -113,20 +122,25 @@ export function applyRootRedaction<TValue>(
  *
  * @internal
  */
-export function truncateOutput(value: unknown): { value: unknown; truncated: boolean } {
-  if (typeof value === 'string') {
-    if (Buffer.byteLength(value, 'utf8') <= OUTPUT_TRUNCATION_LIMIT) return { value, truncated: false }
-    return { value: cutToLimit(value) + TRUNCATION_MARKER, truncated: true }
+export function truncateOutput(value: unknown): {
+  value: unknown;
+  truncated: boolean;
+} {
+  if (typeof value === "string") {
+    if (Buffer.byteLength(value, "utf8") <= OUTPUT_TRUNCATION_LIMIT)
+      return { value, truncated: false };
+    return { value: cutToLimit(value) + TRUNCATION_MARKER, truncated: true };
   }
-  const rendered = canonicalJson(value)
-  if (Buffer.byteLength(rendered, 'utf8') <= OUTPUT_TRUNCATION_LIMIT) return { value, truncated: false }
-  return { value: cutToLimit(rendered) + TRUNCATION_MARKER, truncated: true }
+  const rendered = canonicalJson(value);
+  if (Buffer.byteLength(rendered, "utf8") <= OUTPUT_TRUNCATION_LIMIT)
+    return { value, truncated: false };
+  return { value: cutToLimit(rendered) + TRUNCATION_MARKER, truncated: true };
 }
 
 function cutToLimit(text: string): string {
-  let cut = text.slice(0, OUTPUT_TRUNCATION_LIMIT)
-  while (Buffer.byteLength(cut, 'utf8') > OUTPUT_TRUNCATION_LIMIT) {
-    cut = cut.slice(0, -1024)
+  let cut = text.slice(0, OUTPUT_TRUNCATION_LIMIT);
+  while (Buffer.byteLength(cut, "utf8") > OUTPUT_TRUNCATION_LIMIT) {
+    cut = cut.slice(0, -1024);
   }
-  return cut
+  return cut;
 }

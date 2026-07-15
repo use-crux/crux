@@ -16,6 +16,7 @@ import type {
   EvalTaskLike,
   InputOf,
   OutputOf,
+  RequiredKeys,
 } from "./task";
 
 /** Existing assertion context exposed under Eval vocabulary during coexistence. */
@@ -36,27 +37,24 @@ export type EvalAssertContext<
 > = AssertContext<I, O, E, ScoreName, Caps>;
 
 /**
- * One typed input and its optional expected evidence and checks.
+ * Shared fields for one typed Case, excluding call-arity handling.
  *
  * @typeParam I - Input derived from the task.
  * @typeParam O - Semantic task output.
  * @typeParam E - Expected evidence inferred from inline Cases.
- * @typeParam C - Remaining task call options.
  * @typeParam Caps - Captured trace-signal capabilities.
  * @typeParam ScoreName - Statically known scorer names.
  */
-export interface EvalCase<
+interface EvalCaseFields<
   I,
   O,
   E,
-  C extends object,
   Caps extends EvalCapability,
   ScoreName extends string = string,
 > {
   id?: string;
   name?: string;
   input: NoInfer<I>;
-  call?: NoInfer<C>;
   expected?: E;
   expect?: (
     ctx: EvalCaseContext<I, O, NoInfer<E>, Caps>,
@@ -70,6 +68,26 @@ export interface EvalCase<
   only?: boolean;
   skip?: boolean | string;
 }
+
+/** Case-level call options follow the callable task's required-key arity. */
+type EvalCaseCall<C extends object> = [RequiredKeys<C>] extends [never]
+  ? { call?: NoInfer<C> }
+  : { call: NoInfer<C> };
+
+/**
+ * One typed input and its optional expected evidence and checks.
+ *
+ * `call` becomes required when task defaults leave any required call option
+ * unbound, keeping authored Cases executable through every Variant arm.
+ */
+export type EvalCase<
+  I,
+  O,
+  E,
+  C extends object,
+  Caps extends EvalCapability,
+  ScoreName extends string = string,
+> = EvalCaseFields<I, O, E, Caps, ScoreName> & EvalCaseCall<C>;
 
 /**
  * The Case type derived from a task.

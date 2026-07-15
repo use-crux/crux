@@ -10,6 +10,7 @@
 
 import type { StreamCompletion } from "../../adapter/result-accumulator";
 import type { StandardSchemaV1 } from "../../quality/standard-schema";
+import type { JsonValue } from "../../storage/types";
 import type {
   CallOf,
   EvalCapability,
@@ -17,6 +18,10 @@ import type {
   InputOf,
   OutputOf,
 } from "../task";
+import {
+  isCompatibleEvalTaskDescriptor,
+  normalizeEvalTaskIdentityProjection,
+} from "./task-protocol-values";
 
 /** Global storage key shared by compatible Core module copies. */
 export const EVAL_TASK_INTERNAL: unique symbol = Symbol.for(
@@ -35,6 +40,36 @@ export interface EvalTaskDiagnostics {
   readonly adapterId: "ai-sdk";
   readonly promptId?: string;
 }
+
+/** Adapter-owned, provider-neutral semantic identity projection. */
+export type EvalTaskIdentityProjection =
+  | {
+      readonly reusable: true;
+      readonly fingerprintMaterial: JsonValue;
+    }
+  | {
+      readonly reusable: false;
+      readonly reason:
+        | "identity_unavailable"
+        | "untracked_external_dependency"
+        | "implicit_media";
+    };
+
+/** Inputs available before execution and after observing its terminal result. */
+export type EvalTaskIdentityProjectionRequest<TResult> =
+  | {
+      readonly phase: "plan";
+      readonly input: unknown;
+      readonly call?: Readonly<object>;
+      readonly overrides: Readonly<object>;
+    }
+  | {
+      readonly phase: "observed";
+      readonly input: unknown;
+      readonly call?: Readonly<object>;
+      readonly overrides: Readonly<object>;
+      readonly result: TResult;
+    };
 
 /**
  * Private execution descriptor attached to a production-callable Eval task.
@@ -58,10 +93,15 @@ export interface EvalTaskDescriptor<
   readonly defaults: Readonly<object>;
   /** Bound option keys eligible for later override validation. */
   readonly overrideKeys: readonly string[];
+  /** Project complete adapter semantics without performing I/O. */
+  readonly projectIdentity: (
+    request: EvalTaskIdentityProjectionRequest<TResult>,
+  ) => EvalTaskIdentityProjection;
   /** Provider-neutral invocation seam captured by the adapter package. */
   readonly execute: (
     input: unknown,
     callOptions?: Readonly<object>,
+    overrides?: Readonly<object>,
   ) => Promise<TResult>;
   /** Project the rich production result to the Case's semantic output. */
   readonly projectOutput: (result: TResult) => TOutput | undefined;
@@ -75,6 +115,8 @@ export interface EvalTaskExecutionResult<TOutput> {
   readonly output: TOutput;
   /** Provider-neutral terminal completion retained as execution evidence. */
   readonly response: StreamCompletion<TOutput>;
+  /** Adapter semantics observed from the completed production path. */
+  readonly observedIdentity: EvalTaskIdentityProjection;
 }
 
 /** Coded configuration failure raised by the managed Eval task protocol. */
@@ -138,7 +180,7 @@ export function getEvalTaskDescriptorForInternalUse(
   }
 
   const descriptor = (task as Record<PropertyKey, unknown>)[EVAL_TASK_INTERNAL];
-  if (!isCompatibleDescriptor(descriptor)) {
+  if (!isCompatibleEvalTaskDescriptor(descriptor)) {
     throw new EvalTaskExecutionError(
       "descriptor_incompatible",
       "Managed Eval task descriptor is incompatible. This usually means @use-crux/core and @use-crux/ai are on mixed fixed versions; align both packages to the same compatible release.",
@@ -152,9 +194,14 @@ export async function executeEvalTaskForInternalUse<TTask extends EvalTaskLike>(
   task: TTask,
   input: InputOf<TTask>,
   callOptions?: CallOf<TTask>,
+  overrides: Readonly<object> = {},
 ): Promise<EvalTaskExecutionResult<OutputOf<TTask>>> {
   const descriptor = getEvalTaskDescriptorForInternalUse(task);
-  const productionResult = await descriptor.execute(input, callOptions);
+  const productionResult = await descriptor.execute(
+    input,
+    callOptions,
+    overrides,
+  );
   const output = descriptor.projectOutput(productionResult);
   if (output === undefined) {
     throw structuredOutputMissing(descriptor);
@@ -164,7 +211,27 @@ export async function executeEvalTaskForInternalUse<TTask extends EvalTaskLike>(
     response: descriptor.projectResponse(productionResult) as StreamCompletion<
       OutputOf<TTask>
     >,
+    observedIdentity: normalizeEvalTaskIdentityProjection(
+      descriptor.projectIdentity({
+        phase: "observed",
+        input,
+        ...(callOptions !== undefined ? { call: callOptions } : {}),
+        overrides,
+        result: productionResult,
+      }),
+    ),
   });
+}
+
+/** Project and normalize the adapter-semantic identity used by planning. */
+export function projectEvalTaskIdentityForInternalUse(
+  task: unknown,
+  request: EvalTaskIdentityProjectionRequest<unknown>,
+): EvalTaskIdentityProjection {
+  const descriptor = getEvalTaskDescriptorForInternalUse(task);
+  return normalizeEvalTaskIdentityProjection(
+    descriptor.projectIdentity(request),
+  );
 }
 
 function missingDescriptor(): EvalTaskExecutionError {
@@ -184,73 +251,5 @@ function structuredOutputMissing(
     "structured_output_missing",
     `Managed ${descriptor.operation} task${prompt} returned no structured output; the adapter must return a validated object or throw its validation failure.`,
     descriptor,
-  );
-}
-
-function isCompatibleDescriptor(value: unknown): value is EvalTaskDescriptor {
-  if (value === null || typeof value !== "object" || !Object.isFrozen(value)) {
-    return false;
-  }
-  const descriptor = value as Record<string, unknown>;
-  return (
-    descriptor._tag === "CruxEvalTaskDescriptor" &&
-    (descriptor.operation === "generate" ||
-      descriptor.operation === "stream") &&
-    descriptor.adapterId === "ai-sdk" &&
-    (descriptor.promptId === undefined ||
-      typeof descriptor.promptId === "string") &&
-    isOptionalSchema(descriptor.inputSchema) &&
-    isOptionalSchema(descriptor.outputSchema) &&
-    Array.isArray(descriptor.capabilities) &&
-    Object.isFrozen(descriptor.capabilities) &&
-    descriptor.capabilities.every(isEvalCapability) &&
-    isRecord(descriptor.defaults) &&
-    Object.isFrozen(descriptor.defaults) &&
-    Array.isArray(descriptor.overrideKeys) &&
-    Object.isFrozen(descriptor.overrideKeys) &&
-    descriptor.overrideKeys.every((key) => typeof key === "string") &&
-    typeof descriptor.execute === "function" &&
-    typeof descriptor.projectOutput === "function" &&
-    typeof descriptor.projectResponse === "function"
-  );
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
-function isOptionalSchema(value: unknown): boolean {
-  if (value === undefined) return true;
-  if (value === null || typeof value !== "object" || !("~standard" in value)) {
-    return false;
-  }
-  const standard = value["~standard"];
-  return (
-    standard !== null &&
-    typeof standard === "object" &&
-    "version" in standard &&
-    standard.version === 1 &&
-    "vendor" in standard &&
-    typeof standard.vendor === "string" &&
-    "validate" in standard &&
-    typeof standard.validate === "function"
-  );
-}
-
-function isEvalCapability(value: unknown): value is EvalCapability {
-  return (
-    typeof value === "string" &&
-    [
-      "modelCalls",
-      "toolCalls",
-      "steps",
-      "handoffs",
-      "retrieval",
-      "citations",
-      "safety",
-      "memory",
-      "routing",
-      "decisionReport",
-    ].includes(value)
   );
 }

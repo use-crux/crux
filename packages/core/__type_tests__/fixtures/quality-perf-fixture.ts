@@ -711,34 +711,47 @@ export const fnEval0 = evaluate('fixture.fn.0', {
   scorers: [scorers.exact()],
 })
 
-export const fnEval1 = evaluate('fixture.fn.1', {
-  task: async (input: { text: string }, params: { threshold: number }) => input.text.length > params.threshold,
-  data: [{ input: { text: 'sample 1' }, expected: true }],
-  params: { threshold: 1 },
-  variants: { strict: { threshold: 100 } },
-  scorers: [scorers.exact()],
+// Keep Phase 3 imports beside its generated rows so the line-sensitive
+// explicit-any baseline above remains stable.
+import { evaluate as defineEval } from '../../src/eval/evaluate'
+import type { EvalTask } from '../../src/eval/task'
+
+declare const managedTask: EvalTask<{ text: string }, { text: string; object?: { label: string } }, { label: string }, { locale?: 'en' | 'nl' }, { temperature?: number }, 'modelCalls' | 'safety'>
+
+export const managedEval0 = defineEval({
+  task: managedTask,
+  cases: [{ input: { text: 'sample 1' }, expected: { label: 'sample' } }],
+  variants: { warm: { temperature: 0.4 } },
 })
 
-export const fnEval2 = evaluate('fixture.fn.2', {
-  task: async (input: { text: string }, params: { threshold: number }) => input.text.length > params.threshold,
-  data: [{ input: { text: 'sample 2' }, expected: true }],
-  params: { threshold: 2 },
-  variants: { strict: { threshold: 100 } },
-  scorers: [scorers.exact()],
+export const managedEval1 = defineEval({
+  task: managedTask,
+  cases: [{ input: { text: 'sample 2' }, expected: { label: 'short' } }],
+  variants: { strict: { temperature: 0 } },
+  scorers: [scorers.exact({ name: 'managed-exact-0' })],
+  gates: { scores: { 'managed-exact-0': { min: 1 } } },
 })
 
-export const fnEval3 = evaluate('fixture.fn.3', {
-  task: async (input: { text: string }, params: { threshold: number }) => input.text.length > params.threshold,
-  data: [{ input: { text: 'sample 3' }, expected: true }],
-  params: { threshold: 3 },
-  variants: { strict: { threshold: 100 } },
-  scorers: [scorers.exact()],
+export const managedEval2 = defineEval({
+  task: managedTask,
+  cases: [
+    {
+      input: { text: 'sample 3' },
+      call: { locale: 'en' },
+      expected: { label: 'short' },
+    },
+  ],
+  variants: { creative: { temperature: 0.8 } },
 })
 
-export const fnEval4 = evaluate('fixture.fn.4', {
-  task: async (input: { text: string }, params: { threshold: number }) => input.text.length > params.threshold,
-  data: [{ input: { text: 'sample 4' }, expected: true }],
-  params: { threshold: 4 },
-  variants: { strict: { threshold: 100 } },
-  scorers: [scorers.exact()],
+export const managedEval3 = defineEval({
+  task: managedTask,
+  cases: [
+    {
+      input: { text: 'sample 4' },
+      call: { locale: 'nl' },
+      expected: { label: 'lang' },
+    },
+  ],
+  variants: { deterministic: { temperature: 0.1 } },
 })

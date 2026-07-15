@@ -10,22 +10,16 @@
  * @module
  */
 
-import { z } from 'zod'
-import { Buffer } from 'node:buffer'
-import { randomUUID } from 'node:crypto'
-import { canonicalJson, sha256Hex } from './json'
-
-/** Bump when normalized-call construction changes in a way not captured by its inputs. */
-export const CASSETTE_CACHE_EPOCH = 3
-
-/** Bump when cell/output cache key semantics change. */
-export const OUTPUT_CACHE_EPOCH = 2
-
-/** Bump when baseline config-fingerprint composition changes. */
-export const BASELINE_FINGERPRINT_EPOCH = 1
-
-/** Bump when the built-in judge prompt template changes. */
-export const JUDGE_PROMPT_VERSION = 1
+import { z } from "zod";
+import { Buffer } from "node:buffer";
+import { randomUUID } from "node:crypto";
+import { canonicalJson, sha256Hex } from "./json";
+export {
+  BASELINE_FINGERPRINT_EPOCH,
+  CASSETTE_CACHE_EPOCH,
+  JUDGE_PROMPT_VERSION,
+  OUTPUT_CACHE_EPOCH,
+} from "./cache-epochs";
 
 /**
  * Fingerprint a schema-like value for identity purposes.
@@ -35,21 +29,28 @@ export const JUDGE_PROMPT_VERSION = 1
  * over-invalidate but must not under-invalidate.
  */
 export function fingerprintSchema(schema: unknown): string {
-  if (schema === undefined || schema === null) return 'none'
+  if (schema === undefined || schema === null) return "none";
   if (isZodSchema(schema)) {
     try {
-      return sha256Hex(canonicalJson({ vendor: 'zod', schema: z.toJSONSchema(schema) }))
+      return sha256Hex(
+        canonicalJson({ vendor: "zod", schema: z.toJSONSchema(schema) }),
+      );
     } catch {
-      return sha256Hex(canonicalJson({ vendor: 'zod', fallback: fingerprintValue(schema) }))
+      return sha256Hex(
+        canonicalJson({ vendor: "zod", fallback: fingerprintValue(schema) }),
+      );
     }
   }
-  const constructorName = typeof schema === 'object' && schema !== null ? schema.constructor?.name : typeof schema
+  const constructorName =
+    typeof schema === "object" && schema !== null
+      ? schema.constructor?.name
+      : typeof schema;
   return sha256Hex(
     canonicalJson({
-      vendor: constructorName ?? 'unknown',
+      vendor: constructorName ?? "unknown",
       schema: replaceFunctionLeaves(schema),
     }),
-  )
+  );
 }
 
 /**
@@ -57,7 +58,7 @@ export function fingerprintSchema(schema: unknown): string {
  * semantic identity inputs but are not valid canonical JSON leaves.
  */
 export function fingerprintFunction(fn: (...args: never[]) => unknown): string {
-  return `fn:${fn.name || 'anon'}:${sha256Hex(fn.toString())}`
+  return `fn:${fn.name || "anon"}:${sha256Hex(fn.toString())}`;
 }
 
 /**
@@ -65,37 +66,53 @@ export function fingerprintFunction(fn: (...args: never[]) => unknown): string {
  * function fingerprints.
  */
 export function fingerprintValue(value: unknown): string {
-  return sha256Hex(canonicalJson(replaceFunctionLeaves(value)))
+  return sha256Hex(canonicalJson(replaceFunctionLeaves(value)));
 }
 
 function isZodSchema(value: unknown): value is z.ZodType {
-  return typeof value === 'object' && value !== null && '_zod' in value
+  return typeof value === "object" && value !== null && "_zod" in value;
 }
 
 function replaceFunctionLeaves(value: unknown): unknown {
-  if (typeof value === 'function') return fingerprintFunction(value as (...args: never[]) => unknown)
-  if (value instanceof Uint8Array) return { mediaDigest: sha256Hex(Buffer.from(value).toString('base64')), byteLength: value.byteLength }
-  if (value instanceof ArrayBuffer) return { mediaDigest: sha256Hex(Buffer.from(value).toString('base64')), byteLength: value.byteLength }
-  if (typeof Blob !== 'undefined' && value instanceof Blob) {
+  if (typeof value === "function")
+    return fingerprintFunction(value as (...args: never[]) => unknown);
+  if (value instanceof Uint8Array)
+    return {
+      mediaDigest: sha256Hex(Buffer.from(value).toString("base64")),
+      byteLength: value.byteLength,
+    };
+  if (value instanceof ArrayBuffer)
+    return {
+      mediaDigest: sha256Hex(Buffer.from(value).toString("base64")),
+      byteLength: value.byteLength,
+    };
+  if (typeof Blob !== "undefined" && value instanceof Blob) {
     // A synchronous key cannot know Blob content. A fresh nonce deliberately
     // disables cache reuse rather than colliding on size/MIME across restarts.
-    return { uncacheableBlob: randomUUID() }
+    return { uncacheableBlob: randomUUID() };
   }
-  if (value instanceof URL) return { urlDigest: sha256Hex(value.href) }
-  if (Array.isArray(value)) return value.map((item) => replaceFunctionLeaves(item))
-  if (value instanceof Date) return value
+  if (value instanceof URL) return { urlDigest: sha256Hex(value.href) };
+  if (Array.isArray(value))
+    return value.map((item) => replaceFunctionLeaves(item));
+  if (value instanceof Date) return value;
   if (value instanceof Map) {
-    return new Map([...value.entries()].map(([key, entry]) => [replaceFunctionLeaves(key), replaceFunctionLeaves(entry)]))
+    return new Map(
+      [...value.entries()].map(([key, entry]) => [
+        replaceFunctionLeaves(key),
+        replaceFunctionLeaves(entry),
+      ]),
+    );
   }
-  if (value instanceof Set) return new Set([...value].map((entry) => replaceFunctionLeaves(entry)))
-  if (value !== null && typeof value === 'object') {
-    const record = value as Record<string, unknown>
-    const replaced: Record<string, unknown> = {}
+  if (value instanceof Set)
+    return new Set([...value].map((entry) => replaceFunctionLeaves(entry)));
+  if (value !== null && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const replaced: Record<string, unknown> = {};
     for (const key of Object.keys(record)) {
-      const entry = record[key]
-      if (entry !== undefined) replaced[key] = replaceFunctionLeaves(entry)
+      const entry = record[key];
+      if (entry !== undefined) replaced[key] = replaceFunctionLeaves(entry);
     }
-    return replaced
+    return replaced;
   }
-  return value
+  return value;
 }

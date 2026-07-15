@@ -8,23 +8,28 @@
  * @module
  */
 
-import type { GenerateObjectResult, LanguageModel, ToolSet } from "ai";
+import type { GenerateObjectResult, GenerateTextResult, ToolSet } from "ai";
 import type { z } from "zod";
 import type {
   AnyPrompt,
   AnyToolSet,
   ContextEntry,
+  GenerationSettings,
   MergedInput,
   Prompt,
 } from "@use-crux/core";
 import type { GenerateResult, StreamCompletion } from "@use-crux/core/adapter";
-import type { EvalTask } from "@use-crux/core/eval";
+import type { EvalTask, EvalTaskLike } from "@use-crux/core/eval";
 import {
   attachEvalTaskDescriptorForInternalUse,
   type EvalTaskDescriptor,
 } from "@use-crux/core/eval/internal/task";
 import type { BoundOk, InputOk, PromptInputOf } from "@use-crux/core/routing";
-import type { AIGenerateOptions } from "./options";
+import type { AIGenerateOptions, AISupportedModel } from "./options";
+import {
+  createAiTaskIdentityProjector,
+  resolveAiTaskInvocation,
+} from "./eval-task-identity";
 
 /** Full trace-signal set captured by a prompt-backed task. */
 export type AIPromptEvalCapability =
@@ -40,7 +45,7 @@ export type AIGenerateTaskDefaults<
   TCallTools extends ToolSet | undefined,
   TPrompt extends Prompt<
     TOwnInput,
-    z.ZodType,
+    z.ZodType | undefined,
     TContexts,
     AnyToolSet | undefined
   >,
@@ -58,66 +63,112 @@ export type AIGenerateTaskDefaults<
   "input"
 >;
 
-/** Remaining per-call overrides after a task binds its defaults. */
-export type AIGenerateTaskCallOptions<TDefaults extends object> =
-  Partial<TDefaults>;
+/** Flatten an inferred option intersection at the public callable boundary. */
+type Simplify<T> = { [K in keyof T]: T[K] } & {};
 
-type StructuredPromptForModel<P extends AnyPrompt, M> = P &
+/** Remaining per-call options after exact task defaults have been bound. */
+export type AIGenerateTaskCallOptions<
+  TCall extends object,
+  TDefaults extends object,
+> = Simplify<
+  Omit<TCall, keyof TDefaults> &
+    Partial<Pick<TCall, Extract<keyof TDefaults, keyof TCall>>>
+>;
+
+/** Validate only the keys a caller actually binds as task defaults. */
+export type ValidateTaskDefaults<
+  TDefaults extends object,
+  TCall extends object,
+> = {
+  [K in keyof TDefaults]: K extends keyof TCall ? TCall[K] : never;
+};
+
+/** Model or routing tree bound by the exact defaults object. */
+export type TaskModel<TDefaults extends object> = TDefaults extends {
+  readonly model: infer TModel extends AISupportedModel;
+}
+  ? TModel
+  : AISupportedModel;
+
+/** Call-tool surface bound by defaults, or the normal open call-site surface. */
+export type TaskCallTools<TDefaults extends object> = TDefaults extends {
+  readonly tools: infer TTools extends ToolSet;
+}
+  ? TTools
+  : ToolSet | undefined;
+
+/** Runtime context bound by defaults when one is authored. */
+export type TaskRuntimeContext<TDefaults extends object> = TDefaults extends {
+  readonly runtimeContext: infer TRuntimeContext;
+}
+  ? TRuntimeContext
+  : unknown;
+
+export type StructuredPromptForModel<P extends AnyPrompt, M> = P &
   BoundOk<M, P> &
   InputOk<M, PromptInputOf<P>>;
 
-type StructuredGenerateReturn<TOutput extends z.ZodType> = GenerateResult<
-  GenerateObjectResult<z.output<TOutput>> | undefined,
-  z.output<TOutput>
->;
+/** Rich production result selected from the prompt's output declaration. */
+type ManagedGenerateReturn<TOutput extends z.ZodType | undefined> =
+  TOutput extends z.ZodType<infer TObject>
+    ? GenerateResult<GenerateObjectResult<TObject> | undefined, TObject>
+    : GenerateResult<
+        GenerateTextResult<Record<string, never>, never> | undefined
+      >;
+
+/** Semantic value assessed by Eval checks for one managed prompt. */
+export type ManagedGenerateOutput<TOutput extends z.ZodType | undefined> =
+  TOutput extends z.ZodType ? z.output<TOutput> : string;
+
+/** Comparison dimensions declared by a managed prompt task. */
+export type AIGenerateTaskVariant<TPrompt extends AnyPrompt> =
+  Partial<GenerationSettings> & {
+    readonly task?: EvalTaskLike;
+    readonly prompt?: TPrompt;
+    readonly model?: AISupportedModel;
+  };
 
 /** Factory attached as `generate.task()` on every AI adapter instance. */
 export interface AIGenerateTaskFactory {
   <
     TOwnInput extends z.ZodType,
-    TOutput extends z.ZodType,
+    TOutput extends z.ZodType | undefined,
     TContexts extends readonly ContextEntry[],
     TPromptTools extends AnyToolSet | undefined = undefined,
-    TCallTools extends ToolSet | undefined = undefined,
-    TRuntimeContext = unknown,
-    TModel = LanguageModel,
+    const TDefaults extends object = {},
   >(
     prompt: StructuredPromptForModel<
       Prompt<TOwnInput, TOutput, TContexts, TPromptTools>,
-      TModel
+      TaskModel<TDefaults>
     >,
-    defaults: AIGenerateTaskDefaults<
-      TOwnInput,
-      TContexts,
-      TCallTools,
-      Prompt<TOwnInput, TOutput, TContexts, TPromptTools>,
-      TRuntimeContext,
-      TModel
-    >,
+    defaults: TDefaults &
+      ValidateTaskDefaults<
+        TDefaults,
+        AIGenerateTaskDefaults<
+          TOwnInput,
+          TContexts,
+          TaskCallTools<TDefaults>,
+          Prompt<TOwnInput, TOutput, TContexts, TPromptTools>,
+          TaskRuntimeContext<TDefaults>,
+          TaskModel<TDefaults>
+        >
+      >,
   ): EvalTask<
     MergedInput<TOwnInput, TContexts>,
-    StructuredGenerateReturn<TOutput>,
-    z.output<TOutput>,
+    ManagedGenerateReturn<TOutput>,
+    ManagedGenerateOutput<TOutput>,
     AIGenerateTaskCallOptions<
       AIGenerateTaskDefaults<
         TOwnInput,
         TContexts,
-        TCallTools,
+        TaskCallTools<TDefaults>,
         Prompt<TOwnInput, TOutput, TContexts, TPromptTools>,
-        TRuntimeContext,
-        TModel
-      >
+        TaskRuntimeContext<TDefaults>,
+        TaskModel<TDefaults>
+      >,
+      TDefaults
     >,
-    AIGenerateTaskCallOptions<
-      AIGenerateTaskDefaults<
-        TOwnInput,
-        TContexts,
-        TCallTools,
-        Prompt<TOwnInput, TOutput, TContexts, TPromptTools>,
-        TRuntimeContext,
-        TModel
-      >
-    >,
+    AIGenerateTaskVariant<Prompt<TOwnInput, TOutput, TContexts, TPromptTools>>,
     AIPromptEvalCapability
   >;
 }
@@ -127,7 +178,7 @@ type ErasedGenerate = (
   options: object,
 ) => Promise<GenerateResult<unknown, unknown>>;
 
-const PROMPT_CAPABILITIES = Object.freeze([
+export const AI_PROMPT_EVAL_CAPABILITIES = Object.freeze([
   "modelCalls",
   "citations",
   "safety",
@@ -140,8 +191,19 @@ export function createGenerateTaskFactory(
 ): AIGenerateTaskFactory {
   return ((prompt: AnyPrompt, defaults: object) => {
     const normalizedDefaults = Object.freeze({ ...defaults });
-    const invoke = (input: unknown, callOptions: object = {}) =>
-      generate(prompt, { ...normalizedDefaults, ...callOptions, input });
+    const invoke = (
+      input: unknown,
+      callOptions: object = {},
+      overrides: object = {},
+    ) => {
+      const invocation = resolveAiTaskInvocation(
+        prompt,
+        normalizedDefaults,
+        callOptions,
+        overrides,
+      );
+      return generate(invocation.prompt, { ...invocation.options, input });
+    };
     const task = (input: unknown, callOptions?: object) =>
       invoke(input, callOptions);
     const descriptor: EvalTaskDescriptor<
@@ -156,11 +218,17 @@ export function createGenerateTaskFactory(
         ? { inputSchema: prompt.inputSchema }
         : {}),
       outputSchema: prompt.outputSchema,
-      capabilities: PROMPT_CAPABILITIES,
+      capabilities: AI_PROMPT_EVAL_CAPABILITIES,
       defaults: normalizedDefaults,
       overrideKeys: Object.keys(normalizedDefaults),
+      projectIdentity: createAiTaskIdentityProjector({
+        operation: "generate",
+        prompt,
+        defaults: normalizedDefaults,
+      }),
       execute: invoke,
-      projectOutput: (result) => result.object,
+      projectOutput: (result) =>
+        prompt.outputSchema === undefined ? result.text : result.object,
       projectResponse: normalizedResponse,
     };
     return attachEvalTaskDescriptorForInternalUse(task, descriptor);

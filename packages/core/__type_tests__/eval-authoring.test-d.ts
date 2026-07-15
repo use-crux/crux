@@ -147,7 +147,7 @@ const evalValue = evaluate({
 const typedEval: Eval<
   { question: string },
   { category: string },
-  string,
+  "pass",
   never,
   undefined
 > = evalValue;

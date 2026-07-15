@@ -16,7 +16,7 @@ export type EvalCapability = Capability;
 declare const EVAL_TASK_TYPES: unique symbol;
 
 /** Required property names in an authored call-options object. @internal */
-type RequiredKeys<C extends object> = {
+export type RequiredKeys<C extends object> = {
   [K in keyof C]-?: object extends Pick<C, K> ? never : K;
 }[keyof C];
 

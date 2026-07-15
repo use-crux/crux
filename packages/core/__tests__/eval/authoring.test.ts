@@ -79,6 +79,33 @@ describe("evaluate()", () => {
     expect(Object.isFrozen(scorer)).toBe(false);
   });
 
+  it("normalizes top-level Variant differences without freezing replacements", () => {
+    const replacementPrompt = { id: "concise" };
+    const replacementModel = { modelId: "mini" };
+    const evalValue = evaluate({
+      task: async (input: { question: string }) => input.question,
+      cases: [{ input: { question: "Refund?" } }],
+      variants: {
+        cheaper: {
+          prompt: replacementPrompt,
+          model: replacementModel,
+          temperature: 0.1,
+        },
+      } as never,
+    });
+
+    const definition = getEvalDefinitionForInternalUse(evalValue);
+    expect(definition.arms[1]).toEqual({
+      name: "cheaper",
+      overrideKeys: ["prompt", "model", "temperature"],
+    });
+    expect(definition.variants.cheaper?.prompt).toBe(replacementPrompt);
+    expect(definition.variants.cheaper?.model).toBe(replacementModel);
+    expect(Object.isFrozen(definition.variants.cheaper)).toBe(true);
+    expect(Object.isFrozen(replacementPrompt)).toBe(false);
+    expect(Object.isFrozen(replacementModel)).toBe(false);
+  });
+
   it.each(["current", "baseline"])(
     "rejects the reserved Variant name %s at runtime",
     (name) => {

@@ -113,6 +113,10 @@ import {
   createGenerateTaskFactory,
   type AIGenerateTaskFactory,
 } from "./eval-task";
+import {
+  createStreamTaskFactory,
+  type AIStreamTaskFactory,
+} from "./eval-stream-task";
 export { fromResponse, toParams } from "./codec";
 export type { AiSdkCodecOptions } from "./codec";
 
@@ -276,18 +280,9 @@ interface AIGenerate {
   readonly task: AIGenerateTaskFactory;
 }
 
-/** The bound API surface returned by {@link createCruxAi}. */
-export interface CruxAi {
-  /** Run one stateless AI SDK image operation without entering a language loop. */
-  generateImage: AIGenerateImage;
-  /** Run one stateless AI SDK transcription operation. */
-  transcribe: AITranscribe;
-  /** Run one stateless AI SDK speech operation. */
-  generateSpeech: AIGenerateSpeech;
-  /** See the package-level {@link generate}. */
-  generate: AIGenerate;
-  /** See the package-level {@link stream}. */
-  stream<
+/** Production `stream()` plus its managed Eval task factory. */
+interface AIStream {
+  <
     TOwnInput extends z.ZodType,
     TOutput extends z.ZodType | undefined,
     TContexts extends readonly ContextEntry[],
@@ -309,6 +304,23 @@ export interface CruxAi {
       TModel
     >,
   ): Promise<StreamReturn<TOutput>>;
+
+  /** Bind a prompt and input-independent defaults as a streaming Eval task. */
+  readonly task: AIStreamTaskFactory;
+}
+
+/** The bound API surface returned by {@link createCruxAi}. */
+export interface CruxAi {
+  /** Run one stateless AI SDK image operation without entering a language loop. */
+  generateImage: AIGenerateImage;
+  /** Run one stateless AI SDK transcription operation. */
+  transcribe: AITranscribe;
+  /** Run one stateless AI SDK speech operation. */
+  generateSpeech: AIGenerateSpeech;
+  /** See the package-level {@link generate}. */
+  generate: AIGenerate;
+  /** See the package-level {@link stream}. */
+  stream: AIStream;
   /** Prepare a sans-I/O AI SDK call handle for one `generateText()` or `generateObject()` request. */
   prepare?<
     TOwnInput extends z.ZodType,
@@ -596,6 +608,17 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
     configurable: false,
   });
   const streamFn = streamImpl as unknown as CruxAi["stream"];
+  Object.defineProperty(streamFn, "task", {
+    value: createStreamTaskFactory(
+      (prompt, taskOptions) =>
+        streamImpl(prompt, taskOptions as CallOpts) as unknown as Promise<
+          StreamResult<unknown, unknown>
+        >,
+    ),
+    enumerable: true,
+    writable: false,
+    configurable: false,
+  });
   const prepareFn = prepareImpl as unknown as NonNullable<CruxAi["prepare"]>;
 
   const generateObjectFnImpl: GenerateObjectFn =

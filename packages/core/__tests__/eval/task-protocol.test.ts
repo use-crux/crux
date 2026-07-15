@@ -43,6 +43,10 @@ describe("Eval task execution protocol", () => {
           capabilities: Object.freeze(["modelCalls"]),
           defaults: Object.freeze({}),
           overrideKeys: Object.freeze([]),
+          projectIdentity: ({ phase }: { phase: "plan" | "observed" }) => ({
+            reusable: true as const,
+            fingerprintMaterial: { phase: phase === "plan" ? "same" : "same" },
+          }),
           execute: async (input: unknown) => ({ object: input }),
           projectOutput: (result: { object: unknown }) => result.object,
           projectResponse: (result: { object: unknown }) =>
@@ -59,7 +63,29 @@ describe("Eval task execution protocol", () => {
     ).resolves.toMatchObject({
       output: "semantic",
       response: { object: "semantic" },
+      observedIdentity: {
+        reusable: true,
+        fingerprintMaterial: { phase: "same" },
+      },
     });
+  });
+
+  it("rejects a frozen projector-less descriptor before invocation", async () => {
+    let invocations = 0;
+    const task = async () => undefined;
+    const { projectIdentity: _projectIdentity, ...legacy } =
+      compatibleDescriptor(async () => {
+        invocations += 1;
+        return { object: "unexpected" };
+      });
+    Object.defineProperty(task, EVAL_TASK_INTERNAL, {
+      value: Object.freeze(legacy),
+    });
+
+    await expect(
+      executeEvalTaskForInternalUse(task, undefined),
+    ).rejects.toMatchObject({ code: "descriptor_incompatible" });
+    expect(invocations).toBe(0);
   });
 
   it("rejects a malformed branded descriptor before invoking it", async () => {
@@ -203,6 +229,10 @@ describe("Eval task execution protocol", () => {
       capabilities: ["modelCalls"],
       defaults: { temperature: 0.2 },
       overrideKeys: ["temperature"],
+      projectIdentity: ({ phase }) => ({
+        reusable: true,
+        fingerprintMaterial: { phase },
+      }),
       execute: task,
       projectOutput: (result) => result,
       projectResponse: () => ({}) as never,
@@ -234,6 +264,10 @@ function compatibleDescriptor(execute: () => Promise<unknown>) {
     capabilities: Object.freeze(["modelCalls"]),
     defaults: Object.freeze({}),
     overrideKeys: Object.freeze([]),
+    projectIdentity: ({ phase }: { phase: "plan" | "observed" }) => ({
+      reusable: true as const,
+      fingerprintMaterial: { phase },
+    }),
     execute,
     projectOutput: (result: { object?: unknown }) => result.object,
     projectResponse: () => ({}) as never,

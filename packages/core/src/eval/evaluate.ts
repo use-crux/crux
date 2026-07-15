@@ -14,7 +14,15 @@ import type { Gates } from "../quality/gates";
 import type { EvaluationCoverageTargetId } from "../quality/internal/definition";
 import type { EvalCase } from "./case";
 import type { CaseFile } from "./case-file";
-import type { CallOf, CapsOf, EvalTaskLike, InputOf, OutputOf } from "./task";
+import type {
+  CallOf,
+  CapsOf,
+  EvalTaskLike,
+  InputOf,
+  OutputOf,
+  VariantOf,
+} from "./task";
+import type { ValidateEvalVariants } from "./variant";
 import { EVAL_INTERNAL, type EvalDefinitionV1 } from "./internal/definition";
 import { normalizeEvalDefinition } from "./internal/normalize-definition";
 
@@ -37,14 +45,21 @@ type ScorerNamesOf<TScorers> = TScorers extends readonly (infer S)[]
   ? ScorerElementName<S>
   : never;
 
+/** Task projections cached behind short aliases for public diagnostics. */
+type TaskInput<TTask> = InputOf<TTask>;
+type TaskOutput<TTask> = OutputOf<TTask>;
+type TaskCall<TTask> = CallOf<TTask>;
+type TaskVariant<TTask> = VariantOf<TTask>;
+type TaskCapabilities<TTask> = CapsOf<TTask>;
+
 /** Options accepted by the inert Phase 1 authoring surface. */
 export interface EvaluateOptions<
   TTask extends EvalTaskLike,
   TExpected,
   TScorers extends readonly Scorer<
-    InputOf<TTask>,
-    OutputOf<TTask>,
-    TExpected,
+    TaskInput<TTask>,
+    TaskOutput<TTask>,
+    NoInfer<TExpected>,
     string
   >[],
   TVariants extends Readonly<Record<string, Readonly<Record<string, unknown>>>>,
@@ -55,36 +70,47 @@ export interface EvaluateOptions<
   cases:
     | readonly (
         | EvalCase<
-            InputOf<TTask>,
-            OutputOf<TTask>,
+            TaskInput<TTask>,
+            TaskOutput<TTask>,
             TExpected,
-            CallOf<TTask>,
-            CapsOf<TTask>,
+            TaskCall<TTask>,
+            TaskCapabilities<TTask>,
             ScorerNamesOf<TScorers>
           >
-        | CaseFile<NoInfer<InputOf<TTask>>, unknown>
+        | CaseFile<NoInfer<TaskInput<TTask>>, unknown>
       )[]
-    | CaseFile<NoInfer<InputOf<TTask>>, unknown>;
-  variants?: TVariants;
+    | CaseFile<NoInfer<TaskInput<TTask>>, unknown>;
+  variants?: TVariants &
+    ValidateEvalVariants<
+      TVariants,
+      TaskVariant<TTask>,
+      TaskInput<TTask>,
+      TaskOutput<TTask>,
+      TaskCall<TTask>
+    >;
   expect?: EvalCase<
-    InputOf<TTask>,
-    OutputOf<TTask>,
+    TaskInput<TTask>,
+    TaskOutput<TTask>,
     TExpected,
-    CallOf<TTask>,
-    CapsOf<TTask>
+    TaskCall<TTask>,
+    TaskCapabilities<TTask>
   >["expect"];
   afterScores?: EvalCase<
-    InputOf<TTask>,
-    OutputOf<TTask>,
+    TaskInput<TTask>,
+    TaskOutput<TTask>,
     TExpected,
-    CallOf<TTask>,
-    CapsOf<TTask>,
+    TaskCall<TTask>,
+    TaskCapabilities<TTask>,
     ScorerNamesOf<TScorers>
   >["afterScores"];
   scorers?:
     | TScorers
     | ((
-        scorers: BoundScorerLib<InputOf<TTask>, OutputOf<TTask>, TExpected>,
+        scorers: BoundScorerLib<
+          TaskInput<TTask>,
+          TaskOutput<TTask>,
+          NoInfer<TExpected>
+        >,
       ) => TScorers);
   gates?: Gates<ScorerNamesOf<TScorers> | "pass">;
   trials?: number;
@@ -118,6 +144,20 @@ export interface Eval<
 /** Widest Eval type accepted by internal collection code. */
 export type AnyEval = Eval<never, unknown, string, string, string | undefined>;
 
+/** Return type assembled from one fully inferred authoring contract. */
+type InferredEval<
+  TTask,
+  TScorers,
+  TVariants,
+  TId extends string | undefined,
+> = Eval<
+  TaskInput<TTask>,
+  TaskOutput<TTask>,
+  ScorerNamesOf<TScorers> | "pass",
+  keyof TVariants & string,
+  TId
+>;
+
 function createEval(options: unknown): AnyEval {
   const { id, definition } = normalizeEvalDefinition(options);
   const evalValue = {
@@ -141,29 +181,17 @@ export function evaluate<
   const TTask extends EvalTaskLike,
   const TExpected = unknown,
   const TScorers extends readonly Scorer<
-    InputOf<TTask>,
-    OutputOf<TTask>,
-    TExpected,
+    TaskInput<TTask>,
+    TaskOutput<TTask>,
+    NoInfer<TExpected>,
     string
-  >[] = readonly Scorer<InputOf<TTask>, OutputOf<TTask>, TExpected, string>[],
+  >[] = readonly [],
   const TVariants extends Readonly<
     Record<string, Readonly<Record<string, unknown>>>
   > = {},
   const TId extends string | undefined = undefined,
 >(
   options: EvaluateOptions<TTask, TExpected, TScorers, TVariants, TId>,
-): Eval<
-  InputOf<TTask>,
-  OutputOf<TTask>,
-  ScorerNamesOf<TScorers> | "pass",
-  keyof TVariants & string,
-  TId
-> {
-  return createEval(options) as Eval<
-    InputOf<TTask>,
-    OutputOf<TTask>,
-    ScorerNamesOf<TScorers> | "pass",
-    keyof TVariants & string,
-    TId
-  >;
+): InferredEval<TTask, TScorers, TVariants, TId> {
+  return createEval(options) as InferredEval<TTask, TScorers, TVariants, TId>;
 }
