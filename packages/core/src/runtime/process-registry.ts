@@ -16,6 +16,25 @@ interface RegistryHooksLayer {
   readonly previousHooks: Readonly<CruxHooks>
 }
 
+const CRUX_HOOK_KEYS = new Set<keyof CruxHooks>([
+  'middleware',
+  'resolveHook',
+  'executionHook',
+  'streamProgressHook',
+  'streamStartHook',
+  'observabilityTransport',
+  'observabilityDelivery',
+  'observabilityCapture',
+  'spanActivationHook',
+  'telemetryFlushHook',
+  'telemetryResumeAttributesHook',
+  'records',
+  'runtimeEngine',
+  'globalConstraints',
+  'globalGuardrails',
+  'semanticCacheInstalled',
+])
+
 export interface CruxProcessRegistry {
   readonly packageName: '@use-crux/core'
   readonly registryVersion: typeof PROCESS_REGISTRY_VERSION
@@ -93,17 +112,102 @@ function isCruxProcessRegistry(value: unknown): value is CruxProcessRegistry {
     typeof runtime.currentHooks === 'object' &&
     runtime.currentHooks !== null &&
     isRegistryNumber(runtime.nextHooksLayerId) &&
-    runtime.hooksLayers instanceof Map &&
+    runtime.nextHooksLayerId > 0 &&
+    isRegistryHooksLayers(runtime.hooksLayers, runtime.nextHooksLayerId) &&
     typeof candidate.observability === 'object' &&
     candidate.observability !== null &&
     isRegistryNumber(observability.nextConfigurationToken) &&
     isRegistryNumber(observability.activeConfigurationToken) &&
-    observability.configurationParents instanceof Map &&
+    isConfigurationParents(
+      observability.configurationParents,
+      observability.nextConfigurationToken,
+      observability.activeConfigurationToken,
+    ) &&
     isRegistryNumber(observability.configurationGeneration) &&
     isRegistryNumber(observability.resetGeneration) &&
     observability.listeners instanceof Set &&
     [...observability.listeners].every(isObservabilityListenerReference)
   )
+}
+
+function isRegistryHooksLayers(
+  value: unknown,
+  nextLayerId: number,
+): value is Map<number, RegistryHooksLayer> {
+  if (!(value instanceof Map)) return false
+  for (const [id, layer] of value) {
+    if (
+      !isRegistryNumber(id) ||
+      id === 0 ||
+      id >= nextLayerId ||
+      !isRegistryHooksLayer(layer)
+    ) {
+      return false
+    }
+  }
+  return true
+}
+
+function isRegistryHooksLayer(value: unknown): value is RegistryHooksLayer {
+  if (typeof value !== 'object' || value === null) return false
+  const layer = value as { keys?: unknown; previousHooks?: unknown }
+  return (
+    Array.isArray(layer.keys) &&
+    layer.keys.every(isCruxHookKey) &&
+    isCruxHooksShape(layer.previousHooks)
+  )
+}
+
+function isCruxHooksShape(value: unknown): value is Readonly<CruxHooks> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Object.keys(value).every(isCruxHookKey)
+  )
+}
+
+function isCruxHookKey(value: unknown): value is keyof CruxHooks {
+  return (
+    typeof value === 'string' && CRUX_HOOK_KEYS.has(value as keyof CruxHooks)
+  )
+}
+
+function isConfigurationParents(
+  value: unknown,
+  nextToken: number,
+  activeToken: number,
+): value is Map<number, number> {
+  if (!(value instanceof Map)) return false
+  for (const [token, parentToken] of value) {
+    if (
+      !isRegistryNumber(token) ||
+      token === 0 ||
+      token > nextToken ||
+      !isRegistryNumber(parentToken) ||
+      parentToken > nextToken
+    ) {
+      return false
+    }
+  }
+
+  const parents = value as Map<number, number>
+  if (activeToken !== 0 && !parents.has(activeToken)) return false
+  for (const parentToken of parents.values()) {
+    if (parentToken !== 0 && !parents.has(parentToken)) return false
+  }
+  for (const token of parents.keys()) {
+    const visited = new Set<number>()
+    let currentToken = token
+    while (currentToken !== 0) {
+      if (visited.has(currentToken)) return false
+      visited.add(currentToken)
+      const parentToken = parents.get(currentToken)
+      if (parentToken === undefined) return false
+      currentToken = parentToken
+    }
+  }
+  return true
 }
 
 function isObservabilityListenerReference(

@@ -11,6 +11,33 @@ describe('duplicate module runtime state', () => {
     core.resetObservabilityRuntime()
   })
 
+  it('shares hook updates across module copies', async () => {
+    vi.resetModules()
+    const firstCore = await import('../src/index')
+    const middleware = vi.fn(async (args, next) => next(args))
+    firstCore.updateHooks({ middleware })
+
+    vi.resetModules()
+    const secondCore = await import('../src/index')
+
+    expect(secondCore.getHooks().middleware).toBe(middleware)
+  }, 30_000)
+
+  it('resets hooks across module copies', async () => {
+    vi.resetModules()
+    const firstCore = await import('../src/index')
+    firstCore.updateHooks({
+      middleware: vi.fn(async (args, next) => next(args)),
+    })
+
+    vi.resetModules()
+    const secondCore = await import('../src/index')
+    secondCore.resetHooks()
+
+    expect(firstCore.getHooks()).toEqual({})
+    expect(secondCore.getHooks()).toEqual({})
+  }, 30_000)
+
   it('observes instrumentation config from an isolated action-side module copy', async () => {
     const fetchImpl = vi.fn<typeof fetch>(async (_input, init) => {
       const envelope = JSON.parse(String(init?.body))
@@ -360,6 +387,111 @@ describe('duplicate module runtime state', () => {
       vi.resetModules()
     }
   }, 15_000)
+
+  it.each([
+    ['self-referential ancestry', new Map<unknown, unknown>([[1, 1]])],
+    [
+      'cyclic ancestry',
+      new Map<unknown, unknown>([
+        [1, 2],
+        [2, 1],
+      ]),
+    ],
+    ['dangling ancestry', new Map<unknown, unknown>([[1, 2]])],
+    ['malformed ancestry key', new Map<unknown, unknown>([['child', 0]])],
+    ['malformed ancestry', new Map<unknown, unknown>([[1, 'parent']])],
+  ])(
+    'rejects %s in an otherwise compatible registry',
+    async (_, configurationParents) => {
+      const key = Symbol.for('@use-crux/core/process-registry/v1')
+      const original = Reflect.get(globalThis, key)
+      try {
+        const registry = original as {
+          runtime: object
+          observability: object
+        }
+        Reflect.set(globalThis, key, {
+          ...registry,
+          runtime: { ...registry.runtime },
+          observability: {
+            ...registry.observability,
+            nextConfigurationToken: 2,
+            activeConfigurationToken: 1,
+            configurationParents,
+          },
+        })
+        vi.resetModules()
+
+        await expect(import('../src/index')).rejects.toThrow(
+          'Incompatible @use-crux/core process registry found at the v1 global symbol',
+        )
+      } finally {
+        Reflect.set(globalThis, key, original)
+        vi.resetModules()
+      }
+    },
+    15_000,
+  )
+
+  it.each([
+    ['a zero next layer id', 0, new Map<unknown, unknown>()],
+    [
+      'a malformed layer id',
+      2,
+      new Map<unknown, unknown>([['1', { keys: [], previousHooks: {} }]]),
+    ],
+    [
+      'malformed layer keys',
+      2,
+      new Map<unknown, unknown>([
+        [1, { keys: 'middleware', previousHooks: {} }],
+      ]),
+    ],
+    [
+      'an unknown hook key',
+      2,
+      new Map<unknown, unknown>([
+        [1, { keys: ['unknownHook'], previousHooks: {} }],
+      ]),
+    ],
+    [
+      'malformed previous hooks',
+      2,
+      new Map<unknown, unknown>([
+        [1, { keys: ['middleware'], previousHooks: null }],
+      ]),
+    ],
+  ])(
+    'rejects %s in an otherwise compatible registry',
+    async (_, nextHooksLayerId, hooksLayers) => {
+      const key = Symbol.for('@use-crux/core/process-registry/v1')
+      const original = Reflect.get(globalThis, key)
+      try {
+        const registry = original as {
+          runtime: object
+          observability: object
+        }
+        Reflect.set(globalThis, key, {
+          ...registry,
+          runtime: {
+          ...registry.runtime,
+          nextHooksLayerId,
+            hooksLayers,
+          },
+          observability: { ...registry.observability },
+        })
+        vi.resetModules()
+
+        await expect(import('../src/index')).rejects.toThrow(
+          'Incompatible @use-crux/core process registry found at the v1 global symbol',
+        )
+      } finally {
+        Reflect.set(globalThis, key, original)
+        vi.resetModules()
+      }
+    },
+    15_000,
+  )
 
   it('removes bad listeners without blocking valid cross-copy synchronization', async () => {
     const {
