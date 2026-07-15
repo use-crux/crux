@@ -1,0 +1,14 @@
+◇ crux catalog status
+
+  Catalog: 3 definitions, 2 relations, 1 diagnostics, 1 lints
+  Indexing: degraded
+  AST: ready
+  Semantic: degraded
+  Cache: hit (42ms old)
+  Last error: semantic evidence partial
+  Semantic mode: unknown
+  Semantic backend: unknown
+  Watch: ready (full, fallback: missing-source-graph)
+  Changed / affected: 1 / 3 files
+  Manifests: 2
+  Current manifest: unknown

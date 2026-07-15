@@ -74,15 +74,16 @@ fn project_match(
     let scoped_context = parts.as_ref().map(|parts| {
         PrimitiveContext::new_with_records(
             file,
+            relative_path,
             imports,
             local_initializers,
             parts,
             records_by_file,
         )
     });
-    let local_context = parts
-        .as_ref()
-        .map(|parts| PrimitiveContext::new(file, imports, local_initializers, parts));
+    let local_context = parts.as_ref().map(|parts| {
+        PrimitiveContext::new(file, relative_path, imports, local_initializers, parts)
+    });
 
     for entry in FIRST_PARTY_PRIMITIVE_MANIFEST {
         let custom_input = CustomProjectionInput {

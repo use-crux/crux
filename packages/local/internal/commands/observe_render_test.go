@@ -155,8 +155,11 @@ func TestIndexRendererEmptyStillBranded(t *testing.T) {
 	printIndex(io, api.IndexData{}, "")
 	got := out.String()
 
-	if !strings.Contains(got, "◇ crux index") || !strings.Contains(got, "No index entries found") {
+	if !strings.Contains(got, "◇ crux index") || !strings.Contains(got, "No Catalog definitions found") {
 		t.Errorf("empty index should still print a branded header and an honest empty line:\n%s", got)
+	}
+	if strings.Contains(got, "sent an index event") {
+		t.Errorf("empty index retained obsolete event-registration guidance:\n%s", got)
 	}
 }
 

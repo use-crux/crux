@@ -190,6 +190,20 @@ pub(crate) fn merge_fact_value(facts: &mut StaticIndexPatchFacts, value: &Value)
 
 fn merge_grouped_facts(facts: &mut StaticIndexPatchFacts, grouped: StaticIndexPatchFacts) {
     facts.definitions.extend(grouped.definitions);
+    for (definition_id, extractors) in grouped.definition_extractors {
+        facts
+            .definition_extractors
+            .entry(definition_id)
+            .or_default()
+            .extend(extractors);
+    }
+    for (fact_id, extractors) in grouped.fact_extractors {
+        facts
+            .fact_extractors
+            .entry(fact_id)
+            .or_default()
+            .extend(extractors);
+    }
     facts.relation_refs.extend(grouped.relation_refs);
     facts.relations.extend(grouped.relations);
     facts.source_refs.extend(grouped.source_refs);

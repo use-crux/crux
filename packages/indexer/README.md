@@ -2,15 +2,24 @@
 
 Project source intelligence for Crux local devtools.
 
-## Install
+This published package primarily serves Crux Local and compiler integrations.
+Applications normally install `@use-crux/core` and `@use-crux/local` instead;
+compiler integrations use the Crux-owned root/contract/host boundaries, while
+experimental extension packages opt into the explicit `extensions` and
+`testing` subpaths.
 
-```sh
-pnpm add @use-crux/indexer @use-crux/core
-```
+This package contains Crux-owned Catalog compiler contracts and worker bridges.
+It is not an application SDK or a public in-process indexer. Bundled first-party
+extraction and lint evaluation are owned by the Crux Local binary through the
+Rust/Oxc Static Index pipeline.
 
-This package is the Project Index extension-authoring SDK and contract package.
-Bundled first-party extraction and lint evaluation are owned by the Crux Local
-binary through the Rust/Oxc Static Index pipeline.
+Third-party authoring is isolated on the experimental
+`@use-crux/indexer/extensions` subpath. Its current promise is declarative:
+explicit trusted package references, immutable manifests, source match patterns,
+extractors, definition/reference builders, source-reference roles, relation
+declarations, and compiler-owned diagnostics. Arbitrary third-party rules,
+resolvers, emitters, raw compiler objects, registration, discovery, and native-only
+behavior remain reserved.
 
 The Go runtime in `@use-crux/local` calls this through bounded Node worker bundles built by the private `@use-crux/local-workers` package. `@use-crux/core` owns the public index contracts; this package owns how local projects are indexed into those contracts.
 
@@ -30,11 +39,11 @@ spawns or substitutes for the native binary.
 
 `inspectProjectConfig(...)` is the package-public facade for **effective-configuration** inspection (the `crux config inspect` command). Unlike `resolveProjectModel`, it imports the project's `crux.config.ts` in inert `CRUX_INDEX=1` mode and returns a `ProjectConfigInspect` value covering every `CruxConfig` domain — `quality`, `generation`, `indexer`, `experimental`, `observability`, `devtools`, `persistence`, `lint`, `plugins` — with each value paired to an origin (`config`, `default`, `package.json`, `set`, or `none`) so callers can distinguish explicit overrides from applied defaults. Non-serializable bindings (store, tokenizer, middleware, transport) are surfaced as presence flags. A broken config degrades to an all-defaults view with an `import-failed` status rather than throwing.
 
-Relation resolution is centralized behind the root-exported relation model helpers. `resolveRelationModel` is the project/file-scope facade for binding static relation refs, identity-merging static and semantic edges, projecting relation metadata back onto definitions, and preserving unresolved refs in a `RelationResolutionReport`. `relationIdentity` is the single static/semantic/patch key contract, and semantic analyzer aggregation uses that same identity merge so resolved analyzer facts replace provisional static edges instead of coexisting with them. `createRelationPolicyTable` makes policy precedence explicit with validation diagnostics instead of relying on import order.
+Compiler-internal relation resolution uses one relation model for binding static refs, identity-merging static and semantic edges, projecting relation metadata, and preserving unresolved evidence. These helpers are not root exports; extension authors declare relation contracts and emit unresolved references through the experimental `/extensions` boundary.
 
 Every relation type that reaches compiler output must be declared in the active policy table. Undeclared static refs and pre-resolved semantic/project relations remain visible as evidence, but `RelationResolutionReport.policyGaps` and `relation.policy_gap` diagnostics make the missing declaration explicit during indexing.
 
-The extension boundary lives behind `@use-crux/indexer/extensions`. Third-party Indexer Extensions use role-based compiler slots such as extractors, resolvers, rules, and emitters; normal extractors return immutable extracted facts and unresolved references rather than mutating the index graph directly. Bundled first-party extractors and lints are not implemented through TypeScript extension slots.
+The extension boundary lives behind `@use-crux/indexer/extensions`. Third-party Indexer Extensions return immutable extracted facts and unresolved references rather than mutating the Catalog graph directly. Resolver, rule, and emitter machinery remains compiler-owned and is not exported as third-party authoring API. Bundled first-party extractors and lints are not implemented through TypeScript extension slots.
 
 The public loading foundation is intentionally explicit and non-magical. `crux.config.ts` carries an
 inert `indexer` config bag through `@use-crux/core`; `@use-crux/indexer` enforces it at compiler startup.
@@ -84,7 +93,7 @@ Relation read-model projection accepts optional runtime-use target rules. Produc
 
 Use `go test ./internal/devtools -run '^$' -bench BenchmarkReindexProjectIncrementalWatchCommit` from `packages/local` to isolate the Go-side patch commit, status, and read-model projection cost.
 
-Semantic enrichment is composed from focused analyzers behind a shared result contract. The top-level `semanticIndexFacts(root, files)` behavior remains the public entry point, while analyzers own narrower responsibilities such as schema metadata/source refs, direct source refs, relation discovery, and definition enrichment. Shared semantic plumbing lives under `indexer/semantic/`: compiler/backend services own project setup, `discovery.ts` owns candidate discovery, `schema-candidates.ts` and `source-ref-candidates.ts` select analyzer inputs, `registry.ts` wires analyzers, and `runner.ts` merges analyzer outputs. This keeps new semantic capabilities testable at their boundary without changing the patch shape consumed by caches and the Go read model.
+Semantic enrichment is composed from focused analyzers behind a shared result contract. The compiler-level `semanticIndexFacts(root, files)` behavior remains the orchestration entry, while analyzers own narrower responsibilities such as schema metadata/source refs, direct source refs, relation discovery, and definition enrichment. Shared semantic plumbing lives under `indexer/semantic/`: compiler/backend services own project setup, `discovery.ts` owns candidate discovery, `schema-candidates.ts` and `source-ref-candidates.ts` select analyzer inputs, `registry.ts` wires analyzers, and `runner.ts` merges analyzer outputs. This keeps new semantic capabilities testable at their boundary without presenting compiler orchestration as application API.
 
 Source resolver logic is organized under `source-resolver/` with a stable root re-export at `source-resolver.ts`. The facade keeps the compatibility API, while the internals are split into focused functional modules:
 
@@ -111,13 +120,16 @@ Refactors that only move semantic logic between analyzers without changing emitt
 
 If a feature spans static facts, semantic facts, and the Go-owned index snapshot, bump all three. A normal rebuild/restart plus `crux index reindex` should pick up the migration; users should not need to delete `.crux/cache` manually.
 
-## Public Entry Points
+## Package Entry Points
 
-Stable beta root APIs are the package root, `testing`, `source-resolver`, and the JSON-safe
-`contracts/*` subpaths. Breaking shape changes are not planned for those surfaces after the
-pre-launch rename phase. `@use-crux/indexer/extensions` remains experimental until third-party
-loading, trust UX, rule execution, and fixture package contracts are ready. `host/*` subpaths are
-Crux-owned worker bridges, not general SDK APIs.
+The package root and `contracts/*` contain Crux-owned compiler data contracts;
+`host/*` contains Crux-owned worker bridges. They are exported for the bundled
+Local build, not as application APIs. `source-resolver` is the focused source-map
+lookup facade. `testing` supports source-text extension fixtures.
+
+`@use-crux/indexer/extensions` remains experimental. Its extractor reader/builder
+shape is deliberately narrow, but the extension ecosystem, trust UX, package
+fixtures, and all reserved execution slots require a separate graduation RFC.
 
 ```ts
 import type { IndexerExtension } from "@use-crux/indexer/extensions";
@@ -128,7 +140,7 @@ import {
 } from "@use-crux/indexer/testing";
 ```
 
-Crux-owned worker hosts can use private host subpaths while the package remains private:
+Crux-owned worker hosts use the published host and contract subpaths:
 
 ```ts
 import { inspectProjectStaticSyntaxPlan } from "@use-crux/indexer/host/static-index";
@@ -136,4 +148,9 @@ import { extractStaticEvidenceBatchForProject } from "@use-crux/indexer/host/sta
 import { indexPatchFromWorkerEvents } from "@use-crux/indexer/contracts/worker-events";
 ```
 
-Most applications should not import this package directly. It is primarily an internal dependency of Crux local devtools, documented as a separate package so the architecture boundary is explicit. `@use-crux/indexer/testing` is the supported source-text fixture surface for extension tests. The `extensions` subpath is experimental and exists to migrate first-party internals before third-party extension support is stabilized. Internal `indexer/*` modules are not package exports; `host/*` subpaths are Crux-owned worker bridges, and `contracts/*` subpaths are JSON-safe cross-runtime contracts rather than general SDK entry points.
+Applications should not import the root package. Use
+`@use-crux/core/project-index` for JSON-safe Catalog data and Crux Local/CLI for
+compilation. Extension authors opt into the experimental `extensions` and
+`testing` subpaths explicitly. Internal `indexer/*` modules are not package
+exports; `host/*` and `contracts/*` are Crux-owned build boundaries rather than
+general SDK entry points.

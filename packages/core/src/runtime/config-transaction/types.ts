@@ -13,6 +13,7 @@ import type {
 import type { TokenizerFn } from '../../shared/tokenizer'
 import type { ConfigureOptions, PromptRegistry } from '../configure'
 import type { CruxConfig } from '../config-types'
+import type { CruxDeploymentIdentity } from '../../project-index'
 import type { ApplyPluginsResult, CruxPlugin } from '../plugin'
 import type { CruxHooks, HooksLayerToken } from '../runtime'
 import type { Crux, RuntimeConfigCruxFactory } from './crux'
@@ -102,15 +103,22 @@ export interface RuntimeConfigTransactionPorts {
 export type RuntimeConfigObservabilityPlan =
   | { readonly kind: 'none' }
   | {
+      /** Install deployment identity without taking ownership of transport. */
+      readonly kind: 'identity'
+      readonly identity: CruxDeploymentIdentity | undefined
+    }
+  | {
       readonly kind: 'owned'
       readonly transport?: CruxObservabilityTransport
       readonly delivery?: ObservabilityDeliveryOptions
+      readonly identity?: CruxDeploymentIdentity
     }
   | {
       readonly kind: 'http'
       readonly serverUrl: string
       readonly token?: string
       readonly delivery?: ObservabilityDeliveryOptions
+      readonly identity?: CruxDeploymentIdentity
     }
 
 /** Pure plan produced from user config before any side effects run. */

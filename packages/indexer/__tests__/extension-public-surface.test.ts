@@ -2,10 +2,43 @@ import { readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import {
+  resolveIndexerExtensionReferences,
+  validateIndexerExtensionManifest,
+  type IndexerExtension,
+} from '../src/extensions'
 
 const testDir = dirname(fileURLToPath(import.meta.url))
 
 describe('public indexer extension surface', () => {
+  it('rejects inherited reserved compiler slots from untyped manifests', () => {
+    for (const slot of ['static', 'resolvers', 'rules', 'emitters', 'queries'] as const) {
+      const extension = Object.assign(Object.create({ [slot]: slot === 'static' ? {} : [] }), {
+        name: `@acme/reserved-${slot}`,
+        version: '1.0.0',
+        crux: { indexer: '0.1.0', projectIndexSchema: 1 },
+      }) as IndexerExtension
+
+      expect(validateIndexerExtensionManifest(extension)).toEqual({
+        valid: false,
+        errors: [`Reserved compiler extension slots are not public: ${slot}.`],
+      })
+
+      const resolved = resolveIndexerExtensionReferences({
+        config: {
+          extensions: [{ package: extension.name }],
+          trust: { mode: 'allowlisted', allow: [extension.name] },
+        },
+        installed: [{ package: extension.name, extension }],
+      })
+
+      expect(resolved.extensions, slot).toEqual([])
+      expect(resolved.diagnostics.map((diagnostic) => diagnostic.code), slot).toEqual([
+        'index.extension_invalid_manifest',
+      ])
+    }
+  })
+
   it('documents package entry barrels as module surfaces', async () => {
     for (const file of [
       'src/index.ts',
@@ -50,63 +83,11 @@ describe('public indexer extension surface', () => {
     ])
   })
 
-  it('keeps the root package barrel on SDK and record-contract entry points', async () => {
+  it('keeps the root package barrel on Crux-owned compiler contracts', async () => {
     const source = await readFile(join(testDir, '..', 'src/index.ts'), 'utf8')
 
-    expect(namedValueExports(source)).toEqual([
-      'callPattern',
-      'facts',
-      'INDEXER_EXTENSION_API_VERSION',
-      'isIndexerExtensionAllowed',
-      'loadIndexerExtensionReferences',
-      'newPattern',
-      'none',
-      'PROJECT_INDEX_SCHEMA_VERSION',
-      'projectDefinition',
-      'resolveIndexerExtensionReferences',
-      'validateIndexerExtensionManifest',
-    ])
+    expect(namedValueExports(source)).toEqual([])
     expect(namedTypeExports(source)).toEqual([
-      'ArgumentReader',
-      'ConfigCallReader',
-      'ConfigReader',
-      'ConfiguredObjectReader',
-      'DefinitionBuilder',
-      'DefinitionBuilderInput',
-      'ExtensionIdentity',
-      'ExtensionReference',
-      'ExtensionTrustMode',
-      'ExtensionTrustPolicy',
-      'ExtractContext',
-      'ExtractMatch',
-      'ExtractPattern',
-      'ExtractResult',
-      'ExtractedDefinition',
-      'ExtractedFacts',
-      'ExtractedSourceRef',
-      'IndexDependency',
-      'IndexerCompatibility',
-      'IndexerExtension',
-      'IndexerExtensionConfig',
-      'IndexRule',
-      'IndexRuleContext',
-      'InstalledIndexerExtension',
-      'LoadIndexerExtensionReferencesInput',
-      'RelationSpec',
-      'ReferenceBuilder',
-      'ResolvedIndexerExtension',
-      'ResolveIndexerExtensionReferencesInput',
-      'ResolveIndexerExtensionReferencesResult',
-      'SemanticReadModel',
-      'SemanticSymbol',
-      'SemanticType',
-      'SourceReference',
-      'SourceRefBuilder',
-      'SourceView',
-      'StaticObjectReader',
-      'StaticObjectMapIdentifierEntry',
-      'UnresolvedReference',
-      'IndexerExtensionManifestValidation',
       'IndexPatch',
       'IndexPatchBudget',
       'IndexPatchFacts',
@@ -123,6 +104,7 @@ describe('public indexer extension surface', () => {
       'StaticExtractionTiming',
       'StaticExtractionTimingName',
     ])
+    expect(source).not.toContain("from './indexer/extensions'")
     expect(source).not.toContain('StaticFactParser')
     expect(source).not.toContain('createStaticExtractionParser')
     expect(source).not.toContain("from './indexer/static/extraction/parser'")
@@ -280,21 +262,12 @@ describe('public indexer extension surface', () => {
       'facts',
       'INDEXER_EXTENSION_API_VERSION',
       'isIndexerExtensionAllowed',
-      'loadIndexerExtensionReferences',
       'newPattern',
       'none',
       'PROJECT_INDEX_SCHEMA_VERSION',
       'projectDefinition',
-      'resolveIndexerExtensionReferences',
-      'validateIndexerExtensionManifest',
     ])
     expect(namedTypeExports(source)).toEqual([
-      'InstalledIndexerExtension',
-      'LoadIndexerExtensionReferencesInput',
-      'ResolvedIndexerExtension',
-      'ResolveIndexerExtensionReferencesInput',
-      'ResolveIndexerExtensionReferencesResult',
-      'IndexerExtensionManifestValidation',
       'ArgumentReader',
       'ConfigCallReader',
       'ConfigReader',
@@ -314,26 +287,32 @@ describe('public indexer extension surface', () => {
       'IndexDependency',
       'IndexerCompatibility',
       'IndexerExtensionConfig',
-      'IndexRule',
-      'IndexRuleContext',
       'RelationSpec',
       'ReferenceBuilder',
-      'SemanticReadModel',
-      'SemanticSymbol',
-      'SemanticType',
       'SourceView',
       'SourceReference',
       'SourceRefBuilder',
       'UnresolvedReference',
-      'IndexFactKind',
-      'IndexRuleBudget',
-      'IndexRuleFidelity',
-      'IndexRuleManifest',
-      'IndexRulePhase',
     ])
-    expect(publicInterfaces(source)).toEqual(['ExtractContext', 'IndexExtractor', 'IndexerExtension'])
+    expect(publicInterfaces(source)).toEqual([
+      'ExtractContext',
+      'IndexExtractor',
+      'IndexerExtension',
+      'InstalledIndexerExtension',
+      'ResolvedIndexerExtension',
+      'ResolveIndexerExtensionReferencesInput',
+      'ResolveIndexerExtensionReferencesResult',
+      'LoadIndexerExtensionReferencesInput',
+      'IndexerExtensionManifestValidation',
+    ])
+    expect(namedFunctionExports(source)).toEqual([
+      'validateIndexerExtensionManifest',
+      'resolveIndexerExtensionReferences',
+      'loadIndexerExtensionReferences',
+    ])
     expect(source).not.toContain('IndexResolver')
     expect(source).not.toContain('IndexEmitter')
+    expect(source).not.toContain('IndexRule')
     expect(source).not.toContain('IndexQuery')
     expect(source).not.toContain('unstableNative')
     expect(source).not.toContain('internalNative')

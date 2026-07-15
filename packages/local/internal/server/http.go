@@ -13,6 +13,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/devtools"
 	"github.com/use-crux/crux/packages/local/internal/localserver"
 	"github.com/use-crux/crux/packages/local/internal/observability"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/manifeststore"
 	"github.com/use-crux/crux/packages/local/internal/quality"
 	"github.com/use-crux/crux/packages/local/internal/resourceinspection"
 	"github.com/use-crux/crux/packages/local/internal/runtimebridge"
@@ -98,6 +99,13 @@ func NewHTTPServerWithServicesContext(ctx context.Context, devSvc *devtools.Serv
 				slog.Warn("observability service close failed", "error", err)
 			}
 		}()
+	}
+	if opt.ProjectRoot != "" {
+		manifests := manifeststore.New(opt.ProjectRoot)
+		devSvc.WithManifestStore(manifests)
+		if observabilitySvc != nil {
+			observabilitySvc.WithManifestStore(manifests)
+		}
 	}
 	if observabilitySvc != nil {
 		devSvc.WithObservability(observabilitySvc)

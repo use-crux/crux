@@ -57,13 +57,13 @@ Catalog zero-activity copy: *No runs have referenced this definition yet.*
 | Is the kind a contributor / structural child? | You may see “referenced by N runs” rather than being the subject of a run. |
 | Quality-owned kinds | Primary lens is Quality; secondary direct runtime only when the manifest declares it (e.g. `scorer` / `scoring.judge`). |
 | File-loaded skills | Registry skills join; bare file-loaded directory ids are a different id space and intentionally do not emit refs. |
-| Since-deleted definitions | Runs still filter by the historical id; Catalog may show unresolved links from old runs. |
+| Since-deleted definitions | Runs still filter by historical id. Imported exact manifests resolve the old definition; a missing manifest stays explicitly unresolved. |
 
 View Runs appears only when the activity rollup reports `runCount > 0`. An empty state with no button is intentional.
 
 ## Why is Run Detail missing Catalog links?
 
-Links come from runtime `definitionRefs` on the run/span. If refs were never emitted (anonymous handle, non-instrumented path), there is nothing to link. If refs exist but the Project Index no longer contains the id, the row shows **unresolved** with: *Not found in the current Project Index: the source definition may have been renamed or deleted.*
+Links come from runtime `definitionRefs` on the run/span. If refs were never emitted (anonymous handle, non-instrumented path), there is nothing to link. Identified runs resolve only against their exact imported deployment manifest. A missing manifest is `manifest-unresolved`; a present manifest without that id is `definition-unresolved`. The current Catalog is a separately labeled comparison, never a fallback.
 
 ## Why did stream completion miss usage / finish reason?
 

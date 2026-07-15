@@ -1,8 +1,8 @@
-import { createHash } from "node:crypto";
+import { sha256Hex } from "./sha256";
 
 /** Create a SHA-256 fingerprint over canonical, key-sorted JSON. */
 export function canonicalFingerprint(value: unknown): string {
-  return `sha256:${createHash("sha256").update(canonicalJson(value)).digest("hex")}`;
+  return `sha256:${sha256Hex(new TextEncoder().encode(canonicalJson(value)))}`;
 }
 
 /** Serialize JSON-compatible input independently of object insertion order. */

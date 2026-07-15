@@ -73,9 +73,9 @@ export async function materializeMcpToolSource(
   setMcpTransportAttributes(connect, errorContext);
 
   const client = new Client({ name: "@use-crux/mcp", version: "0.5.0" });
-  let transport: ReturnType<typeof createOfficialClientTransport>;
+  let transport: Awaited<ReturnType<typeof createOfficialClientTransport>>;
   try {
-    transport = createOfficialClientTransport(config);
+    transport = await createOfficialClientTransport(config);
   } catch (error) {
     const failure = mcpToolSourceError(
       "transport-configuration",

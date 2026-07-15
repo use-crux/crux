@@ -7,6 +7,7 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/protocol"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
@@ -76,24 +77,30 @@ func replayFact(root string, projectName string, hit protocol.SourceFile) (json.
 		file = hit.File
 	}
 	dependencies := uniqueStrings(extraction.Dependencies)
-	hasFacts := len(extraction.Definitions) > 0 || len(extraction.Relations) > 0 || len(extraction.Diagnostics) > 0
+	hasFacts := len(extraction.Definitions) > 0 || len(extraction.Relations) > 0 || len(extraction.SourceRefs) > 0 || len(extraction.Diagnostics) > 0
 	if !hasFacts && len(dependencies) == 0 {
 		return nil, nil
 	}
 
 	group := struct {
-		Root        string                  `json:"root,omitempty"`
-		ProjectName string                  `json:"projectName,omitempty"`
-		Definitions []json.RawMessage       `json:"definitions,omitempty"`
-		Relations   []json.RawMessage       `json:"relations,omitempty"`
-		Diagnostics []json.RawMessage       `json:"diagnostics,omitempty"`
-		Sources     []store.IndexSourceFile `json:"sources,omitempty"`
+		Root                 string                                                 `json:"root,omitempty"`
+		ProjectName          string                                                 `json:"projectName,omitempty"`
+		Definitions          []json.RawMessage                                      `json:"definitions,omitempty"`
+		DefinitionExtractors map[string][]projectindex.IndexFactExtractorProvenance `json:"definitionExtractors,omitempty"`
+		FactExtractors       map[string][]projectindex.IndexFactExtractorProvenance `json:"factExtractors,omitempty"`
+		Relations            []json.RawMessage                                      `json:"relations,omitempty"`
+		SourceRefs           []json.RawMessage                                      `json:"sourceRefs,omitempty"`
+		Diagnostics          []json.RawMessage                                      `json:"diagnostics,omitempty"`
+		Sources              []store.IndexSourceFile                                `json:"sources,omitempty"`
 	}{
-		Root:        root,
-		ProjectName: projectName,
-		Definitions: extraction.Definitions,
-		Relations:   extraction.Relations,
-		Diagnostics: extraction.Diagnostics,
+		Root:                 root,
+		ProjectName:          projectName,
+		Definitions:          extraction.Definitions,
+		DefinitionExtractors: extraction.DefinitionExtractors,
+		FactExtractors:       extraction.FactExtractors,
+		Relations:            extraction.Relations,
+		SourceRefs:           extraction.SourceRefs,
+		Diagnostics:          extraction.Diagnostics,
 		Sources: []store.IndexSourceFile{{
 			File:          file,
 			Status:        "indexed",

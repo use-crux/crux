@@ -11,7 +11,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
-func TestSnapshotEpoch34IgnoresEpoch33ThenReindexesAndReloads(t *testing.T) {
+func TestSnapshotEpoch37IgnoresEpoch36ThenReindexesAndReloads(t *testing.T) {
 	root := t.TempDir()
 	ctx := context.Background()
 	stalePatch := IndexPatch{
@@ -26,21 +26,21 @@ func TestSnapshotEpoch34IgnoresEpoch33ThenReindexesAndReloads(t *testing.T) {
 		}},
 	}
 	if err := NewSQLiteIndexFactStore().CommitPhase(ctx, FactTransactionFromPatch(stalePatch)); err != nil {
-		t.Fatalf("seed epoch 34 store before downgrade: %v", err)
+		t.Fatalf("seed epoch 37 store before downgrade: %v", err)
 	}
 
 	currentDir := filepath.Dir(projectIndexFactStoreDBFile(root))
-	staleDir := filepath.Join(root, ".crux", "cache", "index-v2", "epoch-33")
+	staleDir := filepath.Join(root, ".crux", "cache", "index-v2", "epoch-36")
 	if err := os.Rename(currentDir, staleDir); err != nil {
-		t.Fatalf("move seeded cache to epoch 33: %v", err)
+		t.Fatalf("move seeded cache to epoch 36: %v", err)
 	}
 	staleDB := filepath.Join(staleDir, "index.db")
 
 	facts := NewSQLiteIndexFactStore()
 	if index, ok, err := facts.LoadSnapshot(ctx, root, "media", time.Now()); err != nil {
-		t.Fatalf("restart load with only epoch 33: %v", err)
+		t.Fatalf("restart load with only epoch 36: %v", err)
 	} else if ok {
-		t.Fatalf("restart loaded stale epoch 33 snapshot: %+v", index.Definitions)
+		t.Fatalf("restart loaded stale epoch 36 snapshot: %+v", index.Definitions)
 	}
 
 	freshPatch := stalePatch
@@ -49,21 +49,21 @@ func TestSnapshotEpoch34IgnoresEpoch33ThenReindexesAndReloads(t *testing.T) {
 		{ID: "media.operation:fresh", Kind: "media.operation", Name: "fresh", Fidelity: "resolved", Status: "active"},
 	}
 	if err := facts.CommitPhase(ctx, FactTransactionFromPatch(freshPatch)); err != nil {
-		t.Fatalf("reindex into epoch 34: %v", err)
+		t.Fatalf("reindex into epoch 37: %v", err)
 	}
 
 	reloaded, ok, err := NewSQLiteIndexFactStore().LoadSnapshot(ctx, root, "media", time.Now())
 	if err != nil {
-		t.Fatalf("reload epoch 34 after reindex: %v", err)
+		t.Fatalf("reload epoch 37 after reindex: %v", err)
 	}
 	if !ok || findTestDefinition(reloaded.Definitions, "media.operation:fresh") == nil {
-		t.Fatalf("reloaded definitions = %+v, want fresh epoch 34 fact", reloaded.Definitions)
+		t.Fatalf("reloaded definitions = %+v, want fresh epoch 37 fact", reloaded.Definitions)
 	}
 	if findTestDefinition(reloaded.Definitions, "media.operation:stale") != nil {
-		t.Fatalf("reloaded stale epoch 33 fact: %+v", reloaded.Definitions)
+		t.Fatalf("reloaded stale epoch 36 fact: %+v", reloaded.Definitions)
 	}
 	if _, err := os.Stat(staleDB); err != nil {
-		t.Fatalf("epoch 33 cache was deleted during migration: %v", err)
+		t.Fatalf("epoch 36 cache was deleted during migration: %v", err)
 	}
 }
 
@@ -145,6 +145,87 @@ func TestSQLiteIndexFactStoreProjectsCommittedPhaseFacts(t *testing.T) {
 	}
 	if projected.SourceGraph == nil || len(projected.SourceGraph.Shards) != 1 || projected.SourceGraph.Shards[0].ID != "." {
 		t.Fatalf("sourceGraph = %+v, want root shard", projected.SourceGraph)
+	}
+}
+
+func TestSQLiteIndexFactStoreReturnsDefinitionEvidenceInPhaseOrder(t *testing.T) {
+	root := t.TempDir()
+	ctx := context.Background()
+	facts := NewSQLiteIndexFactStore()
+	definition := testDefinition("prompt:writer", "src/writer.ts")
+	for _, phase := range []IndexPatchPhase{PhaseSemantic, PhaseAST} {
+		patch := IndexPatch{
+			SchemaVersion: 1,
+			Phase:         phase,
+			Project:       store.ProjectIdentity{Root: root},
+			Status:        "ok",
+		}
+		envelope := testIndexFactEnvelope(t, patch, "definitions:prompt:writer", "definitions", definition)
+		envelope.Provenance = IndexFactProvenance{
+			Kind: "source", File: "src/writer.ts", ExportName: "writer",
+			Extractors: []IndexFactExtractorProvenance{{Name: "prompt"}},
+		}
+		if err := facts.CommitPhase(ctx, IndexFactTransaction{Patch: patch, Facts: []IndexFactEnvelope{envelope}}); err != nil {
+			t.Fatalf("commit %s evidence: %v", phase, err)
+		}
+	}
+
+	got, err := NewSQLiteIndexFactStore().DefinitionEvidence(ctx, root, "prompt:writer")
+	if err != nil {
+		t.Fatalf("definition evidence: %v", err)
+	}
+	if len(got) != 2 || got[0].Phase != PhaseAST || got[1].Phase != PhaseSemantic {
+		t.Fatalf("definition evidence = %+v, want ast then semantic", got)
+	}
+	if len(got[0].Provenance.Extractors) != 1 || got[0].Provenance.Extractors[0].Name != "prompt" {
+		t.Fatalf("restarted definition evidence provenance = %+v", got[0].Provenance)
+	}
+}
+
+func TestSQLiteIndexFactStoreRestartRetainsExtractorProvenanceForEveryRelatedFactKind(t *testing.T) {
+	root := t.TempDir()
+	ctx := context.Background()
+	patch := IndexPatch{
+		SchemaVersion: 1,
+		Phase:         PhaseAST,
+		Project:       store.ProjectIdentity{Root: root},
+		Status:        "ok",
+		Facts: IndexPatchFacts{
+			Definitions: []store.ProjectDefinition{{ID: "prompt:writer", Kind: "prompt", Name: "writer", Fidelity: "resolved"}},
+			Relations:   []store.ProjectRelation{{ID: "relation:writer-brand", Type: "prompt.uses_context", From: "prompt:writer", To: "context:brand", Fidelity: "resolved"}},
+			SourceRefs:  []IndexSourceRefFact{{DefinitionID: "prompt:writer", Ref: store.ProjectSourceRef{ID: "source-ref:writer-schema", Role: "schema", Source: store.SourceLoc{File: "src/writer.ts", Line: 2}, Fidelity: "resolved"}}},
+			Diagnostics: []store.IndexDiagnostic{{ID: "diagnostic:writer", Severity: "warning", Code: "extension.writer_partial", Message: "partial", RelatedDefinitionIDs: []string{"prompt:writer"}}},
+		},
+	}
+	contributor := []IndexFactExtractorProvenance{{Name: "writer.extractor", Extension: &IndexFactProducer{Name: "@scope/writer-extension", Version: "1.2.3"}}}
+	envelopes := []IndexFactEnvelope{
+		testIndexFactEnvelope(t, patch, "definitions:prompt:writer", "definitions", patch.Facts.Definitions[0]),
+		testIndexFactEnvelope(t, patch, "relations:relation:writer-brand", "relations", patch.Facts.Relations[0]),
+		testIndexFactEnvelope(t, patch, "sourceRefs:0", "sourceRefs", patch.Facts.SourceRefs[0]),
+		testIndexFactEnvelope(t, patch, "diagnostics:diagnostic:writer", "diagnostics", patch.Facts.Diagnostics[0]),
+	}
+	for index := range envelopes {
+		envelopes[index].Provenance.Extractors = contributor
+	}
+	if err := NewSQLiteIndexFactStore().CommitPhase(ctx, IndexFactTransaction{Patch: patch, Facts: envelopes}); err != nil {
+		t.Fatalf("commit attributed facts: %v", err)
+	}
+
+	got, err := NewSQLiteIndexFactStore().DefinitionEvidence(ctx, root, "prompt:writer")
+	if err != nil {
+		t.Fatalf("restart definition evidence: %v", err)
+	}
+	kinds := map[string]bool{}
+	for _, envelope := range got {
+		kinds[envelope.Kind] = true
+		if len(envelope.Provenance.Extractors) != 1 || envelope.Provenance.Extractors[0].Name != "writer.extractor" {
+			t.Fatalf("%s provenance after restart = %+v", envelope.Kind, envelope.Provenance)
+		}
+	}
+	for _, kind := range []string{"definitions", "relations", "sourceRefs", "diagnostics"} {
+		if !kinds[kind] {
+			t.Fatalf("restart evidence kinds = %+v, missing %s", kinds, kind)
+		}
 	}
 }
 

@@ -102,5 +102,6 @@ fn relation_ref(owner_definition_id: &str, relation_type: &str) -> StaticIndexRe
         fallback_to_id: None,
         source: None,
         metadata: None,
+        extractors: Vec::new(),
     }
 }

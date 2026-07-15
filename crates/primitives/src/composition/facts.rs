@@ -39,7 +39,7 @@ pub(crate) fn composition_facts(
             id,
             kind,
             name: authored_id,
-            file: context.file,
+            file: context.fingerprint_file,
             source: parts.source,
             snippet: parts.snippet,
             metadata,

@@ -18,9 +18,6 @@
     "access": "public"
   },
   "type": "module",
-  "engines": {
-    "node": ">=22.0.0"
-  },
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
@@ -106,7 +103,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
-    "test:observability:runtime": "vitest run __tests__/server.test.ts __tests__/server-flow.test.ts __tests__/swarm.test.ts __tests__/agent-lifecycle-observe.test.ts __tests__/runtime-engine-handlers.test.ts __tests__/observability-runtime.test.ts __tests__/observability-bundle.test.ts"
+    "test:observability:runtime": "vitest run __tests__/server.test.ts __tests__/server-flow.test.ts __tests__/swarm.test.ts __tests__/agent-lifecycle-observe.test.ts __tests__/runtime-engine-handlers.test.ts __tests__/observability-runtime.test.ts __tests__/observability-bundle.test.ts __tests__/profile-lifecycle-observability.test.ts"
   },
   "devDependencies": {
     "@edge-runtime/vm": "^5.0.0",

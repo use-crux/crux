@@ -52,6 +52,20 @@ const stagedPackages = new Map()
 
 await validateCommittedWorkspaceManifests(failures)
 
+const stagedPackageNames = new Set(index.packages.map((staged) => staged.name))
+if (stagedPackageNames.has('@use-crux/core')) {
+  const portability = spawnSync('node', ['./scripts/check-portable-entrypoints.mjs', '--stage-root', stageRoot], {
+    cwd: repoRoot,
+    encoding: 'utf8',
+    shell: process.platform === 'win32',
+  })
+  if (portability.status !== 0) {
+    failures.push(`staged portability validation failed\n${portability.stderr || portability.stdout}`)
+  } else if (portability.stdout) {
+    process.stdout.write(portability.stdout)
+  }
+}
+
 for (const staged of index.packages) {
   const packageDir = join(stageRoot, staged.path)
   stagedPackages.set(staged.name, packageDir)

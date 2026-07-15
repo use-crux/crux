@@ -89,13 +89,14 @@ func CachedIndexIndexingStatus(previous *ProjectIndexingStatus, indexedAt string
 	}
 }
 
-func IndexIndexingWithSemanticReady(current *ProjectIndexingStatus, indexedAt string, duration time.Duration, diagnosticCount int, enrichedDefinitionCount int) *ProjectIndexingStatus {
+func IndexIndexingWithSemanticReady(current *ProjectIndexingStatus, backend string, indexedAt string, duration time.Duration, diagnosticCount int, enrichedDefinitionCount int) *ProjectIndexingStatus {
 	next := cloneIndexIndexingStatus(current)
 	if next.Status == "" || next.Status == "cold" || next.Status == "cached" || next.Status == "refreshing" {
 		next.Status = "ready"
 	}
 	next.Semantic = IndexIndexingSemanticStatus{
 		Status:                  "ready",
+		Backend:                 backend,
 		IndexedAt:               indexedAt,
 		DurationMs:              duration.Milliseconds(),
 		DiagnosticCount:         diagnosticCount,
@@ -105,12 +106,24 @@ func IndexIndexingWithSemanticReady(current *ProjectIndexingStatus, indexedAt st
 	return next
 }
 
-func IndexIndexingWithSemanticDegraded(current *ProjectIndexingStatus, duration time.Duration, message string) *ProjectIndexingStatus {
+func IndexIndexingWithSemanticDegraded(
+	current *ProjectIndexingStatus,
+	backend string,
+	indexedAt string,
+	duration time.Duration,
+	diagnosticCount int,
+	enrichedDefinitionCount int,
+	message string,
+) *ProjectIndexingStatus {
 	next := cloneIndexIndexingStatus(current)
 	next.Status = "degraded"
 	next.Semantic = IndexIndexingSemanticStatus{
-		Status:     "degraded",
-		DurationMs: duration.Milliseconds(),
+		Status:                  "degraded",
+		Backend:                 backend,
+		IndexedAt:               indexedAt,
+		DurationMs:              duration.Milliseconds(),
+		DiagnosticCount:         diagnosticCount,
+		EnrichedDefinitionCount: enrichedDefinitionCount,
 	}
 	next.Error = message
 	return next

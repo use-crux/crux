@@ -25,6 +25,10 @@ import type {
   CruxSpanSummaryView,
 } from "./base";
 import type { CruxRunDetailRequest } from "./run-detail-request";
+import type {
+  CruxCurrentCatalogComparison,
+  CruxRunManifestResolution,
+} from "./manifest-resolution";
 
 /** Display metadata for a projected run-detail node or attached detail. */
 export interface CruxRunDetailDisplay {
@@ -282,5 +286,9 @@ export interface CruxRunDetail {
   };
   /** Canonical runtime refs recovered from authoritative run records. */
   definitionRefs: DefinitionRef[];
+  /** Resolution against only the immutable manifest named by the run. */
+  manifest?: CruxRunManifestResolution;
+  /** Separately labeled comparison against the current checkout, when known. */
+  currentCatalog?: CruxCurrentCatalogComparison;
   debug?: unknown;
 }

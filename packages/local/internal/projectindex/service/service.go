@@ -27,6 +27,9 @@ type Options struct {
 	Indexer ASTClient
 	// FactStore persists phase transactions for cache warm starts.
 	FactStore CacheStore
+	// StrictCache turns cache read/write failures into indexing failures. It is
+	// used by bounded CI commands whose exit contract reports integrity errors.
+	StrictCache bool
 	// ReadModel returns the host-enriched read model. When omitted, Store is read
 	// directly.
 	ReadModel ReadModelFunc
@@ -49,6 +52,9 @@ type Service struct {
 	watchStatus              projectIndexWatchStatusStore
 	readModel                ReadModelFunc
 	publish                  PublishFunc
+
+	semanticModeMu sync.RWMutex
+	semanticMode   ProjectSemanticExecutionMode
 
 	backgroundSemanticMu     sync.Mutex
 	backgroundSemanticCancel func()
@@ -73,7 +79,7 @@ func New(options Options) *Service {
 		ctx:             ctx,
 		store:           indexStore,
 		indexer:         options.Indexer,
-		indexCache:      cache.NewCache(facts),
+		indexCache:      cache.NewCache(facts, options.StrictCache),
 		indexState:      projectindex.NewState(),
 		runtimeOverlays: projectindex.NewRuntimeOverlayState(),
 		readModel:       options.ReadModel,
@@ -108,4 +114,30 @@ func (s *Service) WatchStatus() api.ProjectIndexWatchStatus {
 		return api.ProjectIndexWatchStatus{State: "idle"}
 	}
 	return s.watchStatus.Snapshot()
+}
+
+// SemanticMode returns the most recently requested semantic execution mode.
+// An empty value means no refresh has established a mode yet.
+func (s *Service) SemanticMode() ProjectSemanticExecutionMode {
+	if s == nil {
+		return ""
+	}
+	s.semanticModeMu.RLock()
+	defer s.semanticModeMu.RUnlock()
+	return s.semanticMode
+}
+
+func (s *Service) setSemanticMode(mode ProjectSemanticExecutionMode) {
+	s.semanticModeMu.Lock()
+	s.semanticMode = mode
+	s.semanticModeMu.Unlock()
+}
+
+// DefinitionEvidence returns durable compiler provenance linked to one current
+// Catalog definition. It does not inspect source or compiler AST objects.
+func (s *Service) DefinitionEvidence(ctx context.Context, root, definitionID string) ([]projectindex.IndexFactEnvelope, error) {
+	if s == nil || s.indexCache == nil {
+		return []projectindex.IndexFactEnvelope{}, nil
+	}
+	return s.indexCache.DefinitionEvidence(ctx, root, definitionID)
 }

@@ -1,0 +1,215 @@
+{
+  "version": 1,
+  "guardedNodeFallbacks": [
+    {
+      "owner": "@use-crux/core",
+      "sourceImporter": "src/async-scope/internal/carrier.ts",
+      "stagedImporter": "dist/async-scope/internal/carrier.js",
+      "specifier": "node:async_hooks",
+      "kind": "require-call",
+      "smoke": "core-guarded-fallbacks"
+    },
+    {
+      "owner": "@use-crux/core",
+      "sourceImporter": "src/observability/channel.ts",
+      "stagedImporter": "dist/observability/channel.js",
+      "specifier": "node:diagnostics_channel",
+      "kind": "require-call",
+      "smoke": "core-guarded-fallbacks"
+    },
+    {
+      "owner": "@use-crux/core",
+      "sourceImporter": "src/observability/channel.ts",
+      "stagedImporter": "dist/observability/channel.js",
+      "specifier": "node:diagnostics_channel",
+      "kind": "dynamic-import",
+      "smoke": "core-guarded-fallbacks"
+    }
+  ],
+  "smokes": {
+    "core-guarded-fallbacks": "scripts/fixtures/portability/core-guarded-fallbacks.ts"
+  },
+  "packages": [
+    {
+      "name": "@use-crux/core",
+      "manifest": "packages/core/package.json",
+      "entrypoints": {
+        ".": "portable-web",
+        "./quality": "node-only",
+        "./quality/schemas": "portable-web",
+        "./quality/internal/runner": "node-only",
+        "./internal/async-scope": "portable-web",
+        "./internal/defer-host": "portable-web",
+        "./internal/defer-lifecycle": "portable-web",
+        "./defer/node": "node-only",
+        "./defer/serverless": "portable-web",
+        "./project-index": "portable-web",
+        "./project-index/runtime": "portable-web",
+        "./project-index/serializers": "portable-web",
+        "./lint": "portable-web",
+        "./runtime-bridge": "portable-web",
+        "./runtime": "portable-web",
+        "./setup": "node-only",
+        "./runtime/testing": "node-only",
+        "./runtime/next": "node-only",
+        "./observability": "portable-web",
+        "./observability/node": "node-only",
+        "./observability/workers": "portable-web",
+        "./embedding": "portable-web",
+        "./retrieval": "portable-web",
+        "./citations": "portable-web",
+        "./indexing": "portable-web",
+        "./cache": "portable-web",
+        "./cost": "portable-web",
+        "./flow": "portable-web",
+        "./memory": "portable-web",
+        "./compaction": "portable-web",
+        "./scoring": "portable-web",
+        "./transcription": "portable-web",
+        "./transcription/node": "node-only",
+        "./speech": "portable-web",
+        "./agent": "portable-web",
+        "./storage": "portable-web",
+        "./storage/testing/vitest": "node-only",
+        "./plan": "portable-web",
+        "./tasks": "portable-web",
+        "./adapter": "portable-web",
+        "./adapter/testing": "portable-web",
+        "./adapter/testing/vitest": "node-only",
+        "./adapter/tool": "portable-web",
+        "./skill": "portable-web",
+        "./routing": "portable-web",
+        "./tool-middleware": "portable-web",
+        "./tools": "portable-web",
+        "./workspace": "portable-web",
+        "./safety": "portable-web",
+        "./skill/node": "node-only"
+      }
+    },
+    {
+      "name": "@use-crux/ai",
+      "manifest": "packages/ai/package.json",
+      "entrypoints": {
+        ".": "portable-web",
+        "./agent": "portable-web",
+        "./stream": "portable-web",
+        "./transcription/node": "node-only"
+      }
+    },
+    {
+      "name": "@use-crux/anthropic",
+      "manifest": "packages/anthropic/package.json",
+      "entrypoints": { ".": "node-only" }
+    },
+    {
+      "name": "@use-crux/mcp",
+      "manifest": "packages/mcp/package.json",
+      "entrypoints": {
+        ".": "portable-web",
+        "./testing/vitest": "node-only"
+      }
+    },
+    {
+      "name": "@use-crux/openai",
+      "manifest": "packages/openai/package.json",
+      "entrypoints": { ".": "node-only" }
+    },
+    {
+      "name": "@use-crux/google",
+      "manifest": "packages/google/package.json",
+      "entrypoints": { ".": "node-only" }
+    },
+    {
+      "name": "@use-crux/convex",
+      "manifest": "packages/convex/package.json",
+      "externals": ["@ai-sdk/provider", "convex", "convex/*"],
+      "entrypoints": {
+        ".": "convex-server",
+        "./swarm": "convex-server",
+        "./agent": "convex-server",
+        "./context": "convex-server",
+        "./memory": "convex-server",
+        "./retrieval": "convex-server",
+        "./react": "portable-web",
+        "./skill": "convex-server",
+        "./tools": "convex-server",
+        "./runtime": "convex-server",
+        "./runtime/node": "node-only",
+        "./workspace": "convex-server",
+        "./bridge": "convex-server",
+        "./observability": "convex-server",
+        "./server": "convex-server",
+        "./convex.config": "compiler-local",
+        "./_generated/component.js": "compiler-local",
+        "./skill/node": "node-only"
+      }
+    },
+    {
+      "name": "@use-crux/next",
+      "manifest": "packages/next/package.json",
+      "externals": ["next", "next/*"],
+      "entrypoints": { ".": "next-server" }
+    },
+    {
+      "name": "@use-crux/otel",
+      "manifest": "packages/otel/package.json",
+      "entrypoints": { ".": "portable-web" }
+    },
+    {
+      "name": "@use-crux/react",
+      "manifest": "packages/react/package.json",
+      "entrypoints": {
+        ".": "portable-web",
+        "./server": "portable-web"
+      }
+    },
+    {
+      "name": "@use-crux/upstash",
+      "manifest": "packages/upstash/package.json",
+      "entrypoints": {
+        ".": "portable-web",
+        "./runtime": "portable-web"
+      }
+    },
+    {
+      "name": "@use-crux/ingest",
+      "manifest": "packages/ingest/package.json",
+      "entrypoints": {
+        ".": "node-only",
+        "./files": "node-only",
+        "./urls": "node-only"
+      }
+    },
+    {
+      "name": "@use-crux/indexer",
+      "manifest": "packages/indexer/package.json",
+      "entrypoints": {
+        ".": "compiler-local",
+        "./extensions": "compiler-local",
+        "./host": "compiler-local",
+        "./host/static-index": "compiler-local",
+        "./host/semantic": "compiler-local",
+        "./host/runtime": "compiler-local",
+        "./host/static-compat": "compiler-local",
+        "./testing": "compiler-local",
+        "./contracts/worker-events": "compiler-local",
+        "./contracts/static-index": "compiler-local",
+        "./contracts/static-syntax": "compiler-local",
+        "./contracts/semantic": "compiler-local",
+        "./contracts/parity": "compiler-local",
+        "./source-resolver": "compiler-local"
+      }
+    },
+    {
+      "name": "@use-crux/postgres",
+      "manifest": "packages/postgres/package.json",
+      "entrypoints": { "./runtime": "node-only" }
+    },
+    {
+      "name": "@use-crux/local",
+      "manifest": "packages/local/npm/local/package.json",
+      "stage": "local",
+      "entrypoints": { "bin:crux": "compiler-local" }
+    }
+  ]
+}

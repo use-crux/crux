@@ -1,21 +1,17 @@
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 
 import type { McpTransportConfig } from "../index";
+import { createOfficialStdioTransport } from "#official-stdio";
 
 /** Build one fresh official-client transport for a single invocation. */
-export function createOfficialClientTransport(
+export async function createOfficialClientTransport(
   config: McpTransportConfig,
-): Transport {
+): Promise<Transport> {
   switch (config.type) {
-    case "stdio":
-      return new StdioClientTransport({
-        command: config.command,
-        ...(config.args ? { args: [...config.args] } : {}),
-        ...(config.cwd !== undefined ? { cwd: config.cwd } : {}),
-        ...(config.env ? { env: { ...config.env } } : {}),
-      });
+    case "stdio": {
+      return createOfficialStdioTransport(config);
+    }
     case "streamable-http":
       return new StreamableHTTPClientTransport(new URL(config.url), {
         requestInit: {

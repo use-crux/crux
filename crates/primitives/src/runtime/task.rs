@@ -71,7 +71,7 @@ pub(crate) fn runtime_task_facts(
             id,
             kind: "task",
             name: target_name,
-            file: context.file,
+            file: context.fingerprint_file,
             source: parts.source,
             snippet: parts.snippet,
             metadata,

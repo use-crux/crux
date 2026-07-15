@@ -24,6 +24,12 @@ pub struct StaticIndexPatchFacts {
     pub project: Option<StaticIndexProjectIdentity>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub definitions: Vec<StaticIndexDefinition>,
+    /// Exact extractor declarations that contributed to each definition.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub definition_extractors: BTreeMap<String, Vec<StaticIndexFactExtractorProvenance>>,
+    /// Exact extractor declarations keyed by stable emitted fact identity.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub fact_extractors: BTreeMap<String, Vec<StaticIndexFactExtractorProvenance>>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub relation_refs: Vec<StaticIndexRelationRef>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -47,6 +53,8 @@ impl StaticIndexPatchFacts {
     pub fn canonicalize(&mut self) {
         self.definitions
             .sort_by(|left, right| left.id.cmp(&right.id));
+        canonicalize_extractor_map(&mut self.definition_extractors);
+        canonicalize_extractor_map(&mut self.fact_extractors);
         self.relation_refs.sort_by(|left, right| {
             left.owner_definition_id
                 .cmp(&right.owner_definition_id)
@@ -75,6 +83,57 @@ impl StaticIndexPatchFacts {
             }
         }
     }
+}
+
+fn canonicalize_extractor_map(map: &mut BTreeMap<String, Vec<StaticIndexFactExtractorProvenance>>) {
+    map.retain(|_, extractors| {
+        extractors.sort_by(|left, right| {
+            left.extension
+                .as_ref()
+                .map(|extension| extension.name.as_str())
+                .unwrap_or("")
+                .cmp(
+                    right
+                        .extension
+                        .as_ref()
+                        .map(|extension| extension.name.as_str())
+                        .unwrap_or(""),
+                )
+                .then(
+                    left.extension
+                        .as_ref()
+                        .map(|extension| extension.version.as_str())
+                        .unwrap_or("")
+                        .cmp(
+                            right
+                                .extension
+                                .as_ref()
+                                .map(|extension| extension.version.as_str())
+                                .unwrap_or(""),
+                        ),
+                )
+                .then(left.name.cmp(&right.name))
+        });
+        extractors.dedup();
+        !extractors.is_empty()
+    });
+}
+
+/// One extractor declaration that actually contributed to a durable fact.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StaticIndexFactExtractorProvenance {
+    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub extension: Option<StaticIndexFactExtractorExtension>,
+}
+
+/// Exact resolved extension identity for a third-party extractor.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StaticIndexFactExtractorExtension {
+    pub name: String,
+    pub version: String,
 }
 
 /// Project-level identity and configuration flags used by native finalization.
@@ -201,6 +260,9 @@ pub struct StaticIndexRelationRef {
     pub source: Option<StaticIndexSourceLocation>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<Value>,
+    /// Exact contributors carried until relation finalization assigns the durable id.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub extractors: Vec<StaticIndexFactExtractorProvenance>,
 }
 
 /// Canonical Project Index relation fact.

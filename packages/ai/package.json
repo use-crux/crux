@@ -15,9 +15,6 @@
   "publishConfig": {
     "access": "public"
   },
-  "engines": {
-    "node": ">=22.0.0"
-  },
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
@@ -34,6 +31,10 @@
     "./stream": {
       "types": "./src/stream/index.ts",
       "import": "./src/stream/index.ts"
+    },
+    "./transcription/node": {
+      "types": "./src/transcription/node.ts",
+      "import": "./src/transcription/node.ts"
     }
   },
   "scripts": {
@@ -47,7 +48,7 @@
     "zod": "^4.4.3"
   },
   "peerDependencies": {
-    "@use-crux/mcp": "workspace:^",
+    "@use-crux/mcp": "workspace:^0.5.0 || ^0.6.0",
     "ai": "^6.0.0",
     "react": "^18.0.0 || ^19.0.0"
   },
@@ -64,6 +65,7 @@
     "@types/node": "^24.12.4",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
+    "esbuild": "^0.28.0",
     "jsdom": "^29.1.1",
     "vitest": "^4.1.7"
   },

@@ -4,6 +4,7 @@ import type {
   CruxSpanId,
   CruxTraceId,
 } from "./contract";
+import type { CruxDeploymentIdentity } from "../project-index";
 import { mergeCruxCorrelators, type CruxCorrelators } from "./correlators";
 import { createAsyncScopeFacet } from "../async-scope";
 import {
@@ -18,6 +19,8 @@ export interface ObservabilityContext {
   startedAtMs?: number;
   spanStack: readonly CruxSpanId[];
   correlators?: CruxCorrelators;
+  /** Deployment identity captured for the lifetime of this logical run. */
+  deployment?: CruxDeploymentIdentity;
 }
 
 export interface CapturedObservabilityContext extends ObservabilityContext {

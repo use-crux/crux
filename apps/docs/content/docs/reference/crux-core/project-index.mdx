@@ -12,6 +12,58 @@ The Project Index describes what exists in a local Crux project. It is separate 
 
 `@use-crux/core` owns the TypeScript contract. The Go devtools backend mirrors the contract manually, builds the service-owned read model, and exposes it to web devtools and the TUI.
 
+## Deployment manifest contract
+
+`@use-crux/core/project-index` exports the portable
+`CruxDeploymentIdentity`, `ProjectIndexDeploymentManifestV1`, and related Zod
+schemas. A deployment identity keeps three concerns separate: a stable,
+explicit `projectId`; an optional content-addressed `manifestId`; and an
+optional opaque `deploymentId` supplied by application or host code. Core does
+not read environment variables to populate them.
+
+The manifest content is a privacy-safe projection of definitions, source refs,
+and relations. It may contain canonical repo-relative source locations and
+fingerprints, but never prompt or source bodies, descriptions, arbitrary
+metadata, absolute checkout paths, timestamps, or credentials. Its
+`pim_<sha256>` identity covers only normalized `content`; project identity and
+compiler provenance stay outside the digest. Manifest projection and hashing
+remain build-time Indexer concerns and are not reachable from this portable
+runtime subpath.
+
+Build a manifest without starting `crux dev`, then import its exact immutable
+content into the local historical Catalog store:
+
+```bash
+crux manifest --project-id checkout --out .crux/project-index.manifest.json
+crux catalog import .crux/project-index.manifest.json
+```
+
+`crux manifest` uses the same one-shot compiler as `crux check`. It requires an
+explicit logical project ID, waits for semantic indexing, and atomically
+replaces the output only after the Go boundary has recomputed and verified the
+TypeScript compiler's manifest ID. `catalog import` repeats that verification
+and stores the artifact by `(projectId, manifestId)`; importing the same bytes
+again is idempotent, while different content for an existing tuple is rejected.
+
+Inspect the current Catalog through the running local server:
+
+```bash
+crux catalog list
+crux catalog show agent:writer
+crux catalog status
+crux catalog explain agent:writer
+```
+
+The stable explanation projection reports definition evidence by AST,
+semantic, runtime, or Quality phase; producer/fidelity/source provenance;
+the canonical first-party or resolved extension extractors that actually
+contributed when that attribution is known;
+resolved and compiler-reported unresolved relations; diagnostics; lints; and
+known cache/backend/fallback state. It strips opaque definition/relation
+metadata and normalizes source locations to repository-relative paths. The v1
+command does not select historical deployments; exact historical resolution
+remains part of run detail and never substitutes the current Catalog.
+
 ## Snapshot Shape
 
 ```ts

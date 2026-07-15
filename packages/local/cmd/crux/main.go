@@ -36,9 +36,11 @@ func main() {
 
 func newRootCommand(f *cli.Factory) *cobra.Command {
 	rootCmd := &cobra.Command{
-		Use:     "crux",
-		Short:   " ",
-		Version: version,
+		Use:           "crux",
+		Short:         " ",
+		Version:       version,
+		SilenceErrors: true,
+		SilenceUsage:  true,
 		// Keep cobra's built-in `completion [bash|zsh|fish|powershell]` command
 		// visible so users can discover and install shell completions
 		// (clig.dev R7: discoverability). Cobra registers it lazily during
@@ -63,6 +65,9 @@ func newRootCommand(f *cli.Factory) *cobra.Command {
 	rootCmd.AddCommand(commands.NewTracesCmd(f))
 	rootCmd.AddCommand(commands.NewIndexCmd(f))
 	rootCmd.AddCommand(commands.NewLintCmd(f))
+	rootCmd.AddCommand(commands.NewCheckCmd(f))
+	rootCmd.AddCommand(commands.NewManifestCmd(f))
+	rootCmd.AddCommand(commands.NewCatalogCmd(f))
 	rootCmd.AddCommand(commands.NewStatsCmd(f))
 	rootCmd.AddCommand(commands.NewCostCmd(f))
 	rootCmd.AddCommand(commands.NewQualityCmd(f))
@@ -120,6 +125,9 @@ func printRootUsage(cmd *cobra.Command, io *output.IO) error {
 	w("cost", "Show tracked model cost")
 	w("index", "List registered prompts, contexts, and tools")
 	w("lint", "Check authored Crux project health")
+	w("check", "Compile and gate authored Crux project health")
+	w("manifest", "Build a deployment Project Index manifest")
+	w("catalog", "Inspect and import Project Index catalog data")
 	w("inspect", "Show token breakdown for a prompt")
 	w("runtime", "Generate Runtime Engine artifacts")
 	fmt.Fprintln(out)

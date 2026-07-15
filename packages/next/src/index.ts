@@ -26,9 +26,19 @@ import {
   type DeferAfterPort,
 } from "@use-crux/core/defer/serverless";
 import type { DeferLifetimeCapability } from "@use-crux/core/internal/defer-host";
+import type { ObservabilityFlushResult } from "@use-crux/core/observability";
 import { resolveNextAfterPort } from "./after";
+import { reportNextObservabilityDrain } from "./observability-drain";
 
 export type { DeferAfterPort };
+
+/** Options for the opinionated Next lifecycle boundary created by {@link withCrux}. */
+export interface NextCruxOptions<T> extends NextDeferWrapOptions<T> {
+  /** Maximum time allowed for the post-response observability drain. */
+  readonly flushTimeoutMs?: number;
+  /** Receive the structured post-response drain result. */
+  readonly onDrain?: (result: ObservabilityFlushResult) => void;
+}
 
 /** Options for {@link withNextDefer}. */
 export type NextDeferWrapOptions<T> = Omit<AfterDeferWrapOptions<T>, "after"> & {
@@ -79,4 +89,53 @@ export function withNextDefer<TArgs extends unknown[], TResult>(
     ...rest,
     after: resolveNextAfterPort(after),
   });
+}
+
+/**
+ * Wrap a Next handler with response-finished deferred work and observability.
+ *
+ * The same resolved `after()` port owns both tasks. The response or thrown
+ * framework control-flow value settles before the bounded telemetry drain,
+ * and drain/reporter failures cannot replace the handler outcome.
+ *
+ * @param handler - Next route or server handler to invoke.
+ * @param options - Defer classification and observability drain controls.
+ * @returns A handler preserving the original argument tuple and awaited result.
+ *
+ * @example
+ * ```ts
+ * import { defer } from '@use-crux/core'
+ * import { withCrux } from '@use-crux/next'
+ *
+ * export const POST = withCrux(async () => {
+ *   defer(() => flushAnalytics())
+ *   return Response.json({ ok: true })
+ * })
+ * ```
+ */
+export function withCrux<TArgs extends unknown[], TResult>(
+  handler: (...args: TArgs) => TResult | PromiseLike<TResult>,
+  options: NextCruxOptions<Awaited<TResult>> = {},
+): (...args: TArgs) => Promise<Awaited<TResult>> {
+  const {
+    after: afterOverride,
+    flushTimeoutMs,
+    onDrain,
+    ...deferOptions
+  } = options;
+  const after = resolveNextAfterPort(afterOverride);
+  const lifecycleAfter: DeferAfterPort = (task) => {
+    after(async () => {
+      try {
+        await task();
+      } finally {
+        await reportNextObservabilityDrain({
+          ...(flushTimeoutMs === undefined ? {} : { flushTimeoutMs }),
+          ...(onDrain ? { onDrain } : {}),
+        });
+      }
+    });
+  };
+
+  return withNextDefer(handler, { ...deferOptions, after: lifecycleAfter });
 }

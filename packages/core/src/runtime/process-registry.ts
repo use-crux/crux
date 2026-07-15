@@ -1,81 +1,83 @@
 import type {
   CruxObservabilityTransport,
   ObservabilityDeliveryOptions,
-} from '../observability'
-import type { CruxCorrelators } from '../observability/correlators'
-import type { RuntimeConfigInstallation } from './config-transaction'
-import type { CruxHooks } from './runtime'
+} from "../observability";
+import type { CruxCorrelators } from "../observability/correlators";
+import type { CruxDeploymentIdentity } from "../project-index";
+import type { RuntimeConfigInstallation } from "./config-transaction";
+import type { CruxHooks } from "./runtime";
 
-const PROCESS_REGISTRY_VERSION = 1
-const PROCESS_REGISTRY_KEY = Symbol.for('@use-crux/core/process-registry/v1')
+const PROCESS_REGISTRY_VERSION = 1;
+const PROCESS_REGISTRY_KEY = Symbol.for("@use-crux/core/process-registry/v1");
 
-export type ObservabilityRegistryListener = () => void
+export type ObservabilityRegistryListener = () => void;
 
 interface RegistryHooksLayer {
-  readonly keys: readonly (keyof CruxHooks)[]
-  readonly previousHooks: Readonly<CruxHooks>
+  readonly keys: readonly (keyof CruxHooks)[];
+  readonly previousHooks: Readonly<CruxHooks>;
 }
 
 const CRUX_HOOK_KEYS = new Set<keyof CruxHooks>([
-  'middleware',
-  'resolveHook',
-  'executionHook',
-  'streamProgressHook',
-  'streamStartHook',
-  'observabilityTransport',
-  'observabilityDelivery',
-  'observabilityCapture',
-  'spanActivationHook',
-  'telemetryFlushHook',
-  'telemetryResumeAttributesHook',
-  'records',
-  'runtimeEngine',
-  'globalConstraints',
-  'globalGuardrails',
-  'semanticCacheInstalled',
-])
+  "middleware",
+  "resolveHook",
+  "executionHook",
+  "streamProgressHook",
+  "streamStartHook",
+  "observabilityTransport",
+  "observabilityDelivery",
+  "observabilityCapture",
+  "spanActivationHook",
+  "telemetryFlushHook",
+  "telemetryResumeAttributesHook",
+  "records",
+  "runtimeEngine",
+  "globalConstraints",
+  "globalGuardrails",
+  "semanticCacheInstalled",
+]);
 
 export interface CruxProcessRegistry {
-  readonly packageName: '@use-crux/core'
-  readonly registryVersion: typeof PROCESS_REGISTRY_VERSION
+  readonly packageName: "@use-crux/core";
+  readonly registryVersion: typeof PROCESS_REGISTRY_VERSION;
   readonly runtime: {
-    currentHooks: CruxHooks
-    nextHooksLayerId: number
-    hooksLayers: Map<number, RegistryHooksLayer>
-    activeInstallation: RuntimeConfigInstallation | undefined
-  }
+    currentHooks: CruxHooks;
+    nextHooksLayerId: number;
+    hooksLayers: Map<number, RegistryHooksLayer>;
+    activeInstallation: RuntimeConfigInstallation | undefined;
+  };
   readonly observability: {
-    transport: CruxObservabilityTransport | undefined
-    delivery: ObservabilityDeliveryOptions | undefined
-    defaultCorrelators: CruxCorrelators | undefined
-    nextConfigurationToken: number
-    activeConfigurationToken: number
-    configurationParents: Map<number, number>
-    configurationGeneration: number
-    resetGeneration: number
-    listeners: Set<WeakRef<ObservabilityRegistryListener>>
-  }
+    transport: CruxObservabilityTransport | undefined;
+    delivery: ObservabilityDeliveryOptions | undefined;
+    defaultCorrelators: CruxCorrelators | undefined;
+    deploymentIdentity: CruxDeploymentIdentity | undefined;
+    nextConfigurationToken: number;
+    activeConfigurationToken: number;
+    configurationParents: Map<number, number>;
+    configurationGeneration: number;
+    resetGeneration: number;
+    listeners: Set<WeakRef<ObservabilityRegistryListener>>;
+  };
 }
 
 export function getCruxProcessRegistry(): CruxProcessRegistry {
-  const runtime = globalThis as typeof globalThis & Record<symbol, unknown>
-  const existing = runtime[PROCESS_REGISTRY_KEY]
-  if (isCruxProcessRegistry(existing)) return existing
+  const runtime = globalThis as typeof globalThis & Record<symbol, unknown>;
+  const existing = runtime[PROCESS_REGISTRY_KEY];
+  if (isCruxProcessRegistry(existing)) return existing;
 
   if (existing !== undefined) {
     throw new Error(
-      'Incompatible @use-crux/core process registry found at the v1 global symbol',
-    )
+      "Incompatible @use-crux/core process registry found at the v1 global symbol",
+    );
   }
 
-  const registry = createCruxProcessRegistry()
-  runtime[PROCESS_REGISTRY_KEY] = registry
-  return registry
+  const registry = createCruxProcessRegistry();
+  runtime[PROCESS_REGISTRY_KEY] = registry;
+  return registry;
 }
 
 function createCruxProcessRegistry(): CruxProcessRegistry {
   return {
-    packageName: '@use-crux/core',
+    packageName: "@use-crux/core",
     registryVersion: PROCESS_REGISTRY_VERSION,
     runtime: {
       currentHooks: {},
@@ -87,6 +89,7 @@ function createCruxProcessRegistry(): CruxProcessRegistry {
       transport: undefined,
       delivery: undefined,
       defaultCorrelators: undefined,
+      deploymentIdentity: undefined,
       nextConfigurationToken: 0,
       activeConfigurationToken: 0,
       configurationParents: new Map(),
@@ -94,27 +97,27 @@ function createCruxProcessRegistry(): CruxProcessRegistry {
       resetGeneration: 0,
       listeners: new Set(),
     },
-  }
+  };
 }
 
 function isCruxProcessRegistry(value: unknown): value is CruxProcessRegistry {
-  if (typeof value !== 'object' || value === null) return false
-  const candidate = value as Partial<CruxProcessRegistry>
-  const runtime = candidate.runtime as Partial<CruxProcessRegistry['runtime']>
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as Partial<CruxProcessRegistry>;
+  const runtime = candidate.runtime as Partial<CruxProcessRegistry["runtime"]>;
   const observability = candidate.observability as Partial<
-    CruxProcessRegistry['observability']
-  >
+    CruxProcessRegistry["observability"]
+  >;
   return (
-    candidate.packageName === '@use-crux/core' &&
+    candidate.packageName === "@use-crux/core" &&
     candidate.registryVersion === PROCESS_REGISTRY_VERSION &&
-    typeof candidate.runtime === 'object' &&
+    typeof candidate.runtime === "object" &&
     candidate.runtime !== null &&
-    typeof runtime.currentHooks === 'object' &&
+    typeof runtime.currentHooks === "object" &&
     runtime.currentHooks !== null &&
     isRegistryNumber(runtime.nextHooksLayerId) &&
     runtime.nextHooksLayerId > 0 &&
     isRegistryHooksLayers(runtime.hooksLayers, runtime.nextHooksLayerId) &&
-    typeof candidate.observability === 'object' &&
+    typeof candidate.observability === "object" &&
     candidate.observability !== null &&
     isRegistryNumber(observability.nextConfigurationToken) &&
     isRegistryNumber(observability.activeConfigurationToken) &&
@@ -127,14 +130,14 @@ function isCruxProcessRegistry(value: unknown): value is CruxProcessRegistry {
     isRegistryNumber(observability.resetGeneration) &&
     observability.listeners instanceof Set &&
     [...observability.listeners].every(isObservabilityListenerReference)
-  )
+  );
 }
 
 function isRegistryHooksLayers(
   value: unknown,
   nextLayerId: number,
 ): value is Map<number, RegistryHooksLayer> {
-  if (!(value instanceof Map)) return false
+  if (!(value instanceof Map)) return false;
   for (const [id, layer] of value) {
     if (
       !isRegistryNumber(id) ||
@@ -142,35 +145,35 @@ function isRegistryHooksLayers(
       id >= nextLayerId ||
       !isRegistryHooksLayer(layer)
     ) {
-      return false
+      return false;
     }
   }
-  return true
+  return true;
 }
 
 function isRegistryHooksLayer(value: unknown): value is RegistryHooksLayer {
-  if (typeof value !== 'object' || value === null) return false
-  const layer = value as { keys?: unknown; previousHooks?: unknown }
+  if (typeof value !== "object" || value === null) return false;
+  const layer = value as { keys?: unknown; previousHooks?: unknown };
   return (
     Array.isArray(layer.keys) &&
     layer.keys.every(isCruxHookKey) &&
     isCruxHooksShape(layer.previousHooks)
-  )
+  );
 }
 
 function isCruxHooksShape(value: unknown): value is Readonly<CruxHooks> {
   return (
-    typeof value === 'object' &&
+    typeof value === "object" &&
     value !== null &&
     !Array.isArray(value) &&
     Object.keys(value).every(isCruxHookKey)
-  )
+  );
 }
 
 function isCruxHookKey(value: unknown): value is keyof CruxHooks {
   return (
-    typeof value === 'string' && CRUX_HOOK_KEYS.has(value as keyof CruxHooks)
-  )
+    typeof value === "string" && CRUX_HOOK_KEYS.has(value as keyof CruxHooks)
+  );
 }
 
 function isConfigurationParents(
@@ -178,7 +181,7 @@ function isConfigurationParents(
   nextToken: number,
   activeToken: number,
 ): value is Map<number, number> {
-  if (!(value instanceof Map)) return false
+  if (!(value instanceof Map)) return false;
   for (const [token, parentToken] of value) {
     if (
       !isRegistryNumber(token) ||
@@ -187,64 +190,64 @@ function isConfigurationParents(
       !isRegistryNumber(parentToken) ||
       parentToken > nextToken
     ) {
-      return false
+      return false;
     }
   }
 
-  const parents = value as Map<number, number>
-  if (activeToken !== 0 && !parents.has(activeToken)) return false
+  const parents = value as Map<number, number>;
+  if (activeToken !== 0 && !parents.has(activeToken)) return false;
   for (const parentToken of parents.values()) {
-    if (parentToken !== 0 && !parents.has(parentToken)) return false
+    if (parentToken !== 0 && !parents.has(parentToken)) return false;
   }
   for (const token of parents.keys()) {
-    const visited = new Set<number>()
-    let currentToken = token
+    const visited = new Set<number>();
+    let currentToken = token;
     while (currentToken !== 0) {
-      if (visited.has(currentToken)) return false
-      visited.add(currentToken)
-      const parentToken = parents.get(currentToken)
-      if (parentToken === undefined) return false
-      currentToken = parentToken
+      if (visited.has(currentToken)) return false;
+      visited.add(currentToken);
+      const parentToken = parents.get(currentToken);
+      if (parentToken === undefined) return false;
+      currentToken = parentToken;
     }
   }
-  return true
+  return true;
 }
 
 function isObservabilityListenerReference(
   value: unknown,
 ): value is WeakRef<ObservabilityRegistryListener> {
   return (
-    typeof value === 'object' &&
+    typeof value === "object" &&
     value !== null &&
-    typeof (value as { deref?: unknown }).deref === 'function'
-  )
+    typeof (value as { deref?: unknown }).deref === "function"
+  );
 }
 
 function isRegistryNumber(value: unknown): value is number {
-  return Number.isSafeInteger(value) && (value as number) >= 0
+  return Number.isSafeInteger(value) && (value as number) >= 0;
 }
 
 export function addObservabilityRegistryListener(
-  registry: CruxProcessRegistry['observability'],
+  registry: CruxProcessRegistry["observability"],
   listener: ObservabilityRegistryListener,
 ): void {
-  registry.listeners.add(new WeakRef(listener))
+  registry.listeners.add(new WeakRef(listener));
 }
 
 export function notifyObservabilityRegistryListeners(
-  registry: CruxProcessRegistry['observability'],
+  registry: CruxProcessRegistry["observability"],
 ): void {
   for (const reference of registry.listeners) {
     if (!isObservabilityListenerReference(reference)) {
-      registry.listeners.delete(reference)
-      continue
+      registry.listeners.delete(reference);
+      continue;
     }
     try {
-      const listener = reference.deref()
-      if (listener) listener()
-      else registry.listeners.delete(reference)
+      const listener = reference.deref();
+      if (listener) listener();
+      else registry.listeners.delete(reference);
     } catch {
-      registry.listeners.delete(reference)
+      registry.listeners.delete(reference);
     }
   }
 }

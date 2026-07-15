@@ -19,22 +19,12 @@ export {
   facts,
   INDEXER_EXTENSION_API_VERSION,
   isIndexerExtensionAllowed,
-  loadIndexerExtensionReferences,
   newPattern,
   none,
   PROJECT_INDEX_SCHEMA_VERSION,
   projectDefinition,
-  resolveIndexerExtensionReferences,
-  validateIndexerExtensionManifest,
 } from './indexer/extensions'
-export type {
-  InstalledIndexerExtension,
-  LoadIndexerExtensionReferencesInput,
-  ResolvedIndexerExtension,
-  ResolveIndexerExtensionReferencesInput,
-  ResolveIndexerExtensionReferencesResult,
-} from './indexer/extensions'
-export type { IndexerExtensionManifestValidation } from './indexer/extensions/loading/manifest'
+import type { IndexDiagnostic } from '@use-crux/core/project-index'
 import type {
   IndexExtractor as InternalIndexExtractor,
   DefinitionBuilder,
@@ -48,6 +38,13 @@ import type {
   ConfigCallReader,
   ConfigReader,
   ConfiguredObjectReader,
+  ExtensionReference,
+  IndexerExtensionConfig,
+} from './indexer/extensions'
+import {
+  loadIndexerExtensionReferences as loadInternalIndexerExtensionReferences,
+  resolveIndexerExtensionReferences as resolveInternalIndexerExtensionReferences,
+  validateIndexerExtensionManifest as validateInternalIndexerExtensionManifest,
 } from './indexer/extensions'
 
 export type {
@@ -70,26 +67,13 @@ export type {
   IndexDependency,
   IndexerCompatibility,
   IndexerExtensionConfig,
-  IndexRule,
-  IndexRuleContext,
   RelationSpec,
   ReferenceBuilder,
-  SemanticReadModel,
-  SemanticSymbol,
-  SemanticType,
   SourceView,
   SourceReference,
   SourceRefBuilder,
   UnresolvedReference,
 } from './indexer/extensions'
-
-export type {
-  IndexFactKind,
-  IndexRuleBudget,
-  IndexRuleFidelity,
-  IndexRuleManifest,
-  IndexRulePhase,
-} from '@use-crux/core/project-index'
 
 /**
  * Stable extractor context exposed by the experimental public authoring barrel.
@@ -146,13 +130,121 @@ export interface IndexExtractor extends Omit<InternalIndexExtractor, 'extract'> 
  * Manifests are data, not registration side effects. Importing a manifest should not mutate global
  * compiler state, start workers, read project files, or patch runtime behavior.
  *
- * V1 public authoring is intentionally limited to extractors, relation specs, and rule declarations.
- * Compiler profiles, parser construction, custom source discovery, raw AST traversal, emitters,
- * query scheduling, and dynamic package loading remain internal until Crux is ready to support a
- * stable external extension ecosystem.
+ * V1 public authoring is intentionally limited to extractors and relation declarations. Compiler
+ * profiles, parser construction, custom source discovery, raw AST traversal, rules, resolvers,
+ * emitters, query scheduling, and side-effect loading remain internal until a separate public RFC
+ * graduates them.
  */
 export interface IndexerExtension
-  extends Pick<InternalIndexerExtension, 'name' | 'version' | 'crux' | 'relations' | 'rules'> {
+  extends Pick<InternalIndexerExtension, 'name' | 'version' | 'crux' | 'relations'> {
   /** Extractors contributed by this extension. */
   readonly extractors?: readonly IndexExtractor[]
+}
+
+/** Extension manifest obtained by trusted loader code before public validation. */
+export interface InstalledIndexerExtension {
+  /** Configured package specifier. */
+  readonly package: string
+  /** Selected package export. Defaults to `default`. */
+  readonly export?: string
+  /** Installed package version, when package metadata supplied it. */
+  readonly packageVersion?: string
+  /** Declarative public extension manifest. */
+  readonly extension: IndexerExtension
+}
+
+/** Validated extension selected by one configured package reference. */
+export interface ResolvedIndexerExtension {
+  /** Normalized configuration reference. */
+  readonly reference: ExtensionReference
+  /** Installed package version, when available. */
+  readonly packageVersion?: string
+  /** Validated declarative public extension manifest. */
+  readonly extension: IndexerExtension
+}
+
+/** Input for pure extension-reference resolution. */
+export interface ResolveIndexerExtensionReferencesInput {
+  readonly config?: IndexerExtensionConfig
+  readonly installed?: readonly InstalledIndexerExtension[]
+}
+
+/** Result of public extension-reference resolution. */
+export interface ResolveIndexerExtensionReferencesResult {
+  readonly extensions: readonly ResolvedIndexerExtension[]
+  readonly diagnostics: readonly IndexDiagnostic[]
+}
+
+/** Input for trusted package loading relative to a project root. */
+export interface LoadIndexerExtensionReferencesInput {
+  readonly root: string
+  readonly config?: IndexerExtensionConfig
+}
+
+/** Result of validating one public extension manifest. */
+export interface IndexerExtensionManifestValidation {
+  readonly valid: boolean
+  readonly errors: readonly string[]
+}
+
+const RESERVED_EXTENSION_SLOTS = ['static', 'resolvers', 'rules', 'emitters', 'queries'] as const
+
+/**
+ * Validates the experimental public manifest shape.
+ *
+ * Reserved compiler slots are rejected even when JavaScript callers bypass the TypeScript surface.
+ */
+export function validateIndexerExtensionManifest(
+  extension: IndexerExtension,
+): IndexerExtensionManifestValidation {
+  const reserved = reservedExtensionSlots(extension)
+  if (reserved.length > 0) {
+    return {
+      valid: false,
+      errors: [`Reserved compiler extension slots are not public: ${reserved.join(', ')}.`],
+    }
+  }
+  return validateInternalIndexerExtensionManifest(extension)
+}
+
+/** Resolves trusted, already-installed manifests through the public declarative boundary. */
+export function resolveIndexerExtensionReferences(
+  input: ResolveIndexerExtensionReferencesInput = {},
+): ResolveIndexerExtensionReferencesResult {
+  return enforcePublicExtensionResults(resolveInternalIndexerExtensionReferences(input))
+}
+
+/** Loads configured packages and admits only public declarative extension manifests. */
+export async function loadIndexerExtensionReferences(
+  input: LoadIndexerExtensionReferencesInput,
+): Promise<ResolveIndexerExtensionReferencesResult> {
+  return enforcePublicExtensionResults(await loadInternalIndexerExtensionReferences(input))
+}
+
+function enforcePublicExtensionResults(
+  result: ResolveIndexerExtensionReferencesResult,
+): ResolveIndexerExtensionReferencesResult {
+  const extensions: ResolvedIndexerExtension[] = []
+  const diagnostics = [...result.diagnostics]
+
+  for (const resolved of result.extensions) {
+    const validation = validateIndexerExtensionManifest(resolved.extension)
+    if (validation.valid) {
+      extensions.push(resolved)
+      continue
+    }
+    diagnostics.push({
+      id: `index.extension_invalid_manifest:${resolved.reference.package}#${resolved.reference.export ?? 'default'}`,
+      code: 'index.extension_invalid_manifest',
+      severity: 'error',
+      message: `Indexer extension ${resolved.extension.name} has an invalid public manifest: ${validation.errors.join(' ')}`,
+    })
+  }
+
+  return { extensions, diagnostics }
+}
+
+function reservedExtensionSlots(extension: IndexerExtension): readonly string[] {
+  const value = extension as unknown as Readonly<Record<string, unknown>>
+  return RESERVED_EXTENSION_SLOTS.filter((slot) => slot in value)
 }

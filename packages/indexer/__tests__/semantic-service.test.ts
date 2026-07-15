@@ -70,6 +70,7 @@ describe('semantic index service', () => {
       projectName: 'semantic-service',
     })
     expect(patch.status).toBe('ok')
+    expect(patch.semanticBackend).toBe('test-semantic')
     expect(patch.facts.definitions).toEqual(facts.definitions)
     expect(sessionCalls).toHaveLength(1)
     expect(sessionCalls[0]).toMatchObject({

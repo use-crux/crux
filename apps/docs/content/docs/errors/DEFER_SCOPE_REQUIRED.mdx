@@ -27,8 +27,8 @@ Wrap the handler with the matching host integration:
 // Node
 import { withNodeDefer } from '@use-crux/core/defer/node'
 
-// Next
-import { withNextDefer } from '@use-crux/next'
+// Next (defer + observability lifecycle)
+import { withCrux } from '@use-crux/next'
 
 // waitUntil hosts
 import { withWaitUntilDefer } from '@use-crux/core/defer/serverless'

@@ -17,6 +17,7 @@ type IndexPatchFacts = model.IndexPatchFacts
 type IndexPatchInvalidation = model.IndexPatchInvalidation
 type IndexSourceRefFact = model.IndexSourceRefFact
 type IndexFactProducer = model.IndexFactProducer
+type IndexFactExtractorProvenance = model.IndexFactExtractorProvenance
 type IndexFactProvenance = model.IndexFactProvenance
 type IndexFactEnvelope = model.IndexFactEnvelope
 type IndexFactTransaction = model.IndexFactTransaction

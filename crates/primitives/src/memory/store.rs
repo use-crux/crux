@@ -80,7 +80,7 @@ pub(crate) fn store_definition(
         ),
         kind: "memory.store",
         name: store.name.clone(),
-        file: context.file,
+        file: context.fingerprint_file,
         source: parts.source,
         snippet: parts.snippet,
         metadata,

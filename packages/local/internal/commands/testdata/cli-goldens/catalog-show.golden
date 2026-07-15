@@ -1,0 +1,18 @@
+◇ crux catalog show
+
+  ID: agent:writer
+  Kind: agent
+  Fidelity: resolved
+  Status: partial
+  Source: src/writer.ts:3
+
+  Source references
+    prompt  ref:prompt  src/brief.ts:2
+
+  Relations
+    → agent.uses_prompt  prompt:brief
+
+  Health
+    warn  agent.missing_policy  Missing policy
+
+  Runtime: 2 runs, latest run-latest

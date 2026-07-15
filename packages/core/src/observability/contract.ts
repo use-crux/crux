@@ -1,6 +1,9 @@
-import type { ProjectDefinitionKind } from "../project-index";
+import type {
+  CruxDeploymentIdentity,
+  ProjectDefinitionKind,
+} from "../project-index";
 
-export const CRUX_OBSERVABILITY_SCHEMA_VERSION = 2;
+export const CRUX_OBSERVABILITY_SCHEMA_VERSION = 3;
 
 export const CRUX_CONTENT_DEGRADED_EVENT = "content.degraded" as const;
 
@@ -1051,7 +1054,10 @@ export interface CruxErrorSummary {
 }
 
 /**
- * Base identity carried by every v2 observability graph record.
+ * Base identity carried by every newly written observability graph record.
+ *
+ * Persisted v2 records remain readable through the runtime schema, but writers
+ * always use the current version and copy deployment identity at run creation.
  * `segmentSeq` is monotonic only within `segmentId`; consumers must not treat
  * it as a distributed per-run order.
  */
@@ -1065,6 +1071,8 @@ interface CruxRecordBase {
   sessionId?: string;
   userId?: string;
   traceId?: CruxTraceId;
+  /** Immutable deployment identity captured when the logical run starts. */
+  deployment?: CruxDeploymentIdentity;
 }
 
 export interface CruxRunStartRecord extends CruxRecordBase {

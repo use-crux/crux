@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import {
   createInMemoryObservabilityTransport,
+  configureObservability,
   extractPropagationCarrier,
   injectPropagationCarrier,
   observe,
@@ -22,6 +23,112 @@ class Headers {
 }
 
 describe('Crux propagation carriers', () => {
+  afterEach(() => {
+    resetObservabilityRuntime()
+  })
+
+  it('keeps validated deployment identity in the owned Crux payload, never baggage', () => {
+    const headers = new Headers()
+    const deployment = {
+      projectId: 'checkout',
+      manifestId: `pim_${'b'.repeat(64)}`,
+      deploymentId: 'production-42',
+    }
+    const carrier = sanitizePropagationCarrier({
+      traceparent: '00-0123456789abcdef0123456789abcdef-0123456789abcdef-01',
+      baggage: 'tenant=untrusted',
+      crux: {
+        runId: 'run_0123456789abcdef01234567',
+        deployment,
+      },
+    })
+
+    injectPropagationCarrier(carrier, headers)
+
+    expect(extractPropagationCarrier(headers)?.crux.deployment).toEqual(
+      deployment,
+    )
+    expect(headers.values.get('baggage')).toBe('tenant=untrusted')
+    expect(headers.values.get('baggage')).not.toContain('checkout')
+    expect(() =>
+      sanitizePropagationCarrier({
+        ...carrier,
+        crux: { ...carrier.crux, deployment: { projectId: ' checkout ' } },
+      }),
+    ).toThrow()
+  })
+
+  it('resumes with the run-start deployment after process state changes', async () => {
+    const original = { projectId: 'checkout', deploymentId: 'production-42' }
+    configureObservability({ identity: original })
+    const carrier = observe
+      .openRun({ name: 'original', rootPrimitive: 'custom.operation' })
+      .suspend({ reason: 'worker-boundary' })
+
+    resetObservabilityRuntime()
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+    configureObservability({
+      identity: { projectId: 'checkout', deploymentId: 'production-43' },
+    })
+    observe.resumeRun(carrier, { reason: 'worker.wake' }).end()
+    await observe.flush()
+
+    expect(transport.records).not.toHaveLength(0)
+    expect(
+      transport.records.every(
+        (record) => record.deployment?.deploymentId === 'production-42',
+      ),
+    ).toBe(true)
+    resetObservabilityRuntime()
+  })
+
+  it('rejects a carrier that changes a deployment identity already known in-process', () => {
+    configureObservability({ identity: { projectId: 'checkout', deploymentId: 'a' } })
+    const run = observe.openRun({ name: 'known', rootPrimitive: 'custom.operation' })
+    const carrier = run.suspend({ reason: 'handoff' })
+
+    expect(() =>
+      observe.resumeRun(
+        {
+          ...carrier,
+          crux: {
+            ...carrier.crux,
+            deployment: { projectId: 'checkout', deploymentId: 'b' },
+          },
+        },
+        { reason: 'tampered' },
+      ),
+    ).toThrow(/deployment identity/i)
+    expect(() =>
+      observe.resumeRun(
+        { ...carrier, crux: { ...carrier.crux, deployment: undefined } },
+        { reason: 'stripped' },
+      ),
+    ).toThrow(/deployment identity/i)
+  })
+
+  it('rejects attaching deployment identity to a known deployment-unspecified run', () => {
+    const run = observe.openRun({
+      name: 'deployment-unspecified',
+      rootPrimitive: 'custom.operation',
+    })
+    const carrier = run.suspend({ reason: 'handoff' })
+
+    expect(() =>
+      observe.resumeRun(
+        {
+          ...carrier,
+          crux: {
+            ...carrier.crux,
+            deployment: { projectId: 'attached-later' },
+          },
+        },
+        { reason: 'tampered' },
+      ),
+    ).toThrow(/deployment identity/i)
+  })
+
   it('round-trips only the serializable boundary fields', () => {
     const headers = new Headers()
     const carrier = sanitizePropagationCarrier({

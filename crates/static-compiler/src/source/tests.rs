@@ -40,8 +40,12 @@ fn finalization_folds_source_refs_into_definitions() {
         .expect("definition should exist");
     assert_eq!(definition.source_refs.len(), 1);
     assert_eq!(definition.source_refs[0].id, "prompt:writer:schema");
-    assert!(output.model.facts.source_refs.is_empty());
-    assert_eq!(output.counts.source_refs, 0);
+    assert_eq!(output.model.facts.source_refs.len(), 1);
+    assert_eq!(
+        output.model.facts.source_refs[0].definition_id,
+        "prompt:writer"
+    );
+    assert_eq!(output.counts.source_refs, 1);
 }
 
 #[test]

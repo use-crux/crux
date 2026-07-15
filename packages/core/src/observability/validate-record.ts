@@ -1,5 +1,6 @@
 import { CRUX_OBSERVABILITY_SCHEMA_VERSION, type CruxGraphRecord } from './contract'
 import { CruxGraphRecordSchema } from './schema'
+import { CruxDeploymentIdentitySchema } from '../project-index'
 
 export type EmitValidationResult =
   | {
@@ -88,6 +89,10 @@ function structuralCheck(record: unknown): record is CruxGraphRecord {
   if (!requiredString(record, 'recordId')) return false
   if (!requiredString(record, 'runId')) return false
   if (record.traceId !== undefined && !requiredString(record, 'traceId')) return false
+  if (
+    record.deployment !== undefined &&
+    !CruxDeploymentIdentitySchema.safeParse(record.deployment).success
+  ) return false
 
   switch (record.type) {
     case 'run:start':

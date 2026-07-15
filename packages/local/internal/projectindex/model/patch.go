@@ -13,14 +13,15 @@ const (
 )
 
 type IndexPatch struct {
-	SchemaVersion int                          `json:"schemaVersion"`
-	Phase         IndexPatchPhase              `json:"phase"`
-	Project       store.ProjectIdentity        `json:"project"`
-	StartedAt     string                       `json:"startedAt"`
-	FinishedAt    string                       `json:"finishedAt,omitempty"`
-	Status        string                       `json:"status"`
-	Indexing      *store.ProjectIndexingStatus `json:"indexing,omitempty"`
-	Facts         IndexPatchFacts              `json:"facts"`
+	SchemaVersion   int                          `json:"schemaVersion"`
+	Phase           IndexPatchPhase              `json:"phase"`
+	Project         store.ProjectIdentity        `json:"project"`
+	StartedAt       string                       `json:"startedAt"`
+	FinishedAt      string                       `json:"finishedAt,omitempty"`
+	Status          string                       `json:"status"`
+	SemanticBackend string                       `json:"semanticBackend,omitempty"`
+	Indexing        *store.ProjectIndexingStatus `json:"indexing,omitempty"`
+	Facts           IndexPatchFacts              `json:"facts"`
 	// SemanticSourceProfile is transient compiler handoff metadata from AST
 	// indexing to semantic indexing. It is not applied to the read model.
 	SemanticSourceProfile *SemanticSourceProfile  `json:"semanticSourceProfile,omitempty"`

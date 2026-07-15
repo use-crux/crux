@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  CRUX_OBSERVABILITY_SCHEMA_VERSION,
   createHttpObservabilityTransport,
   observe,
   observabilityDiagnostics,
@@ -176,7 +177,7 @@ describe('observability delivery receipts', () => {
 
 function deliveryRecord(recordId: string, segmentSeq: number): CruxGraphRecord {
   return {
-    schemaVersion: 2,
+    schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
     recordId,
     type: segmentSeq === 1 ? 'run:start' : 'run:end',
     runId: 'run_delivery_receipt',

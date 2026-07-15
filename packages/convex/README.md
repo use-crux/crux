@@ -84,6 +84,11 @@ await crux.run(ctx, { threadId }, async ({ records }) => {
 });
 ```
 
+`run()` is the owning Convex lifecycle boundary: it preserves the application
+result or error and awaits one bounded terminal observability flush before the
+action settles. Prefer it over manually combining request-scoped storage,
+runtime binding, and low-level flush helpers.
+
 Advanced apps can override storage construction once at the profile boundary. The custom factory receives typed defaults and feeds `run()`, profile-created agents, and `crux.bridge()`:
 
 ```ts
@@ -281,7 +286,7 @@ export const run = internalAction({
 });
 ```
 
-`flushObservability({ timeoutMs })` is also exported for explicit shutdown paths. It defaults to a 5s bounded wait so large fanout traces finish delivering before Convex freezes a warm worker. `@use-crux/convex/server` `action()` and `internalAction()` flush automatically by default; pass `observabilityFlushTimeoutMs: false` only when an outer boundary already flushes.
+`flushObservability({ timeoutMs })` is also exported for explicit shutdown paths. It defaults to a 3s bounded wait so large fanout traces finish delivering before Convex freezes a warm worker. `createCruxConvex().run()`, `@use-crux/convex/server` `action()`, and `internalAction()` flush automatically by default; pass `observabilityFlushTimeoutMs: false` only when an outer boundary already flushes.
 
 Thrown errors use the same evidence contract as core Crux: terminal spans keep a compact error summary, failing spans emit an `exception` event, and stack/raw details attach as `error.stack` and `error.raw` artifacts. Convex wrappers flush those records in `finally`, so failed tools, child actions, generations, and flows reach devtools before the worker can be frozen.
 

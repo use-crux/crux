@@ -92,6 +92,8 @@ export type {
   ProjectConfigSetting,
 } from '../indexer/project-config-inspect'
 export { inspectProjectConfig } from '../indexer/project-config-inspect'
+/** @internal Used by the bundled Crux Local worker; not a root SDK export. */
+export { createProjectIndexDeploymentManifest } from '../indexer/deployment-manifest'
 export {
   checkStaticRulesForProject,
   extractStaticEvidenceBatchForProject,

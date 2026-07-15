@@ -9,6 +9,7 @@
  */
 
 import type {
+  ProjectIndexDeploymentManifestV1,
   ProjectModelProvenance,
   ResolvedProjectModel,
 } from '@use-crux/core/project-index'
@@ -26,6 +27,12 @@ import type {
 import type { RuntimeArtifactGenerationResult } from '../runtime-artifacts'
 import type { RuntimeOperationResult } from '../runtime-ops'
 import type { SetupReport } from '@use-crux/core/setup'
+import type {
+  ProjectIndexFactExtractorProvenance,
+  ProjectIndexFactProvenance,
+} from '../fact-provenance'
+
+export type { ProjectIndexFactExtractorProvenance, ProjectIndexFactProvenance } from '../fact-provenance'
 
 /** Current Project Index worker stream protocol version. */
 export const PROJECT_INDEX_WORKER_PROTOCOL_VERSION = 2 as const
@@ -102,7 +109,7 @@ export interface ProjectIndexFactEnvelopeFor<
   /** Evidence fidelity for this fact at the phase boundary. */
   readonly fidelity: ProjectIndexFactFidelity
   /** JSON-safe provenance for the fact producer or runtime observation. */
-  readonly provenance: ProjectModelProvenance
+  readonly provenance: ProjectIndexFactProvenance
   /** JSON-safe Project Index fact payload. */
   readonly fact: ProjectIndexPatchFactMap[TKind]
 }
@@ -143,6 +150,8 @@ export interface ProjectIndexArtifactMap {
   readonly runtimeOperation: RuntimeOperationResult
   /** Aggregate project setup result emitted for `crux setup`. */
   readonly setupOperation: SetupReport
+  /** Privacy-safe content-addressed Catalog projection for deployment joins. */
+  readonly deploymentManifest: ProjectIndexDeploymentManifestV1
 }
 
 /** JSON artifact kinds supported by the V2 worker stream. */

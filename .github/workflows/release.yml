@@ -296,6 +296,8 @@ jobs:
                 @use-crux/google
                 @use-crux/indexer
                 @use-crux/ingest
+                @use-crux/next
+                @use-crux/mcp
                 @use-crux/openai
                 @use-crux/otel
                 @use-crux/postgres

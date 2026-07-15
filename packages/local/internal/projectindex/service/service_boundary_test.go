@@ -2,13 +2,16 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
 	"time"
 
+	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/readmodel"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
@@ -84,6 +87,96 @@ func TestServiceReindexesWithFakePhaseClients(t *testing.T) {
 	if findBoundaryDefinition(index.Definitions, "prompt:writer") == nil {
 		t.Fatalf("definitions = %+v, want semantic definition", index.Definitions)
 	}
+	if index.Indexing == nil || index.Indexing.Semantic.Backend != "native" {
+		t.Fatalf("semantic indexing = %+v, want native backend provenance", index.Indexing)
+	}
+}
+
+func TestDegradedSemanticPatchRemainsPartialInCatalog(t *testing.T) {
+	service := New(Options{Store: store.NewStore()})
+	service.ApplyIndexPatch(context.Background(), projectindex.IndexPatch{
+		SchemaVersion: 1, Phase: projectindex.PhaseAST,
+		Project: store.ProjectIdentity{Root: "/repo", Name: "project"}, Status: "ok",
+		Facts: projectindex.IndexPatchFacts{Definitions: []store.ProjectDefinition{{
+			ID: "prompt:writer", Kind: "prompt", Name: "writer", Fidelity: "partial", Status: "active",
+		}}},
+	})
+	patch := projectindex.IndexPatch{
+		SchemaVersion: 1, Phase: projectindex.PhaseSemantic,
+		Project:    store.ProjectIdentity{Root: "/repo", Name: "project"},
+		FinishedAt: "2026-07-15T00:00:00Z", Status: "degraded", SemanticBackend: "typescript",
+		Facts: projectindex.IndexPatchFacts{Diagnostics: []store.IndexDiagnostic{
+			{ID: "diagnostic:semantic:z", Severity: "warning", Code: "index.semantic_failed", Message: "Later diagnostic."},
+			{
+				ID: "diagnostic:semantic:budget", Severity: "warning", Code: "index.semantic_budget_exceeded",
+				Message: "Semantic input exceeded the configured budget.",
+			},
+		}},
+	}
+	index, applied, err := service.applyCompletedSemanticPatchIfCurrent(
+		context.Background(), patch, service.indexState.CurrentGeneration(), time.Now(),
+	)
+	if err != nil || !applied {
+		t.Fatalf("apply degraded semantic patch: applied=%v err=%v", applied, err)
+	}
+	encoded, err := json.Marshal(index)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var catalogIndex api.IndexData
+	if err := json.Unmarshal(encoded, &catalogIndex); err != nil {
+		t.Fatal(err)
+	}
+	status := readmodel.CatalogStatus(catalogIndex, service.WatchStatus(), nil, nil)
+	if status.Indexing == nil || status.Indexing.Status != "degraded" || status.Indexing.Semantic.Status != "degraded" {
+		t.Fatalf("Catalog semantic status = %+v, want degraded", status.Indexing)
+	}
+	if status.Indexing.Semantic.Backend != "typescript" || status.Indexing.Error != "Semantic input exceeded the configured budget." {
+		t.Fatalf("Catalog semantic evidence = %+v, want backend and stable error", status.Indexing)
+	}
+	explanation, found := readmodel.CatalogExplain(catalogIndex, "prompt:writer", nil, nil)
+	if !found || explanation.Indexing.Backend != "typescript" || explanation.Indexing.PartialReason != status.Indexing.Error {
+		t.Fatalf("Catalog explanation indexing = %+v, found=%v", explanation.Indexing, found)
+	}
+}
+
+func TestPartialSemanticPatchMarksWatchRunDegraded(t *testing.T) {
+	service := New(Options{Store: store.NewStore()})
+	service.ApplyIndexPatch(context.Background(), projectindex.IndexPatch{
+		SchemaVersion: 1, Phase: projectindex.PhaseAST,
+		Project: store.ProjectIdentity{Root: "/repo", Name: "project"}, Status: "ok",
+	})
+	const runID = 45
+	service.watchStatus.Start(ProjectWatchRunOptions{RunID: runID}, []string{"/repo/src/writer.ts"}, nil)
+
+	_, err := service.applyProjectSemanticPatchResult(
+		context.Background(),
+		projectindex.ProjectSemanticIndexRequest{
+			Root: "/repo", ProjectName: "project",
+			IndexGeneration: service.indexState.CurrentGeneration(), WatchRunID: runID,
+		},
+		time.Now(),
+		projectindex.IndexPatch{
+			SchemaVersion: 1, Phase: projectindex.PhaseSemantic,
+			Project: store.ProjectIdentity{Root: "/repo", Name: "project"},
+			Status:  "partial", SemanticBackend: "typescript",
+			Facts: projectindex.IndexPatchFacts{Diagnostics: []store.IndexDiagnostic{{
+				ID: "diagnostic:semantic:partial", Severity: "warning",
+				Code: "index.semantic_partial", Message: "Semantic indexing was partial.",
+			}}},
+		},
+		nil,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("apply partial semantic patch: %v", err)
+	}
+
+	status := service.WatchStatus()
+	if status.State != "degraded" || status.LastRun == nil ||
+		status.LastRun.Status != "semantic-degraded" || status.LastRun.SemanticStatus != "degraded" {
+		t.Fatalf("watch status = %+v, want degraded partial semantic run", status)
+	}
 }
 
 func TestServiceRecordsIncrementalWatchStatusWithFakeClient(t *testing.T) {
@@ -124,6 +217,9 @@ func TestServiceRecordsIncrementalWatchStatusWithFakeClient(t *testing.T) {
 	}
 	if status.LastRun.PlanKind != "source-file-reindex" || status.LastRun.PatchCount != 1 {
 		t.Fatalf("watch last run = %+v, want incremental patch result", status.LastRun)
+	}
+	if mode := service.SemanticMode(); mode != ProjectSemanticDisabled {
+		t.Fatalf("semantic mode = %q, want disabled", mode)
 	}
 	if !status.LastRun.CoalescedWhileRunning || status.LastRun.PendingRunReplacedCount != 1 {
 		t.Fatalf("watch queue telemetry = %+v, want coalesced replacement", status.LastRun)

@@ -9,13 +9,16 @@ import (
 )
 
 type Extraction struct {
-	File            string                                  `json:"file,omitempty"`
-	InterfaceHash   string                                  `json:"interfaceHash,omitempty"`
-	Definitions     []json.RawMessage                       `json:"definitions"`
-	Relations       []json.RawMessage                       `json:"relations"`
-	Dependencies    []string                                `json:"dependencies"`
-	Diagnostics     []json.RawMessage                       `json:"diagnostics"`
-	SemanticProfile *projectindex.SemanticSourceProfileFile `json:"semanticProfile,omitempty"`
+	File                 string                                                 `json:"file,omitempty"`
+	InterfaceHash        string                                                 `json:"interfaceHash,omitempty"`
+	Definitions          []json.RawMessage                                      `json:"definitions"`
+	DefinitionExtractors map[string][]projectindex.IndexFactExtractorProvenance `json:"definitionExtractors,omitempty"`
+	FactExtractors       map[string][]projectindex.IndexFactExtractorProvenance `json:"factExtractors,omitempty"`
+	Relations            []json.RawMessage                                      `json:"relations"`
+	SourceRefs           []json.RawMessage                                      `json:"sourceRefs,omitempty"`
+	Dependencies         []string                                               `json:"dependencies"`
+	Diagnostics          []json.RawMessage                                      `json:"diagnostics"`
+	SemanticProfile      *projectindex.SemanticSourceProfileFile                `json:"semanticProfile,omitempty"`
 }
 
 func ReadExtraction(root string, cacheKey string) (Extraction, error) {

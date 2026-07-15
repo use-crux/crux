@@ -84,7 +84,7 @@ function deferProjection(
     fingerprint: fingerprint({
       kind: 'deferred-work',
       name,
-      file,
+      file: relativePath,
       ...(match.snippet ? { text: match.snippet.source } : {}),
     }),
     metadata,

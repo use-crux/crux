@@ -1,7 +1,7 @@
 {
   "name": "@use-crux/indexer",
   "version": "0.5.0",
-  "description": "Project Index and source-intelligence workers for Crux — indexing, extensions, and source resolution.",
+  "description": "Crux-owned Catalog compiler contracts, experimental extensions, and source resolution.",
   "keywords": [
     "ai",
     "rag",

@@ -59,7 +59,7 @@ pub(crate) fn ingest_source_facts(
         id: format!("ingest.source:{}", safe_id(parts.variable_name)),
         kind: "ingest.source",
         name: parts.variable_name.to_string(),
-        file: context.file,
+        file: context.fingerprint_file,
         source: parts.source,
         snippet: parts.snippet,
         metadata,

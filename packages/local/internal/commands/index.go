@@ -1,8 +1,8 @@
 package commands
 
 import (
+	"context"
 	"fmt"
-	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/use-crux/crux/packages/local/internal/api"
@@ -10,7 +10,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/output"
 )
 
-// NewIndexCmd creates the "crux index" command for browsing registered prompts, contexts, and tools.
+// NewIndexCmd creates the compatibility alias for browsing every Catalog definition kind.
 func NewIndexCmd(f *cli.Factory) *cobra.Command {
 	var jsonOutput bool
 	var reindexRoot string
@@ -19,49 +19,19 @@ func NewIndexCmd(f *cli.Factory) *cobra.Command {
 	var reindexRuntimeRich bool
 
 	cmd := &cobra.Command{
-		Use:   "index [prompts|contexts|tools|definitions|diagnostics|<id>]",
-		Short: "List registered Crux project index definitions",
+		Use:   "index [<definition-id>]",
+		Short: "List every current Catalog definition, or show one by ID",
 		Example: `  crux index
   crux index prompts
   crux index my.prompt.id
   crux index --json`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c := f.Client()
-			var index api.IndexData
-			if err := c.GetJSON(cmd.Context(), "/api/index", &index); err != nil {
-				return err
-			}
-
 			filter := ""
 			if len(args) == 1 {
 				filter = args[0]
 			}
-
-			// Check if arg is a specific item ID (not a category keyword).
-			if filter != "" && filter != "prompts" && filter != "contexts" && filter != "tools" && filter != "definitions" && filter != "diagnostics" {
-				return showIndexItem(f.Streams(), index, filter, jsonOutput)
-			}
-
-			if jsonOutput {
-				switch filter {
-				case "prompts":
-					return output.JSON(index.Prompts)
-				case "contexts":
-					return output.JSON(index.Contexts)
-				case "tools":
-					return output.JSON(index.Tools)
-				case "definitions":
-					return output.JSON(index.Definitions)
-				case "diagnostics":
-					return output.JSON(index.Diagnostics)
-				default:
-					return output.JSON(index)
-				}
-			}
-
-			printIndex(f.Streams(), index, filter)
-			return nil
+			return runIndexCompatibility(cmd.Context(), f, filter, jsonOutput)
 		},
 	}
 
@@ -118,6 +88,73 @@ func NewIndexCmd(f *cli.Factory) *cobra.Command {
 	return cmd
 }
 
+type indexRoute struct {
+	mode string
+	path string
+}
+
+func indexCompatibilityRoute(argument string) indexRoute {
+	if argument == "" {
+		return indexRoute{mode: "catalog-list", path: "/api/catalog"}
+	}
+	if isIndexCategory(argument) {
+		return indexRoute{mode: "legacy-category", path: "/api/index"}
+	}
+	return indexRoute{mode: "catalog-show", path: catalogDefinitionPath(argument)}
+}
+
+func runIndexCompatibility(ctx context.Context, f *cli.Factory, filter string, jsonOutput bool) error {
+	route := indexCompatibilityRoute(filter)
+	switch route.mode {
+	case "catalog-list":
+		return runCatalogList(ctx, f, "", jsonOutput)
+	case "catalog-show":
+		var definition api.CatalogDefinitionV1
+		if err := f.Client().GetJSON(ctx, route.path, &definition); err != nil {
+			return err
+		}
+		if jsonOutput {
+			return writeCatalogJSON(f, definition)
+		}
+		printCatalogDefinition(f.Streams(), definition)
+		return nil
+	default:
+		return runLegacyIndexCategory(ctx, f, filter, jsonOutput)
+	}
+}
+
+func runLegacyIndexCategory(ctx context.Context, f *cli.Factory, filter string, jsonOutput bool) error {
+	var index api.IndexData
+	if err := f.Client().GetJSON(ctx, "/api/index", &index); err != nil {
+		return err
+	}
+	if jsonOutput {
+		switch filter {
+		case "prompts":
+			return output.JSON(index.Prompts)
+		case "contexts":
+			return output.JSON(index.Contexts)
+		case "tools":
+			return output.JSON(index.Tools)
+		case "definitions":
+			return output.JSON(index.Definitions)
+		default:
+			return output.JSON(index.Diagnostics)
+		}
+	}
+	printIndex(f.Streams(), index, filter)
+	return nil
+}
+
+func isIndexCategory(value string) bool {
+	switch value {
+	case "prompts", "contexts", "tools", "definitions", "diagnostics":
+		return true
+	default:
+		return false
+	}
+}
+
 // printIndex renders the Project Index under a branded header: definitions,
 // diagnostics, prompts, contexts, and tools, filtered to the requested category
 // (empty filter shows all). Every styled span funnels through io.Sprint so
@@ -142,7 +179,7 @@ func printIndex(io *output.IO, index api.IndexData, filter string) {
 	}
 
 	if len(index.Definitions)+len(index.Prompts)+len(index.Contexts)+len(index.Tools) == 0 {
-		fmt.Fprintln(io.Out, "  "+io.Sprint(output.Dim, "No index entries found. Has the app sent an index event?"))
+		fmt.Fprintln(io.Out, "  "+io.Sprint(output.Dim, "No Catalog definitions found. Run `crux check` or `crux index reindex` to compile the project."))
 	}
 }
 
@@ -237,122 +274,6 @@ func printContexts(io *output.IO, contexts []api.ContextMeta) {
 	}
 	fmt.Fprint(io.Out, io.RenderTable(tbl))
 	fmt.Fprintln(io.Out)
-}
-
-func printTools(io *output.IO, tools []api.ToolMeta) {
-	if len(tools) == 0 {
-		return
-	}
-	fmt.Fprintf(io.Out, "%s (%d)\n\n", io.Sprint(output.Bold, "Tools"), len(tools))
-	tbl := &output.Table{
-		Headers: []string{"ID", "DESCRIPTION"},
-	}
-	for _, t := range tools {
-		id := t.ID
-		if id == "" {
-			id = t.Name
-		}
-		desc := ""
-		if t.Description != nil {
-			desc = truncate(*t.Description, 60)
-		}
-		tbl.Rows = append(tbl.Rows, []string{
-			io.Sprint(output.Magenta, id),
-			desc,
-		})
-	}
-	fmt.Fprint(io.Out, io.RenderTable(tbl))
-	fmt.Fprintln(io.Out)
-}
-
-// showIndexItem renders one index entry (definition, prompt, context, or tool)
-// matched by id. Styled spans funnel through io.Sprint so `--no-color`/non-TTY
-// output stays byte-clean; the --json branch returns the raw record unchanged.
-func showIndexItem(io *output.IO, index api.IndexData, id string, jsonOut bool) error {
-	for _, definition := range index.Definitions {
-		if definition.ID == id {
-			if jsonOut {
-				return output.JSON(definition)
-			}
-			fmt.Fprintf(io.Out, "%s %s\n", io.Sprint(output.Bold, "Definition:"), io.Sprint(output.BoldCyan, definition.ID))
-			fmt.Fprintf(io.Out, "  %s %s\n", io.Sprint(output.Bold, "Kind:"), definition.Kind)
-			fmt.Fprintf(io.Out, "  %s %s\n", io.Sprint(output.Bold, "Fidelity:"), definition.Fidelity)
-			if definition.Description != "" {
-				fmt.Fprintf(io.Out, "  %s\n", definition.Description)
-			}
-			if definition.Source != nil {
-				fmt.Fprintf(io.Out, "  %s %s:%d\n", io.Sprint(output.Bold, "Source:"), definition.Source.File, definition.Source.Line)
-			}
-			fmt.Fprintln(io.Out)
-			return nil
-		}
-	}
-
-	// Search prompts.
-	for _, p := range index.Prompts {
-		if p.ID == id {
-			if jsonOut {
-				return output.JSON(p)
-			}
-			fmt.Fprintf(io.Out, "%s %s\n", io.Sprint(output.Bold, "Prompt:"), io.Sprint(output.BoldCyan, p.ID))
-			if p.Description != nil {
-				fmt.Fprintf(io.Out, "  %s\n", *p.Description)
-			}
-			if len(p.Tags) > 0 {
-				fmt.Fprintf(io.Out, "  %s %s\n", io.Sprint(output.Bold, "Tags:"), io.Sprint(output.Dim, strings.Join(p.Tags, ", ")))
-			}
-			if len(p.Path) > 0 {
-				fmt.Fprintf(io.Out, "  %s %s\n", io.Sprint(output.Bold, "Path:"), io.Sprint(output.Dim, strings.Join(p.Path, " → ")))
-			}
-			if len(p.ContextIDs) > 0 {
-				fmt.Fprintf(io.Out, "\n  %s\n", io.Sprint(output.Bold, "Contexts"))
-				for _, cid := range p.ContextIDs {
-					fmt.Fprintf(io.Out, "    %s %s\n", io.Sprint(output.Blue, "→"), cid)
-				}
-			}
-			fmt.Fprintln(io.Out)
-			return nil
-		}
-	}
-
-	// Search contexts.
-	for _, c := range index.Contexts {
-		if c.ID == id {
-			if jsonOut {
-				return output.JSON(c)
-			}
-			fmt.Fprintf(io.Out, "%s %s\n", io.Sprint(output.Bold, "Context:"), io.Sprint(output.Blue, c.ID))
-			if c.Description != nil {
-				fmt.Fprintf(io.Out, "  %s\n", *c.Description)
-			}
-			if len(c.Path) > 0 {
-				fmt.Fprintf(io.Out, "  %s %s\n", io.Sprint(output.Bold, "Path:"), io.Sprint(output.Dim, strings.Join(c.Path, " → ")))
-			}
-			fmt.Fprintln(io.Out)
-			return nil
-		}
-	}
-
-	// Search tools.
-	for _, t := range index.Tools {
-		toolID := t.ID
-		if toolID == "" {
-			toolID = t.Name
-		}
-		if toolID == id {
-			if jsonOut {
-				return output.JSON(t)
-			}
-			fmt.Fprintf(io.Out, "%s %s\n", io.Sprint(output.Bold, "Tool:"), io.Sprint(output.Magenta, toolID))
-			if t.Description != nil {
-				fmt.Fprintf(io.Out, "  %s\n", *t.Description)
-			}
-			fmt.Fprintln(io.Out)
-			return nil
-		}
-	}
-
-	return fmt.Errorf("index item %q not found", id)
 }
 
 func truncate(s string, max int) string {

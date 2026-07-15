@@ -1550,7 +1550,7 @@ describe('observe runtime', () => {
 
     expect(fetchImpl).toHaveBeenCalledTimes(1)
     expect(JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body))).toEqual({
-      schemaVersion: 2,
+      schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
       records: [firstRecord, secondRecord],
     })
   })
@@ -1691,7 +1691,7 @@ describe('observe runtime', () => {
 
     expect(fetchImpl).toHaveBeenCalledTimes(1)
     expect(JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body))).toEqual({
-      schemaVersion: 2,
+      schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
       records: [malformedButAlreadyAcceptedRecord],
     })
   })

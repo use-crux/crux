@@ -10,7 +10,7 @@ that might omit affected facts.
 
 ## Accepted Target Architecture
 
-The accepted pre-launch direction is to use **Crux Indexer** for the public system and
+The accepted direction is to use **Crux Indexer** for the public system and
 **Project Index** for the output/read model. `@use-crux/indexer` is the package name, while
 `ProjectIndex*` identifiers are artifact/read-model names rather than legacy system names. New
 architecture decisions should use this language:
@@ -22,7 +22,7 @@ architecture decisions should use this language:
 - Extension ecosystem: **Indexer Extensions**.
 
 The Indexer is a compiler-style project intelligence system, not an AST plugin framework. The public
-extension contract should expose facts, relation specs, diagnostics, rules, and read models. The Rust
+extension contract exposes facts, relation specs, and compiler-owned diagnostics through extractors. Rules, resolvers, emitters, queries, and read-model execution remain reserved. The Rust
 Static Index compiler owns first-party parser traversal, graph assembly, bundled lint finalization,
 and source patch projection. TypeScript owns third-party extension hosting, semantic backends,
 config/runtime host work, cache identity helpers, and JSON-safe contract mirrors.
@@ -33,14 +33,14 @@ the bundled first-party implementation. Cache identity includes extension and ex
 profile/projection inputs, and the selected syntax frontend identity, so parser/frontend upgrades
 invalidate fixture extraction structurally instead of relying only on manual epoch bumps.
 
-Accepted public package surfaces after the rename:
+Published package surfaces:
 
-- `@use-crux/indexer`
-- `@use-crux/indexer/extensions`
+- `@use-crux/indexer` — Crux-owned compiler contracts, not third-party authoring
+- `@use-crux/indexer/extensions` — experimental extractors and relation declarations
 - `@use-crux/indexer/testing`
 - `@use-crux/indexer/source-resolver`
 
-Accepted host-only surfaces while the package remains private:
+Crux-owned host and contract surfaces:
 
 - `@use-crux/indexer/host`
 - `@use-crux/indexer/host/static-index`
@@ -62,21 +62,19 @@ default and reports the selected producer on `trace.syntaxFrontend`.
 Static Index, and Semantic Evidence protocols. The contract manifest records the canonical fixture,
 version, and Go/Rust mirror inventory that `scripts/check-indexer-contracts.mjs` validates.
 `@use-crux/indexer/host/*` exposes focused Crux-owned worker bridges for static planning/config,
-semantic enrichment, runtime patching, and Static Index compatibility-host calls. Before public
-release, each host-only surface must be removed, made intentionally public, or kept package-private
-through build output.
+semantic enrichment, runtime patching, and Static Index compatibility-host calls. They are published
+compiler/build boundaries, not application SDK or third-party authoring promises.
 
 The stability promise is granular:
 
-- `@use-crux/indexer`, `@use-crux/indexer/testing`, `@use-crux/indexer/source-resolver`, and
-  JSON-safe `contracts/*` subpaths are stable-beta surfaces once this kit finishes. Breaking shape
-  changes are not planned after the pre-launch rename/cache-bump phase.
+- The root, `host/*`, and JSON-safe `contracts/*` subpaths are Crux-owned compiler/build contracts.
+  `testing` and `source-resolver` are focused public facades rather than broad compiler APIs.
 - `@use-crux/indexer/extensions` remains experimental. Its `ExtractContext` reader/builder shape is
-  frozen, but third-party loading, trust UX, rule execution, and fixture package contracts are not
+  frozen, but third-party loading, trust UX, reserved execution slots, and fixture package contracts are not
   stable plugin ecosystem promises yet.
-- `@use-crux/indexer/host/*` is host-only. `host/static-index` owns static config/plan inspection.
+- `@use-crux/indexer/host/*` is Crux-owned. `host/static-index` owns static config/plan inspection.
   `host/static-compat` owns the Node calls used by the Rust Static Index compiler for third-party
-  extension evidence and rule checks.
+  extractor evidence and compiler-owned rule checks.
 
 Local TypeScript worker bundles are owned by the private `packages/local-workers` package.
 `@use-crux/devtools` owns only the React/Vite UI and UI-local tests.
@@ -98,8 +96,8 @@ type AnalysisTier = "syntax" | "index" | "semantic";
 
 `syntax` is file-local and parser-backed, `index` is project-level Project Index analysis, and
 `semantic` is optional type/program-aware analysis exposed through a stable `SemanticReadModel`.
-Rules opt into semantic cost with `requires: ['semantic']`; extension authors do not receive stable
-raw TypeScript compiler objects.
+Compiler-owned analyzers opt into semantic cost through internal requirements. The public extension
+surface exposes neither semantic analyzer/rule slots nor raw TypeScript compiler objects.
 
 See ADRs 0004-0009 for the accepted terminology, public extension contract, analysis tier,
 loading/trust decisions, and code-is-config project discovery boundary.
@@ -121,8 +119,9 @@ flowchart TD
   J --> K["Go Project Index read model"]
 ```
 
-The public package root is the extension-authoring SDK and record-contract
-surface. Crux-owned execution facades live under `host/*` and are consumed by
+The public package root exposes Crux-owned compiler and record contracts.
+Experimental third-party extractor and relation authoring lives under
+`/extensions`. Crux-owned execution facades live under `host/*` and are consumed by
 local worker bundles for config/runtime/semantic work and third-party Static
 Index extension evidence. Go/Rust produce source patches.
 
@@ -133,20 +132,20 @@ Index extension evidence. Go/Rust produce source patches.
   value with an origin (`config` / `default` / `package.json` / `set` / `none`). It reuses
   `resolveProjectModel` for the compact discovery summary and degrades to all-defaults with an
   `import-failed` status on a broken config.
-Internally, `cruxCoreCompilerProfile` records stable profile/projection identity used by the
-TypeScript extension host and fixture extraction. Profiles keep extension execution instance-local;
-there is no process-wide public extension registration.
+  Internally, `cruxCoreCompilerProfile` records stable profile/projection identity used by the
+  TypeScript extension host and fixture extraction. Profiles keep extension execution instance-local;
+  there is no process-wide public extension registration.
 
 First-party syntax extraction, relation finalization, and bundled lint evaluation are Rust-owned in
-the binary. TypeScript extension runtime remains for third-party extractor and rule manifests that
+the binary. TypeScript extension runtime remains for third-party extractor and relation manifests that
 run against Rust-produced syntax/evidence records. The remaining profile projection records are cache
 identity inputs for fixture and extension-host construction rather than a second bundled projector.
 
-Semantic analysis remains compiler-owned internal analyzer code. Public extension authors should see
-semantic capability through `SemanticReadModel` and `requires: ['semantic']`, not through raw
-TypeScript `Program`, `TypeChecker`, or AST nodes. Static relation resolution is likewise
-compiler-owned for now, exposed internally through a functional boundary while public resolver
-authoring remains reserved.
+Semantic analysis remains compiler-owned internal analyzer code. Crux-owned hosts may consume the
+stable `SemanticReadModel`, but the public extension authoring surface exposes no semantic requirement
+or analyzer slot and no raw TypeScript `Program`, `TypeChecker`, or AST nodes. Static relation
+resolution is likewise compiler-owned for now, exposed internally through a functional boundary while
+public resolver authoring remains reserved.
 
 Internal package code is organized around compiler responsibilities instead of keeping every engine
 module in the `indexer/` root:
@@ -255,7 +254,7 @@ flowchart LR
 ```
 
 Bundled first-party static facts are emitted by the Rust Static Index binary. The TypeScript
-extension host remains only for third-party extractor and rule contributions, which emit immutable
+extension host remains only for third-party extractor contributions and relation declarations, which emit immutable
 intermediate facts, unresolved references, source refs, diagnostics, and dependency declarations.
 Resolver slots link unresolved references into validated Project Index relations after definitions
 are known. Rules run over resolved index facts. Emitters remain compiler-internal and produce
@@ -271,9 +270,9 @@ objects. The runtime must not be a mutable plugin manager or global registry ser
 Third-party static extractors emit immutable `ExtractedFacts` through the extension runtime, and
 the host projection path merges those facts with native Rust/Oxc output. Bundled first-party
 extractors and lints are Rust-only. Project Index snapshots and AST patches still carry
-`ruleDescriptors`, a metadata list for built-in rules and extension-provided rules whether or not they
-fired findings. Extension index rules must declare metadata with docs, schema, and message ids before
-registry construction succeeds. Raw TypeScript nodes are not a stable extension API.
+`ruleDescriptors`, a metadata list for compiler-owned rules whether or not they fired findings.
+Compiler-owned index rules declare metadata with docs, schema, and message ids before registry
+construction succeeds. Raw TypeScript nodes are not a stable extension API.
 
 The static extractor context remains available for third-party extensions:
 `ctx.args` for factory arguments, `ctx.config` for object-literal/static
@@ -302,12 +301,13 @@ Relation read-model projection is public compiler data, not app policy. Runtime 
 name ambient resources are matched through `RuntimeUseTargetRules`; product-specific ids or aliases
 must be supplied as data by the host/profile instead of hardcoded in `relations/index.ts`.
 
-The package export map intentionally separates public authoring surfaces from host/internal bridges:
-`@use-crux/indexer`, `@use-crux/indexer/extensions`, `@use-crux/indexer/testing`, and
-`@use-crux/indexer/source-resolver` are the public-facing surfaces; `@use-crux/indexer/host/*` and
-`@use-crux/indexer/contracts/*` are Crux-owned host and cross-runtime contract surfaces while the package
-remains private. Other compiler and indexer modules are reached by relative imports inside the
-package so they do not accidentally become third-party API.
+The package export map intentionally separates Crux-owned public compiler contracts, experimental
+authoring surfaces, and host/internal bridges. `@use-crux/indexer` exposes Crux-owned compiler and
+record contracts; `@use-crux/indexer/extensions` exposes experimental extractor and relation
+authoring; and `@use-crux/indexer/testing` plus `@use-crux/indexer/source-resolver` are focused public
+tooling. `@use-crux/indexer/host/*` and `@use-crux/indexer/contracts/*` remain Crux-owned host and
+cross-runtime contract surfaces. Other compiler and indexer modules are reached by relative imports
+inside the package so they do not accidentally become third-party API.
 
 ### Extension Runtime
 
@@ -320,7 +320,8 @@ The runtime is functional and value-oriented:
 - Inputs are readonly compiler views, extension manifests, and fact packets.
 - Outputs are discriminated runtime results, diagnostics, dependency declarations, and immutable
   facts.
-- Runtime manifests expose deterministic extension/extractor/rule identities and cache inputs.
+- Runtime manifests expose deterministic extension/extractor identities plus compiler-owned rule
+  identities and cache inputs.
 - Static cache keys combine source hashes, import dependency hashes, config boundary hashes,
   extension runtime identity, compiler profile identity, and compiler-owned projection identity. The
   remaining manual invalidation levers are explicit epochs in `indexer/cache-identity.ts`.
@@ -607,7 +608,7 @@ Initial query records should stay file-level:
 - `SemanticAnalyze(file, analyzer)`: source hash, analyzer version, TypeScript version, compiler
   options hash, resolved module graph hash, static candidate hash -> semantic definition patches,
   relations, source refs, diagnostics.
-- `IndexLint(ruleProfile)`: extension rule outputs over merged definitions/relations plus lint
+- `IndexLint(ruleProfile)`: merged definitions/relations plus the compiler-owned rule profile and lint
   config/suppressions -> lint findings.
 - `SourceGraph(component)`: affected rows, dependency edges, ownership maps -> normalized
   `IndexSourceFile` rows and a trusted `sourceGraph` marker.

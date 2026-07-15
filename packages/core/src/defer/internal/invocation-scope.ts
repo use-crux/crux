@@ -231,12 +231,23 @@ export function createInvocationDeferScope(
           // outlive deferred execution on every host. Flush after closing
           // its graph so wrapper-level drains cannot race work emitted by
           // waitUntil(), after(), or response-finished callbacks.
-          await observe.flush({
-            timeoutMs: Math.min(
-              lifetime.limits.maxDrainMs,
-              DEFER_OBSERVABILITY_FLUSH_TIMEOUT_MS,
-            ),
-          })
+          try {
+            await observe.flush({
+              timeoutMs: Math.min(
+                lifetime.limits.maxDrainMs,
+                DEFER_OBSERVABILITY_FLUSH_TIMEOUT_MS,
+              ),
+            })
+          } catch (error) {
+            // A retained host promise must never reject solely because the
+            // telemetry exporter threw. Opinionated host facades own the
+            // structured terminal drain report; low-level defer users still
+            // receive a diagnostic without an unhandled rejection.
+            console.error(
+              '[crux] observability flush threw after deferred work settled; the deferred callback outcome was preserved.',
+              error,
+            )
+          }
         },
         cancel(reason) {
           scope.cancel(reason)

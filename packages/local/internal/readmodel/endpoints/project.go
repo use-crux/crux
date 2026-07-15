@@ -17,6 +17,15 @@ type DevtoolsReads interface {
 	ProjectIndexWatchStatus(context.Context) (api.ProjectIndexWatchStatus, error)
 }
 
+// CatalogReads exposes the stable Catalog projections independently from the
+// legacy raw Project Index endpoint.
+type CatalogReads interface {
+	CatalogList(context.Context, string) (api.CatalogListV1, error)
+	CatalogDefinition(context.Context, string) (api.CatalogDefinitionV1, bool, error)
+	CatalogExplanation(context.Context, string) (api.CatalogExplanationV1, bool, error)
+	CatalogStatus(context.Context) (api.CatalogStatusV1, error)
+}
+
 type QualityReads interface {
 	ActivityAPI(context.Context, int) ([]api.QualityActivityEvent, error)
 	RunsWithOptionsAPI(context.Context, api.QualityRunsOptions) ([]api.QualityRunRecord, error)
@@ -55,6 +64,7 @@ type EvaluationCollector interface {
 
 type Deps struct {
 	Devtools DevtoolsReads
+	Catalog  CatalogReads
 	Quality  QualityReads
 	// Evaluations is optional; the evaluations endpoint reports
 	// unavailability when nil.
@@ -673,3 +683,43 @@ var (
 			return deps.Devtools.(runtimeEventReads).SecurityEvents(ctx), nil
 		})
 )
+
+type catalogListParams struct {
+	Kind string
+}
+
+func (p *catalogListParams) Parse(req readmodel.Req) error {
+	p.Kind = req.Query.Get("kind")
+	return nil
+}
+
+var CatalogList = readmodel.GetP[Deps, *catalogListParams, api.CatalogListV1](Registry, "GET /api/catalog",
+	func() *catalogListParams { return &catalogListParams{} },
+	func(ctx context.Context, deps Deps, params *catalogListParams) (api.CatalogListV1, error) {
+		return deps.Catalog.CatalogList(ctx, params.Kind)
+	})
+
+var CatalogStatus = readmodel.Get(Registry, "GET /api/catalog/status",
+	func(ctx context.Context, deps Deps) (api.CatalogStatusV1, error) {
+		return deps.Catalog.CatalogStatus(ctx)
+	})
+
+var CatalogDefinition = readmodel.GetP[Deps, *readmodel.PathID, api.CatalogDefinitionV1](Registry, "GET /api/catalog/{definitionId}",
+	func() *readmodel.PathID { return &readmodel.PathID{Name: "definitionId"} },
+	func(ctx context.Context, deps Deps, params *readmodel.PathID) (api.CatalogDefinitionV1, error) {
+		definition, found, err := deps.Catalog.CatalogDefinition(ctx, params.ID)
+		if err != nil || found {
+			return definition, err
+		}
+		return definition, readmodel.ErrNotFound
+	})
+
+var CatalogExplanation = readmodel.GetP[Deps, *readmodel.PathID, api.CatalogExplanationV1](Registry, "GET /api/catalog/explain/{definitionId}",
+	func() *readmodel.PathID { return &readmodel.PathID{Name: "definitionId"} },
+	func(ctx context.Context, deps Deps, params *readmodel.PathID) (api.CatalogExplanationV1, error) {
+		explanation, found, err := deps.Catalog.CatalogExplanation(ctx, params.ID)
+		if err != nil || found {
+			return explanation, err
+		}
+		return explanation, readmodel.ErrNotFound
+	})

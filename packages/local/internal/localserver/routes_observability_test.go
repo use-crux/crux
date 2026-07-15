@@ -6,9 +6,15 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/use-crux/crux/packages/local/internal/devtools"
 	"github.com/use-crux/crux/packages/local/internal/observability"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/manifeststore"
+	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
 func TestParseObservabilityRunListOptionsIncludesSessionID(t *testing.T) {
@@ -36,6 +42,55 @@ func TestObservabilityBareRunsListRouteIsNotRegistered(t *testing.T) {
 
 	if response.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404 for removed bare list route; body = %s", response.Code, response.Body.String())
+	}
+}
+
+func TestRunDetailSeparatesHistoricalManifestAndCurrentCatalog(t *testing.T) {
+	ctx := context.Background()
+	manifestRoot := t.TempDir()
+	manifestBytes, err := os.ReadFile(filepath.Join("..", "observability", "testdata", "manifest-v1.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifests := manifeststore.New(manifestRoot)
+	if _, err := manifests.Import(ctx, manifestBytes); err != nil {
+		t.Fatal(err)
+	}
+	service, err := observability.OpenService(ctx, ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	service.WithManifestStore(manifests)
+	t.Cleanup(func() { _ = service.Close() })
+	var batch observability.Batch
+	if err := json.Unmarshal([]byte(`{"schemaVersion":3,"records":[{"schemaVersion":3,"recordId":"record-manifest-api","type":"run:start","runId":"run-manifest-api","segmentId":"segment-manifest-api","segmentSeq":1,"name":"manifest","rootPrimitive":"run","startedAt":"2026-01-01T00:00:00.000Z","status":"running","deployment":{"projectId":"fixture","manifestId":"pim_15b48ab7fa9b323034d77aec99352109ae2a5ad1185b1f8adbd5821a7bb9c866"},"definitionRefs":[{"id":"prompt:writer","kind":"prompt","role":"resolved-prompt"}]}]}`), &batch); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.Ingest(ctx, batch); err != nil {
+		t.Fatal(err)
+	}
+	indexStore := store.NewStore()
+	indexStore.SetIndexData(store.IndexData{
+		Project:     &store.ProjectIdentity{Name: "fixture"},
+		Definitions: []store.ProjectDefinition{{ID: "prompt:writer", Kind: "prompt", Name: "writer", Description: "API_SECRET_MUST_NOT_LEAK"}},
+	})
+	catalog := devtools.NewService(indexStore, nil)
+	t.Cleanup(catalog.Shutdown)
+	mux := http.NewServeMux()
+	registerObservabilityRoutesWithCatalog(mux, service, nil, catalog)
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/observability/runs/run-manifest-api", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	body := response.Body.String()
+	for _, want := range []string{`"manifest":`, `"resolution":"resolved"`, `"currentCatalog":`, `"label":"current-catalog"`} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("body missing %s: %s", want, body)
+		}
+	}
+	if strings.Contains(body, "API_SECRET_MUST_NOT_LEAK") {
+		t.Fatalf("current Catalog authored content leaked: %s", body)
 	}
 }
 
@@ -121,7 +176,7 @@ func TestObservabilityIngestRouteRejectsUnsupportedBatchSchemaPerRecord(t *testi
 	t.Cleanup(func() { _ = service.Close() })
 	mux := http.NewServeMux()
 	registerObservabilityRoutes(mux, service, nil)
-	body := []byte(`{"schemaVersion":3,"records":[{"recordId":"rec_future"}]}`)
+	body := []byte(`{"schemaVersion":4,"records":[{"recordId":"rec_future"}]}`)
 
 	response := performObservabilityIngestRequest(mux, body)
 

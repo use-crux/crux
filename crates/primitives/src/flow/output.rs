@@ -55,7 +55,7 @@ pub(crate) fn step_definitions(
                 id: definition_id,
                 kind: "flow.step",
                 name: step_name.clone(),
-                file: context.file,
+                file: context.fingerprint_file,
                 source: parts.source,
                 snippet: parts.snippet,
                 metadata,

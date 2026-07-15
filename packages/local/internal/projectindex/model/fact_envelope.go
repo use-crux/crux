@@ -18,15 +18,16 @@ type IndexFactProducer struct {
 // The shape intentionally mirrors the public Project Model provenance union
 // without forcing every local read model to understand provenance internals.
 type IndexFactProvenance struct {
-	Kind       string `json:"kind"`
-	File       string `json:"file,omitempty"`
-	ExportName string `json:"exportName,omitempty"`
-	TraceID    string `json:"traceId,omitempty"`
-	Attribute  string `json:"attribute,omitempty"`
-	Path       string `json:"path,omitempty"`
-	Convention string `json:"convention,omitempty"`
-	Key        string `json:"key,omitempty"`
-	Flag       string `json:"flag,omitempty"`
+	Kind       string                         `json:"kind"`
+	File       string                         `json:"file,omitempty"`
+	ExportName string                         `json:"exportName,omitempty"`
+	TraceID    string                         `json:"traceId,omitempty"`
+	Attribute  string                         `json:"attribute,omitempty"`
+	Path       string                         `json:"path,omitempty"`
+	Convention string                         `json:"convention,omitempty"`
+	Key        string                         `json:"key,omitempty"`
+	Flag       string                         `json:"flag,omitempty"`
+	Extractors []IndexFactExtractorProvenance `json:"extractors,omitempty"`
 }
 
 // IndexFactEnvelope is the durable Go representation of a V2 worker fact.
@@ -282,7 +283,7 @@ func ValidateIndexFactProvenance(envelope IndexFactEnvelope) error {
 	default:
 		return fmt.Errorf("project index fact %q has unsupported provenance kind %q", envelope.FactID, envelope.Provenance.Kind)
 	}
-	return nil
+	return validateIndexFactExtractors(envelope.FactID, envelope.Provenance.Extractors)
 }
 
 func appendDecodedIndexFact[T any](envelope IndexFactEnvelope, out *[]T) error {

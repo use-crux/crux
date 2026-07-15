@@ -57,7 +57,11 @@ func (p projectIndexPipeline) reindexProjectWithOptions(
 	}
 
 	cacheLoaded := false
-	if cached, ok := s.indexCache.LoadSnapshot(ctx, root, projectName, run.startedAt); ok {
+	cached, cacheHit, err := s.indexCache.LoadSnapshot(ctx, root, projectName, run.startedAt)
+	if err != nil {
+		return store.IndexData{}, s.publishFailedFullReindex(root, projectName, run.startedAt, fmt.Errorf("load Project Index cache: %w", err))
+	}
+	if cacheHit {
 		cacheLoaded = true
 		s.ApplyIndexPatch(ctx, projectindex.PatchFromSnapshot(cached, projectindex.PhaseCache, "ok"))
 	}

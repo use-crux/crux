@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { posix } from 'node:path'
 import type { ProjectDefinition, ProjectDefinitionKind, ProjectRelation } from '@use-crux/core/project-index'
 import { sourceForFile, sourceSnippet } from './ast/snippets'
 import { projectRelation } from './relations'
@@ -22,7 +23,13 @@ export async function definition(
     sourceSnippet: await sourceSnippet(root, file),
     fidelity: 'resolved',
     status: 'active',
-    fingerprint: fingerprint({ kind, name, description, metadata, file }),
+    fingerprint: fingerprint({
+      kind,
+      name,
+      description,
+      metadata,
+      file: definitionFingerprintFile(root, file),
+    }),
     metadata,
   }
 }
@@ -48,4 +55,15 @@ export function safeId(value: string): string {
 
 export function fingerprint(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex').slice(0, 16)
+}
+
+/** Normalizes source identity so definition fingerprints survive checkout moves. */
+export function definitionFingerprintFile(root: string, file: string): string {
+  const normalizedRoot = posix.normalize(root.replaceAll('\\', '/')).replace(/\/$/, '')
+  const normalizedFile = posix.normalize(file.replaceAll('\\', '/'))
+  if (normalizedFile === normalizedRoot) return '.'
+  if (normalizedFile.startsWith(`${normalizedRoot}/`)) {
+    return normalizedFile.slice(normalizedRoot.length + 1)
+  }
+  return normalizedFile.replace(/^\.\//, '')
 }

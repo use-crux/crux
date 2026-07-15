@@ -192,19 +192,57 @@ They never include environment values, credentials, or connection strings.
 Safe-additive setup is idempotent. A failed later action does not roll back earlier successful
 actions; rerun `crux setup --apply` after correcting the reported problem.
 
-## `crux index`
+## `crux catalog`
 
-List Project Index definitions from the Go devtools service.
+Inspect the current authored Catalog through the running local server. Catalog
+responses are deterministic, omit opaque compiler metadata, and keep unknown
+backend, watch, cache, or manifest state explicit.
 
 ```bash
-crux index                  # List all
+crux catalog                         # List every definition kind
+crux catalog list --kind agent       # Filter by exact definition kind
+crux catalog show agent:writer       # Definition, relations, Health, Quality, Runs
+crux catalog status                  # Compiler, cache, watch, and manifest state
+crux catalog explain agent:writer    # Why the compiler recognized this definition
+crux catalog import ./manifest.json  # Verify and retain immutable history
+```
+
+`catalog list` sorts by kind and definition ID. `show` returns the safe current
+read model with source references, incoming/outgoing relations, applicable
+diagnostics and lints, Quality summary, and bounded runtime activity. `explain`
+uses durable compiler fact provenance and reports unresolved relations only
+when compiler diagnostics establish them; it never guesses from source text or
+extractor names. When contributor attribution is present, the reason names each
+canonical `extension@version/extractor` (or first-party extractor) while the
+producer continues to identify the phase worker/backend. It never exposes raw
+AST/checker objects. Source paths are repository-relative and fail
+closed when they are outside the project.
+
+`catalog status` reports indexing phases, semantic execution mode, cache hit
+and age, watch plan/fallback and changed/affected counts, last indexing error,
+manifest count, and a current identity when a verified default artifact or one
+unambiguous imported manifest exists. Unavailable values render as `unknown` or
+are omitted in JSON.
+
+The v1 CLI explains the current Catalog. Historical selector flags are not yet
+available; run detail continues to resolve exact named deployment manifests
+without falling back to the current checkout.
+
+## `crux index` (compatibility)
+
+`crux index` remains available during the beta. Its default list and definition
+detail delegate to the canonical Catalog projections; category keywords and the
+explicit daemon rebuild command remain compatible.
+
+```bash
+crux index                  # Delegates to crux catalog list
 crux index prompts          # List prompts only
 crux index contexts         # List contexts only
 crux index tools            # List tools only
 crux index definitions      # List all discovered definitions
 crux index diagnostics      # List index diagnostics
 crux index reindex          # Rebuild from source files and .crux/quality JSON
-crux index editor.seo       # Show detail for a specific item
+crux index agent:writer     # Delegates to crux catalog show
 crux index --json           # Output as JSON
 ```
 
@@ -212,7 +250,11 @@ crux index --json           # Output as JSON
 | -------- | -------------- |
 | `--json` | Output as JSON |
 
-When called with a specific item ID, shows detailed information including description, tags, source, path, associated contexts, and Project Index metadata when available. `crux dev` indexes source files and `.crux/quality` JSON at startup, then watches source/config files for debounced incremental index refreshes. Runtime prompt/context/tool snapshots enrich the same backend-owned read model.
+Use `crux catalog` for new automation. `crux index reindex` still requires the
+running dev server and forces a source/Quality rebuild; `crux check` and
+`crux manifest` are daemon-free CI/build surfaces. `crux dev` indexes source
+files and `.crux/quality` JSON at startup, then watches source/config files for
+debounced incremental refreshes.
 
 ## `crux inspect`
 
@@ -236,7 +278,9 @@ Finds the most recent successful trace for the given prompt ID and displays: sys
 
 ## `crux lint`
 
-Check authored Crux project health against a lint profile.
+Check authored Crux project health against a lint profile. The default path
+indexes the project once and does not require `crux dev`; use `--server` only
+for compatibility when you intentionally want the running daemon snapshot.
 
 ```bash
 crux lint                          # Run the recommended profile
@@ -244,6 +288,8 @@ crux lint --profile strict         # Use a stricter profile
 crux lint --fail-on warning        # Exit 1 if any warning (or error) is found
 crux lint --include-suppressed     # Also show source-comment suppressed findings
 crux lint --json                   # Output as JSON
+crux lint --root packages/app      # Check another project without a daemon
+crux lint --server                 # Read the running devtools snapshot
 ```
 
 | Flag                   | Description                                                            |
@@ -252,11 +298,77 @@ crux lint --json                   # Output as JSON
 | `--fail-on <severity>` | Exit `1` when selected findings include `error`, `warning`, or `info`  |
 | `--include-suppressed` | Include source-comment suppressed findings                             |
 | `--json`               | Output as JSON                                                         |
+| `--root <path>`        | Project root; defaults to the current directory                         |
+| `--config <path>`      | Optional absolute or root-relative Crux config                          |
+| `--project-id <id>`    | Optional display/cache identity                                         |
+| `--server`             | Use the running devtools server instead of one-shot indexing            |
 
 Lists findings sorted by severity (`error` · `warning` · `info`), each with its
 rule id, target definition, source `file:line`, and (when available) the
 problem, rationale, suggested fix, and docs link. With `--fail-on`, a matching
 finding sets exit code `1` so the command can gate CI.
+
+## `crux check`
+
+Compile the same Project Index pipeline once and apply an explicit CI gate.
+Unlike `crux lint`, `check` defaults to `--fail-on error`. It groups compiler
+diagnostics separately from authored-system findings and never requires a
+running daemon.
+
+```bash
+crux check
+crux check --profile strict --fail-on warning
+crux check --root packages/app --config crux.config.ts
+crux check --project-id storefront --json
+```
+
+| Flag                       | Description                                                            |
+| -------------------------- | ---------------------------------------------------------------------- |
+| `--root <path>`            | Project root; defaults to the current directory                         |
+| `--config <path>`          | Optional absolute or root-relative Crux config                          |
+| `--project-id <id>`        | Optional display/cache identity                                         |
+| `--profile <name>`         | `off`, `recommended`, `strict`, or `experimental`                       |
+| `--include-suppressed`     | Include source-comment suppressed findings                             |
+| `--fail-on <level>`        | `error` (default), `warning`, `info`, or `none`                         |
+| `--json`                   | Write exactly one deterministic JSON v1 value to stdout                 |
+
+Exit `0` means compilation completed without a selected finding meeting the
+gate. Exit `1` means the gate matched. Exit `2` means configuration, compiler,
+protocol, cache integrity, or another operational failure prevented a
+trustworthy check. JSON v1 excludes timestamps and durations; incidental
+worker diagnostics remain on stderr.
+
+## `crux manifest`
+
+Compile a privacy-safe, content-addressed deployment manifest without a
+running daemon. `--project-id` is required and identifies the logical project;
+it is intentionally outside the content hash.
+
+```bash
+crux manifest --project-id storefront
+crux manifest --project-id storefront --root packages/app --out dist/project-index.manifest.json --json
+```
+
+The default output is `<root>/.crux/project-index.manifest.json`. The command
+uses the same one-shot pipeline as `crux check`, waits for semantic indexing,
+and writes atomically only after verifying the compiler artifact. Operational
+or compiler failure exits `2` and leaves any previous valid artifact untouched.
+JSON mode writes one deterministic v1 summary to stdout; the output file always
+contains the full manifest.
+
+## `crux catalog import`
+
+Verify and persist an immutable historical manifest in the current project's
+local Catalog store:
+
+```bash
+crux catalog import .crux/project-index.manifest.json
+crux catalog import /tmp/build-manifest.json --json
+```
+
+Import is idempotent for an existing `(projectId, manifestId)` with identical
+content. Invalid hashes, malformed artifacts, and tuple collisions exit `2`
+without changing the store.
 
 ## `crux quality`
 

@@ -50,7 +50,11 @@ definitionRefs?: Array<{
 - **No function names**: stack-derived function fields are intentionally never emitted
 - **Omitted when unproven**: if the runtime cannot prove a safe relative path (missing project root, path outside root, bad line), `source` is absent entirely
 
-Built-in emitters usually omit `source` and let the current Project Index supply location at read time. When a site does hold a genuine compiled location, `sanitizeDefinitionSource(source, { projectRoot })` is the only supported conversion.
+Built-in emitters usually omit `source`. Historical Run detail resolves location
+only from the exact named manifest; current-only Catalog views use the current
+compiler read model separately. When runtime code holds a genuine compiled
+location, `sanitizeDefinitionSource(source, { projectRoot })` is the only
+supported conversion.
 
 ## Provider errors
 

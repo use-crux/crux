@@ -58,6 +58,22 @@ func (w *Bundle) GenerateRuntimeArtifacts(ctx context.Context, root string, defi
 	return w.streamArtifact(ctx, req, projectindex.ProjectIndexArtifactRuntimeArtifacts)
 }
 
+// CreateDeploymentManifest projects one completed Project Index snapshot in
+// the TypeScript worker, which owns privacy filtering and canonical hashing.
+func (w *Bundle) CreateDeploymentManifest(ctx context.Context, input projectindex.DeploymentManifestProjectionInput) (json.RawMessage, error) {
+	req := requestwire.Request{
+		Method:                  "createDeploymentManifest",
+		Root:                    input.Root,
+		ProjectID:               input.ProjectID,
+		Definitions:             input.Definitions,
+		Relations:               input.Relations,
+		StaticFrontend:          input.StaticFrontend,
+		ManifestSemanticBackend: input.SemanticBackend,
+		SemanticStatus:          input.SemanticStatus,
+	}
+	return w.streamArtifact(ctx, req, projectindex.ProjectIndexArtifactDeploymentManifest)
+}
+
 // RunRuntimeOperation executes a Runtime Engine operation in the TypeScript worker.
 func (w *Bundle) RunRuntimeOperation(ctx context.Context, root, operation, workID string, includeDetails bool) (json.RawMessage, error) {
 	req := requestwire.Request{

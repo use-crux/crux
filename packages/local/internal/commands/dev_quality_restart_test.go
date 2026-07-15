@@ -54,7 +54,7 @@ func TestDevQualityDirRestoresPersistedExperimentsAfterRestart(t *testing.T) {
 	previous := resolveProjectConfigForInspect
 	t.Cleanup(func() { resolveProjectConfigForInspect = previous })
 	resolveProjectConfigForInspect = func(context.Context, string, string, string) (json.RawMessage, error) {
-		return json.RawMessage(`{"root":` + mustJSON(t, root) + `,"quality":{"dir":{"value":"var/quality","origin":"config"}}}`), nil
+		return json.RawMessage(`{"root":` + string(mustJSON(t, root)) + `,"quality":{"dir":{"value":"var/quality","origin":"config"}}}`), nil
 	}
 
 	dir, err := resolveDevQualityDir(context.Background(), root)
@@ -116,13 +116,4 @@ func TestDevQualityDirFallsBackWhenConfigInspectionFails(t *testing.T) {
 			}
 		})
 	}
-}
-
-func mustJSON(t *testing.T, value string) string {
-	t.Helper()
-	data, err := json.Marshal(value)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(data)
 }

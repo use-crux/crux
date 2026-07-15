@@ -11,11 +11,16 @@ import (
 	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/api"
+	"github.com/use-crux/crux/packages/local/internal/devtools"
 	"github.com/use-crux/crux/packages/local/internal/observability"
 	"github.com/use-crux/crux/packages/local/internal/quality"
 )
 
 func registerObservabilityRoutes(mux *http.ServeMux, service *observability.Service, qualityEvents *quality.EventBus) {
+	registerObservabilityRoutesWithCatalog(mux, service, qualityEvents, nil)
+}
+
+func registerObservabilityRoutesWithCatalog(mux *http.ServeMux, service *observability.Service, qualityEvents *quality.EventBus, catalog *devtools.Service) {
 	mux.HandleFunc("POST /api/observability/records", func(w http.ResponseWriter, r *http.Request) {
 		if service == nil {
 			http.Error(w, "observability service unavailable", http.StatusServiceUnavailable)
@@ -33,7 +38,7 @@ func registerObservabilityRoutes(mux *http.ServeMux, service *observability.Serv
 			http.Error(w, http.StatusText(status), status)
 			return
 		}
-		if batch.SchemaVersion != observability.SchemaVersion {
+		if !observability.IsSupportedSchemaVersion(batch.SchemaVersion) {
 			writeUnsupportedObservabilitySchema(w, batch)
 			return
 		}
@@ -141,6 +146,11 @@ func registerObservabilityRoutes(mux *http.ServeMux, service *observability.Serv
 			return
 		}
 		detail, err := service.RunDetail(r.Context(), r.PathValue("runId"))
+		if err == nil && catalog != nil {
+			index := catalog.ProjectIndexSnapshot()
+			comparison := observability.CompareCurrentCatalog(detail.DefinitionRefs, index)
+			detail.CurrentCatalog = &comparison
+		}
 		writeObservabilityRead(w, detail, err)
 	})
 

@@ -1,12 +1,13 @@
 {
   "name": "@use-crux/next",
   "version": "0.5.0",
-  "description": "Next.js host integration for Crux request-scoped defer() via next/server after().",
+  "description": "Next.js lifecycle integration for Crux defer and observability via next/server after().",
   "keywords": [
     "next",
     "nextjs",
     "defer",
     "after",
+    "observability",
     "crux"
   ],
   "license": "Apache-2.0",
@@ -16,9 +17,6 @@
     "access": "public"
   },
   "type": "module",
-  "engines": {
-    "node": ">=22.0.0"
-  },
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {

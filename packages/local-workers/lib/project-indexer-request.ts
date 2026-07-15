@@ -28,6 +28,16 @@ export interface ProjectIndexWorkerRequest {
   readonly previousIndexSources?: ProjectIndexSnapshot['sources']
   /** Native Project Index definitions used to generate runtime artifacts. */
   readonly definitions?: ProjectIndexSnapshot['definitions']
+  /** Relations forwarded only to the deployment-manifest projector. */
+  readonly relations?: ProjectIndexSnapshot['relations']
+  /** Explicit logical project identity required by deployment manifests. */
+  readonly projectId?: string
+  /** Static frontend identity recorded outside content-addressed bytes. */
+  readonly staticFrontend?: string
+  /** Optional semantic backend identity recorded as provenance. */
+  readonly manifestSemanticBackend?: string
+  /** Completed semantic state mapped to manifest provenance. */
+  readonly semanticStatus?: 'complete' | 'disabled' | 'partial'
   readonly files?: readonly string[]
   readonly deletedFiles?: readonly string[]
   readonly mode?: string

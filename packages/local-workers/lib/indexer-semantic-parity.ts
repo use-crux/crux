@@ -60,7 +60,7 @@ type FactCount = number | 'present' | 'missing'
 type FactCounts = Readonly<Record<FactKey, FactCount>>
 type NativeCoverageEvent = Parameters<NonNullable<SemanticIndexInstrumentation['onNativeCoverage']>>[0]
 
-const DEFAULT_BACKEND_ROOT = '/home/henri/private/karyla/packages/backend'
+const DEFAULT_BACKEND_ROOT = process.cwd()
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2))

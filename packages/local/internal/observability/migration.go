@@ -72,6 +72,9 @@ func observabilitySchemaStatements() []string {
 		`CREATE TABLE IF NOT EXISTS runs (
 			run_id TEXT PRIMARY KEY,
 			trace_id TEXT,
+			project_id TEXT,
+			manifest_id TEXT,
+			deployment_id TEXT,
 			session_id TEXT,
 			user_id TEXT,
 			name TEXT,
@@ -298,6 +301,9 @@ func createObservabilitySchema(ctx context.Context, runner sqliteRunner) error {
 		name string
 		ddl  string
 	}{
+		{name: "project_id", ddl: `ALTER TABLE runs ADD COLUMN project_id TEXT`},
+		{name: "manifest_id", ddl: `ALTER TABLE runs ADD COLUMN manifest_id TEXT`},
+		{name: "deployment_id", ddl: `ALTER TABLE runs ADD COLUMN deployment_id TEXT`},
 		{name: "span_count", ddl: `ALTER TABLE runs ADD COLUMN span_count INTEGER NOT NULL DEFAULT 0`},
 		{name: "event_count", ddl: `ALTER TABLE runs ADD COLUMN event_count INTEGER NOT NULL DEFAULT 0`},
 		{name: "artifact_count", ddl: `ALTER TABLE runs ADD COLUMN artifact_count INTEGER NOT NULL DEFAULT 0`},

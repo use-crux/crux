@@ -11,6 +11,41 @@ import {
 } from '../src/runtime/config-transaction'
 
 describe('runtime config transaction', () => {
+  it('installs identity without taking transport ownership or suppressing devtools', () => {
+    const identity = { projectId: 'checkout', deploymentId: 'preview-9' }
+    const configure = vi.fn(() => () => undefined)
+    const plan = planRuntimeConfig({
+      config: {
+        devtools: { serverUrl: 'http://localhost:4400' },
+        observability: { identity },
+      },
+    })
+
+    expect(plan.ownsObservability).toBe(false)
+    expect(plan.observability).toEqual({ kind: 'identity', identity })
+    expect(plan.plugins.map((plugin) => plugin.name)).toContain('crux:devtools')
+
+    createRuntimeConfigTransaction(
+      { config: { observability: { identity } } },
+      { observability: { configure } },
+    ).apply()
+
+    expect(configure).toHaveBeenCalledWith({ identity })
+  })
+
+  it('rejects malformed identity while planning, before effect ports run', () => {
+    expect(() =>
+      createRuntimeConfigTransaction({
+        config: {
+          observability: {
+            identity: { projectId: ' checkout ' },
+            serverUrl: 'http://localhost:4400',
+          },
+        },
+      }),
+    ).toThrow()
+  })
+
   it('plans default config without owning observability or plugins', () => {
     const plan = planRuntimeConfig({ config: {} })
 

@@ -8,9 +8,14 @@ whenever graph records change.
 
 ## Current Version
 
-`CRUX_OBSERVABILITY_SCHEMA_VERSION` is `2`.
+`CRUX_OBSERVABILITY_SCHEMA_VERSION` is `3`.
 
-Version 2 is a clean pre-launch cutover. Graph records carry execution segment
+Version 3 adds optional, validated `deployment` identity to the record envelope.
+Writers emit v3 only. TypeScript and Go aggregate readers continue accepting
+persisted v2 records as deployment-unspecified; v2 records carrying a
+`deployment` field are rejected rather than reinterpreted.
+
+Version 2 was a clean pre-launch cutover. Graph records carry execution segment
 identity with `segmentId` and positive segment-local `segmentSeq`; the old
 process-local `seq` field is not retained or reinterpreted. The local SQLite
 runtime detects pre-v2 observability storage transactionally, drops only the

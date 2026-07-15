@@ -9,14 +9,18 @@
  * silently extend action latency.
  */
 
-import { observabilityDiagnostics, observe, type ObservabilityFlushResult } from '@use-crux/core/observability'
+import {
+  observabilityDiagnostics,
+  observe,
+  type ObservabilityFlushResult,
+} from "@use-crux/core/observability";
 
 export interface ConvexObservabilityFlushOptions {
   /**
    * Maximum time to wait for queued graph deliveries.
    * @default 3000
    */
-  timeoutMs?: number
+  timeoutMs?: number;
   /**
    * Whether this flush is the boundary's own final drain rather than an
    * opportunistic mid-operation flush (e.g. before/after a nested action hop,
@@ -29,7 +33,7 @@ export interface ConvexObservabilityFlushOptions {
    * an explicit `onDrain` still receives every drain's result regardless.
    * @default true
    */
-  terminal?: boolean
+  terminal?: boolean;
   /**
    * Receives the structured drain result.
    *
@@ -37,10 +41,13 @@ export interface ConvexObservabilityFlushOptions {
    * not fully complete (`status !== 'drained'`); the result is never silently
    * discarded either way.
    */
-  onDrain?: (result: ObservabilityFlushResult) => void
+  onDrain?: (result: ObservabilityFlushResult) => void;
 }
 
-export type ConvexActionHandler<Ctx, Args, Result> = (ctx: Ctx, args: Args) => Result | Promise<Result>
+export type ConvexActionHandler<Ctx, Args, Result> = (
+  ctx: Ctx,
+  args: Args,
+) => Result | Promise<Result>;
 
 /**
  * Short bounded default flush budget for a Convex action boundary.
@@ -50,26 +57,42 @@ export type ConvexActionHandler<Ctx, Args, Result> = (ctx: Ctx, args: Args) => R
  * replaces the prior 20-second default, which could silently stack across
  * nested action boundaries and mask a slow or stuck collector.
  */
-export const DEFAULT_CONVEX_OBSERVABILITY_FLUSH_TIMEOUT_MS = 3000
+export const DEFAULT_CONVEX_OBSERVABILITY_FLUSH_TIMEOUT_MS = 3000;
 
 export async function flushObservability(
   options: ConvexObservabilityFlushOptions = {},
 ): Promise<ObservabilityFlushResult> {
-  let result: ObservabilityFlushResult
+  let result: ObservabilityFlushResult;
   try {
-    result = await observe.flush({ timeoutMs: options.timeoutMs ?? DEFAULT_CONVEX_OBSERVABILITY_FLUSH_TIMEOUT_MS })
+    result = await observe.flush({
+      timeoutMs:
+        options.timeoutMs ?? DEFAULT_CONVEX_OBSERVABILITY_FLUSH_TIMEOUT_MS,
+    });
   } catch (error) {
-    result = failedDrainResult(error)
+    result = failedDrainResult(error);
   }
-  const report = options.onDrain ?? (options.terminal === false ? undefined : warnAboutIncompleteDrain)
+  const report =
+    options.onDrain ??
+    (options.terminal === false ? undefined : warnAboutIncompleteDrain);
   // A caller-supplied reporter is untrusted: isolate its failures so they
   // never mask the drain result the caller is about to receive.
   try {
-    report?.(result)
+    const reporting = (
+      report as ((result: ObservabilityFlushResult) => unknown) | undefined
+    )?.(result);
+    void Promise.resolve(reporting).catch((error: unknown) => {
+      console.error(
+        "[crux] Convex observability onDrain reporter rejected; the drain result above was still computed.",
+        error,
+      );
+    });
   } catch (error) {
-    console.error('[crux] Convex observability onDrain reporter threw; the drain result above was still computed.', error)
+    console.error(
+      "[crux] Convex observability onDrain reporter threw; the drain result above was still computed.",
+      error,
+    );
   }
-  return result
+  return result;
 }
 
 export function withObservabilityFlush<Ctx, Args, Result>(
@@ -78,29 +101,32 @@ export function withObservabilityFlush<Ctx, Args, Result>(
 ): (ctx: Ctx, args: Args) => Promise<Result> {
   return async (ctx, args) => {
     try {
-      return await handler(ctx, args)
+      return await handler(ctx, args);
     } finally {
-      await flushObservability(options)
+      await flushObservability(options);
     }
-  }
+  };
 }
 
 function failedDrainResult(error: unknown): ObservabilityFlushResult {
-  const diagnostics = observabilityDiagnostics()
-  console.error('[crux] Convex observability flush threw while draining an action boundary; treating as a failed drain.', error)
+  const diagnostics = observabilityDiagnostics();
+  console.error(
+    "[crux] Convex observability flush threw while draining an action boundary; treating as a failed drain.",
+    error,
+  );
   return {
-    status: 'failed',
+    status: "failed",
     delivered: 0,
     rejected: 0,
     remaining: diagnostics.queuedRecords + diagnostics.pendingDeliveries,
     deadlineExceeded: false,
-  }
+  };
 }
 
 function warnAboutIncompleteDrain(result: ObservabilityFlushResult): void {
-  if (result.status === 'drained') return
+  if (result.status === "drained") return;
   console.warn(
-    '[crux] Convex observability drain did not fully complete before the action boundary returned; telemetry may be delayed or lost.',
+    "[crux] Convex observability drain did not fully complete before the action boundary returned; telemetry may be delayed or lost.",
     result,
-  )
+  );
 }

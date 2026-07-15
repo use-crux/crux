@@ -1,7 +1,11 @@
 # Public Indexer Extension Contract
 
-Status: Accepted
+Status: Superseded
 Date: 2026-06-08
+
+Superseded by the implemented package-surface contract: the package root exposes Crux-owned compiler
+contracts, while the experimental `@use-crux/indexer/extensions` authoring surface exposes only
+extractors and relation declarations. Third-party rules remain reserved.
 
 Crux will expose a small data-first Indexer extension contract instead of a general compiler plugin
 API. Extension authors should contribute facts, relation specs, and analyses. The Project Index
@@ -10,7 +14,7 @@ resolution, suppression, and output projection.
 
 **Decision**
 
-The stable public authoring surface is limited to:
+The original proposal described the public authoring surface as:
 
 - `IndexerExtension`
 - `IndexExtractor`
@@ -41,14 +45,14 @@ Extractors are syntax-local and return immutable results:
 
 ```ts
 type ExtractResult =
-  | { kind: 'facts'; facts: ExtractedFacts }
-  | { kind: 'none'; dependencies?: readonly IndexDependency[] }
+  | { kind: "facts"; facts: ExtractedFacts }
+  | { kind: "none"; dependencies?: readonly IndexDependency[] }
   | {
-      kind: 'degraded'
-      diagnostics: readonly IndexDiagnostic[]
-      partialFacts?: ExtractedFacts
-      dependencies?: readonly IndexDependency[]
-    }
+      kind: "degraded";
+      diagnostics: readonly IndexDiagnostic[];
+      partialFacts?: ExtractedFacts;
+      dependencies?: readonly IndexDependency[];
+    };
 ```
 
 Source-level misses and partial extraction should degrade into diagnostics and dependencies when the
@@ -60,10 +64,10 @@ Rules follow an ESLint-style metadata contract:
 
 ```ts
 interface IndexRule<TOptions = unknown> {
-  name: RuleName
-  meta: IndexRuleMeta<TOptions>
-  requires?: readonly AnalysisTier[]
-  run(ctx: IndexRuleContext<TOptions>): readonly IndexLintFinding[]
+  name: RuleName;
+  meta: IndexRuleMeta<TOptions>;
+  requires?: readonly AnalysisTier[];
+  run(ctx: IndexRuleContext<TOptions>): readonly IndexLintFinding[];
 }
 ```
 
@@ -73,14 +77,14 @@ source files.
 
 **Consequences**
 
-Public extension support starts with extractors, rules, and relation specs. Public resolvers,
+The implemented public extension support starts with extractors and relation specs. Rules, resolvers,
 emitters, parser hooks, custom source providers, and query engines remain reserved until the Project
 Index graph model has proven stable.
 
-Third-party names for rules, relations, named diagnostic categories, and future derived views must be
+Third-party names for relations, named diagnostic categories, and future derived views must be
 package-prefixed, such as `@acme/crux-indexer/no-missing-description`. Crux owns `@use-crux/*` and any
 explicitly reserved core namespace.
 
-The testing harness is part of the public contract. `@use-crux/indexer/testing` should provide extractor
-fixtures, rule tests, manifest validation, namespace conflict tests, degraded extraction fixtures,
-and cache invalidation fixtures.
+The testing harness is part of the public contract. `@use-crux/indexer/testing` provides extractor
+fixtures, manifest validation, namespace conflict tests, degraded extraction fixtures, and cache
+invalidation fixtures. Rule execution and rule-test authoring remain compiler-owned.

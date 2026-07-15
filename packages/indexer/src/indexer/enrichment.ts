@@ -1,5 +1,5 @@
 import type { ProjectDefinition, ProjectDefinitionKind, ProjectRelation } from '@use-crux/core/project-index'
-import { definition, fingerprint, relation, safeId } from './definitions'
+import { definition, definitionFingerprintFile, fingerprint, relation, safeId } from './definitions'
 import { sourceForFile, sourceSnippet } from './ast/snippets'
 
 export async function resolvedDefinitionFromExport(
@@ -378,7 +378,13 @@ async function resolvedDefinition(
     sourceSnippet: staticBase?.sourceSnippet ?? (await sourceSnippet(root, file)),
     fidelity: 'resolved',
     status: 'active',
-    fingerprint: fingerprint({ kind, name, description, metadata, file }),
+    fingerprint: fingerprint({
+      kind,
+      name,
+      description,
+      metadata,
+      file: definitionFingerprintFile(root, file),
+    }),
     metadata,
   }
 }

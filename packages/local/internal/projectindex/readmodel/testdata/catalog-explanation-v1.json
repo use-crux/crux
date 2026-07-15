@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "definition": {
+    "id": "agent:writer",
+    "kind": "agent",
+    "name": "writer",
+    "source": {
+      "file": "src/writer.ts",
+      "line": 3
+    },
+    "fidelity": "resolved",
+    "status": "partial"
+  },
+  "evidence": [
+    {
+      "phase": "semantic",
+      "producer": "@use-crux/indexer/project-indexer@0.5.0",
+      "fidelity": "resolved",
+      "source": {
+        "file": "src/writer.ts",
+        "line": 3
+      },
+      "reason": "definition fact from source export writer"
+    }
+  ],
+  "relations": {
+    "incoming": [],
+    "outgoing": [
+      {
+        "id": "rel:prompt",
+        "type": "agent.uses_prompt",
+        "from": "agent:writer",
+        "to": "prompt:brief",
+        "fidelity": "resolved"
+      }
+    ],
+    "unresolved": [
+      {
+        "id": "diag:missing",
+        "reason": "tool target unresolved"
+      }
+    ]
+  },
+  "diagnostics": [
+    {
+      "id": "diag:missing",
+      "severity": "warn",
+      "code": "index.relation_unresolved",
+      "message": "tool target unresolved",
+      "relatedDefinitionIds": [
+        "agent:writer"
+      ]
+    }
+  ],
+  "lints": [
+    {
+      "id": "lint:policy",
+      "severity": "warn",
+      "ruleId": "agent.missing_policy",
+      "category": "safety",
+      "maturity": "stable",
+      "confidence": "high",
+      "profiles": [
+        "recommended"
+      ],
+      "title": "Missing policy",
+      "message": "Agent has no policy",
+      "rationale": "Policies bound behavior",
+      "primaryDefinitionId": "agent:writer",
+      "evidence": [],
+      "fixes": []
+    }
+  ],
+  "indexing": {
+    "cache": "hit",
+    "partialReason": "semantic evidence partial"
+  },
+  "manifest": {
+    "projectId": "assistant",
+    "manifestId": "pim_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "resolution": "resolved"
+  }
+}

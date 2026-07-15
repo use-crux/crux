@@ -52,15 +52,13 @@ describe("Crux observability graph contract", () => {
     );
   });
 
-  it("validates the shared generation run fixture", () => {
+  it("reads the shared persisted v2 generation run fixture", () => {
     const parsed = CruxGraphRecordBatchSchema.parse(fixture);
 
     expect(parsed.records).toHaveLength(13);
-    expect(
-      parsed.records.every(
-        (record) => record.schemaVersion === CRUX_OBSERVABILITY_SCHEMA_VERSION,
-      ),
-    ).toBe(true);
+    expect(parsed.records.every((record) => record.schemaVersion === 2)).toBe(
+      true,
+    );
     expect(parsed.records.map((record) => record.type)).toEqual([
       "run:start",
       "span:start",

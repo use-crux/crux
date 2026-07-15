@@ -13,7 +13,6 @@ pub(crate) fn with_static_index_source_model(
     mut facts: StaticIndexPatchFacts,
 ) -> StaticIndexPatchFacts {
     fold_source_refs_into_definitions(&mut facts.definitions, &facts.source_refs);
-    facts.source_refs.clear();
     facts.sources = source_rows(&facts);
     if facts.source_graph.is_none() && !facts.sources.is_empty() {
         facts.source_graph = Some(static_index_source_graph());

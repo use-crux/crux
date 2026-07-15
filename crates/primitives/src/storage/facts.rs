@@ -35,6 +35,7 @@ pub(crate) fn storage_native_facts(input: &CustomProjectionInput<'_>) -> Option<
         } => {
             let context = PrimitiveContext::from_initializers(
                 input.file,
+                input.relative_path,
                 input.imports,
                 input.local_initializers,
                 local_initializers,
@@ -52,7 +53,13 @@ pub(crate) fn storage_native_facts(input: &CustomProjectionInput<'_>) -> Option<
 
 fn storage_call_facts(input: &CustomProjectionInput<'_>) -> Option<Value> {
     let call = call_parts(input.source_match)?;
-    let context = PrimitiveContext::new(input.file, input.imports, input.local_initializers, &call);
+    let context = PrimitiveContext::new(
+        input.file,
+        input.relative_path,
+        input.imports,
+        input.local_initializers,
+        &call,
+    );
     let parts = StorageParts {
         variable_name: call.variable_name,
         source: call.source,
@@ -100,7 +107,7 @@ fn bundle_definition_facts(
             id,
             kind: "storage.bundle",
             name: parts.variable_name.to_string(),
-            file: context.file,
+            file: context.fingerprint_file,
             source: parts.source,
             snippet: parts.snippet,
             metadata: bundle_metadata(parts.variable_name, backend, &refs),
@@ -133,7 +140,7 @@ fn storage_scope_facts(
             id,
             kind: "storage.scope",
             name: parts.variable_name.to_string(),
-            file: context.file,
+            file: context.fingerprint_file,
             source: parts.source,
             snippet: parts.snippet,
             metadata: scope_metadata(
@@ -157,7 +164,7 @@ fn storage_factory_definition(
         id: format!("{}:{}", descriptor.kind, safe_id(parts.variable_name)),
         kind: descriptor.kind,
         name: parts.variable_name.to_string(),
-        file: context.file,
+        file: context.fingerprint_file,
         source: parts.source,
         snippet: parts.snippet,
         metadata: factory_metadata(parts.variable_name, descriptor),

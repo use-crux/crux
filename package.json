@@ -21,6 +21,7 @@
     "typecheck:ts60": "node ./scripts/typecheck-typescript-compat.mjs 6.0.3",
     "typecheck:tsgo-preview": "node ./scripts/typecheck-typescript-compat.mjs tsgo",
     "check:indexer-contracts": "node ./scripts/check-indexer-contracts.mjs",
+    "check:portability": "node ./scripts/check-portable-entrypoints.mjs",
     "test:indexer:compiler-runtime": "node ./scripts/test-indexer-compiler-runtime.mjs",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,mdx}\" --ignore-path .gitignore",
     "changeset": "changeset",
@@ -36,8 +37,10 @@
   },
   "devDependencies": {
     "@changesets/cli": "^2.29.7",
+    "@edge-runtime/vm": "^5.0.0",
     "@types/node": "^24.12.4",
     "@typescript/native-preview": "^7.0.0-dev.20260325.1",
+    "esbuild": "^0.28.0",
     "prettier": "3.8.1",
     "turbo": "2.8.12",
     "typescript": "5.9.3"

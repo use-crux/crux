@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "projectId": "manifest-fixture",
+  "manifestId": "pim_2ef1edd97de11a9af98749673d3e44fb90e28bc8ae61df42d6b7ba26dbc52329",
+  "content": {
+    "schemaVersion": 1,
+    "definitions": [
+      {
+        "id": "context:資料",
+        "kind": "context",
+        "name": "資料",
+        "fidelity": "partial",
+        "source": {
+          "file": "src/context.ts",
+          "line": 3
+        }
+      },
+      {
+        "id": "prompt:writer",
+        "kind": "prompt",
+        "name": "Writer",
+        "fidelity": "resolved",
+        "source": {
+          "file": "src/writer.ts",
+          "line": 4,
+          "column": 2
+        },
+        "sourceRefs": [
+          {
+            "id": "prompt:writer:schema",
+            "role": "schema",
+            "symbol": "WriterInput",
+            "source": {
+              "file": "src/schema.ts",
+              "line": 2
+            },
+            "fidelity": "resolved"
+          }
+        ],
+        "fingerprints": {
+          "definition": "def_writer_v1",
+          "contract": "41bcbd0a7fba50e420fbbd0a435d9f754adb0b6bf94b0c874b6dd8ac9c8bf508"
+        }
+      }
+    ],
+    "relations": [
+      {
+        "id": "prompt:writer:uses:context:資料",
+        "type": "uses",
+        "from": "prompt:writer",
+        "to": "context:資料",
+        "fidelity": "resolved",
+        "source": {
+          "file": "src/writer.ts",
+          "line": 5
+        }
+      }
+    ]
+  },
+  "provenance": {
+    "producer": "@use-crux/indexer",
+    "producerVersion": "0.5.0",
+    "staticFrontend": "oxc",
+    "semanticBackend": "typescript",
+    "semanticStatus": "complete"
+  }
+}

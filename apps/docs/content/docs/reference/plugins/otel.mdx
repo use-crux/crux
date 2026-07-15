@@ -4,7 +4,7 @@ description: OpenTelemetry integration, spans for every instrumented Crux event.
 ---
 
 ```ts
-import { withTelemetry } from '@use-crux/otel'
+import { createCruxResourceAttributes, withTelemetry } from '@use-crux/otel'
 import { createUrlExporter, createCallbackExporter } from '@use-crux/otel'
 ```
 
@@ -47,6 +47,17 @@ local graph capture is inline.
 If the standard OTel path is used without a registered `TracerProvider`, Crux detects the invalid OTel span context, warns once, and falls back to lightweight span tracking. Register a provider before installing the plugin or pass `exporter`.
 
 Open span registries are bounded. Registry-pressure evictions force-end spans with `crux.expired: true` and `UNSET` status.
+
+### `createCruxResourceAttributes(identity)`
+
+Validates `CruxDeploymentIdentity` and returns only `crux.project.id` plus the
+optional `crux.manifest.id` and `crux.deployment.id` attributes. Add them to
+the application-owned OTel Resource before registering or starting its
+provider, and pass the same identity to `observability.identity`.
+
+The helper is portable plain-data mapping: it does not import or create a Node
+SDK, provider, or Resource. Standard spans keep identity on their Resource;
+lightweight exporter spans carry the same semantic keys per span.
 
 Crux emits embedding spans as `embeddings {model}` with attributes for embedding name, kind, input count, chunk count, dense dimensions, token usage, and cost when available.
 

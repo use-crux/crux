@@ -135,8 +135,8 @@ func TestRoutingStableBetaPrimitiveTaxonomy(t *testing.T) {
 
 func assertValidFixtureRecord(t *testing.T, record Record, runID string) {
 	t.Helper()
-	if record.SchemaVersion != SchemaVersion {
-		t.Fatalf("record %s schemaVersion = %d, want %d", record.RecordID, record.SchemaVersion, SchemaVersion)
+	if !IsSupportedSchemaVersion(record.SchemaVersion) {
+		t.Fatalf("record %s schemaVersion = %d is unsupported", record.RecordID, record.SchemaVersion)
 	}
 	if record.RunID != runID {
 		t.Fatalf("record %s runId = %q", record.RecordID, record.RunID)

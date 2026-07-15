@@ -9,7 +9,6 @@
  * @module
  */
 
-import { Experimental_StdioMCPTransport } from "@ai-sdk/mcp/mcp-stdio";
 import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 import type {
   ToolSource,
@@ -42,6 +41,7 @@ import {
   type MCPClient,
   type MCPTransport,
 } from "./client";
+import { createAiSdkStdioTransport } from "#ai-sdk-stdio";
 import type {
   AiSdkMcpMaterializedTool,
   AiSdkMcpToolSourceSession,
@@ -89,9 +89,9 @@ export async function materializeAiSdkMcpToolSource(
   }
   const errorContext = mcpTransportErrorContext(source.id, config);
   setMcpTransportAttributes(connect, errorContext);
-  let transport: ReturnType<typeof createNativeTransport>;
+  let transport: Awaited<ReturnType<typeof createNativeTransport>>;
   try {
-    transport = createNativeTransport(config);
+    transport = await createNativeTransport(config);
   } catch (error) {
     const failure = mcpToolSourceError(
       "transport-configuration",
@@ -346,7 +346,7 @@ function wrapNativeTool(
   );
 }
 
-function createNativeTransport(config: McpTransportConfig):
+async function createNativeTransport(config: McpTransportConfig): Promise<
   | MCPTransport
   | {
       readonly type: "http";
@@ -354,14 +354,10 @@ function createNativeTransport(config: McpTransportConfig):
       readonly headers?: Record<string, string>;
       readonly redirect: "error" | "follow";
       readonly fetch?: typeof globalThis.fetch;
-    } {
+    }
+> {
   if (config.type === "stdio") {
-    return new Experimental_StdioMCPTransport({
-      command: config.command,
-      ...(config.args ? { args: [...config.args] } : {}),
-      ...(config.cwd !== undefined ? { cwd: config.cwd } : {}),
-      ...(config.env ? { env: { ...config.env } } : {}),
-    });
+    return createAiSdkStdioTransport(config);
   }
   return {
     type: "http",

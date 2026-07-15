@@ -62,6 +62,7 @@ func (s *Service) loadRunSummary(ctx context.Context, runID string, includeCount
 	row := s.db.QueryRowContext(ctx, `
 		SELECT
 			r.run_id, ifnull(r.trace_id, ''), ifnull(r.session_id, ''), ifnull(r.user_id, ''),
+			ifnull(r.project_id, ''), ifnull(r.manifest_id, ''), ifnull(r.deployment_id, ''),
 			ifnull(r.name, ''), ifnull(r.root_primitive, ''),
 			`+effectiveRunStatusSQL+`, ifnull(r.started_at, ''), ifnull(r.ended_at, ''),
 			ifnull(r.duration_ms, 0),
@@ -72,11 +73,15 @@ func (s *Service) loadRunSummary(ctx context.Context, runID string, includeCount
 		WHERE r.run_id = ?
 	`, runID)
 	var attributes, metrics, errorJSON []byte
+	var projectID, manifestID, deploymentID string
 	if err := row.Scan(
 		&run.RunID,
 		&run.TraceID,
 		&run.SessionID,
 		&run.UserID,
+		&projectID,
+		&manifestID,
+		&deploymentID,
 		&run.Name,
 		&run.RootPrimitive,
 		&run.Status,
@@ -105,6 +110,7 @@ func (s *Service) loadRunSummary(ctx context.Context, runID string, includeCount
 	run.Attributes = json.RawMessage(attributes)
 	run.Metrics = json.RawMessage(metrics)
 	run.Error = json.RawMessage(errorJSON)
+	run.Deployment = deploymentIdentityFromColumns(projectID, manifestID, deploymentID)
 	return run, nil
 }
 
@@ -135,6 +141,7 @@ func (s *Service) runsWithOptions(ctx context.Context, opts RunListOptions) ([]R
 	query := `
 		SELECT
 			r.run_id, ifnull(r.trace_id, ''), ifnull(r.session_id, ''), ifnull(r.user_id, ''),
+			ifnull(r.project_id, ''), ifnull(r.manifest_id, ''), ifnull(r.deployment_id, ''),
 			ifnull(r.name, ''), ifnull(r.root_primitive, ''),
 			` + effectiveRunStatusSQL + `, ifnull(r.started_at, ''), ifnull(r.ended_at, ''),
 			ifnull(r.duration_ms, 0),
@@ -163,11 +170,15 @@ func (s *Service) runsWithOptions(ctx context.Context, opts RunListOptions) ([]R
 	for rows.Next() {
 		var run RunSummary
 		var attributes, metrics, errorJSON []byte
+		var projectID, manifestID, deploymentID string
 		if err := rows.Scan(
 			&run.RunID,
 			&run.TraceID,
 			&run.SessionID,
 			&run.UserID,
+			&projectID,
+			&manifestID,
+			&deploymentID,
 			&run.Name,
 			&run.RootPrimitive,
 			&run.Status,
@@ -196,6 +207,7 @@ func (s *Service) runsWithOptions(ctx context.Context, opts RunListOptions) ([]R
 		run.Attributes = json.RawMessage(attributes)
 		run.Metrics = json.RawMessage(metrics)
 		run.Error = json.RawMessage(errorJSON)
+		run.Deployment = deploymentIdentityFromColumns(projectID, manifestID, deploymentID)
 		runs = append(runs, run)
 	}
 	if err := rows.Err(); err != nil {
@@ -212,6 +224,21 @@ func (s *Service) runsWithOptions(ctx context.Context, opts RunListOptions) ([]R
 		return nil, 0, err
 	}
 	return runs, appliedLimit, nil
+}
+
+func deploymentIdentityFromColumns(
+	projectID string,
+	manifestID string,
+	deploymentID string,
+) *DeploymentIdentity {
+	if projectID == "" {
+		return nil
+	}
+	return &DeploymentIdentity{
+		ProjectID:    projectID,
+		ManifestID:   manifestID,
+		DeploymentID: deploymentID,
+	}
 }
 
 // runListWhereClause builds the SQL predicate for status/session/time-range
@@ -1054,6 +1081,11 @@ func (s *Service) RunDetail(ctx context.Context, runID string) (RunDetail, error
 	}
 	detail.DefinitionRefs = definitionRefs.Run
 	attachRunDetailDefinitionRefs(&detail.Root, definitionRefs.BySpan)
+	resolution, err := s.resolveRunManifest(ctx, graph.Run, detail.DefinitionRefs, "")
+	if err != nil {
+		return RunDetail{}, err
+	}
+	detail.Manifest = &resolution
 	return detail, nil
 }
 

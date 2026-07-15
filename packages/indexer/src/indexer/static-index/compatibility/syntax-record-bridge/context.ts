@@ -86,6 +86,7 @@ export function createStaticRecordExtractContext(
       : undefined,
     define: createDefinitionBuilder(({ id, kind, name, metadata }) =>
       staticDefinition(
+        input.root,
         input.record.file,
         id,
         kind,

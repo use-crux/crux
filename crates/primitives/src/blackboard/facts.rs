@@ -81,7 +81,7 @@ pub(crate) fn blackboard_facts(
             name: id_info
                 .display_name
                 .unwrap_or_else(|| parts.variable_name.to_string()),
-            file: context.file,
+            file: context.fingerprint_file,
             source: parts.source,
             snippet: parts.snippet,
             metadata,

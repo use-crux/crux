@@ -33,11 +33,11 @@ afterEach(async () => {
 });
 
 describe("semantic facts cache", () => {
-  it("uses the complete media-lint semantic epoch instead of stale v24 artifacts", () => {
-    expect(SEMANTIC_FACTS_CACHE_EPOCH).toBe("semantic-facts-v28");
+  it("uses the integrated provenance semantic epoch instead of stale v28 artifacts", () => {
+    expect(SEMANTIC_FACTS_CACHE_EPOCH).toBe("semantic-facts-v29");
   });
 
-  it("does not reuse a valid cache artifact from the pre-lint v24 namespace", async () => {
+  it("does not reuse a valid cache artifact from the pre-integration v28 namespace", async () => {
     const root = await fixtureRoot();
     const file = join(root, "src/writer.ts");
     await writeFile(file, `export const writer = true`);
@@ -65,7 +65,7 @@ describe("semantic facts cache", () => {
       ".crux/cache/index",
       SEMANTIC_FACTS_CACHE_EPOCH,
     );
-    const staleDir = join(root, ".crux/cache/index", "semantic-facts-v24");
+    const staleDir = join(root, ".crux/cache/index", "semantic-facts-v28");
     await mkdir(staleDir, { recursive: true });
     await copyFile(join(currentDir, cacheName), join(staleDir, cacheName));
     await rm(currentDir, { recursive: true, force: true });

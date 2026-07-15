@@ -23,6 +23,7 @@ type IndexSourceRefFact = model.IndexSourceRefFact
 type PatchState = model.PatchState
 
 type IndexFactProducer = model.IndexFactProducer
+type IndexFactExtractorProvenance = model.IndexFactExtractorProvenance
 type IndexFactProvenance = model.IndexFactProvenance
 type IndexFactEnvelope = model.IndexFactEnvelope
 type IndexFactTransaction = model.IndexFactTransaction

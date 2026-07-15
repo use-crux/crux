@@ -46,6 +46,39 @@ describe('correctness holds with AsyncLocalStorage forced unavailable', () => {
     await expect(outcome).rejects.toThrow(/AsyncLocalStorage/)
   })
 
+  it('contains rejection from detached async work after failing closed', async () => {
+    resetObservabilityRuntime()
+    __setAlsForTesting(null)
+    const unhandled: unknown[] = []
+    const onUnhandled = (event: PromiseRejectionEvent) => unhandled.push(event.reason)
+    globalThis.addEventListener('unhandledrejection', onUnhandled)
+
+    try {
+      const { observe } = await import('../../../src/observability')
+      const outcome = observe.withHostLifecycle({ defer: () => {} }, async () => {
+        await Promise.resolve()
+        throw new Error('detached failure')
+      })
+      await expect(outcome).rejects.toThrow(/AsyncLocalStorage/)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(unhandled).toEqual([])
+    } finally {
+      globalThis.removeEventListener('unhandledrejection', onUnhandled)
+    }
+  })
+
+  it('keeps the host lifecycle available for the synchronous fallback frame only', async () => {
+    resetObservabilityRuntime()
+    __setAlsForTesting(null)
+    const { activeHostLifecycle, observe } = await import('../../../src/observability')
+
+    const deadline = Date.now() + 1_000
+    expect(
+      observe.withHostLifecycle({ deadline: () => deadline }, () => activeHostLifecycle()?.deadline?.()),
+    ).toBe(deadline)
+    expect(activeHostLifecycle()).toBeUndefined()
+  })
+
   it('accepts a plain-object CruxExecutionContext, not a Cloudflare-typed one', async () => {
     resetObservabilityRuntime()
     const waited: Promise<unknown>[] = []

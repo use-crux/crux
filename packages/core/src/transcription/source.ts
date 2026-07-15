@@ -36,11 +36,11 @@ function decodeDataUrl(value: string, declared?: string): DataAsset {
   if (!match) throw new TypeError('Invalid audio data URL')
   const mediaType = declared ?? match[1]!
   const encoded = match[3]!
-  const estimated = match[2] ? Math.floor(encoded.length * 3 / 4) : encoded.length
+  const estimated = match[2] ? Math.floor((encoded.length * 3) / 4) : encoded.length
   if (estimated > MAX_DATA_URL_BYTES) throw new TypeError('Audio data URL exceeds 20 MiB')
   const bytes = match[2]
-    ? Uint8Array.from(Buffer.from(encoded, 'base64'))
-    : Uint8Array.from(Buffer.from(decodeURIComponent(encoded), 'utf8'))
+    ? Uint8Array.from(atob(encoded), (character) => character.charCodeAt(0))
+    : new TextEncoder().encode(decodeURIComponent(encoded))
   if (bytes.byteLength > MAX_DATA_URL_BYTES) throw new TypeError('Audio data URL exceeds 20 MiB')
   return dataAsset(bytes, mediaType)
 }
@@ -54,8 +54,12 @@ async function bytesFromData(data: Uint8Array | Blob): Promise<Uint8Array> {
 }
 
 function isAsset(value: AudioSource): value is Asset {
-  return typeof value === 'object' && value !== null && 'type' in value &&
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'type' in value &&
     (value.type === 'data' || value.type === 'url' || value.type === 'provider-file')
+  )
 }
 
 function isBlob(value: unknown): value is Blob {

@@ -8,9 +8,6 @@
   "publishConfig": {
     "access": "public"
   },
-  "engines": {
-    "node": ">=22.0.0"
-  },
   "keywords": [
     "ai",
     "rag",

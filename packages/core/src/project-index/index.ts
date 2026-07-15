@@ -22,6 +22,7 @@ import {
 
 export { captureSource } from "./source";
 export * from "./definition-kind-coverage";
+export * from "./manifest";
 export * from "./project-model";
 export * from "./rule-manifest";
 
@@ -1236,6 +1237,8 @@ export interface ProjectIndexingStatus {
   ast: IndexIndexingPhaseStatus;
   semantic: Omit<IndexIndexingPhaseStatus, "status"> & {
     status: "disabled" | IndexIndexingPhaseStatus["status"];
+    /** Compiler backend that produced the latest semantic phase. */
+    backend?: string;
     enrichedDefinitionCount?: number;
   };
   cache?: {
@@ -2096,6 +2099,7 @@ export const ProjectIndexingStatusSchema = z.object({
   ast: IndexIndexingPhaseStatusSchema,
   semantic: IndexIndexingPhaseStatusSchema.omit({ status: true }).extend({
     status: z.enum(["disabled", "pending", "running", "ready", "degraded"]),
+    backend: z.string().optional(),
     enrichedDefinitionCount: z.number().optional(),
   }),
   cache: z

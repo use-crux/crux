@@ -34,6 +34,7 @@ import {
 } from "./project-indexer-protocol";
 import { writeStaticHostArtifactRequest } from "./project-indexer-static-host";
 import { isRuntimeOperationKind } from "../lib/runtime-operation-kind";
+import { writeDeploymentManifestArtifact } from "./project-indexer-deployment-manifest";
 
 const rl = createInterface({
   input: process.stdin,
@@ -208,6 +209,10 @@ async function runAssembledRequest(
           result,
           req.root,
         );
+        break;
+      }
+      case "createDeploymentManifest": {
+        await writeDeploymentManifestArtifact(writeResponse, req);
         break;
       }
       case "runRuntimeOperation": {

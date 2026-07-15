@@ -20,7 +20,8 @@ pnpm add @use-crux/ai ai # or @use-crux/openai, @use-crux/anthropic, @use-crux/g
 client. Adapter packages keep MCP as an optional peer, so ordinary Core and
 provider installs do not pull an MCP client into the application.
 
-Crux packages are ESM-only and require Node.js 22 or newer.
+`@use-crux/mcp` is ESM-only. Streamable HTTP remains portable; stdio
+materialization requires a Node runtime and fails closed elsewhere.
 
 ## Streamable HTTP
 

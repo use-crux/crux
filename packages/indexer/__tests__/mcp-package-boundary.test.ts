@@ -15,6 +15,7 @@ interface PackageManifest {
   readonly author?: string;
   readonly engines?: Readonly<Record<string, string>>;
   readonly exports?: Readonly<Record<string, unknown>>;
+  readonly imports?: Readonly<Record<string, unknown>>;
   readonly homepage?: string;
   readonly publishConfig?: { readonly access?: string };
   readonly repository?: { readonly directory?: string };
@@ -37,7 +38,7 @@ describe("MCP package boundary", () => {
         "@use-crux/mcp",
       );
       expect(manifest.peerDependencies ?? {}, packageName).toMatchObject({
-        "@use-crux/mcp": "workspace:^",
+        "@use-crux/mcp": "workspace:^0.5.0 || ^0.6.0",
       });
       expect(manifest.peerDependenciesMeta ?? {}, packageName).toMatchObject({
         "@use-crux/mcp": { optional: true },
@@ -57,7 +58,6 @@ describe("MCP package boundary", () => {
     const manifest = packageManifest("mcp");
     expect(manifest).toMatchObject({
       author: "Crux",
-      engines: { node: ">=22.0.0" },
       publishConfig: { access: "public" },
       repository: { directory: "packages/mcp" },
       homepage: "https://cruxjs.dev/docs/reference/mcp",
@@ -65,14 +65,32 @@ describe("MCP package boundary", () => {
         ".": expect.any(Object),
         "./testing/vitest": expect.any(Object),
       },
+      imports: {
+        "#ai-sdk-stdio": expect.any(Object),
+        "#official-stdio": expect.any(Object),
+      },
     });
 
-    expect(readRepoFile("scripts/stage-npm-packages.mjs")).toContain(
-      "{ name: '@use-crux/mcp', dir: 'packages/mcp', sourceRoot: 'src' }",
+    const stagingScript = readRepoFile("scripts/stage-npm-packages.mjs");
+    expect(stagingScript).toMatch(
+      /\{ name: ["']@use-crux\/mcp["'], dir: ["']packages\/mcp["'], sourceRoot: ["']src["'] \}/,
     );
     expect(readRepoFile("scripts/typecheck-typescript-compat.mjs")).toContain(
       "'packages/mcp'",
     );
+    expect(manifest.engines).toBeUndefined();
+
+    const releaseWorkflow = readRepoFile(".github/workflows/release.yml");
+    const nightlyPackages = releaseWorkflow.match(
+      /nightly_packages=\([\s\S]*?\n\s*\)/,
+    )?.[0];
+    expect(nightlyPackages).toBeDefined();
+    const stagedPackageNames = [
+      ...stagingScript.matchAll(/\{ name: ["'](@use-crux\/[^"']+)["']/g),
+    ].map((match) => match[1]);
+    for (const packageName of stagedPackageNames) {
+      expect(nightlyPackages, packageName).toContain(packageName);
+    }
     expect(productionFilesWithExplicitAny("mcp")).toEqual([]);
   });
 });

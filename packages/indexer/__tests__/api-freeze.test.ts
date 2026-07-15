@@ -29,6 +29,7 @@ describe('API freeze guardrails', () => {
       'runSetupOperation',
       'resolveProjectModel',
       'inspectProjectConfig',
+      'createProjectIndexDeploymentManifest',
       'checkStaticRulesForProject',
       'extractStaticEvidenceBatchForProject',
       'loadStaticExtensionHostManifestForProject',

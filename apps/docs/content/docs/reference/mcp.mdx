@@ -68,6 +68,9 @@ put secrets in IDs, prefixes, URL queries, prompt text, or error messages.
 
 ## `stdio()`
 
+Stdio materialization is a Node-only capability. Portable runtimes fail closed
+with remediation to use `streamableHttp()` instead.
+
 ```ts
 function stdio(
   config: Omit<McpStdioTransportConfig, "type">,

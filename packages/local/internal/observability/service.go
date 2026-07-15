@@ -42,6 +42,7 @@ type Service struct {
 	mutationTO    time.Duration
 	maintenanceTO time.Duration
 	mutationMu    sync.Mutex
+	manifestStore deploymentManifestReader
 
 	retentionSettings  retentionSettings
 	lifecycleRunDetail func(context.Context, string) (RunDetail, error)
@@ -115,33 +116,34 @@ func (b *EventBus) Publish(event Event) {
 }
 
 type RunSummary struct {
-	RunID              string  `json:"runId"`
-	TraceID            string  `json:"traceId"`
-	SessionID          string  `json:"sessionId,omitempty"`
-	UserID             string  `json:"userId,omitempty"`
-	Name               string  `json:"name"`
-	RootPrimitive      string  `json:"rootPrimitive"`
-	Status             string  `json:"status"`
-	StartedAt          string  `json:"startedAt"`
-	EndedAt            string  `json:"endedAt"`
-	DurationMs         float64 `json:"durationMs"`
-	Model              string  `json:"model"`
-	Provider           string  `json:"provider"`
-	PromptID           string  `json:"promptId"`
-	RecordCount        int     `json:"recordCount"`
-	SpanCount          int     `json:"spanCount"`
-	EventCount         int     `json:"eventCount"`
-	ArtifactCount      int     `json:"artifactCount"`
-	EdgeCount          int     `json:"edgeCount"`
-	SegmentCount       int     `json:"segmentCount"`
-	ActiveSegmentID    string  `json:"activeSegmentId,omitempty"`
-	OrderingConfidence string  `json:"orderingConfidence"`
-	GapCount           int     `json:"gapCount"`
-	TraceAliasConflict bool    `json:"traceAliasConflict,omitempty"`
-	inputTokens        int     `json:"-"`
-	outputTokens       int     `json:"-"`
-	costUSD            float64 `json:"-"`
-	LastActivityAt     string  `json:"lastActivityAt,omitempty"`
+	RunID              string              `json:"runId"`
+	TraceID            string              `json:"traceId"`
+	SessionID          string              `json:"sessionId,omitempty"`
+	UserID             string              `json:"userId,omitempty"`
+	Deployment         *DeploymentIdentity `json:"deployment,omitempty"`
+	Name               string              `json:"name"`
+	RootPrimitive      string              `json:"rootPrimitive"`
+	Status             string              `json:"status"`
+	StartedAt          string              `json:"startedAt"`
+	EndedAt            string              `json:"endedAt"`
+	DurationMs         float64             `json:"durationMs"`
+	Model              string              `json:"model"`
+	Provider           string              `json:"provider"`
+	PromptID           string              `json:"promptId"`
+	RecordCount        int                 `json:"recordCount"`
+	SpanCount          int                 `json:"spanCount"`
+	EventCount         int                 `json:"eventCount"`
+	ArtifactCount      int                 `json:"artifactCount"`
+	EdgeCount          int                 `json:"edgeCount"`
+	SegmentCount       int                 `json:"segmentCount"`
+	ActiveSegmentID    string              `json:"activeSegmentId,omitempty"`
+	OrderingConfidence string              `json:"orderingConfidence"`
+	GapCount           int                 `json:"gapCount"`
+	TraceAliasConflict bool                `json:"traceAliasConflict,omitempty"`
+	inputTokens        int                 `json:"-"`
+	outputTokens       int                 `json:"-"`
+	costUSD            float64             `json:"-"`
+	LastActivityAt     string              `json:"lastActivityAt,omitempty"`
 	// Revision is the server-owned read-model revision this run last changed
 	// at. Zero means the run predates revision tracking (pre-Phase-11 rows
 	// before their next write).
@@ -302,6 +304,8 @@ type RunDetail struct {
 	Diagnostics    []RunDetailDiagnostic         `json:"diagnostics"`
 	Counts         RunDetailCounts               `json:"counts"`
 	DefinitionRefs []DefinitionRef               `json:"definitionRefs"`
+	Manifest       *RunManifestResolution        `json:"manifest,omitempty"`
+	CurrentCatalog *CurrentCatalogComparison     `json:"currentCatalog,omitempty"`
 	Debug          *Graph                        `json:"debug,omitempty"`
 }
 

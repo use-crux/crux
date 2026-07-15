@@ -766,6 +766,7 @@ type IndexIndexingPhaseStatus struct {
 
 type IndexIndexingSemanticStatus struct {
 	Status                  string `json:"status"`
+	Backend                 string `json:"backend,omitempty"`
 	IndexedAt               string `json:"indexedAt,omitempty"`
 	DurationMs              int64  `json:"durationMs,omitempty"`
 	FileCount               int    `json:"fileCount,omitempty"`

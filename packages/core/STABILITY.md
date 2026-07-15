@@ -55,7 +55,7 @@ by their package documentation may still be experimental.
 
 ## Observability (`@use-crux/core/observability`, `@use-crux/otel`)
 
-Observability is **stable beta** for the v2 graph record contract (`schemaVersion: 2`, `runId` /
+Observability is **stable beta** for the v3 graph record contract (`schemaVersion: 3`, `runId` /
 `traceId` / `segmentId` / `segmentSeq`), the `run:start` / `run:suspend` / `run:resume` / `run:end`
 lifecycle and its explicit ownership API (`observe.openRun()`, `observe.resumeRun()`, the returned
 handle's `.suspend()` / `.end()` / `.error()`), the delivery receipt/idempotence contract, the host

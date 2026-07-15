@@ -132,7 +132,7 @@ fn shared_static_index_protocol_fixture_decodes_and_finalizes() {
     let finalize_response = pipeline::finalize(finalize);
     assert_eq!(finalize_response.method, StaticIndexMethod::Finalize);
     assert_eq!(finalize_response.telemetry.facts.definitions, 1);
-    assert_eq!(finalize_response.telemetry.facts.source_refs, 0);
+    assert_eq!(finalize_response.telemetry.facts.source_refs, 1);
     assert_eq!(finalize_response.telemetry.facts.diagnostics, 1);
     assert_eq!(finalize_response.telemetry.facts.lint_findings, 1);
     assert_eq!(finalize_response.telemetry.facts.sources, 1);

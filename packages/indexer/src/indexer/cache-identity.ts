@@ -7,8 +7,8 @@ import type { ProjectIndexCompilerProfile } from "./compiler/profile";
  * Cache epochs are intentional invalidation levers for compiler behavior that is not captured by
  * source/config hashes or structured dependency identities.
  */
-export const STATIC_PARSE_CACHE_EPOCH = "static-parse-v62";
-export const SEMANTIC_FACTS_CACHE_EPOCH = "semantic-facts-v28";
+export const STATIC_PARSE_CACHE_EPOCH = "static-parse-v65";
+export const SEMANTIC_FACTS_CACHE_EPOCH = "semantic-facts-v29";
 export const SEMANTIC_COMPILER_OPTIONS_ID =
   "ts-bundler-es2022-strict-false-types-empty";
 

@@ -17,6 +17,7 @@ func (s *Service) ReindexProjectWithOptions(
 	projectName string,
 	options ProjectReindexOptions,
 ) (store.IndexData, error) {
+	s.setSemanticMode(options.semanticMode())
 	return s.pipeline().reindexProjectWithOptions(ctx, root, configPath, projectName, options)
 }
 
@@ -40,9 +41,11 @@ func (s *Service) ReindexProjectIncrementalWithOptions(
 	deletedFiles []string,
 	options ProjectReindexOptions,
 ) (store.IndexData, error) {
+	s.setSemanticMode(options.semanticMode())
 	return s.pipeline().reindexProjectIncrementalWithOptions(ctx, root, configPath, projectName, files, deletedFiles, options)
 }
 
 func (s *Service) ReindexProjectRuntimeRich(ctx context.Context, root, configPath, projectName string) (store.IndexData, error) {
+	s.setSemanticMode(ProjectSemanticInline)
 	return s.pipeline().reindexProjectRuntimeRich(ctx, root, configPath, projectName)
 }

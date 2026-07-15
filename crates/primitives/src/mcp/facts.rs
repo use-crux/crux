@@ -40,7 +40,7 @@ pub(crate) fn mcp_server_facts(
         id: definition_id.clone(),
         kind: "mcp.server",
         name: server_id.clone(),
-        file: context.file,
+        file: context.fingerprint_file,
         source: parts.source,
         snippet: parts.snippet,
         metadata,

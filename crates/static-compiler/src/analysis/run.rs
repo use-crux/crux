@@ -87,7 +87,7 @@ fn analyze_parsed_file(
     let mut seen_definition_ids = HashSet::<String>::new();
     let mut groups = Vec::new();
     for projection in &native_facts {
-        let Some(grouped) = grouped_finalize_facts_from_extracted(
+        let Some(mut grouped) = grouped_finalize_facts_from_extracted(
             &projection.facts,
             &request.plan.root,
             request.plan.project_name.as_deref(),
@@ -95,6 +95,7 @@ fn analyze_parsed_file(
         ) else {
             continue;
         };
+        attribute_native_fact_extractors(&mut grouped, &projection.replaces);
         if let Some(id) = primary_definition_id(&grouped) {
             if !seen_definition_ids.insert(id) {
                 continue;
@@ -153,6 +154,54 @@ fn analyze_parsed_file(
         groups.push(source_group);
     }
     groups
+}
+
+pub(crate) fn attribute_native_fact_extractors(
+    grouped: &mut StaticIndexPatchFacts,
+    replaces: &[crate::protocol::static_syntax::StaticNativeFactExtractorIdentity],
+) {
+    let contributors = replaces
+        .iter()
+        .map(
+            |replaced| crate::core::facts::StaticIndexFactExtractorProvenance {
+                name: replaced.extractor.clone(),
+                extension: None,
+            },
+        )
+        .collect::<Vec<_>>();
+    for definition in &grouped.definitions {
+        grouped
+            .definition_extractors
+            .entry(definition.id.clone())
+            .or_default()
+            .extend(contributors.clone());
+        grouped
+            .fact_extractors
+            .entry(format!("definitions:{}", definition.id))
+            .or_default()
+            .extend(contributors.clone());
+    }
+    for relation_ref in &mut grouped.relation_refs {
+        relation_ref.extractors.extend(contributors.clone());
+    }
+    for source_ref in &grouped.source_refs {
+        grouped
+            .fact_extractors
+            .entry(format!(
+                "sourceRefs:{}:{}",
+                source_ref.definition_id, source_ref.ref_.id
+            ))
+            .or_default()
+            .extend(contributors.clone());
+    }
+    for diagnostic in &grouped.diagnostics {
+        grouped
+            .fact_extractors
+            .entry(format!("diagnostics:{}", diagnostic.id))
+            .or_default()
+            .extend(contributors.clone());
+    }
+    grouped.canonicalize();
 }
 
 impl From<Vec<StaticIndexPatchFacts>> for StaticIndexAnalysisFacts {

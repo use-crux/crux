@@ -12,7 +12,7 @@
  * @module
  */
 
-import type { SanitizedSourceRef } from './contract'
+import type { SanitizedSourceRef } from "./contract";
 
 /**
  * Source shape available on compiled definitions and runtime call sites. Mirrors
@@ -20,31 +20,41 @@ import type { SanitizedSourceRef } from './contract'
  * values a runtime emitter may hold, so callers can hand over whatever they have.
  */
 export interface DefinitionSourceInput {
-  file?: string
-  line?: number
-  column?: number
+  file?: string;
+  line?: number;
+  column?: number;
   /** Present on stack-derived call sites; intentionally never emitted. */
-  function?: string
+  function?: string;
 }
 
 /** Options controlling how a source location is proven repo-relative. */
 export interface SanitizeDefinitionSourceOptions {
   /** Absolute project root used to relativize absolute source paths. */
-  projectRoot?: string
+  projectRoot?: string;
 }
 
 function normalizeSeparators(path: string): string {
-  return path.replace(/\\/g, '/')
+  return path.replace(/\\/g, "/");
 }
 
 function isAbsolute(path: string): boolean {
-  // POSIX root, Windows drive (C:/), or UNC (//server) — all after separator
-  // normalization to forward slashes.
-  return path.startsWith('/') || /^[A-Za-z]:\//.test(path)
+  // POSIX root, Windows drive absolute (C:/), or UNC (//server) — all after
+  // separator normalization to forward slashes.
+  return path.startsWith("/") || /^[A-Za-z]:\//.test(path);
+}
+
+function isDriveRelative(path: string): boolean {
+  // C:private resolves against ambient per-drive process state, so neither a
+  // source nor a project root in this form can establish repository locality.
+  return /^[A-Za-z]:(?!\/)/.test(path);
 }
 
 function hasTraversal(path: string): boolean {
-  return path.split('/').some((segment) => segment === '..')
+  return path.split("/").some((segment) => segment === "..");
+}
+
+function hasControlCharacters(path: string): boolean {
+  return /[\u0000-\u001f\u007f-\u009f]/u.test(path);
 }
 
 /**
@@ -56,37 +66,47 @@ export function sanitizeDefinitionSource(
   source: DefinitionSourceInput | undefined,
   options?: SanitizeDefinitionSourceOptions,
 ): SanitizedSourceRef | undefined {
-  if (!source || typeof source.file !== 'string' || source.file.length === 0) {
-    return undefined
+  if (!source || typeof source.file !== "string" || source.file.length === 0) {
+    return undefined;
   }
   if (!Number.isInteger(source.line) || (source.line as number) <= 0) {
-    return undefined
+    return undefined;
   }
 
-  let file = normalizeSeparators(source.file)
+  let file = normalizeSeparators(source.file);
+  if (isDriveRelative(file) || hasControlCharacters(file)) return undefined;
 
   if (isAbsolute(file)) {
     const root = options?.projectRoot
-      ? normalizeSeparators(options.projectRoot).replace(/\/+$/, '')
-      : undefined
-    if (!root || !isAbsolute(root)) return undefined
-    if (file === root) return undefined
-    if (!file.startsWith(`${root}/`)) return undefined
-    file = file.slice(root.length + 1)
+      ? normalizeSeparators(options.projectRoot).replace(/\/+$/, "")
+      : undefined;
+    if (!root || !isAbsolute(root)) return undefined;
+    if (file === root) return undefined;
+    if (!file.startsWith(`${root}/`)) return undefined;
+    file = file.slice(root.length + 1);
   }
 
-  // Strip a leading `./`, then reject anything that still walks upward. This
-  // covers both plain relative `../x` inputs and absolute paths whose root-
-  // relative remainder escaped via `..`.
-  file = file.replace(/^\.\//, '')
-  if (file.length === 0 || isAbsolute(file) || hasTraversal(file)) return undefined
+  // Collapse empty and `.` segments, then reject anything that still walks
+  // upward. This covers plain relative `../x` inputs and absolute paths whose
+  // root-relative remainder escaped via `..`.
+  const segments = file
+    .split("/")
+    .filter((segment) => segment.length > 0 && segment !== ".");
+  file = segments.join("/");
+  if (
+    file.length === 0 ||
+    isAbsolute(file) ||
+    isDriveRelative(file) ||
+    hasTraversal(file)
+  )
+    return undefined;
 
   const column =
     Number.isInteger(source.column) && (source.column as number) > 0
       ? (source.column as number)
-      : undefined
+      : undefined;
 
   return column === undefined
     ? { file, line: source.line as number }
-    : { file, line: source.line as number, column }
+    : { file, line: source.line as number, column };
 }
