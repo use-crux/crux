@@ -1,0 +1,169 @@
+/**
+ * `evaluate()` — define one inert Eval.
+ *
+ * The task is the sole inference anchor for Case input, semantic output, call
+ * options, and capabilities. Defining an Eval performs no model, filesystem,
+ * or host work.
+ *
+ * @module
+ */
+
+import type { ProjectDefinitionKind } from "../project-index";
+import type { BoundScorerLib, Scorer } from "../quality/scorers";
+import type { Gates } from "../quality/gates";
+import type { EvaluationCoverageTargetId } from "../quality/internal/definition";
+import type { EvalCase } from "./case";
+import type { CaseFile } from "./case-file";
+import type { CallOf, CapsOf, EvalTaskLike, InputOf, OutputOf } from "./task";
+import { EVAL_INTERNAL, type EvalDefinitionV1 } from "./internal/definition";
+import { normalizeEvalDefinition } from "./internal/normalize-definition";
+
+/** Project Index definition id that an Eval is intended to cover. */
+export type EvalCoverageTargetId<
+  TKind extends ProjectDefinitionKind = ProjectDefinitionKind,
+> = EvaluationCoverageTargetId<TKind>;
+
+/** Literal name carried by one statically named scorer. @internal */
+type ScorerElementName<S> = S extends { readonly scorerName?: infer N }
+  ? N extends string
+    ? string extends N
+      ? string
+      : N
+    : string
+  : string;
+
+/** Literal scorer names declared by an authored scorer tuple. @internal */
+type ScorerNamesOf<TScorers> = TScorers extends readonly (infer S)[]
+  ? ScorerElementName<S>
+  : never;
+
+/** Options accepted by the inert Phase 1 authoring surface. */
+export interface EvaluateOptions<
+  TTask extends EvalTaskLike,
+  TExpected,
+  TScorers extends readonly Scorer<
+    InputOf<TTask>,
+    OutputOf<TTask>,
+    TExpected,
+    string
+  >[],
+  TVariants extends Readonly<Record<string, Readonly<Record<string, unknown>>>>,
+  TId extends string | undefined,
+> {
+  id?: TId;
+  task: TTask;
+  cases:
+    | readonly (
+        | EvalCase<
+            InputOf<TTask>,
+            OutputOf<TTask>,
+            TExpected,
+            CallOf<TTask>,
+            CapsOf<TTask>,
+            ScorerNamesOf<TScorers>
+          >
+        | CaseFile<NoInfer<InputOf<TTask>>, unknown>
+      )[]
+    | CaseFile<NoInfer<InputOf<TTask>>, unknown>;
+  variants?: TVariants;
+  expect?: EvalCase<
+    InputOf<TTask>,
+    OutputOf<TTask>,
+    TExpected,
+    CallOf<TTask>,
+    CapsOf<TTask>
+  >["expect"];
+  afterScores?: EvalCase<
+    InputOf<TTask>,
+    OutputOf<TTask>,
+    TExpected,
+    CallOf<TTask>,
+    CapsOf<TTask>,
+    ScorerNamesOf<TScorers>
+  >["afterScores"];
+  scorers?:
+    | TScorers
+    | ((
+        scorers: BoundScorerLib<InputOf<TTask>, OutputOf<TTask>, TExpected>,
+      ) => TScorers);
+  gates?: Gates<ScorerNamesOf<TScorers> | "pass">;
+  trials?: number;
+  tags?: readonly string[];
+  description?: string;
+  covers?: readonly EvalCoverageTargetId[];
+}
+
+/**
+ * An immutable Eval definition discovered and executed by external
+ * coordinators. It intentionally has no execution or promotion methods.
+ */
+export interface Eval<
+  I = unknown,
+  O = unknown,
+  ScoreName extends string = string,
+  VariantName extends string = never,
+  Id extends string | undefined = string | undefined,
+> {
+  readonly _tag: "CruxEval";
+  readonly id: Id;
+  readonly __types?: {
+    readonly input: (value: I) => void;
+    readonly output: () => O;
+    readonly scoreName: () => ScoreName;
+    readonly variantName: () => VariantName;
+  };
+  readonly [EVAL_INTERNAL]: EvalDefinitionV1;
+}
+
+/** Widest Eval type accepted by internal collection code. */
+export type AnyEval = Eval<never, unknown, string, string, string | undefined>;
+
+function createEval(options: unknown): AnyEval {
+  const { id, definition } = normalizeEvalDefinition(options);
+  const evalValue = {
+    _tag: "CruxEval" as const,
+    id,
+  };
+  Object.defineProperty(evalValue, EVAL_INTERNAL, {
+    value: definition,
+    enumerable: false,
+  });
+  return Object.freeze(evalValue) as AnyEval;
+}
+
+/**
+ * Define a frozen, inert Eval from a production task and its Cases.
+ *
+ * @param options - Task, Cases, and optional checks or comparison Variants.
+ * @returns A definition for CLI/Node discovery; no work is executed.
+ */
+export function evaluate<
+  const TTask extends EvalTaskLike,
+  const TExpected = unknown,
+  const TScorers extends readonly Scorer<
+    InputOf<TTask>,
+    OutputOf<TTask>,
+    TExpected,
+    string
+  >[] = readonly Scorer<InputOf<TTask>, OutputOf<TTask>, TExpected, string>[],
+  const TVariants extends Readonly<
+    Record<string, Readonly<Record<string, unknown>>>
+  > = {},
+  const TId extends string | undefined = undefined,
+>(
+  options: EvaluateOptions<TTask, TExpected, TScorers, TVariants, TId>,
+): Eval<
+  InputOf<TTask>,
+  OutputOf<TTask>,
+  ScorerNamesOf<TScorers> | "pass",
+  keyof TVariants & string,
+  TId
+> {
+  return createEval(options) as Eval<
+    InputOf<TTask>,
+    OutputOf<TTask>,
+    ScorerNamesOf<TScorers> | "pass",
+    keyof TVariants & string,
+    TId
+  >;
+}

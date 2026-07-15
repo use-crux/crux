@@ -1,0 +1,24 @@
+import { readFile } from "node:fs/promises";
+import { describe, expect, it } from "vitest";
+
+interface CorePackageManifest {
+  readonly exports?: Readonly<Record<string, unknown>>;
+}
+
+describe("@use-crux/core/eval", () => {
+  it("resolves from the conditional package export with an exact runtime surface", async () => {
+    const manifest = JSON.parse(
+      await readFile(new URL("../../package.json", import.meta.url), "utf8"),
+    ) as CorePackageManifest;
+
+    expect(manifest.exports?.["./eval"]).toEqual({
+      types: "./src/eval/index.ts",
+      import: "./src/eval/index.ts",
+    });
+
+    const surface = await import("@use-crux/core/eval");
+    expect(Object.keys(surface).sort()).toEqual(["caseFile", "evaluate"]);
+    expect(surface.evaluate).toBeTypeOf("function");
+    expect(surface.caseFile).toBeTypeOf("function");
+  });
+});

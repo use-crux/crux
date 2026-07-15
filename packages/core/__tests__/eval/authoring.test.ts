@@ -1,0 +1,193 @@
+import { describe, expect, it } from "vitest";
+import { z } from "zod";
+
+import { caseFile, evaluate } from "../../src/eval";
+import { getEvalDefinitionForInternalUse } from "../../src/eval/internal/definition";
+
+describe("evaluate()", () => {
+  it("defines one frozen inert Eval from an opaque task and inline Case", () => {
+    const support = async (input: { question: string }) => ({
+      answer: input.question,
+    });
+
+    const evalValue = evaluate({
+      task: support,
+      cases: [{ input: { question: "Can I get a refund?" } }],
+    });
+
+    expect(evalValue).toMatchObject({
+      _tag: "CruxEval",
+      id: undefined,
+    });
+    expect(Object.isFrozen(evalValue)).toBe(true);
+    expect(evalValue).not.toHaveProperty("run");
+    expect(evalValue).not.toHaveProperty("promote");
+    expect(getEvalDefinitionForInternalUse(evalValue)).toMatchObject({
+      schemaVersion: 1,
+      task: support,
+      caseFiles: [],
+      variants: {},
+      arms: [{ name: "current", overrideKeys: [] }],
+      scorers: [],
+      trials: 1,
+      tags: [],
+      covers: [],
+    });
+  });
+
+  it("carries a frozen Current-first definition without cloning user-owned values", () => {
+    const task = async (input: { question: string }) => input.question;
+    const sharedExpect = () => undefined;
+    const scorer = () => ({ name: "length", score: 1 });
+    const candidate = { temperature: 0.2 };
+
+    const evalValue = evaluate({
+      id: "support",
+      task,
+      cases: [{ id: "refund", input: { question: "Refund?" } }],
+      variants: { cheaper: candidate },
+      expect: sharedExpect,
+      scorers: [scorer],
+      description: "Support quality",
+      tags: ["support"],
+      covers: ["prompt:support"],
+    });
+
+    const definition = getEvalDefinitionForInternalUse(evalValue);
+    expect(definition).toMatchObject({
+      schemaVersion: 1,
+      explicitId: "support",
+      task,
+      trials: 1,
+      description: "Support quality",
+      tags: ["support"],
+      covers: ["prompt:support"],
+      arms: [
+        { name: "current", overrideKeys: [] },
+        { name: "cheaper", overrideKeys: ["temperature"] },
+      ],
+    });
+    expect(definition.expect).toBe(sharedExpect);
+    expect(definition.scorers).toEqual([scorer]);
+    expect(definition.variants.cheaper).not.toBe(candidate);
+    expect(definition.variants.cheaper).toEqual(candidate);
+    expect(Object.isFrozen(definition)).toBe(true);
+    expect(Object.isFrozen(definition.cases)).toBe(true);
+    expect(Object.isFrozen(definition.variants)).toBe(true);
+    expect(Object.isFrozen(task)).toBe(false);
+    expect(Object.isFrozen(candidate)).toBe(false);
+    expect(Object.isFrozen(scorer)).toBe(false);
+  });
+
+  it.each(["current", "baseline"])(
+    "rejects the reserved Variant name %s at runtime",
+    (name) => {
+      expect(() =>
+        evaluate({
+          task: async (input: { question: string }) => input.question,
+          cases: [{ input: { question: "Refund?" } }],
+          variants: { [name]: { temperature: 0.2 } },
+        }),
+      ).toThrowError(`evaluate(): Variant name '${name}' is reserved.`);
+    },
+  );
+
+  it("stably separates mixed inline Cases and case-file references", () => {
+    const inputSchema = z.object({ question: z.string() });
+    const firstFile = caseFile("./support.cases.jsonl", { input: inputSchema });
+    const secondFile = caseFile("./regressions.csv", { input: inputSchema });
+
+    const evalValue = evaluate({
+      task: async (input: { question: string }) => input.question,
+      cases: [
+        { id: "refund", input: { question: "Refund?" } },
+        firstFile,
+        { id: "shipping", input: { question: "Shipping?" } },
+        secondFile,
+      ],
+    });
+
+    const definition = getEvalDefinitionForInternalUse(evalValue);
+    expect(definition.cases.map((item) => item.id)).toEqual([
+      "refund",
+      "shipping",
+    ]);
+    expect(definition.caseFiles.map((item) => item.path)).toEqual([
+      "./support.cases.jsonl",
+      "./regressions.csv",
+    ]);
+    expect(definition.caseFiles[0]?.inputSchema).toBe(inputSchema);
+    expect(Object.isFrozen(firstFile)).toBe(true);
+    expect(Object.isFrozen(inputSchema)).toBe(false);
+  });
+
+  it("rejects an empty explicit Case id", () => {
+    expect(() =>
+      evaluate({
+        task: async (input: { question: string }) => input.question,
+        cases: [{ id: "  ", input: { question: "Refund?" } }],
+      }),
+    ).toThrowError(
+      "evaluate(): a Case `id` must be a non-empty string when provided.",
+    );
+  });
+
+  it("validates case-file arguments without changing schema ownership", () => {
+    const inputSchema = z.object({ question: z.string() });
+
+    expect(() => caseFile("", { input: inputSchema })).toThrowError(
+      /non-empty string/,
+    );
+    expect(() =>
+      caseFile("./cases.jsonl", { input: {} as never }),
+    ).toThrowError(/Standard Schema/);
+    expect(() =>
+      caseFile("./cases.jsonl", {
+        input: inputSchema,
+        expected: {} as never,
+      }),
+    ).toThrowError(/`expected` must be a Standard Schema/);
+    expect(Object.isFrozen(inputSchema)).toBe(false);
+  });
+
+  it("rejects malformed Variant containers and entries", () => {
+    const task = async (input: { question: string }) => input.question;
+    const cases = [{ input: { question: "Refund?" } }];
+
+    expect(() => evaluate({ task, cases, variants: [] as never })).toThrowError(
+      /record of override objects/,
+    );
+    expect(() =>
+      evaluate({ task, cases, variants: { candidate: null } as never }),
+    ).toThrowError(/Variant 'candidate' must be an override object/);
+  });
+
+  it("normalizes Case shells without freezing user-owned evidence", () => {
+    const input = { question: "Refund?" };
+    const expected = { answer: "Yes" };
+    const tags = ["smoke"];
+    const metadata = { source: "hand-authored" };
+    const authoredCase = { input, expected, tags, metadata };
+
+    const evalValue = evaluate({
+      task: async (value: { question: string }) => value.question,
+      cases: [authoredCase],
+    });
+    const normalized = getEvalDefinitionForInternalUse(evalValue).cases[0]!;
+
+    expect(normalized).not.toBe(authoredCase);
+    expect(normalized.input).toBe(input);
+    expect(normalized.expected).toBe(expected);
+    expect(normalized.tags).not.toBe(tags);
+    expect(normalized.tags).toEqual(tags);
+    expect(normalized.metadata).not.toBe(metadata);
+    expect(normalized.metadata).toEqual(metadata);
+    expect(Object.isFrozen(normalized)).toBe(true);
+    expect(Object.isFrozen(normalized.tags)).toBe(true);
+    expect(Object.isFrozen(normalized.metadata)).toBe(true);
+    expect(Object.isFrozen(input)).toBe(false);
+    expect(Object.isFrozen(expected)).toBe(false);
+    expect(Object.isFrozen(tags)).toBe(false);
+    expect(Object.isFrozen(metadata)).toBe(false);
+  });
+});
