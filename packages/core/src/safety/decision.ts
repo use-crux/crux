@@ -1,4 +1,4 @@
-import type { BoundaryDef, BoundaryIdOf, SafetyTargetId } from './boundary'
+import type { BoundaryDef, BoundaryIdOf, MediaPartLocation, SafetyTargetId } from './boundary'
 import type { GuardrailStreamOption } from './stream/types'
 
 /** Safe, structured finding metadata emitted by safety policies. */
@@ -14,6 +14,7 @@ export type SafetyDecisionAction =
   | 'block'
   | 'warn'
   | 'rewrite'
+  | 'strip'
   | 'retry'
   | 'request_approval'
   | 'drop'
@@ -37,6 +38,7 @@ export interface SafetyDecision {
   readonly action: SafetyDecisionAction
   readonly severity?: 'info' | 'warn' | 'error'
   readonly reason?: string
+  readonly location?: MediaPartLocation
   readonly findings?: readonly SafetyFinding[]
   readonly tuned?: readonly ('mode' | 'stream' | 'enabled')[]
   readonly durationMs: number

@@ -1,9 +1,11 @@
 import type { ApprovalRequestInfo } from '../adapter/tool/approval'
 import type { RetrieverHit } from '../retrieval/types'
+import type { ContentPart } from '../types/content'
 
 /** Canonical safety boundary ids used in decisions, traces, and config serialization. */
 export type SafetyTargetId =
   | 'user.input'
+  | 'user.input.media'
   | 'model.input'
   | 'model.output.text'
   | 'model.output.object'
@@ -14,6 +16,39 @@ export type SafetyTargetId =
   | 'retrieval.result'
   | 'memory.write'
   | 'validation.feedback'
+
+/**
+ * A canonical non-text input part that can be inspected by a media guardrail.
+ *
+ * The union is derived from {@link ContentPart}, so narrowing `type` exposes
+ * the canonical properties for images, audio, video, and files.
+ */
+export type MediaPart = Exclude<ContentPart, { readonly type: 'text' }>
+
+/**
+ * The original canonical {@link MediaPart} and its stable input location.
+ *
+ * Both indexes refer to the caller's message arrays before any media is
+ * stripped. The `part` is the original object supplied by the caller.
+ */
+export interface MediaPartSubject {
+  /** The original canonical non-text part supplied by the caller. */
+  readonly part: MediaPart
+  /** Index in the original pre-strip messages array. */
+  readonly messageIndex: number
+  /** Index in the original pre-strip message content array. */
+  readonly partIndex: number
+}
+
+/** Safe original input coordinates for an evaluated canonical media part. */
+export interface MediaPartLocation {
+  /** Index in the original pre-strip messages array. */
+  readonly messageIndex: number
+  /** Index in the original pre-strip message content array. */
+  readonly partIndex: number
+  /** Canonical media discriminant without its source value. */
+  readonly partType: MediaPart['type']
+}
 
 /**
  * Frozen public boundary descriptor.
@@ -131,6 +166,26 @@ export const boundary = Object.freeze({
     user: (): BoundaryDef<'user.input', string> => makeBoundary('user.input'),
     model: (): BoundaryDef<'model.input', string> => makeBoundary('model.input'),
     text: (): BoundaryDef<'user.input', string> => makeBoundary('user.input'),
+    /**
+     * Target each canonical non-text part in user input before provider normalization.
+     *
+     * @returns A boundary whose guardrail subject is a {@link MediaPartSubject}.
+     *
+     * @example
+     * ```ts
+     * const pngOnly = guardrail({
+     *   id: 'png-only',
+     *   on: boundary.input.media(),
+     *   run: (subject) => {
+     *     if (subject.part.type !== 'image') return { action: 'allow' }
+     *     return subject.part.mediaType === 'image/png'
+     *       ? { action: 'allow' }
+     *       : { action: 'strip', reason: 'Only PNG images are accepted.' }
+     *   },
+     * })
+     * ```
+     */
+    media: (): BoundaryDef<'user.input.media', MediaPartSubject> => makeBoundary('user.input.media'),
   }),
   output: Object.freeze({
     text: (): BoundaryDef<'model.output.text', string> => makeBoundary('model.output.text'),

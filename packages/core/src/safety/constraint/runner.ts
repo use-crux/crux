@@ -10,8 +10,8 @@ import { validateConstraintRunResult } from './types'
 import { ConstraintViolationError } from './errors'
 import { observe } from '../../observability'
 import { constraintDefinitionRef } from '../../observability/definition-ref'
-import type { BoundaryDef } from '../boundary'
 import type { SafetyRunContext } from '../decision'
+import type { ConstraintBoundary } from './boundary'
 
 // ── Runner Options ────────────────────────────────────────────────
 
@@ -141,7 +141,10 @@ export async function observeConstraintCheck(
   }
 }
 
-function runContext<B extends BoundaryDef>(constraint: Constraint, ctx: ConstraintContext): SafetyRunContext<B> {
+function runContext<B extends ConstraintBoundary>(
+  constraint: Constraint,
+  ctx: ConstraintContext,
+): SafetyRunContext<B> {
   const boundary = constraint.on as B
   return {
     policy: { id: constraint.id, mode: 'enforce' },
@@ -156,7 +159,7 @@ function runContext<B extends BoundaryDef>(constraint: Constraint, ctx: Constrai
   }
 }
 
-function subjectForBoundary(boundary: BoundaryDef, output: ConstraintOutput): unknown {
+function subjectForBoundary(boundary: ConstraintBoundary, output: ConstraintOutput): unknown {
   if (boundary.id === 'model.output.text') return output.text
   if (boundary.id === 'model.output.object') return boundary.path ? valueAtPath(output.parsed, boundary.path) : output.parsed
   if (boundary.id === 'model.output') return { text: output.text, object: output.parsed }

@@ -71,6 +71,7 @@ export type TurnDecisionReasonCode =
   | "guardrail.warned"
   | "guardrail.blocked"
   | "guardrail.redacted"
+  | "guardrail.stripped"
   | "constraint.passed"
   | "constraint.failed"
   | "constraint.retry_requested"

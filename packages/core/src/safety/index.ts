@@ -24,6 +24,9 @@ export type {
   BoundaryIdOf,
   BoundaryInput,
   DotPath,
+  MediaPart,
+  MediaPartLocation,
+  MediaPartSubject,
   PathValue,
   RetrievalResultSubject,
   SafetyTargetId,
@@ -81,6 +84,7 @@ export type {
   GuardrailMode,
   GuardrailRunResult,
   GuardrailRewriteKind,
+  MediaGuardrailRunResult,
 } from './guardrail/types'
 
 // ── Constraint authoring ───────────────────────────────────────────

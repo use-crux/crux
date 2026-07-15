@@ -73,6 +73,46 @@ describe('Safety decisions in TurnDecisionReport', () => {
     })
   })
 
+  it('projects media stripping as a distinct guardrail outcome', () => {
+    const decision = safetyDecision({
+      policyId: 'strip-image',
+      kind: 'guardrail',
+      boundary: 'user.input.media',
+      action: 'strip',
+      reason: 'Image removed.',
+      location: { messageIndex: 2, partIndex: 1, partType: 'image' },
+    })
+
+    expect(safetyDecisionToTurnDecision(decision)).toMatchObject({
+      phase: 'checks',
+      kind: 'safety.guardrail',
+      outcome: 'strip',
+      reason: {
+        code: 'guardrail.stripped',
+        text: 'Image removed.',
+      },
+      tab: { tab: 'Guardrail', anchorId: 'strip-image' },
+    })
+  })
+
+  it('does not mislabel impossible strip actions from other safety kinds', () => {
+    const constraint = safetyDecision({
+      policyId: 'constraint-strip-fixture',
+      kind: 'constraint',
+      boundary: 'model.output.both',
+      action: 'strip',
+    })
+    const toolPolicy = safetyDecision({
+      policyId: 'tool-strip-fixture',
+      kind: 'toolPolicy',
+      boundary: 'tool.call',
+      action: 'strip',
+    })
+
+    expect(safetyDecisionToTurnDecision(constraint).reason.code).toBe('custom.safety.constraint.strip')
+    expect(safetyDecisionToTurnDecision(toolPolicy).reason.code).toBe('custom.safety.toolPolicy.strip')
+  })
+
   it('links tool-policy evidence to security reports and the owning boundary span', () => {
     const reported = safetyDecision({
       policyId: 'report-read',

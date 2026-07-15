@@ -1,6 +1,7 @@
 import type { SafetyProtocolEvent } from './session'
 import { createGuardrailPipeline } from './guardrail/pipeline'
-import type { Guardrail, GuardrailAudit, GuardrailContext } from './guardrail/types'
+import type { GuardrailAudit, GuardrailContext } from './guardrail/types'
+import type { GuardrailBinding } from './registry'
 
 /**
  * Run output-text guardrails independently for provider completion slots.
@@ -9,17 +10,17 @@ import type { Guardrail, GuardrailAudit, GuardrailContext } from './guardrail/ty
  */
 export async function guardOutputTextParts(
   options: Readonly<{
-    guards: readonly Guardrail[]
+    bindings: readonly GuardrailBinding[]
     parts: readonly string[]
     context: GuardrailContext
     appendAudit: (audit: GuardrailAudit) => void
     transcript: SafetyProtocolEvent[]
   }>,
 ): Promise<readonly string[]> {
-  const guards = options.guards.filter(guardsTextOutput)
-  if (guards.length === 0) return [...options.parts]
+  const bindings = options.bindings.filter(bindingGuardsTextOutput)
+  if (bindings.length === 0) return [...options.parts]
 
-  const pipeline = createGuardrailPipeline(guards)
+  const pipeline = createGuardrailPipeline(bindings)
   const guarded: string[] = []
   const actions: string[] = []
   for (const part of options.parts) {
@@ -30,13 +31,12 @@ export async function guardOutputTextParts(
   }
   options.transcript.push({
     t: 'output.guard',
-    guards: guards.length,
+    guards: bindings.length,
     actions,
   })
   return guarded
 }
 
-function guardsTextOutput(guard: Guardrail): boolean {
-  const boundaries = Array.isArray(guard.on) ? guard.on : [guard.on]
-  return boundaries.some((boundary) => boundary.id === 'model.output.text' || boundary.id === 'model.output')
+function bindingGuardsTextOutput(binding: GuardrailBinding): boolean {
+  return binding.boundary.id === 'model.output.text' || binding.boundary.id === 'model.output'
 }

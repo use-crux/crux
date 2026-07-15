@@ -54,7 +54,7 @@ packages with required gate environment.
 
 ## Cache Identity Review
 
-The current static cache namespace is `static-parse-v65`; semantic facts use
+The current static cache namespace is `static-parse-v66`; semantic facts use
 `semantic-facts-v29`; and the Go Project Index snapshot cache lives under
 `.crux/cache/index-v2/epoch-37/`. These identities include main's scheduling
 and owner-fact migrations plus root-stable fingerprints, backend state, and
