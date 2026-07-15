@@ -33,6 +33,24 @@ type ProjectIndexPatchCounts = model.ProjectIndexPatchCounts
 
 type Generation = model.Generation
 type State = model.State
+type StateCheckpoint = model.StateCheckpoint
+type RuntimeUpdateOperation = model.RuntimeUpdateOperation
+type RuntimeUpdateOwner = model.RuntimeUpdateOwner
+type RuntimeUpdateError = model.RuntimeUpdateError
+type RuntimeOwnerFacts = model.RuntimeOwnerFacts
+type RuntimeOwnerServerIdentity = model.RuntimeOwnerServerIdentity
+type RuntimeSuccessfulDiscovery = model.RuntimeSuccessfulDiscovery
+type ProjectIndexRuntimeUpdate = model.ProjectIndexRuntimeUpdate
+type RuntimeOverlay = model.RuntimeOverlay
+type RuntimeOverlayState = model.RuntimeOverlayState
+type RuntimeUpdateConflictError = model.RuntimeUpdateConflictError
+type RuntimeUpdateValidationError = model.RuntimeUpdateValidationError
+type RuntimeUpdatePersistenceError = model.RuntimeUpdatePersistenceError
+
+const (
+	RuntimeUpdateReplace = model.RuntimeUpdateReplace
+	RuntimeUpdateFailure = model.RuntimeUpdateFailure
+)
 
 type ProjectStaticSyntaxPlan = model.ProjectStaticSyntaxPlan
 type StaticCallInterest = model.StaticCallInterest
@@ -51,6 +69,14 @@ type StaticExtensionHostNodeReport = model.StaticExtensionHostNodeReport
 
 var EmptyPatchState = model.EmptyPatchState
 var NewState = model.NewState
+var NewRuntimeOverlayState = model.NewRuntimeOverlayState
+var ValidateRuntimeUpdate = model.ValidateRuntimeUpdate
+var ValidateRuntimeUpdateAgainstBase = model.ValidateRuntimeUpdateAgainstBase
+var IsRuntimeUpdateConflict = model.IsRuntimeUpdateConflict
+var NewRuntimeUpdateValidationError = model.NewRuntimeUpdateValidationError
+var IsRuntimeUpdateValidationError = model.IsRuntimeUpdateValidationError
+var NewRuntimeUpdatePersistenceError = model.NewRuntimeUpdatePersistenceError
+var IsRuntimeUpdatePersistenceError = model.IsRuntimeUpdatePersistenceError
 var ApplyPatch = model.ApplyPatch
 var PatchFromSnapshot = model.PatchFromSnapshot
 var MergeIndexPatches = model.MergeIndexPatches
@@ -61,6 +87,7 @@ var MergeProjectDefinition = model.MergeProjectDefinition
 var HasCompleteShardEvidence = model.HasCompleteShardEvidence
 var JoinSemanticPatch = model.JoinSemanticPatch
 var MergeRuntimeSnapshot = model.MergeRuntimeSnapshot
+var ProjectRegisteredRuntimeSnapshot = model.ProjectRegisteredRuntimeSnapshot
 var IsEmptyIndex = model.IsEmptyIndex
 var IsSourceOnlyIndex = model.IsSourceOnlyIndex
 var HasSourceOnlyDiagnostic = model.HasSourceOnlyDiagnostic

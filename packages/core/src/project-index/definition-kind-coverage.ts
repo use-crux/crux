@@ -109,7 +109,7 @@ export interface CoverageDescriptor {
  * above and `01-coverage-contract.md` §1.1/§1.2 for the full rationale.
  */
 export const DEFINITION_KIND_COVERAGE = {
-  // Category A — directly observed execution owner (24 kinds).
+  // Category A — directly observed execution owner (25 kinds).
   prompt: {
     primary: "directly-observed",
     runtimePrimitiveNames: ["prompt.resolve", "prompt.budget"],
@@ -125,6 +125,10 @@ export const DEFINITION_KIND_COVERAGE = {
   tool: {
     primary: "directly-observed",
     runtimePrimitiveNames: ["tool.call", "tool.approval"],
+  },
+  "mcp.server": {
+    primary: "directly-observed",
+    runtimePrimitiveNames: ["mcp.connect", "mcp.discover", "tool.call"],
   },
   agent: { primary: "directly-observed", runtimePrimitiveNames: ["agent.run"] },
   flow: { primary: "directly-observed", runtimePrimitiveNames: ["flow.run"] },

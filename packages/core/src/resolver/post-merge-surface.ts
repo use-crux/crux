@@ -16,6 +16,7 @@ import type { ExcludedContext } from './types'
 import type { Constraint } from '../safety/constraint/types'
 import type { Guardrail } from '../safety/guardrail/types'
 import type { ToolMiddleware } from '../tools/types'
+import type { ToolSource } from '../tools/tool-source'
 import type { MergedResolution } from './contract'
 import type { ResolverPorts } from './ports'
 import { resolveSkillSurface } from './skills'
@@ -29,6 +30,7 @@ export interface PostMergeSurface {
   readonly memories: MemoryEntry[]
   readonly blackboards: BlackboardEntry[]
   readonly injectedTools: AnyToolSet
+  readonly toolSources: readonly ToolSource[]
   readonly injectedToolOwners: ReadonlyMap<string, ToolOwnerLabel>
   readonly injectedToolMiddleware: ToolMiddleware[]
   readonly injectedConstraints: Constraint[]
@@ -59,6 +61,7 @@ export async function resolvePostMergeSurface(
     memories: merged.memories,
     blackboards: merged.blackboards,
     injectedTools: merged.tools,
+    toolSources: merged.toolSources,
     injectedToolOwners: merged.toolOwners,
     injectedToolMiddleware: merged.toolMiddleware,
     injectedConstraints: merged.constraints,

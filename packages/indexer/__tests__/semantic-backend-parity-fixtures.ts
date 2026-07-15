@@ -94,6 +94,41 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
       },
     },
     {
+      name: "authored-mcp-shared-analyzer",
+      workspacePackages: ["core", "mcp"],
+      files: {
+        "src/mcp.ts": `
+        import { context, prompt, when } from '@use-crux/core'
+        import { mcp, stdio } from '@use-crux/mcp'
+
+        export const searchServer = mcp({
+          id: 'search',
+          transport: stdio({
+            command: 'search-server',
+            env: { MCP_TOKEN: 'SECRET_MCP_PARITY_TOKEN' },
+          }),
+          tools: { allow: ['lookup'], prefix: 'search_' },
+        })
+        export const researchContext = context({
+          id: 'research',
+          use: [when(() => true, searchServer)],
+        })
+        export const writerPrompt = prompt({
+          id: 'writer',
+          use: [searchServer],
+        })
+      `,
+      },
+      expect: {
+        definitionIds: ["context:research", "prompt:writer"],
+        relationTypes: [
+          "context.uses_mcp_server",
+          "prompt.uses_mcp_server",
+          "mcp.server.provides_tool",
+        ],
+      },
+    },
+    {
       name: "authored-media-shared-analyzer",
       workspacePackages: ["ai", "core", "openai"],
       files: {

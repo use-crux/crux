@@ -163,6 +163,17 @@ export interface IndexFacts {
   hasExecute?: boolean;
   hasToModelOutput?: boolean;
   approvalRequired?: boolean;
+  serverId?: string;
+  transport?:
+    | { kind: "stdio"; executable?: string }
+    | { kind: "streamable-http"; origin?: string; pathname?: string }
+    | { kind: "resolver" };
+  mcp?: {
+    serverId: string;
+    remoteName: string;
+    exposedName: string;
+    provenance: "authored-expected" | "runtime-discovered";
+  };
   // agent
   promptId?: string;
   toolNames?: string[];

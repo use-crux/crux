@@ -14,6 +14,7 @@ export const CRUX_PRIMITIVE_FAMILIES = [
   "flow",
   "composition",
   "tool",
+  "mcp",
   "retrieval",
   "embedding",
   "memory",
@@ -68,6 +69,8 @@ export const CRUX_PRIMITIVE_NAMES = [
   "composition.vote",
   "tool.call",
   "tool.approval",
+  "mcp.connect",
+  "mcp.discover",
   "retrieval.pipeline",
   "retrieval.recipe",
   "retrieval.retrieve",
@@ -206,6 +209,8 @@ export const CRUX_PRIMITIVE_FAMILY_BY_NAME = {
   "composition.vote": "composition",
   "tool.call": "tool",
   "tool.approval": "tool",
+  "mcp.connect": "mcp",
+  "mcp.discover": "mcp",
   "retrieval.pipeline": "retrieval",
   "retrieval.recipe": "retrieval",
   "retrieval.retrieve": "retrieval",
@@ -873,6 +878,7 @@ export interface SanitizedSourceRef {
 export type DefinitionRefRole =
   | "resolved-prompt"
   | "resolved-context"
+  | "resolved-mcp-server"
   | "invoked-tool"
   | "invoked-agent"
   | "invoked-flow"

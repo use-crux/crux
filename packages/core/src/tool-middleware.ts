@@ -23,11 +23,7 @@ export {
   findToolApprovalDecision,
   deniedToolModelOutput,
 } from './tools/approvals'
-export {
-  approvalPolicyKind,
-  inspectToolApprovalPolicies,
-  resolveApprovalPolicy,
-} from './tools/approval-policy'
+export { approvalPolicyKind, inspectToolApprovalPolicies, resolveApprovalPolicy } from './tools/approval-policy'
 export type {
   ApprovalDeclaration,
   ResolvedApprovalPolicy,
@@ -39,6 +35,8 @@ export type {
 } from './tools/approval-policy'
 export type {
   ToolApprovalStatus,
+  ToolApprovalPolicyIdentity,
+  ToolApprovalReplayProvenance,
   ToolApprovalRequestPayload,
   ToolApprovalRequestPart,
   ToolApprovalResponsePart,

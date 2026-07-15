@@ -439,6 +439,23 @@ export interface WorkspaceDefinitionMount {
   source?: WorkspaceMountSourceSummary;
 }
 
+export type McpToolSelectionFacts =
+  | { allow: readonly string[]; deny?: never; prefix?: string }
+  | { deny: readonly string[]; allow?: never; prefix?: string }
+  | { allow?: never; deny?: never; prefix?: string };
+
+export type McpTransportFacts =
+  | { kind: "stdio"; executable?: string }
+  | { kind: "streamable-http"; origin?: string; pathname?: string }
+  | { kind: "resolver" };
+
+export interface McpToolProvenanceFacts {
+  serverId: string;
+  remoteName: string;
+  exposedName: string;
+  provenance: "authored-expected" | "runtime-discovered";
+}
+
 export type PrimitiveSpecificFacts =
   | {
       kind: "prompt";
@@ -477,6 +494,13 @@ export type PrimitiveSpecificFacts =
       hasExecute?: boolean;
       hasToModelOutput?: boolean;
       approvalRequired?: boolean;
+      mcp?: McpToolProvenanceFacts;
+    }
+  | {
+      kind: "mcp.server";
+      serverId: string;
+      transport?: McpTransportFacts;
+      tools?: McpToolSelectionFacts;
     }
   | {
       kind: "agent";
@@ -771,7 +795,7 @@ export interface ProjectDefinition {
   sourceSnippet?: SourceSnippet;
   sourceRefs?: ProjectSourceRef[];
   fidelity: "resolved" | "partial" | "error";
-  status?: "active" | "missing" | "stale";
+  status?: "active" | "missing" | "stale" | "removed";
   fingerprint?: string;
   metadata?: ProjectDefinitionMetadata;
   quality?: ProjectDefinitionQuality;
@@ -1447,6 +1471,8 @@ export type SpanPrimitive =
   | "embedding.call"
   | "memory.read"
   | "memory.write"
+  | "mcp.connect"
+  | "mcp.discover"
   | "constraint.check"
   | "constraint.retry"
   | "guardrail.run"

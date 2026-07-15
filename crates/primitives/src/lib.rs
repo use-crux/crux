@@ -56,6 +56,9 @@ mod memory {
     pub(crate) mod id;
     pub(crate) mod store;
 }
+mod mcp {
+    pub(crate) mod facts;
+}
 mod prompt {
     pub(crate) mod facts;
 }

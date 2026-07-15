@@ -1,9 +1,5 @@
 {
   "title": "Tools",
   "description": "Declare LLM-callable tools on prompts and contexts.",
-  "pages": [
-    "index",
-    "middleware",
-    "approvals"
-  ]
+  "pages": ["index", "mcp", "middleware", "approvals"]
 }

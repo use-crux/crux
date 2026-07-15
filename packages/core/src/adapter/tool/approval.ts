@@ -13,6 +13,7 @@ import { observe } from '../../observability'
 import { findToolApprovalDecision, findToolApprovalRequests } from '../../tools/approvals'
 import type { Message } from '../../generation/messages'
 import type { JsonValue, ToolModelOutput } from '../../types/tool'
+import type { ToolApprovalReplayProvenance } from '../../tools/types'
 import type { AdapterResponse } from '../types'
 import { emitToolArgsArtifact, emitToolResultArtifact, measureModelOutput } from './emission'
 import { collectToolApprovalDecisions } from '../../tools/internal/message-parsing'
@@ -42,6 +43,8 @@ export interface ApprovalRequestInfo {
   readonly input: JsonValue
   /** Random token that must round-trip through the approval response. */
   readonly approvalToken: string
+  /** Source/policy commitment required to authorize a rediscovered tool. */
+  readonly replay?: ToolApprovalReplayProvenance
 }
 
 /** Invalid approval response paired with the tool call it tried to decide. */
@@ -218,21 +221,23 @@ export function findInvalidApprovalToolCalls(messages: readonly Message[]): read
         name: toolName,
         args: request?.input ?? call?.args,
         approvalId: decision.approvalId,
-        message: invalidApprovalMessage(toolName, decision.approvalId),
+        message: invalidApprovalMessage(),
       },
     ]
   })
 }
 
-function invalidApprovalMessage(toolName: string, approvalId: string): string {
-  return `Tool approval response for "${toolName}" (${approvalId}) has no matching request or an invalid token; treating as denied.`
+function invalidApprovalMessage(): string {
+  return 'The approved tool request changed and was not executed. Request approval again.'
 }
 
 function toolCallIdFromApprovalId(approvalId: string): string | undefined {
   return approvalId.startsWith('approval_') ? approvalId.slice('approval_'.length) : undefined
 }
 
-function collectAssistantToolCalls(messages: readonly Message[]): Map<string, { readonly name: string; readonly args: unknown }> {
+function collectAssistantToolCalls(
+  messages: readonly Message[],
+): Map<string, { readonly name: string; readonly args: unknown }> {
   const calls = new Map<string, { readonly name: string; readonly args: unknown }>()
   for (const message of messages) {
     if (message.role !== 'assistant') continue
@@ -241,7 +246,11 @@ function collectAssistantToolCalls(messages: readonly Message[]): Map<string, { 
       for (const call of metadataCalls) {
         const id = readString(call, 'id') ?? readString(call, 'toolCallId')
         const name = readString(call, 'name') ?? readString(call, 'toolName')
-        if (id && name) calls.set(id, { name, args: readProperty(call, 'args') ?? readProperty(call, 'input') })
+        if (id && name)
+          calls.set(id, {
+            name,
+            args: readProperty(call, 'args') ?? readProperty(call, 'input'),
+          })
       }
     }
     if (!Array.isArray(message.content)) continue
@@ -249,7 +258,11 @@ function collectAssistantToolCalls(messages: readonly Message[]): Map<string, { 
       if (readString(part, 'type') !== 'tool-call') continue
       const id = readString(part, 'toolCallId')
       const name = readString(part, 'toolName')
-      if (id && name) calls.set(id, { name, args: readProperty(part, 'input') ?? readProperty(part, 'args') })
+      if (id && name)
+        calls.set(id, {
+          name,
+          args: readProperty(part, 'input') ?? readProperty(part, 'args'),
+        })
     }
   }
   return calls
@@ -281,6 +294,8 @@ export function emitToolApprovalObservation(
     modelOutput?: ToolModelOutput
     modelOutputSize?: number
     error?: unknown
+    /** Internal policy evidence emitted within this approval span. */
+    observePolicyDecision?: () => void
   },
 ): void {
   const span = observe.openSpan({
@@ -299,6 +314,7 @@ export function emitToolApprovalObservation(
   try {
     span.withContext(() => {
       emitToolArgsArtifact(span.spanId, args.toolName, args.toolCallId, args.input)
+      args.observePolicyDecision?.()
       if (args.modelOutput) {
         emitToolResultArtifact(span.spanId, args.toolName, args.toolCallId, args.modelOutput, {
           resultKind: 'model',
@@ -316,7 +332,11 @@ export function emitToolApprovalObservation(
           toolCallId: args.toolCallId,
           toolName: args.toolName,
           ...(args.reason ? { reason: args.reason } : {}),
-          ...(args.error ? { error: args.error instanceof Error ? args.error.message : String(args.error) } : {}),
+          ...(args.error
+            ? {
+                error: args.error instanceof Error ? args.error.message : String(args.error),
+              }
+            : {}),
         },
       })
     })

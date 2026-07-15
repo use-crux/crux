@@ -468,6 +468,11 @@ function conditionSourceRef(
   const resolved = isResolvableSourceExpression(unwrapped, view) ? resolveSemanticExpression(unwrapped, view) : undefined
   if (resolved) {
     const source = semanticSourceForNode(resolved.declaration, view.syntax)
+    const resolvedExpression = resolved.expression ? unwrapExpression(resolved.expression, view) : undefined
+    const containsMcpDeclaration =
+      resolvedExpression !== undefined &&
+      view.syntax.isKind(resolvedExpression, 'callExpression') &&
+      callExpressionName(resolvedExpression, view) === 'mcp'
     return {
       id: `${definitionId}:source:${role}:${property}:${sourceRefIdSegment(options.condition)}:${sourceRefIdSegment(
         options.branch ?? '',
@@ -476,7 +481,7 @@ function conditionSourceRef(
       property,
       symbol: resolved.symbol,
       source: resolved.functionName ? { ...source, function: resolved.functionName } : source,
-      snippet: semanticSourceSnippetForNode(resolved.declaration, view.syntax),
+      ...(containsMcpDeclaration ? {} : { snippet: semanticSourceSnippetForNode(resolved.declaration, view.syntax) }),
       fidelity: 'resolved',
       metadata,
     }

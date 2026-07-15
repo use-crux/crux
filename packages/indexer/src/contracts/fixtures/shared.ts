@@ -202,7 +202,10 @@ export type PrimitiveCoverageFixtureClass =
 /** Native coverage identity and its fixture proof anchors. */
 export interface PrimitiveCoverageIdentityFixture {
   /** Extension package that owns the extractor. */
-  readonly extension: "@use-crux/indexer/crux-core";
+  readonly extension:
+    | "@use-crux/indexer/crux-core"
+    | "@use-crux/indexer/crux-core-media"
+    | "@use-crux/indexer/crux-core-mcp";
   /** Extractor family name inside the extension. */
   readonly extractor: string;
   /** Native primitive family name used in coverage diagnostics. */

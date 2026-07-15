@@ -9,4 +9,4 @@ package cache
 // invalidates snapshots created before default Static Index scheduling.
 // TS-owned AST and semantic fact cache identity remain versioned in
 // @use-crux/indexer.
-const ProjectIndexSnapshotCacheEpoch = 34
+const ProjectIndexSnapshotCacheEpoch = 35

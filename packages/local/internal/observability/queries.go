@@ -1048,11 +1048,23 @@ func (s *Service) RunDetail(ctx context.Context, runID string) (RunDetail, error
 		return RunDetail{}, err
 	}
 	detail := ProjectRunDetail(graph, DefaultProjectionOptions())
-	detail.DefinitionRefs, err = s.runDefinitionRefs(ctx, graph.Run.RunID)
+	definitionRefs, err := s.projectRunDefinitionRefs(ctx, graph.Run.RunID)
 	if err != nil {
 		return RunDetail{}, fmt.Errorf("list definition refs for run %q: %w", runID, err)
 	}
+	detail.DefinitionRefs = definitionRefs.Run
+	attachRunDetailDefinitionRefs(&detail.Root, definitionRefs.BySpan)
 	return detail, nil
+}
+
+func attachRunDetailDefinitionRefs(node *RunDetailNode, refsBySpan map[string][]DefinitionRef) {
+	node.DefinitionRefs = refsBySpan[node.SpanID]
+	for index := range node.Details {
+		node.Details[index].DefinitionRefs = refsBySpan[node.Details[index].SpanID]
+	}
+	for index := range node.Children {
+		attachRunDetailDefinitionRefs(&node.Children[index], refsBySpan)
+	}
 }
 
 func applyRunSummaryGraphRollups(run *RunSummary, spans []SpanSummary, events []SpanEventSummary, artifacts []ArtifactSummary, edges []EdgeSummary) {

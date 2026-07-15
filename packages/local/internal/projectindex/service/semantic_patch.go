@@ -222,7 +222,7 @@ func (s *Service) applySemanticPatchIfCurrent(ctx context.Context, patch project
 	if err := s.indexCache.Commit(ctx, patch); err != nil {
 		return store.IndexData{}, true, err
 	}
-	return s.applyIndexPatchLocked(patch), true, nil
+	return s.applyIndexPatchLocked(ctx, patch), true, nil
 }
 
 func (s *Service) applyReadySemanticPatchIfCurrent(
@@ -262,5 +262,5 @@ func (s *Service) applyReadySemanticPatchIfCurrent(
 	if err := s.indexCache.Commit(ctx, patch); err != nil {
 		return store.IndexData{}, true, err
 	}
-	return s.applyIndexPatchLocked(patch), true, nil
+	return s.applyIndexPatchLocked(ctx, patch), true, nil
 }

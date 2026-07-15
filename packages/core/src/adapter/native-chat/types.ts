@@ -12,6 +12,7 @@ import type { GenerateObjectFn, GenerateTextFn } from "../../compaction";
 import type { Message } from "../../generation/messages";
 import type { GenerationSettings } from "../../generation/types";
 import type { AssistantContentPart } from "../../types/content";
+import type { ToolSourceMaterializer } from "../../tools/tool-source";
 import type { CruxAdapter } from "../define-adapter";
 import type { CruxProviderError } from "../normalized-outcome";
 import type { AdapterSpec } from "../spec";
@@ -175,6 +176,9 @@ export interface NativeChatProfile<
 > {
   /** Stable provider identifier used in traces and adapter matching. */
   readonly providerId: string;
+
+  /** Materialize an inert tool source for one provider invocation. */
+  readonly materializeToolSource?: ToolSourceMaterializer;
 
   /** Build a provider-native request from canonical Crux call arguments. */
   request(

@@ -34,7 +34,9 @@ import {
   inspectForDevtools,
   withSkillActivationInput,
 } from "./shared";
-import { emitInputTokenEstimate } from './media-token-budget'
+import { emitInputTokenEstimate } from "./media-token-budget";
+import { materializeToolSources } from "./tool-sources";
+import { createStreamSourceCleanup } from "./stream-source-cleanup";
 
 /**
  * Start one SDK-owned stream for a concrete model attempt.
@@ -60,31 +62,11 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     tokenBudget: args.tokenBudget,
     settings: args.settings,
   });
-  const resolved = await prompt.resolve(resolveOpts);
+  let resolved = await prompt.resolve(resolveOpts);
   const diagnostics = withDefaultResolverPorts().diagnostics;
   const mappedSettings = dialect.mapSettings(resolved.settings, modelInfo);
-  const lifecycle = createToolLifecycle({
-    regime: "sdk",
-    resolved,
-    call: {
-      tools: args.tools,
-      toolsContext: args.toolsContext,
-      runtimeContext: args.runtimeContext,
-      toolMiddleware: args.toolMiddleware,
-      toolApproval: args.toolApproval,
-    },
-    promptId: prompt.id,
-    input: args.input ?? {},
-    timeout: args.timeout,
-    reresolve: (skillSession) =>
-      prompt.resolve(withSkillActivationInput(resolveOpts, skillSession)),
-  });
-  const tools = lifecycle.tools;
   let { messages, promptText } = initialMessageState(resolved, args.messages);
   let nativeMessages = args.nativeMessages;
-  const resumed = await lifecycle.resume(messages);
-  messages = resumed.messages;
-  if (resumed.replayed > 0) nativeMessages = undefined;
   const safety = createSafety({
     call: {
       constraints: args.constraints,
@@ -109,20 +91,69 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
   messages = [...guardedInput.messages];
   promptText = guardedInput.prompt;
 
+  const sourceSession = await materializeToolSources({
+    dialect: dialect.id,
+    resolved,
+    materialize: dialect.materializeToolSource,
+    runtimeContext: args.runtimeContext,
+    abortSignal: args.signal,
+  });
+  resolved = sourceSession.resolved;
+  const closeSources = createStreamSourceCleanup(sourceSession, args.signal);
+  let lifecycle: ReturnType<typeof createToolLifecycle>;
+  try {
+    lifecycle = createToolLifecycle({
+      regime: "sdk",
+      resolved,
+      call: {
+        tools: args.tools,
+        toolsContext: args.toolsContext,
+        runtimeContext: args.runtimeContext,
+        toolMiddleware: args.toolMiddleware,
+        toolApproval: args.toolApproval,
+      },
+      promptId: prompt.id,
+      input: args.input ?? {},
+      timeout: args.timeout,
+      reresolve: (skillSession) =>
+        prompt.resolve(withSkillActivationInput(resolveOpts, skillSession)),
+    });
+    const resumed = await lifecycle.resume(messages);
+    messages = resumed.messages;
+    if (resumed.replayed > 0) nativeMessages = undefined;
+  } catch (error) {
+    await closeSources();
+    throw error;
+  }
+  const tools = lifecycle.tools;
+
   const stepBudget = createBudgetSignal({
     budget: "step",
     limitMs: args.timeout?.stepMs,
   });
-  const providerMessages =
-    messages.length > 0
-      ? await normalizeInvocationMessages(messages, {
-          provider: modelInfo.provider,
-        })
-      : undefined;
-  assertProviderMediaSupported(
-    { providerId: dialect.id, media: dialect.media },
-    { provider: modelInfo.provider, model: modelInfo.modelId, messages: providerMessages ?? [] },
-  );
+  let providerMessages:
+    | Awaited<ReturnType<typeof normalizeInvocationMessages>>
+    | undefined;
+  try {
+    providerMessages =
+      messages.length > 0
+        ? await normalizeInvocationMessages(messages, {
+            provider: modelInfo.provider,
+          })
+        : undefined;
+    assertProviderMediaSupported(
+      { providerId: dialect.id, media: dialect.media },
+      {
+        provider: modelInfo.provider,
+        model: modelInfo.modelId,
+        messages: providerMessages ?? [],
+      },
+    );
+  } catch (error) {
+    stepBudget.dispose();
+    await closeSources();
+    throw error;
+  }
   const request: ExecutorRequest<TModel> & { schema?: z.ZodType } = {
     model: args.model,
     modelInfo,
@@ -152,57 +183,60 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
 
   let handle: ExecutorStreamHandle<TRawStream>;
   try {
-    handle = await orchestrateStream<
-      Record<string, unknown>,
-      ExecutorStreamHandle<TRawStream>
-    >(
-      {
-        promptId: prompt.id,
-        promptConfig:
-          prompt.config ?? ({} as NonNullable<typeof prompt.config>),
-        preparedArgs: {
-          model: modelInfo.modelId,
-          system: resolved.system,
-          systemBlocks: resolved.systemBlocks,
-          prompt: promptText,
-          messages,
-          settings: mappedSettings,
-          schema: resolved.schema,
-          tools,
+    handle = await sourceSession.withContext(async () =>
+      orchestrateStream<
+        Record<string, unknown>,
+        ExecutorStreamHandle<TRawStream>
+      >(
+        {
+          promptId: prompt.id,
+          promptConfig:
+            prompt.config ?? ({} as NonNullable<typeof prompt.config>),
+          preparedArgs: {
+            model: modelInfo.modelId,
+            system: resolved.system,
+            systemBlocks: resolved.systemBlocks,
+            prompt: promptText,
+            messages,
+            settings: mappedSettings,
+            schema: resolved.schema,
+            tools,
+            input: args.input ?? {},
+            ...(await inspectForDevtools(prompt, resolveOpts, tools)),
+          },
           input: args.input ?? {},
-          ...(await inspectForDevtools(prompt, resolveOpts, tools)),
+          provider: modelInfo.provider || dialect.id,
+          model: args.model,
+          traceModel: modelInfo.modelId || undefined,
+          resolved,
+          outputMode: resolved.schema ? "object" : "text",
+          timeout: args.timeout,
+          ...(dialect.replayStream
+            ? {
+                createCachedStreamResult: (cached: {
+                  text?: string;
+                  object?: unknown;
+                  meta?: Record<string, unknown>;
+                }) =>
+                  dialect.replayStream!(cached) as unknown as MiddlewareResult,
+              }
+            : {}),
         },
-        input: args.input ?? {},
-        provider: modelInfo.provider || dialect.id,
-        model: args.model,
-        traceModel: modelInfo.modelId || undefined,
-        resolved,
-        outputMode: resolved.schema ? "object" : "text",
-        timeout: args.timeout,
-        ...(dialect.replayStream
-          ? {
-              createCachedStreamResult: (cached: {
-                text?: string;
-                object?: unknown;
-                meta?: Record<string, unknown>;
-              }) =>
-                dialect.replayStream!(cached) as unknown as MiddlewareResult,
-            }
-          : {}),
-      },
-      async () => {
-        emitInputTokenEstimate({
-          messages: providerMessages ?? [],
-          provider: modelInfo.provider,
-          model: modelInfo.modelId,
-          media: dialect.media,
-          tokenBudget: args.tokenBudget,
-        })
-        return dialect.runStream(request)
-      },
+        async () => {
+          emitInputTokenEstimate({
+            messages: providerMessages ?? [],
+            provider: modelInfo.provider,
+            model: modelInfo.modelId,
+            media: dialect.media,
+            tokenBudget: args.tokenBudget,
+          });
+          return dialect.runStream(request);
+        },
+      ),
     );
   } catch (error) {
     stepBudget.dispose();
+    await closeSources();
     throw error;
   }
 
@@ -221,6 +255,7 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
       return stamped;
     } finally {
       stepBudget.dispose();
+      await closeSources();
     }
   };
 

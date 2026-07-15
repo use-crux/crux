@@ -36,10 +36,8 @@ import {
   unwrapExpression,
 } from "./model";
 import { semanticStorageRelationsForCandidate } from "./storage-facts";
-import {
-  semanticNodeKey,
-  semanticStringLiteralProperty,
-} from "./syntax-readers";
+import { semanticStringLiteralProperty } from "./syntax-readers";
+import { semanticInjectionUseEntryFacts } from "./enrichment-facts";
 
 /**
  * Computes resolved semantic relations for one discovered definition.
@@ -62,6 +60,8 @@ export function semanticRelationsForCandidate(
         ...semanticInjectionToolRelations(candidate, view),
         ...accessRelations,
       ];
+    case "mcp.server":
+      return semanticMcpExpectedToolRelations(candidate, view);
     case "tool":
       return accessRelations;
     case "agent":
@@ -111,54 +111,20 @@ function semanticInjectionUseRelations(
   candidate: SemanticDefinitionCandidate,
   view: SemanticAnalyzerView,
 ): ProjectRelation[] {
-  const use = propertyInitializer(candidate.object, "use", view);
-  if (!use) return [];
-  const expressions = semanticUseExpressions(toExpression(use, view), view);
-  const relations: ProjectRelation[] = [];
-  expressions.forEach((expression, index) => {
-    const target = semanticTargetForExpression(expression, view);
-    const type = target
-      ? semanticInjectionUseRelationType(candidate.kind, target.kind)
-      : undefined;
-    if (!target || !type) return;
-    relations.push(
-      semanticRelation(
-        candidate,
-        type,
-        `${candidate.definitionId}:use:${index + 1}`,
-        target.id,
-        view,
-      ),
-    );
-  });
-  return relations;
-}
-
-/**
- * Reads elements from a use expression, following import-safe array constants
- * and spread entries without executing code.
- */
-function semanticUseExpressions(
-  expression: SemanticAnalyzerNode<SemanticAnalyzerView>,
-  view: SemanticAnalyzerView,
-  seen = new Set<string>(),
-): SemanticAnalyzerNode<SemanticAnalyzerView>[] {
-  const key = semanticNodeKey(expression, view.syntax);
-  if (seen.has(key)) return [];
-  const nextSeen = new Set(seen);
-  nextSeen.add(key);
-  const array = semanticArrayExpression(expression, view, nextSeen);
-  if (!array) return [expression];
-  const expressions: SemanticAnalyzerNode<SemanticAnalyzerView>[] = [];
-  for (const element of view.syntax.arrayElements(array)) {
-    const spread = view.syntax.spreadExpression(element);
-    if (spread) {
-      expressions.push(...semanticUseExpressions(spread, view, nextSeen));
-      continue;
-    }
-    expressions.push(element);
-  }
-  return expressions;
+  return semanticInjectionUseEntryFacts(candidate, view).flatMap(
+    (entry, index) => {
+      if (!entry.targetDefinitionId || !entry.relationType) return [];
+      return [
+        semanticRelation(
+          candidate,
+          entry.relationType,
+          `${candidate.definitionId}:use:${index + 1}`,
+          entry.targetDefinitionId,
+          view,
+        ),
+      ];
+    },
+  );
 }
 
 /**
@@ -184,9 +150,39 @@ function semanticInjectionUseRelationType(
       return `${ownerKind}.uses_memory`;
     case "blackboard":
       return `${ownerKind}.uses_blackboard`;
+    case "mcp.server":
+      if (ownerKind === "injectable") return undefined;
+      return `${ownerKind}.uses_mcp_server`;
     default:
       return undefined;
   }
+}
+
+/** Projects statically known MCP allowlist entries into expected-tool edges. */
+function semanticMcpExpectedToolRelations(
+  candidate: SemanticDefinitionCandidate,
+  view: SemanticAnalyzerView,
+): ProjectRelation[] {
+  const tools = semanticObjectProperty(candidate.object, "tools", view);
+  const allow = tools ? semanticArrayProperty(tools, "allow", view) : undefined;
+  if (!tools || !allow) return [];
+  const prefix =
+    semanticStringLiteralProperty(tools, "prefix", view.syntax) ?? "";
+  return view.syntax.arrayElements(allow).flatMap((element) => {
+    const remoteName = view.syntax.stringLiteralText(
+      unwrapExpression(element, view),
+    );
+    if (remoteName === undefined) return [];
+    return [
+      semanticRelation(
+        candidate,
+        "mcp.server.provides_tool",
+        candidate.definitionId,
+        `tool:${safeId(`${prefix}${remoteName}`)}`,
+        view,
+      ),
+    ];
+  });
 }
 
 /**

@@ -204,7 +204,7 @@ function semanticInjectionDefinitionEnrichments(
  * Adds resolved `useEntries` for import-safe arrays and spread entries that the
  * static pass can only describe as an unresolved array variable.
  */
-function semanticInjectionUseEntryFacts(
+export function semanticInjectionUseEntryFacts(
   candidate: SemanticDefinitionCandidate,
   view: SemanticAnalyzerView,
 ): InjectionUseFacts[] {
@@ -550,6 +550,9 @@ function semanticInjectionUseEntryRelationType(
       return `${ownerKind}.uses_memory`;
     case "blackboard":
       return `${ownerKind}.uses_blackboard`;
+    case "mcp.server":
+      if (ownerKind === "injectable") return undefined;
+      return `${ownerKind}.uses_mcp_server`;
     default:
       return undefined;
   }

@@ -46,6 +46,7 @@ import type { GoogleExtra, GoogleRequest } from "./types";
 import { createGoogleImageOperation } from "./image-generation";
 import { createGoogleTranscriptionOperation } from "./transcription";
 import { createGoogleSpeechOperation } from "./speech";
+import { materializeGoogleToolSource } from "./mcp-materializer";
 
 /** Configuration for `google.retrievalModel()`. */
 export interface GoogleRetrievalModelConfig {
@@ -89,6 +90,7 @@ const google = defineSingleTurnProviderBundle({
   id: "google",
   bind: bindGoogle,
   profile: {
+    materializeToolSource: materializeGoogleToolSource,
     request: (args, { deps }) =>
       googleRequest(
         args,

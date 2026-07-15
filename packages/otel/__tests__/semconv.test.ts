@@ -118,6 +118,31 @@ describe('GenAI semconv projection', () => {
     ])
   })
 
+  it('exports MCP preparation primitives with stable OTel span names', () => {
+    const spans: TraceSpan[] = []
+    const installed = withTelemetry({
+      exporter: (batch) => {
+        spans.push(...batch)
+      },
+    }).install({})
+
+    observe
+      .openSpan({ name: 'connect catalog', primitive: 'mcp.connect' })
+      .end()
+    observe
+      .openSpan({ name: 'discover catalog', primitive: 'mcp.discover' })
+      .end()
+    installed.dispose?.()
+
+    expect(
+      spans
+        .filter((span) =>
+          String(span.attributes['crux.primitive.name']).startsWith('mcp.'),
+        )
+        .map((span) => span.name),
+    ).toEqual(['crux.mcp.connect', 'crux.mcp.discover'])
+  })
+
   it('exports request-scoped defer lifecycle spans with stable names', () => {
     const spans: TraceSpan[] = []
     const installed = withTelemetry({

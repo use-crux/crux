@@ -11,9 +11,18 @@
  * @module
  */
 
-import type { CruxHooks, SpanActivationHook, TelemetryFlushHook, TelemetryResumeAttributesHook } from './runtime'
-import type { ResolveHook, ResolveHookArgs, StreamProgressReporter } from './middleware'
-import type { PromptMiddleware } from './types'
+import type {
+  CruxHooks,
+  SpanActivationHook,
+  TelemetryFlushHook,
+  TelemetryResumeAttributesHook,
+} from "./runtime";
+import type {
+  ResolveHook,
+  ResolveHookArgs,
+  StreamProgressReporter,
+} from "./middleware";
+import type { PromptMiddleware } from "./types";
 
 /**
  * Merge a partial hook patch into a base hook store.
@@ -33,39 +42,54 @@ import type { PromptMiddleware } from './types'
  * const merged = mergeHooks(currentHooks, plugin.install(currentHooks))
  * ```
  */
-export function mergeHooks(base: CruxHooks, patch: Partial<CruxHooks>): CruxHooks {
-  const result: CruxHooks = { ...base }
+export function mergeHooks(
+  base: CruxHooks,
+  patch: Partial<CruxHooks>,
+): CruxHooks {
+  const result: CruxHooks = { ...base };
 
   // Middleware: layered chaining (new wraps old)
   if (patch.middleware !== undefined) {
-    result.middleware = chainMiddleware(base.middleware, patch.middleware)
+    result.middleware = chainMiddleware(base.middleware, patch.middleware);
   }
 
   // Fan-out hooks
   if (patch.executionHook !== undefined) {
-    result.executionHook = fanOutHook(base.executionHook, patch.executionHook)
+    result.executionHook = fanOutHook(base.executionHook, patch.executionHook);
   }
 
   if (patch.resolveHook !== undefined) {
-    result.resolveHook = fanOutResolveHook(base.resolveHook, patch.resolveHook)
+    result.resolveHook = fanOutResolveHook(base.resolveHook, patch.resolveHook);
   }
 
   if (patch.streamStartHook !== undefined) {
-    result.streamStartHook = fanOutHook(base.streamStartHook, patch.streamStartHook)
+    result.streamStartHook = fanOutHook(
+      base.streamStartHook,
+      patch.streamStartHook,
+    );
   }
 
   if (patch.streamProgressHook !== undefined) {
-    result.streamProgressHook = fanOutStreamProgressHook(base.streamProgressHook, patch.streamProgressHook)
+    result.streamProgressHook = fanOutStreamProgressHook(
+      base.streamProgressHook,
+      patch.streamProgressHook,
+    );
   }
 
   // Span activation: layered chaining (new activates around old, innermost fn last)
   if (patch.spanActivationHook !== undefined) {
-    result.spanActivationHook = chainSpanActivationHook(base.spanActivationHook, patch.spanActivationHook)
+    result.spanActivationHook = chainSpanActivationHook(
+      base.spanActivationHook,
+      patch.spanActivationHook,
+    );
   }
 
   // Telemetry flush: fan-out — every installed manager's flush is awaited, all must succeed for `ok`.
   if (patch.telemetryFlushHook !== undefined) {
-    result.telemetryFlushHook = fanOutTelemetryFlushHook(base.telemetryFlushHook, patch.telemetryFlushHook)
+    result.telemetryFlushHook = fanOutTelemetryFlushHook(
+      base.telemetryFlushHook,
+      patch.telemetryFlushHook,
+    );
   }
 
   // Resume attributes: fan-out — attribute objects from every plugin are merged, patch wins on key conflicts.
@@ -73,31 +97,41 @@ export function mergeHooks(base: CruxHooks, patch: Partial<CruxHooks>): CruxHook
     result.telemetryResumeAttributesHook = fanOutResumeAttributesHook(
       base.telemetryResumeAttributesHook,
       patch.telemetryResumeAttributesHook,
-    )
+    );
   }
 
   // Global safety policies: concat so multiple plugins compose
   if (patch.globalConstraints !== undefined) {
-    result.globalConstraints = [...(base.globalConstraints ?? []), ...patch.globalConstraints]
+    result.globalConstraints = [
+      ...(base.globalConstraints ?? []),
+      ...patch.globalConstraints,
+    ];
   }
 
   if (patch.globalGuardrails !== undefined) {
-    result.globalGuardrails = [...(base.globalGuardrails ?? []), ...patch.globalGuardrails]
+    result.globalGuardrails = [
+      ...(base.globalGuardrails ?? []),
+      ...patch.globalGuardrails,
+    ];
   }
 
-  if ('observabilityTransport' in patch) {
-    result.observabilityTransport = patch.observabilityTransport
+  if ("observabilityTransport" in patch) {
+    result.observabilityTransport = patch.observabilityTransport;
   }
 
-  if ('observabilityDelivery' in patch) {
-    result.observabilityDelivery = patch.observabilityDelivery
+  if ("projectIndexRuntimeTransport" in patch) {
+    result.projectIndexRuntimeTransport = patch.projectIndexRuntimeTransport;
   }
 
-  if ('semanticCacheInstalled' in patch) {
-    result.semanticCacheInstalled = patch.semanticCacheInstalled
+  if ("observabilityDelivery" in patch) {
+    result.observabilityDelivery = patch.observabilityDelivery;
   }
 
-  return result
+  if ("semanticCacheInstalled" in patch) {
+    result.semanticCacheInstalled = patch.semanticCacheInstalled;
+  }
+
+  return result;
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -108,35 +142,44 @@ export function mergeHooks(base: CruxHooks, patch: Partial<CruxHooks>): CruxHook
  * Chain middleware: new wraps old (layered).
  * When the new middleware calls `next(args)`, it invokes the old middleware.
  */
-function chainMiddleware(base: PromptMiddleware | undefined, patch: PromptMiddleware): PromptMiddleware {
-  if (!base) return patch
+function chainMiddleware(
+  base: PromptMiddleware | undefined,
+  patch: PromptMiddleware,
+): PromptMiddleware {
+  if (!base) return patch;
   return async (args, next) => {
-    return patch(args, (innerArgs) => base(innerArgs, next))
-  }
+    return patch(args, (innerArgs) => base(innerArgs, next));
+  };
 }
 
 /**
  * Fan-out two hooks: both called with the same args.
  * Works for any hook with signature `(args) => void | Promise<void>`.
  */
-function fanOutHook<T extends (...args: never[]) => unknown>(base: T | undefined, patch: T): T {
-  if (!base) return patch
+function fanOutHook<T extends (...args: never[]) => unknown>(
+  base: T | undefined,
+  patch: T,
+): T {
+  if (!base) return patch;
   return ((...args: Parameters<T>) => {
-    base(...args)
-    return patch(...args)
-  }) as T
+    base(...args);
+    return patch(...args);
+  }) as T;
 }
 
 /**
  * Fan-out resolve hooks: both called, last result wins.
  * ResolveHook returns a traceId that needs to propagate.
  */
-function fanOutResolveHook(base: ResolveHook | undefined, patch: ResolveHook): ResolveHook {
-  if (!base) return patch
+function fanOutResolveHook(
+  base: ResolveHook | undefined,
+  patch: ResolveHook,
+): ResolveHook {
+  if (!base) return patch;
   return async (args: ResolveHookArgs) => {
-    await base(args)
-    return patch(args)
-  }
+    await base(args);
+    return patch(args);
+  };
 }
 
 /**
@@ -147,8 +190,8 @@ function chainSpanActivationHook(
   base: SpanActivationHook | undefined,
   patch: SpanActivationHook,
 ): SpanActivationHook {
-  if (!base) return patch
-  return (context, fn) => patch(context, () => base(context, fn))
+  if (!base) return patch;
+  return (context, fn) => patch(context, () => base(context, fn));
 }
 
 /**
@@ -159,11 +202,14 @@ function fanOutTelemetryFlushHook(
   base: TelemetryFlushHook | undefined,
   patch: TelemetryFlushHook,
 ): TelemetryFlushHook {
-  if (!base) return patch
+  if (!base) return patch;
   return async (options) => {
-    const [a, b] = await Promise.all([base(options), patch(options)])
-    return { ok: a.ok && b.ok, timedOut: Boolean(a.timedOut) || Boolean(b.timedOut) }
-  }
+    const [a, b] = await Promise.all([base(options), patch(options)]);
+    return {
+      ok: a.ok && b.ok,
+      timedOut: Boolean(a.timedOut) || Boolean(b.timedOut),
+    };
+  };
 }
 
 /**
@@ -174,8 +220,8 @@ function fanOutResumeAttributesHook(
   base: TelemetryResumeAttributesHook | undefined,
   patch: TelemetryResumeAttributesHook,
 ): TelemetryResumeAttributesHook {
-  if (!base) return patch
-  return (carrier) => ({ ...(base(carrier) ?? {}), ...(patch(carrier) ?? {}) })
+  if (!base) return patch;
+  return (carrier) => ({ ...(base(carrier) ?? {}), ...(patch(carrier) ?? {}) });
 }
 
 /**
@@ -183,27 +229,27 @@ function fanOutResumeAttributesHook(
  * forwarded to both.
  */
 function fanOutStreamProgressHook(
-  base: CruxHooks['streamProgressHook'],
-  patch: NonNullable<CruxHooks['streamProgressHook']>,
-): NonNullable<CruxHooks['streamProgressHook']> {
-  if (!base) return patch
+  base: CruxHooks["streamProgressHook"],
+  patch: NonNullable<CruxHooks["streamProgressHook"]>,
+): NonNullable<CruxHooks["streamProgressHook"]> {
+  if (!base) return patch;
   return (traceId: string): StreamProgressReporter | undefined => {
-    const r1 = base(traceId)
-    const r2 = patch(traceId)
-    if (!r1 && !r2) return undefined
+    const r1 = base(traceId);
+    const r2 = patch(traceId);
+    if (!r1 && !r2) return undefined;
     return {
       onChunk(textDelta) {
-        r1?.onChunk(textDelta)
-        r2?.onChunk(textDelta)
+        r1?.onChunk(textDelta);
+        r2?.onChunk(textDelta);
       },
       async flush() {
-        await r1?.flush()
-        await r2?.flush()
+        await r1?.flush();
+        await r2?.flush();
       },
       dispose() {
-        r1?.dispose()
-        r2?.dispose()
+        r1?.dispose();
+        r2?.dispose();
       },
-    }
-  }
+    };
+  };
 }

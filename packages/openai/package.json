@@ -37,7 +37,13 @@
     "zod": "^4.4.3"
   },
   "peerDependencies": {
+    "@use-crux/mcp": "workspace:^",
     "openai": "^5.0.0||^6.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@use-crux/mcp": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/node": "^24.12.4",

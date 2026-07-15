@@ -240,6 +240,8 @@ var primitiveFamilyByName = map[string]string{
 	"composition.vote":        "composition",
 	"tool.call":               "tool",
 	"tool.approval":           "tool",
+	"mcp.connect":             "mcp",
+	"mcp.discover":            "mcp",
 	"retrieval.pipeline":      "retrieval",
 	"retrieval.query":         "retrieval",
 	"retrieval.recipe":        "retrieval",

@@ -106,13 +106,36 @@ export function IndexQuality({ def }: { def: ViewDef }) {
         }}
       >
         {/* headline */}
-        <div style={{ display: 'flex', gap: 24, padding: '16px 18px', flexWrap: 'wrap', alignItems: 'center' }}>
+        <div
+          style={{
+            display: 'flex',
+            gap: 24,
+            padding: '16px 18px',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+          }}
+        >
           {pr != null && (
             <div style={{ minWidth: 116 }}>
-              <div style={{ fontFamily: T.mono, fontSize: 30, fontWeight: 600, letterSpacing: '-0.02em', color: c.fg }}>
+              <div
+                style={{
+                  fontFamily: T.mono,
+                  fontSize: 30,
+                  fontWeight: 600,
+                  letterSpacing: '-0.02em',
+                  color: c.fg,
+                }}
+              >
                 {Math.round(pr * 100)}%
               </div>
-              <div style={{ fontSize: 11, color: T.fgFaint, fontFamily: T.mono, marginBottom: 7 }}>
+              <div
+                style={{
+                  fontSize: 11,
+                  color: T.fgFaint,
+                  fontFamily: T.mono,
+                  marginBottom: 7,
+                }}
+              >
                 pass rate{q.caseCount ? ` · ${q.caseCount} cases` : ''}
               </div>
               <Bar value={pr} tone={prTone} height={7} />
@@ -134,12 +157,48 @@ export function IndexQuality({ def }: { def: ViewDef }) {
                 >
                   {runs} runs
                 </div>
-                <div style={{ display: 'flex', height: 8, borderRadius: 99, overflow: 'hidden', marginBottom: 8 }}>
-                  {comp ? <div style={{ width: `${(comp / runs) * 100}%`, background: T.ok }} /> : null}
-                  {run ? <div style={{ width: `${(run / runs) * 100}%`, background: T.crux }} /> : null}
-                  {fail ? <div style={{ width: `${(fail / runs) * 100}%`, background: T.danger }} /> : null}
+                <div
+                  style={{
+                    display: 'flex',
+                    height: 8,
+                    borderRadius: 99,
+                    overflow: 'hidden',
+                    marginBottom: 8,
+                  }}
+                >
+                  {comp ? (
+                    <div
+                      style={{
+                        width: `${(comp / runs) * 100}%`,
+                        background: T.ok,
+                      }}
+                    />
+                  ) : null}
+                  {run ? (
+                    <div
+                      style={{
+                        width: `${(run / runs) * 100}%`,
+                        background: T.crux,
+                      }}
+                    />
+                  ) : null}
+                  {fail ? (
+                    <div
+                      style={{
+                        width: `${(fail / runs) * 100}%`,
+                        background: T.danger,
+                      }}
+                    />
+                  ) : null}
                 </div>
-                <div style={{ display: 'flex', gap: 12, fontFamily: T.mono, fontSize: 10.5 }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    gap: 12,
+                    fontFamily: T.mono,
+                    fontSize: 10.5,
+                  }}
+                >
                   {comp != null && <span style={{ color: T.ok }}>● {comp} done</span>}
                   {run ? <span style={{ color: T.crux }}>● {run} running</span> : null}
                   {fail ? <span style={{ color: T.danger }}>● {fail} failed</span> : null}
@@ -467,7 +526,15 @@ export function IndexObservability({ def }: { def: ViewDef }) {
               latest {displayedActivity.lastRun.status}
             </span>
             <span>·</span>
-            <span>{new Date(displayedActivity.lastRun.endedAt || displayedActivity.lastRun.startedAt).toLocaleString()}</span>
+            <span>
+              {new Date(displayedActivity.lastRun.endedAt || displayedActivity.lastRun.startedAt).toLocaleString()}
+            </span>
+            {displayedActivity.lastRun.durationMs > 0 && (
+              <>
+                <span>·</span>
+                <span>{displayedActivity.lastRun.durationMs.toLocaleString()}ms</span>
+              </>
+            )}
             {displayedActivity.lastRun.deliveryHealth?.status && (
               <DeliveryHealthBadge status={displayedActivity.lastRun.deliveryHealth.status} />
             )}
@@ -475,9 +542,24 @@ export function IndexObservability({ def }: { def: ViewDef }) {
         )}
         {rjn && (
           <>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                marginBottom: 12,
+                flexWrap: 'wrap',
+              }}
+            >
               <Icon name="trace" size={15} color={T.crux} />
-              <span style={{ fontFamily: T.mono, fontSize: 14, fontWeight: 600, color: T.fg }}>
+              <span
+                style={{
+                  fontFamily: T.mono,
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: T.fg,
+                }}
+              >
                 {rjn.spanName || rjn.primitive}
               </span>
               {rjn.primitive && (
@@ -491,14 +573,28 @@ export function IndexObservability({ def }: { def: ViewDef }) {
                 </Chip>
               )}
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: 18,
+              }}
+            >
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {kv('primitive', rjn.primitive)}
                 {kv('backend', rjn.backend)}
                 {kv('resource', rjn.resource)}
                 {kv('id prefix', rjn.runtimeIdPrefix)}
                 {ids.map(([k, v]) => (
-                  <div key={k} style={{ display: 'flex', gap: 10, fontFamily: T.mono, fontSize: 11.5 }}>
+                  <div
+                    key={k}
+                    style={{
+                      display: 'flex',
+                      gap: 10,
+                      fontFamily: T.mono,
+                      fontSize: 11.5,
+                    }}
+                  >
                     <span style={{ color: T.fgFaint, minWidth: 110 }}>{k}</span>
                     <span style={{ color: T.fg }}>{v}</span>
                   </div>
@@ -506,62 +602,68 @@ export function IndexObservability({ def }: { def: ViewDef }) {
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {rjn.correlationAttributes && (
-              <div>
-                <div
-                  style={{
-                    fontFamily: T.mono,
-                    fontSize: 9.5,
-                    color: T.fgFaint,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.1em',
-                    marginBottom: 6,
-                  }}
-                >
-                  correlation attributes
-                </div>
-                <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                  {rjn.correlationAttributes.map((a) => (
-                    <span
-                      key={a}
+                  <div>
+                    <div
                       style={{
                         fontFamily: T.mono,
-                        fontSize: 10.5,
-                        padding: '2px 7px',
-                        borderRadius: 4,
-                        background: T.cruxSoft,
-                        color: T.crux,
+                        fontSize: 9.5,
+                        color: T.fgFaint,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.1em',
+                        marginBottom: 6,
                       }}
                     >
-                      {a}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-            {rjn.spanAttributes && (
-              <div>
-                <div
-                  style={{
-                    fontFamily: T.mono,
-                    fontSize: 9.5,
-                    color: T.fgFaint,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.1em',
-                    marginBottom: 6,
-                  }}
-                >
-                  span attributes
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                  {Object.entries(rjn.spanAttributes).map(([k, v]) => (
-                    <div key={k} style={{ fontFamily: T.mono, fontSize: 10.5 }}>
-                      <span style={{ color: T.fgFaint }}>{k}=</span>
-                      <span style={{ color: T.fg }}>{v}</span>
+                      correlation attributes
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
+                    <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                      {rjn.correlationAttributes.map((a) => (
+                        <span
+                          key={a}
+                          style={{
+                            fontFamily: T.mono,
+                            fontSize: 10.5,
+                            padding: '2px 7px',
+                            borderRadius: 4,
+                            background: T.cruxSoft,
+                            color: T.crux,
+                          }}
+                        >
+                          {a}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {rjn.spanAttributes && (
+                  <div>
+                    <div
+                      style={{
+                        fontFamily: T.mono,
+                        fontSize: 9.5,
+                        color: T.fgFaint,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.1em',
+                        marginBottom: 6,
+                      }}
+                    >
+                      span attributes
+                    </div>
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 3,
+                      }}
+                    >
+                      {Object.entries(rjn.spanAttributes).map(([k, v]) => (
+                        <div key={k} style={{ fontFamily: T.mono, fontSize: 10.5 }}>
+                          <span style={{ color: T.fgFaint }}>{k}=</span>
+                          <span style={{ color: T.fg }}>{v}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </>
@@ -663,7 +765,13 @@ export function IndexProvenance({ def }: { def: ViewDef }) {
           <Row k="kind">{def.kind}</Row>
           <Row k="family">{m.familyLabel}</Row>
           <Row k="status">
-            <span style={{ color: toneColor(T, statusTone(def.status ?? 'active')).fg }}>{def.status ?? 'active'}</span>
+            <span
+              style={{
+                color: toneColor(T, statusTone(def.status ?? 'active')).fg,
+              }}
+            >
+              {def.status ?? 'active'}
+            </span>
           </Row>
           <Row k="fidelity">{def.fidelity}</Row>
           <Row k="confidence">{def.confidence}</Row>

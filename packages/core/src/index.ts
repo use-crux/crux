@@ -129,6 +129,29 @@ export type {
 // resolves through internally. App code composes entries with the factories
 // above and never touches lowering/driver functions directly.
 export { CONTRIBUTOR } from "./resolver/contract";
+export {
+  TOOL_SOURCE,
+  TOOL_SOURCE_PROVENANCE,
+  TOOL_SOURCE_QUALITY_IDENTITY,
+  TOOL_SOURCE_SESSION_PROVENANCE,
+  ToolSourceCollisionError,
+  ToolSourceUnsupportedError,
+  isToolSource,
+  toolSourceProvenance,
+  toolSourceQualityIdentity,
+  toolSourceSessionProvenance,
+  withToolSourceProvenance,
+  withToolSourceSessionProvenance,
+} from "./tools/tool-source";
+export type {
+  ToolSource,
+  ToolSourceMaterializationContext,
+  ToolSourceMaterializer,
+  ToolSourceProvenance,
+  ToolSourceQualityIdentity,
+  ToolSourceSessionProvenance,
+  ToolSourceSession,
+} from "./tools/tool-source";
 export type {
   ContributeArgs,
   Contribution as LoweredContribution,
@@ -250,7 +273,7 @@ export {
   validateTranscribeOptions,
   validateAudioBytes,
   validateTranscriptionResult,
-} from './transcription'
+} from "./transcription";
 export type {
   AudioSource,
   NativeTranscriptionResult,
@@ -260,16 +283,16 @@ export type {
   TranscribeOptions,
   TranscriptionResult,
   TranscriptInterval,
-} from './transcription'
+} from "./transcription";
 export {
   createGenerateSpeechResult,
   validateGenerateSpeechOptions,
-} from './speech'
+} from "./speech";
 export type {
   GenerateSpeech,
   GenerateSpeechOptions,
   GenerateSpeechResult,
-} from './speech'
+} from "./speech";
 
 // Request-scoped deferred work
 export { defer, CruxDeferError, DEFER_ERROR_CODES } from "./defer";
@@ -395,6 +418,8 @@ export type {
 export type {
   ToolApprovalDecision,
   ToolApprovalDecisionEvent,
+  ToolApprovalPolicyIdentity,
+  ToolApprovalReplayProvenance,
   ToolApprovalRequest,
   ToolApprovalRequestPart,
   ToolApprovalRequestPayload,

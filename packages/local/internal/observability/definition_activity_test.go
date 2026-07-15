@@ -100,6 +100,41 @@ func TestDefinitionActivityProjectsContributorChildAndScorerRefsWithoutKindSpeci
 	}
 }
 
+func TestDefinitionActivityJoinsExactMCPServerAndOrdinaryToolIDs(t *testing.T) {
+	service := newTestService(t)
+	mustIngest(t, service,
+		spanWithRefsJSON(
+			"r-mcp-tool",
+			"run-mcp-tool",
+			"seg-mcp-tool",
+			1,
+			"sp-mcp-tool",
+			"2026-01-01T00:00:00.000Z",
+			definitionRefJSON("mcp.server:catalog", "mcp.server", "resolved-mcp-server"),
+			definitionRefJSON("tool:remote_lookup", "tool", "invoked-tool"),
+		),
+	)
+
+	got := definitionActivity(t, service, "run-mcp-tool")
+	want := []DefinitionActivity{
+		{DefinitionID: "mcp.server:catalog", DefinitionKind: "mcp.server", Role: "resolved-mcp-server", FirstSeenAt: "2026-01-01T00:00:00.000Z", LastSeenAt: "2026-01-01T00:00:00.000Z", OccurrenceCount: 1},
+		{DefinitionID: "tool:remote_lookup", DefinitionKind: "tool", Role: "invoked-tool", FirstSeenAt: "2026-01-01T00:00:00.000Z", LastSeenAt: "2026-01-01T00:00:00.000Z", OccurrenceCount: 1},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("MCP definition activity mismatch:\n got %+v\nwant %+v", got, want)
+	}
+
+	for _, definitionID := range []string{"mcp.server:catalog", "tool:remote_lookup"} {
+		summary, err := service.DefinitionActivitySummary(context.Background(), definitionID)
+		if err != nil {
+			t.Fatalf("DefinitionActivitySummary(%s): %v", definitionID, err)
+		}
+		if summary.RunCount != 1 || summary.LastRun == nil || summary.LastRun.RunID != "run-mcp-tool" {
+			t.Fatalf("DefinitionActivitySummary(%s) = %+v", definitionID, summary)
+		}
+	}
+}
+
 func TestRunDetailCarriesCanonicalDefinitionRefsWithLastKnownSource(t *testing.T) {
 	service := newTestService(t)
 	mustIngest(t, service,
@@ -119,6 +154,29 @@ func TestRunDetailCarriesCanonicalDefinitionRefsWithLastKnownSource(t *testing.T
 	}
 	if !reflect.DeepEqual(detail.DefinitionRefs, want) {
 		t.Fatalf("definition refs mismatch:\n got %+v\nwant %+v", detail.DefinitionRefs, want)
+	}
+}
+
+func TestRunDetailCarriesCanonicalDefinitionRefsOnTheirExactSpan(t *testing.T) {
+	service := newTestService(t)
+	mustIngest(t, service,
+		fmt.Sprintf(`{"schemaVersion":2,"recordId":"r-span-server-a","type":"span","runId":"run-span-refs","segmentId":"seg-span-refs","segmentSeq":1,"spanId":"sp-server-a","family":"mcp","primitive":"mcp.connect","name":"connect","startedAt":"2026-01-01T00:00:01.000Z","status":"ok","definitionRefs":[%s]}`,
+			definitionRefJSON("mcp.server:server-a", "mcp.server", "resolved-mcp-server")),
+		fmt.Sprintf(`{"schemaVersion":2,"recordId":"r-span-server-b","type":"span","runId":"run-span-refs","segmentId":"seg-span-refs","segmentSeq":2,"spanId":"sp-server-b","family":"mcp","primitive":"mcp.connect","name":"connect","startedAt":"2026-01-01T00:00:02.000Z","status":"ok","definitionRefs":[%s]}`,
+			definitionRefJSON("mcp.server:server-b", "mcp.server", "resolved-mcp-server")),
+	)
+
+	detail, err := service.RunDetail(context.Background(), "run-span-refs")
+	if err != nil {
+		t.Fatalf("run detail: %v", err)
+	}
+	serverA := findRunDetailNode(&detail.Root, "sp-server-a")
+	if serverA == nil {
+		t.Fatal("server-a span missing from run detail")
+	}
+	want := []DefinitionRef{{ID: "mcp.server:server-a", Kind: "mcp.server", Role: "resolved-mcp-server"}}
+	if !reflect.DeepEqual(serverA.DefinitionRefs, want) {
+		t.Fatalf("server-a span refs mismatch:\n got %+v\nwant %+v", serverA.DefinitionRefs, want)
 	}
 }
 

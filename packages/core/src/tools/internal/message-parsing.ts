@@ -10,7 +10,12 @@
  * @module
  */
 
-import type { ToolApprovalDecision, ToolApprovalRequest, ToolApprovalRequestPayload } from '../types'
+import type {
+  ToolApprovalDecision,
+  ToolApprovalReplayProvenance,
+  ToolApprovalRequest,
+  ToolApprovalRequestPayload,
+} from '../types'
 
 /** A resolved approval pairing a request with its decision, used by the middleware. */
 export interface ResolvedToolApproval {
@@ -179,8 +184,15 @@ function normalizeApprovalRequest(value: unknown): ToolApprovalRequest | undefin
     toolCallId,
     toolName: toolName ?? '',
     input: readProperty(value, 'input') ?? readProperty(toolCall, 'input') ?? readProperty(toolCall, 'args'),
-    ...(isApprovalRequestPayload(readProperty(value, 'request')) ? { request: readProperty(value, 'request') as ToolApprovalRequestPayload } : {}),
-    ...(readStringProperty(value, 'approvalToken') ? { approvalToken: readStringProperty(value, 'approvalToken') } : {}),
+    ...(isApprovalRequestPayload(readProperty(value, 'request'))
+      ? { request: readProperty(value, 'request') as ToolApprovalRequestPayload }
+      : {}),
+    ...(readStringProperty(value, 'approvalToken')
+      ? { approvalToken: readStringProperty(value, 'approvalToken') }
+      : {}),
+    ...(isReplayProvenance(readProperty(value, 'replay'))
+      ? { replay: readProperty(value, 'replay') as ToolApprovalReplayProvenance }
+      : {}),
   }
 }
 
@@ -207,7 +219,9 @@ function normalizeApprovalDecision(value: unknown): ToolApprovalDecision | undef
       approvalId,
       approved,
       ...(readStringProperty(value, 'reason') ? { reason: readStringProperty(value, 'reason') } : {}),
-      ...(readStringProperty(value, 'approvalToken') ? { approvalToken: readStringProperty(value, 'approvalToken') } : {}),
+      ...(readStringProperty(value, 'approvalToken')
+        ? { approvalToken: readStringProperty(value, 'approvalToken') }
+        : {}),
     }
   }
   return undefined
@@ -215,6 +229,17 @@ function normalizeApprovalDecision(value: unknown): ToolApprovalDecision | undef
 
 function isApprovalRequestPayload(value: unknown): value is ToolApprovalRequestPayload {
   return value !== null && typeof value === 'object'
+}
+
+function isReplayProvenance(value: unknown): value is ToolApprovalReplayProvenance {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    readProperty(value, 'version') === 1 &&
+    readProperty(value, 'tool') !== undefined &&
+    Array.isArray(readProperty(value, 'policies')) &&
+    typeof readProperty(value, 'commitment') === 'string'
+  )
 }
 
 function readProperty(value: unknown, key: string): unknown {

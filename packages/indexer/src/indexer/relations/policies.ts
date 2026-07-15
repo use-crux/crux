@@ -3,6 +3,7 @@ import {
   injectableUseRelationPolicies,
   invocationAccessRelationPolicies,
   mediaRelationPolicies,
+  mcpRelationPolicies,
   promptContextAccessRelationPolicies,
   routingTargetRelationPolicies,
 } from './policy-groups'
@@ -13,6 +14,7 @@ export const indexRelationPolicies = [
   ...injectableContributionRelationPolicies,
   ...promptContextAccessRelationPolicies,
   ...mediaRelationPolicies,
+  ...mcpRelationPolicies,
   {
     type: 'defer.contained_by',
     fromKinds: ['deferred-work'],

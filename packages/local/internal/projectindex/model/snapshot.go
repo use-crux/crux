@@ -34,6 +34,45 @@ func MergeRuntimeSnapshot(current, incoming store.IndexData) store.IndexData {
 	return normalizeRuntimeSnapshot(merged)
 }
 
+// ProjectRegisteredRuntimeSnapshot augments a compiler-owned snapshot with a
+// previously registered runtime snapshot. Compiler facts win when both lanes
+// describe the same item, and compiler-owned lifecycle state and diagnostics
+// are never replaced or filtered by stale runtime state.
+func ProjectRegisteredRuntimeSnapshot(compiler, runtime store.IndexData) store.IndexData {
+	merged := runtime
+	merged.Prompts = mergePromptMeta(runtime.Prompts, compiler.Prompts)
+	merged.Contexts = mergeContextMeta(runtime.Contexts, compiler.Contexts)
+	merged.Tools = mergeToolMeta(runtime.Tools, compiler.Tools)
+	merged.Definitions = mergeSnapshotDefinitions(runtime.Definitions, compiler.Definitions)
+	merged.Relations = mergeSnapshotRelations(runtime.Relations, compiler.Relations)
+	merged.Sources = mergeSnapshotSources(runtime.Sources, compiler.Sources)
+	merged.Diagnostics = mergeRegisteredRuntimeDiagnostics(runtime.Diagnostics, compiler.Diagnostics)
+	merged.LintFindings = mergeSnapshotLintFindings(runtime.LintFindings, compiler.LintFindings)
+
+	if compiler.SchemaVersion != 0 {
+		merged.SchemaVersion = compiler.SchemaVersion
+	}
+	if compiler.Project != nil {
+		merged.Project = compiler.Project
+	}
+	if compiler.Lint != nil {
+		merged.Lint = compiler.Lint
+	}
+	if compiler.IndexedAt != "" {
+		merged.IndexedAt = compiler.IndexedAt
+	}
+	if compiler.Indexing != nil {
+		merged.Indexing = compiler.Indexing
+	}
+	if compiler.SourceGraph != nil {
+		merged.SourceGraph = compiler.SourceGraph
+	}
+	if compiler.RuleDescriptors != nil {
+		merged.RuleDescriptors = compiler.RuleDescriptors
+	}
+	return merged
+}
+
 func IsEmptyIndex(index store.IndexData) bool {
 	return len(index.Prompts) == 0 &&
 		len(index.Contexts) == 0 &&
@@ -213,6 +252,27 @@ func mergeSnapshotDiagnostics(current, incoming []store.IndexDiagnostic) []store
 		if item.Code == sourceOnlyDiagnosticCode {
 			continue
 		}
+		if existing, ok := index[item.ID]; ok {
+			merged[existing] = item
+			continue
+		}
+		index[item.ID] = len(merged)
+		merged = append(merged, item)
+	}
+	return merged
+}
+
+func mergeRegisteredRuntimeDiagnostics(runtime, compiler []store.IndexDiagnostic) []store.IndexDiagnostic {
+	merged := make([]store.IndexDiagnostic, 0, len(runtime)+len(compiler))
+	index := map[string]int{}
+	for _, item := range runtime {
+		if item.Code == sourceOnlyDiagnosticCode {
+			continue
+		}
+		index[item.ID] = len(merged)
+		merged = append(merged, item)
+	}
+	for _, item := range compiler {
 		if existing, ok := index[item.ID]; ok {
 			merged[existing] = item
 			continue

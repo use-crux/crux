@@ -13,6 +13,28 @@
   ],
   "identities": [
     {
+      "extension": "@use-crux/indexer/crux-core-mcp",
+      "extractor": "mcp.server",
+      "family": "mcp.server",
+      "nativeCovered": true,
+      "fixtureClasses": {
+        "definitions": "mcp-native-static.test.ts",
+        "relations": "mcp-native-static.test.ts",
+        "sourceRefs": "mcp-native-static.test.ts",
+        "diagnostics": "mcp-native-static.test.ts",
+        "dependencies": "mcp-native-static.test.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "sources": "mcp-native-static.test.ts",
+        "sourceGraph": "mcp-native-static.test.ts",
+        "runtimeMetadata": "mcp-native-static.test.ts",
+        "degradedBehavior": "mcp-native-static.test.ts"
+      },
+      "parityFixtures": {
+        "positive": "mcp-native-static.test.ts",
+        "negative": "mcp-native-static.test.ts"
+      }
+    },
+    {
       "extension": "@use-crux/indexer/crux-core-media",
       "extractor": "media.operation",
       "family": "media.operation",

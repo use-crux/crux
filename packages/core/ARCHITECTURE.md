@@ -2,6 +2,22 @@
 
 Internal implementation details of `@use-crux/core`. For usage documentation, see [README.md](./README.md).
 
+## Tool-source boundary
+
+Core treats execution-time tool discovery as a provider-neutral, branded
+`ToolSource` contract. Prompt resolution records inert sources without external
+work. An adapter dialect materializes each source before provider I/O into
+ordinary tools plus an invocation-scoped cleanup handle; Core then applies its
+existing merge, middleware, approval, Safety, timeout, observability, and result
+lifecycles. Generic source provenance augments ordinary `tool.call` observations
+without teaching Core about MCP properties.
+
+Protocol integrations such as `@use-crux/mcp` own connection, discovery,
+schema/result normalization, replay identity, and safe source-specific evidence.
+Core never depends on their SDKs. Source sessions close in reverse order through
+the bounded invocation cleanup path, including setup failure, cancellation,
+stream disposal, and approval suspension.
+
 `config()` may carry inert tooling configuration for adjacent Crux packages, but core must not execute
 those tools. The `indexer` config bag stores Project Indexer extension references, trust policy, and
 rule options as data only. `@use-crux/indexer` owns extension manifest validation, trust enforcement,

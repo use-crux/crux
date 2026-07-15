@@ -19,16 +19,13 @@ import type {
   NativeDirectDependencyFactSpec,
   NativeDirectDefinitionKind,
   NativeDirectIdentifierDependencySpec,
+  NativeDirectMcpExpectedToolsDependencySpec,
   NativeDirectObjectDependencySpec,
   NativeDirectRelationOriginSpec,
 } from './manifest'
+import { safeId } from '../../../../definitions'
 import { staticIdArrayEntries, type StaticIdArrayDependencyEntry } from './static-id-dependencies'
-import type {
-  NativeDefinition,
-  NativeDependencyEvidence,
-  RelationFact,
-  SourceRefFact,
-} from './types'
+import type { NativeDefinition, NativeDependencyEvidence, RelationFact, SourceRefFact } from './types'
 
 type ArrayDependencyEntry = {
   readonly kind: 'arrayIdentifier'
@@ -55,11 +52,18 @@ type IdentifierDependencyEntry = {
   readonly relation: RelationFact
 }
 
+type McpExpectedToolEntry = {
+  readonly kind: 'mcpExpectedTools'
+  readonly spec: NativeDirectMcpExpectedToolsDependencySpec
+  readonly relation: RelationFact
+}
+
 type DependencyEntry =
   | IdentifierDependencyEntry
   | ArrayDependencyEntry
   | ObjectDependencyEntry
   | StaticIdArrayDependencyEntry
+  | McpExpectedToolEntry
 
 /**
  * Emits direct dependency evidence from manifest-declared local reference shapes.
@@ -100,7 +104,41 @@ function dependencyEntries(
   if (spec.kind === 'staticIdArray') {
     return staticIdArrayEntries(definition, spec)
   }
+  if (spec.kind === 'mcpExpectedTools') {
+    return mcpExpectedToolEntries(definition, spec)
+  }
   return objectShorthandEntries(definition, definitions, spec)
+}
+
+function mcpExpectedToolEntries(
+  definition: NativeDefinition,
+  spec: NativeDirectMcpExpectedToolsDependencySpec,
+): readonly McpExpectedToolEntry[] | undefined {
+  const tools = propertyInitializer(definition.object, spec.property)
+  if (!tools) return []
+  if (!isObjectLiteralExpression(tools)) return undefined
+  const allow = propertyInitializer(tools, 'allow')
+  if (!allow) return []
+  if (!isArrayLiteralExpression(allow)) return undefined
+  const prefixExpression = propertyInitializer(tools, 'prefix')
+  if (prefixExpression && !isStringLiteral(prefixExpression)) return undefined
+  const prefix = prefixExpression?.text ?? ''
+  return presentValues(
+    nativeNodeList(allow.elements).map((element) => {
+      if (!isStringLiteral(element)) return undefined
+      return {
+        kind: 'mcpExpectedTools' as const,
+        spec,
+        relation: projectRelation({
+          type: spec.relationType,
+          from: definition.id,
+          to: `tool:${safeId(`${prefix}${element.text}`)}`,
+          fidelity: 'resolved',
+          source: nativeSourceForNode(definition.variable.file, definition.object),
+        }),
+      }
+    }),
+  )
 }
 
 function identifierPropertyEntries(
@@ -140,11 +178,15 @@ function arrayIdentifierEntries(
   const expression = propertyInitializer(definition.object, spec.property)
   if (!expression) return []
   if (!isArrayLiteralExpression(expression)) return undefined
-  return presentValues(
-    nativeNodeList(expression.elements).map((element, index) =>
-      useEntry(definition, definitions, spec, element, index),
-    ),
-  )
+  const entries: ArrayDependencyEntry[] = []
+  for (const [index, element] of nativeNodeList(expression.elements).entries()) {
+    if (!isIdentifier(element)) return undefined
+    const target = definitions.get(element.text)
+    if (!target) return undefined
+    if (target.kind !== spec.targetKind) continue
+    entries.push(useEntry(definition, spec, element.text, target, index))
+  }
+  return entries
 }
 
 function objectShorthandEntries(
@@ -180,21 +222,18 @@ function objectShorthandEntries(
 
 function useEntry(
   definition: NativeDefinition,
-  definitions: ReadonlyMap<string, NativeDefinition>,
   spec: NativeDirectArrayDependencySpec,
-  element: Expression,
+  variable: string,
+  target: NativeDefinition,
   index: number,
-): ArrayDependencyEntry | undefined {
-  if (!isIdentifier(element)) return undefined
-  const target = definitions.get(element.text)
-  if (!target || target.kind !== spec.targetKind) return undefined
+): ArrayDependencyEntry {
   return {
     kind: 'arrayIdentifier',
     spec,
-    variable: element.text,
+    variable,
     target,
     fact: {
-      variable: element.text,
+      variable,
       relationHint: spec.fact.relationHint,
       targetDefinitionId: target.id,
       targetKind: target.kind,
@@ -222,11 +261,17 @@ function dependencyFacts(
   for (const spec of definition.primitive.dependencies) {
     if (!('fact' in spec) || !spec.fact) continue
     if (!propertyInitializer(definition.object, spec.property)) continue
-    const value = dependencyFactValue(
-      spec.fact,
-      entries.filter((entry) => entry.spec === spec),
-    )
-    if (value !== undefined) facts[spec.fact.metadataKey] = value
+    const specEntries = entries.filter((entry) => entry.spec === spec)
+    if (spec.fact.kind === 'injectionUseEntries') {
+      const value = specEntries.flatMap((entry) => (entry.kind === 'arrayIdentifier' ? [entry.fact] : []))
+      const existing = facts[spec.fact.metadataKey]
+      facts[spec.fact.metadataKey] = Array.isArray(existing) ? [...existing, ...value] : value
+      continue
+    }
+    const value = dependencyFactValue(spec.fact, specEntries)
+    if (value === undefined) continue
+    const existing = facts[spec.fact.metadataKey]
+    facts[spec.fact.metadataKey] = existing ?? value
   }
   if (Object.keys(facts).length > 0) facts.kind = definition.kind
   return facts as NonNullable<NativeDependencyEvidence['facts']>
