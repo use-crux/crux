@@ -1,4 +1,5 @@
-import { adapter, prompt } from "@use-crux/core";
+import { adapter, prompt, resetHooks, setHooks } from "@use-crux/core";
+import type { ProjectIndexRuntimeUpdate } from "@use-crux/core/project-index/runtime";
 import {
   createInMemoryObservabilityTransport,
   observe,
@@ -24,6 +25,7 @@ const BINARY_BASE64 = Buffer.from(BINARY_CANARY).toString("base64");
 
 afterEach(async () => {
   resetObservabilityRuntime();
+  resetHooks();
   await Promise.all(fixtures.splice(0).map((fixture) => fixture.close()));
 });
 
@@ -124,23 +126,32 @@ describe("MCP observability privacy", () => {
 
   it("sanitizes resolver causes and never records stdio environment values", async () => {
     const transport = createInMemoryObservabilityTransport();
-    setObservabilityTransport(transport);
-    const resolverSecret = "token-resolver-canary";
+    const resolverSecret = "violet-umbrella-9281";
     const environmentSecret = "token-stdio-environment-canary";
+    const runtimeUpdates: ProjectIndexRuntimeUpdate[] = [];
+    setHooks({
+      projectIndexRuntimeTransport: {
+        enqueue(update) {
+          runtimeUpdates.push(update);
+        },
+        async flush() {
+          return "ok";
+        },
+      },
+    });
+    setObservabilityTransport(transport);
 
     await expect(
       materializeMcpToolSource(
         mcp({
           id: "resolver-failure",
           transport: async () => {
-            throw new Error(
-              `Authorization: Bearer bearer-resolver-canary ${resolverSecret}`,
-            );
+            throw new Error(`dependency rejected ${resolverSecret}`);
           },
         }),
         { runtimeContext: undefined },
       ),
-    ).rejects.not.toThrow(/resolver-canary/);
+    ).rejects.not.toThrow(resolverSecret);
 
     await expect(
       materializeMcpToolSource(
@@ -157,8 +168,8 @@ describe("MCP observability privacy", () => {
     await observe.flush();
 
     const evidence = JSON.stringify(transport.records);
-    expect(evidence).not.toContain("bearer-resolver-canary");
     expect(evidence).not.toContain(resolverSecret);
     expect(evidence).not.toContain(environmentSecret);
+    expect(JSON.stringify(runtimeUpdates)).not.toContain(resolverSecret);
   });
 });

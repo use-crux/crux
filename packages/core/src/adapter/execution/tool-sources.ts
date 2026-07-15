@@ -14,6 +14,7 @@ import {
   type ToolSourceMaterializer,
   type ToolSourceSession,
 } from "../../tools/tool-source";
+import { createToolRegistry } from "../../tools/tool-registry";
 
 /** A resolved prompt augmented with materialized tools and owned cleanup. */
 export interface MaterializedToolSources {
@@ -83,7 +84,7 @@ export async function materializeToolSources(options: {
     readonly sourceId: string;
     readonly session: ToolSourceSession;
   }> = [];
-  const tools: Record<string, unknown> = { ...(options.resolved.tools ?? {}) };
+  const tools = createToolRegistry(options.resolved.tools);
   const owners = new Map<string, string>(
     Object.keys(tools).map((name) => [name, "prompt-authored tools"] as const),
   );

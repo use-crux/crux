@@ -111,7 +111,11 @@ describe("official MCP HTTP materializer", () => {
           abortSignal: AbortSignal.timeout(100),
         },
       ),
-    ).rejects.toThrow('MCP tools/list cursor loop detected at "same".');
+    ).rejects.toMatchObject({
+      name: "McpToolSourceError",
+      phase: "discover",
+      serverId: "looping",
+    });
   });
 
   it("rejects discovery beyond the finite page limit", async () => {
@@ -161,6 +165,35 @@ describe("official MCP HTTP materializer", () => {
       exposedName: "remote_present",
     });
     expect(JSON.stringify(session.discovery)).not.toContain("missing");
+    await session.close();
+  });
+
+  it("discovers and executes the portable name __proto__ as an own tool", async () => {
+    const calls: string[] = [];
+    const fixture = await startMcpHttpFixture({
+      pages: [{ tools: [tool("__proto__", { type: "object" })] }],
+      callTool: ({ name }) => {
+        calls.push(name);
+        return { content: [{ type: "text", text: "ok" }] };
+      },
+    });
+    fixtures.push(fixture);
+
+    const session = await materializeMcpToolSource(
+      mcp({
+        id: "prototype-tool",
+        transport: streamableHttp({ url: fixture.url }),
+      }),
+      { runtimeContext: undefined },
+    );
+
+    expect(Object.keys(session.tools)).toEqual(["__proto__"]);
+    expect(Object.hasOwn(session.tools, "__proto__")).toBe(true);
+    await session.tools.__proto__!.execute(
+      {},
+      { toolCallId: "call-1", messages: [], runtimeContext: undefined },
+    );
+    expect(calls).toEqual(["__proto__"]);
     await session.close();
   });
 });

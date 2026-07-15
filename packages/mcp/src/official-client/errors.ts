@@ -26,8 +26,9 @@ export interface McpToolSourceErrorContext {
 /**
  * Structured failure raised while materializing an MCP tool source.
  *
- * Endpoint credentials and query parameters are removed, and the retained
- * cause is sanitized before crossing the public package boundary.
+ * Endpoint credentials and query parameters are removed. Dependency error
+ * messages are never retained because runtime resolvers and transports may
+ * receive opaque secrets that cannot be recognized by heuristic redaction.
  */
 export class McpToolSourceError extends Error {
   readonly code = "MCP_TOOL_SOURCE_ERROR" as const;
@@ -41,21 +42,28 @@ export class McpToolSourceError extends Error {
     context: McpToolSourceErrorContext,
     cause?: unknown,
   ) {
-    const detail =
-      cause === undefined ? undefined : sanitizeCauseMessage(cause);
-    super(
-      `MCP source "${context.serverId}" failed during ${phase}.` +
-        (detail ? ` ${detail}` : ""),
-      {
-        ...(cause === undefined ? {} : { cause: new Error(detail) }),
-      },
-    );
+    super(`MCP source "${context.serverId}" failed during ${phase}.`, {
+      ...(cause === undefined
+        ? {}
+        : { cause: new Error("An MCP dependency failed.") }),
+    });
     this.name = "McpToolSourceError";
     this.serverId = context.serverId;
     this.phase = phase;
     this.transportKind = context.transportKind;
     this.endpoint = context.endpoint;
   }
+}
+
+/** Create a structured failure with detail authored by Crux itself. */
+export function mcpToolSourceContractError(
+  phase: McpToolSourceErrorPhase,
+  context: McpToolSourceErrorContext,
+  detail: string,
+): McpToolSourceError {
+  const error = new McpToolSourceError(phase, context);
+  error.message = `${error.message} ${detail}`;
+  return error;
 }
 
 /** Preserve an existing structured boundary or wrap an unsafe dependency error. */
@@ -90,20 +98,4 @@ function safeHttpEndpoint(value: string | URL): string | undefined {
   } catch {
     return undefined;
   }
-}
-
-function sanitizeCauseMessage(cause: unknown): string {
-  const message = cause instanceof Error ? cause.message : String(cause);
-  return message
-    .replace(/https?:\/\/[^\s"'<>]+/giu, sanitizeMatchedUrl)
-    .replace(/\bBearer\s+\S+/giu, "Bearer [REDACTED]")
-    .replace(/\b(?:sk|pk|rk|key|token)-[A-Za-z0-9_-]{3,}\b/giu, "[REDACTED]")
-    .replace(
-      /\b(authorization|api[-_]?key|token|secret|password)\s*[:=]\s*\S+/giu,
-      "$1=[REDACTED]",
-    );
-}
-
-function sanitizeMatchedUrl(value: string): string {
-  return safeHttpEndpoint(value) ?? "[REDACTED URL]";
 }

@@ -58,6 +58,7 @@ import {
   enqueueMcpDiscoveryFailure,
   enqueueMcpDiscoveryUpdate,
 } from "../project-index";
+import { assertMcpTransportConfig } from "../configuration";
 
 const MAX_DISCOVERY_PAGES = 64;
 
@@ -388,7 +389,9 @@ async function resolveTransport(
   source: McpToolSource<unknown>,
   context: McpTransportResolutionContext<unknown>,
 ): Promise<McpTransportConfig> {
-  return typeof source.transport === "function"
+  const transport = await (typeof source.transport === "function"
     ? source.transport(context)
-    : source.transport;
+    : source.transport);
+  assertMcpTransportConfig(transport);
+  return transport;
 }

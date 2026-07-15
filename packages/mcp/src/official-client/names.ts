@@ -1,4 +1,7 @@
-import { McpToolSourceError, type McpToolSourceErrorContext } from "./errors";
+import {
+  mcpToolSourceContractError,
+  type McpToolSourceErrorContext,
+} from "./errors";
 
 const MCP_REMOTE_TOOL_NAME = /^[A-Za-z0-9_.-]{1,128}$/u;
 const PORTABLE_EXPOSED_TOOL_NAME = /^[A-Za-z_][A-Za-z0-9_-]{0,63}$/u;
@@ -15,24 +18,20 @@ export function assertMcpToolNames(
   errorContext: McpToolSourceErrorContext,
 ): void {
   if (!MCP_REMOTE_TOOL_NAME.test(remoteName)) {
-    throw new McpToolSourceError(
+    throw mcpToolSourceContractError(
       "filter",
       errorContext,
-      new Error(
-        `Invalid remote MCP tool name "${remoteName}". Remote names must match ` +
-          "[A-Za-z0-9_.-]{1,128}.",
-      ),
+      `Invalid remote MCP tool name "${remoteName}". Remote names must match ` +
+        "[A-Za-z0-9_.-]{1,128}.",
     );
   }
   if (!PORTABLE_EXPOSED_TOOL_NAME.test(exposedName)) {
-    throw new McpToolSourceError(
+    throw mcpToolSourceContractError(
       "filter",
       errorContext,
-      new Error(
-        `Exposed MCP tool name "${exposedName}" is not portable. Final names must ` +
-          "match [A-Za-z_][A-Za-z0-9_-]{0,63}. Configure tools.prefix to fix " +
-          "a leading digit when possible; otherwise rename the server tool.",
-      ),
+      `Exposed MCP tool name "${exposedName}" is not portable. Final names must ` +
+        "match [A-Za-z_][A-Za-z0-9_-]{0,63}. Configure tools.prefix to fix " +
+        "a leading digit when possible; otherwise rename the server tool.",
     );
   }
 }

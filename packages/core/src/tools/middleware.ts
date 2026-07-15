@@ -37,6 +37,7 @@ import type {
   ToolMiddlewareNext,
   ToolApprovalPolicyIdentity,
 } from './types'
+import { createToolRegistry } from './tool-registry'
 
 interface ApprovalMetadata<TInput = unknown> {
   readonly middlewareId: string
@@ -292,7 +293,7 @@ export function applyToolMiddleware<TTools extends Record<string, unknown>>(
   const chain = Array.isArray(middleware) ? middleware : middleware ? [middleware] : []
   if (chain.length === 0) return tools
 
-  const wrapped: Record<string, unknown> = {}
+  const wrapped = createToolRegistry<unknown>()
   for (const [toolName, tool] of Object.entries(tools)) {
     if (!isToolLike(tool)) {
       wrapped[toolName] = tool

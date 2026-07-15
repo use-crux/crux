@@ -6,7 +6,7 @@ import type { McpToolSelection } from "../index";
 import { canonicalFingerprint } from "./canonical";
 import { mcpApprovalReplayIdentity } from "./approval-replay";
 import {
-  McpToolSourceError,
+  mcpToolSourceContractError,
   mcpToolSourceError,
   type McpToolSourceErrorContext,
 } from "./errors";
@@ -55,14 +55,20 @@ export async function discoverMcpTools(
 
   do {
     if (pageCount >= MAX_DISCOVERY_PAGES) {
-      throw new Error(
+      throw mcpToolSourceContractError(
+        "discover",
+        errorContext,
         `MCP tools/list exceeded the ${MAX_DISCOVERY_PAGES}-page discovery limit.`,
       );
     }
     pageCount += 1;
     if (cursor !== undefined) {
       if (requestedCursors.has(cursor)) {
-        throw new Error(`MCP tools/list cursor loop detected at "${cursor}".`);
+        throw mcpToolSourceContractError(
+          "discover",
+          errorContext,
+          "MCP tools/list cursor loop detected.",
+        );
       }
       requestedCursors.add(cursor);
     }
@@ -215,12 +221,10 @@ function assertSupportedExecution(
   errorContext: McpToolSourceErrorContext,
 ): void {
   if (tool.execution?.taskSupport === "required") {
-    throw new McpToolSourceError(
+    throw mcpToolSourceContractError(
       "discover",
       errorContext,
-      new Error(
-        `MCP tool "${tool.name}" requires task-based execution, which Crux does not support.`,
-      ),
+      `MCP tool "${tool.name}" requires task-based execution, which Crux does not support.`,
     );
   }
 }
@@ -232,10 +236,10 @@ function assertUniqueExposedNames(
   for (let index = 1; index < selected.length; index += 1) {
     const exposedName = selected[index]!.exposedName;
     if (exposedName === selected[index - 1]!.exposedName) {
-      throw new McpToolSourceError(
+      throw mcpToolSourceContractError(
         "filter",
         errorContext,
-        new Error(`Duplicate exposed MCP tool name "${exposedName}".`),
+        `Duplicate exposed MCP tool name "${exposedName}".`,
       );
     }
   }

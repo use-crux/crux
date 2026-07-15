@@ -153,7 +153,12 @@ export interface ProjectIndexRuntimeTransport {
 
 export interface CreateProjectIndexRuntimeTransportOptions {
   /** Deliver one validated update to a Project Index service boundary. */
-  readonly deliver: (update: ProjectIndexRuntimeUpdate) => Promise<void>;
+  readonly deliver: (
+    update: ProjectIndexRuntimeUpdate,
+    context: { readonly signal: AbortSignal },
+  ) => Promise<void>;
+  /** Maximum time allowed for one external delivery attempt. */
+  readonly deliveryTimeoutMs?: number;
   /** Receive a safe delivery failure without affecting the queue. */
   readonly onDeliveryError?: (error: unknown) => void;
 }
@@ -185,32 +190,83 @@ export function enqueueProjectIndexRuntimeUpdate(
 export function createProjectIndexRuntimeTransport(
   options: CreateProjectIndexRuntimeTransportOptions,
 ): ProjectIndexRuntimeTransport {
-  const tails = new Map<string, Promise<void>>();
+  interface OwnerDelivery {
+    pending?: ProjectIndexRuntimeUpdate;
+    readonly running: Promise<void>;
+  }
+
+  const owners = new Map<string, OwnerDelivery>();
+  const deliveryTimeoutMs = Math.max(0, options.deliveryTimeoutMs ?? 2_000);
+
+  const reportDeliveryError = (error: unknown): void => {
+    try {
+      options.onDeliveryError?.(error);
+    } catch {
+      // Diagnostics must not poison delivery for subsequent updates.
+    }
+  };
+
+  const deliverBounded = async (
+    update: ProjectIndexRuntimeUpdate,
+  ): Promise<void> => {
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        options.deliver(update, { signal: controller.signal }),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => {
+            controller.abort();
+            reject(new ProjectIndexRuntimeDeliveryTimeoutError());
+          }, deliveryTimeoutMs);
+        }),
+      ]);
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
+    }
+  };
+
+  const startOwner = (
+    ownerId: string,
+    first: ProjectIndexRuntimeUpdate,
+  ): OwnerDelivery => {
+    const state = {} as OwnerDelivery;
+    const running = (async () => {
+      let current: ProjectIndexRuntimeUpdate | undefined = first;
+      while (current) {
+        try {
+          await deliverBounded(current);
+        } catch (error) {
+          reportDeliveryError(error);
+        }
+        current = state.pending;
+        state.pending = undefined;
+      }
+    })().finally(() => {
+      if (owners.get(ownerId) === state) owners.delete(ownerId);
+    });
+    Object.defineProperty(state, "running", { value: running });
+    return state;
+  };
 
   return {
     enqueue(update) {
       const parsed = ProjectIndexRuntimeUpdateSchema.parse(update);
       const ownerId = parsed.owner.definitionId;
-      const tail = (tails.get(ownerId) ?? Promise.resolve())
-        .then(() => options.deliver(parsed))
-        .catch((error: unknown) => {
-          try {
-            options.onDeliveryError?.(error);
-          } catch {
-            // Diagnostics must not poison delivery for subsequent updates.
-          }
-        });
-      tails.set(ownerId, tail);
-      void tail.then(() => {
-        if (tails.get(ownerId) === tail) tails.delete(ownerId);
-      });
+      const active = owners.get(ownerId);
+      if (active) {
+        // One in-flight and one latest pending update bounds retained state.
+        active.pending = parsed;
+        return;
+      }
+      owners.set(ownerId, startOwner(ownerId, parsed));
     },
     async flush({ timeoutMs }) {
       let timer: ReturnType<typeof setTimeout> | undefined;
       const timeout = new Promise<"timeout">((resolve) => {
         timer = setTimeout(() => resolve("timeout"), Math.max(0, timeoutMs));
       });
-      const accepted = [...tails.values()];
+      const accepted = [...owners.values()].map((owner) => owner.running);
       const outcome = await Promise.race([
         Promise.all(accepted).then(() => "ok" as const),
         timeout,
@@ -219,4 +275,12 @@ export function createProjectIndexRuntimeTransport(
       return outcome;
     },
   };
+}
+
+class ProjectIndexRuntimeDeliveryTimeoutError extends Error {
+  override readonly name = "ProjectIndexRuntimeDeliveryTimeoutError";
+
+  constructor() {
+    super("Project Index runtime update delivery timed out.");
+  }
 }

@@ -167,6 +167,46 @@ describe("portable tool sources", () => {
     expect(call).not.toHaveBeenCalled();
   });
 
+  it("closes a materialized source when lifecycle preparation rejects toolsContext", async () => {
+    const source = mcp({
+      id: "lifecycle-setup-failure",
+      transport: stdio({ command: "fixture-server" }),
+    });
+    const close = vi.fn(async () => {});
+    const call = vi.fn();
+    const createFixtureAdapter = adapter({
+      providerId: "lifecycle-setup-provider",
+      materializeToolSource: async () => ({
+        tools: { lookup: { description: "No context schema." } },
+        close,
+      }),
+      call,
+      mapSettings: () => ({}),
+      async stream() {
+        throw new Error("stream is not used by this test");
+      },
+      appendToolRound(messages) {
+        return messages;
+      },
+    });
+    const assistant = prompt({
+      id: "lifecycle-setup-failure",
+      use: [source],
+      prompt: "Do not call the provider.",
+    });
+
+    await expect(
+      createFixtureAdapter({}).generate(assistant, {
+        model: "fixture-model",
+        toolsContext: { lookup: { opaque: true } },
+      }),
+    ).rejects.toThrow(
+      'toolsContext.lookup was provided, but tool "lookup" does not declare contextSchema',
+    );
+    expect(call).not.toHaveBeenCalled();
+    expect(close).toHaveBeenCalledOnce();
+  });
+
   it("reports source collisions with structured merge ownership", async () => {
     const first = mcp({
       id: "first-server",
@@ -177,7 +217,7 @@ describe("portable tool sources", () => {
       transport: stdio({ command: "second-server" }),
     });
     const materializeToolSource = vi.fn(async () => ({
-      tools: { lookup: { description: "duplicate" } },
+      tools: Object.fromEntries([["__proto__", { description: "duplicate" }]]),
       close: vi.fn(),
     }));
     const call = vi.fn();
@@ -207,7 +247,7 @@ describe("portable tool sources", () => {
       name: "ToolSourceCollisionError",
       code: "TOOL_SOURCE_COLLISION",
       phase: "merge",
-      toolName: "lookup",
+      toolName: "__proto__",
       sourceId: "second-server",
       previousOwner: 'tool source "first-server"',
     });

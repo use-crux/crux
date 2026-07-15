@@ -137,6 +137,49 @@ describe("MCP errors", () => {
     expect(visible).not.toContain("query-secret");
   });
 
+  it("never exposes opaque resolver values in the public error or cause", async () => {
+    const opaqueSecret = "violet-umbrella-9281";
+    const error = await materializeMcpToolSource(
+      mcp({
+        id: "opaque-resolver-failure",
+        transport: async () => {
+          throw new Error(`dependency rejected ${opaqueSecret}`);
+        },
+      }),
+      { runtimeContext: undefined },
+    ).catch((cause: unknown) => cause);
+
+    expect(error).toBeInstanceOf(McpToolSourceError);
+    expect(error).toMatchObject({
+      phase: "transport-configuration",
+      serverId: "opaque-resolver-failure",
+    });
+    expect(`${String(error)}\n${String((error as Error).cause)}`).not.toContain(
+      opaqueSecret,
+    );
+  });
+
+  it("validates widened resolver results before transport construction", async () => {
+    const opaqueSecret = "resolver-payload-4817";
+    const error = await materializeMcpToolSource(
+      mcp({
+        id: "invalid-resolver-result",
+        transport: async () =>
+          ({ type: "websocket", detail: opaqueSecret }) as never,
+      }),
+      { runtimeContext: undefined },
+    ).catch((cause: unknown) => cause);
+
+    expect(error).toMatchObject({
+      name: "McpToolSourceError",
+      phase: "transport-configuration",
+      serverId: "invalid-resolver-result",
+    });
+    expect(`${String(error)}\n${String((error as Error).cause)}`).not.toContain(
+      opaqueSecret,
+    );
+  });
+
   it("throws transport and protocol call failures through ordinary tool handling", async () => {
     const fixture = await startMcpHttpFixture({
       pages: [

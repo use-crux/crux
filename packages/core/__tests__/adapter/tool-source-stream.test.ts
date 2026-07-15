@@ -66,6 +66,29 @@ describe("stream tool-source lifecycle", () => {
     expect(close).toHaveBeenCalledOnce();
   });
 
+  it("closes when lifecycle preparation rejects toolsContext", async () => {
+    const close = vi.fn();
+    const provider = vi.fn(async () => successfulHandle([]));
+    const fixture = createStreamAdapter(
+      async () => ({
+        tools: { lookup: { description: "No context schema." } },
+        close,
+      }),
+      provider,
+    );
+
+    await expect(
+      fixture.stream(streamPrompt(), {
+        model: "fixture-model",
+        toolsContext: { lookup: { opaque: true } },
+      }),
+    ).rejects.toThrow(
+      'toolsContext.lookup was provided, but tool "lookup" does not declare contextSchema',
+    );
+    expect(provider).not.toHaveBeenCalled();
+    expect(close).toHaveBeenCalledOnce();
+  });
+
   it("closes exactly once when the provider stream errors", async () => {
     const primary = new Error("stream read failed");
     const close = vi.fn();

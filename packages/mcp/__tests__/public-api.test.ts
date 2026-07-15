@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { mcp, stdio, streamableHttp } from "../src";
+import { McpConfigurationError, mcp, stdio, streamableHttp } from "../src";
 
 describe("MCP definitions", () => {
   it("copies and freezes retained transport and selection values", () => {
@@ -63,5 +63,95 @@ describe("MCP definitions", () => {
         },
       ]),
     ).toThrow("mcp(): tools.allow and tools.deny are mutually exclusive");
+  });
+
+  it.each([
+    ["stdio command", () => stdio({ command: 42 } as never), "command"],
+    [
+      "stdio discriminant",
+      () => stdio({ type: "websocket", command: "node" } as never),
+      "type",
+    ],
+    [
+      "stdio arguments",
+      () => stdio({ command: "node", args: ["ok", 42] } as never),
+      "args[1]",
+    ],
+    [
+      "stdio environment",
+      () => stdio({ command: "node", env: { TOKEN: 42 } } as never),
+      "env.TOKEN",
+    ],
+    ["HTTP URL", () => streamableHttp({ url: 42 } as never), "url"],
+    [
+      "HTTP discriminant",
+      () =>
+        streamableHttp({
+          type: "websocket",
+          url: "https://mcp.example.test",
+        } as never),
+      "type",
+    ],
+    [
+      "HTTP headers",
+      () =>
+        streamableHttp({
+          url: "https://mcp.example.test",
+          headers: { Authorization: 42 },
+        } as never),
+      "headers.Authorization",
+    ],
+    [
+      "HTTP redirect",
+      () =>
+        streamableHttp({
+          url: "https://mcp.example.test",
+          redirect: "manual",
+        } as never),
+      "redirect",
+    ],
+    [
+      "transport discriminant",
+      () =>
+        mcp({
+          id: "fixture",
+          transport: { type: "websocket", url: "opaque-value" },
+        } as never),
+      "transport.type",
+    ],
+    [
+      "selection entry",
+      () =>
+        mcp({
+          id: "fixture",
+          transport: stdio({ command: "node" }),
+          tools: { allow: ["lookup", 42] },
+        } as never),
+      "tools.allow[1]",
+    ],
+    [
+      "selection prefix",
+      () =>
+        mcp({
+          id: "fixture",
+          transport: stdio({ command: "node" }),
+          tools: { prefix: 42 },
+        } as never),
+      "tools.prefix",
+    ],
+  ])("rejects an invalid %s with structured safe context", (_, run, field) => {
+    let error: unknown;
+    try {
+      run();
+    } catch (cause) {
+      error = cause;
+    }
+
+    expect(error).toBeInstanceOf(McpConfigurationError);
+    expect(error).toMatchObject({
+      code: "MCP_CONFIGURATION_ERROR",
+      field,
+    });
+    expect(String(error)).not.toContain("opaque-value");
   });
 });

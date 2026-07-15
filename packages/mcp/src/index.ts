@@ -8,6 +8,13 @@
  */
 
 import { TOOL_SOURCE, type ToolSource } from "@use-crux/core/tools";
+import {
+  assertMcpToolSelection,
+  assertMcpTransportConfig,
+  assertStdioConfig,
+  assertStreamableHttpConfig,
+  McpConfigurationError,
+} from "./configuration";
 
 /** Configuration for an MCP server transported over stdio. */
 export interface McpStdioTransportConfig {
@@ -88,14 +95,20 @@ export interface McpToolSource<
 export function mcp<TRuntimeContext = unknown>(
   config: McpConfig<TRuntimeContext>,
 ): McpToolSource<TRuntimeContext> {
-  if (typeof config.id !== "string" || !config.id.trim()) {
-    throw new Error("mcp(): id must be non-empty.");
-  }
-  if (config.tools?.allow !== undefined && config.tools.deny !== undefined) {
-    throw new Error(
-      "mcp(): tools.allow and tools.deny are mutually exclusive.",
+  if (typeof config !== "object" || config === null || Array.isArray(config)) {
+    throw new McpConfigurationError(
+      "mcp()",
+      "config",
+      "config must be an object",
     );
   }
+  if (typeof config.id !== "string" || !config.id.trim()) {
+    throw new McpConfigurationError("mcp()", "id", "id must be non-empty");
+  }
+  if (typeof config.transport !== "function") {
+    assertMcpTransportConfig(config.transport);
+  }
+  if (config.tools !== undefined) assertMcpToolSelection(config.tools);
   const transport =
     typeof config.transport === "function"
       ? config.transport
@@ -114,6 +127,7 @@ export function mcp<TRuntimeContext = unknown>(
 export function stdio(
   config: Omit<McpStdioTransportConfig, "type">,
 ): McpStdioTransportConfig {
+  assertStdioConfig(config);
   return copyStdio({ type: "stdio", ...config });
 }
 
@@ -121,10 +135,12 @@ export function stdio(
 export function streamableHttp(
   config: Omit<McpStreamableHttpTransportConfig, "type">,
 ): McpStreamableHttpTransportConfig {
+  assertStreamableHttpConfig(config);
   return copyStreamableHttp({ type: "streamable-http", ...config });
 }
 
 function copyTransport(config: McpTransportConfig): McpTransportConfig {
+  assertMcpTransportConfig(config);
   return config.type === "stdio"
     ? copyStdio(config)
     : copyStreamableHttp(config);
@@ -172,6 +188,7 @@ function copySelection(selection: McpToolSelection): McpToolSelection {
 }
 
 export { materializeMcpToolSource } from "./official-client/materialize";
+export { McpConfigurationError } from "./configuration";
 export { materializeAiSdkMcpToolSource } from "./ai-sdk/materialize";
 export type {
   AiSdkMcpMaterializedTool,

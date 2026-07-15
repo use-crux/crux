@@ -193,7 +193,7 @@ describe("MCP Project Index runtime updates", () => {
         }),
         { runtimeContext: undefined },
       ),
-    ).rejects.toThrow("cursor loop");
+    ).rejects.toMatchObject({ phase: "discover", serverId: "catalog" });
 
     expect(updates).toEqual([
       expect.objectContaining({

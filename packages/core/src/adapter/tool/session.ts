@@ -88,6 +88,7 @@ import {
   withToolSourceProvenance,
 } from "../../tools/tool-source";
 import { isToolExecutionMock } from "../../tools/mock";
+import { createToolRegistry } from "../../tools/tool-registry";
 import { LOAD_SKILL_TOOL_NAME } from "../../skill/tools";
 import {
   createApprovalId,
@@ -608,7 +609,7 @@ export function createToolLifecycle(
       resolved.tools,
       options.call?.tools,
     );
-    const merged = { ...(resolved.tools ?? {}), ...(callTools ?? {}) };
+    const merged = createToolRegistry(resolved.tools, callTools);
     wrappedTools = applyToolMiddleware(merged, middleware);
     toolContexts = resolveToolsContext(
       wrappedTools,

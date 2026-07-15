@@ -201,6 +201,28 @@ func TestRuntimeUpdateRouteUsesRegisteredSnapshotAsAuthoredBase(t *testing.T) {
 	assertStatusAndClose(t, http.MethodPost, server.URL+"/api/index/runtime-update", body, http.StatusNoContent)
 }
 
+func TestRuntimeUpdateRouteRejectsOversizedBody(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(New(Options{
+		Devtools: devtools.NewService(
+			store.NewStore(),
+			quality.NewService(store.NewStore(), quality.Dir(t.TempDir())),
+		),
+		OriginAllowed: func(*http.Request) bool { return true },
+	}))
+	t.Cleanup(server.Close)
+
+	body := bytes.Repeat([]byte(" "), maxProjectIndexRuntimeUpdateRequestBytes+1)
+	assertStatusAndClose(
+		t,
+		http.MethodPost,
+		server.URL+"/api/index/runtime-update",
+		body,
+		http.StatusRequestEntityTooLarge,
+	)
+}
+
 func assertRejectedRuntimeUpdate(t *testing.T, serverURL string, body []byte, secret string) {
 	t.Helper()
 	request, err := http.NewRequest(http.MethodPost, serverURL+"/api/index/runtime-update", bytes.NewReader(body))

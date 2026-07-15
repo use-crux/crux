@@ -24,6 +24,7 @@ import {
   type ToolSourceProvenance,
 } from "../../tools/tool-source";
 import { isToolExecutionMock } from "../../tools/mock";
+import { createToolRegistry } from "../../tools/tool-registry";
 import { redactSensitiveValue } from "../../shared/redaction";
 import { contentText } from "../../content";
 import type { ContentPart } from "../../types/content";
@@ -407,7 +408,7 @@ export function instrumentToolSet<TTools extends Record<string, unknown>>(
   if (!shouldInstrument) return tools;
 
   const maxPending = options?.maxPending ?? DEFAULT_MAX_PENDING;
-  const wrapped: Record<string, unknown> = {};
+  const wrapped = createToolRegistry<unknown>();
   for (const [name, tool] of Object.entries(tools)) {
     const toolLike = tool as {
       execute?: ToolExecute;

@@ -8,6 +8,47 @@ import { createMcpPolicyFixture } from "./mcp-policy-fixture";
 
 /** Registers MCP cases shared by the ordinary authored-tool middleware path. */
 export function registerMcpMiddlewareConformanceTests(): void {
+  it("preserves __proto__ through materialization, middleware, and execution", async () => {
+    const beforeExecute = vi.fn();
+    const execute = vi.fn(async () => ({ ok: true }));
+    const source = mcp({
+      id: "prototype-tool-fixture",
+      transport: stdio({ command: "fixture-server" }),
+    });
+    const assistant = prompt({
+      id: "mcp-prototype-tool",
+      use: [source],
+      prompt: "Use the tool.",
+      toolMiddleware: toolMiddleware({
+        id: "prototype-tool-middleware",
+        match: ["__proto__"],
+        beforeExecute,
+      }),
+    });
+    const fixture = createMcpPolicyFixture({
+      tools: Object.fromEntries([
+        [
+          "__proto__",
+          {
+            description: "A portable prototype-named tool.",
+            parameters: z.object({}),
+            execute,
+          },
+        ],
+      ]),
+      toolName: "__proto__",
+      input: {},
+    });
+
+    await fixture.adapter.generate(assistant, { model: "fixture-model" });
+
+    expect(beforeExecute).toHaveBeenCalledOnce();
+    expect(execute).toHaveBeenCalledOnce();
+    expect(fixture.results()[0]).toMatchObject({
+      name: "__proto__",
+    });
+  });
+
   it("matches the exposed name and keeps call middleware outermost", async () => {
     const events: string[] = [];
     const execute = vi.fn(async (input: { value: string }) => {

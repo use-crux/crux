@@ -70,4 +70,44 @@ describe("AI SDK-native MCP materialization", () => {
     expect(sdkTools.lookup?.execute).not.toBe(nativeExecute);
     expect(sdkTools.lookup?.toModelOutput).toBe(nativeToModelOutput);
   });
+
+  it.each(["generate", "stream"] as const)(
+    "closes when SDK %s lifecycle preparation rejects toolsContext",
+    async (method) => {
+      const close = vi.fn(async () => {});
+      materializeMcpMock.mockResolvedValue({
+        tools: {
+          lookup: {
+            description: "No context schema.",
+            inputSchema: { jsonSchema: {} },
+          },
+        },
+        close,
+      } as never);
+      const assistant = prompt({
+        id: `native-mcp-${method}-setup-failure`,
+        use: [
+          mcp({
+            id: "catalog",
+            transport: streamableHttp({ url: "https://mcp.example.test" }),
+          }),
+        ],
+        prompt: "Do not call the provider.",
+      });
+      const scripted = scriptedGateway();
+      const crux = createCruxAi({ gateway: scripted.gateway });
+
+      await expect(
+        crux[method](assistant, {
+          model: "test:model" as never,
+          toolsContext: { lookup: { opaque: true } } as never,
+        }),
+      ).rejects.toThrow(
+        'toolsContext.lookup was provided, but tool "lookup" does not declare contextSchema',
+      );
+      expect(close).toHaveBeenCalledOnce();
+      expect(scripted.calls.generateText).toHaveLength(0);
+      expect(scripted.calls.streamText).toHaveLength(0);
+    },
+  );
 });

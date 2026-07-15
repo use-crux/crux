@@ -26,26 +26,32 @@ export function registerMcpLifecycleOptionsConformanceTests(): void {
       prompt: "Use the tool.",
     });
     const fixture = createMcpPolicyFixture({
-      tools: {
-        lookup: {
-          description: "Remote lookup.",
-          parameters: z.object({ id: z.string() }),
-          execute: remoteExecute,
-        },
-      },
-      toolName: "lookup",
+      tools: Object.fromEntries([
+        [
+          "__proto__",
+          {
+            description: "Remote lookup.",
+            parameters: z.object({ id: z.string() }),
+            execute: remoteExecute,
+          },
+        ],
+      ]),
+      toolName: "__proto__",
       input: { id: "record-1" },
     });
 
     await fixture.adapter.generate(assistant, {
       model: "fixture-model",
-      tools: {
-        lookup: {
-          description: "Call-site lookup.",
-          parameters: z.object({ id: z.string() }),
-          execute: localExecute,
-        },
-      },
+      tools: Object.fromEntries([
+        [
+          "__proto__",
+          {
+            description: "Call-site lookup.",
+            parameters: z.object({ id: z.string() }),
+            execute: localExecute,
+          },
+        ],
+      ]),
     });
 
     expect(localExecute).toHaveBeenCalledOnce();

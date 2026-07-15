@@ -2,6 +2,7 @@ package localserver
 
 import (
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"os"
@@ -17,11 +18,17 @@ func registerIndexRoutes(mux *http.ServeMux, devtoolsSvc *devtools.Service) {
 			http.Error(w, "devtools service unavailable", http.StatusServiceUnavailable)
 			return
 		}
+		r.Body = http.MaxBytesReader(w, r.Body, maxProjectIndexRuntimeUpdateRequestBytes)
 		var update projectindex.ProjectIndexRuntimeUpdate
 		decoder := json.NewDecoder(r.Body)
 		decoder.DisallowUnknownFields()
 		if err := decoder.Decode(&update); err != nil {
-			http.Error(w, "invalid runtime update", http.StatusBadRequest)
+			status := http.StatusBadRequest
+			var maxBytesError *http.MaxBytesError
+			if errors.As(err, &maxBytesError) {
+				status = http.StatusRequestEntityTooLarge
+			}
+			http.Error(w, http.StatusText(status), status)
 			return
 		}
 		if _, err := devtoolsSvc.ApplyProjectIndexRuntimeUpdate(r.Context(), update); err != nil {
@@ -106,3 +113,5 @@ func registerIndexRoutes(mux *http.ServeMux, devtoolsSvc *devtools.Service) {
 	mux.HandleFunc("POST /api/project/index/reindex", indexReindexHandler)
 	mux.HandleFunc("POST /api/index/reindex", indexReindexHandler)
 }
+
+const maxProjectIndexRuntimeUpdateRequestBytes = 4 * 1024 * 1024

@@ -21,3 +21,9 @@ runtime-discovered tools, safe schemas and fingerprints, health and lifecycle st
 Run Detail preparation evidence, and exact Catalog activity. The new
 `@use-crux/mcp` package owns both supported client paths and keeps MCP optional
 for Core and adapter installations.
+
+The release also validates widened runtime transport and selection values at
+the public boundary, keeps opaque dependency failures out of errors and
+evidence, preserves every accepted portable tool name, closes materialized
+sessions when lifecycle preparation fails, and bounds Project Index runtime
+delivery and ingestion.

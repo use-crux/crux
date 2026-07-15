@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   ProjectIndexRuntimeUpdateSchema,
@@ -27,6 +27,39 @@ function replacement(
 }
 
 describe("Project Index runtime update transport", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("aborts a hanging delivery and coalesces pending state per owner", async () => {
+    vi.useFakeTimers();
+    const delivered: string[] = [];
+    const signals: AbortSignal[] = [];
+    const transport = createProjectIndexRuntimeTransport({
+      deliveryTimeoutMs: 50,
+      deliver: async (update, { signal }) => {
+        delivered.push(update.updateId);
+        signals.push(signal);
+        if (update.updateId === "update-1") {
+          await new Promise<void>(() => {});
+        }
+      },
+    });
+
+    transport.enqueue(replacement("update-1"));
+    transport.enqueue(replacement("update-2"));
+    transport.enqueue(replacement("update-3"));
+    await Promise.resolve();
+    expect(delivered).toEqual(["update-1"]);
+
+    const earlyFlush = transport.flush({ timeoutMs: 10 });
+    await vi.advanceTimersByTimeAsync(10);
+    await expect(earlyFlush).resolves.toBe("timeout");
+    await vi.advanceTimersByTimeAsync(50);
+    await expect(transport.flush({ timeoutMs: 10 })).resolves.toBe("ok");
+
+    expect(signals[0]?.aborted).toBe(true);
+    expect(delivered).toEqual(["update-1", "update-3"]);
+  });
+
   it("serializes non-blocking delivery and flushes the queued owner updates", async () => {
     let releaseFirst!: () => void;
     const firstDelivery = new Promise<void>((resolve) => {

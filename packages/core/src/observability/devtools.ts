@@ -144,7 +144,7 @@ function buildDevtoolsRuntime(
   });
   const snapshotRegistration = registerIndexSnapshot(options);
   const projectIndexRuntimeTransport = createProjectIndexRuntimeTransport({
-    deliver: async (update) => {
+    deliver: async (update, { signal }) => {
       await snapshotRegistration;
       const fetchImpl = globalThis.fetch;
       if (!fetchImpl) throw new Error("fetch unavailable");
@@ -160,6 +160,7 @@ function buildDevtoolsRuntime(
             "Bypass-Tunnel-Reminder": "true",
           },
           body: JSON.stringify(update),
+          signal,
         },
       );
       if (!response.ok) {

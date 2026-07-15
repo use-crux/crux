@@ -152,25 +152,31 @@ export async function generateCore<
     abortSignal: args.signal,
   });
   resolved = sourceSession.resolved;
-  const lifecycle = createToolLifecycle({
-    regime: "core",
-    resolved,
-    call: {
-      tools: args.tools,
-      toolsContext: args.toolsContext,
-      runtimeContext: args.runtimeContext,
-      toolMiddleware: args.toolMiddleware,
-      toolApproval: args.toolApproval,
-    },
-    promptId: prompt.id,
-    input: args.input ?? {},
-    timeout: args.timeout,
-    reresolve: (skillSession) =>
-      prompt.resolve(withSkillActivationInput(resolveOpts, skillSession)),
-    appendToolRound: dialect.appendToolRound,
-    sanitizeToolSchema: dialect.sanitizeToolSchema,
-  });
-  messages = (await lifecycle.resume(messages)).messages;
+  let lifecycle: ReturnType<typeof createToolLifecycle>;
+  try {
+    lifecycle = createToolLifecycle({
+      regime: "core",
+      resolved,
+      call: {
+        tools: args.tools,
+        toolsContext: args.toolsContext,
+        runtimeContext: args.runtimeContext,
+        toolMiddleware: args.toolMiddleware,
+        toolApproval: args.toolApproval,
+      },
+      promptId: prompt.id,
+      input: args.input ?? {},
+      timeout: args.timeout,
+      reresolve: (skillSession) =>
+        prompt.resolve(withSkillActivationInput(resolveOpts, skillSession)),
+      appendToolRound: dialect.appendToolRound,
+      sanitizeToolSchema: dialect.sanitizeToolSchema,
+    });
+    messages = (await lifecycle.resume(messages)).messages;
+  } catch (error) {
+    await sourceSession.close();
+    throw error;
+  }
 
   /**
    * Run exactly one provider call under the step budget, normalizing any thrown
