@@ -1,4 +1,9 @@
-import { prompt, type ContextEntry } from "@use-crux/core";
+import {
+  prompt,
+  type AdapterGenerateOptions,
+  type ContextEntry,
+} from "@use-crux/core";
+import { describeMcpAdapterConformance } from "@use-crux/mcp/testing/vitest";
 import { describe, expect, expectTypeOf, it } from "vitest";
 
 import {
@@ -40,6 +45,27 @@ describe("MCP public types", () => {
       staticSource,
       dynamicSource,
     ]);
+
+    const options = {
+      model: "fixture-model",
+      runtimeContext: { token: "fixture-token" },
+      toolApproval: {
+        remote_lookup: (context) => {
+          expectTypeOf(context.runtimeContext).toEqualTypeOf<{
+            token: string;
+          }>();
+          return context.runtimeContext.token.length > 0;
+        },
+      },
+    } satisfies AdapterGenerateOptions<
+      Record<string, unknown>,
+      undefined,
+      typeof assistant,
+      { token: string }
+    >;
+
+    expect(options.runtimeContext.token).toBe("fixture-token");
+    expectTypeOf(describeMcpAdapterConformance).toBeFunction();
   });
 
   it("narrows transport configurations exhaustively", () => {
@@ -59,9 +85,7 @@ describe("MCP public types", () => {
 
   it("types dynamic tool input as a record rather than any", () => {
     type Session = Awaited<ReturnType<typeof materializeMcpToolSource>>;
-    type DynamicInput = Parameters<
-      Session["tools"][string]["execute"]
-    >[0];
+    type DynamicInput = Parameters<Session["tools"][string]["execute"]>[0];
 
     expectTypeOf<DynamicInput>().toEqualTypeOf<Record<string, unknown>>();
   });

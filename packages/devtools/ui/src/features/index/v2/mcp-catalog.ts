@@ -132,7 +132,7 @@ function serverView(definition: ViewDef, index: IndexIndex): McpServerCatalogVie
   const rawServer = record(rawSuccess?.server)
   const serverName = text(rawServer?.name)
   const serverVersion = text(rawServer?.version)
-  const lastSuccessfulDiscovery =
+  const lastSuccessfulDiscovery: McpServerCatalogView['lastSuccessfulDiscovery'] =
     successObservedAt && supportedImplementation
       ? {
           observedAt: successObservedAt,

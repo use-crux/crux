@@ -179,16 +179,11 @@ function materializedTool(
       async execute(input, options) {
         const signal = options.abortSignal ?? materializationSignal;
         const validatedInput = await parameters.parseAsync(input);
-        let result: Awaited<ReturnType<Client["callTool"]>>;
-        try {
-          result = await client.callTool(
-            { name: tool.name, arguments: validatedInput },
-            undefined,
-            signal ? { signal } : undefined,
-          );
-        } catch (error) {
-          throw mcpToolSourceError("execute", errorContext, error);
-        }
+        const result = await client.callTool(
+          { name: tool.name, arguments: validatedInput },
+          undefined,
+          signal ? { signal } : undefined,
+        );
         if (outputSchema && result.structuredContent === undefined) {
           if (!result.isError) {
             throw new TypeError(

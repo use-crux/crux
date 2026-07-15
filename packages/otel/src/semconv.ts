@@ -109,6 +109,8 @@ export const primitiveSpanNames = {
   'composition.vote': 'crux.composition.vote',
   'tool.call': 'crux.tool.call',
   'tool.approval': 'crux.tool.approval',
+  'mcp.connect': 'crux.mcp.connect',
+  'mcp.discover': 'crux.mcp.discover',
   'retrieval.pipeline': 'crux.retrieval.pipeline',
   'retrieval.recipe': 'crux.retrieval.recipe',
   'retrieval.retrieve': 'crux.retrieval.retrieve',

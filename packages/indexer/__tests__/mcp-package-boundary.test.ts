@@ -12,6 +12,12 @@ const repoRoot = join(
 const adapterPackages = ["ai", "openai", "anthropic", "google"] as const;
 
 interface PackageManifest {
+  readonly author?: string;
+  readonly engines?: Readonly<Record<string, string>>;
+  readonly exports?: Readonly<Record<string, unknown>>;
+  readonly homepage?: string;
+  readonly publishConfig?: { readonly access?: string };
+  readonly repository?: { readonly directory?: string };
   readonly dependencies?: Readonly<Record<string, string>>;
   readonly peerDependencies?: Readonly<Record<string, string>>;
   readonly peerDependenciesMeta?: Readonly<
@@ -46,6 +52,29 @@ describe("MCP package boundary", () => {
       zod: "^4.4.3",
     });
   });
+
+  it("includes MCP in compatibility checks and release staging", () => {
+    const manifest = packageManifest("mcp");
+    expect(manifest).toMatchObject({
+      author: "Crux",
+      engines: { node: ">=22.0.0" },
+      publishConfig: { access: "public" },
+      repository: { directory: "packages/mcp" },
+      homepage: "https://cruxjs.dev/docs/reference/mcp",
+      exports: {
+        ".": expect.any(Object),
+        "./testing/vitest": expect.any(Object),
+      },
+    });
+
+    expect(readRepoFile("scripts/stage-npm-packages.mjs")).toContain(
+      "{ name: '@use-crux/mcp', dir: 'packages/mcp', sourceRoot: 'src' }",
+    );
+    expect(readRepoFile("scripts/typecheck-typescript-compat.mjs")).toContain(
+      "'packages/mcp'",
+    );
+    expect(productionFilesWithExplicitAny("mcp")).toEqual([]);
+  });
 });
 
 function packageManifest(packageName: string): PackageManifest {
@@ -55,6 +84,16 @@ function packageManifest(packageName: string): PackageManifest {
       "utf8",
     ),
   ) as PackageManifest;
+}
+
+function readRepoFile(path: string): string {
+  return readFileSync(join(repoRoot, path), "utf8");
+}
+
+function productionFilesWithExplicitAny(packageName: string): string[] {
+  return sourceFiles(join(repoRoot, "packages", packageName, "src")).filter(
+    (path) => /\bany\b/.test(readFileSync(path, "utf8")),
+  );
 }
 
 function staticMcpImports(packageName: string): string[] {
