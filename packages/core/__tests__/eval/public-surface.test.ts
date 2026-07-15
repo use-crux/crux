@@ -21,4 +21,20 @@ describe("@use-crux/core/eval", () => {
     expect(surface.evaluate).toBeTypeOf("function");
     expect(surface.caseFile).toBeTypeOf("function");
   });
+
+  it("resolves the internal task protocol without widening the Eval root", async () => {
+    const manifest = JSON.parse(
+      await readFile(new URL("../../package.json", import.meta.url), "utf8"),
+    ) as CorePackageManifest;
+
+    expect(manifest.exports?.["./eval/internal/task"]).toEqual({
+      types: "./src/eval/internal/task.ts",
+      import: "./src/eval/internal/task.ts",
+    });
+    const protocol = await import("@use-crux/core/eval/internal/task");
+    expect(protocol.executeEvalTaskForInternalUse).toBeTypeOf("function");
+
+    const surface = await import("@use-crux/core/eval");
+    expect(Object.keys(surface).sort()).toEqual(["caseFile", "evaluate"]);
+  });
 });

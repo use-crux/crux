@@ -33,6 +33,10 @@
       "types": "./src/eval/index.ts",
       "import": "./src/eval/index.ts"
     },
+    "./eval/internal/task": {
+      "types": "./src/eval/internal/task.ts",
+      "import": "./src/eval/internal/task.ts"
+    },
     "./quality": {
       "types": "./src/quality/index.ts",
       "import": "./src/quality/index.ts"
