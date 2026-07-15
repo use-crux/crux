@@ -19,6 +19,47 @@ function readRepoFile(path: string): string {
 }
 
 describe("stable beta docs", () => {
+  it("keeps the Indexer root and experimental extension boundary explicit", () => {
+    const architecture = readRepoFile("packages/indexer/ARCHITECTURE.md");
+
+    expect(architecture).toContain(
+      "The public package root exposes Crux-owned compiler and record contracts.",
+    );
+    expect(architecture).toContain(
+      "Experimental third-party extractor and relation authoring lives under",
+    );
+    expect(architecture).not.toContain(
+      "public package root is the extension-authoring SDK",
+    );
+
+    expect(architecture).not.toContain(
+      "separates public authoring surfaces from host/internal bridges",
+    );
+    expect(architecture).toMatch(
+      /separates Crux-owned public compiler contracts, experimental\s+authoring surfaces, and host\/internal bridges/,
+    );
+    expect(architecture).not.toContain(
+      "IndexLint(ruleProfile)`: extension rule outputs",
+    );
+    expect(architecture).not.toContain(
+      "Rules opt into semantic cost with `requires: ['semantic']`",
+    );
+    expect(architecture).not.toContain("`requires: ['semantic']`");
+    expect(architecture).toContain(
+      "IndexLint(ruleProfile)`: merged definitions/relations plus the compiler-owned rule profile",
+    );
+  });
+
+  it("keeps extension peer examples compatible with current and scheduled releases", () => {
+    const guide = readRepoFile(
+      "apps/docs/content/docs/guides/advanced/writing-indexer-extension.mdx",
+    );
+    const supportedRange = "^0.5.0 || ^1.0.0";
+
+    expect(guide.match(/\^0\.5\.0 \|\| \^1\.0\.0/g)).toHaveLength(3);
+    expect(guide.replaceAll(supportedRange, "")).not.toContain("^0.5.0");
+  });
+
   it("keeps cache migration epochs and terminology aligned with code", () => {
     const docs = [
       readRepoFile("packages/indexer/CONTEXT.md"),
@@ -31,7 +72,7 @@ describe("stable beta docs", () => {
 
     expect(docs).toContain(STATIC_PARSE_CACHE_EPOCH);
     expect(docs).toContain(SEMANTIC_FACTS_CACHE_EPOCH);
-    expect(docs).toContain("epoch-36");
+    expect(docs).toContain("epoch-37");
     expect(docs).not.toMatch(/static-parse-v(39|45|51|52)\b/);
     expect(docs).not.toMatch(/semantic-facts-v(15|17|20)\b/);
     expect(docs).not.toContain(

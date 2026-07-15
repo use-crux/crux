@@ -374,6 +374,14 @@
     "runtimeJoin": true
   },
   {
+    "type": "context.uses_mcp_server",
+    "fromKinds": ["context"],
+    "toKinds": ["mcp.server"],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": true
+  },
+  {
     "type": "context.uses_scorer",
     "fromKinds": ["context"],
     "toKinds": ["scorer"],
@@ -824,6 +832,14 @@
     "runtimeJoin": true
   },
   {
+    "type": "mcp.server.provides_tool",
+    "fromKinds": ["mcp.server"],
+    "toKinds": ["tool"],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": true
+  },
+  {
     "type": "prompt.uses_blackboard",
     "fromKinds": ["prompt"],
     "toKinds": ["blackboard"],
@@ -851,6 +867,14 @@
     "type": "prompt.uses_memory",
     "fromKinds": ["prompt"],
     "toKinds": ["memory"],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": true
+  },
+  {
+    "type": "prompt.uses_mcp_server",
+    "fromKinds": ["prompt"],
+    "toKinds": ["mcp.server"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true

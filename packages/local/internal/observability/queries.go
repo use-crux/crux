@@ -12,6 +12,12 @@ import (
 
 const runSummaryRollupBatchSize = 100
 
+const effectiveRunStatusSQL = `CASE
+	WHEN r.lifecycle_status = 'reconciled-incomplete' THEN 'incomplete'
+	WHEN r.lifecycle_status LIKE 'reconciled-terminal:%' THEN substr(r.lifecycle_status, length('reconciled-terminal:') + 1)
+	ELSE ifnull(r.status, '')
+END`
+
 func (s *Service) Run(ctx context.Context, runID string) (RunSummary, error) {
 	queryCtx, cancel := s.queryContext(ctx)
 	defer cancel()
@@ -58,7 +64,7 @@ func (s *Service) loadRunSummary(ctx context.Context, runID string, includeCount
 			r.run_id, ifnull(r.trace_id, ''), ifnull(r.session_id, ''), ifnull(r.user_id, ''),
 			ifnull(r.project_id, ''), ifnull(r.manifest_id, ''), ifnull(r.deployment_id, ''),
 			ifnull(r.name, ''), ifnull(r.root_primitive, ''),
-			ifnull(r.status, ''), ifnull(r.started_at, ''), ifnull(r.ended_at, ''),
+			`+effectiveRunStatusSQL+`, ifnull(r.started_at, ''), ifnull(r.ended_at, ''),
 			ifnull(r.duration_ms, 0),
 			'', '', '',`+countProjection+`,
 			ifnull(r.last_activity_at, ''), r.revision,
@@ -137,7 +143,7 @@ func (s *Service) runsWithOptions(ctx context.Context, opts RunListOptions) ([]R
 			r.run_id, ifnull(r.trace_id, ''), ifnull(r.session_id, ''), ifnull(r.user_id, ''),
 			ifnull(r.project_id, ''), ifnull(r.manifest_id, ''), ifnull(r.deployment_id, ''),
 			ifnull(r.name, ''), ifnull(r.root_primitive, ''),
-			ifnull(r.status, ''), ifnull(r.started_at, ''), ifnull(r.ended_at, ''),
+			` + effectiveRunStatusSQL + `, ifnull(r.started_at, ''), ifnull(r.ended_at, ''),
 			ifnull(r.duration_ms, 0),
 			'', '', '',
 			r.record_count, r.span_count, r.event_count, r.artifact_count, r.edge_count,
@@ -247,7 +253,7 @@ func runListWhereClause(opts RunListOptions) (string, []any, error) {
 		args = append(args, opts.SessionID)
 	}
 	if len(opts.Status) > 0 {
-		clauses = append(clauses, `r.status IN (`+queryPlaceholders(len(opts.Status))+`)`)
+		clauses = append(clauses, effectiveRunStatusSQL+` IN (`+queryPlaceholders(len(opts.Status))+`)`)
 		args = append(args, queryArgs(opts.Status)...)
 	}
 	if opts.Since != "" {
@@ -1069,16 +1075,28 @@ func (s *Service) RunDetail(ctx context.Context, runID string) (RunDetail, error
 		return RunDetail{}, err
 	}
 	detail := ProjectRunDetail(graph, DefaultProjectionOptions())
-	detail.DefinitionRefs, err = s.runDefinitionRefs(ctx, graph.Run.RunID)
+	definitionRefs, err := s.projectRunDefinitionRefs(ctx, graph.Run.RunID)
 	if err != nil {
 		return RunDetail{}, fmt.Errorf("list definition refs for run %q: %w", runID, err)
 	}
+	detail.DefinitionRefs = definitionRefs.Run
+	attachRunDetailDefinitionRefs(&detail.Root, definitionRefs.BySpan)
 	resolution, err := s.resolveRunManifest(ctx, graph.Run, detail.DefinitionRefs, "")
 	if err != nil {
 		return RunDetail{}, err
 	}
 	detail.Manifest = &resolution
 	return detail, nil
+}
+
+func attachRunDetailDefinitionRefs(node *RunDetailNode, refsBySpan map[string][]DefinitionRef) {
+	node.DefinitionRefs = refsBySpan[node.SpanID]
+	for index := range node.Details {
+		node.Details[index].DefinitionRefs = refsBySpan[node.Details[index].SpanID]
+	}
+	for index := range node.Children {
+		attachRunDetailDefinitionRefs(&node.Children[index], refsBySpan)
+	}
 }
 
 func applyRunSummaryGraphRollups(run *RunSummary, spans []SpanSummary, events []SpanEventSummary, artifacts []ArtifactSummary, edges []EdgeSummary) {

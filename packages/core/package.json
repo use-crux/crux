@@ -69,6 +69,10 @@
       "types": "./src/project-index/serializers.ts",
       "import": "./src/project-index/serializers.ts"
     },
+    "./project-index/runtime": {
+      "types": "./src/project-index/runtime.ts",
+      "import": "./src/project-index/runtime.ts"
+    },
     "./lint": {
       "types": "./src/lint/index.ts",
       "import": "./src/lint/index.ts"

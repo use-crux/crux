@@ -22,14 +22,14 @@ node scripts/native-ast-parity-gate.mjs
 
 Observed gate coverage:
 
-| Surface                         | Evidence                                                                                                                                                                                        |
-| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Rust worker build               | `cargo build --package crux-static-index-worker --bin crux-static-index-worker` passed.                                                                                                         |
-| Rust tests                      | `cargo test` passed, including `static-compiler` 68 tests, `worker` 19 tests, `syntax-oxc` 8 tests, and doc tests.                                                                              |
-| Rust first-party golden         | `rust-first-party-static-golden.test.ts` compares Rust/Oxc output with `contracts/fixtures/rust-first-party-static-golden.json`.                                                                |
-| Full indexer suite              | `CRUX_STATIC_INDEX_WORKER=target/debug/crux-static-index-worker pnpm --filter @use-crux/indexer test` passed with 73 files, 330 tests, and 1 skipped env-gated test.                            |
-| Go production path              | `go test ./internal/projectindex/... -count=1` passed from `packages/local` with the built Rust worker and embedded local worker bundle.                                                         |
-| Local worker embed path         | The gate built `@use-crux/local-workers`, embedded the generated worker assets, and then ran the Go Project Index packages against those assets.                                                  |
+| Surface                 | Evidence                                                                                                                                                             |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Rust worker build       | `cargo build --package crux-static-index-worker --bin crux-static-index-worker` passed.                                                                              |
+| Rust tests              | `cargo test` passed, including `static-compiler` 68 tests, `worker` 19 tests, `syntax-oxc` 8 tests, and doc tests.                                                   |
+| Rust first-party golden | `rust-first-party-static-golden.test.ts` compares Rust/Oxc output with `contracts/fixtures/rust-first-party-static-golden.json`.                                     |
+| Full indexer suite      | `CRUX_STATIC_INDEX_WORKER=target/debug/crux-static-index-worker pnpm --filter @use-crux/indexer test` passed with 73 files, 330 tests, and 1 skipped env-gated test. |
+| Go production path      | `go test ./internal/projectindex/... -count=1` passed from `packages/local` with the built Rust worker and embedded local worker bundle.                             |
+| Local worker embed path | The gate built `@use-crux/local-workers`, embedded the generated worker assets, and then ran the Go Project Index packages against those assets.                     |
 
 `pnpm test:native-ast-parity` is the release command because it builds the
 current Rust/Oxc worker, points every worker-backed test at that binary, compares
@@ -54,11 +54,12 @@ packages with required gate environment.
 
 ## Cache Identity Review
 
-The current static cache namespace is `static-parse-v64`; semantic facts use
-`semantic-facts-v28`; and the Go Project Index snapshot cache lives under
-`.crux/cache/index-v2/epoch-36/`. These identities include the later
-root-stable fingerprint, backend-state, and durable extractor-provenance
-migrations so restart warm loads cannot mask changed Catalog evidence.
+The current static cache namespace is `static-parse-v65`; semantic facts use
+`semantic-facts-v29`; and the Go Project Index snapshot cache lives under
+`.crux/cache/index-v2/epoch-37/`. These identities include main's scheduling
+and owner-fact migrations plus root-stable fingerprints, backend state, and
+durable all-kind extractor provenance, so restart warm loads cannot mask
+changed Catalog evidence.
 
 `nativeAst` is the static AST/source frontend experiment and remains independent
 from `experimental.indexer.native`, which selects the semantic backend.
@@ -121,11 +122,11 @@ Rust/Oxc worker, the production one-shot Go service, and exactly two iterations
 per fixture. These are non-gating end-to-end context; the 100 ms Tier-A leaf
 budget measures a different watch path.
 
-| Fixture | TypeScript files | Cold | Warm | Peak process-tree RSS |
-| --- | ---: | ---: | ---: | ---: |
-| Small manifest fixture | 3 | 435.8 ms | 85.49 ms | 184.3 MiB |
-| Indexer package | 430 | 1.701 s | 340.7 ms | 477.8 MiB |
-| Crux repository | 2,579 | 23.484 s | 6.036 s | 3,752 MiB |
+| Fixture                | TypeScript files |     Cold |     Warm | Peak process-tree RSS |
+| ---------------------- | ---------------: | -------: | -------: | --------------------: |
+| Small manifest fixture |                3 | 435.8 ms | 85.49 ms |             184.3 MiB |
+| Indexer package        |              430 |  1.701 s | 340.7 ms |             477.8 MiB |
+| Crux repository        |            2,579 | 23.484 s |  6.036 s |             3,752 MiB |
 
 Reproduce the same measurement shape with
 `BenchmarkOneShotProjectIndexBaselines`, setting

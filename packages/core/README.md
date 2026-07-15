@@ -25,6 +25,32 @@ pnpm add @use-crux/core @use-crux/ai ai @ai-sdk/openai zod
 
 Prefer a provider SDK directly? Use `@use-crux/openai`, `@use-crux/anthropic`, or `@use-crux/google` instead of `@use-crux/ai`.
 
+```bash
+pnpm add @use-crux/openai openai
+pnpm add @use-crux/anthropic @anthropic-ai/sdk
+pnpm add @use-crux/google @google/genai
+```
+
+To compose portable tools from an MCP server, install `@use-crux/mcp` and add
+its inert `mcp()` definition to a prompt or context `use[]`. The active adapter
+materializes that source before provider I/O, while the resulting tools keep the
+ordinary middleware, approval, Safety, observability, and Quality lifecycle.
+Core owns only this provider-neutral tool-source boundary; the opt-in MCP
+package owns protocol clients and transports.
+
+```ts
+import { mcp, streamableHttp } from "@use-crux/mcp";
+
+const catalog = mcp({
+  id: "catalog",
+  transport: streamableHttp({ url: "https://mcp.example.com" }),
+  tools: { allow: ["lookup"], prefix: "catalog_" },
+});
+```
+
+See the [MCP guide](https://cruxjs.dev/docs/guides/tools/mcp) for credentials,
+approval resume, Quality mocks, and lifecycle guidance.
+
 ## Start with one prompt
 
 ```ts
@@ -117,7 +143,10 @@ const reply = prompt({
 
 const result = await generate(reply, {
   model: openai("gpt-4o"),
-  input: { userId: "user_123", question: "What did we decide about the launch plan?" },
+  input: {
+    userId: "user_123",
+    question: "What did we decide about the launch plan?",
+  },
   guardrails: [injection],
   constraints: [grounded],
 });
@@ -129,18 +158,18 @@ Now the same call has memory, retrieval, input screening, structured output, ret
 
 `@use-crux/core` exposes SDK-agnostic primitives through focused subpaths:
 
-| Import                           | Area                                                                                            |
-| -------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `@use-crux/core`                 | Prompts, contexts, config, injection-defense helpers (`safe`, `escapeXml`), and common types.   |
-| `@use-crux/core/memory`          | Memory blocks, stores, capture, recall, and compaction hooks.                                    |
-| `@use-crux/core/retrieval`       | Retrievers, rerankers, grounding inputs, and RAG pipelines.                                      |
-| `@use-crux/core/safety`          | Guardrails, constraints, safety plugins, and validation retry.                                   |
-| `@use-crux/core/quality`         | Evaluations, suites, assertions, scorers, gates, variants, and baselines.                        |
-| `@use-crux/core/agent`           | Agents, blackboards, handoffs, delegates, and compositions (parallel, pipeline, consensus, swarm). |
-| `@use-crux/core/flow`            | Suspendable, resumable typed workflows.                                                          |
-| `@use-crux/core/runtime`         | The durable Runtime Engine composers, ports, and diagnostics.                                    |
-| `@use-crux/core/observability`   | Canonical graph records, transports, and the per-turn decision report read model.               |
-| `@use-crux/core/skill`           | Skill authoring with inline and registry loaders.                                                |
+| Import                         | Area                                                                                               |
+| ------------------------------ | -------------------------------------------------------------------------------------------------- |
+| `@use-crux/core`               | Prompts, contexts, config, injection-defense helpers (`safe`, `escapeXml`), and common types.      |
+| `@use-crux/core/memory`        | Memory blocks, stores, capture, recall, and compaction hooks.                                      |
+| `@use-crux/core/retrieval`     | Retrievers, rerankers, grounding inputs, and RAG pipelines.                                        |
+| `@use-crux/core/safety`        | Guardrails, constraints, safety plugins, and validation retry.                                     |
+| `@use-crux/core/quality`       | Evaluations, suites, assertions, scorers, gates, variants, and baselines.                          |
+| `@use-crux/core/agent`         | Agents, blackboards, handoffs, delegates, and compositions (parallel, pipeline, consensus, swarm). |
+| `@use-crux/core/flow`          | Suspendable, resumable typed workflows.                                                            |
+| `@use-crux/core/runtime`       | The durable Runtime Engine composers, ports, and diagnostics.                                      |
+| `@use-crux/core/observability` | Canonical graph records, transports, and the per-turn decision report read model.                  |
+| `@use-crux/core/skill`         | Skill authoring with inline and registry loaders.                                                  |
 
 Node-only/build-time subpaths are explicit: `quality`, `setup`,
 `runtime/next`, `defer/node`, `observability/node`, `transcription/node`,

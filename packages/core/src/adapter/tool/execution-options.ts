@@ -8,6 +8,8 @@
  * @module
  */
 
+import { createToolRegistry } from '../../tools/tool-registry'
+
 /** Canonical options passed to one tool execution. */
 export interface ToolLifecycleExecutionOptions {
   readonly toolCallId: string
@@ -40,7 +42,7 @@ export function withToolLifecycleExecutionOptions(
   tools: Record<string, unknown>,
   resolveOptions: ExecutionOptionsResolver,
 ): Record<string, unknown> {
-  const contextual: Record<string, unknown> = {}
+  const contextual = createToolRegistry<unknown>()
   for (const [toolName, tool] of Object.entries(tools)) {
     if (!tool || typeof tool !== 'object') {
       contextual[toolName] = tool

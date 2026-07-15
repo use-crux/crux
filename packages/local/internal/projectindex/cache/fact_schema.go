@@ -70,6 +70,13 @@ func migrateProjectIndexFactStore(ctx context.Context, db *sql.DB) error {
 			PRIMARY KEY (root, phase, fact_id, relation_id)
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_index_fact_relation_ids_id ON index_fact_relation_ids(root, relation_id)`,
+		`CREATE TABLE IF NOT EXISTS index_runtime_overlays (
+			root TEXT NOT NULL,
+			owner_definition_id TEXT NOT NULL,
+			overlay_json TEXT NOT NULL,
+			updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (root, owner_definition_id)
+		)`,
 	}
 	for _, statement := range statements {
 		if _, err := db.ExecContext(ctx, statement); err != nil {

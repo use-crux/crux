@@ -10,7 +10,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/output"
 )
 
-// NewIndexCmd creates the "crux index" command for browsing registered prompts, contexts, and tools.
+// NewIndexCmd creates the compatibility alias for browsing every Catalog definition kind.
 func NewIndexCmd(f *cli.Factory) *cobra.Command {
 	var jsonOutput bool
 	var reindexRoot string
@@ -19,8 +19,8 @@ func NewIndexCmd(f *cli.Factory) *cobra.Command {
 	var reindexRuntimeRich bool
 
 	cmd := &cobra.Command{
-		Use:   "index [prompts|contexts|tools|definitions|diagnostics|<id>]",
-		Short: "List registered Crux project index definitions",
+		Use:   "index [<definition-id>]",
+		Short: "List every current Catalog definition, or show one by ID",
 		Example: `  crux index
   crux index prompts
   crux index my.prompt.id

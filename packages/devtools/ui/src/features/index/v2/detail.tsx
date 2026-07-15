@@ -23,6 +23,7 @@ import { CatContributesSection, CatObservedSection } from './observed'
 import { IndexHealthSection } from './health'
 import { IndexStorage } from './storage-section'
 import { IndexMedia } from './media-section'
+import { IndexMcpDetail } from './mcp-detail'
 
 // ── relations block (two columns, full width) ────────────────────────────────
 function CatRelations({ def }: { def: ViewDef }) {
@@ -82,7 +83,14 @@ function CatRelations({ def }: { def: ViewDef }) {
                 >
                   {otherId}
                 </span>
-                <span style={{ fontFamily: T.mono, fontSize: 9.5, color: T.fgFaint, whiteSpace: 'nowrap' }}>
+                <span
+                  style={{
+                    fontFamily: T.mono,
+                    fontSize: 9.5,
+                    color: T.fgFaint,
+                    whiteSpace: 'nowrap',
+                  }}
+                >
                   {r.type.replace(/_/g, ' ')}
                   {r.fidelity === 'partial' ? ' ·partial' : ''}
                 </span>
@@ -105,7 +113,14 @@ function CatRelations({ def }: { def: ViewDef }) {
           </span>
         }
       />
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, marginBottom: 22 }}>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          gap: 18,
+          marginBottom: 22,
+        }}
+      >
         <Col title="Used by · incoming" edges={rels.incoming} dir="in" />
         <Col title="Depends on · outgoing" edges={rels.outgoing} dir="out" />
       </div>
@@ -124,6 +139,7 @@ const INDEX_SECTION_COMP: Record<string, ComponentType<{ def: ViewDef }>> = {
   deps: IndexDependencies,
   storage: IndexStorage,
   media: IndexMedia,
+  mcp: IndexMcpDetail,
   // observed-injection layer (prompt/context) + injectable "Contributes";
   // each returns null without data, so they are inert for every other kind.
   observed: CatObservedSection,
@@ -151,7 +167,8 @@ function indexSectionOrder(def: ViewDef): string[] {
     ],
     context: ['hero', 'config', 'contract', 'observed', 'source', 'deps', 'relations', 'health'],
     injectable: ['hero', 'contributes', 'contract', 'config', 'source', 'deps', 'relations', 'health'],
-    tool: ['hero', 'contract', 'config', 'observability', 'source', 'data', 'relations', 'quality', 'health'],
+    tool: ['hero', 'mcp', 'contract', 'config', 'observability', 'source', 'data', 'relations', 'quality', 'health'],
+    'mcp.server': ['hero', 'mcp', 'config', 'source', 'observability', 'relations', 'health'],
     agent: ['hero', 'config', 'deps', 'control', 'source', 'data', 'observability', 'quality', 'relations', 'health'],
     flow: [
       'hero',
@@ -213,7 +230,18 @@ const KIND_ACTIONS: Record<string, string[]> = {
 export function IndexDetail({ def, onExpand }: { def: ViewDef | undefined; onExpand?: () => void }) {
   const idx = useIndexIndex()
   if (!def)
-    return <div style={{ padding: 40, color: T.fgFaint, fontFamily: T.mono, fontSize: 13 }}>Select a definition</div>
+    return (
+      <div
+        style={{
+          padding: 40,
+          color: T.fgFaint,
+          fontFamily: T.mono,
+          fontSize: 13,
+        }}
+      >
+        Select a definition
+      </div>
+    )
   const m = kindMeta(def.kind)
   const chips = indexFactChips(def)
   const q = def.quality
@@ -221,9 +249,7 @@ export function IndexDetail({ def, onExpand }: { def: ViewDef | undefined; onExp
   const configuredOrder = indexSectionOrder(def)
   // Runtime coverage is exhaustive and manifest-driven; even static-only and
   // structural kinds need a truthful "no runtime evidence" explanation.
-  const order = configuredOrder.includes('observability')
-    ? configuredOrder
-    : [...configuredOrder, 'observability']
+  const order = configuredOrder.includes('observability') ? configuredOrder : [...configuredOrder, 'observability']
   const actions = KIND_ACTIONS[def.kind] ?? ['Open in runs']
 
   // quick-reference properties band — the at-a-glance health of the entry
@@ -303,16 +329,43 @@ export function IndexDetail({ def, onExpand }: { def: ViewDef | undefined; onExp
   return (
     <div style={{ height: '100%', overflow: 'auto', background: T.bg }}>
       {/* identity */}
-      <div style={{ padding: '22px 30px 16px', borderBottom: `1px solid ${T.border}` }}>
+      <div
+        style={{
+          padding: '22px 30px 16px',
+          borderBottom: `1px solid ${T.border}`,
+        }}
+      >
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
           <KindGlyph kind={def.kind} size={44} />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-              <span style={{ fontFamily: T.mono, fontSize: 23, fontWeight: 600, letterSpacing: '-0.02em' }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                flexWrap: 'wrap',
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: T.mono,
+                  fontSize: 23,
+                  fontWeight: 600,
+                  letterSpacing: '-0.02em',
+                }}
+              >
                 {def.name}
               </span>
               <KindBadge kind={def.kind} />
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: T.fgMuted }}>
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  fontSize: 11.5,
+                  color: T.fgMuted,
+                }}
+              >
                 <FamilyDot family={m.family} /> {m.familyLabel}
               </span>
               <FidelityChip value={def.fidelity} />
@@ -354,7 +407,15 @@ export function IndexDetail({ def, onExpand }: { def: ViewDef | undefined; onExp
           </div>
         </div>
         {/* properties band */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 14, flexWrap: 'wrap' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 16,
+            marginTop: 14,
+            flexWrap: 'wrap',
+          }}
+        >
           <MetaRow
             items={[
               def.file ? { label: 'source', value: `${def.file}:${def.line}` } : null,
@@ -371,7 +432,14 @@ export function IndexDetail({ def, onExpand }: { def: ViewDef | undefined; onExp
       <div style={{ padding: '22px 30px 40px' }}>
         {/* at a glance */}
         {chips.length > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 20 }}>
+          <div
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 6,
+              marginBottom: 20,
+            }}
+          >
             {chips.map(([key, v]) => (
               <span
                 key={key}

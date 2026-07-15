@@ -177,3 +177,94 @@ fn project_patch_events_attach_canonical_definition_extractors() {
         "@use-crux/indexer/project-indexer"
     );
 }
+
+#[test]
+fn project_patch_events_preserve_exact_extractors_for_every_emitted_fact_kind() {
+    let contributor = json!({
+        "name": "writer.extractor",
+        "extension": { "name": "@scope/writer-extension", "version": "1.2.3" }
+    });
+    let relation_id = "relation:prompt.uses_context:prompt:writer:context:brand";
+    let policies = built_in_relation_policy_table();
+    let output = finalize_static_index_values_with_policies(
+        &[json!({
+            "definitions": [
+                { "id": "prompt:writer", "kind": "prompt", "name": "writer", "fidelity": "resolved" },
+                { "id": "context:brand", "kind": "context", "name": "brand", "fidelity": "resolved" }
+            ],
+            "relationRefs": [{
+                "ownerDefinitionId": "prompt:writer",
+                "type": "prompt.uses_context",
+                "fromId": "prompt:writer",
+                "toId": "context:brand",
+                "extractors": [contributor.clone()]
+            }],
+            "sourceRefs": [{
+                "definitionId": "prompt:writer",
+                "ref": {
+                    "id": "source-ref:writer-schema",
+                    "role": "schema",
+                    "source": { "file": "src/writer.ts", "line": 2, "column": 3 },
+                    "fidelity": "resolved"
+                }
+            }],
+            "diagnostics": [{
+                "id": "diagnostic:writer",
+                "severity": "warning",
+                "code": "extension.writer_partial",
+                "message": "Writer metadata is partial."
+            }],
+            "factExtractors": {
+                "definitions:prompt:writer": [contributor.clone()],
+                "sourceRefs:prompt:writer:source-ref:writer-schema": [contributor.clone()],
+                "diagnostics:diagnostic:writer": [contributor.clone()]
+            }
+        })],
+        &[],
+        &policies,
+    );
+    let events = project_patch_events(
+        &output,
+        &StaticIndexFinalizeProject {
+            root: "/repo".to_string(),
+            project_name: None,
+        },
+        "test",
+        StaticIndexFinalizeEventOptions {
+            phase: "ast",
+            invalidates: None,
+        },
+    );
+    let facts = events
+        .iter()
+        .filter(|event| event["type"] == "fact:batch")
+        .flat_map(|event| event["facts"].as_array().expect("batch facts"))
+        .collect::<Vec<_>>();
+
+    let relation_fact_id = format!("relations:{relation_id}");
+    for (kind, fact_id) in [
+        ("definitions", "definitions:prompt:writer"),
+        ("relations", relation_fact_id.as_str()),
+        ("sourceRefs", "sourceRefs:3"),
+        ("diagnostics", "diagnostics:diagnostic:writer"),
+    ] {
+        let envelope = facts
+            .iter()
+            .find(|fact| fact["kind"] == kind && fact["factId"] == fact_id)
+            .unwrap_or_else(|| panic!("missing {kind} envelope {fact_id}"));
+        assert_eq!(
+            envelope["provenance"]["extractors"],
+            json!([contributor.clone()])
+        );
+        assert_eq!(
+            envelope["producer"]["name"],
+            "@use-crux/indexer/project-indexer"
+        );
+    }
+
+    let brand = facts
+        .iter()
+        .find(|fact| fact["factId"] == "definitions:context:brand")
+        .expect("unattributed definition");
+    assert!(brand["provenance"].get("extractors").is_none());
+}

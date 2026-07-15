@@ -40,10 +40,14 @@ export interface ProjectStaticIndexConfig {
    * `staticSyntaxEnabled`.
    */
   readonly nativeAstEnabled: boolean
+  /** Whether `nativeAst` was explicitly authored in project config. */
+  readonly nativeAstConfigured: boolean
   /** Historical Go wire field for the selected Static Index syntax frontend. */
   readonly nativeAstFrontend?: 'oxc'
   /** Whether config opted into the experimental Static Index syntax path. */
   readonly staticSyntaxEnabled: boolean
+  /** Whether Static Index syntax selection was explicitly authored. */
+  readonly staticSyntaxConfigured: boolean
   /** Optional Static Index syntax frontend selected by config. */
   readonly staticSyntaxFrontend?: 'oxc'
   /** Configured Indexer Extension references. */
@@ -74,8 +78,10 @@ export async function inspectProjectStaticIndexConfig(
     root,
     ...(result.loaded.configFile ? { configFile: result.loaded.configFile } : {}),
     nativeAstEnabled: selection.enabled,
+    nativeAstConfigured: selection.configured,
     ...(selection.frontend ? { nativeAstFrontend: selection.frontend } : {}),
     staticSyntaxEnabled: selection.enabled,
+    staticSyntaxConfigured: selection.configured,
     ...(selection.frontend ? { staticSyntaxFrontend: selection.frontend } : {}),
     extensions: (result.loaded.indexer?.extensions ?? []).map((extension) => ({
       package: extension.package,

@@ -55,12 +55,18 @@ delegate to Catalog while category keywords and explicit reindex remain.
 Durable definition evidence now retains canonical extractor and resolved
 extension provenance, and Catalog explanations name every actual contributor
 without changing the public evidence shape or phase producer identity.
+Durable relation, source-reference, and diagnostic evidence now retains the
+same exact extractor contributors across worker, cache, and restart boundaries.
 
 Add opinionated `withCrux` lifecycle boundaries for Cloudflare Workers and
 Next.js while retaining their low-level adapters. Workers and Next now compose
 deferred work with contained, bounded post-response observability drains;
 `createCruxConvex().run()` owns the corresponding bounded terminal drain and
 preserves deployment identity across durable continuation boundaries.
+Rejected promises returned by advisory drain reporters are contained without
+delaying or replacing handler results or host-owned drain work.
+Portable MCP entrypoints now fail closed when stdio is selected, while Node
+runtimes resolve their lazy stdio adapters through private conditional imports.
 
 Align public documentation around Catalog, Runs, Quality, and Health. Narrow
 the published Indexer root to Crux-owned compiler contracts; third-party

@@ -2,6 +2,7 @@ package cache
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/projectindex/model"
@@ -20,6 +21,30 @@ type definitionEvidenceStore interface {
 type Cache struct {
 	facts  FactStore
 	strict bool
+}
+
+func (c *Cache) CommitRuntimeOverlay(ctx context.Context, root string, overlay model.RuntimeOverlay) error {
+	store, ok := c.facts.(RuntimeOverlayStore)
+	if !ok {
+		return fmt.Errorf("project index fact store does not support runtime overlays")
+	}
+	return store.CommitRuntimeOverlay(ctx, root, overlay)
+}
+
+func (c *Cache) LoadRuntimeOverlays(ctx context.Context, root string) ([]model.RuntimeOverlay, error) {
+	store, ok := c.facts.(RuntimeOverlayStore)
+	if !ok {
+		return nil, nil
+	}
+	return store.LoadRuntimeOverlays(ctx, root)
+}
+
+func (c *Cache) DeleteRuntimeOverlay(ctx context.Context, root, ownerDefinitionID string) error {
+	store, ok := c.facts.(RuntimeOverlayStore)
+	if !ok {
+		return fmt.Errorf("project index fact store does not support runtime overlays")
+	}
+	return store.DeleteRuntimeOverlay(ctx, root, ownerDefinitionID)
 }
 
 func NewCache(facts FactStore, strict ...bool) *Cache {

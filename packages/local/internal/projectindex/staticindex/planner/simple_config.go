@@ -63,11 +63,12 @@ func ParseSimpleConfig(
 	value := strings.TrimSpace(match[1])
 	runtimeConfigured := false
 	config := projectindex.ProjectStaticIndexConfig{
-		Root:              root,
-		ConfigFile:        configFile,
-		RuntimeConfigured: &runtimeConfigured,
-		Extensions:        []projectindex.ProjectStaticIndexExtensionReference{},
-		Diagnostics:       []projectindex.ProjectStaticIndexConfigDiagnostic{},
+		Root:                   root,
+		ConfigFile:             configFile,
+		RuntimeConfigured:      &runtimeConfigured,
+		Extensions:             []projectindex.ProjectStaticIndexExtensionReference{},
+		Diagnostics:            []projectindex.ProjectStaticIndexConfigDiagnostic{},
+		StaticSyntaxConfigured: true,
 	}
 	switch value {
 	case "true":

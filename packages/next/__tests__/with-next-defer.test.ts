@@ -147,7 +147,10 @@ describe("Next withCrux lifecycle", () => {
     );
 
     await expect(handler()).rejects.toBe(original);
-    expect(classifyOutcome).toHaveBeenCalledWith({ kind: "thrown", error: original });
+    expect(classifyOutcome).toHaveBeenCalledWith({
+      kind: "thrown",
+      error: original,
+    });
     expect(afterTasks).toHaveLength(1);
 
     for (const task of afterTasks) await task();
@@ -157,7 +160,9 @@ describe("Next withCrux lifecycle", () => {
   });
 
   it("preserves the response and reports failure when the exporter throws", async () => {
-    vi.spyOn(observe, "flush").mockRejectedValue(new Error("next exporter failed"));
+    vi.spyOn(observe, "flush").mockRejectedValue(
+      new Error("next exporter failed"),
+    );
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     const afterTasks: Array<() => void | Promise<void>> = [];
     const onDrain = vi.fn();
@@ -175,9 +180,11 @@ describe("Next withCrux lifecycle", () => {
   });
 
   it("contains a throwing drain reporter without rejecting the after task", async () => {
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
     const afterTasks: Array<() => void | Promise<void>> = [];
-    const handler = withCrux(async () => ({ ok: true } as const), {
+    const handler = withCrux(async () => ({ ok: true }) as const, {
       after: (task) => afterTasks.push(task),
       onDrain: () => {
         throw new Error("next reporter failed");
@@ -185,11 +192,41 @@ describe("Next withCrux lifecycle", () => {
     });
 
     await expect(handler()).resolves.toEqual({ ok: true });
-    for (const task of afterTasks) await expect(task()).resolves.toBeUndefined();
+    for (const task of afterTasks)
+      await expect(task()).resolves.toBeUndefined();
 
     expect(consoleError).toHaveBeenCalledWith(
       expect.stringContaining("onDrain reporter threw"),
       expect.objectContaining({ message: "next reporter failed" }),
+    );
+  });
+
+  it("contains a rejected async drain reporter without rejecting the after task", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const afterTasks: Array<() => void | Promise<void>> = [];
+    let rejectReporter!: (error: Error) => void;
+    const reporter = new Promise<void>((_resolve, reject) => {
+      rejectReporter = reject;
+    });
+    const handler = withCrux(async () => "next-result" as const, {
+      after: (task) => afterTasks.push(task),
+      onDrain: () => reporter,
+    });
+
+    await expect(handler()).resolves.toBe("next-result");
+    for (const task of afterTasks) {
+      await expect(
+        settlesBeforeReporter(Promise.resolve(task())),
+      ).resolves.toBeUndefined();
+    }
+    rejectReporter(new Error("async next reporter failed"));
+    await Promise.resolve();
+
+    expect(consoleError).toHaveBeenCalledWith(
+      expect.stringContaining("onDrain reporter rejected"),
+      expect.objectContaining({ message: "async next reporter failed" }),
     );
   });
 
@@ -205,7 +242,9 @@ describe("Next withCrux lifecycle", () => {
     const onDrain = vi.fn();
     const handler = withCrux(
       async () => {
-        observe.openRun({ name: "next-with-crux-deadline", rootPrimitive: "run" }).end();
+        observe
+          .openRun({ name: "next-with-crux-deadline", rootPrimitive: "run" })
+          .end();
         return "response";
       },
       {
@@ -249,3 +288,20 @@ describe("Next withCrux lifecycle", () => {
     >();
   });
 });
+
+async function settlesBeforeReporter<T>(promise: Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(
+          () => reject(new Error("host boundary awaited advisory reporter")),
+          1_000,
+        );
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}

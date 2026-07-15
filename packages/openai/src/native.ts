@@ -36,6 +36,7 @@ import type { OpenAIChatRequest, OpenAIExtra } from "./types";
 import { createOpenAIImageOperation } from "./image-generation";
 import { createOpenAITranscriptionOperation } from "./transcription";
 import { createOpenAISpeechOperation } from "./speech";
+import { materializeOpenAIToolSource } from "./mcp-materializer";
 
 /** Configuration for `openai.retrievalModel()`. */
 export interface OpenAIRetrievalModelConfig {
@@ -54,6 +55,7 @@ const openAI = defineSingleTurnProviderBundle({
   id: "openai",
   bind: bindOpenAI,
   profile: {
+    materializeToolSource: materializeOpenAIToolSource,
     request: openAIRequest,
     response: {
       meta: openAIResponseMeta,

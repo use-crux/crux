@@ -16,6 +16,7 @@ pub(crate) mod analysis {
     #[cfg(test)]
     pub(crate) mod tests {
         pub(crate) mod model;
+        pub(crate) mod provenance;
         pub(crate) mod source_refs;
         pub(crate) mod tree;
 

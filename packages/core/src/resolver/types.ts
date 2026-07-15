@@ -24,6 +24,7 @@ import type {
   CruxContextInjectableKind,
 } from "../observability/contract";
 import type { ToolMiddleware } from "../tools/types";
+import type { ToolSource } from "../tools/tool-source";
 import type {
   ApprovalDeclaration,
   ToolApprovalInspection,
@@ -99,6 +100,8 @@ export interface ResolvedPrompt {
   schema?: z.ZodType;
   /** Merged tools from contexts and config. */
   tools?: AnyToolSet;
+  /** Inert sources selected during prompt composition, materialized only by execution dialects. */
+  toolSources?: readonly ToolSource[];
   /** Middleware applied to merged tools before adapter execution. */
   toolMiddleware?: ToolMiddleware | readonly ToolMiddleware[];
   /**

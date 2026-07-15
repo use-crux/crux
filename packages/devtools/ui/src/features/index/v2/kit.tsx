@@ -122,6 +122,11 @@ export const INDEX_KINDS: Record<string, KindDef> = {
   context: { label: "Context", family: "authoring", glyph: "layers" },
   injectable: { label: "Injectable", family: "authoring", glyph: "inject" },
   tool: { label: "Tool", family: "capability", glyph: "tool" },
+  "mcp.server": {
+    label: "MCP server",
+    family: "capability",
+    glyph: "tool",
+  },
   agent: { label: "Agent", family: "agent", glyph: "bot" },
   flow: { label: "Flow", family: "orchestration", glyph: "flow" },
   "flow.step": {

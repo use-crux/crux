@@ -152,6 +152,8 @@ const sourceResult = {
 
 ## Pipeline Cache
 
+Pipeline caching covers document and chunk preparation stages. It does not cache dense or sparse embedding calls; those calls still run when the indexer writes a fresh generation. See [Embeddings](/docs/guides/retrieval/embeddings) for embedding configuration.
+
 If the indexer has `cache: true`, sync can control the pipeline cache per run.
 
 ```ts

@@ -17,6 +17,7 @@ const stablePackages = [
   'packages/google',
   'packages/indexer',
   'packages/ingest',
+  'packages/mcp',
   'packages/openai',
   'packages/otel',
   'packages/react',

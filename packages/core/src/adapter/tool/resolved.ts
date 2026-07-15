@@ -18,7 +18,9 @@ import { messageText } from '../../content'
  * Read the explicit skill activation session set by prompt resolution.
  */
 export function readSkillActivationSession(resolved: ResolvedPrompt): SkillActivationSession | undefined {
-  const candidate = resolved as ResolvedPrompt & { _skillSession?: SkillActivationSession }
+  const candidate = resolved as ResolvedPrompt & {
+    _skillSession?: SkillActivationSession
+  }
   return candidate._skillSession
 }
 
@@ -55,11 +57,11 @@ export async function captureMemoryTurn(
         {
           messages: [...userMessages, ...assistantMessages],
           toolEvents: args.toolCalls?.map((toolCall) => ({
-            toolCallId: toolCall.id,
+            ...(toolCall.id ? { toolCallId: toolCall.id } : {}),
             toolName: toolCall.name,
             args: toolCall.args,
-            result: toolCall.result,
-            error: toolCall.error,
+            ...(toolCall.result !== undefined ? { result: toolCall.result } : {}),
+            ...(toolCall.error !== undefined ? { error: toolCall.error } : {}),
           })),
           source: { promptId: binding.promptId ?? args.promptId },
         },

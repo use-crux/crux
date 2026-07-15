@@ -197,6 +197,13 @@ fn merge_grouped_facts(facts: &mut StaticIndexPatchFacts, grouped: StaticIndexPa
             .or_default()
             .extend(extractors);
     }
+    for (fact_id, extractors) in grouped.fact_extractors {
+        facts
+            .fact_extractors
+            .entry(fact_id)
+            .or_default()
+            .extend(extractors);
+    }
     facts.relation_refs.extend(grouped.relation_refs);
     facts.relations.extend(grouped.relations);
     facts.source_refs.extend(grouped.source_refs);

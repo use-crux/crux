@@ -18,6 +18,7 @@ import type {
   ToolResultEntry,
 } from "./types";
 import type { CruxProviderError } from "./normalized-outcome";
+import type { ToolSourceMaterializer } from "../tools/tool-source";
 
 // ─────────────────────────────────────────────────────────────────
 // AdapterSpec Interface
@@ -45,6 +46,9 @@ export interface AdapterSpec<
 > {
   /** Provider identifier for adaptation matching (e.g., 'anthropic', 'openai'). */
   readonly providerId: string;
+
+  /** Materialize an inert prompt tool source for one adapter invocation. */
+  readonly materializeToolSource?: ToolSourceMaterializer;
 
   /** Execute a non-streaming API call. Returns canonical + raw SDK response. */
   call(

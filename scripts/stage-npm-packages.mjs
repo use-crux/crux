@@ -2,7 +2,7 @@
 
 import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { cp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { chmod, cp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname, extname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -35,6 +35,7 @@ const tsPackages = [
   { name: '@use-crux/indexer', dir: 'packages/indexer', sourceRoot: 'src' },
   { name: '@use-crux/ingest', dir: 'packages/ingest', sourceRoot: 'src' },
   { name: '@use-crux/next', dir: 'packages/next', sourceRoot: 'src' },
+  { name: '@use-crux/mcp', dir: 'packages/mcp', sourceRoot: 'src' },
   { name: '@use-crux/openai', dir: 'packages/openai', sourceRoot: 'src' },
   { name: '@use-crux/otel', dir: 'packages/otel', sourceRoot: 'src' },
   { name: '@use-crux/postgres', dir: 'packages/postgres', sourceRoot: 'src' },
@@ -305,6 +306,7 @@ function transformTypeScriptManifest(sourceManifest, pkg) {
     manifest.types = './dist/index.d.ts'
   }
   manifest.exports = transformExports(sourceManifest.exports, pkg)
+  manifest.imports = transformPackageImports(sourceManifest.imports, pkg)
   manifest.files = ['dist', 'README.md', 'LICENSE']
   manifest.publishConfig = { ...(sourceManifest.publishConfig ?? {}), access: 'public' }
   manifest.repository = repositoryFor(pkg.dir)
@@ -329,6 +331,13 @@ function transformExports(exportsField, pkg) {
 
   exports['./package.json'] = './package.json'
   return exports
+}
+
+function transformPackageImports(importsField, pkg) {
+  if (!importsField) return undefined
+  return Object.fromEntries(
+    Object.entries(importsField).map(([key, value]) => [key, transformExportTarget(value, pkg)]),
+  )
 }
 
 function transformExportTarget(target, pkg) {
@@ -406,6 +415,9 @@ async function stageLocalPlatform(platform) {
   const stageDir = packageStageDir(packageName)
   await mkdir(join(stageDir, 'bin'), { recursive: true })
   await cp(sourceBinDir, join(stageDir, 'bin'), { recursive: true })
+  if (platform.os !== 'win32') {
+    await Promise.all([platform.crux, platform.worker].map((binary) => chmod(join(stageDir, 'bin', binary), 0o755)))
+  }
   await copyIfExists(join(repoRoot, 'packages/local/npm/local/LICENSE'), join(stageDir, 'LICENSE'))
   await copyIfExists(join(repoRoot, 'packages/local/npm/local/README.md'), join(stageDir, 'README.md'))
 
@@ -439,6 +451,7 @@ function pickPackageManifestFields(sourceManifest) {
     'funding',
     'engines',
     'type',
+    'imports',
     'dependencies',
     'peerDependencies',
     'peerDependenciesMeta',

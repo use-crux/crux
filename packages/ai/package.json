@@ -48,10 +48,14 @@
     "zod": "^4.4.3"
   },
   "peerDependencies": {
+    "@use-crux/mcp": "workspace:^",
     "ai": "^6.0.0",
     "react": "^18.0.0 || ^19.0.0"
   },
   "peerDependenciesMeta": {
+    "@use-crux/mcp": {
+      "optional": true
+    },
     "react": {
       "optional": true
     }

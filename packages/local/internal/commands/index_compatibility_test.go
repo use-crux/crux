@@ -2,6 +2,16 @@ package commands
 
 import "testing"
 
+func TestIndexCompatibilityHelpDescribesAllKindCatalogAlias(t *testing.T) {
+	cmd := NewIndexCmd(nil)
+	if cmd.Use != "index [<definition-id>]" {
+		t.Fatalf("Use = %q, want all-kind Catalog definition selector", cmd.Use)
+	}
+	if cmd.Short != "List every current Catalog definition, or show one by ID" {
+		t.Fatalf("Short = %q, want all-kind Catalog alias description", cmd.Short)
+	}
+}
+
 func TestIndexCompatibilityRoutesListAndDefinitionToCatalog(t *testing.T) {
 	tests := []struct {
 		argument string

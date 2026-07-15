@@ -16,8 +16,8 @@ import {
   type CruxSpanId,
   type CruxTraceId,
   type DefinitionRef,
-} from './contract'
-import { channelHasSubscribers, publishObservabilityChannel } from './channel'
+} from "./contract";
+import { channelHasSubscribers, publishObservabilityChannel } from "./channel";
 import {
   createCruxArtifactId,
   createCruxEdgeId,
@@ -27,35 +27,46 @@ import {
   createCruxSpanEventId,
   createCruxSpanId,
   createCruxTraceId,
-} from './ids'
-import { normalizeObservedError, observedErrorSummary } from './errors'
-import { applyObservabilityCapturePolicyToRecord } from './capture-policy'
-import { sanitizeRecord } from './sanitize'
+} from "./ids";
+import { normalizeObservedError, observedErrorSummary } from "./errors";
+import { applyObservabilityCapturePolicyToRecord } from "./capture-policy";
+import { sanitizeRecord } from "./sanitize";
 import {
   applyCruxCorrelators,
   mergeCruxCorrelators,
   type CruxCorrelators,
-} from './correlators'
+} from "./correlators";
 import {
   hasObservabilitySubscribers,
   observabilitySubscriberErrorCount,
   publishObservabilitySubscribers,
   resetObservabilitySubscribers,
-} from './subscribers'
-import type { CruxObservabilityTransport } from './transport'
-import { validateRecordForEmission } from './validate-record'
+} from "./subscribers";
+import type { CruxObservabilityTransport } from "./transport";
+import { validateRecordForEmission } from "./validate-record";
 import {
   createDeliveryEngine,
   type DeliveryDiagnostic,
-} from './delivery/engine'
+} from "./delivery/engine";
 import type {
   ObservabilityDeliveryOptions,
   ObservabilityFlushOptions,
   ObservabilityFlushResult,
-} from './delivery/options'
-import { activeHostLifecycle, runWithHostLifecycle } from './delivery/host-scope'
-import { remainingHostDeadlineMs, type CruxHostLifecycle } from '../runtime/api/host-lifecycle'
-import { getHooks } from '../runtime/runtime'
+} from "./delivery/options";
+import {
+  activeHostLifecycle,
+  runWithHostLifecycle,
+} from "./delivery/host-scope";
+import {
+  remainingHostDeadlineMs,
+  type CruxHostLifecycle,
+} from "../runtime/api/host-lifecycle";
+import { getHooks } from "../runtime/runtime";
+import {
+  addObservabilityRegistryListener,
+  getCruxProcessRegistry,
+  notifyObservabilityRegistryListeners,
+} from "../runtime/process-registry";
 import {
   currentCruxCorrelators,
   currentObservabilityContext,
@@ -63,143 +74,143 @@ import {
   withObservabilityContext,
   type CapturedObservabilityContext,
   type ObservabilityContext,
-} from './context'
+} from "./context";
 import {
   createRecordSequencer,
   type UnsequencedCruxGraphRecord,
-} from './sequence'
+} from "./sequence";
 import {
   currentQualityObservabilityCaptureSession,
   shouldQuarantineQualityObservabilityWrite,
-} from './quality-capture-hooks'
+} from "./quality-capture-hooks";
 import {
   continuationIdentity,
   createPropagationCarrier,
   type CruxPropagationCarrier,
-} from './continuation'
+} from "./continuation";
 import {
   CruxDeploymentIdentitySchema,
   type CruxDeploymentIdentity,
-} from '../project-index'
+} from "../project-index";
 
 export {
   subscribeObservability,
   type CruxObservabilitySubscriber,
-} from './subscribers'
-export { hasObservabilitySubscribers } from './subscribers'
-export { __setAlsForTesting } from './context'
-export type { CapturedObservabilityContext } from './context'
+} from "./subscribers";
+export { hasObservabilitySubscribers } from "./subscribers";
+export { __setAlsForTesting } from "./context";
+export type { CapturedObservabilityContext } from "./context";
 export type {
   ObservabilityDeliveryOptions,
   ObservabilityFlushOptions,
   ObservabilityFlushResult,
-} from './delivery/options'
-export type { DeliveryDiagnostic } from './delivery/engine'
+} from "./delivery/options";
+export type { DeliveryDiagnostic } from "./delivery/engine";
 
 export interface ConfigureObservabilityOptions {
-  transport?: CruxObservabilityTransport
-  delivery?: ObservabilityDeliveryOptions
+  transport?: CruxObservabilityTransport;
+  delivery?: ObservabilityDeliveryOptions;
   /**
    * Correlators applied when no active observability context provides them.
    *
    * Devtools uses this for process-level session grouping. Explicit
    * `propagateAttributes()` scopes override these defaults.
    */
-  defaultCorrelators?: CruxCorrelators
+  defaultCorrelators?: CruxCorrelators;
   /** Deployment identity captured by each logical run created by this layer. */
-  identity?: CruxDeploymentIdentity
+  identity?: CruxDeploymentIdentity;
 }
 
 export interface ObservabilityDiagnostics {
-  readonly pendingDeliveries: number
-  readonly queuedRecords: number
-  readonly queuedBytes: number
-  readonly droppedRecords: number
+  readonly pendingDeliveries: number;
+  readonly queuedRecords: number;
+  readonly queuedBytes: number;
+  readonly droppedRecords: number;
   /**
    * Total delivery failures observed since the diagnostics were last reset.
    *
    * Unlike `deliveryErrors`, this is not capped; it is intended for health
    * checks that need an exact monotonic failure count for the current runtime.
    */
-  readonly deliveryErrorCount: number
-  readonly invalidRecords: number
-  readonly redactedRecords: number
-  readonly contextlessRecords: number
-  readonly deliveryErrors: readonly DeliveryDiagnostic[]
-  readonly acceptedRecords: number
-  readonly retriedRecords: number
-  readonly permanentlyRejectedRecords: number
-  readonly overflowDroppedRecords: number
-  readonly overflowDroppedBytes: number
-  readonly deadlineDroppedRecords: number
-  readonly reconfiguredDroppedRecords: number
+  readonly deliveryErrorCount: number;
+  readonly invalidRecords: number;
+  readonly redactedRecords: number;
+  readonly contextlessRecords: number;
+  readonly deliveryErrors: readonly DeliveryDiagnostic[];
+  readonly acceptedRecords: number;
+  readonly retriedRecords: number;
+  readonly permanentlyRejectedRecords: number;
+  readonly overflowDroppedRecords: number;
+  readonly overflowDroppedBytes: number;
+  readonly deadlineDroppedRecords: number;
+  readonly reconfiguredDroppedRecords: number;
   /** Records still in flight to a transport superseded by reconfiguration; not yet settled. */
-  readonly reconfiguredRemainingRecords: number
+  readonly reconfiguredRemainingRecords: number;
   /** Serialized bytes backing {@link reconfiguredRemainingRecords}. */
-  readonly reconfiguredRemainingBytes: number
+  readonly reconfiguredRemainingBytes: number;
   /** Superseded delivery promises still retained for a drain to await, bounded by `maxPendingDeliveries`. */
-  readonly reconfiguredTrackedDeliveries: number
-  readonly subscriberErrors: number
+  readonly reconfiguredTrackedDeliveries: number;
+  readonly subscriberErrors: number;
 }
 
 export interface OpenObservedSpan {
-  readonly runId: CruxRunId
-  readonly traceId: CruxTraceId
+  readonly runId: CruxRunId;
+  readonly traceId: CruxTraceId;
   /** Segment that owns records emitted by this open span. */
-  readonly segmentId: CruxSegmentId
-  readonly spanId: CruxSpanId
-  readonly parentSpanId: CruxSpanId | null
+  readonly segmentId: CruxSegmentId;
+  readonly spanId: CruxSpanId;
+  readonly parentSpanId: CruxSpanId | null;
   /**
    * Run work with this span as the active observability context.
    *
    * Context propagation is best-effort and never changes user-code behavior if
    * the host runtime does not provide `AsyncLocalStorage`.
    */
-  withContext<T>(fn: () => T | Promise<T>): T | Promise<T>
+  withContext<T>(fn: () => T | Promise<T>): T | Promise<T>;
   /**
    * Merge attributes into the span end record without ending the span.
    *
    * Later calls override earlier keys. Use this for metadata discovered after
    * span start; terminal attributes can still be passed to {@link end}.
    */
-  setAttributes(attributes: CruxAttributes): void
+  setAttributes(attributes: CruxAttributes): void;
   /**
    * End the span once.
    *
    * Raw attribute bags are intentionally not accepted. Pass terminal attributes
    * as `{ attributes }`, or call {@link setAttributes} before ending.
    */
-  end(options?: EndObservedSpanOptions): void
+  end(options?: EndObservedSpanOptions): void;
   /** End the span with status `error` and emit normalized error evidence. */
-  error(error: unknown, attributes?: CruxAttributes): void
+  error(error: unknown, attributes?: CruxAttributes): void;
 }
 
 export interface OpenObservedRun {
-  readonly runId: CruxRunId
-  readonly traceId: CruxTraceId
+  readonly runId: CruxRunId;
+  readonly traceId: CruxTraceId;
   /** Segment that owns records emitted by this open run. */
-  readonly segmentId: CruxSegmentId
-  captureContext(): CapturedObservabilityContext
+  readonly segmentId: CruxSegmentId;
+  captureContext(): CapturedObservabilityContext;
   /** Capture serializable correlation without changing lifecycle state. */
-  captureContinuation(): CruxPropagationCarrier
-  withContext<T>(fn: () => T | Promise<T>): T | Promise<T>
+  captureContinuation(): CruxPropagationCarrier;
+  withContext<T>(fn: () => T | Promise<T>): T | Promise<T>;
   /** Close this physical segment without terminalizing its logical run. */
-  suspend(options: SuspendObservedRunOptions): CruxPropagationCarrier
-  end(options?: EndObservedRunOptions): void
+  suspend(options: SuspendObservedRunOptions): CruxPropagationCarrier;
+  end(options?: EndObservedRunOptions): void;
   error(
     error: unknown,
-    options?: Omit<EndObservedRunOptions, 'status' | 'error'>,
-  ): void
+    options?: Omit<EndObservedRunOptions, "status" | "error">,
+  ): void;
 }
 
 export interface SuspendObservedRunOptions {
-  reason: string
-  attributes?: CruxAttributes
+  reason: string;
+  attributes?: CruxAttributes;
 }
 
 export interface ResumeObservedRunOptions {
-  reason: string
-  attributes?: CruxAttributes
+  reason: string;
+  attributes?: CruxAttributes;
 }
 
 export interface ObserveRunOptions {
@@ -209,41 +220,41 @@ export interface ObserveRunOptions {
    * Use this when a higher-level workflow owns the umbrella trace and starts
    * multiple run roots inside it. Omit to create a fresh W3C trace id.
    */
-  traceId?: CruxTraceId
-  name: string
-  rootPrimitive: CruxPrimitiveName
-  attributes?: CruxAttributes
+  traceId?: CruxTraceId;
+  name: string;
+  rootPrimitive: CruxPrimitiveName;
+  attributes?: CruxAttributes;
   /** Authored definitions directly associated with this run boundary. */
-  definitionRefs?: DefinitionRef[]
+  definitionRefs?: DefinitionRef[];
 }
 
 export interface EndObservedRunOptions {
-  status?: Exclude<CruxRunStatus, 'running' | 'suspended'>
-  metrics?: CruxMetrics
-  error?: unknown
-  attributes?: CruxAttributes
+  status?: Exclude<CruxRunStatus, "running" | "suspended">;
+  metrics?: CruxMetrics;
+  error?: unknown;
+  attributes?: CruxAttributes;
 }
 
 export interface EndObservedSpanOptions {
-  status?: Exclude<CruxSpanStatus, 'running'>
-  metrics?: CruxMetrics
-  error?: unknown
-  attributes?: CruxAttributes
+  status?: Exclude<CruxSpanStatus, "running">;
+  metrics?: CruxMetrics;
+  error?: unknown;
+  attributes?: CruxAttributes;
 }
 
 export interface ObserveSpanOptions<
   P extends CruxPrimitiveName = CruxPrimitiveName,
 > {
-  name: string
-  primitive: P
-  attributes?: AttributesFor<P>
+  name: string;
+  primitive: P;
+  attributes?: AttributesFor<P>;
   /**
    * Project Index definitions this span resolved or invoked. Emitted verbatim
    * on the `span:start` record so the runtime→index join can attach evidence.
    * Callers are responsible for canonical id construction and source
    * sanitization (see `./definition-ref`).
    */
-  definitionRefs?: DefinitionRef[]
+  definitionRefs?: DefinitionRef[];
   /**
    * When a span starts outside an active run, `observe.span()` normally opens
    * an implicit run so direct primitive calls remain inspectable. Detail
@@ -252,7 +263,7 @@ export interface ObserveSpanOptions<
    *
    * @default true
    */
-  implicitRun?: boolean
+  implicitRun?: boolean;
   /**
    * Optional predetermined span id for durable correlation.
    *
@@ -260,76 +271,106 @@ export interface ObserveSpanOptions<
    * process can emit a `triggered` edge to the acceptance span. Callers must
    * supply a valid Crux span id (16 lowercase hex characters).
    */
-  spanId?: CruxSpanId
+  spanId?: CruxSpanId;
 }
 
 export interface ObserveEventOptions {
-  name: string
-  attributes?: CruxAttributes
+  name: string;
+  attributes?: CruxAttributes;
 }
 
 export interface ObserveArtifactOptions {
-  artifactId?: CruxArtifactId
-  kind: CruxArtifactKind
-  contentType: string
-  encoding: 'json' | 'text' | 'bytes' | 'reference'
-  sizeBytes?: number
-  hash?: string
-  preview?: unknown
-  uri?: string
-  attributes?: CruxAttributes
+  artifactId?: CruxArtifactId;
+  kind: CruxArtifactKind;
+  contentType: string;
+  encoding: "json" | "text" | "bytes" | "reference";
+  sizeBytes?: number;
+  hash?: string;
+  preview?: unknown;
+  uri?: string;
+  attributes?: CruxAttributes;
 }
 
 export interface ObserveEdgeOptions {
-  edgeType: CruxEdgeType
-  from: CruxGraphNodeRef
-  to: CruxGraphNodeRef
-  attributes?: CruxAttributes
+  edgeType: CruxEdgeType;
+  from: CruxGraphNodeRef;
+  to: CruxGraphNodeRef;
+  attributes?: CruxAttributes;
 }
 
-const deliveryEngine = createDeliveryEngine()
-const recordSequencer = createRecordSequencer()
-let invalidRecords = 0
-let redactedRecords = 0
-let contextlessRecords = 0
-let warnedAboutInvalidRecord = false
-let warnedAboutRedactedRecord = false
-let warnedAboutContextlessRecord = false
+const deliveryEngine = createDeliveryEngine();
+const recordSequencer = createRecordSequencer();
+const observabilityRegistry = getCruxProcessRegistry().observability;
+let appliedObservabilityConfigurationGeneration = -1;
+let appliedObservabilityResetGeneration = observabilityRegistry.resetGeneration;
+let invalidRecords = 0;
+let redactedRecords = 0;
+let contextlessRecords = 0;
+let warnedAboutInvalidRecord = false;
+let warnedAboutRedactedRecord = false;
+let warnedAboutContextlessRecord = false;
 
 interface ObservabilityConfigurationLayer {
-  readonly token: number
-  readonly parentToken: number
-  readonly previousTransport: CruxObservabilityTransport | undefined
-  readonly previousDeliveryOptions: ReturnType<
-    typeof deliveryEngine.deliveryOptions
-  >
-  readonly previousDefaultCorrelators: CruxCorrelators | undefined
-  readonly previousDeploymentIdentity: CruxDeploymentIdentity | undefined
+  readonly token: number;
+  readonly parentToken: number;
+  readonly previousTransport: CruxObservabilityTransport | undefined;
+  readonly previousDeliveryOptions: ObservabilityDeliveryOptions | undefined;
+  readonly previousDefaultCorrelators: CruxCorrelators | undefined;
+  readonly previousDeploymentIdentity: CruxDeploymentIdentity | undefined;
 }
 
-let nextConfigurationToken = 0
-let activeConfigurationToken = 0
-const configurationParents = new Map<number, number>()
-
-const maxEndedRunIds = 10_000
-type EndedRunStatus = Exclude<CruxRunStatus, 'running'>
-const endedRunStatuses = new Map<CruxRunId, EndedRunStatus>()
-let defaultCorrelators: CruxCorrelators | undefined
-let deploymentIdentity: CruxDeploymentIdentity | undefined
+const maxEndedRunIds = 10_000;
+type EndedRunStatus = Exclude<CruxRunStatus, "running">;
+const endedRunStatuses = new Map<CruxRunId, EndedRunStatus>();
 // `null` is an authoritative deployment-unspecified run identity. Retaining the
 // sentinel prevents a later continuation from attaching identity to a run that
 // began without one.
 const runDeploymentIdentities = new Map<
   CruxRunId,
   CruxDeploymentIdentity | null
->()
+>();
+
+function syncDeliveryEngineWithProcessRegistry(): void {
+  if (
+    appliedObservabilityResetGeneration !==
+    observabilityRegistry.resetGeneration
+  ) {
+    resetModuleObservabilityState();
+    appliedObservabilityResetGeneration = observabilityRegistry.resetGeneration;
+    appliedObservabilityConfigurationGeneration = -1;
+  }
+  if (
+    appliedObservabilityConfigurationGeneration ===
+    observabilityRegistry.configurationGeneration
+  ) {
+    return;
+  }
+
+  if (deliveryEngine.currentTransport() !== observabilityRegistry.transport) {
+    deliveryEngine.setTransport(observabilityRegistry.transport);
+  }
+  deliveryEngine.configureDelivery(observabilityRegistry.delivery);
+  appliedObservabilityConfigurationGeneration =
+    observabilityRegistry.configurationGeneration;
+}
+
+addObservabilityRegistryListener(
+  observabilityRegistry,
+  syncDeliveryEngineWithProcessRegistry,
+);
+deliveryEngine.anchorLifetime(syncDeliveryEngineWithProcessRegistry);
+
+function markObservabilityConfigurationChanged(): void {
+  observabilityRegistry.configurationGeneration += 1;
+  notifyObservabilityRegistryListeners(observabilityRegistry);
+}
 
 function currentContext(): ObservabilityContext | undefined {
-  return currentObservabilityContext()
+  return currentObservabilityContext();
 }
 
 function withContext<R>(context: ObservabilityContext, fn: () => R): R {
-  return withObservabilityContext(context, () => activateSpan(context, fn))
+  return withObservabilityContext(context, () => activateSpan(context, fn));
 }
 
 /**
@@ -342,10 +383,13 @@ function withContext<R>(context: ObservabilityContext, fn: () => R): R {
  * for every instrumented entry point without per-call-site wiring.
  */
 function activateSpan<R>(context: ObservabilityContext, fn: () => R): R {
-  const hook = getHooks().spanActivationHook
-  if (!hook) return fn()
-  const currentSpanId = context.spanStack[context.spanStack.length - 1]
-  return hook(captureContextValue(context, context.spanStack, currentSpanId), fn)
+  const hook = getHooks().spanActivationHook;
+  if (!hook) return fn();
+  const currentSpanId = context.spanStack[context.spanStack.length - 1];
+  return hook(
+    captureContextValue(context, context.spanStack, currentSpanId),
+    fn,
+  );
 }
 
 /**
@@ -358,172 +402,183 @@ function resumeAttributesFor(
   carrier: CruxPropagationCarrier,
   explicit: CruxAttributes | undefined,
 ): CruxAttributes | undefined {
-  const hook = getHooks().telemetryResumeAttributesHook
-  if (!hook) return explicit
-  let derived: CruxAttributes | undefined
+  const hook = getHooks().telemetryResumeAttributesHook;
+  if (!hook) return explicit;
+  let derived: CruxAttributes | undefined;
   try {
-    derived = hook(carrier)
+    derived = hook(carrier);
   } catch {
-    derived = undefined
+    derived = undefined;
   }
-  if (!derived || Object.keys(derived).length === 0) return explicit
-  return { ...derived, ...(explicit ?? {}) }
+  if (!derived || Object.keys(derived).length === 0) return explicit;
+  return { ...derived, ...(explicit ?? {}) };
 }
 
 function now(): string {
-  return new Date().toISOString()
+  return new Date().toISOString();
 }
 
 function durationSince(startedAtMs: number): number {
-  return Math.max(0, Date.now() - startedAtMs)
+  return Math.max(0, Date.now() - startedAtMs);
 }
 
 function emit(
   record: UnsequencedCruxGraphRecord,
   correlators = effectiveCorrelators(),
 ): void {
-  const runDeployment = runDeploymentIdentities.get(record.runId)
+  const runDeployment = runDeploymentIdentities.get(record.runId);
   const recordWithDeployment = runDeployment
     ? { ...record, deployment: runDeployment }
-    : record
+    : record;
   const sequencedRecord = recordSequencer.assign(
     applyCruxCorrelators(recordWithDeployment, correlators),
-  )
-  const privacy = applyObservabilityCapturePolicyToRecord(sequencedRecord)
+  );
+  const privacy = applyObservabilityCapturePolicyToRecord(sequencedRecord);
   if (!privacy.ok) {
-    recordRedactedRecord(privacy.error)
-    return
+    recordRedactedRecord(privacy.error);
+    return;
   }
   if (!sameDeploymentIdentity(sequencedRecord, privacy.record)) {
     recordRedactedRecord(
-      new Error('Observability redaction cannot rewrite deployment identity'),
-    )
-    return
+      new Error("Observability redaction cannot rewrite deployment identity"),
+    );
+    return;
   }
 
-  let validated: ReturnType<typeof validateRecordForEmission>
+  let validated: ReturnType<typeof validateRecordForEmission>;
   try {
-    validated = validateRecordForEmission(sanitizeRecord(privacy.record))
+    validated = validateRecordForEmission(sanitizeRecord(privacy.record));
   } catch (error) {
-    recordInvalidRecord(['Record validation threw unexpectedly', String(error)])
-    return
+    recordInvalidRecord([
+      "Record validation threw unexpectedly",
+      String(error),
+    ]);
+    return;
   }
   if (!validated.ok) {
-    recordInvalidRecord(validated.issues)
-    return
+    recordInvalidRecord(validated.issues);
+    return;
   }
 
-  if (shouldQuarantineQualityObservabilityWrite()) return
+  if (shouldQuarantineQualityObservabilityWrite()) return;
 
-  currentQualityObservabilityCaptureSession()?.send([validated.record])
-  publishObservabilitySubscribers(validated.record)
-  publishObservabilityChannel(validated.record)
-  deliveryEngine.enqueue(validated.record)
+  currentQualityObservabilityCaptureSession()?.send([validated.record]);
+  publishObservabilitySubscribers(validated.record);
+  publishObservabilityChannel(validated.record);
+  syncDeliveryEngineWithProcessRegistry();
+  deliveryEngine.enqueue(validated.record);
 }
 
 function sameDeploymentIdentity(
   before: { readonly deployment?: CruxDeploymentIdentity },
   after: { readonly deployment?: CruxDeploymentIdentity },
 ): boolean {
-  return before.deployment?.projectId === after.deployment?.projectId &&
+  return (
+    before.deployment?.projectId === after.deployment?.projectId &&
     before.deployment?.manifestId === after.deployment?.manifestId &&
     before.deployment?.deploymentId === after.deployment?.deploymentId
+  );
 }
 
 function emitObserved(
   createRecord: () => UnsequencedCruxGraphRecord,
   correlators?: CruxCorrelators | null,
 ): void {
-  if (!hasActiveObservabilitySinks()) return
+  if (!hasActiveObservabilitySinks()) return;
   try {
     emit(
       createRecord(),
       correlators === null ? undefined : effectiveCorrelators(correlators),
-    )
+    );
   } catch (error) {
     recordInvalidRecord([
-      'Observability record construction threw unexpectedly',
+      "Observability record construction threw unexpectedly",
       String(error),
-    ])
+    ]);
   }
 }
 
 function hasActiveObservabilitySinks(): boolean {
+  syncDeliveryEngineWithProcessRegistry();
   return (
     deliveryEngine.currentTransport() !== undefined ||
     currentQualityObservabilityCaptureSession() !== undefined ||
     hasObservabilitySubscribers() ||
     channelHasSubscribers()
-  )
+  );
 }
 
 function effectiveCorrelators(
   preferred?: CruxCorrelators,
 ): CruxCorrelators | undefined {
-  return preferred ?? currentCruxCorrelators() ?? defaultCorrelators
+  return (
+    preferred ??
+    currentCruxCorrelators() ??
+    observabilityRegistry.defaultCorrelators
+  );
 }
 
 function recordInvalidRecord(issues: readonly string[]): void {
-  invalidRecords += 1
-  if (warnedAboutInvalidRecord) return
-  if (!shouldWarnAboutInvalidRecords()) return
+  invalidRecords += 1;
+  if (warnedAboutInvalidRecord) return;
+  if (!shouldWarnAboutInvalidRecords()) return;
 
-  warnedAboutInvalidRecord = true
+  warnedAboutInvalidRecord = true;
   console.warn(
-    '[crux] invalid observability record dropped; continuing without interrupting execution.',
+    "[crux] invalid observability record dropped; continuing without interrupting execution.",
     issues,
-  )
+  );
 }
 
 function recordRedactedRecord(error: unknown): void {
-  redactedRecords += 1
-  if (warnedAboutRedactedRecord) return
-  if (!shouldWarnAboutInvalidRecords()) return
+  redactedRecords += 1;
+  if (warnedAboutRedactedRecord) return;
+  if (!shouldWarnAboutInvalidRecords()) return;
 
-  warnedAboutRedactedRecord = true
-  console.warn(
-    '[crux] observability record redacted or dropped by privacy policy.',
-    error,
-  )
+  warnedAboutRedactedRecord = true;
+  const message =
+    "[crux] observability record redacted or dropped by privacy policy.";
+  if (error === undefined) console.warn(message);
+  else console.warn(message, error);
 }
 
 function shouldWarnAboutInvalidRecords(): boolean {
   const runtime = globalThis as typeof globalThis & {
-    process?: { env?: Readonly<Record<string, string | undefined>> }
-  }
-  const nodeEnv = runtime.process?.env?.NODE_ENV
-  return nodeEnv !== 'production' && nodeEnv !== 'test'
+    process?: { env?: Readonly<Record<string, string | undefined>> };
+  };
+  const nodeEnv = runtime.process?.env?.NODE_ENV;
+  return nodeEnv !== "production" && nodeEnv !== "test";
 }
 
 function shouldWarnAboutRuntimeLimitations(): boolean {
   const runtime = globalThis as typeof globalThis & {
-    process?: { env?: Readonly<Record<string, string | undefined>> }
-  }
-  const nodeEnv = runtime.process?.env?.NODE_ENV
-  return nodeEnv !== 'production' && nodeEnv !== 'test'
+    process?: { env?: Readonly<Record<string, string | undefined>> };
+  };
+  const nodeEnv = runtime.process?.env?.NODE_ENV;
+  return nodeEnv !== "production" && nodeEnv !== "test";
 }
 
 function errorContext(attributes?: CruxAttributes): {
-  readonly attributes?: CruxAttributes
-  readonly phase?: string
-  readonly errorKind?: string
+  readonly attributes?: CruxAttributes;
+  readonly phase?: string;
+  readonly errorKind?: string;
 } {
   return {
     ...(attributes ? { attributes } : {}),
-    ...stringAttribute(attributes, 'phase', 'phase'),
-    ...stringAttribute(attributes, 'errorKind', 'errorKind'),
-  }
+    ...stringAttribute(attributes, "phase", "phase"),
+    ...stringAttribute(attributes, "errorKind", "errorKind"),
+  };
 }
 
 function stringAttribute(
   attributes: CruxAttributes | undefined,
   key: string,
-  outputKey: 'phase' | 'errorKind',
+  outputKey: "phase" | "errorKind",
 ) {
-  const value = attributes?.[key]
-  return typeof value === 'string' && value.length > 0
+  const value = attributes?.[key];
+  return typeof value === "string" && value.length > 0
     ? { [outputKey]: value }
-    : {}
+    : {};
 }
 
 function emitObservedErrorEvidence(
@@ -532,88 +587,88 @@ function emitObservedErrorEvidence(
   error: unknown,
   attributes?: CruxAttributes,
 ): void {
-  if (!hasActiveObservabilitySinks()) return
+  if (!hasActiveObservabilitySinks()) return;
 
   try {
-    const normalized = normalizeObservedError(error, errorContext(attributes))
-    const stack = normalized.thrown === 'error' ? normalized.stack : undefined
-    const phase = stringField(attributes, 'phase')
+    const normalized = normalizeObservedError(error, errorContext(attributes));
+    const stack = normalized.thrown === "error" ? normalized.stack : undefined;
+    const phase = stringField(attributes, "phase");
     const errorKind =
-      stringField(attributes, 'errorKind') ?? normalized.summary.category
+      stringField(attributes, "errorKind") ?? normalized.summary.category;
     const eventAttributes: CruxAttributes = {
       ...attributes,
-      'exception.message': normalized.summary.message,
+      "exception.message": normalized.summary.message,
       ...(normalized.summary.name
-        ? { 'exception.type': normalized.summary.name }
+        ? { "exception.type": normalized.summary.name }
         : {}),
-      ...(stack ? { 'exception.stacktrace': stack } : {}),
-      ...(phase ? { 'error.phase': phase } : {}),
-      ...(errorKind ? { 'error.kind': errorKind } : {}),
-    }
+      ...(stack ? { "exception.stacktrace": stack } : {}),
+      ...(phase ? { "error.phase": phase } : {}),
+      ...(errorKind ? { "error.kind": errorKind } : {}),
+    };
 
     emitObserved(
       () => ({
         schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
         recordId: createCruxRecordId(),
-        type: 'span:event',
+        type: "span:event",
         runId: context.runId,
         segmentId: context.segmentId,
         traceId: context.traceId,
         spanId,
         eventId: createCruxSpanEventId(),
-        name: 'exception',
+        name: "exception",
         timestamp: now(),
         attributes: eventAttributes,
       }),
       context.correlators ?? null,
-    )
+    );
 
     if (stack) {
       emitObserved(
         () => ({
           schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
           recordId: createCruxRecordId(),
-          type: 'artifact',
+          type: "artifact",
           runId: context.runId,
           segmentId: context.segmentId,
           traceId: context.traceId,
           spanId,
           artifactId: createCruxArtifactId(),
-          kind: 'error.stack',
+          kind: "error.stack",
           createdAt: now(),
-          contentType: 'text/plain',
-          encoding: 'text',
+          contentType: "text/plain",
+          encoding: "text",
           preview: stack,
           ...(attributes ? { attributes } : {}),
         }),
         context.correlators ?? null,
-      )
+      );
     }
 
     emitObserved(
       () => ({
         schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
         recordId: createCruxRecordId(),
-        type: 'artifact',
+        type: "artifact",
         runId: context.runId,
         segmentId: context.segmentId,
         traceId: context.traceId,
         spanId,
         artifactId: createCruxArtifactId(),
-        kind: 'error.raw',
+        kind: "error.raw",
         createdAt: now(),
-        contentType: 'application/json',
-        encoding: 'json',
+        contentType: "application/json",
+        encoding: "json",
         preview: normalized.raw,
         ...(attributes ? { attributes } : {}),
       }),
       context.correlators ?? null,
-    )
+    );
   } catch (normalizationError) {
     recordInvalidRecord([
-      'Error evidence construction threw unexpectedly',
+      "Error evidence construction threw unexpectedly",
       String(normalizationError),
-    ])
+    ]);
   }
 }
 
@@ -621,8 +676,8 @@ function stringField(
   record: CruxAttributes | undefined,
   key: string,
 ): string | undefined {
-  const value = record?.[key]
-  return typeof value === 'string' && value.length > 0 ? value : undefined
+  const value = record?.[key];
+  return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
 function captureContextValue(
@@ -645,64 +700,69 @@ function captureContextValue(
       : {}),
     spanStack: [...spanStack],
     ...(currentSpanId ? { currentSpanId } : {}),
-  }
+  };
 }
 
 export function configureObservability(
   options: ConfigureObservabilityOptions,
 ): () => void {
-  const nextDeploymentIdentity = Object.hasOwn(options, 'identity')
+  const nextDeploymentIdentity = Object.hasOwn(options, "identity")
     ? cloneDeploymentIdentity(options.identity)
-    : deploymentIdentity
+    : observabilityRegistry.deploymentIdentity;
   const layer: ObservabilityConfigurationLayer = {
-    token: nextConfigurationToken + 1,
-    parentToken: activeConfigurationToken,
-    previousTransport: deliveryEngine.currentTransport(),
-    previousDeliveryOptions: deliveryEngine.deliveryOptions(),
-    previousDefaultCorrelators: defaultCorrelators,
-    previousDeploymentIdentity: deploymentIdentity,
+    token: observabilityRegistry.nextConfigurationToken + 1,
+    parentToken: observabilityRegistry.activeConfigurationToken,
+    previousTransport: observabilityRegistry.transport,
+    previousDeliveryOptions: observabilityRegistry.delivery,
+    previousDefaultCorrelators: observabilityRegistry.defaultCorrelators,
+    previousDeploymentIdentity: observabilityRegistry.deploymentIdentity,
+  };
+  observabilityRegistry.nextConfigurationToken = layer.token;
+  observabilityRegistry.configurationParents.set(
+    layer.token,
+    layer.parentToken,
+  );
+  observabilityRegistry.activeConfigurationToken = layer.token;
+  if (Object.hasOwn(options, "transport")) {
+    observabilityRegistry.transport = options.transport;
   }
-  nextConfigurationToken = layer.token
-  configurationParents.set(layer.token, layer.parentToken)
-  activeConfigurationToken = layer.token
-  if (Object.hasOwn(options, 'transport')) {
-    deliveryEngine.setTransport(options.transport)
+  if (Object.hasOwn(options, "delivery")) {
+    observabilityRegistry.delivery = options.delivery;
   }
-  if (Object.hasOwn(options, 'delivery')) {
-    deliveryEngine.configureDelivery(options.delivery)
-  }
-  if (Object.hasOwn(options, 'defaultCorrelators')) {
-    defaultCorrelators = mergeCruxCorrelators(
+  if (Object.hasOwn(options, "defaultCorrelators")) {
+    observabilityRegistry.defaultCorrelators = mergeCruxCorrelators(
       undefined,
       options.defaultCorrelators,
-    )
+    );
   }
-  if (Object.hasOwn(options, 'identity')) {
-    deploymentIdentity = nextDeploymentIdentity
+  if (Object.hasOwn(options, "identity")) {
+    observabilityRegistry.deploymentIdentity = nextDeploymentIdentity;
   }
-  let restored = false
+  markObservabilityConfigurationChanged();
+  let restored = false;
   return () => {
-    if (restored) return
-    restored = true
+    if (restored) return;
+    restored = true;
     if (!isActiveConfigurationLayer(layer.token)) {
-      deleteConfigurationLayerAndDescendants(layer.token)
-      return
+      deleteConfigurationLayerAndDescendants(layer.token);
+      return;
     }
 
-    activeConfigurationToken = layer.parentToken
-    deleteConfigurationLayerAndDescendants(layer.token)
-    deliveryEngine.setTransport(layer.previousTransport)
-    deliveryEngine.configureDelivery(layer.previousDeliveryOptions)
-    defaultCorrelators = layer.previousDefaultCorrelators
-    deploymentIdentity = layer.previousDeploymentIdentity
-  }
+    observabilityRegistry.activeConfigurationToken = layer.parentToken;
+    deleteConfigurationLayerAndDescendants(layer.token);
+    observabilityRegistry.transport = layer.previousTransport;
+    observabilityRegistry.delivery = layer.previousDeliveryOptions;
+    observabilityRegistry.defaultCorrelators = layer.previousDefaultCorrelators;
+    observabilityRegistry.deploymentIdentity = layer.previousDeploymentIdentity;
+    markObservabilityConfigurationChanged();
+  };
 }
 
 function cloneDeploymentIdentity(
   identity: CruxDeploymentIdentity | undefined,
 ): CruxDeploymentIdentity | undefined {
-  if (identity === undefined) return undefined
-  return Object.freeze({ ...CruxDeploymentIdentitySchema.parse(identity) })
+  if (identity === undefined) return undefined;
+  return Object.freeze({ ...CruxDeploymentIdentitySchema.parse(identity) });
 }
 
 /**
@@ -720,35 +780,41 @@ function cloneDeploymentIdentity(
 export function propagateAttributes<T>(
   correlators: CruxCorrelators,
   fn: () => Promise<T>,
-): Promise<T>
+): Promise<T>;
 export function propagateAttributes<T>(
   correlators: CruxCorrelators,
   fn: () => T,
-): T
+): T;
 export function propagateAttributes<T>(
   correlators: CruxCorrelators,
   fn: () => T | Promise<T>,
 ): T | Promise<T> {
-  return withCruxCorrelators(correlators, fn)
+  return withCruxCorrelators(correlators, fn);
 }
 
 function isActiveConfigurationLayer(token: number): boolean {
-  for (let currentToken = activeConfigurationToken; currentToken !== 0; ) {
-    if (currentToken === token) return true
-    currentToken = configurationParents.get(currentToken) ?? 0
+  for (
+    let currentToken = observabilityRegistry.activeConfigurationToken;
+    currentToken !== 0;
+  ) {
+    if (currentToken === token) return true;
+    currentToken =
+      observabilityRegistry.configurationParents.get(currentToken) ?? 0;
   }
-  return false
+  return false;
 }
 
 function deleteConfigurationLayerAndDescendants(token: number): void {
-  const tokensToDelete = new Set<number>([token])
-  for (const childToken of [...configurationParents.keys()]) {
+  const tokensToDelete = new Set<number>([token]);
+  for (const childToken of [
+    ...observabilityRegistry.configurationParents.keys(),
+  ]) {
     if (isDescendantConfigurationLayer(childToken, token)) {
-      tokensToDelete.add(childToken)
+      tokensToDelete.add(childToken);
     }
   }
   for (const tokenToDelete of tokensToDelete)
-    configurationParents.delete(tokenToDelete)
+    observabilityRegistry.configurationParents.delete(tokenToDelete);
 }
 
 function isDescendantConfigurationLayer(
@@ -756,20 +822,22 @@ function isDescendantConfigurationLayer(
   ancestorToken: number,
 ): boolean {
   for (
-    let currentToken = configurationParents.get(candidateToken) ?? 0;
+    let currentToken =
+      observabilityRegistry.configurationParents.get(candidateToken) ?? 0;
     currentToken !== 0;
   ) {
-    if (currentToken === ancestorToken) return true
-    currentToken = configurationParents.get(currentToken) ?? 0
+    if (currentToken === ancestorToken) return true;
+    currentToken =
+      observabilityRegistry.configurationParents.get(currentToken) ?? 0;
   }
-  return false
+  return false;
 }
 
 export function setObservabilityTransport(
   transport: CruxObservabilityTransport | undefined,
   options?: ObservabilityDeliveryOptions,
 ): () => void {
-  return configureObservability({ transport, delivery: options })
+  return configureObservability({ transport, delivery: options });
 }
 
 /**
@@ -784,35 +852,49 @@ export function setObservabilityTransport(
 export function currentObservabilityTransport():
   | CruxObservabilityTransport
   | undefined {
-  return deliveryEngine.currentTransport()
+  syncDeliveryEngineWithProcessRegistry();
+  return observabilityRegistry.transport;
 }
 
 export function resetObservabilityRuntime(): void {
-  deliveryEngine.reset()
-  resetObservabilitySubscribers()
-  activeConfigurationToken = 0
-  nextConfigurationToken = 0
-  configurationParents.clear()
-  invalidRecords = 0
-  redactedRecords = 0
-  contextlessRecords = 0
-  warnedAboutInvalidRecord = false
-  warnedAboutRedactedRecord = false
-  warnedAboutContextlessRecord = false
-  endedRunStatuses.clear()
-  runDeploymentIdentities.clear()
-  recordSequencer.reset()
-  defaultCorrelators = undefined
-  deploymentIdentity = undefined
-  telemetryFlushFailures = 0
+  observabilityRegistry.activeConfigurationToken = 0;
+  observabilityRegistry.configurationParents.clear();
+  observabilityRegistry.transport = undefined;
+  observabilityRegistry.delivery = undefined;
+  observabilityRegistry.defaultCorrelators = undefined;
+  observabilityRegistry.deploymentIdentity = undefined;
+  observabilityRegistry.resetGeneration += 1;
+  observabilityRegistry.configurationGeneration += 1;
+  resetModuleObservabilityState();
+  appliedObservabilityResetGeneration = observabilityRegistry.resetGeneration;
+  appliedObservabilityConfigurationGeneration =
+    observabilityRegistry.configurationGeneration;
+  notifyObservabilityRegistryListeners(observabilityRegistry);
+}
+
+function resetModuleObservabilityState(): void {
+  deliveryEngine.reset();
+  resetObservabilitySubscribers();
+  invalidRecords = 0;
+  redactedRecords = 0;
+  contextlessRecords = 0;
+  warnedAboutInvalidRecord = false;
+  warnedAboutRedactedRecord = false;
+  warnedAboutContextlessRecord = false;
+  endedRunStatuses.clear();
+  runDeploymentIdentities.clear();
+  recordSequencer.reset();
+  telemetryFlushFailures = 0;
 }
 
 export function observabilityDeliveryErrors(): readonly unknown[] {
-  return deliveryEngine.errors()
+  syncDeliveryEngineWithProcessRegistry();
+  return deliveryEngine.errors();
 }
 
 export function observabilityDiagnostics(): ObservabilityDiagnostics {
-  const deliveryDiagnostics = deliveryEngine.diagnostics()
+  syncDeliveryEngineWithProcessRegistry();
+  const deliveryDiagnostics = deliveryEngine.diagnostics();
   return {
     pendingDeliveries: deliveryDiagnostics.pendingDeliveries,
     queuedRecords: deliveryDiagnostics.queuedRecords,
@@ -825,25 +907,26 @@ export function observabilityDiagnostics(): ObservabilityDiagnostics {
     deliveryErrors: deliveryDiagnostics.deliveryErrors,
     acceptedRecords: deliveryDiagnostics.acceptedRecords,
     retriedRecords: deliveryDiagnostics.retriedRecords,
-    permanentlyRejectedRecords:
-      deliveryDiagnostics.permanentlyRejectedRecords,
+    permanentlyRejectedRecords: deliveryDiagnostics.permanentlyRejectedRecords,
     overflowDroppedRecords: deliveryDiagnostics.overflowDroppedRecords,
     overflowDroppedBytes: deliveryDiagnostics.overflowDroppedBytes,
     deadlineDroppedRecords: deliveryDiagnostics.deadlineDroppedRecords,
     reconfiguredDroppedRecords: deliveryDiagnostics.reconfiguredDroppedRecords,
-    reconfiguredRemainingRecords: deliveryDiagnostics.reconfiguredRemainingRecords,
+    reconfiguredRemainingRecords:
+      deliveryDiagnostics.reconfiguredRemainingRecords,
     reconfiguredRemainingBytes: deliveryDiagnostics.reconfiguredRemainingBytes,
-    reconfiguredTrackedDeliveries: deliveryDiagnostics.reconfiguredTrackedDeliveries,
+    reconfiguredTrackedDeliveries:
+      deliveryDiagnostics.reconfiguredTrackedDeliveries,
     subscriberErrors: observabilitySubscriberErrorCount(),
-  }
+  };
 }
 
 export const observe = {
   openRun(options: ObserveRunOptions): OpenObservedRun {
-    const runId = createCruxRunId()
-    const traceId = options.traceId ?? createCruxTraceId()
-    const segmentId = createCruxSegmentId()
-    const startedAtMs = Date.now()
+    const runId = createCruxRunId();
+    const traceId = options.traceId ?? createCruxTraceId();
+    const segmentId = createCruxSegmentId();
+    const startedAtMs = Date.now();
     const context: ObservabilityContext = {
       runId,
       traceId,
@@ -851,49 +934,51 @@ export const observe = {
       startedAtMs,
       spanStack: [],
       correlators: effectiveCorrelators(),
-      deployment: cloneDeploymentIdentity(deploymentIdentity),
-    }
-    rememberRunDeployment(runId, context.deployment)
-    let closed = false
+      deployment: cloneDeploymentIdentity(
+        observabilityRegistry.deploymentIdentity,
+      ),
+    };
+    rememberRunDeployment(runId, context.deployment);
+    let closed = false;
     const continuation = createPropagationCarrier({
       runId,
       traceId,
       previousSegmentId: segmentId,
       correlators: context.correlators,
       deployment: context.deployment,
-    })
+    });
 
     emitObserved(
       () => ({
         schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
         recordId: createCruxRecordId(),
-        type: 'run:start',
+        type: "run:start",
         runId,
         segmentId,
         traceId,
         name: options.name,
         rootPrimitive: options.rootPrimitive,
         startedAt: now(),
-        status: 'running',
+        status: "running",
         ...(options.attributes ? { attributes: options.attributes } : {}),
         ...(options.definitionRefs && options.definitionRefs.length > 0
           ? { definitionRefs: options.definitionRefs }
           : {}),
       }),
       context.correlators ?? null,
-    )
+    );
 
     const finish = (finishOptions: EndObservedRunOptions = {}): void => {
-      if (closed) return
-      closed = true
+      if (closed) return;
+      closed = true;
       const status =
-        finishOptions.status ?? (finishOptions.error ? 'error' : 'ok')
-      if (!rememberEndedRun(runId, status)) return
+        finishOptions.status ?? (finishOptions.error ? "error" : "ok");
+      if (!rememberEndedRun(runId, status)) return;
       emitObserved(
         () => ({
           schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
           recordId: createCruxRecordId(),
-          type: 'run:end',
+          type: "run:end",
           runId,
           segmentId,
           traceId,
@@ -914,31 +999,32 @@ export const observe = {
             : {}),
         }),
         context.correlators ?? null,
-      )
-    }
+      );
+    };
 
     return {
       runId,
       traceId,
       segmentId,
       captureContext(): CapturedObservabilityContext {
-        return captureContextValue(context, [])
+        return captureContextValue(context, []);
       },
       captureContinuation(): CruxPropagationCarrier {
-        return continuation
+        return continuation;
       },
       withContext<T>(fn: () => T | Promise<T>): T | Promise<T> {
-        return withContext(context, fn)
+        return withContext(context, fn);
       },
       suspend(options: SuspendObservedRunOptions): CruxPropagationCarrier {
-        if (!options.reason) throw new TypeError('A suspension reason is required')
-        if (closed) return continuation
-        closed = true
+        if (!options.reason)
+          throw new TypeError("A suspension reason is required");
+        if (closed) return continuation;
+        closed = true;
         emitObserved(
           () => ({
             schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
             recordId: createCruxRecordId(),
-            type: 'run:suspend',
+            type: "run:suspend",
             runId,
             segmentId,
             traceId,
@@ -947,32 +1033,32 @@ export const observe = {
             ...(options.attributes ? { attributes: options.attributes } : {}),
           }),
           context.correlators ?? null,
-        )
-        return continuation
+        );
+        return continuation;
       },
       end(options?: EndObservedRunOptions): void {
-        finish(options)
+        finish(options);
       },
       error(
         error: unknown,
-        options?: Omit<EndObservedRunOptions, 'status' | 'error'>,
+        options?: Omit<EndObservedRunOptions, "status" | "error">,
       ): void {
-        finish({ ...options, status: 'error', error })
+        finish({ ...options, status: "error", error });
       },
-    }
+    };
   },
 
   resumeRun(
     carrier: CruxPropagationCarrier,
     options: ResumeObservedRunOptions,
   ): OpenObservedRun {
-    if (!options.reason) throw new TypeError('A resume reason is required')
-    const identity = continuationIdentity(carrier)
+    if (!options.reason) throw new TypeError("A resume reason is required");
+    const identity = continuationIdentity(carrier);
     if (endedRunStatuses.has(identity.runId)) {
-      throw new Error('Cannot resume a terminal observed run')
+      throw new Error("Cannot resume a terminal observed run");
     }
-    const segmentId = createCruxSegmentId()
-    const startedAtMs = Date.now()
+    const segmentId = createCruxSegmentId();
+    const startedAtMs = Date.now();
     const context: ObservabilityContext = {
       runId: identity.runId,
       traceId: identity.traceId,
@@ -981,23 +1067,23 @@ export const observe = {
       spanStack: [],
       correlators: effectiveCorrelators(),
       deployment: cloneDeploymentIdentity(identity.deployment),
-    }
-    rememberRunDeployment(identity.runId, context.deployment)
-    let closed = false
+    };
+    rememberRunDeployment(identity.runId, context.deployment);
+    let closed = false;
     const continuation = createPropagationCarrier({
       runId: identity.runId,
       traceId: identity.traceId,
       previousSegmentId: segmentId,
       correlators: context.correlators,
       deployment: context.deployment,
-    })
-    const resumeAttributes = resumeAttributesFor(carrier, options.attributes)
+    });
+    const resumeAttributes = resumeAttributesFor(carrier, options.attributes);
 
     emitObserved(
       () => ({
         schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
         recordId: createCruxRecordId(),
-        type: 'run:resume',
+        type: "run:resume",
         runId: identity.runId,
         segmentId,
         traceId: identity.traceId,
@@ -1009,18 +1095,19 @@ export const observe = {
         ...(resumeAttributes ? { attributes: resumeAttributes } : {}),
       }),
       context.correlators ?? null,
-    )
+    );
 
     const finish = (finishOptions: EndObservedRunOptions = {}): void => {
-      if (closed) return
-      closed = true
-      const status = finishOptions.status ?? (finishOptions.error ? 'error' : 'ok')
-      if (!rememberEndedRun(identity.runId, status)) return
+      if (closed) return;
+      closed = true;
+      const status =
+        finishOptions.status ?? (finishOptions.error ? "error" : "ok");
+      if (!rememberEndedRun(identity.runId, status)) return;
       emitObserved(
         () => ({
           schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
           recordId: createCruxRecordId(),
-          type: 'run:end',
+          type: "run:end",
           runId: identity.runId,
           segmentId,
           traceId: identity.traceId,
@@ -1029,13 +1116,20 @@ export const observe = {
           status,
           ...(finishOptions.metrics ? { metrics: finishOptions.metrics } : {}),
           ...(finishOptions.error !== undefined
-            ? { error: observedErrorSummary(finishOptions.error, errorContext(finishOptions.attributes)) }
+            ? {
+                error: observedErrorSummary(
+                  finishOptions.error,
+                  errorContext(finishOptions.attributes),
+                ),
+              }
             : {}),
-          ...(finishOptions.attributes ? { attributes: finishOptions.attributes } : {}),
+          ...(finishOptions.attributes
+            ? { attributes: finishOptions.attributes }
+            : {}),
         }),
         context.correlators ?? null,
-      )
-    }
+      );
+    };
 
     return {
       runId: identity.runId,
@@ -1044,41 +1138,46 @@ export const observe = {
       captureContext: () => captureContextValue(context, []),
       captureContinuation: () => continuation,
       withContext: <T>(fn: () => T | Promise<T>) => withContext(context, fn),
-      suspend(suspendOptions: SuspendObservedRunOptions): CruxPropagationCarrier {
-        if (!suspendOptions.reason) throw new TypeError('A suspension reason is required')
-        if (closed) return continuation
-        closed = true
+      suspend(
+        suspendOptions: SuspendObservedRunOptions,
+      ): CruxPropagationCarrier {
+        if (!suspendOptions.reason)
+          throw new TypeError("A suspension reason is required");
+        if (closed) return continuation;
+        closed = true;
         emitObserved(
           () => ({
             schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
             recordId: createCruxRecordId(),
-            type: 'run:suspend',
+            type: "run:suspend",
             runId: identity.runId,
             segmentId,
             traceId: identity.traceId,
             suspendedAt: now(),
             reason: suspendOptions.reason,
-            ...(suspendOptions.attributes ? { attributes: suspendOptions.attributes } : {}),
+            ...(suspendOptions.attributes
+              ? { attributes: suspendOptions.attributes }
+              : {}),
           }),
           context.correlators ?? null,
-        )
-        return continuation
+        );
+        return continuation;
       },
       end: finish,
       error(error, finishOptions): void {
-        finish({ ...finishOptions, status: 'error', error })
+        finish({ ...finishOptions, status: "error", error });
       },
-    }
+    };
   },
 
   async run<T>(
     options: ObserveRunOptions,
     fn: () => T | Promise<T>,
   ): Promise<T> {
-    const runId = createCruxRunId()
-    const traceId = options.traceId ?? createCruxTraceId()
-    const segmentId = createCruxSegmentId()
-    const startedAtMs = Date.now()
+    const runId = createCruxRunId();
+    const traceId = options.traceId ?? createCruxTraceId();
+    const segmentId = createCruxSegmentId();
+    const startedAtMs = Date.now();
     const context: ObservabilityContext = {
       runId,
       traceId,
@@ -1086,66 +1185,68 @@ export const observe = {
       startedAtMs,
       spanStack: [],
       correlators: effectiveCorrelators(),
-      deployment: cloneDeploymentIdentity(deploymentIdentity),
-    }
-    rememberRunDeployment(runId, context.deployment)
+      deployment: cloneDeploymentIdentity(
+        observabilityRegistry.deploymentIdentity,
+      ),
+    };
+    rememberRunDeployment(runId, context.deployment);
 
     emitObserved(
       () => ({
         schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
         recordId: createCruxRecordId(),
-        type: 'run:start',
+        type: "run:start",
         runId,
         segmentId,
         traceId,
         name: options.name,
         rootPrimitive: options.rootPrimitive,
         startedAt: now(),
-        status: 'running',
+        status: "running",
         ...(options.attributes ? { attributes: options.attributes } : {}),
         ...(options.definitionRefs && options.definitionRefs.length > 0
           ? { definitionRefs: options.definitionRefs }
           : {}),
       }),
       context.correlators ?? null,
-    )
+    );
 
     try {
-      const result = await withContext(context, fn)
-      if (!rememberEndedRun(runId, 'ok')) return result
+      const result = await withContext(context, fn);
+      if (!rememberEndedRun(runId, "ok")) return result;
       emitObserved(
         () => ({
           schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
           recordId: createCruxRecordId(),
-          type: 'run:end',
+          type: "run:end",
           runId,
           segmentId,
           traceId,
           endedAt: now(),
           durationMs: durationSince(startedAtMs),
-          status: 'ok',
+          status: "ok",
         }),
         context.correlators ?? null,
-      )
-      return result
+      );
+      return result;
     } catch (error) {
-      if (!rememberEndedRun(runId, 'error')) throw error
+      if (!rememberEndedRun(runId, "error")) throw error;
       emitObserved(
         () => ({
           schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
           recordId: createCruxRecordId(),
-          type: 'run:end',
+          type: "run:end",
           runId,
           segmentId,
           traceId,
           endedAt: now(),
           durationMs: durationSince(startedAtMs),
-          status: 'error',
+          status: "error",
           error: observedErrorSummary(error, errorContext(options.attributes)),
         }),
         context.correlators ?? null,
-      )
-      throw error
+      );
+      throw error;
     }
   },
 
@@ -1153,9 +1254,9 @@ export const observe = {
     options: ObserveSpanOptions<P>,
     fn: () => T | Promise<T>,
   ): Promise<T> {
-    const context = currentContext()
+    const context = currentContext();
     if (!context) {
-      if (options.implicitRun === false) return await fn()
+      if (options.implicitRun === false) return await fn();
       return await observe.run(
         {
           name: options.name,
@@ -1167,22 +1268,23 @@ export const observe = {
         // re-entry would land in this same no-context branch forever — degrade
         // to executing the body without a span instead of recursing.
         () => (currentContext() ? observe.span(options, fn) : fn()),
-      )
+      );
     }
 
-    const spanId = createCruxSpanId()
-    const parentSpanId = context.spanStack[context.spanStack.length - 1] ?? null
+    const spanId = createCruxSpanId();
+    const parentSpanId =
+      context.spanStack[context.spanStack.length - 1] ?? null;
     const nextContext: ObservabilityContext = {
       ...context,
       spanStack: [...context.spanStack, spanId],
-    }
-    const startedAtMs = Date.now()
+    };
+    const startedAtMs = Date.now();
 
     emitObserved(
       () => ({
         schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
         recordId: createCruxRecordId(),
-        type: 'span:start',
+        type: "span:start",
         runId: context.runId,
         segmentId: context.segmentId,
         traceId: context.traceId,
@@ -1192,68 +1294,68 @@ export const observe = {
         primitive: options.primitive,
         name: options.name,
         startedAt: now(),
-        status: 'running',
+        status: "running",
         ...(options.attributes ? { attributes: options.attributes } : {}),
         ...(options.definitionRefs && options.definitionRefs.length > 0
           ? { definitionRefs: options.definitionRefs }
           : {}),
       }),
       context.correlators ?? null,
-    )
+    );
 
     try {
-      const result = await withContext(nextContext, fn)
+      const result = await withContext(nextContext, fn);
       emitObserved(
         () => ({
           schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
           recordId: createCruxRecordId(),
-          type: 'span:end',
+          type: "span:end",
           runId: context.runId,
           segmentId: context.segmentId,
           traceId: context.traceId,
           spanId,
           endedAt: now(),
           durationMs: durationSince(startedAtMs),
-          status: 'ok',
+          status: "ok",
         }),
         nextContext.correlators ?? null,
-      )
-      return result
+      );
+      return result;
     } catch (error) {
-      emitObservedErrorEvidence(nextContext, spanId, error, options.attributes)
+      emitObservedErrorEvidence(nextContext, spanId, error, options.attributes);
       emitObserved(
         () => ({
           schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
           recordId: createCruxRecordId(),
-          type: 'span:end',
+          type: "span:end",
           runId: context.runId,
           segmentId: context.segmentId,
           traceId: context.traceId,
           spanId,
           endedAt: now(),
           durationMs: durationSince(startedAtMs),
-          status: 'error',
+          status: "error",
           error: observedErrorSummary(error, errorContext(options.attributes)),
           ...(options.attributes ? { attributes: options.attributes } : {}),
         }),
         nextContext.correlators ?? null,
-      )
-      throw error
+      );
+      throw error;
     }
   },
 
   openSpan<P extends CruxPrimitiveName>(
     options: ObserveSpanOptions<P>,
   ): OpenObservedSpan {
-    let context = currentContext()
-    let openedImplicitRun = false
-    let implicitRunStartedAtMs = 0
+    let context = currentContext();
+    let openedImplicitRun = false;
+    let implicitRunStartedAtMs = 0;
     if (!context) {
       if (options.implicitRun === false) {
-        const runId = createCruxRunId()
-        const traceId = createCruxTraceId()
-        const segmentId = createCruxSegmentId()
-        const spanId = createCruxSpanId()
+        const runId = createCruxRunId();
+        const traceId = createCruxTraceId();
+        const segmentId = createCruxSegmentId();
+        const spanId = createCruxSpanId();
         return {
           runId,
           traceId,
@@ -1261,15 +1363,15 @@ export const observe = {
           spanId,
           parentSpanId: null,
           withContext<T>(fn: () => T | Promise<T>): T | Promise<T> {
-            return fn()
+            return fn();
           },
           setAttributes(): void {},
           end(): void {},
           error(): void {},
-        }
+        };
       }
-      openedImplicitRun = true
-      implicitRunStartedAtMs = Date.now()
+      openedImplicitRun = true;
+      implicitRunStartedAtMs = Date.now();
       const implicitContext: ObservabilityContext = {
         runId: createCruxRunId(),
         traceId: createCruxTraceId(),
@@ -1277,43 +1379,46 @@ export const observe = {
         startedAtMs: implicitRunStartedAtMs,
         spanStack: [],
         correlators: effectiveCorrelators(),
-        deployment: cloneDeploymentIdentity(deploymentIdentity),
-      }
-      rememberRunDeployment(implicitContext.runId, implicitContext.deployment)
-      context = implicitContext
+        deployment: cloneDeploymentIdentity(
+          observabilityRegistry.deploymentIdentity,
+        ),
+      };
+      rememberRunDeployment(implicitContext.runId, implicitContext.deployment);
+      context = implicitContext;
       emitObserved(
         () => ({
           schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
           recordId: createCruxRecordId(),
-          type: 'run:start',
+          type: "run:start",
           runId: implicitContext.runId,
           segmentId: implicitContext.segmentId,
           traceId: implicitContext.traceId,
           name: options.name,
           rootPrimitive: options.primitive,
           startedAt: now(),
-          status: 'running',
+          status: "running",
           ...(options.attributes ? { attributes: options.attributes } : {}),
         }),
         implicitContext.correlators ?? null,
-      )
+      );
     }
 
-    const spanId = options.spanId ?? createCruxSpanId()
-    const parentSpanId = context.spanStack[context.spanStack.length - 1] ?? null
+    const spanId = options.spanId ?? createCruxSpanId();
+    const parentSpanId =
+      context.spanStack[context.spanStack.length - 1] ?? null;
     const spanContext: ObservabilityContext = {
       ...context,
       spanStack: [...context.spanStack, spanId],
-    }
-    const startedAtMs = Date.now()
-    let ended = false
-    let accumulatedAttributes: CruxAttributes | undefined
+    };
+    const startedAtMs = Date.now();
+    let ended = false;
+    let accumulatedAttributes: CruxAttributes | undefined;
 
     emitObserved(
       () => ({
         schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
         recordId: createCruxRecordId(),
-        type: 'span:start',
+        type: "span:start",
         runId: context.runId,
         segmentId: context.segmentId,
         traceId: context.traceId,
@@ -1323,46 +1428,46 @@ export const observe = {
         primitive: options.primitive,
         name: options.name,
         startedAt: now(),
-        status: 'running',
+        status: "running",
         ...(options.attributes ? { attributes: options.attributes } : {}),
         ...(options.definitionRefs && options.definitionRefs.length > 0
           ? { definitionRefs: options.definitionRefs }
           : {}),
       }),
       context.correlators ?? null,
-    )
+    );
 
     const mergeSpanAttributes = (
       finishAttributes?: CruxAttributes,
     ): CruxAttributes | undefined => {
       if (!options.attributes && !accumulatedAttributes && !finishAttributes)
-        return undefined
+        return undefined;
       return {
         ...(options.attributes ?? {}),
         ...(accumulatedAttributes ?? {}),
         ...(finishAttributes ?? {}),
-      }
-    }
+      };
+    };
 
     const finish = (finishOptions: EndObservedSpanOptions = {}): void => {
-      if (ended) return
-      ended = true
+      if (ended) return;
+      ended = true;
       const status =
-        finishOptions.status ?? (finishOptions.error ? 'error' : 'ok')
-      const attributes = mergeSpanAttributes(finishOptions.attributes)
+        finishOptions.status ?? (finishOptions.error ? "error" : "ok");
+      const attributes = mergeSpanAttributes(finishOptions.attributes);
       if (finishOptions.error !== undefined) {
         emitObservedErrorEvidence(
           spanContext,
           spanId,
           finishOptions.error,
           attributes,
-        )
+        );
       }
       emitObserved(
         () => ({
           schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
           recordId: createCruxRecordId(),
-          type: 'span:end',
+          type: "span:end",
           runId: spanContext.runId,
           segmentId: spanContext.segmentId,
           traceId: spanContext.traceId,
@@ -1382,15 +1487,15 @@ export const observe = {
           ...(attributes ? { attributes } : {}),
         }),
         spanContext.correlators ?? null,
-      )
+      );
       if (openedImplicitRun) {
-        const runStatus: EndedRunStatus = status === 'skipped' ? 'ok' : status
-        if (!rememberEndedRun(spanContext.runId, runStatus)) return
+        const runStatus: EndedRunStatus = status === "skipped" ? "ok" : status;
+        if (!rememberEndedRun(spanContext.runId, runStatus)) return;
         emitObserved(
           () => ({
             schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
             recordId: createCruxRecordId(),
-            type: 'run:end',
+            type: "run:end",
             runId: spanContext.runId,
             segmentId: spanContext.segmentId,
             traceId: spanContext.traceId,
@@ -1410,9 +1515,9 @@ export const observe = {
               : {}),
           }),
           spanContext.correlators ?? null,
-        )
+        );
       }
-    }
+    };
 
     return {
       runId: spanContext.runId,
@@ -1421,38 +1526,38 @@ export const observe = {
       spanId,
       parentSpanId,
       withContext<T>(fn: () => T | Promise<T>): T | Promise<T> {
-        return withContext(spanContext, fn)
+        return withContext(spanContext, fn);
       },
       setAttributes(attributes: CruxAttributes): void {
         accumulatedAttributes = {
           ...(accumulatedAttributes ?? {}),
           ...attributes,
-        }
+        };
       },
       end(options?: EndObservedSpanOptions): void {
-        finish(options)
+        finish(options);
       },
       error(error: unknown, attributes?: CruxAttributes): void {
-        finish({ status: 'error', error, attributes })
+        finish({ status: "error", error, attributes });
       },
-    }
+    };
   },
 
   event(options: ObserveEventOptions): void {
-    if (shouldQuarantineQualityObservabilityWrite()) return
-    const context = currentContext()
-    const spanId = context?.spanStack[context.spanStack.length - 1]
+    if (shouldQuarantineQualityObservabilityWrite()) return;
+    const context = currentContext();
+    const spanId = context?.spanStack[context.spanStack.length - 1];
     if (!context) {
-      recordContextlessRecord('event')
-      return
+      recordContextlessRecord("event");
+      return;
     }
-    if (!spanId) return
+    if (!spanId) return;
 
     emitObserved(
       () => ({
         schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
         recordId: createCruxRecordId(),
-        type: 'span:event',
+        type: "span:event",
         runId: context.runId,
         segmentId: context.segmentId,
         traceId: context.traceId,
@@ -1463,24 +1568,24 @@ export const observe = {
         ...(options.attributes ? { attributes: options.attributes } : {}),
       }),
       context.correlators ?? null,
-    )
+    );
   },
 
   artifact(options: ObserveArtifactOptions): CruxArtifactId | undefined {
-    if (shouldQuarantineQualityObservabilityWrite()) return undefined
-    const context = currentContext()
+    if (shouldQuarantineQualityObservabilityWrite()) return undefined;
+    const context = currentContext();
     if (!context) {
-      recordContextlessRecord('artifact')
-      return undefined
+      recordContextlessRecord("artifact");
+      return undefined;
     }
 
-    const artifactId = options.artifactId ?? createCruxArtifactId()
+    const artifactId = options.artifactId ?? createCruxArtifactId();
     emitObserved(() => {
-      const spanId = context.spanStack[context.spanStack.length - 1]
+      const spanId = context.spanStack[context.spanStack.length - 1];
       return {
         schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
         recordId: createCruxRecordId(),
-        type: 'artifact',
+        type: "artifact",
         runId: context.runId,
         segmentId: context.segmentId,
         traceId: context.traceId,
@@ -1497,24 +1602,24 @@ export const observe = {
         ...(options.preview !== undefined ? { preview: options.preview } : {}),
         ...(options.uri ? { uri: options.uri } : {}),
         ...(options.attributes ? { attributes: options.attributes } : {}),
-      }
-    }, context.correlators ?? null)
-    return artifactId
+      };
+    }, context.correlators ?? null);
+    return artifactId;
   },
 
   edge(options: ObserveEdgeOptions): void {
-    if (shouldQuarantineQualityObservabilityWrite()) return
-    const context = currentContext()
+    if (shouldQuarantineQualityObservabilityWrite()) return;
+    const context = currentContext();
     if (!context) {
-      recordContextlessRecord('edge')
-      return
+      recordContextlessRecord("edge");
+      return;
     }
 
     emitObserved(
       () => ({
         schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
         recordId: createCruxRecordId(),
-        type: 'edge',
+        type: "edge",
         runId: context.runId,
         segmentId: context.segmentId,
         traceId: context.traceId,
@@ -1526,21 +1631,21 @@ export const observe = {
         ...(options.attributes ? { attributes: options.attributes } : {}),
       }),
       context.correlators ?? null,
-    )
+    );
   },
 
   captureContext(): CapturedObservabilityContext | undefined {
-    const context = currentContext()
-    if (!context) return undefined
-    const currentSpanId = context.spanStack[context.spanStack.length - 1]
-    return captureContextValue(context, context.spanStack, currentSpanId)
+    const context = currentContext();
+    if (!context) return undefined;
+    const currentSpanId = context.spanStack[context.spanStack.length - 1];
+    return captureContextValue(context, context.spanStack, currentSpanId);
   },
 
   withContext<T>(
     context: CapturedObservabilityContext | undefined,
     fn: () => T | Promise<T>,
   ): T | Promise<T> {
-    if (!context) return fn()
+    if (!context) return fn();
     return withContext(
       {
         runId: context.runId,
@@ -1552,7 +1657,7 @@ export const observe = {
         spanStack: [...context.spanStack],
       },
       fn,
-    )
+    );
   },
 
   /**
@@ -1565,35 +1670,37 @@ export const observe = {
    * synchronous-only scope where it is unavailable.
    */
   withHostLifecycle<T>(lifecycle: CruxHostLifecycle, fn: () => T): T {
-    return runWithHostLifecycle(lifecycle, fn)
+    return runWithHostLifecycle(lifecycle, fn);
   },
 
   async flush(
     options: ObservabilityFlushOptions = {},
   ): Promise<ObservabilityFlushResult> {
+    syncDeliveryEngineWithProcessRegistry();
     const [result] = await Promise.all([
       deliveryEngine.flush(options),
       runTelemetryFlushHook(options),
-    ])
-    return result
+    ]);
+    return result;
   },
 
   async shutdown(
     options: ObservabilityFlushOptions = {},
   ): Promise<ObservabilityFlushResult> {
+    syncDeliveryEngineWithProcessRegistry();
     const [result] = await Promise.all([
       deliveryEngine.shutdown(options),
       runTelemetryFlushHook(options),
-    ])
-    return result
+    ]);
+    return result;
   },
-}
+};
 
-let telemetryFlushFailures = 0
+let telemetryFlushFailures = 0;
 
 /** Total non-throwing telemetry flush hook failures observed since the last reset. */
 export function observabilityTelemetryFlushFailures(): number {
-  return telemetryFlushFailures
+  return telemetryFlushFailures;
 }
 
 /**
@@ -1601,39 +1708,48 @@ export function observabilityTelemetryFlushFailures(): number {
  * `timeoutMs` and the active host lifecycle's remaining deadline, mirroring
  * the delivery engine's own deadline combination in `drainDeliveryState`.
  */
-function telemetryFlushDeadlineMs(options: ObservabilityFlushOptions): number | undefined {
-  const hostRemainingMs = remainingHostDeadlineMs(activeHostLifecycle())
-  const explicitMs = options.timeoutMs === undefined ? undefined : Math.max(0, options.timeoutMs)
-  if (hostRemainingMs === undefined) return explicitMs
-  if (explicitMs === undefined) return hostRemainingMs
-  return Math.min(explicitMs, hostRemainingMs)
+function telemetryFlushDeadlineMs(
+  options: ObservabilityFlushOptions,
+): number | undefined {
+  const hostRemainingMs = remainingHostDeadlineMs(activeHostLifecycle());
+  const explicitMs =
+    options.timeoutMs === undefined
+      ? undefined
+      : Math.max(0, options.timeoutMs);
+  if (hostRemainingMs === undefined) return explicitMs;
+  if (explicitMs === undefined) return hostRemainingMs;
+  return Math.min(explicitMs, hostRemainingMs);
 }
 
 /** Run the installed telemetry flush hook, if any. Never throws through app work. */
-async function runTelemetryFlushHook(options: ObservabilityFlushOptions): Promise<void> {
-  const hook = getHooks().telemetryFlushHook
-  if (!hook) return
+async function runTelemetryFlushHook(
+  options: ObservabilityFlushOptions,
+): Promise<void> {
+  const hook = getHooks().telemetryFlushHook;
+  if (!hook) return;
   try {
-    const result = await hook({ deadlineMs: telemetryFlushDeadlineMs(options) })
-    if (!result?.ok) telemetryFlushFailures += 1
+    const result = await hook({
+      deadlineMs: telemetryFlushDeadlineMs(options),
+    });
+    if (!result?.ok) telemetryFlushFailures += 1;
   } catch {
-    telemetryFlushFailures += 1
+    telemetryFlushFailures += 1;
   }
 }
 
 function rememberEndedRun(runId: CruxRunId, status: EndedRunStatus): boolean {
-  const previousStatus = endedRunStatuses.get(runId)
-  if (previousStatus) return false
+  const previousStatus = endedRunStatuses.get(runId);
+  if (previousStatus) return false;
 
-  endedRunStatuses.set(runId, status)
-  if (endedRunStatuses.size <= maxEndedRunIds) return true
+  endedRunStatuses.set(runId, status);
+  if (endedRunStatuses.size <= maxEndedRunIds) return true;
 
-  const oldestRunId = endedRunStatuses.keys().next().value
+  const oldestRunId = endedRunStatuses.keys().next().value;
   if (oldestRunId) {
-    endedRunStatuses.delete(oldestRunId)
-    runDeploymentIdentities.delete(oldestRunId)
+    endedRunStatuses.delete(oldestRunId);
+    runDeploymentIdentities.delete(oldestRunId);
   }
-  return true
+  return true;
 }
 
 function rememberRunDeployment(
@@ -1641,24 +1757,26 @@ function rememberRunDeployment(
   identity: CruxDeploymentIdentity | undefined,
 ): void {
   if (runDeploymentIdentities.has(runId)) {
-    const current = runDeploymentIdentities.get(runId) ?? undefined
-    if (!sameDeploymentIdentity({ deployment: current }, { deployment: identity })) {
-      throw new Error('Cannot change an observed run deployment identity')
+    const current = runDeploymentIdentities.get(runId) ?? undefined;
+    if (
+      !sameDeploymentIdentity({ deployment: current }, { deployment: identity })
+    ) {
+      throw new Error("Cannot change an observed run deployment identity");
     }
-    return
+    return;
   }
   runDeploymentIdentities.set(
     runId,
     identity ? cloneDeploymentIdentity(identity)! : null,
-  )
+  );
 }
 
-function recordContextlessRecord(kind: 'event' | 'artifact' | 'edge'): void {
-  contextlessRecords += 1
-  if (warnedAboutContextlessRecord) return
-  if (!shouldWarnAboutRuntimeLimitations()) return
-  warnedAboutContextlessRecord = true
+function recordContextlessRecord(kind: "event" | "artifact" | "edge"): void {
+  contextlessRecords += 1;
+  if (warnedAboutContextlessRecord) return;
+  if (!shouldWarnAboutRuntimeLimitations()) return;
+  warnedAboutContextlessRecord = true;
   console.warn(
     `[crux] observability ${kind} skipped because no active observability context is available.`,
-  )
+  );
 }

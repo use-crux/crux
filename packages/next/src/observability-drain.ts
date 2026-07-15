@@ -37,7 +37,17 @@ export async function reportNextObservabilityDrain(
   }
 
   try {
-    (options.onDrain ?? warnAboutIncompleteDrain)(result);
+    const reporting = (
+      (options.onDrain ?? warnAboutIncompleteDrain) as (
+        result: ObservabilityFlushResult,
+      ) => unknown
+    )(result);
+    void Promise.resolve(reporting).catch((error: unknown) => {
+      console.error(
+        "[crux] observability onDrain reporter rejected; the Next drain result above was still computed.",
+        error,
+      );
+    });
   } catch (error) {
     console.error(
       "[crux] observability onDrain reporter threw; the Next drain result above was still computed.",

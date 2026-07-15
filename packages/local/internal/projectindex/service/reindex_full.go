@@ -47,8 +47,14 @@ func (p projectIndexPipeline) reindexProjectWithOptions(
 	}()
 
 	s.indexMu.Lock()
+	previousState := s.indexState.Checkpoint()
+	previousBase := s.indexState.Index()
 	s.indexState.Reset()
 	s.indexMu.Unlock()
+	if err := s.hydrateRuntimeOverlays(ctx, root); err != nil {
+		s.restoreBaseAfterFailedReindex(previousState)
+		return store.IndexData{}, fmt.Errorf("hydrate runtime overlays: %w", err)
+	}
 
 	cacheLoaded := false
 	cached, cacheHit, err := s.indexCache.LoadSnapshot(ctx, root, projectName, run.startedAt)
@@ -62,6 +68,7 @@ func (p projectIndexPipeline) reindexProjectWithOptions(
 
 	astResult, err := s.indexProjectAstPatch(ctx, root, configPath, projectName)
 	if err != nil {
+		s.restoreBaseAfterFailedReindex(previousState)
 		return store.IndexData{}, s.publishFailedFullReindex(root, projectName, run.startedAt, err)
 	}
 
@@ -80,6 +87,11 @@ func (p projectIndexPipeline) reindexProjectWithOptions(
 	if cacheLoaded && patch.Indexing.Cache != nil {
 		patch.Indexing.Cache.Status = "hit"
 		patch.Indexing.Cache.LoadedAt = run.startedAt.UTC().Format(time.RFC3339Nano)
+	}
+	if isIncompleteASTPatch(patch) && !projectindex.IsEmptyIndex(previousBase) {
+		s.indexMu.Lock()
+		s.indexState.Restore(previousState)
+		s.indexMu.Unlock()
 	}
 	index, err := s.commitAndApply(ctx, patch)
 	if err != nil {
@@ -102,6 +114,14 @@ func (p projectIndexPipeline) reindexProjectWithOptions(
 	}()
 
 	return s.completeSemanticAndLint(ctx, run)
+}
+
+func (s *Service) restoreBaseAfterFailedReindex(previous projectindex.StateCheckpoint) {
+	s.indexMu.Lock()
+	defer s.indexMu.Unlock()
+	s.indexState.Restore(previous)
+	base := s.registeredBaseLocked()
+	s.store.SetIndexData(s.runtimeOverlays.Project(base))
 }
 
 // publishFailedFullReindex records and publishes a degraded snapshot when source

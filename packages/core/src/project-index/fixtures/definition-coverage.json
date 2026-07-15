@@ -12,10 +12,7 @@
       "kind": "prompt",
       "primary": "directly-observed",
       "secondary": [],
-      "runtimePrimitiveNames": [
-        "prompt.resolve",
-        "prompt.budget"
-      ],
+      "runtimePrimitiveNames": ["prompt.resolve", "prompt.budget"],
       "expectedTreatment": "definition-ref",
       "definitionRef": {
         "id": "prompt:connected",
@@ -43,10 +40,7 @@
       "kind": "tool",
       "primary": "directly-observed",
       "secondary": [],
-      "runtimePrimitiveNames": [
-        "tool.call",
-        "tool.approval"
-      ],
+      "runtimePrimitiveNames": ["tool.call", "tool.approval"],
       "expectedTreatment": "definition-ref",
       "definitionRef": {
         "id": "tool:connected",
@@ -55,12 +49,22 @@
       }
     },
     {
+      "kind": "mcp.server",
+      "primary": "directly-observed",
+      "secondary": [],
+      "runtimePrimitiveNames": ["mcp.connect", "mcp.discover", "tool.call"],
+      "expectedTreatment": "definition-ref",
+      "definitionRef": {
+        "id": "mcp.server:connected",
+        "kind": "mcp.server",
+        "role": "resolved-mcp-server"
+      }
+    },
+    {
       "kind": "agent",
       "primary": "directly-observed",
       "secondary": [],
-      "runtimePrimitiveNames": [
-        "agent.run"
-      ],
+      "runtimePrimitiveNames": ["agent.run"],
       "expectedTreatment": "definition-ref",
       "definitionRef": {
         "id": "agent:connected",
@@ -72,9 +76,7 @@
       "kind": "flow",
       "primary": "directly-observed",
       "secondary": [],
-      "runtimePrimitiveNames": [
-        "flow.run"
-      ],
+      "runtimePrimitiveNames": ["flow.run"],
       "expectedTreatment": "definition-ref",
       "definitionRef": {
         "id": "flow:connected",
@@ -86,9 +88,7 @@
       "kind": "task",
       "primary": "directly-observed",
       "secondary": [],
-      "runtimePrimitiveNames": [
-        "task.operation"
-      ],
+      "runtimePrimitiveNames": ["task.operation"],
       "expectedTreatment": "definition-ref",
       "definitionRef": {
         "id": "task:connected",
@@ -100,9 +100,7 @@
       "kind": "composition.parallel",
       "primary": "directly-observed",
       "secondary": [],
-      "runtimePrimitiveNames": [
-        "composition.parallel"
-      ],
+      "runtimePrimitiveNames": ["composition.parallel"],
       "expectedTreatment": "definition-ref",
       "definitionRef": {
         "id": "composition.parallel:connected",
@@ -114,9 +112,7 @@
       "kind": "composition.pipeline",
       "primary": "directly-observed",
       "secondary": [],
-      "runtimePrimitiveNames": [
-        "composition.pipeline"
-      ],
+      "runtimePrimitiveNames": ["composition.pipeline"],
       "expectedTreatment": "definition-ref",
       "definitionRef": {
         "id": "composition.pipeline:connected",
@@ -128,9 +124,7 @@
       "kind": "composition.swarm",
       "primary": "directly-observed",
       "secondary": [],
-      "runtimePrimitiveNames": [
-        "composition.swarm"
-      ],
+      "runtimePrimitiveNames": ["composition.swarm"],
       "expectedTreatment": "definition-ref",
       "definitionRef": {
         "id": "composition.swarm:connected",
@@ -142,9 +136,7 @@
       "kind": "composition.consensus",
       "primary": "directly-observed",
       "secondary": [],
-      "runtimePrimitiveNames": [
-        "composition.consensus"
-      ],
+      "runtimePrimitiveNames": ["composition.consensus"],
       "expectedTreatment": "definition-ref",
       "definitionRef": {
         "id": "composition.consensus:connected",
@@ -156,9 +148,7 @@
       "kind": "routing.router",
       "primary": "directly-observed",
       "secondary": [],
-      "runtimePrimitiveNames": [
-        "routing.router"
-      ],
+      "runtimePrimitiveNames": ["routing.router"],
       "expectedTreatment": "definition-ref",
       "definitionRef": {
         "id": "routing.router:connected",
@@ -170,9 +160,7 @@
       "kind": "routing.split",
       "primary": "directly-observed",
       "secondary": [],
-      "runtimePrimitiveNames": [
-        "routing.split"
-      ],
+      "runtimePrimitiveNames": ["routing.split"],
       "expectedTreatment": "definition-ref",
       "definitionRef": {
         "id": "routing.split:connected",
@@ -184,9 +172,7 @@
       "kind": "routing.retry",
       "primary": "directly-observed",
       "secondary": [],
-      "runtimePrimitiveNames": [
-        "routing.retry"
-      ],
+      "runtimePrimitiveNames": ["routing.retry"],
       "expectedTreatment": "definition-ref",
       "definitionRef": {
         "id": "routing.retry:connected",
@@ -198,9 +184,7 @@
       "kind": "routing.cascade",
       "primary": "directly-observed",
       "secondary": [],
-      "runtimePrimitiveNames": [
-        "routing.cascade"
-      ],
+      "runtimePrimitiveNames": ["routing.cascade"],
       "expectedTreatment": "definition-ref",
       "definitionRef": {
         "id": "routing.cascade:connected",
@@ -212,9 +196,7 @@
       "kind": "routing.fallback",
       "primary": "directly-observed",
       "secondary": [],
-      "runtimePrimitiveNames": [
-        "routing.fallback"
-      ],
+      "runtimePrimitiveNames": ["routing.fallback"],
       "expectedTreatment": "definition-ref",
       "definitionRef": {
         "id": "routing.fallback:connected",
@@ -226,9 +208,7 @@
       "kind": "rag.recipe",
       "primary": "directly-observed",
       "secondary": [],
-      "runtimePrimitiveNames": [
-        "retrieval.recipe"
-      ],
+      "runtimePrimitiveNames": ["retrieval.recipe"],
       "expectedTreatment": "definition-ref",
       "definitionRef": {
         "id": "rag.recipe:connected",
@@ -240,9 +220,7 @@
       "kind": "rag.reranker",
       "primary": "directly-observed",
       "secondary": [],
-      "runtimePrimitiveNames": [
-        "retrieval.step"
-      ],
+      "runtimePrimitiveNames": ["retrieval.step"],
       "expectedTreatment": "definition-ref",
       "definitionRef": {
         "id": "rag.reranker:connected",
@@ -254,10 +232,7 @@
       "kind": "rag.retriever",
       "primary": "directly-observed",
       "secondary": [],
-      "runtimePrimitiveNames": [
-        "retrieval.retrieve",
-        "retrieval.query"
-      ],
+      "runtimePrimitiveNames": ["retrieval.retrieve", "retrieval.query"],
       "expectedTreatment": "definition-ref",
       "definitionRef": {
         "id": "rag.retriever:connected",
@@ -269,9 +244,7 @@
       "kind": "skill",
       "primary": "directly-observed",
       "secondary": [],
-      "runtimePrimitiveNames": [
-        "skill.load"
-      ],
+      "runtimePrimitiveNames": ["skill.load"],
       "expectedTreatment": "definition-ref",
       "definitionRef": {
         "id": "skill:connected",
@@ -283,10 +256,7 @@
       "kind": "memory",
       "primary": "directly-observed",
       "secondary": [],
-      "runtimePrimitiveNames": [
-        "memory.read",
-        "memory.write"
-      ],
+      "runtimePrimitiveNames": ["memory.read", "memory.write"],
       "expectedTreatment": "definition-ref",
       "definitionRef": {
         "id": "memory:connected",
@@ -298,9 +268,7 @@
       "kind": "workspace",
       "primary": "directly-observed",
       "secondary": [],
-      "runtimePrimitiveNames": [
-        "workspace.operation"
-      ],
+      "runtimePrimitiveNames": ["workspace.operation"],
       "expectedTreatment": "definition-ref",
       "definitionRef": {
         "id": "workspace:connected",
@@ -312,10 +280,7 @@
       "kind": "constraint",
       "primary": "directly-observed",
       "secondary": [],
-      "runtimePrimitiveNames": [
-        "constraint.check",
-        "constraint.retry"
-      ],
+      "runtimePrimitiveNames": ["constraint.check", "constraint.retry"],
       "expectedTreatment": "definition-ref",
       "definitionRef": {
         "id": "constraint:connected",
@@ -327,9 +292,7 @@
       "kind": "guardrail",
       "primary": "directly-observed",
       "secondary": [],
-      "runtimePrimitiveNames": [
-        "guardrail.run"
-      ],
+      "runtimePrimitiveNames": ["guardrail.run"],
       "expectedTreatment": "definition-ref",
       "definitionRef": {
         "id": "guardrail:connected",
@@ -341,10 +304,7 @@
       "kind": "blackboard",
       "primary": "directly-observed",
       "secondary": [],
-      "runtimePrimitiveNames": [
-        "memory.read",
-        "memory.write"
-      ],
+      "runtimePrimitiveNames": ["memory.read", "memory.write"],
       "expectedTreatment": "definition-ref",
       "definitionRef": {
         "id": "blackboard:connected",
@@ -356,10 +316,7 @@
       "kind": "injectable",
       "primary": "runtime-contributor",
       "secondary": [],
-      "runtimePrimitiveNames": [
-        "prompt.resolve",
-        "context.resolve"
-      ],
+      "runtimePrimitiveNames": ["prompt.resolve", "context.resolve"],
       "expectedTreatment": "none",
       "definitionRef": null
     },
@@ -367,10 +324,7 @@
       "kind": "rag.knowledgeBase",
       "primary": "runtime-contributor",
       "secondary": [],
-      "runtimePrimitiveNames": [
-        "retrieval.retrieve",
-        "retrieval.query"
-      ],
+      "runtimePrimitiveNames": ["retrieval.retrieve", "retrieval.query"],
       "expectedTreatment": "definition-ref",
       "definitionRef": {
         "id": "rag.knowledgeBase:connected",
@@ -406,10 +360,7 @@
       "kind": "storage.assetStore",
       "primary": "runtime-contributor",
       "secondary": [],
-      "runtimePrimitiveNames": [
-        "ingest.parse",
-        "corpus.sync"
-      ],
+      "runtimePrimitiveNames": ["ingest.parse", "corpus.sync"],
       "expectedTreatment": "none",
       "definitionRef": null
     },
@@ -417,10 +368,7 @@
       "kind": "toolPolicy",
       "primary": "runtime-contributor",
       "secondary": [],
-      "runtimePrimitiveNames": [
-        "tool.call",
-        "tool.approval"
-      ],
+      "runtimePrimitiveNames": ["tool.call", "tool.approval"],
       "expectedTreatment": "definition-ref",
       "definitionRef": {
         "id": "toolPolicy:connected",
@@ -432,10 +380,7 @@
       "kind": "deferred-work",
       "primary": "runtime-observed-unjoined",
       "secondary": [],
-      "runtimePrimitiveNames": [
-        "defer.scheduled",
-        "defer.run"
-      ],
+      "runtimePrimitiveNames": ["defer.scheduled", "defer.run"],
       "expectedTreatment": "runtime-unjoined",
       "definitionRef": null
     },
@@ -458,10 +403,7 @@
       "kind": "ingest.source",
       "primary": "runtime-observed-unjoined",
       "secondary": [],
-      "runtimePrimitiveNames": [
-        "ingest.parse",
-        "corpus.sync"
-      ],
+      "runtimePrimitiveNames": ["ingest.parse", "corpus.sync"],
       "expectedTreatment": "runtime-unjoined",
       "definitionRef": null
     },
@@ -469,9 +411,7 @@
       "kind": "flow.step",
       "primary": "structural-child",
       "secondary": [],
-      "runtimePrimitiveNames": [
-        "flow.step"
-      ],
+      "runtimePrimitiveNames": ["flow.step"],
       "expectedTreatment": "definition-ref",
       "definitionRef": {
         "id": "flow.step:connected:connected",
@@ -483,9 +423,7 @@
       "kind": "composition.parallel.branch",
       "primary": "structural-child",
       "secondary": [],
-      "runtimePrimitiveNames": [
-        "agent.run"
-      ],
+      "runtimePrimitiveNames": ["agent.run"],
       "expectedTreatment": "definition-ref",
       "definitionRef": {
         "id": "composition.parallel:connected:branch:connected",
@@ -545,9 +483,7 @@
       "kind": "rag.recipe.step",
       "primary": "structural-child",
       "secondary": [],
-      "runtimePrimitiveNames": [
-        "retrieval.step"
-      ],
+      "runtimePrimitiveNames": ["retrieval.step"],
       "expectedTreatment": "definition-ref",
       "definitionRef": {
         "id": "rag.recipe:connected:step:connected",
@@ -559,9 +495,7 @@
       "kind": "rag.pipeline.stage",
       "primary": "structural-child",
       "secondary": [],
-      "runtimePrimitiveNames": [
-        "retrieval.stage"
-      ],
+      "runtimePrimitiveNames": ["retrieval.stage"],
       "expectedTreatment": "none",
       "definitionRef": null
     },
@@ -584,9 +518,7 @@
     {
       "kind": "evaluation.case",
       "primary": "structural-child",
-      "secondary": [
-        "quality-owned"
-      ],
+      "secondary": ["quality-owned"],
       "runtimePrimitiveNames": [],
       "expectedTreatment": "quality",
       "definitionRef": null
@@ -594,9 +526,7 @@
     {
       "kind": "suite.case",
       "primary": "structural-child",
-      "secondary": [
-        "quality-owned"
-      ],
+      "secondary": ["quality-owned"],
       "runtimePrimitiveNames": [],
       "expectedTreatment": "quality",
       "definitionRef": null
@@ -604,12 +534,8 @@
     {
       "kind": "scorer",
       "primary": "quality-owned",
-      "secondary": [
-        "direct-runtime"
-      ],
-      "runtimePrimitiveNames": [
-        "scoring.judge"
-      ],
+      "secondary": ["direct-runtime"],
+      "runtimePrimitiveNames": ["scoring.judge"],
       "expectedTreatment": "definition-ref",
       "definitionRef": {
         "id": "scorer:connected",

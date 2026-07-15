@@ -227,6 +227,7 @@ pub(crate) fn relation_ref(
         fallback_to_id: None,
         source: None,
         metadata: None,
+        extractors: Vec::new(),
     }
 }
 

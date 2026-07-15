@@ -318,6 +318,7 @@ type RunDetailCounts struct {
 
 type RunDetailNode struct {
 	SpanSummary
+	DefinitionRefs []DefinitionRef        `json:"definitionRefs,omitempty"`
 	ID             string                 `json:"id"`
 	Virtual        bool                   `json:"virtual"`
 	ParentID       string                 `json:"parentId"`
@@ -344,6 +345,7 @@ type RunDetailNode struct {
 
 type RunDetailDetail struct {
 	SpanSummary
+	DefinitionRefs []DefinitionRef       `json:"definitionRefs,omitempty"`
 	ID             string                `json:"id"`
 	Kind           string                `json:"kind"`
 	Role           string                `json:"role,omitempty"`
@@ -930,7 +932,7 @@ func (s *Service) lifecycleCandidateRuns(ctx context.Context) ([]lifecycleRunSum
 }
 
 func (s *Service) persistLifecycleReconciliation(ctx context.Context, reconciliation lifecycleReconciliation) (bool, error) {
-	status := "reconciled-terminal"
+	status := "reconciled-terminal:" + reconciliation.Status
 	if reconciliation.Status == "incomplete" {
 		status = "reconciled-incomplete"
 	}

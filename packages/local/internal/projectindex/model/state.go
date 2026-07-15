@@ -12,6 +12,12 @@ type State struct {
 	generation Generation
 }
 
+// StateCheckpoint is an opaque compiler-fact snapshot used to roll back an
+// incomplete reindex without changing phase ownership or generation identity.
+type StateCheckpoint struct {
+	patch PatchState
+}
+
 func NewState() *State {
 	return &State{patch: EmptyPatchState()}
 }
@@ -21,6 +27,19 @@ func (s *State) Reset() {
 		return
 	}
 	s.patch = EmptyPatchState()
+}
+
+func (s *State) Checkpoint() StateCheckpoint {
+	if s == nil {
+		return StateCheckpoint{patch: EmptyPatchState()}
+	}
+	return StateCheckpoint{patch: s.patch}
+}
+
+func (s *State) Restore(checkpoint StateCheckpoint) {
+	if s != nil {
+		s.patch = checkpoint.patch
+	}
 }
 
 func (s *State) Index() store.IndexData {
@@ -39,6 +58,14 @@ func (s *State) Apply(patch IndexPatch) store.IndexData {
 	}
 	s.patch = ApplyPatch(s.patch, patch)
 	return s.patch.Index
+}
+
+// AdvanceASTGeneration invalidates semantic work after an incomplete AST pass
+// without replacing the last authoritative compiler facts.
+func (s *State) AdvanceASTGeneration() {
+	if s != nil {
+		s.generation.BumpAST()
+	}
 }
 
 func (s *State) Hydrate(index store.IndexData, phase IndexPatchPhase, status string) {

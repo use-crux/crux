@@ -5,6 +5,8 @@ export type StaticIndexSyntaxFrontend = 'oxc'
 
 /** Normalized Static Index syntax configuration used by parser hosts. */
 export interface StaticIndexSyntaxSelection {
+  /** Whether project config explicitly authored `nativeAst`. */
+  readonly configured: boolean
   /** Whether Rust/Oxc static syntax parsing is enabled for this project. */
   readonly enabled: boolean
   /** Static syntax frontend to use when enabled. */
@@ -22,7 +24,8 @@ export function staticIndexSyntaxSelectionFromConfig(
   config: CruxExperimentalConfig | undefined,
 ): StaticIndexSyntaxSelection {
   const ast = config?.indexer?.nativeAst
-  if (!ast) return { enabled: false }
-  if (ast === true) return { enabled: true, frontend: 'oxc' }
-  return { enabled: true, frontend: ast.frontend ?? 'oxc' }
+  if (ast === undefined) return { configured: false, enabled: false }
+  if (ast === false) return { configured: true, enabled: false }
+  if (ast === true) return { configured: true, enabled: true, frontend: 'oxc' }
+  return { configured: true, enabled: true, frontend: ast.frontend ?? 'oxc' }
 }

@@ -132,7 +132,7 @@ fn shared_static_index_protocol_fixture_decodes_and_finalizes() {
     let finalize_response = pipeline::finalize(finalize);
     assert_eq!(finalize_response.method, StaticIndexMethod::Finalize);
     assert_eq!(finalize_response.telemetry.facts.definitions, 1);
-    assert_eq!(finalize_response.telemetry.facts.source_refs, 0);
+    assert_eq!(finalize_response.telemetry.facts.source_refs, 1);
     assert_eq!(finalize_response.telemetry.facts.diagnostics, 1);
     assert_eq!(finalize_response.telemetry.facts.lint_findings, 1);
     assert_eq!(finalize_response.telemetry.facts.sources, 1);
@@ -366,7 +366,7 @@ fn shared_relation_rule_and_coverage_fixtures_decode() {
             .iter()
             .any(|class| class == "dependencies")
     );
-    assert_eq!(coverage.identities.len(), 22);
+    assert_eq!(coverage.identities.len(), 23);
 
     // The Rust first-party projection manifest must cover exactly these
     // identities, with the same stable replacement identity it stamps when it
@@ -386,12 +386,11 @@ fn shared_relation_rule_and_coverage_fixtures_decode() {
         "first-party manifest must project exactly the covered extractor identities"
     );
     for identity in &manifest_identities {
-        let expected_extension =
-            if matches!(identity.extractor, "media.operation" | "ingest.source") {
-                "@use-crux/indexer/crux-core-media"
-            } else {
-                "@use-crux/indexer/crux-core"
-            };
+        let expected_extension = match identity.extractor {
+            "mcp.server" => "@use-crux/indexer/crux-core-mcp",
+            "media.operation" | "ingest.source" => "@use-crux/indexer/crux-core-media",
+            _ => "@use-crux/indexer/crux-core",
+        };
         assert_eq!(identity.extension, expected_extension);
         assert_eq!(
             identity.family, identity.extractor,
@@ -401,26 +400,20 @@ fn shared_relation_rule_and_coverage_fixtures_decode() {
     }
 
     for identity in coverage.identities {
-        let media = matches!(
-            identity.extractor.as_str(),
-            "media.operation" | "ingest.source"
-        );
-        assert_eq!(
-            identity.extension,
-            if media {
-                "@use-crux/indexer/crux-core-media"
-            } else {
-                "@use-crux/indexer/crux-core"
-            }
-        );
+        let expected_extension = match identity.extractor.as_str() {
+            "mcp.server" => "@use-crux/indexer/crux-core-mcp",
+            "media.operation" | "ingest.source" => "@use-crux/indexer/crux-core-media",
+            _ => "@use-crux/indexer/crux-core",
+        };
+        assert_eq!(identity.extension, expected_extension);
         assert_eq!(identity.family, identity.extractor);
         assert!(identity.native_covered);
         assert_eq!(
             identity.parity_fixtures.negative,
-            if media {
-                "media-native-static.test.ts"
-            } else {
-                "first-party-native-negative-fixtures.test.ts"
+            match identity.extractor.as_str() {
+                "mcp.server" => "mcp-native-static.test.ts",
+                "media.operation" | "ingest.source" => "media-native-static.test.ts",
+                _ => "first-party-native-negative-fixtures.test.ts",
             }
         );
         assert_eq!(

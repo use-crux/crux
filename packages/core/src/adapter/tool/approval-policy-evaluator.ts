@@ -17,7 +17,8 @@ import {
   type ToolApprovalContext,
   type ToolApprovalMap,
 } from '../../tools/approval-policy'
-import { evaluateApprovalMiddleware } from '../../tools/middleware'
+import { evaluateApprovalMiddlewareRequest } from '../../tools/middleware'
+import type { ToolApprovalPolicyIdentity } from '../../tools/types'
 
 /** The call shape needed to evaluate approval requirements. */
 export interface ApprovalPolicyToolCall {
@@ -56,6 +57,15 @@ export interface RequiresToolApprovalOptions {
   readonly declarations: readonly ApprovalDeclaration[]
   /** Optional policy trace sink used by dialect parity tests. */
   readonly onPolicyTrace?: (trace: ApprovalPolicyTrace) => void
+  /** Whether request lifecycle callbacks should run for this evaluation. */
+  readonly notifyRequest?: boolean
+}
+
+/** Approval verdict plus optional evidence callback for the request span. */
+export interface ToolApprovalRequirement {
+  readonly requiresApproval: boolean
+  readonly policies: readonly ToolApprovalPolicyIdentity[]
+  readonly observeRequest?: () => void
 }
 
 /**
@@ -64,7 +74,11 @@ export interface RequiresToolApprovalOptions {
  */
 export function callApprovalDeclarations(map: ToolApprovalMap | undefined): ApprovalDeclaration[] {
   if (!map) return []
-  return Object.entries(map).map(([key, policy]) => ({ layer: 'call' as const, key, policy }))
+  return Object.entries(map).map(([key, policy]) => ({
+    layer: 'call' as const,
+    key,
+    policy,
+  }))
 }
 
 /**
@@ -75,27 +89,35 @@ export function callApprovalDeclarations(map: ToolApprovalMap | undefined): Appr
  * OR'd with declarations so existing `approvalMiddleware()` users retain the
  * ability to request approval without mutating the tool object.
  */
-export async function requiresToolApproval(options: RequiresToolApprovalOptions): Promise<boolean> {
+export async function requiresToolApproval(options: RequiresToolApprovalOptions): Promise<ToolApprovalRequirement> {
   const { tool, toolCall, messages, declarations } = options
-  if (!tool || typeof tool !== 'object') return false
+  if (!tool || typeof tool !== 'object') return { requiresApproval: false, policies: [] }
 
-  const policyRequiresApproval = await evaluateDeclaredApprovalPolicy(toolCall, messages, declarations, options)
+  const declaration = await evaluateDeclaredApprovalPolicy(toolCall, messages, declarations, options)
   const middlewareOptions = {
     toolCallId: toolCall.id,
     messages,
     runtimeContext: options.runtimeContext,
     ...(options.toolContext !== undefined ? { context: options.toolContext } : {}),
   }
-  const middlewareRequiresApproval = await evaluateApprovalMiddleware(tool, {
-    toolName: toolCall.name,
-    toolCallId: toolCall.id,
-    input: toolCall.args,
-    options: middlewareOptions,
-    ...(options.toolContext !== undefined ? { context: options.toolContext } : {}),
-    runtimeContext: options.runtimeContext,
-    messages,
-  })
-  return policyRequiresApproval || middlewareRequiresApproval
+  const middleware = await evaluateApprovalMiddlewareRequest(
+    tool,
+    {
+      toolName: toolCall.name,
+      toolCallId: toolCall.id,
+      input: toolCall.args,
+      options: middlewareOptions,
+      ...(options.toolContext !== undefined ? { context: options.toolContext } : {}),
+      runtimeContext: options.runtimeContext,
+      messages,
+    },
+    { notifyRequest: options.notifyRequest },
+  )
+  return {
+    requiresApproval: declaration.requiresApproval || middleware.requiresApproval,
+    policies: [...(declaration.identity ? [declaration.identity] : []), ...middleware.policies],
+    ...(middleware.observeRequest ? { observeRequest: middleware.observeRequest } : {}),
+  }
 }
 
 async function evaluateDeclaredApprovalPolicy(
@@ -103,9 +125,12 @@ async function evaluateDeclaredApprovalPolicy(
   messages: readonly Message[],
   declarations: readonly ApprovalDeclaration[],
   options: Pick<RequiresToolApprovalOptions, 'onPolicyTrace' | 'runtimeContext'>,
-): Promise<boolean> {
+): Promise<{
+  readonly requiresApproval: boolean
+  readonly identity?: ToolApprovalPolicyIdentity
+}> {
   const resolvedPolicy = resolveApprovalPolicy(toolCall.name, declarations)
-  if (!resolvedPolicy) return false
+  if (!resolvedPolicy) return { requiresApproval: false }
 
   const { policy, provenance } = resolvedPolicy
   let requiresApproval: boolean
@@ -137,5 +162,18 @@ async function evaluateDeclaredApprovalPolicy(
     key: provenance.key,
     ...(provenance.owner ? { owner: provenance.owner } : {}),
   })
-  return requiresApproval
+  return {
+    requiresApproval,
+    ...(requiresApproval
+      ? {
+          identity: {
+            kind: 'declaration' as const,
+            layer: provenance.layer,
+            key: provenance.key,
+            policyKind: approvalPolicyKind(policy) as 'always' | 'function',
+            ...(provenance.owner ? { owner: provenance.owner } : {}),
+          },
+        }
+      : {}),
+  }
 }

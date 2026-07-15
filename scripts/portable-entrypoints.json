@@ -44,6 +44,7 @@
         "./defer/node": "node-only",
         "./defer/serverless": "portable-web",
         "./project-index": "portable-web",
+        "./project-index/runtime": "portable-web",
         "./project-index/serializers": "portable-web",
         "./lint": "portable-web",
         "./runtime-bridge": "portable-web",
@@ -99,6 +100,14 @@
       "name": "@use-crux/anthropic",
       "manifest": "packages/anthropic/package.json",
       "entrypoints": { ".": "node-only" }
+    },
+    {
+      "name": "@use-crux/mcp",
+      "manifest": "packages/mcp/package.json",
+      "entrypoints": {
+        ".": "portable-web",
+        "./testing/vitest": "node-only"
+      }
     },
     {
       "name": "@use-crux/openai",

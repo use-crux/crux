@@ -16,7 +16,7 @@ import { randomUUID } from 'node:crypto'
 import { canonicalJson, sha256Hex } from './json'
 
 /** Bump when normalized-call construction changes in a way not captured by its inputs. */
-export const CASSETTE_CACHE_EPOCH = 2
+export const CASSETTE_CACHE_EPOCH = 3
 
 /** Bump when cell/output cache key semantics change. */
 export const OUTPUT_CACHE_EPOCH = 2

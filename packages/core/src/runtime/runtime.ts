@@ -10,19 +10,25 @@
  * @module
  */
 
-import type { PromptMiddleware } from './types'
+import type { PromptMiddleware } from "./types";
 import type {
   ResolveHook,
   ExecutionHook,
   StreamProgressHook,
   StreamStartHook,
-} from './middleware'
-import type { CruxAttributes, CruxObservabilityTransport, ObservabilityDeliveryOptions } from '../observability'
-import type { CruxObservabilityCapturePolicy } from '../observability/capture-policy'
-import type { CapturedObservabilityContext } from '../observability/context'
-import type { CruxPropagationCarrier } from '../observability/continuation'
-import type { RecordStore } from '../storage'
-import type { RuntimeEngineDefinition } from './api/runtime-definition'
+} from "./middleware";
+import type {
+  CruxAttributes,
+  CruxObservabilityTransport,
+  ObservabilityDeliveryOptions,
+} from "../observability";
+import type { CruxObservabilityCapturePolicy } from "../observability/capture-policy";
+import type { CapturedObservabilityContext } from "../observability/context";
+import type { CruxPropagationCarrier } from "../observability/continuation";
+import type { ProjectIndexRuntimeTransport } from "../project-index/runtime";
+import type { RecordStore } from "../storage";
+import type { RuntimeEngineDefinition } from "./api/runtime-definition";
+import { getCruxProcessRegistry } from "./process-registry";
 
 /**
  * Activates the real execution context (e.g. an OTel span) around the actual
@@ -33,19 +39,22 @@ import type { RuntimeEngineDefinition } from './api/runtime-definition'
  * inside a graph-record subscriber running downstream of it. `fn` may be sync
  * or return a promise; the hook must return whatever `fn` returns unchanged.
  */
-export type SpanActivationHook = <T>(context: CapturedObservabilityContext, fn: () => T) => T
+export type SpanActivationHook = <T>(
+  context: CapturedObservabilityContext,
+  fn: () => T,
+) => T;
 
 /** Bounds for {@link TelemetryFlushHook}. */
 export interface TelemetryFlushHookOptions {
   /** Milliseconds remaining to flush, combining any explicit timeout with the active host deadline. Omit to wait unbounded. */
-  readonly deadlineMs?: number
+  readonly deadlineMs?: number;
 }
 
 /** Structured, non-throwing outcome of a telemetry manager's bounded flush. */
 export interface TelemetryFlushHookResult {
   /** `false` when the flush could not complete (e.g. timed out) — never a thrown error. */
-  readonly ok: boolean
-  readonly timedOut?: boolean
+  readonly ok: boolean;
+  readonly timedOut?: boolean;
 }
 
 /**
@@ -58,7 +67,9 @@ export interface TelemetryFlushHookResult {
  * and lightweight OTel exporter work, not only plugin teardown. Must never
  * throw — failures are reported via `{ ok: false }`.
  */
-export type TelemetryFlushHook = (options: TelemetryFlushHookOptions) => Promise<TelemetryFlushHookResult>
+export type TelemetryFlushHook = (
+  options: TelemetryFlushHookOptions,
+) => Promise<TelemetryFlushHookResult>;
 
 /**
  * Derives extra attributes to attach to a resumed run/segment from its
@@ -70,7 +81,9 @@ export type TelemetryFlushHook = (options: TelemetryFlushHookOptions) => Promise
  * projected onto the resumed segment's root span. Returns `undefined` when
  * there is nothing to add. Must never throw.
  */
-export type TelemetryResumeAttributesHook = (carrier: CruxPropagationCarrier) => CruxAttributes | undefined
+export type TelemetryResumeAttributesHook = (
+  carrier: CruxPropagationCarrier,
+) => CruxAttributes | undefined;
 
 /**
  * The set of global hooks and reporters that instrument Crux primitives.
@@ -93,39 +106,41 @@ export type TelemetryResumeAttributesHook = (carrier: CruxPropagationCarrier) =>
  */
 export interface CruxHooks {
   /** Wraps every adapter `generate()` call for logging, cost tracking, observability. */
-  middleware?: PromptMiddleware
+  middleware?: PromptMiddleware;
   /** Fires when a prompt is resolved via the agent adapter. */
-  resolveHook?: ResolveHook
+  resolveHook?: ResolveHook;
   /** Fires after each model call from the agent adapter. */
-  executionHook?: ExecutionHook
+  executionHook?: ExecutionHook;
   /** Creates a progress reporter for live streaming metrics. */
-  streamProgressHook?: StreamProgressHook
+  streamProgressHook?: StreamProgressHook;
   /** Fires immediately when a stream begins, before any chunks arrive. */
-  streamStartHook?: StreamStartHook
+  streamStartHook?: StreamStartHook;
   /** Canonical observability graph transport and delivery bounds. */
-  observabilityTransport?: CruxObservabilityTransport
-  observabilityDelivery?: ObservabilityDeliveryOptions
+  observabilityTransport?: CruxObservabilityTransport;
+  /** Best-effort owner-scoped Project Index runtime-update delivery. */
+  projectIndexRuntimeTransport?: ProjectIndexRuntimeTransport;
+  observabilityDelivery?: ObservabilityDeliveryOptions;
   /** Central policy for whether canonical observability artifacts include payload previews. */
-  observabilityCapture?: CruxObservabilityCapturePolicy
+  observabilityCapture?: CruxObservabilityCapturePolicy;
   /** Activates the real execution context (e.g. an OTel span) around observed span/run work. */
-  spanActivationHook?: SpanActivationHook
+  spanActivationHook?: SpanActivationHook;
   /** Bounded flush of an installed telemetry manager's own exporter/processor work. */
-  telemetryFlushHook?: TelemetryFlushHook
+  telemetryFlushHook?: TelemetryFlushHook;
   /** Derives extra attributes for a resumed run/segment from its propagation carrier. */
-  telemetryResumeAttributesHook?: TelemetryResumeAttributesHook
+  telemetryResumeAttributesHook?: TelemetryResumeAttributesHook;
   /** Global record store for flow state persistence (suspend/resume). */
-  records?: RecordStore
+  records?: RecordStore;
   /** Durable Runtime Engine composer configured for runtime-bound APIs. */
-  runtimeEngine?: RuntimeEngineDefinition
+  runtimeEngine?: RuntimeEngineDefinition;
   /** Global constraints registered via createConstraintPlugin(). */
-  globalConstraints?: import('../safety/constraint/types').Constraint[]
+  globalConstraints?: import("../safety/constraint/types").Constraint[];
   /** Global guardrails registered via createGuardrailPlugin(). */
-  globalGuardrails?: import('../safety/guardrail/types').Guardrail[]
+  globalGuardrails?: import("../safety/guardrail/types").Guardrail[];
   /** True when createSemanticCache() is installed. Used for dev warnings on inert prompt hints. */
-  semanticCacheInstalled?: boolean
+  semanticCacheInstalled?: boolean;
 }
 
-const hooksLayerBrand = Symbol('CruxHooksLayerToken')
+const hooksLayerBrand = Symbol("CruxHooksLayerToken");
 
 /**
  * Opaque handle returned by {@link pushHooksLayer}.
@@ -135,18 +150,11 @@ const hooksLayerBrand = Symbol('CruxHooksLayerToken')
  * callers; keep the value returned from `pushHooksLayer()`.
  */
 export interface HooksLayerToken {
-  readonly [hooksLayerBrand]: true
-  readonly id: number
+  readonly [hooksLayerBrand]: true;
+  readonly id: number;
 }
 
-interface HooksLayer {
-  readonly keys: readonly (keyof CruxHooks)[]
-  readonly previousHooks: Readonly<CruxHooks>
-}
-
-let currentHooks: CruxHooks = {}
-let nextHooksLayerId = 1
-const hooksLayers = new Map<number, HooksLayer>()
+const runtimeRegistry = getCruxProcessRegistry().runtime;
 
 /**
  * Get the current hook state.
@@ -159,7 +167,7 @@ const hooksLayers = new Map<number, HooksLayer>()
  * ```
  */
 export function getHooks(): Readonly<CruxHooks> {
-  return Object.freeze({ ...currentHooks })
+  return Object.freeze({ ...runtimeRegistry.currentHooks });
 }
 
 /**
@@ -179,7 +187,7 @@ export function getHooks(): Readonly<CruxHooks> {
  * ```
  */
 export function setHooks(hooks: CruxHooks): void {
-  currentHooks = { ...hooks }
+  runtimeRegistry.currentHooks = { ...hooks };
 }
 
 /**
@@ -197,7 +205,7 @@ export function setHooks(hooks: CruxHooks): void {
  * ```
  */
 export function updateHooks(patch: Partial<CruxHooks>): void {
-  currentHooks = { ...currentHooks, ...patch }
+  runtimeRegistry.currentHooks = { ...runtimeRegistry.currentHooks, ...patch };
 }
 
 /**
@@ -218,14 +226,14 @@ export function updateHooks(patch: Partial<CruxHooks>): void {
  * ```
  */
 export function pushHooksLayer(patch: Partial<CruxHooks>): HooksLayerToken {
-  const id = nextHooksLayerId++
-  const keys = Object.keys(patch) as (keyof CruxHooks)[]
-  hooksLayers.set(id, {
+  const id = runtimeRegistry.nextHooksLayerId++;
+  const keys = Object.keys(patch) as (keyof CruxHooks)[];
+  runtimeRegistry.hooksLayers.set(id, {
     keys,
-    previousHooks: { ...currentHooks },
-  })
-  currentHooks = { ...currentHooks, ...patch }
-  return { id, [hooksLayerBrand]: true }
+    previousHooks: { ...runtimeRegistry.currentHooks },
+  });
+  runtimeRegistry.currentHooks = { ...runtimeRegistry.currentHooks, ...patch };
+  return { id, [hooksLayerBrand]: true };
 }
 
 /**
@@ -236,19 +244,19 @@ export function pushHooksLayer(patch: Partial<CruxHooks>): HooksLayerToken {
  * previous value for each key and leaves all other keys untouched.
  */
 export function restoreHooksLayer(token: HooksLayerToken): void {
-  const layer = hooksLayers.get(token.id)
-  if (!layer) return
+  const layer = runtimeRegistry.hooksLayers.get(token.id);
+  if (!layer) return;
 
-  hooksLayers.delete(token.id)
-  const nextHooks: CruxHooks = { ...currentHooks }
+  runtimeRegistry.hooksLayers.delete(token.id);
+  const nextHooks: CruxHooks = { ...runtimeRegistry.currentHooks };
   for (const key of layer.keys) {
     if (Object.prototype.hasOwnProperty.call(layer.previousHooks, key)) {
-      copyHookField(nextHooks, layer.previousHooks, key)
+      copyHookField(nextHooks, layer.previousHooks, key);
     } else {
-      delete nextHooks[key]
+      delete nextHooks[key];
     }
   }
-  currentHooks = nextHooks
+  runtimeRegistry.currentHooks = nextHooks;
 }
 
 /**
@@ -258,8 +266,8 @@ export function restoreHooksLayer(token: HooksLayerToken): void {
  * when tearing down devtools.
  */
 export function resetHooks(): void {
-  currentHooks = {}
-  hooksLayers.clear()
+  runtimeRegistry.currentHooks = {};
+  runtimeRegistry.hooksLayers.clear();
 }
 
 /**
@@ -277,13 +285,13 @@ export function resetHooks(): void {
  * ```
  */
 export function resolveRecords(): RecordStore {
-  const records = currentHooks.records
+  const records = runtimeRegistry.currentHooks.records;
   if (!records) {
     throw new Error(
-      'No RecordStore configured. Call config({ persistence: { records } }) before using plans, tasks, or flows.',
-    )
+      "No RecordStore configured. Call config({ persistence: { records } }) before using plans, tasks, or flows.",
+    );
   }
-  return records
+  return records;
 }
 
 function copyHookField<K extends keyof CruxHooks>(
@@ -291,5 +299,5 @@ function copyHookField<K extends keyof CruxHooks>(
   source: Readonly<CruxHooks>,
   key: K,
 ): void {
-  target[key] = source[key]
+  target[key] = source[key];
 }

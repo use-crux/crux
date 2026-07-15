@@ -43,6 +43,7 @@ import type { InternalInjectableEntry, InternalPromptInjection } from '../prompt
 import type { CruxContextInjectableKind, CruxContextInjects } from '../observability/contract'
 import { isInternalInjectableEntry } from '../prompt/internal-injection'
 import { isContributorEntry } from '../prompt/contributor'
+import { isToolSource, type ToolSource } from '../tools/tool-source'
 import {
   CONTRIBUTOR,
   type GateResult,
@@ -448,6 +449,7 @@ function lowerContributorEntry(entry: ContributorEntry<z.ZodType>, index: number
       return {
         use: reenter,
         tools: result.tools,
+        toolSources: result.toolSources,
         toolMiddleware: result.toolMiddleware,
         constraints: result.constraints,
         guardrails: result.guardrails,
@@ -499,6 +501,7 @@ export function lowerEntry(entry: ContextEntry, index: number): LoweredContribut
 function lowerEntryUncached(entry: NonNullable<Exclude<ContextEntry, false>>, index: number): LoweredContributor {
   if (isContributorEntry(entry)) return lowerContributorEntry(entry, index)
   if (isInternalInjectableEntry(entry)) return lowerInjectable(entry, index)
+  if (isToolSource(entry)) return lowerToolSource(entry, index)
   switch (entry._tag) {
     case 'Skill':
       return lowerSkill(entry as SkillEntry, index)
@@ -512,5 +515,17 @@ function lowerEntryUncached(entry: NonNullable<Exclude<ContextEntry, false>>, in
       return lowerConditional(entry as ConditionalContext<Context<z.ZodType>>, index)
     default:
       return lowerContext(entry as Context<z.ZodType>, index)
+  }
+}
+
+function lowerToolSource(source: ToolSource, index: number): LoweredContributor {
+  return {
+    [CONTRIBUTOR]: true,
+    id: source.id,
+    family: 'tool-source',
+    index,
+    mergeSourceId: `tool-source:${source.id}`,
+    toolOwnerLabel: undefined,
+    contribute: () => ({ toolSources: [source] }),
   }
 }

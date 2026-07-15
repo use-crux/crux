@@ -2,7 +2,8 @@
 
 import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { readFile, readdir } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -47,22 +48,27 @@ const localPlatformPackages = new Map([
 ])
 
 const failures = []
+const stagedPackages = new Map()
 
 await validateCommittedWorkspaceManifests(failures)
 
-const portability = spawnSync('node', ['./scripts/check-portable-entrypoints.mjs', '--stage-root', stageRoot], {
-  cwd: repoRoot,
-  encoding: 'utf8',
-  shell: process.platform === 'win32',
-})
-if (portability.status !== 0) {
-  failures.push(`staged portability validation failed\n${portability.stderr || portability.stdout}`)
-} else if (portability.stdout) {
-  process.stdout.write(portability.stdout)
+const stagedPackageNames = new Set(index.packages.map((staged) => staged.name))
+if (stagedPackageNames.has('@use-crux/core')) {
+  const portability = spawnSync('node', ['./scripts/check-portable-entrypoints.mjs', '--stage-root', stageRoot], {
+    cwd: repoRoot,
+    encoding: 'utf8',
+    shell: process.platform === 'win32',
+  })
+  if (portability.status !== 0) {
+    failures.push(`staged portability validation failed\n${portability.stderr || portability.stdout}`)
+  } else if (portability.stdout) {
+    process.stdout.write(portability.stdout)
+  }
 }
 
 for (const staged of index.packages) {
   const packageDir = join(stageRoot, staged.path)
+  stagedPackages.set(staged.name, packageDir)
   const manifest = JSON.parse(await readFile(join(packageDir, 'package.json'), 'utf8'))
   if (manifest.private) failures.push(`${staged.name}: staged package.json must not be private`)
   for (const field of ['dependencies', 'peerDependencies', 'optionalDependencies']) {
@@ -95,7 +101,8 @@ for (const staged of index.packages) {
     failures.push(`${staged.name}: npm pack --dry-run returned an unexpected JSON result`)
     continue
   }
-  const paths = result.files.map((file) => file.path)
+  const packedFiles = new Map(result.files.map((file) => [file.path, file]))
+  const paths = [...packedFiles.keys()]
   const localPlatform = localPlatformPackages.get(staged.name)
   if (localPlatform) {
     if (!matchesSingleValueArray(manifest.os, localPlatform.os)) {
@@ -105,8 +112,11 @@ for (const staged of index.packages) {
       failures.push(`${staged.name}: package.json must declare cpu ${JSON.stringify([localPlatform.cpu])}`)
     }
     for (const binary of localPlatform.binaries) {
-      if (!paths.includes(binary)) {
+      const packedBinary = packedFiles.get(binary)
+      if (!packedBinary) {
         failures.push(`${staged.name}: tarball missing required binary ${binary}`)
+      } else if (localPlatform.os !== 'win32' && (packedBinary.mode & 0o111) === 0) {
+        failures.push(`${staged.name}: tarball binary ${binary} must be executable`)
       }
     }
   }
@@ -149,6 +159,10 @@ for (const staged of index.packages) {
   console.log(`${staged.name}@${staged.version}: ${result.entryCount} files, ${result.unpackedSize} bytes unpacked`)
 }
 
+if (failures.length === 0) {
+  await validateLocalPackedInstall(stagedPackages, failures)
+}
+
 if (failures.length > 0) {
   console.error('\nStaged package validation failed:')
   for (const failure of failures) console.error(`- ${failure}`)
@@ -156,6 +170,87 @@ if (failures.length > 0) {
 }
 
 console.log(`Validated ${index.packages.length} staged package(s).`)
+
+async function validateLocalPackedInstall(stagedPackages, failures) {
+  const platformName = platformPackageName(process.platform, process.arch)
+  const wrapperDir = stagedPackages.get('@use-crux/local')
+  const platformDir = platformName ? stagedPackages.get(platformName) : undefined
+  if (!wrapperDir || !platformDir) return
+
+  const smokeRoot = await mkdtemp(join(tmpdir(), 'crux-local-packed-install-'))
+  const packDir = join(smokeRoot, 'packs')
+  const installDir = join(smokeRoot, 'install')
+
+  try {
+    await mkdir(packDir)
+    await mkdir(installDir)
+    const tarballs = []
+
+    for (const [name, packageDir] of [
+      ['@use-crux/local', wrapperDir],
+      [platformName, platformDir],
+    ]) {
+      const pack = spawnSync('npm', ['pack', '--json', '--pack-destination', packDir], {
+        cwd: packageDir,
+        encoding: 'utf8',
+        shell: process.platform === 'win32',
+        timeout: 30_000,
+      })
+      if (pack.status !== 0) {
+        failures.push(`${name}: npm pack failed during installed CLI smoke test\n${pack.stderr || pack.stdout}`)
+        return
+      }
+
+      const result = packResult(pack.stdout, name)
+      if (!result?.filename) {
+        failures.push(`${name}: npm pack returned an unexpected result during installed CLI smoke test`)
+        return
+      }
+      tarballs.push(join(packDir, result.filename))
+    }
+
+    const install = spawnSync(
+      'npm',
+      ['install', '--offline', '--ignore-scripts', '--no-audit', '--no-fund', ...tarballs],
+      {
+        cwd: installDir,
+        encoding: 'utf8',
+        shell: process.platform === 'win32',
+        timeout: 30_000,
+      },
+    )
+    if (install.status !== 0) {
+      failures.push(`@use-crux/local: packed install smoke test failed\n${install.stderr || install.stdout}`)
+      return
+    }
+
+    const shim = join(installDir, 'node_modules', '.bin', process.platform === 'win32' ? 'crux.cmd' : 'crux')
+    const help = spawnSync(shim, ['--help'], {
+      cwd: installDir,
+      encoding: 'utf8',
+      shell: process.platform === 'win32',
+      timeout: 30_000,
+    })
+    if (help.status !== 0) {
+      failures.push(`@use-crux/local: installed crux --help failed\n${help.stderr || help.stdout}`)
+      return
+    }
+
+    console.log(`@use-crux/local: installed ${platformName} tarballs and ran crux --help`)
+  } finally {
+    await rm(smokeRoot, { recursive: true, force: true })
+  }
+}
+
+function platformPackageName(platform, arch) {
+  const name = `@use-crux/local-${platform}-${arch}`
+  return localPlatformPackages.has(name) ? name : undefined
+}
+
+function packResult(output, packageName) {
+  const parsed = JSON.parse(output)
+  return Array.isArray(parsed) ? parsed[0] : parsed[packageName]
+}
 
 function exportTargets(exportsField) {
   if (!exportsField) return []

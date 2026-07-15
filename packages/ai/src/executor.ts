@@ -18,6 +18,7 @@ import type { SdkGateway } from './gateway'
 import { mapAiSdkError } from './normalized-outcome'
 import { createAiSdkCodec } from './sdk-codec'
 import type { SdkLoopResultLike, SdkStreamResultLike } from './sdk-codec'
+import { materializeAiSdkToolSource } from './mcp-materializer'
 
 export type { SdkLoopResultLike, SdkStreamResultLike } from './sdk-codec'
 
@@ -40,6 +41,8 @@ export function createAiSdkLoopRuntime(gateway: SdkGateway): AiSdkLoopRuntime {
 
   return {
     id: codec.executorId,
+
+    materializeToolSource: materializeAiSdkToolSource,
 
     describeModel: codec.describeModel,
 

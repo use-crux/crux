@@ -16,6 +16,7 @@ export {
   type NativeDirectDependencyFactSpec,
   type NativeDirectDependencySpec,
   type NativeDirectIdentifierDependencySpec,
+  type NativeDirectMcpExpectedToolsDependencySpec,
   type NativeDirectObjectDependencySpec,
   type NativeDirectPrimitiveSpec,
   type NativeDirectRelationOriginSpec,

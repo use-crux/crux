@@ -3,11 +3,12 @@ title: Writing an Indexer Extension
 description: Build an experimental Crux Indexer extension that contributes Project Index definitions and relation specs.
 ---
 
-import { Callout } from 'fumadocs-ui/components/callout'
+import { Callout } from "fumadocs-ui/components/callout";
 
 <Callout type="warn">
-  Indexer extension authoring is experimental. Extractors and relation specs can be loaded from allowlisted packages.
-  Executable third-party lint rules, custom parsers, custom resolvers, custom emitters, public queries, and sandboxed
+  Indexer extension authoring is experimental. Extractors and relation specs can
+  be loaded from allowlisted packages. Executable third-party lint rules, custom
+  parsers, custom resolvers, custom emitters, public queries, and sandboxed
   execution are not public yet.
 </Callout>
 
@@ -21,34 +22,46 @@ An extension is an ESM package that exports an `IndexerExtension` manifest:
 
 ```ts
 // packages/acme-crux-indexer/src/index.ts
-import { facts, type IndexerExtension } from '@use-crux/indexer/extensions'
+import { facts, type IndexerExtension } from "@use-crux/indexer/extensions";
 
 export default {
-  name: '@acme/crux-indexer',
-  version: '1',
+  name: "@acme/crux-indexer",
+  version: "1",
   crux: {
-    indexer: '^0.1.0',
+    indexer: "^0.5.0 || ^1.0.0",
     projectIndexSchema: 1,
   },
   extractors: [
     {
-      name: '@acme/workflow.defineTool',
-      patterns: [{ kind: 'call', name: 'defineWorkflowTool', importFrom: ['@acme/workflow'] }],
+      name: "@acme/workflow.defineTool",
+      patterns: [
+        {
+          kind: "call",
+          name: "defineWorkflowTool",
+          importFrom: ["@acme/workflow"],
+        },
+      ],
       extract(ctx) {
-        const name = ctx.config?.string('id') ?? ctx.args.string(0) ?? ctx.source.localName
-        const id = `tool:${ctx.source.safeId(name)}`
-        const input = ctx.sourceRef.schemaProperty({ definitionId: id, property: 'input' })
+        const name =
+          ctx.config?.string("id") ??
+          ctx.args.string(0) ??
+          ctx.source.localName;
+        const id = `tool:${ctx.source.safeId(name)}`;
+        const input = ctx.sourceRef.schemaProperty({
+          definitionId: id,
+          property: "input",
+        });
 
         return facts({
           definitions: [
             ctx.define.definition({
               variableName: ctx.source.variableName,
               id,
-              kind: 'tool',
+              kind: "tool",
               name,
               metadata: {
-                description: ctx.config?.string('description'),
-                inputSchema: ctx.config?.schema('input') ?? input.schema,
+                description: ctx.config?.string("description"),
+                inputSchema: ctx.config?.schema("input") ?? input.schema,
               },
             }),
           ],
@@ -57,16 +70,16 @@ export default {
             ...[
               ctx.sourceRef.callbackProperty({
                 definitionId: id,
-                property: 'execute',
-                role: 'handler',
+                property: "execute",
+                role: "handler",
               }),
             ].filter(Boolean),
           ],
-        })
+        });
       },
     },
   ],
-} satisfies IndexerExtension
+} satisfies IndexerExtension;
 ```
 
 Extractor functions are pure. They receive a read-only source match and return data. They should not mutate compiler state, write files, cache their own results, or reach into TypeScript AST internals.
@@ -84,7 +97,7 @@ Use an ordinary ESM package. The package name is what projects allowlist.
     ".": "./dist/index.js"
   },
   "peerDependencies": {
-    "@use-crux/indexer": "^0.1.0"
+    "@use-crux/indexer": "^0.5.0 || ^1.0.0"
   }
 }
 ```
@@ -97,17 +110,17 @@ Projects must opt in explicitly:
 
 ```ts
 // crux.config.ts
-import { config } from '@use-crux/core'
+import { config } from "@use-crux/core";
 
 export default config({
   indexer: {
-    extensions: [{ package: '@acme/crux-indexer', version: '^1.0.0' }],
+    extensions: [{ package: "@acme/crux-indexer", version: "^1.0.0" }],
     trust: {
-      mode: 'allowlisted',
-      allow: ['@acme/crux-indexer'],
+      mode: "allowlisted",
+      allow: ["@acme/crux-indexer"],
     },
   },
-})
+});
 ```
 
 Loading an extension imports code from `node_modules`. Treat allowlisted extensions like build tooling: only allow packages you trust. `unsafe-local-dev` is for local experiments only.
@@ -117,7 +130,9 @@ Loading an extension imports code from `node_modules`. Treat allowlisted extensi
 Use `importFrom` unless your wrapper is intentionally global:
 
 ```ts
-patterns: [{ kind: 'call', name: 'defineWorkflowTool', importFrom: ['@acme/workflow'] }]
+patterns: [
+  { kind: "call", name: "defineWorkflowTool", importFrom: ["@acme/workflow"] },
+];
 ```
 
 `importFrom` matches the authored import specifier after the import has been resolved. Package subpaths are exact, not wildcards. If users can import from both `@acme/workflow` and `@acme/workflow/tools`, list both.
@@ -136,9 +151,13 @@ Return `facts(...)` when the call was understood:
 
 ```ts
 return facts({
-  definitions: [ctx.define.definition({ variableName, id, kind: 'tool', name })],
-  references: [ctx.ref.variable('@acme/crux-indexer/workflow.uses_tool', 'searchTool')],
-})
+  definitions: [
+    ctx.define.definition({ variableName, id, kind: "tool", name }),
+  ],
+  references: [
+    ctx.ref.variable("@acme/crux-indexer/workflow.uses_tool", "searchTool"),
+  ],
+});
 ```
 
 Return `{ kind: 'none' }` when a match is not actually an authored definition. Return a degraded result with diagnostics when the extension found a real definition but could not extract enough information for full fidelity.
@@ -148,22 +167,22 @@ Return `{ kind: 'none' }` when a match is not actually an authored definition. R
 Relation specs give namespaced relation types a stable meaning:
 
 ```ts
-import type { IndexerExtension } from '@use-crux/indexer/extensions'
+import type { IndexerExtension } from "@use-crux/indexer/extensions";
 
 export default {
-  name: '@acme/crux-indexer',
-  version: '1',
-  crux: { indexer: '^0.1.0', projectIndexSchema: 1 },
+  name: "@acme/crux-indexer",
+  version: "1",
+  crux: { indexer: "^0.5.0 || ^1.0.0", projectIndexSchema: 1 },
   relations: [
     {
-      type: '@acme/crux-indexer/workflow.uses_tool',
-      fromKinds: ['tool'],
-      toKinds: ['tool'],
-      presentation: 'both',
+      type: "@acme/crux-indexer/workflow.uses_tool",
+      fromKinds: ["tool"],
+      toKinds: ["tool"],
+      presentation: "both",
       runtimeJoin: false,
     },
   ],
-} satisfies IndexerExtension
+} satisfies IndexerExtension;
 ```
 
 Third-party relation types should be package-namespaced. Built-in Crux relation names are reserved for first-party extractors.
@@ -182,17 +201,17 @@ pattern matching, readers, builders, relation projection, diagnostics, and cache
 constructing parser-native contexts.
 
 ```ts
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from "vitest";
 import {
   assertDeterministicExtraction,
   defineIndexerExtensionFixture,
   extractFixtureSource,
-} from '@use-crux/indexer/testing'
-import extension from '../src/index'
+} from "@use-crux/indexer/testing";
+import extension from "../src/index";
 
-describe('@acme/crux-indexer', () => {
-  it('extracts workflow tools from authored source', async () => {
-    const fixture = defineIndexerExtensionFixture(extension)
+describe("@acme/crux-indexer", () => {
+  it("extracts workflow tools from authored source", async () => {
+    const fixture = defineIndexerExtensionFixture(extension);
 
     const out = await extractFixtureSource(
       fixture,
@@ -205,19 +224,23 @@ describe('@acme/crux-indexer', () => {
           execute: async () => [],
         })
       `,
-    )
+    );
 
     expect(out.definitions).toContainEqual(
       expect.objectContaining({
-        id: 'tool:search-docs',
-        kind: 'tool',
-        name: 'search-docs',
+        id: "tool:search-docs",
+        kind: "tool",
+        name: "search-docs",
       }),
-    )
-    await expect(assertDeterministicExtraction(fixture, `export const t = defineWorkflowTool({ id: 't' })`))
-      .resolves.toBeUndefined()
-  })
-})
+    );
+    await expect(
+      assertDeterministicExtraction(
+        fixture,
+        `export const t = defineWorkflowTool({ id: 't' })`,
+      ),
+    ).resolves.toBeUndefined();
+  });
+});
 ```
 
 ## Test Loading With A Fixture Package

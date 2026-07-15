@@ -55,6 +55,16 @@ export interface QueuedRecord {
 }
 
 export interface DeliveryState extends DeliveryRetryState {
+  /**
+   * Strongly retains module-local synchronization state while this engine is
+   * reachable. The process registry retains the same listener only weakly,
+   * so detached idle HMR copies remain collectible; timers and promises that
+   * keep this state active also keep its listener alive.
+   *
+   * A full engine reset must preserve this anchor because it reuses the same
+   * module-local engine and state object.
+   */
+  lifetimeAnchor: object | undefined
   transport: CruxObservabilityTransport | undefined
   options: NormalizedObservabilityDeliveryOptions
   /**
@@ -120,6 +130,7 @@ export interface DeliveryState extends DeliveryRetryState {
 
 export function initialDeliveryState(): DeliveryState {
   return {
+    lifetimeAnchor: undefined,
     transport: undefined,
     options: defaultDeliveryOptions(),
     sourceId: undefined,

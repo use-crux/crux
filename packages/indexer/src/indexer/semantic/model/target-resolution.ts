@@ -307,6 +307,12 @@ function semanticDefinitionTargetForCall(
         semanticStringLiteralProperty(object, "id", view.syntax) ??
           variableName,
       );
+    case "mcp":
+      return target(
+        "mcp.server",
+        semanticStringLiteralProperty(object, "id", view.syntax) ??
+          variableName,
+      );
     case "injectable":
       return target(
         "injectable",

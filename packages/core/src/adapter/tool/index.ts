@@ -33,11 +33,7 @@ export type {
   ToolProtocolEvent,
 } from './session'
 export type { ApprovalRequestInfo } from './approval'
-export {
-  approvalPolicyKind,
-  inspectToolApprovalPolicies,
-  resolveApprovalPolicy,
-} from '../../tools/approval-policy'
+export { approvalPolicyKind, inspectToolApprovalPolicies, resolveApprovalPolicy } from '../../tools/approval-policy'
 export type {
   ApprovalDeclaration,
   ResolvedApprovalPolicy,
@@ -76,6 +72,8 @@ export {
 } from '../../tools/approvals'
 export type {
   ToolApprovalDecision,
+  ToolApprovalPolicyIdentity,
+  ToolApprovalReplayProvenance,
   ToolApprovalRequest,
   ToolApprovalRequestPart,
   ToolApprovalRequestPayload,

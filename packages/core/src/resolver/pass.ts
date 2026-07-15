@@ -305,6 +305,7 @@ export async function runPromptPass(
 
   const merged = toolMerge.tools;
   if (Object.keys(merged).length > 0) resolved.tools = merged;
+  if (postMerge.toolSources.length > 0) resolved.toolSources = postMerge.toolSources;
   if (toolApprovalDeclarations.length > 0) resolved.toolApprovalDeclarations = toolApprovalDeclarations;
   const toolMiddleware = mergeToolMiddleware(
     postMerge.injectedToolMiddleware,

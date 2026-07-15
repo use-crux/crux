@@ -14,6 +14,7 @@ import type { z } from 'zod'
 import type { ConditionalContext, Context, ContextEntry, MatchSpec } from '../prompt/context-types'
 import { isContributorEntry } from '../prompt/contributor'
 import { isInternalInjectableEntry } from '../prompt/internal-injection'
+import { isToolSource } from '../tools/tool-source'
 import type { SchemaContribution } from './contract'
 
 const SCHEMA_CONTRIBUTION_SOURCE: unique symbol = Symbol('crux.schemaContributionSource')
@@ -84,6 +85,11 @@ export function collectSchemaContributions(
       if (entry.inputSchema) {
         out.push(schemaContribution({ id: entry.id, schema: entry.inputSchema, optional: optionalPath }, entry))
       }
+      continue
+    }
+
+    if (isToolSource(entry)) {
+      out.push({ id: undefined, schema: undefined, optional: optionalPath })
       continue
     }
 

@@ -54,7 +54,8 @@ import {
   withSkillActivationInput,
 } from "./shared";
 import { generateSdkStructured } from "./generate-sdk-structured";
-import { emitInputTokenEstimate } from './media-token-budget'
+import { emitInputTokenEstimate } from "./media-token-budget";
+import { materializeToolSources } from "./tool-sources";
 
 /** Regeneration is deliberately unavailable after tool-approval suspension. */
 const unreachableRegenerate = (): Promise<never> => {
@@ -86,34 +87,10 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
     tokenBudget: args.tokenBudget,
     settings: args.settings,
   });
-  const resolved = await prompt.resolve(resolveOpts);
+  let resolved = await prompt.resolve(resolveOpts);
   const mappedSettings = dialect.mapSettings(resolved.settings, modelInfo);
-  const lifecycle = createToolLifecycle({
-    regime: "sdk",
-    resolved,
-    call: {
-      tools: args.tools,
-      toolsContext: args.toolsContext,
-      runtimeContext: args.runtimeContext,
-      toolMiddleware: args.toolMiddleware,
-      toolApproval: args.toolApproval,
-    },
-    promptId: prompt.id,
-    input: args.input ?? {},
-    timeout: args.timeout,
-    reresolve: (skillSession) =>
-      prompt.resolve(withSkillActivationInput(resolveOpts, skillSession)),
-  });
-
   let { messages, promptText } = initialMessageState(resolved, args.messages);
   let nativeMessages = args.nativeMessages;
-  const resumed = await lifecycle.resume(messages);
-  messages = resumed.messages;
-  if (resumed.replayed > 0) nativeMessages = undefined;
-  let currentSystem = resolved.system;
-  let currentSystemBlocks = resolved.systemBlocks;
-  const maxSteps =
-    args.maxSteps ?? resolved.settings.maxSteps ?? DEFAULT_MAX_STEPS;
   const retryId = args.validationRetry
     ? `vr_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
     : "";
@@ -134,6 +111,51 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
     traceId: retryId || undefined,
     systemPrompt: resolved.system,
   });
+  const guardedInput = await safety.guardInput({
+    messages,
+    prompt: promptText,
+  });
+  if (guardedInput.messages !== messages) nativeMessages = undefined;
+  messages = [...guardedInput.messages];
+  promptText = guardedInput.prompt;
+
+  const sourceSession = await materializeToolSources({
+    dialect: dialect.id,
+    resolved,
+    materialize: dialect.materializeToolSource,
+    runtimeContext: args.runtimeContext,
+    abortSignal: args.signal,
+  });
+  resolved = sourceSession.resolved;
+  let lifecycle: ReturnType<typeof createToolLifecycle>;
+  try {
+    lifecycle = createToolLifecycle({
+      regime: "sdk",
+      resolved,
+      call: {
+        tools: args.tools,
+        toolsContext: args.toolsContext,
+        runtimeContext: args.runtimeContext,
+        toolMiddleware: args.toolMiddleware,
+        toolApproval: args.toolApproval,
+      },
+      promptId: prompt.id,
+      input: args.input ?? {},
+      timeout: args.timeout,
+      reresolve: (skillSession) =>
+        prompt.resolve(withSkillActivationInput(resolveOpts, skillSession)),
+    });
+    const resumed = await lifecycle.resume(messages);
+    messages = resumed.messages;
+    if (resumed.replayed > 0) nativeMessages = undefined;
+  } catch (error) {
+    await sourceSession.close();
+    throw error;
+  }
+  let currentSystem = resolved.system;
+  let currentSystemBlocks = resolved.systemBlocks;
+  const maxSteps =
+    args.maxSteps ?? resolved.settings.maxSteps ?? DEFAULT_MAX_STEPS;
 
   let stepBudget: BudgetSignal = createBudgetSignal(undefined);
   const stepFacts: ResultStepFacts[] = [];
@@ -174,7 +196,11 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
         : undefined;
     assertProviderMediaSupported(
       { providerId: dialect.id, media: dialect.media },
-      { provider: modelInfo.provider, model: modelInfo.modelId, messages: providerMessages ?? [] },
+      {
+        provider: modelInfo.provider,
+        model: modelInfo.modelId,
+        messages: providerMessages ?? [],
+      },
     );
     emitInputTokenEstimate({
       messages: providerMessages ?? [],
@@ -182,7 +208,7 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
       model: modelInfo.modelId,
       media: dialect.media,
       tokenBudget: args.tokenBudget,
-    })
+    });
     return {
       model: args.model,
       modelInfo,
@@ -206,75 +232,76 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
     };
   };
 
-  const generated = await orchestrateGenerate<
-    Record<string, unknown>,
-    AdapterExecutionGenerateResult<TRawResponse>
-  >(
-    {
-      promptId: prompt.id,
-      promptConfig: prompt.config ?? ({} as NonNullable<typeof prompt.config>),
-      preparedArgs: {
-        model: modelInfo.modelId,
-        system: currentSystem,
-        systemBlocks: currentSystemBlocks,
-        prompt: promptText,
-        messages,
-        settings: mappedSettings,
-        schema: resolved.schema,
-        tools: lifecycle.tools,
-        input: args.input ?? {},
-        ...(await inspectForDevtools(prompt, resolveOpts, lifecycle.tools)),
-      },
-      model: args.model,
-      input: args.input ?? {},
-      provider: modelInfo.provider || dialect.id,
-      resolved,
-      outputMode: resolved.schema ? "object" : "text",
-      timeout: args.timeout,
-    },
-    async () => {
-      try {
-        const guardedInput = await safety.guardInput({
-          messages,
-          prompt: promptText,
-        });
-        if (guardedInput.messages !== messages) nativeMessages = undefined;
-        messages = [...guardedInput.messages];
-        promptText = guardedInput.prompt;
-        const result = resolved.schema
-          ? await generateSdkStructured({
-              dialect,
-              args,
-              request: await buildRequest(undefined),
-              schema: resolved.schema,
-              safety,
-              retryId,
-              promptId: prompt.id,
-              describeCall,
-              stepFacts,
-            })
-          : await (async () => {
-              stepBudget = createBudgetSignal({
-                budget: "step",
-                limitMs: args.timeout?.stepMs,
-              });
-              return generateLoop(await buildRequest(stepBudget.signal));
-            })();
-        result._meta = safety.stamp(result._meta);
-        return result;
-      } finally {
-        stepBudget.dispose();
-      }
-    },
-  );
+  try {
+    const generated = await sourceSession.withContext(async () =>
+      orchestrateGenerate<
+        Record<string, unknown>,
+        AdapterExecutionGenerateResult<TRawResponse>
+      >(
+        {
+          promptId: prompt.id,
+          promptConfig:
+            prompt.config ?? ({} as NonNullable<typeof prompt.config>),
+          preparedArgs: {
+            model: modelInfo.modelId,
+            system: currentSystem,
+            systemBlocks: currentSystemBlocks,
+            prompt: promptText,
+            messages,
+            settings: mappedSettings,
+            schema: resolved.schema,
+            tools: lifecycle.tools,
+            input: args.input ?? {},
+            ...(await inspectForDevtools(prompt, resolveOpts, lifecycle.tools)),
+          },
+          model: args.model,
+          traceModel: modelInfo.modelId || undefined,
+          input: args.input ?? {},
+          provider: modelInfo.provider || dialect.id,
+          resolved,
+          outputMode: resolved.schema ? "object" : "text",
+          timeout: args.timeout,
+        },
+        async () => {
+          try {
+            const result = resolved.schema
+              ? await generateSdkStructured({
+                  dialect,
+                  args,
+                  request: await buildRequest(undefined),
+                  schema: resolved.schema,
+                  safety,
+                  retryId,
+                  promptId: prompt.id,
+                  describeCall,
+                  stepFacts,
+                })
+              : await (async () => {
+                  stepBudget = createBudgetSignal({
+                    budget: "step",
+                    limitMs: args.timeout?.stepMs,
+                  });
+                  return generateLoop(await buildRequest(stepBudget.signal));
+                })();
+            result._meta = safety.stamp(result._meta);
+            return result;
+          } finally {
+            stepBudget.dispose();
+          }
+        },
+      ),
+    );
 
-  await lifecycle.captureTurn({
-    messages: generated.messages,
-    assistantText: generated.text,
-    toolCalls: generated._meta.toolCalls,
-  });
+    await lifecycle.captureTurn({
+      messages: generated.messages,
+      assistantText: generated.text,
+      toolCalls: generated._meta.toolCalls,
+    });
 
-  return generated;
+    return generated;
+  } finally {
+    await sourceSession.close();
+  }
 
   /** Describe a concrete SDK call for interception, middleware, and devtools. */
   function describeCall(

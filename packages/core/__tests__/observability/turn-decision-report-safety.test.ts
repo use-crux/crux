@@ -72,11 +72,56 @@ describe('Safety decisions in TurnDecisionReport', () => {
       tab: { tab: 'Security', anchorId: 'approve-delete' },
     })
   })
+
+  it('links tool-policy evidence to security reports and the owning boundary span', () => {
+    const reported = safetyDecision({
+      policyId: 'report-read',
+      kind: 'toolPolicy',
+      boundary: 'tool.call',
+      action: 'warn',
+      mode: 'report',
+      severity: 'warn',
+    })
+    const approval = safetyDecision({
+      policyId: 'approve-write',
+      kind: 'toolPolicy',
+      boundary: 'approval.request',
+      action: 'request_approval',
+    })
+
+    expect(
+      safetyDecisionToTurnDecision(reported, {
+        artifactId: 'artifact_report',
+        spanId: 'span_call',
+      }),
+    ).toMatchObject({
+      reason: { code: 'security.warned' },
+      evidence: [
+        {
+          kind: 'artifact',
+          artifactKind: 'security.report',
+          spanId: 'span_call',
+        },
+        { kind: 'span', primitive: 'tool.call', spanId: 'span_call' },
+      ],
+    })
+    expect(
+      safetyDecisionToTurnDecision(approval, {
+        artifactId: 'artifact_approval',
+        spanId: 'span_approval',
+      }),
+    ).toMatchObject({
+      reason: { code: 'tool.eligible.request' },
+      evidence: [
+        { kind: 'artifact', artifactKind: 'security.report' },
+        { kind: 'span', primitive: 'tool.approval' },
+      ],
+    })
+  })
 })
 
 function safetyDecision(
-  overrides: Partial<SafetyDecision> &
-    Pick<SafetyDecision, 'policyId' | 'kind' | 'boundary' | 'action'>,
+  overrides: Partial<SafetyDecision> & Pick<SafetyDecision, 'policyId' | 'kind' | 'boundary' | 'action'>,
 ): SafetyDecision {
   return {
     mode: 'enforce',

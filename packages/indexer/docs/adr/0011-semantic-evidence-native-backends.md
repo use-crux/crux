@@ -99,7 +99,7 @@ They should consume Crux facts/read models, not raw compiler AST or checker APIs
 - `SemanticAnalyzeResult` is a `SemanticEvidenceBatchSource`, not a compiler object graph.
 - Semantic fact caching stores projected Project Index facts, but cache misses stream evidence from
   the selected backend before projection. Native AST traversal and text-only semantic preflight are
-  hard-invalidated by the current `semantic-facts-v28` cache epoch.
+  hard-invalidated by the current `semantic-facts-v29` cache epoch.
 - Semantic preflight produces one source profile for a request. Cache identity, native projector
   guards, and backend setup consume that profile instead of independently rereading selected sources.
   It follows local static imports from source text and path-alias config without constructing

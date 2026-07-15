@@ -9,6 +9,7 @@ import {
 describe("Project Index schemas", () => {
   it("accepts definition kinds exposed by the public union", () => {
     expect(ProjectDefinitionKindSchema.parse("injectable")).toBe("injectable");
+    expect(ProjectDefinitionKindSchema.parse("mcp.server")).toBe("mcp.server");
     expect(ProjectDefinitionKindSchema.parse("evaluation")).toBe("evaluation");
     expect(ProjectDefinitionKindSchema.parse("deferred-work")).toBe(
       "deferred-work",

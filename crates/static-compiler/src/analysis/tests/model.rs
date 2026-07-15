@@ -178,6 +178,10 @@ fn analyze_relation_refs_are_finalize_compatible() {
         agent_group["relationRefs"][0].get("source"),
         agent_group["definitions"][0].get("source")
     );
+    assert_eq!(
+        agent_group["relationRefs"][0]["extractors"],
+        json!([{ "name": "agent" }])
+    );
 
     let policies = relation_policy_table_from_value(Some(&json!({
         "relations": [{
@@ -198,6 +202,26 @@ fn analyze_relation_refs_are_finalize_compatible() {
             .definitions
             .iter()
             .any(|definition| definition.id == "agent:support-agent")
+    );
+    let relation = output
+        .model
+        .facts
+        .relations
+        .iter()
+        .find(|relation| relation.r#type == "agent.uses_prompt")
+        .expect("agent prompt relation");
+    assert_eq!(
+        output
+            .model
+            .facts
+            .fact_extractors
+            .get(&format!("relations:{}", relation.id)),
+        Some(&vec![
+            crate::core::facts::StaticIndexFactExtractorProvenance {
+                name: "agent".to_string(),
+                extension: None,
+            }
+        ])
     );
 }
 

@@ -24,6 +24,7 @@ export async function checkPortableEntrypoints(context) {
       })
       inspectNodeEdges(context, result, observedFallbacks)
       rejectEmittedStaticNodeImports(result, publicSpecifier(packageName, key))
+      await rejectUnresolvedWorkspaceImports(context, result, publicSpecifier(packageName, key))
       rejectNodeOnlyReachability(context, result, nodeOnlyTargets, packageName, key)
       checked += 1
     }
@@ -90,6 +91,26 @@ function rejectEmittedStaticNodeImports(result, specifier) {
   }
 }
 
+function rejectUnresolvedRuntimeImports(result, specifier) {
+  const unresolvedRuntimeImport = /\bimport\s*\(\s*(?!["'])/
+  for (const output of result.outputFiles) {
+    if (unresolvedRuntimeImport.test(output.text)) {
+      throw new Error(`${specifier} emitted a non-literal runtime import.`)
+    }
+  }
+}
+
+async function rejectUnresolvedWorkspaceImports(context, result, specifier) {
+  const unresolvedRuntimeImport = /\bimport\s*\(\s*(?!["'])/
+  for (const input of Object.keys(result.metafile.inputs)) {
+    if (!context.ownerForInput(input)) continue
+    const source = await readFile(resolve(context.repoRoot, input), 'utf8')
+    if (unresolvedRuntimeImport.test(source)) {
+      throw new Error(`${specifier} reaches a workspace-owned non-literal runtime import in ${input}.`)
+    }
+  }
+}
+
 function rejectNodeOnlyReachability(context, result, nodeOnlyTargets, packageName, key) {
   const inputs = new Set(Object.keys(result.metafile.inputs).map((input) => resolve(context.repoRoot, input)))
   for (const [nodeSpecifier, target] of nodeOnlyTargets) {
@@ -113,6 +134,7 @@ async function runGuardedFallbackSmokes(context) {
     })
     const observed = new Set()
     inspectNodeEdges(context, result, observed)
+    await rejectUnresolvedWorkspaceImports(context, result, name)
     for (const fallback of context.matrix.guardedNodeFallbacks.filter(
       (candidate) => candidate.smoke === name && context.packages.has(candidate.owner),
     )) {
@@ -154,6 +176,7 @@ async function runNegativeFixtures(context) {
       'unregistered-guarded-dynamic-node.mjs',
       /Unregistered Node edge .*node:path \(dynamic-import\)/,
     ],
+    ['unresolved runtime import', 'unresolved-runtime-import.mjs', /emitted a non-literal runtime import/],
     ['Node-only re-export', 'node-only-reexport.ts', /reaches Node-only @use-crux\/core\/runtime\/testing/],
   ]) {
     const path = resolve(context.repoRoot, 'scripts/fixtures/portability', fixture)
@@ -161,6 +184,9 @@ async function runNegativeFixtures(context) {
     try {
       const result = await bundleEntry(context, path, 'portable-web')
       inspectNodeEdges(context, result, new Set())
+      if (name === 'unresolved runtime import') {
+        rejectUnresolvedRuntimeImports(result, `negative fixture ${name}`)
+      }
       rejectNodeOnlyReachability(context, result, nodeOnlyEntrypoints(context), 'fixture', '.')
     } catch (error) {
       rejection = error
@@ -249,6 +275,7 @@ function workspaceResolver(context, externals, runtime) {
       })
       buildApi.onResolve({ filter: /^[^./]/ }, async (args) => {
         if (args.pluginData?.cruxStagedDependency) return undefined
+        if (args.path.startsWith('#')) return undefined
         if (isNodeBuiltin(args.path)) return undefined
         const installed = context.resolveInstalledDependency(args.path, args.importer)
         if (installed?.error) return { errors: [{ text: installed.error }] }

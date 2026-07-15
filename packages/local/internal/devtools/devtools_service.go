@@ -143,9 +143,8 @@ func (s *Service) SubscribeChanges() <-chan struct{} {
 	return s.store.Subscribe()
 }
 
-func (s *Service) RegisterIndexSnapshot(_ context.Context, index store.IndexData) {
-	s.store.SetIndexData(projectindex.MergeRuntimeSnapshot(s.store.GetIndex(), index))
-	s.publishIndex(s.indexReadModel())
+func (s *Service) RegisterIndexSnapshot(ctx context.Context, index store.IndexData) {
+	s.indexService.RegisterRuntimeSnapshot(ctx, index)
 }
 
 func (s *Service) ProjectIndex(_ context.Context) (api.IndexData, error) {
@@ -164,6 +163,15 @@ func (s *Service) ProjectIndexWatchStatus(_ context.Context) (api.ProjectIndexWa
 
 func (s *Service) ApplyIndexPatch(ctx context.Context, patch projectindex.IndexPatch) store.IndexData {
 	return s.indexService.ApplyIndexPatch(ctx, patch)
+}
+
+// ApplyProjectIndexRuntimeUpdate atomically applies one owner-scoped runtime
+// contribution through the Project Index service and durable cache boundary.
+func (s *Service) ApplyProjectIndexRuntimeUpdate(
+	ctx context.Context,
+	update projectindex.ProjectIndexRuntimeUpdate,
+) (store.IndexData, error) {
+	return s.indexService.ApplyRuntimeUpdate(ctx, update)
 }
 
 func (s *Service) indexReadModel() store.IndexData {

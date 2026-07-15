@@ -4,7 +4,9 @@
 //! primitive, in dispatch precedence order. Projection logic, the entry type,
 //! and the digest live in the parent `manifest` module; this file is the table.
 
-use super::{FirstPartyPrimitive, LocalReferenceForm, Projector, first_party, media_party};
+use super::{
+    FirstPartyPrimitive, LocalReferenceForm, Projector, first_party, mcp_party, media_party,
+};
 use crate::{
     agent::facts::agent_facts,
     blackboard::facts::blackboard_facts,
@@ -14,6 +16,7 @@ use crate::{
     eval::facts::eval_facts,
     flow::facts::flow_facts,
     injection::injectable::injectable_facts,
+    mcp::facts::mcp_server_facts,
     media::{facts::media_operation_facts, ingest::ingest_source_facts},
     memory::facts::memory_facts,
     prompt::facts::prompt_facts,
@@ -47,6 +50,13 @@ const LOCAL_REFERENCE_FORMS: &[LocalReferenceForm] = &[
 /// a source match wins. Names are otherwise disjoint, but the order is the
 /// historical projection order and is preserved deliberately.
 pub(crate) const FIRST_PARTY_PRIMITIVE_MANIFEST: &[FirstPartyPrimitive] = &[
+    mcp_party(
+        "mcp.server",
+        &["mcp"],
+        &["mcp.server", "tool"],
+        &["mcp.server:", "tool:"],
+        Projector::CallParts(mcp_server_facts),
+    ),
     media_party(
         "media.operation",
         &[

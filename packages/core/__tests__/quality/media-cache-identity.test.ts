@@ -19,7 +19,7 @@ function mediaCall(byte: number): InterceptedGeneration {
 
 describe('Quality media cache identity', () => {
   it('bumps stale epochs and fingerprints bytes without retaining them', () => {
-    expect(CASSETTE_CACHE_EPOCH).toBe(2)
+    expect(CASSETTE_CACHE_EPOCH).toBe(3)
     expect(OUTPUT_CACHE_EPOCH).toBe(2)
     expect(normalizedCallKey(mediaCall(1))).not.toBe(normalizedCallKey(mediaCall(2)))
     const normalized = JSON.stringify(buildNormalizedCall(mediaCall(123)))

@@ -248,6 +248,15 @@ pub(crate) fn routing_runtime_join(
             );
             runtime_join.insert("toolName".to_string(), Value::String(tool_name));
         }
+        "mcp.server" => {
+            let server_id = name.to_string();
+            span_attributes.insert("serverId".to_string(), Value::String(server_id.clone()));
+            runtime_join.insert(
+                "primitive".to_string(),
+                Value::String("mcp.connect".to_string()),
+            );
+            runtime_join.insert("serverId".to_string(), Value::String(server_id));
+        }
         "context" => {
             let context_id = strip_definition_prefix(id, "context:").to_string();
             span_attributes.insert("contextId".to_string(), Value::String(context_id.clone()));

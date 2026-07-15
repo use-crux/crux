@@ -117,13 +117,21 @@ pub(crate) fn resolve_static_index_relation_model(
             unresolved.push(unresolved_ref(reason, fact));
             continue;
         };
-        relations.push(project_relation(
+        let relation = project_relation(
             relation_type,
             &from_id,
             &to_id,
             relation_fidelity(from, target, relation_ref.to_id.is_some()),
             relation_ref.source.clone(),
-        ));
+        );
+        if !relation_ref.extractors.is_empty() {
+            facts
+                .fact_extractors
+                .entry(format!("relations:{}", relation.id))
+                .or_default()
+                .extend(relation_ref.extractors.clone());
+        }
+        relations.push(relation);
         if let Some(target) = resolved_use_entry_target(
             relation_ref,
             relation_type,

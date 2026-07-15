@@ -9,6 +9,7 @@ import (
 
 	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/model"
+	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
 func TestCatalogListIncludesEveryKindInStableOrder(t *testing.T) {
@@ -147,6 +148,61 @@ func TestCatalogEvidenceProjectsDurableFactsWithoutAbsolutePaths(t *testing.T) {
 	}
 	if got[0].Reason != "definition fact from source export writer via prompt, @acme/indexer@1.2.3/custom" {
 		t.Fatalf("reason = %q", got[0].Reason)
+	}
+}
+
+func TestCatalogEvidenceProjectsExtractorAttributedRelatedFacts(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "src", "writer.ts")
+	extractors := []model.IndexFactExtractorProvenance{{
+		Name: "writer.extractor",
+		Extension: &model.IndexFactProducer{
+			Name: "@scope/writer-extension", Version: "1.2.3",
+		},
+	}}
+	producer := model.IndexFactProducer{Name: "@use-crux/indexer/static-compiler", Version: "0.5.0"}
+	fact := func(factID, kind string, value any) model.IndexFactEnvelope {
+		payload, err := json.Marshal(value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return model.IndexFactEnvelope{
+			FactID: factID, Kind: kind, Phase: model.PhaseAST, Producer: producer,
+			Fidelity: "resolved", Provenance: model.IndexFactProvenance{
+				Kind: "source", File: source, Extractors: extractors,
+			},
+			Fact: payload,
+		}
+	}
+
+	facts := []model.IndexFactEnvelope{
+		fact("relations:writer-brand", "relations", api.ProjectRelation{
+			ID: "writer-brand", Type: "prompt.uses_context", From: "prompt:writer", To: "context:brand",
+			Fidelity: "resolved", Source: &api.SourceLoc{File: source, Line: 8},
+		}),
+		fact("sourceRefs:writer-schema", "sourceRefs", model.IndexSourceRefFact{
+			DefinitionID: "prompt:writer",
+			Ref:          store.ProjectSourceRef{ID: "writer-schema", Role: "schema", Fidelity: "resolved", Source: store.SourceLoc{File: source, Line: 9}},
+		}),
+		fact("diagnostics:writer", "diagnostics", api.IndexDiagnostic{
+			ID: "writer", Severity: "warning", Code: "extension.writer_partial", Message: "partial",
+			Source: &api.SourceLoc{File: source, Line: 10}, RelatedDefinitionIDs: []string{"prompt:writer"},
+		}),
+	}
+
+	got := CatalogEvidence(root, facts)
+	if len(got) != 3 {
+		t.Fatalf("catalog evidence = %+v, want three attributed related facts", got)
+	}
+	wantReasons := []string{
+		"diagnostic fact from source via @scope/writer-extension@1.2.3/writer.extractor",
+		"relation fact from source via @scope/writer-extension@1.2.3/writer.extractor",
+		"sourceRef fact from source via @scope/writer-extension@1.2.3/writer.extractor",
+	}
+	for index, want := range wantReasons {
+		if got[index].Reason != want || got[index].Source == nil || got[index].Source.File != "src/writer.ts" {
+			t.Fatalf("catalog evidence[%d] = %+v, want reason %q and repository-relative source", index, got[index], want)
+		}
 	}
 }
 

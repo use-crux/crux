@@ -1,0 +1,163 @@
+---
+title: MCP
+description: API reference for portable Model Context Protocol tool sources.
+---
+
+Package: `@use-crux/mcp`
+
+## `mcp()`
+
+```ts
+function mcp<TRuntimeContext = unknown>(
+  config: McpConfig<TRuntimeContext>,
+): McpToolSource<TRuntimeContext>;
+```
+
+Creates a frozen, inert tool-source definition. Construction does not connect,
+spawn, initialize, or discover. Put the returned source in a prompt or context
+`use[]`.
+
+```ts
+const source = mcp({
+  id: "catalog",
+  transport: streamableHttp({ url: "https://mcp.example.com" }),
+  tools: { allow: ["lookup"], prefix: "catalog_" },
+});
+```
+
+### `McpConfig`
+
+| Field       | Type                                                   | Meaning                                      |
+| ----------- | ------------------------------------------------------ | -------------------------------------------- |
+| `id`        | `string`                                               | Stable, non-empty authored server identity.  |
+| `transport` | `McpTransportConfig \| McpTransportResolver<TContext>` | Static config or per-invocation resolver.    |
+| `tools`     | `McpToolSelection`                                     | Optional exact selection and exposed prefix. |
+
+`McpToolSelection` is a three-member union: `allow`, `deny`, or neither, with
+an optional `prefix` in every branch. `allow` and `deny` are mutually exclusive.
+
+## `streamableHttp()`
+
+```ts
+function streamableHttp(
+  config: Omit<McpStreamableHttpTransportConfig, "type">,
+): McpStreamableHttpTransportConfig;
+```
+
+| Field      | Type                    | Default   | Meaning                             |
+| ---------- | ----------------------- | --------- | ----------------------------------- |
+| `url`      | `string \| URL`         | required  | MCP Streamable HTTP endpoint.       |
+| `headers`  | `Record<string,string>` | none      | Request headers, copied and frozen. |
+| `redirect` | `'error' \| 'follow'`   | `'error'` | Explicit safe redirect posture.     |
+
+Resolve authentication from `runtimeContext` when it varies per request:
+
+```ts
+const source = mcp<{ token: string }>({
+  id: "catalog",
+  transport: ({ runtimeContext }) =>
+    streamableHttp({
+      url: "https://mcp.example.com",
+      headers: { Authorization: `Bearer ${runtimeContext.token}` },
+    }),
+});
+```
+
+With `redirect: 'follow'`, configured credentials do not cross origins. Never
+put secrets in IDs, prefixes, URL queries, prompt text, or error messages.
+
+## `stdio()`
+
+Stdio materialization is a Node-only capability. Portable runtimes fail closed
+with remediation to use `streamableHttp()` instead.
+
+```ts
+function stdio(
+  config: Omit<McpStdioTransportConfig, "type">,
+): McpStdioTransportConfig;
+```
+
+| Field     | Type                    | Meaning                             |
+| --------- | ----------------------- | ----------------------------------- |
+| `command` | `string`                | Executable path or command name.    |
+| `args`    | `readonly string[]`     | Arguments passed without a shell.   |
+| `cwd`     | `string`                | Optional child working directory.   |
+| `env`     | `Record<string,string>` | Explicit child environment entries. |
+
+The process is spawned lazily for one invocation and closed with its source
+session. Do not derive `command`, `args`, `cwd`, or environment values from
+untrusted model input.
+
+## Runtime context resolver
+
+```ts
+interface McpTransportResolutionContext<TRuntimeContext> {
+  readonly runtimeContext: TRuntimeContext;
+  readonly abortSignal?: AbortSignal;
+}
+```
+
+The resolver runs for every invocation with the active abort signal. Returning
+a new transport prevents credentials and sessions from leaking across calls.
+
+## Discovery and naming
+
+Discovery follows at most 64 pages and rejects cursor loops. Selection uses
+remote names before prefixing. The exposed name must match:
+
+```text
+^[A-Za-z_][A-Za-z0-9_-]{0,63}$
+```
+
+Remote names are preserved exactly for `tools/call`. Duplicate final names,
+invalid schemas, malformed pages, and collisions with authored tools fail
+before provider I/O. Dynamic tool input is
+`Record<string, unknown>` and is validated against the discovered JSON Schema
+before transport.
+
+## Results
+
+`McpToolResult` is readonly application output. It retains ordered supported
+text, image, audio, embedded resource, resource-link, and structured content,
+but not trusted/model-visible `_meta`. Advertised output schemas validate
+`structuredContent`. MCP `isError` becomes a completed model-visible tool error;
+thrown execution failures use the ordinary Crux tool error path.
+
+Malformed base64 and binary parts larger than 20 MiB decoded bytes are rejected
+during result normalization. The error reports content index/type and the limit,
+never the payload.
+
+## Materializers
+
+`materializeMcpToolSource()` is the official-client materializer.
+`materializeAiSdkMcpToolSource()` is the AI SDK-native materializer. Adapter
+packages choose lazily; most applications should call an adapter rather than a
+materializer directly.
+
+Both return one call-scoped session with discovered `tools`, `discovery`
+metadata, and idempotent `close()`. The public testing subpath
+`@use-crux/mcp/testing/vitest` exports shared materializer and adapter
+conformance helpers for integration authors.
+
+## Middleware, Safety, approval, and Quality
+
+Materialized tools use their final exposed names in `toolMiddleware` and
+`toolPolicy`. Remote annotations are untrusted and never relax local policy.
+Approval resume uses `appendToolApprovalResponse`; it reconnects, rediscovers,
+and validates the committed identity before execution.
+
+Live MCP Quality runs can affect real systems and bypass reusable cell-output
+cache. `target.agent(..., { tools: { exposed_name: fixture } })` prevents remote
+execution but may still discover. Use a deterministic no-network fixture for a
+fully offline run.
+
+Run Detail shows preparation, calls, decisions, and cleanup. Catalog shows the
+server, ordinary discovered tools, safe schemas/fingerprints, runtime health,
+and lifecycle status.
+
+## Deferred features
+
+MCP resources as prompt inputs, prompts, sampling, elicitation, tasks, roots,
+server pools, config auto-discovery, rename maps, and public binary-limit
+configuration are not supported in v1. Provider-hosted MCP is a different path
+and does not provide Crux's portable lifecycle guarantees.

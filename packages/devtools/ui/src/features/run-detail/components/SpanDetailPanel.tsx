@@ -97,6 +97,9 @@ import { projectMediaRunFromNode } from '../lib/media-run-from-node'
 import { RunInsight } from './explain/RunInsight'
 import { collectTurnReports } from '@/features/run-detail/lib/explain/rollup'
 import { ContextComposition, hasContextContributions } from './ContextComposition'
+import { McpPreparationNode, McpToolOrigin } from './McpPreparation'
+import { mcpToolOrigin } from '../lib/mcp'
+import { useProjectDefinitionIds } from '@/shared/query/useProjectDefinitionIds'
 
 // ─── Card primitives ────────────────────────────────────────────────
 
@@ -159,7 +162,10 @@ function SpanErrorCard({ error }: { error: ResolvedSpanError }) {
               <div
                 key={`${item.kind ?? item.label}:${item.preview}`}
                 className="rounded-[6px] px-2.5 py-1.5 font-mono text-[11px]"
-                style={{ background: 'var(--qw-bg-muted)', border: '1px solid var(--qw-border)' }}
+                style={{
+                  background: 'var(--qw-bg-muted)',
+                  border: '1px solid var(--qw-border)',
+                }}
               >
                 <div style={{ color: 'var(--qw-danger)' }}>{item.label}</div>
                 <div className="mt-1 break-words" style={{ color: 'var(--qw-fg-muted)' }}>
@@ -359,14 +365,18 @@ function OutputTab({
       {isRoot && trace?.fallback && trace.fallback.details.length > 0 && (
         <div>
           <Eyebrow>
-            Fallback · {trace.fallback.attempts} attempt{trace.fallback.attempts === 1 ? '' : 's'}
+            Fallback · {trace.fallback.attempts} attempt
+            {trace.fallback.attempts === 1 ? '' : 's'}
           </Eyebrow>
           <div className="mt-2 flex flex-col gap-2">
             {trace.fallback.details.map((d, i) => (
               <div
                 key={i}
                 className="flex items-center gap-3 rounded-[6px] px-3 py-2 font-mono text-[11.5px]"
-                style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)' }}
+                style={{
+                  background: 'var(--qw-bg-elev)',
+                  border: '1px solid var(--qw-border)',
+                }}
               >
                 <Chip tone={d.status === 'success' ? 'ok' : 'danger'} dot>
                   {d.status}
@@ -427,9 +437,17 @@ function OutputGrounding({ node }: { node: ObservabilityRunDetailNode }) {
             <div
               key={i}
               className="flex items-center gap-2.5 px-3.5 py-1.5 font-mono text-[11.5px]"
-              style={{ background: 'var(--qw-bg-elev)', opacity: isGrounded ? 1 : 0.7 }}
+              style={{
+                background: 'var(--qw-bg-elev)',
+                opacity: isGrounded ? 1 : 0.7,
+              }}
             >
-              <span style={{ color: isGrounded ? 'var(--qw-crux)' : 'var(--qw-fg-faint)', width: 26 }}>
+              <span
+                style={{
+                  color: isGrounded ? 'var(--qw-crux)' : 'var(--qw-fg-faint)',
+                  width: 26,
+                }}
+              >
                 {marker != null ? `[${String(marker)}]` : '—'}
               </span>
               <span className="flex-1 truncate" style={{ color: 'var(--qw-fg-muted)' }} title={sourceId}>
@@ -715,7 +733,10 @@ function ResolvedContextCard({ entry, color }: { entry: ResolvedContext; color: 
     >
       <div
         className="flex flex-wrap items-center gap-2 px-3.5 py-2"
-        style={{ borderBottom: '1px solid var(--qw-border)', background: 'var(--qw-bg-muted)' }}
+        style={{
+          borderBottom: '1px solid var(--qw-border)',
+          background: 'var(--qw-bg-muted)',
+        }}
       >
         <span className="font-mono text-[10.5px] uppercase tracking-[0.08em]" style={{ color: 'var(--qw-fg-faint)' }}>
           {entry.family}
@@ -797,7 +818,10 @@ function PartCard({ part, color }: { part: InspectPart; color: string }) {
     >
       <div
         className="flex flex-wrap items-center gap-2 px-3.5 py-2"
-        style={{ borderBottom: '1px solid var(--qw-border)', background: 'var(--qw-bg-muted)' }}
+        style={{
+          borderBottom: '1px solid var(--qw-border)',
+          background: 'var(--qw-bg-muted)',
+        }}
       >
         <span className="font-mono text-[10.5px] uppercase tracking-[0.08em]" style={{ color: 'var(--qw-fg-faint)' }}>
           system
@@ -848,7 +872,11 @@ function DroppedRow({ entry }: { entry: DroppedContext }) {
   return (
     <div
       className="flex items-center gap-2.5 rounded-[6px] px-3 py-1.5 font-mono text-[11.5px]"
-      style={{ background: 'var(--qw-warn-soft)', border: '1px solid var(--qw-warn-soft)', color: 'var(--qw-warn)' }}
+      style={{
+        background: 'var(--qw-warn-soft)',
+        border: '1px solid var(--qw-warn-soft)',
+        color: 'var(--qw-warn)',
+      }}
     >
       <span style={{ fontWeight: 600 }}>{entry.source}</span>
       <span style={{ color: 'var(--qw-fg-muted)' }}>
@@ -865,7 +893,11 @@ function ExcludedRow({ entry }: { entry: ExcludedContext }) {
   return (
     <div
       className="flex items-center gap-2.5 rounded-[6px] px-3 py-1.5 font-mono text-[11.5px]"
-      style={{ background: 'var(--qw-bg-muted)', border: '1px solid var(--qw-border)', color: 'var(--qw-fg-muted)' }}
+      style={{
+        background: 'var(--qw-bg-muted)',
+        border: '1px solid var(--qw-border)',
+        color: 'var(--qw-fg-muted)',
+      }}
     >
       <span style={{ fontWeight: 600, color: 'var(--qw-fg)' }}>{entry.source}</span>
       <span>· {entry.reason}</span>
@@ -951,7 +983,11 @@ function ContentPartRow({ part }: { part: AssistantContentPart }) {
         <PartRow tone="iris" label="reasoning" icon="brain">
           <div
             className="whitespace-pre-wrap text-[12.5px] leading-[1.6]"
-            style={{ color: 'var(--qw-fg-muted)', fontFamily: 'var(--qw-serif)', fontStyle: 'italic' }}
+            style={{
+              color: 'var(--qw-fg-muted)',
+              fontFamily: 'var(--qw-serif)',
+              fontStyle: 'italic',
+            }}
           >
             {part.text || <span style={{ color: 'var(--qw-fg-faint)' }}>(empty reasoning)</span>}
           </div>
@@ -1094,7 +1130,11 @@ function ContentPartRow({ part }: { part: AssistantContentPart }) {
         <PartRow tone="muted" label={part.type || 'part'}>
           <div
             className="overflow-auto rounded-[6px] px-2.5 py-1.5 font-mono text-[11.5px]"
-            style={{ background: 'var(--qw-bg)', border: '1px solid var(--qw-border)', maxHeight: 200 }}
+            style={{
+              background: 'var(--qw-bg)',
+              border: '1px solid var(--qw-border)',
+              maxHeight: 200,
+            }}
           >
             <JsonTree data={part as unknown} />
           </div>
@@ -1147,7 +1187,9 @@ function ChatMessageRow({ msg }: { msg: AnyMessageItem }) {
       {typeof content === 'string' ? (
         <div
           className="whitespace-pre-wrap text-[12.5px] leading-[1.55]"
-          style={{ fontFamily: role === 'tool' ? 'var(--qw-mono)' : 'var(--qw-serif)' }}
+          style={{
+            fontFamily: role === 'tool' ? 'var(--qw-mono)' : 'var(--qw-serif)',
+          }}
         >
           {content || <span style={{ color: 'var(--qw-fg-faint)' }}>(empty)</span>}
         </div>
@@ -1160,7 +1202,11 @@ function ChatMessageRow({ msg }: { msg: AnyMessageItem }) {
               <div
                 key={j}
                 className="overflow-auto rounded-[6px] px-2.5 py-1.5 font-mono text-[11.5px]"
-                style={{ background: 'var(--qw-bg)', border: '1px solid var(--qw-border)', maxHeight: 200 }}
+                style={{
+                  background: 'var(--qw-bg)',
+                  border: '1px solid var(--qw-border)',
+                  maxHeight: 200,
+                }}
               >
                 <JsonTree data={c as unknown} />
               </div>
@@ -1170,7 +1216,11 @@ function ChatMessageRow({ msg }: { msg: AnyMessageItem }) {
       ) : content != null ? (
         <div
           className="overflow-auto rounded-[6px] px-2.5 py-1.5 font-mono text-[11.5px]"
-          style={{ background: 'var(--qw-bg)', border: '1px solid var(--qw-border)', maxHeight: 200 }}
+          style={{
+            background: 'var(--qw-bg)',
+            border: '1px solid var(--qw-border)',
+            maxHeight: 200,
+          }}
         >
           <JsonTree data={content as unknown} />
         </div>
@@ -1309,12 +1359,24 @@ function ToolCallBox({
   )
 }
 
-function ToolSpanTab({ node }: { node: ObservabilityRunDetailNode }) {
+function ToolSpanTab({
+  node,
+  onSelectSpan,
+}: {
+  node: ObservabilityRunDetailNode
+  onSelectSpan?: (id: string) => void
+}) {
   // Identity (toolName · callId · status) renders in `SelectedSpanHeader`.
   const toolCallId = findAttribute(node, 'toolCallId') as string | undefined
   const payload = useMemo(() => resolveToolPayload(node), [node])
   const spanError = useMemo(() => resolveSpanError(node), [node])
-  const approvalArt = findArtifact(node, 'guardrail.report') ?? findArtifact(node, 'constraint.report')
+  const approvalArt =
+    findArtifact(node, 'security.report') ??
+    findArtifact(node, 'guardrail.report') ??
+    findArtifact(node, 'constraint.report')
+  const knownDefinitionIds = useProjectDefinitionIds()
+  const mcpOrigin = mcpToolOrigin(node, knownDefinitionIds)
+  const { navigate } = useNavigation()
 
   // Cross-link to the requesting generation via tool.request item
   const insp = inspectionOf(node)
@@ -1332,6 +1394,14 @@ function ToolSpanTab({ node }: { node: ObservabilityRunDetailNode }) {
   return (
     <div className="flex flex-col gap-3">
       {spanError && <SpanErrorCard error={spanError} />}
+
+      {mcpOrigin && (
+        <McpToolOrigin
+          origin={mcpOrigin}
+          onOpenCatalog={(definitionId) => navigate({ view: 'library-index', promptId: definitionId })}
+          onSelectSpan={onSelectSpan}
+        />
+      )}
 
       {/* design `CardTool` center: a "Call" section (Raw⇄Pretty) over one
           bordered args↓ / result↑ box. Identity/status live in the header;
@@ -1519,7 +1589,11 @@ function MemoryTab({ node }: { node: ObservabilityRunDetailNode }) {
         >
           <div
             className="rounded-[8px] px-3.5 py-2.5 font-mono text-[12px]"
-            style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)', color: 'var(--qw-fg)' }}
+            style={{
+              background: 'var(--qw-bg-elev)',
+              border: '1px solid var(--qw-border)',
+              color: 'var(--qw-fg)',
+            }}
           >
             {query}
           </div>
@@ -1576,10 +1650,18 @@ function MemoryTab({ node }: { node: ObservabilityRunDetailNode }) {
         <SpanSection title="Snapshot · before → after">
           <div
             className="grid overflow-hidden rounded-[8px]"
-            style={{ gridTemplateColumns: '1fr 1fr', border: '1px solid var(--qw-border)' }}
+            style={{
+              gridTemplateColumns: '1fr 1fr',
+              border: '1px solid var(--qw-border)',
+            }}
           >
             {(['before', 'after'] as const).map((side, k) => (
-              <div key={side} style={{ borderRight: k === 0 ? '1px solid var(--qw-border)' : 'none' }}>
+              <div
+                key={side}
+                style={{
+                  borderRight: k === 0 ? '1px solid var(--qw-border)' : 'none',
+                }}
+              >
                 <div
                   className="px-3 py-1.5 font-mono text-[9.5px] uppercase tracking-[0.06em]"
                   style={{
@@ -1602,7 +1684,10 @@ function MemoryTab({ node }: { node: ObservabilityRunDetailNode }) {
           <SpanSection title={isWrite ? 'State · after write' : 'State'}>
             <div
               className="flex flex-col gap-1.5 rounded-[8px] px-3.5 py-3"
-              style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)' }}
+              style={{
+                background: 'var(--qw-bg-elev)',
+                border: '1px solid var(--qw-border)',
+              }}
             >
               {stateEntries.map(([label, value], i) => (
                 <div key={i} className="flex gap-2 font-mono text-[11.5px]">
@@ -1622,15 +1707,7 @@ function MemoryTab({ node }: { node: ObservabilityRunDetailNode }) {
   )
 }
 
-function BudgetBlockList({
-  label,
-  blocks,
-  tone,
-}: {
-  label: string
-  blocks: readonly string[]
-  tone: ChipTone
-}) {
+function BudgetBlockList({ label, blocks, tone }: { label: string; blocks: readonly string[]; tone: ChipTone }) {
   return (
     <div className="min-w-0">
       <div className="mb-1.5 font-mono text-[10px] uppercase tracking-[0.08em]" style={{ color: 'var(--qw-fg-faint)' }}>
@@ -1692,7 +1769,10 @@ function MemoryRecalledRow({ r, fallbackBlock }: { r: Record<string, unknown>; f
   return (
     <div
       className="flex gap-2.5 rounded-[8px] px-3 py-2.5"
-      style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)' }}
+      style={{
+        background: 'var(--qw-bg-elev)',
+        border: '1px solid var(--qw-border)',
+      }}
     >
       <span
         className="h-fit rounded-[3px] px-1.5 py-px font-mono text-[9px] uppercase"
@@ -1740,7 +1820,9 @@ function SnapshotSide({ value }: { value: unknown }) {
             <span
               key={i}
               className="font-mono text-[10.5px]"
-              style={{ color: s.startsWith('+') ? 'var(--qw-ok)' : 'var(--qw-fg-muted)' }}
+              style={{
+                color: s.startsWith('+') ? 'var(--qw-ok)' : 'var(--qw-fg-muted)',
+              }}
             >
               {s}
             </span>
@@ -1763,7 +1845,9 @@ function SnapshotSide({ value }: { value: unknown }) {
   return (
     <span
       className="font-mono text-[10.5px]"
-      style={{ color: value == null ? 'var(--qw-fg-faint)' : 'var(--qw-fg-muted)' }}
+      style={{
+        color: value == null ? 'var(--qw-fg-faint)' : 'var(--qw-fg-muted)',
+      }}
     >
       {value == null ? '—' : compactValue(value)}
     </span>
@@ -1839,15 +1923,45 @@ function ApprovalCard({ node }: { node: ObservabilityRunDetailNode }) {
 
 // ─── Plan span panel (primitive === plan.*) ─────────────────────────
 
-function planTaskStyle(s: string): { color: string; soft: string; label: string; done: boolean; strike: boolean } {
+function planTaskStyle(s: string): {
+  color: string
+  soft: string
+  label: string
+  done: boolean
+  strike: boolean
+} {
   const v = s.toLowerCase()
   if (/done|complete|success|finished/.test(v))
-    return { color: 'var(--qw-ok)', soft: 'var(--qw-ok-soft)', label: 'done', done: true, strike: false }
+    return {
+      color: 'var(--qw-ok)',
+      soft: 'var(--qw-ok-soft)',
+      label: 'done',
+      done: true,
+      strike: false,
+    }
   if (/doing|active|progress|running/.test(v))
-    return { color: 'var(--qw-crux)', soft: 'var(--qw-crux-soft)', label: 'doing', done: false, strike: false }
+    return {
+      color: 'var(--qw-crux)',
+      soft: 'var(--qw-crux-soft)',
+      label: 'doing',
+      done: false,
+      strike: false,
+    }
   if (/abandon|cancel|skip|fail|drop/.test(v))
-    return { color: 'var(--qw-fg-faint)', soft: 'var(--qw-bg-muted)', label: v, done: false, strike: true }
-  return { color: 'var(--qw-fg-muted)', soft: 'var(--qw-bg-muted)', label: 'todo', done: false, strike: false }
+    return {
+      color: 'var(--qw-fg-faint)',
+      soft: 'var(--qw-bg-muted)',
+      label: v,
+      done: false,
+      strike: true,
+    }
+  return {
+    color: 'var(--qw-fg-muted)',
+    soft: 'var(--qw-bg-muted)',
+    label: 'todo',
+    done: false,
+    strike: false,
+  }
 }
 
 /** design `CardPlan` — goal + task list (done/doing/todo/abandoned). */
@@ -1912,11 +2026,16 @@ function PlanCard({ node }: { node: ObservabilityRunDetailNode }) {
                 >
                   <span
                     className="size-3 shrink-0 rounded-[4px]"
-                    style={{ background: st.soft, boxShadow: `inset 0 0 0 1px ${st.color}` }}
+                    style={{
+                      background: st.soft,
+                      boxShadow: `inset 0 0 0 1px ${st.color}`,
+                    }}
                   />
                   <span
                     className="min-w-0 flex-1 truncate font-mono text-[12px]"
-                    style={{ textDecoration: st.strike ? 'line-through' : 'none' }}
+                    style={{
+                      textDecoration: st.strike ? 'line-through' : 'none',
+                    }}
                   >
                     {tk.label}
                   </span>
@@ -1942,7 +2061,11 @@ function AgentPill({ name, dim }: { name: string; dim?: boolean }) {
       className="inline-flex items-center gap-1.5 rounded-[8px] px-3 py-1.5 font-mono text-[12px] font-semibold"
       style={
         dim
-          ? { background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)', color: 'var(--qw-fg-muted)' }
+          ? {
+              background: 'var(--qw-bg-elev)',
+              border: '1px solid var(--qw-border)',
+              color: 'var(--qw-fg-muted)',
+            }
           : { background: 'var(--qw-iris-soft)', color: 'var(--qw-iris)' }
       }
     >
@@ -1956,10 +2079,18 @@ function PayloadGrid({ cells }: { cells: { label: string; size?: string; body: u
   return (
     <div
       className="grid overflow-hidden rounded-[8px]"
-      style={{ gridTemplateColumns: `repeat(${cells.length}, 1fr)`, border: '1px solid var(--qw-border)' }}
+      style={{
+        gridTemplateColumns: `repeat(${cells.length}, 1fr)`,
+        border: '1px solid var(--qw-border)',
+      }}
     >
       {cells.map((c, i) => (
-        <div key={c.label} style={{ borderRight: i < cells.length - 1 ? '1px solid var(--qw-border)' : 'none' }}>
+        <div
+          key={c.label}
+          style={{
+            borderRight: i < cells.length - 1 ? '1px solid var(--qw-border)' : 'none',
+          }}
+        >
           <div
             className="flex items-center justify-between px-3 py-1.5 font-mono text-[9.5px] uppercase tracking-[0.06em]"
             style={{
@@ -2053,7 +2184,11 @@ function HandoffTab({ node, onSelect }: { node: ObservabilityRunDetailNode; onSe
               type="button"
               onClick={() => onSelect(subRun.id)}
               className="shrink-0 rounded-[8px] px-2.5 py-1.5 font-mono text-[11px]"
-              style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)', color: 'var(--qw-crux)' }}
+              style={{
+                background: 'var(--qw-bg-elev)',
+                border: '1px solid var(--qw-border)',
+                color: 'var(--qw-crux)',
+              }}
             >
               Open sub-run →
             </button>
@@ -2102,8 +2237,16 @@ function HandoffTab({ node, onSelect }: { node: ObservabilityRunDetailNode; onSe
         >
           <PayloadGrid
             cells={[
-              { label: 'args (in)', size: fmtBytes(inputSize), body: inputData },
-              { label: 'result (out)', size: fmtBytes(outputSize), body: output },
+              {
+                label: 'args (in)',
+                size: fmtBytes(inputSize),
+                body: inputData,
+              },
+              {
+                label: 'result (out)',
+                size: fmtBytes(outputSize),
+                body: output,
+              },
             ]}
           />
         </SpanSection>
@@ -2154,7 +2297,11 @@ function HandoffTab({ node, onSelect }: { node: ObservabilityRunDetailNode; onSe
         <PayloadGrid
           cells={[
             { label: 'input', size: fmtBytes(inputSize), body: inputData },
-            { label: 'summary', size: fmtBytes(outputSize), body: summary ?? output },
+            {
+              label: 'summary',
+              size: fmtBytes(outputSize),
+              body: summary ?? output,
+            },
           ]}
         />
       </SpanSection>
@@ -2223,7 +2370,11 @@ function EmbeddingCard({ node }: { node: ObservabilityRunDetailNode }) {
             </div>
             <div
               className="flex flex-1 items-center justify-center font-mono text-[9.5px] font-semibold"
-              style={{ background: 'var(--qw-crux)', opacity: 0.7, color: 'var(--qw-bg)' }}
+              style={{
+                background: 'var(--qw-crux)',
+                opacity: 0.7,
+                color: 'var(--qw-bg)',
+              }}
             >
               fresh {total - hit}
             </div>
@@ -2234,13 +2385,18 @@ function EmbeddingCard({ node }: { node: ObservabilityRunDetailNode }) {
         <SpanSection title="Run">
           <div
             className="grid gap-2.5"
-            style={{ gridTemplateColumns: `repeat(${Math.min(cells.length, 4)}, minmax(0, 1fr))` }}
+            style={{
+              gridTemplateColumns: `repeat(${Math.min(cells.length, 4)}, minmax(0, 1fr))`,
+            }}
           >
             {cells.map(([k, v]) => (
               <div
                 key={k}
                 className="rounded-[8px] px-3 py-2.5"
-                style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)' }}
+                style={{
+                  background: 'var(--qw-bg-elev)',
+                  border: '1px solid var(--qw-border)',
+                }}
               >
                 <div
                   className="font-mono text-[10px] uppercase tracking-[0.04em]"
@@ -2286,7 +2442,11 @@ function RetrievalSpanTab({ node }: { node: ObservabilityRunDetailNode }) {
         >
           <div
             className="rounded-[8px] px-3.5 py-2.5 font-mono text-[12px]"
-            style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)', color: 'var(--qw-fg)' }}
+            style={{
+              background: 'var(--qw-bg-elev)',
+              border: '1px solid var(--qw-border)',
+              color: 'var(--qw-fg)',
+            }}
           >
             {query}
           </div>
@@ -2314,7 +2474,10 @@ function RetrievalSpanTab({ node }: { node: ObservabilityRunDetailNode }) {
                 <div
                   key={i}
                   className="min-w-[84px] flex-1 rounded-[8px] px-2.5 py-2"
-                  style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)' }}
+                  style={{
+                    background: 'var(--qw-bg-elev)',
+                    border: '1px solid var(--qw-border)',
+                  }}
                 >
                   <div className="flex items-center gap-1.5">
                     <span className="truncate font-mono text-[10px]" style={{ color: 'var(--qw-fg-muted)' }}>
@@ -2366,9 +2529,10 @@ function RetrievalSpanTab({ node }: { node: ObservabilityRunDetailNode }) {
 /** design `ChunkHit` atom — #rank · sourceId · chunkId · 2-line preview · score chip. */
 function ChunkHitRow({ hit, rank }: { hit: Record<string, unknown>; rank: number }) {
   const { navigate } = useNavigation()
-  const source = hit.source && typeof hit.source === 'object' && !Array.isArray(hit.source)
-    ? hit.source as Record<string, unknown>
-    : undefined
+  const source =
+    hit.source && typeof hit.source === 'object' && !Array.isArray(hit.source)
+      ? (hit.source as Record<string, unknown>)
+      : undefined
   const sourceId = typeof source?.id === 'string' ? source.id : undefined
   const chunkId =
     typeof hit.chunkId === 'string' ? hit.chunkId : typeof hit.id === 'string' ? (hit.id as string) : undefined
@@ -2384,7 +2548,11 @@ function ChunkHitRow({ hit, rank }: { hit: Record<string, unknown>; rank: number
   return (
     <div
       className="flex gap-2.5 rounded-[8px] px-3 py-2.5"
-      style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)', opacity: used ? 1 : 0.66 }}
+      style={{
+        background: 'var(--qw-bg-elev)',
+        border: '1px solid var(--qw-border)',
+        opacity: used ? 1 : 0.66,
+      }}
     >
       <span className="w-4 shrink-0 font-mono text-[11px]" style={{ color: 'var(--qw-fg-faint)' }}>
         #{rank}
@@ -2466,7 +2634,13 @@ function ToolsTab({ scope }: { scope: ObservabilityRunDetailNode }) {
                     {r.toolName ?? 'tool'}
                   </span>
                   {r.toolCallId && (
-                    <span className="font-mono" style={{ textTransform: 'none', color: 'var(--qw-fg-faint)' }}>
+                    <span
+                      className="font-mono"
+                      style={{
+                        textTransform: 'none',
+                        color: 'var(--qw-fg-faint)',
+                      }}
+                    >
                       · {r.toolCallId.slice(0, 12)}
                     </span>
                   )}
@@ -2647,15 +2821,30 @@ function ScoresTab({ node, judges }: { node: ObservabilityRunDetailNode; judges:
       const data = item.data
       if (data == null) continue
       if (Array.isArray(data)) {
-        for (const e of data as Array<{ name?: string; metricId?: string; score?: number; reasoning?: string }>) {
+        for (const e of data as Array<{
+          name?: string
+          metricId?: string
+          score?: number
+          reasoning?: string
+        }>) {
           if (typeof e.score === 'number') {
-            out.push({ name: e.name ?? e.metricId ?? item.label ?? 'score', score: e.score, reasoning: e.reasoning })
+            out.push({
+              name: e.name ?? e.metricId ?? item.label ?? 'score',
+              score: e.score,
+              reasoning: e.reasoning,
+            })
           }
         }
         continue
       }
       if (typeof data === 'object') {
-        const obj = data as { name?: string; metricId?: string; score?: number; reasoning?: string; scores?: unknown }
+        const obj = data as {
+          name?: string
+          metricId?: string
+          score?: number
+          reasoning?: string
+          scores?: unknown
+        }
         if (Array.isArray(obj.scores)) {
           for (const e of obj.scores as Array<{
             name?: string
@@ -2664,7 +2853,11 @@ function ScoresTab({ node, judges }: { node: ObservabilityRunDetailNode; judges:
             reasoning?: string
           }>) {
             if (typeof e.score === 'number') {
-              out.push({ name: e.name ?? e.metricId ?? 'score', score: e.score, reasoning: e.reasoning })
+              out.push({
+                name: e.name ?? e.metricId ?? 'score',
+                score: e.score,
+                reasoning: e.reasoning,
+              })
             }
           }
         } else if (typeof obj.score === 'number') {
@@ -2685,22 +2878,49 @@ function ScoresTab({ node, judges }: { node: ObservabilityRunDetailNode; judges:
     const raw = art?.preview
     if (!raw) return []
     if (Array.isArray(raw)) {
-      return (raw as Array<{ name?: string; metricId?: string; score?: number; reasoning?: string }>)
+      return (
+        raw as Array<{
+          name?: string
+          metricId?: string
+          score?: number
+          reasoning?: string
+        }>
+      )
         .filter((e) => typeof e.score === 'number')
-        .map((e) => ({ name: e.name ?? e.metricId ?? 'score', score: e.score!, reasoning: e.reasoning }))
+        .map((e) => ({
+          name: e.name ?? e.metricId ?? 'score',
+          score: e.score!,
+          reasoning: e.reasoning,
+        }))
     }
     if (typeof raw === 'object' && raw !== null) {
       const list = (raw as { scores?: unknown }).scores
       if (Array.isArray(list)) {
-        return (list as Array<{ name?: string; metricId?: string; score?: number; reasoning?: string }>)
+        return (
+          list as Array<{
+            name?: string
+            metricId?: string
+            score?: number
+            reasoning?: string
+          }>
+        )
           .filter((e) => typeof e.score === 'number')
-          .map((e) => ({ name: e.name ?? e.metricId ?? 'score', score: e.score!, reasoning: e.reasoning }))
+          .map((e) => ({
+            name: e.name ?? e.metricId ?? 'score',
+            score: e.score!,
+            reasoning: e.reasoning,
+          }))
       }
     }
     return []
   }, [node])
   const fromJudges = useMemo<Entry[]>(
-    () => judges.map((j) => ({ name: j.metricId, score: j.score, reasoning: j.reasoning })),
+    () =>
+      judges.map((j) => ({
+        name: j.metricId,
+        score: j.score,
+        reasoning: j.reasoning,
+      })),
     [judges],
   )
   const entries = fromInspection.length > 0 ? fromInspection : fromArtifact.length > 0 ? fromArtifact : fromJudges
@@ -2724,7 +2944,10 @@ function ScoresTab({ node, judges }: { node: ObservabilityRunDetailNode; judges:
           <div
             key={`${e.name}-${i}`}
             className="rounded-[10px] px-4 py-3"
-            style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)' }}
+            style={{
+              background: 'var(--qw-bg-elev)',
+              border: '1px solid var(--qw-border)',
+            }}
           >
             <div className="mb-2 flex items-center justify-between">
               <span className="font-mono text-[12px]" style={{ color: 'var(--qw-fg-muted)' }}>
@@ -2752,7 +2975,13 @@ function ScoresTab({ node, judges }: { node: ObservabilityRunDetailNode; judges:
 // ─── Citations ──────────────────────────────────────────────────────
 
 function CitationsTab({ node }: { node: ObservabilityRunDetailNode }) {
-  type Entry = { num?: string | number; sourceId?: string; path?: string; score?: number; status?: string }
+  type Entry = {
+    num?: string | number
+    sourceId?: string
+    path?: string
+    score?: number
+    status?: string
+  }
 
   // Prefer inspection.citations
   const fromInspection: Entry[] = useMemo(() => {
@@ -2804,7 +3033,10 @@ function CitationsTab({ node }: { node: ObservabilityRunDetailNode }) {
           <div
             key={`${num}-${path}-${i}`}
             className="flex items-center gap-2.5 rounded-[6px] px-3 py-2"
-            style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)' }}
+            style={{
+              background: 'var(--qw-bg-elev)',
+              border: '1px solid var(--qw-border)',
+            }}
           >
             <span className="font-mono text-[11.5px]" style={{ color: 'var(--qw-crux)' }}>
               {num}
@@ -2901,8 +3133,7 @@ function MediaRunDetailSection({
   trace: Trace | undefined
 }) {
   const { navigate } = useNavigation()
-  const selectedMediaSpanId =
-    typeof node.spanId === 'string' && node.spanId.length > 0 ? node.spanId : node.id
+  const selectedMediaSpanId = typeof node.spanId === 'string' && node.spanId.length > 0 ? node.spanId : node.id
   const mediaView = projectMediaRunFromNode(detail.root, selectedMediaSpanId)
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -2915,7 +3146,10 @@ function MediaRunDetailSection({
               onOpenCatalog={
                 mediaView.catalogJoin.status === 'joined'
                   ? (definitionId) =>
-                      navigate({ view: 'library-index', promptId: definitionId })
+                      navigate({
+                        view: 'library-index',
+                        promptId: definitionId,
+                      })
                   : undefined
               }
             />
@@ -2980,7 +3214,11 @@ function SelectedSpanHeader({
     <>
       <div
         className="flex flex-shrink-0 flex-wrap items-center gap-2 font-mono text-[12px]"
-        style={{ padding: '11px 24px', borderBottom: '1px solid var(--qw-border)', background: 'var(--qw-bg)' }}
+        style={{
+          padding: '11px 24px',
+          borderBottom: '1px solid var(--qw-border)',
+          background: 'var(--qw-bg)',
+        }}
       >
         <Chip tone={statusTone(node.status)} dot>
           {statusLabel(node.status)}
@@ -3079,7 +3317,10 @@ function SelectedSpanHeader({
       {(kind === 'run' || kind === 'generation') && (
         <div
           className="grid flex-shrink-0 gap-2 px-4 py-3"
-          style={{ gridTemplateColumns: 'repeat(4, 1fr)', borderBottom: '1px solid var(--qw-border)' }}
+          style={{
+            gridTemplateColumns: 'repeat(4, 1fr)',
+            borderBottom: '1px solid var(--qw-border)',
+          }}
         >
           <Kpi
             label="Duration"
@@ -3153,7 +3394,10 @@ function TabStrip({
   return (
     <div
       className="flex flex-shrink-0 items-center px-4 text-[12px]"
-      style={{ borderBottom: '1px solid var(--qw-border)', background: 'var(--qw-bg)' }}
+      style={{
+        borderBottom: '1px solid var(--qw-border)',
+        background: 'var(--qw-bg)',
+      }}
     >
       {tabs.map((id) => {
         const isActive = id === active
@@ -3215,7 +3459,10 @@ export function SpanDetailPanel({ detail, selectedNodeId, onSelectSpan, trace, j
     name: 'token.chunk',
     limit: 512,
   })
-  const focusedTokenChunks = useMemo(() => tokenChunksFromEvents(focusedTokenEvents.events), [focusedTokenEvents.events])
+  const focusedTokenChunks = useMemo(
+    () => tokenChunksFromEvents(focusedTokenEvents.events),
+    [focusedTokenEvents.events],
+  )
   const isRoot = node.id === detail.root.id
   // The root shows *its primitive's* card (agent.run → agent loop, composition
   // → composition card, …), not a generic "run" view (spec §4). `isRoot` still
@@ -3224,9 +3471,7 @@ export function SpanDetailPanel({ detail, selectedNodeId, onSelectSpan, trace, j
   // The run root leads with Turn Explanation rolled up across the run, when the
   // projection emitted per-turn reports; its existing tabs stay one click away.
   const runHasInsight = isRoot && collectTurnReports(detail.root).length > 0
-  const tabs: readonly InspectTabId[] = runHasInsight
-    ? ['insight', ...tabsForKind(kind)]
-    : tabsForKind(kind)
+  const tabs: readonly InspectTabId[] = runHasInsight ? ['insight', ...tabsForKind(kind)] : tabsForKind(kind)
 
   const [activeTab, setActiveTab] = useState<InspectTabId>(tabs[0])
   // Reset to default tab whenever the selected node changes (so switching
@@ -3314,15 +3559,7 @@ export function SpanDetailPanel({ detail, selectedNodeId, onSelectSpan, trace, j
   // media span (definitionId); when absent, the panel shows an explicit
   // unavailable state — completed-media capture does not invent Catalog ids.
   if (node.primitive?.startsWith('media.')) {
-    return (
-      <MediaRunDetailSection
-        node={node}
-        detail={detail}
-        kind={kind}
-        isRoot={isRoot}
-        trace={trace}
-      />
-    )
+    return <MediaRunDetailSection node={node} detail={detail} kind={kind} isRoot={isRoot} trace={trace} />
   }
 
   // Agent gets its own detail — instructions · tools · nested loop, no tab strip
@@ -3370,6 +3607,19 @@ export function SpanDetailPanel({ detail, selectedNodeId, onSelectSpan, trace, j
     )
   }
 
+  if (node.primitive === 'mcp.connect' || node.primitive === 'mcp.discover') {
+    return (
+      <div className="flex h-full min-h-0 flex-col">
+        <SelectedSpanHeader node={node} detail={detail} kind={kind} isRoot={isRoot} trace={trace} />
+        <div className="flex-1 overflow-auto px-4 py-4">
+          <SectionErrorBoundary title="MCP preparation" compact resetKey={node.id}>
+            <McpPreparationNode node={node} />
+          </SectionErrorBoundary>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <SelectedSpanHeader node={node} detail={detail} kind={kind} isRoot={isRoot} trace={trace} />
@@ -3379,48 +3629,52 @@ export function SpanDetailPanel({ detail, selectedNodeId, onSelectSpan, trace, j
       {activeTab === 'insight' ? (
         <RunInsight root={detail.root} onSelectSpan={(id) => onSelectSpan?.(id)} />
       ) : (
-      /* Per-tab error boundary: a broken render on one tab (malformed
+        /* Per-tab error boundary: a broken render on one tab (malformed
           message payload, unexpected handoff shape, etc.) shouldn't
           take down the rest of the span detail panel. `resetKey` ties
           the boundary to the selected node + tab, so switching tabs or
           spans gives a clean retry surface. */
-      <div className="flex-1 overflow-auto px-4 py-4">
-        <SectionErrorBoundary
-          title={`${TAB_LABEL[activeTab] ?? activeTab} tab`}
-          compact
-          resetKey={`${node.id}:${activeTab}`}
-        >
-          {activeTab === 'output' && (
-            <OutputTab node={node} trace={trace} isRoot={isRoot} lazyTokenChunks={focusedTokenChunks} />
-          )}
-          {activeTab === 'context' && <ContextTab node={node} trace={trace} isRoot={isRoot} />}
-          {activeTab === 'tool' &&
-            (node.primitive.startsWith('tool.approval') ? <ApprovalCard node={node} /> : <ToolSpanTab node={node} />)}
-          {activeTab === 'memory' && <MemoryTab node={node} />}
-          {activeTab === 'handoff' && <HandoffTab node={node} onSelect={(id) => onSelectSpan?.(id)} />}
-          {activeTab === 'tools' && <ToolsTab scope={isRoot ? detail.root : node} />}
-          {activeTab === 'retrieval' &&
-            (node.primitive.startsWith('embedding.') ? (
-              <EmbeddingCard node={node} />
-            ) : kind === 'retrieval' ? (
-              <RetrievalSpanTab node={node} />
-            ) : (
-              <RetrievalAggregateTab scope={isRoot ? detail.root : node} />
-            ))}
-          {activeTab === 'scores' && <ScoresTab node={node} judges={spanJudges} />}
-          {activeTab === 'citations' && <CitationsTab node={node} />}
-          {activeTab === 'eval' &&
-            (node.primitive === 'eval.run' || node.primitive === 'eval.suite' ? (
-              <EvalRunCard node={node} onSelect={(id) => onSelectSpan?.(id)} />
-            ) : (
-              <EvalCard node={node} />
-            ))}
-          {activeTab === 'report' &&
-            (node.primitive.startsWith('plan.') ? <PlanCard node={node} /> : <OperationReportCard node={node} />)}
-          {activeTab === 'composition' && <CompositionCard node={node} />}
-          {activeTab === 'children' && <ChildrenTab node={node} onSelect={(id) => onSelectSpan?.(id)} />}
-        </SectionErrorBoundary>
-      </div>
+        <div className="flex-1 overflow-auto px-4 py-4">
+          <SectionErrorBoundary
+            title={`${TAB_LABEL[activeTab] ?? activeTab} tab`}
+            compact
+            resetKey={`${node.id}:${activeTab}`}
+          >
+            {activeTab === 'output' && (
+              <OutputTab node={node} trace={trace} isRoot={isRoot} lazyTokenChunks={focusedTokenChunks} />
+            )}
+            {activeTab === 'context' && <ContextTab node={node} trace={trace} isRoot={isRoot} />}
+            {activeTab === 'tool' &&
+              (node.primitive.startsWith('tool.approval') ? (
+                <ApprovalCard node={node} />
+              ) : (
+                <ToolSpanTab node={node} onSelectSpan={onSelectSpan} />
+              ))}
+            {activeTab === 'memory' && <MemoryTab node={node} />}
+            {activeTab === 'handoff' && <HandoffTab node={node} onSelect={(id) => onSelectSpan?.(id)} />}
+            {activeTab === 'tools' && <ToolsTab scope={isRoot ? detail.root : node} />}
+            {activeTab === 'retrieval' &&
+              (node.primitive.startsWith('embedding.') ? (
+                <EmbeddingCard node={node} />
+              ) : kind === 'retrieval' ? (
+                <RetrievalSpanTab node={node} />
+              ) : (
+                <RetrievalAggregateTab scope={isRoot ? detail.root : node} />
+              ))}
+            {activeTab === 'scores' && <ScoresTab node={node} judges={spanJudges} />}
+            {activeTab === 'citations' && <CitationsTab node={node} />}
+            {activeTab === 'eval' &&
+              (node.primitive === 'eval.run' || node.primitive === 'eval.suite' ? (
+                <EvalRunCard node={node} onSelect={(id) => onSelectSpan?.(id)} />
+              ) : (
+                <EvalCard node={node} />
+              ))}
+            {activeTab === 'report' &&
+              (node.primitive.startsWith('plan.') ? <PlanCard node={node} /> : <OperationReportCard node={node} />)}
+            {activeTab === 'composition' && <CompositionCard node={node} />}
+            {activeTab === 'children' && <ChildrenTab node={node} onSelect={(id) => onSelectSpan?.(id)} />}
+          </SectionErrorBoundary>
+        </div>
       )}
     </div>
   )

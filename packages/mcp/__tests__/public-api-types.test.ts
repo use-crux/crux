@@ -1,0 +1,122 @@
+import {
+  prompt,
+  type AdapterGenerateOptions,
+  type ContextEntry,
+} from "@use-crux/core";
+import { describeMcpAdapterConformance } from "@use-crux/mcp/testing/vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
+
+import {
+  materializeMcpToolSource,
+  mcp,
+  stdio,
+  streamableHttp,
+  type McpTransportConfig,
+  type McpToolSource,
+} from "@use-crux/mcp";
+
+describe("MCP public types", () => {
+  it("preserves source, transport, and runtime-context inference", async () => {
+    const staticSource = mcp({
+      id: "static",
+      transport: stdio({ command: "fixture-server" }),
+    });
+    const dynamicSource = mcp<{ token: string }>({
+      id: "dynamic",
+      transport: ({ runtimeContext, abortSignal }) => {
+        expectTypeOf(runtimeContext.token).toEqualTypeOf<string>();
+        expectTypeOf(abortSignal).toEqualTypeOf<AbortSignal | undefined>();
+        return streamableHttp({
+          url: "https://mcp.example.test",
+          headers: { Authorization: `Bearer ${runtimeContext.token}` },
+        });
+      },
+    });
+    const assistant = prompt({
+      use: [staticSource, dynamicSource],
+      prompt: "Use the available tools.",
+    });
+
+    expectTypeOf(staticSource).toMatchTypeOf<ContextEntry>();
+    expectTypeOf(dynamicSource).toEqualTypeOf<
+      McpToolSource<{ token: string }>
+    >();
+    expect((await assistant.resolve({})).toolSources).toEqual([
+      staticSource,
+      dynamicSource,
+    ]);
+
+    const options = {
+      model: "fixture-model",
+      runtimeContext: { token: "fixture-token" },
+      toolApproval: {
+        remote_lookup: (context) => {
+          expectTypeOf(context.runtimeContext).toEqualTypeOf<{
+            token: string;
+          }>();
+          return context.runtimeContext.token.length > 0;
+        },
+      },
+    } satisfies AdapterGenerateOptions<
+      Record<string, unknown>,
+      undefined,
+      typeof assistant,
+      { token: string }
+    >;
+
+    expect(options.runtimeContext.token).toBe("fixture-token");
+    expectTypeOf(describeMcpAdapterConformance).toBeFunction();
+  });
+
+  it("narrows transport configurations exhaustively", () => {
+    const describeTransport = (transport: McpTransportConfig): string => {
+      switch (transport.type) {
+        case "stdio":
+          return transport.command;
+        case "streamable-http":
+          return transport.url.toString();
+        default:
+          return assertNever(transport);
+      }
+    };
+
+    expect(describeTransport(stdio({ command: "node" }))).toBe("node");
+  });
+
+  it("types dynamic tool input as a record rather than any", () => {
+    type Session = Awaited<ReturnType<typeof materializeMcpToolSource>>;
+    type DynamicInput = Parameters<Session["tools"][string]["execute"]>[0];
+
+    expectTypeOf<DynamicInput>().toEqualTypeOf<Record<string, unknown>>();
+  });
+});
+
+function assertNever(value: never): never {
+  throw new Error(`Unexpected transport: ${String(value)}`);
+}
+
+function compileTimeRejections(): void {
+  // @ts-expect-error id is required
+  mcp({ transport: stdio({ command: "node" }) });
+
+  // @ts-expect-error transport is required
+  mcp({ id: "missing-transport" });
+
+  mcp({
+    id: "conflicting-selection",
+    transport: stdio({ command: "node" }),
+    // @ts-expect-error allow and deny are mutually exclusive
+    tools: { allow: ["read"], deny: ["write"] },
+  });
+
+  // @ts-expect-error stdio requires a command
+  stdio({ args: ["fixture.mjs"] });
+
+  streamableHttp({
+    url: "https://mcp.example.test",
+    // @ts-expect-error redirect is a closed literal union
+    redirect: "manual",
+  });
+}
+
+void compileTimeRejections;

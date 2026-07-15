@@ -9,17 +9,17 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/projectindex/model"
 )
 
-// CatalogEvidence converts durable fact envelopes into the bounded public
-// explanation shape. Only definition facts explain recognition; relations,
-// diagnostics, and lints have dedicated fields in the response.
+// CatalogEvidence converts durable fact envelopes linked to one definition
+// into the bounded public explanation shape. Related facts are evidence only
+// when their durable envelope names an extractor contributor.
 func CatalogEvidence(root string, facts []model.IndexFactEnvelope) []api.CatalogEvidenceV1 {
 	evidence := make([]api.CatalogEvidenceV1, 0)
 	for _, fact := range facts {
-		if fact.Kind != "definitions" || !catalogEvidencePhase(fact.Phase) {
+		if !catalogEvidencePhase(fact.Phase) {
 			continue
 		}
-		var definition api.ProjectDefinition
-		if err := json.Unmarshal(fact.Fact, &definition); err != nil {
+		source, supported := catalogEvidenceSource(root, fact)
+		if !supported {
 			continue
 		}
 		producer := fact.Producer.Name
@@ -28,11 +28,53 @@ func CatalogEvidence(root string, facts []model.IndexFactEnvelope) []api.Catalog
 		}
 		evidence = append(evidence, api.CatalogEvidenceV1{
 			Phase: string(fact.Phase), Producer: producer, Fidelity: fact.Fidelity,
-			Source: safeCatalogSource(root, definition.Source),
+			Source: source,
 			Reason: catalogEvidenceReason(fact),
 		})
 	}
 	return sortedCatalogEvidence(evidence)
+}
+
+func catalogEvidenceSource(root string, fact model.IndexFactEnvelope) (*api.SourceLoc, bool) {
+	switch fact.Kind {
+	case "definitions":
+		var definition api.ProjectDefinition
+		if err := json.Unmarshal(fact.Fact, &definition); err != nil {
+			return nil, false
+		}
+		return safeCatalogSource(root, definition.Source), true
+	case "relations":
+		if len(fact.Provenance.Extractors) == 0 {
+			return nil, false
+		}
+		var relation api.ProjectRelation
+		if err := json.Unmarshal(fact.Fact, &relation); err != nil {
+			return nil, false
+		}
+		return safeCatalogSource(root, relation.Source), true
+	case "sourceRefs":
+		if len(fact.Provenance.Extractors) == 0 {
+			return nil, false
+		}
+		var sourceRef struct {
+			Ref api.ProjectSourceRef `json:"ref"`
+		}
+		if err := json.Unmarshal(fact.Fact, &sourceRef); err != nil {
+			return nil, false
+		}
+		return safeCatalogSource(root, &sourceRef.Ref.Source), true
+	case "diagnostics":
+		if len(fact.Provenance.Extractors) == 0 {
+			return nil, false
+		}
+		var diagnostic api.IndexDiagnostic
+		if err := json.Unmarshal(fact.Fact, &diagnostic); err != nil {
+			return nil, false
+		}
+		return safeCatalogSource(root, diagnostic.Source), true
+	default:
+		return nil, false
+	}
 }
 
 func catalogEvidencePhase(phase model.IndexPatchPhase) bool {

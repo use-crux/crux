@@ -48,6 +48,8 @@ import {
   DEFAULT_MAX_STEPS,
   withSkillActivationInput,
 } from "./shared";
+import { materializeToolSources } from "./tool-sources";
+import { replaceResponseText } from "./response-text";
 
 /**
  * Execute one prompt through the core-owned provider loop.
@@ -82,26 +84,8 @@ export async function generateCore<
     tokenBudget: args.tokenBudget,
     settings: args.settings,
   });
-  const resolved = await prompt.resolve(resolveOpts);
+  let resolved = await prompt.resolve(resolveOpts);
   const mappedSettings = dialect.mapSettings(resolved.settings);
-  const lifecycle = createToolLifecycle({
-    regime: "core",
-    resolved,
-    call: {
-      tools: args.tools,
-      toolsContext: args.toolsContext,
-      runtimeContext: args.runtimeContext,
-      toolMiddleware: args.toolMiddleware,
-      toolApproval: args.toolApproval,
-    },
-    promptId: prompt.id,
-    input: args.input ?? {},
-    timeout: args.timeout,
-    reresolve: (skillSession) =>
-      prompt.resolve(withSkillActivationInput(resolveOpts, skillSession)),
-    appendToolRound: dialect.appendToolRound,
-    sanitizeToolSchema: dialect.sanitizeToolSchema,
-  });
 
   let messages = initialCoreMessages(resolved, args.messages);
   let schemaParams: Record<string, unknown> | undefined;
@@ -159,7 +143,40 @@ export async function generateCore<
     );
     return normalized;
   };
-  messages = (await lifecycle.resume(messages)).messages;
+  messages = [...(await safety.guardInput({ messages })).messages];
+  const sourceSession = await materializeToolSources({
+    dialect: dialect.id,
+    resolved,
+    materialize: dialect.materializeToolSource,
+    runtimeContext: args.runtimeContext,
+    abortSignal: args.signal,
+  });
+  resolved = sourceSession.resolved;
+  let lifecycle: ReturnType<typeof createToolLifecycle>;
+  try {
+    lifecycle = createToolLifecycle({
+      regime: "core",
+      resolved,
+      call: {
+        tools: args.tools,
+        toolsContext: args.toolsContext,
+        runtimeContext: args.runtimeContext,
+        toolMiddleware: args.toolMiddleware,
+        toolApproval: args.toolApproval,
+      },
+      promptId: prompt.id,
+      input: args.input ?? {},
+      timeout: args.timeout,
+      reresolve: (skillSession) =>
+        prompt.resolve(withSkillActivationInput(resolveOpts, skillSession)),
+      appendToolRound: dialect.appendToolRound,
+      sanitizeToolSchema: dialect.sanitizeToolSchema,
+    });
+    messages = (await lifecycle.resume(messages)).messages;
+  } catch (error) {
+    await sourceSession.close();
+    throw error;
+  }
 
   /**
    * Run exactly one provider call under the step budget, normalizing any thrown
@@ -181,239 +198,268 @@ export async function generateCore<
       });
     });
 
-  const generated = await orchestrateGenerate(
-    {
-      promptId: prompt.id,
-      promptConfig: prompt.config ?? ({} as typeof prompt.config),
-      preparedArgs: {
-        model: modelInfo.modelId,
-        system: currentSystem,
-        systemBlocks: currentSystemBlocks,
-        messages,
-        settings: mappedSettings,
-        schema: resolved.schema,
-        schemaParams,
-        tools: lifecycle.descriptors,
-        extra: (args.extra ?? {}) as TExtra,
-        input: args.input ?? {},
-      },
-      model: modelInfo.modelId,
-      input: args.input ?? {},
-      provider: modelInfo.provider,
-      resolved,
-      outputMode: resolved.schema ? "object" : "text",
-      timeout: args.timeout,
-    },
-    async () => {
-      messages = [...(await safety.guardInput({ messages })).messages];
-      let lastCallArgs: CallArgs<TExtra> | undefined;
-      let suspendedApproval = false;
-
-      for (let step = 0; step < maxSteps; step++) {
-        steps++;
-        const providerMessages = await prepareProviderMessages(messages);
-        emitInputTokenEstimate({
-          messages: providerMessages,
+  const generated = await sourceSession
+    .withContext(() =>
+      orchestrateGenerate(
+        {
+          promptId: prompt.id,
+          promptConfig: prompt.config ?? ({} as typeof prompt.config),
+          preparedArgs: {
+            model: modelInfo.modelId,
+            system: currentSystem,
+            systemBlocks: currentSystemBlocks,
+            messages,
+            settings: mappedSettings,
+            schema: resolved.schema,
+            schemaParams,
+            tools: lifecycle.descriptors,
+            extra: (args.extra ?? {}) as TExtra,
+            input: args.input ?? {},
+          },
+          model: modelInfo.modelId,
+          input: args.input ?? {},
           provider: modelInfo.provider,
-          model: modelInfo.modelId,
-          media: dialect.media,
-          tokenBudget: args.tokenBudget,
-        });
-        const callArgs: CallArgs<TExtra> = {
-          model: modelInfo.modelId,
-          system: currentSystem,
-          systemBlocks: currentSystemBlocks,
-          messages: providerMessages,
-          settings: mappedSettings,
-          schema: resolved.schema,
-          schemaParams,
-          tools: lifecycle.descriptors ? [...lifecycle.descriptors] : undefined,
-          extra: (args.extra ?? {}) as TExtra,
-        };
-        lastCallArgs = callArgs;
+          resolved,
+          outputMode: resolved.schema ? "object" : "text",
+          timeout: args.timeout,
+        },
+        async () => {
+          let lastCallArgs: CallArgs<TExtra> | undefined;
+          let suspendedApproval = false;
 
-        const { raw, extracted } = await callProvider(callArgs);
-        lastRaw = raw;
-        lastExtracted = extracted;
-
-        if (extracted.toolCalls && extracted.toolCalls.length > 0) {
-          // Tool calls are handled below after validation-only exits.
-        } else if (resolved.schema && validationRetry) {
-          const validationResult = validateStructuredOutput(
-            extracted.text,
-            resolved.schema,
-          );
-          if (validationResult.valid) {
-            const validText = validationResult.repairedText ?? extracted.text;
-            if (validText !== extracted.text) {
-              lastExtracted = { ...extracted, text: validText };
-            }
-            rememberStep(lastExtracted);
-            break;
-          }
-          if (validationRetries < maxValidationRetries && step < maxSteps - 1) {
-            validationRetries++;
-            validationRetry.onRetry?.(
-              validationRetries,
-              validationResult.error!,
-            );
-            messages = dialect.appendToolRound(messages, extracted, []);
-            messages = [
-              ...messages,
-              {
-                role: "user" as const,
-                content: formatValidationFeedback(
-                  extracted.text,
-                  validationResult.error!,
-                ),
-              },
-            ];
-            rememberStep({ ...lastExtracted, text: "" });
-            continue;
-          }
-          validationRetry.onExhausted?.(
-            validationRetries,
-            validationResult.error!,
-          );
-          throw new ValidationExhaustedError({
-            lastRawOutput: extracted.text,
-            zodErrors: validationResult.error!,
-            attempts: validationRetries,
-            maxAttempts: maxValidationRetries,
-            promptId: prompt.id ?? "unknown",
-          });
-        } else {
-          rememberStep(lastExtracted);
-          break;
-        }
-
-        if (!extracted.toolCalls || extracted.toolCalls.length === 0) continue;
-        const round = await lifecycle.executeRound(extracted, messages);
-        messages = round.messages;
-        if (round.kind === "suspended") {
-          // Suspension is tracked separately; the provider-normalized finish
-          // reason on the tool-call turn (e.g. "tool-calls") stays truthful.
-          suspendedApproval = true;
-          lastExtracted = extracted;
-          pendingApprovals = [round.request];
-          rememberStep(lastExtracted);
-          break;
-        }
-        const amendment = await lifecycle.applySkillLoads(extracted.toolCalls);
-        if (amendment) {
-          currentSystem = amendment.system;
-          currentSystemBlocks = amendment.systemBlocks;
-          steps--;
-          step--;
-          continue;
-        }
-        rememberStep(lastExtracted);
-        const triggered = findTriggeredStopCondition(stopConditions, {
-          steps,
-          toolCalls: extracted.toolCalls,
-        });
-        if (triggered) {
-          stoppedBy = triggered;
-          break;
-        }
-      }
-
-      if (lastExtracted) {
-        const suspended = suspendedApproval;
-        let parsed: unknown;
-        if (resolved.schema && !suspended) {
-          try {
-            parsed = JSON.parse(lastExtracted.text);
-          } catch {
-            parsed = undefined;
-          }
-        }
-        const finalOutput = await safety.finalizeOutput(
-          { text: lastExtracted.text, parsed },
-          async (corrective) => {
-            replaceLastStep({ ...lastExtracted!, text: "" });
-            messages = dialect.appendToolRound(messages, lastExtracted!, []);
-            messages = [...messages, ...corrective];
-            const providerMessages = await prepareProviderMessages(messages);
-            const regen = await callProvider({
-              ...lastCallArgs!,
-              messages: providerMessages,
-            });
-            lastRaw = regen.raw;
-            lastExtracted = regen.extracted;
+          for (let step = 0; step < maxSteps; step++) {
             steps++;
-            rememberStep(lastExtracted);
-            if (resolved.schema) {
-              const reVal = validateStructuredOutput(
-                regen.extracted.text,
+            const providerMessages = await prepareProviderMessages(messages);
+            emitInputTokenEstimate({
+              messages: providerMessages,
+              provider: modelInfo.provider,
+              model: modelInfo.modelId,
+              media: dialect.media,
+              tokenBudget: args.tokenBudget,
+            });
+            const callArgs: CallArgs<TExtra> = {
+              model: modelInfo.modelId,
+              system: currentSystem,
+              systemBlocks: currentSystemBlocks,
+              messages: providerMessages,
+              settings: mappedSettings,
+              schema: resolved.schema,
+              schemaParams,
+              tools: lifecycle.descriptors
+                ? [...lifecycle.descriptors]
+                : undefined,
+              extra: (args.extra ?? {}) as TExtra,
+            };
+            lastCallArgs = callArgs;
+
+            const { raw, extracted } = await callProvider(callArgs);
+            lastRaw = raw;
+            lastExtracted = extracted;
+
+            if (extracted.toolCalls && extracted.toolCalls.length > 0) {
+              // Tool calls are handled below after validation-only exits.
+            } else if (resolved.schema && validationRetry) {
+              const validationResult = validateStructuredOutput(
+                extracted.text,
                 resolved.schema,
               );
-              const reText = reVal.valid
-                ? (reVal.repairedText ?? regen.extracted.text)
-                : regen.extracted.text;
-              if (reText !== regen.extracted.text) {
-                lastExtracted = { ...regen.extracted, text: reText };
-                replaceLastStep(lastExtracted);
+              if (validationResult.valid) {
+                const validText =
+                  validationResult.repairedText ?? extracted.text;
+                if (validText !== extracted.text) {
+                  lastExtracted = replaceResponseText(extracted, validText);
+                }
+                rememberStep(lastExtracted);
+                break;
               }
-              let reParsed: unknown;
-              try {
-                reParsed = JSON.parse(reText);
-              } catch {
-                reParsed = undefined;
+              if (
+                validationRetries < maxValidationRetries &&
+                step < maxSteps - 1
+              ) {
+                validationRetries++;
+                validationRetry.onRetry?.(
+                  validationRetries,
+                  validationResult.error!,
+                );
+                messages = dialect.appendToolRound(messages, extracted, []);
+                messages = [
+                  ...messages,
+                  {
+                    role: "user" as const,
+                    content: formatValidationFeedback(
+                      extracted.text,
+                      validationResult.error!,
+                    ),
+                  },
+                ];
+                rememberStep(replaceResponseText(lastExtracted, ""));
+                continue;
               }
-              return { text: reText, parsed: reParsed };
+              validationRetry.onExhausted?.(
+                validationRetries,
+                validationResult.error!,
+              );
+              throw new ValidationExhaustedError({
+                lastRawOutput: extracted.text,
+                zodErrors: validationResult.error!,
+                attempts: validationRetries,
+                maxAttempts: maxValidationRetries,
+                promptId: prompt.id ?? "unknown",
+              });
+            } else {
+              rememberStep(lastExtracted);
+              break;
             }
-            return { text: regen.extracted.text, parsed: undefined };
-          },
-          { suspended, messages, schema: resolved.schema },
-        );
-        if (finalOutput.text !== lastExtracted.text) {
-          lastExtracted = { ...lastExtracted, text: finalOutput.text };
-          replaceLastStep(lastExtracted);
-        }
-        parsedObject = finalOutput.parsed;
-      }
 
-      const meta: TraceMeta = safety.stamp({
-        usage: lastExtracted?.usage,
-        finishReason: suspendedApproval
-          ? "tool_approval_required"
-          : lastExtracted?.finishReason,
-        stoppedBy,
-        toolCalls: lastExtracted?.toolCalls?.map((tc) => ({
-          id: tc.id,
-          name: tc.name,
-          args: tc.args,
-        })),
-        responseId: lastExtracted?.responseId,
-        actualModelId: lastExtracted?.actualModelId,
-      });
+            if (!extracted.toolCalls || extracted.toolCalls.length === 0)
+              continue;
+            const round = await lifecycle.executeRound(extracted, messages);
+            messages = round.messages;
+            if (round.kind === "suspended") {
+              // Suspension is tracked separately; the provider-normalized finish
+              // reason on the tool-call turn (e.g. "tool-calls") stays truthful.
+              suspendedApproval = true;
+              lastExtracted = extracted;
+              pendingApprovals = [round.request];
+              rememberStep(lastExtracted);
+              break;
+            }
+            const amendment = await lifecycle.applySkillLoads(
+              extracted.toolCalls,
+            );
+            if (amendment) {
+              currentSystem = amendment.system;
+              currentSystemBlocks = amendment.systemBlocks;
+              steps--;
+              step--;
+              continue;
+            }
+            rememberStep(lastExtracted);
+            const triggered = findTriggeredStopCondition(stopConditions, {
+              steps,
+              toolCalls: extracted.toolCalls,
+            });
+            if (triggered) {
+              stoppedBy = triggered;
+              break;
+            }
+          }
 
-      const resultMessages = suspendedApproval
-        ? messages
-        : appendAssistantResultMessage(messages, lastExtracted);
+          if (lastExtracted) {
+            const suspended = suspendedApproval;
+            let parsed: unknown;
+            if (resolved.schema && !suspended) {
+              try {
+                parsed = JSON.parse(lastExtracted.text);
+              } catch {
+                parsed = undefined;
+              }
+            }
+            const finalOutput = await safety.finalizeOutput(
+              { text: lastExtracted.text, parsed },
+              async (corrective) => {
+                replaceLastStep(replaceResponseText(lastExtracted!, ""));
+                messages = dialect.appendToolRound(
+                  messages,
+                  lastExtracted!,
+                  [],
+                );
+                messages = [...messages, ...corrective];
+                const providerMessages =
+                  await prepareProviderMessages(messages);
+                const regen = await callProvider({
+                  ...lastCallArgs!,
+                  messages: providerMessages,
+                });
+                lastRaw = regen.raw;
+                lastExtracted = regen.extracted;
+                steps++;
+                rememberStep(lastExtracted);
+                if (resolved.schema) {
+                  const reVal = validateStructuredOutput(
+                    regen.extracted.text,
+                    resolved.schema,
+                  );
+                  const reText = reVal.valid
+                    ? (reVal.repairedText ?? regen.extracted.text)
+                    : regen.extracted.text;
+                  if (reText !== regen.extracted.text) {
+                    lastExtracted = replaceResponseText(
+                      regen.extracted,
+                      reText,
+                    );
+                    replaceLastStep(lastExtracted);
+                  }
+                  let reParsed: unknown;
+                  try {
+                    reParsed = JSON.parse(reText);
+                  } catch {
+                    reParsed = undefined;
+                  }
+                  return { text: reText, parsed: reParsed };
+                }
+                return { text: regen.extracted.text, parsed: undefined };
+              },
+              { suspended, messages, schema: resolved.schema },
+            );
+            if (finalOutput.text !== lastExtracted.text) {
+              lastExtracted = replaceResponseText(
+                lastExtracted,
+                finalOutput.text,
+              );
+              replaceLastStep(lastExtracted);
+            }
+            parsedObject = finalOutput.parsed;
+          }
 
-      const accumulator = createResultAccumulator();
-      for (const facts of stepFacts) accumulator.addStep(facts);
+          const meta: TraceMeta = safety.stamp({
+            usage: lastExtracted?.usage,
+            finishReason: suspendedApproval
+              ? "tool_approval_required"
+              : lastExtracted?.finishReason,
+            stoppedBy,
+            toolCalls: lastExtracted?.toolCalls?.map((tc) => ({
+              id: tc.id,
+              name: tc.name,
+              args: tc.args,
+            })),
+            responseId: lastExtracted?.responseId,
+            actualModelId: lastExtracted?.actualModelId,
+          });
 
-      return accumulator.finalize({
-        raw: lastRaw,
-        messages: resultMessages,
-        _meta: meta,
-        ...(parsedObject !== undefined ? { object: parsedObject } : {}),
-        ...(meta.cost !== undefined ? { cost: meta.cost } : {}),
-        ...(pendingApprovals ? { pendingApprovals } : {}),
-      });
-    },
-  );
+          const resultMessages = suspendedApproval
+            ? messages
+            : appendAssistantResultMessage(messages, lastExtracted);
 
-  await lifecycle.captureTurn({
-    messages,
-    assistantText: generated.text,
-    toolCalls: generated._meta.toolCalls,
-  });
+          const accumulator = createResultAccumulator();
+          for (const facts of stepFacts) accumulator.addStep(facts);
 
-  return generated;
+          return accumulator.finalize({
+            raw: lastRaw,
+            messages: resultMessages,
+            _meta: meta,
+            ...(parsedObject !== undefined ? { object: parsedObject } : {}),
+            ...(meta.cost !== undefined ? { cost: meta.cost } : {}),
+            ...(pendingApprovals ? { pendingApprovals } : {}),
+          });
+        },
+      ),
+    )
+    .catch(async (error: unknown) => {
+      await sourceSession.close();
+      throw error;
+    });
+
+  try {
+    await lifecycle.captureTurn({
+      messages,
+      assistantText: generated.text,
+      toolCalls: stepFacts.flatMap((step) => step.toolCalls ?? []),
+    });
+    return generated;
+  } finally {
+    await sourceSession.close();
+  }
 
   function rememberStep(response: AdapterResponse | undefined): void {
     if (!response) return;

@@ -13,7 +13,9 @@ type Extraction struct {
 	InterfaceHash        string                                                 `json:"interfaceHash,omitempty"`
 	Definitions          []json.RawMessage                                      `json:"definitions"`
 	DefinitionExtractors map[string][]projectindex.IndexFactExtractorProvenance `json:"definitionExtractors,omitempty"`
+	FactExtractors       map[string][]projectindex.IndexFactExtractorProvenance `json:"factExtractors,omitempty"`
 	Relations            []json.RawMessage                                      `json:"relations"`
+	SourceRefs           []json.RawMessage                                      `json:"sourceRefs,omitempty"`
 	Dependencies         []string                                               `json:"dependencies"`
 	Diagnostics          []json.RawMessage                                      `json:"diagnostics"`
 	SemanticProfile      *projectindex.SemanticSourceProfileFile                `json:"semanticProfile,omitempty"`

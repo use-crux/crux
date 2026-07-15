@@ -51,11 +51,11 @@ func (s *Service) ResolveRunManifest(ctx context.Context, runID, requestedProjec
 	if err != nil {
 		return RunManifestResolution{}, err
 	}
-	refs, err := s.runDefinitionRefs(ctx, run.RunID)
+	projectedRefs, err := s.projectRunDefinitionRefs(ctx, run.RunID)
 	if err != nil {
 		return RunManifestResolution{}, fmt.Errorf("list definition refs for run %q: %w", runID, err)
 	}
-	return s.resolveRunManifest(ctx, run, refs, requestedProjectID)
+	return s.resolveRunManifest(ctx, run, projectedRefs.Run, requestedProjectID)
 }
 
 func (s *Service) resolveRunManifest(ctx context.Context, run RunSummary, refs []DefinitionRef, requestedProjectID string) (RunManifestResolution, error) {

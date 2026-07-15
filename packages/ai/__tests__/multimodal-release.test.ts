@@ -14,6 +14,78 @@ import { scriptedGateway } from './scripted-gateway'
 describe('multimodal release tracer', () => {
   afterEach(() => resetObservabilityRuntime())
 
+  it('traces generate and stream with an AI SDK model object verbatim', async () => {
+    const chat = prompt({ id: 'model-id-trace', prompt: 'Hello.' })
+    const scripted = scriptedGateway({
+      generateText: [{ text: 'generated' }],
+      streamText: [{ chunks: ['streamed'] }],
+    })
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+    const ai = createCruxAi({ gateway: scripted.gateway })
+    const model = {
+      provider: 'openrouter',
+      modelId: 'openai/gpt-5.6-luna',
+      specificationVersion: 'v3',
+    } as unknown as LanguageModel
+
+    await ai.generate(chat, { model })
+    const streamed = await ai.stream(chat, { model })
+    await streamed.completion
+    await observe.flush()
+
+    const generationStarts = transport.records.filter(
+      (record) =>
+        record.type === 'span:start' &&
+        (record.primitive === 'generation.call' ||
+          record.primitive === 'generation.stream'),
+    )
+    expect(generationStarts).toHaveLength(2)
+    expect(generationStarts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          attributes: expect.objectContaining({ operation: 'generate' }),
+        }),
+        expect.objectContaining({
+          attributes: expect.objectContaining({ operation: 'stream' }),
+        }),
+      ]),
+    )
+    for (const record of generationStarts) {
+      expect(record).toMatchObject({
+        attributes: {
+          provider: 'openrouter',
+          model: 'openai/gpt-5.6-luna',
+        },
+      })
+    }
+  })
+
+  it('omits an empty AI SDK modelId from trace metadata', async () => {
+    const chat = prompt({ id: 'empty-model-id-trace', prompt: 'Hello.' })
+    const scripted = scriptedGateway({ generateText: [{ text: 'generated' }] })
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+    const ai = createCruxAi({ gateway: scripted.gateway })
+    const model = {
+      provider: 'openrouter',
+      modelId: '',
+      specificationVersion: 'v3',
+    } as unknown as LanguageModel
+
+    await ai.generate(chat, { model })
+    await observe.flush()
+
+    const generationStart = transport.records.find(
+      (record) =>
+        record.type === 'span:start' && record.primitive === 'generation.call',
+    )
+    expect(generationStart).toMatchObject({
+      attributes: { provider: 'openrouter' },
+    })
+    expect(generationStart?.attributes).not.toHaveProperty('model')
+  })
+
   it('round-trips explicitly stored media through generate and stream without unsafe capture', async () => {
     const store = inMemoryAssetStore()
     const stored = await store.put({

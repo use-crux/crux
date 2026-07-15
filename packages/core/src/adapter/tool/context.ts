@@ -10,6 +10,7 @@
  */
 
 import type { z } from 'zod'
+import { createToolRegistry } from '../../tools/tool-registry'
 
 export type ResolvedToolsContext = Readonly<Record<string, unknown>>
 
@@ -28,11 +29,11 @@ export function resolveToolsContext(
   tools: Record<string, unknown>,
   toolsContext: Readonly<Record<string, unknown>> | undefined,
 ): ResolvedToolsContext {
-  const parsed: Record<string, unknown> = {}
+  const parsed = createToolRegistry<unknown>()
 
   for (const key of Object.keys(toolsContext ?? {})) {
     const tool = tools[key]
-    if (tool === undefined && !(key in tools)) {
+    if (tool === undefined && !Object.hasOwn(tools, key)) {
       throw new Error(`toolsContext.${key} was provided, but no resolved tool named "${key}" exists.`)
     }
     if (!toolContextSchema(tool)) {
@@ -44,7 +45,7 @@ export function resolveToolsContext(
     const schema = toolContextSchema(tool)
     if (!schema) continue
 
-    if (!toolsContext || !(toolName in toolsContext)) {
+    if (!toolsContext || !Object.hasOwn(toolsContext, toolName)) {
       throw new Error(`Tool "${toolName}" requires toolsContext.${toolName} because it declares contextSchema.`)
     }
 
