@@ -1,13 +1,13 @@
 import type { JsonValue } from "../../storage";
-import type { InMemoryRuntimeStore } from "../adapters/memory";
 import type { WorkItem } from "../engine/work";
 import type { WorkId } from "../ports/ids";
 import type { RuntimeWork } from "../ports/work";
 import type { SubmitEvalJobV1 } from "./types";
+import type { EvalHostStore } from "./types";
 
 /** Project one Runtime work row into the stable Eval host poll union. */
 export async function projectEvalJobStatus(input: {
-  readonly store: InMemoryRuntimeStore;
+  readonly store: EvalHostStore;
   readonly namespace: string;
   readonly jobId: string;
 }): Promise<{ readonly statusCode: number; readonly body: JsonValue }> {
@@ -97,7 +97,7 @@ function isEvalJobWork(work: WorkItem): work is WorkItem & {
 }
 
 async function completedStatus(
-  store: InMemoryRuntimeStore,
+  store: EvalHostStore,
   work: WorkItem,
   common: Readonly<Record<string, JsonValue>>,
 ): Promise<{ readonly statusCode: number; readonly body: JsonValue }> {

@@ -41,8 +41,12 @@ describe("@use-crux/core runtime store public surface", () => {
     );
     expect("createDeployedEvalRegistry" in runtimePublic).toBe(false);
     expect(evalHostInternal.createMemoryEvalHost).toBeTypeOf("function");
+    expect(evalHostInternal.createNodeEvalHost).toBeTypeOf("function");
+    expect(evalHostInternal.createServerlessEvalHost).toBeTypeOf("function");
     expect(evalHostInternal.createEvalHostClient).toBeTypeOf("function");
     expect("createMemoryEvalHost" in runtimePublic).toBe(false);
+    expect("createNodeEvalHost" in runtimePublic).toBe(false);
+    expect("createServerlessEvalHost" in runtimePublic).toBe(false);
   });
 
   it("uses adapter-neutral remediation for capability preflight failures", () => {

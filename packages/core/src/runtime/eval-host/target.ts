@@ -3,7 +3,6 @@ import {
   getEvalTaskDescriptorForInternalUse,
 } from "../../eval/internal/task";
 import type { JsonValue } from "../../storage";
-import type { InMemoryRuntimeStore } from "../adapters/memory";
 import type { RuntimeTarget, RuntimeTargetContext } from "../engine/kernel";
 import type { WorkItemError } from "../engine/work";
 import type { RuntimeTargetId } from "../ports/ids";
@@ -11,13 +10,14 @@ import type { DeployedEvalRegistry } from "../eval-registry";
 import { resolveDeployedEval } from "../eval-registry";
 import { CruxRuntimeError } from "../engine/errors";
 import { CRUX_EVAL_HOST_PROTOCOL, type SubmitEvalJobV1 } from "./types";
+import type { EvalHostStore } from "./types";
 
 export const EVAL_EXECUTE_TARGET_ID = "_crux.eval.execute" as RuntimeTargetId;
 
 /** Build the sole allowlisted Runtime target used by deployed Eval jobs. */
 export function createEvalExecuteTarget(input: {
   readonly registry: DeployedEvalRegistry;
-  readonly store: InMemoryRuntimeStore;
+  readonly store: EvalHostStore;
   readonly now: () => Date;
 }): RuntimeTarget {
   return Object.freeze({

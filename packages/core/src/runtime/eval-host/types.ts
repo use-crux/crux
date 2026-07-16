@@ -2,6 +2,10 @@ import type { DeployedEvalRegistry } from "../eval-registry";
 import type { InMemoryRuntimeStore } from "../adapters/memory";
 import type { JsonValue } from "../../storage";
 import type { RuntimeResultRef } from "../results/types";
+import type { RuntimeResultPayloadPort } from "../results/types";
+import type { RuntimeStoreAdapter } from "../store";
+import type { InProcessRuntimeEngineDefinition } from "../api/runtime-definition";
+import type { RuntimeWakeRequestVerifier } from "../handler/verify";
 
 /** Stable private wire protocol spoken by deployed Eval execution hosts. */
 export const CRUX_EVAL_HOST_PROTOCOL = "crux.eval-host.v1" as const;
@@ -52,8 +56,63 @@ export interface CreateMemoryEvalHostOptions {
   readonly hostCapabilities?: readonly string[];
 }
 
+/** Runtime store whose result capability is proven before Eval admission. */
+export type EvalHostStore = RuntimeStoreAdapter & {
+  readonly results: RuntimeResultPayloadPort;
+};
+
+/** Shared authenticated Eval-host construction contract. */
+export interface CreateEvalHostOptions {
+  /** Stable deployment identity compared before admission. */
+  readonly deploymentId: string;
+  /** Dedicated Eval-execute bearer capability. */
+  readonly token: string;
+  /** Generated allowlist containing executable deployed Evals. */
+  readonly registry: DeployedEvalRegistry;
+  /** Deterministic clock used by deadline and protocol conformance tests. */
+  readonly now?: () => Date;
+  /** Bounded operational limits. */
+  readonly limits?: CreateMemoryEvalHostOptions["limits"];
+  /** Durable services this host can satisfy for managed tasks. */
+  readonly hostCapabilities?: readonly string[];
+}
+
+/** Options for a long-lived in-process Node Eval host. */
+export interface CreateNodeEvalHostOptions extends CreateEvalHostOptions {
+  /** Optional result-capable store; defaults to the process-local memory store. */
+  readonly store?: EvalHostStore;
+}
+
+/** Options for a durable generic-serverless Eval host invocation. */
+export interface CreateServerlessEvalHostOptions<
+  TStore extends EvalHostStore = EvalHostStore,
+> extends CreateEvalHostOptions {
+  /** Existing serverless composer definition with durable state and wake ports. */
+  readonly runtime: InProcessRuntimeEngineDefinition<TStore>;
+  /** Explicit wake verifier override for trusted adapter bridges. */
+  readonly verifyWake?: RuntimeWakeRequestVerifier;
+}
+
+/** Fetch-compatible authenticated Eval protocol handler. */
+export interface EvalHostFetchHandler {
+  /** Handle one manifest or job request. */
+  fetch(request: Request): Promise<Response>;
+}
+
+/** Generic-serverless handler pair for Eval traffic and signed wake delivery. */
+export interface ServerlessEvalHost<
+  TStore extends EvalHostStore = EvalHostStore,
+> extends EvalHostFetchHandler {
+  /** Durable store retained across invocation reconstruction. */
+  readonly store: TStore;
+  /** Handle one signed Runtime wake request. */
+  wake(request: Request): Promise<Response>;
+  /** Stop invocation-owned maintenance resources. */
+  dispose(): void;
+}
+
 /** Fetch-compatible private Eval host boundary. */
-export interface MemoryEvalHost {
+export interface MemoryEvalHost extends EvalHostFetchHandler {
   /** Handle one authenticated manifest or job request. */
   fetch(request: Request): Promise<Response>;
   /** Reference store exposed for shared adapter conformance assertions. */

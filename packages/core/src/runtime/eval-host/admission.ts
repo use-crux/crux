@@ -1,7 +1,7 @@
 import type { JsonValue } from "../../storage";
-import type { InMemoryRuntimeStore } from "../adapters/memory";
 import type { RuntimeKernel } from "../engine/kernel";
 import { wakeEnvelopeForWork } from "../engine/kernel";
+import type { RuntimeWakeDeliver } from "../engine/outbox";
 import { enqueueTaskInTransaction } from "../engine/kernel-tasks";
 import type { TaskId } from "../ports/ids";
 import {
@@ -11,18 +11,19 @@ import {
 import { decodeSubmitEvalJob, EvalHostProtocolError } from "./protocol";
 import { projectEvalJobStatus, workId } from "./status";
 import { EVAL_EXECUTE_TARGET_ID } from "./target";
-import type { CreateMemoryEvalHostOptions } from "./types";
+import type { CreateEvalHostOptions, EvalHostStore } from "./types";
 import { jsonResponse } from "./transport";
 
 /** Context required to validate and durably admit one exact deployed Case. */
 export interface EvalHostAdmissionContext {
-  readonly registry: CreateMemoryEvalHostOptions["registry"];
-  readonly store: InMemoryRuntimeStore;
+  readonly registry: CreateEvalHostOptions["registry"];
+  readonly store: EvalHostStore;
   readonly kernel: RuntimeKernel;
   readonly namespace: string;
   readonly now: () => Date;
   readonly maxConcurrentJobs: number;
   readonly hostCapabilities: readonly string[];
+  readonly scheduleWake: RuntimeWakeDeliver;
 }
 
 /** Validate, deduplicate, and enqueue one Eval job. */
@@ -58,13 +59,12 @@ export async function submitEvalJob(
   }
 
   const id = workId(job.jobId);
-  let created = false;
-  const work = await context.store
+  const admission = await context.store
     .transact(async (tx) => {
       const existing = await tx.state.getWork(id, {
         namespace: context.namespace,
       });
-      if (existing !== null) return existing;
+      if (existing !== null) return { work: existing, created: false } as const;
       const counts = await tx.state.countWork({ namespace: context.namespace });
       const active = counts
         .filter(
@@ -74,32 +74,35 @@ export async function submitEvalJob(
       if (active >= context.maxConcurrentJobs) {
         throw new EvalHostCapacityError();
       }
-      created = true;
-      return await enqueueTaskInTransaction(
-        tx,
-        { newWorkId: () => id, now: context.now },
-        {
-          namespace: context.namespace,
-          taskId: job.jobId as TaskId,
-          targetId: EVAL_EXECUTE_TARGET_ID,
-          input: job as unknown as JsonValue,
-        },
-      );
+      return {
+        work: await enqueueTaskInTransaction(
+          tx,
+          { newWorkId: () => id, now: context.now },
+          {
+            namespace: context.namespace,
+            taskId: job.jobId as TaskId,
+            targetId: EVAL_EXECUTE_TARGET_ID,
+            input: job as unknown as JsonValue,
+          },
+        ),
+        created: true,
+      } as const;
     })
     .catch((error: unknown) => {
       if (error instanceof EvalHostCapacityError) return error;
       throw error;
     });
-  if (work instanceof EvalHostCapacityError) {
+  if (admission instanceof EvalHostCapacityError) {
     return jsonResponse({ error: capacityError() }, 429);
   }
+  const { work, created } = admission;
   if (work.work.kind !== "task.run" || !sameJob(work.work.input, job)) {
     return jsonResponse({ error: admissionError("IDEMPOTENCY_CONFLICT") }, 409);
   }
+  if (work.status === "pending") {
+    await context.scheduleWake(wakeEnvelopeForWork(work));
+  }
   if (created) {
-    queueMicrotask(() => {
-      void context.kernel.handleWake(wakeEnvelopeForWork(work));
-    });
     return jsonResponse(
       {
         status: "accepted",
