@@ -4,11 +4,12 @@ import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join, parse } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type * as EvalRunnerModule from '@use-crux/core/eval/internal/runner'
+import type * as EvalNodeRunnerModule from '@use-crux/core/eval/internal/node-runner'
 
 const SUPPORTED_PROTOCOLS = [1] as const
 
 export type EvalRunnerCore = typeof EvalRunnerModule
-export type EvalNodeCore = typeof import('@use-crux/core/eval/node')
+export type EvalNodeRunnerCore = typeof EvalNodeRunnerModule
 
 /** Structured worker/Core skew failure emitted before discovery. */
 export class EvalRunnerProtocolMismatchError extends Error {
@@ -38,14 +39,30 @@ export async function loadEvalRunnerCore(projectRoot: string): Promise<EvalRunne
 	return (await loadCoreExport(projectRoot, './eval/internal/runner', true)) as EvalRunnerCore
 }
 
-/** Resolve the project-local Node stores used by CLI coordination. */
-export async function loadEvalNodeCore(projectRoot: string): Promise<EvalNodeCore> {
-	return (await loadCoreExport(projectRoot, './eval/node', false)) as EvalNodeCore
+/** Resolve the project-local Node discovery/coordinator contract. */
+export async function loadEvalNodeRunnerCore(
+  projectRoot: string,
+): Promise<EvalNodeRunnerCore> {
+  const imported = (await loadCoreExport(
+    projectRoot,
+    './eval/internal/node-runner',
+    false,
+  )) as EvalNodeRunnerCore
+  if (imported.EVAL_NODE_RUNNER_PROTOCOL !== 1) {
+    throw new EvalRunnerProtocolMismatchError(
+      typeof imported.EVAL_NODE_RUNNER_PROTOCOL === 'number'
+        ? imported.EVAL_NODE_RUNNER_PROTOCOL
+        : 'pre-versioning',
+    )
+  }
+  return imported
 }
 
 async function loadCoreExport(
   projectRoot: string,
-  exportName: './eval/internal/runner' | './eval/node',
+  exportName:
+    | './eval/internal/runner'
+    | './eval/internal/node-runner',
   checkProtocol: boolean,
 ): Promise<unknown> {
   const packageDir = findPackageDir(projectRoot, '@use-crux/core')

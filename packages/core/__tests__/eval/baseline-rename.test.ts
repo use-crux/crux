@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import {
   createEvalBaselineFileStore,
   EvalBaselineMigrationError,
-} from "../../src/eval/node";
+} from "../../src/eval/node-stores";
 import { buildEvalBaseline } from "../../src/eval/internal/baseline";
 import type { EvalRun } from "../../src/eval/internal/types";
 import { runFixture } from "./baseline-test-harness";
@@ -107,4 +107,3 @@ describe("Eval Baseline rename migration", () => {
 function atSource(run: EvalRun, relativeFile: string): EvalRun {
   return { ...run, sourceKey: { relativeFile, export: "default" } };
 }
-

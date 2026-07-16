@@ -8,7 +8,7 @@ import {
   createEvalRunFileStore,
   evalRunV3Schema,
   isEvalRunPromotable,
-} from "../../src/eval/node";
+} from "../../src/eval/node-stores";
 import { executeEvalPlan } from "../../src/eval/internal/executor";
 import { planEval } from "../../src/eval/internal/planner";
 import {

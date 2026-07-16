@@ -46,4 +46,21 @@ describe("@use-crux/core/eval", () => {
     const surface = await import("@use-crux/core/eval");
     expect(Object.keys(surface).sort()).toEqual(["caseFile", "evaluate"]);
   });
+
+  it("exposes only runEval as the Node runtime API", async () => {
+    const manifest = JSON.parse(
+      await readFile(new URL("../../package.json", import.meta.url), "utf8"),
+    ) as CorePackageManifest;
+    expect(manifest.exports?.["./eval/node"]).toEqual({
+      types: "./src/eval/node.ts",
+      import: "./src/eval/node.ts",
+    });
+    expect(manifest.exports?.["./eval/internal/node-runner"]).toEqual({
+      types: "./src/eval/node-runner.ts",
+      import: "./src/eval/node-runner.ts",
+    });
+
+    const surface = await import("@use-crux/core/eval/node");
+    expect(Object.keys(surface)).toEqual(["runEval"]);
+  });
 });

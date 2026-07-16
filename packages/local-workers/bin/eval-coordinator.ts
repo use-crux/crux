@@ -2,10 +2,10 @@
 
 /** Standalone NDJSON coordinator behind the new `crux eval` namespace. */
 
-import { hydrateEvalCases } from '../lib/eval-cases'
-import { loadEvalNodeCore, loadEvalRunnerCore } from '../lib/eval-core-bridge'
-import { discoverProjectEvals, selectEvals } from '../lib/eval-discovery'
-import { coordinateEval } from '../lib/eval-execute'
+import {
+  loadEvalNodeRunnerCore,
+  loadEvalRunnerCore,
+} from '../lib/eval-core-bridge'
 import { getArg, getRepeatedArg, hasFlag, positionalArgs } from '../lib/quality-runner-argv'
 
 console.log = (...args: unknown[]) => console.error(...args)
@@ -28,7 +28,8 @@ async function main(): Promise<number> {
   const watchDependencies = new Set<string>()
   try {
     const core = await loadEvalRunnerCore(projectRoot)
-    const node = await loadEvalNodeCore(projectRoot)
+    const nodeRunner = await loadEvalNodeRunnerCore(projectRoot)
+    const node = nodeRunner
     if (baselineRunId !== undefined) {
       return await setBaseline(
         node,
@@ -37,27 +38,29 @@ async function main(): Promise<number> {
         getArg(args, '--variant'),
       )
     }
-    const discovered = await discoverProjectEvals({ projectRoot, core })
+    const discovered = await nodeRunner.discoverProjectEvals(projectRoot)
     if (discovered.errors.length > 0) {
       emit({ type: 'collect:done', evals: [], errors: discovered.errors })
       return 2
     }
-    const selection = selectEvals(discovered.evals, selectors)
+    const selection = nodeRunner.selectEvals(discovered.evals, selectors)
     if (selection.errors.length > 0) {
-      emit({ type: 'collect:done', evals: [], errors: selection.errors })
+      emit({
+        type: 'collect:done',
+        evals: [],
+        errors: selection.errors.map((message) => ({ message })),
+      })
       return 2
     }
     const hydrated = []
     for (const entry of selection.matches) {
       hydrated.push(
-        selectCases(
-          await hydrateEvalCases(entry, {
+        nodeRunner.selectHydratedCases(
+          await nodeRunner.hydrateEvalCases(entry, {
             projectRoot,
-            core,
             registerWatchDependency: (path) => watchDependencies.add(path),
           }),
           getRepeatedArg(args, '--case'),
-          core,
         ),
       )
     }
@@ -90,7 +93,7 @@ async function main(): Promise<number> {
     const runIds: string[] = []
     let failed = false
     for (const entry of hydrated) {
-      const coordinated = await coordinateEval(
+      const coordinated = await nodeRunner.coordinateNodeEval(
         entry,
         {
           ...(variants[0] !== undefined ? { variant: variants[0] } : {}),
@@ -101,8 +104,6 @@ async function main(): Promise<number> {
           ...(entry.filteredSelection ? { filtered: true } : {}),
           ...(hasFlag(args, '--confirm-unknown-cost') ? { confirmUnknownCost: true } : {}),
         },
-        core,
-        node,
         projectRoot,
       )
       emit({ type: 'eval:plan', evalId: entry.id, plan: coordinated.plan })
@@ -143,47 +144,8 @@ async function main(): Promise<number> {
   }
 }
 
-function selectCases(
-  entry: Awaited<ReturnType<typeof hydrateEvalCases>>,
-  patterns: readonly string[],
-  core: Awaited<ReturnType<typeof loadEvalRunnerCore>>,
-): Awaited<ReturnType<typeof hydrateEvalCases>> {
-  const only = entry.cases.filter((item) => item.authored.only === true)
-  const candidates = only.length > 0 ? only : entry.cases
-  const selected = patterns.length === 0
-    ? candidates
-    : candidates.filter((item) => patterns.some((pattern) => {
-        const matcher = wildcardPattern(pattern)
-        return matcher.test(item.id) || (item.authored.name !== undefined && matcher.test(item.authored.name))
-      }))
-  if (selected.length === 0) {
-    throw new TypeError(`Eval '${entry.id}' has no Case matching ${patterns.map((value) => `'${value}'`).join(', ')}.`)
-  }
-  const cases = selected.map((item) => {
-    const { only, ...authored } = item.authored
-    void only
-    return Object.freeze({ ...item, authored: Object.freeze(authored) })
-  })
-  return Object.freeze({
-    ...entry,
-    ...((only.length > 0 || patterns.length > 0)
-      ? { filteredSelection: true as const }
-      : {}),
-    cases: Object.freeze(cases),
-    eval: core.materializeEvalForInternalUse(entry.eval, {
-      id: entry.id,
-      cases: cases.map((item) => item.authored),
-    }),
-  })
-}
-
-function wildcardPattern(value: string): RegExp {
-  const escaped = value.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replaceAll('*', '.*')
-  return new RegExp(`^${escaped}$`)
-}
-
 async function setBaseline(
-  node: Awaited<ReturnType<typeof loadEvalNodeCore>>,
+  node: Awaited<ReturnType<typeof loadEvalNodeRunnerCore>>,
   projectRoot: string,
   runId: string,
   variant: string | undefined,

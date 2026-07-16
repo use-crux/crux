@@ -1,8 +1,3 @@
-/** Definition/configuration failure raised before any Eval external work. */
-export class EvalCaseFileError extends Error {
-  override readonly name = 'EvalCaseFileError'
+/** Compatibility re-export for Worker characterization tests. */
 
-  constructor(readonly path: string, detail: string) {
-    super(`Eval Case file ${path}: ${detail}`)
-  }
-}
+export { EvalCaseFileError } from '@use-crux/core/eval/internal/node-runner'

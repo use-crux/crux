@@ -45,6 +45,10 @@
       "types": "./src/eval/internal/runner.ts",
       "import": "./src/eval/internal/runner.ts"
     },
+    "./eval/internal/node-runner": {
+      "types": "./src/eval/node-runner.ts",
+      "import": "./src/eval/node-runner.ts"
+    },
     "./quality": {
       "types": "./src/quality/index.ts",
       "import": "./src/quality/index.ts"
