@@ -109,6 +109,10 @@
       "types": "./src/runtime/eval-registry/index.ts",
       "import": "./src/runtime/eval-registry/index.ts"
     },
+    "./runtime/internal/eval-host": {
+      "types": "./src/runtime/eval-host/index.ts",
+      "import": "./src/runtime/eval-host/index.ts"
+    },
     "./setup": {
       "types": "./src/setup/index.ts",
       "import": "./src/setup/index.ts"

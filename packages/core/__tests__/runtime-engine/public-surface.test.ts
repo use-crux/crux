@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as runtimePublic from "@use-crux/core/runtime";
 import * as evalRegistryInternal from "@use-crux/core/runtime/internal/eval-registry";
+import * as evalHostInternal from "@use-crux/core/runtime/internal/eval-host";
 import {
   createOutboxDispatcher,
   createRuntime,
@@ -39,6 +40,9 @@ describe("@use-crux/core runtime store public surface", () => {
       "function",
     );
     expect("createDeployedEvalRegistry" in runtimePublic).toBe(false);
+    expect(evalHostInternal.createMemoryEvalHost).toBeTypeOf("function");
+    expect(evalHostInternal.createEvalHostClient).toBeTypeOf("function");
+    expect("createMemoryEvalHost" in runtimePublic).toBe(false);
   });
 
   it("uses adapter-neutral remediation for capability preflight failures", () => {

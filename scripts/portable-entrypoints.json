@@ -55,6 +55,7 @@
         "./runtime-bridge": "portable-web",
         "./runtime": "portable-web",
         "./runtime/internal/eval-registry": "portable-web",
+        "./runtime/internal/eval-host": "portable-web",
         "./setup": "node-only",
         "./runtime/testing": "node-only",
         "./runtime/next": "node-only",
