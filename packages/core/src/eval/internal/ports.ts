@@ -4,6 +4,12 @@ import type { EvalTaskEvidenceEntry } from "./evidence";
 import type { EvalScorerEvidenceEntry } from "./scorer-evidence";
 import type { EvalRun, EvalTaskHostRequest, EvalTaskHostResult } from "./types";
 import type { Score, Scorer } from "../../quality/scorers";
+import type {
+  EvalCostAction,
+  EvalCostEstimationRequest,
+  EvalCostEstimate,
+} from "./cost-types";
+import type { EvalBaselineV3 } from "./baseline-types";
 
 export interface EvalTaskHost {
   execute(request: EvalTaskHostRequest): Promise<EvalTaskHostResult>;
@@ -55,6 +61,27 @@ export interface EvalPlanningPorts {
   readonly evidenceStore: EvalEvidenceStore;
   readonly taskIdentity: EvalTaskIdentityProvider;
   readonly externalScorerHostContractFingerprint?: string;
+  readonly costEstimator: EvalCostEstimator;
+  readonly costConfirmation?: EvalCostConfirmationPort;
+}
+
+/** Pricing-aware maximum estimator supplied by the coordinating host. */
+export interface EvalCostEstimator {
+  /**
+   * Apply managed model/router pricing and bounds first, then the existing
+   * config override, returning `unknown` when neither proves a maximum.
+   */
+  estimate(
+    action: EvalCostEstimationRequest,
+  ): Promise<EvalCostEstimate> | EvalCostEstimate;
+}
+
+/** Single interactive confirmation for plans containing unknown costs. */
+export interface EvalCostConfirmationPort {
+  confirm(input: {
+    readonly knownMaximumUsd: number;
+    readonly unknownActions: readonly EvalCostAction[];
+  }): Promise<boolean>;
 }
 
 export interface ExternalScorerHostRequest {
@@ -77,4 +104,20 @@ export interface EvalExecutionPorts {
   readonly runStore: EvalRunStore;
   readonly evidenceStore?: EvalEvidenceStore;
   readonly externalScorerHost?: ExternalScorerHost;
+  readonly reservations?: EvalReservationPort;
+  /** Validated committed truth supplied before portable execution. */
+  readonly baseline?: EvalBaselineV3;
+}
+
+/** Atomic shared budget boundary used before admitted external calls. */
+export interface EvalReservationPort {
+  reserve(input: {
+    readonly reservationId: string;
+    readonly actionId: string;
+    readonly maximumUsd: number;
+  }): Promise<{ readonly status: "reserved" | "rejected" }>;
+  settle(input: {
+    readonly reservationId: string;
+    readonly actualUsd: number;
+  }): Promise<void>;
 }

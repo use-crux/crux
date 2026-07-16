@@ -11,6 +11,9 @@ interface EvalScorerActionBase {
   readonly externalKind: "model";
   readonly price: { readonly kind: "unknown" };
   readonly admission: "admitted";
+  /** Whether exact scorer evidence may be consulted for this action. */
+  readonly evidenceRead: "allow" | "bypass";
+  readonly evidenceReadReason?: "fresh_requested" | "performance_freshness";
 }
 
 export type EvalScorerAction =
@@ -31,7 +34,11 @@ export type EvalScorerAction =
       readonly contractFingerprint?: string;
       readonly hostContractFingerprint?: string;
       readonly evidenceKey?: string;
-      readonly reason: "no_exact_evidence" | "identity_unavailable";
+      readonly reason:
+        | "fresh_requested"
+        | "performance_freshness"
+        | "no_exact_evidence"
+        | "identity_unavailable";
       readonly reservation: {
         readonly kind: "reserved";
         readonly reservationId: string;

@@ -5,12 +5,15 @@ import { resolveEvalArms } from "./arm-policy";
 import { resolveInlineCases } from "./case-matrix";
 import { getEvalDefinitionForInternalUse } from "./definition";
 import { readTaskEvidenceEntry } from "./evidence";
+import { resolveEvalCellFreshness, type EvalCellFreshness } from "./freshness";
 import {
   createTaskEvidenceIdentity,
   fingerprintEvalValue,
   isReusableEvalValue,
 } from "./identity";
 import type { EvalPlanningPorts } from "./ports";
+import { createEvalPreflight } from "./offline";
+import { createEvalCostPlan } from "./cost-plan";
 import { planExternalScorers } from "./scorer-plan";
 import {
   EvalTaskExecutionError,
@@ -25,11 +28,19 @@ import type {
 
 export async function planEval(
   evalValue: AnyEval,
-  options: { readonly sourceKey: EvalSourceKey; readonly variant?: string },
+  options: {
+    readonly sourceKey: EvalSourceKey;
+    readonly variant?: string;
+    readonly fresh?: boolean;
+    readonly offline?: boolean;
+    readonly maxCostUsd?: number;
+    readonly interactive?: boolean;
+    readonly plan?: boolean;
+  },
   ports?: EvalPlanningPorts,
 ): Promise<EvalPlan> {
   const definition = getEvalDefinitionForInternalUse(evalValue);
-  assertPhase8Definition(definition);
+  assertSupportedDefinition(definition);
   const evalId = definition.explicitId!;
   const resolvedCases = resolveInlineCases(definition);
   const sourceKey = Object.freeze({ ...options.sourceKey });
@@ -45,6 +56,11 @@ export async function planEval(
           arm,
           trial,
           scorers: definition.scorers,
+          freshness: resolveEvalCellFreshness(
+            definition,
+            resolvedCase.authored,
+            options.fresh === true,
+          ),
           ports,
         });
         cells.push(cell);
@@ -57,16 +73,37 @@ export async function planEval(
     variants: Object.freeze(arms.map((arm) => arm.name)),
     trials: Math.max(...resolvedCases.map((entry) => entry.trials)),
   });
+  const cost = await createEvalCostPlan({
+    cells,
+    rawScorers: definition.scorers,
+    options,
+    ...(ports?.costEstimator !== undefined
+      ? { estimator: ports.costEstimator }
+      : {}),
+    ...(ports?.costConfirmation !== undefined
+      ? { confirmation: ports.costConfirmation }
+      : {}),
+  });
   return Object.freeze({
     schemaVersion: 1 as const,
     evalId,
     sourceKey,
-    definitionFingerprint: `phase8:${evalId}`,
+    definitionFingerprint: `pending-source-identity:${evalId}`,
     selection,
+    preflight: createEvalPreflight(
+      cells,
+      definition.scorers,
+      options.offline === true,
+    ),
+    cost,
     task: definition.task,
     arms,
     ...(definition.expect !== undefined ? { expect: definition.expect } : {}),
+    ...(definition.afterScores !== undefined
+      ? { afterScores: definition.afterScores }
+      : {}),
     scorers: definition.scorers,
+    ...(definition.gates !== undefined ? { gates: definition.gates } : {}),
     scorerActions: Object.freeze(allScorerActions),
     cells: Object.freeze(cells),
   });
@@ -78,6 +115,7 @@ async function planCell(input: {
   readonly arm: ReturnType<typeof resolveEvalArms>[number];
   readonly trial: number;
   readonly scorers: unknown;
+  readonly freshness: EvalCellFreshness;
   readonly ports?: EvalPlanningPorts;
 }): Promise<EvalPlannedCell> {
   const authored = input.resolvedCase.authored;
@@ -93,7 +131,13 @@ async function planCell(input: {
       ? { call: authored.call as Readonly<Record<string, unknown>> }
       : {}),
   };
-  const action = await planTaskAction(request, input.ports);
+  const action = authored.skip
+    ? Object.freeze({
+        kind: "skip" as const,
+        reason: "source_skipped" as const,
+        ...(typeof authored.skip === "string" ? { detail: authored.skip } : {}),
+      })
+    : await planTaskAction(request, input.ports, input.freshness);
   const cellBase = {
     caseId: input.resolvedCase.caseId,
     ...(authored.name !== undefined ? { caseName: authored.name } : {}),
@@ -107,12 +151,18 @@ async function planCell(input: {
     ...(request.call !== undefined ? { call: request.call } : {}),
     ...(authored.expected !== undefined ? { expected: authored.expected } : {}),
     ...(authored.expect !== undefined ? { expect: authored.expect } : {}),
+    ...(authored.afterScores !== undefined
+      ? { afterScores: authored.afterScores }
+      : {}),
   };
-  const scorerActions = await planExternalScorers({
+  const scorerActions = action.kind === "skip" ? Object.freeze([]) : await planExternalScorers({
     rawScorers: input.scorers,
     cell: Object.freeze({ ...cellBase, scorerActions: Object.freeze([]) }),
     taskAction: action,
     actionPrefix: `${request.caseId}:${request.variant}:${request.trial}`,
+    ...(input.freshness.reason === "fresh_requested"
+      ? { bypassEvidenceReason: input.freshness.reason }
+      : {}),
     ...(input.ports !== undefined
       ? {
           evidenceStore: input.ports.evidenceStore,
@@ -131,6 +181,7 @@ async function planCell(input: {
 async function planTaskAction(
   request: Parameters<EvalPlanningPorts["taskIdentity"]["describe"]>[0],
   ports: EvalPlanningPorts | undefined,
+  freshness: EvalCellFreshness,
 ) {
   if (ports === undefined) {
     return Object.freeze({
@@ -195,6 +246,17 @@ async function planTaskAction(
     hostContractFingerprint: description.hostContractFingerprint,
     occurrence: "root",
   });
+  if (freshness.reason !== undefined) {
+    return Object.freeze({
+      kind: "execute" as const,
+      reason: freshness.reason,
+      evidenceKey: identity.key,
+      plannedAdapterFingerprint: adapterFingerprint,
+      ...(freshness.source !== undefined
+        ? { freshnessSource: freshness.source }
+        : {}),
+    });
+  }
   const evidence = readTaskEvidenceEntry(
     await ports.evidenceStore.read(identity.key),
     identity.key,
@@ -213,7 +275,7 @@ async function planTaskAction(
       });
 }
 
-function assertPhase8Definition(
+function assertSupportedDefinition(
   definition: ReturnType<typeof getEvalDefinitionForInternalUse>,
 ): void {
   if (definition.explicitId === undefined) {
@@ -222,16 +284,7 @@ function assertPhase8Definition(
   if (definition.caseFiles.length > 0) {
     throw new TypeError("Phase 8 does not yet support caseFile() sources.");
   }
-  if (definition.gates !== undefined || definition.afterScores !== undefined) {
-    throw new TypeError(
-      "Phase 8 does not execute authored Gates or afterScores checks.",
-    );
-  }
-  if (
-    definition.cases.some(
-      (authored) => authored.skip !== undefined || authored.only !== undefined,
-    )
-  ) {
-    throw new TypeError("Phase 8 does not support Case selection flags.");
+  if (definition.cases.some((authored) => authored.only !== undefined)) {
+    throw new TypeError("Eval planning does not yet support Case `only` flags.");
   }
 }

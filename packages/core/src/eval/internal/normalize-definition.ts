@@ -17,6 +17,7 @@ import type {
   EvalDefinitionV1,
   RawEvalCase,
 } from "./definition";
+import { normalizeEvalCheck, normalizeEvalGates } from "./normalize-checks";
 
 interface RawEvaluateOptions {
   readonly id?: unknown;
@@ -90,9 +91,21 @@ function normalizeCaseSources(value: unknown): {
     ) {
       throw new TypeError("evaluate(): Case `metadata` must be a record.");
     }
+    const rawCase = item as Readonly<Record<string, unknown>>;
     cases.push(
       Object.freeze({
-        ...item,
+        ...rawCase,
+        ...(rawCase.expect !== undefined
+          ? { expect: normalizeEvalCheck(rawCase.expect, "Case `expect`") }
+          : {}),
+        ...(rawCase.afterScores !== undefined
+          ? {
+              afterScores: normalizeEvalCheck(
+                rawCase.afterScores,
+                "Case `afterScores`",
+              ),
+            }
+          : {}),
         ...("tags" in item && item.tags !== undefined
           ? { tags: Object.freeze([...item.tags]) }
           : {}),
@@ -207,6 +220,7 @@ export function normalizeEvalDefinition(
 
   const { variants, arms } = normalizeVariants(raw.variants);
   const { cases, caseFiles } = normalizeCaseSources(raw.cases);
+  const gates = normalizeEvalGates(raw.gates);
   return {
     id: explicitId,
     definition: Object.freeze({
@@ -217,18 +231,16 @@ export function normalizeEvalDefinition(
       caseFiles,
       variants,
       arms,
-      ...(raw.expect !== undefined ? { expect: raw.expect } : {}),
-      ...(raw.afterScores !== undefined
-        ? { afterScores: raw.afterScores }
+      ...(raw.expect !== undefined
+        ? { expect: normalizeEvalCheck(raw.expect, "`expect`") }
         : {}),
-      scorers: normalizeScorers(raw.scorers),
-      ...(raw.gates !== undefined
+      ...(raw.afterScores !== undefined
         ? {
-            gates: Object.freeze({
-              ...(raw.gates as Readonly<Record<string, unknown>>),
-            }),
+            afterScores: normalizeEvalCheck(raw.afterScores, "`afterScores`"),
           }
         : {}),
+      scorers: normalizeScorers(raw.scorers),
+      ...(gates !== undefined ? { gates } : {}),
       trials: (raw.trials as number | undefined) ?? 1,
       tags: normalizeStringArray(raw.tags, "tags"),
       ...(raw.description !== undefined

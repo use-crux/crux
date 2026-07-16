@@ -29,4 +29,4 @@ export type {
   Scorer as EvalScorer,
   ScorerFactory as EvalScorerFactory,
 } from "../quality/scorers";
-export type { Gates as EvalGates } from "../quality/gates";
+export type { EvalGates } from "./gates";

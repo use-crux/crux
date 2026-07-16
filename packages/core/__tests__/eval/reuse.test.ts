@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { evaluate } from "../../src/eval/evaluate";
 import { executeEvalPlan } from "../../src/eval/internal/executor";
 import { planEval } from "../../src/eval/internal/planner";
 import { attachEvalTaskDescriptorForInternalUse } from "../../src/eval/internal/task";
@@ -9,92 +8,12 @@ import type {
   EvalExecutionPorts,
   EvalPlanningPorts,
 } from "../../src/eval/internal/ports";
-
-const task = attachEvalTaskDescriptorForInternalUse(
-  Object.assign(async () => "unused", {
-    _tag: "CruxTask" as const,
-    operation: "function" as const,
-  }),
-  {
-    _tag: "CruxEvalTaskDescriptor",
-    operation: "generate",
-    adapterId: "ai-sdk",
-    capabilities: [],
-    defaults: {},
-    overrideKeys: [],
-    projectIdentity: () => ({
-      reusable: true,
-      fingerprintMaterial: { adapter: "fake-v1" },
-    }),
-    execute: async () => taskResult(),
-    projectOutput: (result) => result.output,
-    projectResponse: (result) => result.response,
-  },
-);
-
-function evalValue(taskValue = task) {
-  return evaluate({
-    id: "support",
-    task: taskValue,
-    cases: [{ id: "refund", input: { question: "yes" } }],
-  });
-}
-
-function memoryEvidenceStore(): EvalEvidenceStore & {
-  readonly entries: Map<string, unknown>;
-} {
-  const entries = new Map<string, unknown>();
-  return {
-    identity: "memory",
-    consistency: "read_after_write",
-    entries,
-    read: async (key) => entries.get(key),
-    write: async (entry) => void entries.set(entry.key, entry),
-  };
-}
-
-function planningPorts(evidenceStore: EvalEvidenceStore): EvalPlanningPorts {
-  return {
-    evidenceStore,
-    taskIdentity: {
-      describe: async () => ({
-        managedTaskFingerprint: "task-v1",
-        hostContractFingerprint: "host-v1",
-        reusable: true,
-      }),
-    },
-  };
-}
-
-function taskResult(
-  output: unknown = "yes",
-  fingerprintMaterial: Readonly<Record<string, unknown>> = {
-    adapter: "fake-v1",
-  },
-) {
-  return {
-    output,
-    response: {
-      content: [],
-      text: "yes",
-      steps: [],
-      finalStep: {
-        content: [],
-        text: "yes",
-        finishReason: "stop",
-        responseId: "response-1",
-        modelId: "fake",
-        warnings: [],
-      },
-      messages: [],
-      warnings: [],
-    },
-    capturedSignals: [],
-    runIds: ["task-run-1"],
-    metrics: { durationMs: 20 },
-    observedIdentity: { reusable: true as const, fingerprintMaterial },
-  };
-}
+import {
+  evalValue,
+  memoryEvidenceStore,
+  planningPorts,
+  taskResult,
+} from "./reuse-test-harness";
 
 describe("automatic exact Eval task reuse", () => {
   it("writes successful evidence once and reuses it on an identical second run", async () => {
@@ -328,6 +247,7 @@ describe("automatic exact Eval task reuse", () => {
         ...evidenceStore,
         read: async () => invalidEntry,
       },
+      costEstimator: { estimate: () => ({ kind: "none" }) },
       taskIdentity: {
         describe: async () => ({
           managedTaskFingerprint: "task-v1",

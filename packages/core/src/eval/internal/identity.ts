@@ -71,7 +71,8 @@ function isReusableValue(value: unknown, seen: WeakSet<object>): boolean {
     "type" in value &&
     ["data", "url", "provider-file"].includes(
       String((value as { readonly type?: unknown }).type),
-    )
+    ) &&
+    !hasDurableMediaIdentity(value)
   ) {
     return false;
   }
@@ -85,4 +86,15 @@ function isReusableValue(value: unknown, seen: WeakSet<object>): boolean {
     return [...value].every((entry) => isReusableValue(entry, seen));
   }
   return Object.values(value).every((entry) => isReusableValue(entry, seen));
+}
+
+function hasDurableMediaIdentity(value: object): boolean {
+  const media = value as {
+    readonly contentHash?: unknown;
+    readonly sha256?: unknown;
+    readonly ref?: unknown;
+  };
+  return [media.contentHash, media.sha256, media.ref].some(
+    (entry) => typeof entry === "string" && entry.length > 0,
+  );
 }

@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/use-crux/crux/packages/local/internal/devtools"
+	"github.com/use-crux/crux/packages/local/internal/evalfs"
 	"github.com/use-crux/crux/packages/local/internal/observability"
 	"github.com/use-crux/crux/packages/local/internal/quality"
 	"github.com/use-crux/crux/packages/local/internal/readmodel"
@@ -65,6 +66,7 @@ func New(options Options) http.Handler {
 		Devtools: options.Devtools,
 		Catalog:  options.Devtools,
 		Quality:  options.Quality,
+		Eval:     evalfs.OpenProject(options.ProjectRoot),
 		Evaluations: qualityserver.NewEvaluationCollector(
 			options.ProjectRoot,
 			options.ConfigPath,

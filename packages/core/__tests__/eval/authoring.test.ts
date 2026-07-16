@@ -67,7 +67,12 @@ describe("evaluate()", () => {
         { name: "cheaper", overrideKeys: ["temperature"] },
       ],
     });
-    expect(definition.expect).toBe(sharedExpect);
+    expect(definition.expect).toEqual({
+      check: sharedExpect,
+      requiresFresh: false,
+    });
+    expect(definition.expect?.check).toBe(sharedExpect);
+    expect(Object.isFrozen(definition.expect)).toBe(true);
     expect(definition.scorers).toEqual([scorer]);
     expect(definition.variants.cheaper).not.toBe(candidate);
     expect(definition.variants.cheaper).toEqual(candidate);
@@ -77,6 +82,54 @@ describe("evaluate()", () => {
     expect(Object.isFrozen(task)).toBe(false);
     expect(Object.isFrozen(candidate)).toBe(false);
     expect(Object.isFrozen(scorer)).toBe(false);
+  });
+
+  it("normalizes fresh Eval and Case checks without cloning callbacks", () => {
+    const evalCheck = () => undefined;
+    const caseCheck = () => undefined;
+    const afterScores = () => undefined;
+    const evalValue = evaluate({
+      task: async (input: { question: string }) => input.question,
+      expect: { fresh: true, check: evalCheck },
+      afterScores: { fresh: true, check: afterScores },
+      cases: [
+        {
+          input: { question: "Refund?" },
+          expect: { fresh: true, check: caseCheck },
+        },
+      ],
+    });
+    const definition = getEvalDefinitionForInternalUse(evalValue);
+
+    expect(definition.expect).toEqual({
+      check: evalCheck,
+      requiresFresh: true,
+    });
+    expect(definition.afterScores).toEqual({
+      check: afterScores,
+      requiresFresh: true,
+    });
+    expect(definition.cases[0]?.expect).toEqual({
+      check: caseCheck,
+      requiresFresh: true,
+    });
+    expect(Object.isFrozen(definition.expect)).toBe(true);
+    expect(Object.isFrozen(definition.afterScores)).toBe(true);
+    expect(Object.isFrozen(definition.cases[0]?.expect)).toBe(true);
+    expect(Object.isFrozen(evalCheck)).toBe(false);
+    expect(Object.isFrozen(caseCheck)).toBe(false);
+  });
+
+  it("rejects malformed fresh checks and empty latency Gates", () => {
+    const task = async (input: { question: string }) => input.question;
+    const cases = [{ input: { question: "Refund?" } }];
+
+    expect(() =>
+      evaluate({ task, cases, expect: { fresh: false } as never }),
+    ).toThrowError(/expect.*fresh: true.*check/i);
+    expect(() =>
+      evaluate({ task, cases, gates: { latency: {} } as never }),
+    ).toThrowError(/latency.*meanMs.*p95Ms/i);
   });
 
   it("normalizes top-level Variant differences without freezing replacements", () => {

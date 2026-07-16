@@ -39,7 +39,11 @@ async function executeAction(
     );
   }
   const key = resolveEvidenceKey(action, input);
-  if (key !== undefined && input.ports.evidenceStore !== undefined) {
+  if (
+    action.evidenceRead === "allow" &&
+    key !== undefined &&
+    input.ports.evidenceStore !== undefined
+  ) {
     const hit = readScorerEvidenceEntry(
       await input.ports.evidenceStore.read(key),
       key,
@@ -136,9 +140,11 @@ function computed(
       reason:
         status === "reused"
           ? ("exact_evidence" as const)
-          : action.kind === "execute"
-            ? action.reason
-            : ("no_exact_evidence" as const),
+          : action.evidenceRead === "bypass"
+            ? (action.evidenceReadReason ?? "fresh_requested")
+            : action.kind === "execute"
+              ? action.reason
+              : ("no_exact_evidence" as const),
       ...(evidenceRef !== undefined ? { evidenceRef } : {}),
       reservation: status === "reused" ? "released" : "consumed",
     }),

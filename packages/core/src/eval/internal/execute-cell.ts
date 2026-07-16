@@ -39,6 +39,22 @@ export async function executePlannedCell(input: {
   readonly planned: EvalPlannedCell;
   readonly ports: EvalExecutionPorts;
 }): Promise<EvalCellExecutionResult> {
+  if (input.planned.action.kind === "skip") {
+    return Object.freeze({
+      cell: freezeCell({
+        ...cellIdentity(input.planned),
+        status: "skipped",
+        skipReason: input.planned.action.detail ?? "source_skipped",
+        task: { status: "skipped", reason: "source_skipped" },
+        scores: Object.freeze([]),
+        assertions: EMPTY_ASSERTIONS,
+        metrics: { durationMs: 0 },
+        runIds: Object.freeze([]),
+        capturedSignals: Object.freeze([]),
+      }),
+      evidenceWrite: "not_attempted",
+    });
+  }
   let evidenceWrite: EvidenceWriteStatus = "not_attempted";
   let evidenceWriteReason: EvidenceWriteReason | undefined;
   try {
@@ -100,6 +116,7 @@ export async function executePlannedCell(input: {
     });
     const assessment = await assessEvalCell({
       planExpect: input.plan.expect,
+      planAfterScores: input.plan.afterScores,
       scorers: input.plan.scorers,
       cell: input.planned,
       execution,
@@ -133,6 +150,11 @@ export async function executePlannedCell(input: {
                   ? {
                       evidenceFingerprint: input.planned.action.evidenceKey,
                       evidenceRef: input.planned.action.evidenceKey,
+                    }
+                  : {}),
+                ...(input.planned.action.freshnessSource !== undefined
+                  ? {
+                      freshnessSource: input.planned.action.freshnessSource,
                     }
                   : {}),
               },

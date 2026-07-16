@@ -10,16 +10,17 @@
 
 import type { ProjectDefinitionKind } from "../project-index";
 import type { BoundScorerLib, Scorer } from "../quality/scorers";
-import type { Gates } from "../quality/gates";
 import type { EvaluationCoverageTargetId } from "../quality/internal/definition";
 import type { EvalCase } from "./case";
 import type { CaseFile } from "./case-file";
+import type { EvalGates } from "./gates";
 import type {
   CallOf,
   CapsOf,
   EvalTaskLike,
   InputOf,
   OutputOf,
+  ResponseOf,
   VariantOf,
 } from "./task";
 import type { ValidateEvalVariants } from "./variant";
@@ -51,6 +52,7 @@ type TaskOutput<TTask> = OutputOf<TTask>;
 type TaskCall<TTask> = CallOf<TTask>;
 type TaskVariant<TTask> = VariantOf<TTask>;
 type TaskCapabilities<TTask> = CapsOf<TTask>;
+type TaskResponse<TTask> = ResponseOf<TTask>;
 
 /** Options accepted by the inert Phase 1 authoring surface. */
 export interface EvaluateOptions<
@@ -75,7 +77,8 @@ export interface EvaluateOptions<
             TExpected,
             TaskCall<TTask>,
             TaskCapabilities<TTask>,
-            ScorerNamesOf<TScorers>
+            ScorerNamesOf<TScorers>,
+            TaskResponse<TTask>
           >
         | CaseFile<NoInfer<TaskInput<TTask>>, unknown>
       )[]
@@ -93,7 +96,9 @@ export interface EvaluateOptions<
     TaskOutput<TTask>,
     TExpected,
     TaskCall<TTask>,
-    TaskCapabilities<TTask>
+    TaskCapabilities<TTask>,
+    string,
+    TaskResponse<TTask>
   >["expect"];
   afterScores?: EvalCase<
     TaskInput<TTask>,
@@ -101,7 +106,8 @@ export interface EvaluateOptions<
     TExpected,
     TaskCall<TTask>,
     TaskCapabilities<TTask>,
-    ScorerNamesOf<TScorers>
+    ScorerNamesOf<TScorers>,
+    TaskResponse<TTask>
   >["afterScores"];
   scorers?:
     | TScorers
@@ -112,7 +118,7 @@ export interface EvaluateOptions<
           NoInfer<TExpected>
         >,
       ) => TScorers);
-  gates?: Gates<ScorerNamesOf<TScorers> | "pass">;
+  gates?: EvalGates<ScorerNamesOf<TScorers> | "pass">;
   trials?: number;
   tags?: readonly string[];
   description?: string;

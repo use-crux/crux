@@ -13,6 +13,12 @@ import type { AnyEval } from "../evaluate";
 /** Private storage key for an Eval's normalized definition. */
 export const EVAL_INTERNAL: unique symbol = Symbol("crux.eval.definition");
 
+/** Frozen callback declaration consumed by planning without invocation. */
+export interface NormalizedEvalCheck {
+  readonly check: (context: never) => void | Promise<void>;
+  readonly requiresFresh: boolean;
+}
+
 /** One inline Case erased to its runtime authoring shape. */
 export interface RawEvalCase {
   readonly id?: string;
@@ -20,8 +26,8 @@ export interface RawEvalCase {
   readonly input: unknown;
   readonly call?: unknown;
   readonly expected?: unknown;
-  readonly expect?: unknown;
-  readonly afterScores?: unknown;
+  readonly expect?: NormalizedEvalCheck;
+  readonly afterScores?: NormalizedEvalCheck;
   readonly trials?: number;
   readonly tags?: readonly string[];
   readonly metadata?: Readonly<Record<string, JsonValue>>;
@@ -54,8 +60,8 @@ export interface EvalDefinitionV1 {
     Record<string, Readonly<Record<string, unknown>>>
   >;
   readonly arms: readonly EvalArmDeclaration[];
-  readonly expect?: unknown;
-  readonly afterScores?: unknown;
+  readonly expect?: NormalizedEvalCheck;
+  readonly afterScores?: NormalizedEvalCheck;
   readonly scorers: unknown;
   readonly gates?: Readonly<Record<string, unknown>>;
   readonly trials: number;

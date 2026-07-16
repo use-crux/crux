@@ -8,13 +8,38 @@ import {
 import { evaluateBlockingGates } from "./gates";
 import type { EvalExecutionPorts } from "./ports";
 import type { EvalPlan, EvalRun } from "./types";
+import { assertEvalPreflightReady } from "./offline";
+import { assertEvalCostAdmitted } from "./cost-plan";
+import { reserveEvalCostPlan } from "./reservation";
+import { compareEvalCellsToBaseline } from "./baseline";
 
 export async function executeEvalPlan(
   plan: EvalPlan,
   ports: EvalExecutionPorts,
 ): Promise<EvalRun> {
-  const startedAt = ports.clock.now();
+  assertEvalPreflightReady(plan.evalId, plan.preflight);
+  assertEvalCostAdmitted(plan.cost);
   const runId = ports.ids.next("run");
+  const costLease = await reserveEvalCostPlan(
+    plan.cost,
+    ports.reservations,
+    runId,
+  );
+  try {
+    return await executeReservedEvalPlan(plan, ports, costLease, runId);
+  } catch (error) {
+    await costLease.fail();
+    throw error;
+  }
+}
+
+async function executeReservedEvalPlan(
+  plan: EvalPlan,
+  ports: EvalExecutionPorts,
+  costLease: Awaited<ReturnType<typeof reserveEvalCostPlan>>,
+  runId: string,
+): Promise<EvalRun> {
+  const startedAt = ports.clock.now();
   const results: EvalCellExecutionResult[] = [];
   for (const planned of plan.cells) {
     results.push(await executePlannedCell({ plan, planned, ports }));
@@ -34,7 +59,17 @@ export async function executeEvalPlan(
       ]),
     ),
   );
-  const gates = evaluateBlockingGates(cells, blockingVariants);
+  const comparison =
+    ports.baseline === undefined
+      ? undefined
+      : compareEvalCellsToBaseline(cells, ports.baseline);
+  const gates = evaluateBlockingGates(
+    cells,
+    blockingVariants,
+    plan.gates,
+    comparison,
+    plan.evalId,
+  );
   const actualCosts = cells.flatMap((cell) =>
     cell.metrics.costUsd === undefined ? [] : [cell.metrics.costUsd],
   );
@@ -52,7 +87,10 @@ export async function executeEvalPlan(
     endedAt: ports.clock.now(),
     definitionFingerprint: plan.definitionFingerprint,
     selection: plan.selection,
-    costControl: "not_required" as const,
+    costControl:
+      plan.cost.admission.status === "admitted"
+        ? plan.cost.admission.costControl
+        : "not_required",
     blockingVariants,
     cells,
     variants: Object.freeze(
@@ -66,15 +104,16 @@ export async function executeEvalPlan(
       ),
     ),
     aggregates,
+    ...(comparison !== undefined ? { comparison } : {}),
     gates,
     cost: Object.freeze({
       ...(actualUsd !== undefined ? { actualUsd } : {}),
-      reservedMaximumUsd: 0 as const,
-      unknownActionCount: 0 as const,
+      reservedMaximumUsd: plan.cost.knownMaximumUsd,
+      unknownActionCount: plan.cost.unknownActionCount,
       task: Object.freeze({
         ...(actualUsd !== undefined ? { actualUsd } : {}),
       }),
-      judge: Object.freeze({ actualUsd: 0 as const }),
+      judge: Object.freeze({}),
     }),
     provenance: Object.freeze({
       task: "managed" as const,
@@ -102,6 +141,7 @@ export async function executeEvalPlan(
           reasons: incompleteReasons,
         },
   );
+  await costLease.settle(plan, run);
   await ports.runStore.write(run);
   return run;
 }

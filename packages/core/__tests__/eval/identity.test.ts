@@ -42,5 +42,14 @@ describe("portable Eval evidence identity", () => {
         image: { ref: "sha256:abc", mediaType: "image/png" },
       }),
     ).toBe(true);
+    expect(
+      isReusableEvalValue({
+        image: {
+          type: "data",
+          sha256: "abc",
+          mediaType: "image/png",
+        },
+      }),
+    ).toBe(true);
   });
 });

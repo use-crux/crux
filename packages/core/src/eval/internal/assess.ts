@@ -3,10 +3,6 @@
 import type { CaseContext } from "../../quality/expect";
 import type { Capability } from "../../quality/target";
 import {
-  runAssertionCallbacks,
-  type AssertionCallback,
-} from "../../quality/internal/assertion-callbacks";
-import {
   createAssertionRecorder,
   createRuntimeBoundExpect,
 } from "../../quality/internal/expect-runtime";
@@ -21,9 +17,19 @@ import type {
   EvalScoreEvidence,
   EvalTaskExecutionEvidence,
 } from "./types";
+import type { NormalizedEvalCheck } from "./definition";
+import { runAfterScoreAssertions } from "./after-scores";
+import {
+  createEvalMeta,
+  guardEvalExpect,
+  guardEvalStepAccessor,
+  runNormalizedEvalChecks,
+} from "./check-runtime";
+import { isManagedEvalTaskForInternalUse } from "./task";
 
 export async function assessEvalCell(input: {
-  readonly planExpect?: unknown;
+  readonly planExpect?: NormalizedEvalCheck;
+  readonly planAfterScores?: NormalizedEvalCheck;
   readonly scorers: unknown;
   readonly cell: EvalPlannedCell;
   readonly execution: EvalTaskExecutionEvidence;
@@ -33,7 +39,7 @@ export async function assessEvalCell(input: {
   readonly scores: readonly EvalScoreEvidence[];
   readonly error?: {
     readonly message: string;
-    readonly phase: "expect" | "score";
+    readonly phase: "expect" | "afterScores" | "score";
   };
 }> {
   const signals: CellSignals = {
@@ -41,37 +47,18 @@ export async function assessEvalCell(input: {
     captured: new Set<Capability>(input.execution.capturedSignals),
   };
   const recorder = createAssertionRecorder();
+  const managedTask = isManagedEvalTaskForInternalUse(input.cell.task);
   let cellErrored = false;
-  const context = createContext(recorder);
-  const callbacks: AssertionCallback<typeof context>[] = [];
-  if (typeof input.planExpect === "function") {
-    callbacks.push({
-      phase: "expect",
-      level: "evaluation",
-      fn: input.planExpect as never,
-    });
-  }
-  if (typeof input.cell.expect === "function") {
-    callbacks.push({
-      phase: "expect",
-      level: "case",
-      fn: input.cell.expect as never,
-    });
-  }
-  const result = await runAssertionCallbacks({
-    callbacks,
-    context,
+  const result = await runNormalizedEvalChecks({
+    checks: [
+      { declaration: input.planExpect, level: "evaluation" },
+      { declaration: input.cell.expect, level: "case" },
+    ],
+    phase: "expect",
     recorder,
-    createCountingContext: createContext,
+    createContext,
   });
   if (result.error !== undefined) cellErrored = true;
-  const assertions = Object.freeze({
-    ran: recorder.ran,
-    notEvaluated: result.notEvaluated,
-    outcomes: Object.freeze(
-      recorder.outcomes.map((outcome) => Object.freeze({ ...outcome })),
-    ),
-  });
   const scoreResult =
     result.error === undefined
       ? await runDeterministicScorers(input.scorers, input, signals)
@@ -80,9 +67,32 @@ export async function assessEvalCell(input: {
   const managedError = managedScores.find(
     (score) => score.status === "errored",
   );
+  const scores = Object.freeze([...scoreResult.scores, ...managedScores]);
+  const afterResult =
+    result.error === undefined &&
+    scoreResult.error === undefined &&
+    managedError === undefined
+      ? await runAfterScoreAssertions({
+          planAfterScores: input.planAfterScores,
+          cell: input.cell,
+          execution: input.execution,
+          scores,
+          signals,
+          recorder,
+          managedTask,
+        })
+      : { notEvaluated: 0 };
+  if (afterResult.error !== undefined) cellErrored = true;
+  const assertions = Object.freeze({
+    ran: recorder.ran,
+    notEvaluated: result.notEvaluated + afterResult.notEvaluated,
+    outcomes: Object.freeze(
+      recorder.outcomes.map((outcome) => Object.freeze({ ...outcome })),
+    ),
+  });
   return {
     assertions,
-    scores: Object.freeze([...scoreResult.scores, ...managedScores]),
+    scores,
     ...(result.error !== undefined
       ? {
           error: Object.freeze({
@@ -99,23 +109,33 @@ export async function assessEvalCell(input: {
                 phase: "score" as const,
               }),
             }
-          : {}),
+          : afterResult.error !== undefined
+            ? {
+                error: Object.freeze({
+                  message: afterResult.error.message,
+                  phase: "afterScores" as const,
+                }),
+              }
+            : {}),
   };
 
   function createContext(
+    requiresFresh: boolean,
     activeRecorder: ReturnType<typeof createAssertionRecorder>,
   ): CaseContext<unknown, unknown, unknown, Capability> {
+    const boundExpect = createRuntimeBoundExpect({
+      signals,
+      recorder: activeRecorder,
+      capabilities: input.execution.capturedSignals,
+      cellDurationMs: () => input.execution.metrics.durationMs,
+      cellErrored: () => cellErrored,
+    });
     return {
       input: input.cell.input,
       output: input.execution.output,
+      ...(managedTask ? { response: input.execution.response } : {}),
       expected: input.cell.expected,
-      expect: createRuntimeBoundExpect({
-        signals,
-        recorder: activeRecorder,
-        capabilities: input.execution.capturedSignals,
-        cellDurationMs: () => input.execution.metrics.durationMs,
-        cellErrored: () => cellErrored,
-      }),
+      expect: guardEvalExpect(boundExpect, requiresFresh),
       variant: { name: "current", params: {} },
       trial: 0,
       recordScore() {
@@ -123,14 +143,16 @@ export async function assessEvalCell(input: {
           "Ad-hoc scores are not supported until Eval assessment Phase 7.",
         );
       },
-      step: createStepAccessor(signals) as never,
+      step: guardEvalStepAccessor(
+        createStepAccessor(signals),
+        requiresFresh,
+      ) as never,
       trace: { id: input.execution.runIds[0] },
-      meta: {
-        durationMs: input.execution.metrics.durationMs,
-        ...(input.execution.metrics.costUsd !== undefined
-          ? { costUsd: input.execution.metrics.costUsd }
-          : {}),
-      },
+      meta: createEvalMeta(
+        input.execution.metrics.durationMs,
+        input.execution.metrics.costUsd,
+        requiresFresh,
+      ),
     };
   }
 }

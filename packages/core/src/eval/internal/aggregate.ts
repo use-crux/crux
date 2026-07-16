@@ -5,7 +5,8 @@ import type { EvalCell, EvalVariantAggregate } from "./types";
 export function aggregateVariant(
   cells: readonly EvalCell[],
 ): EvalVariantAggregate {
-  const passed = cells.filter((cell) => cell.status === "passed").length;
+  const active = cells.filter((cell) => cell.status !== "skipped");
+  const passed = active.filter((cell) => cell.status === "passed").length;
   const costValues = cells.flatMap((cell) =>
     cell.metrics.costUsd === undefined ? [] : [cell.metrics.costUsd],
   );
@@ -35,12 +36,12 @@ export function aggregateVariant(
     }),
   );
   return Object.freeze({
-    cells: cells.length,
+    cells: active.length,
     passed,
-    failed: cells.filter((cell) => cell.status === "failed").length,
-    errored: cells.filter((cell) => cell.status === "errored").length,
-    skipped: 0 as const,
-    passRate: cells.length === 0 ? 0 : passed / cells.length,
+    failed: active.filter((cell) => cell.status === "failed").length,
+    errored: active.filter((cell) => cell.status === "errored").length,
+    skipped: cells.length - active.length,
+    passRate: active.length === 0 ? 0 : passed / active.length,
     scores: Object.freeze(scores),
     trialConsistency: trialConsistency(cells),
     latencyMs: average(cells.map((cell) => cell.metrics.durationMs)),

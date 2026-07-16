@@ -9,6 +9,7 @@
  */
 
 import type { Capability } from "../quality/target";
+import type { StreamCompletion } from "../adapter/result-accumulator";
 
 /** A trace-signal family that an Eval task can capture. */
 export type EvalCapability = Capability;
@@ -121,3 +122,8 @@ export type VariantOf<T> = [ManagedTaskTypes<T>] extends [never]
 export type CapsOf<T> = [ManagedTaskTypes<T>] extends [never]
   ? never
   : ManagedTaskTypes<T>["capabilities"];
+
+/** Normalized terminal response projected only for managed Eval tasks. @internal */
+export type ResponseOf<T> = [ManagedTaskTypes<T>] extends [never]
+  ? never
+  : StreamCompletion<ManagedTaskTypes<T>["output"]>;

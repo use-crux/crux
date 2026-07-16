@@ -14,10 +14,8 @@ import type {
   CaseOf,
   CaseFile,
   Eval,
-  EvalAssertContext,
   EvalCapability,
   EvalCase,
-  EvalCaseContext,
   EvalCoverageTargetId,
   EvalGates,
   EvalScorer,
@@ -52,8 +50,6 @@ import type { EvalRun } from "@use-crux/core/eval";
 import { EVAL_INTERNAL } from "@use-crux/core/eval";
 // @ts-expect-error — coordinator internals are not public Eval exports
 import { getEvalDefinitionForInternalUse } from "@use-crux/core/eval";
-import type { AssertContext, CaseContext } from "../src/quality/expect";
-import type { Gates } from "../src/quality/gates";
 import type { EvaluationCoverageTargetId } from "../src/quality/internal/definition";
 import type { Scorer, ScorerFactory } from "../src/quality/scorers";
 import type { Capability } from "../src/quality/target";
@@ -123,22 +119,14 @@ expectTypeOf<EvalCoverageTargetId<"prompt">>().toEqualTypeOf<
   EvaluationCoverageTargetId<"prompt">
 >();
 expectTypeOf<
-  EvalCaseContext<{ q: string }, string, { answer: string }, never>
->().toEqualTypeOf<
-  CaseContext<{ q: string }, string, { answer: string }, never>
->();
-expectTypeOf<
-  EvalAssertContext<{ q: string }, string, { answer: string }, "exact", never>
->().toEqualTypeOf<
-  AssertContext<{ q: string }, string, { answer: string }, "exact", never>
->();
-expectTypeOf<
   EvalScorer<{ q: string }, string, { answer: string }, "exact">
 >().toEqualTypeOf<Scorer<{ q: string }, string, { answer: string }, "exact">>();
 expectTypeOf<
   EvalScorerFactory<{ q: string }, string, { answer: string }>
 >().toEqualTypeOf<ScorerFactory<{ q: string }, string, { answer: string }>>();
-expectTypeOf<EvalGates<"exact">>().toEqualTypeOf<Gates<"exact">>();
+expectTypeOf<{
+  readonly latency: { readonly meanMs: number };
+}>().toMatchTypeOf<EvalGates<"exact">>();
 
 const evalValue = evaluate({
   task: classify,

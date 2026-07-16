@@ -10,7 +10,7 @@ export const OUTPUT_CACHE_EPOCH = 3;
 export const SCORER_RESULT_CACHE_EPOCH = 1;
 
 /** Bump when baseline config-fingerprint composition changes. */
-export const BASELINE_FINGERPRINT_EPOCH = 1;
+export const BASELINE_FINGERPRINT_EPOCH = 2;
 
 /** Bump when the built-in judge prompt template changes. */
 export const JUDGE_PROMPT_VERSION = 1;

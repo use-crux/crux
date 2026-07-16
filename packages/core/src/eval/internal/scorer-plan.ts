@@ -42,6 +42,7 @@ export async function planExternalScorers(input: {
   readonly evidenceStore?: EvalEvidenceStore;
   readonly hostContractFingerprint?: string;
   readonly actionPrefix?: string;
+  readonly bypassEvidenceReason?: "fresh_requested" | "performance_freshness";
 }): Promise<readonly EvalScorerAction[]> {
   const external = resolveEvalScorers(input.rawScorers).filter(
     (scorer) => scorer.costClass === "model",
@@ -74,6 +75,13 @@ async function planExternalScorer(
     externalKind: "model" as const,
     price: Object.freeze({ kind: "unknown" as const }),
     admission: "admitted" as const,
+    evidenceRead:
+      input.bypassEvidenceReason !== undefined
+        ? ("bypass" as const)
+        : ("allow" as const),
+    ...(input.bypassEvidenceReason !== undefined
+      ? { evidenceReadReason: input.bypassEvidenceReason }
+      : {}),
     reservation: Object.freeze({
       kind: "reserved" as const,
       reservationId: `reservation:${actionId}`,
@@ -84,6 +92,13 @@ async function planExternalScorer(
       ...common,
       kind: "after_task_output" as const,
       reason: "output_dependency" as const,
+    });
+  }
+  if (input.bypassEvidenceReason !== undefined) {
+    return Object.freeze({
+      ...common,
+      kind: "execute" as const,
+      reason: input.bypassEvidenceReason,
     });
   }
   if (

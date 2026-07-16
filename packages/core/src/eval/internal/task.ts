@@ -189,6 +189,22 @@ export function getEvalTaskDescriptorForInternalUse(
   return descriptor;
 }
 
+/** Distinguish opaque callables from compatible managed tasks. */
+export function isManagedEvalTaskForInternalUse(task: unknown): boolean {
+  try {
+    getEvalTaskDescriptorForInternalUse(task);
+    return true;
+  } catch (error) {
+    if (
+      error instanceof EvalTaskExecutionError &&
+      error.code === "descriptor_missing"
+    ) {
+      return false;
+    }
+    throw error;
+  }
+}
+
 /** Execute one Case through the provider-neutral managed task protocol. */
 export async function executeEvalTaskForInternalUse<TTask extends EvalTaskLike>(
   task: TTask,

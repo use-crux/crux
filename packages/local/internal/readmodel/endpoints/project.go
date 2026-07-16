@@ -66,6 +66,7 @@ type Deps struct {
 	Devtools DevtoolsReads
 	Catalog  CatalogReads
 	Quality  QualityReads
+	Eval     EvalReads
 	// Evaluations is optional; the evaluations endpoint reports
 	// unavailability when nil.
 	Evaluations EvaluationCollector

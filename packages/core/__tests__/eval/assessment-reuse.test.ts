@@ -61,6 +61,7 @@ function harness() {
   };
   const planning: EvalPlanningPorts = {
     evidenceStore,
+    costEstimator: { estimate: () => ({ kind: "none" }) },
     taskIdentity: {
       describe: async () => ({
         managedTaskFingerprint: "task-v1",
@@ -103,6 +104,10 @@ function definition(options: {
     expect: (value: unknown) => { toBe(expected: unknown): void };
   }) => void;
   readonly scorer?: ReturnType<typeof scorer>;
+  readonly afterScores?: (context: {
+    score: Readonly<Record<string, number>>;
+    expect: (value: unknown) => { toBe(expected: unknown): void };
+  }) => void;
 }) {
   return evaluate({
     id: "support",
@@ -110,6 +115,9 @@ function definition(options: {
     cases: [{ id: "refund", input: { question: "yes" }, expected: "yes" }],
     ...(options.expect !== undefined ? { expect: options.expect } : {}),
     ...(options.scorer !== undefined ? { scorers: [options.scorer] } : {}),
+    ...(options.afterScores !== undefined
+      ? { afterScores: options.afterScores }
+      : {}),
   });
 }
 
@@ -192,6 +200,46 @@ describe("independent Eval assessment", () => {
           value: 1,
         },
       ],
+    });
+  });
+
+  it("reuses task evidence while rerunning changed post-score assertions", async () => {
+    const run = harness();
+    const quality = scorer(() => ({ name: "quality", score: 1 }));
+    const first = await executeEvalPlan(
+      await planEval(
+        definition({
+          scorer: quality,
+          afterScores: ({ score, expect: assert }) =>
+            assert(score.quality).toBe(1),
+        }),
+        source,
+        run.planning,
+      ),
+      run.execution(),
+    );
+    const second = await executeEvalPlan(
+      await planEval(
+        definition({
+          scorer: quality,
+          afterScores: ({ score, expect: assert }) =>
+            assert(score.quality).toBe(0),
+        }),
+        source,
+        run.planning,
+      ),
+      run.execution(),
+    );
+
+    expect(run.execute).toHaveBeenCalledOnce();
+    expect(first.cells[0]).toMatchObject({
+      status: "passed",
+      assertions: { ran: 1 },
+    });
+    expect(second.cells[0]).toMatchObject({
+      status: "failed",
+      task: { status: "reused", reason: "exact_evidence" },
+      assertions: { ran: 1 },
     });
   });
 });

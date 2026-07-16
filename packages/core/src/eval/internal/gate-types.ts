@@ -7,10 +7,13 @@ export interface EvalGateSummary {
 }
 
 export interface EvalGateResult {
-  readonly gate: "pass";
+  readonly gate: string;
   readonly variantName: string;
-  readonly threshold: true;
-  readonly actual: boolean;
+  readonly threshold: number | boolean;
+  readonly actual: number | boolean;
   readonly passed: boolean;
   readonly informational?: true;
+  readonly evidence?: "complete" | "incomplete";
+  readonly reason?: "baseline_missing" | "baseline_evidence_incomplete";
+  readonly remediation?: string;
 }

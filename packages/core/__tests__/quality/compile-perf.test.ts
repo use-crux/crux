@@ -12,12 +12,12 @@ import { describe, expect, it } from 'vitest'
  * stays within the recorded baseline +20%. This monorepo has TS2589 history —
  * the Quality types must never join it.
  *
- * Baseline recorded 2026-06-12 (TypeScript 5.9.3): 337,533 instantiations,
- * 114,466 types, ~2.4s check time. If you intentionally changed the fixture
+ * Baseline recorded 2026-07-16 (TypeScript 5.9.3): 456,238 instantiations,
+ * 165,068 types, ~8.5s check time. If you intentionally changed the fixture
  * or the public types, re-measure and update BASELINE_INSTANTIATIONS (and the
  * implementation kit's SCRATCHPAD) in the same commit.
  */
-const BASELINE_INSTANTIATIONS = 379_399
+const BASELINE_INSTANTIATIONS = 456_238
 
 const here = dirname(fileURLToPath(import.meta.url))
 const packageRoot = resolve(here, '..', '..')

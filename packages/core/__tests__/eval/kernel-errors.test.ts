@@ -26,12 +26,17 @@ function plan() {
 }
 
 describe("portable Eval kernel failures", () => {
-  it("rejects checks outside the Phase 8 tracer instead of ignoring them", async () => {
+  it("rejects unsupported Case `only` flags before any task work", async () => {
     await expect(
-      planEval(definition({ gates: { passRate: { min: 1 } } }), {
-        sourceKey: { relativeFile: "support.eval.ts", export: "default" },
-      }),
-    ).rejects.toThrow("Phase 8 does not execute authored Gates");
+      planEval(
+        definition({
+          cases: [{ id: "refund", input: { question: "yes" }, only: true }],
+        }),
+        {
+          sourceKey: { relativeFile: "support.eval.ts", export: "default" },
+        },
+      ),
+    ).rejects.toThrow("does not yet support Case `only` flags");
   });
 
   it("persists an incomplete run after a task-host failure", async () => {

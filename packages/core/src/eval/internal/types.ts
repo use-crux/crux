@@ -7,9 +7,15 @@ import type { EvalTaskEvidenceEntry } from "./evidence";
 import type { EvalTaskIdentityProjection } from "./task";
 import type { EvalScorerAction } from "./scorer-action-types";
 import type { EvalGateSummary } from "./gate-types";
+import type { NormalizedEvalCheck } from "./definition";
+import type { EvalScoreEvidence } from "./score-types";
+import type { EvalCostPlan } from "./cost-types";
+import type { EvalPlanPreflight } from "./offline-types";
+import type { EvalBaselineComparison } from "./baseline-types";
 
 export type { EvalScorerAction } from "./scorer-action-types";
 export type { EvalGateResult, EvalGateSummary } from "./gate-types";
+export type { EvalScoreEvidence } from "./score-types";
 
 export type EvalTaskNonReusableReason =
   | "identity_unavailable"
@@ -17,6 +23,13 @@ export type EvalTaskNonReusableReason =
   | "implicit_media"
   | "registry_identity_unavailable"
   | "host_contract_unavailable";
+
+export type EvalFreshnessSource =
+  | "latency_gate"
+  | "eval_expect"
+  | "eval_after_scores"
+  | "case_expect"
+  | "case_after_scores";
 
 export interface EvalSourceKey {
   readonly relativeFile: string;
@@ -40,13 +53,21 @@ export interface EvalPlannedArm {
 
 export type EvalPlanAction =
   | {
+      readonly kind: "skip";
+      readonly reason: "source_skipped";
+      readonly detail?: string;
+    }
+  | {
       readonly kind: "execute";
       readonly reason:
         | "live_required"
+        | "fresh_requested"
+        | "performance_freshness"
         | "no_exact_evidence"
         | EvalTaskNonReusableReason;
       readonly evidenceKey?: string;
       readonly plannedAdapterFingerprint?: string;
+      readonly freshnessSource?: EvalFreshnessSource;
     }
   | {
       readonly kind: "reuse";
@@ -67,7 +88,8 @@ export interface EvalPlannedCell {
   readonly input: Readonly<Record<string, unknown>>;
   readonly call?: Readonly<Record<string, unknown>>;
   readonly expected?: unknown;
-  readonly expect?: unknown;
+  readonly expect?: NormalizedEvalCheck;
+  readonly afterScores?: NormalizedEvalCheck;
 }
 
 export interface EvalPlan {
@@ -76,10 +98,14 @@ export interface EvalPlan {
   readonly sourceKey: EvalSourceKey;
   readonly definitionFingerprint: string;
   readonly selection: EvalSelection;
+  readonly preflight: EvalPlanPreflight;
+  readonly cost: EvalCostPlan;
   readonly task: unknown;
   readonly arms: readonly EvalPlannedArm[];
-  readonly expect?: unknown;
+  readonly expect?: NormalizedEvalCheck;
+  readonly afterScores?: NormalizedEvalCheck;
   readonly scorers: unknown;
+  readonly gates?: unknown;
   readonly scorerActions: readonly EvalScorerAction[];
   readonly cells: readonly EvalPlannedCell[];
 }
@@ -116,63 +142,19 @@ export interface EvalAssertionSummary {
   readonly outcomes: readonly CellAssertionOutcome[];
 }
 
-export type EvalScoreEvidence =
-  | {
-      readonly status: "computed";
-      readonly reason: "deterministic_local";
-      readonly name: string;
-      readonly contractFingerprint: "local_always_run";
-      readonly value: number | null;
-      readonly label?: string;
-      readonly rationale?: string;
-    }
-  | {
-      readonly status: "errored";
-      readonly reason: "scorer_error";
-      readonly name: string;
-      readonly contractFingerprint: "local_always_run";
-      readonly message: string;
-    }
-  | {
-      readonly status: "computed";
-      readonly reason: "managed_external_executed" | "managed_external_reused";
-      readonly name: string;
-      readonly contractFingerprint: string;
-      readonly value: number | null;
-      readonly label?: string;
-      readonly rationale?: string;
-      readonly work: {
-        readonly status: "executed" | "reused";
-        readonly reason:
-          | "no_exact_evidence"
-          | "identity_unavailable"
-          | "exact_evidence";
-        readonly evidenceRef?: string;
-        readonly reservation: "consumed" | "released";
-      };
-    }
-  | {
-      readonly status: "errored";
-      readonly reason: "scorer_error" | "dependency_failed";
-      readonly name: string;
-      readonly contractFingerprint: string;
-      readonly message: string;
-      readonly work: {
-        readonly status: "errored" | "not_called";
-        readonly reason: "scorer_error" | "dependency_failed";
-        readonly reservation: "consumed" | "released";
-      };
-    };
-
 export type EvalTaskWorkDecision =
+  | { readonly status: "skipped"; readonly reason: "source_skipped" }
   | {
       readonly status: "executed";
       readonly reason:
         | "live_required"
+        | "fresh_requested"
+        | "performance_freshness"
         | "no_exact_evidence"
         | EvalTaskNonReusableReason;
       readonly evidenceFingerprint?: string;
       readonly evidenceRef?: string;
+      readonly freshnessSource?: EvalFreshnessSource;
     }
   | {
       readonly status: "reused";
@@ -187,7 +169,8 @@ export interface EvalCell {
   readonly caseName?: string;
   readonly variant: string;
   readonly trial: number;
-  readonly status: "passed" | "failed" | "errored";
+  readonly status: "passed" | "failed" | "errored" | "skipped";
+  readonly skipReason?: string;
   readonly task: EvalTaskWorkDecision;
   readonly scores: readonly EvalScoreEvidence[];
   readonly assertions: EvalAssertionSummary;
@@ -198,7 +181,7 @@ export interface EvalCell {
   readonly response?: StreamCompletion<unknown>;
   readonly error?: {
     readonly message: string;
-    readonly phase: "execute" | "expect" | "score";
+    readonly phase: "execute" | "expect" | "afterScores" | "score";
   };
   readonly metrics: { readonly durationMs: number; readonly costUsd?: number };
   readonly runIds: readonly string[];
@@ -217,7 +200,7 @@ export interface EvalVariantAggregate {
   readonly passed: number;
   readonly failed: number;
   readonly errored: number;
-  readonly skipped: 0;
+  readonly skipped: number;
   readonly passRate: number;
   readonly scores: Readonly<
     Record<
@@ -239,18 +222,19 @@ interface EvalRunBase {
   readonly endedAt: number;
   readonly definitionFingerprint: string;
   readonly selection: EvalSelection;
-  readonly costControl: "not_required";
+  readonly costControl: "not_required" | "max_cost" | "unknown";
   readonly blockingVariants: readonly string[];
   readonly cells: readonly EvalCell[];
   readonly variants: readonly EvalRunVariant[];
   readonly aggregates: Readonly<Record<string, EvalVariantAggregate>>;
+  readonly comparison?: EvalBaselineComparison;
   readonly gates: EvalGateSummary;
   readonly cost: {
     readonly actualUsd?: number;
-    readonly reservedMaximumUsd: 0;
-    readonly unknownActionCount: 0;
+    readonly reservedMaximumUsd: number;
+    readonly unknownActionCount: number;
     readonly task: { readonly actualUsd?: number };
-    readonly judge: { readonly actualUsd: 0 };
+    readonly judge: { readonly actualUsd?: number };
   };
   readonly provenance: {
     readonly task: "managed";

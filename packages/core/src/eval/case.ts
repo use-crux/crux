@@ -8,7 +8,15 @@
  */
 
 import type { JsonValue } from "../storage";
-import type { AssertContext, CaseContext } from "../quality/expect";
+import type {
+  AlwaysOnExpect,
+  AssertContext,
+  CaseContext,
+  SignalExpect,
+  StepAccess,
+  ValueExpect,
+} from "../quality/expect";
+import type { StandardSchemaV1 } from "../quality/standard-schema";
 import type {
   CallOf,
   CapsOf,
@@ -16,16 +24,51 @@ import type {
   EvalTaskLike,
   InputOf,
   OutputOf,
+  ResponseOf,
   RequiredKeys,
 } from "./task";
 
-/** Existing assertion context exposed under Eval vocabulary during coexistence. */
-export type EvalCaseContext<I, O, E, Caps extends EvalCapability> = CaseContext<
+/** Adds a normalized response only for a managed task. @internal */
+type EvalResponseProjection<Response> = [Response] extends [never]
+  ? object
+  : { readonly response: Response };
+
+/** Value/non-timing assertion surface available to ordinary Eval callbacks. */
+type EvalBoundExpect<O, Caps extends EvalCapability> = ValueExpect &
+  Pick<AlwaysOnExpect, "cost" | "errors"> &
+  Pick<SignalExpect, Extract<Caps, keyof SignalExpect>>;
+
+/** Step accessor that deliberately omits timing evidence. @internal */
+interface EvalStepAccessor {
+  (name: string): Omit<StepAccess<unknown>, "durationMs">;
+  <S extends StandardSchemaV1>(
+    name: string,
+    schema: S,
+  ): Omit<StepAccess<StandardSchemaV1.InferOutput<S>>, "durationMs">;
+}
+
+/** Cache-friendly Eval callback context without official timing evidence. */
+export type EvalCaseContext<
   I,
   O,
   E,
-  Caps
->;
+  Caps extends EvalCapability,
+  Response = never,
+> = Omit<CaseContext<I, O, E, Caps>, "expect" | "meta" | "step"> &
+  EvalResponseProjection<Response> & {
+    expect: EvalBoundExpect<O, Caps>;
+    meta: Omit<CaseContext<I, O, E, Caps>["meta"], "durationMs">;
+    step: "steps" extends Caps ? EvalStepAccessor : never;
+  };
+
+/** Live-only context exposed by a declared fresh callback. @internal */
+type EvalFreshCaseContext<
+  I,
+  O,
+  E,
+  Caps extends EvalCapability,
+  Response,
+> = CaseContext<I, O, E, Caps> & EvalResponseProjection<Response>;
 
 /** Existing post-score context exposed under Eval vocabulary during coexistence. */
 export type EvalAssertContext<
@@ -34,7 +77,31 @@ export type EvalAssertContext<
   E,
   ScoreName extends string,
   Caps extends EvalCapability,
-> = AssertContext<I, O, E, ScoreName, Caps>;
+  Response = never,
+> = Omit<AssertContext<I, O, E, ScoreName, Caps>, "expect" | "meta" | "step"> &
+  EvalResponseProjection<Response> & {
+    expect: EvalBoundExpect<O, Caps>;
+    meta: Omit<AssertContext<I, O, E, ScoreName, Caps>["meta"], "durationMs">;
+    step: "steps" extends Caps ? EvalStepAccessor : never;
+  };
+
+/** Live-only score-aware context exposed by a fresh callback. @internal */
+type EvalFreshAssertContext<
+  I,
+  O,
+  E,
+  ScoreName extends string,
+  Caps extends EvalCapability,
+  Response,
+> = AssertContext<I, O, E, ScoreName, Caps> & EvalResponseProjection<Response>;
+
+/** Ordinary callback or explicitly live timing callback. @internal */
+export type EvalCheck<TContext, TFreshContext> =
+  | ((context: TContext) => void | Promise<void>)
+  | {
+      readonly fresh: true;
+      readonly check: (context: TFreshContext) => void | Promise<void>;
+    };
 
 /**
  * Shared fields for one typed Case, excluding call-arity handling.
@@ -51,17 +118,20 @@ interface EvalCaseFields<
   E,
   Caps extends EvalCapability,
   ScoreName extends string = string,
+  Response = never,
 > {
   id?: string;
   name?: string;
   input: NoInfer<I>;
   expected?: E;
-  expect?: (
-    ctx: EvalCaseContext<I, O, NoInfer<E>, Caps>,
-  ) => void | Promise<void>;
-  afterScores?: (
-    ctx: EvalAssertContext<I, O, NoInfer<E>, ScoreName, Caps>,
-  ) => void | Promise<void>;
+  expect?: EvalCheck<
+    EvalCaseContext<I, O, NoInfer<E>, Caps, Response>,
+    EvalFreshCaseContext<I, O, NoInfer<E>, Caps, Response>
+  >;
+  afterScores?: EvalCheck<
+    EvalAssertContext<I, O, NoInfer<E>, ScoreName, Caps, Response>,
+    EvalFreshAssertContext<I, O, NoInfer<E>, ScoreName, Caps, Response>
+  >;
   trials?: number;
   tags?: readonly string[];
   metadata?: Readonly<Record<string, JsonValue>>;
@@ -87,7 +157,8 @@ export type EvalCase<
   C extends object,
   Caps extends EvalCapability,
   ScoreName extends string = string,
-> = EvalCaseFields<I, O, E, Caps, ScoreName> & EvalCaseCall<C>;
+  Response = never,
+> = EvalCaseFields<I, O, E, Caps, ScoreName, Response> & EvalCaseCall<C>;
 
 /**
  * The Case type derived from a task.
@@ -99,4 +170,12 @@ export type CaseOf<
   T extends EvalTaskLike,
   E = unknown,
   ScoreName extends string = string,
-> = EvalCase<InputOf<T>, OutputOf<T>, E, CallOf<T>, CapsOf<T>, ScoreName>;
+> = EvalCase<
+  InputOf<T>,
+  OutputOf<T>,
+  E,
+  CallOf<T>,
+  CapsOf<T>,
+  ScoreName,
+  ResponseOf<T>
+>;

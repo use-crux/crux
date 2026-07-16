@@ -70,6 +70,7 @@ function harness() {
   };
   const planning: EvalPlanningPorts = {
     evidenceStore,
+    costEstimator: { estimate: () => ({ kind: "none" }) },
     taskIdentity: {
       describe: async () => ({
         reusable: true,
