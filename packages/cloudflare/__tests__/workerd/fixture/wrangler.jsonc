@@ -1,0 +1,22 @@
+{
+  "name": "crux-cloudflare-eval-host-fixture",
+  "main": "./worker.ts",
+  "compatibility_date": "2026-07-15",
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "CRUX_EVAL_HOST",
+        "class_name": "CruxEvalHost",
+      },
+    ],
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["CruxEvalHost"],
+    },
+  ],
+  "vars": {
+    "CRUX_EVAL_HOST_TOKEN": "eval-execute-capability-token-32-bytes",
+  },
+}

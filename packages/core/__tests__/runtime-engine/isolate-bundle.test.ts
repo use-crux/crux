@@ -26,11 +26,19 @@ describe("runtime isolate bundle compatibility", () => {
         ),
         importStatement(
           repoRoot,
+          "packages/convex/src/component/runtime/eval_host.ts",
+        ),
+        importStatement(
+          repoRoot,
           "packages/convex/src/component/runtime/leases.ts",
         ),
         importStatement(
           repoRoot,
           "packages/convex/src/component/runtime/outbox.ts",
+        ),
+        importStatement(
+          repoRoot,
+          "packages/convex/src/component/runtime/results.ts",
         ),
         importStatement(
           repoRoot,
@@ -85,6 +93,10 @@ function coreSubpath(specifier: string): string {
   if (specifier === "@use-crux/core") return "packages/core/src/index.ts";
   const subpath = specifier.slice("@use-crux/core/".length);
   if (subpath === "runtime") return "packages/core/src/runtime/public.ts";
+  if (subpath === "runtime/internal/eval-host")
+    return "packages/core/src/runtime/eval-host/index.ts";
+  if (subpath === "runtime/internal/eval-registry")
+    return "packages/core/src/runtime/eval-registry/index.ts";
   if (subpath === "observability")
     return "packages/core/src/observability/index.ts";
   if (subpath === "storage") return "packages/core/src/storage/index.ts";

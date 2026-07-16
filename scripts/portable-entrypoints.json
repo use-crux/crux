@@ -1,31 +1,6 @@
 {
   "version": 1,
-  "guardedNodeFallbacks": [
-    {
-      "owner": "@use-crux/core",
-      "sourceImporter": "src/async-scope/internal/carrier.ts",
-      "stagedImporter": "dist/async-scope/internal/carrier.js",
-      "specifier": "node:async_hooks",
-      "kind": "require-call",
-      "smoke": "core-guarded-fallbacks"
-    },
-    {
-      "owner": "@use-crux/core",
-      "sourceImporter": "src/observability/channel.ts",
-      "stagedImporter": "dist/observability/channel.js",
-      "specifier": "node:diagnostics_channel",
-      "kind": "require-call",
-      "smoke": "core-guarded-fallbacks"
-    },
-    {
-      "owner": "@use-crux/core",
-      "sourceImporter": "src/observability/channel.ts",
-      "stagedImporter": "dist/observability/channel.js",
-      "specifier": "node:diagnostics_channel",
-      "kind": "dynamic-import",
-      "smoke": "core-guarded-fallbacks"
-    }
-  ],
+  "guardedNodeFallbacks": [],
   "smokes": {
     "core-guarded-fallbacks": "scripts/fixtures/portability/core-guarded-fallbacks.ts"
   },
@@ -125,6 +100,13 @@
       "name": "@use-crux/google",
       "manifest": "packages/google/package.json",
       "entrypoints": { ".": "node-only" }
+    },
+    {
+      "name": "@use-crux/cloudflare",
+      "manifest": "packages/cloudflare/package.json",
+      "entrypoints": {
+        ".": "portable-web"
+      }
     },
     {
       "name": "@use-crux/convex",

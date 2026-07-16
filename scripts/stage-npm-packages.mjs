@@ -30,6 +30,7 @@ const tsPackages = [
   { name: '@use-crux/core', dir: 'packages/core', sourceRoot: 'src' },
   { name: '@use-crux/ai', dir: 'packages/ai', sourceRoot: 'src' },
   { name: '@use-crux/anthropic', dir: 'packages/anthropic', sourceRoot: 'src' },
+  { name: '@use-crux/cloudflare', dir: 'packages/cloudflare', sourceRoot: 'src' },
   { name: '@use-crux/convex', dir: 'packages/convex', sourceRoot: 'src' },
   { name: '@use-crux/google', dir: 'packages/google', sourceRoot: 'src' },
   { name: '@use-crux/indexer', dir: 'packages/indexer', sourceRoot: 'src' },
@@ -192,9 +193,10 @@ async function createReleaseTsconfig() {
       types: ['node'],
       paths,
     },
-    files: (await collectReleaseSourceFiles()).map((file) =>
-      relative(dirname(releaseTsconfig), file).replaceAll(sep, '/'),
-    ),
+    files: [
+      ...(await collectReleaseSourceFiles()),
+      resolve(repoRoot, 'packages/cloudflare/node_modules/@cloudflare/workers-types/index.d.ts'),
+    ].map((file) => relative(dirname(releaseTsconfig), file).replaceAll(sep, '/')),
   }
 }
 
@@ -268,7 +270,8 @@ async function stageTypeScriptPackage(pkg) {
   await createDirectoryIndexBridges(distDir)
   await rewriteRelativeJsSpecifiers(distDir)
   await copyIfExists(join(sourceDir, 'README.md'), join(stageDir, 'README.md'))
-  await copyIfExists(join(sourceDir, 'LICENSE'), join(stageDir, 'LICENSE'))
+  const packageLicense = join(sourceDir, 'LICENSE')
+  await copyIfExists(existsSync(packageLicense) ? packageLicense : join(repoRoot, 'LICENSE'), join(stageDir, 'LICENSE'))
   await rewriteTextFileIfExists(join(stageDir, 'README.md'), rewritePublishedScopeText)
 
   const manifest = transformTypeScriptManifest(sourceManifest, pkg)

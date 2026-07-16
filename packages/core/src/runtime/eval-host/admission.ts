@@ -59,40 +59,48 @@ export async function submitEvalJob(
   }
 
   const id = workId(job.jobId);
-  const admission = await context.store
-    .transact(async (tx) => {
-      const existing = await tx.state.getWork(id, {
+  const admission = context.store.evalHost
+    ? await context.store.evalHost.admit({
         namespace: context.namespace,
+        workId: id,
+        job,
+        maxConcurrentJobs: context.maxConcurrentJobs,
+        now: context.now(),
+      })
+    : await context.store.transact(async (tx) => {
+        const existing = await tx.state.getWork(id, {
+          namespace: context.namespace,
+        });
+        if (existing !== null) {
+          return { kind: "admitted", work: existing, created: false } as const;
+        }
+        const counts = await tx.state.countWork({
+          namespace: context.namespace,
+        });
+        const active = counts
+          .filter(
+            (entry) => entry.status === "pending" || entry.status === "leased",
+          )
+          .reduce((total, entry) => total + entry.count, 0);
+        if (active >= context.maxConcurrentJobs) {
+          return { kind: "capacity" } as const;
+        }
+        return {
+          kind: "admitted",
+          work: await enqueueTaskInTransaction(
+            tx,
+            { newWorkId: () => id, now: context.now },
+            {
+              namespace: context.namespace,
+              taskId: job.jobId as TaskId,
+              targetId: EVAL_EXECUTE_TARGET_ID,
+              input: job as unknown as JsonValue,
+            },
+          ),
+          created: true,
+        } as const;
       });
-      if (existing !== null) return { work: existing, created: false } as const;
-      const counts = await tx.state.countWork({ namespace: context.namespace });
-      const active = counts
-        .filter(
-          (entry) => entry.status === "pending" || entry.status === "leased",
-        )
-        .reduce((total, entry) => total + entry.count, 0);
-      if (active >= context.maxConcurrentJobs) {
-        throw new EvalHostCapacityError();
-      }
-      return {
-        work: await enqueueTaskInTransaction(
-          tx,
-          { newWorkId: () => id, now: context.now },
-          {
-            namespace: context.namespace,
-            taskId: job.jobId as TaskId,
-            targetId: EVAL_EXECUTE_TARGET_ID,
-            input: job as unknown as JsonValue,
-          },
-        ),
-        created: true,
-      } as const;
-    })
-    .catch((error: unknown) => {
-      if (error instanceof EvalHostCapacityError) return error;
-      throw error;
-    });
-  if (admission instanceof EvalHostCapacityError) {
+  if (admission.kind === "capacity") {
     return jsonResponse({ error: capacityError() }, 429);
   }
   const { work, created } = admission;
@@ -167,5 +175,3 @@ function capacityError() {
     phase: "admission",
   } as const;
 }
-
-class EvalHostCapacityError extends Error {}

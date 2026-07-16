@@ -167,9 +167,13 @@ describe("runtime artifacts", () => {
     expect(control).not.toContain("from '../../src/review'");
     expect(targets).toContain("'use node'");
     expect(targets).toContain("createConvexRuntimeTargetExecutor");
+    expect(targets).toContain("createConvexEvalHost");
     expect(targets).toContain("from '@use-crux/convex/runtime/node'");
     expect(targets).not.toContain("from '../../src/review'");
     expect(targets).toContain("executeTarget");
+    expect(targets).toContain("handleEvalRequest");
+    expect(targets).toContain("executeEvalTarget");
+    expect(targets).toContain("CRUX_EVAL_HOST_TOKEN");
   });
 
   it("does not rewrite byte-identical generated artifacts", async () => {

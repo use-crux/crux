@@ -18,6 +18,7 @@ import type {
   RuntimeWaiterStorePort,
 } from '@use-crux/core/runtime'
 import type { EventCursor } from '@use-crux/core/runtime'
+import type { EvalHostAdmissionPort } from '@use-crux/core/runtime/internal/eval-host'
 import type { ConvexCtxPort } from '../store'
 import {
   decodeEvent,
@@ -41,6 +42,8 @@ import {
   encodeWorkForCreate,
 } from './codec'
 import { assertConvexDeferredComponent, createConvexDeferredStore } from './deferred-store'
+import { createConvexEvalHostAdmission } from './eval-host/admission'
+import { createConvexRuntimeResultStore, type ConvexRuntimeResultComponent } from './results'
 
 /** Component refs needed by the Runtime Engine store adapter. */
 export interface ConvexRuntimeComponent {
@@ -52,6 +55,10 @@ export interface ConvexRuntimeComponent {
     readonly outbox: Record<string, unknown>
     readonly leases: Record<string, unknown>
     readonly deferred?: Record<string, unknown>
+    readonly results?: ConvexRuntimeResultComponent
+    readonly evalHost?: {
+      readonly admit?: unknown
+    }
     readonly composites?: {
       readonly run?: unknown
     }
@@ -68,10 +75,15 @@ export interface ConvexRuntimeStoreOptions<TCtx extends ConvexCtxPort = ConvexCt
   readonly now?: () => Date
 }
 
-/** Create a Runtime Engine store backed by the Crux Convex component. */
+/** Convex Runtime store backed by the component, with optional Eval capabilities. */
+export interface ConvexRuntimeStore extends RuntimeStoreAdapter {
+  readonly results?: RuntimeStoreAdapter['results']
+  readonly evalHost?: EvalHostAdmissionPort
+}
+
 export function convexRuntimeStore<TCtx extends ConvexCtxPort>(
   options: ConvexRuntimeStoreOptions<TCtx>,
-): RuntimeStoreAdapter {
+): ConvexRuntimeStore {
   const now = options.now ?? (() => new Date())
   const run = <TResult>(ref: unknown, args: Record<string, unknown>) =>
     options.ctx.runMutation<TResult>(ref, cleanArgs(args))
@@ -296,6 +308,8 @@ export function convexRuntimeStore<TCtx extends ConvexCtxPort>(
     id: 'convex',
     ...transaction,
     leases,
+    ...(refs.results ? { results: createConvexRuntimeResultStore({ refs: refs.results, run, now }) } : {}),
+    ...(refs.evalHost?.admit ? { evalHost: createConvexEvalHostAdmission({ ref: refs.evalHost.admit, run }) } : {}),
     runComposite: async <K extends RuntimeCompositeKind>(
       kind: K,
       input: RuntimeCompositeInput[K],

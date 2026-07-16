@@ -3,6 +3,8 @@ import type { ResolvedRuntimeEngine } from "../api/create-runtime";
 import type { InProcessRuntimeEngineDefinition } from "../api/runtime-definition";
 import type { WorkId } from "../ports/ids";
 import type { RuntimeWakeDeliver } from "../engine/outbox";
+import type { RuntimeLeaseExtensionOptions } from "../engine/kernel";
+import type { RuntimeTargetMap } from "../engine/kernel";
 import { createEvalExecuteTarget, EVAL_EXECUTE_TARGET_ID } from "./target";
 import type {
   CreateEvalHostOptions,
@@ -29,6 +31,10 @@ export function createResolvedEvalHost<TStore extends EvalHostStore>(
     readonly runtime: InProcessRuntimeEngineDefinition<TStore>;
     readonly hostKind: EvalHostKind;
     readonly wakeMode: EvalHostWakeMode;
+    /** Platform-owned lease heartbeat scheduling, or false when unsupported. */
+    readonly leaseExtension?: false | RuntimeLeaseExtensionOptions;
+    /** Additional generated Runtime targets deployed beside the Eval executor. */
+    readonly targets?: RuntimeTargetMap;
   },
 ): ResolvedEvalHost<TStore> {
   assertEvalHostEntry(options);
@@ -43,9 +49,13 @@ export function createResolvedEvalHost<TStore extends EvalHostStore>(
   const runtime = createRuntime({
     runtime: options.runtime,
     namespace: `eval-host:${options.deploymentId}`,
-    targets: { [EVAL_EXECUTE_TARGET_ID]: target },
+    targets: {
+      ...options.targets,
+      [EVAL_EXECUTE_TARGET_ID]: target,
+    },
     newWorkId: () => `eval-host-internal:${++generatedId}` as WorkId,
     now,
+    leaseExtension: options.leaseExtension,
     startMaintenance: false,
   });
   const scheduleWake = wakeScheduler(runtime, options.wakeMode);

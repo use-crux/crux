@@ -6,6 +6,7 @@ import type { RuntimeResultPayloadPort } from "../results/types";
 import type { RuntimeStoreAdapter } from "../store";
 import type { InProcessRuntimeEngineDefinition } from "../api/runtime-definition";
 import type { RuntimeWakeRequestVerifier } from "../handler/verify";
+import type { WorkItem } from "../engine/work";
 
 /** Stable private wire protocol spoken by deployed Eval execution hosts. */
 export const CRUX_EVAL_HOST_PROTOCOL = "crux.eval-host.v1" as const;
@@ -59,7 +60,32 @@ export interface CreateMemoryEvalHostOptions {
 /** Runtime store whose result capability is proven before Eval admission. */
 export type EvalHostStore = RuntimeStoreAdapter & {
   readonly results: RuntimeResultPayloadPort;
+  /** Optional adapter-native atomic Eval admission operation. */
+  readonly evalHost?: EvalHostAdmissionPort;
 };
+
+/** Adapter-native atomic admission input for stores with remote transactions. */
+export interface EvalHostAdmissionInput {
+  readonly namespace: string;
+  readonly workId: string;
+  readonly job: SubmitEvalJobV1;
+  readonly maxConcurrentJobs: number;
+  readonly now: Date;
+}
+
+/** Atomic Eval admission result returned by a durable host adapter. */
+export type EvalHostAdmissionResult =
+  | { readonly kind: "capacity" }
+  | {
+      readonly kind: "admitted";
+      readonly work: WorkItem;
+      readonly created: boolean;
+    };
+
+/** Adapter-native admission capability used when callbacks cannot cross transactions. */
+export interface EvalHostAdmissionPort {
+  admit(input: EvalHostAdmissionInput): Promise<EvalHostAdmissionResult>;
+}
 
 /** Shared authenticated Eval-host construction contract. */
 export interface CreateEvalHostOptions {
