@@ -37,7 +37,7 @@ describe("static cache identity", () => {
     );
 
     expect(STATIC_PARSE_CACHE_EPOCH).toBe(identity.staticParseCacheEpoch);
-    expect(STATIC_PARSE_CACHE_EPOCH).toBe("static-parse-v66");
+    expect(STATIC_PARSE_CACHE_EPOCH).toBe("static-parse-v67");
   });
 
   it("takes the pre-launch semantic facts cache migration epoch", () => {

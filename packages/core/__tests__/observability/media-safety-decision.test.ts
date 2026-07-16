@@ -238,4 +238,46 @@ describe('input media safety observability', () => {
       })
     }
   })
+
+  it('keeps composite source-policy URL facts out of observability', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport, { scheduledDelayMs: 0 })
+    const source = 'https://SECRET_USER:SECRET_PASSWORD@secret-host.invalid/SECRET_PATH?SECRET_QUERY=yes'
+    const policy = guardrail({
+      id: 'private-composite-media-policy',
+      on: boundary.input.media(),
+      mode: 'report',
+      run: guardrail.media({
+        sources: {
+          allowHosts: ['cdn.example.com'],
+          allowUrlQuery: false,
+        },
+      }),
+    })
+    const safety = createSafety({
+      call: { guardrails: [policy] },
+      promptId: 'media-privacy',
+      model: 'model-1',
+    })
+
+    await safety.guardInput({
+      messages: [{ role: 'user', content: [{ type: 'image', source }] }],
+    })
+    await observe.flush()
+
+    const serialized = JSON.stringify({ audit: safety.audit, records: transport.records })
+    for (const sentinel of [
+      source,
+      'SECRET_USER',
+      'SECRET_PASSWORD',
+      'secret-host.invalid',
+      'SECRET_PATH',
+      'SECRET_QUERY',
+    ]) {
+      expect(serialized).not.toContain(sentinel)
+    }
+    expect(serialized).toContain('media source host is not allowed')
+    expect(serialized).toContain('media source URL userinfo is not allowed')
+    expect(serialized).toContain('media source URL query strings are not allowed')
+  })
 })

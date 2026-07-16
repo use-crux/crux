@@ -1,11 +1,14 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use serde_json::{Value, json};
 
 use crate::{
-    protocol::{LiteralValue, StaticInitializerRecord, StaticSyntaxValue},
-    record_values::{direct_string_property, property_value, resolve_static_value},
+    protocol::{LiteralValue, StaticCalleeRecord, StaticInitializerRecord, StaticSyntaxValue},
+    record_values::{direct_string_property, json_value, property_value, resolve_static_value},
 };
+
+const SAFETY_API_MODULES: &[&str] = &["@use-crux/core", "@use-crux/core/safety"];
+const GUARDRAIL_STRATEGY_KINDS: &[&str] = &["classifier", "injection", "media", "pii", "secrets"];
 
 const SAFETY_BOUNDARY_IDS: &[&str] = &[
     "user.input",
@@ -44,7 +47,7 @@ pub(crate) fn policy_id_for(config: &StaticSyntaxValue, fallback: &str) -> Strin
         .unwrap_or_else(|| fallback.to_string())
 }
 
-pub(crate) fn strategy_facts(
+pub(crate) fn constraint_strategy_facts(
     config: &StaticSyntaxValue,
     initializers: &HashMap<&str, &StaticInitializerRecord>,
 ) -> Option<Value> {
@@ -54,6 +57,75 @@ pub(crate) fn strategy_facts(
         return None;
     };
     Some(json!({ "kind": callee.name }))
+}
+
+pub(crate) fn guardrail_strategy_facts(
+    config: &StaticSyntaxValue,
+    initializers: &HashMap<&str, &StaticInitializerRecord>,
+) -> Option<Value> {
+    let value = property_value(config, "run")?;
+    let resolved = resolve_static_value(value, initializers, &mut Default::default());
+    let StaticSyntaxValue::Call { callee, args, .. } = resolved else {
+        return None;
+    };
+    if !is_guardrail_strategy_helper(callee) {
+        return None;
+    }
+
+    let mut strategy = json!({ "kind": callee.name });
+    if let Some(config) = args
+        .first()
+        .and_then(|arg| complete_config_value(arg, initializers))
+    {
+        strategy["config"] = config;
+    }
+    Some(strategy)
+}
+
+fn is_guardrail_strategy_helper(callee: &StaticCalleeRecord) -> bool {
+    callee.direct == Some(false)
+        && GUARDRAIL_STRATEGY_KINDS.contains(&callee.name.as_str())
+        && callee
+            .module_specifier
+            .as_deref()
+            .is_some_and(|module| SAFETY_API_MODULES.contains(&module))
+}
+
+fn complete_config_value(
+    value: &StaticSyntaxValue,
+    initializers: &HashMap<&str, &StaticInitializerRecord>,
+) -> Option<Value> {
+    if has_incomplete_shape(value, initializers, &mut HashSet::new()) {
+        return None;
+    }
+    json_value(value, initializers)
+}
+
+fn has_incomplete_shape(
+    value: &StaticSyntaxValue,
+    initializers: &HashMap<&str, &StaticInitializerRecord>,
+    path: &mut HashSet<String>,
+) -> bool {
+    match value {
+        StaticSyntaxValue::Identifier { name } => {
+            if !path.insert(name.clone()) {
+                return true;
+            }
+            let incomplete = initializers.get(name.as_str()).is_some_and(|initializer| {
+                has_incomplete_shape(&initializer.value, initializers, path)
+            });
+            path.remove(name);
+            incomplete
+        }
+        StaticSyntaxValue::Array { elements } => elements
+            .iter()
+            .any(|element| has_incomplete_shape(element, initializers, path)),
+        StaticSyntaxValue::Object { properties, .. } => properties.iter().any(|property| {
+            property.spread == Some(true)
+                || has_incomplete_shape(&property.value, initializers, path)
+        }),
+        _ => false,
+    }
 }
 
 pub(crate) fn safety_boundaries(config: &StaticSyntaxValue) -> Vec<String> {

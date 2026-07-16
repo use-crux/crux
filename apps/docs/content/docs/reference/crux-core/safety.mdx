@@ -93,9 +93,67 @@ Built-in strategies:
 - `guardrail.secrets()`
 - `guardrail.injection({ action })`
 - `guardrail.classifier({ classifier, blockWhen, findings })`
+- `guardrail.media({ mediaTypes, size, sources, action })`
 
 Text strategies default to sentence-level streaming checks. Classifier and
 object/path guardrails run at final output unless tuned.
+
+### `guardrail.media(options)`
+
+Creates a callback restricted to `boundary.input.media()`. At least one rule
+group is required. Configured rules run in stable `mediaTypes` → `size` →
+`sources` order and aggregate all failures into one privacy-safe decision.
+
+Top-level options:
+
+| Option | Type | Default | Behavior |
+| --- | --- | --- | --- |
+| `mediaTypes` | `MediaTypeGuardrailRule` | omitted | MIME allowlist; exact essences and subtype wildcards such as `image/*`. |
+| `size` | `MediaSizeGuardrailRule` | omitted | Maximum locally known or explicitly declared payload size. |
+| `sources` | `MediaSourceGuardrailRule` | omitted | Source-category and remote-URL rules. Omitted means no source checks. |
+| `action` | `'block' \| 'strip'` | `'block'` | Result returned when any configured rule fails. |
+
+MIME and size rules:
+
+| Option | Type | Default | Behavior |
+| --- | --- | --- | --- |
+| `mediaTypes.allow` | non-empty `readonly MediaTypePattern[]` | required | MIME essences such as `image/png` or `image/*`; matching is case-normalized and ignores parameters. |
+| `mediaTypes.allowUnknown` | `boolean` | `false` | Allows a part whose MIME type cannot be observed locally. |
+| `size.maxBytes` | `number` | required | Positive safe-integer byte ceiling. |
+| `size.allowUnknown` | `boolean` | `false` | Allows a part whose size cannot be observed without external I/O. |
+
+Source rules:
+
+| Option | Type | Default | Behavior |
+| --- | --- | --- | --- |
+| `sources.allowHosts` | `readonly string[]` | all hosts | Exact normalized hostnames. Schemes, ports, paths, queries, userinfo, and wildcards are invalid config. |
+| `sources.allowInline` | `boolean` | `true` | Allows bytes, Blobs, data assets, and data URLs. |
+| `sources.allowProviderFiles` | `boolean` | `true` | Allows provider-owned file references; URL rules do not apply to them. |
+| `sources.allowUrlUserInfo` | `boolean` | `false` | Allows username/password fields in a URL authority. |
+| `sources.allowUrlQuery` | `boolean` | `true` | Allows URL query strings, including signed-URL parameters. |
+
+`sources: {}` enables all source defaults in the table; omitting `sources`
+disables source evaluation entirely. Invalid configuration throws
+`SafetyConfigError` when the strategy is constructed.
+
+MIME inspection prefers the declared `part.mediaType`, then source-owned metadata,
+then a data-URL type. A bounded image signature sniff is used only for
+undeclared local bytes; it does not verify a declared MIME type against payload
+contents. Size inspection uses local payload bytes or declared asset/provider
+metadata. It never fetches remote URLs or calls providers.
+
+The exported public types are `MediaGuardrailOptions`,
+`MediaTypeGuardrailRule`, `MediaSizeGuardrailRule`,
+`MediaSourceGuardrailRule`, `MediaGuardrailAction`, and `MediaTypePattern`.
+The returned callback carries normalized, frozen runtime metadata as
+`{ kind: 'guardrail.media', config }`. Project Index records authored helper
+calls with static strategy kind `media` and includes config only when the whole
+argument is statically resolvable.
+
+Reasons and observability can contain MIME types and byte counts, but never raw
+media, URLs, observed hostnames, paths, queries, userinfo, filenames, or
+provider/file identifiers. Model-produced media is out of scope; see
+[#228](https://github.com/use-crux/crux/issues/228).
 
 ## Constraints
 
