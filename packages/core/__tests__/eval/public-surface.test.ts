@@ -56,8 +56,8 @@ describe("@use-crux/core/eval", () => {
       import: "./src/eval/node.ts",
     });
     expect(manifest.exports?.["./eval/internal/node-runner"]).toEqual({
-      types: "./src/eval/node-runner.ts",
-      import: "./src/eval/node-runner.ts",
+      types: "./src/eval/node/runner.ts",
+      import: "./src/eval/node/runner.ts",
     });
 
     const surface = await import("@use-crux/core/eval/node");

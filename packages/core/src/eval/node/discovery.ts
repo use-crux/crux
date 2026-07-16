@@ -3,10 +3,8 @@
 import { readdir, stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import type { AnyEval } from "./evaluate";
-import {
-  getEvalDefinitionForInternalUse,
-} from "./internal/definition";
+import type { AnyEval } from "../evaluate";
+import { getEvalDefinitionForInternalUse } from "../internal/definition";
 
 export interface EvalModule {
   readonly relativeFile: string;
@@ -114,9 +112,7 @@ export function deriveEvalId(relativeFile: string): string {
   const beneathEvals = normalized.startsWith("evals/")
     ? normalized.slice("evals/".length)
     : normalized;
-  return beneathEvals
-    .replace(/\.eval\.[cm]?[jt]sx?$/, "")
-    .replaceAll("/", ".");
+  return beneathEvals.replace(/\.eval\.[cm]?[jt]sx?$/, "").replaceAll("/", ".");
 }
 
 /** Return the canonical automatic Review sidecar path. */
@@ -147,7 +143,10 @@ export function selectEvals<T extends SelectableEval>(
     const matches = selectOne(evals, selector);
     if (matches.length === 0) {
       errors.push(`No Eval matches '${selector}'.`);
-    } else if (matches.length > 1 && matches.every((entry) => entry.links?.includes(selector))) {
+    } else if (
+      matches.length > 1 &&
+      matches.every((entry) => entry.links?.includes(selector))
+    ) {
       errors.push(
         `Selector '${selector}' is ambiguous. Use one exact Eval id: ${matches.map((entry) => `runEval('${entry.id}')`).join(", ")}.`,
       );
@@ -161,20 +160,30 @@ export function selectEvals<T extends SelectableEval>(
   });
 }
 
-function selectOne<T extends SelectableEval>(evals: readonly T[], selector: string): T[] {
+function selectOne<T extends SelectableEval>(
+  evals: readonly T[],
+  selector: string,
+): T[] {
   const exact = evals.filter((entry) => entry.id === selector);
   if (exact.length > 0) return exact;
-  const normalized = normalizePath(selector).replace(/^\.\//, "").replace(/\/$/, "");
+  const normalized = normalizePath(selector)
+    .replace(/^\.\//, "")
+    .replace(/\/$/, "");
   const byPath = evals.filter((entry) => {
     const file = entry.sourceKey.relativeFile;
     const stem = file.replace(/\.eval\.[cm]?[jt]sx?$/, "");
-    return file === normalized || stem === normalized || file.startsWith(`${normalized}/`);
+    return (
+      file === normalized ||
+      stem === normalized ||
+      file.startsWith(`${normalized}/`)
+    );
   });
   if (byPath.length > 0) return byPath;
   if (selector.includes("*")) {
     const matcher = wildcardPattern(selector);
-    const byGlob = evals.filter((entry) =>
-      matcher.test(entry.id) || matcher.test(entry.sourceKey.relativeFile),
+    const byGlob = evals.filter(
+      (entry) =>
+        matcher.test(entry.id) || matcher.test(entry.sourceKey.relativeFile),
     );
     if (byGlob.length > 0) return byGlob;
   }
@@ -187,15 +196,26 @@ async function findEvalFiles(root: string): Promise<readonly string[]> {
   return Object.freeze(files.sort());
 }
 
-async function walk(root: string, directory: string, files: string[]): Promise<void> {
+async function walk(
+  root: string,
+  directory: string,
+  files: string[],
+): Promise<void> {
   const entries = await readdir(join(root, directory), { withFileTypes: true });
   for (const entry of entries) {
-    if (["node_modules", "dist", ".crux", ".git", ".next", ".turbo"].includes(entry.name)) continue;
+    if (
+      ["node_modules", "dist", ".crux", ".git", ".next", ".turbo"].includes(
+        entry.name,
+      )
+    )
+      continue;
     const relativeFile = normalizePath(join(directory, entry.name));
     if (entry.isDirectory()) {
       await walk(root, relativeFile, files);
     } else if (
-      (entry.isFile() || (entry.isSymbolicLink() && (await stat(join(root, relativeFile))).isFile())) &&
+      (entry.isFile() ||
+        (entry.isSymbolicLink() &&
+          (await stat(join(root, relativeFile))).isFile())) &&
       /\.eval\.[cm]?[jt]sx?$/.test(entry.name)
     ) {
       files.push(relativeFile);
@@ -203,17 +223,24 @@ async function walk(root: string, directory: string, files: string[]): Promise<v
   }
 }
 
-function discoveryExportMessage(file: string, names: readonly string[]): string {
-  if (names.length === 0) return `${file} must default-export exactly one Eval.`;
+function discoveryExportMessage(
+  file: string,
+  names: readonly string[],
+): string {
+  if (names.length === 0)
+    return `${file} must default-export exactly one Eval.`;
   if (names.length === 1 && names[0] !== "default") {
     return `${file} exports Eval '${names[0]}', but an Eval file must use a default export.`;
   }
   return `${file} exports Evals ${names.map((name) => `'${name}'`).join(", ")}. Keep one default Eval and split each additional Eval into its own file.`;
 }
 
-function duplicateIdErrors(evals: readonly DiscoveredEval[]): EvalDiscoveryError[] {
+function duplicateIdErrors(
+  evals: readonly DiscoveredEval[],
+): EvalDiscoveryError[] {
   const byId = new Map<string, DiscoveredEval[]>();
-  for (const entry of evals) byId.set(entry.id, [...(byId.get(entry.id) ?? []), entry]);
+  for (const entry of evals)
+    byId.set(entry.id, [...(byId.get(entry.id) ?? []), entry]);
   return [...byId]
     .filter(([, entries]) => entries.length > 1)
     .map(([id, entries]) => ({
@@ -223,11 +250,18 @@ function duplicateIdErrors(evals: readonly DiscoveredEval[]): EvalDiscoveryError
 }
 
 function isEval(value: unknown): value is AnyEval {
-  return value !== null && typeof value === "object" && "_tag" in value && value._tag === "CruxEval";
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    "_tag" in value &&
+    value._tag === "CruxEval"
+  );
 }
 
 function wildcardPattern(value: string): RegExp {
-  const escaped = value.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replaceAll("*", ".*");
+  const escaped = value
+    .replace(/[.+?^${}()|[\]\\]/g, "\\$&")
+    .replaceAll("*", ".*");
   return new RegExp(`^${escaped}$`);
 }
 

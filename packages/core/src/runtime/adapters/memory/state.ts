@@ -1,7 +1,7 @@
-import type { JsonValue } from '../../../storage'
-import { DEFAULT_RUNTIME_MAX_ATTEMPTS } from '../../engine/retry'
-import type { WorkItem } from '../../engine/work'
-import type { EventCursor, FlowId, WorkId } from '../../ports/ids'
+import type { JsonValue } from "../../../storage";
+import { DEFAULT_RUNTIME_MAX_ATTEMPTS } from "../../engine/retry";
+import type { WorkItem } from "../../engine/work";
+import type { EventCursor, FlowId, WorkId } from "../../ports/ids";
 import type {
   FlowSnapshot,
   IdempotencyRecord,
@@ -13,12 +13,13 @@ import type {
   RuntimeStateReadOptions,
   SetWorkPendingOptions,
   WorkStatusCount,
-} from '../../ports/state'
-import type { RuntimeWork } from '../../ports/work'
-import type { MemoryRuntimeData, MemoryWriteRecorder } from './data'
-import { scopedKey } from './data'
-import { cloneJsonValue } from './json'
-import { matchesPruneNamespace, olderThan, pruneMapValues } from './retention'
+} from "../../ports/state";
+import type { RuntimeWork } from "../../ports/work";
+import type { MemoryRuntimeData, MemoryWriteRecorder } from "./data";
+import { scopedKey } from "./data";
+import { cloneJsonValue } from "./json";
+import { matchesPruneNamespace, olderThan, pruneMapValues } from "./retention";
+import { cloneRuntimeResultRef } from "../../results/types";
 
 export function createMemoryStatePort(
   data: MemoryRuntimeData,
@@ -26,18 +27,18 @@ export function createMemoryStatePort(
 ): RuntimeStatePort {
   return {
     async createWork(input: NewWorkItem): Promise<WorkItem> {
-      const key = scopedKey(input.namespace, input.workId)
-      const existing = data.work.get(key)
-      if (existing) return cloneWorkItem(existing)
+      const key = scopedKey(input.namespace, input.workId);
+      const existing = data.work.get(key);
+      if (existing) return cloneWorkItem(existing);
 
-      recordWrite?.()
-      const now = input.now ? new Date(input.now) : new Date()
+      recordWrite?.();
+      const now = input.now ? new Date(input.now) : new Date();
       const stored: WorkItem = Object.freeze({
         workId: input.workId,
         namespace: input.namespace,
         work: cloneRuntimeWork(input.work),
         targetId: input.targetId,
-        status: 'pending',
+        status: "pending",
         attempt: 1,
         maxAttempts: input.maxAttempts ?? DEFAULT_RUNTIME_MAX_ATTEMPTS,
         notBefore: input.notBefore ? new Date(input.notBefore) : undefined,
@@ -45,25 +46,28 @@ export function createMemoryStatePort(
         idleScope: input.idleScope,
         createdAt: now,
         updatedAt: now,
-      })
-      data.work.set(key, stored)
+      });
+      data.work.set(key, stored);
       if (input.idleScope) {
-        incrementCounter(data, input.namespace, input.idleScope)
+        incrementCounter(data, input.namespace, input.idleScope);
       }
-      return cloneWorkItem(stored)
+      return cloneWorkItem(stored);
     },
 
     async getWork(
       workId: WorkId,
       options: RuntimeStateReadOptions,
     ): Promise<WorkItem | null> {
-      const work = data.work.get(scopedKey(options.namespace, workId))
-      return work ? cloneWorkItem(work) : null
+      const work = data.work.get(scopedKey(options.namespace, workId));
+      return work ? cloneWorkItem(work) : null;
     },
 
     async putWork(work: WorkItem): Promise<void> {
-      recordWrite?.()
-      data.work.set(scopedKey(work.namespace, work.workId), cloneWorkItem(work))
+      recordWrite?.();
+      data.work.set(
+        scopedKey(work.namespace, work.workId),
+        cloneWorkItem(work),
+      );
     },
 
     async listWork(options: ListWorkOptions): Promise<readonly WorkItem[]> {
@@ -75,8 +79,8 @@ export function createMemoryStatePort(
             (options.updatedBefore === undefined ||
               item.updatedAt.getTime() < options.updatedBefore.getTime()),
         )
-        .slice(0, options.limit)
-      return work.map((item) => cloneWorkItem(item))
+        .slice(0, options.limit);
+      return work.map((item) => cloneWorkItem(item));
     },
 
     async pruneTerminalWork(options) {
@@ -87,68 +91,68 @@ export function createMemoryStatePort(
           matchesPruneNamespace(work, options.namespace) &&
           isPrunableWorkStatus(work.status) &&
           olderThan(work.updatedAt, options.before),
-      )
-      if (result.removed > 0) recordWrite?.()
-      return result
+      );
+      if (result.removed > 0) recordWrite?.();
+      return result;
     },
 
     async countWork(options): Promise<readonly WorkStatusCount[]> {
-      const counts = new Map<string, WorkStatusCount>()
+      const counts = new Map<string, WorkStatusCount>();
       for (const item of data.work.values()) {
-        if (item.namespace !== options.namespace) continue
-        const key = `${item.namespace}:${item.status}:${item.targetId}`
-        const previous = counts.get(key)
+        if (item.namespace !== options.namespace) continue;
+        const key = `${item.namespace}:${item.status}:${item.targetId}`;
+        const previous = counts.get(key);
         counts.set(key, {
           namespace: item.namespace,
           status: item.status,
           targetId: item.targetId,
           count: (previous?.count ?? 0) + 1,
-        })
+        });
       }
-      return [...counts.values()]
+      return [...counts.values()];
     },
 
     async setWorkPending(
       workId: WorkId,
       options: SetWorkPendingOptions,
     ): Promise<WorkItem | null> {
-      const key = scopedKey(options.namespace, workId)
-      const existing = data.work.get(key)
+      const key = scopedKey(options.namespace, workId);
+      const existing = data.work.get(key);
       if (!existing || !statusAllowed(existing.status, options.from))
-        return null
+        return null;
 
-      recordWrite?.()
+      recordWrite?.();
       const updated: WorkItem = Object.freeze({
         workId: existing.workId,
         namespace: existing.namespace,
         work: cloneRuntimeWork(options.work),
         targetId: existing.targetId,
-        status: 'pending',
+        status: "pending",
         attempt: 1,
         maxAttempts: existing.maxAttempts,
         idempotencyKey: options.idempotencyKey,
         idleScope: existing.idleScope,
         createdAt: new Date(existing.createdAt),
         updatedAt: options.now ? new Date(options.now) : new Date(),
-      })
-      data.work.set(key, updated)
-      return cloneWorkItem(updated)
+      });
+      data.work.set(key, updated);
+      return cloneWorkItem(updated);
     },
 
     async getSnapshot(
       flowId: FlowId,
       options: RuntimeStateReadOptions,
     ): Promise<FlowSnapshot | null> {
-      const snapshot = data.snapshots.get(scopedKey(options.namespace, flowId))
-      return snapshot ? cloneFlowSnapshot(snapshot) : null
+      const snapshot = data.snapshots.get(scopedKey(options.namespace, flowId));
+      return snapshot ? cloneFlowSnapshot(snapshot) : null;
     },
 
     async putSnapshot(snapshot: FlowSnapshot): Promise<void> {
-      recordWrite?.()
+      recordWrite?.();
       data.snapshots.set(
         scopedKey(snapshot.namespace, snapshot.flowId),
         cloneFlowSnapshot(snapshot),
-      )
+      );
     },
 
     async pruneTerminalSnapshots(options) {
@@ -159,9 +163,9 @@ export function createMemoryStatePort(
           matchesPruneNamespace(snapshot, options.namespace) &&
           isPrunableSnapshotStatus(snapshot.status) &&
           olderThan(snapshot.updatedAt, options.before),
-      )
-      if (result.removed > 0) recordWrite?.()
-      return result
+      );
+      if (result.removed > 0) recordWrite?.();
+      return result;
     },
 
     async markSnapshotDelivered(
@@ -172,34 +176,34 @@ export function createMemoryStatePort(
         ([, snapshot]) =>
           snapshot.namespace === options.namespace &&
           snapshot.workId === workId,
-      )
-      if (!entry) return
+      );
+      if (!entry) return;
 
-      const [key, snapshot] = entry
+      const [key, snapshot] = entry;
       const pendingSuspends = snapshot.pendingSuspends.map((suspend) => {
-        if (suspend.waiterId !== options.waiterId) return suspend
+        if (suspend.waiterId !== options.waiterId) return suspend;
         return Object.freeze({
           ...clonePendingSuspend(suspend),
           delivered: deliveredSuspend(options),
-        })
-      })
-      const deliveredSuspends = mergeDeliveredSuspend(snapshot, options)
-      recordWrite?.()
+        });
+      });
+      const deliveredSuspends = mergeDeliveredSuspend(snapshot, options);
+      recordWrite?.();
       data.snapshots.set(
         key,
         cloneFlowSnapshot({ ...snapshot, pendingSuspends, deliveredSuspends }),
-      )
+      );
     },
 
     async hasIdempotencyKey(namespace: string, key: string): Promise<boolean> {
-      return data.idempotency.has(scopedKey(namespace, key))
+      return data.idempotency.has(scopedKey(namespace, key));
     },
 
     async putIdempotencyKey(record: IdempotencyRecord): Promise<void> {
-      const key = scopedKey(record.namespace, record.key)
-      if (data.idempotency.has(key)) return
-      recordWrite?.()
-      data.idempotency.set(key, cloneIdempotencyRecord(record))
+      const key = scopedKey(record.namespace, record.key);
+      if (data.idempotency.has(key)) return;
+      recordWrite?.();
+      data.idempotency.set(key, cloneIdempotencyRecord(record));
     },
 
     async pruneIdempotencyKeys(options) {
@@ -209,47 +213,47 @@ export function createMemoryStatePort(
         (record) =>
           matchesPruneNamespace(record, options.namespace) &&
           olderThan(record.completedAt, options.before),
-      )
-      if (result.removed > 0) recordWrite?.()
-      return result
+      );
+      if (result.removed > 0) recordWrite?.();
+      return result;
     },
 
     async incrementIdle(namespace: string, scope: string): Promise<number> {
-      recordWrite?.()
-      return incrementCounter(data, namespace, scope)
+      recordWrite?.();
+      return incrementCounter(data, namespace, scope);
     },
 
     async decrementIdle(namespace: string, scope: string): Promise<number> {
-      const key = scopedKey(namespace, scope)
-      const next = (data.idleCounters.get(key) ?? 0) - 1
+      const key = scopedKey(namespace, scope);
+      const next = (data.idleCounters.get(key) ?? 0) - 1;
       if (next < 0) {
-        throw new Error(`Runtime idle counter ${scope} went negative.`)
+        throw new Error(`Runtime idle counter ${scope} went negative.`);
       }
-      recordWrite?.()
+      recordWrite?.();
       if (next === 0) {
-        data.idleCounters.delete(key)
+        data.idleCounters.delete(key);
       } else {
-        data.idleCounters.set(key, next)
+        data.idleCounters.set(key, next);
       }
-      return next
+      return next;
     },
 
     async getIdleCount(namespace: string, scope: string): Promise<number> {
-      return data.idleCounters.get(scopedKey(namespace, scope)) ?? 0
+      return data.idleCounters.get(scopedKey(namespace, scope)) ?? 0;
     },
-  }
+  };
 }
 
-function isPrunableWorkStatus(status: WorkItem['status']): boolean {
+function isPrunableWorkStatus(status: WorkItem["status"]): boolean {
   return (
-    status === 'completed' || status === 'cancelled' || status === 'dead-letter'
-  )
+    status === "completed" || status === "cancelled" || status === "dead-letter"
+  );
 }
 
-function isPrunableSnapshotStatus(status: FlowSnapshot['status']): boolean {
+function isPrunableSnapshotStatus(status: FlowSnapshot["status"]): boolean {
   return (
-    status === 'completed' || status === 'blocked' || status === 'cancelled'
-  )
+    status === "completed" || status === "blocked" || status === "cancelled"
+  );
 }
 
 export function cloneWorkItem(work: WorkItem): WorkItem {
@@ -272,9 +276,12 @@ export function cloneWorkItem(work: WorkItem): WorkItem {
           at: new Date(work.lastError.at),
         }
       : undefined,
+    resultRef: work.resultRef
+      ? cloneRuntimeResultRef(work.resultRef)
+      : undefined,
     createdAt: new Date(work.createdAt),
     updatedAt: new Date(work.updatedAt),
-  })
+  });
 }
 
 function incrementCounter(
@@ -282,19 +289,19 @@ function incrementCounter(
   namespace: string,
   scope: string,
 ): number {
-  const key = scopedKey(namespace, scope)
-  const next = (data.idleCounters.get(key) ?? 0) + 1
-  data.idleCounters.set(key, next)
-  return next
+  const key = scopedKey(namespace, scope);
+  const next = (data.idleCounters.get(key) ?? 0) + 1;
+  data.idleCounters.set(key, next);
+  return next;
 }
 
 function statusAllowed(
-  status: WorkItem['status'],
-  from: SetWorkPendingOptions['from'],
+  status: WorkItem["status"],
+  from: SetWorkPendingOptions["from"],
 ): boolean {
   const allowed =
-    from === undefined ? ['suspended'] : Array.isArray(from) ? from : [from]
-  return allowed.includes(status)
+    from === undefined ? ["suspended"] : Array.isArray(from) ? from : [from];
+  return allowed.includes(status);
 }
 
 export function cloneFlowSnapshot(snapshot: FlowSnapshot): FlowSnapshot {
@@ -304,13 +311,18 @@ export function cloneFlowSnapshot(snapshot: FlowSnapshot): FlowSnapshot {
     targetId: snapshot.targetId,
     namespace: snapshot.namespace,
     status: snapshot.status,
-    input: cloneJsonValue(snapshot.input, 'flow snapshot input'),
+    input: cloneJsonValue(snapshot.input, "flow snapshot input"),
     ...(snapshot.continuation
-      ? { continuation: cloneJsonValue(snapshot.continuation, 'flow snapshot continuation') }
+      ? {
+          continuation: cloneJsonValue(
+            snapshot.continuation,
+            "flow snapshot continuation",
+          ),
+        }
       : {}),
     completedSteps: cloneJsonValue(
       snapshot.completedSteps,
-      'flow snapshot completedSteps',
+      "flow snapshot completedSteps",
     ) as Readonly<Record<string, JsonValue>>,
     fingerprint: [...snapshot.fingerprint],
     pendingSuspends: snapshot.pendingSuspends.map((suspend) =>
@@ -344,7 +356,7 @@ export function cloneFlowSnapshot(snapshot: FlowSnapshot): FlowSnapshot {
         )
       : undefined,
     updatedAt: new Date(snapshot.updatedAt),
-  })
+  });
 }
 
 function cloneIdempotencyRecord(record: IdempotencyRecord): IdempotencyRecord {
@@ -352,7 +364,7 @@ function cloneIdempotencyRecord(record: IdempotencyRecord): IdempotencyRecord {
     namespace: record.namespace,
     key: record.key,
     completedAt: new Date(record.completedAt),
-  })
+  });
 }
 
 function clonePendingSuspend(
@@ -369,64 +381,64 @@ function clonePendingSuspend(
           `flow snapshot pendingSuspends.${suspend.label}.delivered.payload`,
         )
       : undefined,
-  })
+  });
 }
 
 function cloneDeliveredSuspend(
-  delivery: NonNullable<RuntimePendingSuspend['delivered']>,
+  delivery: NonNullable<RuntimePendingSuspend["delivered"]>,
   path: string,
-): NonNullable<RuntimePendingSuspend['delivered']> {
+): NonNullable<RuntimePendingSuspend["delivered"]> {
   const payload = (
-    delivery as NonNullable<RuntimePendingSuspend['delivered']> & {
-      readonly payload?: JsonValue
+    delivery as NonNullable<RuntimePendingSuspend["delivered"]> & {
+      readonly payload?: JsonValue;
     }
-  ).payload
+  ).payload;
   if (payload === undefined) {
     return { eventId: delivery.eventId } as unknown as NonNullable<
-      RuntimePendingSuspend['delivered']
-    >
+      RuntimePendingSuspend["delivered"]
+    >;
   }
   return {
     eventId: delivery.eventId,
     payload: cloneJsonValue(payload, path),
-  }
+  };
 }
 
 function mergeDeliveredSuspend(
   snapshot: FlowSnapshot,
   options: MarkSnapshotDeliveredOptions,
-): FlowSnapshot['deliveredSuspends'] {
+): FlowSnapshot["deliveredSuspends"] {
   const suspend = snapshot.pendingSuspends.find(
     (pending) => pending.waiterId === options.waiterId,
-  )
-  const deliveryKey = suspend?.deliveryKey ?? suspend?.label
-  if (!deliveryKey) return snapshot.deliveredSuspends
+  );
+  const deliveryKey = suspend?.deliveryKey ?? suspend?.label;
+  if (!deliveryKey) return snapshot.deliveredSuspends;
   return Object.freeze({
     ...(snapshot.deliveredSuspends ?? {}),
     [deliveryKey]: deliveredSuspend(options),
-  })
+  });
 }
 
 function deliveredSuspend(
   options: MarkSnapshotDeliveredOptions,
-): FlowSnapshot['pendingSuspends'][number]['delivered'] {
+): FlowSnapshot["pendingSuspends"][number]["delivered"] {
   return {
     eventId: options.eventId as EventCursor,
-    payload: cloneJsonValue(options.payload, 'flow snapshot delivered payload'),
-  }
+    payload: cloneJsonValue(options.payload, "flow snapshot delivered payload"),
+  };
 }
 
 export function cloneRuntimeWork(work: RuntimeWork): RuntimeWork {
   switch (work.kind) {
-    case 'flow.resume':
-      return { kind: work.kind, flowId: work.flowId }
-    case 'flow.timeout':
+    case "flow.resume":
+      return { kind: work.kind, flowId: work.flowId };
+    case "flow.timeout":
       return {
         kind: work.kind,
         flowId: work.flowId,
         suspendPoint: work.suspendPoint,
-      }
-    case 'task.run':
+      };
+    case "task.run":
       return {
         kind: work.kind,
         taskId: work.taskId,
@@ -434,18 +446,18 @@ export function cloneRuntimeWork(work: RuntimeWork): RuntimeWork {
         input:
           work.input === undefined
             ? undefined
-            : cloneJsonValue(work.input, 'durable task input'),
+            : cloneJsonValue(work.input, "durable task input"),
         ...(work.defer === undefined
           ? {}
           : {
-              defer: cloneJsonValue(work.defer, 'named defer provenance'),
+              defer: cloneJsonValue(work.defer, "named defer provenance"),
             }),
-      }
-    case 'watch.deliver':
+      };
+    case "watch.deliver":
       return {
         kind: work.kind,
         subscriptionId: work.subscriptionId,
         cursor: work.cursor,
-      }
+      };
   }
 }

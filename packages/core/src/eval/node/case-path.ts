@@ -1,4 +1,4 @@
-/** Realpath-safe authored Case-file resolution relative to an Eval source. */
+/** Node realpath-safe authored Case-file resolution relative to an Eval source. */
 
 import { realpath, stat } from "node:fs/promises";
 import {
@@ -15,7 +15,10 @@ import {
 export class EvalCaseFileError extends Error {
   override readonly name = "EvalCaseFileError";
 
-  constructor(readonly path: string, detail: string) {
+  constructor(
+    readonly path: string,
+    detail: string,
+  ) {
     super(`Eval Case file ${path}: ${detail}`);
   }
 }
@@ -36,7 +39,10 @@ export async function resolveAuthoredCaseFile(
   readonly canonicalPath: string;
   readonly exists: true;
 }> {
-  if (isAbsolute(options.authoredPath) || win32.isAbsolute(options.authoredPath)) {
+  if (
+    isAbsolute(options.authoredPath) ||
+    win32.isAbsolute(options.authoredPath)
+  ) {
     throw pathError(
       options,
       undefined,
@@ -67,13 +73,15 @@ export async function resolveAuthoredCaseFile(
     lexicalCanonical,
     "the authored path resolves outside the project root",
   );
-  const target = await realpathOrNearest(lexicalTarget).catch((error: unknown) => {
-    throw pathError(
-      options,
-      lexicalCanonical,
-      `cannot resolve the target (${errorMessage(error)})`,
-    );
-  });
+  const target = await realpathOrNearest(lexicalTarget).catch(
+    (error: unknown) => {
+      throw pathError(
+        options,
+        lexicalCanonical,
+        `cannot resolve the target (${errorMessage(error)})`,
+      );
+    },
+  );
   assertContained(
     root,
     target.path,
@@ -100,7 +108,11 @@ export async function resolveAuthoredCaseFile(
   }
   const info = await stat(target.path);
   if (!info.isFile()) {
-    throw pathError(options, canonicalPath, "target must be a regular Case file");
+    throw pathError(
+      options,
+      canonicalPath,
+      "target must be a regular Case file",
+    );
   }
   if (![".json", ".jsonl", ".csv"].includes(extname(canonicalPath))) {
     throw pathError(
@@ -133,7 +145,8 @@ async function realpathOrNearest(
       if (!isMissing(error)) throw error;
     }
     const parent = dirname(cursor);
-    if (parent === cursor) throw new Error(`No existing ancestor for ${absolutePath}`);
+    if (parent === cursor)
+      throw new Error(`No existing ancestor for ${absolutePath}`);
     suffix.unshift(basename(cursor));
     cursor = parent;
   }
@@ -166,9 +179,8 @@ function pathError(
   canonicalPath: string | undefined,
   detail: string,
 ): EvalCaseFileError {
-  const attempted = canonicalPath === undefined
-    ? ""
-    : `; canonical target '${canonicalPath}'`;
+  const attempted =
+    canonicalPath === undefined ? "" : `; canonical target '${canonicalPath}'`;
   return new EvalCaseFileError(
     options.sourceFile,
     `caseFile('${options.authoredPath}')${attempted}: ${detail}`,
@@ -176,7 +188,12 @@ function pathError(
 }
 
 function isMissing(error: unknown): boolean {
-  return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "ENOENT"
+  );
 }
 
 function errorMessage(error: unknown): string {

@@ -1,24 +1,19 @@
 /** Core-owned Node discovery/coordinator contract shared with Crux Local. */
 
-import type { AnyEval } from "./evaluate";
-import { getEvalDefinitionForInternalUse } from "./internal/definition";
-import {
-  materializeEvalForInternalUse,
-} from "./internal/runner";
-import type { EvalPlan, EvalRun } from "./internal/types";
+import type { AnyEval } from "../evaluate";
+import { getEvalDefinitionForInternalUse } from "../internal/definition";
+import { materializeEvalForInternalUse } from "../internal/runner";
+import type { EvalPlan, EvalRun } from "../internal/types";
 import {
   discoverProjectEvals,
   selectEvals,
   type DiscoveredEval,
-} from "./node-discovery";
-import {
-  hydrateEvalCases,
-  type HydratedEval,
-} from "./node-cases";
+} from "./discovery";
+import { hydrateEvalCases, type HydratedEval } from "./cases";
 import {
   coordinateNodeEval,
   type NodeEvalCoordinatorOptions,
-} from "./node-coordinator";
+} from "./coordinator";
 
 export {
   collectEvalModules,
@@ -26,27 +21,24 @@ export {
   discoverProjectEvals,
   selectEvals,
   siblingCaseFile,
-} from "./node-discovery";
-export { hydrateEvalCases, loadCaseRows } from "./node-cases";
-export {
-  EvalCaseFileError,
-  resolveAuthoredCaseFile,
-} from "./node-case-path";
-export { coordinateNodeEval } from "./node-coordinator";
+} from "./discovery";
+export { hydrateEvalCases, loadCaseRows } from "./cases";
+export { EvalCaseFileError, resolveAuthoredCaseFile } from "./case-path";
+export { coordinateNodeEval } from "./coordinator";
 export {
   createEvalBaselineFileStore,
   createEvalEvidenceFileStore,
   createEvalRunFileStore,
   EvalBaselineFileError,
   setEvalBaseline,
-} from "./node-stores";
+} from "./stores";
 export type {
   DiscoveredEval,
   EvalDiscoveryError,
   EvalDiscoveryResult,
   EvalModule,
-} from "./node-discovery";
-export type { HydratedEval, LoadedEvalCase } from "./node-cases";
+} from "./discovery";
+export type { HydratedEval, LoadedEvalCase } from "./cases";
 
 /** Worker/Core compatibility marker for the Node discovery protocol. */
 export const EVAL_NODE_RUNNER_PROTOCOL = 1 as const;
@@ -67,9 +59,10 @@ export async function runDiscoveredEval(
       discovery.errors.map((entry) => entry.message).join("\n"),
     );
   }
-  const selector = typeof evalOrId === "string"
-    ? evalOrId
-    : getEvalDefinitionForInternalUse(evalOrId).explicitId!;
+  const selector =
+    typeof evalOrId === "string"
+      ? evalOrId
+      : getEvalDefinitionForInternalUse(evalOrId).explicitId!;
   const selected = selectEvals(discovery.evals, [selector]);
   if (selected.errors.length > 0) {
     throw new TypeError(selected.errors.join("\n"));
@@ -121,15 +114,19 @@ function selectCases(
 ): HydratedEval {
   const only = entry.cases.filter((item) => item.authored.only === true);
   const candidates = only.length > 0 ? only : entry.cases;
-  const selected = patterns.length === 0
-    ? candidates
-    : candidates.filter((item) =>
-        patterns.some((pattern) => {
-          const matcher = wildcardPattern(pattern);
-          return matcher.test(item.id) ||
-            (item.authored.name !== undefined && matcher.test(item.authored.name));
-        }),
-      );
+  const selected =
+    patterns.length === 0
+      ? candidates
+      : candidates.filter((item) =>
+          patterns.some((pattern) => {
+            const matcher = wildcardPattern(pattern);
+            return (
+              matcher.test(item.id) ||
+              (item.authored.name !== undefined &&
+                matcher.test(item.authored.name))
+            );
+          }),
+        );
   if (selected.length === 0) {
     throw new TypeError(
       `Eval '${entry.id}' has no Case matching ${patterns.map((value) => `'${value}'`).join(", ")}.`,
@@ -141,7 +138,7 @@ function selectCases(
   });
   return Object.freeze({
     ...entry,
-    ...((only.length > 0 || patterns.length > 0)
+    ...(only.length > 0 || patterns.length > 0
       ? { filteredSelection: true as const }
       : {}),
     cases: Object.freeze(cases),

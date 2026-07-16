@@ -2,11 +2,11 @@
 
 import { mkdir, readFile, unlink } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
-import { writeFileAtomic } from "../quality/internal/fs-atomic";
-import { withFileLock } from "../quality/internal/fs-lock";
-import { fingerprintEvalValue } from "./internal/identity";
-import { parseAndVerifyEvalBaselineV3 } from "./internal/baseline-schema";
-import type { EvalBaselineV3 } from "./internal/baseline-types";
+import { writeFileAtomic } from "../../quality/internal/fs-atomic";
+import { withFileLock } from "../../quality/internal/fs-lock";
+import { fingerprintEvalValue } from "../internal/identity";
+import { parseAndVerifyEvalBaselineV3 } from "../internal/baseline-schema";
+import type { EvalBaselineV3 } from "../internal/baseline-types";
 
 interface BaselineIndexEntry {
   readonly baselineId: string;
@@ -29,7 +29,9 @@ export async function indexEvalBaseline(
   await mkdir(dirname(indexPath), { recursive: true });
   await withFileLock(indexPath, async () => {
     const entries = await readIndex(indexPath);
-    const next = entries.filter((entry) => entry.baselineId !== baseline.baselineId);
+    const next = entries.filter(
+      (entry) => entry.baselineId !== baseline.baselineId,
+    );
     next.push({
       baselineId: baseline.baselineId,
       evalId: baseline.evalId,
@@ -93,8 +95,14 @@ async function readIndex(path: string): Promise<readonly BaselineIndexEntry[]> {
     if (isMissing(error)) return [];
     throw error;
   }
-  if (!isRecord(value) || value.schemaVersion !== 1 || !Array.isArray(value.entries)) {
-    throw new EvalBaselineMigrationError(`Eval Baseline index ${path} is corrupt`);
+  if (
+    !isRecord(value) ||
+    value.schemaVersion !== 1 ||
+    !Array.isArray(value.entries)
+  ) {
+    throw new EvalBaselineMigrationError(
+      `Eval Baseline index ${path} is corrupt`,
+    );
   }
   return value.entries.filter(isIndexEntry);
 }
@@ -102,9 +110,13 @@ async function readIndex(path: string): Promise<readonly BaselineIndexEntry[]> {
 function isIndexEntry(value: unknown): value is BaselineIndexEntry {
   return (
     isRecord(value) &&
-    [value.baselineId, value.evalId, value.sourceFile, value.definitionFingerprint, value.path].every(
-      (entry) => typeof entry === "string",
-    )
+    [
+      value.baselineId,
+      value.evalId,
+      value.sourceFile,
+      value.definitionFingerprint,
+      value.path,
+    ].every((entry) => typeof entry === "string")
   );
 }
 

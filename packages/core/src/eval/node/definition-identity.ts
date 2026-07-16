@@ -3,11 +3,11 @@
 import { createHash } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
-import type { EvalDefinitionV1 } from "./internal/definition";
-import { fingerprintEvalValue } from "./internal/identity";
-import type { DiscoveredEval } from "./node-discovery";
-import type { LoadedEvalCase } from "./node-cases";
-import { EvalCaseFileError } from "./node-case-path";
+import type { EvalDefinitionV1 } from "../internal/definition";
+import { fingerprintEvalValue } from "../internal/identity";
+import type { DiscoveredEval } from "./discovery";
+import type { LoadedEvalCase } from "./cases";
+import { EvalCaseFileError } from "./case-path";
 
 /** Fingerprint source semantics after canonicalizing authored Case paths. */
 export async function fingerprintEvalDefinition(input: {
@@ -18,7 +18,10 @@ export async function fingerprintEvalDefinition(input: {
   readonly projectRoot: string;
 }): Promise<string> {
   const authoredSource = await readFile(
-    insideProjectRoot(input.projectRoot, input.discovered.sourceKey.relativeFile),
+    insideProjectRoot(
+      input.projectRoot,
+      input.discovered.sourceKey.relativeFile,
+    ),
     "utf8",
   );
   const source = input.definition.caseFiles.reduce(
@@ -37,16 +40,30 @@ export async function fingerprintEvalDefinition(input: {
       id: entry.id,
       value: fingerprintEvalValue({
         input: entry.authored.input,
-        ...(entry.authored.name !== undefined ? { name: entry.authored.name } : {}),
-        ...(entry.authored.call !== undefined ? { call: entry.authored.call } : {}),
-        ...(entry.authored.expected !== undefined ? { expected: entry.authored.expected } : {}),
+        ...(entry.authored.name !== undefined
+          ? { name: entry.authored.name }
+          : {}),
+        ...(entry.authored.call !== undefined
+          ? { call: entry.authored.call }
+          : {}),
+        ...(entry.authored.expected !== undefined
+          ? { expected: entry.authored.expected }
+          : {}),
         ...(entry.authored.unvalidatedExpected === true
           ? { unvalidatedExpected: true }
           : {}),
-        ...(entry.authored.trials !== undefined ? { trials: entry.authored.trials } : {}),
-        ...(entry.authored.tags !== undefined ? { tags: entry.authored.tags } : {}),
-        ...(entry.authored.skip !== undefined ? { skip: entry.authored.skip } : {}),
-        ...(entry.authored.only !== undefined ? { only: entry.authored.only } : {}),
+        ...(entry.authored.trials !== undefined
+          ? { trials: entry.authored.trials }
+          : {}),
+        ...(entry.authored.tags !== undefined
+          ? { tags: entry.authored.tags }
+          : {}),
+        ...(entry.authored.skip !== undefined
+          ? { skip: entry.authored.skip }
+          : {}),
+        ...(entry.authored.only !== undefined
+          ? { only: entry.authored.only }
+          : {}),
       }),
     })),
     arms: input.definition.arms,
@@ -79,5 +96,10 @@ export function insideProjectRoot(projectRoot: string, path: string): string {
 }
 
 function isMissing(error: unknown): boolean {
-  return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "ENOENT"
+  );
 }

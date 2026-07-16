@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import {
   createEvalBaselineFileStore,
   EvalBaselineMigrationError,
-} from "../../src/eval/node-stores";
+} from "../../src/eval/node/stores";
 import { buildEvalBaseline } from "../../src/eval/internal/baseline";
 import type { EvalRun } from "../../src/eval/internal/types";
 import { runFixture } from "./baseline-test-harness";

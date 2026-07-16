@@ -2,24 +2,33 @@
 
 import { mkdir, readFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
-import { writeFileAtomic } from "../quality/internal/fs-atomic";
-import { withFileLock } from "../quality/internal/fs-lock";
-import { buildEvalBaseline, type BuildEvalBaselineOptions } from "./internal/baseline";
-import { parseAndVerifyEvalBaselineV3 } from "./internal/baseline-schema";
-import type { EvalBaselineV3 } from "./internal/baseline-types";
-import { readTaskEvidenceEntry, type EvalTaskEvidenceEntry } from "./internal/evidence";
-import type { EvalEvidenceStore, EvalRunStore } from "./internal/ports";
-import { parseEvalRunV3 } from "./internal/run-schema";
-import { readScorerEvidenceEntry, type EvalScorerEvidenceEntry } from "./internal/scorer-evidence";
-import type { EvalRun } from "./internal/types";
+import { writeFileAtomic } from "../../quality/internal/fs-atomic";
+import { withFileLock } from "../../quality/internal/fs-lock";
+import {
+  buildEvalBaseline,
+  type BuildEvalBaselineOptions,
+} from "../internal/baseline";
+import { parseAndVerifyEvalBaselineV3 } from "../internal/baseline-schema";
+import type { EvalBaselineV3 } from "../internal/baseline-types";
+import {
+  readTaskEvidenceEntry,
+  type EvalTaskEvidenceEntry,
+} from "../internal/evidence";
+import type { EvalEvidenceStore, EvalRunStore } from "../internal/ports";
+import { parseEvalRunV3 } from "../internal/run-schema";
+import {
+  readScorerEvidenceEntry,
+  type EvalScorerEvidenceEntry,
+} from "../internal/scorer-evidence";
+import type { EvalRun } from "../internal/types";
 import {
   EvalBaselineMigrationError,
   indexEvalBaseline,
   migrateIndexedEvalBaseline,
-} from "./node-baseline-index";
+} from "./baseline-index";
 
-export { EvalBaselineMigrationError } from "./node-baseline-index";
-export { evalRunV3Schema, isEvalRunPromotable } from "./internal/run-schema";
+export { EvalBaselineMigrationError } from "./baseline-index";
+export { evalRunV3Schema, isEvalRunPromotable } from "../internal/run-schema";
 
 export type EvalRunReadResult =
   | { readonly status: "found"; readonly run: EvalRun }
@@ -33,7 +42,10 @@ export interface EvalFileStoreOptions {
 export class EvalBaselineFileError extends Error {
   override readonly name = "EvalBaselineFileError";
 
-  constructor(readonly path: string, detail: string) {
+  constructor(
+    readonly path: string,
+    detail: string,
+  ) {
     super(
       `Eval Baseline ${path} is invalid: ${detail}. Rerun the Eval and use baseline set to replace it.`,
     );
@@ -44,8 +56,14 @@ export class EvalBaselineFileError extends Error {
 export function createEvalBaselineFileStore(options: EvalFileStoreOptions) {
   const store = {
     async write(baseline: EvalBaselineV3): Promise<string> {
-      const path = baselinePath(options.projectRoot, baseline.sourceKey.relativeFile);
-      const persisted = parseAndVerifyBaseline(parseJson(serializeJson(baseline)), path);
+      const path = baselinePath(
+        options.projectRoot,
+        baseline.sourceKey.relativeFile,
+      );
+      const persisted = parseAndVerifyBaseline(
+        parseJson(serializeJson(baseline)),
+        path,
+      );
       await mkdir(dirname(path), { recursive: true });
       await withFileLock(path, () =>
         writeFileAtomic(path, `${JSON.stringify(persisted, null, 2)}\n`),
@@ -171,7 +189,10 @@ export function createEvalEvidenceFileStore(
     },
     async write(entry) {
       const path = artifactPath(directory, entry.key);
-      const persisted = validateEvidence(parseJson(serializeJson(entry)), entry.key);
+      const persisted = validateEvidence(
+        parseJson(serializeJson(entry)),
+        entry.key,
+      );
       await mkdir(directory, { recursive: true });
       await withFileLock(path, () =>
         writeFileAtomic(path, `${JSON.stringify(persisted, null, 2)}\n`),
@@ -188,7 +209,9 @@ function validateEvidence(
   if (task !== undefined) return task;
   const scorer = readScorerEvidenceEntry(value, key);
   if (scorer !== undefined) return scorer;
-  throw new TypeError(`Eval evidence ${key} is not a valid complete evidence record`);
+  throw new TypeError(
+    `Eval evidence ${key} is not a valid complete evidence record`,
+  );
 }
 
 function parseAndVerifyBaseline(value: unknown, path: string): EvalBaselineV3 {
@@ -215,7 +238,9 @@ function baselinePath(projectRoot: string, sourceFile: string): string {
 
 function artifactPath(directory: string, id: string): string {
   if (!/^[A-Za-z0-9_-]+$/.test(id)) {
-    throw new TypeError("Eval artifact IDs may contain only letters, numbers, '_' and '-'");
+    throw new TypeError(
+      "Eval artifact IDs may contain only letters, numbers, '_' and '-'",
+    );
   }
   return join(directory, `${id}.json`);
 }
@@ -223,10 +248,13 @@ function artifactPath(directory: string, id: string): string {
 function serializeJson(value: unknown): string {
   try {
     const serialized = JSON.stringify(value);
-    if (serialized === undefined) throw new TypeError("value is not JSON serializable");
+    if (serialized === undefined)
+      throw new TypeError("value is not JSON serializable");
     return serialized;
   } catch (error) {
-    throw new TypeError(`Eval artifact is not JSON serializable: ${errorMessage(error)}`);
+    throw new TypeError(
+      `Eval artifact is not JSON serializable: ${errorMessage(error)}`,
+    );
   }
 }
 
@@ -235,7 +263,12 @@ function parseJson(value: string): unknown {
 }
 
 function isMissing(error: unknown): boolean {
-  return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "ENOENT"
+  );
 }
 
 function errorMessage(error: unknown): string {

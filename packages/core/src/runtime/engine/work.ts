@@ -8,80 +8,87 @@
  * @module
  */
 
-import type { LeaseToken, RuntimeTargetId, WorkId } from '../ports/ids'
-import type { RuntimeWork } from '../ports/work'
+import type { LeaseToken, RuntimeTargetId, WorkId } from "../ports/ids";
+import type { RuntimeWork } from "../ports/work";
+import { cloneRuntimeResultRef, type RuntimeResultRef } from "../results/types";
 
 /** Durable execution status for a runtime work item. */
 export type WorkStatus =
-  | 'pending'
-  | 'leased'
-  | 'suspended'
-  | 'completed'
-  | 'cancelled'
-  | 'blocked'
-  | 'dead-letter'
+  | "pending"
+  | "leased"
+  | "suspended"
+  | "completed"
+  | "cancelled"
+  | "blocked"
+  | "dead-letter";
 
 /** Inspectable error summary attached to blocked or failed work. */
 export interface WorkItemError {
   /** Stable Crux runtime error code, such as `TARGET_NOT_FOUND`. */
-  readonly code: string
+  readonly code: string;
   /** Human-readable diagnostic summary. */
-  readonly message: string
+  readonly message: string;
   /** Time when the runtime recorded this error. */
-  readonly at: Date
+  readonly at: Date;
 }
 
 /** Durable runtime work record owned by the kernel state machine. */
 export interface WorkItem {
   /** Kernel-generated stable work id. */
-  readonly workId: WorkId
+  readonly workId: WorkId;
   /** Runtime namespace isolating environments that share a substrate. */
-  readonly namespace: string
+  readonly namespace: string;
   /** Small routing payload describing the work to execute. */
-  readonly work: RuntimeWork
+  readonly work: RuntimeWork;
   /** Durable name-based target id for diagnostics and target lookup. */
-  readonly targetId: RuntimeTargetId
+  readonly targetId: RuntimeTargetId;
   /** Current kernel-owned execution status. */
-  readonly status: WorkStatus
+  readonly status: WorkStatus;
   /** One-based delivery attempt count. */
-  readonly attempt: number
+  readonly attempt: number;
   /** Maximum attempts before work becomes dead-lettered. */
-  readonly maxAttempts: number
+  readonly maxAttempts: number;
   /** Earliest time this work should be delivered again. */
-  readonly notBefore?: Date
+  readonly notBefore?: Date;
   /** Stable idempotency key for the current delivery. */
-  readonly idempotencyKey: string
+  readonly idempotencyKey: string;
   /** Scoped-idle counter group this item keeps busy until terminal. */
-  readonly idleScope?: string
+  readonly idleScope?: string;
   /** Lease token while a worker owns this item. */
-  readonly leaseToken?: LeaseToken
+  readonly leaseToken?: LeaseToken;
   /** Last user-facing runtime error attached to this item. */
-  readonly lastError?: WorkItemError
+  readonly lastError?: WorkItemError;
+  /** Private content-addressed result committed with completed work. */
+  readonly resultRef?: RuntimeResultRef;
   /** Creation timestamp. */
-  readonly createdAt: Date
+  readonly createdAt: Date;
   /** Last state transition timestamp. */
-  readonly updatedAt: Date
+  readonly updatedAt: Date;
 }
 
 /** Transition request accepted by {@link transition}. */
 export type WorkTransition =
   | {
-      readonly status: 'leased'
-      readonly leaseToken: LeaseToken
+      readonly status: "leased";
+      readonly leaseToken: LeaseToken;
     }
   | {
-      readonly status: 'completed' | 'suspended' | 'cancelled'
+      readonly status: "completed";
+      readonly resultRef?: RuntimeResultRef;
     }
   | {
-      readonly status: 'pending'
-      readonly attempt?: number
-      readonly notBefore?: Date
-      readonly idempotencyKey?: string
+      readonly status: "suspended" | "cancelled";
     }
   | {
-      readonly status: 'blocked' | 'dead-letter'
-      readonly lastError: WorkItemError
+      readonly status: "pending";
+      readonly attempt?: number;
+      readonly notBefore?: Date;
+      readonly idempotencyKey?: string;
     }
+  | {
+      readonly status: "blocked" | "dead-letter";
+      readonly lastError: WorkItemError;
+    };
 
 /**
  * Return a new work item after applying a legal state transition.
@@ -95,56 +102,59 @@ export function transition(work: WorkItem, next: WorkTransition): WorkItem {
   if (!isLegalTransition(work.status, next.status)) {
     throw new Error(
       `Illegal runtime work transition: ${work.status} -> ${next.status}`,
-    )
+    );
   }
 
-  const withoutLease = omitLease(work)
+  const withoutLease = omitLease(work);
   return Object.freeze({
     ...withoutLease,
     status: next.status,
-    ...(next.status === 'leased' ? { leaseToken: next.leaseToken } : {}),
-    ...(next.status === 'pending' && next.attempt !== undefined
+    ...(next.status === "leased" ? { leaseToken: next.leaseToken } : {}),
+    ...(next.status === "pending" && next.attempt !== undefined
       ? { attempt: next.attempt }
       : {}),
-    ...(next.status === 'pending' && next.notBefore !== undefined
+    ...(next.status === "pending" && next.notBefore !== undefined
       ? { notBefore: next.notBefore }
       : {}),
-    ...(next.status === 'pending' && next.idempotencyKey !== undefined
+    ...(next.status === "pending" && next.idempotencyKey !== undefined
       ? { idempotencyKey: next.idempotencyKey }
       : {}),
-    ...(next.status === 'blocked' || next.status === 'dead-letter'
+    ...(next.status === "blocked" || next.status === "dead-letter"
       ? { lastError: next.lastError }
       : {}),
+    ...(next.status === "completed" && next.resultRef
+      ? { resultRef: cloneRuntimeResultRef(next.resultRef) }
+      : {}),
     updatedAt: new Date(),
-  })
+  });
 }
 
 function isLegalTransition(from: WorkStatus, to: WorkStatus): boolean {
   switch (from) {
-    case 'pending':
-      return to === 'leased' || to === 'blocked' || to === 'cancelled'
-    case 'leased':
+    case "pending":
+      return to === "leased" || to === "blocked" || to === "cancelled";
+    case "leased":
       return (
-        to === 'completed' ||
-        to === 'suspended' ||
-        to === 'pending' ||
-        to === 'dead-letter' ||
-        to === 'blocked' ||
-        to === 'cancelled'
-      )
-    case 'suspended':
-      return to === 'pending' || to === 'cancelled'
-    case 'blocked':
-    case 'dead-letter':
-      return to === 'pending'
-    case 'completed':
-    case 'cancelled':
-      return false
+        to === "completed" ||
+        to === "suspended" ||
+        to === "pending" ||
+        to === "dead-letter" ||
+        to === "blocked" ||
+        to === "cancelled"
+      );
+    case "suspended":
+      return to === "pending" || to === "cancelled";
+    case "blocked":
+    case "dead-letter":
+      return to === "pending";
+    case "completed":
+    case "cancelled":
+      return false;
   }
 }
 
-function omitLease(work: WorkItem): Omit<WorkItem, 'leaseToken'> {
-  const { leaseToken, ...withoutLease } = work
-  void leaseToken
-  return withoutLease
+function omitLease(work: WorkItem): Omit<WorkItem, "leaseToken"> {
+  const { leaseToken, ...withoutLease } = work;
+  void leaseToken;
+  return withoutLease;
 }

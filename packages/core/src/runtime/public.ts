@@ -13,48 +13,48 @@ export {
   RUNTIME_ERROR_CODES,
   createRuntimeError,
   runtimeErrorDocsUrl,
-} from './engine/errors'
-export type { CruxRuntimeErrorCode, RuntimeErrorInput } from './engine/errors'
+} from "./engine/errors";
+export type { CruxRuntimeErrorCode, RuntimeErrorInput } from "./engine/errors";
 
 export type {
   RuntimeArtifactManifest,
   RuntimeArtifactManifestTarget,
   RuntimeArtifactTargetKind,
-} from './artifacts'
+} from "./artifacts";
 
 export {
   MAX_WAKE_ENVELOPE_BYTES,
   decodeWakeEnvelope,
   encodeWakeEnvelope,
-} from './engine/envelope'
-export type { WakeEnvelope } from './engine/envelope'
+} from "./engine/envelope";
+export type { WakeEnvelope } from "./engine/envelope";
 
 export {
   DEFAULT_RUNTIME_MAX_ATTEMPTS,
   classifyRuntimeFailure,
   retryDelayMs,
-} from './engine/retry'
+} from "./engine/retry";
 export type {
   RetryDelayOptions,
   RuntimeFailureClassification,
   RuntimeFailureClassificationOptions,
-} from './engine/retry'
+} from "./engine/retry";
 export type {
   ResolvedRuntimeRetentionConfig,
   ResolveRuntimeRetentionOptions,
   RuntimeRetentionConfig,
   RuntimeRetentionDurationInput,
-} from './engine/retention'
+} from "./engine/retention";
 
-export { transition } from './engine/work'
+export { transition } from "./engine/work";
 export type {
   WorkItem,
   WorkItemError,
   WorkStatus,
   WorkTransition,
-} from './engine/work'
+} from "./engine/work";
 
-export { createRuntimeKernel, wakeEnvelopeForWork } from './engine/kernel'
+export { createRuntimeKernel, wakeEnvelopeForWork } from "./engine/kernel";
 export type {
   CancelWorkInput,
   CancelWorkResult,
@@ -82,12 +82,12 @@ export type {
   ScanTimersOptions,
   ScanTimersResult,
   ScheduleTimerInput,
-} from './engine/kernel'
+} from "./engine/kernel";
 
 export {
   runDefaultRuntimeComposite,
   runtimeCompositeBodies,
-} from './engine/composites'
+} from "./engine/composites";
 export type {
   RuntimeCompositeBody,
   RuntimeCompositeDeps,
@@ -95,34 +95,34 @@ export type {
   RuntimeCompositeKind,
   RuntimeCompositeResult,
   RuntimeCompositeRunner,
-} from './engine/composites'
+} from "./engine/composites";
 
-export { bindHostRuntime } from './api/bind-host-runtime'
-export { createRuntime } from './api/create-runtime'
+export { bindHostRuntime } from "./api/bind-host-runtime";
+export { createRuntime } from "./api/create-runtime";
 export {
   createRuntimeWithHostContext,
   runWithRuntimeHost,
-} from './api/host-context'
-export { remainingHostDeadlineMs } from './api/host-lifecycle'
-export { runtimeHostOnlyError } from './api/runtime-definition'
+} from "./api/host-context";
+export { remainingHostDeadlineMs } from "./api/host-lifecycle";
+export { runtimeHostOnlyError } from "./api/runtime-definition";
 export type {
   CreateRuntimeOptions,
   ResolvedRuntimeEngine,
   RuntimeMaintenanceController,
   RuntimeMaintenanceHandle,
   RuntimeMaintenanceTickOptions,
-} from './api/create-runtime'
-export type { HostRuntimeBinding } from './api/bind-host-runtime'
+} from "./api/create-runtime";
+export type { HostRuntimeBinding } from "./api/bind-host-runtime";
 export type {
   RuntimeHostBinder,
   RuntimeHostBindingOptions,
   RuntimeHostContext,
-} from './api/host-context'
+} from "./api/host-context";
 export type {
   CruxContextStorage,
   CruxHostDeadlineOptions,
   CruxHostLifecycle,
-} from './api/host-lifecycle'
+} from "./api/host-lifecycle";
 export type {
   HostBoundRuntimeEngineDefinition,
   InProcessRuntimeEngineDefinition,
@@ -130,58 +130,58 @@ export type {
   RuntimeHostOnlyErrorOptions,
   RuntimeMaintenanceLoopOptions,
   RuntimeWakeFactoryInput,
-} from './api/runtime-definition'
+} from "./api/runtime-definition";
 
-export { runtimeRequiredError } from './api/runtime-required'
+export { runtimeRequiredError } from "./api/runtime-required";
 export type {
   RuntimeRequiredError,
   RuntimeRequiredErrorOptions,
-} from './api/runtime-required'
+} from "./api/runtime-required";
 
-export { runtimeTargetMap } from './api/target-registry'
-export type { RuntimeTargetRuntimeRef } from './api/target-registry'
+export { runtimeTargetMap } from "./api/target-registry";
+export type { RuntimeTargetRuntimeRef } from "./api/target-registry";
 
-export { durableTask } from './api/task'
+export { durableTask } from "./api/task";
 export type {
   RuntimeTaskContext,
   RuntimeTaskInput,
   RuntimeTaskOptions,
   RuntimeTaskTarget,
-} from './api/task'
+} from "./api/task";
 
-export { node } from './composers/node'
-export type { NodeRuntimeOptions } from './composers/node'
+export { node } from "./composers/node";
+export type { NodeRuntimeOptions } from "./composers/node";
 
-export { serverless } from './composers/serverless'
+export { serverless } from "./composers/serverless";
 export type {
   ServerlessRuntimeEnvironment,
   ServerlessRuntimeOptions,
-} from './composers/serverless'
-export type { RuntimeNamespaceSource } from './composers/namespace'
+} from "./composers/serverless";
+export type { RuntimeNamespaceSource } from "./composers/namespace";
 
-export { genericQueue } from './composers/generic-queue'
-export type { GenericQueueWakeOptions } from './composers/generic-queue'
+export { genericQueue } from "./composers/generic-queue";
+export type { GenericQueueWakeOptions } from "./composers/generic-queue";
 
 export type {
   RuntimeWakeAdapter,
   RuntimeWakeAdapterCapabilities,
   RuntimeWakeAdapterInput,
   RuntimeWakeMessage,
-} from './composers/wake-adapter'
+} from "./composers/wake-adapter";
 
-export { createRuntimeHandler } from './handler/create-runtime-handler'
-export { normalizeRuntimeHandlerTargets } from './handler/targets'
+export { createRuntimeHandler } from "./handler/create-runtime-handler";
+export { normalizeRuntimeHandlerTargets } from "./handler/targets";
 export type {
   CreateRuntimeHandlerOptions,
   RuntimeFetchHandlers,
-} from './handler/create-runtime-handler'
+} from "./handler/create-runtime-handler";
 export type {
   NormalizeRuntimeHandlerTargetsOptions,
   RuntimeHandlerTarget,
-} from './handler/targets'
+} from "./handler/targets";
 
-export { handleWakeRequest } from './handler/core'
-export type { HandleWakeRequestOptions } from './handler/core'
+export { handleWakeRequest } from "./handler/core";
+export type { HandleWakeRequestOptions } from "./handler/core";
 
 export {
   CRUX_WAKE_SIGNATURE_HEADER,
@@ -190,20 +190,20 @@ export {
   devWakeSecret,
   hmacWakeVerifier,
   signWakeBody,
-} from './handler/verify'
+} from "./handler/verify";
 export type {
   HmacWakeVerifierOptions,
   RuntimeWakeRequestVerifier,
   RuntimeWakeVerificationInput,
-} from './handler/verify'
+} from "./handler/verify";
 
-export { createOutboxDispatcher, dispatchBatch } from './engine/outbox'
+export { createOutboxDispatcher, dispatchBatch } from "./engine/outbox";
 export type {
   DispatchBatchOptions,
   DispatchBatchResult,
   RuntimeOutboxDispatcher,
   RuntimeWakeDeliver,
-} from './engine/outbox'
+} from "./engine/outbox";
 
 export {
   flowEventResumeKey,
@@ -214,13 +214,13 @@ export {
   taskRunKey,
   timerKey,
   waiterTimeoutKey,
-} from './engine/idempotency'
-export { runtimeSignalEventName } from './engine/replay'
+} from "./engine/idempotency";
+export { runtimeSignalEventName } from "./engine/replay";
 
 export type {
   CruxEngineCapabilities,
   DeploymentSupport,
-} from './ports/capabilities'
+} from "./ports/capabilities";
 export type {
   AppendEventOptions,
   DurableEventPort,
@@ -228,7 +228,7 @@ export type {
   ReadEventsOptions,
   ReadEventsResult,
   RuntimeEvent,
-} from './ports/events'
+} from "./ports/events";
 export type {
   DeferredIntentId,
   DeferredScopeId,
@@ -240,7 +240,7 @@ export type {
   TimerId,
   WaiterId,
   WorkId,
-} from './ports/ids'
+} from "./ports/ids";
 export type {
   ListRuntimeDeferredIntentsOptions,
   ListRuntimeDeferredScopesOptions,
@@ -250,13 +250,13 @@ export type {
   RuntimeDeferredStorePort,
   RuntimeDeferFinalization,
   RuntimeDeferInvocationOutcome,
-} from './ports/deferred'
+} from "./ports/deferred";
 export type {
   ClaimOptions,
   Lease,
   LeasePort,
   LeaseResource,
-} from './ports/leases'
+} from "./ports/leases";
 export type {
   RuntimeSetupApplyOptions,
   RuntimeSetupFinding,
@@ -264,8 +264,11 @@ export type {
   RuntimeSetupOptions,
   RuntimeSetupPort,
   RuntimeSetupResult,
-} from './ports/setup'
-export type { RuntimePruneOptions, RuntimePruneResult } from './ports/retention'
+} from "./ports/setup";
+export type {
+  RuntimePruneOptions,
+  RuntimePruneResult,
+} from "./ports/retention";
 export type {
   CountWorkOptions,
   FlowSnapshot,
@@ -278,18 +281,29 @@ export type {
   RuntimeStateReadOptions,
   SetWorkPendingOptions,
   WorkStatusCount,
-} from './ports/state'
+} from "./ports/state";
 export type {
   NewRuntimeWaiter,
   ResolveWaiterOptions,
   RuntimeWaiter,
   WaiterPort,
-} from './ports/waiters'
-export type { RuntimeWork } from './ports/work'
-export type * from './store'
+} from "./ports/waiters";
+export type { RuntimeWork } from "./ports/work";
+export type * from "./store";
 
-export { inMemoryRuntimeStore } from './adapters/memory'
+export {
+  RUNTIME_RESULT_MAX_BYTES,
+  RUNTIME_RESULT_MEDIA_TYPE,
+} from "./results/types";
+export type {
+  RuntimeResultPayloadPort,
+  RuntimeResultPruneOptions,
+  RuntimeResultPutOptions,
+  RuntimeResultRef,
+} from "./results/types";
+
+export { inMemoryRuntimeStore } from "./adapters/memory";
 export type {
   InMemoryRuntimeStore,
   InMemoryRuntimeStoreTesting,
-} from './adapters/memory'
+} from "./adapters/memory";

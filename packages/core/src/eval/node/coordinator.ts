@@ -5,21 +5,17 @@ import {
   createEvalBaselineFileStore,
   createEvalEvidenceFileStore,
   createEvalRunFileStore,
-} from "./node-stores";
-import type { HydratedEval } from "./node-cases";
+} from "./stores";
+import type { HydratedEval } from "./cases";
 import {
   executeEvalPlan,
   executeEvalTaskForInternalUse,
   fingerprintEvalTaskSourceForInternalUse,
   getEvalTaskDescriptorForInternalUse,
   planEval,
-} from "./internal/runner";
-import type {
-  EvalPlan,
-  EvalRun,
-  EvalTaskHostRequest,
-} from "./internal/types";
-import type { EvalPlanningPorts } from "./internal/ports";
+} from "../internal/runner";
+import type { EvalPlan, EvalRun, EvalTaskHostRequest } from "../internal/types";
+import type { EvalPlanningPorts } from "../internal/ports";
 
 export interface NodeEvalCoordinatorOptions {
   readonly variant?: string;
@@ -84,7 +80,9 @@ export async function coordinateNodeEval(
   return Object.freeze({
     plan,
     execute: async () => {
-      const baseline = await createEvalBaselineFileStore({ projectRoot }).readForEval({
+      const baseline = await createEvalBaselineFileStore({
+        projectRoot,
+      }).readForEval({
         sourceKey: entry.sourceKey,
         evalId: entry.id,
         definitionFingerprint: entry.definitionFingerprint,
@@ -125,7 +123,9 @@ async function executeTask(request: EvalTaskHostRequest) {
     runIds: Object.freeze([]),
     metrics: Object.freeze({
       durationMs: Math.max(0, Date.now() - startedAt),
-      ...(typeof costUsd === "number" && Number.isFinite(costUsd) && costUsd >= 0
+      ...(typeof costUsd === "number" &&
+      Number.isFinite(costUsd) &&
+      costUsd >= 0
         ? { costUsd }
         : {}),
     }),

@@ -65,6 +65,6 @@ export async function runEval(
       "runEval(): maxCostUsd must be a non-negative finite number.",
     );
   }
-  const { runDiscoveredEval } = await import("./node-runner");
+  const { runDiscoveredEval } = await import("./node/runner");
   return runDiscoveredEval(evalOrId, options, process.cwd());
 }

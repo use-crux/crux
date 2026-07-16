@@ -1,22 +1,22 @@
 /** Schema-validated JSON, JSONL, and CSV Case hydration for Node Evals. */
 
-import type { RawEvalCase } from "./internal/definition";
+import type { RawEvalCase } from "../internal/definition";
 import {
   fingerprintEvalValueForInternalUse,
   getEvalDefinitionForInternalUse,
   getEvalTaskSchemasForInternalUse,
   materializeEvalForInternalUse,
-} from "./internal/runner";
-import type { DiscoveredEval } from "./node-discovery";
-import { EvalCaseFileError, resolveAuthoredCaseFile } from "./node-case-path";
+} from "../internal/runner";
+import type { DiscoveredEval } from "./discovery";
+import { EvalCaseFileError, resolveAuthoredCaseFile } from "./case-path";
 import {
   fingerprintEvalDefinition,
   insideProjectRoot,
   pathExists,
-} from "./node-definition-identity";
-import { loadCaseRows } from "./node-case-rows";
+} from "./definition-identity";
+import { loadCaseRows } from "./case-rows";
 
-export { loadCaseRows } from "./node-case-rows";
+export { loadCaseRows } from "./case-rows";
 
 export interface LoadedEvalCase {
   readonly id: string;
@@ -43,10 +43,16 @@ export async function hydrateEvalCases(
   options: EvalCaseHydrationOptions,
 ): Promise<HydratedEval> {
   const definition = getEvalDefinitionForInternalUse(discovered.eval);
-  const sidecarPath = insideProjectRoot(options.projectRoot, discovered.sidecarFile);
+  const sidecarPath = insideProjectRoot(
+    options.projectRoot,
+    discovered.sidecarFile,
+  );
   const hasSidecar = await pathExists(sidecarPath);
   const schemas = getEvalTaskSchemasForInternalUse(discovered.eval);
-  if ((hasSidecar || definition.caseFiles.length > 0) && schemas.inputSchema === undefined) {
+  if (
+    (hasSidecar || definition.caseFiles.length > 0) &&
+    schemas.inputSchema === undefined
+  ) {
     throw new EvalCaseFileError(
       discovered.sourceKey.relativeFile,
       "file-backed Cases require a managed task with an input Standard Schema",

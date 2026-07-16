@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import {
   createEvalBaselineFileStore,
   EvalBaselineFileError,
-} from "../../src/eval/node-stores";
+} from "../../src/eval/node/stores";
 import {
   buildEvalBaseline,
   compareEvalRunToBaseline,

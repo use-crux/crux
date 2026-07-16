@@ -1,12 +1,12 @@
 /** Data-only Case row parsing and Standard Schema validation. */
 
 import { readFile } from "node:fs/promises";
-import type { StandardSchemaV1 } from "../quality/standard-schema";
-import type { JsonValue } from "../storage";
-import type { RawEvalCase } from "./internal/definition";
-import { fingerprintEvalValueForInternalUse } from "./internal/runner";
-import type { LoadedEvalCase } from "./node-cases";
-import { EvalCaseFileError } from "./node-case-path";
+import type { StandardSchemaV1 } from "../../quality/standard-schema";
+import type { JsonValue } from "../../storage";
+import type { RawEvalCase } from "../internal/definition";
+import { fingerprintEvalValueForInternalUse } from "../internal/runner";
+import type { LoadedEvalCase } from "./cases";
+import { EvalCaseFileError } from "./case-path";
 
 type EvalCaseMetadata = Readonly<Record<string, JsonValue>>;
 
@@ -44,21 +44,29 @@ interface ParsedRow {
 function parseRows(text: string, path: string): readonly ParsedRow[] {
   try {
     if (path.endsWith(".jsonl")) {
-      return text.split(/\r?\n/).flatMap((line, index) =>
-        line.trim() === ""
-          ? []
-          : [{ value: JSON.parse(line) as unknown, line: index + 1 }],
-      );
+      return text
+        .split(/\r?\n/)
+        .flatMap((line, index) =>
+          line.trim() === ""
+            ? []
+            : [{ value: JSON.parse(line) as unknown, line: index + 1 }],
+        );
     }
     if (path.endsWith(".csv")) return parseCsv(text);
     if (path.endsWith(".json")) {
       const value = JSON.parse(text) as unknown;
       if (!Array.isArray(value)) {
-        throw new EvalCaseFileError(path, "JSON Case files must contain an array of rows");
+        throw new EvalCaseFileError(
+          path,
+          "JSON Case files must contain an array of rows",
+        );
       }
       return value.map((row, index) => ({ value: row, line: index + 1 }));
     }
-    throw new EvalCaseFileError(path, "supported extensions are .json, .jsonl, and .csv");
+    throw new EvalCaseFileError(
+      path,
+      "supported extensions are .json, .jsonl, and .csv",
+    );
   } catch (error) {
     if (error instanceof EvalCaseFileError) throw error;
     throw new EvalCaseFileError(path, `invalid row (${errorMessage(error)})`);
@@ -91,7 +99,10 @@ async function normalizeRow(
   const record = row.value;
   if (options.kind === "sidecar") assertReviewCaseRow(record, origin);
   if (record.expect !== undefined || record.afterScores !== undefined) {
-    throw new EvalCaseFileError(origin, "file-backed Cases cannot contain callbacks");
+    throw new EvalCaseFileError(
+      origin,
+      "file-backed Cases cannot contain callbacks",
+    );
   }
   const input = await validateSchema(
     options.inputSchema,
@@ -99,11 +110,17 @@ async function normalizeRow(
     origin,
     "input",
   );
-  const expected = record.expected === undefined
-    ? undefined
-    : options.expectedSchema === undefined
-      ? record.expected
-      : await validateSchema(options.expectedSchema, record.expected, origin, "expected");
+  const expected =
+    record.expected === undefined
+      ? undefined
+      : options.expectedSchema === undefined
+        ? record.expected
+        : await validateSchema(
+            options.expectedSchema,
+            record.expected,
+            origin,
+            "expected",
+          );
   const authored: RawEvalCase = Object.freeze({
     ...(typeof record.id === "string" ? { id: record.id } : {}),
     ...(typeof record.name === "string" ? { name: record.name } : {}),
@@ -126,7 +143,8 @@ async function normalizeRow(
     ...(typeof record.only === "boolean" ? { only: record.only } : {}),
   });
   const id = authored.id ?? fingerprintEvalValueForInternalUse(input);
-  if (id.trim() === "") throw new EvalCaseFileError(origin, "Case id must be non-empty");
+  if (id.trim() === "")
+    throw new EvalCaseFileError(origin, "Case id must be non-empty");
   return Object.freeze({
     id,
     origin,
@@ -158,9 +176,14 @@ function assertReviewCaseRow(
 ): void {
   const metadata = row.metadata;
   if (
-    row.schemaVersion !== 1 || typeof row.id !== "string" || row.id.trim() === "" ||
-    row.input === undefined || !isRecord(metadata) || metadata.source !== "review" ||
-    typeof metadata.reviewId !== "string" || typeof metadata.runId !== "string" ||
+    row.schemaVersion !== 1 ||
+    typeof row.id !== "string" ||
+    row.id.trim() === "" ||
+    row.input === undefined ||
+    !isRecord(metadata) ||
+    metadata.source !== "review" ||
+    typeof metadata.reviewId !== "string" ||
+    typeof metadata.runId !== "string" ||
     typeof metadata.addedAt !== "string"
   ) {
     throw new EvalCaseFileError(origin, "row does not match ReviewCaseRowV1");
