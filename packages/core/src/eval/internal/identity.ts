@@ -11,8 +11,8 @@ export interface TaskEvidenceIdentityInput {
   readonly caseId: string;
   readonly input: unknown;
   readonly call?: unknown;
-  readonly variant: "current";
-  readonly trial: 0;
+  readonly variant: string;
+  readonly trial: number;
   readonly managedTaskFingerprint: string;
   readonly adapterFingerprint: string;
   readonly hostContractFingerprint: string;

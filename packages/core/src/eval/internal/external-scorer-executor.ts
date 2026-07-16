@@ -8,19 +8,19 @@ import {
   readScorerEvidenceEntry,
 } from "./scorer-evidence";
 import type {
-  EvalPlan,
+  EvalPlannedCell,
   EvalScoreEvidence,
   EvalScorerAction,
   EvalTaskExecutionEvidence,
 } from "./types";
 
 export async function executeExternalScorers(input: {
-  readonly plan: EvalPlan;
+  readonly cell: EvalPlannedCell;
   readonly execution: EvalTaskExecutionEvidence;
   readonly ports: EvalExecutionPorts;
 }): Promise<readonly EvalScoreEvidence[]> {
   const scores: EvalScoreEvidence[] = [];
-  for (const action of input.plan.scorerActions) {
+  for (const action of input.cell.scorerActions) {
     scores.push(await executeAction(action, input));
   }
   return Object.freeze(scores);
@@ -58,9 +58,9 @@ async function executeAction(
       actionId: action.actionId,
       scorerName: action.scorerName,
       scorer: action.scorer,
-      input: input.plan.cells[0].input,
+      input: input.cell.input,
       output: input.execution.output,
-      expected: input.plan.cells[0].expected,
+      expected: input.cell.expected,
     });
     if (
       score.name !== action.scorerName ||
@@ -103,12 +103,12 @@ function resolveEvidenceKey(
     return undefined;
   }
   return createScorerEvidenceKey({
-    cell: input.plan.cells[0],
+    cell: input.cell,
     execution: input.execution,
     scorerName: action.scorerName,
     contractFingerprint: action.contractFingerprint,
     hostContractFingerprint: action.hostContractFingerprint,
-    occurrence: action.actionId.split(":")[1] ?? "0",
+    occurrence: action.occurrence,
   });
 }
 

@@ -1,6 +1,8 @@
-/** Pure Current-cell planning for the first portable Eval tracer. @internal */
+/** Pure ordered Case × Variant × trial planning for portable Eval. @internal */
 
 import type { AnyEval } from "../evaluate";
+import { resolveEvalArms } from "./arm-policy";
+import { resolveInlineCases } from "./case-matrix";
 import { getEvalDefinitionForInternalUse } from "./definition";
 import { readTaskEvidenceEntry } from "./evidence";
 import {
@@ -14,81 +16,116 @@ import {
   EvalTaskExecutionError,
   projectEvalTaskIdentityForInternalUse,
 } from "./task";
-import type { EvalPlan, EvalSourceKey } from "./types";
+import type {
+  EvalPlan,
+  EvalPlannedCell,
+  EvalScorerAction,
+  EvalSourceKey,
+} from "./types";
 
 export async function planEval(
   evalValue: AnyEval,
-  options: { readonly sourceKey: EvalSourceKey },
+  options: { readonly sourceKey: EvalSourceKey; readonly variant?: string },
   ports?: EvalPlanningPorts,
 ): Promise<EvalPlan> {
   const definition = getEvalDefinitionForInternalUse(evalValue);
-  assertPhase5Definition(definition);
+  assertPhase8Definition(definition);
   const evalId = definition.explicitId!;
-  const authoredCase = definition.cases[0]!;
-  const caseId = authoredCase.id!;
+  const resolvedCases = resolveInlineCases(definition);
   const sourceKey = Object.freeze({ ...options.sourceKey });
-  const request = {
-    evalId,
-    caseId,
-    variant: "current" as const,
-    trial: 0 as const,
-    task: definition.task,
-    input: authoredCase.input as Readonly<Record<string, unknown>>,
-    ...(authoredCase.call !== undefined
-      ? { call: authoredCase.call as Readonly<Record<string, unknown>> }
-      : {}),
-  };
-  const action = await planTaskAction(request, ports);
-  const cell = Object.freeze({
-    caseId,
-    ...(authoredCase.name !== undefined ? { caseName: authoredCase.name } : {}),
-    variant: "current" as const,
-    trial: 0 as const,
-    action,
-    input: authoredCase.input as Readonly<Record<string, unknown>>,
-    ...(authoredCase.call !== undefined
-      ? { call: authoredCase.call as Readonly<Record<string, unknown>> }
-      : {}),
-    ...(authoredCase.expected !== undefined
-      ? { expected: authoredCase.expected }
-      : {}),
-    ...(authoredCase.expect !== undefined
-      ? { expect: authoredCase.expect }
-      : {}),
-  });
+  const arms = resolveEvalArms(definition, options.variant);
+  const cells: EvalPlannedCell[] = [];
+  const allScorerActions: EvalScorerAction[] = [];
+  for (const resolvedCase of resolvedCases) {
+    for (const arm of arms) {
+      for (let trial = 0; trial < resolvedCase.trials; trial++) {
+        const cell = await planCell({
+          evalId,
+          resolvedCase,
+          arm,
+          trial,
+          scorers: definition.scorers,
+          ports,
+        });
+        cells.push(cell);
+        allScorerActions.push(...cell.scorerActions);
+      }
+    }
+  }
   const selection = Object.freeze({
-    cases: Object.freeze([caseId]),
-    variants: Object.freeze(["current"] as const),
-    trials: 1 as const,
-  });
-  const scorerActions = await planExternalScorers({
-    rawScorers: definition.scorers,
-    cell,
-    taskAction: action,
-    ...(ports !== undefined
-      ? {
-          evidenceStore: ports.evidenceStore,
-          ...(ports.externalScorerHostContractFingerprint !== undefined
-            ? {
-                hostContractFingerprint:
-                  ports.externalScorerHostContractFingerprint,
-              }
-            : {}),
-        }
-      : {}),
+    cases: Object.freeze(resolvedCases.map((entry) => entry.caseId)),
+    variants: Object.freeze(arms.map((arm) => arm.name)),
+    trials: Math.max(...resolvedCases.map((entry) => entry.trials)),
   });
   return Object.freeze({
     schemaVersion: 1 as const,
     evalId,
     sourceKey,
-    definitionFingerprint: `phase5:${evalId}`,
+    definitionFingerprint: `phase8:${evalId}`,
     selection,
     task: definition.task,
+    arms,
     ...(definition.expect !== undefined ? { expect: definition.expect } : {}),
     scorers: definition.scorers,
-    scorerActions,
-    cells: Object.freeze([cell] as const),
+    scorerActions: Object.freeze(allScorerActions),
+    cells: Object.freeze(cells),
   });
+}
+
+async function planCell(input: {
+  readonly evalId: string;
+  readonly resolvedCase: ReturnType<typeof resolveInlineCases>[number];
+  readonly arm: ReturnType<typeof resolveEvalArms>[number];
+  readonly trial: number;
+  readonly scorers: unknown;
+  readonly ports?: EvalPlanningPorts;
+}): Promise<EvalPlannedCell> {
+  const authored = input.resolvedCase.authored;
+  const request = {
+    evalId: input.evalId,
+    caseId: input.resolvedCase.caseId,
+    variant: input.arm.name,
+    trial: input.trial,
+    task: input.arm.task,
+    overrides: input.arm.overrides,
+    input: authored.input as Readonly<Record<string, unknown>>,
+    ...(authored.call !== undefined
+      ? { call: authored.call as Readonly<Record<string, unknown>> }
+      : {}),
+  };
+  const action = await planTaskAction(request, input.ports);
+  const cellBase = {
+    caseId: input.resolvedCase.caseId,
+    ...(authored.name !== undefined ? { caseName: authored.name } : {}),
+    variant: input.arm.name,
+    trial: input.trial,
+    blocking: input.arm.blocking,
+    task: input.arm.task,
+    overrides: input.arm.overrides,
+    action,
+    input: request.input,
+    ...(request.call !== undefined ? { call: request.call } : {}),
+    ...(authored.expected !== undefined ? { expected: authored.expected } : {}),
+    ...(authored.expect !== undefined ? { expect: authored.expect } : {}),
+  };
+  const scorerActions = await planExternalScorers({
+    rawScorers: input.scorers,
+    cell: Object.freeze({ ...cellBase, scorerActions: Object.freeze([]) }),
+    taskAction: action,
+    actionPrefix: `${request.caseId}:${request.variant}:${request.trial}`,
+    ...(input.ports !== undefined
+      ? {
+          evidenceStore: input.ports.evidenceStore,
+          ...(input.ports.externalScorerHostContractFingerprint !== undefined
+            ? {
+                hostContractFingerprint:
+                  input.ports.externalScorerHostContractFingerprint,
+              }
+            : {}),
+        }
+      : {}),
+  });
+  return Object.freeze({ ...cellBase, scorerActions });
 }
 
 async function planTaskAction(
@@ -123,7 +160,7 @@ async function planTaskAction(
       phase: "plan",
       input: request.input,
       ...(request.call !== undefined ? { call: request.call } : {}),
-      overrides: EMPTY_OVERRIDES,
+      overrides: request.overrides,
     });
   } catch (error) {
     if (
@@ -176,39 +213,25 @@ async function planTaskAction(
       });
 }
 
-const EMPTY_OVERRIDES = Object.freeze({});
-
-function assertPhase5Definition(
+function assertPhase8Definition(
   definition: ReturnType<typeof getEvalDefinitionForInternalUse>,
 ): void {
   if (definition.explicitId === undefined) {
-    throw new TypeError("Phase 5 Eval execution requires an explicit Eval id.");
+    throw new TypeError("Phase 8 Eval execution requires an explicit Eval id.");
   }
   if (definition.caseFiles.length > 0) {
-    throw new TypeError("Phase 5 does not yet support caseFile() sources.");
-  }
-  if (definition.cases.length !== 1 || definition.cases[0]?.id === undefined) {
-    throw new TypeError(
-      "Phase 5 requires exactly one inline Case with an explicit id.",
-    );
-  }
-  if (definition.arms.length !== 1) {
-    throw new TypeError(
-      "Phase 5 executes Current only; Variants arrive in Phase 8.",
-    );
-  }
-  if (definition.trials !== 1 || definition.cases[0].trials !== undefined) {
-    throw new TypeError("Phase 5 supports exactly one trial.");
+    throw new TypeError("Phase 8 does not yet support caseFile() sources.");
   }
   if (definition.gates !== undefined || definition.afterScores !== undefined) {
     throw new TypeError(
-      "Phase 5 does not execute Gates or afterScores checks.",
+      "Phase 8 does not execute authored Gates or afterScores checks.",
     );
   }
   if (
-    definition.cases[0].skip !== undefined ||
-    definition.cases[0].only !== undefined
+    definition.cases.some(
+      (authored) => authored.skip !== undefined || authored.only !== undefined,
+    )
   ) {
-    throw new TypeError("Phase 5 does not support Case selection flags.");
+    throw new TypeError("Phase 8 does not support Case selection flags.");
   }
 }

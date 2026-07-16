@@ -7,6 +7,7 @@ interface EvalScorerActionBase {
   readonly actionId: string;
   readonly dependency: "task:root";
   readonly scorerName: string;
+  readonly occurrence: string;
   readonly externalKind: "model";
   readonly price: { readonly kind: "unknown" };
   readonly admission: "admitted";

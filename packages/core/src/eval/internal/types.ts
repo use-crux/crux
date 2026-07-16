@@ -6,8 +6,10 @@ import type { EvalCapability } from "../task";
 import type { EvalTaskEvidenceEntry } from "./evidence";
 import type { EvalTaskIdentityProjection } from "./task";
 import type { EvalScorerAction } from "./scorer-action-types";
+import type { EvalGateSummary } from "./gate-types";
 
 export type { EvalScorerAction } from "./scorer-action-types";
+export type { EvalGateResult, EvalGateSummary } from "./gate-types";
 
 export type EvalTaskNonReusableReason =
   | "identity_unavailable"
@@ -23,8 +25,17 @@ export interface EvalSourceKey {
 
 export interface EvalSelection {
   readonly cases: readonly string[];
-  readonly variants: readonly ["current"];
-  readonly trials: 1;
+  readonly variants: readonly string[];
+  readonly trials: number;
+}
+
+export interface EvalPlannedArm {
+  readonly name: string;
+  readonly task: unknown;
+  readonly overrides: Readonly<Record<string, unknown>>;
+  readonly overrideKeys: readonly string[];
+  readonly fingerprint: string;
+  readonly blocking: boolean;
 }
 
 export type EvalPlanAction =
@@ -46,9 +57,13 @@ export type EvalPlanAction =
 export interface EvalPlannedCell {
   readonly caseId: string;
   readonly caseName?: string;
-  readonly variant: "current";
-  readonly trial: 0;
+  readonly variant: string;
+  readonly trial: number;
+  readonly blocking: boolean;
+  readonly task: unknown;
+  readonly overrides: Readonly<Record<string, unknown>>;
   readonly action: EvalPlanAction;
+  readonly scorerActions: readonly EvalScorerAction[];
   readonly input: Readonly<Record<string, unknown>>;
   readonly call?: Readonly<Record<string, unknown>>;
   readonly expected?: unknown;
@@ -62,18 +77,20 @@ export interface EvalPlan {
   readonly definitionFingerprint: string;
   readonly selection: EvalSelection;
   readonly task: unknown;
+  readonly arms: readonly EvalPlannedArm[];
   readonly expect?: unknown;
   readonly scorers: unknown;
   readonly scorerActions: readonly EvalScorerAction[];
-  readonly cells: readonly [EvalPlannedCell];
+  readonly cells: readonly EvalPlannedCell[];
 }
 
 export interface EvalTaskHostRequest {
   readonly evalId: string;
   readonly caseId: string;
-  readonly variant: "current";
-  readonly trial: 0;
+  readonly variant: string;
+  readonly trial: number;
   readonly task: unknown;
+  readonly overrides: Readonly<Record<string, unknown>>;
   readonly input: Readonly<Record<string, unknown>>;
   readonly call?: Readonly<Record<string, unknown>>;
 }
@@ -168,8 +185,8 @@ export type EvalTaskWorkDecision =
 export interface EvalCell {
   readonly caseId: string;
   readonly caseName?: string;
-  readonly variant: "current";
-  readonly trial: 0;
+  readonly variant: string;
+  readonly trial: number;
   readonly status: "passed" | "failed" | "errored";
   readonly task: EvalTaskWorkDecision;
   readonly scores: readonly EvalScoreEvidence[];
@@ -189,10 +206,10 @@ export interface EvalCell {
 }
 
 export interface EvalRunVariant {
-  readonly name: "current";
+  readonly name: string;
   readonly fingerprint: string;
-  readonly overrideKeys: readonly [];
-  readonly blocking: true;
+  readonly overrideKeys: readonly string[];
+  readonly blocking: boolean;
 }
 
 export interface EvalVariantAggregate {
@@ -213,12 +230,6 @@ export interface EvalVariantAggregate {
   readonly knownCostUsd?: number;
 }
 
-export interface EvalGateSummary {
-  readonly passed: boolean;
-  readonly blockingPassed: boolean;
-  readonly results: readonly [];
-}
-
 interface EvalRunBase {
   readonly schemaVersion: 3;
   readonly runId: string;
@@ -229,10 +240,10 @@ interface EvalRunBase {
   readonly definitionFingerprint: string;
   readonly selection: EvalSelection;
   readonly costControl: "not_required";
-  readonly blockingVariants: readonly ["current"];
-  readonly cells: readonly [EvalCell];
-  readonly variants: readonly [EvalRunVariant];
-  readonly aggregates: Readonly<Record<"current", EvalVariantAggregate>>;
+  readonly blockingVariants: readonly string[];
+  readonly cells: readonly EvalCell[];
+  readonly variants: readonly EvalRunVariant[];
+  readonly aggregates: Readonly<Record<string, EvalVariantAggregate>>;
   readonly gates: EvalGateSummary;
   readonly cost: {
     readonly actualUsd?: number;
@@ -271,9 +282,11 @@ export interface EvalRunComplete extends EvalRunBase {
 export interface EvalRunIncomplete extends EvalRunBase {
   readonly status: "incomplete";
   readonly passed: false;
-  readonly reasons: readonly [
-    "task_error" | "assertion_error" | "scorer_error",
-  ];
+  readonly reasons: readonly (
+    | "task_error"
+    | "assertion_error"
+    | "scorer_error"
+  )[];
 }
 
 export type EvalRun = EvalRunComplete | EvalRunIncomplete;

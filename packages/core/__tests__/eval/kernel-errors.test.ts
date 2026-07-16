@@ -26,12 +26,12 @@ function plan() {
 }
 
 describe("portable Eval kernel failures", () => {
-  it("rejects options outside the Phase 5 tracer instead of ignoring them", async () => {
+  it("rejects checks outside the Phase 8 tracer instead of ignoring them", async () => {
     await expect(
-      planEval(definition({ variants: { cheaper: { task } } }), {
+      planEval(definition({ gates: { passRate: { min: 1 } } }), {
         sourceKey: { relativeFile: "support.eval.ts", export: "default" },
       }),
-    ).rejects.toThrow("Phase 5 executes Current only");
+    ).rejects.toThrow("Phase 8 does not execute authored Gates");
   });
 
   it("persists an incomplete run after a task-host failure", async () => {

@@ -41,6 +41,7 @@ export async function planExternalScorers(input: {
   readonly taskAction: EvalPlanAction;
   readonly evidenceStore?: EvalEvidenceStore;
   readonly hostContractFingerprint?: string;
+  readonly actionPrefix?: string;
 }): Promise<readonly EvalScorerAction[]> {
   const external = resolveEvalScorers(input.rawScorers).filter(
     (scorer) => scorer.costClass === "model",
@@ -58,12 +59,13 @@ async function planExternalScorer(
   input: Parameters<typeof planExternalScorers>[0],
 ): Promise<EvalScorerAction> {
   const scorerName = scorer.scorerName ?? scorer.name ?? "(dynamic)";
-  const actionId = `score:${index}:${scorerName}`;
+  const actionId = `${input.actionPrefix ?? "score"}:score:${index}:${scorerName}`;
   const contractFingerprint = projectScorerContract(scorer);
   const common = {
     actionId,
     dependency: "task:root" as const,
     scorerName,
+    occurrence: String(index),
     scorer,
     ...(contractFingerprint !== undefined ? { contractFingerprint } : {}),
     ...(input.hostContractFingerprint !== undefined

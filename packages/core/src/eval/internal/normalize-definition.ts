@@ -142,7 +142,10 @@ function normalizeVariants(value: unknown): {
     );
   }
 
-  const variants: Record<string, Readonly<Record<string, unknown>>> = {};
+  const variants = Object.create(null) as Record<
+    string,
+    Readonly<Record<string, unknown>>
+  >;
   const arms: EvalArmDeclaration[] = [
     Object.freeze({ name: "current", overrideKeys: Object.freeze([]) }),
   ];
