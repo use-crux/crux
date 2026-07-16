@@ -1,6 +1,6 @@
 # Go CLI and TUI stabilization design
 
-Status: **approved design; implementation planning pending written-spec review**
+Status: **approved**
 
 ## Summary
 
