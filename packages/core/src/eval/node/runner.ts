@@ -23,8 +23,14 @@ export {
   siblingCaseFile,
 } from "./discovery";
 export { hydrateEvalCases, loadCaseRows } from "./cases";
+export { discoverDeployableProjectEvals } from "./deployed-discovery";
 export { EvalCaseFileError, resolveAuthoredCaseFile } from "./case-path";
 export { coordinateNodeEval } from "./coordinator";
+export {
+  fingerprintDeployedEvalCase,
+  projectDeployedEvalRequiredHostCapabilities,
+  projectDeployedEvalVariants,
+} from "../../runtime/eval-registry/projection";
 export {
   createEvalBaselineFileStore,
   createEvalEvidenceFileStore,

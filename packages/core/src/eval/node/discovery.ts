@@ -190,7 +190,7 @@ function selectOne<T extends SelectableEval>(
   return evals.filter((entry) => entry.links?.includes(selector));
 }
 
-async function findEvalFiles(root: string): Promise<readonly string[]> {
+export async function findEvalFiles(root: string): Promise<readonly string[]> {
   const files: string[] = [];
   await walk(root, "", files);
   return Object.freeze(files.sort());
@@ -249,7 +249,7 @@ function duplicateIdErrors(
     }));
 }
 
-function isEval(value: unknown): value is AnyEval {
+export function isEval(value: unknown): value is AnyEval {
   return (
     value !== null &&
     typeof value === "object" &&

@@ -262,6 +262,36 @@ fn analyze_evaluation_after_scores_assertion_sites_match_quality_authoring_api()
 }
 
 #[test]
+fn analyze_default_exported_authored_eval_emits_registry_corroboration() {
+    let source = [
+        "export default evaluate({",
+        "  id: 'support',",
+        "  task: supportTask,",
+        "  cases: [{ id: 'refund', input: { question: 'refund?' } }],",
+        "})",
+    ]
+    .join("\n");
+    let facts = analyze_static_index_facts(&request_with_call_names(
+        vec!["evaluate".to_string()],
+        &source,
+    ));
+    let facts = facts.into_wire_values();
+    let evaluation = facts
+        .iter()
+        .flat_map(|fact| fact["definitions"].as_array().into_iter().flatten())
+        .find(|definition| definition["id"] == "evaluation:support")
+        .expect("authored Eval definition");
+
+    assert_eq!(evaluation["metadata"]["exportName"], "default");
+    assert_eq!(evaluation["metadata"]["evalContract"], "crux.eval");
+    assert_eq!(
+        evaluation["metadata"]["requiredHostCapabilities"],
+        json!([])
+    );
+    assert_eq!(evaluation["metadata"]["caseCount"], 1);
+}
+
+#[test]
 fn analyze_evaluation_emits_catalog_facts_from_literal_config() {
     let source = [
         "export const supportEval = evaluate('support.answer', {",

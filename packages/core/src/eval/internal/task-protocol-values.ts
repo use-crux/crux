@@ -23,6 +23,10 @@ export function isCompatibleEvalTaskDescriptor(
     Array.isArray(descriptor.capabilities) &&
     Object.isFrozen(descriptor.capabilities) &&
     descriptor.capabilities.every(isEvalCapability) &&
+    (descriptor.requiredHostCapabilities === undefined ||
+      (Array.isArray(descriptor.requiredHostCapabilities) &&
+        Object.isFrozen(descriptor.requiredHostCapabilities) &&
+        descriptor.requiredHostCapabilities.every(isRequiredHostCapability))) &&
     isRecord(descriptor.defaults) &&
     Object.isFrozen(descriptor.defaults) &&
     Array.isArray(descriptor.overrideKeys) &&
@@ -32,6 +36,14 @@ export function isCompatibleEvalTaskDescriptor(
     typeof descriptor.execute === "function" &&
     typeof descriptor.projectOutput === "function" &&
     typeof descriptor.projectResponse === "function"
+  );
+}
+
+function isRequiredHostCapability(value: unknown): boolean {
+  return (
+    value === "asset-store" ||
+    value === "record-store" ||
+    value === "vector-store"
   );
 }
 

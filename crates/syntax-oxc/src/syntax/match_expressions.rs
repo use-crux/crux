@@ -168,18 +168,29 @@ pub(crate) fn visit_expression_call(
     call: &CallExpression<'_>,
     matches: &mut Vec<StaticSourceMatch>,
 ) {
+    visit_bound_expression_call(
+        context,
+        call,
+        format!(
+            "{}-{}",
+            callee_record_from_expression(&call.callee, context.imports).name,
+            context.view.location_for_span(call).line
+        ),
+        false,
+        matches,
+    );
+}
+
+pub(crate) fn visit_bound_expression_call(
+    context: MatchContext<'_, '_>,
+    call: &CallExpression<'_>,
+    variable_name: String,
+    exported: bool,
+    matches: &mut Vec<StaticSourceMatch>,
+) {
     let callee = callee_record_from_expression(&call.callee, context.imports);
     if context.call_matcher.allows(&callee) {
-        matches.push(call_match(
-            context,
-            format!(
-                "{}-{}",
-                callee.name,
-                context.view.location_for_span(call).line
-            ),
-            call,
-            false,
-        ));
+        matches.push(call_match(context, variable_name, call, exported));
     }
     visit_expression(context, &call.callee, matches);
     for argument in &call.arguments {

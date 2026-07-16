@@ -138,9 +138,10 @@ func printRuntimeGenerateResult(io *output.IO, raw json.RawMessage) error {
 	if err := json.Unmarshal(raw, &result); err != nil {
 		return fmt.Errorf("decode runtime generation result: %w", err)
 	}
-	fmt.Fprintf(io.Out, "%s generated %d runtime targets, %d files\n",
+	fmt.Fprintf(io.Out, "%s generated %d runtime targets, %d Evals, %d files\n",
 		io.Sprint(output.Green, "Runtime"),
 		len(result.Manifest.Targets),
+		len(result.Manifest.Evals),
 		len(result.WrittenFiles),
 	)
 	fmt.Fprintf(io.Out, "%s %s\n", io.Sprint(output.Dim, "hash:"), result.ContentHash)
@@ -158,9 +159,14 @@ type runtimeGenerateResult struct {
 
 type runtimeManifest struct {
 	Targets []runtimeManifestTarget `json:"targets"`
+	Evals   []runtimeManifestEval   `json:"evals"`
 }
 
 type runtimeManifestTarget struct {
 	Name string `json:"name"`
 	Kind string `json:"kind"`
+}
+
+type runtimeManifestEval struct {
+	ID string `json:"id"`
 }

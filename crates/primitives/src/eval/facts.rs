@@ -21,13 +21,23 @@ pub(crate) fn eval_facts(
         return None;
     }
     let config = parts.object_arg?;
-    let explicit_id = parts.args.first().and_then(string_argument);
-    let name = explicit_id
-        .clone()
-        .unwrap_or_else(|| parts.variable_name.to_string());
+    let authored_eval = matches!(parts.args.first(), Some(StaticSyntaxValue::Object { .. }));
+    let explicit_id = if authored_eval {
+        direct_string_property(config, "id")
+    } else {
+        parts.args.first().and_then(string_argument)
+    };
+    let name = explicit_id.clone().unwrap_or_else(|| {
+        if authored_eval && parts.variable_name == "default" {
+            derived_authored_eval_id(context.fingerprint_file)
+        } else {
+            parts.variable_name.to_string()
+        }
+    });
     let id = format!("evaluation:{}", safe_id(&name));
-    let cases = evaluation_cases(context, parts, config, &id, &name);
-    let total_cases = case_count(config, context);
+    let case_property = if authored_eval { "cases" } else { "data" };
+    let cases = evaluation_cases(context, parts, config, case_property, &id, &name);
+    let total_cases = case_count(config, case_property, context);
     let coverage = task_coverage_refs(config, explicit_id.as_deref());
     let assertion_sites =
         assertion_sites_from_source(context.file, parts.variable_name, source_text);
@@ -54,6 +64,18 @@ pub(crate) fn eval_facts(
         Value::String(parts.variable_name.to_string()),
     );
     metadata.insert("explicitId".to_string(), Value::Bool(explicit_id.is_some()));
+    if authored_eval {
+        metadata.insert(
+            "evalContract".to_string(),
+            Value::String("crux.eval".to_string()),
+        );
+        metadata.insert("requiredHostCapabilities".to_string(), json!([]));
+        facts.insert(
+            "evalContract".to_string(),
+            Value::String("crux.eval".to_string()),
+        );
+        facts.insert("requiredHostCapabilities".to_string(), json!([]));
+    }
     if total_cases > 0 {
         metadata.insert("caseCount".to_string(), json!(total_cases));
     }
@@ -97,15 +119,18 @@ fn evaluation_cases(
     context: &PrimitiveContext<'_>,
     parts: &CallParts<'_>,
     config: &StaticSyntaxValue,
+    case_property: &str,
     evaluation_definition_id: &str,
     evaluation_name: &str,
 ) -> Vec<EvaluationCase> {
-    object_array_value(property_value(config, "data"), &context.initializers)
+    object_array_value(property_value(config, case_property), &context.initializers)
         .into_iter()
         .enumerate()
         .filter_map(|(index, case)| {
-            let case_name = direct_string_property(case, "name")?;
-            let case_id = safe_id(&case_name);
+            let explicit_case_id = direct_string_property(case, "id");
+            let case_name =
+                direct_string_property(case, "name").or_else(|| explicit_case_id.clone())?;
+            let case_id = safe_id(explicit_case_id.as_deref().unwrap_or(&case_name));
             let definition_id = format!("evaluation.case:{}:{}", safe_id(evaluation_name), case_id);
             let mut facts = Map::new();
             facts.insert(
@@ -201,8 +226,12 @@ fn coverage_target_from_evaluation_id(explicit_id: &str) -> Option<String> {
     (!rest.is_empty()).then(|| format!("{target_prefix}:{}", safe_id(rest)))
 }
 
-fn case_count(config: &StaticSyntaxValue, context: &PrimitiveContext<'_>) -> usize {
-    object_array_value(property_value(config, "data"), &context.initializers).len()
+fn case_count(
+    config: &StaticSyntaxValue,
+    case_property: &str,
+    context: &PrimitiveContext<'_>,
+) -> usize {
+    object_array_value(property_value(config, case_property), &context.initializers).len()
 }
 
 fn identifier_property(config: &StaticSyntaxValue, property: &str) -> Option<String> {
@@ -223,4 +252,14 @@ fn string_argument(value: &StaticSyntaxValue) -> Option<String> {
         } => Some(value.clone()),
         _ => None,
     }
+}
+
+fn derived_authored_eval_id(file: &str) -> String {
+    let normalized = file.replace('\\', "/");
+    let relative = normalized.strip_prefix("evals/").unwrap_or(&normalized);
+    [".eval.tsx", ".eval.ts", ".eval.mjs", ".eval.js"]
+        .iter()
+        .find_map(|suffix| relative.strip_suffix(suffix))
+        .unwrap_or(relative)
+        .replace('/', ".")
 }

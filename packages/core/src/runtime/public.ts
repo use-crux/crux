@@ -18,6 +18,9 @@ export type { CruxRuntimeErrorCode, RuntimeErrorInput } from "./engine/errors";
 
 export type {
   RuntimeArtifactManifest,
+  RuntimeArtifactManifestEval,
+  RuntimeArtifactManifestEvalCase,
+  RuntimeArtifactManifestEvalVariant,
   RuntimeArtifactManifestTarget,
   RuntimeArtifactTargetKind,
 } from "./artifacts";

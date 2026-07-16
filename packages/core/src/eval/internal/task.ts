@@ -89,6 +89,8 @@ export interface EvalTaskDescriptor<
   readonly outputSchema?: StandardSchemaV1;
   /** Trace-signal families captured by this task kind. */
   readonly capabilities: readonly EvalCapability[];
+  /** Durable host services required when this task is deployed remotely. */
+  readonly requiredHostCapabilities?: readonly EvalRequiredHostCapability[];
   /** Input-independent adapter options bound to the task. */
   readonly defaults: Readonly<object>;
   /** Bound option keys eligible for later override validation. */
@@ -118,6 +120,12 @@ export interface EvalTaskExecutionResult<TOutput> {
   /** Adapter semantics observed from the completed production path. */
   readonly observedIdentity: EvalTaskIdentityProjection;
 }
+
+/** Allowlisted durable services a managed task may require from its host. */
+export type EvalRequiredHostCapability =
+  | "asset-store"
+  | "record-store"
+  | "vector-store";
 
 /** Coded configuration failure raised by the managed Eval task protocol. */
 export class EvalTaskExecutionError extends Error {
@@ -157,6 +165,13 @@ export function attachEvalTaskDescriptorForInternalUse<
   const normalized = Object.freeze({
     ...descriptor,
     capabilities: Object.freeze([...descriptor.capabilities]),
+    ...(descriptor.requiredHostCapabilities !== undefined
+      ? {
+          requiredHostCapabilities: Object.freeze([
+            ...descriptor.requiredHostCapabilities,
+          ]),
+        }
+      : {}),
     defaults: Object.isFrozen(descriptor.defaults)
       ? descriptor.defaults
       : Object.freeze({ ...descriptor.defaults }),

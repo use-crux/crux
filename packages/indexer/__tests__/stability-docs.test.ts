@@ -72,7 +72,7 @@ describe("stable beta docs", () => {
 
     expect(docs).toContain(STATIC_PARSE_CACHE_EPOCH);
     expect(docs).toContain(SEMANTIC_FACTS_CACHE_EPOCH);
-    expect(docs).toContain("epoch-37");
+    expect(docs).toContain("epoch-38");
     expect(docs).not.toMatch(/static-parse-v(39|45|51|52)\b/);
     expect(docs).not.toMatch(/semantic-facts-v(15|17|20)\b/);
     expect(docs).not.toContain(

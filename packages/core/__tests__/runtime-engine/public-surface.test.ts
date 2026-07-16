@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as runtimePublic from "@use-crux/core/runtime";
+import * as evalRegistryInternal from "@use-crux/core/runtime/internal/eval-registry";
 import {
   createOutboxDispatcher,
   createRuntime,
@@ -34,6 +35,10 @@ describe("@use-crux/core runtime store public surface", () => {
     expect(runtimePublic.RUNTIME_RESULT_MEDIA_TYPE).toBe(
       "application/vnd.crux.eval-result+json",
     );
+    expect(evalRegistryInternal.createDeployedEvalRegistry).toBeTypeOf(
+      "function",
+    );
+    expect("createDeployedEvalRegistry" in runtimePublic).toBe(false);
   });
 
   it("uses adapter-neutral remediation for capability preflight failures", () => {
