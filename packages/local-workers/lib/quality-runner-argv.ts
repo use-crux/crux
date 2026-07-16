@@ -26,6 +26,7 @@ const VALUE_FLAGS = new Set([
   '--diff-a',
   '--diff-b',
   '--definition',
+  '--baseline-set',
 ])
 
 /** Return positional args after skipping worker flags with values. */

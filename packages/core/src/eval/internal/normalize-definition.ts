@@ -14,6 +14,7 @@ import type { EvalCoverageTargetId } from "../evaluate";
 import type {
   CaseFileRef,
   EvalArmDeclaration,
+  EvalCaseSourcePosition,
   EvalDefinitionV1,
   RawEvalCase,
 } from "./definition";
@@ -43,6 +44,7 @@ export interface NormalizedEvalDefinition {
 function normalizeCaseSources(value: unknown): {
   readonly cases: readonly RawEvalCase[];
   readonly caseFiles: readonly CaseFileRef[];
+  readonly caseSourceOrder: readonly EvalCaseSourcePosition[];
 } {
   const items = isCaseFile(value) ? [value] : value;
   if (!Array.isArray(items)) {
@@ -53,8 +55,12 @@ function normalizeCaseSources(value: unknown): {
 
   const cases: RawEvalCase[] = [];
   const caseFiles: CaseFileRef[] = [];
+  const caseSourceOrder: EvalCaseSourcePosition[] = [];
   for (const item of items) {
     if (isCaseFile(item)) {
+      caseSourceOrder.push(
+        Object.freeze({ kind: "file", index: caseFiles.length }),
+      );
       caseFiles.push(getCaseFileRef(item));
       continue;
     }
@@ -92,6 +98,9 @@ function normalizeCaseSources(value: unknown): {
       throw new TypeError("evaluate(): Case `metadata` must be a record.");
     }
     const rawCase = item as Readonly<Record<string, unknown>>;
+    caseSourceOrder.push(
+      Object.freeze({ kind: "inline", index: cases.length }),
+    );
     cases.push(
       Object.freeze({
         ...rawCase,
@@ -118,6 +127,7 @@ function normalizeCaseSources(value: unknown): {
   return {
     cases: Object.freeze(cases),
     caseFiles: Object.freeze(caseFiles),
+    caseSourceOrder: Object.freeze(caseSourceOrder),
   };
 }
 
@@ -219,7 +229,7 @@ export function normalizeEvalDefinition(
   }
 
   const { variants, arms } = normalizeVariants(raw.variants);
-  const { cases, caseFiles } = normalizeCaseSources(raw.cases);
+  const { cases, caseFiles, caseSourceOrder } = normalizeCaseSources(raw.cases);
   const gates = normalizeEvalGates(raw.gates);
   return {
     id: explicitId,
@@ -229,6 +239,7 @@ export function normalizeEvalDefinition(
       task: raw.task,
       cases,
       caseFiles,
+      caseSourceOrder,
       variants,
       arms,
       ...(raw.expect !== undefined

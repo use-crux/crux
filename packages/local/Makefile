@@ -70,6 +70,14 @@ embed-workers: $(EMBED_DIR)
 		echo "Run 'make build-local-workers' first"; \
 		exit 1; \
 	fi
+	@if [ -f "$(LOCAL_WORKERS_DIST)/eval-coordinator.mjs" ]; then \
+		cp "$(LOCAL_WORKERS_DIST)/eval-coordinator.mjs" "$(EMBED_DIR)/eval-coordinator.mjs"; \
+		echo "Embedded eval-coordinator.mjs from local-workers dist"; \
+	else \
+		echo "Error: $(LOCAL_WORKERS_DIST)/eval-coordinator.mjs not found"; \
+		echo "Run 'make build-local-workers' first"; \
+		exit 1; \
+	fi
 	@if [ -f "$(LOCAL_WORKERS_DIST)/source-resolver.mjs" ]; then \
 		cp "$(LOCAL_WORKERS_DIST)/source-resolver.mjs" "$(EMBED_DIR)/source-resolver.mjs"; \
 		echo "Embedded source-resolver.mjs from local-workers dist"; \

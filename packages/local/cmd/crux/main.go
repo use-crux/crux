@@ -71,6 +71,7 @@ func newRootCommand(f *cli.Factory) *cobra.Command {
 	rootCmd.AddCommand(commands.NewStatsCmd(f))
 	rootCmd.AddCommand(commands.NewCostCmd(f))
 	rootCmd.AddCommand(commands.NewQualityCmd(f))
+	rootCmd.AddCommand(commands.NewEvalCmd(f))
 	rootCmd.AddCommand(commands.NewFlowsCmd(f))
 	rootCmd.AddCommand(commands.NewInspectCmd(f))
 	rootCmd.AddCommand(commands.NewRuntimeCmd(f))
@@ -114,8 +115,9 @@ func printRootUsage(cmd *cobra.Command, io *output.IO) error {
 	fmt.Fprintf(out, "  %s %s\n\n", logo, io.Sprint(output.Dim, "- context engineering devtools"))
 	fmt.Fprintf(out, "  %s\n", io.Sprint(output.Bold, "Usage"))
 	fmt.Fprintf(out, "    crux <command> [flags]\n\n")
-	fmt.Fprintf(out, "  %s\n", io.Sprint(output.Bold, "Quality"))
-	w("quality", "Run source-defined evaluations and inspect experiments")
+	fmt.Fprintf(out, "  %s\n", io.Sprint(output.Bold, "Evals"))
+	w("eval", "Run Evals and inspect Eval runs and Baselines")
+	w("quality", "Use the legacy Quality workflow during migration")
 	fmt.Fprintln(out)
 	fmt.Fprintf(out, "  %s\n", io.Sprint(output.Bold, "Observe"))
 	w("config", "Inspect resolved config and source discovery")
@@ -139,6 +141,6 @@ func printRootUsage(cmd *cobra.Command, io *output.IO) error {
 	fl("--no-color", "Disable colored output")
 	fl("--json", "JSON output (on subcommands)")
 	fmt.Fprintln(out)
-	fmt.Fprintf(out, "  %s\n\n", io.Sprint(output.Dim, "Run crux quality --help for the evaluation workflow"))
+	fmt.Fprintf(out, "  %s\n\n", io.Sprint(output.Dim, "Run crux eval --help for the Eval workflow"))
 	return nil
 }

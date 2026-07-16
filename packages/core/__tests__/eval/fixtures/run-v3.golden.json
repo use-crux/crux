@@ -6,7 +6,12 @@
   "startedAt": 100,
   "endedAt": 125,
   "definitionFingerprint": "definition-v1",
-  "selection": { "cases": ["refund"], "variants": ["current"], "trials": 1 },
+  "selection": {
+    "cases": ["refund"],
+    "variants": ["current"],
+    "trials": 1,
+    "caseTrials": { "refund": 1 }
+  },
   "costControl": "not_required",
   "blockingVariants": ["current"],
   "cells": [

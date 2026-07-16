@@ -37,4 +37,13 @@ describe("@use-crux/core/eval", () => {
     const surface = await import("@use-crux/core/eval");
     expect(Object.keys(surface).sort()).toEqual(["caseFile", "evaluate"]);
   });
+
+  it("exposes the coordinator bridge only through its internal subpath", async () => {
+    const runner = await import("@use-crux/core/eval/internal/runner");
+    expect(runner.EVAL_RUNNER_PROTOCOL).toBe(1);
+    expect(runner.materializeEvalForInternalUse).toBeTypeOf("function");
+
+    const surface = await import("@use-crux/core/eval");
+    expect(Object.keys(surface).sort()).toEqual(["caseFile", "evaluate"]);
+  });
 });

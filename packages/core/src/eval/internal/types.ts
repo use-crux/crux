@@ -40,6 +40,10 @@ export interface EvalSelection {
   readonly cases: readonly string[];
   readonly variants: readonly string[];
   readonly trials: number;
+  /** Exact authored trial count for each selected Case. */
+  readonly caseTrials: Readonly<Record<string, number>>;
+  /** Present only when Case selection omitted authored work. */
+  readonly filtered?: true;
 }
 
 export interface EvalPlannedArm {
@@ -88,6 +92,7 @@ export interface EvalPlannedCell {
   readonly input: Readonly<Record<string, unknown>>;
   readonly call?: Readonly<Record<string, unknown>>;
   readonly expected?: unknown;
+  readonly unvalidatedExpected?: true;
   readonly expect?: NormalizedEvalCheck;
   readonly afterScores?: NormalizedEvalCheck;
 }
@@ -178,6 +183,7 @@ export interface EvalCell {
   readonly call?: Readonly<Record<string, unknown>>;
   readonly output?: unknown;
   readonly expected?: unknown;
+  readonly unvalidatedExpected?: true;
   readonly response?: StreamCompletion<unknown>;
   readonly error?: {
     readonly message: string;

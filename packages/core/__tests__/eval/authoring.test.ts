@@ -196,6 +196,12 @@ describe("evaluate()", () => {
       "./support.cases.jsonl",
       "./regressions.csv",
     ]);
+    expect(definition.caseSourceOrder).toEqual([
+      { kind: "inline", index: 0 },
+      { kind: "file", index: 0 },
+      { kind: "inline", index: 1 },
+      { kind: "file", index: 1 },
+    ]);
     expect(definition.caseFiles[0]?.inputSchema).toBe(inputSchema);
     expect(Object.isFrozen(firstFile)).toBe(true);
     expect(Object.isFrozen(inputSchema)).toBe(false);

@@ -41,6 +41,10 @@
       "types": "./src/eval/internal/task.ts",
       "import": "./src/eval/internal/task.ts"
     },
+    "./eval/internal/runner": {
+      "types": "./src/eval/internal/runner.ts",
+      "import": "./src/eval/internal/runner.ts"
+    },
     "./quality": {
       "types": "./src/quality/index.ts",
       "import": "./src/quality/index.ts"

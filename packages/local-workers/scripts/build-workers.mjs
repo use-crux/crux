@@ -38,7 +38,7 @@ const shared = {
 }
 
 try {
-  const [qualityResult, resolverResult, indexerResult, semanticIndexerResult, runtimeIndexerResult] = await Promise.all([
+  const [qualityResult, evalResult, resolverResult, indexerResult, semanticIndexerResult, runtimeIndexerResult] = await Promise.all([
     build({
       ...shared,
       entryPoints: [resolve(rootDir, 'bin/quality-runner.ts')],
@@ -48,6 +48,12 @@ try {
       // globals) — see lib/quality-core-bridge.ts. Type-only imports vanish;
       // an accidental runtime import fails loudly at extract time instead of
       // silently forking the module graph.
+      external: [...shared.external, '@use-crux/core', '@use-crux/core/*'],
+    }),
+    build({
+      ...shared,
+      entryPoints: [resolve(rootDir, 'bin/eval-coordinator.ts')],
+      outfile: resolve(rootDir, 'dist/eval-coordinator.mjs'),
       external: [...shared.external, '@use-crux/core', '@use-crux/core/*'],
     }),
     build({
@@ -76,6 +82,7 @@ try {
   ])
   console.log(
     `Built dist/quality-runner.mjs (${qualityResult.errors.length} errors), ` +
+      `dist/eval-coordinator.mjs (${evalResult.errors.length} errors), ` +
       `dist/source-resolver.mjs (${resolverResult.errors.length} errors), ` +
       `dist/project-indexer.mjs (${indexerResult.errors.length} errors), ` +
       `dist/project-semantic-indexer.mjs (${semanticIndexerResult.errors.length} errors), ` +

@@ -30,12 +30,14 @@ export async function planEval(
   evalValue: AnyEval,
   options: {
     readonly sourceKey: EvalSourceKey;
+    readonly definitionFingerprint?: string;
     readonly variant?: string;
     readonly fresh?: boolean;
     readonly offline?: boolean;
     readonly maxCostUsd?: number;
     readonly interactive?: boolean;
     readonly plan?: boolean;
+    readonly filtered?: boolean;
   },
   ports?: EvalPlanningPorts,
 ): Promise<EvalPlan> {
@@ -72,6 +74,12 @@ export async function planEval(
     cases: Object.freeze(resolvedCases.map((entry) => entry.caseId)),
     variants: Object.freeze(arms.map((arm) => arm.name)),
     trials: Math.max(...resolvedCases.map((entry) => entry.trials)),
+    caseTrials: Object.freeze(
+      Object.fromEntries(
+        resolvedCases.map((entry) => [entry.caseId, entry.trials]),
+      ),
+    ),
+    ...(options.filtered === true ? { filtered: true as const } : {}),
   });
   const cost = await createEvalCostPlan({
     cells,
@@ -88,7 +96,8 @@ export async function planEval(
     schemaVersion: 1 as const,
     evalId,
     sourceKey,
-    definitionFingerprint: `pending-source-identity:${evalId}`,
+    definitionFingerprint:
+      options.definitionFingerprint ?? `pending-source-identity:${evalId}`,
     selection,
     preflight: createEvalPreflight(
       cells,
@@ -150,6 +159,9 @@ async function planCell(input: {
     input: request.input,
     ...(request.call !== undefined ? { call: request.call } : {}),
     ...(authored.expected !== undefined ? { expected: authored.expected } : {}),
+    ...(authored.unvalidatedExpected === true
+      ? { unvalidatedExpected: true as const }
+      : {}),
     ...(authored.expect !== undefined ? { expect: authored.expect } : {}),
     ...(authored.afterScores !== undefined
       ? { afterScores: authored.afterScores }

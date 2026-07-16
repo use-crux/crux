@@ -210,6 +210,9 @@ function cellIdentity(planned: EvalPlannedCell) {
     input: planned.input,
     ...(planned.call !== undefined ? { call: planned.call } : {}),
     ...(planned.expected !== undefined ? { expected: planned.expected } : {}),
+    ...(planned.unvalidatedExpected === true
+      ? { unvalidatedExpected: true as const }
+      : {}),
   };
 }
 

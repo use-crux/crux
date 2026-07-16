@@ -18,6 +18,11 @@ func ExtractQualityRunner(content []byte) (string, error) {
 	return ExtractEmbedded("quality-runner", content)
 }
 
+// ExtractEvalCoordinator extracts the Eval coordinator script.
+func ExtractEvalCoordinator(content []byte) (string, error) {
+	return ExtractEmbedded("eval-coordinator", content)
+}
+
 // ExtractSourceResolver extracts the embedded source resolver script.
 func ExtractSourceResolver(content []byte) (string, error) {
 	return ExtractEmbedded("source-resolver", content)

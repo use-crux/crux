@@ -9,7 +9,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/cli"
 )
 
-func TestRootHelpNamesQualityAsCanonicalEvaluationSurface(t *testing.T) {
+func TestRootHelpNamesEvalAsCanonicalSurfaceAndRetainsQuality(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 
 	cmd := newRootCommand(&cli.Factory{})
@@ -27,30 +27,36 @@ func TestRootHelpNamesQualityAsCanonicalEvaluationSurface(t *testing.T) {
 		t.Fatalf("root help with NO_COLOR contained an ANSI escape:\n%q", text)
 	}
 	for _, want := range []string{
-		"Quality",
+		"Evals",
+		"eval",
+		"Run Evals and inspect Eval runs and Baselines",
 		"quality",
-		"Run source-defined evaluations and inspect experiments",
+		"Use the legacy Quality workflow during migration",
 		"flows",
 		"List runtime flow sessions",
-		"Run crux quality --help for the evaluation workflow",
+		"Run crux eval --help for the Eval workflow",
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("root help missing %q:\n%s", want, text)
 		}
 	}
-	if strings.Contains(text, "evals") ||
-		strings.Contains(text, "crux eval") ||
-		strings.Contains(text, "Compatibility alias") ||
+	if strings.Contains(text, "Compatibility alias") ||
 		strings.Contains(text, "Run prompt and flow evals") ||
 		strings.Contains(text, "List past eval runs") {
 		t.Fatalf("root help still advertises legacy evals wording:\n%s", text)
 	}
 }
 
-func TestRootCommandDoesNotRegisterLegacyEvalCommands(t *testing.T) {
+func TestRootCommandRegistersNewEvalButNotLegacyEvalsAlias(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 
-	for _, legacyCommand := range []string{"eval", "evals"} {
+	eval := newRootCommand(&cli.Factory{})
+	eval.SetArgs([]string{"eval", "--help"})
+	if err := eval.Execute(); err != nil {
+		t.Fatalf("new eval command is unavailable: %v", err)
+	}
+
+	for _, legacyCommand := range []string{"evals"} {
 		cmd := newRootCommand(&cli.Factory{})
 		var out bytes.Buffer
 		cmd.SetOut(&out)

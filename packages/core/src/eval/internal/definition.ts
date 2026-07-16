@@ -26,6 +26,8 @@ export interface RawEvalCase {
   readonly input: unknown;
   readonly call?: unknown;
   readonly expected?: unknown;
+  /** Diagnostic marker for file evidence accepted without an expected schema. */
+  readonly unvalidatedExpected?: true;
   readonly expect?: NormalizedEvalCheck;
   readonly afterScores?: NormalizedEvalCheck;
   readonly trials?: number;
@@ -33,6 +35,12 @@ export interface RawEvalCase {
   readonly metadata?: Readonly<Record<string, JsonValue>>;
   readonly only?: boolean;
   readonly skip?: boolean | string;
+}
+
+/** Position of one authored Case source before collection expands files. */
+export interface EvalCaseSourcePosition {
+  readonly kind: "inline" | "file";
+  readonly index: number;
 }
 
 /** One inert case-file reference in the normalized definition. */
@@ -56,6 +64,8 @@ export interface EvalDefinitionV1 {
   readonly task: unknown;
   readonly cases: readonly RawEvalCase[];
   readonly caseFiles: readonly CaseFileRef[];
+  /** Stable mixed-source order retained while inline/file collections stay separate. */
+  readonly caseSourceOrder: readonly EvalCaseSourcePosition[];
   readonly variants: Readonly<
     Record<string, Readonly<Record<string, unknown>>>
   >;

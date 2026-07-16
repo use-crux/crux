@@ -73,6 +73,7 @@ export const evalCellV3Schema = z
     call: jsonRecord.optional(),
     output: z.unknown().optional(),
     expected: z.unknown().optional(),
+    unvalidatedExpected: z.literal(true).optional(),
     response: z.record(z.string(), z.unknown()).optional(),
     error: z
       .object({

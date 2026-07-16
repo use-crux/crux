@@ -22,6 +22,7 @@ func TestEmbeddedAssetsAreOwnedByAssetsPackage(t *testing.T) {
 		filepath.Join("embed", "project-semantic-indexer.mjs"),
 		filepath.Join("embed", "project-runtime-indexer.mjs"),
 		filepath.Join("embed", "quality-runner.mjs"),
+		filepath.Join("embed", "eval-coordinator.mjs"),
 		filepath.Join("embed", "source-resolver.mjs"),
 		filepath.Join("ui-embed", "index.html"),
 	}

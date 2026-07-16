@@ -28,6 +28,9 @@ export function buildEvalBaseline(
   if (run.status !== "complete") {
     throw new TypeError("Only a complete Eval run can be set as a Baseline");
   }
+  if (run.selection.filtered === true) {
+    throw new TypeError("A filtered Eval run cannot be set as a Baseline");
+  }
   const selectedArm = options.selectedArm ?? "current";
   const variant = run.variants.find((entry) => entry.name === selectedArm);
   if (variant === undefined) throw new TypeError(`Eval run has no arm '${selectedArm}'`);
@@ -167,6 +170,20 @@ function projectCoverage(
     for (const caseId of run.selection.cases) {
       if (!present.has(caseId)) {
         throw new TypeError(`Arm '${arm}' is incomplete for Case '${caseId}'`);
+      }
+      const expectedTrials = run.selection.caseTrials[caseId];
+      const actualTrials = cells
+        .filter((cell) => cell.caseId === caseId)
+        .map((cell) => cell.trial)
+        .sort((left, right) => left - right);
+      if (
+        expectedTrials === undefined ||
+        actualTrials.length !== expectedTrials ||
+        actualTrials.some((trial, index) => trial !== index)
+      ) {
+        throw new TypeError(
+          `Arm '${arm}' is incomplete for Case '${caseId}': expected every trial`,
+        );
       }
     }
   }

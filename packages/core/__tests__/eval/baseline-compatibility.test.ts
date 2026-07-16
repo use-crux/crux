@@ -129,4 +129,32 @@ describe("granular Eval Baseline compatibility", () => {
       { code: "promoted_failing_run", message: expect.any(String) },
     ]);
   });
+
+  it("refuses filtered selections and missing trials", () => {
+    const complete = runFixture({ score: 0.8 });
+
+    expect(() =>
+      buildEvalBaseline(
+        {
+          ...complete,
+          selection: { ...complete.selection, filtered: true },
+        },
+        promotion,
+      ),
+    ).toThrow(/filtered/i);
+
+    expect(() =>
+      buildEvalBaseline(
+        {
+          ...complete,
+          selection: {
+            ...complete.selection,
+            caseTrials: { refund: 2 },
+            trials: 2,
+          },
+        },
+        promotion,
+      ),
+    ).toThrow(/incomplete.*trial/i);
+  });
 });

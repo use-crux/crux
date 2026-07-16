@@ -87,6 +87,8 @@ const runBase = z
         cases: z.array(z.string()),
         variants: z.array(z.string()),
         trials: z.number().int().positive(),
+        caseTrials: z.record(z.string(), z.number().int().positive()),
+        filtered: z.literal(true).optional(),
       })
       .passthrough(),
     costControl: z.enum(["not_required", "max_cost", "unknown"]),

@@ -35,6 +35,7 @@ export function runFixture(options: {
       cases: ["refund"],
       variants: variants.map((variant) => variant.name),
       trials: 1,
+      caseTrials: { refund: 1 },
     },
     costControl: "not_required",
     blockingVariants: ["current"],
@@ -93,4 +94,3 @@ export function runFixture(options: {
     passed: true,
   };
 }
-
