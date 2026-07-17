@@ -78,6 +78,10 @@ guardrail.classifier({
   classifier: async (subject) => ({ unsafe: subject.includes('risk') }),
   blockWhen: (result) => result.unsafe,
 })
+guardrail.media({
+  mediaTypes: { allow: ['image/*', 'application/pdf'] },
+  size: { maxBytes: 10 * 1024 * 1024 },
+})
 ```
 
 `pii`, `secrets`, and `injection` are text strategies. They default to
@@ -107,44 +111,87 @@ boundaries when the same policy should apply in several places.
 
 ## Multimodal Input
 
-Use `boundary.input.media()` when a policy needs the real canonical image,
-audio, video, or file part. Crux invokes the policy before provider
-normalization and before provider I/O. The callback type is inferred from the
-boundary; no type arguments are needed:
+Use `guardrail.media()` with `boundary.input.media()` for a declarative
+attachment policy. Crux checks the real canonical image, audio, video, or file
+part before provider normalization or provider I/O:
 
-```ts title="upload-guard.ts"
+```ts title="safe-attachments.ts"
 import { boundary, guardrail } from '@use-crux/core/safety'
 
-export const uploadGuard = guardrail({
-  id: 'upload-policy',
+export const safeAttachments = guardrail({
+  id: 'safe-attachments',
   on: boundary.input.media(),
-  run: ({ part }) => {
-    if (part.type === 'image') {
-      if (part.mediaType !== 'image/png' && part.mediaType !== 'image/jpeg') {
-        return {
-          action: 'block',
-          reason: 'Images require a known PNG or JPEG MIME type.',
-        }
-      }
-    }
-
-    if (part.type === 'file' && part.mediaType === 'application/x-msdownload') {
-      return {
-        action: 'strip',
-        reason: 'Executable attachments are not sent to the model.',
-      }
-    }
-
-    return { action: 'allow' }
-  },
+  run: guardrail.media({
+    mediaTypes: {
+      allow: ['image/png', 'image/jpeg', 'application/pdf'],
+    },
+    size: {
+      maxBytes: 10 * 1024 * 1024,
+    },
+    sources: {
+      allowHosts: ['cdn.example.com'],
+      allowInline: true,
+      allowProviderFiles: true,
+      allowUrlUserInfo: false,
+      allowUrlQuery: true,
+    },
+    action: 'block',
+  }),
 })
 ```
 
-Narrowing `part.type` exposes that canonical variant's fields. The example
-blocks image parts whose MIME type is missing or unsupported, and strips only a
-disallowed file; sibling text and image parts stay in order. Crux does not
-guess missing MIME types or sizes, so unknown values remain `undefined` or
-otherwise absent on the canonical source.
+At least one of `mediaTypes`, `size`, or `sources` is required. MIME patterns
+accept exact essences and top-level subtype wildcards such as `image/*`.
+Unknown MIME types and sizes fail their configured rule by default; set that
+rule's `allowUnknown: true` only when the application accepts sources whose
+metadata cannot be known locally. A raw remote URL normally has unknown size,
+while URL assets and provider-file references can supply a declared size.
+
+Source rules use these categories:
+
+- Bytes, Blobs, data assets, and data URLs are inline.
+- Provider-owned file references are provider files, not remote hosts.
+- Raw URLs, `URL` objects, and URL assets are remote URLs.
+
+`allowHosts` performs case-normalized exact hostname matching—no wildcards,
+paths, ports, or suffix matching. URL authority userinfo is rejected by
+default, while query strings (including signed-URL parameters) are allowed by
+default. Set `allowUrlQuery: false` for a stricter posture. Crux does not use
+credential-name heuristics.
+
+Omitting `sources` performs no source checks. Passing `sources: {}` opts into
+the documented baseline: inline and provider files allowed, URL userinfo
+blocked, and query strings allowed. Inspection uses only supplied metadata and
+local bytes. It never fetches a URL or asks a provider for metadata. Decisions
+can report a MIME type or byte counts, but never include the URL, observed
+hostname, path, query, userinfo, filename, provider/file id, or payload bytes.
+
+The violation action defaults to `block`. Set `action: 'strip'` to remove only
+an offending part in enforce mode. In report mode, both actions record what
+would happen while leaving the request unchanged:
+
+```ts
+const attachmentRollout = guardrail({
+  id: 'attachment-rollout',
+  mode: 'report',
+  on: boundary.input.media(),
+  run: guardrail.media({
+    size: { maxBytes: 10 * 1024 * 1024 },
+    action: 'strip',
+  }),
+})
+```
+
+Use a guardrail here because attachments are caller input that must be accepted,
+blocked, or stripped before the first provider call. Constraints are retryable
+assertions about model output and cannot repair unsafe input. Input media
+rewrites remain tracked in [#212](https://github.com/use-crux/crux/issues/212),
+and model-produced media safety remains tracked in
+[#228](https://github.com/use-crux/crux/issues/228).
+
+For policy logic beyond the built-in rules, provide a custom media callback.
+Narrowing `part.type` exposes that canonical variant's fields; the callback type
+is inferred from the boundary without type arguments.
 
 The callback also receives `messageIndex` and `partIndex`. These are coordinates
 in the caller's original arrays, before any earlier policy stripped a part, and
@@ -159,8 +206,7 @@ original location.
 
 Media policies accept `allow`, `warn`, `block`, and `strip`. They cannot stream,
 return text actions such as `rewrite` or `hold`, or share an `on` tuple with a
-text boundary. Model-produced media is not covered by this input boundary; see
-[#228](https://github.com/use-crux/crux/issues/228) for output-media safety.
+text boundary.
 
 Use `boundary.input.text()` when a policy instead needs the `messageText()`
 projection. Text parts pass through verbatim and media parts become bounded

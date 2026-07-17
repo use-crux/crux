@@ -86,6 +86,14 @@ export type {
   GuardrailRewriteKind,
   MediaGuardrailRunResult,
 } from './guardrail/types'
+export type {
+  MediaGuardrailAction,
+  MediaGuardrailOptions,
+  MediaSizeGuardrailRule,
+  MediaSourceGuardrailRule,
+  MediaTypeGuardrailRule,
+  MediaTypePattern,
+} from './guardrail/strategies'
 
 // ── Constraint authoring ───────────────────────────────────────────
 export { constraint, isConstraint, getConstraintDefinitionSource } from './constraint/define'

@@ -6,7 +6,7 @@ import {
 
 describe('input media safety boundary indexing', () => {
   itWithRustOxc(
-    'extracts the exact media target and callback source with native parity',
+    'extracts the exact media target and callback source through the native contract',
     async () => {
       const { nativeOut, record } = await extractNativeAndFallback({
         source: [

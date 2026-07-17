@@ -15,3 +15,10 @@ decisions remove only the current part, while report-mode strips record intent w
 provider input; Project Index now records the exact media boundary on authored guardrails. Input
 media remains guardrail-only: constraints reject `boundary.input.media()` in TypeScript and fail
 closed on bypassed configurations.
+
+Add `guardrail.media()` as a declarative, provider-neutral attachment policy for MIME allowlists,
+byte limits, exact remote hosts, inline/provider-file categories, and URL userinfo/query posture.
+It inspects only caller-supplied metadata and local bytes, supports block or strip enforcement, and
+keeps locator and payload details out of decisions. Project Index now records complete literal
+guardrail helper strategy config through the bundled native Safety extractor and retains kind-only
+facts for dynamic config.

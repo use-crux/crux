@@ -5,12 +5,12 @@
   "fileSelection": "staticDefinitionFiles(root)",
   "projection": "canonicalStaticExtractionJson(definitions,relations,diagnostics,dependencies)",
   "totals": {
-    "files": 699,
+    "files": 701,
     "definitions": 71,
     "relations": 4,
     "diagnostics": 17,
-    "dependencies": 1326,
-    "canonicalBytes": 186716
+    "dependencies": 1330,
+    "canonicalBytes": 187109
   },
   "files": [
     {
@@ -1635,6 +1635,15 @@
     },
     {
       "file": "packages/core/__type_tests__/safety-media-contract.ts",
+      "sha256": "edbc7989d3940c5013763a64ee4710014e3d52b101c6da964ae14d8686ee90b8",
+      "bytes": 110,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/core/__type_tests__/safety-media-strategy-contract.ts",
       "sha256": "edbc7989d3940c5013763a64ee4710014e3d52b101c6da964ae14d8686ee90b8",
       "bytes": 110,
       "definitions": 0,
@@ -3279,6 +3288,15 @@
       "relations": 0,
       "diagnostics": 0,
       "dependencies": 6
+    },
+    {
+      "file": "packages/core/src/safety/guardrail/strategies/media/index.ts",
+      "sha256": "2dc2820e083195a25e0e16d306aa0e7113bfa2aca32bfabf493e16db550ca96e",
+      "bytes": 283,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
     },
     {
       "file": "packages/core/src/safety/index.ts",

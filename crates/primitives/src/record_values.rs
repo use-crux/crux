@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use serde_json::{Map, Value, json};
+use serde_json::{Map, Value};
 
 use crate::protocol::{
     LiteralValue, SourceLocation, SourceSnippet, StaticInitializerRecord, StaticObjectProperty,
@@ -304,7 +304,7 @@ fn is_fallback_options_argument(value: &StaticSyntaxValue, index: usize, arg_cou
         .any(|property| property_value(value, property).is_some())
 }
 
-fn json_value(
+pub(crate) fn json_value(
     value: &StaticSyntaxValue,
     initializers: &HashMap<&str, &StaticInitializerRecord>,
 ) -> Option<Value> {
@@ -338,7 +338,7 @@ fn literal_json(value: &StaticSyntaxValue) -> Option<Value> {
 fn literal_json_value(value: &LiteralValue) -> Option<Value> {
     match value {
         LiteralValue::String(value) => Some(Value::String(value.clone())),
-        LiteralValue::Number(value) => Some(json!(value)),
+        LiteralValue::Number(value) => serde_json::Number::from_f64(*value).map(Value::Number),
         LiteralValue::Boolean(value) => Some(Value::Bool(*value)),
         LiteralValue::Null => Some(Value::Null),
     }
