@@ -5,21 +5,33 @@ import type { MediaPolicyFacts } from './types'
 
 const IMAGE_SIGNATURE_BYTES = 12
 
+interface DataUrlSnapshot {
+  readonly location: 'source' | 'data' | 'url'
+  readonly mediaType?: string
+  readonly byteLength?: number
+  readonly payloadPrefix?: Uint8Array
+}
+
 export async function inspectMediaPart(subject: MediaPartSubject): Promise<MediaPolicyFacts> {
-  const observedMediaType = subject.part.mediaType ?? sourceMediaType(subject.part.source)
+  const dataUrl = createDataUrlSnapshot(subject.part.source)
+  const observedMediaType = subject.part.mediaType ?? sourceMediaType(subject.part.source, dataUrl)
   const mediaType = observedMediaType === undefined
-    ? await sniffUndeclaredImage(subject)
+    ? await sniffUndeclaredImage(subject, dataUrl)
     : normalizeObservedMediaType(observedMediaType)
-  const sizeBytes = sourceSize(subject.part.source)
+  const sizeBytes = sourceSize(subject.part.source, dataUrl)
   return {
     partType: subject.part.type,
     ...(mediaType ? { mediaType } : {}),
     ...(sizeBytes !== undefined ? { sizeBytes } : {}),
-    source: inspectSource(subject.part.source),
+    source: inspectSource(subject.part.source, dataUrl),
   }
 }
 
-function inspectSource(source: unknown): MediaPolicyFacts['source'] {
+function inspectSource(
+  source: unknown,
+  dataUrl: DataUrlSnapshot | undefined,
+): MediaPolicyFacts['source'] {
+  if (dataUrl !== undefined) return { kind: 'inline' }
   if (source instanceof Uint8Array || source instanceof ArrayBuffer || source instanceof Blob) {
     return { kind: 'inline' }
   }
@@ -50,11 +62,13 @@ function inspectUrl(value: unknown): MediaPolicyFacts['source'] {
   }
 }
 
-function sourceSize(source: unknown): number | undefined {
+function sourceSize(
+  source: unknown,
+  dataUrl: DataUrlSnapshot | undefined,
+): number | undefined {
   if (source instanceof Uint8Array || source instanceof ArrayBuffer) return source.byteLength
   if (source instanceof Blob) return source.size
-  const url = dataUrl(source)
-  if (url !== undefined) return dataUrlSize(url)
+  if (dataUrl !== undefined) return dataUrl.byteLength
   if (
     typeof source === 'object' &&
     source !== null &&
@@ -62,18 +76,7 @@ function sourceSize(source: unknown): number | undefined {
     source.type === 'data' &&
     'data' in source
   ) {
-    return sourceSize(source.data)
-  }
-  if (
-    typeof source === 'object' &&
-    source !== null &&
-    'type' in source &&
-    source.type === 'url' &&
-    'url' in source &&
-    source.url instanceof URL &&
-    source.url.protocol === 'data:'
-  ) {
-    return dataUrlSize(source.url.href)
+    return sourceSize(source.data, undefined)
   }
   if (
     typeof source === 'object' &&
@@ -88,21 +91,19 @@ function sourceSize(source: unknown): number | undefined {
   return undefined
 }
 
-function dataUrlSize(value: string): number | undefined {
-  try {
-    return parseDataUrl(value, 'media source').data.byteLength
-  } catch {
-    return undefined
-  }
-}
-
-async function sniffUndeclaredImage(subject: MediaPartSubject): Promise<string | undefined> {
+async function sniffUndeclaredImage(
+  subject: MediaPartSubject,
+  dataUrl: DataUrlSnapshot | undefined,
+): Promise<string | undefined> {
   if (subject.part.type !== 'image') return undefined
-  const prefix = await localBytePrefix(subject.part.source)
+  const prefix = await localBytePrefix(subject.part.source, dataUrl)
   return prefix ? sniffImageMediaType(prefix) : undefined
 }
 
-async function localBytePrefix(source: unknown): Promise<Uint8Array | undefined> {
+async function localBytePrefix(
+  source: unknown,
+  dataUrl: DataUrlSnapshot | undefined,
+): Promise<Uint8Array | undefined> {
   if (source instanceof Uint8Array) return source.subarray(0, IMAGE_SIGNATURE_BYTES)
   if (source instanceof ArrayBuffer) {
     return new Uint8Array(source, 0, Math.min(source.byteLength, IMAGE_SIGNATURE_BYTES))
@@ -110,47 +111,61 @@ async function localBytePrefix(source: unknown): Promise<Uint8Array | undefined>
   if (source instanceof Blob) {
     return new Uint8Array(await source.slice(0, IMAGE_SIGNATURE_BYTES).arrayBuffer())
   }
-  const url = dataUrl(source)
-  if (url !== undefined) return dataUrlBytes(url)
+  if (dataUrl !== undefined) return dataUrl.payloadPrefix
   if (typeof source !== 'object' || source === null || !('type' in source)) {
     return undefined
   }
   if (source.type === 'data' && 'data' in source) {
-    return localBytePrefix(source.data)
-  }
-  if (source.type === 'url' && 'url' in source && source.url instanceof URL && source.url.protocol === 'data:') {
-    return dataUrlBytes(source.url.href)
+    return localBytePrefix(source.data, undefined)
   }
   return undefined
 }
 
-function sourceMediaType(source: MediaPartSubject['part']['source']): string | undefined {
+function sourceMediaType(
+  source: MediaPartSubject['part']['source'],
+  dataUrl: DataUrlSnapshot | undefined,
+): string | undefined {
   if (source instanceof Blob && source.type !== '') return source.type
-  const url = dataUrl(source)
-  if (url !== undefined) return dataUrlMediaType(url)
+  if (dataUrl?.location === 'source') return dataUrl.mediaType
   if (typeof source === 'object' && source !== null && 'mediaType' in source && typeof source.mediaType === 'string') {
     return source.mediaType
   }
-  if (
-    typeof source === 'object' &&
-    source !== null &&
-    'type' in source &&
-    source.type === 'url' &&
-    'url' in source &&
-    source.url instanceof URL &&
-    source.url.protocol === 'data:'
-  ) {
-    return dataUrlMediaType(source.url.href)
-  }
+  if (dataUrl?.location === 'url') return dataUrl.mediaType
   return undefined
 }
 
-function dataUrlMediaType(value: string): string | undefined {
+function createDataUrlSnapshot(source: unknown): DataUrlSnapshot | undefined {
+  const located = locateDataUrl(source)
+  if (located === undefined) return undefined
   try {
-    return parseDataUrl(value, 'media source').mediaType
+    const parsed = parseDataUrl(located.value, 'media source')
+    return {
+      location: located.location,
+      ...(parsed.mediaType ? { mediaType: parsed.mediaType } : {}),
+      byteLength: parsed.data.byteLength,
+      payloadPrefix: parsed.data.subarray(0, IMAGE_SIGNATURE_BYTES),
+    }
   } catch {
+    return { location: located.location }
+  }
+}
+
+function locateDataUrl(
+  source: unknown,
+): { readonly location: DataUrlSnapshot['location']; readonly value: string } | undefined {
+  const direct = dataUrl(source)
+  if (direct !== undefined) return { location: 'source', value: direct }
+  if (typeof source !== 'object' || source === null || !('type' in source)) {
     return undefined
   }
+  if (source.type === 'data' && 'data' in source) {
+    const nested = locateDataUrl(source.data)
+    return nested === undefined ? undefined : { ...nested, location: 'data' }
+  }
+  if (source.type === 'url' && 'url' in source && source.url instanceof URL && source.url.protocol === 'data:') {
+    return { location: 'url', value: source.url.href }
+  }
+  return undefined
 }
 
 function dataUrl(value: unknown): string | undefined {
@@ -161,14 +176,6 @@ function dataUrl(value: unknown): string | undefined {
         ? new URL(value)
         : undefined
     return url?.protocol === 'data:' ? url.href : undefined
-  } catch {
-    return undefined
-  }
-}
-
-function dataUrlBytes(value: string): Uint8Array | undefined {
-  try {
-    return parseDataUrl(value, 'media source').data.subarray(0, IMAGE_SIGNATURE_BYTES)
   } catch {
     return undefined
   }

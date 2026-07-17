@@ -6,11 +6,22 @@ import type {
 } from './types'
 
 const MIME_PATTERN = /^[a-z0-9!#$&^_.+-]+\/(?:[a-z0-9!#$&^_.+-]+|\*)$/
+const MEDIA_OPTION_FIELDS = ['mediaTypes', 'size', 'sources', 'action'] as const
+const MEDIA_TYPE_FIELDS = ['allow', 'allowUnknown'] as const
+const SIZE_FIELDS = ['maxBytes', 'allowUnknown'] as const
+const SOURCE_FIELDS = [
+  'allowHosts',
+  'allowInline',
+  'allowProviderFiles',
+  'allowUrlUserInfo',
+  'allowUrlQuery',
+] as const
 
 export function normalizeMediaGuardrailConfig(
   options: MediaGuardrailOptions,
 ): NormalizedMediaGuardrailConfig {
   if (!isRecord(options)) throw configError('at least one rule must be configured.')
+  rejectUnknownFields(options, '', MEDIA_OPTION_FIELDS)
   const mediaTypes = options.mediaTypes === undefined
     ? undefined
     : normalizeMediaTypes(options.mediaTypes)
@@ -37,6 +48,7 @@ export function normalizeMediaGuardrailConfig(
 
 function normalizeSources(value: unknown) {
   if (!isRecord(value)) throw configError('sources must be an object.')
+  rejectUnknownFields(value, 'sources.', SOURCE_FIELDS)
   const allowHosts = value.allowHosts === undefined
     ? undefined
     : normalizeHosts(value.allowHosts)
@@ -93,7 +105,11 @@ function invalidHost(): SafetyConfigError {
 }
 
 function normalizeMediaTypes(value: unknown) {
-  if (!isRecord(value) || !Array.isArray(value.allow)) {
+  if (!isRecord(value)) {
+    throw configError('mediaTypes.allow must be an array of MIME patterns.')
+  }
+  rejectUnknownFields(value, 'mediaTypes.', MEDIA_TYPE_FIELDS)
+  if (!Array.isArray(value.allow)) {
     throw configError('mediaTypes.allow must be an array of MIME patterns.')
   }
   if (value.allowUnknown !== undefined && typeof value.allowUnknown !== 'boolean') {
@@ -110,7 +126,11 @@ function normalizeMediaTypes(value: unknown) {
 }
 
 function normalizeSize(value: unknown) {
-  if (!isRecord(value) || !Number.isSafeInteger(value.maxBytes) || Number(value.maxBytes) <= 0) {
+  if (!isRecord(value)) {
+    throw configError('size.maxBytes must be a positive safe integer.')
+  }
+  rejectUnknownFields(value, 'size.', SIZE_FIELDS)
+  if (!Number.isSafeInteger(value.maxBytes) || Number(value.maxBytes) <= 0) {
     throw configError('size.maxBytes must be a positive safe integer.')
   }
   if (value.allowUnknown !== undefined && typeof value.allowUnknown !== 'boolean') {
@@ -137,6 +157,17 @@ function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   if (typeof value !== 'object' || value === null) return false
   const prototype = Object.getPrototypeOf(value)
   return prototype === Object.prototype || prototype === null
+}
+
+function rejectUnknownFields(
+  value: Readonly<Record<string, unknown>>,
+  prefix: string,
+  supported: readonly string[],
+): void {
+  const unknown = Object.keys(value).find((field) => !supported.includes(field))
+  if (unknown !== undefined) {
+    throw configError(`${prefix}${unknown} is not supported.`)
+  }
 }
 
 function configError(problem: string): SafetyConfigError {

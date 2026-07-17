@@ -1,6 +1,7 @@
 /** Composite media size policy behavior through the public Safety session. */
 
 import { describe, expect, it, vi } from 'vitest'
+import { parseDataUrl } from '../../src/content/media-data-url'
 import {
   boundary,
   createSafety,
@@ -9,6 +10,11 @@ import {
   type MediaPart,
   SafetyConfigError,
 } from '../../src/safety'
+
+vi.mock('../../src/content/media-data-url', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/content/media-data-url')>()
+  return { ...actual, parseDataUrl: vi.fn(actual.parseDataUrl) }
+})
 
 type MediaRun = ReturnType<typeof guardrail.media>
 
@@ -111,6 +117,22 @@ describe('guardrail.media — size', () => {
       action: 'block',
       reason: expect.stringContaining('media size 4 bytes'),
     })
+  })
+
+  it('parses a data URL once while deriving its type, size, and source facts', async () => {
+    const parse = vi.mocked(parseDataUrl)
+    parse.mockClear()
+    const run = guardrail.media({
+      mediaTypes: { allow: ['image/png'] },
+      size: { maxBytes: 8 },
+      sources: {},
+    })
+
+    await expect(runOn(run, {
+      type: 'image',
+      source: 'data:;base64,iVBORwAAAAA=',
+    })).resolves.toEqual({ action: 'allow' })
+    expect(parse).toHaveBeenCalledTimes(1)
   })
 
   it('uses declared URL Asset and provider-file sizes without external I/O', async () => {

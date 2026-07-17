@@ -121,6 +121,23 @@ describe('guardrail.media — composition', () => {
     }
   })
 
+  it.each([
+    { options: { sources: {}, actoin: 'strip' }, field: 'actoin' },
+    {
+      options: { mediaTypes: { allow: ['image/png'], allowUnkown: true } },
+      field: 'mediaTypes.allowUnkown',
+    },
+    { options: { size: { maxBytes: 1, maxByte: 2 } }, field: 'size.maxByte' },
+    {
+      options: { sources: { allowInline: true, allowInlne: false } },
+      field: 'sources.allowInlne',
+    },
+  ])('rejects the unknown configuration field $field', ({ options, field }) => {
+    expect(() => guardrail.media(options as never)).toThrow(
+      `guardrail.media() configuration is invalid: ${field} is not supported.`,
+    )
+  })
+
   it('isolates behavior and metadata from caller mutation', async () => {
     const allowHosts = ['cdn.example.com']
     const options = {
