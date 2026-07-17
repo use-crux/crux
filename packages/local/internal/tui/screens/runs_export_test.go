@@ -16,8 +16,8 @@ func TestRunsExportEmitsCmd(t *testing.T) {
 	r := NewRuns()
 	r.loaded = true
 	r.selRun = "8af2f1c"
-	r.detail = &api.QualityRunDetailRecord{
-		Run: api.QualityRunRecord{TraceID: "8af2f1c"},
+	r.detail = &api.InspectRunDetailRecord{
+		Run: api.InspectRunRecord{TraceID: "8af2f1c"},
 	}
 
 	cmd := r.Update(tea.KeyPressMsg(tea.Key{Text: "e", Code: 'e'}), nil)

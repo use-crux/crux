@@ -1,5 +1,5 @@
-import type { ObservabilityDefinitionActivitySummary } from '@/types'
-import { fetchJson } from './http'
+import type { ObservabilityDefinitionActivitySummary } from "@/types";
+import { fetchJson } from "./http";
 
 /** Fetch the server-owned per-definition runtime activity rollup. */
 export function fetchDefinitionActivity(
@@ -9,5 +9,5 @@ export function fetchDefinitionActivity(
   return fetchJson<ObservabilityDefinitionActivitySummary>(
     `/api/observability/definitions/${encodeURIComponent(definitionId)}/activity`,
     signal,
-  )
+  );
 }

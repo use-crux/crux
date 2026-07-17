@@ -1019,21 +1019,9 @@ export interface ProjectDefinition {
 export interface ProjectDefinitionQuality {
   evalIds?: string[];
   suiteIds?: string[];
-  experimentIds?: string[];
-  baselineIds?: string[];
-  comparisonIds?: string[];
-  feedbackIds?: string[];
-  cassettePaths?: string[];
   runIds?: string[];
   traceIds?: string[];
-  affectedEvalIds?: string[];
-  affectedSuiteIds?: string[];
   runCount?: number;
-  experimentCount?: number;
-  baselineCount?: number;
-  comparisonCount?: number;
-  feedbackCount?: number;
-  cassetteCount?: number;
   completedRunCount?: number;
   failedRunCount?: number;
   runningRunCount?: number;
@@ -1042,22 +1030,6 @@ export interface ProjectDefinitionQuality {
   lastStatus?: string;
   caseCount?: number;
   passRate?: number;
-  currentFingerprint?: string;
-  baselineFingerprint?: string;
-  changedSinceBaseline?: boolean;
-  drift?: {
-    evals: ProjectDefinitionQualityDriftRow[];
-    suites: ProjectDefinitionQualityDriftRow[];
-  };
-}
-
-export interface ProjectDefinitionQualityDriftRow {
-  id: string;
-  passRate: number;
-  runs: number;
-  baselineExperimentId: string;
-  baselinePassRate: number;
-  driftPp: number;
 }
 
 export type ProjectRelationFidelity = DefinitionFidelity;
@@ -1846,33 +1818,12 @@ export const ProjectDefinitionMetadataSchema = z
   })
   .catchall(z.unknown()) satisfies z.ZodType<ProjectDefinitionMetadata>;
 
-export const ProjectDefinitionQualityDriftRowSchema = z.object({
-  id: z.string(),
-  passRate: z.number(),
-  runs: z.number(),
-  baselineExperimentId: z.string(),
-  baselinePassRate: z.number(),
-  driftPp: z.number(),
-}) satisfies z.ZodType<ProjectDefinitionQualityDriftRow>;
-
 export const ProjectDefinitionQualitySchema = z.object({
   evalIds: z.array(z.string()).optional(),
   suiteIds: z.array(z.string()).optional(),
-  experimentIds: z.array(z.string()).optional(),
-  baselineIds: z.array(z.string()).optional(),
-  comparisonIds: z.array(z.string()).optional(),
-  feedbackIds: z.array(z.string()).optional(),
-  cassettePaths: z.array(z.string()).optional(),
   runIds: z.array(z.string()).optional(),
   traceIds: z.array(z.string()).optional(),
-  affectedEvalIds: z.array(z.string()).optional(),
-  affectedSuiteIds: z.array(z.string()).optional(),
   runCount: z.number().optional(),
-  experimentCount: z.number().optional(),
-  baselineCount: z.number().optional(),
-  comparisonCount: z.number().optional(),
-  feedbackCount: z.number().optional(),
-  cassetteCount: z.number().optional(),
   completedRunCount: z.number().optional(),
   failedRunCount: z.number().optional(),
   runningRunCount: z.number().optional(),
@@ -1881,15 +1832,6 @@ export const ProjectDefinitionQualitySchema = z.object({
   lastStatus: z.string().optional(),
   caseCount: z.number().optional(),
   passRate: z.number().optional(),
-  currentFingerprint: z.string().optional(),
-  baselineFingerprint: z.string().optional(),
-  changedSinceBaseline: z.boolean().optional(),
-  drift: z
-    .object({
-      evals: z.array(ProjectDefinitionQualityDriftRowSchema),
-      suites: z.array(ProjectDefinitionQualityDriftRowSchema),
-    })
-    .optional(),
 }) satisfies z.ZodType<ProjectDefinitionQuality>;
 
 export const ProjectDefinitionSchema = z.object({

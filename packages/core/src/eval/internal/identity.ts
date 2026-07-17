@@ -1,8 +1,8 @@
 /** Web-safe canonical identity for exact Eval evidence reuse. @internal */
 
 import { sha256Hex } from "../../content/sha256";
-import { OUTPUT_CACHE_EPOCH } from "../../quality/internal/cache-epochs";
-import { canonicalJson } from "../../quality/internal/canonical-json";
+import { OUTPUT_CACHE_EPOCH } from "./evidence/cache-epochs";
+import { canonicalJson } from "./evidence/canonical-json";
 
 export { OUTPUT_CACHE_EPOCH };
 

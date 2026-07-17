@@ -13,13 +13,13 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/use-crux/crux/packages/local/internal/devtools"
-	"github.com/use-crux/crux/packages/local/internal/quality"
+	"github.com/use-crux/crux/packages/local/internal/inspect"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
 func newTestWSServer(t *testing.T, s *store.Store) http.Handler {
 	t.Helper()
-	return NewHTTPServer(s, ServerOptions{QualityDir: t.TempDir()})
+	return NewHTTPServer(s, ServerOptions{InspectDir: t.TempDir()})
 }
 
 func dialWS(t *testing.T, ts *httptest.Server) *websocket.Conn {
@@ -104,7 +104,7 @@ func readObservabilityEvent(t *testing.T, ws *websocket.Conn) map[string]any {
 	}
 }
 
-func readQualityEvent(t *testing.T, ws *websocket.Conn) map[string]any {
+func readInspectEvent(t *testing.T, ws *websocket.Conn) map[string]any {
 	t.Helper()
 	ws.SetReadDeadline(time.Now().Add(2 * time.Second))
 	for {
@@ -117,15 +117,15 @@ func readQualityEvent(t *testing.T, ws *websocket.Conn) map[string]any {
 			t.Fatalf("JSON decode error: %v", err)
 		}
 		if envelope["type"] == "quality:event" {
-			if envelope["_tag"] != "QualityEvent" {
-				t.Fatalf("quality:event missing top-level QualityEvent fields: %#v", envelope)
+			if envelope["_tag"] != "InspectEvent" {
+				t.Fatalf("quality:event missing top-level InspectEvent fields: %#v", envelope)
 			}
 			return envelope
 		}
 	}
 }
 
-func readObservabilityAndQualityEvents(t *testing.T, ws *websocket.Conn) (map[string]any, map[string]any) {
+func readObservabilityAndInspectEvents(t *testing.T, ws *websocket.Conn) (map[string]any, map[string]any) {
 	t.Helper()
 	ws.SetReadDeadline(time.Now().Add(2 * time.Second))
 	var observabilityEvent map[string]any
@@ -147,8 +147,8 @@ func readObservabilityAndQualityEvents(t *testing.T, ws *websocket.Conn) (map[st
 			}
 			observabilityEvent = event
 		case "quality:event":
-			if envelope["_tag"] != "QualityEvent" {
-				t.Fatalf("quality:event missing top-level QualityEvent fields: %#v", envelope)
+			if envelope["_tag"] != "InspectEvent" {
+				t.Fatalf("quality:event missing top-level InspectEvent fields: %#v", envelope)
 			}
 			qualityEvent = envelope
 		}
@@ -288,11 +288,6 @@ func readServerSource(t *testing.T, name string) string {
 
 func TestRegisteredSnapshotMessageUsesRegistryMetadata(t *testing.T) {
 	s := store.NewStore()
-	s.EvalStart(store.EvalStartEvent{
-		EvalID:     "eval-1",
-		StartedAt:  1,
-		TotalCases: 1,
-	})
 	actualCost := 0.12
 	s.RecordCostEvent("report", store.CostEvent{
 		TraceID:   "trace-1",
@@ -300,17 +295,8 @@ func TestRegisteredSnapshotMessageUsesRegistryMetadata(t *testing.T) {
 		Actual:    &actualCost,
 		Entry:     map[string]any{"model": "test-model"},
 	})
-	qualitySvc := quality.NewService(s, quality.Dir(t.TempDir()))
-	hub := &WSHub{devtools: devtools.NewService(s, qualitySvc)}
-
-	evalMessage, ok := registeredSnapshotMessage(hub, "eval:snapshot")
-	if !ok {
-		t.Fatal("eval:snapshot was not built")
-	}
-	evalRuns, ok := evalMessage["evalRuns"].([]store.EvalRun)
-	if !ok || len(evalRuns) != 1 || evalRuns[0].EvalID != "eval-1" {
-		t.Fatalf("evalRuns = %#v, want eval-1", evalMessage["evalRuns"])
-	}
+	inspectSvc := inspect.NewService(s, inspect.Dir(t.TempDir()))
+	hub := &WSHub{devtools: devtools.NewService(s, inspectSvc)}
 
 	runtimeMessage, ok := registeredSnapshotMessage(hub, "runtime:snapshot")
 	if !ok {
@@ -420,7 +406,7 @@ func TestWebSocket_broadcast_on_event(t *testing.T) {
 	drainSnapshot(t, ws)
 
 	postObservabilityRun(t, ts.Client(), ts.URL, "run_ws")
-	event, qualityEvent := readObservabilityAndQualityEvents(t, ws)
+	event, qualityEvent := readObservabilityAndInspectEvents(t, ws)
 	if event["kind"] != "observability.records" || event["action"] != "ingested" || event["refId"] != "run_ws" {
 		t.Fatalf("observability event = %#v", event)
 	}
@@ -442,7 +428,7 @@ func TestWebSocket_broadcasts_quality_run_delete(t *testing.T) {
 	postObservabilityRun(t, ts.Client(), ts.URL, "run_delete_ws")
 	_ = readObservabilityEvent(t, ws)
 
-	req, err := http.NewRequest(http.MethodDelete, ts.URL+"/api/quality/runs/run_delete_ws", nil)
+	req, err := http.NewRequest(http.MethodDelete, ts.URL+"/api/inspect/runs/run_delete_ws", nil)
 	if err != nil {
 		t.Fatalf("create delete request: %v", err)
 	}
@@ -457,7 +443,7 @@ func TestWebSocket_broadcasts_quality_run_delete(t *testing.T) {
 
 	var event map[string]any
 	for i := 0; i < 3; i++ {
-		event = readQualityEvent(t, ws)
+		event = readInspectEvent(t, ws)
 		if event["kind"] == "run" && event["action"] == "deleted" {
 			break
 		}

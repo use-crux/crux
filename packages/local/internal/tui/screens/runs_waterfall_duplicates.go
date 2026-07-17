@@ -6,13 +6,13 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/api"
 )
 
-func (s *Runs) visibleSpans() []api.QualityRunSpan {
+func (s *Runs) visibleSpans() []api.InspectRunSpan {
 	if s.detail == nil || len(s.detail.Spans) == 0 {
 		return nil
 	}
 	counts := s.duplicateGroupCounts()
 	emitted := map[string]bool{}
-	out := make([]api.QualityRunSpan, 0, len(s.detail.Spans))
+	out := make([]api.InspectRunSpan, 0, len(s.detail.Spans))
 	for _, span := range s.detail.Spans {
 		key := duplicateGroupKey(span)
 		if key == "" || counts[key] <= 1 || s.expandedDups[key] {
@@ -35,7 +35,7 @@ func (s *Runs) toggleSelectedDuplicateGroup() bool {
 	if s.detail == nil {
 		return false
 	}
-	var selected *api.QualityRunSpan
+	var selected *api.InspectRunSpan
 	for _, span := range s.visibleSpans() {
 		if span.ID == s.selSpan {
 			copy := span
@@ -89,7 +89,7 @@ func (s *Runs) duplicateGroupDuration(key string) *float64 {
 	return &total
 }
 
-func duplicateGroupKey(span api.QualityRunSpan) string {
+func duplicateGroupKey(span api.InspectRunSpan) string {
 	if !span.Duplicate {
 		return ""
 	}

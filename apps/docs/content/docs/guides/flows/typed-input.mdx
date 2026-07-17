@@ -6,24 +6,29 @@ description: Type the flow's input, share it with steps via flow.input, extract 
 You want to pass structured data into a flow at call time and keep it typed everywhere: in the flow body, in extracted step helpers, and across nested flows. `flow` infers typed input from the handler's second parameter, so you can access it directly in the flow body. The same input is also available on `flow.input` for reusable step helpers that receive the scope.
 
 ```ts
-import { flow } from '@use-crux/core'
+import { flow } from "@use-crux/core";
 
 interface PipelineInput {
-  query: string
-  maxResults: number
+  query: string;
+  maxResults: number;
 }
 
-const researchFlow = flow('research', async (flow, input: PipelineInput) => {
-  const plan = await flow.step('plan', () => generate(planner, { model, input: { query: input.query } }))
-  return flow.step('search', () =>
+const researchFlow = flow("research", async (flow, input: PipelineInput) => {
+  const plan = await flow.step("plan", () =>
+    generate(planner, { model, input: { query: input.query } }),
+  );
+  return flow.step("search", () =>
     generate(searcher, {
       model,
       input: { plan: plan.object, limit: input.maxResults },
     }),
-  )
-})
+  );
+});
 
-const result = await researchFlow.run({ query: 'cloud migration', maxResults: 10 })
+const result = await researchFlow.run({
+  query: "cloud migration",
+  maxResults: 10,
+});
 ```
 
 ## Reusable step functions
@@ -33,14 +38,14 @@ When a step function accepts a `(flow: FlowScope)` parameter, `flow.step()` pass
 ```ts
 // External step function, receives flow automatically
 async function planStep(flow: FlowScope<PipelineInput>) {
-  return generate(planner, { model, input: { query: flow.input.query } })
+  return generate(planner, { model, input: { query: flow.input.query } });
 }
 
 // Auto-pass: flow.step detects the parameter and passes flow
-await flow.step('plan', planStep)
+await flow.step("plan", planStep);
 
 // Compare with the manual wrapper form:
-await flow.step('plan', () => planStep(customArgs))
+await flow.step("plan", () => planStep(customArgs));
 ```
 
 The auto-pass pattern works when your step function signature is `(flow: FlowScope) => T`. If your function needs additional arguments, use the wrapper form `() => stepFn(args)`.
@@ -52,16 +57,22 @@ After each step completes, its return value is stored in `flow.results` keyed by
 ```ts
 async function searchStep(flow: FlowScope<PipelineInput>) {
   // Access the plan step's output via flow.results
-  const plan = flow.results['plan'] as PlanOutput
-  return generate(searcher, { model, input: { plan, limit: flow.input.maxResults } })
+  const plan = flow.results["plan"] as PlanOutput;
+  return generate(searcher, {
+    model,
+    input: { plan, limit: flow.input.maxResults },
+  });
 }
 
-const researchFlow = flow('research', async (flow, _input: PipelineInput) => {
-  await flow.step('plan', planStep)
-  return flow.step('search', searchStep)
-})
+const researchFlow = flow("research", async (flow, _input: PipelineInput) => {
+  await flow.step("plan", planStep);
+  return flow.step("search", searchStep);
+});
 
-const result = await researchFlow.run({ query: 'cloud migration', maxResults: 10 })
+const result = await researchFlow.run({
+  query: "cloud migration",
+  maxResults: 10,
+});
 ```
 
 <Callout type="info">
@@ -73,29 +84,35 @@ const result = await researchFlow.run({ query: 'cloud migration', maxResults: 10
 Flows can nest inside other flows. Running `flow().run()` inside another flow creates a parent-child relationship in the observability graph automatically.
 
 ```ts
-import { flow } from '@use-crux/core'
-import { generate } from '@use-crux/ai'
-import { openai } from '@ai-sdk/openai'
+import { flow } from "@use-crux/core";
+import { generate } from "@use-crux/ai";
+import { openai } from "@ai-sdk/openai";
 
-const model = openai('gpt-4o')
+const model = openai("gpt-4o");
 
-const innerResearch = flow('research', async (innerFlow) => {
-  const sources = await innerFlow.step('find-sources', () =>
+const innerResearch = flow("research", async (innerFlow) => {
+  const sources = await innerFlow.step("find-sources", () =>
     generate(sourceFinder, { model, input: { plan: plan.object } }),
-  )
-  return innerFlow.step('synthesize', () => generate(synthesizer, { model, input: { sources: sources.object } }))
-})
+  );
+  return innerFlow.step("synthesize", () =>
+    generate(synthesizer, { model, input: { sources: sources.object } }),
+  );
+});
 
-const contentPipeline = flow('content-pipeline', async (flow) => {
-  const plan = await flow.step('plan', () => generate(contentPlanner, { model, input: { topic: 'cloud migration' } }))
+const contentPipeline = flow("content-pipeline", async (flow) => {
+  const plan = await flow.step("plan", () =>
+    generate(contentPlanner, { model, input: { topic: "cloud migration" } }),
+  );
 
   // Inner flow runs as a nested pipeline inside a step
-  const research = await flow.step('research', () => innerResearch.run())
+  const research = await flow.step("research", () => innerResearch.run());
 
-  return flow.step('write', () => generate(articleWriter, { model, input: { research: research.object } }))
-})
+  return flow.step("write", () =>
+    generate(articleWriter, { model, input: { research: research.object } }),
+  );
+});
 
-await contentPipeline.run()
+await contentPipeline.run();
 ```
 
 In devtools, nested flows render as a tree:

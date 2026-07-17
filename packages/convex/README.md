@@ -157,6 +157,17 @@ Convex runtime execution is fencing-only. The host bindings disable in-process
 lease heartbeat timers and rely on `LEASE_LOST` fencing plus a lease TTL sized
 for the longest expected target action.
 
+The same selected Runtime executes host-required Evals from the generated
+registry. The Node coordinator infers its non-secret connection values from
+`CONVEX_SITE_URL` and `CONVEX_DEPLOYMENT`; set the dedicated bearer only in
+`CRUX_EVAL_HOST_TOKEN`. Explicit `CRUX_EVAL_HOST_URL` and
+`CRUX_EVAL_HOST_DEPLOYMENT_ID` override inference. The authenticated manifest
+must match the expected deployment before any paid work begins.
+
+Do not put the bearer in `crux.config.ts`, generated Convex files, CLI
+arguments, plans, logs, or fingerprints. Crux uses one selected deployment per
+invocation and never silently falls back to another.
+
 ### Storage Beta adapters
 
 Use `convexRecordStore()`, `convexVectorStore()`, and `convexStorage()` for component-backed Crux records and dense vector search. No manual schema or function definitions needed.

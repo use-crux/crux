@@ -4,7 +4,7 @@ description: Cost tracking plugin and pricing helpers.
 ---
 
 ```ts
-import { modelPricing, withCostTracking } from '@use-crux/core/cost'
+import { modelPricing, withCostTracking } from "@use-crux/core/cost";
 ```
 
 ### `modelPricing(prices)`
@@ -15,8 +15,8 @@ Rates are USD per 1M tokens.
 
 ```ts
 const pricing = modelPricing({
-  'gpt-4o': { input: 2.5, output: 10 },
-})
+  "gpt-4o": { input: 2.5, output: 10 },
+});
 ```
 
 ### `withCostTracking(options)`
@@ -27,7 +27,7 @@ Creates a tracker with `.asPlugin()`, `.getReport()`, and `.reset()`.
 const tracker = withCostTracking({
   pricing,
   budget: { warn: 1, limit: 5 },
-})
+});
 ```
 
 Install `tracker.asPlugin()` in `config({ plugins })`. The tracker records actual provider cost when present, otherwise estimates from `usage` and `pricing`.

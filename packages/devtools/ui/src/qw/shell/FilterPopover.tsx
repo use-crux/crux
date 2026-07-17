@@ -15,20 +15,29 @@
  * callbacks.
  */
 
-import { useState, type ReactNode } from 'react'
-import { Popover, PopoverContent, PopoverTrigger } from '@/shared/components/ui/popover'
-import { Icon } from './Icon'
+import { useState, type ReactNode } from "react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/shared/components/ui/popover";
+import { Icon } from "./Icon";
 
 // ─── Low-level building blocks ──────────────────────────────────────
 
 interface ChipPopoverProps {
-  k: string
-  value: string
-  onRemove: () => void
-  children: ReactNode
+  k: string;
+  value: string;
+  onRemove: () => void;
+  children: ReactNode;
 }
 
-export function ChipPopover({ k, value, onRemove, children }: ChipPopoverProps) {
+export function ChipPopover({
+  k,
+  value,
+  onRemove,
+  children,
+}: ChipPopoverProps) {
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -36,19 +45,19 @@ export function ChipPopover({ k, value, onRemove, children }: ChipPopoverProps) 
           type="button"
           className="inline-flex items-center gap-1.5 rounded-[4px] px-2 py-[3px] font-mono text-[11.5px]"
           style={{
-            background: 'var(--qw-crux-soft)',
-            border: '1px solid var(--qw-crux-line)',
-            color: 'var(--qw-crux)',
+            background: "var(--qw-crux-soft)",
+            border: "1px solid var(--qw-crux-line)",
+            color: "var(--qw-crux)",
           }}
         >
-          <span style={{ color: 'var(--qw-crux)' }}>{k}:</span>
+          <span style={{ color: "var(--qw-crux)" }}>{k}:</span>
           <span
             className="font-medium"
             style={{
               maxWidth: 160,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
             }}
           >
             {value}
@@ -56,12 +65,12 @@ export function ChipPopover({ k, value, onRemove, children }: ChipPopoverProps) 
           <span
             role="button"
             onClick={(e) => {
-              e.stopPropagation()
-              onRemove()
+              e.stopPropagation();
+              onRemove();
             }}
             className="opacity-70 hover:opacity-100"
             aria-label={`Remove ${k} filter`}
-            style={{ color: 'var(--qw-crux)' }}
+            style={{ color: "var(--qw-crux)" }}
           >
             <Icon name="x" size={10} />
           </span>
@@ -70,79 +79,114 @@ export function ChipPopover({ k, value, onRemove, children }: ChipPopoverProps) 
       <PopoverContent
         align="start"
         className="w-[260px] p-0"
-        style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)' }}
+        style={{
+          background: "var(--qw-bg-elev)",
+          border: "1px solid var(--qw-border)",
+        }}
       >
         {children}
       </PopoverContent>
     </Popover>
-  )
+  );
 }
 
-export function PopoverSection({ title, children }: { title: string; children: ReactNode }) {
+export function PopoverSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
   return (
     <div>
       <div
         className="px-3 py-2 font-mono text-[10px] uppercase tracking-[0.08em]"
-        style={{ color: 'var(--qw-fg-faint)', borderBottom: '1px solid var(--qw-border)' }}
+        style={{
+          color: "var(--qw-fg-faint)",
+          borderBottom: "1px solid var(--qw-border)",
+        }}
       >
         {title}
       </div>
       <div className="py-1">{children}</div>
     </div>
-  )
+  );
 }
 
-export function CheckRow({ checked, label, onClick }: { checked: boolean; label: ReactNode; onClick: () => void }) {
+export function CheckRow({
+  checked,
+  label,
+  onClick,
+}: {
+  checked: boolean;
+  label: ReactNode;
+  onClick: () => void;
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
       className="flex w-full items-center gap-2 px-3 py-1.5 text-left transition-colors hover:opacity-90"
-      style={{ color: 'var(--qw-fg)' }}
+      style={{ color: "var(--qw-fg)" }}
     >
       <span
         className="flex size-3.5 flex-shrink-0 items-center justify-center rounded-[3px]"
         style={{
-          background: checked ? 'var(--qw-crux)' : 'transparent',
-          border: `1px solid ${checked ? 'var(--qw-crux)' : 'var(--qw-border-strong)'}`,
+          background: checked ? "var(--qw-crux)" : "transparent",
+          border: `1px solid ${checked ? "var(--qw-crux)" : "var(--qw-border-strong)"}`,
         }}
       >
         {checked && <Icon name="check" size={9} color="var(--qw-bg)" />}
       </span>
       <span className="truncate font-mono text-[11.5px]">{label}</span>
     </button>
-  )
+  );
 }
 
-export function RadioRow({ checked, label, onClick }: { checked: boolean; label: ReactNode; onClick: () => void }) {
+export function RadioRow({
+  checked,
+  label,
+  onClick,
+}: {
+  checked: boolean;
+  label: ReactNode;
+  onClick: () => void;
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
       className="flex w-full items-center gap-2 px-3 py-1.5 text-left transition-colors hover:opacity-90"
-      style={{ color: 'var(--qw-fg)' }}
+      style={{ color: "var(--qw-fg)" }}
     >
       <span
         className="flex size-3.5 flex-shrink-0 items-center justify-center rounded-full"
-        style={{ border: `1px solid ${checked ? 'var(--qw-crux)' : 'var(--qw-border-strong)'}` }}
+        style={{
+          border: `1px solid ${checked ? "var(--qw-crux)" : "var(--qw-border-strong)"}`,
+        }}
       >
-        {checked && <span className="block size-1.5 rounded-full" style={{ background: 'var(--qw-crux)' }} />}
+        {checked && (
+          <span
+            className="block size-1.5 rounded-full"
+            style={{ background: "var(--qw-crux)" }}
+          />
+        )}
       </span>
       <span className="font-mono text-[11.5px]">{label}</span>
     </button>
-  )
+  );
 }
 
 // ─── Convenience preset chips ───────────────────────────────────────
 
 interface MultiSelectChipProps {
-  k: string
-  values: readonly string[]
-  options: readonly string[]
-  onChange: (next: readonly string[]) => void
+  k: string;
+  values: readonly string[];
+  options: readonly string[];
+  onChange: (next: readonly string[]) => void;
   /** Pretty-print a single value (e.g. strip provider prefix). */
-  format?: (v: string) => string
-  emptyHint?: string
+  format?: (v: string) => string;
+  emptyHint?: string;
 }
 
 export function MultiSelectChip({
@@ -151,16 +195,22 @@ export function MultiSelectChip({
   options,
   onChange,
   format,
-  emptyHint = 'No values yet.',
+  emptyHint = "No values yet.",
 }: MultiSelectChipProps) {
-  const selected = new Set(values)
-  const display = values.length === 0 ? 'any' : values.map((v) => (format ? format(v) : v)).join(', ')
+  const selected = new Set(values);
+  const display =
+    values.length === 0
+      ? "any"
+      : values.map((v) => (format ? format(v) : v)).join(", ");
   return (
     <ChipPopover k={k} value={display} onRemove={() => onChange([])}>
       <PopoverSection title={`${k} · ${options.length}`}>
         <div className="max-h-[240px] overflow-auto">
           {options.length === 0 && (
-            <div className="px-3 py-2 font-mono text-[11px]" style={{ color: 'var(--qw-fg-faint)' }}>
+            <div
+              className="px-3 py-2 font-mono text-[11px]"
+              style={{ color: "var(--qw-fg-faint)" }}
+            >
               {emptyHint}
             </div>
           )}
@@ -170,27 +220,27 @@ export function MultiSelectChip({
               checked={selected.has(o)}
               label={format ? format(o) : o}
               onClick={() => {
-                const next = new Set(selected)
-                if (next.has(o)) next.delete(o)
-                else next.add(o)
-                onChange(Array.from(next))
+                const next = new Set(selected);
+                if (next.has(o)) next.delete(o);
+                else next.add(o);
+                onChange(Array.from(next));
               }}
             />
           ))}
         </div>
       </PopoverSection>
     </ChipPopover>
-  )
+  );
 }
 
 interface SingleSelectChipProps<V extends string> {
-  k: string
-  value: V | undefined
-  options: ReadonlyArray<{ value: V; label: string }>
-  onChange: (next: V | undefined) => void
+  k: string;
+  value: V | undefined;
+  options: ReadonlyArray<{ value: V; label: string }>;
+  onChange: (next: V | undefined) => void;
   /** Value that means "no filter" (won't render a chip if equal). */
-  noneValue?: V
-  title?: string
+  noneValue?: V;
+  title?: string;
 }
 
 export function SingleSelectChip<V extends string>({
@@ -201,7 +251,7 @@ export function SingleSelectChip<V extends string>({
   noneValue,
   title = k,
 }: SingleSelectChipProps<V>) {
-  const display = value ?? '—'
+  const display = value ?? "—";
   return (
     <ChipPopover k={k} value={display} onRemove={() => onChange(undefined)}>
       <PopoverSection title={title}>
@@ -210,30 +260,40 @@ export function SingleSelectChip<V extends string>({
             key={o.value}
             checked={value === o.value}
             label={o.label}
-            onClick={() => onChange(o.value === noneValue ? undefined : o.value)}
+            onClick={() =>
+              onChange(o.value === noneValue ? undefined : o.value)
+            }
           />
         ))}
       </PopoverSection>
     </ChipPopover>
-  )
+  );
 }
 
 interface SearchChipProps {
-  value: string | undefined
-  onChange: (next: string | undefined) => void
-  placeholder?: string
+  value: string | undefined;
+  onChange: (next: string | undefined) => void;
+  placeholder?: string;
 }
 
-export function SearchChip({ value, onChange, placeholder = 'free text' }: SearchChipProps) {
-  const [draft, setDraft] = useState(value ?? '')
+export function SearchChip({
+  value,
+  onChange,
+  placeholder = "free text",
+}: SearchChipProps) {
+  const [draft, setDraft] = useState(value ?? "");
   return (
-    <ChipPopover k="search" value={(value ?? '').trim() || '—'} onRemove={() => onChange(undefined)}>
+    <ChipPopover
+      k="search"
+      value={(value ?? "").trim() || "—"}
+      onRemove={() => onChange(undefined)}
+    >
       <PopoverSection title="Search">
         <form
           className="flex flex-col gap-2 px-3 py-2"
           onSubmit={(e) => {
-            e.preventDefault()
-            onChange(draft.trim() || undefined)
+            e.preventDefault();
+            onChange(draft.trim() || undefined);
           }}
         >
           <input
@@ -243,10 +303,10 @@ export function SearchChip({ value, onChange, placeholder = 'free text' }: Searc
             placeholder={placeholder}
             className="rounded-[4px] px-2 py-1 font-mono text-[11.5px]"
             style={{
-              background: 'var(--qw-bg)',
-              border: '1px solid var(--qw-border)',
-              color: 'var(--qw-fg)',
-              outline: 'none',
+              background: "var(--qw-bg)",
+              border: "1px solid var(--qw-border)",
+              color: "var(--qw-fg)",
+              outline: "none",
             }}
             autoFocus
           />
@@ -254,10 +314,10 @@ export function SearchChip({ value, onChange, placeholder = 'free text' }: Searc
             <button
               type="button"
               className="font-mono text-[11px]"
-              style={{ color: 'var(--qw-fg-faint)' }}
+              style={{ color: "var(--qw-fg-faint)" }}
               onClick={() => {
-                setDraft('')
-                onChange(undefined)
+                setDraft("");
+                onChange(undefined);
               }}
             >
               Clear
@@ -265,7 +325,7 @@ export function SearchChip({ value, onChange, placeholder = 'free text' }: Searc
             <button
               type="submit"
               className="rounded-[4px] px-2 py-0.5 font-mono text-[11px]"
-              style={{ background: 'var(--qw-crux)', color: 'var(--qw-bg)' }}
+              style={{ background: "var(--qw-crux)", color: "var(--qw-bg)" }}
             >
               Apply
             </button>
@@ -273,7 +333,7 @@ export function SearchChip({ value, onChange, placeholder = 'free text' }: Searc
         </form>
       </PopoverSection>
     </ChipPopover>
-  )
+  );
 }
 
 // ─── Header filter buttons (design idiom) ───────────────────────────
@@ -284,66 +344,81 @@ export function SearchChip({ value, onChange, placeholder = 'free text' }: Searc
 // Uses the shadcn Popover (not the menu) so the search variant can host a
 // text input without menu typeahead stealing focus.
 
-type IconName = Parameters<typeof Icon>[0]['name']
+type IconName = Parameters<typeof Icon>[0]["name"];
 
 const HEADER_BTN_CLASS =
-  'inline-flex items-center gap-[6px] rounded-[6px] px-[10px] py-[6px] text-[12px] font-medium whitespace-nowrap transition-colors hover:opacity-90'
+  "inline-flex items-center gap-[6px] rounded-[6px] px-[10px] py-[6px] text-[12px] font-medium whitespace-nowrap transition-colors hover:opacity-90";
 
 function headerBtnStyle(active: boolean): React.CSSProperties {
   return {
-    background: active ? 'var(--qw-crux-soft)' : 'transparent',
-    color: active ? 'var(--qw-crux)' : 'var(--qw-fg)',
-    boxShadow: `inset 0 0 0 1px ${active ? 'var(--qw-crux-line)' : 'var(--qw-border)'}`,
-  }
+    background: active ? "var(--qw-crux-soft)" : "transparent",
+    color: active ? "var(--qw-crux)" : "var(--qw-fg)",
+    boxShadow: `inset 0 0 0 1px ${active ? "var(--qw-crux-line)" : "var(--qw-border)"}`,
+  };
 }
 
 interface FilterButtonProps<V extends string> {
-  icon?: IconName
-  value: V
-  options: ReadonlyArray<{ value: V; label: string }>
-  onChange: (next: V) => void
+  icon?: IconName;
+  value: V;
+  options: ReadonlyArray<{ value: V; label: string }>;
+  onChange: (next: V) => void;
   /** Heading shown above the option list. */
-  title?: string
+  title?: string;
   /** The value treated as "no filter" — when selected the button reads inactive. */
-  noneValue?: V
+  noneValue?: V;
 }
 
 /** Header single-select filter: ghost button + radio menu. */
 export function FilterButton<V extends string>({
-  icon = 'filter',
+  icon = "filter",
   value,
   options,
   onChange,
   title,
   noneValue,
 }: FilterButtonProps<V>) {
-  const [open, setOpen] = useState(false)
-  const cur = options.find((o) => o.value === value)
-  const active = noneValue != null && value !== noneValue
+  const [open, setOpen] = useState(false);
+  const cur = options.find((o) => o.value === value);
+  const active = noneValue != null && value !== noneValue;
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button type="button" className={HEADER_BTN_CLASS} style={headerBtnStyle(active)}>
-          <Icon name={icon} size={13} color={active ? 'var(--qw-crux)' : 'var(--qw-fg-muted)'} />
+        <button
+          type="button"
+          className={HEADER_BTN_CLASS}
+          style={headerBtnStyle(active)}
+        >
+          <Icon
+            name={icon}
+            size={13}
+            color={active ? "var(--qw-crux)" : "var(--qw-fg-muted)"}
+          />
           {cur?.label ?? value}
-          <Icon name="arrowDown" size={10} color={active ? 'var(--qw-crux)' : 'var(--qw-fg-muted)'} />
+          <Icon
+            name="arrowDown"
+            size={10}
+            color={active ? "var(--qw-crux)" : "var(--qw-fg-muted)"}
+          />
         </button>
       </PopoverTrigger>
       <PopoverContent
         align="end"
         className="w-[240px] p-0"
-        style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)' }}
+        style={{
+          background: "var(--qw-bg-elev)",
+          border: "1px solid var(--qw-border)",
+        }}
       >
         <div className="max-h-[340px] overflow-auto">
-          <PopoverSection title={title ?? 'Filter'}>
+          <PopoverSection title={title ?? "Filter"}>
             {options.map((o) => (
               <RadioRow
                 key={o.value}
                 checked={o.value === value}
                 label={o.label}
                 onClick={() => {
-                  onChange(o.value)
-                  setOpen(false)
+                  onChange(o.value);
+                  setOpen(false);
                 }}
               />
             ))}
@@ -351,46 +426,62 @@ export function FilterButton<V extends string>({
         </div>
       </PopoverContent>
     </Popover>
-  )
+  );
 }
 
 interface SearchButtonProps {
-  value: string | undefined
-  onChange: (next: string | undefined) => void
-  placeholder?: string
-  label?: string
+  value: string | undefined;
+  onChange: (next: string | undefined) => void;
+  placeholder?: string;
+  label?: string;
 }
 
 /** Header search filter: ghost button + text-input popover. */
-export function SearchButton({ value, onChange, placeholder = 'search', label = 'Search' }: SearchButtonProps) {
-  const [open, setOpen] = useState(false)
-  const [draft, setDraft] = useState(value ?? '')
-  const active = !!value?.trim()
+export function SearchButton({
+  value,
+  onChange,
+  placeholder = "search",
+  label = "Search",
+}: SearchButtonProps) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState(value ?? "");
+  const active = !!value?.trim();
   return (
     <Popover
       open={open}
       onOpenChange={(o) => {
-        setOpen(o)
-        if (o) setDraft(value ?? '')
+        setOpen(o);
+        if (o) setDraft(value ?? "");
       }}
     >
       <PopoverTrigger asChild>
-        <button type="button" className={HEADER_BTN_CLASS} style={headerBtnStyle(active)}>
-          <Icon name="search" size={13} color={active ? 'var(--qw-crux)' : 'var(--qw-fg-muted)'} />
+        <button
+          type="button"
+          className={HEADER_BTN_CLASS}
+          style={headerBtnStyle(active)}
+        >
+          <Icon
+            name="search"
+            size={13}
+            color={active ? "var(--qw-crux)" : "var(--qw-fg-muted)"}
+          />
           {active ? value : label}
         </button>
       </PopoverTrigger>
       <PopoverContent
         align="end"
         className="w-[240px] p-0"
-        style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)' }}
+        style={{
+          background: "var(--qw-bg-elev)",
+          border: "1px solid var(--qw-border)",
+        }}
       >
         <form
           className="flex flex-col gap-2 p-3"
           onSubmit={(e) => {
-            e.preventDefault()
-            onChange(draft.trim() || undefined)
-            setOpen(false)
+            e.preventDefault();
+            onChange(draft.trim() || undefined);
+            setOpen(false);
           }}
         >
           <input
@@ -399,18 +490,23 @@ export function SearchButton({ value, onChange, placeholder = 'search', label = 
             onChange={(e) => setDraft(e.target.value)}
             placeholder={placeholder}
             className="rounded-[4px] px-2 py-1 font-mono text-[11.5px]"
-            style={{ background: 'var(--qw-bg)', border: '1px solid var(--qw-border)', color: 'var(--qw-fg)', outline: 'none' }}
+            style={{
+              background: "var(--qw-bg)",
+              border: "1px solid var(--qw-border)",
+              color: "var(--qw-fg)",
+              outline: "none",
+            }}
             autoFocus
           />
           <div className="flex items-center justify-between">
             <button
               type="button"
               className="font-mono text-[11px]"
-              style={{ color: 'var(--qw-fg-faint)' }}
+              style={{ color: "var(--qw-fg-faint)" }}
               onClick={() => {
-                setDraft('')
-                onChange(undefined)
-                setOpen(false)
+                setDraft("");
+                onChange(undefined);
+                setOpen(false);
               }}
             >
               Clear
@@ -418,7 +514,7 @@ export function SearchButton({ value, onChange, placeholder = 'search', label = 
             <button
               type="submit"
               className="rounded-[4px] px-2 py-0.5 font-mono text-[11px]"
-              style={{ background: 'var(--qw-crux)', color: 'var(--qw-bg)' }}
+              style={{ background: "var(--qw-crux)", color: "var(--qw-bg)" }}
             >
               Apply
             </button>
@@ -426,7 +522,7 @@ export function SearchButton({ value, onChange, placeholder = 'search', label = 
         </form>
       </PopoverContent>
     </Popover>
-  )
+  );
 }
 
 // ─── Add-filter dropdown button ─────────────────────────────────────
@@ -436,12 +532,12 @@ export function SearchButton({ value, onChange, placeholder = 'search', label = 
 // don't churn — `QwAddFilterMenu` takes the same option shape.
 
 export type AddFilterOption<K extends string> = {
-  kind: K
-  label: string
-  enabled: boolean
-}
+  kind: K;
+  label: string;
+  enabled: boolean;
+};
 
-export { QwAddFilterMenu as AddFilterButton } from './QwMenu'
+export { QwAddFilterMenu as AddFilterButton } from "./QwMenu";
 
 // ─── Group-by toggle (cycles through options on click) ──────────────
 //
@@ -453,26 +549,26 @@ export function GroupByCycle<G extends string>({
   value,
   cycle,
   onChange,
-  noneLabel = 'off',
+  noneLabel = "off",
 }: {
-  value: G
-  cycle: readonly G[]
-  onChange: (next: G) => void
-  noneLabel?: string
+  value: G;
+  cycle: readonly G[];
+  onChange: (next: G) => void;
+  noneLabel?: string;
 }) {
   return (
     <button
       onClick={() => {
-        const idx = cycle.indexOf(value)
-        const next = cycle[(idx + 1) % cycle.length]
-        onChange(next)
+        const idx = cycle.indexOf(value);
+        const next = cycle[(idx + 1) % cycle.length];
+        onChange(next);
       }}
       className="font-mono text-[11px] hover:opacity-80"
-      style={{ color: 'var(--qw-fg-muted)' }}
+      style={{ color: "var(--qw-fg-muted)" }}
     >
       group by · {value === cycle[0] ? noneLabel : value}
     </button>
-  )
+  );
 }
 
 // ─── Group-by dropdown ──────────────────────────────────────────────
@@ -481,7 +577,7 @@ export function GroupByCycle<G extends string>({
 // importing `GroupByDropdown` from this module without knowing about
 // the wrapper. New code should prefer `QwGroupBy` directly.
 
-export { QwGroupBy as GroupByDropdown } from './QwMenu'
+export { QwGroupBy as GroupByDropdown } from "./QwMenu";
 
 // ─── Collapsible group section ──────────────────────────────────────
 //
@@ -491,18 +587,18 @@ export { QwGroupBy as GroupByDropdown } from './QwMenu'
 
 export interface CollapsibleGroupProps {
   /** Unique group key — used for the React key + default expanded persistence. */
-  groupKey: string
+  groupKey: string;
   /** Title rendered prominently on the left (e.g. the group name). */
-  title: ReactNode
+  title: ReactNode;
   /** Item count for the group; shown next to the title. */
-  count?: number
+  count?: number;
   /** Right-aligned summary chips / stat cluster. */
-  summary?: ReactNode
+  summary?: ReactNode;
   /** Initial expanded state. Defaults to true (open). */
-  defaultExpanded?: boolean
+  defaultExpanded?: boolean;
   /** Hide the collapse chrome entirely when there's only one group (e.g. group=none). */
-  ungrouped?: boolean
-  children: ReactNode
+  ungrouped?: boolean;
+  children: ReactNode;
 }
 
 export function CollapsibleGroup({
@@ -513,9 +609,9 @@ export function CollapsibleGroup({
   ungrouped = false,
   children,
 }: CollapsibleGroupProps) {
-  const [open, setOpen] = useState(defaultExpanded)
+  const [open, setOpen] = useState(defaultExpanded);
   if (ungrouped) {
-    return <>{children}</>
+    return <>{children}</>;
   }
   return (
     <div className="flex flex-col">
@@ -524,24 +620,33 @@ export function CollapsibleGroup({
         onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-2.5 px-8 py-2.5 text-left text-[11.5px] font-mono transition-colors hover:opacity-90"
         style={{
-          background: 'var(--qw-bg-muted)',
-          borderBottom: '1px solid var(--qw-border)',
-          borderTop: '1px solid var(--qw-border)',
-          color: 'var(--qw-fg-muted)',
+          background: "var(--qw-bg-muted)",
+          borderBottom: "1px solid var(--qw-border)",
+          borderTop: "1px solid var(--qw-border)",
+          color: "var(--qw-fg-muted)",
         }}
       >
-        <Icon name={open ? 'arrowDown' : 'arrowRight'} size={11} color="var(--qw-crux)" />
-        <span className="font-semibold" style={{ color: 'var(--qw-fg)' }}>
+        <Icon
+          name={open ? "arrowDown" : "arrowRight"}
+          size={11}
+          color="var(--qw-crux)"
+        />
+        <span className="font-semibold" style={{ color: "var(--qw-fg)" }}>
           {title}
         </span>
-        {count != null && <span style={{ color: 'var(--qw-fg-faint)' }}>· {count}</span>}
+        {count != null && (
+          <span style={{ color: "var(--qw-fg-faint)" }}>· {count}</span>
+        )}
         {summary && (
-          <span className="ml-auto flex items-center gap-2" style={{ color: 'var(--qw-fg-muted)' }}>
+          <span
+            className="ml-auto flex items-center gap-2"
+            style={{ color: "var(--qw-fg-muted)" }}
+          >
             {summary}
           </span>
         )}
       </button>
       {open && children}
     </div>
-  )
+  );
 }

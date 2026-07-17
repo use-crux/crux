@@ -1,5 +1,6 @@
 import { attachEvalTaskDescriptorForInternalUse } from "../../../../src/eval/internal/task";
 import { z } from "zod";
+import { createCruxRunId } from "../../../../src/observability";
 
 export const inputSchema = z.object({ question: z.string() });
 
@@ -20,6 +21,7 @@ export const task = attachEvalTaskDescriptorForInternalUse(
     execute: async (input) => ({ output: (input as { question: string }).question }),
     projectOutput: (result) => result.output,
     projectResponse: (result) => ({
+      runId: createCruxRunId(),
       content: [],
       text: result.output,
       object: result.output,

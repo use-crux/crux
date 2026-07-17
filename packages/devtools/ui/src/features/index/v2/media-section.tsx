@@ -148,7 +148,9 @@ export function MediaCatalogSection({
         <dl style={{ margin: 0, display: "grid", gap: 4, fontSize: 12 }}>
           {view.namespace ? (
             <div>
-              <dt style={{ color: T.fgFaint, display: "inline" }}>namespace </dt>
+              <dt style={{ color: T.fgFaint, display: "inline" }}>
+                namespace{" "}
+              </dt>
               <dd style={{ display: "inline", margin: 0 }}>{view.namespace}</dd>
             </div>
           ) : null}

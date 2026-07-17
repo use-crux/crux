@@ -15,6 +15,9 @@ describe("@use-crux/core/eval", () => {
       types: "./src/eval/index.ts",
       import: "./src/eval/index.ts",
     });
+    expect(manifest.exports).not.toHaveProperty("./quality");
+    expect(manifest.exports).not.toHaveProperty("./quality/schemas");
+    expect(manifest.exports).not.toHaveProperty("./quality/internal/runner");
 
     const surface = await import("@use-crux/core/eval");
     expect(Object.keys(surface).sort()).toEqual(["caseFile", "evaluate"]);

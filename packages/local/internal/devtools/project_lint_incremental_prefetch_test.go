@@ -38,7 +38,7 @@ func TestReindexProjectIncrementalInlinePrefetchesLintFactsWhileSemanticRuns(t *
 	case <-time.After(time.Second):
 		t.Fatal("ReindexProjectIncremental did not finish")
 	}
-	if !indexer.sawSemanticQuality {
+	if !indexer.sawSemanticRuns {
 		t.Fatal("incremental lint request did not include semantic quality data")
 	}
 	if !indexer.sawPrefetchedRuleFacts {
@@ -56,7 +56,7 @@ type incrementalConcurrentLintProjectIndexer struct {
 	semanticStarted        chan struct{}
 	releaseSemantic        chan struct{}
 	prefetchStarted        chan struct{}
-	sawSemanticQuality     bool
+	sawSemanticRuns        bool
 	sawPrefetchedRuleFacts bool
 	sawPrefetchStaticIndex bool
 	sawLintStaticIndex     bool
@@ -158,8 +158,8 @@ func (i *incrementalConcurrentLintProjectIndexer) IndexProjectSemanticPatch(ctx 
 				Fidelity: "resolved",
 				Status:   "active",
 				Quality: &store.IndexQuality{
-					ExperimentIDs:   []string{"experiment:writer"},
-					ExperimentCount: 1,
+					RunIDs:   []string{"experiment:writer"},
+					RunCount: 1,
 				},
 			}},
 		},
@@ -177,7 +177,7 @@ func (i *incrementalConcurrentLintProjectIndexer) PrefetchProjectLintFacts(_ con
 func (i *incrementalConcurrentLintProjectIndexer) IndexProjectLintPatch(_ context.Context, req projectindex.ProjectLintIndexRequest) (projectindex.IndexPatch, error) {
 	for _, definition := range req.PreviousIndex.Definitions {
 		if definition.ID == "prompt:writer" && definition.Quality != nil {
-			i.sawSemanticQuality = true
+			i.sawSemanticRuns = true
 		}
 	}
 	i.sawPrefetchedRuleFacts = req.Prefetch != nil && len(req.Prefetch.RuleFacts) == 1

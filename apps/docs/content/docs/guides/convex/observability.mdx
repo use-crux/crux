@@ -29,7 +29,7 @@ config({
     serverUrl: process.env.DEVTOOLS_URL,
     token: process.env.CRUX_DEVTOOLS_TOKEN,
   },
-})
+});
 ```
 
 ## Automatic Flush
@@ -41,22 +41,25 @@ The HTTP observability transport also protects Convex action lifecycles from lat
 Thrown errors use the same evidence contract as core Crux: terminal spans keep a compact error summary, failing spans emit an `exception` event, and stack/raw details attach as `error.stack` and `error.raw` artifacts. Convex action wrappers flush those records in `finally`, so tool failures, child action failures, and generation failures reach devtools before the worker can be frozen.
 
 ```ts
-import { action } from '@use-crux/convex/server'
+import { action } from "@use-crux/convex/server";
 
 export const run = action({
   args: {},
   handler: async (ctx) => {
     // Crux work here; bounded flush runs in finally.
   },
-})
+});
 ```
 
 For unusual shutdown paths, use the explicit helpers:
 
 ```ts
-import { flushObservability, withObservabilityFlush } from '@use-crux/convex/observability'
+import {
+  flushObservability,
+  withObservabilityFlush,
+} from "@use-crux/convex/observability";
 
-await flushObservability()
+await flushObservability();
 ```
 
 Convex `flow()` helpers flush after direct `.handler()` calls too. That means a flow that suspends on a point such as `plan-approval` delivers the completed step spans and the suspended flow span immediately, even when the parent chat action continues streaming final text or performing follow-up work.
@@ -68,7 +71,7 @@ AI operations with configured timeouts also record Crux operation deadlines. If 
 Use `ctx.crux.runAction()` instead of raw `ctx.runAction()` for child work:
 
 ```ts
-await ctx.crux.runAction('research', internal.research.run, { question })
+await ctx.crux.runAction("research", internal.research.run, { question });
 ```
 
 The helper captures the current Crux context and sends it through the hidden `__crux` envelope. The receiving `@use-crux/convex/server` action restores that context before running user code.
@@ -94,7 +97,7 @@ Convex Agent `generation.stream` containers are folded into details when they on
 Use explicit labels for meaningful boundaries:
 
 ```ts
-ctx.crux.runAction('rank citations', internal.citations.rank, { draftId })
+ctx.crux.runAction("rank citations", internal.citations.rank, { draftId });
 ```
 
 Avoid labels like `runAction` or generated function IDs unless they are truly the only useful name.

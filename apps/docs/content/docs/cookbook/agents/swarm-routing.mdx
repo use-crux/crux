@@ -19,16 +19,16 @@ This recipe builds a customer-service swarm: a triage agent receives every incom
 ## Full code
 
 ```ts
-import { agent } from '@use-crux/core/agent'
-import { swarm } from '@use-crux/ai'
-import { prompt } from '@use-crux/core'
-import { openai } from '@ai-sdk/openai'
-import { z } from 'zod'
+import { agent } from "@use-crux/core/agent";
+import { swarm } from "@use-crux/ai";
+import { prompt } from "@use-crux/core";
+import { openai } from "@ai-sdk/openai";
+import { z } from "zod";
 
 const triage = agent({
-  id: 'triage',
+  id: "triage",
   prompt: prompt({
-    id: 'triage',
+    id: "triage",
     input: z.object({ message: z.string() }),
     system: `You are a triage agent. Read the message, then transfer to the right specialist:
        - billing: charges, refunds, subscription, payment
@@ -37,57 +37,59 @@ const triage = agent({
        Always transfer; never answer directly.`,
     prompt: ({ input }) => input.message,
   }),
-  handoffs: ['billing', 'technical', 'sales'],
-})
+  handoffs: ["billing", "technical", "sales"],
+});
 
 const billing = agent({
-  id: 'billing',
+  id: "billing",
   prompt: prompt({
-    id: 'billing',
+    id: "billing",
     input: z.object({ message: z.string() }),
-    system: 'You handle billing inquiries. Pull up account details with lookupAccount.',
+    system:
+      "You handle billing inquiries. Pull up account details with lookupAccount.",
     prompt: ({ input }) => input.message,
   }),
   tools: { lookupAccount: lookupTool, processRefund: refundTool },
-  handoffs: ['triage'], // can hand back if misrouted
-})
+  handoffs: ["triage"], // can hand back if misrouted
+});
 
 const technical = agent({
-  id: 'technical',
+  id: "technical",
   prompt: prompt({
-    id: 'technical',
+    id: "technical",
     input: z.object({ message: z.string() }),
-    system: 'You handle technical issues. Search docs, check status, file tickets.',
+    system:
+      "You handle technical issues. Search docs, check status, file tickets.",
     prompt: ({ input }) => input.message,
   }),
   tools: { searchDocs: docsTool, checkStatus: statusTool },
-  handoffs: ['triage'],
-})
+  handoffs: ["triage"],
+});
 
 const sales = agent({
-  id: 'sales',
+  id: "sales",
   prompt: prompt({
-    id: 'sales',
+    id: "sales",
     input: z.object({ message: z.string() }),
-    system: 'You handle sales inquiries. Quote pricing, qualify leads.',
+    system: "You handle sales inquiries. Quote pricing, qualify leads.",
     prompt: ({ input }) => input.message,
   }),
   tools: { lookupPricing: pricingTool },
-  handoffs: ['triage'],
-})
+  handoffs: ["triage"],
+});
 
 const result = await swarm({
-  id: 'swarm-routing-swarm-1',
+  id: "swarm-routing-swarm-1",
   agents: { triage, billing, technical, sales },
-  startAgent: 'triage',
-  model: openai('gpt-4o'),
-  input: { message: 'I was charged twice last month' },
-  history: 'transfer-only', // each agent only sees the original input + transfer history
-})
+  startAgent: "triage",
+  model: openai("gpt-4o"),
+  input: { message: "I was charged twice last month" },
+  history: "transfer-only", // each agent only sees the original input + transfer history
+});
 
-result.finalAgent // 'billing', who answered last
-result.output // the final response
-result.transcript // full transfer history with reasoning
+result.finalAgent; // 'billing', who answered last
+result.output; // the final response
+result.transcript; // full transfer history with reasoning
 ```
 
 ## How it works

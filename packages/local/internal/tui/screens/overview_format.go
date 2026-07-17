@@ -111,11 +111,11 @@ func overviewSparkFromInts(vs []int, fallback int) []float64 {
 	return gentleSeries(float64(fallback), 14, 0.18)
 }
 
-func passRateSpark(rec api.QualityOverviewRecord) []float64 {
+func passRateSpark(rec api.InspectOverviewRecord) []float64 {
 	return passRateHistory(rec)
 }
 
-func passRateHistory(rec api.QualityOverviewRecord) []float64 {
+func passRateHistory(rec api.InspectOverviewRecord) []float64 {
 	if len(rec.PassRateHistory) > 0 {
 		return rec.PassRateHistory
 	}

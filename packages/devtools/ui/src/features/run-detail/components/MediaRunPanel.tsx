@@ -204,7 +204,10 @@ function LineageSection({
             })}
           </ul>
           {edges.length > 0 ? (
-            <ul aria-label="Lineage relationships" className="grid gap-1 text-xs">
+            <ul
+              aria-label="Lineage relationships"
+              className="grid gap-1 text-xs"
+            >
               {edges.map((edge, index) => {
                 const from = nodeById.get(edge.from);
                 const to = nodeById.get(edge.to);
@@ -262,9 +265,7 @@ function CatalogJoinStatus({
   }
 
   return (
-    <p className="text-xs text-(--qw-fg-muted)">
-      Catalog source {join.label}
-    </p>
+    <p className="text-xs text-(--qw-fg-muted)">Catalog source {join.label}</p>
   );
 }
 

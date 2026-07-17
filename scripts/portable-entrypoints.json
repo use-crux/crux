@@ -11,13 +11,11 @@
       "entrypoints": {
         ".": "portable-web",
         "./eval": "portable-web",
+        "./feedback": "portable-web",
         "./eval/node": "node-only",
         "./eval/internal/task": "portable-web",
         "./eval/internal/runner": "portable-web",
         "./eval/internal/node-runner": "node-only",
-        "./quality": "node-only",
-        "./quality/schemas": "portable-web",
-        "./quality/internal/runner": "node-only",
         "./internal/async-scope": "portable-web",
         "./internal/defer-host": "portable-web",
         "./internal/defer-lifecycle": "portable-web",
@@ -74,6 +72,7 @@
       "entrypoints": {
         ".": "portable-web",
         "./agent": "portable-web",
+        "./feedback": "portable-web",
         "./stream": "portable-web",
         "./transcription/node": "node-only"
       }

@@ -11,9 +11,18 @@ export {
   type EvalHostTransport,
 } from "./client";
 export { createEvalHostManifest } from "./manifest";
+export {
+  attachEvalHostConnectionInference,
+  getEvalHostConnectionInference,
+  type EvalHostConnectionDefaults,
+  type EvalHostConnectionInference,
+} from "./connection-inference";
 export { canonicalRuntimeResult, createRuntimeResultLocation } from "./results";
 export { EvalHostSetupError, type EvalHostSetupErrorCode } from "./setup";
-export { decodeEvalHostManifest } from "./validation/manifest";
+export {
+  decodeEvalHostManifest,
+  EvalHostManifestCompatibilityError,
+} from "./validation/manifest";
 export { decodeEvalHostJobStatus } from "./validation/status";
 export {
   EVAL_HOST_MAX_BODY_BYTES,

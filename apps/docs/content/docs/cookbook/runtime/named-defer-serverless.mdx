@@ -9,18 +9,18 @@ The host must finalize successfully before the response commits.
 ## Serverless / Lambda-style
 
 ```ts
-import { config, defer } from '@use-crux/core'
-import { durableTask, serverless } from '@use-crux/core/runtime'
-import { withNamedOnlyDefer } from '@use-crux/core/defer/serverless'
+import { config, defer } from "@use-crux/core";
+import { durableTask, serverless } from "@use-crux/core/runtime";
+import { withNamedOnlyDefer } from "@use-crux/core/defer/serverless";
 // import { postgres } from '@use-crux/postgres/runtime'
 // import { qstash } from '@use-crux/upstash/runtime' // example wake adapter
 
-const postProcess = durableTask('post-process', {
+const postProcess = durableTask("post-process", {
   run: async (input: { jobId: string }) => {
     // wakeable target body
-    return input.jobId
+    return input.jobId;
   },
-})
+});
 
 // config({
 //   runtime: serverless({ store: postgres(), wake: qstash() }),
@@ -28,11 +28,11 @@ const postProcess = durableTask('post-process', {
 
 export const handler = withNamedOnlyDefer(
   async (event: { jobId: string }) => {
-    const ref = await defer(postProcess, { jobId: event.jobId })
-    return { accepted: true, workId: ref.workId }
+    const ref = await defer(postProcess, { jobId: event.jobId });
+    return { accepted: true, workId: ref.workId };
   },
-  { host: 'lambda', durableFinalization: true },
-)
+  { host: "lambda", durableFinalization: true },
+);
 ```
 
 Inline `defer(callback)` throws `DEFER_CAPABILITY_MISSING` on named-only hosts.

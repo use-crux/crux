@@ -10,8 +10,8 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/devtools"
+	"github.com/use-crux/crux/packages/local/internal/inspect"
 	"github.com/use-crux/crux/packages/local/internal/observability"
-	"github.com/use-crux/crux/packages/local/internal/quality"
 	"github.com/use-crux/crux/packages/local/internal/readmodel/endpoints"
 	"github.com/use-crux/crux/packages/local/internal/runtimebridge"
 	"github.com/use-crux/crux/packages/local/internal/store"
@@ -32,7 +32,7 @@ type WSHub struct {
 	clients             map[*wsClient]struct{}
 	ctx                 context.Context
 	devtools            *devtools.Service
-	qualityEvents       *quality.EventBus
+	inspectEvents       *inspect.EventBus
 	observabilityEvents *observability.EventBus
 	runtimeBridge       *runtimebridge.Service
 	indexMu             sync.Mutex
@@ -42,16 +42,16 @@ type WSHub struct {
 }
 
 // NewWSHub creates a WebSocket hub for the given store.
-func NewWSHub(ctx context.Context, devtoolsSvc *devtools.Service, qualityEvents *quality.EventBus, observabilityEvents *observability.EventBus, runtimeBridge *runtimebridge.Service) *WSHub {
+func NewWSHub(ctx context.Context, devtoolsSvc *devtools.Service, inspectEvents *inspect.EventBus, observabilityEvents *observability.EventBus, runtimeBridge *runtimebridge.Service) *WSHub {
 	h := &WSHub{
 		clients:       make(map[*wsClient]struct{}),
 		ctx:           ctx,
 		devtools:      devtoolsSvc,
 		runtimeBridge: runtimeBridge,
 	}
-	if qualityEvents != nil {
-		h.qualityEvents = qualityEvents
-		go h.forwardQualityEvents(qualityEvents.Subscribe(ctx))
+	if inspectEvents != nil {
+		h.inspectEvents = inspectEvents
+		go h.forwardInspectEvents(inspectEvents.Subscribe(ctx))
 	}
 	if observabilityEvents != nil {
 		h.observabilityEvents = observabilityEvents
@@ -146,7 +146,7 @@ func (h *WSHub) ClientCount() int {
 	return len(h.clients)
 }
 
-func (h *WSHub) forwardQualityEvents(events <-chan api.QualityEvent) {
+func (h *WSHub) forwardInspectEvents(events <-chan api.InspectEvent) {
 	for event := range events {
 		h.BroadcastJSON(map[string]any{
 			"type":      "quality:event",

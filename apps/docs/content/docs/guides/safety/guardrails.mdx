@@ -9,19 +9,19 @@ surfaces. Use a guardrail when you need to block, redact, mask, hash, normalize,
 or report on content without re-calling the model.
 
 ```ts title="guardrails.ts"
-import { boundary, guardrail } from '@use-crux/core/safety'
+import { boundary, guardrail } from "@use-crux/core/safety";
 
 export const injectionGuard = guardrail({
-  id: 'prompt-injection',
+  id: "prompt-injection",
   on: boundary.input.text(),
-  run: guardrail.injection({ action: 'block' }),
-})
+  run: guardrail.injection({ action: "block" }),
+});
 
 export const piiGuard = guardrail({
-  id: 'pii',
+  id: "pii",
   on: [boundary.input.text(), boundary.output.text()],
-  run: guardrail.pii({ strategy: 'mask' }),
-})
+  run: guardrail.pii({ strategy: "mask" }),
+});
 ```
 
 Attach guardrails globally with `createSafetyPlugin()`, on prompts and contexts,
@@ -34,32 +34,32 @@ Every guardrail has a stable `id`, one boundary or a boundary array, and a
 
 ```ts
 const redactEmail = guardrail({
-  id: 'email-redactor',
+  id: "email-redactor",
   on: boundary.output.text(),
   run: async (text, ctx) => {
-    const next = text.replace(/\S+@\S+/g, '[email]')
+    const next = text.replace(/\S+@\S+/g, "[email]");
 
-    if (next === text) return { action: 'allow' }
+    if (next === text) return { action: "allow" };
 
     return {
-      action: 'rewrite',
+      action: "rewrite",
       value: next,
-      rewrite: { kind: 'redact' },
-      findings: [{ type: 'email', count: 1 }],
-    }
+      rewrite: { kind: "redact" },
+      findings: [{ type: "email", count: 1 }],
+    };
   },
-})
+});
 ```
 
 Supported result actions:
 
-| Action | Effect |
-| --- | --- |
-| `allow` | Continue with the current subject. |
-| `block` | Stop the call with `GuardrailBlockedError`. |
-| `warn` | Record a Safety decision without changing content. |
+| Action    | Effect                                                                                |
+| --------- | ------------------------------------------------------------------------------------- |
+| `allow`   | Continue with the current subject.                                                    |
+| `block`   | Stop the call with `GuardrailBlockedError`.                                           |
+| `warn`    | Record a Safety decision without changing content.                                    |
 | `rewrite` | Replace the subject. Use `rewrite.kind` for `redact`, `mask`, `hash`, or `normalize`. |
-| `hold` | Streaming only. Wait for more text before releasing the segment. |
+| `hold`    | Streaming only. Wait for more text before releasing the segment.                      |
 
 Malformed or unknown results fail closed with `SafetyResultError`, including
 when JavaScript callers escape the TypeScript result type.
@@ -70,13 +70,13 @@ First-party strategies are provider-agnostic and carry safe strategy metadata
 for observability, Devtools, and Project Index:
 
 ```ts
-guardrail.pii({ strategy: 'redact' })
-guardrail.secrets()
-guardrail.injection({ action: 'warn' })
+guardrail.pii({ strategy: "redact" });
+guardrail.secrets();
+guardrail.injection({ action: "warn" });
 guardrail.classifier({
-  classifier: async (subject) => ({ unsafe: subject.includes('risk') }),
+  classifier: async (subject) => ({ unsafe: subject.includes("risk") }),
   blockWhen: (result) => result.unsafe,
-})
+});
 ```
 
 `pii`, `secrets`, and `injection` are text strategies. They default to
@@ -87,16 +87,16 @@ classifier calls are usually too expensive or stateful for every segment.
 
 Common boundaries:
 
-| Boundary | Subject |
-| --- | --- |
-| `boundary.input.text()` | User input text before the provider call. |
-| `boundary.output.text()` | Model output text before the caller sees it. |
-| `boundary.output.object<T>()` | Parsed structured output. |
-| `boundary.output.path<T>()('a.b')` | One typed structured-output path. |
-| `boundary.tool.call()` | Tool call name, id, and input. |
-| `boundary.tool.result()` | Tool result before it returns to the model. |
-| `boundary.memory.write<T>()` | Candidate memory write. |
-| `boundary.validation.feedback()` | Corrective feedback before it is re-prompted. |
+| Boundary                           | Subject                                       |
+| ---------------------------------- | --------------------------------------------- |
+| `boundary.input.text()`            | User input text before the provider call.     |
+| `boundary.output.text()`           | Model output text before the caller sees it.  |
+| `boundary.output.object<T>()`      | Parsed structured output.                     |
+| `boundary.output.path<T>()('a.b')` | One typed structured-output path.             |
+| `boundary.tool.call()`             | Tool call name, id, and input.                |
+| `boundary.tool.result()`           | Tool result before it returns to the model.   |
+| `boundary.memory.write<T>()`       | Candidate memory write.                       |
+| `boundary.validation.feedback()`   | Corrective feedback before it is re-prompted. |
 
 Guardrails can bind to several boundaries with `on: [...]`. A duplicate
 boundary in the same guardrail is a configuration error. Duplicate policy ids
@@ -121,15 +121,15 @@ For example, this guard receives both the text and the image URL:
 
 ```ts
 const mediaSourceGuard = guardrail({
-  id: 'media-source',
+  id: "media-source",
   on: boundary.input.text(),
   run: async (subject) => {
     // subject: "Describe this image\n[image image/png https://example.com/chart.png]"
-    return subject.includes('token=')
-      ? { action: 'block', reason: 'Media URL contains a token.' }
-      : { action: 'allow' }
+    return subject.includes("token=")
+      ? { action: "block", reason: "Media URL contains a token." }
+      : { action: "allow" };
   },
-})
+});
 ```
 
 `block` and `warn` apply to the complete projection. `rewrite` applies only to
@@ -164,11 +164,11 @@ Use `mode: 'report'` when a guardrail should audit but not enforce:
 
 ```ts
 const shadowPii = guardrail({
-  id: 'pii-shadow',
-  mode: 'report',
+  id: "pii-shadow",
+  mode: "report",
   on: boundary.output.text(),
   run: guardrail.pii(),
-})
+});
 ```
 
 You can also tune policy posture per call:
@@ -178,11 +178,11 @@ await adapter.generate(prompt, {
   input,
   safety: {
     tune: {
-      'pii-shadow': { mode: 'enforce' },
-      'prompt-injection': { enabled: false },
+      "pii-shadow": { mode: "enforce" },
+      "prompt-injection": { enabled: false },
     },
   },
-})
+});
 ```
 
 Tune can change only `mode`, `stream`, and `enabled`. Unknown policy ids throw
@@ -196,23 +196,23 @@ Later guardrails see earlier rewrites.
 
 ```ts
 const pii = guardrail({
-  id: 'pii',
+  id: "pii",
   on: boundary.output.text(),
-  stream: 'sentence',
-  run: guardrail.pii({ strategy: 'mask' }),
-})
+  stream: "sentence",
+  run: guardrail.pii({ strategy: "mask" }),
+});
 ```
 
 Streaming options:
 
-| Option | Behavior |
-| --- | --- |
-| `false` | Skip the guardrail for streaming calls and audit the skip. |
-| `'final'` | Let live chunks flow and run the guardrail once at completion. |
-| `'sentence'` | Gate and check complete sentence segments. |
-| `'line'` | Gate and check complete line segments. |
-| `'chunk'` | Check each provider text chunk. |
-| `{ segment, maxHold, onHoldLimit }` | Custom segmenter and hold bounds. |
+| Option                              | Behavior                                                       |
+| ----------------------------------- | -------------------------------------------------------------- |
+| `false`                             | Skip the guardrail for streaming calls and audit the skip.     |
+| `'final'`                           | Let live chunks flow and run the guardrail once at completion. |
+| `'sentence'`                        | Gate and check complete sentence segments.                     |
+| `'line'`                            | Gate and check complete line segments.                         |
+| `'chunk'`                           | Check each provider text chunk.                                |
+| `{ segment, maxHold, onHoldLimit }` | Custom segmenter and hold bounds.                              |
 
 `hold` is valid only for non-final stream segments. If held text exceeds the
 configured `maxHold`, Crux fails closed by default with `StreamHoldLimitError`.
@@ -226,18 +226,18 @@ duration, findings, and safe capture summaries. Raw pre-safety content is not
 included by default.
 
 ```ts
-import { GuardrailBlockedError } from '@use-crux/core/safety'
+import { GuardrailBlockedError } from "@use-crux/core/safety";
 
 try {
-  await adapter.generate(prompt, { input, guardrails: [injectionGuard] })
+  await adapter.generate(prompt, { input, guardrails: [injectionGuard] });
 } catch (error) {
   if (error instanceof GuardrailBlockedError) {
-    error.decisions[0]?.policyId
-    error.decisions[0]?.captured.preview
+    error.decisions[0]?.policyId;
+    error.decisions[0]?.captured.preview;
   }
 }
 ```
 
 Use `evaluateGuardrail()` for focused unit tests and
-`ctx.expect.decisionReport.safety.toHaveOutcome(...)` in Quality suites when
+`ctx.expect.decisionReport.safety.toHaveOutcome(...)` in Eval checks when
 you want to assert on the canonical Safety decision report.

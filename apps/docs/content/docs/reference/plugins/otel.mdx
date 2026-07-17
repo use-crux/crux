@@ -1,11 +1,11 @@
 ---
-title: '@use-crux/otel'
+title: "@use-crux/otel"
 description: OpenTelemetry integration, spans for every instrumented Crux event.
 ---
 
 ```ts
-import { createCruxResourceAttributes, withTelemetry } from '@use-crux/otel'
-import { createUrlExporter, createCallbackExporter } from '@use-crux/otel'
+import { createCruxResourceAttributes, withTelemetry } from "@use-crux/otel";
+import { createUrlExporter, createCallbackExporter } from "@use-crux/otel";
 ```
 
 <Callout type="info">
@@ -19,20 +19,20 @@ Creates a `CruxPlugin` that instruments all Crux operations with OpenTelemetry s
 
 ```ts
 config({
-  plugins: [withTelemetry({ serviceName: 'my-app' })],
-})
+  plugins: [withTelemetry({ serviceName: "my-app" })],
+});
 ```
 
 **Options:**
 
-| Field | Type | Default | Description |
-| --- | --- | --- | --- |
-| `serviceName` | `string` | `'@use-crux/otel'` | Tracer name for span identification |
-| `attributes` | `Record<string, string>` | n/a | Custom attributes added to every span |
-| `exporter` | `UrlExporter \| CallbackExporter` | n/a | Export strategy. Omit for standard OTel TracerProvider path |
-| `captureMessageContent` | `boolean` | `false` | Export GenAI input/output message attributes |
-| `semconvVersion` | `'genai-dev-2026-06'` | current table | Forward compatibility knob for semconv names |
-| `baggageAttributeAllowlist` | `readonly string[]` | unset | Baggage keys copied onto resumed root spans as `crux.baggage.*` |
+| Field                       | Type                              | Default            | Description                                                     |
+| --------------------------- | --------------------------------- | ------------------ | --------------------------------------------------------------- |
+| `serviceName`               | `string`                          | `'@use-crux/otel'` | Tracer name for span identification                             |
+| `attributes`                | `Record<string, string>`          | n/a                | Custom attributes added to every span                           |
+| `exporter`                  | `UrlExporter \| CallbackExporter` | n/a                | Export strategy. Omit for standard OTel TracerProvider path     |
+| `captureMessageContent`     | `boolean`                         | `false`            | Export GenAI input/output message attributes                    |
+| `semconvVersion`            | `'genai-dev-2026-06'`             | current table      | Forward compatibility knob for semconv names                    |
+| `baggageAttributeAllowlist` | `readonly string[]`               | unset              | Baggage keys copied onto resumed root spans as `crux.baggage.*` |
 
 Payload capture is controlled by the core observability policy:
 `config({ observability: { recordInputs, recordOutputs, redactRecord } })`.
@@ -69,7 +69,7 @@ Ingest parsers emit `crux.ingest.parse` spans. These include parser name, source
 
 Retrieval emits direct `crux.retrieval.query` spans for retriever calls. Retrieval recipes emit a parent `crux.retrieval.recipe` span and one `crux.retrieval.step` span per recipe step. Step spans include recipe id, step id, step kind, input/output query counts, input/output hit counts, warning count, and status. They intentionally do not include raw query text, hit content, metadata, filters, or embeddings.
 
-Quality evaluations export `crux.eval.run` and `crux.eval.case` spans. Baseline comparison, case membership, and replay provenance are canonical graph edges for local/devtools read models; OTel export keeps those relationships as aggregate span metadata rather than raw case payloads.
+Eval runs export `crux.eval.run` and `crux.eval.case` spans. Baseline comparison, Case membership, and reuse provenance are canonical graph edges for local/devtools read models; OTel export keeps those relationships as aggregate span metadata rather than raw Case payloads.
 
 ### `UrlExporter`
 
@@ -85,7 +85,7 @@ Configuration for HTTP POST export (ephemeral runtimes).
 ```ts
 type CallbackExporter = (
   spans: ReadonlyArray<TraceSpan>,
-) => void | Promise<void>
+) => void | Promise<void>;
 ```
 
 A function that receives completed span batches. Use for custom handling (Convex actions, PostHog, etc.).
@@ -109,10 +109,10 @@ Structured span data used by the lightweight exporter path.
 
 ### Propagation helpers
 
-| Export | Purpose |
-| --- | --- |
-| `injectCruxPropagationCarrier(carrier, target)` | Write W3C `traceparent` / `tracestate` / baggage (+ optional OTel propagator fields) into a header-like carrier with `.set` |
-| `extractCruxPropagationCarrier(source, options?)` | Read a validated carrier + allowlisted baggage attributes from a header-like carrier with `.get`; never throws |
+| Export                                            | Purpose                                                                                                                     |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `injectCruxPropagationCarrier(carrier, target)`   | Write W3C `traceparent` / `tracestate` / baggage (+ optional OTel propagator fields) into a header-like carrier with `.set` |
+| `extractCruxPropagationCarrier(source, options?)` | Read a validated carrier + allowlisted baggage attributes from a header-like carrier with `.get`; never throws              |
 
 See the [telemetry guide](/docs/guides/observability/telemetry#active-span-bridge-and-w3c-propagation) for suspend/resume and queue examples.
 
@@ -122,9 +122,9 @@ Creates a `SpanExporter` that POSTs span batches to a URL. Fire-and-forget with 
 
 ```ts
 const exporter = createUrlExporter({
-  url: 'https://collector.example.com/v1/traces',
-  headers: { 'X-Api-Key': 'key' },
-})
+  url: "https://collector.example.com/v1/traces",
+  headers: { "X-Api-Key": "key" },
+});
 ```
 
 ### `createCallbackExporter(callback)`
@@ -134,9 +134,9 @@ Creates a `SpanExporter` that delivers span batches to a callback function.
 ```ts
 const exporter = createCallbackExporter((spans) => {
   for (const span of spans) {
-    console.log(`${span.name}: ${span.durationMs}ms`)
+    console.log(`${span.name}: ${span.durationMs}ms`);
   }
-})
+});
 ```
 
 ### `SpanExporter`

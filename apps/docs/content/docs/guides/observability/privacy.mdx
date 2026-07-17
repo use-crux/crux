@@ -10,18 +10,18 @@ Crux observability is built to be **safe by default**, in plain terms: nothing l
 Configure capture once; every consumer (devtools HTTP transport, `subscribeObservability()`, diagnostics channel, `@use-crux/otel`) sees the same sanitized records:
 
 ```ts
-import { config } from '@use-crux/core'
+import { config } from "@use-crux/core";
 
 export default config({
   observability: {
-    recordInputs: 'off', // 'inline' | 'reference' | 'off'
-    recordOutputs: 'reference',
+    recordInputs: "off", // 'inline' | 'reference' | 'off'
+    recordOutputs: "reference",
     redactRecord: (record) => {
       // return a replacement record, or null to drop fail-closed
-      return record
+      return record;
     },
   },
-})
+});
 ```
 
 - **`inline`**: embed bounded previews on the record
@@ -62,19 +62,19 @@ Normalized adapter failures use:
 
 ```ts
 interface CruxProviderError {
-  kind: CruxProviderErrorKind
-  code: string // bounded, namespaced machine id
-  retryable: boolean
-  message?: string // optional, redacted human text
+  kind: CruxProviderErrorKind;
+  code: string; // bounded, namespaced machine id
+  retryable: boolean;
+  message?: string; // optional, redacted human text
 }
 ```
 
-| Field | Retention rule |
-| --- | --- |
-| `kind` | Closed enum, classification only |
-| `code` | Short namespaced string (`openai.rate_limit`, `anthropic.stream_completion_failed`, `crux.timeout.generate`, …), enough to debug without raw payloads |
-| `retryable` | Boolean classification only, does not trigger retries by itself |
-| `message` | Optional; always passed through `redactProviderMessage` / `toSafeJsonValue` before storage. Empty after redaction → omitted |
+| Field       | Retention rule                                                                                                                                        |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `kind`      | Closed enum, classification only                                                                                                                      |
+| `code`      | Short namespaced string (`openai.rate_limit`, `anthropic.stream_completion_failed`, `crux.timeout.generate`, …), enough to debug without raw payloads |
+| `retryable` | Boolean classification only, does not trigger retries by itself                                                                                       |
+| `message`   | Optional; always passed through `redactProviderMessage` / `toSafeJsonValue` before storage. Empty after redaction → omitted                           |
 
 There is no `providerEvidence` bag and no raw response-body field on the public error shape. Prefer `code` + `kind` in logs; treat `message` as best-effort, already-redacted text.
 

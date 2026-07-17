@@ -1,0 +1,54 @@
+---
+title: Variants and Baselines
+description: Compare named candidate changes with Current and accept complete evidence explicitly.
+---
+
+Current is the production task with its bound defaults. A Variant contains
+only the override being evaluated.
+
+```ts
+export default evaluate({
+  task: support,
+  cases,
+  variants: {
+    cheaper: {
+      model: cheaperModel,
+      temperature: 0,
+    },
+    concise: {
+      prompt: conciseSupportPrompt,
+    },
+  },
+});
+```
+
+Variant overrides are typed from the managed task. Replacement prompts,
+models, settings, tools, schemas, and routing must preserve the base Case call
+contract. `current` and `baseline` are rejected as Variant names.
+
+All Variants run by default for comparison, while Current is blocking. Select
+a Variant to make it blocking alongside Current:
+
+```bash
+crux eval support --variant cheaper
+```
+
+## Accept a Baseline
+
+A Baseline is not source configuration and is never selected implicitly.
+Accept one complete arm from a saved Eval run:
+
+```bash
+crux eval baseline set <eval-run-id>
+crux eval baseline set <eval-run-id> --variant cheaper
+```
+
+Crux writes the pointer beside the Eval as `<name>.baseline.json`. Commit that
+small file when the team should share the accepted comparison point. It
+contains fingerprints and comparison metadata, not raw Cases, outputs,
+comments, or credentials.
+
+Filtered, incomplete, incompatible, or unresolved runs cannot become a
+Baseline. Source, Case, scorer, Gate, Variant, parameter, and schema drift can
+make an older Baseline non-comparable. Crux reports the exact compatibility
+reason rather than silently comparing different populations.

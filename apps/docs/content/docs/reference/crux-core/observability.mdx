@@ -50,10 +50,10 @@ definition handle:
 
 ```ts
 interface DefinitionRef {
-  id: string // matches store.ProjectDefinition.ID exactly
-  kind: ProjectDefinitionKind
-  role: DefinitionRefRole // e.g. resolved-prompt, invoked-agent, invoked-tool
-  source?: { file: string; line: number; column?: number } // repo-relative only
+  id: string; // matches store.ProjectDefinition.ID exactly
+  kind: ProjectDefinitionKind;
+  role: DefinitionRefRole; // e.g. resolved-prompt, invoked-agent, invoked-tool
+  source?: { file: string; line: number; column?: number }; // repo-relative only
 }
 ```
 
@@ -69,15 +69,15 @@ role is a coarser relationship label used for display and filtering.
 
 ### Plane ownership
 
-The Project Index answers *what is authored*; the observability graph answers *what ran*. Catalog
+The Project Index answers _what is authored_; the observability graph answers _what ran_. Catalog
 relates them without mixing the two planes: runtime evidence is a derived rollup over graph records,
 never part of the compiler snapshot or cache identity.
 
-| Plane | Owner | Facts |
-| --- | --- | --- |
-| Project Index | Compiler / indexer | Definition id, kind, name, source refs, static/semantic relations |
-| Observability graph | Runtime + local Go server | Runs, spans, delivery health, costs, outcomes |
-| Join | Runtime-emitted `DefinitionRef` | Canonical `id` matching `store.ProjectDefinition.ID` |
+| Plane               | Owner                           | Facts                                                             |
+| ------------------- | ------------------------------- | ----------------------------------------------------------------- |
+| Project Index       | Compiler / indexer              | Definition id, kind, name, source refs, static/semantic relations |
+| Observability graph | Runtime + local Go server       | Runs, spans, delivery health, costs, outcomes                     |
+| Join                | Runtime-emitted `DefinitionRef` | Canonical `id` matching `store.ProjectDefinition.ID`              |
 
 ### Coverage manifest and `runtimeIdentity`
 
@@ -85,29 +85,29 @@ Catalog classifies each definition's Observability section from the compiler-own
 `DEFINITION_KIND_COVERAGE` manifest plus the server rollup
 `GET /api/observability/definitions/{id}/activity`:
 
-| Treatment | Kind primary (manifest) | Behavior |
-| --- | --- | --- |
-| Direct activity | `directly-observed` | Latest status / time / delivery badge when present; **View N runs** only when the activity rollup reports `runCount > 0`. Zero activity is a real state, not a broken link. |
-| Contributor | `runtime-contributor` or structural child with a live identity path | Canonical contributor/child refs (`runtimeIdentity: definition-ref`) show *Referenced by N runs*. Parent-derived definitions show *Parent ran in N runs; this definition is not independently observed.* No count is inferred from a display name. |
-| Runtime-observed, unjoined | `runtime-observed-unjoined` | The kind's primitives appear in Runs, but records do not carry this authored definition's canonical Catalog id. Catalog names the relevant primitives and explicitly withholds per-definition counts and **View Runs**. |
-| Quality-primary | `quality-owned` (and dual-tagged cases) | Correlates through the Quality ↔ observability join; secondary direct runtime (e.g. live `scoring.judge` for `scorer`) still surfaces when present. |
-| No runtime | `static-only` / fallback, or other kinds with no runtime path | *Static/declarative: never the target or subject of a runtime primitive.* No fabricated counts, no dead View Runs link, no arbitrary owner selection. |
+| Treatment                  | Kind primary (manifest)                                             | Behavior                                                                                                                                                                                                                                           |
+| -------------------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Direct activity            | `directly-observed`                                                 | Latest status / time / delivery badge when present; **View N runs** only when the activity rollup reports `runCount > 0`. Zero activity is a real state, not a broken link.                                                                        |
+| Contributor                | `runtime-contributor` or structural child with a live identity path | Canonical contributor/child refs (`runtimeIdentity: definition-ref`) show _Referenced by N runs_. Parent-derived definitions show _Parent ran in N runs; this definition is not independently observed._ No count is inferred from a display name. |
+| Runtime-observed, unjoined | `runtime-observed-unjoined`                                         | The kind's primitives appear in Runs, but records do not carry this authored definition's canonical Catalog id. Catalog names the relevant primitives and explicitly withholds per-definition counts and **View Runs**.                            |
+| Eval-primary               | `quality-owned` (legacy internal manifest label)                    | Correlates through the Eval ↔ observability join; secondary direct runtime evidence still surfaces when present.                                                                                                                                   |
+| No runtime                 | `static-only` / fallback, or other kinds with no runtime path       | _Static/declarative: never the target or subject of a runtime primitive._ No fabricated counts, no dead View Runs link, no arbitrary owner selection.                                                                                              |
 
 The manifest also declares `runtimeIdentity` for definitions that are not top-level execution owners:
 
 - `definition-ref`: the runtime holds the exact authored identity and records it directly.
 - `parent-derived`: the index gives a structural child one exact containment parent; Catalog reports that parent's activity and says the child was not independently observed. Contributors without canonical runtime identity remain truthful zero-runtime states rather than selecting an arbitrary owner.
-- `quality`: the existing Quality correlation is authoritative.
+- `quality`: legacy internal manifest spelling for the authoritative Eval correlation.
 - `none`: no truthful definition-level identity path exists. The kind may still emit runtime spans; the manifest's primary treatment distinguishes that case from genuinely static definitions.
 
 Per-kind coverage facts:
 
 - Executed flow steps, parallel branches, and recipe steps carry canonical child refs because their parent identity and authored child key are both available at runtime.
-- Other structural children inherit evidence from an indexed parent and are labelled *not independently observed*.
+- Other structural children inherit evidence from an indexed parent and are labelled _not independently observed_.
 - Knowledge bases and tool policies have canonical contributor refs on their owner spans (`runtimeIdentity: definition-ref`).
 - Injectables and storage ports do not expose canonical runtime ids (`runtimeIdentity: none`); Catalog shows truthful zero-runtime / non-independent evidence for them.
 - Deferred work, media operations, and ingest sources emit real runtime primitives, but those records do not carry the authored definition id; Catalog labels them runtime-observed but unjoined.
-- Scorers remain Quality-primary; an authored `judge({ id })` also attaches a scorer ref to its live `scoring.judge` span.
+- Scorers remain Eval-primary; an authored `judge({ id })` also attaches a scorer ref to its live `scoring.judge` span.
 - File-loaded skills without a registry composite id do not invent a join key; registry-loaded skills do emit `DefinitionRef`.
 - Compositions (`parallel` / `pipeline` / `swarm` / `consensus`) require an authored `id` so runtime and index share `composition.<kind>:<id>`.
 
@@ -116,7 +116,7 @@ Catalog **View N runs** opens Runs with `definitionId` set
 `run_definition_activity` projection, rebuildable from raw records with no separate revision stream.
 Run Detail lists every `DefinitionRef` on the run/span. Refs whose definition was renamed or deleted
 since the run keep `role`, `kind`, id, and any sanitized `source`, and are marked **unresolved**
-(*Not found in the current Project Index: the source definition may have been renamed or deleted.*)
+(_Not found in the current Project Index: the source definition may have been renamed or deleted._)
 instead of becoming dead links. The projection stores runtime-emitted identity only; it is never
 validated against the current index at write time, and runs whose refs point at a since-deleted
 definition still appear in the filtered Runs list.
@@ -182,7 +182,7 @@ Common detail artifacts use stable kinds so `RunDetail.inspection` can route the
 the Run Detail **Explain** tab. It is a projection over evidence Crux already
 records (request composition, context contribution and prompt-budget artifacts,
 routing/fallback reports, guardrail/constraint/security/cache/compaction reports,
-retrieval/memory artifacts, Project Index source refs, and quality records), not
+retrieval/memory artifacts, Project Index source refs, and Eval records), not
 a new trace format and not model chain-of-thought. It summarizes and links into
 the existing detail views rather than duplicating their payloads.
 
@@ -193,18 +193,18 @@ is absent the existing detail tabs are unaffected. Run Insight is derived by the
 UI from per-turn reports that share the same `runId`; V1 does not define a
 separate run-level `decisionReport` projection.
 
-| Field        | Purpose                                                                                                           |
-| ------------ | ----------------------------------------------------------------------------------------------------------------- |
-| `turn`       | Turn metadata and a short, evidence-bound `readout` sentence.                                                     |
-| `saw`        | Items that reached the model (`disposition: "active"`).                                                           |
-| `considered` | Items checked but not sent (`checked` / `dropped` / `disabled` / `unknown`) with a reason.                        |
-| `freshness`  | Whether evidence was current enough (`fresh` / `refreshed` / `stale-used` / `stale-rejected` / ...).              |
-| `cache`      | Reuse/write/miss behavior, with `acceptedByFreshness` / `rejectedByFreshness` as the explicit join.               |
-| `decisions`  | Routing, fallback, guardrail, security, constraint, cache, and compaction outcomes plus deep-tab targets.         |
-| `source`     | Grouped source-definition joins ("what do I change?") with file:line and resolution fidelity.                     |
-| `coverage`   | Quality coverage scorecard with stable area `id`, display `label`, status, and optional `suggestion` / `command`. |
-| `gaps`       | Missing or inferred evidence the report could not prove.                                                          |
-| `chips`      | Optional stable scan/filter chips for Explain.                                                                    |
+| Field        | Purpose                                                                                                        |
+| ------------ | -------------------------------------------------------------------------------------------------------------- |
+| `turn`       | Turn metadata and a short, evidence-bound `readout` sentence.                                                  |
+| `saw`        | Items that reached the model (`disposition: "active"`).                                                        |
+| `considered` | Items checked but not sent (`checked` / `dropped` / `disabled` / `unknown`) with a reason.                     |
+| `freshness`  | Whether evidence was current enough (`fresh` / `refreshed` / `stale-used` / `stale-rejected` / ...).           |
+| `cache`      | Reuse/write/miss behavior, with `acceptedByFreshness` / `rejectedByFreshness` as the explicit join.            |
+| `decisions`  | Routing, fallback, guardrail, security, constraint, cache, and compaction outcomes plus deep-tab targets.      |
+| `source`     | Grouped source-definition joins ("what do I change?") with file:line and resolution fidelity.                  |
+| `coverage`   | Eval coverage scorecard with stable area `id`, display `label`, status, and optional `suggestion` / `command`. |
+| `gaps`       | Missing or inferred evidence the report could not prove.                                                       |
+| `chips`      | Optional stable scan/filter chips for Explain.                                                                 |
 
 Cache and freshness are deliberately separate concepts and types: freshness is
 correctness (was the data current enough?), cache is efficiency (what did reuse
@@ -215,7 +215,7 @@ about what it could and could not prove; `reason.source: "not-recorded"` maps to
 `routing.fallback.fired`, `context.freshness.stale_used`,
 `cache.freshness.rejected`) suitable for quality matchers, while human-facing
 text can change independently. The same codes back the
-`ctx.expect.decisionReport` Quality matchers.
+`ctx.expect.decisionReport` Eval matchers.
 
 ### TurnDecisionReport V1 compatibility
 
@@ -262,7 +262,7 @@ Prompt and safety helpers emit the same graph contract automatically:
 - Embeddings emit `embedding.call` spans with provider name, kind, dimensions, batch shape, usage, cost, governance metrics, and bounded `embedding.report` artifacts. Configured embedding caches emit nested `cache.lookup` spans with hit/miss/write counts and per-entry hit/miss events.
 - Semantic cache middleware emits `cache.lookup` spans for lookup, write, and skip decisions. Hit, miss, write, and skip events carry prompt id, scope hash, version, query hash, score, result kind, and timing metadata; hit/write decisions also attach `cache.report` artifacts.
 - Cost tracking emits `cost.record` spans with call attribution, token/cost totals, and `cost.warn` / `cost.limit` events. Token budget checks emit `prompt.budget` spans with source breakdowns and pressure levels. Compaction helpers emit `compaction.run` spans and `compaction.report` artifacts with before/after token counts, compression ratios, focus, model labels, and bounded summary previews.
-- Quality runs emit `eval.run` spans and `eval.case` children for each case/variant. LLM judges emit `scoring.judge` spans with bounded `score.report` artifacts. Citation validation emits `citation.check` spans with bounded `citation.report` artifacts; structured citations may carry output-text anchors (`start`, `end`, and `outputQuote`) so clients can place inline superscripts without reparsing the generated answer. Feedback inbox writes emit `feedback.record` spans with bounded feedback artifacts.
+- Eval runs emit `eval.run` spans and `eval.case` children for each Case and Variant. LLM judges emit `scoring.judge` spans with bounded `score.report` artifacts. Citation validation emits `citation.check` spans with bounded `citation.report` artifacts; structured citations may carry output-text anchors (`start`, `end`, and `outputQuote`) so clients can place inline superscripts without reparsing the generated answer. Durable feedback emits `feedback.record` spans linked to the canonical run.
 - Workspaces emit `workspace.operation` spans for list/read/write/edit/delete operations, with namespace hashes and bounded output artifacts. Plans and tasks emit `plan.operation` / `task.operation` spans for mutations, including task create/update/remove/discard paths. File and registry skills emit `skill.load` spans, and configured prompt-injection diagnostics emit `security.warning` spans plus `security.report` artifacts.
 - Router, split, retry, fallback, and cascade wrappers emit `routing.router`, `routing.split`, `routing.retry`, `routing.fallback`, `routing.cascade`, and child `fallback.attempt` spans. Router spans record classification and selected route/model; split spans record deterministic bucket selection without exposing the raw seed; retry spans record repeated attempts against one child model; cascade spans record attempted tiers, rejection/acceptance, budget exits, provider errors, and full ordered configured tier metadata for skipped/not-reached tiers; fallback attempt spans record model attempts, bounded error classifications, success metadata, and `fallback.attempt` edges between failed and next attempts. Each top-level routed resolution attaches one `routing.report` artifact whose preview is the caller-visible receipt `{ model, cost, firstTokenAt?, trace }`; the outer artifact kind is `routing.report`, while the receipt itself has no inner `kind` discriminator. At the JSON observability boundary, unavailable `cost` values are represented as `null` and treated as absent by consumers. Run Detail renders TTFT, bounded attempt errors, and cascade note/budget from that receipt.
 - The Safety session's constraint phase opens a grouped `constraint.check` span, records each individual check as a child span, attaches `constraint.report` artifacts, and emits `constraint.retry` spans plus `constraint.retry` edges when feedback triggers regeneration.
@@ -412,11 +412,11 @@ suspended Flow, a resumed Runtime Engine wake, a Convex action that hands off to
 Worker that answers a follow-up request. Three identities stay distinct so none of them has to be
 inferred from another:
 
-| Identity | Stability | Carried by |
-| --- | --- | --- |
-| `runId` | One user-visible logical operation. Begins once, may suspend/resume any number of times, ends once. | Every record |
-| `traceId` | Distributed causal correlation; interoperates with W3C `traceparent`. | Every record, propagation carrier |
-| `segmentId` | One contiguous execution in one process/isolate/invocation. Never survives a host boundary. | Every record, via `segmentId`/`segmentSeq` |
+| Identity    | Stability                                                                                           | Carried by                                 |
+| ----------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| `runId`     | One user-visible logical operation. Begins once, may suspend/resume any number of times, ends once. | Every record                               |
+| `traceId`   | Distributed causal correlation; interoperates with W3C `traceparent`.                               | Every record, propagation carrier          |
+| `segmentId` | One contiguous execution in one process/isolate/invocation. Never survives a host boundary.         | Every record, via `segmentId`/`segmentSeq` |
 
 `segmentSeq` is monotonic only within its `segmentId`, it is not a distributed total order and the
 backend never treats it as one. Ordering across segments is a partial order: exact edges and parent
@@ -465,13 +465,13 @@ counts and last-error state so a process that never reconnects can still report 
 Core exposes a small provider-neutral host lifecycle port (context, `defer`, `deadline`) instead of
 importing any runtime. First-party wrappers bind it per host:
 
-| Runtime | Setup | Wrapper |
-| --- | --- | --- |
-| Long-lived Node | None for normal use; graceful shutdown remains recommended. | Background batching; call `observe.flush()`/`shutdown()` on exit. |
-| Generic serverless / Lambda | Use the wrapper, or call the documented drain in a custom handler. | `withObservableInvocation()` / `withNodeObservableInvocation()` (`@use-crux/core/observability`, `.../node`). |
-| Cloudflare Workers | Pass the Worker's `ExecutionContext` once. | `withCrux()` (`@use-crux/core/observability/workers`) binds defer and drain to `ctx.waitUntil()`, no `nodejs_compat` required. |
-| Next.js | Wrap the route once. | `withCrux()` (`@use-crux/next`) binds response-finished defer and drain to the same `after()` port. |
-| Convex | Use `createCruxConvex().run()`, `action`/`internalAction`, or the agent/swarm wrappers. | Bounded drain awaited before the action returns; see `@use-crux/convex/observability`. |
+| Runtime                     | Setup                                                                                   | Wrapper                                                                                                                        |
+| --------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Long-lived Node             | None for normal use; graceful shutdown remains recommended.                             | Background batching; call `observe.flush()`/`shutdown()` on exit.                                                              |
+| Generic serverless / Lambda | Use the wrapper, or call the documented drain in a custom handler.                      | `withObservableInvocation()` / `withNodeObservableInvocation()` (`@use-crux/core/observability`, `.../node`).                  |
+| Cloudflare Workers          | Pass the Worker's `ExecutionContext` once.                                              | `withCrux()` (`@use-crux/core/observability/workers`) binds defer and drain to `ctx.waitUntil()`, no `nodejs_compat` required. |
+| Next.js                     | Wrap the route once.                                                                    | `withCrux()` (`@use-crux/next`) binds response-finished defer and drain to the same `after()` port.                            |
+| Convex                      | Use `createCruxConvex().run()`, `action`/`internalAction`, or the agent/swarm wrappers. | Bounded drain awaited before the action returns; see `@use-crux/convex/observability`.                                         |
 
 Every wrapper reports a structured `ObservabilityFlushResult` (`status`, `delivered`, `rejected`,
 `remaining`, `deadlineExceeded`) instead of a boolean. Pass `onDrain` to inspect it; the default
@@ -520,7 +520,7 @@ validated deployment identity. TypeScript and Go readers retain persisted v2
 as explicitly deployment-unspecified and reject a v2 record that attempts to
 carry the new field. On first startup against a pre-v2 local database, the Go backend transactionally
 discards pre-v2 observability rows (they carry no truthful execution-segment identity to migrate)
-and rebuilds the schema automatically. Every other SQLite table (Quality, workspace, etc.) is
+and rebuilds the schema automatically. Every other SQLite table (Eval, workspace, etc.) is
 untouched, and you never need to delete `.crux` by hand.
 
 ## Serverless and edge hosts
@@ -656,32 +656,29 @@ When disabled, input-family artifacts (`messages`, `input`, `system`, `prompt`, 
 
 The emit path also strips payload-shaped attributes, converts JSON-hostile values, and drops invalid optional metrics before fan-out, so subscribers, the diagnostics channel, plugins, and transports all consume the same sanitized JSON-safe record. A failure inside a configured `redactRecord` hook drops the record (fail-closed) instead of emitting it unredacted. The shared helper `toSafeJsonValue()` truncates long strings (default 8000 characters) and redacts sensitive object keys.
 
-### Quality coverage map
+### Eval coverage map
 
-Quality uses the same graph contract as production traces. The table below lists every Quality-owned observability kind, the core or local path that emits it, and where local tooling surfaces it.
+Eval uses the same graph contract as production traces. The table below lists every Eval-owned observability kind, the core or local path that emits it, and where local tooling surfaces it.
 
-| Kind | Type | Emitter | Visible in |
-| --- | --- | --- | --- |
-| `eval.run` | run | Quality engine umbrella run | Runs list, experiment detail, TUI activity |
-| `eval.case` | run | Quality engine cell execution | Cell evidence, trace detail |
-| `scoring.judge` | span | Judge-backed scorers | Trace detail, judge report evidence |
-| `feedback.record` | span | Quality feedback store | Activity, feedback and judge-report views |
-| `score.report` | artifact | Judge/scoring helpers | Trace detail, cell evidence |
-| `comparison.report` | artifact | Promoted comparisons and `quality diff` | Experiment detail, diff JSON, activity |
-| `baseline.promotion` | artifact | Successful Quality promotion | Activity and trace detail |
-| `eval.case_of` | edge | Quality engine | Evaluation graph and trace detail |
-| `comparison.baseline` | edge | Comparison and diff reports | Comparison graph and trace detail |
-| `comparison.candidate` | edge | Comparison and diff reports | Comparison graph and trace detail |
-| `replay.of` | edge | Cassette replay | Replay trace detail |
-| `feedback.for` | edge | Feedback store | Feedback trace detail |
+| Kind              | Type     | Emitter                     | Visible in                    |
+| ----------------- | -------- | --------------------------- | ----------------------------- |
+| `eval.run`        | run      | Eval execution umbrella     | Runs and Eval-run detail      |
+| `eval.case`       | run      | One Case × arm × trial      | Eval-run and trace detail     |
+| `scoring.judge`   | span     | Managed judge scorer        | Trace and score evidence      |
+| `feedback.record` | span     | Durable feedback submission | Production run and Review     |
+| `score.report`    | artifact | Judge/scoring helpers       | Trace and score evidence      |
+| `feedback.for`    | edge     | Durable feedback submission | Canonical production-run link |
 
-Quality edges may point at runs recorded in another local database or an older baseline file; the server preserves those external references and does not treat absent target nodes as read-model errors. Cached or replayed cells may link `eval.case_of` to a historical case run rather than a run created during the current evaluation; consumers should treat the edge as provenance, not same-run membership.
+Eval provenance can point to task evidence observed before the current Eval
+run. Consumers must preserve that historical link and must not require
+same-run membership. Baseline and reuse truth comes from the Eval run read
+model, not from reconstructing it from graph edges.
 
 The `observability` domain is explicit export configuration. `config()` with no `observability`
 block does not install telemetry, cloud upload, or raw-content capture. Use `devtools` only for local
 UI/control/tunnel/bridge behavior.
 
-The HTTP transport posts `{ records }` to `/api/observability/records`. `POST /api/observability/records` is intentionally partial-accepting: parseable batches return `202` with accepted and rejected record counts, malformed JSON returns `400`, and transient local storage failures return `503` with `Retry-After: 1`. The local read models keep broad dashboard/resource queries bounded, including latest-500 caps for full-history devtools pulls and resource activity. When a devtools transport is installed, the SDK also sends runtime prompt/context/tool snapshots through `POST /api/index/snapshot` to enrich the Project Index. Queued records are capped with oldest-record drops, and generation streams close their spans from the raw stream's completion or error signal, so stopped or failed streams do not stay visually running while later usage metadata is collected. The Go server accepts the configured bearer token only on the observability ingest route; tokenized tunnel URLs such as `https://example.ngrok.app?t=...` are still supported as `serverUrl` values for compatibility, with the token preserved on the final ingest endpoint. The server stores the raw payload for every accepted graph record, including forward-compatible unknown record types, so newer SDKs can preserve data even when an older local read model skips normalized projection. The Go backend owns validation, persistence, read-model building, filtering, search, and subscriptions. It joins Quality annotations onto the same run identity server-side and publishes one monotonic revision per affected run after each ingest transaction commits; devtools never merges a second, independently-filtered list on the client. Web devtools polls an open run's detail once per second while it is live, then once every 5 seconds for the following 60 seconds after a terminal signal (catching a late Convex/serverless flush that lands after the terminal update), before stopping; the Runs list polls once per second while any row is live and once every 5 seconds otherwise, and is revision-gated so a WebSocket push only triggers a bounded catch-up or refetch when its revision is actually new. A reconnect after a dropped WebSocket sends the last known revision and performs a bounded catch-up, or a full invalidation when that revision has aged out of the server's retained change log. Convex Agent container streams fold into details in the Go read model, while step-level streamed generation turns, tools, handoffs, and delegated flows render as chronological agent children. Promoted tool executions preserve `source.canonicalParentSpanId` and sort after their request generation by relation, even when Convex action timestamps arrive slightly out of order.
+The HTTP transport posts `{ records }` to `/api/observability/records`. `POST /api/observability/records` is intentionally partial-accepting: parseable batches return `202` with accepted and rejected record counts, malformed JSON returns `400`, and transient local storage failures return `503` with `Retry-After: 1`. The local read models keep broad dashboard/resource queries bounded, including latest-500 caps for full-history devtools pulls and resource activity. When a devtools transport is installed, the SDK also sends runtime prompt/context/tool snapshots through `POST /api/index/snapshot` to enrich the Project Index. Queued records are capped with oldest-record drops, and generation streams close their spans from the raw stream's completion or error signal, so stopped or failed streams do not stay visually running while later usage metadata is collected. The Go server accepts the configured bearer token only on the observability ingest route; tokenized tunnel URLs such as `https://example.ngrok.app?t=...` are still supported as `serverUrl` values for compatibility, with the token preserved on the final ingest endpoint. The server stores the raw payload for every accepted graph record, including forward-compatible unknown record types, so newer SDKs can preserve data even when an older local read model skips normalized projection. The Go backend owns validation, persistence, read-model building, filtering, search, and subscriptions. It joins Eval annotations onto the same run identity server-side and publishes one monotonic revision per affected run after each ingest transaction commits; devtools never merges a second, independently-filtered list on the client. Web devtools polls an open run's detail once per second while it is live, then once every 5 seconds for the following 60 seconds after a terminal signal (catching a late Convex/serverless flush that lands after the terminal update), before stopping; the Runs list polls once per second while any row is live and once every 5 seconds otherwise, and is revision-gated so a WebSocket push only triggers a bounded catch-up or refetch when its revision is actually new. A reconnect after a dropped WebSocket sends the last known revision and performs a bounded catch-up, or a full invalidation when that revision has aged out of the server's retained change log. Convex Agent container streams fold into details in the Go read model, while step-level streamed generation turns, tools, handoffs, and delegated flows render as chronological agent children. Promoted tool executions preserve `source.canonicalParentSpanId` and sort after their request generation by relation, even when Convex action timestamps arrive slightly out of order.
 
 Runs and run detail distinguish `suspended` (a non-terminal boundary was observed, not an error) and
 `incomplete` (a stale segment with no suspend/end, most often a host crash or freeze) from ordinary
@@ -698,29 +695,29 @@ DevTools uses shared plain-language explanations on Runs and Run Detail (one hel
 
 **`suspended`**
 
-- Default: *This run is durably suspended, waiting on a signal, event, or timer.*
-- With multiple segments: *This run is durably suspended, waiting on a signal, event, or timer. N execution segments have been observed so far.*
+- Default: _This run is durably suspended, waiting on a signal, event, or timer._
+- With multiple segments: _This run is durably suspended, waiting on a signal, event, or timer. N execution segments have been observed so far._
 
 **`incomplete`**
 
-- Default: *Telemetry ended without a run:end record, the run may still be executing out of view, or its process exited before reporting a terminal status.*
-- With sequence gaps: *Telemetry ended without a run:end record, and N sequence gap(s) or missing parent reference(s) were observed, the run may still be executing out of view, or its process exited before reporting a terminal status.*
+- Default: _Telemetry ended without a run:end record, the run may still be executing out of view, or its process exited before reporting a terminal status._
+- With sequence gaps: _Telemetry ended without a run:end record, and N sequence gap(s) or missing parent reference(s) were observed, the run may still be executing out of view, or its process exited before reporting a terminal status._
 
 **`conflicted`**
 
-- Trace alias conflict: *A trace alias identifies more than one logical run, so the server could not establish one immutable identity for this trace.*
-- Otherwise: *The stored terminal evidence for this run conflicts with what was previously recorded, so its identity could not be resolved.*
+- Trace alias conflict: _A trace alias identifies more than one logical run, so the server could not establish one immutable identity for this trace._
+- Otherwise: _The stored terminal evidence for this run conflicts with what was previously recorded, so its identity could not be resolved._
 
 Delivery-health badge tooltips (exact copy):
 
-- **healthy:** *The server observed a clean terminal run with causal ordering and no gaps, conflicts, or rejected delivery.*
-- **degraded:** *Some telemetry records were rejected or delivery could not complete cleanly.*
-- **unknown:** *The server has not observed enough delivery evidence to call this run healthy or degraded.*
+- **healthy:** _The server observed a clean terminal run with causal ordering and no gaps, conflicts, or rejected delivery._
+- **degraded:** _Some telemetry records were rejected or delivery could not complete cleanly._
+- **unknown:** _The server has not observed enough delivery evidence to call this run healthy or degraded._
 
 **Degraded** explanation variants:
 
-- Default: *Delivery/export health is degraded, some records were rejected during export.*
-- With partial ordering: *Delivery/export health is degraded, and the server could not establish one causal display order across segments, some records may be missing or rejected.*
+- Default: _Delivery/export health is degraded, some records were rejected during export._
+- With partial ordering: _Delivery/export health is degraded, and the server could not establish one causal display order across segments, some records may be missing or rejected._
 
 ### When is `healthy` reachable?
 
@@ -738,13 +735,13 @@ Still-running runs stay `unknown`. Incomplete or partially ordered runs stay `un
 
 Alongside status and delivery health, run rows may surface:
 
-| Field | Meaning |
-| --- | --- |
-| `segmentCount` | Physical execution segments observed for this logical run |
-| `gapCount` | Missing segment-local sequence values or unresolved parent references |
-| `orderingConfidence` | `causal` when one display order is established; `partial` otherwise |
-| `traceAliasConflict` | A trace alias maps to more than one logical run |
-| `revision` | Server-owned read-model revision for catch-up / reconnect |
+| Field                | Meaning                                                               |
+| -------------------- | --------------------------------------------------------------------- |
+| `segmentCount`       | Physical execution segments observed for this logical run             |
+| `gapCount`           | Missing segment-local sequence values or unresolved parent references |
+| `orderingConfidence` | `causal` when one display order is established; `partial` otherwise   |
+| `traceAliasConflict` | A trace alias maps to more than one logical run                       |
+| `revision`           | Server-owned read-model revision for catch-up / reconnect             |
 
 Reliability chips may also say "N segments", "N sequence gaps", "conflicting trace alias", "partial ordering", or "delivery degraded".
 
@@ -782,9 +779,9 @@ Passed to `onPrepare` after the prompt's system message and contexts are compose
 
 ```ts
 interface PrepareHookArgs {
-  promptId: string // ID of the prompt being prepared
-  systemTokens: number // total tokens in composed system message
-  droppedContexts: DroppedContext[] // contexts dropped due to token budget
+  promptId: string; // ID of the prompt being prepared
+  systemTokens: number; // total tokens in composed system message
+  droppedContexts: DroppedContext[]; // contexts dropped due to token budget
 }
 ```
 
@@ -796,9 +793,9 @@ Passed to `onGenerate` after a successful generation completes.
 
 ```ts
 interface GenerateHookArgs {
-  promptId: string // ID of the prompt that generated
-  durationMs: number // generation wall-clock time in milliseconds
-  result: unknown // the generation result (adapter-specific)
+  promptId: string; // ID of the prompt that generated
+  durationMs: number; // generation wall-clock time in milliseconds
+  result: unknown; // the generation result (adapter-specific)
 }
 ```
 
@@ -810,9 +807,9 @@ Passed to `onError` when an error occurs during preparation or generation.
 
 ```ts
 interface ErrorHookArgs {
-  promptId: string // ID of the prompt that errored
-  error: unknown // the error that occurred
-  phase: 'prepare' | 'generate' // which phase the error happened in
+  promptId: string; // ID of the prompt that errored
+  error: unknown; // the error that occurred
+  phase: "prepare" | "generate"; // which phase the error happened in
 }
 ```
 

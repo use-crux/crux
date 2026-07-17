@@ -8,12 +8,12 @@ import {
   materializeEvalForInternalUse,
 } from "../internal/runner";
 import type { DiscoveredEval } from "./discovery";
-import { EvalCaseFileError, resolveAuthoredCaseFile } from "./case-path";
 import {
-  fingerprintEvalDefinition,
-  insideProjectRoot,
-  pathExists,
-} from "./definition-identity";
+  EvalCaseFileError,
+  resolveAuthoredCaseFile,
+  resolveAutomaticCaseFile,
+} from "./case-path";
+import { fingerprintEvalDefinition } from "./definition-identity";
 import { loadCaseRows } from "./case-rows";
 
 export { loadCaseRows } from "./case-rows";
@@ -43,11 +43,11 @@ export async function hydrateEvalCases(
   options: EvalCaseHydrationOptions,
 ): Promise<HydratedEval> {
   const definition = getEvalDefinitionForInternalUse(discovered.eval);
-  const sidecarPath = insideProjectRoot(
+  const sidecar = await resolveAutomaticCaseFile(
     options.projectRoot,
     discovered.sidecarFile,
   );
-  const hasSidecar = await pathExists(sidecarPath);
+  const hasSidecar = sidecar.exists;
   const schemas = getEvalTaskSchemasForInternalUse(discovered.eval);
   if (
     (hasSidecar || definition.caseFiles.length > 0) &&
@@ -99,7 +99,7 @@ export async function hydrateEvalCases(
   if (hasSidecar) {
     merged.push(
       ...(await loadCaseRows({
-        path: sidecarPath,
+        path: sidecar.absolutePath,
         displayPath: discovered.sidecarFile,
         kind: "sidecar",
         inputSchema: schemas.inputSchema!,

@@ -1,8 +1,5 @@
 {
   "title": "Production",
-  "description": "Quality gates in CI and the full observability stack.",
-  "pages": [
-    "index",
-    "observability-stack"
-  ]
+  "description": "Eval gates in CI and the full observability stack.",
+  "pages": ["index", "observability-stack"]
 }

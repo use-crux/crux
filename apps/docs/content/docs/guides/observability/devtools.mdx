@@ -1,317 +1,118 @@
 ---
 title: Devtools
-description: "Visual tracing UI for generations, memory, compaction, evals, and quality experiments: setup, CLI, and dashboard navigation."
+description: Inspect production runs, Evals, Eval runs, Baselines, Review work, and source definitions locally.
 ---
 
-Crux's devtools give you a real-time view into every part of the pipeline: what the model saw, why it saw it, how long it took, what tools it called, and what came back. Execution observability works via fire-and-forget HTTP POST, so it's safe for ephemeral runtimes like serverless functions and adds zero overhead when disabled.
+Crux Devtools is the browser UI embedded in the native `crux` local runtime.
+It reads backend-owned services and projections; React components do not run
+Evals or reconstruct evidence.
 
-## Setup
-
-For ordinary local Quality runs, you do not need devtools config. Start the local server and run
-Quality from the same machine; the CLI auto-attaches to loopback devtools origins only.
+## Start Devtools
 
 ```bash
 crux dev
-crux quality run
+crux dev --tui
 ```
 
-Add `observability` config only when application runtime code should send live records to a known
-local server, tunnel, or bridge endpoint:
+The server listens on port 4400 by default and opens the web UI. Application
+observability can connect through normal Crux config:
 
 ```ts title="crux.config.ts"
-config({
-  observability: {
-    serverUrl: process.env.DEVTOOLS_URL,
-    token: process.env.CRUX_DEVTOOLS_TOKEN,
-  },
+import { config } from "@use-crux/core";
+
+export default config({
   devtools: {
-    bridge: true, // optional live-runtime command plane for local Node apps
-    sessionId: process.env.CRUX_DEVTOOLS_SESSION_ID,
+    serverUrl: "http://localhost:4400",
   },
 });
 ```
 
-<Callout type="idea">
-  The `devtools` key is for local UI/control/tunnel/bridge behavior. Production
-  telemetry and remote collectors stay explicit through `observability` config
-  or telemetry plugins.
-</Callout>
+Keep remote observability tokens in environment or platform secrets. Local
+loopback development does not require Eval-specific config.
 
-`devtools.sessionId` is applied as a default observability correlator. Every record emitted while the
-devtools transport is active carries that `sessionId`, and the local server can filter run lists by
-`sessionId`.
+## Runs
 
-## What gets instrumented
+Runs show the canonical observability graph: model calls, context resolution,
+retrieval, tools, safety decisions, cost, errors, and artifacts. Run detail
+links source definitions when the exact deployment manifest is available and
+labels historical or unresolved joins honestly.
 
-- Every `generate()` / `stream()` call: timing, tokens, results, finish reasons, and rich error evidence when execution throws
-- Every `.resolve()` call: system message assembly details
-- Agent model calls via `@use-crux/ai/agent`
-- Quality experiments: every evaluation cell opens an observed run with full trace links
-- Memory operations: every read/write across all memory types
-- Storage operations: record, vector, and asset operation counts, latency, errors, result counts, and safe byte metrics where available
-- Compaction events: sliding window evictions with compression stats
-- Budget checks: pressure level transitions
-- Blackboard updates: field-level change tracking
-- Retrieval pipeline stages: query planning, multi-query fanout, parent expansion, compression, diversity, decay
-- Handoff preparations: input/output size tracking
-- Judge scores: every `judge()` result with reasoning
+## Evals
 
-## CLI
-
-The `crux` CLI is a native Go binary distributed via npm. It provides both print-and-exit commands for scripting/CI and an interactive TUI dashboard.
-
-### Server & dashboard
+The Evals page lists the single default Eval export discovered from every
+`*.eval.ts` file, its source, Cases, Variants, and latest status. Discovery is
+separate from execution:
 
 ```bash
-crux dev                   # start devtools server + open web UI
-crux dev --tui             # start server + interactive terminal dashboard
-crux dev --tunnel          # with public tunnel for cloud runtimes
-crux dev --port 8080       # custom port
-crux dev --no-open         # start server without opening browser
+crux eval list
+crux eval support --plan
+crux eval support
 ```
 
-### Observability commands
+The CLI remains the V1 execution surface. Devtools does not start remote Eval
+work.
 
-All commands connect to a running `crux dev` server. Add `--json` to any command for machine-readable output.
+## Eval runs
+
+Eval runs show blocking status, completeness, selected Cases and Variants,
+reuse reasons, latency, cost, scores, checks, and authored Gates. A reused task
+can link to historical production evidence; that provenance does not imply the
+evidence was created in the current Eval run.
+
+Use the CLI for saved-run inspection and comparison:
 
 ```bash
-crux traces                # list recent traces
-crux traces <id>           # trace detail (tokens, tool calls, streaming)
-crux traces --live         # tail traces in real-time
-crux traces --prompt <id>  # filter by prompt
-
-crux stats                 # aggregate statistics + prompt usage
-crux stats --live          # continuously updating
-
-crux catalog             # list every authored definition kind
-crux catalog status      # compiler/cache/watch/manifest state
-crux catalog show <id>   # safe current definition detail
-crux catalog explain <id> # provenance and partiality
-crux index               # compatibility alias for catalog list
-crux index prompts       # list prompts only
-crux index definitions   # list all discovered definitions
-crux index diagnostics   # list index diagnostics
-crux index reindex       # force source/.crux quality reindex
-crux index <id>          # detail for a specific item
-
-crux inspect <prompt-id>   # token breakdown from most recent trace
-
-crux flows                 # runtime flow sessions
-crux quality list          # discovered evaluations
-crux quality run           # run all Quality evaluations
-crux quality show <id>     # experiment detail
-crux quality progress <id> # recent runs + score series
+crux eval show <run-id>
+crux eval diff <run-a> <run-b>
 ```
 
-### Running Quality evaluations
+## Baselines
+
+A Baseline is one complete, unfiltered Eval run arm explicitly accepted by a
+user. Devtools enables **Set as Baseline** only when the backend reports the
+run eligible. Core performs the authoritative compatibility and atomic-write
+checks.
 
 ```bash
-crux quality list                 # discover evaluations without executing
-crux quality run                  # run every discovered evaluation
-crux quality run support.refunds  # run one evaluation by id
-crux quality run --ci             # CI mode with exit codes
-crux quality show <experiment-id> --json
-crux quality cell-evidence <experiment-id> --case simple-refund --variant default --trial 0 --json
+crux eval baseline set <run-id> [--variant <name>]
 ```
 
-### Global flags
+The view explains source, Case, scorer, Gate, Variant, schema, and parameter
+compatibility per comparison rather than showing a misleading global match.
+
+## Review
+
+Production `feedback()` creates durable Review work linked to its canonical
+run. Reviewers can inspect bounded run context, resolve, dismiss, or choose
+**Add to Eval**.
+
+The editor prefills production input and call context, never model output as
+expected truth. Saving delegates to the repository writer and reports one of
+`added`, `linked`, `conflict`, or `pending-sync`; it never overwrites an
+existing Case id.
+
+## Inspect
+
+Inspect presents source-discovered prompts, contexts, tools, routing, agents,
+flows, Evals, relations, safe schemas, and diagnostics from the Project Index.
+Runtime evidence enriches this authored view without becoming source truth.
+Historical manifest joins are resolved only against the exact project and
+manifest identity.
+
+Force a source rebuild only when needed:
 
 ```bash
---port <n>     # devtools server port (default 4400)
---no-color     # disable colored output (also respects NO_COLOR env)
---json         # JSON output for scripting and LLM agents
+crux index reindex
 ```
 
-## Web dashboard
+## Local files and privacy
 
-Run `crux dev` to open the web dashboard at `http://localhost:4400`. Everything updates in real-time over WebSocket, no page refreshes needed.
+Private Eval runs and evidence live under `.crux/quality/` and should remain
+gitignored. Source-controlled project truth consists of Eval source,
+hand-authored Case files (including sibling `.cases.jsonl`), and explicit
+`.baseline.json` pointers. Review comments, corrections, raw inputs, outputs,
+tokens, and credentials do not belong in Baseline files.
 
-The run inspector reads backend-owned `RunDetail` by default. The canonical graph remains lossless, but `RunDetail` classifies spans into visible nodes or attached details so low-level routing, prompt, context, memory, cache, and cost spans attach to the visible operation they explain instead of becoming misleading root rows. Explicit semantic ownership wins through `explains` edges and `presentation.ownerSpanId`; sibling chronology is only a fallback. Completion-only lifecycle fragments are retained as inspectable details rather than anonymous top-level trace rows. Convex Agent streams render as `AGENT -> GENERATE stream response -> GENERATE step / TOOL ...` when the stream container carries useful structure, while redundant single-step stream wrappers fold into details. Flow suspensions render as visible suspension markers rather than stuck generated spans. Attached spans remain inspectable in the detail panel, and coalesced `token.chunk` notifications let the UI append live tokens without refetching the whole run on every chunk.
-
-The visible root should match the user's actual initiating work. Use `flow()` only for real Crux flows; external framework turns such as Convex Agent chat responses should open an `agent.run` root/span. For direct Convex Agent tools, use `wrapConvexTool(tool, { name })` so tool rows show names like `research`, `writer`, or `optimizeSeo` instead of provider-generated call ids while nested delegates remain correctly parented.
-
-### Timeline
-
-The main view is a live trace list showing every `generate()` and `stream()` call as it happens.
-
-- **Session grouping**: traces with the same `sessionId` appear as collapsible groups; sessions are metadata/grouping, not execution nodes
-- **Flow nesting**: `flow().run()` adds sub-groups with labeled steps within sessions
-- **Status indicators**: running (spinner), success (green), error (red)
-- **Filtering**: filter by prompt ID, model, or session using the search bar
-- **Click any trace** to open its detail view
-
-Standalone traces (outside any session) appear as individual rows. Most recent traces appear at the top.
-
-### Trace detail
-
-Click a trace in the timeline to see its full execution:
-
-- **Token breakdown**: system, prompt, completion tokens with per-context attribution
-- **Timing**: total duration; time-to-first-token (TTFT) for streaming calls
-- **Model & provider**: which model handled the call
-- **Input & output**: the resolved prompt messages and the model's response
-- **Tool calls**: each native-adapter or `@use-crux/ai` live invocation with arguments, raw result preview, model-facing `toModelOutput()` preview, duration, and output-size savings
-- **Source location**: file, line number, and function name where `generate()` was called
-- **Streaming metrics**: throughput (tokens/sec), chunk count, stream duration
-- **Errors**: compact message, error type, stack trace, and raw safe details when a call, tool, stage, step, or runtime command throws
-
-### Explain tab: the turn read-out
-
-Select a generation turn and the **Explain** tab answers, in one place, _why this
-model call behaved the way it did_. It is a read-out: it summarises the turn and
-links into the existing Context / Routing / Cache / Guardrail / Security /
-Constraint / Compaction tabs rather than duplicating them. It is backed by the
-deterministic [`TurnDecisionReport`](/docs/reference/crux-core/observability#turn-explanation-decisionreport)
-projected onto the turn, nothing here implies model chain-of-thought.
-
-Explain leads with a one-line **readout** and a row of scan chips, then a
-scannable body:
-
-- **What the model saw**: prompt, context, retrieval, memory, and tools that
-  reached the model, with token estimates.
-- **Checked but not sent**: candidates Crux evaluated but did not send, each
-  with its disposition (`checked` / `dropped` / `disabled`) and reason
-  (predicate false, budget, compaction, stale-rejected, …).
-- **Freshness & cache**: two deliberately separate columns. Freshness answers
-  _was the evidence current enough for this turn?_ (`fresh` / `refreshed` /
-  `stale-used` / `stale-rejected`); cache answers _what did reuse save?_
-  (`hit` / `miss` / `write`). They are never merged into "cache freshness".
-- **Decisions**: routing, fallback, guardrail, security, constraint, cache, and
-  compaction outcomes, each linking to its deep tab.
-- **What source do I change?**: the prompt/context/tool/route definitions that
-  shaped the turn, with file:line and a resolution status when known.
-- **How this is protected**: a coverage scorecard keyed by stable area ids,
-  with display labels and read-only suggested assertions (tests are authored in
-  code and run from the CLI).
-- **Missing evidence**: what Crux could not prove from recorded data, shown
-  factually (never as an error).
-
-Explain opens **by default** when the turn carries a warning signal: an error,
-a fired fallback, stale-used evidence, a dropped required context, or a
-guardrail/security block, and the same turns are flagged with a badge in the
-Tree, Timeline, and Graph lenses. Selecting the **run root** shows a
-failing-first **Insight** roll-up derived from the per-turn reports in that run;
-there is no separate run-level `decisionReport` projection in V1. Status
-(disposition, freshness, cache, coverage) is the only saturated colour; coverage
-gaps and missing evidence are never styled as failures.
-
-### Stats panel
-
-Aggregate metrics across all traces in the current session:
-
-- **Overview**: total traces, success/error counts, average duration, error rate
-- **Tokens & cost**: total and average token usage, cumulative cost
-- **Top prompts**: most-called prompts ranked by invocation count
-- **Cost by model**: visual bars showing spend distribution across models
-- **Latency percentiles**: P50, P90, P99 response times
-- **Streaming**: average TTFT, throughput across streaming traces
-- **Activity**: memory read/write counts, retrieval stage counts/errors, handoffs, delegates
-
-### Catalog
-
-Browse discovered prompts, contexts, tools, suites, evals, storage definitions, safe source locations, authored paths, relations, and Health diagnostics before the first run. `crux dev` rebuilds this Go-owned Catalog from source files and `.crux/quality` JSON on startup; runtime evidence enriches it without becoming authored truth. Use `definition.source.file` for file-tree grouping and `definition.path` for authored prompt/context/tool tree grouping. Memory and blackboard definitions include authored store bindings and Zod schemas when the compiler can safely resolve them, including `workingState({ schema })` blocks nested in a `memory({ blocks })` definition. Storage definitions include record stores, vector stores, asset stores, storage bundles, scoped storage, backend/factory names, capabilities, source locations, primitive usage, and warnings. `definition.metadata.runtimeJoin` is compiler guidance for joining authored definitions to Runs; execution-only `flowId` and `stepId` remain correlation fields. Click any item to inspect safe metadata and relations. Use the compatibility `crux index reindex` only when you need to force a daemon rebuild.
-
-Each Catalog definition detail includes an **Observability** section driven by the coverage manifest and a server activity rollup: direct run counts with **View N runs**, contributor “referenced by N runs” treatment, Quality-primary kinds, runtime-observed kinds whose records cannot yet join to an authored definition, or a truthful empty state. Run Detail links the other direction through runtime `DefinitionRef`s. When a run names deployment identity, the backend resolves those refs only against the exact imported `(projectId, manifestId)` and reports `resolved`, `definition-unresolved`, `manifest-unresolved`, `manifest-unspecified`, or `project-mismatch`. It never substitutes the current checkout for missing historical content; any current-Catalog comparison is returned under a separately labeled `currentCatalog` field. Full join semantics: [Catalog runtime evidence](/docs/guides/observability/catalog-runtime-evidence). Run lifecycle and delivery-health copy: [Runs and delivery health](/docs/guides/observability/runs-and-delivery).
-
-The Storage detail view is privacy-safe by default. It shows wiring, capabilities, warnings, and runtime operation summaries, but it does not display record values, vector contents, blob bodies, or signed URLs unless raw debug data is explicitly enabled by the application.
-
-While `crux dev` is running, source and config changes are picked up by the local watcher. Normal edits to known prompt, context, tool, suite, eval, and dependency-closure source files are planned incrementally, committed as AST/source patches first, and then enriched semantically in the background. Broad resolver changes such as `crux.config.*`, `package.json`, lockfiles, workspace files, unsafe deletions, unknown files, and incomplete graph evidence intentionally fall back to a full reindex. Inspect the latest watch decision at `GET /api/project/index/watch`; the response includes the run id, plan kind, fallback reason, affected counts, patch counts, queue coalescing counts, semantic status, and bounded phase timings.
-
-The Catalog remains the authored/source plane. Runtime contribution evidence is available as a separate local read model at `GET /api/project/index/observed-injection?limit=250`, which aggregates recent `context.contribution`, `prompt.budget`, and redacted `prompt.input` artifacts into observed source ids, branch labels, injected tools, budget drops, prompt ids, run refs, authored/runtime comparison evidence, and prompt input-key validation summaries. UIs can compare possible injection with observed injection without treating recent Runs as the authored contract.
-
-### Quality assets
-
-The Quality screens merge authored assets with local workbench state. Code and JSON suites named `*.suite.*` appear in the suites/datasets views as soon as the Project Index is ready, even before an experiment has been run. Committed cassette fixtures named `*.cassette.json` appear in the cassettes view alongside local `.crux/quality/cassettes` records. Local `.crux/quality` suite records take precedence for the same suite id, so annotations or UI-created cases are not overwritten by source discovery.
-
-### Memory explorer
-
-The **Memory** nav item opens a dedicated view for browsing memory activity and inspectable snapshots. Runtime memory and blackboard reads/writes come from canonical `memory.read` / `memory.write` spans, `memory.snapshot` artifacts, and semantic memory edges. The Go backend joins those records with Project Index definitions to expose store details, schemas, source links, read/write trends, and cross-store operation history when the runtime captured the relevant metadata. Span start/end attributes are merged by span id, so terminal read/write measurements do not erase resource identity fields such as `memoryId`, `memoryType`, `blockId`, or `blockKind`. When Runtime Bridge live inspection is available, the same memory detail response includes `inspection.status: "ok"`, `inspection.source: "mixed"`, and live store entries. When the bridge is unavailable, ambiguous, or fails, the response keeps the projected state and includes `inspection.status: "partial"` with a reason, message, and docs link. Missing optional fields mean "not captured yet", not zero or empty.
-
-- **Current state**: type-specific visualization: field-level view for working-state blocks, entry tables for fact/episode/procedure blocks, JSON tree for blackboard fields
-- **History**: chronological event log with inline state diffs
-
-A time-travel slider lets you scrub through historical writes to see state at any point in time.
-
-Durable inventories of existing memory stores, workspaces, or plans belong to the index/state plane. Runtime touches of those resources still appear in the observability graph. The library views read `GET /api/observability/resources/:family`, which is assembled by the Go backend from spans, artifacts, and edges. That keeps memory snapshots, workspace outputs, plan previews, and task mutations inspectable while the web UI and TUI remain dumb readers.
-
-### Quality workbench
-
-When you run `crux quality run`, experiment records appear in the Quality workbench: a run list with status, case counts, pass/fail state, duration, score summaries, and expanded evidence for failed cells. The cell drawer reads backend-owned evidence records, including assertion outcomes, normalized checks, source frames, baseline deltas, and trace hotspots when the run retained those details.
-
-### Security tab
-
-Detected injection attempts across your prompts. Pattern frequency cards (clickable filters), an attack timeline correlated to traces, input previews with matched patterns highlighted, and a vulnerability matrix showing which prompts receive which types of attacks. Security warnings emit automatically when `securityWarnings` is enabled (default in development).
-
-## Terminal dashboard (TUI)
-
-For a terminal-based alternative, use `crux dev --tui`. Split-pane: live traces on the left, aggregate stats on the right. Tunnel URL appears in the breadcrumb when a tunnel is active, and the scoped ingest token path appears as `ingest token .crux/devtools/ingest-token`.
-
-| Key       | Action                                    |
-| --------- | ----------------------------------------- |
-| `j` / `k` | Navigate up/down                          |
-| `d` / `u` | Half-page jump                            |
-| `/`       | Filter traces                             |
-| `Enter`   | Inspect selected trace                    |
-| `c`       | Browse index                              |
-| `Tab`     | Switch index tab (prompts/contexts/tools) |
-| `Esc`     | Go back                                   |
-| `q`       | Quit                                      |
-
-## How it works
-
-The architecture has two sides. The **CLI** (`crux`) is a native Go binary that owns the HTTP API, WebSocket/SSE subscriptions, SQLite persistence, read models, the TUI, and the embedded web UI; Node.js is spawned only for bounded helper workers (indexing, eval execution, source resolution). The **SDK** in your application posts canonical graph-record batches to the server, non-blocking, batched, with capped retries, so devtools never slow down or break application code. For tunneled/cloud runtimes, prefer `observability.token` or `CRUX_DEVTOOLS_TOKEN`; in serverless runtimes, call `observe.flush()` or use the `@use-crux/convex` helpers before the action returns. Ingest-endpoint semantics, delivery internals, retention limits, and the Quality trace graph are documented in the [Observability reference](/docs/reference/crux-core/observability#delivery) and the [@use-crux/local reference](/docs/reference/local).
-
-Failed spans expose an `errors` inspection section built by the Go backend, rendered above primitive-specific output, so a failed tool shows the error before args/results. Status outcomes that are not thrown errors (approval denials, guardrail blocks, constraint retries, retrieval zero hits, flow suspensions, stream finish reasons) stay in their own sections instead of being mislabeled as exceptions.
-
-The optional Runtime Bridge is the reverse command plane: with `devtools.bridge: true`, a long-lived Node runtime opens `/ws/runtime` so devtools can inspect live resources such as `memory:<id>` instead of reconstructing state from traces. Convex and serverless runtimes use framework-bound HTTP endpoints instead of long-lived sockets. For Convex, bind the bridge once from `convex/http.ts`:
-
-```ts
-import { setup } from "@use-crux/convex";
-import crux from "../crux.config";
-import { components } from "./_generated/api";
-
-setup(http, crux, {
-  component: components.crux,
-});
-```
-
-During `crux dev`, the Go server auto-discovers that HTTP peer from your Convex environment variables. Bridge discovery details and the resource-inspection APIs live in the [Devtools plugin reference](/docs/reference/crux-core/devtools#runtime-bridge-types).
-
-### Requirements
-
-- **`@use-crux/local`**: npm package that ships the `crux` local runtime wrapper
-
-## Where to next
-
-<Cards>
-  <Card
-    title="Cloud & tunnel setup"
-    description="Connect cloud backends like Convex via public tunnels."
-    href="/docs/guides/observability/devtools-cloud"
-  />
-  <Card
-    title="Telemetry"
-    description="OpenTelemetry spans for production observability."
-    href="/docs/guides/observability/telemetry"
-  />
-  <Card
-    title="Catalog runtime evidence"
-    description="DefinitionRef join from Catalog to Runs."
-    href="/docs/guides/observability/catalog-runtime-evidence"
-  />
-  <Card
-    title="Runs and delivery health"
-    description="Status vocabulary and delivery tri-state."
-    href="/docs/guides/observability/runs-and-delivery"
-  />
-  <Card
-    title="Plugins"
-    description="Build a custom CruxPlugin with subscribeObservability()."
-    href="/docs/guides/observability/plugins"
-  />
-  <Card
-    title="API Reference"
-    description="withDevtools, observability records, and backend read models."
-    href="/docs/reference/crux-core/devtools"
-  />
-</Cards>
+The local service uses SQLite WAL, busy timeouts, and bounded read models for
+concurrent observability and Review traffic. The browser consumes those
+services over the local HTTP/event API.

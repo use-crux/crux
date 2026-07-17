@@ -1,0 +1,983 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="The agreed product model for Crux evals, baselines, reuse, recordings, and production feedback.">
+  <title>Crux Evals — the simple product model</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #17211d;
+      --muted: #65706a;
+      --paper: #f6f4ed;
+      --surface: #fffefa;
+      --surface-2: #edebe3;
+      --line: #d9d7ce;
+      --green: #176b4d;
+      --green-soft: #dff1e8;
+      --blue: #245aa5;
+      --blue-soft: #e4edfa;
+      --amber: #925d0b;
+      --amber-soft: #faedcd;
+      --red: #9d352f;
+      --red-soft: #f8e2df;
+      --violet: #6750a4;
+      --violet-soft: #eee8fb;
+      --shadow: 0 18px 50px rgba(27, 37, 32, .08);
+      --radius: 18px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      --sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at 10% 0%, rgba(23, 107, 77, .08), transparent 30rem),
+        radial-gradient(circle at 90% 10%, rgba(36, 90, 165, .07), transparent 28rem),
+        var(--paper);
+      color: var(--ink);
+      font-family: var(--sans);
+      font-size: 16px;
+      line-height: 1.6;
+    }
+
+    a { color: inherit; }
+    button, summary { font: inherit; }
+    code, pre { font-family: var(--mono); }
+    .skip-link {
+      position: fixed;
+      left: 16px;
+      top: -60px;
+      z-index: 100;
+      background: var(--ink);
+      color: white;
+      padding: 10px 14px;
+      border-radius: 10px;
+    }
+    .skip-link:focus { top: 16px; }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      border-bottom: 1px solid rgba(217, 215, 206, .85);
+      background: rgba(246, 244, 237, .9);
+      backdrop-filter: blur(18px);
+    }
+    .topbar-inner {
+      width: min(1180px, calc(100% - 32px));
+      min-height: 62px;
+      margin: auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+    }
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-decoration: none;
+    }
+    .brand-mark {
+      width: 24px;
+      height: 24px;
+      color: var(--green);
+    }
+    .topnav { display: flex; gap: 6px; }
+    .topnav a {
+      padding: 8px 10px;
+      border-radius: 9px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 650;
+      text-decoration: none;
+    }
+    .topnav a:hover, .topnav a:focus-visible { background: var(--surface-2); color: var(--ink); }
+
+    main { width: min(1180px, calc(100% - 32px)); margin: auto; }
+    .hero {
+      min-height: 620px;
+      padding: 92px 0 68px;
+      display: grid;
+      grid-template-columns: minmax(0, 1.03fr) minmax(420px, .97fr);
+      align-items: center;
+      gap: clamp(40px, 7vw, 92px);
+    }
+    .eyebrow, .kicker {
+      color: var(--green);
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+    h1 {
+      max-width: 740px;
+      margin: 16px 0 22px;
+      font-size: clamp(48px, 7vw, 88px);
+      line-height: .98;
+      letter-spacing: -.065em;
+    }
+    .lead {
+      max-width: 650px;
+      margin: 0;
+      color: #3f4a44;
+      font-size: clamp(19px, 2vw, 24px);
+      line-height: 1.45;
+    }
+    .hero-rule {
+      margin-top: 30px;
+      padding-left: 18px;
+      border-left: 3px solid var(--green);
+      color: var(--ink);
+      font-weight: 700;
+    }
+
+    .hero-map {
+      position: relative;
+      padding: 28px;
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      background: rgba(255, 254, 250, .92);
+      box-shadow: var(--shadow);
+    }
+    .hero-map::before {
+      content: "the whole system";
+      position: absolute;
+      top: -12px;
+      right: 24px;
+      padding: 4px 10px;
+      border: 1px solid var(--line);
+      border-radius: 99px;
+      background: var(--paper);
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 11px;
+      text-transform: uppercase;
+    }
+    .map-row { display: flex; align-items: stretch; gap: 9px; }
+    .map-box {
+      flex: 1;
+      min-width: 0;
+      padding: 16px 12px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--surface);
+      text-align: center;
+    }
+    .map-box strong { display: block; font-size: 14px; }
+    .map-box span { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; }
+    .map-box.active { border-color: rgba(23, 107, 77, .45); background: var(--green-soft); }
+    .map-arrow { align-self: center; color: var(--muted); font-family: var(--mono); }
+    .map-connector {
+      width: 1px;
+      height: 27px;
+      margin: 0 auto;
+      background: var(--line);
+    }
+    .map-label {
+      display: block;
+      width: fit-content;
+      margin: 0 auto 8px;
+      padding: 3px 8px;
+      border-radius: 99px;
+      background: var(--surface-2);
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 10px;
+      text-transform: uppercase;
+    }
+    .map-optional { margin-top: 24px; padding-top: 22px; border-top: 1px dashed var(--line); }
+    .map-optional .map-box:first-child { background: var(--violet-soft); border-color: rgba(103, 80, 164, .3); }
+    .map-optional .map-box:last-child { background: var(--amber-soft); border-color: rgba(146, 93, 11, .3); }
+
+    section { padding: 82px 0; scroll-margin-top: 68px; }
+    .section-head {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(280px, 440px);
+      gap: 40px;
+      align-items: end;
+      margin-bottom: 34px;
+    }
+    h2 {
+      max-width: 800px;
+      margin: 10px 0 0;
+      font-size: clamp(34px, 4.6vw, 58px);
+      line-height: 1.04;
+      letter-spacing: -.045em;
+    }
+    .section-head p { margin: 0; color: var(--muted); font-size: 18px; }
+    h3 { margin: 0 0 8px; font-size: 19px; letter-spacing: -.015em; }
+    p { margin-top: 0; }
+
+    .card-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+    .concept-card {
+      min-height: 225px;
+      padding: 22px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+    }
+    .concept-card .number {
+      display: inline-grid;
+      width: 29px;
+      height: 29px;
+      place-items: center;
+      margin-bottom: 34px;
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+    .concept-card p { color: var(--muted); font-size: 14px; line-height: 1.5; }
+    .concept-card code { color: var(--green); font-size: 12px; }
+
+    .optional-strip {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .optional-card {
+      padding: 20px 22px;
+      border: 1px dashed var(--line);
+      border-radius: var(--radius);
+      background: rgba(255, 254, 250, .6);
+    }
+    .optional-card p { margin: 0; color: var(--muted); font-size: 14px; }
+    .optional-card strong { color: var(--ink); }
+
+    .formula {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr auto 1fr auto 1fr;
+      gap: 12px;
+      align-items: center;
+      padding: 28px;
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: var(--ink);
+      color: white;
+      box-shadow: var(--shadow);
+    }
+    .formula-item { padding: 18px; text-align: center; }
+    .formula-item strong { display: block; font-size: 17px; }
+    .formula-item span { color: #aeb9b3; font-size: 12px; }
+    .formula-op { color: #94a199; font-family: var(--mono); font-size: 24px; }
+
+    .journey {
+      display: grid;
+      grid-template-columns: .9fr 1.1fr;
+      gap: 18px;
+      align-items: start;
+    }
+    .steps { display: grid; gap: 10px; }
+    .step {
+      display: grid;
+      grid-template-columns: 38px 1fr;
+      gap: 14px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--surface);
+    }
+    .step-index {
+      display: grid;
+      width: 34px;
+      height: 34px;
+      place-items: center;
+      border-radius: 10px;
+      background: var(--green-soft);
+      color: var(--green);
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .step p { margin: 2px 0 0; color: var(--muted); font-size: 14px; }
+
+    .code-window {
+      overflow: hidden;
+      border: 1px solid #35413b;
+      border-radius: 18px;
+      background: #17211d;
+      color: #e9f0ec;
+      box-shadow: var(--shadow);
+    }
+    .code-title {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 12px 18px;
+      border-bottom: 1px solid #35413b;
+      color: #aab7b0;
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+    pre {
+      overflow: auto;
+      margin: 0;
+      padding: 22px;
+      font-size: 13px;
+      line-height: 1.72;
+      tab-size: 2;
+    }
+    .c-key { color: #9ed5ff; }
+    .c-fn { color: #c7b4ff; }
+    .c-str { color: #f1cd87; }
+    .c-comment { color: #839188; }
+
+    .compare-lane {
+      display: grid;
+      grid-template-columns: 1fr 52px 1fr 52px 1fr;
+      align-items: stretch;
+      gap: 8px;
+    }
+    .compare-node {
+      min-height: 170px;
+      padding: 22px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+    }
+    .compare-node small { color: var(--muted); font-family: var(--mono); }
+    .compare-node p { margin: 16px 0 0; color: var(--muted); font-size: 14px; }
+    .compare-node.baseline { background: var(--blue-soft); border-color: rgba(36, 90, 165, .3); }
+    .compare-node.current { background: var(--green-soft); border-color: rgba(23, 107, 77, .35); }
+    .compare-node.variant { background: var(--violet-soft); border-color: rgba(103, 80, 164, .3); }
+    .compare-arrow { display: grid; place-items: center; color: var(--muted); font-family: var(--mono); font-size: 20px; }
+    .baseline-note {
+      margin-top: 14px;
+      padding: 16px 18px;
+      border-left: 3px solid var(--blue);
+      background: rgba(228, 237, 250, .55);
+      color: #30455e;
+      font-size: 14px;
+    }
+
+    .change-lab {
+      display: grid;
+      grid-template-columns: 300px 1fr;
+      gap: 16px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+    .scenario-list { display: grid; align-content: start; gap: 6px; }
+    .scenario-button {
+      min-height: 46px;
+      padding: 10px 13px;
+      border: 1px solid transparent;
+      border-radius: 11px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      text-align: left;
+      transition: background 180ms ease, border-color 180ms ease, color 180ms ease;
+    }
+    .scenario-button:hover { background: var(--surface-2); color: var(--ink); }
+    .scenario-button[aria-pressed="true"] {
+      border-color: rgba(23, 107, 77, .25);
+      background: var(--green-soft);
+      color: var(--green);
+      font-weight: 700;
+    }
+    .scenario-output {
+      min-height: 340px;
+      padding: 26px;
+      border-radius: 16px;
+      background: #f5f7f4;
+    }
+    .scenario-output h3 { font-size: 24px; }
+    .scenario-summary { max-width: 660px; color: var(--muted); }
+    .work-pipeline { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 26px 0 20px; }
+    .work-stage {
+      min-height: 105px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: white;
+    }
+    .work-stage strong { display: block; font-size: 13px; }
+    .work-stage span { color: var(--muted); font-size: 11px; }
+    .work-stage.run { border-color: rgba(23, 107, 77, .45); background: var(--green-soft); }
+    .work-stage.reuse { border-color: rgba(36, 90, 165, .3); background: var(--blue-soft); }
+    .work-stage.skip { opacity: .48; }
+    .legend { display: flex; flex-wrap: wrap; gap: 14px; color: var(--muted); font-size: 12px; }
+    .legend i { display: inline-block; width: 9px; height: 9px; margin-right: 5px; border-radius: 50%; }
+    .legend .run-dot { background: var(--green); }
+    .legend .reuse-dot { background: var(--blue); }
+    .legend .skip-dot { background: #9ea7a2; }
+
+    .checks-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .check-card {
+      padding: 24px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+    }
+    .check-card p { min-height: 74px; color: var(--muted); font-size: 14px; }
+    .check-card code { display: block; padding: 12px; border-radius: 10px; background: var(--surface-2); font-size: 12px; }
+
+    .branch-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .branch-card {
+      padding: 26px;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: var(--surface);
+    }
+    .branch-card ol { margin: 20px 0 0; padding-left: 22px; }
+    .branch-card li { margin: 10px 0; color: var(--muted); }
+    .branch-card.recording { border-top: 4px solid var(--violet); }
+    .branch-card.review { border-top: 4px solid var(--amber); }
+    .not-needed {
+      display: inline-block;
+      margin-bottom: 16px;
+      padding: 4px 9px;
+      border-radius: 99px;
+      background: var(--surface-2);
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .runtime-visual {
+      padding: 28px;
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: var(--surface);
+    }
+    .runtime-top {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 16px;
+      align-items: center;
+    }
+    .runtime-box { padding: 22px; border: 1px solid var(--line); border-radius: 15px; }
+    .runtime-box p { margin: 7px 0 0; color: var(--muted); font-size: 14px; }
+    .runtime-box.coordinator { background: var(--blue-soft); }
+    .runtime-box.host { background: var(--green-soft); }
+    .runtime-arrow { color: var(--muted); font-family: var(--mono); }
+    .runtime-rule {
+      margin-top: 20px;
+      padding: 16px;
+      border-radius: 12px;
+      background: var(--ink);
+      color: white;
+      text-align: center;
+      font-weight: 700;
+    }
+
+    .dx-grid { display: grid; grid-template-columns: 1.05fr .95fr; gap: 16px; }
+    .command-list { display: grid; gap: 8px; }
+    .command {
+      display: grid;
+      grid-template-columns: minmax(240px, .8fr) 1.2fr;
+      gap: 20px;
+      padding: 13px 16px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--surface);
+    }
+    .command code { color: var(--green); font-size: 12px; }
+    .command span { color: var(--muted); font-size: 13px; }
+    .devtools-shell {
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+    .devtools-nav { display: flex; gap: 4px; padding: 11px; border-bottom: 1px solid var(--line); background: var(--surface-2); }
+    .devtools-nav span { padding: 7px 9px; border-radius: 8px; color: var(--muted); font-size: 11px; }
+    .devtools-nav span:first-child { background: white; color: var(--ink); font-weight: 700; }
+    .devtools-body { padding: 20px; }
+    .eval-row { display: grid; grid-template-columns: 1fr auto; gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+    .eval-row:last-child { border: 0; }
+    .eval-row small { display: block; color: var(--muted); }
+    .status { align-self: center; padding: 4px 8px; border-radius: 99px; background: var(--green-soft); color: var(--green); font-size: 10px; font-weight: 800; }
+
+    .truth-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .truth-card { padding: 28px; border-radius: 22px; }
+    .truth-card.now { border: 1px solid rgba(157, 53, 47, .25); background: var(--red-soft); }
+    .truth-card.target { border: 1px solid rgba(23, 107, 77, .3); background: var(--green-soft); }
+    .truth-card ul { margin: 18px 0 0; padding-left: 20px; }
+    .truth-card li { margin: 9px 0; }
+    .verdict {
+      margin-top: 16px;
+      padding: 24px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--ink);
+      color: white;
+    }
+    .verdict strong { color: #a9e2c6; }
+
+    details {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--surface);
+    }
+    details + details { margin-top: 9px; }
+    summary {
+      min-height: 52px;
+      padding: 14px 18px;
+      cursor: pointer;
+      font-weight: 700;
+    }
+    .detail-body { padding: 0 18px 18px; color: var(--muted); }
+    .detail-body ul { margin-bottom: 0; }
+
+    .scope-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .scope-card { padding: 25px; border: 1px solid var(--line); border-radius: 20px; background: var(--surface); }
+    .scope-card ul { margin: 16px 0 0; padding-left: 20px; }
+    .scope-card li { margin: 9px 0; color: var(--muted); }
+    .scope-card.later { background: rgba(255, 254, 250, .55); border-style: dashed; }
+
+    .final-rule {
+      padding: 60px 0 100px;
+      text-align: center;
+    }
+    .final-rule blockquote {
+      max-width: 880px;
+      margin: 0 auto;
+      font-size: clamp(30px, 4vw, 52px);
+      font-weight: 750;
+      line-height: 1.14;
+      letter-spacing: -.04em;
+    }
+    .final-rule p { margin-top: 20px; color: var(--muted); }
+    footer {
+      padding: 24px 0 50px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+
+    :focus-visible { outline: 3px solid rgba(36, 90, 165, .45); outline-offset: 3px; }
+
+    @media (max-width: 1020px) {
+      .hero { grid-template-columns: 1fr; min-height: auto; }
+      .hero-map { max-width: 700px; }
+      .card-grid { grid-template-columns: repeat(2, 1fr); }
+      .card-grid .concept-card:last-child { grid-column: 1 / -1; min-height: auto; }
+      .journey, .dx-grid { grid-template-columns: 1fr; }
+      .section-head { grid-template-columns: 1fr; gap: 14px; }
+      .change-lab { grid-template-columns: 240px 1fr; }
+    }
+    @media (max-width: 760px) {
+      .topnav { display: none; }
+      .hero { padding-top: 64px; }
+      .hero-map { padding: 20px; }
+      .map-row, .compare-lane, .formula { grid-template-columns: 1fr; display: grid; }
+      .map-arrow, .compare-arrow, .formula-op { transform: rotate(90deg); min-height: 30px; }
+      .card-grid, .optional-strip, .checks-grid, .branch-grid, .truth-grid, .scope-grid { grid-template-columns: 1fr; }
+      .card-grid .concept-card:last-child { grid-column: auto; }
+      .change-lab { grid-template-columns: 1fr; }
+      .scenario-list { grid-template-columns: 1fr 1fr; }
+      .work-pipeline { grid-template-columns: 1fr 1fr; }
+      .runtime-top { grid-template-columns: 1fr; }
+      .runtime-arrow { transform: rotate(90deg); text-align: center; }
+      .command { grid-template-columns: 1fr; gap: 3px; }
+    }
+    @media (max-width: 480px) {
+      main, .topbar-inner { width: min(100% - 22px, 1180px); }
+      h1 { font-size: 48px; }
+      section { padding: 64px 0; }
+      .scenario-list, .work-pipeline { grid-template-columns: 1fr; }
+      .scenario-output { padding: 19px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="#top" aria-label="Crux eval product model">
+        <svg class="brand-mark" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2 3 7v10l9 5 9-5V7l-9-5Z" stroke="currentColor" stroke-width="1.5"/><path d="M12 22V12M3 7l9 5 9-5" stroke="currentColor" stroke-width="1.5"/></svg>
+        CRUX / EVALS
+      </a>
+      <nav class="topnav" aria-label="Page sections">
+        <a href="#concepts">Concepts</a>
+        <a href="#workflow">Workflow</a>
+        <a href="#reuse">Reuse</a>
+        <a href="#optional">Optional</a>
+        <a href="#verdict">Verdict</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero" id="top">
+      <div>
+        <div class="eyebrow">Agreed product model · July 2026</div>
+        <h1>AI evals should feel like tests.</h1>
+        <p class="lead">Define examples. Run them from the CLI. See what changed. Crux handles inference reuse, evidence, comparison, cost, and execution location.</p>
+        <p class="hero-rule">The complexity exists. It belongs inside Crux, not inside the user’s mental model.</p>
+      </div>
+
+      <div class="hero-map" aria-label="The Crux eval workflow">
+        <span class="map-label">ordinary workflow</span>
+        <div class="map-row">
+          <div class="map-box"><strong>Task</strong><span>production behavior</span></div>
+          <div class="map-arrow" aria-hidden="true">+</div>
+          <div class="map-box"><strong>Cases</strong><span>examples</span></div>
+          <div class="map-arrow" aria-hidden="true">+</div>
+          <div class="map-box"><strong>Checks</strong><span>what good means</span></div>
+        </div>
+        <div class="map-connector"></div>
+        <div class="map-row">
+          <div class="map-box active"><strong>Eval</strong><span>the test definition</span></div>
+          <div class="map-arrow" aria-hidden="true">→</div>
+          <div class="map-box active"><strong>Eval run</strong><span>the result</span></div>
+          <div class="map-arrow" aria-hidden="true">→</div>
+          <div class="map-box active"><strong>Baseline</strong><span>accepted past</span></div>
+        </div>
+        <div class="map-optional">
+          <span class="map-label">only when needed</span>
+          <div class="map-row">
+            <div class="map-box"><strong>Recording</strong><span>future portable fixture</span></div>
+            <div class="map-box"><strong>Review</strong><span>production issue → case</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="concepts">
+      <div class="section-head">
+        <div><div class="kicker">01 · Mental model</div><h2>Five concepts for the normal path.</h2></div>
+        <p>Tasks and prompts already exist in the application. Evals add only the familiar testing concepts around them.</p>
+      </div>
+      <div class="card-grid">
+        <article class="concept-card"><span class="number">01</span><h3>Eval</h3><p>A test definition: one task, some cases, and the checks that describe acceptable behavior.</p><code>evaluate({ … })</code></article>
+        <article class="concept-card"><span class="number">02</span><h3>Case</h3><p>One example input, plus optional expected data. Inline for small evals; reusable datasets when useful.</p><code>{ input, expected? }</code></article>
+        <article class="concept-card"><span class="number">03</span><h3>Variant</h3><p>A named candidate change—prompt, model, settings, or task—that runs over the same cases.</p><code>variants: { cheaper: … }</code></article>
+        <article class="concept-card"><span class="number">04</span><h3>Eval run</h3><p>The persisted result of running an eval. It contains outcomes, scores, cost, provenance, and comparison.</p><code>crux eval support</code></article>
+        <article class="concept-card"><span class="number">05</span><h3>Baseline</h3><p>A deliberately accepted historical run. It answers: did today become worse than the past we trusted?</p><code>baseline set</code></article>
+      </div>
+      <div class="optional-strip">
+        <div class="optional-card"><p><strong>Current is implicit.</strong> It simply means the task referenced by the eval as it exists today. Users never define a <code>current</code> variant.</p></div>
+        <div class="optional-card"><p><strong>Cache is not a concept.</strong> Reports say “reused” or “new” and explain why. Users control it only with <code>--fresh</code> and <code>--offline</code>.</p></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <div><div class="kicker">The definition</div><h2>An eval is just this formula.</h2></div>
+        <p>Scorers, judges, fingerprints, repeated samples, and traces are capabilities behind these three understandable ingredients.</p>
+      </div>
+      <div class="formula" role="img" aria-label="Production task plus cases plus checks equals an eval">
+        <div class="formula-item"><strong>Production task</strong><span>what the app actually does</span></div><div class="formula-op">+</div>
+        <div class="formula-item"><strong>Cases</strong><span>examples to exercise</span></div><div class="formula-op">+</div>
+        <div class="formula-item"><strong>Checks</strong><span>what acceptable means</span></div><div class="formula-op">=</div>
+        <div class="formula-item"><strong>Eval</strong><span>repeatable evidence</span></div>
+      </div>
+    </section>
+
+    <section id="workflow">
+      <div class="section-head">
+        <div><div class="kicker">02 · First run</div><h2>Write one file. Run one command.</h2></div>
+        <p>No executor setup. No cassette mode. No <code>.run()</code> method on the definition. The task already knows how production executes.</p>
+      </div>
+      <div class="journey">
+        <div class="steps">
+          <div class="step"><span class="step-index">1</span><div><h3>Reference the real task</h3><p>The eval does not repeat its prompt, model, stream mode, or routing.</p></div></div>
+          <div class="step"><span class="step-index">2</span><div><h3>Add representative cases</h3><p>Inputs are typed from the task. Expected data is optional.</p></div></div>
+          <div class="step"><span class="step-index">3</span><div><h3>Run from the CLI</h3><p><code>crux eval support</code> discovers and executes the definition.</p></div></div>
+          <div class="step"><span class="step-index">4</span><div><h3>Change and rerun</h3><p>Crux computes only work whose inputs changed.</p></div></div>
+          <div class="step"><span class="step-index">5</span><div><h3>Set a baseline when trusted</h3><p>Optional until a relative regression gate actually needs it.</p></div></div>
+        </div>
+        <div class="code-window" aria-label="Example production task and eval source">
+          <div class="code-title"><span>production task + eval</span><span>one definition, then test it</span></div>
+          <pre><span class="c-comment">// src/support.ts — normal production behavior</span>
+<span class="c-key">import</span> { generate } <span class="c-key">from</span> <span class="c-str">'@use-crux/ai'</span>
+<span class="c-key">import</span> { supportRouter } <span class="c-key">from</span> <span class="c-str">'./models'</span>
+<span class="c-key">import</span> { supportPrompt } <span class="c-key">from</span> <span class="c-str">'./prompts'</span>
+
+<span class="c-key">export const</span> support = generate.<span class="c-fn">task</span>(supportPrompt, {
+  model: supportRouter,
+  temperature: 0.2,
+})
+
+<span class="c-comment">// evals/support.eval.ts — auto-discovered as support</span>
+<span class="c-key">import</span> { evaluate } <span class="c-key">from</span> <span class="c-str">'@use-crux/core/eval'</span>
+<span class="c-key">import</span> { support } <span class="c-key">from</span> <span class="c-str">'../src/support'</span>
+<span class="c-key">import</span> { cheaperModel } <span class="c-key">from</span> <span class="c-str">'../src/models'</span>
+
+<span class="c-key">export default</span> <span class="c-fn">evaluate</span>({
+  task: support,
+
+  cases: [
+    {
+      id: <span class="c-str">'refund'</span>,
+      input: { question: <span class="c-str">'Can I get a refund?'</span> },
+      expected: { answer: <span class="c-str">'Yes'</span> },
+    },
+  ],
+
+  variants: {
+    cheaper: { model: cheaperModel },
+  },
+
+  expect: ({ output, expected, expect }) => {
+    <span class="c-fn">expect</span>(output.answer).<span class="c-fn">toBe</span>(expected.answer)
+  },
+})</pre>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <div><div class="kicker">Comparison</div><h2>Past, present, and candidates.</h2></div>
+        <p>These are positions in a comparison, not three different ways to configure a task.</p>
+      </div>
+      <div class="compare-lane">
+        <article class="compare-node baseline"><small>accepted past</small><h3>Baseline</h3><p>A complete run and selected variant that a human deliberately accepted.</p></article>
+        <div class="compare-arrow" aria-hidden="true">→</div>
+        <article class="compare-node current"><small>today</small><h3>Current</h3><p>The unmodified production task referenced by the eval. Always implicit.</p></article>
+        <div class="compare-arrow" aria-hidden="true">→</div>
+        <article class="compare-node variant"><small>possible changes</small><h3>Variants</h3><p>Only the fields that differ: prompt, model, settings, or a compatible task.</p></article>
+      </div>
+      <div class="baseline-note"><strong>A baseline is not “the good variant.”</strong> It is accepted historical reality. It can be imperfect or even failing; setting it is explicit in CLI and Devtools, never automatic.</div>
+    </section>
+
+    <section id="reuse">
+      <div class="section-head">
+        <div><div class="kicker">03 · Just enough work</div><h2>Change anything. Crux knows what to recompute.</h2></div>
+        <p>Select a change to see the intended behavior. Green means new work; blue means trusted evidence reused.</p>
+      </div>
+      <div class="change-lab">
+        <div class="scenario-list" role="group" aria-label="Change scenarios">
+          <button class="scenario-button" type="button" data-scenario="prompt" aria-pressed="true">Prompt changed</button>
+          <button class="scenario-button" type="button" data-scenario="scorer" aria-pressed="false">Scorer or judge changed</button>
+          <button class="scenario-button" type="button" data-scenario="gate" aria-pressed="false">Gate changed</button>
+          <button class="scenario-button" type="button" data-scenario="variant" aria-pressed="false">Variant added</button>
+          <button class="scenario-button" type="button" data-scenario="assertion" aria-pressed="false">Static assertion added</button>
+          <button class="scenario-button" type="button" data-scenario="fresh" aria-pressed="false">User passes --fresh</button>
+        </div>
+        <div class="scenario-output" id="scenario-output" aria-live="polite"></div>
+      </div>
+      <div class="baseline-note"><strong>V1 is deliberately conservative.</strong> Opaque functions, untracked external data, performance measurements, and toolful workflows with possible side effects rerun unless Crux can prove complete managed-task identity. Reusing stale evidence is a correctness bug; extra work is only slower.</div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <div><div class="kicker">Checks</div><h2>Three ways to say what good means.</h2></div>
+        <p>Beginners can start with assertions. Measurement and release policy appear only when the problem needs them.</p>
+      </div>
+      <div class="checks-grid">
+        <article class="check-card"><h3>Expect</h3><p>A deterministic assertion over output or captured behavior. Familiar unit-test semantics.</p><code>expect(output.answer).toBe('Yes')</code></article>
+        <article class="check-card"><h3>Scorer</h3><p>A measurement: exact metric, heuristic, or model judge. It produces evidence rather than deciding the release alone.</p><code>scorers: [correctness, citations]</code></article>
+        <article class="check-card"><h3>Gate</h3><p>The pass/fail policy over assertions and scores. It turns measurements into an actionable release decision.</p><code>gates: { correctness: { min: .9 } }</code></article>
+      </div>
+      <div class="baseline-note"><strong>Blocking rule:</strong> a normal <code>crux eval</code> run is blocked by current-task gates; candidate variants are informational. Explicitly selecting <code>--variant cheaper</code> makes that candidate’s gates blocking. Adding an experiment therefore cannot unexpectedly break CI, while deliberate candidate validation remains strict.</div>
+    </section>
+
+    <section id="optional">
+      <div class="section-head">
+        <div><div class="kicker">04 · Optional branches</div><h2>Recordings and Review solve different problems.</h2></div>
+        <p>Neither belongs in the ordinary “write an eval and rerun it” workflow.</p>
+      </div>
+      <div class="branch-grid">
+        <article class="branch-card recording">
+          <span class="not-needed">advanced · explicit</span>
+          <h3>Recording: a future portable fixture</h3>
+          <p>A deliberately updated, committed fixture for reproducing an eval elsewhere. It is not the automatic result cache, and it should not ship until its strict promise is true across every supported boundary.</p>
+          <ol><li>V1 <code>--offline</code> uses only exact reusable results and makes zero external calls.</li><li>A missing result is listed precisely and the run stops.</li><li>A later recordings RFC adds explicit portable fixtures without changing the ordinary workflow.</li></ol>
+        </article>
+        <article class="branch-card review">
+          <span class="not-needed">production bridge · optional</span>
+          <h3>Review: turn real problems into cases</h3>
+          <p>Feedback attaches to the existing production run. Standard message integrations carry that link automatically.</p>
+          <ol><li>A user rates a production message.</li><li>Crux creates a Review item linked to its run.</li><li>A human dismisses, resolves, or adds it to an eval.</li></ol>
+        </article>
+      </div>
+      <div class="code-window" style="margin-top:16px" aria-label="Feedback example">
+        <div class="code-title"><span>authenticated server</span><span>message already carries its run</span></div>
+        <pre><span class="c-key">import</span> { feedback } <span class="c-key">from</span> <span class="c-str">'@use-crux/ai/feedback'</span>
+
+<span class="c-key">const</span> message = <span class="c-key">await</span> messages.<span class="c-fn">getOwned</span>(messageId, user.id)
+
+<span class="c-key">await</span> <span class="c-fn">feedback</span>(message, {
+  rating: <span class="c-str">'down'</span>,
+  comment: <span class="c-str">'It used the old refund policy.'</span>,
+  correction: { answer: <span class="c-str">'Refunds are available within 30 days.'</span> },
+})
+
+<span class="c-comment">// Creates a Review item. Never changes an eval or baseline automatically.</span></pre>
+      </div>
+      <div class="baseline-note"><strong>The destination is explicit infrastructure, not a second runtime.</strong> <code>feedback()</code> writes through the application’s configured Crux observability destination, which durably stores the Review record and its run link. Devtools reads that same destination. If no durable destination is configured, submission fails with the exact setup action instead of pretending it worked.</div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <div><div class="kicker">05 · Where it runs</div><h2>One runtime concept, honest execution.</h2></div>
+        <p>The CLI and Devtools coordinate evals. The task executes where the application can truthfully execute it.</p>
+      </div>
+      <div class="runtime-visual">
+        <div class="runtime-top">
+          <div class="runtime-box coordinator"><h3>CLI coordinator</h3><p>Discovers evals, plans work, enforces budget, assembles evidence, and reports progress. A later Devtools trigger invokes this same contract.</p></div>
+          <div class="runtime-arrow" aria-hidden="true">coordinates →</div>
+          <div class="runtime-box host"><h3>The task’s real host</h3><p>Local Node when portable; Worker, serverless function, or Convex when host-bound.</p></div>
+        </div>
+        <div class="runtime-rule">There is no public “Quality runtime.” Crux uses the application’s existing runtime and host capabilities.</div>
+      </div>
+      <details style="margin-top:16px"><summary>What Crux stores underneath—without making users manage it</summary><div class="detail-body"><ul><li><strong>Project truth:</strong> eval source, accepted cases, and promoted baseline snapshots live in Git.</li><li><strong>Private reusable evidence:</strong> exact task/judge outputs, fingerprints, and freshness are automatic and gitignored locally; a configured shared store can carry them across CI machines.</li><li><strong>Remote execution state:</strong> an accepted host job, its idempotency state, normalized result, and failure/cancellation are durably stored by the real host before completion is reported.</li><li><strong>Production Review evidence:</strong> feedback records and their run links travel through the configured at-least-once observability destination into durable storage; Devtools reads the same records.</li></ul></div></details>
+      <details><summary>How a host-bound task stays honest</summary><div class="detail-body">The deployed host owns a generated registry of allowed tasks and variants. Before inference, coordinator and host compare fingerprints. Missing or stale deployment fails before spend with the exact generate/deploy action. No functions, routers, or closures are serialized over the wire, and observability is evidence rather than the control plane.</div></details>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <div><div class="kicker">06 · Control surfaces</div><h2>One model across source, CLI, and Devtools.</h2></div>
+        <p>Definitions live in source. The CLI is the V1 execution surface; Devtools inspects, compares, reviews, and sets baselines against the same run model. UI-triggered execution can follow.</p>
+      </div>
+      <div class="dx-grid">
+        <div class="command-list">
+          <div class="command"><code>crux eval</code><span>Run every discovered eval once.</span></div>
+          <div class="command"><code>crux eval support</code><span>Run an ID, path, directory, or glob.</span></div>
+          <div class="command"><code>crux eval support --watch</code><span>Rerun affected work while editing.</span></div>
+          <div class="command"><code>crux eval support --fresh</code><span>Intentionally bypass reusable task results.</span></div>
+          <div class="command"><code>crux eval support --offline</code><span>Forbid every external call.</span></div>
+          <div class="command"><code>crux eval support --plan</code><span>Show reused work, new work, and estimated spend before execution.</span></div>
+          <div class="command"><code>crux eval support --max-cost 5</code><span>Authorize a hard US-dollar run-global spend ceiling for unattended work.</span></div>
+          <div class="command"><code>crux eval baseline set &lt;run-id&gt; [--variant cheaper]</code><span>Accept one complete position as historical reference; omitted variant means current.</span></div>
+        </div>
+        <div class="devtools-shell" aria-label="Conceptual Devtools eval catalog">
+          <div class="devtools-nav"><span>Evals</span><span>Eval runs</span><span>Baselines</span><span>Review</span></div>
+          <div class="devtools-body">
+            <div class="kicker">Eval catalog</div>
+            <div class="eval-row"><div><strong>support</strong><small>12 cases · current + 2 variants</small></div><span class="status">passing</span></div>
+            <div class="eval-row"><div><strong>billing/refunds</strong><small>28 cases · baseline set 2d ago</small></div><span class="status">passing</span></div>
+            <div class="eval-row"><div><strong>research</strong><small>8 cases · host: Convex</small></div><span class="status">ready</span></div>
+          </div>
+        </div>
+      </div>
+      <details style="margin-top:16px"><summary>Optional programmatic execution</summary><div class="detail-body"><p>Definitions remain inert and edge-safe. A separate Node coordinator API exists for scripts and test harnesses; it is never required by the CLI. Add <code>id: 'support'</code> to the definition when opting into direct execution, then:</p><div class="code-window"><div class="code-title"><span>programmatic.ts</span><span>same semantics as the CLI</span></div><pre><span class="c-key">import</span> supportEval <span class="c-key">from</span> <span class="c-str">'./evals/support.eval'</span>
+<span class="c-key">import</span> { runEval } <span class="c-key">from</span> <span class="c-str">'@use-crux/core/eval/node'</span>
+
+<span class="c-key">const</span> result = <span class="c-key">await</span> <span class="c-fn">runEval</span>(supportEval, {
+  maxCostUsd: 5,
+})
+
+result.passed <span class="c-comment">// EvalRun — never Experiment</span></pre></div><p style="margin-top:14px">Direct execution requires a definition-level <code>id</code>. CLI discovery still derives it automatically. Adding the same explicit ID changes nothing; a different ID is treated as a rename and migrated or explained, never silently forked. There is no anonymous ephemeral mode and no run-time identity override.</p></div></details>
+    </section>
+
+    <section id="verdict">
+      <div class="section-head">
+        <div><div class="kicker">07 · Diagnosis</div><h2>Crux has good ingredients, but the current product model is not stable enough.</h2></div>
+        <p>The answer is neither “throw it all away” nor “polish the docs.” The internal boundaries and public vocabulary need deliberate change.</p>
+      </div>
+      <div class="truth-grid">
+        <article class="truth-card now"><h3>Current Crux</h3><ul><li>Vitest-like <code>evaluate()</code>, typed cases, assertions, scorers, and gates are strong foundations.</li><li><code>Evaluation</code>, <code>Experiment</code>, <code>Suite</code>, Quality, and eval overlap publicly.</li><li>A source <code>baseline</code> variant conflicts with a promoted historical baseline.</li><li>Cassettes are public despite not reliably covering every execution boundary.</li><li>Execution and persistence assume Node in places that cannot honestly serve edge and host-bound tasks.</li><li>Reuse exists, but is surfaced as modes and mechanics rather than a trustworthy minimal-work planner.</li></ul></article>
+        <article class="truth-card target"><h3>Target Crux</h3><ul><li>One public vocabulary: Eval, Case, Variant, Eval run, Baseline.</li><li>The current task is always implicit; variants specify only differences.</li><li>Automatic private reuse is default and explained per result.</li><li>Portable recordings are explicit and ship only when strict across supported boundaries.</li><li>CLI/Devtools coordinate; the task runs in its real host through the existing runtime.</li><li>Production feedback creates Review items that humans can turn into source-controlled cases.</li></ul></article>
+      </div>
+      <div class="verdict"><strong>Verdict:</strong> preserve the typed authoring, evidence, scoring, gates, and observability foundations. Fundamentally revise the public model, baseline semantics, replay promise, incremental planner, and host execution boundary before launch.</div>
+      <details style="margin-top:16px"><summary>Code-audit anchors behind this verdict</summary><div class="detail-body"><ul><li><code>packages/core/src/quality/evaluate.ts</code> contains the strong typed <code>evaluate()</code> foundation, but publicly returns an <code>Evaluation</code> whose run result is an <code>Experiment</code>.</li><li><code>packages/core/src/quality/internal/engine.ts</code> drops the unchanged task when authored variants exist and prevents promoted-baseline lookup when a source baseline is configured.</li><li><code>packages/core/src/quality/internal/output-cache.ts</code> has useful exact cell-output identity, but normal CLI runs do not yet use automatic minimum-correct-work reuse.</li><li><code>packages/core/src/adapter/interception.ts</code> explicitly excludes streaming interception; current cassettes also collapse identical stochastic occurrences.</li><li><code>packages/core/src/quality/internal/engine.ts</code>, cassette context, cache, baseline, persistence, and feedback directly depend on Node APIs.</li><li><code>packages/core/src/quality/internal/feedback.ts</code> is local/internal, accepts expected truth directly, and has no production run-aware API or Add-to-eval workflow.</li><li>The existing Runtime Engine has real host binding for serverless and Convex, but Quality has no remote eval-job/result protocol and no first-party Cloudflare host adapter yet.</li></ul></div></details>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <div><div class="kicker">08 · Honest failures</div><h2>When magic cannot work, explain the exact fix.</h2></div>
+        <p>“Just works” includes refusing unsafe or impossible work before spending money.</p>
+      </div>
+      <details><summary>A host-bound eval was started without a ready host</summary><div class="detail-body">Fail before inference: “<code>research</code> requires its deployed Convex host, but the registered fingerprint is missing or stale. Run the project-specific deploy command shown below, then rerun <code>crux eval research</code>.” Never simulate or silently fall back.</div></details>
+      <details><summary>An unattended run would create new billable work</summary><div class="detail-body">Show the planned new work and require an explicit <code>--max-cost</code> ceiling in US dollars. Reused zero-spend work needs no budget. An exhausted or incomplete run cannot pass or become a baseline.</div></details>
+      <details><summary>An offline run lacks exact reusable evidence</summary><div class="detail-body">List every missing case, variant, or required judge result and stop. Never make an external call under <code>--offline</code>. Portable committed recordings are a later RFC, not a hidden V1 fallback.</div></details>
+      <details><summary>A scorer changed after the baseline was set</summary><div class="detail-body">Keep compatible measurements, mark only the changed score incomparable, and explain it. A gate requiring that relative score makes the run incomplete rather than silently green.</div></details>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <div><div class="kicker">09 · Scope</div><h2>Small coherent release, deeper optimization later.</h2></div>
+        <p>V1 must keep every correctness promise it exposes. More granular optimization can follow without changing the mental model.</p>
+      </div>
+      <div class="scope-grid">
+        <article class="scope-card"><h3>Coherent V1</h3><ul><li><code>generate.task</code> / <code>stream.task</code> and fully type-inferred eval cases and variants.</li><li><code>evaluate()</code> from the single provider-neutral <code>@use-crux/core/eval</code> surface; provider packages only supply executable task helpers.</li><li><code>crux eval</code> discovery, selectors, watch, plan, fresh, offline, and spend admission.</li><li>Optional <code>runEval()</code> from <code>@use-crux/core/eval/node</code>, using the same coordinator and requiring stable identity.</li><li>Current + variants, granular output/scorer/gate reuse, and explicit promoted baselines.</li><li>Portable coordinator/host protocol for Node, ordinary serverless, and Convex; reliable Workers support requires an explicit new first-party host adapter and conformance suite.</li><li>Eval catalog, run evidence, baseline setting, and Review workflow in Devtools.</li><li>Production feedback linked through run-aware message integrations and the configured durable observability destination.</li></ul></article>
+        <article class="scope-card later"><h3>RFC / later optimization</h3><ul><li>Partial recomputation inside an opaque multi-step task when only one nested prompt or tool changes.</li><li>Advanced statistical sequential testing and adaptive repeated sampling.</li><li>Shared/team evidence services and remote scheduling beyond the narrow host handshake.</li><li>Training-data and post-training exports—only after consent, provenance, review, and held-out certification are real.</li><li>Portable recordings become public only when streams, tools, media, repeated samples, judges, and every supported host obey the same strict contract.</li></ul></article>
+      </div>
+    </section>
+
+    <div class="final-rule">
+      <blockquote>Users write tests. Crux manages evidence.</blockquote>
+      <p>That is the product boundary every API, CLI command, Devtools screen, cache key, and runtime decision should reinforce.</p>
+    </div>
+
+    <footer>
+      Product/API design artifact · agreed interactively with the Crux team · current implementation remains unchanged · no release changeset required
+    </footer>
+  </main>
+
+  <script>
+    const scenarios = {
+      prompt: {
+        title: 'Prompt changed',
+        summary: 'The task can produce different output, so Crux reruns inference for affected current/variant paths, then recomputes dependent checks.',
+        stages: [['Task output', 'run', 'new inference'], ['Assertions', 'run', 'new output'], ['Scorers', 'run', 'new output'], ['Gates', 'run', 'new scores']]
+      },
+      scorer: {
+        title: 'Scorer or judge changed',
+        summary: 'The production output is unchanged. Crux reuses it and runs only the changed measurement and downstream gates.',
+        stages: [['Task output', 'reuse', 'exact evidence'], ['Assertions', 'reuse', 'unchanged'], ['Scorers', 'run', 'changed scorer'], ['Gates', 'run', 'new score']]
+      },
+      gate: {
+        title: 'Gate changed',
+        summary: 'A gate is policy over existing evidence. No inference or judging is needed.',
+        stages: [['Task output', 'reuse', 'exact evidence'], ['Assertions', 'reuse', 'unchanged'], ['Scorers', 'reuse', 'unchanged'], ['Gates', 'run', 'changed policy']]
+      },
+      variant: {
+        title: 'Variant added',
+        summary: 'Existing current and candidate paths are reused. Only the new variant runs for the selected cases.',
+        stages: [['Existing paths', 'reuse', 'current + variants'], ['New variant', 'run', 'new inference'], ['Scorers', 'run', 'new output only'], ['Gates', 'run', 'new comparison']]
+      },
+      assertion: {
+        title: 'Static assertion added',
+        summary: 'The assertion evaluates existing output and captured evidence. It does not cause another model call.',
+        stages: [['Task output', 'reuse', 'exact evidence'], ['New assertion', 'run', 'local check'], ['Scorers', 'reuse', 'unchanged'], ['Gates', 'run', 'new outcome']]
+      },
+      fresh: {
+        title: 'User passes --fresh',
+        summary: 'Crux intentionally bypasses reusable task results and refreshes private evidence for this run.',
+        stages: [['Task output', 'run', 'forced fresh'], ['Assertions', 'run', 'new output'], ['Scorers', 'run', 'new output'], ['Gates', 'run', 'new evidence']]
+      }
+    };
+
+    function renderScenario(key) {
+      const scenario = scenarios[key];
+      const stages = scenario.stages.map(function(stage) {
+        return '<div class="work-stage ' + stage[1] + '"><strong>' + stage[0] + '</strong><span>' + stage[2] + '</span></div>';
+      }).join('');
+      document.getElementById('scenario-output').innerHTML =
+        '<h3>' + scenario.title + '</h3>' +
+        '<p class="scenario-summary">' + scenario.summary + '</p>' +
+        '<div class="work-pipeline">' + stages + '</div>' +
+        '<div class="legend"><span><i class="run-dot"></i>new work</span><span><i class="reuse-dot"></i>reused evidence</span><span><i class="skip-dot"></i>not needed</span></div>';
+    }
+
+    document.querySelectorAll('[data-scenario]').forEach(function(button) {
+      button.addEventListener('click', function() {
+        document.querySelectorAll('[data-scenario]').forEach(function(other) { other.setAttribute('aria-pressed', 'false'); });
+        button.setAttribute('aria-pressed', 'true');
+        renderScenario(button.dataset.scenario);
+      });
+    });
+
+    renderScenario('prompt');
+  </script>
+</body>
+</html>

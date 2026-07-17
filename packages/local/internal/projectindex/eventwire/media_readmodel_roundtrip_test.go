@@ -40,7 +40,7 @@ func TestMediaFactsPreserveRawJSONThroughEventReadModelAndAPI(t *testing.T) {
 	}
 
 	state := projectmodel.ApplyPatch(projectmodel.EmptyPatchState(), patches[0])
-	index := projectreadmodel.New(mediaRoundTripSource{index: state.Index}, "").Index()
+	index := projectreadmodel.New(mediaRoundTripSource{index: state.Index}).Index()
 	assertMediaRawMessages(t, index.Definitions, index.Relations, index.LintFindings)
 
 	encoded, err := json.Marshal(index)

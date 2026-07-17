@@ -1,17 +1,15 @@
 package screens
 
 import (
-	"context"
 	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/use-crux/crux/packages/local/internal/api"
-	"github.com/use-crux/crux/packages/local/internal/tui/uitest"
 )
 
-func sampleInsight() api.QualityInsightRecord {
-	return api.QualityInsightRecord{
+func sampleInsight() api.InspectInsightRecord {
+	return api.InspectInsightRecord{
 		InsightID:      "INS-014",
 		Title:          "docs_agent loops on retrieval",
 		Severity:       "high",
@@ -25,7 +23,7 @@ func sampleInsight() api.QualityInsightRecord {
 // trace and jumping to Runs. Per plan S14.
 func TestInsightsTKeyDrillsToLinkedTrace(t *testing.T) {
 	i := NewInsights()
-	i.items = []api.QualityInsightRecord{sampleInsight()}
+	i.items = []api.InspectInsightRecord{sampleInsight()}
 	i.selectedID = "INS-014"
 	i.loaded = true
 
@@ -46,7 +44,7 @@ func TestInsightsTKeyDrillsToLinkedTrace(t *testing.T) {
 // the focused insight has no linked traces.
 func TestInsightsTKeyNoopWhenNoLinkedTraces(t *testing.T) {
 	i := NewInsights()
-	i.items = []api.QualityInsightRecord{{InsightID: "INS-99"}}
+	i.items = []api.InspectInsightRecord{{InsightID: "INS-99"}}
 	i.selectedID = "INS-99"
 	i.loaded = true
 
@@ -58,7 +56,7 @@ func TestInsightsTKeyNoopWhenNoLinkedTraces(t *testing.T) {
 
 func TestInsightsBracketKeysSwitchTabs(t *testing.T) {
 	i := NewInsights()
-	i.items = []api.QualityInsightRecord{sampleInsight()}
+	i.items = []api.InspectInsightRecord{sampleInsight()}
 	i.selectedID = "INS-014"
 	i.loaded = true
 
@@ -77,7 +75,7 @@ func TestInsightsBracketKeysSwitchTabs(t *testing.T) {
 // writes the focused insight to ~/.crux/exports/insight-{id}.json.
 func TestInsightsExportEmitsCmd(t *testing.T) {
 	i := NewInsights()
-	i.items = []api.QualityInsightRecord{sampleInsight()}
+	i.items = []api.InspectInsightRecord{sampleInsight()}
 	i.selectedID = "INS-014"
 	i.loaded = true
 
@@ -102,7 +100,7 @@ func TestInsightsUnsupportedActionsDoNotEmitStubs(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			i := NewInsights()
-			i.items = []api.QualityInsightRecord{sampleInsight()}
+			i.items = []api.InspectInsightRecord{sampleInsight()}
 			i.selectedID = "INS-014"
 			i.loaded = true
 
@@ -111,27 +109,6 @@ func TestInsightsUnsupportedActionsDoNotEmitStubs(t *testing.T) {
 				t.Errorf("pressing %q returned a stub command; missing backend actions must stay blocked", tc.key)
 			}
 		})
-	}
-}
-
-func TestInsightsPromoteUsesLinkedExperimentWinner(t *testing.T) {
-	client := &insightPromoteClient{FixtureClient: uitest.NewFixtureClient()}
-	i := NewInsights()
-	insight := sampleInsight()
-	insight.LinkedExperimentIDs = []string{"exp-043"}
-	i.items = []api.QualityInsightRecord{insight}
-	i.selectedID = "INS-014"
-	i.loaded = true
-
-	cmd := i.Update(tea.KeyPressMsg(tea.Key{Text: "p", Code: 'p'}), client)
-	if cmd == nil {
-		t.Fatal("p returned nil; expected promote command")
-	}
-	if _, ok := cmd().(insightPromotedMsg); !ok {
-		t.Fatalf("p returned %T, want insightPromotedMsg", cmd())
-	}
-	if client.gotExperimentID != "exp-043" || client.gotVariant != "maxIter+dedupe" {
-		t.Fatalf("promote args = %q/%q, want exp-043/maxIter+dedupe", client.gotExperimentID, client.gotVariant)
 	}
 }
 
@@ -152,40 +129,4 @@ func TestInsightsKeybindsOnlyAdvertiseWiredActions(t *testing.T) {
 			t.Fatalf("keybinds advertised blocked action %q: %s", blocked, text)
 		}
 	}
-}
-
-func TestInsightsKeybindsAdvertisePromoteForLinkedExperiment(t *testing.T) {
-	i := NewInsights()
-	insight := sampleInsight()
-	insight.LinkedExperimentIDs = []string{"exp-043"}
-	i.items = []api.QualityInsightRecord{insight}
-	i.selectedID = "INS-014"
-	i.loaded = true
-
-	got := make([]string, 0)
-	for _, bind := range i.Keybinds() {
-		got = append(got, bind.Key+" "+bind.Label)
-	}
-	text := strings.Join(got, " · ")
-	if !strings.Contains(text, "p promote") {
-		t.Fatalf("keybinds missing linked-experiment promote action: %s", text)
-	}
-}
-
-type insightPromoteClient struct {
-	*uitest.FixtureClient
-	gotExperimentID string
-	gotVariant      string
-}
-
-func (c *insightPromoteClient) PromoteBaseline(_ context.Context, experimentID, variant, _ string) (api.QualityPromoteResult, error) {
-	c.gotExperimentID = experimentID
-	c.gotVariant = variant
-	return api.QualityPromoteResult{
-		BaselineID:   "baseline-015",
-		EvaluationID: "agent-loops",
-		ExperimentID: experimentID,
-		VariantName:  variant,
-		Path:         ".crux/quality/baselines/agent-loops.json",
-	}, nil
 }

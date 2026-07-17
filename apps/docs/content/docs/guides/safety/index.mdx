@@ -25,19 +25,19 @@ Separate concern: **[Security](/docs/guides/safety/security)**, patterns to make
 Guardrails and constraints bind to `boundary.*` descriptors instead of a broad "input/output" phase:
 
 ```ts
-import { boundary, constraint, guardrail } from '@use-crux/core/safety'
+import { boundary, constraint, guardrail } from "@use-crux/core/safety";
 
 export const redactPii = guardrail({
-  id: 'pii',
+  id: "pii",
   on: [boundary.input.text(), boundary.output.text()],
-  run: guardrail.pii({ strategy: 'mask' }),
-})
+  run: guardrail.pii({ strategy: "mask" }),
+});
 
 export const grounded = constraint({
-  id: 'grounded-answer',
+  id: "grounded-answer",
   on: boundary.output.object<{ answer: string; citations: string[] }>(),
   run: constraint.judge({ judge, minScore: 0.8 }),
-})
+});
 ```
 
 Useful targets include `boundary.input.text()`, `boundary.output.text()`,
@@ -54,11 +54,11 @@ await adapter.generate(prompt, {
   input,
   safety: {
     tune: {
-      pii: { mode: 'report' },
-      'grounded-answer': { enabled: true },
+      pii: { mode: "report" },
+      "grounded-answer": { enabled: true },
     },
   },
-})
+});
 ```
 
 Built-in text guardrails such as `guardrail.pii()`, `guardrail.secrets()`, and
@@ -69,20 +69,20 @@ guardrails and object/path guardrails run at final output unless you tune them.
 
 A recap of the four primitives side by side:
 
-| | Guardrail | Constraint | Tool policy | Validation retry |
-|---|---|---|---|---|
-| **Runs on** | `boundary.input.*`, `boundary.output.*`, retrieval, memory, validation feedback | One output boundary | Tool call, tool result, approval request | Structured output parse/validation |
-| **What it catches** | Forbidden content, PII, secrets, injection, formatting | Semantic / business-rule violations | Unsafe tool execution or unsafe tool I/O | Schema-parse failures, wrong types |
-| **What happens on a hit** | Block, rewrite, warn, or report | Re-call the model with custom feedback | Block, request approval, report, or rewrite tool I/O | Text-repair first, then re-call with the Zod error |
-| **Knows about retries** | No: it is a policy pass | Yes: retry is the purpose | No, except approval suspension | Yes: bounded by `maxRetries` and `maxSteps` |
-| **You write** | `guardrail({ id, on, run })` | `constraint({ id, on, run })` | `toolPolicy({ id, match, action })` or `toolPolicy.args/result` | `validationRetry: { maxRetries }` |
+|                           | Guardrail                                                                       | Constraint                             | Tool policy                                                     | Validation retry                                   |
+| ------------------------- | ------------------------------------------------------------------------------- | -------------------------------------- | --------------------------------------------------------------- | -------------------------------------------------- |
+| **Runs on**               | `boundary.input.*`, `boundary.output.*`, retrieval, memory, validation feedback | One output boundary                    | Tool call, tool result, approval request                        | Structured output parse/validation                 |
+| **What it catches**       | Forbidden content, PII, secrets, injection, formatting                          | Semantic / business-rule violations    | Unsafe tool execution or unsafe tool I/O                        | Schema-parse failures, wrong types                 |
+| **What happens on a hit** | Block, rewrite, warn, or report                                                 | Re-call the model with custom feedback | Block, request approval, report, or rewrite tool I/O            | Text-repair first, then re-call with the Zod error |
+| **Knows about retries**   | No: it is a policy pass                                                         | Yes: retry is the purpose              | No, except approval suspension                                  | Yes: bounded by `maxRetries` and `maxSteps`        |
+| **You write**             | `guardrail({ id, on, run })`                                                    | `constraint({ id, on, run })`          | `toolPolicy({ id, match, action })` or `toolPolicy.args/result` | `validationRetry: { maxRetries }`                  |
 
 Rules of thumb:
 
-- **Schema parse failed?** That's *validation retry*: built-in, just enable it.
-- **Output parsed but business rule failed?** That's a *constraint*: write a `check`.
-- **Need to filter, redact, or transform content?** That's a *guardrail*.
-- **Need to gate tool execution?** That's a *tool policy*. Use tool middleware for execution plumbing.
+- **Schema parse failed?** That's _validation retry_: built-in, just enable it.
+- **Output parsed but business rule failed?** That's a _constraint_: write a `check`.
+- **Need to filter, redact, or transform content?** That's a _guardrail_.
+- **Need to gate tool execution?** That's a _tool policy_. Use tool middleware for execution plumbing.
 
 ## When should I use a guardrail?
 
@@ -95,13 +95,13 @@ Rules of thumb:
 
 - The model **occasionally** returns output that fails a business rule (off-topic, wrong language, missing field)
 - You're willing to spend an extra round-trip to get correct output
-- Your output schema validates *most* outputs but a small percentage need a re-prompt with the validation error
+- Your output schema validates _most_ outputs but a small percentage need a re-prompt with the validation error
 
 ## When should I use neither?
 
 - The output is structurally invalid (won't parse): Zod schema validation already handles that
 - The check needs to read external state (database, RAG): use a tool call, not a guardrail
-- The check is about *who* is asking, not *what*: that's auth, not safety
+- The check is about _who_ is asking, not _what_: that's auth, not safety
 
 ## Inspect and test safety
 
@@ -114,24 +114,44 @@ In quality tests, use the legacy span matchers for guardrail/constraint audits
 or the decision report matcher for the canonical safety read model:
 
 ```ts
-ctx.expect.safety.toHaveBlocked('pii')
-ctx.expect.decisionReport.safety.toHaveOutcome('pii', 'rewrite', {
-  reasonCode: 'guardrail.redacted',
-})
+ctx.expect.safety.toHaveBlocked("pii");
+ctx.expect.decisionReport.safety.toHaveOutcome("pii", "rewrite", {
+  reasonCode: "guardrail.redacted",
+});
 ```
 
 ## Pick a topic
 
 <Cards>
-  <Card title="Guardrails" description="Filter, transform, redact, or warn on inputs and outputs." href="/docs/guides/safety/guardrails" />
-  <Card title="Constraints" description="Semantic output validation with model retry on business-rule violations." href="/docs/guides/safety/constraints" />
-  <Card title="Validation retry" description="Auto-recover from schema-parse failures and wrong types." href="/docs/guides/safety/validation-retry" />
-  <Card title="Tool middleware" description="Execution plumbing and where toolPolicy fits." href="/docs/guides/tools/middleware" />
-  <Card title="Security" description="Injection-resistant prompt patterns." href="/docs/guides/safety/security" />
+  <Card
+    title="Guardrails"
+    description="Filter, transform, redact, or warn on inputs and outputs."
+    href="/docs/guides/safety/guardrails"
+  />
+  <Card
+    title="Constraints"
+    description="Semantic output validation with model retry on business-rule violations."
+    href="/docs/guides/safety/constraints"
+  />
+  <Card
+    title="Validation retry"
+    description="Auto-recover from schema-parse failures and wrong types."
+    href="/docs/guides/safety/validation-retry"
+  />
+  <Card
+    title="Tool middleware"
+    description="Execution plumbing and where toolPolicy fits."
+    href="/docs/guides/tools/middleware"
+  />
+  <Card
+    title="Security"
+    description="Injection-resistant prompt patterns."
+    href="/docs/guides/safety/security"
+  />
 </Cards>
 
 ## How this fits with the rest of Crux
 
-- **[Quality](/docs/guides/quality)** validates output quality *during testing*. Guardrails and constraints validate it *during execution*. `constraint.judge(...)` bridges a scoring judge into runtime Safety enforcement, while `constraintScorer()` runs production constraints in eval suites.
+- **[Eval](/docs/guides/evals)** validates output quality _during testing_. Guardrails and constraints validate it _during execution_. `constraint.judge(...)` bridges a scoring judge into runtime Safety enforcement, while `constraintScorer()` runs production constraints in eval suites.
 - **[Tools](/docs/guides/tools)** can implement domain-specific safety checks that need external data.
 - **[Devtools](/docs/guides/observability/devtools)** trace every guardrail hit and constraint retry.

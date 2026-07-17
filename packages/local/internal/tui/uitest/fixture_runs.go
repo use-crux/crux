@@ -7,10 +7,10 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/api"
 )
 
-func (c *FixtureClient) fixtureRunSpans(traceID string) []api.QualityRunSpan {
+func (c *FixtureClient) fixtureRunSpans(traceID string) []api.InspectRunSpan {
 	start := c.Now.Add(-14 * time.Minute).UnixMilli()
 	cost := 0.044
-	return []api.QualityRunSpan{
+	return []api.InspectRunSpan{
 		{
 			ID:         "root",
 			Kind:       "agent",
@@ -67,8 +67,8 @@ func (c *FixtureClient) fixtureRunSpans(traceID string) []api.QualityRunSpan {
 	}
 }
 
-func fixtureSpan(id, parentID, op string, primitive string, name string, startedAt int64, duration float64) api.QualityRunSpan {
-	return api.QualityRunSpan{
+func fixtureSpan(id, parentID, op string, primitive string, name string, startedAt int64, duration float64) api.InspectRunSpan {
+	return api.InspectRunSpan{
 		ID:         id,
 		ParentID:   parentID,
 		Kind:       op,
@@ -81,13 +81,13 @@ func fixtureSpan(id, parentID, op string, primitive string, name string, started
 	}
 }
 
-func fixtureToolSpan(id, parentID, traceID string, startedAt int64, duration float64, dup bool) api.QualityRunSpan {
+func fixtureToolSpan(id, parentID, traceID string, startedAt int64, duration float64, dup bool) api.InspectRunSpan {
 	data, _ := json.Marshal(map[string]any{
 		"toolName": "rag.search",
 		"args":     map[string]any{"query": "typed prompts", "k": 4},
 		"result":   map[string]any{"hits": []string{"typed-prompts-definition", "prompt-api"}},
 	})
-	span := api.QualityRunSpan{
+	span := api.InspectRunSpan{
 		ID:                id,
 		ParentID:          parentID,
 		Kind:              "tool",

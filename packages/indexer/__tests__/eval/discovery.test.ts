@@ -31,7 +31,6 @@ describe("Eval Project Index discovery", () => {
     const result = await discoverRuntimeEvalDefinitions(
       root,
       ["**/*.eval.ts"],
-      new Set(),
       [],
     );
 

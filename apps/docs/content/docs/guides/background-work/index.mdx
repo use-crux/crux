@@ -8,17 +8,17 @@ You have finished the work the user is waiting for, but there is still something
 `defer()` registers a callback that runs **after** the response is sent, off the critical path. Your handler returns immediately; the deferred work starts once the response is on its way.
 
 ```ts
-import { defer } from '@use-crux/core'
+import { defer } from "@use-crux/core";
 
 async function handleSignup(input: SignupInput) {
-  const user = await createUser(input)
+  const user = await createUser(input);
 
   defer(async () => {
-    await sendWelcomeEmail(user.email)
-    await track('signup', { userId: user.id })
-  })
+    await sendWelcomeEmail(user.email);
+    await track("signup", { userId: user.id });
+  });
 
-  return user // returned now; the email and analytics run after
+  return user; // returned now; the email and analytics run after
 }
 ```
 
@@ -43,17 +43,17 @@ Inline `defer()` is process-local. It is perfect for work that is nice to comple
 For work that **must** happen even across a crash or restart, such as a payment receipt or an email you cannot drop, register durable named work instead. This needs [Durable Execution](/docs/guides/durable-execution) configured:
 
 ```ts
-import { defer } from '@use-crux/core'
-import { durableTask } from '@use-crux/core/runtime'
+import { defer } from "@use-crux/core";
+import { durableTask } from "@use-crux/core/runtime";
 
-const sendReceipt = durableTask('send-receipt', {
+const sendReceipt = durableTask("send-receipt", {
   run: async (input: { orderId: string }) => {
-    await emailReceipt(input.orderId)
+    await emailReceipt(input.orderId);
   },
-})
+});
 
 // Awaited: resolves once the work is durably accepted, then survives restarts.
-await defer(sendReceipt, { orderId: order.id })
+await defer(sendReceipt, { orderId: order.id });
 ```
 
 Design durable targets to be idempotent: after a crash, work can be retried, so running twice must be safe. The full semantics (durable acceptance, commit behavior, delivery guarantees) live in the [`defer()` API reference](/docs/reference/crux-core/defer).
@@ -63,7 +63,7 @@ Design durable targets to be idempotent: after a crash, work can be retried, so 
 `defer()` is for request handlers, not replayable flow bodies. Inside a [flow](/docs/guides/flows), use `flow.defer()`, which keeps a stable identity across replay:
 
 ```ts
-await flow.defer(sendReceipt, { orderId: order.id })
+await flow.defer(sendReceipt, { orderId: order.id });
 ```
 
 ## Related

@@ -6,11 +6,7 @@
  * @module
  */
 
-import {
-  asRecord,
-  collectDescriptors,
-  numberValue,
-} from "./media-run-helpers";
+import { asRecord, collectDescriptors, numberValue } from "./media-run-helpers";
 import type {
   GraphLikeRecord,
   MediaAttribution,

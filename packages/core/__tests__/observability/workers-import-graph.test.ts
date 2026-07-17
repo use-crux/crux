@@ -13,6 +13,7 @@ describe('observability import graph is edge-safe without nodejs_compat', () => 
   it.each([
     ['@use-crux/core/observability', '../../src/observability/index.ts'],
     ['@use-crux/core/observability/workers', '../../src/observability/workers.ts'],
+    ['@use-crux/core/feedback', '../../src/feedback/index.ts'],
   ])('%s bundles for the browser platform with no unresolved node:/cloudflare: specifiers', async (_label, entry) => {
     const entryPoint = new URL(entry, import.meta.url).pathname
     const result = await esbuild.build({

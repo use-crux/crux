@@ -16,6 +16,7 @@ import {
 } from "../internal/runner";
 import type { EvalPlan, EvalRun, EvalTaskHostRequest } from "../internal/types";
 import type { EvalPlanningPorts } from "../internal/ports";
+import { createNodeEvalHostRuntime } from "./host/readiness";
 
 export interface NodeEvalCoordinatorOptions {
   readonly variant?: string;
@@ -41,17 +42,27 @@ export async function coordinateNodeEval(
 ): Promise<CoordinatedNodeEval> {
   const evidenceStore = createEvalEvidenceFileStore({ projectRoot });
   const runStore = createEvalRunFileStore({ projectRoot });
+  const deployedRuntime = createNodeEvalHostRuntime({ entry, projectRoot });
   const planningPorts: EvalPlanningPorts = {
     evidenceStore,
     taskIdentity: {
-      describe: async (request) => ({
-        reusable: true,
-        managedTaskFingerprint: fingerprintEvalTaskSourceForInternalUse(
-          request.task,
-        ),
-        hostContractFingerprint: "crux.eval-local-task-host",
-      }),
+      describe: async (request) => {
+        const required =
+          getEvalTaskDescriptorForInternalUse(request.task)
+            .requiredHostCapabilities ?? [];
+        return {
+          reusable: true,
+          managedTaskFingerprint: fingerprintEvalTaskSourceForInternalUse(
+            request.task,
+          ),
+          hostContractFingerprint:
+            required.length === 0
+              ? "crux.eval-local-task-host"
+              : `crux.eval-deployed-task-host:${[...required].sort().join(",")}`,
+        };
+      },
     },
+    hostReadiness: deployedRuntime.readiness,
     externalScorerHostContractFingerprint: "crux.eval-local-scorer-host",
     costEstimator: {
       estimate: () => ({ kind: "unknown", source: "unknown" }),
@@ -93,7 +104,13 @@ export async function coordinateNodeEval(
         ...(baseline !== undefined ? { baseline } : {}),
         clock: { now: () => Date.now() },
         ids: { next: () => `eval-${Date.now()}-${randomUUID()}` },
-        taskHost: { execute: executeTask },
+        taskHost: {
+          execute: (request) =>
+            (getEvalTaskDescriptorForInternalUse(request.task)
+              .requiredHostCapabilities?.length ?? 0) > 0
+              ? deployedRuntime.execute(request)
+              : executeTask(request),
+        },
         externalScorerHost: {
           execute: async (request) =>
             request.scorer({

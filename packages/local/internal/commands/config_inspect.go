@@ -182,7 +182,6 @@ type configInspect struct {
 	Root          string                     `json:"root"`
 	PackageName   string                     `json:"packageName,omitempty"`
 	ConfigFile    configFileInspect          `json:"configFile"`
-	Quality       configQualityInspect       `json:"quality"`
 	Generation    configGenerationInspect    `json:"generation"`
 	Indexer       configIndexerInspect       `json:"indexer"`
 	Experimental  configExperimentalInspect  `json:"experimental"`
@@ -210,18 +209,6 @@ type configFileInspect struct {
 	Status string `json:"status"`
 	Origin string `json:"origin"`
 	Error  string `json:"error,omitempty"`
-}
-
-type configQualityInspect struct {
-	ID          configSetting `json:"id"`
-	Dir         configSetting `json:"dir"`
-	Include     configList    `json:"include"`
-	Exclude     configList    `json:"exclude"`
-	Redact      configList    `json:"redact"`
-	Trials      configSetting `json:"trials"`
-	Concurrency configSetting `json:"concurrency"`
-	TimeoutMs   configSetting `json:"timeoutMs"`
-	Replay      configSetting `json:"replay"`
 }
 
 type configGenerationInspect struct {
@@ -316,20 +303,6 @@ func printConfigInspect(io *output.IO, raw json.RawMessage) error {
 	// ── Config file ──────────────────────────────────────────
 	fmt.Fprintln(out)
 	printConfigFile(io, model.ConfigFile, root)
-
-	// ── quality: ─────────────────────────────────────────────
-	fmt.Fprintln(out)
-	printConfigDomain(io, "quality:", []configRow{
-		settingRow(io, "id", model.Quality.ID),
-		pathSettingRow(io, "dir", model.Quality.Dir, root),
-		listRow(io, "include", model.Quality.Include),
-		listRow(io, "exclude", model.Quality.Exclude),
-		listRow(io, "redact", model.Quality.Redact),
-		settingRow(io, "trials", model.Quality.Trials),
-		settingRow(io, "concurrency", model.Quality.Concurrency),
-		settingRow(io, "timeoutMs", model.Quality.TimeoutMs),
-		settingRow(io, "replay", model.Quality.Replay),
-	})
 
 	// ── generation: ──────────────────────────────────────────
 	fmt.Fprintln(out)

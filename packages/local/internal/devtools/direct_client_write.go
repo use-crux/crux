@@ -4,41 +4,24 @@ import (
 	"context"
 
 	"github.com/use-crux/crux/packages/local/internal/api"
-	"github.com/use-crux/crux/packages/local/internal/quality"
+	"github.com/use-crux/crux/packages/local/internal/inspect"
 )
 
 // Typed write accessors. Each method takes/returns api.Quality* types and
 // JSON-roundtrips through the internal quality records. This is the
-// in-process mirror of the equivalent `POST /api/quality/...` HTTP routes.
+// in-process mirror of the equivalent `POST /api/inspect/...` HTTP routes.
 
 // SetInsightStatus updates an insight's open/dismissed/resolved status.
-func (c *DirectClient) SetInsightStatus(ctx context.Context, insightID string, req api.QualityInsightStatusRequest) (api.QualityInsightStatusRecord, error) {
-	var out api.QualityInsightStatusRecord
-	if c.quality == nil {
-		return out, errNoQualityService
+func (c *DirectClient) SetInsightStatus(ctx context.Context, insightID string, req api.InspectInsightStatusRequest) (api.InspectInsightStatusRecord, error) {
+	var out api.InspectInsightStatusRecord
+	if c.inspect == nil {
+		return out, errNoInspectService
 	}
-	var internal quality.InsightStatusRequest
+	var internal inspect.InsightStatusRequest
 	if err := assignJSON(&internal, req); err != nil {
 		return out, err
 	}
-	rec, err := c.quality.SetInsightStatus(ctx, insightID, internal)
-	if err != nil {
-		return out, err
-	}
-	return out, assignJSON(&out, rec)
-}
-
-// CreateFeedbackAnnotation appends a review note to a feedback record.
-func (c *DirectClient) CreateFeedbackAnnotation(ctx context.Context, req api.QualityFeedbackAnnotationPostRequest) (api.QualityFeedbackAnnotationRecord, error) {
-	var out api.QualityFeedbackAnnotationRecord
-	if c.quality == nil {
-		return out, errNoQualityService
-	}
-	var internal quality.FeedbackAnnotationPostRequest
-	if err := assignJSON(&internal, req); err != nil {
-		return out, err
-	}
-	rec, err := c.quality.CreateFeedbackAnnotation(ctx, internal)
+	rec, err := c.inspect.SetInsightStatus(ctx, insightID, internal)
 	if err != nil {
 		return out, err
 	}
@@ -48,47 +31,47 @@ func (c *DirectClient) CreateFeedbackAnnotation(ctx context.Context, req api.Qua
 // DeleteRuns removes one or more quality run projections and their canonical
 // observability records, then publishes the same quality event used by the HTTP
 // DELETE route.
-func (c *DirectClient) DeleteRuns(ctx context.Context, traceIDs []string) (api.QualityDeleteRunsRecord, error) {
-	if c.quality == nil {
-		return api.QualityDeleteRunsRecord{}, errNoQualityService
+func (c *DirectClient) DeleteRuns(ctx context.Context, traceIDs []string) (api.InspectDeleteRunsRecord, error) {
+	if c.inspect == nil {
+		return api.InspectDeleteRunsRecord{}, errNoInspectService
 	}
-	return c.quality.DeleteRuns(ctx, traceIDs)
+	return c.inspect.DeleteRuns(ctx, traceIDs)
 }
 
-func (c *DirectClient) InsightSilences(ctx context.Context, includeDeleted bool) ([]api.QualityInsightSilenceRecord, error) {
-	if c.quality == nil {
-		return nil, errNoQualityService
+func (c *DirectClient) InsightSilences(ctx context.Context, includeDeleted bool) ([]api.InspectInsightSilenceRecord, error) {
+	if c.inspect == nil {
+		return nil, errNoInspectService
 	}
-	recs, err := c.quality.InsightSilences(ctx, includeDeleted)
+	recs, err := c.inspect.InsightSilences(ctx, includeDeleted)
 	if err != nil {
 		return nil, err
 	}
-	var out []api.QualityInsightSilenceRecord
+	var out []api.InspectInsightSilenceRecord
 	return out, assignJSON(&out, recs)
 }
 
-func (c *DirectClient) CreateInsightSilence(ctx context.Context, req api.QualityInsightSilenceRequest) (api.QualityInsightSilenceRecord, error) {
-	var out api.QualityInsightSilenceRecord
-	if c.quality == nil {
-		return out, errNoQualityService
+func (c *DirectClient) CreateInsightSilence(ctx context.Context, req api.InspectInsightSilenceRequest) (api.InspectInsightSilenceRecord, error) {
+	var out api.InspectInsightSilenceRecord
+	if c.inspect == nil {
+		return out, errNoInspectService
 	}
-	var internal quality.InsightSilenceRequest
+	var internal inspect.InsightSilenceRequest
 	if err := assignJSON(&internal, req); err != nil {
 		return out, err
 	}
-	rec, err := c.quality.CreateInsightSilence(ctx, internal)
+	rec, err := c.inspect.CreateInsightSilence(ctx, internal)
 	if err != nil {
 		return out, err
 	}
 	return out, assignJSON(&out, rec)
 }
 
-func (c *DirectClient) DeleteInsightSilence(ctx context.Context, silenceID string) (api.QualityInsightSilenceRecord, error) {
-	var out api.QualityInsightSilenceRecord
-	if c.quality == nil {
-		return out, errNoQualityService
+func (c *DirectClient) DeleteInsightSilence(ctx context.Context, silenceID string) (api.InspectInsightSilenceRecord, error) {
+	var out api.InspectInsightSilenceRecord
+	if c.inspect == nil {
+		return out, errNoInspectService
 	}
-	rec, err := c.quality.DeleteInsightSilence(ctx, silenceID)
+	rec, err := c.inspect.DeleteInsightSilence(ctx, silenceID)
 	if err != nil {
 		return out, err
 	}

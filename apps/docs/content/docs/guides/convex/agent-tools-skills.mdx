@@ -6,11 +6,11 @@ description: Integrate Crux prompts, tools, blackboards, and skills with the Con
 Give your Convex Agent threads Crux prompts, memory, tools, and skills. `crux.convexAgent()` keeps the Convex Agent call shape while a Crux prompt supplies dynamic context, memory blocks, skills, and tools for every turn. All primitives import from the mirrored Convex profile subpaths:
 
 ```ts
-import { createCruxConvex, prompt } from '@use-crux/convex'
-import { context } from '@use-crux/convex/context'
-import { memory, recentMessages, workingState } from '@use-crux/convex/memory'
-import { skill } from '@use-crux/convex/skill'
-import { tool } from '@use-crux/convex/tools'
+import { createCruxConvex, prompt } from "@use-crux/convex";
+import { context } from "@use-crux/convex/context";
+import { memory, recentMessages, workingState } from "@use-crux/convex/memory";
+import { skill } from "@use-crux/convex/skill";
+import { tool } from "@use-crux/convex/tools";
 ```
 
 ## Complete Agent
@@ -18,96 +18,101 @@ import { tool } from '@use-crux/convex/tools'
 Define normal Crux primitives from the Convex profile subpaths:
 
 ```ts title="convex/agent/support.ts"
-'use node'
+"use node";
 
-import { createCruxConvex, prompt } from '@use-crux/convex'
-import { context } from '@use-crux/convex/context'
-import { memory, recentMessages, workingState } from '@use-crux/convex/memory'
-import { skill } from '@use-crux/convex/skill'
-import { tool } from '@use-crux/convex/tools'
-import { z } from 'zod'
-import { components } from '../_generated/api'
+import { createCruxConvex, prompt } from "@use-crux/convex";
+import { context } from "@use-crux/convex/context";
+import { memory, recentMessages, workingState } from "@use-crux/convex/memory";
+import { skill } from "@use-crux/convex/skill";
+import { tool } from "@use-crux/convex/tools";
+import { z } from "zod";
+import { components } from "../_generated/api";
 
 const sessionState = z.object({
   currentGoal: z.string().optional(),
-})
+});
 
 const supportMemory = memory({
-  id: 'support-memory',
+  id: "support-memory",
   blocks: [
-    recentMessages({ id: 'recent', maxMessages: 12 }),
-    workingState({ id: 'session-state', schema: sessionState }),
+    recentMessages({ id: "recent", maxMessages: 12 }),
+    workingState({ id: "session-state", schema: sessionState }),
   ],
-})
+});
 
 const accountContext = context({
-  id: 'account',
+  id: "account",
   input: z.object({
-    accountTier: z.enum(['free', 'pro', 'enterprise']),
+    accountTier: z.enum(["free", "pro", "enterprise"]),
   }),
   system: ({ input }) => `Account tier: ${input.accountTier}`,
-})
+});
 
 const supportSkill = skill.inline({
-  id: 'support-debugging',
-  description: 'Debugging workflow for support issues.',
-  instructions: 'Ask for exact error text, isolate reproduction steps, and confirm the fix.',
-})
+  id: "support-debugging",
+  description: "Debugging workflow for support issues.",
+  instructions:
+    "Ask for exact error text, isolate reproduction steps, and confirm the fix.",
+});
 
 const lookupAccount = tool({
-  name: 'lookupAccount',
-  description: 'Look up account metadata.',
+  name: "lookupAccount",
+  description: "Look up account metadata.",
   input: z.object({
     accountId: z.string(),
   }),
   execute: async ({ input, ctx, target }) => {
     return loadAccount(ctx, {
       accountId: input.accountId,
-      userId: String(target.userId ?? ''),
-    })
+      userId: String(target.userId ?? ""),
+    });
   },
-})
+});
 
 const supportPrompt = prompt({
-  id: 'support.agent',
+  id: "support.agent",
   input: z.object({
     accountId: z.string(),
-    accountTier: z.enum(['free', 'pro', 'enterprise']),
+    accountTier: z.enum(["free", "pro", "enterprise"]),
     message: z.string(),
   }),
   use: [supportMemory, accountContext, supportSkill],
   tools: { lookupAccount },
-  system: 'You are a precise support engineer.',
+  system: "You are a precise support engineer.",
   prompt: ({ input }) => input.message,
-})
+});
 
 export const crux = createCruxConvex({
   components: {
     crux: components.crux,
     agent: components.agent,
   },
-})
+});
 
 export const supportAgent = crux.convexAgent({
-  name: 'Support',
+  name: "Support",
   prompt: supportPrompt,
   languageModel,
-})
+});
 ```
 
 Call the agent from a Convex action:
 
 ```ts title="convex/support/actions.ts"
-import { action } from '../_generated/server'
-import { v } from 'convex/values'
-import { supportAgent } from '../agent/support'
+import { action } from "../_generated/server";
+import { v } from "convex/values";
+import { supportAgent } from "../agent/support";
 
 export const reply = action({
   args: {
     threadId: v.string(),
     userId: v.string(),
     accountId: v.string(),
-    accountTier: v.union(v.literal('free'), v.literal('pro'), v.literal('enterprise')),
+    accountTier: v.union(
+      v.literal("free"),
+      v.literal("pro"),
+      v.literal("enterprise"),
+    ),
     message: v.string(),
   },
   handler: async (ctx, args) => {
@@ -115,7 +120,7 @@ export const reply = action({
       threadId: args.threadId,
       userId: args.userId,
       accountId: args.accountId,
-    })
+    });
 
     return thread.streamText({
       input: {
@@ -123,9 +128,9 @@ export const reply = action({
         accountTier: args.accountTier,
         message: args.message,
       },
-    })
+    });
   },
-})
+});
 ```
 
 TypeScript infers the `input` object from the prompt and its `use` entries. If `accountTier` is omitted, the call fails at compile time because `accountContext` contributes that input requirement.
@@ -139,19 +144,19 @@ Use `convexAgent()` or `crux.convexAgent()` when Crux should own the profile-bac
 Use `crux.prepare` when prompt input or runtime `use[]` entries must be derived from Convex Agent thread context:
 
 ```ts
-import { messageText } from '@use-crux/convex'
+import { messageText } from "@use-crux/convex";
 
 export const supportAgent = crux.convexAgent({
-  name: 'Support',
+  name: "Support",
   prompt: supportPrompt,
   languageModel,
   crux: {
     prepare: async ({ ctx, target, input, messages }) => {
-      const lastMessage = messages?.recent.at(-1)
+      const lastMessage = messages?.recent.at(-1);
       const account = await loadAccount(ctx, {
-        userId: String(target.userId ?? ''),
-        lastMessage: lastMessage ? messageText(lastMessage) : '',
-      })
+        userId: String(target.userId ?? ""),
+        lastMessage: lastMessage ? messageText(lastMessage) : "",
+      });
 
       return {
         input: {
@@ -160,10 +165,10 @@ export const supportAgent = crux.convexAgent({
         },
         use: [threadMemory],
         captureMessages: messages?.recent,
-      }
+      };
     },
   },
-})
+});
 ```
 
 The wrapper runs `crux.prepare` inside the active Convex Crux runtime. Returned `use[]` entries are added to the prompt for that turn, including when `crux.prepare` returns a prompt override. Returned tools are merged with resolved prompt tools, and `captureMessages` gives memory blocks the real user message when Convex Agent owns the thread history. Use `crux.runtime.store` and `crux.runtime.namespace` for request-scoped Crux store and namespace overrides, `crux.observe` to customize or disable the profile `agent.run` span, and `crux.persistence` to disable best-effort skill or memory persistence for specialized agents.
@@ -188,10 +193,10 @@ The default memory namespace is `thread:${threadId}`. Use the normal `namespace`
 
 ```ts
 const projectMemory = memory({
-  id: 'project-memory',
+  id: "project-memory",
   namespace: ({ input }) => `project:${input.projectId}`,
-  blocks: [workingState({ id: 'project-state', schema: projectStateSchema })],
-})
+  blocks: [workingState({ id: "project-state", schema: projectStateSchema })],
+});
 ```
 
 Skills stay normal Crux `use[]` entries. Their blackboard/session bookkeeping is internal to the Convex wrapper unless you explicitly add a blackboard primitive yourself.
@@ -202,16 +207,16 @@ Use `tool()` from `@use-crux/convex/tools` for tools that need Convex runtime me
 
 ```ts
 const searchProject = tool({
-  name: 'searchProject',
-  description: 'Search project material.',
+  name: "searchProject",
+  description: "Search project material.",
   input: z.object({ query: z.string() }),
   execute: async ({ input, ctx, target }) => {
     return searchProjectDocuments(ctx, {
       projectId: String(target.projectId),
       query: input.query,
-    })
+    });
   },
-})
+});
 ```
 
 The public authoring shape follows `@use-crux/core/tools`. The only Convex-specific difference is the `execute()` argument: `{ input, ctx, target, runtime }`.
@@ -221,23 +226,23 @@ The public authoring shape follows `@use-crux/core/tools`. The only Convex-speci
 Use `resolve()` when you need to assemble Convex Agent options manually.
 
 ```ts
-import { resolve } from '@use-crux/ai/agent'
-import { Agent, convexTools } from '@use-crux/convex/agent'
+import { resolve } from "@use-crux/ai/agent";
+import { Agent, convexTools } from "@use-crux/convex/agent";
 
 const resolved = await resolve(supportPrompt, {
   model: languageModel,
   input: { locale, threadId },
-})
+});
 
 const agent = new Agent(components.agent, {
-  name: 'Support',
+  name: "Support",
   languageModel: resolved.model,
   instructions: resolved.instructions,
   tools: {
     ...businessTools,
     ...convexTools(resolved.tools),
   },
-})
+});
 ```
 
 Manual setup is the escape hatch for normal Convex Agent-shaped code. Prefer profile-backed `convexAgent()` when the Crux prompt owns memory, skills, and tools for every turn.
@@ -249,18 +254,18 @@ Manual setup is the escape hatch for normal Convex Agent-shaped code. Prefer pro
 Create tools with `createTool()` from `@use-crux/convex/agent` or wrap existing Convex Agent tools with `wrapConvexTool()`. When a tool is passed through `Agent`, the object key is used as the devtools label; direct standalone tools can set `title`. Keep `description` model-facing and descriptive.
 
 ```ts
-import { createTool } from '@use-crux/convex/agent'
-import { z } from 'zod'
+import { createTool } from "@use-crux/convex/agent";
+import { z } from "zod";
 
 export const researchTool = createTool({
-  description: 'Run delegated research.',
+  description: "Run delegated research.",
   inputSchema: z.object({ query: z.string() }),
   execute: async (ctx, args) => {
-    return ctx.crux.runAction('research', internal.research.run, {
+    return ctx.crux.runAction("research", internal.research.run, {
       query: args.query,
-    })
+    });
   },
-})
+});
 ```
 
 Readable tool names matter. If you wrap a tool, pass `{ name: 'research' }` so devtools do not show only provider-generated tool call IDs. Wrapped tools also flush after success or failure, so nested spans and tool error evidence arrive before the Convex Agent turn continues.
@@ -270,22 +275,22 @@ Readable tool names matter. If you wrap a tool, pass `{ name: 'research' }` so d
 Blackboards contribute Crux tools when resolved through prompts. With `convexAgent()`, those tools are discovered during prompt resolution and registered automatically. Convert them with `convexTools()` only when using manual setup:
 
 ```ts
-import { prompt } from '@use-crux/convex'
-import { convexTools } from '@use-crux/convex/agent'
+import { prompt } from "@use-crux/convex";
+import { convexTools } from "@use-crux/convex/agent";
 
-const board = createResearchBoard(ctx, threadId)
+const board = createResearchBoard(ctx, threadId);
 const promptWithBoard = prompt({
-  id: 'research',
+  id: "research",
   use: [board.asContext({ priority: 80 })],
   prompt: ({ input }) => String(input.question),
-})
+});
 
-const resolved = await promptWithBoard.resolve({ input: { question } })
+const resolved = await promptWithBoard.resolve({ input: { question } });
 
 const tools = {
   ...businessTools,
   ...convexTools(resolved.tools),
-}
+};
 ```
 
 ## Skills
@@ -294,30 +299,34 @@ Skills are core definitions. With `convexAgent()`, put skills in prompt `use[]` 
 
 ```ts
 const debugging = skill.inline({
-  id: 'debugging',
-  description: 'Structured debugging guidance.',
-  instructions: 'Collect symptoms, isolate variables, and verify the resolution.',
-})
+  id: "debugging",
+  description: "Structured debugging guidance.",
+  instructions:
+    "Collect symptoms, isolate variables, and verify the resolution.",
+});
 
 const assistant = prompt({
-  id: 'assistant',
+  id: "assistant",
   use: [debugging],
   prompt: ({ input }) => input.message,
-})
+});
 ```
 
 External agent frameworks still need a skill activation persistence port because they own the tool loop:
 
 ```ts
-import { createAgentSkillKit, convexSkillActivationPersistence } from '@use-crux/convex/skill'
-import { convexTools } from '@use-crux/convex/agent'
+import {
+  createAgentSkillKit,
+  convexSkillActivationPersistence,
+} from "@use-crux/convex/skill";
+import { convexTools } from "@use-crux/convex/agent";
 
 const kit = await createAgentSkillKit(promptWithSkills, {
   target: { threadId },
   persistence: convexSkillActivationPersistence(),
-})
+});
 
-const tools = convexTools(kit.tools)
+const tools = convexTools(kit.tools);
 ```
 
 On the turn where `LoadSkill` runs, the skill content is available as the tool result. On later turns, load the activation snapshot and re-resolve the prompt so the skill becomes part of the system context.

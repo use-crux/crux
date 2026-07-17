@@ -17,7 +17,7 @@ type RunSignals struct {
 	RepeatedToolName        string
 	RepeatedToolCount       int
 	RetrievalIssueCount     int
-	QualitySignalIssueCount int
+	InspectSignalIssueCount int
 	SuspensionSignalCount   int
 	BlockedSignalCount      int
 	DiagnosticCount         int
@@ -136,7 +136,7 @@ func (s *Service) runSignals(ctx context.Context, runIDs []string) (map[string]R
 			signal.RetrievalIssueCount++
 		}
 		if isQualitySignal(span.Family, span.Primitive) && statusNeedsAttention {
-			signal.QualitySignalIssueCount++
+			signal.InspectSignalIssueCount++
 		}
 		if normalizeSignalStatus(span.Status) == "blocked" {
 			signal.BlockedSignalCount++

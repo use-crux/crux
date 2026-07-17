@@ -22,7 +22,7 @@
  * skip the dialog entirely for those).
  */
 
-import { type ReactNode } from 'react'
+import { type ReactNode } from "react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -33,46 +33,54 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from '@/shared/components/ui/alert-dialog'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/tooltip'
+} from "@/shared/components/ui/alert-dialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/shared/components/ui/tooltip";
 
-export type QwConfirmTone = 'danger' | 'warn' | 'crux'
+export type QwConfirmTone = "danger" | "warn" | "crux";
 
 interface QwConfirmProps {
-  title: ReactNode
-  description?: ReactNode
-  confirmLabel?: string
-  cancelLabel?: string
-  tone?: QwConfirmTone
-  onConfirm: () => void
+  title: ReactNode;
+  description?: ReactNode;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  tone?: QwConfirmTone;
+  onConfirm: () => void;
   /**
    * Optional hover hint shown before the dialog opens. We render it here
    * (rather than letting callers wrap with <QwTooltip>) so the two Radix
    * `asChild` Slots stack directly on the trigger — nesting via a
    * function-component wrapper breaks Slot prop forwarding.
    */
-  tooltip?: ReactNode
+  tooltip?: ReactNode;
   /** The button (or other element) the user clicks to open the dialog. */
-  children: ReactNode
+  children: ReactNode;
 }
 
 const TONE: Record<QwConfirmTone, { bg: string; fg: string; ring: string }> = {
-  danger: { bg: 'var(--qw-danger)', fg: 'var(--qw-bg)', ring: 'var(--qw-danger)' },
-  warn: { bg: 'var(--qw-warn)', fg: 'var(--qw-bg)', ring: 'var(--qw-warn)' },
-  crux: { bg: 'var(--qw-crux)', fg: 'var(--qw-bg)', ring: 'var(--qw-crux)' },
-}
+  danger: {
+    bg: "var(--qw-danger)",
+    fg: "var(--qw-bg)",
+    ring: "var(--qw-danger)",
+  },
+  warn: { bg: "var(--qw-warn)", fg: "var(--qw-bg)", ring: "var(--qw-warn)" },
+  crux: { bg: "var(--qw-crux)", fg: "var(--qw-bg)", ring: "var(--qw-crux)" },
+};
 
 export function QwConfirm({
   title,
   description,
-  confirmLabel = 'Confirm',
-  cancelLabel = 'Cancel',
-  tone = 'warn',
+  confirmLabel = "Confirm",
+  cancelLabel = "Cancel",
+  tone = "warn",
   onConfirm,
   tooltip,
   children,
 }: QwConfirmProps) {
-  const palette = TONE[tone]
+  const palette = TONE[tone];
   // Stack the two Slot triggers directly when a tooltip is requested so
   // both Radix contexts merge their event handlers onto the underlying
   // button. Order matters: TooltipTrigger outermost, AlertDialogTrigge
@@ -87,16 +95,16 @@ export function QwConfirm({
         align="center"
         sideOffset={6}
         style={{
-          background: 'var(--qw-bg-elev)',
-          color: 'var(--qw-fg)',
-          border: '1px solid var(--qw-border)',
-          fontFamily: 'var(--qw-mono)',
+          background: "var(--qw-bg-elev)",
+          color: "var(--qw-fg)",
+          border: "1px solid var(--qw-border)",
+          fontFamily: "var(--qw-mono)",
           fontSize: 11.5,
           lineHeight: 1.5,
           maxWidth: 320,
-          padding: '6px 10px',
+          padding: "6px 10px",
           borderRadius: 6,
-          boxShadow: '0 4px 12px rgb(0 0 0 / 0.2)',
+          boxShadow: "0 4px 12px rgb(0 0 0 / 0.2)",
         }}
       >
         {tooltip}
@@ -104,17 +112,17 @@ export function QwConfirm({
     </Tooltip>
   ) : (
     <AlertDialogTrigger asChild>{children}</AlertDialogTrigger>
-  )
+  );
   return (
     <AlertDialog>
       {trigger}
       <AlertDialogContent
         className="qw-confirm"
         style={{
-          background: 'var(--qw-bg-elev)',
-          color: 'var(--qw-fg)',
-          border: '1px solid var(--qw-border)',
-          fontFamily: 'var(--qw-sans)',
+          background: "var(--qw-bg-elev)",
+          color: "var(--qw-fg)",
+          border: "1px solid var(--qw-border)",
+          fontFamily: "var(--qw-sans)",
           borderRadius: 10,
           maxWidth: 460,
         }}
@@ -124,8 +132,8 @@ export function QwConfirm({
             style={{
               fontSize: 15,
               fontWeight: 600,
-              letterSpacing: '-0.01em',
-              color: 'var(--qw-fg)',
+              letterSpacing: "-0.01em",
+              color: "var(--qw-fg)",
             }}
           >
             {title}
@@ -135,7 +143,7 @@ export function QwConfirm({
               style={{
                 fontSize: 12.5,
                 lineHeight: 1.55,
-                color: 'var(--qw-fg-muted)',
+                color: "var(--qw-fg-muted)",
                 marginTop: 6,
               }}
             >
@@ -146,12 +154,12 @@ export function QwConfirm({
         <AlertDialogFooter style={{ marginTop: 16 }}>
           <AlertDialogCancel
             style={{
-              background: 'transparent',
-              color: 'var(--qw-fg-muted)',
-              border: '1px solid var(--qw-border)',
-              fontFamily: 'var(--qw-mono)',
+              background: "transparent",
+              color: "var(--qw-fg-muted)",
+              border: "1px solid var(--qw-border)",
+              fontFamily: "var(--qw-mono)",
               fontSize: 12,
-              padding: '6px 12px',
+              padding: "6px 12px",
               borderRadius: 6,
             }}
           >
@@ -163,10 +171,10 @@ export function QwConfirm({
               background: palette.bg,
               color: palette.fg,
               boxShadow: `inset 0 0 0 1px ${palette.ring}`,
-              fontFamily: 'var(--qw-mono)',
+              fontFamily: "var(--qw-mono)",
               fontSize: 12,
               fontWeight: 600,
-              padding: '6px 14px',
+              padding: "6px 14px",
               borderRadius: 6,
             }}
           >
@@ -175,5 +183,5 @@ export function QwConfirm({
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
-  )
+  );
 }

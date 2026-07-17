@@ -9,7 +9,7 @@
  */
 
 import type { StreamCompletion } from "../../adapter/result-accumulator";
-import type { StandardSchemaV1 } from "../../quality/standard-schema";
+import type { StandardSchemaV1 } from "./schema";
 import type { JsonValue } from "../../storage/types";
 import type {
   CallOf,

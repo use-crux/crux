@@ -5,8 +5,7 @@
  * grouping `generate()` calls into structured pipelines with named steps,
  * automatic devtools tracing, suspend/resume, and retry/fallback.
  *
- * Flows are evaluated with the Quality system: wrap a handle in
- * `evaluate({ task: myFlow, ... })` from `@use-crux/core/quality`.
+ * Flows can be exercised by an Eval task that calls the flow handle.
  *
  * @example
  * ```ts

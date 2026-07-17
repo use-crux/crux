@@ -3,6 +3,7 @@ import {
   CruxRuntimeError,
   createRuntime,
 } from '@use-crux/core/runtime'
+import { getEvalHostConnectionInference } from '@use-crux/core/runtime/internal/eval-host'
 import { describe, expect, it } from 'vitest'
 import { CONVEX_RUNTIME_ENTRY, convex } from '../src/runtime'
 
@@ -51,5 +52,22 @@ describe('convex() Runtime Engine declaration', () => {
         startMaintenance: false,
       }),
     ).toThrowError(/createConvexRuntimeHandlers/)
+  })
+
+  it('infers only non-secret Eval host connection fields', () => {
+    const crux = config({ runtime: convex() })
+    const inference = getEvalHostConnectionInference(crux.config.runtime)
+
+    expect(
+      inference?.infer({
+        CONVEX_SITE_URL: 'https://example.convex.site',
+        CONVEX_DEPLOYMENT: 'dev:example',
+        CRUX_EVAL_HOST_TOKEN: 'must-not-be-inferred',
+      }),
+    ).toEqual({
+      url: 'https://example.convex.site',
+      deploymentId: 'dev:example',
+    })
+    crux.dispose()
   })
 })

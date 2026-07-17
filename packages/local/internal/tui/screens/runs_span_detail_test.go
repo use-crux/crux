@@ -21,9 +21,9 @@ func renderSpanWithPayload(t *testing.T, primitive string, payload map[string]an
 	r := NewRuns()
 	r.loaded = true
 	r.selRun = "run-x"
-	r.detail = &api.QualityRunDetailRecord{
-		Run: api.QualityRunRecord{TraceID: "run-x"},
-		Spans: []api.QualityRunSpan{
+	r.detail = &api.InspectRunDetailRecord{
+		Run: api.InspectRunRecord{TraceID: "run-x"},
+		Spans: []api.InspectRunSpan{
 			{
 				ID:        "sp1",
 				Name:      "span under test",
@@ -33,7 +33,7 @@ func renderSpanWithPayload(t *testing.T, primitive string, payload map[string]an
 				Data:      json.RawMessage(body),
 			},
 		},
-		Trace: api.QualityTraceRecord{StartedAt: 1716730000000},
+		Trace: api.InspectTraceRecord{StartedAt: 1716730000000},
 	}
 	r.selSpan = "sp1"
 	return r.renderSpanDetail(80, 60)
@@ -112,9 +112,9 @@ func TestSpanDetailSurfacesObservedError(t *testing.T) {
 	r := NewRuns()
 	r.loaded = true
 	r.selRun = "run-error"
-	r.detail = &api.QualityRunDetailRecord{
-		Run: api.QualityRunRecord{TraceID: "run-error"},
-		Spans: []api.QualityRunSpan{
+	r.detail = &api.InspectRunDetailRecord{
+		Run: api.InspectRunRecord{TraceID: "run-error"},
+		Spans: []api.InspectRunSpan{
 			{
 				ID:        "sp-error",
 				Name:      "rag.search",
@@ -138,7 +138,7 @@ func TestSpanDetailSurfacesObservedError(t *testing.T) {
 				},
 			},
 		},
-		Trace: api.QualityTraceRecord{StartedAt: 1716730000000},
+		Trace: api.InspectTraceRecord{StartedAt: 1716730000000},
 	}
 	r.selSpan = "sp-error"
 

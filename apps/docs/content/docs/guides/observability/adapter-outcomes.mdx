@@ -6,21 +6,21 @@ description: Handle a rate limit, timeout, or refusal the same way on every prov
 A rate limit from OpenAI, a stream timeout from Anthropic, a safety refusal from Google: without normalization, each one needs provider-specific error handling. Crux's first-party adapters (`@use-crux/openai`, `@use-crux/anthropic`, `@use-crux/google`, and `@use-crux/ai`) map every completed call and every failure into one closed taxonomy, so one code path handles them all:
 
 ```ts
-import { isCruxAdapterError } from '@use-crux/core/adapter'
+import { isCruxAdapterError } from "@use-crux/core/adapter";
 
 try {
-  const result = await adapter.generate(supportReply, { model, input })
-  return result.text
+  const result = await adapter.generate(supportReply, { model, input });
+  return result.text;
 } catch (error) {
   if (isCruxAdapterError(error)) {
     if (error.providerError.retryable) {
       // rate limit, timeout, transient provider failure
-      return requeue(job, error.providerError.code)
+      return requeue(job, error.providerError.code);
     }
     // invalid request, refusal, safety block: retrying will not help
-    return fail(job, error.providerError.code)
+    return fail(job, error.providerError.code);
   }
-  throw error
+  throw error;
 }
 ```
 
@@ -31,23 +31,23 @@ import type {
   CruxFinishReason,
   CruxProviderError,
   CruxAdapterError,
-} from '@use-crux/core/adapter'
+} from "@use-crux/core/adapter";
 ```
 
 ## Finish reasons
 
 `AdapterResponse.finishReason` is `CruxFinishReason | undefined`:
 
-| Value | Meaning |
-| --- | --- |
-| `stop` | Natural completion |
-| `length` | Hit a max-token / length limit |
-| `tool-calls` | Model requested one or more completed tool calls |
+| Value            | Meaning                                                                 |
+| ---------------- | ----------------------------------------------------------------------- |
+| `stop`           | Natural completion                                                      |
+| `length`         | Hit a max-token / length limit                                          |
+| `tool-calls`     | Model requested one or more completed tool calls                        |
 | `content-filter` | Provider safety / content filter blocked output (or blocked the prompt) |
-| `refusal` | Model refused (when the provider distinguishes refusal from filter) |
-| `error` | Provider reported an error finish |
-| `aborted` | Cooperative abort |
-| `unknown` | Unrecognized provider string clamped honestly |
+| `refusal`        | Model refused (when the provider distinguishes refusal from filter)     |
+| `error`          | Provider reported an error finish                                       |
+| `aborted`        | Cooperative abort                                                       |
+| `unknown`        | Unrecognized provider string clamped honestly                           |
 
 Raw provider strings (Anthropic `end_turn`, Google `SAFETY`, AI SDK `other`, ...) never leak through as the public finish reason.
 
@@ -55,24 +55,24 @@ Raw provider strings (Anthropic `end_turn`, Google `SAFETY`, AI SDK `other`, ...
 
 ```ts
 interface CruxProviderError {
-  readonly kind: CruxProviderErrorKind
+  readonly kind: CruxProviderErrorKind;
   /** Bounded, namespaced machine id, e.g. `openai.rate_limit`. */
-  readonly code: string
-  readonly retryable: boolean
+  readonly code: string;
+  readonly retryable: boolean;
   /** Optional redacted human text, never a raw provider payload dump. */
-  readonly message?: string
+  readonly message?: string;
 }
 
 type CruxProviderErrorKind =
-  | 'refusal'
-  | 'safety'
-  | 'content-filter'
-  | 'rate-limit'
-  | 'timeout'
-  | 'aborted'
-  | 'invalid-request'
-  | 'provider-error'
-  | 'unknown'
+  | "refusal"
+  | "safety"
+  | "content-filter"
+  | "rate-limit"
+  | "timeout"
+  | "aborted"
+  | "invalid-request"
+  | "provider-error"
+  | "unknown";
 ```
 
 Caller `AbortSignal` and Crux budget timeouts are classified as `aborted` and `timeout`, and usage is honestly omitted when the provider omits counts (never invented zeros). Optional `message` is routed through the shared observability redaction path (`toSafeJsonValue`) before retention: sensitive keys are stripped and long strings are truncated. See [Privacy](/docs/guides/observability/privacy).

@@ -25,9 +25,18 @@ export function decodeEvalHostManifest(value: unknown): EvalHostManifestV1 {
     !Array.isArray(value.evals) ||
     !value.evals.every(isManifestEntry)
   ) {
-    throw new TypeError("Eval host returned an incompatible manifest.");
+    throw new EvalHostManifestCompatibilityError();
   }
   return value as unknown as EvalHostManifestV1;
+}
+
+/** Authenticated manifest bytes that do not satisfy the selected V1 protocol. */
+export class EvalHostManifestCompatibilityError extends TypeError {
+  override readonly name = "EvalHostManifestCompatibilityError";
+
+  constructor() {
+    super("Eval host returned an incompatible manifest protocol.");
+  }
 }
 
 function isManifestEntry(value: unknown): boolean {

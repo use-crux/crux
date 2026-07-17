@@ -213,8 +213,7 @@ function pathField(path: string): boolean {
     path === 'sources.dependencies' ||
     path === 'sources.dependents' ||
     path.endsWith('.source.file') ||
-    path.endsWith('.range.file') ||
-    path.endsWith('.cassettePaths')
+    path.endsWith('.range.file')
   )
 }
 

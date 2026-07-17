@@ -15,7 +15,7 @@ import (
 
 func TestObservabilityHTTPIngestAndReadGraph(t *testing.T) {
 	srv := NewHTTPServer(store.NewStore(), ServerOptions{
-		QualityDir:          t.TempDir(),
+		InspectDir:          t.TempDir(),
 		ObservabilityDBPath: t.TempDir() + "/observability.sqlite",
 	})
 	ts := httptest.NewServer(srv)
@@ -123,7 +123,7 @@ func mustReadGraphBody(t *testing.T, baseURL string, runID string) []byte {
 
 func TestObservabilityHTTPMapsInvalidAndMissing(t *testing.T) {
 	srv := NewHTTPServer(store.NewStore(), ServerOptions{
-		QualityDir:          t.TempDir(),
+		InspectDir:          t.TempDir(),
 		ObservabilityDBPath: t.TempDir() + "/observability.sqlite",
 	})
 	ts := httptest.NewServer(srv)
@@ -164,7 +164,7 @@ func TestObservabilityHTTPMapsInvalidAndMissing(t *testing.T) {
 
 func TestObservabilityHTTPResourceActivity(t *testing.T) {
 	srv := NewHTTPServer(store.NewStore(), ServerOptions{
-		QualityDir:          t.TempDir(),
+		InspectDir:          t.TempDir(),
 		ObservabilityDBPath: t.TempDir() + "/observability.sqlite",
 	})
 	ts := httptest.NewServer(srv)

@@ -20,7 +20,7 @@ Features not requiring the missing capability may continue to work. Object-bound
 Use a stack that supports the feature, such as:
 
 ```ts
-runtime: serverless({ store: postgres(), wake: qstash() })
+runtime: serverless({ store: postgres(), wake: qstash() });
 ```
 
 For custom adapters, update capabilities only after implementing the matching behavior and conformance tests.

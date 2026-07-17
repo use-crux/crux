@@ -7,7 +7,7 @@ import type {
   EvalPlanningPorts,
 } from "../../src/eval/internal/ports";
 import { attachEvalTaskDescriptorForInternalUse } from "../../src/eval/internal/task";
-import { scorers } from "../../src/quality/scorers";
+import { scorers } from "../../src/eval/internal/scorers/types";
 
 export const taskIdentity = {
   reusable: true as const,

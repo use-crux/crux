@@ -1,0 +1,58 @@
+---
+title: Runtime host setup
+description: Connect Evals to the project's selected Crux Runtime without exposing credentials.
+---
+
+Evals use the Crux Runtime already selected by the project. There is no
+separate Eval runtime, host array, profile, capability router, or fallback.
+Exactly one deployment is active for an invocation.
+
+## Connection discovery
+
+Explicit Crux variables take precedence:
+
+```bash
+CRUX_EVAL_HOST_URL=https://runtime.example.com
+CRUX_EVAL_HOST_DEPLOYMENT_ID=production-eu
+CRUX_EVAL_HOST_TOKEN=...
+```
+
+The selected adapter may infer the two non-secret values from its standard
+environment. The Convex adapter reads `CONVEX_SITE_URL` and
+`CONVEX_DEPLOYMENT`. The bearer is never inferred: it comes only from
+`CRUX_EVAL_HOST_TOKEN`.
+
+Keep the token in the environment or platform secret store. Never put it in
+`crux.config.ts`, generated registries, command arguments, logs, plans,
+errors, or fingerprints. Crux authenticates the Runtime manifest and then
+requires its deployment id and capabilities to match local expectations.
+
+## Convex
+
+Configure the project with the existing Convex Runtime adapter and deploy the
+generated Runtime entry using the normal Convex workflow. In a standard
+Convex environment, set only `CRUX_EVAL_HOST_TOKEN`; the adapter infers URL
+and deployment id. Explicit Crux URL and deployment variables override that
+inference.
+
+## Cloudflare
+
+Create the host with `createCloudflareEvalHost()`, export its Durable Object,
+bind the namespace in Wrangler, and store the execute bearer as a Worker
+secret. Durable Object storage holds canonical chunked results and alarms
+recover jobs; `waitUntil()` is not the correctness path.
+
+The local CLI cannot infer Cloudflare connection values. Set all three
+explicit Crux environment variables for the selected deployment.
+
+## Other serverless hosts
+
+A custom Runtime host must implement the authenticated manifest and Eval job
+protocol, durable reservation/job/result storage, wake recovery, and
+content-addressed result references. Generated registries contain identities,
+not functions, prompts, models, module paths, or credentials.
+
+`--plan` may make one authenticated read-only manifest request when remote
+work is required. Missing credentials produce an unverified plan with exact
+setup remedies. `--offline`, including `--offline --plan`, never accesses the
+network.

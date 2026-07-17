@@ -33,6 +33,10 @@
       "types": "./src/eval/index.ts",
       "import": "./src/eval/index.ts"
     },
+    "./feedback": {
+      "types": "./src/feedback/index.ts",
+      "import": "./src/feedback/index.ts"
+    },
     "./eval/node": {
       "types": "./src/eval/node.ts",
       "import": "./src/eval/node.ts"
@@ -48,18 +52,6 @@
     "./eval/internal/node-runner": {
       "types": "./src/eval/node/runner.ts",
       "import": "./src/eval/node/runner.ts"
-    },
-    "./quality": {
-      "types": "./src/quality/index.ts",
-      "import": "./src/quality/index.ts"
-    },
-    "./quality/schemas": {
-      "types": "./src/quality/schemas.ts",
-      "import": "./src/quality/schemas.ts"
-    },
-    "./quality/internal/runner": {
-      "types": "./src/quality/internal/runner.ts",
-      "import": "./src/quality/internal/runner.ts"
     },
     "./internal/async-scope": {
       "types": "./src/async-scope/index.ts",
@@ -256,12 +248,6 @@
   },
   "typesVersions": {
     "*": {
-      "quality": [
-        "src/quality/index.ts"
-      ],
-      "quality/schemas": [
-        "src/quality/schemas.ts"
-      ],
       "internal/async-scope": [
         "src/async-scope/index.ts"
       ],

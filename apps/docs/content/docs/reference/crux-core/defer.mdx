@@ -10,7 +10,7 @@ import {
   DEFER_ERROR_CODES,
   type DeferredWorkRef,
   type DeferredCallback,
-} from '@use-crux/core'
+} from "@use-crux/core";
 ```
 
 ## Overview
@@ -20,8 +20,8 @@ named targets come first; unbranded callbacks select the inline form.
 
 ## `defer(callback)`
 
-| Parameter | Type | Description |
-| --- | --- | --- |
+| Parameter  | Type                              | Description                 |
+| ---------- | --------------------------------- | --------------------------- |
 | `callback` | `() => void \| PromiseLike<void>` | Lazy zero-argument callback |
 
 **Returns:** `void`
@@ -39,18 +39,18 @@ Throws:
 
 ## `defer(target, input)`
 
-| Parameter | Type | Description |
-| --- | --- | --- |
-| `target` | branded `RuntimeTaskTarget` | Exported `durableTask(...)` (or compatible) target |
-| `input` | inferred JSON-safe input | Required for V1 targets constrained to `JsonValue` |
+| Parameter | Type                        | Description                                        |
+| --------- | --------------------------- | -------------------------------------------------- |
+| `target`  | branded `RuntimeTaskTarget` | Exported `durableTask(...)` (or compatible) target |
+| `input`   | inferred JSON-safe input    | Required for V1 targets constrained to `JsonValue` |
 
 **Returns:** `Promise<DeferredWorkRef>`
 
 ```ts
 interface DeferredWorkRef {
-  readonly kind: 'deferred.work'
-  readonly workId: string
-  readonly targetId: string
+  readonly kind: "deferred.work";
+  readonly workId: string;
+  readonly targetId: string;
 }
 ```
 
@@ -67,11 +67,11 @@ Throws or poisons commit with:
 
 ## Host subpaths
 
-| Import | Purpose |
-| --- | --- |
-| `@use-crux/core/defer/node` | Node HTTP `withNodeDefer` / `createNodeDeferHost` |
-| `@use-crux/core/defer/serverless` | `withWaitUntilDefer`, `withAfterDefer`, `withNamedOnlyDefer`, factories |
-| `@use-crux/next` | Next.js `withCrux` binding defer and observability to `after()`; `withNextDefer` remains the defer-only primitive |
+| Import                            | Purpose                                                                                                           |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `@use-crux/core/defer/node`       | Node HTTP `withNodeDefer` / `createNodeDeferHost`                                                                 |
+| `@use-crux/core/defer/serverless` | `withWaitUntilDefer`, `withAfterDefer`, `withNamedOnlyDefer`, factories                                           |
+| `@use-crux/next`                  | Next.js `withCrux` binding defer and observability to `after()`; `withNextDefer` remains the defer-only primitive |
 
 Internal first-party SPI (not application API):
 
@@ -113,15 +113,15 @@ recognizable environment alone is not treated as proof of a working lifetime.
 
 ## Diagnostics
 
-| Code | Docs |
-| --- | --- |
-| `DEFER_SCOPE_REQUIRED` | [/docs/errors/DEFER_SCOPE_REQUIRED](/docs/errors/DEFER_SCOPE_REQUIRED) |
-| `DEFER_CAPABILITY_MISSING` | [/docs/errors/DEFER_CAPABILITY_MISSING](/docs/errors/DEFER_CAPABILITY_MISSING) |
-| `DEFER_SCOPE_SEALED` | [/docs/errors/DEFER_SCOPE_SEALED](/docs/errors/DEFER_SCOPE_SEALED) |
-| `DEFER_LIMIT_EXCEEDED` | [/docs/errors/DEFER_LIMIT_EXCEEDED](/docs/errors/DEFER_LIMIT_EXCEEDED) |
-| `DEFER_REPLAY_UNSAFE` | [/docs/errors/DEFER_REPLAY_UNSAFE](/docs/errors/DEFER_REPLAY_UNSAFE) |
+| Code                          | Docs                                                                                 |
+| ----------------------------- | ------------------------------------------------------------------------------------ |
+| `DEFER_SCOPE_REQUIRED`        | [/docs/errors/DEFER_SCOPE_REQUIRED](/docs/errors/DEFER_SCOPE_REQUIRED)               |
+| `DEFER_CAPABILITY_MISSING`    | [/docs/errors/DEFER_CAPABILITY_MISSING](/docs/errors/DEFER_CAPABILITY_MISSING)       |
+| `DEFER_SCOPE_SEALED`          | [/docs/errors/DEFER_SCOPE_SEALED](/docs/errors/DEFER_SCOPE_SEALED)                   |
+| `DEFER_LIMIT_EXCEEDED`        | [/docs/errors/DEFER_LIMIT_EXCEEDED](/docs/errors/DEFER_LIMIT_EXCEEDED)               |
+| `DEFER_REPLAY_UNSAFE`         | [/docs/errors/DEFER_REPLAY_UNSAFE](/docs/errors/DEFER_REPLAY_UNSAFE)                 |
 | `DEFER_TARGET_INPUT_REQUIRED` | [/docs/errors/DEFER_TARGET_INPUT_REQUIRED](/docs/errors/DEFER_TARGET_INPUT_REQUIRED) |
-| `DEFER_COMMIT_FAILED` | [/docs/errors/DEFER_COMMIT_FAILED](/docs/errors/DEFER_COMMIT_FAILED) |
+| `DEFER_COMMIT_FAILED`         | [/docs/errors/DEFER_COMMIT_FAILED](/docs/errors/DEFER_COMMIT_FAILED)                 |
 
 Observed drain outcomes (not always thrown to the handler):
 

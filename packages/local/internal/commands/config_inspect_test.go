@@ -11,24 +11,12 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/output"
 )
 
-// loadedConfigFixture is an effective-config payload for a project that set a few
-// quality values explicitly and left everything else at its default.
+// loadedConfigFixture is a representative effective-config payload.
 func loadedConfigFixture(root string) json.RawMessage {
 	return json.RawMessage(`{
 	  "root": "` + jsonEscape(root) + `",
 	  "packageName": "@fixture/model",
 	  "configFile": { "path": "` + jsonEscape(root) + `/crux.config.ts", "status": "loaded", "origin": "discovered" },
-	  "quality": {
-	    "id": { "value": "acme-backend", "origin": "config" },
-	    "dir": { "value": "` + jsonEscape(root) + `/.crux/quality", "origin": "default" },
-	    "include": { "values": ["evals/**/*.eval.ts", "**/*.eval.ts"], "origin": "default" },
-	    "exclude": { "values": [], "origin": "default" },
-	    "redact": { "values": ["customer.email"], "origin": "config" },
-	    "trials": { "value": "3", "origin": "config" },
-	    "concurrency": { "value": "5", "origin": "default" },
-	    "timeoutMs": { "value": "60000", "origin": "default" },
-	    "replay": { "value": "record-new", "origin": "config" }
-	  },
 	  "generation": {
 	    "autoEscape": { "value": "true", "origin": "default" },
 	    "securityWarnings": { "value": "true", "origin": "default" },
@@ -99,9 +87,6 @@ func TestConfigInspectJSONPrintsEffectiveConfig(t *testing.T) {
 	if err := json.Unmarshal([]byte(out.String()), &decoded); err != nil {
 		t.Fatalf("decode JSON: %v\n%s", err, out.String())
 	}
-	if _, ok := decoded["quality"].(map[string]any); !ok {
-		t.Fatalf("quality domain missing from JSON: %#v", decoded["quality"])
-	}
 	if _, ok := decoded["generation"].(map[string]any); !ok {
 		t.Fatalf("generation domain missing from JSON: %#v", decoded["generation"])
 	}
@@ -131,14 +116,6 @@ func TestConfigInspectHumanRendersEveryConfigDomain(t *testing.T) {
 		// Project + config file (root-relative path, located by discovery).
 		"Project", "root", root, "package", "@fixture/model", "(package.json)",
 		"Config file", "file", "crux.config.ts", "(discovered)", "status", "✓ loaded",
-		// quality: mirrors the QualityConfig interface; explicit vs default tags.
-		"quality:",
-		"id", "acme-backend", "(config)",
-		"dir", ".crux/quality", "(default)",
-		"include", "evals/**/*.eval.ts",
-		"redact", "customer.email",
-		"trials", "3",
-		"replay", "record-new",
 		// Every other config() domain is represented.
 		"generation:", "autoEscape", "securityWarnings", "tokenizer", "middleware",
 		"indexer:", "trust", "first-party-only", "extensions",
@@ -158,15 +135,8 @@ func TestConfigInspectHumanRendersEveryConfigDomain(t *testing.T) {
 	}
 
 	// Explicit values must be tagged as config, defaults as default.
-	if !strings.Contains(text, "acme-backend  (config)") {
-		t.Fatalf("explicit quality.id was not tagged (config):\n%s", text)
-	}
 	if !strings.Contains(text, "first-party-only  (default)") {
 		t.Fatalf("default indexer.trust was not tagged (default):\n%s", text)
-	}
-	// Paths normalize: the absolute root prefix never leaks into the dir value.
-	if strings.Contains(text, root+"/.crux/quality") {
-		t.Fatalf("quality.dir was not normalized relative to root:\n%s", text)
 	}
 }
 
@@ -174,17 +144,6 @@ func TestConfigInspectHumanZeroConfigReadsAsDefaults(t *testing.T) {
 	raw := json.RawMessage(`{
 	  "root": "/tmp/project",
 	  "configFile": { "status": "missing", "origin": "none" },
-	  "quality": {
-	    "id": { "value": "none", "origin": "none" },
-	    "dir": { "value": "/tmp/project/.crux/quality", "origin": "default" },
-	    "include": { "values": ["evals/**/*.eval.ts", "**/*.eval.ts"], "origin": "default" },
-	    "exclude": { "values": [], "origin": "default" },
-	    "redact": { "values": [], "origin": "default" },
-	    "trials": { "value": "1", "origin": "default" },
-	    "concurrency": { "value": "5", "origin": "default" },
-	    "timeoutMs": { "value": "60000", "origin": "default" },
-	    "replay": { "value": "live", "origin": "default" }
-	  },
 	  "generation": {
 	    "autoEscape": { "value": "true", "origin": "default" },
 	    "securityWarnings": { "value": "true", "origin": "default" },
@@ -215,8 +174,6 @@ func TestConfigInspectHumanZeroConfigReadsAsDefaults(t *testing.T) {
 	for _, want := range []string{
 		"◇ crux config inspect",
 		"Config file", "status", "✗ missing",
-		"dir", ".crux/quality", "(default)",
-		"replay", "live", "(default)",
 		"experimental:", "indexer.native", "false", "(default)", "indexer.nativeAst", "false", "indexer.nativeEngine", "none", "indexer.tsserverPath", "none",
 		"lint:", "recommended", "(default)",
 		"Diagnostics  0", "✓ none",

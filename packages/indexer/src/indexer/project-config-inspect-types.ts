@@ -31,17 +31,6 @@ export interface ProjectConfigInspect {
     readonly origin: ProjectConfigFileOrigin
     readonly error?: string
   }
-  readonly quality: {
-    readonly id: ProjectConfigSetting
-    readonly dir: ProjectConfigSetting
-    readonly include: ProjectConfigList
-    readonly exclude: ProjectConfigList
-    readonly redact: ProjectConfigList
-    readonly trials: ProjectConfigSetting
-    readonly concurrency: ProjectConfigSetting
-    readonly timeoutMs: ProjectConfigSetting
-    readonly replay: ProjectConfigSetting
-  }
   readonly generation: {
     readonly autoEscape: ProjectConfigSetting
     readonly securityWarnings: ProjectConfigSetting

@@ -40,12 +40,6 @@ export type {
   ProjectConfigSetting,
 } from './project-config-inspect-types'
 
-const DEFAULT_QUALITY_INCLUDE = ['evals/**/*.eval.ts', '**/*.eval.ts'] as const
-const DEFAULT_QUALITY_DIR = '.crux/quality'
-const DEFAULT_QUALITY_TRIALS = 1
-const DEFAULT_QUALITY_CONCURRENCY = 5
-const DEFAULT_QUALITY_TIMEOUT_MS = 60_000
-const DEFAULT_QUALITY_REPLAY = 'live'
 const DEFAULT_INDEXER_TRUST = 'first-party-only'
 const DEFAULT_LINT_PROFILE = 'recommended'
 
@@ -53,11 +47,6 @@ const explicit = (value: unknown): ProjectConfigSetting => ({ value: String(valu
 const fromDefault = (value: unknown): ProjectConfigSetting => ({ value: String(value), origin: 'default' })
 const presence = (present: boolean): ProjectConfigSetting =>
   present ? { value: 'set', origin: 'set' } : { value: 'none', origin: 'none' }
-
-function toStringArray(value: string | readonly string[] | undefined): readonly string[] {
-  if (value === undefined) return []
-  return typeof value === 'string' ? [value] : [...value]
-}
 
 /**
  * Resolve the effective Crux configuration for `crux config inspect`.
@@ -84,7 +73,6 @@ export async function inspectProjectConfig(options: InspectProjectConfigOptions)
 
   const cfg: CruxConfig | undefined = loaded.crux?.config
   const packageName = model.packageName?.value
-  const quality = cfg?.quality
   const generation = cfg?.generation
   const indexer = cfg?.indexer
   const experimental = cfg?.experimental
@@ -101,37 +89,6 @@ export async function inspectProjectConfig(options: InspectProjectConfigOptions)
     root: model.root.value,
     ...(packageName ? { packageName } : {}),
     configFile: configFileSummary(loaded, options.configPath, configDiagnostics),
-    quality: {
-      id:
-        quality?.id != null
-          ? explicit(quality.id)
-          : packageName
-            ? { value: packageName, origin: 'package.json' }
-            : { value: 'none', origin: 'none' },
-      dir: quality?.dir != null ? explicit(quality.dir) : fromDefault(DEFAULT_QUALITY_DIR),
-      include:
-        quality?.include != null
-          ? { values: toStringArray(quality.include), origin: 'config' }
-          : { values: [...DEFAULT_QUALITY_INCLUDE], origin: 'default' },
-      exclude:
-        quality?.exclude != null
-          ? { values: toStringArray(quality.exclude), origin: 'config' }
-          : { values: [], origin: 'default' },
-      redact:
-        quality?.redact != null ? { values: [...quality.redact], origin: 'config' } : { values: [], origin: 'default' },
-      trials:
-        quality?.defaults?.trials != null ? explicit(quality.defaults.trials) : fromDefault(DEFAULT_QUALITY_TRIALS),
-      concurrency:
-        quality?.defaults?.concurrency != null
-          ? explicit(quality.defaults.concurrency)
-          : fromDefault(DEFAULT_QUALITY_CONCURRENCY),
-      timeoutMs:
-        quality?.defaults?.timeoutMs != null
-          ? explicit(quality.defaults.timeoutMs)
-          : fromDefault(DEFAULT_QUALITY_TIMEOUT_MS),
-      replay:
-        quality?.defaults?.replay != null ? explicit(quality.defaults.replay) : fromDefault(DEFAULT_QUALITY_REPLAY),
-    },
     generation: {
       autoEscape: generation?.autoEscape != null ? explicit(generation.autoEscape) : fromDefault(true),
       securityWarnings:

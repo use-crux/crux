@@ -4,7 +4,7 @@ import { evaluate } from "../../src/eval/evaluate";
 import { executeEvalPlan } from "../../src/eval/internal/executor";
 import { planEval } from "../../src/eval/internal/planner";
 import { readScorerEvidenceEntry } from "../../src/eval/internal/scorer-evidence";
-import { scorers } from "../../src/quality/scorers";
+import { scorers } from "../../src/eval/internal/scorers/types";
 import {
   createManagedScorerHarness,
   managedScorerDefinition,

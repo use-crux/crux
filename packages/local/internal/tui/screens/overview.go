@@ -11,10 +11,10 @@ import (
 // Overview screen: 4-column KPI strip, top-insights queue, recent runs,
 // 14-day pass-rate ASCII chart, live activity log.
 type Overview struct {
-	overview api.QualityOverviewRecord
-	insights []api.QualityInsightRecord
-	runs     []api.QualityRunRecord
-	activity []api.QualityActivityEvent
+	overview api.InspectOverviewRecord
+	insights []api.InspectInsightRecord
+	runs     []api.InspectRunRecord
+	activity []api.InspectActivityEvent
 	loaded   bool
 	err      string
 
@@ -27,8 +27,8 @@ type Overview struct {
 	// activityScroll is zero when the activity feed is pinned to newest rows.
 	// Positive values latch the feed onto older rows while live events arrive.
 	activityScroll int
-	insightList    kit.VList[api.QualityInsightRecord]
-	runList        kit.VList[api.QualityRunRecord]
+	insightList    kit.VList[api.InspectInsightRecord]
+	runList        kit.VList[api.InspectRunRecord]
 	renderRev      uint64
 	memo           kit.Memo
 }
@@ -62,7 +62,7 @@ func (o *Overview) SelectedRunID() string {
 
 // recentRunsList resolves the right source for the runs panel — the
 // overview-embedded list if present, otherwise the recent-runs fallback.
-func (o *Overview) recentRunsList() []api.QualityRunRecord {
+func (o *Overview) recentRunsList() []api.InspectRunRecord {
 	if len(o.overview.RecentRuns) > 0 {
 		return o.overview.RecentRuns
 	}
@@ -72,8 +72,8 @@ func (o *Overview) recentRunsList() []api.QualityRunRecord {
 // NewOverview constructs an empty Overview screen.
 func NewOverview() *Overview {
 	o := &Overview{}
-	o.insightList.SetIdentity(func(ins api.QualityInsightRecord) string { return ins.InsightID })
-	o.runList.SetIdentity(func(run api.QualityRunRecord) string { return run.TraceID })
+	o.insightList.SetIdentity(func(ins api.InspectInsightRecord) string { return ins.InsightID })
+	o.runList.SetIdentity(func(run api.InspectRunRecord) string { return run.TraceID })
 	return o
 }
 
@@ -103,25 +103,25 @@ func (o *Overview) Init(client DataClient) tea.Cmd {
 func (o *Overview) Update(msg tea.Msg, client DataClient) tea.Cmd {
 	switch m := msg.(type) {
 	case overviewLoadedMsg:
-		o.overview = api.QualityOverviewRecord(m.rec)
+		o.overview = api.InspectOverviewRecord(m.rec)
 		o.loaded = true
 		o.syncLists()
 		o.bumpRenderRev()
 	case insightsLoadedMsg:
-		o.insights = []api.QualityInsightRecord(m)
+		o.insights = []api.InspectInsightRecord(m)
 		o.syncLists()
 		o.bumpRenderRev()
 	case runsLoadedMsg:
-		o.runs = []api.QualityRunRecord(m)
+		o.runs = []api.InspectRunRecord(m)
 		o.syncLists()
 		o.bumpRenderRev()
 	case activityLoadedMsg:
-		o.activity = []api.QualityActivityEvent(m)
+		o.activity = []api.InspectActivityEvent(m)
 		o.bumpRenderRev()
 	case dataErrMsg:
 		o.err = string(m)
 		o.bumpRenderRev()
-	case api.QualityEvent:
+	case api.InspectEvent:
 		// A typed event arrived from the bus. Optimistically prepend it as
 		// an activity row + re-fetch in the background.
 		o.activity = prependActivity(o.activity, activityFromEvent(m), 12)
@@ -258,8 +258,6 @@ func (o *Overview) Keybinds() []shell.Keybind {
 	return []shell.Keybind{
 		{Key: "g i", Label: "insights"},
 		{Key: "g r", Label: "runs"},
-		{Key: "g x", Label: "experiments"},
-		{Key: "g s", Label: "suites"},
 		{Key: ":", Label: "cmd"},
 		{Key: "?", Label: "help"},
 		{Key: "q", Label: "quit"},
@@ -268,11 +266,7 @@ func (o *Overview) Keybinds() []shell.Keybind {
 
 func (o *Overview) Counts() map[string]int {
 	return map[string]int{
-		"insights":    o.overview.InsightCount,
-		"runs":        o.overview.RunCount,
-		"experiments": o.overview.ExperimentCount,
-		"baselines":   o.overview.BaselineCount,
-		"feedback":    o.overview.FeedbackCount,
-		"cassettes":   o.overview.CassetteCount,
+		"insights": o.overview.InsightCount,
+		"runs":     o.overview.RunCount,
 	}
 }

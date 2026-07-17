@@ -27,15 +27,11 @@ import type {
   StepDirective,
   StepObserver,
 } from "../executor-types";
-import {
-  describeTools,
-  interceptGeneration,
-  type InterceptedGeneration,
-} from "../interception";
 import { createToolLifecycle } from "../tool/session";
 import type {
   AdapterExecutionGenerateArgs,
   AdapterExecutionGenerateResult,
+  AdapterExecutionGenerateResultWithoutRunId,
   SdkLoopDialect,
 } from "./types";
 import type { ResultStepFacts } from "../result-accumulator";
@@ -236,7 +232,7 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
     const generated = await sourceSession.withContext(async () =>
       orchestrateGenerate<
         Record<string, unknown>,
-        AdapterExecutionGenerateResult<TRawResponse>
+        AdapterExecutionGenerateResultWithoutRunId<TRawResponse>
       >(
         {
           promptId: prompt.id,
@@ -273,7 +269,6 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
                   safety,
                   retryId,
                   promptId: prompt.id,
-                  describeCall,
                   stepFacts,
                 })
               : await (async () => {
@@ -303,35 +298,11 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
     await sourceSession.close();
   }
 
-  /** Describe a concrete SDK call for interception, middleware, and devtools. */
-  function describeCall(
-    kind: "loop" | "structured",
-    request: ExecutorRequest<TModel>,
-  ): InterceptedGeneration {
-    return {
-      kind,
-      promptId: prompt.id,
-      modelInfo,
-      system: request.system,
-      prompt: request.prompt,
-      messages: request.messages,
-      settings: request.settings,
-      outputSchema:
-        kind === "structured" && "schema" in request
-          ? request.schema
-          : undefined,
-      tools: describeTools(request.tools),
-    };
-  }
-
   /** Run the SDK text/tool loop and apply final-output safety regeneration. */
   async function generateLoop(
     request: ExecutorRequest<TModel>,
-  ): Promise<AdapterExecutionGenerateResult<TRawResponse>> {
-    const outcome = await interceptGeneration(
-      describeCall("loop", request),
-      () => dialect.runTextLoop(request),
-    );
+  ): Promise<AdapterExecutionGenerateResultWithoutRunId<TRawResponse>> {
+    const outcome = await dialect.runTextLoop(request);
 
     if (outcome.status === "suspended") {
       const result = buildSuspendedResult(outcome);
@@ -364,10 +335,7 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
           maxSteps: 1,
           observer: undefined,
         };
-        const regen = await interceptGeneration(
-          describeCall("loop", regenRequest),
-          () => dialect.runTextLoop(regenRequest),
-        );
+        const regen = await dialect.runTextLoop(regenRequest);
         if (regen.status === "complete") {
           if (resultStepFacts.length > 0) {
             const previous = resultStepFacts[resultStepFacts.length - 1]!;
@@ -416,7 +384,7 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
   /** Convert an SDK approval suspension into the shared adapter result shape. */
   function buildSuspendedResult(
     outcome: Extract<ExecutorOutcome<TRawResponse>, { status: "suspended" }>,
-  ): AdapterExecutionGenerateResult<TRawResponse> {
+  ): AdapterExecutionGenerateResultWithoutRunId<TRawResponse> {
     const sealed = lifecycle.suspend(
       outcome.pendingApprovals,
       outcome.assistantResponse,

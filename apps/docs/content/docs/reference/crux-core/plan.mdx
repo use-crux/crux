@@ -4,7 +4,7 @@ description: Reference for the canonical plan primitive.
 ---
 
 ```ts
-import { plan } from '@use-crux/core/plan'
+import { plan } from "@use-crux/core/plan";
 
 import type {
   CreatePlanInput,
@@ -13,7 +13,7 @@ import type {
   Plan,
   PlanHandle,
   PlanUpdate,
-} from '@use-crux/core/plan'
+} from "@use-crux/core/plan";
 ```
 
 ## Overview
@@ -22,10 +22,10 @@ import type {
 
 ```ts
 const roadmap = await plan({
-  title: 'Launch plan',
-  content: 'Research, draft, review, publish.',
-  metadata: { threadId: 'thread-123' },
-})
+  title: "Launch plan",
+  content: "Research, draft, review, publish.",
+  metadata: { threadId: "thread-123" },
+});
 ```
 
 Plans emit canonical `plan.operation` observability artifacts for creation and updates. Local devtools uses those artifacts for the Plans views.
@@ -36,16 +36,16 @@ Creates a plan.
 
 ```ts
 const roadmap = await plan({
-  title: 'Cloud migration guide',
-  content: '## Objective\nWrite the migration guide.',
-})
+  title: "Cloud migration guide",
+  content: "## Objective\nWrite the migration guide.",
+});
 ```
 
 ```ts
 interface CreatePlanInput {
-  title: string
-  content?: string
-  metadata?: JsonObject
+  title: string;
+  content?: string;
+  metadata?: JsonObject;
 }
 ```
 
@@ -56,8 +56,8 @@ Metadata must be JSON-safe.
 Returns a handle for an existing plan without reading the store first.
 
 ```ts
-const roadmap = plan.ref(planId)
-const latest = await roadmap.get()
+const roadmap = plan.ref(planId);
+const latest = await roadmap.get();
 ```
 
 ## `plan.list(options?)`
@@ -66,15 +66,15 @@ Lists plans from the configured store.
 
 ```ts
 const plans = await plan.list({
-  metadata: { threadId: 'thread-123' },
+  metadata: { threadId: "thread-123" },
   limit: 20,
-})
+});
 ```
 
 ```ts
 interface PlanListOptions {
-  metadata?: Record<string, JsonValue>
-  limit?: number
+  metadata?: Record<string, JsonValue>;
+  limit?: number;
 }
 ```
 
@@ -84,21 +84,21 @@ Creates a focused prompt tool that persists a new plan. After a model call, use 
 
 ```ts
 const makePlan = plan.tool({
-  template: '## Goal\n\n## Constraints\n\n## Steps',
+  template: "## Goal\n\n## Constraints\n\n## Steps",
   onCreated: (roadmap) => {
-    console.log(roadmap.id)
+    console.log(roadmap.id);
   },
-})
+});
 
 await generate(
   prompt({
-    system: 'Create a concise execution plan.',
+    system: "Create a concise execution plan.",
     tools: { makePlan },
   }),
   { model, input: { request } },
-)
+);
 
-const roadmap = makePlan.created()
+const roadmap = makePlan.created();
 ```
 
 `created()` throws `CreationToolNotCreatedError` if the tool did not create an entity.
@@ -107,11 +107,11 @@ const roadmap = makePlan.created()
 
 ```ts
 interface PlanHandle {
-  readonly id: string
-  get(): Promise<Plan | null>
-  update(update: PlanUpdate): Promise<Plan>
-  asContext(options?: PlanContextOptions): Context
-  asTools(): Record<string, ToolDef>
+  readonly id: string;
+  get(): Promise<Plan | null>;
+  update(update: PlanUpdate): Promise<Plan>;
+  asContext(options?: PlanContextOptions): Context;
+  asTools(): Record<string, ToolDef>;
 }
 ```
 
@@ -120,7 +120,7 @@ interface PlanHandle {
 Reads the latest plan.
 
 ```ts
-const current = await roadmap.get()
+const current = await roadmap.get();
 ```
 
 ### `update(update)`
@@ -129,15 +129,15 @@ Updates title, content, or metadata. The version increments when title or conten
 
 ```ts
 await roadmap.update({
-  content: 'Updated approach.',
-})
+  content: "Updated approach.",
+});
 ```
 
 ```ts
 interface PlanUpdate {
-  title?: string
-  content?: string
-  metadata?: JsonObject
+  title?: string;
+  content?: string;
+  metadata?: JsonObject;
 }
 ```
 
@@ -148,16 +148,16 @@ Returns a Crux context that resolves the latest plan at prompt time.
 ```ts
 prompt({
   use: [roadmap.asContext()],
-})
+});
 ```
 
 Options:
 
 ```ts
 interface PlanContextOptions {
-  priority?: number
-  mode?: 'full' | 'reference'
-  renderContext?: (plan: Plan) => string
+  priority?: number;
+  mode?: "full" | "reference";
+  renderContext?: (plan: Plan) => string;
 }
 ```
 
@@ -166,27 +166,27 @@ interface PlanContextOptions {
 Returns focused tools for reading and updating the bound plan.
 
 ```ts
-const tools = roadmap.asTools()
+const tools = roadmap.asTools();
 
 prompt({
   tools: {
     getPlan: tools.getPlan,
     updatePlan: tools.updatePlan,
   },
-})
+});
 ```
 
 ## Types
 
 ```ts
 interface Plan {
-  id: string
-  title: string
-  content: string
-  version: number
-  metadata?: JsonObject
-  createdAt: number
-  updatedAt: number
+  id: string;
+  title: string;
+  content: string;
+  version: number;
+  metadata?: JsonObject;
+  createdAt: number;
+  updatedAt: number;
 }
 ```
 

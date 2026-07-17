@@ -20,12 +20,6 @@ func (h *WSHub) sendSnapshot(client *wsClient) {
 		h.sendJSON(client, apiIndexMessage(api.IndexData{}))
 	}
 
-	if message, ok := registeredSnapshotMessage(h, "eval:snapshot"); ok {
-		h.sendJSON(client, message)
-	}
-	if message, ok := registeredSnapshotMessage(h, "rag-eval:snapshot"); ok {
-		h.sendJSON(client, message)
-	}
 	if message, ok := registeredSnapshotMessage(h, "flow:snapshot"); ok {
 		h.sendJSON(client, message)
 	}

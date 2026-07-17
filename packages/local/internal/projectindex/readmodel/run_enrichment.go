@@ -231,25 +231,9 @@ func indexQualityIsEmpty(q *store.IndexQuality) bool {
 		q.LastRunAt == 0 &&
 		q.LastStatus == "" &&
 		q.CaseCount == 0 &&
-		q.ExperimentCount == 0 &&
-		q.BaselineCount == 0 &&
-		q.ComparisonCount == 0 &&
-		q.FeedbackCount == 0 &&
-		q.CassetteCount == 0 &&
 		q.PassRate == nil &&
-		q.Drift == nil &&
-		q.CurrentFingerprint == "" &&
-		q.BaselineFingerprint == "" &&
-		q.ChangedSinceBaseline == nil &&
-		len(q.AffectedEvalIDs) == 0 &&
-		len(q.AffectedSuiteIDs) == 0 &&
 		len(q.EvalIDs) == 0 &&
 		len(q.SuiteIDs) == 0 &&
-		len(q.ExperimentIDs) == 0 &&
-		len(q.BaselineIDs) == 0 &&
-		len(q.ComparisonIDs) == 0 &&
-		len(q.FeedbackIDs) == 0 &&
-		len(q.CassettePaths) == 0 &&
 		len(q.RunIDs) == 0 &&
 		len(q.TraceIDs) == 0
 }

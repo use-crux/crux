@@ -1,109 +1,100 @@
 /**
- * Quality Workbench navigation map.
- *
- * Sidebar layout: two Quality groups (Inspect / Evaluate) plus a Library
- * group for browseable Crux primitives & state. Inspect is the observability
- * side (Overview · Insights · Runs · Feedback); Evaluate is the measurement
- * side (Evaluations · Experiments · Baselines · Cassettes · Scorers).
+ * Devtools navigation map for inspection, Evals, and the Project Index.
  */
 
 export type QwViewId =
-  | 'overview'
-  | 'insights'
-  | 'runs'
-  | 'runtime'
-  | 'feedback'
-  | 'evaluations'
-  | 'experiments'
-  | 'baselines'
-  | 'cassettes'
-  | 'scorers'
-  | 'library-index'
-  | 'library-memory'
-  | 'library-workspaces'
-  | 'library-plans'
+  | "overview"
+  | "insights"
+  | "runs"
+  | "runtime"
+  | "evals"
+  | "eval-runs"
+  | "review"
+  | "baselines"
+  | "library-index"
+  | "library-memory"
+  | "library-workspaces"
+  | "library-plans";
 
 export interface QwNavItem {
-  id: QwViewId
-  label: string
-  iconName: IconName
+  id: QwViewId;
+  label: string;
+  iconName: IconName;
 }
 
 export interface QwNavGroup {
-  id: string
-  label: string
-  items: QwNavItem[]
+  id: string;
+  label: string;
+  items: QwNavItem[];
 }
 
 export type IconName =
-  | 'home'
-  | 'sparkle'
-  | 'trace'
-  | 'layers'
-  | 'flask'
-  | 'compare'
-  | 'bookmark'
-  | 'inbox'
-  | 'cassette'
-  | 'filter'
-  | 'search'
-  | 'play'
-  | 'arrowRight'
-  | 'arrowDown'
-  | 'arrowUp'
-  | 'check'
-  | 'x'
-  | 'loop'
-  | 'spark'
-  | 'alert'
-  | 'diff'
-  | 'more'
-  | 'book'
-  | 'brain'
-  | 'folder'
-  | 'list'
-  | 'tasks'
-  | 'doc'
-  | 'link'
-  | 'db'
-  | 'grid'
-  | 'clock'
-  | 'user'
-  | 'branch'
-  | 'bot'
-  | 'info'
+  | "home"
+  | "sparkle"
+  | "trace"
+  | "layers"
+  | "flask"
+  | "compare"
+  | "bookmark"
+  | "inbox"
+  | "cassette"
+  | "filter"
+  | "search"
+  | "play"
+  | "arrowRight"
+  | "arrowDown"
+  | "arrowUp"
+  | "check"
+  | "x"
+  | "loop"
+  | "spark"
+  | "alert"
+  | "diff"
+  | "more"
+  | "book"
+  | "brain"
+  | "folder"
+  | "list"
+  | "tasks"
+  | "doc"
+  | "link"
+  | "db"
+  | "grid"
+  | "clock"
+  | "user"
+  | "branch"
+  | "bot"
+  | "info";
 
 export const QW_NAV: QwNavGroup[] = [
   {
-    id: 'inspect',
-    label: 'Inspect',
+    id: "inspect",
+    label: "Inspect",
     items: [
-      { id: 'overview', label: 'Overview', iconName: 'home' },
-      { id: 'insights', label: 'Insights', iconName: 'sparkle' },
-      { id: 'runs', label: 'Runs', iconName: 'trace' },
-      { id: 'runtime', label: 'Runtime', iconName: 'db' },
-      { id: 'feedback', label: 'Feedback', iconName: 'inbox' },
+      { id: "overview", label: "Overview", iconName: "home" },
+      { id: "insights", label: "Insights", iconName: "sparkle" },
+      { id: "runs", label: "Runs", iconName: "trace" },
+      { id: "runtime", label: "Runtime", iconName: "db" },
     ],
   },
   {
-    id: 'evaluate',
-    label: 'Evaluate',
+    id: "evaluate",
+    label: "Evals",
     items: [
-      { id: 'evaluations', label: 'Evaluations', iconName: 'layers' },
-      { id: 'experiments', label: 'Experiments', iconName: 'flask' },
-      { id: 'baselines', label: 'Baselines', iconName: 'bookmark' },
-      { id: 'cassettes', label: 'Cassettes', iconName: 'cassette' },
-      { id: 'scorers', label: 'Scorers', iconName: 'spark' },
+      { id: "evals", label: "Evals", iconName: "layers" },
+      { id: "eval-runs", label: "Eval runs", iconName: "flask" },
+      { id: "baselines", label: "Baselines", iconName: "bookmark" },
+      { id: "review", label: "Review", iconName: "inbox" },
     ],
   },
   {
-    id: 'library',
-    label: 'Library',
+    id: "library",
+    label: "Library",
     items: [
-      { id: 'library-index', label: 'Index', iconName: 'book' },
-      { id: 'library-memory', label: 'Memory', iconName: 'brain' },
-      { id: 'library-workspaces', label: 'Workspaces', iconName: 'folder' },
-      { id: 'library-plans', label: 'Plans & Tasks', iconName: 'tasks' },
+      { id: "library-index", label: "Index", iconName: "book" },
+      { id: "library-memory", label: "Memory", iconName: "brain" },
+      { id: "library-workspaces", label: "Workspaces", iconName: "folder" },
+      { id: "library-plans", label: "Plans & Tasks", iconName: "tasks" },
     ],
   },
-]
+];

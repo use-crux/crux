@@ -1,6 +1,6 @@
 /** Immutable planner-admitted managed external-scorer actions. @internal */
 
-import type { Scorer } from "../../quality/scorers";
+import type { Scorer } from "./scorers/types";
 import type { EvalScorerEvidenceEntry } from "./scorer-evidence";
 
 interface EvalScorerActionBase {

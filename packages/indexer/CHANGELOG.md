@@ -318,19 +318,19 @@
 
   Structured judge inputs are serialized before prompt framing, so Safety's judge-backed constraints can evaluate object-shaped outputs without losing fields or throwing during escaping.
 
-  Harden the Quality local pipeline by making `crux quality run --json` emit a single run summary object, adding worker/core protocol version checks and run-scoped event ids, surfacing worker crashes as structured exit-2 failures, fixing live read-model collisions and source-frame path containment, reporting skipped legacy records, and requiring an explicit devtools promotion variant.
+  Harden the Quality local pipeline by making `crux eval run --json` emit a single run summary object, adding worker/core protocol version checks and run-scoped event ids, surfacing worker crashes as structured exit-2 failures, fixing live read-model collisions and source-frame path containment, reporting skipped legacy records, and requiring an explicit devtools promotion variant.
 
   Quality observability capture now uses an observability-owned hook registry, preserving run-scoped trace capture without importing Node-only Quality internals into platform-neutral runtime bundles.
 
-  Add the Quality machine contract surface: `@use-crux/core/quality/schemas` exports validation schemas and JSON Schema generation for records and CLI JSON, experiment records embed agent-readable `failures` artifacts, and `crux quality diff <expA> <expB> --json` compares saved experiment records through core-owned diff policy.
+  Add the Quality machine contract surface: `@use-crux/core/eval/schemas` exports validation schemas and JSON Schema generation for records and CLI JSON, experiment records embed agent-readable `failures` artifacts, and `crux eval diff <expA> <expB> --json` compares saved experiment records through core-owned diff policy.
 
-  Add the Quality adoption path: `crux quality init` scaffolds first evals for uncovered prompt definitions, `crux quality import-traces` converts retained local traces into JSONL dataset rows, and dataset-backed failures now surface dataset path plus content fingerprint in persisted records, run summaries, failure artifacts, and experiment diffs.
+  Add the Quality adoption path: `crux eval init` scaffolds first evals for uncovered prompt definitions, `crux eval import-traces` converts retained local traces into JSONL dataset rows, and dataset-backed failures now surface dataset path plus content fingerprint in persisted records, run summaries, failure artifacts, and experiment diffs.
 
-  Add the Quality agent loop: `crux quality run` now supports `--failed`, deterministic `--sample`/`--seed`, `--max-cost`, and `--changed-since` subsets, `crux quality mcp` exposes list/run/show/diff/evidence/judge-report/label tools over MCP, and `crux quality init` scaffolds a local Quality skill for coding agents.
+  Add the Quality agent loop: `crux eval run` now supports `--failed`, deterministic `--sample`/`--seed`, `--max-cost`, and `--changed-since` subsets, `crux eval mcp` exposes list/run/show/diff/evidence/judge-report/label tools over MCP, and `crux eval init` scaffolds a local Quality skill for coding agents.
 
   Declare Quality beta: the authoring surface, experiment/manifest schemas, CLI JSON outputs, and exit codes are stable within 0.x minors; future breaking changes require a minor bump and migration note while the first-party runner facade remains internal.
 
-  Finish Quality Project Index parity for beta: native static extraction now treats `afterScores` assertions as evaluation-level `ctx.expect()` sites, evaluation definitions expose catalog facts for devtools chips, spec experiment records enrich `evaluation:*` and covered definitions in the local read model, and `crux quality init` discovers uncovered targets from Project Model evidence before falling back to config exports.
+  Finish Quality Project Index parity for beta: native static extraction now treats `afterScores` assertions as evaluation-level `ctx.expect()` sites, evaluation definitions expose catalog facts for devtools chips, spec experiment records enrich `evaluation:*` and covered definitions in the local read model, and `crux eval init` discovers uncovered targets from Project Model evidence before falling back to config exports.
 
   Complete Quality observability coverage by removing the unused `quality.snapshot` artifact kind, emitting `baseline.promotion` artifacts on successful promotion, emitting diff-mode `comparison.report` artifacts from core experiment diffs, and forwarding `quality diff` events into local activity.
 

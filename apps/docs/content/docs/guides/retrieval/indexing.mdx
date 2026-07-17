@@ -14,45 +14,48 @@ In production you usually call the indexer through `corpus.sync()` so Crux can s
 The shortest useful version looks like this. The embeddings are defined once and shared by the indexer and retriever.
 
 ```ts
-import { embedding } from '@use-crux/core/embedding'
-import { corpus, indexer } from '@use-crux/core/indexing'
-import { inMemoryRecordStore, inMemoryVectorStore } from '@use-crux/core/storage'
-import { filesSource } from '@use-crux/ingest/files'
+import { embedding } from "@use-crux/core/embedding";
+import { corpus, indexer } from "@use-crux/core/indexing";
+import {
+  inMemoryRecordStore,
+  inMemoryVectorStore,
+} from "@use-crux/core/storage";
+import { filesSource } from "@use-crux/ingest/files";
 
 const dense = embedding({
-  kind: 'dense',
-  name: 'text-embedding-3-small',
+  kind: "dense",
+  name: "text-embedding-3-small",
   dimensions: 1536,
   maxInputTokens: 8191,
   embed: async (texts) => ({ embeddings: await embedDense(texts) }),
-})
-const records = inMemoryRecordStore()
-const vectors = inMemoryVectorStore()
+});
+const records = inMemoryRecordStore();
+const vectors = inMemoryVectorStore();
 
 const docsIndexer = indexer({
-  id: 'docs',
-  namespace: 'product-docs',
+  id: "docs",
+  namespace: "product-docs",
   records,
   vectors,
   dense,
-})
+});
 
 const docsCorpus = corpus({
-  id: 'docs',
-  namespace: 'product-docs',
+  id: "docs",
+  namespace: "product-docs",
   records,
   indexer: docsIndexer,
-})
+});
 
 const source = filesSource(
-  { directory: './docs', recursive: true },
-  { namespace: 'product-docs' },
-)
+  { directory: "./docs", recursive: true },
+  { namespace: "product-docs" },
+);
 
 await docsCorpus.sync(source.load(), {
-  sourceSet: 'complete',
-  stale: 'delete',
-})
+  sourceSet: "complete",
+  stale: "delete",
+});
 ```
 
 That is the normal product path. `corpus.sync()` skips unchanged sources, reindexes changed sources, records failed sources, and deletes stale sources only when you say the input is complete.
@@ -61,23 +64,23 @@ Add `sparse` too when your retriever will run sparse or hybrid search:
 
 ```ts
 const docsIndexer = indexer({
-  id: 'docs',
-  namespace: 'product-docs',
+  id: "docs",
+  namespace: "product-docs",
   records,
   vectors,
   dense,
   sparse,
-})
+});
 
 const docs = retriever({
-  id: 'docs',
-  namespace: 'product-docs',
+  id: "docs",
+  namespace: "product-docs",
   records,
   vectors,
   dense,
   sparse,
-  search: { mode: 'hybrid' },
-})
+  search: { mode: "hybrid" },
+});
 ```
 
 The rule is simple: index the vector types you want to query later.
@@ -87,11 +90,17 @@ The rule is simple: index the vector types you want to query later.
 Make the pipeline explicit once indexing becomes product infrastructure. This gives every transform and chunking choice a name, version, and fingerprint.
 
 ```ts
-import { chunker, corpus, indexer, indexingPipeline, transform } from '@use-crux/core/indexing'
+import {
+  chunker,
+  corpus,
+  indexer,
+  indexingPipeline,
+  transform,
+} from "@use-crux/core/indexing";
 
 const docsIndexer = indexer({
-  id: 'docs',
-  namespace: 'product-docs',
+  id: "docs",
+  namespace: "product-docs",
   records,
   vectors,
   dense,
@@ -100,17 +109,17 @@ const docsIndexer = indexer({
   pipeline: indexingPipeline({
     documents: [
       transform.document({
-        name: 'normalize-docs',
-        version: '1',
+        name: "normalize-docs",
+        version: "1",
         run(document) {
           return {
             ...document,
             content: document.content.trim(),
             metadata: {
               ...document.metadata,
-              corpus: 'product-docs',
+              corpus: "product-docs",
             },
-          }
+          };
         },
       }),
     ],
@@ -120,7 +129,7 @@ const docsIndexer = indexer({
       tableRowsPerChunk: 25,
     }),
   }),
-})
+});
 ```
 
 Document transforms run before chunking. Chunk transforms run after chunking and before embedding:
@@ -129,19 +138,19 @@ Document transforms run before chunking. Chunk transforms run after chunking and
 const pipeline = indexingPipeline({
   documents: [
     transform.document({
-      name: 'strip-draft-comments',
-      version: '1',
+      name: "strip-draft-comments",
+      version: "1",
       run: (doc) => ({
         ...doc,
-        content: doc.content.replace(/<!-- draft -->/g, ''),
+        content: doc.content.replace(/<!-- draft -->/g, ""),
       }),
     }),
   ],
   chunker: chunker.structured(),
   chunks: [
     transform.chunk({
-      name: 'tag-chunks',
-      version: '1',
+      name: "tag-chunks",
+      version: "1",
       run: (chunks) =>
         chunks.map((chunk) => ({
           ...chunk,
@@ -149,7 +158,7 @@ const pipeline = indexingPipeline({
         })),
     }),
   ],
-})
+});
 ```
 
 ## Choose A Chunker
@@ -159,7 +168,7 @@ The default `chunker.structured()` works for most ingest output. Plain prose, pa
 ```ts
 indexingPipeline({
   chunker: chunker.structured({ maxChars: 1200, overlapChars: 150 }),
-})
+});
 ```
 
 ## Cache Expensive Stages
@@ -170,22 +179,22 @@ Enable stage caching on the indexer:
 
 ```ts
 const docsIndexer = indexer({
-  id: 'docs',
-  namespace: 'product-docs',
+  id: "docs",
+  namespace: "product-docs",
   records,
   vectors,
   dense,
   pipeline,
   cache: true,
-})
+});
 ```
 
 Then control cache behavior per sync or write:
 
 ```ts
-await docsCorpus.sync(source.load(), { cache: 'readwrite' })
-await docsCorpus.sync(source.load(), { cache: 'refresh' })
-await docsCorpus.sync(source.load(), { cache: 'bypass' })
+await docsCorpus.sync(source.load(), { cache: "readwrite" });
+await docsCorpus.sync(source.load(), { cache: "refresh" });
+await docsCorpus.sync(source.load(), { cache: "bypass" });
 ```
 
 Use `readwrite` for normal jobs, `refresh` when you want to recompute and replace cached stages, and `bypass` when you are debugging the pipeline itself.
@@ -196,12 +205,12 @@ Dry runs execute the same planning path but do not write chunks or source record
 
 ```ts
 const plan = await docsCorpus.sync(source.load(), {
-  sourceSet: 'complete',
-  stale: 'delete',
+  sourceSet: "complete",
+  stale: "delete",
   dryRun: true,
-})
+});
 
-console.log(plan.added, plan.changed, plan.deleted, plan.failed)
+console.log(plan.added, plan.changed, plan.deleted, plan.failed);
 ```
 
 Dry-run document indexing also returns prepared chunks and parent records:
@@ -209,11 +218,11 @@ Dry-run document indexing also returns prepared chunks and parent records:
 ```ts
 const preview = await docsIndexer.indexDocuments(docs, {
   dryRun: true,
-})
+});
 
-console.log(preview.chunks)
-console.log(preview.parents)
-console.log(preview.stages)
+console.log(preview.chunks);
+console.log(preview.parents);
+console.log(preview.stages);
 ```
 
 ## Query What You Indexed
@@ -221,78 +230,78 @@ console.log(preview.stages)
 Retrievers query active child chunks. Parent records and inactive generations are filtered out automatically.
 
 ```ts
-import { retriever } from '@use-crux/core/retrieval'
+import { retriever } from "@use-crux/core/retrieval";
 
 const docs = retriever({
-  id: 'docs',
-  namespace: 'product-docs',
+  id: "docs",
+  namespace: "product-docs",
   records,
   vectors,
   dense,
   sparse,
   search: {
-    mode: 'hybrid',
-    fusion: 'dbsf',
+    mode: "hybrid",
+    fusion: "dbsf",
     limit: 8,
   },
   context: {
     query: ({ question }) => question,
     limit: 5,
   },
-})
+});
 
-const hits = await docs.retrieve('how do billing credits work?')
+const hits = await docs.retrieve("how do billing credits work?");
 ```
 
 If your retriever uses a different `id` from the indexer that wrote the records, set `indexerId` so parent refs, chunk hydration, and cleanup all use the same indexed read model:
 
 ```ts
 const docs = retriever({
-  id: 'docs-search',
-  indexerId: 'docs',
-  namespace: 'product-docs',
+  id: "docs-search",
+  indexerId: "docs",
+  namespace: "product-docs",
   records,
   vectors,
   dense,
-})
+});
 ```
 
 Use it as prompt context:
 
 ```ts
 const answer = prompt({
-  id: 'docs-answer',
+  id: "docs-answer",
   use: [docs],
   input: z.object({ question: z.string() }),
-  system: 'Answer using the retrieved docs. Cite sourceId/chunkId.',
+  system: "Answer using the retrieved docs. Cite sourceId/chunkId.",
   prompt: ({ input }) => input.question,
-})
+});
 ```
 
 Or expose it as an agent tool:
 
 ```ts
 const searchableDocs = retriever({
-  id: 'docs-tools',
-  namespace: 'product-docs',
+  id: "docs-tools",
+  namespace: "product-docs",
   records,
   vectors,
   dense,
   sparse,
   search: {
-    mode: 'hybrid',
-    fusion: 'dbsf',
+    mode: "hybrid",
+    fusion: "dbsf",
     limit: 8,
   },
-  inject: 'tool',
+  inject: "tool",
   tools: { prefix: true },
-})
+});
 
 const assistant = prompt({
-  id: 'assistant',
+  id: "assistant",
   use: [searchableDocs],
-  system: 'Use search before answering product questions.',
-})
+  system: "Use search before answering product questions.",
+});
 ```
 
 ## Inspect The Ledger
@@ -300,7 +309,7 @@ const assistant = prompt({
 Every synced source records its latest pipeline stages:
 
 ```ts
-const sourceRecord = await docsCorpus.getSource('docs/pricing.md')
+const sourceRecord = await docsCorpus.getSource("docs/pricing.md");
 
 console.table(
   sourceRecord?.stages?.map((stage) => ({
@@ -311,7 +320,7 @@ console.table(
     parents: stage.parentCount,
     ms: stage.durationMs,
   })),
-)
+);
 ```
 
 Those same stage records flow through devtools, CLI/TUI, and OTel. When a sync surprises you, start with the source ledger.
@@ -323,13 +332,13 @@ Use `indexDocuments()` for tests, demos, and controlled one-off writes:
 ```ts
 await docsIndexer.indexDocuments([
   {
-    namespace: 'product-docs',
-    sourceId: 'roadmap',
-    title: 'Roadmap',
+    namespace: "product-docs",
+    sourceId: "roadmap",
+    title: "Roadmap",
     content: roadmapText,
-    metadata: { section: 'planning' },
+    metadata: { section: "planning" },
   },
-])
+]);
 ```
 
 Use `indexChunks()` only when you already own chunking upstream:
@@ -337,14 +346,14 @@ Use `indexChunks()` only when you already own chunking upstream:
 ```ts
 await docsIndexer.indexChunks([
   {
-    namespace: 'product-docs',
-    sourceId: 'roadmap',
-    chunkId: 'roadmap:overview',
+    namespace: "product-docs",
+    sourceId: "roadmap",
+    chunkId: "roadmap:overview",
     ordinal: 0,
-    content: 'Q2 roadmap overview...',
-    metadata: { section: 'overview' },
+    content: "Q2 roadmap overview...",
+    metadata: { section: "overview" },
   },
-])
+]);
 ```
 
 ## Related
@@ -375,5 +384,9 @@ await docsIndexer.indexChunks([
     description="Use parent expansion and compression over indexed chunks."
     href="/docs/guides/retrieval/recipes"
   />
-  <Card title="Indexer Reference" description="Full `indexer()` API." href="/docs/reference/crux-core/indexing" />
+  <Card
+    title="Indexer Reference"
+    description="Full `indexer()` API."
+    href="/docs/reference/crux-core/indexing"
+  />
 </Cards>

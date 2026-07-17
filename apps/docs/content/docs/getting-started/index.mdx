@@ -8,7 +8,8 @@ Crux does not have to become your AI framework. You can start with one typed pro
 Pick the problem you are feeling first. Each starting point still leads back to the same shape: define the AI part in code, compose it into the model request, inspect what happened, and test the behavior you care about.
 
 <Callout type="warning">
-  Crux is in alpha. Public packages are available on npm; use the install commands below to get started.
+  Crux is in alpha. Public packages are available on npm; use the install
+  commands below to get started.
 </Callout>
 
 ## Start with the problem in front of you
@@ -46,8 +47,8 @@ Pick the problem you are feeling first. Each starting point still leads back to 
   />
   <Card
     title="Regressions are slipping through"
-    description="Use quality suites, targets, experiments, cassettes, baselines, and feedback records to protect behavior."
-    href="/docs/guides/quality"
+    description="Use production tasks, typed Cases, Variants, exact reuse, Baselines, and Review to protect behavior."
+    href="/docs/guides/evals"
   />
   <Card
     title="You need the whole run explained"
@@ -59,8 +60,9 @@ Pick the problem you are feeling first. Each starting point still leads back to 
 Those starting points are intentionally modular. Starting with prompts does not force you into memory. Starting with retrieval does not force you into a new agent runtime. The value grows because the pieces compose through the same prompt setup and become visible in the same debugging and quality workflow.
 
 <Callout type="info">
-  Crux can be 5% of your AI system or the organizing layer for the whole model turn. The throughline is the same:
-  keep your SDK, make the setup explicit, and test more than the final text.
+  Crux can be 5% of your AI system or the organizing layer for the whole model
+  turn. The throughline is the same: keep your SDK, make the setup explicit, and
+  test more than the final text.
 </Callout>
 
 ## Pick your stack
@@ -96,17 +98,38 @@ Every Crux project needs `@use-crux/core` plus exactly one adapter for your SDK 
 
 {/* prettier-ignore-start */}
 
-<Tabs items={['npm', 'pnpm', 'yarn', 'bun']}>
-  <Tab value="npm">```bash npm install @use-crux/core zod npm install @use-crux/ai # Vercel AI SDK (most common) ```</Tab>
-  <Tab value="pnpm">```bash pnpm add @use-crux/core zod pnpm add @use-crux/ai # Vercel AI SDK (most common) ```</Tab>
-  <Tab value="yarn">```bash yarn add @use-crux/core zod yarn add @use-crux/ai # Vercel AI SDK (most common) ```</Tab>
-  <Tab value="bun">```bash bun add @use-crux/core zod bun add @use-crux/ai # Vercel AI SDK (most common) ```</Tab>
+<Tabs items={["npm", "pnpm", "yarn", "bun"]}>
+  <Tab value="npm">
+    ```bash
+    npm install @use-crux/core zod
+    npm install @use-crux/ai # Vercel AI SDK (most common)
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @use-crux/core zod
+    pnpm add @use-crux/ai # Vercel AI SDK (most common)
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn add @use-crux/core zod
+    yarn add @use-crux/ai # Vercel AI SDK (most common)
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bun add @use-crux/core zod
+    bun add @use-crux/ai # Vercel AI SDK (most common)
+    ```
+  </Tab>
 </Tabs>
 {/* prettier-ignore-end */}
 
 <Callout type="info">
-  `@use-crux/ai` is the Vercel AI SDK adapter. You can also use `@use-crux/openai`, `@use-crux/google`, or `@use-crux/anthropic`
-  directly: pick whichever SDK you already have in the project.
+  `@use-crux/ai` is the Vercel AI SDK adapter. You can also use
+  `@use-crux/openai`, `@use-crux/google`, or `@use-crux/anthropic` directly:
+  pick whichever SDK you already have in the project.
 </Callout>
 
 ## A 30-second taste
@@ -114,29 +137,29 @@ Every Crux project needs `@use-crux/core` plus exactly one adapter for your SDK 
 If you just want to see the smallest piece in isolation, start with a typed prompt:
 
 ```ts title="hello.ts"
-import { prompt } from '@use-crux/core'
-import { generate } from '@use-crux/ai'
-import { openai } from '@ai-sdk/openai'
-import { z } from 'zod'
+import { prompt } from "@use-crux/core";
+import { generate } from "@use-crux/ai";
+import { openai } from "@ai-sdk/openai";
+import { z } from "zod";
 
 const greet = prompt({
-  id: 'greet',
+  id: "greet",
   input: z.object({ name: z.string() }),
-  system: 'You are a friendly assistant.',
+  system: "You are a friendly assistant.",
   prompt: ({ input }) => `Say hello to ${input.name}`,
-})
+});
 
 const result = await generate(greet, {
-  model: openai('gpt-4o'),
-  input: { name: 'World' },
-})
+  model: openai("gpt-4o"),
+  input: { name: "World" },
+});
 
-console.log(result.text) // string
+console.log(result.text); // string
 ```
 
 Set `OPENAI_API_KEY` in your environment and run it. That's a complete Crux program.
 
-From there, the same prompt can add contexts, memory, retrieval, tools, safety, routing, quality suites, and devtools without rewriting the original model call around a new framework.
+From there, the same prompt can add contexts, memory, retrieval, tools, safety, routing, Evals, and devtools without rewriting the original model call around a new framework.
 
 ## How the pieces connect
 
@@ -146,7 +169,7 @@ Crux is most useful when the pieces stop feeling like separate features.
 - Context composition controls what gets added to that shape.
 - Memory and retrieval contribute state and sources when the task needs them.
 - Guardrails, constraints, routing, and fallback make important choices explicit.
-- Quality suites and devtools let you inspect and protect the behavior.
+- Evals and Devtools let you inspect and protect production behavior.
 
 Some of this is shipped today: prompts, contexts, memory, retrieval, guardrails, routing, quality foundations, local devtools, and observability are real. Some of the deeper "why did this happen?" workflow is still in progress: the full turn decision report, richer rationale artifacts, unified freshness vocabulary, and polished harness-decision matchers are active roadmap work.
 

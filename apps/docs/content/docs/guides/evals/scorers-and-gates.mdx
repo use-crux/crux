@@ -1,0 +1,61 @@
+---
+title: Scorers and Gates
+description: Measure Eval output, reuse exact judge evidence, and define explicit blocking policy.
+---
+
+A scorer measures one Case output. A Gate turns aggregate evidence into a
+blocking decision. Keeping those roles separate makes reports explain both the
+measurement and the policy.
+
+## Local and managed scorers
+
+Local scorers are pure code and run in the coordinator. Managed scorers may
+call a model through the active Crux Runtime.
+
+```ts
+const containsRefund = Object.assign(
+  ({ output }: { output: { answer: string } }) => ({
+    name: "mentions_refund" as const,
+    score: output.answer.includes("refund") ? 1 : 0,
+  }),
+  {
+    scorerName: "mentions_refund" as const,
+    costClass: "code" as const,
+  },
+);
+```
+
+Managed scorer actions are admitted during planning. Their final evidence key
+depends on task output, so Crux resolves it after the task completes. Exact
+hits and failed task dependencies avoid the external call.
+
+## Gates
+
+```ts
+gates: {
+  correctness: { min: 0.9 },
+  latency: { p95Ms: 2_000 },
+}
+```
+
+A correctness Gate reads scorer evidence. A latency Gate proves that the
+measured task executions were fresh. Gates never infer freshness by executing
+callbacks or inspecting function source.
+
+Case filtering can make aggregate evidence incomplete. Crux reports that
+honestly rather than treating a partial result as a complete passing run.
+Incomplete runs cannot become Baselines.
+
+## Reuse and freshness
+
+Crux reuses only exact evidence whose identity includes task, prompt, model,
+settings, tools, schemas, routing semantics, Case input, Variant overrides,
+and relevant host/source identity. Metadata is diagnostic only.
+
+Dynamic dependencies or media whose identity cannot be proven still execute
+normally, but their output is not reusable. A task identity mismatch after
+execution prevents evidence writes.
+
+`--fresh` bypasses both task and managed-scorer evidence. A latency Gate or
+fresh callback bypasses only the task measurement; an unchanged output can
+still reuse its judge evidence.

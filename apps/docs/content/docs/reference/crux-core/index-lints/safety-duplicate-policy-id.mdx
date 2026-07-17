@@ -19,8 +19,16 @@ approval.
 Rename one policy so each Safety policy id is unique within the project:
 
 ```ts
-guardrail({ id: 'pii-output', on: boundary.output.text(), run: guardrail.pii() })
-toolPolicy({ id: 'delete-user-block', match: { tool: 'deleteUser' }, action: 'block' })
+guardrail({
+  id: "pii-output",
+  on: boundary.output.text(),
+  run: guardrail.pii(),
+});
+toolPolicy({
+  id: "delete-user-block",
+  match: { tool: "deleteUser" },
+  action: "block",
+});
 ```
 
 ## When to suppress

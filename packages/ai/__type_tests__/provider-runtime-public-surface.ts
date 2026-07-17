@@ -8,7 +8,7 @@ import type {
   CruxExecutor,
   ExecutorGenerateResult,
   ExecutorModelArg,
-  ExecutorStreamHandle,
+  ExecutorStreamResult,
 } from '@use-crux/core/adapter'
 import type { Reranker, RetrievalModel } from '@use-crux/core/retrieval'
 import { aiSdkProviderRuntime } from '../src'
@@ -27,7 +27,7 @@ expectTypeOf<Awaited<ReturnType<AiRuntime['generate']>>>().toEqualTypeOf<
   ExecutorGenerateResult<SdkLoopResultLike>
 >()
 expectTypeOf<Awaited<ReturnType<AiRuntime['stream']>>>().toEqualTypeOf<
-  ExecutorStreamHandle<SdkStreamResultLike>
+  ExecutorStreamResult<SdkStreamResultLike>
 >()
 expectTypeOf<AiGenerateOptions['model']>().toEqualTypeOf<ExecutorModelArg<LanguageModel>>()
 // @ts-expect-error - media estimation remains private adapter integration.

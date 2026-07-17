@@ -7,7 +7,7 @@
  * @module
  */
 
-import type { StandardSchemaV1 } from "../quality/standard-schema";
+import type { StandardSchemaV1 } from "./internal/schema";
 import type { CaseFileRef } from "./internal/definition";
 
 const CASE_FILE_INTERNAL: unique symbol = Symbol("crux.eval.case-file");

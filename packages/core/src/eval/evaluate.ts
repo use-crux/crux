@@ -9,8 +9,7 @@
  */
 
 import type { ProjectDefinitionKind } from "../project-index";
-import type { BoundScorerLib, Scorer } from "../quality/scorers";
-import type { EvaluationCoverageTargetId } from "../quality/internal/definition";
+import type { BoundScorerLib, Scorer } from "./internal/scorers/types";
 import type { EvalCase } from "./case";
 import type { CaseFile } from "./case-file";
 import type { EvalGates } from "./gates";
@@ -30,7 +29,7 @@ import { normalizeEvalDefinition } from "./internal/normalize-definition";
 /** Project Index definition id that an Eval is intended to cover. */
 export type EvalCoverageTargetId<
   TKind extends ProjectDefinitionKind = ProjectDefinitionKind,
-> = EvaluationCoverageTargetId<TKind>;
+> = `${TKind}:${string}`;
 
 /** Literal name carried by one statically named scorer. @internal */
 type ScorerElementName<S> = S extends { readonly scorerName?: infer N }

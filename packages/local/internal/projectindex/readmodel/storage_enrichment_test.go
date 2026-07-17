@@ -46,7 +46,7 @@ func TestModelIndexEnrichesStorageDefinitionsAndWarnings(t *testing.T) {
 		},
 	}
 
-	got := New(snapshotSource{index: index}, "").Index()
+	got := New(snapshotSource{index: index}).Index()
 	bundle := definitionByID(got.Definitions, "storage.bundle:appStorage")
 	if bundle == nil {
 		t.Fatal("storage.bundle:appStorage definition missing")

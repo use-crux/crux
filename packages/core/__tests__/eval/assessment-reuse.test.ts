@@ -9,7 +9,7 @@ import type {
   EvalExecutionPorts,
   EvalPlanningPorts,
 } from "../../src/eval/internal/ports";
-import type { Score, ScorerArgs } from "../../src/quality/scorers";
+import type { Score, ScorerArgs } from "../../src/eval/internal/scorers/types";
 
 const task = attachEvalTaskDescriptorForInternalUse(
   Object.assign(async () => "unused", {

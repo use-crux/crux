@@ -1,7 +1,7 @@
 /** Portable exact evidence for one managed external scorer action. @internal */
 
-import type { Score } from "../../quality/scorers";
-import { SCORER_RESULT_CACHE_EPOCH } from "../../quality/internal/cache-epochs";
+import type { Score } from "./scorers/types";
+import { SCORER_RESULT_CACHE_EPOCH } from "./evidence/cache-epochs";
 import { fingerprintEvalValue, isReusableEvalValue } from "./identity";
 import type { EvalPlannedCell, EvalTaskExecutionEvidence } from "./types";
 

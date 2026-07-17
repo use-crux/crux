@@ -6,13 +6,13 @@ description: Store versioned intent documents and expose them as context or focu
 Plans capture what the agent intends to do, outside its context window: human-reviewable intent before execution, a shared document that worker prompts can read, and traceable revisions to the objective or approach. They are freeform documents with title, content, metadata, timestamps, and a version that increments when title or content changes.
 
 ```ts
-import { plan } from '@use-crux/core/plan'
+import { plan } from "@use-crux/core/plan";
 
 const roadmap = await plan({
-  title: 'Roadmap analysis',
-  content: 'Compare customer feedback, usage data, and support volume.',
-  metadata: { threadId: 'thread-123' },
-})
+  title: "Roadmap analysis",
+  content: "Compare customer feedback, usage data, and support volume.",
+  metadata: { threadId: "thread-123" },
+});
 ```
 
 ## Handles
@@ -20,25 +20,25 @@ const roadmap = await plan({
 `plan()` returns a command handle, not a data snapshot.
 
 ```ts
-roadmap.id
-await roadmap.get()
-await roadmap.update({ content: 'Updated objective and approach.' })
+roadmap.id;
+await roadmap.get();
+await roadmap.update({ content: "Updated objective and approach." });
 ```
 
 Bind an existing plan without reading it first:
 
 ```ts
-const roadmap = plan.ref(planId)
-const current = await roadmap.get()
+const roadmap = plan.ref(planId);
+const current = await roadmap.get();
 ```
 
 List plans by metadata:
 
 ```ts
 const threadPlans = await plan.list({
-  metadata: { threadId: 'thread-123' },
+  metadata: { threadId: "thread-123" },
   limit: 20,
-})
+});
 ```
 
 ## Context
@@ -48,16 +48,16 @@ const threadPlans = await plan.list({
 ```ts
 prompt({
   use: [roadmap.asContext()],
-  system: 'Follow the plan unless the user changes the objective.',
-})
+  system: "Follow the plan unless the user changes the objective.",
+});
 ```
 
 Use reference mode when the model only needs a compact pointer:
 
 ```ts
 prompt({
-  use: [roadmap.asContext({ mode: 'reference', priority: 60 })],
-})
+  use: [roadmap.asContext({ mode: "reference", priority: 60 })],
+});
 ```
 
 Custom rendering is useful when your plan content has a stable house style:
@@ -65,7 +65,7 @@ Custom rendering is useful when your plan content has a stable house style:
 ```ts
 roadmap.asContext({
   renderContext: (p) => `# ${p.title}\n\nVersion ${p.version}\n\n${p.content}`,
-})
+});
 ```
 
 ## Tools
@@ -73,32 +73,32 @@ roadmap.asContext({
 `asTools()` gives the model focused plan read/update tools bound to this plan.
 
 ```ts
-const tools = roadmap.asTools()
+const tools = roadmap.asTools();
 
 prompt({
   tools: {
     getPlan: tools.getPlan,
     updatePlan: tools.updatePlan,
   },
-})
+});
 ```
 
 Create plans from model output with `plan.tool()`. Use `created()` after execution to read the handle safely.
 
 ```ts
 const makePlan = plan.tool({
-  template: '## Goal\n\n## Constraints\n\n## Steps',
-})
+  template: "## Goal\n\n## Constraints\n\n## Steps",
+});
 
 await generate(
   prompt({
-    system: 'Create a concise execution plan.',
+    system: "Create a concise execution plan.",
     tools: { makePlan },
   }),
   { model, input: { request } },
-)
+);
 
-const roadmap = makePlan.created()
+const roadmap = makePlan.created();
 ```
 
 ## Metadata
@@ -108,10 +108,10 @@ Plan metadata must be JSON-safe. Store IDs and small routing fields, not functio
 ```ts
 await roadmap.update({
   metadata: {
-    threadId: 'thread-123',
-    source: 'support',
+    threadId: "thread-123",
+    source: "support",
   },
-})
+});
 ```
 
 ## Execution Lives Elsewhere

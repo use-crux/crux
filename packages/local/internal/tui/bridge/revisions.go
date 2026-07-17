@@ -108,9 +108,9 @@ type Revisions struct {
 	Context     uint64
 }
 
-// BumpQuality records the domains affected by ev and returns that domain set.
-func (r *Revisions) BumpQuality(ev api.QualityEvent) Domains {
-	return r.bump(domainsForQualityEvent(ev)...)
+// BumpInspect records the domains affected by ev and returns that domain set.
+func (r *Revisions) BumpInspect(ev api.InspectEvent) Domains {
+	return r.bump(domainsForInspectEvent(ev)...)
 }
 
 // BumpStore records a generic store change without forcing a context refetch.
@@ -150,7 +150,7 @@ func (r *Revisions) bump(domains ...Domain) Domains {
 	return changed
 }
 
-func domainsForQualityEvent(ev api.QualityEvent) []Domain {
+func domainsForInspectEvent(ev api.InspectEvent) []Domain {
 	kind := strings.ToLower(ev.Kind)
 	action := strings.ToLower(ev.Action)
 	switch {

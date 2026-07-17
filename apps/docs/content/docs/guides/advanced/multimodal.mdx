@@ -12,13 +12,15 @@ import { prompt } from "@use-crux/core";
 import { generate } from "@use-crux/openai";
 
 const inspect = prompt({
-  messages: () => [{
-    role: "user",
-    content: [
-      { type: "text", text: "What is in this image?" },
-      { type: "image", source: imageBytes, mediaType: "image/png" },
-    ],
-  }],
+  messages: () => [
+    {
+      role: "user",
+      content: [
+        { type: "text", text: "What is in this image?" },
+        { type: "image", source: imageBytes, mediaType: "image/png" },
+      ],
+    },
+  ],
 });
 
 const answer = await generate(inspect, { model: "gpt-4o" });
@@ -109,7 +111,9 @@ console.log(hit.source.id, hit.source.location);
 
 Image and visual-PDF ingestion use an application-owned `media.describe`; audio uses `media.transcribe`; video may use either or both. Derivation becomes ordinary text with page/time attribution. Retrieval returns structured source facts and never hydrates media. Vector metadata stays locator-free.
 
-Quality judges accept text, an `Asset`, or canonical content parts. Binary outputs are not written implicitly to cassettes or output caches, and safe descriptor projections (not media bytes or locators) enter experiment artifacts.
+Eval tasks may accept canonical media parts, but dynamic media whose identity
+cannot be proven is not reusable. Crux never clones or persists user-owned
+media merely to create task identity.
 
 ## Inspect authored and executed media work
 

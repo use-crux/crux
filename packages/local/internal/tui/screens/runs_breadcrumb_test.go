@@ -55,8 +55,8 @@ func TestRunsBreadcrumbSpanSegmentPrefixed(t *testing.T) {
 	r.loaded = true
 	r.selRun = "8af2f1c0deadbeef"
 	r.focus = focusSpanDetail
-	r.detail = &api.QualityRunDetailRecord{
-		Spans: []api.QualityRunSpan{
+	r.detail = &api.InspectRunDetailRecord{
+		Spans: []api.InspectRunSpan{
 			{ID: "sp1", Name: "retrieve (loop)"},
 		},
 	}

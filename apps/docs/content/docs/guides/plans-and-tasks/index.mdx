@@ -16,42 +16,42 @@ Use either piece on its own, or combine them with prompt contexts, focused tools
 ## Quick Start
 
 ```ts title="plans-and-tasks.ts"
-import { z } from 'zod'
-import { prompt, generate } from '@use-crux/ai'
-import { plan } from '@use-crux/core/plan'
-import { task, tasks } from '@use-crux/core/tasks'
+import { z } from "zod";
+import { prompt, generate } from "@use-crux/ai";
+import { plan } from "@use-crux/core/plan";
+import { task, tasks } from "@use-crux/core/tasks";
 
 const launchPlan = await plan({
-  title: 'Launch guide',
-  content: 'Research channels, draft the announcement, review, then publish.',
-  metadata: { threadId: 'thread-123' },
-})
+  title: "Launch guide",
+  content: "Research channels, draft the announcement, review, then publish.",
+  metadata: { threadId: "thread-123" },
+});
 
 const work = await tasks({
   plan: launchPlan,
-  title: 'Launch work',
+  title: "Launch work",
   items: {
-    research: task('Research launch channels', {
+    research: task("Research launch channels", {
       result: z.object({ channels: z.array(z.string()) }),
     }),
-    draft: task('Draft announcement', {
+    draft: task("Draft announcement", {
       result: z.object({ markdown: z.string() }),
     }),
   },
-})
+});
 
-const worker = work.worker('research')
+const worker = work.worker("research");
 
 await generate(
   prompt({
     use: [launchPlan.asContext(), worker.asContext()],
     tools: worker.asTools(),
-    system: 'Complete the assigned task. Use the plan as the source of intent.',
+    system: "Complete the assigned task. Use the plan as the source of intent.",
   }),
   { model, input: {} },
-)
+);
 
-const status = (await work.get())?.status
+const status = (await work.get())?.status;
 ```
 
 ## When To Use What
@@ -67,8 +67,8 @@ Use an external durable runner when you need queues, retries, schedules, concurr
 ## Imports
 
 ```ts
-import { plan } from '@use-crux/core/plan'
-import { task, tasks } from '@use-crux/core/tasks'
+import { plan } from "@use-crux/core/plan";
+import { task, tasks } from "@use-crux/core/tasks";
 ```
 
 ## Core Model
@@ -76,20 +76,20 @@ import { task, tasks } from '@use-crux/core/tasks'
 `plan()` returns a command handle with a stable `id`. Call `get()` when you need the latest plan data.
 
 ```ts
-const roadmap = await plan({ title: 'Q1 roadmap', content: '...' })
-await roadmap.update({ content: 'Updated direction.' })
-const latest = await roadmap.get()
+const roadmap = await plan({ title: "Q1 roadmap", content: "..." });
+await roadmap.update({ content: "Updated direction." });
+const latest = await roadmap.get();
 ```
 
 `tasks()` returns a task-ledger handle. Dynamic ledgers can add any string ID.
 
 ```ts
-const work = await tasks({ plan: roadmap, title: 'Roadmap tasks' })
+const work = await tasks({ plan: roadmap, title: "Roadmap tasks" });
 
-await work.add({ id: 'research', label: 'Research customer asks' })
-await work.start('research')
-await work.progress('research', 'Reading interview notes')
-await work.complete('research', { themes: ['activation', 'billing'] })
+await work.add({ id: "research", label: "Research customer asks" });
+await work.start("research");
+await work.progress("research", "Reading interview notes");
+await work.complete("research", { themes: ["activation", "billing"] });
 ```
 
 Defined ledgers infer task IDs from `items`.
@@ -97,11 +97,11 @@ Defined ledgers infer task IDs from `items`.
 ```ts
 const work = await tasks({
   items: {
-    review: task('Review plan'),
+    review: task("Review plan"),
   },
-})
+});
 
-await work.start('review')
+await work.start("review");
 ```
 
 ## Composition
@@ -115,27 +115,43 @@ prompt({
     ...roadmap.asTools(),
     ...work.asTools(),
   },
-})
+});
 ```
 
 Worker handles scope context and tools to one assigned task:
 
 ```ts
-const writer = work.worker('draft', {
-  guidelines: 'Write in markdown and include source links.',
-})
+const writer = work.worker("draft", {
+  guidelines: "Write in markdown and include source links.",
+});
 
 prompt({
   use: [roadmap.asContext(), writer.asContext()],
   tools: writer.asTools(),
-})
+});
 ```
 
 ## Next Steps
 
 <Cards>
-  <Card title="Plans" description="Persistent intent documents and plan handles." href="/docs/guides/plans-and-tasks/plans" />
-  <Card title="Tasks" description="Dynamic and typed task ledgers." href="/docs/guides/plans-and-tasks/tasks" />
-  <Card title="Workers" description="Task-scoped contexts and tools." href="/docs/guides/plans-and-tasks/workers" />
-  <Card title="Reactive UI" description="React hooks and transports." href="/docs/guides/plans-and-tasks/reactive-ui" />
+  <Card
+    title="Plans"
+    description="Persistent intent documents and plan handles."
+    href="/docs/guides/plans-and-tasks/plans"
+  />
+  <Card
+    title="Tasks"
+    description="Dynamic and typed task ledgers."
+    href="/docs/guides/plans-and-tasks/tasks"
+  />
+  <Card
+    title="Workers"
+    description="Task-scoped contexts and tools."
+    href="/docs/guides/plans-and-tasks/workers"
+  />
+  <Card
+    title="Reactive UI"
+    description="React hooks and transports."
+    href="/docs/guides/plans-and-tasks/reactive-ui"
+  />
 </Cards>

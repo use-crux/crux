@@ -10,33 +10,34 @@ Crux has a generic plugin system for extending the runtime. Plugins can install 
 Pass plugins to `config()`:
 
 ```ts title="crux.config.ts"
-import { config } from '@use-crux/core'
-import { withTelemetry } from '@use-crux/otel'
+import { config } from "@use-crux/core";
+import { withTelemetry } from "@use-crux/otel";
 
 export default config({
-  plugins: [withTelemetry({ serviceName: 'my-app' })],
-})
+  plugins: [withTelemetry({ serviceName: "my-app" })],
+});
 ```
 
 Multiple plugins compose automatically:
 
 ```ts title="crux.config.ts"
-import { withTelemetry } from '@use-crux/otel'
+import { withTelemetry } from "@use-crux/otel";
 
 config({
   observability: {
     serverUrl: process.env.DEVTOOLS_URL,
     token: process.env.CRUX_DEVTOOLS_TOKEN,
   },
-  plugins: [withTelemetry({ serviceName: 'my-app' }), myCustomPlugin],
-})
+  plugins: [withTelemetry({ serviceName: "my-app" }), myCustomPlugin],
+});
 ```
 
 Plugins are processed in order. Each plugin's `install()` receives the cumulative hook state from all prior plugins.
 
 <Callout type="info">
-  When you explicitly set `devtools.serverUrl` and no `observability` transport is configured, Crux installs the local
-  devtools transport before your custom plugins. Tunnel/serverless ingest, remote collectors, and production export
+  When you explicitly set `devtools.serverUrl` and no `observability` transport
+  is configured, Crux installs the local devtools transport before your custom
+  plugins. Tunnel/serverless ingest, remote collectors, and production export
   belong under `observability` or an explicit telemetry plugin.
 </Callout>
 
@@ -53,26 +54,29 @@ You do not need a full plugin when you only want to consume the canonical graph 
 the same process. Use `subscribeObservability()` and clean it up when your integration stops:
 
 ```ts title="my-record-subscriber.ts"
-import { subscribeObservability } from '@use-crux/core/observability'
+import { subscribeObservability } from "@use-crux/core/observability";
 
 const unsubscribe = subscribeObservability((record) => {
-  if (record.type === 'artifact' && record.kind === 'output') {
-    queueAuditWrite(record)
+  if (record.type === "artifact" && record.kind === "output") {
+    queueAuditWrite(record);
   }
-})
+});
 
-unsubscribe()
+unsubscribe();
 ```
 
 When an integration only needs specific record variants, pass the discriminants first. The callback
 is typed to the selected records and is not called for the rest of the stream:
 
 ```ts title="span-end-subscriber.ts"
-const unsubscribeSpanEnds = subscribeObservability(['span:end'] as const, (record) => {
-  queueSpanSummary(record.spanId, record.status)
-})
+const unsubscribeSpanEnds = subscribeObservability(
+  ["span:end"] as const,
+  (record) => {
+    queueSpanSummary(record.spanId, record.status);
+  },
+);
 
-unsubscribeSpanEnds()
+unsubscribeSpanEnds();
 ```
 
 Node-native vendor integrations can also subscribe to the `crux:observability` diagnostics channel
@@ -85,30 +89,37 @@ Implement the `CruxPlugin` interface. Prefer **subscribing to graph records** fo
 diagnostics channel) for tool starts, generation ends, and similar signals.
 
 ```ts title="my-plugin.ts"
-import type { CruxPlugin } from '@use-crux/core'
-import { subscribeObservability } from '@use-crux/core/observability'
+import type { CruxPlugin } from "@use-crux/core";
+import { subscribeObservability } from "@use-crux/core/observability";
 
 export function createMyPlugin(options: { endpoint: string }): CruxPlugin {
   return {
-    name: 'my-tracer',
+    name: "my-tracer",
     install() {
-      const unsubscribe = subscribeObservability(['span:start'] as const, (record) => {
-        if (record.primitive !== 'tool.call') return
-        const toolName =
-          typeof record.attributes?.toolName === 'string'
-            ? record.attributes.toolName
-            : undefined
-        void fetch(options.endpoint, {
-          method: 'POST',
-          body: JSON.stringify({ event: 'tool.start', tool: toolName, spanId: record.spanId }),
-        }).catch(() => {}) // fire-and-forget
-      })
+      const unsubscribe = subscribeObservability(
+        ["span:start"] as const,
+        (record) => {
+          if (record.primitive !== "tool.call") return;
+          const toolName =
+            typeof record.attributes?.toolName === "string"
+              ? record.attributes.toolName
+              : undefined;
+          void fetch(options.endpoint, {
+            method: "POST",
+            body: JSON.stringify({
+              event: "tool.start",
+              tool: toolName,
+              spanId: record.spanId,
+            }),
+          }).catch(() => {}); // fire-and-forget
+        },
+      );
 
       return {
         dispose: unsubscribe,
-      }
+      };
     },
-  }
+  };
 }
 ```
 
@@ -120,20 +131,20 @@ export function createMyPlugin(options: { endpoint: string }): CruxPlugin {
 
 Return a `CruxPluginResult`: any subset of `CruxHooks` fields plus an optional `dispose` function. Observability-relevant fields:
 
-| Field | Type | Description |
-| --- | --- | --- |
-| `middleware` | `PromptMiddleware` | Wraps every `generate()` / `stream()` call |
-| `resolveHook` | `ResolveHook` | Observe prompt `.resolve()` calls |
-| `executionHook` | `ExecutionHook` | Observe model calls from agent adapters |
-| `streamProgressHook` | `StreamProgressHook` | Live streaming metrics |
-| `streamStartHook` | `StreamStartHook` | Fires before first chunk |
-| `observabilityTransport` | `CruxObservabilityTransport` | Canonical graph transport instance |
-| `observabilityDelivery` | `ObservabilityDeliveryOptions` | Non-blocking batching, retry, and queue bounds |
-| `observabilityCapture` | capture policy | Central payload capture / redaction policy |
-| `spanActivationHook` | `SpanActivationHook` | Activate real execution context (e.g. OTel span) |
-| `telemetryFlushHook` | `TelemetryFlushHook` | Force-flush installed telemetry exporters |
+| Field                           | Type                            | Description                                           |
+| ------------------------------- | ------------------------------- | ----------------------------------------------------- |
+| `middleware`                    | `PromptMiddleware`              | Wraps every `generate()` / `stream()` call            |
+| `resolveHook`                   | `ResolveHook`                   | Observe prompt `.resolve()` calls                     |
+| `executionHook`                 | `ExecutionHook`                 | Observe model calls from agent adapters               |
+| `streamProgressHook`            | `StreamProgressHook`            | Live streaming metrics                                |
+| `streamStartHook`               | `StreamStartHook`               | Fires before first chunk                              |
+| `observabilityTransport`        | `CruxObservabilityTransport`    | Canonical graph transport instance                    |
+| `observabilityDelivery`         | `ObservabilityDeliveryOptions`  | Non-blocking batching, retry, and queue bounds        |
+| `observabilityCapture`          | capture policy                  | Central payload capture / redaction policy            |
+| `spanActivationHook`            | `SpanActivationHook`            | Activate real execution context (e.g. OTel span)      |
+| `telemetryFlushHook`            | `TelemetryFlushHook`            | Force-flush installed telemetry exporters             |
 | `telemetryResumeAttributesHook` | `TelemetryResumeAttributesHook` | Extra attributes on resume from a propagation carrier |
-| `dispose` | `() => void \| Promise<void>` | Cleanup on `registry.dispose()` |
+| `dispose`                       | `() => void \| Promise<void>`   | Cleanup on `registry.dispose()`                       |
 
 `CruxHooks` also carries non-observability slots (`records`, `runtimeEngine`, global constraints/guardrails, …) that plugins may set; they are not free-form event maps.
 

@@ -387,7 +387,6 @@ export interface ViewDef {
   sourceStatus?: ProjectDefinitionMetadata["sourceStatus"];
   presentation?: PresentationView;
   quality?: ProjectDefinitionQuality;
-  changedSinceBaseline?: boolean;
   /** Source-file mtime as a short relative string (no author — see backend). */
   updated?: string;
   /** Observed-injection layer (prompt/context/injectable) — drives the
@@ -683,7 +682,6 @@ export function toViewDef(
         }
       : undefined,
     quality: def.quality,
-    changedSinceBaseline: def.quality?.changedSinceBaseline,
     updated: fmtAgo(meta.updated?.lastEditedAtMs) ?? meta.updated?.lastEditedAt,
     observed: readObserved(metaRec, intel),
     contributions: readContributions(def.kind, metaRec, intel),

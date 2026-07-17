@@ -106,30 +106,30 @@
   /* Zinc palette — inverted for light mode */
   --zinc-950: oklch(0.995 0 0);
   --zinc-900: oklch(0.967 0.001 286.375);
-  --zinc-800: oklch(0.920 0.004 286.32);
+  --zinc-800: oklch(0.92 0.004 286.32);
   --zinc-700: oklch(0.871 0.006 286.286);
   --zinc-600: oklch(0.705 0.015 286.067);
   --zinc-500: oklch(0.552 0.016 285.938);
   --zinc-400: oklch(0.442 0.017 285.786);
   --zinc-300: oklch(0.372 0.013 285.805);
   --zinc-200: oklch(0.274 0.006 286.033);
-  --zinc-100: oklch(0.210 0.006 285.885);
+  --zinc-100: oklch(0.21 0.006 285.885);
   --zinc-50: oklch(0.141 0.005 285.823);
 
   /* Semantic tokens — light */
   --background: oklch(0.985 0 0);
   --foreground: oklch(0.145 0 0);
-  --card: oklch(1.0 0 0);
+  --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1.0 0 0);
+  --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
   --primary: oklch(0.205 0 0);
   --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.930 0 0);
+  --secondary: oklch(0.93 0 0);
   --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.930 0 0);
+  --muted: oklch(0.93 0 0);
   --muted-foreground: oklch(0.442 0 0);
-  --accent: oklch(0.930 0 0);
+  --accent: oklch(0.93 0 0);
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0 0 0 / 10%);
@@ -163,21 +163,21 @@
   --qw-fg: oklch(20% 0 0);
   --qw-fg-muted: oklch(45% 0 0);
   --qw-fg-faint: oklch(60% 0 0);
-  --qw-border: oklch(0% 0 0 / 0.10);
+  --qw-border: oklch(0% 0 0 / 0.1);
   --qw-border-strong: oklch(0% 0 0 / 0.16);
   --qw-crux: oklch(55% 0.09 192);
   --qw-crux-hover: oklch(48% 0.09 192);
-  --qw-crux-soft: oklch(55% 0.09 192 / 0.10);
+  --qw-crux-soft: oklch(55% 0.09 192 / 0.1);
   --qw-crux-line: oklch(55% 0.09 192 / 0.28);
   --qw-crux-glow: oklch(70% 0.08 192 / 0.06);
   --qw-danger: oklch(57% 0.22 27);
-  --qw-danger-soft: oklch(57% 0.22 27 / 0.10);
+  --qw-danger-soft: oklch(57% 0.22 27 / 0.1);
   --qw-danger-line: oklch(57% 0.22 27 / 0.28);
   --qw-warn: oklch(68% 0.16 75);
   --qw-warn-soft: oklch(68% 0.16 75 / 0.12);
-  --qw-warn-line: oklch(68% 0.16 75 / 0.30);
+  --qw-warn-line: oklch(68% 0.16 75 / 0.3);
   --qw-ok: oklch(55% 0.13 155);
-  --qw-ok-soft: oklch(55% 0.13 155 / 0.10);
+  --qw-ok-soft: oklch(55% 0.13 155 / 0.1);
   --qw-ok-line: oklch(55% 0.13 155 / 0.28);
   --qw-iris: oklch(56% 0.16 280);
   --qw-iris-soft: oklch(56% 0.16 280 / 0.12);
@@ -190,7 +190,7 @@
   --qw-plum-line: oklch(52% 0.16 320 / 0.28);
   --qw-gold: oklch(60% 0.12 95);
   --qw-gold-soft: oklch(60% 0.12 95 / 0.13);
-  --qw-gold-line: oklch(60% 0.12 95 / 0.30);
+  --qw-gold-line: oklch(60% 0.12 95 / 0.3);
   --qw-grid: oklch(0% 0 0 / 0.04);
   --qw-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --qw-mono: "JetBrains Mono", "SF Mono", ui-monospace, Menlo, monospace;
@@ -204,14 +204,14 @@
   /* Zinc palette — standard Tailwind values */
   --zinc-50: oklch(0.985 0 0);
   --zinc-100: oklch(0.967 0.001 286.375);
-  --zinc-200: oklch(0.920 0.004 286.32);
+  --zinc-200: oklch(0.92 0.004 286.32);
   --zinc-300: oklch(0.871 0.006 286.286);
   --zinc-400: oklch(0.705 0.015 286.067);
   --zinc-500: oklch(0.552 0.016 285.938);
   --zinc-600: oklch(0.442 0.017 285.786);
   --zinc-700: oklch(0.372 0.013 285.805);
   --zinc-800: oklch(0.274 0.006 286.033);
-  --zinc-900: oklch(0.210 0.006 285.885);
+  --zinc-900: oklch(0.21 0.006 285.885);
   --zinc-950: oklch(0.141 0.005 285.823);
 
   /* Semantic tokens — dark */
@@ -263,11 +263,11 @@
   --qw-fg-faint: oklch(52% 0.01 240);
   --qw-border: oklch(100% 0 0 / 0.08);
   --qw-border-strong: oklch(100% 0 0 / 0.14);
-  --qw-crux: oklch(75% 0.10 192);
-  --qw-crux-hover: oklch(82% 0.10 192);
-  --qw-crux-soft: oklch(75% 0.10 192 / 0.10);
-  --qw-crux-line: oklch(75% 0.10 192 / 0.30);
-  --qw-crux-glow: oklch(75% 0.10 192 / 0.06);
+  --qw-crux: oklch(75% 0.1 192);
+  --qw-crux-hover: oklch(82% 0.1 192);
+  --qw-crux-soft: oklch(75% 0.1 192 / 0.1);
+  --qw-crux-line: oklch(75% 0.1 192 / 0.3);
+  --qw-crux-glow: oklch(75% 0.1 192 / 0.06);
   --qw-danger: oklch(70% 0.19 22);
   --qw-danger-soft: oklch(70% 0.19 22 / 0.14);
   --qw-danger-line: oklch(70% 0.19 22 / 0.32);
@@ -276,19 +276,19 @@
   --qw-warn-line: oklch(78% 0.15 75 / 0.32);
   --qw-ok: oklch(72% 0.16 155);
   --qw-ok-soft: oklch(72% 0.16 155 / 0.12);
-  --qw-ok-line: oklch(72% 0.16 155 / 0.30);
+  --qw-ok-line: oklch(72% 0.16 155 / 0.3);
   --qw-iris: oklch(72% 0.16 280);
   --qw-iris-soft: oklch(72% 0.16 280 / 0.14);
-  --qw-iris-line: oklch(72% 0.16 280 / 0.30);
+  --qw-iris-line: oklch(72% 0.16 280 / 0.3);
   --qw-blue: oklch(72% 0.14 250);
   --qw-blue-soft: oklch(72% 0.14 250 / 0.14);
-  --qw-blue-line: oklch(72% 0.14 250 / 0.30);
+  --qw-blue-line: oklch(72% 0.14 250 / 0.3);
   --qw-plum: oklch(74% 0.16 320);
   --qw-plum-soft: oklch(74% 0.16 320 / 0.14);
-  --qw-plum-line: oklch(74% 0.16 320 / 0.30);
+  --qw-plum-line: oklch(74% 0.16 320 / 0.3);
   --qw-gold: oklch(82% 0.13 95);
   --qw-gold-soft: oklch(82% 0.13 95 / 0.14);
-  --qw-gold-line: oklch(82% 0.13 95 / 0.30);
+  --qw-gold-line: oklch(82% 0.13 95 / 0.3);
   --qw-grid: oklch(100% 0 0 / 0.025);
 
   color-scheme: dark;
@@ -350,8 +350,13 @@
 }
 
 @keyframes running-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
 }
 
 .animate-trace-in {
@@ -364,15 +369,29 @@
 
 /* Project Index "refreshing" status dot pulse. */
 @keyframes cat-pulse {
-  0% { box-shadow: 0 0 0 0 currentColor; opacity: 1; }
-  70% { box-shadow: 0 0 0 5px transparent; opacity: 0.5; }
-  100% { box-shadow: 0 0 0 0 transparent; opacity: 1; }
+  0% {
+    box-shadow: 0 0 0 0 currentColor;
+    opacity: 1;
+  }
+  70% {
+    box-shadow: 0 0 0 5px transparent;
+    opacity: 0.5;
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+    opacity: 1;
+  }
 }
 
 /* Suspense / skeleton fallback pulse. Honors prefers-reduced-motion. */
 @keyframes qw-skeleton-pulse {
-  0%, 100% { opacity: 0.55; }
-  50% { opacity: 0.95; }
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 0.95;
+  }
 }
 
 .qw-skeleton {
@@ -383,8 +402,12 @@
 /* Subtle indeterminate top progress bar — shown while a route
  * transition is pending (useTransition). */
 @keyframes qw-progress-slide {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(220%); }
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(220%);
+  }
 }
 
 .qw-progress-bar {
@@ -395,7 +418,7 @@
 }
 
 .qw-progress-bar::after {
-  content: '';
+  content: "";
   position: absolute;
   inset: 0;
   width: 45%;
@@ -429,8 +452,12 @@
 
 /* Give each major region its own snapshot so the page swap doesn't
  * animate the whole window. */
-.qw-sidebar { view-transition-name: qw-sidebar; }
-.qw-page-content { view-transition-name: qw-page-content; }
+.qw-sidebar {
+  view-transition-name: qw-sidebar;
+}
+.qw-page-content {
+  view-transition-name: qw-page-content;
+}
 
 /* Sidebar: never animate during nav. */
 ::view-transition-old(qw-sidebar),
@@ -447,36 +474,59 @@
 }
 
 @keyframes qw-nav-out-forward {
-  to { transform: translateX(-2%); opacity: 0; }
+  to {
+    transform: translateX(-2%);
+    opacity: 0;
+  }
 }
 @keyframes qw-nav-in-forward {
-  from { transform: translateX(2%); opacity: 0; }
+  from {
+    transform: translateX(2%);
+    opacity: 0;
+  }
 }
 @keyframes qw-nav-out-back {
-  to { transform: translateX(2%); opacity: 0; }
+  to {
+    transform: translateX(2%);
+    opacity: 0;
+  }
 }
 @keyframes qw-nav-in-back {
-  from { transform: translateX(-2%); opacity: 0; }
+  from {
+    transform: translateX(-2%);
+    opacity: 0;
+  }
 }
 
-html[data-nav-direction='forward']::view-transition-old(qw-page-content) {
+html[data-nav-direction="forward"]::view-transition-old(qw-page-content) {
   animation-name: qw-nav-out-forward;
 }
-html[data-nav-direction='forward']::view-transition-new(qw-page-content) {
+html[data-nav-direction="forward"]::view-transition-new(qw-page-content) {
   animation-name: qw-nav-in-forward;
 }
-html[data-nav-direction='back']::view-transition-old(qw-page-content) {
+html[data-nav-direction="back"]::view-transition-old(qw-page-content) {
   animation-name: qw-nav-out-back;
 }
-html[data-nav-direction='back']::view-transition-new(qw-page-content) {
+html[data-nav-direction="back"]::view-transition-new(qw-page-content) {
   animation-name: qw-nav-in-back;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .qw-skeleton { animation: none; opacity: 0.7; }
-  .qw-progress-bar::after { animation: none; opacity: 0.5; width: 100%; }
-  .animate-running-pulse { animation: none; }
-  .animate-trace-in { animation: none; }
+  .qw-skeleton {
+    animation: none;
+    opacity: 0.7;
+  }
+  .qw-progress-bar::after {
+    animation: none;
+    opacity: 0.5;
+    width: 100%;
+  }
+  .animate-running-pulse {
+    animation: none;
+  }
+  .animate-trace-in {
+    animation: none;
+  }
   ::view-transition-old(qw-page-content),
   ::view-transition-new(qw-page-content),
   ::view-transition-old(qw-sidebar),
@@ -498,8 +548,12 @@ html[data-nav-direction='back']::view-transition-new(qw-page-content) {
   color: var(--qw-fg);
   line-height: 1.65;
 }
-.qw-prose > *:first-child { margin-top: 0; }
-.qw-prose > *:last-child { margin-bottom: 0; }
+.qw-prose > *:first-child {
+  margin-top: 0;
+}
+.qw-prose > *:last-child {
+  margin-bottom: 0;
+}
 .qw-prose p,
 .qw-prose ul,
 .qw-prose ol,
@@ -521,10 +575,19 @@ html[data-nav-direction='back']::view-transition-new(qw-page-content) {
   margin: 1.1em 0 0.4em;
   line-height: 1.3;
 }
-.qw-prose h1 { font-size: 18px; }
-.qw-prose h2 { font-size: 16px; }
-.qw-prose h3 { font-size: 14.5px; }
-.qw-prose h4 { font-size: 13.5px; color: var(--qw-fg-muted); }
+.qw-prose h1 {
+  font-size: 18px;
+}
+.qw-prose h2 {
+  font-size: 16px;
+}
+.qw-prose h3 {
+  font-size: 14.5px;
+}
+.qw-prose h4 {
+  font-size: 13.5px;
+  color: var(--qw-fg-muted);
+}
 .qw-prose h5,
 .qw-prose h6 {
   font-family: var(--qw-mono);
@@ -540,9 +603,16 @@ html[data-nav-direction='back']::view-transition-new(qw-page-content) {
 .qw-prose li {
   margin: 0.2em 0;
 }
-.qw-prose li > p { margin: 0.2em 0; }
-.qw-prose strong { font-weight: 600; color: var(--qw-fg); }
-.qw-prose em { font-style: italic; }
+.qw-prose li > p {
+  margin: 0.2em 0;
+}
+.qw-prose strong {
+  font-weight: 600;
+  color: var(--qw-fg);
+}
+.qw-prose em {
+  font-style: italic;
+}
 .qw-prose a {
   color: var(--qw-crux);
   text-decoration: underline;

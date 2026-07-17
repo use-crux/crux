@@ -8,19 +8,30 @@
  * drilling.
  */
 
-import { createContext, useContext, type ReactNode } from 'react'
-import type { IndexIndex } from './adapt'
+import { createContext, useContext, type ReactNode } from "react";
+import type { IndexIndex } from "./adapt";
 
-const IndexIndexContext = createContext<IndexIndex | null>(null)
+const IndexIndexContext = createContext<IndexIndex | null>(null);
 
-export function IndexIndexProvider({ index, children }: { index: IndexIndex; children: ReactNode }) {
-  return <IndexIndexContext.Provider value={index}>{children}</IndexIndexContext.Provider>
+export function IndexIndexProvider({
+  index,
+  children,
+}: {
+  index: IndexIndex;
+  children: ReactNode;
+}) {
+  return (
+    <IndexIndexContext.Provider value={index}>
+      {children}
+    </IndexIndexContext.Provider>
+  );
 }
 
 export function useIndexIndex(): IndexIndex {
-  const ctx = useContext(IndexIndexContext)
-  if (!ctx) throw new Error('useIndexIndex must be used within a IndexIndexProvider')
-  return ctx
+  const ctx = useContext(IndexIndexContext);
+  if (!ctx)
+    throw new Error("useIndexIndex must be used within a IndexIndexProvider");
+  return ctx;
 }
 
 /**
@@ -29,14 +40,24 @@ export function useIndexIndex(): IndexIndex {
  * prop-drilling. Defaults to a no-op so components render safely outside a
  * provider.
  */
-export type SelectDefinition = (id: string) => void
+export type SelectDefinition = (id: string) => void;
 
-const IndexSelectContext = createContext<SelectDefinition>(() => {})
+const IndexSelectContext = createContext<SelectDefinition>(() => {});
 
-export function IndexSelectProvider({ select, children }: { select: SelectDefinition; children: ReactNode }) {
-  return <IndexSelectContext.Provider value={select}>{children}</IndexSelectContext.Provider>
+export function IndexSelectProvider({
+  select,
+  children,
+}: {
+  select: SelectDefinition;
+  children: ReactNode;
+}) {
+  return (
+    <IndexSelectContext.Provider value={select}>
+      {children}
+    </IndexSelectContext.Provider>
+  );
 }
 
 export function useIndexSelect(): SelectDefinition {
-  return useContext(IndexSelectContext)
+  return useContext(IndexSelectContext);
 }

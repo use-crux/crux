@@ -1,6 +1,6 @@
 ---
-title: '@use-crux/local'
-description: Local Crux runtime for the Go devtools server, TUI, traces, Quality, index, and lint.
+title: "@use-crux/local"
+description: Local Crux runtime for the Go devtools server, TUI, traces, Evals, Review, index, and lint.
 ---
 
 ```bash
@@ -11,7 +11,7 @@ npm install -g @use-crux/local
 
 ## Overview
 
-The Crux local runtime is a Go binary that hosts the HTTP API, WebSocket/SSE subscriptions, React devtools UI, TUI, SQLite-backed observability services, index services, Quality run orchestration, and lint presentation. File-backed observability databases use SQLite WAL, busy timeouts, and pooled connections for concurrent flush/read workloads; in-memory databases stay single-connection for tests. Node.js is used only for bounded helper workers such as Project Index indexing, source resolution, and Quality evaluation execution.
+The Crux local runtime is a Go binary that hosts the HTTP API, WebSocket/SSE subscriptions, React devtools UI, TUI, SQLite-backed observability and Review services, index services, Eval coordination, and lint presentation. File-backed observability databases use SQLite WAL, busy timeouts, and pooled connections for concurrent flush/read workloads; in-memory databases stay single-connection for tests. Node.js is used only for bounded helper workers such as Project Index indexing, source resolution, and Eval execution.
 
 All query commands support a `--json` flag for machine-readable output. Table output is the default for human consumption.
 
@@ -45,7 +45,7 @@ public tunnel origin when cloud runtimes need to post records back to your local
 
 The local HTTP API, in-process DirectClient, and WebSocket snapshot payloads share the same backend read-model registry. This keeps route parameters, query parsing, not-found handling, live invalidation messages, and initial snapshot payloads aligned between custom tooling and the embedded devtools UI.
 
-Observability and quality run lists are newest-first pages by default so live web/TUI refreshes stay responsive on large local histories. Observability lists read ingest-time count and usage rollups from SQLite; the web devtools runs table groups by root `sessionId` and displays those token, cost, and graph-count rollups directly. Single-run detail endpoints remain exact, while focused streaming spans read `token.chunk` text through the lazy span-events endpoint instead of loading every chunk into the run-detail graph. Use explicit `limit`/`offset` query parameters on the HTTP list endpoints when building custom local tooling that needs a different page size.
+Observability and Eval run lists are newest-first pages by default so live web/TUI refreshes stay responsive on large local histories. Observability lists read ingest-time count and usage rollups from SQLite; the web devtools runs table groups by root `sessionId` and displays those token, cost, and graph-count rollups directly. Single-run detail endpoints remain exact, while focused streaming spans read `token.chunk` text through the lazy span-events endpoint instead of loading every chunk into the run-detail graph. Use explicit `limit`/`offset` query parameters on the HTTP list endpoints when building custom local tooling that needs a different page size.
 
 ## `crux traces`
 
@@ -134,8 +134,6 @@ The view is organized by `config()` domain, in interface order:
 
 - `Project`: root and package name
 - `Config file`: the resolved file, how it was located, its load status, and any import error
-- `quality:` `id`, `dir`, `include`, `exclude`, `redact`, and the run defaults `trials` /
-  `concurrency` / `timeoutMs` / `replay` (the full `QualityConfig` surface)
 - `generation:` `autoEscape`, `securityWarnings`, and whether a `tokenizer` / `middleware` is bound
 - `indexer:` extension `trust` mode and configured `extensions`
 - `observability:` `enabled`, `serverUrl`, token presence, and whether a custom `transport` is bound
@@ -174,12 +172,12 @@ crux setup --json          # Stable machine-readable report
 crux setup --cwd packages/backend
 ```
 
-| Flag      | Description                                                                    |
-| --------- | ------------------------------------------------------------------------------ |
-| `--check` | Read-only inspection; the default when no mode is passed                      |
+| Flag      | Description                                                                         |
+| --------- | ----------------------------------------------------------------------------------- |
+| `--check` | Read-only inspection; the default when no mode is passed                            |
 | `--apply` | Apply planned actions classified as `safe-additive`, in plan order, then re-inspect |
-| `--json`  | Machine-readable report: findings, planned actions, and application results   |
-| `--cwd`   | Inspect another project root                                                   |
+| `--json`  | Machine-readable report: findings, planned actions, and application results         |
+| `--cwd`   | Inspect another project root                                                        |
 
 Every planned action carries a classification, and apply mode runs only actions classified as
 `safe-additive`. It never automatically performs destructive migrations, paid provisioning,
@@ -201,7 +199,7 @@ backend, watch, cache, or manifest state explicit.
 ```bash
 crux catalog                         # List every definition kind
 crux catalog list --kind agent       # Filter by exact definition kind
-crux catalog show agent:writer       # Definition, relations, Health, Quality, Runs
+crux catalog show agent:writer       # Definition, relations, Health, Eval, Runs
 crux catalog status                  # Compiler, cache, watch, and manifest state
 crux catalog explain agent:writer    # Why the compiler recognized this definition
 crux catalog import ./manifest.json  # Verify and retain immutable history
@@ -209,7 +207,7 @@ crux catalog import ./manifest.json  # Verify and retain immutable history
 
 `catalog list` sorts by kind and definition ID. `show` returns the safe current
 read model with source references, incoming/outgoing relations, applicable
-diagnostics and lints, Quality summary, and bounded runtime activity. `explain`
+diagnostics and lints, Eval summary, and bounded runtime activity. `explain`
 uses durable compiler fact provenance and reports unresolved relations only
 when compiler diagnostics establish them; it never guesses from source text or
 extractor names. When contributor attribution is present, the reason names each
@@ -241,7 +239,7 @@ crux index contexts         # List contexts only
 crux index tools            # List tools only
 crux index definitions      # List all discovered definitions
 crux index diagnostics      # List index diagnostics
-crux index reindex          # Rebuild from source files and .crux/quality JSON
+crux index reindex          # Rebuild source definitions and local Eval records
 crux index agent:writer     # Delegates to crux catalog show
 crux index --json           # Output as JSON
 ```
@@ -251,9 +249,9 @@ crux index --json           # Output as JSON
 | `--json` | Output as JSON |
 
 Use `crux catalog` for new automation. `crux index reindex` still requires the
-running dev server and forces a source/Quality rebuild; `crux check` and
+running dev server and forces a source/Eval rebuild; `crux check` and
 `crux manifest` are daemon-free CI/build surfaces. `crux dev` indexes source
-files and `.crux/quality` JSON at startup, then watches source/config files for
+files and local Eval records at startup, then watches source/config files for
 debounced incremental refreshes.
 
 ## `crux inspect`
@@ -298,10 +296,10 @@ crux lint --server                 # Read the running devtools snapshot
 | `--fail-on <severity>` | Exit `1` when selected findings include `error`, `warning`, or `info`  |
 | `--include-suppressed` | Include source-comment suppressed findings                             |
 | `--json`               | Output as JSON                                                         |
-| `--root <path>`        | Project root; defaults to the current directory                         |
-| `--config <path>`      | Optional absolute or root-relative Crux config                          |
-| `--project-id <id>`    | Optional display/cache identity                                         |
-| `--server`             | Use the running devtools server instead of one-shot indexing            |
+| `--root <path>`        | Project root; defaults to the current directory                        |
+| `--config <path>`      | Optional absolute or root-relative Crux config                         |
+| `--project-id <id>`    | Optional display/cache identity                                        |
+| `--server`             | Use the running devtools server instead of one-shot indexing           |
 
 Lists findings sorted by severity (`error` · `warning` · `info`), each with its
 rule id, target definition, source `file:line`, and (when available) the
@@ -322,15 +320,15 @@ crux check --root packages/app --config crux.config.ts
 crux check --project-id storefront --json
 ```
 
-| Flag                       | Description                                                            |
-| -------------------------- | ---------------------------------------------------------------------- |
-| `--root <path>`            | Project root; defaults to the current directory                         |
-| `--config <path>`          | Optional absolute or root-relative Crux config                          |
-| `--project-id <id>`        | Optional display/cache identity                                         |
-| `--profile <name>`         | `off`, `recommended`, `strict`, or `experimental`                       |
-| `--include-suppressed`     | Include source-comment suppressed findings                             |
-| `--fail-on <level>`        | `error` (default), `warning`, `info`, or `none`                         |
-| `--json`                   | Write exactly one deterministic JSON v1 value to stdout                 |
+| Flag                   | Description                                             |
+| ---------------------- | ------------------------------------------------------- |
+| `--root <path>`        | Project root; defaults to the current directory         |
+| `--config <path>`      | Optional absolute or root-relative Crux config          |
+| `--project-id <id>`    | Optional display/cache identity                         |
+| `--profile <name>`     | `off`, `recommended`, `strict`, or `experimental`       |
+| `--include-suppressed` | Include source-comment suppressed findings              |
+| `--fail-on <level>`    | `error` (default), `warning`, `info`, or `none`         |
+| `--json`               | Write exactly one deterministic JSON v1 value to stdout |
 
 Exit `0` means compilation completed without a selected finding meeting the
 gate. Exit `1` means the gate matched. Exit `2` means configuration, compiler,
@@ -370,200 +368,63 @@ Import is idempotent for an existing `(projectId, manifestId)` with identical
 content. Invalid hashes, malformed artifacts, and tuple collisions exit `2`
 without changing the store.
 
-## `crux quality`
+## `crux eval`
 
-Run, watch, list, inspect, and promote Quality evaluations (`*.eval.ts` files
-plus colocated `prompt({ tests })` when a prompt registry is available).
-File-defined evaluations are discovered by convention; `crux.config.ts` is
-optional policy/defaults, not a required primitive registry. See the
-[Quality guide](/docs/guides/quality).
+Discover and run one default Eval export per `*.eval.ts` file. The shorthand
+`crux eval [selector...]` is equivalent to `crux eval run [selector...]`.
 
 ```bash
-crux quality init [definition-id]  # Scaffold an eval for an uncovered definition
-crux quality import-traces --definition <id> # Create JSONL cases from local traces
-crux quality run [id...]            # Run all discovered evaluations, or the listed ids
-crux quality run --failed latest --json # Rerun failed cells from the latest experiment
-crux quality run --sample 10 --seed smoke # Run a deterministic case slice
-crux quality watch [id...]          # Incremental re-run on change (also embedded in `crux dev`)
-crux quality list                   # Discovered evaluations (manifests), no execution
-crux quality show <experimentId>    # Print one persisted experiment record (human or --json)
-crux quality progress <evaluationId> # Recent runs and score series for one evaluation
-crux quality cell-evidence <experimentId> --case <caseId> --variant <name> --trial <n>
-crux quality diff <experimentA> <experimentB> --json
-crux quality mcp                    # Serve Quality tools over MCP stdio
-crux quality promote <experimentId> [--variant <name>] [--pin-id <id>]
+crux eval
+crux eval support --case refund --variant cheaper
+crux eval list
+crux eval show <run-id>
+crux eval diff <run-a> <run-b>
+crux eval baseline set <run-id> [--variant <name>]
 ```
 
-Quality is the supported evaluation CLI namespace.
+Selectors match Eval ids or source paths. Every run includes Current; repeat
+`--variant` to add blocking Variants and `--case` to select Cases.
 
-### `crux quality init`
+### Run flags
 
-Scaffold the first eval for a Project Index definition:
+| Flag                  | Meaning                                                             |
+| --------------------- | ------------------------------------------------------------------- |
+| `--case <id-or-name>` | Select a Case; repeatable                                           |
+| `--variant <name>`    | Add a blocking Variant alongside Current; repeatable                |
+| `--watch`             | Replan affected Evals when source or Case files change              |
+| `--fresh`             | Bypass reusable task and managed-scorer evidence                    |
+| `--offline`           | Require exact external evidence and make no network requests        |
+| `--plan`              | Show admitted work without creating runs, reservations, or evidence |
+| `--max-cost <usd>`    | Refuse external work beyond the invocation budget                   |
+| `--cwd <path>`        | Set the project directory used for discovery                        |
 
-```bash
-crux quality init
-crux quality init prompt:support-triage
-crux quality init prompt:support-triage --force
-```
+A plan can make one authenticated, read-only Runtime manifest request when
+remote work is required. If credentials are absent it reports the remote work
+as unverified and prints setup instructions. `--offline --plan` never accesses
+the network.
 
-With no argument, `init` lists definitions that appear to lack eval coverage.
-With a single target, it writes `evals/<safe-id>.eval.ts` and seeds it with an
-imported task, `covers: ['<definition-id>']`, a TODO data row, a truthy smoke
-assertion, and `scorers.exact()`. Existing files are left untouched unless
-`--force` is set. The command also creates `.crux/skills/quality/SKILL.md`
-when the project does not already have a local Quality skill note.
+### Commands and exit codes
 
-### `crux quality import-traces`
+`list` performs discovery without execution. `show` inspects a saved run,
+`diff` compares two saved runs, and `baseline set` accepts one complete run
+arm as the Eval's explicit Baseline.
 
-Convert retained local traces into JSONL dataset rows:
+| Code | Meaning                                                               |
+| ---- | --------------------------------------------------------------------- |
+| `0`  | Every blocking result passed                                          |
+| `1`  | A check, Gate, or execution failed                                    |
+| `2`  | Discovery, configuration, selection, or preflight failed before spend |
 
-```bash
-crux quality import-traces --definition prompt:support-triage
-crux quality import-traces --definition support-triage --status ok --since 7d --limit 20
-crux quality import-traces --definition support-triage --with-expected --out evals/datasets/support.jsonl
-```
+### Files and privacy
 
-`--definition` accepts the Project Index prompt id form (`prompt:<id>`) or the
-runtime prompt id form (`<id>`). The command reads local observability run
-details, uses the root input/prompt/messages artifact as `input`, and writes
-`expected` only with `--with-expected`, using the observed output artifact.
-Rows are tagged `trace-import` and include
-`metadata.provenance.{traceId,observedAt,source}`. Runs without usable input
-or, under `--with-expected`, usable output are skipped with a reason.
+Crux writes private run and evidence data under `.crux/quality/`; keep that
+directory gitignored. Commit authored Eval files, sibling `.cases.jsonl`
+datasets, explicit files referenced by `caseFile()`, and `.baseline.json`
+Baseline pointers when they are intended to be shared.
 
-### `crux quality run` flags
-
-| Flag                    | Meaning                                                                                                                                                           |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `[id...]`               | Evaluation ids (explicit or path-derived). Unknown id → exit 2 with a nearest-match suggestion                                                                    |
-| `--case <pattern>`      | Filter cases by id/name; `*` glob; repeatable. **Demotes gates to informational**                                                                                 |
-| `--failed <ref>`        | Rerun failed or errored cells from an experiment id, or `latest` for the newest matching saved experiment. Demotes gates to informational                         |
-| `--sample <n>`          | Deterministically sample `n` cases after filters. Requires `--seed` so the subset can be reproduced                                                               |
-| `--seed <value>`        | Seed used by `--sample`                                                                                                                                            |
-| `--max-cost <usd>`      | Stop scheduling new cells after cumulative reported cell cost reaches this USD budget                                                                              |
-| `--changed-since <ref>` | Select evaluations affected by files changed since a git ref. If coverage cannot be proven, the command fails open by running the selected/all evaluation set      |
-| `--variant <name>`      | Run a variant subset; repeatable. Demotes gates unless the baseline variant is included                                                                           |
-| `--trials <n>`          | Override trials for this run                                                                                                                                      |
-| `--replay <mode>`       | `live` · `record-new` · `replay-strict` · `refresh`: overrides declaration/config                                                                                |
-| `--rescore`             | Reuse cached outputs, re-run scorers/expects only (token-free judge iteration)                                                                                    |
-| `--experiment <label>`  | Grouping label stored on the record(s)                                                                                                                            |
-| `--json`                | Suppress human stdout and write one machine-readable run summary object (verdict, record paths, failed cells, evidence commands, cost, duration)                  |
-| `--json-out <path>`     | Write the same run summary object to a file path while keeping human stdout                                                                                       |
-| `--junit <path>`        | Write JUnit XML (one testsuite per evaluation × variant; gate failures as a synthetic `gates` testcase; experimentId/configFingerprint/score means in properties) |
-| `--ci`                  | Force plain, non-animated output and no color, even on a TTY. Pair with explicit `--replay replay-strict` for token-free CI posture                               |
-| `--max-concurrency <n>` | Cap parallel cells across all evaluations                                                                                                                         |
-| `--quiet` / `--verbose` | Reporter detail level                                                                                                                                             |
-
-### Exit codes
-
-| Code | Meaning                                                                                                                                                          |
-| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `0`  | All blocking gates passed (or a filtered run with no errored cells)                                                                                              |
-| `1`  | A blocking gate failed, an expect failed under the default policy, or any cell errored                                                                           |
-| `2`  | Definition/discovery error: unknown id, duplicate ids, dataset schema failure, missing `generate` for a model-backed task, invalid config. Nothing was executed |
-
-The reporter prints a per-evaluation tree with per-cell status; failures show
-the assertion diff, its `file:line` source ref, and the devtools trace deep
-link. Deltas vs the baseline always render with ±SEM. Filtered runs print
-`gates informational (filtered run)`; replay-strict misses print the missing
-cassette key and the re-record command.
-
-### Records on disk
-
-Experiment records persist to `.crux/quality/experiments/` (gitignored: the
-runner scaffolds the `.gitignore`); promoted baselines live in
-`.crux/quality/baselines/` and cassettes in `.crux/quality/cassettes/`, both
-committed.
-
-### `crux quality watch`
-
-Re-collects on changes to eval files, their imports, datasets, or cassettes.
-Unchanged cells (same case identity, task fingerprint, params, and replay
-mode) are served from the output cache and re-scored only, so a scorer or
-`expect` edit reruns instantly without re-executing tasks. `evaluate.only` /
-case `only` narrow the watch set. The same engine is embedded in `crux dev`,
-streaming results to devtools.
-
-Cached or replayed cells may link their `eval.case_of` observability edge to a
-historical case run rather than a run created during the current evaluation.
-Consumers should treat the edge as provenance and not require same-run
-membership.
-
-Dataset-backed cells keep `metadata.datasetProvenance` with the dataset path
-and content fingerprint. The same compact provenance appears on failed rows in
-`crux quality run --json`, failed-cell output from `crux quality show`, and
-matched rows in `crux quality diff --json`.
-
-### `crux quality mcp`
-
-Serves Quality tools over MCP stdio for local agents:
-
-```bash
-crux quality mcp
-```
-
-The server exposes `quality_list`, `quality_run`, `quality_show`,
-`quality_diff`, `quality_cell_evidence`, `quality_judge_report`, and
-`quality_label`. Tool outputs use the same JSON contracts as the CLI summary,
-experiment record, diff, evidence, judge-report, and feedback commands.
-
-### `crux quality progress`
-
-Shows the backend-owned progress read model for one evaluation: recent
-experiment rows, status counts, score series, and baseline state. Use `--json`
-when feeding the result to agents or custom dashboards.
-
-The same local backend also serves evaluation-to-experiment relation reads for
-devtools: one endpoint returns recent experiment summaries for a single
-evaluation, and another returns experiment buckets grouped by evaluation. UI
-clients should consume those read models instead of rebuilding the relation
-from the flat experiment list.
-
-```bash
-crux quality progress support.refunds
-crux quality progress support.refunds --limit 20 --json
-```
-
-### `crux quality cell-evidence`
-
-Prints the evidence record for one experiment cell. The record joins the
-persisted experiment, assertion ledger, score-threshold checks, source frame,
-baseline comparison, and retained trace hotspots when available.
-
-```bash
-crux quality cell-evidence <experimentId> --case simple-refund --variant default --trial 0
-crux quality cell-evidence <experimentId> --case simple-refund --variant default --trial 0 --json
-```
-
-### `crux quality diff`
-
-Prints a schema-versioned JSON diff between two saved experiment records. The
-arguments may be experiment ids under `.crux/quality/experiments/` or record
-paths. The diff includes score deltas, per-case pass/fail changes,
-unmatched cases, fingerprint drift, and both gate verdicts. Drifted
-fingerprints render with `comparable: false` instead of being dropped.
-
-```bash
-crux quality diff 01KTA 01KTB --json
-crux quality diff .crux/quality/experiments/01KTA.json .crux/quality/experiments/01KTB.json --json
-```
-
-### `crux quality promote`
-
-Promote an experiment to the committed baseline; every subsequent run of that
-evaluation auto-compares against it and `minDeltaVsBaseline` gates become
-evaluable:
-
-```bash
-crux quality promote <experimentId>                  # promotes the declared baseline variant
-crux quality promote <experimentId> --variant cheap  # promote a specific variant
-crux quality promote <experimentId> --pin-id support.refunds  # pin a path-derived id
-```
-
-Promotion requires an explicit evaluation id (use `--pin-id` and add the
-printed one-line id to your `evaluate()` call: the CLI never rewrites
-source) and refuses filtered runs: paired statistics need the full case
-population. Promote failures are usage errors (exit 2, nothing written).
+See the [Eval guide](/docs/guides/evals), [Eval API
+reference](/docs/reference/crux-core/eval), and [Runtime host
+setup](/docs/guides/evals/runtime-hosts).
 
 ## `crux flows`
 
@@ -599,11 +460,11 @@ Run `crux completion <shell> --help` for shell-specific installation steps.
 
 ## Configuration
 
-The CLI discovers the devtools server by connecting to `localhost` on the configured port (default 4400). Quality auto-attach accepts `CRUX_DEVTOOLS_URL` only when it points at a loopback devtools origin such as `localhost`, `127.0.0.1`, or `[::1]`; remote observability and cloud upload targets must be configured explicitly by project code. The Quality runner resolves a project root from `--cwd`, `--config`, the nearest config file, the nearest package root, or the current working directory, then runs against that project's installed `@use-crux/core` so evaluations and observability use the same runtime instance as user code.
+The CLI discovers the devtools server by connecting to `localhost` on the configured port (default 4400). Remote observability and cloud upload targets must be configured explicitly by project code. The Eval coordinator resolves the project from `--cwd` or the current project context, then loads that project's installed `@use-crux/core` so discovery, execution, and observability share one runtime instance.
 
 Set the `CRUX_STARTUP_DEBUG=1` environment variable to show startup timing diagnostics without the `--startup-debug` flag.
 
 ## Related
 
 - Guide: [Devtools](/docs/guides/observability/devtools)
-- Guide: [Quality](/docs/guides/quality)
+- Guide: [Evals](/docs/guides/evals)

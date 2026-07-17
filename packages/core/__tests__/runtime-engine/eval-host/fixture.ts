@@ -7,6 +7,7 @@ import {
   projectDeployedEvalVariants,
 } from "../../../src/runtime/eval-registry";
 import { CRUX_EVAL_HOST_PROTOCOL } from "../../../src/runtime/eval-host";
+import { createCruxRunId } from "../../../src/observability";
 
 export const TOKEN = "eval-execute-capability-token-32-bytes";
 export const NOW = new Date("2026-07-16T18:00:00.000Z");
@@ -35,6 +36,7 @@ export function fixtureRegistry(
       execute,
       projectOutput: (result) => result.output,
       projectResponse: (result) => ({
+        runId: createCruxRunId(),
         content: [],
         text: responseText(result.output),
         steps: [],

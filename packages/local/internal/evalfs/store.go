@@ -29,12 +29,16 @@ type Run struct {
 
 // Store reads Eval records rooted at a project's `.crux/quality` directory.
 type Store struct {
-	runsDir string
+	projectRoot string
+	runsDir     string
 }
 
 // OpenProject creates a reader for a project root.
 func OpenProject(projectRoot string) *Store {
-	return &Store{runsDir: filepath.Join(projectRoot, ".crux", "quality", "runs")}
+	return &Store{
+		projectRoot: projectRoot,
+		runsDir:     filepath.Join(projectRoot, ".crux", "quality", "runs"),
+	}
 }
 
 // ReadRun validates the known V3 envelope while preserving the exact bytes.

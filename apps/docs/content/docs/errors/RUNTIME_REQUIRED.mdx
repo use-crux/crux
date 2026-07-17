@@ -20,7 +20,7 @@ Object-bound flow APIs still work when your code has the flow handle: `flow.susp
 Add a runtime in `crux.config.ts`:
 
 ```ts
-runtime: serverless({ store: postgres(), wake: qstash() })
+runtime: serverless({ store: postgres(), wake: qstash() });
 ```
 
 Use `runtime: node()` for local development and tests.

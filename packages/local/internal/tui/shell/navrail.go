@@ -21,10 +21,7 @@ type NavItem struct {
 	Show  bool   // when false, the count column is empty
 }
 
-// DefaultNav is the quality nav rail, grouped into the same sections as the
-// web devtools nav (Inspect / Evaluate / Loop / Library) and in the same
-// order. Compare is deferred until its data contract is resolved; Datasets is
-// present as the local suite/case workbench.
+// DefaultNav is the local inspection nav rail.
 //
 // Numeric keys run top-to-bottom in visual order and must stay in sync with
 // `navIDByKey` in workbench.go. The web nav's extra Library entries (Memory,
@@ -35,12 +32,7 @@ var DefaultNav = []NavItem{
 	{Key: "1", ID: "overview", Label: "Overview", Group: "Inspect", Count: -1},
 	{Key: "2", ID: "insights", Label: "Insights", Group: "Inspect", Count: 0, Show: true},
 	{Key: "3", ID: "runs", Label: "Runs", Group: "Inspect", Count: 0, Show: true},
-	{Key: "4", ID: "experiments", Label: "Experiments", Group: "Evaluate", Count: 0, Show: true},
-	{Key: "5", ID: "baselines", Label: "Baselines", Group: "Evaluate", Count: 0, Show: true},
-	{Key: "6", ID: "datasets", Label: "Datasets", Group: "Loop", Count: 0, Show: true},
-	{Key: "7", ID: "feedback", Label: "Feedback", Group: "Loop", Count: 0, Show: true},
-	{Key: "8", ID: "cassettes", Label: "Cassettes", Group: "Loop", Count: 0, Show: true},
-	{Key: "9", ID: "index", Label: "Index", Group: "Library", Count: 0, Show: true},
+	{Key: "4", ID: "index", Label: "Index", Group: "Library", Count: 0, Show: true},
 }
 
 // NavRailFooter is rendered under the nav rail (target + baseline blocks).

@@ -21,7 +21,7 @@
  * - `@use-crux/google` — Google GenAI adapter (`createGoogle()`)
  *
  * **Other subpaths:**
- * - `@use-crux/core/quality` — `quality()`, `suite()`, and `target()` for local quality loops
+ * - `@use-crux/core/eval` — inert Eval authoring with `evaluate()` and `caseFile()`
  * - `@use-crux/core/observability` — `enableDevtools()` for local canonical observability delivery
  * @example
  * ```ts
@@ -327,7 +327,6 @@ export type {
   CruxPersistenceConfig,
   CruxRuntimeConfig,
 } from "./runtime";
-export type { QualityConfig } from "./quality/config";
 export type { PromptRegistry } from "./runtime";
 
 export {

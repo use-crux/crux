@@ -24,7 +24,7 @@ import (
 // Per the backend handoff, the TUI is purely presentational:
 //   - reads `c.ProjectIndex(ctx)` for the canonical view
 //   - does NOT walk relations or compute fingerprints client-side
-//   - missing Quality renders as no signal, not as an error
+//   - missing Inspect renders as no signal, not as an error
 //
 // Cross-screen propagation: the workbench can read AffectedSuiteIDs() /
 // AffectedEvalIDs() from this screen to mark rows on Suites/Insights
@@ -68,7 +68,7 @@ func (s *Index) Update(msg tea.Msg, c DataClient) tea.Cmd {
 		s.index = api.IndexData(m)
 		s.loaded = true
 		s.clampCursor()
-	case api.QualityEvent:
+	case api.InspectEvent:
 		return fetchIndex(c)
 	case dataErrMsg:
 		s.err = string(m)
@@ -138,38 +138,6 @@ func (s *Index) SelectedDefinitionID() string {
 		return ""
 	}
 	return defs[s.cursor].ID
-}
-
-// AffectedSuiteIDs returns the set-union of `AffectedSuiteIDs` across
-// every Quality-changed definition. Used by the workbench to mark
-// affected Suites rows in cross-screen propagation. Backend-owned per
-// the handoff — TUI does NOT walk relations.
-func (s *Index) AffectedSuiteIDs() map[string]struct{} {
-	out := make(map[string]struct{})
-	for _, d := range s.index.Definitions {
-		if d.Quality == nil || d.Quality.ChangedSinceBaseline == nil || !*d.Quality.ChangedSinceBaseline {
-			continue
-		}
-		for _, id := range d.Quality.AffectedSuiteIDs {
-			out[id] = struct{}{}
-		}
-	}
-	return out
-}
-
-// AffectedEvalIDs returns the set-union of `AffectedEvalIDs` across
-// every Quality-changed definition. Same model as AffectedSuiteIDs.
-func (s *Index) AffectedEvalIDs() map[string]struct{} {
-	out := make(map[string]struct{})
-	for _, d := range s.index.Definitions {
-		if d.Quality == nil || d.Quality.ChangedSinceBaseline == nil || !*d.Quality.ChangedSinceBaseline {
-			continue
-		}
-		for _, id := range d.Quality.AffectedEvalIDs {
-			out[id] = struct{}{}
-		}
-	}
-	return out
 }
 
 func (s *Index) Breadcrumb() ([]string, string) {
@@ -254,26 +222,6 @@ func (s *Index) renderListRow(d api.ProjectDefinition, width int, selected bool)
 	if d.Fidelity != "" && d.Fidelity != "resolved" {
 		parts = append(parts, " ", indexFidelityChip(d.Fidelity))
 	}
-	// `changed` chip — subtle but visible. State markers preserve case
-	// per the design (lowercase `changed`, `curated`, `pinned`, etc.).
-	if d.Quality != nil && d.Quality.ChangedSinceBaseline != nil && *d.Quality.ChangedSinceBaseline {
-		parts = append(parts, " ", kit.ChipState("changed", shell.ColorAmber))
-	}
-	// Affected counts.
-	if d.Quality != nil {
-		nE := len(d.Quality.AffectedEvalIDs)
-		nS := len(d.Quality.AffectedSuiteIDs)
-		if nE+nS > 0 {
-			affected := []string{}
-			if nE > 0 {
-				affected = append(affected, fmt.Sprintf("evals %d", nE))
-			}
-			if nS > 0 {
-				affected = append(affected, fmt.Sprintf("suites %d", nS))
-			}
-			parts = append(parts, "  ", shell.TextDim.Render(strings.Join(affected, " · ")))
-		}
-	}
 	if count := len(s.lintFindingsForDefinition(d.ID)); count > 0 {
 		parts = append(parts, " ", kit.ChipState(fmt.Sprintf("lint %d", count), shell.ColorAmber))
 	}
@@ -318,17 +266,8 @@ func (s *Index) renderDetail(width, height int) string {
 	}
 
 	if d.Quality != nil {
-		b.WriteString(" " + shell.SectionTag.Render("QUALITY"))
+		b.WriteString(" " + shell.SectionTag.Render("EVAL RUNS"))
 		b.WriteString("\n")
-		if d.Quality.ChangedSinceBaseline != nil && *d.Quality.ChangedSinceBaseline {
-			b.WriteString(" " + shell.Amber.Render("changed since baseline") + "\n")
-		}
-		if d.Quality.BaselineFingerprint != "" {
-			b.WriteString(kvRow("baseline fp", truncate(d.Quality.BaselineFingerprint, 12), width))
-		}
-		if d.Quality.CurrentFingerprint != "" {
-			b.WriteString(kvRow("current fp", truncate(d.Quality.CurrentFingerprint, 12), width))
-		}
 		if d.Quality.RunCount > 0 {
 			b.WriteString(kvRow("runs", fmt.Sprintf("%d", d.Quality.RunCount), width))
 		}
@@ -336,18 +275,6 @@ func (s *Index) renderDetail(width, height int) string {
 			b.WriteString(kvRow("pass rate", fmt.Sprintf("%.0f%%", *d.Quality.PassRate*100), width))
 		}
 		b.WriteString("\n")
-
-		if len(d.Quality.AffectedEvalIDs)+len(d.Quality.AffectedSuiteIDs) > 0 {
-			b.WriteString(" " + shell.SectionTag.Render("AFFECTED CHECKS"))
-			b.WriteString("\n")
-			if len(d.Quality.AffectedEvalIDs) > 0 {
-				b.WriteString(kvRow("evals", clipIDs(d.Quality.AffectedEvalIDs, width-12), width))
-			}
-			if len(d.Quality.AffectedSuiteIDs) > 0 {
-				b.WriteString(kvRow("suites", clipIDs(d.Quality.AffectedSuiteIDs, width-12), width))
-			}
-			b.WriteString("\n")
-		}
 	}
 
 	lintFindings := s.lintFindingsForDefinition(d.ID)

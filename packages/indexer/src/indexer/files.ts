@@ -41,12 +41,7 @@ const DEFAULT_STATIC_IGNORES = [
   '**/*.spec.*',
 ]
 
-export interface IndexFileConfig {
-  quality?: {
-    include?: string | readonly string[]
-    exclude?: string | readonly string[]
-  }
-}
+export interface IndexFileConfig {}
 
 export interface StaticDefinitionFileSelection {
   files: string[]
@@ -95,9 +90,8 @@ export function staticDefinitionFileSelection(
 }
 
 export function evalGlobs(loaded: IndexFileConfig): string[] {
-  const include = patternsFrom(loaded.quality?.include)
-  const exclude = patternsFrom(loaded.quality?.exclude).map((pattern) => `!${pattern}`)
-  return [...(include.length > 0 ? include : DEFAULT_EVAL_GLOBS), ...exclude]
+  void loaded
+  return [...DEFAULT_EVAL_GLOBS]
 }
 
 export function codeFilesFromGlobs(root: string, patterns: readonly string[]): string[] {
@@ -130,9 +124,4 @@ function walkFilesSyncFallback(root: string, include: (file: string) => boolean)
   }
 
   return files
-}
-
-function patternsFrom(value: string | readonly string[] | undefined): string[] {
-  if (!value) return []
-  return Array.isArray(value) ? [...value] : [value as string]
 }

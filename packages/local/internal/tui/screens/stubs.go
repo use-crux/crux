@@ -10,7 +10,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
 
-// Stub is a placeholder screen used until each Quality screen is filled in.
+// Stub is a placeholder screen used until each Inspect screen is filled in.
 // It renders the title + a "coming soon" hint so the nav rail can still
 // route to every section and users can see what's planned.
 type Stub struct {

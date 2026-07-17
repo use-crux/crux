@@ -1,0 +1,5 @@
+package inspect
+
+type InsightStatusRequest = inspectInsightStatusRequest
+type InsightSilenceRequest = inspectInsightSilenceRequest
+type InsightSilencePattern = inspectInsightSilencePattern

@@ -15,6 +15,7 @@ import {
   type UIMessageStreamOptions,
 } from "ai";
 import type { StreamResult } from "@use-crux/core/adapter";
+import type { CruxRunId } from "@use-crux/core/observability";
 
 type SdkCreateOptions = Omit<
   Parameters<typeof createSdkUIMessageStreamResponse>[0],
@@ -87,5 +88,32 @@ function toUIMessageStream<UI_MESSAGE extends UIMessage>(
       "@use-crux/ai UI-message helpers require an AI SDK text stream result with toUIMessageStream().",
     );
   }
-  return raw.toUIMessageStream(options);
+  return raw.toUIMessageStream(withCruxMessageMetadata(options, result.runId));
+}
+
+function withCruxMessageMetadata<UI_MESSAGE extends UIMessage>(
+  options: UIMessageStreamOptions<UI_MESSAGE>,
+  runId: CruxRunId,
+): UIMessageStreamOptions<UI_MESSAGE> {
+  const userMessageMetadata = options.messageMetadata;
+  return {
+    ...options,
+    messageMetadata: (input) =>
+      mergeCruxMetadata(userMessageMetadata?.(input), runId) as ReturnType<
+        NonNullable<UIMessageStreamOptions<UI_MESSAGE>["messageMetadata"]>
+      >,
+  };
+}
+
+function mergeCruxMetadata(value: unknown, runId: CruxRunId): unknown {
+  const metadata = isRecord(value) ? value : {};
+  const crux = isRecord(metadata.crux) ? metadata.crux : {};
+  return {
+    ...metadata,
+    crux: { ...crux, runId },
+  };
+}
+
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

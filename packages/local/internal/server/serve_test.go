@@ -35,7 +35,7 @@ func TestNewDevServerLoadsPersistentIngestToken(t *testing.T) {
 
 	srv := NewDevServer(DevServerOptions{
 		Port:                findFreePort(),
-		QualityDir:          t.TempDir(),
+		InspectDir:          t.TempDir(),
 		ObservabilityDBPath: filepath.Join(t.TempDir(), "observability.sqlite"),
 		IngestTokenPath:     tokenPath,
 	})
@@ -54,7 +54,7 @@ func devServerTestOptions(t *testing.T, port int) DevServerOptions {
 	dir := t.TempDir()
 	return DevServerOptions{
 		Port:                port,
-		QualityDir:          filepath.Join(dir, "quality"),
+		InspectDir:          filepath.Join(dir, "quality"),
 		ObservabilityDBPath: filepath.Join(dir, "observability.sqlite"),
 		IngestTokenPath:     filepath.Join(dir, ".crux", "devtools", "ingest-token"),
 		RuntimeArtifacts: func(context.Context, string, []store.ProjectDefinition) error {

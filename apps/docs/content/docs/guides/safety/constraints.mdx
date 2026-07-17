@@ -8,16 +8,16 @@ output candidate. Use a constraint when the output is structurally valid but
 needs a retry because it fails a business, quality, grounding, or style rule.
 
 ```ts title="constraints.ts"
-import { boundary, constraint } from '@use-crux/core/safety'
+import { boundary, constraint } from "@use-crux/core/safety";
 
 export const citeSources = constraint({
-  id: 'cite-sources',
+  id: "cite-sources",
   on: boundary.output.text(),
   run: async (text) =>
-    text.includes('[1]')
+    text.includes("[1]")
       ? { pass: true }
-      : { pass: false, feedback: 'Include at least one citation.' },
-})
+      : { pass: false, feedback: "Include at least one citation." },
+});
 ```
 
 Attach constraints globally with `createSafetyPlugin()`, on prompts and
@@ -30,19 +30,19 @@ Every constraint has a stable `id`, one output boundary, and a
 
 ```ts
 type Answer = {
-  answer: string
-  citations: { title: string; url: string }[]
-}
+  answer: string;
+  citations: { title: string; url: string }[];
+};
 
 const grounded = constraint({
-  id: 'grounded-answer',
+  id: "grounded-answer",
   on: boundary.output.object<Answer>(),
   maxRetries: 2,
   run: async (object) =>
     object.citations.length > 0
       ? { pass: true }
-      : { pass: false, feedback: 'Return at least one source citation.' },
-})
+      : { pass: false, feedback: "Return at least one source citation." },
+});
 ```
 
 Use `boundary.output.path<T>()('field.path')` when one structured field owns
@@ -50,20 +50,20 @@ the rule:
 
 ```ts
 const titleLength = constraint({
-  id: 'title-length',
-  on: boundary.output.path<Answer>()('answer'),
+  id: "title-length",
+  on: boundary.output.path<Answer>()("answer"),
   run: async (answer) =>
     answer.length <= 280
       ? { pass: true }
-      : { pass: false, feedback: 'Keep the answer under 280 characters.' },
-})
+      : { pass: false, feedback: "Keep the answer under 280 characters." },
+});
 ```
 
 Result shape:
 
 ```ts
-return { pass: true, metadata: { score: 0.96 } }
-return { pass: false, feedback: 'Explain what must change.' }
+return { pass: true, metadata: { score: 0.96 } };
+return { pass: false, feedback: "Explain what must change." };
 ```
 
 Malformed results fail closed with `SafetyResultError`, including JavaScript
@@ -88,29 +88,29 @@ feedback at once instead of one retry per constraint.
 
 ## Severity And Retry Budget
 
-| Option | Default | Meaning |
-| --- | --- | --- |
-| `severity: 'assert'` | yes | Failure triggers retry and eventually `ConstraintViolationError`. |
-| `severity: 'suggest'` | no | Failure is recorded, but the final output can still return. |
-| `maxRetries` | `2` | Per-constraint retry budget. |
-| `constraintMaxRetries` | unset | Shared per-call cap across all constraints. |
+| Option                 | Default | Meaning                                                           |
+| ---------------------- | ------- | ----------------------------------------------------------------- |
+| `severity: 'assert'`   | yes     | Failure triggers retry and eventually `ConstraintViolationError`. |
+| `severity: 'suggest'`  | no      | Failure is recorded, but the final output can still return.       |
+| `maxRetries`           | `2`     | Per-constraint retry budget.                                      |
+| `constraintMaxRetries` | unset   | Shared per-call cap across all constraints.                       |
 
 ```ts
 const formalTone = constraint({
-  id: 'formal-tone',
+  id: "formal-tone",
   on: boundary.output.text(),
-  severity: 'suggest',
+  severity: "suggest",
   run: async (text) =>
-    text.includes('gonna')
-      ? { pass: false, feedback: 'Use formal wording.' }
+    text.includes("gonna")
+      ? { pass: false, feedback: "Use formal wording." }
       : { pass: true },
-})
+});
 
 await adapter.generate(prompt, {
   input,
   constraints: [citeSources, formalTone],
   constraintMaxRetries: 3,
-})
+});
 ```
 
 ## Built-in Strategies
@@ -119,22 +119,22 @@ Use `constraint.judge(...)` to turn a scoring judge into a retryable Safety
 constraint:
 
 ```ts
-import { judge } from '@use-crux/core/scoring'
-import { boundary, constraint } from '@use-crux/core/safety'
+import { judge } from "@use-crux/core/scoring";
+import { boundary, constraint } from "@use-crux/core/safety";
 
 const brandJudge = judge({
-  id: 'brand-voice',
-  criteria: 'Does the answer match our direct, warm brand voice?',
+  id: "brand-voice",
+  criteria: "Does the answer match our direct, warm brand voice?",
   scale: { min: 1, max: 10 },
   generate: generateObjectFn,
   model,
-})
+});
 
 export const brandVoice = constraint({
-  id: 'brand-voice',
+  id: "brand-voice",
   on: boundary.output.text(),
   run: constraint.judge({ judge: brandJudge, minScore: 7 }),
-})
+});
 ```
 
 Use `constraint.citations(...)` when the output must cite retrieved or injected
@@ -151,10 +151,10 @@ await adapter.generate(prompt, {
   input,
   safety: {
     tune: {
-      'brand-voice': { mode: 'report' },
+      "brand-voice": { mode: "report" },
     },
   },
-})
+});
 ```
 
 Report-mode constraints run and audit decisions but do not retry, block, or
@@ -177,22 +177,22 @@ constraints, total attempts, last guarded output, and safe Safety decision
 metadata. Raw failed output is not exposed by default.
 
 ```ts
-import { ConstraintViolationError } from '@use-crux/core/safety'
+import { ConstraintViolationError } from "@use-crux/core/safety";
 
 try {
-  await adapter.generate(prompt, { input, constraints: [citeSources] })
+  await adapter.generate(prompt, { input, constraints: [citeSources] });
 } catch (error) {
   if (error instanceof ConstraintViolationError) {
-    error.failedConstraints
-    error.decisions[0]?.captured.preview
+    error.failedConstraints;
+    error.decisions[0]?.captured.preview;
   }
 }
 ```
 
-Use `evaluateConstraint()` for focused unit tests. In Quality suites, prefer
+Use `evaluateConstraint()` for focused unit tests. In Evals, prefer
 decision-report assertions when the contract you care about is the runtime
 Safety decision:
 
 ```ts
-ctx.expect.decisionReport.safety.toHaveOutcome('cite-sources', 'retry')
+ctx.expect.decisionReport.safety.toHaveOutcome("cite-sources", "retry");
 ```

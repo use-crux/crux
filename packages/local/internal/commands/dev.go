@@ -3,24 +3,19 @@ package commands
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/signal"
 	"path/filepath"
-	"strings"
 	"syscall"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/spf13/cobra"
-	"github.com/use-crux/crux/packages/local/internal/api"
-	"github.com/use-crux/crux/packages/local/internal/assets"
 	"github.com/use-crux/crux/packages/local/internal/cli"
 	"github.com/use-crux/crux/packages/local/internal/devtools"
 	"github.com/use-crux/crux/packages/local/internal/output"
 	"github.com/use-crux/crux/packages/local/internal/server"
-	qualityserver "github.com/use-crux/crux/packages/local/internal/server/quality"
 	"github.com/use-crux/crux/packages/local/internal/tui"
 	"github.com/use-crux/crux/packages/local/internal/tui/bridge"
 )
@@ -112,17 +107,14 @@ func NewDevCmd(f *cli.Factory) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			qualityDir, err := resolveDevQualityDir(ctx, root)
-			if err != nil {
-				devStatusf(io, "%s Warning: %s\n", devBullet(io), err)
-			}
+			inspectDir := filepath.Join(root, ".crux", "quality")
 
 			// Start the Go HTTP/WS server directly (no Node.js subprocess).
 			devSrv := server.NewDevServer(server.DevServerOptions{
 				Port:       port,
 				Tunnel:     tunnel,
 				Quiet:      tuiMode,
-				QualityDir: qualityDir,
+				InspectDir: inspectDir,
 			})
 			if err := devSrv.Start(); err != nil {
 				return err
@@ -205,34 +197,6 @@ func NewDevCmd(f *cli.Factory) *cobra.Command {
 	return cmd
 }
 
-func resolveDevQualityDir(ctx context.Context, root string) (string, error) {
-	fallback := filepath.Join(root, ".crux", "quality")
-	raw, err := resolveProjectConfigForInspect(ctx, root, "", "")
-	if err != nil {
-		return fallback, fmt.Errorf("config inspection failed; using default quality directory: %w", err)
-	}
-	var config struct {
-		Root    string `json:"root"`
-		Quality struct {
-			Dir configSetting `json:"dir"`
-		} `json:"quality"`
-	}
-	if err := json.Unmarshal(raw, &config); err != nil {
-		return fallback, fmt.Errorf("invalid config inspection result; using default quality directory: %w", err)
-	}
-	dir := config.Quality.Dir.Value
-	if strings.TrimSpace(dir) == "" {
-		return fallback, fmt.Errorf("invalid config inspection result; using default quality directory: quality.dir.value is missing or empty")
-	}
-	if filepath.IsAbs(dir) {
-		return dir, nil
-	}
-	if config.Root != "" {
-		root = config.Root
-	}
-	return filepath.Join(root, dir), nil
-}
-
 func printIngestTokenHint(io *output.IO, devSrv *server.DevServer) {
 	if devSrv == nil || devSrv.IngestToken == "" {
 		return
@@ -267,21 +231,8 @@ func runTUI(io *output.IO, devSrv *server.DevServer, serverURL string, port int,
 	printIngestTokenHint(io, devSrv)
 
 	// Phase 3: Launch Bubbletea TUI (server is ready, WS connected).
-	// Promotion spawns the embedded quality worker through the server-owned
-	// Quality bridge. Empty root/config let the worker run in the process cwd
-	// and auto-discover crux.config.ts.
 	c := devtools.NewDirectClientFromService(devSrv.Devtools).
-		WithObservability(devSrv.Observability).
-		WithQualityPromote(func(ctx context.Context, experimentID, variant, pinID string) (api.QualityPromoteResult, error) {
-			return qualityserver.RunPromote(ctx, "", "", qualityserver.RunnerDeps{
-				FindNode:      assets.FindNode,
-				ExtractRunner: assets.ExtractEmbeddedQualityRunner,
-			}, qualityserver.PromoteRequest{
-				ExperimentID: experimentID,
-				Variant:      variant,
-				PinID:        pinID,
-			})
-		})
+		WithObservability(devSrv.Observability)
 	app := tui.NewApp(serverURL, c, startup.Mode(), startup.Enabled())
 	app.SendIngestToken(devSrv.IngestToken, devSrv.IngestTokenPath)
 
@@ -295,7 +246,7 @@ func runTUI(io *output.IO, devSrv *server.DevServer, serverURL string, port int,
 	bridgeCtx, stopBridge := context.WithCancel(context.Background())
 	sources := bridge.Sources{
 		StoreChanged: devSrv.Devtools.SubscribeChanges(),
-		Quality:      devSrv.Devtools.Quality().Events().Subscribe(bridgeCtx),
+		Inspect:      devSrv.Devtools.Inspect().Events().Subscribe(bridgeCtx),
 		IndexChanged: devSrv.Devtools.IndexEvents().Subscribe(bridgeCtx),
 	}
 	if devSrv.Observability != nil {

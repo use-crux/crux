@@ -13,7 +13,7 @@
  * checkbox items, sub-menus) can use them directly.
  */
 
-import { type ReactNode } from 'react'
+import { type ReactNode } from "react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,54 +23,62 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/shared/components/ui/dropdown-menu'
-import { Icon } from './Icon'
-import { Chip } from './primitives'
+} from "@/shared/components/ui/dropdown-menu";
+import { Icon } from "./Icon";
+import { Chip } from "./primitives";
 
 const CONTENT_STYLE: React.CSSProperties = {
-  background: 'var(--qw-bg-elev)',
-  color: 'var(--qw-fg)',
-  border: '1px solid var(--qw-border)',
-  fontFamily: 'var(--qw-mono)',
+  background: "var(--qw-bg-elev)",
+  color: "var(--qw-fg)",
+  border: "1px solid var(--qw-border)",
+  fontFamily: "var(--qw-mono)",
   fontSize: 11.5,
   borderRadius: 8,
   padding: 4,
-  boxShadow: '0 8px 24px rgb(0 0 0 / 0.18)',
+  boxShadow: "0 8px 24px rgb(0 0 0 / 0.18)",
   minWidth: 200,
-}
+};
 
 const LABEL_STYLE: React.CSSProperties = {
-  color: 'var(--qw-fg-faint)',
-  fontFamily: 'var(--qw-mono)',
+  color: "var(--qw-fg-faint)",
+  fontFamily: "var(--qw-mono)",
   fontSize: 10,
-  textTransform: 'uppercase',
-  letterSpacing: '0.08em',
-  padding: '6px 10px 4px',
-}
+  textTransform: "uppercase",
+  letterSpacing: "0.08em",
+  padding: "6px 10px 4px",
+};
 
 const ITEM_STYLE: React.CSSProperties = {
-  color: 'var(--qw-fg)',
-  fontFamily: 'var(--qw-mono)',
+  color: "var(--qw-fg)",
+  fontFamily: "var(--qw-mono)",
   fontSize: 11.5,
-  padding: '6px 10px',
+  padding: "6px 10px",
   borderRadius: 4,
-  cursor: 'pointer',
-}
+  cursor: "pointer",
+};
 
 // ─── Re-exports for richer cases ────────────────────────────────────
 
-export { DropdownMenu as QwMenuRoot, DropdownMenuTrigger as QwMenuTrigger, DropdownMenuSeparator as QwMenuSeparator }
+export {
+  DropdownMenu as QwMenuRoot,
+  DropdownMenuTrigger as QwMenuTrigger,
+  DropdownMenuSeparator as QwMenuSeparator,
+};
 
-export function QwMenuContent({ align = 'end', children, ...rest }: React.ComponentProps<typeof DropdownMenuContent>) {
+export function QwMenuContent({
+  align = "end",
+  children,
+  ...rest
+}: React.ComponentProps<typeof DropdownMenuContent>) {
   return (
     <DropdownMenuContent align={align} style={CONTENT_STYLE} {...rest}>
       {children}
     </DropdownMenuContent>
-  )
+  );
 }
 
 export function QwMenuLabel({ children }: { children: ReactNode }) {
-  return <DropdownMenuLabel style={LABEL_STYLE}>{children}</DropdownMenuLabel>
+  return <DropdownMenuLabel style={LABEL_STYLE}>{children}</DropdownMenuLabel>;
 }
 
 export function QwMenuItem({
@@ -79,17 +87,26 @@ export function QwMenuItem({
   disabled,
   hint,
 }: {
-  children: ReactNode
-  onSelect?: () => void
-  disabled?: boolean
-  hint?: ReactNode
+  children: ReactNode;
+  onSelect?: () => void;
+  disabled?: boolean;
+  hint?: ReactNode;
 }) {
   return (
-    <DropdownMenuItem onSelect={onSelect} disabled={disabled} style={ITEM_STYLE} className="qw-menu-item">
+    <DropdownMenuItem
+      onSelect={onSelect}
+      disabled={disabled}
+      style={ITEM_STYLE}
+      className="qw-menu-item"
+    >
       <span>{children}</span>
-      {hint && <span style={{ marginLeft: 'auto', color: 'var(--qw-fg-faint)' }}>{hint}</span>}
+      {hint && (
+        <span style={{ marginLeft: "auto", color: "var(--qw-fg-faint)" }}>
+          {hint}
+        </span>
+      )}
     </DropdownMenuItem>
-  )
+  );
 }
 
 // ─── Group-by preset ────────────────────────────────────────────────
@@ -98,29 +115,33 @@ export function QwGroupBy<G extends string>({
   value,
   options,
   onChange,
-  label = 'group by',
+  label = "group by",
 }: {
-  value: G
-  options: ReadonlyArray<{ value: G; label: string }>
-  onChange: (next: G) => void
-  label?: string
+  value: G;
+  options: ReadonlyArray<{ value: G; label: string }>;
+  onChange: (next: G) => void;
+  label?: string;
 }) {
-  const cur = options.find((o) => o.value === value)
+  const cur = options.find((o) => o.value === value);
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
           type="button"
           className="inline-flex items-center gap-1.5 font-mono text-[11px] hover:opacity-80"
-          style={{ color: 'var(--qw-fg-muted)' }}
+          style={{ color: "var(--qw-fg-muted)" }}
         >
-          {label} · <span style={{ color: 'var(--qw-fg)' }}>{cur?.label ?? value}</span>
+          {label} ·{" "}
+          <span style={{ color: "var(--qw-fg)" }}>{cur?.label ?? value}</span>
           <Icon name="arrowDown" size={10} color="var(--qw-fg-muted)" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" style={CONTENT_STYLE}>
         <DropdownMenuLabel style={LABEL_STYLE}>Group by</DropdownMenuLabel>
-        <DropdownMenuRadioGroup value={value} onValueChange={(v) => onChange(v as G)}>
+        <DropdownMenuRadioGroup
+          value={value}
+          onValueChange={(v) => onChange(v as G)}
+        >
           {options.map((o) => (
             <DropdownMenuRadioItem
               key={o.value}
@@ -137,33 +158,36 @@ export function QwGroupBy<G extends string>({
         </DropdownMenuRadioGroup>
       </DropdownMenuContent>
     </DropdownMenu>
-  )
+  );
 }
 
 // ─── Add-filter preset ──────────────────────────────────────────────
 
 export interface QwAddFilterItem<K extends string> {
-  kind: K
-  label: string
-  enabled: boolean
+  kind: K;
+  label: string;
+  enabled: boolean;
 }
 
 export function QwAddFilterMenu<K extends string>({
   options,
   onAdd,
 }: {
-  options: ReadonlyArray<QwAddFilterItem<K>>
-  onAdd: (kind: K) => void
+  options: ReadonlyArray<QwAddFilterItem<K>>;
+  onAdd: (kind: K) => void;
 }) {
-  const anyEnabled = options.some((o) => o.enabled)
-  if (!anyEnabled) return null
+  const anyEnabled = options.some((o) => o.enabled);
+  if (!anyEnabled) return null;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
           type="button"
           className="inline-flex items-center gap-1 rounded-[4px] px-2 py-[3px] font-mono text-[11.5px] transition-opacity hover:opacity-80"
-          style={{ color: 'var(--qw-fg-muted)', border: '1px dashed var(--qw-border)' }}
+          style={{
+            color: "var(--qw-fg-muted)",
+            border: "1px dashed var(--qw-border)",
+          }}
         >
           + filter
         </button>
@@ -178,7 +202,7 @@ export function QwAddFilterMenu<K extends string>({
             style={{
               ...ITEM_STYLE,
               opacity: o.enabled ? 1 : 0.45,
-              cursor: o.enabled ? 'pointer' : 'not-allowed',
+              cursor: o.enabled ? "pointer" : "not-allowed",
             }}
             className="qw-menu-item"
           >
@@ -192,5 +216,5 @@ export function QwAddFilterMenu<K extends string>({
         ))}
       </DropdownMenuContent>
     </DropdownMenu>
-  )
+  );
 }

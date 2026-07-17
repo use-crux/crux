@@ -1,14 +1,14 @@
 /** Score-aware assertion phase kept separate from task/scorer execution. @internal */
 
-import type { AssertContext } from "../../quality/expect";
-import type { Capability } from "../../quality/target";
+import type { AssertContext } from "./assertions/types";
+import type { Capability } from "./capabilities";
 import {
   createAssertionRecorder,
   createRuntimeBoundExpect,
   createStepAccessor,
-} from "../../quality/internal/expect-runtime";
-import { scoreMapFromScores } from "../../quality/internal/score-map";
-import type { CellSignals } from "../../quality/internal/signals";
+} from "./assertions/runtime";
+import { scoreMapFromScores } from "./assertions/score-map";
+import type { CellSignals } from "./execution-signals";
 import type {
   EvalPlannedCell,
   EvalScoreEvidence,

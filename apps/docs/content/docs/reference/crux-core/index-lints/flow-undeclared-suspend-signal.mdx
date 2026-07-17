@@ -19,9 +19,9 @@ const review = flow(
   "review",
   { signals: { approval: approvalSchema } },
   async (flow) => {
-    await flow.suspend("approval")
+    await flow.suspend("approval");
   },
-)
+);
 ```
 
 ## When to suppress

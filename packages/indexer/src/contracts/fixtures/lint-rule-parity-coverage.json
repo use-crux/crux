@@ -29,11 +29,6 @@
       "negativeFixture": "index-lint-native-parity.test.ts"
     },
     {
-      "ruleId": "quality.missing_baseline",
-      "positiveFixture": "index-lint-native-parity.test.ts",
-      "negativeFixture": "index-lint-native-parity.test.ts"
-    },
-    {
       "ruleId": "agent.unobservable_handoff",
       "positiveFixture": "index-lint-native-parity.test.ts",
       "negativeFixture": "index-lint-native-parity.test.ts"

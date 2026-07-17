@@ -9,19 +9,19 @@ Plans & Tasks tracks the work; something else has to run it. Depending on how mu
 
 ```ts
 const makePlan = plan.tool({
-  template: '## Objective\n\n## Constraints\n\n## Work items',
-})
+  template: "## Objective\n\n## Constraints\n\n## Work items",
+});
 
 await generate(
   prompt({
-    system: 'Create a plan for the request.',
+    system: "Create a plan for the request.",
     tools: { makePlan },
   }),
   { model, input: { request } },
-)
+);
 
-const roadmap = makePlan.created()
-const work = await tasks({ plan: roadmap, title: 'Execution tasks' })
+const roadmap = makePlan.created();
+const work = await tasks({ plan: roadmap, title: "Execution tasks" });
 ```
 
 ## Prompt-Level Composition
@@ -35,7 +35,7 @@ prompt({
     ...roadmap.asTools(),
     ...work.asTools(),
   },
-})
+});
 ```
 
 ## Flow
@@ -43,19 +43,19 @@ prompt({
 Use `flow()` when the orchestration itself needs named steps and suspend/resume behavior.
 
 ```ts
-const launchFlow = flow('launch', async (run) => {
-  const roadmap = await run.step('plan', () =>
-    plan({ title: 'Launch', content: 'Draft launch approach.' }),
-  )
+const launchFlow = flow("launch", async (run) => {
+  const roadmap = await run.step("plan", () =>
+    plan({ title: "Launch", content: "Draft launch approach." }),
+  );
 
-  await run.suspend('approval')
+  await run.suspend("approval");
 
-  return run.step('execute', async () => {
-    const work = await tasks({ plan: roadmap, title: 'Launch tasks' })
-    await work.add({ id: 'draft', label: 'Draft announcement' })
-    return work.id
-  })
-})
+  return run.step("execute", async () => {
+    const work = await tasks({ plan: roadmap, title: "Launch tasks" });
+    await work.add({ id: "draft", label: "Draft announcement" });
+    return work.id;
+  });
+});
 ```
 
 ## External Durable Runners
@@ -72,17 +72,17 @@ Store the plan ID and task-ledger ID in the runner payload, then rebind handles 
 
 ```ts
 export async function runTask({ planId, taskListId, taskId }: JobPayload) {
-  const roadmap = plan.ref(planId)
-  const work = tasks.ref(taskListId)
-  const worker = work.worker(taskId)
+  const roadmap = plan.ref(planId);
+  const work = tasks.ref(taskListId);
+  const worker = work.worker(taskId);
 
   return generate(
     prompt({
       use: [roadmap.asContext(), worker.asContext()],
       tools: worker.asTools(),
-      system: 'Complete the assigned task.',
+      system: "Complete the assigned task.",
     }),
     { model, input: {} },
-  )
+  );
 }
 ```

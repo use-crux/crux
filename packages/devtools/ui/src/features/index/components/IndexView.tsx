@@ -17,23 +17,31 @@
  *      backend payload; there is no client-side derivation of findings.
  */
 
-import { useMemo, useState } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { QwShell, type QwTab } from '@/qw/shell/QwShell'
-import { SectionBoundary } from '@/qw/shell/SectionBoundary'
-import { SkeletonSplit } from '@/shared/components/Skeleton'
-import { qk } from '@/shared/query/queryClient'
-import { navTarget } from '@/app/navigation/navTarget'
-import { useNavigation } from '@/app/navigation/useNavigation'
-import { useIndexSuspense, useProjectIndexWatchStatus } from '@/features/index/hooks/useIndex'
-import { indexService } from '@/features/index/services/index'
-import { useConnected } from '@/app/runtime/runtimeStore'
-import { IndexHealth } from './IndexHealth'
-import { buildIndex, IndexBrowser, IndexIndexProvider, IndexingStatus, WatchStatus } from '../v2'
-import { Btn } from '../v2/primitives'
-import { MemoryView } from '@/features/memory/components/MemoryView'
-import { PlansView } from '@/features/plans/components/PlansView'
-import { WorkspacesView } from '@/features/workspaces/components/WorkspacesView'
+import { useMemo, useState } from "react";
+import { QwShell, type QwTab } from "@/qw/shell/QwShell";
+import { SectionBoundary } from "@/qw/shell/SectionBoundary";
+import { SkeletonSplit } from "@/shared/components/Skeleton";
+import { qk } from "@/shared/query/queryClient";
+import { navTarget } from "@/app/navigation/navTarget";
+import { useNavigation } from "@/app/navigation/useNavigation";
+import {
+  useIndexSuspense,
+  useProjectIndexWatchStatus,
+  useReindexProject,
+} from "@/features/index/hooks/useIndex";
+import { useConnected } from "@/app/runtime/runtimeStore";
+import { IndexHealth } from "./IndexHealth";
+import {
+  buildIndex,
+  IndexBrowser,
+  IndexIndexProvider,
+  IndexingStatus,
+  WatchStatus,
+} from "../v2";
+import { Btn } from "../v2/primitives";
+import { MemoryView } from "@/features/memory/components/MemoryView";
+import { PlansView } from "@/features/plans/components/PlansView";
+import { WorkspacesView } from "@/features/workspaces/components/WorkspacesView";
 
 export function IndexView({
   promptId,
@@ -41,77 +49,79 @@ export function IndexView({
   toolName,
   tab,
 }: {
-  promptId?: string
-  contextId?: string
-  toolName?: string
-  tab?: string
+  promptId?: string;
+  contextId?: string;
+  toolName?: string;
+  tab?: string;
 }) {
-  const { navigate } = useNavigation()
-  const connected = useConnected()
-  const queryClient = useQueryClient()
-
-  // Re-index runs the index service on the Go side and publishes a fresh
-  // `index` WS snapshot; we invalidate afterwards so the query reconciles
-  // even if the push is missed.
-  const reindex = useMutation({
-    mutationFn: () => indexService.reindex(),
-    onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: qk.index() })
-    },
-  })
+  const { navigate } = useNavigation();
+  const connected = useConnected();
+  const reindex = useReindexProject();
 
   // Suspends on first paint — caught by the SectionBoundary below. WS-driven
   // index pushes refresh in the background without re-suspending.
-  const projectIndex = useIndexSuspense()
-  const watchStatus = useProjectIndexWatchStatus()
-  const definitions = projectIndex.definitions ?? []
-  const relations = projectIndex.relations ?? []
-  const lintFindings = projectIndex.lintFindings ?? []
-  const visibleLintFindings = lintFindings.filter((l) => !l.suppressed)
+  const projectIndex = useIndexSuspense();
+  const watchStatus = useProjectIndexWatchStatus();
+  const definitions = projectIndex.definitions ?? [];
+  const relations = projectIndex.relations ?? [];
+  const lintFindings = projectIndex.lintFindings ?? [];
+  const visibleLintFindings = lintFindings.filter((l) => !l.suppressed);
 
   // Adapt the read model once; rebuild only when the index payload changes.
-  const indexModel = useMemo(() => buildIndex(projectIndex), [projectIndex])
+  const indexModel = useMemo(() => buildIndex(projectIndex), [projectIndex]);
 
   // Selection: an explicit click wins; otherwise honor a deep-link param if it
   // resolves, else fall back to the first standalone definition.
-  const deepLink = promptId ?? contextId ?? toolName
-  const [selected, setSelected] = useState<string | null>(null)
+  const deepLink = promptId ?? contextId ?? toolName;
+  const [selected, setSelected] = useState<string | null>(null);
   const effectiveSelected =
-    selected ?? (deepLink && indexModel.byId(deepLink) ? deepLink : (indexModel.standalone[0]?.id ?? null))
-  const [graphOpen, setGraphOpen] = useState(false)
+    selected ??
+    (deepLink && indexModel.byId(deepLink)
+      ? deepLink
+      : (indexModel.standalone[0]?.id ?? null));
+  const [graphOpen, setGraphOpen] = useState(false);
 
   // Index | Health tab strip — matches the Library sibling screens.
   const indexTabs: QwTab[] = [
     {
-      label: 'Index',
-      iconName: 'book',
-      active: tab !== 'health',
-      onClick: () => navigate({ view: 'library-index' }),
+      label: "Index",
+      iconName: "book",
+      active: tab !== "health",
+      onClick: () => navigate({ view: "library-index" }),
     },
     {
-      label: 'Health',
-      iconName: 'sparkle',
-      count: visibleLintFindings.length > 0 ? visibleLintFindings.length : undefined,
-      active: tab === 'health',
-      onClick: () => navigate({ view: 'library-index', tab: 'health' }),
+      label: "Health",
+      iconName: "sparkle",
+      count:
+        visibleLintFindings.length > 0 ? visibleLintFindings.length : undefined,
+      active: tab === "health",
+      onClick: () => navigate({ view: "library-index", tab: "health" }),
     },
-  ]
+  ];
 
   // Roll-up view ("Index · Health") — opted into via `tab: 'health'`.
-  if (tab === 'health') {
-    return <IndexHealth index={indexModel} indexedAt={projectIndex.indexedAt} connected={connected} tabs={indexTabs} />
+  if (tab === "health") {
+    return (
+      <IndexHealth
+        index={indexModel}
+        indexedAt={projectIndex.indexedAt}
+        connected={connected}
+        tabs={indexTabs}
+      />
+    );
   }
 
   const subtitle = (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
-      <span style={{ fontFamily: 'var(--qw-mono)', fontSize: 12.5 }}>
-        {definitions.length} definition{definitions.length === 1 ? '' : 's'} · {relations.length} relation
-        {relations.length === 1 ? '' : 's'}
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+      <span style={{ fontFamily: "var(--qw-mono)", fontSize: 12.5 }}>
+        {definitions.length} definition{definitions.length === 1 ? "" : "s"} ·{" "}
+        {relations.length} relation
+        {relations.length === 1 ? "" : "s"}
       </span>
       <IndexingStatus indexing={projectIndex.indexing} />
       <WatchStatus status={watchStatus.data} />
     </span>
-  )
+  );
 
   return (
     <QwShell
@@ -132,7 +142,7 @@ export function IndexView({
             icon="sparkle"
             size="sm"
             variant="soft"
-            onClick={() => navigate({ view: 'library-index', tab: 'health' })}
+            onClick={() => navigate({ view: "library-index", tab: "health" })}
           >
             Health · {visibleLintFindings.length}
           </Btn>
@@ -143,12 +153,16 @@ export function IndexView({
             disabled={reindex.isPending}
             onClick={() => reindex.mutate()}
           >
-            {reindex.isPending ? 'Re-indexing…' : 'Re-index'}
+            {reindex.isPending ? "Re-indexing…" : "Re-index"}
           </Btn>
         </>
       }
     >
-      <SectionBoundary title="Index" invalidateKeys={[qk.index()]} fallback={<SkeletonSplit sidebarRows={14} />}>
+      <SectionBoundary
+        title="Index"
+        invalidateKeys={[qk.index()]}
+        fallback={<SkeletonSplit sidebarRows={14} />}
+      >
         <IndexIndexProvider index={indexModel}>
           <IndexBrowser
             selected={effectiveSelected}
@@ -159,17 +173,23 @@ export function IndexView({
         </IndexIndexProvider>
       </SectionBoundary>
     </QwShell>
-  )
+  );
 }
 
 export function LibraryMemory({ memoryId }: { memoryId?: string }) {
-  return <MemoryView memoryId={memoryId} />
+  return <MemoryView memoryId={memoryId} />;
 }
 
-export function LibraryWorkspaces({ workspaceId, filePath }: { workspaceId?: string; filePath?: string }) {
-  return <WorkspacesView workspaceId={workspaceId} filePath={filePath} />
+export function LibraryWorkspaces({
+  workspaceId,
+  filePath,
+}: {
+  workspaceId?: string;
+  filePath?: string;
+}) {
+  return <WorkspacesView workspaceId={workspaceId} filePath={filePath} />;
 }
 
 export function LibraryPlans({ planId }: { planId?: string }) {
-  return <PlansView planId={planId} />
+  return <PlansView planId={planId} />;
 }

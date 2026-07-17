@@ -822,49 +822,19 @@ type ProjectDefinition struct {
 
 // IndexQuality links authored definitions to eval, suite, and run quality state.
 type IndexQuality struct {
-	EvalIDs              []string           `json:"evalIds,omitempty"`
-	SuiteIDs             []string           `json:"suiteIds,omitempty"`
-	ExperimentIDs        []string           `json:"experimentIds,omitempty"`
-	BaselineIDs          []string           `json:"baselineIds,omitempty"`
-	ComparisonIDs        []string           `json:"comparisonIds,omitempty"`
-	FeedbackIDs          []string           `json:"feedbackIds,omitempty"`
-	CassettePaths        []string           `json:"cassettePaths,omitempty"`
-	RunIDs               []string           `json:"runIds,omitempty"`
-	TraceIDs             []string           `json:"traceIds,omitempty"`
-	AffectedEvalIDs      []string           `json:"affectedEvalIds,omitempty"`
-	AffectedSuiteIDs     []string           `json:"affectedSuiteIds,omitempty"`
-	RunCount             int                `json:"runCount,omitempty"`
-	ExperimentCount      int                `json:"experimentCount,omitempty"`
-	BaselineCount        int                `json:"baselineCount,omitempty"`
-	ComparisonCount      int                `json:"comparisonCount,omitempty"`
-	FeedbackCount        int                `json:"feedbackCount,omitempty"`
-	CassetteCount        int                `json:"cassetteCount,omitempty"`
-	CompletedRunCount    int                `json:"completedRunCount,omitempty"`
-	FailedRunCount       int                `json:"failedRunCount,omitempty"`
-	RunningRunCount      int                `json:"runningRunCount,omitempty"`
-	LastRunID            string             `json:"lastRunId,omitempty"`
-	LastRunAt            int64              `json:"lastRunAt,omitempty"`
-	LastStatus           string             `json:"lastStatus,omitempty"`
-	CaseCount            int                `json:"caseCount,omitempty"`
-	PassRate             *float64           `json:"passRate,omitempty"`
-	CurrentFingerprint   string             `json:"currentFingerprint,omitempty"`
-	BaselineFingerprint  string             `json:"baselineFingerprint,omitempty"`
-	ChangedSinceBaseline *bool              `json:"changedSinceBaseline,omitempty"`
-	Drift                *IndexQualityDrift `json:"drift,omitempty"`
-}
-
-type IndexQualityDrift struct {
-	Evals  []IndexQualityDriftRow `json:"evals"`
-	Suites []IndexQualityDriftRow `json:"suites"`
-}
-
-type IndexQualityDriftRow struct {
-	ID                   string  `json:"id"`
-	PassRate             float64 `json:"passRate"`
-	Runs                 int     `json:"runs"`
-	BaselineExperimentID string  `json:"baselineExperimentId"`
-	BaselinePassRate     float64 `json:"baselinePassRate"`
-	DriftPp              float64 `json:"driftPp"`
+	EvalIDs           []string `json:"evalIds,omitempty"`
+	SuiteIDs          []string `json:"suiteIds,omitempty"`
+	RunIDs            []string `json:"runIds,omitempty"`
+	TraceIDs          []string `json:"traceIds,omitempty"`
+	RunCount          int      `json:"runCount,omitempty"`
+	CompletedRunCount int      `json:"completedRunCount,omitempty"`
+	FailedRunCount    int      `json:"failedRunCount,omitempty"`
+	RunningRunCount   int      `json:"runningRunCount,omitempty"`
+	LastRunID         string   `json:"lastRunId,omitempty"`
+	LastRunAt         int64    `json:"lastRunAt,omitempty"`
+	LastStatus        string   `json:"lastStatus,omitempty"`
+	CaseCount         int      `json:"caseCount,omitempty"`
+	PassRate          *float64 `json:"passRate,omitempty"`
 }
 
 // ProjectRelation describes graph edges between authored Crux definitions.

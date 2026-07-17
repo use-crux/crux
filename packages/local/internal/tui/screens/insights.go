@@ -31,19 +31,19 @@ const (
 // live updates arrive through the bridge interest contract, and all rendering
 // is bounded by the Rects supplied by the kit layout engine.
 type Insights struct {
-	items      []api.QualityInsightRecord
+	items      []api.InspectInsightRecord
 	selectedID string
 	loaded     bool
 	err        string
 	tab        string
 	focus      insightsFocus
-	list       kit.VList[api.QualityInsightRecord]
+	list       kit.VList[api.InspectInsightRecord]
 }
 
 func NewInsights() *Insights {
 	s := &Insights{tab: "diagnosis"}
-	s.list.SetIdentity(func(ins api.QualityInsightRecord) string { return ins.InsightID })
-	s.list.SetRowHeight(func(api.QualityInsightRecord) int { return 2 })
+	s.list.SetIdentity(func(ins api.InspectInsightRecord) string { return ins.InsightID })
+	s.list.SetRowHeight(func(api.InspectInsightRecord) int { return 2 })
 	return s
 }
 
@@ -60,10 +60,8 @@ func (s *Insights) Init(client DataClient) tea.Cmd {
 func (s *Insights) Update(msg tea.Msg, client DataClient) tea.Cmd {
 	switch m := msg.(type) {
 	case insightsListLoadedMsg:
-		s.applyInsights([]api.QualityInsightRecord(m))
-	case insightPromotedMsg:
-		return fetchInsightsList(client)
-	case api.QualityEvent:
+		s.applyInsights([]api.InspectInsightRecord(m))
+	case api.InspectEvent:
 		return fetchInsightsList(client)
 	case dataErrMsg:
 		s.err = string(m)
@@ -95,15 +93,13 @@ func (s *Insights) updateKey(msg tea.KeyPressMsg, client DataClient) tea.Cmd {
 		return s.markFixed(client)
 	case "t":
 		return s.openLinkedTrace()
-	case "p":
-		return s.promoteFix(client)
 	case "e":
 		return s.exportInsight()
 	}
 	return nil
 }
 
-func (s *Insights) applyInsights(items []api.QualityInsightRecord) {
+func (s *Insights) applyInsights(items []api.InspectInsightRecord) {
 	s.items = items
 	s.list.SetItems(items)
 	if s.selectedID == "" && len(items) > 0 {
@@ -176,9 +172,6 @@ func (s *Insights) Keybinds() []shell.Keybind {
 		shell.Bind("x", "dismiss"),
 		shell.Bind("e", "export"),
 	}
-	if cur := s.currentInsight(); cur != nil && len(cur.LinkedExperimentIDs) > 0 {
-		binds = append(binds, shell.Bind("p", "promote"))
-	}
 	binds = append(binds, shell.Bind(":", "cmd"), shell.Bind("?", "help"))
 	return binds
 }
@@ -205,7 +198,7 @@ func (s *Insights) openCount() int {
 	return open
 }
 
-func (s *Insights) currentInsight() *api.QualityInsightRecord {
+func (s *Insights) currentInsight() *api.InspectInsightRecord {
 	for i, it := range s.items {
 		if it.InsightID == s.selectedID {
 			return &s.items[i]
@@ -243,7 +236,7 @@ func (s *Insights) setInsightStatus(client DataClient, status string) tea.Cmd {
 	}
 	id := cur.InsightID
 	return func() tea.Msg {
-		_, err := client.SetInsightStatus(context.Background(), id, api.QualityInsightStatusRequest{Status: status})
+		_, err := client.SetInsightStatus(context.Background(), id, api.InspectInsightStatusRequest{Status: status})
 		if err != nil {
 			return dataErrMsg(err.Error())
 		}

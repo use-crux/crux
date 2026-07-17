@@ -22,8 +22,8 @@ func TestCommandsLeadWithExamples(t *testing.T) {
 		NewTracesCmd(f),
 		NewFlowsCmd(f),
 		NewRuntimeCmd(f),
+		NewEvalCmd(f),
 	}
-	cmds = append(cmds, NewQualityCmd(f).Commands()...)
 
 	for _, cmd := range cmds {
 		if strings.TrimSpace(cmd.Example) == "" {

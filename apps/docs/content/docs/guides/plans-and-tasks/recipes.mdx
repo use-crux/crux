@@ -7,27 +7,27 @@ description: Common Plans & Tasks patterns using the canonical beta API.
 
 ```ts
 const makePlan = plan.tool({
-  template: '## Goal\n\n## Risks\n\n## Steps',
-})
+  template: "## Goal\n\n## Risks\n\n## Steps",
+});
 
 await generate(
   prompt({
-    system: 'Create a plan for the user request.',
+    system: "Create a plan for the user request.",
     tools: { makePlan },
   }),
   { model, input: { request } },
-)
+);
 
-const roadmap = makePlan.created()
+const roadmap = makePlan.created();
 ```
 
 ## Dynamic Checklist
 
 ```ts
-const work = await tasks({ title: 'Migration checklist' })
+const work = await tasks({ title: "Migration checklist" });
 
 for (const item of checklistItems) {
-  await work.add({ id: item.id, label: item.label })
+  await work.add({ id: item.id, label: item.label });
 }
 ```
 
@@ -36,62 +36,62 @@ for (const item of checklistItems) {
 ```ts
 const editorial = await tasks({
   items: {
-    research: task('Research source material', {
+    research: task("Research source material", {
       result: z.object({ sources: z.array(z.string()) }),
     }),
-    draft: task('Draft the article', {
+    draft: task("Draft the article", {
       result: z.object({ markdown: z.string() }),
     }),
-    review: task('Review for accuracy', {
+    review: task("Review for accuracy", {
       result: z.object({ approved: z.boolean(), notes: z.string().optional() }),
     }),
   },
-})
+});
 ```
 
 ## Human Approval Between Plan And Work
 
 ```ts
-const roadmap = await plan({ title: 'Release plan', content: draftContent })
+const roadmap = await plan({ title: "Release plan", content: draftContent });
 
-await waitForApproval(roadmap.id)
+await waitForApproval(roadmap.id);
 
 const work = await tasks({
   plan: roadmap,
   items: {
-    publish: task('Publish announcement'),
+    publish: task("Publish announcement"),
   },
-})
+});
 ```
 
 ## Resume From IDs
 
 ```ts
 export async function continueWork(planId: string, taskListId: string) {
-  const roadmap = plan.ref(planId)
-  const work = tasks.ref(taskListId)
+  const roadmap = plan.ref(planId);
+  const work = tasks.ref(taskListId);
 
   return prompt({
     use: [roadmap.asContext(), work.asContext()],
     tools: work.asTools(),
-  })
+  });
 }
 ```
 
 ## Worker Per Pending Task
 
 ```ts
-const pending = (await work.list()).filter((item) => item.status === 'pending')
+const pending = (await work.list()).filter((item) => item.status === "pending");
 
 for (const item of pending) {
-  const worker = work.worker(item.id)
+  const worker = work.worker(item.id);
   await generate(
     prompt({
       use: [worker.asContext()],
       tools: worker.asTools(),
-      system: 'Complete this task.',
+      system: "Complete this task.",
     }),
     { model, input: {} },
-  )
+  );
 }
 ```

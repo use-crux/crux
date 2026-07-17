@@ -8,7 +8,7 @@
  * @module
  */
 
-import type { Capability } from "../quality/target";
+import type { Capability } from "./internal/capabilities";
 import type { StreamCompletion } from "../adapter/result-accumulator";
 
 /** A trace-signal family that an Eval task can capture. */

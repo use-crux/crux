@@ -8,39 +8,41 @@ This recipe uses a task ledger as the visible work record and your own code as t
 ## Setup
 
 ```ts
-import { prompt, generate } from '@use-crux/ai'
-import { tasks } from '@use-crux/core/tasks'
+import { prompt, generate } from "@use-crux/ai";
+import { tasks } from "@use-crux/core/tasks";
 
-const work = await tasks({ title: 'Batch enrichment' })
+const work = await tasks({ title: "Batch enrichment" });
 
-await work.add({ id: 'account-1', label: 'Enrich account 1' })
-await work.add({ id: 'account-2', label: 'Enrich account 2' })
-await work.add({ id: 'account-3', label: 'Enrich account 3' })
+await work.add({ id: "account-1", label: "Enrich account 1" });
+await work.add({ id: "account-2", label: "Enrich account 2" });
+await work.add({ id: "account-3", label: "Enrich account 3" });
 ```
 
 ## Drain Pending Tasks
 
 ```ts
 async function drainPending(taskListId: string) {
-  const work = tasks.ref(taskListId)
-  const pending = (await work.list()).filter((item) => item.status === 'pending')
+  const work = tasks.ref(taskListId);
+  const pending = (await work.list()).filter(
+    (item) => item.status === "pending",
+  );
 
   await Promise.all(
     pending.map((item) => {
       const worker = work.worker(item.id, {
-        guidelines: 'Return a short JSON-safe result.',
-      })
+        guidelines: "Return a short JSON-safe result.",
+      });
 
       return generate(
         prompt({
           use: [worker.asContext()],
           tools: worker.asTools(),
-          system: 'Complete the assigned enrichment task.',
+          system: "Complete the assigned enrichment task.",
         }),
         { model, input: {} },
-      )
+      );
     }),
-  )
+  );
 }
 ```
 
@@ -50,27 +52,29 @@ Use your own runner when you need concurrency limits:
 
 ```ts
 async function drainInBatches(taskListId: string, batchSize = 3) {
-  const work = tasks.ref(taskListId)
-  const pending = (await work.list()).filter((item) => item.status === 'pending')
+  const work = tasks.ref(taskListId);
+  const pending = (await work.list()).filter(
+    (item) => item.status === "pending",
+  );
 
   for (let index = 0; index < pending.length; index += batchSize) {
-    const batch = pending.slice(index, index + batchSize)
-    await Promise.all(batch.map((item) => runOneTask(work.id, item.id)))
+    const batch = pending.slice(index, index + batchSize);
+    await Promise.all(batch.map((item) => runOneTask(work.id, item.id)));
   }
 }
 
 async function runOneTask(taskListId: string, taskId: string) {
-  const work = tasks.ref(taskListId)
-  const worker = work.worker(taskId)
+  const work = tasks.ref(taskListId);
+  const worker = work.worker(taskId);
 
   return generate(
     prompt({
       use: [worker.asContext()],
       tools: worker.asTools(),
-      system: 'Complete this task.',
+      system: "Complete this task.",
     }),
     { model, input: {} },
-  )
+  );
 }
 ```
 
@@ -82,9 +86,9 @@ Subscribe with `useTasks(taskListId)` and render the core status vocabulary dire
 
 ```tsx
 function BatchProgress({ taskListId }: { taskListId: string }) {
-  const state = useTasks(taskListId)
+  const state = useTasks(taskListId);
 
-  if (state.status === 'loading') return <p>Loading...</p>
+  if (state.status === "loading") return <p>Loading...</p>;
 
   return (
     <ul>
@@ -96,7 +100,7 @@ function BatchProgress({ taskListId }: { taskListId: string }) {
         </li>
       ))}
     </ul>
-  )
+  );
 }
 ```
 

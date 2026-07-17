@@ -5,16 +5,20 @@
  * the page never implies "cache freshness".
  */
 
-import type { ReactNode } from 'react'
-import { Icon } from '@/qw/shell/Icon'
-import type { IconName } from '@/qw/shell/nav'
-import { fmtAge } from '@/features/run-detail/lib/explain/format'
-import { fmtTokens } from '@/features/run-detail/lib/span-detail-inspection'
-import type { TurnCacheEvidence, TurnDecisionSubject, TurnFreshnessEvidence } from '@/types'
-import { CacheChip, FreshnessChip } from '../atoms'
+import type { ReactNode } from "react";
+import { Icon } from "@/qw/shell/Icon";
+import type { IconName } from "@/qw/shell/nav";
+import { fmtAge } from "@/features/run-detail/lib/explain/format";
+import { fmtTokens } from "@/features/run-detail/lib/span-detail-inspection";
+import type {
+  TurnCacheEvidence,
+  TurnDecisionSubject,
+  TurnFreshnessEvidence,
+} from "@/types";
+import { CacheChip, FreshnessChip } from "../atoms";
 
 function subjectLabel(s: TurnDecisionSubject): string {
-  return s.label ?? s.name ?? s.id ?? s.kind
+  return s.label ?? s.name ?? s.id ?? s.kind;
 }
 
 function Column({
@@ -23,69 +27,100 @@ function Column({
   blurb,
   children,
 }: {
-  title: string
-  glyph: IconName
-  blurb: string
-  children: ReactNode
+  title: string;
+  glyph: IconName;
+  blurb: string;
+  children: ReactNode;
 }) {
   return (
     <div
       className="min-w-0 flex-1 overflow-hidden rounded-[10px]"
-      style={{ background: 'var(--qw-bg)', border: '1px solid var(--qw-border)' }}
+      style={{
+        background: "var(--qw-bg)",
+        border: "1px solid var(--qw-border)",
+      }}
     >
       <div
         className="flex items-center gap-2 px-3.5 py-[9px]"
-        style={{ borderBottom: '1px solid var(--qw-border)', background: 'var(--qw-bg-elev)' }}
+        style={{
+          borderBottom: "1px solid var(--qw-border)",
+          background: "var(--qw-bg-elev)",
+        }}
       >
         <Icon name={glyph} size={14} color="var(--qw-fg-muted)" />
         <span className="text-[12.5px] font-semibold">{title}</span>
-        <span className="text-[11.5px] italic" style={{ fontFamily: 'var(--qw-serif)', color: 'var(--qw-fg-faint)' }}>
+        <span
+          className="text-[11.5px] italic"
+          style={{ fontFamily: "var(--qw-serif)", color: "var(--qw-fg-faint)" }}
+        >
           {blurb}
         </span>
       </div>
       {children}
     </div>
-  )
+  );
 }
 
-function Row({ chip, subject, meta, reason }: { chip: ReactNode; subject: string; meta?: ReactNode; reason: ReactNode }) {
+function Row({
+  chip,
+  subject,
+  meta,
+  reason,
+}: {
+  chip: ReactNode;
+  subject: string;
+  meta?: ReactNode;
+  reason: ReactNode;
+}) {
   return (
-    <div className="flex items-start gap-[10px] px-3.5 py-[9px]" style={{ borderBottom: '1px solid var(--qw-border)' }}>
+    <div
+      className="flex items-start gap-[10px] px-3.5 py-[9px]"
+      style={{ borderBottom: "1px solid var(--qw-border)" }}
+    >
       <div className="w-[124px] flex-shrink-0">
         <div className="mb-1">{chip}</div>
-        <div className="truncate font-mono text-[10px]" style={{ color: 'var(--qw-fg-faint)' }}>
+        <div
+          className="truncate font-mono text-[10px]"
+          style={{ color: "var(--qw-fg-faint)" }}
+        >
           {subject}
         </div>
         {meta && (
-          <div className="mt-0.5 font-mono text-[9.5px]" style={{ color: 'var(--qw-fg-faint)' }}>
+          <div
+            className="mt-0.5 font-mono text-[9.5px]"
+            style={{ color: "var(--qw-fg-faint)" }}
+          >
             {meta}
           </div>
         )}
       </div>
       <span
         className="min-w-0 flex-1 text-[12px] leading-[1.45]"
-        style={{ fontFamily: 'var(--qw-serif)', color: 'var(--qw-fg-muted)' }}
+        style={{ fontFamily: "var(--qw-serif)", color: "var(--qw-fg-muted)" }}
       >
         {reason}
       </span>
     </div>
-  )
+  );
 }
 
 function Empty({ children }: { children: ReactNode }) {
   return (
-    <div className="px-3.5 py-3 text-[11.5px]" style={{ color: 'var(--qw-fg-faint)' }}>
+    <div
+      className="px-3.5 py-3 text-[11.5px]"
+      style={{ color: "var(--qw-fg-faint)" }}
+    >
       {children}
     </div>
-  )
+  );
 }
 
 export function FreshCacheBlock({
   freshness,
   cache,
 }: {
-  freshness: readonly TurnFreshnessEvidence[]
-  cache: readonly TurnCacheEvidence[]
+  freshness: readonly TurnFreshnessEvidence[];
+  cache: readonly TurnCacheEvidence[];
 }) {
   return (
     <div className="flex gap-3">
@@ -98,8 +133,12 @@ export function FreshCacheBlock({
               key={i}
               chip={<FreshnessChip status={f.status} />}
               subject={subjectLabel(f.subject)}
-              meta={f.maxAgeMs != null ? `age ${fmtAge(f.ageMs)} · max ${fmtAge(f.maxAgeMs)}` : undefined}
-              reason={f.reason ?? '—'}
+              meta={
+                f.maxAgeMs != null
+                  ? `age ${fmtAge(f.ageMs)} · max ${fmtAge(f.maxAgeMs)}`
+                  : undefined
+              }
+              reason={f.reason ?? "—"}
             />
           ))
         )}
@@ -115,14 +154,21 @@ export function FreshCacheBlock({
               subject={subjectLabel(c.subject)}
               meta={
                 c.savedTokens != null ? (
-                  <span style={{ color: 'var(--qw-ok)' }}>saved {fmtTokens(c.savedTokens)} tok</span>
+                  <span style={{ color: "var(--qw-ok)" }}>
+                    saved {fmtTokens(c.savedTokens)} tok
+                  </span>
                 ) : undefined
               }
-              reason={c.reason ?? (c.acceptedByFreshness ? 'Accepted by the freshness gate.' : '—')}
+              reason={
+                c.reason ??
+                (c.acceptedByFreshness
+                  ? "Accepted by the freshness gate."
+                  : "—")
+              }
             />
           ))
         )}
       </Column>
     </div>
-  )
+  );
 }

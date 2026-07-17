@@ -1,11 +1,5 @@
 {
   "title": "Compaction",
   "description": "Four primitives for keeping long conversations within token limits.",
-  "pages": [
-    "index",
-    "sliding-window",
-    "budget",
-    "summarization",
-    "extraction"
-  ]
+  "pages": ["index", "sliding-window", "budget", "summarization", "extraction"]
 }

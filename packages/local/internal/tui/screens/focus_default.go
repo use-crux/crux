@@ -6,10 +6,7 @@ package screens
 // staging logic per ADR-0051. Defining them here keeps the diff that
 // added the Focus interface method small — one file instead of nine.
 
-func (o *Overview) Focus(_, _ string)  {}
-func (s *Runs) Focus(_, _ string)      {}
-func (s *Baselines) Focus(_, _ string) {}
-func (s *Feedback) Focus(_, _ string)  {}
-func (s *Cassettes) Focus(_, _ string) {}
-func (s *Index) Focus(_, _ string)     {}
-func (s *Stub) Focus(_, _ string)      {}
+func (o *Overview) Focus(_, _ string) {}
+func (s *Runs) Focus(_, _ string)     {}
+func (s *Index) Focus(_, _ string)    {}
+func (s *Stub) Focus(_, _ string)     {}

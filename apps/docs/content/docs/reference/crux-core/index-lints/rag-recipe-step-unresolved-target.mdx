@@ -15,12 +15,12 @@ Recipe steps are most useful in devtools when their dependencies resolve to conc
 Reference an exported, index-visible Crux primitive from the recipe step.
 
 ```ts
-export const answerRanker = reranker({ name: 'answer-ranker', model })
+export const answerRanker = reranker({ name: "answer-ranker", model });
 
 export const docsRecipe = retrievalRecipe({
-  id: 'docs',
+  id: "docs",
   steps: [rerank({ engine: answerRanker })],
-})
+});
 ```
 
 ## When to suppress
@@ -29,7 +29,10 @@ Suppress only when the target is intentionally external and reduced index visibi
 
 ```ts
 // crux-lint-disable-next-line rag.recipe_step_unresolved_target -- external ranking engine is injected by the host
-export const docsRecipe = retrievalRecipe({ id: 'docs', steps: [rerank({ engine: hostRanker })] })
+export const docsRecipe = retrievalRecipe({
+  id: "docs",
+  steps: [rerank({ engine: hostRanker })],
+});
 ```
 
 ## Rule metadata

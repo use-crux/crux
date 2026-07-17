@@ -22,32 +22,32 @@ You do not need the Runtime Engine to get started. Plenty works without it:
 
 You add the Runtime Engine when you need work to survive the process. These APIs require it:
 
-| API | What it does |
-| --- | --- |
-| `flow.waitFor(event)` | Suspend until an event arrives, even across restarts |
-| `flow.after(target, delay)` | Run work later, on a durable timer |
-| `flow.defer(target, input)` | Durable child work inside a flow |
+| API                                         | What it does                                         |
+| ------------------------------------------- | ---------------------------------------------------- |
+| `flow.waitFor(event)`                       | Suspend until an event arrives, even across restarts |
+| `flow.after(target, delay)`                 | Run work later, on a durable timer                   |
+| `flow.defer(target, input)`                 | Durable child work inside a flow                     |
 | `flow.untilIdle({ scope: 'current-flow' })` | Wait for the current flow's durable child-work scope |
-| `defer(target, input)` | Durable named background work from a request |
-| `crux.flows.signal/resume/cancel(...)` | Operate on a flow by name without holding its handle |
+| `defer(target, input)`                      | Durable named background work from a request         |
+| `crux.flows.signal/resume/cancel(...)`      | Operate on a flow by name without holding its handle |
 
 ## Turn it on
 
 Pick the runtime shape that matches where your code runs, and pass it to your Crux setup:
 
-| Shape | Use when |
-| --- | --- |
-| `node()` | Local development, tests, single-process demos |
-| `node({ store: postgres() })` | Long-lived Node processes that need state across restarts or multiple workers |
-| `serverless({ store: postgres(), wake: qstash() })` | Next.js or Vercel-style apps where a cold function needs an external wake |
-| `convex()` | Convex apps that run runtime work inside Convex functions and the scheduler |
-| `genericQueue()` | You own a queue and want to adapt it without a bundled Crux package |
+| Shape                                               | Use when                                                                      |
+| --------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `node()`                                            | Local development, tests, single-process demos                                |
+| `node({ store: postgres() })`                       | Long-lived Node processes that need state across restarts or multiple workers |
+| `serverless({ store: postgres(), wake: qstash() })` | Next.js or Vercel-style apps where a cold function needs an external wake     |
+| `convex()`                                          | Convex apps that run runtime work inside Convex functions and the scheduler   |
+| `genericQueue()`                                    | You own a queue and want to adapt it without a bundled Crux package           |
 
 ```ts
-import { node } from '@use-crux/core/runtime'
-import { postgres } from '@use-crux/postgres/runtime'
+import { node } from "@use-crux/core/runtime";
+import { postgres } from "@use-crux/postgres/runtime";
 
-const runtime = node({ store: postgres() })
+const runtime = node({ store: postgres() });
 ```
 
 Durable payloads must be JSON-compatible. Pass ids, URLs, or storage keys for large or complex values, not the values themselves.
@@ -61,11 +61,31 @@ Durable payloads must be JSON-compatible. Pass ids, URLs, or storage keys for la
 Each environment has a focused setup guide:
 
 <Cards>
-  <Card title="Next.js / Vercel" description="Serverless runtime with an external wake for cold functions." href="/docs/guides/durable-execution/next-vercel" />
-  <Card title="Long-lived Node" description="A persistent Node process with a Postgres store." href="/docs/guides/durable-execution/node" />
-  <Card title="Convex" description="Run runtime work inside Convex functions and the scheduler." href="/docs/guides/durable-execution/convex" />
-  <Card title="Testing" description="Drive durable flows deterministically in tests." href="/docs/guides/durable-execution/testing" />
-  <Card title="Custom adapters" description="Adapt a queue or store the built-in shapes do not cover." href="/docs/guides/durable-execution/custom-adapters" />
+  <Card
+    title="Next.js / Vercel"
+    description="Serverless runtime with an external wake for cold functions."
+    href="/docs/guides/durable-execution/next-vercel"
+  />
+  <Card
+    title="Long-lived Node"
+    description="A persistent Node process with a Postgres store."
+    href="/docs/guides/durable-execution/node"
+  />
+  <Card
+    title="Convex"
+    description="Run runtime work inside Convex functions and the scheduler."
+    href="/docs/guides/durable-execution/convex"
+  />
+  <Card
+    title="Testing"
+    description="Drive durable flows deterministically in tests."
+    href="/docs/guides/durable-execution/testing"
+  />
+  <Card
+    title="Custom adapters"
+    description="Adapt a queue or store the built-in shapes do not cover."
+    href="/docs/guides/durable-execution/custom-adapters"
+  />
 </Cards>
 
 ## Production tuning and internals

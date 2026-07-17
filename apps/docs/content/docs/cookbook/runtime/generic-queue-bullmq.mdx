@@ -8,9 +8,9 @@ description: Use genericQueue() to adapt a user-owned queue to Runtime Engine wa
 ## Runtime config
 
 ```ts
-import { config } from '@use-crux/core'
-import { genericQueue, serverless } from '@use-crux/core/runtime'
-import { postgres } from '@use-crux/postgres/runtime'
+import { config } from "@use-crux/core";
+import { genericQueue, serverless } from "@use-crux/core/runtime";
+import { postgres } from "@use-crux/postgres/runtime";
 
 export default config({
   runtime: serverless({
@@ -21,12 +21,12 @@ export default config({
       enqueue: async (message) => {
         await queue.add(message.id, message, {
           jobId: message.id,
-        })
+        });
       },
     }),
     publicUrl: process.env.CRUX_PUBLIC_URL,
   }),
-})
+});
 ```
 
 Secrets shorter than 16 characters are rejected. Use at least 32 random bytes for production.
@@ -38,21 +38,21 @@ Secrets shorter than 16 characters are rejected. Use at least 32 random bytes fo
 ## BullMQ worker sketch
 
 ```ts
-import { Worker } from 'bullmq'
+import { Worker } from "bullmq";
 
 const worker = new Worker(queue.name, async (job) => {
-  const message = job.data
+  const message = job.data;
 
   const response = await fetch(message.url, {
-    method: 'POST',
+    method: "POST",
     headers: message.headers,
     body: message.body,
-  })
+  });
 
   if (!response.ok && response.status >= 500) {
-    throw new Error(`Crux wake failed with ${response.status}`)
+    throw new Error(`Crux wake failed with ${response.status}`);
   }
-})
+});
 ```
 
 The queue remains at-least-once. Crux expects duplicates and uses idempotency keys, leases, and terminal-state checks to make duplicate delivery harmless.

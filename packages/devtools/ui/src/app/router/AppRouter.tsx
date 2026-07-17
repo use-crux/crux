@@ -9,43 +9,64 @@
  * mounted while the next page resolves, instead of flashing a fallback.
  */
 
-import { lazy } from 'react'
-import { navTarget } from '@/app/navigation/navTarget'
-import { useNavigation, type NavState } from '@/app/navigation/useNavigation'
-import { QwShell } from '@/qw/shell/QwShell'
-import { QwSidebar } from '@/qw/shell/QwSidebar'
-import { CodeBlock } from '@/shared/components/ai-elements/code-block'
+import { lazy } from "react";
+import { navTarget } from "@/app/navigation/navTarget";
+import { useNavigation, type NavState } from "@/app/navigation/useNavigation";
+import { QwShell } from "@/qw/shell/QwShell";
+import { QwSidebar } from "@/qw/shell/QwSidebar";
+import { CodeBlock } from "@/shared/components/ai-elements/code-block";
 
-const OverviewPage = lazy(() => import('@/pages/OverviewPage').then((m) => ({ default: m.OverviewPage })))
-const InsightsPage = lazy(() => import('@/pages/InsightsPage').then((m) => ({ default: m.InsightsPage })))
-const RunsPage = lazy(() => import('@/pages/RunsPage').then((m) => ({ default: m.RunsPage })))
-const RuntimePage = lazy(() => import('@/pages/RuntimePage').then((m) => ({ default: m.RuntimePage })))
-const RunDetailPage = lazy(() => import('@/pages/RunDetailPage').then((m) => ({ default: m.RunDetailPage })))
-const ExperimentsPage = lazy(() => import('@/pages/ExperimentsPage').then((m) => ({ default: m.ExperimentsPage })))
-const ExperimentDetailPage = lazy(() =>
-  import('@/pages/ExperimentsPage').then((m) => ({ default: m.ExperimentDetailPage })),
-)
-const BaselinesPage = lazy(() => import('@/pages/BaselinesPage').then((m) => ({ default: m.BaselinesPage })))
-const EvaluationsPage = lazy(() => import('@/pages/EvaluationsPage').then((m) => ({ default: m.EvaluationsPage })))
-const FeedbackPage = lazy(() => import('@/pages/FeedbackPage').then((m) => ({ default: m.FeedbackPage })))
-const CassettesPage = lazy(() => import('@/pages/CassettesPage').then((m) => ({ default: m.CassettesPage })))
-const ScorersPage = lazy(() => import('@/pages/ScorersPage').then((m) => ({ default: m.ScorersPage })))
-const MemoryPage = lazy(() => import('@/pages/MemoryPage').then((m) => ({ default: m.MemoryPage })))
-const PlansPage = lazy(() => import('@/pages/PlansPage').then((m) => ({ default: m.PlansPage })))
-const WorkspacesPage = lazy(() => import('@/pages/WorkspacesPage').then((m) => ({ default: m.WorkspacesPage })))
-const IndexPage = lazy(() => import('@/pages/IndexPage').then((m) => ({ default: m.IndexPage })))
+const OverviewPage = lazy(() =>
+  import("@/pages/OverviewPage").then((m) => ({ default: m.OverviewPage })),
+);
+const InsightsPage = lazy(() =>
+  import("@/pages/InsightsPage").then((m) => ({ default: m.InsightsPage })),
+);
+const RunsPage = lazy(() =>
+  import("@/pages/RunsPage").then((m) => ({ default: m.RunsPage })),
+);
+const RuntimePage = lazy(() =>
+  import("@/pages/RuntimePage").then((m) => ({ default: m.RuntimePage })),
+);
+const RunDetailPage = lazy(() =>
+  import("@/pages/RunDetailPage").then((m) => ({ default: m.RunDetailPage })),
+);
+const BaselinesPage = lazy(() =>
+  import("@/pages/BaselinesPage").then((m) => ({ default: m.BaselinesPage })),
+);
+const MemoryPage = lazy(() =>
+  import("@/pages/MemoryPage").then((m) => ({ default: m.MemoryPage })),
+);
+const PlansPage = lazy(() =>
+  import("@/pages/PlansPage").then((m) => ({ default: m.PlansPage })),
+);
+const WorkspacesPage = lazy(() =>
+  import("@/pages/WorkspacesPage").then((m) => ({ default: m.WorkspacesPage })),
+);
+const IndexPage = lazy(() =>
+  import("@/pages/IndexPage").then((m) => ({ default: m.IndexPage })),
+);
+const EvalsPage = lazy(() =>
+  import("@/pages/EvalsPage").then((m) => ({ default: m.EvalsPage })),
+);
+const EvalRunsPage = lazy(() =>
+  import("@/pages/EvalRunsPage").then((m) => ({ default: m.EvalRunsPage })),
+);
+const ReviewPage = lazy(() =>
+  import("@/pages/ReviewPage").then((m) => ({ default: m.ReviewPage })),
+);
 
 export function AppRouter({ nav }: { nav: NavState }) {
   switch (nav.view) {
-    case 'overview':
-    case 'dashboard':
-      return <OverviewPage />
-    case 'insights':
-    case 'security':
+    case "overview":
+    case "dashboard":
+      return <OverviewPage />;
+    case "insights":
+    case "security":
       return (
         <InsightsPage
           filters={
-            nav.view === 'insights'
+            nav.view === "insights"
               ? {
                   severity: nav.severity,
                   target: nav.target,
@@ -54,91 +75,92 @@ export function AppRouter({ nav }: { nav: NavState }) {
                 }
               : {}
           }
-          groupBy={nav.view === 'insights' ? (nav.groupBy ?? 'none') : 'none'}
+          groupBy={nav.view === "insights" ? (nav.groupBy ?? "none") : "none"}
         />
-      )
-    case 'runs':
-    case 'traces':
-    case 'sessions':
-    case 'constraints':
+      );
+    case "runs":
+    case "traces":
+    case "sessions":
+    case "constraints":
       return (
         <RunsPage
-          groupBy={nav.view === 'runs' ? (nav.groupBy ?? 'none') : 'none'}
+          groupBy={nav.view === "runs" ? (nav.groupBy ?? "none") : "none"}
           filters={
-            nav.view === 'runs'
+            nav.view === "runs"
               ? {
                   status: nav.status,
                   target: nav.target,
                   model: nav.model,
                   last: nav.last,
-                  has: nav.has,
                   search: nav.search,
                   definitionId: nav.definitionId,
                 }
               : {}
           }
         />
-      )
-    case 'runtime':
-      return <RuntimePage />
-    case 'run-detail':
-      return <RunDetailPage traceId={nav.traceId} lens={nav.lens} spanId={nav.spanId} summary={nav.summary} />
-    case 'detail':
+      );
+    case "runtime":
+      return <RuntimePage />;
+    case "run-detail":
+      return (
+        <RunDetailPage
+          traceId={nav.traceId}
+          lens={nav.lens}
+          spanId={nav.spanId}
+          summary={nav.summary}
+        />
+      );
+    case "detail":
       if (nav.traceId) {
-        return <RunDetailPage traceId={nav.traceId} />
+        return <RunDetailPage traceId={nav.traceId} />;
       }
-      return <RunsPage groupBy="none" filters={{}} />
-    case 'evaluations':
-      return <EvaluationsPage />
-    case 'experiments':
-    case 'evals':
-      return <ExperimentsPage />
-    case 'experiment-detail':
-      return <ExperimentDetailPage experimentId={nav.experimentId} />
-    case 'baselines':
-      return <BaselinesPage />
-    case 'feedback':
-      return <FeedbackPage />
-    case 'cassettes':
-      return <CassettesPage />
-    case 'scorers':
-      return <ScorersPage />
-    case 'library-index':
-    case 'prompts':
+      return <RunsPage groupBy="none" filters={{}} />;
+    case "evals":
+      return <EvalsPage evalId={nav.evalId} />;
+    case "eval-runs":
+      return <EvalRunsPage runId={nav.runId} />;
+    case "review":
+      return <ReviewPage reviewId={nav.reviewId} />;
+    case "baselines":
+      return <BaselinesPage />;
+    case "library-index":
+    case "prompts":
       return (
         <IndexPage
-          promptId={'promptId' in nav ? nav.promptId : undefined}
-          contextId={'contextId' in nav ? nav.contextId : undefined}
-          toolName={'toolName' in nav ? nav.toolName : undefined}
-          tab={'tab' in nav ? nav.tab : undefined}
+          promptId={"promptId" in nav ? nav.promptId : undefined}
+          contextId={"contextId" in nav ? nav.contextId : undefined}
+          toolName={"toolName" in nav ? nav.toolName : undefined}
+          tab={"tab" in nav ? nav.tab : undefined}
         />
-      )
-    case 'library-memory':
-    case 'memory':
-      return <MemoryPage memoryId={'memoryId' in nav ? nav.memoryId : undefined} />
-    case 'library-workspaces':
-    case 'workspaces':
+      );
+    case "library-memory":
+    case "memory":
+      return (
+        <MemoryPage memoryId={"memoryId" in nav ? nav.memoryId : undefined} />
+      );
+    case "library-workspaces":
+    case "workspaces":
       return (
         <WorkspacesPage
-          workspaceId={'workspaceId' in nav ? nav.workspaceId : undefined}
-          filePath={'filePath' in nav ? nav.filePath : undefined}
+          workspaceId={"workspaceId" in nav ? nav.workspaceId : undefined}
+          filePath={"filePath" in nav ? nav.filePath : undefined}
         />
-      )
-    case 'library-plans':
-    case 'plans':
-      return <PlansPage planId={'planId' in nav ? nav.planId : undefined} />
+      );
+    case "library-plans":
+    case "plans":
+      return <PlansPage planId={"planId" in nav ? nav.planId : undefined} />;
   }
 }
 
 export function WaitingShell({ connected }: { connected: boolean }) {
-  const { navigate } = useNavigation()
+  const { navigate } = useNavigation();
   return (
     <div
       className="flex h-screen min-h-0 overflow-hidden"
       style={{
-        background: 'var(--qw-bg)',
-        color: 'var(--qw-fg)',
-        fontFamily: 'var(--qw-sans)',
+        background: "var(--qw-bg)",
+        color: "var(--qw-fg)",
+        fontFamily: "var(--qw-sans)",
       }}
     >
       <QwSidebar />
@@ -154,8 +176,8 @@ export function WaitingShell({ connected }: { connected: boolean }) {
           <div
             className="w-full max-w-[560px] space-y-4 rounded-[10px] p-6"
             style={{
-              background: 'var(--qw-bg-elev)',
-              border: '1px solid var(--qw-border)',
+              background: "var(--qw-bg-elev)",
+              border: "1px solid var(--qw-border)",
             }}
           >
             <Step
@@ -185,7 +207,7 @@ enableDevtools({
         </div>
       </QwShell>
     </div>
-  )
+  );
 }
 
 function Step({
@@ -195,30 +217,36 @@ function Step({
   description,
   code,
 }: {
-  n: number
-  done: boolean
-  title: string
-  description?: string
-  code?: string
+  n: number;
+  done: boolean;
+  title: string;
+  description?: string;
+  code?: string;
 }) {
   return (
     <div className="flex gap-3">
       <span
         className="flex h-6 w-6 flex-shrink-0 items-center justify-center text-[11px] font-medium"
         style={{
-          border: `1px solid ${done ? 'var(--qw-ok)' : 'var(--qw-border)'}`,
-          background: done ? 'var(--qw-ok-soft)' : 'var(--qw-bg-muted)',
-          color: done ? 'var(--qw-ok)' : 'var(--qw-fg-muted)',
+          border: `1px solid ${done ? "var(--qw-ok)" : "var(--qw-border)"}`,
+          background: done ? "var(--qw-ok-soft)" : "var(--qw-bg-muted)",
+          color: done ? "var(--qw-ok)" : "var(--qw-fg-muted)",
         }}
       >
-        {done ? 'OK' : n}
+        {done ? "OK" : n}
       </span>
       <div className="min-w-0">
-        <div className="text-[13px] font-medium" style={{ color: done ? 'var(--qw-fg-muted)' : 'var(--qw-fg)' }}>
+        <div
+          className="text-[13px] font-medium"
+          style={{ color: done ? "var(--qw-fg-muted)" : "var(--qw-fg)" }}
+        >
           {title}
         </div>
         {description && (
-          <div className="mt-0.5 text-[12px]" style={{ color: 'var(--qw-fg-muted)' }}>
+          <div
+            className="mt-0.5 text-[12px]"
+            style={{ color: "var(--qw-fg-muted)" }}
+          >
             {description}
           </div>
         )}
@@ -229,5 +257,5 @@ function Step({
         )}
       </div>
     </div>
-  )
+  );
 }

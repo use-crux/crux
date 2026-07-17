@@ -127,7 +127,7 @@ const report = {
         label: "Context inclusion",
         status: "partial",
         suggestion: "Assert context customerProfile is included",
-        command: "crux quality run --suite support-routing",
+        command: "crux eval support-routing",
       },
     ],
   },

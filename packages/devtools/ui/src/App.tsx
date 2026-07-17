@@ -19,18 +19,21 @@
  * re-render when that slice changes.
  */
 
-import { Suspense, useEffect } from 'react'
-import { useDevtools } from './app/runtime/useDevtools'
-import { useConnected, useHasEverConnected } from './app/runtime/runtimeStore'
-import { NavigationProvider, useNavigation } from './app/navigation/useNavigation'
-import { TooltipProvider } from '@/shared/components/ui/tooltip'
-import { ErrorBoundary } from './qw/shell/ErrorBoundary'
-import { QwSidebar } from './qw/shell/QwSidebar'
-import { ToastProvider } from './qw/shell/useToast'
-import { GlobalSearch } from './features/search/components/GlobalSearch'
-import { useGlobalSearchShortcut } from './features/search/hooks/useGlobalSearchShortcut'
-import { AppRouter, WaitingShell } from './app/router/AppRouter'
-import { SkeletonPage } from '@/shared/components/Skeleton'
+import { Suspense, useEffect } from "react";
+import { useDevtools } from "./app/runtime/useDevtools";
+import { useConnected, useHasEverConnected } from "./app/runtime/runtimeStore";
+import {
+  NavigationProvider,
+  useNavigation,
+} from "./app/navigation/useNavigation";
+import { TooltipProvider } from "@/shared/components/ui/tooltip";
+import { ErrorBoundary } from "./qw/shell/ErrorBoundary";
+import { QwSidebar } from "./qw/shell/QwSidebar";
+import { ToastProvider } from "./qw/shell/useToast";
+import { GlobalSearch } from "./features/search/components/GlobalSearch";
+import { useGlobalSearchShortcut } from "./features/search/hooks/useGlobalSearchShortcut";
+import { AppRouter, WaitingShell } from "./app/router/AppRouter";
+import { SkeletonPage } from "@/shared/components/Skeleton";
 
 export function App() {
   return (
@@ -41,34 +44,35 @@ export function App() {
         </ToastProvider>
       </TooltipProvider>
     </NavigationProvider>
-  )
+  );
 }
 
 function AppInner() {
-  const { nav, isNavigating } = useNavigation()
-  useDevtools() // bootstraps WS + Query invalidation; state read via selectors
-  const connected = useConnected()
+  const { nav, isNavigating } = useNavigation();
+  useDevtools(); // bootstraps WS + Query invalidation; state read via selectors
+  const connected = useConnected();
   // `hasEverConnected` is the gate: once we land a single WS connection
   // we stop showing the onboarding shell, even on later disconnects
   // (the ConnectionBanner inside QwShell handles those). This separates
   // session-lifecycle state from index data — App.tsx no longer
   // reads index at all, so unrelated index WS pushes don't
   // re-render the root.
-  const hasEverConnected = useHasEverConnected()
-  const { isOpen, setIsOpen } = useGlobalSearchShortcut()
+  const hasEverConnected = useHasEverConnected();
+  const { isOpen, setIsOpen } = useGlobalSearchShortcut();
 
   // Listen for the shell's "open-search" custom event so the sidebar
   // ⌘K button opens the same dialog as the keyboard shortcut.
   useEffect(() => {
     function onOpen() {
-      setIsOpen(true)
+      setIsOpen(true);
     }
-    window.addEventListener('qw:open-search', onOpen as EventListener)
-    return () => window.removeEventListener('qw:open-search', onOpen as EventListener)
-  }, [setIsOpen])
+    window.addEventListener("qw:open-search", onOpen as EventListener);
+    return () =>
+      window.removeEventListener("qw:open-search", onOpen as EventListener);
+  }, [setIsOpen]);
 
   if (!hasEverConnected) {
-    return <WaitingShell connected={connected} />
+    return <WaitingShell connected={connected} />;
   }
 
   return (
@@ -80,7 +84,7 @@ function AppInner() {
         <div
           className="qw-progress-bar"
           style={{
-            position: 'fixed',
+            position: "fixed",
             top: 0,
             left: 0,
             right: 0,
@@ -96,9 +100,9 @@ function AppInner() {
       <div
         className="flex h-screen min-h-0 overflow-hidden"
         style={{
-          background: 'var(--qw-bg)',
-          color: 'var(--qw-fg)',
-          fontFamily: 'var(--qw-sans)',
+          background: "var(--qw-bg)",
+          color: "var(--qw-fg)",
+          fontFamily: "var(--qw-sans)",
         }}
       >
         <QwSidebar />
@@ -110,5 +114,5 @@ function AppInner() {
       </div>
       <GlobalSearch isOpen={isOpen} setIsOpen={setIsOpen} hideTrigger />
     </>
-  )
+  );
 }

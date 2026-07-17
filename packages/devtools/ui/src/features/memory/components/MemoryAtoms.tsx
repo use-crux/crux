@@ -1,34 +1,34 @@
-import { Icon } from '@/qw/shell/Icon'
-import type { IconName } from '@/qw/shell/nav'
-import { cruxDocsUrl } from '@/shared/lib/cruxDocs'
-import type { MemoryInspection } from '@/types'
+import { Icon } from "@/qw/shell/Icon";
+import type { IconName } from "@/qw/shell/nav";
+import { cruxDocsUrl } from "@/shared/lib/cruxDocs";
+import type { MemoryInspection } from "@/types";
 
 function opPillTone(op: string | undefined): { bg: string; fg: string } {
   switch (op) {
-    case 'write':
-    case 'delete':
-      return { bg: 'var(--qw-danger-soft)', fg: 'var(--qw-danger)' }
-    case 'update':
-      return { bg: 'var(--qw-warn-soft)', fg: 'var(--qw-warn)' }
-    case 'evict':
+    case "write":
+    case "delete":
+      return { bg: "var(--qw-danger-soft)", fg: "var(--qw-danger)" };
+    case "update":
+      return { bg: "var(--qw-warn-soft)", fg: "var(--qw-warn)" };
+    case "evict":
       // Retention GC sweep — eviction-style, visible but not alarming.
-      return { bg: 'var(--qw-warn-soft)', fg: 'var(--qw-warn)' }
-    case 'append':
-    case 'record':
-      return { bg: 'var(--qw-iris-soft)', fg: 'var(--qw-iris)' }
-    case 'read':
-      return { bg: 'var(--qw-ok-soft)', fg: 'var(--qw-ok)' }
-    case 'query':
-      return { bg: 'var(--qw-crux-soft)', fg: 'var(--qw-crux)' }
+      return { bg: "var(--qw-warn-soft)", fg: "var(--qw-warn)" };
+    case "append":
+    case "record":
+      return { bg: "var(--qw-iris-soft)", fg: "var(--qw-iris)" };
+    case "read":
+      return { bg: "var(--qw-ok-soft)", fg: "var(--qw-ok)" };
+    case "query":
+      return { bg: "var(--qw-crux-soft)", fg: "var(--qw-crux)" };
     default:
-      return { bg: 'var(--qw-bg-muted)', fg: 'var(--qw-fg-muted)' }
+      return { bg: "var(--qw-bg-muted)", fg: "var(--qw-fg-muted)" };
   }
 }
 
 interface HeaderStripStat {
-  label: string
-  value: React.ReactNode
-  color?: string
+  label: string;
+  value: React.ReactNode;
+  color?: string;
 }
 
 export function LDHeaderStrip({
@@ -39,27 +39,30 @@ export function LDHeaderStrip({
   stats,
   right,
 }: {
-  icon: IconName
-  color: string
-  id: string
-  chips?: React.ReactNode
-  stats: readonly HeaderStripStat[]
-  right?: React.ReactNode
+  icon: IconName;
+  color: string;
+  id: string;
+  chips?: React.ReactNode;
+  stats: readonly HeaderStripStat[];
+  right?: React.ReactNode;
 }) {
   return (
     <div
       className="mb-5 grid items-center gap-4 rounded-[10px] px-4 py-3.5"
       style={{
-        background: 'var(--qw-bg-elev)',
-        border: '1px solid var(--qw-border)',
+        background: "var(--qw-bg-elev)",
+        border: "1px solid var(--qw-border)",
         borderLeft: `3px solid ${color}`,
-        gridTemplateColumns: 'minmax(0, 1fr) auto',
+        gridTemplateColumns: "minmax(0, 1fr) auto",
       }}
     >
       <div className="min-w-0">
         <div className="mb-1.5 flex min-w-0 flex-wrap items-center gap-2">
           <Icon name={icon} size={15} color={color} className="shrink-0" />
-          <span className="min-w-0 max-w-full truncate font-mono text-[17px] font-semibold" title={id}>
+          <span
+            className="min-w-0 max-w-full truncate font-mono text-[17px] font-semibold"
+            title={id}
+          >
             {id}
           </span>
           {chips}
@@ -67,12 +70,15 @@ export function LDHeaderStrip({
         <div className="flex flex-wrap gap-6">
           {stats.map((stat) => (
             <div key={stat.label}>
-              <div className="font-mono text-[10px] uppercase tracking-[0.1em]" style={{ color: 'var(--qw-fg-faint)' }}>
+              <div
+                className="font-mono text-[10px] uppercase tracking-[0.1em]"
+                style={{ color: "var(--qw-fg-faint)" }}
+              >
                 {stat.label}
               </div>
               <div
                 className="mt-0.5 font-mono text-[14px] font-semibold"
-                style={{ color: stat.color ?? 'var(--qw-fg)' }}
+                style={{ color: stat.color ?? "var(--qw-fg)" }}
               >
                 {stat.value}
               </div>
@@ -80,9 +86,13 @@ export function LDHeaderStrip({
           ))}
         </div>
       </div>
-      {right && <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">{right}</div>}
+      {right && (
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+          {right}
+        </div>
+      )}
     </div>
-  )
+  );
 }
 
 export function LDCard({
@@ -92,31 +102,41 @@ export function LDCard({
   children,
   padding,
 }: {
-  title: string
-  right?: React.ReactNode
-  color?: string
-  children: React.ReactNode
-  padding?: string
+  title: string;
+  right?: React.ReactNode;
+  color?: string;
+  children: React.ReactNode;
+  padding?: string;
 }) {
   return (
     <div
       className="overflow-hidden rounded-[10px]"
-      style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)' }}
+      style={{
+        background: "var(--qw-bg-elev)",
+        border: "1px solid var(--qw-border)",
+      }}
     >
       <div
         className="flex items-center gap-2 px-3.5 py-2.5"
         style={{
-          borderBottom: '1px solid var(--qw-border)',
-          background: 'var(--qw-bg-muted)',
+          borderBottom: "1px solid var(--qw-border)",
+          background: "var(--qw-bg-muted)",
         }}
       >
-        {color && <span className="size-[7px] rounded-full" style={{ background: color }} />}
+        {color && (
+          <span
+            className="size-[7px] rounded-full"
+            style={{ background: color }}
+          />
+        )}
         <span className="text-[12px] font-semibold">{title}</span>
-        {right && <span className="ml-auto flex items-center gap-1.5">{right}</span>}
+        {right && (
+          <span className="ml-auto flex items-center gap-1.5">{right}</span>
+        )}
       </div>
       <div style={{ padding: padding ?? 0 }}>{children}</div>
     </div>
-  )
+  );
 }
 
 export function LDKV({
@@ -126,39 +146,45 @@ export function LDKV({
   color,
   last = false,
 }: {
-  k: string
-  type?: string
-  v: React.ReactNode
-  color?: string
-  last?: boolean
+  k: string;
+  type?: string;
+  v: React.ReactNode;
+  color?: string;
+  last?: boolean;
 }) {
   return (
     <div
       className="grid items-baseline gap-3 px-3.5 py-2 text-[12px]"
       style={{
-        gridTemplateColumns: '180px 80px minmax(0, 1fr)',
-        borderBottom: last ? 'none' : '1px solid var(--qw-border)',
+        gridTemplateColumns: "180px 80px minmax(0, 1fr)",
+        borderBottom: last ? "none" : "1px solid var(--qw-border)",
       }}
     >
-      <span className="font-mono font-medium" style={{ color: 'var(--qw-crux)' }}>
+      <span
+        className="font-mono font-medium"
+        style={{ color: "var(--qw-crux)" }}
+      >
         {k}
       </span>
-      <span className="font-mono text-[10.5px] tracking-[0.06em] lowercase" style={{ color: 'var(--qw-fg-faint)' }}>
-        {type ?? '-'}
+      <span
+        className="font-mono text-[10.5px] tracking-[0.06em] lowercase"
+        style={{ color: "var(--qw-fg-faint)" }}
+      >
+        {type ?? "-"}
       </span>
       <span
         className="truncate font-mono"
-        style={{ color: color ?? 'var(--qw-fg)' }}
-        title={typeof v === 'string' ? v : undefined}
+        style={{ color: color ?? "var(--qw-fg)" }}
+        title={typeof v === "string" ? v : undefined}
       >
         {v}
       </span>
     </div>
-  )
+  );
 }
 
 export function LDOpPill({ op }: { op: string }) {
-  const tone = opPillTone(op)
+  const tone = opPillTone(op);
   return (
     <span
       className="inline-flex w-fit rounded-[3px] px-1.5 py-[1px] font-mono text-[10.5px] font-semibold"
@@ -166,27 +192,31 @@ export function LDOpPill({ op }: { op: string }) {
     >
       {op}
     </span>
-  )
+  );
 }
 
-export function TableHeader({ cols }: { cols: readonly { label: string; width: string; align?: 'left' | 'right' }[] }) {
+export function TableHeader({
+  cols,
+}: {
+  cols: readonly { label: string; width: string; align?: "left" | "right" }[];
+}) {
   return (
     <div
       className="grid gap-2.5 px-4 py-2 text-[10px] uppercase tracking-[0.1em]"
       style={{
-        gridTemplateColumns: cols.map((c) => c.width).join(' '),
-        color: 'var(--qw-fg-faint)',
-        borderBottom: '1px solid var(--qw-border)',
-        background: 'var(--qw-bg-muted)',
+        gridTemplateColumns: cols.map((c) => c.width).join(" "),
+        color: "var(--qw-fg-faint)",
+        borderBottom: "1px solid var(--qw-border)",
+        background: "var(--qw-bg-muted)",
       }}
     >
       {cols.map((c) => (
-        <div key={c.label} style={{ textAlign: c.align ?? 'left' }}>
+        <div key={c.label} style={{ textAlign: c.align ?? "left" }}>
           {c.label}
         </div>
       ))}
     </div>
-  )
+  );
 }
 
 export function Stat({
@@ -194,23 +224,32 @@ export function Stat({
   value,
   color,
 }: {
-  label: string
-  value: number | string | null | undefined
-  color?: string
+  label: string;
+  value: number | string | null | undefined;
+  color?: string;
 }) {
   return (
     <div className="flex flex-col">
-      <span className="text-[10px] uppercase tracking-[0.08em]" style={{ color: 'var(--qw-fg-faint)' }}>
+      <span
+        className="text-[10px] uppercase tracking-[0.08em]"
+        style={{ color: "var(--qw-fg-faint)" }}
+      >
         {label}
       </span>
       <span
         className="font-mono text-[14px] font-semibold"
-        style={{ color: color ?? (value == null || value === '—' ? 'var(--qw-fg-faint)' : 'var(--qw-fg)') }}
+        style={{
+          color:
+            color ??
+            (value == null || value === "—"
+              ? "var(--qw-fg-faint)"
+              : "var(--qw-fg)"),
+        }}
       >
-        {value == null ? '—' : value}
+        {value == null ? "—" : value}
       </span>
     </div>
-  )
+  );
 }
 
 export function EmptyHint({ children }: { children: React.ReactNode }) {
@@ -218,25 +257,28 @@ export function EmptyHint({ children }: { children: React.ReactNode }) {
     <div
       className="rounded-[10px] px-6 py-10 text-center text-[13px]"
       style={{
-        background: 'var(--qw-bg-elev)',
-        border: '1px dashed var(--qw-border)',
-        color: 'var(--qw-fg-muted)',
+        background: "var(--qw-bg-elev)",
+        border: "1px dashed var(--qw-border)",
+        color: "var(--qw-fg-muted)",
       }}
     >
       {children}
     </div>
-  )
+  );
 }
 
 export function EmptyInline({ children }: { children: React.ReactNode }) {
   return (
-    <div className="px-4 py-5 text-center text-[12px]" style={{ color: 'var(--qw-fg-muted)' }}>
+    <div
+      className="px-4 py-5 text-center text-[12px]"
+      style={{ color: "var(--qw-fg-muted)" }}
+    >
       {children}
     </div>
-  )
+  );
 }
 
-import { TabsList, TabsTrigger } from '@/shared/components/ui/tabs'
+import { TabsList, TabsTrigger } from "@/shared/components/ui/tabs";
 
 /**
  * Card-header tab strip — thin wrapper around the shadcn `TabsList` so memory
@@ -245,9 +287,9 @@ import { TabsList, TabsTrigger } from '@/shared/components/ui/tabs'
  * rendered inside a `<Tabs>` root from the same `ui/tabs` module.
  */
 export interface MemoryTabSpec {
-  value: string
-  label: string
-  count?: number
+  value: string;
+  label: string;
+  count?: number;
 }
 
 export function MemoryCardTabs({ tabs }: { tabs: readonly MemoryTabSpec[] }) {
@@ -268,7 +310,7 @@ export function MemoryCardTabs({ tabs }: { tabs: readonly MemoryTabSpec[] }) {
         </TabsTrigger>
       ))}
     </TabsList>
-  )
+  );
 }
 
 /**
@@ -277,31 +319,42 @@ export function MemoryCardTabs({ tabs }: { tabs: readonly MemoryTabSpec[] }) {
  * Strictly presentational — renders the backend-provided `message` and
  * `docsUrl`. The projected memory state always renders alongside.
  */
-export function MemoryInspectionNotice({ inspection }: { inspection: MemoryInspection }) {
-  if (inspection.status === 'ok') return null
-  const message = inspection.message ?? 'Showing projected memory activity. Live runtime inspection is not available.'
-  const docsHref = cruxDocsUrl(inspection.docsUrl)
+export function MemoryInspectionNotice({
+  inspection,
+}: {
+  inspection: MemoryInspection;
+}) {
+  if (inspection.status === "ok") return null;
+  const message =
+    inspection.message ??
+    "Showing projected memory activity. Live runtime inspection is not available.";
+  const docsHref = cruxDocsUrl(inspection.docsUrl);
   return (
     <div
       className="mb-4 flex items-start gap-2.5 rounded-[8px] px-3.5 py-2.5 text-[12px]"
       style={{
-        background: 'var(--qw-bg-elev)',
-        border: '1px dashed var(--qw-border)',
-        color: 'var(--qw-fg-muted)',
+        background: "var(--qw-bg-elev)",
+        border: "1px dashed var(--qw-border)",
+        color: "var(--qw-fg-muted)",
       }}
     >
-      <Icon name="alert" size={14} color="var(--qw-fg-faint)" className="mt-[2px] shrink-0" />
+      <Icon
+        name="alert"
+        size={14}
+        color="var(--qw-fg-faint)"
+        className="mt-[2px] shrink-0"
+      />
       <div className="min-w-0 flex-1">
         <span>{message}</span>
         {docsHref && (
           <>
-            {' '}
+            {" "}
             <a
               href={docsHref}
               target="_blank"
               rel="noopener noreferrer"
               className="font-medium underline"
-              style={{ color: 'var(--qw-crux)' }}
+              style={{ color: "var(--qw-crux)" }}
             >
               Learn more
             </a>
@@ -311,23 +364,26 @@ export function MemoryInspectionNotice({ inspection }: { inspection: MemoryInspe
       {inspection.reason && (
         <span
           className="ml-2 shrink-0 rounded-[3px] px-1.5 py-[1px] font-mono text-[10px] uppercase tracking-[0.06em]"
-          style={{ background: 'var(--qw-bg-muted)', color: 'var(--qw-fg-faint)' }}
+          style={{
+            background: "var(--qw-bg-muted)",
+            color: "var(--qw-fg-faint)",
+          }}
           title={`reason: ${inspection.reason}`}
         >
           {inspection.reason}
         </span>
       )}
     </div>
-  )
+  );
 }
 
 export function ErrorBanner({ message }: { message: string }) {
   return (
     <div
       className="mb-4 rounded-[8px] px-4 py-3 text-[12px]"
-      style={{ background: 'var(--qw-danger-soft)', color: 'var(--qw-danger)' }}
+      style={{ background: "var(--qw-danger-soft)", color: "var(--qw-danger)" }}
     >
       {message}
     </div>
-  )
+  );
 }

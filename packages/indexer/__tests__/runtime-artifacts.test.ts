@@ -174,6 +174,9 @@ describe("runtime artifacts", () => {
     expect(targets).toContain("handleEvalRequest");
     expect(targets).toContain("executeEvalTarget");
     expect(targets).toContain("CRUX_EVAL_HOST_TOKEN");
+    expect(targets).toContain("CONVEX_DEPLOYMENT");
+    expect(targets).not.toContain("CONVEX_DEPLOYMENT ?? 'convex'");
+    expect(targets).not.toContain("CRUX_EVAL_HOST_TOKEN ?? ''");
   });
 
   it("does not rewrite byte-identical generated artifacts", async () => {

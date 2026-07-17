@@ -197,6 +197,7 @@ export type {
   ExecutorGenerateOptions,
   ExecutorStreamOptions,
   ExecutorGenerateResult,
+  ExecutorStreamResult,
 } from "./define-executor";
 
 // Shared policy modules (used by both factories; public so executors built
@@ -234,18 +235,6 @@ export type {
   ToolProtocolEvent,
 } from "./tool";
 export type { ApprovalRequestInfo } from "./tool/approval";
-
-// Replay seam (@internal) — the process-wide generation interceptor the
-// Quality cassette runtime installs around every spec call. Exported so
-// adapter packages can test their replayed-result shapes against it.
-export {
-  setGenerationInterceptor,
-  clearGenerationInterceptor,
-} from "./interception";
-export type {
-  GenerationInterceptor,
-  InterceptedGeneration,
-} from "./interception";
 
 // Testing utilities for public provider runtimes and lower-level execution IR.
 export {

@@ -3,6 +3,7 @@ import {
   assertCanonicalResult,
   type CanonicalResultStepExpectation,
 } from "../../src/adapter/testing";
+import { createCruxRunId } from "../../src/observability";
 
 const firstStep: CanonicalResultStepExpectation = {
   text: "hello ",
@@ -41,6 +42,7 @@ const publicStep = (step: CanonicalResultStepExpectation) => ({
 describe("assertCanonicalResult", () => {
   it("accepts a canonical envelope with accumulated text, usage, and finalStep data", () => {
     const result = {
+      runId: createCruxRunId(),
       text: "hello world",
       content: [{ type: "text", text: "hello world" }],
       usage: {
@@ -66,6 +68,7 @@ describe("assertCanonicalResult", () => {
 
   it("rejects fabricated detail token counts that no step reported", () => {
     const result = {
+      runId: createCruxRunId(),
       text: "world",
       content: [{ type: "text", text: "world" }],
       usage: {
@@ -96,6 +99,7 @@ describe("assertCanonicalResult", () => {
 
   it("accepts omitted accumulated usage when any expected step is unmetered", () => {
     const result = {
+      runId: createCruxRunId(),
       text: "hello world",
       content: [{ type: "text", text: "hello world" }],
       steps: [publicStep(firstStep), publicStep(finalStep)],
@@ -111,5 +115,20 @@ describe("assertCanonicalResult", () => {
         steps: [{ ...firstStep, usage: undefined }, finalStep],
       }),
     ).not.toThrow();
+  });
+
+  it("rejects an envelope without its authoritative run ID", () => {
+    const result = {
+      text: "world",
+      content: [{ type: "text", text: "world" }],
+      steps: [publicStep(finalStep)],
+      finalStep: publicStep(finalStep),
+      messages: [],
+      warnings: [],
+      raw: {},
+      _meta: {},
+    };
+
+    expect(() => assertCanonicalResult(result)).toThrow("result.runId");
   });
 });

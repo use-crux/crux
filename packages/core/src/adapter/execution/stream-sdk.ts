@@ -37,6 +37,7 @@ import {
 import { emitInputTokenEstimate } from "./media-token-budget";
 import { materializeToolSources } from "./tool-sources";
 import { createStreamSourceCleanup } from "./stream-source-cleanup";
+import type { CruxRunId } from "../../observability";
 
 /**
  * Start one SDK-owned stream for a concrete model attempt.
@@ -52,7 +53,7 @@ import { createStreamSourceCleanup } from "./stream-source-cleanup";
 export async function streamSdk<TModel, TRawResponse, TRawStream>(
   dialect: SdkLoopDialect<TModel, TRawResponse, TRawStream>,
   args: AdapterExecutionStreamArgs<TModel, Record<string, unknown>>,
-): Promise<ExecutorStreamHandle<TRawStream>> {
+): Promise<ExecutorStreamHandle<TRawStream> & { readonly runId: CruxRunId }> {
   const prompt = args.prompt;
   const modelInfo = dialect.describeModel(args.model);
   const resolveOpts = buildResolveOpts({
@@ -181,7 +182,9 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     ...(resolved.schema ? { schema: resolved.schema } : {}),
   };
 
-  let handle: ExecutorStreamHandle<TRawStream>;
+  let handle: ExecutorStreamHandle<TRawStream> & {
+    readonly runId: CruxRunId;
+  };
   try {
     handle = await sourceSession.withContext(async () =>
       orchestrateStream<

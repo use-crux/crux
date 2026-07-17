@@ -1,14 +1,22 @@
-import { expectOk, fetchJson, postJson } from '@/shared/services/http'
-import { fetchProjectIndex } from '@/shared/services/project-index'
-import type { ProjectIndexData, ProjectIndexWatchRunInfo, ProjectIndexWatchStatus } from '@/types'
+import { expectOk, fetchJson, postJson } from "@/shared/services/http";
+import { fetchProjectIndex } from "@/shared/services/project-index";
+import type {
+  ProjectIndexData,
+  ProjectIndexWatchRunInfo,
+  ProjectIndexWatchStatus,
+} from "@/types";
 
-export type IndexData = ProjectIndexData
-export type IndexWatchStatus = ProjectIndexWatchStatus
-type IndexWatchStatusPayload = Partial<Omit<IndexWatchStatus, 'lastRun'> & { lastRun?: Partial<ProjectIndexWatchRunInfo> }>
+export type IndexData = ProjectIndexData;
+export type IndexWatchStatus = ProjectIndexWatchStatus;
+type IndexWatchStatusPayload = Partial<
+  Omit<IndexWatchStatus, "lastRun"> & {
+    lastRun?: Partial<ProjectIndexWatchRunInfo>;
+  }
+>;
 
 export const indexService = {
   async getIndex(signal?: AbortSignal): Promise<IndexData> {
-    return fetchProjectIndex(signal)
+    return fetchProjectIndex(signal);
   },
 
   /**
@@ -17,31 +25,36 @@ export const indexService = {
    * so callers only need to invalidate the index query afterwards.
    */
   async reindex(): Promise<void> {
-    const res = await postJson('/api/index/reindex', {})
-    await expectOk(res, 'reindex index')
+    const res = await postJson("/api/index/reindex", {});
+    await expectOk(res, "reindex index");
   },
 
   /** Return the latest coalesced Project Index watch run telemetry. */
   async getWatchStatus(signal?: AbortSignal): Promise<IndexWatchStatus> {
-    const payload = await fetchJson<IndexWatchStatusPayload | null>('/api/project/index/watch', signal)
-    return normalizeWatchStatus(payload)
+    const payload = await fetchJson<IndexWatchStatusPayload | null>(
+      "/api/project/index/watch",
+      signal,
+    );
+    return normalizeWatchStatus(payload);
   },
-}
+};
 
 /**
  * Normalizes the bounded watch-status read model produced by older and newer
  * local runtimes into the strict UI shape used by status components.
  */
-export function normalizeWatchStatus(payload: IndexWatchStatusPayload | null | undefined): IndexWatchStatus {
-  const lastRun = payload?.lastRun
+export function normalizeWatchStatus(
+  payload: IndexWatchStatusPayload | null | undefined,
+): IndexWatchStatus {
+  const lastRun = payload?.lastRun;
   return {
-    state: payload?.state ?? 'idle',
+    state: payload?.state ?? "idle",
     lastRun:
       lastRun == null
         ? undefined
         : {
             runId: lastRun.runId ?? 0,
-            status: lastRun.status ?? 'unknown',
+            status: lastRun.status ?? "unknown",
             planKind: lastRun.planKind,
             fallbackUsed: lastRun.fallbackUsed ?? false,
             fallbackReason: lastRun.fallbackReason,
@@ -55,8 +68,8 @@ export function normalizeWatchStatus(payload: IndexWatchStatusPayload | null | u
             coalescedWhileRunning: lastRun.coalescedWhileRunning,
             pendingRunReplacedCount: lastRun.pendingRunReplacedCount,
             phaseTimingsMs: lastRun.phaseTimingsMs,
-            semanticStatus: lastRun.semanticStatus ?? 'unknown',
+            semanticStatus: lastRun.semanticStatus ?? "unknown",
             staleSemanticDropped: lastRun.staleSemanticDropped,
           },
-  }
+  };
 }

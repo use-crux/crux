@@ -8,42 +8,42 @@ Your model cannot answer questions about your own docs: it has never seen them, 
 ## Minimal RAG
 
 ```ts
-import { prompt } from '@use-crux/core'
-import { embedding } from '@use-crux/openai'
-import { knowledgeBase } from '@use-crux/core/retrieval'
-import { inMemoryStorage } from '@use-crux/core/storage'
-import { z } from 'zod'
+import { prompt } from "@use-crux/core";
+import { embedding } from "@use-crux/openai";
+import { knowledgeBase } from "@use-crux/core/retrieval";
+import { inMemoryStorage } from "@use-crux/core/storage";
+import { z } from "zod";
 
 const docs = knowledgeBase({
-  id: 'docs',
+  id: "docs",
   storage: inMemoryStorage(),
   embeddings: embedding({
-    name: 'docs',
-    model: 'text-embedding-3-small',
+    name: "docs",
+    model: "text-embedding-3-small",
   }),
-})
+});
 
 await docs.index([
   {
-    namespace: 'docs',
-    sourceId: 'refunds.md',
-    content: 'Refunds are available within 30 days of purchase.',
-    metadata: { section: 'policy' },
+    namespace: "docs",
+    sourceId: "refunds.md",
+    content: "Refunds are available within 30 days of purchase.",
+    metadata: { section: "policy" },
   },
-])
+]);
 
 export const answerDocs = prompt({
-  id: 'answer-docs',
+  id: "answer-docs",
   use: [
     docs.grounding({
       query: ({ input }) => input.question as string,
-      citations: { required: true, quotes: 'required' },
+      citations: { required: true, quotes: "required" },
     }),
   ],
   input: z.object({ question: z.string() }),
-  system: 'Answer only from the retrieved docs.',
+  system: "Answer only from the retrieved docs.",
   prompt: ({ input }) => input.question,
-})
+});
 ```
 
 ## When To Drop Down A Layer
@@ -56,53 +56,56 @@ knowledgeBase() -> retriever() -> retrievalRecipe() -> grounding()
 
 Each layer exposes the layer below it. Start with a knowledge base for normal RAG, drop down to a retriever for custom search, use a recipe when one search pass is not enough, and use grounding when an answer must cite allowed evidence.
 
-| Primitive | Job | Start here |
-| --- | --- | --- |
-| `knowledgeBase()` | Own indexing, storage, embeddings, lifecycle, retrieval, tools, and scoping. | [Querying](/docs/guides/retrieval/querying) |
-| `retriever()` | Query indexed knowledge or a custom backend and return scored hits. | [Querying](/docs/guides/retrieval/querying) |
-| `retrievalRecipe()` | Compose named query fanout, retrieval, reranking, parent expansion, and compression. | [Recipes](/docs/guides/retrieval/recipes) |
-| `grounding()` | Inject evidence, expose search tools, and validate citations. | [Grounding](/docs/guides/retrieval/grounding) |
-| `corpus()` / `indexer()` | Build lower-level write paths when you need direct control. | [Indexing](/docs/guides/retrieval/indexing) |
+| Primitive                | Job                                                                                  | Start here                                    |
+| ------------------------ | ------------------------------------------------------------------------------------ | --------------------------------------------- |
+| `knowledgeBase()`        | Own indexing, storage, embeddings, lifecycle, retrieval, tools, and scoping.         | [Querying](/docs/guides/retrieval/querying)   |
+| `retriever()`            | Query indexed knowledge or a custom backend and return scored hits.                  | [Querying](/docs/guides/retrieval/querying)   |
+| `retrievalRecipe()`      | Compose named query fanout, retrieval, reranking, parent expansion, and compression. | [Recipes](/docs/guides/retrieval/recipes)     |
+| `grounding()`            | Inject evidence, expose search tools, and validate citations.                        | [Grounding](/docs/guides/retrieval/grounding) |
+| `corpus()` / `indexer()` | Build lower-level write paths when you need direct control.                          | [Indexing](/docs/guides/retrieval/indexing)   |
 
 ## Inspect And Replace Layers
 
 A knowledge base is a facade, not a closed abstraction:
 
 ```ts
-const inspection = docs.inspect()
-const direct = docs.retriever({ limit: 6 })
+const inspection = docs.inspect();
+const direct = docs.retriever({ limit: 6 });
 const recipe = docs.recipe({
-  id: 'docs-answer',
-  steps: [retrieve({ limit: 20 }), rerank({ engine: judgeReranker({ name: 'docs-judge', model }), topK: 8 })],
-})
-const tools = docs.tools({ prefix: 'docs', include: ['search', 'getSource'] })
+  id: "docs-answer",
+  steps: [
+    retrieve({ limit: 20 }),
+    rerank({ engine: judgeReranker({ name: "docs-judge", model }), topK: 8 }),
+  ],
+});
+const tools = docs.tools({ prefix: "docs", include: ["search", "getSource"] });
 ```
 
 You can replace any layer:
 
 ```ts
-import { retriever } from '@use-crux/core/retrieval'
+import { retriever } from "@use-crux/core/retrieval";
 
 const searchApi = retriever({
-  id: 'search-api',
-  namespace: 'docs',
+  id: "search-api",
+  namespace: "docs",
   async retrieve(query, options) {
     const results = await internalSearch.search({
       query,
       limit: options.limit ?? 5,
       filter: options.filter,
-    })
+    });
 
     return results.map((result) => ({
-      namespace: 'docs',
+      namespace: "docs",
       source: { id: result.documentId, url: result.url },
       chunkId: result.sectionId,
       content: result.text,
       metadata: result.metadata,
       score: result.score,
-    }))
+    }));
   },
-})
+});
 ```
 
 ## Recipes For Stronger Retrieval
@@ -110,36 +113,47 @@ const searchApi = retriever({
 Use a named recipe when a raw retriever needs broader recall, model-backed ranking, parent context, or prompt-budget compression:
 
 ```ts
-import { compressToBudget, fanout, retrievalRecipe, retrieve, rerank } from '@use-crux/core/retrieval'
+import {
+  compressToBudget,
+  fanout,
+  retrievalRecipe,
+  retrieve,
+  rerank,
+} from "@use-crux/core/retrieval";
 
 const docsAnswer = retrievalRecipe({
-  id: 'docs-answer',
+  id: "docs-answer",
   retriever: docs.retriever(),
   model,
   steps: [
     fanout({ maxQueries: 4 }),
     retrieve({ limit: 30 }),
-    rerank({ engine: judgeReranker({ name: 'docs-judge', model }), topK: 8 }),
+    rerank({ engine: judgeReranker({ name: "docs-judge", model }), topK: 8 }),
     compressToBudget({ tokens: 3500 }),
   ],
-})
+});
 
-const hits = await docsAnswer.retrieve('How do enterprise refunds work?')
-const { trace } = await docsAnswer.retrieveWithTrace('How do enterprise refunds work?')
+const hits = await docsAnswer.retrieve("How do enterprise refunds work?");
+const { trace } = await docsAnswer.retrieveWithTrace(
+  "How do enterprise refunds work?",
+);
 ```
 
 Recipes also support federation:
 
 ```ts
 const answer = retrievalRecipe({
-  id: 'support-and-docs',
+  id: "support-and-docs",
   retriever: [
     { retriever: docs.retriever(), weight: 1 },
     { retriever: supportTickets, weight: 0.5 },
   ],
-  onSourceError: 'skip-with-warning',
-  steps: [retrieve({ limit: 20 }), rerank({ engine: judgeReranker({ name: 'docs-judge', model }), topK: 8 })],
-})
+  onSourceError: "skip-with-warning",
+  steps: [
+    retrieve({ limit: 20 }),
+    rerank({ engine: judgeReranker({ name: "docs-judge", model }), topK: 8 }),
+  ],
+});
 ```
 
 ## Tenancy And Lifecycle
@@ -147,44 +161,63 @@ const answer = retrievalRecipe({
 Use scopes when one knowledge base definition serves multiple namespaces. Isolation is structural: scoped handles bind storage keys to the namespace instead of relying on a runtime filter.
 
 ```ts
-const tenantDocs = docs.scope({ namespace: `tenant:${tenantId}` })
+const tenantDocs = docs.scope({ namespace: `tenant:${tenantId}` });
 
-await tenantDocs.reindex(sourceDocuments)
-await tenantDocs.remove('old-policy.md')
+await tenantDocs.reindex(sourceDocuments);
+await tenantDocs.remove("old-policy.md");
 
-const status = tenantDocs.inspect().lifecycle
+const status = tenantDocs.inspect().lifecycle;
 ```
 
 Removed sources become unretrievable immediately. If inactive vector rows are retained by policy or adapter limits, `inspect()` reports that retention.
 
-## Quality
+## Evals
 
-RAG evaluation lives in the Quality system, not in a separate `ragEval` module:
-
-```ts
-import { evaluate, scorers, target } from '@use-crux/core/quality'
-
-await evaluate({
-  task: target.retrievalRecipe(docsAnswer, {
-    query: ({ question }) => question,
-  }),
-  scorers: [
-    scorers.rag.recallAtK(5),
-    scorers.rag.mrr(),
-    scorers.rag.citationValidity(),
-  ],
-})
-```
+Test the callable production `generate.task()` or `stream.task()` that uses
+your retriever. Cases stay typed from the prompt input, and checks can assert
+on structured answers and citations. See the [Evals guide](/docs/guides/evals).
 
 ## Related
 
 <Cards>
-  <Card title="Embeddings" description="Dense, sparse, hybrid, preprocessing, truncation, retries, rate limits, and cache." href="/docs/guides/retrieval/embeddings" />
-  <Card title="Ingestion" description="Text, files, URLs, built-in parsers, OCR hooks, and custom loaders." href="/docs/guides/retrieval/ingestion" />
-  <Card title="Indexing" description="Lower-level indexing, transforms, chunking, cache, and dry runs." href="/docs/guides/retrieval/indexing" />
-  <Card title="Chunkers" description="Structured, plain text, parent-child, semantic, and custom chunking strategies." href="/docs/guides/retrieval/chunkers" />
-  <Card title="Querying" description="Knowledge bases, direct retrievers, search modes, tools, and custom backends." href="/docs/guides/retrieval/querying" />
-  <Card title="Recipes" description="Named query fanout, retrieve, rerank, parent expansion, compression, and federation." href="/docs/guides/retrieval/recipes" />
-  <Card title="Grounding" description="When retrieval must become cited, validated evidence." href="/docs/guides/retrieval/grounding" />
-  <Card title="Corpus Sync" description="Repeated indexing jobs, stale deletion, dry runs, source ledgers, and cache control." href="/docs/guides/retrieval/corpus-sync" />
+  <Card
+    title="Embeddings"
+    description="Dense, sparse, hybrid, preprocessing, truncation, retries, rate limits, and cache."
+    href="/docs/guides/retrieval/embeddings"
+  />
+  <Card
+    title="Ingestion"
+    description="Text, files, URLs, built-in parsers, OCR hooks, and custom loaders."
+    href="/docs/guides/retrieval/ingestion"
+  />
+  <Card
+    title="Indexing"
+    description="Lower-level indexing, transforms, chunking, cache, and dry runs."
+    href="/docs/guides/retrieval/indexing"
+  />
+  <Card
+    title="Chunkers"
+    description="Structured, plain text, parent-child, semantic, and custom chunking strategies."
+    href="/docs/guides/retrieval/chunkers"
+  />
+  <Card
+    title="Querying"
+    description="Knowledge bases, direct retrievers, search modes, tools, and custom backends."
+    href="/docs/guides/retrieval/querying"
+  />
+  <Card
+    title="Recipes"
+    description="Named query fanout, retrieve, rerank, parent expansion, compression, and federation."
+    href="/docs/guides/retrieval/recipes"
+  />
+  <Card
+    title="Grounding"
+    description="When retrieval must become cited, validated evidence."
+    href="/docs/guides/retrieval/grounding"
+  />
+  <Card
+    title="Corpus Sync"
+    description="Repeated indexing jobs, stale deletion, dry runs, source ledgers, and cache control."
+    href="/docs/guides/retrieval/corpus-sync"
+  />
 </Cards>

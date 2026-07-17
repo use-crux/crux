@@ -8,24 +8,24 @@ Prompt strings, input shapes, output schemas, and model settings tend to scatter
 The prompt does not call a model by itself. Adapters such as `@use-crux/ai`, `@use-crux/openai`, `@use-crux/google`, and `@use-crux/anthropic` execute the same prompt definition against their SDKs.
 
 ```ts twoslash title="support-prompt.ts"
-import { context, prompt } from '@use-crux/core'
-import { z } from 'zod'
+import { context, prompt } from "@use-crux/core";
+import { z } from "zod";
 
 const brand = context({
-  id: 'brand',
-  system: 'Use a concise, helpful support tone.',
-})
+  id: "brand",
+  system: "Use a concise, helpful support tone.",
+});
 
 export const answerSupport = prompt({
-  id: 'answer-support',
+  id: "answer-support",
   use: [brand],
   input: z.object({
     question: z.string(),
   }),
-  system: 'You are a product support assistant.',
+  system: "You are a product support assistant.",
   prompt: ({ input }) => input.question,
   settings: { temperature: 0.2 },
-})
+});
 ```
 
 ## The Mental Model
@@ -34,29 +34,29 @@ A prompt owns the call contract.
 
 ```ts
 prompt({
-  id: 'answer-support',
+  id: "answer-support",
   use: [brand, docs, memory],
   input: InputSchema,
   output: OutputSchema,
-  system: 'Who the assistant is.',
+  system: "Who the assistant is.",
   prompt: ({ input }) => `What the user asked: ${input.question}`,
-})
+});
 ```
 
 Think of the fields this way:
 
-| Field | What it owns |
-|---|---|
-| `id` | Stable identity for logs, evals, cache keys, and devtools |
-| `input` | Runtime data this prompt accepts |
-| `output` | Structured output schema. Omit it for plain text generation. |
-| `system` | The prompt's role, policy, and high-level instructions |
-| `prompt` | The user/task message for single-turn calls |
-| `messages` | Full message history for chat or few-shot calls |
-| `use` | Reusable capabilities: [contexts](/docs/guides/contexts), [memory](/docs/guides/memory), [retrieval](/docs/guides/retrieval), [grounding](/docs/guides/retrieval/grounding), [blackboards](/docs/guides/agents/blackboard), [skills](/docs/guides/skills), and [custom contributors](/docs/reference/crux-core/prompts#custom-contributor-entries) |
-| `tools` | Prompt-local tools for this call |
-| `settings` | Default generation settings such as temperature and max tokens |
-| `tests` | Inline eval cases for CI and local regression checks |
+| Field      | What it owns                                                                                                                                                                                                                                                                                                                                       |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`       | Stable identity for logs, evals, cache keys, and devtools                                                                                                                                                                                                                                                                                          |
+| `input`    | Runtime data this prompt accepts                                                                                                                                                                                                                                                                                                                   |
+| `output`   | Structured output schema. Omit it for plain text generation.                                                                                                                                                                                                                                                                                       |
+| `system`   | The prompt's role, policy, and high-level instructions                                                                                                                                                                                                                                                                                             |
+| `prompt`   | The user/task message for single-turn calls                                                                                                                                                                                                                                                                                                        |
+| `messages` | Full message history for chat or few-shot calls                                                                                                                                                                                                                                                                                                    |
+| `use`      | Reusable capabilities: [contexts](/docs/guides/contexts), [memory](/docs/guides/memory), [retrieval](/docs/guides/retrieval), [grounding](/docs/guides/retrieval/grounding), [blackboards](/docs/guides/agents/blackboard), [skills](/docs/guides/skills), and [custom contributors](/docs/reference/crux-core/prompts#custom-contributor-entries) |
+| `tools`    | Prompt-local tools for this call                                                                                                                                                                                                                                                                                                                   |
+| `settings` | Default generation settings such as temperature and max tokens                                                                                                                                                                                                                                                                                     |
+| `tests`    | Inline eval cases for CI and local regression checks                                                                                                                                                                                                                                                                                               |
 
 The normal path is composition through `use`. Manual helpers like `asContext()` and `asTools()` exist for advanced or framework-specific wiring, but users should not need them for ordinary Crux prompts.
 
@@ -67,33 +67,33 @@ Entries in `use` can add instructions, tools, constraints, metadata, or lifecycl
 Omit `output` when the model should return text.
 
 ```ts twoslash title="text-prompt.ts"
-import { prompt } from '@use-crux/core'
-import { z } from 'zod'
+import { prompt } from "@use-crux/core";
+import { z } from "zod";
 
 const rewrite = prompt({
-  id: 'rewrite',
+  id: "rewrite",
   input: z.object({
     text: z.string(),
-    tone: z.enum(['clear', 'friendly', 'direct']),
+    tone: z.enum(["clear", "friendly", "direct"]),
   }),
-  system: 'Rewrite text without changing the meaning.',
+  system: "Rewrite text without changing the meaning.",
   prompt: ({ input }) => `Tone: ${input.tone}\n\n${input.text}`,
-})
+});
 ```
 
 ```ts title="run.ts"
-import { generate } from '@use-crux/ai'
-import { openai } from '@ai-sdk/openai'
+import { generate } from "@use-crux/ai";
+import { openai } from "@ai-sdk/openai";
 
 const result = await generate(rewrite, {
-  model: openai('gpt-4o-mini'),
+  model: openai("gpt-4o-mini"),
   input: {
-    text: 'The deployment failed due to credentials.',
-    tone: 'friendly',
+    text: "The deployment failed due to credentials.",
+    tone: "friendly",
   },
-})
+});
 
-result.text
+result.text;
 ```
 
 ## Structured Output
@@ -101,36 +101,36 @@ result.text
 Add `output` when downstream code needs typed data. Adapters switch to structured generation and validate the result with Zod.
 
 ```ts twoslash title="structured-prompt.ts"
-import { prompt } from '@use-crux/core'
-import { z } from 'zod'
+import { prompt } from "@use-crux/core";
+import { z } from "zod";
 
 const classifyTicket = prompt({
-  id: 'classify-ticket',
+  id: "classify-ticket",
   input: z.object({
     subject: z.string(),
     body: z.string(),
   }),
   output: z.object({
-    category: z.enum(['billing', 'auth', 'bug', 'other']),
-    urgency: z.enum(['low', 'normal', 'high']),
+    category: z.enum(["billing", "auth", "bug", "other"]),
+    urgency: z.enum(["low", "normal", "high"]),
     summary: z.string(),
   }),
-  system: 'Classify support tickets for routing.',
+  system: "Classify support tickets for routing.",
   prompt: ({ input }) => `${input.subject}\n\n${input.body}`,
-})
+});
 ```
 
 ```ts title="run.ts"
 const result = await generate(classifyTicket, {
   model,
   input: {
-    subject: 'SSO stopped working',
-    body: 'Our Okta login fails after rotating certificates.',
+    subject: "SSO stopped working",
+    body: "Our Okta login fails after rotating certificates.",
   },
-})
+});
 
-result.object.category
-result.object.urgency
+result.object.category;
+result.object.urgency;
 ```
 
 ## Compose Capabilities With `use`
@@ -138,45 +138,47 @@ result.object.urgency
 `use` is the main Crux composition surface. Put the capability in the array; Crux resolves the right context, tools, constraints, metadata, and lifecycle behavior.
 
 ```ts title="composition.ts"
-import { prompt, context } from '@use-crux/core'
-import { memory, recentMessages, facts } from '@use-crux/core/memory'
-import { grounding } from '@use-crux/core/retrieval'
-import { skill } from '@use-crux/core/skill/node'
+import { prompt, context } from "@use-crux/core";
+import { memory, recentMessages, facts } from "@use-crux/core/memory";
+import { grounding } from "@use-crux/core/retrieval";
+import { skill } from "@use-crux/core/skill/node";
 
 const policy = context({
-  id: 'support-policy',
-  system: 'Do not invent product behavior. Ask for clarification when needed.',
-})
+  id: "support-policy",
+  system: "Do not invent product behavior. Ask for clarification when needed.",
+});
 
 const userMemory = memory({
-  id: 'user-memory',
+  id: "user-memory",
   store,
   namespace: ({ input }) => `user:${input.userId}`,
   blocks: [
-    recentMessages({ id: 'recent', maxMessages: 8 }),
-    facts({ id: 'facts', embed: dense }),
+    recentMessages({ id: "recent", maxMessages: 8 }),
+    facts({ id: "facts", embed: dense }),
   ],
-})
+});
 
 const docsGrounding = grounding({
-  id: 'docs-grounding',
+  id: "docs-grounding",
   retriever: docs,
-  inject: 'both',
+  inject: "both",
   citations: true,
-})
+});
 
-const supportTroubleshooting = skill.fromFile('./skills/support-troubleshooting/SKILL.md')
+const supportTroubleshooting = skill.fromFile(
+  "./skills/support-troubleshooting/SKILL.md",
+);
 
 const support = prompt({
-  id: 'support',
+  id: "support",
   use: [policy, userMemory, docsGrounding, supportTroubleshooting],
   input: z.object({
     userId: z.string(),
     question: z.string(),
   }),
-  system: 'Answer the support question.',
+  system: "Answer the support question.",
   prompt: ({ input }) => input.question,
-})
+});
 ```
 
 This is intentionally boring at the call site. The prompt author names the dependencies; each primitive decides what it contributes.
@@ -187,21 +189,22 @@ If several prompts should share the same policy plus the same [retrieval](/docs/
 
 ```ts title="capability-context.ts"
 const supportKnowledge = context({
-  id: 'support-knowledge',
+  id: "support-knowledge",
   use: [docsGrounding, userMemory, supportTroubleshooting],
-  system: 'Use product docs first. Use memory only for user-specific details. Load the troubleshooting skill when the question requires diagnostic steps.',
-})
+  system:
+    "Use product docs first. Use memory only for user-specific details. Load the troubleshooting skill when the question requires diagnostic steps.",
+});
 
 const reply = prompt({
-  id: 'reply',
+  id: "reply",
   use: [supportKnowledge],
   input: z.object({
     userId: z.string(),
     question: z.string(),
   }),
-  system: 'You are a support assistant.',
+  system: "You are a support assistant.",
   prompt: ({ input }) => input.question,
-})
+});
 ```
 
 Use direct `prompt({ use: [...] })` for one-off wiring. Use `context({ use: [...] })` when you want a reusable product capability.
@@ -211,35 +214,35 @@ Use direct `prompt({ use: [...] })` for one-off wiring. Use `context({ use: [...
 Use `system` + `prompt` for the common single-turn shape.
 
 ```ts twoslash title="single-turn.ts"
-import { prompt } from '@use-crux/core'
-import { z } from 'zod'
+import { prompt } from "@use-crux/core";
+import { z } from "zod";
 
 const titleIdeas = prompt({
-  id: 'title-ideas',
+  id: "title-ideas",
   input: z.object({ topic: z.string() }),
-  system: 'Generate practical article titles.',
+  system: "Generate practical article titles.",
   prompt: ({ input }) => `Topic: ${input.topic}`,
-})
+});
 ```
 
 Use `messages` when you need a full chat transcript, few-shot examples, or role-specific turns.
 
 ```ts twoslash title="messages.ts"
-import { prompt } from '@use-crux/core'
-import { z } from 'zod'
+import { prompt } from "@use-crux/core";
+import { z } from "zod";
 
 const chatReply = prompt({
-  id: 'chat-reply',
+  id: "chat-reply",
   input: z.object({
     userMessage: z.string(),
   }),
   messages: ({ input }) => [
-    { role: 'system', content: 'Answer as a careful assistant.' },
-    { role: 'user', content: 'Answer in one sentence.' },
-    { role: 'assistant', content: 'I will keep responses concise.' },
-    { role: 'user', content: input.userMessage },
+    { role: "system", content: "Answer as a careful assistant." },
+    { role: "user", content: "Answer in one sentence." },
+    { role: "assistant", content: "I will keep responses concise." },
+    { role: "user", content: input.userMessage },
   ],
-})
+});
 ```
 
 Do not define `system` or `prompt` together with `messages` unless the adapter guide explicitly documents that combination. `messages` is for cases where the message list is the source of truth.
@@ -251,45 +254,45 @@ Use `.resolve()` or `.inspect()` when debugging composition. This is the fastest
 ```ts title="inspect.ts"
 const resolved = await support.resolve({
   input: {
-    userId: 'user_123',
-    question: 'How do I configure SSO?',
+    userId: "user_123",
+    question: "How do I configure SSO?",
   },
-  provider: 'openai',
-  modelId: 'gpt-4o',
-})
+  provider: "openai",
+  modelId: "gpt-4o",
+});
 
-console.log(resolved.system)
-console.log(Object.keys(resolved.tools ?? {}))
+console.log(resolved.system);
+console.log(Object.keys(resolved.tools ?? {}));
 ```
 
 ```ts title="budget-debug.ts"
 const inspection = await support.inspect({
   input: {
-    userId: 'user_123',
-    question: 'How do I configure SSO?',
+    userId: "user_123",
+    question: "How do I configure SSO?",
   },
   tokenBudget: 4000,
-})
+});
 
-console.log(inspection.system.parts)
-console.log(inspection.droppedContexts)
-console.log(inspection.excludedContexts)
+console.log(inspection.system.parts);
+console.log(inspection.droppedContexts);
+console.log(inspection.excludedContexts);
 ```
 
 ## What To Reach For
 
-| Need | Use |
-|---|---|
-| One model call with typed input/output | `prompt()` |
-| Reusable instructions or input fields | [`context()`](/docs/guides/contexts) in `use` |
-| Runtime conditional instructions | [`context({ when })`](/docs/guides/contexts), [`when()`](/docs/reference/crux-core/contexts), or [`match()`](/docs/reference/crux-core/contexts) |
-| Durable user/session recall | [`memory()`](/docs/guides/memory) in `use` |
-| Retrieve documents as evidence | [`retriever()`](/docs/guides/retrieval/querying), [`retrievalRecipe()`](/docs/guides/retrieval/recipes), or [`grounding()`](/docs/guides/retrieval/grounding) in `use` |
-| Markdown instruction sets loaded on demand | [`skill()`](/docs/guides/skills) in `use` |
-| Shared coordination state | [`blackboard()`](/docs/guides/agents/blackboard) in `use` |
-| Citation and answer constraints | [`grounding()`](/docs/guides/retrieval/grounding) or [`constraints`](/docs/guides/safety/constraints) |
-| CI regression testing | `tests` or [`evaluate()`](/docs/guides/quality) |
-| Provider-specific prompt tweaks | `adapt` |
+| Need                                       | Use                                                                                                                                                                    |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| One model call with typed input/output     | `prompt()`                                                                                                                                                             |
+| Reusable instructions or input fields      | [`context()`](/docs/guides/contexts) in `use`                                                                                                                          |
+| Runtime conditional instructions           | [`context({ when })`](/docs/guides/contexts), [`when()`](/docs/reference/crux-core/contexts), or [`match()`](/docs/reference/crux-core/contexts)                       |
+| Durable user/session recall                | [`memory()`](/docs/guides/memory) in `use`                                                                                                                             |
+| Retrieve documents as evidence             | [`retriever()`](/docs/guides/retrieval/querying), [`retrievalRecipe()`](/docs/guides/retrieval/recipes), or [`grounding()`](/docs/guides/retrieval/grounding) in `use` |
+| Markdown instruction sets loaded on demand | [`skill()`](/docs/guides/skills) in `use`                                                                                                                              |
+| Shared coordination state                  | [`blackboard()`](/docs/guides/agents/blackboard) in `use`                                                                                                              |
+| Citation and answer constraints            | [`grounding()`](/docs/guides/retrieval/grounding) or [`constraints`](/docs/guides/safety/constraints)                                                                  |
+| CI regression testing                      | `tests` or [`evaluate()`](/docs/guides/evals)                                                                                                                          |
+| Provider-specific prompt tweaks            | `adapt`                                                                                                                                                                |
 
 ## How This Fits With The Rest Of Crux
 
@@ -300,13 +303,29 @@ console.log(inspection.excludedContexts)
 - **[Blackboards](/docs/guides/agents/blackboard)** inject shared state and focused state-update tools for multi-agent coordination.
 - **[Tools](/docs/guides/tools)** can live on prompts, contexts, or injected primitives.
 - **[Semantic response cache](/docs/guides/prompts/semantic-cache)** reuses safe prompt results for similar inputs.
-- **[Quality](/docs/guides/quality)** runs prompt and RAG regression evaluations in CI and devtools.
+- **[Eval](/docs/guides/evals)** runs prompt and RAG regression evaluations in CI and devtools.
 
 ## Pick A Topic
 
 <Cards>
-  <Card title="Execution" description="Run prompts with each SDK adapter: generate, stream, multi-turn, and framework adapters." href="/docs/guides/prompts/execution" />
-  <Card title="Semantic Response Cache" description="Use dense embeddings to reuse safe prompt results across similar requests." href="/docs/guides/prompts/semantic-cache" />
-  <Card title="Contexts" description="Compose reusable instructions, runtime data, tools, and nested capabilities." href="/docs/guides/contexts" />
-  <Card title="API Reference" description="Full prompt() signature, options, methods, and types." href="/docs/reference/crux-core/prompts" />
+  <Card
+    title="Execution"
+    description="Run prompts with each SDK adapter: generate, stream, multi-turn, and framework adapters."
+    href="/docs/guides/prompts/execution"
+  />
+  <Card
+    title="Semantic Response Cache"
+    description="Use dense embeddings to reuse safe prompt results across similar requests."
+    href="/docs/guides/prompts/semantic-cache"
+  />
+  <Card
+    title="Contexts"
+    description="Compose reusable instructions, runtime data, tools, and nested capabilities."
+    href="/docs/guides/contexts"
+  />
+  <Card
+    title="API Reference"
+    description="Full prompt() signature, options, methods, and types."
+    href="/docs/reference/crux-core/prompts"
+  />
 </Cards>

@@ -1,6 +1,6 @@
 /** Node realpath-safe authored Case-file resolution relative to an Eval source. */
 
-import { realpath, stat } from "node:fs/promises";
+import { lstat, readlink, realpath, stat } from "node:fs/promises";
 import {
   basename,
   dirname,
@@ -29,6 +29,32 @@ export interface ResolveAuthoredCaseFileOptions {
   readonly sidecarFile: string;
   readonly authoredPath: string;
   readonly registerWatchDependency?: (canonicalPath: string) => void;
+}
+
+/** Resolve the generated sibling sidecar against the real project root. */
+export async function resolveAutomaticCaseFile(
+  projectRoot: string,
+  sidecarFile: string,
+): Promise<{
+  readonly absolutePath: string;
+  readonly canonicalPath: string;
+  readonly exists: boolean;
+}> {
+  const root = await realpath(projectRoot).catch((error: unknown) => {
+    throw new EvalCaseFileError(
+      sidecarFile,
+      `cannot realpath the configured project root (${errorMessage(error)})`,
+    );
+  });
+  const lexicalTarget = resolve(root, sidecarFile);
+  assertAutomaticContained(root, lexicalTarget, sidecarFile);
+  const target = await realpathOrNearest(lexicalTarget);
+  assertAutomaticContained(root, target.path, sidecarFile);
+  return Object.freeze({
+    absolutePath: target.path,
+    canonicalPath: projectRelative(root, lexicalTarget),
+    exists: target.exists,
+  });
 }
 
 /** Resolve an authored Case file and return its canonical project identity. */
@@ -136,6 +162,15 @@ async function realpathOrNearest(
   } catch (error) {
     if (!isMissing(error)) throw error;
   }
+  const info = await lstat(absolutePath).catch((error: unknown) => {
+    if (isMissing(error)) return undefined;
+    throw error;
+  });
+  if (info?.isSymbolicLink()) {
+    return realpathOrNearest(
+      resolve(dirname(absolutePath), await readlink(absolutePath)),
+    );
+  }
   const suffix: string[] = [];
   let cursor = absolutePath;
   for (;;) {
@@ -149,6 +184,25 @@ async function realpathOrNearest(
       throw new Error(`No existing ancestor for ${absolutePath}`);
     suffix.unshift(basename(cursor));
     cursor = parent;
+  }
+}
+
+function assertAutomaticContained(
+  root: string,
+  target: string,
+  sidecarFile: string,
+): void {
+  const fromRoot = relative(root, target);
+  if (
+    fromRoot === ".." ||
+    fromRoot.startsWith("../") ||
+    fromRoot.startsWith("..\\") ||
+    isAbsolute(fromRoot)
+  ) {
+    throw new EvalCaseFileError(
+      sidecarFile,
+      "automatic Review sidecar must stay inside the configured project root",
+    );
   }
 }
 

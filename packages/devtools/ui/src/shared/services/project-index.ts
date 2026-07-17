@@ -1,9 +1,14 @@
-import type { ProjectIndexData } from '@/types'
-import { fetchJson } from './http'
+import type { ProjectIndexData } from "@/types";
+import { fetchJson } from "./http";
 
 /** Fetch and normalize the shared Project Index snapshot. */
-export async function fetchProjectIndex(signal?: AbortSignal): Promise<ProjectIndexData> {
-  const payload = await fetchJson<Partial<ProjectIndexData> | null>('/api/index', signal)
+export async function fetchProjectIndex(
+  signal?: AbortSignal,
+): Promise<ProjectIndexData> {
+  const payload = await fetchJson<Partial<ProjectIndexData> | null>(
+    "/api/index",
+    signal,
+  );
   return {
     schemaVersion: payload?.schemaVersion ?? 1,
     prompts: payload?.prompts ?? [],
@@ -17,5 +22,5 @@ export async function fetchProjectIndex(signal?: AbortSignal): Promise<ProjectIn
     diagnostics: payload?.diagnostics ?? [],
     lintFindings: payload?.lintFindings ?? [],
     sources: payload?.sources ?? [],
-  }
+  };
 }

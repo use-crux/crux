@@ -1,6 +1,6 @@
 ---
 title: Debug why a model turn behaved badly
-description: Use Run Detail Explain to inspect what shaped one model turn, find the source to change, and protect the behavior with Quality assertions.
+description: Use Run Detail Explain to inspect what shaped one model turn, find the source to change, and protect the behavior with Eval assertions.
 ---
 
 Bad AI behavior usually starts before the final text: missing context, dropped
@@ -96,30 +96,38 @@ Assert that the required context reaches the model:
 
 ```ts
 expect: (ctx) => {
-  ctx.expect.decisionReport.context.toHaveDisposition('context:customerProfile', 'active', {
-    reasonCode: 'context.active',
-  })
-}
+  ctx.expect.decisionReport.context.toHaveDisposition(
+    "context:customerProfile",
+    "active",
+    {
+      reasonCode: "context.active",
+    },
+  );
+};
 ```
 
 Assert that stale cached evidence is rejected:
 
 ```ts
 expect: (ctx) => {
-  ctx.expect.decisionReport.cache.toHaveFreshnessAcceptance('context:customerProfile', 'rejected', {
-    reasonCode: 'cache.freshness.rejected',
-  })
-}
+  ctx.expect.decisionReport.cache.toHaveFreshnessAcceptance(
+    "context:customerProfile",
+    "rejected",
+    {
+      reasonCode: "cache.freshness.rejected",
+    },
+  );
+};
 ```
 
 Assert that routing picked the intended route:
 
 ```ts
 expect: (ctx) => {
-  ctx.expect.decisionReport.routing.toHaveOutcome('route:billing', 'selected', {
-    reasonCode: 'routing.router.selected',
-  })
-}
+  ctx.expect.decisionReport.routing.toHaveOutcome("route:billing", "selected", {
+    reasonCode: "routing.router.selected",
+  });
+};
 ```
 
 ## 8. Interpret missing evidence honestly

@@ -8,23 +8,23 @@ Cost tracking answers a different question than token budgeting. Token budgets p
 Use `withCostTracking()` when you want model spend to show up in devtools, the CLI, the TUI, and OpenTelemetry without writing provider-specific accounting code.
 
 ```ts
-import { config } from '@use-crux/core'
-import { modelPricing, withCostTracking } from '@use-crux/core/cost'
+import { config } from "@use-crux/core";
+import { modelPricing, withCostTracking } from "@use-crux/core/cost";
 
 const costs = withCostTracking({
   pricing: modelPricing({
-    'gpt-4o': { input: 2.5, output: 10 },
-    'claude-sonnet-4-20250514': { input: 3, output: 15 },
+    "gpt-4o": { input: 2.5, output: 10 },
+    "claude-sonnet-4-20250514": { input: 3, output: 15 },
   }),
   budget: {
     warn: 1,
     limit: 5,
   },
-})
+});
 
 config({
   plugins: [costs.asPlugin()],
-})
+});
 ```
 
 ## Actual cost vs estimates
@@ -35,11 +35,11 @@ When `_meta.cost` is missing, Crux estimates from token usage and the pricing ta
 
 ```ts
 modelPricing({
-  'gpt-4o': {
+  "gpt-4o": {
     input: 2.5, // USD per 1M input tokens
     output: 10, // USD per 1M output tokens
   },
-})
+});
 ```
 
 Estimates are useful for dashboards and guardrails, but they are still estimates. If your provider changes pricing, update the table.
@@ -49,13 +49,13 @@ Estimates are useful for dashboards and guardrails, but they are still estimates
 The tracker keeps an in-memory report for the current runtime process:
 
 ```ts
-const report = costs.getReport()
+const report = costs.getReport();
 
-report.total.cost
-report.byPrompt['support-reply']
-report.byModel['gpt-4o']
-report.byFlow['flow_123']
-report.bySession['session_123']
+report.total.cost;
+report.byPrompt["support-reply"];
+report.byModel["gpt-4o"];
+report.byFlow["flow_123"];
+report.bySession["session_123"];
 ```
 
 Use `costs.reset()` to clear the process report, or `costs.reset(sessionId)` to clear one session.
@@ -70,10 +70,10 @@ const costs = withCostTracking({
     warn: 1,
     limit: 5,
     onLimit(report) {
-      console.error('cost limit exceeded', report.total.cost)
+      console.error("cost limit exceeded", report.total.cost);
     },
   },
-})
+});
 ```
 
 The failed call is still recorded. That makes debugging straightforward: devtools and OTel can show the exact call that crossed the limit.

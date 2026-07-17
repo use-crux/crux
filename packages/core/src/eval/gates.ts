@@ -1,6 +1,6 @@
 /** Eval-specific Gate policy that rejects empty latency declarations. */
 
-import type { Gates } from "../quality/gates";
+import type { Gates } from "./internal/gate-contract";
 
 /** At least one latency ceiling is required when latency policy is present. */
 export type EvalLatencyGate =

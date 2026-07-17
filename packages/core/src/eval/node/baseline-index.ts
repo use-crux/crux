@@ -2,8 +2,8 @@
 
 import { mkdir, readFile, unlink } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
-import { writeFileAtomic } from "../../quality/internal/fs-atomic";
-import { withFileLock } from "../../quality/internal/fs-lock";
+import { writeFileAtomic } from "./fs/atomic";
+import { withFileLock } from "./fs/lock";
 import { fingerprintEvalValue } from "../internal/identity";
 import { parseAndVerifyEvalBaselineV3 } from "../internal/baseline-schema";
 import type { EvalBaselineV3 } from "../internal/baseline-types";

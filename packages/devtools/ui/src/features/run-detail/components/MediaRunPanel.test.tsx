@@ -162,7 +162,9 @@ describe("MediaRunPanel", () => {
     expect(html).toContain("child of media.transcribe");
     expect(html).toContain("child of generation.call");
     // Depth-2 nesting is visibly deeper than depth-1 (padding/indent class).
-    expect(html).toMatch(/pl-6|depth-2|padding-left:\s*1\.5rem|style="[^"]*padding-left:\s*24px/i);
+    expect(html).toMatch(
+      /pl-6|depth-2|padding-left:\s*1\.5rem|style="[^"]*padding-left:\s*24px/i,
+    );
   });
 
   it("renders Catalog join without exposing definition ids", () => {

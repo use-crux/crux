@@ -6,12 +6,12 @@ import (
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/api"
+	"github.com/use-crux/crux/packages/local/internal/inspect"
 	"github.com/use-crux/crux/packages/local/internal/observability"
-	"github.com/use-crux/crux/packages/local/internal/quality"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
-func TestDirectClientQualityRunsGetJSONUsesRegisteredFilters(t *testing.T) {
+func TestDirectClientInspectRunsGetJSONUsesRegisteredFilters(t *testing.T) {
 	ctx := context.Background()
 	obs, err := observability.OpenService(ctx, ":memory:")
 	if err != nil {
@@ -35,11 +35,11 @@ func TestDirectClientQualityRunsGetJSONUsesRegisteredFilters(t *testing.T) {
 	}
 
 	s := store.NewStore()
-	qualitySvc := quality.NewService(s, quality.Dir(t.TempDir())).WithObservability(obs)
-	client := NewDirectClientFromService(NewService(s, qualitySvc))
+	inspectSvc := inspect.NewService(s, inspect.Dir(t.TempDir())).WithObservability(obs)
+	client := NewDirectClientFromService(NewService(s, inspectSvc))
 
-	var runs []api.QualityRunRecord
-	if err := client.GetJSON(ctx, "/api/quality/runs?kind=generation&model=gpt-4o", &runs); err != nil {
+	var runs []api.InspectRunRecord
+	if err := client.GetJSON(ctx, "/api/inspect/runs?kind=generation&model=gpt-4o", &runs); err != nil {
 		t.Fatal(err)
 	}
 	if len(runs) != 1 || runs[0].TraceID != "run_filter_generation" {

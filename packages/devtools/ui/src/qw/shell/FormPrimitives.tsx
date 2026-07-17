@@ -16,49 +16,62 @@
  * file only owns the inline pending UI.
  */
 
-import * as React from 'react'
-import { useFormStatus } from 'react-dom'
-import { Btn, type BtnProps } from './primitives'
+import * as React from "react";
+import { useFormStatus } from "react-dom";
+import { Btn, type BtnProps } from "./primitives";
 
-interface FormSubmitButtonProps extends Omit<BtnProps, 'onClick' | 'type' | 'disabled'> {
+interface FormSubmitButtonProps extends Omit<
+  BtnProps,
+  "onClick" | "type" | "disabled"
+> {
   /** If true, the button stays clickable while pending (rare; the
    *  default is to disable to prevent double-submit). */
-  enabledWhilePending?: boolean
+  enabledWhilePending?: boolean;
   /** Optional explicit busy state — useful when the calling form mixes
    *  controlled async work with a `useActionState` result. */
-  busy?: boolean
+  busy?: boolean;
 }
 
 /** Submit button that knows about its own form's pending state. */
-export function FormSubmitButton({ enabledWhilePending, busy, children, ...rest }: FormSubmitButtonProps) {
-  const { pending } = useFormStatus()
-  const isPending = pending || busy
+export function FormSubmitButton({
+  enabledWhilePending,
+  busy,
+  children,
+  ...rest
+}: FormSubmitButtonProps) {
+  const { pending } = useFormStatus();
+  const isPending = pending || busy;
   return (
-    <Btn {...rest} type="submit" disabled={isPending && !enabledWhilePending} aria-busy={isPending || undefined}>
+    <Btn
+      {...rest}
+      type="submit"
+      disabled={isPending && !enabledWhilePending}
+      aria-busy={isPending || undefined}
+    >
       {children}
     </Btn>
-  )
+  );
 }
 
 /** Inline "Saving…" hint next to a submit button. Renders nothing when
  *  the form is idle. */
 export function FormPendingHint({
-  pendingMessage = 'Saving…',
+  pendingMessage = "Saving…",
   className,
 }: {
-  pendingMessage?: string
-  className?: string
+  pendingMessage?: string;
+  className?: string;
 }) {
-  const { pending } = useFormStatus()
-  if (!pending) return null
+  const { pending } = useFormStatus();
+  if (!pending) return null;
   return (
     <span
       className={className}
       style={{
-        display: 'inline-flex',
-        alignItems: 'center',
+        display: "inline-flex",
+        alignItems: "center",
         gap: 6,
-        color: 'var(--qw-fg-muted)',
+        color: "var(--qw-fg-muted)",
         fontSize: 12,
       }}
       aria-live="polite"
@@ -66,11 +79,11 @@ export function FormPendingHint({
       <span
         aria-hidden
         className="animate-running-pulse inline-block rounded-full"
-        style={{ width: 6, height: 6, background: 'var(--qw-crux)' }}
+        style={{ width: 6, height: 6, background: "var(--qw-crux)" }}
       />
       {pendingMessage}
     </span>
-  )
+  );
 }
 
 /** Disable an entire fieldset while the surrounding form is pending —
@@ -80,15 +93,19 @@ export function FormPendingFieldset({
   className,
   legend,
 }: {
-  children: React.ReactNode
-  className?: string
-  legend?: React.ReactNode
+  children: React.ReactNode;
+  className?: string;
+  legend?: React.ReactNode;
 }) {
-  const { pending } = useFormStatus()
+  const { pending } = useFormStatus();
   return (
-    <fieldset disabled={pending} className={className} style={{ border: 0, padding: 0, margin: 0 }}>
+    <fieldset
+      disabled={pending}
+      className={className}
+      style={{ border: 0, padding: 0, margin: 0 }}
+    >
       {legend && <legend className="sr-only">{legend}</legend>}
       {children}
     </fieldset>
-  )
+  );
 }

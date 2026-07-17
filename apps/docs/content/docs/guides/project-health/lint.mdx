@@ -31,23 +31,23 @@ Most projects should use the recommended profile:
 
 ```ts
 // crux.config.ts
-import { config } from '@use-crux/core'
+import { config } from "@use-crux/core";
 
 export default config({
   lint: {
-    profile: 'recommended',
+    profile: "recommended",
   },
-})
+});
 ```
 
 Profiles are additive:
 
-| Profile | Use it when |
-| --- | --- |
-| `recommended` | You want high-signal findings during normal development. |
-| `strict` | You want stronger production-readiness checks. |
+| Profile        | Use it when                                                     |
+| -------------- | --------------------------------------------------------------- |
+| `recommended`  | You want high-signal findings during normal development.        |
+| `strict`       | You want stronger production-readiness checks.                  |
 | `experimental` | You want early feedback from rules that are still being proven. |
-| `off` | You need to disable index lint findings for a project. |
+| `off`          | You need to disable index lint findings for a project.          |
 
 What the rules cover:
 
@@ -89,9 +89,9 @@ Suppress a finding only when the exception is intentional and the reason will st
 ```ts
 // crux-lint-disable-next-line tool.missing_input_schema -- generated adapter validates externally
 export const generatedTool = tool({
-  id: 'generated',
-  execute: async () => 'ok',
-})
+  id: "generated",
+  execute: async () => "ok",
+});
 ```
 
 File-level suppressions should be rare:
@@ -108,17 +108,17 @@ Use per-rule config when a project needs a different severity or when a rule is 
 
 ```ts
 // crux.config.ts
-import { config } from '@use-crux/core'
+import { config } from "@use-crux/core";
 
 export default config({
   lint: {
-    profile: 'strict',
+    profile: "strict",
     rules: {
-      'definition.missing_eval_coverage': { severity: 'info' },
-      'prompt.missing_output_schema': { enabled: false },
+      "definition.missing_eval_coverage": { severity: "info" },
+      "prompt.missing_output_schema": { enabled: false },
     },
   },
-})
+});
 ```
 
 Keep rule overrides narrow. If many rules need disabling, the project may be missing visibility, eval coverage, stable authored ids, or schemas that Devtools can inspect.

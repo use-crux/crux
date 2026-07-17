@@ -1,10 +1,10 @@
 /** Declared Eval-check execution and timing-evidence runtime backstops. @internal */
 
-import type { StepAccess, StepAccessor } from "../../quality/expect";
-import type { CellAssertionPhase } from "../../quality/experiment";
-import type { StandardSchemaV1 } from "../../quality/standard-schema";
-import { runAssertionCallbacks } from "../../quality/internal/assertion-callbacks";
-import type { AssertionRecorder } from "../../quality/internal/expect-runtime";
+import type { StepAccess, StepAccessor } from "./assertions/types";
+import type { CellAssertionPhase } from "./assertion-types";
+import type { StandardSchemaV1 } from "./schema";
+import { runAssertionCallbacks } from "./assertions/callbacks";
+import type { AssertionRecorder } from "./assertions/runtime";
 import type { NormalizedEvalCheck } from "./definition";
 
 export const PERFORMANCE_EVIDENCE_GUIDANCE =

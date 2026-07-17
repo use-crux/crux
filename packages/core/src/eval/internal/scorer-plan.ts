@@ -1,10 +1,10 @@
 /** Planning helpers for explicit managed external-scorer actions. @internal */
 
-import { boundScorerLib, type Scorer } from "../../quality/scorers";
+import { boundScorerLib, type Scorer } from "./scorers/types";
 import {
   SCORER_IDENTITY,
   type MaybeIdentifiedScorer,
-} from "../../quality/internal/scorer-runtime";
+} from "./scorers/runtime";
 import { fingerprintEvalValue, isReusableEvalValue } from "./identity";
 import type { EvalEvidenceStore } from "./ports";
 import {

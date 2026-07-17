@@ -12,18 +12,6 @@ func TestWorkbenchGdIsNotDatasetAlias(t *testing.T) {
 	}
 }
 
-// TestWorkbenchGdRoutesToDatasets asserts the Datasets screen owns the
-// natural `g d` mnemonic now that it is part of the nav rail again.
-func TestWorkbenchGdRoutesToDatasets(t *testing.T) {
-	id, ok := navIDByGoKey["d"]
-	if !ok {
-		t.Fatal("navIDByGoKey[\"d\"] missing — should map to datasets")
-	}
-	if id != "datasets" {
-		t.Errorf("navIDByGoKey[\"d\"] = %q, want %q", id, "datasets")
-	}
-}
-
 func TestWorkbenchGpRoutesToIndex(t *testing.T) {
 	id, ok := navIDByGoKey["p"]
 	if !ok {

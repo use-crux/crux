@@ -7,18 +7,18 @@ A single agent answers a single prompt. A composition combines multiple agents i
 
 ## What problem does this solve?
 
-Most real LLM workloads aren't one-shot. You want to *plan then execute*, *generate three drafts and pick one*, *fan out to specialists and merge*, or *let the model itself route the next step*. Hand-coding these patterns leads to ad-hoc orchestration that's hard to test, hard to instrument, and hard to swap.
+Most real LLM workloads aren't one-shot. You want to _plan then execute_, _generate three drafts and pick one_, _fan out to specialists and merge_, or _let the model itself route the next step_. Hand-coding these patterns leads to ad-hoc orchestration that's hard to test, hard to instrument, and hard to swap.
 
 Crux gives you four named compositions with shared semantics: typed inputs, observable handoffs, instrumentation hooks, and `onError` policies. Switching from `pipeline` to `consensus` is a one-word change, not a rewrite.
 
 ## When should I use which?
 
-| Composition | Use when |
-|---|---|
-| **Pipeline** | One agent's output feeds the next. Plan → research → write. Deterministic order. |
-| **Parallel** | Multiple agents do **independent** work on the same input. Fan-out to specialists, merge results. |
-| **Consensus** | Multiple agents vote and you accept the answer if a quorum agrees. Quality-over-speed. |
-| **Swarm** | The model itself decides who handles the next turn. Peer-to-peer triage / routing. |
+| Composition   | Use when                                                                                          |
+| ------------- | ------------------------------------------------------------------------------------------------- |
+| **Pipeline**  | One agent's output feeds the next. Plan → research → write. Deterministic order.                  |
+| **Parallel**  | Multiple agents do **independent** work on the same input. Fan-out to specialists, merge results. |
+| **Consensus** | Multiple agents vote and you accept the answer if a quorum agrees. Quality-over-speed.            |
+| **Swarm**     | The model itself decides who handles the next turn. Peer-to-peer triage / routing.                |
 
 ## When should I NOT use a composition?
 
@@ -29,21 +29,23 @@ Crux gives you four named compositions with shared semantics: typed inputs, obse
 ## Quick example: pipeline
 
 ```ts
-import { agent, createPipeline } from '@use-crux/core/agent'
-import { generate } from '@use-crux/ai'
-import { openai } from '@ai-sdk/openai'
+import { agent, createPipeline } from "@use-crux/core/agent";
+import { generate } from "@use-crux/ai";
+import { openai } from "@ai-sdk/openai";
 
-const researcher = agent({ id: 'researcher', prompt: researchPrompt })
-const writer = agent({ id: 'writer', prompt: writePrompt })
+const researcher = agent({ id: "researcher", prompt: researchPrompt });
+const writer = agent({ id: "writer", prompt: writePrompt });
 
-const pipeline = createPipeline({ executor: (agent, opts) => generate(agent.prompt, opts) })
+const pipeline = createPipeline({
+  executor: (agent, opts) => generate(agent.prompt, opts),
+});
 
 const result = await pipeline({
-  id: 'index-pipeline-1',
+  id: "index-pipeline-1",
   agents: [researcher, writer],
-  model: openai('gpt-4o'),
-  context: { topic: 'agentic workflows' },
-})
+  model: openai("gpt-4o"),
+  context: { topic: "agentic workflows" },
+});
 ```
 
 Each step's output is typed and accumulates into the context for the next step.
@@ -57,8 +59,24 @@ Each step's output is typed and accumulates into the context for the next step.
 ## Pick a topic
 
 <Cards>
-  <Card title="Pipeline" description="Sequential chaining with typed context accumulation." href="/docs/guides/compositions/pipeline" />
-  <Card title="Parallel" description="Concurrent agents, results keyed by name." href="/docs/guides/compositions/parallel" />
-  <Card title="Consensus" description="Voting with a quorum threshold." href="/docs/guides/compositions/consensus" />
-  <Card title="Swarm" description="Peer-to-peer LLM-routed handoffs." href="/docs/guides/compositions/swarm" />
+  <Card
+    title="Pipeline"
+    description="Sequential chaining with typed context accumulation."
+    href="/docs/guides/compositions/pipeline"
+  />
+  <Card
+    title="Parallel"
+    description="Concurrent agents, results keyed by name."
+    href="/docs/guides/compositions/parallel"
+  />
+  <Card
+    title="Consensus"
+    description="Voting with a quorum threshold."
+    href="/docs/guides/compositions/consensus"
+  />
+  <Card
+    title="Swarm"
+    description="Peer-to-peer LLM-routed handoffs."
+    href="/docs/guides/compositions/swarm"
+  />
 </Cards>

@@ -28,5 +28,5 @@ export type {
 export type {
   Scorer as EvalScorer,
   ScorerFactory as EvalScorerFactory,
-} from "../quality/scorers";
+} from "./internal/scorers/types";
 export type { EvalGates } from "./gates";

@@ -17,32 +17,36 @@
  * native <button>) so Radix's asChild slot can forward focus & hover.
  */
 
-import { type ReactNode } from 'react'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/tooltip'
+import { type ReactNode } from "react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/shared/components/ui/tooltip";
 
 interface QwTooltipProps {
-  content: ReactNode
+  content: ReactNode;
   /** Side relative to the trigger. Defaults to `top` (matches Radix default). */
-  side?: 'top' | 'right' | 'bottom' | 'left'
+  side?: "top" | "right" | "bottom" | "left";
   /** Alignment along the trigger axis. Defaults to `center`. */
-  align?: 'start' | 'center' | 'end'
+  align?: "start" | "center" | "end";
   /** Hover delay before showing. Defaults to 320ms — fast enough to feel
    *  responsive, slow enough not to fire on accidental hovers. */
-  delayMs?: number
+  delayMs?: number;
   /** Disable the tooltip entirely (e.g. when the action is disabled). */
-  disabled?: boolean
-  children: ReactNode
+  disabled?: boolean;
+  children: ReactNode;
 }
 
 export function QwTooltip({
   content,
-  side = 'top',
-  align = 'center',
+  side = "top",
+  align = "center",
   delayMs = 320,
   disabled = false,
   children,
 }: QwTooltipProps) {
-  if (disabled || !content) return <>{children}</>
+  if (disabled || !content) return <>{children}</>;
   return (
     <Tooltip delayDuration={delayMs}>
       <TooltipTrigger asChild>{children}</TooltipTrigger>
@@ -52,20 +56,20 @@ export function QwTooltip({
         sideOffset={6}
         className="qw-tooltip"
         style={{
-          background: 'var(--qw-bg-elev)',
-          color: 'var(--qw-fg)',
-          border: '1px solid var(--qw-border)',
-          fontFamily: 'var(--qw-mono)',
+          background: "var(--qw-bg-elev)",
+          color: "var(--qw-fg)",
+          border: "1px solid var(--qw-border)",
+          fontFamily: "var(--qw-mono)",
           fontSize: 11.5,
           lineHeight: 1.5,
           maxWidth: 320,
-          padding: '6px 10px',
+          padding: "6px 10px",
           borderRadius: 6,
-          boxShadow: '0 4px 12px rgb(0 0 0 / 0.2)',
+          boxShadow: "0 4px 12px rgb(0 0 0 / 0.2)",
         }}
       >
         {content}
       </TooltipContent>
     </Tooltip>
-  )
+  );
 }

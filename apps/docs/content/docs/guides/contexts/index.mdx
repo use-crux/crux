@@ -28,31 +28,31 @@ Contexts let you define a fragment once and compose it into any prompt via `use:
 ## Quick example
 
 ```ts twoslash title="contexts.ts"
-import { context, prompt } from '@use-crux/core'
-import { z } from 'zod'
+import { context, prompt } from "@use-crux/core";
+import { z } from "zod";
 
 // Static, always contributes the same text
 const rules = context({
-  id: 'rules',
-  system: '## Rules\nAlways respond in valid JSON.',
-})
+  id: "rules",
+  system: "## Rules\nAlways respond in valid JSON.",
+});
 
 // Dynamic, text depends on input, skipped when input is missing
 const brand = context({
-  id: 'brand',
+  id: "brand",
   priority: 30,
   input: z.object({ brandVoice: z.string().optional() }),
   when: ({ input }) => !!input.brandVoice,
   system: ({ input }) => `## Brand voice\n${input.brandVoice}`,
-})
+});
 
 const reply = prompt({
-  id: 'reply',
+  id: "reply",
   use: [rules, brand],
   input: z.object({ message: z.string() }),
-  system: 'You are a helpful assistant.',
+  system: "You are a helpful assistant.",
   prompt: ({ input }) => input.message,
-})
+});
 
 // TypeScript merges inputs: { message: string, brandVoice?: string }
 ```
@@ -79,25 +79,25 @@ Crux supports three conditional patterns. Use the one that matches where the dec
 If a context only makes sense when one of its own input fields is present, put `when` on the context definition.
 
 ```ts twoslash title="context-level-when.ts"
-import { context, prompt } from '@use-crux/core'
-import { z } from 'zod'
+import { context, prompt } from "@use-crux/core";
+import { z } from "zod";
 
 const brandVoice = context({
-  id: 'brand-voice',
+  id: "brand-voice",
   input: z.object({
     brandVoice: z.string().optional(),
   }),
   when: ({ input }) => Boolean(input.brandVoice),
   system: ({ input }) => `## Brand voice\n${input.brandVoice}`,
-})
+});
 
 const writer = prompt({
-  id: 'writer',
+  id: "writer",
   use: [brandVoice],
   input: z.object({ topic: z.string() }),
-  system: 'Write the draft.',
+  system: "Write the draft.",
   prompt: ({ input }) => input.topic,
-})
+});
 ```
 
 `brandVoice` becomes optional in the merged prompt input type because the context may be excluded at runtime.
@@ -107,27 +107,25 @@ const writer = prompt({
 Sometimes the same context is reusable, but one prompt only wants it in a specific mode. Keep the context unconditional, then wrap it at the call site.
 
 ```ts twoslash title="when-wrapper.ts"
-import { context, prompt, when } from '@use-crux/core'
-import { z } from 'zod'
+import { context, prompt, when } from "@use-crux/core";
+import { z } from "zod";
 
 const seoGuidance = context({
-  id: 'seo-guidance',
+  id: "seo-guidance",
   input: z.object({
-    mode: z.enum(['draft', 'seo']).optional(),
+    mode: z.enum(["draft", "seo"]).optional(),
     keyword: z.string().optional(),
   }),
-  system: ({ input }) => `Optimize for keyword: ${input.keyword ?? 'none'}`,
-})
+  system: ({ input }) => `Optimize for keyword: ${input.keyword ?? "none"}`,
+});
 
 const articlePrompt = prompt({
-  id: 'article',
-  use: [
-    when(({ mode }) => mode === 'seo', seoGuidance),
-  ],
+  id: "article",
+  use: [when(({ mode }) => mode === "seo", seoGuidance)],
   input: z.object({ title: z.string() }),
-  system: 'Write an article.',
+  system: "Write an article.",
   prompt: ({ input }) => input.title,
-})
+});
 ```
 
 Use this when the same context should be always-on in one prompt, optional in another prompt, and absent in a third.
@@ -137,24 +135,24 @@ Use this when the same context should be always-on in one prompt, optional in an
 If exactly one branch should be active, use `match()` instead of a list of `when()` wrappers.
 
 ```ts twoslash title="match-contexts.ts"
-import { context, match, prompt } from '@use-crux/core'
-import { z } from 'zod'
+import { context, match, prompt } from "@use-crux/core";
+import { z } from "zod";
 
 const draftMode = context({
-  id: 'draft-mode',
-  system: 'Prioritize speed and outline-level structure.',
-})
+  id: "draft-mode",
+  system: "Prioritize speed and outline-level structure.",
+});
 
 const reviewMode = context({
-  id: 'review-mode',
-  system: 'Be strict. Identify gaps, risks, and unsupported claims.',
-})
+  id: "review-mode",
+  system: "Be strict. Identify gaps, risks, and unsupported claims.",
+});
 
 const editor = prompt({
-  id: 'editor',
+  id: "editor",
   use: [
     match({
-      on: (input: { mode?: 'draft' | 'review' }) => input.mode ?? 'draft',
+      on: (input: { mode?: "draft" | "review" }) => input.mode ?? "draft",
       cases: {
         draft: draftMode,
         review: reviewMode,
@@ -162,12 +160,12 @@ const editor = prompt({
     }),
   ],
   input: z.object({
-    mode: z.enum(['draft', 'review']).optional(),
+    mode: z.enum(["draft", "review"]).optional(),
     text: z.string(),
   }),
-  system: 'Edit the text.',
+  system: "Edit the text.",
   prompt: ({ input }) => input.text,
-})
+});
 ```
 
 `match()` is easier to read than several predicates when the branches are mutually exclusive. Branches can contain a single context or an array of contexts.
@@ -178,13 +176,10 @@ For feature flags or environment-specific composition, you can put falsy values 
 
 ```ts
 const assistant = prompt({
-  id: 'assistant',
-  use: [
-    baseRules,
-    process.env.NODE_ENV === 'development' && debugContext,
-  ],
-  system: 'Help the user.',
-})
+  id: "assistant",
+  use: [baseRules, process.env.NODE_ENV === "development" && debugContext],
+  system: "Help the user.",
+});
 ```
 
 This is best for static decisions known when the prompt is created. Use `when()` for runtime decisions based on input.
@@ -195,10 +190,10 @@ Prompt inspection includes excluded conditional contexts, so users can see why a
 
 ```ts
 const inspection = await articlePrompt.inspect({
-  input: { title: 'Launch notes', mode: 'draft' },
-})
+  input: { title: "Launch notes", mode: "draft" },
+});
 
-console.log(inspection.excludedContexts)
+console.log(inspection.excludedContexts);
 ```
 
 Excluded contexts are not resolved, do not call async `system()` functions, and do not contribute tools. Their input keys still become optional in the merged type because Crux cannot know at compile time which runtime branch will be active.
@@ -208,39 +203,40 @@ Excluded contexts are not resolved, do not call async `system()` functions, and 
 `context()` also accepts `use`, just like `prompt()`. Nested entries resolve before the context's own system text. This lets you package a reusable policy with the [memory](/docs/guides/memory), [retrieval](/docs/guides/retrieval), [grounding](/docs/guides/retrieval/grounding), [skills](/docs/guides/skills), [blackboard](/docs/guides/agents/blackboard), or tools that make that policy work.
 
 ```ts title="context-with-memory.ts"
-import { context, prompt } from '@use-crux/core'
-import { memory, recentMessages, facts } from '@use-crux/core/memory'
-import { skill } from '@use-crux/core/skill/node'
-import { z } from 'zod'
+import { context, prompt } from "@use-crux/core";
+import { memory, recentMessages, facts } from "@use-crux/core/memory";
+import { skill } from "@use-crux/core/skill/node";
+import { z } from "zod";
 
 const userMemory = memory({
-  id: 'user-memory',
+  id: "user-memory",
   store,
   namespace: ({ input }) => `user:${input.userId}`,
   blocks: [
-    recentMessages({ id: 'recent', maxMessages: 8 }),
-    facts({ id: 'facts', embed: dense }),
+    recentMessages({ id: "recent", maxMessages: 8 }),
+    facts({ id: "facts", embed: dense }),
   ],
-})
+});
 
-const escalationSkill = skill.fromFile('./skills/escalation/SKILL.md')
+const escalationSkill = skill.fromFile("./skills/escalation/SKILL.md");
 
 const personalizedSupport = context({
-  id: 'personalized-support',
+  id: "personalized-support",
   use: [userMemory, escalationSkill],
-  system: 'Use durable user memory when it is relevant. Load the escalation skill for account-risk or billing-risk questions.',
-})
+  system:
+    "Use durable user memory when it is relevant. Load the escalation skill for account-risk or billing-risk questions.",
+});
 
 const supportAgent = prompt({
-  id: 'support-agent',
+  id: "support-agent",
   use: [personalizedSupport],
   input: z.object({
     userId: z.string(),
     question: z.string(),
   }),
-  system: 'Answer the support question.',
+  system: "Answer the support question.",
   prompt: ({ input }) => input.question,
-})
+});
 ```
 
 This keeps prompt wiring small:
@@ -263,7 +259,19 @@ Use this pattern when a context is really a product capability, not just text. F
 ## Pick a topic
 
 <Cards>
-  <Card title="Caching" description="Cache expensive context resolvers and use Anthropic prompt caching." href="/docs/guides/contexts/caching" />
-  <Card title="Token budget" description="Set a budget and let Crux drop lowest-priority contexts under pressure." href="/docs/guides/contexts/token-budget" />
-  <Card title="API Reference" description="Full context() signature, when(), match(), and helpers." href="/docs/reference/crux-core/contexts" />
+  <Card
+    title="Caching"
+    description="Cache expensive context resolvers and use Anthropic prompt caching."
+    href="/docs/guides/contexts/caching"
+  />
+  <Card
+    title="Token budget"
+    description="Set a budget and let Crux drop lowest-priority contexts under pressure."
+    href="/docs/guides/contexts/token-budget"
+  />
+  <Card
+    title="API Reference"
+    description="Full context() signature, when(), match(), and helpers."
+    href="/docs/reference/crux-core/contexts"
+  />
 </Cards>

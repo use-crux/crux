@@ -138,13 +138,17 @@ describe("GenerationDecisions", () => {
     expect(html).toContain("Fallback");
     expect(html).toContain("model-b");
     expect(html).toContain("TTFT 218ms");
-    expect(html).toContain("rate limited after the gateway exhausted its retry budget");
+    expect(html).toContain(
+      "rate limited after the gateway exhausted its retry budget",
+    );
     expect(html).toContain("delay 50ms");
     expect(html).toContain("quality below the launch threshold");
     expect(html).toContain("rejected 0.62");
     expect(html).toContain("judge $0.0020");
     expect(html).toContain("budget $0.050");
-    expect(html).not.toContain("No routing decision folded onto this generation.");
+    expect(html).not.toContain(
+      "No routing decision folded onto this generation.",
+    );
   });
 
   it("renders the canonical receipt in operation-report cards", () => {

@@ -7,31 +7,33 @@ A blackboard gives multiple agents a shared, typed state object. One agent write
 
 ```ts title="blackboard.ts"
 const board = blackboard({
-  id: 'research-board',
+  id: "research-board",
   schema: z.object({
     query: z.string(),
     findings: z.array(z.string()),
-    status: z.enum(['planning', 'researching', 'done']),
+    status: z.enum(["planning", "researching", "done"]),
   }),
   records: sharedRecords,
-})
+});
 
 // Write individual fields (validated per-field)
-await board.set('status', 'researching')
-await board.patch({ findings: ['Finding 1'], status: 'researching' })
+await board.set("status", "researching");
+await board.patch({ findings: ["Finding 1"], status: "researching" });
 
 // Read
-const status = await board.get('status')    // 'researching'
-const all = await board.getAll()            // full board state
+const status = await board.get("status"); // 'researching'
+const all = await board.getAll(); // full board state
 
 // Subscribe to changes (in-process)
 const unsubscribe = board.subscribe((fields) => {
-  console.log('Changed:', fields) // ['findings', 'status']
-})
+  console.log("Changed:", fields); // ['findings', 'status']
+});
 ```
 
 <Callout type="warn">
-Board writes are in-process only. For cross-process coordination (e.g., separate serverless invocations), provide persistent `records`, see [Memory](/docs/guides/memory) for storage options.
+  Board writes are in-process only. For cross-process coordination (e.g.,
+  separate serverless invocations), provide persistent `records`, see
+  [Memory](/docs/guides/memory) for storage options.
 </Callout>
 
 ## Prompt and tool integration
@@ -42,16 +44,16 @@ and be able to update it:
 ```ts
 const agentPrompt = prompt({
   use: [board],
-})
+});
 ```
 
 Crux expands that into blackboard context plus four focused tools:
 
 ```ts
-readBlackboard
-writeBlackboard
-patchBlackboard
-clearBlackboard
+readBlackboard;
+writeBlackboard;
+patchBlackboard;
+clearBlackboard;
 ```
 
 If you only want the current board state in the system message, use
@@ -59,24 +61,44 @@ If you only want the current board state in the system message, use
 `board.asTools()`:
 
 ```ts
-prompt({ use: [board.asContext()] }) // context only
-const tools = board.asTools()
+prompt({ use: [board.asContext()] }); // context only
+const tools = board.asTools();
 ```
 
 When multiple blackboards are used by the same prompt, prefix their tools:
 
 ```ts
-const research = blackboard({ id: 'research', schema, tools: { prefix: 'research' } })
-const writing = blackboard({ id: 'writing', schema, tools: { prefix: 'writing' } })
+const research = blackboard({
+  id: "research",
+  schema,
+  tools: { prefix: "research" },
+});
+const writing = blackboard({
+  id: "writing",
+  schema,
+  tools: { prefix: "writing" },
+});
 
-prompt({ use: [research, writing] })
+prompt({ use: [research, writing] });
 // readResearchBlackboard, writeResearchBlackboard, readWritingBlackboard, ...
 ```
 
 ## Next steps
 
 <Cards>
-  <Card title="Agents" description="Multi-agent coordination patterns at a glance." href="/docs/guides/agents" />
-  <Card title="Handoff" description="Structured context transfer between agents with validation." href="/docs/guides/agents/handoff" />
-  <Card title="Recipes" description="Full working example of a multi-agent pipeline with blackboard." href="/docs/cookbook" />
+  <Card
+    title="Agents"
+    description="Multi-agent coordination patterns at a glance."
+    href="/docs/guides/agents"
+  />
+  <Card
+    title="Handoff"
+    description="Structured context transfer between agents with validation."
+    href="/docs/guides/agents/handoff"
+  />
+  <Card
+    title="Recipes"
+    description="Full working example of a multi-agent pipeline with blackboard."
+    href="/docs/cookbook"
+  />
 </Cards>

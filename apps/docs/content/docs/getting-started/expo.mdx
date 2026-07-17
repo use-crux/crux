@@ -6,8 +6,9 @@ description: Use Crux from an Expo or React Native app via a Node.js or Convex b
 Crux runs on the server, not on-device. From an Expo app, you call your backend (Node.js, Next.js Route Handler, or Convex action) which then calls Crux. This guide shows the recommended setup with each option.
 
 <Callout type="info">
-  **Why server-side?** Crux prompts compose contexts, manage memory, and call provider APIs, all of which require
-  server-side credentials and persistent storage. The mobile app sends inputs and receives outputs.
+  **Why server-side?** Crux prompts compose contexts, manage memory, and call
+  provider APIs, all of which require server-side credentials and persistent
+  storage. The mobile app sends inputs and receives outputs.
 </Callout>
 
 ## Pattern 1: Expo + Node/Next.js backend
@@ -17,20 +18,20 @@ The simplest setup: your Expo app posts to a backend you control.
 ### Backend (Next.js Route Handler)
 
 ```ts title="app/api/summarize/route.ts"
-import { generate } from '@use-crux/ai'
-import { openai } from '@ai-sdk/openai'
+import { generate } from "@use-crux/ai";
+import { openai } from "@ai-sdk/openai";
 
-import { summarize } from '@/lib/ai/prompts'
+import { summarize } from "@/lib/ai/prompts";
 
 export async function POST(req: Request) {
-  const { text } = await req.json()
+  const { text } = await req.json();
 
   const result = await generate(summarize, {
-    model: openai('gpt-4o-mini'),
+    model: openai("gpt-4o-mini"),
     input: { text },
-  })
+  });
 
-  return Response.json(result.object)
+  return Response.json(result.object);
 }
 ```
 
@@ -39,23 +40,23 @@ See the [Next.js guide](/docs/getting-started/nextjs) for the prompt definition 
 ### Expo client
 
 ```tsx title="app/screens/Summarize.tsx"
-import { useState } from 'react'
-import { View, TextInput, Button, Text } from 'react-native'
+import { useState } from "react";
+import { View, TextInput, Button, Text } from "react-native";
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL // your backend
+const API_URL = process.env.EXPO_PUBLIC_API_URL; // your backend
 
 export function Summarize() {
-  const [text, setText] = useState('')
-  const [summary, setSummary] = useState<string | null>(null)
+  const [text, setText] = useState("");
+  const [summary, setSummary] = useState<string | null>(null);
 
   async function handleSummarize() {
     const res = await fetch(`${API_URL}/api/summarize`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text }),
-    })
-    const data = await res.json()
-    setSummary(data.summary)
+    });
+    const data = await res.json();
+    setSummary(data.summary);
   }
 
   return (
@@ -64,7 +65,7 @@ export function Summarize() {
       <Button title="Summarize" onPress={handleSummarize} />
       {summary && <Text>{summary}</Text>}
     </View>
-  )
+  );
 }
 ```
 
@@ -77,14 +78,14 @@ If you're using Convex, your Expo app calls Convex actions directly via the Conv
 ### Expo client
 
 ```tsx title="app/screens/Chat.tsx"
-import { useAction } from 'convex/react'
-import { api } from '@/convex/_generated/api'
+import { useAction } from "convex/react";
+import { api } from "@/convex/_generated/api";
 
 export function Chat() {
-  const respond = useAction(api.agent.chat.respond)
+  const respond = useAction(api.agent.chat.respond);
 
   async function handleSend(message: string) {
-    const reply = await respond({ message, mode: 'casual' })
+    const reply = await respond({ message, mode: "casual" });
     // ...display reply
   }
 
@@ -97,25 +98,27 @@ export function Chat() {
 If your Expo app needs to subscribe to plan or task list changes (for approval flows, agent progress, etc.), wrap it in a `CruxProvider` and use the live hooks:
 
 ```tsx title="App.tsx"
-import { CruxProvider } from '@use-crux/react'
-import { createSSETransport } from '@use-crux/react'
+import { CruxProvider } from "@use-crux/react";
+import { createSSETransport } from "@use-crux/react";
 
 const transport = createSSETransport({
   url: `${process.env.EXPO_PUBLIC_API_URL}/api/crux/sse`,
-})
+});
 
 export default function App() {
-  return <CruxProvider transport={transport}>{/* your screens */}</CruxProvider>
+  return (
+    <CruxProvider transport={transport}>{/* your screens */}</CruxProvider>
+  );
 }
 ```
 
 ```tsx title="app/screens/PlanReview.tsx"
-import { usePlan } from '@use-crux/react'
+import { usePlan } from "@use-crux/react";
 
 export function PlanReview({ planId }: { planId: string }) {
-  const plan = usePlan(planId)
-  if (!plan) return null
-  return <Text>{plan.content}</Text>
+  const plan = usePlan(planId);
+  if (!plan) return null;
+  return <Text>{plan.content}</Text>;
 }
 ```
 
@@ -129,7 +132,11 @@ The SSE transport reconnects automatically. For environments where SSE is unreli
     description="Detailed Next.js guide for the API routes that Expo calls."
     href="/docs/getting-started/nextjs"
   />
-  <Card title="Convex Backend" description="Use Convex actions as your Expo backend." href="/docs/guides/convex" />
+  <Card
+    title="Convex Backend"
+    description="Use Convex actions as your Expo backend."
+    href="/docs/guides/convex"
+  />
   <Card
     title="Plans & Tasks"
     description="Live subscriptions for approval flows and agent progress."

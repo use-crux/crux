@@ -7,10 +7,10 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/api"
 )
 
-type overviewLoadedMsg struct{ rec api.QualityOverviewRecord }
-type insightsLoadedMsg []api.QualityInsightRecord
-type runsLoadedMsg []api.QualityRunRecord
-type activityLoadedMsg []api.QualityActivityEvent
+type overviewLoadedMsg struct{ rec api.InspectOverviewRecord }
+type insightsLoadedMsg []api.InspectInsightRecord
+type runsLoadedMsg []api.InspectRunRecord
+type activityLoadedMsg []api.InspectActivityEvent
 type dataErrMsg string
 
 func fetchOverview(c DataClient) tea.Cmd {

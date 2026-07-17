@@ -11,16 +11,16 @@ You authored a prompt three weeks ago. Is anything still calling it? Open it in 
 2. Scroll to its **Observability** section: latest run status, timestamp, and delivery-health badge.
 3. Click **View N runs** to open Runs pre-filtered to that definition.
 
-Zero activity is a real state, not a broken link: **View N runs** appears only when the server rollup reports at least one run, and a definition that has never been referenced says so plainly (*No runs have referenced this definition yet.*).
+Zero activity is a real state, not a broken link: **View N runs** appears only when the server rollup reports at least one run, and a definition that has never been referenced says so plainly (_No runs have referenced this definition yet._).
 
 ## What you'll see
 
 The section adapts to what Crux can truthfully prove for the definition's kind:
 
 - **Direct activity**: the runtime recorded this definition's exact authored id on runs. You get status, timing, delivery health, and **View N runs**.
-- **Contributor**: the definition (a knowledge base, tool policy, or structural child) contributed to runs it does not own. Catalog shows *Referenced by N runs*, or reports the indexed parent's activity while stating the child was not independently observed.
+- **Contributor**: the definition (a knowledge base, tool policy, or structural child) contributed to runs it does not own. Catalog shows _Referenced by N runs_, or reports the indexed parent's activity while stating the child was not independently observed.
 - **Runtime-observed, unjoined**: the kind's primitives appear in Runs (deferred work, media operations, ingest sources), but records do not carry this authored definition's id. Catalog names the relevant primitives and withholds per-definition counts rather than guessing.
-- **Quality-primary**: scorers correlate through the Quality join; a live `scoring.judge` span still surfaces when an authored `judge({ id })` ran.
+- **Eval-primary**: scorers correlate through the Eval join; a live `scoring.judge` span still surfaces when an authored `judge({ id })` ran.
 - **No runtime**: static or declarative definitions show no fabricated counts and no dead links.
 
 ## Run Detail links back

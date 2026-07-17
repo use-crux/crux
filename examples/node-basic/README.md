@@ -1,27 +1,29 @@
 # Node Basic
 
-A tiny typed prompt using `@use-crux/core` and the Vercel AI SDK adapter, plus a
-deterministic quality eval that demonstrates score-aware `assert`.
+A typed prompt using `@use-crux/core` and the Vercel AI SDK adapter, plus a
+production-task Eval with typed Cases.
 
 ```bash
 pnpm add @use-crux/core @use-crux/ai ai @ai-sdk/openai zod
 OPENAI_API_KEY=... pnpm tsx hello.ts
 ```
 
-The quality example is local-only, does not call a model, and does not need a
-`crux.config.ts` file. Quality discovers `*.eval.ts` files from the project
-directory by convention:
+Crux discovers one default Eval export per `*.eval.ts` file:
 
 ```bash
 cd examples/node-basic
-crux quality list
-crux quality run examples.support-citations
+crux eval list
+crux eval examples.support-citations --plan
+OPENAI_API_KEY=... crux eval examples.support-citations
 ```
 
-`quality-model-backed.example.ts` shows the model-backed shape: the eval imports `createQualityModelRuntime()`
-from a nearby helper and passes `generate`/`model` directly to `target.prompt`.
-Rename it to `quality-model-backed.eval.ts` when you want to run it, then use
-`crux quality run examples.model-backed-support-answer --replay record-new` to
-record its first cassette.
+The Eval imports the same callable `generate.task()` production task it tests.
+Repeated runs automatically reuse exact safe evidence. Use `--offline` for a
+zero-network run that fails on any evidence miss, or `--fresh` to bypass task
+and managed-scorer evidence.
 
-During alpha, packages may still be consumed from this repository workspace before the first public npm release.
+`evals/model-backed.example.ts` demonstrates a typed Variant without adding a
+second discovered Eval. Rename it to `concise.eval.ts` to run it.
+
+During alpha, packages may still be consumed from this repository workspace
+before the first public npm release.

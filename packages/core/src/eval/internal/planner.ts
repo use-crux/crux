@@ -15,8 +15,11 @@ import type { EvalPlanningPorts } from "./ports";
 import { createEvalPreflight } from "./offline";
 import { createEvalCostPlan } from "./cost-plan";
 import { planExternalScorers } from "./scorer-plan";
+import { resolveEvalHostReadiness } from "./placement";
 import {
   EvalTaskExecutionError,
+  getEvalTaskDescriptorForInternalUse,
+  isManagedEvalTaskForInternalUse,
   projectEvalTaskIdentityForInternalUse,
 } from "./task";
 import type {
@@ -81,6 +84,11 @@ export async function planEval(
     ),
     ...(options.filtered === true ? { filtered: true as const } : {}),
   });
+  const hostReadiness = await resolveEvalHostReadiness({
+    cells,
+    offline: options.offline === true,
+    ...(ports?.hostReadiness ? { provider: ports.hostReadiness } : {}),
+  });
   const cost = await createEvalCostPlan({
     cells,
     rawScorers: definition.scorers,
@@ -99,6 +107,7 @@ export async function planEval(
     definitionFingerprint:
       options.definitionFingerprint ?? `pending-source-identity:${evalId}`,
     selection,
+    hostReadiness,
     preflight: createEvalPreflight(
       cells,
       definition.scorers,
@@ -154,6 +163,7 @@ async function planCell(input: {
     trial: input.trial,
     blocking: input.arm.blocking,
     task: input.arm.task,
+    requiredHostCapabilities: requiredHostCapabilities(input.arm.task),
     overrides: input.arm.overrides,
     action,
     input: request.input,
@@ -188,6 +198,13 @@ async function planCell(input: {
       : {}),
   });
   return Object.freeze({ ...cellBase, scorerActions });
+}
+
+function requiredHostCapabilities(task: unknown): readonly string[] {
+  if (!isManagedEvalTaskForInternalUse(task)) return Object.freeze([]);
+  return Object.freeze([
+    ...(getEvalTaskDescriptorForInternalUse(task).requiredHostCapabilities ?? []),
+  ]);
 }
 
 async function planTaskAction(

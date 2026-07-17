@@ -11,13 +11,13 @@ For in-process handoffs where both agents run in the same execution context:
 
 ```ts twoslash
 // @noErrors
-import { z } from 'zod'
-import { prompt } from '@use-crux/core'
-import { handoff } from '@use-crux/core/agent'
-import { generateTextFn } from '@use-crux/ai'
+import { z } from "zod";
+import { prompt } from "@use-crux/core";
+import { handoff } from "@use-crux/core/agent";
+import { generateTextFn } from "@use-crux/ai";
 
 const researchHandoff = handoff({
-  id: 'research-to-writer',
+  id: "research-to-writer",
   inputSchema: z.object({
     query: z.string(),
     findings: z.array(z.string()),
@@ -34,27 +34,28 @@ const researchHandoff = handoff({
   summarize: {
     generate: generateTextFn,
     model: summaryModel,
-    system: 'Summarize the research findings concisely.',
+    system: "Summarize the research findings concisely.",
   },
-  fromAgent: 'research', // devtools identification
-  toAgent: 'writer',
-})
+  fromAgent: "research", // devtools identification
+  toAgent: "writer",
+});
 
 // Prepare the handoff payload
-const payload = await handoff.prepare(researchOutput)
-payload.data
+const payload = await handoff.prepare(researchOutput);
+payload.data;
 //      ^?
-payload.summary // string (if summarize was configured)
+payload.summary; // string (if summarize was configured)
 
 // Inject into the receiving agent's prompt
 const writerPrompt = prompt({
   use: [handoff.asContext(payload)], // priority 80
-})
+});
 ```
 
 <Callout type="info">
-  The optional `summarize` config compresses the handoff payload with an LLM to fit the receiving agent's token budget.
-  Omit it if the payload is already small.
+  The optional `summarize` config compresses the handoff payload with an LLM to
+  fit the receiving agent's token budget. Omit it if the payload is already
+  small.
 </Callout>
 
 ## Stored handoff
@@ -62,8 +63,8 @@ const writerPrompt = prompt({
 For distributed agents that run in separate processes, actions, or serverless functions, provide `records` to enable `send()` and `receive()`. Convex apps use `convexRecordStore({ component, ctx })` and Crux-aware action boundaries; see the [Convex storage and boundary guides](/docs/guides/convex/storage-memory-workspaces) for the complete setup.
 
 <Callout type="warn">
-  `send()` and `receive()` throw if `records` is not configured. The stateless `prepare()` and `asContext()` work without
-  records.
+  `send()` and `receive()` throw if `records` is not configured. The stateless
+  `prepare()` and `asContext()` work without records.
 </Callout>
 
 ## Instrumentation
@@ -73,7 +74,11 @@ Handoff events show up in [Devtools](/docs/guides/observability/devtools) automa
 ## Next steps
 
 <Cards>
-  <Card title="Agents" description="Multi-agent coordination patterns at a glance." href="/docs/guides/agents" />
+  <Card
+    title="Agents"
+    description="Multi-agent coordination patterns at a glance."
+    href="/docs/guides/agents"
+  />
   <Card
     title="Blackboard"
     description="Shared typed scratchpad for multi-agent coordination."

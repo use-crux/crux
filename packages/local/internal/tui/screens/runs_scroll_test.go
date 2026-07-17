@@ -16,7 +16,7 @@ func TestRunsListScrollsWithCursor(t *testing.T) {
 	r.loaded = true
 	// 10 runs, list pane visible capacity = 3 (= 6 rows ÷ 2 rows/run).
 	for i := 0; i < 10; i++ {
-		r.runs = append(r.runs, api.QualityRunRecord{TraceID: tabbedID(i)})
+		r.runs = append(r.runs, api.InspectRunRecord{TraceID: tabbedID(i)})
 	}
 	r.selRun = r.runs[0].TraceID
 	r.runList.SetItems(r.runs)
@@ -47,7 +47,7 @@ func TestRunsListScrollsBackUp(t *testing.T) {
 	r := NewRuns()
 	r.loaded = true
 	for i := 0; i < 10; i++ {
-		r.runs = append(r.runs, api.QualityRunRecord{TraceID: tabbedID(i)})
+		r.runs = append(r.runs, api.InspectRunRecord{TraceID: tabbedID(i)})
 	}
 	r.selRun = r.runs[8].TraceID
 	r.runList.SetItems(r.runs)

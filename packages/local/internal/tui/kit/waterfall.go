@@ -95,12 +95,12 @@ func Waterfall(spans []WaterfallSpan, totalMs float64, width int) string {
 // `StartedAt` (same unit as each span's `StartedAt`); span offsets are
 // derived as `span.StartedAt - traceStartMs`. If `traceStartMs` is 0 we fall
 // back to the minimum across spans so the waterfall always starts at 0.
-func FromAPISpans(apiSpans []api.QualityRunSpan, traceStartMs int64, selectedID string) []WaterfallSpan {
+func FromAPISpans(apiSpans []api.InspectRunSpan, traceStartMs int64, selectedID string) []WaterfallSpan {
 	idx := map[string]int{}
 	for i, s := range apiSpans {
 		idx[s.ID] = i
 	}
-	indent := func(s api.QualityRunSpan) int {
+	indent := func(s api.InspectRunSpan) int {
 		depth := 0
 		cur := s
 		for cur.ParentID != "" {
@@ -188,7 +188,7 @@ func PrimitiveColor(primitive string) color.Color {
 // downstream callers (if any) get a no-op rather than a compile error.
 func PrimitiveGlyph(primitive string) string { return "" }
 
-func spanOp(s api.QualityRunSpan) string {
+func spanOp(s api.InspectRunSpan) string {
 	if s.EventType != "" {
 		return s.EventType
 	}

@@ -36,7 +36,7 @@ import { describeCruxAdapterConformance } from "@use-crux/core/adapter/testing/v
 
 ## Overview
 
-The adapter package provides the public authoring surface for AI provider adapters. `defineSingleTurnProviderBundle()` is the preferred helper for raw chat SDKs where Crux owns the provider step loop. `defineProviderRuntime()` remains the lower-level runtime compiler: `ownership: 'single-turn'` with `turn` compiles the same core-owned loop mechanics directly, and `ownership: 'loop-owned'` with `loop` covers SDKs that own the loop while Crux steers policy around it. Both branches compile into the same execution engine and share the same policy modules (validation retry, tool instrumentation, approvals) plus the same per-call [`Safety` session](/docs/reference/crux-core/safety), so behavior does not diverge between runtimes. Provider runtimes compile into a private execution facade that wires prompt resolution, tool lifecycle, safety policy, retries, stream safety, metadata stamping, and memory capture around the SDK-specific call. Every adapter performs the same orchestration: resolve the prompt into system/messages/schema/settings, convert to the SDK-specific format, wrap with middleware, timing, and hooks, call the SDK, and normalize metadata for devtools, evals, and quality experiments; only the conversion and the SDK call are provider-specific.
+The adapter package provides the public authoring surface for AI provider adapters. `defineSingleTurnProviderBundle()` is the preferred helper for raw chat SDKs where Crux owns the provider step loop. `defineProviderRuntime()` remains the lower-level runtime compiler: `ownership: 'single-turn'` with `turn` compiles the same core-owned loop mechanics directly, and `ownership: 'loop-owned'` with `loop` covers SDKs that own the loop while Crux steers policy around it. Both branches compile into the same execution engine and share the same policy modules (validation retry, tool instrumentation, approvals) plus the same per-call [`Safety` session](/docs/reference/crux-core/safety), so behavior does not diverge between runtimes. Provider runtimes compile into a private execution facade that wires prompt resolution, tool lifecycle, safety policy, retries, stream safety, metadata stamping, and memory capture around the SDK-specific call. Every adapter performs the same orchestration: resolve the prompt into system/messages/schema/settings, convert to the SDK-specific format, wrap with middleware, timing, and hooks, call the SDK, and normalize metadata for Devtools, production runs, and Evals; only the conversion and the SDK call are provider-specific.
 
 Built-in adapters are built on this abstraction: `@use-crux/openai`, `@use-crux/anthropic`, and `@use-crux/google` export single-turn provider runtimes, while `@use-crux/ai` exports a loop-owned provider runtime for the Vercel AI SDK. Native provider packages own a `NativeTranscriptCodec` for provider message conversion, assistant text/tool-call extraction, and provider-specific tool-round appends. Core injects transcript-produced `providerMessages` into request builders and composes `transcript.readAssistant(raw)` with response-level metadata. Core owns the canonical `Message[]`, `CallArgs`, `AdapterResponse`, `ToolResultEntry`, and small tool-output helpers those codecs share.
 
@@ -45,25 +45,25 @@ Built-in adapters are built on this abstraction: `@use-crux/openai`, `@use-crux/
 All first-party adapters map completed calls into one closed taxonomy from
 `@use-crux/core/adapter`:
 
-| Surface | Contract |
-| --- | --- |
-| Finish reason | `CruxFinishReason` (`stop` / `length` / `tool-calls` / `content-filter` / `refusal` / `error` / `aborted` / `unknown`) |
-| Errors | `CruxAdapterError` carrying `CruxProviderError` (`kind` / `code` / `retryable` / optional redacted `message`) |
-| Tool calls | **Completed** name + arguments only: no progressive argument-delta streaming on any adapter |
-| Stream completion | Usage / model / finish / completed tool calls after settle; failures reject instead of silent missing metadata |
-| Abort / timeout | Classified as `aborted` / `timeout`; `retryable` is classification only (SDK owns network retries) |
+| Surface           | Contract                                                                                                               |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Finish reason     | `CruxFinishReason` (`stop` / `length` / `tool-calls` / `content-filter` / `refusal` / `error` / `aborted` / `unknown`) |
+| Errors            | `CruxAdapterError` carrying `CruxProviderError` (`kind` / `code` / `retryable` / optional redacted `message`)          |
+| Tool calls        | **Completed** name + arguments only: no progressive argument-delta streaming on any adapter                            |
+| Stream completion | Usage / model / finish / completed tool calls after settle; failures reject instead of silent missing metadata         |
+| Abort / timeout   | Classified as `aborted` / `timeout`; `retryable` is classification only (SDK owns network retries)                     |
 
 Per-dimension behavior:
 
-| Dimension | Behavior |
-| --- | --- |
-| **generate()** | Provider finish reasons map into `CruxFinishReason`. Usage, model, and response identity are captured when the provider returns them. |
-| **stream()** | Stream completion carries the same finish/usage/model fields as generate after the stream settles. Iteration and completion failures reject with `CruxAdapterError` instead of silent missing metadata. |
-| **Usage** | Honest omission when the provider omits counts, never invented zeros. |
-| **Completed tool calls** | Fully assembled name + arguments (and results on the generate path) appear on the completed step. |
-| **Errors** | Timeouts, aborts, rate limits, invalid requests, refusals/safety, and provider failures become `CruxProviderError` on a thrown `CruxAdapterError`. |
-| **Abort / timeout** | Caller `AbortSignal` and Crux budget timeouts are classified as `aborted` and `timeout`. |
-| **Retry** | Adapters **classify** retryability (`retryable: true \| false`). They do not own a second network retry loop; SDK clients keep their own `maxRetries`. |
+| Dimension                | Behavior                                                                                                                                                                                                |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **generate()**           | Provider finish reasons map into `CruxFinishReason`. Usage, model, and response identity are captured when the provider returns them.                                                                   |
+| **stream()**             | Stream completion carries the same finish/usage/model fields as generate after the stream settles. Iteration and completion failures reject with `CruxAdapterError` instead of silent missing metadata. |
+| **Usage**                | Honest omission when the provider omits counts, never invented zeros.                                                                                                                                   |
+| **Completed tool calls** | Fully assembled name + arguments (and results on the generate path) appear on the completed step.                                                                                                       |
+| **Errors**               | Timeouts, aborts, rate limits, invalid requests, refusals/safety, and provider failures become `CruxProviderError` on a thrown `CruxAdapterError`.                                                      |
+| **Abort / timeout**      | Caller `AbortSignal` and Crux budget timeouts are classified as `aborted` and `timeout`.                                                                                                                |
+| **Retry**                | Adapters **classify** retryability (`retryable: true \| false`). They do not own a second network retry loop; SDK clients keep their own `maxRetries`.                                                  |
 
 ### Explicit non-goal: progressive tool-call deltas
 
@@ -73,12 +73,12 @@ The normalized-outcome layer is also **not** a Crux-owned network retry engine (
 
 ### Per-adapter mapping notes
 
-| Package | Ownership | Stream completion | Tool calls | Errors |
-| --- | --- | --- | --- | --- |
-| `@use-crux/openai` | single-turn | Single-pass capture with `stream_options.include_usage`; completion metadata + completed tool calls | Completed only | HTTP status + SDK abort/timeout classes |
-| `@use-crux/anthropic` | single-turn | `finalMessage()` rejection surfaces as `CruxAdapterError` (not silent `undefined`) | Completed tool uses from the final message | Same closed taxonomy |
-| `@use-crux/google` | single-turn | Single-pass capture of usage/finish/model + completed function calls | Completed only | Status / client-error classes + safety block folding |
-| `@use-crux/ai` | loop-owned (AI SDK) | Stream iteration/completion failures normalize at the runtime boundary | SDK-assembled completed calls only | Shared taxonomy on the runtime path; public `CruxAIError` remains an optional user-boundary helper |
+| Package               | Ownership           | Stream completion                                                                                   | Tool calls                                 | Errors                                                                                             |
+| --------------------- | ------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| `@use-crux/openai`    | single-turn         | Single-pass capture with `stream_options.include_usage`; completion metadata + completed tool calls | Completed only                             | HTTP status + SDK abort/timeout classes                                                            |
+| `@use-crux/anthropic` | single-turn         | `finalMessage()` rejection surfaces as `CruxAdapterError` (not silent `undefined`)                  | Completed tool uses from the final message | Same closed taxonomy                                                                               |
+| `@use-crux/google`    | single-turn         | Single-pass capture of usage/finish/model + completed function calls                                | Completed only                             | Status / client-error classes + safety block folding                                               |
+| `@use-crux/ai`        | loop-owned (AI SDK) | Stream iteration/completion failures normalize at the runtime boundary                              | SDK-assembled completed calls only         | Shared taxonomy on the runtime path; public `CruxAIError` remains an optional user-boundary helper |
 
 All four packages exercise the same core conformance helper so generate success, stream completion with a finished tool call, refusal/content-filter (where the provider can express it), timeout, abort, and erroring iteration stay aligned.
 
@@ -88,26 +88,26 @@ Guide: [Adapter outcomes](/docs/guides/observability/adapter-outcomes). Privacy 
 
 All first-party generation adapters accept canonical `Message.content` values as either strings or readonly `ContentPart[]`. Each adapter uses one provider-local content part table for managed calls, public codecs, headless handles, transport mode, and rich tool-result encoding. Model calls validate and normalize media sources before provider I/O; malformed media throws `InvalidMediaSourceError`, and valid media that the selected adapter or model cannot send throws `UnsupportedCapabilityError`.
 
-| Capability | `@use-crux/ai` | `@use-crux/anthropic` | `@use-crux/openai` Chat | `@use-crux/google` |
-| --- | --- | --- | --- | --- |
-| Image input, data or URL | yes | yes | yes, byte data as data URLs | yes |
-| PDF input | yes | yes, document blocks | file data yes; URL degrades | yes |
-| Audio input | model-dependent | degrades | wav/mp3 file data | yes |
-| Assistant media decode | yes | yes | yes | yes |
-| System-role media | degrades | degrades | degrades | degrades |
-| Tool-result media | SDK parts where supported | image/PDF native blocks | deterministic text references | function-response parts |
+| Capability               | `@use-crux/ai`            | `@use-crux/anthropic`   | `@use-crux/openai` Chat       | `@use-crux/google`      |
+| ------------------------ | ------------------------- | ----------------------- | ----------------------------- | ----------------------- |
+| Image input, data or URL | yes                       | yes                     | yes, byte data as data URLs   | yes                     |
+| PDF input                | yes                       | yes, document blocks    | file data yes; URL degrades   | yes                     |
+| Audio input              | model-dependent           | degrades                | wav/mp3 file data             | yes                     |
+| Assistant media decode   | yes                       | yes                     | yes                           | yes                     |
+| System-role media        | degrades                  | degrades                | degrades                      | degrades                |
+| Tool-result media        | SDK parts where supported | image/PDF native blocks | deterministic text references | function-response parts |
 
 `GenerateResult.text` and `StreamResult.textStream` remain string-shaped. Assistant-returned media is available in `result.messages`.
 
 Image generation is a separate flat operation, projected from the same internal five-adapter conformance fixture used by adapter tests:
 
-| Adapter | `generateImage` binding |
-| --- | --- |
-| ai-sdk | native |
-| anthropic | absent |
-| convex | exact AI SDK re-export |
-| google | native |
-| openai | native |
+| Adapter   | `generateImage` binding |
+| --------- | ----------------------- |
+| ai-sdk    | native                  |
+| anthropic | absent                  |
+| convex    | exact AI SDK re-export  |
+| google    | native                  |
+| openai    | native                  |
 
 Generated images are immediately usable data assets. Persistence stays explicit: call `assetStore.put(result.image)` later when durable storage is needed.
 
@@ -125,12 +125,12 @@ Never implement more than one generation runtime for one SDK. In either branch, 
 
 Routing wrappers are authored in `@use-crux/core/routing` and resolved by the managed adapter execution loop. Codecs such as `toParams()` and headless provider SDK calls are translation-only and require a raw model.
 
-| Adapter family                                                                              | `generate()`                                                | `stream()`                                     | Notes                                                                     |
-| ------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------- |
-| `@use-crux/ai`                                                                              | `router()`, `split()`, `retry()`, `fallback()`, `cascade()` | `router()`, `split()`, `retry()`, `fallback()` | `cascade()` needs complete tier results and is generate-only.             |
-| Native single-turn adapters (`@use-crux/openai`, `@use-crux/anthropic`, `@use-crux/google`) | Raw model id only                                          | Raw model id only                              | Native package `model` options are `string` and type-reject routing wrappers. Use `@use-crux/ai` or a core loop-owned adapter for routed calls. |
-| Headless `prepare()` / `transport`                                                          | Same as the managed method that owns the loop               | Same as the managed method that owns the loop  | `transport` receives raw provider params after routing resolution.        |
-| `toParams()` / `fromResponse()`                                                             | Raw model only                                              | Raw model only                                 | These helpers do not run prompt policy, routing, tools, or observability. |
+| Adapter family                                                                              | `generate()`                                                | `stream()`                                     | Notes                                                                                                                                           |
+| ------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@use-crux/ai`                                                                              | `router()`, `split()`, `retry()`, `fallback()`, `cascade()` | `router()`, `split()`, `retry()`, `fallback()` | `cascade()` needs complete tier results and is generate-only.                                                                                   |
+| Native single-turn adapters (`@use-crux/openai`, `@use-crux/anthropic`, `@use-crux/google`) | Raw model id only                                           | Raw model id only                              | Native package `model` options are `string` and type-reject routing wrappers. Use `@use-crux/ai` or a core loop-owned adapter for routed calls. |
+| Headless `prepare()` / `transport`                                                          | Same as the managed method that owns the loop               | Same as the managed method that owns the loop  | `transport` receives raw provider params after routing resolution.                                                                              |
+| `toParams()` / `fromResponse()`                                                             | Raw model only                                              | Raw model only                                 | These helpers do not run prompt policy, routing, tools, or observability.                                                                       |
 
 Under the hood, `turn` compiles to `AdapterSpec`: core calls `call()` once per loop turn and `appendToolRound()` formats results. `loop.bind()` compiles to a `LoopRuntimePort`: the SDK owns the loop and core steers each step through a `StepObserver`. `bind(client)` returns the client-dependent operations (`BoundLoopRuntime`), which core assembles with `id`, `describeModel`, and `mapSettings(settings, model)` into a gateway-closed `LoopRuntimePort`:
 
@@ -249,7 +249,7 @@ const violations = transcriptCodecConformance({
 expect(violations).toEqual([]);
 ```
 
-Provider packages may expose `GenerateTextFn` and `GenerateObjectFn` helpers when useful, but those helpers should stay explicitly smaller than adapter `generate()`: no prompt resolution, tool loop, safety, cassettes, memory capture, or instrumentation.
+Provider packages may expose `GenerateTextFn` and `GenerateObjectFn` helpers when useful, but those helpers should stay explicitly smaller than adapter `generate()`: no prompt resolution, tool loop, safety, memory capture, or instrumentation.
 
 ## Internal IR: `adapter(spec)`
 

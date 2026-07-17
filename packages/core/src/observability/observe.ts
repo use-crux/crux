@@ -80,9 +80,9 @@ import {
   type UnsequencedCruxGraphRecord,
 } from "./sequence";
 import {
-  currentQualityObservabilityCaptureSession,
-  shouldQuarantineQualityObservabilityWrite,
-} from "./quality-capture-hooks";
+  currentEvalObservabilityCaptureSession,
+  shouldQuarantineEvalObservabilityWrite,
+} from "./eval-capture-hooks";
 import {
   continuationIdentity,
   createPropagationCarrier,
@@ -460,9 +460,9 @@ function emit(
     return;
   }
 
-  if (shouldQuarantineQualityObservabilityWrite()) return;
+  if (shouldQuarantineEvalObservabilityWrite()) return;
 
-  currentQualityObservabilityCaptureSession()?.send([validated.record]);
+  currentEvalObservabilityCaptureSession()?.send([validated.record]);
   publishObservabilitySubscribers(validated.record);
   publishObservabilityChannel(validated.record);
   syncDeliveryEngineWithProcessRegistry();
@@ -502,7 +502,7 @@ function hasActiveObservabilitySinks(): boolean {
   syncDeliveryEngineWithProcessRegistry();
   return (
     deliveryEngine.currentTransport() !== undefined ||
-    currentQualityObservabilityCaptureSession() !== undefined ||
+    currentEvalObservabilityCaptureSession() !== undefined ||
     hasObservabilitySubscribers() ||
     channelHasSubscribers()
   );
@@ -1544,7 +1544,7 @@ export const observe = {
   },
 
   event(options: ObserveEventOptions): void {
-    if (shouldQuarantineQualityObservabilityWrite()) return;
+    if (shouldQuarantineEvalObservabilityWrite()) return;
     const context = currentContext();
     const spanId = context?.spanStack[context.spanStack.length - 1];
     if (!context) {
@@ -1572,7 +1572,7 @@ export const observe = {
   },
 
   artifact(options: ObserveArtifactOptions): CruxArtifactId | undefined {
-    if (shouldQuarantineQualityObservabilityWrite()) return undefined;
+    if (shouldQuarantineEvalObservabilityWrite()) return undefined;
     const context = currentContext();
     if (!context) {
       recordContextlessRecord("artifact");
@@ -1608,7 +1608,7 @@ export const observe = {
   },
 
   edge(options: ObserveEdgeOptions): void {
-    if (shouldQuarantineQualityObservabilityWrite()) return;
+    if (shouldQuarantineEvalObservabilityWrite()) return;
     const context = currentContext();
     if (!context) {
       recordContextlessRecord("edge");

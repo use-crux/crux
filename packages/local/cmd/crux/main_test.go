@@ -9,7 +9,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/cli"
 )
 
-func TestRootHelpNamesEvalAsCanonicalSurfaceAndRetainsQuality(t *testing.T) {
+func TestRootHelpNamesEvalAsCanonicalSurfaceAndRemovesQuality(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 
 	cmd := newRootCommand(&cli.Factory{})
@@ -30,8 +30,6 @@ func TestRootHelpNamesEvalAsCanonicalSurfaceAndRetainsQuality(t *testing.T) {
 		"Evals",
 		"eval",
 		"Run Evals and inspect Eval runs and Baselines",
-		"quality",
-		"Use the legacy Quality workflow during migration",
 		"flows",
 		"List runtime flow sessions",
 		"Run crux eval --help for the Eval workflow",
@@ -39,6 +37,9 @@ func TestRootHelpNamesEvalAsCanonicalSurfaceAndRetainsQuality(t *testing.T) {
 		if !strings.Contains(text, want) {
 			t.Fatalf("root help missing %q:\n%s", want, text)
 		}
+	}
+	if strings.Contains(text, "quality") || strings.Contains(text, "Quality") {
+		t.Fatalf("root help still advertises removed Quality workflow:\n%s", text)
 	}
 	if strings.Contains(text, "Compatibility alias") ||
 		strings.Contains(text, "Run prompt and flow evals") ||
@@ -136,7 +137,7 @@ func TestRootCompletionEmitsShellScripts(t *testing.T) {
 	}
 }
 
-func TestRootQualityHelpUsesQualityCommandHelp(t *testing.T) {
+func TestRootQualityCommandIsRemoved(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 
 	cmd := newRootCommand(&cli.Factory{})
@@ -145,23 +146,7 @@ func TestRootQualityHelpUsesQualityCommandHelp(t *testing.T) {
 	cmd.SetErr(&out)
 	cmd.SetArgs([]string{"quality", "--help"})
 
-	if err := cmd.Execute(); err != nil {
-		t.Fatalf("quality help through root error: %v\n%s", err, out.String())
-	}
-
-	text := out.String()
-	for _, want := range []string{
-		"Quality is the canonical Crux evaluation surface.",
-		"Available Commands:",
-		"run",
-		"Run source-defined evaluations and write experiment records",
-		"cell-evidence",
-	} {
-		if !strings.Contains(text, want) {
-			t.Fatalf("quality help through root missing %q:\n%s", want, text)
-		}
-	}
-	if strings.Contains(text, "Compatibility alias") || strings.Contains(text, "crux eval") {
-		t.Fatalf("quality help through root still mentions legacy eval:\n%s", text)
+	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "unknown command") {
+		t.Fatalf("removed quality command result = %v\n%s", err, out.String())
 	}
 }

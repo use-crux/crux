@@ -15,9 +15,9 @@ import (
 	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/devtools"
+	"github.com/use-crux/crux/packages/local/internal/inspect"
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/planner"
-	"github.com/use-crux/crux/packages/local/internal/quality"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
@@ -179,7 +179,7 @@ func BenchmarkWorkerReindexProjectGraphPipeline(b *testing.B) {
 			state := store.NewStore()
 			service := devtools.NewService(
 				state,
-				quality.NewService(state, quality.Dir(filepath.Join(qualityRoot, fmt.Sprintf("run-%d", i)))),
+				inspect.NewService(state, inspect.Dir(filepath.Join(qualityRoot, fmt.Sprintf("run-%d", i)))),
 			).WithProjectIndexer(worker)
 			defer service.Shutdown()
 			result, err := service.ReindexProjectWithOptions(ctx, root, configPath, fmt.Sprintf("bench-%d", i), devtools.ProjectReindexOptions{
@@ -238,7 +238,7 @@ func BenchmarkWorkerProductionWatchLeafPath(b *testing.B) {
 	state := store.NewStore()
 	service := devtools.NewService(
 		state,
-		quality.NewService(state, quality.Dir(filepath.Join(qualityRoot, "warm"))),
+		inspect.NewService(state, inspect.Dir(filepath.Join(qualityRoot, "warm"))),
 	).WithProjectIndexer(worker)
 	defer service.Shutdown()
 	warmIndex, err := service.ReindexProjectWithOptions(ctx, root, configPath, "bench-watch", devtools.ProjectReindexOptions{

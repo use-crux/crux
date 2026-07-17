@@ -1,8 +1,8 @@
 # @use-crux/devtools
 
 React web devtools for `@use-crux/core` and Crux Local. The UI inspects prompts,
-contexts, execution traces, evals, quality experiments, Project Index data, and
-lint findings served by the Go local runtime.
+contexts, production runs, Evals, Eval runs, Baselines, Review work, Project
+Index data, and lint findings served by the Go local runtime.
 
 ## Ownership
 

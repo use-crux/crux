@@ -4,27 +4,32 @@ description: fileSource, filesSource, load IngestDocuments from individual files
 ---
 
 ```ts
-import { fileSource, filesSource } from '@use-crux/ingest/files'
-import type { FileSourceOptions, FilesSourceOptions, FilesDirectoryInput, FilesGlobInput } from '@use-crux/ingest/files'
+import { fileSource, filesSource } from "@use-crux/ingest/files";
+import type {
+  FileSourceOptions,
+  FilesSourceOptions,
+  FilesDirectoryInput,
+  FilesGlobInput,
+} from "@use-crux/ingest/files";
 ```
 
 ## Supported file types
 
 `fileSource()` and `filesSource()` use the same bundled parser index as the rest of `@use-crux/ingest`:
 
-| Extension          | Format     | Notes                                                          |
-| ------------------ | ---------- | -------------------------------------------------------------- |
-| `.txt`             | Plain text | Loaded verbatim                                                |
-| `.md`, `.markdown` | Markdown   | Extracts headings, paragraphs, code/list text, and GFM tables  |
-| `.html`, `.htm`    | HTML       | Extracts title, text blocks, headings, lists, code, and tables |
-| `.pdf`             | PDF        | Extracts page parts; visual pages can use `media.describe`     |
-| image formats      | Image      | Derives text through `media.describe`                          |
-| audio formats      | Audio      | Derives text and time segments through `media.transcribe`      |
+| Extension          | Format     | Notes                                                               |
+| ------------------ | ---------- | ------------------------------------------------------------------- |
+| `.txt`             | Plain text | Loaded verbatim                                                     |
+| `.md`, `.markdown` | Markdown   | Extracts headings, paragraphs, code/list text, and GFM tables       |
+| `.html`, `.htm`    | HTML       | Extracts title, text blocks, headings, lists, code, and tables      |
+| `.pdf`             | PDF        | Extracts page parts; visual pages can use `media.describe`          |
+| image formats      | Image      | Derives text through `media.describe`                               |
+| audio formats      | Audio      | Derives text and time segments through `media.transcribe`           |
 | video formats      | Video      | Uses explicitly bound `media.describe`, `media.transcribe`, or both |
-| `.csv`             | CSV        | Extracts a table part                                          |
-| `.json`            | JSON       | Extracts JSON path parts                                       |
-| `.docx`            | DOCX       | Extracts text and tables through Mammoth                       |
-| `.xlsx`            | XLSX       | Extracts sheet and table parts through ExcelJS                 |
+| `.csv`             | CSV        | Extracts a table part                                               |
+| `.json`            | JSON       | Extracts JSON path parts                                            |
+| `.docx`            | DOCX       | Extracts text and tables through Mammoth                            |
+| `.xlsx`            | XLSX       | Extracts sheet and table parts through ExcelJS                      |
 
 The file extension determines the parser. For other formats, pre-extract to text, provide a custom parser, or use `textSource()`.
 
@@ -45,12 +50,12 @@ fileSource('./docs/intro.md', {
 
 Returns a `SourceLoader` that yields exactly one `IngestDocument`.
 
-| Option      | Type              | Description                                                                    |
-| ----------- | ----------------- | ------------------------------------------------------------------------------ |
-| `namespace` | `string`          | Required, non-empty. Used as the indexer namespace prefix.                     |
-| `sourceId`  | `string?`         | Optional. Defaults to the file's absolute path.                                |
-| `parsers`   | `IngestParser[]?` | Optional parser overrides. Custom parsers beat built-ins for matching formats. |
-| `media`     | `IngestMediaOperations?` | Bound semantic description/transcription operations for media sources. |
+| Option      | Type                     | Description                                                                    |
+| ----------- | ------------------------ | ------------------------------------------------------------------------------ |
+| `namespace` | `string`                 | Required, non-empty. Used as the indexer namespace prefix.                     |
+| `sourceId`  | `string?`                | Optional. Defaults to the file's absolute path.                                |
+| `parsers`   | `IngestParser[]?`        | Optional parser overrides. Custom parsers beat built-ins for matching formats. |
+| `media`     | `IngestMediaOperations?` | Bound semantic description/transcription operations for media sources.         |
 
 ### Document metadata
 
@@ -85,13 +90,13 @@ Load multiple files. The `input` parameter accepts three shapes:
 ### Array of paths
 
 ```ts
-filesSource(['./a.md', './b.md', './c.md'], { namespace: 'docs' })
+filesSource(["./a.md", "./b.md", "./c.md"], { namespace: "docs" });
 ```
 
 ### Directory
 
 ```ts
-filesSource({ directory: './docs', recursive: true }, { namespace: 'docs' })
+filesSource({ directory: "./docs", recursive: true }, { namespace: "docs" });
 ```
 
 | Field       | Type       | Default  | Description         |
@@ -102,47 +107,50 @@ filesSource({ directory: './docs', recursive: true }, { namespace: 'docs' })
 ### Glob
 
 ```ts
-filesSource({ glob: '**/*.md', cwd: './docs' }, { namespace: 'docs' })
+filesSource({ glob: "**/*.md", cwd: "./docs" }, { namespace: "docs" });
 ```
 
-| Field  | Type                 | Default         | Description                                 |
-| ------ | -------------------- | --------------- | ------------------------------------------- |
+| Field  | Type                 | Default         | Description                                |
+| ------ | -------------------- | --------------- | ------------------------------------------ |
 | `glob` | `string \| string[]` | required        | Glob pattern(s), uses Node's `matchesGlob` |
-| `cwd`  | `string?`            | `process.cwd()` | Base directory for the glob                 |
+| `cwd`  | `string?`            | `process.cwd()` | Base directory for the glob                |
 
 ## Example
 
 ```ts
-import { corpus, indexer } from '@use-crux/core/indexing'
-import { filesSource } from '@use-crux/ingest/files'
+import { corpus, indexer } from "@use-crux/core/indexing";
+import { filesSource } from "@use-crux/ingest/files";
 
 const docsIndexer = indexer({
-  id: 'docs',
-  namespace: 'product-docs',
+  id: "docs",
+  namespace: "product-docs",
   store,
   dense: embedding,
-})
+});
 
 const docsCorpus = corpus({
-  id: 'docs',
-  namespace: 'product-docs',
+  id: "docs",
+  namespace: "product-docs",
   store,
   indexer: docsIndexer,
-})
+});
 
-const source = filesSource({ glob: 'docs/**/*.{md,html}', cwd: process.cwd() }, { namespace: 'product-docs' })
+const source = filesSource(
+  { glob: "docs/**/*.{md,html}", cwd: process.cwd() },
+  { namespace: "product-docs" },
+);
 
 const result = await docsCorpus.sync(source.load(), {
-  sourceSet: 'complete',
-  stale: 'delete',
-})
+  sourceSet: "complete",
+  stale: "delete",
+});
 ```
 
 Use `source.load()` for corpus sync because failed files are returned as failed source results. Use `source.documents()` for fail-fast scripts:
 
 ```ts
 for await (const document of source.documents()) {
-  console.log(document.sourceId, document.parts.length)
+  console.log(document.sourceId, document.parts.length);
 }
 ```
 

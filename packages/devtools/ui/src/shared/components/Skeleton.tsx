@@ -12,55 +12,69 @@
  *     row-based skeleton; a card grid gets card skeletons.
  */
 
-import type { CSSProperties, ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from "react";
 
 interface SkeletonProps {
-  width?: number | string
-  height?: number | string
-  radius?: number | string
-  className?: string
-  style?: CSSProperties
+  width?: number | string;
+  height?: number | string;
+  radius?: number | string;
+  className?: string;
+  style?: CSSProperties;
 }
 
-export function Skeleton({ width = '100%', height = 12, radius = 4, className, style }: SkeletonProps) {
+export function Skeleton({
+  width = "100%",
+  height = 12,
+  radius = 4,
+  className,
+  style,
+}: SkeletonProps) {
   return (
     <span
       aria-hidden
-      className={`qw-skeleton ${className ?? ''}`}
+      className={`qw-skeleton ${className ?? ""}`}
       style={{
-        display: 'inline-block',
+        display: "inline-block",
         width,
         height,
         borderRadius: radius,
-        background: 'var(--qw-bg-muted)',
+        background: "var(--qw-bg-muted)",
         ...style,
       }}
     />
-  )
+  );
 }
 
 /** Multi-line text skeleton — `lines` rows with slight width variation. */
 export function SkeletonText({
   lines = 3,
-  width = ['100%', '92%', '78%'],
+  width = ["100%", "92%", "78%"],
   lineHeight = 12,
   gap = 6,
   className,
 }: {
-  lines?: number
-  width?: ReadonlyArray<number | string> | (number | string)
-  lineHeight?: number
-  gap?: number
-  className?: string
+  lines?: number;
+  width?: ReadonlyArray<number | string> | (number | string);
+  lineHeight?: number;
+  gap?: number;
+  className?: string;
 }) {
-  const widths = Array.isArray(width) ? width : [width]
+  const widths = Array.isArray(width) ? width : [width];
   return (
-    <div aria-hidden className={className} style={{ display: 'flex', flexDirection: 'column', gap }}>
+    <div
+      aria-hidden
+      className={className}
+      style={{ display: "flex", flexDirection: "column", gap }}
+    >
       {Array.from({ length: lines }).map((_, i) => (
-        <Skeleton key={i} height={lineHeight} width={widths[i % widths.length] ?? '90%'} />
+        <Skeleton
+          key={i}
+          height={lineHeight}
+          width={widths[i % widths.length] ?? "90%"}
+        />
       ))}
     </div>
-  )
+  );
 }
 
 /** Card-shaped placeholder. Header line + body lines. */
@@ -71,31 +85,31 @@ export function SkeletonCard({
   className,
   children,
 }: {
-  title?: boolean
-  bodyLines?: number
-  height?: number | string
-  className?: string
-  children?: ReactNode
+  title?: boolean;
+  bodyLines?: number;
+  height?: number | string;
+  className?: string;
+  children?: ReactNode;
 }) {
   return (
     <div
       aria-hidden
       className={className}
       style={{
-        background: 'var(--qw-bg-elev)',
-        border: '1px solid var(--qw-border)',
+        background: "var(--qw-bg-elev)",
+        border: "1px solid var(--qw-border)",
         borderRadius: 10,
-        padding: '14px 16px',
+        padding: "14px 16px",
         height,
-        display: 'flex',
-        flexDirection: 'column',
+        display: "flex",
+        flexDirection: "column",
         gap: 10,
       }}
     >
       {title && <Skeleton width="40%" height={12} />}
       {children ?? <SkeletonText lines={bodyLines} />}
     </div>
-  )
+  );
 }
 
 /** Repeated row placeholder (matches list/table rows). */
@@ -105,23 +119,23 @@ export function SkeletonRows({
   className,
   style,
 }: {
-  rows?: number
-  rowHeight?: number
-  className?: string
-  style?: CSSProperties
+  rows?: number;
+  rowHeight?: number;
+  className?: string;
+  style?: CSSProperties;
 }) {
   return (
     <div
       aria-hidden
       className={className}
       style={{
-        display: 'flex',
-        flexDirection: 'column',
+        display: "flex",
+        flexDirection: "column",
         gap: 1,
-        background: 'var(--qw-border)',
-        border: '1px solid var(--qw-border)',
+        background: "var(--qw-border)",
+        border: "1px solid var(--qw-border)",
         borderRadius: 10,
-        overflow: 'hidden',
+        overflow: "hidden",
         ...style,
       }}
     >
@@ -129,11 +143,11 @@ export function SkeletonRows({
         <div
           key={i}
           style={{
-            background: 'var(--qw-bg-elev)',
+            background: "var(--qw-bg-elev)",
             height: rowHeight,
-            display: 'flex',
-            alignItems: 'center',
-            padding: '0 14px',
+            display: "flex",
+            alignItems: "center",
+            padding: "0 14px",
             gap: 12,
           }}
         >
@@ -141,27 +155,31 @@ export function SkeletonRows({
           <Skeleton width="22%" height={10} />
           <Skeleton width="14%" height={10} />
           <Skeleton width="34%" height={10} />
-          <Skeleton width="10%" height={10} style={{ marginLeft: 'auto' }} />
+          <Skeleton width="10%" height={10} style={{ marginLeft: "auto" }} />
         </div>
       ))}
     </div>
-  )
+  );
 }
 
 /** KPI strip placeholder — matches the Overview header. */
 export function SkeletonKpiStrip({ count = 4 }: { count?: number }) {
   return (
-    <div aria-hidden className="grid gap-3" style={{ gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))` }}>
+    <div
+      aria-hidden
+      className="grid gap-3"
+      style={{ gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))` }}
+    >
       {Array.from({ length: count }).map((_, i) => (
         <div
           key={i}
           style={{
-            background: 'var(--qw-bg-elev)',
-            border: '1px solid var(--qw-border)',
+            background: "var(--qw-bg-elev)",
+            border: "1px solid var(--qw-border)",
             borderRadius: 10,
-            padding: '12px 14px',
-            display: 'flex',
-            flexDirection: 'column',
+            padding: "12px 14px",
+            display: "flex",
+            flexDirection: "column",
             gap: 8,
             minHeight: 78,
           }}
@@ -172,19 +190,22 @@ export function SkeletonKpiStrip({ count = 4 }: { count?: number }) {
         </div>
       ))}
     </div>
-  )
+  );
 }
 
 /** Sidebar tree placeholder — vertical list of indented rows. */
 export function SkeletonTree({ rows = 8 }: { rows?: number }) {
   return (
-    <div aria-hidden style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: 6 }}>
+    <div
+      aria-hidden
+      style={{ display: "flex", flexDirection: "column", gap: 4, padding: 6 }}
+    >
       {Array.from({ length: rows }).map((_, i) => (
         <div
           key={i}
           style={{
-            display: 'flex',
-            alignItems: 'center',
+            display: "flex",
+            alignItems: "center",
             gap: 8,
             paddingLeft: 6 + (i % 3) * 10,
             height: 22,
@@ -195,17 +216,23 @@ export function SkeletonTree({ rows = 8 }: { rows?: number }) {
         </div>
       ))}
     </div>
-  )
+  );
 }
 
 /** Two-column split (sidebar + detail) placeholder. */
-export function SkeletonSplit({ sidebarRows = 12, detailLines = 6 }: { sidebarRows?: number; detailLines?: number }) {
+export function SkeletonSplit({
+  sidebarRows = 12,
+  detailLines = 6,
+}: {
+  sidebarRows?: number;
+  detailLines?: number;
+}) {
   return (
-    <div className="grid h-full" style={{ gridTemplateColumns: '304px 1fr' }}>
+    <div className="grid h-full" style={{ gridTemplateColumns: "304px 1fr" }}>
       <aside
         style={{
-          borderRight: '1px solid var(--qw-border)',
-          background: 'var(--qw-bg)',
+          borderRight: "1px solid var(--qw-border)",
+          background: "var(--qw-bg)",
         }}
       >
         <div style={{ padding: 12 }}>
@@ -223,7 +250,7 @@ export function SkeletonSplit({ sidebarRows = 12, detailLines = 6 }: { sidebarRo
         <SkeletonCard bodyLines={detailLines} />
       </div>
     </div>
-  )
+  );
 }
 
 /** Page-loading placeholder used as the route-level Suspense fallback.
@@ -235,16 +262,26 @@ export function SkeletonPage() {
   return (
     <main
       className="qw-page-content flex h-full min-w-0 flex-1 flex-col overflow-auto"
-      style={{ background: 'var(--qw-bg)' }}
+      style={{ background: "var(--qw-bg)" }}
     >
-      <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 18 }}>
+      <div
+        style={{
+          padding: 24,
+          display: "flex",
+          flexDirection: "column",
+          gap: 18,
+        }}
+      >
         <SkeletonKpiStrip count={4} />
-        <div className="grid gap-[18px]" style={{ gridTemplateColumns: '1.4fr 1fr' }}>
+        <div
+          className="grid gap-[18px]"
+          style={{ gridTemplateColumns: "1.4fr 1fr" }}
+        >
           <SkeletonCard bodyLines={6} />
           <SkeletonCard bodyLines={6} />
         </div>
         <SkeletonRows rows={5} />
       </div>
     </main>
-  )
+  );
 }

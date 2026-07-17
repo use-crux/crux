@@ -2,8 +2,14 @@
 
 import type { EvalTaskEvidenceEntry } from "./evidence";
 import type { EvalScorerEvidenceEntry } from "./scorer-evidence";
-import type { EvalRun, EvalTaskHostRequest, EvalTaskHostResult } from "./types";
-import type { Score, Scorer } from "../../quality/scorers";
+import type {
+  EvalHostReadiness,
+  EvalRequiredHostWork,
+  EvalRun,
+  EvalTaskHostRequest,
+  EvalTaskHostResult,
+} from "./types";
+import type { Score, Scorer } from "./scorers/types";
 import type {
   EvalCostAction,
   EvalCostEstimationRequest,
@@ -63,6 +69,12 @@ export interface EvalPlanningPorts {
   readonly externalScorerHostContractFingerprint?: string;
   readonly costEstimator: EvalCostEstimator;
   readonly costConfirmation?: EvalCostConfirmationPort;
+  readonly hostReadiness?: EvalHostReadinessProvider;
+}
+
+/** Invocation-scoped connection and manifest proof for remaining remote cells. */
+export interface EvalHostReadinessProvider {
+  resolve(work: readonly EvalRequiredHostWork[]): Promise<EvalHostReadiness>;
 }
 
 /** Pricing-aware maximum estimator supplied by the coordinating host. */

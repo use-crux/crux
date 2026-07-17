@@ -1,5 +1,5 @@
 ---
-title: '@use-crux/react'
+title: "@use-crux/react"
 description: Reactive hooks and transports for plans, task lists, blackboards, and working memory.
 ---
 
@@ -14,7 +14,7 @@ import {
   createPollingTransport,
   createSSETransport,
   createMockTransport,
-} from '@use-crux/react'
+} from "@use-crux/react";
 ```
 
 ## Overview
@@ -38,16 +38,16 @@ component query only receives `prefix`, `limit`, and `cursor`.
 Provide a `CruxTransport` to all child components.
 
 ```tsx
-import { CruxProvider } from '@use-crux/react'
-import { createConvexTransport } from '@use-crux/convex'
-import { useQuery } from 'convex/react'
-import { components } from '../convex/_generated/api'
+import { CruxProvider } from "@use-crux/react";
+import { createConvexTransport } from "@use-crux/convex";
+import { useQuery } from "convex/react";
+import { components } from "../convex/_generated/api";
 
-const transport = createConvexTransport({ api: components.crux, useQuery })
+const transport = createConvexTransport({ api: components.crux, useQuery });
 
-;<CruxProvider transport={transport}>
+<CruxProvider transport={transport}>
   <App />
-</CruxProvider>
+</CruxProvider>;
 ```
 
 | Prop        | Type            | Description                            |
@@ -94,9 +94,9 @@ Subscribe to a blackboard's current state.
 **Returns:** `T | null | undefined` -- the blackboard state, `null` if not found, or `undefined` if loading/skipped.
 
 ```tsx
-const state = useBlackboard<{ analysis: string; score: number }>('shared')
+const state = useBlackboard<{ analysis: string; score: number }>("shared");
 if (state) {
-  console.log(state.analysis, state.score)
+  console.log(state.analysis, state.score);
 }
 ```
 
@@ -111,7 +111,7 @@ Subscribe to a working memory's current state.
 **Returns:** `T | null | undefined` -- the working memory state, `null` if not found, or `undefined` if loading/skipped.
 
 ```tsx
-const memory = useWorkingMemory<{ conversationSummary: string }>('agent-1')
+const memory = useWorkingMemory<{ conversationSummary: string }>("agent-1");
 ```
 
 ## Transports
@@ -120,10 +120,10 @@ const memory = useWorkingMemory<{ conversationSummary: string }>('agent-1')
 
 Create a transport that polls a `RecordStore` at a regular interval. Universal fallback -- works with any backend that implements `RecordStore`, even without `subscribe()` support.
 
-| Parameter            | Type        | Description                                      |
-| -------------------- | ----------- | ------------------------------------------------ |
-| `store`              | `RecordStore` | The RecordStore to poll                            |
-| `options.intervalMs` | `number?`   | Polling interval in milliseconds. Default: 1000. |
+| Parameter            | Type          | Description                                      |
+| -------------------- | ------------- | ------------------------------------------------ |
+| `store`              | `RecordStore` | The RecordStore to poll                          |
+| `options.intervalMs` | `number?`     | Polling interval in milliseconds. Default: 1000. |
 
 **Returns:** `PollingTransport`
 
@@ -185,23 +185,25 @@ Create a mock transport for testing. Backed by an in-memory Map with `useSyncExt
 | `getData()`       | Get the raw data Map (for assertions).     |
 
 ```tsx
-import { createMockTransport, CruxProvider, usePlan } from '@use-crux/react'
+import { createMockTransport, CruxProvider, usePlan } from "@use-crux/react";
 
-const transport = createMockTransport()
-transport.set('plan:abc', {
-  id: 'abc',
-  title: 'Test Plan',
-  content: '',
+const transport = createMockTransport();
+transport.set("plan:abc", {
+  id: "abc",
+  title: "Test Plan",
+  content: "",
   version: 1,
   createdAt: Date.now(),
   updatedAt: Date.now(),
-})
+});
 
-const { result } = renderHook(() => usePlan('abc'), {
-  wrapper: ({ children }) => <CruxProvider transport={transport}>{children}</CruxProvider>,
-})
+const { result } = renderHook(() => usePlan("abc"), {
+  wrapper: ({ children }) => (
+    <CruxProvider transport={transport}>{children}</CruxProvider>
+  ),
+});
 
-expect(result.current?.title).toBe('Test Plan')
+expect(result.current?.title).toBe("Test Plan");
 ```
 
 ## `CruxTransport` Interface
@@ -210,8 +212,11 @@ The transport interface that all implementations must satisfy. Each method IS a 
 
 ```ts
 interface CruxTransport {
-  useDocument(key: string | undefined): JsonObject | null | undefined
-  useDocumentList(prefix: string | undefined, options?: ListOptions): StoreEntry[] | undefined
+  useDocument(key: string | undefined): JsonObject | null | undefined;
+  useDocumentList(
+    prefix: string | undefined,
+    options?: ListOptions,
+  ): StoreEntry[] | undefined;
 }
 ```
 
@@ -230,7 +235,7 @@ import type {
   SSETransport,
   SSETransportOptions,
   MockTransport,
-} from '@use-crux/react'
+} from "@use-crux/react";
 ```
 
 ## Related

@@ -87,7 +87,9 @@ function AttemptRow({
           className="flex flex-wrap gap-x-3 gap-y-1 pl-[30px] font-mono text-[10.5px]"
           style={{ color: "var(--qw-fg-faint)" }}
         >
-          {attempt.delayMs != null && <span>delay {fmtDuration(attempt.delayMs)}</span>}
+          {attempt.delayMs != null && (
+            <span>delay {fmtDuration(attempt.delayMs)}</span>
+          )}
           {attempt.error && (
             <span title={attempt.error} style={{ overflowWrap: "anywhere" }}>
               {boundedReceiptText(attempt.error)}
@@ -135,7 +137,9 @@ function TierRow({ tier }: { tier: RoutingTierView }) {
     <div className="flex flex-col gap-1">
       <div
         className="grid items-center gap-2 font-mono text-[11.5px]"
-        style={{ gridTemplateColumns: "22px minmax(0, 1fr) 72px 76px 72px auto" }}
+        style={{
+          gridTemplateColumns: "22px minmax(0, 1fr) 72px 76px 72px auto",
+        }}
       >
         <span style={{ color: "var(--qw-fg-faint)" }}>{tier.index + 1}</span>
         <span
@@ -178,7 +182,9 @@ function TierRow({ tier }: { tier: RoutingTierView }) {
 
 function boundedReceiptText(value: string, limit = 180): string {
   const normalized = value.replace(/\s+/g, " ").trim();
-  return normalized.length <= limit ? normalized : `${normalized.slice(0, limit - 3)}...`;
+  return normalized.length <= limit
+    ? normalized
+    : `${normalized.slice(0, limit - 3)}...`;
 }
 
 function tierTone(status: string): ChipTone {

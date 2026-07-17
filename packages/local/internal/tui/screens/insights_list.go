@@ -30,7 +30,7 @@ func (s *Insights) renderList(width, height int) string {
 	s.list.SetItems(s.items)
 	s.list.SetHeight(bodyRows)
 	s.list.SetCursorByIdentity(s.selectedID)
-	rows := s.list.Render(width, func(ins api.QualityInsightRecord, _ int, selected bool, rowW int) string {
+	rows := s.list.Render(width, func(ins api.InspectInsightRecord, _ int, selected bool, rowW int) string {
 		row1, row2 := s.renderListRow(ins, rowW, selected)
 		return row1 + "\n" + row2
 	})
@@ -46,7 +46,7 @@ func (s *Insights) renderList(width, height int) string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
-func (s *Insights) renderListRow(ins api.QualityInsightRecord, width int, selected bool) (string, string) {
+func (s *Insights) renderListRow(ins api.InspectInsightRecord, width int, selected bool) (string, string) {
 	bar := " "
 	if selected {
 		bar = lipgloss.NewStyle().Foreground(shell.ColorTeal).Render("▌")

@@ -8,36 +8,65 @@
  * so a `partial` definition collapses to identity + hero + provenance.
  */
 
-import { Fragment, type ComponentType, type ReactNode } from 'react'
-import { T, toneColor, type Tone } from './tokens'
-import { Icon } from './icons'
-import { Btn, Chip, SectionHead } from './primitives'
-import { Bar, ConfidenceMeter, FamilyDot, FidelityChip, KindBadge, KindGlyph, MetaRow, kindMeta } from './kit'
-import type { ViewDef } from './adapt'
-import { indexFactChips } from './adapt'
-import { useIndexIndex, useIndexSelect } from './context'
-import { IndexHero } from './hero'
-import { IndexConfig, IndexContract, IndexControl, IndexData, IndexDependencies, IndexSource } from './intel'
-import { IndexDiagnostics, IndexObservability, IndexProvenance, IndexQuality } from './sections'
-import { CatContributesSection, CatObservedSection } from './observed'
-import { IndexHealthSection } from './health'
-import { IndexStorage } from './storage-section'
-import { IndexMedia } from './media-section'
-import { IndexMcpDetail } from './mcp-detail'
+import { Fragment, type ComponentType, type ReactNode } from "react";
+import { T, toneColor, type Tone } from "./tokens";
+import { Icon } from "./icons";
+import { Btn, Chip, SectionHead } from "./primitives";
+import {
+  Bar,
+  ConfidenceMeter,
+  FamilyDot,
+  FidelityChip,
+  KindBadge,
+  KindGlyph,
+  MetaRow,
+  kindMeta,
+} from "./kit";
+import type { ViewDef } from "./adapt";
+import { indexFactChips } from "./adapt";
+import { useIndexIndex, useIndexSelect } from "./context";
+import { IndexHero } from "./hero";
+import {
+  IndexConfig,
+  IndexContract,
+  IndexControl,
+  IndexData,
+  IndexDependencies,
+  IndexSource,
+} from "./intel";
+import {
+  IndexDiagnostics,
+  IndexObservability,
+  IndexProvenance,
+  IndexQuality,
+} from "./sections";
+import { CatContributesSection, CatObservedSection } from "./observed";
+import { IndexHealthSection } from "./health";
+import { IndexStorage } from "./storage-section";
+import { IndexMedia } from "./media-section";
+import { IndexMcpDetail } from "./mcp-detail";
 
 // ── relations block (two columns, full width) ────────────────────────────────
 function CatRelations({ def }: { def: ViewDef }) {
-  const idx = useIndexIndex()
-  const select = useIndexSelect()
-  const rels = idx.relationsOf(def.id)
-  if (!rels.incoming.length && !rels.outgoing.length) return null
-  const Col = ({ title, edges, dir }: { title: string; edges: typeof rels.incoming; dir: 'in' | 'out' }) => (
+  const idx = useIndexIndex();
+  const select = useIndexSelect();
+  const rels = idx.relationsOf(def.id);
+  if (!rels.incoming.length && !rels.outgoing.length) return null;
+  const Col = ({
+    title,
+    edges,
+    dir,
+  }: {
+    title: string;
+    edges: typeof rels.incoming;
+    dir: "in" | "out";
+  }) => (
     <div>
       <div
         style={{
           fontSize: 10,
-          letterSpacing: '0.14em',
-          textTransform: 'uppercase',
+          letterSpacing: "0.14em",
+          textTransform: "uppercase",
           color: T.fgFaint,
           fontWeight: 500,
           marginBottom: 10,
@@ -45,11 +74,11 @@ function CatRelations({ def }: { def: ViewDef }) {
       >
         {title} · {edges.length}
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
         {edges.length ? (
           edges.map((r) => {
-            const otherId = dir === 'out' ? r.to : r.from
-            const other = idx.byId(otherId)
+            const otherId = dir === "out" ? r.to : r.from;
+            const other = idx.byId(otherId);
             return (
               <button
                 key={r.id}
@@ -57,28 +86,32 @@ function CatRelations({ def }: { def: ViewDef }) {
                 onClick={other ? () => select(otherId) : undefined}
                 title={other ? `Open ${otherId}` : undefined}
                 style={{
-                  all: 'unset',
-                  boxSizing: 'border-box',
-                  cursor: other ? 'pointer' : 'default',
-                  display: 'grid',
-                  gridTemplateColumns: '22px 1fr auto',
+                  all: "unset",
+                  boxSizing: "border-box",
+                  cursor: other ? "pointer" : "default",
+                  display: "grid",
+                  gridTemplateColumns: "22px 1fr auto",
                   gap: 10,
-                  alignItems: 'center',
-                  padding: '7px 10px',
+                  alignItems: "center",
+                  padding: "7px 10px",
                   background: T.bg,
                   border: `1px solid ${T.border}`,
                   borderRadius: 7,
                 }}
               >
-                {other ? <KindGlyph kind={other.kind} size={22} /> : <span style={{ width: 22 }} />}
+                {other ? (
+                  <KindGlyph kind={other.kind} size={22} />
+                ) : (
+                  <span style={{ width: 22 }} />
+                )}
                 <span
                   style={{
                     fontFamily: T.mono,
                     fontSize: 12,
                     fontWeight: 500,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
                   }}
                 >
                   {otherId}
@@ -88,21 +121,23 @@ function CatRelations({ def }: { def: ViewDef }) {
                     fontFamily: T.mono,
                     fontSize: 9.5,
                     color: T.fgFaint,
-                    whiteSpace: 'nowrap',
+                    whiteSpace: "nowrap",
                   }}
                 >
-                  {r.type.replace(/_/g, ' ')}
-                  {r.fidelity === 'partial' ? ' ·partial' : ''}
+                  {r.type.replace(/_/g, " ")}
+                  {r.fidelity === "partial" ? " ·partial" : ""}
                 </span>
               </button>
-            )
+            );
           })
         ) : (
-          <span style={{ fontFamily: T.mono, fontSize: 11, color: T.fgFaint }}>none</span>
+          <span style={{ fontFamily: T.mono, fontSize: 11, color: T.fgFaint }}>
+            none
+          </span>
         )}
       </div>
     </div>
-  )
+  );
   return (
     <>
       <SectionHead
@@ -115,8 +150,8 @@ function CatRelations({ def }: { def: ViewDef }) {
       />
       <div
         style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
           gap: 18,
           marginBottom: 22,
         }}
@@ -125,7 +160,7 @@ function CatRelations({ def }: { def: ViewDef }) {
         <Col title="Depends on · outgoing" edges={rels.outgoing} dir="out" />
       </div>
     </>
-  )
+  );
 }
 
 // ── per-kind section order (importance → prominence) ─────────────────────────
@@ -148,87 +183,193 @@ const INDEX_SECTION_COMP: Record<string, ComponentType<{ def: ViewDef }>> = {
   relations: CatRelations,
   quality: IndexQuality,
   health: IndexHealthSection,
-}
+};
 
 function indexSectionOrder(def: ViewDef): string[] {
-  const k = def.kind
+  const k = def.kind;
   const map: Record<string, string[]> = {
     prompt: [
-      'hero',
-      'config',
-      'contract',
-      'observed',
-      'source',
-      'deps',
-      'quality',
-      'observability',
-      'relations',
-      'health',
+      "hero",
+      "config",
+      "contract",
+      "observed",
+      "source",
+      "deps",
+      "quality",
+      "observability",
+      "relations",
+      "health",
     ],
-    context: ['hero', 'config', 'contract', 'observed', 'source', 'deps', 'relations', 'health'],
-    injectable: ['hero', 'contributes', 'contract', 'config', 'source', 'deps', 'relations', 'health'],
-    tool: ['hero', 'mcp', 'contract', 'config', 'observability', 'source', 'data', 'relations', 'quality', 'health'],
-    'mcp.server': ['hero', 'mcp', 'config', 'source', 'observability', 'relations', 'health'],
-    agent: ['hero', 'config', 'deps', 'control', 'source', 'data', 'observability', 'quality', 'relations', 'health'],
+    context: [
+      "hero",
+      "config",
+      "contract",
+      "observed",
+      "source",
+      "deps",
+      "relations",
+      "health",
+    ],
+    injectable: [
+      "hero",
+      "contributes",
+      "contract",
+      "config",
+      "source",
+      "deps",
+      "relations",
+      "health",
+    ],
+    tool: [
+      "hero",
+      "mcp",
+      "contract",
+      "config",
+      "observability",
+      "source",
+      "data",
+      "relations",
+      "quality",
+      "health",
+    ],
+    "mcp.server": [
+      "hero",
+      "mcp",
+      "config",
+      "source",
+      "observability",
+      "relations",
+      "health",
+    ],
+    agent: [
+      "hero",
+      "config",
+      "deps",
+      "control",
+      "source",
+      "data",
+      "observability",
+      "quality",
+      "relations",
+      "health",
+    ],
     flow: [
-      'hero',
-      'control',
-      'contract',
-      'config',
-      'data',
-      'deps',
-      'source',
-      'observability',
-      'quality',
-      'relations',
-      'health',
+      "hero",
+      "control",
+      "contract",
+      "config",
+      "data",
+      "deps",
+      "source",
+      "observability",
+      "quality",
+      "relations",
+      "health",
     ],
-    evaluation: ['hero', 'config', 'quality', 'relations', 'source', 'health'],
-  }
-  if (map[k]) return map[k]
-  if (k.startsWith('routing.'))
-    return ['hero', 'config', 'control', 'deps', 'source', 'observability', 'relations', 'health', 'quality']
-  if (k.startsWith('composition.'))
-    return ['hero', 'control', 'config', 'deps', 'data', 'observability', 'relations', 'quality', 'health']
-  if (k.startsWith('rag.'))
-    return ['hero', 'config', 'deps', 'data', 'source', 'observability', 'quality', 'relations', 'health']
-  if (k.startsWith('storage.')) return ['hero', 'storage', 'source', 'observability', 'relations', 'health']
-  if (k === 'media.operation' || k === 'ingest.source')
-    return ['hero', 'media', 'source', 'observability', 'relations', 'health']
-  if (k.startsWith('eval.')) return ['hero', 'quality', 'config', 'source', 'relations', 'health']
-  if (k === 'memory' || k === 'blackboard')
-    return ['hero', 'config', 'contract', 'data', 'source', 'observability', 'relations', 'health']
-  if (k === 'workspace') return ['hero', 'config', 'data', 'source', 'relations', 'health']
-  if (k === 'guardrail' || k === 'constraint') return ['hero', 'config', 'source', 'deps', 'relations', 'health']
-  if (k === 'scorer') return ['hero', 'config', 'source', 'relations', 'quality']
-  if (k === 'dataset' || k === 'suite') return ['hero', 'quality', 'relations', 'health']
+    evaluation: ["hero", "config", "quality", "relations", "source", "health"],
+  };
+  if (map[k]) return map[k];
+  if (k.startsWith("routing."))
+    return [
+      "hero",
+      "config",
+      "control",
+      "deps",
+      "source",
+      "observability",
+      "relations",
+      "health",
+      "quality",
+    ];
+  if (k.startsWith("composition."))
+    return [
+      "hero",
+      "control",
+      "config",
+      "deps",
+      "data",
+      "observability",
+      "relations",
+      "quality",
+      "health",
+    ];
+  if (k.startsWith("rag."))
+    return [
+      "hero",
+      "config",
+      "deps",
+      "data",
+      "source",
+      "observability",
+      "quality",
+      "relations",
+      "health",
+    ];
+  if (k.startsWith("storage."))
+    return [
+      "hero",
+      "storage",
+      "source",
+      "observability",
+      "relations",
+      "health",
+    ];
+  if (k === "media.operation" || k === "ingest.source")
+    return ["hero", "media", "source", "observability", "relations", "health"];
+  if (k.startsWith("eval."))
+    return ["hero", "quality", "config", "source", "relations", "health"];
+  if (k === "memory" || k === "blackboard")
+    return [
+      "hero",
+      "config",
+      "contract",
+      "data",
+      "source",
+      "observability",
+      "relations",
+      "health",
+    ];
+  if (k === "workspace")
+    return ["hero", "config", "data", "source", "relations", "health"];
+  if (k === "guardrail" || k === "constraint")
+    return ["hero", "config", "source", "deps", "relations", "health"];
+  if (k === "scorer")
+    return ["hero", "config", "source", "relations", "quality"];
+  if (k === "dataset" || k === "suite")
+    return ["hero", "quality", "relations", "health"];
   return [
-    'hero',
-    'contract',
-    'config',
-    'source',
-    'control',
-    'data',
-    'deps',
-    'observability',
-    'relations',
-    'quality',
-    'health',
-  ]
+    "hero",
+    "contract",
+    "config",
+    "source",
+    "control",
+    "data",
+    "deps",
+    "observability",
+    "relations",
+    "quality",
+    "health",
+  ];
 }
 
 const KIND_ACTIONS: Record<string, string[]> = {
-  agent: ['Run eval', 'Playground'],
-  prompt: ['Run eval', 'Playground'],
-  flow: ['Run', 'Trace'],
-  tool: ['Test', 'Trace'],
-  'eval.prompt': ['Run eval'],
-  suite: ['Run suite'],
-}
+  agent: ["Run eval", "Playground"],
+  prompt: ["Run eval", "Playground"],
+  flow: ["Run", "Trace"],
+  tool: ["Test", "Trace"],
+  "eval.prompt": ["Run eval"],
+  suite: ["Run suite"],
+};
 
 // ── the detail view ──────────────────────────────────────────────────────────
-export function IndexDetail({ def, onExpand }: { def: ViewDef | undefined; onExpand?: () => void }) {
-  const idx = useIndexIndex()
+export function IndexDetail({
+  def,
+  onExpand,
+}: {
+  def: ViewDef | undefined;
+  onExpand?: () => void;
+}) {
+  const idx = useIndexIndex();
   if (!def)
     return (
       <div
@@ -241,35 +382,40 @@ export function IndexDetail({ def, onExpand }: { def: ViewDef | undefined; onExp
       >
         Select a definition
       </div>
-    )
-  const m = kindMeta(def.kind)
-  const chips = indexFactChips(def)
-  const q = def.quality
-  const directLints = idx.lintsForDef(def.id).filter((f) => f.primaryDefinitionId === def.id)
-  const configuredOrder = indexSectionOrder(def)
+    );
+  const m = kindMeta(def.kind);
+  const chips = indexFactChips(def);
+  const q = def.quality;
+  const directLints = idx
+    .lintsForDef(def.id)
+    .filter((f) => f.primaryDefinitionId === def.id);
+  const configuredOrder = indexSectionOrder(def);
   // Runtime coverage is exhaustive and manifest-driven; even static-only and
   // structural kinds need a truthful "no runtime evidence" explanation.
-  const order = configuredOrder.includes('observability') ? configuredOrder : [...configuredOrder, 'observability']
-  const actions = KIND_ACTIONS[def.kind] ?? ['Open in runs']
+  const order = configuredOrder.includes("observability")
+    ? configuredOrder
+    : [...configuredOrder, "observability"];
+  const actions = KIND_ACTIONS[def.kind] ?? ["Open in runs"];
 
   // quick-reference properties band — the at-a-glance health of the entry
-  const props: ReactNode[] = []
-  props.push(<ConfidenceMeter key="conf" value={def.confidence} />)
-  if (def.status && def.status !== 'active') {
+  const props: ReactNode[] = [];
+  props.push(<ConfidenceMeter key="conf" value={def.confidence} />);
+  if (def.status && def.status !== "active") {
     props.push(
-      <Chip key="status" tone={def.status === 'stale' ? 'warn' : 'danger'} dot>
+      <Chip key="status" tone={def.status === "stale" ? "warn" : "danger"} dot>
         {def.status}
       </Chip>,
-    )
+    );
   }
   if (q && q.passRate != null) {
-    const tone: Tone = q.passRate >= 0.9 ? 'ok' : q.passRate >= 0.75 ? 'crux' : 'warn'
+    const tone: Tone =
+      q.passRate >= 0.9 ? "ok" : q.passRate >= 0.75 ? "crux" : "warn";
     props.push(
       <span
         key="pr"
         style={{
-          display: 'inline-flex',
-          alignItems: 'center',
+          display: "inline-flex",
+          alignItems: "center",
           gap: 6,
           fontFamily: T.mono,
           fontSize: 11,
@@ -281,69 +427,75 @@ export function IndexDetail({ def, onExpand }: { def: ViewDef | undefined; onExp
         </span>
         {Math.round(q.passRate * 100)}% · {q.runCount ?? 0} runs
       </span>,
-    )
+    );
   }
   if (def.runtimeJoin) {
     props.push(
       <span
         key="rj"
         style={{
-          display: 'inline-flex',
-          alignItems: 'center',
+          display: "inline-flex",
+          alignItems: "center",
           gap: 6,
           fontFamily: T.mono,
           fontSize: 11,
           color: T.crux,
           background: T.cruxSoft,
-          padding: '2px 8px',
+          padding: "2px 8px",
           borderRadius: 5,
         }}
       >
         <Icon name="trace" size={11} color={T.crux} />
         {def.runtimeJoin.spanName || def.runtimeJoin.primitive}
       </span>,
-    )
+    );
   }
   if (directLints.length) {
     // Neutral by default; warn-toned only when a warning/error is present.
     // `info` never saturates the band (see the Index health handover §8).
-    const actionable = directLints.some((l) => l.severity === 'warning' || l.severity === 'error')
+    const actionable = directLints.some(
+      (l) => l.severity === "warning" || l.severity === "error",
+    );
     props.push(
       <span
         key="lint"
         style={{
-          display: 'inline-flex',
-          alignItems: 'center',
+          display: "inline-flex",
+          alignItems: "center",
           gap: 5,
           fontFamily: T.mono,
           fontSize: 11,
           color: actionable ? T.warn : T.fgMuted,
         }}
       >
-        <Icon name="sparkle" size={11} color={actionable ? T.warn : T.fgFaint} />
-        {directLints.length} finding{directLints.length > 1 ? 's' : ''}
+        <Icon
+          name="sparkle"
+          size={11}
+          color={actionable ? T.warn : T.fgFaint}
+        />
+        {directLints.length} finding{directLints.length > 1 ? "s" : ""}
       </span>,
-    )
+    );
   }
 
   return (
-    <div style={{ height: '100%', overflow: 'auto', background: T.bg }}>
+    <div style={{ height: "100%", overflow: "auto", background: T.bg }}>
       {/* identity */}
       <div
         style={{
-          padding: '22px 30px 16px',
+          padding: "22px 30px 16px",
           borderBottom: `1px solid ${T.border}`,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
           <KindGlyph kind={def.kind} size={44} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div
               style={{
-                display: 'flex',
-                alignItems: 'center',
+                display: "flex",
+                alignItems: "center",
                 gap: 10,
-                flexWrap: 'wrap',
+                flexWrap: "wrap",
               }}
             >
               <span
@@ -351,7 +503,7 @@ export function IndexDetail({ def, onExpand }: { def: ViewDef | undefined; onExp
                   fontFamily: T.mono,
                   fontSize: 23,
                   fontWeight: 600,
-                  letterSpacing: '-0.02em',
+                  letterSpacing: "-0.02em",
                 }}
               >
                 {def.name}
@@ -359,8 +511,8 @@ export function IndexDetail({ def, onExpand }: { def: ViewDef | undefined; onExp
               <KindBadge kind={def.kind} />
               <span
                 style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
+                  display: "inline-flex",
+                  alignItems: "center",
                   gap: 5,
                   fontSize: 11.5,
                   color: T.fgMuted,
@@ -369,16 +521,11 @@ export function IndexDetail({ def, onExpand }: { def: ViewDef | undefined; onExp
                 <FamilyDot family={m.family} /> {m.familyLabel}
               </span>
               <FidelityChip value={def.fidelity} />
-              {def.changedSinceBaseline && (
-                <Chip tone="warn" dot>
-                  changed vs baseline
-                </Chip>
-              )}
             </div>
             {def.description && (
               <p
                 style={{
-                  margin: '8px 0 0',
+                  margin: "8px 0 0",
                   fontFamily: T.serif,
                   fontSize: 14.5,
                   lineHeight: 1.55,
@@ -390,9 +537,14 @@ export function IndexDetail({ def, onExpand }: { def: ViewDef | undefined; onExp
               </p>
             )}
           </div>
-          <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+          <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
             {actions.map((a, i) => (
-              <Btn key={a} size="sm" variant={i === 0 ? 'primary' : 'ghost'} icon={i === 0 ? 'play' : undefined}>
+              <Btn
+                key={a}
+                size="sm"
+                variant={i === 0 ? "primary" : "ghost"}
+                icon={i === 0 ? "play" : undefined}
+              >
                 {a}
               </Btn>
             ))}
@@ -409,18 +561,22 @@ export function IndexDetail({ def, onExpand }: { def: ViewDef | undefined; onExp
         {/* properties band */}
         <div
           style={{
-            display: 'flex',
-            alignItems: 'center',
+            display: "flex",
+            alignItems: "center",
             gap: 16,
             marginTop: 14,
-            flexWrap: 'wrap',
+            flexWrap: "wrap",
           }}
         >
           <MetaRow
             items={[
-              def.file ? { label: 'source', value: `${def.file}:${def.line}` } : null,
-              def.fingerprint ? { label: 'fp', value: def.fingerprint } : null,
-              def.tags && def.tags.length ? { value: def.tags.map((x) => '#' + x).join(' ') } : null,
+              def.file
+                ? { label: "source", value: `${def.file}:${def.line}` }
+                : null,
+              def.fingerprint ? { label: "fp", value: def.fingerprint } : null,
+              def.tags && def.tags.length
+                ? { value: def.tags.map((x) => "#" + x).join(" ") }
+                : null,
             ]}
           />
           {props.map((p, i) => (
@@ -429,13 +585,13 @@ export function IndexDetail({ def, onExpand }: { def: ViewDef | undefined; onExp
         </div>
       </div>
 
-      <div style={{ padding: '22px 30px 40px' }}>
+      <div style={{ padding: "22px 30px 40px" }}>
         {/* at a glance */}
         {chips.length > 0 && (
           <div
             style={{
-              display: 'flex',
-              flexWrap: 'wrap',
+              display: "flex",
+              flexWrap: "wrap",
               gap: 6,
               marginBottom: 20,
             }}
@@ -444,10 +600,10 @@ export function IndexDetail({ def, onExpand }: { def: ViewDef | undefined; onExp
               <span
                 key={key}
                 style={{
-                  display: 'inline-flex',
-                  alignItems: 'baseline',
+                  display: "inline-flex",
+                  alignItems: "baseline",
                   gap: 6,
-                  padding: '4px 10px',
+                  padding: "4px 10px",
                   borderRadius: 6,
                   background: T.bgElev,
                   border: `1px solid ${T.border}`,
@@ -456,7 +612,9 @@ export function IndexDetail({ def, onExpand }: { def: ViewDef | undefined; onExp
                 }}
               >
                 <span style={{ color: T.fgFaint }}>{key}</span>
-                <span style={{ color: T.fg, fontWeight: 500 }}>{String(v)}</span>
+                <span style={{ color: T.fg, fontWeight: 500 }}>
+                  {String(v)}
+                </span>
               </span>
             ))}
           </div>
@@ -467,13 +625,13 @@ export function IndexDetail({ def, onExpand }: { def: ViewDef | undefined; onExp
 
         {/* per-kind ordered sections */}
         {order.map((key) => {
-          const C = INDEX_SECTION_COMP[key]
-          return C ? <C key={key} def={def} /> : null
+          const C = INDEX_SECTION_COMP[key];
+          return C ? <C key={key} def={def} /> : null;
         })}
 
         {/* provenance — the quiet "everything else" */}
         <IndexProvenance def={def} />
       </div>
     </div>
-  )
+  );
 }

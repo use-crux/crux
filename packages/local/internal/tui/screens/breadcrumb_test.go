@@ -11,13 +11,10 @@ import (
 // screen-local segments. See ADR-0050 + the TUI V1 implementation plan.
 func TestScreenBreadcrumbsDoNotPrependQuality(t *testing.T) {
 	all := map[string]Screen{
-		"overview":    NewOverview(),
-		"insights":    NewInsights(),
-		"runs":        NewRuns(),
-		"experiments": NewExperiments(),
-		"baselines":   NewBaselines(),
-		"feedback":    NewFeedback(),
-		"cassettes":   NewCassettes(),
+		"overview": NewOverview(),
+		"insights": NewInsights(),
+		"runs":     NewRuns(),
+		"index":    NewIndex(),
 	}
 	for name, s := range all {
 		path, _ := s.Breadcrumb()

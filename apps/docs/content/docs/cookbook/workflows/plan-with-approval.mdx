@@ -23,78 +23,91 @@ This recipe builds a workflow that proposes a plan, suspends for human review, a
 ### Backend
 
 ```ts
-import { plan } from '@use-crux/core/plan'
-import { flow } from '@use-crux/core/flow'
-import { generate } from '@use-crux/ai'
-import { openai } from '@ai-sdk/openai'
-import { z } from 'zod'
+import { plan } from "@use-crux/core/plan";
+import { flow } from "@use-crux/core/flow";
+import { generate } from "@use-crux/ai";
+import { openai } from "@ai-sdk/openai";
+import { z } from "zod";
 
-const writerFlow = flow('writer-flow', async (flow) => {
+const writerFlow = flow("writer-flow", async (flow) => {
   // Step 1: produce a plan via LLM
-  const planContent = await flow.step('draft-plan', async () => {
+  const planContent = await flow.step("draft-plan", async () => {
     const result = await generate(planPrompt, {
-      model: openai('gpt-4o'),
+      model: openai("gpt-4o"),
       input: { brief: flow.input.brief },
-    })
-    return result.text
-  })
+    });
+    return result.text;
+  });
 
   // Step 2: persist the plan
-  const planHandle = await flow.step('persist-plan', async () => {
+  const planHandle = await flow.step("persist-plan", async () => {
     const p = await plan({
       title: flow.input.title,
       content: planContent,
-      metadata: { status: 'draft', flowId: flow.flowId },
-    })
-    return { planId: p.id }
-  })
+      metadata: { status: "draft", flowId: flow.flowId },
+    });
+    return { planId: p.id };
+  });
 
   // Step 3: suspend until approval
-  const approval = await flow.suspend('await-approval', {
-    schema: z.object({ approved: z.boolean(), revisions: z.string().optional() }),
-    timeout: '7d',
-  })
+  const approval = await flow.suspend("await-approval", {
+    schema: z.object({
+      approved: z.boolean(),
+      revisions: z.string().optional(),
+    }),
+    timeout: "7d",
+  });
 
   if (!approval.approved) {
-    return { status: 'rejected', planId: planHandle.planId }
+    return { status: "rejected", planId: planHandle.planId };
   }
 
   // Step 4: execute the plan
-  return flow.step('execute', async () => {
+  return flow.step("execute", async () => {
     return generate(executePrompt, {
-      model: openai('gpt-4o'),
+      model: openai("gpt-4o"),
       input: { plan: planContent, revisions: approval.revisions },
-    })
-  })
-})
+    });
+  });
+});
 ```
 
 ### Approval mutation
 
 ```ts
-import { signalFlow } from '@use-crux/core/flow'
-import { plan } from '@use-crux/core/plan'
+import { signalFlow } from "@use-crux/core/flow";
+import { plan } from "@use-crux/core/plan";
 
-export async function approvePlan(planId: string, flowId: string, revisions?: string) {
-  await plan.ref(planId).update({ metadata: { status: 'approved' } })
-  await signalFlow(flowId, 'await-approval', { approved: true, revisions })
+export async function approvePlan(
+  planId: string,
+  flowId: string,
+  revisions?: string,
+) {
+  await plan.ref(planId).update({ metadata: { status: "approved" } });
+  await signalFlow(flowId, "await-approval", { approved: true, revisions });
 }
 
 export async function rejectPlan(planId: string, flowId: string) {
-  await plan.ref(planId).update({ metadata: { status: 'rejected' } })
-  await signalFlow(flowId, 'await-approval', { approved: false })
+  await plan.ref(planId).update({ metadata: { status: "rejected" } });
+  await signalFlow(flowId, "await-approval", { approved: false });
 }
 ```
 
 ### Live UI
 
 ```tsx
-'use client'
-import { usePlan } from '@use-crux/react'
+"use client";
+import { usePlan } from "@use-crux/react";
 
-export function PlanReview({ planId, flowId }: { planId: string; flowId: string }) {
-  const plan = usePlan(planId)
-  if (!plan) return <p>Loading...</p>
+export function PlanReview({
+  planId,
+  flowId,
+}: {
+  planId: string;
+  flowId: string;
+}) {
+  const plan = usePlan(planId);
+  if (!plan) return <p>Loading...</p>;
 
   return (
     <article>
@@ -104,7 +117,7 @@ export function PlanReview({ planId, flowId }: { planId: string; flowId: string 
       <button onClick={() => approvePlan(planId, flowId)}>Approve</button>
       <button onClick={() => rejectPlan(planId, flowId)}>Reject</button>
     </article>
-  )
+  );
 }
 ```
 

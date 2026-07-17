@@ -1,0 +1,24 @@
+---
+title: Errors and remedies
+description: Exact preflight and task-contract diagnostics for Evals.
+---
+
+Eval errors name the violated contract and the next action. You never need to
+know an evidence key, storage implementation, or Runtime execution degree to
+recover.
+
+| Message                                                                                                                                                                             | Remedy                                                                          |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `Eval execution requires a managed task created with generate.task() or stream.task().`                                                                                             | Pass the callable production task, not a plain wrapper around it.               |
+| `Managed Eval task descriptor is incompatible. This usually means @use-crux/core and @use-crux/ai are on mixed fixed versions; align both packages to the same compatible release.` | Install compatible fixed Core and AI package versions together.                 |
+| `Managed generate task returned no structured output; the adapter must return a validated object or throw its validation failure.`                                                  | Keep the prompt output schema and let the adapter surface validation failure.   |
+| `Set CRUX_EVAL_HOST_URL.`                                                                                                                                                           | Select the remote Runtime URL, unless the active adapter can infer it.          |
+| `Set CRUX_EVAL_HOST_DEPLOYMENT_ID.`                                                                                                                                                 | Set the expected deployment id, unless the active adapter can infer it.         |
+| `Set CRUX_EVAL_HOST_TOKEN.`                                                                                                                                                         | Add the dedicated bearer to the environment or secret store.                    |
+| `Only a complete Eval run can be set as a Baseline`                                                                                                                                 | Rerun every selected Case and required score without errors.                    |
+| `A filtered Eval run cannot be set as a Baseline`                                                                                                                                   | Run the full Eval population before accepting it.                               |
+| `feedback() requires a configured durable feedback destination. Configure the Crux observability destination before submitting feedback.`                                           | Configure the existing observability destination with durable feedback support. |
+| `feedback() requires a message with valid metadata.crux.runId from a Crux stream result.`                                                                                           | Pass the AI message produced by the Crux stream integration.                    |
+
+Provider, abort, timeout, adapter, and validation-exhaustion errors pass
+through unchanged. Fix them at their originating provider or adapter layer.

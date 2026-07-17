@@ -7,11 +7,14 @@
  * and an indeterminate progress bar while the run is live.
  */
 
-import { Icon } from '@/qw/shell/Icon'
-import { explainRunReliability, reliabilityTone } from '@/shared/lib/run-reliability'
-import { ReliabilityGlyph } from '@/shared/components/ReliabilityGlyph'
-import { DeliveryHealthBadge } from '@/shared/components/DeliveryHealthBadge'
-import { StatStrip, StatusPill, type StatItem } from './atoms'
+import { Icon } from "@/qw/shell/Icon";
+import {
+  explainRunReliability,
+  reliabilityTone,
+} from "@/shared/lib/run-reliability";
+import { ReliabilityGlyph } from "@/shared/components/ReliabilityGlyph";
+import { DeliveryHealthBadge } from "@/shared/components/DeliveryHealthBadge";
+import { StatStrip, StatusPill, type StatItem } from "./atoms";
 
 /** Failure stepper — `‹ ⚠ n/N ›` that walks the shared selection through the
  *  run's failing spans. Mirrors the keyboard `e` / `⇧E` stepper; works across
@@ -19,10 +22,10 @@ import { StatStrip, StatusPill, type StatItem } from './atoms'
 export interface ErrorStepper {
   /** 1-based position of the current selection among failures, or 0 when the
    *  selection isn't itself a failure. */
-  index: number
-  total: number
-  onPrev: () => void
-  onNext: () => void
+  index: number;
+  total: number;
+  onPrev: () => void;
+  onNext: () => void;
 }
 
 /**
@@ -31,42 +34,57 @@ export interface ErrorStepper {
  * single-segment runs never see this badge (spec's "stay visually calm").
  */
 export interface RunReliabilityDetail {
-  segmentCount?: number
-  activeSegmentId?: string
-  orderingConfidence?: string
-  gapCount?: number
-  traceAliasConflict?: boolean
+  segmentCount?: number;
+  activeSegmentId?: string;
+  orderingConfidence?: string;
+  gapCount?: number;
+  traceAliasConflict?: boolean;
   /** Delivery/export health; "unknown" is distinct from "healthy" — see `deliveryHealthTone`. */
-  deliveryHealth?: string
+  deliveryHealth?: string;
 }
 
 export interface RunContextStripProps {
-  status: string
-  items: readonly StatItem[]
-  diagnosticsCount: number
-  errorStepper?: ErrorStepper
-  reliability?: RunReliabilityDetail
+  status: string;
+  items: readonly StatItem[];
+  diagnosticsCount: number;
+  errorStepper?: ErrorStepper;
+  reliability?: RunReliabilityDetail;
 }
 
-export function RunContextStrip({ status, items, diagnosticsCount, errorStepper, reliability }: RunContextStripProps) {
+export function RunContextStrip({
+  status,
+  items,
+  diagnosticsCount,
+  errorStepper,
+  reliability,
+}: RunContextStripProps) {
   // Plain-language explanation for suspended/incomplete/conflicted statuses and
   // degraded delivery health — shares its wording and signal set with the Runs
   // list's `ReliabilityGlyph` tooltip, just spelled out in full sentences.
-  const reliabilityMsg = reliability ? explainRunReliability({ ...reliability, status }) : undefined
-  const isRunning = status === 'running'
+  const reliabilityMsg = reliability
+    ? explainRunReliability({ ...reliability, status })
+    : undefined;
+  const isRunning = status === "running";
   return (
     <div
       className="flex flex-shrink-0 flex-col"
-      style={{ borderBottom: '1px solid var(--qw-border)', background: 'var(--qw-bg)' }}
+      style={{
+        borderBottom: "1px solid var(--qw-border)",
+        background: "var(--qw-bg)",
+      }}
     >
       <div className="flex items-center gap-3.5 px-6 py-2.5">
         <StatusPill status={status} />
-        {reliability?.deliveryHealth && <DeliveryHealthBadge status={reliability.deliveryHealth} />}
+        {reliability?.deliveryHealth && (
+          <DeliveryHealthBadge status={reliability.deliveryHealth} />
+        )}
         <StatStrip items={items} size={11.5} gap={14} />
         {reliabilityMsg && reliability && (
           <div
             className="flex items-center gap-1.5 rounded-[6px] px-2.5 py-1"
-            style={{ background: `var(--qw-${reliabilityTone(reliability)}-soft)` }}
+            style={{
+              background: `var(--qw-${reliabilityTone(reliability)}-soft)`,
+            }}
             title={reliabilityMsg}
           >
             <ReliabilityGlyph run={reliability} />
@@ -82,7 +100,10 @@ export function RunContextStrip({ status, items, diagnosticsCount, errorStepper,
         {errorStepper && errorStepper.total > 0 && (
           <div
             className="flex items-center overflow-hidden rounded-[6px]"
-            style={{ background: 'var(--qw-danger-soft)', boxShadow: 'inset 0 0 0 1px var(--qw-danger)' }}
+            style={{
+              background: "var(--qw-danger-soft)",
+              boxShadow: "inset 0 0 0 1px var(--qw-danger)",
+            }}
             title="next / previous failure · e / ⇧E — selection shared across lenses"
           >
             <button
@@ -90,14 +111,24 @@ export function RunContextStrip({ status, items, diagnosticsCount, errorStepper,
               onClick={errorStepper.onPrev}
               aria-label="Previous failure"
               className="flex cursor-pointer items-center px-1.5 py-1"
-              style={{ borderRight: '1px solid var(--qw-danger)' }}
+              style={{ borderRight: "1px solid var(--qw-danger)" }}
             >
-              <Icon name="arrowRight" size={11} color="var(--qw-danger)" className="rotate-180" />
+              <Icon
+                name="arrowRight"
+                size={11}
+                color="var(--qw-danger)"
+                className="rotate-180"
+              />
             </button>
             <span className="flex items-center gap-1.5 px-2 py-0.5">
               <Icon name="alert" size={12} color="var(--qw-danger)" />
-              <span className="font-mono text-[11.5px] font-semibold" style={{ color: 'var(--qw-danger)' }}>
-                {errorStepper.index > 0 ? `${errorStepper.index} / ${errorStepper.total}` : errorStepper.total}
+              <span
+                className="font-mono text-[11.5px] font-semibold"
+                style={{ color: "var(--qw-danger)" }}
+              >
+                {errorStepper.index > 0
+                  ? `${errorStepper.index} / ${errorStepper.total}`
+                  : errorStepper.total}
               </span>
             </span>
             <button
@@ -105,7 +136,7 @@ export function RunContextStrip({ status, items, diagnosticsCount, errorStepper,
               onClick={errorStepper.onNext}
               aria-label="Next failure"
               className="flex cursor-pointer items-center px-1.5 py-1"
-              style={{ borderLeft: '1px solid var(--qw-danger)' }}
+              style={{ borderLeft: "1px solid var(--qw-danger)" }}
             >
               <Icon name="arrowRight" size={11} color="var(--qw-danger)" />
             </button>
@@ -114,17 +145,20 @@ export function RunContextStrip({ status, items, diagnosticsCount, errorStepper,
         {diagnosticsCount > 0 && (
           <div
             className="flex items-center gap-1.5 rounded-[6px] px-2.5 py-1"
-            style={{ background: 'var(--qw-warn-soft)' }}
-            title={`${diagnosticsCount} run diagnostic${diagnosticsCount === 1 ? '' : 's'}`}
+            style={{ background: "var(--qw-warn-soft)" }}
+            title={`${diagnosticsCount} run diagnostic${diagnosticsCount === 1 ? "" : "s"}`}
           >
             <Icon name="alert" size={13} color="var(--qw-warn)" />
-            <span className="text-[11px] font-semibold" style={{ color: 'var(--qw-warn)' }}>
-              {diagnosticsCount} diagnostic{diagnosticsCount === 1 ? '' : 's'}
+            <span
+              className="text-[11px] font-semibold"
+              style={{ color: "var(--qw-warn)" }}
+            >
+              {diagnosticsCount} diagnostic{diagnosticsCount === 1 ? "" : "s"}
             </span>
           </div>
         )}
       </div>
       {isRunning && <div className="qw-progress-bar" aria-hidden />}
     </div>
-  )
+  );
 }

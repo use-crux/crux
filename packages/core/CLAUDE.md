@@ -39,8 +39,8 @@ React bindings live in **`@use-crux/react`** (`CruxProvider`, hooks, transports,
 
 ## Testing & Evaluation
 
-- `evaluate()` from `@use-crux/core/quality` — author evaluations over any Crux primitive (prompt/flow/agent/retriever/fn)
-- `evaluation.run()` — programmatic runs (Vitest bridge); `crux quality run` — CLI runner with watch/replay/baselines
+- `evaluate()` from `@use-crux/core/eval` — author evaluations over any Crux primitive (prompt/flow/agent/retriever/fn)
+- `evaluation.run()` — programmatic runs (Vitest bridge); `crux eval run` — CLI runner with watch/replay/baselines
 - Run unit tests: `pnpm --filter @use-crux/core test -- --run`
 - Evals: `packages/backend/evals/` directory (Karyla consumer)
 

@@ -30,7 +30,7 @@ Everything else is labelled by subpath. Memory, retrieval, skills, agents,
 flows, quality, and local/devtools surfaces keep their existing beta or
 experimental status unless their own subpath documentation says otherwise.
 
-## Quality (`@use-crux/core/quality`)
+## Quality (`@use-crux/core/eval`)
 
 Quality is **beta**: the authoring surface (`evaluate`, `target`, `scorers`,
 `dataset`, `cassette`), the experiment/manifest record schemas

@@ -157,11 +157,13 @@ describe("adapter result envelope", () => {
       model: "envelope-model",
       input: { instruction: "Stream a greeting." },
     });
+    expect(result.runId).toMatch(/^run_[0-9a-f]{24}$/);
 
     const chunks: string[] = [];
     for await (const delta of result.textStream) chunks.push(delta);
 
     await expect(result.completion).resolves.toMatchObject({
+      runId: result.runId,
       text: "hello",
       usage: finalUsage,
       steps: [expect.objectContaining({ text: "hello" })],

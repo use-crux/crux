@@ -12,22 +12,22 @@
  * QwShell; clickable segments only add a hover affordance.
  */
 
-import { Fragment } from 'react'
-import { useNavigation } from '@/app/navigation/useNavigation'
-import { breadcrumbTarget } from '@/app/navigation/navTarget'
+import { Fragment } from "react";
+import { useNavigation } from "@/app/navigation/useNavigation";
+import { breadcrumbTarget } from "@/app/navigation/navTarget";
 
 export function Breadcrumb({ text }: { text: string }) {
-  const { navigate } = useNavigation()
+  const { navigate } = useNavigation();
   const segments = text
-    .split('/')
+    .split("/")
     .map((segment) => segment.trim())
-    .filter(Boolean)
+    .filter(Boolean);
 
   return (
     <>
       {segments.map((segment, i) => {
-        const isLast = i === segments.length - 1
-        const target = isLast ? null : breadcrumbTarget(segment)
+        const isLast = i === segments.length - 1;
+        const target = isLast ? null : breadcrumbTarget(segment);
         return (
           <Fragment key={i}>
             {i > 0 && <span aria-hidden> / </span>}
@@ -43,8 +43,8 @@ export function Breadcrumb({ text }: { text: string }) {
               <span>{segment}</span>
             )}
           </Fragment>
-        )
+        );
       })}
     </>
-  )
+  );
 }

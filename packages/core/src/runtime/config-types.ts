@@ -16,7 +16,6 @@ import type {
 } from '../observability'
 import type { CruxPlugin } from './plugin'
 import type { CruxLintConfig as CoreCruxLintConfig } from '../project-index'
-import type { QualityConfig } from '../quality/config'
 import type { RuntimeBridgeOptions } from '../runtime-bridge'
 import type { RecordStore } from '../storage'
 import type { TokenizerFn } from '../shared/tokenizer'
@@ -262,11 +261,6 @@ export type CruxRuntimeConfig = RuntimeEngineDefinition
  * not register prompts, contexts, tools, or registries for local discovery.
  */
 export interface CruxConfig {
-  /**
-   * Quality system configuration (the `quality:` block): discovery globs,
-   * persistence root, redaction, and run defaults.
-   */
-  readonly quality?: QualityConfig
   /** Authored-system lint configuration. Used by Crux devtools and `crux lint`. */
   readonly lint?: CoreCruxLintConfig
   /**

@@ -1,19 +1,22 @@
-import type { ObservabilityRunSummary } from '@/types'
+import type { ObservabilityRunSummary } from "@/types";
 
-const MAX_PER_CATEGORY = 5
+const MAX_PER_CATEGORY = 5;
 
 export interface RunSearchResult {
-  category: 'traces'
-  id: string
-  label: string
-  meta: string
+  category: "traces";
+  id: string;
+  label: string;
+  meta: string;
   /** Nav target for run detail — keyed by logical run id. */
-  nav: { view: 'run-detail'; traceId: string }
+  nav: { view: "run-detail"; traceId: string };
 }
 
-function matches(query: string, ...fields: (string | undefined | null)[]): boolean {
-  const q = query.toLowerCase()
-  return fields.some((f) => f != null && f.toLowerCase().includes(q))
+function matches(
+  query: string,
+  ...fields: (string | undefined | null)[]
+): boolean {
+  const q = query.toLowerCase();
+  return fields.some((f) => f != null && f.toLowerCase().includes(q));
 }
 
 /**
@@ -21,19 +24,32 @@ function matches(query: string, ...fields: (string | undefined | null)[]): boole
  * model. Callers must pass rows from `useObservabilityRunsPage` /
  * `listRunsPage` — not a second bare-array list source.
  */
-export function searchRuns(runs: readonly ObservabilityRunSummary[], query: string): RunSearchResult[] {
-  const results: RunSearchResult[] = []
+export function searchRuns(
+  runs: readonly ObservabilityRunSummary[],
+  query: string,
+): RunSearchResult[] {
+  const results: RunSearchResult[] = [];
   for (const run of runs) {
-    if (results.length >= MAX_PER_CATEGORY) break
-    if (matches(query, run.runId, run.traceId, run.promptId, run.model, run.name, run.rootPrimitive)) {
+    if (results.length >= MAX_PER_CATEGORY) break;
+    if (
+      matches(
+        query,
+        run.runId,
+        run.traceId,
+        run.promptId,
+        run.model,
+        run.name,
+        run.rootPrimitive,
+      )
+    ) {
       results.push({
-        category: 'traces',
+        category: "traces",
         id: run.runId,
         label: run.promptId || run.name || run.runId.slice(0, 12),
         meta: `${run.model || run.rootPrimitive} · ${run.status}`,
-        nav: { view: 'run-detail', traceId: run.runId },
-      })
+        nav: { view: "run-detail", traceId: run.runId },
+      });
     }
   }
-  return results
+  return results;
 }

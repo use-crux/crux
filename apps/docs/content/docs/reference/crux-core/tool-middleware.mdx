@@ -15,7 +15,7 @@ import {
   toolApprovalResponseMessage,
   // Consumption (adapter authors only)
   createToolLifecycle,
-} from '@use-crux/core/adapter/tool'
+} from "@use-crux/core/adapter/tool";
 ```
 
 The tool lifecycle is one deep module. Middleware and approvals are **authored** as frozen objects; everything between "the model emitted tool calls" and "tool results are ready" is **executed** through a single per-call `ToolLifecycle` session that every adapter constructs internally, merge precedence, middleware chaining, the approval suspend/resume protocol, instrumentation, skill loads, and memory capture live in the session, never in adapter code. See [the ToolLifecycle session](#the-toollifecycle-session-adapter-authors) below.
@@ -33,10 +33,10 @@ Middleware can be attached to a prompt:
 
 ```ts
 const assistant = prompt({
-  id: 'assistant',
+  id: "assistant",
   tools: { sendEmail, createRefund },
   toolMiddleware: [auditTools, approvals],
-})
+});
 ```
 
 or supplied per call:
@@ -46,25 +46,25 @@ await generate(assistant, {
   model,
   input,
   toolMiddleware: [approvalForThisRoute],
-})
+});
 ```
 
 ## `toolMiddleware(config)`
 
 ```ts
 const auditTools = toolMiddleware({
-  id: 'audit-tools',
-  match: ['sendEmail', /^admin/],
+  id: "audit-tools",
+  match: ["sendEmail", /^admin/],
   beforeExecute: ({ toolName, toolCallId, input }) => {
-    audit.write({ phase: 'start', toolName, toolCallId, input })
+    audit.write({ phase: "start", toolName, toolCallId, input });
   },
   afterExecute: ({ toolName, toolCallId, output, durationMs }) => {
-    audit.write({ phase: 'end', toolName, toolCallId, output, durationMs })
+    audit.write({ phase: "end", toolName, toolCallId, output, durationMs });
   },
   onError: ({ toolName, toolCallId, error }) => {
-    audit.write({ phase: 'error', toolName, toolCallId, error: String(error) })
+    audit.write({ phase: "error", toolName, toolCallId, error: String(error) });
   },
-})
+});
 ```
 
 ### Config
@@ -82,44 +82,47 @@ const auditTools = toolMiddleware({
 
 ```ts
 const requiresAudit = toolMiddleware({
-  id: 'customer-data-audit',
+  id: "customer-data-audit",
   match: [
-    'exportCustomers',
+    "exportCustomers",
     /^admin/,
     ({ toolName, input }) =>
-      toolName === 'searchCustomers' && typeof input === 'object' && input !== null && 'email' in input,
+      toolName === "searchCustomers" &&
+      typeof input === "object" &&
+      input !== null &&
+      "email" in input,
   ],
-})
+});
 ```
 
 ### Intercept execution
 
 ```ts
 const cacheLookup = toolMiddleware({
-  id: 'cache-lookup',
-  match: ['lookupCustomer'],
+  id: "cache-lookup",
+  match: ["lookupCustomer"],
   aroundExecute: async ({ input, options }, next) => {
-    const cached = await cache.get(input)
-    if (cached) return cached
+    const cached = await cache.get(input);
+    if (cached) return cached;
 
-    const output = await next(input, options)
-    await cache.set(input, output)
-    return output
+    const output = await next(input, options);
+    await cache.set(input, output);
+    return output;
   },
-})
+});
 ```
 
 Pass a different input to `next()` to modify arguments:
 
 ```ts
 const trimSubjects = toolMiddleware({
-  id: 'trim-subjects',
-  match: ['sendEmail'],
+  id: "trim-subjects",
+  match: ["sendEmail"],
   aroundExecute: ({ input, options }, next) =>
-    typeof input === 'object' && input !== null && 'subject' in input
+    typeof input === "object" && input !== null && "subject" in input
       ? next({ ...input, subject: String(input.subject).trim() }, options)
       : next(input, options),
-})
+});
 ```
 
 ## `approvalMiddleware(config)`
@@ -128,18 +131,18 @@ const trimSubjects = toolMiddleware({
 
 ```ts
 const approvals = approvalMiddleware({
-  id: 'dangerous-tools',
-  match: ['sendEmail', 'createRefund'],
+  id: "dangerous-tools",
+  match: ["sendEmail", "createRefund"],
   onRequest: ({ toolName, input }) => {
-    audit.write({ phase: 'approval-requested', toolName, input })
+    audit.write({ phase: "approval-requested", toolName, input });
   },
   onApproved: ({ approvalId, toolName }) => {
-    audit.write({ phase: 'approved', approvalId, toolName })
+    audit.write({ phase: "approved", approvalId, toolName });
   },
   onDenied: ({ approvalId, toolName, reason }) => {
-    audit.write({ phase: 'denied', approvalId, toolName, reason })
+    audit.write({ phase: "denied", approvalId, toolName, reason });
   },
-})
+});
 ```
 
 ### Config
@@ -163,14 +166,14 @@ Approvals are designed for serverless and Convex-style runtimes. Crux does not h
 5. Crux sees the response, calls `onApproved` or `onDenied`, and lets the adapter execute or deny the tool.
 
 ```ts
-const first = await generate(assistant, { model, input })
+const first = await generate(assistant, { model, input });
 
-const approvalId = findApprovalId(first.response.messages)
+const approvalId = findApprovalId(first.response.messages);
 
 const response = toolApprovalResponse({
   approvalId,
   approved: true,
-})
+});
 
 await generate(assistant, {
   model,
@@ -178,11 +181,11 @@ await generate(assistant, {
   messages: [
     ...first.response.messages,
     {
-      role: 'tool',
+      role: "tool",
       content: [response],
     },
   ],
-})
+});
 ```
 
 `@use-crux/ai` maps this to the AI SDK approval protocol. The shared native adapter layer for `@use-crux/openai`, `@use-crux/google`, and `@use-crux/anthropic` uses the same Crux approval protocol through `result.messages`, `findToolApprovalRequests()`, and `appendToolApprovalResponse()`.
@@ -191,22 +194,22 @@ await generate(assistant, {
 
 ```ts
 const response = toolApprovalResponse({
-  approvalId: 'approval_123',
+  approvalId: "approval_123",
   approved: false,
-  reason: 'Refund exceeds the approval limit.',
-})
+  reason: "Refund exceeds the approval limit.",
+});
 ```
 
 Returns a portable `tool-approval-response` message part:
 
 ```ts
 type ToolApprovalResponsePart = {
-  type: 'tool-approval-response'
-  approvalId: string
-  approved: boolean
-  reason?: string
-  approvalToken?: string
-}
+  type: "tool-approval-response";
+  approvalId: string;
+  approved: boolean;
+  reason?: string;
+  approvalToken?: string;
+};
 ```
 
 Use `approvalToken` when your app needs an extra signed or one-time token in addition to the provider-generated approval id.
@@ -214,8 +217,8 @@ Use `approvalToken` when your app needs an extra signed or one-time token in add
 ## Native adapter helpers
 
 ```ts
-const first = await openai.generate(assistant, { model, input })
-const [request] = findToolApprovalRequests(first.messages)
+const first = await openai.generate(assistant, { model, input });
+const [request] = findToolApprovalRequests(first.messages);
 
 const final = await openai.generate(assistant, {
   model,
@@ -223,7 +226,7 @@ const final = await openai.generate(assistant, {
     approvalId: request.approvalId,
     approved: true,
   }),
-})
+});
 ```
 
 Use `toolApprovalResponseMessage()` when you want to construct the response message yourself instead of appending it.
@@ -233,10 +236,10 @@ Use `toolApprovalResponseMessage()` when you want to construct the response mess
 Apps never call this, both built-in dialect factories (`adapter()` for core-driven loops, `loopRuntimeAdapter()` for SDK-driven loops) construct one session per `generate()`/`stream()` call. You only need it when building a custom adapter outside the factories.
 
 ```ts
-import { createToolLifecycle } from '@use-crux/core/adapter/tool'
+import { createToolLifecycle } from "@use-crux/core/adapter/tool";
 
 const lifecycle = createToolLifecycle({
-  regime: 'core', // 'core' (you drive rounds) | 'sdk' (the SDK drives)
+  regime: "core", // 'core' (you drive rounds) | 'sdk' (the SDK drives)
   resolved, // the resolved prompt, tools, middleware, skills, memory
   call: { tools, toolMiddleware }, // per-call additions (highest precedence)
   promptId: prompt.id,
@@ -244,30 +247,34 @@ const lifecycle = createToolLifecycle({
   reresolve: () => prompt.resolve(resolveOpts), // for LoadSkill re-resolution
   appendToolRound, // provider tool-round shape (core regime)
   sanitizeToolSchema, // provider JSON Schema quirks (core regime)
-})
+});
 
 // Once, before the first provider call:
-let messages = (await lifecycle.resume(history)).messages
+let messages = (await lifecycle.resume(history)).messages;
 
 // Core regime, drive rounds yourself:
-const round = await lifecycle.executeRound(extracted, messages)
-if (round.kind === 'suspended') {
+const round = await lifecycle.executeRound(extracted, messages);
+if (round.kind === "suspended") {
   // round.messages ends with the approval-request message plus one tool
   // message per already-executed sibling (side effects happened; resume()
   // will not replay them). Persist as-is, return round.request.
 }
 
 // SDK regime, hand the armed map to the SDK instead:
-const outcome = await sdk.runTextLoop({ tools: lifecycle.tools /* … */ })
-if (outcome.status === 'suspended') {
-  const sealed = lifecycle.suspend(outcome.pendingApprovals, outcome.assistantResponse, outcome.messages)
+const outcome = await sdk.runTextLoop({ tools: lifecycle.tools /* … */ });
+if (outcome.status === "suspended") {
+  const sealed = lifecycle.suspend(
+    outcome.pendingApprovals,
+    outcome.assistantResponse,
+    outcome.messages,
+  );
 }
 
 // Per step, both regimes:
-const amendment = await lifecycle.applySkillLoads(step.toolCalls) // LoadSkill → re-resolve + re-arm + refund
+const amendment = await lifecycle.applySkillLoads(step.toolCalls); // LoadSkill → re-resolve + re-arm + refund
 
 // At the end, both regimes (at-most-once internally):
-await lifecycle.captureTurn({ messages, assistantText, toolCalls })
+await lifecycle.captureTurn({ messages, assistantText, toolCalls });
 ```
 
 The session owns: tool merge precedence (call tools shadow prompt tools), middleware chain order (prompt middleware before call middleware), the full approval protocol (deterministic `approval_<toolCallId>` ids, anti-forgery tokens, decision matching, idempotent resume replay), per-call instrumentation (canonical `tool.call` spans, consumed `tool.args`, raw and model-facing `tool.result` artifacts, and approval decision records), output normalization (`toModelOutput`, default shaping, rendering), the `LoadSkill` side effect, and memory-capture fan-out. Both regimes drive the same private gate → execute → settle verdict kernel, so live and resumed tool calls have the same observability contract whether core or the SDK drives the loop, the cross-dialect parity suite verifies it mechanically.
@@ -291,7 +298,7 @@ export {
   findToolApprovalRequests,
   toolApprovalResponse,
   toolApprovalResponseMessage,
-}
+};
 
 export type {
   ToolLifecycle,
@@ -316,7 +323,7 @@ export type {
   ToolMiddleware,
   ToolMiddlewareConfig,
   ToolResultContext,
-}
+};
 ```
 
 The authoring surface and approval helpers are also exported from the `@use-crux/core` root and `@use-crux/core/tool-middleware`. The former `@use-crux/core/tool-approvals` subpath is gone, import the same helpers from `@use-crux/core/adapter/tool` (or the root). The orchestration internals the session replaced (`applyToolMiddleware`, `notifyToolApprovalResponses`, `instrumentToolSet`, the approval id/token/message builders, resume scanning) are no longer exported anywhere, every removed call pattern is a session method now.

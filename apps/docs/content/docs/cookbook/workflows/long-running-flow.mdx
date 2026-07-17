@@ -20,60 +20,63 @@ This recipe shows a flow that performs an LLM step, suspends to wait for an exte
 ## Full code
 
 ```ts
-import { flow, signalFlow } from '@use-crux/core/flow'
-import { generate } from '@use-crux/ai'
-import { openai } from '@ai-sdk/openai'
-import { z } from 'zod'
+import { flow, signalFlow } from "@use-crux/core/flow";
+import { generate } from "@use-crux/ai";
+import { openai } from "@ai-sdk/openai";
+import { z } from "zod";
 
 type OnboardingInput = {
-  email: string
-  name: string
-  goal: string
-}
+  email: string;
+  name: string;
+  goal: string;
+};
 
-const onboardingFlow = flow('onboarding', async (flow, input: OnboardingInput) => {
-  // Step 1: send a welcome email immediately
-  await flow.step('send-welcome', async () => {
-    await emailClient.send({
-      to: input.email,
-      template: 'welcome',
-      data: { name: input.name },
-    })
-  })
+const onboardingFlow = flow(
+  "onboarding",
+  async (flow, input: OnboardingInput) => {
+    // Step 1: send a welcome email immediately
+    await flow.step("send-welcome", async () => {
+      await emailClient.send({
+        to: input.email,
+        template: "welcome",
+        data: { name: input.name },
+      });
+    });
 
-  // Step 2: wait up to 24h for the user to verify their email
-  const verification = await flow.suspend('email-verified', {
-    schema: z.object({ verifiedAt: z.string() }),
-    timeout: '24h',
-  })
+    // Step 2: wait up to 24h for the user to verify their email
+    const verification = await flow.suspend("email-verified", {
+      schema: z.object({ verifiedAt: z.string() }),
+      timeout: "24h",
+    });
 
-  // Step 3: generate a personalized first-week plan
-  const plan = await flow.step('first-week-plan', async () => {
-    const result = await generate(onboardingPlanPrompt, {
-      model: openai('gpt-4o'),
-      input: { name: input.name, signupGoal: input.goal },
-    })
-    return result.text
-  })
+    // Step 3: generate a personalized first-week plan
+    const plan = await flow.step("first-week-plan", async () => {
+      const result = await generate(onboardingPlanPrompt, {
+        model: openai("gpt-4o"),
+        input: { name: input.name, signupGoal: input.goal },
+      });
+      return result.text;
+    });
 
-  // Step 4: schedule daily check-in emails
-  return flow.step('schedule-checkins', async () => {
-    return scheduleEmails(input.email, plan)
-  })
-})
+    // Step 4: schedule daily check-in emails
+    return flow.step("schedule-checkins", async () => {
+      return scheduleEmails(input.email, plan);
+    });
+  },
+);
 
 // Start
-const handle = onboardingFlow
+const handle = onboardingFlow;
 const { flowId } = await handle.run({
-  email: 'user@example.com',
-  name: 'Henri',
-  goal: 'shipping',
-})
+  email: "user@example.com",
+  name: "Henri",
+  goal: "shipping",
+});
 // flowId is persisted; can be returned to the caller
 
 // Later, webhook fires when the user clicks the verification link
 export async function handleEmailVerified(flowId: string, verifiedAt: string) {
-  await signalFlow(flowId, 'email-verified', { verifiedAt })
+  await signalFlow(flowId, "email-verified", { verifiedAt });
 }
 
 // Resume happens automatically on the next handle.resume(flowId), usually
@@ -111,7 +114,11 @@ Use `flow()` from `@use-crux/convex/server` for Convex-aware resume scheduling. 
 ## Where to next
 
 <Cards>
-  <Card title="Flows guide" description="flow, suspend, step caching, replay semantics." href="/docs/guides/flows" />
+  <Card
+    title="Flows guide"
+    description="flow, suspend, step caching, replay semantics."
+    href="/docs/guides/flows"
+  />
   <Card
     title="Plan with approval"
     description="A specific shape of long-running flow with a human gate."

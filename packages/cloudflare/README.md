@@ -47,6 +47,12 @@ the content-addressed result reference.
 Jobs are recovered through Durable Object alarms. `waitUntil()` and Cloudflare
 Queues are not part of the correctness path.
 
+Point the local coordinator at this deployment with
+`CRUX_EVAL_HOST_URL`, `CRUX_EVAL_HOST_DEPLOYMENT_ID`, and the secret
+`CRUX_EVAL_HOST_TOKEN`. Cloudflare connection values are not inferred. The
+token must stay in environment/platform secrets and must not appear in config,
+generated registries, CLI arguments, plans, logs, errors, or fingerprints.
+
 ## Runtime declaration
 
 Declare the host in `crux.config.ts` with `cloudflare()`. The returned value is

@@ -10,27 +10,24 @@ Do not repeat prompts, contexts, tools, agents, flows, registries, or skills in 
 those values in normal TypeScript modules and export them. Local tooling discovers them from source.
 
 ```ts title="crux.config.ts"
-import { config } from '@use-crux/core'
+import { config } from "@use-crux/core";
 
 export default config({
-  quality: {
-    defaults: { replay: 'record-new' },
-  },
   lint: {
-    profile: 'recommended',
+    profile: "recommended",
   },
   generation: {
     autoEscape: true,
   },
-})
+});
 ```
 
 An empty config is valid:
 
 ```ts title="crux.config.ts"
-import { config } from '@use-crux/core'
+import { config } from "@use-crux/core";
 
-export default config({})
+export default config({});
 ```
 
 ## Behavior
@@ -65,22 +62,20 @@ this process-global API.
 
 ```ts
 interface CruxConfig {
-  quality?: QualityConfig
-  lint?: CruxLintConfig
-  indexer?: CruxIndexerConfig
-  experimental?: CruxExperimentalConfig
-  runtime?: RuntimeEngineDefinition
-  persistence?: CruxPersistenceConfig
-  generation?: CruxGenerationConfig
-  devtools?: CruxDevtoolsConfig
-  observability?: CruxObservabilityConfig
-  plugins?: readonly CruxPlugin[]
+  lint?: CruxLintConfig;
+  indexer?: CruxIndexerConfig;
+  experimental?: CruxExperimentalConfig;
+  runtime?: RuntimeEngineDefinition;
+  persistence?: CruxPersistenceConfig;
+  generation?: CruxGenerationConfig;
+  devtools?: CruxDevtoolsConfig;
+  observability?: CruxObservabilityConfig;
+  plugins?: readonly CruxPlugin[];
 }
 ```
 
 | Option          | Type                      | Default                                                  | Consumed by                               |
 | --------------- | ------------------------- | -------------------------------------------------------- | ----------------------------------------- |
-| `quality`       | `QualityConfig`           | zero-config Quality defaults                             | `crux quality`, `crux dev`, Quality views |
 | `lint`          | `CruxLintConfig`          | `{ profile: 'recommended' }`                             | Project Index lint, `crux lint`, devtools |
 | `indexer`       | `CruxIndexerConfig`       | no third-party extensions                                | `@use-crux/indexer`                       |
 | `experimental`  | `CruxExperimentalConfig`  | no experimental flags                                    | `@use-crux/indexer`, `@use-crux/local`    |
@@ -90,42 +85,6 @@ interface CruxConfig {
 | `devtools`      | `CruxDevtoolsConfig`      | no runtime devtools transport unless installed elsewhere | local devtools plugin and Runtime Bridge  |
 | `observability` | `CruxObservabilityConfig` | no explicit export transport                             | canonical observability transport         |
 | `plugins`       | `readonly CruxPlugin[]`   | `[]`                                                     | runtime plugin installer                  |
-
-## `quality`
-
-Quality config controls discovery, persistence, redaction, and run defaults. Model, judge, and
-embedding providers belong in eval code, not in config.
-
-| Option                         | Type                          | Default                                  | Notes                                                                        |
-| ------------------------------ | ----------------------------- | ---------------------------------------- | ---------------------------------------------------------------------------- |
-| `quality.id`                   | `string`                      | nearest `package.json` name              | Workbench id stored on Quality records.                                      |
-| `quality.dir`                  | `string`                      | `.crux/quality`                          | Persistence root for experiments, baselines, cassettes, and workbench state. |
-| `quality.include`              | `string \| readonly string[]` | `['evals/**/*.eval.ts', '**/*.eval.ts']` | Discovery globs relative to the project root.                                |
-| `quality.exclude`              | `string \| readonly string[]` | dependency/output defaults               | Extra discovery excludes.                                                    |
-| `quality.redact`               | `readonly string[]`           | built-in secret redaction only           | Dot paths removed from persisted records and cassettes.                      |
-| `quality.defaults.trials`      | `number`                      | `1`                                      | Default executions per evaluation cell.                                      |
-| `quality.defaults.concurrency` | `number`                      | `5`                                      | Default concurrent cell execution.                                           |
-| `quality.defaults.timeoutMs`   | `number`                      | `60_000`                                 | Default per-cell timeout.                                                    |
-| `quality.defaults.replay`      | `ReplayMode`                  | `live`                                   | Default cassette behavior.                                                   |
-
-```ts title="crux.config.ts"
-export default config({
-  quality: {
-    id: 'support-agent',
-    dir: '.crux/quality',
-    include: ['evals/**/*.eval.ts', 'src/**/*.eval.ts'],
-    redact: ['customer.email', 'metadata.privateNote'],
-    defaults: {
-      trials: 2,
-      concurrency: 4,
-      timeoutMs: 90_000,
-      replay: 'record-new',
-    },
-  },
-})
-```
-
-See [Quality](/docs/reference/crux-core/quality) and [`crux quality`](/docs/reference/local#crux-quality).
 
 ## `lint`
 
@@ -141,13 +100,13 @@ Lint config controls authored Project Index findings. It does not run ESLint or 
 ```ts title="crux.config.ts"
 export default config({
   lint: {
-    profile: 'strict',
+    profile: "strict",
     rules: {
-      'definition.missing_eval_coverage': { severity: 'error' },
-      'prompt.missing_output_schema': { enabled: false },
+      "definition.missing_eval_coverage": { severity: "error" },
+      "prompt.missing_output_schema": { enabled: false },
     },
   },
-})
+});
 ```
 
 See [Index Lint](/docs/reference/crux-core/lint).
@@ -175,17 +134,17 @@ export default config({
   indexer: {
     extensions: [
       {
-        package: '@acme/crux-indexer',
-        export: 'default',
-        version: '^1.0.0',
+        package: "@acme/crux-indexer",
+        export: "default",
+        version: "^1.0.0",
       },
     ],
     trust: {
-      mode: 'allowlisted',
-      allow: ['@acme/crux-indexer'],
+      mode: "allowlisted",
+      allow: ["@acme/crux-indexer"],
     },
   },
-})
+});
 ```
 
 See [Writing an Indexer Extension](/docs/guides/advanced/writing-indexer-extension).
@@ -222,15 +181,15 @@ export default config({
   experimental: {
     indexer: {
       native: {
-        engine: 'tsgo',
-        tsserverPath: '/path/to/tsgo',
+        engine: "tsgo",
+        tsserverPath: "/path/to/tsgo",
       },
       nativeAst: {
-        frontend: 'oxc',
+        frontend: "oxc",
       },
     },
   },
-})
+});
 ```
 
 See [Project Index semantic backend selection](/docs/reference/crux-core/project-index#semantic-backend-selection).
@@ -240,21 +199,21 @@ See [Project Index semantic backend selection](/docs/reference/crux-core/project
 Generation config installs cross-cutting behavior for prompt resolution and adapter execution. Model
 choices usually belong in prompt, agent, eval, or adapter code.
 
-| Option                        | Type               | Default                                               | Notes                                                                       |
-| ----------------------------- | ------------------ | ----------------------------------------------------- | --------------------------------------------------------------------------- |
-| `generation.middleware`       | `PromptMiddleware` | `undefined`                                           | Global generate/stream middleware. Plugins can layer additional middleware. |
-| `generation.tokenizer`        | `TokenizerFn`      | character estimate                                    | Custom token counting for budgets and related helpers.                      |
+| Option                        | Type               | Default                                               | Notes                                                                                                |
+| ----------------------------- | ------------------ | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `generation.middleware`       | `PromptMiddleware` | `undefined`                                           | Global generate/stream middleware. Plugins can layer additional middleware.                          |
+| `generation.tokenizer`        | `TokenizerFn`      | character estimate                                    | Custom token counting for budgets and related helpers.                                               |
 | `generation.autoEscape`       | `boolean`          | `true`                                                | Escapes top-level string input fields before context gates and system/prompt functions receive them. |
-| `generation.securityWarnings` | `boolean`          | `true` when `NODE_ENV !== 'production'`, else `false` | Emits warnings for suspicious input patterns.                               |
+| `generation.securityWarnings` | `boolean`          | `true` when `NODE_ENV !== 'production'`, else `false` | Emits warnings for suspicious input patterns.                                                        |
 
 ```ts title="crux.config.ts"
 export default config({
   generation: {
     tokenizer: (text) => Math.ceil(text.length / 4),
     autoEscape: true,
-    securityWarnings: process.env.NODE_ENV !== 'production',
+    securityWarnings: process.env.NODE_ENV !== "production",
   },
-})
+});
 ```
 
 See [Prompt execution](/docs/guides/prompts/execution) and [Security warnings](/docs/guides/safety/security).
@@ -264,17 +223,17 @@ See [Prompt execution](/docs/guides/prompts/execution) and [Security warnings](/
 Runtime config installs the durable Runtime Engine used by name-bound, event-bound, time-bound, and background APIs.
 
 ```ts title="crux.config.ts"
-import { config } from '@use-crux/core'
-import { serverless } from '@use-crux/core/runtime'
-import { postgres } from '@use-crux/postgres/runtime'
-import { qstash } from '@use-crux/upstash/runtime'
+import { config } from "@use-crux/core";
+import { serverless } from "@use-crux/core/runtime";
+import { postgres } from "@use-crux/postgres/runtime";
+import { qstash } from "@use-crux/upstash/runtime";
 
 export default config({
   runtime: serverless({
     store: postgres(),
     wake: qstash(),
   }),
-})
+});
 ```
 
 Use `node()` for local/test execution, `serverless({ store, wake })` for HTTP-woken deployments, or `convex()` from `@use-crux/convex/runtime` for Convex-hosted runtime work. Runtime config is a stable top-level domain, not `experimental.runtime`.
@@ -291,13 +250,13 @@ locality from source discovery.
 | `persistence.records` | `RecordStore` | `undefined` | Required for durable flows, plans, tasks, and Runtime Bridge record reads. |
 
 ```ts title="crux.config.ts"
-import { inMemoryRecordStore } from '@use-crux/core/storage'
+import { inMemoryRecordStore } from "@use-crux/core/storage";
 
 export default config({
   persistence: {
     records: inMemoryRecordStore(),
   },
-})
+});
 ```
 
 See [Storage](/docs/reference/crux-core/storage).
@@ -324,13 +283,13 @@ or tunnel.
 ```ts title="crux.config.ts"
 export default config({
   devtools: {
-    serverUrl: 'http://localhost:4400',
+    serverUrl: "http://localhost:4400",
     bridge: {
-      transport: 'ws',
-      runtimeName: 'local-node-worker',
+      transport: "ws",
+      runtimeName: "local-node-worker",
     },
   },
-})
+});
 ```
 
 See [Devtools Integration](/docs/reference/crux-core/devtools) and [Runtime Bridge](/docs/reference/crux-core/runtime-bridge).
@@ -367,7 +326,7 @@ export default config({
       maxRetryDelayMs: 5000,
     },
   },
-})
+});
 ```
 
 See [Observability](/docs/reference/crux-core/observability).
@@ -379,30 +338,33 @@ plugins. Cleanup runs when the returned Crux object is disposed. Cleanup hooks m
 Crux starts cleanup in reverse install order, and plugin runners that expose async disposal wait for
 those promises before reporting shutdown complete.
 
-| Option              | Type                                                   | Default  | Notes                                                  |
-| ------------------- | ------------------------------------------------------ | -------- | ------------------------------------------------------ |
-| `plugins`           | `readonly CruxPlugin[]`                                | `[]`     | Ordered plugin list.                                   |
-| `plugins[].name`    | `string`                                               | required | Unique name for debugging and diagnostics.             |
+| Option              | Type                                               | Default  | Notes                                               |
+| ------------------- | -------------------------------------------------- | -------- | --------------------------------------------------- |
+| `plugins`           | `readonly CruxPlugin[]`                            | `[]`     | Ordered plugin list.                                |
+| `plugins[].name`    | `string`                                           | required | Unique name for debugging and diagnostics.          |
 | `plugins[].install` | `(hooks: Readonly<CruxHooks>) => CruxPluginResult` | required | Returns hook fields to merge plus optional cleanup. |
 
 ```ts title="crux.config.ts"
-import { subscribeObservability } from '@use-crux/core/observability'
+import { subscribeObservability } from "@use-crux/core/observability";
 
 export default config({
   plugins: [
     {
-      name: 'my-plugin',
+      name: "my-plugin",
       install() {
-        const unsubscribe = subscribeObservability(['span:start'] as const, (record) => {
-          if (record.primitive === 'tool.call') {
-            console.log(record.attributes?.toolName)
-          }
-        })
-        return { dispose: unsubscribe }
+        const unsubscribe = subscribeObservability(
+          ["span:start"] as const,
+          (record) => {
+            if (record.primitive === "tool.call") {
+              console.log(record.attributes?.toolName);
+            }
+          },
+        );
+        return { dispose: unsubscribe };
       },
     },
   ],
-})
+});
 ```
 
 See [Observability plugins](/docs/guides/observability/plugins).

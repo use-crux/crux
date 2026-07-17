@@ -46,6 +46,7 @@ export function createEvalHostRequestHandler(
     deploymentId: options.deploymentId,
     hostKind: options.hostKind,
     registry: options.registry,
+    hostCapabilities: options.hostCapabilities,
   });
   return Object.freeze({
     async fetch(request: Request): Promise<Response> {

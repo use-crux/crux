@@ -8,7 +8,7 @@ TypeScript project:
 - `project-indexer.mjs`
 - `project-semantic-indexer.mjs`
 - `project-runtime-indexer.mjs`
-- `quality-runner.mjs`
+- `eval-coordinator.mjs`
 - `source-resolver.mjs`
 
 The React devtools UI lives in `@use-crux/devtools`. The Go local runtime builds
@@ -24,14 +24,9 @@ The build script bundles entrypoints from `bin/` into self-contained ESM files i
 `dist/`. Node builtins stay external. Optional peer dependencies with native
 addons, such as local tunnel providers, stay external.
 
-The quality runner deliberately does not bundle `@use-crux/core`; it resolves
-the project's own core instance at runtime and drives Quality through
-`@use-crux/core/quality/internal/runner`'s `createQualityRunner()` facade. That
-keeps evaluation symbols shared with user files without exposing engine
-internals such as definitions, baseline helpers, cassette sessions, or output
-cache keys. Devtools auto-attach resolves the same project's
-`@use-crux/core/observability` facade separately so observability state is shared
-without widening the Quality runner contract.
+The Eval coordinator deliberately does not bundle `@use-crux/core`; it resolves
+the project's own Core instance so authored Eval brands, loader identity, and
+the internal runner protocol remain shared with user files.
 
 ## Checks
 

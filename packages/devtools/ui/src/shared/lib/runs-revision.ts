@@ -9,9 +9,9 @@
  * server reports the delta window expired.
  */
 
-import type { ObservabilityRunsDelta } from '@/types'
+import type { ObservabilityRunsDelta } from "@/types";
 
-export type RevisionEventDecision = 'ignore' | 'catch-up'
+export type RevisionEventDecision = "ignore" | "catch-up";
 
 /**
  * Decide whether a WS `ObservabilityEvent` revision is new information.
@@ -22,11 +22,11 @@ export function decideOnObservabilityRevisionEvent(
   lastAppliedRevision: number,
   eventRevision: number | undefined,
 ): RevisionEventDecision {
-  if (eventRevision == null) return 'catch-up'
-  return eventRevision > lastAppliedRevision ? 'catch-up' : 'ignore'
+  if (eventRevision == null) return "catch-up";
+  return eventRevision > lastAppliedRevision ? "catch-up" : "ignore";
 }
 
-export type CatchUpAction = 'noop' | 'invalidate'
+export type CatchUpAction = "noop" | "invalidate";
 
 /**
  * Interpret a bounded `/runs/delta` response. `expired` means the client's
@@ -34,7 +34,9 @@ export type CatchUpAction = 'noop' | 'invalidate'
  * partial delta would be a lie — the caller must fully invalidate instead
  * of trusting an empty/partial `changes` list.
  */
-export function catchUpActionFromDelta(delta: ObservabilityRunsDelta): CatchUpAction {
-  if (delta.expired) return 'invalidate'
-  return delta.changes.length > 0 ? 'invalidate' : 'noop'
+export function catchUpActionFromDelta(
+  delta: ObservabilityRunsDelta,
+): CatchUpAction {
+  if (delta.expired) return "invalidate";
+  return delta.changes.length > 0 ? "invalidate" : "noop";
 }

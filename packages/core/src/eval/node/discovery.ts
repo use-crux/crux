@@ -213,10 +213,10 @@ async function walk(
     if (entry.isDirectory()) {
       await walk(root, relativeFile, files);
     } else if (
+      /\.eval\.[cm]?[jt]sx?$/.test(entry.name) &&
       (entry.isFile() ||
         (entry.isSymbolicLink() &&
-          (await stat(join(root, relativeFile))).isFile())) &&
-      /\.eval\.[cm]?[jt]sx?$/.test(entry.name)
+          (await stat(join(root, relativeFile))).isFile()))
     ) {
       files.push(relativeFile);
     }

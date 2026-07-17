@@ -9,8 +9,8 @@ import (
 
 // --- fetch -------------------------------------------------------------------
 
-type runsListLoadedMsg []api.QualityRunRecord
-type runDetailLoadedMsg api.QualityRunDetailRecord
+type runsListLoadedMsg []api.InspectRunRecord
+type runDetailLoadedMsg api.InspectRunDetailRecord
 
 func fetchRunsList(c DataClient) tea.Cmd {
 	return func() tea.Msg {

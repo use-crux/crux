@@ -7,6 +7,7 @@ import {
   type CruxDeliveryReceipt,
 } from './delivery/receipt'
 import type { CruxObservabilityTransport } from './transport'
+import { submitHttpFeedback } from '../feedback/http-destination'
 
 const DEFAULT_MAX_REQUEST_BYTES = 1024 * 1024
 const MAX_RECEIPT_MESSAGE_LENGTH = 240
@@ -18,6 +19,10 @@ export interface HttpObservabilityTransportOptions {
   endpoint?: string
   /** Bearer token for scoped observability ingest auth. */
   token?: string
+  /** Feedback endpoint relative to `serverUrl`. @default '/api/feedback' */
+  feedbackEndpoint?: string
+  /** Optional write-only feedback token; defaults to the ingest token. */
+  feedbackToken?: string
   /** Allowlisted extra headers for local routing. */
   headers?: Record<string, string>
   /** Abort one POST after this duration. @default 5000 */
@@ -34,11 +39,22 @@ export interface HttpObservabilityTransportOptions {
 export function createHttpObservabilityTransport(
   options: HttpObservabilityTransportOptions = {},
 ): CruxObservabilityTransport {
-  const url = joinUrl(options.serverUrl ?? 'http://localhost:4400', options.endpoint ?? '/api/observability/records')
+  const url = joinUrl(
+    options.serverUrl ?? 'http://localhost:4400',
+    options.endpoint ?? '/api/observability/records',
+  )
+  const feedbackUrl = joinUrl(
+    options.serverUrl ?? 'http://localhost:4400',
+    options.feedbackEndpoint ?? '/api/feedback',
+  )
   const fetchImpl = options.fetch ?? globalThis.fetch
   const maxRecordsPerRequest = positiveInteger(options.maxRecordsPerRequest, 50)
-  const maxRequestBytes = positiveInteger(options.maxRequestBytes, DEFAULT_MAX_REQUEST_BYTES)
+  const maxRequestBytes = positiveInteger(
+    options.maxRequestBytes,
+    DEFAULT_MAX_REQUEST_BYTES,
+  )
   const token = normalizeToken(options.token) ?? defaultDevtoolsToken()
+  const feedbackToken = normalizeToken(options.feedbackToken) ?? token
 
   return {
     maxRecordsPerRequest,
@@ -47,7 +63,10 @@ export function createHttpObservabilityTransport(
       if (!fetchImpl) throw new Error('Observability transport is unavailable')
       const payload = serializeDeliveryEnvelope(records, context)
       const controller = new AbortController()
-      const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 5000)
+      const timeout = setTimeout(
+        () => controller.abort(),
+        options.timeoutMs ?? 5000,
+      )
       try {
         const response = await fetchImpl(url, {
           method: 'POST',
@@ -75,6 +94,16 @@ export function createHttpObservabilityTransport(
         clearTimeout(timeout)
       }
     },
+    async submitFeedback(submission) {
+      if (!fetchImpl) throw new Error('Feedback destination is unavailable')
+      return submitHttpFeedback({
+        fetchImpl,
+        url: feedbackUrl,
+        headers: requestHeaders(feedbackToken, options.headers),
+        timeoutMs: options.timeoutMs ?? 5000,
+        submission,
+      })
+    },
   }
 }
 
@@ -85,12 +114,19 @@ function parseReceipt(
 ): CruxDeliveryReceipt {
   if (isObject(value) && Array.isArray(value.dispositions)) {
     return {
-      dispositions: value.dispositions.map(sanitizeDisposition).filter((item) => item !== undefined),
+      dispositions: value.dispositions
+        .map(sanitizeDisposition)
+        .filter((item) => item !== undefined),
       ...(retryAfterMs > 0 ? { retryAfterMs } : {}),
     }
   }
-  if (isObject(value) && Number.isInteger(value.accepted) && Array.isArray(value.rejected)) {
-    const complete = value.accepted === records.length && value.rejected.length === 0
+  if (
+    isObject(value) &&
+    Number.isInteger(value.accepted) &&
+    Array.isArray(value.rejected)
+  ) {
+    const complete =
+      value.accepted === records.length && value.rejected.length === 0
     return complete
       ? acceptedDeliveryReceipt(records)
       : rejectedDeliveryReceipt(records, {
@@ -103,24 +139,36 @@ function parseReceipt(
   return { dispositions: [], ...(retryAfterMs > 0 ? { retryAfterMs } : {}) }
 }
 
-function sanitizeDisposition(value: unknown): CruxDeliveryReceipt['dispositions'][number] | undefined {
+function sanitizeDisposition(
+  value: unknown,
+): CruxDeliveryReceipt['dispositions'][number] | undefined {
   if (!isObject(value)) return undefined
-  if (typeof value.index !== 'number' || typeof value.recordId !== 'string') return undefined
-  if (value.outcome !== 'accepted' && value.outcome !== 'rejected') return undefined
-  if (typeof value.code !== 'string' || typeof value.retryable !== 'boolean') return undefined
-  if (value.outcome === 'accepted' && value.retryable !== false) return undefined
+  if (typeof value.index !== 'number' || typeof value.recordId !== 'string')
+    return undefined
+  if (value.outcome !== 'accepted' && value.outcome !== 'rejected')
+    return undefined
+  if (typeof value.code !== 'string' || typeof value.retryable !== 'boolean')
+    return undefined
+  if (value.outcome === 'accepted' && value.retryable !== false)
+    return undefined
   const base = {
     index: value.index,
-    recordId: value.recordId as CruxDeliveryReceipt['dispositions'][number]['recordId'],
+    recordId:
+      value.recordId as CruxDeliveryReceipt['dispositions'][number]['recordId'],
     code: sanitizeCode(value.code),
-    ...(typeof value.message === 'string' ? { message: sanitizeMessage(value.message) } : {}),
+    ...(typeof value.message === 'string'
+      ? { message: sanitizeMessage(value.message) }
+      : {}),
   }
   return value.outcome === 'accepted'
     ? { ...base, outcome: 'accepted', retryable: false }
     : { ...base, outcome: 'rejected', retryable: value.retryable }
 }
 
-function requestHeaders(token: string | undefined, extra: Record<string, string> | undefined): Record<string, string> {
+function requestHeaders(
+  token: string | undefined,
+  extra: Record<string, string> | undefined,
+): Record<string, string> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'Bypass-Tunnel-Reminder': 'true',
@@ -134,13 +182,17 @@ function requestHeaders(token: string | undefined, extra: Record<string, string>
 
 function isAllowlistedHeader(name: string): boolean {
   const normalized = name.toLowerCase()
-  return normalized === 'bypass-tunnel-reminder' || normalized.startsWith('x-crux-')
+  return (
+    normalized === 'bypass-tunnel-reminder' || normalized.startsWith('x-crux-')
+  )
 }
 
 function parseRetryAfter(value: string | null): number {
   if (!value) return 0
   const seconds = Number(value)
-  const delay = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(value) - Date.now()
+  const delay = Number.isFinite(seconds)
+    ? seconds * 1000
+    : Date.parse(value) - Date.now()
   return Math.max(0, Number.isFinite(delay) ? Math.round(delay) : 0)
 }
 
@@ -153,7 +205,13 @@ async function decodeJson(response: Response): Promise<unknown> {
 }
 
 function isRetryableStatus(status: number): boolean {
-  return status === 408 || status === 409 || status === 425 || status === 429 || status >= 500
+  return (
+    status === 408 ||
+    status === 409 ||
+    status === 425 ||
+    status === 429 ||
+    status >= 500
+  )
 }
 
 function httpCode(status: number | undefined): string {

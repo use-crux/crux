@@ -134,7 +134,7 @@ func (io *IO) Width() int {
 }
 
 // Sprint applies a lipgloss style only when color is enabled; otherwise it
-// returns s unchanged. All Quality rendering must funnel styling through this
+// returns s unchanged. All command rendering must funnel styling through this
 // (or IO-aware helpers built on it) rather than calling style.Render directly,
 // so `--no-color`, a non-TTY, and NO_COLOR all produce byte-clean plain text.
 func (io *IO) Sprint(style lipgloss.Style, s string) string {
@@ -150,7 +150,7 @@ func (io *IO) Sprint(style lipgloss.Style, s string) string {
 
 // WithColorDisabled returns a shallow copy of io with color forced off, keeping
 // the same streams, TTY status, CI flag, and width. It lets a single command
-// (e.g. `crux quality run --ci`) render byte-clean plain output even on a color-
+// (e.g. a CI-oriented command) render byte-clean plain output even on a color-
 // capable TTY, without mutating the shared factory IO or any global env state.
 func (io *IO) WithColorDisabled() *IO {
 	clone := *io

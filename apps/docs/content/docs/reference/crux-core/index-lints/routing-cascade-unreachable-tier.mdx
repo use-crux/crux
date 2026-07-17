@@ -16,12 +16,9 @@ Add an `evaluate` callback to non-terminal tiers, or move unconditional tiers to
 
 ```ts
 export const modelCascade = cascade({
-  id: 'model-cascade',
-  tiers: [
-    { model: cheap, evaluate: acceptsCheap },
-    { model: strong },
-  ],
-})
+  id: "model-cascade",
+  tiers: [{ model: cheap, evaluate: acceptsCheap }, { model: strong }],
+});
 ```
 
 ## When to suppress
@@ -30,7 +27,7 @@ Suppress only when the later tier is intentionally unreachable in the current co
 
 ```ts
 // crux-lint-disable-next-line routing.cascade_unreachable_tier -- backup tier is staged but not active yet
-export const modelCascade = cascade({ id: 'model-cascade', tiers })
+export const modelCascade = cascade({ id: "model-cascade", tiers });
 ```
 
 ## Rule metadata

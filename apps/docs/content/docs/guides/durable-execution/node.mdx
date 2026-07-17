@@ -8,12 +8,12 @@ description: Use node() for local development, tests, and durable multi-worker N
 ## Local development
 
 ```ts
-import { config } from '@use-crux/core'
-import { node } from '@use-crux/core/runtime'
+import { config } from "@use-crux/core";
+import { node } from "@use-crux/core/runtime";
 
 export default config({
   runtime: node(),
-})
+});
 ```
 
 This supports runtime-bound APIs in one process: event waits, timers, deferred tasks, scoped idle, and automatic signal resume.
@@ -23,19 +23,19 @@ This supports runtime-bound APIs in one process: event waits, timers, deferred t
 Use a durable store for long-lived workers or multiple Node processes:
 
 ```ts
-import { config } from '@use-crux/core'
-import { node } from '@use-crux/core/runtime'
-import { postgres } from '@use-crux/postgres/runtime'
+import { config } from "@use-crux/core";
+import { node } from "@use-crux/core/runtime";
+import { postgres } from "@use-crux/postgres/runtime";
 
 export default config({
   runtime: node({
     store: postgres({ url: process.env.DATABASE_URL }),
     retention: {
-      terminalWork: '7d',
-      terminalSnapshots: '30d',
+      terminalWork: "7d",
+      terminalSnapshots: "30d",
     },
   }),
-})
+});
 ```
 
 Run setup before deployment:
@@ -56,9 +56,9 @@ For tests or custom hosts, disable auto-start and call maintenance explicitly th
 const runtime = createRuntime({
   runtime: node({ autoStartMaintenance: false }),
   targets: runtimeTargetMap([reviewFlow, embedDocument]),
-})
+});
 
-await runtime.maintenance.tick()
+await runtime.maintenance.tick();
 ```
 
 ## Related

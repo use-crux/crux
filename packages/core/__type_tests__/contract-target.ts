@@ -153,6 +153,7 @@ type _GenerateResultKeys = Expect<
       { readonly provider: "raw" },
       { readonly ok: true }
     >,
+    | "runId"
     | "text"
     | "content"
     | "object"
@@ -214,7 +215,7 @@ type _FinalStepUsage = Expect<
 type _StreamResultKeys = Expect<
   AssertEqual<
     keyof TargetStreamResult<{ readonly stream: true }>,
-    "textStream" | "raw" | "completion"
+    "runId" | "textStream" | "raw" | "completion"
   >
 >;
 type _StreamRaw = Expect<

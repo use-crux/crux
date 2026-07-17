@@ -50,27 +50,9 @@ describe("Project Index schemas", () => {
       injectables: ["injectable:safety"],
     });
 
-    expect(
-      ProjectDefinitionQualitySchema.parse({
-        drift: {
-          evals: [
-            {
-              id: "eval:quality",
-              passRate: 0.75,
-              runs: 4,
-              baselineExperimentId: "baseline",
-              baselinePassRate: 1,
-              driftPp: -25,
-            },
-          ],
-          suites: [],
-        },
-      }),
-    ).toMatchObject({
-      drift: {
-        evals: [{ id: "eval:quality", driftPp: -25 }],
-        suites: [],
-      },
+    expect(ProjectDefinitionQualitySchema.parse({ evalIds: ["eval:quality"], runCount: 4 })).toEqual({
+      evalIds: ["eval:quality"],
+      runCount: 4,
     });
   });
 });

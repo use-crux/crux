@@ -71,8 +71,8 @@ func buildRunWithSpan() *Runs {
 	r := NewRuns()
 	r.loaded = true
 	body, _ := json.Marshal(map[string]any{"hello": "world"})
-	r.detail = &api.QualityRunDetailRecord{
-		Spans: []api.QualityRunSpan{
+	r.detail = &api.InspectRunDetailRecord{
+		Spans: []api.InspectRunSpan{
 			{ID: "sp1", Name: "agent.run", Data: json.RawMessage(body)},
 		},
 	}

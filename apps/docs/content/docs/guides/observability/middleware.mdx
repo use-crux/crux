@@ -13,18 +13,18 @@ Middleware wraps every `generate()` and `stream()` call across all prompts. Use 
 config({
   generation: {
     middleware: async (args, next) => {
-      const start = Date.now()
+      const start = Date.now();
       try {
-        const result = await next(args)
-        console.log(`${args.promptId}: ${Date.now() - start}ms`)
-        return result
+        const result = await next(args);
+        console.log(`${args.promptId}: ${Date.now() - start}ms`);
+        return result;
       } catch (error) {
-        console.error(`${args.promptId} failed after ${Date.now() - start}ms`)
-        throw error
+        console.error(`${args.promptId} failed after ${Date.now() - start}ms`);
+        throw error;
       }
     },
   },
-})
+});
 ```
 
 Middleware receives `{ promptId, preparedArgs }` and a `next` function. It can inspect or modify args, measure timing, transform results, or handle errors.
@@ -44,27 +44,28 @@ Per-prompt hooks give you fine-grained observability on individual prompts:
 prompt({
   hooks: {
     onPrepare: (args) => {
-      console.log('System tokens:', args.systemTokens)
+      console.log("System tokens:", args.systemTokens);
       if (args.droppedContexts.length > 0) {
         console.warn(
-          'Dropped:',
+          "Dropped:",
           args.droppedContexts.map((c) => c.source),
-        )
+        );
       }
     },
     onGenerate: (args) => {
-      console.log(`${args.promptId}: ${args.durationMs}ms`)
+      console.log(`${args.promptId}: ${args.durationMs}ms`);
     },
     onError: (args) => {
-      reportError(args.promptId, args.error)
+      reportError(args.promptId, args.error);
     },
   },
-})
+});
 ```
 
 <Callout type="info">
-  Middleware runs globally on every call. Hooks run per-prompt. Use middleware for cross-cutting concerns (logging,
-  timing) and hooks for prompt-specific observability.
+  Middleware runs globally on every call. Hooks run per-prompt. Use middleware
+  for cross-cutting concerns (logging, timing) and hooks for prompt-specific
+  observability.
 </Callout>
 
 ## Hook argument types
@@ -95,8 +96,9 @@ The instrumentation hooks cover three areas:
 - **`onJudgeResult`**: fired when an LLM judge returns a score, includes the metric ID, score, and reasoning
 
 <Callout type="info">
-  Instrumentation hooks are designed for observability, not control flow. They cannot modify the data flowing through
-  them, use middleware if you need to transform args or results.
+  Instrumentation hooks are designed for observability, not control flow. They
+  cannot modify the data flowing through them, use middleware if you need to
+  transform args or results.
 </Callout>
 
 ## Production logging
@@ -107,39 +109,40 @@ Middleware gives you structured data about every `generate()` call. Use it to fo
 config({
   generation: {
     middleware: async (args, next) => {
-      const start = Date.now()
+      const start = Date.now();
       try {
-        const result = await next(args)
+        const result = await next(args);
         myLogger.send({
-          type: 'llm.generate',
+          type: "llm.generate",
           promptId: args.promptId,
           model: result._meta?.model,
           durationMs: Date.now() - start,
           tokens: result._meta?.usage,
           cost: result._meta?.cost,
-          status: 'success',
-        })
-        return result
+          status: "success",
+        });
+        return result;
       } catch (error) {
         myLogger.send({
-          type: 'llm.generate',
+          type: "llm.generate",
           promptId: args.promptId,
           durationMs: Date.now() - start,
-          status: 'error',
+          status: "error",
           error: error.message,
-        })
-        throw error
+        });
+        throw error;
       }
     },
   },
-})
+});
 ```
 
 This works with any logging service, Datadog, Sentry, Posthog, or a simple `console.log`. The `_meta` object on results contains normalized model, usage, and cost data regardless of which adapter you used.
 
 <Callout type="info">
-  This approach captures `generate()` and `stream()` calls. For full observability covering memory operations,
-  compaction, tool calls, and flows, use devtools locally or the explicit OpenTelemetry plugin in production.
+  This approach captures `generate()` and `stream()` calls. For full
+  observability covering memory operations, compaction, tool calls, and flows,
+  use devtools locally or the explicit OpenTelemetry plugin in production.
 </Callout>
 
 ## Next steps
@@ -147,7 +150,7 @@ This works with any logging service, Datadog, Sentry, Posthog, or a simple `cons
 <Cards>
   <Card
     title="Devtools"
-    description="Visual tracing UI for generations, memory, evals, and quality experiments."
+    description="Visual tracing UI for generations, memory, Evals, Eval runs, and Review."
     href="/docs/guides/observability/devtools"
   />
   <Card
@@ -158,7 +161,7 @@ This works with any logging service, Datadog, Sentry, Posthog, or a simple `cons
   <Card
     title="Scoring"
     description="LLM-as-a-judge scoring and pre-built quality metrics."
-    href="/docs/guides/quality/scorers-and-gates"
+    href="/docs/guides/evals/scorers-and-gates"
   />
   <Card
     title="API Reference"

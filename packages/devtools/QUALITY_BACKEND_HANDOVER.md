@@ -652,14 +652,14 @@ can be added once the UI shape is known.
 The CLI now exposes the BFF records:
 
 ```bash
-crux quality
-crux quality list
-crux quality run [id...]
-crux quality watch [id...]
-crux quality show <experiment-id> --json
-crux quality cell-evidence <experiment-id> --case <case-id> --variant <variant-name> --trial <n> --json
-crux quality progress <evaluation-id> --limit <n> --json
-crux quality promote <experiment-id> --variant <variant-name>
+crux eval
+crux eval list
+crux eval run [id...]
+crux eval watch [id...]
+crux eval show <experiment-id> --json
+crux eval cell-evidence <experiment-id> --case <case-id> --variant <variant-name> --trial <n> --json
+crux eval progress <evaluation-id> --limit <n> --json
+crux eval promote <experiment-id> --variant <variant-name>
 ```
 
 JSON output is available with `--json`.
@@ -671,7 +671,7 @@ Build the new UI around these domain screens:
 - Overview: call `/api/quality/overview?window=24h|7d|30d|all`, then optionally load insights/experiments.
 - Insights: call `/api/quality/insights`; linked IDs open Runs, Experiments, Suites, or Cassettes.
 - Runs: call `/api/quality/runs`; drill into `/api/quality/runs/{traceId}` for the quality projection or `/api/observability/runs/{runId}` for the full graph.
-- Quality eval trace links: connected `crux quality run` executions now post the
+- Quality eval trace links: connected `crux eval run` executions now post the
   canonical observability graph before the worker exits, and direct
   `evaluation.run()` calls do the same when `CRUX_DEVTOOLS_URL`, `DEVTOOLS_URL`,
   or a reachable local `localhost:4400` devtools server is available. Fresh

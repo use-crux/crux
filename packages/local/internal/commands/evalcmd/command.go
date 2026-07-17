@@ -20,7 +20,7 @@ type runOptions struct {
 	maxCost   float64
 }
 
-// New creates the Eval V1 command group without changing legacy Quality.
+// New creates the Eval V1 command group.
 func New(f *cli.Factory) *cobra.Command {
 	opts := &runOptions{}
 	cmd := &cobra.Command{
@@ -28,7 +28,7 @@ func New(f *cli.Factory) *cobra.Command {
 		Short: "Run Evals and inspect Eval runs and Baselines",
 		Long: `Eval discovers one default Eval per *.eval.ts file and runs Current
 plus declared Variants with exact reuse, explicit Baselines, and actionable
-preflight errors. Legacy crux quality remains a separate command during migration.`,
+preflight errors.`,
 		Example: `  crux eval
   crux eval support
   crux eval support --case refund --variant cheaper

@@ -4,9 +4,9 @@ Small, copyable Crux examples live here. They are intentionally minimal; full wa
 
 ## Available examples
 
-| Example                    | What it shows                                                 |
-| -------------------------- | ------------------------------------------------------------- |
-| [node-basic](./node-basic) | A typed prompt plus a deterministic score-aware quality eval. |
+| Example                    | What it shows                                                |
+| -------------------------- | ------------------------------------------------------------ |
+| [node-basic](./node-basic) | A typed prompt plus a production-task Eval with typed Cases. |
 
 ## More recipes
 

@@ -50,9 +50,9 @@ import type { EvalRun } from "@use-crux/core/eval";
 import { EVAL_INTERNAL } from "@use-crux/core/eval";
 // @ts-expect-error — coordinator internals are not public Eval exports
 import { getEvalDefinitionForInternalUse } from "@use-crux/core/eval";
-import type { EvaluationCoverageTargetId } from "../src/quality/internal/definition";
-import type { Scorer, ScorerFactory } from "../src/quality/scorers";
-import type { Capability } from "../src/quality/target";
+import type { EvalCoverageTargetId as EvaluationCoverageTargetId } from "../src/eval/evaluate";
+import type { Scorer, ScorerFactory } from "../src/eval/internal/scorers/types";
+import type { Capability } from "../src/eval/internal/capabilities";
 
 const classify = async (input: {
   question: string;

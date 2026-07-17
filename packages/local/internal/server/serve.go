@@ -15,10 +15,11 @@ import (
 
 	"github.com/use-crux/crux/packages/local/internal/assets"
 	"github.com/use-crux/crux/packages/local/internal/devtools"
+	"github.com/use-crux/crux/packages/local/internal/inspect"
+	"github.com/use-crux/crux/packages/local/internal/legacymigration"
 	"github.com/use-crux/crux/packages/local/internal/observability"
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"github.com/use-crux/crux/packages/local/internal/projectwatch"
-	"github.com/use-crux/crux/packages/local/internal/quality"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
@@ -27,7 +28,7 @@ type DevServer struct {
 	ctx                   context.Context
 	cancel                context.CancelFunc
 	Store                 *store.Store
-	Quality               *quality.Service
+	Inspect               *inspect.Service
 	Devtools              *devtools.Service
 	Observability         *observability.Service
 	Port                  int
@@ -52,7 +53,7 @@ type DevServerOptions struct {
 	Tunnel               bool
 	SourceResolverScript string
 	ProjectIndexerScript string
-	QualityDir           string
+	InspectDir           string
 	ObservabilityDBPath  string
 	IngestTokenPath      string
 	RuntimeArtifacts     RuntimeArtifactGenerator
@@ -79,8 +80,9 @@ func NewDevServer(opts DevServerOptions) *DevServer {
 	serverOpts := ServerOptions{
 		SourceResolverScript: opts.SourceResolverScript,
 		ProjectIndexerScript: opts.ProjectIndexerScript,
-		QualityDir:           opts.QualityDir,
+		InspectDir:           opts.InspectDir,
 		ObservabilityDBPath:  opts.ObservabilityDBPath,
+		ReviewDBPath:         ".crux/review.sqlite",
 	}
 	if cwd, err := os.Getwd(); err == nil {
 		serverOpts.ProjectRoot = cwd
@@ -95,8 +97,12 @@ func NewDevServer(opts DevServerOptions) *DevServer {
 	if runtimeArtifacts == nil {
 		runtimeArtifacts, closeRuntimeArtifacts = newRuntimeArtifactGeneratorForDev(opts.ProjectIndexerScript)
 	}
-	qualitySvc := quality.NewService(s, quality.Dir(serverOpts.QualityDir))
-	devtoolsSvc := devtools.NewService(s, qualitySvc)
+	inspectDir := inspect.Dir(serverOpts.InspectDir)
+	if err := legacymigration.ArchiveExperiments(inspectDir); err != nil {
+		slog.Error("legacy Quality experiment archival failed", "error", err)
+	}
+	inspectSvc := inspect.NewService(s, inspectDir)
+	devtoolsSvc := devtools.NewService(s, inspectSvc)
 	if opts.ProjectIndexer != nil {
 		devtoolsSvc.WithProjectIndexer(opts.ProjectIndexer)
 	}
@@ -150,7 +156,7 @@ func NewDevServer(opts DevServerOptions) *DevServer {
 		ctx:             ctx,
 		cancel:          cancel,
 		Store:           s,
-		Quality:         qualitySvc,
+		Inspect:         inspectSvc,
 		Devtools:        devtoolsSvc,
 		Observability:   observabilitySvc,
 		Port:            opts.Port,

@@ -560,7 +560,7 @@ func TestServiceRunSignalsDeriveQualitySummaryWithoutRunDetail(t *testing.T) {
 	if signal.ToolCallCount != 2 || signal.ToolErrorCount != 1 || signal.RepeatedToolName != "search" || signal.RepeatedToolCount != 2 {
 		t.Fatalf("tool signals = %#v", signal)
 	}
-	if signal.RetrievalIssueCount != 1 || signal.QualitySignalIssueCount != 1 || signal.BlockedSignalCount != 1 || signal.SuspensionSignalCount != 1 {
+	if signal.RetrievalIssueCount != 1 || signal.InspectSignalIssueCount != 1 || signal.BlockedSignalCount != 1 || signal.SuspensionSignalCount != 1 {
 		t.Fatalf("attention signals = %#v", signal)
 	}
 	if signal.DiagnosticCount == 0 || !containsTestString(signal.DiagnosticCodes, "missing-parent-span") {

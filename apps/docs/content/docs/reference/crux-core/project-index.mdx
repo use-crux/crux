@@ -55,7 +55,7 @@ crux catalog explain agent:writer
 ```
 
 The stable explanation projection reports definition evidence by AST,
-semantic, runtime, or Quality phase; producer/fidelity/source provenance;
+semantic, runtime, or Eval phase; producer/fidelity/source provenance;
 the canonical first-party or resolved extension extractors that actually
 contributed when that attribution is known;
 resolved and compiler-reported unresolved relations; diagnostics; lints; and
@@ -107,7 +107,7 @@ import type {
 ```
 
 The model contains the selected root, optional package name, config files, source roots, ignored
-paths, discovered definitions, source-visible relations, Quality discovery settings, and
+paths, discovered definitions, source-visible relations, Eval discovery settings, and
 diagnostics. Fields that can be inferred or overridden use `ProjectModelField<T>` so clients can show
 whether a value came from source, runtime evidence, filesystem convention, config, or CLI flags.
 
@@ -296,13 +296,17 @@ Prompt, context, and tool schemas are exposed on `ProjectDefinition.metadata` wh
 
 Clients should render these schema fields directly from the definition detail. Partial definitions can still include best-effort schemas when the source uses common inline Zod expressions such as `z.object`, `z.array`, `z.enum`, `z.string`, `z.number`, `z.boolean`, `optional`, `describe`, `default`, `min`, and `max`. Tool schemas passed by same-file variable or direct project import are also resolved when the underlying Zod/Convex-validator expression is statically visible; the calling file records a dependency on the imported schema file. Unresolved dynamic schemas are omitted rather than guessed.
 
-## Quality Joins
+## Eval source coverage
 
-The Go service enriches index definitions with a derived `quality` summary when eval, RAG eval, flow eval, experiment, baseline, comparison, cassette, or feedback records point at that definition. The summary can include related eval IDs, suite IDs, experiment IDs, baseline IDs, comparison IDs, feedback IDs, cassette paths, run IDs, trace IDs, run counts, case counts, last status/time, pass rate, and changed-since-baseline fingerprint signals and affected eval/suite suggestions.
+The Project Index exposes source definitions and coverage relations needed to
+answer which production definitions an Eval protects. Eval discovery and the
+Go Eval services remain authoritative for Cases, Eval runs, Baselines, reuse,
+and Review; clients must not reconstruct those read models by walking compiler
+definitions.
 
-This field is a read-model join. It is not written into source files or indexer output, and clients should not recompute it by walking eval lists themselves.
-
-Quality insights use the same backend-owned mapping. When an insight references a target, experiment, trace, or cassette path that resolves to index definitions, the response includes `linkedDefinitionIds` and `linkedSources` so web devtools and the TUI can navigate to the exact source without client-side matching rules.
+Generated deployed registries use canonical project-relative source paths and
+source fingerprints. Runtime evidence can link back to those exact definitions
+without writing run state into compiler output.
 
 ## Lint Findings
 

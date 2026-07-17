@@ -1,11 +1,5 @@
 {
   "title": "Compositions",
   "description": "Pipeline, parallel, consensus, and swarm composition patterns.",
-  "pages": [
-    "index",
-    "pipeline",
-    "parallel",
-    "consensus",
-    "swarm"
-  ]
+  "pages": ["index", "pipeline", "parallel", "consensus", "swarm"]
 }

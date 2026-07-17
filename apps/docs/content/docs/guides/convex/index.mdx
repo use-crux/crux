@@ -6,9 +6,10 @@ description: Recommended architecture for running Crux inside Convex actions, Ag
 Run Crux agents inside Convex: define prompts, memory, and tools once, then execute them from Convex actions, Convex Agent threads, and durable flows with full trace continuity. Core primitives stay in `@use-crux/core`; Convex storage adapters, function wrappers, and Agent integration come from `@use-crux/convex`. Start with [Setup](/docs/guides/convex/setup) to install the component and create the shared store helper.
 
 <Callout type="info">
-  Recommended rule: define prompts, contexts, memory, workspaces, skills, blackboards, and immediate compositions with
-  `@use-crux/core`; run Convex actions, Convex Agent tools, durable flows, experimental cross-action swarms, and observability flushing
-  through `@use-crux/convex`.
+  Recommended rule: define prompts, contexts, memory, workspaces, skills,
+  blackboards, and immediate compositions with `@use-crux/core`; run Convex
+  actions, Convex Agent tools, durable flows, experimental cross-action swarms,
+  and observability flushing through `@use-crux/convex`.
 </Callout>
 
 ## Why Convex Needs Its Own Boundaries
@@ -34,14 +35,14 @@ convex/
 
 ## Best Practices
 
-| Do                                                                                       | Why                                                                                             |
-| ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| Use `action()` / `internalAction()` from `@use-crux/convex/server` for AI runtime boundaries | Restores trace context, provides `ctx.crux`, and flushes before workers exit                    |
-| Use `ctx.crux.runAction(label, ref, args)` for child AI work                             | Preserves parent/child relations across worker boundaries                                       |
-| Keep app-specific mutation helpers in your app                                           | Table names, tenancy, and auth are application policy                                           |
-| Use `convexRecordStore()` or `convexStorage()` for Crux data records                     | Component-backed records for memory, blackboards, plans, prompt cache, workspace metadata, and React reads |
-| Use `@use-crux/convex/agent` with Convex Agent                                               | Tool calls get readable names and nested work inherits the active span                          |
-| Use `flow()` for suspend/resume; treat `createComponentSwarm()` as experimental          | Compositions execute immediately; durable swarm semantics are still being explored               |
+| Do                                                                                           | Why                                                                                                        |
+| -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Use `action()` / `internalAction()` from `@use-crux/convex/server` for AI runtime boundaries | Restores trace context, provides `ctx.crux`, and flushes before workers exit                               |
+| Use `ctx.crux.runAction(label, ref, args)` for child AI work                                 | Preserves parent/child relations across worker boundaries                                                  |
+| Keep app-specific mutation helpers in your app                                               | Table names, tenancy, and auth are application policy                                                      |
+| Use `convexRecordStore()` or `convexStorage()` for Crux data records                         | Component-backed records for memory, blackboards, plans, prompt cache, workspace metadata, and React reads |
+| Use `@use-crux/convex/agent` with Convex Agent                                               | Tool calls get readable names and nested work inherits the active span                                     |
+| Use `flow()` for suspend/resume; treat `createComponentSwarm()` as experimental              | Compositions execute immediately; durable swarm semantics are still being explored                         |
 
 | Avoid                                                      | Why                                                                  |
 | ---------------------------------------------------------- | -------------------------------------------------------------------- |

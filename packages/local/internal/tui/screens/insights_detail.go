@@ -35,7 +35,7 @@ func (s *Insights) renderDetail(width, height int) string {
 	return strings.Join(body, "\n")
 }
 
-func (s *Insights) renderBadgeLine(ins api.QualityInsightRecord, width int) string {
+func (s *Insights) renderBadgeLine(ins api.InspectInsightRecord, width int) string {
 	parts := []string{kit.Badge(ins.Severity, severityTone(ins.Severity), insightsStyles)}
 	for _, tag := range ins.Tags {
 		parts = append(parts, kit.Badge(tag, theme.ToneDim, insightsStyles))
@@ -60,7 +60,6 @@ func (s *Insights) renderTabs(width int) string {
 		{"diagnosis", "Diagnosis"},
 		{"traces", "Traces"},
 		{"cases", "Cases"},
-		{"compare", "Compare"},
 		{"fix", "Fix"},
 	}
 	parts := make([]string, 0, len(tabs))
@@ -74,14 +73,12 @@ func (s *Insights) renderTabs(width int) string {
 	return padRow(" "+strings.Join(parts, insightsStyles.Border.Render(" · ")), width)
 }
 
-func (s *Insights) renderTabBody(ins api.QualityInsightRecord, width, height int) []string {
+func (s *Insights) renderTabBody(ins api.InspectInsightRecord, width, height int) []string {
 	switch s.tab {
 	case "traces":
 		return s.renderLinkedIDs("LINKED TRACES", ins.LinkedTraceIDs, width, height)
 	case "cases":
 		return s.renderLinkedIDs("LINKED CASES", ins.LinkedCaseIDs, width, height)
-	case "compare":
-		return s.renderLinkedIDs("LINKED EXPERIMENTS", ins.LinkedExperimentIDs, width, height)
 	case "fix":
 		return s.renderFixTab(ins, width, height)
 	default:
@@ -89,7 +86,7 @@ func (s *Insights) renderTabBody(ins api.QualityInsightRecord, width, height int
 	}
 }
 
-func (s *Insights) renderDiagnosisTab(ins api.QualityInsightRecord, width, height int) []string {
+func (s *Insights) renderDiagnosisTab(ins api.InspectInsightRecord, width, height int) []string {
 	lines := []string{padRow(" "+insightsStyles.Accent.Render("PATTERN"), width)}
 	pattern := ins.SuspectedCause
 	if pattern == "" {
@@ -103,7 +100,7 @@ func (s *Insights) renderDiagnosisTab(ins api.QualityInsightRecord, width, heigh
 	return clampLines(lines, width, height)
 }
 
-func (s *Insights) renderStatCells(stats api.QualityInsightDetailStats, width int) []string {
+func (s *Insights) renderStatCells(stats api.InspectInsightDetailStats, width int) []string {
 	cellW := max(12, (width-2)/3)
 	cells := []string{
 		statCell("tokens/run", fmt.Sprintf("%.1fk", stats.TokensPerRun/1000), stats.TokensDeltaVsBaseline, stats.TokensSpark, cellW),
@@ -134,7 +131,7 @@ func (s *Insights) renderLinkedIDs(title string, ids []string, width, height int
 	return clampLines(lines, width, height)
 }
 
-func (s *Insights) renderFixTab(ins api.QualityInsightRecord, width, height int) []string {
+func (s *Insights) renderFixTab(ins api.InspectInsightRecord, width, height int) []string {
 	lines := []string{padRow(" "+insightsStyles.Accent.Render("PROPOSED FIX"), width)}
 	fix := ins.ProposedFix
 	if ins.ProposedFixConfig != nil && ins.ProposedFixConfig.YAML != "" {

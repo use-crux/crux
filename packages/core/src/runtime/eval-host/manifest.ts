@@ -11,12 +11,17 @@ export function createEvalHostManifest(input: {
   readonly deploymentId: string;
   readonly hostKind: EvalHostKind;
   readonly registry: DeployedEvalRegistry;
+  readonly hostCapabilities?: readonly string[];
 }): EvalHostManifestV1 {
   return Object.freeze({
     protocol: CRUX_EVAL_HOST_PROTOCOL,
     deploymentId: input.deploymentId,
     hostKind: input.hostKind,
-    capabilities: Object.freeze(["result-ref"]),
+    capabilities: Object.freeze(
+      ["result-ref", ...(input.hostCapabilities ?? [])]
+        .filter((value, index, values) => values.indexOf(value) === index)
+        .sort(compareCodepoint),
+    ),
     resultMaxBytes: RUNTIME_RESULT_MAX_BYTES,
     evals: Object.freeze(
       [...input.registry.entries]

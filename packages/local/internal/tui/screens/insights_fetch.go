@@ -7,7 +7,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/api"
 )
 
-type insightsListLoadedMsg []api.QualityInsightRecord
+type insightsListLoadedMsg []api.InspectInsightRecord
 
 func fetchInsightsList(c DataClient) tea.Cmd {
 	return func() tea.Msg {

@@ -22,31 +22,40 @@ The result: a 10-skill agent costs ~10 lines of index upfront, and only pays for
 ## Quick Start
 
 ```ts
-import { skill, skillsSh } from '@use-crux/core/skill/node'
-import { prompt, context } from '@use-crux/core'
-import { agent } from '@use-crux/core/agent'
+import { skill, skillsSh } from "@use-crux/core/skill/node";
+import { prompt, context } from "@use-crux/core";
+import { agent } from "@use-crux/core/agent";
 
 // Inline, useful for short, app-specific instructions
 const tone = skill.inline({
-  id: 'tone',
-  description: 'Writing voice and tone guidelines',
-  instructions: 'Always write in a warm professional tone. Avoid jargon unless the user uses it first.',
-})
+  id: "tone",
+  description: "Writing voice and tone guidelines",
+  instructions:
+    "Always write in a warm professional tone. Avoid jargon unless the user uses it first.",
+});
 
 // From a SKILL.md file on disk
-const seo = skill.fromFile('./skills/seo-analysis/SKILL.md')
+const seo = skill.fromFile("./skills/seo-analysis/SKILL.md");
 
 // From the skills.sh community registry
-const research = skill.fromRegistry(skillsSh, 'mattpocock/skills/research-synthesis')
+const research = skill.fromRegistry(
+  skillsSh,
+  "mattpocock/skills/research-synthesis",
+);
 
 // Drop them into a prompt's `use` array, same as contexts
 const reviewer = agent({
   prompt: prompt({
-    id: 'reviewer',
-    use: [tone, seo, research, context({ id: 'base', system: 'You review marketing content.' })],
-    system: '',
+    id: "reviewer",
+    use: [
+      tone,
+      seo,
+      research,
+      context({ id: "base", system: "You review marketing content." }),
+    ],
+    system: "",
   }),
-})
+});
 ```
 
 That is the entire integration for adapter-based agents (`@use-crux/anthropic`, `@use-crux/openai`, `@use-crux/google`, `@use-crux/ai`). The index, the `LoadSkill`/`LoadReference` tools, and the re-resolution loop are all wired up by the resolver.
@@ -84,11 +93,11 @@ The skill content arrives as authoritative system context, not as a tool result 
 
 ## Adapter Support
 
-| Adapter                                           | How it works                                                                                                                    | Setup                                |
-| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
-| `@use-crux/anthropic`, `@use-crux/openai`, `@use-crux/google` | Executor intercepts `LoadSkill` mid-loop and re-resolves the system prompt                                                      | Add skills to `use`                  |
-| `@use-crux/ai` (Vercel AI SDK)                        | `wrapGenerate` middleware injects newly activated skills between steps                                                          | Add skills to `use`                  |
-| Convex Agent, Mastra, custom loops                | `createAgentSkillKit()` with a skill activation persistence port, see [Agent Frameworks](/docs/guides/skills/agent-frameworks) | Store/load `SkillActivationSnapshot` |
+| Adapter                                                       | How it works                                                                                                                   | Setup                                |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------ |
+| `@use-crux/anthropic`, `@use-crux/openai`, `@use-crux/google` | Executor intercepts `LoadSkill` mid-loop and re-resolves the system prompt                                                     | Add skills to `use`                  |
+| `@use-crux/ai` (Vercel AI SDK)                                | `wrapGenerate` middleware injects newly activated skills between steps                                                         | Add skills to `use`                  |
+| Convex Agent, Mastra, custom loops                            | `createAgentSkillKit()` with a skill activation persistence port, see [Agent Frameworks](/docs/guides/skills/agent-frameworks) | Store/load `SkillActivationSnapshot` |
 
 ## The Escape Hatch
 
@@ -96,9 +105,9 @@ If you want the raw skill text without the skill system, call `.dump()`:
 
 ```ts
 const ctx = context({
-  id: 'seo-inline',
+  id: "seo-inline",
   system: `SEO guidelines:\n${seo.dump()}`,
-})
+});
 ```
 
 This exits the skill system entirely: no index entry, no `LoadSkill` tool, no re-resolution. Reach for it when you want full control over how a single skill's content is presented, or when you genuinely want a skill always in the system prompt.

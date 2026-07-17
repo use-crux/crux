@@ -129,7 +129,7 @@ All composition patterns accept `validationRetry` as a top-level option:
 ```ts
 // Pipeline, default for all agent steps
 await pipeline({
-  id: 'validation-retry-pipeline-1',
+  id: "validation-retry-pipeline-1",
   context: { userId },
   validationRetry: { maxRetries: 3 },
   steps: [
@@ -140,7 +140,7 @@ await pipeline({
 
 // Parallel, all agents get validation retry
 await parallel({
-  id: 'validation-retry-parallel-1',
+  id: "validation-retry-parallel-1",
   context: { document },
   agents: { entities: entityAgent, sentiment: sentimentAgent },
   validationRetry: { maxRetries: 2 },
@@ -148,7 +148,7 @@ await parallel({
 
 // Swarm, each agent turn gets validation retry
 await swarm({
-  id: 'validation-retry-swarm-1',
+  id: "validation-retry-swarm-1",
   agents: { router: routerAgent, writer: writerAgent },
   startAgent: "router",
   input: query,

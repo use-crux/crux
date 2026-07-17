@@ -163,7 +163,7 @@ func stringifyJSON(v any) string {
 
 // renderTraceChips builds the small chip cluster shown on the right of the
 // waterfall pane header (e.g. RETRIEVAL-LOOP, INS-014).
-func renderTraceChips(d *api.QualityRunDetailRecord) string {
+func renderTraceChips(d *api.InspectRunDetailRecord) string {
 	if d == nil {
 		return ""
 	}

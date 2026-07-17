@@ -4,7 +4,7 @@ description: API reference for @use-crux/core/lint rule metadata, findings, prof
 ---
 
 ```ts
-import type { IndexLintFinding, CruxLintConfig } from '@use-crux/core/lint'
+import type { IndexLintFinding, CruxLintConfig } from "@use-crux/core/lint";
 ```
 
 Index lint is the authored-graph lint contract used by `crux dev`, `crux lint`, the web devtools, and the TUI. Lint findings describe actionable issues in source-authored Crux definitions. They are separate from index diagnostics, which describe indexer health.
@@ -13,14 +13,14 @@ Index lint is the authored-graph lint contract used by `crux dev`, `crux lint`, 
 
 ```ts
 interface CruxLintConfig {
-  profile?: 'off' | 'recommended' | 'strict' | 'experimental'
+  profile?: "off" | "recommended" | "strict" | "experimental";
   rules?: Record<
     string,
     {
-      enabled?: boolean
-      severity?: 'info' | 'warning' | 'error'
+      enabled?: boolean;
+      severity?: "info" | "warning" | "error";
     }
-  >
+  >;
 }
 ```
 
@@ -67,27 +67,27 @@ Media rules are deterministic authored-source checks. They cover discarded speci
 
 ```ts
 interface IndexLintFinding {
-  id: string
-  severity: 'info' | 'warning' | 'error'
-  ruleId: string
-  category: CruxLintCategory
-  maturity: 'stable' | 'preview' | 'experimental'
-  confidence: 'high' | 'medium' | 'low'
-  profiles: Array<'recommended' | 'strict' | 'experimental'>
-  title: string
-  message: string
-  rationale: string
-  impact?: string
-  source?: SourceLocation
-  primaryDefinitionId?: string
-  relatedDefinitionIds: string[]
-  affectedDefinitionIds?: string[]
-  evidence: IndexLintEvidence[]
-  fixes: IndexLintFix[]
-  docsUrl: string
-  suppression?: IndexLintSuppression
-  propagatedDefinitionIds?: string[]
-  propagationPaths?: IndexLintPropagationPath[]
+  id: string;
+  severity: "info" | "warning" | "error";
+  ruleId: string;
+  category: CruxLintCategory;
+  maturity: "stable" | "preview" | "experimental";
+  confidence: "high" | "medium" | "low";
+  profiles: Array<"recommended" | "strict" | "experimental">;
+  title: string;
+  message: string;
+  rationale: string;
+  impact?: string;
+  source?: SourceLocation;
+  primaryDefinitionId?: string;
+  relatedDefinitionIds: string[];
+  affectedDefinitionIds?: string[];
+  evidence: IndexLintEvidence[];
+  fixes: IndexLintFix[];
+  docsUrl: string;
+  suppression?: IndexLintSuppression;
+  propagatedDefinitionIds?: string[];
+  propagationPaths?: IndexLintPropagationPath[];
 }
 ```
 

@@ -1,15 +1,15 @@
 /** Shared assertion assessment for one executed Eval cell. @internal */
 
-import type { CaseContext } from "../../quality/expect";
-import type { Capability } from "../../quality/target";
+import type { CaseContext } from "./assertions/types";
+import type { Capability } from "./capabilities";
 import {
   createAssertionRecorder,
   createRuntimeBoundExpect,
-} from "../../quality/internal/expect-runtime";
-import { createStepAccessor } from "../../quality/internal/expect-runtime";
-import type { CellSignals } from "../../quality/internal/signals";
-import { invokeScorer } from "../../quality/internal/scorer-runtime";
-import type { Score } from "../../quality/scorers";
+} from "./assertions/runtime";
+import { createStepAccessor } from "./assertions/runtime";
+import type { CellSignals } from "./execution-signals";
+import { invokeScorer } from "./scorers/runtime";
+import type { Score } from "./scorers/types";
 import { resolveEvalScorers } from "./scorer-plan";
 import type {
   EvalAssertionSummary,

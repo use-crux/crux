@@ -4,6 +4,7 @@ import type { Message } from "../generation/messages";
 import type { AssistantContentPart } from "../types/content";
 import type { ApprovalRequestInfo } from "./tool/approval";
 import type { StreamHandle } from "./types";
+import type { CruxRunId } from "../observability";
 import {
   attachRoutingToError,
   markRoutingMidStreamFailure,
@@ -17,7 +18,7 @@ import {
 
 /** Build the public stream envelope from an internal provider stream handle. */
 export function createStreamResult<TRawStream, TOutput = unknown>(
-  handle: StreamHandle<TRawStream>,
+  handle: StreamHandle<TRawStream> & { readonly runId: CruxRunId },
 ): StreamResult<TRawStream, TOutput> {
   let streamedText = "";
   let resolveStream: (() => void) | undefined;
@@ -61,19 +62,23 @@ export function createStreamResult<TRawStream, TOutput = unknown>(
         : {}),
     });
     const extended = meta as typeof meta & StreamOutputMeta<TOutput>;
-    return accumulator.finalizeCompletion({
-      messages: meta?.messages ? [...meta.messages] : [],
-      ...(extended?.object !== undefined ? { object: extended.object } : {}),
-      ...(meta?.cost !== undefined ? { cost: meta.cost } : {}),
-      ...(extended?.pendingApprovals
-        ? { pendingApprovals: extended.pendingApprovals }
-        : {}),
-      ...(handle.routing !== undefined ? { routing: handle.routing } : {}),
-    });
+    return {
+      ...accumulator.finalizeCompletion({
+        messages: meta?.messages ? [...meta.messages] : [],
+        ...(extended?.object !== undefined ? { object: extended.object } : {}),
+        ...(meta?.cost !== undefined ? { cost: meta.cost } : {}),
+        ...(extended?.pendingApprovals
+          ? { pendingApprovals: extended.pendingApprovals }
+          : {}),
+        ...(handle.routing !== undefined ? { routing: handle.routing } : {}),
+      }),
+      runId: handle.runId,
+    };
   })();
   void completion.catch(() => undefined);
 
   return {
+    runId: handle.runId,
     textStream: textStream(),
     raw: handle.raw ?? handle.rawStream,
     completion,

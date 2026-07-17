@@ -30,35 +30,6 @@
       "fidelity": "safe"
     },
     {
-      "id": "quality.missing_baseline",
-      "source": "builtin",
-      "severity": "info",
-      "category": "quality",
-      "maturity": "stable",
-      "confidence": "high",
-      "profiles": ["recommended", "strict"],
-      "title": "Quality target has no baseline",
-      "description": "A promoted baseline lets you compare future runs against known behavior and understand whether authored AI changes are regressions or improvements.",
-      "rationale": "A promoted baseline lets you compare future runs against known behavior and understand whether authored AI changes are regressions or improvements.",
-      "impact": "Without a baseline, quality history is visible but drift and regression checks cannot anchor to a known good run.",
-      "docsUrl": "/docs/reference/crux-core/index-lints/quality-missing-baseline",
-      "fixes": [
-        {
-          "title": "Promote a baseline",
-          "description": "Promote a trusted experiment or variant as the baseline for this definition so future changes can be compared.",
-          "kind": "manual"
-        }
-      ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line quality.missing_baseline -- reason"
-      },
-      "phase": "index",
-      "requires": ["definitions", "relations"],
-      "fidelity": "safe"
-    },
-    {
       "id": "agent.unobservable_handoff",
       "source": "builtin",
       "severity": "warning",

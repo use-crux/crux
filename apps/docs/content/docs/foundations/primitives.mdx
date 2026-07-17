@@ -8,7 +8,9 @@ This page is the index of Crux primitives. You do not need all of them on day on
 Each section is a one-paragraph hook plus an example so you can recognize the primitive when you need it. Follow the links for the deep guide.
 
 <Callout type="info">
-  Most teams start with prompts and contexts, then add memory, retrieval, safety, routing, quality, or devtools when those problems show up in the product.
+  Most teams start with prompts and contexts, then add memory, retrieval,
+  safety, routing, quality, or devtools when those problems show up in the
+  product.
 </Callout>
 
 ## Prompts
@@ -16,16 +18,16 @@ Each section is a one-paragraph hook plus an example so you can recognize the pr
 A prompt is a typed data structure: input schema, output schema (or absent for text generation), system message, user prompt, contexts to compose, settings. Define once, run with any adapter.
 
 ```ts
-import { prompt } from '@use-crux/core'
-import { z } from 'zod'
+import { prompt } from "@use-crux/core";
+import { z } from "zod";
 
 const summarize = prompt({
-  id: 'summarize',
+  id: "summarize",
   input: z.object({ text: z.string() }),
   output: z.object({ summary: z.string() }),
-  system: 'Summarize the given text in one sentence.',
+  system: "Summarize the given text in one sentence.",
   prompt: ({ input }) => input.text,
-})
+});
 ```
 
 → [Prompts guide](/docs/guides/prompts)
@@ -35,15 +37,15 @@ const summarize = prompt({
 A context is a reusable fragment that contributes system text, input fields, and tools to any prompt that uses it. Contexts have priority (drop order under token pressure), `when` predicates (conditional inclusion), and optional caching.
 
 ```ts
-import { context } from '@use-crux/core'
+import { context } from "@use-crux/core";
 
 const brand = context({
-  id: 'brand',
+  id: "brand",
   priority: 30,
   input: z.object({ tone: z.string().optional() }),
   when: ({ input }) => !!input.tone,
   system: ({ input }) => `Write in a ${input.tone} tone.`,
-})
+});
 ```
 
 → [Contexts guide](/docs/guides/contexts)
@@ -54,14 +56,14 @@ Tools are LLM-callable functions. They're declared on a prompt (or a context) wi
 
 ```ts
 const search = context({
-  id: 'search',
+  id: "search",
   tools: () => ({
     searchWeb: {
-      description: 'Search the web',
+      description: "Search the web",
       execute: async (query: string) => fetchResults(query),
     },
   }),
-})
+});
 ```
 
 → [Tools guide](/docs/guides/tools)
@@ -71,19 +73,19 @@ const search = context({
 Crux memory is block based. Compose the blocks you need and pass the composed `memory()` object into a prompt:
 
 ```ts
-import { memory, workingState, episodes } from '@use-crux/core/memory'
+import { memory, workingState, episodes } from "@use-crux/core/memory";
 
 const session = workingState({
-  id: 'session',
-  schema: z.object({ mode: z.enum(['plan', 'execute']) }),
-})
-const chat = episodes({ id: 'chat', embed })
+  id: "session",
+  schema: z.object({ mode: z.enum(["plan", "execute"]) }),
+});
+const chat = episodes({ id: "chat", embed });
 
 const assistantMemory = memory({
-  id: 'assistant',
-  namespace: 'thread:1',
+  id: "assistant",
+  namespace: "thread:1",
   blocks: [session, chat],
-})
+});
 ```
 
 → [Memory guide](/docs/guides/memory)
@@ -93,15 +95,23 @@ const assistantMemory = memory({
 A retrieval corpus is the product-facing RAG path: load documents, sync them incrementally, and query them through a retriever. `indexer()` defines how documents become chunks; `corpus()` remembers source state across sync runs; `retriever()` is the read surface for prompts and tools.
 
 ```ts
-import { corpus, indexer } from '@use-crux/core/indexing'
-import { retriever } from '@use-crux/core/retrieval'
+import { corpus, indexer } from "@use-crux/core/indexing";
+import { retriever } from "@use-crux/core/retrieval";
 
-const docsIndexer = indexer({ id: 'docs', namespace: 'docs', store, dense })
-const docsCorpus = corpus({ id: 'docs', namespace: 'docs', store, indexer: docsIndexer })
-const docs = retriever({ id: 'docs', namespace: 'docs', store, dense })
+const docsIndexer = indexer({ id: "docs", namespace: "docs", store, dense });
+const docsCorpus = corpus({
+  id: "docs",
+  namespace: "docs",
+  store,
+  indexer: docsIndexer,
+});
+const docs = retriever({ id: "docs", namespace: "docs", store, dense });
 
-await docsCorpus.sync(loader.load(), { sourceSet: 'complete', stale: 'delete' })
-const hits = await docs.retrieve('How do deployments work?')
+await docsCorpus.sync(loader.load(), {
+  sourceSet: "complete",
+  stale: "delete",
+});
+const hits = await docs.retrieve("How do deployments work?");
 ```
 
 → [Retrieval guide](/docs/guides/retrieval)
@@ -124,14 +134,14 @@ When conversations get long, you need to compress. Crux gives you four primitive
 An agent is a prompt with a defined identity, optional default model, allowed tools, and allowed handoffs to other agents.
 
 ```ts
-import { agent } from '@use-crux/core/agent'
+import { agent } from "@use-crux/core/agent";
 
 const researcher = agent({
-  id: 'researcher',
+  id: "researcher",
   prompt: researchPrompt,
   tools: { search: searchTool },
-  handoffs: ['writer'],
-})
+  handoffs: ["writer"],
+});
 ```
 
 → [Agents guide](/docs/guides/agents)
@@ -152,13 +162,15 @@ Combine multiple agents into structured workflows:
 A flow is a suspendable, resumable orchestration. Each step is named and cached: when you resume, only steps after the suspension point re-run.
 
 ```ts
-import { flow } from '@use-crux/core/flow'
+import { flow } from "@use-crux/core/flow";
 
-const research = flow('research', async (flow) => {
-  const plan = await flow.step('plan', () => generate(planner, { model, input: flow.input }))
-  await flow.suspend('await-approval')
-  return flow.step('write', () => generate(writer, { model, input: plan }))
-})
+const research = flow("research", async (flow) => {
+  const plan = await flow.step("plan", () =>
+    generate(planner, { model, input: flow.input }),
+  );
+  await flow.suspend("await-approval");
+  return flow.step("write", () => generate(writer, { model, input: plan }));
+});
 ```
 
 → [Flows guide](/docs/guides/flows)
@@ -168,17 +180,17 @@ const research = flow('research', async (flow) => {
 Plans are freeform documents describing intent. Task lists are structured work tracking with live status. Both persist via `RecordStore` and have React hooks for live UI subscriptions.
 
 ```ts
-import { plan } from '@use-crux/core/plan'
-import { task, tasks } from '@use-crux/core/tasks'
+import { plan } from "@use-crux/core/plan";
+import { task, tasks } from "@use-crux/core/tasks";
 
-const p = await plan({ title: 'Q1 roadmap', content: '...' })
+const p = await plan({ title: "Q1 roadmap", content: "..." });
 const work = await tasks({
   plan: p,
-  title: 'Roadmap tasks',
+  title: "Roadmap tasks",
   items: {
-    research: task('Research customer asks'),
+    research: task("Research customer asks"),
   },
-})
+});
 ```
 
 → [Plans & Tasks guide](/docs/guides/plans-and-tasks)
@@ -188,10 +200,10 @@ const work = await tasks({
 Skills are Markdown-based instruction sets that agents can load on demand. Compatible with the [skills.sh](https://skills.sh) format.
 
 ```ts
-import { skill, skillsSh } from '@use-crux/core/skill/node'
+import { skill, skillsSh } from "@use-crux/core/skill/node";
 
-const seo = skill.fromFile('./skills/seo-analysis/SKILL.md')
-const research = skill.fromRegistry(skillsSh, 'user/skills/research')
+const seo = skill.fromFile("./skills/seo-analysis/SKILL.md");
+const research = skill.fromRegistry(skillsSh, "user/skills/research");
 ```
 
 → [Skills guide](/docs/guides/skills)
@@ -205,16 +217,16 @@ Two distinct primitives for two distinct problems:
 
 → [Safety guide](/docs/guides/safety)
 
-## Quality
+## Evals
 
-- **`quality()`** stores local experiments, variants, comparisons, feedback, and replay data
-- **`suite()`** defines Git-friendly regression cases
-- **`target()`** wraps prompts, retrievers, flows, tools, or app code
-- **`expect()`** checks outputs, retrieval hits, tool calls, and flow steps
-- **`judge()`** for LLM-as-a-judge scoring with pre-built quality metrics
-- **Quality experiments** persist suites, variants, scores, and local comparison history
+- **`generate.task()` / `stream.task()`** bind normal production behavior once
+- **`evaluate()`** defines an inert Eval with typed Cases and checks
+- **Variants** contain only candidate differences from Current
+- **Eval runs** persist evidence; exact safe task and scorer evidence is reused automatically
+- **Baselines** are complete run arms explicitly accepted for comparison
+- **`feedback()`** creates durable, run-linked Review work
 
-→ [Quality guide](/docs/guides/quality)
+→ [Evals guide](/docs/guides/evals)
 
 ## Observability
 
@@ -233,6 +245,14 @@ Two distinct primitives for two distinct problems:
     description="How these primitives compose at runtime."
     href="/docs/foundations/mental-model"
   />
-  <Card title="Get Started" description="Pick a framework and ship something." href="/docs/getting-started" />
-  <Card title="Cookbook" description="Full working examples that combine many primitives." href="/docs/cookbook" />
+  <Card
+    title="Get Started"
+    description="Pick a framework and ship something."
+    href="/docs/getting-started"
+  />
+  <Card
+    title="Cookbook"
+    description="Full working examples that combine many primitives."
+    href="/docs/cookbook"
+  />
 </Cards>

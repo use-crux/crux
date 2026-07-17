@@ -48,7 +48,10 @@ describe.sequential("runEval", () => {
 
     expect(plan).toMatchObject({
       evalId: "support",
-      sourceKey: { relativeFile: "evals/support.eval.ts", export: "default" },
+      sourceKey: {
+        relativeFile: "evals/support.eval.ts",
+        export: "default",
+      },
       cells: [
         expect.objectContaining({
           caseId: "support-case",
@@ -57,7 +60,7 @@ describe.sequential("runEval", () => {
       ],
     });
     await expect(access(join(projectRoot, ".crux"))).rejects.toThrow();
-  });
+  }, 10_000);
 
   it("executes the same discovered string path through the portable coordinator", async () => {
     const run = await runEval("support");
@@ -70,8 +73,10 @@ describe.sequential("runEval", () => {
   });
 
   it("accepts only the exact discovered default export and its re-export", async () => {
-    const imported = await import("./fixtures/node-run-project/evals/object.eval");
-    const reexport = await import("./fixtures/node-run-project/object-reexport");
+    const imported =
+      await import("./fixtures/node-run-project/evals/object.eval");
+    const reexport =
+      await import("./fixtures/node-run-project/object-reexport");
     expect(Object.is(imported.default, reexport.default)).toBe(true);
 
     const byObject = await runEval(imported.default, { plan: true });
@@ -79,7 +84,9 @@ describe.sequential("runEval", () => {
     const byReexport = await runEval(reexport.default, { plan: true });
     expect(byObject.definitionFingerprint).toBe(byString.definitionFingerprint);
     expect(byObject.cells).toEqual(byString.cells);
-    expect(byReexport.definitionFingerprint).toBe(byString.definitionFingerprint);
+    expect(byReexport.definitionFingerprint).toBe(
+      byString.definitionFingerprint,
+    );
   });
 
   it("rejects a separately constructed same-id Eval before hydration or planning", async () => {
@@ -117,7 +124,8 @@ describe.sequential("runEval", () => {
   it("preserves duplicate-discovery errors ahead of object identity", async () => {
     process.chdir(duplicateRoot);
     try {
-      const imported = await import("./fixtures/node-run-duplicate/evals/a.eval");
+      const imported =
+        await import("./fixtures/node-run-duplicate/evals/a.eval");
       await expect(runEval(imported.default, { plan: true })).rejects.toThrow(
         /Duplicate Eval id 'duplicate'.*a\.eval\.ts.*b\.eval\.ts/is,
       );

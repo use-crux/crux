@@ -1,7 +1,7 @@
 /** Data-only Case row parsing and Standard Schema validation. */
 
 import { readFile } from "node:fs/promises";
-import type { StandardSchemaV1 } from "../../quality/standard-schema";
+import type { StandardSchemaV1 } from "../internal/schema";
 import type { JsonValue } from "../../storage";
 import type { RawEvalCase } from "../internal/definition";
 import { fingerprintEvalValueForInternalUse } from "../internal/runner";
@@ -10,12 +10,30 @@ import { EvalCaseFileError } from "./case-path";
 
 type EvalCaseMetadata = Readonly<Record<string, JsonValue>>;
 
-interface LoadCaseRowsOptions {
+export interface LoadCaseRowsOptions {
   readonly path: string;
   readonly displayPath: string;
   readonly kind: "authored" | "sidecar";
   readonly inputSchema: StandardSchemaV1;
   readonly expectedSchema?: StandardSchemaV1;
+}
+
+export interface NormalizeCaseRowOptions extends Omit<
+  LoadCaseRowsOptions,
+  "path"
+> {
+  readonly value: unknown;
+  readonly line?: number;
+}
+
+/** Normalize one in-memory row through the same contract as file hydration. */
+export async function normalizeCaseRow(
+  options: NormalizeCaseRowOptions,
+): Promise<LoadedEvalCase> {
+  return normalizeRow(
+    { value: options.value, line: options.line ?? 1 },
+    options,
+  );
 }
 
 /** Read and validate one serialized Case source. */
@@ -90,7 +108,7 @@ function parseCsv(text: string): readonly ParsedRow[] {
 
 async function normalizeRow(
   row: ParsedRow,
-  options: LoadCaseRowsOptions,
+  options: Omit<LoadCaseRowsOptions, "path">,
 ): Promise<LoadedEvalCase> {
   const origin = `${options.displayPath}:${row.line}`;
   if (!isRecord(row.value)) {
@@ -184,7 +202,11 @@ function assertReviewCaseRow(
     metadata.source !== "review" ||
     typeof metadata.reviewId !== "string" ||
     typeof metadata.runId !== "string" ||
-    typeof metadata.addedAt !== "string"
+    typeof metadata.addedAt !== "string" ||
+    (row.name !== undefined && typeof row.name !== "string") ||
+    (row.tags !== undefined &&
+      (!Array.isArray(row.tags) ||
+        row.tags.some((tag) => typeof tag !== "string")))
   ) {
     throw new EvalCaseFileError(origin, "row does not match ReviewCaseRowV1");
   }

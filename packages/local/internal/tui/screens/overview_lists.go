@@ -39,7 +39,7 @@ func (o *Overview) renderInsightsBlock(width, height int) string {
 	}
 
 	if len(o.insights) == 0 {
-		hint := " " + shell.TextMuted.Render("no insights yet — run an experiment or wait for the analyzer.")
+		hint := " " + shell.TextMuted.Render("no insights yet — collect more runs or wait for the analyzer.")
 		rows := []string{hint}
 		for len(rows) < bodyRows {
 			rows = append(rows, strings.Repeat(" ", width))
@@ -50,7 +50,7 @@ func (o *Overview) renderInsightsBlock(width, height int) string {
 	o.insightList.SetItems(o.insights)
 	o.insightList.SetHeight(bodyRows)
 	o.insightList.SetCursorByIdentity(o.SelectedInsightID())
-	rows := o.insightList.Render(width, func(ins api.QualityInsightRecord, _ int, selected bool, rowW int) string {
+	rows := o.insightList.Render(width, func(ins api.InspectInsightRecord, _ int, selected bool, rowW int) string {
 		// Row 1: bar + severity dot + ID + tag chip + title + target + age.
 		bar := "  "
 		if selected {
@@ -109,7 +109,7 @@ func (o *Overview) renderRecentRunsBlock(width, height int) string {
 	o.runList.SetItems(runs)
 	o.runList.SetHeight(bodyRows)
 	o.runList.SetCursorByIdentity(o.SelectedRunID())
-	rows := o.runList.Render(width, func(r api.QualityRunRecord, _ int, selected bool, rowW int) string {
+	rows := o.runList.Render(width, func(r api.InspectRunRecord, _ int, selected bool, rowW int) string {
 		prefix := " "
 		if selected && o.focusedPanel == panelRuns {
 			prefix = shell.SelectionBar(shell.ColorTeal) + " "
@@ -160,7 +160,7 @@ func panelRect(body string, width, height int) string {
 	return kit.PadBlock(body, width, height)
 }
 
-func recentRunsMeta(runs []api.QualityRunRecord) string {
+func recentRunsMeta(runs []api.InspectRunRecord) string {
 	if len(runs) == 0 {
 		return "no runs"
 	}

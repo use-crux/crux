@@ -20,79 +20,83 @@ This recipe runs N agents in parallel on the same question, each taking a differ
 ## Full code
 
 ```ts
-import { agent, blackboard, createConsensus } from '@use-crux/core/agent'
-import { prompt } from '@use-crux/core'
-import { generate } from '@use-crux/ai'
-import { openai } from '@ai-sdk/openai'
-import { z } from 'zod'
+import { agent, blackboard, createConsensus } from "@use-crux/core/agent";
+import { prompt } from "@use-crux/core";
+import { generate } from "@use-crux/ai";
+import { openai } from "@ai-sdk/openai";
+import { z } from "zod";
 
 const VoteSchema = z.object({
-  position: z.enum(['ship', 'hold', 'rework']),
+  position: z.enum(["ship", "hold", "rework"]),
   reasoning: z.string(),
   confidence: z.number().min(0).max(1),
-})
+});
 
 // Shared state across the parallel agents
 const debateBoard = blackboard({
-  id: 'release-debate',
+  id: "release-debate",
   schema: z.object({
     proposal: z.string(),
     risks: z.array(z.string()).default([]),
   }),
-})
+});
 
 const optimist = agent({
-  id: 'optimist',
+  id: "optimist",
   prompt: prompt({
     use: [debateBoard],
     input: z.object({ proposal: z.string() }),
     output: VoteSchema,
-    system: 'You favor shipping. Argue for ship unless there is a clear blocker.',
+    system:
+      "You favor shipping. Argue for ship unless there is a clear blocker.",
     prompt: ({ input }) => input.proposal,
   }),
-})
+});
 
 const skeptic = agent({
-  id: 'skeptic',
+  id: "skeptic",
   prompt: prompt({
     use: [debateBoard],
     input: z.object({ proposal: z.string() }),
     output: VoteSchema,
-    system: 'You favor caution. Identify risks. Lean toward hold or rework.',
+    system: "You favor caution. Identify risks. Lean toward hold or rework.",
     prompt: ({ input }) => input.proposal,
   }),
-})
+});
 
 const pragmatist = agent({
-  id: 'pragmatist',
+  id: "pragmatist",
   prompt: prompt({
     use: [debateBoard],
     input: z.object({ proposal: z.string() }),
     output: VoteSchema,
-    system: 'You weigh shipping value vs risk. No bias either way.',
+    system: "You weigh shipping value vs risk. No bias either way.",
     prompt: ({ input }) => input.proposal,
   }),
-})
+});
 
 const consensus = createConsensus({
   executor: (agent, opts) => generate(agent.prompt, opts),
-})
+});
 
-await debateBoard.patch({ proposal: 'Release auth v2 next Tuesday', risks: [] })
+await debateBoard.patch({
+  proposal: "Release auth v2 next Tuesday",
+  risks: [],
+});
 
 const decision = await consensus({
-  id: 'multi-agent-debate-consensus-1',
+  id: "multi-agent-debate-consensus-1",
   agents: [optimist, skeptic, pragmatist],
-  model: openai('gpt-4o'),
-  input: { proposal: 'Release auth v2 next Tuesday' },
-  extract: (r) => r.output.position,   // pull the vote value from each agent's result
-  quorum: 'majority',                  // 'majority' | 'unanimous' | number, number = at least N votes
-})
+  model: openai("gpt-4o"),
+  input: { proposal: "Release auth v2 next Tuesday" },
+  extract: (r) => r.output.position, // pull the vote value from each agent's result
+  quorum: "majority", // 'majority' | 'unanimous' | number, number = at least N votes
+});
 
-decision.result      // 'ship' | 'hold' | 'rework', the winning position
-decision.votes       // { ship: 2, hold: 1 }, breakdown by value
-decision.agreement   // 0.67, winner count / total
-decision.details     // AgentResult[], every agent's full result with reasoning
+decision.result; // 'ship' | 'hold' | 'rework', the winning position
+decision.votes; // { ship: 2, hold: 1 }, breakdown by value
+decision.agreement; // 0.67, winner count / total
+decision.details; // AgentResult[], every agent's full result with reasoning
 ```
 
 ## How it works
@@ -109,17 +113,19 @@ decision.details     // AgentResult[], every agent's full result with reasoning
 Loop the consensus call N times, letting agents see prior rounds via the blackboard. Catch `ConsensusError` to detect missed quorums and append risks before retrying:
 
 ```ts
-import { ConsensusError } from '@use-crux/core/agent'
+import { ConsensusError } from "@use-crux/core/agent";
 
 for (let round = 0; round < 3; round++) {
   try {
-    return await consensus({ /* ... */ })
+    return await consensus({
+      /* ... */
+    });
   } catch (err) {
-    if (!(err instanceof ConsensusError)) throw err
+    if (!(err instanceof ConsensusError)) throw err;
     // Append risks surfaced from each agent's reasoning to the board for the next round
     await debateBoard.patch({
       risks: [...board.risks, ...extractRisksFromAgents(err)],
-    })
+    });
   }
 }
 ```
@@ -131,6 +137,14 @@ Replace the discriminator vote with a numeric score, then reduce by averaging or
 ## Where to next
 
 <Cards>
-  <Card title="Compositions: Consensus" description="Quorum semantics, executor signatures, error policies." href="/docs/guides/compositions/consensus" />
-  <Card title="Blackboards" description="Shared typed state across agents: set, patch, subscribe." href="/docs/guides/agents/blackboard" />
+  <Card
+    title="Compositions: Consensus"
+    description="Quorum semantics, executor signatures, error policies."
+    href="/docs/guides/compositions/consensus"
+  />
+  <Card
+    title="Blackboards"
+    description="Shared typed state across agents: set, patch, subscribe."
+    href="/docs/guides/agents/blackboard"
+  />
 </Cards>

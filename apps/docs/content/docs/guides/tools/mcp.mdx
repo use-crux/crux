@@ -185,29 +185,11 @@ also change the policy ID.
 
 ## Evaluate without remote side effects
 
-A live MCP evaluation can read or change real systems. Live discovery and
-execution appear in the trace, and Quality bypasses reusable output caching for
-tasks that may contain a live source.
-
-For an agent evaluation, mock the final exposed name:
-
-```ts
-import { agent } from "@use-crux/core/agent";
-import { target } from "@use-crux/core/quality";
-
-const supportAgent = agent({ id: "support-agent", prompt: governedSupport });
-const evaluatedSupport = target.agent(supportAgent, {
-  tools: {
-    crm_search_customer: { id: "fixture-customer", status: "active" },
-  },
-});
-```
-
-This prevents remote `tools/call` and marks the call as mocked, but live
-discovery may still happen. For zero external transport, point the source at a
-deterministic in-process or spawned fixture server with no network dependency.
-Use a stable fixture revision when your test harness exposes fixture identity.
-A cassette is not a materialization mock; matching happens after discovery.
+A live MCP task can read or change real systems. For an Eval, bind the same
+callable managed production task to a deterministic in-process or spawned MCP
+fixture with no network dependency. Use a stable fixture revision so identity
+changes when behavior changes. If a dynamic dependency cannot be proven, Crux
+executes it normally but does not reuse its task output.
 
 ## Inspect the run and catalog
 
@@ -229,6 +211,6 @@ auto-discovery, rename maps, and configurable binary limits are deferred.
 
 Provider-hosted MCP is not equivalent to this integration. It does not pass
 through Crux's portable discovery, policy, approval replay, result mapping,
-observability, Quality identity, and Project Index contracts.
+observability, Eval identity, and Project Index contracts.
 
 See the [MCP API reference](/docs/reference/mcp) for exact types and limits.

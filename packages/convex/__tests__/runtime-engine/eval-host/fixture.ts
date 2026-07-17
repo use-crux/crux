@@ -1,5 +1,6 @@
 import { evaluate } from '@use-crux/core/eval'
 import { attachEvalTaskDescriptorForInternalUse } from '@use-crux/core/eval/internal/task'
+import { createCruxRunId } from '@use-crux/core/observability'
 import {
   createDeployedEvalRegistry,
   fingerprintDeployedEvalCase,
@@ -28,6 +29,7 @@ export function fixtureRegistry(
     execute,
     projectOutput: (result) => result.output,
     projectResponse: () => ({
+      runId: createCruxRunId(),
       content: [],
       text: '',
       steps: [],

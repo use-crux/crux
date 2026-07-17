@@ -7,32 +7,42 @@
  * live here (run-level) so collapsing the inspector never hides the numbers.
  */
 
-import { Btn } from '@/qw/shell/primitives'
-import { Icon } from '@/qw/shell/Icon'
-import { fmtCost, fmtDuration, fmtTokens } from '@/features/run-detail/lib/span-detail-inspection'
-import type { RunLens } from '@/features/run-detail/types'
-import { KindTag, StatStrip, StatusPill, LensSwitch, type RunNodeKind } from './atoms'
+import { Btn } from "@/qw/shell/primitives";
+import { Icon } from "@/qw/shell/Icon";
+import {
+  fmtCost,
+  fmtDuration,
+  fmtTokens,
+} from "@/features/run-detail/lib/span-detail-inspection";
+import type { RunLens } from "@/features/run-detail/types";
+import {
+  KindTag,
+  StatStrip,
+  StatusPill,
+  LensSwitch,
+  type RunNodeKind,
+} from "./atoms";
 
 export interface RunHeaderProps {
-  traceId: string
-  kind: RunNodeKind
-  name: string
-  status: string
-  provider?: string
-  model?: string
-  modelExtraCount?: number
-  modelTitle?: string
-  startedAt?: string
-  durationMs?: number
-  tokens?: number
-  cost?: number
-  cacheRead?: number
-  diagnosticsCount: number
-  lens: RunLens
-  onSelectLens: (lens: RunLens) => void
-  onCompare: () => void
-  onShare: () => void
-  onReplay: () => void
+  traceId: string;
+  kind: RunNodeKind;
+  name: string;
+  status: string;
+  provider?: string;
+  model?: string;
+  modelExtraCount?: number;
+  modelTitle?: string;
+  startedAt?: string;
+  durationMs?: number;
+  tokens?: number;
+  cost?: number;
+  cacheRead?: number;
+  diagnosticsCount: number;
+  lens: RunLens;
+  onSelectLens: (lens: RunLens) => void;
+  onCompare: () => void;
+  onShare: () => void;
+  onReplay: () => void;
 }
 
 export function RunHeader({
@@ -59,26 +69,44 @@ export function RunHeader({
   return (
     <header
       className="flex flex-shrink-0 flex-col gap-3 px-7 pb-2.5 pt-3"
-      style={{ borderBottom: '1px solid var(--qw-border)', background: 'var(--qw-bg)' }}
+      style={{
+        borderBottom: "1px solid var(--qw-border)",
+        background: "var(--qw-bg)",
+      }}
     >
-      <div className="font-mono text-[10.5px] uppercase tracking-[0.06em]" style={{ color: 'var(--qw-fg-faint)' }}>
+      <div
+        className="font-mono text-[10.5px] uppercase tracking-[0.06em]"
+        style={{ color: "var(--qw-fg-faint)" }}
+      >
         Runs / {traceId.slice(0, 16)}
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
         <KindTag kind={kind} size={10} />
-        <h1 className="m-0 text-[21px] font-semibold tracking-[-0.02em]">{name}</h1>
+        <h1 className="m-0 text-[21px] font-semibold tracking-[-0.02em]">
+          {name}
+        </h1>
         <StatusPill status={status} />
         {(provider || model) && (
-          <span className="font-mono text-[12px]" style={{ color: 'var(--qw-fg-muted)' }} title={modelTitle}>
-            {[provider, model].filter(Boolean).join(' · ')}
+          <span
+            className="font-mono text-[12px]"
+            style={{ color: "var(--qw-fg-muted)" }}
+            title={modelTitle}
+          >
+            {[provider, model].filter(Boolean).join(" · ")}
             {modelExtraCount != null && modelExtraCount > 0 && (
-              <span style={{ color: 'var(--qw-fg-faint)' }}> +{modelExtraCount}</span>
+              <span style={{ color: "var(--qw-fg-faint)" }}>
+                {" "}
+                +{modelExtraCount}
+              </span>
             )}
           </span>
         )}
         {startedAt && (
-          <span className="font-mono text-[11px]" style={{ color: 'var(--qw-fg-faint)' }}>
+          <span
+            className="font-mono text-[11px]"
+            style={{ color: "var(--qw-fg-faint)" }}
+          >
             · {startedAt}
           </span>
         )}
@@ -87,10 +115,18 @@ export function RunHeader({
 
         <StatStrip
           items={[
-            { label: 'dur', value: fmtDuration(durationMs) },
-            { label: 'tokens', value: fmtTokens(tokens) },
-            { label: 'cost', value: fmtCost(cost) },
-            ...(cacheRead != null ? [{ label: 'cache', value: fmtTokens(cacheRead), tone: 'ok' as const }] : []),
+            { label: "dur", value: fmtDuration(durationMs) },
+            { label: "tokens", value: fmtTokens(tokens) },
+            { label: "cost", value: fmtCost(cost) },
+            ...(cacheRead != null
+              ? [
+                  {
+                    label: "cache",
+                    value: fmtTokens(cacheRead),
+                    tone: "ok" as const,
+                  },
+                ]
+              : []),
           ]}
           size={11.5}
           gap={14}
@@ -99,25 +135,44 @@ export function RunHeader({
         {diagnosticsCount > 0 && (
           <div
             className="flex items-center gap-1.5 rounded-[6px] px-2 py-1"
-            style={{ background: 'var(--qw-warn-soft)' }}
-            title={`${diagnosticsCount} run diagnostic${diagnosticsCount === 1 ? '' : 's'}`}
+            style={{ background: "var(--qw-warn-soft)" }}
+            title={`${diagnosticsCount} run diagnostic${diagnosticsCount === 1 ? "" : "s"}`}
           >
             <Icon name="alert" size={13} color="var(--qw-warn)" />
-            <span className="text-[11px] font-semibold" style={{ color: 'var(--qw-warn)' }}>
+            <span
+              className="text-[11px] font-semibold"
+              style={{ color: "var(--qw-warn)" }}
+            >
               {diagnosticsCount}
             </span>
           </div>
         )}
 
-        <div className="mx-0.5 h-5 w-px" style={{ background: 'var(--qw-border)' }} />
+        <div
+          className="mx-0.5 h-5 w-px"
+          style={{ background: "var(--qw-border)" }}
+        />
 
-        <Btn size="sm" icon={<Icon name="compare" size={13} />} onClick={onCompare}>
+        <Btn
+          size="sm"
+          icon={<Icon name="compare" size={13} />}
+          onClick={onCompare}
+        >
           Compare
         </Btn>
-        <Btn size="sm" icon={<Icon name="arrowUp" size={13} />} onClick={onShare}>
+        <Btn
+          size="sm"
+          icon={<Icon name="arrowUp" size={13} />}
+          onClick={onShare}
+        >
           Share
         </Btn>
-        <Btn size="sm" variant="primary" icon={<Icon name="play" size={13} />} onClick={onReplay}>
+        <Btn
+          size="sm"
+          variant="primary"
+          icon={<Icon name="play" size={13} />}
+          onClick={onReplay}
+        >
           Replay
         </Btn>
       </div>
@@ -126,5 +181,5 @@ export function RunHeader({
         <LensSwitch active={lens} onSelect={onSelectLens} dense />
       </div>
     </header>
-  )
+  );
 }

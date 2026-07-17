@@ -1,6 +1,6 @@
 /** Pure construction and granular comparison for Eval Baseline V3. @internal */
 
-import { BASELINE_FINGERPRINT_EPOCH } from "../../quality/internal/cache-epochs";
+import { BASELINE_FINGERPRINT_EPOCH } from "./evidence/cache-epochs";
 import { fingerprintEvalValue } from "./identity";
 import type {
   EvalBaselineCase,

@@ -18,7 +18,7 @@ import {
   createResultAccumulator,
   type ResultStepFacts,
 } from "../result-accumulator";
-import type { AdapterExecutionGenerateResult } from "./types";
+import type { AdapterExecutionGenerateResultWithoutRunId } from "./types";
 
 /** Convert an observed SDK-loop step into accumulator facts. */
 export function sdkStepFacts(step: ExecutorStep): ResultStepFacts {
@@ -65,7 +65,7 @@ export function finalizeSdkResultEnvelope<TRawResponse>(args: {
   readonly pendingApprovals?: readonly ApprovalRequestInfo[];
   readonly stepFacts?: readonly ResultStepFacts[];
   readonly finalStepMode?: "replace" | "append" | "preserve";
-}): AdapterExecutionGenerateResult<TRawResponse> {
+}): AdapterExecutionGenerateResultWithoutRunId<TRawResponse> {
   const facts = [...(args.stepFacts ?? [])];
   const finalFacts = sdkResponseFacts(args.response, args.text);
   if (facts.length === 0 || args.finalStepMode === "append") {
@@ -86,5 +86,5 @@ export function finalizeSdkResultEnvelope<TRawResponse>(args: {
     ...(args.pendingApprovals
       ? { pendingApprovals: args.pendingApprovals }
       : {}),
-  }) as AdapterExecutionGenerateResult<TRawResponse>;
+  }) as AdapterExecutionGenerateResultWithoutRunId<TRawResponse>;
 }

@@ -11,81 +11,81 @@
  * triggers a refresh.
  */
 
-import { useCallback } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
-import { qk } from '@/shared/query/queryClient'
-import { qualityService } from '@/shared/services/quality'
-import { libraryService } from '@/shared/services/library'
-import { observabilityService } from '@/features/observability/services/observability'
+import { useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { qk } from "@/shared/query/queryClient";
+import { inspectService } from "@/shared/services/inspect";
+import { libraryService } from "@/shared/services/library";
+import { observabilityService } from "@/features/observability/services/observability";
 
-const HOVER_STALE_MS = 10_000
+const HOVER_STALE_MS = 10_000;
 
 /** Prefetch the canonical run detail + the quality run detail in
  *  parallel. Call from a runs-list row's `onMouseEnter` / `onFocus`. */
 export function usePrefetchRunDetail() {
-  const client = useQueryClient()
+  const client = useQueryClient();
   return useCallback(
     (traceId: string) => {
-      if (!traceId) return
+      if (!traceId) return;
       void client.prefetchQuery({
-        queryKey: qk.quality.run(traceId),
-        queryFn: ({ signal }) => qualityService.runDetail(traceId, signal),
+        queryKey: qk.inspect.run(traceId),
+        queryFn: ({ signal }) => inspectService.runDetail(traceId, signal),
         staleTime: HOVER_STALE_MS,
-      })
+      });
       void client.prefetchQuery({
         queryKey: qk.observability.run(traceId),
         queryFn: ({ signal }) => observabilityService.getRun(traceId, signal),
         staleTime: HOVER_STALE_MS,
-      })
+      });
     },
     [client],
-  )
+  );
 }
 
 /** Prefetch a memory store detail. */
 export function usePrefetchMemoryStore() {
-  const client = useQueryClient()
+  const client = useQueryClient();
   return useCallback(
     (storeId: string) => {
-      if (!storeId) return
+      if (!storeId) return;
       void client.prefetchQuery({
         queryKey: qk.memory.store(storeId),
         queryFn: ({ signal }) => libraryService.memoryStore(storeId, signal),
         staleTime: HOVER_STALE_MS,
-      })
+      });
     },
     [client],
-  )
+  );
 }
 
 /** Prefetch a workspace detail. */
 export function usePrefetchWorkspace() {
-  const client = useQueryClient()
+  const client = useQueryClient();
   return useCallback(
     (workspaceId: string) => {
-      if (!workspaceId) return
+      if (!workspaceId) return;
       void client.prefetchQuery({
         queryKey: qk.workspaces.workspace(workspaceId),
         queryFn: ({ signal }) => libraryService.workspace(workspaceId, signal),
         staleTime: HOVER_STALE_MS,
-      })
+      });
     },
     [client],
-  )
+  );
 }
 
 /** Prefetch a plan detail. */
 export function usePrefetchPlan() {
-  const client = useQueryClient()
+  const client = useQueryClient();
   return useCallback(
     (planId: string) => {
-      if (!planId) return
+      if (!planId) return;
       void client.prefetchQuery({
         queryKey: qk.plans.plan(planId),
         queryFn: ({ signal }) => libraryService.plan(planId, signal),
         staleTime: HOVER_STALE_MS,
-      })
+      });
     },
     [client],
-  )
+  );
 }

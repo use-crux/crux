@@ -1,6 +1,3 @@
-import { mkdtemp, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { resolveCitations, type RetrieverHit } from '../../src/citations'
@@ -10,16 +7,12 @@ import {
   resetObservabilityRuntime,
   setObservabilityTransport,
 } from '../../src/observability'
-import { createFeedbackStore } from '../../src/quality/internal/feedback'
 import { judge as createJudge } from '../../src/scoring'
 
-describe('canonical quality, scoring, and citation observability', () => {
-  const tempDirs: string[] = []
-
-  afterEach(async () => {
+describe('scoring and citation observability', () => {
+  afterEach(() => {
     resetObservabilityRuntime()
     vi.restoreAllMocks()
-    await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
   })
 
     it('records LLM judge scoring as scoring.judge spans with bounded score artifacts', async () => {
@@ -141,46 +134,4 @@ describe('canonical quality, scoring, and citation observability', () => {
     )
   })
 
-    it('records feedback writes as feedback.record spans', async () => {
-    const transport = createInMemoryObservabilityTransport()
-    setObservabilityTransport(transport)
-    const dir = await mkdtemp(join(tmpdir(), 'crux-quality-feedback-'))
-    tempDirs.push(dir)
-    const feedback = createFeedbackStore({ qualityId: 'support-quality', dir })
-
-    const record = await feedback.record({
-      traceId: 'trace-1',
-      experimentId: 'experiment-1',
-      caseId: 'case-1',
-      rating: -1,
-      comment: 'Expected the answer to cite the refund policy.',
-      tags: ['citation'],
-    })
-    await observe.flush()
-
-    expect(record.id).toContain('feedback-')
-    expect(transport.records).toContainEqual(
-      expect.objectContaining({
-        type: 'span:start',
-        primitive: 'feedback.record',
-        name: 'feedback.record',
-        attributes: expect.objectContaining({
-          qualityId: 'support-quality',
-          traceId: 'trace-1',
-          experimentId: 'experiment-1',
-          caseId: 'case-1',
-          rating: -1,
-          tagCount: 1,
-          hasComment: true,
-        }),
-      }),
-    )
-    expect(transport.records).toContainEqual(
-      expect.objectContaining({
-        type: 'span:end',
-        status: 'ok',
-        attributes: expect.objectContaining({ feedbackId: record.id, status: 'new' }),
-      }),
-    )
-  })
 })

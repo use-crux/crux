@@ -1,6 +1,6 @@
 // Package tui provides the interactive terminal dashboard using Bubbletea.
 //
-// Post-boot the TUI is the V1 Panels Quality Workbench, implemented in
+// Post-boot the TUI is the V1 Panels Inspect Workbench, implemented in
 // workbench.go + the shell/screens/components subpackages. This file just
 // owns the boot phase and the program plumbing dev.go uses to inject events.
 package tui
@@ -28,7 +28,7 @@ type DataClient interface {
 	screens.DataClient
 
 	// Legacy raw access — used only by the boot phase and any future
-	// non-Quality screens (e.g. the "traces" tab body).
+	// non-Inspect screens (e.g. the "traces" tab body).
 	GetJSON(ctx context.Context, path string, target any) error
 }
 
@@ -100,13 +100,13 @@ func (a *App) SetQuitRequestedCallback(fn func())     { a.onQuitRequested = fn }
 // Triggers the active screen to re-fetch.
 func (a *App) SendStoreChanged() { a.sendMsg(storeChangedMsg{}) }
 
-// SendQualityEvent forwards a typed quality event into the TUI event loop.
+// SendInspectEvent forwards a typed quality event into the TUI event loop.
 // Used by `runTUI` to bridge `quality.EventBus` subscriptions into Bubbletea
 // without a JSON roundtrip.
-func (a *App) SendQualityEvent(ev api.QualityEvent) { a.sendMsg(qualityEventMsg(ev)) }
+func (a *App) SendInspectEvent(ev api.InspectEvent) { a.sendMsg(inspectEventMsg(ev)) }
 
 // SendWSEvent is preserved for back-compat with any external WS bridge. The
-// payload is ignored in V1 Panels; screens listen via SendQualityEvent.
+// payload is ignored in V1 Panels; screens listen via SendInspectEvent.
 func (a *App) SendWSEvent(_ json.RawMessage) { a.sendMsg(storeChangedMsg{}) }
 
 // SendMsg injects an already-typed Bubble Tea message into the TUI event loop.

@@ -9,15 +9,15 @@ You opened Runs and a row says `incomplete`. Or a run has been `suspended` for a
 
 Status describes the run's lifecycle. A logical run can span multiple physical **segments** (process, isolate, or invocation) when it suspends and resumes.
 
-| Status | Kind | Meaning |
-| --- | --- | --- |
-| `running` | Live | The only live state. Work is in progress in at least one open segment. |
-| `suspended` | Durable pause | Non-terminal. Waiting on a signal, event, or timer; may resume later in a new segment. |
-| `ok` | Terminal | Completed successfully. |
-| `error` | Terminal | Completed with a thrown / failed outcome. |
-| `cancelled` | Terminal | Explicitly cancelled. |
+| Status       | Kind                  | Meaning                                                                                         |
+| ------------ | --------------------- | ----------------------------------------------------------------------------------------------- |
+| `running`    | Live                  | The only live state. Work is in progress in at least one open segment.                          |
+| `suspended`  | Durable pause         | Non-terminal. Waiting on a signal, event, or timer; may resume later in a new segment.          |
+| `ok`         | Terminal              | Completed successfully.                                                                         |
+| `error`      | Terminal              | Completed with a thrown / failed outcome.                                                       |
+| `cancelled`  | Terminal              | Explicitly cancelled.                                                                           |
 | `incomplete` | Terminal (reconciled) | Telemetry ended without a clean `run:end`; most often the host froze or exited before flushing. |
-| `conflicted` | Terminal (reconciled) | Stored terminal evidence or trace identity conflicts; identity could not be resolved. |
+| `conflicted` | Terminal (reconciled) | Stored terminal evidence or trace identity conflicts; identity could not be resolved.           |
 
 What to do:
 
@@ -31,11 +31,11 @@ Fix the underlying flush, host lifecycle, or identity conflict when you need a c
 
 Delivery health is an independent axis: it describes whether telemetry for the run was observed cleanly, not whether the run succeeded.
 
-| Status | Chip | Meaning |
-| --- | --- | --- |
-| `unknown` | muted | Default whenever the server cannot prove clean delivery. **Never treated as healthy.** |
-| `healthy` | ok | Clean terminal run with causal ordering and no gaps, conflicts, or rejected delivery. |
-| `degraded` | warn | Some telemetry records were rejected or delivery could not complete cleanly. |
+| Status     | Chip  | Meaning                                                                                |
+| ---------- | ----- | -------------------------------------------------------------------------------------- |
+| `unknown`  | muted | Default whenever the server cannot prove clean delivery. **Never treated as healthy.** |
+| `healthy`  | ok    | Clean terminal run with causal ordering and no gaps, conflicts, or rejected delivery.  |
+| `degraded` | warn  | Some telemetry records were rejected or delivery could not complete cleanly.           |
 
 A still-running run stays `unknown`; a process that never connected stays `unknown`. The server never invents `healthy`. The exact promotion conditions, segment/ordering signals, and the plain-language UI copy for every state live in the [Observability reference](/docs/reference/crux-core/observability#run-status-and-delivery-health-copy).
 

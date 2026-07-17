@@ -18,6 +18,7 @@ export async function executeEvalPlan(
   ports: EvalExecutionPorts,
 ): Promise<EvalRun> {
   assertEvalPreflightReady(plan.evalId, plan.preflight);
+  assertEvalHostReady(plan);
   assertEvalCostAdmitted(plan.cost);
   const runId = ports.ids.next("run");
   const costLease = await reserveEvalCostPlan(
@@ -31,6 +32,20 @@ export async function executeEvalPlan(
     await costLease.fail();
     throw error;
   }
+}
+
+function assertEvalHostReady(plan: EvalPlan): void {
+  if (
+    plan.hostReadiness.status === "local" ||
+    plan.hostReadiness.status === "verified"
+  ) {
+    return;
+  }
+  throw new TypeError(
+    plan.hostReadiness.status === "mismatch"
+      ? `${plan.hostReadiness.reason} ${plan.hostReadiness.remedy}`
+      : `Eval '${plan.evalId}' requires an unverified deployed Runtime. ${plan.hostReadiness.remedies.join(" ")}`,
+  );
 }
 
 async function executeReservedEvalPlan(

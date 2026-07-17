@@ -2,8 +2,8 @@
 
 import { mkdir, readFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
-import { writeFileAtomic } from "../../quality/internal/fs-atomic";
-import { withFileLock } from "../../quality/internal/fs-lock";
+import { writeFileAtomic } from "./fs/atomic";
+import { withFileLock } from "./fs/lock";
 import {
   buildEvalBaseline,
   type BuildEvalBaselineOptions,

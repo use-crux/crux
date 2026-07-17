@@ -15,8 +15,8 @@ import type {
   SignalExpect,
   StepAccess,
   ValueExpect,
-} from "../quality/expect";
-import type { StandardSchemaV1 } from "../quality/standard-schema";
+} from "./internal/assertions/types";
+import type { StandardSchemaV1 } from "./internal/schema";
 import type {
   CallOf,
   CapsOf,

@@ -1,7 +1,7 @@
 /** Canonical additive schema for committed Eval Baseline V3 truth. @internal */
 
 import { z } from "zod";
-import { BASELINE_FINGERPRINT_EPOCH } from "../../quality/internal/cache-epochs";
+import { BASELINE_FINGERPRINT_EPOCH } from "./evidence/cache-epochs";
 import type { EvalBaselineV3 } from "./baseline-types";
 import { fingerprintEvalValue } from "./identity";
 

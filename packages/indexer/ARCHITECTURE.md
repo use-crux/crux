@@ -170,32 +170,15 @@ policy, or source-ref helpers once a file starts owning more than one compiler r
 
 ## Local Read-Model Boundary
 
-The Project Index Compiler emits raw Project Index snapshots and patches. It does not own devtools
-quality annotations. `@use-crux/local` stores those raw snapshots in `store.Store`; `Store.GetIndex()`
-returns the raw value for cache writes, runtime snapshot merging, suite discovery, and other callers
-that must not observe derived fields.
+The Project Index Compiler emits raw Project Index snapshots and patches. `@use-crux/local` stores
+those raw values for cache writes and runtime snapshot merging, while its Project Index read model may
+add only local source metadata needed by Index consumers.
 
-The devtools-facing read model is produced by `@use-crux/local/internal/projectindex/readmodel`. Its
-`Model.Index()` is the single owner of derived `definition.quality` data and local metadata
-enrichment. The `.crux/quality` filesystem contract is owned separately by
-`@use-crux/local/internal/qualityfs`; the Project Index read model
-loads a `qualityfs.Snapshot` instead of parsing those files itself. The pipeline order is fixed:
-
-1. Join in-memory eval, RAG eval, and flow runs from an atomic `Store.Snapshot()`.
-2. Join file-backed quality records, cassettes, feedback, baselines, comparisons, drift, and lint
-   policy from a `qualityfs.Snapshot`.
-3. Add source mtime metadata and safety `appliesTo` metadata for local UI consumption.
-
-This split keeps `@use-crux/indexer` responsible for authored source facts while `@use-crux/local` owns the
-runtime/file-system read model consumed by HTTP, websocket snapshots, and the React devtools UI. New
-`.crux/quality` parsing, overlay, or normalization rules belong in `internal/qualityfs`; new
-`IndexQuality` aggregation rules belong in `internal/projectindex/readmodel`, not in `store`,
-`quality.Service`, or devtools call sites.
-
-Quality workbench insights are another local boundary: `quality.Service` loads a `qualityfs.Snapshot`
-and observability-derived runs, then calls pure `deriveInsights` logic with an explicit clock. That
-derivation must not move into `@use-crux/indexer` or `qualityfs`, because it combines runtime telemetry
-with local quality snapshot state.
+Eval runs and Baselines, Inspect insights, and Review records have separate Local read models and
+filesystem owners. They are not Project Index facts and must not be joined into compiler snapshots or
+persisted in Project Index caches. This keeps `@use-crux/indexer` responsible for authored source facts
+while Local owns runtime and repository projections consumed by HTTP, websocket, TUI, and Devtools
+surfaces.
 
 ## Project Model And Configuration Boundary
 

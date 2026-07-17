@@ -1,0 +1,47 @@
+---
+title: Feedback and Review
+description: Submit durable run-linked feedback and deliberately turn reviewed incidents into Cases.
+---
+
+Feedback attaches production evidence to the authoritative Crux run. Submit
+it on an authenticated application server after checking that the current
+user owns the message or run.
+
+## Core run feedback
+
+```ts
+import { feedback } from "@use-crux/core/feedback";
+
+const receipt = await feedback(runId, {
+  rating: "down",
+  comment: "The refund window is incorrect",
+  dedupeKey: requestId,
+});
+```
+
+The first argument is the canonical `run_...` id returned by Crux. The call
+is awaited and resolves only after the configured observability destination
+returns a durable receipt. There is no local fallback.
+
+## AI message feedback
+
+```ts
+import { feedback } from "@use-crux/ai/feedback";
+
+await feedback(message, "down");
+```
+
+The AI helper extracts `metadata.crux.runId` from a Crux stream message and
+then calls Core. It rejects unrelated or malformed message metadata.
+
+## Review
+
+Feedback creates immutable Review history. A reviewer can resolve, dismiss,
+or explicitly add the incident to an Eval. Add-to-eval validates against the
+managed task input schema and atomically appends a canonical row to the
+sibling `.cases.jsonl` file.
+
+Crux prefills input and call context, never output as expected truth. A
+correction remains a proposal until a reviewer saves it. Duplicate semantic
+Cases link to the existing row; id conflicts never overwrite; remote projects
+can report `pending-sync` with the exact proposed row and path.

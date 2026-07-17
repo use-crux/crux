@@ -32,9 +32,7 @@ export function DeferredWorkCard({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
-        {presentation.mode && (
-          <Chip tone="crux">{presentation.mode}</Chip>
-        )}
+        {presentation.mode && <Chip tone="crux">{presentation.mode}</Chip>}
         {presentation.stateLabel && (
           <Chip tone={stateTone(presentation)} dot>
             {presentation.stateLabel}

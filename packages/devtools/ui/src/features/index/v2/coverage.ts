@@ -11,32 +11,39 @@
  * manifest entry lands, with no Catalog-side kind list to keep in sync.
  */
 
-import { DEFINITION_KIND_COVERAGE, type CoverageDescriptor } from '@use-crux/core/project-index'
-import type { ObservabilityDefinitionActivitySummary } from '@/types'
+import {
+  DEFINITION_KIND_COVERAGE,
+  type CoverageDescriptor,
+} from "@use-crux/core/project-index";
+import type { ObservabilityDefinitionActivitySummary } from "@/types";
 
-const FALLBACK_COVERAGE: CoverageDescriptor = { primary: 'fallback' }
+const FALLBACK_COVERAGE: CoverageDescriptor = { primary: "fallback" };
 
 /** Look up a kind's coverage descriptor, tolerating kinds absent from the manifest (never expected, but never a crash). */
 export function coverageForKind(kind: string): CoverageDescriptor {
-  return (DEFINITION_KIND_COVERAGE as Record<string, CoverageDescriptor | undefined>)[kind] ?? FALLBACK_COVERAGE
+  return (
+    (
+      DEFINITION_KIND_COVERAGE as Record<string, CoverageDescriptor | undefined>
+    )[kind] ?? FALLBACK_COVERAGE
+  );
 }
 
 export type CatalogCoverageTreatment =
-  | 'direct-activity'
-  | 'contributor'
-  | 'runtime-unjoined'
-  | 'quality-primary'
-  | 'no-runtime'
+  | "direct-activity"
+  | "contributor"
+  | "runtime-unjoined"
+  | "quality-primary"
+  | "no-runtime";
 
 /** The Catalog Observability section's read model for one definition. */
 export interface CatalogCoverageState {
-  treatment: CatalogCoverageTreatment
-  coverage: CoverageDescriptor
+  treatment: CatalogCoverageTreatment;
+  coverage: CoverageDescriptor;
   /** Distinct runs that referenced this definition, per the activity rollup. */
-  runCount: number
-  hasRuntimeEvidence: boolean
+  runCount: number;
+  hasRuntimeEvidence: boolean;
   /** Activity comes from the indexed parent, not an independently observed child. */
-  parentDerived: boolean
+  parentDerived: boolean;
 }
 
 /**
@@ -67,39 +74,75 @@ export function describeCatalogCoverage(
   activity: ObservabilityDefinitionActivitySummary | undefined,
   parentActivity?: ObservabilityDefinitionActivitySummary,
 ): CatalogCoverageState {
-  const coverage = coverageForKind(kind)
-  const parentDerived = coverage.runtimeIdentity === 'parent-derived'
-  const runCount = (parentDerived ? parentActivity : activity)?.runCount ?? 0
+  const coverage = coverageForKind(kind);
+  const parentDerived = coverage.runtimeIdentity === "parent-derived";
+  const runCount = (parentDerived ? parentActivity : activity)?.runCount ?? 0;
   const declaresDirectRuntime =
-    coverage.primary === 'directly-observed' || Boolean(coverage.secondary?.includes('direct-runtime'))
+    coverage.primary === "directly-observed" ||
+    Boolean(coverage.secondary?.includes("direct-runtime"));
 
-  if (coverage.primary === 'quality-owned' || coverage.secondary?.includes('quality-owned')) {
+  if (
+    coverage.primary === "quality-owned" ||
+    coverage.secondary?.includes("quality-owned")
+  ) {
     return {
-      treatment: 'quality-primary',
+      treatment: "quality-primary",
       coverage,
       runCount: declaresDirectRuntime ? runCount : 0,
       hasRuntimeEvidence: declaresDirectRuntime && runCount > 0,
       parentDerived: false,
-    }
+    };
   }
 
-  if (coverage.primary === 'directly-observed') {
-    return { treatment: 'direct-activity', coverage, runCount, hasRuntimeEvidence: runCount > 0, parentDerived: false }
+  if (coverage.primary === "directly-observed") {
+    return {
+      treatment: "direct-activity",
+      coverage,
+      runCount,
+      hasRuntimeEvidence: runCount > 0,
+      parentDerived: false,
+    };
   }
 
-  if (coverage.primary === 'runtime-observed-unjoined') {
-    return { treatment: 'runtime-unjoined', coverage, runCount: 0, hasRuntimeEvidence: false, parentDerived: false }
+  if (coverage.primary === "runtime-observed-unjoined") {
+    return {
+      treatment: "runtime-unjoined",
+      coverage,
+      runCount: 0,
+      hasRuntimeEvidence: false,
+      parentDerived: false,
+    };
   }
 
-  if (coverage.runtimeIdentity === 'none') {
-    return { treatment: 'no-runtime', coverage, runCount: 0, hasRuntimeEvidence: false, parentDerived: false }
+  if (coverage.runtimeIdentity === "none") {
+    return {
+      treatment: "no-runtime",
+      coverage,
+      runCount: 0,
+      hasRuntimeEvidence: false,
+      parentDerived: false,
+    };
   }
 
-  const isDerivedContributor = coverage.primary === 'runtime-contributor' || coverage.primary === 'structural-child'
+  const isDerivedContributor =
+    coverage.primary === "runtime-contributor" ||
+    coverage.primary === "structural-child";
 
   if (isDerivedContributor) {
-    return { treatment: 'contributor', coverage, runCount, hasRuntimeEvidence: runCount > 0, parentDerived }
+    return {
+      treatment: "contributor",
+      coverage,
+      runCount,
+      hasRuntimeEvidence: runCount > 0,
+      parentDerived,
+    };
   }
 
-  return { treatment: 'no-runtime', coverage, runCount: 0, hasRuntimeEvidence: false, parentDerived: false }
+  return {
+    treatment: "no-runtime",
+    coverage,
+    runCount: 0,
+    hasRuntimeEvidence: false,
+    parentDerived: false,
+  };
 }

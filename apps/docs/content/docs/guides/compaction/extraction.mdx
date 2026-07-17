@@ -9,7 +9,7 @@ Where summarization produces prose, extraction produces typed objects: decisions
 
 When a conversation gets compacted, prose summaries lose structure. "We decided to ship by Friday and Sarah owns the migration" is fine for the model to read but useless for tooling: you can't filter, count, or programmatically act on a sentence.
 
-Extraction produces typed objects that survive compaction: structured decisions, structured action items, structured open questions. Pair it with [sliding window](/docs/guides/compaction/sliding-window): extract structure *before* the window evicts and summarizes, so the structure persists in your application layer while prose gets compressed.
+Extraction produces typed objects that survive compaction: structured decisions, structured action items, structured open questions. Pair it with [sliding window](/docs/guides/compaction/sliding-window): extract structure _before_ the window evicts and summarizes, so the structure persists in your application layer while prose gets compressed.
 
 ## When should I use it?
 
@@ -26,9 +26,9 @@ Extraction produces typed objects that survive compaction: structured decisions,
 ## Quick start
 
 ```ts
-import { z } from 'zod'
-import { generateObjectFn } from '@use-crux/ai'
-import { extractKeyFacts } from '@use-crux/core/compaction'
+import { z } from "zod";
+import { generateObjectFn } from "@use-crux/ai";
+import { extractKeyFacts } from "@use-crux/core/compaction";
 
 const facts = await extractKeyFacts({
   messages: conversation,
@@ -36,12 +36,10 @@ const facts = await extractKeyFacts({
   model: myModel,
   schema: z.object({
     decisions: z.array(z.string()),
-    actionItems: z.array(
-      z.object({ task: z.string(), assignee: z.string() })
-    ),
+    actionItems: z.array(z.object({ task: z.string(), assignee: z.string() })),
     openQuestions: z.array(z.string()),
   }),
-})
+});
 
 // facts is fully typed:
 // { decisions: string[]; actionItems: { task: string; assignee: string }[]; openQuestions: string[] }
@@ -51,13 +49,13 @@ const facts = await extractKeyFacts({
 
 Three patterns work well:
 
-**Decisions and questions**, capture what was *agreed* and what's *unresolved*:
+**Decisions and questions**, capture what was _agreed_ and what's _unresolved_:
 
 ```ts
 schema: z.object({
   decisions: z.array(z.string()),
   openQuestions: z.array(z.string()),
-})
+});
 ```
 
 **Action items with ownership**, for project conversations:
@@ -70,9 +68,9 @@ schema: z.object({
       assignee: z.string(),
       deadline: z.string().optional(),
       blockers: z.array(z.string()).default([]),
-    })
+    }),
   ),
-})
+});
 ```
 
 **Named entities and bindings**, for agent conversations where the LLM needs to remember "the project = Atlas":
@@ -81,11 +79,11 @@ schema: z.object({
 schema: z.object({
   bindings: z.array(
     z.object({
-      term: z.string(),       // the user's shorthand
-      refers_to: z.string(),  // canonical name
-    })
+      term: z.string(), // the user's shorthand
+      refers_to: z.string(), // canonical name
+    }),
   ),
-})
+});
 ```
 
 ## Combining with sliding window
@@ -93,13 +91,13 @@ schema: z.object({
 Pair extraction with [sliding window](/docs/guides/compaction/sliding-window) so structured facts persist as a side-effect of compaction. The window owns its own eviction; you observe the prose summary via `getMessages()` and run extraction periodically against the messages you've collected.
 
 ```ts
-const window = createSlidingWindow({ id: 'chat', windowSize: 20, /* ... */ })
+const window = createSlidingWindow({ id: "chat", windowSize: 20 /* ... */ });
 
 // Track recent turns yourself for extraction
-const recentTurns: Message[] = []
+const recentTurns: Message[] = [];
 
-await window.push(newTurn)
-recentTurns.push(newTurn)
+await window.push(newTurn);
+recentTurns.push(newTurn);
 
 // Every N turns, extract structure from the buffer and trim it
 if (recentTurns.length >= 5) {
@@ -108,9 +106,9 @@ if (recentTurns.length >= 5) {
     generate: generateObjectFn,
     model: cheapModel,
     schema: actionSchema,
-  })
-  await persistFacts(facts)
-  recentTurns.length = 0
+  });
+  await persistFacts(facts);
+  recentTurns.length = 0;
 }
 ```
 
@@ -121,7 +119,19 @@ This way the prose summary keeps narrative context for the LLM, and the structur
 ## Where to next
 
 <Cards>
-  <Card title="Compaction overview" description="All four primitives at a glance." href="/docs/guides/compaction" />
-  <Card title="Sliding window" description="Pair extraction with stateful auto-compaction." href="/docs/guides/compaction/sliding-window" />
-  <Card title="Scoring" description="Use judge to evaluate extraction quality." href="/docs/guides/quality/scorers-and-gates" />
+  <Card
+    title="Compaction overview"
+    description="All four primitives at a glance."
+    href="/docs/guides/compaction"
+  />
+  <Card
+    title="Sliding window"
+    description="Pair extraction with stateful auto-compaction."
+    href="/docs/guides/compaction/sliding-window"
+  />
+  <Card
+    title="Scoring"
+    description="Use judge to evaluate extraction quality."
+    href="/docs/guides/evals/scorers-and-gates"
+  />
 </Cards>

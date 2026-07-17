@@ -21,16 +21,16 @@
  *     callers outside React (e.g. the WS message handler).
  */
 
-import { create } from 'zustand'
+import { create } from "zustand";
 import {
   devtoolsReducer,
   INITIAL_STATE,
   type DevtoolsAction,
   type DevtoolsState,
-} from './devtoolsReducer'
+} from "./devtoolsReducer";
 
 interface RuntimeStore extends DevtoolsState {
-  dispatch: (action: DevtoolsAction) => void
+  dispatch: (action: DevtoolsAction) => void;
 }
 
 export const useRuntimeStore = create<RuntimeStore>((set) => ({
@@ -39,14 +39,14 @@ export const useRuntimeStore = create<RuntimeStore>((set) => ({
     set((state) => {
       // Extract dispatch out; reducer is typed against DevtoolsState
       // (no dispatch field) for testability.
-      const next = devtoolsReducer(state, action)
-      return next === state ? state : next
+      const next = devtoolsReducer(state, action);
+      return next === state ? state : next;
     }),
-}))
+}));
 
 /** Non-hook dispatcher (for the WS handler in `useDevtools.ts`). */
 export function dispatchRuntime(action: DevtoolsAction): void {
-  useRuntimeStore.getState().dispatch(action)
+  useRuntimeStore.getState().dispatch(action);
 }
 
 // ─── Selectors ─────────────────────────────────────────────────────
@@ -57,9 +57,12 @@ export function dispatchRuntime(action: DevtoolsAction): void {
 // (returns same reference when unchanged) means no re-render for
 // unrelated WS events.
 
-export const useConnected = () => useRuntimeStore((s) => s.connected)
-export const useHasEverConnected = () => useRuntimeStore((s) => s.hasEverConnected)
-export const useDisconnectedAt = () => useRuntimeStore((s) => s.disconnectedAt)
-export const useRetryAttempt = () => useRuntimeStore((s) => s.retryAttempt)
-export const useJudgeEvents = () => useRuntimeStore((s) => s.runtime.judgeEvents)
-export const useAgentEvents = () => useRuntimeStore((s) => s.runtime.agentEvents)
+export const useConnected = () => useRuntimeStore((s) => s.connected);
+export const useHasEverConnected = () =>
+  useRuntimeStore((s) => s.hasEverConnected);
+export const useDisconnectedAt = () => useRuntimeStore((s) => s.disconnectedAt);
+export const useRetryAttempt = () => useRuntimeStore((s) => s.retryAttempt);
+export const useJudgeEvents = () =>
+  useRuntimeStore((s) => s.runtime.judgeEvents);
+export const useAgentEvents = () =>
+  useRuntimeStore((s) => s.runtime.agentEvents);

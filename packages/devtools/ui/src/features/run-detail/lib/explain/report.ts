@@ -8,23 +8,29 @@
  * questions such as `.some()`, `.filter()`, or `.map()`.
  */
 
-import type { TurnDecisionCoverage, TurnDecisionReport, TurnSourceGroup } from '@/types'
+import type {
+  TurnDecisionCoverage,
+  TurnDecisionReport,
+  TurnSourceGroup,
+} from "@/types";
 
 type ArrayFieldKeys<T> = {
-  [K in keyof T]-?: NonNullable<T[K]> extends readonly unknown[] ? K : never
-}[keyof T]
+  [K in keyof T]-?: NonNullable<T[K]> extends readonly unknown[] ? K : never;
+}[keyof T];
 
 type NullableReportArrays = Partial<{
-  [K in Exclude<ArrayFieldKeys<TurnDecisionReport>, 'source'>]: TurnDecisionReport[K] | null
-}>
+  [K in Exclude<ArrayFieldKeys<TurnDecisionReport>, "source">]:
+    | TurnDecisionReport[K]
+    | null;
+}>;
 
-type RuntimeCoverage = Partial<Omit<TurnDecisionCoverage, 'areas'>> & {
-  areas?: TurnDecisionCoverage['areas'] | null
-}
+type RuntimeCoverage = Partial<Omit<TurnDecisionCoverage, "areas">> & {
+  areas?: TurnDecisionCoverage["areas"] | null;
+};
 
-type RuntimeSourceGroup = Omit<TurnSourceGroup, 'items'> & {
-  items?: TurnSourceGroup['items'] | null
-}
+type RuntimeSourceGroup = Omit<TurnSourceGroup, "items"> & {
+  items?: TurnSourceGroup["items"] | null;
+};
 
 /**
  * A `TurnDecisionReport` as it may arrive over the local Devtools JSON boundary.
@@ -36,30 +42,34 @@ type RuntimeSourceGroup = Omit<TurnSourceGroup, 'items'> & {
  */
 export type RuntimeTurnDecisionReport = Omit<
   TurnDecisionReport,
-  keyof NullableReportArrays | 'coverage' | 'source'
+  keyof NullableReportArrays | "coverage" | "source"
 > &
   NullableReportArrays & {
-    coverage?: RuntimeCoverage | null
-    source?: readonly RuntimeSourceGroup[] | null
-  }
+    coverage?: RuntimeCoverage | null;
+    source?: readonly RuntimeSourceGroup[] | null;
+  };
 
 function arrayOrEmpty<T>(value: readonly T[] | null | undefined): T[] {
-  return Array.isArray(value) ? [...value] : []
+  return Array.isArray(value) ? [...value] : [];
 }
 
-function normalizeCoverage(coverage: RuntimeCoverage | null | undefined): TurnDecisionCoverage {
+function normalizeCoverage(
+  coverage: RuntimeCoverage | null | undefined,
+): TurnDecisionCoverage {
   return {
-    covered: typeof coverage?.covered === 'number' ? coverage.covered : 0,
-    total: typeof coverage?.total === 'number' ? coverage.total : 0,
+    covered: typeof coverage?.covered === "number" ? coverage.covered : 0,
+    total: typeof coverage?.total === "number" ? coverage.total : 0,
     areas: arrayOrEmpty(coverage?.areas),
-  }
+  };
 }
 
-function normalizeSourceGroups(groups: readonly RuntimeSourceGroup[] | null | undefined): TurnSourceGroup[] {
+function normalizeSourceGroups(
+  groups: readonly RuntimeSourceGroup[] | null | undefined,
+): TurnSourceGroup[] {
   return arrayOrEmpty(groups).map((group) => ({
     ...group,
     items: arrayOrEmpty(group.items),
-  }))
+  }));
 }
 
 /**
@@ -72,7 +82,7 @@ function normalizeSourceGroups(groups: readonly RuntimeSourceGroup[] | null | un
 export function normalizeTurnDecisionReport(
   report: RuntimeTurnDecisionReport | null | undefined,
 ): TurnDecisionReport | undefined {
-  if (!report) return undefined
+  if (!report) return undefined;
 
   const normalized: TurnDecisionReport = {
     schemaVersion: 1,
@@ -88,11 +98,11 @@ export function normalizeTurnDecisionReport(
     source: normalizeSourceGroups(report.source),
     coverage: normalizeCoverage(report.coverage),
     gaps: arrayOrEmpty(report.gaps),
-  }
+  };
 
   if (Array.isArray(report.chips)) {
-    normalized.chips = [...report.chips]
+    normalized.chips = [...report.chips];
   }
 
-  return normalized
+  return normalized;
 }

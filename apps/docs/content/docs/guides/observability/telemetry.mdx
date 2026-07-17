@@ -7,7 +7,7 @@ Crux devtools is great for development, but production environments need traces 
 
 ## Setup
 
-<Tabs items={['pnpm', 'npm', 'yarn', 'bun']}>
+<Tabs items={["pnpm", "npm", "yarn", "bun"]}>
   <Tab value="pnpm">```bash pnpm add @use-crux/otel ```</Tab>
   <Tab value="npm">```bash npm install @use-crux/otel ```</Tab>
   <Tab value="yarn">```bash yarn add @use-crux/otel ```</Tab>
@@ -15,12 +15,12 @@ Crux devtools is great for development, but production environments need traces 
 </Tabs>
 
 ```ts title="crux.config.ts"
-import { config } from '@use-crux/core'
-import { withTelemetry } from '@use-crux/otel'
+import { config } from "@use-crux/core";
+import { withTelemetry } from "@use-crux/otel";
 
 export default config({
-  plugins: [withTelemetry({ serviceName: 'my-app' })],
-})
+  plugins: [withTelemetry({ serviceName: "my-app" })],
+});
 ```
 
 That's it. Spans flow to whatever observability platform you've configured.
@@ -34,47 +34,51 @@ That's it. Spans flow to whatever observability platform you've configured.
 For long-lived servers (Next.js, Express, Fastify), set up the OTel SDK once in your application entrypoint. `@use-crux/otel` creates spans via `@opentelemetry/api` which routes them through your globally registered `TracerProvider`.
 
 ```ts title="instrumentation.ts"
-import { NodeSDK } from '@opentelemetry/sdk-node'
-import { resourceFromAttributes } from '@opentelemetry/resources'
-import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http'
-import { createCruxResourceAttributes } from '@use-crux/otel'
-import type { CruxDeploymentIdentity } from '@use-crux/core/project-index'
+import { NodeSDK } from "@opentelemetry/sdk-node";
+import { resourceFromAttributes } from "@opentelemetry/resources";
+import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
+import { createCruxResourceAttributes } from "@use-crux/otel";
+import type { CruxDeploymentIdentity } from "@use-crux/core/project-index";
 
 export const identity = {
-  projectId: 'checkout',
-  manifestId: 'pim_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
-  deploymentId: 'production-42',
-} satisfies CruxDeploymentIdentity
+  projectId: "checkout",
+  manifestId:
+    "pim_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  deploymentId: "production-42",
+} satisfies CruxDeploymentIdentity;
 
 const sdk = new NodeSDK({
   resource: resourceFromAttributes({
     ...createCruxResourceAttributes(identity),
   }),
   traceExporter: new OTLPTraceExporter({
-    url: 'https://otel-collector.example.com/v1/traces',
-    headers: { 'DD-API-KEY': process.env.DD_API_KEY },
+    url: "https://otel-collector.example.com/v1/traces",
+    headers: { "DD-API-KEY": process.env.DD_API_KEY },
   }),
-})
-sdk.start()
+});
+sdk.start();
 ```
 
 ```ts title="crux.config.ts"
-import { withTelemetry } from '@use-crux/otel'
-import { identity } from './instrumentation'
+import { withTelemetry } from "@use-crux/otel";
+import { identity } from "./instrumentation";
 
 // No exporter needed: uses the global TracerProvider
 config({
   observability: { identity },
-  plugins: [withTelemetry({ serviceName: 'my-app' })],
-})
+  plugins: [withTelemetry({ serviceName: "my-app" })],
+});
 ```
 
 <Callout type="info">
-  `@opentelemetry/api` is an optional peer dependency. Install it alongside the OTel SDK when using the standard path.
+  `@opentelemetry/api` is an optional peer dependency. Install it alongside the
+  OTel SDK when using the standard path.
 </Callout>
 
 <Callout type="warning">
-  Install and start your `TracerProvider` before `withTelemetry()`. If Crux sees invalid OTel span contexts, it warns once and falls back to lightweight span tracking so application code keeps running.
+  Install and start your `TracerProvider` before `withTelemetry()`. If Crux sees
+  invalid OTel span contexts, it warns once and falls back to lightweight span
+  tracking so application code keeps running.
 </Callout>
 
 The Resource is immutable application-owned setup. Use the same validated
@@ -90,20 +94,20 @@ For ephemeral runtimes where the full OTel SDK isn't available, pass an `exporte
 
 ```ts title="URL exporter"
 export const telemetry = withTelemetry({
-  serviceName: 'my-app',
+  serviceName: "my-app",
   exporter: {
-    url: 'https://collector.example.com/v1/traces',
-    headers: { 'X-Api-Key': collectorApiKey }, // supplied by this host
+    url: "https://collector.example.com/v1/traces",
+    headers: { "X-Api-Key": collectorApiKey }, // supplied by this host
   },
-})
+});
 ```
 
 ```ts title="Callback exporter"
 export const telemetry = withTelemetry({
-  serviceName: 'my-app',
+  serviceName: "my-app",
   // `sendTelemetry` is an application-injected host adapter.
   exporter: (spans) => sendTelemetry(spans),
-})
+});
 ```
 
 The URL exporter uses fire-and-forget HTTP POST (5-second timeout): failures are silently ignored so telemetry never impacts your application.
@@ -114,22 +118,22 @@ The URL exporter uses fire-and-forget HTTP POST (5-second timeout): failures are
 
 Every instrumented Crux event produces a span:
 
-| Event                     | Span Name                         | Key Attributes                                                                                      |
-| ------------------------- | --------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `generate()` / `stream()` | `chat {model}`                    | `gen_ai.operation.name`, `gen_ai.provider.name`, `gen_ai.request.model`, token usage, cost          |
-| Cost tracking             | `crux.cost.{report\|warn\|limit}` | `crux.cost`, `crux.cost.total`, `crux.cost.source`, `crux.cost.threshold`                           |
+| Event                     | Span Name                         | Key Attributes                                                                                        |
+| ------------------------- | --------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `generate()` / `stream()` | `chat {model}`                    | `gen_ai.operation.name`, `gen_ai.provider.name`, `gen_ai.request.model`, token usage, cost            |
+| Cost tracking             | `crux.cost.{report\|warn\|limit}` | `crux.cost`, `crux.cost.total`, `crux.cost.source`, `crux.cost.threshold`                             |
 | Tool execution            | `execute_tool {name}`             | `gen_ai.operation.name`, `crux.tool.name`, `crux.tool.call_id`, model-output sizes, estimated savings |
-| `flow().run()`            | `crux.flow`                       | `crux.flow.id`, `crux.flow.name`                                                                    |
-| `flow.step()`             | `crux.flow.step`                  | `crux.step.id`, `crux.step.label`                                                                   |
-| `flow.suspend()`          | Event on `crux.flow` + span end   | `crux.flow.suspend_point`                                                                           |
-| Resume                    | `crux.flow.resume`                | `crux.flow.id`, `crux.flow.name`                                                                    |
-| Compositions              | `crux.composition.{kind}`         | `crux.composition.kind`, agent count                                                                |
-| Memory ops                | `crux.memory.{read\|write}`       | `crux.memory.type`, `crux.memory.operation`                                                         |
-| Corpus sync               | `crux.corpus.sync`                | `crux.corpus.id`, hashed namespace, sync counts, dry-run flag                                       |
-| Corpus source events      | `crux.corpus.source`              | `crux.corpus.action`, hashed namespace/source ID, chunk count                                       |
-| Compaction                | `crux.compact`                    | `crux.compaction.ratio`                                                                             |
-| Judge scores              | `crux.judge`                      | `crux.judge.metric`, `crux.judge.score`                                                             |
-| Delegation                | `crux.delegate`                   | `crux.delegate.id`                                                                                  |
+| `flow().run()`            | `crux.flow`                       | `crux.flow.id`, `crux.flow.name`                                                                      |
+| `flow.step()`             | `crux.flow.step`                  | `crux.step.id`, `crux.step.label`                                                                     |
+| `flow.suspend()`          | Event on `crux.flow` + span end   | `crux.flow.suspend_point`                                                                             |
+| Resume                    | `crux.flow.resume`                | `crux.flow.id`, `crux.flow.name`                                                                      |
+| Compositions              | `crux.composition.{kind}`         | `crux.composition.kind`, agent count                                                                  |
+| Memory ops                | `crux.memory.{read\|write}`       | `crux.memory.type`, `crux.memory.operation`                                                           |
+| Corpus sync               | `crux.corpus.sync`                | `crux.corpus.id`, hashed namespace, sync counts, dry-run flag                                         |
+| Corpus source events      | `crux.corpus.source`              | `crux.corpus.action`, hashed namespace/source ID, chunk count                                         |
+| Compaction                | `crux.compact`                    | `crux.compaction.ratio`                                                                               |
+| Judge scores              | `crux.judge`                      | `crux.judge.metric`, `crux.judge.score`                                                               |
+| Delegation                | `crux.delegate`                   | `crux.delegate.id`                                                                                    |
 
 Tool spans include privacy-safe `toModelOutput()` metadata only. OTel records the output shape and byte-size difference; it does not record raw tool results, model-facing tool content, queries, files, or metadata.
 
@@ -147,8 +151,8 @@ config({
     serverUrl: process.env.DEVTOOLS_URL,
     token: process.env.CRUX_DEVTOOLS_TOKEN,
   },
-  plugins: [withTelemetry({ serviceName: 'my-app' })],
-})
+  plugins: [withTelemetry({ serviceName: "my-app" })],
+});
 ```
 
 Devtools uses the visual UI for development. OTel sends spans to your production dashboards. Same
@@ -156,14 +160,14 @@ events, deliberately configured destinations.
 
 ## Options
 
-| Option | Type | Default | Description |
-| --- | --- | --- | --- |
-| `serviceName` | `string` | `'@use-crux/otel'` | Tracer name / service identifier |
-| `attributes` | `Record<string, string>` | n/a | Custom attributes on every span |
-| `exporter` | `UrlExporter \| CallbackExporter` | n/a | Export strategy (omit for standard OTel path) |
-| `captureMessageContent` | `boolean` | `false` | Export GenAI input/output message attributes |
-| `semconvVersion` | `'genai-dev-2026-06'` | current table | Forward compatibility knob for semconv names |
-| `baggageAttributeAllowlist` | `readonly string[]` | unset | Baggage keys copied onto resumed root spans as `crux.baggage.*` |
+| Option                      | Type                              | Default            | Description                                                     |
+| --------------------------- | --------------------------------- | ------------------ | --------------------------------------------------------------- |
+| `serviceName`               | `string`                          | `'@use-crux/otel'` | Tracer name / service identifier                                |
+| `attributes`                | `Record<string, string>`          | n/a                | Custom attributes on every span                                 |
+| `exporter`                  | `UrlExporter \| CallbackExporter` | n/a                | Export strategy (omit for standard OTel path)                   |
+| `captureMessageContent`     | `boolean`                         | `false`            | Export GenAI input/output message attributes                    |
+| `semconvVersion`            | `'genai-dev-2026-06'`             | current table      | Forward compatibility knob for semconv names                    |
+| `baggageAttributeAllowlist` | `readonly string[]`               | unset              | Baggage keys copied onto resumed root spans as `crux.baggage.*` |
 
 Payload capture is configured centrally with
 `config({ observability: { recordInputs, recordOutputs, redactRecord } })`.
@@ -205,30 +209,32 @@ and Convex use for in-process resume through standard W3C headers:
 import {
   injectCruxPropagationCarrier,
   extractCruxPropagationCarrier,
-} from '@use-crux/otel'
-import { observe } from '@use-crux/core/observability'
+} from "@use-crux/otel";
+import { observe } from "@use-crux/core/observability";
 
 // Header-like carrier: any object with get/set/keys.
-const headers = new Map<string, string>()
+const headers = new Map<string, string>();
 const headerCarrier = {
   get: (key: string) => headers.get(key),
   set: (key: string, value: string) => {
-    headers.set(key, value)
+    headers.set(key, value);
   },
   keys: () => [...headers.keys()],
-}
+};
 
 // Producer: serialize W3C headers from a suspend carrier.
-const carrier = run.suspend({ reason: 'queued-work' })
-injectCruxPropagationCarrier(carrier, headerCarrier)
-await queue.send({ body, headers: Object.fromEntries(headers) })
+const carrier = run.suspend({ reason: "queued-work" });
+injectCruxPropagationCarrier(carrier, headerCarrier);
+await queue.send({ body, headers: Object.fromEntries(headers) });
 
 // Consumer: restore correlation before resuming work.
-const extracted = extractCruxPropagationCarrier(headerCarrier)
+const extracted = extractCruxPropagationCarrier(headerCarrier);
 if (extracted.carrier) {
-  const resumed = observe.resumeRun(extracted.carrier, { reason: 'worker-start' })
+  const resumed = observe.resumeRun(extracted.carrier, {
+    reason: "worker-start",
+  });
   // ...
-  resumed.end()
+  resumed.end();
 }
 ```
 
@@ -259,7 +265,19 @@ or the standard `TracerProvider.forceFlush()`), bounded by the same deadline.
     description="Visual development tracing with crux dev."
     href="/docs/guides/observability/devtools"
   />
-  <Card title="Runtime setup" description="Node, serverless, Workers, Convex flush bindings." href="/docs/guides/observability/runtime-setup" />
-  <Card title="Privacy" description="What OTel keeps off by default." href="/docs/guides/observability/privacy" />
-  <Card title="API Reference" description="@use-crux/otel API reference." href="/docs/reference/plugins/otel" />
+  <Card
+    title="Runtime setup"
+    description="Node, serverless, Workers, Convex flush bindings."
+    href="/docs/guides/observability/runtime-setup"
+  />
+  <Card
+    title="Privacy"
+    description="What OTel keeps off by default."
+    href="/docs/guides/observability/privacy"
+  />
+  <Card
+    title="API Reference"
+    description="@use-crux/otel API reference."
+    href="/docs/reference/plugins/otel"
+  />
 </Cards>

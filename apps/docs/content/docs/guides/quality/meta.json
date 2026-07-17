@@ -1,5 +1,0 @@
-{
-  "title": "Quality",
-  "description": "Evaluations, experiments, baselines, and replay for every Crux primitive.",
-  "pages": ["index", "assertions", "scorers-and-gates", "variants-and-baselines", "replay", "recipes"]
-}

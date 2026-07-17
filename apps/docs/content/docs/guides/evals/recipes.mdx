@@ -1,0 +1,74 @@
+---
+title: Recipes
+description: Practical workflows for CI, Case files, cost planning, feedback, and Review.
+---
+
+## Token-safe CI
+
+Use offline mode when CI must never make an external request:
+
+```bash
+crux eval --offline
+```
+
+Crux completes preflight before local work. Every required external task and
+managed-scorer action must have exact reusable evidence; otherwise the run
+fails without partial execution.
+
+## Inspect cost before execution
+
+```bash
+crux eval support --plan --max-cost 0.50
+```
+
+Planning creates no run, job, reservation, or evidence. When remote work is
+required it may make one authenticated read-only manifest request. Without
+credentials the plan is `unverified` and explains setup. Add `--offline` to
+guarantee zero network access.
+
+## Keep Cases in JSONL
+
+```ts
+cases: [
+  caseFile("./fixtures/refunds.jsonl", {
+    input: SupportInputSchema,
+    expected: SupportExpectedSchema,
+  }),
+];
+```
+
+The path resolves from the declaring Eval file like a relative import. Crux
+does not retry against the working directory or project root. `../` is
+allowed only when the real target remains inside the configured project root;
+absolute paths and symlink escapes are rejected.
+
+The sibling `<eval-name>.cases.jsonl` file is loaded automatically. Do not
+also reference it with `caseFile()`.
+
+## Measure live latency without rejudging unchanged output
+
+```ts
+gates: {
+  latency: { p95Ms: 2_000 },
+}
+```
+
+The latency Gate makes task execution fresh. It does not automatically bypass
+managed scorer evidence, so the judge can reuse when the fresh task returns
+the same output.
+
+## Turn production feedback into a reviewed Case
+
+```ts
+import { feedback } from "@use-crux/core/feedback";
+
+await feedback(runId, {
+  rating: "down",
+  comment: "The refund window is incorrect",
+});
+```
+
+Reviewers can resolve, dismiss, or add feedback to an Eval. Add-to-eval
+prefills the production input and call context, never the model output as
+expected truth. Saving appends one validated canonical Case or returns an
+honest linked, conflict, or pending-sync result.

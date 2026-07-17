@@ -38,18 +38,7 @@ const shared = {
 }
 
 try {
-  const [qualityResult, evalResult, resolverResult, indexerResult, semanticIndexerResult, runtimeIndexerResult] = await Promise.all([
-    build({
-      ...shared,
-      entryPoints: [resolve(rootDir, 'bin/quality-runner.ts')],
-      outfile: resolve(rootDir, 'dist/quality-runner.mjs'),
-      // NEVER bundle @use-crux/core into the quality runner: the worker must
-      // share the PROJECT's core instance (internal symbols, observability
-      // globals) — see lib/quality-core-bridge.ts. Type-only imports vanish;
-      // an accidental runtime import fails loudly at extract time instead of
-      // silently forking the module graph.
-      external: [...shared.external, '@use-crux/core', '@use-crux/core/*'],
-    }),
+  const [evalResult, resolverResult, indexerResult, semanticIndexerResult, runtimeIndexerResult] = await Promise.all([
     build({
       ...shared,
       entryPoints: [resolve(rootDir, 'bin/eval-coordinator.ts')],
@@ -81,8 +70,7 @@ try {
     }),
   ])
   console.log(
-    `Built dist/quality-runner.mjs (${qualityResult.errors.length} errors), ` +
-      `dist/eval-coordinator.mjs (${evalResult.errors.length} errors), ` +
+    `Built dist/eval-coordinator.mjs (${evalResult.errors.length} errors), ` +
       `dist/source-resolver.mjs (${resolverResult.errors.length} errors), ` +
       `dist/project-indexer.mjs (${indexerResult.errors.length} errors), ` +
       `dist/project-semantic-indexer.mjs (${semanticIndexerResult.errors.length} errors), ` +

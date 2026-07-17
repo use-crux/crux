@@ -1,7 +1,7 @@
 /** Portable immutable plan and run records for the Eval kernel. @internal */
 
 import type { StreamCompletion } from "../../adapter";
-import type { CellAssertionOutcome } from "../../quality/experiment";
+import type { CellAssertionOutcome } from "./assertion-types";
 import type { EvalCapability } from "../task";
 import type { EvalTaskEvidenceEntry } from "./evidence";
 import type { EvalTaskIdentityProjection } from "./task";
@@ -86,6 +86,8 @@ export interface EvalPlannedCell {
   readonly trial: number;
   readonly blocking: boolean;
   readonly task: unknown;
+  /** Frozen managed capabilities projected during cell planning. */
+  readonly requiredHostCapabilities: readonly string[];
   readonly overrides: Readonly<Record<string, unknown>>;
   readonly action: EvalPlanAction;
   readonly scorerActions: readonly EvalScorerAction[];
@@ -97,12 +99,44 @@ export interface EvalPlannedCell {
   readonly afterScores?: NormalizedEvalCheck;
 }
 
+/** One live cell whose declared capabilities require the selected Runtime. */
+export interface EvalRequiredHostWork {
+  readonly caseId: string;
+  readonly variant: string;
+  readonly trial: number;
+  readonly capabilities: readonly string[];
+}
+
+/** Pre-spend proof that remaining task work can use its required execution host. */
+export type EvalHostReadiness =
+  | {
+      readonly status: "local";
+      readonly reason: "no_required_host_work" | "exact_evidence";
+    }
+  | {
+      readonly status: "verified";
+      readonly deploymentId: string;
+      readonly hostKind: string;
+    }
+  | {
+      readonly status: "unverified";
+      readonly reason: "offline" | "connection_unavailable" | "transport";
+      readonly remedies: readonly string[];
+    }
+  | {
+      readonly status: "mismatch";
+      readonly reason: string;
+      readonly remedy: string;
+    };
+
 export interface EvalPlan {
   readonly schemaVersion: 1;
   readonly evalId: string;
   readonly sourceKey: EvalSourceKey;
   readonly definitionFingerprint: string;
   readonly selection: EvalSelection;
+  /** Diagnostic placement proof resolved after exact evidence lookup. */
+  readonly hostReadiness: EvalHostReadiness;
   readonly preflight: EvalPlanPreflight;
   readonly cost: EvalCostPlan;
   readonly task: unknown;

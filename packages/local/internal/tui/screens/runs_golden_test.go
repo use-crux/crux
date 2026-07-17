@@ -75,7 +75,7 @@ func fixtureRuns() (*Runs, time.Time) {
 func TestRunsStatusFilterLimitsVisibleRows(t *testing.T) {
 	screen := NewRuns()
 	screen.loaded = true
-	screen.runs = []api.QualityRunRecord{
+	screen.runs = []api.InspectRunRecord{
 		{TraceID: "failed-000", TargetID: "docs_agent", Status: "failed"},
 		{TraceID: "passed-000", TargetID: "docs_agent", Status: "passed"},
 		{TraceID: "running-0", TargetID: "docs_agent", Status: "running"},
@@ -99,7 +99,7 @@ func TestRunsStatusFilterLimitsVisibleRows(t *testing.T) {
 func TestRunsTextFilterLimitsVisibleRows(t *testing.T) {
 	screen := NewRuns()
 	screen.loaded = true
-	screen.runs = []api.QualityRunRecord{
+	screen.runs = []api.InspectRunRecord{
 		{TraceID: "docs-000", TargetID: "docs_agent", Status: "failed"},
 		{TraceID: "triage-0", TargetID: "triage", Status: "passed"},
 	}
@@ -126,9 +126,9 @@ func TestRunsWaterfallCollapsesDuplicateGroups(t *testing.T) {
 	screen.loaded = true
 	duration := 10_000.0
 	spanDuration := 100.0
-	screen.detail = &api.QualityRunDetailRecord{
-		Run: api.QualityRunRecord{TraceID: "run-dup", TargetID: "docs_agent", DurationMs: &duration},
-		Spans: []api.QualityRunSpan{
+	screen.detail = &api.InspectRunDetailRecord{
+		Run: api.InspectRunRecord{TraceID: "run-dup", TargetID: "docs_agent", DurationMs: &duration},
+		Spans: []api.InspectRunSpan{
 			{ID: "root", Name: "docs_agent.run", Primitive: api.SpanPrimitiveAgent, DurationMs: &duration},
 			{ID: "dup-1", ParentID: "root", Name: "rag.search \"typed prompts\"", Primitive: api.SpanPrimitiveTool, Duplicate: true, DuplicateOfSpanID: "search", StartedAt: 100, DurationMs: &spanDuration},
 			{ID: "dup-2", ParentID: "root", Name: "rag.search \"typed prompts\"", Primitive: api.SpanPrimitiveTool, Duplicate: true, DuplicateOfSpanID: "search", StartedAt: 200, DurationMs: &spanDuration},

@@ -6,7 +6,7 @@ description: Bind an agent to one task with scoped context and lifecycle tools.
 When you hand a subagent a task, you want it to work on exactly that task, with tools that cannot touch the rest of the ledger. A worker handle gives you that binding, created from a task ledger:
 
 ```ts
-const worker = work.worker('research')
+const worker = work.worker("research");
 ```
 
 The worker is scoped to one task ID. Its context describes the assignment, and its tools mutate only that task.
@@ -16,10 +16,10 @@ await generate(
   prompt({
     use: [launchPlan.asContext(), worker.asContext()],
     tools: worker.asTools(),
-    system: 'Complete the assigned task and report progress.',
+    system: "Complete the assigned task and report progress.",
   }),
   { model, input: {} },
-)
+);
 ```
 
 ## Guidelines
@@ -27,9 +27,9 @@ await generate(
 Pass task-specific guidance when the worker is created:
 
 ```ts
-const writer = work.worker('draft', {
-  guidelines: 'Write markdown. Include source links. Keep the tone direct.',
-})
+const writer = work.worker("draft", {
+  guidelines: "Write markdown. Include source links. Keep the tone direct.",
+});
 ```
 
 ## Custom Context
@@ -37,12 +37,14 @@ const writer = work.worker('draft', {
 Use `renderContext` when the default assignment summary is not enough:
 
 ```ts
-const reviewer = work.worker('review', {
+const reviewer = work.worker("review", {
   renderContext: (task, allTasks) => {
-    const completed = allTasks.filter((item) => item.status === 'completed').length
-    return `Task: ${task.label}\nStatus: ${task.status}\nCompleted nearby tasks: ${completed}`
+    const completed = allTasks.filter(
+      (item) => item.status === "completed",
+    ).length;
+    return `Task: ${task.label}\nStatus: ${task.status}\nCompleted nearby tasks: ${completed}`;
   },
-})
+});
 ```
 
 ## Bounded Worker Pool
@@ -50,25 +52,25 @@ const reviewer = work.worker('review', {
 Workers are handles, not a scheduler. You can run a small pool in user code:
 
 ```ts
-const active = (await work.list()).filter((item) => item.status === 'pending')
-const poolSize = 3
+const active = (await work.list()).filter((item) => item.status === "pending");
+const poolSize = 3;
 
 for (let index = 0; index < active.length; index += poolSize) {
-  const batch = active.slice(index, index + poolSize)
+  const batch = active.slice(index, index + poolSize);
 
   await Promise.all(
     batch.map((item) => {
-      const worker = work.worker(item.id)
+      const worker = work.worker(item.id);
       return generate(
         prompt({
           use: [launchPlan.asContext(), worker.asContext()],
           tools: worker.asTools(),
-          system: 'Complete this task.',
+          system: "Complete this task.",
         }),
         { model, input: {} },
-      )
+      );
     }),
-  )
+  );
 }
 ```
 

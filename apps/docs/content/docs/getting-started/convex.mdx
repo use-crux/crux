@@ -6,7 +6,8 @@ description: Run Crux prompts inside Convex actions and persist memory in the cr
 This quick start gets Crux running in a [Convex](https://convex.dev) project. Crux prompts run inside Convex actions; persistent memory uses `@use-crux/convex`. For cross-action flows, swarm routing, Convex Agent integration, workspaces, skills, blackboards, and devtools, see the full [Convex guide](/docs/guides/convex).
 
 <Callout type="warning">
-  Crux is in alpha. Public packages are available on npm; use the install command below to get started.
+  Crux is in alpha. Public packages are available on npm; use the install
+  command below to get started.
 </Callout>
 
 ## Install
@@ -20,12 +21,12 @@ pnpm add @use-crux/core @use-crux/ai @use-crux/convex @ai-sdk/openai zod
 `@use-crux/convex` ships a Convex component that handles Crux-owned persistence such as memory records and experimental cross-action swarm state. Install it once in your `convex.config.ts`:
 
 ```ts title="convex/convex.config.ts"
-import { defineApp } from 'convex/server'
-import crux from '@use-crux/convex/convex.config'
+import { defineApp } from "convex/server";
+import crux from "@use-crux/convex/convex.config";
 
-const app = defineApp()
-app.use(crux)
-export default app
+const app = defineApp();
+app.use(crux);
+export default app;
 ```
 
 This creates the `crux` component namespace. The component manages its own tables: no schema definitions needed in your app.
@@ -47,52 +48,52 @@ convex/
 ## Step 1: Define a prompt
 
 ```ts title="convex/prompts/index.ts"
-import { context, prompt } from '@use-crux/convex'
-import { z } from 'zod'
+import { context, prompt } from "@use-crux/convex";
+import { z } from "zod";
 
 const brand = context({
-  id: 'brand',
+  id: "brand",
   priority: 30,
-  system: 'You are a helpful writing assistant.',
-})
+  system: "You are a helpful writing assistant.",
+});
 
 export const chat = prompt({
-  id: 'chat',
+  id: "chat",
   use: [brand],
   input: z.object({ message: z.string(), mode: z.string() }),
-  system: 'Help the user with their writing task.',
+  system: "Help the user with their writing task.",
   prompt: ({ input }) => input.message,
-})
+});
 ```
 
 ## Step 2: Call it from a Convex action
 
 ```ts title="convex/agent/chat.ts"
-'use node'
+"use node";
 
-import { action } from '@use-crux/convex/server'
-import { v } from 'convex/values'
-import { generate } from '@use-crux/ai'
-import { openai } from '@ai-sdk/openai'
+import { action } from "@use-crux/convex/server";
+import { v } from "convex/values";
+import { generate } from "@use-crux/ai";
+import { openai } from "@ai-sdk/openai";
 
-import { chat } from '../prompts'
+import { chat } from "../prompts";
 
 export const respond = action({
   args: { message: v.string(), mode: v.string() },
   handler: async (ctx, args) => {
     const result = await generate(chat, {
-      model: openai('gpt-4o'),
+      model: openai("gpt-4o"),
       input: { message: args.message, mode: args.mode },
-    })
+    });
 
-    return result.text
+    return result.text;
   },
-})
+});
 ```
 
 <Callout type="info">
-  Convex actions that import the AI SDK or OpenAI client need the `'use node'` directive, because they run in a Node.js
-  runtime, not Convex's V8 isolate.
+  Convex actions that import the AI SDK or OpenAI client need the `'use node'`
+  directive, because they run in a Node.js runtime, not Convex's V8 isolate.
 </Callout>
 
 ## Persistent memory
@@ -100,25 +101,25 @@ export const respond = action({
 Use `convexRecordStore()` for durable Convex-backed memory records:
 
 ```ts title="convex/memory/storage.ts"
-import { convexRecordStore } from '@use-crux/convex'
-import { episodes, memory, workingState } from '@use-crux/convex/memory'
-import { components } from '../_generated/api'
-import type { ActionCtx } from '../_generated/server'
+import { convexRecordStore } from "@use-crux/convex";
+import { episodes, memory, workingState } from "@use-crux/convex/memory";
+import { components } from "../_generated/api";
+import type { ActionCtx } from "../_generated/server";
 
 export function createMemoryRecords(ctx: ActionCtx) {
-  return convexRecordStore({ component: components.crux, ctx })
+  return convexRecordStore({ component: components.crux, ctx });
 }
 
 // Inside an action:
-const records = createMemoryRecords(ctx)
-const episodic = episodes({ id: 'chat', embed: embedFn })
-const working = workingState({ id: 'session', schema })
+const records = createMemoryRecords(ctx);
+const episodic = episodes({ id: "chat", embed: embedFn });
+const working = workingState({ id: "session", schema });
 const assistantMemory = memory({
-  id: 'assistant',
+  id: "assistant",
   records,
-  namespace: 'thread:1',
+  namespace: "thread:1",
   blocks: [working, episodic],
-})
+});
 ```
 
 The component handles record operations (`get`, `put`, `create`, `delete`, `list`) automatically. Dense vector search uses `ctx.vectorSearch` from the action context through `convexVectorStore()` or `convexStorage()`.
@@ -128,39 +129,43 @@ The component handles record operations (`get`, `put`, `create`, `delete`, `list
 If you're using the [Convex Agent component](https://www.convex.dev/components/agent), create one Crux Convex profile and let `convexAgent()` resolve the Crux prompt, memory, skills, and tools for each turn:
 
 ```ts title="convex/agent/setup.ts"
-'use node'
+"use node";
 
-import { openai } from '@ai-sdk/openai'
+import { openai } from "@ai-sdk/openai";
 
-import { createCruxConvex } from '@use-crux/convex'
-import { components } from '../_generated/api'
+import { createCruxConvex } from "@use-crux/convex";
+import { components } from "../_generated/api";
 
-import { chat } from '../prompts'
+import { chat } from "../prompts";
 
-const languageModel = openai('gpt-4o')
+const languageModel = openai("gpt-4o");
 
 const crux = createCruxConvex({
   components: {
     crux: components.crux,
     agent: components.agent,
   },
-})
+});
 
 export const chatAgent = crux.convexAgent({
-  name: 'Chat',
+  name: "Chat",
   prompt: chat,
   languageModel,
-})
+});
 
-await chatAgent.generateText(ctx, { threadId, userId }, { input: { message, mode } })
+await chatAgent.generateText(
+  ctx,
+  { threadId, userId },
+  { input: { message, mode } },
+);
 ```
 
 Use `crux.run(ctx, target, fn)` when lower-level action code needs the same request-scoped storage and runtime binding without going through an agent:
 
 ```ts
 await crux.run(ctx, { threadId, userId }, async ({ records }) => {
-  await records.put(`blackboard:${threadId}`, { status: 'ready' })
-})
+  await records.put(`blackboard:${threadId}`, { status: "ready" });
+});
 ```
 
 The lower-level `Agent` export remains available for manual Convex Agent integrations, but the profile-created agent is the default path when Crux should own prompt resolution, memory, skills, and tools for each turn.
@@ -181,8 +186,16 @@ Convex actions have a 5-minute timeout. For long-running multi-agent workflows:
 ## Next steps
 
 <Cards>
-  <Card title="Convex Guide" description="All Convex-specific Crux patterns in one place." href="/docs/guides/convex" />
-  <Card title="Memory" description="Block-based memory backed by Convex." href="/docs/guides/memory" />
+  <Card
+    title="Convex Guide"
+    description="All Convex-specific Crux patterns in one place."
+    href="/docs/guides/convex"
+  />
+  <Card
+    title="Memory"
+    description="Block-based memory backed by Convex."
+    href="/docs/guides/memory"
+  />
   <Card
     title="Plans & Tasks"
     description="Approval workflows and task tracking with reactive UI hooks."

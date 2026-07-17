@@ -35,7 +35,7 @@ func TestCatalogHTTPProjectsSafeCurrentReadModel(t *testing.T) {
 	})
 	service := devtools.NewService(state, nil).WithFactStore(nil)
 	defer service.Shutdown()
-	server := httptest.NewServer(NewHTTPServerWithServices(service, ServerOptions{ProjectRoot: root, QualityDir: t.TempDir()}))
+	server := httptest.NewServer(NewHTTPServerWithServices(service, ServerOptions{ProjectRoot: root, InspectDir: t.TempDir()}))
 	defer server.Close()
 
 	var explanation api.CatalogExplanationV1
@@ -73,7 +73,7 @@ func TestCatalogHTTPProjectsSafeCurrentReadModel(t *testing.T) {
 func TestCatalogHTTPReturnsNotFoundForUnknownDefinition(t *testing.T) {
 	service := devtools.NewService(store.NewStore(), nil).WithFactStore(nil)
 	defer service.Shutdown()
-	server := httptest.NewServer(NewHTTPServerWithServices(service, ServerOptions{QualityDir: t.TempDir()}))
+	server := httptest.NewServer(NewHTTPServerWithServices(service, ServerOptions{InspectDir: t.TempDir()}))
 	defer server.Close()
 
 	response, err := http.Get(server.URL + "/api/catalog/agent:missing")

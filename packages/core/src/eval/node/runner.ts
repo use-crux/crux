@@ -26,6 +26,8 @@ export { hydrateEvalCases, loadCaseRows } from "./cases";
 export { discoverDeployableProjectEvals } from "./deployed-discovery";
 export { EvalCaseFileError, resolveAuthoredCaseFile } from "./case-path";
 export { coordinateNodeEval } from "./coordinator";
+export { addReviewCase } from "./review";
+export type { AddReviewCaseInput, AddReviewCaseResult } from "./review";
 export {
   fingerprintDeployedEvalCase,
   projectDeployedEvalRequiredHostCapabilities,
@@ -101,7 +103,14 @@ export async function runDiscoveredEval(
     },
     projectRoot,
   );
-  if (options.plan) return coordinated.plan;
+  if (options.plan) {
+    if (coordinated.plan.hostReadiness.status === "mismatch") {
+      throw new TypeError(
+        `${coordinated.plan.hostReadiness.reason} ${coordinated.plan.hostReadiness.remedy}`,
+      );
+    }
+    return coordinated.plan;
+  }
   assertExecutable(coordinated.plan, selector);
   return coordinated.execute();
 }
@@ -159,6 +168,16 @@ function assertExecutable(plan: EvalPlan, selector: string): void {
   if (plan.preflight.status === "blocked") {
     throw new TypeError(
       `Offline run needs ${plan.preflight.misses.length} uncached external result(s); no external calls were made. Remove offline or run '${selector}' online.`,
+    );
+  }
+  if (plan.hostReadiness.status === "unverified") {
+    throw new TypeError(
+      `Eval '${selector}' requires an unverified deployed Runtime. ${plan.hostReadiness.remedies.join(" ")}`,
+    );
+  }
+  if (plan.hostReadiness.status === "mismatch") {
+    throw new TypeError(
+      `${plan.hostReadiness.reason} ${plan.hostReadiness.remedy}`,
     );
   }
   if (plan.cost.admission.status !== "admitted") {

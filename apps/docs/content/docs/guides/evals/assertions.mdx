@@ -1,0 +1,87 @@
+---
+title: Checks
+description: Write typed output checks and opt into fresh timing evidence explicitly.
+---
+
+Checks run locally for every Case. They are deterministic, inexpensive, and
+rerun even when Crux safely reuses task output.
+
+```ts
+import { evaluate } from "@use-crux/core/eval";
+import { support } from "../../../../src/support";
+
+export default evaluate({
+  task: support,
+  cases: [
+    {
+      id: "refund",
+      input: { question: "Can I get a refund?" },
+      expected: { phrase: "refund" },
+    },
+  ],
+  expect: ({ output, expected, expect }) => {
+    expect(output.answer).toContain(expected.phrase);
+  },
+});
+```
+
+The task is the single source of input and output types. The Case supplies the
+type of `expected`; Crux never compares expected data implicitly.
+
+## Case-specific checks
+
+Put a check on one Case only when its assertion genuinely differs from the
+Eval-wide rule:
+
+```ts
+cases: [
+  {
+    id: "escalation",
+    input: { question: "I need a human" },
+    expect: ({ output, expect }) => {
+      expect(output.answer).toContain("support");
+    },
+  },
+];
+```
+
+Case callbacks are source behavior and therefore do not belong in JSONL Case
+files.
+
+## Checks after scores
+
+Use `afterScores` when a check depends on named scorer output:
+
+```ts
+afterScores: ({ score, expect }) => {
+  expect(score.correctness).toBeGreaterThanOrEqual(0.9);
+};
+```
+
+The callback runs only after its scorer dependencies have resolved. A scorer
+cache hit avoids the external call but still supplies the admitted evidence.
+
+## Timing requires fresh execution
+
+Ordinary callbacks intentionally cannot read official latency or duration.
+Reused output is valid semantic evidence, but it is not a new measurement.
+
+Declare fresh timing explicitly:
+
+```ts
+expect: {
+  fresh: true,
+  check: ({ expect, meta }) => {
+    expect.latency.toBeUnderMs(1_000);
+    expect(meta.durationMs).toBeLessThan(1_000);
+  },
+}
+```
+
+The same descriptor works for Case checks and `afterScores`. It forces only
+the measured task execution fresh; a managed judge may still reuse exact
+output-dependent evidence. Use `--fresh` when the entire invocation must
+bypass both task and managed-scorer evidence.
+
+Empty `gates.latency: {}` is invalid. JavaScript or `any` access to timing
+from an ordinary callback throws with guidance to use a fresh descriptor.

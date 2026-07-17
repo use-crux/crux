@@ -6,31 +6,34 @@ description: Chain agents sequentially with typed data flow between immediate st
 `pipeline()` chains agents sequentially, each step can access all previous outputs via a context accumulator. Use it for multi-step workflows like research-write-edit, or any process where each stage depends on earlier stages.
 
 ```ts title="research-pipeline.ts"
-import { pipeline } from '@use-crux/ai'
-import { agent } from '@use-crux/core/agent'
+import { pipeline } from "@use-crux/ai";
+import { agent } from "@use-crux/core/agent";
 
 const result = await pipeline({
-  id: 'pipeline-pipeline-1',
+  id: "pipeline-pipeline-1",
   steps: [
-    { agent: researcher, name: 'research' },
+    { agent: researcher, name: "research" },
     {
       agent: writer,
-      name: 'write',
-      input: (ctx) => ({ findings: ctx.research.output.sources, query: ctx.research.output.query }),
+      name: "write",
+      input: (ctx) => ({
+        findings: ctx.research.output.sources,
+        query: ctx.research.output.query,
+      }),
     },
     {
       agent: editor,
-      name: 'edit',
+      name: "edit",
       input: (ctx) => ({ draft: ctx.write.output.text }),
     },
   ],
-  context: { query: 'Write about AI safety' },
+  context: { query: "Write about AI safety" },
   model: claude35,
-})
+});
 
-result.finalOutput  // editor's output
-result.context      // accumulated context from all steps
-result.durationMs   // total pipeline time
+result.finalOutput; // editor's output
+result.context; // accumulated context from all steps
+result.durationMs; // total pipeline time
 ```
 
 ## How it works
@@ -72,25 +75,25 @@ Steps can also be plain `{ name, fn }` objects alongside agent steps. Use this f
 
 ```ts
 const result = await pipeline({
-  id: 'pipeline-pipeline-2',
+  id: "pipeline-pipeline-2",
   steps: [
-    { agent: researcher, name: 'research' },
+    { agent: researcher, name: "research" },
     {
-      name: 'enrich',
+      name: "enrich",
       fn: async (ctx) => {
-        const sources = ctx.research.output.sources
-        return { enriched: await fetchMetadata(sources) }
+        const sources = ctx.research.output.sources;
+        return { enriched: await fetchMetadata(sources) };
       },
     },
     {
       agent: writer,
-      name: 'write',
+      name: "write",
       input: (ctx) => ({ findings: ctx.enrich.enriched }),
     },
   ],
-  context: { query: 'AI safety' },
+  context: { query: "AI safety" },
   model,
-})
+});
 ```
 
 Plain function steps appear in devtools tracing but skip agent execution.
@@ -101,21 +104,25 @@ Each step can have its own retry configuration with backoff and fallback:
 
 ```ts title="resilient-pipeline.ts"
 const result = await pipeline({
-  id: 'pipeline-pipeline-3',
+  id: "pipeline-pipeline-3",
   steps: [
     {
       agent: researcher,
-      name: 'research',
+      name: "research",
       retry: {
-        retry: { attempts: 3, delay: 1000, backoff: 'exponential' },
-        fallback: () => ({ sources: [], query: 'fallback' }),
+        retry: { attempts: 3, delay: 1000, backoff: "exponential" },
+        fallback: () => ({ sources: [], query: "fallback" }),
       },
     },
-    { agent: writer, name: 'write', input: (ctx) => ({ findings: ctx.research.output.sources }) },
+    {
+      agent: writer,
+      name: "write",
+      input: (ctx) => ({ findings: ctx.research.output.sources }),
+    },
   ],
-  context: { query: 'AI safety' },
+  context: { query: "AI safety" },
   model,
-})
+});
 ```
 
 Without `retry`, failures propagate immediately (current behavior).
@@ -138,11 +145,11 @@ A pipeline with one step works, useful when you want the pipeline return shape (
 
 ```ts
 const result = await pipeline({
-  id: 'pipeline-pipeline-4',
-  steps: [{ agent: classifier, name: 'classify' }],
+  id: "pipeline-pipeline-4",
+  steps: [{ agent: classifier, name: "classify" }],
   context: { text: message },
   model,
-})
+});
 ```
 
 ## Durability
@@ -154,27 +161,27 @@ const result = await pipeline({
 When an agent step uses a `CreationTool` (a tool that produces artifacts), the pipeline automatically captures the tool's `.created` values. Downstream steps can access them via `ctx[stepName]._created[toolName]`.
 
 ```ts title="pipeline-with-creation.ts"
-import { pipeline } from '@use-crux/ai'
+import { pipeline } from "@use-crux/ai";
 
 const result = await pipeline({
-  id: 'pipeline-pipeline-5',
+  id: "pipeline-pipeline-5",
   steps: [
     {
-      agent: plannerAgent,  // uses a CreationTool called "createPlan"
-      name: 'plan',
+      agent: plannerAgent, // uses a CreationTool called "createPlan"
+      name: "plan",
     },
     {
       agent: executor,
-      name: 'execute',
+      name: "execute",
       input: (ctx) => ({
         // Access the createPlan tool's .created values from the plan step
         plan: ctx.plan._created.createPlan,
       }),
     },
   ],
-  context: { goal: 'migrate to cloud' },
+  context: { goal: "migrate to cloud" },
   model,
-})
+});
 ```
 
 Each agent step's context entry gains a `_created` record keyed by tool name. This is populated automatically, no extra wiring needed. If the agent didn't invoke any creation tools, `_created` is an empty object.
@@ -192,8 +199,24 @@ comp  ← pipeline  3/3 ok  6.1s
 ```
 
 <Cards>
-  <Card title="Agent" description="Bundle prompt + model + tools into a reusable agent." href="/docs/guides/agents/agent" />
-  <Card title="Parallel" description="Run agents concurrently." href="/docs/guides/compositions/parallel" />
-  <Card title="Consensus" description="Multiple agents vote on a decision." href="/docs/guides/compositions/consensus" />
-  <Card title="Swarm" description="Dynamic peer-to-peer routing via LLM-decided handoffs." href="/docs/guides/compositions/swarm" />
+  <Card
+    title="Agent"
+    description="Bundle prompt + model + tools into a reusable agent."
+    href="/docs/guides/agents/agent"
+  />
+  <Card
+    title="Parallel"
+    description="Run agents concurrently."
+    href="/docs/guides/compositions/parallel"
+  />
+  <Card
+    title="Consensus"
+    description="Multiple agents vote on a decision."
+    href="/docs/guides/compositions/consensus"
+  />
+  <Card
+    title="Swarm"
+    description="Dynamic peer-to-peer routing via LLM-decided handoffs."
+    href="/docs/guides/compositions/swarm"
+  />
 </Cards>

@@ -1,0 +1,14 @@
+{
+  "title": "Evals",
+  "description": "Typed Cases, Variants, checks, Eval runs, Baselines, and production Review.",
+  "pages": [
+    "index",
+    "assertions",
+    "scorers-and-gates",
+    "variants-and-baselines",
+    "runtime-hosts",
+    "feedback-and-review",
+    "errors",
+    "recipes"
+  ]
+}

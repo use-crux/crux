@@ -7,9 +7,9 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/api"
 )
 
-func qualityRunDetailFromObservabilityDetail(detail api.ObservabilityRunDetail) api.QualityRunDetailRecord {
+func qualityRunDetailFromObservabilityDetail(detail api.ObservabilityRunDetail) api.InspectRunDetailRecord {
 	run := qualityRunFromObservability(detail.Run)
-	trace := api.QualityTraceRecord{
+	trace := api.InspectTraceRecord{
 		TraceID:    detail.Run.RunID,
 		StartedAt:  parseObservabilityTime(detail.Run.StartedAt),
 		Model:      detail.Run.Model,
@@ -24,18 +24,18 @@ func qualityRunDetailFromObservabilityDetail(detail api.ObservabilityRunDetail) 
 			continue
 		}
 	}
-	return api.QualityRunDetailRecord{
-		Tag:       "QualityRunDetail",
+	return api.InspectRunDetailRecord{
+		Tag:       "InspectRunDetail",
 		Run:       run,
 		Trace:     trace,
 		Events:    events,
 		Spans:     spans,
-		Narrative: []api.QualityRunNarrativeEvent{},
+		Narrative: []api.InspectRunNarrativeEvent{},
 	}
 }
 
-func qualitySpansFromRunDetailNode(root api.ObservabilityRunDetailNode) []api.QualityRunSpan {
-	var spans []api.QualityRunSpan
+func qualitySpansFromRunDetailNode(root api.ObservabilityRunDetailNode) []api.InspectRunSpan {
+	var spans []api.InspectRunSpan
 	var visit func(api.ObservabilityRunDetailNode)
 	visit = func(node api.ObservabilityRunDetailNode) {
 		data, _ := json.Marshal(buildSpanDataPayload(node))
@@ -53,7 +53,7 @@ func qualitySpansFromRunDetailNode(root api.ObservabilityRunDetailNode) []api.Qu
 		addStringAttr(attrs, "step_id", node.StepID)
 		addStringAttr(attrs, "memory_id", node.MemoryID)
 		addStringAttr(attrs, "retriever_id", node.RetrieverID)
-		spans = append(spans, api.QualityRunSpan{
+		spans = append(spans, api.InspectRunSpan{
 			ID:         firstNonEmpty(node.SpanID, node.ID),
 			ParentID:   strings.TrimPrefix(node.ParentID, "span:"),
 			Kind:       node.Display.Kind,

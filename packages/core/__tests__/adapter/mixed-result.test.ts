@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { AssistantContentPart, Message } from "../../src";
 import { createResultAccumulator } from "../../src/adapter";
 import { createStreamResult } from "../../src/adapter/result-accumulator";
+import { createCruxRunId } from "../../src/observability";
 
 const firstContent = [
   { type: "reasoning", text: "Inspect the attachment." },
@@ -60,6 +61,7 @@ describe("authoritative mixed generation output", () => {
       yield { text: "2." };
     })();
     const result = createStreamResult({
+      runId: createCruxRunId(),
       rawStream,
       extractTextDelta: (chunk) => (chunk as { text: string }).text,
       completion: async () => ({
@@ -78,6 +80,7 @@ describe("authoritative mixed generation output", () => {
     expect(completion.content).toEqual(finalContent);
     expect(completion.text).toBe("42.");
     expect(completion.messages).toEqual(messages);
+    expect(completion.runId).toBe(result.runId);
   });
 });
 

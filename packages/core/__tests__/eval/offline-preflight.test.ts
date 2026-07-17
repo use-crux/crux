@@ -5,7 +5,7 @@ import type { EvalCaseContext } from "../../src/eval/case";
 import { executeEvalPlan } from "../../src/eval/internal/executor";
 import { renderEvalOfflineMisses } from "../../src/eval/internal/offline";
 import { planEval } from "../../src/eval/internal/planner";
-import { scorers } from "../../src/quality/scorers";
+import { scorers } from "../../src/eval/internal/scorers/types";
 import {
   createManagedScorerHarness,
   managedScorerDefinition,

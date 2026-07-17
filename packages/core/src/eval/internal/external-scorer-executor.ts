@@ -1,6 +1,6 @@
 /** Execute only planner-admitted managed external-scorer actions. @internal */
 
-import type { Score } from "../../quality/scorers";
+import type { Score } from "./scorers/types";
 import type { EvalExecutionPorts } from "./ports";
 import {
   createScorerEvidenceEntry,

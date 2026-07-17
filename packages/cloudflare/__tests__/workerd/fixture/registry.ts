@@ -1,5 +1,6 @@
 import { evaluate } from "@use-crux/core/eval";
 import { attachEvalTaskDescriptorForInternalUse } from "@use-crux/core/eval/internal/task";
+import { createCruxRunId } from "@use-crux/core/observability";
 import { createRuntimeWithHostContext } from "@use-crux/core/runtime";
 import {
   createDeployedEvalRegistry,
@@ -34,6 +35,7 @@ export function fixtureRegistry() {
       },
       projectOutput: (result) => result.output,
       projectResponse: () => ({
+        runId: createCruxRunId(),
         content: [],
         text: "Can I get a refund?",
         steps: [],

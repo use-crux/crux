@@ -27,6 +27,7 @@ import type { Message } from "../generation/messages";
 import type { LoopRuntimePort } from "./loop-runtime-port";
 import type { ExecutorStreamHandle, StepObserver } from "./executor-types";
 import type { GenerateResult } from "./result-accumulator";
+import type { CruxRunId } from "../observability";
 import type { ValidationRetryOptions } from "../generation/validation-retry";
 import type { Constraint } from "../safety/constraint/types";
 import type { Guardrail } from "../safety/guardrail/types";
@@ -158,6 +159,11 @@ export type ExecutorGenerateResult<TRawResponse> = GenerateResult<
   TRawResponse | undefined
 >;
 
+/** SDK-owned stream handle stamped by the authoritative Crux run span. */
+export type ExecutorStreamResult<TRawStream> = ExecutorStreamHandle<TRawStream> & {
+  readonly runId: CruxRunId;
+};
+
 /** The executor interface returned by the factory. */
 export interface CruxExecutor<
   TModel,
@@ -181,7 +187,7 @@ export interface CruxExecutor<
   stream(
     prompt: AnyPrompt,
     opts: ExecutorStreamOptions<TModel>,
-  ): Promise<ExecutorStreamHandle<TRawStream>>;
+  ): Promise<ExecutorStreamResult<TRawStream>>;
 
   /** Run multiple agents concurrently and merge results. */
   parallel: ReturnType<typeof createCompositions>["parallel"];
@@ -324,12 +330,12 @@ export function loopRuntimeAdapter<
   async function streamFn(
     prompt: AnyPrompt,
     opts: ExecutorStreamOptions<TModel>,
-  ): Promise<ExecutorStreamHandle<TRawStream>> {
+  ): Promise<ExecutorStreamResult<TRawStream>> {
     const deadline = Deadline.after(opts.timeout?.totalMs);
     const runWithModel = (
       model: TModel,
       attemptOptions: AttemptSignalOptions = {},
-    ): Promise<ExecutorStreamHandle<TRawStream>> =>
+    ): Promise<ExecutorStreamResult<TRawStream>> =>
       streamSingle(
         prompt,
         opts,
@@ -339,7 +345,7 @@ export function loopRuntimeAdapter<
       );
 
     try {
-      return await resolveModel<TModel, ExecutorStreamHandle<TRawStream>>(
+      return await resolveModel<TModel, ExecutorStreamResult<TRawStream>>(
         opts.model as TModel,
         opts.input ?? {},
         runWithModel,
@@ -363,7 +369,7 @@ export function loopRuntimeAdapter<
     model: TModel,
     signal: AbortSignal | undefined,
     params: CallProfileParams | undefined,
-  ): Promise<ExecutorStreamHandle<TRawStream>> {
+  ): Promise<ExecutorStreamResult<TRawStream>> {
     const nativeMessages = (opts as { readonly nativeMessages?: readonly unknown[] }).nativeMessages;
     return (await execution.stream({
       prompt,
@@ -389,7 +395,7 @@ export function loopRuntimeAdapter<
       activeTools: opts.activeTools,
       extra: opts.extra,
       signal,
-    })) as ExecutorStreamHandle<TRawStream>;
+    })) as ExecutorStreamResult<TRawStream>;
   }
 
   // ── Agent executor + compositions ───────────────────────────

@@ -50,9 +50,9 @@ function withDevtools(options: DevtoolsOptions): CruxPlugin;
 | `prompts`   | `Prompt[]`                        | `[]`    | Prompt definitions to include in runtime index snapshots.                    |
 | `contexts`  | `Context[]`                       | `[]`    | Context definitions to include in runtime index snapshots.                   |
 | `tools`     | `FlowToolDef[]`                   | `[]`    | Tool definitions to include in runtime index snapshots.                      |
-| `paths`     | `Map<string, string[]>`           | n/a       | Authored namespace paths from `createPrompts()` / `createContexts()`.        |
-| `serverUrl` | `string`                          | n/a       | URL of the running `@use-crux/local` server.                                 |
-| `sessionId` | `string`                          | n/a       | Optional session id used to group emitted runtime records.                   |
+| `paths`     | `Map<string, string[]>`           | n/a     | Authored namespace paths from `createPrompts()` / `createContexts()`.        |
+| `serverUrl` | `string`                          | n/a     | URL of the running `@use-crux/local` server.                                 |
+| `sessionId` | `string`                          | n/a     | Optional session id used to group emitted runtime records.                   |
 | `bridge`    | `boolean \| RuntimeBridgeOptions` | `false` | Enables the local Runtime Bridge command plane for long-lived Node runtimes. |
 
 ### Returns
@@ -75,7 +75,7 @@ function enableDevtools(options: EnableDevtoolsOptions): () => void;
 
 | Field       | Type            | Default | Description                                  |
 | ----------- | --------------- | ------- | -------------------------------------------- |
-| `serverUrl` | `string`        | n/a       | URL of the running `@use-crux/local` server. |
+| `serverUrl` | `string`        | n/a     | URL of the running `@use-crux/local` server. |
 | `prompts`   | `Prompt[]`      | `[]`    | Prompt definitions to snapshot.              |
 | `contexts`  | `Context[]`     | `[]`    | Context definitions to snapshot.             |
 | `tools`     | `FlowToolDef[]` | `[]`    | Tool definitions to snapshot.                |
@@ -87,8 +87,8 @@ Cleanup function that restores the previous observability transport.
 ## Auto-Install Through `config()`
 
 When `devtools.serverUrl` is explicitly set and no `observability` transport is configured,
-`config()` installs the local devtools transport. Ordinary local Quality runs do not require this
-boilerplate; the CLI auto-attaches to loopback `crux dev` origins.
+`config()` installs the local devtools transport. Ordinary local Eval runs do not require this
+boilerplate; the CLI coordinates against the local project directly.
 For tunneled serverless runtimes, prefer `observability.serverUrl` plus `observability.token` so the
 remote worker receives only scoped ingest access.
 

@@ -20,6 +20,7 @@ import {
   markRoutingMidStreamFailure,
 } from "@use-crux/core/routing";
 import { mapAiSdkError, mapAiSdkFinishReason } from "./normalized-outcome";
+import type { CruxRunId } from "@use-crux/core/observability";
 
 interface AiTextStreamLike {
   readonly textStream?: AsyncIterable<string>;
@@ -27,7 +28,7 @@ interface AiTextStreamLike {
 
 /** Build a canonical Crux stream result from an AI SDK executor handle. */
 export function createAiStreamResult<TRawStream>(
-  handle: ExecutorStreamHandle<TRawStream>,
+  handle: ExecutorStreamHandle<TRawStream> & { readonly runId: CruxRunId },
 ): StreamResult<TRawStream> {
   let resolveStream: (() => void) | undefined;
   let rejectStream: ((error: unknown) => void) | undefined;
@@ -43,6 +44,7 @@ export function createAiStreamResult<TRawStream>(
   });
 
   return {
+    runId: handle.runId,
     textStream,
     raw: handle.raw,
     completion: (async () => {
@@ -51,7 +53,10 @@ export function createAiStreamResult<TRawStream>(
           await streamFinished;
         }
         const meta = await handle.completion();
-        return completionFromMeta(meta, handle.routing);
+        return {
+          ...completionFromMeta(meta, handle.routing),
+          runId: handle.runId,
+        };
       } catch (error) {
         throw normalizeStreamError(error, handle.routing);
       }

@@ -135,7 +135,7 @@ func (s *Runs) section(label string) string {
 // block. Maps both legacy (`tool`) and detailed (`tool.call`) primitive
 // strings to the same family name. Generic primitives fall back to
 // `PAYLOAD` so the section still has a stable label.
-func spanDetailHeader(span *api.QualityRunSpan) string {
+func spanDetailHeader(span *api.InspectRunSpan) string {
 	switch span.Primitive {
 	case api.SpanPrimitiveTool, api.SpanPrimitiveToolCall, api.SpanPrimitiveToolApproval:
 		return "TOOL"
@@ -197,7 +197,7 @@ func spanDetailHeader(span *api.QualityRunSpan) string {
 	return "PAYLOAD"
 }
 
-func (s *Runs) childrenRow(span *api.QualityRunSpan, width int) string {
+func (s *Runs) childrenRow(span *api.InspectRunSpan, width int) string {
 	children, dup := s.childrenStats(span.ID)
 	if children == 0 {
 		return kvRow("children", "—", width)

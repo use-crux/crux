@@ -6,15 +6,22 @@ description: Subscribe to plans and task ledgers from React with canonical hooks
 React exposes canonical hooks for plan and task-ledger reads:
 
 ```tsx
-import { usePlan, useTasks } from '@use-crux/react'
+import { usePlan, useTasks } from "@use-crux/react";
 
-function WorkPanel({ planId, taskListId }: { planId?: string; taskListId?: string }) {
-  const planState = usePlan(planId)
-  const tasksState = useTasks(taskListId)
+function WorkPanel({
+  planId,
+  taskListId,
+}: {
+  planId?: string;
+  taskListId?: string;
+}) {
+  const planState = usePlan(planId);
+  const tasksState = useTasks(taskListId);
 
-  if (!planId || !taskListId) return null
-  if (planState === undefined || tasksState === undefined) return <p>Loading...</p>
-  if (planState === null) return <p>Plan not found.</p>
+  if (!planId || !taskListId) return null;
+  if (planState === undefined || tasksState === undefined)
+    return <p>Loading...</p>;
+  if (planState === null) return <p>Plan not found.</p>;
 
   return (
     <section>
@@ -28,16 +35,22 @@ function WorkPanel({ planId, taskListId }: { planId?: string; taskListId?: strin
         ))}
       </ul>
     </section>
-  )
+  );
 }
 ```
 
 Hooks also accept handles:
 
 ```tsx
-function WorkPanel({ roadmap, work }: { roadmap?: PlanHandle; work?: TasksHandle }) {
-  const planState = usePlan(roadmap)
-  const tasksState = useTasks(work)
+function WorkPanel({
+  roadmap,
+  work,
+}: {
+  roadmap?: PlanHandle;
+  work?: TasksHandle;
+}) {
+  const planState = usePlan(roadmap);
+  const tasksState = useTasks(work);
   // ...
 }
 ```
@@ -50,13 +63,13 @@ Use the core status vocabulary directly:
 
 ```tsx
 const toneByStatus = {
-  pending: 'muted',
-  in_progress: 'active',
-  completed: 'success',
-  failed: 'danger',
-  skipped: 'muted',
-  cancelled: 'warning',
-} as const
+  pending: "muted",
+  in_progress: "active",
+  completed: "success",
+  failed: "danger",
+  skipped: "muted",
+  cancelled: "warning",
+} as const;
 ```
 
 Task `progress` is a message string. Treat numeric progress as a separate UI concern.

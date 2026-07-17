@@ -28,6 +28,7 @@ export function createEvalHostClient(options: {
     const response = await transport(
       new Request(new URL(path, trailingSlash(options.baseUrl)), {
         ...init,
+        redirect: "manual",
         headers: {
           authorization: `Bearer ${options.token}`,
           "content-type": "application/json",

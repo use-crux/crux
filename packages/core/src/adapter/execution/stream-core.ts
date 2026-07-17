@@ -30,6 +30,7 @@ import { replaceTextSlots } from "./stream-content";
 import { materializeToolSources } from "./tool-sources";
 import { createStreamSourceCleanup } from "./stream-source-cleanup";
 import { trackRawStream } from "./stream-tracking";
+import type { CruxRunId } from "../../observability";
 
 /**
  * Start one provider stream through the core-owned adapter dialect.
@@ -50,7 +51,7 @@ export async function streamCore<
 >(
   dialect: CoreStepDialect<TClient, TRawResponse, TRawStream, TExtra>,
   args: AdapterExecutionStreamArgs<string, TExtra>,
-): Promise<StreamHandle<TRawStream>> {
+): Promise<StreamHandle<TRawStream> & { readonly runId: CruxRunId }> {
   const prompt = args.prompt;
   const modelInfo = args.modelInfo ?? {
     provider: args.provider ?? dialect.id,

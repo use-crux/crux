@@ -4,7 +4,7 @@ import { expectTypeOf } from "vitest";
 
 import { evaluate } from "@use-crux/core/eval";
 import type { Eval, EvalTask } from "@use-crux/core/eval";
-import { scorers } from "@use-crux/core/quality";
+import { scorers } from "../src/eval/internal/scorers/types";
 
 declare const answerTask: EvalTask<
   { question: string },
