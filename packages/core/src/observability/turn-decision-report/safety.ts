@@ -115,6 +115,8 @@ function guardrailReasonCode(decision: SafetyDecision): TurnDecisionReasonCode {
       return 'guardrail.blocked'
     case 'rewrite':
       return 'guardrail.redacted'
+    case 'strip':
+      return 'guardrail.stripped'
     case 'retry':
       return 'constraint.retry_requested'
     case 'request_approval':
@@ -134,6 +136,7 @@ function constraintReasonCode(decision: SafetyDecision): TurnDecisionReasonCode 
     case 'warn':
     case 'rewrite':
     case 'request_approval':
+    case 'strip':
       return `custom.safety.constraint.${decision.action}`
   }
 }
@@ -153,6 +156,8 @@ function toolPolicyReasonCode(decision: SafetyDecision): TurnDecisionReasonCode 
       return 'tool.eligible.request'
     case 'retry':
       return `custom.safety.toolPolicy.retry`
+    case 'strip':
+      return `custom.safety.toolPolicy.strip`
   }
 }
 

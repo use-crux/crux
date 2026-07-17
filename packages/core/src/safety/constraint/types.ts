@@ -1,7 +1,8 @@
 import type { z } from 'zod'
-import type { BoundaryDef, SubjectOf } from '../boundary'
+import type { SubjectOf } from '../boundary'
 import type { SafetyRunContext } from '../decision'
 import { SafetyResultError } from '../errors'
+import type { ConstraintBoundary } from './boundary'
 
 export type ConstraintSeverity = 'assert' | 'suggest'
 
@@ -13,7 +14,7 @@ export type ConstraintCheckResult =
 export type ChunkCheckResult = { readonly abort: false } | { readonly abort: true; readonly feedback: string }
 
 /** Callable constraint body, optionally carrying first-party strategy metadata. */
-export interface ConstraintRun<B extends BoundaryDef> {
+export interface ConstraintRun<B extends ConstraintBoundary> {
   (subject: SubjectOf<B>, ctx: SafetyRunContext<B>): ConstraintCheckResult | Promise<ConstraintCheckResult>
   readonly strategy?: {
     readonly kind: string
@@ -21,7 +22,7 @@ export interface ConstraintRun<B extends BoundaryDef> {
   }
 }
 
-export interface ConstraintConfig<B extends BoundaryDef = BoundaryDef> {
+export interface ConstraintConfig<B extends ConstraintBoundary = ConstraintBoundary> {
   readonly id: string
   readonly on: B
   readonly category?: string
@@ -36,7 +37,7 @@ export interface ConstraintConfig<B extends BoundaryDef = BoundaryDef> {
 }
 
 /** Frozen constraint object. */
-export interface Constraint<B extends BoundaryDef = BoundaryDef> {
+export interface Constraint<B extends ConstraintBoundary = ConstraintBoundary> {
   readonly _tag: 'Constraint'
   readonly id: string
   readonly on: B

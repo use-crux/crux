@@ -8,7 +8,9 @@ use crate::{
         direct_identifier, direct_string_property, property_value, resolve_static_value,
     },
     routing::output::{extracted_facts, insert_string},
-    safety::metadata::{policy_id_for, safety_boundaries, strategy_facts},
+    safety::metadata::{
+        constraint_strategy_facts, guardrail_strategy_facts, policy_id_for, safety_boundaries,
+    },
 };
 
 pub(crate) fn safety_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>) -> Option<Value> {
@@ -29,7 +31,7 @@ fn constraint_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>) -> Op
     let targets = applies_to_refs(config, context);
     let boundaries = safety_boundaries(config);
     let boundary = boundaries.first().cloned();
-    let strategy = strategy_facts(config, &context.initializers);
+    let strategy = constraint_strategy_facts(config, &context.initializers);
 
     let mut facts = Map::new();
     facts.insert("kind".to_string(), Value::String("constraint".to_string()));
@@ -108,13 +110,23 @@ fn guardrail_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>) -> Opt
     let id = format!("guardrail:{}", safe_id(&policy_id));
     let targets = applies_to_refs(config, context);
     let phase = direct_string_property(config, "phase");
+    let boundaries = safety_boundaries(config);
+    let boundary = boundaries.first().cloned();
+    let strategy = guardrail_strategy_facts(config, &context.initializers);
 
     let mut facts = Map::new();
     facts.insert("kind".to_string(), Value::String("guardrail".to_string()));
     facts.insert("policyId".to_string(), Value::String(policy_id.clone()));
     insert_string(&mut facts, "policy", phase.clone());
+    if let Some(boundary) = boundary.clone() {
+        facts.insert("boundary".to_string(), Value::String(boundary));
+    }
+    insert_string_array(&mut facts, "boundaries", &boundaries);
     if let Some(applies_to) = targets.metadata.clone() {
         facts.insert("appliesTo".to_string(), applies_to);
+    }
+    if let Some(strategy) = strategy.clone() {
+        facts.insert("strategy".to_string(), strategy);
     }
 
     let mut metadata = Map::new();
@@ -124,6 +136,10 @@ fn guardrail_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>) -> Opt
     );
     metadata.insert("policyId".to_string(), Value::String(policy_id.clone()));
     insert_string(&mut metadata, "phase", phase);
+    if let Some(boundary) = boundary {
+        metadata.insert("boundary".to_string(), Value::String(boundary));
+    }
+    insert_string_array(&mut metadata, "boundaries", &boundaries);
     insert_string(
         &mut metadata,
         "mode",
@@ -136,6 +152,9 @@ fn guardrail_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>) -> Opt
     );
     if let Some(applies_to) = targets.metadata {
         metadata.insert("appliesTo".to_string(), applies_to);
+    }
+    if let Some(strategy) = strategy {
+        metadata.insert("strategy".to_string(), strategy);
     }
     metadata.insert("facts".to_string(), Value::Object(facts));
 

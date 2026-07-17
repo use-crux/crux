@@ -24,6 +24,9 @@ export type {
   BoundaryIdOf,
   BoundaryInput,
   DotPath,
+  MediaPart,
+  MediaPartLocation,
+  MediaPartSubject,
   PathValue,
   RetrievalResultSubject,
   SafetyTargetId,
@@ -81,7 +84,16 @@ export type {
   GuardrailMode,
   GuardrailRunResult,
   GuardrailRewriteKind,
+  MediaGuardrailRunResult,
 } from './guardrail/types'
+export type {
+  MediaGuardrailAction,
+  MediaGuardrailOptions,
+  MediaSizeGuardrailRule,
+  MediaSourceGuardrailRule,
+  MediaTypeGuardrailRule,
+  MediaTypePattern,
+} from './guardrail/strategies'
 
 // ── Constraint authoring ───────────────────────────────────────────
 export { constraint, isConstraint, getConstraintDefinitionSource } from './constraint/define'

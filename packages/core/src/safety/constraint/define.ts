@@ -1,7 +1,7 @@
 import type { z } from 'zod'
-import type { BoundaryDef } from '../boundary'
 import type { SafetyRunContext } from '../decision'
 import { captureSource } from '../../project-index/source'
+import { assertConstraintBoundary, type ConstraintBoundary } from './boundary'
 import type {
   Constraint,
   ConstraintConfig,
@@ -28,15 +28,16 @@ export function getConstraintDefinitionSource(
  * for protective rewrites/blocks and constraints for retryable success rules.
  */
 interface ConstraintFactory {
-  <B extends BoundaryDef>(config: ConstraintConfig<B>): Constraint<B>
+  <B extends ConstraintBoundary>(config: ConstraintConfig<B>): Constraint<B>
   /** Built-in LLM-as-a-judge constraint strategy. */
   readonly judge: typeof judge
   /** Built-in grounded-citation constraint strategy. */
   readonly citations: typeof citations
 }
 
-function defineConstraint<B extends BoundaryDef>(config: ConstraintConfig<B>): Constraint<B>
-function defineConstraint<B extends BoundaryDef>(config: ConstraintConfig<B>): Constraint<B> {
+function defineConstraint<B extends ConstraintBoundary>(config: ConstraintConfig<B>): Constraint<B>
+function defineConstraint<B extends ConstraintBoundary>(config: ConstraintConfig<B>): Constraint<B> {
+  assertConstraintBoundary(config)
   const defSource = captureSource()
   const c = defineBoundaryConstraint(config)
 
@@ -60,7 +61,7 @@ export function isConstraint(value: unknown): value is Constraint {
   )
 }
 
-function defineBoundaryConstraint<B extends BoundaryDef>(config: ConstraintConfig<B>): Constraint<B> {
+function defineBoundaryConstraint<B extends ConstraintBoundary>(config: ConstraintConfig<B>): Constraint<B> {
   const strategy = strategyMetadata(config.run)
   const c = Object.freeze({
     _tag: 'Constraint' as const,
@@ -87,7 +88,7 @@ function isStrategyMetadata(value: unknown): value is NonNullable<Constraint['st
   return typeof value === 'object' && value !== null && 'kind' in value && typeof value.kind === 'string'
 }
 
-function contextForConstraint<B extends BoundaryDef>(
+function contextForConstraint<B extends ConstraintBoundary>(
   id: string,
   on: B,
   ctx: ConstraintContext,
@@ -105,7 +106,7 @@ function contextForConstraint<B extends BoundaryDef>(
   }
 }
 
-function subjectForBoundary(on: BoundaryDef, output: ConstraintOutput): unknown {
+function subjectForBoundary(on: ConstraintBoundary, output: ConstraintOutput): unknown {
   if (on.id === 'model.output.text') return output.text
   if (on.id === 'model.output.object') return on.path ? valueAtPath(output.parsed, on.path) : output.parsed
   if (on.id === 'model.output') return { text: output.text, object: output.parsed }

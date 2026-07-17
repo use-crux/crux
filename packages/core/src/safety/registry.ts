@@ -1,6 +1,7 @@
 import type { BoundaryDef, SafetyTargetId } from './boundary'
 import { SafetyConfigError } from './errors'
 import type { Constraint } from './constraint/types'
+import { assertConstraintBoundary } from './constraint/boundary'
 import type { Guardrail } from './guardrail/types'
 import type { GuardrailStreamOption } from './stream/types'
 import type { SafetyTuneOptions, SafetyTunePolicyOptions } from './tune'
@@ -20,22 +21,28 @@ type PolicySource =
       readonly policy: Constraint
       readonly scope: SafetyPolicyScope
     }
-  | {
-      readonly kind: 'toolPolicy'
-      readonly policy: never
-      readonly scope: SafetyPolicyScope
-    }
-
-export interface SafetyBinding<TPolicy = Guardrail | Constraint> {
-  readonly kind: SafetyPolicyKind
-  readonly policy: TPolicy
+interface SafetyBindingBase {
   readonly boundary: BoundaryDef
   readonly scope: SafetyPolicyScope
   readonly mode: 'enforce' | 'report'
-  readonly stream?: GuardrailStreamOption | Guardrail['stream']
   readonly enabled: boolean
   readonly tuned?: readonly ('mode' | 'stream' | 'enabled')[]
 }
+
+/** One guardrail attached to one exact boundary with its effective posture. */
+export interface GuardrailBinding extends SafetyBindingBase {
+  readonly kind: 'guardrail'
+  readonly policy: Guardrail
+  readonly stream?: GuardrailStreamOption
+}
+
+/** One constraint attached to one exact boundary with its effective posture. */
+export interface ConstraintBinding extends SafetyBindingBase {
+  readonly kind: 'constraint'
+  readonly policy: Constraint
+}
+
+export type SafetyBinding = GuardrailBinding | ConstraintBinding
 
 export interface SafetyRegistry {
   readonly bindings: readonly SafetyBinding[]
@@ -62,11 +69,14 @@ export interface BuildSafetyRegistryOptions {
 export function buildSafetyRegistry(options: BuildSafetyRegistryOptions): SafetyRegistry {
   const sources = collectSources(options)
   assertUniquePolicyIds(sources)
+  assertValidConstraintBoundaries(sources)
+  assertValidGuardrailBoundaryFamilies(sources)
 
   const tune = validateSafetyTuneOptions(
     options.tune,
     new Set(sources.map((source) => source.policy.id)),
   )
+  assertValidMediaTune(sources, tune)
 
   const bindings = sources.flatMap((source) => expandBindings(source, tune[source.policy.id]))
   return {
@@ -74,6 +84,12 @@ export function buildSafetyRegistry(options: BuildSafetyRegistryOptions): Safety
     bindingsFor(targetId) {
       return bindings.filter((binding) => binding.boundary.id === targetId)
     },
+  }
+}
+
+function assertValidConstraintBoundaries(sources: readonly PolicySource[]): void {
+  for (const source of sources) {
+    if (source.kind === 'constraint') assertConstraintBoundary(source.policy)
   }
 }
 
@@ -122,6 +138,56 @@ function assertUniquePolicyIds(sources: readonly PolicySource[]): void {
   }
 }
 
+function assertValidGuardrailBoundaryFamilies(sources: readonly PolicySource[]): void {
+  for (const source of sources) {
+    if (source.kind !== 'guardrail') continue
+    const boundaries = boundariesFor(source.policy)
+    const hasMedia = boundaries.some((boundary) => boundary.id === 'user.input.media')
+    const hasOther = boundaries.some((boundary) => boundary.id !== 'user.input.media')
+    const ids = boundaries.map((boundary) => boundary.id)
+    if (hasMedia && hasOther) {
+      throw new SafetyConfigError({
+        message:
+          `Safety policy "${source.policy.id}" mixes media and non-media boundaries (${ids.join(', ')}). ` +
+          'A media guardrail can target only boundary.input.media().',
+        boundaries: ids,
+        kinds: [source.kind],
+        scopes: [source.scope],
+      })
+    }
+    if (hasMedia && source.policy.stream !== undefined) {
+      throw new SafetyConfigError({
+        message:
+          `Safety policy "${source.policy.id}" configures stream handling for boundary "user.input.media". ` +
+          'Media guardrails run once on canonical input parts and cannot stream.',
+        boundaries: ids,
+        kinds: [source.kind],
+        scopes: [source.scope],
+      })
+    }
+  }
+}
+
+function assertValidMediaTune(
+  sources: readonly PolicySource[],
+  tune: Readonly<Record<string, SafetyTunePolicyOptions>>,
+): void {
+  for (const source of sources) {
+    if (source.kind !== 'guardrail' || tune[source.policy.id]?.stream === undefined) continue
+    const boundaries = boundariesFor(source.policy)
+    if (!boundaries.some((boundary) => boundary.id === 'user.input.media')) continue
+
+    throw new SafetyConfigError({
+      message:
+        `Safety tune for media policy "${source.policy.id}" cannot set "stream". ` +
+        'Media guardrails run once on canonical input parts.',
+      boundaries: boundaries.map((boundary) => boundary.id),
+      kinds: [source.kind],
+      scopes: [source.scope],
+    })
+  }
+}
+
 function expandBindings(
   source: PolicySource,
   tune: SafetyTunePolicyOptions | undefined,
@@ -130,13 +196,25 @@ function expandBindings(
   assertUniqueBoundaries(source.policy.id, boundaries)
   const tuned = tunedFields(tune)
 
-  return boundaries.map((boundary) => ({
-    kind: source.kind,
+  if (source.kind === 'guardrail') {
+    return boundaries.map((boundary): GuardrailBinding => ({
+      kind: 'guardrail',
+      policy: source.policy,
+      boundary,
+      scope: source.scope,
+      mode: tune?.mode ?? source.policy.mode,
+      stream: tune?.stream ?? source.policy.stream,
+      enabled: tune?.enabled ?? true,
+      ...(tuned.length > 0 ? { tuned } : {}),
+    }))
+  }
+
+  return boundaries.map((boundary): ConstraintBinding => ({
+    kind: 'constraint',
     policy: source.policy,
     boundary,
     scope: source.scope,
-    mode: tune?.mode ?? (source.kind === 'guardrail' ? source.policy.mode : 'enforce'),
-    ...(source.kind === 'guardrail' ? { stream: tune?.stream ?? source.policy.stream } : {}),
+    mode: tune?.mode ?? 'enforce',
     enabled: tune?.enabled ?? true,
     ...(tuned.length > 0 ? { tuned } : {}),
   }))

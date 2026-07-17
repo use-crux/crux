@@ -138,4 +138,25 @@ describe("turnHasWarningSignal", () => {
     expect(turnInitialTab(r)).toBe("explain");
     expect(turnHasWarningSignal(r)).toBe(true);
   });
+
+  it("is true when a media guardrail stripped input", () => {
+    const r = cleanReport();
+    r.decisions = [
+      {
+        id: "decision:safety:1:media:user.input.media",
+        phase: "checks",
+        kind: "safety.guardrail",
+        subject: { kind: "guardrail", id: "media", name: "media" },
+        outcome: "strip",
+        reason: {
+          code: "guardrail.stripped",
+          text: "Media guardrail stripped one image.",
+          source: "artifact",
+          evidenceLevel: "declared",
+        },
+      },
+    ];
+    expect(turnInitialTab(r)).toBe("explain");
+    expect(turnHasWarningSignal(r)).toBe(true);
+  });
 });

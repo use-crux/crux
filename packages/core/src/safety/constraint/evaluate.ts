@@ -1,5 +1,5 @@
-import type { BoundaryDef } from '../boundary'
 import type { SafetyRunContext } from '../decision'
+import { assertConstraintBoundary, type ConstraintBoundary } from './boundary'
 import type { Constraint, ConstraintContext, ConstraintOutput } from './types'
 import { validateConstraintRunResult } from './types'
 
@@ -53,6 +53,7 @@ export async function evaluateConstraint(
   constraint: Constraint,
   cases: readonly ConstraintEvalCase[],
 ): Promise<ConstraintEvalReport> {
+  assertConstraintBoundary(constraint)
   const results: ConstraintEvalCaseResult[] = []
 
   const ctx: ConstraintContext = {
@@ -109,7 +110,10 @@ export async function evaluateConstraint(
   }
 }
 
-function runContext<B extends BoundaryDef>(constraint: Constraint, ctx: ConstraintContext): SafetyRunContext<B> {
+function runContext<B extends ConstraintBoundary>(
+  constraint: Constraint,
+  ctx: ConstraintContext,
+): SafetyRunContext<B> {
   const boundary = constraint.on as B
   return {
     policy: { id: constraint.id, mode: 'enforce' },
@@ -124,7 +128,7 @@ function runContext<B extends BoundaryDef>(constraint: Constraint, ctx: Constrai
   }
 }
 
-function subjectForBoundary(boundary: BoundaryDef, output: ConstraintOutput): unknown {
+function subjectForBoundary(boundary: ConstraintBoundary, output: ConstraintOutput): unknown {
   if (boundary.id === 'model.output.text') return output.text
   if (boundary.id === 'model.output.object') return boundary.path ? valueAtPath(output.parsed, boundary.path) : output.parsed
   if (boundary.id === 'model.output') return { text: output.text, object: output.parsed }

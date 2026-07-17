@@ -13,4 +13,5 @@ export type {
   GuardrailRewriteKind,
   GuardrailAudit,
   GuardrailAuditEntry,
+  MediaGuardrailRunResult,
 } from './types'

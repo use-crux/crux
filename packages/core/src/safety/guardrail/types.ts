@@ -1,5 +1,13 @@
 import type { Message } from '../../generation/messages'
-import type { BoundaryDef, BoundaryInput, SubjectOf } from '../boundary'
+import type {
+  BoundaryDef,
+  BoundaryIdOf,
+  BoundaryInput,
+  MediaPartLocation,
+  MediaPartSubject,
+  SafetyTargetId,
+  SubjectOf,
+} from '../boundary'
 import type { SafetyFinding, SafetyRunContext } from '../decision'
 import { SafetyResultError } from '../errors'
 import type { GuardrailStreamOption } from '../stream/types'
@@ -20,11 +28,43 @@ export type GuardrailRunResult<TValue = string> =
     }
   | { readonly action: 'hold' }
 
+/**
+ * Result returned by a guardrail attached to `boundary.input.media()` whose
+ * callback receives a {@link MediaPartSubject}.
+ *
+ * `strip` removes the current part only in enforce mode; report mode records
+ * the decision without changing provider input. Warn, block, and strip
+ * results require a reason.
+ */
+export type MediaGuardrailRunResult =
+  | { readonly action: 'allow' }
+  | { readonly action: 'warn'; readonly reason: string }
+  | { readonly action: 'block'; readonly reason: string }
+  | { readonly action: 'strip'; readonly reason: string }
+
+type IsMediaBoundary<B extends BoundaryInput> = [BoundaryIdOf<B>] extends ['user.input.media'] ? true : false
+
+type ContainsMediaBoundary<B extends BoundaryInput> = 'user.input.media' extends BoundaryIdOf<B> ? true : false
+
+type IsMixedMediaBoundary<B extends BoundaryInput> = ContainsMediaBoundary<B> extends true
+  ? Exclude<BoundaryIdOf<B>, 'user.input.media'> extends never
+    ? false
+    : true
+  : false
+
+type GuardrailBoundaryInput<B extends BoundaryInput> = IsMixedMediaBoundary<B> extends true
+  ? B & { readonly 'A media guardrail can target only boundary.input.media()': never }
+  : B
+
+type GuardrailRunResultFor<B extends BoundaryInput> = IsMediaBoundary<B> extends true
+  ? MediaGuardrailRunResult
+  : GuardrailRunResult<SubjectOf<B>>
+
 /** Callable guardrail body, optionally carrying first-party strategy metadata. */
 export interface GuardrailRun<B extends BoundaryInput> {
   (subject: SubjectOf<B>, ctx: SafetyRunContext<B>):
-    | GuardrailRunResult<SubjectOf<B>>
-    | Promise<GuardrailRunResult<SubjectOf<B>>>
+    | GuardrailRunResultFor<B>
+    | Promise<GuardrailRunResultFor<B>>
   readonly strategy?: {
     readonly kind: string
     readonly config: Readonly<Record<string, unknown>>
@@ -34,10 +74,10 @@ export interface GuardrailRun<B extends BoundaryInput> {
 /** Public guardrail authoring config. */
 export interface GuardrailConfig<B extends BoundaryInput = BoundaryDef> {
   readonly id: string
-  readonly on: B
+  readonly on: GuardrailBoundaryInput<B>
   readonly category?: string
   readonly mode?: GuardrailMode
-  readonly stream?: GuardrailStreamOption
+  readonly stream?: IsMediaBoundary<B> extends true ? never : GuardrailStreamOption
   readonly run: GuardrailRun<B>
 }
 
@@ -76,15 +116,55 @@ export interface GuardrailContext {
 export interface GuardrailAuditEntry {
   readonly guard: string
   readonly category?: string
+  /** Exact boundary evaluated for this entry. */
+  readonly boundary: SafetyTargetId
+  /** Effective enforcement posture after per-call tuning. */
+  readonly mode: GuardrailMode
   readonly phase: 'input' | 'output'
   readonly action: string
   readonly reason?: string
+  /** Safe original coordinates for media-boundary entries. */
+  readonly location?: MediaPartLocation
+  /** Present only when stripping the part immediately became a terminal block. */
+  readonly escalatedToBlock?: true
   readonly durationMs: number
 }
 
 export interface GuardrailAudit {
   readonly applied: readonly GuardrailAuditEntry[]
   readonly blocked: boolean
+}
+
+/** Validate a JS/unknown media guardrail result and fail closed on malformed values. */
+export function validateMediaGuardrailRunResult(
+  value: unknown,
+  opts: { readonly policyId?: string; readonly boundary?: string },
+): MediaGuardrailRunResult {
+  if (!isRecord(value) || typeof value.action !== 'string') {
+    throw resultError(opts, 'media result must be an object with an action string')
+  }
+
+  switch (value.action) {
+    case 'allow':
+      return { action: 'allow' }
+    case 'warn':
+      if (typeof value.reason !== 'string' || value.reason.length === 0) {
+        throw resultError(opts, 'media warn results require a reason')
+      }
+      return { action: 'warn', reason: value.reason }
+    case 'block':
+      if (typeof value.reason !== 'string' || value.reason.length === 0) {
+        throw resultError(opts, 'media block results require a reason')
+      }
+      return { action: 'block', reason: value.reason }
+    case 'strip':
+      if (typeof value.reason !== 'string' || value.reason.length === 0) {
+        throw resultError(opts, 'media strip results require a reason')
+      }
+      return { action: 'strip', reason: value.reason }
+    default:
+      throw resultError(opts, `unknown media guardrail action "${value.action}"`)
+  }
 }
 
 /** Validate a JS/unknown guardrail result and fail closed on malformed values. */

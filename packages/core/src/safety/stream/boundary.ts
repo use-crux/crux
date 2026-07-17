@@ -1,18 +1,9 @@
 import { GuardrailBlockedError } from '../guardrail/errors'
 import type { SafetyRunContext } from '../decision'
-import type { Guardrail, GuardrailContext } from '../guardrail/types'
+import type { GuardrailContext } from '../guardrail/types'
 import { validateGuardrailRunResult } from '../guardrail/types'
+import type { GuardrailBinding } from '../registry'
 import { streamGuardDecision } from './decision'
-
-/** Return the first boundary declared by a guardrail. */
-export function firstBoundary(guard: Guardrail): { readonly id: string; readonly path?: string } {
-  return Array.isArray(guard.on) ? (guard.on[0] ?? { id: 'model.output.text' }) : guard.on
-}
-
-/** Return the first boundary id declared by a guardrail. */
-export function firstBoundaryId(guard: Guardrail): string {
-  return firstBoundary(guard).id
-}
 
 /**
  * Run an object-boundary guard against parsed final stream text.
@@ -22,38 +13,40 @@ export function firstBoundaryId(guard: Guardrail): string {
  * that object.
  */
 export async function runFinalBoundaryGuard(
-  guard: Guardrail,
+  binding: GuardrailBinding,
   text: string,
   context: GuardrailContext,
 ): Promise<void> {
-  const boundary = firstBoundary(guard)
+  const guard = binding.policy
+  const boundary = binding.boundary
   const parsed = parseJsonObject(text)
   const subject = boundary.path ? valueAtPath(parsed, boundary.path) : parsed
-  const runContext = finalBoundaryRunContext(guard, boundary, context)
+  const runContext = finalBoundaryRunContext(binding, context)
   const result = validateGuardrailRunResult(await guard.run(subject as never, runContext as never), {
     streaming: true,
     last: true,
     policyId: guard.id,
-    boundary: firstBoundaryId(guard),
+    boundary: boundary.id,
   })
 
-  if (result.action !== 'block' || guard.mode === 'report') return
+  if (result.action !== 'block' || binding.mode === 'report') return
 
   throw new GuardrailBlockedError({
     guardrailId: guard.id,
     phase: 'output',
     reason: result.reason,
-    decisions: [streamGuardDecision(guard, result, text)],
+    decisions: [streamGuardDecision(binding, result, text)],
   })
 }
 
 function finalBoundaryRunContext(
-  guard: Guardrail,
-  boundary: { readonly id: string; readonly path?: string },
+  binding: GuardrailBinding,
   context: GuardrailContext,
 ): SafetyRunContext {
+  const guard = binding.policy
+  const boundary = binding.boundary
   return {
-    policy: { id: guard.id, mode: guard.mode },
+    policy: { id: guard.id, mode: binding.mode },
     boundary: { id: boundary.id as never, kind: boundary.id as never },
     prompt: { id: context.promptId },
     model: { id: context.model },

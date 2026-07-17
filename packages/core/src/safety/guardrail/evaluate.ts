@@ -1,5 +1,6 @@
 import type { BoundaryDef } from '../boundary'
 import type { SafetyRunContext } from '../decision'
+import { SafetyConfigError } from '../errors'
 import type { Guardrail } from './types'
 import { validateGuardrailRunResult } from './types'
 
@@ -59,7 +60,7 @@ export async function evaluateGuardrail(
 ): Promise<GuardrailEvalReport> {
   const results: GuardrailEvalCaseResult[] = []
 
-  const boundary = firstBoundary(guard)
+  const boundary = stringEvaluationBoundary(guard)
   const ctx = evaluationContext(guard, boundary)
 
   for (const evalCase of cases) {
@@ -108,8 +109,18 @@ export async function evaluateGuardrail(
   }
 }
 
-function firstBoundary(guard: Guardrail): BoundaryDef {
-  return Array.isArray(guard.on) ? (guard.on[0] ?? { _tag: 'Boundary', id: 'model.output.text' }) : guard.on
+function stringEvaluationBoundary(guard: Guardrail): BoundaryDef {
+  const boundaries = Array.isArray(guard.on) ? guard.on : [guard.on]
+  if (boundaries.some((boundary) => boundary.id === 'user.input.media')) {
+    throw new SafetyConfigError({
+      message:
+        `evaluateGuardrail() accepts string cases and cannot evaluate media policy "${guard.id}". ` +
+        'Test media policies through createSafety().guardInput() or adapter integration.',
+      boundaries: boundaries.map((boundary) => boundary.id),
+      kinds: ['guardrail'],
+    })
+  }
+  return boundaries[0] ?? { _tag: 'Boundary', id: 'model.output.text' }
 }
 
 function evaluationContext<B extends BoundaryDef>(guard: Guardrail, boundary: B): SafetyRunContext<B> {

@@ -1,21 +1,24 @@
 import type { SafetyDecision } from '../decision'
 import { safeCaptureSummary } from '../errors'
-import type { Guardrail, GuardrailRunResult } from '../guardrail/types'
+import type { GuardrailRunResult } from '../guardrail/types'
+import type { GuardrailBinding } from '../registry'
 
 /** Build the safe, redacted decision summary stored on stream block errors. */
 export function streamGuardDecision(
-  guard: Guardrail,
+  binding: GuardrailBinding,
   result: GuardrailRunResult<unknown>,
   content: string,
 ): SafetyDecision {
+  const guard = binding.policy
   return {
     policyId: guard.id,
     kind: 'guardrail',
-    boundary: 'model.output.text',
+    boundary: binding.boundary.id,
     stage: 'stream.segment',
-    mode: guard.mode,
+    mode: binding.mode,
     action: chunkSafetyAction(result.action),
     ...(result.action === 'block' || result.action === 'warn' ? { reason: result.reason } : {}),
+    ...(binding.tuned ? { tuned: binding.tuned } : {}),
     durationMs: 0,
     captured: safeCaptureSummary(content),
   }

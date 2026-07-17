@@ -44,6 +44,7 @@ function hasSafetyIntervention(report: TurnDecisionReport): boolean {
     [
       "guardrail.blocked",
       "guardrail.redacted",
+      "guardrail.stripped",
       "constraint.failed",
       "security.blocked",
     ].includes(d.reason.code),

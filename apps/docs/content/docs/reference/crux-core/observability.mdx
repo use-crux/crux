@@ -169,12 +169,20 @@ Common detail artifacts use stable kinds so `RunDetail.inspection` can route the
 | `citation.report` / `score.report`                                         | Grounding markers, optional output anchors (`start`, `end`, `outputQuote`), score verdicts, judge rationales, and pass/fail detail.                                                                 |
 | `composition.report`                                                       | Parallel branches, pipeline stages, consensus votes, or swarm handoff path.                                                                                                                         |
 | `handoff.payload` / `delegate.report`                                      | Transfer contract data, hop metadata, input/output sizes, and delegate result preview.                                                                                                              |
-| `constraint.report` / `guardrail.report`                                   | Constraint attempts/retries and guardrail action reports with before/after previews when available.                                                                                                 |
+| `constraint.report` / `guardrail.report`                                   | Constraint attempts/retries and `allow`, `warn`, `block`, `rewrite`, or `strip` guardrail reports with before/after previews when available. Media reports include only canonical type and original indexes. |
 | `routing.report` / `cache.report`                                          | Router, split, retry, fallback, and cascade choices; full cascade tier ladders including skipped/not-reached tiers; evaluator notes/confidence/budgets; semantic cache hits/writes; and saved work. |
 | `compaction.report`                                                        | Before/after token counts and summary previews.                                                                                                                                                     |
 | `memory.snapshot` / `memory.recall` / `memory.diff`                        | Memory state snapshots, recalled block previews (`blockKind`, `key`, `preview`, `score`), and before/after write summaries with added/removed block summaries.                                      |
 | `embedding.report` / `indexing.report` / `ingest.report` / `corpus.report` | Embedding shape/cache metrics, indexing totals/stage counts, loader status, and corpus source ledger summaries.                                                                                     |
 | `security.report`                                                          | Prompt-injection warning severity, pattern, field/location, action, and bounded preview.                                                                                                            |
+
+Both enforce- and report-mode media strips emit a `guardrail.report` artifact
+and a `guardrail.action` span event with `action: 'strip'`. Report mode preserves the
+provider input; it changes mutation behavior, not whether the action is
+observed. `guardrail.stripped` is only the Turn Decision Report reason code.
+When an enforced strip empties a media-only message, the strip report and action
+are followed by a `guardrail.blocked` edge. Media sources, bytes, provider file ids,
+filenames, and provider options are never included in these records.
 
 ## Turn Explanation (`decisionReport`)
 
