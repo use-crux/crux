@@ -68,12 +68,14 @@ export type GenerateImageCommonOptions = Readonly<{
   /** Whole-operation and per-attempt timeout budgets. */
   timeout?: OperationTimeout;
   /**
-   * Guardrails applied to canonical prompt images and generated images.
+   * Guardrails applied to canonical prompt references, masks, and generated images.
    *
-   * Output callbacks receive the original generated asset as
-   * `subject.part.source`. Enforced `strip` removes that canonical image and
-   * blocks if it is the final image; report mode records intent without
-   * changing the result. Provider-native `raw` and metadata are not guarded.
+   * Media callbacks receive the original asset as `subject.part.source` and a
+   * stable operation origin. Input strips are written back before provider
+   * normalization; a retained edit mask with no references blocks. Output
+   * strips remove generated images and block on the final image. Report mode
+   * records intent without changing input or result. Provider-native `raw` and
+   * metadata are not guarded.
    */
   guardrails?: readonly Guardrail[];
   /** Per-policy enablement, mode, and stream tuning for attached guardrails. */

@@ -146,10 +146,11 @@ export const boundary = Object.freeze({
      * Target each canonical non-text part in user input before provider normalization.
      *
      * The callback receives the caller's original part identity and a stable
-     * message origin. Narrow `subject.part.type` for media-specific fields and
-     * `subject.origin.kind` before reading its indexes. Enforced `strip`
-     * removes the selected part and blocks if it would empty the message;
-     * report mode records intent without changing input.
+     * message or completed-operation origin. Narrow `subject.part.type` for
+     * media-specific fields and `subject.origin.kind` before reading its
+     * coordinates. Enforced `strip` removes the selected optional part and
+     * blocks when the retained media would violate a required group or
+     * dependency; report mode records intent without changing provider input.
      *
      * @returns A boundary whose guardrail subject is a {@link MediaPartSubject}.
      *
@@ -159,7 +160,6 @@ export const boundary = Object.freeze({
      *   id: 'png-only',
      *   on: boundary.input.media(),
      *   run: (subject) => {
-     *     if (subject.origin.kind !== 'message') return { action: 'allow' }
      *     if (subject.part.type !== 'image') return { action: 'allow' }
      *     return subject.part.mediaType === 'image/png'
      *       ? { action: 'allow' }

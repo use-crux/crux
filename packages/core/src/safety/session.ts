@@ -50,10 +50,19 @@ import { resyncStructuredText } from './structured'
 import { guardOutputTextParts as guardCompletionTextParts } from './output-text-parts'
 import { guardInput as guardSafetyInput } from './input/runner'
 import { createScopedSafetySession } from './scope-session'
+import { guardInputOperationMedia } from './input/operation-media'
+import {
+  guardInputOperationText,
+  type OperationInputTextSlot,
+} from './input/operation-text'
+import type { MediaGroupDependency } from './media/groups'
+import type { MediaVisitGroup, MediaVisitItem } from './media/visit'
 import type { SafetyAudit } from './audit'
 import { guardOutputMedia as guardSafetyOutputMedia, type MediaOutputResult } from './output/media'
 
 const outputMediaGuard: unique symbol = Symbol('crux.safety.outputMediaGuard')
+const inputOperationMediaGuard: unique symbol = Symbol('crux.safety.inputOperationMediaGuard')
+const inputOperationTextGuard: unique symbol = Symbol('crux.safety.inputOperationTextGuard')
 
 // ─────────────────────────────────────────────────────────────────
 // Public types
@@ -247,17 +256,50 @@ export interface Safety {
 }
 
 interface SafetySession extends Safety {
+  [inputOperationTextGuard](
+    slots: readonly OperationInputTextSlot[],
+  ): Promise<readonly OperationInputTextSlot[]>
+  [inputOperationMediaGuard](
+    items: readonly MediaVisitItem[],
+    groups: readonly MediaVisitGroup[],
+    dependencies?: readonly MediaGroupDependency[],
+  ): Promise<MediaOutputResult>
   [outputMediaGuard](
     subjects: readonly MediaPartSubject[],
-    options?: { readonly minimumRetained?: number },
+    options?: {
+      readonly minimumRetained?: number
+      readonly model?: string
+    },
   ): Promise<MediaOutputResult>
+}
+
+/** @internal Guard canonical completed-operation input text slots. */
+export function guardSafetySessionInputOperationText(
+  safety: Safety,
+  slots: readonly OperationInputTextSlot[],
+): Promise<readonly OperationInputTextSlot[]> {
+  return (safety as SafetySession)[inputOperationTextGuard](slots)
+}
+
+/** @internal Guard canonical completed-operation input media. */
+export function guardSafetySessionInputOperationMedia(
+  safety: Safety,
+  items: readonly MediaVisitItem[],
+  groups: readonly MediaVisitGroup[],
+  dependencies?: readonly MediaGroupDependency[],
+): Promise<MediaOutputResult> {
+  return (safety as SafetySession)[inputOperationMediaGuard](items, groups, dependencies)
 }
 
 /** @internal Guard canonical output media for Core-owned adapter projections. */
 export function guardSafetySessionOutputMedia(
   safety: Safety,
   subjects: readonly MediaPartSubject[],
-  options?: { readonly minimumRetained?: number },
+  options?: {
+    readonly minimumRetained?: number
+    /** Selected provider model for routed completed-operation output. */
+    readonly model?: string
+  },
 ): Promise<MediaOutputResult> {
   return (safety as SafetySession)[outputMediaGuard](subjects, options)
 }
@@ -606,12 +648,35 @@ export function createSafety(options: SafetyCallOptions): Safety {
       })
     },
 
+    async [inputOperationTextGuard](slots) {
+      return guardInputOperationText({
+        bindings: phaseBindings('input'),
+        slots,
+        context: guardContext('input', lastMessages),
+        appendAudit: appendGuardrailAudit,
+      })
+    },
+
+    async [inputOperationMediaGuard](items, groups, dependencies) {
+      return guardInputOperationMedia({
+        bindings: phaseBindings('input').filter((binding) => binding.boundary.id === 'user.input.media'),
+        items,
+        groups,
+        dependencies,
+        context: guardContext('input', lastMessages),
+        appendAudit: appendGuardrailAudit,
+      })
+    },
+
     async [outputMediaGuard](subjects, mediaOptions) {
       return guardSafetyOutputMedia({
         bindings: phaseBindings('output').filter((binding) => binding.boundary.id === 'model.output.media'),
         subjects,
         minimumRetained: mediaOptions?.minimumRetained ?? 0,
-        context: guardContext('output', lastMessages),
+        context: {
+          ...guardContext('output', lastMessages),
+          model: mediaOptions?.model ?? options.model,
+        },
         appendAudit: appendGuardrailAudit,
       })
     },

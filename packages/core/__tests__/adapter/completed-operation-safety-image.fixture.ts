@@ -55,3 +55,31 @@ export function imageOperation(
     conformance: [],
   })
 }
+
+/** Defines an image operation that exposes its first normalized input. */
+export function imageInputOperation(
+  events: string[],
+  onNormalize: (input: GenerateImageOptions<string>) => void,
+) {
+  return defineCompletedOperation({
+    normalize(input: GenerateImageOptions<string>) {
+      events.push('normalize')
+      onNormalize(input)
+      return input
+    },
+    support: () => 'supported' as const,
+    invoke: async (_input, context) =>
+      context.call('image.generate', async () => {
+        events.push('invoke')
+        return Object.freeze({ requestId: 'request-1' })
+      }),
+    validate: (raw) => createGeneratedImageResult([generatedImage], {
+      warnings: [],
+      providerMetadata: Object.freeze({ requestId: raw.requestId }),
+      execution: { kind: 'native', calls: 1 },
+      raw,
+    }),
+    report: () => ({ kind: 'image' }),
+    conformance: [],
+  })
+}

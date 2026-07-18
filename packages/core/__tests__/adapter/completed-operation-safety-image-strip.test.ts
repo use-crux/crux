@@ -7,6 +7,120 @@ import { boundary, guardrail, GuardrailBlockedError } from '../../src/safety'
 import { generatedImage, imageOperation, secondGeneratedImage } from './completed-operation-safety-image.fixture'
 
 describe('completed operation Safety — generated-image strip', () => {
+  it('runs policies in image-major order and skips later policies after strip', async () => {
+    const callbacks: string[] = []
+    const first = guardrail({
+      id: 'first-image-policy',
+      on: boundary.output.media(),
+      run: (subject) => {
+        callbacks.push(`${operationPartIndex(subject)}:first`)
+        return { action: 'allow' }
+      },
+    })
+    const second = guardrail({
+      id: 'second-image-policy',
+      on: boundary.output.media(),
+      run: (subject) => {
+        const partIndex = operationPartIndex(subject)
+        callbacks.push(`${partIndex}:second`)
+        return partIndex === 0
+          ? { action: 'strip', reason: 'Remove the first image.' }
+          : { action: 'allow' }
+      },
+    })
+    const third = guardrail({
+      id: 'third-image-policy',
+      on: boundary.output.media(),
+      run: (subject) => {
+        callbacks.push(`${operationPartIndex(subject)}:third`)
+        return { action: 'warn', reason: 'Review the retained image.' }
+      },
+    })
+    const generateImage = bindCompletedOperation({
+      definition: imageOperation([], [generatedImage, secondGeneratedImage]),
+      provider: 'test',
+      operation: 'generateImage',
+    })
+
+    const result = await generateImage({
+      model: 'image-model',
+      prompt: 'A quiet canal',
+      guardrails: [first, second, third],
+    })
+
+    expect(callbacks).toEqual([
+      '0:first',
+      '0:second',
+      '1:first',
+      '1:second',
+      '1:third',
+    ])
+    expect(result.images).toEqual([secondGeneratedImage])
+    expect(result.safety?.guardrails?.applied.map((entry) => [entry.guard, entry.action])).toEqual([
+      ['first-image-policy', 'allow'],
+      ['second-image-policy', 'strip'],
+      ['first-image-policy', 'allow'],
+      ['second-image-policy', 'allow'],
+      ['third-image-policy', 'warn'],
+    ])
+  })
+
+  it('attributes final-image escalation to the terminal policy and original image', async () => {
+    const firstStrip = guardrail({
+      id: 'strip-original-first-image',
+      on: boundary.output.media(),
+      run: (subject) =>
+        operationPartIndex(subject) === 0
+          ? { action: 'strip', reason: 'Remove original image zero.' }
+          : { action: 'allow' },
+    })
+    const finalStrip = guardrail({
+      id: 'strip-original-second-image',
+      on: boundary.output.media(),
+      run: (subject) =>
+        operationPartIndex(subject) === 1
+          ? { action: 'strip', reason: 'Remove original image one.' }
+          : { action: 'allow' },
+    })
+    const generateImage = bindCompletedOperation({
+      definition: imageOperation([], [generatedImage, secondGeneratedImage]),
+      provider: 'test',
+      operation: 'generateImage',
+    })
+
+    const error = await generateImage({
+      model: 'image-model',
+      prompt: 'A quiet canal',
+      guardrails: [firstStrip, finalStrip],
+    }).then(
+      () => undefined,
+      (caught: unknown) => caught,
+    )
+
+    expect(error).toBeInstanceOf(GuardrailBlockedError)
+    expect(error).toMatchObject({
+      guardrailId: 'strip-original-second-image',
+      reason: 'Remove original image one.',
+      decisions: [
+        {
+          policyId: 'strip-original-second-image',
+          boundary: 'model.output.media',
+          action: 'block',
+          location: {
+            origin: {
+              kind: 'operation',
+              operation: 'generateImage',
+              phase: 'output',
+              field: 'images',
+              partIndex: 1,
+            },
+            partType: 'image',
+          },
+        },
+      ],
+    })
+  })
+
   it('strips one sibling and resets the image alias', async () => {
     let validated: GenerateImageResult | undefined
     const policy = guardrail({
@@ -144,3 +258,8 @@ describe('completed operation Safety — generated-image strip', () => {
     )
   })
 })
+
+function operationPartIndex(subject: Parameters<ReturnType<typeof guardrail.media>>[0]): number {
+  if (subject.origin.kind !== 'operation') throw new Error('Expected operation origin.')
+  return subject.origin.partIndex
+}

@@ -35,6 +35,7 @@ import type { Guardrail } from "../../safety/guardrail/types";
 import type { SafetyTuneOptions } from "../../safety/tune";
 import {
   createCompletedOperationSafety,
+  guardCompletedOperationInput,
   guardCompletedOperationOutput,
 } from "./safety/execute";
 
@@ -174,11 +175,19 @@ async function runWithObservation<
         guardrails: options.guardrails,
         safety: options.safety,
       });
-      const prepared = await preflightCompletedCandidates(options, signal);
+      const input = await guardCompletedOperationInput(
+        options.operation,
+        options.input,
+        safety,
+      );
+      const prepared = await preflightCompletedCandidates(
+        { ...options, input },
+        signal,
+      );
       const result = await resolveCompletedModel(
         options.model,
         {
-          input: options.input,
+          input,
           context: options.routing,
           route: options.route,
           signal,
@@ -190,7 +199,7 @@ async function runWithObservation<
             options,
             candidate as TModel,
           );
-          const candidateInput = withSelectedModel(options.input, candidate);
+          const candidateInput = withSelectedModel(input, candidate);
           const normalized =
             prepared.get(candidate) ??
             (await options.definition.normalize(candidateInput, context));
@@ -217,10 +226,11 @@ async function runWithObservation<
         options.operation,
         finalized,
         safety,
+        state.selectedModel,
       );
       const selected = await selectedCompletedInput(
         prepared,
-        options.input,
+        input,
         options.definition,
         options,
         state.selectedModel,

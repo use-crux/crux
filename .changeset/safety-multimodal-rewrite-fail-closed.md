@@ -22,3 +22,16 @@ It inspects only caller-supplied metadata and local bytes, supports block or str
 keeps locator and payload details out of decisions. Project Index now records complete literal
 guardrail helper strategy config through the bundled native Safety extractor and retains kind-only
 facts for dynamic config.
+
+Add `boundary.output.media()` and completed image Safety. Generated images now run output policies
+once after routing selects a result; enforce-mode strips preserve image order, reset the `image`
+alias, and block on the final image, while report mode preserves the result. Direct image-edit
+references and masks run input media policies before provider normalization with immutable
+write-back and a fail-closed retained-mask dependency. Canonical write-back preserves provider
+`raw` and metadata identities.
+
+Add completed speech Safety options and runtime coverage. Speech `text` and optional
+`instructions` now run through their exact input boundaries before provider normalization, and
+generated audio runs output-media policies before reporting or return. Enforced audio strip blocks
+because audio is required; report mode preserves it. Canonical audit write-back retains provider
+facts and works identically through direct bindings and provider runtimes.

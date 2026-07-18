@@ -17,7 +17,7 @@ type GeneratedImageResult = CompletedOperationResult &
 /** Guard generated images and write retained canonical assets back immutably. */
 export async function guardGeneratedImageOutput<
   TResult extends CompletedOperationResult,
->(result: TResult, safety: Safety): Promise<TResult> {
+>(result: TResult, safety: Safety, model?: string): Promise<TResult> {
   if (!isGeneratedImageResult(result)) {
     throw new SafetyResultError({
       message:
@@ -35,7 +35,7 @@ export async function guardGeneratedImageOutput<
   const guarded = await guardSafetySessionOutputMedia(
     safety,
     projected.map(({ subject }) => subject),
-    { minimumRetained: 1 },
+    { minimumRetained: 1, model },
   );
   const retained = new Set(guarded.subjects);
   const images = projected
