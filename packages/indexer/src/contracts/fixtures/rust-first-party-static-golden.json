@@ -5,12 +5,12 @@
   "fileSelection": "staticDefinitionFiles(root)",
   "projection": "canonicalStaticExtractionJson(definitions,relations,diagnostics,dependencies)",
   "totals": {
-    "files": 728,
+    "files": 727,
     "definitions": 72,
-    "relations": 4,
+    "relations": 3,
     "diagnostics": 17,
-    "dependencies": 1338,
-    "canonicalBytes": 189866
+    "dependencies": 1337,
+    "canonicalBytes": 189240
   },
   "files": [
     {
@@ -1518,10 +1518,10 @@
     },
     {
       "file": "packages/convex/src/runtime.ts",
-      "sha256": "e60e9877851c3aec091196a18eb430440640fa11713c09d4a291f997da32f52c",
-      "bytes": 2020,
+      "sha256": "ff794cbe762cc9669f438750fd1ec14cd70bf18c74d763e7dd720859e57ad919",
+      "bytes": 1503,
       "definitions": 1,
-      "relations": 2,
+      "relations": 1,
       "diagnostics": 0,
       "dependencies": 0
     },
@@ -1614,15 +1614,6 @@
       "relations": 0,
       "diagnostics": 0,
       "dependencies": 0
-    },
-    {
-      "file": "packages/convex/src/store.ts",
-      "sha256": "bcadc032007c1c0b1f87fe8739f50590236b0d30e3cdb33fd172e4a4b36dded6",
-      "bytes": 109,
-      "definitions": 0,
-      "relations": 0,
-      "diagnostics": 0,
-      "dependencies": 1
     },
     {
       "file": "packages/convex/src/swarm-observability.ts",
