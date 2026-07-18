@@ -5,7 +5,7 @@ import { createTestRuntime } from "@use-crux/core/runtime/testing";
 import {
   runWithDeferInvocation,
   type DeferLifetimeCapability,
-} from "@use-crux/core/internal/defer-host";
+} from "@use-crux/core/internal/scope";
 import { testLifetime } from "./test-lifetime";
 
 describe("named defer() recovery edges", () => {

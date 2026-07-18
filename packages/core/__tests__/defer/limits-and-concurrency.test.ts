@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { defer } from "@use-crux/core";
-import { runWithDeferInvocation } from "@use-crux/core/internal/defer-host";
+import { runWithDeferInvocation } from "@use-crux/core/internal/scope";
 import { testLifetime } from "./test-lifetime";
 
 describe("defer limits and concurrency", () => {

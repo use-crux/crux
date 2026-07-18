@@ -46,6 +46,7 @@ Crux public APIs use names that describe the thing a user is declaring or doing:
 - Use `createX()` for runtime infrastructure factories that produce machinery rather than domain definitions: transports, middleware, plugins, reporters, stores, adapter clients, pipelines, and other operational helpers.
 - Use verbs for one-off operations: `generate()`, `stream()`, `retrieve()`, `indexDocuments()`, `signalFlow()`, `cancelFlow()`, and similar execution functions.
 - Avoid `defineX()` for new public Crux APIs. The project is pre-launch, so naming changes are breaking changes rather than deprecated aliases.
+- Keep platform names on Runtime composers, name host/retention bindings for their mechanism, reserve `withCrux` for framework lifecycle boundaries, and use `withCruxBuild`-style names for build plugins.
 
 This keeps the SDK readable at call sites: users define nouns once, execute verbs when work happens, and reach for `createX()` only when building infrastructure.
 
@@ -161,6 +162,16 @@ compatibility shims, while every implementation lives in a domain folder.
 │   ├── sanitize.ts     Injection-defense helpers (escapeXml, safe, raw, limit, wrap, userContent, truncate, detectSuspiciousPatterns)
 │   ├── tokenizer.ts    Pluggable token counter (countTokens/setTokenizer; default chars/4)
 │   └── schema-compat.ts  sanitizeJsonSchema() — provider JSON-schema sanitization (@internal)
+├── scope/              Internal execution-scope kernel shared by Core and first-party integrations
+│   ├── internal.ts     Curated `@use-crux/core/internal/scope` SPI; not application-facing
+│   ├── kernel.ts       Scope lifecycle, nesting, close hooks, write routing, manual controllers, and root-idle waits
+│   ├── contracts.ts    Typed scope/controller/close-hook contracts and the sealed-write error
+│   ├── facets.ts       Nominal typed facet slots with nearest-ancestor resolution
+│   ├── lifecycle.ts    Settlement helpers shared by automatic and manual close paths
+│   ├── overrides.ts    Immutable execution-local facet overrides on the canonical carrier
+│   ├── pending.ts      Live root pending-set and drain-to-empty microtask re-check
+│   ├── state.ts        Functional scope state, facet writes, sealing, and reroute policy
+│   └── types.ts        Closed scope kinds, descriptors, policies, outcomes, state, and sealing reasons
 ├── observability/
 │   ├── index.ts        Barrel: canonical graph contract, presentation read models, schemas, ID helpers, observe runtime, transports
 │   ├── contract.ts     Wire-only canonical graph records; branded IDs; taxonomies

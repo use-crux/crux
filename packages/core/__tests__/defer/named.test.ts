@@ -2,8 +2,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import { defer } from "@use-crux/core";
 import { durableTask } from "@use-crux/core/runtime";
 import { createTestRuntime } from "@use-crux/core/runtime/testing";
-import { runWithDeferInvocation } from "@use-crux/core/internal/defer-host";
-import type { DeferLifetimeCapability } from "@use-crux/core/internal/defer-host";
+import { runWithDeferInvocation } from "@use-crux/core/internal/scope";
+import type { DeferLifetimeCapability } from "@use-crux/core/internal/scope";
 import { getHooks, setHooks } from "../../src/runtime/runtime";
 import { testLifetime } from "./test-lifetime";
 

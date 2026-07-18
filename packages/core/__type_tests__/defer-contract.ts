@@ -12,7 +12,7 @@ import {
   runWithDeferInvocation,
   type DeferHostBoundaryOptions,
   type DeferLifetimeCapability,
-} from "@use-crux/core/internal/defer-host";
+} from "@use-crux/core/internal/scope";
 
 const synchronousResult = defer(() => {});
 const asynchronousResult = defer(async () => {});

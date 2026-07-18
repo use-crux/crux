@@ -3,7 +3,7 @@ import { executeDeferredCallback } from "./callback-boundary";
 import type {
   DeferredDrainResult,
   InlineRegistration,
-  InvocationDeferScope,
+  ScopeDeferController,
 } from "./invocation-scope";
 import type { DeferScopeObservability } from "./observability";
 
@@ -18,7 +18,7 @@ interface DrainInlineCallbacksOptions {
 
 /** Drain accepted callbacks through a bounded, all-settled worker pool. */
 export async function drainInlineCallbacks(
-  scope: InvocationDeferScope,
+  scope: ScopeDeferController,
   registrations: InlineRegistration[],
   options: DrainInlineCallbacksOptions,
 ): Promise<DeferredDrainResult> {

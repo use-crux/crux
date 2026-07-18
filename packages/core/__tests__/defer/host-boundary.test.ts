@@ -7,7 +7,7 @@ import {
 import {
   runWithDeferInvocation,
   type DeferInvocationOutcome,
-} from "@use-crux/core/internal/defer-host";
+} from "@use-crux/core/internal/scope";
 import { testLifetime } from "./test-lifetime";
 import { trackDeferCommit } from "../../src/defer/internal/context";
 

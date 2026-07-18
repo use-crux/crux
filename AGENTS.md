@@ -73,6 +73,13 @@ Avoid:
 - Provider SDKs and host frameworks belong in `peerDependencies` when users should control the installed version.
 - Build outputs, generated docs artifacts, and local caches should not be committed.
 
+### Platform package naming
+
+- Runtime composers keep the platform name, such as `cloudflare()` and `convex()`.
+- Host and retention bindings use the mechanism name: `next()`, `vercel()`, `node()`, and `workers()`.
+- Each framework package has exactly one `withCrux` meaning: its lifecycle boundary.
+- Build-time plugins use `withCruxBuild`-style names so they cannot be confused with lifecycle boundaries.
+
 ## Changesets
 
 Changesets are the release queue, not a per-commit log. Do not create a new

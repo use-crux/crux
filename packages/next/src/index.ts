@@ -25,7 +25,7 @@ import {
   type AfterDeferWrapOptions,
   type DeferAfterPort,
 } from "@use-crux/core/defer/serverless";
-import type { DeferLifetimeCapability } from "@use-crux/core/internal/defer-host";
+import type { DeferLifetimeCapability } from "@use-crux/core/internal/scope";
 import type { ObservabilityFlushResult } from "@use-crux/core/observability";
 import { resolveNextAfterPort } from "./after";
 import { reportNextObservabilityDrain } from "./observability-drain";
@@ -41,7 +41,10 @@ export interface NextCruxOptions<T> extends NextDeferWrapOptions<T> {
 }
 
 /** Options for {@link withNextDefer}. */
-export type NextDeferWrapOptions<T> = Omit<AfterDeferWrapOptions<T>, "after"> & {
+export type NextDeferWrapOptions<T> = Omit<
+  AfterDeferWrapOptions<T>,
+  "after"
+> & {
   /**
    * Override the Next `after` port.
    *

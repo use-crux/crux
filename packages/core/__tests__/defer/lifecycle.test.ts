@@ -2,11 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createHandlerReturnedDeferLifetime,
   createResponseFinishedDeferLifetime,
-} from "@use-crux/core/internal/defer-lifecycle";
+} from "@use-crux/core/internal/scope";
 import type {
   DeferScheduledTask,
   DeferLifetimeCapability,
-} from "@use-crux/core/internal/defer-host";
+} from "@use-crux/core/internal/scope";
 
 const limits = {
   maxDrainMs: 1_000,

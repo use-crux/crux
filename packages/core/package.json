@@ -57,13 +57,9 @@
       "types": "./src/async-scope/index.ts",
       "import": "./src/async-scope/index.ts"
     },
-    "./internal/defer-host": {
-      "types": "./src/defer/host.ts",
-      "import": "./src/defer/host.ts"
-    },
-    "./internal/defer-lifecycle": {
-      "types": "./src/defer/lifecycle.ts",
-      "import": "./src/defer/lifecycle.ts"
+    "./internal/scope": {
+      "types": "./src/scope/internal.ts",
+      "import": "./src/scope/internal.ts"
     },
     "./defer/node": {
       "types": "./src/defer/node.ts",
@@ -269,11 +265,8 @@
       "internal/async-scope": [
         "src/async-scope/index.ts"
       ],
-      "internal/defer-host": [
-        "src/defer/host.ts"
-      ],
-      "internal/defer-lifecycle": [
-        "src/defer/lifecycle.ts"
+      "internal/scope": [
+        "src/scope/internal.ts"
       ],
       "defer/node": [
         "src/defer/node.ts"

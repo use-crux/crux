@@ -3,7 +3,7 @@ import { defer } from '@use-crux/core'
 import {
   runWithDeferInvocation,
   type DeferLifetimeCapability,
-} from '@use-crux/core/internal/defer-host'
+} from '@use-crux/core/internal/scope'
 import { durableTask } from '@use-crux/core/runtime'
 import { createTestRuntime } from '@use-crux/core/runtime/testing'
 import {
@@ -14,7 +14,7 @@ import {
   type CruxGraphRecord,
 } from '../../src/observability'
 import { expectBalancedGraph } from '../observability/helpers/expect-balanced-graph'
-import { testLifetime } from './test-lifetime'
+import { createTestScopeDeferController, testLifetime } from './test-lifetime'
 import { scheduleDiagnosticsOnlyDeferredCallback } from '../../src/defer/internal/port'
 
 describe('public defer observability (DFR-E04)', () => {
@@ -623,9 +623,7 @@ describe('named evidence lifecycle vs drain settlement', () => {
     setObservabilityTransport(transport, { scheduledDelayMs: 60_000 })
 
     let runRetained: (() => Promise<void>) | undefined
-    const { createInvocationDeferScope } =
-      await import('../../src/defer/internal/invocation-scope')
-    const scope = createInvocationDeferScope({
+    const scope = createTestScopeDeferController({
       ...testLifetime((run) => {
         runRetained = run
       }),
@@ -707,10 +705,7 @@ describe('named evidence lifecycle vs drain settlement', () => {
       },
     }
 
-    const { createInvocationDeferScope } =
-      await import('../../src/defer/internal/invocation-scope')
-
-    const scope = createInvocationDeferScope(lifetime)
+    const scope = createTestScopeDeferController(lifetime)
     // Simulate in-flight named acceptance still tracked by the commit barrier.
     scope.trackCommit(hangCommit)
     const barriers = scope.seal('success')

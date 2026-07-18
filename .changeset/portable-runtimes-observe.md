@@ -65,6 +65,8 @@ deferred work with contained, bounded post-response observability drains;
 preserves deployment identity across durable continuation boundaries.
 Rejected promises returned by advisory drain reporters are contained without
 delaying or replacing handler results or host-owned drain work.
+Rename the Next Runtime artifact build plugin to `withCruxBuild`, reserving
+`withCrux` for framework lifecycle boundaries without a compatibility alias.
 Portable MCP entrypoints now fail closed when stdio is selected, while Node
 runtimes resolve their lazy stdio adapters through private conditional imports.
 

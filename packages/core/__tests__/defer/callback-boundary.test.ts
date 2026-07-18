@@ -5,12 +5,11 @@ import { createTestRuntime } from "@use-crux/core/runtime/testing";
 import type {
   DeferLifetimeCapability,
   DeferScheduledTask,
-} from "@use-crux/core/internal/defer-host";
-import { createInvocationDeferScope } from "../../src/defer/internal/invocation-scope";
+} from "@use-crux/core/internal/scope";
 import { scheduleDiagnosticsOnlyDeferredCallback } from "../../src/defer/internal/port";
 import { runWithDeferRegistration } from "../../src/defer/internal/context";
 import { getHooks, setHooks } from "../../src/runtime/runtime";
-import { testLifetime } from "./test-lifetime";
+import { createTestScopeDeferController, testLifetime } from "./test-lifetime";
 
 describe("deferred callback boundary", () => {
   const previousHooks = getHooks();
@@ -24,7 +23,7 @@ describe("deferred callback boundary", () => {
     const runtime = createTestRuntime({ targets: [target] });
     const retained = retainedLifetime({ concurrency: 2 });
     try {
-      const parent = createInvocationDeferScope(retained.lifetime);
+      const parent = createTestScopeDeferController(retained.lifetime);
       parent.registerInline(
         () => defer(target, { id: "first" }),
         handlerRegistration(parent),
@@ -66,7 +65,7 @@ describe("deferred callback boundary", () => {
     const runtime = createTestRuntime({ targets: [target] });
     const retained = retainedLifetime();
     try {
-      const parent = createInvocationDeferScope(retained.lifetime);
+      const parent = createTestScopeDeferController(retained.lifetime);
       let workId: string | undefined;
       parent.registerInline(() => {
         void defer(target, { id: "unawaited" }).then((work) => {
@@ -94,7 +93,7 @@ describe("deferred callback boundary", () => {
     const retained = retainedLifetime({ concurrency: 2 });
     const sibling = vi.fn();
     try {
-      const parent = createInvocationDeferScope(retained.lifetime);
+      const parent = createTestScopeDeferController(retained.lifetime);
       parent.registerInline(() => {
         void (
           defer as unknown as (
@@ -128,7 +127,7 @@ describe("deferred callback boundary", () => {
     const runtime = createTestRuntime({ targets: [target] });
     const retained = retainedLifetime();
     try {
-      const parent = createInvocationDeferScope(retained.lifetime);
+      const parent = createTestScopeDeferController(retained.lifetime);
       parent.registerInline(async () => {
         await defer(target, { id: "accepted" });
         throw new Error("callback failed after staging");
@@ -169,7 +168,7 @@ describe("deferred callback boundary", () => {
   it("delegates nested inline work to the parent drain without scheduling another drain", async () => {
     const retained = retainedLifetime();
     const nested = vi.fn();
-    const parent = createInvocationDeferScope(retained.lifetime);
+    const parent = createTestScopeDeferController(retained.lifetime);
     parent.registerInline(() => defer(nested), handlerRegistration(parent));
 
     const handle = parent.seal("success");
@@ -189,7 +188,7 @@ describe("deferred callback boundary", () => {
   it("schedules diagnostics-only callbacks through the same bounded parent drain", async () => {
     const retained = retainedLifetime();
     const callback = vi.fn();
-    const parent = createInvocationDeferScope(retained.lifetime);
+    const parent = createTestScopeDeferController(retained.lifetime);
     runWithDeferRegistration(handlerRegistration(parent), () => {
       scheduleDiagnosticsOnlyDeferredCallback(callback);
     });
@@ -211,7 +210,7 @@ function callbackTarget(name: string) {
 }
 
 function handlerRegistration(
-  scope: ReturnType<typeof createInvocationDeferScope>,
+  scope: ReturnType<typeof createTestScopeDeferController>,
 ) {
   return { scope, phase: "handler" as const, depth: 0 };
 }

@@ -4,7 +4,7 @@ import { __setAlsForTesting } from "@use-crux/core/observability";
 import {
   runWithDeferInvocation,
   type DeferLifetimeCapability,
-} from "@use-crux/core/internal/defer-host";
+} from "@use-crux/core/internal/scope";
 
 describe("defer without AsyncLocalStorage", () => {
   afterEach(() => {

@@ -203,7 +203,7 @@ inspect admitted work, or explicitly accept a complete run as a Baseline.
 | `@use-crux/core/skill`         | Skill authoring with inline and registry loaders.                                                  |
 
 Node-only/build-time subpaths are explicit: `eval/node`, `setup`,
-`runtime/next`, `defer/node`, `observability/node`, `transcription/node`,
+`runtime/next` (`withCruxBuild`), `defer/node`, `observability/node`, `transcription/node`,
 `skill/node`, and the Vitest testing helpers. Portable application code should
 not re-export them from a Workers or browser entrypoint.
 

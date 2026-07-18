@@ -15,7 +15,7 @@ import {
 import { createDurableDeferController } from './durable'
 import type {
   InlineRegistration,
-  InvocationDeferScope,
+  ScopeDeferController,
 } from './invocation-scope'
 
 /** Internal callback failure retained for diagnostics without becoming public API. */
@@ -26,7 +26,7 @@ export interface DeferredCallbackFailure extends Error {
 
 /** Execute one callback in its captured causal scope and fresh named-commit scope. */
 export async function executeDeferredCallback(
-  parent: InvocationDeferScope,
+  parent: ScopeDeferController,
   registration: InlineRegistration,
   lifetime: DeferLifetimeCapability,
 ): Promise<void> {
@@ -65,7 +65,7 @@ interface CallbackCommitScope extends DeferRegistrationScope {
 }
 
 function createCallbackCommitScope(
-  parent: InvocationDeferScope,
+  parent: ScopeDeferController,
   lifetime: DeferLifetimeCapability,
 ): CallbackCommitScope {
   let state: 'open' | 'sealed' = 'open'
@@ -106,7 +106,7 @@ function createCallbackCommitScope(
 }
 
 function parentRegistration(
-  parent: InvocationDeferScope,
+  parent: ScopeDeferController,
   registration: DeferRegistrationContext,
 ): DeferRegistrationContext {
   return {

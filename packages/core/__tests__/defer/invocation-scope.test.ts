@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import fc from "fast-check";
-import type { DeferLifetimeCapability } from "@use-crux/core/internal/defer-host";
-import { createInvocationDeferScope } from "../../src/defer/internal/invocation-scope";
+import type { DeferLifetimeCapability } from "@use-crux/core/internal/scope";
+import { createTestScopeDeferController } from "./test-lifetime";
 
 describe("invocation defer scope", () => {
   afterEach(() => {
@@ -25,7 +25,7 @@ describe("invocation defer scope", () => {
         scheduled = () => task.run();
       },
     };
-    const scope = createInvocationDeferScope(lifetime);
+    const scope = createTestScopeDeferController(lifetime);
     const callback = vi.fn(() => new Promise<void>(() => {}));
     scope.registerInline(callback, { scope, phase: "handler", depth: 0 });
 
@@ -59,7 +59,7 @@ describe("invocation defer scope", () => {
         scheduled = () => task.run();
       },
     };
-    const scope = createInvocationDeferScope(lifetime);
+    const scope = createTestScopeDeferController(lifetime);
     scope.registerInline(() => new Promise<void>(() => {}), {
       scope,
       phase: "handler",
@@ -95,7 +95,7 @@ describe("invocation defer scope", () => {
         scheduled = () => task.run();
       },
     };
-    const scope = createInvocationDeferScope(lifetime);
+    const scope = createTestScopeDeferController(lifetime);
     scope.registerInline(
       async () => {
         await Promise.resolve();
@@ -131,6 +131,54 @@ describe("invocation defer scope", () => {
     });
   });
 
+  it("runs and awaits the drain-settled lane after callbacks", async () => {
+    let scheduled: (() => Promise<void>) | undefined;
+    let releaseLane: (() => void) | undefined;
+    let markLaneStarted: (() => void) | undefined;
+    const laneGate = new Promise<void>((resolve) => {
+      releaseLane = resolve;
+    });
+    const laneStarted = new Promise<void>((resolve) => {
+      markLaneStarted = resolve;
+    });
+    const events: string[] = [];
+    const lifetime: DeferLifetimeCapability = {
+      completion: "handler-returned",
+      limits: {
+        maxDrainMs: 1_000,
+        maxCallbacks: 10,
+        concurrency: 1,
+        maxNestingDepth: 2,
+      },
+      supportsInline: true,
+      durableFinalization: false,
+      schedule(task) {
+        scheduled = () => task.run();
+      },
+    };
+    const scope = createTestScopeDeferController(lifetime);
+    scope.registerInline(
+      () => {
+        events.push("callback");
+      },
+      { scope, phase: "handler", depth: 0 },
+    );
+    scope.onDrainSettled(async (result) => {
+      events.push(`lane:${result.callbacks[0]?.outcome}`);
+      markLaneStarted?.();
+      await laneGate;
+    });
+
+    scope.seal("success");
+    const drain = scheduled?.().then(() => events.push("retained-complete"));
+    await laneStarted;
+
+    expect(events).toEqual(["callback", "lane:completed"]);
+    releaseLane?.();
+    await drain;
+    expect(events).toEqual(["callback", "lane:completed", "retained-complete"]);
+  });
+
   it("preserves source registration order for arbitrary callback counts", async () => {
     await fc.assert(
       fc.asyncProperty(fc.integer({ min: 0, max: 20 }), async (count) => {
@@ -149,7 +197,7 @@ describe("invocation defer scope", () => {
             scheduled = () => task.run();
           },
         };
-        const scope = createInvocationDeferScope(lifetime);
+        const scope = createTestScopeDeferController(lifetime);
         const starts: number[] = [];
         for (let sequence = 0; sequence < count; sequence += 1) {
           scope.registerInline(

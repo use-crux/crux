@@ -15,7 +15,7 @@ import {
   type NamedOnlyDeferWrapOptions,
   type WaitUntilDeferWrapOptions,
 } from "@use-crux/core/defer/serverless";
-import type { DeferLifetimeCapability } from "@use-crux/core/internal/defer-host";
+import type { DeferLifetimeCapability } from "@use-crux/core/internal/scope";
 
 declare const waitUntil: DeferWaitUntilPort;
 declare const after: DeferAfterPort;

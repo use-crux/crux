@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { defer, type CruxDeferError } from "@use-crux/core";
-import { runWithDeferInvocation } from "@use-crux/core/internal/defer-host";
-import type { DeferLifetimeCapability } from "@use-crux/core/internal/defer-host";
+import { runWithDeferInvocation } from "@use-crux/core/internal/scope";
+import type { DeferLifetimeCapability } from "@use-crux/core/internal/scope";
 import { testLifetime } from "./test-lifetime";
 
 describe("host capability matrix", () => {

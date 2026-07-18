@@ -1,277 +1,199 @@
-import type {
-  DeferInvocationOutcome,
-  DeferLifetimeCapability,
-} from '../host-types'
-import type { DeferredCallback } from '../types'
-import { createDeferError } from '../errors'
 import {
   captureAsyncScope,
   type CapturedAsyncScope,
-} from '../../async-scope/internal/carrier'
+} from "../../async-scope/internal/carrier";
+import { resolveWritableScope } from "../../scope/kernel";
+import type { ExecutionScope } from "../../scope/contracts";
+import { createDeferError } from "../errors";
+import type { DeferredCallback } from "../types";
 import {
+  deferControllerForScope,
+  setScopeDeferController,
   type DeferRegistrationContext,
   type DeferRegistrationScope,
-} from './context'
-import { drainInlineCallbacks } from './drain'
+} from "./context";
+import type { DurableDeferEvidenceHooks } from "./durable";
 import {
-  createDurableDeferController,
-  type DurableDeferEvidenceHooks,
-} from './durable'
-import { createDeferCommitBarrier } from './commit-barrier'
-import {
-  createDeferScopeObservability,
-  type DeferredScheduledObservation,
-  type DeferEvidencePolicy,
-} from './observability'
-import { observe } from '../../observability'
+  createInvocationDeferServices,
+  type InvocationDeferServices,
+} from "./invocation-services";
+import type {
+  DeferredScheduledObservation,
+  DeferEvidencePolicy,
+} from "./observability";
+import { scheduleInvocationDeferDrain } from "./retained-task";
 
-type InvocationState = 'open' | 'sealed'
 type DeferredCallbackOutcome =
-  | 'completed'
-  | 'failed'
-  | 'timed-out'
-  | 'cancelled'
-
-const DEFER_OBSERVABILITY_FLUSH_TIMEOUT_MS = 3_000
+  | "completed"
+  | "failed"
+  | "timed-out"
+  | "cancelled";
 
 export interface InlineRegistration {
-  readonly sequence: number
-  readonly depth: number
-  readonly callback: DeferredCallback
-  readonly capturedScope: CapturedAsyncScope
-  readonly observation: DeferredScheduledObservation
+  readonly sequence: number;
+  readonly depth: number;
+  readonly callback: DeferredCallback;
+  readonly capturedScope: CapturedAsyncScope;
+  readonly observation: DeferredScheduledObservation;
 }
 
 /** Result retained internally for shutdown, tests, and later diagnostics. */
 export interface DeferredDrainResult {
   readonly callbacks: readonly {
-    readonly sequence: number
-    readonly outcome: DeferredCallbackOutcome
-    readonly error?: unknown
-  }[]
-  readonly timedOut: boolean
-  readonly cancelled: boolean
+    readonly sequence: number;
+    readonly outcome: DeferredCallbackOutcome;
+    readonly error?: unknown;
+  }[];
+  readonly timedOut: boolean;
+  readonly cancelled: boolean;
 }
 
 /** Internal barriers created when an invocation is sealed. */
 export interface DeferredDrainHandle {
-  readonly committed: Promise<void>
-  readonly settled: Promise<DeferredDrainResult>
+  readonly committed: Promise<void>;
+  readonly settled: Promise<DeferredDrainResult>;
 }
 
-/** Package-private invocation state machine. */
-export interface InvocationDeferScope extends DeferRegistrationScope {
-  /** Cooperative signal aborted when bounded drain settlement stops waiting. */
-  readonly signal: AbortSignal
-  /**
-   * Shared public evidence hooks for nested callback named staging.
-   *
-   * Child commit scopes create their own durable controller but must emit
-   * scheduled/run evidence through the owning invocation controller.
-   */
-  readonly namedEvidenceHooks: DurableDeferEvidenceHooks
-  /** Stop waiting for callback settlement during shutdown or host cancellation. */
-  cancel(reason?: unknown): void
-  seal(outcome: DeferInvocationOutcome): DeferredDrainHandle
+/** Per-execution-scope deferred-work controller. */
+export interface ScopeDeferController extends DeferRegistrationScope {
+  readonly executionScope: ExecutionScope;
+  readonly signal: AbortSignal;
+  readonly namedEvidenceHooks: DurableDeferEvidenceHooks;
+  cancel(reason?: unknown): void;
+  onDrainSettled(
+    hook: (result: DeferredDrainResult) => void | PromiseLike<void>,
+  ): void;
+  getDrainHandle(): DeferredDrainHandle;
 }
 
-/** Create one invocation-scoped deferred-work kernel. */
-export function createInvocationDeferScope(
-  lifetime: DeferLifetimeCapability,
-): InvocationDeferScope {
-  let state: InvocationState = 'open'
-  let drainClosed = false
-  let handle: DeferredDrainHandle | undefined
-  const registrations: InlineRegistration[] = []
-  const commitBarrier = createDeferCommitBarrier()
-  const abortController = new AbortController()
-  const evidence = createDeferScopeObservability({
-    completion: lifetime.completion,
-  })
-  const namedEvidenceHooks: DurableDeferEvidenceHooks = {
-    ensurePublicTraceId() {
-      return evidence.ensurePublicTraceId()
-    },
-    onStaged(input) {
-      const observation = evidence.recordNamedScheduled({
-        sequence: input.sequence,
-        policy: 'public',
-        targetId: input.targetId,
-        workId: input.workId,
-        scopeId: input.scopeId,
-        scheduledSpanId: input.scheduledSpanId,
-      })
-      return {
-        ...(observation.spanId ? { spanId: observation.spanId } : {}),
-      }
-    },
-    onTerminal(intents, intentState) {
-      for (const intent of intents) {
-        evidence.markNamedTerminal(
-          {
-            policy: 'public',
-            sequence: intent.sequence,
-            mode: 'named',
-            completion: lifetime.completion,
-            scheduledAtMs: intent.scheduledAtMs,
-            workId: intent.workId,
-            targetId: intent.targetId,
-            scopeId: intent.scopeId,
-          },
-          intentState,
-        )
-      }
-    },
-  }
-  const durable = createDurableDeferController(lifetime, namedEvidenceHooks)
+/** Create and persist the deferred-work controller for one execution scope. */
+export function createScopeDeferController(
+  executionScope: ExecutionScope,
+  services: InvocationDeferServices,
+): ScopeDeferController {
+  const registrations: InlineRegistration[] = [];
+  const drainSettledHooks: Array<
+    (result: DeferredDrainResult) => void | PromiseLike<void>
+  > = [];
+  let drainClosed = false;
+  let handle: DeferredDrainHandle | undefined;
+  let controller: ScopeDeferController;
 
-  const scope: InvocationDeferScope = {
-    signal: abortController.signal,
-    namedEvidenceHooks,
-    cancel(reason) {
-      abortController.abort(
-        reason ?? new Error('Deferred callback drain was cancelled.'),
-      )
+  controller = Object.freeze({
+    executionScope,
+    signal: services.signal,
+    namedEvidenceHooks: services.namedEvidenceHooks,
+    cancel: services.cancel,
+    onDrainSettled: (hook) => drainSettledHooks.push(hook),
+    getDrainHandle() {
+      if (!handle) {
+        throw new TypeError("The defer controller has not started closing.");
+      }
+      return handle;
     },
     registerInline(callback, registration) {
-      if ((state !== 'open' && registration.phase !== 'drain') || drainClosed) {
-        throw createDeferError({
-          code: 'DEFER_SCOPE_SEALED',
-          message:
-            'defer() cannot register work after its invocation was sealed.',
-        })
+      // A retained drain runs after the kernel scope is sealed. Preserve the
+      // existing nested-defer exception only while that drain is still open.
+      const writable =
+        registration.phase === "drain" && !drainClosed
+          ? executionScope
+          : resolveWritableScope(executionScope, {
+              phase: registration.phase,
+            });
+      if (writable === "sealed" || drainClosed) throwInlineScopeSealed();
+      if (writable !== executionScope) {
+        const routed = deferControllerForScope(writable);
+        if (!routed || routed === controller) throwInlineScopeSealed();
+        routed.registerInline(callback, registration);
+        return;
       }
-      if (!lifetime.supportsInline) {
-        throw createDeferError({
-          code: 'DEFER_CAPABILITY_MISSING',
-          message:
-            'The active host does not support inline defer(callback). Use await defer(target, input) with a configured Runtime, or install a host lifetime integration.',
-        })
-      }
-      if (registrations.length >= lifetime.limits.maxCallbacks) {
-        throw createDeferError({
-          code: 'DEFER_LIMIT_EXCEEDED',
-          message: `defer() exceeded the host callback limit of ${lifetime.limits.maxCallbacks}.`,
-        })
-      }
-      if (
-        registration.phase === 'drain' &&
-        registration.depth > lifetime.limits.maxNestingDepth
-      ) {
-        throw createDeferError({
-          code: 'DEFER_LIMIT_EXCEEDED',
-          message: `defer() exceeded the host nesting limit of ${lifetime.limits.maxNestingDepth}.`,
-        })
-      }
-      const policy: DeferEvidencePolicy = registration.evidence ?? 'public'
-      const sequence = registrations.length
-      const observation = evidence.recordInlineScheduled(sequence, policy)
+      assertInlineRegistrationAllowed(services, registration);
+      const policy: DeferEvidencePolicy = registration.evidence ?? "public";
+      const sequence = registrations.length;
+      const observation = services.evidence.recordInlineScheduled(
+        sequence,
+        policy,
+      );
       registrations.push({
         sequence,
         depth: registration.depth,
         callback,
         capturedScope: captureAsyncScope(),
         observation,
-      })
+      });
+      services.recordCallback();
     },
     stageNamed(target, input) {
-      if (state !== 'open') {
-        throw createDeferError({
-          code: 'DEFER_SCOPE_SEALED',
-          message: 'defer() cannot stage durable work after sealing.',
-        })
-      }
-      const operation = durable.stage(target, input)
-      scope.trackCommit(operation)
-      return operation
+      assertNamedScopeOpen(executionScope, "stage");
+      return services.stageNamed(target, input);
     },
     trackCommit(operation) {
-      if (state !== 'open') {
-        throw createDeferError({
-          code: 'DEFER_SCOPE_SEALED',
-          message: 'defer() cannot track durable acceptance after sealing.',
-        })
-      }
-      commitBarrier.track(operation)
+      assertNamedScopeOpen(executionScope, "track");
+      services.trackCommit(operation);
     },
-    seal(outcome) {
-      void outcome
-      if (handle) return handle
-      state = 'sealed'
+  } satisfies ScopeDeferController);
 
-      const settlement = deferred<DeferredDrainResult>()
-      const committed = durable.commit(outcome, commitBarrier.settle())
-      // Named acceptance/finalization owns public scheduled spans; keep the
-      // optional grouped run open until that path is terminal even when the
-      // empty/fast inline drain settles first. Public `settled` stays independent.
-      evidence.trackNamedLifecycle(committed)
-      handle = {
-        committed,
-        settled: settlement.promise,
-      }
-      lifetime.schedule({
-        async run() {
-          const result = await drainInlineCallbacks(scope, registrations, {
-            concurrency: lifetime.limits.concurrency,
-            maxDrainMs: lifetime.limits.maxDrainMs,
-            lifetime,
-            abortController,
-            evidence,
-            close: () => {
-              drainClosed = true
-            },
-          })
-          evidence.settle(result)
-          // Public settlement reports callback outcomes only. Host retention
-          // continues until ignored named acceptance/finalization has emitted
-          // terminal evidence and that complete graph has been drained.
-          settlement.resolve(result)
-          await evidence.waitForClosure()
-          // The retained task is the only lifecycle boundary guaranteed to
-          // outlive deferred execution on every host. Flush after closing
-          // its graph so wrapper-level drains cannot race work emitted by
-          // waitUntil(), after(), or response-finished callbacks.
-          try {
-            await observe.flush({
-              timeoutMs: Math.min(
-                lifetime.limits.maxDrainMs,
-                DEFER_OBSERVABILITY_FLUSH_TIMEOUT_MS,
-              ),
-            })
-          } catch (error) {
-            // A retained host promise must never reject solely because the
-            // telemetry exporter threw. Opinionated host facades own the
-            // structured terminal drain report; low-level defer users still
-            // receive a diagnostic without an unhandled rejection.
-            console.error(
-              '[crux] observability flush threw after deferred work settled; the deferred callback outcome was preserved.',
-              error,
-            )
-          }
-        },
-        cancel(reason) {
-          scope.cancel(reason)
-        },
-      })
-      return handle
-    },
-  }
-
-  return scope
+  setScopeDeferController(executionScope, controller);
+  executionScope.onClose((outcome) => {
+    handle ??= scheduleInvocationDeferDrain(
+      controller,
+      services,
+      registrations,
+      drainSettledHooks,
+      () => {
+        drainClosed = true;
+      },
+      outcome,
+    );
+  });
+  return controller;
 }
 
-function deferred<T>(): {
-  readonly promise: Promise<T>
-  readonly resolve: (value: T) => void
-} {
-  let resolvePromise: ((value: T) => void) | undefined
-  const promise = new Promise<T>((resolve) => {
-    resolvePromise = resolve
-  })
-  return {
-    promise,
-    resolve(value) {
-      resolvePromise?.(value)
-    },
+function assertInlineRegistrationAllowed(
+  services: InvocationDeferServices,
+  registration: DeferRegistrationContext,
+): void {
+  if (!services.lifetime.supportsInline) {
+    throw createDeferError({
+      code: "DEFER_CAPABILITY_MISSING",
+      message:
+        "The active host does not support inline defer(callback). Use await defer(target, input) with a configured Runtime, or install a host lifetime integration.",
+    });
   }
+  if (!services.hasCallbackCapacity()) {
+    throw createDeferError({
+      code: "DEFER_LIMIT_EXCEEDED",
+      message: `defer() exceeded the host callback limit of ${services.lifetime.limits.maxCallbacks}.`,
+    });
+  }
+  if (
+    registration.phase === "drain" &&
+    registration.depth > services.lifetime.limits.maxNestingDepth
+  ) {
+    throw createDeferError({
+      code: "DEFER_LIMIT_EXCEEDED",
+      message: `defer() exceeded the host nesting limit of ${services.lifetime.limits.maxNestingDepth}.`,
+    });
+  }
+}
+
+function assertNamedScopeOpen(
+  scope: ExecutionScope,
+  operation: "stage" | "track",
+): void {
+  if (scope.state === "open") return;
+  throw createDeferError({
+    code: "DEFER_SCOPE_SEALED",
+    message:
+      operation === "stage"
+        ? "defer() cannot stage durable work after sealing."
+        : "defer() cannot track durable acceptance after sealing.",
+  });
+}
+
+function throwInlineScopeSealed(): never {
+  throw createDeferError({
+    code: "DEFER_SCOPE_SEALED",
+    message: "defer() cannot register work after its invocation was sealed.",
+  });
 }

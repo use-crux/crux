@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { withCrux } from '../../src/runtime/next'
+import { withCruxBuild } from '../../src/runtime/next'
 
-describe('withCrux', () => {
+describe('withCruxBuild', () => {
   it('runs runtime artifact generation before delegating to the user webpack hook', () => {
     const calls: string[] = []
-    const config = withCrux(
+    const config = withCruxBuild(
       {
         webpack(input) {
           calls.push('user-webpack')
@@ -21,6 +21,8 @@ describe('withCrux', () => {
   })
 
   it('throws ARTIFACTS_STALE when generation fails', () => {
-    expect(() => withCrux({}, { command: ['node', '-e', 'process.exit(7)'] })).toThrow(/Code: ARTIFACTS_STALE/)
+    expect(() =>
+      withCruxBuild({}, { command: ['node', '-e', 'process.exit(7)'] }),
+    ).toThrow(/Code: ARTIFACTS_STALE/)
   })
 })
