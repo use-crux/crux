@@ -369,6 +369,12 @@ export interface SkillEntry {
 export interface MemoryEntry {
   readonly _tag: 'Memory'
   readonly id: string
+  readonly config?: {
+    readonly capture?: {
+      readonly mode?: 'inline' | 'afterResponse' | 'detached'
+      readonly waitUntil?: (promise: Promise<unknown>) => void
+    }
+  }
   asContext(): Context<z.ZodType>
   asTools(options?: { input?: Record<string, unknown>; namespace?: string }): AnyToolSet
   captureTurn(
@@ -377,6 +383,16 @@ export interface MemoryEntry {
       toolEvents?: Array<{ toolCallId?: string; toolName: string; args?: unknown; result?: unknown; error?: string }>
       source?: { traceId?: string; promptId?: string }
       metadata?: Record<string, unknown>
+    },
+    options?: Record<string, unknown>,
+  ): Promise<void>
+  captureToolEvent(
+    event: {
+      toolCallId?: string
+      toolName: string
+      args?: unknown
+      result?: unknown
+      error?: string
     },
     options?: Record<string, unknown>,
   ): Promise<void>

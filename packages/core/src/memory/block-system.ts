@@ -1625,6 +1625,9 @@ function extractiveBlock(
   }
 
   async function captureTurn(turn: MemoryTurn, ctx: MemoryBlockContext) {
+    // Manual mode writes only through direct block methods, so skip the
+    // extract call (often a model call) whose candidates could never land.
+    if (writeMode === 'manual') return
     const candidates = await extract(turn, ctx)
     for (const candidate of candidates) {
       const blockIdentity = { id: config.id, kind }

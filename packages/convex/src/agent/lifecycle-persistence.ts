@@ -129,6 +129,8 @@ async function captureResolvedMemory(
     toolCallId: toolCall.id,
     toolName: toolCall.name,
     args: toolCall.args,
+    ...(toolCall.result !== undefined ? { result: toolCall.result } : {}),
+    ...(toolCall.error !== undefined ? { error: toolCall.error } : {}),
   }))
   if (messages.length === 0 && toolEvents.length === 0) return undefined
 
@@ -146,6 +148,14 @@ async function captureResolvedMemory(
           promptId: binding.promptId,
         },
       )
+      for (const event of toolEvents) {
+        await binding.memory.captureToolEvent(event, {
+          input: binding.input ?? input,
+          promptId: binding.promptId,
+        })
+      }
+      // Convex actions have no waitUntil lifetime; pending capture work must
+      // finish before the action returns or the runtime may terminate it.
       await binding.memory.flush({
         input: binding.input ?? input,
         promptId: binding.promptId,

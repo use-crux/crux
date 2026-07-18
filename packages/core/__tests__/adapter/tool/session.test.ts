@@ -808,8 +808,9 @@ describe('createToolLifecycle — applySkillLoads', () => {
 describe('createToolLifecycle — captureTurn', () => {
   it('fans the turn into every binding then flushes, at most once per session', async () => {
     const capture = vi.fn(async () => {})
+    const captureToolEvent = vi.fn(async () => {})
     const flush = vi.fn(async () => {})
-    const binding = { memory: { captureTurn: capture, flush } }
+    const binding = { memory: { captureTurn: capture, captureToolEvent, flush } }
     const resolved = resolvedWith({
       tools: { echo: { execute: async () => 'ok' } },
       memoryBindings: [binding, binding] as never,
@@ -825,6 +826,7 @@ describe('createToolLifecycle — captureTurn', () => {
     await lifecycle.captureTurn(args) // double invocation — stream completion + consumption
 
     expect(capture).toHaveBeenCalledTimes(2) // two bindings, one capture each
+    expect(captureToolEvent).toHaveBeenCalledTimes(2)
     expect(flush).toHaveBeenCalledTimes(2)
     expect(capture.mock.calls[0]![0]).toMatchObject({
       messages: [
@@ -833,16 +835,22 @@ describe('createToolLifecycle — captureTurn', () => {
       ],
       toolEvents: [{ toolCallId: 'tc1', toolName: 'echo', args: {} }],
     })
+    expect(captureToolEvent.mock.calls[0]![0]).toEqual({
+      toolCallId: 'tc1',
+      toolName: 'echo',
+      args: {},
+    })
     expect(lifecycle.transcript.filter((e) => e.t === 'memory.capture')).toEqual([{ t: 'memory.capture', bindings: 2 }])
   })
 
   it('captures multimodal user messages through the canonical text projection', async () => {
     const capture = vi.fn(async () => {})
+    const captureToolEvent = vi.fn(async () => {})
     const flush = vi.fn(async () => {})
     const lifecycle = createToolLifecycle({
       regime: 'core',
       resolved: resolvedWith({
-        memoryBindings: [{ memory: { captureTurn: capture, flush } }] as never,
+        memoryBindings: [{ memory: { captureTurn: capture, captureToolEvent, flush } }] as never,
       }),
       promptId: 'p1',
     })
@@ -870,6 +878,7 @@ describe('createToolLifecycle — captureTurn', () => {
 
   it('preserves settled tool results and errors when capturing adapter turns', async () => {
     const capture = vi.fn(async () => {})
+    const captureToolEvent = vi.fn(async () => {})
     const flush = vi.fn(async () => {})
     const lifecycle = createToolLifecycle({
       regime: 'core',
@@ -882,7 +891,7 @@ describe('createToolLifecycle — captureTurn', () => {
             },
           },
         },
-        memoryBindings: [{ memory: { captureTurn: capture, flush } }] as never,
+        memoryBindings: [{ memory: { captureTurn: capture, captureToolEvent, flush } }] as never,
       }),
       promptId: 'p1',
       input: { topic: 'tools' },
@@ -922,5 +931,6 @@ describe('createToolLifecycle — captureTurn', () => {
         error: 'boom',
       },
     ])
+    expect(captureToolEvent.mock.calls.map(([event]) => event)).toEqual(capture.mock.calls[0]![0].toolEvents)
   })
 })
