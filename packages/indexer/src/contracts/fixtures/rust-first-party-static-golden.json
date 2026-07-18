@@ -5,12 +5,12 @@
   "fileSelection": "staticDefinitionFiles(root)",
   "projection": "canonicalStaticExtractionJson(definitions,relations,diagnostics,dependencies)",
   "totals": {
-    "files": 727,
+    "files": 729,
     "definitions": 72,
     "relations": 4,
     "diagnostics": 17,
-    "dependencies": 1335,
-    "canonicalBytes": 189596
+    "dependencies": 1342,
+    "canonicalBytes": 190113
   },
   "files": [
     {
@@ -338,13 +338,22 @@
       "dependencies": 2
     },
     {
-      "file": "packages/ai/src/eval-stream-task.ts",
-      "sha256": "62e48bf507998817ba508e19220d7c851dd17c47bca4852aaf0f116488d497de",
-      "bytes": 299,
+      "file": "packages/ai/src/eval-rendered-prompt-identity.ts",
+      "sha256": "960704fc94390a8bc4e829d88fff0a0ab0c5fefe789d4af315d582f9e86553b3",
+      "bytes": 258,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 5
+      "dependencies": 4
+    },
+    {
+      "file": "packages/ai/src/eval-stream-task.ts",
+      "sha256": "0cedd7d08736ccdbb123a2d4632472d395f3e987362f8258d4b23b2dfb0d14dd",
+      "bytes": 357,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 6
     },
     {
       "file": "packages/ai/src/eval-task-cost.ts",
@@ -384,12 +393,12 @@
     },
     {
       "file": "packages/ai/src/eval-task.ts",
-      "sha256": "9f45ca2f89f358d0aa9c3be25dc303b25fdfbf9799f2cca68ba159302099bff4",
-      "bytes": 261,
+      "sha256": "75edf6c9461c58fac474ffd44f0072a41a9df323ac5ab7f766d29494755e9f85",
+      "bytes": 319,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 4
+      "dependencies": 5
     },
     {
       "file": "packages/ai/src/executor.ts",
@@ -5595,12 +5604,12 @@
     },
     {
       "file": "packages/local-workers/bin/eval-coordinator.ts",
-      "sha256": "a997b5ebb3b417052dff5de18a3d079469512b3d307053e6b347095bf4ad79dd",
-      "bytes": 327,
+      "sha256": "f764b13ac8919a6a54436311b385c242f9c5220c0d52f0e86653352981f4e5b0",
+      "bytes": 402,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 4
+      "dependencies": 5
     },
     {
       "file": "packages/local-workers/bin/project-indexer-deployment-manifest.ts",
@@ -5694,6 +5703,15 @@
     },
     {
       "file": "packages/local-workers/lib/eval-cases.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/local-workers/lib/eval-coordinator/cli-run-projection.ts",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
       "definitions": 0,
