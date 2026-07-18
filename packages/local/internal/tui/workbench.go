@@ -47,12 +47,14 @@ type Workbench struct {
 	width  int
 	height int
 
-	activeNav   string
-	screens     map[string]screens.Screen
-	counts      map[string]int
-	stale       map[string]bridge.Domains
-	initialized map[string]bool
-	devContext  api.DevtoolsContext
+	activeNav    string
+	activeTarget NavTarget
+	screens      map[string]screens.Screen
+	counts       map[string]int
+	stale        map[string]bridge.Domains
+	initialized  map[string]bool
+	history      []Location
+	devContext   api.DevtoolsContext
 
 	pendingPrefix string // for `g…` two-key sequences
 
@@ -77,6 +79,7 @@ func NewWorkbench(client screens.DataClient, rawClient DataClient, serverURL str
 		capabilities: discoverCapabilities(client),
 		serverURL:    serverURL,
 		activeNav:    "overview",
+		activeTarget: NavTarget{NavID: "overview"},
 		counts:       map[string]int{},
 		stale:        map[string]bridge.Domains{},
 		initialized:  map[string]bool{},
@@ -132,15 +135,11 @@ func (w *Workbench) Update(msg tea.Msg) tea.Cmd {
 	case tea.KeyPressMsg:
 		return w.handleKey(m)
 	case screens.NavigateRequest:
-		// A screen asked to drill cross-screen. Stage the selection (if
-		// any) and switch active nav per the approved stabilization design.
-		if m.Kind != "" && m.ID != "" {
-			w.SetSelection(Kind(m.Kind), m.ID)
-		}
-		if m.NavID != "" {
-			return w.gotoNav(m.NavID)
-		}
-		return nil
+		return w.gotoTarget(NavTarget{
+			NavID: m.NavID,
+			Kind:  Kind(m.Kind),
+			ID:    m.ID,
+		})
 	case devCtxLoadedMsg:
 		w.devContext = api.DevtoolsContext(m)
 		return nil

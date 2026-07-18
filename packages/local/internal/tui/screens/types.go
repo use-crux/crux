@@ -46,21 +46,19 @@ type Size struct {
 	Height int
 }
 
-// NavigateRequest is emitted by a screen's Update to ask the workbench
-// to switch to another screen, optionally staging a record in the
-// cross-screen selection store first, per the approved 2026-07-16 TUI
-// stabilization design. Workbench listens
-// for this message type in its own Update and handles the routing —
-// screens never call gotoNav directly.
+// NavigateRequest is emitted by a screen's Update to ask the workbench to
+// switch to another screen. Kind and ID form an exact route parameter owned
+// by the destination screen. Workbench listens for this message type and
+// handles routing; screens never call navigation helpers directly.
 type NavigateRequest struct {
 	// NavID is the destination screen id (e.g. "insights", "runs"). The
 	// screen must exist in the workbench's registry; unknown ids are
 	// silently dropped.
 	NavID string
-	// Kind names the selection-store slot to fill before nav (e.g.
-	// "insight", "run"). Empty means: no staging — just nav.
+	// Kind names the destination record type (e.g. "insight", "run").
+	// Empty means the request changes only the screen route.
 	Kind string
-	// ID is the staged record id paired with Kind. Empty when Kind is
+	// ID is the stable record identity paired with Kind. Empty when Kind is
 	// empty.
 	ID string
 }
@@ -102,6 +100,23 @@ type Screen interface {
 type FocusScreen interface {
 	Screen
 	Focus(kind, id string)
+}
+
+// ScreenLocation is the screen-owned portion of navigation history. It keeps
+// only logical UI identity: pane focus, stable record IDs, and viewport
+// anchors. Resource data remains owned by the live screen model.
+type ScreenLocation struct {
+	FocusedPane string
+	SelectedIDs map[string]string
+	Anchors     map[string]string
+}
+
+// LocationScreen is implemented by screens whose logical focus and selection
+// can be restored when the user navigates Back.
+type LocationScreen interface {
+	Screen
+	CaptureLocation() ScreenLocation
+	RestoreLocation(ScreenLocation)
 }
 
 // EditingScreen is an optional capability implemented by screens that own

@@ -32,14 +32,15 @@ var runsStyles = theme.NewStyles(theme.Resolve(colorprofile.TrueColor))
 // (loads run detail from the list, drills into span detail from the
 // waterfall).
 type Runs struct {
-	runs    []api.InspectRunRecord
-	detail  *api.InspectRunDetailRecord
-	selRun  string
-	selSpan string
-	focus   runsFocus
-	loaded  bool
-	err     string
-	loading bool
+	runs      []api.InspectRunRecord
+	routedRun *api.InspectRunRecord
+	detail    *api.InspectRunDetailRecord
+	selRun    string
+	selSpan   string
+	focus     runsFocus
+	loaded    bool
+	err       string
+	loading   bool
 
 	runList        kit.VList[api.InspectRunRecord]
 	filteringRuns  bool
@@ -69,6 +70,30 @@ func (s *Runs) ID() string { return "runs" }
 
 func (s *Runs) Editing() bool { return s.filteringRuns }
 
+// Focus selects the exact run identity carried by a navigation target. Runs
+// owns this route parameter; display names and legacy workspace selection do
+// not participate in resolving it.
+func (s *Runs) Focus(kind, id string) {
+	if kind != "run" || id == "" {
+		return
+	}
+	s.selRun = id
+	s.selSpan = ""
+	s.detail = nil
+	s.routedRun = nil
+	s.loading = true
+	s.filteringRuns = false
+	s.runQuery = ""
+	s.runStatusIndex = 0
+	s.ensureSelectedRunVisible()
+	s.runList.SetItems(s.selectableRuns())
+	s.runList.SetCursorByIdentity(id)
+	s.bumpRenderRev()
+}
+
+// SelectedRunID returns the stable identity of the active run.
+func (s *Runs) SelectedRunID() string { return s.selRun }
+
 func (s *Runs) Interested(domains bridge.Domains) bool {
 	return domains.Has(bridge.DomainRuns)
 }
@@ -79,17 +104,24 @@ func (s *Runs) Update(msg tea.Msg, c DataClient) tea.Cmd {
 	switch m := msg.(type) {
 	case runsListLoadedMsg:
 		s.runs = []api.InspectRunRecord(m)
-		s.runList.SetItems(s.runs)
+		s.ensureSelectedRunVisible()
+		s.runList.SetItems(s.selectableRuns())
 		s.loaded = true
 		s.bumpRenderRev()
 		if s.selRun == "" && len(s.runs) > 0 {
 			s.selRun = s.runs[0].TraceID
-			s.runList.SetCursorByIdentity(s.selRun)
-			return fetchRunDetail(c, s.selRun)
 		}
 		s.runList.SetCursorByIdentity(s.selRun)
+		if s.detail == nil || s.detail.Run.TraceID != s.selRun {
+			if s.selRun == "" {
+				return nil
+			}
+			s.loading = true
+			return fetchRunDetail(c, s.selRun)
+		}
 	case runDetailLoadedMsg:
 		d := api.InspectRunDetailRecord(m)
+		s.replaceSelectedRunSummary(d.Run)
 		// Preserve the user's span selection across refetches when the
 		// span still exists.
 		prevSel := s.selSpan

@@ -61,27 +61,38 @@ func (s *fakeScreen) Counts() map[string]int                 { return nil }
 func (s *fakeScreen) Interested(domains bridge.Domains) bool { return s.interest.Intersects(domains) }
 func (s *fakeScreen) Focus(kind, id string)                  { s.focusCalls = append(s.focusCalls, focusCall{kind, id}) }
 
-// TestGotoNavInvokesFocusOnDestination asserts that when the user jumps
-// to a screen via the workbench's nav routing AND a matching record is
-// staged in the cross-screen selection store, the destination screen
-// receives a Focus(kind, id) call before becoming active, per the approved
-// 2026-07-16 TUI stabilization design.
-func TestGotoNavInvokesFocusOnDestination(t *testing.T) {
+// TestGotoNavInvokesFocusForLegacySelectionAdapter asserts that an unmigrated
+// screen can still consume selection-store state until route ownership moves
+// into that workflow.
+func TestGotoNavInvokesFocusForLegacySelectionAdapter(t *testing.T) {
 	w := NewWorkbench(nil, nil, "http://localhost:4400")
 	// Replace one of the real screens with our recorder.
-	fake := &fakeScreen{id: "runs"}
-	w.screens["runs"] = fake
+	fake := &fakeScreen{id: "insights"}
+	w.screens["insights"] = fake
 
-	// Stage a run id and jump to the runs screen.
-	w.SetSelection(KindRun, "8af2f1c")
-	w.gotoNav("runs")
+	// Stage an insight id and jump to the still-adapted Insights screen.
+	w.SetSelection(KindInsight, "INS-014")
+	w.gotoNav("insights")
 
 	if len(fake.focusCalls) != 1 {
 		t.Fatalf("expected 1 Focus call on destination screen, got %d: %v", len(fake.focusCalls), fake.focusCalls)
 	}
 	got := fake.focusCalls[0]
-	if got.kind != string(KindRun) || got.id != "8af2f1c" {
-		t.Errorf("Focus call = {%q, %q}, want {%q, %q}", got.kind, got.id, KindRun, "8af2f1c")
+	if got.kind != string(KindInsight) || got.id != "INS-014" {
+		t.Errorf("Focus call = {%q, %q}, want {%q, %q}", got.kind, got.id, KindInsight, "INS-014")
+	}
+}
+
+func TestGotoNavDoesNotReplayLegacyRunSelection(t *testing.T) {
+	w := NewWorkbench(nil, nil, "http://localhost:4400")
+	fake := &fakeScreen{id: "runs"}
+	w.screens["runs"] = fake
+	w.SetSelection(KindRun, "stale-run")
+
+	w.gotoNav("runs")
+
+	if len(fake.focusCalls) != 0 {
+		t.Fatalf("migrated Runs received stale legacy focus: %#v", fake.focusCalls)
 	}
 }
 

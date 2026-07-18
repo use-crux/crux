@@ -176,10 +176,9 @@ func (o *Overview) shiftFocus(delta int) {
 	o.focusedPanel = overviewPanel(next)
 }
 
-// drill returns a tea.Cmd that emits a NavigateRequest based on the
-// focused panel + cursor — the workbench picks it up, stages the id in
-// the cross-screen selection store, and jumps to the destination screen.
-// Per the approved stabilization design, an empty focused list returns nil.
+// drill returns a tea.Cmd that emits a NavigateRequest based on the focused
+// panel and cursor. The destination owns the exact record ID as a route
+// parameter. An empty focused list returns nil.
 func (o *Overview) drill() tea.Cmd {
 	var req NavigateRequest
 	switch o.focusedPanel {

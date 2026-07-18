@@ -18,11 +18,12 @@ func (s *Runs) activeRunStatusFilter() string {
 func (s *Runs) filteredRuns() []api.InspectRunRecord {
 	status := s.activeRunStatusFilter()
 	query := strings.ToLower(strings.TrimSpace(s.runQuery))
+	runs := s.selectableRuns()
 	if status == "" && query == "" {
-		return s.runs
+		return runs
 	}
-	out := make([]api.InspectRunRecord, 0, len(s.runs))
-	for _, run := range s.runs {
+	out := make([]api.InspectRunRecord, 0, len(runs))
+	for _, run := range runs {
 		if status != "" && run.Status != status {
 			continue
 		}

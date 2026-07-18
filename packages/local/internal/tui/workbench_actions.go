@@ -73,8 +73,16 @@ func (w *Workbench) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 }
 
 func (w *Workbench) workspaceActions() []interaction.Action {
-	actions := []interaction.Action{
-		{
+	actions := make([]interaction.Action, 0, 5+len(w.navigationItems()))
+	if len(w.history) > 0 {
+		actions = append(actions, interaction.Action{
+			ID:      "workspace.back",
+			Binding: key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "back")),
+			Run:     w.goBack,
+		})
+	}
+	actions = append(actions,
+		interaction.Action{
 			ID:      "workspace.palette",
 			Binding: key.NewBinding(key.WithKeys(":"), key.WithHelp(":", "command palette")),
 			Run: func() tea.Cmd {
@@ -82,7 +90,7 @@ func (w *Workbench) workspaceActions() []interaction.Action {
 				return nil
 			},
 		},
-		{
+		interaction.Action{
 			ID:      "workspace.help",
 			Binding: key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
 			Run: func() tea.Cmd {
@@ -91,7 +99,7 @@ func (w *Workbench) workspaceActions() []interaction.Action {
 				return nil
 			},
 		},
-		{
+		interaction.Action{
 			ID:      "workspace.jump-prefix",
 			Binding: key.NewBinding(key.WithKeys("g"), key.WithHelp("g", "jump")),
 			Run: func() tea.Cmd {
@@ -99,7 +107,7 @@ func (w *Workbench) workspaceActions() []interaction.Action {
 				return nil
 			},
 		},
-		{
+		interaction.Action{
 			ID:      "workspace.quit",
 			Binding: key.NewBinding(key.WithKeys("q"), key.WithHelp("q", "quit")),
 			Run: func() tea.Cmd {
@@ -109,7 +117,7 @@ func (w *Workbench) workspaceActions() []interaction.Action {
 				return tea.Quit
 			},
 		},
-	}
+	)
 	for _, nav := range w.navigationItems() {
 		nav := nav
 		actions = append(actions, interaction.Action{
