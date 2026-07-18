@@ -1,5 +1,6 @@
 import type { MediaPartSubject } from '../../../safety/boundary'
-import { freezeSafetyAudit, hasSafetyAudit } from '../../../safety/audit'
+import { freezeSafetyAudit, hasSafetyAudit, type SafetyAudit } from '../../../safety/audit'
+import type { GuardrailAuditEntry } from '../../../safety/guardrail/types'
 import { SafetyResultError } from '../../../safety/errors'
 import {
   guardSafetySessionInputOperationMedia,
@@ -56,12 +57,44 @@ export async function guardTranscriptionOutput<TResult extends CompletedOperatio
   const changed = text !== result.text
   const audit = safety.audit
   if (!changed && !hasSafetyAudit(audit)) return result
+  const publicAudit = changed ? withTimedTranscriptDetailRemoved(audit) : audit
 
   return Object.freeze({
     ...result,
     ...(changed ? { text, segments: Object.freeze([]), words: Object.freeze([]) } : {}),
-    ...(hasSafetyAudit(audit) ? { safety: freezeSafetyAudit(audit) } : {}),
+    ...(hasSafetyAudit(publicAudit) ? { safety: freezeSafetyAudit(publicAudit) } : {}),
   })
+}
+
+function withTimedTranscriptDetailRemoved(audit: SafetyAudit): SafetyAudit {
+  const guardrails = audit.guardrails
+  if (!guardrails) return audit
+  const index = lastEnforcedTranscriptRewrite(guardrails.applied)
+  if (index < 0) return audit
+
+  return {
+    ...audit,
+    guardrails: {
+      ...guardrails,
+      applied: guardrails.applied.map((entry, entryIndex) =>
+        entryIndex === index ? { ...entry, timedTranscriptDetailRemoved: true as const } : entry,
+      ),
+    },
+  }
+}
+
+function lastEnforcedTranscriptRewrite(entries: readonly GuardrailAuditEntry[]): number {
+  for (let index = entries.length - 1; index >= 0; index--) {
+    const entry = entries[index]
+    if (
+      entry?.boundary === 'model.output.text' &&
+      entry.mode === 'enforce' &&
+      (entry.action === 'redact' || entry.action === 'transform')
+    ) {
+      return index
+    }
+  }
+  return -1
 }
 
 async function guardPromptHint(input: TranscriptionInput, safety: Safety): Promise<TranscriptionInput> {

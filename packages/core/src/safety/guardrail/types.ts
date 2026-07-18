@@ -127,10 +127,14 @@ export interface GuardrailAuditEntry {
   readonly phase: 'input' | 'output'
   readonly action: string
   readonly reason?: string
+  /** Safe model id for this media evaluation, when one is known. */
+  readonly model?: string
   /** Safe original coordinates for media-boundary entries. */
   readonly location?: MediaPartLocation
   /** Present only when stripping the part immediately became a terminal block. */
   readonly escalatedToBlock?: true
+  /** Present only when an enforced transcript rewrite removed segments and words. */
+  readonly timedTranscriptDetailRemoved?: true
   readonly durationMs: number
 }
 
@@ -228,10 +232,7 @@ function isRewriteKind(value: unknown): value is GuardrailRewriteKind {
 }
 
 function isSafetyFindings(value: unknown): value is readonly SafetyFinding[] {
-  return (
-    Array.isArray(value) &&
-    value.every((finding) => isRecord(finding) && typeof finding.type === 'string')
-  )
+  return Array.isArray(value) && value.every((finding) => isRecord(finding) && typeof finding.type === 'string')
 }
 
 function resultError(

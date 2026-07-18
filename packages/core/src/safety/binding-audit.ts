@@ -1,4 +1,5 @@
 import type { BoundaryDef } from './boundary'
+import { observe } from '../observability'
 import type { GuardrailAuditEntry } from './guardrail/types'
 import type { SafetyBinding } from './registry'
 
@@ -38,6 +39,39 @@ export function dormantBindingEntries(bindings: readonly SafetyBinding[]): Guard
       },
     ]
   })
+}
+
+/** Record safe timeline evidence for bindings intentionally not evaluated. */
+export function recordBindingAuditEntries(entries: readonly GuardrailAuditEntry[]): void {
+  const spanId = observe.captureContext()?.currentSpanId
+  if (!spanId) return
+
+  for (const entry of entries) {
+    const details = {
+      guardrailName: entry.guard,
+      boundary: entry.boundary,
+      mode: entry.mode,
+      phase: entry.phase,
+      action: entry.action,
+      ...(entry.reason ? { reason: entry.reason } : {}),
+    }
+    const artifactId = observe.artifact({
+      kind: 'guardrail.report',
+      contentType: 'application/json',
+      encoding: 'json',
+      preview: { kind: 'guardrail.report', ...details },
+      attributes: details,
+    })
+    if (artifactId) {
+      observe.edge({
+        edgeType: 'produced',
+        from: { kind: 'span', id: spanId },
+        to: { kind: 'artifact', id: artifactId },
+        attributes: details,
+      })
+    }
+    observe.event({ name: 'guardrail.action', attributes: details })
+  }
 }
 
 function boundaryPhase(boundary: BoundaryDef): 'input' | 'output' {

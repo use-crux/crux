@@ -13,6 +13,7 @@ export interface MediaEvaluation {
   readonly binding: GuardrailBinding
   readonly result: MediaGuardrailRunResult
   readonly location: MediaPartLocation
+  readonly model?: string
   readonly durationMs: number
   readonly span: ReturnType<typeof observe.openSpan>
   escalatedToBlock: boolean
@@ -28,16 +29,22 @@ export function finalizeMediaEvaluations(
   terminal?: MediaEvaluation,
 ): void {
   for (const evaluation of evaluations) {
-    const { binding, result, location, durationMs, escalatedToBlock, span } = evaluation
+    const { binding, result, location, model, durationMs, escalatedToBlock, span } = evaluation
     span.withContext(() => {
       recordMediaGuardrailReport(binding, result, location, durationMs, escalatedToBlock)
       if (evaluation === terminal && result.action !== 'allow') {
         recordMediaGuardrailBlockedEdge(binding, result.reason, location, escalatedToBlock)
       }
     })
-    span.end({ attributes: { action: result.action, durationMs } })
+    span.end({
+      attributes: {
+        action: result.action,
+        ...(escalatedToBlock ? { escalatedToBlock: true as const } : {}),
+        durationMs,
+      },
+    })
     options.appendAudit({
-      applied: [auditEntry(options.phase, binding, result, location, durationMs, escalatedToBlock)],
+      applied: [auditEntry(options.phase, binding, result, location, model, durationMs, escalatedToBlock)],
       blocked: (result.action === 'block' && binding.mode === 'enforce') || escalatedToBlock,
     })
   }
@@ -50,6 +57,8 @@ export function mediaBlockedError(
   reason: string,
   location: MediaPartLocation,
   durationMs: number,
+  escalatedToBlock = false,
+  model?: string,
 ): GuardrailBlockedError {
   return new GuardrailBlockedError({
     guardrailId: binding.policy.id,
@@ -63,7 +72,9 @@ export function mediaBlockedError(
         mode: binding.mode,
         action: 'block',
         reason,
+        ...(model ? { model } : {}),
         location,
+        ...(escalatedToBlock ? { escalatedToBlock: true as const } : {}),
         ...(binding.tuned ? { tuned: binding.tuned } : {}),
         durationMs,
         captured: safeCaptureSummary(''),
@@ -91,6 +102,7 @@ function auditEntry(
   binding: GuardrailBinding,
   result: MediaGuardrailRunResult,
   location: MediaPartLocation,
+  model: string | undefined,
   durationMs: number,
   escalatedToBlock: boolean,
 ): GuardrailAuditEntry {
@@ -102,6 +114,7 @@ function auditEntry(
     phase,
     action: result.action,
     ...(result.action === 'allow' ? {} : { reason: result.reason }),
+    ...(model ? { model } : {}),
     location,
     ...(escalatedToBlock ? { escalatedToBlock: true as const } : {}),
     durationMs,

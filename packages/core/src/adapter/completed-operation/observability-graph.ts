@@ -27,10 +27,7 @@ export interface CompletedMediaObservation {
   readonly primitive: MediaPrimitiveName;
   readonly spanId: CruxSpanId;
   withContext<T>(fn: () => T | Promise<T>): T | Promise<T>;
-  observeChildCall<T>(
-    operation: string,
-    start: () => Promise<T>,
-  ): Promise<T>;
+  observeChildCall<T>(operation: string, start: () => Promise<T>): Promise<T>;
   succeed(
     result: CompletedOperationResult,
     report: unknown,
@@ -45,11 +42,13 @@ export interface CompletedMediaObservation {
  * the media vocabulary. Non-media operations stay uninstrumented so generic
  * runner tests do not invent parallel graphs.
  */
-export function openCompletedMediaObservation(options: Readonly<{
-  provider: string;
-  operation: string;
-  model: unknown;
-}>): CompletedMediaObservation | undefined {
+export function openCompletedMediaObservation(
+  options: Readonly<{
+    provider: string;
+    operation: string;
+    model: unknown;
+  }>,
+): CompletedMediaObservation | undefined {
   const primitive = mediaPrimitiveForOperation(options.operation);
   if (!primitive) return undefined;
 
@@ -168,13 +167,35 @@ export function openCompletedMediaObservation(options: Readonly<{
 
 /** Project untrusted input into a descriptor-only preview. */
 export function safeMediaInputPreview(input: unknown): unknown {
-  return sanitizeMediaPreview(projectMediaFacingValue(input));
+  return sanitizeMediaPreview(
+    projectMediaFacingValue(input, INPUT_CONTROL_FIELDS),
+  );
 }
 
 /** Project untrusted output into a descriptor-only preview. */
 export function safeMediaOutputPreview(result: unknown): unknown {
-  return sanitizeMediaPreview(projectMediaFacingValue(result));
+  return sanitizeMediaPreview(
+    projectMediaFacingValue(result, OUTPUT_PRIVATE_FIELDS),
+  );
 }
+
+const INPUT_CONTROL_FIELDS = new Set([
+  "constraints",
+  "guardrails",
+  "model",
+  "providerOptions",
+  "route",
+  "safety",
+  "signal",
+  "timeout",
+]);
+
+const OUTPUT_PRIVATE_FIELDS = new Set([
+  "segments",
+  "text",
+  "warnings",
+  "words",
+]);
 
 function buildMediaReportPreview(
   result: CompletedOperationResult,
@@ -225,11 +246,15 @@ function linkSpanArtifact(
   });
 }
 
-function projectMediaFacingValue(value: unknown): unknown {
+function projectMediaFacingValue(
+  value: unknown,
+  omitted?: ReadonlySet<string>,
+): unknown {
   if (!isRecord(value)) return value;
   const projected: Record<string, unknown> = {};
   for (const key of Object.keys(value)) {
-    if (key === "raw" || key === "providerMetadata") continue;
+    if (key === "raw" || key === "providerMetadata" || omitted?.has(key))
+      continue;
     projected[key] = value[key];
   }
   return projected;
@@ -237,7 +262,10 @@ function projectMediaFacingValue(value: unknown): unknown {
 
 function describeModel(model: unknown): string | undefined {
   if (typeof model === "object" && model !== null) {
-    const record = model as { readonly modelId?: unknown; readonly id?: unknown };
+    const record = model as {
+      readonly modelId?: unknown;
+      readonly id?: unknown;
+    };
     if (typeof record.modelId === "string") return record.modelId;
     if (typeof record.id === "string") return record.id;
   }

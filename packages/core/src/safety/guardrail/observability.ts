@@ -35,12 +35,24 @@ export function recordGuardrailReport(
       edgeType: 'produced',
       from: { kind: 'span', id: activeSpanId },
       to: { kind: 'artifact', id: artifactId },
-      attributes: { guardrailName, boundary: binding.boundary.id, mode: binding.mode, action },
+      attributes: {
+        guardrailName,
+        boundary: binding.boundary.id,
+        mode: binding.mode,
+        action,
+      },
     })
   }
   observe.event({
     name: 'guardrail.action',
-    attributes: { guardrailName, boundary: binding.boundary.id, mode: binding.mode, phase, action, durationMs },
+    attributes: {
+      guardrailName,
+      boundary: binding.boundary.id,
+      mode: binding.mode,
+      phase,
+      action,
+      durationMs,
+    },
   })
 }
 
@@ -150,7 +162,13 @@ function recordBlockedEdge(
       edgeType: 'guardrail.blocked',
       from: { kind: 'span', id: activeSpanId },
       to: { kind: 'artifact', id: artifactId },
-      attributes: { guardrailName, boundary: binding.boundary.id, mode: binding.mode, reason, ...details },
+      attributes: {
+        guardrailName,
+        boundary: binding.boundary.id,
+        mode: binding.mode,
+        reason,
+        ...details,
+      },
     })
   }
 }
@@ -165,11 +183,7 @@ function mediaAttributes(
   }
 }
 
-function guardrailReportPreview(
-  phase: 'input' | 'output',
-  action: string,
-  result: unknown,
-): Record<string, unknown> {
+function guardrailReportPreview(phase: 'input' | 'output', action: string, result: unknown): Record<string, unknown> {
   const base = {
     kind: 'guardrail.report',
     phase,
@@ -178,10 +192,17 @@ function guardrailReportPreview(
   if (!result || typeof result !== 'object') return base
 
   const record = result as Record<string, unknown>
+  const rewrite =
+    record.rewrite &&
+    typeof record.rewrite === 'object' &&
+    typeof (record.rewrite as { readonly kind?: unknown }).kind === 'string'
+      ? {
+          rewrite: { kind: (record.rewrite as { readonly kind: string }).kind },
+        }
+      : {}
   return {
     ...base,
-    ...record,
-    ...(typeof record.value === 'string' ? { afterPreview: record.value.slice(0, 500) } : {}),
+    ...rewrite,
     ...(typeof record.reason === 'string' ? { reason: record.reason } : {}),
   }
 }

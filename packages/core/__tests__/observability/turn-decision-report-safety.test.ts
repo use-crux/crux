@@ -90,12 +90,34 @@ describe('Safety decisions in TurnDecisionReport', () => {
       phase: 'checks',
       kind: 'safety.guardrail',
       outcome: 'strip',
+      location: {
+        origin: { kind: 'message', messageIndex: 2, partIndex: 1 },
+        partType: 'image',
+      },
       reason: {
         code: 'guardrail.stripped',
         text: 'Image removed.',
       },
       tab: { tab: 'Guardrail', anchorId: 'strip-image' },
     })
+  })
+
+  it('preserves exact step media coordinates without copying capture previews', () => {
+    const decision = safetyDecision({
+      policyId: 'strip-step-image',
+      kind: 'guardrail',
+      boundary: 'model.output.media',
+      action: 'strip',
+      location: {
+        origin: { kind: 'step', stepIndex: 3, partIndex: 2 },
+        partType: 'image',
+      },
+    })
+
+    const row = safetyDecisionToTurnDecision(decision)
+
+    expect(row.location).toEqual(decision.location)
+    expect(JSON.stringify(row)).not.toContain('safe preview')
   })
 
   it('does not mislabel impossible strip actions from other safety kinds', () => {

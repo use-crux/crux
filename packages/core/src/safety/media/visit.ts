@@ -40,7 +40,11 @@ export interface MediaVisitResult {
 /** Visit media policies once and enforce each retention group's minimum size. */
 export async function visitMedia(options: VisitMediaOptions): Promise<MediaVisitResult> {
   if (options.bindings.length === 0 || options.items.length === 0) {
-    return { subjects: options.items.map(({ subject }) => subject), actions: [], ran: false }
+    return {
+      subjects: options.items.map(({ subject }) => subject),
+      actions: [],
+      ran: false,
+    }
   }
 
   const retainedByGroup = new Map(options.groups.map((group) => [group.id, group.size]))
@@ -99,6 +103,7 @@ export async function visitMedia(options: VisitMediaOptions): Promise<MediaVisit
         binding,
         result,
         location,
+        model: context.model,
         durationMs,
         span,
         escalatedToBlock,
@@ -108,13 +113,13 @@ export async function visitMedia(options: VisitMediaOptions): Promise<MediaVisit
 
       if (result.action === 'block' && binding.mode === 'enforce') {
         finalizeMediaEvaluations(options, evaluations, evaluation)
-        throw mediaBlockedError(options.phase, binding, result.reason, location, durationMs)
+        throw mediaBlockedError(options.phase, binding, result.reason, location, durationMs, false, context.model)
       }
 
       if (result.action === 'strip' && binding.mode === 'enforce') {
         if (escalatedToBlock) {
           finalizeMediaEvaluations(options, evaluations, evaluation)
-          throw mediaBlockedError(options.phase, binding, result.reason, location, durationMs)
+          throw mediaBlockedError(options.phase, binding, result.reason, location, durationMs, true, context.model)
         }
         retainedByGroup.set(item.groupId, retainedCount(retainedByGroup, item.groupId) - 1)
         stripped.add(item.subject)
@@ -139,6 +144,8 @@ export async function visitMedia(options: VisitMediaOptions): Promise<MediaVisit
       evaluation.result.reason,
       evaluation.location,
       evaluation.durationMs,
+      true,
+      evaluation.model,
     )
   }
 

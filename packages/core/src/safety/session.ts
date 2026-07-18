@@ -39,7 +39,11 @@ import {
   type SafetyBinding,
 } from "./registry";
 import type { SafetyBindingApplicability } from "./applicability";
-import { disabledBindingEntries, dormantBindingEntries } from "./binding-audit";
+import {
+  disabledBindingEntries,
+  dormantBindingEntries,
+  recordBindingAuditEntries,
+} from "./binding-audit";
 import type { SafetyTuneOptions } from "./tune";
 import type {
   Constraint,
@@ -706,9 +710,11 @@ function createSafetySession(
 
   if (disabledGuardEntries.length > 0) {
     appendGuardrailAudit({ applied: disabledGuardEntries, blocked: false });
+    recordBindingAuditEntries(disabledGuardEntries);
   }
   if (dormantGuardEntries.length > 0) {
     appendGuardrailAudit({ applied: dormantGuardEntries, blocked: false });
+    recordBindingAuditEntries(dormantGuardEntries);
   }
 
   const toCorrectiveMessages = (

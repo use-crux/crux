@@ -112,19 +112,39 @@ type TurnCacheEvidence struct {
 
 // TurnDecision is a compact row describing one recorded decision.
 type TurnDecision struct {
-	ID        string                 `json:"id"`
-	Phase     string                 `json:"phase"`
-	Kind      string                 `json:"kind"`
-	Subject   TurnDecisionSubject    `json:"subject"`
-	Outcome   string                 `json:"outcome"`
-	Reason    TurnDecisionReason     `json:"reason"`
-	Source    *TurnSourceJoin        `json:"source,omitempty"`
-	Coverage  *TurnCoverageArea      `json:"coverage,omitempty"`
-	Tab       *TurnDeepTabTarget     `json:"tab,omitempty"`
-	Evidence  []TurnEvidenceRef      `json:"evidence,omitempty"`
-	Freshness *TurnFreshnessEvidence `json:"freshness,omitempty"`
-	Cache     *TurnCacheEvidence     `json:"cache,omitempty"`
-	Metrics   *TurnDecisionMetrics   `json:"metrics,omitempty"`
+	ID               string                 `json:"id"`
+	Phase            string                 `json:"phase"`
+	Kind             string                 `json:"kind"`
+	Subject          TurnDecisionSubject    `json:"subject"`
+	Outcome          string                 `json:"outcome"`
+	Reason           TurnDecisionReason     `json:"reason"`
+	Model            string                 `json:"model,omitempty"`
+	Location         *TurnDecisionLocation  `json:"location,omitempty"`
+	EscalatedToBlock bool                   `json:"escalatedToBlock,omitempty"`
+	Source           *TurnSourceJoin        `json:"source,omitempty"`
+	Coverage         *TurnCoverageArea      `json:"coverage,omitempty"`
+	Tab              *TurnDeepTabTarget     `json:"tab,omitempty"`
+	Evidence         []TurnEvidenceRef      `json:"evidence,omitempty"`
+	Freshness        *TurnFreshnessEvidence `json:"freshness,omitempty"`
+	Cache            *TurnCacheEvidence     `json:"cache,omitempty"`
+	Metrics          *TurnDecisionMetrics   `json:"metrics,omitempty"`
+}
+
+// TurnDecisionLocation is the source-free location of canonical media.
+type TurnDecisionLocation struct {
+	Origin   TurnDecisionOrigin `json:"origin"`
+	PartType string             `json:"partType"`
+}
+
+// TurnDecisionOrigin preserves exact original indexes without media evidence.
+type TurnDecisionOrigin struct {
+	Kind         string `json:"kind"`
+	MessageIndex *int   `json:"messageIndex,omitempty"`
+	StepIndex    *int   `json:"stepIndex,omitempty"`
+	Operation    string `json:"operation,omitempty"`
+	Phase        string `json:"phase,omitempty"`
+	Field        string `json:"field,omitempty"`
+	PartIndex    int    `json:"partIndex"`
 }
 
 // TurnDecisionSubject identifies the thing a decision acted on.

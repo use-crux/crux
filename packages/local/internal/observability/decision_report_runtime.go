@@ -87,23 +87,6 @@ func routingDecisionForSpan(turn SpanSummary, span SpanSummary) TurnDecision {
 	return runtimeDecision(turn, span, "model-selection", span.Primitive, "route", outcome, observedReason(reasonCode, "Routing decision was observed."), "Routing")
 }
 
-func guardDecisionForSpan(turn SpanSummary, span SpanSummary, subjectKind string, tab string) TurnDecision {
-	status := strings.ToLower(firstNonEmpty(span.Status, "unknown"))
-	outcome := status
-	codeStatus := status
-	switch status {
-	case "ok", "success", "passed":
-		codeStatus = "passed"
-	case "warn", "warning":
-		codeStatus = "warned"
-	case "blocked", "error":
-		codeStatus = "blocked"
-	default:
-		codeStatus = "passed"
-	}
-	return runtimeDecision(turn, span, "checks", span.Primitive, subjectKind, outcome, observedReason(subjectKind+"."+codeStatus, subjectKind+" decision was observed."), tab)
-}
-
 func cacheRuntimeDecisionForSpan(turn SpanSummary, span SpanSummary) TurnDecision {
 	status := normalizeCacheStatus(firstNonEmpty(stringAttribute(span.Attributes, "status"), span.Status))
 	if status == "" || status == "ok" {
