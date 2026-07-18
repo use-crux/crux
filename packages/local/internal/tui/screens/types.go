@@ -24,7 +24,7 @@ type DataClient interface {
 	Runs(ctx context.Context) ([]api.InspectRunRecord, error)
 	RunsWithOptions(ctx context.Context, opts api.InspectRunsOptions) ([]api.InspectRunRecord, error)
 	RunDetail(ctx context.Context, traceID string) (api.InspectRunDetailRecord, bool, error)
-	ObservabilityRuns(ctx context.Context) ([]api.ObservabilityRunSummary, error)
+	ObservabilityRunsPage(ctx context.Context) (api.ObservabilityRunsPage, error)
 	ObservabilityRunDetail(ctx context.Context, runID string) (api.ObservabilityRunDetail, bool, error)
 	ObservabilityResourceActivity(ctx context.Context, family string) ([]api.ObservabilityResourceActivity, error)
 	ProjectIndex(ctx context.Context) (api.IndexData, error)

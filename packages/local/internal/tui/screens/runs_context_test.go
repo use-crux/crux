@@ -31,9 +31,10 @@ func TestRunsActionThreadsRootContextIntoDetailFetch(t *testing.T) {
 		observed:      make(chan bool, 1),
 	}
 	runs := NewRuns()
-	runs.runs = []api.InspectRunRecord{{TraceID: "run-1"}, {TraceID: "run-2"}}
+	values := []api.ObservabilityRunSummary{{RunID: "run-1"}, {RunID: "run-2"}}
+	setRunsForTest(runs, values...)
 	runs.selRun = "run-1"
-	runs.runList.SetItems(runs.runs)
+	runs.runList.SetItems(values)
 	runs.runList.SetCursorByIdentity(runs.selRun)
 
 	cmd, handled := interaction.Dispatch(

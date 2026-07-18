@@ -10,10 +10,10 @@ func TestRunsKeepsExactRouteTargetOutsideLoadedList(t *testing.T) {
 	runs := NewRuns()
 	runs.Focus("run", "run-outside-current-page")
 
-	cmd := runs.Update(testContext, runsListLoadedMsg{
-		api.InspectRunRecord{TraceID: "first-visible-run"},
-		api.InspectRunRecord{TraceID: "second-visible-run"},
-	}, nil)
+	cmd := runs.Update(testContext, runsListLoadedForTest(runs,
+		api.ObservabilityRunSummary{RunID: "first-visible-run"},
+		api.ObservabilityRunSummary{RunID: "second-visible-run"},
+	), nil)
 
 	if got := runs.SelectedRunID(); got != "run-outside-current-page" {
 		t.Fatalf("selected run = %q, want exact route target", got)
@@ -22,8 +22,8 @@ func TestRunsKeepsExactRouteTargetOutsideLoadedList(t *testing.T) {
 		t.Fatal("exact route target did not schedule direct detail fetch")
 	}
 	selected, _, ok := runs.runList.Cursor()
-	if !ok || selected.TraceID != "run-outside-current-page" {
-		t.Fatalf("visible list cursor = (%q, %v), want explicit exact route row", selected.TraceID, ok)
+	if !ok || selected.RunID != "run-outside-current-page" {
+		t.Fatalf("visible list cursor = (%q, %v), want explicit exact route row", selected.RunID, ok)
 	}
 	if got := runs.Counts()["runs"]; got != 2 {
 		t.Fatalf("server-backed run count = %d, want 2", got)
@@ -36,16 +36,16 @@ func TestRunsKeepsExactRouteTargetOutsideLoadedList(t *testing.T) {
 
 func TestRunsFocusRepresentsOffPageTargetBeforeRefresh(t *testing.T) {
 	runs := NewRuns()
-	runs.Update(testContext, runsListLoadedMsg{
-		api.InspectRunRecord{TraceID: "first-visible-run"},
-		api.InspectRunRecord{TraceID: "second-visible-run"},
-	}, nil)
+	runs.Update(testContext, runsListLoadedForTest(runs,
+		api.ObservabilityRunSummary{RunID: "first-visible-run"},
+		api.ObservabilityRunSummary{RunID: "second-visible-run"},
+	), nil)
 
 	runs.Focus("run", "run-outside-current-page")
 
 	selected, _, ok := runs.runList.Cursor()
-	if !ok || selected.TraceID != "run-outside-current-page" {
-		t.Fatalf("immediate list cursor = (%q, %v), want explicit exact route row", selected.TraceID, ok)
+	if !ok || selected.RunID != "run-outside-current-page" {
+		t.Fatalf("immediate list cursor = (%q, %v), want explicit exact route row", selected.RunID, ok)
 	}
 	if got := runs.Counts()["runs"]; got != 2 {
 		t.Fatalf("server-backed run count = %d, want 2", got)

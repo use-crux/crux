@@ -37,15 +37,14 @@ func (s *Runs) cycleRun(ctx context.Context, c DataClient, delta int) tea.Cmd {
 		s.runList.CursorUp()
 	}
 	run, _, ok := s.runList.Cursor()
-	if !ok || run.TraceID == s.selRun {
+	if !ok || run.RunID == s.selRun {
 		// Cursor didn't move — already at the boundary. No need to
 		// re-fetch or rescroll.
 		return nil
 	}
-	s.selRun = run.TraceID
-	s.loading = true
+	s.selRun = run.RunID
 	s.detail = nil
-	return fetchRunDetail(ctx, c, s.selRun)
+	return s.fetchRunDetail(ctx, c, s.selRun)
 }
 
 func (s *Runs) cycleRunStatusFilter(ctx context.Context, c DataClient) tea.Cmd {
@@ -58,20 +57,21 @@ func (s *Runs) ensureFilteredRunSelection(ctx context.Context, c DataClient) tea
 	s.runList.SetItems(runs)
 	if len(runs) == 0 {
 		s.selRun = ""
+		s.selSpan = ""
 		s.detail = nil
+		s.detailResource.Cancel()
 		return nil
 	}
 	if s.runList.SetCursorByIdentity(s.selRun) {
 		return nil
 	}
-	s.selRun = runs[0].TraceID
+	s.selRun = runs[0].RunID
 	s.runList.SetCursorByIdentity(s.selRun)
 	if c == nil {
 		return nil
 	}
-	s.loading = true
 	s.detail = nil
-	return fetchRunDetail(ctx, c, s.selRun)
+	return s.fetchRunDetail(ctx, c, s.selRun)
 }
 
 func (s *Runs) cycleSpan(delta int) tea.Cmd {

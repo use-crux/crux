@@ -15,7 +15,12 @@ import (
 func (s *Runs) renderWaterfall(width, height int) string {
 	if s.detail == nil {
 		header := shell.PaneHeader(width, focusTitle("Trace", s.focus == focusWaterfall), "—", "")
-		body := centerMsg(Size{Width: width, Height: height - 2}, "loading trace…")
+		message := "loading trace…"
+		snapshot := s.detailResource.Snapshot()
+		if snapshot.Err != nil {
+			message = "error: " + snapshot.Err.Error()
+		}
+		body := centerMsg(Size{Width: width, Height: height - 2}, message)
 		return header + "\n" + body
 	}
 

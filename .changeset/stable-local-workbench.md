@@ -10,3 +10,6 @@ Preserve exact record identities across Overview drills and restore logical
 route, pane focus, and stable selections when navigating Back.
 Cancel in-flight Overview and Runs fetches and actions when the owning dev
 command ends instead of leaving workflow work detached from shutdown.
+Keep Runs list and detail reads revision-aware and selection-owned, preserve
+complete observability detail when exporting, and reject late detail responses
+from a previously selected run.

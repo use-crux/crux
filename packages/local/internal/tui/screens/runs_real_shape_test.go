@@ -183,7 +183,6 @@ func TestRealShapeProjectionSurfacesPerPrimitiveFields(t *testing.T) {
 			}
 
 			r := NewRuns()
-			r.loaded = true
 			r.selRun = projected.Run.TraceID
 			d := projected
 			r.detail = &d

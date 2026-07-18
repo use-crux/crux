@@ -25,11 +25,11 @@ func (c *rootContextProgramClient) Overview(ctx context.Context) (api.InspectOve
 	return api.InspectOverviewRecord{}, ctx.Err()
 }
 
-func (c *rootContextProgramClient) ObservabilityRuns(context.Context) ([]api.ObservabilityRunSummary, error) {
-	return []api.ObservabilityRunSummary{
+func (c *rootContextProgramClient) ObservabilityRunsPage(context.Context) (api.ObservabilityRunsPage, error) {
+	return api.ObservabilityRunsPage{Rows: []api.ObservabilityRunSummary{
 		{RunID: "run-a", Name: "run A"},
 		{RunID: "run-b", Name: "run B"},
-	}, nil
+	}}, nil
 }
 
 func (c *rootContextProgramClient) ObservabilityRunDetail(ctx context.Context, _ string) (api.ObservabilityRunDetail, bool, error) {

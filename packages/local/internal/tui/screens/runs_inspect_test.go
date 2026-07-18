@@ -62,7 +62,7 @@ func TestRunsKeybindsAdvertiseOnlyExecutableInspectAction(t *testing.T) {
 // loaded and selected — enough to exercise the inspect path.
 func buildRunWithSpan() *Runs {
 	r := NewRuns()
-	r.loaded = true
+	setRunsForTest(r)
 	body, _ := json.Marshal(map[string]any{"hello": "world"})
 	r.detail = &api.InspectRunDetailRecord{
 		Spans: []api.InspectRunSpan{

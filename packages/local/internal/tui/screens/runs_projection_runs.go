@@ -8,14 +8,9 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/api"
 )
 
-func inspectRunsFromObservability(runs []api.ObservabilityRunSummary) []api.InspectRunRecord {
-	out := make([]api.InspectRunRecord, 0, len(runs))
-	for _, run := range runs {
-		out = append(out, inspectRunFromObservability(run))
-	}
-	return out
-}
-
+// inspectRunFromObservability adapts only the run metadata consumed by the
+// temporary legacy waterfall renderers. Resource state keeps the source
+// ObservabilityRunSummary unchanged.
 func inspectRunFromObservability(run api.ObservabilityRunSummary) api.InspectRunRecord {
 	metrics := observabilityMetrics(run.Metrics)
 	cost := optionalFloatMetric(metrics, "costUsd")

@@ -139,6 +139,9 @@ func (c *FixtureClient) RunDetail(_ context.Context, traceID string) (api.Inspec
 func (c *FixtureClient) ObservabilityRuns(context.Context) ([]api.ObservabilityRunSummary, error) {
 	return nil, nil
 }
+func (c *FixtureClient) ObservabilityRunsPage(context.Context) (api.ObservabilityRunsPage, error) {
+	return api.ObservabilityRunsPage{}, nil
+}
 func (c *FixtureClient) ObservabilityRunDetail(context.Context, string) (api.ObservabilityRunDetail, bool, error) {
 	return api.ObservabilityRunDetail{}, false, nil
 }

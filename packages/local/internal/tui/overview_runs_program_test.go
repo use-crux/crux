@@ -43,11 +43,11 @@ func (c *overviewRunsProgramClient) Runs(context.Context) ([]api.InspectRunRecor
 	return c.inspectRuns(), nil
 }
 
-func (c *overviewRunsProgramClient) ObservabilityRuns(context.Context) ([]api.ObservabilityRunSummary, error) {
-	return []api.ObservabilityRunSummary{
+func (c *overviewRunsProgramClient) ObservabilityRunsPage(context.Context) (api.ObservabilityRunsPage, error) {
+	return api.ObservabilityRunsPage{Rows: []api.ObservabilityRunSummary{
 		c.observabilityRun(firstSimilarRunID),
 		c.observabilityRun(secondSimilarRunID),
-	}, nil
+	}}, nil
 }
 
 func (c *overviewRunsProgramClient) ObservabilityRunDetail(_ context.Context, runID string) (api.ObservabilityRunDetail, bool, error) {

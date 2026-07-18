@@ -22,10 +22,11 @@ type runExportErrMsg struct{ err string }
 // record as pretty-printed JSON to ~/.crux/exports/run-{id}.json. No-op
 // (returns nil) when nothing is focused.
 func (s *Runs) exportRun() tea.Cmd {
-	if s.detail == nil || s.selRun == "" {
+	snapshot := s.detailResource.Snapshot()
+	if !snapshot.HasValue || s.selRun == "" || snapshot.Value.Run.RunID != s.selRun {
 		return nil
 	}
-	rec := *s.detail
+	rec := snapshot.Value
 	id := s.selRun
 	return func() tea.Msg {
 		home, err := os.UserHomeDir()

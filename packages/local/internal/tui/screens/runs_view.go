@@ -6,14 +6,16 @@ import (
 	"strings"
 
 	"github.com/use-crux/crux/packages/local/internal/tui/kit"
+	"github.com/use-crux/crux/packages/local/internal/tui/resource"
 )
 
 func (s *Runs) View(size Size) string {
-	if !s.loaded {
+	listSnapshot := s.runsResource.Snapshot()
+	if !listSnapshot.HasValue {
+		if listSnapshot.State == resource.ResourceFailed && listSnapshot.Err != nil {
+			return centerMsg(size, "error: "+listSnapshot.Err.Error())
+		}
 		return centerMsg(size, "loading runs…")
-	}
-	if s.err != "" {
-		return centerMsg(size, "error: "+s.err)
 	}
 	if size.Width <= 0 || size.Height <= 0 {
 		return ""

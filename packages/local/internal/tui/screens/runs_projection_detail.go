@@ -7,6 +7,9 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/api"
 )
 
+// inspectRunDetailFromObservabilityDetail builds the temporary view model used
+// by legacy waterfall and span renderers. It must not be used as resource state
+// or exported because it intentionally projects only renderable fields.
 func inspectRunDetailFromObservabilityDetail(detail api.ObservabilityRunDetail) api.InspectRunDetailRecord {
 	run := inspectRunFromObservability(detail.Run)
 	trace := api.InspectTraceRecord{
@@ -18,17 +21,11 @@ func inspectRunDetailFromObservabilityDetail(detail api.ObservabilityRunDetail) 
 		Status:     normalizeObservabilityStatus(detail.Run.Status),
 	}
 	spans := inspectSpansFromRunDetailNode(detail.Root)
-	events := make([]api.CorrelatedEvent, 0)
-	for _, span := range spans {
-		if len(span.Data) == 0 {
-			continue
-		}
-	}
 	return api.InspectRunDetailRecord{
 		Tag:       "InspectRunDetail",
 		Run:       run,
 		Trace:     trace,
-		Events:    events,
+		Events:    []api.CorrelatedEvent{},
 		Spans:     spans,
 		Narrative: []api.InspectRunNarrativeEvent{},
 	}

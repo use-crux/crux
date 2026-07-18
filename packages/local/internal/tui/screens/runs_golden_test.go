@@ -43,7 +43,7 @@ func TestRunsGoldens(t *testing.T) {
 			screen := runs
 			if tc.empty {
 				screen = NewRuns()
-				screen.loaded = true
+				setRunsForTest(screen)
 			}
 			uitest.Golden(t, tc.name, screen.View(Size{Width: tc.width, Height: tc.height}))
 		})
@@ -55,7 +55,11 @@ func fixtureRuns() (*Runs, time.Time) {
 	runs, _ := client.Runs(nil)
 	detail, _, _ := client.RunDetail(nil, runs[0].TraceID)
 	screen := NewRuns()
-	screen.runs = runs
+	summaries := make([]api.ObservabilityRunSummary, len(runs))
+	for index, run := range runs {
+		summaries[index] = observabilityRunSummaryForTest(run)
+	}
+	setRunsForTest(screen, summaries...)
 	screen.detail = &detail
 	screen.selRun = runs[0].TraceID
 	if len(detail.Spans) > 0 {
@@ -67,29 +71,28 @@ func fixtureRuns() (*Runs, time.Time) {
 			}
 		}
 	}
-	screen.loaded = true
-	screen.runList.SetItems(runs)
+	screen.runList.SetItems(summaries)
 	return screen, client.Now
 }
 
 func TestRunsStatusFilterLimitsVisibleRows(t *testing.T) {
 	screen := NewRuns()
-	screen.loaded = true
-	screen.runs = []api.InspectRunRecord{
-		{TraceID: "failed-000", TargetID: "docs_agent", Status: "failed"},
-		{TraceID: "passed-000", TargetID: "docs_agent", Status: "passed"},
-		{TraceID: "running-0", TargetID: "docs_agent", Status: "running"},
+	values := []api.ObservabilityRunSummary{
+		{RunID: "error-1", Name: "docs_agent", Status: "error"},
+		{RunID: "ok-1", Name: "docs_agent", Status: "ok"},
+		{RunID: "run-1", Name: "docs_agent", Status: "running"},
 	}
-	screen.selRun = "failed-000"
-	screen.runList.SetItems(screen.runs)
+	setRunsForTest(screen, values...)
+	screen.selRun = "error-1"
+	screen.runList.SetItems(values)
 
 	screen.Update(testContext, tea.KeyPressMsg(tea.Key{Text: "f", Code: 'f'}), nil)
 	out := stripANSI(screen.View(Size{Width: 100, Height: 24}))
 
-	if !strings.Contains(out, "failed") {
-		t.Fatalf("filtered runs view lost failed row:\n%s", out)
+	if !strings.Contains(out, "error-1") {
+		t.Fatalf("failed filter lost the error-status row:\n%s", out)
 	}
-	for _, hidden := range []string{"passed", "running"} {
+	for _, hidden := range []string{"ok-1", "run-1"} {
 		if strings.Contains(out, hidden) {
 			t.Fatalf("status filter rendered hidden %q row:\n%s", hidden, out)
 		}
@@ -98,13 +101,13 @@ func TestRunsStatusFilterLimitsVisibleRows(t *testing.T) {
 
 func TestRunsTextFilterLimitsVisibleRows(t *testing.T) {
 	screen := NewRuns()
-	screen.loaded = true
-	screen.runs = []api.InspectRunRecord{
-		{TraceID: "docs-000", TargetID: "docs_agent", Status: "failed"},
-		{TraceID: "triage-0", TargetID: "triage", Status: "passed"},
+	values := []api.ObservabilityRunSummary{
+		{RunID: "docs-000", Name: "docs_agent", Status: "failed"},
+		{RunID: "triage-0", Name: "triage", Status: "passed"},
 	}
+	setRunsForTest(screen, values...)
 	screen.selRun = "docs-000"
-	screen.runList.SetItems(screen.runs)
+	screen.runList.SetItems(values)
 
 	screen.Update(testContext, tea.KeyPressMsg(tea.Key{Text: "/", Code: '/'}), nil)
 	for _, r := range "triage" {
@@ -123,7 +126,7 @@ func TestRunsTextFilterLimitsVisibleRows(t *testing.T) {
 
 func TestRunsWaterfallCollapsesDuplicateGroups(t *testing.T) {
 	screen := NewRuns()
-	screen.loaded = true
+	setRunsForTest(screen)
 	duration := 10_000.0
 	spanDuration := 100.0
 	screen.detail = &api.InspectRunDetailRecord{

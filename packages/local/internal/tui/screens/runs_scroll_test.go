@@ -13,13 +13,14 @@ import (
 // of where the cursor was.
 func TestRunsListScrollsWithCursor(t *testing.T) {
 	r := NewRuns()
-	r.loaded = true
 	// 10 runs, list pane visible capacity = 3 (= 6 rows ÷ 2 rows/run).
-	for i := 0; i < 10; i++ {
-		r.runs = append(r.runs, api.InspectRunRecord{TraceID: tabbedID(i)})
+	values := make([]api.ObservabilityRunSummary, 10)
+	for i := range values {
+		values[i] = api.ObservabilityRunSummary{RunID: tabbedID(i)}
 	}
-	r.selRun = r.runs[0].TraceID
-	r.runList.SetItems(r.runs)
+	setRunsForTest(r, values...)
+	r.selRun = values[0].RunID
+	r.runList.SetItems(values)
 	r.runList.SetHeight(6)
 
 	// Move cursor down 5 times — past the visible window (capacity 3).
@@ -27,8 +28,8 @@ func TestRunsListScrollsWithCursor(t *testing.T) {
 		r.cycleRun(testContext, nil, +1)
 	}
 
-	if r.selRun != r.runs[5].TraceID {
-		t.Errorf("cursor index = %q, want %q", r.selRun, r.runs[5].TraceID)
+	if r.selRun != values[5].RunID {
+		t.Errorf("cursor index = %q, want %q", r.selRun, values[5].RunID)
 	}
 	// After 5 down-moves with capacity 3, scroll should have advanced
 	// enough to keep index 5 visible — i.e. scroll >= 3 (so index 5 is
@@ -45,12 +46,13 @@ func TestRunsListScrollsWithCursor(t *testing.T) {
 // the list up too.
 func TestRunsListScrollsBackUp(t *testing.T) {
 	r := NewRuns()
-	r.loaded = true
-	for i := 0; i < 10; i++ {
-		r.runs = append(r.runs, api.InspectRunRecord{TraceID: tabbedID(i)})
+	values := make([]api.ObservabilityRunSummary, 10)
+	for i := range values {
+		values[i] = api.ObservabilityRunSummary{RunID: tabbedID(i)}
 	}
-	r.selRun = r.runs[8].TraceID
-	r.runList.SetItems(r.runs)
+	setRunsForTest(r, values...)
+	r.selRun = values[8].RunID
+	r.runList.SetItems(values)
 	r.runList.SetHeight(6)
 	r.runList.SetCursorByIdentity(r.selRun)
 
@@ -59,8 +61,8 @@ func TestRunsListScrollsBackUp(t *testing.T) {
 		r.cycleRun(testContext, nil, -1)
 	}
 
-	if r.selRun != r.runs[1].TraceID {
-		t.Errorf("cursor index = %q, want %q", r.selRun, r.runs[1].TraceID)
+	if r.selRun != values[1].RunID {
+		t.Errorf("cursor index = %q, want %q", r.selRun, values[1].RunID)
 	}
 	if got := r.runList.Offset(); got > 1 {
 		t.Errorf("offset = %d, want <= 1 (cursor at index 1 must be visible)", got)

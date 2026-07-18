@@ -31,7 +31,8 @@ func (s *Runs) Actions(ctx context.Context, client DataClient) []interaction.Act
 		inspectReason = "selected span has no raw payload"
 	}
 	exportReason := ""
-	if s.detail == nil || s.selRun == "" {
+	detailSnapshot := s.detailResource.Snapshot()
+	if !detailSnapshot.HasValue || s.selRun == "" || detailSnapshot.Value.Run.RunID != s.selRun {
 		exportReason = "load a run before exporting"
 	}
 	activateReason := ""

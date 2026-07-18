@@ -121,6 +121,7 @@ func (r *Resource[T]) Apply(result ResourceResult[T]) bool {
 	if !r.active || result.Token.Request != r.token.Request || result.Token.Owner != r.token.Owner || result.Token.Revision < r.token.Revision {
 		return false
 	}
+	r.token = result.Token
 	if result.Err != nil {
 		r.err = result.Err
 		r.refreshing = false

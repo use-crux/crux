@@ -132,7 +132,6 @@ func TestDumpPrimitiveRenders(t *testing.T) {
 	for _, tc := range cases {
 		body, _ := json.Marshal(tc.payload)
 		r := NewRuns()
-		r.loaded = true
 		r.selRun = "run-x"
 		r.detail = &api.InspectRunDetailRecord{
 			Run: api.InspectRunRecord{TraceID: "run-x"},

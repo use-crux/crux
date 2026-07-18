@@ -19,7 +19,6 @@ func renderSpanWithPayload(t *testing.T, primitive string, payload map[string]an
 		t.Fatalf("marshal payload: %v", err)
 	}
 	r := NewRuns()
-	r.loaded = true
 	r.selRun = "run-x"
 	r.detail = &api.InspectRunDetailRecord{
 		Run: api.InspectRunRecord{TraceID: "run-x"},
@@ -110,7 +109,6 @@ func TestQualitySpansFromRunDetailNodePreservesErrorInspection(t *testing.T) {
 func TestSpanDetailSurfacesObservedError(t *testing.T) {
 	errorJSON := json.RawMessage(`{"name":"ToolExecutionError","message":"tool exploded","stack":"Error: tool exploded\n    at search.ts:10:3","category":"tool","retryable":false}`)
 	r := NewRuns()
-	r.loaded = true
 	r.selRun = "run-error"
 	r.detail = &api.InspectRunDetailRecord{
 		Run: api.InspectRunRecord{TraceID: "run-error"},

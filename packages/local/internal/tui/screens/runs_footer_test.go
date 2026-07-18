@@ -14,7 +14,7 @@ import (
 // screen actually does. See S7 in the plan.
 func TestRunsFooterOmitsUnbuiltVerbs(t *testing.T) {
 	r := NewRuns()
-	r.loaded = true
+	setRunsForTest(r)
 	r.detail = &api.InspectRunDetailRecord{
 		Run: api.InspectRunRecord{TraceID: "8af2f1c", TargetID: "docs_agent"},
 		Spans: []api.InspectRunSpan{
@@ -44,7 +44,7 @@ func TestRunsFooterOmitsUnimplementedExternalViewer(t *testing.T) {
 
 func TestRunsFooterOmitsInspectWhenSelectedSpanHasNoRawPayload(t *testing.T) {
 	r := NewRuns()
-	r.loaded = true
+	setRunsForTest(r)
 	r.detail = &api.InspectRunDetailRecord{
 		Run: api.InspectRunRecord{TraceID: "run-1"},
 		Spans: []api.InspectRunSpan{

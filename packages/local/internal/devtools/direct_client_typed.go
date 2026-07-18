@@ -55,17 +55,22 @@ func (c *DirectClient) RunDetail(ctx context.Context, traceID string) (api.Inspe
 	return record, err == nil, err
 }
 
-// ObservabilityRuns loads the revisioned runs page and returns its rows for
-// list-oriented TUI and CLI rendering.
-func (c *DirectClient) ObservabilityRuns(ctx context.Context) ([]api.ObservabilityRunSummary, error) {
+// ObservabilityRunsPage loads the revisioned Runs read-model page.
+func (c *DirectClient) ObservabilityRunsPage(ctx context.Context) (api.ObservabilityRunsPage, error) {
 	if c.observability == nil {
-		return nil, errNoObservabilityService
+		return api.ObservabilityRunsPage{}, errNoObservabilityService
 	}
 	page, err := c.observability.RunsPage(ctx, observability.RunListOptions{})
 	if err != nil {
-		return nil, err
+		return api.ObservabilityRunsPage{}, err
 	}
-	return page.Rows, nil
+	return page, nil
+}
+
+// ObservabilityRuns loads Runs rows for list-oriented CLI rendering.
+func (c *DirectClient) ObservabilityRuns(ctx context.Context) ([]api.ObservabilityRunSummary, error) {
+	page, err := c.ObservabilityRunsPage(ctx)
+	return page.Rows, err
 }
 
 func (c *DirectClient) ObservabilityRunDetail(ctx context.Context, runID string) (api.ObservabilityRunDetail, bool, error) {

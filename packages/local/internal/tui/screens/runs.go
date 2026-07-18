@@ -11,6 +11,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/theme"
 	"github.com/use-crux/crux/packages/local/internal/tui/bridge"
 	"github.com/use-crux/crux/packages/local/internal/tui/kit"
+	"github.com/use-crux/crux/packages/local/internal/tui/resource"
 	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
 
@@ -33,17 +34,17 @@ var runsStyles = theme.NewStyles(theme.Resolve(colorprofile.TrueColor))
 // (loads run detail from the list, drills into span detail from the
 // waterfall).
 type Runs struct {
-	runs      []api.InspectRunRecord
-	routedRun *api.InspectRunRecord
-	detail    *api.InspectRunDetailRecord
-	selRun    string
-	selSpan   string
-	focus     runsFocus
-	loaded    bool
-	err       string
-	loading   bool
+	runsResource   *resource.Resource[[]api.ObservabilityRunSummary]
+	detailResource *resource.Resource[api.ObservabilityRunDetail]
+	routedRun      *api.ObservabilityRunSummary
+	// detail is a temporary presentation adapter for the legacy waterfall and
+	// span renderers. detailResource remains the lossless source of truth.
+	detail  *api.InspectRunDetailRecord
+	selRun  string
+	selSpan string
+	focus   runsFocus
 
-	runList        kit.VList[api.InspectRunRecord]
+	runList        kit.VList[api.ObservabilityRunSummary]
 	filteringRuns  bool
 	runQuery       string
 	runStatusIndex int
@@ -61,9 +62,16 @@ const (
 )
 
 func NewRuns() *Runs {
-	r := &Runs{}
-	r.runList.SetIdentity(func(run api.InspectRunRecord) string { return run.TraceID })
-	r.runList.SetRowHeight(func(api.InspectRunRecord) int { return 2 })
+	r := &Runs{
+		runsResource: resource.New(func(runs []api.ObservabilityRunSummary) bool {
+			return len(runs) == 0
+		}),
+		detailResource: resource.New(func(detail api.ObservabilityRunDetail) bool {
+			return detail.Run.RunID == ""
+		}),
+	}
+	r.runList.SetIdentity(func(run api.ObservabilityRunSummary) string { return run.RunID })
+	r.runList.SetRowHeight(func(api.ObservabilityRunSummary) int { return 2 })
 	return r
 }
 
@@ -80,9 +88,9 @@ func (s *Runs) Focus(kind, id string) {
 	}
 	s.selRun = id
 	s.selSpan = ""
+	s.detailResource.Cancel()
 	s.detail = nil
 	s.routedRun = nil
-	s.loading = true
 	s.filteringRuns = false
 	s.runQuery = ""
 	s.runStatusIndex = 0
@@ -99,35 +107,48 @@ func (s *Runs) Interested(domains bridge.Domains) bool {
 	return domains.Has(bridge.DomainRuns)
 }
 
-func (s *Runs) Init(ctx context.Context, c DataClient) tea.Cmd { return fetchRunsList(ctx, c) }
+func (s *Runs) Init(ctx context.Context, c DataClient) tea.Cmd { return s.fetchRunsList(ctx, c) }
 
 func (s *Runs) Update(ctx context.Context, msg tea.Msg, c DataClient) tea.Cmd {
 	switch m := msg.(type) {
 	case runsListLoadedMsg:
-		s.runs = []api.InspectRunRecord(m)
+		if !s.runsResource.Apply(resource.ResourceResult[[]api.ObservabilityRunSummary](m)) {
+			return nil
+		}
+		snapshot := s.runsResource.Snapshot()
+		if !snapshot.HasValue {
+			s.bumpRenderRev()
+			return nil
+		}
 		s.ensureSelectedRunVisible()
 		s.runList.SetItems(s.selectableRuns())
-		s.loaded = true
 		s.bumpRenderRev()
-		if s.selRun == "" && len(s.runs) > 0 {
-			s.selRun = s.runs[0].TraceID
+		if s.selRun == "" && len(snapshot.Value) > 0 {
+			s.selRun = snapshot.Value[0].RunID
 		}
 		s.runList.SetCursorByIdentity(s.selRun)
-		if s.detail == nil || s.detail.Run.TraceID != s.selRun {
+		if !s.selectedDetailIsCurrent() {
 			if s.selRun == "" {
 				return nil
 			}
-			s.loading = true
-			return fetchRunDetail(ctx, c, s.selRun)
+			return s.fetchRunDetail(ctx, c, s.selRun)
 		}
 	case runDetailLoadedMsg:
-		d := api.InspectRunDetailRecord(m)
-		s.replaceSelectedRunSummary(d.Run)
+		result := resource.ResourceResult[api.ObservabilityRunDetail](m)
+		if result.Token.Owner != runsDetailOwner(s.selRun) || !s.detailResource.Apply(result) {
+			return nil
+		}
+		snapshot := s.detailResource.Snapshot()
+		if !snapshot.HasValue {
+			s.bumpRenderRev()
+			return nil
+		}
+		d := inspectRunDetailFromObservabilityDetail(snapshot.Value)
 		// Preserve the user's span selection across refetches when the
 		// span still exists.
 		prevSel := s.selSpan
 		s.detail = &d
-		s.loading = false
+		s.replaceSelectedRunSummary(snapshot.Value.Run)
 		s.selSpan = ""
 		for _, sp := range d.Spans {
 			if sp.ID == prevSel {
@@ -138,10 +159,6 @@ func (s *Runs) Update(ctx context.Context, msg tea.Msg, c DataClient) tea.Cmd {
 		if s.selSpan == "" && len(d.Spans) > 0 {
 			s.selSpan = d.Spans[0].ID
 		}
-		s.bumpRenderRev()
-	case dataErrMsg:
-		s.err = string(m)
-		s.loading = false
 		s.bumpRenderRev()
 	case api.InspectEvent:
 		// Typed live event from the bus (also used for the synthesized
@@ -182,9 +199,9 @@ func (s *Runs) openInspect() tea.Cmd {
 // also refetches that trace's detail. Returning batched commands keeps
 // the screen in sync without losing focus or selection state.
 func (s *Runs) liveRefresh(ctx context.Context, c DataClient, refID string) tea.Cmd {
-	cmds := []tea.Cmd{fetchRunsList(ctx, c)}
+	cmds := []tea.Cmd{s.fetchRunsList(ctx, c)}
 	if s.selRun != "" && (refID == "" || refID == s.selRun) {
-		cmds = append(cmds, fetchRunDetail(ctx, c, s.selRun))
+		cmds = append(cmds, s.fetchRunDetail(ctx, c, s.selRun))
 	}
 	return tea.Batch(cmds...)
 }
@@ -206,9 +223,7 @@ func (s *Runs) activateFocus(ctx context.Context, c DataClient) tea.Cmd {
 		if s.selRun == "" {
 			return nil
 		}
-		s.loading = true
-		s.detail = nil
-		return fetchRunDetail(ctx, c, s.selRun)
+		return s.fetchRunDetail(ctx, c, s.selRun)
 	case focusWaterfall:
 		if s.toggleSelectedDuplicateGroup() {
 			return nil
@@ -227,8 +242,9 @@ func (s *Runs) Breadcrumb() ([]string, string) {
 		path = append(path, "span: "+cur.Name)
 	}
 	right := ""
-	if s.loaded {
-		right = fmt.Sprintf("%d runs · last 1h", len(s.runs))
+	listSnapshot := s.runsResource.Snapshot()
+	if listSnapshot.HasValue {
+		right = fmt.Sprintf("%d runs · last 1h", len(s.runSummaries()))
 	}
 	return path, right
 }
@@ -254,4 +270,4 @@ func focusActionLabel(f runsFocus) string {
 	}
 }
 
-func (s *Runs) Counts() map[string]int { return map[string]int{"runs": len(s.runs)} }
+func (s *Runs) Counts() map[string]int { return map[string]int{"runs": len(s.runSummaries())} }
