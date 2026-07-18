@@ -24,12 +24,31 @@ func setRunsForTest(runs *Runs, values ...api.ObservabilityRunSummary) {
 	runs.Update(testContext, runsListLoadedForTest(runs, values...), nil)
 }
 
+func selectRunForTest(runs *Runs, id string) {
+	if id == "" {
+		runs.runList.SetItems(nil)
+		return
+	}
+	if !runs.hasRun(id) {
+		routed := api.ObservabilityRunSummary{RunID: id, Name: id}
+		runs.routedRun = &routed
+	}
+	runs.runList.SetItems(runs.selectableRuns())
+	if !runs.runList.Select(id) {
+		panic("test selected run is not available: " + id)
+	}
+}
+
 func setRunDetailForTest(runs *Runs, detail api.ObservabilityRunDetail) {
+	runs.Update(testContext, runDetailLoadedForTest(runs, detail), nil)
+}
+
+func runDetailLoadedForTest(runs *Runs, detail api.ObservabilityRunDetail) runDetailLoadedMsg {
 	_, token := runs.detailResource.Begin(testContext, runsDetailOwner(detail.Run.RunID), uint64(detail.Run.Revision))
-	runs.Update(testContext, runDetailLoadedMsg(resource.ResourceResult[api.ObservabilityRunDetail]{
+	return runDetailLoadedMsg(resource.ResourceResult[api.ObservabilityRunDetail]{
 		Token: token,
 		Value: detail,
-	}), nil)
+	})
 }
 
 func observabilityRunSummaryForTest(run api.InspectRunRecord) api.ObservabilityRunSummary {

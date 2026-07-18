@@ -92,15 +92,15 @@ func (s *Runs) memoLines(focus string, rect kit.Rect, render func() string) []st
 }
 
 func (s *Runs) listMemoFocus() string {
-	return fmt.Sprintf("list:%s:%d:%t:%s:%d", s.selRun, s.focus, s.filteringRuns, s.runQuery, s.runStatusIndex)
+	return fmt.Sprintf("list:%s:%d:%t:%s:%d", s.SelectedRunID(), s.focus, s.filteringRuns, s.runQuery, s.runStatusIndex)
 }
 
 func (s *Runs) waterfallMemoFocus() string {
-	return fmt.Sprintf("waterfall:%s:%s:%d:%s", s.selRun, s.selSpan, s.focus, s.expandedSignature())
+	return fmt.Sprintf("waterfall:%s:%s:%d:%s", s.SelectedRunID(), s.selSpan, s.focus, s.expandedSignature())
 }
 
 func (s *Runs) detailMemoFocus() string {
-	return fmt.Sprintf("detail:%s:%s:%d", s.selRun, s.selSpan, s.focus)
+	return fmt.Sprintf("detail:%s:%s:%d", s.SelectedRunID(), s.selSpan, s.focus)
 }
 
 func (s *Runs) expandedSignature() string {

@@ -23,11 +23,12 @@ type runExportErrMsg struct{ err string }
 // (returns nil) when nothing is focused.
 func (s *Runs) exportRun() tea.Cmd {
 	snapshot := s.detailResource.Snapshot()
-	if !snapshot.HasValue || s.selRun == "" || snapshot.Value.Run.RunID != s.selRun {
+	selectedID := s.SelectedRunID()
+	if !snapshot.HasValue || selectedID == "" || snapshot.Value.Run.RunID != selectedID {
 		return nil
 	}
 	rec := snapshot.Value
-	id := s.selRun
+	id := selectedID
 	return func() tea.Msg {
 		home, err := os.UserHomeDir()
 		if err != nil {

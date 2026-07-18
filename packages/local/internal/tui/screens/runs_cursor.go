@@ -30,21 +30,29 @@ func (s *Runs) cycleRun(ctx context.Context, c DataClient, delta int) tea.Cmd {
 		return nil
 	}
 	s.runList.SetItems(runs)
-	s.runList.SetCursorByIdentity(s.selRun)
+	var msg tea.KeyPressMsg
 	if delta > 0 {
-		s.runList.CursorDown()
+		msg = tea.KeyPressMsg{Text: "j", Code: 'j'}
 	} else {
-		s.runList.CursorUp()
+		msg = tea.KeyPressMsg{Text: "k", Code: 'k'}
 	}
-	run, _, ok := s.runList.Cursor()
-	if !ok || run.RunID == s.selRun {
-		// Cursor didn't move — already at the boundary. No need to
-		// re-fetch or rescroll.
-		return nil
+	cmd, _ := s.updateRunListInput(ctx, msg, c)
+	return cmd
+}
+
+func (s *Runs) updateRunListInput(ctx context.Context, msg tea.Msg, c DataClient) (tea.Cmd, bool) {
+	s.runList.SetFocused(s.focus == focusRuns)
+	previousID := s.SelectedRunID()
+	if !s.runList.Update(msg) {
+		return nil, false
 	}
-	s.selRun = run.RunID
+	selectedID := s.SelectedRunID()
+	if selectedID == "" || selectedID == previousID {
+		return nil, true
+	}
 	s.detail = nil
-	return s.fetchRunDetail(ctx, c, s.selRun)
+	s.bumpRenderRev()
+	return s.fetchRunDetail(ctx, c, selectedID), true
 }
 
 func (s *Runs) cycleRunStatusFilter(ctx context.Context, c DataClient) tea.Cmd {
@@ -53,25 +61,33 @@ func (s *Runs) cycleRunStatusFilter(ctx context.Context, c DataClient) tea.Cmd {
 }
 
 func (s *Runs) ensureFilteredRunSelection(ctx context.Context, c DataClient) tea.Cmd {
+	previousID := s.SelectedRunID()
 	runs := s.filteredRuns()
 	s.runList.SetItems(runs)
 	if len(runs) == 0 {
-		s.selRun = ""
-		s.selSpan = ""
-		s.detail = nil
-		s.detailResource.Cancel()
+		s.clearRunSelection()
 		return nil
 	}
-	if s.runList.SetCursorByIdentity(s.selRun) {
+	selectedID := s.SelectedRunID()
+	if selectedID == previousID {
 		return nil
 	}
-	s.selRun = runs[0].RunID
-	s.runList.SetCursorByIdentity(s.selRun)
+	if selectedID == "" {
+		return nil
+	}
 	if c == nil {
 		return nil
 	}
 	s.detail = nil
-	return s.fetchRunDetail(ctx, c, s.selRun)
+	return s.fetchRunDetail(ctx, c, selectedID)
+}
+
+func (s *Runs) clearRunSelection() {
+	s.runList.SetItems(nil)
+	s.selSpan = ""
+	s.routedRun = nil
+	s.detail = nil
+	s.detailResource.Cancel()
 }
 
 func (s *Runs) cycleSpan(delta int) tea.Cmd {

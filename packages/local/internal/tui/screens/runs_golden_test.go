@@ -61,7 +61,7 @@ func fixtureRuns() (*Runs, time.Time) {
 	}
 	setRunsForTest(screen, summaries...)
 	screen.detail = &detail
-	screen.selRun = runs[0].TraceID
+	selectRunForTest(screen, runs[0].TraceID)
 	if len(detail.Spans) > 0 {
 		screen.selSpan = detail.Spans[0].ID
 		for _, span := range detail.Spans {
@@ -83,7 +83,7 @@ func TestRunsStatusFilterLimitsVisibleRows(t *testing.T) {
 		{RunID: "run-1", Name: "docs_agent", Status: "running"},
 	}
 	setRunsForTest(screen, values...)
-	screen.selRun = "error-1"
+	selectRunForTest(screen, "error-1")
 	screen.runList.SetItems(values)
 
 	screen.Update(testContext, tea.KeyPressMsg(tea.Key{Text: "f", Code: 'f'}), nil)
@@ -106,7 +106,7 @@ func TestRunsTextFilterLimitsVisibleRows(t *testing.T) {
 		{RunID: "triage-0", Name: "triage", Status: "passed"},
 	}
 	setRunsForTest(screen, values...)
-	screen.selRun = "docs-000"
+	selectRunForTest(screen, "docs-000")
 	screen.runList.SetItems(values)
 
 	screen.Update(testContext, tea.KeyPressMsg(tea.Key{Text: "/", Code: '/'}), nil)
@@ -138,7 +138,7 @@ func TestRunsWaterfallCollapsesDuplicateGroups(t *testing.T) {
 			{ID: "dup-3", ParentID: "root", Name: "rag.search \"typed prompts\"", Primitive: api.SpanPrimitiveTool, Duplicate: true, DuplicateOfSpanID: "search", StartedAt: 300, DurationMs: &spanDuration},
 		},
 	}
-	screen.selRun = "run-dup"
+	selectRunForTest(screen, "run-dup")
 	screen.selSpan = "dup-1"
 	screen.focus = focusWaterfall
 

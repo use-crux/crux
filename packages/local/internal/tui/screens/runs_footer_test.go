@@ -21,7 +21,7 @@ func TestRunsFooterOmitsUnbuiltVerbs(t *testing.T) {
 			{ID: "sp1", Name: "agent", Kind: "agent"},
 		},
 	}
-	r.selRun = "8af2f1c"
+	selectRunForTest(r, "8af2f1c")
 	r.selSpan = "sp1"
 
 	out := r.View(Size{Width: 160, Height: 40})
@@ -51,7 +51,7 @@ func TestRunsFooterOmitsInspectWhenSelectedSpanHasNoRawPayload(t *testing.T) {
 			{ID: "span-1", Name: "agent.run"},
 		},
 	}
-	r.selRun = "run-1"
+	selectRunForTest(r, "run-1")
 	r.selSpan = "span-1"
 	r.focus = focusWaterfall
 

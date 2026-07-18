@@ -37,6 +37,26 @@ func TestWorkbenchFilteringHintsHideWorkspaceActions(t *testing.T) {
 	}
 }
 
+func TestWorkbenchRoutesPageNavigationToFocusedRunsListPane(t *testing.T) {
+	client := newOverviewRunsProgramClient()
+	w := newTestWorkbench(client, client, "http://localhost:4400")
+	w.Resize(120, 30)
+	w.activeNav = "runs"
+	runs := w.screens["runs"].(*screens.Runs)
+	load := runs.Init(w.ctx, client)
+	if load == nil {
+		t.Fatal("Runs did not schedule its list load")
+	}
+	runs.Update(w.ctx, load(), client)
+	w.View()
+
+	w.Update(tea.KeyPressMsg{Code: tea.KeyPgDown})
+
+	if got := runs.SelectedRunID(); got != secondSimilarRunID {
+		t.Fatalf("page down through Workbench selected %q, want %q", got, secondSimilarRunID)
+	}
+}
+
 func TestWorkbenchMigratedScreenDoesNotFallThroughToLegacyUpdate(t *testing.T) {
 	screen := &fakeActionScreen{
 		fakeScreen: &fakeScreen{id: "overview"},

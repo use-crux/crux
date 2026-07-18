@@ -29,7 +29,7 @@ func (c *preservingRunDetailClient) ObservabilityRunDetail(context.Context, stri
 // under test is "produces a cmd."
 func TestRunsExportEmitsCmd(t *testing.T) {
 	r := NewRuns()
-	r.selRun = "8af2f1c"
+	selectRunForTest(r, "8af2f1c")
 	setRunDetailForTest(r, api.ObservabilityRunDetail{
 		Run:  api.ObservabilityRunSummary{RunID: "8af2f1c"},
 		Root: api.ObservabilityRunDetailNode{ID: "root"},
@@ -46,7 +46,7 @@ func TestRunsExportEmitsCmd(t *testing.T) {
 // surprise file appear.
 func TestRunsExportWithoutSelectionIsNoop(t *testing.T) {
 	r := NewRuns()
-	// No detail, no selRun.
+	// No detail and no pane selection.
 
 	cmd := r.Update(testContext, tea.KeyPressMsg(tea.Key{Text: "e", Code: 'e'}), nil)
 	if cmd != nil {
@@ -77,7 +77,7 @@ func TestRunsExportPreservesCompleteObservabilityDetail(t *testing.T) {
 	}
 	client := &preservingRunDetailClient{FixtureClient: uitest.NewFixtureClient(), detail: detail}
 	runs := NewRuns()
-	runs.selRun = detail.Run.RunID
+	selectRunForTest(runs, detail.Run.RunID)
 	cmd := runs.fetchRunDetail(testContext, client, detail.Run.RunID)
 	runs.Update(testContext, cmd(), client)
 

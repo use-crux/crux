@@ -10,6 +10,11 @@ import (
 )
 
 func (s *Runs) updateKey(ctx context.Context, msg tea.KeyPressMsg, client DataClient) tea.Cmd {
+	if !s.filteringRuns {
+		if cmd, handled := s.updateRunListInput(ctx, msg, client); handled {
+			return cmd
+		}
+	}
 	if cmd, handled := interaction.Dispatch(s.Actions(ctx, client), msg); handled {
 		return cmd
 	}
@@ -32,13 +37,14 @@ func (s *Runs) Actions(ctx context.Context, client DataClient) []interaction.Act
 	}
 	exportReason := ""
 	detailSnapshot := s.detailResource.Snapshot()
-	if !detailSnapshot.HasValue || s.selRun == "" || detailSnapshot.Value.Run.RunID != s.selRun {
+	selectedID := s.SelectedRunID()
+	if !detailSnapshot.HasValue || selectedID == "" || detailSnapshot.Value.Run.RunID != selectedID {
 		exportReason = "load a run before exporting"
 	}
 	activateReason := ""
 	switch s.focus {
 	case focusRuns:
-		activateReason = disabledUnless(s.selRun != "", "select a run to load")
+		activateReason = disabledUnless(selectedID != "", "select a run to load")
 	case focusWaterfall:
 		activateReason = disabledUnless(s.currentSpan() != nil, "select a span to open")
 	default:
@@ -54,6 +60,42 @@ func (s *Runs) Actions(ctx context.Context, client DataClient) []interaction.Act
 			ID:      "runs.previous",
 			Binding: key.NewBinding(key.WithKeys("k", "up"), key.WithHelp("k/↑", "previous "+s.focusItemLabel())),
 			Run:     func() tea.Cmd { return s.moveUp(ctx, client) },
+		},
+		{
+			ID:             "runs.page-down",
+			Binding:        key.NewBinding(key.WithKeys("pgdown"), key.WithHelp("pgdn", "next run page")),
+			DisabledReason: disabledUnless(s.focus == focusRuns, "focus the run list to page"),
+			Run: func() tea.Cmd {
+				cmd, _ := s.updateRunListInput(ctx, tea.KeyPressMsg{Code: tea.KeyPgDown}, client)
+				return cmd
+			},
+		},
+		{
+			ID:             "runs.page-up",
+			Binding:        key.NewBinding(key.WithKeys("pgup"), key.WithHelp("pgup", "previous run page")),
+			DisabledReason: disabledUnless(s.focus == focusRuns, "focus the run list to page"),
+			Run: func() tea.Cmd {
+				cmd, _ := s.updateRunListInput(ctx, tea.KeyPressMsg{Code: tea.KeyPgUp}, client)
+				return cmd
+			},
+		},
+		{
+			ID:             "runs.first",
+			Binding:        key.NewBinding(key.WithKeys("home"), key.WithHelp("home", "first run")),
+			DisabledReason: disabledUnless(s.focus == focusRuns, "focus the run list to move"),
+			Run: func() tea.Cmd {
+				cmd, _ := s.updateRunListInput(ctx, tea.KeyPressMsg{Code: tea.KeyHome}, client)
+				return cmd
+			},
+		},
+		{
+			ID:             "runs.last",
+			Binding:        key.NewBinding(key.WithKeys("end"), key.WithHelp("end", "last run")),
+			DisabledReason: disabledUnless(s.focus == focusRuns, "focus the run list to move"),
+			Run: func() tea.Cmd {
+				cmd, _ := s.updateRunListInput(ctx, tea.KeyPressMsg{Code: tea.KeyEnd}, client)
+				return cmd
+			},
 		},
 		{
 			ID:      "runs.previous-pane",

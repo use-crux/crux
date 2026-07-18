@@ -13,3 +13,5 @@ command ends instead of leaving workflow work detached from shutdown.
 Keep Runs list and detail reads revision-aware and selection-owned, preserve
 complete observability detail when exporting, and reject late detail responses
 from a previously selected run.
+Keep the Runs list selection visible across paging, filtering, refresh, and
+terminal resize, with keyboard and mouse-wheel navigation gated by pane focus.

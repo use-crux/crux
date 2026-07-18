@@ -43,10 +43,8 @@ func (s *Runs) renderList(width, height int) string {
 		return strings.TrimRight(b.String(), "\n")
 	}
 
-	s.runList.SetItems(runs)
-	s.runList.SetHeight(bodyRows)
-	s.runList.SetCursorByIdentity(s.selRun)
-	rows := s.runList.Render(width, func(r api.ObservabilityRunSummary, _ int, selected bool, rowW int) string {
+	s.runList.SetSize(width, bodyRows)
+	rows := s.runList.Render(func(r api.ObservabilityRunSummary, _ int, selected bool, rowW int) string {
 		row1, row2 := s.renderRunRow(r, rowW, selected)
 		return row1 + "\n" + row2
 	})

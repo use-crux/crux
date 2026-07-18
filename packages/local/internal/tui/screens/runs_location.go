@@ -6,7 +6,7 @@ func (s *Runs) CaptureLocation() ScreenLocation {
 	return ScreenLocation{
 		FocusedPane: runsPaneID(s.focus),
 		SelectedIDs: map[string]string{
-			"run":  s.selRun,
+			"run":  s.SelectedRunID(),
 			"span": s.selSpan,
 		},
 	}
@@ -17,10 +17,10 @@ func (s *Runs) CaptureLocation() ScreenLocation {
 // list/detail reconciliation rather than resurrecting historical payloads.
 func (s *Runs) RestoreLocation(location ScreenLocation) {
 	if focus, ok := runsFocusByID(location.FocusedPane); ok {
-		s.focus = focus
+		s.setFocus(focus)
 	}
-	if id := location.SelectedIDs["run"]; id != "" && s.runList.SetCursorByIdentity(id) {
-		s.selRun = id
+	if id := location.SelectedIDs["run"]; id != "" {
+		s.runList.Select(id)
 	}
 	if id := location.SelectedIDs["span"]; id != "" && s.hasSpan(id) {
 		s.selSpan = id

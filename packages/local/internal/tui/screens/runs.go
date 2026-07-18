@@ -40,11 +40,10 @@ type Runs struct {
 	// detail is a temporary presentation adapter for the legacy waterfall and
 	// span renderers. detailResource remains the lossless source of truth.
 	detail  *api.InspectRunDetailRecord
-	selRun  string
 	selSpan string
 	focus   runsFocus
 
-	runList        kit.VList[api.ObservabilityRunSummary]
+	runList        *kit.ListPane[api.ObservabilityRunSummary]
 	filteringRuns  bool
 	runQuery       string
 	runStatusIndex int
@@ -69,9 +68,12 @@ func NewRuns() *Runs {
 		detailResource: resource.New(func(detail api.ObservabilityRunDetail) bool {
 			return detail.Run.RunID == ""
 		}),
+		runList: kit.NewListPane(func(run api.ObservabilityRunSummary) string {
+			return run.RunID
+		}),
 	}
-	r.runList.SetIdentity(func(run api.ObservabilityRunSummary) string { return run.RunID })
 	r.runList.SetRowHeight(func(api.ObservabilityRunSummary) int { return 2 })
+	r.runList.SetFocused(true)
 	return r
 }
 
@@ -86,7 +88,6 @@ func (s *Runs) Focus(kind, id string) {
 	if kind != "run" || id == "" {
 		return
 	}
-	s.selRun = id
 	s.selSpan = ""
 	s.detailResource.Cancel()
 	s.detail = nil
@@ -94,14 +95,20 @@ func (s *Runs) Focus(kind, id string) {
 	s.filteringRuns = false
 	s.runQuery = ""
 	s.runStatusIndex = 0
-	s.ensureSelectedRunVisible()
+	s.ensureSelectedRunVisible(id)
 	s.runList.SetItems(s.selectableRuns())
-	s.runList.SetCursorByIdentity(id)
+	s.runList.Select(id)
 	s.bumpRenderRev()
 }
 
-// SelectedRunID returns the stable identity of the active run.
-func (s *Runs) SelectedRunID() string { return s.selRun }
+// SelectedRunID returns the pane-owned stable identity of the active run.
+func (s *Runs) SelectedRunID() string {
+	selected, _, ok := s.runList.Selected()
+	if !ok {
+		return ""
+	}
+	return selected.RunID
+}
 
 func (s *Runs) Interested(domains bridge.Domains) bool {
 	return domains.Has(bridge.DomainRuns)
@@ -120,46 +127,27 @@ func (s *Runs) Update(ctx context.Context, msg tea.Msg, c DataClient) tea.Cmd {
 			s.bumpRenderRev()
 			return nil
 		}
-		s.ensureSelectedRunVisible()
-		s.runList.SetItems(s.selectableRuns())
-		s.bumpRenderRev()
-		if s.selRun == "" && len(snapshot.Value) > 0 {
-			s.selRun = snapshot.Value[0].RunID
+		selectedID := s.SelectedRunID()
+		if s.routedRun != nil {
+			s.ensureSelectedRunVisible(selectedID)
 		}
-		s.runList.SetCursorByIdentity(s.selRun)
+		s.runList.SetItems(s.filteredRuns())
+		s.bumpRenderRev()
+		if selectedID != "" {
+			s.runList.Select(selectedID)
+		}
+		selectedID = s.SelectedRunID()
+		if selectedID == "" {
+			s.clearRunSelection()
+		}
 		if !s.selectedDetailIsCurrent() {
-			if s.selRun == "" {
+			if selectedID == "" {
 				return nil
 			}
-			return s.fetchRunDetail(ctx, c, s.selRun)
+			return s.fetchRunDetail(ctx, c, selectedID)
 		}
 	case runDetailLoadedMsg:
-		result := resource.ResourceResult[api.ObservabilityRunDetail](m)
-		if result.Token.Owner != runsDetailOwner(s.selRun) || !s.detailResource.Apply(result) {
-			return nil
-		}
-		snapshot := s.detailResource.Snapshot()
-		if !snapshot.HasValue {
-			s.bumpRenderRev()
-			return nil
-		}
-		d := inspectRunDetailFromObservabilityDetail(snapshot.Value)
-		// Preserve the user's span selection across refetches when the
-		// span still exists.
-		prevSel := s.selSpan
-		s.detail = &d
-		s.replaceSelectedRunSummary(snapshot.Value.Run)
-		s.selSpan = ""
-		for _, sp := range d.Spans {
-			if sp.ID == prevSel {
-				s.selSpan = prevSel
-				break
-			}
-		}
-		if s.selSpan == "" && len(d.Spans) > 0 {
-			s.selSpan = d.Spans[0].ID
-		}
-		s.bumpRenderRev()
+		return s.applyRunDetail(ctx, resource.ResourceResult[api.ObservabilityRunDetail](m), c)
 	case api.InspectEvent:
 		// Typed live event from the bus (also used for the synthesized
 		// "store changed" signal — kind=="refresh"). Refresh the run list
@@ -167,6 +155,12 @@ func (s *Runs) Update(ctx context.Context, msg tea.Msg, c DataClient) tea.Cmd {
 		return s.liveRefresh(ctx, c, m.RefID)
 	case tea.KeyPressMsg:
 		return s.updateKey(ctx, m, c)
+	case tea.MouseWheelMsg:
+		if s.filteringRuns {
+			return nil
+		}
+		cmd, _ := s.updateRunListInput(ctx, m, c)
+		return cmd
 	}
 	return nil
 }
@@ -200,8 +194,9 @@ func (s *Runs) openInspect() tea.Cmd {
 // the screen in sync without losing focus or selection state.
 func (s *Runs) liveRefresh(ctx context.Context, c DataClient, refID string) tea.Cmd {
 	cmds := []tea.Cmd{s.fetchRunsList(ctx, c)}
-	if s.selRun != "" && (refID == "" || refID == s.selRun) {
-		cmds = append(cmds, s.fetchRunDetail(ctx, c, s.selRun))
+	selectedID := s.SelectedRunID()
+	if selectedID != "" && (refID == "" || refID == selectedID) {
+		cmds = append(cmds, s.fetchRunDetail(ctx, c, selectedID))
 	}
 	return tea.Batch(cmds...)
 }
@@ -214,29 +209,35 @@ func (s *Runs) shiftFocus(delta int) {
 	if next > int(focusSpanDetail) {
 		next = int(focusSpanDetail)
 	}
-	s.focus = runsFocus(next)
+	s.setFocus(runsFocus(next))
+}
+
+func (s *Runs) setFocus(focus runsFocus) {
+	s.focus = focus
+	s.runList.SetFocused(focus == focusRuns)
 }
 
 func (s *Runs) activateFocus(ctx context.Context, c DataClient) tea.Cmd {
 	switch s.focus {
 	case focusRuns:
-		if s.selRun == "" {
+		selectedID := s.SelectedRunID()
+		if selectedID == "" {
 			return nil
 		}
-		return s.fetchRunDetail(ctx, c, s.selRun)
+		return s.fetchRunDetail(ctx, c, selectedID)
 	case focusWaterfall:
 		if s.toggleSelectedDuplicateGroup() {
 			return nil
 		}
-		s.focus = focusSpanDetail
+		s.setFocus(focusSpanDetail)
 	}
 	return nil
 }
 
 func (s *Runs) Breadcrumb() ([]string, string) {
 	path := []string{"runs"}
-	if s.selRun != "" {
-		path = append(path, "run "+truncate(s.selRun, 8))
+	if selectedID := s.SelectedRunID(); selectedID != "" {
+		path = append(path, "run "+truncate(selectedID, 8))
 	}
 	if cur := s.currentSpan(); cur != nil && s.focus == focusSpanDetail {
 		path = append(path, "span: "+cur.Name)

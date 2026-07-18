@@ -7,20 +7,20 @@ import (
 // ensureSelectedRunVisible represents an exact route target even when it is
 // outside the current list page. This keeps the visible cursor consistent
 // with the breadcrumb and detail request until the exact detail arrives.
-func (s *Runs) ensureSelectedRunVisible() {
+func (s *Runs) ensureSelectedRunVisible(selectedID string) {
 	s.routedRun = nil
-	if s.selRun == "" || s.hasRun(s.selRun) {
+	if selectedID == "" || s.hasRun(selectedID) {
 		return
 	}
 	detailSnapshot := s.detailResource.Snapshot()
-	if detailSnapshot.HasValue && detailSnapshot.Value.Run.RunID == s.selRun {
+	if detailSnapshot.HasValue && detailSnapshot.Value.Run.RunID == selectedID {
 		routed := detailSnapshot.Value.Run
 		s.routedRun = &routed
 		return
 	}
 	routed := api.ObservabilityRunSummary{
-		RunID:  s.selRun,
-		Name:   s.selRun,
+		RunID:  selectedID,
+		Name:   selectedID,
 		Status: "unknown",
 	}
 	s.routedRun = &routed
@@ -35,7 +35,6 @@ func (s *Runs) replaceSelectedRunSummary(run api.ObservabilityRunSummary) {
 	if s.routedRun != nil && s.routedRun.RunID == run.RunID {
 		s.routedRun = &run
 		s.runList.SetItems(s.filteredRuns())
-		s.runList.SetCursorByIdentity(s.selRun)
 	}
 }
 
@@ -65,8 +64,9 @@ func (s *Runs) runSummaries() []api.ObservabilityRunSummary {
 }
 
 func (s *Runs) selectedRunRevision() uint64 {
+	selectedID := s.SelectedRunID()
 	for _, run := range s.selectableRuns() {
-		if run.RunID == s.selRun {
+		if run.RunID == selectedID {
 			return uint64Revision(run.Revision)
 		}
 	}
@@ -74,15 +74,16 @@ func (s *Runs) selectedRunRevision() uint64 {
 }
 
 func (s *Runs) selectedDetailIsCurrent() bool {
-	if s.selRun == "" {
+	selectedID := s.SelectedRunID()
+	if selectedID == "" {
 		return false
 	}
 	snapshot := s.detailResource.Snapshot()
-	if snapshot.Token.Owner != runsDetailOwner(s.selRun) || snapshot.Token.Revision < s.selectedRunRevision() {
+	if snapshot.Token.Owner != runsDetailOwner(selectedID) || snapshot.Token.Revision < s.selectedRunRevision() {
 		return false
 	}
 	if snapshot.HasValue {
-		return s.detail != nil && snapshot.Value.Run.RunID == s.selRun
+		return s.detail != nil && snapshot.Value.Run.RunID == selectedID
 	}
 	return false
 }

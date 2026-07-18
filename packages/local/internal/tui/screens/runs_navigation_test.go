@@ -21,7 +21,7 @@ func TestRunsKeepsExactRouteTargetOutsideLoadedList(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("exact route target did not schedule direct detail fetch")
 	}
-	selected, _, ok := runs.runList.Cursor()
+	selected, _, ok := runs.runList.Selected()
 	if !ok || selected.RunID != "run-outside-current-page" {
 		t.Fatalf("visible list cursor = (%q, %v), want explicit exact route row", selected.RunID, ok)
 	}
@@ -43,7 +43,7 @@ func TestRunsFocusRepresentsOffPageTargetBeforeRefresh(t *testing.T) {
 
 	runs.Focus("run", "run-outside-current-page")
 
-	selected, _, ok := runs.runList.Cursor()
+	selected, _, ok := runs.runList.Selected()
 	if !ok || selected.RunID != "run-outside-current-page" {
 		t.Fatalf("immediate list cursor = (%q, %v), want explicit exact route row", selected.RunID, ok)
 	}

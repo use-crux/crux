@@ -69,7 +69,7 @@ func buildRunWithSpan() *Runs {
 			{ID: "sp1", Name: "agent.run", Data: json.RawMessage(body)},
 		},
 	}
-	r.selRun = "8af2f1c"
+	selectRunForTest(r, "8af2f1c")
 	r.selSpan = "sp1"
 	return r
 }

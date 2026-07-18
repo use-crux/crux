@@ -64,9 +64,9 @@ func TestRunsDetailRejectsLateResultFromPreviousSelection(t *testing.T) {
 	client := &detailRaceClient{FixtureClient: uitest.NewFixtureClient()}
 	runs := NewRuns()
 
-	runs.selRun = "run-a"
+	selectRunForTest(runs, "run-a")
 	requestA := runs.fetchRunDetail(ctx, client, "run-a")
-	runs.selRun = "run-b"
+	selectRunForTest(runs, "run-b")
 	requestB := runs.fetchRunDetail(ctx, client, "run-b")
 
 	runs.Update(ctx, requestB(), client)
@@ -86,9 +86,9 @@ func TestRunsDetailRevisionIsScopedToSelectedRun(t *testing.T) {
 	client := &detailRaceClient{FixtureClient: uitest.NewFixtureClient()}
 	runs := NewRuns()
 
-	runs.selRun = "run-a"
+	selectRunForTest(runs, "run-a")
 	runs.Update(ctx, runs.fetchRunDetail(ctx, client, "run-a")(), client)
-	runs.selRun = "run-b"
+	selectRunForTest(runs, "run-b")
 	runs.Update(ctx, runs.fetchRunDetail(ctx, client, "run-b")(), client)
 
 	snapshot := runs.detailResource.Snapshot()
@@ -102,7 +102,7 @@ func TestRunsDetailRejectsResultOlderThanSelectedSummary(t *testing.T) {
 	client := &detailRaceClient{FixtureClient: uitest.NewFixtureClient()}
 	runs := NewRuns()
 	setRunsForTest(runs, api.ObservabilityRunSummary{RunID: "run-b", Revision: 50})
-	runs.selRun = "run-b"
+	selectRunForTest(runs, "run-b")
 
 	runs.Update(ctx, runs.fetchRunDetail(ctx, client, "run-b")(), client)
 
@@ -114,7 +114,7 @@ func TestRunsDetailRejectsResultOlderThanSelectedSummary(t *testing.T) {
 
 func TestRunsSameOwnerRefreshKeepsLastGoodDetailVisible(t *testing.T) {
 	runs := NewRuns()
-	runs.selRun = "run-b"
+	selectRunForTest(runs, "run-b")
 	setRunDetailForTest(runs, api.ObservabilityRunDetail{
 		Run:  api.ObservabilityRunSummary{RunID: "run-b", Revision: 9},
 		Root: api.ObservabilityRunDetailNode{ID: "root"},
@@ -140,25 +140,93 @@ func TestRunsClearedSelectionRejectsPendingDetail(t *testing.T) {
 	client := &detailRaceClient{FixtureClient: uitest.NewFixtureClient()}
 	runs := NewRuns()
 	setRunsForTest(runs, api.ObservabilityRunSummary{RunID: "run-a", Revision: 91})
-	runs.selRun = "run-a"
+	selectRunForTest(runs, "run-a")
 	requestA := runs.fetchRunDetail(ctx, client, "run-a")
 	runs.runQuery = "does-not-match"
 	runs.ensureFilteredRunSelection(ctx, nil)
 
 	runs.Update(ctx, requestA(), client)
 
-	if runs.selRun != "" {
-		t.Fatalf("selection = %q, want cleared", runs.selRun)
+	if got := runs.SelectedRunID(); got != "" {
+		t.Fatalf("selection = %q, want cleared", got)
 	}
 	if snapshot := runs.detailResource.Snapshot(); snapshot.HasValue || runs.detail != nil {
 		t.Fatalf("cleared selection accepted pending detail: resource=%#v view=%#v", snapshot, runs.detail)
 	}
 }
 
+func TestRunsRefreshToEmptyFilterClearsAndCancelsSelection(t *testing.T) {
+	ctx := context.Background()
+	client := &detailRaceClient{FixtureClient: uitest.NewFixtureClient()}
+	runs := NewRuns()
+	setRunsForTest(runs, api.ObservabilityRunSummary{RunID: "run-a", Name: "visible", Revision: 91})
+	selectRunForTest(runs, "run-a")
+	setRunDetailForTest(runs, api.ObservabilityRunDetail{
+		Run:  api.ObservabilityRunSummary{RunID: "run-a", Name: "visible", Revision: 91},
+		Root: api.ObservabilityRunDetailNode{ID: "span-run-a"},
+	})
+	runs.selSpan = "span-run-a"
+	pending := runs.fetchRunDetail(ctx, client, "run-a")
+	runs.runQuery = "visible"
+
+	runs.Update(ctx, runsListLoadedForTest(runs,
+		api.ObservabilityRunSummary{RunID: "run-a", Name: "hidden", Revision: 92},
+	), client)
+	runs.Update(ctx, pending(), client)
+
+	if selectedID := runs.SelectedRunID(); selectedID != "" || runs.selSpan != "" || runs.detail != nil {
+		t.Fatalf("empty filtered refresh retained selection/detail: run=%q span=%q detail=%#v", selectedID, runs.selSpan, runs.detail)
+	}
+	if snapshot := runs.detailResource.Snapshot(); snapshot.Refreshing {
+		t.Fatalf("empty filtered refresh left detail request active: %#v", snapshot)
+	}
+}
+
+func TestRunsRoutedDetailMetadataReconcilesActiveFilter(t *testing.T) {
+	detail := api.ObservabilityRunDetail{
+		Run:  api.ObservabilityRunSummary{RunID: "routed", Name: "resolved", Status: "ok"},
+		Root: api.ObservabilityRunDetailNode{ID: "root"},
+	}
+
+	t.Run("clears when no rows remain", func(t *testing.T) {
+		runs := NewRuns()
+		runs.Focus("run", "routed")
+		runs.runQuery = "unknown"
+		runs.ensureFilteredRunSelection(testContext, nil)
+
+		runs.Update(testContext, runDetailLoadedForTest(runs, detail), nil)
+
+		if selectedID := runs.SelectedRunID(); selectedID != "" || runs.detail != nil {
+			t.Fatalf("resolved route retained filtered selection/detail: run=%q detail=%#v", selectedID, runs.detail)
+		}
+	})
+
+	t.Run("loads deterministic neighbor", func(t *testing.T) {
+		client := &detailRaceClient{FixtureClient: uitest.NewFixtureClient()}
+		runs := NewRuns()
+		setRunsForTest(runs, api.ObservabilityRunSummary{RunID: "neighbor", Status: "unknown"})
+		runs.Focus("run", "routed")
+		runs.runQuery = "unknown"
+		runs.ensureFilteredRunSelection(testContext, nil)
+
+		cmd := runs.Update(testContext, runDetailLoadedForTest(runs, detail), client)
+
+		if got := runs.SelectedRunID(); got != "neighbor" {
+			t.Fatalf("resolved route selected %q, want neighbor", got)
+		}
+		if runs.detail != nil {
+			t.Fatalf("resolved route retained stale detail: %#v", runs.detail)
+		}
+		if cmd == nil {
+			t.Fatal("resolved route did not schedule neighbor detail fetch")
+		}
+	})
+}
+
 func TestRunsNewerListRevisionRefreshesOlderSelectedDetail(t *testing.T) {
 	runs := NewRuns()
 	setRunsForTest(runs, api.ObservabilityRunSummary{RunID: "run-a", Revision: 5})
-	runs.selRun = "run-a"
+	selectRunForTest(runs, "run-a")
 	setRunDetailForTest(runs, api.ObservabilityRunDetail{
 		Run:  api.ObservabilityRunSummary{RunID: "run-a", Revision: 5},
 		Root: api.ObservabilityRunDetailNode{ID: "root"},
@@ -184,7 +252,7 @@ func TestRunsNewerListRevisionRefreshesOlderSelectedDetail(t *testing.T) {
 func TestRunsRefetchesAfterSameOwnerInitialLoadIsCanceled(t *testing.T) {
 	client := &detailRaceClient{FixtureClient: uitest.NewFixtureClient()}
 	runs := NewRuns()
-	runs.selRun = "run-a"
+	selectRunForTest(runs, "run-a")
 	runs.fetchRunDetail(testContext, client, "run-a")
 	firstRequest := runs.detailResource.Snapshot().Token.Request
 

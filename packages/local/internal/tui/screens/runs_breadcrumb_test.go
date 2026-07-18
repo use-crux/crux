@@ -13,7 +13,7 @@ import (
 // Run — breadcrumbs, labels, and nav items in the TUI must say "run".
 func TestRunsBreadcrumbUsesRunNotTrace(t *testing.T) {
 	r := NewRuns()
-	r.selRun = "8af2f1c0deadbeef"
+	selectRunForTest(r, "8af2f1c0deadbeef")
 
 	path, _ := r.Breadcrumb()
 
@@ -51,7 +51,7 @@ func TestRunsBreadcrumbRightMetaUsesRunsNotTraces(t *testing.T) {
 // Example: `runs / run 8af2f1c / span: retrieve (loop)` per S7.
 func TestRunsBreadcrumbSpanSegmentPrefixed(t *testing.T) {
 	r := NewRuns()
-	r.selRun = "8af2f1c0deadbeef"
+	selectRunForTest(r, "8af2f1c0deadbeef")
 	r.focus = focusSpanDetail
 	r.detail = &api.InspectRunDetailRecord{
 		Spans: []api.InspectRunSpan{
