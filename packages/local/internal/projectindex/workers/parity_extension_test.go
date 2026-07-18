@@ -242,7 +242,7 @@ func repositoryRoot(t testing.TB) string {
 	if err != nil {
 		t.Fatalf("get working directory: %v", err)
 	}
-	return filepath.Clean(filepath.Join(wd, "..", "..", "..", ".."))
+	return filepath.Clean(filepath.Join(wd, "..", "..", "..", "..", ".."))
 }
 
 func assertHasDefinition(t testing.TB, facts projectindex.IndexPatchFacts, id string) {
