@@ -3,7 +3,7 @@ import { createExecutionContext, waitOnExecutionContext } from 'cloudflare:test'
 import { beforeEach, describe, expect, it } from 'vitest'
 import worker, { deliveredRecords, resetFixture } from './fixtures/worker'
 
-describe('waitUntil defers the drain past the returned response', () => {
+describe('Workers waitUntil defers the drain past the returned response', () => {
   beforeEach(() => resetFixture())
 
   it('returns the response before delivery, then delivers once waitOnExecutionContext resolves', async () => {

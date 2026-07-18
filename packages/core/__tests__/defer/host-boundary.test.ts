@@ -8,7 +8,7 @@ import {
   runWithDeferInvocation,
   type DeferInvocationOutcome,
 } from "@use-crux/core/internal/scope";
-import { testLifetime } from "./test-lifetime";
+import { testBinding } from "./test-binding";
 import { trackDeferCommit } from "../../src/defer/internal/context";
 
 describe("runWithDeferInvocation()", () => {
@@ -23,7 +23,7 @@ describe("runWithDeferInvocation()", () => {
         return { status: 200 };
       },
       {
-        lifetime: testLifetime((task) => {
+        binding: testBinding((task) => {
           scheduled = task;
         }),
         classifyOutcome: () => "success",
@@ -52,7 +52,7 @@ describe("runWithDeferInvocation()", () => {
         return "response";
       },
       {
-        lifetime: testLifetime(() => {}),
+        binding: testBinding(() => {}),
         classifyOutcome: () => "success",
       },
     );
@@ -79,7 +79,7 @@ describe("runWithDeferInvocation()", () => {
         return "response";
       },
       {
-        lifetime: testLifetime((task) => {
+        binding: testBinding((task) => {
           scheduled = task;
         }),
         classifyOutcome: () => outcome,
@@ -97,7 +97,7 @@ describe("runWithDeferInvocation()", () => {
 
     await expect(
       runWithDeferInvocation(() => returned, {
-        lifetime: testLifetime(() => {}),
+        binding: testBinding(() => {}),
         classifyOutcome: (settlement) => {
           expect(settlement).toEqual({ kind: "returned", value: returned });
           return "success";
@@ -111,7 +111,7 @@ describe("runWithDeferInvocation()", () => {
           throw thrown;
         },
         {
-          lifetime: testLifetime(() => {}),
+          binding: testBinding(() => {}),
           classifyOutcome: (settlement) => {
             expect(settlement).toEqual({ kind: "thrown", error: thrown });
             return "error";
@@ -124,7 +124,7 @@ describe("runWithDeferInvocation()", () => {
   it("rejects an async outcome classifier supplied by untyped JavaScript", async () => {
     await expect(
       runWithDeferInvocation(() => "response", {
-        lifetime: testLifetime(() => {}),
+        binding: testBinding(() => {}),
         classifyOutcome: (() => Promise.resolve("success")) as never,
       }),
     ).rejects.toThrow("classifyOutcome must return synchronously");
@@ -140,7 +140,7 @@ describe("runWithDeferInvocation()", () => {
           return { status: 200 };
         },
         {
-          lifetime: testLifetime(() => {}),
+          binding: testBinding(() => {}),
           classifyOutcome: () => "success",
         },
       ),
@@ -167,7 +167,7 @@ describe("runWithDeferInvocation()", () => {
               });
             },
             {
-              lifetime: testLifetime((task) => {
+              binding: testBinding((task) => {
                 scheduled.set(requestId, task);
               }),
               classifyOutcome: () => "success",
@@ -197,7 +197,7 @@ describe("runWithDeferInvocation()", () => {
         return "response";
       },
       {
-        lifetime: testLifetime((task) => {
+        binding: testBinding((task) => {
           drain = task();
         }),
         classifyOutcome: () => "success",
@@ -216,7 +216,7 @@ describe("runWithDeferInvocation()", () => {
     await expect(drain).resolves.toBeUndefined();
   });
 
-  it("uses the nearest nested invocation scope and restores the parent scope", async () => {
+  it("uses the nearest nested invocation scope and one root retention gate", async () => {
     let outerTask: (() => Promise<void>) | undefined;
     let innerTask: (() => Promise<void>) | undefined;
     const runs: string[] = [];
@@ -233,7 +233,7 @@ describe("runWithDeferInvocation()", () => {
             });
           },
           {
-            lifetime: testLifetime((task) => {
+            binding: testBinding((task) => {
               innerTask = task;
             }),
             classifyOutcome: () => "success",
@@ -244,14 +244,14 @@ describe("runWithDeferInvocation()", () => {
         });
       },
       {
-        lifetime: testLifetime((task) => {
+        binding: testBinding((task) => {
           outerTask = task;
         }),
         classifyOutcome: () => "success",
       },
     );
 
-    await innerTask?.();
+    expect(innerTask).toBeUndefined();
     await outerTask?.();
     expect(runs).toEqual(["inner", "outer-before", "outer-after"]);
   });

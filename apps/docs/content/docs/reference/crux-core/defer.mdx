@@ -26,9 +26,15 @@ named targets come first; unbranded callbacks select the inline form.
 
 **Returns:** `void`
 
-Registers work on the nearest compatible invocation scope. The callback starts
-after the host’s declared completion class. Failures are contained and observed;
-they do not fail an already-committed response.
+Registers work on the nearest compatible execution scope. The callback starts
+when that scope closes and its host binding releases retained work. Failures are
+contained and observed; they do not fail an already-committed response.
+
+Agent turns, adapter calls, tool executions, and Safety sessions install this
+scope automatically. On a long-lived process, `defer(callback)` therefore needs
+no wrapper or host configuration inside those primitives. Nested registrations
+belong to the nearest primitive, so their evidence and drain timing stay local.
+Replayable flow steps remain guarded and require `flow.defer()`.
 
 Throws:
 
@@ -70,7 +76,7 @@ Throws or poisons commit with:
 | Import                            | Purpose                                                                                                           |
 | --------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | `@use-crux/core/defer/node`       | Node HTTP wrappers plus `node()` for explicit process-lifetime host configuration                                 |
-| `@use-crux/core/defer/serverless` | `withWaitUntilDefer`, `withAfterDefer`, `withNamedOnlyDefer`, factories                                           |
+| `@use-crux/core/defer/serverless` | Provider-neutral `withWaitUntilDefer`, `withAfterDefer`, and `withNamedOnlyDefer` wrappers                        |
 | `@use-crux/next`                  | Next.js `withCrux` binding defer and observability to `after()`; `withNextDefer` remains the defer-only primitive |
 | `@use-crux/next`                  | `config({ host: next() })` enables ambient root-level defer through `after()`                                     |
 | `@use-crux/cloudflare`            | `config({ host: workers({ ctx }) })` retains ambient work with `ctx.waitUntil()`                                  |
@@ -80,28 +86,25 @@ Internal first-party SPI (not application API):
 
 - `@use-crux/core/internal/scope`
 
-## Host lifetime semantics
+## Host binding semantics
 
-### Completion classes
+### Retention timing
 
-Each host lifetime declares a completion class describing when inline deferred
-callbacks may start relative to the response:
+The host binding decides when retained inline callbacks may start relative to
+the response:
 
-- `response-finished`: callbacks start only after the response has fully
-  finished (Node HTTP via `withNodeDefer`, Next.js via `after()`, per-process
-  multiprocess Node hosts).
-- `handler-returned`: callbacks may start as soon as the handler returns, and
-  may overlap a still-streaming response body (`waitUntil`-based hosts such as
-  Vercel Functions and Cloudflare Workers).
-- Named-only lifetimes (Lambda `withNamedOnlyDefer`, Convex bridge runs) have
-  no inline completion class; inline `defer(callback)` throws
+- Node HTTP and Next.js `after()` release callbacks after response completion.
+- `waitUntil` bindings may release callbacks when the handler returns, so work
+  can overlap a still-streaming response body.
+- Named-only bindings (Lambda `withNamedOnlyDefer`, Convex bridge runs) reject
+  inline `defer(callback)` with
   `DEFER_CAPABILITY_MISSING`.
 
 ### `durableFinalization` advertisement
 
-A host lifetime advertises `durableFinalization: true` only when it can await
+A host binding advertises `durableFinalization: true` only when it can await
 the named-defer commit barrier before committing the response. Named
-`await defer(target, input)` requires a configured Runtime plus a lifetime
+`await defer(target, input)` requires a configured Runtime plus a binding
 advertising durable finalization; raw Node hosts advertise
 `durableFinalization: false` unless the wrapper opts in (for example
 `withNamedOnlyDefer(handler, { durableFinalization: true })`).
@@ -109,9 +112,9 @@ advertising durable finalization; raw Node hosts advertise
 ### Capability is explicit, never inferred
 
 Never infer host correctness from environment variable names (`VERCEL`, etc.).
-Capability comes only from the wrapper or platform hook that is explicitly
-installed (`waitUntil`, `after`, a lifetime port); an installed package or a
-recognizable environment alone is not treated as proof of a working lifetime.
+Capability comes only from the wrapper or platform binding that is explicitly
+installed (`waitUntil`, `after`, `next()`, `workers()`, or `vercel()`); an
+installed package or recognizable environment alone proves nothing.
 
 ## Diagnostics
 

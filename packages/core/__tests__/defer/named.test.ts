@@ -3,9 +3,9 @@ import { defer } from "@use-crux/core";
 import { durableTask } from "@use-crux/core/runtime";
 import { createTestRuntime } from "@use-crux/core/runtime/testing";
 import { runWithDeferInvocation } from "@use-crux/core/internal/scope";
-import type { DeferLifetimeCapability } from "@use-crux/core/internal/scope";
+import type { CruxHostBinding } from "@use-crux/core/internal/scope";
 import { getHooks, setHooks } from "../../src/runtime/runtime";
-import { testLifetime } from "./test-lifetime";
+import { testBinding } from "./test-binding";
 
 describe("named defer()", () => {
   const previousHooks = getHooks();
@@ -103,7 +103,7 @@ describe("named defer()", () => {
           return "response";
         },
         {
-          lifetime: namedLifetime(),
+          binding: namedBinding(),
           classifyOutcome: () => "success",
         },
       );
@@ -142,7 +142,7 @@ describe("named defer()", () => {
           return "response";
         },
         {
-          lifetime: namedLifetime(),
+          binding: namedBinding(),
           classifyOutcome: () => "success",
         },
       ),
@@ -169,7 +169,7 @@ describe("named defer()", () => {
             return "discard-me";
           },
           {
-            lifetime: namedLifetime(),
+            binding: namedBinding(),
             classifyOutcome: () => "success",
           },
         ),
@@ -209,7 +209,7 @@ describe("named defer()", () => {
             return "discard-me";
           },
           {
-            lifetime: namedLifetime(),
+            binding: namedBinding(),
             classifyOutcome: () => "success",
           },
         ),
@@ -267,7 +267,7 @@ describe("named defer()", () => {
               return "discard-me";
             },
             {
-              lifetime: namedLifetime(),
+              binding: namedBinding(),
               classifyOutcome: () => "success",
             },
           ),
@@ -295,7 +295,7 @@ describe("named defer()", () => {
             return "discard-me";
           },
           {
-            lifetime: testLifetime(() => {}),
+            binding: testBinding(() => {}),
             classifyOutcome: () => "success",
           },
         ),
@@ -309,9 +309,9 @@ describe("named defer()", () => {
   });
 });
 
-function namedLifetime(): DeferLifetimeCapability {
+function namedBinding(): CruxHostBinding {
   return {
-    ...testLifetime(() => {}),
+    ...testBinding(() => {}),
     durableFinalization: true,
   };
 }

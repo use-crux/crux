@@ -1,4 +1,3 @@
-import type { DeferLifetimeCapability } from "../host-types";
 import { executeDeferredCallback } from "./callback-boundary";
 import type {
   DeferredDrainResult,
@@ -10,7 +9,7 @@ import type { DeferScopeObservability } from "./observability";
 interface DrainInlineCallbacksOptions {
   readonly concurrency: number;
   readonly maxDrainMs: number;
-  readonly lifetime: DeferLifetimeCapability;
+  readonly durableFinalization: boolean;
   readonly abortController: AbortController;
   readonly evidence: DeferScopeObservability;
   readonly close: () => void;
@@ -38,7 +37,9 @@ export async function drainInlineCallbacks(
 
       try {
         await options.evidence.runInline(registration.observation, () =>
-          executeDeferredCallback(scope, registration, options.lifetime),
+          executeDeferredCallback(scope, registration, {
+            durableFinalization: options.durableFinalization,
+          }),
         );
         if (!closed) {
           outcomes.set(registration.sequence, { outcome: "completed" });

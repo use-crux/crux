@@ -1,5 +1,5 @@
 /**
- * Regression fixture: proves the default and `/observability/workers` import
+ * Regression fixture: proves the Core observability and Cloudflare import
  * graphs are startup-safe in a genuinely natively-loaded Worker.
  *
  * Unlike `fixtures/worker.ts` (loaded through the pool's own Vite pipeline
@@ -16,8 +16,8 @@
 
 /// <reference types="@cloudflare/workers-types" />
 
-import '../../../../src/observability'
-import '../../../../src/observability/workers'
+import '@use-crux/core/observability'
+import '../../../src'
 
 async function route(request: Request): Promise<Response> {
   const url = new URL(request.url)

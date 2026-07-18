@@ -16,7 +16,7 @@ import {
   type OpenObservedRun,
   type OpenObservedSpan,
 } from "../../observability";
-import type { DeferCompletionClass } from "../host-types";
+import type { ScopeDescriptor } from "../../scope/types";
 import type { DeferredDrainResult } from "./invocation-scope";
 
 /** Whether a registration is user-authored or first-party internal composition. */
@@ -27,10 +27,10 @@ export interface DeferredScheduledObservation {
   readonly policy: DeferEvidencePolicy;
   readonly sequence: number;
   readonly mode: "inline" | "named";
-  readonly completion: DeferCompletionClass;
   readonly scheduledAtMs: number;
   readonly spanId?: CruxSpanId;
   readonly context?: CapturedObservabilityContext;
+  readonly scope?: ScopeDescriptor;
   /** Named acceptance identity retained through terminal span-end attributes. */
   readonly targetId?: string;
   readonly workId?: string;
@@ -52,10 +52,6 @@ interface OpenNamedScheduled {
   readonly definitionId?: string;
 }
 
-interface CreateDeferScopeObservabilityOptions {
-  readonly completion: DeferCompletionClass;
-}
-
 /** Per-invocation evidence controller shared by registration and drain. */
 export interface DeferScopeObservability {
   /**
@@ -67,6 +63,7 @@ export interface DeferScopeObservability {
   recordInlineScheduled(
     sequence: number,
     policy: DeferEvidencePolicy,
+    scope: ScopeDescriptor,
   ): DeferredScheduledObservation;
 
   /** Ensure a public originating run exists and return its durable trace id. */
@@ -124,6 +121,9 @@ export interface DeferScopeObservability {
    */
   settle(result: DeferredDrainResult): void;
 
+  /** Accumulate an inner-scope drain without closing invocation evidence. */
+  recordDrain(result: DeferredDrainResult): void;
+
   /**
    * Keep the owned grouped run open until the invocation's named commit path
    * settles (success or failure), including ignored caller stage promises.
@@ -139,16 +139,14 @@ export interface DeferScopeObservability {
  *
  * The controller is lazy: no run is opened until the first public registration.
  */
-export function createDeferScopeObservability(
-  options: CreateDeferScopeObservabilityOptions,
-): DeferScopeObservability {
+export function createDeferScopeObservability(): DeferScopeObservability {
   let groupedRun: OpenObservedRun | undefined;
   let ownedGroupedRun = false;
   let baseContext: CapturedObservabilityContext | undefined;
   // Keyed by workId so nested callback scopes cannot collide on sequence 0.
   const openNamed = new Map<string, OpenNamedScheduled>();
   let drainSettled = false;
-  let drainResult: DeferredDrainResult | undefined;
+  const drainResults: DeferredDrainResult[] = [];
   let namedLifecyclePending = false;
   let namedTerminalStatus: "ok" | "cancelled" | "error" | undefined;
   let runEnded = false;
@@ -187,9 +185,6 @@ export function createDeferScopeObservability(
     groupedRun = observe.openRun({
       name: "deferred work",
       rootPrimitive: "defer.scheduled",
-      attributes: {
-        completion: options.completion,
-      },
     });
     ownedGroupedRun = true;
     baseContext = groupedRun.captureContext();
@@ -209,7 +204,7 @@ export function createDeferScopeObservability(
       return context.traceId;
     },
 
-    recordInlineScheduled(sequence, policy) {
+    recordInlineScheduled(sequence, policy, scope) {
       const scheduledAtMs = Date.now();
       if (policy === "diagnostics-only") {
         // Capture owning primitive context so failure events can attach after
@@ -219,8 +214,8 @@ export function createDeferScopeObservability(
           policy,
           sequence,
           mode: "inline" as const,
-          completion: options.completion,
           scheduledAtMs,
+          scope,
           ...(context
             ? {
                 context: {
@@ -251,8 +246,8 @@ export function createDeferScopeObservability(
           primitive: "defer.scheduled",
           attributes: {
             mode: "inline",
-            completion: options.completion,
             sequence,
+            ...scopeAttributes(scope),
           },
         });
         spanId = span.spanId;
@@ -260,7 +255,6 @@ export function createDeferScopeObservability(
           status: "ok",
           attributes: {
             mode: "inline",
-            completion: options.completion,
             sequence,
           },
         });
@@ -270,8 +264,8 @@ export function createDeferScopeObservability(
         policy,
         sequence,
         mode: "inline",
-        completion: options.completion,
         scheduledAtMs,
+        scope,
         spanId,
         context: {
           runId: context.runId,
@@ -296,7 +290,6 @@ export function createDeferScopeObservability(
           policy: input.policy,
           sequence: input.sequence,
           mode: "named" as const,
-          completion: options.completion,
           scheduledAtMs,
           targetId: input.targetId,
           workId: input.workId,
@@ -313,7 +306,6 @@ export function createDeferScopeObservability(
           primitive: "defer.scheduled",
           attributes: {
             mode: "named",
-            completion: options.completion,
             sequence: input.sequence,
             targetId: input.targetId,
             workId: input.workId,
@@ -340,7 +332,6 @@ export function createDeferScopeObservability(
         policy: input.policy,
         sequence: input.sequence,
         mode: "named" as const,
-        completion: options.completion,
         scheduledAtMs,
         spanId: openSpan?.spanId,
         openSpan,
@@ -390,7 +381,6 @@ export function createDeferScopeObservability(
         status: endStatus,
         attributes: {
           mode: "named",
-          completion: observation.completion,
           sequence: observation.sequence,
           intentState,
           ...(targetId ? { targetId } : {}),
@@ -443,9 +433,9 @@ export function createDeferScopeObservability(
           primitive: "defer.run",
           attributes: {
             mode: observation.mode,
-            completion: observation.completion,
             sequence: observation.sequence,
             queueDelayMs,
+            ...(observation.scope ? scopeAttributes(observation.scope) : {}),
           },
           // Execution must not open a second root when the grouped/parent run
           // already exists in the restored context.
@@ -466,7 +456,6 @@ export function createDeferScopeObservability(
             status: "ok",
             attributes: {
               mode: observation.mode,
-              completion: observation.completion,
               sequence: observation.sequence,
               queueDelayMs,
               outcome: "completed",
@@ -478,7 +467,6 @@ export function createDeferScopeObservability(
             error,
             attributes: {
               mode: observation.mode,
-              completion: observation.completion,
               sequence: observation.sequence,
               queueDelayMs,
               outcome: "failed",
@@ -498,8 +486,8 @@ export function createDeferScopeObservability(
           primitive: "defer.run",
           attributes: {
             mode: observation.mode,
-            completion: observation.completion,
             sequence: observation.sequence,
+            ...(observation.scope ? scopeAttributes(observation.scope) : {}),
           },
           implicitRun: false,
         });
@@ -522,11 +510,15 @@ export function createDeferScopeObservability(
 
     settle(result) {
       drainSettled = true;
-      drainResult = result;
+      drainResults.push(result);
       // Inline drain settlement must not abandon still-open named scheduled
       // spans or end the owned run while named acceptance/finalization can
       // still emit or close public evidence.
       maybeCloseEvidence();
+    },
+
+    recordDrain(result) {
+      drainResults.push(result);
     },
 
     trackNamedLifecycle(commit) {
@@ -581,7 +573,6 @@ export function createDeferScopeObservability(
         status: "cancelled",
         attributes: {
           mode: "named",
-          completion: options.completion,
           sequence: entry.sequence,
           intentState: "abandoned",
           targetId: entry.targetId,
@@ -596,7 +587,10 @@ export function createDeferScopeObservability(
 
     if (!runEnded && ownedGroupedRun && groupedRun) {
       const status = combineRunStatus(
-        drainResult ? drainStatus(drainResult) : "ok",
+        drainResults.reduce<"ok" | "cancelled" | "error">(
+          (combined, result) => combineRunStatus(combined, drainStatus(result)),
+          "ok",
+        ),
         namedTerminalStatus,
       );
       groupedRun.end({ status });
@@ -611,6 +605,16 @@ export function createDeferScopeObservability(
   }
 
   return api;
+}
+
+function scopeAttributes(
+  scope: ScopeDescriptor,
+): Readonly<Record<string, string>> {
+  return {
+    scopeId: scope.id,
+    scopeKind: scope.kind,
+    ...(scope.name ? { scopeName: scope.name } : {}),
+  };
 }
 
 /**

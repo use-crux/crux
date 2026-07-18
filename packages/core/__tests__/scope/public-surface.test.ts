@@ -6,8 +6,6 @@ describe("execution scope internal surface", () => {
     expect(scope).toEqual(
       expect.objectContaining({
         ScopeSealedError: expect.any(Function),
-        createHandlerReturnedDeferLifetime: expect.any(Function),
-        createResponseFinishedDeferLifetime: expect.any(Function),
         createScopeFacetSlot: expect.any(Function),
         currentScope: expect.any(Function),
         currentScopeStack: expect.any(Function),

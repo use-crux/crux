@@ -185,8 +185,13 @@ inspect admitted work, or explicitly accept a complete run as a Baseline.
 
 ## Background work
 
-Configure an explicit platform retention capability once, then call `defer()`
-at root level without a route wrapper on ambient hosts:
+Inside a Crux agent turn, adapter call, tool execution, or Safety session,
+`defer()` works without a wrapper or host configuration. Work registers on the
+nearest execution scope and starts when that scope closes, so a nested tool can
+begin its cleanup while the enclosing model call continues.
+
+At a handler's root level, configure an explicit platform retention capability
+once, then call `defer()` without a route wrapper on ambient hosts:
 
 ```ts
 import { config, defer } from "@use-crux/core";
@@ -196,10 +201,12 @@ config({ host: next() });
 defer(() => flushAnalytics());
 ```
 
-Each config-only call owns an ephemeral invocation. Use a wrapper or a Crux
-primitive when several registrations must share limits, outcome classification,
-or a strict named-work commit barrier. Inline callbacks registered by failed or
-cancelled scopes are recorded as skipped and are not invoked.
+Each config-only call owns an ephemeral invocation. Crux primitives group
+registrations within their execution lifetime; use a wrapper when the handler
+needs outcome classification or a strict named-work commit barrier. Inline
+callbacks registered by failed or cancelled scopes are recorded as skipped and
+are not invoked. Replayable flow bodies remain special: use `flow.defer()`
+instead of public `defer()`.
 
 ## What's inside
 

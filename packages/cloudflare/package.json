@@ -29,6 +29,7 @@
   },
   "scripts": {
     "test": "vitest run",
+    "test:observability": "vitest run --config vitest.observability.config.ts",
     "test:workerd": "vitest run --config vitest.workerd.config.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },

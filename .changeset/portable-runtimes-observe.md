@@ -73,6 +73,16 @@ Add explicit `config({ host })` retention bindings for Node, Next.js,
 Cloudflare Workers, and Vercel. Config-only ambient defer uses an ephemeral
 invocation per call; failed or cancelled scopes now record and skip inline
 callbacks instead of running them.
+Remove defer completion classes and lifetime factories in favor of the scope
+kernel's host bindings. Serverless and Node wrappers now enqueue retained work
+through the root gate. Move the Workers `withCrux` lifecycle boundary from
+Core's deleted `/observability/workers` subpath to `@use-crux/cloudflare`,
+where its structured drain runs before the kernel flush.
+Open lazy execution scopes at Crux agent, adapter, tool, Safety, flow-step, and
+Convex bridge boundaries. Inline `defer()` now works with zero host setup inside
+defer-capable primitives on long-lived processes; nested work drains at its
+nearest boundary and streaming adapters restore one scope across Core-owned
+iteration and completion segments.
 Portable MCP entrypoints now fail closed when stdio is selected, while Node
 runtimes resolve their lazy stdio adapters through private conditional imports.
 

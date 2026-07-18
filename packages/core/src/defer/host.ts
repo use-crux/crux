@@ -9,6 +9,7 @@
  */
 
 import { runScope } from "../scope/kernel";
+import { bindRootRetention } from "../scope/state";
 import {
   createScopeDeferController,
   type ScopeDeferController,
@@ -22,13 +23,9 @@ import type {
 } from "./host-types";
 
 export type {
-  DeferCompletionClass,
   DeferHandlerSettlement,
   DeferHostBoundaryOptions,
   DeferInvocationOutcome,
-  DeferLifetimeCapability,
-  DeferLifetimeLimits,
-  DeferScheduledTask,
 } from "./host-types";
 
 /**
@@ -57,7 +54,12 @@ export async function runWithDeferInvocation<T>(
       },
     },
     async (scope): Promise<DeferHandlerSettlement<Awaited<T>>> => {
-      const services = createInvocationDeferServices(scope, options.lifetime);
+      if (scope.root === scope) bindRootRetention(scope, options.binding);
+      const services = createInvocationDeferServices(scope, options.binding, {
+        ...(options.abortController
+          ? { abortController: options.abortController }
+          : {}),
+      });
       controller = createScopeDeferController(scope, services);
       let handlerSettlement: DeferHandlerSettlement<Awaited<T>>;
       try {

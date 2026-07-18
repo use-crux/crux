@@ -11,6 +11,7 @@
 
 import type { Crux } from '@use-crux/core'
 import { withNamedOnlyDefer } from '@use-crux/core/defer/serverless'
+import { runScope } from '@use-crux/core/internal/scope'
 import {
   bindHostRuntime,
   runWithRuntimeHost,
@@ -19,7 +20,10 @@ import {
 import type { RecordStore, Storage } from '@use-crux/core/storage'
 import { makeFunctionReference } from 'convex/server'
 import { setup as setupBridge } from './bridge'
-import type { CruxConvexBridgeHttpRouter, CruxConvexBridgeSetupOptions } from './bridge'
+import type {
+  CruxConvexBridgeHttpRouter,
+  CruxConvexBridgeSetupOptions,
+} from './bridge'
 import {
   assertConvexCtxPort,
   createCruxConvexStorageResolver,
@@ -31,9 +35,15 @@ import {
   type ConvexMemoryNamespace,
   type ConvexRuntimeTarget,
 } from './runtime'
-import { convex, type ConvexRuntimeEngineDefinition } from './runtime-engine/definition'
+import {
+  convex,
+  type ConvexRuntimeEngineDefinition,
+} from './runtime-engine/definition'
 import { createConvexWorkIdGenerator } from './runtime-engine/helpers'
-import { convexRuntimeStore, type ConvexRuntimeComponent } from './runtime-engine/store'
+import {
+  convexRuntimeStore,
+  type ConvexRuntimeComponent,
+} from './runtime-engine/store'
 import type { ComponentApi } from './component/_generated/component'
 import type { ConvexCtxPort } from './store'
 import { flushObservability } from './observability'
@@ -41,10 +51,16 @@ import { flushObservability } from './observability'
 const DEFAULT_TARGET_EXECUTOR = '_crux/targets:executeTarget'
 
 /** HTTP bridge options accepted by `ConvexRuntimeBridge.bridge()`. */
-export type ConvexRuntimeBridgeSetupOptions = Omit<CruxConvexBridgeSetupOptions, 'component' | 'storage'>
+export type ConvexRuntimeBridgeSetupOptions = Omit<
+  CruxConvexBridgeSetupOptions,
+  'component' | 'storage'
+>
 
 /** Scope passed to `ConvexRuntimeBridge.run()`. */
-export interface ConvexRunScope<TCtx extends ConvexCtxPort, TTarget extends ConvexRuntimeTarget> {
+export interface ConvexRunScope<
+  TCtx extends ConvexCtxPort,
+  TTarget extends ConvexRuntimeTarget,
+> {
   /** Convex ctx for the current request. */
   readonly ctx: TCtx
   /** Optional runtime target for namespace and tool-call metadata. */
@@ -58,7 +74,9 @@ export interface ConvexRunScope<TCtx extends ConvexCtxPort, TTarget extends Conv
 }
 
 /** Reusable host/runtime bridge for a Convex-installed Crux component. */
-export interface ConvexRuntimeBridge<TCtx extends ConvexCtxPort = ConvexCtxPort> {
+export interface ConvexRuntimeBridge<
+  TCtx extends ConvexCtxPort = ConvexCtxPort,
+> {
   /**
    * Create the request-scoped Crux storage using the bridge defaults.
    *
@@ -72,13 +90,20 @@ export interface ConvexRuntimeBridge<TCtx extends ConvexCtxPort = ConvexCtxPort>
    * active runtime while `fn` is executing. Before returning or rethrowing,
    * the boundary awaits Convex's fixed bounded terminal observability drain.
    */
-  run<TTarget extends ConvexRuntimeTarget = ConvexRuntimeTarget, TResult = unknown>(
+  run<
+    TTarget extends ConvexRuntimeTarget = ConvexRuntimeTarget,
+    TResult = unknown,
+  >(
     ctx: TCtx,
     target: TTarget | undefined,
     fn: (scope: ConvexRunScope<TCtx, TTarget>) => TResult | Promise<TResult>,
   ): Promise<Awaited<TResult>>
   /** Register the HTTP devtools bridge using the same ctx-bound store path. */
-  bridge(http: CruxConvexBridgeHttpRouter, crux: Crux, options?: ConvexRuntimeBridgeSetupOptions): void
+  bridge(
+    http: CruxConvexBridgeHttpRouter,
+    crux: Crux,
+    options?: ConvexRuntimeBridgeSetupOptions,
+  ): void
 }
 
 /** Runtime Engine options for host-bound Convex execution. */
@@ -100,7 +125,9 @@ export interface ConvexRuntimeBridgeEngineOptions {
 }
 
 /** Internal options for `createConvexRuntimeBridge()`. */
-export interface CreateConvexRuntimeBridgeOptions<TCtx extends ConvexCtxPort = ConvexCtxPort> {
+export interface CreateConvexRuntimeBridgeOptions<
+  TCtx extends ConvexCtxPort = ConvexCtxPort,
+> {
   /** Crux persistence component installed from `@use-crux/convex/convex.config`. */
   readonly component: ComponentApi
   /**
@@ -130,11 +157,12 @@ export interface CreateConvexRuntimeBridgeOptions<TCtx extends ConvexCtxPort = C
  * @param options - Component ref plus optional namespace, runtime, and storage defaults.
  * @returns Internal bridge consumed by `createCruxConvex()`.
  */
-export function createConvexRuntimeBridge<TCtx extends ConvexCtxPort = ConvexCtxPort>(
-  options: CreateConvexRuntimeBridgeOptions<TCtx>,
-): ConvexRuntimeBridge<TCtx> {
+export function createConvexRuntimeBridge<
+  TCtx extends ConvexCtxPort = ConvexCtxPort,
+>(options: CreateConvexRuntimeBridgeOptions<TCtx>): ConvexRuntimeBridge<TCtx> {
   const runtimeDeclaration = options.runtime?.declaration ?? convex()
-  const targetExecutor = options.runtime?.targetExecutor ?? defaultTargetExecutor()
+  const targetExecutor =
+    options.runtime?.targetExecutor ?? defaultTargetExecutor()
   const storageForCtx = createCruxConvexStorageResolver<TCtx>({
     component: options.component,
     create: options.storage?.create,
@@ -159,7 +187,10 @@ export function createConvexRuntimeBridge<TCtx extends ConvexCtxPort = ConvexCtx
     storage(ctx: TCtx): Storage | Promise<Storage> {
       return storageForCtx(ctx)
     },
-    async run<TTarget extends ConvexRuntimeTarget = ConvexRuntimeTarget, TResult = unknown>(
+    async run<
+      TTarget extends ConvexRuntimeTarget = ConvexRuntimeTarget,
+      TResult = unknown,
+    >(
       ctx: TCtx,
       target: TTarget | undefined,
       fn: (scope: ConvexRunScope<TCtx, TTarget>) => TResult | Promise<TResult>,
@@ -182,13 +213,15 @@ export function createConvexRuntimeBridge<TCtx extends ConvexCtxPort = ConvexCtx
               // work remains available; inline defer(callback) throws.
               withNamedOnlyDefer(
                 () =>
-                  fn({
-                    ctx,
-                    target,
-                    storage,
-                    records: storage.records,
-                    runtime,
-                  }),
+                  runScope({ kind: 'bridge-run' }, {}, () =>
+                    fn({
+                      ctx,
+                      target,
+                      storage,
+                      records: storage.records,
+                      runtime,
+                    }),
+                  ),
                 { host: 'convex', durableFinalization: true },
               )(),
           ),
@@ -200,7 +233,11 @@ export function createConvexRuntimeBridge<TCtx extends ConvexCtxPort = ConvexCtx
         await flushObservability()
       }
     },
-    bridge(http: CruxConvexBridgeHttpRouter, crux: Crux, bridgeOptions?: ConvexRuntimeBridgeSetupOptions): void {
+    bridge(
+      http: CruxConvexBridgeHttpRouter,
+      crux: Crux,
+      bridgeOptions?: ConvexRuntimeBridgeSetupOptions,
+    ): void {
       setupBridge(http, crux, {
         ...bridgeOptions,
         storage: (ctx) => {
@@ -213,7 +250,9 @@ export function createConvexRuntimeBridge<TCtx extends ConvexCtxPort = ConvexCtx
 }
 
 function defaultTargetExecutor(): unknown {
-  return makeFunctionReference<'action', { envelope: unknown }, unknown>(DEFAULT_TARGET_EXECUTOR)
+  return makeFunctionReference<'action', { envelope: unknown }, unknown>(
+    DEFAULT_TARGET_EXECUTOR,
+  )
 }
 
 function createRuntimeHostBinder<TCtx extends ConvexCtxPort>(options: {
@@ -246,17 +285,31 @@ function wakeWithScheduler<TCtx extends ConvexCtxPort>(
 }
 
 function schedulerForCtx(ctx: ConvexCtxPort): {
-  runAfter(delayMs: number, ref: unknown, args: Record<string, unknown>): Promise<unknown>
+  runAfter(
+    delayMs: number,
+    ref: unknown,
+    args: Record<string, unknown>,
+  ): Promise<unknown>
 } {
   const scheduler = (ctx as ConvexCtxPort & { scheduler?: unknown }).scheduler
   if (!scheduler || typeof scheduler !== 'object') {
-    throw new Error('Convex Runtime Engine wake delivery requires a Convex action context with ctx.scheduler.')
+    throw new Error(
+      'Convex Runtime Engine wake delivery requires a Convex action context with ctx.scheduler.',
+    )
   }
   const runAfter = (scheduler as { runAfter?: unknown }).runAfter
   if (typeof runAfter !== 'function') {
-    throw new Error('Convex Runtime Engine wake delivery requires ctx.scheduler.runAfter().')
+    throw new Error(
+      'Convex Runtime Engine wake delivery requires ctx.scheduler.runAfter().',
+    )
   }
-  return { runAfter: runAfter as (delayMs: number, ref: unknown, args: Record<string, unknown>) => Promise<unknown> }
+  return {
+    runAfter: runAfter as (
+      delayMs: number,
+      ref: unknown,
+      args: Record<string, unknown>,
+    ) => Promise<unknown>,
+  }
 }
 
 function runtimeComponent(component: ComponentApi): ConvexRuntimeComponent {

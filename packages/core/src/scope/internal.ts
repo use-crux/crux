@@ -49,19 +49,8 @@ export type {
 export { bindRootRetention, enqueueRetainedTask } from "./state";
 export { runWithDeferInvocation } from "../defer/host";
 export type {
-  DeferCompletionClass,
   DeferHandlerSettlement,
   DeferHostBoundaryOptions,
   DeferInvocationOutcome,
-  DeferLifetimeCapability,
-  DeferScheduledTask,
 } from "../defer/host";
-export {
-  createHandlerReturnedDeferLifetime,
-  createResponseFinishedDeferLifetime,
-} from "../defer/lifecycle";
-export type {
-  HandlerReturnedLifetimeOptions,
-  ResponseFinishedLifetimeOptions,
-  ResponseFinishedTerminal,
-} from "../defer/lifecycle";
+export { onDeferDrainSettled } from "../defer/internal/context";

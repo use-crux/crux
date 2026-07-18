@@ -3,9 +3,9 @@ import {
   waitOnExecutionContext,
 } from "cloudflare:test";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { defer } from "../../../src";
-import { observe } from "../../../src/observability";
-import { withCrux } from "../../../src/observability/workers";
+import { defer } from "@use-crux/core";
+import { observe } from "@use-crux/core/observability";
+import { withCrux } from "../../src";
 import { deliveredRecords, resetFixture } from "./fixtures/worker";
 
 describe("Workers withCrux lifecycle", () => {
@@ -82,7 +82,7 @@ describe("Workers withCrux lifecycle", () => {
     expect(onDrain).toHaveBeenCalledOnce();
   });
 
-  it("rethrows the original handler error after retaining deferred work and the final drain", async () => {
+  it("rethrows the original handler error and skips inline work for the failed scope", async () => {
     const original = new Error("workers handler failed");
     let deferredCompleted = false;
     const handler = withCrux(
@@ -102,7 +102,7 @@ describe("Workers withCrux lifecycle", () => {
     await expect(handler(ctx)).rejects.toBe(original);
     await waitOnExecutionContext(ctx);
 
-    expect(deferredCompleted).toBe(true);
+    expect(deferredCompleted).toBe(false);
     expect(deliveredRecords()).toContainEqual(
       expect.objectContaining({
         type: "run:start",

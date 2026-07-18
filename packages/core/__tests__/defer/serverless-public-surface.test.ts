@@ -28,9 +28,6 @@ describe("serverless defer package surfaces", () => {
     expect(Object.keys(surface).sort()).toEqual(
       [
         "SERVERLESS_DEFER_POLICY",
-        "createAfterDeferLifetime",
-        "createNamedOnlyDeferLifetime",
-        "createWaitUntilDeferLifetime",
         "withAfterDefer",
         "withNamedOnlyDefer",
         "withServerlessDefer",
@@ -42,7 +39,6 @@ describe("serverless defer package surfaces", () => {
       expect(packageSurface).not.toHaveProperty("withWaitUntilDefer");
       expect(packageSurface).not.toHaveProperty("withAfterDefer");
       expect(packageSurface).not.toHaveProperty("withNamedOnlyDefer");
-      expect(packageSurface).not.toHaveProperty("createWaitUntilDeferLifetime");
     }
   });
 });

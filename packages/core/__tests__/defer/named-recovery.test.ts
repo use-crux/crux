@@ -4,9 +4,9 @@ import { durableTask } from "@use-crux/core/runtime";
 import { createTestRuntime } from "@use-crux/core/runtime/testing";
 import {
   runWithDeferInvocation,
-  type DeferLifetimeCapability,
+  type CruxHostBinding,
 } from "@use-crux/core/internal/scope";
-import { testLifetime } from "./test-lifetime";
+import { testBinding } from "./test-binding";
 
 describe("named defer() recovery edges", () => {
   it("keeps a live long-running scope leased beyond its initial TTL", async () => {
@@ -33,7 +33,7 @@ describe("named defer() recovery edges", () => {
           return "response";
         },
         {
-          lifetime: namedLifetime(),
+          binding: namedBinding(),
           classifyOutcome: () => "success",
         },
       );
@@ -71,7 +71,7 @@ describe("named defer() recovery edges", () => {
       const reference = await runWithDeferInvocation(
         () => defer(target, { id: "1" }),
         {
-          lifetime: namedLifetime(),
+          binding: namedBinding(),
           classifyOutcome: () => "success",
         },
       );
@@ -90,9 +90,9 @@ describe("named defer() recovery edges", () => {
   });
 });
 
-function namedLifetime(): DeferLifetimeCapability {
+function namedBinding(): CruxHostBinding {
   return {
-    ...testLifetime(() => {}),
+    ...testBinding(() => {}),
     durableFinalization: true,
   };
 }

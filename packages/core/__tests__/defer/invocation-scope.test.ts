@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import fc from "fast-check";
-import type { DeferLifetimeCapability } from "@use-crux/core/internal/scope";
-import { createTestScopeDeferController } from "./test-lifetime";
+import { createTestScopeDeferController, testBinding } from "./test-binding";
 
 describe("invocation defer scope", () => {
   afterEach(() => {
@@ -11,21 +10,13 @@ describe("invocation defer scope", () => {
   it("settles at the drain deadline and aborts its cooperative signal", async () => {
     vi.useFakeTimers();
     let scheduled: (() => Promise<void>) | undefined;
-    const lifetime: DeferLifetimeCapability = {
-      completion: "handler-returned",
-      limits: {
-        maxDrainMs: 50,
-        maxCallbacks: 10,
-        concurrency: 1,
-        maxNestingDepth: 2,
+    const binding = testBinding(
+      (run) => {
+        scheduled = run;
       },
-      supportsInline: true,
-      durableFinalization: false,
-      schedule(task) {
-        scheduled = () => task.run();
-      },
-    };
-    const scope = createTestScopeDeferController(lifetime);
+      { maxDrainMs: 50, maxNestingDepth: 2 },
+    );
+    const scope = createTestScopeDeferController(binding);
     const callback = vi.fn(() => new Promise<void>(() => {}));
     scope.registerInline(callback, { scope, phase: "handler", depth: 0 });
 
@@ -45,21 +36,10 @@ describe("invocation defer scope", () => {
 
   it("settles cancelled without claiming to preempt a running callback", async () => {
     let scheduled: (() => Promise<void>) | undefined;
-    const lifetime: DeferLifetimeCapability = {
-      completion: "handler-returned",
-      limits: {
-        maxDrainMs: 1_000,
-        maxCallbacks: 10,
-        concurrency: 1,
-        maxNestingDepth: 2,
-      },
-      supportsInline: true,
-      durableFinalization: false,
-      schedule(task) {
-        scheduled = () => task.run();
-      },
-    };
-    const scope = createTestScopeDeferController(lifetime);
+    const binding = testBinding((run) => {
+      scheduled = run;
+    });
+    const scope = createTestScopeDeferController(binding);
     scope.registerInline(() => new Promise<void>(() => {}), {
       scope,
       phase: "handler",
@@ -81,21 +61,13 @@ describe("invocation defer scope", () => {
 
   it("contains callback failure and reports sibling outcomes in registration order", async () => {
     let scheduled: (() => Promise<void>) | undefined;
-    const lifetime: DeferLifetimeCapability = {
-      completion: "handler-returned",
-      limits: {
-        maxDrainMs: 1_000,
-        maxCallbacks: 10,
-        concurrency: 2,
-        maxNestingDepth: 2,
+    const binding = testBinding(
+      (run) => {
+        scheduled = run;
       },
-      supportsInline: true,
-      durableFinalization: false,
-      schedule(task) {
-        scheduled = () => task.run();
-      },
-    };
-    const scope = createTestScopeDeferController(lifetime);
+      { concurrency: 2 },
+    );
+    const scope = createTestScopeDeferController(binding);
     scope.registerInline(
       async () => {
         await Promise.resolve();
@@ -142,21 +114,10 @@ describe("invocation defer scope", () => {
       markLaneStarted = resolve;
     });
     const events: string[] = [];
-    const lifetime: DeferLifetimeCapability = {
-      completion: "handler-returned",
-      limits: {
-        maxDrainMs: 1_000,
-        maxCallbacks: 10,
-        concurrency: 1,
-        maxNestingDepth: 2,
-      },
-      supportsInline: true,
-      durableFinalization: false,
-      schedule(task) {
-        scheduled = () => task.run();
-      },
-    };
-    const scope = createTestScopeDeferController(lifetime);
+    const binding = testBinding((run) => {
+      scheduled = run;
+    });
+    const scope = createTestScopeDeferController(binding);
     scope.registerInline(
       () => {
         events.push("callback");
@@ -183,21 +144,13 @@ describe("invocation defer scope", () => {
     await fc.assert(
       fc.asyncProperty(fc.integer({ min: 0, max: 20 }), async (count) => {
         let scheduled: (() => Promise<void>) | undefined;
-        const lifetime: DeferLifetimeCapability = {
-          completion: "handler-returned",
-          limits: {
-            maxDrainMs: 1_000,
-            maxCallbacks: 20,
-            concurrency: 3,
-            maxNestingDepth: 2,
+        const binding = testBinding(
+          (run) => {
+            scheduled = run;
           },
-          supportsInline: true,
-          durableFinalization: false,
-          schedule(task) {
-            scheduled = () => task.run();
-          },
-        };
-        const scope = createTestScopeDeferController(lifetime);
+          { maxCallbacks: 20, concurrency: 3 },
+        );
+        const scope = createTestScopeDeferController(binding);
         const starts: number[] = [];
         for (let sequence = 0; sequence < count; sequence += 1) {
           scope.registerInline(

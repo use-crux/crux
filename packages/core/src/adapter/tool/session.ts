@@ -118,6 +118,7 @@ import {
   type PartialToolLifecycleExecutionOptions,
   type ToolLifecycleExecutionOptions,
 } from "./execution-options";
+import { runToolScope } from "./scope";
 
 // ─────────────────────────────────────────────────────────────────
 // Public types
@@ -800,153 +801,158 @@ export function createToolLifecycle(
     messages: readonly Message[],
     traceId: string | undefined,
   ): Promise<ToolResultEntry> {
-    const startedAt = now();
-    const provenance = toolCallProvenance(tool);
-    const span = openToolCallSpan(
-      toolCall.name,
-      toolCall.id,
-      toolCall.args,
-      provenance?.definitionRefs,
-      provenance,
-    );
-    try {
-      span.withContext(() =>
-        emitToolArgsArtifact(
-          span.spanId,
-          toolCall.name,
-          toolCall.id,
-          toolCall.args,
-        ),
+    return runToolScope(toolCall.name, async () => {
+      const startedAt = now();
+      const provenance = toolCallProvenance(tool);
+      const span = openToolCallSpan(
+        toolCall.name,
+        toolCall.id,
+        toolCall.args,
+        provenance?.definitionRefs,
+        provenance,
       );
-      const execute = tool.execute ?? (() => undefined);
-      const toolOptions = executionOptionsFor(toolCall, messages);
-      const result = await span.withContext(() =>
-        withBudget(() => Promise.resolve(execute(toolCall.args, toolOptions)), {
-          budget: "tool",
-          limitMs: toolBudgetMs(options.timeout, toolCall.name),
-          toolName: toolCall.name,
-        }),
-      );
-      const modelOutput = await span.withContext(() =>
-        createToolModelOutput({
-          tool,
-          toolCallId: toolCall.id,
-          input: normalizeToolInput(toolCall.args),
-          output: result,
-        }),
-      );
-      const outputSize = measureUnknown(result);
-      const modelOutputSize = measureModelOutput(modelOutput);
-      const content = renderToolModelOutput(modelOutput);
-      span.withContext(() => {
-        emitToolResultArtifact(
-          span.spanId,
-          toolCall.name,
-          toolCall.id,
-          result,
-          {
-            resultKind: "raw",
+      try {
+        span.withContext(() =>
+          emitToolArgsArtifact(
+            span.spanId,
+            toolCall.name,
+            toolCall.id,
+            toolCall.args,
+          ),
+        );
+        const execute = tool.execute ?? (() => undefined);
+        const toolOptions = executionOptionsFor(toolCall, messages);
+        const result = await span.withContext(() =>
+          withBudget(
+            () => Promise.resolve(execute(toolCall.args, toolOptions)),
+            {
+              budget: "tool",
+              limitMs: toolBudgetMs(options.timeout, toolCall.name),
+              toolName: toolCall.name,
+            },
+          ),
+        );
+        const modelOutput = await span.withContext(() =>
+          createToolModelOutput({
+            tool,
+            toolCallId: toolCall.id,
+            input: normalizeToolInput(toolCall.args),
+            output: result,
+          }),
+        );
+        const outputSize = measureUnknown(result);
+        const modelOutputSize = measureModelOutput(modelOutput);
+        const content = renderToolModelOutput(modelOutput);
+        span.withContext(() => {
+          emitToolResultArtifact(
+            span.spanId,
+            toolCall.name,
+            toolCall.id,
+            result,
+            {
+              resultKind: "raw",
+              outputSize,
+              isError: false,
+            },
+            sourceResultPreview(provenance, result),
+          );
+          emitToolResultArtifact(
+            span.spanId,
+            toolCall.name,
+            toolCall.id,
+            modelOutput,
+            {
+              resultKind: "model",
+              modelOutputType: modelOutput.type,
+              modelOutputSize,
+              tokenSavingsEstimate: Math.max(0, outputSize - modelOutputSize),
+              isError: false,
+            },
+            sourceResultPreview(provenance, modelOutput),
+          );
+        });
+        span.end({
+          attributes: {
+            isError: false,
             outputSize,
-            isError: false,
-          },
-          sourceResultPreview(provenance, result),
-        );
-        emitToolResultArtifact(
-          span.spanId,
-          toolCall.name,
-          toolCall.id,
-          modelOutput,
-          {
-            resultKind: "model",
-            modelOutputType: modelOutput.type,
             modelOutputSize,
+            modelOutputType: modelOutput.type,
             tokenSavingsEstimate: Math.max(0, outputSize - modelOutputSize),
-            isError: false,
           },
-          sourceResultPreview(provenance, modelOutput),
-        );
-      });
-      span.end({
-        attributes: {
-          isError: false,
+        });
+        transcript.push({
+          t: "execute.settle",
+          toolCallId: toolCall.id,
+          outcome: "ok",
+        });
+        return {
+          toolCallId: toolCall.id,
+          name: toolCall.name,
+          output: result,
+          modelOutput,
+          content,
           outputSize,
           modelOutputSize,
-          modelOutputType: modelOutput.type,
-          tokenSavingsEstimate: Math.max(0, outputSize - modelOutputSize),
-        },
-      });
-      transcript.push({
-        t: "execute.settle",
-        toolCallId: toolCall.id,
-        outcome: "ok",
-      });
-      return {
-        toolCallId: toolCall.id,
-        name: toolCall.name,
-        output: result,
-        modelOutput,
-        content,
-        outputSize,
-        modelOutputSize,
-      };
-    } catch (err) {
-      if (err instanceof TimeoutError) {
+        };
+      } catch (err) {
+        if (err instanceof TimeoutError) {
+          span.error(err, {
+            ...provenance?.errorAttributes,
+            isError: true,
+            phase: "tool.execute",
+            errorKind: "timeout",
+          });
+          throw err;
+        }
+        const modelOutput: ToolModelOutput = {
+          type: "error-json",
+          value: { error: err instanceof Error ? err.message : String(err) },
+        };
+        const modelOutputSize = measureModelOutput(modelOutput);
+        span.withContext(() => {
+          emitToolResultArtifact(
+            span.spanId,
+            toolCall.name,
+            toolCall.id,
+            modelOutput,
+            {
+              resultKind: "model",
+              modelOutputType: modelOutput.type,
+              modelOutputSize,
+              tokenSavingsEstimate: 0,
+              isError: true,
+              errorKind: "execute_error",
+            },
+            sourceResultPreview(provenance, modelOutput),
+          );
+        });
         span.error(err, {
           ...provenance?.errorAttributes,
           isError: true,
           phase: "tool.execute",
-          errorKind: "timeout",
+          errorKind: "execute_error",
+          outputSize: 0,
+          modelOutputSize,
+          modelOutputType: modelOutput.type,
+          tokenSavingsEstimate: 0,
         });
-        throw err;
-      }
-      const modelOutput: ToolModelOutput = {
-        type: "error-json",
-        value: { error: err instanceof Error ? err.message : String(err) },
-      };
-      const modelOutputSize = measureModelOutput(modelOutput);
-      span.withContext(() => {
-        emitToolResultArtifact(
-          span.spanId,
-          toolCall.name,
-          toolCall.id,
+        transcript.push({
+          t: "execute.settle",
+          toolCallId: toolCall.id,
+          outcome: "error",
+        });
+        return {
+          toolCallId: toolCall.id,
+          name: toolCall.name,
           modelOutput,
-          {
-            resultKind: "model",
-            modelOutputType: modelOutput.type,
-            modelOutputSize,
-            tokenSavingsEstimate: 0,
-            isError: true,
-            errorKind: "execute_error",
-          },
-          sourceResultPreview(provenance, modelOutput),
-        );
-      });
-      span.error(err, {
-        ...provenance?.errorAttributes,
-        isError: true,
-        phase: "tool.execute",
-        errorKind: "execute_error",
-        outputSize: 0,
-        modelOutputSize,
-        modelOutputType: modelOutput.type,
-        tokenSavingsEstimate: 0,
-      });
-      transcript.push({
-        t: "execute.settle",
-        toolCallId: toolCall.id,
-        outcome: "error",
-      });
-      return {
-        toolCallId: toolCall.id,
-        name: toolCall.name,
-        modelOutput,
-        content: renderToolModelOutput(modelOutput),
-        outputSize: 0,
-        modelOutputSize,
-        modelOutputError: err instanceof Error ? err.message : String(err),
-        isError: true,
-      };
-    }
+          content: renderToolModelOutput(modelOutput),
+          outputSize: 0,
+          modelOutputSize,
+          modelOutputError: err instanceof Error ? err.message : String(err),
+          isError: true,
+        };
+      }
+    });
   }
 
   async function approvalRequirement(

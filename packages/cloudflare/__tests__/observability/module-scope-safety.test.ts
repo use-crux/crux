@@ -18,7 +18,7 @@ interface ModuleScopeEnv {
  * `miniflare.workers` entry (like `resumer-worker.ts`) specifically so this
  * class of bug cannot hide behind that pipeline again.
  */
-describe('importing the observability import graph does not perform I/O at module scope', () => {
+describe('importing the Cloudflare observability graph does not perform I/O at module scope', () => {
   it('the module-scope-check Worker starts and serves a request without a global-scope violation', async () => {
     const moduleScopeEnv = env as unknown as ModuleScopeEnv
     const response = await moduleScopeEnv.MODULE_SCOPE_CHECK.fetch(new Request('http://module-scope.test/ping'))

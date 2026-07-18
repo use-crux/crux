@@ -26,10 +26,7 @@ import {
   namedDeferProvenanceAsJson,
   type RuntimeNamedDeferProvenance,
 } from "../../runtime/engine/named-defer-evidence";
-import type {
-  DeferInvocationOutcome,
-  DeferLifetimeCapability,
-} from "../host-types";
+import type { DeferInvocationOutcome } from "../host-types";
 import type { DeferredWorkRef } from "../types";
 import { createDeferError } from "../errors";
 
@@ -103,7 +100,7 @@ export interface DurableDeferEvidenceHooks {
 
 /** Create a lazy Runtime bridge; inline-only invocations allocate nothing. */
 export function createDurableDeferController(
-  lifetime: DeferLifetimeCapability,
+  policy: { readonly durableFinalization: boolean },
   evidence?: DurableDeferEvidenceHooks,
   options: { readonly acceptanceMode?: boolean } = {},
 ): DurableDeferController {
@@ -123,7 +120,7 @@ export function createDurableDeferController(
   }
 
   async function createSession(): Promise<DurableSession> {
-    if (!lifetime.durableFinalization && !options.acceptanceMode) {
+    if (!policy.durableFinalization && !options.acceptanceMode) {
       throw createDeferError({
         code: "DEFER_CAPABILITY_MISSING",
         message:
@@ -249,7 +246,6 @@ export function createDurableDeferController(
       const provisionalProvenance: RuntimeNamedDeferProvenance = {
         mode: "named",
         sequence,
-        completion: lifetime.completion,
         scopeId: session.scopeId,
         // Kernel stamps the durable workId at createIntent time.
         workId: "pending",

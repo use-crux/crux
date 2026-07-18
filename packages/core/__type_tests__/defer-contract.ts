@@ -10,8 +10,8 @@ import {
 import { durableTask } from "@use-crux/core/runtime";
 import {
   runWithDeferInvocation,
+  type CruxHostBinding,
   type DeferHostBoundaryOptions,
-  type DeferLifetimeCapability,
 } from "@use-crux/core/internal/scope";
 
 const synchronousResult = defer(() => {});
@@ -61,9 +61,9 @@ defer(() => 42);
 // @ts-expect-error Async inline callbacks may not resolve to application values.
 defer(async () => "not-void");
 
-declare const lifetime: DeferLifetimeCapability;
+declare const binding: CruxHostBinding;
 const hostOptions = {
-  lifetime,
+  binding,
   classifyOutcome: (settlement) =>
     settlement.kind === "returned" ? "success" : "error",
 } satisfies DeferHostBoundaryOptions<string>;
@@ -73,7 +73,7 @@ expectTypeOf(
 ).toEqualTypeOf<Promise<string>>();
 
 const invalidHostOptions: DeferHostBoundaryOptions<string> = {
-  lifetime,
+  binding,
   // @ts-expect-error Outcome classification must be synchronous.
   classifyOutcome: async () => "success",
 };

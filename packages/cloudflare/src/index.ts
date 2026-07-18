@@ -35,6 +35,8 @@ export type {
   WorkersExecutionContext,
   WorkersHostBindingOptions,
 } from "./workers";
+export { withCrux } from "./with-crux";
+export type { CruxWorkersInvocation, CruxWorkersOptions } from "./with-crux";
 export type {
   CloudflareRuntimeEngineDefinition,
   CloudflareRuntimeEngineOptions,

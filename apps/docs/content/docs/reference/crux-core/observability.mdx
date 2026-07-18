@@ -473,13 +473,13 @@ counts and last-error state so a process that never reconnects can still report 
 Core exposes a small provider-neutral host lifecycle port (context, `defer`, `deadline`) instead of
 importing any runtime. First-party wrappers bind it per host:
 
-| Runtime                     | Setup                                                                                   | Wrapper                                                                                                                        |
-| --------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| Long-lived Node             | None for normal use; graceful shutdown remains recommended.                             | Background batching; call `observe.flush()`/`shutdown()` on exit.                                                              |
-| Generic serverless / Lambda | Use the wrapper, or call the documented drain in a custom handler.                      | `withObservableInvocation()` / `withNodeObservableInvocation()` (`@use-crux/core/observability`, `.../node`).                  |
-| Cloudflare Workers          | Pass the Worker's `ExecutionContext` once.                                              | `withCrux()` (`@use-crux/core/observability/workers`) binds defer and drain to `ctx.waitUntil()`, no `nodejs_compat` required. |
-| Next.js                     | Wrap the route once.                                                                    | `withCrux()` (`@use-crux/next`) binds response-finished defer and drain to the same `after()` port.                            |
-| Convex                      | Use `createCruxConvex().run()`, `action`/`internalAction`, or the agent/swarm wrappers. | Bounded drain awaited before the action returns; see `@use-crux/convex/observability`.                                         |
+| Runtime                     | Setup                                                                                   | Wrapper                                                                                                        |
+| --------------------------- | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Long-lived Node             | None for normal use; graceful shutdown remains recommended.                             | Background batching; call `observe.flush()`/`shutdown()` on exit.                                              |
+| Generic serverless / Lambda | Use the wrapper, or call the documented drain in a custom handler.                      | `withObservableInvocation()` / `withNodeObservableInvocation()` (`@use-crux/core/observability`, `.../node`).  |
+| Cloudflare Workers          | Pass the Worker's `ExecutionContext` once.                                              | `withCrux()` (`@use-crux/cloudflare`) binds defer and drain to `ctx.waitUntil()`, no `nodejs_compat` required. |
+| Next.js                     | Wrap the route once.                                                                    | `withCrux()` (`@use-crux/next`) binds response-finished defer and drain to the same `after()` port.            |
+| Convex                      | Use `createCruxConvex().run()`, `action`/`internalAction`, or the agent/swarm wrappers. | Bounded drain awaited before the action returns; see `@use-crux/convex/observability`.                         |
 
 Every wrapper reports a structured `ObservabilityFlushResult` (`status`, `delivered`, `rejected`,
 `remaining`, `deadlineExceeded`) instead of a boolean. Pass `onDrain` to inspect it; the default
@@ -559,13 +559,13 @@ adapts this to Node Lambda-style `(event, context)` handlers, reading
 
 Workers isolates can outlive the returned `Response` via
 `ExecutionContext.waitUntil`, so `withCrux()` (from
-`@use-crux/core/observability/workers`) registers the final drain with
+`@use-crux/cloudflare`) registers the final drain with
 `ctx.waitUntil()` instead of awaiting it inline, telemetry drains in the
 background with no added response latency:
 
 ```ts
 import { defer } from "@use-crux/core";
-import { withCrux } from "@use-crux/core/observability/workers";
+import { withCrux } from "@use-crux/cloudflare";
 
 const handleFetch = withCrux(
   async (request, env, ctx) => {
@@ -583,13 +583,10 @@ export default { fetch: handleFetch };
 
 A raw Worker `fetch` handler must pass its `ExecutionContext` to the wrapper
 once, as shown above, `@use-crux/core/observability` has no way to discover
-`ctx` on its own. `@use-crux/core/observability/workers` never imports
-Cloudflare's runtime types and needs no `nodejs_compat` compatibility flag;
-`CruxExecutionContext` is a structural type satisfied by anything exposing
-`waitUntil(promise)`.
-`withWorkersObservableInvocation()` remains exported for observability-only
-composition, and `withWaitUntilDefer()` remains the provider-neutral low-level
-defer wrapper.
+`ctx` on its own. `@use-crux/cloudflare` needs no `nodejs_compat` compatibility
+flag; `WorkersExecutionContext` is a structural type satisfied by anything
+exposing `waitUntil(promise)`. The provider-neutral low-level alternative is
+`withWaitUntilDefer()` from `@use-crux/core/defer/serverless`.
 
 Explicit propagation is the correctness path across Workers requests and
 isolates: use `observe.openRun(...).suspend({ reason })` to obtain a

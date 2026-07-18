@@ -40,7 +40,7 @@ Runtime-bound failures still use Runtime codes such as
    `withWaitUntilDefer`, Convex `createCruxConvex().run`, …)?
 2. For inline work: does the host advertise a real lifetime capability?
 3. For named work: is `config({ runtime })` present and is
-   `durableFinalization: true` on the host lifetime?
+   `durableFinalization: true` on the host binding?
 4. Inside flows: use `flow.defer()`, never public `defer()`.
 5. Catching a named `defer` promise does not undo `DEFER_COMMIT_FAILED`; fix
    the staging failure or use the callback overload for best-effort work.

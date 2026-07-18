@@ -1,9 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { defer } from '@use-crux/core'
-import {
-  runWithDeferInvocation,
-  type DeferLifetimeCapability,
-} from '@use-crux/core/internal/scope'
+import { runWithDeferInvocation } from '@use-crux/core/internal/scope'
 import { durableTask } from '@use-crux/core/runtime'
 import { createTestRuntime } from '@use-crux/core/runtime/testing'
 import {
@@ -14,7 +11,7 @@ import {
   type CruxGraphRecord,
 } from '../../src/observability'
 import { expectBalancedGraph } from '../observability/helpers/expect-balanced-graph'
-import { createTestScopeDeferController, testLifetime } from './test-lifetime'
+import { createTestScopeDeferController, testBinding } from './test-binding'
 import { scheduleDiagnosticsOnlyDeferredCallback } from '../../src/defer/internal/port'
 
 describe('public defer observability (DFR-E04)', () => {
@@ -29,7 +26,7 @@ describe('public defer observability (DFR-E04)', () => {
     const callback = vi.fn()
 
     await runWithDeferInvocation(() => defer(callback), {
-      lifetime: testLifetime((run) => {
+      binding: testBinding((run) => {
         drain = run
       }),
       classifyOutcome: () => 'error',
@@ -63,7 +60,7 @@ describe('public defer observability (DFR-E04)', () => {
             return 'ok'
           },
           {
-            lifetime: testLifetime((run) => {
+            binding: testBinding((run) => {
               scheduled = run
             }),
             classifyOutcome: () => 'success',
@@ -88,7 +85,6 @@ describe('public defer observability (DFR-E04)', () => {
       primitive: 'defer.scheduled',
       attributes: expect.objectContaining({
         mode: 'inline',
-        completion: 'handler-returned',
         sequence: 0,
       }),
     })
@@ -103,7 +99,6 @@ describe('public defer observability (DFR-E04)', () => {
       parentSpanId: null,
       attributes: expect.objectContaining({
         mode: 'inline',
-        completion: 'handler-returned',
         sequence: 0,
       }),
     })
@@ -143,7 +138,7 @@ describe('public defer observability (DFR-E04)', () => {
         return 'ok'
       },
       {
-        lifetime: testLifetime((run) => {
+        binding: testBinding((run) => {
           scheduled = run
         }),
         classifyOutcome: () => 'success',
@@ -185,7 +180,7 @@ describe('public defer observability (DFR-E04)', () => {
         return 'ok'
       },
       {
-        lifetime: testLifetime((run) => {
+        binding: testBinding((run) => {
           scheduled = run
         }),
         classifyOutcome: () => 'success',
@@ -235,7 +230,7 @@ describe('internal defer composition is quiet (DFR-E03)', () => {
             return 'ok'
           },
           {
-            lifetime: testLifetime((run) => {
+            binding: testBinding((run) => {
               scheduled = run
             }),
             classifyOutcome: () => 'success',
@@ -289,7 +284,7 @@ describe('internal defer composition is quiet (DFR-E03)', () => {
                 return 'ok'
               },
               {
-                lifetime: testLifetime((run) => {
+                binding: testBinding((run) => {
                   scheduled = run
                 }),
                 classifyOutcome: () => 'success',
@@ -343,7 +338,7 @@ describe('internal defer composition is quiet (DFR-E03)', () => {
                 return 'ok'
               },
               {
-                lifetime: testLifetime((run) => {
+                binding: testBinding((run) => {
                   scheduled = run
                 }),
                 classifyOutcome: () => 'success',
@@ -373,50 +368,6 @@ describe('internal defer composition is quiet (DFR-E03)', () => {
   })
 })
 
-describe('handler-returned completion class is recorded', () => {
-  afterEach(() => {
-    resetObservabilityRuntime()
-  })
-
-  it('stamps completion on scheduled and run attributes', async () => {
-    const transport = createInMemoryObservabilityTransport()
-    setObservabilityTransport(transport)
-
-    let scheduled: (() => Promise<void>) | undefined
-    const lifetime: DeferLifetimeCapability = {
-      ...testLifetime((run) => {
-        scheduled = run
-      }),
-      completion: 'response-finished',
-    }
-
-    await runWithDeferInvocation(
-      () => {
-        defer(() => {})
-        return 'ok'
-      },
-      {
-        lifetime,
-        classifyOutcome: () => 'success',
-      },
-    )
-    await scheduled?.()
-    await observe.flush()
-
-    for (const primitive of ['defer.scheduled', 'defer.run'] as const) {
-      expect(transport.records).toContainEqual(
-        expect.objectContaining({
-          type: 'span:start',
-          primitive,
-          attributes: expect.objectContaining({
-            completion: 'response-finished',
-          }),
-        }),
-      )
-    }
-  })
-})
-
 describe('named evidence lifecycle vs drain settlement', () => {
   afterEach(() => {
     vi.useRealTimers()
@@ -429,9 +380,7 @@ describe('named evidence lifecycle vs drain settlement', () => {
     const { createDeferScopeObservability } =
       await import('../../src/defer/internal/observability')
 
-    const evidence = createDeferScopeObservability({
-      completion: 'handler-returned',
-    })
+    const evidence = createDeferScopeObservability()
     let releaseCommit!: () => void
     const commit = new Promise<void>((resolve) => {
       releaseCommit = resolve
@@ -488,9 +437,7 @@ describe('named evidence lifecycle vs drain settlement', () => {
     const { createDeferScopeObservability } =
       await import('../../src/defer/internal/observability')
 
-    const evidence = createDeferScopeObservability({
-      completion: 'handler-returned',
-    })
+    const evidence = createDeferScopeObservability()
     // Nested callback scopes each begin their durable sequence at zero.
     const outer = evidence.recordNamedScheduled({
       sequence: 0,
@@ -545,9 +492,7 @@ describe('named evidence lifecycle vs drain settlement', () => {
     const { createDeferScopeObservability } =
       await import('../../src/defer/internal/observability')
 
-    const evidence = createDeferScopeObservability({
-      completion: 'handler-returned',
-    })
+    const evidence = createDeferScopeObservability()
     let releaseCommit!: (error?: unknown) => void
     const commit = new Promise<void>((resolve, reject) => {
       releaseCommit = (error) => {
@@ -601,9 +546,7 @@ describe('named evidence lifecycle vs drain settlement', () => {
     const { createDeferScopeObservability } =
       await import('../../src/defer/internal/observability')
 
-    const evidence = createDeferScopeObservability({
-      completion: 'handler-returned',
-    })
+    const evidence = createDeferScopeObservability()
     let releaseCommit!: () => void
     const commit = new Promise<void>((resolve) => {
       releaseCommit = resolve
@@ -651,7 +594,7 @@ describe('named evidence lifecycle vs drain settlement', () => {
 
     let runRetained: (() => Promise<void>) | undefined
     const scope = createTestScopeDeferController({
-      ...testLifetime((run) => {
+      ...testBinding((run) => {
         runRetained = run
       }),
       durableFinalization: true,
@@ -721,18 +664,18 @@ describe('named evidence lifecycle vs drain settlement', () => {
     let retainedDone = false
     let retained: Promise<void> | undefined
     let committedDone = false
-    const lifetime: DeferLifetimeCapability = {
-      ...testLifetime(() => {}),
+    const binding = {
+      ...testBinding(() => {}),
       durableFinalization: true,
-      schedule(task) {
-        retained = task.run()
+      retain(work: () => Promise<void>) {
+        retained = work()
         void retained.then(() => {
           retainedDone = true
         })
       },
     }
 
-    const scope = createTestScopeDeferController(lifetime)
+    const scope = createTestScopeDeferController(binding)
     // Simulate in-flight named acceptance still tracked by the commit barrier.
     scope.trackCommit(hangCommit)
     const barriers = scope.seal('success')
@@ -775,8 +718,8 @@ describe('named evidence lifecycle vs drain settlement', () => {
           return 'ok'
         },
         {
-          lifetime: {
-            ...testLifetime((run) => {
+          binding: {
+            ...testBinding((run) => {
               drain = run
             }),
             durableFinalization: true,
@@ -871,8 +814,8 @@ describe('named evidence lifecycle vs drain settlement', () => {
           return 'ok'
         },
         {
-          lifetime: {
-            ...testLifetime((run) => {
+          binding: {
+            ...testBinding((run) => {
               drain = run
             }),
             durableFinalization: true,
@@ -1007,8 +950,8 @@ describe('named evidence lifecycle vs drain settlement', () => {
           return 'ok'
         },
         {
-          lifetime: {
-            ...testLifetime((run) => {
+          binding: {
+            ...testBinding((run) => {
               drain = run
             }),
             durableFinalization: true,
@@ -1077,8 +1020,8 @@ describe('named evidence lifecycle vs drain settlement', () => {
           return 'ok'
         },
         {
-          lifetime: {
-            ...testLifetime((run) => {
+          binding: {
+            ...testBinding((run) => {
               drain = run
             }),
             durableFinalization: true,
@@ -1126,8 +1069,8 @@ describe('named evidence lifecycle vs drain settlement', () => {
           return 'ok'
         },
         {
-          lifetime: {
-            ...testLifetime((run) => {
+          binding: {
+            ...testBinding((run) => {
               drain = run
             }),
             durableFinalization: true,
@@ -1237,8 +1180,8 @@ describe('named evidence lifecycle vs drain settlement', () => {
           return 'ok'
         },
         {
-          lifetime: {
-            ...testLifetime((run) => {
+          binding: {
+            ...testBinding((run) => {
               drain = run
             }),
             durableFinalization: true,
@@ -1342,8 +1285,8 @@ describe('named evidence lifecycle vs drain settlement', () => {
           return 'ok'
         },
         {
-          lifetime: {
-            ...testLifetime((run) => {
+          binding: {
+            ...testBinding((run) => {
               drain = run
             }),
             durableFinalization: true,

@@ -1,10 +1,13 @@
 import type { ExecutionScope } from "../../scope/contracts";
+import type {
+  CruxHostBinding,
+  DeferLifetimeLimits,
+  ScopeRetainedTask,
+} from "../../scope/types";
 import { enqueueRetainedTask } from "../../scope/state";
 import type { RuntimeTaskTarget } from "../../runtime/api/task";
-import type {
-  DeferInvocationOutcome,
-  DeferLifetimeCapability,
-} from "../host-types";
+import type { DeferInvocationOutcome } from "../host-types";
+import { SERVERLESS_DEFER_POLICY } from "../serverless/policy";
 import type { DeferredWorkRef } from "../types";
 import { createDeferCommitBarrier } from "./commit-barrier";
 import {
@@ -19,12 +22,14 @@ import {
 /** Invocation-owned services shared by every per-scope defer controller. */
 export interface InvocationDeferServices {
   readonly invocationScope: ExecutionScope;
-  readonly lifetime: DeferLifetimeCapability;
+  readonly limits: DeferLifetimeLimits;
+  readonly supportsInline: boolean;
+  readonly durableFinalization: boolean;
   readonly signal: AbortSignal;
   readonly abortController: AbortController;
   readonly evidence: DeferScopeObservability;
   readonly namedEvidenceHooks: DurableDeferEvidenceHooks;
-  schedule(task: import("../host-types").DeferScheduledTask): void;
+  schedule(task: ScopeRetainedTask): void;
   hasCallbackCapacity(): boolean;
   recordCallback(): void;
   stageNamed(
@@ -39,35 +44,91 @@ export interface InvocationDeferServices {
 /** Create the root-owned durable, evidence, limit, and cancellation services. */
 export function createInvocationDeferServices(
   invocationScope: ExecutionScope,
-  lifetime: DeferLifetimeCapability,
+  binding: CruxHostBinding,
   options: {
-    readonly retention?: "lifetime" | "binding";
     readonly acceptanceMode?: boolean;
+    readonly abortController?: AbortController;
   } = {},
 ): InvocationDeferServices {
+  return createDeferServices(
+    invocationScope,
+    {
+      limits: binding.limits ?? SERVERLESS_DEFER_POLICY,
+      supportsInline: binding.supportsInline ?? true,
+      durableFinalization: binding.durableFinalization ?? false,
+      schedule: (task) => enqueueRetainedTask(invocationScope, task),
+    },
+    options,
+  );
+}
+
+/**
+ * Create root-owned defer services for a long-lived-process primitive.
+ *
+ * Primitive drains start immediately at scope close. No host retention claim
+ * is made; serverless teardown still requires an invocation host binding.
+ */
+export function createPrimitiveDeferServices(
+  rootScope: ExecutionScope,
+): InvocationDeferServices {
+  return createDeferServices(
+    rootScope,
+    {
+      limits: SERVERLESS_DEFER_POLICY,
+      supportsInline: true,
+      durableFinalization: false,
+      schedule(task) {
+        void task.run().catch((error: unknown) => {
+          console.error(
+            "[crux] primitive deferred work escaped its contained drain.",
+            error,
+          );
+        });
+      },
+    },
+    { acceptanceMode: true },
+  );
+}
+
+interface DeferServiceCapabilities {
+  readonly limits: DeferLifetimeLimits;
+  readonly supportsInline: boolean;
+  readonly durableFinalization: boolean;
+  readonly schedule: (task: ScopeRetainedTask) => void;
+}
+
+function createDeferServices(
+  invocationScope: ExecutionScope,
+  capabilities: DeferServiceCapabilities,
+  options: {
+    readonly acceptanceMode?: boolean;
+    readonly abortController?: AbortController;
+  },
+): InvocationDeferServices {
+  const { limits, supportsInline, durableFinalization, schedule } =
+    capabilities;
   let callbackCount = 0;
   const commitBarrier = createDeferCommitBarrier();
-  const abortController = new AbortController();
-  const evidence = createDeferScopeObservability({
-    completion: lifetime.completion,
-  });
-  const namedEvidenceHooks = createNamedEvidenceHooks(evidence, lifetime);
-  const durable = createDurableDeferController(lifetime, namedEvidenceHooks, {
-    acceptanceMode: options.acceptanceMode ?? false,
-  });
+  const abortController = options.abortController ?? new AbortController();
+  const evidence = createDeferScopeObservability();
+  const namedEvidenceHooks = createNamedEvidenceHooks(evidence);
+  const durable = createDurableDeferController(
+    { durableFinalization },
+    namedEvidenceHooks,
+    { acceptanceMode: options.acceptanceMode ?? false },
+  );
 
   return Object.freeze({
     invocationScope,
-    lifetime,
+    limits,
+    supportsInline,
+    durableFinalization,
     signal: abortController.signal,
     abortController,
     evidence,
     namedEvidenceHooks,
-    schedule: (task) =>
-      options.retention === "binding"
-        ? enqueueRetainedTask(invocationScope, task)
-        : lifetime.schedule(task),
-    hasCallbackCapacity: () => callbackCount < lifetime.limits.maxCallbacks,
+    schedule,
+    hasCallbackCapacity: () => callbackCount < limits.maxCallbacks,
     recordCallback: () => {
       callbackCount += 1;
     },
@@ -88,7 +149,6 @@ export function createInvocationDeferServices(
 
 function createNamedEvidenceHooks(
   evidence: DeferScopeObservability,
-  lifetime: DeferLifetimeCapability,
 ): DurableDeferEvidenceHooks {
   return {
     ensurePublicTraceId: () => evidence.ensurePublicTraceId(),
@@ -110,7 +170,6 @@ function createNamedEvidenceHooks(
             policy: "public",
             sequence: intent.sequence,
             mode: "named",
-            completion: lifetime.completion,
             scheduledAtMs: intent.scheduledAtMs,
             workId: intent.workId,
             targetId: intent.targetId,

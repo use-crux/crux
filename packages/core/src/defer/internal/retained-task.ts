@@ -11,7 +11,7 @@ import type {
 
 const DEFER_OBSERVABILITY_FLUSH_TIMEOUT_MS = 3_000;
 
-/** Schedule the invocation controller's retained drain and track its lifetime. */
+/** Schedule the invocation controller's retained drain and track its settlement. */
 export function scheduleInvocationDeferDrain(
   controller: ScopeDeferController,
   services: InvocationDeferServices,
@@ -24,35 +24,48 @@ export function scheduleInvocationDeferDrain(
 ): DeferredDrainHandle {
   const settlement = deferred<DeferredDrainResult>();
   const retained = deferred<void>();
-  const committed = services.commit(
-    outcome === "timeout" ? "cancelled" : outcome,
-  );
-  services.evidence.trackNamedLifecycle(committed);
+  const ownsRoot = controller.executionScope === services.invocationScope;
+  const committed = ownsRoot
+    ? services.commit(outcome === "timeout" ? "cancelled" : outcome)
+    : Promise.resolve();
+  if (ownsRoot) services.evidence.trackNamedLifecycle(committed);
 
-  services.schedule({
+  const task = {
     async run() {
       try {
         const result = skipsInlineDrain(outcome)
           ? skipInlineCallbacks(services, registrations, close)
           : await drainInlineCallbacks(controller, registrations, {
-              concurrency: services.lifetime.limits.concurrency,
-              maxDrainMs: services.lifetime.limits.maxDrainMs,
-              lifetime: services.lifetime,
+              concurrency: services.limits.concurrency,
+              maxDrainMs: services.limits.maxDrainMs,
+              durableFinalization: services.durableFinalization,
               abortController: services.abortController,
               evidence: services.evidence,
               close,
             });
-        services.evidence.settle(result);
+        if (ownsRoot) services.evidence.settle(result);
+        else services.evidence.recordDrain(result);
         await runDrainSettledHooks(drainSettledHooks, result);
         settlement.resolve(result);
-        await services.evidence.waitForClosure();
-        await flushObservability(services);
+        if (ownsRoot) {
+          await services.evidence.waitForClosure();
+          await flushObservability(services);
+        }
       } finally {
         retained.resolve(undefined);
       }
     },
     cancel: services.cancel,
-  });
+  };
+  if (ownsRoot) services.schedule(task);
+  else {
+    void task.run().catch((error: unknown) => {
+      console.error(
+        "[crux] inner-scope deferred work escaped its contained drain.",
+        error,
+      );
+    });
+  }
   controller.executionScope.trackPending(retained.promise);
   return Object.freeze({ committed, settled: settlement.promise });
 }
@@ -105,7 +118,7 @@ async function flushObservability(
   try {
     await observe.flush({
       timeoutMs: Math.min(
-        services.lifetime.limits.maxDrainMs,
+        services.limits.maxDrainMs,
         DEFER_OBSERVABILITY_FLUSH_TIMEOUT_MS,
       ),
     });

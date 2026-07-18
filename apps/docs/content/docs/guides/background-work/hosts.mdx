@@ -3,7 +3,7 @@ title: Host support
 description: Which environments support background work, and how each one behaves.
 ---
 
-Where does `defer()` work? Find your platform below and add one wrapper. Application code always imports `defer` from `@use-crux/core`; the host package or wrapper only installs the lifetime boundary. On Next.js, the whole integration is one wrapper:
+Where does `defer()` work? Find your platform below and add one binding or wrapper. Application code always imports `defer` from `@use-crux/core`; the host package or wrapper installs the invocation boundary. On Next.js, the whole integration is one wrapper:
 
 ```ts
 import { defer } from "@use-crux/core";
@@ -78,30 +78,30 @@ export const handler = withNamedOnlyDefer(
 
 ### Convex
 
-Convex bridge runs install a named-only lifetime automatically. Use
+Convex bridge runs install a named-only binding automatically. Use
 `await defer(target, input)` with `runtime: convex()` configured. Inline
 `defer(callback)` throws `DEFER_CAPABILITY_MISSING`.
 
 ## Reliability matrix
 
-| Environment               | Integration                                               | Completion class                        | Inline `defer(callback)`      | Named `await defer(target, input)`                                 |
-| ------------------------- | --------------------------------------------------------- | --------------------------------------- | ----------------------------- | ------------------------------------------------------------------ |
-| Node HTTP                 | `@use-crux/core/defer/node`                               | `response-finished`                     | Yes (process-local)           | Optional Runtime; raw Node advertises `durableFinalization: false` |
-| Next.js 15.1+             | `@use-crux/next` `withCrux` (`after`)                     | `response-finished`                     | Yes                           | Runtime + `durableFinalization: true`                              |
-| Vercel Functions          | inject `waitUntil` into `@use-crux/core/defer/serverless` | `handler-returned` (may overlap stream) | Yes                           | Runtime + durable finalization                                     |
-| Cloudflare Workers        | inject `ctx.waitUntil` the same way                       | `handler-returned`                      | Yes                           | Runtime + durable finalization                                     |
-| Generic serverless        | explicit lifetime port only                               | Host-declared                           | Only when a port is installed | Runtime when durability is required                                |
-| AWS Lambda (no extension) | `withNamedOnlyDefer`                                      | n/a for inline                          | **Unsupported**, throws       | Runtime required                                                   |
-| Convex                    | automatic on `bridge.run`                                 | n/a for inline                          | **Unsupported**, throws       | Host-bound Runtime required                                        |
-| Multiprocess Node         | per-process Node host                                     | `response-finished`                     | Process-local only            | Shared Runtime store for cross-process durability                  |
-| Unknown / unmanaged       | none                                                      | n/a                                     | Throws                        | Throws unless a Runtime-capable scope is bound                     |
+| Environment               | Integration                                | Retained work starts              | Inline `defer(callback)`         | Named `await defer(target, input)`                                 |
+| ------------------------- | ------------------------------------------ | --------------------------------- | -------------------------------- | ------------------------------------------------------------------ |
+| Node HTTP                 | `@use-crux/core/defer/node`                | After response finish             | Yes (process-local)              | Optional Runtime; raw Node advertises `durableFinalization: false` |
+| Next.js 15.1+             | `@use-crux/next` `withCrux` (`after`)      | Inside Next.js `after()`          | Yes                              | Runtime + `durableFinalization: true`                              |
+| Vercel Functions          | `@use-crux/vercel` or injected `waitUntil` | From `waitUntil` after return     | Yes                              | Runtime + durable finalization                                     |
+| Cloudflare Workers        | `@use-crux/cloudflare` `withCrux`          | From `ctx.waitUntil` after return | Yes                              | Runtime + durable finalization                                     |
+| Generic serverless        | explicit binding only                      | Binding-defined                   | Only when a binding is installed | Runtime when durability is required                                |
+| AWS Lambda (no extension) | `withNamedOnlyDefer`                       | n/a for inline                    | **Unsupported**, throws          | Runtime required                                                   |
+| Convex                    | automatic on `bridge.run`                  | n/a for inline                    | **Unsupported**, throws          | Host-bound Runtime required                                        |
+| Multiprocess Node         | per-process Node host                      | After response finish             | Process-local only               | Shared Runtime store for cross-process durability                  |
+| Unknown / unmanaged       | none                                       | n/a                               | Throws                           | Throws unless a Runtime-capable scope is bound                     |
 
-For what the completion classes mean and how `durableFinalization` is advertised, see the [defer reference](/docs/reference/crux-core/defer#host-lifetime-semantics).
+For retention and `durableFinalization` semantics, see the [defer reference](/docs/reference/crux-core/defer#host-binding-semantics).
 
 ## Platform behavior notes
 
-- Host capability is declared explicitly by the wrapper you install, never guessed from the environment. See the [defer reference](/docs/reference/crux-core/defer#host-lifetime-semantics) for why capability is never inferred from env var names.
-- Handler-returned hosts (Vercel, Cloudflare) may run deferred callbacks while the response body is still streaming. Document that to users and operators.
+- Host capability is declared explicitly by the binding or wrapper you install, never guessed from the environment. See the [defer reference](/docs/reference/crux-core/defer#host-binding-semantics).
+- `waitUntil` hosts (Vercel, Cloudflare) may run deferred callbacks while the response body is still streaming. Document that to users and operators.
 - Multiprocess Node keeps **inline** work local to each worker. Use named Runtime work when execution must survive or cross workers.
 - Convex and Lambda do not pretend post-return closures are reliable: inline `defer(callback)` throws there, and named Runtime work is the supported path.
 

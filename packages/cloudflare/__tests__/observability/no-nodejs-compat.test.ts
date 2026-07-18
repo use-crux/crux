@@ -1,14 +1,17 @@
 import { env } from 'cloudflare:workers'
 import { createExecutionContext, waitOnExecutionContext } from 'cloudflare:test'
 import { afterEach, describe, expect, it } from 'vitest'
-import { __setAlsForTesting, resetObservabilityRuntime } from '../../../src/observability/observe'
-import { withWorkersObservableInvocation } from '../../../src/observability/workers'
+import {
+  __setAlsForTesting,
+  resetObservabilityRuntime,
+} from '@use-crux/core/observability'
+import { withCrux } from '../../src'
 import worker, { deliveredRecords, resetFixture } from './fixtures/worker'
 
 /**
  * `fixtures/wrangler.jsonc` has no `compatibility_flags`, so every test in
  * this project already proves the default `@use-crux/core/observability`
- * and `@use-crux/core/observability/workers` import graphs load and run in
+ * and `@use-crux/cloudflare` import graphs load and run in
  * a real workerd isolate with no `nodejs_compat`. This file additionally
  * forces the shared AsyncLocalStorage resolver off (the same seam
  * `__tests__/observability/no-als.test.ts` uses) so passing here can never
@@ -34,11 +37,11 @@ describe('correctness holds with AsyncLocalStorage forced unavailable', () => {
   it('observe.withHostLifecycle fails closed for async work instead of silently mis-scoping it across requests', async () => {
     resetObservabilityRuntime()
     __setAlsForTesting(null)
-    // This is exactly why withWorkersObservableInvocation never calls
+    // This is exactly why the Workers boundary never calls
     // observe.withHostLifecycle() around the handler: without ambient async
     // context there is no safe way to scope defer/deadline per concurrent
     // request, so the ambient API refuses async work instead of leaking it.
-    const { observe } = await import('../../../src/observability')
+    const { observe } = await import('@use-crux/core/observability')
     const outcome = observe.withHostLifecycle({ defer: () => {} }, async () => {
       await Promise.resolve()
       return 'unreachable'
@@ -54,7 +57,7 @@ describe('correctness holds with AsyncLocalStorage forced unavailable', () => {
     globalThis.addEventListener('unhandledrejection', onUnhandled)
 
     try {
-      const { observe } = await import('../../../src/observability')
+      const { observe } = await import('@use-crux/core/observability')
       const outcome = observe.withHostLifecycle({ defer: () => {} }, async () => {
         await Promise.resolve()
         throw new Error('detached failure')
@@ -70,7 +73,7 @@ describe('correctness holds with AsyncLocalStorage forced unavailable', () => {
   it('keeps the host lifecycle available for the synchronous fallback frame only', async () => {
     resetObservabilityRuntime()
     __setAlsForTesting(null)
-    const { activeHostLifecycle, observe } = await import('../../../src/observability')
+    const { activeHostLifecycle, observe } = await import('@use-crux/core/observability')
 
     const deadline = Date.now() + 1_000
     expect(
@@ -84,10 +87,7 @@ describe('correctness holds with AsyncLocalStorage forced unavailable', () => {
     const waited: Promise<unknown>[] = []
     const plainCtx = { waitUntil: (p: Promise<unknown>) => void waited.push(p) }
 
-    const handler = withWorkersObservableInvocation(
-      async () => 'ok',
-      () => plainCtx,
-    )
+    const handler = withCrux(async () => 'ok', { context: () => plainCtx })
     await expect(handler()).resolves.toBe('ok')
     expect(waited).toHaveLength(1)
     await waited[0]

@@ -1,10 +1,7 @@
 import { runWithCapturedAsyncScope } from '../../async-scope/internal/carrier'
 import type { RuntimeTaskTarget } from '../../runtime/api/task'
 import { createDeferError } from '../errors'
-import type {
-  DeferInvocationOutcome,
-  DeferLifetimeCapability,
-} from '../host-types'
+import type { DeferInvocationOutcome } from '../host-types'
 import type { DeferredCallback, DeferredWorkRef } from '../types'
 import { createDeferCommitBarrier } from './commit-barrier'
 import {
@@ -28,10 +25,10 @@ export interface DeferredCallbackFailure extends Error {
 export async function executeDeferredCallback(
   parent: ScopeDeferController,
   registration: InlineRegistration,
-  lifetime: DeferLifetimeCapability,
+  policy: { readonly durableFinalization: boolean },
 ): Promise<void> {
   await runWithCapturedAsyncScope(registration.capturedScope, async () => {
-    const child = createCallbackCommitScope(parent, lifetime)
+    const child = createCallbackCommitScope(parent, policy)
     let settlement:
       | { readonly kind: 'returned' }
       | { readonly kind: 'thrown'; readonly error: unknown }
@@ -66,7 +63,7 @@ interface CallbackCommitScope extends DeferRegistrationScope {
 
 function createCallbackCommitScope(
   parent: ScopeDeferController,
-  lifetime: DeferLifetimeCapability,
+  policy: { readonly durableFinalization: boolean },
 ): CallbackCommitScope {
   let state: 'open' | 'sealed' = 'open'
   let committed: Promise<void> | undefined
@@ -74,7 +71,7 @@ function createCallbackCommitScope(
   // Own durable session for nested commit isolation, but public named evidence
   // goes through the owning invocation controller (same run, no duplicate roots).
   const durable = createDurableDeferController(
-    lifetime,
+    policy,
     parent.namedEvidenceHooks,
   )
 

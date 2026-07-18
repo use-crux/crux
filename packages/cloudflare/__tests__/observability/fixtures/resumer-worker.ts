@@ -1,7 +1,7 @@
 /**
  * Auxiliary Worker for Phase 7 cross-isolate resume proof.
  *
- * Configured as a genuinely separate named Worker in `vitest.workers.config.ts`
+ * Configured as a separate named Worker in `vitest.observability.config.ts`
  * (`miniflare.workers`), reachable only through the primary fixture worker's
  * `RESUMER` service binding. It has its own module scope, its own
  * `setObservabilityTransport()` call, and its own `delivered` array —
@@ -22,7 +22,7 @@ import {
   type CruxGraphRecord,
   type CruxObservabilityTransport,
   type CruxPropagationCarrier,
-} from '../../../../src/observability'
+} from '@use-crux/core/observability'
 
 const delivered: CruxGraphRecord[] = []
 let transportInstalled = false

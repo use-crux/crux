@@ -1,6 +1,6 @@
 import { createDeferError } from "./errors";
 import { asyncScopeActive } from "../async-scope/internal/carrier";
-import { currentDeferRegistration } from "./internal/context";
+import { resolveDeferRegistration } from "./internal/registration";
 import { resolveConfiguredHost } from "../scope/kernel";
 import {
   registerAmbientInlineDefer,
@@ -50,7 +50,7 @@ export function defer(
         "defer() cannot run inside replayable flow execution. Use flow.defer() for durable work with stable replay identity.",
     });
   }
-  const registration = currentDeferRegistration();
+  const registration = resolveDeferRegistration();
   if (isRuntimeTaskTarget(callbackOrTarget)) {
     if (registration) {
       return registration.scope.stageNamed(callbackOrTarget, input);

@@ -1,11 +1,15 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import type { ResponseFinishedTerminal } from "../lifecycle";
+
+/** First terminal signal observed for a Node response boundary. */
+export interface NodeResponseTerminal {
+  finish(): void;
+}
 
 /** Subscribe a Node request/response pair to its first observable terminal. */
 export function subscribeNodeResponseTerminal(
   request: IncomingMessage,
   response: ServerResponse,
-  terminal: ResponseFinishedTerminal,
+  terminal: NodeResponseTerminal,
 ): () => void {
   const finish = () => terminal.finish();
   response.once("finish", finish);

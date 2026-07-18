@@ -11,24 +11,12 @@
 export { SERVERLESS_DEFER_POLICY } from "./serverless/policy";
 export type { DeferAfterPort, DeferWaitUntilPort } from "./serverless/ports";
 export {
-  createWaitUntilDeferLifetime,
-  type WaitUntilDeferLifetimeOptions,
-} from "./serverless/wait-until";
-export {
-  createAfterDeferLifetime,
-  type AfterDeferLifetimeOptions,
-} from "./serverless/after";
-export {
-  createNamedOnlyDeferLifetime,
-  type NamedOnlyDeferHostKind,
-  type NamedOnlyDeferLifetimeOptions,
-} from "./serverless/named-only";
-export {
   withServerlessDefer,
   withWaitUntilDefer,
   withAfterDefer,
   withNamedOnlyDefer,
   type AfterDeferWrapOptions,
+  type NamedOnlyDeferHostKind,
   type NamedOnlyDeferWrapOptions,
   type ServerlessDeferClassifyOutcome,
   type ServerlessDeferWrapOptions,

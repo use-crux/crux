@@ -1,7 +1,12 @@
 import { config, defer, resetHooks, type CruxDeferError } from '@use-crux/core'
 import { createRuntimeWithHostContext } from '@use-crux/core/runtime'
+import { currentScope } from '@use-crux/core/internal/scope'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { convexRuntimeRecords, getConvexCruxRuntime, type ConvexCtxPort } from '../src'
+import {
+  convexRuntimeRecords,
+  getConvexCruxRuntime,
+  type ConvexCtxPort,
+} from '../src'
 import { inMemoryRecordStore, memory, memoryBlock } from '../src/memory'
 import { convex } from '../src/runtime'
 import { createConvexRuntimeBridge } from '../src/runtime-bridge'
@@ -64,18 +69,22 @@ describe('Convex runtime bridge', () => {
       },
     })
 
-    const result = await bridge.run(ctx, { threadId: 'thread-1', attempt: 2 }, async (scope) => {
-      expect(scope.ctx.tenantId).toBe('tenant-1')
-      expect(scope.target?.attempt).toBe(2)
-      expect(scope.runtime.records).toBe(records)
-      await convexRuntimeRecords.put('runtime:key', { ok: true })
-      const rendered = await runtimeMemory.asContext().systemFn({})
-      return {
-        stored: await records.get('runtime:key'),
-        rendered,
-        activeTarget: getConvexCruxRuntime()?.target,
-      }
-    })
+    const result = await bridge.run(
+      ctx,
+      { threadId: 'thread-1', attempt: 2 },
+      async (scope) => {
+        expect(scope.ctx.tenantId).toBe('tenant-1')
+        expect(scope.target?.attempt).toBe(2)
+        expect(scope.runtime.records).toBe(records)
+        await convexRuntimeRecords.put('runtime:key', { ok: true })
+        const rendered = await runtimeMemory.asContext().systemFn({})
+        return {
+          stored: await records.get('runtime:key'),
+          rendered,
+          activeTarget: getConvexCruxRuntime()?.target,
+        }
+      },
+    )
 
     expect(result).toEqual({
       stored: { ok: true },
@@ -98,7 +107,11 @@ describe('Convex runtime bridge', () => {
       },
     } satisfies TenantCtx & {
       scheduler: {
-        runAfter(delayMs: number, ref: unknown, args: Record<string, unknown>): Promise<unknown>
+        runAfter(
+          delayMs: number,
+          ref: unknown,
+          args: Record<string, unknown>,
+        ): Promise<unknown>
       }
     }
     const bridge = createConvexRuntimeBridge<TenantCtx>({
@@ -140,9 +153,11 @@ describe('Convex runtime bridge', () => {
       runMutation: vi.fn(),
     }
     const callback = vi.fn()
+    let bridgeScopeKind: string | undefined
 
     await expect(
       bridge.run(ctx, undefined, async () => {
+        bridgeScopeKind = currentScope()?.descriptor.kind
         defer(callback)
         return 'response'
       }),
@@ -150,6 +165,7 @@ describe('Convex runtime bridge', () => {
       code: 'DEFER_CAPABILITY_MISSING',
     } satisfies Partial<CruxDeferError>)
     expect(callback).not.toHaveBeenCalled()
+    expect(bridgeScopeKind).toBe('bridge-run')
   })
 
   it('executes bridge commands through the runtime bridge store path', async () => {

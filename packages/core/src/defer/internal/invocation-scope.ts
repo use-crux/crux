@@ -2,7 +2,7 @@ import {
   captureAsyncScope,
   type CapturedAsyncScope,
 } from "../../async-scope/internal/carrier";
-import { resolveWritableScope } from "../../scope/kernel";
+import { currentScope, resolveWritableScope } from "../../scope/kernel";
 import type { ExecutionScope } from "../../scope/contracts";
 import { createDeferError } from "../errors";
 import type { DeferredCallback } from "../types";
@@ -95,16 +95,21 @@ export function createScopeDeferController(
     registerInline(callback, registration) {
       // A retained drain runs after the kernel scope is sealed. Preserve the
       // existing nested-defer exception only while that drain is still open.
+      const origin = currentScope() ?? executionScope;
       const writable =
-        registration.phase === "drain" && !drainClosed
+        registration.phase === "drain" &&
+        !drainClosed &&
+        origin === executionScope
           ? executionScope
-          : resolveWritableScope(executionScope, {
+          : resolveWritableScope(origin, {
               phase: registration.phase,
             });
       if (writable === "sealed" || drainClosed) throwInlineScopeSealed();
       if (writable !== executionScope) {
-        const routed = deferControllerForScope(writable);
-        if (!routed || routed === controller) throwInlineScopeSealed();
+        const routed =
+          deferControllerForScope(writable) ??
+          createScopeDeferController(writable, services);
+        if (routed === controller) throwInlineScopeSealed();
         routed.registerInline(callback, registration);
         return;
       }
@@ -114,6 +119,7 @@ export function createScopeDeferController(
       const observation = services.evidence.recordInlineScheduled(
         sequence,
         policy,
+        executionScope.descriptor,
       );
       registrations.push({
         sequence,
@@ -154,26 +160,26 @@ function assertInlineRegistrationAllowed(
   services: InvocationDeferServices,
   registration: DeferRegistrationContext,
 ): void {
-  if (!services.lifetime.supportsInline) {
+  if (!services.supportsInline) {
     throw createDeferError({
       code: "DEFER_CAPABILITY_MISSING",
       message:
-        "The active host does not support inline defer(callback). Use await defer(target, input) with a configured Runtime, or install a host lifetime integration.",
+        "The active host does not support inline defer(callback). Use await defer(target, input) with a configured Runtime, or install a host binding.",
     });
   }
   if (!services.hasCallbackCapacity()) {
     throw createDeferError({
       code: "DEFER_LIMIT_EXCEEDED",
-      message: `defer() exceeded the host callback limit of ${services.lifetime.limits.maxCallbacks}.`,
+      message: `defer() exceeded the host callback limit of ${services.limits.maxCallbacks}.`,
     });
   }
   if (
     registration.phase === "drain" &&
-    registration.depth > services.lifetime.limits.maxNestingDepth
+    registration.depth > services.limits.maxNestingDepth
   ) {
     throw createDeferError({
       code: "DEFER_LIMIT_EXCEEDED",
-      message: `defer() exceeded the host nesting limit of ${services.lifetime.limits.maxNestingDepth}.`,
+      message: `defer() exceeded the host nesting limit of ${services.limits.maxNestingDepth}.`,
     });
   }
 }

@@ -3,8 +3,6 @@ import { bindRootRetention } from "../../scope/state";
 import { openScope } from "../../scope/kernel";
 import type { RuntimeTaskTarget } from "../../runtime/api/task";
 import type { DeferredCallback, DeferredWorkRef } from "../types";
-import type { DeferLifetimeCapability } from "../host-types";
-import { SERVERLESS_DEFER_POLICY } from "../serverless/policy";
 import { createInvocationDeferServices } from "./invocation-services";
 import { createScopeDeferController } from "./invocation-scope";
 
@@ -52,27 +50,11 @@ function createAmbientRoot(
 } {
   const scope = openScope({ kind: "invocation" }, {});
   bindRootRetention(scope.scope, binding);
-  const services = createInvocationDeferServices(
-    scope.scope,
-    bindingLifetime(binding),
-    { retention: "binding", acceptanceMode },
-  );
+  const services = createInvocationDeferServices(scope.scope, binding, {
+    acceptanceMode,
+  });
   return {
     scope,
     controller: createScopeDeferController(scope.scope, services),
-  };
-}
-
-function bindingLifetime(binding: CruxHostBinding): DeferLifetimeCapability {
-  return {
-    completion: "response-finished",
-    limits: binding.limits ?? SERVERLESS_DEFER_POLICY,
-    supportsInline: binding.supportsInline ?? true,
-    durableFinalization: binding.durableFinalization ?? false,
-    schedule() {
-      throw new TypeError(
-        "Binding-owned work must use the scope retention gate.",
-      );
-    },
   };
 }

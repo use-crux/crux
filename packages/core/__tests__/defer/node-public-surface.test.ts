@@ -11,7 +11,7 @@ interface CorePackageManifest {
 }
 
 describe("Node defer package surfaces", () => {
-  it("declares the public Node subpath and folds lifecycle into scope", async () => {
+  it("declares the public Node subpath and the scope kernel SPI", async () => {
     const manifest = JSON.parse(
       await readFile(new URL("../../package.json", import.meta.url), "utf8"),
     ) as CorePackageManifest;
@@ -38,11 +38,8 @@ describe("Node defer package surfaces", () => {
       "shutdownNodeDefer",
       "withNodeDefer",
     ]);
-    expect(await import("@use-crux/core/internal/scope")).toEqual(
-      expect.objectContaining({
-        createHandlerReturnedDeferLifetime: expect.any(Function),
-        createResponseFinishedDeferLifetime: expect.any(Function),
-      }),
+    expect(await import("@use-crux/core/internal/scope")).not.toHaveProperty(
+      "createHandlerReturnedDeferLifetime",
     );
   });
 

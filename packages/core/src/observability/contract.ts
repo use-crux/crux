@@ -942,7 +942,6 @@ export interface CruxPromptResolveAttributes {
  */
 export interface CruxDeferScheduledAttributes {
   mode: "inline" | "named";
-  completion: "response-finished" | "handler-returned";
   sequence: number;
   definitionId?: string;
   targetId?: string;
@@ -962,7 +961,6 @@ export interface CruxDeferScheduledAttributes {
  */
 export interface CruxDeferRunAttributes {
   mode: "inline" | "named";
-  completion: "response-finished" | "handler-returned";
   sequence: number;
   definitionId?: string;
   targetId?: string;

@@ -72,11 +72,25 @@ export function currentScopeDeferController():
   return currentScopeFacet(deferControllerSlot);
 }
 
+/** Register first-party work after callback settlement and before evidence flush. */
+export function onDeferDrainSettled(
+  hook: Parameters<ScopeDeferController["onDrainSettled"]>[0],
+): void {
+  const controller = currentScopeDeferController();
+  if (!controller) {
+    throw new TypeError(
+      "Cannot register a drain-settled hook without an active defer controller.",
+    );
+  }
+  controller.onDrainSettled(hook);
+}
+
 /** Resolve the nearest persistent defer controller from an explicit scope. */
 export function deferControllerForScope(
   scope: ExecutionScope,
 ): ScopeDeferController | undefined {
-  return scope.facet(deferControllerSlot);
+  const controller = scope.facet(deferControllerSlot);
+  return controller?.executionScope === scope ? controller : undefined;
 }
 
 /** Track an operation in the owning invocation's strict commit barrier. */

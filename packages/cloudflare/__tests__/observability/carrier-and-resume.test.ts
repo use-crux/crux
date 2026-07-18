@@ -11,7 +11,7 @@ interface ResumerEnv {
  * Proves the explicit W3C/Crux carrier is the correctness path across a
  * genuinely separate Worker, not shared JS memory.
  *
- * `fixtures/resumer-worker.ts` is configured in `vitest.workers.config.ts`
+ * `fixtures/resumer-worker.ts` is configured in `vitest.observability.config.ts`
  * as its own named Worker (own module scope, own delivery/transport state)
  * and is reachable from this fixture worker only through the `RESUMER`
  * service binding declared in `fixtures/wrangler.jsonc`. Calling

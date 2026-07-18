@@ -3,13 +3,14 @@ import { defer } from "@use-crux/core";
 import { durableTask } from "@use-crux/core/runtime";
 import { createTestRuntime } from "@use-crux/core/runtime/testing";
 import type {
-  DeferLifetimeCapability,
-  DeferScheduledTask,
+  CruxHostBinding,
+  DeferLifetimeLimits,
+  ScopeRetainedTask,
 } from "@use-crux/core/internal/scope";
 import { scheduleDiagnosticsOnlyDeferredCallback } from "../../src/defer/internal/port";
 import { runWithDeferRegistration } from "../../src/defer/internal/context";
 import { getHooks, setHooks } from "../../src/runtime/runtime";
-import { createTestScopeDeferController, testLifetime } from "./test-lifetime";
+import { createTestScopeDeferController, testBinding } from "./test-binding";
 
 describe("deferred callback boundary", () => {
   const previousHooks = getHooks();
@@ -21,9 +22,9 @@ describe("deferred callback boundary", () => {
   it("gives concurrent callbacks distinct named commit scopes", async () => {
     const target = callbackTarget("callback-distinct-scopes");
     const runtime = createTestRuntime({ targets: [target] });
-    const retained = retainedLifetime({ concurrency: 2 });
+    const retained = retainedBinding({ concurrency: 2 });
     try {
-      const parent = createTestScopeDeferController(retained.lifetime);
+      const parent = createTestScopeDeferController(retained.binding);
       parent.registerInline(
         () => defer(target, { id: "first" }),
         handlerRegistration(parent),
@@ -63,9 +64,9 @@ describe("deferred callback boundary", () => {
   it("tracks unawaited named staging through callback commit", async () => {
     const target = callbackTarget("callback-unawaited-named");
     const runtime = createTestRuntime({ targets: [target] });
-    const retained = retainedLifetime();
+    const retained = retainedBinding();
     try {
-      const parent = createTestScopeDeferController(retained.lifetime);
+      const parent = createTestScopeDeferController(retained.binding);
       let workId: string | undefined;
       parent.registerInline(() => {
         void defer(target, { id: "unawaited" }).then((work) => {
@@ -90,10 +91,10 @@ describe("deferred callback boundary", () => {
   it("reports nested commit failure with the required causal chain and continues siblings", async () => {
     const target = callbackTarget("callback-commit-failure");
     const runtime = createTestRuntime({ targets: [target] });
-    const retained = retainedLifetime({ concurrency: 2 });
+    const retained = retainedBinding({ concurrency: 2 });
     const sibling = vi.fn();
     try {
-      const parent = createTestScopeDeferController(retained.lifetime);
+      const parent = createTestScopeDeferController(retained.binding);
       parent.registerInline(() => {
         void (
           defer as unknown as (
@@ -125,9 +126,9 @@ describe("deferred callback boundary", () => {
   it("finalizes accepted named work with the callback error outcome", async () => {
     const target = callbackTarget("callback-error-outcome");
     const runtime = createTestRuntime({ targets: [target] });
-    const retained = retainedLifetime();
+    const retained = retainedBinding();
     try {
-      const parent = createTestScopeDeferController(retained.lifetime);
+      const parent = createTestScopeDeferController(retained.binding);
       parent.registerInline(async () => {
         await defer(target, { id: "accepted" });
         throw new Error("callback failed after staging");
@@ -166,9 +167,9 @@ describe("deferred callback boundary", () => {
   });
 
   it("delegates nested inline work to the parent drain without scheduling another drain", async () => {
-    const retained = retainedLifetime();
+    const retained = retainedBinding();
     const nested = vi.fn();
-    const parent = createTestScopeDeferController(retained.lifetime);
+    const parent = createTestScopeDeferController(retained.binding);
     parent.registerInline(() => defer(nested), handlerRegistration(parent));
 
     const handle = parent.seal("success");
@@ -186,9 +187,9 @@ describe("deferred callback boundary", () => {
   });
 
   it("schedules diagnostics-only callbacks through the same bounded parent drain", async () => {
-    const retained = retainedLifetime();
+    const retained = retainedBinding();
     const callback = vi.fn();
-    const parent = createTestScopeDeferController(retained.lifetime);
+    const parent = createTestScopeDeferController(retained.binding);
     runWithDeferRegistration(handlerRegistration(parent), () => {
       scheduleDiagnosticsOnlyDeferredCallback(callback);
     });
@@ -215,16 +216,14 @@ function handlerRegistration(
   return { scope, phase: "handler" as const, depth: 0 };
 }
 
-function retainedLifetime(
-  limits: Partial<DeferLifetimeCapability["limits"]> = {},
-) {
-  const tasks: DeferScheduledTask[] = [];
-  const lifetime: DeferLifetimeCapability = {
-    ...testLifetime((_run, task) => tasks.push(task), limits),
+function retainedBinding(limits: Partial<DeferLifetimeLimits> = {}) {
+  const tasks: ScopeRetainedTask[] = [];
+  const binding: CruxHostBinding = {
+    ...testBinding((_run, task) => tasks.push(task), limits),
     durableFinalization: true,
   };
   return {
-    lifetime,
+    binding,
     tasks,
     async runOnlyTask() {
       expect(tasks).toHaveLength(1);
