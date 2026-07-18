@@ -2,6 +2,7 @@ import type { Message } from '../../generation/messages'
 import { observe } from '../../observability'
 import { guardrailDefinitionRef } from '../../observability/definition-ref'
 import type { MediaPartLocation, MediaPartSubject } from '../boundary'
+import { mediaLocationAttributes } from '../media/location'
 import type { SafetyRunContext } from '../decision'
 import { safeCaptureSummary } from '../errors'
 import { GuardrailBlockedError } from '../guardrail/errors'
@@ -53,10 +54,10 @@ export async function guardInputMedia(options: GuardInputMediaOptions): Promise<
       for (const binding of options.bindings) {
         ran = true
         const start = performance.now()
-        const subject: MediaPartSubject = { part, messageIndex, partIndex }
+        const origin = { kind: 'message' as const, messageIndex, partIndex }
+        const subject: MediaPartSubject = { part, origin }
         const location: MediaPartLocation = {
-          messageIndex,
-          partIndex,
+          origin,
           partType: part.type,
         }
         const context = options.context(messages)
@@ -72,9 +73,7 @@ export async function guardInputMedia(options: GuardInputMediaOptions): Promise<
             phase: 'input',
             promptId: context.promptId,
             model: context.model,
-            mediaPartType: location.partType,
-            messageIndex: location.messageIndex,
-            partIndex: location.partIndex,
+            ...mediaLocationAttributes(location),
           },
         })
         let result: MediaGuardrailRunResult

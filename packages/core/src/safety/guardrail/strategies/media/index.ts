@@ -1,14 +1,14 @@
-import type { BoundaryDef, MediaPartSubject } from '../../../boundary'
+import type { BoundaryDef, MediaPartSubject, MediaSafetyTargetId } from '../../../boundary'
 import type { GuardrailRun, MediaGuardrailRunResult } from '../../types'
 import { normalizeMediaGuardrailConfig } from './config'
 import { evaluateMediaPolicy } from './evaluate'
 import { inspectMediaPart } from './inspect'
 import type { MediaGuardrailOptions } from './types'
 
-type MediaBoundary = BoundaryDef<'user.input.media', MediaPartSubject>
+type MediaBoundary = BoundaryDef<MediaSafetyTargetId, MediaPartSubject>
 
 /**
- * Create a declarative policy callback for input attachments.
+ * Create a declarative policy callback for canonical input or output media.
  *
  * Inspection uses only metadata and bytes already supplied by the caller; it
  * never fetches a URL or calls a provider. Unknown MIME types fail configured
@@ -17,15 +17,15 @@ type MediaBoundary = BoundaryDef<'user.input.media', MediaPartSubject>
  * types against payload contents.
  *
  * @param options - Attachment rules and the action returned for violations.
- * @returns A callback restricted to `boundary.input.media()`.
+ * @returns A callback restricted to media-only boundaries.
  *
  * @example
  * ```ts
  * import { boundary, guardrail } from '@use-crux/core/safety'
  *
- * const safeAttachments = guardrail({
- *   id: 'safe-attachments',
- *   on: boundary.input.media(),
+ * const safeMedia = guardrail({
+ *   id: 'safe-media',
+ *   on: [boundary.input.media(), boundary.output.media()] as const,
  *   run: guardrail.media({
  *     mediaTypes: {
  *       allow: ['image/png', 'image/jpeg', 'application/pdf'],

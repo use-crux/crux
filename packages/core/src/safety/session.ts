@@ -32,7 +32,7 @@ import type { Message } from '../generation/messages'
 import type { TraceMeta } from '../generation/types'
 import { getHooks } from '../runtime/runtime'
 import type { z } from 'zod'
-import type { BoundaryDef } from './boundary'
+import type { BoundaryDef, MediaPartSubject } from './boundary'
 import { buildSafetyRegistry, type GuardrailBinding, type SafetyBinding } from './registry'
 import type { SafetyTuneOptions } from './tune'
 import type {
@@ -43,18 +43,17 @@ import type {
   ConstraintFailure,
 } from './constraint/types'
 import { observeConstraintCheck, runConstraints } from './constraint/runner'
-import type {
-  Guardrail,
-  GuardrailAudit,
-  GuardrailAuditEntry,
-  GuardrailContext,
-} from './guardrail/types'
+import type { Guardrail, GuardrailAudit, GuardrailAuditEntry, GuardrailContext } from './guardrail/types'
 import { createGuardrailPipeline } from './guardrail/pipeline'
 import { createSafetyStream } from './stream/engine'
 import { resyncStructuredText } from './structured'
 import { guardOutputTextParts as guardCompletionTextParts } from './output-text-parts'
 import { guardInput as guardSafetyInput } from './input/runner'
 import { createScopedSafetySession } from './scope-session'
+import type { SafetyAudit } from './audit'
+import { guardOutputMedia as guardSafetyOutputMedia, type MediaOutputResult } from './output/media'
+
+const outputMediaGuard: unique symbol = Symbol('crux.safety.outputMediaGuard')
 
 // ─────────────────────────────────────────────────────────────────
 // Public types
@@ -235,7 +234,7 @@ export interface Safety {
   guardOutputTextParts(parts: readonly string[]): Promise<readonly string[]>
 
   /** Audits accumulated so far (exact `GuardrailAudit` / `ConstraintAudit` shapes). */
-  readonly audit: { readonly guardrails?: GuardrailAudit; readonly constraints?: ConstraintAudit }
+  readonly audit: SafetyAudit
 
   /** Return `meta` with audit fields attached iff non-empty. */
   stamp<TMeta extends TraceMeta>(meta: TMeta): TMeta
@@ -245,6 +244,22 @@ export interface Safety {
 
   /** Protocol transcript — see {@link SafetyProtocolEvent}. */
   readonly transcript: readonly SafetyProtocolEvent[]
+}
+
+interface SafetySession extends Safety {
+  [outputMediaGuard](
+    subjects: readonly MediaPartSubject[],
+    options?: { readonly minimumRetained?: number },
+  ): Promise<MediaOutputResult>
+}
+
+/** @internal Guard canonical output media for Core-owned adapter projections. */
+export function guardSafetySessionOutputMedia(
+  safety: Safety,
+  subjects: readonly MediaPartSubject[],
+  options?: { readonly minimumRetained?: number },
+): Promise<MediaOutputResult> {
+  return (safety as SafetySession)[outputMediaGuard](subjects, options)
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -541,7 +556,7 @@ export function createSafety(options: SafetyCallOptions): Safety {
 
   // ── The session ────────────────────────────────────────────────
 
-  const session: Safety = {
+  const session: SafetySession = {
     enabled,
 
     async guardInput(input) {
@@ -591,6 +606,16 @@ export function createSafety(options: SafetyCallOptions): Safety {
       })
     },
 
+    async [outputMediaGuard](subjects, mediaOptions) {
+      return guardSafetyOutputMedia({
+        bindings: phaseBindings('output').filter((binding) => binding.boundary.id === 'model.output.media'),
+        subjects,
+        minimumRetained: mediaOptions?.minimumRetained ?? 0,
+        context: guardContext('output', lastMessages),
+        appendAudit: appendGuardrailAudit,
+      })
+    },
+
     get audit() {
       return {
         ...(guardrailAudit ? { guardrails: guardrailAudit } : {}),
@@ -614,7 +639,7 @@ export function createSafety(options: SafetyCallOptions): Safety {
 
     transcript,
   }
-  return createScopedSafetySession(options.promptId, session)
+  return createScopedSafetySession(options.promptId, session) as SafetySession
 }
 
 function latestRewritePolicyId(entries: readonly GuardrailAuditEntry[]): string | undefined {

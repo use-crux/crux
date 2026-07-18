@@ -213,14 +213,20 @@ describe('guardInput — media boundaries', () => {
       boundary: 'user.input.media',
       action: 'block',
       reason: 'The only part is disallowed.',
-      location: { messageIndex: 1, partIndex: 0, partType: 'image' },
+      location: {
+        origin: { kind: 'message', messageIndex: 1, partIndex: 0 },
+        partType: 'image',
+      },
     })
     expect(safety.audit.guardrails?.applied).toContainEqual(
       expect.objectContaining({
         guard: 'strip-only-part',
         action: 'strip',
         reason: 'The only part is disallowed.',
-        location: { messageIndex: 1, partIndex: 0, partType: 'image' },
+        location: {
+          origin: { kind: 'message', messageIndex: 1, partIndex: 0 },
+          partType: 'image',
+        },
         escalatedToBlock: true,
       }),
     )

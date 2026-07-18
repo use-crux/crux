@@ -31,6 +31,12 @@ import {
   type CompletedMediaObservation,
 } from "./observability-graph";
 import { preflightCompletedCandidates } from "./preflight";
+import type { Guardrail } from "../../safety/guardrail/types";
+import type { SafetyTuneOptions } from "../../safety/tune";
+import {
+  createCompletedOperationSafety,
+  guardCompletedOperationOutput,
+} from "./safety/execute";
 
 /** Options owned by the shared bounded-media lifecycle. */
 export type RunCompletedMediaOperationOptions<
@@ -56,6 +62,8 @@ export type RunCompletedMediaOperationOptions<
   readonly input: TInput;
   readonly abortSignal?: AbortSignal;
   readonly timeout?: OperationTimeout;
+  readonly guardrails?: readonly Guardrail[];
+  readonly safety?: SafetyTuneOptions;
   /** Context consumed by router/split callbacks. */
   readonly routing?: object;
   /** Optional top-level route override. */
@@ -160,6 +168,12 @@ async function runWithObservation<
     const state: CompletedRoutingState = { calls: 0 };
     const inputPreview = safeMediaInputPreview(options.input);
     try {
+      const safety = createCompletedOperationSafety({
+        operation: options.operation,
+        model: options.model,
+        guardrails: options.guardrails,
+        safety: options.safety,
+      });
       const prepared = await preflightCompletedCandidates(options, signal);
       const result = await resolveCompletedModel(
         options.model,
@@ -199,6 +213,11 @@ async function runWithObservation<
         },
       );
       const finalized = finalizeCompletedResult(result, state.calls);
+      const guarded = await guardCompletedOperationOutput(
+        options.operation,
+        finalized,
+        safety,
+      );
       const selected = await selectedCompletedInput(
         prepared,
         options.input,
@@ -206,14 +225,14 @@ async function runWithObservation<
         options,
         state.selectedModel,
       );
-      const report = emitReport(options, finalized, selected);
+      const report = emitReport(options, guarded, selected);
       observation?.succeed(
-        finalized,
+        guarded,
         report,
         inputPreview,
-        safeMediaOutputPreview(finalized),
+        safeMediaOutputPreview(guarded),
       );
-      return finalized;
+      return guarded;
     } catch (error) {
       observation?.fail(error, inputPreview);
       throw error;

@@ -9,6 +9,8 @@ import type { Prompt } from "../prompt/prompt-types";
 import type { MergedInput } from "../prompt/type-utils";
 import type { AnyToolSet } from "../types";
 import type { CompletedOperationModelGuard, RoutingCallOptions } from "../routing/types";
+import type { Guardrail } from "../safety/guardrail/types";
+import type { SafetyTuneOptions } from "../safety/tune";
 
 /** A direct text prompt, composed Crux prompt, or native image-edit prompt. */
 export type ImagePrompt = string | AnyImageCruxPrompt | ImagePromptContent;
@@ -49,7 +51,13 @@ type PromptInputOption<TPrompt> = TPrompt extends AnyImageCruxPrompt
     : { readonly input: PromptInput<TPrompt> }
   : { readonly input?: never };
 
-/** Portable controls shared by native image-generation adapters. */
+/**
+ * Portable controls shared by native image-generation adapters.
+ *
+ * Image operations support guardrails over canonical prompt images and
+ * generated images. They intentionally do not expose output constraints or
+ * constraint retry controls.
+ */
 export type GenerateImageCommonOptions = Readonly<{
   /** Number of images requested. Must be a positive integer. */
   n?: number;
@@ -59,6 +67,17 @@ export type GenerateImageCommonOptions = Readonly<{
   abortSignal?: AbortSignal;
   /** Whole-operation and per-attempt timeout budgets. */
   timeout?: OperationTimeout;
+  /**
+   * Guardrails applied to canonical prompt images and generated images.
+   *
+   * Output callbacks receive the original generated asset as
+   * `subject.part.source`. Enforced `strip` removes that canonical image and
+   * blocks if it is the final image; report mode records intent without
+   * changing the result. Provider-native `raw` and metadata are not guarded.
+   */
+  guardrails?: readonly Guardrail[];
+  /** Per-policy enablement, mode, and stream tuning for attached guardrails. */
+  safety?: SafetyTuneOptions;
 }>;
 
 type ImageDimensions =

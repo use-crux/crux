@@ -5,6 +5,7 @@ import type {
   BoundaryInput,
   MediaPartLocation,
   MediaPartSubject,
+  MediaSafetyTargetId,
   SafetyTargetId,
   SubjectOf,
 } from '../boundary'
@@ -42,29 +43,32 @@ export type MediaGuardrailRunResult =
   | { readonly action: 'block'; readonly reason: string }
   | { readonly action: 'strip'; readonly reason: string }
 
-type IsMediaBoundary<B extends BoundaryInput> = [BoundaryIdOf<B>] extends ['user.input.media'] ? true : false
+type IsMediaBoundary<B extends BoundaryInput> = [BoundaryIdOf<B>] extends [MediaSafetyTargetId] ? true : false
 
-type ContainsMediaBoundary<B extends BoundaryInput> = 'user.input.media' extends BoundaryIdOf<B> ? true : false
+type ContainsMediaBoundary<B extends BoundaryInput> = [Extract<BoundaryIdOf<B>, MediaSafetyTargetId>] extends [never]
+  ? false
+  : true
 
-type IsMixedMediaBoundary<B extends BoundaryInput> = ContainsMediaBoundary<B> extends true
-  ? Exclude<BoundaryIdOf<B>, 'user.input.media'> extends never
-    ? false
-    : true
-  : false
+type IsMixedMediaBoundary<B extends BoundaryInput> =
+  ContainsMediaBoundary<B> extends true
+    ? Exclude<BoundaryIdOf<B>, MediaSafetyTargetId> extends never
+      ? false
+      : true
+    : false
 
-type GuardrailBoundaryInput<B extends BoundaryInput> = IsMixedMediaBoundary<B> extends true
-  ? B & { readonly 'A media guardrail can target only boundary.input.media()': never }
-  : B
+type GuardrailBoundaryInput<B extends BoundaryInput> =
+  IsMixedMediaBoundary<B> extends true
+    ? B & {
+        readonly 'A media guardrail can target only media boundaries': never
+      }
+    : B
 
-type GuardrailRunResultFor<B extends BoundaryInput> = IsMediaBoundary<B> extends true
-  ? MediaGuardrailRunResult
-  : GuardrailRunResult<SubjectOf<B>>
+type GuardrailRunResultFor<B extends BoundaryInput> =
+  IsMediaBoundary<B> extends true ? MediaGuardrailRunResult : GuardrailRunResult<SubjectOf<B>>
 
 /** Callable guardrail body, optionally carrying first-party strategy metadata. */
 export interface GuardrailRun<B extends BoundaryInput> {
-  (subject: SubjectOf<B>, ctx: SafetyRunContext<B>):
-    | GuardrailRunResultFor<B>
-    | Promise<GuardrailRunResultFor<B>>
+  (subject: SubjectOf<B>, ctx: SafetyRunContext<B>): GuardrailRunResultFor<B> | Promise<GuardrailRunResultFor<B>>
   readonly strategy?: {
     readonly kind: string
     readonly config: Readonly<Record<string, unknown>>

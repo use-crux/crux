@@ -1,6 +1,7 @@
 import { observe } from '../../observability'
 import type { MediaGuardrailRunResult } from './types'
 import type { MediaPartLocation } from '../boundary'
+import { mediaLocationAttributes } from '../media/location'
 import type { GuardrailBinding } from '../registry'
 
 /** Record the safe observability projection for one guardrail result. */
@@ -58,6 +59,7 @@ export function recordMediaGuardrailReport(
 ): void {
   const guardrailName = binding.policy.id
   const media = mediaAttributes(location, escalatedToBlock)
+  const phase = binding.boundary.id === 'model.output.media' ? 'output' : 'input'
   const reason = result.action === 'allow' ? {} : { reason: result.reason }
   const activeSpanId = observe.captureContext()?.currentSpanId
   const artifactId = observe.artifact({
@@ -66,7 +68,7 @@ export function recordMediaGuardrailReport(
     encoding: 'json',
     preview: {
       kind: 'guardrail.report',
-      phase: 'input',
+      phase,
       action: result.action,
       ...reason,
       ...media,
@@ -76,7 +78,7 @@ export function recordMediaGuardrailReport(
       category: binding.policy.category,
       boundary: binding.boundary.id,
       mode: binding.mode,
-      phase: 'input',
+      phase,
       action: result.action,
       ...reason,
       ...media,
@@ -103,7 +105,7 @@ export function recordMediaGuardrailReport(
       guardrailName,
       boundary: binding.boundary.id,
       mode: binding.mode,
-      phase: 'input',
+      phase,
       action: result.action,
       ...reason,
       ...media,
@@ -158,9 +160,7 @@ function mediaAttributes(
   escalatedToBlock: boolean,
 ): Readonly<Record<string, string | number | true>> {
   return {
-    mediaPartType: location.partType,
-    messageIndex: location.messageIndex,
-    partIndex: location.partIndex,
+    ...mediaLocationAttributes(location),
     ...(escalatedToBlock ? { escalatedToBlock: true as const } : {}),
   }
 }

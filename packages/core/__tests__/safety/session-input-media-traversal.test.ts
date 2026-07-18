@@ -36,7 +36,10 @@ describe('guardInput — media traversal', () => {
 
     expect(seen).toEqual([
       {
-        subject: { part: image, messageIndex: 1, partIndex: 1 },
+        subject: {
+          part: image,
+          origin: { kind: 'message', messageIndex: 1, partIndex: 1 },
+        },
         boundary: 'user.input.media',
       },
     ])
@@ -113,7 +116,8 @@ describe('guardInput — media traversal', () => {
         id,
         on: boundary.input.media(),
         run: (subject) => {
-          order.push(`${subject.messageIndex}:${subject.partIndex}:${id}`)
+          if (subject.origin.kind !== 'message') throw new Error('Expected message origin.')
+          order.push(`${subject.origin.messageIndex}:${subject.origin.partIndex}:${id}`)
           return { action: 'allow' }
         },
       })
@@ -154,7 +158,8 @@ describe('guardInput — media traversal', () => {
       id: 'inspect-original-coordinate',
       on: boundary.input.media(),
       run: (subject) => {
-        seen.push(subject.partIndex)
+        if (subject.origin.kind !== 'message') throw new Error('Expected message origin.')
+        seen.push(subject.origin.partIndex)
         return { action: 'allow' }
       },
     })
@@ -180,7 +185,10 @@ describe('guardInput — media traversal', () => {
     expect(safety.audit.guardrails?.applied).toContainEqual(
       expect.objectContaining({
         guard: 'inspect-original-coordinate',
-        location: { messageIndex: 0, partIndex: 1, partType: 'file' },
+        location: {
+          origin: { kind: 'message', messageIndex: 0, partIndex: 1 },
+          partType: 'file',
+        },
       }),
     )
   })

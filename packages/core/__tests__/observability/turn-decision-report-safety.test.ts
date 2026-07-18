@@ -80,7 +80,10 @@ describe('Safety decisions in TurnDecisionReport', () => {
       boundary: 'user.input.media',
       action: 'strip',
       reason: 'Image removed.',
-      location: { messageIndex: 2, partIndex: 1, partType: 'image' },
+      location: {
+        origin: { kind: 'message', messageIndex: 2, partIndex: 1 },
+        partType: 'image',
+      },
     })
 
     expect(safetyDecisionToTurnDecision(decision)).toMatchObject({

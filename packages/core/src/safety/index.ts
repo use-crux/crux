@@ -17,7 +17,7 @@
  */
 
 // ── Boundary and shared decision types ─────────────────────────────
-export { boundary, isBoundaryDef } from './boundary'
+export { boundary, isBoundaryDef, isMediaSafetyTargetId } from './boundary'
 export type {
   ApprovalRequestSubject,
   BoundaryDef,
@@ -26,7 +26,9 @@ export type {
   DotPath,
   MediaPart,
   MediaPartLocation,
+  MediaPartOrigin,
   MediaPartSubject,
+  MediaSafetyTargetId,
   PathValue,
   RetrievalResultSubject,
   SafetyTargetId,
@@ -45,6 +47,7 @@ export type {
 } from './decision'
 export type { GuardrailStreamOption, StreamSegmenter } from './stream/types'
 export type { SafetyTuneOptions, SafetyTunePolicyOptions } from './tune'
+export type { SafetyAudit } from './audit'
 
 // ── Policy-terminal errors ────────────────────────────────────────
 export {

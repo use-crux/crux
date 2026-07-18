@@ -1,3 +1,5 @@
+import type { SafetyAudit } from '../safety/audit'
+
 /** Timeout budgets shared by bounded, non-streaming media operations. */
 export type OperationTimeout = Readonly<{
   /** Whole public operation, including retries and composed child calls. */
@@ -23,6 +25,13 @@ export type CompletedOperationResult<TRaw = unknown, TMetadata = unknown, TWarni
   providerMetadata?: TMetadata
   execution: OperationExecution
   raw: TRaw
+  /**
+   * Applied Safety decisions for canonical fields.
+   *
+   * Absent when no entry was recorded. Provider-native `raw`, metadata, and
+   * warnings are preserved but are not covered by this audit.
+   */
+  safety?: SafetyAudit
 }>
 
 /** Validate completed-operation timeout budgets before provider I/O. */

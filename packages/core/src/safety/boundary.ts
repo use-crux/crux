@@ -1,11 +1,20 @@
 import type { ApprovalRequestInfo } from '../adapter/tool/approval'
 import type { RetrieverHit } from '../retrieval/types'
-import type { ContentPart } from '../types/content'
+import type { MediaPartSubject, MediaSafetyTargetId } from './media/types'
+
+export type {
+  MediaPart,
+  MediaPartLocation,
+  MediaPartOrigin,
+  MediaPartSubject,
+  MediaSafetyTargetId,
+} from './media/types'
+export { isMediaSafetyTargetId } from './media/types'
 
 /** Canonical safety boundary ids used in decisions, traces, and config serialization. */
 export type SafetyTargetId =
   | 'user.input'
-  | 'user.input.media'
+  | MediaSafetyTargetId
   | 'model.input'
   | 'model.output.text'
   | 'model.output.object'
@@ -16,39 +25,6 @@ export type SafetyTargetId =
   | 'retrieval.result'
   | 'memory.write'
   | 'validation.feedback'
-
-/**
- * A canonical non-text input part that can be inspected by a media guardrail.
- *
- * The union is derived from {@link ContentPart}, so narrowing `type` exposes
- * the canonical properties for images, audio, video, and files.
- */
-export type MediaPart = Exclude<ContentPart, { readonly type: 'text' }>
-
-/**
- * The original canonical {@link MediaPart} and its stable input location.
- *
- * Both indexes refer to the caller's message arrays before any media is
- * stripped. The `part` is the original object supplied by the caller.
- */
-export interface MediaPartSubject {
-  /** The original canonical non-text part supplied by the caller. */
-  readonly part: MediaPart
-  /** Index in the original pre-strip messages array. */
-  readonly messageIndex: number
-  /** Index in the original pre-strip message content array. */
-  readonly partIndex: number
-}
-
-/** Safe original input coordinates for an evaluated canonical media part. */
-export interface MediaPartLocation {
-  /** Index in the original pre-strip messages array. */
-  readonly messageIndex: number
-  /** Index in the original pre-strip message content array. */
-  readonly partIndex: number
-  /** Canonical media discriminant without its source value. */
-  readonly partType: MediaPart['type']
-}
 
 /**
  * Frozen public boundary descriptor.
@@ -169,6 +145,12 @@ export const boundary = Object.freeze({
     /**
      * Target each canonical non-text part in user input before provider normalization.
      *
+     * The callback receives the caller's original part identity and a stable
+     * message origin. Narrow `subject.part.type` for media-specific fields and
+     * `subject.origin.kind` before reading its indexes. Enforced `strip`
+     * removes the selected part and blocks if it would empty the message;
+     * report mode records intent without changing input.
+     *
      * @returns A boundary whose guardrail subject is a {@link MediaPartSubject}.
      *
      * @example
@@ -177,6 +159,7 @@ export const boundary = Object.freeze({
      *   id: 'png-only',
      *   on: boundary.input.media(),
      *   run: (subject) => {
+     *     if (subject.origin.kind !== 'message') return { action: 'allow' }
      *     if (subject.part.type !== 'image') return { action: 'allow' }
      *     return subject.part.mediaType === 'image/png'
      *       ? { action: 'allow' }
@@ -189,6 +172,35 @@ export const boundary = Object.freeze({
   }),
   output: Object.freeze({
     text: (): BoundaryDef<'model.output.text', string> => makeBoundary('model.output.text'),
+    /**
+     * Target each canonical media part produced by a model or completed operation.
+     *
+     * The callback receives the original canonical media source together with a
+     * stable origin. Narrow `subject.part.type` to inspect image, audio, video,
+     * or file facts. Enforced `strip` removes the selected optional part; a
+     * required or final part escalates to a block. Report mode records strip
+     * intent without changing the result.
+     *
+     * Provider-native `raw` values, metadata, and warnings are not guarded and
+     * may repeat content removed from canonical fields.
+     *
+     * @returns A boundary whose guardrail subject is a {@link MediaPartSubject}.
+     *
+     * @example
+     * ```ts
+     * const generatedImages = guardrail({
+     *   id: 'generated-images',
+     *   on: boundary.output.media(),
+     *   run: (subject) => {
+     *     if (subject.part.type !== 'image') return { action: 'allow' }
+     *     return subject.part.mediaType === 'image/png'
+     *       ? { action: 'allow' }
+     *       : { action: 'strip', reason: 'Only PNG images are accepted.' }
+     *   },
+     * })
+     * ```
+     */
+    media: (): BoundaryDef<'model.output.media', MediaPartSubject> => makeBoundary('model.output.media'),
     object: <T>(): BoundaryDef<'model.output.object', T> => makeBoundary('model.output.object'),
     both: <T>(): BoundaryDef<'model.output', { readonly text: string; readonly object: T }> =>
       makeBoundary('model.output'),

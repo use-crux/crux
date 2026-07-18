@@ -35,7 +35,10 @@ describe('adapter media safety parity', () => {
           boundary: 'user.input.media',
           mode: scenario === 'report-strip' ? 'report' : 'enforce',
           action: scenario === 'allow' ? 'allow' : 'strip',
-          location: { messageIndex: 0, partIndex: 1, partType: 'image' },
+          location: {
+            origin: { kind: 'message', messageIndex: 0, partIndex: 1 },
+            partType: 'image',
+          },
         })
         expect(mediaPartTypes(result.resultMessages?.slice(0, 1) ?? []), result.path).toEqual(
           scenario === 'strip' ? ['text'] : ['text', 'image'],

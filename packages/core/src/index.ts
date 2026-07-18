@@ -539,6 +539,7 @@ export type {
   SafetyStream,
   SafetyProtocolEvent,
 } from "./safety/session";
+export type { SafetyAudit } from "./safety/audit";
 export { createSafetyPlugin } from "./safety/plugin";
 export type { SafetyPolicy } from "./safety/plugin";
 
