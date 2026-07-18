@@ -1,4 +1,6 @@
 import Link from "next/link";
+import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/metadata";
 import { pickHeroVariant } from "./hero-variants";
 import {
   CodePanel,
@@ -10,6 +12,16 @@ import {
 import { TrackedLink } from "@/components/tracked-link";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  ...pageMetadata({
+    title: "Crux — The TypeScript toolkit for harness engineering",
+    description:
+      "Typed building blocks for memory, retrieval, tools, guardrails, routing, evaluation, and observability — everything around your LLM call. Bring your own SDK. Use one block or ten.",
+    path: "/",
+  }),
+  title: { absolute: "Crux — The TypeScript toolkit for harness engineering" },
+};
 
 // ─────────────────────────────────────────────────────────────────────
 // Hero block diagram — snap-notch tiles arranged around the prompt bus.

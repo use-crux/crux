@@ -1,0 +1,87 @@
+---
+title: "Where a harness layer fits: AI SDK, LangChain, Mastra, and Crux"
+description: "The TypeScript AI stack is usually framed as a framework choice. A harness layer is a different axis: it composes over the SDK you already picked. An honest map of what each tool owns, and when you'd add (or skip) Crux."
+date: "2026-07-16"
+type: Essay
+tags: [ecosystem, comparison, harness]
+authors: [henri]
+draft: false
+readTime: 8
+---
+
+Every "best TypeScript AI framework" comparison frames the decision the same way: pick your stack. AI SDK *or* LangChain *or* Mastra *or* raw provider SDKs. One winner, migrate accordingly.
+
+For the execution layer, that framing is right, and the short answers are stable at this point:
+
+- **Vercel AI SDK** for user-facing apps that want streaming, tool calling, and structured output with minimal ceremony. It's the ecosystem default for a reason.
+- **LangChain** for orchestration pipelines where the enormous integration catalog pays for the abstraction weight.
+- **Mastra** for a TypeScript-native agent framework with workflows and evals as built-ins.
+- **Raw provider SDKs** for one provider, zero abstraction.
+
+But there's a second axis the comparisons flatten, and it's where a lot of production pain actually lives. This post is about that axis. We build a tool on it ([Crux](https://cruxjs.dev)), so read with that bias in mind; the "when to skip it" section below is sincere.
+
+## The question the framework choice doesn't answer
+
+Whichever execution stack you pick, a set of concerns shows up only after you ship, and they look remarkably similar across stacks:
+
+- What exactly went into that prompt, and *why*? And what got cut?
+- What does the assistant remember, and what should it never persist?
+- Was the retrieved evidence current?
+- Which model actually served this request, and what fired when it failed?
+- Did the prompt edit in this PR make anything worse, measurably?
+
+Call this layer the **harness**: everything around the model call. The execution SDKs each cover slices of it. The AI SDK has hooks and leaves memory deliberately open, LangChain has LangSmith for tracing, Mastra bundles evals and tracing into its runtime. What none of them owns end-to-end is the *assembly* story: one mechanism through which context, memory, retrieval, and policy enter the turn, with the inclusion decisions recorded and the whole thing assertable in CI.
+
+That's the slot Crux is built for. The critical property is that it's **a layer, not a side**. Crux doesn't call models. You bring the SDK; Crux composes the turn around it and explains what it composed. Adapters exist for the AI SDK, OpenAI, Anthropic, and Google GenAI, and a typed `prompt()` runs through any of them unchanged.
+
+## The honest map
+
+| You need | AI SDK | LangChain | Mastra | Crux |
+| --- | --- | --- | --- | --- |
+| Model calls, streaming, tool loops | ✅ owns it | ✅ | ✅ | ➖ delegates to your SDK |
+| Streaming UI hooks (React) | ✅ best-in-class | ➖ | ➖ | ➖ live-state hooks only, not generation UI |
+| Integration catalog breadth | ➖ | ✅ owns it | ➖ | ➖ deliberately thin |
+| Agent runtime with hosted platform path | ➖ | ✅ LangGraph | ✅ owns it | ❌ non-goal |
+| Typed prompts/contexts as first-class definitions | partial | partial | partial | ✅ owns it |
+| Memory as composable, budgeted blocks | ❌ open by design | partial | ✅ built-in | ✅ owns it |
+| Turn-assembly evidence (included/dropped/stale, with reasons) | ❌ | ❌ | ❌ | ✅ the point |
+| Evals asserting harness decisions, not just output | ❌ | partial (output) | partial (output) | ✅ the point |
+| Local devtools joined to source definitions | ➖ | ➖ SaaS tracing | ✅ local playground | ✅ local, source-linked |
+
+"Partial" is doing honest work in that table. Each of these tools is evolving fast, and the boxes will shift. The bottom three rows are the ones we'd argue are structural: an execution SDK *can't* retrofit assembly evidence easily, because it executes what you assembled rather than assembling it.
+
+The pairings that follow from the map, concretely.
+
+**AI SDK + Crux** is the natural stack for product teams. The AI SDK keeps everything it's great at (calls, streaming, UI), and Crux adds the definition layer over it: typed prompts, memory, budget-arbitrated context, guardrails, routing policy, quality suites. No migration; you wrap existing calls incrementally.
+
+**LangChain or hand-rolled agent loop + Crux** works because Crux primitives are values, not a runtime. Typed prompts, memory blocks, and routing policies slot into an existing loop without adopting anything else.
+
+**Mastra vs. Crux** is the closest genuine overlap, and the axis question distinguishes them. Mastra is a framework: you build *inside* it, and it rewards you with an integrated runtime, playground, and deploy story. Crux is a toolkit: you build in *your* architecture and compose blocks into it, and it rewards you with assembly evidence and proof. Framework people and toolkit people both exist. You know which you are.
+
+## What does adopting the layer actually cost?
+
+A fair question for any "add a layer" pitch. The honest answer for Crux, in order of effort:
+
+1. **First prompt: an afternoon.** Wrap one existing SDK call in a typed `prompt()`. The SDK call site barely changes; you gain schemas and inspection on that one call.
+2. **First blocks: incremental, per feature.** Memory, retrieval, or a guardrail on the prompts that need them. Each block is useful alone; nothing forces the next one.
+3. **First Evals: an afternoon per task.** An Eval exercises the same callable task you already ship, so authoring one is a file with typed Cases; your best Cases are real production inputs you already have.
+4. **Devtools: free.** `crux dev` reads what the definitions already emit.
+
+What you do *not* pay: no runtime adoption, no data migration, no platform account, no rewrite of working SDK code. The exit cost is symmetric. Definitions are plain TypeScript values, and deleting a block returns you to the SDK call you already had.
+
+## When to skip the harness layer
+
+A layer has to pay rent. Skip Crux (for now) if:
+
+- **You're prototyping.** A prompt string and `generateText` is the right amount of machinery for a demo. Harness discipline earns its keep when regressions start costing you, not before.
+- **One prompt, no memory, no retrieval, no routing.** The debugging surface is small enough to hold in your head. Come back when `use[]` would have five things in it.
+- **You want one vendor to own everything**: runtime, tracing, evals, deploy, support contract. That's a reasonable enterprise posture; it points at an integrated platform, not a composable toolkit.
+- **You need boring-stable today.** Crux is alpha, and parts of the proof layer (the full per-turn decision report, richer routing rationale) are still being completed. The docs label shipped vs. in-progress honestly, but alpha is alpha.
+
+## The one-sentence version
+
+Pick your execution stack on its own merits. The comparisons largely have that question right, and Crux has no horse in it.
+
+Then ask the second question, the one that predicts your on-call load in month six: *when a turn goes wrong, can this stack tell me why, and can I pin the fix down in CI?* If the answer needs to be yes, that's a harness question, and it's the one Crux exists to answer.
+
+*Factual, maintained comparisons live at [cruxjs.dev/compare](https://cruxjs.dev/compare). Corrections welcome. File an issue.*

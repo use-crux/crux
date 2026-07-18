@@ -1,0 +1,101 @@
+---
+title: "The RAG freshness problem is a harness problem"
+description: "Vector similarity has no concept of time: a stale chunk at 0.92 outranks the current one at 0.87, every time. Why freshness can't be fixed inside the index, and what it looks like as a first-class, testable property of the turn."
+date: "2026-07-03"
+type: Engineering
+tags: [retrieval, rag, freshness]
+authors: [henri]
+draft: false
+readTime: 8
+---
+
+There's a class of RAG failure that produces no error, no bad retrieval score, and no obviously wrong answer. Just an answer that was true eight months ago. The pricing page from before the repackaging. The API parameter you renamed in March. The launch plan that got cancelled.
+
+The mechanism is simple: **semantic similarity has no temporal dimension.** An embedding of your old pricing doc doesn't decay when the pricing changes. It sits in the index scoring 0.92 against pricing questions forever, comfortably outranking the current doc at 0.87, if the current doc got re-embedded at all.
+
+Retrieval works perfectly. Ranking works perfectly. The answer is confidently wrong, and the system contains no signal that anything is amiss.
+
+Which is why this failure mode is discovered by users, not dashboards. Retrieval metrics say hit. Eval judges say fluent and grounded, grounded in the *retrieved* evidence, which is exactly the problem. By the time someone reports it, they've usually spent weeks not quite trusting the feature.
+
+## Start with the pipeline. It's necessary, just not sufficient
+
+The standard prescriptions are pipeline prescriptions, and you should do them. Sync the corpus against its sources on a schedule or on change events; diff by content hash so only changed documents re-embed; delete chunks whose sources are gone. On Crux this is `corpus()`, a source ledger around the indexer, so repeated jobs only reprocess what changed:
+
+```ts
+await docsCorpus.sync(allDocs.load(), {
+  mode: 'complete', // full authoritative set: adds, updates, and deletes orphans
+})
+```
+
+A well-synced corpus is the actual fix for stale *content*. Two cheap ranking improvements help too: store `updatedAt` in chunk metadata and let recipes filter or boost by it, and prefer retrieving fewer, better chunks over drowning the question in near-duplicates from different document versions.
+
+But pipeline hygiene alone has a structural gap: **it's unverifiable at the moment that matters.** Sync jobs fail silently, cover some sources and not others, and drift as new sources get added by people who don't know the job exists. The corpus dashboard can say "97% fresh" while the specific chunk your user's question retrieves is in the 3%.
+
+Freshness of the *index* is a statistic. What you care about is freshness of the *evidence in this turn*, and no pipeline tooling can tell you that, because the pipeline isn't there when the turn is assembled.
+
+That's the reframe: freshness is not an indexing chore. It's a per-turn property of evidence, which makes it the harness's job. The layer that selects evidence for the model is the only layer positioned to judge whether that evidence is current enough, and to leave a record of the judgment.
+
+## What freshness looks like as a turn-time decision
+
+Three capabilities, in increasing order of ambition.
+
+**1. Evidence carries its age.** Every retrieved chunk should reach the assembly layer with provenance: source id, indexed-at, source-changed-at where knowable. Not for the model's benefit. For the harness's. A chunk whose source has changed since embedding is *detectably* stale before it ever enters the prompt.
+
+**2. Staleness is a decision, not a fact.** What to do with stale evidence is policy: serve it (fine for an FAQ), serve it flagged, or reject it and let retrieval fall through to fresher material. Whichever way it goes, the crucial part is that *it's recorded as a decision with a reason*.
+
+In Crux, a turn's Explain view keeps two questions strictly separate: was the evidence current enough (freshness), and what was reused (cache)? Cached evidence can be accepted or rejected by freshness. Live evidence can still be stale.
+
+Collapsing these into one "cache freshness" blob is how the wrong-launch-plan bug hides. The interesting story is usually a chain (a stale entry was correctly rejected, so retrieval fell through to an older but validly-indexed document), and that chain is visible only if the rejection left a record.
+
+**3. Freshness is assertable.** Once staleness decisions are recorded evidence, they're testable like any other harness behavior:
+
+```ts
+import { evaluate } from '@use-crux/core/eval'
+import { answerDocsTask } from '../src/answer-docs'
+
+export default evaluate({
+  id: 'docs-freshness-contract',
+  task: answerDocsTask,
+  cases: pricingAndPolicyCases,
+  expect: (ctx) => {
+    ctx.expect.decisionReport.cache.toHaveFreshnessAcceptance(
+      'context:docs', 'accepted',
+      { reasonCode: 'cache.freshness.accepted' },
+    )
+  },
+})
+```
+
+Read it as a contract: for pricing and policy questions, the evidence that reaches the model has passed freshness. Now the silent failure has a tripwire. When the sync job dies in six months, this fails in CI naming the rejected evidence, instead of a user finding last year's prices.
+
+## Close the loop with citations
+
+Freshness pairs with a second grounding discipline: make the model show its evidence. When answers must cite, staleness becomes auditable end to end:
+
+```ts
+const answerDocs = prompt({
+  id: 'answer-docs',
+  use: [
+    docs.grounding({
+      query: ({ input }) => input.question,
+      citations: { required: true, quotes: 'required' },
+    }),
+  ],
+  system: 'Answer only from the retrieved docs.',
+  prompt: ({ input }) => input.question,
+})
+```
+
+Citation validation catches the model inventing sources. Freshness evidence catches the sources themselves being outdated. Either check alone leaves a hole: a perfectly cited answer from a stale document passes citation validation, and a fresh corpus doesn't stop uncited hallucination. Together they cover the two ways a grounded answer goes wrong.
+
+An honest status note: Crux ships freshness handling for retrieval and cached context today, and the Explain view separates freshness from cache reuse as described. A *unified* freshness vocabulary across every evidence type (retrieval, memory, cached context, tool results) is still active development, not a finished spec. The direction is firm; the uniform surface isn't done.
+
+## The takeaway
+
+The freshness problem has the same shape as the other silent RAG and context failures. Silent truncation: content cut with no record. Accidental context: content included with no reason. Stale retrieval: content outdated with no signal.
+
+Every time, it's **a consequential assembly decision made by no one, recorded nowhere**. And every time, the fix is the same: make the decision deliberate, leave evidence, assert it in CI.
+
+RAG tutorials end where the index ends. Production starts where the turn begins. Put freshness where the turn is assembled, and "is this answer current?" stops being a question you ask after the screenshot arrives.
+
+*Retrieval, grounding, and corpus sync: [cruxjs.dev/docs/guides/retrieval](https://cruxjs.dev/docs/guides/retrieval). Crux is open source and alpha.*

@@ -1,0 +1,94 @@
+---
+title: "Context engineering is missing correctness"
+description: "The discipline taught us to curate what the model sees. It never gave us a way to verify the curation. That second half is where production reliability actually lives."
+date: "2026-06-15"
+type: Essay
+tags: [context, philosophy, testing]
+authors: [henri]
+draft: false
+readTime: 7
+---
+
+Context engineering won the vocabulary war. In two years, "prompt engineering" went from job title to punchline, and the field converged on a better framing: the quality of an LLM feature is determined less by how you phrase instructions and more by *what the model sees*. Which documents, which memory, which tool definitions, which history, structured how, in what order.
+
+That reframing is correct, and the discipline built around it is useful: write less context but better; put the right things at the start and end of the window; separate stable prefixes for caching; curate tools ruthlessly; compact history deliberately.
+
+But read any context engineering guide end to end and notice what is missing. Every guide tells you how to *decide* what the model should see. Almost none tell you how to **verify what it actually saw**, on this turn, in production, after six months of other people editing the system.
+
+Context engineering, as practiced, is a discipline of intentions. It has no correctness story.
+
+## Curation is a claim. Where's the proof?
+
+Software engineering internalized a long time ago that design intent and running behavior drift apart, which is why we have types, tests, and CI rather than design docs alone. Context curation drifts the same way, for concrete reasons.
+
+**Curation decisions are runtime decisions.** "Include the user's plan details for billing questions" is a predicate evaluated per request. Predicates have bugs. Nobody unit-tests string concatenation.
+
+**Curation decisions interact.** Your retrieval addition was fine, and my new policy block was fine, but together they exceed the token budget and now one of them silently evicts the third thing neither of us was thinking about. Context is a shared, finite resource, and shared finite resources need arbitration rules. Most codebases arbitrate by whoever concatenates last.
+
+**Curation decisions decay.** The docs got rewritten but the embeddings didn't. The "current pricing" context is current as of the deploy that cached it. Freshness is a property of *evidence at a point in time*, and a static curation design has no opinion about it.
+
+So the real state of a production prompt is not your curation design. It is the design, composed with everyone else's edits, filtered through budgets, caches, and staleness, per request. If you cannot observe that composed result and assert against it, your context engineering is a belief system.
+
+## What correctness would look like
+
+Take the standard correctness toolkit from software and apply it to context curation. Three capabilities.
+
+**1. Curation decisions are declared, not emergent.** The difference between
+
+```ts
+if (isBillingQuestion) parts.push(planDetails)
+// ...200 lines later...
+parts.push(examples)
+const system = parts.join('\n\n')
+```
+
+and
+
+```ts
+const planDetails = context({
+  id: 'plan-details',
+  when: ({ input }) => input.topic === 'billing',
+  priority: 80,
+  system: ({ input }) => renderPlan(input.plan),
+})
+
+const reply = prompt({ use: [planDetails, docs, examples], ... })
+```
+
+is not aesthetics. In the first version, inclusion logic is control flow: invisible to any tool, recoverable only by reading the code and simulating it in your head. In the second, it is *data*. A condition, a priority, an identity. Things that are data can be inspected, diffed, linted, and tested.
+
+**2. The composed result is inspectable, before and after the call.** Given declared curation, you can ask, for any input: what would the model see? What was excluded because its predicate failed? What was dropped for budget, and in what order would things be dropped under more pressure? At runtime, the same questions have recorded answers with reasons, including the ones intentions can't cover, like "this cached context was rejected as stale."
+
+**3. Curation is assertable in CI.** This is the piece that turns context engineering into engineering. Not scoring output text (output scoring tells you *that* something regressed, not *what*) but asserting the curation itself:
+
+```ts
+expect: (ctx) => {
+  ctx.expect.decisionReport.context.toHaveDisposition(
+    'context:plan-details', 'active',
+    { reasonCode: 'context.active' },
+  )
+}
+```
+
+"For billing inputs, plan details reach the model." That is a falsifiable statement about curation, it runs on every PR, and when someone's innocent refactor changes a predicate or a priority fight evicts the block, the pipeline fails with the actual cause. Not a mysteriously lower answer score two weeks later.
+
+## Why the ecosystem hasn't built this
+
+Because it's structurally hard to retrofit. Observability vendors sit *after* the turn: they can record what the request contained, but they never saw the candidates that didn't make it, so they cannot explain curation, only display its output. Eval tools sit *after* the output: they can score the answer, but a score cannot name the dropped context that caused it.
+
+The only layer that can explain curation is the layer that performed it. Correctness has to live in the harness.
+
+## Starting the correctness half
+
+If this argument lands, the practical sequence is short:
+
+1. **Move inclusion logic from control flow to data.** Every `if` that gates a prompt fragment becomes a declared condition on a named block. This step alone makes the next three possible.
+2. **Get inspection before the call.** For any input, you should be able to render the would-be prompt and see the exclusion and drop lists without calling a model.
+3. **Record decisions at runtime.** Inclusion, exclusion, drop, staleness. With reasons, per turn.
+4. **Assert the invariants that matter.** Start with the two or three inclusions that would be incidents if they silently stopped: the safety policy, the pricing source, the user's plan.
+
+That is the bet behind [Crux](https://cruxjs.dev), the open-source TypeScript toolkit where the examples above come from. Context enters the turn through one typed composition model, every inclusion, exclusion, drop, and staleness decision is recorded with its reason, and quality suites assert those decisions in CI. Honest status: the composition model, inspection, and quality system are shipped; the complete per-turn decision report and a unified freshness vocabulary are still in active development.
+
+But the argument stands independent of the tool. Context engineering taught us that the model's input deserves design. The next step is admitting that design without verification is hope. Curate deliberately, then prove the curation, on every turn, in CI, with reasons.
+
+The discipline is half-built. Let's build the correctness half.

@@ -1,0 +1,167 @@
+---
+title: "Guardrails that compose: practical LLM safety boundaries in TypeScript"
+description: "Prompt injection can't be solved with a wrapper function and a regex. Model safety as typed boundaries (input, output, tool calls, memory writes) with declared actions, streaming semantics, and evidence for every decision."
+date: "2026-07-13"
+type: Engineering
+tags: [safety, guardrails, security]
+authors: [henri]
+draft: false
+readTime: 9
+---
+
+The OWASP guidance on prompt injection is refreshingly honest: you cannot reliably prevent it at the model layer. Instructions and data share one channel, which is what an LLM is, so a sufficiently motivated input can always try to reweight the instructions.
+
+The realistic posture is defense in depth: screen inputs, constrain outputs, gate the actions that matter, and keep evidence of every decision.
+
+The trouble is how most Node/TypeScript codebases implement that posture: a `sanitize()` here, a regex before the fetch there, a `checkOutput()` bolted after the call. Wrappers accreting around call sites. Wrappers have three chronic failures:
+
+- They're **per-call-site**, so the fourth endpoint added next quarter forgets one.
+- They're **unordered**. Does redaction run before or after logging? It matters, and nobody knows.
+- They're **evidence-free**. When a customer asks "did that get blocked?", grep is your audit trail.
+
+The fix is structural, and it mirrors how web security settled down: policies attach to **boundaries**, not call sites.
+
+## Name the boundaries
+
+A model turn has a small, enumerable set of places where content crosses a trust line:
+
+| Boundary | What crosses it |
+| --- | --- |
+| `boundary.input.text()` | User input, before the provider call |
+| `boundary.input.media()` | Attachments, before provider normalization |
+| `boundary.output.text()` / `.object<T>()` | Model output, before your caller sees it |
+| `boundary.tool.call()` / `.result()` | Tool invocations and their results |
+| `boundary.memory.write<T>()` | Candidate long-term memory writes |
+| `boundary.validation.feedback()` | Corrective feedback before re-prompting |
+
+A guardrail is a policy pinned to one or more of them:
+
+```ts
+import { boundary, guardrail } from '@use-crux/core/safety'
+
+export const injectionGuard = guardrail({
+  id: 'prompt-injection',
+  on: boundary.input.text(),
+  run: guardrail.injection({ action: 'block' }),
+})
+
+export const piiGuard = guardrail({
+  id: 'pii',
+  on: [boundary.input.text(), boundary.output.text()],
+  run: guardrail.pii({ strategy: 'mask' }),
+})
+```
+
+Attach them globally via the safety plugin, per prompt, or per call. The payoff: your safety posture becomes a list you can read (these policies, on these boundaries), reviewable in a PR, instead of an emergent property of scattered call sites.
+
+## Decisions, not booleans
+
+A wrapper returns true or false. A boundary decision has more useful shapes:
+
+| Action | Effect |
+| --- | --- |
+| `allow` | Continue unchanged |
+| `block` | Stop the call with a typed `GuardrailBlockedError` |
+| `warn` | Record the finding without altering content |
+| `rewrite` | Replace the content, tagged as redact, mask, hash, or normalize |
+
+Custom policies are ordinary async functions over a *typed* subject. The boundary drives the type:
+
+```ts
+const redactEmail = guardrail({
+  id: 'email-redactor',
+  on: boundary.output.text(),
+  run: async (text) => {
+    const matches = text.match(/\S+@\S+/g) ?? []
+    if (matches.length === 0) return { action: 'allow' }
+    return {
+      action: 'rewrite',
+      value: text.replace(/\S+@\S+/g, '[email]'),
+      rewrite: { kind: 'redact' },
+      findings: [{ type: 'email', count: matches.length }],
+    }
+  },
+})
+```
+
+The `warn` action deserves a special mention as a rollout strategy. New detection policies ship in warn mode first: findings land in the trace, nothing changes for users, and a week of evidence tells you the false-positive rate before you flip to `block`. Tuning a safety policy against production evidence beats tuning it against your imagination.
+
+## What about streaming?
+
+An output guardrail on a stream can't wait for the full response, since users see tokens immediately. It also can't run per token, because a redaction target spans chunks.
+
+Text strategies default to sentence-gated checking: hold a segment until it's checkable, then release it. A policy can also return `hold` to wait for more text. Expensive checks like classifiers default to final-output evaluation instead, because a model call per sentence is usually the wrong trade. You'd have to hand-build exactly this machinery to stream safely with wrappers.
+
+Failure semantics are declared too. A guardrail that throws, or returns a malformed result, fails *closed* with a typed error. A wrapper that throws fails however your try/catch mood was that day, and a safety check that fails open is worse than none, because you believe it's there.
+
+## The boundaries wrappers never cover
+
+Input and output screening is where everyone starts. It's also where injection defense matters least, because screening is the arms-race layer. The high-leverage boundaries come after the model.
+
+**Tool calls.** The real damage from a successful injection isn't rude text. It's the model calling `send_email` or `query_database` with attacker-chosen arguments. `boundary.tool.call()` checks name and typed input before execution. `boundary.tool.result()` screens what flows back into context, which is where second-order injection rides in on retrieved documents and API responses.
+
+**Memory writes.** The quietly catastrophic one. If extracted facts get persisted, an injected turn can write itself into every future conversation. Injection with persistence. `boundary.memory.write<T>()` gates candidate writes with the same machinery, so "never persist secrets or instruction-shaped content" is one declared rule, not a hope.
+
+**Attachments.** Multimodal input is its own trust line. A declarative media policy checks the real canonical part (type, size) before provider normalization:
+
+```ts
+guardrail({
+  id: 'safe-attachments',
+  on: boundary.input.media(),
+  run: guardrail.media({
+    mediaTypes: { allow: ['image/*', 'application/pdf'] },
+    size: { maxBytes: 10 * 1024 * 1024 },
+  }),
+})
+```
+
+## Guardrails or constraints?
+
+One distinction keeps safety code clean. Guardrails answer *"may this content cross this boundary?"*: allow, block, rewrite, without re-calling the model. Constraints answer *"is this output good enough?"*: semantic validation that can send feedback and retry generation.
+
+```ts
+const grounded = constraint({
+  id: 'grounded',
+  on: boundary.output.object<Answer>(),
+  severity: 'assert',
+  run: async (output) =>
+    output.citations.length > 0
+      ? { pass: true }
+      : { pass: false, feedback: 'Cite at least one source.' },
+})
+```
+
+If the fix is "remove or block the content," it's a guardrail. If the fix is "ask the model to do better," it's a constraint. Teams that blur these end up either retrying on PII (leaking it into the retry loop) or hard-blocking on quality issues a retry would have fixed.
+
+## Evidence, then proof
+
+Every decision (allow, warn, block, rewrite, with findings and strategy metadata) lands in the same observability graph as the rest of the turn. "What did safety do?" is answered per turn in devtools, not per grep.
+
+And declared policies are testable policies. Your incident-response regression cases belong in CI:
+
+```ts
+import { evaluate } from '@use-crux/core/eval'
+import { supportTask } from '../src/support'
+
+export default evaluate({
+  id: 'safety-injection-contract',
+  task: supportTask,
+  cases: knownInjectionCases,
+  expect: (ctx) => {
+    ctx.expect.decisionReport.guardrail.toHaveOutcome(
+      'guardrail:prompt-injection', 'blocked',
+      { reasonCode: 'guardrail.blocked' },
+    )
+  },
+})
+```
+
+When someone tunes the injection threshold six months from now, the pipeline tells you which known-bad inputs started passing. Not a red-teamer, not a user.
+
+## An honest caveat
+
+None of this makes injection solved, and any library claiming otherwise is selling something. Detection strategies (Crux ships `injection`, `pii`, `secrets`, a bring-your-own `classifier`, and media policies) are probabilistic and will chase attacker creativity forever.
+
+What the boundary model changes is the engineering posture: coverage you can enumerate, ordered semantics you can reason about, fail-closed defaults, evidence for every decision, and tests that pin it all down. Screening is a cat-and-mouse game. The boundaries are yours to hold.
+
+*Safety docs (guardrails, constraints, validation retry, the security model): [cruxjs.dev/docs/guides/safety](https://cruxjs.dev/docs/guides/safety). Crux is open source and alpha.*

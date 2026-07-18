@@ -1,0 +1,140 @@
+---
+title: "What did the model actually see? Anatomy of a bad AI answer"
+description: "A debugging walkthrough of one bad model turn: from wrong answer, to the context that never made it into the prompt, to a regression test that keeps it fixed."
+date: "2026-06-04"
+type: Engineering
+tags: [observability, debugging, devtools]
+authors: [henri]
+draft: false
+readTime: 8
+---
+
+A user asks your support assistant: *"What did we decide about the launch plan?"* The assistant answers confidently, about the wrong launch. The Q2 one that was cancelled.
+
+If you have debugged an LLM feature, you know what happens next. You open the logs. You find the request: a wall of concatenated system text, retrieved chunks, and message history. You squint at it. Somewhere in those 6,000 tokens is the reason for the wrong answer, but the log cannot tell you *which* line is the problem, *why* that line is there, or *what should have been there instead*.
+
+This post walks through the same debugging session with a harness that records its own assembly decisions. The tooling shown is [Crux](https://cruxjs.dev) devtools, but the questions are universal. Steal them for whatever stack you run.
+
+## The setup
+
+The assistant is one typed prompt with memory and retrieval composed in:
+
+```ts
+const chat = memory({
+  id: 'assistant',
+  store,
+  namespace: ({ input }) => `user:${input.userId}`,
+  blocks: [
+    recentMessages({ id: 'recent', maxMessages: 12 }),
+    facts({ id: 'about-user', embed }),
+  ],
+})
+
+const reply = prompt({
+  id: 'reply',
+  use: [chat, docs.grounding({ query: ({ input }) => input.question })],
+  input: z.object({ userId: z.string(), question: z.string() }),
+  system: 'Answer from memory and project docs. Do not invent facts.',
+  prompt: ({ input }) => input.question,
+})
+```
+
+Nothing exotic. Memory, retrieval, one prompt. And yet: wrong launch.
+
+Before opening any tool, it is worth listing the suspects. For a memory-plus-retrieval prompt there are only a handful of failure classes:
+
+| Suspect | Typical cause |
+| --- | --- |
+| Wrong evidence retrieved | Ranking, query construction, stale index |
+| Right evidence missing | Budget drop, predicate exclusion, freshness rejection |
+| Wrong memory recalled | Namespace mixup, bad extraction, unbounded recall |
+| Wrong model or path | Router, fallback, cache reuse |
+| Model ignored good context | Actual prompt problem (rarer than assumed) |
+
+The debugging loop below is a systematic walk through that table, with evidence at each step instead of guesses.
+
+## Question 1: What did the model see?
+
+Start with the ground truth of the turn. Not the code, the *evidence*. Run `crux dev`, open the run, select the generation turn, and open **Explain**.
+
+The first panel answers the first question directly: the prompt text, the messages, and every context row that actually reached the model. Which memory entries, which retrieved chunks, which tool definitions, with token counts per row.
+
+There it is, in the retrieval rows: three chunks about the *Q2* launch plan, retrieved at similarity 0.91. The current Q3 plan is nowhere in the prompt. The model did exactly what we told it to: it answered from the context it was given. The model is innocent. It usually is.
+
+## Question 2: What was considered but not sent?
+
+Runtime-only tracing stops at the previous question. You know the Q3 doc is missing, and now you are guessing why. This is where assembly evidence changes the game.
+
+The **Checked but not sent** panel lists every candidate the harness evaluated and withheld, each with a reason state: predicate false, no matching case, dropped for budget, rejected as stale, disabled, empty.
+
+The Q3 launch doc is in this list. Reason: **stale rejected**. The chunk was in the index, but its source document changed after it was embedded, and the freshness policy on the knowledge base rejected the outdated embedding rather than serving it.
+
+So the real story: the Q3 doc was rewritten last week, the corpus never re-synced, the stale entry was correctly refused, and retrieval fell through to the next-best matches, which were Q2 chunks. Two decisions, both locally correct, jointly wrong. No log line would have told you this, because each component behaved as designed.
+
+## Question 3: Which decisions shaped the turn?
+
+The **Decisions** panel confirms nothing else interfered: no fallback fired, no guardrail rewrote anything, no compaction ran, routing picked the expected model. Good. The blast radius is exactly one stale corpus and one missing re-sync job.
+
+This step matters more than it looks. Half of LLM debugging pain is *not knowing what you can rule out*. An explicit decision list turns "anything could have caused this" into "these seven things happened; six are fine."
+
+## Question 4: Which source do I change?
+
+Evidence should end in a diff, not a shrug. The **What source do I change?** panel joins the runtime decision back to the authored definition that caused it. Here, the knowledge base's sync configuration, with the join fidelity labeled (`exact` when the Project Index can prove the source location, down to `inferred` when it cannot).
+
+The fix is boring, which is the point: schedule the corpus sync, and the stale rejection disappears because nothing is stale anymore.
+
+## Question 5: How do I keep it fixed?
+
+A fix without a test is a fix until the next refactor. Because the harness records decisions as structured evidence, the expectation is assertable. Not "the answer mentions Q3" (brittle, model-dependent) but the harness behavior itself:
+
+```ts title="evals/reply.eval.ts"
+import { evaluate } from '@use-crux/core/eval'
+import { replyTask } from '../src/reply' // generate.task(reply, { model: stableModel(...) })
+
+export default evaluate({
+  id: 'reply-launch-freshness',
+  task: replyTask,
+  cases: [
+    { id: 'launch-plan', input: { userId: 'u1', question: 'What did we decide about the launch plan?' } },
+  ],
+  expect: (ctx) => {
+    ctx.expect.decisionReport.cache.toHaveFreshnessAcceptance(
+      'retrieval:docs', 'accepted',
+      { reasonCode: 'cache.freshness.accepted' },
+    )
+  },
+})
+```
+
+The Eval exercises `replyTask`, the same callable the application ships, so the assertion runs against real production assembly rather than an eval-only copy.
+
+And since the memory table listed "wrong memory recalled" as a suspect, pin that side down too while you are here:
+
+```ts
+expect: (ctx) => {
+  ctx.expect.decisionReport.context.toHaveDisposition(
+    'memory:assistant', 'active',
+    { reasonCode: 'context.active' },
+  )
+}
+```
+
+Run both in CI with `crux eval`. If the sync job breaks again, the pipeline fails with "stale evidence rejected on prompt:reply" instead of a customer screenshot three weeks later.
+
+## No devtools? Run the checklist anyway
+
+The five questions do not require any particular tool. If your stack cannot answer them today, they still make a serviceable manual checklist:
+
+1. **What did the model see?** Log the final assembled request, structured. Per-source rows, not one concatenated string.
+2. **What was considered but not sent?** Wherever your code skips, trims, or filters context, log the skip with a reason. This is the single highest-value log line most stacks are missing.
+3. **What runtime decisions shaped the turn?** Fallbacks, retries, cache hits, safety rewrites. Each should be findable per request, not inferred from aggregate metrics.
+4. **Which authored definition caused it?** Give every prompt, context source, and policy a stable id, and put those ids in the logs.
+5. **What assertion keeps it fixed?** Whatever you can record, you can test. Even a coarse "retrieval returned at least one chunk newer than the source's last edit" catches whole bug classes.
+
+Most stacks can answer question 1 with effort and question 3 partially. Questions 2, 4, and 5 require something structural: the layer that *assembled* the turn has to be the layer that *explains* it. An after-the-fact tracing tool cannot list candidates it never knew existed.
+
+That is the case for putting explanation into the harness itself, with every inclusion, exclusion, drop, and rejection recorded at decision time. Crux is our attempt at that layer. It is [open source and alpha](https://github.com/use-crux/crux), and the full per-turn decision report is still being completed.
+
+Whatever you build on: the next time an AI answer is wrong, do not start with the prompt. Start with what the model saw, and what it almost saw.
+
+*Debugging guide: [Debug why a model turn behaved badly](/docs/guides/observability/debug-model-turns).*

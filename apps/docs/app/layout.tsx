@@ -5,6 +5,7 @@ import type { Metadata } from 'next'
 import { Analytics } from "@vercel/analytics/next"
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://cruxjs.dev'),
   title: {
     default: 'Crux',
     template: '%s – Crux',
@@ -16,10 +17,31 @@ export const metadata: Metadata = {
   },
 }
 
+const siteJsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'Organization',
+      '@id': 'https://cruxjs.dev/#org',
+      name: 'Crux',
+      url: 'https://cruxjs.dev',
+      logo: 'https://cruxjs.dev/favicon.svg',
+      sameAs: ['https://github.com/use-crux/crux'],
+    },
+    {
+      '@type': 'WebSite',
+      name: 'Crux',
+      url: 'https://cruxjs.dev',
+      publisher: { '@id': 'https://cruxjs.dev/#org' },
+    },
+  ],
+}
+
 export default function Layout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="flex min-h-screen flex-col">
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(siteJsonLd) }} />
         <RootProvider>{children}</RootProvider>
         <Analytics />
       </body>
