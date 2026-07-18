@@ -176,6 +176,7 @@ async function runGuardsInternal(
       mode: binding.mode,
       phase,
       action: auditAction(result),
+      ...(result.action === 'block' || result.action === 'warn' ? { reason: result.reason } : {}),
       durationMs,
     }
 

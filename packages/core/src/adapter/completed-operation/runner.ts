@@ -12,11 +12,11 @@ import type {
   CompletedOperationDefinition,
   CompletedOperationContext,
 } from "./definition";
-import type { CompletedOperationModelGuard, RoutingCallOptions } from "../../routing/types";
-import {
-  resolveCompletedModel,
-  type CompletedRoutingState,
-} from "./routing";
+import type {
+  CompletedOperationModelGuard,
+  RoutingCallOptions,
+} from "../../routing/types";
+import { resolveCompletedModel, type CompletedRoutingState } from "./routing";
 import { safeCompletedOperationReport } from "./report";
 import {
   completedLifecycleContext,
@@ -31,13 +31,12 @@ import {
   type CompletedMediaObservation,
 } from "./observability-graph";
 import { preflightCompletedCandidates } from "./preflight";
-import type { Guardrail } from "../../safety/guardrail/types";
-import type { SafetyTuneOptions } from "../../safety/tune";
 import {
   createCompletedOperationSafety,
   guardCompletedOperationInput,
   guardCompletedOperationOutput,
 } from "./safety/execute";
+import type { CompletedOperationSafetyOptions } from "./safety/options";
 
 /** Options owned by the shared bounded-media lifecycle. */
 export type RunCompletedMediaOperationOptions<
@@ -63,8 +62,6 @@ export type RunCompletedMediaOperationOptions<
   readonly input: TInput;
   readonly abortSignal?: AbortSignal;
   readonly timeout?: OperationTimeout;
-  readonly guardrails?: readonly Guardrail[];
-  readonly safety?: SafetyTuneOptions;
   /** Context consumed by router/split callbacks. */
   readonly routing?: object;
   /** Optional top-level route override. */
@@ -72,6 +69,7 @@ export type RunCompletedMediaOperationOptions<
   /** Internal descriptor sink. Reports must contain safe facts only. */
   readonly onReport?: (report: unknown) => void;
 }> &
+  CompletedOperationSafetyOptions &
   CompletedOperationModelGuard<TModel, TSelectedModel> &
   RoutingCallOptions<TSelectedModel>;
 
@@ -173,6 +171,7 @@ async function runWithObservation<
         operation: options.operation,
         model: options.model,
         guardrails: options.guardrails,
+        constraints: options.constraints,
         safety: options.safety,
       });
       const input = await guardCompletedOperationInput(

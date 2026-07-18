@@ -35,3 +35,9 @@ Add completed speech Safety options and runtime coverage. Speech `text` and opti
 generated audio runs output-media policies before reporting or return. Enforced audio strip blocks
 because audio is required; report mode preserves it. Canonical audit write-back retains provider
 facts and works identically through direct bindings and provider runtimes.
+
+Add completed transcription Safety options and runtime enforcement. Prompt hints and required
+audio are guarded before normalization or materialization, while validated transcript text is
+guarded once before reporting or return. Enforced transcript rewrites clear timed segments and
+words without changing provider-native facts. Transcript constraints run exactly once with no
+provider retry: assert failures throw and suggest/report failures remain in canonical audit.

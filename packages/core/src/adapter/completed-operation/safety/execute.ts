@@ -1,7 +1,5 @@
 import type { CompletedOperationResult } from "../../../completed-operation/contracts";
-import type { Guardrail } from "../../../safety/guardrail/types";
 import { createSafety, type Safety } from "../../../safety/session";
-import type { SafetyTuneOptions } from "../../../safety/tune";
 import { describeCompletedModel } from "../model-description";
 import { guardGeneratedImageInput } from "./image-input";
 import { guardGeneratedImageOutput } from "./image-output";
@@ -13,20 +11,29 @@ import {
   isSafetyCompletedOperation,
   type SafetyCompletedOperation,
 } from "./operation";
+import {
+  guardTranscriptionInput,
+  guardTranscriptionOutput,
+} from "./transcription";
+import { assertCompletedOperationConstraintApplicability } from "./applicability";
+import type { CompletedOperationSafetyOptions } from "./options";
 
 /** Build one completed-operation Safety session before provider preflight. */
 export function createCompletedOperationSafety(
   options: Readonly<{
     operation: string;
     model: unknown;
-    guardrails?: readonly Guardrail[];
-    safety?: SafetyTuneOptions;
-  }>,
+  }> &
+    CompletedOperationSafetyOptions,
 ): Safety | undefined {
   if (!isSafetyCompletedOperation(options.operation)) return undefined;
+  assertCompletedOperationConstraintApplicability(
+    options.operation,
+    options.constraints,
+  );
 
   const safety = createSafety({
-    call: { guardrails: options.guardrails },
+    call: { guardrails: options.guardrails, constraints: options.constraints },
     promptId: undefined,
     model: describeCompletedModel(options.model),
     safety: options.safety,
@@ -48,7 +55,7 @@ export async function guardCompletedOperationInput<TInput>(
     case "generateSpeech":
       return guardGeneratedSpeechInput(input, safety);
     case "transcribe":
-      return input;
+      return guardTranscriptionInput(input, safety);
   }
 }
 
@@ -83,6 +90,6 @@ async function guardKnownOutput<TResult extends CompletedOperationResult>(
     case "generateSpeech":
       return guardGeneratedSpeechOutput(result, safety, model);
     case "transcribe":
-      return result;
+      return guardTranscriptionOutput(result, safety, model);
   }
 }

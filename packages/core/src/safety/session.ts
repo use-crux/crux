@@ -59,10 +59,14 @@ import type { MediaGroupDependency } from './media/groups'
 import type { MediaVisitGroup, MediaVisitItem } from './media/visit'
 import type { SafetyAudit } from './audit'
 import { guardOutputMedia as guardSafetyOutputMedia, type MediaOutputResult } from './output/media'
+import { guardOutputOperationText } from './output/operation-text'
+import { runOneShotConstraints } from './output/one-shot'
 
 const outputMediaGuard: unique symbol = Symbol('crux.safety.outputMediaGuard')
 const inputOperationMediaGuard: unique symbol = Symbol('crux.safety.inputOperationMediaGuard')
 const inputOperationTextGuard: unique symbol = Symbol('crux.safety.inputOperationTextGuard')
+const outputOperationTextGuard: unique symbol = Symbol('crux.safety.outputOperationTextGuard')
+const oneShotOutputConstraints: unique symbol = Symbol('crux.safety.oneShotOutputConstraints')
 
 // ─────────────────────────────────────────────────────────────────
 // Public types
@@ -271,6 +275,8 @@ interface SafetySession extends Safety {
       readonly model?: string
     },
   ): Promise<MediaOutputResult>
+  [outputOperationTextGuard](text: string, model?: string): Promise<string>
+  [oneShotOutputConstraints](text: string, model?: string): Promise<void>
 }
 
 /** @internal Guard canonical completed-operation input text slots. */
@@ -302,6 +308,16 @@ export function guardSafetySessionOutputMedia(
   },
 ): Promise<MediaOutputResult> {
   return (safety as SafetySession)[outputMediaGuard](subjects, options)
+}
+
+/** @internal Guard canonical completed-operation output text. */
+export function guardSafetySessionOutputOperationText(safety: Safety, text: string, model?: string): Promise<string> {
+  return (safety as SafetySession)[outputOperationTextGuard](text, model)
+}
+
+/** @internal Evaluate completed-operation terminal constraints exactly once. */
+export function runSafetySessionOneShotOutputConstraints(safety: Safety, text: string, model?: string): Promise<void> {
+  return (safety as SafetySession)[oneShotOutputConstraints](text, model)
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -679,6 +695,31 @@ export function createSafety(options: SafetyCallOptions): Safety {
         },
         appendAudit: appendGuardrailAudit,
       })
+    },
+
+    async [outputOperationTextGuard](text, model) {
+      return guardOutputOperationText({
+        bindings: phaseBindings('output'),
+        text,
+        context: {
+          ...guardContext('output', lastMessages),
+          model: model ?? options.model,
+        },
+        appendAudit: appendGuardrailAudit,
+      })
+    },
+
+    async [oneShotOutputConstraints](text, model) {
+      const audit = await runOneShotConstraints({
+        constraints: constraints.filter((constraint) => constraint.on.id === 'model.output.text'),
+        reportConstraints: reportConstraints.filter((constraint) => constraint.on.id === 'model.output.text'),
+        text,
+        context: {
+          ...constraintContext(),
+          model: model ?? options.model,
+        },
+      })
+      if (audit) constraintAudit = audit
     },
 
     get audit() {
