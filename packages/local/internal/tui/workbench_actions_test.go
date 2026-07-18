@@ -16,6 +16,15 @@ type fakeLegacyHandledScreen struct {
 	handledKey string
 }
 
+type fakeResizableActionScreen struct {
+	*fakeActionScreen
+	size screens.Size
+}
+
+func (s *fakeResizableActionScreen) Resize(size screens.Size) {
+	s.size = size
+}
+
 func (s *fakeLegacyHandledScreen) HandlesKey(msg tea.KeyPressMsg) bool {
 	return msg.String() == s.handledKey
 }
@@ -54,6 +63,31 @@ func TestWorkbenchRoutesPageNavigationToFocusedRunsListPane(t *testing.T) {
 
 	if got := runs.SelectedRunID(); got != secondSimilarRunID {
 		t.Fatalf("page down through Workbench selected %q, want %q", got, secondSimilarRunID)
+	}
+}
+
+func TestWorkbenchResizesActiveScreenBeforeActionInput(t *testing.T) {
+	resizedBeforeRun := false
+	screen := &fakeResizableActionScreen{fakeActionScreen: &fakeActionScreen{
+		fakeScreen: &fakeScreen{id: "runs"},
+	}}
+	screen.actions = []interaction.Action{{
+		ID:      "resized-action",
+		Binding: key.NewBinding(key.WithKeys("x")),
+		Run: func() tea.Cmd {
+			resizedBeforeRun = screen.size.Width > 0 && screen.size.Height > 0
+			return nil
+		},
+	}}
+	w := newTestWorkbench(nil, nil, "http://localhost:4400")
+	w.screens["runs"] = screen
+	w.activeNav = "runs"
+	w.Resize(120, 30)
+
+	w.Update(tea.KeyPressMsg{Text: "x", Code: 'x'})
+
+	if !resizedBeforeRun {
+		t.Fatalf("action ran before active screen received body size: %+v", screen.size)
 	}
 }
 

@@ -119,6 +119,7 @@ func (w *Workbench) SetIngestToken(_ string, path string) {
 // Init is called once to fire initial fetches for the active screen and the
 // devtools context.
 func (w *Workbench) Init() tea.Cmd {
+	w.resizeActiveScreen()
 	w.initialized[w.activeNav] = true
 	return tea.Batch(
 		w.fetchContext(),
@@ -126,14 +127,10 @@ func (w *Workbench) Init() tea.Cmd {
 	)
 }
 
-// Resize updates the cached viewport dimensions.
-func (w *Workbench) Resize(width, height int) {
-	w.width = width
-	w.height = height
-}
-
 // Update routes a tea.Msg through the active screen and handles global keys.
 func (w *Workbench) Update(msg tea.Msg) tea.Cmd {
+	w.resizeActiveScreen()
+	defer w.resizeActiveScreen()
 	switch m := msg.(type) {
 	case tea.KeyPressMsg:
 		return w.handleKey(m)
@@ -211,16 +208,7 @@ func (w *Workbench) View() string {
 
 	statusBar := shell.StatusBar(statusRect.W, w.statusKeybinds(), ".crux/evals")
 
-	path, right := w.activeScreen().Breadcrumb()
-	if right == "" {
-		right = w.contextMeta()
-	}
-	// Workspace prefix: `{project}:{target}` becomes the leading segment
-	// when both are known. Screens return only their screen-local segments;
-	// the workbench owns the workspace prefix — see plan S2.
-	if proj, tgt := w.devContext.Project.Name, w.devContext.Target.ID; proj != "" && tgt != "" {
-		path = append([]string{proj + ":" + tgt}, path...)
-	}
+	path, right := w.breadcrumbContent()
 
 	bodyLines := w.layoutBody(bodyRect, path, right)
 	base := strings.Join(append(bodyLines, statusBar), "\n")

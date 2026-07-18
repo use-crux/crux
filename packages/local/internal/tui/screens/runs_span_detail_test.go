@@ -35,7 +35,7 @@ func renderSpanWithPayload(t *testing.T, primitive string, payload map[string]an
 		Trace: api.InspectTraceRecord{StartedAt: 1716730000000},
 	}
 	r.selSpan = "sp1"
-	return r.renderSpanDetail(80, 60)
+	return renderSpanDetailForTest(r, 80, 60)
 }
 
 // TestSpanDetailToolShowsCuratedKVNotJSONDump asserts a tool span's
@@ -140,7 +140,7 @@ func TestSpanDetailSurfacesObservedError(t *testing.T) {
 	}
 	r.selSpan = "sp-error"
 
-	plain := stripANSI(r.renderSpanDetail(90, 60))
+	plain := stripANSI(renderSpanDetailForTest(r, 90, 60))
 	for _, want := range []string{"ERROR", "ToolExecutionError", "tool exploded", "category", "tool", "retryable", "false", "error.stack", "search.ts:10:3"} {
 		if !strings.Contains(plain, want) {
 			t.Errorf("rendered error span missing %q\nfull output:\n%s", want, plain)

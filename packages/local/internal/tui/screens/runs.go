@@ -44,6 +44,8 @@ type Runs struct {
 	focus   runsFocus
 
 	runList        *kit.ListPane[api.ObservabilityRunSummary]
+	spanDocument   *kit.DocumentPane
+	size           Size
 	filteringRuns  bool
 	runQuery       string
 	runStatusIndex int
@@ -71,6 +73,7 @@ func NewRuns() *Runs {
 		runList: kit.NewListPane(func(run api.ObservabilityRunSummary) string {
 			return run.RunID
 		}),
+		spanDocument: kit.NewDocumentPane(),
 	}
 	r.runList.SetRowHeight(func(api.ObservabilityRunSummary) int { return 2 })
 	r.runList.SetFocused(true)
@@ -159,7 +162,7 @@ func (s *Runs) Update(ctx context.Context, msg tea.Msg, c DataClient) tea.Cmd {
 		if s.filteringRuns {
 			return nil
 		}
-		cmd, _ := s.updateRunListInput(ctx, m, c)
+		cmd, _ := s.updateFocusedPaneInput(ctx, m, c)
 		return cmd
 	}
 	return nil
@@ -215,6 +218,8 @@ func (s *Runs) shiftFocus(delta int) {
 func (s *Runs) setFocus(focus runsFocus) {
 	s.focus = focus
 	s.runList.SetFocused(focus == focusRuns)
+	s.spanDocument.SetFocused(focus == focusSpanDetail)
+	s.Resize(s.size)
 }
 
 func (s *Runs) activateFocus(ctx context.Context, c DataClient) tea.Cmd {

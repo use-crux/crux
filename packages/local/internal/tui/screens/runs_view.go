@@ -53,9 +53,7 @@ func (s *Runs) View(size Size) string {
 }
 
 func (s *Runs) renderListLines(r kit.Rect) []string {
-	return s.memoLines(s.listMemoFocus(), r, func() string {
-		return s.renderList(r.W, r.H)
-	})
+	return blockLines(s.renderList(r.W, r.H), r)
 }
 
 func (s *Runs) renderWaterfallLines(r kit.Rect) []string {
@@ -65,9 +63,7 @@ func (s *Runs) renderWaterfallLines(r kit.Rect) []string {
 }
 
 func (s *Runs) renderSpanDetailLines(r kit.Rect) []string {
-	return s.memoLines(s.detailMemoFocus(), r, func() string {
-		return s.renderSpanDetail(r.W, r.H)
-	})
+	return blockLines(s.renderSpanDetail(r.W, r.H), r)
 }
 
 func blockLines(body string, r kit.Rect) []string {
@@ -91,16 +87,8 @@ func (s *Runs) memoLines(focus string, rect kit.Rect, render func() string) []st
 	})
 }
 
-func (s *Runs) listMemoFocus() string {
-	return fmt.Sprintf("list:%s:%d:%t:%s:%d", s.SelectedRunID(), s.focus, s.filteringRuns, s.runQuery, s.runStatusIndex)
-}
-
 func (s *Runs) waterfallMemoFocus() string {
 	return fmt.Sprintf("waterfall:%s:%s:%d:%s", s.SelectedRunID(), s.selSpan, s.focus, s.expandedSignature())
-}
-
-func (s *Runs) detailMemoFocus() string {
-	return fmt.Sprintf("detail:%s:%s:%d", s.SelectedRunID(), s.selSpan, s.focus)
 }
 
 func (s *Runs) expandedSignature() string {

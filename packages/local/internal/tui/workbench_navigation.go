@@ -87,6 +87,7 @@ func (w *Workbench) activateTarget(target NavTarget, forceInit bool) tea.Cmd {
 	w.activeNav = target.NavID
 	w.activeTarget = target
 	delete(w.stale, target.NavID)
+	w.resizeActiveScreen()
 	if !needsInit {
 		return nil
 	}
@@ -130,6 +131,7 @@ func (w *Workbench) goBack() tea.Cmd {
 			Anchors:     cloneStringMap(location.Anchors),
 		})
 	}
+	w.resizeActiveScreen()
 	return cmd
 }
 

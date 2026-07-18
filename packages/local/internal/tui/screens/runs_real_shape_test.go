@@ -188,7 +188,7 @@ func TestRealShapeProjectionSurfacesPerPrimitiveFields(t *testing.T) {
 			r.detail = &d
 			r.selSpan = projected.Spans[0].ID
 
-			plain := stripANSI(r.renderSpanDetail(80, 60))
+			plain := stripANSI(renderSpanDetailForTest(r, 80, 60))
 			for _, want := range tc.want {
 				if !strings.Contains(plain, want) {
 					t.Errorf("missing %q in rendered span detail.\n--- output ---\n%s\n--------------", want, plain)

@@ -6,10 +6,21 @@ import (
 	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/api"
+	"github.com/use-crux/crux/packages/local/internal/tui/kit"
 	"github.com/use-crux/crux/packages/local/internal/tui/resource"
 )
 
 var testContext = context.Background()
+
+func renderSpanDetailForTest(runs *Runs, width, height int) string {
+	runs.resizeSpanDocument(kit.Rect{W: width, H: height})
+	return runs.renderSpanDetail(width, height)
+}
+
+func viewRunsForTest(runs *Runs, size Size) string {
+	runs.Resize(size)
+	return runs.View(size)
+}
 
 func runsListLoadedForTest(runs *Runs, values ...api.ObservabilityRunSummary) runsListLoadedMsg {
 	_, token := runs.runsResource.Begin(testContext, runsListOwner, 0)

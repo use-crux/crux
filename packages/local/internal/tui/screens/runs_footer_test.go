@@ -24,7 +24,7 @@ func TestRunsFooterOmitsUnbuiltVerbs(t *testing.T) {
 	selectRunForTest(r, "8af2f1c")
 	r.selSpan = "sp1"
 
-	out := r.View(Size{Width: 160, Height: 40})
+	out := viewRunsForTest(r, Size{Width: 160, Height: 40})
 	for _, label := range []string{"flame chart", "timeline"} {
 		if strings.Contains(out, label) {
 			t.Errorf("Runs footer still advertises %q — should be dropped per KEYBINDS contract", label)
@@ -36,7 +36,7 @@ func TestRunsFooterOmitsUnimplementedExternalViewer(t *testing.T) {
 	r := buildRunWithSpan()
 	r.focus = focusWaterfall
 
-	out := r.View(Size{Width: 160, Height: 40})
+	out := viewRunsForTest(r, Size{Width: 160, Height: 40})
 	if strings.Contains(out, "open in viewer") {
 		t.Fatalf("Runs footer advertised an external viewer without an executable capability:\n%s", out)
 	}
@@ -55,7 +55,7 @@ func TestRunsFooterOmitsInspectWhenSelectedSpanHasNoRawPayload(t *testing.T) {
 	r.selSpan = "span-1"
 	r.focus = focusWaterfall
 
-	out := r.View(Size{Width: 160, Height: 40})
+	out := viewRunsForTest(r, Size{Width: 160, Height: 40})
 	if strings.Contains(out, "inspect raw") {
 		t.Fatalf("Runs footer advertised raw inspection for a span without a payload:\n%s", out)
 	}

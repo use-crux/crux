@@ -15,3 +15,5 @@ complete observability detail when exporting, and reject late detail responses
 from a previously selected run.
 Keep the Runs list selection visible across paging, filtering, refresh, and
 terminal resize, with keyboard and mouse-wheel navigation gated by pane focus.
+Wrap and scroll long Runs span details with stable resize anchors, focused
+line/page navigation, and a visible document position indicator.

@@ -1,6 +1,8 @@
 package screens
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -14,7 +16,7 @@ func TestRunsListPanePageNavigationPreservesSelectionOnRefresh(t *testing.T) {
 		values[i] = api.ObservabilityRunSummary{RunID: tabbedID(i)}
 	}
 	runs.Update(testContext, runsListLoadedForTest(runs, values...), nil)
-	runs.View(Size{Width: 70, Height: 10})
+	viewRunsForTest(runs, Size{Width: 70, Height: 10})
 
 	runs.Update(testContext, tea.KeyPressMsg{Code: tea.KeyPgDown}, nil)
 	selected := runs.SelectedRunID()
@@ -24,7 +26,7 @@ func TestRunsListPanePageNavigationPreservesSelectionOnRefresh(t *testing.T) {
 	if got := runs.runList.Position().Offset; got == 0 {
 		t.Fatal("page down did not scroll the run list")
 	}
-	runs.View(Size{Width: 100, Height: 6})
+	viewRunsForTest(runs, Size{Width: 100, Height: 6})
 	if got := runs.SelectedRunID(); got != selected {
 		t.Fatalf("selection after resize = %q, want stable identity %q", got, selected)
 	}
@@ -113,7 +115,7 @@ func TestRunsListPaneNavigationFollowsFocus(t *testing.T) {
 				values[i] = api.ObservabilityRunSummary{RunID: tabbedID(i)}
 			}
 			runs.Update(testContext, runsListLoadedForTest(runs, values...), nil)
-			runs.View(Size{Width: 70, Height: 10})
+			viewRunsForTest(runs, Size{Width: 70, Height: 10})
 			runs.shiftFocus(1)
 
 			runs.Update(testContext, msg, nil)
@@ -150,6 +152,36 @@ func TestRunsListPaneLineNavigationConsumesExactlyOnce(t *testing.T) {
 	runs.Update(testContext, down, nil)
 	if got := runs.SelectedRunID(); got != "b" {
 		t.Fatalf("unfocused run list selected %q, want b", got)
+	}
+}
+
+func TestRunsListRenderingReflectsResizeAdjustedOffset(t *testing.T) {
+	runs := NewRuns()
+	values := make([]api.ObservabilityRunSummary, 10)
+	for i := range values {
+		values[i] = api.ObservabilityRunSummary{
+			RunID: fmt.Sprintf("run-%02d", i),
+			Name:  fmt.Sprintf("run name %02d", i),
+		}
+	}
+	setRunsForTest(runs, values...)
+
+	tall := Size{Width: 70, Height: 14}
+	short := Size{Width: 70, Height: 6}
+	runs.Resize(tall)
+	runs.Update(testContext, tea.KeyPressMsg{Code: tea.KeyEnd}, nil)
+	tallList, _ := runsPaneRects(tall)
+	runs.renderListLines(tallList) // populate the tall rectangle's memo entry
+
+	runs.Resize(short)
+	shortList, _ := runsPaneRects(short)
+	runs.renderListLines(shortList)
+	runs.Resize(tall)
+	got := runs.renderListLines(tallList)
+	want := blockLines(runs.renderList(tallList.W, tallList.H), tallList)
+
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatal("returning to the tall rectangle rendered rows for its stale list offset")
 	}
 }
 

@@ -149,7 +149,7 @@ func TestDumpPrimitiveRenders(t *testing.T) {
 		}
 		r.selSpan = "sp1"
 
-		out := stripANSI(r.renderSpanDetail(80, 60))
+		out := stripANSI(renderSpanDetailForTest(r, 80, 60))
 		// Trim trailing all-whitespace lines for readability.
 		lines := strings.Split(out, "\n")
 		end := len(lines)

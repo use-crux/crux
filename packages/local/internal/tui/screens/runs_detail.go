@@ -13,21 +13,34 @@ import (
 // --- right pane: span detail ------------------------------------------------
 
 func (s *Runs) renderSpanDetail(width, height int) string {
+	if width <= 0 || height <= 0 {
+		return ""
+	}
 	if s.detail == nil || len(s.detail.Spans) == 0 {
 		header := shell.PaneHeader(width, "span: —", "", "")
-		body := centerMsg(Size{Width: width, Height: height - 1}, "no span selected")
-		return header + "\n" + body
+		body := centerMsg(Size{Width: width, Height: max(0, height-3)}, "no span selected")
+		return kit.PadBlock(header+"\n"+body, width, height)
 	}
 	span := s.currentSpan()
 	if span == nil {
 		span = &s.detail.Spans[0]
 	}
-	title := focusTitle("span: "+truncate(span.Name, width-15), s.focus == focusSpanDetail)
-	header := shell.PaneHeader(width, title, formatSpanDuration(deref(span.DurationMs)), "")
+	bodyHeight := max(0, height-3)
+	position := s.spanDocument.Position()
+	right := ""
+	if position.TotalLines > bodyHeight && bodyHeight > 0 {
+		right = shell.TextMuted.Render(formatDocumentPosition(position))
+	}
+	duration := formatSpanDuration(deref(span.DurationMs))
+	title := spanDocumentTitle(span.Name, width, duration, right, s.focus == focusSpanDetail)
+	header := shell.PaneHeader(width, title, duration, right)
+	lines := strings.Split(kit.PadBlock(header, width, min(3, height)), "\n")
+	lines = append(lines, s.spanDocument.Render()...)
+	return strings.Join(lines, "\n")
+}
 
+func (s *Runs) renderSpanDetailDocument(span *api.InspectRunSpan, width int) string {
 	var b strings.Builder
-	b.WriteString(header)
-	b.WriteString("\n")
 
 	// IDENTITY — exactly 4 rows per the design: span_id · parent · kind · op.
 	// `primitive` is intentionally omitted — for agent/tool/llm spans it
@@ -123,8 +136,23 @@ func (s *Runs) renderSpanDetail(width, height int) string {
 		}
 	}
 
-	hdrH := strings.Count(header, "\n") + 1
-	return kit.PadBlock(b.String(), width, height-hdrH+1)
+	return strings.TrimRight(b.String(), "\n")
+}
+
+func formatDocumentPosition(position kit.DocumentPosition) string {
+	return fmt.Sprintf("%d-%d/%d", position.FirstLine, position.LastLine, position.TotalLines)
+}
+
+func spanDocumentTitle(name string, width int, subtitle, right string, focused bool) string {
+	available := width - lipgloss.Width(subtitle) - lipgloss.Width(right) - 7
+	if subtitle == "" {
+		available += 4
+	}
+	if focused {
+		available -= 2
+	}
+	nameWidth := max(0, available-lipgloss.Width("span: "))
+	return focusTitle("span: "+kit.Truncate(name, nameWidth, "…"), focused)
 }
 
 func (s *Runs) section(label string) string {

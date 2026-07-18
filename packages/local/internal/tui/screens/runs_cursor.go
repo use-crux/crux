@@ -10,18 +10,46 @@ func (s *Runs) moveDown(ctx context.Context, c DataClient) tea.Cmd {
 	switch s.focus {
 	case focusRuns:
 		return s.cycleRun(ctx, c, +1)
-	default:
+	case focusWaterfall:
 		return s.cycleSpan(+1)
+	case focusSpanDetail:
+		cmd, _ := s.updateSpanDocumentInput(tea.KeyPressMsg{Text: "j", Code: 'j'})
+		return cmd
 	}
+	return nil
 }
 
 func (s *Runs) moveUp(ctx context.Context, c DataClient) tea.Cmd {
 	switch s.focus {
 	case focusRuns:
 		return s.cycleRun(ctx, c, -1)
-	default:
+	case focusWaterfall:
 		return s.cycleSpan(-1)
+	case focusSpanDetail:
+		cmd, _ := s.updateSpanDocumentInput(tea.KeyPressMsg{Text: "k", Code: 'k'})
+		return cmd
 	}
+	return nil
+}
+
+func (s *Runs) updateFocusedPaneInput(ctx context.Context, msg tea.Msg, c DataClient) (tea.Cmd, bool) {
+	switch s.focus {
+	case focusRuns:
+		return s.updateRunListInput(ctx, msg, c)
+	case focusSpanDetail:
+		return s.updateSpanDocumentInput(msg)
+	default:
+		return nil, false
+	}
+}
+
+func (s *Runs) updateSpanDocumentInput(msg tea.Msg) (tea.Cmd, bool) {
+	s.spanDocument.SetFocused(s.focus == focusSpanDetail)
+	if !s.spanDocument.Update(msg) {
+		return nil, false
+	}
+	s.bumpRenderRev()
+	return nil, true
 }
 
 func (s *Runs) cycleRun(ctx context.Context, c DataClient, delta int) tea.Cmd {

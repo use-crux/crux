@@ -96,9 +96,9 @@ func renderAttributes(attrs map[string]string, width int) string {
 		v := attrs[k]
 		row := fmt.Sprintf(" %s  %s",
 			shell.TextDim.Render(padString2(k+":", keyW+1)),
-			shell.Text.Render(truncate(v, width-keyW-4)),
+			shell.Text.Render(v),
 		)
-		b.WriteString(padRow(row, width))
+		b.WriteString(row)
 		b.WriteString("\n")
 	}
 	return b.String()
@@ -130,21 +130,21 @@ func commaInt(n int) string {
 // kvRow is the standard `muted-key  value` row used in detail panes across
 // screens. Defined here because Runs is the most invariant consumer; other
 // screens import it via the package.
-func kvRow(k, v string, width int) string {
+func kvRow(k, v string, _ int) string {
 	kCol := 14
 	key := lipgloss.NewStyle().Foreground(shell.ColorTextMuted).Render(padString2(k, kCol))
 	val := lipgloss.NewStyle().Foreground(shell.ColorText).Render(v)
 	row := fmt.Sprintf(" %s %s", key, val)
-	return padRow(row, width) + "\n"
+	return row + "\n"
 }
 
 // kvRowColored is kvRow with a colored value.
-func kvRowColored(k, v string, c color.Color, width int) string {
+func kvRowColored(k, v string, c color.Color, _ int) string {
 	kCol := 14
 	key := lipgloss.NewStyle().Foreground(shell.ColorTextMuted).Render(padString2(k, kCol))
 	val := lipgloss.NewStyle().Foreground(c).Render(v)
 	row := fmt.Sprintf(" %s %s", key, val)
-	return padRow(row, width) + "\n"
+	return row + "\n"
 }
 
 // padString2 right-pads an ASCII string with spaces to a fixed width.

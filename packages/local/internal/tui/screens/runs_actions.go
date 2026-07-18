@@ -10,7 +10,7 @@ import (
 )
 
 func (s *Runs) updateKey(ctx context.Context, msg tea.KeyPressMsg, client DataClient) tea.Cmd {
-	if !s.filteringRuns {
+	if !s.filteringRuns && s.focus == focusRuns {
 		if cmd, handled := s.updateRunListInput(ctx, msg, client); handled {
 			return cmd
 		}
@@ -63,37 +63,37 @@ func (s *Runs) Actions(ctx context.Context, client DataClient) []interaction.Act
 		},
 		{
 			ID:             "runs.page-down",
-			Binding:        key.NewBinding(key.WithKeys("pgdown"), key.WithHelp("pgdn", "next run page")),
-			DisabledReason: disabledUnless(s.focus == focusRuns, "focus the run list to page"),
+			Binding:        key.NewBinding(key.WithKeys("pgdown"), key.WithHelp("pgdn", "next "+s.focusPageLabel())),
+			DisabledReason: disabledUnless(s.focus != focusWaterfall, "focus a scrollable pane to page"),
 			Run: func() tea.Cmd {
-				cmd, _ := s.updateRunListInput(ctx, tea.KeyPressMsg{Code: tea.KeyPgDown}, client)
+				cmd, _ := s.updateFocusedPaneInput(ctx, tea.KeyPressMsg{Code: tea.KeyPgDown}, client)
 				return cmd
 			},
 		},
 		{
 			ID:             "runs.page-up",
-			Binding:        key.NewBinding(key.WithKeys("pgup"), key.WithHelp("pgup", "previous run page")),
-			DisabledReason: disabledUnless(s.focus == focusRuns, "focus the run list to page"),
+			Binding:        key.NewBinding(key.WithKeys("pgup"), key.WithHelp("pgup", "previous "+s.focusPageLabel())),
+			DisabledReason: disabledUnless(s.focus != focusWaterfall, "focus a scrollable pane to page"),
 			Run: func() tea.Cmd {
-				cmd, _ := s.updateRunListInput(ctx, tea.KeyPressMsg{Code: tea.KeyPgUp}, client)
+				cmd, _ := s.updateFocusedPaneInput(ctx, tea.KeyPressMsg{Code: tea.KeyPgUp}, client)
 				return cmd
 			},
 		},
 		{
 			ID:             "runs.first",
-			Binding:        key.NewBinding(key.WithKeys("home"), key.WithHelp("home", "first run")),
-			DisabledReason: disabledUnless(s.focus == focusRuns, "focus the run list to move"),
+			Binding:        key.NewBinding(key.WithKeys("home"), key.WithHelp("home", "first "+s.focusItemLabel())),
+			DisabledReason: disabledUnless(s.focus != focusWaterfall, "focus a scrollable pane to move"),
 			Run: func() tea.Cmd {
-				cmd, _ := s.updateRunListInput(ctx, tea.KeyPressMsg{Code: tea.KeyHome}, client)
+				cmd, _ := s.updateFocusedPaneInput(ctx, tea.KeyPressMsg{Code: tea.KeyHome}, client)
 				return cmd
 			},
 		},
 		{
 			ID:             "runs.last",
-			Binding:        key.NewBinding(key.WithKeys("end"), key.WithHelp("end", "last run")),
-			DisabledReason: disabledUnless(s.focus == focusRuns, "focus the run list to move"),
+			Binding:        key.NewBinding(key.WithKeys("end"), key.WithHelp("end", "last "+s.focusItemLabel())),
+			DisabledReason: disabledUnless(s.focus != focusWaterfall, "focus a scrollable pane to move"),
 			Run: func() tea.Cmd {
-				cmd, _ := s.updateRunListInput(ctx, tea.KeyPressMsg{Code: tea.KeyEnd}, client)
+				cmd, _ := s.updateFocusedPaneInput(ctx, tea.KeyPressMsg{Code: tea.KeyEnd}, client)
 				return cmd
 			},
 		},
@@ -205,10 +205,21 @@ func actionKeybinds(actions []interaction.Action, allowed map[string]bool) []she
 }
 
 func (s *Runs) focusItemLabel() string {
-	if s.focus == focusRuns {
+	switch s.focus {
+	case focusRuns:
 		return "run"
+	case focusSpanDetail:
+		return "line"
+	default:
+		return "span"
 	}
-	return "span"
+}
+
+func (s *Runs) focusPageLabel() string {
+	if s.focus == focusSpanDetail {
+		return "detail page"
+	}
+	return "run page"
 }
 
 func disabledUnless(enabled bool, reason string) string {

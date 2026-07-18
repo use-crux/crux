@@ -96,6 +96,13 @@ type Screen interface {
 	Interested(domains bridge.Domains) bool
 }
 
+// ResizableScreen is implemented by migrated screens that distribute their
+// concrete body size to stateful panes before input is handled.
+type ResizableScreen interface {
+	Screen
+	Resize(Size)
+}
+
 // FocusScreen is implemented by screens that can select a record reference
 // carried by navigation. Screens without drill-in state omit this capability.
 type FocusScreen interface {
