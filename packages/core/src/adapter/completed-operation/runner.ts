@@ -22,7 +22,6 @@ import {
   completedLifecycleContext,
   finalizeCompletedResult,
   selectedCompletedInput,
-  withSelectedModel,
 } from "./lifecycle";
 import {
   openCompletedMediaObservation,
@@ -30,13 +29,9 @@ import {
   safeMediaOutputPreview,
   type CompletedMediaObservation,
 } from "./observability-graph";
-import { preflightCompletedCandidates } from "./preflight";
-import {
-  createCompletedOperationSafety,
-  guardCompletedOperationInput,
-  guardCompletedOperationOutput,
-} from "./safety/execute";
+import { guardCompletedOperationOutput } from "./safety/execute";
 import type { CompletedOperationSafetyOptions } from "./safety/options";
+import { prepareCompletedOperationCandidates } from "./safety/candidate";
 
 /** Options owned by the shared bounded-media lifecycle. */
 export type RunCompletedMediaOperationOptions<
@@ -167,22 +162,11 @@ async function runWithObservation<
     const state: CompletedRoutingState = { calls: 0 };
     const inputPreview = safeMediaInputPreview(options.input);
     try {
-      const safety = createCompletedOperationSafety({
-        operation: options.operation,
-        model: options.model,
-        guardrails: options.guardrails,
-        constraints: options.constraints,
-        safety: options.safety,
-      });
-      const input = await guardCompletedOperationInput(
-        options.operation,
-        options.input,
-        safety,
-      );
-      const prepared = await preflightCompletedCandidates(
-        { ...options, input },
+      const candidates = await prepareCompletedOperationCandidates(
+        options,
         signal,
       );
+      const { input, safety, normalized: prepared } = candidates;
       const result = await resolveCompletedModel(
         options.model,
         {
@@ -198,10 +182,7 @@ async function runWithObservation<
             options,
             candidate as TModel,
           );
-          const candidateInput = withSelectedModel(input, candidate);
-          const normalized =
-            prepared.get(candidate) ??
-            (await options.definition.normalize(candidateInput, context));
+          const normalized = await candidates.prepare(candidate, attemptSignal);
           const native = await options.definition.invoke(normalized, {
             ...context,
             signal: attemptSignal,

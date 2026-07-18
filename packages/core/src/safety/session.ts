@@ -34,6 +34,8 @@ import { getHooks } from '../runtime/runtime'
 import type { z } from 'zod'
 import type { BoundaryDef, MediaPartSubject } from './boundary'
 import { buildSafetyRegistry, type GuardrailBinding, type SafetyBinding } from './registry'
+import type { SafetyBindingApplicability } from './applicability'
+import { disabledBindingEntries, dormantBindingEntries } from './binding-audit'
 import type { SafetyTuneOptions } from './tune'
 import type {
   Constraint,
@@ -262,6 +264,7 @@ export interface Safety {
 interface SafetySession extends Safety {
   [inputOperationTextGuard](
     slots: readonly OperationInputTextSlot[],
+    context?: OperationInputGuardContext,
   ): Promise<readonly OperationInputTextSlot[]>
   [inputOperationMediaGuard](
     items: readonly MediaVisitItem[],
@@ -279,12 +282,18 @@ interface SafetySession extends Safety {
   [oneShotOutputConstraints](text: string, model?: string): Promise<void>
 }
 
+interface OperationInputGuardContext {
+  readonly model?: string
+  readonly systemPrompt?: string
+}
+
 /** @internal Guard canonical completed-operation input text slots. */
 export function guardSafetySessionInputOperationText(
   safety: Safety,
   slots: readonly OperationInputTextSlot[],
+  context?: OperationInputGuardContext,
 ): Promise<readonly OperationInputTextSlot[]> {
-  return (safety as SafetySession)[inputOperationTextGuard](slots)
+  return (safety as SafetySession)[inputOperationTextGuard](slots, context)
 }
 
 /** @internal Guard canonical completed-operation input media. */
@@ -356,34 +365,24 @@ function uniquePolicies<TPolicy extends object>(policies: readonly TPolicy[]): T
 }
 
 function enabledGuardrailBindings(bindings: readonly SafetyBinding[]): GuardrailBinding[] {
-  return bindings.filter((binding): binding is GuardrailBinding => binding.kind === 'guardrail' && binding.enabled)
+  return bindings.filter(
+    (binding): binding is GuardrailBinding =>
+      binding.kind === 'guardrail' && binding.enabled && binding.dormantReason === undefined,
+  )
 }
 
 function constraintsForMode(bindings: readonly SafetyBinding[], mode: 'enforce' | 'report'): Constraint[] {
   return uniquePolicies(
     bindings
-      .filter((binding) => binding.kind === 'constraint' && binding.enabled && binding.mode === mode)
+      .filter(
+        (binding) =>
+          binding.kind === 'constraint' &&
+          binding.enabled &&
+          binding.mode === mode &&
+          binding.dormantReason === undefined,
+      )
       .map((binding) => binding.policy as Constraint),
   )
-}
-
-function disabledGuardrailEntries(bindings: readonly SafetyBinding[]): GuardrailAuditEntry[] {
-  const entries: GuardrailAuditEntry[] = []
-  for (const binding of bindings) {
-    if (binding.kind !== 'guardrail' || binding.enabled) continue
-    const guard = binding.policy
-    entries.push({
-      guard: guard.id,
-      ...(guard.category !== undefined ? { category: guard.category } : {}),
-      boundary: binding.boundary.id,
-      mode: binding.mode,
-      phase: boundaryPhase(binding.boundary),
-      action: 'allow',
-      reason: 'disabled by call site',
-      durationMs: 0,
-    })
-  }
-  return entries
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -422,6 +421,18 @@ function disabledGuardrailEntries(bindings: readonly SafetyBinding[]): Guardrail
  * ```
  */
 export function createSafety(options: SafetyCallOptions): Safety {
+  return createSafetySession(options)
+}
+
+/** @internal Create a Safety session with primitive-owned exact-binding applicability. */
+export function createSafetyWithBindingApplicability(
+  options: SafetyCallOptions,
+  applicability: SafetyBindingApplicability,
+): Safety {
+  return createSafetySession(options, applicability)
+}
+
+function createSafetySession(options: SafetyCallOptions, applicability?: SafetyBindingApplicability): Safety {
   // Snapshot runtime state once — a mid-call setHooks() cannot
   // half-instrument this run.
   const runtime = getHooks()
@@ -440,12 +451,14 @@ export function createSafety(options: SafetyCallOptions): Safety {
       guardrails: options.call?.guardrails,
     },
     tune: options.safety,
+    applicability,
   })
 
   const constraints = constraintsForMode(registry.bindings, 'enforce')
   const reportConstraints = constraintsForMode(registry.bindings, 'report')
   const guardrailBindings = enabledGuardrailBindings(registry.bindings)
-  const disabledGuardEntries = disabledGuardrailEntries(registry.bindings)
+  const disabledGuardEntries = disabledBindingEntries(registry.bindings)
+  const dormantGuardEntries = dormantBindingEntries(registry.bindings)
 
   // Phase dispatch is keyed, not branched — the phase vocabulary can grow
   // (tool-args, tool-result, context-inject) without session surgery.
@@ -463,7 +476,8 @@ export function createSafety(options: SafetyCallOptions): Safety {
     constraints.length > 0 ||
     reportConstraints.length > 0 ||
     guardrailBindings.length > 0 ||
-    disabledGuardEntries.length > 0
+    disabledGuardEntries.length > 0 ||
+    dormantGuardEntries.length > 0
   const formatter = options.formatter ?? defaultConstraintFeedbackFormatter
   const metadata = options.resolved?.metadata ?? {}
   const traceId = options.traceId
@@ -473,11 +487,15 @@ export function createSafety(options: SafetyCallOptions): Safety {
   let constraintAudit: ConstraintAudit | undefined
   let lastMessages: readonly Message[] = []
 
-  const guardContext = (_phase: 'input' | 'output', messages: readonly Message[]): GuardrailContext => ({
+  const guardContext = (
+    _phase: 'input' | 'output',
+    messages: readonly Message[],
+    override?: OperationInputGuardContext,
+  ): GuardrailContext => ({
     promptId: options.promptId,
-    model: options.model,
+    model: override ? override.model : options.model,
     messages,
-    systemPrompt: options.systemPrompt,
+    systemPrompt: override ? override.systemPrompt : options.systemPrompt,
     traceId,
     metadata,
   })
@@ -506,6 +524,9 @@ export function createSafety(options: SafetyCallOptions): Safety {
 
   if (disabledGuardEntries.length > 0) {
     appendGuardrailAudit({ applied: disabledGuardEntries, blocked: false })
+  }
+  if (dormantGuardEntries.length > 0) {
+    appendGuardrailAudit({ applied: dormantGuardEntries, blocked: false })
   }
 
   const toCorrectiveMessages = (formatted: string | readonly Message[]): readonly Message[] =>
@@ -664,11 +685,11 @@ export function createSafety(options: SafetyCallOptions): Safety {
       })
     },
 
-    async [inputOperationTextGuard](slots) {
+    async [inputOperationTextGuard](slots, context) {
       return guardInputOperationText({
         bindings: phaseBindings('input'),
         slots,
-        context: guardContext('input', lastMessages),
+        context: guardContext('input', lastMessages, context),
         appendAudit: appendGuardrailAudit,
       })
     },

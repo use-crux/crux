@@ -177,11 +177,6 @@ describe('completed operation Safety — transcription input', () => {
         }
       }),
     })
-    const modelPolicy = guardrail({
-      id: 'transcription-model-input-policy',
-      on: boundary.input.model(),
-      run: vi.fn(() => ({ action: 'allow' as const })),
-    })
     const transcribe = bindCompletedOperation({
       definition: transcriptionOperation(events, {
         onNormalize: (input) => {
@@ -196,11 +191,10 @@ describe('completed operation Safety — transcription input', () => {
       model: 'transcription-model',
       audio: inputAudio,
       prompt: 'Names include a private person',
-      guardrails: [userPolicy, modelPolicy],
+      guardrails: [userPolicy],
     })
 
     expect(userPolicy.run).toHaveBeenCalledOnce()
-    expect(modelPolicy.run).not.toHaveBeenCalled()
     expect(events.slice(0, 2)).toEqual(['guard:user', 'normalize'])
     expect(normalizedPrompt).toBe('Names are redacted')
   })

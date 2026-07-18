@@ -1,30 +1,33 @@
-import type { BoundaryDef } from '../../../safety/boundary'
-import type { Constraint } from '../../../safety/constraint/types'
 import { SafetyConfigError } from '../../../safety/errors'
+import type { SafetyBindingApplicability } from '../../../safety/applicability'
+import type { SafetyCompletedOperation } from './operation'
 
-/** Reject call-scoped constraint boundaries unavailable to a completed operation. */
-export function assertCompletedOperationConstraintApplicability(
-  operation: string,
-  constraints: readonly Constraint[] | undefined,
-): void {
-  if (operation !== 'transcribe' || constraints === undefined) return
+const applicableBoundaries = {
+  generateImage: new Set(['user.input', 'model.input', 'user.input.media', 'model.output.media']),
+  generateSpeech: new Set(['user.input', 'model.input', 'model.output.media']),
+  transcribe: new Set(['user.input', 'user.input.media', 'model.output.text']),
+} satisfies Record<SafetyCompletedOperation, ReadonlySet<string>>
 
-  for (const policy of constraints) {
-    const boundaries = constraintBoundaries(policy)
-    const invalid = boundaries.filter((boundary) => boundary.id !== 'model.output.text')
-    if (invalid.length === 0) continue
+/** Classify exact bindings for one closed completed-operation primitive. */
+export function completedOperationBindingApplicability(
+  operation: SafetyCompletedOperation,
+): SafetyBindingApplicability {
+  return (binding) => {
+    if (applicableBoundaries[operation].has(binding.boundary.id)) return { active: true }
 
+    if (binding.scope === 'global') {
+      return {
+        active: false,
+        reason: `Global policy is dormant for ${operation} at ${binding.boundary.id}.`,
+      }
+    }
     throw new SafetyConfigError({
       message:
-        `Safety constraint "${policy.id}" cannot target ${invalid.map((boundary) => `"${boundary.id}"`).join(', ')} ` +
-        'for transcribe. Attach transcription constraints to boundary.output.text().',
-      boundaries: invalid.map((boundary) => boundary.id),
-      kinds: ['constraint'],
-      scopes: ['call'],
+        `Safety ${binding.kind} "${binding.policy.id}" cannot target "${binding.boundary.id}" for ${operation}. ` +
+        'Remove the binding or attach it to a boundary supported by this operation.',
+      boundaries: [binding.boundary.id],
+      kinds: [binding.kind],
+      scopes: [binding.scope],
     })
   }
-}
-
-function constraintBoundaries(policy: Constraint): readonly BoundaryDef[] {
-  return Array.isArray(policy.on) ? policy.on : [policy.on]
 }

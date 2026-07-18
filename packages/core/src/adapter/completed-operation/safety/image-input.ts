@@ -3,13 +3,59 @@ import type { ImagePromptContent } from '../../../generation/image-contracts'
 import type { MediaPartSubject } from '../../../safety/boundary'
 import type { MediaGroupDependency } from '../../../safety/media/groups'
 import type { MediaVisitGroup, MediaVisitItem } from '../../../safety/media/visit'
-import { guardSafetySessionInputOperationMedia, type Safety } from '../../../safety/session'
+import {
+  guardSafetySessionInputOperationMedia,
+  guardSafetySessionInputOperationText,
+  type Safety,
+} from '../../../safety/session'
 
-type DirectImageInput = Readonly<{ readonly prompt: ImagePromptContent }>
+type DirectImageInput = Readonly<{
+  readonly prompt: string | ImagePromptContent
+}>
 
-/** Guard direct image references and mask before provider normalization. */
-export async function guardGeneratedImageInput<TInput>(input: TInput, safety: Safety): Promise<TInput> {
+/** Exact candidate text fields retained while a typed prompt becomes direct provider input. */
+export interface PreparedImageInputContext {
+  readonly preparedTypedPrompt: true
+  readonly userText?: string
+  readonly systemText?: string
+  readonly model?: string
+}
+
+/** Guard direct image media, then prompt text, before provider normalization. */
+export async function guardGeneratedImageInput<TInput>(
+  input: TInput,
+  safety: Safety,
+  context?: PreparedImageInputContext,
+): Promise<TInput> {
   if (!isDirectImageInput(input)) return input
+
+  const mediaGuarded = typeof input.prompt === 'string' ? input : await guardDirectImageMedia(input, safety)
+  const prompt = mediaGuarded.prompt
+  const userText = context ? context.userText : typeof prompt === 'string' ? prompt : prompt.text
+  const slots = await guardSafetySessionInputOperationText(
+    safety,
+    [
+      ...(userText === undefined ? [] : [{ boundary: 'user.input' as const, value: userText }]),
+      ...(context?.systemText === undefined ? [] : [{ boundary: 'model.input' as const, value: context.systemText }]),
+    ],
+    context ? { model: context.model, systemPrompt: context.systemText } : undefined,
+  )
+  const guardedUser = slots.find((slot) => slot.boundary === 'user.input')?.value
+  const guardedSystem = slots.find((slot) => slot.boundary === 'model.input')?.value
+
+  if (context) {
+    const guardedPrompt = [guardedSystem, guardedUser].filter((part): part is string => Boolean(part)).join('\n')
+    if (guardedPrompt === prompt) return mediaGuarded as TInput
+    return Object.freeze({ ...mediaGuarded, prompt: guardedPrompt }) as TInput
+  }
+  if (guardedUser === undefined || guardedUser === userText) return mediaGuarded as TInput
+
+  const guardedPrompt = typeof prompt === 'string' ? guardedUser : Object.freeze({ ...prompt, text: guardedUser })
+  return Object.freeze({ ...mediaGuarded, prompt: guardedPrompt }) as TInput
+}
+
+async function guardDirectImageMedia(input: DirectImageInput, safety: Safety): Promise<DirectImageInput> {
+  if (typeof input.prompt === 'string') return input
 
   const prompt = input.prompt
   const references = (prompt.images ?? []).map((asset, partIndex) => ({
@@ -42,8 +88,8 @@ export async function guardGeneratedImageInput<TInput>(input: TInput, safety: Sa
     ...rest,
     ...(images.length > 0 ? { images: Object.freeze(images) } : {}),
     ...(retainedMask === undefined ? {} : { mask: retainedMask }),
-  })
-  return Object.freeze({ ...input, prompt: guardedPrompt }) as TInput
+  }) as ImagePromptContent
+  return Object.freeze({ ...input, prompt: guardedPrompt })
 }
 
 const maskDependency: MediaGroupDependency = Object.freeze({
@@ -89,11 +135,6 @@ function imageSubject(image: Asset, field: 'images' | 'mask', partIndex: number)
 function isDirectImageInput(value: unknown): value is DirectImageInput {
   if (typeof value !== 'object' || value === null || !('prompt' in value)) return false
   const prompt = value.prompt
-  return (
-    typeof prompt === 'object' &&
-    prompt !== null &&
-    'text' in prompt &&
-    typeof prompt.text === 'string' &&
-    ('images' in prompt || 'mask' in prompt)
-  )
+  if (typeof prompt === 'string') return true
+  return typeof prompt === 'object' && prompt !== null && 'text' in prompt && typeof prompt.text === 'string'
 }

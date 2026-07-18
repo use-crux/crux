@@ -7,6 +7,7 @@ import type { Guardrail } from './guardrail/types'
 import type { GuardrailStreamOption } from './stream/types'
 import type { SafetyTuneOptions, SafetyTunePolicyOptions } from './tune'
 import { validateSafetyTuneOptions } from './tune'
+import { applyBindingApplicability, type SafetyBindingApplicability } from './applicability'
 
 export type SafetyPolicyKind = 'guardrail' | 'constraint' | 'toolPolicy'
 export type SafetyPolicyScope = 'global' | 'prompt' | 'call'
@@ -27,6 +28,8 @@ interface SafetyBindingBase {
   readonly scope: SafetyPolicyScope
   readonly mode: 'enforce' | 'report'
   readonly enabled: boolean
+  /** Safe explanation when a global binding cannot run for this primitive. */
+  readonly dormantReason?: string
   readonly tuned?: readonly ('mode' | 'stream' | 'enabled')[]
 }
 
@@ -64,6 +67,8 @@ export interface BuildSafetyRegistryOptions {
     readonly constraints?: readonly Constraint[]
   }
   readonly tune?: SafetyTuneOptions
+  /** @internal Primitive-owned classification applied after all registry validation. */
+  readonly applicability?: SafetyBindingApplicability
 }
 
 /** Build the effective per-call safety registry without applying precedence. */
@@ -79,7 +84,10 @@ export function buildSafetyRegistry(options: BuildSafetyRegistryOptions): Safety
   )
   assertValidMediaTune(sources, tune)
 
-  const bindings = sources.flatMap((source) => expandBindings(source, tune[source.policy.id]))
+  const expanded = sources.flatMap((source) => expandBindings(source, tune[source.policy.id]))
+  const bindings = options.applicability
+    ? expanded.map((binding) => applyBindingApplicability(binding, options.applicability!))
+    : expanded
   return {
     bindings,
     bindingsFor(targetId) {

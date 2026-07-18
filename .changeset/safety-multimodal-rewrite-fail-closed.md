@@ -41,3 +41,14 @@ audio are guarded before normalization or materialization, while validated trans
 guarded once before reporting or return. Enforced transcript rewrites clear timed segments and
 words without changing provider-native facts. Transcript constraints run exactly once with no
 provider retry: assert failures throw and suggest/report failures remain in canonical audit.
+
+Completed operations now validate every exact Safety binding against their primitive before
+provider work. Inapplicable call and prompt bindings fail closed, while global tuple members remain
+auditable as dormant without suppressing applicable members; duplicate IDs and invalid media tuning
+still fail before dormancy classification.
+
+Typed image prompts now merge prompt guardrails with global and call policies, guard resolved user
+and system text at their exact boundaries, and hand providers a direct prepared prompt without a
+second resolution. Routed prompts require one candidate-stable ordered policy set, lazily guard only
+attempted candidates, and treat candidate input Safety failures as terminal rather than eligible for
+fallback.

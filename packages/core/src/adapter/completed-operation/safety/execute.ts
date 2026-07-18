@@ -1,5 +1,8 @@
 import type { CompletedOperationResult } from "../../../completed-operation/contracts";
-import { createSafety, type Safety } from "../../../safety/session";
+import {
+  createSafetyWithBindingApplicability,
+  type Safety,
+} from "../../../safety/session";
 import { describeCompletedModel } from "../model-description";
 import { guardGeneratedImageInput } from "./image-input";
 import { guardGeneratedImageOutput } from "./image-output";
@@ -15,29 +18,39 @@ import {
   guardTranscriptionInput,
   guardTranscriptionOutput,
 } from "./transcription";
-import { assertCompletedOperationConstraintApplicability } from "./applicability";
+import { completedOperationBindingApplicability } from "./applicability";
 import type { CompletedOperationSafetyOptions } from "./options";
+import type { Guardrail } from "../../../safety/guardrail/types";
 
 /** Build one completed-operation Safety session before provider preflight. */
 export function createCompletedOperationSafety(
   options: Readonly<{
     operation: string;
     model: unknown;
+    promptId?: string;
+    systemPrompt?: string;
+    resolved?: {
+      readonly guardrails?: readonly Guardrail[];
+      readonly metadata?: Readonly<Record<string, unknown>>;
+    };
   }> &
     CompletedOperationSafetyOptions,
 ): Safety | undefined {
   if (!isSafetyCompletedOperation(options.operation)) return undefined;
-  assertCompletedOperationConstraintApplicability(
-    options.operation,
-    options.constraints,
+  const safety = createSafetyWithBindingApplicability(
+    {
+      call: {
+        guardrails: options.guardrails,
+        constraints: options.constraints,
+      },
+      resolved: options.resolved,
+      promptId: options.promptId,
+      model: describeCompletedModel(options.model),
+      systemPrompt: options.systemPrompt,
+      safety: options.safety,
+    },
+    completedOperationBindingApplicability(options.operation),
   );
-
-  const safety = createSafety({
-    call: { guardrails: options.guardrails, constraints: options.constraints },
-    promptId: undefined,
-    model: describeCompletedModel(options.model),
-    safety: options.safety,
-  });
   return safety.enabled ? safety : undefined;
 }
 

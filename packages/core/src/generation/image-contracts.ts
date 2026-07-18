@@ -8,7 +8,10 @@ import type { ContextEntry } from "../prompt/context-types";
 import type { Prompt } from "../prompt/prompt-types";
 import type { MergedInput } from "../prompt/type-utils";
 import type { AnyToolSet } from "../types";
-import type { CompletedOperationModelGuard, RoutingCallOptions } from "../routing/types";
+import type {
+  CompletedOperationModelGuard,
+  RoutingCallOptions,
+} from "../routing/types";
 import type { Guardrail } from "../safety/guardrail/types";
 import type { SafetyTuneOptions } from "../safety/tune";
 
@@ -68,14 +71,18 @@ export type GenerateImageCommonOptions = Readonly<{
   /** Whole-operation and per-attempt timeout budgets. */
   timeout?: OperationTimeout;
   /**
-   * Guardrails applied to canonical prompt references, masks, and generated images.
+   * Guardrails applied to canonical prompt text, typed-prompt system text,
+   * prompt references, masks, and generated images.
    *
-   * Media callbacks receive the original asset as `subject.part.source` and a
-   * stable operation origin. Input strips are written back before provider
-   * normalization; a retained edit mask with no references blocks. Output
-   * strips remove generated images and block on the final image. Report mode
-   * records intent without changing input or result. Provider-native `raw` and
-   * metadata are not guarded.
+   * Direct and resolved prompt text targets `boundary.input.user()`; a typed
+   * prompt's resolved system text targets `boundary.input.model()`. Resolved
+   * prompt guardrails merge with global and call policies before candidate
+   * normalization. Media callbacks receive the original asset as
+   * `subject.part.source` and a stable operation origin. Input strips are
+   * written back before provider normalization; a retained edit mask with no
+   * references blocks. Output strips remove generated images and block on the
+   * final image. Report mode records intent without changing input or result.
+   * Provider-native `raw` and metadata are not guarded.
    */
   guardrails?: readonly Guardrail[];
   /** Per-policy enablement, mode, and stream tuning for attached guardrails. */
@@ -128,14 +135,12 @@ export type GenerateImage<
   TWarning = unknown,
 > = ((
   options: GenerateImageOptions<TModel, TExtra, ImagePrompt>,
-) => Promise<GenerateImageResult<TRaw, TProviderMetadata, TWarning>>) & (<
-  TPrompt extends ImagePrompt,
-  TSelectedModel = TModel,
->(
-  options: GenerateImageOptions<TSelectedModel, TExtra, TPrompt> &
-    CompletedOperationModelGuard<TModel, TSelectedModel> &
-    RoutingCallOptions<TSelectedModel>,
-) => Promise<GenerateImageResult<TRaw, TProviderMetadata, TWarning>>);
+) => Promise<GenerateImageResult<TRaw, TProviderMetadata, TWarning>>) &
+  (<TPrompt extends ImagePrompt, TSelectedModel = TModel>(
+    options: GenerateImageOptions<TSelectedModel, TExtra, TPrompt> &
+      CompletedOperationModelGuard<TModel, TSelectedModel> &
+      RoutingCallOptions<TSelectedModel>,
+  ) => Promise<GenerateImageResult<TRaw, TProviderMetadata, TWarning>>);
 
 /** Native generated image before provider-neutral result validation. */
 export type NativeGeneratedImage =
