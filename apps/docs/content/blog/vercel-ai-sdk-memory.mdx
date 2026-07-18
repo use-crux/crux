@@ -36,7 +36,7 @@ import { z } from 'zod'
 
 const chat = memory({
   id: 'assistant',
-  store,                                            // your storage adapter
+  records,                                          // your record store
   namespace: ({ input }) => `user:${input.userId}`, // isolation per user
   blocks: [recentMessages({ id: 'recent', maxMessages: 12 })],
 })
@@ -55,7 +55,7 @@ const result = await generate(assistant, {
 })
 ```
 
-Each call renders the block into prompt context before generation. After the model finishes, the adapter captures both turns and flushes the write. Streaming works the same way; capture runs after `stream().completion()` resolves, so nothing blocks the token stream.
+Each call renders the block into prompt context before generation. After the model finishes, the adapter captures both turns according to the configured capture mode. Streaming works the same way; capture runs while `stream().completion()` finalizes, after the tokens have already streamed. In `inline` mode (or `afterResponse` without a `waitUntil` hook) capture can delay when `completion()` resolves, but it never blocks token delivery.
 
 Note the `namespace` function. Cross-user memory leakage is the classic memory bug. Making isolation a declared property of the composition, rather than a `WHERE` clause you remember to add, removes that failure mode structurally.
 
@@ -134,7 +134,7 @@ Crux makes the arbitration explicit. Blocks have priorities, and the composed me
 ```ts
 const chat = memory({
   id: 'assistant',
-  store,
+  records,
   namespace: ({ input }) => `user:${input.userId}`,
   capture: { mode: 'afterResponse' },
   budget: { maxTokens: 1200 },
@@ -148,7 +148,7 @@ const chat = memory({
 
 Under pressure, working state survives, then recent messages, then facts. A declared policy, not an accident of concatenation order.
 
-`capture: { mode: 'afterResponse' }` moves capture work off the response path and hands it to `waitUntil` on serverless. Use `detached` plus an explicit `flush()` when you manage background work yourself, or the default `inline` when you need read-your-writes semantics in tests.
+`capture.mode` defaults to `afterResponse`. With `capture.waitUntil`, that mode hands capture work to the serverless hook without making the response wait; without `waitUntil`, the adapter awaits capture before resolving. Use `detached` plus an explicit `flush()` when you manage background work yourself, or `inline` when you need read-your-writes semantics in tests.
 
 ## How do I debug it?
 

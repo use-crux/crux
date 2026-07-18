@@ -96,7 +96,7 @@ export function createConvexEvalHost(
       >,
       hostKind: "convex",
       wakeMode: "durable",
-      hostCapabilities: resolveHostCapabilities(options, ctx),
+      hostCapabilities: resolveHostCapabilities(options),
     });
   };
 
@@ -166,17 +166,12 @@ export function createConvexEvalHost(
 
 function resolveHostCapabilities(
   options: CreateConvexEvalHostOptions,
-  ctx: ConvexEvalActionCtx,
 ): readonly string[] {
   const hasStorage = isStorageComponent(options.component);
   return Object.freeze(
     [...new Set(options.hostCapabilities ?? [])]
       .filter(
-        (capability) =>
-          (capability === "record-store" && hasStorage) ||
-          (capability === "vector-store" &&
-            hasStorage &&
-            typeof ctx.vectorSearch === "function"),
+        (capability) => capability === "record-store" && hasStorage,
       )
       .sort(),
   );
@@ -187,7 +182,7 @@ async function runWithEvalStorage<TResult>(
   ctx: ConvexEvalActionCtx,
   execute: () => Promise<TResult>,
 ): Promise<TResult> {
-  const capabilities = resolveHostCapabilities(options, ctx);
+  const capabilities = resolveHostCapabilities(options);
   if (capabilities.length === 0 || !isStorageComponent(options.component))
     return await execute();
   const storage = convexStorage({ component: options.component, ctx });

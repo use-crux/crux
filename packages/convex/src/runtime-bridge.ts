@@ -115,8 +115,7 @@ export interface CreateConvexRuntimeBridgeOptions<TCtx extends ConvexCtxPort = C
   /**
    * Storage options for the request-scoped default storage.
    *
-   * This is the preferred home for vector index/cache options and custom store
-   * factory overrides.
+   * This is the preferred home for custom store factory overrides.
    */
   readonly storage?: CruxConvexProfileStorageOptions<TCtx>
 }
@@ -138,8 +137,6 @@ export function createConvexRuntimeBridge<TCtx extends ConvexCtxPort = ConvexCtx
   const targetExecutor = options.runtime?.targetExecutor ?? defaultTargetExecutor()
   const storageForCtx = createCruxConvexStorageResolver<TCtx>({
     component: options.component,
-    vectorIndexName: options.storage?.vectorIndexName,
-    semanticCache: options.storage?.semanticCache,
     create: options.storage?.create,
   })
 

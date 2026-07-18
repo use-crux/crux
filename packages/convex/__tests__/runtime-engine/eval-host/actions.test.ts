@@ -31,12 +31,13 @@ describe("createConvexEvalHost()", () => {
       deploymentId: "production-eu",
       token: TOKEN,
       now: () => NOW,
-      hostCapabilities: ["record-store", "asset-store"],
+      hostCapabilities: ["record-store", "vector-store", "asset-store"],
     });
     const ctx = {
       runMutation: async () => {
         throw new Error("Manifest/auth reads must not touch durable state.");
       },
+      vectorSearch: async () => [],
       scheduler: { runAfter: async () => undefined },
     };
     const unauthorized = await actions.handleEvalRequest._handler!(

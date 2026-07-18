@@ -62,11 +62,11 @@ const http = registerCruxEvalRoutes(httpRouter());
 export default http;
 ```
 
-Convex advertises `record-store` and `vector-store` only when a deployed Eval
-requires them and the request context can bind the corresponding component
-service. Unsupported requirements such as `asset-store` remain visible in the
-Eval manifest but absent from host capabilities, so readiness fails before
-inference instead of claiming a service that is not present.
+Convex advertises `record-store` only when a deployed Eval requires it and the
+request context can bind the component service. Unsupported requirements such
+as `vector-store` and `asset-store` remain visible in the Eval manifest but
+absent from host capabilities, so readiness fails before inference instead of
+claiming a service that is not present.
 
 ## Next.js and other serverless functions
 

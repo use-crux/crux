@@ -3,7 +3,7 @@ title: Storage, Memory, Workspaces
 description: Use Convex Storage Beta adapters, memory blocks, blackboards, and Convex file storage from Convex functions.
 ---
 
-Your agent's memory blocks, blackboards, plans, flow state, and workspace files need somewhere durable to live. If your app runs on Convex, `convexRecordStore()` keeps all of that Crux state in your Convex deployment, and `convexStorage()` adds vector search and file assets when a feature needs them.
+Your agent's memory blocks, blackboards, plans, flow state, and workspace files need somewhere durable to live. If your app runs on Convex, `convexRecordStore()` keeps JSON records in your Convex deployment. `convexStorage()` bundles those records and includes file assets only when you pass an explicit `assets` configuration. It does not provide vector search.
 
 ## Shared Records
 
@@ -50,7 +50,40 @@ export function createAssistantMemory(ctx: ActionCtx, threadId: string) {
 }
 ```
 
-Prefer `episodes().record(..., { store, namespace })` from action/runtime code. If a mutation needs to write application-specific memory directly, keep that helper in your app so table names, authorization, and tenancy remain explicit.
+Without a `VectorStore`, blocks configured with `embed` still persist embeddings in their records, but semantic recall falls back to the block's recency/list behavior. Pass an explicit vector backend when you need similarity-ranked recall. For example, pair Convex records with Upstash Vector:
+
+```ts title="convex/agent/memory.ts"
+import { memory, episodes } from "@use-crux/convex/memory";
+import { upstashVectorStore } from "@use-crux/upstash";
+
+const vectors = upstashVectorStore({
+  index: vectorIndex,
+  namespace: `memory:${threadId}`,
+});
+
+const assistantMemory = memory({
+  id: "assistant",
+  records: cruxRecords(ctx),
+  vectors,
+  namespace: `thread:${threadId}`,
+  blocks: [episodes({ id: "episodes", embed })],
+});
+```
+
+From action/runtime code, the standalone episode API takes `records`, `namespace`, and an optional `memoryId`—there is no `store` option:
+
+```ts
+await episodesBlock.record(
+  { content: "User asked about pricing" },
+  {
+    records: cruxRecords(ctx),
+    namespace: `thread:${threadId}`,
+    memoryId: "assistant",
+  },
+);
+```
+
+If a mutation needs to write application-specific memory directly, keep that helper in your app so table names, authorization, and tenancy remain explicit.
 
 ## Blackboards
 
@@ -104,23 +137,28 @@ Convex file storage methods differ by function context. If asset reads are unava
 
 ## Semantic Cache
 
-Semantic cache lookup needs an isolated vector namespace. Do not point it at a store shared with RAG chunks or memory entries unless you intentionally accept cross-feature vector crowding.
+Convex bundled storage supplies records, not vectors. Pair it with an explicit pre-filter-capable `VectorStore` for semantic cache lookup, and isolate that vector namespace from RAG chunks and memory entries.
 
 ```ts
-import { convexStorage } from "@use-crux/convex";
+import { createSemanticCache } from "@use-crux/core/cache";
+import { convexRecordStore } from "@use-crux/convex";
+import { upstashVectorStore } from "@use-crux/upstash";
 
-const cacheStorage = convexStorage({
-  component: components.crux,
-  ctx,
-  vectorIndexName: "by_embedding",
-  semanticCache: { isolatedVectorNamespace: true },
+const cache = createSemanticCache({
+  records: convexRecordStore({ component: components.crux, ctx }),
+  vectors: upstashVectorStore({
+    index: vectorIndex,
+    namespace: "semantic-cache",
+  }),
+  embedding,
+  ttl: 60_000,
 });
 ```
 
 ## Best Practices
 
-- Namespace by thread, project, task, or workflow so data remains tenant-safe and easy to inspect.
-- Use `convexRecordStore()` for JSON records; use `convexAssetStore()` for file bytes.
+- Namespace by thread, project, task, or workflow for key scoping and inspection. Namespaces do not authorize access; enforce tenant access in your Convex functions.
+- Use `convexRecordStore()` for JSON records. Configure `convexAssetStore()` explicitly for file bytes.
 - Keep mutation-only direct table writes app-local.
-- Use a dedicated vector space for semantic cache.
+- Pass an explicit `VectorStore` for semantic recall and use a dedicated vector space for semantic cache.
 - Do not create separate Convex-specific memory, blackboard, or workspace primitives unless Convex infrastructure requires a new lifecycle.

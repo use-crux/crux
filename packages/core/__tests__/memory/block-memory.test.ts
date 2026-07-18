@@ -36,13 +36,14 @@ function mockResponse(text: string, toolCalls?: AdapterResponse['toolCalls']): A
   }
 }
 
-function testAdapter(text = 'assistant answer') {
+function testAdapter(text = 'assistant answer', firstToolCalls?: AdapterResponse['toolCalls']) {
+  let callCount = 0
   return makeAdapter({
     providerId: 'test',
     async call() {
       return {
         raw: { id: 'raw-1' },
-        extracted: mockResponse(text),
+        extracted: callCount++ === 0 && firstToolCalls ? mockResponse('', firstToolCalls) : mockResponse(text),
       }
     },
     async stream() {
@@ -297,7 +298,7 @@ describe('memory block system', () => {
     expect(rendered).not.toContain('low priority detail')
   })
 
-  it('captures completed adapter turns after generation and flushes deferred work', async () => {
+  it('flushes afterResponse capture before generation resolves when waitUntil is absent', async () => {
     const store = inMemoryRecordStore()
     const recent = recentMessages({ id: 'recent', maxMessages: 5 })
     const mem = memory({
@@ -319,11 +320,200 @@ describe('memory block system', () => {
       model: 'model-1',
       input: { threadId: 't1', message: 'Hello' },
     })
-    await mem.flush()
 
     const turns = await recent.list({ records: store, namespace: 'thread:t1', memoryId: 'capture' })
     expect(turns.map((turn) => turn.role)).toEqual(['user', 'assistant'])
     expect(turns[1].content).toBe('stored answer')
+  })
+
+  it('reports rejected afterResponse capture when the fallback flush is required', async () => {
+    const mem = memory({
+      id: 'rejected-after-response-capture',
+      namespace: 'thread:1',
+      blocks: [
+        memoryBlock({
+          id: 'rejected-capture',
+          kind: 'custom',
+          captureTurn: async () => {
+            throw new Error('capture failed')
+          },
+        }),
+      ],
+    })
+    const p = makePrompt({
+      id: 'rejected-after-response-capture-prompt',
+      use: [mem],
+      input: z.object({ message: z.string() }),
+      prompt: ({ input }) => input.message,
+    })
+
+    await expect(
+      testAdapter().generate(p, { model: 'model-1', input: { message: 'Hello' } }),
+    ).rejects.toThrow('capture failed')
+  })
+
+  it('hands afterResponse adapter capture to waitUntil without blocking generation', async () => {
+    let releaseCapture!: () => void
+    const captureCanFinish = new Promise<void>((resolve) => {
+      releaseCapture = resolve
+    })
+    const waitUntilTasks: Promise<unknown>[] = []
+    const store = inMemoryRecordStore()
+    const factBlock = facts({
+      id: 'facts',
+      extract: async () => {
+        await captureCanFinish
+        return [{ content: 'Capture completed' }]
+      },
+    })
+    const mem = memory({
+      id: 'after-response-wait-until',
+      records: store,
+      namespace: 'thread:1',
+      capture: {
+        mode: 'afterResponse',
+        waitUntil: (promise) => waitUntilTasks.push(promise),
+      },
+      blocks: [factBlock],
+    })
+    const p = makePrompt({
+      id: 'after-response-wait-until-prompt',
+      use: [mem],
+      input: z.object({ message: z.string() }),
+      prompt: ({ input }) => input.message,
+    })
+
+    await testAdapter().generate(p, { model: 'model-1', input: { message: 'Hello' } })
+
+    await expect(mem.proposals.list({ namespace: 'thread:1' })).resolves.toEqual([])
+    expect(waitUntilTasks).toHaveLength(1)
+
+    releaseCapture()
+    await waitUntilTasks[0]
+    const proposals = await mem.proposals.list({ namespace: 'thread:1' })
+    expect(proposals.map((proposal) => proposal.candidate)).toEqual([{ content: 'Capture completed' }])
+  })
+
+  it('leaves detached adapter capture pending until flush', async () => {
+    let releaseCapture!: () => void
+    const captureCanFinish = new Promise<void>((resolve) => {
+      releaseCapture = resolve
+    })
+    const writes: string[] = []
+    const mem = memory({
+      id: 'detached-capture',
+      namespace: 'thread:1',
+      capture: { mode: 'detached' },
+      blocks: [
+        memoryBlock({
+          id: 'slow-capture',
+          kind: 'custom',
+          captureTurn: async () => {
+            await captureCanFinish
+            writes.push('captured')
+          },
+        }),
+      ],
+    })
+    const p = makePrompt({
+      id: 'detached-capture-prompt',
+      use: [mem],
+      input: z.object({ message: z.string() }),
+      prompt: ({ input }) => input.message,
+    })
+
+    await testAdapter().generate(p, { model: 'model-1', input: { message: 'Hello' } })
+    expect(writes).toEqual([])
+
+    let flushed = false
+    const flush = mem.flush().then(() => {
+      flushed = true
+    })
+    await Promise.resolve()
+    expect(flushed).toBe(false)
+
+    releaseCapture()
+    await flush
+    expect(writes).toEqual(['captured'])
+  })
+
+  it('keeps inline adapter capture on the generation path', async () => {
+    let releaseCapture!: () => void
+    const captureCanFinish = new Promise<void>((resolve) => {
+      releaseCapture = resolve
+    })
+    let captureStarted!: () => void
+    const captureDidStart = new Promise<void>((resolve) => {
+      captureStarted = resolve
+    })
+    const writes: string[] = []
+    const mem = memory({
+      id: 'inline-adapter-capture',
+      namespace: 'thread:1',
+      capture: { mode: 'inline' },
+      blocks: [
+        memoryBlock({
+          id: 'slow-capture',
+          kind: 'custom',
+          captureTurn: async () => {
+            captureStarted()
+            await captureCanFinish
+            writes.push('captured')
+          },
+        }),
+      ],
+    })
+    const p = makePrompt({
+      id: 'inline-adapter-capture-prompt',
+      use: [mem],
+      input: z.object({ message: z.string() }),
+      prompt: ({ input }) => input.message,
+    })
+
+    let generated = false
+    const generation = testAdapter()
+      .generate(p, { model: 'model-1', input: { message: 'Hello' } })
+      .then(() => {
+        generated = true
+      })
+    await captureDidStart
+    expect(generated).toBe(false)
+
+    releaseCapture()
+    await generation
+    expect(writes).toEqual(['captured'])
+  })
+
+  it('forwards adapter tool events to episodes capture hooks', async () => {
+    const store = inMemoryRecordStore()
+    const episodeBlock = episodes({ id: 'episodes' })
+    const mem = memory({
+      id: 'tool-episodes',
+      records: store,
+      namespace: 'thread:1',
+      blocks: [episodeBlock],
+    })
+    const p = makePrompt({
+      id: 'tool-episodes-prompt',
+      use: [mem],
+      input: z.object({ message: z.string() }),
+      prompt: ({ input }) => input.message,
+      tools: {
+        lookup: {
+          description: 'Look up a value.',
+          parameters: z.object({ query: z.string() }),
+          execute: async () => ({ answer: 'found' }),
+        },
+      },
+    })
+    const adapter = testAdapter('done', [
+      { id: 'tool-call-1', name: 'lookup', args: { query: 'memory' } },
+    ])
+
+    await adapter.generate(p, { model: 'model-1', input: { message: 'Use lookup' } })
+
+    const entries = await episodeBlock.list({ records: store, namespace: 'thread:1', memoryId: 'tool-episodes' })
+    expect(entries.map((entry) => entry.content)).toContain('tool:lookup: {"answer":"found"}')
   })
 
   it('supports standalone working state blocks', async () => {
@@ -499,6 +689,25 @@ describe('memory block system', () => {
     expect(rendered).not.toContain('someone else')
     expect(rendered).not.toContain('another block')
     expect(rendered).not.toContain('Shipping address')
+  })
+
+  it('skips extraction entirely for manual write mode', async () => {
+    const store = inMemoryRecordStore()
+    const extract = vi.fn(async () => [{ content: 'Should never be extracted', confidence: 1 }])
+    const manualFacts = facts({ id: 'manual-facts', extract, write: { mode: 'manual' } })
+    const mem = memory({
+      id: 'assistant',
+      records: store,
+      namespace: 'user:manual',
+      capture: { mode: 'inline' },
+      blocks: [manualFacts],
+    })
+
+    await mem.captureTurn({ messages: [{ role: 'user', content: 'Remember this' }] })
+
+    expect(extract).not.toHaveBeenCalled()
+    expect(await mem.proposals.list()).toEqual([])
+    expect(await manualFacts.list({ records: store, namespace: 'user:manual', memoryId: 'assistant' })).toEqual([])
   })
 
   it('supports procedural memories without mutating prompt definitions', async () => {

@@ -92,8 +92,6 @@ describe('Convex profile runtime', () => {
     const createStore = vi.fn((ctx, defaults) => {
       expect(ctx).toMatchObject({ tenantId: 'tenant-1' })
       expect(defaults.component).toBe(components.crux)
-      expect(defaults.vectorIndexName).toBe('by_custom_embedding')
-      expect(defaults.semanticCache).toEqual({ isolatedVectorNamespace: true })
       return records
     })
     const ctx: ConvexCtxPort & { tenantId: string } = {
@@ -114,8 +112,6 @@ describe('Convex profile runtime', () => {
       components,
       namespace: ({ target }) => `profile:${target?.threadId ?? 'missing'}`,
       storage: {
-        vectorIndexName: 'by_custom_embedding',
-        semanticCache: { isolatedVectorNamespace: true },
         create: createStore,
       },
     })

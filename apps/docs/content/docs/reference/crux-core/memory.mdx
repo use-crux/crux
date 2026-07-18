@@ -23,7 +23,7 @@ Composes memory blocks into a prompt-usable memory object.
 ```ts
 const mem = memory({
   id: "assistant",
-  store,
+  records,
   namespace: ({ input }) => `user:${input.userId}`,
   capture: { mode: "afterResponse" },
   budget: { maxTokens: 1200 },
@@ -58,27 +58,15 @@ prompt({
 ```ts
 interface MemoryConfig {
   id: string;
-  store?: RecordStore;
-  namespace:
-    | string
-    | ((ctx: {
-        input?: Record<string, unknown>;
-        promptId?: string;
-      }) => string | Promise<string>);
+  storage?: Storage;
+  records?: RecordStore;
+  vectors?: VectorStore;
+  namespace: MemoryNamespace;
   blocks: readonly MemoryBlock[];
-  capture?: {
-    mode?: "inline" | "afterResponse" | "detached";
-    waitUntil?: (promise: Promise<unknown>) => void;
-  };
-  processing?: {
-    mode?: "deferred" | "inline" | "manual";
-    waitUntil?: (promise: Promise<unknown>) => void;
-  };
-  budget?: { maxTokens?: number };
+  capture?: MemoryCaptureConfig;
+  budget?: MemoryBudget;
 }
 ```
-
-`capture` is the beta field for scheduling memory writes. `processing` is deprecated compatibility: `deferred` maps to `afterResponse`, `inline` remains `inline`, and `manual` maps to `detached` because capture still starts immediately.
 
 Dynamic namespaces are resolved consistently for context rendering, capture, direct block calls, proposal operations, and tools. `asTools()` is synchronous, so async namespaces or async block tools throw clear errors at that boundary instead of falling back to an empty namespace or silently dropping tools.
 
@@ -143,13 +131,17 @@ type MemoryEntryRenderStrategy =
 
 `reflections(config)` stores generated reflections on supplied memory text. It is a small wrapper for reflection workflows and can be expanded by custom blocks when products need richer behavior.
 
+Methods: `reflect(options)`, plus the extractive block's `add(entry, options)`, `find(query, options)`, `list(options)`, `delete(key, options)`, and `render(options)`.
+
 ## Runtime Options
 
 Direct block methods accept:
 
 ```ts
 type MemoryRuntimeOptions = {
+  storage?: Storage;
   records: RecordStore;
+  vectors?: VectorStore;
   namespace: string;
   memoryId?: string;
   traceId?: string;
@@ -163,6 +155,8 @@ Use the same `memoryId` as the composed `memory()` object when direct block call
 
 `captureTurn(turn, options)` captures completed user/assistant turns. `captureToolEvent(event, options)` captures tool calls with available `toolCallId`, `toolName`, `args`, `result`, and `error`.
 
+Adapters also forward each tool call to blocks' `captureToolEvent` hooks, so `episodes()` records tool activity.
+
 ```ts
 await mem.captureToolEvent({
   toolCallId: "call_1",
@@ -172,7 +166,11 @@ await mem.captureToolEvent({
 });
 ```
 
-Use `flush()` to await pending work after `afterResponse` or `detached` capture.
+`capture.mode` defaults to `afterResponse`:
+
+- `inline` awaits capture before `captureTurn()` or adapter generation resolves.
+- `afterResponse` starts capture after generation. With `capture.waitUntil`, the work is handed to that hook and the response does not wait. Without `waitUntil`, the adapter awaits capture before resolving, which is the safe serverless default.
+- `detached` starts capture in the background and the adapter does not await it. Call `flush()` to await the work.
 
 ## Proposals
 
@@ -190,7 +188,7 @@ await mem.proposals.edit(pending[1].id, { content: "Edited fact" });
 await mem.proposals.reject(pending[2].id, { reason: "Not true" });
 ```
 
-`facts()` and `procedures()` default to `write: { mode: 'propose' }`. Use `write: { mode: 'auto' }` when the product has a safe automatic write path.
+`facts()` and `procedures()` default to `write: { mode: 'propose' }`. Use `write: { mode: 'auto' }` when the product has a safe automatic write path. With `write: { mode: 'manual' }`, capture extracts nothing automatically and writes happen only through direct block method calls.
 
 Proposal transitions are pending-only. Approved and rejected proposals cannot be approved again, rejected again, or edited into duplicate writes.
 
@@ -223,7 +221,7 @@ Budgeted memory rendering emits a composed `memory.read` span with a `memory.sna
     memoryId: "assistant",
     memoryType: "memory",
     operation: "render",
-    namespaceHash: "sha256:...",
+    namespaceHash: "f0112a03",
     budgetMaxTokens: 1200,
     budgetIncludedBlocks: ["facts"],
     budgetTrimmedBlocks: ["facts"],

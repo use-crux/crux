@@ -16,7 +16,7 @@ import type { DecodedStoreDoc, StoreDocCodec, StoreDocCodecOptions, StoreDocReco
  * Create the shared Convex store document codec.
  *
  * The codec writes the current `_cruxDoc` format and decodes enough metadata
- * for stores to apply TTL cleanup, vector scores, and top-level filters.
+ * for stores to apply TTL cleanup and top-level filters.
  */
 export function createStoreDocCodec(options: StoreDocCodecOptions = {}): StoreDocCodec {
   const now = options.now ?? (() => Date.now())
@@ -73,7 +73,6 @@ function decodeCruxRecordDoc(doc: StoreDocRecord, now: () => number): DecodedSto
   return {
     key,
     value,
-    ...(typeof doc._score === 'number' ? { score: doc._score } : {}),
     expired: expiresAt !== undefined && now() >= expiresAt,
     ...(expiresAt !== undefined ? { expiresAt } : {}),
     encoding: 'crux-doc',

@@ -6,11 +6,6 @@ import type {
   RecordStore,
   RecordWriteOptions,
   Storage,
-  VectorHit,
-  VectorRecord,
-  VectorSearchQuery,
-  VectorStore,
-  VectorStoreCapabilities,
 } from '@use-crux/core/storage'
 import { getHooks } from '@use-crux/core'
 import { createAsyncScopeFacet } from '@use-crux/core/internal/async-scope'
@@ -129,33 +124,8 @@ export const convexRuntimeRecords: RecordStore = {
   },
 }
 
-function resolveRuntimeVectors(): VectorStore {
-  const vectors = resolveRuntimeStorage().vectors
-  if (!vectors) {
-    throw new Error('No Convex Crux runtime vector storage is active. Pass storage.vectors or use convexStorage().')
-  }
-  return vectors
-}
-
-export const convexRuntimeVectors: VectorStore = {
-  _tag: 'VectorStore',
-  upsert(records: readonly VectorRecord[]): Promise<void> {
-    return resolveRuntimeVectors().upsert(records)
-  },
-  delete(keys: readonly string[]): Promise<void> {
-    return resolveRuntimeVectors().delete(keys)
-  },
-  search(query: VectorSearchQuery): Promise<readonly VectorHit[]> {
-    return resolveRuntimeVectors().search(query)
-  },
-  capabilities(): VectorStoreCapabilities {
-    return resolveRuntimeVectors().capabilities()
-  },
-}
-
 export const convexRuntimeStorage: Storage = {
   records: convexRuntimeRecords,
-  vectors: convexRuntimeVectors,
   get assets() {
     return resolveRuntimeStorage().assets
   },

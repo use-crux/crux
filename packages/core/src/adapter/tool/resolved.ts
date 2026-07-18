@@ -26,7 +26,7 @@ export function readSkillActivationSession(resolved: ResolvedPrompt): SkillActiv
 
 /**
  * Capture a completed generation turn into every memory bound to the
- * resolved prompt, then flush.
+ * resolved prompt, then flush when required by its capture mode.
  *
  * No-op when the prompt has no memory bindings. User messages are read
  * from the canonical history; the assistant turn comes from the final
@@ -50,30 +50,37 @@ export async function captureMemoryTurn(
     .filter((message) => message.role === 'user')
     .map((message) => ({ role: 'user', content: messageText(message) }))
   const assistantMessages = args.assistantText !== undefined ? [{ role: 'assistant', content: args.assistantText }] : []
+  const toolEvents = args.toolCalls?.map((toolCall) => ({
+    ...(toolCall.id ? { toolCallId: toolCall.id } : {}),
+    toolName: toolCall.name,
+    args: toolCall.args,
+    ...(toolCall.result !== undefined ? { result: toolCall.result } : {}),
+    ...(toolCall.error !== undefined ? { error: toolCall.error } : {}),
+  }))
 
   await Promise.all(
     resolved.memoryBindings.map(async (binding) => {
+      const options = {
+        input: binding.input ?? args.input,
+        promptId: binding.promptId ?? args.promptId,
+      }
       await binding.memory.captureTurn(
         {
           messages: [...userMessages, ...assistantMessages],
-          toolEvents: args.toolCalls?.map((toolCall) => ({
-            ...(toolCall.id ? { toolCallId: toolCall.id } : {}),
-            toolName: toolCall.name,
-            args: toolCall.args,
-            ...(toolCall.result !== undefined ? { result: toolCall.result } : {}),
-            ...(toolCall.error !== undefined ? { error: toolCall.error } : {}),
-          })),
+          toolEvents,
           source: { promptId: binding.promptId ?? args.promptId },
         },
-        {
-          input: binding.input ?? args.input,
-          promptId: binding.promptId ?? args.promptId,
-        },
+        options,
       )
-      await binding.memory.flush({
-        input: binding.input ?? args.input,
-        promptId: binding.promptId ?? args.promptId,
-      })
+      for (const event of toolEvents ?? []) {
+        await binding.memory.captureToolEvent(event, options)
+      }
+
+      const mode = binding.memory.config?.capture?.mode ?? 'afterResponse'
+      const hasWaitUntil = typeof binding.memory.config?.capture?.waitUntil === 'function'
+      if (mode === 'inline' || (mode === 'afterResponse' && !hasWaitUntil)) {
+        await binding.memory.flush(options)
+      }
     }),
   )
 }

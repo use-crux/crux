@@ -14,12 +14,10 @@ import type {
   ConvexCruxStorageComponent,
   ConvexCruxStorageMemoryComponent,
   ConvexStoreDocumentComponent,
-  ConvexStoreDocumentComponentIoOptions,
   ConvexStoreDocumentComponentReadOptions,
 } from './store-component'
 import type {
   ComponentDocumentPort,
-  StoreDocDenseSearchQuery,
   StoreDocPage,
   StoreDocPageQuery,
   StoreDocRecord,
@@ -31,13 +29,6 @@ import { STORE_DOC_COMPONENT_SPEC } from './store-doc'
 export interface InMemoryConvexStoreDocumentComponentOptions {
   /** Initial raw documents available to server storage adapters and React reads. */
   readonly docs?: readonly StoreDocRecord[]
-  /**
-   * Optional dense-search substitute.
-   *
-   * Return documents in relevance order and include `_score` on records when a
-   * vector score should be surfaced by `VectorStore.search()`.
-   */
-  readonly denseSearch?: (query: StoreDocDenseSearchQuery, docs: readonly StoreDocRecord[]) => readonly StoreDocRecord[]
 }
 
 /**
@@ -110,9 +101,6 @@ export function createInMemoryConvexStoreDocumentComponent(
     async delete(key) {
       docs.delete(key)
     },
-    async searchDense(query) {
-      return options.denseSearch ? options.denseSearch(query, sortedDocs(docs)) : []
-    },
   }
 
   const ctx: ConvexCtxPort = {
@@ -157,7 +145,7 @@ export function createInMemoryConvexStoreDocumentComponent(
     table: STORE_DOC_COMPONENT_SPEC.table,
     ctx,
     useQuery,
-    io(_ctx: ConvexCtxPort, _options: ConvexStoreDocumentComponentIoOptions) {
+    io(_ctx: ConvexCtxPort) {
       return port
     },
     reads(args: ConvexStoreDocumentComponentReadOptions) {

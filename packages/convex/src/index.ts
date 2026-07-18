@@ -1,8 +1,8 @@
 /**
  * `@use-crux/convex` — Convex storage adapter for Crux.
  *
- * Provides Storage Beta factories (`convexRecordStore`, `convexVectorStore`,
- * and `convexStorage`) plus profile helpers for Convex request lifecycles.
+ * Provides Convex-backed records and asset storage plus profile helpers for
+ * Convex request lifecycles.
  *
  * **Setup:** Install the crux Convex component and use the component ref:
  *
@@ -61,12 +61,10 @@ export type {
   ConvexCruxStorageMemoryComponent,
   ConvexCruxStorageTransportComponent,
   ConvexStoreDocumentComponent,
-  ConvexStoreDocumentComponentIoOptions,
   ConvexStoreDocumentComponentReadOptions,
 } from "./store-component";
 export type {
   ComponentDocumentPort,
-  StoreDocDenseSearchQuery,
   StoreDocPage,
   StoreDocPageQuery,
   StoreDocRecord,

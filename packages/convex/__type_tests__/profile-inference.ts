@@ -233,10 +233,8 @@ const tenantProfile = createCruxConvex<TenantConvexCtx>({
     agent: { agent: true } as never,
   },
   storage: {
-    vectorIndexName: 'by_tenant_embedding',
     create(ctx, defaults) {
       expectTypeOf(ctx.tenantId).toEqualTypeOf<string>()
-      expectTypeOf(defaults.vectorIndexName).toEqualTypeOf<string>()
       expectTypeOf(defaults.createComponentStorage(ctx)).toEqualTypeOf<Storage>()
       return defaults.createComponentStorage(ctx)
     },
