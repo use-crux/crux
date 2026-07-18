@@ -63,20 +63,22 @@ export function createInvocationDeferServices(
 }
 
 /**
- * Create root-owned defer services for a long-lived-process primitive.
+ * Create root-owned defer services for an automatically opened primitive.
  *
- * Primitive drains start immediately at scope close. No host retention claim
- * is made; serverless teardown still requires an invocation host binding.
+ * Primitive drains always start immediately at scope close. When configured,
+ * the host binding supplies uniform capability facts while root retention only
+ * waits for that already-running drain to settle.
  */
 export function createPrimitiveDeferServices(
   rootScope: ExecutionScope,
+  binding?: CruxHostBinding,
 ): InvocationDeferServices {
   return createDeferServices(
     rootScope,
     {
-      limits: SERVERLESS_DEFER_POLICY,
-      supportsInline: true,
-      durableFinalization: false,
+      limits: binding?.limits ?? SERVERLESS_DEFER_POLICY,
+      supportsInline: binding?.supportsInline ?? true,
+      durableFinalization: binding?.durableFinalization ?? false,
       schedule(task) {
         void task.run().catch((error: unknown) => {
           console.error(

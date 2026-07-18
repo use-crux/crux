@@ -11,7 +11,7 @@ import type {
 
 const DEFER_OBSERVABILITY_FLUSH_TIMEOUT_MS = 3_000;
 
-/** Schedule the invocation controller's retained drain and track its settlement. */
+/** Schedule a controller drain and expose its full retained settlement. */
 export function scheduleInvocationDeferDrain(
   controller: ScopeDeferController,
   services: InvocationDeferServices,
@@ -66,8 +66,11 @@ export function scheduleInvocationDeferDrain(
       );
     });
   }
-  controller.executionScope.trackPending(retained.promise);
-  return Object.freeze({ committed, settled: settlement.promise });
+  return Object.freeze({
+    committed,
+    settled: settlement.promise,
+    retained: retained.promise,
+  });
 }
 
 function skipsInlineDrain(outcome: ScopeCloseOutcome): boolean {

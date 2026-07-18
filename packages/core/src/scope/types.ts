@@ -43,7 +43,7 @@ export interface ScopeRetainedTask {
   cancel(reason?: unknown): void;
 }
 
-/** Provider-neutral capability that retains one invocation root. */
+/** Provider-neutral capability that retains one execution root. */
 export interface CruxHostBinding {
   readonly kind: "node" | "next" | "vercel" | "workers" | (string & {});
   /** Whether this binding may contribute ambient invocation scopes. */

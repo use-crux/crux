@@ -95,18 +95,18 @@ export function createExecutionScope(
   return scope;
 }
 
-/** Associate a root with the host binding that owns its retention callback. */
+/** Associate an execution root with the host binding that retains its pending set. */
 export function bindRootRetention(
   scope: ExecutionScope,
   binding: CruxHostBinding,
 ): void {
   const root = scope.root;
   const rootState = stateFor(root).rootState;
-  if (root !== scope || root.descriptor.kind !== "invocation") {
-    throw new TypeError("Host retention may only bind an invocation root.");
+  if (root !== scope) {
+    throw new TypeError("Host retention may only bind an execution root.");
   }
   if (rootState.retention) {
-    throw new TypeError("The invocation root already has a host binding.");
+    throw new TypeError("The execution root already has a host binding.");
   }
   rootState.retention = createRootRetentionGate(binding, rootState.pending);
 }
@@ -118,7 +118,7 @@ export function enqueueRetainedTask(
 ): void {
   const retention = stateFor(scope.root).rootState.retention;
   if (!retention) {
-    throw new TypeError("The invocation root has no host retention binding.");
+    throw new TypeError("The execution root has no host retention binding.");
   }
   retention.enqueueTask(task);
 }
@@ -132,7 +132,7 @@ function trackRootPending(
   rootState.retention?.noteFirstPending();
 }
 
-/** Allocate the next generated id from the invocation root. */
+/** Allocate the next generated id from the execution root. */
 export function allocateScopeId(
   parent: ExecutionScope,
   kind: ScopeKind,
@@ -226,16 +226,25 @@ function closeScope(scope: ExecutionScope, outcome: ScopeCloseOutcome): void {
   const state = stateFor(scope);
   if (state.state !== "open") return;
   state.state = "closing";
+  let retentionFailure: { readonly error: unknown } | undefined;
   for (let index = 0; index < state.closeHooks.length; index += 1) {
+    let operation: void | PromiseLike<void>;
     try {
-      const operation = state.closeHooks[index]?.(outcome);
-      if (isThenable(operation)) scope.trackPending(operation);
+      operation = state.closeHooks[index]?.(outcome);
     } catch (error) {
       console.error("Crux execution scope close hook failed.", error);
+      continue;
+    }
+    if (!isThenable(operation)) continue;
+    try {
+      scope.trackPending(operation);
+    } catch (error) {
+      retentionFailure ??= Object.freeze({ error });
     }
   }
   state.state = "sealed";
   state.sealedReason = sealedReasonFor(outcome);
+  if (retentionFailure) throw retentionFailure.error;
 }
 
 function writableTarget(

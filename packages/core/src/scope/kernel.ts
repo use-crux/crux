@@ -108,7 +108,7 @@ export function currentScopeFacet<T>(slot: ScopeFacetSlot<T>): T | undefined {
   return currentScope()?.facet(slot);
 }
 
-/** Return active scope descriptors from nearest scope to invocation root. */
+/** Return active scope descriptors from nearest scope to execution root. */
 export function currentScopeStack(): readonly ScopeDescriptor[] {
   const descriptors: ScopeDescriptor[] = [];
   let scope = executionScopeFacet.current();

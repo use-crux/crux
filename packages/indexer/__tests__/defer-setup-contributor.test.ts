@@ -36,8 +36,9 @@ describe('defer setup contributor', () => {
         }),
         expect.objectContaining({ code: 'DEFER_MAINTENANCE_NOT_PROVEN' }),
         expect.objectContaining({
-          code: 'DEFER_DURABLE_FINALIZATION_NOT_PROVEN',
-          resource: 'host-lifetime',
+          code: 'DEFER_HOST_CAPABILITY_NOT_PROVEN',
+          resource: 'next',
+          remediation: 'Add `host: next()` to config() in crux.config.ts.',
         }),
       ]),
     )
@@ -108,11 +109,17 @@ describe('defer setup contributor', () => {
     await expect(contributor.plan({ root, mode: 'plan' })).resolves.toEqual([])
   })
 
-  it('treats callback references as inline and checks host integration per file', async () => {
+  it('treats callback references as inline and checks freezing-host integration per file', async () => {
     const root = await mkdtemp(join(tmpdir(), 'crux-defer-setup-'))
     await writeFile(
       join(root, 'package.json'),
-      JSON.stringify({ dependencies: { '@use-crux/core': 'workspace:*' } }),
+      JSON.stringify({
+        dependencies: {
+          '@use-crux/core': 'workspace:*',
+          '@use-crux/next': 'workspace:*',
+          next: '^16',
+        },
+      }),
     )
     await mkdir(join(root, 'src'))
     await writeFile(
@@ -149,7 +156,13 @@ describe('defer setup contributor', () => {
     const root = await mkdtemp(join(tmpdir(), 'crux-defer-setup-'))
     await writeFile(
       join(root, 'package.json'),
-      JSON.stringify({ dependencies: { '@use-crux/core': 'workspace:*' } }),
+      JSON.stringify({
+        dependencies: {
+          '@use-crux/core': 'workspace:*',
+          '@use-crux/next': 'workspace:*',
+          next: '^16',
+        },
+      }),
     )
     await mkdir(join(root, 'src'))
     await writeFile(

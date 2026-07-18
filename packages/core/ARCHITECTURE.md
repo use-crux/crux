@@ -51,10 +51,12 @@ Crux public APIs use names that describe the thing a user is declaring or doing:
 ### Host retention bindings
 
 `config({ host })` installs a provider-neutral `CruxHostBinding` in the same
-restorable hook layer as `runtime`. Binding-opened invocation roots own one
-functional retention gate: completion-gated root tasks queue until the platform
-callback runs, while already-running inner drains only extend the shared live
-pending set. The first signal calls `binding.retain(work)` exactly once.
+restorable hook layer as `runtime`. Every configured execution root lazily owns
+one functional retention gate: completion-gated invocation tasks queue until
+the platform callback runs, while primitive drains start immediately and extend
+the shared live pending set. The first pending signal calls
+`binding.retain(work)` exactly once. A retention-port failure propagates after
+deterministic sealing because Core could not establish the acceptance guarantee.
 
 Core exports `node()` from `/defer/node`; `@use-crux/next`,
 `@use-crux/cloudflare`, and `@use-crux/vercel` inject `after()`,

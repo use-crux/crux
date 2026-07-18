@@ -193,6 +193,10 @@ Inside a Crux agent turn, adapter call, tool execution, or Safety session,
 nearest execution scope and starts when that scope closes, so a nested tool can
 begin its cleanup while the enclosing model call continues.
 
+On a freezing platform, the configured `host` capability applies to these
+primitive roots too: it keeps an already-started drain alive without delaying
+that drain until the response boundary.
+
 At a handler's root level, configure an explicit platform retention capability
 once, then call `defer()` without a route wrapper on ambient hosts:
 

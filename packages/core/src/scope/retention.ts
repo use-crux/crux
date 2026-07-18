@@ -7,6 +7,10 @@ interface QueuedRetainedTask {
   started: boolean;
 }
 
+interface RetentionFailure {
+  readonly error: unknown;
+}
+
 /** Functional gate joining platform completion with the live root pending set. */
 export interface RootRetentionGate {
   enqueueTask(task: ScopeRetainedTask): void;
@@ -21,6 +25,7 @@ export function createRootRetentionGate(
   const queued: QueuedRetainedTask[] = [];
   let retained = false;
   let started = false;
+  let failure: RetentionFailure | undefined;
 
   const start = (entry: QueuedRetainedTask): void => {
     if (entry.started) return;
@@ -35,13 +40,19 @@ export function createRootRetentionGate(
   };
 
   const retainOnce = (): void => {
+    if (failure) throw failure.error;
     if (retained) return;
     retained = true;
-    binding.retain(async () => {
-      started = true;
-      for (const entry of queued) start(entry);
-      await pending.whenIdle();
-    });
+    try {
+      binding.retain(async () => {
+        started = true;
+        for (const entry of queued) start(entry);
+        await pending.whenIdle();
+      });
+    } catch (error) {
+      failure = Object.freeze({ error });
+      throw error;
+    }
   };
 
   return Object.freeze({
@@ -57,7 +68,12 @@ export function createRootRetentionGate(
       };
       queued.push(entry);
       pending.track(gate);
-      retainOnce();
+      try {
+        retainOnce();
+      } catch {
+        // The scope kernel re-observes and propagates this acceptance failure
+        // when it tracks the defer close hook's returned settlement.
+      }
       if (started) start(entry);
     },
     noteFirstPending: retainOnce,

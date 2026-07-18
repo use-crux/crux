@@ -1,12 +1,17 @@
 /** Lazy deferred-work capability for active Crux primitive scopes. */
 
-import { currentScope } from '../../scope/kernel'
+import { currentScope, resolveConfiguredHost } from '../../scope/kernel'
+import type { ExecutionScope } from '../../scope/contracts'
+import { bindRootRetention } from '../../scope/state'
 import {
   currentDeferRegistration,
   currentScopeDeferController,
   type DeferRegistrationContext,
 } from './context'
-import { createScopeDeferController } from './invocation-scope'
+import {
+  createScopeDeferController,
+  type ScopeDeferController,
+} from './invocation-scope'
 import { createPrimitiveDeferServices } from './invocation-services'
 
 /**
@@ -22,15 +27,24 @@ export function resolveDeferRegistration():
   const scope = currentScope()
   if (!scope) return undefined
 
+  const inheritedController = currentScopeDeferController()
   const controller =
-    currentScopeDeferController() ??
-    createScopeDeferController(
-      scope.root,
-      createPrimitiveDeferServices(scope.root),
-    )
+    inheritedController ?? createPrimitiveRootController(scope.root)
   return Object.freeze({
     scope: controller,
     phase: 'handler' as const,
     depth: 0,
   })
+}
+
+/** Attach configured capabilities and lazily create one primitive-root controller. */
+function createPrimitiveRootController(
+  rootScope: ExecutionScope,
+): ScopeDeferController {
+  const binding = resolveConfiguredHost()
+  if (binding) bindRootRetention(rootScope, binding)
+  return createScopeDeferController(
+    rootScope,
+    createPrimitiveDeferServices(rootScope, binding),
+  )
 }

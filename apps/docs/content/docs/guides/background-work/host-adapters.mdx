@@ -1,0 +1,96 @@
+---
+title: Author a host adapter
+description: Implement a provider-neutral retention binding and strict invocation boundary for another platform.
+---
+
+Use this page when a platform has no first-party Crux package. Application
+authors should start with [Host support](/docs/guides/background-work/hosts).
+
+## The binding contract
+
+```ts
+import type { CruxHostBinding } from "@use-crux/core";
+
+const binding: CruxHostBinding = {
+  kind: "fastly",
+  invocationScope: true,
+  retain(work) {
+    platform.waitUntil(work());
+  },
+  supportsInline: true,
+  durableFinalization: false,
+  limits: {
+    maxDrainMs: 30_000,
+    maxCallbacks: 64,
+    concurrency: 4,
+    maxNestingDepth: 4,
+  },
+};
+```
+
+`retain(work)` is called lazily and at most once per execution root. The `work`
+callback starts completion-gated tasks, if any, and then waits for the live root
+pending set to drain to empty. New pending work extends that wait.
+
+- For `after`-style hosts, pass the callback: `after(work)`.
+- For `waitUntil`-style hosts, pass its promise: `waitUntil(work())`.
+- Throw when the required platform context is unavailable. Crux propagates the
+  original error after deterministic sealing rather than accepting work it
+  cannot retain.
+
+Do not run `work()` early on response-finished platforms. Do not snapshot the
+pending set. Do not infer capability from environment variables.
+
+## Capability facts
+
+The binding is the single capability object:
+
+- `invocationScope`: permits config-only ambient root-level calls.
+- `supportsInline`: set `false` when post-return closures cannot be retained.
+- `durableFinalization`: true only when the boundary can prevent response
+  commitment until named Runtime work finalizes.
+- `limits`: one coherent callback, deadline, concurrency, and nesting policy.
+
+Do not duplicate these as wrapper options. The old completion class and separate
+lifetime objects are obsolete; the binding plus execution scope is the host
+contract.
+
+## Strict invocation boundary
+
+`withServerlessDefer` is the supported extension point for Deno Deploy, Bun,
+Fastly, and other platforms without a first-party package:
+
+```ts
+import { withServerlessDefer } from "@use-crux/core/defer/serverless";
+
+export const handler = withServerlessDefer(appHandler, {
+  binding,
+  classifyOutcome(settlement) {
+    return settlement.kind === "returned" ? "success" : "error";
+  },
+});
+```
+
+Capability facts stay on `binding`. `classifyOutcome` is the one wrapper-level
+option because settlement mapping belongs to the framework boundary.
+
+Platform packages may expose opinionated sugar over this API. Each framework
+package should have one `withCrux` meaning: its lifecycle boundary.
+
+## Conformance checklist
+
+Test observable behavior through the wrapper and binding:
+
+1. `retain` is called exactly once per root.
+2. Primitive drains start at primitive close, before retained work is invoked.
+3. Completion-gated root tasks start only inside retained work.
+4. Work registered during a drain extends the same drain-to-empty wait.
+5. A retention-port throw propagates unchanged after deterministic sealing.
+6. User callback and close-hook failures stay contained.
+7. `supportsInline: false` rejects callback registration.
+8. Binding limits apply to root and nested primitive registrations.
+9. Failed and cancelled scopes skip their own inline callbacks.
+10. Named strict-commit failures prevent a successful handler result.
+
+Keep provider SDK imports in the platform package. `@use-crux/core` remains
+provider-neutral.

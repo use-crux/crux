@@ -1,37 +1,39 @@
 ---
 title: DEFER_SCOPE_REQUIRED
-description: defer() was called without an active Crux invocation scope.
+description: defer() was called without a Crux execution scope or ambient host binding.
 ---
 
 ## What failed
 
-`defer()` was called outside any host-installed invocation scope.
+`defer()` was called where no Crux primitive scope or ambient-capable host
+binding was active.
 
 ## Why
 
-Request-scoped deferred work must attach to a concrete request/handler lifetime.
-Without a scope, Crux cannot know when the completion boundary is or who owns
-cancellation and drain bounds.
-
-## What still works
-
-- Synchronous application logic outside the handler
-- Durable work via Runtime APIs once a Runtime and host scope exist
-- `flow.defer()` inside a properly configured flow (different API)
+Crux must know which execution boundary owns the work. Without a scope or host
+binding, it cannot establish drain timing, retention, limits, or cancellation.
+It throws instead of silently dropping the registration.
 
 ## Fix
 
-Wrap the handler with the matching host integration:
+Run `crux setup --check` for the exact host-specific remediation, then choose
+the smallest matching rung:
 
-```ts
-// Node
-import { withNodeDefer } from "@use-crux/core/defer/node";
+1. Move the call inside a Crux agent, adapter, tool, Safety session, or other
+   defer-capable primitive.
+2. On Next or Vercel, add the platform binding to `config({ host })`.
+3. On Workers, use a per-request boundary with the current `ctx`.
+4. Add a strict wrapper when handler outcome or response commitment must be
+   part of the same invocation.
 
-// Next (defer + observability lifecycle)
-import { withCrux } from "@use-crux/next";
+```ts title="crux.config.ts"
+import { config } from "@use-crux/core";
+import { next } from "@use-crux/next";
 
-// waitUntil hosts
-import { withWaitUntilDefer } from "@use-crux/core/defer/serverless";
+export default config({ host: next() });
 ```
 
-See the [host matrix](/docs/guides/background-work/hosts).
+Inside replayable flow execution, use `flow.defer()` instead.
+
+See [Host support](/docs/guides/background-work/hosts) and
+[Troubleshooting](/docs/guides/background-work/troubleshooting).

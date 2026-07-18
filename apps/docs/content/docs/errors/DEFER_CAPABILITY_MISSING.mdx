@@ -1,37 +1,39 @@
 ---
 title: DEFER_CAPABILITY_MISSING
-description: The active scope cannot honor this defer() overload.
+description: The active scope or host cannot honor this defer() operation.
 ---
 
 ## What failed
 
-An active Crux scope exists, but it cannot support the requested `defer()` form.
+Crux found an execution scope or binding, but the host cannot honor the
+requested operation.
 
 Common cases:
 
-- Inline `defer(callback)` on Convex or Lambda named-only hosts
-- Missing `waitUntil` / `after` port
-- Named work on a host with `durableFinalization: false`
-- Async scope without a lifetime capability facet
+- Inline `defer(callback)` on a Convex or Lambda named-only host
+- Next `after()` or Vercel `waitUntil()` is unavailable
+- A Workers binding has no request `ctx`
+- A strict wrapper attempts named work without durable finalization
 
 ## Why
 
-Crux refuses to advertise reliability a host cannot provide. Inline closures are
-not durable; named work needs durable finalization before response commit.
-
-## What still works
-
-- The other overload when the host supports it (named on Convex/Lambda with Runtime)
-- Hosts with retention bindings for inline work
-- `flow.defer()` for replay-safe durable flow children
+Crux refuses to accept work the host cannot retain or finalize. A
+retention-port failure propagates after deterministic scope sealing; callback
+execution failures after successful acceptance remain contained.
 
 ## Fix
 
-1. **Inline unsupported:** switch to `await defer(target, input)` with Runtime, or
-   move the work to a host that supports inline drain.
-2. **Missing port:** pass an explicit `waitUntil` / `after` into
-   `@use-crux/core/defer/serverless` or use `@use-crux/next`.
-3. **Named without durability:** enable `durableFinalization: true` on a Runtime-
-   capable host integration and configure `config({ runtime })`.
+1. **Inline unsupported:** use `await defer(target, input)` with Runtime, or
+   choose a host with a real retention port.
+2. **Next/Vercel port missing:** install the supported platform package and
+   configure its binding.
+3. **Workers context missing:** use `@use-crux/cloudflare` `withCrux`, or pass
+   `workers({ ctx })` to a per-request boundary.
+4. **Strict named finalization missing:** use a binding advertising
+   `durableFinalization: true` with a configured Runtime.
 
-See [hosts](/docs/guides/background-work/hosts) and [troubleshooting](/docs/guides/background-work/troubleshooting).
+Config-only named calls use the caller's `await` as their acceptance barrier;
+they do not provide strict handler outcome or response commit semantics.
+
+See [Host support](/docs/guides/background-work/hosts) and
+[Troubleshooting](/docs/guides/background-work/troubleshooting).

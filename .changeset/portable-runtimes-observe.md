@@ -83,10 +83,19 @@ Convex bridge boundaries. Inline `defer()` now works with zero host setup inside
 defer-capable primitives on long-lived processes; nested work drains at its
 nearest boundary and streaming adapters restore one scope across Core-owned
 iteration and completion segments.
+Configured host retention now applies uniformly when any Crux primitive is the
+execution root. Primitive drains still start immediately, while retention-port
+failures propagate after deterministic sealing instead of silently accepting
+work the host cannot keep alive.
 Run Evals and their cells as execution scopes. Deferred work registered by an
 Eval task is captured as cell evidence instead of invoking inline callbacks or
 staging named Runtime work, and expired remote cells drop late observability
 writes through the shared scope-sealing policy.
+Teach setup diagnostics, the built-in defer lint, and public documentation the
+same primitive-first host-retention ladder, including exact Next, Vercel, and
+Workers remediations and the generic serverless adapter contract.
+Remove the config-dependent `defer.missing_scope` bundled lint; `crux setup`
+now owns host-retention diagnostics using selected config and platform evidence.
 Portable MCP entrypoints now fail closed when stdio is selected, while Node
 runtimes resolve their lazy stdio adapters through private conditional imports.
 

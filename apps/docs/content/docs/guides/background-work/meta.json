@@ -1,5 +1,5 @@
 {
   "title": "Background Work",
   "description": "Run follow-up work after the response is sent, without making the user wait.",
-  "pages": ["index", "hosts", "troubleshooting"]
+  "pages": ["index", "hosts", "troubleshooting", "host-adapters"]
 }

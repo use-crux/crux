@@ -57,6 +57,8 @@ export interface DeferredDrainResult {
 export interface DeferredDrainHandle {
   readonly committed: Promise<void>;
   readonly settled: Promise<DeferredDrainResult>;
+  /** Full retained-task settlement returned to the scope kernel for tracking. */
+  readonly retained: Promise<void>;
 }
 
 /** Per-execution-scope deferred-work controller. */
@@ -198,6 +200,7 @@ export function createScopeDeferController(
       },
       outcome,
     );
+    return handle.retained;
   });
   return controller;
 }

@@ -30,8 +30,9 @@ export default {
 };
 ```
 
-For config-only ambient retention inside a known invocation, install
-`config({ host: workers({ ctx }) })`.
+For a custom boundary, construct `workers({ ctx })` from the current request and
+pass it to that boundary. Do not install one request's `ctx` in process-global
+configuration.
 
 ## Worker entry
 
