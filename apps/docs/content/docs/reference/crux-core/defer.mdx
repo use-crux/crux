@@ -69,9 +69,12 @@ Throws or poisons commit with:
 
 | Import                            | Purpose                                                                                                           |
 | --------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `@use-crux/core/defer/node`       | Node HTTP `withNodeDefer` / `createNodeDeferHost`                                                                 |
+| `@use-crux/core/defer/node`       | Node HTTP wrappers plus `node()` for explicit process-lifetime host configuration                                 |
 | `@use-crux/core/defer/serverless` | `withWaitUntilDefer`, `withAfterDefer`, `withNamedOnlyDefer`, factories                                           |
 | `@use-crux/next`                  | Next.js `withCrux` binding defer and observability to `after()`; `withNextDefer` remains the defer-only primitive |
+| `@use-crux/next`                  | `config({ host: next() })` enables ambient root-level defer through `after()`                                     |
+| `@use-crux/cloudflare`            | `config({ host: workers({ ctx }) })` retains ambient work with `ctx.waitUntil()`                                  |
+| `@use-crux/vercel`                | `config({ host: vercel() })` retains ambient work with Vercel `waitUntil()`                                       |
 
 Internal first-party SPI (not application API):
 

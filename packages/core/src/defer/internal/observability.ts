@@ -112,6 +112,9 @@ export interface DeferScopeObservability {
     execute: () => Promise<void>,
   ): Promise<void>;
 
+  /** Record an inline callback suppressed by its scope's terminal outcome. */
+  skipInline(observation: DeferredScheduledObservation): void;
+
   /**
    * Record that the inline drain finished.
    *
@@ -486,6 +489,37 @@ export function createDeferScopeObservability(
       });
     },
 
+    skipInline(observation) {
+      if (observation.policy === "diagnostics-only") return;
+      const context = observation.context ?? ensurePublicContext();
+      observe.withContext({ ...context, spanStack: [] }, () => {
+        const span = observe.openSpan({
+          name: `defer run #${observation.sequence}`,
+          primitive: "defer.run",
+          attributes: {
+            mode: observation.mode,
+            completion: observation.completion,
+            sequence: observation.sequence,
+          },
+          implicitRun: false,
+        });
+        if (observation.spanId) {
+          observe.edge({
+            edgeType: "triggered",
+            from: { kind: "span", id: observation.spanId },
+            to: { kind: "span", id: span.spanId },
+          });
+        }
+        span.end({
+          status: "cancelled",
+          attributes: {
+            outcome: "cancelled",
+            skipReason: "scope-outcome",
+          },
+        });
+      });
+    },
+
     settle(result) {
       drainSettled = true;
       drainResult = result;
@@ -517,7 +551,12 @@ export function createDeferScopeObservability(
   function drainStatus(
     result: DeferredDrainResult,
   ): "ok" | "cancelled" | "error" {
-    if (result.timedOut || result.cancelled) return "cancelled";
+    if (
+      result.timedOut ||
+      result.cancelled ||
+      result.callbacks.some((callback) => callback.outcome === "cancelled")
+    )
+      return "cancelled";
     if (result.callbacks.some((callback) => callback.outcome === "failed")) {
       return "error";
     }

@@ -26,11 +26,23 @@ import {
   type DeferAfterPort,
 } from "@use-crux/core/defer/serverless";
 import type { DeferLifetimeCapability } from "@use-crux/core/internal/scope";
+import type { CruxHostBinding } from "@use-crux/core";
 import type { ObservabilityFlushResult } from "@use-crux/core/observability";
 import { resolveNextAfterPort } from "./after";
 import { reportNextObservabilityDrain } from "./observability-drain";
 
 export type { DeferAfterPort };
+
+/** Bind ambient invocation retention to Next.js `after()`. */
+export function next(): CruxHostBinding {
+  return Object.freeze({
+    kind: "next",
+    invocationScope: true,
+    supportsInline: true,
+    durableFinalization: false,
+    retain: (work) => resolveNextAfterPort()(work),
+  } satisfies CruxHostBinding);
+}
 
 /** Options for the opinionated Next lifecycle boundary created by {@link withCrux}. */
 export interface NextCruxOptions<T> extends NextDeferWrapOptions<T> {

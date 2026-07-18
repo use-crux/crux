@@ -29,17 +29,19 @@ export function scheduleInvocationDeferDrain(
   );
   services.evidence.trackNamedLifecycle(committed);
 
-  services.lifetime.schedule({
+  services.schedule({
     async run() {
       try {
-        const result = await drainInlineCallbacks(controller, registrations, {
-          concurrency: services.lifetime.limits.concurrency,
-          maxDrainMs: services.lifetime.limits.maxDrainMs,
-          lifetime: services.lifetime,
-          abortController: services.abortController,
-          evidence: services.evidence,
-          close,
-        });
+        const result = skipsInlineDrain(outcome)
+          ? skipInlineCallbacks(services, registrations, close)
+          : await drainInlineCallbacks(controller, registrations, {
+              concurrency: services.lifetime.limits.concurrency,
+              maxDrainMs: services.lifetime.limits.maxDrainMs,
+              lifetime: services.lifetime,
+              abortController: services.abortController,
+              evidence: services.evidence,
+              close,
+            });
         services.evidence.settle(result);
         await runDrainSettledHooks(drainSettledHooks, result);
         settlement.resolve(result);
@@ -53,6 +55,32 @@ export function scheduleInvocationDeferDrain(
   });
   controller.executionScope.trackPending(retained.promise);
   return Object.freeze({ committed, settled: settlement.promise });
+}
+
+function skipsInlineDrain(outcome: ScopeCloseOutcome): boolean {
+  return (
+    outcome === "error" || outcome === "cancelled" || outcome === "timeout"
+  );
+}
+
+function skipInlineCallbacks(
+  services: InvocationDeferServices,
+  registrations: readonly InlineRegistration[],
+  close: () => void,
+): DeferredDrainResult {
+  for (const registration of registrations) {
+    services.evidence.skipInline(registration.observation);
+  }
+  close();
+  return {
+    callbacks: registrations.map(({ sequence }) => ({
+      sequence,
+      outcome: "cancelled" as const,
+      skipReason: "scope-outcome" as const,
+    })),
+    timedOut: false,
+    cancelled: true,
+  };
 }
 
 async function runDrainSettledHooks(

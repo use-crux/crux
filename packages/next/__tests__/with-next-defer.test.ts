@@ -8,6 +8,7 @@ import {
 } from "@use-crux/core/observability";
 import {
   createNextDeferLifetime,
+  next,
   withCrux,
   withNextDefer,
 } from "@use-crux/next";
@@ -15,6 +16,14 @@ import {
 describe("withNextDefer", () => {
   afterEach(() => {
     resetObservabilityRuntime();
+  });
+
+  it("declares an ambient response-finished host binding", () => {
+    expect(next()).toMatchObject({
+      kind: "next",
+      invocationScope: true,
+      supportsInline: true,
+    });
   });
 
   it("declares response-finished completion and starts work only when after runs", async () => {

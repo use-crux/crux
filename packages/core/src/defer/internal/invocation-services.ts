@@ -1,4 +1,5 @@
 import type { ExecutionScope } from "../../scope/contracts";
+import { enqueueRetainedTask } from "../../scope/state";
 import type { RuntimeTaskTarget } from "../../runtime/api/task";
 import type {
   DeferInvocationOutcome,
@@ -23,6 +24,7 @@ export interface InvocationDeferServices {
   readonly abortController: AbortController;
   readonly evidence: DeferScopeObservability;
   readonly namedEvidenceHooks: DurableDeferEvidenceHooks;
+  schedule(task: import("../host-types").DeferScheduledTask): void;
   hasCallbackCapacity(): boolean;
   recordCallback(): void;
   stageNamed(
@@ -38,6 +40,10 @@ export interface InvocationDeferServices {
 export function createInvocationDeferServices(
   invocationScope: ExecutionScope,
   lifetime: DeferLifetimeCapability,
+  options: {
+    readonly retention?: "lifetime" | "binding";
+    readonly acceptanceMode?: boolean;
+  } = {},
 ): InvocationDeferServices {
   let callbackCount = 0;
   const commitBarrier = createDeferCommitBarrier();
@@ -46,7 +52,9 @@ export function createInvocationDeferServices(
     completion: lifetime.completion,
   });
   const namedEvidenceHooks = createNamedEvidenceHooks(evidence, lifetime);
-  const durable = createDurableDeferController(lifetime, namedEvidenceHooks);
+  const durable = createDurableDeferController(lifetime, namedEvidenceHooks, {
+    acceptanceMode: options.acceptanceMode ?? false,
+  });
 
   return Object.freeze({
     invocationScope,
@@ -55,6 +63,10 @@ export function createInvocationDeferServices(
     abortController,
     evidence,
     namedEvidenceHooks,
+    schedule: (task) =>
+      options.retention === "binding"
+        ? enqueueRetainedTask(invocationScope, task)
+        : lifetime.schedule(task),
     hasCallbackCapacity: () => callbackCount < lifetime.limits.maxCallbacks,
     recordCallback: () => {
       callbackCount += 1;

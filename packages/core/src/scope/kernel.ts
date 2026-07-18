@@ -1,4 +1,5 @@
 import { createAsyncScopeFacet } from "../async-scope";
+import { getHooks } from "../runtime/runtime";
 import {
   captureAsyncScope,
   runWithCapturedAsyncScope,
@@ -23,6 +24,7 @@ import {
   waitForRootIdle,
 } from "./state";
 import type { ScopeDescriptor, ScopeOutcome } from "./types";
+import type { CruxHostBinding } from "./types";
 
 export { ScopeSealedError } from "./contracts";
 export type {
@@ -122,9 +124,9 @@ export function whenRootIdle(scope: ExecutionScope): Promise<void> {
   return waitForRootIdle(scope);
 }
 
-/** Resolve the configured host binding. Phase 4 replaces this empty stub. @internal */
-export function resolveConfiguredHost(): undefined {
-  return undefined;
+/** Resolve the host binding installed by the active config transaction. */
+export function resolveConfiguredHost(): CruxHostBinding | undefined {
+  return getHooks().hostBinding;
 }
 
 /** Resolve the scope on which a write may land under the sealed-write policy. */

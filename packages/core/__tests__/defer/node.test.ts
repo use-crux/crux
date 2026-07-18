@@ -2,7 +2,7 @@ import { IncomingMessage, ServerResponse } from "node:http";
 import { Socket } from "node:net";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { defer } from "@use-crux/core";
-import { createNodeDeferHost } from "@use-crux/core/defer/node";
+import { createNodeDeferHost, node } from "@use-crux/core/defer/node";
 import { classifyNodeOutcome } from "../../src/defer/node/host";
 import {
   createInMemoryObservabilityTransport,
@@ -22,6 +22,17 @@ describe("Node defer host", () => {
   afterEach(() => {
     vi.useRealTimers();
     resetObservabilityRuntime();
+  });
+
+  it("declares a non-ambient process-lifetime binding", () => {
+    const binding = node();
+
+    expect(binding).toMatchObject({
+      kind: "node",
+      invocationScope: false,
+      supportsInline: true,
+    });
+    expect(() => binding.retain(async () => {})).not.toThrow();
   });
 
   it("flushes response-finished deferred evidence before shutdown completes", async () => {

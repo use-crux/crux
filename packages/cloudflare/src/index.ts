@@ -30,6 +30,11 @@ import { createCloudflareRuntimeStore } from "./runtime/store";
 import { CLOUDFLARE_RUNTIME_CAPABILITIES } from "./runtime/definition";
 
 export { CLOUDFLARE_RUNTIME_ENTRY, cloudflare } from "./runtime/definition";
+export { workers } from "./workers";
+export type {
+  WorkersExecutionContext,
+  WorkersHostBindingOptions,
+} from "./workers";
 export type {
   CloudflareRuntimeEngineDefinition,
   CloudflareRuntimeEngineOptions,

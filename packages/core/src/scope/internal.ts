@@ -32,6 +32,8 @@ export {
   type ScopeFacetSlot,
 } from "./facets";
 export type {
+  CruxHostBinding,
+  DeferLifetimeLimits,
   ScopeDescriptor,
   ScopeDrainPolicy,
   ScopeEvidencePolicy,
@@ -42,7 +44,9 @@ export type {
   ScopeSealedWritePolicy,
   ScopeSourceRef,
   ScopeState,
+  ScopeRetainedTask,
 } from "./types";
+export { bindRootRetention, enqueueRetainedTask } from "./state";
 export { runWithDeferInvocation } from "../defer/host";
 export type {
   DeferCompletionClass,
@@ -50,7 +54,6 @@ export type {
   DeferHostBoundaryOptions,
   DeferInvocationOutcome,
   DeferLifetimeCapability,
-  DeferLifetimeLimits,
   DeferScheduledTask,
 } from "../defer/host";
 export {

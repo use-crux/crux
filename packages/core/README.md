@@ -183,6 +183,24 @@ export default evaluate({
 only exact safe evidence. Use `--offline` for zero network access, `--plan` to
 inspect admitted work, or explicitly accept a complete run as a Baseline.
 
+## Background work
+
+Configure an explicit platform retention capability once, then call `defer()`
+at root level without a route wrapper on ambient hosts:
+
+```ts
+import { config, defer } from "@use-crux/core";
+import { next } from "@use-crux/next";
+
+config({ host: next() });
+defer(() => flushAnalytics());
+```
+
+Each config-only call owns an ephemeral invocation. Use a wrapper or a Crux
+primitive when several registrations must share limits, outcome classification,
+or a strict named-work commit barrier. Inline callbacks registered by failed or
+cancelled scopes are recorded as skipped and are not invoked.
+
 ## What's inside
 
 `@use-crux/core` exposes SDK-agnostic primitives through focused subpaths:

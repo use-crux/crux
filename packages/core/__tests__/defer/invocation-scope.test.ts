@@ -109,8 +109,8 @@ describe("invocation defer scope", () => {
       depth: 0,
     });
 
-    const firstHandle = scope.seal("error");
-    const secondHandle = scope.seal("success");
+    const firstHandle = scope.seal("success");
+    const secondHandle = scope.seal("error");
     expect(secondHandle).toBe(firstHandle);
 
     await expect(scheduled?.()).resolves.toBeUndefined();

@@ -1,0 +1,51 @@
+{
+  "name": "@use-crux/vercel",
+  "version": "0.5.0",
+  "description": "Vercel lifecycle integration for Crux deferred work via waitUntil().",
+  "keywords": [
+    "vercel",
+    "defer",
+    "waitUntil",
+    "crux"
+  ],
+  "license": "Apache-2.0",
+  "author": "Crux",
+  "private": true,
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    }
+  },
+  "dependencies": {
+    "@use-crux/core": "workspace:*"
+  },
+  "peerDependencies": {
+    "@vercel/functions": ">=3.0.0"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^24.12.4",
+    "@vercel/functions": "^3.7.5",
+    "typescript": "5.9.3",
+    "vitest": "^4.1.7"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/use-crux/crux.git",
+    "directory": "packages/vercel"
+  },
+  "bugs": {
+    "url": "https://github.com/use-crux/crux/issues"
+  },
+  "homepage": "https://cruxjs.dev"
+}

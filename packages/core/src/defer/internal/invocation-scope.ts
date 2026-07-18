@@ -43,6 +43,7 @@ export interface DeferredDrainResult {
     readonly sequence: number;
     readonly outcome: DeferredCallbackOutcome;
     readonly error?: unknown;
+    readonly skipReason?: "scope-outcome";
   }[];
   readonly timedOut: boolean;
   readonly cancelled: boolean;

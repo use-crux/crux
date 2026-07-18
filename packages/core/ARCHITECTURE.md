@@ -48,6 +48,19 @@ Crux public APIs use names that describe the thing a user is declaring or doing:
 - Avoid `defineX()` for new public Crux APIs. The project is pre-launch, so naming changes are breaking changes rather than deprecated aliases.
 - Keep platform names on Runtime composers, name host/retention bindings for their mechanism, reserve `withCrux` for framework lifecycle boundaries, and use `withCruxBuild`-style names for build plugins.
 
+### Host retention bindings
+
+`config({ host })` installs a provider-neutral `CruxHostBinding` in the same
+restorable hook layer as `runtime`. Binding-opened invocation roots own one
+functional retention gate: completion-gated root tasks queue until the platform
+callback runs, while already-running inner drains only extend the shared live
+pending set. The first signal calls `binding.retain(work)` exactly once.
+
+Core exports `node()` from `/defer/node`; `@use-crux/next`,
+`@use-crux/cloudflare`, and `@use-crux/vercel` inject `after()`,
+`ExecutionContext.waitUntil()`, and Vercel `waitUntil()` respectively. Core does
+not detect platforms or import their SDKs.
+
 This keeps the SDK readable at call sites: users define nouns once, execute verbs when work happens, and reach for `createX()` only when building infrastructure.
 
 ## Workspace Storage Model

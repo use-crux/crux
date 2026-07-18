@@ -22,6 +22,33 @@ describe('public defer observability (DFR-E04)', () => {
     resetObservabilityRuntime()
   })
 
+  it('records scope-outcome skips without invoking the callback', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+    let drain: (() => Promise<void>) | undefined
+    const callback = vi.fn()
+
+    await runWithDeferInvocation(() => defer(callback), {
+      lifetime: testLifetime((run) => {
+        drain = run
+      }),
+      classifyOutcome: () => 'error',
+    })
+    await drain?.()
+
+    expect(callback).not.toHaveBeenCalled()
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({
+        type: 'span:end',
+        status: 'cancelled',
+        attributes: expect.objectContaining({
+          outcome: 'cancelled',
+          skipReason: 'scope-outcome',
+        }),
+      }),
+    )
+  })
+
   it('emits defer.scheduled then defer.run under the originating run with a causal triggered edge', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)

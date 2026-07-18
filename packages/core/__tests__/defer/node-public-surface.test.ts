@@ -32,7 +32,12 @@ describe("Node defer package surfaces", () => {
     ]);
     expect(
       Object.keys(await import("@use-crux/core/defer/node")).sort(),
-    ).toEqual(["createNodeDeferHost", "shutdownNodeDefer", "withNodeDefer"]);
+    ).toEqual([
+      "createNodeDeferHost",
+      "node",
+      "shutdownNodeDefer",
+      "withNodeDefer",
+    ]);
     expect(await import("@use-crux/core/internal/scope")).toEqual(
       expect.objectContaining({
         createHandlerReturnedDeferLifetime: expect.any(Function),

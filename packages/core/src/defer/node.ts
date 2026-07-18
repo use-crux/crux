@@ -14,6 +14,8 @@ import type {
   DeferInvocationOutcome,
 } from "./host-types";
 import { createNodeDeferHostImplementation } from "./node/host";
+import { NODE_DEFER_POLICY } from "./node/policy";
+import type { CruxHostBinding } from "../scope/types";
 
 /** Request and response attached to a Node defer error. */
 export interface NodeDeferErrorContext<
@@ -76,6 +78,18 @@ export interface NodeDeferHost {
   ): (request: TRequest, response: TResponse) => void;
   /** Wait dynamically for this host's process-local drains, then cancel boundedly. */
   shutdown(): Promise<NodeDeferShutdownResult>;
+}
+
+/** Declare the process-lifetime Node host capability for `config({ host })`. */
+export function node(): CruxHostBinding {
+  return Object.freeze({
+    kind: "node",
+    invocationScope: false,
+    supportsInline: true,
+    durableFinalization: false,
+    limits: NODE_DEFER_POLICY,
+    retain: () => {},
+  });
 }
 
 /**

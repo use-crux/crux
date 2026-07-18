@@ -12,16 +12,20 @@ import {
 import { scopeFacetSlotKey, type ScopeFacetSlot } from "./facets";
 import { isThenable, sealedReasonFor } from "./lifecycle";
 import { createRootPendingTracker, type RootPendingTracker } from "./pending";
+import { createRootRetentionGate, type RootRetentionGate } from "./retention";
 import type {
+  CruxHostBinding,
   ScopeDescriptor,
   ScopeKind,
   ScopePolicies,
   ScopeSealedReason,
   ScopeState,
+  ScopeRetainedTask,
 } from "./types";
 
 interface RootState {
   readonly pending: RootPendingTracker;
+  retention: RootRetentionGate | undefined;
   nextScopeId: number;
 }
 
@@ -65,7 +69,7 @@ export function createExecutionScope(
     onClose: (hook: ScopeCloseHook, options: ScopeWriteOptions = {}) =>
       registerCloseHook(scope, hook, options),
     trackPending: (operation: PromiseLike<unknown>) =>
-      stateFor(scope.root).rootState.pending.track(operation),
+      trackRootPending(scope, operation),
     facet: <T>(slot: ScopeFacetSlot<T>) => resolveFacet(scope, slot),
     setFacet: <T>(
       slot: ScopeFacetSlot<T>,
@@ -79,12 +83,53 @@ export function createExecutionScope(
     facetValues: new Map(),
     rootState: parent
       ? stateFor(parent.root).rootState
-      : { pending: createRootPendingTracker(), nextScopeId: 2 },
+      : {
+          pending: createRootPendingTracker(),
+          retention: undefined,
+          nextScopeId: 2,
+        },
     capturedFrame: undefined,
     state: "open",
     sealedReason: undefined,
   });
   return scope;
+}
+
+/** Associate a root with the host binding that owns its retention callback. */
+export function bindRootRetention(
+  scope: ExecutionScope,
+  binding: CruxHostBinding,
+): void {
+  const root = scope.root;
+  const rootState = stateFor(root).rootState;
+  if (root !== scope || root.descriptor.kind !== "invocation") {
+    throw new TypeError("Host retention may only bind an invocation root.");
+  }
+  if (rootState.retention) {
+    throw new TypeError("The invocation root already has a host binding.");
+  }
+  rootState.retention = createRootRetentionGate(binding, rootState.pending);
+}
+
+/** Queue root work whose start is gated on the platform completion moment. */
+export function enqueueRetainedTask(
+  scope: ExecutionScope,
+  task: ScopeRetainedTask,
+): void {
+  const retention = stateFor(scope.root).rootState.retention;
+  if (!retention) {
+    throw new TypeError("The invocation root has no host retention binding.");
+  }
+  retention.enqueueTask(task);
+}
+
+function trackRootPending(
+  scope: ExecutionScope,
+  operation: PromiseLike<unknown>,
+): void {
+  const rootState = stateFor(scope.root).rootState;
+  rootState.pending.track(operation);
+  rootState.retention?.noteFirstPending();
 }
 
 /** Allocate the next generated id from the invocation root. */

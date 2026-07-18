@@ -54,6 +54,7 @@ Allowed:
 - `@use-crux/google` -> `@use-crux/core`
 - `@use-crux/convex` -> `@use-crux/core`
 - `@use-crux/next` -> `@use-crux/core` (peer: `next`; binds `after()` only)
+- `@use-crux/vercel` -> `@use-crux/core` (peer: `@vercel/functions`; binds `waitUntil()` only)
 - `@use-crux/upstash` -> `@use-crux/core`
 - `@use-crux/otel` -> `@use-crux/core`
 - `@use-crux/ingest` -> `@use-crux/core`

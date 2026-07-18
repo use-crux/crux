@@ -63,13 +63,13 @@ describe("runWithDeferInvocation()", () => {
     );
   });
 
-  it.each<DeferInvocationOutcome>([
-    "success",
-    "error",
-    "redirect",
-    "not-found",
-    "cancelled",
-  ])("drains callbacks after a %s logical outcome", async (outcome) => {
+  it.each<[DeferInvocationOutcome, boolean]>([
+    ["success", true],
+    ["error", false],
+    ["redirect", true],
+    ["not-found", true],
+    ["cancelled", false],
+  ])("gates callbacks after a %s logical outcome", async (outcome, runs) => {
     const callback = vi.fn();
     let scheduled: (() => Promise<void>) | undefined;
 
@@ -88,7 +88,7 @@ describe("runWithDeferInvocation()", () => {
 
     expect(callback).not.toHaveBeenCalled();
     await scheduled?.();
-    expect(callback).toHaveBeenCalledOnce();
+    expect(callback).toHaveBeenCalledTimes(runs ? 1 : 0);
   });
 
   it("preserves returned and thrown values by identity", async () => {

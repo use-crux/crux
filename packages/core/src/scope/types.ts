@@ -29,6 +29,32 @@ export type ScopeDrainPolicy = "execute" | "capture" | "suppress";
 export type ScopeSealedWritePolicy = "drop" | "reroute" | "throw";
 export type ScopeEvidencePolicy = "public" | "diagnostics-only";
 
+/** Effective bounds for deferred work retained by a host binding. */
+export interface DeferLifetimeLimits {
+  readonly maxDrainMs: number;
+  readonly maxCallbacks: number;
+  readonly concurrency: number;
+  readonly maxNestingDepth: number;
+}
+
+/** Lazy unit of root work handed to the kernel retention gate. */
+export interface ScopeRetainedTask {
+  run(): Promise<void>;
+  cancel(reason?: unknown): void;
+}
+
+/** Provider-neutral capability that retains one invocation root. */
+export interface CruxHostBinding {
+  readonly kind: "node" | "next" | "vercel" | "workers" | (string & {});
+  /** Whether this binding may contribute ambient invocation scopes. */
+  readonly invocationScope: boolean;
+  /** Retain the single kernel callback that starts gated work and awaits idle. */
+  retain(work: () => Promise<void>): void;
+  readonly durableFinalization?: boolean;
+  readonly supportsInline?: boolean;
+  readonly limits?: DeferLifetimeLimits;
+}
+
 /** Policy overrides applied when a scope opens. */
 export interface ScopePolicies {
   readonly drain?: ScopeDrainPolicy;

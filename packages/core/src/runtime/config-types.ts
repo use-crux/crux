@@ -18,6 +18,9 @@ import type { RuntimeBridgeOptions } from "../runtime-bridge";
 import type { RecordStore } from "../storage";
 import type { TokenizerFn } from "../shared/tokenizer";
 import type { RuntimeEngineDefinition } from "./api/runtime-definition";
+import type { CruxHostBinding } from "../scope/types";
+
+export type { CruxHostBinding } from "../scope/types";
 import type { PromptMiddleware } from "./types";
 import type { CruxExperimentalEvalConfig } from "./eval-config";
 export type {
@@ -285,6 +288,8 @@ export interface CruxConfig {
   readonly persistence?: CruxPersistenceConfig;
   /** Durable Runtime Engine composer for runtime-bound APIs. */
   readonly runtime?: CruxRuntimeConfig;
+  /** Explicit platform capability for invocation retention and ambient defer. */
+  readonly host?: CruxHostBinding;
   /** Cross-cutting generation behavior. Model choices belong in eval/agent code. */
   readonly generation?: CruxGenerationConfig;
   /** Non-default local, tunnel, remote, or bridge devtools behavior. */

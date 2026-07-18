@@ -105,6 +105,7 @@ export interface DurableDeferEvidenceHooks {
 export function createDurableDeferController(
   lifetime: DeferLifetimeCapability,
   evidence?: DurableDeferEvidenceHooks,
+  options: { readonly acceptanceMode?: boolean } = {},
 ): DurableDeferController {
   let sessionPromise: Promise<DurableSession> | undefined;
   let nextIntent = 0;
@@ -122,7 +123,7 @@ export function createDurableDeferController(
   }
 
   async function createSession(): Promise<DurableSession> {
-    if (!lifetime.durableFinalization) {
+    if (!lifetime.durableFinalization && !options.acceptanceMode) {
       throw createDeferError({
         code: "DEFER_CAPABILITY_MISSING",
         message:

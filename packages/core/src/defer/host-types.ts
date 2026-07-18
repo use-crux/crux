@@ -15,20 +15,7 @@ export type DeferHandlerSettlement<T> =
   | { readonly kind: "thrown"; readonly error: unknown };
 
 /** Opaque retained task handed from the invocation kernel to a host lifetime. */
-export interface DeferScheduledTask {
-  /** Start the retained callback drain. */
-  run(): Promise<void>;
-  /** Cooperatively stop waiting for retained callback settlement. */
-  cancel(reason?: unknown): void;
-}
-
-/** Effective callback limits declared by a host integration. */
-export interface DeferLifetimeLimits {
-  readonly maxDrainMs: number;
-  readonly maxCallbacks: number;
-  readonly concurrency: number;
-  readonly maxNestingDepth: number;
-}
+export type DeferScheduledTask = ScopeRetainedTask;
 
 /** Bounded host lifetime capability used for inline deferred work. */
 export interface DeferLifetimeCapability {
@@ -54,3 +41,6 @@ export interface DeferHostBoundaryOptions<T> {
     settlement: DeferHandlerSettlement<T>,
   ) => DeferInvocationOutcome;
 }
+import type { DeferLifetimeLimits, ScopeRetainedTask } from "../scope/types";
+
+export type { DeferLifetimeLimits } from "../scope/types";
