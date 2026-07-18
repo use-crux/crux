@@ -142,11 +142,12 @@ func (s *Index) Breadcrumb() ([]string, string) {
 }
 
 func (s *Index) Keybinds() []shell.Keybind {
+	if s.SelectedDefinitionID() == "" {
+		return nil
+	}
 	return []shell.Keybind{
-		shell.Bind("j/k", "move"), shell.Bind("↵", "open source"),
-		shell.Bind("r", "run"), shell.Bind("e", "export"),
-		shell.Bind("o", "open in viewer"),
-		shell.Bind(":", "cmd"), shell.Bind("?", "help"),
+		shell.Bind("j/k", "move"),
+		shell.Bind("e", "export"),
 	}
 }
 

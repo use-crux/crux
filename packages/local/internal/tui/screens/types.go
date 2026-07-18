@@ -48,7 +48,8 @@ type Size struct {
 
 // NavigateRequest is emitted by a screen's Update to ask the workbench
 // to switch to another screen, optionally staging a record in the
-// cross-screen selection store first. See ADR-0051. Workbench listens
+// cross-screen selection store first, per the approved 2026-07-16 TUI
+// stabilization design. Workbench listens
 // for this message type in its own Update and handles the routing —
 // screens never call gotoNav directly.
 type NavigateRequest struct {
@@ -94,14 +95,12 @@ type Screen interface {
 	// Interested reports whether a live batch touching domains should refetch
 	// this screen when it is active, or mark it stale while it is hidden.
 	Interested(domains bridge.Domains) bool
+}
 
-	// Focus is called by the workbench before a screen becomes active when
-	// the navigation that produced the activation carried a record reference
-	// the screen knows how to surface. `kind` is one of the workbench Kind
-	// constants ("run" or "insight") and `id` is the staged
-	// record id. Screens MAY ignore unknown kinds. Focus is best-effort: if
-	// the referenced id is not present in the screen's data, the screen
-	// falls back to its own default selection. See ADR-0051.
+// FocusScreen is implemented by screens that can select a record reference
+// carried by navigation. Screens without drill-in state omit this capability.
+type FocusScreen interface {
+	Screen
 	Focus(kind, id string)
 }
 
@@ -109,8 +108,8 @@ type Screen interface {
 // an embedded editor or modal widget. When `Editing()` returns true, the
 // workbench forwards every key straight to the screen so editor widgets
 // receive raw input. There is no global mode chip; the status bar reflects
-// the screen's own Keybinds() output instead. Per ADR-0050 the TUI is
-// modeless — this is a pass-through hint, not a mode.
+// the screen's own executable keybind output instead. The approved
+// stabilization design keeps this pass-through contextual, not modal.
 type EditingScreen interface {
 	Screen
 	Editing() bool

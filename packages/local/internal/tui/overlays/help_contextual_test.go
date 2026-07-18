@@ -56,3 +56,15 @@ func TestHelpOverlayLayer1ChordsAlwaysVisible(t *testing.T) {
 		}
 	}
 }
+
+func TestHelpOmitsUnsupportedKeyRemapping(t *testing.T) {
+	h := NewHelp()
+	h.Open()
+
+	out := h.View(100, 30)
+	for _, unsupported := range []string{".crux/keybinds.toml", ":keybind set", "to remap"} {
+		if strings.Contains(out, unsupported) {
+			t.Errorf("help advertised unsupported key remapping %q:\n%s", unsupported, out)
+		}
+	}
+}

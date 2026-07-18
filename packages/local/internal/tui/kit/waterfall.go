@@ -178,16 +178,6 @@ func PrimitiveColor(primitive string) color.Color {
 	}
 }
 
-// PrimitiveGlyph used to return a small Unicode marker per primitive
-// (`✦` generation, `⚒` tool, `⇶` flow, `⌬` eval, `⇄` handoff, `⌕`
-// retrieval, `⚖` judge, etc.) and was rendered before the span name in
-// the waterfall column. The glyphs read as emoji-ish on most terminals
-// and didn't match the design — screenshot 3 uses only the tree
-// connector (`◆` for root, `├`/`└` for children) plus the op label.
-// The function and its callers were removed; this stub is preserved so
-// downstream callers (if any) get a no-op rather than a compile error.
-func PrimitiveGlyph(primitive string) string { return "" }
-
 func spanOp(s api.InspectRunSpan) string {
 	if s.EventType != "" {
 		return s.EventType

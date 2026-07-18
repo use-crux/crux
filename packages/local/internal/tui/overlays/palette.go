@@ -168,8 +168,7 @@ func (p *Palette) View(viewportWidth, viewportHeight int) string {
 	left := " " + lipgloss.NewStyle().Foreground(shell.ColorTextMuted).Render(
 		shell.Teal.Render("↑↓")+" select  "+
 			shell.Teal.Render("↵")+" run  "+
-			shell.Teal.Render("tab")+" complete  "+
-			shell.Teal.Render("^r")+" history",
+			shell.Teal.Render("tab")+" complete",
 	)
 	count := ""
 	if len(p.filtered) > 0 {
@@ -217,7 +216,6 @@ func (p *Palette) refilter() {
 
 func defaultCommands() []Command {
 	return []Command{
-		{ID: "open-trace", Cmd: ":open trace 8af2", Desc: "Open a trace by id prefix", Glyph: "◐"},
 		{ID: "goto-overview", Cmd: ":goto overview", Desc: "Jump to Overview", Glyph: "→"},
 		{ID: "goto-insights", Cmd: ":goto insights", Desc: "Jump to Insights", Glyph: "→"},
 		{ID: "goto-runs", Cmd: ":goto runs", Desc: "Jump to Runs", Glyph: "→"},

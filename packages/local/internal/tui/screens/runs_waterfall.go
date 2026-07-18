@@ -45,17 +45,11 @@ func (s *Runs) renderWaterfall(width, height int) string {
 	header := shell.PaneHeader(width, title, sub, headerChips)
 	hdrH := strings.Count(header, "\n") + 1
 
-	footer := shell.PaneFooter(width, []shell.Keybind{
-		shell.Bind("↵", "expand"),
-		shell.Bind("i", "inspect raw"),
-		shell.Bind("o", "open in viewer"),
-		shell.Bind("e", "export"),
-		// Note: `f flame chart` and `t timeline` are intentionally absent —
-		// they were aspirational footer labels that never had handlers. Per
-		// the KEYBINDS.md contract, footer/status hints must reflect what
-		// the screen actually does.
-	})
-	footerH := strings.Count(footer, "\n") + 1
+	footer := shell.PaneFooter(width, s.waterfallKeybinds())
+	footerH := 0
+	if footer != "" {
+		footerH = strings.Count(footer, "\n") + 1
+	}
 	bodyRows := height - hdrH - footerH
 
 	totalMs := 0.0

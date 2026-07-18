@@ -68,7 +68,7 @@ func renderWaterfallSpans(rows []kit.WaterfallSpan, totalMs float64, width, labe
 		}
 		// Design uses just one glyph per row — the tree connector
 		// (`◆` for root, `├`/`└` for children). The legacy
-		// `PrimitiveGlyph` prefix put a second glyph next to the name
+		// A primitive-glyph prefix put a second glyph next to the name
 		// (`✦`, `⚒`, `⇶`, etc.) which read as emoji-ish on most
 		// terminals and didn't match the design.
 		name := sp.Name

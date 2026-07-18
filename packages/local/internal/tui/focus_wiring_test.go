@@ -21,6 +21,28 @@ type fakeScreen struct {
 
 type focusCall struct{ kind, id string }
 
+type passiveScreen struct{ id string }
+
+func (s *passiveScreen) ID() string                                 { return s.id }
+func (s *passiveScreen) Init(screens.DataClient) tea.Cmd            { return nil }
+func (s *passiveScreen) Update(tea.Msg, screens.DataClient) tea.Cmd { return nil }
+func (s *passiveScreen) View(screens.Size) string                   { return "" }
+func (s *passiveScreen) Breadcrumb() ([]string, string)             { return []string{s.id}, "" }
+func (s *passiveScreen) Keybinds() []shell.Keybind                  { return nil }
+func (s *passiveScreen) Counts() map[string]int                     { return nil }
+func (s *passiveScreen) Interested(bridge.Domains) bool             { return false }
+
+func TestGotoNavAllowsDestinationWithoutFocusCapability(t *testing.T) {
+	w := NewWorkbench(nil, nil, "http://localhost:4400")
+	w.screens["index"] = &passiveScreen{id: "index"}
+
+	w.gotoNav("index")
+
+	if w.activeNav != "index" {
+		t.Fatalf("active nav = %q, want index", w.activeNav)
+	}
+}
+
 func (s *fakeScreen) ID() string { return s.id }
 func (s *fakeScreen) Init(_ screens.DataClient) tea.Cmd {
 	return func() tea.Msg {
@@ -42,7 +64,8 @@ func (s *fakeScreen) Focus(kind, id string)                  { s.focusCalls = ap
 // TestGotoNavInvokesFocusOnDestination asserts that when the user jumps
 // to a screen via the workbench's nav routing AND a matching record is
 // staged in the cross-screen selection store, the destination screen
-// receives a Focus(kind, id) call before becoming active. See ADR-0051.
+// receives a Focus(kind, id) call before becoming active, per the approved
+// 2026-07-16 TUI stabilization design.
 func TestGotoNavInvokesFocusOnDestination(t *testing.T) {
 	w := NewWorkbench(nil, nil, "http://localhost:4400")
 	// Replace one of the real screens with our recorder.

@@ -110,7 +110,7 @@ func (w *Workbench) workspaceActions() []interaction.Action {
 			},
 		},
 	}
-	for _, nav := range shell.DefaultNav {
+	for _, nav := range w.navigationItems() {
 		nav := nav
 		actions = append(actions, interaction.Action{
 			ID:      "workspace.nav." + nav.ID,

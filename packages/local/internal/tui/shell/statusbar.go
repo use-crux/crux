@@ -28,9 +28,9 @@ var layer1Fallback = []Keybind{
 	{"/", "search"},
 }
 
-// StatusBar renders the bottom keybind + path bar. Per ADR-0050, the TUI
-// is modeless: no mode chip, no NORMAL/INSERT/COMMAND label. The status
-// bar is pure keybind context — what the user can press right now.
+// StatusBar renders the bottom keybind + path bar. Per the approved 2026-07-16
+// TUI stabilization design, it has no mode chip: the bar shows only executable
+// keys available in the current context.
 func StatusBar(width int, keybinds []Keybind, path string) string {
 	if len(keybinds) == 0 {
 		keybinds = layer1Fallback

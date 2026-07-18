@@ -128,15 +128,35 @@ func (s *Runs) filterActions(client DataClient) []interaction.Action {
 }
 
 func (s *Runs) Keybinds() []shell.Keybind {
-	bindings := interaction.Bindings(s.Actions(nil))
-	help := make([]shell.Keybind, 0, len(bindings))
-	for _, binding := range bindings {
-		item := binding.Help()
+	return actionKeybinds(s.Actions(nil), nil)
+}
+
+func (s *Runs) waterfallKeybinds() []shell.Keybind {
+	if s.focus != focusWaterfall {
+		return nil
+	}
+	return actionKeybinds(s.Actions(nil), map[string]bool{
+		"runs.activate": true,
+		"runs.inspect":  true,
+		"runs.export":   true,
+	})
+}
+
+func actionKeybinds(actions []interaction.Action, allowed map[string]bool) []shell.Keybind {
+	bindings := make([]shell.Keybind, 0, len(actions))
+	for _, action := range actions {
+		if allowed != nil && !allowed[action.ID] {
+			continue
+		}
+		if !action.Enabled() {
+			continue
+		}
+		item := action.Binding.Help()
 		if item.Key != "" && item.Desc != "" {
-			help = append(help, shell.Bind(item.Key, item.Desc))
+			bindings = append(bindings, shell.Bind(item.Key, item.Desc))
 		}
 	}
-	return help
+	return bindings
 }
 
 func (s *Runs) focusItemLabel() string {

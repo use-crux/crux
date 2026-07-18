@@ -8,6 +8,29 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/api"
 )
 
+func TestIndexKeybindsDescribeOnlyHandledActions(t *testing.T) {
+	index := NewIndex()
+	bindings := index.Keybinds()
+
+	for _, binding := range bindings {
+		switch binding.Key {
+		case "j/k", "e":
+		default:
+			t.Errorf("Index advertised unhandled key %q (%s)", binding.Key, binding.Label)
+		}
+	}
+}
+
+func TestIndexKeybindsOmitExportWithoutSelection(t *testing.T) {
+	index := NewIndex()
+
+	for _, binding := range index.Keybinds() {
+		if binding.Key == "e" {
+			t.Fatal("Index advertised export without a selected definition")
+		}
+	}
+}
+
 func sampleIndex() api.IndexData {
 	return api.IndexData{
 		Definitions: []api.ProjectDefinition{

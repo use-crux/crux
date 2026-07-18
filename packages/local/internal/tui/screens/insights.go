@@ -147,7 +147,7 @@ func (s *Insights) moveSelection(delta int) {
 }
 
 func (s *Insights) cycleTab(delta int) {
-	tabs := []string{"diagnosis", "traces", "cases", "compare", "fix"}
+	tabs := []string{"diagnosis", "traces", "cases", "fix"}
 	idx := 0
 	for i, tab := range tabs {
 		if tab == s.tab {
@@ -176,10 +176,16 @@ func (s *Insights) Keybinds() []shell.Keybind {
 		shell.Bind("j/k", "move"),
 		shell.Bind("h/l", "pane"),
 		shell.Bind("[/]", "tabs"),
-		shell.Bind("t", "linked traces"),
-		shell.Bind("f", "mark fixed"),
-		shell.Bind("x", "dismiss"),
-		shell.Bind("e", "export"),
+	}
+	if current := s.currentInsight(); current != nil {
+		if len(current.LinkedTraceIDs) > 0 {
+			binds = append(binds, shell.Bind("t", "linked traces"))
+		}
+		binds = append(binds,
+			shell.Bind("f", "mark fixed"),
+			shell.Bind("x", "dismiss"),
+			shell.Bind("e", "export"),
+		)
 	}
 	binds = append(binds, shell.Bind(":", "cmd"), shell.Bind("?", "help"))
 	return binds

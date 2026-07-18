@@ -143,12 +143,6 @@ func (h *Help) View(viewportWidth, viewportHeight int) string {
 	colC := kit.PadBlock(colStr[2], colW, maxH)
 	body := kit.ComposeColumns(colA, colB, colC)
 
-	footer := " " + shell.TextMuted.Render(
-		"config: "+shell.Text.Render(".crux/keybinds.toml")+
-			"  ·  "+shell.Teal.Render(":keybind set")+" to remap",
-	)
-	footer = padTo(footer, w)
-
 	border := lipgloss.NewStyle().
 		Background(shell.ColorPanel).
 		BorderForeground(shell.ColorBorderBright).
@@ -157,9 +151,7 @@ func (h *Help) View(viewportWidth, viewportHeight int) string {
 
 	inner := header + "\n" +
 		lipgloss.NewStyle().Foreground(shell.ColorBorder).Render(strings.Repeat("─", w)) + "\n" +
-		body + "\n" +
-		lipgloss.NewStyle().Foreground(shell.ColorBorder).Render(strings.Repeat("─", w)) + "\n" +
-		footer
+		body
 	return border(inner)
 }
 

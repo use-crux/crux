@@ -9,7 +9,7 @@ import (
 // TestWorkbenchHandlesNavigateRequest asserts that when a screen emits a
 // screens.NavigateRequest carrying a Kind/ID and a destination NavID,
 // the workbench stages the selection AND switches active nav. This is
-// the cross-screen drill protocol; see ADR-0051.
+// the cross-screen drill protocol from the approved TUI stabilization design.
 func TestWorkbenchHandlesNavigateRequest(t *testing.T) {
 	w := NewWorkbench(nil, nil, "http://localhost:4400")
 	w.screens["runs"] = &fakeScreen{id: "runs"}

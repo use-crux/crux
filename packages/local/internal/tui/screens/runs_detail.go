@@ -110,7 +110,7 @@ func (s *Runs) renderSpanDetail(width, height int) string {
 		b.WriteString("\n")
 	}
 
-	// LINKED INSIGHTS — colored bullet + ID + (placeholder note).
+	// LINKED INSIGHTS — colored bullet + ID + compact relationship note.
 	if len(span.LinkedInsightIDs) > 0 {
 		b.WriteString(s.section("LINKED INSIGHTS"))
 		for _, id := range span.LinkedInsightIDs {

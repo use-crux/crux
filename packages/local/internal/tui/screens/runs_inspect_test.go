@@ -24,15 +24,14 @@ func TestRunsInspectKeyIsI(t *testing.T) {
 	}
 }
 
-// TestRunsOKeyDoesNotInspect asserts that the legacy `o` binding no
-// longer triggers the raw-inspect overlay. `o` becomes the external-
-// viewer hook (stubbed for now); this guards against regressions.
+// TestRunsOKeyDoesNotInspect asserts that the removed `o` binding does not
+// trigger the raw-inspect overlay.
 func TestRunsOKeyDoesNotInspect(t *testing.T) {
 	r := buildRunWithSpan()
 
 	cmd := r.Update(tea.KeyPressMsg(tea.Key{Text: "o", Code: 'o'}), nil)
 	if cmd == nil {
-		return // perfectly fine — `o` is a stub for now
+		return
 	}
 	if _, ok := cmd().(InspectRequest); ok {
 		t.Errorf("`o` still emits InspectRequest — it should be reserved for external viewer per KEYBINDS contract")

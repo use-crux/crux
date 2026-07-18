@@ -8,7 +8,7 @@ import (
 // TestScreenBreadcrumbsUseCanonicalRoots asserts that no screen's
 // Breadcrumb() returns "quality" as a path segment. The workbench owns
 // the workspace prefix ({project}:{target}); screens return only their
-// screen-local segments. See ADR-0050 + the TUI V1 implementation plan.
+// screen-local segments, per the approved 2026-07-16 TUI stabilization design.
 func TestScreenBreadcrumbsUseCanonicalRoots(t *testing.T) {
 	all := map[string]Screen{
 		"overview": NewOverview(),

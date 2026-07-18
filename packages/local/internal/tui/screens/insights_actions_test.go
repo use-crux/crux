@@ -114,6 +114,7 @@ func TestInsightsUnsupportedActionsDoNotEmitStubs(t *testing.T) {
 
 func TestInsightsKeybindsOnlyAdvertiseWiredActions(t *testing.T) {
 	i := NewInsights()
+	i.applyInsights([]api.InspectInsightRecord{sampleInsight()})
 	got := make([]string, 0)
 	for _, bind := range i.Keybinds() {
 		got = append(got, bind.Key+" "+bind.Label)
@@ -128,5 +129,27 @@ func TestInsightsKeybindsOnlyAdvertiseWiredActions(t *testing.T) {
 		if strings.Contains(text, blocked) {
 			t.Fatalf("keybinds advertised blocked action %q: %s", blocked, text)
 		}
+	}
+}
+
+func TestInsightsKeybindsOmitRecordActionsWithoutSelection(t *testing.T) {
+	i := NewInsights()
+
+	for _, bind := range i.Keybinds() {
+		switch bind.Key {
+		case "t", "f", "x", "e":
+			t.Errorf("Insights advertised record action %q without a selected insight", bind.Key)
+		}
+	}
+}
+
+func TestInsightsTabCycleOmitsUnimplementedCompare(t *testing.T) {
+	i := NewInsights()
+	i.tab = "cases"
+
+	i.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyTab}), nil)
+
+	if i.tab != "fix" {
+		t.Fatalf("tab after cases = %q, want fix", i.tab)
 	}
 }

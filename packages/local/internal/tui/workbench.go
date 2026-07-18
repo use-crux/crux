@@ -39,6 +39,7 @@ func osc8Link(url, text string) string {
 type Workbench struct {
 	client          screens.DataClient
 	rawClient       DataClient // legacy/shared helpers
+	capabilities    Capabilities
 	serverURL       string
 	tunnelURL       string
 	ingestTokenPath string
@@ -55,8 +56,9 @@ type Workbench struct {
 
 	pendingPrefix string // for `g…` two-key sequences
 
-	// selection is the cross-screen record store keyed by Kind. See
-	// ADR-0051. Read/write via GetSelection / SetSelection /
+	// selection is the cross-screen record store keyed by Kind. Per the
+	// approved 2026-07-16 TUI stabilization design, read/write via
+	// GetSelection / SetSelection /
 	// ClearSelection — screens never touch the map directly.
 	selection map[Kind]string
 
@@ -70,16 +72,17 @@ type Workbench struct {
 // NewWorkbench constructs the workbench root.
 func NewWorkbench(client screens.DataClient, rawClient DataClient, serverURL string) *Workbench {
 	w := &Workbench{
-		client:      client,
-		rawClient:   rawClient,
-		serverURL:   serverURL,
-		activeNav:   "overview",
-		counts:      map[string]int{},
-		stale:       map[string]bridge.Domains{},
-		initialized: map[string]bool{},
-		palette:     overlays.NewPalette(),
-		help:        overlays.NewHelp(),
-		inspect:     overlays.NewInspect(),
+		client:       client,
+		rawClient:    rawClient,
+		capabilities: discoverCapabilities(client),
+		serverURL:    serverURL,
+		activeNav:    "overview",
+		counts:       map[string]int{},
+		stale:        map[string]bridge.Domains{},
+		initialized:  map[string]bool{},
+		palette:      overlays.NewPalette(),
+		help:         overlays.NewHelp(),
+		inspect:      overlays.NewInspect(),
 	}
 	w.screens = map[string]screens.Screen{
 		"overview": screens.NewOverview(),
@@ -130,7 +133,7 @@ func (w *Workbench) Update(msg tea.Msg) tea.Cmd {
 		return w.handleKey(m)
 	case screens.NavigateRequest:
 		// A screen asked to drill cross-screen. Stage the selection (if
-		// any) and switch active nav. See ADR-0051.
+		// any) and switch active nav per the approved stabilization design.
 		if m.Kind != "" && m.ID != "" {
 			w.SetSelection(Kind(m.Kind), m.ID)
 		}
@@ -363,41 +366,6 @@ func compactURLLabel(raw string) string {
 	return label
 }
 
-// navKind maps a nav-rail destination id to the primary Kind a screen
-// surfaces. When the user jumps to a screen and a record of the matching
-// Kind is staged in the workbench's selection store, the destination
-// screen receives Focus(kind, id) so it can pre-select that record. See
-// ADR-0051.
-var navKind = map[string]Kind{
-	"insights": KindInsight,
-	"runs":     KindRun,
-	// "overview" is intentionally absent — it's a dashboard, not record-shaped.
-}
-
-func (w *Workbench) gotoNav(id string) tea.Cmd {
-	dest, ok := w.screens[id]
-	if !ok {
-		return nil
-	}
-	stale := w.stale[id]
-	needsInit := !w.initialized[id] || (stale != nil && !stale.Empty())
-	w.activeNav = id
-	delete(w.stale, id)
-	// Best-effort cross-screen selection routing. If a record of the
-	// destination screen's primary Kind is staged, hand it to the screen
-	// before init.
-	if kind, hasKind := navKind[id]; hasKind {
-		if recID := w.GetSelection(kind); recID != "" {
-			dest.Focus(string(kind), recID)
-		}
-	}
-	if !needsInit {
-		return nil
-	}
-	w.initialized[id] = true
-	return dest.Init(w.client)
-}
-
 // runPaletteCommand dispatches a parsed palette command. Verbs map to typed
 // methods on the in-process DirectClient. Unknown verbs produce a transient
 // toast in the activity tail.
@@ -410,13 +378,6 @@ func (w *Workbench) runPaletteCommand(c overlays.Chosen) tea.Cmd {
 			return w.toast("goto: missing screen name")
 		}
 		return w.gotoNav(c.Args[0])
-	case "open":
-		// `open trace <id>` → jump to Runs with selection.
-		if len(c.Args) >= 2 && c.Args[0] == "trace" {
-			cmd := w.gotoNav("runs")
-			return tea.Batch(cmd, w.toast("trace selection from palette is a follow-up"))
-		}
-		return w.toast("usage: open trace <id>")
 	case "dismiss":
 		// `dismiss insight <ID>` or just `dismiss <ID>` on Insights screen.
 		id := ""
@@ -460,18 +421,6 @@ func (w *Workbench) activeScreen() screens.Screen {
 		return sc
 	}
 	return w.screens["overview"]
-}
-
-func (w *Workbench) navWithCounts() []shell.NavItem {
-	out := make([]shell.NavItem, len(shell.DefaultNav))
-	copy(out, shell.DefaultNav)
-	for i := range out {
-		if c, ok := w.counts[out[i].ID]; ok {
-			out[i].Count = c
-			out[i].Show = true
-		}
-	}
-	return out
 }
 
 func (w *Workbench) refreshCounts() {

@@ -25,7 +25,7 @@ var runsStyles = theme.NewStyles(theme.Resolve(colorprofile.TrueColor))
 //	│   docs_agent │ ├ agent  retrieve(loop)  ━━━━━   9.80s  │ parent   8af2…f1c    │
 //	│   14.2s      │ ├ tool   rag.search …    │       0.54s  │ kind     agent.sub…  │
 //	│   18.4k tok  │ …                                       │ op       agent       │
-//	│              │ [↵] expand [o] open [f] flame chart …   │ TIMING   …           │
+//	│              │ [↵] span detail [i] inspect [e] export  │ TIMING   …           │
 //	└──────────────┴─────────────────────────────────────────┴──────────────────────┘
 //
 // Focus moves with h/l. j/k cycles within the focused pane; ↵ activates
