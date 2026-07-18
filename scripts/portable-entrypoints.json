@@ -17,8 +17,7 @@
         "./eval/internal/runner": "portable-web",
         "./eval/internal/node-runner": "node-only",
         "./internal/async-scope": "portable-web",
-        "./internal/defer-host": "portable-web",
-        "./internal/defer-lifecycle": "portable-web",
+        "./internal/scope": "portable-web",
         "./defer/node": "node-only",
         "./defer/serverless": "portable-web",
         "./project-index": "portable-web",
@@ -34,7 +33,6 @@
         "./runtime/next": "node-only",
         "./observability": "portable-web",
         "./observability/node": "node-only",
-        "./observability/workers": "portable-web",
         "./embedding": "portable-web",
         "./retrieval": "portable-web",
         "./citations": "portable-web",
@@ -80,7 +78,9 @@
     {
       "name": "@use-crux/anthropic",
       "manifest": "packages/anthropic/package.json",
-      "entrypoints": { ".": "node-only" }
+      "entrypoints": {
+        ".": "node-only"
+      }
     },
     {
       "name": "@use-crux/mcp",
@@ -93,12 +93,16 @@
     {
       "name": "@use-crux/openai",
       "manifest": "packages/openai/package.json",
-      "entrypoints": { ".": "node-only" }
+      "entrypoints": {
+        ".": "node-only"
+      }
     },
     {
       "name": "@use-crux/google",
       "manifest": "packages/google/package.json",
-      "entrypoints": { ".": "node-only" }
+      "entrypoints": {
+        ".": "node-only"
+      }
     },
     {
       "name": "@use-crux/cloudflare",
@@ -110,7 +114,11 @@
     {
       "name": "@use-crux/convex",
       "manifest": "packages/convex/package.json",
-      "externals": ["@ai-sdk/provider", "convex", "convex/*"],
+      "externals": [
+        "@ai-sdk/provider",
+        "convex",
+        "convex/*"
+      ],
       "entrypoints": {
         ".": "convex-server",
         "./swarm": "convex-server",
@@ -135,13 +143,30 @@
     {
       "name": "@use-crux/next",
       "manifest": "packages/next/package.json",
-      "externals": ["next", "next/*"],
-      "entrypoints": { ".": "next-server" }
+      "externals": [
+        "next",
+        "next/*"
+      ],
+      "entrypoints": {
+        ".": "next-server"
+      }
+    },
+    {
+      "name": "@use-crux/vercel",
+      "manifest": "packages/vercel/package.json",
+      "externals": [
+        "@vercel/functions"
+      ],
+      "entrypoints": {
+        ".": "portable-web"
+      }
     },
     {
       "name": "@use-crux/otel",
       "manifest": "packages/otel/package.json",
-      "entrypoints": { ".": "portable-web" }
+      "entrypoints": {
+        ".": "portable-web"
+      }
     },
     {
       "name": "@use-crux/react",
@@ -192,13 +217,17 @@
     {
       "name": "@use-crux/postgres",
       "manifest": "packages/postgres/package.json",
-      "entrypoints": { "./runtime": "node-only" }
+      "entrypoints": {
+        "./runtime": "node-only"
+      }
     },
     {
       "name": "@use-crux/local",
       "manifest": "packages/local/npm/local/package.json",
       "stage": "local",
-      "entrypoints": { "bin:crux": "compiler-local" }
+      "entrypoints": {
+        "bin:crux": "compiler-local"
+      }
     }
   ]
 }
