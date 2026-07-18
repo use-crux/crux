@@ -8,13 +8,19 @@ import { getEvalTaskDescriptorForInternalUse } from "./task";
 import { isEvalSnapshotPersistenceSafe } from "./redact";
 import type { EvalExecutionPorts } from "./ports";
 import type {
-  EvalAssertionSummary,
   EvalCell,
   EvalPlan,
   EvalPlannedCell,
   EvalTaskExecutionEvidence,
   EvalTaskHostResult,
 } from "./types";
+import { runEvalCellScope } from "./scope";
+import {
+  EMPTY_ASSERTIONS,
+  cellIdentity,
+  dependencyFailedScores,
+  freezeCell,
+} from "./cell-result";
 
 export type EvidenceWriteStatus =
   | "written"
@@ -41,6 +47,15 @@ export interface EvalCellExecutionResult {
 
 /** Consume one admitted cell without creating any new task/scorer work. */
 export async function executePlannedCell(input: {
+  readonly plan: EvalPlan;
+  readonly planned: EvalPlannedCell;
+  readonly ports: EvalExecutionPorts;
+  readonly executionAttemptId: string;
+}): Promise<EvalCellExecutionResult> {
+  return runEvalCellScope(input.planned, () => executeCell(input));
+}
+
+async function executeCell(input: {
   readonly plan: EvalPlan;
   readonly planned: EvalPlannedCell;
   readonly ports: EvalExecutionPorts;
@@ -131,16 +146,16 @@ export async function executePlannedCell(input: {
               !isReusableEvalValue(liveResult.response))
               ? "implicit_media"
               : !isEvalSnapshotPersistenceSafe(
-              liveResult.output,
-              input.ports.persistencePolicy,
-            ) ||
-            (liveResult.response !== undefined &&
-              !isEvalSnapshotPersistenceSafe(
-                liveResult.response,
-                input.ports.persistencePolicy,
-              ))
-              ? "capture_policy"
-              : "implicit_media";
+                    liveResult.output,
+                    input.ports.persistencePolicy,
+                  ) ||
+                  (liveResult.response !== undefined &&
+                    !isEvalSnapshotPersistenceSafe(
+                      liveResult.response,
+                      input.ports.persistencePolicy,
+                    ))
+                ? "capture_policy"
+                : "implicit_media";
         } else {
           try {
             await input.ports.evidenceStore.write(entry);
@@ -244,58 +259,3 @@ export async function executePlannedCell(input: {
     });
   }
 }
-
-function cellIdentity(planned: EvalPlannedCell) {
-  return {
-    caseId: planned.caseId,
-    ...(planned.caseName !== undefined ? { caseName: planned.caseName } : {}),
-    variant: planned.variant,
-    trial: planned.trial,
-    input: planned.input,
-    ...(planned.call !== undefined ? { call: planned.call } : {}),
-    ...(planned.expected !== undefined ? { expected: planned.expected } : {}),
-    ...(planned.unvalidatedExpected === true
-      ? { unvalidatedExpected: true as const }
-      : {}),
-  };
-}
-
-function dependencyFailedScores(planned: EvalPlannedCell): EvalCell["scores"] {
-  return Object.freeze(
-    planned.scorerActions.map((action) =>
-      Object.freeze({
-        status: "missing" as const,
-        reason: "dependency_failed" as const,
-        name: action.scorerName,
-        contractFingerprint:
-          action.contractFingerprint ?? "identity_unavailable",
-        message: `Managed external scorer '${action.scorerName}' was not called because its task dependency failed.`,
-        work: Object.freeze({
-          status: "not_called" as const,
-          reason: "dependency_failed" as const,
-          reservation: "released" as const,
-        }),
-      }),
-    ),
-  );
-}
-
-function freezeCell(cell: EvalCell): EvalCell {
-  return Object.freeze({
-    ...cell,
-    task: Object.freeze({ ...cell.task }),
-    scores: Object.freeze([...cell.scores]),
-    metrics: Object.freeze({ ...cell.metrics }),
-    runIds: Object.freeze([...cell.runIds]),
-    capturedSignals: Object.freeze([...cell.capturedSignals]),
-    ...(cell.error !== undefined
-      ? { error: Object.freeze({ ...cell.error }) }
-      : {}),
-  });
-}
-
-const EMPTY_ASSERTIONS: EvalAssertionSummary = Object.freeze({
-  ran: 0,
-  notEvaluated: 0,
-  outcomes: Object.freeze([]),
-});

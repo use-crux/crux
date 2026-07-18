@@ -83,6 +83,10 @@ Convex bridge boundaries. Inline `defer()` now works with zero host setup inside
 defer-capable primitives on long-lived processes; nested work drains at its
 nearest boundary and streaming adapters restore one scope across Core-owned
 iteration and completion segments.
+Run Evals and their cells as execution scopes. Deferred work registered by an
+Eval task is captured as cell evidence instead of invoking inline callbacks or
+staging named Runtime work, and expired remote cells drop late observability
+writes through the shared scope-sealing policy.
 Portable MCP entrypoints now fail closed when stdio is selected, while Node
 runtimes resolve their lazy stdio adapters through private conditional imports.
 

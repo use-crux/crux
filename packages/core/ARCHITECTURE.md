@@ -1728,10 +1728,12 @@ Delivery success is per record, not per HTTP status: the v2 receipt carries one 
 `config({ observability })` wires a custom transport or an HTTP transport as explicit export behavior.
 Default `config()` does not install telemetry, upload, raw-content capture, or delivery policy.
 `teeObservabilityTransport()` fans records to multiple sinks while isolating a failing leg.
-Evals capture per-cell signal records through the canonical run-scoped async context
-instead of swapping the process transport; configured devtools transports still receive records
-through the normal delivery engine. Token-guarded restore prevents nested config cleanup from
-resurrecting a disposed transport. The HTTP transport posts canonical `{ records }` batches to
+Evals open an `eval-run` execution scope with a persistent capture-session facet and one
+`eval-cell` scope per Case/Variant/trial. Cell scopes use `drain: "capture"` and
+`sealedWrites: "drop"`: inline defers become evidence without invoking their callbacks, named
+defers return captured references without resolving or writing to Runtime, and observability writes
+restored into a timed-out cell are dropped without affecting sibling work. Configured devtools
+transports still receive accepted records through the normal delivery engine. The HTTP transport posts canonical `{ records }` batches to
 `/api/observability/records`; HTTP, WebSocket, and SSE layers should remain adapters around Go
 services rather than owning graph semantics.
 

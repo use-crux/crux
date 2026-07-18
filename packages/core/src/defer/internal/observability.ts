@@ -18,6 +18,10 @@ import {
 } from "../../observability";
 import type { ScopeDescriptor } from "../../scope/types";
 import type { DeferredDrainResult } from "./invocation-scope";
+import {
+  emitInlineCapturedEvidence,
+  emitNamedCapturedEvidence,
+} from "./capture-observability";
 
 /** Whether a registration is user-authored or first-party internal composition. */
 export type DeferEvidencePolicy = "public" | "diagnostics-only";
@@ -54,6 +58,23 @@ interface OpenNamedScheduled {
 
 /** Per-invocation evidence controller shared by registration and drain. */
 export interface DeferScopeObservability {
+  /** Record an inline registration captured by a non-executing scope. */
+  recordInlineCaptured(
+    sequence: number,
+    policy: DeferEvidencePolicy,
+    scope: ScopeDescriptor,
+  ): void;
+
+  /** Record a named registration captured before Runtime resolution. */
+  recordNamedCaptured(input: {
+    readonly sequence: number;
+    readonly policy: DeferEvidencePolicy;
+    readonly targetId: string;
+    readonly workId: string;
+    readonly acceptedInput: unknown;
+    readonly scope: ScopeDescriptor;
+  }): void;
+
   /**
    * Record that one public or diagnostics-only inline callback was accepted.
    *
@@ -199,6 +220,27 @@ export function createDeferScopeObservability(): DeferScopeObservability {
   }
 
   const api: DeferScopeObservability = {
+    recordInlineCaptured(sequence, policy, scope) {
+      if (policy === "diagnostics-only") return;
+      emitInlineCapturedEvidence({
+        context: ensurePublicContext(),
+        sequence,
+        scope,
+      });
+    },
+
+    recordNamedCaptured(input) {
+      if (input.policy === "diagnostics-only") return;
+      emitNamedCapturedEvidence({
+        context: ensurePublicContext(),
+        sequence: input.sequence,
+        targetId: input.targetId,
+        workId: input.workId,
+        acceptedInput: input.acceptedInput,
+        scope: input.scope,
+      });
+    },
+
     ensurePublicTraceId() {
       const context = ensurePublicContext();
       return context.traceId;

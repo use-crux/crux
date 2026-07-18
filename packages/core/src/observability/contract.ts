@@ -941,13 +941,15 @@ export interface CruxPromptResolveAttributes {
  * Runtime acceptance path does not invent a definition id when none is known.
  */
 export interface CruxDeferScheduledAttributes {
-  mode: "inline" | "named";
+  mode: "inline" | "named" | "inline-captured" | "named-captured";
   sequence: number;
   definitionId?: string;
   targetId?: string;
   workId?: string;
   intentState?: "staged" | "released" | "abandoned";
   scopeId?: string;
+  /** JSON snapshot retained only for named capture-policy evidence. */
+  input?: unknown;
 }
 
 /**

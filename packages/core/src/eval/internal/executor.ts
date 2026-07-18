@@ -13,6 +13,7 @@ import { assertEvalCostAdmitted } from "./cost-plan";
 import { reserveEvalCostPlan } from "./reservation";
 import { compareEvalCellsToBaseline } from "./baseline";
 import { isManagedEvalTaskForInternalUse } from "./task";
+import { runEvalScope } from "./scope";
 
 export async function executeEvalPlan(
   plan: EvalPlan,
@@ -22,17 +23,19 @@ export async function executeEvalPlan(
   assertEvalHostReady(plan);
   assertEvalCostAdmitted(plan.cost);
   const runId = ports.ids.next("run");
-  const costLease = await reserveEvalCostPlan(
-    plan.cost,
-    ports.reservations,
-    runId,
-  );
-  try {
-    return await executeReservedEvalPlan(plan, ports, costLease, runId);
-  } catch (error) {
-    await costLease.fail();
-    throw error;
-  }
+  return runEvalScope(plan.evalId, async () => {
+    const costLease = await reserveEvalCostPlan(
+      plan.cost,
+      ports.reservations,
+      runId,
+    );
+    try {
+      return await executeReservedEvalPlan(plan, ports, costLease, runId);
+    } catch (error) {
+      await costLease.fail();
+      throw error;
+    }
+  });
 }
 
 function assertEvalHostReady(plan: EvalPlan): void {

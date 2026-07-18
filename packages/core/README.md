@@ -182,6 +182,9 @@ export default evaluate({
 `crux eval` always includes Current, compares declared Variants, and reuses
 only exact safe evidence. Use `--offline` for zero network access, `--plan` to
 inspect admitted work, or explicitly accept a complete run as a Baseline.
+Each Eval cell is an isolated execution scope. Calls to `defer()` made by the
+task are captured as cell evidence instead of executing side effects or
+staging named Runtime work.
 
 ## Background work
 

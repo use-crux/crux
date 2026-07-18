@@ -14,10 +14,6 @@ import type {
   DeferredScopeId,
   Lease,
 } from "../../runtime/ports";
-import {
-  assertRuntimeJsonValue,
-  cloneRuntimeJsonValue,
-} from "../../runtime/engine/json-value";
 import { createCruxSpanId } from "../../observability";
 import { createRuntimeError } from "../../runtime/engine/errors";
 import { startLeaseExtensionHeartbeat } from "../../runtime/engine/kernel-leases";
@@ -29,6 +25,7 @@ import {
 import type { DeferInvocationOutcome } from "../host-types";
 import type { DeferredWorkRef } from "../types";
 import { createDeferError } from "../errors";
+import { snapshotNamedDeferInput } from "./named-input";
 
 const DEFER_SCOPE_LEASE_TTL_MS = 60_000;
 
@@ -222,17 +219,7 @@ export function createDurableDeferController(
 
   return {
     async stage(target, input) {
-      if (input === undefined) {
-        throw createDeferError({
-          code: "DEFER_TARGET_INPUT_REQUIRED",
-          message: `Named defer target \`${target.name}\` requires a JSON input argument.`,
-        });
-      }
-      assertRuntimeJsonValue(input, "deferred target input");
-      const acceptedInput = cloneRuntimeJsonValue(
-        input,
-        "deferred target input",
-      );
+      const acceptedInput = snapshotNamedDeferInput(target, input);
       const session = await ensureSession();
       assertFenceHealthy(session);
       const sequence = nextIntent;

@@ -22,6 +22,10 @@ import type {
   DeferEvidencePolicy,
 } from "./observability";
 import { scheduleInvocationDeferDrain } from "./retained-task";
+import {
+  createCapturedDeferWorkId,
+  snapshotNamedDeferInput,
+} from "./named-input";
 
 type DeferredCallbackOutcome =
   | "completed"
@@ -77,6 +81,8 @@ export function createScopeDeferController(
     (result: DeferredDrainResult) => void | PromiseLike<void>
   > = [];
   let drainClosed = false;
+  let nextInlineSequence = 0;
+  let nextNamedCaptureSequence = 0;
   let handle: DeferredDrainHandle | undefined;
   let controller: ScopeDeferController;
 
@@ -114,8 +120,19 @@ export function createScopeDeferController(
         return;
       }
       assertInlineRegistrationAllowed(services, registration);
-      const policy: DeferEvidencePolicy = registration.evidence ?? "public";
-      const sequence = registrations.length;
+      const policy: DeferEvidencePolicy =
+        registration.evidence ?? executionScope.policies.evidence;
+      const sequence = nextInlineSequence;
+      nextInlineSequence += 1;
+      if (executionScope.policies.drain === "capture") {
+        services.evidence.recordInlineCaptured(
+          sequence,
+          policy,
+          executionScope.descriptor,
+        );
+        services.recordCallback();
+        return;
+      }
       const observation = services.evidence.recordInlineScheduled(
         sequence,
         policy,
@@ -131,7 +148,36 @@ export function createScopeDeferController(
       services.recordCallback();
     },
     stageNamed(target, input) {
-      assertNamedScopeOpen(executionScope, "stage");
+      const origin = currentScope() ?? executionScope;
+      const writable = resolveWritableScope(origin);
+      if (writable === "sealed") throwNamedScopeSealed("stage");
+      if (writable !== executionScope) {
+        const routed =
+          deferControllerForScope(writable) ??
+          createScopeDeferController(writable, services);
+        return routed.stageNamed(target, input);
+      }
+      assertNamedScopeOpen(writable, "stage");
+      if (executionScope.policies.drain === "capture") {
+        const acceptedInput = snapshotNamedDeferInput(target, input);
+        const workId = createCapturedDeferWorkId();
+        services.evidence.recordNamedCaptured({
+          sequence: nextNamedCaptureSequence,
+          policy: executionScope.policies.evidence,
+          targetId: target.targetId,
+          workId,
+          acceptedInput,
+          scope: executionScope.descriptor,
+        });
+        nextNamedCaptureSequence += 1;
+        return Promise.resolve(
+          Object.freeze({
+            kind: "deferred.work" as const,
+            workId,
+            targetId: target.targetId,
+          }),
+        );
+      }
       return services.stageNamed(target, input);
     },
     trackCommit(operation) {
@@ -189,6 +235,10 @@ function assertNamedScopeOpen(
   operation: "stage" | "track",
 ): void {
   if (scope.state === "open") return;
+  throwNamedScopeSealed(operation);
+}
+
+function throwNamedScopeSealed(operation: "stage" | "track"): never {
   throw createDeferError({
     code: "DEFER_SCOPE_SEALED",
     message:
