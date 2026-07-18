@@ -156,6 +156,15 @@ func (o *Overview) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	return nil
 }
 
+func (o *Overview) HandlesKey(msg tea.KeyPressMsg) bool {
+	switch msg.String() {
+	case "j", "down", "k", "up", "h", "left", "l", "right", "enter":
+		return true
+	default:
+		return false
+	}
+}
+
 func (o *Overview) shiftFocus(delta int) {
 	next := int(o.focusedPanel) + delta
 	if next < int(panelInsights) {

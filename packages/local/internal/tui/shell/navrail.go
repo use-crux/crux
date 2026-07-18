@@ -23,11 +23,10 @@ type NavItem struct {
 
 // DefaultNav is the local inspection nav rail.
 //
-// Numeric keys run top-to-bottom in visual order and must stay in sync with
-// `navIDByKey` in workbench.go. The web nav's extra Library entries (Memory,
-// Workspaces, Plans & Tasks) and the pinned "Scorers & gates" item have no
-// TUI screen yet, so they are intentionally omitted rather than rendered as
-// dead rows.
+// Numeric workspace actions are derived from this order. The web nav's extra
+// Library entries (Memory, Workspaces, Plans & Tasks) and the pinned
+// "Scorers & gates" item have no TUI screen yet, so they are intentionally
+// omitted rather than rendered as dead rows.
 var DefaultNav = []NavItem{
 	{Key: "1", ID: "overview", Label: "Overview", Group: "Inspect", Count: -1},
 	{Key: "2", ID: "insights", Label: "Insights", Group: "Inspect", Count: 0, Show: true},

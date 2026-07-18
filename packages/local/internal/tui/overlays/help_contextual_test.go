@@ -31,7 +31,7 @@ func TestHelpOverlayRendersContextualActGroup(t *testing.T) {
 	}
 	// The screen id should be visible so users know which screen's keymap
 	// they are reading.
-	if !strings.Contains(out, "insights") {
+	if !strings.Contains(strings.ToLower(out), "act · insights") {
 		t.Errorf("help overlay does not name the focused screen (\"insights\") in the Act section")
 	}
 	// And the old composite lie must be gone.
@@ -44,6 +44,10 @@ func TestHelpOverlayRendersContextualActGroup(t *testing.T) {
 // chords stay rendered even when no screen-specific binds are set.
 func TestHelpOverlayLayer1ChordsAlwaysVisible(t *testing.T) {
 	h := NewHelp()
+	h.SetKeybinds("", []shell.Keybind{
+		{Key: ":", Label: "command palette"},
+		{Key: "?", Label: "this help"},
+	}, nil)
 	h.Open()
 	out := h.View(120, 40)
 	for _, label := range []string{"command palette", "this help"} {

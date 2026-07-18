@@ -11,6 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/tui/bridge"
+	"github.com/use-crux/crux/packages/local/internal/tui/interaction"
 	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
 
@@ -113,4 +114,19 @@ type Screen interface {
 type EditingScreen interface {
 	Screen
 	Editing() bool
+}
+
+// ActionScreen exposes executable workflow actions in precedence order.
+// Focused-pane actions, when present, precede workflow-wide actions.
+type ActionScreen interface {
+	Screen
+	Actions(DataClient) []interaction.Action
+}
+
+// LegacyKeyScreen is the temporary handled-aware adapter for workflows that
+// have not migrated to ActionScreen. It prevents workspace actions from
+// pre-empting keys the legacy workflow owns.
+type LegacyKeyScreen interface {
+	Screen
+	HandlesKey(tea.KeyPressMsg) bool
 }

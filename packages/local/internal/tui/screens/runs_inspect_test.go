@@ -39,29 +39,23 @@ func TestRunsOKeyDoesNotInspect(t *testing.T) {
 	}
 }
 
-// TestRunsKeybindsAdvertiseInspectKey asserts the Keybinds() list now
-// surfaces `i inspect raw` and `o open in viewer` — matching what
-// Update() actually does. No more `o inspect` lie.
-func TestRunsKeybindsAdvertiseInspectKey(t *testing.T) {
-	r := NewRuns()
+// TestRunsKeybindsAdvertiseOnlyExecutableInspectAction asserts that raw
+// inspection is visible when the selected span has data, while the unimplemented
+// external-viewer action remains absent.
+func TestRunsKeybindsAdvertiseOnlyExecutableInspectAction(t *testing.T) {
+	r := buildRunWithSpan()
 	binds := r.Keybinds()
-	gotI, gotO := false, false
+	gotI := false
 	for _, b := range binds {
 		if b.Key == "i" {
 			gotI = true
 		}
-		if b.Key == "o" && b.Label != "inspect" {
-			gotO = true
-		}
-		if b.Key == "o" && b.Label == "inspect" {
-			t.Errorf("Runs Keybinds still labels `o` as \"inspect\" — should be \"open in viewer\" per KEYBINDS contract")
+		if b.Key == "o" {
+			t.Errorf("Runs Keybinds advertised unimplemented external viewer action")
 		}
 	}
 	if !gotI {
 		t.Errorf("Runs Keybinds missing `i` (inspect raw)")
-	}
-	if !gotO {
-		t.Errorf("Runs Keybinds missing or wrongly-labelled `o`")
 	}
 }
 

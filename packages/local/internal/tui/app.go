@@ -76,7 +76,7 @@ type App struct {
 func NewApp(serverURL string, c DataClient, startupMode string, startupDebug bool) *App {
 	s := spinner.New(spinner.WithSpinner(spinner.MiniDot))
 	s.Style = lipgloss.NewStyle().Foreground(accent)
-	return &App{
+	app := &App{
 		client:         c,
 		serverURL:      serverURL,
 		spinner:        s,
@@ -85,8 +85,10 @@ func NewApp(serverURL string, c DataClient, startupMode string, startupDebug boo
 		bootPhase:      bootPhaseOrder[0],
 		startupMode:    startupMode,
 		startupDebug:   startupDebug,
-		workbench:      NewWorkbench(c, c, serverURL),
 	}
+	app.workbench = NewWorkbench(c, c, serverURL)
+	app.workbench.SetQuitRequestedCallback(app.requestQuit)
+	return app
 }
 
 // --- External API (called from dev.go) ---
@@ -194,7 +196,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return a, nil
 		}
-		if m.String() == "q" || m.String() == "ctrl+c" {
+		if m.String() == "ctrl+c" {
 			a.requestQuit()
 			return a, tea.Quit
 		}

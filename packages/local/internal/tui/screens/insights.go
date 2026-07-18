@@ -99,6 +99,15 @@ func (s *Insights) updateKey(msg tea.KeyPressMsg, client DataClient) tea.Cmd {
 	return nil
 }
 
+func (s *Insights) HandlesKey(msg tea.KeyPressMsg) bool {
+	switch msg.String() {
+	case "j", "down", "k", "up", "h", "left", "l", "right", "enter", "esc", "shift+tab", "[", "tab", "]", "x", "f", "t", "e":
+		return true
+	default:
+		return false
+	}
+}
+
 func (s *Insights) applyInsights(items []api.InspectInsightRecord) {
 	s.items = items
 	s.list.SetItems(items)

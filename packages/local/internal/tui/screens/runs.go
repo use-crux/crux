@@ -67,6 +67,8 @@ func NewRuns() *Runs {
 
 func (s *Runs) ID() string { return "runs" }
 
+func (s *Runs) Editing() bool { return s.filteringRuns }
+
 func (s *Runs) Interested(domains bridge.Domains) bool {
 	return domains.Has(bridge.DomainRuns)
 }
@@ -114,41 +116,7 @@ func (s *Runs) Update(msg tea.Msg, c DataClient) tea.Cmd {
 		// and refetch the active trace's detail when relevant.
 		return s.liveRefresh(c, m.RefID)
 	case tea.KeyPressMsg:
-		if s.filteringRuns {
-			return s.updateRunFilter(m, c)
-		}
-		switch m.String() {
-		case "j", "down":
-			return s.moveDown(c)
-		case "k", "up":
-			return s.moveUp(c)
-		case "h", "left":
-			s.shiftFocus(-1)
-		case "l", "right":
-			s.shiftFocus(+1)
-		case "enter":
-			return s.activateFocus(c)
-		case "/":
-			if s.focus == focusRuns {
-				s.filteringRuns = true
-			}
-		case "f":
-			if s.focus == focusRuns {
-				return s.cycleRunStatusFilter(c)
-			}
-		case "i":
-			// Raw-inspect overlay (in-TUI JSON pretty-printer). Layer-3
-			// per KEYBINDS.md; `o` is reserved for external viewer.
-			return s.openInspect()
-		case "o":
-			// Open in external React devtools UI — stub for now; S7 wires
-			// the actual handoff once the URL scheme is documented.
-			return nil
-		case "e":
-			// export: dump the focused run's JSON to
-			// ~/.crux/exports/run-{id}.json. No-op if nothing focused.
-			return s.exportRun()
-		}
+		return s.updateKey(m, c)
 	}
 	return nil
 }
@@ -230,23 +198,6 @@ func (s *Runs) Breadcrumb() ([]string, string) {
 		right = fmt.Sprintf("%d runs · last 1h", len(s.runs))
 	}
 	return path, right
-}
-
-func (s *Runs) Keybinds() []shell.Keybind {
-	jkLabel := "span"
-	if s.focus == focusRuns {
-		jkLabel = "run"
-	}
-	return []shell.Keybind{
-		shell.Bind("j/k", jkLabel),
-		shell.Bind("h/l", "pane"),
-		shell.Bind("↵", focusActionLabel(s.focus)),
-		shell.Bind("i", "inspect raw"),
-		shell.Bind("o", "open in viewer"),
-		shell.Bind(":", "cmd"),
-		shell.Bind("?", "help"),
-		shell.Bind("q", "quit"),
-	}
 }
 
 // focusTitle prefixes a teal `▸` accent + bold teal text to the pane title

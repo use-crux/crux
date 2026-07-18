@@ -85,6 +85,15 @@ func (s *Index) handleKey(m tea.KeyPressMsg, c DataClient) tea.Cmd {
 	return nil
 }
 
+func (s *Index) HandlesKey(msg tea.KeyPressMsg) bool {
+	switch msg.String() {
+	case "j", "down", "k", "up", "e":
+		return true
+	default:
+		return false
+	}
+}
+
 func (s *Index) moveCursor(delta int) {
 	n := len(s.index.Definitions)
 	if n == 0 {

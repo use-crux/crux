@@ -21,7 +21,9 @@ func TestWorkbenchHidesNavRailInSingleColumn(t *testing.T) {
 	w.Resize(70, 24)
 
 	out := w.View()
-	if strings.Contains(out, "Overview") {
+	lines := strings.Split(out, "\n")
+	body := strings.Join(lines[:len(lines)-1], "\n")
+	if strings.Contains(body, "Overview") {
 		t.Fatalf("single-column workbench rendered nav rail label: %q", out)
 	}
 }

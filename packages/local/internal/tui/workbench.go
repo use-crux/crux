@@ -63,6 +63,8 @@ type Workbench struct {
 	palette *overlays.Palette
 	help    *overlays.Help
 	inspect *overlays.Inspect
+
+	onQuitRequested func()
 }
 
 // NewWorkbench constructs the workbench root.
@@ -86,6 +88,12 @@ func NewWorkbench(client screens.DataClient, rawClient DataClient, serverURL str
 		"index":    screens.NewIndex(),
 	}
 	return w
+}
+
+// SetQuitRequestedCallback registers the process-level cleanup notification
+// invoked immediately before a workspace quit command is returned.
+func (w *Workbench) SetQuitRequestedCallback(fn func()) {
+	w.onQuitRequested = fn
 }
 
 // SetTunnelURL updates the public devtools URL once the async tunnel is ready.
@@ -196,9 +204,7 @@ func (w *Workbench) View() string {
 	bodyRect := regions[0]
 	statusRect := regions[1]
 
-	// The status bar reflects only the focused screen's keybinds — no mode
-	// chip. See ADR-0050.
-	statusBar := shell.StatusBar(statusRect.W, w.activeScreen().Keybinds(), ".crux/evals")
+	statusBar := shell.StatusBar(statusRect.W, w.statusKeybinds(), ".crux/evals")
 
 	path, right := w.activeScreen().Breadcrumb()
 	if right == "" {
@@ -355,89 +361,6 @@ func compactURLLabel(raw string) string {
 		label = label[:i]
 	}
 	return label
-}
-
-// --- key handling ------------------------------------------------------------
-
-// navIDByKey maps numeric keys to nav IDs. Order follows the grouped
-// visual order of shell.DefaultNav.
-// so the digits run top-to-bottom down the rail.
-var navIDByKey = map[string]string{
-	"1": "overview",
-	"2": "insights",
-	"3": "runs",
-	"4": "index",
-}
-
-var navIDByGoKey = map[string]string{
-	"o": "overview",
-	"i": "insights",
-	"r": "runs",
-	"p": "index", // `g p` = project index
-}
-
-func (w *Workbench) handleKey(msg tea.KeyPressMsg) tea.Cmd {
-	key := msg.String()
-
-	// If the active screen owns an embedded editor,
-	// forward every keystroke straight to the screen so the textarea /
-	// textinput widgets receive raw input. Per ADR-0050 the TUI has no
-	// global mode flag — `Editing()` is a pass-through hint, not a mode.
-	if ed, ok := w.activeScreen().(screens.EditingScreen); ok && ed.Editing() {
-		return w.activeScreen().Update(msg, w.client)
-	}
-
-	// Overlays consume keys exclusively while open.
-	if w.inspect.IsOpen() {
-		return w.inspect.Update(msg)
-	}
-	if w.help.IsOpen() {
-		return w.help.Update(msg)
-	}
-	if w.palette.IsOpen() {
-		chosen, cmd := w.palette.Update(msg)
-		if chosen.Verb != "" {
-			return tea.Batch(cmd, w.runPaletteCommand(chosen))
-		}
-		return cmd
-	}
-
-	// Overlay openers.
-	switch key {
-	case ":":
-		w.palette.Open()
-		return nil
-	case "?":
-		// Feed the focused screen's keybinds into the contextual help overlay.
-		w.help.SetScreenKeybinds(w.activeNav, w.activeScreen().Keybinds())
-		w.help.Open()
-		return nil
-	}
-
-	// Two-key `g{letter}` sequences for nav.
-	if w.pendingPrefix == "g" {
-		w.pendingPrefix = ""
-		if id, ok := navIDByGoKey[key]; ok {
-			return w.gotoNav(id)
-		}
-		return nil
-	}
-	if key == "g" {
-		w.pendingPrefix = "g"
-		return nil
-	}
-
-	// Numeric jumps.
-	if id, ok := navIDByKey[key]; ok {
-		return w.gotoNav(id)
-	}
-
-	// Ctrl+1..4 used to switch top tabs; those were dropped in S2 so
-	// the chords are unbound now. Keys that aren't a global handler fall
-	// through to the active screen.
-
-	// Delegate everything else to the active screen.
-	return w.activeScreen().Update(msg, w.client)
 }
 
 // navKind maps a nav-rail destination id to the primary Kind a screen
