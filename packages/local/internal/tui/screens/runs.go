@@ -39,19 +39,17 @@ type Runs struct {
 	routedRun      *api.ObservabilityRunSummary
 	// detail is a temporary presentation adapter for the legacy waterfall and
 	// span renderers. detailResource remains the lossless source of truth.
-	detail  *api.InspectRunDetailRecord
-	selSpan string
-	focus   runsFocus
+	detail *api.InspectRunDetailRecord
+	focus  runsFocus
 
 	runList        *kit.ListPane[api.ObservabilityRunSummary]
+	spanList       *kit.ListPane[RunRow]
 	spanDocument   *kit.DocumentPane
 	size           Size
 	filteringRuns  bool
 	runQuery       string
 	runStatusIndex int
-	expandedDups   map[string]bool
-	renderRev      uint64
-	memo           kit.Memo
+	expandedRows   map[string]bool
 }
 
 type runsFocus int
@@ -73,10 +71,14 @@ func NewRuns() *Runs {
 		runList: kit.NewListPane(func(run api.ObservabilityRunSummary) string {
 			return run.RunID
 		}),
+		spanList: kit.NewListPane(func(row RunRow) string {
+			return row.ID
+		}),
 		spanDocument: kit.NewDocumentPane(),
 	}
 	r.runList.SetRowHeight(func(api.ObservabilityRunSummary) int { return 2 })
 	r.runList.SetFocused(true)
+	r.spanList.SetRowHeight(func(RunRow) int { return 1 })
 	return r
 }
 
@@ -91,7 +93,7 @@ func (s *Runs) Focus(kind, id string) {
 	if kind != "run" || id == "" {
 		return
 	}
-	s.selSpan = ""
+	s.spanList.SetItems(nil)
 	s.detailResource.Cancel()
 	s.detail = nil
 	s.routedRun = nil
@@ -101,7 +103,6 @@ func (s *Runs) Focus(kind, id string) {
 	s.ensureSelectedRunVisible(id)
 	s.runList.SetItems(s.selectableRuns())
 	s.runList.Select(id)
-	s.bumpRenderRev()
 }
 
 // SelectedRunID returns the pane-owned stable identity of the active run.
@@ -111,6 +112,15 @@ func (s *Runs) SelectedRunID() string {
 		return ""
 	}
 	return selected.RunID
+}
+
+// SelectedSpanID returns the hierarchy pane's selected stable span identity.
+func (s *Runs) SelectedSpanID() string {
+	selected, _, ok := s.spanList.Selected()
+	if !ok {
+		return ""
+	}
+	return selected.ID
 }
 
 func (s *Runs) Interested(domains bridge.Domains) bool {
@@ -127,7 +137,6 @@ func (s *Runs) Update(ctx context.Context, msg tea.Msg, c DataClient) tea.Cmd {
 		}
 		snapshot := s.runsResource.Snapshot()
 		if !snapshot.HasValue {
-			s.bumpRenderRev()
 			return nil
 		}
 		selectedID := s.SelectedRunID()
@@ -135,7 +144,6 @@ func (s *Runs) Update(ctx context.Context, msg tea.Msg, c DataClient) tea.Cmd {
 			s.ensureSelectedRunVisible(selectedID)
 		}
 		s.runList.SetItems(s.filteredRuns())
-		s.bumpRenderRev()
 		if selectedID != "" {
 			s.runList.Select(selectedID)
 		}
@@ -218,6 +226,7 @@ func (s *Runs) shiftFocus(delta int) {
 func (s *Runs) setFocus(focus runsFocus) {
 	s.focus = focus
 	s.runList.SetFocused(focus == focusRuns)
+	s.spanList.SetFocused(focus == focusWaterfall)
 	s.spanDocument.SetFocused(focus == focusSpanDetail)
 	s.Resize(s.size)
 }

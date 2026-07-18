@@ -165,7 +165,7 @@ func TestRunsRefreshToEmptyFilterClearsAndCancelsSelection(t *testing.T) {
 		Run:  api.ObservabilityRunSummary{RunID: "run-a", Name: "visible", Revision: 91},
 		Root: api.ObservabilityRunDetailNode{ID: "span-run-a"},
 	})
-	runs.selSpan = "span-run-a"
+	selectSpanForTest(runs, "span-run-a")
 	pending := runs.fetchRunDetail(ctx, client, "run-a")
 	runs.runQuery = "visible"
 
@@ -174,8 +174,8 @@ func TestRunsRefreshToEmptyFilterClearsAndCancelsSelection(t *testing.T) {
 	), client)
 	runs.Update(ctx, pending(), client)
 
-	if selectedID := runs.SelectedRunID(); selectedID != "" || runs.selSpan != "" || runs.detail != nil {
-		t.Fatalf("empty filtered refresh retained selection/detail: run=%q span=%q detail=%#v", selectedID, runs.selSpan, runs.detail)
+	if selectedID := runs.SelectedRunID(); selectedID != "" || runs.SelectedSpanID() != "" || runs.detail != nil {
+		t.Fatalf("empty filtered refresh retained selection/detail: run=%q span=%q detail=%#v", selectedID, runs.SelectedSpanID(), runs.detail)
 	}
 	if snapshot := runs.detailResource.Snapshot(); snapshot.Refreshing {
 		t.Fatalf("empty filtered refresh left detail request active: %#v", snapshot)

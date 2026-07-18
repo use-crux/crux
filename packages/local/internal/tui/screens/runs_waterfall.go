@@ -14,7 +14,7 @@ import (
 
 func (s *Runs) renderWaterfall(width, height int) string {
 	if s.detail == nil {
-		header := shell.PaneHeader(width, focusTitle("Trace", s.focus == focusWaterfall), "—", "")
+		header := s.waterfallHeader(width)
 		message := "loading trace…"
 		snapshot := s.detailResource.Snapshot()
 		if snapshot.Err != nil {
@@ -24,33 +24,10 @@ func (s *Runs) renderWaterfall(width, height int) string {
 		return header + "\n" + body
 	}
 
-	// Header — left: "Trace XXXX" (or "Run XXXX" when grouped) + sub
-	// "{target} · {dur} · {N} spans · {tok}". Per CONTEXT.md the
-	// canonical noun is "Run" — "Trace" is not a UI synonym. Multi-trace
-	// runs surface their trace count in the subtitle, not the title.
-	id := shortID(s.detail.Run.TraceID, 7)
-	title := focusTitle("Run "+id, s.focus == focusWaterfall)
-	tokStr := ""
-	if s.detail.Run.TokenCount > 0 {
-		tokStr = " · " + formatTokensShort(s.detail.Run.TokenCount) + " tok"
-	}
-	subParts := []string{
-		s.detail.Run.TargetID,
-		durStr(s.detail.Run.DurationMs),
-		fmt.Sprintf("%d spans", len(s.detail.Spans)),
-	}
-	if s.detail.Run.TraceCount > 1 {
-		subParts = append(subParts, fmt.Sprintf("%d traces", s.detail.Run.TraceCount))
-	}
-	sub := strings.Join(subParts, " · ") + tokStr
-	headerChips := renderTraceChips(s.detail)
-	if width < 88 {
-		headerChips = ""
-	}
-	header := shell.PaneHeader(width, title, sub, headerChips)
+	header := s.waterfallHeader(width)
 	hdrH := strings.Count(header, "\n") + 1
 
-	footer := shell.PaneFooter(width, s.waterfallKeybinds())
+	footer := s.waterfallFooter(width)
 	footerH := 0
 	if footer != "" {
 		footerH = strings.Count(footer, "\n") + 1
@@ -80,8 +57,22 @@ func (s *Runs) renderWaterfall(width, height int) string {
 	}
 	labelPrefix := glyphCol + 1 + opCol + 1 + nameCol + 1 // cols before the bar
 
-	rows := kit.FromAPISpans(s.visibleSpans(), s.detail.Trace.StartedAt, s.selSpan)
-	wfLines := renderWaterfallSpans(rows, totalMs, width, labelPrefix, barCol)
+	rows := s.flattenedSpanRows()
+	spans := make([]api.InspectRunSpan, len(rows))
+	for i, row := range rows {
+		spans[i] = row.Span
+	}
+	projected := kit.FromAPISpans(spans, s.detail.Trace.StartedAt, s.SelectedSpanID())
+	lastByParent := make(map[string]string)
+	for i := range projected {
+		projected[i].Indent = rows[i].Depth
+		lastByParent[projected[i].ParentID] = projected[i].ID
+	}
+	wfLines := s.spanList.Render(func(_ RunRow, index int, selected bool, rowWidth int) string {
+		span := projected[index]
+		span.Selected = selected
+		return renderWaterfallSpan(span, lastByParent[span.ParentID] == span.ID, totalMs, rowWidth, barCol)
+	})
 
 	rulerLine := renderTimeRuler(totalMs, labelPrefix, barCol, width)
 

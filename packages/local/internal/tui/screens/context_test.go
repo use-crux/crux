@@ -50,6 +50,13 @@ func selectRunForTest(runs *Runs, id string) {
 	}
 }
 
+func selectSpanForTest(runs *Runs, id string) {
+	runs.syncSpanRows()
+	if !runs.spanList.Select(id) {
+		panic("test selected span is not available: " + id)
+	}
+}
+
 func setRunDetailForTest(runs *Runs, detail api.ObservabilityRunDetail) {
 	runs.Update(testContext, runDetailLoadedForTest(runs, detail), nil)
 }

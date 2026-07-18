@@ -17,8 +17,9 @@ func (s *Runs) currentSpan() *api.InspectRunSpan {
 	if s.detail == nil {
 		return nil
 	}
+	selectedID := s.SelectedSpanID()
 	for i, sp := range s.detail.Spans {
-		if sp.ID == s.selSpan {
+		if sp.ID == selectedID {
 			return &s.detail.Spans[i]
 		}
 	}

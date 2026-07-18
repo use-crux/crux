@@ -136,7 +136,7 @@ func TestRunsSpanDetailWrapsLongAttributeWithoutLosingContent(t *testing.T) {
 			Attributes: map[string]string{"long_value": longValue},
 		}},
 	}
-	runs.selSpan = "span-long-value"
+	selectSpanForTest(runs, "span-long-value")
 	runs.setFocus(focusSpanDetail)
 	renderSpanDetailForTest(runs, 24, 40)
 
@@ -168,7 +168,7 @@ func newLongSpanRuns() *Runs {
 			Attributes: attributes,
 		}},
 	}
-	runs.selSpan = "span-long"
+	selectSpanForTest(runs, "span-long")
 	runs.setFocus(focusSpanDetail)
 	return runs
 }

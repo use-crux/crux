@@ -13,6 +13,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/observability"
+	"github.com/use-crux/crux/packages/local/internal/tui/screens"
 	"github.com/use-crux/crux/packages/local/internal/tui/uitest"
 )
 
@@ -54,6 +55,28 @@ func (c *runsDocumentProgramClient) ObservabilityRunDetail(_ context.Context, ru
 		attributes[fmt.Sprintf("field_%02d", i)] = strings.Repeat("evidence", 5)
 	}
 	rawAttributes, _ := json.Marshal(attributes)
+	children := make([]api.ObservabilityRunDetailNode, 20)
+	for i := range children {
+		spanID := fmt.Sprintf("span-hierarchy-%02d", i)
+		children[i] = api.ObservabilityRunDetailNode{
+			SpanSummary: api.ObservabilitySpanSummary{
+				SpanID:     spanID,
+				RunID:      runID,
+				TraceID:    runID,
+				Family:     "custom",
+				Primitive:  "custom.long",
+				Name:       fmt.Sprintf("hierarchy row %02d", i),
+				Status:     "ok",
+				Attributes: rawAttributes,
+			},
+			ID:       "span:" + spanID,
+			ParentID: "span:span-document-scroll",
+			Display: observability.RunDetailDisplay{
+				Kind:  "custom",
+				Label: fmt.Sprintf("hierarchy row %02d", i),
+			},
+		}
+	}
 	return api.ObservabilityRunDetail{
 		Run: api.ObservabilityRunSummary{
 			RunID:         runID,
@@ -77,9 +100,65 @@ func (c *runsDocumentProgramClient) ObservabilityRunDetail(_ context.Context, ru
 				Kind:  "agent",
 				Label: "long agent detail",
 			},
+			Children: children,
 		},
 	}, true, nil
 }
+
+type runsHierarchyProgramDriver struct {
+	app             *App
+	client          *runsDocumentProgramClient
+	stage           int
+	beforeHierarchy string
+	afterHierarchy  string
+	finalHierarchy  string
+	beforeDocument  string
+	afterDocument   string
+}
+
+func (d *runsHierarchyProgramDriver) Init() tea.Cmd { return d.app.Init() }
+
+func (d *runsHierarchyProgramDriver) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	_, appCmd := d.app.Update(msg)
+	runs, _ := d.app.workbench.activeScreen().(*screens.Runs)
+	plain := ansi.Strip(d.app.View().Content)
+
+	var driverCmd tea.Cmd
+	switch d.stage {
+	case 0:
+		if d.client.detailWasRequested() && runs != nil && runs.SelectedSpanID() != "" {
+			d.stage++
+			driverCmd = keyCommand(tea.KeyPressMsg{Text: "l", Code: 'l'})
+		}
+	case 1:
+		if key, ok := msg.(tea.KeyPressMsg); ok && key.String() == "l" {
+			d.beforeHierarchy = runs.SelectedSpanID()
+			d.stage++
+			driverCmd = keyCommand(tea.KeyPressMsg{Code: tea.KeyPgDown})
+		}
+	case 2:
+		if key, ok := msg.(tea.KeyPressMsg); ok && key.String() == "pgdown" {
+			d.afterHierarchy = runs.SelectedSpanID()
+			d.stage++
+			driverCmd = keyCommand(tea.KeyPressMsg{Text: "l", Code: 'l'})
+		}
+	case 3:
+		if key, ok := msg.(tea.KeyPressMsg); ok && key.String() == "l" {
+			d.beforeDocument = documentPositionPattern.FindString(plain)
+			d.stage++
+			driverCmd = keyCommand(tea.KeyPressMsg{Code: tea.KeyPgDown})
+		}
+	case 4:
+		if key, ok := msg.(tea.KeyPressMsg); ok && key.String() == "pgdown" {
+			d.afterDocument = documentPositionPattern.FindString(plain)
+			d.finalHierarchy = runs.SelectedSpanID()
+			return d, tea.Quit
+		}
+	}
+	return d, tea.Batch(appCmd, driverCmd)
+}
+
+func (d *runsHierarchyProgramDriver) View() tea.View { return d.app.View() }
 
 func (c *runsDocumentProgramClient) detailWasRequested() bool {
 	c.mu.Lock()
@@ -152,5 +231,28 @@ func TestRunsDocumentScrollsThroughRealProgram(t *testing.T) {
 	}
 	if driver.after == driver.before {
 		t.Fatalf("document position after page down = %q, want change from %q", driver.after, driver.before)
+	}
+}
+
+func TestRunsHierarchyAndDocumentNavigateIndependentlyThroughRealProgram(t *testing.T) {
+	client := newRunsDocumentProgramClient()
+	app := newTestApp("http://localhost:4400", client, "", false)
+	app.MarkBootComplete()
+	app.workbench.activeNav = "runs"
+	app.workbench.activeTarget = NavTarget{NavID: "runs"}
+	driver := &runsHierarchyProgramDriver{app: app, client: client}
+
+	_, _, err := runTestProgram(t, driver, "")
+	if err != nil {
+		t.Fatalf("run app: %v", err)
+	}
+	if driver.beforeHierarchy == "" || driver.afterHierarchy == driver.beforeHierarchy {
+		t.Fatalf("hierarchy selection after page down = %q, want change from %q", driver.afterHierarchy, driver.beforeHierarchy)
+	}
+	if driver.finalHierarchy != driver.afterHierarchy {
+		t.Fatalf("detail navigation changed hierarchy selection from %q to %q", driver.afterHierarchy, driver.finalHierarchy)
+	}
+	if driver.beforeDocument == "" || driver.afterDocument == driver.beforeDocument {
+		t.Fatalf("document position after page down = %q, want change from %q", driver.afterDocument, driver.beforeDocument)
 	}
 }

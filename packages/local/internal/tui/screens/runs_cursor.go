@@ -11,7 +11,8 @@ func (s *Runs) moveDown(ctx context.Context, c DataClient) tea.Cmd {
 	case focusRuns:
 		return s.cycleRun(ctx, c, +1)
 	case focusWaterfall:
-		return s.cycleSpan(+1)
+		cmd, _ := s.updateSpanListInput(tea.KeyPressMsg{Text: "j", Code: 'j'})
+		return cmd
 	case focusSpanDetail:
 		cmd, _ := s.updateSpanDocumentInput(tea.KeyPressMsg{Text: "j", Code: 'j'})
 		return cmd
@@ -24,7 +25,8 @@ func (s *Runs) moveUp(ctx context.Context, c DataClient) tea.Cmd {
 	case focusRuns:
 		return s.cycleRun(ctx, c, -1)
 	case focusWaterfall:
-		return s.cycleSpan(-1)
+		cmd, _ := s.updateSpanListInput(tea.KeyPressMsg{Text: "k", Code: 'k'})
+		return cmd
 	case focusSpanDetail:
 		cmd, _ := s.updateSpanDocumentInput(tea.KeyPressMsg{Text: "k", Code: 'k'})
 		return cmd
@@ -36,6 +38,8 @@ func (s *Runs) updateFocusedPaneInput(ctx context.Context, msg tea.Msg, c DataCl
 	switch s.focus {
 	case focusRuns:
 		return s.updateRunListInput(ctx, msg, c)
+	case focusWaterfall:
+		return s.updateSpanListInput(msg)
 	case focusSpanDetail:
 		return s.updateSpanDocumentInput(msg)
 	default:
@@ -43,12 +47,19 @@ func (s *Runs) updateFocusedPaneInput(ctx context.Context, msg tea.Msg, c DataCl
 	}
 }
 
+func (s *Runs) updateSpanListInput(msg tea.Msg) (tea.Cmd, bool) {
+	s.spanList.SetFocused(s.focus == focusWaterfall)
+	if !s.spanList.Update(msg) {
+		return nil, false
+	}
+	return nil, true
+}
+
 func (s *Runs) updateSpanDocumentInput(msg tea.Msg) (tea.Cmd, bool) {
 	s.spanDocument.SetFocused(s.focus == focusSpanDetail)
 	if !s.spanDocument.Update(msg) {
 		return nil, false
 	}
-	s.bumpRenderRev()
 	return nil, true
 }
 
@@ -79,7 +90,6 @@ func (s *Runs) updateRunListInput(ctx context.Context, msg tea.Msg, c DataClient
 		return nil, true
 	}
 	s.detail = nil
-	s.bumpRenderRev()
 	return s.fetchRunDetail(ctx, c, selectedID), true
 }
 
@@ -112,31 +122,8 @@ func (s *Runs) ensureFilteredRunSelection(ctx context.Context, c DataClient) tea
 
 func (s *Runs) clearRunSelection() {
 	s.runList.SetItems(nil)
-	s.selSpan = ""
+	s.spanList.SetItems(nil)
 	s.routedRun = nil
 	s.detail = nil
 	s.detailResource.Cancel()
-}
-
-func (s *Runs) cycleSpan(delta int) tea.Cmd {
-	spans := s.visibleSpans()
-	if len(spans) == 0 {
-		return nil
-	}
-	idx := 0
-	for i, sp := range spans {
-		if sp.ID == s.selSpan {
-			idx = i
-			break
-		}
-	}
-	idx += delta
-	if idx < 0 {
-		idx = 0
-	}
-	if idx >= len(spans) {
-		idx = len(spans) - 1
-	}
-	s.selSpan = spans[idx].ID
-	return nil
 }

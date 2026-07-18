@@ -58,7 +58,7 @@ func TestRunsBreadcrumbSpanSegmentPrefixed(t *testing.T) {
 			{ID: "sp1", Name: "retrieve (loop)"},
 		},
 	}
-	r.selSpan = "sp1"
+	selectSpanForTest(r, "sp1")
 
 	path, _ := r.Breadcrumb()
 	last := path[len(path)-1]

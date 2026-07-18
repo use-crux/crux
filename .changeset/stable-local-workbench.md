@@ -17,3 +17,5 @@ Keep the Runs list selection visible across paging, filtering, refresh, and
 terminal resize, with keyboard and mouse-wheel navigation gated by pane focus.
 Wrap and scroll long Runs span details with stable resize anchors, focused
 line/page navigation, and a visible document position indicator.
+Keep the selected Runs span visible while navigating or refreshing its
+hierarchy, with focused line/page movement independent from detail scrolling.

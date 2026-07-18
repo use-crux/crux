@@ -186,7 +186,7 @@ func TestRealShapeProjectionSurfacesPerPrimitiveFields(t *testing.T) {
 			selectRunForTest(r, projected.Run.TraceID)
 			d := projected
 			r.detail = &d
-			r.selSpan = projected.Spans[0].ID
+			selectSpanForTest(r, projected.Spans[0].ID)
 
 			plain := stripANSI(renderSpanDetailForTest(r, 80, 60))
 			for _, want := range tc.want {

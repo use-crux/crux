@@ -62,36 +62,32 @@ func (s *Runs) Actions(ctx context.Context, client DataClient) []interaction.Act
 			Run:     func() tea.Cmd { return s.moveUp(ctx, client) },
 		},
 		{
-			ID:             "runs.page-down",
-			Binding:        key.NewBinding(key.WithKeys("pgdown"), key.WithHelp("pgdn", "next "+s.focusPageLabel())),
-			DisabledReason: disabledUnless(s.focus != focusWaterfall, "focus a scrollable pane to page"),
+			ID:      "runs.page-down",
+			Binding: key.NewBinding(key.WithKeys("pgdown"), key.WithHelp("pgdn", "next "+s.focusPageLabel())),
 			Run: func() tea.Cmd {
 				cmd, _ := s.updateFocusedPaneInput(ctx, tea.KeyPressMsg{Code: tea.KeyPgDown}, client)
 				return cmd
 			},
 		},
 		{
-			ID:             "runs.page-up",
-			Binding:        key.NewBinding(key.WithKeys("pgup"), key.WithHelp("pgup", "previous "+s.focusPageLabel())),
-			DisabledReason: disabledUnless(s.focus != focusWaterfall, "focus a scrollable pane to page"),
+			ID:      "runs.page-up",
+			Binding: key.NewBinding(key.WithKeys("pgup"), key.WithHelp("pgup", "previous "+s.focusPageLabel())),
 			Run: func() tea.Cmd {
 				cmd, _ := s.updateFocusedPaneInput(ctx, tea.KeyPressMsg{Code: tea.KeyPgUp}, client)
 				return cmd
 			},
 		},
 		{
-			ID:             "runs.first",
-			Binding:        key.NewBinding(key.WithKeys("home"), key.WithHelp("home", "first "+s.focusItemLabel())),
-			DisabledReason: disabledUnless(s.focus != focusWaterfall, "focus a scrollable pane to move"),
+			ID:      "runs.first",
+			Binding: key.NewBinding(key.WithKeys("home"), key.WithHelp("home", "first "+s.focusItemLabel())),
 			Run: func() tea.Cmd {
 				cmd, _ := s.updateFocusedPaneInput(ctx, tea.KeyPressMsg{Code: tea.KeyHome}, client)
 				return cmd
 			},
 		},
 		{
-			ID:             "runs.last",
-			Binding:        key.NewBinding(key.WithKeys("end"), key.WithHelp("end", "last "+s.focusItemLabel())),
-			DisabledReason: disabledUnless(s.focus != focusWaterfall, "focus a scrollable pane to move"),
+			ID:      "runs.last",
+			Binding: key.NewBinding(key.WithKeys("end"), key.WithHelp("end", "last "+s.focusItemLabel())),
 			Run: func() tea.Cmd {
 				cmd, _ := s.updateFocusedPaneInput(ctx, tea.KeyPressMsg{Code: tea.KeyEnd}, client)
 				return cmd
@@ -216,10 +212,14 @@ func (s *Runs) focusItemLabel() string {
 }
 
 func (s *Runs) focusPageLabel() string {
-	if s.focus == focusSpanDetail {
+	switch s.focus {
+	case focusWaterfall:
+		return "hierarchy page"
+	case focusSpanDetail:
 		return "detail page"
+	default:
+		return "run page"
 	}
-	return "run page"
 }
 
 func disabledUnless(enabled bool, reason string) string {

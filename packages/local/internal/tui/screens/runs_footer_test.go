@@ -22,7 +22,7 @@ func TestRunsFooterOmitsUnbuiltVerbs(t *testing.T) {
 		},
 	}
 	selectRunForTest(r, "8af2f1c")
-	r.selSpan = "sp1"
+	selectSpanForTest(r, "sp1")
 
 	out := viewRunsForTest(r, Size{Width: 160, Height: 40})
 	for _, label := range []string{"flame chart", "timeline"} {
@@ -52,7 +52,7 @@ func TestRunsFooterOmitsInspectWhenSelectedSpanHasNoRawPayload(t *testing.T) {
 		},
 	}
 	selectRunForTest(r, "run-1")
-	r.selSpan = "span-1"
+	selectSpanForTest(r, "span-1")
 	r.focus = focusWaterfall
 
 	out := viewRunsForTest(r, Size{Width: 160, Height: 40})

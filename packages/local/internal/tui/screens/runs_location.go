@@ -7,7 +7,7 @@ func (s *Runs) CaptureLocation() ScreenLocation {
 		FocusedPane: runsPaneID(s.focus),
 		SelectedIDs: map[string]string{
 			"run":  s.SelectedRunID(),
-			"span": s.selSpan,
+			"span": s.SelectedSpanID(),
 		},
 	}
 }
@@ -23,9 +23,9 @@ func (s *Runs) RestoreLocation(location ScreenLocation) {
 		s.runList.Select(id)
 	}
 	if id := location.SelectedIDs["span"]; id != "" && s.hasSpan(id) {
-		s.selSpan = id
+		s.syncSpanRows()
+		s.spanList.Select(id)
 	}
-	s.bumpRenderRev()
 }
 
 func (s *Runs) hasSpan(id string) bool {

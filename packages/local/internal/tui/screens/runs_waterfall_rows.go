@@ -11,98 +11,64 @@ import (
 )
 
 func renderWaterfallSpans(rows []kit.WaterfallSpan, totalMs float64, width, labelPrefix, barCol int) []string {
+	lastByParent := make(map[string]string)
+	for _, sp := range rows {
+		lastByParent[sp.ParentID] = sp.ID
+	}
+	out := make([]string, 0, len(rows))
+	for _, sp := range rows {
+		out = append(out, renderWaterfallSpan(sp, lastByParent[sp.ParentID] == sp.ID, totalMs, width, barCol))
+	}
+	_ = labelPrefix
+	return out
+}
+
+func renderWaterfallSpan(sp kit.WaterfallSpan, lastChild bool, totalMs float64, width, barCol int) string {
 	if totalMs <= 0 {
 		totalMs = 1
 	}
 	const (
 		opColW       = 10
-		nameColW     = 26 // total cols for indent + glyph + " " + name
+		nameColW     = 26
 		indentPerLvl = 2
 	)
-
-	// Identify the last child per parent so we can pick └ vs ├.
-	lastByParent := map[string]string{}
-	for _, sp := range rows {
-		lastByParent[sp.ParentID] = sp.ID
+	primitive := sp.Primitive
+	if primitive == "" {
+		primitive = sp.Op
 	}
-
-	out := make([]string, 0, len(rows))
-	for _, sp := range rows {
-		primitive := sp.Primitive
-		if primitive == "" {
-			primitive = sp.Op
-		}
-		color := kit.PrimitiveColor(primitive)
-
-		// Indent goes at the START of the line so the whole glyph→op→name
-		// block shifts right with depth. Root + direct children at col 0;
-		// depth 2+ pushed right by (depth-1) * 2 cols. The bar column
-		// remains at a fixed position because the name budget shrinks by
-		// the same amount.
-		depthIndent := 0
-		if sp.Indent > 1 {
-			depthIndent = (sp.Indent - 1) * indentPerLvl
-		}
-		indentSpaces := strings.Repeat(" ", depthIndent)
-
-		// Tree glyph: ◆ for root, └ for the last child of its parent, ├ otherwise.
-		var treeGlyph string
-		switch {
-		case sp.Indent == 0:
-			treeGlyph = "◆"
-		case lastByParent[sp.ParentID] == sp.ID:
-			treeGlyph = "└"
-		default:
-			treeGlyph = "├"
-		}
-		glyph := lipgloss.NewStyle().Foreground(shell.ColorTextMuted).Render(treeGlyph)
-
-		op := padString2(primitiveLabel(sp), opColW)
-		opStyled := lipgloss.NewStyle().Foreground(color).Render(op)
-
-		// Name budget = (nameColW - depthIndent) total cols available
-		// after the indent. Subtract 2 for the primitive glyph + space.
-		nameWidth := nameColW - depthIndent
-		if nameWidth < 10 {
-			nameWidth = 10
-		}
-		// Design uses just one glyph per row — the tree connector
-		// (`◆` for root, `├`/`└` for children). The legacy
-		// A primitive-glyph prefix put a second glyph next to the name
-		// (`✦`, `⚒`, `⇶`, etc.) which read as emoji-ish on most
-		// terminals and didn't match the design.
-		name := sp.Name
-		if sp.Duplicate {
-			name = name + "  · dup"
-		}
-		nameInner := truncate(name, nameWidth)
-		nameStyled := lipgloss.NewStyle().Foreground(textColorFor(sp)).Render(padString2(nameInner, nameWidth))
-
-		offsetFrac := sp.StartedMs / totalMs
-		widthFrac := sp.DurationMs / totalMs
-		bar := makeSpanBar(barCol, offsetFrac, widthFrac, color, sp.Selected)
-
-		dur := padString2Right(formatSpanDuration(sp.DurationMs), 7)
-		durStyled := shell.TextDim.Render(dur)
-
-		left := " "
-		if sp.Selected {
-			left = lipgloss.NewStyle().Foreground(shell.ColorTeal).Render("▌")
-		}
-
-		// Row layout (always width-stable so bars stay aligned):
-		//   <sel> <indent><glyph> <op> <name> <bar> <dur>
-		// The indent eats into the name column, not the bar column.
-		row := fmt.Sprintf("%s %s%s %s %s %s %s",
-			left, indentSpaces, glyph, opStyled, nameStyled, bar, durStyled,
-		)
-		if w := lipgloss.Width(row); w < width {
-			row += strings.Repeat(" ", width-w)
-		}
-		out = append(out, row)
-		_ = labelPrefix
+	color := kit.PrimitiveColor(primitive)
+	depthIndent := 0
+	if sp.Indent > 1 {
+		depthIndent = (sp.Indent - 1) * indentPerLvl
 	}
-	return out
+	indentSpaces := strings.Repeat(" ", depthIndent)
+
+	treeGlyph := "├"
+	if sp.Indent == 0 {
+		treeGlyph = "◆"
+	} else if lastChild {
+		treeGlyph = "└"
+	}
+	glyph := lipgloss.NewStyle().Foreground(shell.ColorTextMuted).Render(treeGlyph)
+	op := padString2(primitiveLabel(sp), opColW)
+	opStyled := lipgloss.NewStyle().Foreground(color).Render(op)
+	nameWidth := max(10, nameColW-depthIndent)
+	name := sp.Name
+	if sp.Duplicate {
+		name += "  · dup"
+	}
+	nameStyled := lipgloss.NewStyle().Foreground(textColorFor(sp)).Render(padString2(truncate(name, nameWidth), nameWidth))
+	bar := makeSpanBar(barCol, sp.StartedMs/totalMs, sp.DurationMs/totalMs, color, sp.Selected)
+	durStyled := shell.TextDim.Render(padString2Right(formatSpanDuration(sp.DurationMs), 7))
+	left := " "
+	if sp.Selected {
+		left = lipgloss.NewStyle().Foreground(shell.ColorTeal).Render("▌")
+	}
+	row := fmt.Sprintf("%s %s%s %s %s %s %s", left, indentSpaces, glyph, opStyled, nameStyled, bar, durStyled)
+	if rowWidth := lipgloss.Width(row); rowWidth < width {
+		row += strings.Repeat(" ", width-rowWidth)
+	}
+	return row
 }
 
 // textColorFor picks the row text color: rose for duplicate spans

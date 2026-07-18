@@ -73,13 +73,14 @@ func fixtureRuns() (*Runs, time.Time) {
 	screen.detail = &detail
 	selectRunForTest(screen, runs[0].TraceID)
 	if len(detail.Spans) > 0 {
-		screen.selSpan = detail.Spans[0].ID
+		selectedSpanID := detail.Spans[0].ID
 		for _, span := range detail.Spans {
 			if span.ID == "retrieve" {
-				screen.selSpan = span.ID
+				selectedSpanID = span.ID
 				break
 			}
 		}
+		selectSpanForTest(screen, selectedSpanID)
 	}
 	screen.runList.SetItems(summaries)
 	return screen, client.Now
@@ -149,7 +150,7 @@ func TestRunsWaterfallCollapsesDuplicateGroups(t *testing.T) {
 		},
 	}
 	selectRunForTest(screen, "run-dup")
-	screen.selSpan = "dup-1"
+	selectSpanForTest(screen, "dup-1")
 	screen.focus = focusWaterfall
 
 	collapsed := stripANSI(viewRunsForTest(screen, Size{Width: 140, Height: 28}))

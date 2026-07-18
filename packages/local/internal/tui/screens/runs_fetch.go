@@ -75,7 +75,7 @@ func (s *Runs) fetchRunDetail(parent context.Context, c DataClient, runID string
 	}
 	if snapshot.Token.Owner != owner {
 		s.detail = nil
-		s.selSpan = ""
+		s.spanList.SetItems(nil)
 	}
 	ctx, token := s.detailResource.Begin(parent, owner, revision)
 	return fetchRunDetail(ctx, c, token)

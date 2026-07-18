@@ -9,6 +9,9 @@ func (s *Runs) Resize(size Size) {
 	s.size = Size{Width: max(0, size.Width), Height: max(0, size.Height)}
 	listRect, documentRect := runsPaneRects(s.size)
 	s.runList.SetSize(listRect.W, max(0, listRect.H-3))
+	waterfallRect := runsWaterfallRect(s.size)
+	s.syncSpanRows()
+	s.spanList.SetSize(waterfallRect.W, s.waterfallSpanHeight(waterfallRect.W, waterfallRect.H))
 	s.resizeSpanDocument(documentRect)
 }
 
@@ -23,6 +26,20 @@ func runsPaneRects(size Size) (list, document kit.Rect) {
 		return panes[0], panes[1]
 	default:
 		return root, root
+	}
+}
+
+func runsWaterfallRect(size Size) kit.Rect {
+	root := kit.Rect{W: size.Width, H: size.Height}
+	switch kit.Classify(size.Width) {
+	case kit.LayoutFull:
+		panes := kit.SplitH(root, kit.Fixed(26), kit.Fill(), kit.Min(34))
+		return panes[1]
+	case kit.LayoutTwo:
+		panes := kit.SplitH(root, kit.Fixed(26), kit.Fill())
+		return panes[1]
+	default:
+		return root
 	}
 }
 

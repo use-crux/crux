@@ -34,7 +34,7 @@ func renderSpanWithPayload(t *testing.T, primitive string, payload map[string]an
 		},
 		Trace: api.InspectTraceRecord{StartedAt: 1716730000000},
 	}
-	r.selSpan = "sp1"
+	selectSpanForTest(r, "sp1")
 	return renderSpanDetailForTest(r, 80, 60)
 }
 
@@ -138,7 +138,7 @@ func TestSpanDetailSurfacesObservedError(t *testing.T) {
 		},
 		Trace: api.InspectTraceRecord{StartedAt: 1716730000000},
 	}
-	r.selSpan = "sp-error"
+	selectSpanForTest(r, "sp-error")
 
 	plain := stripANSI(renderSpanDetailForTest(r, 90, 60))
 	for _, want := range []string{"ERROR", "ToolExecutionError", "tool exploded", "category", "tool", "retryable", "false", "error.stack", "search.ts:10:3"} {

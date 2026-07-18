@@ -147,7 +147,7 @@ func TestDumpPrimitiveRenders(t *testing.T) {
 			},
 			Trace: api.InspectTraceRecord{StartedAt: 1716730000000},
 		}
-		r.selSpan = "sp1"
+		selectSpanForTest(r, "sp1")
 
 		out := stripANSI(renderSpanDetailForTest(r, 80, 60))
 		// Trim trailing all-whitespace lines for readability.

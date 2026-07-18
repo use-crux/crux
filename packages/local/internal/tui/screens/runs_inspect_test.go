@@ -70,6 +70,6 @@ func buildRunWithSpan() *Runs {
 		},
 	}
 	selectRunForTest(r, "8af2f1c")
-	r.selSpan = "sp1"
+	selectSpanForTest(r, "sp1")
 	return r
 }
