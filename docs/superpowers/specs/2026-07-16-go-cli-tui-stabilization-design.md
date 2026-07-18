@@ -174,12 +174,17 @@ navigation level before it can affect the process.
 
 #### Pane components
 
-The kernel initially needs three pane types:
+The kernel initially needs two generic pane types:
 
 - `ListPane`: selected stable ID, cursor, paging, scroll, empty/error state.
-- `TreePane`: selected stable ID, expansion state, paging, scroll.
 - `DocumentPane`: wrapped content, viewport offset, search position, page and
   line scrolling.
+
+Hierarchical presentation remains workflow-owned. Runs flattens its span tree
+into stable `RunRow` values, including depth and expansion metadata, and renders
+those rows through `ListPane[RunRow]`. Runs owns expansion state. Do not add a
+generic `TreePane` until a second independent workflow demonstrates the same
+tree contract and cannot be expressed cleanly through `ListPane`.
 
 Each pane owns its cursor or viewport and implements one shared input/resize
 contract. Screens do not maintain a second offset or reinterpret movement keys.
