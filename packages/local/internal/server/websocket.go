@@ -149,7 +149,7 @@ func (h *WSHub) ClientCount() int {
 func (h *WSHub) forwardInspectEvents(events <-chan api.InspectEvent) {
 	for event := range events {
 		h.BroadcastJSON(map[string]any{
-			"type":      "quality:event",
+			"type":      "inspect:event",
 			"_tag":      event.Tag,
 			"id":        event.ID,
 			"timestamp": event.Timestamp,

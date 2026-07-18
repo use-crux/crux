@@ -61,6 +61,12 @@ export const { GET, POST } = createRuntimeHandler({
 
 `POST` verifies the wake request before durable writes. `GET` returns health metadata for setup and preflight without exposing secrets.
 
+When deployable Evals are discovered, the same generated module also exports
+`DELETE` and dispatches authenticated `/manifest` and `/jobs/*` requests to
+the durable Eval host. Mount it from an optional catch-all route such as
+`app/api/crux/[[...path]]/route.ts`; set `CRUX_EVAL_HOST_DEPLOYMENT_ID` and
+`CRUX_EVAL_HOST_TOKEN` in the deployment secret store.
+
 ## Verify setup
 
 ```bash

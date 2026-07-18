@@ -11,9 +11,9 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Btn, Eyebrow } from "@/qw/shell/primitives";
-import { Icon } from "@/qw/shell/Icon";
-import { useToast } from "@/qw/shell/useToast";
+import { Btn, Eyebrow } from "@/devtools/shell/primitives";
+import { Icon } from "@/devtools/shell/Icon";
+import { useToast } from "@/devtools/shell/useToast";
 import { pathFromState } from "@/app/navigation/useNavigation";
 import type { RunLens } from "@/features/run-detail/types";
 
@@ -84,8 +84,8 @@ export function RunShareButton({ traceId, lens, spanId }: RunPermalinkParts) {
         <div
           className="absolute right-0 top-full z-50 mt-1.5 w-[332px] rounded-[10px] p-4"
           style={{
-            background: "var(--qw-bg-elev)",
-            border: "1px solid var(--qw-border)",
+            background: "var(--devtools-bg-elev)",
+            border: "1px solid var(--devtools-border)",
             boxShadow: "0 12px 32px oklch(0% 0 0 / 0.28)",
           }}
         >
@@ -95,20 +95,20 @@ export function RunShareButton({ traceId, lens, spanId }: RunPermalinkParts) {
           <div
             className="mt-2.5 overflow-hidden text-ellipsis whitespace-nowrap rounded-[7px] px-2.5 py-2 font-mono text-[11.5px]"
             style={{
-              background: "var(--qw-bg)",
-              border: "1px solid var(--qw-border)",
-              color: "var(--qw-fg)",
+              background: "var(--devtools-bg)",
+              border: "1px solid var(--devtools-border)",
+              color: "var(--devtools-fg)",
             }}
             title={url}
           >
             /runs/
-            <span style={{ color: "var(--qw-crux)" }}>
+            <span style={{ color: "var(--devtools-crux)" }}>
               {traceId.slice(0, 12)}
             </span>
             {spanId && (
               <>
                 ?spanId=
-                <span style={{ color: "var(--qw-crux)" }}>
+                <span style={{ color: "var(--devtools-crux)" }}>
                   {spanId.slice(0, 12)}
                 </span>
               </>
@@ -116,14 +116,14 @@ export function RunShareButton({ traceId, lens, spanId }: RunPermalinkParts) {
             {lens !== "tree" && (
               <>
                 {spanId ? "&" : "?"}lens=
-                <span style={{ color: "var(--qw-crux)" }}>{lens}</span>
+                <span style={{ color: "var(--devtools-crux)" }}>{lens}</span>
               </>
             )}
           </div>
 
           <div
             className="mt-2 flex gap-2.5 font-mono text-[10.5px]"
-            style={{ color: "var(--qw-fg-faint)" }}
+            style={{ color: "var(--devtools-fg-faint)" }}
           >
             <span>run</span>
             <span>· selection</span>
@@ -141,14 +141,14 @@ export function RunShareButton({ traceId, lens, spanId }: RunPermalinkParts) {
             </Btn>
             <span
               className="font-mono text-[10.5px]"
-              style={{ color: "var(--qw-fg-faint)" }}
+              style={{ color: "var(--devtools-fg-faint)" }}
             >
               ⌘⇧C
             </span>
             <div className="flex-1" />
             <span
               className="text-[10.5px]"
-              style={{ color: "var(--qw-fg-faint)" }}
+              style={{ color: "var(--devtools-fg-faint)" }}
             >
               paste into issues · notes · commits
             </span>

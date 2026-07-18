@@ -29,6 +29,21 @@ Managed scorer actions are admitted during planning. Their final evidence key
 depends on task output, so Crux resolves it after the task completes. Exact
 hits and failed task dependencies avoid the external call.
 
+`scorers.judge()` inherits the managed task's adapter, model or router, and
+required routing context by default. Its evidence identity includes that
+binding, fixed judge settings, rubric, output schema, selector, and exact
+input/output/expected dependencies. An explicit judge model overrides the
+inherited model; unattested models or custom generate functions still run, but
+remain fresh until Crux can prove their identity. A task adapter that cannot
+provide a judge execution context fails with a setup-pointing error before any
+judge call.
+
+Crux built-in code scorers carry versioned metric contracts. Arbitrary scorer
+callbacks and `recordScore()` deliberately do not: Crux reruns them, but will
+not claim their metrics are comparable to a Baseline because JavaScript
+function source is not a stable semantic identity. Use a built-in scorer for
+relative metric Gates; treat custom callback scores as current-run evidence.
+
 ## Gates
 
 ```ts
@@ -55,6 +70,40 @@ and relevant host/source identity. Metadata is diagnostic only.
 Dynamic dependencies or media whose identity cannot be proven still execute
 normally, but their output is not reusable. A task identity mismatch after
 execution prevents evidence writes.
+
+An inline managed task or inline Variant task replacement reports
+`task_binding_untracked`; move it into a production module and import the task
+with literal ESM. `unresolved_source_dependency` is reserved for a tracked
+source closure that contains an unreadable, dynamic, CommonJS, generated, or
+otherwise unresolvable dependency.
+
+AI SDK `LanguageModel` objects do not expose a durable identity for endpoint,
+headers, middleware, or captured provider configuration. Wrap a standard model
+with `stableModel(model)` from `@use-crux/ai` to attest those hidden semantics;
+Crux derives `provider:modelId` and keeps the exact same object and inferred
+type. For custom providers or middleware, pass a secret-free versioned key and
+bump it whenever hidden behavior changes:
+
+```ts
+const model = stableModel(custom("support"), "acme:support:v3");
+```
+
+Keys are fingerprint material: never put API keys, bearer tokens, headers, or
+other credentials in them. An unattested object still runs normally, but its
+output is fresh and the plan reports `model_identity_unattested` with the
+`stableModel(model)` remedy. A provider-reported model ID that differs after
+execution prevents the new evidence from being written.
+
+Function-form prompt fields use inert structural markers. The Node coordinator
+proves their authored identity from the Eval's literal-ESM project-source
+dependency closure; it does not invoke callbacks to build that identity or hash
+function source. After an evidence candidate is found, Crux locally resolves
+the prompt and compares its fingerprint with the exact normalized prompt
+captured by the original request. A mismatch runs fresh with
+`nondeterministic_renderer`. An unresolved or non-portable closure runs fresh with
+`unresolved_source_dependency`. Environment, filesystem, and network state
+must be explicit input, call, or Variant identity, or intentionally bypassed
+with `--fresh`.
 
 `--fresh` bypasses both task and managed-scorer evidence. A latency Gate or
 fresh callback bypasses only the task measurement; an unchanged output can

@@ -1,4 +1,4 @@
-import type { ChipTone } from "@/qw/shell/primitives";
+import type { ChipTone } from "@/devtools/shell/primitives";
 import type {
   DroppedContext,
   ExcludedContext,
@@ -9,7 +9,7 @@ import type {
   Trace,
 } from "@/types";
 
-// Center pane = content only. Facts/quality (metadata, attributes, relations,
+// Center pane = content only. Evidence (metadata, attributes, relations,
 // diagnostics) live in the Inspector; structure (graph) is a lens — neither is
 // a center tab.
 export type InspectTabId =
@@ -142,29 +142,29 @@ export function tabsForKind(kind: PrimitiveKind): readonly InspectTabId[] {
 // `PrimitiveKind` buckets; prefer `primitiveAccentVar(node.primitive)` from
 // `./families` wherever the full primitive is available (it can distinguish the
 // Safety / Routing / State members that `classifyPrimitive` collapses into
-// `operation`). Tones follow the v2 design families: State=plum, Quality=gold,
+// `operation`). Tones follow the design families: State=plum, Evaluation=gold,
 // Orchestration=crux, Transition=faint.
 export const KIND_ACCENT: Record<PrimitiveKind, string> = {
-  run: "var(--qw-crux)",
-  generation: "var(--qw-warn)",
-  agent: "var(--qw-iris)",
-  tool: "var(--qw-fg-muted)",
-  memory: "var(--qw-plum)",
-  handoff: "var(--qw-fg-faint)",
-  retrieval: "var(--qw-ok)",
-  eval: "var(--qw-gold)",
-  operation: "var(--qw-plum)",
-  composition: "var(--qw-crux)",
-  suspension: "var(--qw-crux)",
-  group: "var(--qw-crux)",
-  other: "var(--qw-fg-muted)",
+  run: "var(--devtools-crux)",
+  generation: "var(--devtools-warn)",
+  agent: "var(--devtools-iris)",
+  tool: "var(--devtools-fg-muted)",
+  memory: "var(--devtools-plum)",
+  handoff: "var(--devtools-fg-faint)",
+  retrieval: "var(--devtools-ok)",
+  eval: "var(--devtools-gold)",
+  operation: "var(--devtools-plum)",
+  composition: "var(--devtools-crux)",
+  suspension: "var(--devtools-crux)",
+  group: "var(--devtools-crux)",
+  other: "var(--devtools-fg-muted)",
 };
 
 export const COMPOSITION_PALETTE = [
-  "var(--qw-crux)",
-  "var(--qw-ok)",
-  "var(--qw-iris)",
-  "var(--qw-warn)",
+  "var(--devtools-crux)",
+  "var(--devtools-ok)",
+  "var(--devtools-iris)",
+  "var(--devtools-warn)",
   "oklch(70% 0.13 220)",
   "oklch(70% 0.13 160)",
   "oklch(70% 0.13 320)",

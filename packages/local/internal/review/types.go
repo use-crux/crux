@@ -66,6 +66,7 @@ type AddCaseRequest struct {
 	CorrectionProposal json.RawMessage `json:"correctionProposal,omitempty"`
 	SaveCorrection     bool            `json:"saveCorrection,omitempty"`
 	RepositoryWritable bool            `json:"repositoryWritable"`
+	RedactPaths        []string        `json:"redactPaths,omitempty"`
 }
 
 type AddCaseResult struct {
@@ -73,6 +74,7 @@ type AddCaseResult struct {
 	CaseID              string `json:"caseId"`
 	Path                string `json:"path"`
 	Row                 string `json:"row"`
+	Diff                string `json:"diff"`
 	UnvalidatedExpected bool   `json:"unvalidatedExpected"`
 	Existing            string `json:"existing,omitempty"`
 }
@@ -93,6 +95,7 @@ type ContextSnapshot struct {
 	Provider      string          `json:"provider,omitempty"`
 	PromptID      string          `json:"promptId,omitempty"`
 	Input         json.RawMessage `json:"input,omitempty"`
+	Call          json.RawMessage `json:"call,omitempty"`
 	Output        json.RawMessage `json:"output,omitempty"`
 }
 

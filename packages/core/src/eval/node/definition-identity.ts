@@ -8,6 +8,15 @@ import { fingerprintEvalValue } from "../internal/identity";
 import type { DiscoveredEval } from "./discovery";
 import type { LoadedEvalCase } from "./cases";
 import { EvalCaseFileError } from "./case-path";
+import {
+  fingerprintEvalSourceClosure,
+  type EvalSourceClosureIdentity,
+} from "./source-dependencies";
+
+export interface EvalDefinitionIdentity {
+  readonly fingerprint: string;
+  readonly sourceClosure: EvalSourceClosureIdentity;
+}
 
 /** Fingerprint source semantics after canonicalizing authored Case paths. */
 export async function fingerprintEvalDefinition(input: {
@@ -16,7 +25,7 @@ export async function fingerprintEvalDefinition(input: {
   readonly cases: readonly LoadedEvalCase[];
   readonly caseFileDependencies: readonly string[];
   readonly projectRoot: string;
-}): Promise<string> {
+}): Promise<EvalDefinitionIdentity> {
   const authoredSource = await readFile(
     insideProjectRoot(
       input.projectRoot,
@@ -32,8 +41,15 @@ export async function fingerprintEvalDefinition(input: {
       ),
     authoredSource,
   );
+  const sourceClosure = await fingerprintEvalSourceClosure({
+    projectRoot: input.projectRoot,
+    entryFile: input.discovered.sourceKey.relativeFile,
+    entryIdentitySource: source,
+  });
   const material = {
+    identityEpoch: 2,
     source,
+    sourceClosureFingerprint: sourceClosure.fingerprint,
     evalId: input.discovered.id,
     caseFileDependencies: input.caseFileDependencies,
     cases: input.cases.map((entry) => ({
@@ -68,7 +84,12 @@ export async function fingerprintEvalDefinition(input: {
     })),
     arms: input.definition.arms,
   };
-  return createHash("sha256").update(JSON.stringify(material)).digest("hex");
+  return Object.freeze({
+    fingerprint: createHash("sha256")
+      .update(JSON.stringify(material))
+      .digest("hex"),
+    sourceClosure,
+  });
 }
 
 export async function pathExists(path: string): Promise<boolean> {

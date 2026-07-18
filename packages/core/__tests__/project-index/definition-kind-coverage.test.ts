@@ -9,6 +9,25 @@ import { ProjectDefinitionKindSchema } from "../../src/project-index";
 const VALID_PRIMITIVE_NAMES = new Set<string>(CRUX_PRIMITIVE_NAMES);
 
 describe("DEFINITION_KIND_COVERAGE", () => {
+  it("uses only the canonical Eval kinds after the pre-launch migration", () => {
+    expect(ProjectDefinitionKindSchema.safeParse("eval").success).toBe(true);
+    expect(ProjectDefinitionKindSchema.safeParse("eval.case").success).toBe(true);
+    for (const legacy of [
+      "dataset",
+      "evaluation",
+      "evaluation.case",
+      "suite",
+      "suite.case",
+      "eval.prompt",
+      "eval.flow",
+      "eval.rag",
+      "eval.quality",
+    ]) {
+      expect(ProjectDefinitionKindSchema.safeParse(legacy).success, legacy).toBe(
+        false,
+      );
+    }
+  });
   it("has exactly one entry per ProjectDefinitionKindSchema option, no more, no fewer", () => {
     const schemaKinds = [...ProjectDefinitionKindSchema.options].sort();
     const manifestKinds = Object.keys(DEFINITION_KIND_COVERAGE).sort();
@@ -37,10 +56,9 @@ describe("DEFINITION_KIND_COVERAGE", () => {
     }
   });
 
-  it("classifies scorer as Quality-primary with direct-runtime scoring.judge as secondary evidence", () => {
+  it("classifies scorer as directly observed scoring evidence", () => {
     const scorer: CoverageDescriptor = DEFINITION_KIND_COVERAGE.scorer;
-    expect(scorer.primary).toBe("quality-owned");
-    expect(scorer.secondary).toContain("direct-runtime");
+    expect(scorer.primary).toBe("directly-observed");
     expect(scorer.runtimePrimitiveNames).toContain("scoring.judge");
   });
 
@@ -76,8 +94,9 @@ describe("DEFINITION_KIND_COVERAGE", () => {
       "constraint",
       "guardrail",
       "blackboard",
+      "scorer",
     ];
-    expect(categoryA).toHaveLength(24);
+    expect(categoryA).toHaveLength(25);
     for (const kind of categoryA) {
       const descriptor = DEFINITION_KIND_COVERAGE[kind];
       expect(descriptor.primary, kind).toBe("directly-observed");
@@ -150,10 +169,9 @@ describe("DEFINITION_KIND_COVERAGE", () => {
       "rag.pipeline.stage",
       "memory.store",
       "memory.block",
-      "evaluation.case",
-      "suite.case",
+      "eval.case",
     ];
-    expect(structuralChildren).toHaveLength(14);
+    expect(structuralChildren).toHaveLength(13);
     for (const kind of structuralChildren) {
       expect(DEFINITION_KIND_COVERAGE[kind].primary, kind).toBe(
         "structural-child",
@@ -161,12 +179,9 @@ describe("DEFINITION_KIND_COVERAGE", () => {
     }
   });
 
-  it("marks evaluation.case and suite.case as also quality-owned via the secondary channel", () => {
-    expect(DEFINITION_KIND_COVERAGE["evaluation.case"].secondary).toContain(
-      "quality-owned",
-    );
-    expect(DEFINITION_KIND_COVERAGE["suite.case"].secondary).toContain(
-      "quality-owned",
+  it("marks eval.case as Eval-owned through the dedicated run read model", () => {
+    expect(DEFINITION_KIND_COVERAGE["eval.case"].secondary).toContain(
+      "eval-owned",
     );
   });
 
@@ -189,15 +204,12 @@ describe("DEFINITION_KIND_COVERAGE", () => {
     expect(DEFINITION_KIND_COVERAGE["rag.pipeline.stage"].runtimeIdentity).toBe(
       "none",
     );
-    expect(DEFINITION_KIND_COVERAGE["evaluation.case"].runtimeIdentity).toBe(
-      "quality",
-    );
-    expect(DEFINITION_KIND_COVERAGE["suite.case"].runtimeIdentity).toBe(
-      "quality",
+    expect(DEFINITION_KIND_COVERAGE["eval.case"].runtimeIdentity).toBe(
+      "eval",
     );
   });
 
-  it("keeps scorer Quality-primary while declaring canonical direct runtime identity", () => {
+  it("keeps scorer on canonical direct runtime identity", () => {
     expect(DEFINITION_KIND_COVERAGE.scorer.runtimeIdentity).toBe(
       "definition-ref",
     );

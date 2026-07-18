@@ -185,7 +185,8 @@
         "./contracts/static-syntax": "compiler-local",
         "./contracts/semantic": "compiler-local",
         "./contracts/parity": "compiler-local",
-        "./source-resolver": "compiler-local"
+        "./source-resolver": "compiler-local",
+        "./internal/user-import": "compiler-local"
       }
     },
     {

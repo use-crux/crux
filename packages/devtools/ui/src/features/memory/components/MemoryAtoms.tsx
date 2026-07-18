@@ -1,5 +1,5 @@
-import { Icon } from "@/qw/shell/Icon";
-import type { IconName } from "@/qw/shell/nav";
+import { Icon } from "@/devtools/shell/Icon";
+import type { IconName } from "@/devtools/shell/nav";
 import { cruxDocsUrl } from "@/shared/lib/cruxDocs";
 import type { MemoryInspection } from "@/types";
 
@@ -7,21 +7,21 @@ function opPillTone(op: string | undefined): { bg: string; fg: string } {
   switch (op) {
     case "write":
     case "delete":
-      return { bg: "var(--qw-danger-soft)", fg: "var(--qw-danger)" };
+      return { bg: "var(--devtools-danger-soft)", fg: "var(--devtools-danger)" };
     case "update":
-      return { bg: "var(--qw-warn-soft)", fg: "var(--qw-warn)" };
+      return { bg: "var(--devtools-warn-soft)", fg: "var(--devtools-warn)" };
     case "evict":
       // Retention GC sweep — eviction-style, visible but not alarming.
-      return { bg: "var(--qw-warn-soft)", fg: "var(--qw-warn)" };
+      return { bg: "var(--devtools-warn-soft)", fg: "var(--devtools-warn)" };
     case "append":
     case "record":
-      return { bg: "var(--qw-iris-soft)", fg: "var(--qw-iris)" };
+      return { bg: "var(--devtools-iris-soft)", fg: "var(--devtools-iris)" };
     case "read":
-      return { bg: "var(--qw-ok-soft)", fg: "var(--qw-ok)" };
+      return { bg: "var(--devtools-ok-soft)", fg: "var(--devtools-ok)" };
     case "query":
-      return { bg: "var(--qw-crux-soft)", fg: "var(--qw-crux)" };
+      return { bg: "var(--devtools-crux-soft)", fg: "var(--devtools-crux)" };
     default:
-      return { bg: "var(--qw-bg-muted)", fg: "var(--qw-fg-muted)" };
+      return { bg: "var(--devtools-bg-muted)", fg: "var(--devtools-fg-muted)" };
   }
 }
 
@@ -50,8 +50,8 @@ export function LDHeaderStrip({
     <div
       className="mb-5 grid items-center gap-4 rounded-[10px] px-4 py-3.5"
       style={{
-        background: "var(--qw-bg-elev)",
-        border: "1px solid var(--qw-border)",
+        background: "var(--devtools-bg-elev)",
+        border: "1px solid var(--devtools-border)",
         borderLeft: `3px solid ${color}`,
         gridTemplateColumns: "minmax(0, 1fr) auto",
       }}
@@ -72,13 +72,13 @@ export function LDHeaderStrip({
             <div key={stat.label}>
               <div
                 className="font-mono text-[10px] uppercase tracking-[0.1em]"
-                style={{ color: "var(--qw-fg-faint)" }}
+                style={{ color: "var(--devtools-fg-faint)" }}
               >
                 {stat.label}
               </div>
               <div
                 className="mt-0.5 font-mono text-[14px] font-semibold"
-                style={{ color: stat.color ?? "var(--qw-fg)" }}
+                style={{ color: stat.color ?? "var(--devtools-fg)" }}
               >
                 {stat.value}
               </div>
@@ -112,15 +112,15 @@ export function LDCard({
     <div
       className="overflow-hidden rounded-[10px]"
       style={{
-        background: "var(--qw-bg-elev)",
-        border: "1px solid var(--qw-border)",
+        background: "var(--devtools-bg-elev)",
+        border: "1px solid var(--devtools-border)",
       }}
     >
       <div
         className="flex items-center gap-2 px-3.5 py-2.5"
         style={{
-          borderBottom: "1px solid var(--qw-border)",
-          background: "var(--qw-bg-muted)",
+          borderBottom: "1px solid var(--devtools-border)",
+          background: "var(--devtools-bg-muted)",
         }}
       >
         {color && (
@@ -157,24 +157,24 @@ export function LDKV({
       className="grid items-baseline gap-3 px-3.5 py-2 text-[12px]"
       style={{
         gridTemplateColumns: "180px 80px minmax(0, 1fr)",
-        borderBottom: last ? "none" : "1px solid var(--qw-border)",
+        borderBottom: last ? "none" : "1px solid var(--devtools-border)",
       }}
     >
       <span
         className="font-mono font-medium"
-        style={{ color: "var(--qw-crux)" }}
+        style={{ color: "var(--devtools-crux)" }}
       >
         {k}
       </span>
       <span
         className="font-mono text-[10.5px] tracking-[0.06em] lowercase"
-        style={{ color: "var(--qw-fg-faint)" }}
+        style={{ color: "var(--devtools-fg-faint)" }}
       >
         {type ?? "-"}
       </span>
       <span
         className="truncate font-mono"
-        style={{ color: color ?? "var(--qw-fg)" }}
+        style={{ color: color ?? "var(--devtools-fg)" }}
         title={typeof v === "string" ? v : undefined}
       >
         {v}
@@ -205,9 +205,9 @@ export function TableHeader({
       className="grid gap-2.5 px-4 py-2 text-[10px] uppercase tracking-[0.1em]"
       style={{
         gridTemplateColumns: cols.map((c) => c.width).join(" "),
-        color: "var(--qw-fg-faint)",
-        borderBottom: "1px solid var(--qw-border)",
-        background: "var(--qw-bg-muted)",
+        color: "var(--devtools-fg-faint)",
+        borderBottom: "1px solid var(--devtools-border)",
+        background: "var(--devtools-bg-muted)",
       }}
     >
       {cols.map((c) => (
@@ -232,7 +232,7 @@ export function Stat({
     <div className="flex flex-col">
       <span
         className="text-[10px] uppercase tracking-[0.08em]"
-        style={{ color: "var(--qw-fg-faint)" }}
+        style={{ color: "var(--devtools-fg-faint)" }}
       >
         {label}
       </span>
@@ -242,8 +242,8 @@ export function Stat({
           color:
             color ??
             (value == null || value === "—"
-              ? "var(--qw-fg-faint)"
-              : "var(--qw-fg)"),
+              ? "var(--devtools-fg-faint)"
+              : "var(--devtools-fg)"),
         }}
       >
         {value == null ? "—" : value}
@@ -257,9 +257,9 @@ export function EmptyHint({ children }: { children: React.ReactNode }) {
     <div
       className="rounded-[10px] px-6 py-10 text-center text-[13px]"
       style={{
-        background: "var(--qw-bg-elev)",
-        border: "1px dashed var(--qw-border)",
-        color: "var(--qw-fg-muted)",
+        background: "var(--devtools-bg-elev)",
+        border: "1px dashed var(--devtools-border)",
+        color: "var(--devtools-fg-muted)",
       }}
     >
       {children}
@@ -271,7 +271,7 @@ export function EmptyInline({ children }: { children: React.ReactNode }) {
   return (
     <div
       className="px-4 py-5 text-center text-[12px]"
-      style={{ color: "var(--qw-fg-muted)" }}
+      style={{ color: "var(--devtools-fg-muted)" }}
     >
       {children}
     </div>
@@ -294,16 +294,16 @@ export interface MemoryTabSpec {
 
 export function MemoryCardTabs({ tabs }: { tabs: readonly MemoryTabSpec[] }) {
   return (
-    <TabsList className="h-auto w-fit gap-0 rounded-[6px] border border-[var(--qw-border)] bg-[var(--qw-bg)] p-[2px] text-[12px]">
+    <TabsList className="h-auto w-fit gap-0 rounded-[6px] border border-[var(--devtools-border)] bg-[var(--devtools-bg)] p-[2px] text-[12px]">
       {tabs.map((t) => (
         <TabsTrigger
           key={t.value}
           value={t.value}
-          className="inline-flex h-auto flex-none items-center gap-1.5 rounded-[4px] border-0 px-3 py-[3px] text-[12px] leading-[14px] font-medium whitespace-nowrap text-[var(--qw-fg-muted)] shadow-none data-[state=active]:bg-[var(--qw-bg-elev)] data-[state=active]:font-semibold data-[state=active]:text-[var(--qw-fg)] data-[state=active]:shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_0_0_1px_var(--qw-border)]"
+          className="inline-flex h-auto flex-none items-center gap-1.5 rounded-[4px] border-0 px-3 py-[3px] text-[12px] leading-[14px] font-medium whitespace-nowrap text-[var(--devtools-fg-muted)] shadow-none data-[state=active]:bg-[var(--devtools-bg-elev)] data-[state=active]:font-semibold data-[state=active]:text-[var(--devtools-fg)] data-[state=active]:shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_0_0_1px_var(--devtools-border)]"
         >
           {t.label}
           {t.count != null && (
-            <span className="font-mono text-[10px] tabular-nums text-[var(--qw-fg-faint)] group-data-[state=active]/tabs-list:text-[var(--qw-crux)]">
+            <span className="font-mono text-[10px] tabular-nums text-[var(--devtools-fg-faint)] group-data-[state=active]/tabs-list:text-[var(--devtools-crux)]">
               {t.count}
             </span>
           )}
@@ -333,15 +333,15 @@ export function MemoryInspectionNotice({
     <div
       className="mb-4 flex items-start gap-2.5 rounded-[8px] px-3.5 py-2.5 text-[12px]"
       style={{
-        background: "var(--qw-bg-elev)",
-        border: "1px dashed var(--qw-border)",
-        color: "var(--qw-fg-muted)",
+        background: "var(--devtools-bg-elev)",
+        border: "1px dashed var(--devtools-border)",
+        color: "var(--devtools-fg-muted)",
       }}
     >
       <Icon
         name="alert"
         size={14}
-        color="var(--qw-fg-faint)"
+        color="var(--devtools-fg-faint)"
         className="mt-[2px] shrink-0"
       />
       <div className="min-w-0 flex-1">
@@ -354,7 +354,7 @@ export function MemoryInspectionNotice({
               target="_blank"
               rel="noopener noreferrer"
               className="font-medium underline"
-              style={{ color: "var(--qw-crux)" }}
+              style={{ color: "var(--devtools-crux)" }}
             >
               Learn more
             </a>
@@ -365,8 +365,8 @@ export function MemoryInspectionNotice({
         <span
           className="ml-2 shrink-0 rounded-[3px] px-1.5 py-[1px] font-mono text-[10px] uppercase tracking-[0.06em]"
           style={{
-            background: "var(--qw-bg-muted)",
-            color: "var(--qw-fg-faint)",
+            background: "var(--devtools-bg-muted)",
+            color: "var(--devtools-fg-faint)",
           }}
           title={`reason: ${inspection.reason}`}
         >
@@ -381,7 +381,7 @@ export function ErrorBanner({ message }: { message: string }) {
   return (
     <div
       className="mb-4 rounded-[8px] px-4 py-3 text-[12px]"
-      style={{ background: "var(--qw-danger-soft)", color: "var(--qw-danger)" }}
+      style={{ background: "var(--devtools-danger-soft)", color: "var(--devtools-danger)" }}
     >
       {message}
     </div>

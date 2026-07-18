@@ -62,7 +62,23 @@ const definition = evaluate({
 The returned `Eval` is readonly and inert. It has no `.run()`, `.promote()`,
 source `baseline`, timeout, concurrency, or host option.
 
-## Managed tasks
+## Callable and managed tasks
+
+An ordinary async function is a valid local task for inline Cases:
+
+```ts
+const localCheck = evaluate({
+  task: async (input: { question: string }) => answerQuestion(input),
+  cases: [{ input: { question: "Can I get a refund?" } }],
+});
+```
+
+Crux runs the function in a real observed Eval cell, including its canonical
+run ID and nested signals. Because arbitrary code has no provable stable task
+fingerprint or normalized provider response, its task evidence is always fresh
+and its external cost is unknown. Opaque functions cannot be placed in a
+generated remote registry. Use inline Cases and confirm unknown work when the
+CLI asks.
 
 `generate.task()` and `stream.task()` from `@use-crux/ai` produce ordinary
 callable tasks that satisfy `EvalTask`. Call them as
@@ -72,8 +88,26 @@ optional. `InputOf<T>`, `OutputOf<T>`, `CallOf<T>`, `VariantOf<T>`, and
 
 Structured tasks expose non-optional schema-parsed semantic output. Text tasks
 expose `string`. Callbacks additionally receive a normalized terminal
-`response`. Although inert authoring can infer a plain function, execution
-rejects it with the exact `generate.task()` / `stream.task()` remedy.
+`response`. Managed tasks also enable automatic exact evidence reuse,
+file-backed Case validation, typed Variants, and generated Runtime deployment.
+For an AI SDK object model, bind `stableModel(model)` from `@use-crux/ai`;
+custom endpoints or middleware use a secret-free versioned key.
+
+Function-form prompt, system, and message renderers remain reusable. The Node
+coordinator builds their initial identity without invoking them: it fingerprints the declaring
+Eval plus literal-ESM transitive project source, follows workspace symlink
+realpaths, and records installed package version/export identity without
+hashing package internals. Non-literal dynamic imports, CommonJS/generated
+source, unresolved local imports, or source without a portable workspace
+identity fail closed to fresh execution with
+`unresolved_source_dependency`. Ambient environment, filesystem, and network
+reads are outside the reusable callback contract; make them explicit through
+input, call options, or Variants, or request a fresh run.
+
+For an exact evidence candidate, Crux locally resolves the prompt and compares
+its one-way fingerprint with the exact normalized prompt captured by the
+original generate/stream request. A mismatch executes fresh and reports
+`nondeterministic_renderer`; raw prompt material is not persisted.
 
 ## `caseFile(path, schemas)`
 
@@ -119,6 +153,12 @@ objects or unusual loader aliases.
 Run controls correspond to CLI Case and Variant selection plus `fresh`,
 `offline`, `plan`, and maximum cost. A plan performs no execution, reservation,
 run creation, or write. Offline mode performs no network access.
+
+`maxCostUsd` is admitted only from conservative per-call ceilings configured at
+`experimental.eval.pricing[model].maxUsdPerCall` (or the optional `default`).
+Token-rate tables cannot prove a hard maximum. Routed and tool-loop tasks are
+expanded conservatively, including managed judge calls; any unknown path
+returns its missing pricing keys and configuration remedy before execution.
 
 ## Eval runs and Baselines
 

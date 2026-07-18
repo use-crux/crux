@@ -66,7 +66,7 @@ func renderPrimitivePayload(span api.InspectRunSpan, width int) string {
 
 	// --- flow ---
 	case api.SpanPrimitiveFlow, api.SpanPrimitiveFlowRun, api.SpanPrimitiveFlowStep,
-		api.SpanPrimitiveEvalFlow, api.SpanPrimitiveEvalRun, api.SpanPrimitiveEvalCase:
+		api.SpanPrimitiveEvalRun, api.SpanPrimitiveEvalCase:
 		return renderFlowPayload(payload, width)
 
 	// --- composition ---

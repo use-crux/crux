@@ -2,8 +2,12 @@ package review
 
 import (
 	"context"
+	"encoding/json"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/use-crux/crux/packages/local/internal/privacy"
 )
 
 func TestServiceSubmitPreservesHistoryAndDeduplicatesRetries(t *testing.T) {
@@ -69,5 +73,47 @@ func TestServiceSubmitPreservesHistoryAndDeduplicatesRetries(t *testing.T) {
 	}
 	if projection.ContextStatus != "linked" {
 		t.Fatalf("context status = %q, want linked", projection.ContextStatus)
+	}
+}
+
+func TestServiceAppliesProjectPolicyToFeedbackAndReviewContext(t *testing.T) {
+	service, err := OpenService(
+		context.Background(),
+		filepath.Join(t.TempDir(), "review.sqlite"),
+		WithPrivacyProvider(privacy.Static("customer.email")),
+	)
+	if err != nil {
+		t.Fatalf("open review service: %v", err)
+	}
+	t.Cleanup(func() { _ = service.Close() })
+
+	receipt, err := service.Submit(context.Background(), Submission{
+		RunID:      "run_0123456789abcdef01234567",
+		Rating:     "down",
+		Correction: json.RawMessage(`{"customer":{"email":"private@example.test","id":"c-1"}}`),
+	}, true)
+	if err != nil {
+		t.Fatalf("submit feedback: %v", err)
+	}
+	if err := service.LinkRunContext(context.Background(), ContextSnapshot{
+		RunID:  "run_0123456789abcdef01234567",
+		Input:  json.RawMessage(`{"customer":{"email":"private@example.test","id":"c-1"}}`),
+		Output: json.RawMessage(`{"token":"private","answer":"safe"}`),
+	}); err != nil {
+		t.Fatalf("link context: %v", err)
+	}
+
+	projection, history, err := service.Review(context.Background(), receipt.ReviewID)
+	if err != nil {
+		t.Fatalf("read review: %v", err)
+	}
+	if string(projection.Correction) != `{"customer":{"email":"[redacted]","id":"c-1"}}` {
+		t.Fatalf("correction = %s", projection.Correction)
+	}
+	if len(history) != 1 || string(history[0].Correction) != string(projection.Correction) {
+		t.Fatalf("history = %#v", history)
+	}
+	if bytes := string(projection.Context); strings.Contains(bytes, "private@example.test") || strings.Contains(bytes, `"token":"private"`) {
+		t.Fatalf("context retained private values: %s", bytes)
 	}
 }

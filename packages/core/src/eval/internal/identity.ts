@@ -1,10 +1,10 @@
 /** Web-safe canonical identity for exact Eval evidence reuse. @internal */
 
 import { sha256Hex } from "../../content/sha256";
-import { OUTPUT_CACHE_EPOCH } from "./evidence/cache-epochs";
-import { canonicalJson } from "./evidence/canonical-json";
+import { TASK_EVIDENCE_CACHE_EPOCH } from "./evidence/cache-epochs";
+import { canonicalFingerprintJson } from "./evidence/canonical-fingerprint";
 
-export { OUTPUT_CACHE_EPOCH };
+export { TASK_EVIDENCE_CACHE_EPOCH };
 
 export interface TaskEvidenceIdentityInput {
   readonly evalId: string;
@@ -29,7 +29,7 @@ export function createTaskEvidenceIdentity(
   input: TaskEvidenceIdentityInput,
 ): TaskEvidenceIdentity {
   const key = fingerprintEvalValue({
-    outputCacheEpoch: OUTPUT_CACHE_EPOCH,
+    taskEvidenceCacheEpoch: TASK_EVIDENCE_CACHE_EPOCH,
     evalId: input.evalId,
     caseId: input.caseId,
     inputFingerprint: fingerprintEvalValue(input.input),
@@ -46,7 +46,7 @@ export function createTaskEvidenceIdentity(
 
 /** Hash a canonical value without Node Buffer or crypto imports. */
 export function fingerprintEvalValue(value: unknown): string {
-  return sha256Hex(new TextEncoder().encode(canonicalJson(value)));
+  return sha256Hex(new TextEncoder().encode(canonicalFingerprintJson(value)));
 }
 
 /** Reject values whose bytes cannot participate in a durable exact identity. */
@@ -55,7 +55,14 @@ export function isReusableEvalValue(value: unknown): boolean {
 }
 
 function isReusableValue(value: unknown, seen: WeakSet<object>): boolean {
-  if (typeof value === "function" || typeof value === "symbol") return false;
+  if (
+    typeof value === "function" ||
+    typeof value === "symbol" ||
+    typeof value === "bigint" ||
+    value === undefined ||
+    (typeof value === "number" && !Number.isFinite(value))
+  )
+    return false;
   if (
     value instanceof Uint8Array ||
     value instanceof ArrayBuffer ||
@@ -85,6 +92,16 @@ function isReusableValue(value: unknown, seen: WeakSet<object>): boolean {
   if (value instanceof Set) {
     return [...value].every((entry) => isReusableValue(entry, seen));
   }
+  if (value instanceof Date) return !Number.isNaN(value.getTime());
+  const prototype = Object.getPrototypeOf(value);
+  if (
+    !Array.isArray(value) &&
+    !(value instanceof Map) &&
+    !(value instanceof Set) &&
+    prototype !== Object.prototype &&
+    prototype !== null
+  )
+    return false;
   return Object.values(value).every((entry) => isReusableValue(entry, seen));
 }
 

@@ -74,6 +74,51 @@ export function decodeSubmitEvalJob(text: string, now: Date): SubmitEvalJobV1 {
   return Object.freeze(value as unknown as SubmitEvalJobV1);
 }
 
+/** Read one request body without buffering bytes beyond the protocol ceiling. */
+export async function readEvalHostRequestText(
+  request: Request,
+): Promise<string> {
+  const declaredLength = Number(request.headers.get("content-length"));
+  if (
+    Number.isFinite(declaredLength) &&
+    declaredLength > EVAL_HOST_MAX_BODY_BYTES
+  ) {
+    throw protocolError("EVAL_HOST_BODY_TOO_LARGE");
+  }
+  if (request.body === null) return "";
+
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > EVAL_HOST_MAX_BODY_BYTES) {
+        try {
+          await reader.cancel();
+        } catch {
+          // The body is already rejected; a hostile source cannot replace the
+          // stable protocol error by refusing stream cancellation.
+        }
+        throw protocolError("EVAL_HOST_BODY_TOO_LARGE");
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
+}
+
 export class EvalHostProtocolError extends Error {
   override readonly name = "EvalHostProtocolError";
   constructor(readonly code: string) {

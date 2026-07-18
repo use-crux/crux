@@ -119,9 +119,9 @@ export function ParetoChart({
   // Color scale by score
   const colorForScore = (score: number) => {
     const t = scoreRange > 0 ? (score - minScore) / scoreRange : 0.5;
-    if (t >= 0.7) return "var(--qw-ok)";
-    if (t >= 0.4) return "var(--qw-warn)";
-    return "var(--qw-danger)";
+    if (t >= 0.7) return "var(--devtools-ok)";
+    if (t >= 0.4) return "var(--devtools-warn)";
+    return "var(--devtools-danger)";
   };
 
   return (
@@ -136,7 +136,7 @@ export function ParetoChart({
           y1={H - PAD}
           x2={W - PAD}
           y2={H - PAD}
-          stroke="var(--qw-border-strong)"
+          stroke="var(--devtools-border-strong)"
           strokeWidth={1}
         />
         <line
@@ -144,7 +144,7 @@ export function ParetoChart({
           y1={PAD}
           x2={PAD}
           y2={H - PAD}
-          stroke="var(--qw-border-strong)"
+          stroke="var(--devtools-border-strong)"
           strokeWidth={1}
         />
         <text
@@ -170,7 +170,7 @@ export function ParetoChart({
           <path
             d={frontierPath}
             fill="none"
-            stroke="var(--qw-ok)"
+            stroke="var(--devtools-ok)"
             strokeWidth={1.5}
             strokeDasharray="4 3"
             opacity={0.5}

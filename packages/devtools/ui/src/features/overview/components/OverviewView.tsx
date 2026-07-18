@@ -1,24 +1,21 @@
 /** Inspect overview for recent run health and actionable insights. */
 
 import * as React from "react";
-import { navTarget } from "@/app/navigation/navTarget";
 import { useNavigation } from "@/app/navigation/useNavigation";
-import { useConnected } from "@/app/runtime/runtimeStore";
 import { SkeletonKpiStrip } from "@/shared/components/Skeleton";
 import {
   useInspectInsights,
   useInspectOverview,
 } from "@/shared/hooks/useInspectApi";
-import { QwShell } from "@/qw/shell/QwShell";
-import { FilterButton } from "@/qw/shell/FilterPopover";
-import { Icon } from "@/qw/shell/Icon";
-import { Btn, Chip, Kpi } from "@/qw/shell/primitives";
+import { DevtoolsShell } from "@/devtools/shell/DevtoolsShell";
+import { FilterButton } from "@/devtools/shell/FilterPopover";
+import { Icon } from "@/devtools/shell/Icon";
+import { Btn, Chip, Kpi } from "@/devtools/shell/primitives";
 
 const severityRank = { high: 0, medium: 1, low: 2 } as const;
 
 export function OverviewView() {
   const { navigate } = useNavigation();
-  const connected = useConnected();
   const [timeWindow, setTimeWindow] = React.useState<
     "all" | "24h" | "7d" | "30d"
   >("all");
@@ -39,15 +36,12 @@ export function OverviewView() {
   );
 
   return (
-    <QwShell
-      activeView="overview"
-      onNavigate={(view) => navigate(navTarget(view))}
+    <DevtoolsShell
       breadcrumb="Inspect / Overview"
       title="Runtime health at a glance"
       subtitle={
         timeWindow === "all" ? "All retained runs" : `Last ${timeWindow}`
       }
-      connected={connected}
       actions={
         <>
           <FilterButton
@@ -124,19 +118,19 @@ export function OverviewView() {
         <section
           className="overflow-hidden rounded-[12px]"
           style={{
-            background: "var(--qw-bg-elev)",
-            border: "1px solid var(--qw-border)",
+            background: "var(--devtools-bg-elev)",
+            border: "1px solid var(--devtools-border)",
           }}
         >
           <header
             className="flex items-center gap-2.5 px-[18px] py-3"
-            style={{ borderBottom: "1px solid var(--qw-border)" }}
+            style={{ borderBottom: "1px solid var(--devtools-border)" }}
           >
-            <Icon name="sparkle" size={14} color="var(--qw-crux)" />
+            <Icon name="sparkle" size={14} color="var(--devtools-crux)" />
             <span className="text-[13px] font-semibold">Needs attention</span>
             <span
               className="ml-auto font-mono text-[11px]"
-              style={{ color: "var(--qw-fg-faint)" }}
+              style={{ color: "var(--devtools-fg-faint)" }}
             >
               severity first
             </span>
@@ -145,7 +139,7 @@ export function OverviewView() {
           {openInsights.length === 0 ? (
             <div
               className="px-[18px] py-10 text-center text-[12.5px]"
-              style={{ color: "var(--qw-fg-muted)" }}
+              style={{ color: "var(--devtools-fg-muted)" }}
             >
               Nothing needs attention.
             </div>
@@ -156,7 +150,9 @@ export function OverviewView() {
                 className="flex w-full items-center gap-3 px-[18px] py-3 text-left"
                 style={{
                   borderTop:
-                    index === 0 ? undefined : "1px solid var(--qw-border)",
+                    index === 0
+                      ? undefined
+                      : "1px solid var(--devtools-border)",
                 }}
                 onClick={() =>
                   navigate({ view: "insights", insightId: insight.insightId })
@@ -179,7 +175,7 @@ export function OverviewView() {
                   </strong>
                   <span
                     className="block truncate text-[11.5px]"
-                    style={{ color: "var(--qw-fg-muted)" }}
+                    style={{ color: "var(--devtools-fg-muted)" }}
                   >
                     {insight.summary}
                   </span>
@@ -190,6 +186,6 @@ export function OverviewView() {
           )}
         </section>
       </div>
-    </QwShell>
+    </DevtoolsShell>
   );
 }

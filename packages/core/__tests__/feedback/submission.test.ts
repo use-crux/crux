@@ -1,11 +1,14 @@
 import {
+  createInMemoryObservabilityTransport,
   resetObservabilityRuntime,
   setObservabilityTransport,
   subscribeObservability,
+  teeObservabilityTransport,
 } from "../../src/observability";
 import { feedback } from "../../src/feedback";
 import type { FeedbackReceipt, FeedbackSubmission } from "../../src/feedback";
 import { afterEach, describe, expect, it } from "vitest";
+import { normalizeFeedbackSubmission } from "../../src/feedback/validation";
 
 describe("feedback", () => {
   afterEach(() => resetObservabilityRuntime());
@@ -64,6 +67,66 @@ describe("feedback", () => {
       acceptedAt: "2026-07-16T20:00:00.000Z",
     });
     await expect(pending).resolves.toMatchObject({ feedbackId: "feedback-1" });
+  });
+
+  it("preserves one durable feedback destination through a capture tee", async () => {
+    const submissions: FeedbackSubmission[] = [];
+    const durable = {
+      send: () => ({ dispositions: [] }),
+      submitFeedback: async (submission: FeedbackSubmission) => {
+        submissions.push(submission);
+        return {
+          feedbackId: "feedback-tee",
+          reviewId: "review-tee",
+          revision: 1,
+          status: "created" as const,
+          acceptedAt: "2026-07-17T00:00:00.000Z",
+        };
+      },
+    };
+    setObservabilityTransport(
+      teeObservabilityTransport(
+        createInMemoryObservabilityTransport(),
+        durable,
+      ),
+    );
+
+    await expect(
+      feedback("run_0123456789abcdef01234567" as never, "up"),
+    ).resolves.toMatchObject({ feedbackId: "feedback-tee" });
+    expect(submissions).toHaveLength(1);
+  });
+
+  it("rejects an ambiguous tee with multiple durable feedback destinations", () => {
+    const durable = {
+      send: () => ({ dispositions: [] }),
+      submitFeedback: async () => ({
+        feedbackId: "feedback",
+        reviewId: "review",
+        revision: 1,
+        status: "created" as const,
+        acceptedAt: "2026-07-17T00:00:00.000Z",
+      }),
+    };
+
+    expect(() => teeObservabilityTransport(durable, durable)).toThrow(
+      /at most one durable feedback destination/i,
+    );
+  });
+
+  it("applies the shared internal policy to correction proposals", () => {
+    expect(
+      normalizeFeedbackSubmission(
+        "run_0123456789abcdef01234567",
+        {
+          rating: "down",
+          correction: { customer: { email: "private@example.test" } },
+        },
+        { redactPaths: ["customer.email"] },
+      ),
+    ).toMatchObject({
+      correction: { customer: { email: "[redacted]" } },
+    });
   });
 
   it("propagates destination errors without exposing submission secrets", async () => {

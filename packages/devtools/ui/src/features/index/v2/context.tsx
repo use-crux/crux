@@ -61,3 +61,23 @@ export function IndexSelectProvider({
 export function useIndexSelect(): SelectDefinition {
   return useContext(IndexSelectContext);
 }
+
+const IndexOpenEvalContext = createContext<(evalId: string) => void>(() => {});
+
+export function IndexOpenEvalProvider({
+  openEval,
+  children,
+}: {
+  openEval: (evalId: string) => void;
+  children: ReactNode;
+}) {
+  return (
+    <IndexOpenEvalContext.Provider value={openEval}>
+      {children}
+    </IndexOpenEvalContext.Provider>
+  );
+}
+
+export function useIndexOpenEval(): (evalId: string) => void {
+  return useContext(IndexOpenEvalContext);
+}

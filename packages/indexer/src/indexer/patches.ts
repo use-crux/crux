@@ -712,7 +712,6 @@ function mergeDefinitionForPatch(
       ...existing,
       description: incoming.description ?? existing.description,
       metadata: mergeMetadata(existing.metadata, incoming.metadata),
-      quality: incoming.quality ?? existing.quality,
       sourceRefs: mergeSourceRefs(existing.sourceRefs, incoming.sourceRefs),
     };
   }
@@ -733,7 +732,6 @@ function mergeDefinitionForPatch(
     status: incoming.status ?? existing.status,
     fingerprint: incoming.fingerprint ?? existing.fingerprint,
     metadata: mergeMetadata(existing.metadata, incoming.metadata),
-    quality: incoming.quality ?? existing.quality,
     sourceRefs: mergeSourceRefs(existing.sourceRefs, incoming.sourceRefs),
   };
 }

@@ -12,8 +12,8 @@ import (
 
 type mediaRoundTripSource struct{ index store.IndexData }
 
-func (s mediaRoundTripSource) Snapshot() (store.IndexData, []store.EvalRun, []store.RagEvalRun, []store.FlowRun) {
-	return s.index, nil, nil, nil
+func (s mediaRoundTripSource) Snapshot() store.IndexData {
+	return s.index
 }
 
 func TestMediaFactsPreserveRawJSONThroughEventReadModelAndAPI(t *testing.T) {

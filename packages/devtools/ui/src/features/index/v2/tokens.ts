@@ -1,16 +1,16 @@
 /**
  * Index v2 design tokens.
  *
- * The Index v2 design (Claude Design handoff "Crux Devtools - Quality
- * Workbench") is authored entirely with inline styles against a `t.*`
- * token object. Rather than rewrite every rule into Tailwind, we mirror
+ * The Index v2 design uses a restrained editorial palette authored with
+ * inline styles against a token object. Rather than rewrite every rule into
+ * Tailwind, we mirror
  * that token object here — but each value points at the app's existing
- * `--qw-*` CSS custom properties so light/dark theming flows through the
+ * `--devtools-*` CSS custom properties so light/dark theming flows through the
  * single source of truth in `index.css` (no second palette, no seam with
- * the QwShell chrome). The blue / plum / gold families and `iris-line`
+ * the DevtoolsShell chrome). The blue / plum / gold families and `iris-line`
  * were added to `index.css` for this view.
  *
- * Because every value is a `var(--qw-*)` reference resolved at paint time,
+ * Because every value is a `var(--devtools-*)` reference resolved at paint time,
  * `T` is a plain constant — `useTokens()` exists only to keep the port of
  * the design's `const t = useTokens()` call sites mechanical.
  */
@@ -53,40 +53,40 @@ export interface CatTokens {
 }
 
 export const T: CatTokens = {
-  bg: "var(--qw-bg)",
-  bgElev: "var(--qw-bg-elev)",
-  bgMuted: "var(--qw-bg-muted)",
-  bgSubtle: "var(--qw-bg-subtle)",
-  fg: "var(--qw-fg)",
-  fgMuted: "var(--qw-fg-muted)",
-  fgFaint: "var(--qw-fg-faint)",
-  border: "var(--qw-border)",
-  borderStrong: "var(--qw-border-strong)",
-  crux: "var(--qw-crux)",
-  cruxSoft: "var(--qw-crux-soft)",
-  cruxLine: "var(--qw-crux-line)",
-  danger: "var(--qw-danger)",
-  dangerSoft: "var(--qw-danger-soft)",
-  warn: "var(--qw-warn)",
-  warnSoft: "var(--qw-warn-soft)",
-  ok: "var(--qw-ok)",
-  okSoft: "var(--qw-ok-soft)",
-  iris: "var(--qw-iris)",
-  irisSoft: "var(--qw-iris-soft)",
-  irisLine: "var(--qw-iris-line)",
-  blue: "var(--qw-blue)",
-  blueSoft: "var(--qw-blue-soft)",
-  blueLine: "var(--qw-blue-line)",
-  plum: "var(--qw-plum)",
-  plumSoft: "var(--qw-plum-soft)",
-  plumLine: "var(--qw-plum-line)",
-  gold: "var(--qw-gold)",
-  goldSoft: "var(--qw-gold-soft)",
-  goldLine: "var(--qw-gold-line)",
-  grid: "var(--qw-grid)",
-  mono: "var(--qw-mono)",
-  sans: "var(--qw-sans)",
-  serif: "var(--qw-serif)",
+  bg: "var(--devtools-bg)",
+  bgElev: "var(--devtools-bg-elev)",
+  bgMuted: "var(--devtools-bg-muted)",
+  bgSubtle: "var(--devtools-bg-subtle)",
+  fg: "var(--devtools-fg)",
+  fgMuted: "var(--devtools-fg-muted)",
+  fgFaint: "var(--devtools-fg-faint)",
+  border: "var(--devtools-border)",
+  borderStrong: "var(--devtools-border-strong)",
+  crux: "var(--devtools-crux)",
+  cruxSoft: "var(--devtools-crux-soft)",
+  cruxLine: "var(--devtools-crux-line)",
+  danger: "var(--devtools-danger)",
+  dangerSoft: "var(--devtools-danger-soft)",
+  warn: "var(--devtools-warn)",
+  warnSoft: "var(--devtools-warn-soft)",
+  ok: "var(--devtools-ok)",
+  okSoft: "var(--devtools-ok-soft)",
+  iris: "var(--devtools-iris)",
+  irisSoft: "var(--devtools-iris-soft)",
+  irisLine: "var(--devtools-iris-line)",
+  blue: "var(--devtools-blue)",
+  blueSoft: "var(--devtools-blue-soft)",
+  blueLine: "var(--devtools-blue-line)",
+  plum: "var(--devtools-plum)",
+  plumSoft: "var(--devtools-plum-soft)",
+  plumLine: "var(--devtools-plum-line)",
+  gold: "var(--devtools-gold)",
+  goldSoft: "var(--devtools-gold-soft)",
+  goldLine: "var(--devtools-gold-line)",
+  grid: "var(--devtools-grid)",
+  mono: "var(--devtools-mono)",
+  sans: "var(--devtools-sans)",
+  serif: "var(--devtools-serif)",
 };
 
 export type Tone =

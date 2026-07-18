@@ -1,6 +1,6 @@
 /**
  *
- * Turn Decision Report matchers for Quality assertions.
+ * Turn Decision Report matchers for Eval assertions.
  *
  * These matchers let evaluations protect setup behavior that is not visible
  * in the final model output: context inclusion, routing, freshness, cache

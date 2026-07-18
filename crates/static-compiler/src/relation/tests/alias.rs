@@ -151,6 +151,5 @@ fn definition(
         status: Some("active".to_string()),
         fingerprint: None,
         metadata,
-        quality: None,
     }
 }

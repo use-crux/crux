@@ -4,13 +4,6 @@ package store
 // The TUI uses this interface to read data directly instead of via HTTP.
 type StoreReader interface {
 	GetIndex() IndexData
-	GetEvalRuns() []EvalRun
-	GetEvalRun(evalID string) *EvalRun
-	GetEvalBaseline(promptID string) *EvalRun
-	GetRagEvalRuns() []RagEvalRun
-	GetRagEvalRun(evalID string) *RagEvalRun
-	GetFlowRuns() []FlowRun
-	GetFlowRun(flowID string) *FlowRun
 	GetRuntimeFlowRuns() []RuntimeFlowRunData
 	GetRuntimeFlowRun(flowID, sessionID string) *RuntimeFlowRunData
 	GetStats() StatsResult

@@ -1,8 +1,8 @@
 /**
  *
- * Atomic filesystem writes for Quality artifacts.
+ * Atomic filesystem writes for Eval artifacts.
  *
- * Every JSON artifact under `.crux/quality` is written by creating a temporary
+ * Every JSON artifact under `.crux/evals` is written by creating a temporary
  * file in the same directory, fsyncing it, renaming it over the target, and
  * best-effort fsyncing the directory entry.
  *

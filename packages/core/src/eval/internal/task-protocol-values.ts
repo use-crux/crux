@@ -20,6 +20,10 @@ export function isCompatibleEvalTaskDescriptor(
       typeof descriptor.promptId === "string") &&
     isOptionalSchema(descriptor.inputSchema) &&
     isOptionalSchema(descriptor.outputSchema) &&
+    (descriptor.outputContractFingerprint === undefined ||
+      typeof descriptor.outputContractFingerprint === "string") &&
+    (descriptor.callContractFingerprint === undefined ||
+      typeof descriptor.callContractFingerprint === "string") &&
     Array.isArray(descriptor.capabilities) &&
     Object.isFrozen(descriptor.capabilities) &&
     descriptor.capabilities.every(isEvalCapability) &&
@@ -32,7 +36,23 @@ export function isCompatibleEvalTaskDescriptor(
     Array.isArray(descriptor.overrideKeys) &&
     Object.isFrozen(descriptor.overrideKeys) &&
     descriptor.overrideKeys.every((key) => typeof key === "string") &&
+    (descriptor.validateVariantOverrides === undefined ||
+      typeof descriptor.validateVariantOverrides === "function") &&
+    (descriptor.validateVariantInput === undefined ||
+      typeof descriptor.validateVariantInput === "function") &&
+    (descriptor.validateVariantCall === undefined ||
+      typeof descriptor.validateVariantCall === "function") &&
     typeof descriptor.projectIdentity === "function" &&
+    (descriptor.projectRenderedPromptIdentity === undefined ||
+      typeof descriptor.projectRenderedPromptIdentity === "function") &&
+    (descriptor.readRenderedPromptIdentity === undefined ||
+      typeof descriptor.readRenderedPromptIdentity === "function") &&
+    (descriptor.projectScorerContext === undefined ||
+      typeof descriptor.projectScorerContext === "function") &&
+    (descriptor.createScorerContext === undefined ||
+      typeof descriptor.createScorerContext === "function") &&
+    (descriptor.estimateCost === undefined ||
+      typeof descriptor.estimateCost === "function") &&
     typeof descriptor.execute === "function" &&
     typeof descriptor.projectOutput === "function" &&
     typeof descriptor.projectResponse === "function"
@@ -105,7 +125,9 @@ function isIdentityReason(
 ): value is Extract<EvalTaskIdentityProjection, { reusable: false }>["reason"] {
   return (
     value === "identity_unavailable" ||
+    value === "model_identity_unattested" ||
     value === "untracked_external_dependency" ||
+    value === "unresolved_source_dependency" ||
     value === "implicit_media"
   );
 }

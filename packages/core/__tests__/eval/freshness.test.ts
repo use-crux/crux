@@ -18,6 +18,40 @@ const sourceKey = {
 };
 
 describe("Eval evidence freshness", () => {
+  it("keeps a fresh execution attempt unique when evidence identity is unavailable", async () => {
+    const evidenceStore = memoryEvidenceStore();
+    const execute = vi.fn(async () => taskResult("fresh"));
+    const plan = await planEval(
+      evalValue(),
+      { sourceKey, fresh: true },
+      {
+        ...planningPorts(evidenceStore),
+        taskIdentity: {
+          describe: async () => ({
+            reusable: false as const,
+            reason: "task_binding_untracked" as const,
+          }),
+        },
+      },
+    );
+
+    await executeEvalPlan(plan, {
+      taskHost: { execute },
+      clock: { now: () => 1 },
+      ids: { next: () => "fresh-run-1" },
+      runStore: { write: async () => undefined },
+      evidenceStore,
+    });
+
+    expect(plan.cells[0]?.action).toMatchObject({
+      kind: "execute",
+      reason: "fresh_requested",
+    });
+    expect(execute).toHaveBeenCalledWith(
+      expect.objectContaining({ executionAttemptId: "fresh-run-1" }),
+    );
+  });
+
   it("bypasses exact evidence reads when fresh and replaces it after success", async () => {
     const evidenceStore = memoryEvidenceStore();
     const read = vi.spyOn(evidenceStore, "read");

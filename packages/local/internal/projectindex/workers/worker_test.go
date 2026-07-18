@@ -107,17 +107,6 @@ func TestWorker_sourceOnlyFallbackAfterOversizedResponse(t *testing.T) {
 				payload: {
 					root: req.root,
 					configFile: { status, origin: 'discovered' },
-					quality: {
-						id: { value: 'none', origin: 'none' },
-						dir: { value: '.crux/quality', origin: 'default' },
-						include: { values: [], origin: 'default' },
-						exclude: { values: [], origin: 'default' },
-						redact: { values: [], origin: 'default' },
-						trials: { value: '1', origin: 'default' },
-						concurrency: { value: '5', origin: 'default' },
-						timeoutMs: { value: '60000', origin: 'default' },
-						replay: { value: 'live', origin: 'default' }
-					},
 					generation: {
 						autoEscape: { value: 'true', origin: 'default' },
 						securityWarnings: { value: 'true', origin: 'default' },
@@ -140,7 +129,7 @@ func TestWorker_sourceOnlyFallbackAfterOversizedResponse(t *testing.T) {
 						rules: { value: '0', origin: 'default' }
 					},
 					plugins: { values: [], origin: 'default' },
-					discovered: { definitions: 0, relations: 0, evaluations: 0, definitionKinds: {} },
+					discovered: { definitions: 0, relations: 0, evals: 0, definitionKinds: {} },
 					diagnostics
 				}
 			}
@@ -208,17 +197,6 @@ func TestWorker_inspectProjectConfigFallsBackToSourceOnlyAfterWorkerCrash(t *tes
 				payload: {
 					root: req.root,
 					configFile: { status: 'source-only', origin: 'discovered' },
-					quality: {
-						id: { value: 'none', origin: 'none' },
-						dir: { value: '.crux/quality', origin: 'default' },
-						include: { values: [], origin: 'default' },
-						exclude: { values: [], origin: 'default' },
-						redact: { values: [], origin: 'default' },
-						trials: { value: '1', origin: 'default' },
-						concurrency: { value: '5', origin: 'default' },
-						timeoutMs: { value: '60000', origin: 'default' },
-						replay: { value: 'live', origin: 'default' }
-					},
 					generation: {
 						autoEscape: { value: 'true', origin: 'default' },
 						securityWarnings: { value: 'true', origin: 'default' },
@@ -241,7 +219,7 @@ func TestWorker_inspectProjectConfigFallsBackToSourceOnlyAfterWorkerCrash(t *tes
 						rules: { value: '0', origin: 'default' }
 					},
 					plugins: { values: [], origin: 'default' },
-					discovered: { definitions: 0, relations: 0, evaluations: 0, definitionKinds: {} },
+					discovered: { definitions: 0, relations: 0, evals: 0, definitionKinds: {} },
 					diagnostics: [{ severity: 'warning', code: 'index.source_only', message: 'source-only fallback' }]
 				}
 			}) + '\n')

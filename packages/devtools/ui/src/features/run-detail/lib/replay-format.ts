@@ -1,13 +1,13 @@
-import type { ChipTone } from "@/qw/shell/primitives";
-import type { IconName } from "@/qw/shell/nav";
+import type { ChipTone } from "@/devtools/shell/primitives";
+import type { IconName } from "@/devtools/shell/nav";
 import { primitiveAccentVar } from "./families";
 
 // Replay (Story lens) pseudo-kinds that frame an *event* rather than a span —
 // these keep their own framing colours.
 const EVENT_COLOR: Record<string, string> = {
-  input: "var(--qw-crux)",
-  output: "var(--qw-warn)",
-  error: "var(--qw-danger)",
+  input: "var(--devtools-crux)",
+  output: "var(--devtools-warn)",
+  error: "var(--devtools-danger)",
 };
 
 // Canonical replay kind → a representative primitive, so the Story lens colours
@@ -61,7 +61,7 @@ export function kindColor(kind: string | undefined): string {
   const canon = canonicalKind(kind);
   if (EVENT_COLOR[canon]) return EVENT_COLOR[canon];
   const primitive = CANON_PRIMITIVE[canon];
-  return primitive ? primitiveAccentVar(primitive) : "var(--qw-fg-muted)";
+  return primitive ? primitiveAccentVar(primitive) : "var(--devtools-fg-muted)";
 }
 
 export function kindIcon(kind: string | undefined): IconName | null {

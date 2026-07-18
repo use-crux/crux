@@ -84,7 +84,7 @@ export function MediaContentPreview({
   return (
     <span
       aria-label={ariaLabel}
-      className="inline-flex items-center gap-1 rounded border border-(--qw-border) px-1.5 py-0.5 text-(--qw-fg-muted)"
+      className="inline-flex items-center gap-1 rounded border border-(--devtools-border) px-1.5 py-0.5 text-(--devtools-fg-muted)"
     >
       {label ? <span>{label}:</span> : null}
       {visible.map((item, index) => (

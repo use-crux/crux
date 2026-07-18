@@ -154,7 +154,7 @@ func (c *DirectClient) getInspectJSON(ctx context.Context, path string, target a
 		records, err := endpoints.InspectInsightSilences.Call(ctx, deps, params)
 		return assignEndpointJSON(target, records, err)
 	default:
-		return fmt.Errorf("unsupported direct quality API path %q", path)
+		return fmt.Errorf("unsupported direct Inspect API path %q", path)
 	}
 }
 

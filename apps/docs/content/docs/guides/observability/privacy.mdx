@@ -16,6 +16,7 @@ export default config({
   observability: {
     recordInputs: "off", // 'inline' | 'reference' | 'off'
     recordOutputs: "reference",
+    redactPaths: ["customer.email", "credentials.session"],
     redactRecord: (record) => {
       // return a replacement record, or null to drop fail-closed
       return record;
@@ -24,11 +25,35 @@ export default config({
 });
 ```
 
+`redactPaths` is the one data-only persistence policy shared by runtime
+feedback, Eval evidence and run files, Review context, Add-to-eval sidecars,
+and generated Runtime hosts. Paths are relative to the payload being stored.
+Arrays are transparent, so `customers.email` redacts `email` in every item of
+`customers`. Crux also always redacts authorization, API-key, token, and secret
+keys at any depth; those defaults cannot be disabled.
+
+Run `crux runtime generate` after changing this policy. Generated registries
+contain the normalized paths for the selected deployment and expose only a
+secret-free policy fingerprint in the authenticated host manifest. The
+fingerprint is part of Eval evidence identity, so evidence written under a
+different policy is never reused. A remote Eval result that would need
+redaction is rejected before durable storage instead of silently changing its
+meaning.
+
+Crux Local invalidates the previous generated policy before a refresh and
+finishes initial generation before exposing feedback and Review mutation
+routes. Those writes return an actionable `503` while no current, validated
+snapshot is available; they never fall back to an empty configured policy.
+
 - **`inline`**: embed bounded previews on the record
 - **`reference`**: keep identity/size pointers without full bodies where supported
 - **`off`**: omit payload-shaped content
 
 Every consumer sees records only after the shared sanitization pass, and a failure inside your `redactRecord` hook drops the record entirely (fail-closed): a broken redaction never leaks an unredacted payload. The emit-path sanitization steps and the `toSafeJsonValue()` truncation defaults are documented in the [Observability reference](/docs/reference/crux-core/observability#capture-policy).
+
+Use `redactRecord` for graph-record-specific transformations. Use
+`redactPaths` for the stable, portable policy that must also apply outside the
+live graph transport.
 
 ## DefinitionRef source
 

@@ -28,11 +28,14 @@ func (w Writer) SetBaseline(ctx context.Context, request SetBaselineRequest) (Se
 	if request.Variant != "" {
 		args = append(args, "--variant", request.Variant)
 	}
+	if request.AcceptFailing {
+		args = append(args, "--accept-failing")
+	}
 	var result SetBaselineResult
 	found := false
 	stream, err := workerproc.Stream(ctx, workerproc.OneShot{
 		CommandPath: node,
-		CommandArgs: []string{"--import", "tsx/esm", script},
+		CommandArgs: []string{script},
 		Args:        args,
 		Dir:         w.ProjectRoot,
 	}, func(raw json.RawMessage) error {

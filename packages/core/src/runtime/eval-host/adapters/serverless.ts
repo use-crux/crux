@@ -10,6 +10,8 @@ import {
   assertServerlessEvalHostRuntime,
   setupError,
 } from "../setup";
+import { normalizeRuntimeHandlerTargets } from "../../handler/targets";
+import type { RuntimeTargetRuntimeRef } from "../../api/target-registry";
 
 /** Create one request-safe generic-serverless Eval host binding. */
 export function createServerlessEvalHost<TStore extends EvalHostStore>(
@@ -24,11 +26,20 @@ export function createServerlessEvalHost<TStore extends EvalHostStore>(
       "Configure an authenticated Runtime wake verifier before exposing the serverless Eval host.",
     );
   }
+  const runtimeRef: RuntimeTargetRuntimeRef = {};
+  const { targets: targetDeclarations = [], ...hostOptions } = options;
+  const targets = normalizeRuntimeHandlerTargets({
+    targets: targetDeclarations,
+    runtimeRef,
+    entry: "generated serverless Eval host",
+  });
   const resolved = createResolvedEvalHost({
-    ...options,
+    ...hostOptions,
+    targets,
     hostKind: "serverless",
     wakeMode: "durable",
   });
+  runtimeRef.current = resolved.runtime;
   return Object.freeze({
     store: options.runtime.store,
     fetch: resolved.fetch,

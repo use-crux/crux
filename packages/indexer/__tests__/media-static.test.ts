@@ -195,7 +195,7 @@ describe('authored media static indexing', () => {
       'media.derives_with',
       'media.targets_index',
       'media.targets_corpus',
-      'media.evaluation_target',
+      'media.eval_target',
       'media.uses_storage',
     ])
     expect(

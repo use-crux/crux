@@ -30,17 +30,6 @@ export const TOOL_SOURCE_SESSION_PROVENANCE: unique symbol = Symbol.for(
   "crux.toolSourceSessionProvenance",
 );
 
-/** Optional stable identity for a deterministic, no-network Quality fixture. */
-export const TOOL_SOURCE_QUALITY_IDENTITY: unique symbol = Symbol.for(
-  "crux.toolSourceQualityIdentity",
-);
-
-/** Output-cache eligibility asserted by a deterministic source fixture. */
-export interface ToolSourceQualityIdentity {
-  readonly kind: "fixture";
-  readonly id: string;
-}
-
 /** Secret-free metadata that augments an ordinary materialized tool call. */
 export interface ToolSourceProvenance {
   readonly attributes: Readonly<Record<string, JsonValue>>;
@@ -78,7 +67,6 @@ export interface ToolSource<out TKind extends string = string> {
   readonly _tag: "ToolSource";
   readonly id: string;
   readonly kind: TKind;
-  readonly [TOOL_SOURCE_QUALITY_IDENTITY]?: ToolSourceQualityIdentity;
 }
 
 /** Per-invocation values available while a dialect materializes a source. */
@@ -159,13 +147,6 @@ export function toolSourceSessionProvenance(
       readonly [TOOL_SOURCE_SESSION_PROVENANCE]?: ToolSourceSessionProvenance;
     }
   )[TOOL_SOURCE_SESSION_PROVENANCE];
-}
-
-/** Read an explicit deterministic fixture identity, if the source has one. */
-export function toolSourceQualityIdentity(
-  source: ToolSource,
-): ToolSourceQualityIdentity | undefined {
-  return source[TOOL_SOURCE_QUALITY_IDENTITY];
 }
 
 function freezeToolSourceProvenance(

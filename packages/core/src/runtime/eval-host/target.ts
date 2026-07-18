@@ -1,16 +1,15 @@
-import {
-  executeEvalTaskForInternalUse,
-  getEvalTaskDescriptorForInternalUse,
-} from "../../eval/internal/task";
-import type { JsonValue } from "../../storage";
+import { executeObservedEvalTaskForInternalUse } from "../../eval/internal/observed-task";
 import type { RuntimeTarget, RuntimeTargetContext } from "../engine/kernel";
 import type { WorkItemError } from "../engine/work";
 import type { RuntimeTargetId } from "../ports/ids";
 import type { DeployedEvalRegistry } from "../eval-registry";
 import { resolveDeployedEval } from "../eval-registry";
 import { CruxRuntimeError } from "../engine/errors";
-import { CRUX_EVAL_HOST_PROTOCOL, type SubmitEvalJobV1 } from "./types";
+import type { SubmitEvalJobV1 } from "./types";
 import type { EvalHostStore } from "./types";
+import { encodeEvalHostResult } from "./result-codec";
+import { isEvalSnapshotRedactionSafe } from "../../eval/internal/redact";
+import { isReusableEvalValue } from "../../eval/internal/identity";
 
 export const EVAL_EXECUTE_TARGET_ID = "_crux.eval.execute" as RuntimeTargetId;
 
@@ -42,40 +41,55 @@ export function createEvalExecuteTarget(input: {
         return blocked("EVAL_JOB_CANCELLED", input.now());
       }
       const resolved = resolveDeployedEval(input.registry, request);
-      const startedAt = input.now().getTime();
       try {
-        const descriptor = getEvalTaskDescriptorForInternalUse(
-          resolved.variant.task,
-        );
-        const result = await executeEvalTaskForInternalUse(
-          resolved.variant.task as never,
-          resolved.case.authored.input as never,
-          resolved.case.authored.call as never,
-          resolved.variant.overrides,
-        );
-        const payload = {
-          schemaVersion: 1,
-          protocol: CRUX_EVAL_HOST_PROTOCOL,
-          jobId: request.jobId,
-          evalRunId: request.evalRunId,
-          output: result.output,
-          response: result.response,
-          capturedSignals: descriptor.capabilities,
-          runIds: [],
-          metrics: {
-            durationMs: Math.max(0, input.now().getTime() - startedAt),
-            ...(typeof result.response.cost === "number" &&
-            Number.isFinite(result.response.cost) &&
-            result.response.cost >= 0
-              ? { costUsd: result.response.cost }
+        const result = await executeObservedEvalTaskForInternalUse(
+          {
+            evalId: request.evalId,
+            caseId: request.caseId,
+            variant: request.variant,
+            trial: request.trial,
+            task: resolved.variant.task,
+            overrides: resolved.variant.overrides,
+            input: resolved.case.authored.input as Readonly<
+              Record<string, unknown>
+            >,
+            ...(resolved.case.authored.call !== undefined
+              ? {
+                  call: resolved.case.authored.call as Readonly<
+                    Record<string, unknown>
+                  >,
+                }
               : {}),
           },
-          observedIdentity: result.observedIdentity,
-        };
-        const resultRef = await input.store.results.put(
-          payload as unknown as JsonValue,
-          { namespace: work.namespace },
+          () => input.now().getTime(),
         );
+        if (
+          !isReusableEvalValue(result.output) ||
+          (result.response !== undefined &&
+            !isReusableEvalValue(result.response))
+        ) {
+          return blocked("EVAL_RESULT_MEDIA_NOT_DURABLE", input.now());
+        }
+        if (
+          !isEvalSnapshotRedactionSafe(
+            result.output,
+            input.registry.persistencePolicy,
+          ) ||
+          !isEvalSnapshotRedactionSafe(
+            result.response,
+            input.registry.persistencePolicy,
+          )
+        ) {
+          return blocked("EVAL_RESULT_REDACTION_REQUIRED", input.now());
+        }
+        const payload = encodeEvalHostResult({
+          jobId: request.jobId,
+          evalRunId: request.evalRunId,
+          evidence: result,
+        });
+        const resultRef = await input.store.results.put(payload, {
+          namespace: work.namespace,
+        });
         return { status: "completed" as const, resultRef };
       } catch (error) {
         if (error instanceof CruxRuntimeError) {
@@ -119,6 +133,9 @@ function messageForCode(code: string): string {
   }
   if (code === "EVAL_RESULT_MEDIA_NOT_DURABLE") {
     return "Eval media output must use a durable Crux asset reference.";
+  }
+  if (code === "EVAL_RESULT_REDACTION_REQUIRED") {
+    return "The Eval result conflicts with the generated project redaction policy and was not persisted.";
   }
   return "The deployed Eval task failed without exposing provider details.";
 }

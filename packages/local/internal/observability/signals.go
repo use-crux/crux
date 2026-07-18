@@ -8,7 +8,7 @@ import (
 )
 
 // RunSignals is the lightweight, list-safe observability rollup used by
-// quality summaries and insights. It intentionally avoids building the full
+// derived summaries and insights. It intentionally avoids building the full
 // RunDetail presentation tree for every run in the local history.
 type RunSignals struct {
 	RunID                   string
@@ -135,7 +135,7 @@ func (s *Service) runSignals(ctx context.Context, runIDs []string) (map[string]R
 		if isRetrievalSignal(span.Family, span.Primitive) && (statusNeedsAttention || signalReturnedZero(attrs)) {
 			signal.RetrievalIssueCount++
 		}
-		if isQualitySignal(span.Family, span.Primitive) && statusNeedsAttention {
+		if isEvaluationSignal(span.Family, span.Primitive) && statusNeedsAttention {
 			signal.InspectSignalIssueCount++
 		}
 		if normalizeSignalStatus(span.Status) == "blocked" {
@@ -251,7 +251,7 @@ func isRetrievalSignal(family, primitive string) bool {
 	return family == "retrieval" || strings.HasPrefix(primitive, "retrieval.")
 }
 
-func isQualitySignal(family, primitive string) bool {
+func isEvaluationSignal(family, primitive string) bool {
 	switch family {
 	case "guardrail", "constraint", "scoring", "citation":
 		return true

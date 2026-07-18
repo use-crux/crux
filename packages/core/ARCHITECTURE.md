@@ -85,7 +85,7 @@ The rules:
   an existing `package.json` subpath (for example `./tools` and `./tool-middleware`).
 - **Domain folders own implementation.** Product domains — `prompt/`, `resolver/`, `runtime/`,
   `generation/`, `tools/`, `shared/`, plus the existing `adapter/`, `agent/`, `safety/`,
-  `quality/`, `observability/`, `retrieval/`, `indexing/`, `memory/`, and the rest — hold the real
+  `eval/`, `observability/`, `retrieval/`, `indexing/`, `memory/`, and the rest — hold the real
   code behind curated domain barrels. New root _implementation_ files are not added.
 - **Curated barrels, not dumping grounds.** Each domain `index.ts` is a curated barrel or public
   entrypoint, never substantial implementation. Avoid broad `export *` over internals, and put
@@ -299,7 +299,7 @@ compatibility shims, while every implementation lives in a domain folder.
 │       ├── runner.ts       INTERNAL engine driven by the session — parallel-check combined-retry: Promise.all checks → combine feedback → regenerate → re-check. Assert drives retries, suggest is best-effort. Exposes observeConstraintCheck() for the session's report-only stream finish.
 │       ├── evaluate.ts     evaluateConstraint() — test case matrix runner (output × expected pass → report)
 │       └── errors.ts       ConstraintViolationError — thrown when assert constraints exhaust retries (carries all failing constraints)
-│       (Predicate bridges live outside safety so it stays dependency-free: scoring/judge-constraint.ts builds Constraints from judges, quality/ runs Constraints as eval scorers — both target the public Constraint contract)
+│       (Predicate bridges live outside safety so it stays dependency-free: scoring/judge-constraint.ts builds Constraints from judges, eval/ runs Constraints as Eval scorers — both target the public Constraint contract)
 └── adapter/
     ├── index.ts            Curated @use-crux/core/adapter surface (both dialects + the tool session + testing)
     ├── provider-runtime/   defineSingleTurnProviderBundle() and defineProviderRuntime() — public provider authoring compilers
@@ -845,20 +845,16 @@ Primitive (generation, tools, memory, swarm, flow, etc.)
 
 Devtools tracing itself uses the canonical `@use-crux/core/observability` graph runtime. Built-in primitives write `run:start`, `span:start`, `span:event`, `artifact`, `edge`, `span:end`, and `run:end` records; the Go backend validates and persists those records, builds read models, and pushes subscription updates to the web UI and TUI.
 
-The standalone Quality runner loads the project's own `@use-crux/core` instance. When the Go CLI has
+The Eval coordinator loads the project's own `@use-crux/core` instance. When the Go CLI has
 found a loopback devtools server, it passes `CRUX_DEVTOOLS_URL` into that worker; the worker installs
 `createHttpObservabilityTransport({ serverUrl })` only if the project has not already configured an
 observability transport, then calls `observe.flush()` before exit. Tunneled/cloud runtimes should
 use the persistent per-project `CRUX_DEVTOOLS_TOKEN` bearer token, which the local server accepts
-only on `POST /api/observability/records`; legacy tokenized tunnel URLs still keep their query token
-on the final ingest endpoint. Flush failures are swallowed at
-this local auto-attach boundary so a dead devtools server or tunnel cannot change the Quality run's
-exit result. This keeps experiment `traceIds` and the canonical `/api/observability/runs/{runId}`
-graph in the same backend whenever quality runs are executed with devtools attached.
-Quality dataset rows may carry portable metadata; when a row includes trace-import provenance, the
-runner derives dataset provenance from the dataset path and file content fingerprint and stores it on
-cells, failure artifacts, compact run-summary failures, and experiment diffs. Consumers can therefore
-identify the exact dataset content behind a regression without rereading mutable source files.
+only on `POST /api/observability/records`. Flush failures are swallowed at this local auto-attach
+boundary so a dead devtools server or tunnel cannot change the Eval result. This keeps Eval cell run
+references and the canonical `/api/observability/runs/{runId}` graph in the same backend whenever
+Evals execute with devtools attached. Each persisted cell retains immutable Case, Variant, task, and
+definition fingerprints so regressions remain attributable without rereading mutable source files.
 
 **Rules:**
 
@@ -971,9 +967,9 @@ observability history: runs, spans, events, artifacts, edges, metrics, lifecycle
 resource activity, and deletion. File-backed databases use WAL, a busy timeout, and a small
 connection pool; in-memory test databases remain single-connection.
 
-Eval V3 runs and Baselines, Inspect state, and Review records have focused Local storage owners. The
-physical `.crux/quality` directory is retained only as migration provenance. Project Index discovery
-finds authored Eval source and generated registries, while Core owns exact evidence identity and
+Eval runs and Baselines, Inspect state, and Review records have focused Local
+storage owners under `.crux/evals`. Project Index discovery finds authored Eval
+source and generated registries, while Core owns exact evidence identity and
 never derives reusable truth from observability history.
 
 Run lists and lifecycle reconciliation use ingest-time count/token/cost rollups plus lightweight
@@ -995,7 +991,7 @@ Index child/supporting records stay first-class definitions for search, lints, r
 
 The Project Index facts contract is typed but extension-friendly. Known Crux facts belong in stable buckets on `ProjectDefinition.metadata`: direct schemas (`argsSchema`, `inputSchema`, `outputSchema`, `configSchema`, `schema`), `runtimeJoin`, and `intelligence`. `intelligence.contract` carries normalized schema/source summaries, `intelligence.control` carries execution structure such as mode, ordering, children, retry/fallback policy, budgets, and suspension points, `intelligence.data` carries visible memory/blackboard/workspace/store/block reads and writes plus artifacts/retrievals, `intelligence.dependencies` carries detail-panel summaries, and `intelligence.runtime` carries authored-to-runtime hints. Canonical graph structure remains in `ProjectIndex.relations`, and concrete source locations remain in `ProjectDefinition.sourceRefs`. Future plugins may use explicit `extensions` bags, but core primitives should prefer typed fields whenever facts can be statically or semantically proven. Web devtools, the TUI, CLI commands, and future IDE surfaces render this backend-owned read model directly instead of parsing source snippets or rebuilding architecture client-side.
 
-`project-index/project-model.ts` defines the separate config-inspection read model. `ResolvedProjectModel` explains root selection, package metadata, config files, source roots, ignored paths, discovered definitions, discovered relations, Quality defaults, and diagnostics with per-field provenance. It deliberately stays a shallow JSON-safe DTO: source/runtime/filesystem/config/CLI provenance is a discriminated union, diagnostics use stable reason codes, and definition/relation/diagnostic ids are branded strings at TypeScript boundaries. Source-only discovery is informational, while selected source-shape findings such as missing stable ids, runtime-dependent tool maps, and tested prompts whose context dependencies are only partially proven are represented as Project Model diagnostics with source provenance. Prompt and context bundle paths from `createPrompts()` and `createContexts()` are projected as first-class definition `path` fields, and source-proven bindings such as `prompt.uses_context` are projected as inferred Project Model relations. The resolver that fills this model belongs to the local/indexer layer: `@use-crux/indexer` exposes `resolveProjectModel(...)`, and `@use-crux/local` renders that shape through `crux config inspect`; core only owns the shared contract. The CLI inspect command deliberately uses the static/source-only worker request so large projects can inspect source-visible state without importing every user module; staged `crux dev` indexing supplies import-enriched and runtime-backed evidence.
+`project-index/project-model.ts` defines the separate config-inspection read model. `ResolvedProjectModel` explains root selection, package metadata, config files, source roots, ignored paths, discovered definitions, discovered relations, Eval defaults, and diagnostics with per-field provenance. It deliberately stays a shallow JSON-safe DTO: source/runtime/filesystem/config/CLI provenance is a discriminated union, diagnostics use stable reason codes, and definition/relation/diagnostic ids are branded strings at TypeScript boundaries. Source-only discovery is informational, while selected source-shape findings such as missing stable ids, runtime-dependent tool maps, and tested prompts whose context dependencies are only partially proven are represented as Project Model diagnostics with source provenance. Prompt and context bundle paths from `createPrompts()` and `createContexts()` are projected as first-class definition `path` fields, and source-proven bindings such as `prompt.uses_context` are projected as inferred Project Model relations. The resolver that fills this model belongs to the local/indexer layer: `@use-crux/indexer` exposes `resolveProjectModel(...)`, and `@use-crux/local` renders that shape through `crux config inspect`; core only owns the shared contract. The CLI inspect command deliberately uses the static/source-only worker request so large projects can inspect source-visible state without importing every user module; staged `crux dev` indexing supplies import-enriched and runtime-backed evidence.
 
 `ProjectIndexSnapshot.sourceGraph` is the durable provenance marker for source-row dependency evidence. It records the source graph schema version, producer, and capabilities such as source dependencies, reverse dependents, definition ownership, and diagnostic ownership. Incremental planners must treat snapshots without this marker as old or incomplete and fall back to full reindex instead of trusting `sources` edges optimistically.
 
@@ -1136,7 +1132,7 @@ interface graph-record subscribers {
 
 `— zero cost when no hooks are installed. Plugins install hooks via the plugin system;`mergeHooks()` automatically fan-outs multiple handlers for the same hook.
 
-The `evalId` field on `onJudgeResult` enables correlation: callers that run judges inside a larger evaluation can pass an id through `JudgeScoreOptions`, and the judge includes it in the hook event so devtools can link individual judge scores back to the run that triggered them. (Quality cells don't need it — judge calls made by `scorers.judge()` nest inside the cell's observed run.)
+The `evalId` field on `onJudgeResult` enables correlation: callers that run judges inside a larger Eval can pass an id through `JudgeScoreOptions`, and the judge includes it in the hook event so devtools can link individual judge scores back to the run that triggered them. Eval cells do not need it because judge calls made by `scorers.judge()` nest inside the cell's observed run.
 
 Tool execution keeps raw output and model-facing output separate. `execute()` returns the raw application value; optional `toModelOutput()` returns the provider-neutral `ToolModelOutput` fed to the next model step. The core adapter loop records both shapes on `ToolResultEntry`, renders a deterministic string fallback for canonical `Message`, and emits size/savings metadata through instrumentation. It also writes the canonical observability graph directly: model-emitted tool intents attach to the active generation as `tool.request` artifacts; every adapter-managed execution opens a `tool.call` span, consumes a `tool.args` artifact, produces separate raw and model-facing `tool.result` artifacts, and records errors as errored spans. `@use-crux/ai` delegates conversion to the AI SDK's native `toModelOutput` hook and wraps it only for observability.
 
@@ -1606,8 +1602,8 @@ a partial sum.
 
 Each adapter still attaches `_meta` to the result with a consistent trace shape.
 Public adapter docs should point users to `result.usage`, `result.cost`, and
-`result.finalStep`; `_meta` is retained for devtools middleware, quality
-experiments, eval reports, and observability plumbing.
+`result.finalStep`; `_meta` is retained for Devtools middleware, Eval evidence,
+and observability plumbing.
 
 ```ts
 result = {
@@ -1686,7 +1682,7 @@ The Go backend stores `session_id` and `user_id` from `run:start`; run-list read
 
 A logical run (`runId`) is distinct from the physical execution segment (`segmentId`) that carries it: a run may suspend and resume across any number of processes/isolates/invocations before it ends exactly once. `openRun(...).suspend({ reason })` ends the current segment and returns a JSON-safe `CruxPropagationCarrier`; `observe.resumeRun(carrier, { reason })` opens a fresh segment (`segmentSeq` restarts at 1) on the same `runId` and emits `run:resume` before any child record. `observe.withContext()` / `captureContext()` remain context-only — they restore the active span/attribute stack for a callback and can never resume, suspend, or end a run themselves, so first-party Flow/Convex code holds the returned run/segment handle as the explicit lifecycle owner instead of restoring a captured context and hoping an implicit span ends the run. Calling `suspend`/`end`/`error` more than once is locally idempotent; the immutable backend record is the distributed authority, and a conflicting second terminal record is diagnosed rather than applied.
 
-Built-in orchestration primitives write the graph contract through the shared agent composition runtime. `parallel()` opens `composition.parallel` with sibling `agent.run` children. `pipeline()` opens `composition.pipeline`, one `flow.step` per executable step, and nested `agent.run` spans for agent steps. Runtime `flow()` opens `flow.run`, emits `flow.step` children, and records intentional waits as `flow.suspension` markers linked to the causing step. Successful `flow.step` spans also record the step result as an `output` artifact, so step outputs are inspectable from the trace (and back Quality `ctx.step()` access) without re-running the flow. `consensus()` opens `composition.consensus` with voter `agent.run` children directly under that composition span. `swarm()` records agent turns, `handoff.prepare`, `handoff.payload` artifacts, and `triggered` edges between turns. `delegate().run()` records `delegate.invoke`, canonical input/output artifacts, and links its handoff preparation with `delegate.invoked`.
+Built-in orchestration primitives write the graph contract through the shared agent composition runtime. `parallel()` opens `composition.parallel` with sibling `agent.run` children. `pipeline()` opens `composition.pipeline`, one `flow.step` per executable step, and nested `agent.run` spans for agent steps. Runtime `flow()` opens `flow.run`, emits `flow.step` children, and records intentional waits as `flow.suspension` markers linked to the causing step. Successful `flow.step` spans also record the step result as an `output` artifact, so step outputs are inspectable from the trace without re-running the flow. `consensus()` opens `composition.consensus` with voter `agent.run` children directly under that composition span. `swarm()` records agent turns, `handoff.prepare`, `handoff.payload` artifacts, and `triggered` edges between turns. `delegate().run()` records `delegate.invoke`, canonical input/output artifacts, and links its handoff preparation with `delegate.invoked`.
 
 Prompt/context and safety primitives also write the graph contract directly. `prompt.resolve()` opens `prompt.resolve`; conditional context evaluation emits `context.predicate` spans with `included`, `predicate`, discriminator/branch, and exclusion reason attributes; context text resolution emits `context.resolve` spans plus `context.contribution` artifacts and `produced` edges. Context contributions that provide tools carry `injectedTools` so readers can explain which contribution supplied each request tool; contributor, memory, blackboard, and retriever tool producers emit the same preview shape even when they have no resolved text. Included context artifacts are carried through `systemBlocks` and linked to each generation span with `consumed` edges, so the backend can expose the exact context for a call in `inspection.context`. Token-budget drops are recorded in `prompt.budget` artifacts. Generation orchestration emits consumed `messages` artifacts for the prepared request payload. The Safety session's constraint phase opens a grouped `constraint.check` span, runs each constraint check as a child span with pass/fail attributes, records `constraint.report` artifacts, and emits `constraint.retry` spans/edges for combined-feedback regeneration. Its guardrail phases open grouped and per-guard `guardrail.run` spans, record each action as span attributes plus `guardrail.report` artifacts with before/after previews when content changes, and emit `guardrail.blocked` edges for blocking decisions.
 
@@ -1703,7 +1699,7 @@ Delivery success is per record, not per HTTP status: the v2 receipt carries one 
 `config({ observability })` wires a custom transport or an HTTP transport as explicit export behavior.
 Default `config()` does not install telemetry, upload, raw-content capture, or delivery policy.
 `teeObservabilityTransport()` fans records to multiple sinks while isolating a failing leg.
-Quality captures per-cell signal records through a run-scoped AsyncLocalStorage capture session
+Evals capture per-cell signal records through the canonical run-scoped async context
 instead of swapping the process transport; configured devtools transports still receive records
 through the normal delivery engine. Token-guarded restore prevents nested config cleanup from
 resurrecting a disposed transport. The HTTP transport posts canonical `{ records }` batches to
@@ -1715,7 +1711,7 @@ Known producer fixtures must pass the TypeScript schema and Go conformance tests
 Forward-compat fixtures prove the Go server stores unknown record types and extra
 fields as raw records without widening the TypeScript producer schema.
 
-Devtools run-detail views poll briefly after a run reaches a terminal status. This keeps Convex/serverless boundary flushes visible when final artifacts or follow-up generation spans arrive just after the terminal run update. The web runs list is one revisioned server-owned read model (`/api/observability/runs/page`, joined with Quality by an explicit correlation field rather than an assumed `traceId`/`runId` equivalence): the Go service bumps a monotonic revision per affected run inside the same ingest transaction and publishes it after commit, and devtools performs a bounded `/api/observability/runs/delta?since=` catch-up (or a full invalidate once that window has aged out) instead of an unconditional refetch or a client-side merge of two independently-filtered lists. Row/detail status distinguishes `running` / `suspended` / `incomplete` (a stale segment with no suspend/end) / `conflicted` (a diagnosed identity or terminal-evidence conflict) from ordinary success/error/cancelled, and delivery/export health is `unknown` / `healthy` / `degraded` — `unknown` is never rendered as healthy. Focused span output streams use the lazy `/api/observability/runs/{runId}/spans/{spanId}/events?name=token.chunk` endpoint instead of loading high-frequency chunks into every run detail.
+Devtools run-detail views poll briefly after a run reaches a terminal status. This keeps Convex/serverless boundary flushes visible when final artifacts or follow-up generation spans arrive just after the terminal run update. The web runs list is one revisioned server-owned observability read model (`/api/observability/runs/page`); Eval runs remain a separate, explicitly linked read model rather than being merged through an assumed `traceId`/`runId` equivalence. The Go service bumps a monotonic revision per affected observability run inside the same ingest transaction and publishes it after commit, and devtools performs a bounded `/api/observability/runs/delta?since=` catch-up (or a full invalidate once that window has aged out) instead of an unconditional refetch. Row/detail status distinguishes `running` / `suspended` / `incomplete` (a stale segment with no suspend/end) / `conflicted` (a diagnosed identity or terminal-evidence conflict) from ordinary success/error/cancelled, and delivery/export health is `unknown` / `healthy` / `degraded` — `unknown` is never rendered as healthy. Focused span output streams use the lazy `/api/observability/runs/{runId}/spans/{spanId}/events?name=token.chunk` endpoint instead of loading high-frequency chunks into every run detail.
 
 The Go read model owns user-facing trace shape. Convex Agent's outer `generation.stream` is visible as `GENERATE stream response` when it carries useful structure such as multiple steps or tool calls; its child `generation.call` steps and `tool.call` executions stay beneath that container in timestamp order. Each child generation receives a complete effective `request`: exact when it consumed its own request-shaped messages, inherited from the nearest enclosing generation request when it only emitted output-shaped messages, and aggregate on run/stream/agent/composition nodes when representing descendant turns. Agent and stream aggregates only consider the agent loop's own generation turns; generations nested inside tool-called flows remain visible where they ran but cannot become the parent agent's representative request. Contextual retrieval, memory, and embedding spans remain in the lossless graph but fold into attached details when they are request-input evidence for a generation. Operational retrieval inside tool, flow, composition, or agent boundaries remains visible even when an ancestor is an agent generation stream; only the retrieval pipeline internals such as query/embed stages fold into the retrieval node. A redundant single-step stream wrapper is folded as detail so simple generations do not gain an empty-looking extra level. Session ids remain run metadata/grouping, not execution nodes.
 
@@ -1751,9 +1747,3 @@ Production feedback uses the configured observability destination. `@use-crux/co
 the canonical run ID; `@use-crux/ai/feedback` extracts that identity from AI message metadata. Local
 persists immutable submissions and Review actions, and Add-to-eval writes a validated Case only after
 explicit human action. Feedback never becomes expected truth automatically.
-
-## Flow Quality
-
-Flow evaluations use `target.flow()` (or a bare `FlowHandle`) and the same `evaluate()` model as every other primitive. `flow.step` spans record their results as `output` artifacts, which back both `ctx.step()` access (Standard Schema narrowing, since step names/outputs are imperative and not statically typed) and the `steps` signal namespace. Per-step model/settings overrides ride the flow target's params surface, so variants can swap a single step's model.
-
-For custom orchestration paths, wrap app code in `target({ run })` — assertions then cover whatever trace the path emits, plus value matchers and the always-on latency/cost/errors namespaces.

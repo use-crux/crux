@@ -19,6 +19,7 @@ export interface AddReviewCaseInput {
 export interface ReviewCaseArtifact {
   readonly path: string;
   readonly row: string;
+  readonly diff: string;
   readonly unvalidatedExpected: boolean;
 }
 

@@ -94,7 +94,7 @@ func TestQualitySpansFromRunDetailNodePreservesErrorInspection(t *testing.T) {
 		},
 	}
 
-	spans := qualitySpansFromRunDetailNode(root)
+	spans := inspectSpansFromRunDetailNode(root)
 	if len(spans) != 1 {
 		t.Fatalf("expected one projected span, got %d", len(spans))
 	}

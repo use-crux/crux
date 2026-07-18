@@ -1,11 +1,12 @@
 import { build } from 'esbuild'
-import { readFile } from 'node:fs/promises'
+import { readFile, rm } from 'node:fs/promises'
 import { builtinModules } from 'node:module'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const scriptDir = dirname(fileURLToPath(import.meta.url))
 const rootDir = resolve(scriptDir, '..')
+const distDir = resolve(rootDir, 'dist')
 const indexerPackage = JSON.parse(await readFile(resolve(rootDir, '../indexer/package.json'), 'utf8'))
 if (typeof indexerPackage.version !== 'string' || indexerPackage.version.length === 0) {
   throw new Error('@use-crux/indexer package version is missing')
@@ -38,6 +39,9 @@ const shared = {
 }
 
 try {
+  // Recreate generated output so workers removed by a clean migration cannot
+  // survive a rebuild as stale, accidentally packaged artifacts.
+  await rm(distDir, { recursive: true, force: true })
   const [evalResult, resolverResult, indexerResult, semanticIndexerResult, runtimeIndexerResult] = await Promise.all([
     build({
       ...shared,

@@ -117,6 +117,7 @@ function projectJsonValue(
       if (!projected.ok) return projected;
       result.push(projected.value);
     }
+    seen.delete(value);
     return { ok: true, value: Object.freeze(result) };
   }
   if (!isRecord(value)) return unavailable("identity_unavailable");
@@ -136,6 +137,7 @@ function projectJsonValue(
     if (!projected.ok) return projected;
     result[key] = projected.value;
   }
+  seen.delete(value);
   return { ok: true, value: Object.freeze(result) };
 }
 

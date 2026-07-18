@@ -21,8 +21,8 @@ func TestReindexProjectRunsLintPatchAfterSemanticMerge(t *testing.T) {
 	if indexer.lintCalls != 1 {
 		t.Fatalf("lint calls = %d, want 1", indexer.lintCalls)
 	}
-	if !indexer.sawSemanticRuns {
-		t.Fatal("lint request did not include semantic run data")
+	if !indexer.sawSemanticDefinition {
+		t.Fatal("lint request did not include the semantic definition")
 	}
 	if findTestLintFinding(index.LintFindings, "lint:definition.missing_eval_coverage:prompt:writer") == nil {
 		t.Fatalf("lint findings = %+v, want semantic-aware lint", index.LintFindings)
@@ -55,8 +55,8 @@ func TestReindexProjectInlinePrefetchesLintFactsWhileSemanticRuns(t *testing.T) 
 	case <-time.After(time.Second):
 		t.Fatal("ReindexProject did not finish")
 	}
-	if !indexer.sawSemanticRuns {
-		t.Fatal("lint request did not include semantic run data")
+	if !indexer.sawSemanticDefinition {
+		t.Fatal("lint request did not include the semantic definition")
 	}
 	if !indexer.sawPrefetchedRuleFacts {
 		t.Fatal("lint request did not include prefetched rule facts")
@@ -64,8 +64,8 @@ func TestReindexProjectInlinePrefetchesLintFactsWhileSemanticRuns(t *testing.T) 
 }
 
 type semanticAwareLintProjectIndexer struct {
-	lintCalls       int
-	sawSemanticRuns bool
+	lintCalls             int
+	sawSemanticDefinition bool
 }
 
 func (i *semanticAwareLintProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (projectindex.IndexPatch, error) {
@@ -94,15 +94,12 @@ func (i *semanticAwareLintProjectIndexer) IndexProjectSemanticPatch(context.Cont
 		Status:        "ok",
 		Facts: projectindex.IndexPatchFacts{
 			Definitions: []store.ProjectDefinition{{
-				ID:       "prompt:writer",
-				Kind:     "prompt",
-				Name:     "writer",
-				Fidelity: "resolved",
-				Status:   "active",
-				Quality: &store.IndexQuality{
-					RunIDs:   []string{"experiment:writer"},
-					RunCount: 1,
-				},
+				ID:          "prompt:writer",
+				Kind:        "prompt",
+				Name:        "writer",
+				Fidelity:    "resolved",
+				Status:      "active",
+				Description: "semantic marker",
 			}},
 		},
 	}, nil
@@ -111,8 +108,8 @@ func (i *semanticAwareLintProjectIndexer) IndexProjectSemanticPatch(context.Cont
 func (i *semanticAwareLintProjectIndexer) IndexProjectLintPatch(_ context.Context, req projectindex.ProjectLintIndexRequest) (projectindex.IndexPatch, error) {
 	i.lintCalls++
 	for _, definition := range req.PreviousIndex.Definitions {
-		if definition.ID == "prompt:writer" && definition.Quality != nil && len(definition.Quality.RunIDs) == 1 {
-			i.sawSemanticRuns = true
+		if definition.ID == "prompt:writer" && definition.Description == "semantic marker" {
+			i.sawSemanticDefinition = true
 		}
 	}
 	return projectindex.IndexPatch{
@@ -125,7 +122,7 @@ func (i *semanticAwareLintProjectIndexer) IndexProjectLintPatch(_ context.Contex
 				ID:         "lint:definition.missing_eval_coverage:prompt:writer",
 				RuleID:     "definition.missing_eval_coverage",
 				Severity:   "info",
-				Category:   "evaluation",
+				Category:   "evals",
 				Maturity:   "preview",
 				Confidence: "high",
 				Profiles:   []string{"recommended"},
@@ -142,7 +139,7 @@ type concurrentLintProjectIndexer struct {
 	semanticStarted        chan struct{}
 	releaseSemantic        chan struct{}
 	prefetchStarted        chan struct{}
-	sawSemanticRuns        bool
+	sawSemanticDefinition  bool
 	sawPrefetchedRuleFacts bool
 }
 
@@ -184,15 +181,12 @@ func (i *concurrentLintProjectIndexer) IndexProjectSemanticPatch(ctx context.Con
 		Status:        "ok",
 		Facts: projectindex.IndexPatchFacts{
 			Definitions: []store.ProjectDefinition{{
-				ID:       "prompt:writer",
-				Kind:     "prompt",
-				Name:     "writer",
-				Fidelity: "resolved",
-				Status:   "active",
-				Quality: &store.IndexQuality{
-					RunIDs:   []string{"experiment:writer"},
-					RunCount: 1,
-				},
+				ID:          "prompt:writer",
+				Kind:        "prompt",
+				Name:        "writer",
+				Fidelity:    "resolved",
+				Status:      "active",
+				Description: "semantic marker",
 			}},
 		},
 	}, nil
@@ -207,8 +201,8 @@ func (i *concurrentLintProjectIndexer) PrefetchProjectLintFacts(_ context.Contex
 
 func (i *concurrentLintProjectIndexer) IndexProjectLintPatch(_ context.Context, req projectindex.ProjectLintIndexRequest) (projectindex.IndexPatch, error) {
 	for _, definition := range req.PreviousIndex.Definitions {
-		if definition.ID == "prompt:writer" && definition.Quality != nil {
-			i.sawSemanticRuns = true
+		if definition.ID == "prompt:writer" && definition.Description == "semantic marker" {
+			i.sawSemanticDefinition = true
 		}
 	}
 	i.sawPrefetchedRuleFacts = req.Prefetch != nil && len(req.Prefetch.RuleFacts) == 1

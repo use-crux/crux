@@ -23,12 +23,12 @@ const TREND_CONFIG: Record<
 > = {
   up: {
     arrow: "\u2191",
-    color: "text-(--qw-ok) bg-(--qw-ok-soft)",
+    color: "text-(--devtools-ok) bg-(--devtools-ok-soft)",
     sparkColor: "emerald",
   },
   down: {
     arrow: "\u2193",
-    color: "text-(--qw-danger) bg-(--qw-danger-soft)",
+    color: "text-(--devtools-danger) bg-(--devtools-danger-soft)",
     sparkColor: "red",
   },
   stable: {

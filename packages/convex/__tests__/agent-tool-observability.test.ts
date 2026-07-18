@@ -131,7 +131,7 @@ describe('agent tool observability', () => {
     })
     const tools = { askUserQuestion: tool }
     const agent = new Agent({} as any, {
-      name: 'Karyla',
+      name: 'Support Agent',
       languageModel: {} as any,
       instructions: 'test',
       tools,
@@ -232,7 +232,7 @@ describe('agent tool observability', () => {
 
     const execute = vi.fn(async () => 'ok')
     const agent = new Agent({} as any, {
-      name: 'Karyla',
+      name: 'Support Agent',
       languageModel: {} as any,
       tools: {
         research: createTool({

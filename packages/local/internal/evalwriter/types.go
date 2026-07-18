@@ -5,8 +5,9 @@ import "context"
 
 // SetBaselineRequest identifies one persisted run arm to accept.
 type SetBaselineRequest struct {
-	RunID   string `json:"runId"`
-	Variant string `json:"variant,omitempty"`
+	RunID         string `json:"runId"`
+	Variant       string `json:"variant,omitempty"`
+	AcceptFailing bool   `json:"acceptFailing,omitempty"`
 }
 
 // SetBaselineResult describes the repository artifact written by Core.

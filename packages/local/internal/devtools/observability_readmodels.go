@@ -61,17 +61,16 @@ func observabilityStats(ctx context.Context, obs *observability.Service) store.S
 	}
 
 	return store.StatsResult{
-		TotalExecutions:      totalExecutions,
-		SuccessCount:         successCount,
-		ErrorCount:           errorCount,
-		RunningCount:         runningCount,
-		AvgDurationMs:        avgDuration,
-		TotalCost:            totalCost,
-		AvgCost:              avgCost,
-		TotalTokens:          totalTokens,
-		ErrorRate:            errorRate,
-		MemoryByType:         map[string]store.MemoryTypeStats{},
-		RagEvalFailureCounts: map[string]int{},
+		TotalExecutions: totalExecutions,
+		SuccessCount:    successCount,
+		ErrorCount:      errorCount,
+		RunningCount:    runningCount,
+		AvgDurationMs:   avgDuration,
+		TotalCost:       totalCost,
+		AvgCost:         avgCost,
+		TotalTokens:     totalTokens,
+		ErrorRate:       errorRate,
+		MemoryByType:    map[string]store.MemoryTypeStats{},
 	}
 }
 
@@ -450,8 +449,7 @@ func appendTimelineEdges(events []store.TimelineEvent, edges []observability.Edg
 
 func emptyStats() store.StatsResult {
 	return store.StatsResult{
-		MemoryByType:         map[string]store.MemoryTypeStats{},
-		RagEvalFailureCounts: map[string]int{},
+		MemoryByType: map[string]store.MemoryTypeStats{},
 	}
 }
 

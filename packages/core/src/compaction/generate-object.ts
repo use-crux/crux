@@ -51,7 +51,7 @@ export interface GenerateObjectBridgeOptions {
   /**
    * Prompt id used for the synthetic structured prompt.
    *
-   * This id can appear in traces, cassettes, and adapter hooks. Defaults to
+   * This id can appear in traces, Eval evidence, and adapter hooks. Defaults to
    * `crux.generateObject`.
    */
   readonly promptId?: string

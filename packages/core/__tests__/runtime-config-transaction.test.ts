@@ -57,6 +57,42 @@ describe('runtime config transaction', () => {
     expect(plan.plugins).toEqual([])
   })
 
+  it('installs feedback and persistence policy without taking trace transport ownership', () => {
+    const destination = {
+      submitFeedback: vi.fn(async () => ({
+        feedbackId: 'feedback-1',
+        reviewId: 'review-1',
+        revision: 1,
+        status: 'created' as const,
+        acceptedAt: '2026-07-17T00:00:00.000Z',
+      })),
+    }
+    const configure = vi.fn(() => () => undefined)
+    const input = {
+      observability: {
+        feedbackDestination: destination,
+        redactPaths: ['proposal.customer.email'],
+      },
+    } as const
+    const plan = planRuntimeConfig({ config: input })
+
+    expect(plan.ownsObservability).toBe(false)
+    expect(plan.observability).toEqual({
+      kind: 'none',
+      feedbackDestination: destination,
+      redactPaths: ['proposal.customer.email'],
+    })
+
+    createRuntimeConfigTransaction(
+      { config: input },
+      { observability: { configure } },
+    ).apply()
+    expect(configure).toHaveBeenCalledWith({
+      feedbackDestination: destination,
+      redactPaths: ['proposal.customer.email'],
+    })
+  })
+
   it('plans explicit observability as owned hook state and suppresses devtools transport ownership', () => {
     const transport: CruxObservabilityTransport = { send: vi.fn() }
 

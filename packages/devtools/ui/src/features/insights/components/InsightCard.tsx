@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
-import { Btn, Chip, Sparkline, type ChipTone } from "@/qw/shell/primitives";
-import { Icon } from "@/qw/shell/Icon";
-import type { IconName } from "@/qw/shell/nav";
-import { QwTooltip } from "@/qw/shell/QwTooltip";
-import { QwConfirm } from "@/qw/shell/QwConfirm";
+import { Btn, Chip, Sparkline, type ChipTone } from "@/devtools/shell/primitives";
+import { Icon } from "@/devtools/shell/Icon";
+import type { IconName } from "@/devtools/shell/nav";
+import { DevtoolsTooltip } from "@/devtools/shell/DevtoolsTooltip";
+import { DevtoolsConfirm } from "@/devtools/shell/DevtoolsConfirm";
 import { useNavigation } from "@/app/navigation/useNavigation";
 import {
   SEV_LABEL,
@@ -40,10 +40,10 @@ export function InsightCard({
   const { navigate } = useNavigation();
   const stripeColor =
     ins.severity === "high"
-      ? "var(--qw-danger)"
+      ? "var(--devtools-danger)"
       : ins.severity === "medium"
-        ? "var(--qw-warn)"
-        : "var(--qw-iris)";
+        ? "var(--devtools-warn)"
+        : "var(--devtools-iris)";
 
   const kind = insightKind(ins);
   const linkedTraceIds = ins.linkedTraceIds ?? [];
@@ -65,8 +65,8 @@ export function InsightCard({
     <div
       className="grid gap-6 rounded-[10px] px-[22px] py-[18px]"
       style={{
-        background: "var(--qw-bg-elev)",
-        border: "1px solid var(--qw-border)",
+        background: "var(--devtools-bg-elev)",
+        border: "1px solid var(--devtools-border)",
         borderLeft: `3px solid ${stripeColor}`,
         gridTemplateColumns: "1fr 240px",
       }}
@@ -78,9 +78,9 @@ export function InsightCard({
           </Chip>
           <span
             className="inline-flex items-center gap-1.5 font-mono text-[11px]"
-            style={{ color: "var(--qw-fg-muted)" }}
+            style={{ color: "var(--devtools-fg-muted)" }}
           >
-            <Icon name={KIND_ICON[kind]} size={12} color="var(--qw-fg-muted)" />
+            <Icon name={KIND_ICON[kind]} size={12} color="var(--devtools-fg-muted)" />
             {kind}
           </span>
           {ins.tags.map((t) => (
@@ -91,7 +91,7 @@ export function InsightCard({
           {occurrenceTargets.length === 1 && (
             <span
               className="font-mono text-[11px]"
-              style={{ color: "var(--qw-fg-faint)" }}
+              style={{ color: "var(--devtools-fg-faint)" }}
             >
               target · {occurrenceTargets[0]}
             </span>
@@ -99,7 +99,7 @@ export function InsightCard({
           {occurrenceTargets.length > 1 && (
             <span
               className="font-mono text-[11px]"
-              style={{ color: "var(--qw-fg-faint)" }}
+              style={{ color: "var(--devtools-fg-faint)" }}
             >
               {occurrenceTargets.length} targets
             </span>
@@ -124,7 +124,7 @@ export function InsightCard({
           )}
           <span
             className="ml-auto font-mono text-[11px]"
-            style={{ color: "var(--qw-fg-faint)" }}
+            style={{ color: "var(--devtools-fg-faint)" }}
           >
             {timeAgo(ins.updatedAt)}
           </span>
@@ -134,7 +134,7 @@ export function InsightCard({
         </h3>
         <p
           className="m-0 mb-3 max-w-[680px] text-[13.5px] leading-[1.55]"
-          style={{ color: "var(--qw-fg-muted)" }}
+          style={{ color: "var(--devtools-fg-muted)" }}
         >
           {ins.summary}
         </p>
@@ -142,15 +142,15 @@ export function InsightCard({
           <div
             className="flex max-w-[680px] items-start gap-2 rounded-[6px] px-2.5 py-2 text-[12px]"
             style={{
-              background: "var(--qw-crux-soft)",
-              border: "1px dashed var(--qw-crux-line)",
+              background: "var(--devtools-crux-soft)",
+              border: "1px dashed var(--devtools-crux-line)",
             }}
           >
-            <Icon name="sparkle" size={13} color="var(--qw-crux)" />
+            <Icon name="sparkle" size={13} color="var(--devtools-crux)" />
             <div>
               <span
                 className="mr-1.5 font-semibold"
-                style={{ color: "var(--qw-crux)" }}
+                style={{ color: "var(--devtools-crux)" }}
               >
                 Proposed fix
               </span>
@@ -166,9 +166,9 @@ export function InsightCard({
               onClick={() => setExpanded((v) => !v)}
               className="inline-flex items-center gap-1.5 rounded-[4px] px-2 py-[5px] font-mono text-[11.5px] transition-colors hover:opacity-90"
               style={{
-                background: "var(--qw-bg-muted)",
-                color: "var(--qw-fg)",
-                border: "1px solid var(--qw-border)",
+                background: "var(--devtools-bg-muted)",
+                color: "var(--devtools-fg)",
+                border: "1px solid var(--devtools-border)",
               }}
               title={
                 linkedCount === 1
@@ -179,12 +179,12 @@ export function InsightCard({
               <Icon
                 name={expanded ? "arrowDown" : "arrowRight"}
                 size={11}
-                color="var(--qw-crux)"
+                color="var(--devtools-crux)"
               />
               {linkedCount} occurrence{linkedCount === 1 ? "" : "s"}
             </button>
           )}
-          <QwTooltip content="Mark as fixed. Auto-reopens if more occurrences are detected.">
+          <DevtoolsTooltip content="Mark as fixed. Auto-reopens if more occurrences are detected.">
             <Btn
               size="xs"
               icon={<Icon name="check" size={12} />}
@@ -192,8 +192,8 @@ export function InsightCard({
             >
               Resolve
             </Btn>
-          </QwTooltip>
-          <QwConfirm
+          </DevtoolsTooltip>
+          <DevtoolsConfirm
             title={`Silence "${ins.title}"?`}
             description={
               <>
@@ -220,20 +220,20 @@ export function InsightCard({
             <Btn size="xs" icon={<Icon name="x" size={12} />}>
               Silence pattern
             </Btn>
-          </QwConfirm>
+          </DevtoolsConfirm>
         </div>
 
         {expanded && linkedCount > 0 && (
           <div
             className="mt-3 overflow-hidden rounded-[6px]"
-            style={{ border: "1px solid var(--qw-border)" }}
+            style={{ border: "1px solid var(--devtools-border)" }}
           >
             <div
               className="px-3 py-2 font-mono text-[10px] uppercase tracking-[0.08em]"
               style={{
-                color: "var(--qw-fg-faint)",
-                background: "var(--qw-bg-muted)",
-                borderBottom: "1px solid var(--qw-border)",
+                color: "var(--devtools-fg-faint)",
+                background: "var(--devtools-bg-muted)",
+                borderBottom: "1px solid var(--devtools-border)",
               }}
             >
               Occurrences · {linkedCount}
@@ -246,7 +246,7 @@ export function InsightCard({
             </div>
             <div
               className="flex flex-col"
-              style={{ background: "var(--qw-bg)" }}
+              style={{ background: "var(--devtools-bg)" }}
             >
               {linkedTraceIds.slice(0, 5).map((traceId) => (
                 <OccurrenceRow
@@ -259,13 +259,13 @@ export function InsightCard({
                 <div
                   className="px-3 py-2 font-mono text-[11px]"
                   style={{
-                    color: "var(--qw-fg-muted)",
-                    borderTop: "1px solid var(--qw-border)",
-                    background: "var(--qw-bg-muted)",
+                    color: "var(--devtools-fg-muted)",
+                    borderTop: "1px solid var(--devtools-border)",
+                    background: "var(--devtools-bg-muted)",
                   }}
                 >
                   + {linkedTraceIds.length - 5} more occurrences ·{" "}
-                  <span style={{ color: "var(--qw-fg-faint)" }}>
+                  <span style={{ color: "var(--devtools-fg-faint)" }}>
                     full pagination pending backend (see #529)
                   </span>
                 </div>
@@ -278,15 +278,15 @@ export function InsightCard({
       <div className="flex flex-col gap-2">
         <div
           className="text-[10px] font-medium uppercase tracking-[0.16em]"
-          style={{ color: "var(--qw-fg-faint)" }}
+          style={{ color: "var(--devtools-fg-faint)" }}
         >
           Trend
         </div>
         <div
           className="rounded-[6px] px-3 py-2.5"
           style={{
-            background: "var(--qw-bg)",
-            border: "1px solid var(--qw-border)",
+            background: "var(--devtools-bg)",
+            border: "1px solid var(--devtools-border)",
           }}
         >
           {ins.trend && ins.trend.length > 1 ? (
@@ -294,7 +294,7 @@ export function InsightCard({
           ) : (
             <div
               className="text-[11px]"
-              style={{ color: "var(--qw-fg-faint)" }}
+              style={{ color: "var(--devtools-fg-faint)" }}
             >
               No trend recorded yet.
             </div>
@@ -304,13 +304,13 @@ export function InsightCard({
           <div
             className="flex-1 rounded-[6px] px-2.5 py-1.5"
             style={{
-              background: "var(--qw-bg)",
-              border: "1px solid var(--qw-border)",
+              background: "var(--devtools-bg)",
+              border: "1px solid var(--devtools-border)",
             }}
           >
             <div
               className="text-[10px] uppercase tracking-[0.1em]"
-              style={{ color: "var(--qw-fg-faint)" }}
+              style={{ color: "var(--devtools-fg-faint)" }}
             >
               Occurrences
             </div>
@@ -320,7 +320,7 @@ export function InsightCard({
             {occurrenceCount > linkedCount && (
               <div
                 className="text-[10.5px]"
-                style={{ color: "var(--qw-fg-faint)" }}
+                style={{ color: "var(--devtools-fg-faint)" }}
               >
                 {linkedCount} linked
               </div>
@@ -329,13 +329,13 @@ export function InsightCard({
           <div
             className="flex-1 rounded-[6px] px-2.5 py-1.5"
             style={{
-              background: "var(--qw-bg)",
-              border: "1px solid var(--qw-border)",
+              background: "var(--devtools-bg)",
+              border: "1px solid var(--devtools-border)",
             }}
           >
             <div
               className="text-[10px] uppercase tracking-[0.1em]"
-              style={{ color: "var(--qw-fg-faint)" }}
+              style={{ color: "var(--devtools-fg-faint)" }}
             >
               Severity
             </div>
@@ -380,27 +380,27 @@ function OccurrenceRow({
       className="grid items-center gap-3 px-3 py-2 text-[12px]"
       style={{
         gridTemplateColumns: "76px 70px 70px 1fr auto",
-        borderBottom: "1px solid var(--qw-border)",
+        borderBottom: "1px solid var(--devtools-border)",
       }}
     >
       <button
         type="button"
         onClick={() => navigate({ view: "run-detail", traceId })}
         className="truncate text-left font-mono text-[11.5px] transition-colors hover:underline"
-        style={{ color: "var(--qw-crux)" }}
+        style={{ color: "var(--devtools-crux)" }}
         title={traceId}
       >
         {shortId}
       </button>
       <span
         className="font-mono text-[10.5px]"
-        style={{ color: "var(--qw-fg-faint)" }}
+        style={{ color: "var(--devtools-fg-faint)" }}
       >
         {startedAt ? timeAgo(new Date(startedAt).toISOString()) : "—"}
       </span>
       <span
         className="font-mono text-[10.5px]"
-        style={{ color: "var(--qw-fg-muted)" }}
+        style={{ color: "var(--devtools-fg-muted)" }}
       >
         {dur != null
           ? dur < 1000
@@ -414,16 +414,16 @@ function OccurrenceRow({
             {status}
           </Chip>
         )}
-        <span className="truncate" style={{ color: "var(--qw-fg)" }}>
+        <span className="truncate" style={{ color: "var(--devtools-fg)" }}>
           {target ?? (
-            <span style={{ color: "var(--qw-fg-faint)" }}>
+            <span style={{ color: "var(--devtools-fg-faint)" }}>
               (not in runs cache)
             </span>
           )}
         </span>
       </span>
       <span className="flex items-center gap-1">
-        <QwTooltip content="Open this trace in the Run detail view">
+        <DevtoolsTooltip content="Open this trace in the Run detail view">
           <Btn
             size="xs"
             icon={<Icon name="trace" size={11} />}
@@ -431,7 +431,7 @@ function OccurrenceRow({
           >
             Open
           </Btn>
-        </QwTooltip>
+        </DevtoolsTooltip>
       </span>
     </div>
   );

@@ -457,7 +457,7 @@ describe('Convex profile runtime', () => {
       prompt: ({ input }) => `prepared:${input.memoryQuery ?? ''}`,
     })
     const agent = convexAgent({
-      name: 'Karyla',
+      name: 'Support Agent',
       components: {
         crux: { marker: 'crux' } as never,
         agent: agentComponent as never,
@@ -531,11 +531,11 @@ describe('Convex profile runtime', () => {
       (record) => record.type === 'span:start' && record.primitive === 'agent.run',
     )
     expect(agentSpan).toMatchObject({
-      name: 'Karyla',
+      name: 'Support Agent',
       family: 'agent',
       primitive: 'agent.run',
       attributes: expect.objectContaining({
-        agentName: 'Karyla',
+        agentName: 'Support Agent',
         operation: 'streamText',
         promptId: 'threaded-agent',
         threadId: 'thread-5',
@@ -560,7 +560,7 @@ describe('Convex profile runtime', () => {
     )
     expect(toolRegistration).toMatchObject({
       attributes: expect.objectContaining({
-        agentName: 'Karyla',
+        agentName: 'Support Agent',
         operation: 'streamText',
         toolCount: 1,
         toolNames: ['runtimeLookup'],
@@ -626,7 +626,7 @@ describe('Convex profile runtime', () => {
       system: 'system-only',
     })
     const agent = convexAgent({
-      name: 'Karyla',
+      name: 'Support Agent',
       components: {
         crux: { marker: 'crux' } as never,
         agent: agentComponent as never,
@@ -793,7 +793,7 @@ describe('Convex profile runtime', () => {
       prompt: () => promptText,
     })
     const agent = convexAgent({
-      name: 'Karyla',
+      name: 'Support Agent',
       components: { crux: { marker: 'crux' } as never, agent: agentComponent as never },
       prompt: basePrompt,
       model: {} as LanguageModelV3,

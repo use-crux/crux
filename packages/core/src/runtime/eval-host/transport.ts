@@ -11,11 +11,13 @@ export function isSecureRequest(request: Request): boolean {
     url.protocol === "https:" ||
     url.hostname === "localhost" ||
     url.hostname === "127.0.0.1" ||
-    url.hostname === "::1"
+    url.hostname === "[::1]"
   );
 }
 
 /** Apply the bounded process-local poll window used by the reference host. */
+export const EVAL_HOST_MAX_POLL_WINDOWS = 1_024;
+
 export function admitPoll(
   windows: Map<string, { second: number; count: number }>,
   jobId: string,
@@ -23,7 +25,13 @@ export function admitPoll(
   limit: number,
 ): boolean {
   const second = Math.floor(now.getTime() / 1_000);
+  for (const [key, window] of windows) {
+    if (window.second !== second) windows.delete(key);
+  }
   const current = windows.get(jobId);
+  if (current === undefined && windows.size >= EVAL_HOST_MAX_POLL_WINDOWS) {
+    return false;
+  }
   const next = current?.second === second ? current.count + 1 : 1;
   windows.set(jobId, { second, count: next });
   return next <= limit;

@@ -76,6 +76,20 @@ function isTerminalStatus(status: string | undefined): boolean {
   );
 }
 
+/** Bound detail polling once Local has authoritatively returned not-found. */
+export function observabilityRunRefetchInterval(query: {
+  state: {
+    data?: ObservabilityRunDetail | null;
+    dataUpdatedAt: number;
+  };
+}): number | false {
+  if (query.state.data === null) return false;
+  const status = query.state.data?.run?.status;
+  if (!isTerminalStatus(status)) return 1_000;
+  const elapsed = Date.now() - (query.state.dataUpdatedAt || 0);
+  return elapsed < 60_000 ? 5_000 : false;
+}
+
 function timeMs(timestamp: string): number {
   const parsed = Date.parse(timestamp);
   return Number.isNaN(parsed) ? 0 : parsed;
@@ -207,14 +221,7 @@ export function useObservabilityGraph(
     enabled: Boolean(runId),
     // While the run is still running, refetch every second. Once it
     // terminates we taper to one more refresh per 5s for 60s, then stop.
-    refetchInterval: (query) => {
-      const status = (
-        query.state.data as ObservabilityRunDetail | null | undefined
-      )?.run?.status;
-      if (!isTerminalStatus(status)) return 1000;
-      const elapsed = Date.now() - (query.state.dataUpdatedAt || 0);
-      return elapsed < 60_000 ? 5_000 : false;
-    },
+    refetchInterval: observabilityRunRefetchInterval,
   });
 
   const runDetail = q.data ?? null;

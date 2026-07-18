@@ -1,10 +1,10 @@
 /**
  * Optional Eval capture hooks for the observability emitter.
  *
- * This module intentionally has no dependency on `quality/*` or Node-only
- * APIs. The Eval runtime registers ALS-backed hooks when it is loaded;
- * is loaded; platform-neutral bundles can import observability without pulling
- * in `node:async_hooks`.
+ * This module intentionally has no dependency on Eval execution or Node-only
+ * APIs. The Eval runtime registers scoped hooks when it is loaded, while
+ * platform-neutral bundles can import observability without pulling in
+ * `node:async_hooks`.
  *
  * @internal
  * @module

@@ -11,12 +11,12 @@ import {
 } from "@/features/observability/lib/timeline-helpers";
 
 export const FLOW_ACCENT_COLORS = [
-  "border-(--qw-blue-line)",
-  "border-(--qw-ok-soft)",
-  "border-(--qw-warn-soft)",
-  "border-(--qw-iris-line)",
-  "border-(--qw-plum-line)",
-  "border-(--qw-crux-line)",
+  "border-(--devtools-blue-line)",
+  "border-(--devtools-ok-soft)",
+  "border-(--devtools-warn-soft)",
+  "border-(--devtools-iris-line)",
+  "border-(--devtools-plum-line)",
+  "border-(--devtools-crux-line)",
 ];
 
 export function FlowGroupHeader({
@@ -52,10 +52,10 @@ export function FlowGroupHeader({
       ? "\u2717"
       : "\u2713";
   const statusColor = group.isRunning
-    ? "text-(--qw-blue)"
+    ? "text-(--devtools-blue)"
     : group.hasError
-      ? "text-(--qw-danger)"
-      : "text-(--qw-ok)";
+      ? "text-(--devtools-danger)"
+      : "text-(--devtools-ok)";
   const stepLabels = [...group.stepGroups.values()]
     .map((sg) => sg.stepLabel)
     .filter((l) => l !== "_ungrouped");
@@ -85,10 +85,10 @@ export function FlowGroupHeader({
   };
 
   const headerBg = isChild
-    ? "bg-(--qw-iris-soft) hover:bg-(--qw-iris-soft)"
+    ? "bg-(--devtools-iris-soft) hover:bg-(--devtools-iris-soft)"
     : "hover:bg-zinc-800/30";
   const borderStyle = isChild
-    ? `border-l-2 border-(--qw-iris-line)`
+    ? `border-l-2 border-(--devtools-iris-line)`
     : `border-l-2 ${accentColor}`;
   const wrapperBg = isFlowSelected
     ? "bg-zinc-900/50 ring-1 ring-zinc-700/50 rounded-r"
@@ -118,15 +118,15 @@ export function FlowGroupHeader({
 
         {/* Type badge */}
         {isChild ? (
-          <span className="text-[9px] font-semibold uppercase tracking-wider bg-(--qw-iris-soft) text-(--qw-iris) rounded px-1 py-0.5 shrink-0">
+          <span className="text-[9px] font-semibold uppercase tracking-wider bg-(--devtools-iris-soft) text-(--devtools-iris) rounded px-1 py-0.5 shrink-0">
             Sub-flow
           </span>
         ) : hasChildren ? (
-          <span className="text-[9px] font-semibold uppercase tracking-wider bg-(--qw-iris-soft) text-(--qw-iris) rounded px-1 py-0.5 shrink-0">
+          <span className="text-[9px] font-semibold uppercase tracking-wider bg-(--devtools-iris-soft) text-(--devtools-iris) rounded px-1 py-0.5 shrink-0">
             Pipeline
           </span>
         ) : (
-          <span className="text-(--qw-iris) text-[10px] font-medium shrink-0">
+          <span className="text-(--devtools-iris) text-[10px] font-medium shrink-0">
             Flow
           </span>
         )}
@@ -135,7 +135,7 @@ export function FlowGroupHeader({
         {flowName ? (
           <>
             <span
-              className={`font-mono text-[10px] font-medium ${isChild ? "text-(--qw-iris)" : "text-zinc-200"}`}
+              className={`font-mono text-[10px] font-medium ${isChild ? "text-(--devtools-iris)" : "text-zinc-200"}`}
             >
               {flowName}
             </span>
@@ -154,7 +154,7 @@ export function FlowGroupHeader({
         )}
 
         {hasChildren && (
-          <span className="text-[9px] text-(--qw-iris) shrink-0">
+          <span className="text-[9px] text-(--devtools-iris) shrink-0">
             {group.children.length} sub-flow
             {group.children.length !== 1 ? "s" : ""}
           </span>
@@ -164,7 +164,7 @@ export function FlowGroupHeader({
           {group.isRunning ? (
             <Shimmer
               as="span"
-              className="text-xs text-(--qw-blue)"
+              className="text-xs text-(--devtools-blue)"
               duration={2}
             >
               Running...
@@ -179,7 +179,7 @@ export function FlowGroupHeader({
           </span>
         )}
         {group.totalCost > 0 && (
-          <span className="text-(--qw-ok) tabular-nums text-[10px]">
+          <span className="text-(--devtools-ok) tabular-nums text-[10px]">
             {formatCost(group.totalCost)}
           </span>
         )}
@@ -193,8 +193,8 @@ export function FlowGroupHeader({
             <div key={stepKey}>
               {stepGroup.stepLabel !== "_ungrouped" && (
                 <div className="flex items-center gap-2 px-4 py-0.5 text-[10px]">
-                  <span className="w-1.5 h-1.5 rounded-sm bg-(--qw-iris-soft) shrink-0" />
-                  <span className="text-(--qw-iris) font-mono">
+                  <span className="w-1.5 h-1.5 rounded-sm bg-(--devtools-iris-soft) shrink-0" />
+                  <span className="text-(--devtools-iris) font-mono">
                     {stepGroup.stepLabel}
                   </span>
                   <span className="text-zinc-700">
@@ -238,7 +238,7 @@ export function FlowGroupHeader({
               {group.children.map((child, childIdx) => (
                 <div
                   key={child.flowId}
-                  className="rounded-md border border-(--qw-iris-line) bg-(--qw-iris-soft) overflow-hidden"
+                  className="rounded-md border border-(--devtools-iris-line) bg-(--devtools-iris-soft) overflow-hidden"
                 >
                   <FlowGroupHeader
                     group={child}

@@ -916,7 +916,7 @@ function TargetFindingRow({
 type SevFilter = "all" | LintSeverity;
 
 // ── Index-wide findings list (overview + filterable triage) ──────────────────
-// Mounted inside the Health screen's QwShell (see `IndexHealth`).
+// Mounted inside the Health screen's DevtoolsShell (see `IndexHealth`).
 export function IndexHealthList() {
   const idx = useIndexIndex();
   const all = idx.healthFindings;

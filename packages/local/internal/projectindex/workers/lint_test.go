@@ -30,10 +30,6 @@ func TestWorkerIndexProjectLintPatchUsesNativeLintFinalize(t *testing.T) {
 				Kind:     "prompt",
 				Name:     "writer",
 				Fidelity: "resolved",
-				Quality: &store.IndexQuality{
-					RunIDs:   []string{"experiment:writer"},
-					RunCount: 1,
-				},
 			}},
 		},
 	})
@@ -218,7 +214,7 @@ func staticIndexLintPatchEvents(root string) ([]json.RawMessage, error) {
 						"id":         "lint:definition.missing_eval_coverage:prompt:writer",
 						"ruleId":     "definition.missing_eval_coverage",
 						"severity":   "info",
-						"category":   "evaluation",
+						"category":   "evals",
 						"maturity":   "preview",
 						"confidence": "high",
 						"profiles":   []any{"recommended", "strict"},

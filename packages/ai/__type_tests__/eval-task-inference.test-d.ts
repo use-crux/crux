@@ -13,11 +13,15 @@ import { prompt } from "@use-crux/core";
 import { evaluate } from "@use-crux/core/eval";
 import type { CallOf, EvalTask, InputOf, OutputOf } from "@use-crux/core/eval";
 import { cascade, router, type RouteArgs } from "@use-crux/core/routing";
-import { createCruxAi, generate } from "../src";
+import { createCruxAi, generate, stableModel } from "../src";
 
 declare const fastModel: LanguageModel;
 declare const deepModel: LanguageModel;
 declare const callTools: ToolSet;
+
+declare const exactModel: LanguageModel & { readonly deployment: "primary" };
+const exactStableModel = stableModel(exactModel);
+expectTypeOf(exactStableModel).toEqualTypeOf<typeof exactModel>();
 
 const supportPrompt = prompt({
   input: z.object({ question: z.string() }),

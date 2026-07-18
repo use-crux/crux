@@ -11,13 +11,12 @@ fn project_patch_events_chunks_fact_batches() {
     let definitions = (0..205)
         .map(|index| {
             json!({
-                "id": format!("prompt:item-{index}"),
-                "kind": "prompt",
+                "id": format!("context:item-{index}"),
+                "kind": "context",
                 "name": format!("item-{index}"),
                 "fidelity": "resolved",
                 "status": "active",
-                "metadata": { "inputSchema": { "type": "object" } },
-                "quality": { "evalIds": [format!("eval:item-{index}")] }
+                "metadata": { "inputSchema": { "type": "object" } }
             })
         })
         .collect::<Vec<_>>();
@@ -58,11 +57,11 @@ fn project_patch_events_chunks_fact_batches() {
     );
     assert_eq!(
         batches[2]["facts"].as_array().expect("batch facts").len(),
-        56
+        55
     );
     assert_eq!(
         events.last().expect("phase done")["summary"]["factCount"],
-        256
+        255
     );
     assert_eq!(
         events.last().expect("phase done")["summary"]["decision"]["staticIndexComplete"],
@@ -76,11 +75,10 @@ fn project_patch_events_can_materialize_quality_phase_without_invalidation() {
     let output = finalize_static_index_values_with_policies(
         &[json!({
             "definitions": [{
-                "id": "quality-target:writer",
-                "kind": "quality.target",
+                "id": "eval:writer",
+                "kind": "eval",
                 "name": "writer",
-                "fidelity": "resolved",
-                "quality": { "experimentIds": ["experiment:writer"] }
+                "fidelity": "resolved"
             }]
         })],
         &[],

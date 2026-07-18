@@ -13,6 +13,7 @@ import {
   post,
   TOKEN,
 } from "./fixture";
+import { fingerprintEvalValue } from "../../../src/eval/internal/identity";
 
 describe("memory Eval host", () => {
   it("returns the authenticated, sorted deployed manifest without source content", async () => {
@@ -33,6 +34,7 @@ describe("memory Eval host", () => {
       protocol: CRUX_EVAL_HOST_PROTOCOL,
       deploymentId: "production-eu",
       hostKind: "memory",
+      privacyFingerprint: expect.stringMatching(/^[a-f0-9]{64}$/),
       capabilities: ["result-ref"],
       resultMaxBytes: 1024 * 1024,
       evals: [
@@ -53,6 +55,32 @@ describe("memory Eval host", () => {
       ],
     });
     expect(raw).not.toContain("refund policy");
+    expect(raw).not.toContain("redactPaths");
+  });
+
+  it("fails closed before durable storage when project redaction would alter a result", async () => {
+    const registry = fixtureRegistry(
+      async () => ({
+        output: { customer: { email: "private@example.test" } },
+      }),
+      [],
+      "generate",
+      ["customer.email"],
+    );
+    const host = createMemoryEvalHost({
+      deploymentId: "production-eu",
+      token: TOKEN,
+      registry,
+      now: () => NOW,
+    });
+    const body = jobBody(registry);
+
+    await host.fetch(authorizedRequest("/jobs", post(body)));
+
+    await expect(pollUntilTerminal(host, body.jobId)).resolves.toMatchObject({
+      status: "failed",
+      error: { code: "EVAL_RESULT_REDACTION_REQUIRED", phase: "result" },
+    });
   });
 
   it("admits one deployed Case and exposes running then exact succeeded evidence", async () => {
@@ -114,13 +142,19 @@ describe("memory Eval host", () => {
         output: { message: "Can I get a refund?" },
         response: { text: "Can I get a refund?" },
         capturedSignals: [],
-        runIds: [],
+        runIds: [expect.stringMatching(/^run_/)],
         observedIdentity: {
           reusable: true,
-          fingerprintMaterial: { adapter: "fixture-v1" },
+          fingerprint: fingerprintEvalValue({ adapter: "fixture-v1" }),
         },
       },
     });
+    const result = (
+      succeeded as {
+        result: { response: { runId: string }; runIds: string[] };
+      }
+    ).result;
+    expect(result.runIds).toEqual([result.response.runId]);
     expect(execute).toHaveBeenCalledTimes(1);
   });
 
@@ -190,6 +224,7 @@ describe("memory Eval host", () => {
             protocol: CRUX_EVAL_HOST_PROTOCOL,
             deploymentId: "production-eu",
             hostKind: "memory",
+            privacyFingerprint: "privacy-v1",
             capabilities: ["result-ref"],
             resultMaxBytes: 1024 * 1024,
             evals: [],

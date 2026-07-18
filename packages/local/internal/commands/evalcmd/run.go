@@ -36,23 +36,11 @@ func runEvals(cmd *cobra.Command, f *cli.Factory, opts runOptions, maxCostSet bo
 		args = append(args, "--max-cost", fmt.Sprint(opts.maxCost))
 	}
 	if !opts.plan && !maxCostSet {
-		needsConfirmation, blocked, err := inspectAdmission(opts.cwd, args)
-		if err != nil {
-			return failBeforeExecution(cmd, err.Error())
-		}
-		if needsConfirmation && !blocked {
-			io := f.Streams()
-			if !io.IsStderrTTY() || io.IsCI() {
-				return failBeforeExecution(cmd, "Eval has unknown external cost and requires interactive confirmation; run --plan to inspect actions or configure pricing for --max-cost")
-			}
-			confirmed, err := confirmUnknownCost(cmd)
-			if err != nil {
-				return failBeforeExecution(cmd, err.Error())
-			}
-			if !confirmed {
-				return failBeforeExecution(cmd, "Eval cost confirmation declined; no external calls were made")
-			}
-			args = append(args, "--confirm-unknown-cost")
+		io := f.Streams()
+		if io.IsStderrTTY() && !io.IsCI() {
+			args = append(args, "--request-unknown-cost-confirmation")
+		} else {
+			args = append(args, "--decline-unknown-cost-confirmation")
 		}
 	}
 	return runCoordinator(cmd, opts.cwd, args)

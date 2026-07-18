@@ -6,6 +6,7 @@ export function useReviews() {
   return useQuery({
     queryKey: qk.evals.reviews(),
     queryFn: ({ signal }) => reviewService.list(signal),
+    refetchInterval: 2_000,
   });
 }
 
@@ -14,6 +15,7 @@ export function useReview(reviewId?: string) {
     queryKey: qk.evals.review(reviewId),
     queryFn: ({ signal }) => reviewService.detail(reviewId ?? "", signal),
     enabled: Boolean(reviewId),
+    refetchInterval: 2_000,
   });
 }
 

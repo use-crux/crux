@@ -93,4 +93,35 @@ describe("managed scorer freshness", () => {
       work: { status: "executed", reason: "no_exact_evidence" },
     });
   });
+
+  it("reuses a judge when a fresh task returns the same declared inputs with a different provider response id", async () => {
+    const harness = createManagedScorerHarness();
+    await executeEvalPlan(
+      await planEval(
+        managedScorerDefinition("Is it helpful?"),
+        managedScorerSource,
+        harness.planning,
+      ),
+      harness.execution(),
+    );
+    harness.setTaskResponseId("response-2");
+
+    const fresh = await executeEvalPlan(
+      await planEval(
+        managedScorerDefinition("Is it helpful?", {
+          latency: { meanMs: 10 },
+        }),
+        managedScorerSource,
+        harness.planning,
+      ),
+      harness.execution(),
+    );
+
+    expect(harness.taskExecute).toHaveBeenCalledTimes(2);
+    expect(harness.scorerExecute).toHaveBeenCalledOnce();
+    expect(fresh.cells[0]?.scores[0]).toMatchObject({
+      status: "reused",
+      work: { reason: "exact_evidence" },
+    });
+  });
 });

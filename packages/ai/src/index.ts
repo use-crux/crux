@@ -117,6 +117,7 @@ import {
   createStreamTaskFactory,
   type AIStreamTaskFactory,
 } from "./eval-stream-task";
+export { stableModel } from "./stable-model";
 export { fromResponse, toParams } from "./codec";
 export type { AiSdkCodecOptions } from "./codec";
 
@@ -600,8 +601,9 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
 
   const generateFn = generateImpl as unknown as CruxAi["generate"];
   Object.defineProperty(generateFn, "task", {
-    value: createGenerateTaskFactory((prompt, taskOptions) =>
-      generateImpl(prompt, taskOptions as CallOpts),
+    value: createGenerateTaskFactory(
+      (prompt, taskOptions) => generateImpl(prompt, taskOptions as CallOpts),
+      { executionContractKnown: options.gateway === undefined },
     ),
     enumerable: true,
     writable: false,
@@ -614,6 +616,8 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
         streamImpl(prompt, taskOptions as CallOpts) as unknown as Promise<
           StreamResult<unknown, unknown>
         >,
+      (prompt, taskOptions) => generateImpl(prompt, taskOptions as CallOpts),
+      { executionContractKnown: options.gateway === undefined },
     ),
     enumerable: true,
     writable: false,

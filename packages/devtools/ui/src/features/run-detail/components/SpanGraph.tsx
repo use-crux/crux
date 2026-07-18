@@ -37,33 +37,33 @@ const Y_GAP = 18;
 // Coarse kind → family accent, used only as a fallback when a node has no
 // `primitive` (the canonical `primitiveAccentVar` owns the primitive case).
 const KIND_ACCENT: Record<string, string> = {
-  session: "var(--qw-iris)",
-  flow: "var(--qw-crux)",
-  composition: "var(--qw-crux)",
-  step: "var(--qw-crux)",
-  handoff: "var(--qw-fg-faint)",
-  trace: "var(--qw-crux)",
+  session: "var(--devtools-iris)",
+  flow: "var(--devtools-crux)",
+  composition: "var(--devtools-crux)",
+  step: "var(--devtools-crux)",
+  handoff: "var(--devtools-fg-faint)",
+  trace: "var(--devtools-crux)",
 };
 
 const STATUS_BG: Record<string, string> = {
-  success: "var(--qw-bg-elev)",
-  running: "var(--qw-crux-soft)",
-  error: "var(--qw-danger-soft)",
-  stale: "var(--qw-warn-soft)",
+  success: "var(--devtools-bg-elev)",
+  running: "var(--devtools-crux-soft)",
+  error: "var(--devtools-danger-soft)",
+  stale: "var(--devtools-warn-soft)",
 };
 
 const STATUS_DOT: Record<string, string> = {
-  success: "var(--qw-ok)",
-  running: "var(--qw-crux)",
-  error: "var(--qw-danger)",
-  stale: "var(--qw-warn)",
+  success: "var(--devtools-ok)",
+  running: "var(--devtools-crux)",
+  error: "var(--devtools-danger)",
+  stale: "var(--devtools-warn)",
 };
 
 function accentFor(node: SpanNode): string {
   // Canonical family accent off the full primitive; fall back to the coarse
   // kind map only when the node carries no primitive string.
   if (node.primitive) return primitiveAccentVar(node.primitive);
-  return KIND_ACCENT[node.kind] ?? "var(--qw-fg-muted)";
+  return KIND_ACCENT[node.kind] ?? "var(--devtools-fg-muted)";
 }
 
 function isHandoffish(node: SpanNode): boolean {
@@ -82,8 +82,8 @@ function isHandoffish(node: SpanNode): boolean {
  * other structural parent→child edges stay a quiet neutral line.
  */
 function edgeStyleFor(child: SpanNode): { stroke: string; dash?: string } {
-  if (isHandoffish(child)) return { stroke: "var(--qw-iris)", dash: "5 4" };
-  return { stroke: "var(--qw-border-strong, var(--qw-border))" };
+  if (isHandoffish(child)) return { stroke: "var(--devtools-iris)", dash: "5 4" };
+  return { stroke: "var(--devtools-border-strong, var(--devtools-border))" };
 }
 
 interface ShapeSummary {
@@ -156,18 +156,18 @@ const SpanNodeView = memo(function SpanNodeView({
   data,
 }: NodeProps<Node<SpanNodeData>>) {
   const bg = data.selected
-    ? "var(--qw-crux-soft)"
-    : (STATUS_BG[data.status] ?? "var(--qw-bg-elev)");
+    ? "var(--devtools-crux-soft)"
+    : (STATUS_BG[data.status] ?? "var(--devtools-bg-elev)");
   const kindLabel = (data.primitive || "").split(".")[0] || data.primitive;
   // Outline is a subtle, status-aware ring (design `GraphNode`) — the kind
   // accent lives in the KindTag chip, not a colored left border.
   const ring = data.selected
-    ? "var(--qw-crux)"
+    ? "var(--devtools-crux)"
     : data.status === "error"
-      ? "var(--qw-danger)"
+      ? "var(--devtools-danger)"
       : data.status === "stale"
-        ? "var(--qw-warn)"
-        : "var(--qw-border)";
+        ? "var(--devtools-warn)"
+        : "var(--devtools-border)";
   return (
     <div
       style={{
@@ -177,11 +177,11 @@ const SpanNodeView = memo(function SpanNodeView({
         borderRadius: 9,
         padding: "8px 11px",
         boxShadow: data.selected
-          ? "0 0 0 1.5px var(--qw-crux), 0 8px 24px var(--qw-crux-glow, var(--qw-crux-soft))"
+          ? "0 0 0 1.5px var(--devtools-crux), 0 8px 24px var(--devtools-crux-glow, var(--devtools-crux-soft))"
           : `inset 0 0 0 1px ${ring}`,
-        fontFamily: "var(--qw-mono)",
+        fontFamily: "var(--devtools-mono)",
         fontSize: 11,
-        color: "var(--qw-fg)",
+        color: "var(--devtools-fg)",
         overflow: "hidden",
         cursor: "pointer",
       }}
@@ -204,7 +204,7 @@ const SpanNodeView = memo(function SpanNodeView({
         <span
           style={{
             color: data.accent,
-            background: "var(--qw-bg)",
+            background: "var(--devtools-bg)",
             boxShadow: `inset 0 0 0 1px ${data.accent}`,
             fontSize: 8.5,
             lineHeight: 1.5,
@@ -228,27 +228,27 @@ const SpanNodeView = memo(function SpanNodeView({
             height: 6,
             borderRadius: 99,
             flexShrink: 0,
-            background: STATUS_DOT[data.status] ?? "var(--qw-fg-faint)",
+            background: STATUS_DOT[data.status] ?? "var(--devtools-fg-faint)",
           }}
         />
         <span style={{ flex: 1 }} />
         {data.warning && (
           <span
-            style={{ color: "var(--qw-warn)", fontSize: 10, flexShrink: 0 }}
+            style={{ color: "var(--devtools-warn)", fontSize: 10, flexShrink: 0 }}
             title="Turn explanation has a warning signal — open Explain"
           >
             ✦
           </span>
         )}
         <span
-          style={{ color: "var(--qw-fg-faint)", fontSize: 10, flexShrink: 0 }}
+          style={{ color: "var(--devtools-fg-faint)", fontSize: 10, flexShrink: 0 }}
         >
           {fmtDuration(data.durationMs)}
         </span>
       </div>
       <div
         style={{
-          color: "var(--qw-fg)",
+          color: "var(--devtools-fg)",
           fontSize: 12,
           fontWeight: 500,
           whiteSpace: "nowrap",
@@ -436,16 +436,16 @@ export function SpanGraph({
         position: "relative",
         width: "100%",
         height: "100%",
-        background: "var(--qw-bg)",
+        background: "var(--devtools-bg)",
       }}
     >
       {/* Run-shape summary chip (design `RunDetailGraph`, top-right). */}
       <div
         className="absolute right-4 top-3.5 z-10 flex items-center gap-2 rounded-[8px] px-3 py-1.5 font-mono text-[11px]"
         style={{
-          background: "var(--qw-bg-muted)",
-          color: "var(--qw-fg-muted)",
-          boxShadow: "inset 0 0 0 1px var(--qw-border)",
+          background: "var(--devtools-bg-muted)",
+          color: "var(--devtools-fg-muted)",
+          boxShadow: "inset 0 0 0 1px var(--devtools-border)",
         }}
       >
         {shapeChipLabel(shape)}
@@ -455,19 +455,19 @@ export function SpanGraph({
       <div
         className="absolute bottom-3.5 left-1/2 z-10 flex -translate-x-1/2 items-center gap-3.5 rounded-[8px] px-3 py-1.5 font-mono text-[10.5px]"
         style={{
-          background: "var(--qw-bg-elev)",
-          color: "var(--qw-fg-muted)",
-          boxShadow: "inset 0 0 0 1px var(--qw-border)",
+          background: "var(--devtools-bg-elev)",
+          color: "var(--devtools-fg-muted)",
+          boxShadow: "inset 0 0 0 1px var(--devtools-border)",
         }}
       >
         <LegendEdge
           label="parent"
-          color="var(--qw-border-strong, var(--qw-border))"
+          color="var(--devtools-border-strong, var(--devtools-border))"
         />
         {hasHandoffs && (
-          <LegendEdge label="handoff" color="var(--qw-iris)" dash="5 4" />
+          <LegendEdge label="handoff" color="var(--devtools-iris)" dash="5 4" />
         )}
-        <span style={{ color: "var(--qw-fg-faint)" }}>node = span</span>
+        <span style={{ color: "var(--devtools-fg-faint)" }}>node = span</span>
       </div>
 
       <ReactFlow
@@ -491,19 +491,19 @@ export function SpanGraph({
         edgesFocusable={false}
         elementsSelectable
       >
-        <Background gap={20} size={1} color="var(--qw-border)" />
+        <Background gap={20} size={1} color="var(--devtools-border)" />
         <Controls position="bottom-right" showInteractive={false} />
         <MiniMap
           position="bottom-left"
           pannable
           zoomable
-          maskColor="var(--qw-bg)"
+          maskColor="var(--devtools-bg)"
           nodeColor={(n) =>
-            ((n.data as SpanNodeData).accent as string) ?? "var(--qw-fg-muted)"
+            ((n.data as SpanNodeData).accent as string) ?? "var(--devtools-fg-muted)"
           }
           style={{
-            background: "var(--qw-bg-elev)",
-            border: "1px solid var(--qw-border)",
+            background: "var(--devtools-bg-elev)",
+            border: "1px solid var(--devtools-border)",
           }}
         />
       </ReactFlow>

@@ -8,7 +8,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/api"
 )
 
-// FixtureClient serves deterministic quality data for TUI render tests.
+// FixtureClient serves deterministic Inspect data for TUI render tests.
 type FixtureClient struct {
 	Now time.Time
 }

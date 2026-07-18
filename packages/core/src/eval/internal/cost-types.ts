@@ -7,7 +7,12 @@ export type EvalCostEstimate =
       readonly maximumUsd: number;
       readonly source: "managed_metadata" | "config_override";
     }
-  | { readonly kind: "unknown"; readonly source: "unknown" };
+  | {
+      readonly kind: "unknown";
+      readonly source: "unknown";
+      readonly missingPricingKeys: readonly string[];
+      readonly remedy: string;
+    };
 
 export interface EvalCostAction {
   readonly actionId: string;
@@ -26,9 +31,16 @@ export interface EvalCostEstimationRequest extends Omit<
 > {
   readonly task: unknown;
   readonly overrides: Readonly<Record<string, unknown>>;
-  readonly input: Readonly<Record<string, unknown>>;
+  readonly input: unknown;
   readonly call?: Readonly<Record<string, unknown>>;
   readonly scorer?: unknown;
+  /** Adapter model selected by a managed scorer, when Core can prove it. */
+  readonly billingModel?: unknown;
+  /** Whether a managed scorer inherits the task model when no explicit model exists. */
+  readonly inheritTaskModel?: boolean;
+  readonly pricing?: Readonly<
+    Record<string, { readonly maxUsdPerCall: number }>
+  >;
 }
 
 export type EvalCostAdmission =

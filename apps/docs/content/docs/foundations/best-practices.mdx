@@ -211,29 +211,33 @@ const prodMemory = memory({
 
 ## Test prompts like code
 
-Add inline test cases to prompt definitions. Run them in CI with `pnpm eval`. Use judges for subjective quality, `expect()` for structural assertions.
+Keep the production task callable, then define an inert Eval beside it. Run the
+same command locally and in CI; use scorers for subjective quality and
+assertions for structural behavior.
 
 ```ts
-prompt({
-  id: "classify",
-  // ...
-  tests: [
+import { evaluate } from "@use-crux/core/eval";
+import { classify } from "../src/classify";
+
+export default evaluate({
+  task: classify,
+  cases: [
     {
-      name: "positive-sentiment",
+      id: "positive-sentiment",
       input: { text: "This is amazing!" },
-      assert: (r) => {
-        expect(r.object.sentiment).toBe("positive");
-        expect(r.object.confidence).toBeGreaterThan(0.8);
-        return true;
-      },
+      expected: { sentiment: "positive" },
     },
   ],
+  expect: ({ output, expected, expect }) => {
+    expect(output.sentiment).toBe(expected.sentiment);
+    expect(output.confidence).toBeGreaterThan(0.8);
+  },
 });
 ```
 
 <Callout type="info">
-  Run `pnpm eval --devtools` to send results to the visual tracing UI for
-  debugging score disagreements across models.
+  Run `crux eval --plan` to inspect work before inference, then `crux eval`.
+  Eval runs and their linked production runs appear in Devtools automatically.
 </Callout>
 
 ## Use middleware for observability, not logic

@@ -14,16 +14,16 @@
 import { useEffect, useRef } from "react";
 
 const CHUNK_COLORS = [
-  "var(--qw-blue-soft)",
-  "var(--qw-ok-soft)",
-  "var(--qw-warn-soft)",
-  "var(--qw-iris-soft)",
-  "var(--qw-plum-soft)",
-  "var(--qw-crux-soft)",
-  "var(--qw-gold-soft)",
-  "var(--qw-blue-soft)",
-  "var(--qw-ok-soft)",
-  "var(--qw-warn-soft)",
+  "var(--devtools-blue-soft)",
+  "var(--devtools-ok-soft)",
+  "var(--devtools-warn-soft)",
+  "var(--devtools-iris-soft)",
+  "var(--devtools-plum-soft)",
+  "var(--devtools-crux-soft)",
+  "var(--devtools-gold-soft)",
+  "var(--devtools-blue-soft)",
+  "var(--devtools-ok-soft)",
+  "var(--devtools-warn-soft)",
 ];
 
 interface StreamingChunksProps {
@@ -51,13 +51,13 @@ export function StreamingChunks({
       className="overflow-y-auto rounded-[6px]"
       style={{
         maxHeight,
-        background: "var(--qw-bg)",
-        border: "1px solid var(--qw-border)",
+        background: "var(--devtools-bg)",
+        border: "1px solid var(--devtools-border)",
       }}
     >
       <pre
         className="m-0 whitespace-pre-wrap px-3.5 py-3 text-[12px] leading-[1.6]"
-        style={{ fontFamily: "var(--qw-mono)", color: "var(--qw-fg)" }}
+        style={{ fontFamily: "var(--devtools-mono)", color: "var(--devtools-fg)" }}
       >
         <TokenizedText chunks={chunks} />
         {isStreaming && (
@@ -66,7 +66,7 @@ export function StreamingChunks({
             style={{
               width: 2,
               height: 14,
-              background: "var(--qw-crux)",
+              background: "var(--devtools-crux)",
               animation: "running-pulse 1.2s ease-in-out infinite",
             }}
           />
@@ -138,7 +138,7 @@ function tokenizeText(text: string): string[] {
 /**
  * Header strip showing live stream metrics: TTFT · chunks · bytes · t/s.
  * Mirrors the original devtools' "Streaming progress" card but in the
- * QW design language.
+ * Devtools design language.
  */
 export function StreamingMeta({
   chunksReceived,
@@ -157,39 +157,39 @@ export function StreamingMeta({
     <div
       className="flex flex-wrap items-center gap-3 rounded-[6px] px-3 py-2 font-mono text-[11px]"
       style={{
-        background: "var(--qw-crux-soft)",
-        border: "1px solid var(--qw-crux-line)",
-        color: "var(--qw-fg)",
+        background: "var(--devtools-crux-soft)",
+        border: "1px solid var(--devtools-crux-line)",
+        color: "var(--devtools-fg)",
       }}
     >
       <span
         className="inline-flex size-1.5 rounded-full"
         style={{
-          background: "var(--qw-crux)",
+          background: "var(--devtools-crux)",
           animation: "running-pulse 1.2s ease-in-out infinite",
         }}
       />
-      <span style={{ color: "var(--qw-crux)", fontWeight: 600 }}>
+      <span style={{ color: "var(--devtools-crux)", fontWeight: 600 }}>
         streaming
       </span>
-      <span style={{ color: "var(--qw-fg-muted)" }}>
+      <span style={{ color: "var(--devtools-fg-muted)" }}>
         {chunksReceived} chunk{chunksReceived === 1 ? "" : "s"}
       </span>
       {textLength != null && (
-        <span style={{ color: "var(--qw-fg-muted)" }}>
+        <span style={{ color: "var(--devtools-fg-muted)" }}>
           · {textLength.toLocaleString()} chars
         </span>
       )}
       {ttftMs != null && (
-        <span style={{ color: "var(--qw-fg-muted)" }}>· TTFT {ttftMs}ms</span>
+        <span style={{ color: "var(--devtools-fg-muted)" }}>· TTFT {ttftMs}ms</span>
       )}
       {tokensPerSecond != null && (
-        <span style={{ color: "var(--qw-fg-muted)" }}>
+        <span style={{ color: "var(--devtools-fg-muted)" }}>
           · {tokensPerSecond.toFixed(1)} t/s
         </span>
       )}
       {elapsedMs != null && (
-        <span style={{ color: "var(--qw-fg-muted)" }}>
+        <span style={{ color: "var(--devtools-fg-muted)" }}>
           · {(elapsedMs / 1000).toFixed(1)}s elapsed
         </span>
       )}

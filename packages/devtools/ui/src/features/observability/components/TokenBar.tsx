@@ -7,14 +7,14 @@ interface TokenBarProps {
 }
 
 const COLORS = [
-  "bg-(--qw-blue)",
-  "bg-(--qw-ok)",
-  "bg-(--qw-warn)",
-  "bg-(--qw-iris)",
-  "bg-(--qw-plum)",
-  "bg-(--qw-crux)",
-  "bg-(--qw-gold)",
-  "bg-(--qw-blue)",
+  "bg-(--devtools-blue)",
+  "bg-(--devtools-ok)",
+  "bg-(--devtools-warn)",
+  "bg-(--devtools-iris)",
+  "bg-(--devtools-plum)",
+  "bg-(--devtools-crux)",
+  "bg-(--devtools-gold)",
+  "bg-(--devtools-blue)",
 ];
 
 export function TokenBar({

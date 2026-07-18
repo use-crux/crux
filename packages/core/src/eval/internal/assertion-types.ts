@@ -35,7 +35,7 @@ export interface CellAssertionExpression {
 
 export interface CellAssertionOutcome {
   readonly id: string;
-  readonly level: "evaluation" | "case";
+  readonly level: "eval" | "case";
   readonly phase: CellAssertionPhase;
   readonly index: number;
   readonly status: CellAssertionStatus;

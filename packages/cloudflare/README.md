@@ -11,8 +11,9 @@ pnpm add @use-crux/cloudflare @use-crux/core
 
 ## Worker entry
 
-Create one host from the generated deployed-Eval registry, export its Durable
-Object class, and delegate Worker requests to its router:
+Run `crux runtime generate`, then create one host from
+`cloudflare/_crux/generated.ts`, export its Durable Object class, and delegate
+Worker requests to its router:
 
 ```ts
 import { createCloudflareEvalHost } from "@use-crux/cloudflare";
@@ -65,3 +66,6 @@ import { cloudflare } from "@use-crux/cloudflare";
 
 export default config({ runtime: cloudflare() });
 ```
+
+See the [Cloudflare Workers Eval host guide](https://cruxjs.dev/docs/guides/evals/runtime-hosts#cloudflare-workers)
+for generated-entry and deployment setup.

@@ -16,6 +16,7 @@ import { createEvalPreflight } from "./offline";
 import { createEvalCostPlan } from "./cost-plan";
 import { planExternalScorers } from "./scorer-plan";
 import { resolveEvalHostReadiness } from "./placement";
+import { assertTaskAcceptsCase } from "./task-case-compatibility";
 import {
   EvalTaskExecutionError,
   getEvalTaskDescriptorForInternalUse,
@@ -23,6 +24,7 @@ import {
   projectEvalTaskIdentityForInternalUse,
 } from "./task";
 import type {
+  EvalPlanAction,
   EvalPlan,
   EvalPlannedCell,
   EvalScorerAction,
@@ -144,11 +146,19 @@ async function planCell(input: {
     trial: input.trial,
     task: input.arm.task,
     overrides: input.arm.overrides,
-    input: authored.input as Readonly<Record<string, unknown>>,
+    input: authored.input,
     ...(authored.call !== undefined
       ? { call: authored.call as Readonly<Record<string, unknown>> }
       : {}),
   };
+  await assertTaskAcceptsCase(
+    input.arm.task,
+    input.arm.name,
+    input.resolvedCase.caseId,
+    request.input,
+    request.call,
+    input.arm.overrides,
+  );
   const action = authored.skip
     ? Object.freeze({
         kind: "skip" as const,
@@ -177,33 +187,47 @@ async function planCell(input: {
       ? { afterScores: authored.afterScores }
       : {}),
   };
-  const scorerActions = action.kind === "skip" ? Object.freeze([]) : await planExternalScorers({
-    rawScorers: input.scorers,
-    cell: Object.freeze({ ...cellBase, scorerActions: Object.freeze([]) }),
-    taskAction: action,
-    actionPrefix: `${request.caseId}:${request.variant}:${request.trial}`,
-    ...(input.freshness.reason === "fresh_requested"
-      ? { bypassEvidenceReason: input.freshness.reason }
-      : {}),
-    ...(input.ports !== undefined
-      ? {
-          evidenceStore: input.ports.evidenceStore,
-          ...(input.ports.externalScorerHostContractFingerprint !== undefined
+  const scorerActions =
+    action.kind === "skip"
+      ? Object.freeze([])
+      : await planExternalScorers({
+          rawScorers: input.scorers,
+          cell: Object.freeze({
+            ...cellBase,
+            scorerActions: Object.freeze([]),
+          }),
+          taskAction: action,
+          actionPrefix: `${request.caseId}:${request.variant}:${request.trial}`,
+          ...(input.freshness.reason === "fresh_requested"
+            ? { bypassEvidenceReason: input.freshness.reason }
+            : {}),
+          ...(input.ports !== undefined
             ? {
-                hostContractFingerprint:
-                  input.ports.externalScorerHostContractFingerprint,
+                evidenceStore: input.ports.evidenceStore,
+                ...(input.ports.externalScorerHostContractFingerprint !==
+                undefined
+                  ? {
+                      hostContractFingerprint:
+                        input.ports.externalScorerHostContractFingerprint,
+                    }
+                  : {}),
+                ...(input.ports.externalScorerSourceFingerprint !== undefined
+                  ? {
+                      authoredSourceFingerprint:
+                        input.ports.externalScorerSourceFingerprint,
+                    }
+                  : {}),
               }
             : {}),
-        }
-      : {}),
-  });
+        });
   return Object.freeze({ ...cellBase, scorerActions });
 }
 
 function requiredHostCapabilities(task: unknown): readonly string[] {
   if (!isManagedEvalTaskForInternalUse(task)) return Object.freeze([]);
   return Object.freeze([
-    ...(getEvalTaskDescriptorForInternalUse(task).requiredHostCapabilities ?? []),
+    ...(getEvalTaskDescriptorForInternalUse(task).requiredHostCapabilities ??
+      []),
   ]);
 }
 
@@ -213,26 +237,17 @@ async function planTaskAction(
   freshness: EvalCellFreshness,
 ) {
   if (ports === undefined) {
-    return Object.freeze({
-      kind: "execute" as const,
-      reason: "live_required" as const,
-    });
+    return planLiveExecution("live_required", freshness);
   }
   const description = await ports.taskIdentity.describe(request);
   if (!description.reusable) {
-    return Object.freeze({
-      kind: "execute" as const,
-      reason: description.reason,
-    });
+    return planLiveExecution(description.reason, freshness);
   }
   if (
     !isReusableEvalValue(request.input) ||
-    !isReusableEvalValue(request.call)
+    (request.call !== undefined && !isReusableEvalValue(request.call))
   ) {
-    return Object.freeze({
-      kind: "execute" as const,
-      reason: "implicit_media" as const,
-    });
+    return planLiveExecution("implicit_media", freshness);
   }
   let projection;
   try {
@@ -247,18 +262,20 @@ async function planTaskAction(
       error instanceof EvalTaskExecutionError &&
       error.code === "descriptor_missing"
     ) {
-      return Object.freeze({
-        kind: "execute" as const,
-        reason: "identity_unavailable" as const,
-      });
+      return planLiveExecution("identity_unavailable", freshness);
     }
     throw error;
   }
   if (!projection.reusable) {
-    return Object.freeze({
-      kind: "execute" as const,
-      reason: projection.reason,
-    });
+    return planLiveExecution(projection.reason, freshness);
+  }
+  const descriptor = getEvalTaskDescriptorForInternalUse(request.task);
+  if (
+    containsManagedRenderer(projection.fingerprintMaterial) &&
+    (descriptor.projectRenderedPromptIdentity === undefined ||
+      descriptor.readRenderedPromptIdentity === undefined)
+  ) {
+    return planLiveExecution("untracked_external_dependency", freshness);
   }
   const adapterFingerprint = fingerprintEvalValue(
     projection.fingerprintMaterial,
@@ -290,30 +307,82 @@ async function planTaskAction(
     await ports.evidenceStore.read(identity.key),
     identity.key,
   );
-  return evidence === undefined
-    ? Object.freeze({
+  if (evidence === undefined) {
+    return Object.freeze({
+      kind: "execute" as const,
+      reason: "no_exact_evidence" as const,
+      evidenceKey: identity.key,
+      plannedAdapterFingerprint: adapterFingerprint,
+    });
+  }
+  if (descriptor.projectRenderedPromptIdentity !== undefined) {
+    const rendered = await descriptor.projectRenderedPromptIdentity({
+      phase: "plan",
+      input: request.input,
+      ...(request.call !== undefined ? { call: request.call } : {}),
+      overrides: request.overrides,
+    });
+    if (!rendered.reusable) {
+      return planLiveExecution(rendered.reason, freshness);
+    }
+    if (
+      evidence.result.renderedPromptFingerprint !==
+      fingerprintEvalValue(rendered.fingerprintMaterial)
+    ) {
+      return Object.freeze({
         kind: "execute" as const,
-        reason: "no_exact_evidence" as const,
+        reason: "nondeterministic_renderer" as const,
         evidenceKey: identity.key,
         plannedAdapterFingerprint: adapterFingerprint,
-      })
-    : Object.freeze({
-        kind: "reuse" as const,
-        reason: "exact_evidence" as const,
-        evidence,
       });
+    }
+  }
+  return Object.freeze({
+    kind: "reuse" as const,
+    reason: "exact_evidence" as const,
+    evidence,
+  });
+}
+
+function containsManagedRenderer(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some(containsManagedRenderer);
+  if (value === null || typeof value !== "object") return false;
+  const record = value as Record<string, unknown>;
+  return (
+    record.kind === "managed_renderer" ||
+    Object.values(record).some(containsManagedRenderer)
+  );
+}
+
+function planLiveExecution(
+  fallback: Extract<EvalPlanAction, { readonly kind: "execute" }>["reason"],
+  freshness: EvalCellFreshness,
+) {
+  return Object.freeze({
+    kind: "execute" as const,
+    reason: freshness.reason ?? fallback,
+    ...(freshness.source !== undefined
+      ? { freshnessSource: freshness.source }
+      : {}),
+  });
 }
 
 function assertSupportedDefinition(
   definition: ReturnType<typeof getEvalDefinitionForInternalUse>,
 ): void {
   if (definition.explicitId === undefined) {
-    throw new TypeError("Phase 8 Eval execution requires an explicit Eval id.");
+    throw new TypeError(
+      "Eval execution requires an explicit id. Add `id` to evaluate({...}) or run through the project coordinator so Crux can derive it from the file path.",
+    );
   }
   if (definition.caseFiles.length > 0) {
-    throw new TypeError("Phase 8 does not yet support caseFile() sources.");
+    throw new TypeError(
+      "planEval() received unresolved caseFile() sources. Run through `crux eval` or hydrate file-backed Cases before planning.",
+    );
   }
   if (definition.cases.some((authored) => authored.only !== undefined)) {
-    throw new TypeError("Eval planning does not yet support Case `only` flags.");
+    throw new TypeError(
+      "planEval() received unresolved Case `only` flags. Run through the Eval coordinator so Crux can apply Case selection before planning.",
+    );
   }
 }

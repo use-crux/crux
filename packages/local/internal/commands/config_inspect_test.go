@@ -51,7 +51,7 @@ func loadedConfigFixture(root string) json.RawMessage {
 	    "rules": { "value": "2", "origin": "config" }
 	  },
 	  "plugins": { "values": ["@acme/tracer"], "origin": "config" },
-	  "discovered": { "definitions": 12, "relations": 7, "evaluations": 3, "definitionKinds": { "prompt": 5, "tool": 4 } },
+	  "discovered": { "definitions": 12, "relations": 7, "evals": 3, "definitionKinds": { "prompt": 5, "tool": 4 } },
 	  "diagnostics": [
 	    { "severity": "info", "code": "project_model.missing_stable_id", "message": "router uses a fallback id." }
 	  ]
@@ -126,7 +126,7 @@ func TestConfigInspectHumanRendersEveryConfigDomain(t *testing.T) {
 		"lint:", "profile", "strict", "rules",
 		"plugins:", "@acme/tracer",
 		// Compact discovery summary + diagnostics.
-		"Discovered", "definitions", "relations", "evaluations",
+		"Discovered", "definitions", "relations", "Evals",
 		"Diagnostics  1", "info", "project_model.missing_stable_id",
 	} {
 		if !strings.Contains(text, want) {
@@ -157,7 +157,7 @@ func TestConfigInspectHumanZeroConfigReadsAsDefaults(t *testing.T) {
 	  "persistence": { "store": { "value": "none", "origin": "none" } },
 	  "lint": { "profile": { "value": "recommended", "origin": "default" }, "rules": { "value": "0", "origin": "default" } },
 	  "plugins": { "values": [], "origin": "default" },
-	  "discovered": { "definitions": 0, "relations": 0, "evaluations": 0, "definitionKinds": {} },
+	  "discovered": { "definitions": 0, "relations": 0, "evals": 0, "definitionKinds": {} },
 	  "diagnostics": []
 	}`)
 

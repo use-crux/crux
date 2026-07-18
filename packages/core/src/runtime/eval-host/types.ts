@@ -7,6 +7,7 @@ import type { RuntimeStoreAdapter } from "../store";
 import type { InProcessRuntimeEngineDefinition } from "../api/runtime-definition";
 import type { RuntimeWakeRequestVerifier } from "../handler/verify";
 import type { WorkItem } from "../engine/work";
+import type { RuntimeHandlerTarget } from "../handler/targets";
 
 /** Stable private wire protocol spoken by deployed Eval execution hosts. */
 export const CRUX_EVAL_HOST_PROTOCOL = "crux.eval-host.v1" as const;
@@ -24,6 +25,8 @@ export interface EvalHostManifestV1 {
   readonly protocol: typeof CRUX_EVAL_HOST_PROTOCOL;
   readonly deploymentId: string;
   readonly hostKind: EvalHostKind;
+  /** Secret-free identity of the generated persistence policy. */
+  readonly privacyFingerprint: string;
   readonly capabilities: readonly string[];
   readonly resultMaxBytes: number;
   readonly evals: readonly EvalHostManifestEntryV1[];
@@ -117,6 +120,8 @@ export interface CreateServerlessEvalHostOptions<
   readonly runtime: InProcessRuntimeEngineDefinition<TStore>;
   /** Explicit wake verifier override for trusted adapter bridges. */
   readonly verifyWake?: RuntimeWakeRequestVerifier;
+  /** Generated Runtime targets deployed beside the Eval executor. */
+  readonly targets?: readonly RuntimeHandlerTarget[];
 }
 
 /** Fetch-compatible authenticated Eval protocol handler. */

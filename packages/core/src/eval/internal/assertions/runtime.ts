@@ -86,7 +86,7 @@ const CAPTURING_KINDS: Record<Capability, readonly string[]> = {
  */
 export interface AssertionRecorder {
   phase: CellAssertionPhase
-  level: 'evaluation' | 'case'
+  level: 'eval' | 'case'
   mode: 'real' | 'counting'
   /** Assertions that executed in the real callback pass. */
   readonly ran: number
@@ -119,7 +119,7 @@ export function createAssertionRecorder(): AssertionRecorder {
   const outcomes: CellAssertionOutcome[] = []
 
   const recorder: AssertionRecorder = {
-    level: 'evaluation',
+    level: 'eval',
     phase: 'expect',
     mode: 'real',
     get ran() {
@@ -217,7 +217,7 @@ function assertionExpression(
   }
 }
 
-/** Best-effort `file:line:col` of the first stack frame outside Quality internals. @internal */
+/** Best-effort `file:line:col` of the first stack frame outside Eval internals. @internal */
 export function captureSourceRefFromStack(stack: string | undefined): string | undefined {
   if (stack === undefined) return undefined
   for (const line of stack.split('\n').slice(1)) {

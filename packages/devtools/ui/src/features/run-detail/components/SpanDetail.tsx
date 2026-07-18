@@ -290,7 +290,7 @@ function TraceSpanDetail({
               onClick={() =>
                 navigate({ view: "library-index", promptId: trace.promptId! })
               }
-              className="text-sm font-semibold text-zinc-100 truncate hover:text-(--qw-crux) transition-colors flex items-center gap-1"
+              className="text-sm font-semibold text-zinc-100 truncate hover:text-(--devtools-crux) transition-colors flex items-center gap-1"
             >
               <FileTextIcon className="size-3.5 text-zinc-500 shrink-0" />
               {trace.promptId}
@@ -369,7 +369,7 @@ function TraceSpanDetail({
                 onClick={() => navigate({ view: "runs", groupBy: "session" })}
                 className="inline-flex items-center gap-1 border border-zinc-700 bg-zinc-800 px-2 py-0.5 text-[10px] text-zinc-300 hover:bg-zinc-700 transition-colors rounded"
               >
-                <LinkIcon className="size-2.5 text-(--qw-iris)" />
+                <LinkIcon className="size-2.5 text-(--devtools-iris)" />
                 <span className="text-zinc-500">Flow</span>{" "}
                 {trace.flowId.slice(0, 8)}
               </button>
@@ -404,10 +404,10 @@ function TraceSpanDetail({
                 <span
                   className={
                     trace.streaming.ttftMs < 200
-                      ? "text-(--qw-ok)"
+                      ? "text-(--devtools-ok)"
                       : trace.streaming.ttftMs < 500
-                        ? "text-(--qw-warn)"
-                        : "text-(--qw-danger)"
+                        ? "text-(--devtools-warn)"
+                        : "text-(--devtools-danger)"
                   }
                 >
                   {trace.streaming.ttftMs}ms
@@ -430,7 +430,7 @@ function TraceSpanDetail({
           {cost != null && cost > 0 && (
             <MetricPill
               label="Cost"
-              value={<span className="text-(--qw-ok)">{formatCost(cost)}</span>}
+              value={<span className="text-(--devtools-ok)">{formatCost(cost)}</span>}
             />
           )}
         </div>
@@ -485,7 +485,7 @@ function TraceSpanDetail({
                     );
                   })()}
                 </div>
-                <div className="rounded-lg border border-(--qw-danger-soft) bg-(--qw-danger-soft) p-3 text-sm text-(--qw-danger) font-mono leading-relaxed overflow-hidden min-w-0 break-words">
+                <div className="rounded-lg border border-(--devtools-danger-soft) bg-(--devtools-danger-soft) p-3 text-sm text-(--devtools-danger) font-mono leading-relaxed overflow-hidden min-w-0 break-words">
                   {trace.error!.message}
                 </div>
                 {trace.error!.stack && (
@@ -526,7 +526,7 @@ function TraceSpanDetail({
                 className={hasError ? "" : "border-t-0"}
                 badge={
                   budgetEvent ? (
-                    <span className="text-[10px] text-(--qw-warn) bg-(--qw-warn-soft) border border-(--qw-warn-soft) rounded px-1.5 py-0.5">
+                    <span className="text-[10px] text-(--devtools-warn) bg-(--devtools-warn-soft) border border-(--devtools-warn-soft) rounded px-1.5 py-0.5">
                       Budget exceeded
                     </span>
                   ) : undefined
@@ -544,8 +544,8 @@ function TraceSpanDetail({
                           className={cn(
                             "text-[10px] rounded border px-1.5 py-0.5 font-medium",
                             routerEvent.data.overridden
-                              ? "text-(--qw-warn) bg-(--qw-warn-soft) border-(--qw-warn-soft)"
-                              : "text-(--qw-iris) bg-(--qw-iris-soft) border-(--qw-iris-line)",
+                              ? "text-(--devtools-warn) bg-(--devtools-warn-soft) border-(--devtools-warn-soft)"
+                              : "text-(--devtools-iris) bg-(--devtools-iris-soft) border-(--devtools-iris-line)",
                           )}
                         >
                           {String(routerEvent.data.classifiedAs)}
@@ -580,9 +580,9 @@ function TraceSpanDetail({
                           const status = String(tier.data.status);
                           const statusStyle =
                             status === "accepted"
-                              ? "text-(--qw-ok) bg-(--qw-ok-soft) border-(--qw-ok-soft)"
+                              ? "text-(--devtools-ok) bg-(--devtools-ok-soft) border-(--devtools-ok-soft)"
                               : status === "rejected"
-                                ? "text-(--qw-danger) bg-(--qw-danger-soft) border-(--qw-danger-soft)"
+                                ? "text-(--devtools-danger) bg-(--devtools-danger-soft) border-(--devtools-danger-soft)"
                                 : "text-zinc-500 bg-zinc-800 border-zinc-700";
                           return (
                             <div
@@ -610,7 +610,7 @@ function TraceSpanDetail({
                               )}
                               {tier.data.cost != null &&
                                 Number(tier.data.cost) > 0 && (
-                                  <span className="text-(--qw-ok) tabular-nums shrink-0">
+                                  <span className="text-(--devtools-ok) tabular-nums shrink-0">
                                     {formatCost(Number(tier.data.cost))}
                                   </span>
                                 )}
@@ -630,7 +630,7 @@ function TraceSpanDetail({
                           {Number(cascadeEvent.data.totalCost) > 0 && (
                             <span>
                               Total cost{" "}
-                              <span className="text-(--qw-ok)">
+                              <span className="text-(--devtools-ok)">
                                 {formatCost(
                                   Number(cascadeEvent.data.totalCost),
                                 )}
@@ -686,11 +686,11 @@ function TraceSpanDetail({
                       <button
                         onClick={() =>
                           navigate({
-                            view: "prompts",
+                            view: "library-index",
                             promptId: trace.promptId!,
                           })
                         }
-                        className="text-xs font-medium text-zinc-200 hover:text-(--qw-crux) transition-colors"
+                        className="text-xs font-medium text-zinc-200 hover:text-(--devtools-crux) transition-colors"
                       >
                         {trace.promptId}
                       </button>
@@ -716,13 +716,13 @@ function TraceSpanDetail({
                               }
                               className={cn(
                                 "inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] transition-colors",
-                                "border-(--qw-iris-line) bg-(--qw-iris-soft) text-(--qw-iris) hover:bg-(--qw-iris-soft)",
+                                "border-(--devtools-iris-line) bg-(--devtools-iris-soft) text-(--devtools-iris) hover:bg-(--devtools-iris-soft)",
                               )}
                             >
                               <PuzzleIcon className="size-2.5" />
                               {ctxId}
                               {ctx && (
-                                <span className="text-(--qw-iris)">
+                                <span className="text-(--devtools-iris)">
                                   p{ctx.priority}
                                 </span>
                               )}
@@ -790,7 +790,7 @@ function TraceSpanDetail({
                       className={cn(
                         "transition-all duration-300",
                         highlightedSource === part.source &&
-                          "ring-2 ring-(--qw-crux-line) rounded-lg",
+                          "ring-2 ring-(--devtools-crux-line) rounded-lg",
                       )}
                     >
                       <ContextPartCard
@@ -807,7 +807,7 @@ function TraceSpanDetail({
                           ctxMeta
                             ? () =>
                                 navigate({
-                                  view: "prompts",
+                                  view: "library-index",
                                   contextId: ctxMeta.id!,
                                 })
                             : undefined
@@ -854,7 +854,7 @@ function TraceSpanDetail({
                     className={cn(
                       "transition-all duration-300",
                       highlightedSource === "user prompt" &&
-                        "ring-2 ring-(--qw-crux-line) rounded-lg",
+                        "ring-2 ring-(--devtools-crux-line) rounded-lg",
                     )}
                   >
                     <ContextPartCard
@@ -880,7 +880,7 @@ function TraceSpanDetail({
                     className={cn(
                       "transition-all duration-300",
                       highlightedSource === "tools" &&
-                        "ring-2 ring-(--qw-crux-line) rounded-lg",
+                        "ring-2 ring-(--devtools-crux-line) rounded-lg",
                     )}
                   >
                     <div className="rounded-lg border border-zinc-800/60 overflow-hidden">
@@ -903,7 +903,7 @@ function TraceSpanDetail({
                                 toolName: tool,
                               })
                             }
-                            className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-zinc-950/60 border border-zinc-800/40 text-zinc-400 hover:text-(--qw-crux) hover:border-(--qw-crux-line) transition-colors cursor-pointer"
+                            className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-zinc-950/60 border border-zinc-800/40 text-zinc-400 hover:text-(--devtools-crux) hover:border-(--devtools-crux-line) transition-colors cursor-pointer"
                           >
                             {tool}
                           </button>
@@ -921,17 +921,17 @@ function TraceSpanDetail({
             <Section
               title="Fallback"
               badge={
-                <span className="text-[10px] tabular-nums text-(--qw-warn) bg-(--qw-warn-soft) rounded-full px-1.5 py-0.5">
+                <span className="text-[10px] tabular-nums text-(--devtools-warn) bg-(--devtools-warn-soft) rounded-full px-1.5 py-0.5">
                   {trace.fallback.attempts} attempts
                 </span>
               }
               defaultOpen={true}
             >
-              <div className="border-l-2 border-(--qw-warn-soft) pl-3 space-y-2">
+              <div className="border-l-2 border-(--devtools-warn-soft) pl-3 space-y-2">
                 {trace.fallback.failedModels.length > 0 && (
                   <div className="text-xs text-zinc-400">
                     Failed:{" "}
-                    <span className="text-(--qw-danger)">
+                    <span className="text-(--devtools-danger)">
                       {trace.fallback.failedModels.join(", ")}
                     </span>
                   </div>
@@ -940,10 +940,10 @@ function TraceSpanDetail({
                   {trace.fallback.details.map((attempt: any, i: number) => (
                     <div
                       key={i}
-                      className={`flex items-center gap-2 text-xs px-2 py-1 rounded ${attempt.status === "success" ? "bg-(--qw-ok-soft)" : "bg-(--qw-danger-soft)"}`}
+                      className={`flex items-center gap-2 text-xs px-2 py-1 rounded ${attempt.status === "success" ? "bg-(--devtools-ok-soft)" : "bg-(--devtools-danger-soft)"}`}
                     >
                       <span
-                        className={`w-1.5 h-1.5 rounded-full ${attempt.status === "success" ? "bg-(--qw-ok)" : "bg-(--qw-danger)"}`}
+                        className={`w-1.5 h-1.5 rounded-full ${attempt.status === "success" ? "bg-(--devtools-ok)" : "bg-(--devtools-danger)"}`}
                       />
                       <span className="font-mono text-zinc-300">
                         {attempt.model}
@@ -952,7 +952,7 @@ function TraceSpanDetail({
                         {attempt.durationMs}ms
                       </span>
                       {attempt.error && (
-                        <span className="text-(--qw-danger) truncate">
+                        <span className="text-(--devtools-danger) truncate">
                           {attempt.errorCategory || attempt.error}
                         </span>
                       )}
@@ -972,11 +972,11 @@ function TraceSpanDetail({
           {((trace.streamProgress && trace.streamProgress.chunks.length > 0) ||
             trace.streaming) && (
             <Section title="Stream" defaultOpen={true}>
-              <div className="border-l-2 border-(--qw-blue-line) pl-3 space-y-3">
+              <div className="border-l-2 border-(--devtools-blue-line) pl-3 space-y-3">
                 {trace.status === "running" && trace.streamProgress && (
                   <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-(--qw-blue) animate-pulse" />
-                    <span className="text-xs text-(--qw-blue) font-medium">
+                    <span className="w-2 h-2 rounded-full bg-(--devtools-blue) animate-pulse" />
+                    <span className="text-xs text-(--devtools-blue) font-medium">
                       Streaming...
                     </span>
                   </div>
@@ -994,10 +994,10 @@ function TraceSpanDetail({
                           value={`${ttft}ms`}
                           className={
                             ttft < 200
-                              ? "bg-(--qw-ok-soft) text-(--qw-ok)"
+                              ? "bg-(--devtools-ok-soft) text-(--devtools-ok)"
                               : ttft < 500
-                                ? "bg-(--qw-warn-soft) text-(--qw-warn)"
-                                : "bg-(--qw-danger-soft) text-(--qw-danger)"
+                                ? "bg-(--devtools-warn-soft) text-(--devtools-warn)"
+                                : "bg-(--devtools-danger-soft) text-(--devtools-danger)"
                           }
                         />
                       );
@@ -1055,7 +1055,7 @@ function TraceSpanDetail({
           {trace.result &&
             (trace.result.text != null || trace.result.object != null) && (
               <Section title="Output" defaultOpen={true}>
-                <div className="border-l-2 border-(--qw-ok-soft) pl-3 overflow-hidden min-w-0">
+                <div className="border-l-2 border-(--devtools-ok-soft) pl-3 overflow-hidden min-w-0">
                   {trace.result.text != null ? (
                     <CodeBlock code={trace.result.text} language="markdown">
                       <CodeBlockHeader>
@@ -1094,10 +1094,10 @@ function TraceSpanDetail({
                   const durationColor =
                     exec?.durationMs != null
                       ? exec.durationMs < 100
-                        ? "text-(--qw-ok)"
+                        ? "text-(--devtools-ok)"
                         : exec.durationMs < 1000
-                          ? "text-(--qw-warn)"
-                          : "text-(--qw-danger)"
+                          ? "text-(--devtools-warn)"
+                          : "text-(--devtools-danger)"
                       : "";
 
                   // Find matching delegate (convention: delegateId contains tool name, e.g. "delegate-research" ↔ "research")
@@ -1120,11 +1120,11 @@ function TraceSpanDetail({
                             onClick={(e) => {
                               e.stopPropagation();
                               navigate({
-                                view: "prompts",
+                                view: "library-index",
                                 toolName: toolCall.name,
                               });
                             }}
-                            className="font-medium text-xs font-mono text-zinc-200 hover:text-(--qw-crux) transition-colors inline-flex items-center gap-1"
+                            className="font-medium text-xs font-mono text-zinc-200 hover:text-(--devtools-crux) transition-colors inline-flex items-center gap-1"
                           >
                             {toolCall.name}
                             <ExternalLinkIcon className="size-2.5 text-zinc-600" />
@@ -1142,7 +1142,7 @@ function TraceSpanDetail({
                               className="gap-1 rounded-full text-[10px]"
                               variant="secondary"
                             >
-                              <span className="size-2 rounded-full bg-(--qw-blue) animate-pulse" />
+                              <span className="size-2 rounded-full bg-(--devtools-blue) animate-pulse" />
                               Running
                             </Badge>
                           ) : exec?.status === "done" ? (
@@ -1150,7 +1150,7 @@ function TraceSpanDetail({
                               className="gap-1 rounded-full text-[10px]"
                               variant="secondary"
                             >
-                              <CheckCircleIcon className="size-2.5 text-(--qw-ok)" />
+                              <CheckCircleIcon className="size-2.5 text-(--devtools-ok)" />
                               Done
                             </Badge>
                           ) : (
@@ -1194,10 +1194,10 @@ function TraceSpanDetail({
                           </div>
                           {exec?.error && (
                             <div>
-                              <h4 className="text-[10px] font-medium text-(--qw-danger) uppercase tracking-wider mb-1">
+                              <h4 className="text-[10px] font-medium text-(--devtools-danger) uppercase tracking-wider mb-1">
                                 Error
                               </h4>
-                              <div className="rounded-md bg-(--qw-danger-soft) border border-(--qw-danger-soft) px-2.5 py-1.5 text-xs text-(--qw-danger) font-mono">
+                              <div className="rounded-md bg-(--devtools-danger-soft) border border-(--devtools-danger-soft) px-2.5 py-1.5 text-xs text-(--devtools-danger) font-mono">
                                 {exec.error}
                               </div>
                             </div>
@@ -1245,10 +1245,10 @@ function TraceSpanDetail({
                         className={cn(
                           "h-full rounded-full",
                           j.score >= 0.7
-                            ? "bg-(--qw-ok)"
+                            ? "bg-(--devtools-ok)"
                             : j.score >= 0.5
-                              ? "bg-(--qw-warn)"
-                              : "bg-(--qw-danger)",
+                              ? "bg-(--devtools-warn)"
+                              : "bg-(--devtools-danger)",
                         )}
                         style={{ width: `${j.score * 100}%` }}
                       />
@@ -1257,10 +1257,10 @@ function TraceSpanDetail({
                       className={cn(
                         "text-xs font-medium tabular-nums",
                         j.score >= 0.7
-                          ? "text-(--qw-ok)"
+                          ? "text-(--devtools-ok)"
                           : j.score >= 0.5
-                            ? "text-(--qw-warn)"
-                            : "text-(--qw-danger)",
+                            ? "text-(--devtools-warn)"
+                            : "text-(--devtools-danger)",
                       )}
                     >
                       {j.score.toFixed(2)}
@@ -1457,7 +1457,7 @@ function TraceSpanDetail({
                     <div className="col-span-2 min-w-0">
                       <span className="text-zinc-600">Source</span>
                       <div
-                        className={`font-mono truncate ${resolvedSource?.resolved ? "text-(--qw-crux)" : "text-zinc-400"}`}
+                        className={`font-mono truncate ${resolvedSource?.resolved ? "text-(--devtools-crux)" : "text-zinc-400"}`}
                         title={
                           resolvedSource?.resolved
                             ? `Resolved from ${trace.source.file}:${trace.source.line}`
@@ -1509,10 +1509,10 @@ function FlowSpanDetail({
 }) {
   const statusColor =
     flowRun.status === "completed"
-      ? "bg-(--qw-ok)"
+      ? "bg-(--devtools-ok)"
       : flowRun.status === "failed"
-        ? "bg-(--qw-danger)"
-        : "bg-(--qw-blue) animate-pulse";
+        ? "bg-(--devtools-danger)"
+        : "bg-(--devtools-blue) animate-pulse";
 
   // Collect traces that belong to this flow
   const flowTraces = useMemo(() => {
@@ -1536,7 +1536,7 @@ function FlowSpanDetail({
         {flowRun.triggerTraceId && (
           <button
             onClick={() => onSelectTrace(flowRun.triggerTraceId!)}
-            className="text-[10px] text-(--qw-crux) hover:text-(--qw-crux) mb-1.5"
+            className="text-[10px] text-(--devtools-crux) hover:text-(--devtools-crux) mb-1.5"
           >
             Triggered by {flowRun.triggerTraceId.slice(0, 12)} →
           </button>
@@ -1557,7 +1557,7 @@ function FlowSpanDetail({
             <MetricPill
               label="Cost"
               value={
-                <span className="text-(--qw-ok)">
+                <span className="text-(--devtools-ok)">
                   {formatCost(flowRun.aggregate.totalCost)}
                 </span>
               }
@@ -1588,11 +1588,11 @@ function FlowSpanDetail({
                 ? flowRun.steps.map((step, i) => {
                     const stepStatus =
                       step.status === "completed"
-                        ? "bg-(--qw-ok)"
+                        ? "bg-(--devtools-ok)"
                         : step.status === "failed"
-                          ? "bg-(--qw-danger)"
+                          ? "bg-(--devtools-danger)"
                           : step.status === "started"
-                            ? "bg-(--qw-blue) animate-pulse"
+                            ? "bg-(--devtools-blue) animate-pulse"
                             : "bg-zinc-600";
 
                     return (
@@ -1724,7 +1724,7 @@ function FlowSpanDetail({
 
           {flowRun.error && (
             <Section title="Error" defaultOpen={true}>
-              <div className="rounded-lg border border-(--qw-danger-soft) bg-(--qw-danger-soft) p-3 text-sm text-(--qw-danger) font-mono overflow-hidden min-w-0 break-words">
+              <div className="rounded-lg border border-(--devtools-danger-soft) bg-(--devtools-danger-soft) p-3 text-sm text-(--devtools-danger) font-mono overflow-hidden min-w-0 break-words">
                 {flowRun.error}
               </div>
             </Section>
@@ -1823,7 +1823,7 @@ function SessionSpanDetail({
             <MetricPill
               label="Cost"
               value={
-                <span className="text-(--qw-ok)">{formatCost(totalCost)}</span>
+                <span className="text-(--devtools-ok)">{formatCost(totalCost)}</span>
               }
             />
           )}
@@ -1950,12 +1950,12 @@ function ConversationTurn({
               key={tc.id ?? i}
               className="flex items-center gap-1.5 text-[10px] text-zinc-500"
             >
-              <WrenchIcon className="size-3 text-(--qw-blue)" />
+              <WrenchIcon className="size-3 text-(--devtools-blue)" />
               <button
                 onClick={() =>
                   navigate({ view: "library-index", toolName: tc.name })
                 }
-                className="font-mono text-(--qw-blue) hover:text-(--qw-crux) transition-colors"
+                className="font-mono text-(--devtools-blue) hover:text-(--devtools-crux) transition-colors"
               >
                 {tc.name}
               </button>
@@ -1981,11 +1981,11 @@ function ConversationTurn({
           <span>{formatTokens(usage.totalTokens)} tok</span>
         )}
         {cost != null && (
-          <span className="text-(--qw-ok)">{formatCost(cost)}</span>
+          <span className="text-(--devtools-ok)">{formatCost(cost)}</span>
         )}
         <button
           onClick={() => onSelectTrace(trace.traceId)}
-          className="text-(--qw-crux) hover:text-(--qw-crux)"
+          className="text-(--devtools-crux) hover:text-(--devtools-crux)"
         >
           details →
         </button>
@@ -1994,11 +1994,11 @@ function ConversationTurn({
       {/* Assistant output bubble */}
       {outputText && (
         <div className="flex gap-2 justify-end">
-          <div className="max-w-[85%] rounded-lg bg-zinc-900 border-l-2 border-(--qw-ok-soft) px-3 py-2 text-xs text-zinc-200 whitespace-pre-wrap break-words overflow-hidden min-w-0">
+          <div className="max-w-[85%] rounded-lg bg-zinc-900 border-l-2 border-(--devtools-ok-soft) px-3 py-2 text-xs text-zinc-200 whitespace-pre-wrap break-words overflow-hidden min-w-0">
             {outputText}
           </div>
-          <div className="shrink-0 w-6 h-6 rounded-full bg-(--qw-ok-soft) flex items-center justify-center">
-            <BotIcon className="size-3 text-(--qw-ok)" />
+          <div className="shrink-0 w-6 h-6 rounded-full bg-(--devtools-ok-soft) flex items-center justify-center">
+            <BotIcon className="size-3 text-(--devtools-ok)" />
           </div>
         </div>
       )}
@@ -2089,7 +2089,7 @@ function StepSpanDetail({
             <MetricPill
               label="Cost"
               value={
-                <span className="text-(--qw-ok)">
+                <span className="text-(--devtools-ok)">
                   {formatCost((step?.cost ?? node.cost)!)}
                 </span>
               }
@@ -2139,7 +2139,7 @@ function StepSpanDetail({
                   className={cn(
                     "text-[10px] rounded border px-1.5 py-0.5 transition-colors",
                     i === selectedTraceIdx
-                      ? "border-(--qw-crux-line) bg-(--qw-crux-soft) text-(--qw-crux)"
+                      ? "border-(--devtools-crux-line) bg-(--devtools-crux-soft) text-(--devtools-crux)"
                       : "border-zinc-700 bg-zinc-800 text-zinc-400 hover:text-zinc-300",
                   )}
                 >
@@ -2221,7 +2221,7 @@ function FlowNodeFallback({
             <MetricPill
               label="Cost"
               value={
-                <span className="text-(--qw-ok)">{formatCost(totalCost)}</span>
+                <span className="text-(--devtools-ok)">{formatCost(totalCost)}</span>
               }
             />
           )}
@@ -2308,7 +2308,7 @@ function HandoffSpanDetail({
   return (
     <div className="p-5 space-y-4 text-[11px]">
       <div>
-        <h2 className="text-sm font-medium text-(--qw-warn) mb-3">
+        <h2 className="text-sm font-medium text-(--devtools-warn) mb-3">
           Delegate Handoff
         </h2>
         <div className="space-y-3">

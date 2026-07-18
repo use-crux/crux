@@ -141,7 +141,7 @@ The view is organized by `config()` domain, in interface order:
 - `persistence:` whether a global `store` is bound
 - `lint:` selected `profile` and rule-override count
 - `plugins:` installed plugin names
-- `Discovered`: a compact count of authored definitions / relations / evaluations (context, not config;
+- `Discovered`: a compact count of authored definitions / relations / Evals (context, not config;
   the full index lives behind [`crux index`](#crux-index))
 - `Diagnostics`: config-load and project-model findings
 
@@ -150,7 +150,7 @@ applied": `(default)` for a built-in default, `(config)` for an explicit value f
 `(package.json)` for package-derived values, and `(set)` for a bound non-serializable value (store,
 tokenizer, middleware, transport). The config-file status uses a colored glyph (`✓ loaded`,
 `✗ missing`/`import-failed`, `● unrecognized`). Paths are normalized for readability: the project root
-collapses to `~` and every other path is shown relative to it (`.crux/quality`, `evals/...`).
+collapses to `~` and every other path is shown relative to it (`.crux/evals`, `evals/...`).
 
 On an interactive terminal an animated loader is shown while the config resolves; color and the loader
 are suppressed under `--no-color`, `NO_COLOR`, or a non-TTY pipe, and `--json` emits the machine-readable
@@ -382,15 +382,16 @@ crux eval diff <run-a> <run-b>
 crux eval baseline set <run-id> [--variant <name>]
 ```
 
-Selectors match Eval ids or source paths. Every run includes Current; repeat
-`--variant` to add blocking Variants and `--case` to select Cases.
+Selectors match Eval ids or source paths. Every run includes Current. Pass
+`--variant` at most once to make one named Variant blocking alongside Current;
+repeat `--case` to select multiple Cases.
 
 ### Run flags
 
 | Flag                  | Meaning                                                             |
 | --------------------- | ------------------------------------------------------------------- |
 | `--case <id-or-name>` | Select a Case; repeatable                                           |
-| `--variant <name>`    | Add a blocking Variant alongside Current; repeatable                |
+| `--variant <name>`    | Make one named Variant blocking alongside Current                   |
 | `--watch`             | Replan affected Evals when source or Case files change              |
 | `--fresh`             | Bypass reusable task and managed-scorer evidence                    |
 | `--offline`           | Require exact external evidence and make no network requests        |
@@ -402,6 +403,11 @@ A plan can make one authenticated, read-only Runtime manifest request when
 remote work is required. If credentials are absent it reports the remote work
 as unverified and prints setup instructions. `--offline --plan` never accesses
 the network.
+
+The Devtools **Run Eval** action invokes this same coordinator through the
+project-local server. It explicitly confirms unknown-cost external calls,
+keeps the same Runtime readiness and preflight checks, and opens the persisted
+run.
 
 ### Commands and exit codes
 
@@ -417,9 +423,9 @@ arm as the Eval's explicit Baseline.
 
 ### Files and privacy
 
-Crux writes private run and evidence data under `.crux/quality/`; keep that
-directory gitignored. Commit authored Eval files, sibling `.cases.jsonl`
-datasets, explicit files referenced by `caseFile()`, and `.baseline.json`
+Crux writes private run and evidence data under `.crux/evals/`; keep that
+directory gitignored. Commit authored Eval files, sibling `.cases.jsonl` Case
+files, explicit files referenced by `caseFile()`, and `.baseline.json`
 Baseline pointers when they are intended to be shared.
 
 See the [Eval guide](/docs/guides/evals), [Eval API

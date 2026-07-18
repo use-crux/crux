@@ -11,8 +11,13 @@ export interface ReviewProjection {
   readonly context?: {
     readonly input?: unknown;
     readonly output?: unknown;
+    readonly call?: unknown;
     readonly model?: string;
+    readonly provider?: string;
     readonly promptId?: string;
+    readonly name?: string;
+    readonly startedAt?: string;
+    readonly endedAt?: string;
   };
   readonly targetEvalId?: string;
   readonly targetCaseId?: string;
@@ -38,6 +43,7 @@ export interface AddReviewCaseResult {
   readonly caseId: string;
   readonly path: string;
   readonly row: string;
+  readonly diff: string;
   readonly unvalidatedExpected: boolean;
   readonly existing?: string;
 }

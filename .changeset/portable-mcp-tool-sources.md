@@ -13,7 +13,7 @@
 
 Add portable MCP tool sources over Streamable HTTP and stdio. MCP tools now
 materialize lazily across every first-party generation adapter and retain the
-ordinary Crux middleware, Safety, approval replay, Quality, observability, and
+ordinary Crux middleware, Safety, approval, Eval, observability, and
 cleanup contracts.
 
 Project Index and Devtools now connect authored MCP servers with

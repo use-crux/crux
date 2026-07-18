@@ -206,39 +206,6 @@ export interface PromptBaseConfig<
     [input: MergedInput<TOwnInput, TContexts>],
     MergedInput<TOwnInput, TContexts>
   >;
-
-  /**
-   * Colocated test cases for this prompt — Quality rung 0.
-   *
-   * Cases are pure data (`name?`, `input`, `expected?`): the Quality runner
-   * lowers them into an evaluation with id `prompt:<promptId>` that validates
-   * each output against the prompt's output schema; `expected` is reported,
-   * never matched implicitly. Anything richer (callbacks, scorers, variants)
-   * graduates to a `*.eval.ts` file.
-   *
-   * Input and result types are inferred from the prompt's schemas.
-   *
-   * @example
-   * ```ts
-   * prompt({
-   *   id: 'support',
-   *   input: z.object({ question: z.string() }),
-   *   output: z.object({ answer: z.string() }),
-   *   tests: [
-   *     { input: { question: 'How do refunds work?' } },
-   *     { name: 'dutch', input: { question: 'Hoe werkt een refund?' }, expected: '14 dagen' },
-   *   ],
-   * })
-   * ```
-   */
-  tests?: Array<{
-    /** Descriptive name for this test case. Defaults to a content hash of `input`. */
-    name?: string;
-    /** Input to pass to the generate call — typed from the prompt's merged input. */
-    input: MergedInput<TOwnInput, TContexts>;
-    /** Opaque expected payload — reported alongside results, never matched implicitly. */
-    expected?: unknown;
-  }>;
 }
 
 /**
@@ -423,7 +390,7 @@ export type AnyPrompt = Prompt<
  */
 type ErasedPromptBaseConfig = Omit<
   PromptBaseConfig<z.ZodType, z.ZodType | undefined, readonly ContextEntry[], AnyToolSet | undefined>,
-  "cache" | "rawFields" | "sanitize" | "tests"
+  "cache" | "rawFields" | "sanitize"
 > & {
   cache?: PromptCacheOptions<Record<string, unknown>>;
   rawFields?: readonly string[];
@@ -431,11 +398,6 @@ type ErasedPromptBaseConfig = Omit<
     [input: Record<string, unknown>],
     Record<string, unknown>
   >;
-  tests?: Array<{
-    name?: string;
-    input: Record<string, unknown>;
-    expected?: unknown;
-  }>;
 };
 
 export type AnyPromptConfig = ErasedPromptBaseConfig &

@@ -239,4 +239,50 @@ describe("Eval fresh callback runtime", () => {
       assertions: { ran: 3 },
     });
   });
+
+  it("passes the real cell coordinates and records ad-hoc scores", async () => {
+    const seen: Array<{ variant: string; trial: number }> = [];
+    const definition = evaluate({
+      id: "callback-coordinates",
+      task,
+      cases: [
+        {
+          id: "refund",
+          input: { question: "Refund?" },
+          trials: 2,
+          expect: (context) => {
+            seen.push({
+              variant: context.variant.name,
+              trial: context.trial,
+            });
+            context.recordScore("confidence", 0.8, {
+              rationale: `trial ${context.trial}`,
+            });
+          },
+        },
+      ],
+    });
+    const run = await executeEvalPlan(
+      await planEval(
+        definition,
+        { sourceKey },
+        planningPorts(memoryEvidenceStore()),
+      ),
+      {
+        taskHost: { execute: async () => taskResult() },
+        clock: { now: () => 1 },
+        ids: { next: () => "eval-run-coordinates" },
+        runStore: { write: async () => undefined },
+      },
+    );
+
+    expect(seen).toEqual([
+      { variant: "current", trial: 0 },
+      { variant: "current", trial: 1 },
+    ]);
+    expect(run.cells.map((cell) => cell.scores[0])).toEqual([
+      expect.objectContaining({ name: "confidence", value: 0.8, rationale: "trial 0" }),
+      expect.objectContaining({ name: "confidence", value: 0.8, rationale: "trial 1" }),
+    ]);
+  });
 });

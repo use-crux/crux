@@ -90,14 +90,14 @@ Catalog classifies each definition's Observability section from the compiler-own
 | Direct activity            | `directly-observed`                                                 | Latest status / time / delivery badge when present; **View N runs** only when the activity rollup reports `runCount > 0`. Zero activity is a real state, not a broken link.                                                                        |
 | Contributor                | `runtime-contributor` or structural child with a live identity path | Canonical contributor/child refs (`runtimeIdentity: definition-ref`) show _Referenced by N runs_. Parent-derived definitions show _Parent ran in N runs; this definition is not independently observed._ No count is inferred from a display name. |
 | Runtime-observed, unjoined | `runtime-observed-unjoined`                                         | The kind's primitives appear in Runs, but records do not carry this authored definition's canonical Catalog id. Catalog names the relevant primitives and explicitly withholds per-definition counts and **View Runs**.                            |
-| Eval-primary               | `quality-owned` (legacy internal manifest label)                    | Correlates through the Eval ↔ observability join; secondary direct runtime evidence still surfaces when present.                                                                                                                                   |
+| Eval-primary               | `eval-owned`                                                        | Correlates through the Eval ↔ observability join; secondary direct runtime evidence still surfaces when present.                                                                                                                                   |
 | No runtime                 | `static-only` / fallback, or other kinds with no runtime path       | _Static/declarative: never the target or subject of a runtime primitive._ No fabricated counts, no dead View Runs link, no arbitrary owner selection.                                                                                              |
 
 The manifest also declares `runtimeIdentity` for definitions that are not top-level execution owners:
 
 - `definition-ref`: the runtime holds the exact authored identity and records it directly.
 - `parent-derived`: the index gives a structural child one exact containment parent; Catalog reports that parent's activity and says the child was not independently observed. Contributors without canonical runtime identity remain truthful zero-runtime states rather than selecting an arbitrary owner.
-- `quality`: legacy internal manifest spelling for the authoritative Eval correlation.
+- `eval`: authoritative correlation through persisted Eval evidence.
 - `none`: no truthful definition-level identity path exists. The kind may still emit runtime spans; the manifest's primary treatment distinguishes that case from genuinely static definitions.
 
 Per-kind coverage facts:
@@ -161,20 +161,20 @@ Custom edge types and artifact kinds must use the `custom.*` namespace. Unknown 
 
 Common detail artifacts use stable kinds so `RunDetail.inspection` can route them without UI-specific parsing:
 
-| Artifact kind                                                              | Primary payload                                                                                                                                                                                     |
-| -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `context.contribution`                                                     | Context inclusion state, source, primitive kind, priority, tokens, cache status, exclusion reason, segmented static/dynamic text, and contributed tool names in `injectedTools`.                    |
-| `prompt.budget`                                                            | Prompt token budget totals and dropped context contribution previews.                                                                                                                               |
-| `retrieval.hits`                                                           | Query, limit, returned hits, hit ranks, source/chunk ids, scores, and pipeline stage summaries.                                                                                                     |
-| `citation.report` / `score.report`                                         | Grounding markers, optional output anchors (`start`, `end`, `outputQuote`), score verdicts, judge rationales, and pass/fail detail.                                                                 |
-| `composition.report`                                                       | Parallel branches, pipeline stages, consensus votes, or swarm handoff path.                                                                                                                         |
-| `handoff.payload` / `delegate.report`                                      | Transfer contract data, hop metadata, input/output sizes, and delegate result preview.                                                                                                              |
+| Artifact kind                                                              | Primary payload                                                                                                                                                                                              |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `context.contribution`                                                     | Context inclusion state, source, primitive kind, priority, tokens, cache status, exclusion reason, segmented static/dynamic text, and contributed tool names in `injectedTools`.                             |
+| `prompt.budget`                                                            | Prompt token budget totals and dropped context contribution previews.                                                                                                                                        |
+| `retrieval.hits`                                                           | Query, limit, returned hits, hit ranks, source/chunk ids, scores, and pipeline stage summaries.                                                                                                              |
+| `citation.report` / `score.report`                                         | Grounding markers, optional output anchors (`start`, `end`, `outputQuote`), score verdicts, judge rationales, and pass/fail detail.                                                                          |
+| `composition.report`                                                       | Parallel branches, pipeline stages, consensus votes, or swarm handoff path.                                                                                                                                  |
+| `handoff.payload` / `delegate.report`                                      | Transfer contract data, hop metadata, input/output sizes, and delegate result preview.                                                                                                                       |
 | `constraint.report` / `guardrail.report`                                   | Constraint attempts/retries and `allow`, `warn`, `block`, `rewrite`, or `strip` guardrail reports with before/after previews when available. Media reports include only canonical type and original indexes. |
-| `routing.report` / `cache.report`                                          | Router, split, retry, fallback, and cascade choices; full cascade tier ladders including skipped/not-reached tiers; evaluator notes/confidence/budgets; semantic cache hits/writes; and saved work. |
-| `compaction.report`                                                        | Before/after token counts and summary previews.                                                                                                                                                     |
-| `memory.snapshot` / `memory.recall` / `memory.diff`                        | Memory state snapshots, recalled block previews (`blockKind`, `key`, `preview`, `score`), and before/after write summaries with added/removed block summaries.                                      |
-| `embedding.report` / `indexing.report` / `ingest.report` / `corpus.report` | Embedding shape/cache metrics, indexing totals/stage counts, loader status, and corpus source ledger summaries.                                                                                     |
-| `security.report`                                                          | Prompt-injection warning severity, pattern, field/location, action, and bounded preview.                                                                                                            |
+| `routing.report` / `cache.report`                                          | Router, split, retry, fallback, and cascade choices; full cascade tier ladders including skipped/not-reached tiers; evaluator notes/confidence/budgets; semantic cache hits/writes; and saved work.          |
+| `compaction.report`                                                        | Before/after token counts and summary previews.                                                                                                                                                              |
+| `memory.snapshot` / `memory.recall` / `memory.diff`                        | Memory state snapshots, recalled block previews (`blockKind`, `key`, `preview`, `score`), and before/after write summaries with added/removed block summaries.                                               |
+| `embedding.report` / `indexing.report` / `ingest.report` / `corpus.report` | Embedding shape/cache metrics, indexing totals/stage counts, loader status, and corpus source ledger summaries.                                                                                              |
+| `security.report`                                                          | Prompt-injection warning severity, pattern, field/location, action, and bounded preview.                                                                                                                     |
 
 Both enforce- and report-mode media strips emit a `guardrail.report` artifact
 and a `guardrail.action` span event with `action: 'strip'`. Report mode preserves the
@@ -221,7 +221,7 @@ save?). Every decision, disposition, and diagnostic carries an `evidenceLevel`
 about what it could and could not prove; `reason.source: "not-recorded"` maps to
 `evidenceLevel: "missing"`. Reason codes are stable strings (for example
 `routing.fallback.fired`, `context.freshness.stale_used`,
-`cache.freshness.rejected`) suitable for quality matchers, while human-facing
+`cache.freshness.rejected`) suitable for Eval assertions, while human-facing
 text can change independently. The same codes back the
 `ctx.expect.decisionReport` Eval matchers.
 
@@ -631,6 +631,11 @@ const restore = setObservabilityTransport(
 
 restore();
 ```
+
+Trace batches fan out to every leg. Feedback is a durable mutation, so the tee
+delegates it to exactly one feedback-capable leg. Construction fails clearly if
+multiple legs expose `submitFeedback()` instead of guessing which destination
+owns the Review record.
 
 ### Capture policy
 

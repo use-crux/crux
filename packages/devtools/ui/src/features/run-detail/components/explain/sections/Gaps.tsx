@@ -5,7 +5,7 @@
  * "fully proven" confirmation rather than a blank.
  */
 
-import { Icon } from "@/qw/shell/Icon";
+import { Icon } from "@/devtools/shell/Icon";
 import type { TurnDecisionDiagnostic } from "@/types";
 import { EvidenceLevel } from "../atoms";
 
@@ -19,18 +19,18 @@ export function GapsBlock({
       <div
         className="flex items-center gap-2.5 rounded-[10px] px-4 py-3"
         style={{
-          background: "var(--qw-ok-soft)",
-          border: "1px solid var(--qw-ok-soft)",
+          background: "var(--devtools-ok-soft)",
+          border: "1px solid var(--devtools-ok-soft)",
         }}
       >
-        <Icon name="check" size={15} color="var(--qw-ok)" />
+        <Icon name="check" size={15} color="var(--devtools-ok)" />
         <span
           className="text-[12.5px] font-semibold"
-          style={{ color: "var(--qw-fg)" }}
+          style={{ color: "var(--devtools-fg)" }}
         >
           Fully proven
         </span>
-        <span className="text-[12.5px]" style={{ color: "var(--qw-fg-muted)" }}>
+        <span className="text-[12.5px]" style={{ color: "var(--devtools-fg-muted)" }}>
           Every part of this turn is backed by recorded evidence.
         </span>
       </div>
@@ -40,8 +40,8 @@ export function GapsBlock({
     <div
       className="overflow-hidden rounded-[10px]"
       style={{
-        background: "var(--qw-bg)",
-        border: "1px solid var(--qw-border)",
+        background: "var(--devtools-bg)",
+        border: "1px solid var(--devtools-border)",
       }}
     >
       {gaps.map((g, i) => (
@@ -50,18 +50,18 @@ export function GapsBlock({
           className="flex items-start gap-[11px] px-3.5 py-2.5"
           style={{
             borderBottom:
-              i < gaps.length - 1 ? "1px solid var(--qw-border)" : "none",
+              i < gaps.length - 1 ? "1px solid var(--devtools-border)" : "none",
           }}
         >
-          <Icon name="info" size={14} color="var(--qw-fg-faint)" />
+          <Icon name="info" size={14} color="var(--devtools-fg-faint)" />
           <div className="min-w-0 flex-1">
-            <div className="text-[12.5px]" style={{ color: "var(--qw-fg)" }}>
+            <div className="text-[12.5px]" style={{ color: "var(--devtools-fg)" }}>
               {g.text}
             </div>
             {g.detail && (
               <div
                 className="mt-0.5 text-[11.5px]"
-                style={{ color: "var(--qw-fg-muted)" }}
+                style={{ color: "var(--devtools-fg-muted)" }}
               >
                 {g.detail}
               </div>
@@ -70,7 +70,7 @@ export function GapsBlock({
           {g.subject?.id && (
             <span
               className="flex-shrink-0 font-mono text-[10px]"
-              style={{ color: "var(--qw-fg-faint)" }}
+              style={{ color: "var(--devtools-fg-faint)" }}
             >
               {g.subject.id}
             </span>

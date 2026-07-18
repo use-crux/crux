@@ -28,7 +28,7 @@ describe("Eval Baseline V3", () => {
     expect(JSON.stringify(baseline)).not.toContain("private answer");
     expect(baseline).toMatchObject({
       schemaVersion: 3,
-      baselineFingerprintEpoch: 2,
+      baselineFingerprintEpoch: 4,
       evalId: "support",
       runId: "run-1",
       selectedArm: "current",

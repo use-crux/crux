@@ -2,7 +2,7 @@
  * Run-detail presentational atoms.
  *
  * Ports the design's `v5-atoms` (KindTag · StatusPill · StatStrip · LensSwitch)
- * onto the app's `--qw-*` theme tokens + existing `Chip`/`Icon` primitives.
+ * onto the app's `--devtools-*` theme tokens + existing `Chip`/`Icon` primitives.
  * Pure presentation — no data, no navigation, no feature coupling.
  *
  * NOTE: `KindTag` and `StatusPill` encode the observability run/span
@@ -13,9 +13,9 @@
 
 import * as React from "react";
 import { cn } from "@/shared/lib/utils";
-import { Chip, type ChipTone } from "@/qw/shell/primitives";
-import { Icon } from "@/qw/shell/Icon";
-import type { IconName } from "@/qw/shell/nav";
+import { Chip, type ChipTone } from "@/devtools/shell/primitives";
+import { Icon } from "@/devtools/shell/Icon";
+import type { IconName } from "@/devtools/shell/nav";
 import type { RunLens } from "@/features/run-detail/types";
 import {
   TONE_VAR,
@@ -214,7 +214,7 @@ export function StatStrip({
         <div key={it.label} className="flex flex-col leading-tight">
           <span
             className="font-mono uppercase tracking-[0.04em]"
-            style={{ fontSize: size - 3, color: "var(--qw-fg-faint)" }}
+            style={{ fontSize: size - 3, color: "var(--devtools-fg-faint)" }}
           >
             {it.label}
           </span>
@@ -222,7 +222,7 @@ export function StatStrip({
             className="font-mono font-medium"
             style={{
               fontSize: size,
-              color: it.tone ? TONE_VAR[it.tone] : "var(--qw-fg)",
+              color: it.tone ? TONE_VAR[it.tone] : "var(--devtools-fg)",
             }}
           >
             {it.value}
@@ -281,8 +281,8 @@ export function LensSwitch({
         className,
       )}
       style={{
-        background: "var(--qw-bg-elev)",
-        boxShadow: "inset 0 0 0 1px var(--qw-border)",
+        background: "var(--devtools-bg-elev)",
+        boxShadow: "inset 0 0 0 1px var(--devtools-border)",
       }}
     >
       {summary && (
@@ -300,11 +300,11 @@ export function LensSwitch({
             )}
             style={{
               background: summary.active
-                ? "var(--qw-crux-soft)"
+                ? "var(--devtools-crux-soft)"
                 : "transparent",
-              color: summary.active ? "var(--qw-crux)" : "var(--qw-fg-muted)",
+              color: summary.active ? "var(--devtools-crux)" : "var(--devtools-fg-muted)",
               boxShadow: summary.active
-                ? "inset 0 0 0 1px var(--qw-crux-line)"
+                ? "inset 0 0 0 1px var(--devtools-crux-line)"
                 : "none",
             }}
           >
@@ -313,7 +313,7 @@ export function LensSwitch({
           </button>
           <span
             className="mx-[3px] h-[16px] w-px shrink-0"
-            style={{ background: "var(--qw-border)" }}
+            style={{ background: "var(--devtools-border)" }}
           />
         </>
       )}
@@ -333,9 +333,9 @@ export function LensSwitch({
                 : "px-[11px] py-[6px] text-[12.5px]",
             )}
             style={{
-              background: on ? "var(--qw-crux-soft)" : "transparent",
-              color: on ? "var(--qw-crux)" : "var(--qw-fg-muted)",
-              boxShadow: on ? "inset 0 0 0 1px var(--qw-crux-line)" : "none",
+              background: on ? "var(--devtools-crux-soft)" : "transparent",
+              color: on ? "var(--devtools-crux)" : "var(--devtools-fg-muted)",
+              boxShadow: on ? "inset 0 0 0 1px var(--devtools-crux-line)" : "none",
             }}
           >
             <Icon name={lens.icon} size={dense ? 13 : 14} />

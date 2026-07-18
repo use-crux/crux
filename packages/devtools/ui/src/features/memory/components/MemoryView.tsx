@@ -14,8 +14,7 @@
  */
 
 import { useMemo, useState } from "react";
-import { QwShell } from "@/qw/shell/QwShell";
-import { navTarget } from "@/app/navigation/navTarget";
+import { DevtoolsShell } from "@/devtools/shell/DevtoolsShell";
 import {
   Btn,
   Chip,
@@ -23,10 +22,9 @@ import {
   Kpi,
   SectionHead,
   Sparkline,
-} from "@/qw/shell/primitives";
-import { Icon } from "@/qw/shell/Icon";
-import type { IconName } from "@/qw/shell/nav";
-import { useConnected } from "@/app/runtime/runtimeStore";
+} from "@/devtools/shell/primitives";
+import { Icon } from "@/devtools/shell/Icon";
+import type { IconName } from "@/devtools/shell/nav";
 import { useNavigation } from "@/app/navigation/useNavigation";
 import {
   useMemoryOperations,
@@ -61,7 +59,7 @@ import {
   TableHeader,
 } from "./MemoryAtoms";
 import { Tabs, TabsContent } from "@/shared/components/ui/tabs";
-import { SectionBoundary } from "@/qw/shell/SectionBoundary";
+import { SectionBoundary } from "@/devtools/shell/SectionBoundary";
 import { SkeletonCard, SkeletonRows } from "@/shared/components/Skeleton";
 import { qk } from "@/shared/query/queryClient";
 import { usePrefetchMemoryStore } from "@/shared/hooks/usePrefetch";
@@ -109,7 +107,6 @@ type TypeFilter = "all" | MemoryStoreType;
 
 function MemoryOverview() {
   const { navigate } = useNavigation();
-  const connected = useConnected();
   const prefetchStore = usePrefetchMemoryStore();
   // Suspends on first paint — caught by the App-level Suspense. List
   // hooks below (parallel store details, operations) are kept on the
@@ -203,9 +200,7 @@ function MemoryOverview() {
   );
 
   return (
-    <QwShell
-      activeView="library-memory"
-      onNavigate={(v) => navigate(navTarget(v))}
+    <DevtoolsShell
       breadcrumb="Library / Memory"
       title="Memory"
       subtitle={
@@ -213,7 +208,6 @@ function MemoryOverview() {
           ? "No memory stores observed yet"
           : `${list.length} store${list.length === 1 ? "" : "s"} · ${kpis.reads.toLocaleString()} reads · ${kpis.writes.toLocaleString()} writes`
       }
-      connected={connected}
       actions={
         <>
           <Btn
@@ -339,7 +333,7 @@ function MemoryOverview() {
           right={
             <span
               className="font-mono text-[11px]"
-              style={{ color: "var(--qw-fg-faint)" }}
+              style={{ color: "var(--devtools-fg-faint)" }}
             >
               {filtered.length} of {list.length}
             </span>
@@ -404,7 +398,7 @@ function MemoryOverview() {
           />
         )}
       </div>
-    </QwShell>
+    </DevtoolsShell>
   );
 }
 
@@ -412,20 +406,16 @@ function MemoryOverview() {
 
 function MemoryDetail({ storeId }: { storeId: string }) {
   const { navigate } = useNavigation();
-  const connected = useConnected();
   // Suspends on first paint — caught by the App-level Suspense.
   // Errors throw to the App-level ErrorBoundary.
   const data = useMemoryStoreSuspense(storeId);
   const m = typeMeta(data.type);
 
   return (
-    <QwShell
-      activeView="library-memory"
-      onNavigate={(v) => navigate(navTarget(v))}
+    <DevtoolsShell
       breadcrumb={`Library / Memory / ${shortBreadcrumbId(storeId)}`}
       title={`${m.label.charAt(0).toUpperCase() + m.label.slice(1)} memory`}
       subtitle={subtitleFor(data)}
-      connected={connected}
       actions={
         <>
           <Btn
@@ -488,7 +478,7 @@ function MemoryDetail({ storeId }: { storeId: string }) {
       <div className="mx-auto w-full max-w-7xl px-8 py-6">
         <DetailBody store={data} />
       </div>
-    </QwShell>
+    </DevtoolsShell>
   );
 }
 
@@ -581,7 +571,7 @@ function SemanticDetail({
             {(index?.similarity || index?.dimensions) && (
               <span
                 className="font-mono text-[11px]"
-                style={{ color: "var(--qw-fg-faint)" }}
+                style={{ color: "var(--devtools-fg-faint)" }}
               >
                 {index?.similarity ?? "—"}
                 {index?.dimensions ? ` · ${index.dimensions}d` : ""}
@@ -629,7 +619,7 @@ function SemanticDetail({
           right={
             <span
               className="font-mono text-[11px]"
-              style={{ color: "var(--qw-fg-faint)" }}
+              style={{ color: "var(--devtools-fg-faint)" }}
             >
               {chunks.length} of {index?.chunkCount ?? chunks.length}
             </span>
@@ -662,12 +652,17 @@ function SemanticDetail({
                 ["Sources", fmtCount(index?.sourceCount ?? null)],
               ].map(([k, v]) => (
                 <div key={k} className="flex gap-3 font-mono text-[11.5px]">
-                  <span style={{ color: "var(--qw-fg-faint)", minWidth: 100 }}>
+                  <span
+                    style={{ color: "var(--devtools-fg-faint)", minWidth: 100 }}
+                  >
                     {k}
                   </span>
                   <span
                     style={{
-                      color: v === "—" ? "var(--qw-fg-faint)" : "var(--qw-fg)",
+                      color:
+                        v === "—"
+                          ? "var(--devtools-fg-faint)"
+                          : "var(--devtools-fg)",
                     }}
                   >
                     {v}
@@ -693,14 +688,14 @@ function SemanticDetail({
                   >
                     <span
                       className="truncate font-mono text-[11.5px]"
-                      style={{ color: "var(--qw-fg)" }}
+                      style={{ color: "var(--devtools-fg)" }}
                       title={doc}
                     >
                       {doc}
                     </span>
                     <span
                       className="text-right font-mono text-[10.5px]"
-                      style={{ color: "var(--qw-fg-muted)" }}
+                      style={{ color: "var(--devtools-fg-muted)" }}
                     >
                       {n} chunk{n === 1 ? "" : "s"}
                     </span>
@@ -734,18 +729,20 @@ function SemanticChunkRow({
   return (
     <div
       className="px-4 py-3"
-      style={{ borderBottom: last ? "none" : "1px solid var(--qw-border)" }}
+      style={{
+        borderBottom: last ? "none" : "1px solid var(--devtools-border)",
+      }}
     >
       <div className="mb-1.5 flex flex-wrap items-center gap-2">
         <span
           className="font-mono text-[11px]"
-          style={{ color: "var(--qw-crux)" }}
+          style={{ color: "var(--devtools-crux)" }}
         >
           {chunk.id}
         </span>
         <span
           className="font-mono text-[10.5px]"
-          style={{ color: "var(--qw-fg-muted)" }}
+          style={{ color: "var(--devtools-fg-muted)" }}
         >
           § {chunk.sourceDoc}
         </span>
@@ -759,8 +756,8 @@ function SemanticChunkRow({
             <span
               className="rounded-[3px] px-1.5 py-[1px] font-mono text-[10.5px]"
               style={{
-                background: "var(--qw-bg-muted)",
-                color: "var(--qw-fg-muted)",
+                background: "var(--devtools-bg-muted)",
+                color: "var(--devtools-fg-muted)",
               }}
             >
               ‖embed‖ {chunk.magnitude.toFixed(2)}
@@ -771,8 +768,8 @@ function SemanticChunkRow({
       <div
         className="text-[13px] leading-[1.55]"
         style={{
-          fontFamily: "var(--qw-serif, Georgia, serif)",
-          color: "var(--qw-fg)",
+          fontFamily: "var(--devtools-serif, Georgia, serif)",
+          color: "var(--devtools-fg)",
         }}
       >
         {chunk.text}
@@ -806,7 +803,7 @@ function SemanticQueryLog({
         right={
           <span
             className="font-mono text-[11px]"
-            style={{ color: "var(--qw-fg-faint)" }}
+            style={{ color: "var(--devtools-fg-faint)" }}
           >
             {queries.length} {queries.length === 1 ? "query" : "queries"}
           </span>
@@ -815,8 +812,8 @@ function SemanticQueryLog({
       <div
         className="overflow-hidden rounded-[10px]"
         style={{
-          background: "var(--qw-bg-elev)",
-          border: "1px solid var(--qw-border)",
+          background: "var(--devtools-bg-elev)",
+          border: "1px solid var(--devtools-border)",
         }}
       >
         <TableHeader
@@ -855,22 +852,22 @@ function SemanticQueryLog({
               borderBottom:
                 i === queries.length - 1
                   ? "none"
-                  : "1px solid var(--qw-border)",
+                  : "1px solid var(--devtools-border)",
             }}
           >
-            <span style={{ color: "var(--qw-fg-faint)" }}>
+            <span style={{ color: "var(--devtools-fg-faint)" }}>
               {fmtTime(q.timestamp)}
             </span>
             <span
               className="truncate"
-              style={{ color: "var(--qw-fg)" }}
+              style={{ color: "var(--devtools-fg)" }}
               title={q.query}
             >
               {q.query}
             </span>
             <span
               className="text-right"
-              style={{ color: "var(--qw-fg-muted)" }}
+              style={{ color: "var(--devtools-fg-muted)" }}
             >
               {q.k ?? "—"}
             </span>
@@ -887,8 +884,8 @@ function SemanticQueryLog({
                     key={h}
                     className="rounded-[3px] px-1.5 py-[1px] text-[10px]"
                     style={{
-                      background: "var(--qw-crux-soft)",
-                      color: "var(--qw-crux)",
+                      background: "var(--devtools-crux-soft)",
+                      color: "var(--devtools-crux)",
                     }}
                   >
                     {h}
@@ -899,13 +896,16 @@ function SemanticQueryLog({
             {hasLat && (
               <span
                 className="text-right"
-                style={{ color: "var(--qw-fg-faint)" }}
+                style={{ color: "var(--devtools-fg-faint)" }}
               >
                 {q.latencyMs != null ? `${q.latencyMs}ms` : "—"}
               </span>
             )}
             {hasTrace && (
-              <span className="text-right" style={{ color: "var(--qw-crux)" }}>
+              <span
+                className="text-right"
+                style={{ color: "var(--devtools-crux)" }}
+              >
                 {shortTrace(q.traceId) ?? "—"}
               </span>
             )}
@@ -1016,7 +1016,7 @@ function BlackboardDetail({
             {store.scope && (
               <span
                 className="font-mono text-[11px]"
-                style={{ color: "var(--qw-fg-faint)" }}
+                style={{ color: "var(--devtools-fg-faint)" }}
               >
                 {store.scope.kind} ·{" "}
                 {shortTrace(store.scope.id) ?? store.scope.id}
@@ -1031,7 +1031,10 @@ function BlackboardDetail({
           {
             label: "Conflicts",
             value: totalConflicts,
-            color: totalConflicts > 0 ? "var(--qw-warn)" : "var(--qw-fg-faint)",
+            color:
+              totalConflicts > 0
+                ? "var(--devtools-warn)"
+                : "var(--devtools-fg-faint)",
           },
           { label: "Collaborators", value: perAgent.length || "—" },
           ...(state.conflictPolicy
@@ -1039,7 +1042,7 @@ function BlackboardDetail({
                 {
                   label: "Conflict policy",
                   value: state.conflictPolicy,
-                  color: "var(--qw-fg-muted)",
+                  color: "var(--devtools-fg-muted)",
                 },
               ]
             : []),
@@ -1123,16 +1126,16 @@ function BlackboardDetail({
                     gridTemplateColumns: "110px repeat(2, minmax(0, 1fr))",
                   }}
                 >
-                  <span style={{ color: "var(--qw-iris)" }}>{agent}</span>
-                  <span style={{ color: "var(--qw-fg-muted)" }}>
+                  <span style={{ color: "var(--devtools-iris)" }}>{agent}</span>
+                  <span style={{ color: "var(--devtools-fg-muted)" }}>
                     w {row.writes}
                   </span>
                   <span
                     style={{
                       color:
                         row.conflicts > 0
-                          ? "var(--qw-warn)"
-                          : "var(--qw-fg-faint)",
+                          ? "var(--devtools-warn)"
+                          : "var(--devtools-fg-faint)",
                     }}
                   >
                     !{row.conflicts}
@@ -1186,42 +1189,46 @@ function BlackboardFieldTable({
               .filter(Boolean)
               .join(" "),
             borderBottom:
-              i === fields.length - 1 ? "none" : "1px solid var(--qw-border)",
+              i === fields.length - 1
+                ? "none"
+                : "1px solid var(--devtools-border)",
             background:
-              (f.conflicts ?? 0) > 0 ? "var(--qw-warn-soft)" : "transparent",
+              (f.conflicts ?? 0) > 0
+                ? "var(--devtools-warn-soft)"
+                : "transparent",
           }}
         >
-          <span style={{ color: "var(--qw-crux)" }}>{f.name}</span>
+          <span style={{ color: "var(--devtools-crux)" }}>{f.name}</span>
           <span
             className="text-[10.5px]"
-            style={{ color: "var(--qw-fg-faint)" }}
+            style={{ color: "var(--devtools-fg-faint)" }}
           >
             {f.ty}
           </span>
           <span
             className="truncate"
-            style={{ color: "var(--qw-fg)" }}
+            style={{ color: "var(--devtools-fg)" }}
             title={fmtValue(f.value)}
           >
             {fmtValue(f.value)}
             {f.lastConflictResolution && (
               <span
                 className="ml-2 text-[10px]"
-                style={{ color: "var(--qw-warn)" }}
+                style={{ color: "var(--devtools-warn)" }}
               >
                 · {f.lastConflictResolution}
               </span>
             )}
           </span>
           {hasWriter && (
-            <span style={{ color: "var(--qw-fg-muted)" }}>
+            <span style={{ color: "var(--devtools-fg-muted)" }}>
               {f.writer ?? "—"}
             </span>
           )}
           {hasWrittenAt && (
             <span
               className="text-right text-[10.5px]"
-              style={{ color: "var(--qw-fg-faint)" }}
+              style={{ color: "var(--devtools-fg-faint)" }}
             >
               {fmtTime(f.writtenAt) ?? "—"}
             </span>
@@ -1254,7 +1261,7 @@ function BlackboardChangeLog({
         right={
           <span
             className="font-mono text-[11px]"
-            style={{ color: "var(--qw-fg-faint)" }}
+            style={{ color: "var(--devtools-fg-faint)" }}
           >
             {log.length} writes{hasResolved ? " · conflicts highlighted" : ""}
           </span>
@@ -1263,8 +1270,8 @@ function BlackboardChangeLog({
       <div
         className="overflow-hidden rounded-[10px]"
         style={{
-          background: "var(--qw-bg-elev)",
-          border: "1px solid var(--qw-border)",
+          background: "var(--devtools-bg-elev)",
+          border: "1px solid var(--devtools-border)",
         }}
       >
         <TableHeader
@@ -1295,27 +1302,33 @@ function BlackboardChangeLog({
                 .filter(Boolean)
                 .join(" "),
               borderBottom:
-                i === log.length - 1 ? "none" : "1px solid var(--qw-border)",
-              background: l.resolved ? "var(--qw-warn-soft)" : "transparent",
+                i === log.length - 1
+                  ? "none"
+                  : "1px solid var(--devtools-border)",
+              background: l.resolved
+                ? "var(--devtools-warn-soft)"
+                : "transparent",
             }}
           >
-            <span style={{ color: "var(--qw-fg-faint)" }}>
+            <span style={{ color: "var(--devtools-fg-faint)" }}>
               {fmtTime(l.timestamp)}
             </span>
             {hasAgent && (
-              <span style={{ color: "var(--qw-fg)" }}>{l.agent ?? "—"}</span>
+              <span style={{ color: "var(--devtools-fg)" }}>
+                {l.agent ?? "—"}
+              </span>
             )}
-            <span style={{ color: "var(--qw-crux)" }}>{l.field}</span>
+            <span style={{ color: "var(--devtools-crux)" }}>{l.field}</span>
             <span
               className="truncate"
-              style={{ color: "var(--qw-fg-muted)" }}
+              style={{ color: "var(--devtools-fg-muted)" }}
               title={fmtValue(l.before)}
             >
               {fmtValue(l.before)}
             </span>
             <span
               className="truncate"
-              style={{ color: "var(--qw-fg)" }}
+              style={{ color: "var(--devtools-fg)" }}
               title={fmtValue(l.after)}
             >
               {fmtValue(l.after)}
@@ -1324,7 +1337,9 @@ function BlackboardChangeLog({
               <span
                 className="text-[10.5px]"
                 style={{
-                  color: l.resolved ? "var(--qw-warn)" : "var(--qw-fg-faint)",
+                  color: l.resolved
+                    ? "var(--devtools-warn)"
+                    : "var(--devtools-fg-faint)",
                 }}
               >
                 {l.resolved ?? "—"}

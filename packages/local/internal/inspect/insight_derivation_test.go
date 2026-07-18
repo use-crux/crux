@@ -99,7 +99,7 @@ func TestDeriveInsightsPureBehavior(t *testing.T) {
 				Runs: []inspectRunRecord{
 					{
 						TraceID:               "run-a",
-						TargetID:              "karyla-agent",
+						TargetID:              "support-agent",
 						Status:                "suspended",
 						StartedAt:             now.Add(-time.Hour).UnixMilli(),
 						TokenCount:            12000,
@@ -130,8 +130,8 @@ func TestDeriveInsightsPureBehavior(t *testing.T) {
 			name: "resolved pattern reopens when occurrence count grows",
 			input: inspectInsightInputs{
 				Statuses: map[string]inspectfs.InsightStatus{
-					"pattern-high-token-karyla-agent": {
-						InsightID:           "pattern-high-token-karyla-agent",
+					"pattern-high-token-support-agent": {
+						InsightID:           "pattern-high-token-support-agent",
 						Status:              "resolved",
 						UpdatedAt:           resolvedAt,
 						ResolvedAt:          resolvedAt,
@@ -140,14 +140,14 @@ func TestDeriveInsightsPureBehavior(t *testing.T) {
 				},
 				Now: now,
 				Runs: []inspectRunRecord{
-					{TraceID: "run-a", TargetID: "karyla-agent", Status: "success", StartedAt: now.Add(-3 * time.Minute).UnixMilli(), TokenCount: 12000},
-					{TraceID: "run-b", TargetID: "karyla-agent", Status: "success", StartedAt: now.Add(-2 * time.Minute).UnixMilli(), TokenCount: 13000},
-					{TraceID: "run-c", TargetID: "karyla-agent", Status: "success", StartedAt: now.Add(-1 * time.Minute).UnixMilli(), TokenCount: 14000},
+					{TraceID: "run-a", TargetID: "support-agent", Status: "success", StartedAt: now.Add(-3 * time.Minute).UnixMilli(), TokenCount: 12000},
+					{TraceID: "run-b", TargetID: "support-agent", Status: "success", StartedAt: now.Add(-2 * time.Minute).UnixMilli(), TokenCount: 13000},
+					{TraceID: "run-c", TargetID: "support-agent", Status: "success", StartedAt: now.Add(-1 * time.Minute).UnixMilli(), TokenCount: 14000},
 				},
 			},
 			assert: func(t *testing.T, insights []inspectInsightRecord) {
 				t.Helper()
-				insight := derivedInsightByID(insights, "pattern-high-token-karyla-agent")
+				insight := derivedInsightByID(insights, "pattern-high-token-support-agent")
 				if insight == nil {
 					t.Fatalf("missing reopened pattern insight in %#v", insights)
 				}
@@ -162,12 +162,12 @@ func TestDeriveInsightsPureBehavior(t *testing.T) {
 				Silences: []inspectfs.InsightSilence{
 					{
 						ID:      "silence-1",
-						Pattern: inspectfs.InsightSilencePattern{Title: "Run has high token usage", TargetID: "karyla-agent"},
+						Pattern: inspectfs.InsightSilencePattern{Title: "Run has high token usage", TargetID: "support-agent"},
 					},
 				},
 				Now: now,
 				Runs: []inspectRunRecord{
-					{TraceID: "run-a", TargetID: "karyla-agent", Status: "success", StartedAt: now.UnixMilli(), TokenCount: 12000},
+					{TraceID: "run-a", TargetID: "support-agent", Status: "success", StartedAt: now.UnixMilli(), TokenCount: 12000},
 				},
 			},
 			assert: func(t *testing.T, insights []inspectInsightRecord) {
@@ -188,7 +188,7 @@ func TestDeriveInsightsPureBehavior(t *testing.T) {
 				},
 				Now: now,
 				Runs: []inspectRunRecord{
-					{TraceID: "run-a", TargetID: "karyla-agent", Status: "success", StartedAt: now.UnixMilli(), TokenCount: 12000},
+					{TraceID: "run-a", TargetID: "support-agent", Status: "success", StartedAt: now.UnixMilli(), TokenCount: 12000},
 				},
 			},
 			assert: func(t *testing.T, insights []inspectInsightRecord) {
@@ -230,7 +230,7 @@ func TestDeriveInsightsPureBehavior(t *testing.T) {
 			input: inspectInsightInputs{
 				Now: now,
 				Runs: []inspectRunRecord{
-					{TraceID: "old-run", TargetID: "karyla-agent", Status: "success", StartedAt: now.Add(-72 * time.Hour).UnixMilli(), TokenCount: 12000},
+					{TraceID: "old-run", TargetID: "support-agent", Status: "success", StartedAt: now.Add(-72 * time.Hour).UnixMilli(), TokenCount: 12000},
 				},
 			},
 			assert: func(t *testing.T, insights []inspectInsightRecord) {
@@ -248,8 +248,8 @@ func TestDeriveInsightsPureBehavior(t *testing.T) {
 			name: "resolved insights stay resolved when occurrence count is unchanged or lower",
 			input: inspectInsightInputs{
 				Statuses: map[string]inspectfs.InsightStatus{
-					"pattern-high-token-karyla-agent": {
-						InsightID:           "pattern-high-token-karyla-agent",
+					"pattern-high-token-support-agent": {
+						InsightID:           "pattern-high-token-support-agent",
 						Status:              "resolved",
 						UpdatedAt:           resolvedAt,
 						ResolvedAt:          resolvedAt,
@@ -265,13 +265,13 @@ func TestDeriveInsightsPureBehavior(t *testing.T) {
 				},
 				Now: now,
 				Runs: []inspectRunRecord{
-					{TraceID: "run-a", TargetID: "karyla-agent", Status: "success", StartedAt: now.Add(-2 * time.Minute).UnixMilli(), TokenCount: 12000},
-					{TraceID: "run-b", TargetID: "karyla-agent", Status: "success", StartedAt: now.Add(-1 * time.Minute).UnixMilli(), TokenCount: 13000},
+					{TraceID: "run-a", TargetID: "support-agent", Status: "success", StartedAt: now.Add(-2 * time.Minute).UnixMilli(), TokenCount: 12000},
+					{TraceID: "run-b", TargetID: "support-agent", Status: "success", StartedAt: now.Add(-1 * time.Minute).UnixMilli(), TokenCount: 13000},
 				},
 			},
 			assert: func(t *testing.T, insights []inspectInsightRecord) {
 				t.Helper()
-				pattern := derivedInsightByID(insights, "pattern-high-token-karyla-agent")
+				pattern := derivedInsightByID(insights, "pattern-high-token-support-agent")
 				if pattern == nil || pattern.Status != "resolved" || pattern.ReopenedAt != "" {
 					t.Fatalf("pattern = %#v, want still resolved", pattern)
 				}
@@ -291,7 +291,7 @@ func TestDeriveInsightsPureBehavior(t *testing.T) {
 				},
 				Now: now,
 				Runs: []inspectRunRecord{
-					{TraceID: "run-a", TargetID: "karyla-agent", Status: "success", StartedAt: now.UnixMilli(), TokenCount: 12000},
+					{TraceID: "run-a", TargetID: "support-agent", Status: "success", StartedAt: now.UnixMilli(), TokenCount: 12000},
 				},
 			},
 			assert: func(t *testing.T, insights []inspectInsightRecord) {

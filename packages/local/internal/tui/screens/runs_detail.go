@@ -82,7 +82,7 @@ func (s *Runs) renderSpanDetail(width, height int) string {
 		b.WriteString("\n")
 	}
 
-	// TIMINGS — only when the primitive carries replay-quality signals.
+	// TIMINGS — only when the primitive carries detailed timing signals.
 	if span.Timings != nil {
 		b.WriteString(s.section("TIMINGS"))
 		if span.Timings.TTFTMs != nil {
@@ -142,8 +142,7 @@ func spanDetailHeader(span *api.InspectRunSpan) string {
 	case api.SpanPrimitiveTrace, api.SpanPrimitiveGeneration,
 		api.SpanPrimitiveGenerationCall, api.SpanPrimitiveGenerationStream:
 		return "GENERATION"
-	case api.SpanPrimitiveFlow, api.SpanPrimitiveFlowRun, api.SpanPrimitiveFlowStep,
-		api.SpanPrimitiveEvalFlow:
+	case api.SpanPrimitiveFlow, api.SpanPrimitiveFlowRun, api.SpanPrimitiveFlowStep:
 		return "FLOW"
 	case api.SpanPrimitiveEvalRun, api.SpanPrimitiveEvalCase:
 		return "EVAL"

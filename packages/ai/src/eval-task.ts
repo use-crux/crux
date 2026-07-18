@@ -28,8 +28,19 @@ import type { BoundOk, InputOk, PromptInputOf } from "@use-crux/core/routing";
 import type { AIGenerateOptions, AISupportedModel } from "./options";
 import {
   createAiTaskIdentityProjector,
+  createAiScorerContextBinder,
+  createAiScorerContextProjector,
   resolveAiTaskInvocation,
 } from "./eval-task-identity";
+import { projectJson, projectSchema } from "./eval-task-identity-projection";
+import {
+  aiTaskCallContract,
+  validateAiTaskVariantCall,
+  validateAiTaskVariantInput,
+  validateAiTaskVariantOverrides,
+} from "./eval-task-variant";
+import { createAiTaskCostEstimator } from "./eval-task-cost";
+import { createRenderedPromptIdentity } from "./eval-rendered-prompt-identity";
 
 /** Full trace-signal set captured by a prompt-backed task. */
 export type AIPromptEvalCapability =
@@ -188,9 +199,13 @@ export const AI_PROMPT_EVAL_CAPABILITIES = Object.freeze([
 /** Build the `generate.task()` factory over one existing AI generation path. */
 export function createGenerateTaskFactory(
   generate: ErasedGenerate,
+  options: { readonly executionContractKnown: boolean },
 ): AIGenerateTaskFactory {
   return ((prompt: AnyPrompt, defaults: object) => {
     const normalizedDefaults = Object.freeze({ ...defaults });
+    const renderedPromptIdentity = createRenderedPromptIdentity<
+      GenerateResult<unknown, unknown>
+    >({ prompt, defaults: normalizedDefaults });
     const invoke = (
       input: unknown,
       callOptions: object = {},
@@ -204,8 +219,10 @@ export function createGenerateTaskFactory(
       );
       return generate(invocation.prompt, { ...invocation.options, input });
     };
-    const task = (input: unknown, callOptions?: object) =>
-      invoke(input, callOptions);
+    const task = Object.assign(
+      (input: unknown, callOptions?: object) => invoke(input, callOptions),
+      { _tag: "CruxTask" as const, operation: "generate" as const },
+    );
     const descriptor: EvalTaskDescriptor<
       GenerateResult<unknown, unknown>,
       unknown
@@ -218,15 +235,57 @@ export function createGenerateTaskFactory(
         ? { inputSchema: prompt.inputSchema }
         : {}),
       outputSchema: prompt.outputSchema,
+      ...(schemaContract(prompt.outputSchema) !== undefined
+        ? { outputContractFingerprint: schemaContract(prompt.outputSchema) }
+        : {}),
+      ...(aiTaskCallContract("generate", normalizedDefaults) !== undefined
+        ? {
+            callContractFingerprint: aiTaskCallContract(
+              "generate",
+              normalizedDefaults,
+            ),
+          }
+        : {}),
       capabilities: AI_PROMPT_EVAL_CAPABILITIES,
       defaults: normalizedDefaults,
       overrideKeys: Object.keys(normalizedDefaults),
+      validateVariantOverrides: (overrides) =>
+        validateAiTaskVariantOverrides(overrides, prompt),
+      validateVariantInput: validateAiTaskVariantInput,
+      validateVariantCall: (call, overrides) =>
+        validateAiTaskVariantCall(call, overrides, normalizedDefaults),
       projectIdentity: createAiTaskIdentityProjector({
         operation: "generate",
         prompt,
         defaults: normalizedDefaults,
+        executionContractKnown: options.executionContractKnown,
       }),
-      execute: invoke,
+      projectRenderedPromptIdentity: renderedPromptIdentity.project,
+      readRenderedPromptIdentity: renderedPromptIdentity.read,
+      projectScorerContext: createAiScorerContextProjector({
+        prompt,
+        defaults: normalizedDefaults,
+        generate: generate as never,
+        executionContractKnown: options.executionContractKnown,
+      }),
+      createScorerContext: createAiScorerContextBinder({
+        prompt,
+        defaults: normalizedDefaults,
+        generate: generate as never,
+      }),
+      estimateCost: createAiTaskCostEstimator({
+        prompt,
+        defaults: normalizedDefaults,
+      }),
+      execute: (input, callOptions, overrides = {}) =>
+        renderedPromptIdentity.execute(
+          (effectivePrompt, options) => generate(effectivePrompt, options),
+          {
+            input,
+            ...(callOptions !== undefined ? { call: callOptions } : {}),
+            overrides,
+          },
+        ),
       projectOutput: (result) =>
         prompt.outputSchema === undefined ? result.text : result.object,
       projectResponse: normalizedResponse,
@@ -235,9 +294,17 @@ export function createGenerateTaskFactory(
   }) as AIGenerateTaskFactory;
 }
 
+function schemaContract(schema: unknown): string | undefined {
+  const projected = projectSchema(schema);
+  return projected.ok ? JSON.stringify(projected.value) : undefined;
+}
+
 function normalizedResponse<TOutput>(
   result: GenerateResult<unknown, TOutput>,
 ): StreamCompletion<TOutput> {
   const { raw: _raw, _meta: _meta, ...response } = result;
-  return Object.freeze(response);
+  const projected = projectJson(response);
+  return projected.ok
+    ? (projected.value as unknown as StreamCompletion<TOutput>)
+    : Object.freeze(response);
 }

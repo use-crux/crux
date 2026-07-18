@@ -775,7 +775,6 @@ function nativePromptFactsForTest(
               hasSystem: true,
               hasPrompt: false,
               hasMessages: false,
-              hasTests: false,
             },
             intelligence: { confidence: "static" },
             static: true,

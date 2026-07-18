@@ -1,11 +1,15 @@
 /** Portable exact task-evidence records and validation. @internal */
 
-import { OUTPUT_CACHE_EPOCH, isReusableEvalValue } from "./identity";
+import { isReusableEvalValue, TASK_EVIDENCE_CACHE_EPOCH } from "./identity";
 import type { EvalTaskExecutionEvidence, EvalTaskHostResult } from "./types";
+import {
+  isEvalSnapshotPersistenceSafe,
+  type EvalPersistencePolicy,
+} from "./redact";
 
 export interface EvalTaskEvidenceEntry {
   readonly schemaVersion: 1;
-  readonly outputCacheEpoch: typeof OUTPUT_CACHE_EPOCH;
+  readonly taskEvidenceCacheEpoch: typeof TASK_EVIDENCE_CACHE_EPOCH;
   readonly status: "complete";
   readonly key: string;
   readonly fingerprint: string;
@@ -16,9 +20,13 @@ export interface EvalTaskEvidenceEntry {
 export function createTaskEvidenceEntry(
   key: string,
   result: EvalTaskHostResult,
+  policy?: EvalPersistencePolicy,
 ): EvalTaskEvidenceEntry | undefined {
   if (
     !isReusableEvalValue(result.output) ||
+    result.response === undefined ||
+    !isEvalSnapshotPersistenceSafe(result.output, policy) ||
+    !isEvalSnapshotPersistenceSafe(result.response, policy) ||
     !isReusableEvalValue(result.response) ||
     result.response.pendingApprovals !== undefined
   ) {
@@ -26,7 +34,7 @@ export function createTaskEvidenceEntry(
   }
   return freezeEntry({
     schemaVersion: 1,
-    outputCacheEpoch: OUTPUT_CACHE_EPOCH,
+    taskEvidenceCacheEpoch: TASK_EVIDENCE_CACHE_EPOCH,
     status: "complete",
     key,
     fingerprint: key,
@@ -42,7 +50,7 @@ export function readTaskEvidenceEntry(
   if (!isRecord(value)) return undefined;
   if (
     value.schemaVersion !== 1 ||
-    value.outputCacheEpoch !== OUTPUT_CACHE_EPOCH ||
+    value.taskEvidenceCacheEpoch !== TASK_EVIDENCE_CACHE_EPOCH ||
     value.status !== "complete" ||
     value.key !== expectedKey ||
     value.fingerprint !== expectedKey ||
@@ -60,14 +68,18 @@ function freezeEntry(entry: EvalTaskEvidenceEntry): EvalTaskEvidenceEntry {
     ...entry,
     result: Object.freeze({
       ...entry.result,
-      response: Object.freeze({
-        ...entry.result.response,
-        content: Object.freeze([...entry.result.response.content]),
-        steps: Object.freeze([...entry.result.response.steps]),
-        finalStep: Object.freeze({ ...entry.result.response.finalStep }),
-        messages: Object.freeze([...entry.result.response.messages]),
-        warnings: Object.freeze([...entry.result.response.warnings]),
-      }),
+      ...(entry.result.response !== undefined
+        ? {
+            response: Object.freeze({
+              ...entry.result.response,
+              content: Object.freeze([...entry.result.response.content]),
+              steps: Object.freeze([...entry.result.response.steps]),
+              finalStep: Object.freeze({ ...entry.result.response.finalStep }),
+              messages: Object.freeze([...entry.result.response.messages]),
+              warnings: Object.freeze([...entry.result.response.warnings]),
+            }),
+          }
+        : {}),
       capturedSignals: Object.freeze([...entry.result.capturedSignals]),
       runIds: Object.freeze([...entry.result.runIds]),
       metrics: Object.freeze({ ...entry.result.metrics }),
@@ -89,6 +101,9 @@ function isTaskExecutionEvidence(
     typeof value.metrics.durationMs === "number" &&
     Number.isFinite(value.metrics.durationMs) &&
     value.metrics.durationMs >= 0 &&
+    (value.renderedPromptFingerprint === undefined ||
+      (typeof value.renderedPromptFingerprint === "string" &&
+        /^[a-f0-9]{64}$/u.test(value.renderedPromptFingerprint))) &&
     (value.metrics.costUsd === undefined ||
       (typeof value.metrics.costUsd === "number" &&
         Number.isFinite(value.metrics.costUsd) &&

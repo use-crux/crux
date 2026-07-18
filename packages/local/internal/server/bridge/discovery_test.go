@@ -44,7 +44,7 @@ func TestRegisterHTTPRuntimeBridgePeerFetchesManifestAndRegistersPeer(t *testing
 			"enabled":     true,
 			"transport":   "http",
 			"url":         "https://project.convex.site/crux/bridge",
-			"runtimeName": "karyla-convex",
+			"runtimeName": "support-convex",
 			"environment": "convex",
 			"capabilities": []map[string]any{
 				{

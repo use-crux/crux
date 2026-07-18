@@ -62,7 +62,7 @@ export interface ToolCallSignal {
   tool: string;
   args?: Record<string, unknown>;
   result?: unknown;
-  /** True when Quality replaced execution with an exposed-name mock. */
+  /** True when an Eval replaced execution with an exposed-name mock. */
   mocked?: boolean;
   succeeded: boolean;
 }
@@ -250,7 +250,7 @@ export function installSignalCapture(): SignalCapture {
  * Collect records for `rootRunId` and every run it transitively triggered.
  *
  * Nested flows (and other primitives that open a durable child run under an
- * ambient Quality `eval.case` run) emit `edgeType: 'triggered'` on the parent
+ * ambient Eval `eval.case` run) emit `edgeType: 'triggered'` on the parent
  * run, pointing `to: { kind: 'run', id }`. Without following those edges,
  * step/tool signals living on the child run are invisible to expect matchers
  * and honest-fail as "uncaptured".
@@ -289,7 +289,7 @@ export function collectTriggeredRunClosure(
   return ordered;
 }
 
-/** Run `fn` while `capture` receives Quality observability records. @internal */
+/** Run `fn` while `capture` receives Eval observability records. @internal */
 export function withSignalCapture<T>(
   capture: SignalCapture,
   fn: () => Promise<T>,

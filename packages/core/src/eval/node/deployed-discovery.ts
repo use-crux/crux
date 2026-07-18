@@ -1,4 +1,4 @@
-/** Deployment discovery that coexists with legacy Quality evaluation files. */
+/** Deployment discovery for inert Eval definitions. */
 
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -11,7 +11,7 @@ import {
   type EvalModule,
 } from "./discovery";
 
-/** Discover only new inert Evals, ignoring unrelated legacy `*.eval.*` modules. */
+/** Discover inert Evals while ignoring unrelated `*.eval.*` modules. */
 export async function discoverDeployableProjectEvals(
   projectRoot: string,
 ): Promise<EvalDiscoveryResult> {

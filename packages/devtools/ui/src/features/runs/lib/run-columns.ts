@@ -34,7 +34,7 @@ export const DEFAULT_VISIBLE_COLUMNS: readonly ColumnId[] = [
   "time",
 ];
 
-const LOCAL_STORAGE_KEY = "qw:runs:cols";
+const LOCAL_STORAGE_KEY = "devtools:runs:cols";
 
 export function loadVisibleColumns(): readonly ColumnId[] {
   if (typeof window === "undefined") return DEFAULT_VISIBLE_COLUMNS;

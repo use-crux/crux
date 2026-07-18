@@ -1,7 +1,7 @@
 /** Private Node filesystem stores used by Eval coordination and Local. */
 
 import { mkdir, readFile } from "node:fs/promises";
-import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { writeFileAtomic } from "./fs/atomic";
 import { withFileLock } from "./fs/lock";
 import {
@@ -22,6 +22,11 @@ import {
 } from "../internal/scorer-evidence";
 import type { EvalRun } from "../internal/types";
 import {
+  isEvalSnapshotPersistenceSafe,
+  type EvalPersistencePolicy,
+} from "../internal/redact";
+import { sanitizeEvalRunForPersistence } from "../internal/persistence";
+import {
   EvalBaselineMigrationError,
   indexEvalBaseline,
   migrateIndexedEvalBaseline,
@@ -37,6 +42,8 @@ export type EvalRunReadResult =
 
 export interface EvalFileStoreOptions {
   readonly projectRoot: string;
+  /** Internal privacy policy; no separate public Eval configuration surface. */
+  readonly persistencePolicy?: EvalPersistencePolicy;
 }
 
 export class EvalBaselineFileError extends Error {
@@ -134,18 +141,27 @@ export async function setEvalBaseline(input: {
   const path = await createEvalBaselineFileStore({
     projectRoot: input.projectRoot,
   }).write(baseline);
-  return Object.freeze({ baseline, path });
+  return Object.freeze({
+    baseline,
+    path: relative(resolve(input.projectRoot), path).split(sep).join("/"),
+  });
 }
 
 /** Create an atomic filesystem store for terminal Eval V3 records. */
 export function createEvalRunFileStore(
   options: EvalFileStoreOptions,
 ): EvalRunStore & { read(runId: string): Promise<EvalRunReadResult> } {
-  const directory = join(options.projectRoot, ".crux", "quality", "runs");
+  const directory = join(options.projectRoot, ".crux", "evals", "runs");
   return {
     async write(run) {
       const path = artifactPath(directory, run.runId);
-      const persisted = parseEvalRunV3(parseJson(serializeJson(run)));
+      const persisted = parseEvalRunV3(
+        parseJson(
+          serializeJson(
+            sanitizeEvalRunForPersistence(run, options.persistencePolicy),
+          ),
+        ),
+      );
       await mkdir(directory, { recursive: true });
       await withFileLock(path, () =>
         writeFileAtomic(path, `${JSON.stringify(persisted, null, 2)}\n`),
@@ -173,7 +189,7 @@ export function createEvalEvidenceFileStore(
   const directory = join(
     options.projectRoot,
     ".crux",
-    "quality",
+    "evals",
     "cache",
     "evidence",
   );
@@ -182,7 +198,13 @@ export function createEvalEvidenceFileStore(
     consistency: "read_after_write",
     async read(key) {
       try {
-        return parseJson(await readFile(artifactPath(directory, key), "utf8"));
+        const value = parseJson(
+          await readFile(artifactPath(directory, key), "utf8"),
+        );
+        const entry = validateEvidence(value, key);
+        return evidenceIsPersistenceSafe(entry, options.persistencePolicy)
+          ? entry
+          : undefined;
       } catch {
         return undefined;
       }
@@ -193,12 +215,27 @@ export function createEvalEvidenceFileStore(
         parseJson(serializeJson(entry)),
         entry.key,
       );
+      if (!evidenceIsPersistenceSafe(persisted, options.persistencePolicy)) {
+        throw new TypeError(
+          `Eval evidence ${entry.key} conflicts with the active persistence policy`,
+        );
+      }
       await mkdir(directory, { recursive: true });
       await withFileLock(path, () =>
         writeFileAtomic(path, `${JSON.stringify(persisted, null, 2)}\n`),
       );
     },
   };
+}
+
+function evidenceIsPersistenceSafe(
+  entry: EvalTaskEvidenceEntry | EvalScorerEvidenceEntry,
+  policy?: EvalPersistencePolicy,
+): boolean {
+  return "result" in entry
+    ? isEvalSnapshotPersistenceSafe(entry.result.output, policy) &&
+        isEvalSnapshotPersistenceSafe(entry.result.response, policy)
+    : isEvalSnapshotPersistenceSafe(entry.score, policy);
 }
 
 function validateEvidence(

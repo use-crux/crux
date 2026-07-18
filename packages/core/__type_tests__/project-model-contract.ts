@@ -49,10 +49,6 @@ function describeDiagnosticCode(code: ProjectModelDiagnosticCode): string {
       return "dynamic tool map";
     case "project_model.missing_stable_id":
       return "missing stable id";
-    case "project_model.prompt_test_dependency_unproven":
-      return "prompt-test dependency unproven";
-    case "project_model.unknown_suite_target":
-      return "unknown suite target";
     case "project_model.model_executor_missing":
       return "model executor missing";
     case "project_model.source_skipped":

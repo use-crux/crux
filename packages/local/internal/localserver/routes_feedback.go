@@ -9,6 +9,7 @@ import (
 	"net/http"
 
 	"github.com/use-crux/crux/packages/local/internal/observability"
+	"github.com/use-crux/crux/packages/local/internal/privacy"
 	"github.com/use-crux/crux/packages/local/internal/review"
 )
 
@@ -62,6 +63,10 @@ func registerFeedbackRoutes(
 		receipt, err := service.Submit(r.Context(), input, runExists)
 		if err != nil {
 			var validationError *review.ValidationError
+			if errors.Is(err, privacy.ErrPolicyUnavailable) {
+				http.Error(w, privacy.PolicyUnavailableMessage, http.StatusServiceUnavailable)
+				return
+			}
 			if errors.As(err, &validationError) {
 				http.Error(w, validationError.Error(), http.StatusBadRequest)
 				return
@@ -105,11 +110,29 @@ func feedbackContextSnapshot(ctx context.Context, service *observability.Service
 		switch artifact.Kind {
 		case "input":
 			if len(snapshot.Input) == 0 {
-				snapshot.Input = artifact.Preview
+				if input := reviewContextField(artifact.Preview, "input"); len(input) > 0 {
+					snapshot.Input = input
+				} else {
+					snapshot.Input = artifact.Preview
+				}
+			}
+			if len(snapshot.Call) == 0 {
+				snapshot.Call = reviewContextField(artifact.Attributes, "call")
+				if len(snapshot.Call) == 0 {
+					snapshot.Call = reviewContextField(artifact.Preview, "call")
+				}
 			}
 		case "output":
 			snapshot.Output = artifact.Preview
 		}
 	}
 	return snapshot
+}
+
+func reviewContextField(value json.RawMessage, name string) json.RawMessage {
+	var object map[string]json.RawMessage
+	if len(value) == 0 || json.Unmarshal(value, &object) != nil {
+		return nil
+	}
+	return object[name]
 }

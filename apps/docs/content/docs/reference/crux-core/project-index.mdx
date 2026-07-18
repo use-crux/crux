@@ -8,7 +8,7 @@ import type { ProjectIndexSnapshot } from "@use-crux/core/project-index";
 import { serializeProjectIndex } from "@use-crux/core/project-index/serializers";
 ```
 
-The Project Index describes what exists in a local Crux project. It is separate from runtime observability: index definitions are prompts, contexts, tools, agents, flows, flow steps, compositions, RAG resources, memory, memory blocks, blackboards, workspaces, safety definitions, suites, evals, and other design-time resources; spans describe what happened during a run.
+The Project Index describes what exists in a local Crux project. It is separate from runtime observability: index definitions are prompts, contexts, tools, agents, flows, flow steps, compositions, RAG resources, memory, memory blocks, blackboards, workspaces, safety definitions, Evals, and other design-time resources; spans describe what happened during a run.
 
 `@use-crux/core` owns the TypeScript contract. The Go devtools backend mirrors the contract manually, builds the service-owned read model, and exposes it to web devtools and the TUI.
 
@@ -158,12 +158,12 @@ Project Model diagnostics with source provenance.
 
 The index contract is produced by two packages:
 
-| Producer            | Responsibility                                                                                           |
-| ------------------- | -------------------------------------------------------------------------------------------------------- |
-| `@use-crux/indexer` | Discovers source-authored definitions, relations, source refs, diagnostics, and index lint findings.     |
-| `@use-crux/local`   | Persists and serves the index read model, enriches it with quality state, and broadcasts updates to UIs. |
+| Producer            | Responsibility                                                                                            |
+| ------------------- | --------------------------------------------------------------------------------------------------------- |
+| `@use-crux/indexer` | Discovers source-authored definitions, relations, source refs, diagnostics, and index lint findings.      |
+| `@use-crux/local`   | Persists and serves the index read model, joins Eval and runtime evidence, and broadcasts updates to UIs. |
 
-Runtime snapshots emitted by `withDevtools()` can enrich prompt/context/tool metadata, but source files and `.crux/quality` records are authoritative for authored definitions. See [@use-crux/indexer](/docs/reference/indexer) for the indexing package and [@use-crux/local](/docs/reference/local) for CLI/API access.
+Runtime snapshots emitted by `withDevtools()` can enrich prompt, context, and tool metadata, but source files remain authoritative for authored definitions. Private `.crux/evals` records are execution evidence, not source truth. See [@use-crux/indexer](/docs/reference/indexer) for the indexing package and [@use-crux/local](/docs/reference/local) for CLI/API access.
 
 The indexing pipeline is designed as fast source truth plus background enrichment. During `crux dev`,
 the Go service asks the worker for a bounded static/AST pass first so it can publish useful Project

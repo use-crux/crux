@@ -1,4 +1,4 @@
-import type { ChipTone } from "@/qw/shell/primitives";
+import type { ChipTone } from "@/devtools/shell/primitives";
 import type {
   RuntimeStatusCount,
   RuntimeWorkFilters,

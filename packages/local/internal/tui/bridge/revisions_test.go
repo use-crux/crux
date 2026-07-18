@@ -15,11 +15,9 @@ func TestRevisionsBumpDomainsFromInspectEvent(t *testing.T) {
 		{name: "run", ev: api.InspectEvent{Kind: "run"}, want: NewDomains(DomainRuns, DomainActivity)},
 		{name: "observability", ev: api.InspectEvent{Kind: "observability"}, want: NewDomains(DomainRuns, DomainActivity)},
 		{name: "insight", ev: api.InspectEvent{Kind: "insight"}, want: NewDomains(DomainInsights, DomainActivity)},
-		{name: "experiment", ev: api.InspectEvent{Kind: "experiment"}, want: NewDomains(DomainExperiments, DomainActivity)},
+		{name: "eval", ev: api.InspectEvent{Kind: "eval"}, want: NewDomains(DomainActivity)},
 		{name: "baseline", ev: api.InspectEvent{Kind: "baseline"}, want: NewDomains(DomainBaselines, DomainContext, DomainActivity)},
 		{name: "feedback", ev: api.InspectEvent{Kind: "feedback"}, want: NewDomains(DomainFeedback, DomainActivity)},
-		{name: "cassette", ev: api.InspectEvent{Kind: "cassette"}, want: NewDomains(DomainCassettes, DomainActivity)},
-		{name: "suite", ev: api.InspectEvent{Kind: "suite"}, want: NewDomains(DomainSuites, DomainActivity)},
 		{name: "context", ev: api.InspectEvent{Kind: "context"}, want: NewDomains(DomainContext)},
 	}
 	for _, tt := range tests {

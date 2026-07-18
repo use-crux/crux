@@ -2,7 +2,10 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { resolveNodeEvalHostConnection } from "../../../src/eval/node/host/connection";
+import {
+  readExplicitNodeEvalHostDeploymentId,
+  resolveNodeEvalHostConnection,
+} from "../../../src/eval/node/host/connection";
 import { attachEvalHostConnectionInference } from "../../../src/runtime/eval-host";
 
 const roots: string[] = [];
@@ -13,6 +16,21 @@ afterEach(async () => {
 });
 
 describe("Node Eval host connection discovery", () => {
+  it("reads offline identity without invoking adapter connection inference", async () => {
+    const root = await temporaryRoot();
+    await writeFile(
+      join(root, ".env.local"),
+      "CRUX_EVAL_HOST_DEPLOYMENT_ID=offline-deployment\n",
+    );
+
+    await expect(
+      readExplicitNodeEvalHostDeploymentId({
+        projectRoot: root,
+        processEnvironment: {},
+      }),
+    ).resolves.toBe("offline-deployment");
+  });
+
   it("resolves fields independently from process, files, then adapter inference", async () => {
     const root = await temporaryRoot();
     await writeFile(
@@ -146,6 +164,8 @@ function emptyManifest(deploymentId: string) {
     protocol: "crux.eval-host.v1",
     deploymentId,
     hostKind: "memory",
+    privacyFingerprint:
+      "0000000000000000000000000000000000000000000000000000000000000000",
     capabilities: ["result-ref"],
     resultMaxBytes: 1024 * 1024,
     evals: [],

@@ -6,6 +6,10 @@ import {
   fingerprintDeployedEvalCase,
   projectDeployedEvalVariants,
 } from "../../../src/runtime/eval-registry/projection";
+import {
+  DEFAULT_EVAL_PERSISTENCE_POLICY,
+  fingerprintEvalPersistencePolicy,
+} from "../../../src/eval/internal/redact";
 
 export function hydratedEntry() {
   const authored = Object.freeze({
@@ -47,6 +51,9 @@ export function manifest(
     protocol: "crux.eval-host.v1",
     deploymentId,
     hostKind: "memory",
+    privacyFingerprint: fingerprintEvalPersistencePolicy(
+      DEFAULT_EVAL_PERSISTENCE_POLICY,
+    ),
     capabilities: ["record-store", "result-ref"],
     resultMaxBytes: 1024 * 1024,
     evals: [

@@ -9,6 +9,47 @@ import {
 } from "./managed-scorer-test-harness";
 
 describe("Eval cost admission", () => {
+  it("marks built-in managed judges as inheriting the task model for estimation", async () => {
+    const harness = createManagedScorerHarness();
+    const estimate = vi.fn(() => ({ kind: "none" as const }));
+
+    await planEval(
+      managedScorerDefinition("Is it helpful?"),
+      managedScorerSource,
+      {
+        ...harness.planning,
+        costEstimator: { estimate },
+      },
+    );
+
+    expect(estimate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "scorer",
+        scorerName: "helpful",
+        inheritTaskModel: true,
+      }),
+    );
+  });
+
+  it("treats a missing estimator as unknown billable work", async () => {
+    const harness = createManagedScorerHarness();
+    const { costEstimator: _missing, ...planning } = harness.planning;
+    const plan = await planEval(
+      managedScorerDefinition("Is it helpful?"),
+      { ...managedScorerSource, maxCostUsd: 10 },
+      planning as typeof harness.planning,
+    );
+
+    expect(plan.cost).toMatchObject({
+      unknownActionCount: 2,
+      admission: { status: "blocked", reason: "unknown_cost_under_cap" },
+      actions: [
+        { estimate: { kind: "unknown", source: "unknown" } },
+        { estimate: { kind: "unknown", source: "unknown" } },
+      ],
+    });
+  });
+
   it("blocks unattended unknown-cost work before execution when no cap is supplied", async () => {
     const harness = createManagedScorerHarness();
     const plan = await planEval(

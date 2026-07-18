@@ -18,7 +18,7 @@ func fetchRunsList(c DataClient) tea.Cmd {
 		if err != nil {
 			return dataErrMsg(err.Error())
 		}
-		return runsListLoadedMsg(qualityRunsFromObservability(observabilityRuns))
+		return runsListLoadedMsg(inspectRunsFromObservability(observabilityRuns))
 	}
 }
 
@@ -31,6 +31,6 @@ func fetchRunDetail(c DataClient, traceID string) tea.Cmd {
 		if !found {
 			return dataErrMsg("run not found")
 		}
-		return runDetailLoadedMsg(qualityRunDetailFromObservabilityDetail(detail))
+		return runDetailLoadedMsg(inspectRunDetailFromObservabilityDetail(detail))
 	}
 }

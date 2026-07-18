@@ -62,7 +62,7 @@ func signalPatternHint(pattern string) string {
 		return "@use-crux/"
 	}
 	names := append([]string(nil), defaultCallNames...)
-	names = append(names, "workingState", "evaluation", "suite")
+	names = append(names, "workingState")
 	sort.Slice(names, func(i, j int) bool { return len(names[i]) > len(names[j]) })
 	for _, name := range names {
 		if strings.Contains(pattern, name) {

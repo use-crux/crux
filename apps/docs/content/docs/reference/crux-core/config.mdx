@@ -1,6 +1,6 @@
 ---
 title: Config
-description: Full crux.config.ts reference for project policy, local tooling, runtime hooks, persistence, observability, plugins, and experimental indexer options.
+description: Full crux.config.ts reference for project policy, local tooling, runtime hooks, persistence, observability, plugins, and experimental options.
 ---
 
 `config()` is the single public API for Crux project configuration. Use it for policy, local tooling,
@@ -78,7 +78,7 @@ interface CruxConfig {
 | --------------- | ------------------------- | -------------------------------------------------------- | ----------------------------------------- |
 | `lint`          | `CruxLintConfig`          | `{ profile: 'recommended' }`                             | Project Index lint, `crux lint`, devtools |
 | `indexer`       | `CruxIndexerConfig`       | no third-party extensions                                | `@use-crux/indexer`                       |
-| `experimental`  | `CruxExperimentalConfig`  | no experimental flags                                    | `@use-crux/indexer`, `@use-crux/local`    |
+| `experimental`  | `CruxExperimentalConfig`  | no experimental flags                                    | Evals, `@use-crux/indexer`, Local         |
 | `runtime`       | `RuntimeEngineDefinition` | no durable Runtime Engine                                | Runtime Engine APIs, wake handlers, CLI   |
 | `persistence`   | `CruxPersistenceConfig`   | no global store                                          | flows, plans, tasks, Runtime Bridge reads |
 | `generation`    | `CruxGenerationConfig`    | `autoEscape: true`; `securityWarnings` in development    | prompt resolution and generation          |
@@ -98,6 +98,8 @@ Lint config controls authored Project Index findings. It does not run ESLint or 
 | `lint.rules[id].severity` | `'info' \| 'warning' \| 'error'`                       | rule default            | Overrides the displayed severity.                 |
 
 ```ts title="crux.config.ts"
+import { config } from "@use-crux/core";
+
 export default config({
   lint: {
     profile: "strict",
@@ -148,6 +150,32 @@ export default config({
 ```
 
 See [Writing an Indexer Extension](/docs/guides/advanced/writing-indexer-extension).
+
+## `experimental.eval`
+
+`experimental.eval.pricing` is a model-keyed record of conservative USD
+ceilings for one provider call:
+
+```ts title="crux.config.ts"
+import { config } from "@use-crux/core";
+
+export default config({
+  experimental: {
+    eval: {
+      pricing: {
+        "openai/gpt-5": { maxUsdPerCall: 0.25 },
+        default: { maxUsdPerCall: 1 },
+      },
+    },
+  },
+});
+```
+
+Each ceiling must be finite and non-negative. The optional `default` covers
+otherwise unmatched model IDs. This is deliberately not input/output token
+pricing: `crux eval --max-cost` needs a maximum it can reserve before making a
+call. Model lookup follows the existing exact, provider-stripped, then
+version-stripped normalization.
 
 ## `experimental.indexer`
 
@@ -310,6 +338,8 @@ the scoped devtools ingest endpoint. When `observability.transport` is set, that
 | `observability.serverUrl`                     | `string`                     | `undefined`                          | Creates an HTTP observability transport.                                                             |
 | `observability.token`                         | `string`                     | `CRUX_DEVTOOLS_TOKEN` when available | Bearer token for tunneled devtools ingest.                                                           |
 | `observability.transport`                     | `CruxObservabilityTransport` | `undefined`                          | Custom transport with `send(records)`.                                                               |
+| `observability.feedbackDestination`           | `CruxFeedbackDestination`    | transport capability                 | Single durable destination used by `feedback()`; overrides a capable transport.                      |
+| `observability.redactPaths`                   | `readonly string[]`          | `[]`                                 | Dot paths shared by feedback, Eval evidence, Review, sidecars, and generated Runtime hosts.          |
 | `observability.delivery.maxPendingDeliveries` | `number`                     | `1000`                               | Maximum in-flight transport sends before records remain queued.                                      |
 | `observability.delivery.maxQueuedRecords`     | `number`                     | `2048`                               | Maximum retained queued plus in-flight records before oldest queued records are dropped and counted. |
 | `observability.delivery.retryDelayMs`         | `number`                     | `100`                                | Base retry delay after a failed transport send.                                                      |
@@ -320,6 +350,7 @@ export default config({
   observability: {
     serverUrl: process.env.CRUX_OBSERVABILITY_URL,
     token: process.env.CRUX_DEVTOOLS_TOKEN,
+    redactPaths: ["customer.email", "credentials.session"],
     delivery: {
       maxPendingDeliveries: 250,
       retryDelayMs: 100,

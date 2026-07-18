@@ -1,6 +1,6 @@
 import { Streamdown } from "streamdown";
 import { JsonTree } from "@/shared/components/JsonTree";
-import { Icon } from "@/qw/shell/Icon";
+import { Icon } from "@/devtools/shell/Icon";
 import {
   canonicalKind,
   kindColor,
@@ -33,25 +33,25 @@ export function ReplayEventRow({
     >
       <div
         className="pt-3.5 pr-3 text-right font-mono text-[11px]"
-        style={{ color: "var(--qw-fg-faint)" }}
+        style={{ color: "var(--devtools-fg-faint)" }}
       >
         {e.t}
       </div>
       <div className="relative flex justify-center">
         <div
           className="absolute inset-y-0 w-px"
-          style={{ background: "var(--qw-border)" }}
+          style={{ background: "var(--devtools-border)" }}
         />
         <div
           className="absolute top-3 flex size-[18px] items-center justify-center rounded-full"
           style={{
             background: color,
-            border: "2px solid var(--qw-bg)",
+            border: "2px solid var(--devtools-bg)",
             boxShadow: `0 0 0 1px ${color}33`,
           }}
         >
           {icon && (
-            <Icon name={icon} size={10} color="var(--qw-bg)" strokeWidth={2} />
+            <Icon name={icon} size={10} color="var(--devtools-bg)" strokeWidth={2} />
           )}
         </div>
       </div>
@@ -61,7 +61,7 @@ export function ReplayEventRow({
             className="inline-flex items-center gap-1 rounded-[3px] px-1.5 py-px font-mono text-[9.5px] uppercase tracking-[0.06em]"
             style={{
               color,
-              background: "var(--qw-bg)",
+              background: "var(--devtools-bg)",
               boxShadow: `inset 0 0 0 1px ${color}`,
             }}
           >
@@ -72,14 +72,14 @@ export function ReplayEventRow({
           </span>
           <span
             className="font-mono text-[12px] font-medium"
-            style={{ color: "var(--qw-fg)" }}
+            style={{ color: "var(--devtools-fg)" }}
           >
             {e.who}
           </span>
           {e.meta && (
             <span
               className="ml-auto font-mono text-[10.5px]"
-              style={{ color: "var(--qw-fg-faint)" }}
+              style={{ color: "var(--devtools-fg-faint)" }}
             >
               {e.meta}
             </span>
@@ -108,12 +108,12 @@ function EventBody({
   const notesTone = e.notesTone ?? "warn";
   const noteColor =
     notesTone === "danger"
-      ? "var(--qw-danger)"
+      ? "var(--devtools-danger)"
       : notesTone === "ok"
-        ? "var(--qw-ok)"
+        ? "var(--devtools-ok)"
         : notesTone === "muted"
-          ? "var(--qw-fg-muted)"
-          : "var(--qw-warn)";
+          ? "var(--devtools-fg-muted)"
+          : "var(--devtools-warn)";
   const noteGlyph =
     notesTone === "danger"
       ? "✕"
@@ -127,13 +127,13 @@ function EventBody({
     <div
       className="rounded-[10px] px-3.5 py-3 leading-[1.55]"
       style={{
-        background: isUser ? "var(--qw-bg-muted)" : "var(--qw-bg-elev)",
-        border: "1px solid var(--qw-border)",
+        background: isUser ? "var(--devtools-bg-muted)" : "var(--devtools-bg-elev)",
+        border: "1px solid var(--devtools-border)",
         borderLeft: `2px solid ${color}`,
         fontSize: isUser ? 14 : 13,
         fontFamily:
           (useSerif || isUser) && !inlineJson && !renderBody
-            ? "var(--qw-serif)"
+            ? "var(--devtools-serif)"
             : undefined,
       }}
     >
@@ -149,7 +149,7 @@ function EventBody({
       {e.detail && (
         <div
           className="mt-2 text-[12px] leading-[1.55]"
-          style={{ color: "var(--qw-fg-muted)" }}
+          style={{ color: "var(--devtools-fg-muted)" }}
         >
           {e.detail}
         </div>
@@ -182,7 +182,7 @@ function RichHeadline({ text }: { text: string }) {
       {parts.map((part, i) => {
         if (part === " · " || part === " → ") {
           return (
-            <span key={i} style={{ color: "var(--qw-fg-faint)" }}>
+            <span key={i} style={{ color: "var(--devtools-fg-faint)" }}>
               {part}
             </span>
           );
@@ -229,12 +229,12 @@ function PayloadSection({
 }) {
   const labelColor =
     tone === "ok"
-      ? "var(--qw-ok)"
+      ? "var(--devtools-ok)"
       : tone === "warn"
-        ? "var(--qw-warn)"
+        ? "var(--devtools-warn)"
         : tone === "danger"
-          ? "var(--qw-danger)"
-          : "var(--qw-fg-faint)";
+          ? "var(--devtools-danger)"
+          : "var(--devtools-fg-faint)";
   return (
     <div className="mt-2.5">
       <div
@@ -259,8 +259,8 @@ function PayloadCode({
     <div
       className="overflow-auto rounded-[6px] px-2.5 py-1.5 font-mono text-[11.5px]"
       style={{
-        background: "var(--qw-bg)",
-        border: "1px solid var(--qw-border)",
+        background: "var(--devtools-bg)",
+        border: "1px solid var(--devtools-border)",
         maxHeight,
       }}
     >
@@ -284,7 +284,7 @@ function ToolPayload({
         <PayloadSection label="Arguments">
           <PayloadCode>
             {typeof payload.args === "string" ? (
-              <span style={{ color: "var(--qw-fg)" }}>{payload.args}</span>
+              <span style={{ color: "var(--devtools-fg)" }}>{payload.args}</span>
             ) : (
               <JsonTree data={payload.args} />
             )}
@@ -295,7 +295,7 @@ function ToolPayload({
         <PayloadSection label="Result" tone="ok">
           <PayloadCode>
             {typeof payload.result === "string" ? (
-              <span style={{ color: "var(--qw-fg)" }}>{payload.result}</span>
+              <span style={{ color: "var(--devtools-fg)" }}>{payload.result}</span>
             ) : (
               <JsonTree data={payload.result} />
             )}
@@ -307,9 +307,9 @@ function ToolPayload({
           <div
             className="rounded-[6px] px-2.5 py-1.5 font-mono text-[11.5px] leading-[1.5]"
             style={{
-              background: "var(--qw-danger-soft)",
-              color: "var(--qw-danger)",
-              border: "1px solid var(--qw-danger-line, var(--qw-danger))",
+              background: "var(--devtools-danger-soft)",
+              color: "var(--devtools-danger)",
+              border: "1px solid var(--devtools-danger-line, var(--devtools-danger))",
             }}
           >
             {payload.error}
@@ -325,7 +325,7 @@ function ToolPayload({
               className="rounded-[3px] px-1.5 py-px font-mono text-[10.5px]"
               style={{
                 color,
-                background: "var(--qw-bg)",
+                background: "var(--devtools-bg)",
                 boxShadow: `inset 0 0 0 1px ${color}`,
               }}
             >
@@ -353,9 +353,9 @@ function MemoryPayload({
           <code
             className="rounded-[3px] px-1.5 py-px font-mono text-[11.5px]"
             style={{
-              color: "var(--qw-iris)",
-              background: "var(--qw-bg)",
-              boxShadow: "inset 0 0 0 1px var(--qw-border)",
+              color: "var(--devtools-iris)",
+              background: "var(--devtools-bg)",
+              boxShadow: "inset 0 0 0 1px var(--devtools-border)",
             }}
           >
             {payload.key}
@@ -377,7 +377,7 @@ function MemoryPayload({
             {typeof payload.value === "string" ? (
               <div
                 className="font-serif text-[12.5px] leading-[1.55]"
-                style={{ fontFamily: "var(--qw-serif)" }}
+                style={{ fontFamily: "var(--devtools-serif)" }}
               >
                 {payload.value}
               </div>
@@ -434,23 +434,23 @@ function RetrievalPayload({
                   key={i}
                   className="rounded-[6px] px-2.5 py-1.5"
                   style={{
-                    background: "var(--qw-bg)",
-                    border: "1px solid var(--qw-border)",
+                    background: "var(--devtools-bg)",
+                    border: "1px solid var(--devtools-border)",
                   }}
                 >
                   <div className="mb-0.5 flex items-baseline gap-2 font-mono text-[10.5px]">
-                    <span style={{ color: "var(--qw-crux)" }}>›</span>
-                    <span style={{ color: "var(--qw-fg-muted)" }}>{id}</span>
+                    <span style={{ color: "var(--devtools-crux)" }}>›</span>
+                    <span style={{ color: "var(--devtools-fg-muted)" }}>{id}</span>
                     {score != null && (
                       <span
                         className="ml-auto rounded-[3px] px-1 py-px"
                         style={{
                           background:
                             score >= 0.7
-                              ? "var(--qw-ok-soft)"
-                              : "var(--qw-warn-soft)",
+                              ? "var(--devtools-ok-soft)"
+                              : "var(--devtools-warn-soft)",
                           color:
-                            score >= 0.7 ? "var(--qw-ok)" : "var(--qw-warn)",
+                            score >= 0.7 ? "var(--devtools-ok)" : "var(--devtools-warn)",
                         }}
                       >
                         {score.toFixed(3)}
@@ -460,7 +460,7 @@ function RetrievalPayload({
                   {preview && (
                     <div
                       className="text-[12px] leading-[1.5]"
-                      style={{ color: "var(--qw-fg)" }}
+                      style={{ color: "var(--devtools-fg)" }}
                     >
                       {preview.slice(0, 280)}
                       {preview.length > 280 ? "..." : ""}
@@ -473,8 +473,8 @@ function RetrievalPayload({
               <div
                 className="text-[10.5px]"
                 style={{
-                  color: "var(--qw-fg-faint)",
-                  fontFamily: "var(--qw-mono)",
+                  color: "var(--devtools-fg-faint)",
+                  fontFamily: "var(--devtools-mono)",
                 }}
               >
                 +{hits.length - 8} more
@@ -497,11 +497,11 @@ function HandoffPayload({
       {(payload.from || payload.to) && (
         <PayloadSection label="Transfer">
           <div className="flex items-center gap-2 font-mono text-[12px]">
-            <span style={{ color: "var(--qw-fg-muted)" }}>
+            <span style={{ color: "var(--devtools-fg-muted)" }}>
               {payload.from ?? "-"}
             </span>
-            <Icon name="arrowRight" size={12} color="var(--qw-iris)" />
-            <span style={{ color: "var(--qw-fg)", fontWeight: 600 }}>
+            <Icon name="arrowRight" size={12} color="var(--devtools-iris)" />
+            <span style={{ color: "var(--devtools-fg)", fontWeight: 600 }}>
               {payload.to ?? "-"}
             </span>
           </div>
@@ -537,9 +537,9 @@ function ScorePayload({
   const pct = score != null ? Math.max(0, Math.min(1, score)) * 100 : 0;
   const barColor =
     passed === true
-      ? "var(--qw-ok)"
+      ? "var(--devtools-ok)"
       : passed === false
-        ? "var(--qw-danger)"
+        ? "var(--devtools-danger)"
         : color;
   return (
     <>
@@ -562,7 +562,7 @@ function ScorePayload({
             </span>
             <div
               className="relative h-[6px] flex-1 overflow-hidden rounded-full"
-              style={{ background: "var(--qw-bg-muted)" }}
+              style={{ background: "var(--devtools-bg-muted)" }}
             >
               <div
                 className="absolute inset-y-0 left-0 rounded-full"
@@ -573,7 +573,7 @@ function ScorePayload({
                   className="absolute inset-y-[-2px] w-px"
                   style={{
                     left: `${Math.max(0, Math.min(1, threshold)) * 100}%`,
-                    background: "var(--qw-fg-faint)",
+                    background: "var(--devtools-fg-faint)",
                   }}
                   title={`threshold ${threshold.toFixed(2)}`}
                 />
@@ -582,7 +582,7 @@ function ScorePayload({
             {threshold != null && (
               <span
                 className="font-mono text-[10.5px]"
-                style={{ color: "var(--qw-fg-faint)" }}
+                style={{ color: "var(--devtools-fg-faint)" }}
               >
                 threshold {threshold.toFixed(2)}
               </span>
@@ -598,9 +598,9 @@ function ScorePayload({
                 key={k}
                 className="inline-flex items-baseline gap-1 rounded-[4px] px-1.5 py-0.5 font-mono text-[10.5px]"
                 style={{
-                  background: "var(--qw-bg)",
-                  border: "1px solid var(--qw-border)",
-                  color: "var(--qw-fg-muted)",
+                  background: "var(--devtools-bg)",
+                  border: "1px solid var(--devtools-border)",
+                  color: "var(--devtools-fg-muted)",
                 }}
               >
                 {k}
@@ -608,12 +608,12 @@ function ScorePayload({
                   style={{
                     color:
                       v >= 0.85
-                        ? "var(--qw-ok)"
+                        ? "var(--devtools-ok)"
                         : v >= 0.6
-                          ? "var(--qw-crux)"
+                          ? "var(--devtools-crux)"
                           : v < 0.4
-                            ? "var(--qw-danger)"
-                            : "var(--qw-warn)",
+                            ? "var(--devtools-danger)"
+                            : "var(--devtools-warn)",
                     fontWeight: 600,
                   }}
                 >
@@ -628,7 +628,7 @@ function ScorePayload({
         <PayloadSection label="Rationale">
           <div
             className="font-serif text-[12.5px] leading-[1.55]"
-            style={{ color: "var(--qw-fg)" }}
+            style={{ color: "var(--devtools-fg)" }}
           >
             {payload.rationale}
           </div>
@@ -653,9 +653,9 @@ function ErrorPayload({
           <div
             className="rounded-[6px] px-2.5 py-1.5 text-[12.5px] leading-[1.5]"
             style={{
-              background: "var(--qw-danger-soft)",
-              color: "var(--qw-danger)",
-              border: "1px solid var(--qw-danger)",
+              background: "var(--devtools-danger-soft)",
+              color: "var(--devtools-danger)",
+              border: "1px solid var(--devtools-danger)",
             }}
           >
             {payload.message}
@@ -667,7 +667,7 @@ function ErrorPayload({
           <PayloadCode maxHeight={160}>
             <pre
               className="whitespace-pre-wrap break-words"
-              style={{ color: "var(--qw-fg-muted)" }}
+              style={{ color: "var(--devtools-fg-muted)" }}
             >
               {payload.stack}
             </pre>
@@ -705,17 +705,17 @@ function BodyRenderer({ kind, body }: { kind: string; body: unknown }) {
               key={i}
               className="flex items-baseline gap-2 font-mono text-[11px]"
             >
-              <span style={{ color: "var(--qw-crux)" }}>›</span>
-              <span style={{ color: "var(--qw-fg-muted)" }}>{id}</span>
+              <span style={{ color: "var(--devtools-crux)" }}>›</span>
+              <span style={{ color: "var(--devtools-fg-muted)" }}>{id}</span>
               {score != null && (
                 <span
                   className="rounded-[3px] px-1 py-px text-[10.5px]"
                   style={{
                     background:
                       score >= 0.7
-                        ? "var(--qw-ok-soft)"
-                        : "var(--qw-warn-soft)",
-                    color: score >= 0.7 ? "var(--qw-ok)" : "var(--qw-warn)",
+                        ? "var(--devtools-ok-soft)"
+                        : "var(--devtools-warn-soft)",
+                    color: score >= 0.7 ? "var(--devtools-ok)" : "var(--devtools-warn)",
                   }}
                 >
                   {score.toFixed(2)}
@@ -725,8 +725,8 @@ function BodyRenderer({ kind, body }: { kind: string; body: unknown }) {
                 <span
                   className="truncate"
                   style={{
-                    color: "var(--qw-fg)",
-                    fontFamily: "var(--qw-sans)",
+                    color: "var(--devtools-fg)",
+                    fontFamily: "var(--devtools-sans)",
                   }}
                 >
                   {preview.slice(0, 220)}
@@ -743,7 +743,7 @@ function BodyRenderer({ kind, body }: { kind: string; body: unknown }) {
     return (
       <div
         className="mt-2 text-[12.5px] leading-[1.55]"
-        style={{ fontFamily: "var(--qw-serif)" }}
+        style={{ fontFamily: "var(--devtools-serif)" }}
       >
         <Streamdown>{body}</Streamdown>
       </div>
@@ -754,8 +754,8 @@ function BodyRenderer({ kind, body }: { kind: string; body: unknown }) {
     <div
       className="mt-2 max-h-[260px] overflow-auto rounded-[6px] px-3 py-2 font-mono text-[11.5px]"
       style={{
-        background: "var(--qw-bg)",
-        border: "1px solid var(--qw-border)",
+        background: "var(--devtools-bg)",
+        border: "1px solid var(--devtools-border)",
       }}
     >
       <JsonTree data={body} />

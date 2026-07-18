@@ -1,10 +1,14 @@
 /** Public Node.js discovery and execution API for authored Evals. */
 
-import type { AnyEval } from "./evaluate";
+import type { AnyEval, Eval } from "./evaluate";
 import { getEvalDefinitionForInternalUse } from "./internal/definition";
 import type { EvalPlan, EvalRun } from "./internal/types";
 
-export type { EvalPlan, EvalRun } from "./internal/types";
+export type {
+  EvalPlan,
+  EvalRun,
+  EvalVariantAggregate,
+} from "./internal/types";
 
 export interface RunEvalOptions {
   readonly case?: string | readonly string[];
@@ -19,18 +23,50 @@ export interface RunEvalPlanOptions extends RunEvalOptions {
   readonly plan: true;
 }
 
+type EvalScoreNames<T> = T extends Eval<never, unknown, infer S, string, string | undefined>
+  ? S
+  : string;
+type EvalVariantNames<T> = T extends Eval<never, unknown, string, infer V, string | undefined>
+  ? V
+  : string;
+
+/** Options narrowed to the authored Variant literals of one Eval object. */
+export type RunEvalObjectOptions<T extends AnyEval> = Omit<
+  RunEvalOptions,
+  "variant"
+> & { readonly variant?: "current" | EvalVariantNames<T> };
+
+type RunOf<T extends AnyEval> = EvalRun<
+  EvalScoreNames<T>,
+  EvalVariantNames<T>
+>;
+
 export function runEval(
-  evalOrId: AnyEval | string,
+  evalOrId: string,
   options: RunEvalPlanOptions,
 ): Promise<EvalPlan>;
+export function runEval<T extends AnyEval>(
+  evalOrId: T,
+  options: RunEvalObjectOptions<T> & { readonly plan: true },
+): Promise<EvalPlan>;
 export function runEval(
-  evalOrId: AnyEval | string,
+  evalOrId: string,
   options?: RunEvalOptions & { readonly plan?: false | undefined },
 ): Promise<EvalRun>;
+export function runEval<T extends AnyEval>(
+  evalOrId: T,
+  options?: RunEvalObjectOptions<T> & {
+    readonly plan?: false | undefined;
+  },
+): Promise<RunOf<T>>;
 export function runEval(
-  evalOrId: AnyEval | string,
+  evalOrId: string,
   options: RunEvalOptions,
 ): Promise<EvalPlan | EvalRun>;
+export function runEval<T extends AnyEval>(
+  evalOrId: T,
+  options: RunEvalObjectOptions<T>,
+): Promise<EvalPlan | RunOf<T>>;
 /** Discover and run one authored Eval through the Node coordinator. */
 export async function runEval(
   evalOrId: AnyEval | string,

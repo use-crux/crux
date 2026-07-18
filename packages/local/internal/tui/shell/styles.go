@@ -1,6 +1,6 @@
 // Package shell contains the V1 Panels chrome: terminal-style title bar,
 // top tab strip, left nav rail, breadcrumb, status bar, and the generic
-// three-pane primitives every Quality screen plugs into.
+// three-pane primitives every Devtools screen plugs into.
 package shell
 
 import (

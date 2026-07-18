@@ -65,27 +65,25 @@ describe("describeCatalogCoverage", () => {
     });
   });
 
-  it("treats a Quality-owned structural child as Quality-primary", () => {
-    expect(
-      describeCatalogCoverage("evaluation.case", activity(2)),
-    ).toMatchObject({
-      treatment: "quality-primary",
+  it("treats an Eval-owned structural child as Eval-primary", () => {
+    expect(describeCatalogCoverage("eval.case", activity(2))).toMatchObject({
+      treatment: "eval-primary",
       runCount: 0,
       hasRuntimeEvidence: false,
     });
   });
 
-  it("classifies a quality-owned kind with no direct-runtime secondary (dataset) as quality-primary with zero runtime evidence", () => {
-    expect(describeCatalogCoverage("dataset", activity(4))).toMatchObject({
-      treatment: "quality-primary",
+  it("classifies an Eval definition as Eval-primary without fabricating direct runtime evidence", () => {
+    expect(describeCatalogCoverage("eval", activity(4))).toMatchObject({
+      treatment: "eval-primary",
       runCount: 0,
       hasRuntimeEvidence: false,
     });
   });
 
-  it("classifies a quality-owned kind with a direct-runtime secondary (scorer) as quality-primary but surfaces real runtime evidence", () => {
+  it("classifies a directly observed scorer from its actual runtime evidence", () => {
     expect(describeCatalogCoverage("scorer", activity(7))).toMatchObject({
-      treatment: "quality-primary",
+      treatment: "direct-activity",
       runCount: 7,
       hasRuntimeEvidence: true,
     });

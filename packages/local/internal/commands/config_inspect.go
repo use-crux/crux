@@ -53,7 +53,7 @@ func NewConfigCmd(f *cli.Factory) *cobra.Command {
 		Use:   "inspect",
 		Short: "Render the effective Crux configuration",
 		Long: `Render the effective Crux configuration: every domain config() accepts
-(quality, generation, indexer, experimental, observability, devtools, persistence, lint,
+(generation, indexer, experimental, observability, devtools, persistence, lint,
 plugins) with its resolved value and where that value came from — an explicit
 config value, a built-in default, or package metadata.
 
@@ -258,7 +258,7 @@ type configLintInspect struct {
 type configDiscovered struct {
 	Definitions     int            `json:"definitions"`
 	Relations       int            `json:"relations"`
-	Evaluations     int            `json:"evaluations"`
+	Evals           int            `json:"evals"`
 	DefinitionKinds map[string]int `json:"definitionKinds"`
 }
 
@@ -369,7 +369,7 @@ func printConfigInspect(io *output.IO, raw json.RawMessage) error {
 	printConfigDomain(io, "Discovered", []configRow{
 		{label: "definitions", value: io.Sprint(output.Bold, fmt.Sprintf("%d", model.Discovered.Definitions))},
 		{label: "relations", value: io.Sprint(output.Bold, fmt.Sprintf("%d", model.Discovered.Relations))},
-		{label: "evaluations", value: io.Sprint(output.Bold, fmt.Sprintf("%d", model.Discovered.Evaluations))},
+		{label: "Evals", value: io.Sprint(output.Bold, fmt.Sprintf("%d", model.Discovered.Evals))},
 	})
 
 	// ── Diagnostics ──────────────────────────────────────────

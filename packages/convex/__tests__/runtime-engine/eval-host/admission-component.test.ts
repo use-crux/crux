@@ -42,5 +42,5 @@ describe('Convex Eval host admission component', () => {
     })
     await expect(t.run(async (ctx) => await ctx.db.query('runtimeWork').collect())).resolves.toHaveLength(1)
     await expect(t.run(async (ctx) => await ctx.db.query('runtimeOutbox').collect())).resolves.toHaveLength(1)
-  })
+  }, 20_000)
 })

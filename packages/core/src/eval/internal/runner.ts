@@ -16,15 +16,27 @@ import {
   type EvalDefinitionV1,
   type RawEvalCase,
 } from "./definition";
-import { getEvalTaskDescriptorForInternalUse } from "./task";
+import {
+  getEvalTaskDescriptorForInternalUse,
+  isManagedEvalTaskForInternalUse,
+} from "./task";
 import { fingerprintEvalValue } from "./identity";
 
 export { planEval } from "./planner";
 export { executeEvalPlan } from "./executor";
+export { compareEvalDefinitionToBaseline } from "./baseline";
 export {
   executeEvalTaskForInternalUse,
+  fingerprintManagedEvalTaskForInternalUse,
   getEvalTaskDescriptorForInternalUse,
+  isManagedEvalTaskForInternalUse,
 } from "./task";
+export { executeObservedEvalTaskForInternalUse } from "./observed-task";
+export {
+  fingerprintEvalPersistencePolicy,
+  normalizeEvalPersistencePolicy,
+} from "./redact";
+export type { EvalPersistencePolicy } from "./redact";
 export type {
   EvalExecutionPorts,
   EvalPlanningPorts,
@@ -53,27 +65,6 @@ export function fingerprintEvalValueForInternalUse(value: unknown): string {
   return fingerprintEvalValue(value);
 }
 
-/**
- * Fingerprint adapter-owned execution code independently from Eval Cases and
- * checks. Captured prompt/model/settings semantics remain the identity
- * projector's authority; unprovable captures mark that projection non-reusable.
- */
-export function fingerprintEvalTaskSourceForInternalUse(
-  task: unknown,
-): string {
-  const descriptor = getEvalTaskDescriptorForInternalUse(task);
-  return fingerprintEvalValue({
-    execute: Function.prototype.toString.call(descriptor.execute),
-    projectOutput: Function.prototype.toString.call(descriptor.projectOutput),
-    projectResponse: Function.prototype.toString.call(
-      descriptor.projectResponse,
-    ),
-    projectIdentity: Function.prototype.toString.call(
-      descriptor.projectIdentity,
-    ),
-  });
-}
-
 /** Read the managed task schemas required by file-backed Case validation. */
 export function getEvalTaskSchemasForInternalUse(evalValue: AnyEval): {
   readonly inputSchema: ReturnType<
@@ -83,9 +74,11 @@ export function getEvalTaskSchemasForInternalUse(evalValue: AnyEval): {
     typeof getEvalTaskDescriptorForInternalUse
   >["outputSchema"];
 } {
-  const descriptor = getEvalTaskDescriptorForInternalUse(
-    getEvalDefinitionForInternalUse(evalValue).task,
-  );
+  const task = getEvalDefinitionForInternalUse(evalValue).task;
+  if (!isManagedEvalTaskForInternalUse(task)) {
+    return Object.freeze({ inputSchema: undefined, outputSchema: undefined });
+  }
+  const descriptor = getEvalTaskDescriptorForInternalUse(task);
   return Object.freeze({
     inputSchema: descriptor.inputSchema,
     outputSchema: descriptor.outputSchema,

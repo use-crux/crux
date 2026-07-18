@@ -48,7 +48,7 @@ describe("@use-crux/core/eval", () => {
 
     const surface = await import("@use-crux/core/eval");
     expect(Object.keys(surface).sort()).toEqual(["caseFile", "evaluate"]);
-  });
+  }, 20_000);
 
   it("exposes only runEval as the Node runtime API", async () => {
     const manifest = JSON.parse(

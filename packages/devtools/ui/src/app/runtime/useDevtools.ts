@@ -8,7 +8,7 @@
  *      · dispatch into the runtime store (`dispatchRuntime`) for
  *        push-only WS state (event arrays, runtime flow diffs);
  *      · invalidate or set the matching TanStack Query cache for
- *        REST-shaped slices (index, observability, quality).
+ *        REST-shaped slices (index, observability, Evals).
  *
  * Screens **do not** call this hook for data. They subscribe to a
  * specific slice via the selector hooks in `runtimeStore.ts` (e.g.
@@ -78,8 +78,7 @@ export function useDevtools(): void {
           // which owns its own revision-gated invalidation and bounded
           // catch-up (`useObservabilityRunsPage`); see
           // `isBlanketInvalidatableObservabilityQueryKey`. Also invalidate
-          // the matching Quality run projection so run-detail annotations
-          // refresh without waiting on a separate quality event.
+          // matching Run Detail projections refresh with the graph.
           void queryClient.invalidateQueries({
             predicate: (query) =>
               isBlanketInvalidatableObservabilityQueryKey(query.queryKey),
@@ -101,6 +100,7 @@ export function useDevtools(): void {
           indexDeltaGenerationRef.current = 0;
           queryClient.setQueryData(qk.index(), normalizeProjectIndexData(cat));
           void queryClient.invalidateQueries({ queryKey: qk.indexWatch() });
+          void queryClient.invalidateQueries({ queryKey: qk.evals.all });
         }
         if (type === "index:delta") {
           const delta = msg as unknown as IndexDeltaMessage;

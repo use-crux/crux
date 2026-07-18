@@ -2,6 +2,7 @@ import type { StandardSchemaV1 } from "../../eval/internal/schema";
 import type { AnyEval } from "../../eval/evaluate";
 import type { RawEvalCase } from "../../eval/internal/definition";
 import type { EvalPlannedArm } from "../../eval/internal/types";
+import type { EvalPersistencePolicy } from "../../eval/internal/redact";
 
 /** One generated, schema-validated Case retained by a deployed Eval. */
 export interface DeployedEvalCase {
@@ -51,6 +52,10 @@ export interface DeployedEvalRegistryEntry extends Omit<
 /** Immutable generated Eval allowlist. */
 export interface DeployedEvalRegistry {
   readonly _tag: "CruxDeployedEvalRegistry";
+  /** Generated privacy policy retained by the host but never exposed raw. */
+  readonly persistencePolicy: EvalPersistencePolicy;
+  /** Secret-free deployment identity projected into the authenticated manifest. */
+  readonly privacyFingerprint: string;
   readonly entries: readonly DeployedEvalRegistryEntry[];
 }
 

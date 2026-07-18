@@ -2,10 +2,10 @@
  * "How this is protected" — the coverage gauge plus a per-area scorecard.
  * Uncovered areas show a **read-only** suggested assertion (dashed mono) and an
  * optional copyable CLI hint. The UI never fakes a "create test" write: tests
- * are authored in code and run from the CLI, matching the Quality plane.
+ * are authored in code and run from the CLI as Evals.
  */
 
-import { Icon } from "@/qw/shell/Icon";
+import { Icon } from "@/devtools/shell/Icon";
 import type { TurnDecisionCoverage } from "@/types";
 import { CoverageChip, CoverageGauge } from "../atoms";
 
@@ -14,15 +14,15 @@ export function ProtectBlock({ coverage }: { coverage: TurnDecisionCoverage }) {
     <div
       className="overflow-hidden rounded-[12px]"
       style={{
-        background: "var(--qw-bg)",
-        border: "1px solid var(--qw-border)",
+        background: "var(--devtools-bg)",
+        border: "1px solid var(--devtools-border)",
       }}
     >
       <div
         className="px-4 py-3.5"
         style={{
-          borderBottom: "1px solid var(--qw-border)",
-          background: "var(--qw-bg-elev)",
+          borderBottom: "1px solid var(--devtools-border)",
+          background: "var(--devtools-bg-elev)",
         }}
       >
         <CoverageGauge covered={coverage.covered} total={coverage.total} />
@@ -34,13 +34,13 @@ export function ProtectBlock({ coverage }: { coverage: TurnDecisionCoverage }) {
           style={{
             borderBottom:
               i < coverage.areas.length - 1
-                ? "1px solid var(--qw-border)"
+                ? "1px solid var(--devtools-border)"
                 : "none",
           }}
         >
           <span
             className="w-[170px] flex-shrink-0 text-[12.5px] font-medium"
-            style={{ color: "var(--qw-fg)" }}
+            style={{ color: "var(--devtools-fg)" }}
           >
             {a.label}
           </span>
@@ -52,8 +52,8 @@ export function ProtectBlock({ coverage }: { coverage: TurnDecisionCoverage }) {
               <span
                 className="text-[12.5px] italic"
                 style={{
-                  fontFamily: "var(--qw-serif)",
-                  color: "var(--qw-fg-muted)",
+                  fontFamily: "var(--devtools-serif)",
+                  color: "var(--devtools-fg-muted)",
                 }}
               >
                 suggest
@@ -61,9 +61,9 @@ export function ProtectBlock({ coverage }: { coverage: TurnDecisionCoverage }) {
               <span
                 className="min-w-0 flex-1 truncate font-mono text-[11px]"
                 style={{
-                  color: "var(--qw-fg)",
-                  background: "var(--qw-bg-muted)",
-                  border: "1px dashed var(--qw-border-strong)",
+                  color: "var(--devtools-fg)",
+                  background: "var(--devtools-bg-muted)",
+                  border: "1px dashed var(--devtools-border-strong)",
                   borderRadius: 5,
                   padding: "2px 8px",
                 }}
@@ -81,10 +81,10 @@ export function ProtectBlock({ coverage }: { coverage: TurnDecisionCoverage }) {
       ))}
       <div
         className="flex items-center gap-2 px-4 py-2.5"
-        style={{ background: "var(--qw-bg-elev)" }}
+        style={{ background: "var(--devtools-bg-elev)" }}
       >
-        <Icon name="info" size={12} color="var(--qw-fg-faint)" />
-        <span className="text-[11.5px]" style={{ color: "var(--qw-fg-faint)" }}>
+        <Icon name="info" size={12} color="var(--devtools-fg-faint)" />
+        <span className="text-[11.5px]" style={{ color: "var(--devtools-fg-faint)" }}>
           Suggestions are read-only. Assertions are authored in code, then run
           from the CLI.
         </span>

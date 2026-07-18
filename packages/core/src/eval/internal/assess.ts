@@ -8,8 +8,14 @@ import {
 } from "./assertions/runtime";
 import { createStepAccessor } from "./assertions/runtime";
 import type { CellSignals } from "./execution-signals";
-import { invokeScorer } from "./scorers/runtime";
-import type { Score } from "./scorers/types";
+import {
+  invokeScorer,
+  SCORER_IDENTITY,
+  UNVERSIONED_LOCAL_SCORER_CONTRACT,
+  type MaybeIdentifiedScorer,
+} from "./scorers/runtime";
+import { fingerprintEvalValue, isReusableEvalValue } from "./identity";
+import type { Score, Scorer } from "./scorers/types";
 import { resolveEvalScorers } from "./scorer-plan";
 import type {
   EvalAssertionSummary,
@@ -47,11 +53,12 @@ export async function assessEvalCell(input: {
     captured: new Set<Capability>(input.execution.capturedSignals),
   };
   const recorder = createAssertionRecorder();
+  const recordedScores: EvalScoreEvidence[] = [];
   const managedTask = isManagedEvalTaskForInternalUse(input.cell.task);
   let cellErrored = false;
   const result = await runNormalizedEvalChecks({
     checks: [
-      { declaration: input.planExpect, level: "evaluation" },
+      { declaration: input.planExpect, level: "eval" },
       { declaration: input.cell.expect, level: "case" },
     ],
     phase: "expect",
@@ -61,7 +68,10 @@ export async function assessEvalCell(input: {
   if (result.error !== undefined) cellErrored = true;
   const scoreResult =
     result.error === undefined
-      ? await runDeterministicScorers(input.scorers, input, signals)
+      ? mergeRecordedScores(
+          recordedScores,
+          await runDeterministicScorers(input.scorers, input, signals),
+        )
       : { scores: Object.freeze([] as const) };
   const managedScores = input.managedScores ?? [];
   const managedError = managedScores.find(
@@ -133,14 +143,35 @@ export async function assessEvalCell(input: {
     return {
       input: input.cell.input,
       output: input.execution.output,
-      ...(managedTask ? { response: input.execution.response } : {}),
+      ...(managedTask && input.execution.response !== undefined
+        ? { response: input.execution.response }
+        : {}),
       expected: input.cell.expected,
       expect: guardEvalExpect(boundExpect, requiresFresh),
-      variant: { name: "current", params: {} },
-      trial: 0,
-      recordScore() {
-        throw new TypeError(
-          "Ad-hoc scores are not supported until Eval assessment Phase 7.",
+      variant: { name: input.cell.variant, params: input.cell.overrides },
+      trial: input.cell.trial,
+      recordScore(name, score, metadata) {
+        if (
+          name.trim() === "" ||
+          !Number.isFinite(score) ||
+          score < 0 ||
+          score > 1
+        ) {
+          throw new TypeError(
+            "recordScore() requires a non-empty name and a finite 0-1 score.",
+          );
+        }
+        recordedScores.push(
+          Object.freeze({
+            status: "computed" as const,
+            reason: "deterministic_local" as const,
+            name,
+            contractFingerprint: UNVERSIONED_LOCAL_SCORER_CONTRACT,
+            value: score,
+            ...(typeof metadata?.rationale === "string"
+              ? { rationale: metadata.rationale }
+              : {}),
+          }),
         );
       },
       step: guardEvalStepAccessor(
@@ -155,6 +186,16 @@ export async function assessEvalCell(input: {
       ),
     };
   }
+}
+
+function mergeRecordedScores(
+  recorded: readonly EvalScoreEvidence[],
+  result: Awaited<ReturnType<typeof runDeterministicScorers>>,
+): Awaited<ReturnType<typeof runDeterministicScorers>> {
+  return {
+    ...result,
+    scores: Object.freeze([...recorded, ...result.scores]),
+  };
 }
 
 async function runDeterministicScorers(
@@ -173,6 +214,7 @@ async function runDeterministicScorers(
   for (const scorer of scorers) {
     const name = scorer.scorerName ?? scorer.name ?? "(dynamic)";
     if (scorer.costClass === "model") continue;
+    const contractFingerprint = deterministicScorerContract(scorer);
     try {
       const result = await invokeScorer(
         scorer,
@@ -189,7 +231,7 @@ async function runDeterministicScorers(
           status: "computed",
           reason: "deterministic_local",
           name: result.name,
-          contractFingerprint: "local_always_run",
+          contractFingerprint,
           value: result.score,
           ...(result.label !== undefined ? { label: result.label } : {}),
           ...(typeof result.metadata?.rationale === "string"
@@ -199,7 +241,7 @@ async function runDeterministicScorers(
       );
     } catch (error) {
       const message = `Scorer '${name}' threw: ${error instanceof Error ? error.message : String(error)}`;
-      scores.push(errorScore(name, message));
+      scores.push(errorScore(name, contractFingerprint, message));
       return {
         scores: Object.freeze(scores),
         error: Object.freeze({ message, phase: "score" }),
@@ -224,12 +266,25 @@ function assertValidScore(score: Score): void {
   }
 }
 
-function errorScore(name: string, message: string): EvalScoreEvidence {
+function deterministicScorerContract(
+  scorer: Scorer<unknown, unknown, unknown>,
+): string {
+  const identity = (scorer as MaybeIdentifiedScorer)[SCORER_IDENTITY];
+  return identity !== undefined && isReusableEvalValue(identity)
+    ? fingerprintEvalValue(identity)
+    : UNVERSIONED_LOCAL_SCORER_CONTRACT;
+}
+
+function errorScore(
+  name: string,
+  contractFingerprint: string,
+  message: string,
+): EvalScoreEvidence {
   return Object.freeze({
     status: "errored",
     reason: "scorer_error",
     name,
-    contractFingerprint: "local_always_run",
+    contractFingerprint,
     message,
   });
 }

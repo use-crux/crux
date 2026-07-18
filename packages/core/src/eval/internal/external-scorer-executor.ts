@@ -58,17 +58,26 @@ async function executeAction(
     );
   }
   try {
-    const score = await input.ports.externalScorerHost.execute({
+    const result = await input.ports.externalScorerHost.execute({
       actionId: action.actionId,
       scorerName: action.scorerName,
       scorer: action.scorer,
       input: input.cell.input,
       output: input.execution.output,
       expected: input.cell.expected,
+      task: input.cell.task,
+      overrides: input.cell.overrides,
+      ...(input.cell.call !== undefined ? { call: input.cell.call } : {}),
     });
+    const score = result.score;
     if (
       score.name !== action.scorerName ||
-      createScorerEvidenceEntry("validation", score) === undefined
+      !isValidExternalMetrics(result) ||
+      createScorerEvidenceEntry(
+        "validation",
+        score,
+        input.ports.persistencePolicy,
+      ) === undefined
     ) {
       return scorerError(
         action,
@@ -76,7 +85,9 @@ async function executeAction(
       );
     }
     const entry =
-      key === undefined ? undefined : createScorerEvidenceEntry(key, score);
+      key === undefined
+        ? undefined
+        : createScorerEvidenceEntry(key, score, input.ports.persistencePolicy);
     if (entry !== undefined && input.ports.evidenceStore !== undefined) {
       try {
         await input.ports.evidenceStore.write(entry);
@@ -84,13 +95,30 @@ async function executeAction(
         // Evidence writes are best effort; the score remains valid run evidence.
       }
     }
-    return computed(score, action, "executed", key);
+    return computed(score, action, "executed", key, result);
   } catch (error) {
     return scorerError(
       action,
       `Scorer '${action.scorerName}' threw: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
+}
+
+function isValidExternalMetrics(result: {
+  readonly usage?: import("../../generation/types").TokenUsage;
+  readonly actualUsd?: number;
+}): boolean {
+  if (
+    result.actualUsd !== undefined &&
+    (!Number.isFinite(result.actualUsd) || result.actualUsd < 0)
+  ) {
+    return false;
+  }
+  if (result.usage === undefined) return true;
+  const usage = result.usage;
+  return [usage.inputTokens, usage.outputTokens, usage.totalTokens].every(
+    (value) => Number.isInteger(value) && value >= 0,
+  );
 }
 
 function resolveEvidenceKey(
@@ -113,6 +141,7 @@ function resolveEvidenceKey(
     contractFingerprint: action.contractFingerprint,
     hostContractFingerprint: action.hostContractFingerprint,
     occurrence: action.occurrence,
+    dependencies: action.dependencies,
   });
 }
 
@@ -121,13 +150,12 @@ function computed(
   action: EvalScorerAction,
   status: "executed" | "reused",
   evidenceRef?: string,
+  metrics?: {
+    readonly usage?: import("../../generation/types").TokenUsage;
+    readonly actualUsd?: number;
+  },
 ): EvalScoreEvidence {
-  return Object.freeze({
-    status: "computed" as const,
-    reason:
-      status === "reused"
-        ? ("managed_external_reused" as const)
-        : ("managed_external_executed" as const),
+  const common = {
     name: score.name,
     contractFingerprint: action.contractFingerprint ?? "identity_unavailable",
     value: score.score,
@@ -135,20 +163,48 @@ function computed(
     ...(typeof score.metadata?.rationale === "string"
       ? { rationale: score.metadata.rationale }
       : {}),
-    work: Object.freeze({
-      status,
-      reason:
-        status === "reused"
-          ? ("exact_evidence" as const)
-          : action.evidenceRead === "bypass"
-            ? (action.evidenceReadReason ?? "fresh_requested")
-            : action.kind === "execute"
-              ? action.reason
-              : ("no_exact_evidence" as const),
-      ...(evidenceRef !== undefined ? { evidenceRef } : {}),
-      reservation: status === "reused" ? "released" : "consumed",
-    }),
-  });
+  };
+  return status === "reused"
+    ? Object.freeze({
+        status: "reused" as const,
+        reason: "managed_external_reused" as const,
+        ...common,
+        work: Object.freeze({
+          status: "reused" as const,
+          reason: "exact_evidence" as const,
+          ...(evidenceRef !== undefined ? { evidenceRef } : {}),
+          reservation: "released" as const,
+        }),
+      })
+    : Object.freeze({
+        status: "computed" as const,
+        reason: "managed_external_executed" as const,
+        ...common,
+        work: Object.freeze({
+          status: "executed" as const,
+          reason:
+            action.evidenceRead === "bypass"
+              ? (action.evidenceReadReason ?? "fresh_requested")
+              : action.kind === "execute"
+                ? action.reason
+                : ("no_exact_evidence" as const),
+          ...(evidenceRef !== undefined ? { evidenceRef } : {}),
+          reservation: "consumed" as const,
+        }),
+        ...(metrics !== undefined &&
+        (metrics.actualUsd !== undefined || metrics.usage !== undefined)
+          ? {
+              metrics: Object.freeze({
+                ...(metrics.actualUsd !== undefined
+                  ? { actualUsd: metrics.actualUsd }
+                  : {}),
+                ...(metrics.usage !== undefined
+                  ? { usage: metrics.usage }
+                  : {}),
+              }),
+            }
+          : {}),
+      });
 }
 
 function scorerError(

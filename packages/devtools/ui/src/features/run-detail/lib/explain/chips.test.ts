@@ -108,7 +108,7 @@ describe("summaryChips (passthrough when the backend emits them)", () => {
       },
       {
         id: "cov",
-        label: "Quality unprotected",
+        label: "Eval coverage missing",
         tone: "warning",
         filter: { target: "coverage" },
       },

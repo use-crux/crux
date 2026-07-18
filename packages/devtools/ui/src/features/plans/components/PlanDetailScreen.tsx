@@ -1,13 +1,11 @@
 import { useMemo, useState } from "react";
 import { Streamdown } from "streamdown";
-import { QwShell } from "@/qw/shell/QwShell";
-import { navTarget } from "@/app/navigation/navTarget";
-import { Btn, Chip, SectionHead } from "@/qw/shell/primitives";
-import { Icon } from "@/qw/shell/Icon";
-import { useConnected } from "@/app/runtime/runtimeStore";
+import { DevtoolsShell } from "@/devtools/shell/DevtoolsShell";
+import { Btn, Chip, SectionHead } from "@/devtools/shell/primitives";
+import { Icon } from "@/devtools/shell/Icon";
 import { useNavigation } from "@/app/navigation/useNavigation";
 import { usePlanSuspense } from "@/shared/hooks/useLibraryApi";
-import { SectionBoundary } from "@/qw/shell/SectionBoundary";
+import { SectionBoundary } from "@/devtools/shell/SectionBoundary";
 import { SkeletonCard, SkeletonRows } from "@/shared/components/Skeleton";
 import { qk } from "@/shared/query/queryClient";
 import {
@@ -41,7 +39,6 @@ type DetailTab = "plan" | "tasks" | "versions" | "events";
 
 export function PlanDetailScreen({ planId }: { planId: string }) {
   const { navigate } = useNavigation();
-  const connected = useConnected();
   // Suspends on first paint — caught by the App-level Suspense.
   const data = usePlanSuspense(planId);
   const [tab, setTab] = useState<DetailTab>("plan");
@@ -51,13 +48,10 @@ export function PlanDetailScreen({ planId }: { planId: string }) {
   const events = data.events ?? [];
 
   return (
-    <QwShell
-      activeView="library-plans"
-      onNavigate={(v) => navigate(navTarget(v))}
+    <DevtoolsShell
       breadcrumb={`Library / Plans / ${shortBreadcrumbId(planId)}`}
       title={data.title || planId}
       subtitle={buildDetailSubtitle(data)}
-      connected={connected}
       actions={
         <>
           <Btn
@@ -140,7 +134,7 @@ export function PlanDetailScreen({ planId }: { planId: string }) {
           {tab === "events" && <PlanEventsTab events={events} />}
         </SectionBoundary>
       </div>
-    </QwShell>
+    </DevtoolsShell>
   );
 }
 
@@ -175,21 +169,21 @@ function PlanContentTab({ plan }: { plan: PlanDetail }) {
       <div
         className="overflow-hidden rounded-[10px]"
         style={{
-          background: "var(--qw-bg-elev)",
-          border: "1px solid var(--qw-crux-line)",
+          background: "var(--devtools-bg-elev)",
+          border: "1px solid var(--devtools-crux-line)",
         }}
       >
         <div
           className="flex items-center gap-2 px-4 py-2.5"
           style={{
-            borderBottom: "1px solid var(--qw-border)",
-            background: "var(--qw-crux-soft)",
+            borderBottom: "1px solid var(--devtools-border)",
+            background: "var(--devtools-crux-soft)",
           }}
         >
-          <KindBadge name="tasks" color="var(--qw-crux)" size={20} />
+          <KindBadge name="tasks" color="var(--devtools-crux)" size={20} />
           <span
             className="min-w-0 truncate font-mono text-[12px]"
-            style={{ color: "var(--qw-crux)" }}
+            style={{ color: "var(--devtools-crux)" }}
             title={plan.id}
           >
             {plan.id}
@@ -207,7 +201,7 @@ function PlanContentTab({ plan }: { plan: PlanDetail }) {
             {plan.author && (
               <span
                 className="font-mono text-[11px]"
-                style={{ color: "var(--qw-fg-faint)" }}
+                style={{ color: "var(--devtools-fg-faint)" }}
               >
                 {plan.author}
               </span>
@@ -220,8 +214,8 @@ function PlanContentTab({ plan }: { plan: PlanDetail }) {
             <h2
               className="m-0 mb-3 text-[19px] font-semibold tracking-[-0.015em]"
               style={{
-                fontFamily: "var(--qw-serif, Georgia, serif)",
-                color: "var(--qw-fg)",
+                fontFamily: "var(--devtools-serif, Georgia, serif)",
+                color: "var(--devtools-fg)",
               }}
             >
               {plan.title}
@@ -230,10 +224,10 @@ function PlanContentTab({ plan }: { plan: PlanDetail }) {
           {body ? (
             mode === "pretty" ? (
               <div
-                className="qw-markdown text-[14px] leading-[1.65]"
+                className="devtools-markdown text-[14px] leading-[1.65]"
                 style={{
-                  color: "var(--qw-fg)",
-                  fontFamily: "var(--qw-serif, Georgia, serif)",
+                  color: "var(--devtools-fg)",
+                  fontFamily: "var(--devtools-serif, Georgia, serif)",
                 }}
               >
                 <Streamdown>{body}</Streamdown>
@@ -242,8 +236,8 @@ function PlanContentTab({ plan }: { plan: PlanDetail }) {
               <div
                 className="whitespace-pre-wrap text-[14px] leading-[1.65]"
                 style={{
-                  color: "var(--qw-fg)",
-                  fontFamily: "var(--qw-serif, Georgia, serif)",
+                  color: "var(--devtools-fg)",
+                  fontFamily: "var(--devtools-serif, Georgia, serif)",
                 }}
               >
                 {body}
@@ -259,8 +253,8 @@ function PlanContentTab({ plan }: { plan: PlanDetail }) {
             <div
               className="mt-3 text-[11.5px]"
               style={{
-                color: "var(--qw-fg-faint)",
-                fontFamily: "var(--qw-sans)",
+                color: "var(--devtools-fg-faint)",
+                fontFamily: "var(--devtools-sans)",
               }}
             >
               Showing preview — older plan records cap content at the first 500
@@ -295,8 +289,8 @@ function ContentModeToggle({
     <div
       className="flex overflow-hidden rounded-[6px]"
       style={{
-        background: "var(--qw-bg-elev)",
-        border: "1px solid var(--qw-border)",
+        background: "var(--devtools-bg-elev)",
+        border: "1px solid var(--devtools-border)",
       }}
     >
       {(["pretty", "raw"] as const).map((m) => {
@@ -308,8 +302,8 @@ function ContentModeToggle({
             onClick={() => onChange(m)}
             className="px-2 py-[2px] font-mono text-[10.5px] transition-colors"
             style={{
-              background: on ? "var(--qw-crux-soft)" : "transparent",
-              color: on ? "var(--qw-crux)" : "var(--qw-fg-muted)",
+              background: on ? "var(--devtools-crux-soft)" : "transparent",
+              color: on ? "var(--devtools-crux)" : "var(--devtools-fg-muted)",
               fontWeight: on ? 600 : 450,
             }}
           >
@@ -332,25 +326,25 @@ function VersionsCard({
     <div
       className="overflow-hidden rounded-[10px]"
       style={{
-        background: "var(--qw-bg-elev)",
-        border: "1px solid var(--qw-border)",
+        background: "var(--devtools-bg-elev)",
+        border: "1px solid var(--devtools-border)",
       }}
     >
       <div
         className="flex items-center gap-2 px-3.5 py-2.5"
         style={{
-          borderBottom: "1px solid var(--qw-border)",
-          background: "var(--qw-bg-muted)",
+          borderBottom: "1px solid var(--devtools-border)",
+          background: "var(--devtools-bg-muted)",
         }}
       >
         <span
           className="size-[7px] rounded-full"
-          style={{ background: "var(--qw-crux)" }}
+          style={{ background: "var(--devtools-crux)" }}
         />
         <span className="text-[12px] font-semibold">Versions</span>
         <span
           className="ml-auto font-mono text-[11px]"
-          style={{ color: "var(--qw-fg-faint)" }}
+          style={{ color: "var(--devtools-fg-faint)" }}
         >
           {versions.length}
         </span>
@@ -369,10 +363,10 @@ function VersionsCard({
               borderBottom:
                 i === versions.length - 1
                   ? "none"
-                  : "1px solid var(--qw-border)",
+                  : "1px solid var(--devtools-border)",
               background:
                 v.version === currentVersion
-                  ? "var(--qw-crux-soft)"
+                  ? "var(--devtools-crux-soft)"
                   : "transparent",
             }}
           >
@@ -383,7 +377,7 @@ function VersionsCard({
               {v.timestamp && (
                 <span
                   className="font-mono text-[11px]"
-                  style={{ color: "var(--qw-fg-faint)" }}
+                  style={{ color: "var(--devtools-fg-faint)" }}
                 >
                   {fmtTime(v.timestamp) ?? "—"}
                 </span>
@@ -391,7 +385,7 @@ function VersionsCard({
               {v.author && (
                 <span
                   className="font-mono text-[11px]"
-                  style={{ color: "var(--qw-fg-muted)" }}
+                  style={{ color: "var(--devtools-fg-muted)" }}
                 >
                   · {v.author}
                 </span>
@@ -399,18 +393,23 @@ function VersionsCard({
               {v.diff && (
                 <span
                   className="ml-auto font-mono text-[10.5px]"
-                  style={{ color: "var(--qw-fg-faint)" }}
+                  style={{ color: "var(--devtools-fg-faint)" }}
                 >
-                  <span style={{ color: "var(--qw-ok)" }}>+{v.diff.added}</span>
+                  <span style={{ color: "var(--devtools-ok)" }}>
+                    +{v.diff.added}
+                  </span>
                   {" / "}
-                  <span style={{ color: "var(--qw-danger)" }}>
+                  <span style={{ color: "var(--devtools-danger)" }}>
                     -{v.diff.removed}
                   </span>
                 </span>
               )}
             </div>
             {v.summary && (
-              <div className="text-[12px]" style={{ color: "var(--qw-fg)" }}>
+              <div
+                className="text-[12px]"
+                style={{ color: "var(--devtools-fg)" }}
+              >
                 {v.summary}
               </div>
             )}
@@ -435,20 +434,20 @@ function DiffStubCard({
     <div
       className="overflow-hidden rounded-[10px]"
       style={{
-        background: "var(--qw-bg-elev)",
-        border: "1px solid var(--qw-border)",
+        background: "var(--devtools-bg-elev)",
+        border: "1px solid var(--devtools-border)",
       }}
     >
       <div
         className="flex items-center gap-2 px-3.5 py-2.5"
         style={{
-          borderBottom: "1px solid var(--qw-border)",
-          background: "var(--qw-bg-muted)",
+          borderBottom: "1px solid var(--devtools-border)",
+          background: "var(--devtools-bg-muted)",
         }}
       >
         <span
           className="size-[7px] rounded-full"
-          style={{ background: "var(--qw-warn)" }}
+          style={{ background: "var(--devtools-warn)" }}
         />
         <span className="text-[12px] font-semibold">
           Diff · v{prev.version} → v{currentVersion}
@@ -508,7 +507,7 @@ function PlanTasksTab({ plan }: { plan: PlanDetail }) {
         right={
           <span
             className="font-mono text-[11px]"
-            style={{ color: "var(--qw-fg-faint)" }}
+            style={{ color: "var(--devtools-fg-faint)" }}
           >
             {[
               counts.done > 0 ? `${counts.done} done` : null,
@@ -527,8 +526,8 @@ function PlanTasksTab({ plan }: { plan: PlanDetail }) {
       <div
         className="overflow-hidden rounded-[10px]"
         style={{
-          background: "var(--qw-bg-elev)",
-          border: "1px solid var(--qw-border)",
+          background: "var(--devtools-bg-elev)",
+          border: "1px solid var(--devtools-border)",
         }}
       >
         <div
@@ -547,9 +546,9 @@ function PlanTasksTab({ plan }: { plan: PlanDetail }) {
             ]
               .filter(Boolean)
               .join(" "),
-            color: "var(--qw-fg-faint)",
-            borderBottom: "1px solid var(--qw-border)",
-            background: "var(--qw-bg-muted)",
+            color: "var(--devtools-fg-faint)",
+            borderBottom: "1px solid var(--devtools-border)",
+            background: "var(--devtools-bg-muted)",
           }}
         >
           <div />
@@ -629,10 +628,10 @@ function TaskRowDetail({
   const pct = task.progress != null ? Math.round(task.progress * 100) : null;
   const progressColor =
     task.status === "completed"
-      ? "var(--qw-ok)"
+      ? "var(--devtools-ok)"
       : task.status === "in_progress"
-        ? "var(--qw-crux)"
-        : "var(--qw-fg-faint)";
+        ? "var(--devtools-crux)"
+        : "var(--devtools-fg-faint)";
   const progressLabel = task.progressMessage ?? (pct != null ? `${pct}%` : "—");
   const cols = [
     "24px",
@@ -652,15 +651,15 @@ function TaskRowDetail({
       className="grid items-center gap-2.5 px-4 py-2.5 text-[12.5px]"
       style={{
         gridTemplateColumns: cols,
-        borderBottom: "1px solid var(--qw-border)",
-        background: isSub ? "var(--qw-bg-muted)" : "transparent",
+        borderBottom: "1px solid var(--devtools-border)",
+        background: isSub ? "var(--devtools-bg-muted)" : "transparent",
         opacity: removed ? 0.5 : 1,
       }}
     >
       <Checkbox done={task.status === "completed"} />
       <span
         className="font-mono text-[10.5px]"
-        style={{ color: "var(--qw-crux)" }}
+        style={{ color: "var(--devtools-crux)" }}
       >
         {task.id}
       </span>
@@ -685,7 +684,7 @@ function TaskRowDetail({
         <ProgressBar percent={pct ?? 0} color={progressColor} />
         <span
           className="min-w-[26px] truncate text-right font-mono text-[10.5px]"
-          style={{ color: "var(--qw-fg-muted)" }}
+          style={{ color: "var(--devtools-fg-muted)" }}
         >
           {progressLabel}
         </span>
@@ -693,14 +692,14 @@ function TaskRowDetail({
       <div className="flex min-w-0 flex-col">
         <span
           className="truncate font-mono text-[11.5px]"
-          style={{ color: "var(--qw-fg)" }}
+          style={{ color: "var(--devtools-fg)" }}
         >
           {task.assignee ?? "—"}
         </span>
         {task.model && (
           <span
             className="font-mono text-[10px]"
-            style={{ color: "var(--qw-fg-faint)" }}
+            style={{ color: "var(--devtools-fg-faint)" }}
           >
             {task.model}
           </span>
@@ -709,7 +708,7 @@ function TaskRowDetail({
       {hasSpan && (
         <span
           className="truncate font-mono text-[10.5px]"
-          style={{ color: "var(--qw-fg-muted)" }}
+          style={{ color: "var(--devtools-fg-muted)" }}
           title={task.spanId ?? undefined}
         >
           {task.spanId ?? "—"}
@@ -718,14 +717,14 @@ function TaskRowDetail({
       {hasTrace && (
         <span
           className="text-right font-mono text-[10.5px]"
-          style={{ color: "var(--qw-crux)" }}
+          style={{ color: "var(--devtools-crux)" }}
         >
           {shortTrace(task.traceId) ?? "—"}
         </span>
       )}
       <span
         className="text-right font-mono text-[11px]"
-        style={{ color: "var(--qw-fg-muted)" }}
+        style={{ color: "var(--devtools-fg-muted)" }}
       >
         {fmtDuration(task.durationMs) ?? "—"}
       </span>
@@ -750,8 +749,8 @@ function PlanVersionsTab({ versions }: { versions: readonly PlanVersion[] }) {
       <div
         className="overflow-hidden rounded-[10px]"
         style={{
-          background: "var(--qw-bg-elev)",
-          border: "1px solid var(--qw-border)",
+          background: "var(--devtools-bg-elev)",
+          border: "1px solid var(--devtools-border)",
         }}
       >
         {versions.map((v, i) => (
@@ -762,7 +761,7 @@ function PlanVersionsTab({ versions }: { versions: readonly PlanVersion[] }) {
               borderBottom:
                 i === versions.length - 1
                   ? "none"
-                  : "1px solid var(--qw-border)",
+                  : "1px solid var(--devtools-border)",
             }}
           >
             <div className="mb-1.5 flex flex-wrap items-center gap-2">
@@ -771,14 +770,14 @@ function PlanVersionsTab({ versions }: { versions: readonly PlanVersion[] }) {
               </Chip>
               <span
                 className="font-mono text-[11px]"
-                style={{ color: "var(--qw-fg-faint)" }}
+                style={{ color: "var(--devtools-fg-faint)" }}
               >
                 {fmtRelative(v.timestamp) ?? "—"}
               </span>
               {v.author && (
                 <span
                   className="font-mono text-[11px]"
-                  style={{ color: "var(--qw-fg-muted)" }}
+                  style={{ color: "var(--devtools-fg-muted)" }}
                 >
                   · {v.author}
                 </span>
@@ -786,18 +785,23 @@ function PlanVersionsTab({ versions }: { versions: readonly PlanVersion[] }) {
               {v.diff && (
                 <span
                   className="ml-auto font-mono text-[10.5px]"
-                  style={{ color: "var(--qw-fg-faint)" }}
+                  style={{ color: "var(--devtools-fg-faint)" }}
                 >
-                  <span style={{ color: "var(--qw-ok)" }}>+{v.diff.added}</span>
+                  <span style={{ color: "var(--devtools-ok)" }}>
+                    +{v.diff.added}
+                  </span>
                   {" / "}
-                  <span style={{ color: "var(--qw-danger)" }}>
+                  <span style={{ color: "var(--devtools-danger)" }}>
                     -{v.diff.removed}
                   </span>
                 </span>
               )}
             </div>
             {v.summary && (
-              <div className="text-[12.5px]" style={{ color: "var(--qw-fg)" }}>
+              <div
+                className="text-[12.5px]"
+                style={{ color: "var(--devtools-fg)" }}
+              >
                 {v.summary}
               </div>
             )}
@@ -822,7 +826,7 @@ function PlanEventsTab({ events }: { events: readonly PlanEventRecord[] }) {
         right={
           <span
             className="font-mono text-[11px]"
-            style={{ color: "var(--qw-fg-faint)" }}
+            style={{ color: "var(--devtools-fg-faint)" }}
           >
             live
           </span>
@@ -831,8 +835,8 @@ function PlanEventsTab({ events }: { events: readonly PlanEventRecord[] }) {
       <div
         className="overflow-hidden rounded-[10px]"
         style={{
-          background: "var(--qw-bg-elev)",
-          border: "1px solid var(--qw-border)",
+          background: "var(--devtools-bg-elev)",
+          border: "1px solid var(--devtools-border)",
         }}
       >
         {events.map((e, i) => {
@@ -855,10 +859,10 @@ function PlanEventsTab({ events }: { events: readonly PlanEventRecord[] }) {
                 borderBottom:
                   i === events.length - 1
                     ? "none"
-                    : "1px solid var(--qw-border)",
+                    : "1px solid var(--devtools-border)",
               }}
             >
-              <span style={{ color: "var(--qw-fg-faint)" }}>
+              <span style={{ color: "var(--devtools-fg-faint)" }}>
                 {fmtTime(e.timestamp) ?? "—"}
               </span>
               <span
@@ -868,20 +872,20 @@ function PlanEventsTab({ events }: { events: readonly PlanEventRecord[] }) {
                   height: 8,
                   borderRadius: 99,
                   background: t.color,
-                  boxShadow: `0 0 0 3px var(--qw-bg-elev), 0 0 0 4px color-mix(in oklab, ${t.color} 30%, transparent)`,
+                  boxShadow: `0 0 0 3px var(--devtools-bg-elev), 0 0 0 4px color-mix(in oklab, ${t.color} 30%, transparent)`,
                 }}
               />
               <span style={{ color: t.color }}>{e.kind}</span>
               {hasAgent && (
-                <span style={{ color: "var(--qw-fg-muted)" }}>
+                <span style={{ color: "var(--devtools-fg-muted)" }}>
                   {e.agent ?? "—"}
                 </span>
               )}
               <span
                 className="truncate text-[12.5px]"
                 style={{
-                  color: "var(--qw-fg)",
-                  fontFamily: "var(--qw-sans)",
+                  color: "var(--devtools-fg)",
+                  fontFamily: "var(--devtools-sans)",
                 }}
                 title={e.label ?? ""}
               >

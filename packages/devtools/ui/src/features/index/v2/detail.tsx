@@ -9,11 +9,10 @@
  */
 
 import { Fragment, type ComponentType, type ReactNode } from "react";
-import { T, toneColor, type Tone } from "./tokens";
+import { T } from "./tokens";
 import { Icon } from "./icons";
 import { Btn, Chip, SectionHead } from "./primitives";
 import {
-  Bar,
   ConfidenceMeter,
   FamilyDot,
   FidelityChip,
@@ -38,7 +37,6 @@ import {
   IndexDiagnostics,
   IndexObservability,
   IndexProvenance,
-  IndexQuality,
 } from "./sections";
 import { CatContributesSection, CatObservedSection } from "./observed";
 import { IndexHealthSection } from "./health";
@@ -181,7 +179,6 @@ const INDEX_SECTION_COMP: Record<string, ComponentType<{ def: ViewDef }>> = {
   contributes: CatContributesSection,
   observability: IndexObservability,
   relations: CatRelations,
-  quality: IndexQuality,
   health: IndexHealthSection,
 };
 
@@ -195,7 +192,6 @@ function indexSectionOrder(def: ViewDef): string[] {
       "observed",
       "source",
       "deps",
-      "quality",
       "observability",
       "relations",
       "health",
@@ -229,7 +225,6 @@ function indexSectionOrder(def: ViewDef): string[] {
       "source",
       "data",
       "relations",
-      "quality",
       "health",
     ],
     "mcp.server": [
@@ -249,7 +244,6 @@ function indexSectionOrder(def: ViewDef): string[] {
       "source",
       "data",
       "observability",
-      "quality",
       "relations",
       "health",
     ],
@@ -262,11 +256,10 @@ function indexSectionOrder(def: ViewDef): string[] {
       "deps",
       "source",
       "observability",
-      "quality",
       "relations",
       "health",
     ],
-    evaluation: ["hero", "config", "quality", "relations", "source", "health"],
+    eval: ["hero", "config", "relations", "source", "health"],
   };
   if (map[k]) return map[k];
   if (k.startsWith("routing."))
@@ -279,7 +272,6 @@ function indexSectionOrder(def: ViewDef): string[] {
       "observability",
       "relations",
       "health",
-      "quality",
     ];
   if (k.startsWith("composition."))
     return [
@@ -290,7 +282,6 @@ function indexSectionOrder(def: ViewDef): string[] {
       "data",
       "observability",
       "relations",
-      "quality",
       "health",
     ];
   if (k.startsWith("rag."))
@@ -301,7 +292,6 @@ function indexSectionOrder(def: ViewDef): string[] {
       "data",
       "source",
       "observability",
-      "quality",
       "relations",
       "health",
     ];
@@ -316,8 +306,8 @@ function indexSectionOrder(def: ViewDef): string[] {
     ];
   if (k === "media.operation" || k === "ingest.source")
     return ["hero", "media", "source", "observability", "relations", "health"];
-  if (k.startsWith("eval."))
-    return ["hero", "quality", "config", "source", "relations", "health"];
+  if (k === "eval.case")
+    return ["hero", "config", "source", "relations", "health"];
   if (k === "memory" || k === "blackboard")
     return [
       "hero",
@@ -333,10 +323,7 @@ function indexSectionOrder(def: ViewDef): string[] {
     return ["hero", "config", "data", "source", "relations", "health"];
   if (k === "guardrail" || k === "constraint")
     return ["hero", "config", "source", "deps", "relations", "health"];
-  if (k === "scorer")
-    return ["hero", "config", "source", "relations", "quality"];
-  if (k === "dataset" || k === "suite")
-    return ["hero", "quality", "relations", "health"];
+  if (k === "scorer") return ["hero", "config", "source", "relations"];
   return [
     "hero",
     "contract",
@@ -347,19 +334,9 @@ function indexSectionOrder(def: ViewDef): string[] {
     "deps",
     "observability",
     "relations",
-    "quality",
     "health",
   ];
 }
-
-const KIND_ACTIONS: Record<string, string[]> = {
-  agent: ["Run eval", "Playground"],
-  prompt: ["Run eval", "Playground"],
-  flow: ["Run", "Trace"],
-  tool: ["Test", "Trace"],
-  "eval.prompt": ["Run eval"],
-  suite: ["Run suite"],
-};
 
 // ── the detail view ──────────────────────────────────────────────────────────
 export function IndexDetail({
@@ -385,7 +362,6 @@ export function IndexDetail({
     );
   const m = kindMeta(def.kind);
   const chips = indexFactChips(def);
-  const q = def.quality;
   const directLints = idx
     .lintsForDef(def.id)
     .filter((f) => f.primaryDefinitionId === def.id);
@@ -395,7 +371,6 @@ export function IndexDetail({
   const order = configuredOrder.includes("observability")
     ? configuredOrder
     : [...configuredOrder, "observability"];
-  const actions = KIND_ACTIONS[def.kind] ?? ["Open in runs"];
 
   // quick-reference properties band — the at-a-glance health of the entry
   const props: ReactNode[] = [];
@@ -405,28 +380,6 @@ export function IndexDetail({
       <Chip key="status" tone={def.status === "stale" ? "warn" : "danger"} dot>
         {def.status}
       </Chip>,
-    );
-  }
-  if (q && q.passRate != null) {
-    const tone: Tone =
-      q.passRate >= 0.9 ? "ok" : q.passRate >= 0.75 ? "crux" : "warn";
-    props.push(
-      <span
-        key="pr"
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 6,
-          fontFamily: T.mono,
-          fontSize: 11,
-          color: T.fgMuted,
-        }}
-      >
-        <span style={{ width: 40 }}>
-          <Bar value={q.passRate} tone={tone} height={4} />
-        </span>
-        {Math.round(q.passRate * 100)}% · {q.runCount ?? 0} runs
-      </span>,
     );
   }
   if (def.runtimeJoin) {
@@ -538,19 +491,6 @@ export function IndexDetail({
             )}
           </div>
           <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-            {actions.map((a, i) => (
-              <Btn
-                key={a}
-                size="sm"
-                variant={i === 0 ? "primary" : "ghost"}
-                icon={i === 0 ? "play" : undefined}
-              >
-                {a}
-              </Btn>
-            ))}
-            <Btn size="sm" icon="github" variant="outline">
-              Source
-            </Btn>
             {onExpand && (
               <Btn size="sm" icon="grid" variant="outline" onClick={onExpand}>
                 Expand

@@ -41,8 +41,8 @@ function Card({ children }: { children: ReactNode }) {
     <div
       className="mb-1 overflow-hidden rounded-[10px]"
       style={{
-        background: "var(--qw-bg)",
-        border: "1px solid var(--qw-border)",
+        background: "var(--devtools-bg)",
+        border: "1px solid var(--devtools-border)",
       }}
     >
       {children}
@@ -71,7 +71,7 @@ function Sec({
       className="mb-7 rounded-[10px] transition-shadow"
       style={{
         scrollMarginTop: 14,
-        boxShadow: flash === id ? "0 0 0 2px var(--qw-crux-line)" : "none",
+        boxShadow: flash === id ? "0 0 0 2px var(--devtools-crux-line)" : "none",
       }}
     >
       {children}
@@ -235,7 +235,7 @@ export function ExplainTab({
           <SecBand
             icon="spark"
             title="How this is protected"
-            hint="quality coverage & gaps worth testing"
+            hint="Eval coverage and gaps worth testing"
             tone={uncovered ? "warn" : "ok"}
           />
           <ProtectBlock coverage={normalized.coverage} />
@@ -261,7 +261,7 @@ function Empty({ children }: { children: ReactNode }) {
   return (
     <div
       className="px-3.5 py-3 text-[12px]"
-      style={{ color: "var(--qw-fg-faint)" }}
+      style={{ color: "var(--devtools-fg-faint)" }}
     >
       {children}
     </div>
@@ -274,7 +274,7 @@ function OpenContext({ onClick }: { onClick: () => void }) {
       type="button"
       onClick={onClick}
       className="inline-flex items-center gap-1 font-mono text-[10.5px]"
-      style={{ color: "var(--qw-crux)" }}
+      style={{ color: "var(--devtools-crux)" }}
     >
       open Context
     </button>

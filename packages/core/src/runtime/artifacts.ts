@@ -50,6 +50,8 @@ export interface RuntimeArtifactManifestEval {
 export interface RuntimeArtifactManifest {
   /** Manifest schema version. */
   readonly version: 1;
+  /** Secret-free identity of the generated Eval persistence policy. */
+  readonly evalPrivacyFingerprint: string;
   /** Deterministically sorted runtime targets. */
   readonly targets: readonly RuntimeArtifactManifestTarget[];
   /** Deterministically sorted deployed Eval identities. */

@@ -13,7 +13,7 @@ export interface ResolvedInlineCase {
 export function resolveInlineCases(
   definition: EvalDefinitionV1,
 ): readonly ResolvedInlineCase[] {
-  assertTrials(definition.trials, "evaluation");
+  assertTrials(definition.trials, "Eval");
   if (definition.cases.length === 0) {
     throw new TypeError("planEval(): at least one Case is required.");
   }

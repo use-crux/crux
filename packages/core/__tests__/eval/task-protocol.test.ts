@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   EVAL_TASK_INTERNAL,
+  EVAL_TASK_IDENTITY_EPOCH,
   EvalTaskExecutionError,
   attachEvalTaskDescriptorForInternalUse,
   executeEvalTaskForInternalUse,
+  fingerprintManagedEvalTaskForInternalUse,
   getEvalTaskDescriptorForInternalUse,
 } from "../../src/eval/internal/task";
 
@@ -254,7 +256,80 @@ describe("Eval task execution protocol", () => {
     expect(descriptor.outputSchema).toBe(schema);
     expect(Object.isFrozen(schema)).toBe(false);
   });
+
+  it("identifies managed task contracts without hashing JavaScript source rendering", () => {
+    const local = managedTask(
+      async () => ({ object: "local closure" }),
+      undefined,
+    );
+    const remote = managedTask(
+      async () => ({ object: "different remote closure" }),
+      ["record-store"],
+    );
+    const originalToString = Function.prototype.toString;
+    let localFingerprint: string;
+    let remoteFingerprint: string;
+
+    try {
+      Object.defineProperty(Function.prototype, "toString", {
+        configurable: true,
+        writable: true,
+        value: () => {
+          throw new Error("task identity must not inspect function source");
+        },
+      });
+      localFingerprint = fingerprintManagedEvalTaskForInternalUse(
+        local,
+        "generated-definition-v1",
+      );
+      remoteFingerprint = fingerprintManagedEvalTaskForInternalUse(
+        remote,
+        "generated-definition-v1",
+      );
+    } finally {
+      Object.defineProperty(Function.prototype, "toString", {
+        configurable: true,
+        writable: true,
+        value: originalToString,
+      });
+    }
+
+    expect(EVAL_TASK_IDENTITY_EPOCH).toBe(1);
+    expect(localFingerprint!).toBe(remoteFingerprint!);
+    expect(
+      fingerprintManagedEvalTaskForInternalUse(
+        local,
+        "generated-definition-v2",
+      ),
+    ).not.toBe(localFingerprint!);
+  });
 });
+
+function managedTask(
+  execute: () => Promise<{ object: string }>,
+  requiredHostCapabilities: readonly "record-store"[] | undefined,
+) {
+  return attachEvalTaskDescriptorForInternalUse(async () => undefined, {
+    _tag: "CruxEvalTaskDescriptor",
+    operation: "generate",
+    adapterId: "ai-sdk",
+    capabilities: ["modelCalls"],
+    ...(requiredHostCapabilities !== undefined
+      ? { requiredHostCapabilities }
+      : {}),
+    defaults: {},
+    overrideKeys: [],
+    outputContractFingerprint: "output-v1",
+    callContractFingerprint: "call-v1",
+    projectIdentity: () => ({
+      reusable: true,
+      fingerprintMaterial: { contract: "adapter-projection-v1" },
+    }),
+    execute,
+    projectOutput: (result) => result.object,
+    projectResponse: () => ({}) as never,
+  });
+}
 
 function compatibleDescriptor(execute: () => Promise<unknown>) {
   return Object.freeze({

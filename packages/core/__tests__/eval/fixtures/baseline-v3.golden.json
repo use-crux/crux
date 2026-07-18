@@ -1,6 +1,6 @@
 {
   "schemaVersion": 3,
-  "baselineFingerprintEpoch": 2,
+  "baselineFingerprintEpoch": 4,
   "baselineId": "baseline-golden",
   "evalId": "support",
   "runId": "eval-run-golden",
@@ -30,5 +30,5 @@
     "taskFingerprint": "model-a"
   },
   "futureBaselineField": { "preserve": true },
-  "snapshotFingerprint": "c8f6d2dcd98c7b56c2b612ed471f1decc6b2805d19f787e5b7b46811de703c96"
+  "snapshotFingerprint": "f1589e0a1d1b3c7393078759a62ef82950cd6c6444e602bf8278391b19f10634"
 }

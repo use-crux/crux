@@ -107,9 +107,7 @@ var InspectRunDetail = readmodel.GetP[Deps, *readmodel.PathID, api.InspectRunDet
 		return record, readmodel.ErrNotFound
 	})
 
-type evalReads interface {
-	FlowRuns(context.Context) []store.FlowRun
-	FlowRun(context.Context, string) (*store.FlowRun, bool)
+type observedInjectionReads interface {
 	ObservedInjection(context.Context, int) (any, error)
 }
 
@@ -185,37 +183,6 @@ func (p *intQueryParam) Parse(req readmodel.Req) error {
 		return readmodel.BadRequest("invalid " + p.Name)
 	}
 	p.Value = limit.N
-	return nil
-}
-
-type evaluationProgressParams struct {
-	EvaluationID string
-	Limit        int
-}
-
-// EvaluationIDLimitParams exposes the shared evaluation-id + limit parser for
-// in-process direct clients that dispatch logical read-model routes without
-// going through net/http.
-type EvaluationIDLimitParams = evaluationProgressParams
-
-func (p *evaluationProgressParams) Parse(req readmodel.Req) error {
-	if req.PathValue != nil {
-		p.EvaluationID = req.PathValue("evaluationId")
-	}
-	if p.EvaluationID == "" {
-		return readmodel.BadRequest("evaluationId is required")
-	}
-	limit := &readmodel.Limit{Default: 20}
-	if err := limit.Parse(req); err != nil {
-		return err
-	}
-	if limit.N < 0 {
-		return readmodel.BadRequest("invalid limit")
-	}
-	if limit.N > 100 {
-		limit.N = 100
-	}
-	p.Limit = limit.N
 	return nil
 }
 
@@ -321,16 +288,7 @@ var (
 	LegacyObservedInjection = readmodel.GetP[Deps, *readmodel.Limit, any](Registry, "GET /api/project/index/observed-injection",
 		func() *readmodel.Limit { return &readmodel.Limit{Default: 250} },
 		func(ctx context.Context, deps Deps, params *readmodel.Limit) (any, error) {
-			return deps.Devtools.(evalReads).ObservedInjection(ctx, params.N)
-		})
-	LegacyFlowRun = readmodel.GetP[Deps, *readmodel.PathID, *store.FlowRun](Registry, "GET /api/flows/{flowId}",
-		func() *readmodel.PathID { return &readmodel.PathID{Name: "flowId"} },
-		func(ctx context.Context, deps Deps, params *readmodel.PathID) (*store.FlowRun, error) {
-			run, found := deps.Devtools.(evalReads).FlowRun(ctx, params.ID)
-			if !found {
-				return nil, readmodel.ErrNotFound
-			}
-			return run, nil
+			return deps.Devtools.(observedInjectionReads).ObservedInjection(ctx, params.N)
 		})
 	LegacyRuntimeFlows = readmodel.Get(Registry, "GET /api/runtime-flows",
 		func(ctx context.Context, deps Deps) ([]store.RuntimeFlowRunData, error) {
@@ -468,10 +426,6 @@ var (
 	LegacyDevtoolsContext = readmodel.Get(Registry, "GET /api/devtools/context",
 		func(ctx context.Context, deps Deps) (api.DevtoolsContext, error) {
 			return deps.Devtools.(runtimeEventReads).DevtoolsContext(ctx), nil
-		})
-	LegacyFlows = getSnapshot("GET /api/flows", "flow:snapshot", "flowRuns",
-		func(ctx context.Context, deps Deps) ([]store.FlowRun, error) {
-			return deps.Devtools.(evalReads).FlowRuns(ctx), nil
 		})
 	LegacyEmbeddingEvents = getSnapshot("GET /api/embedding", "runtime:snapshot", "embeddingEvents",
 		func(ctx context.Context, deps Deps) ([]store.EmbeddingEventData, error) {

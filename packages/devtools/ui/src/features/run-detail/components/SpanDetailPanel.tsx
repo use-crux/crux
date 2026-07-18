@@ -19,9 +19,9 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { Streamdown } from "streamdown";
 import { JsonTree } from "@/shared/components/JsonTree";
-import { Chip, Eyebrow, Kpi, type ChipTone } from "@/qw/shell/primitives";
-import { Icon } from "@/qw/shell/Icon";
-import { SectionErrorBoundary } from "@/qw/shell/SectionBoundary";
+import { Chip, Eyebrow, Kpi, type ChipTone } from "@/devtools/shell/primitives";
+import { Icon } from "@/devtools/shell/Icon";
+import { SectionErrorBoundary } from "@/devtools/shell/SectionBoundary";
 import {
   StreamingChunks,
   StreamingMeta,
@@ -140,7 +140,7 @@ function SpanErrorCard({ error }: { error: ResolvedSpanError }) {
     <CardShell
       label={
         <span className="flex items-center gap-2">
-          <Icon name="alert" size={12} color="var(--qw-danger)" />
+          <Icon name="alert" size={12} color="var(--devtools-danger)" />
           <span>Error</span>
         </span>
       }
@@ -148,7 +148,7 @@ function SpanErrorCard({ error }: { error: ResolvedSpanError }) {
         error.name ? (
           <span
             className="font-mono text-[10.5px]"
-            style={{ color: "var(--qw-danger)" }}
+            style={{ color: "var(--devtools-danger)" }}
           >
             {error.name}
           </span>
@@ -158,7 +158,7 @@ function SpanErrorCard({ error }: { error: ResolvedSpanError }) {
       <div className="px-3.5 py-3">
         <div
           className="font-mono text-[12.5px] font-semibold"
-          style={{ color: "var(--qw-danger)" }}
+          style={{ color: "var(--devtools-danger)" }}
         >
           {error.summary}
         </div>
@@ -175,9 +175,9 @@ function SpanErrorCard({ error }: { error: ResolvedSpanError }) {
           <pre
             className="mt-2 max-h-[220px] overflow-auto rounded-[6px] px-2.5 py-2 font-mono text-[11px]"
             style={{
-              background: "var(--qw-bg-muted)",
-              border: "1px solid var(--qw-border)",
-              color: "var(--qw-fg-muted)",
+              background: "var(--devtools-bg-muted)",
+              border: "1px solid var(--devtools-border)",
+              color: "var(--devtools-fg-muted)",
             }}
           >
             {error.stack}
@@ -192,14 +192,14 @@ function SpanErrorCard({ error }: { error: ResolvedSpanError }) {
                 key={`${item.kind ?? item.label}:${item.preview}`}
                 className="rounded-[6px] px-2.5 py-1.5 font-mono text-[11px]"
                 style={{
-                  background: "var(--qw-bg-muted)",
-                  border: "1px solid var(--qw-border)",
+                  background: "var(--devtools-bg-muted)",
+                  border: "1px solid var(--devtools-border)",
                 }}
               >
-                <div style={{ color: "var(--qw-danger)" }}>{item.label}</div>
+                <div style={{ color: "var(--devtools-danger)" }}>{item.label}</div>
                 <div
                   className="mt-1 break-words"
-                  style={{ color: "var(--qw-fg-muted)" }}
+                  style={{ color: "var(--devtools-fg-muted)" }}
                 >
                   {item.preview}
                 </div>
@@ -306,14 +306,14 @@ function OutputTab({
 
       {!spanError && trace?.error && isRoot && (
         <CardShell label="Error">
-          <div className="px-3.5 py-3" style={{ color: "var(--qw-danger)" }}>
+          <div className="px-3.5 py-3" style={{ color: "var(--devtools-danger)" }}>
             <div className="font-mono text-[12.5px] font-semibold">
               {trace.error.message}
             </div>
             {trace.error.category && (
               <div
                 className="mt-1 font-mono text-[11px]"
-                style={{ color: "var(--qw-fg-muted)" }}
+                style={{ color: "var(--devtools-fg-muted)" }}
               >
                 category · {trace.error.category}
               </div>
@@ -322,9 +322,9 @@ function OutputTab({
               <pre
                 className="mt-2 max-h-[200px] overflow-auto rounded-[6px] px-2.5 py-2 font-mono text-[11px]"
                 style={{
-                  background: "var(--qw-bg-muted)",
-                  border: "1px solid var(--qw-border)",
-                  color: "var(--qw-fg-muted)",
+                  background: "var(--devtools-bg-muted)",
+                  border: "1px solid var(--devtools-border)",
+                  color: "var(--devtools-fg-muted)",
                 }}
               >
                 {trace.error.stack}
@@ -338,7 +338,7 @@ function OutputTab({
         <CardShell
           label={isStreaming ? "Live stream" : "Stream replay"}
           right={
-            <span style={{ color: "var(--qw-fg-muted)" }}>
+            <span style={{ color: "var(--devtools-fg-muted)" }}>
               {streamChunks.length} chunks ·{" "}
               {tokenizedTextCount(undefined, streamChunks).toLocaleString()}{" "}
               tokens ·{" "}
@@ -387,7 +387,7 @@ function OutputTab({
             {ownerInfo && (
               <span
                 className="font-mono"
-                style={{ color: "var(--qw-fg-faint)" }}
+                style={{ color: "var(--devtools-fg-faint)" }}
               >
                 {ownerInfo}
               </span>
@@ -395,7 +395,7 @@ function OutputTab({
             {modelInfo && (modelInfo.provider || modelInfo.model) && (
               <span
                 className="font-mono"
-                style={{ color: "var(--qw-iris)" }}
+                style={{ color: "var(--devtools-iris)" }}
                 title={modelInfo.model}
               >
                 {[modelInfo.provider, shortModelId(modelInfo.model)]
@@ -421,7 +421,7 @@ function OutputTab({
       >
         <div
           className="px-3.5 py-3 text-[13.5px] leading-[1.65]"
-          style={{ fontFamily: "var(--qw-serif)" }}
+          style={{ fontFamily: "var(--devtools-serif)" }}
         >
           {fallbackText ? (
             <OutputTextView text={fallbackText} mode={outputMode} />
@@ -433,15 +433,15 @@ function OutputTab({
             <pre
               className="m-0 max-h-[360px] overflow-auto rounded-[6px] px-2.5 py-2 font-mono text-[11.5px]"
               style={{
-                background: "var(--qw-bg-muted)",
-                border: "1px solid var(--qw-border)",
-                color: "var(--qw-danger)",
+                background: "var(--devtools-bg-muted)",
+                border: "1px solid var(--devtools-border)",
+                color: "var(--devtools-danger)",
               }}
             >
               {asString(errorArt.preview)}
             </pre>
           ) : (
-            <span style={{ color: "var(--qw-fg-faint)" }}>
+            <span style={{ color: "var(--devtools-fg-faint)" }}>
               (no output for this span)
             </span>
           )}
@@ -467,26 +467,26 @@ function OutputTab({
                 key={i}
                 className="flex items-center gap-3 rounded-[6px] px-3 py-2 font-mono text-[11.5px]"
                 style={{
-                  background: "var(--qw-bg-elev)",
-                  border: "1px solid var(--qw-border)",
+                  background: "var(--devtools-bg-elev)",
+                  border: "1px solid var(--devtools-border)",
                 }}
               >
                 <Chip tone={d.status === "success" ? "ok" : "danger"} dot>
                   {d.status}
                 </Chip>
-                <span style={{ color: "var(--qw-fg)" }}>{d.model}</span>
-                <span style={{ color: "var(--qw-fg-muted)" }}>
+                <span style={{ color: "var(--devtools-fg)" }}>{d.model}</span>
+                <span style={{ color: "var(--devtools-fg-muted)" }}>
                   {fmtDuration(d.durationMs)}
                 </span>
                 {d.cost != null && (
-                  <span style={{ color: "var(--qw-fg-muted)" }}>
+                  <span style={{ color: "var(--devtools-fg-muted)" }}>
                     · {fmtCost(d.cost)}
                   </span>
                 )}
                 {d.error && (
                   <span
                     className="truncate"
-                    style={{ color: "var(--qw-danger)" }}
+                    style={{ color: "var(--devtools-danger)" }}
                   >
                     {d.error}
                   </span>
@@ -540,7 +540,7 @@ function OutputGrounding({ node }: { node: ObservabilityRunDetailNode }) {
     >
       <div
         className="flex flex-col gap-px"
-        style={{ background: "var(--qw-border)" }}
+        style={{ background: "var(--devtools-border)" }}
       >
         {markers.map((m, i) => {
           const sourceId =
@@ -557,13 +557,13 @@ function OutputGrounding({ node }: { node: ObservabilityRunDetailNode }) {
               key={i}
               className="flex items-center gap-2.5 px-3.5 py-1.5 font-mono text-[11.5px]"
               style={{
-                background: "var(--qw-bg-elev)",
+                background: "var(--devtools-bg-elev)",
                 opacity: isGrounded ? 1 : 0.7,
               }}
             >
               <span
                 style={{
-                  color: isGrounded ? "var(--qw-crux)" : "var(--qw-fg-faint)",
+                  color: isGrounded ? "var(--devtools-crux)" : "var(--devtools-fg-faint)",
                   width: 26,
                 }}
               >
@@ -571,7 +571,7 @@ function OutputGrounding({ node }: { node: ObservabilityRunDetailNode }) {
               </span>
               <span
                 className="flex-1 truncate"
-                style={{ color: "var(--qw-fg-muted)" }}
+                style={{ color: "var(--devtools-fg-muted)" }}
                 title={sourceId}
               >
                 {sourceId}
@@ -677,7 +677,7 @@ function ContextTab({
             <div className="px-3.5 py-3">
               <div
                 className="flex h-3 w-full overflow-hidden rounded-[4px]"
-                style={{ background: "var(--qw-bg-muted)" }}
+                style={{ background: "var(--devtools-bg-muted)" }}
               >
                 {withText.map((c, i) => {
                   const w = ((c.sizeBytes ?? 0) / visibleTotal) * 100;
@@ -689,7 +689,7 @@ function ContextTab({
                       style={{
                         width: `${w}%`,
                         background: colorFor(i),
-                        boxShadow: "inset 0 0 0 1px var(--qw-bg-elev)",
+                        boxShadow: "inset 0 0 0 1px var(--devtools-bg-elev)",
                       }}
                     />
                   );
@@ -708,9 +708,9 @@ function ContextTab({
                     }
                     className="inline-flex items-center gap-1.5 rounded-[4px] px-2 py-0.5 font-mono text-[11px] transition-opacity hover:opacity-90"
                     style={{
-                      background: "var(--qw-bg-muted)",
-                      color: "var(--qw-fg)",
-                      boxShadow: "inset 0 0 0 1px var(--qw-border)",
+                      background: "var(--devtools-bg-muted)",
+                      color: "var(--devtools-fg)",
+                      boxShadow: "inset 0 0 0 1px var(--devtools-border)",
                     }}
                     title={`Open ${c.family} · ${c.label}`}
                   >
@@ -720,12 +720,12 @@ function ContextTab({
                     />
                     {c.label}
                     {c.priority != null && (
-                      <span style={{ color: "var(--qw-fg-faint)" }}>
+                      <span style={{ color: "var(--devtools-fg-faint)" }}>
                         p{c.priority}
                       </span>
                     )}
                     {c.sizeBytes != null && (
-                      <span style={{ color: "var(--qw-fg-faint)" }}>
+                      <span style={{ color: "var(--devtools-fg-faint)" }}>
                         {(c.sizeBytes / 1024).toFixed(1)}kB
                       </span>
                     )}
@@ -757,15 +757,15 @@ function ContextTab({
                 key={c.label}
                 className="inline-flex items-center gap-1.5 rounded-[4px] px-2 py-0.5 font-mono text-[11px]"
                 style={{
-                  background: "var(--qw-bg-muted)",
-                  color: "var(--qw-fg-muted)",
-                  border: "1px dashed var(--qw-border)",
+                  background: "var(--devtools-bg-muted)",
+                  color: "var(--devtools-fg-muted)",
+                  border: "1px dashed var(--devtools-border)",
                 }}
                 title={`Predicate-only · ${c.label}`}
               >
                 {c.label}
                 {c.priority != null && (
-                  <span style={{ color: "var(--qw-fg-faint)" }}>
+                  <span style={{ color: "var(--devtools-fg-faint)" }}>
                     p{c.priority}
                   </span>
                 )}
@@ -785,9 +785,9 @@ function ContextTab({
                 onClick={() => navigate({ view: "library-index", toolName: t })}
                 className="rounded-[4px] px-2 py-0.5 font-mono text-[11px] transition-opacity hover:opacity-90"
                 style={{
-                  background: "var(--qw-bg-muted)",
-                  color: "var(--qw-fg)",
-                  boxShadow: "inset 0 0 0 1px var(--qw-border)",
+                  background: "var(--devtools-bg-muted)",
+                  color: "var(--devtools-fg)",
+                  boxShadow: "inset 0 0 0 1px var(--devtools-border)",
                 }}
                 title={`Open tool · ${t}`}
               >
@@ -802,7 +802,7 @@ function ContextTab({
         <CardShell label="System">
           <div
             className="px-3.5 py-3 whitespace-pre-wrap text-[12.5px] leading-[1.55]"
-            style={{ color: "var(--qw-fg)", fontFamily: "var(--qw-serif)" }}
+            style={{ color: "var(--devtools-fg)", fontFamily: "var(--devtools-serif)" }}
           >
             {messages.system}
           </div>
@@ -814,12 +814,12 @@ function ContextTab({
           <div
             className="rounded-[10px] px-4 py-3 text-[14px] leading-[1.6]"
             style={{
-              background: "var(--qw-bg-muted)",
-              border: "1px solid var(--qw-border)",
-              fontFamily: "var(--qw-serif)",
+              background: "var(--devtools-bg-muted)",
+              border: "1px solid var(--devtools-border)",
+              fontFamily: "var(--devtools-serif)",
             }}
           >
-            <div className="qw-prose">
+            <div className="devtools-prose">
               <Streamdown>{messages.prompt}</Streamdown>
             </div>
           </div>
@@ -879,21 +879,21 @@ function ResolvedContextCard({
     <div
       className="overflow-hidden rounded-[10px]"
       style={{
-        background: "var(--qw-bg-elev)",
-        border: "1px solid var(--qw-border)",
+        background: "var(--devtools-bg-elev)",
+        border: "1px solid var(--devtools-border)",
         borderLeft: `3px solid ${color}`,
       }}
     >
       <div
         className="flex flex-wrap items-center gap-2 px-3.5 py-2"
         style={{
-          borderBottom: "1px solid var(--qw-border)",
-          background: "var(--qw-bg-muted)",
+          borderBottom: "1px solid var(--devtools-border)",
+          background: "var(--devtools-bg-muted)",
         }}
       >
         <span
           className="font-mono text-[10.5px] uppercase tracking-[0.08em]"
-          style={{ color: "var(--qw-fg-faint)" }}
+          style={{ color: "var(--devtools-fg-faint)" }}
         >
           {entry.family}
         </span>
@@ -906,7 +906,7 @@ function ResolvedContextCard({
             )
           }
           className="font-mono text-[12px] transition-colors hover:underline"
-          style={{ color: "var(--qw-crux)" }}
+          style={{ color: "var(--devtools-crux)" }}
           title={`Open ${entry.family} · ${entry.label}`}
         >
           {entry.label}
@@ -918,7 +918,7 @@ function ResolvedContextCard({
         )}
         <span
           className="ml-auto font-mono text-[10.5px]"
-          style={{ color: "var(--qw-fg-muted)" }}
+          style={{ color: "var(--devtools-fg-muted)" }}
         >
           {entry.sizeBytes != null
             ? `${(entry.sizeBytes / 1024).toFixed(1)}kB`
@@ -932,7 +932,7 @@ function ResolvedContextCard({
         <>
           <div
             className="whitespace-pre-wrap px-3.5 py-3 text-[12.5px] leading-[1.55]"
-            style={{ fontFamily: "var(--qw-serif)" }}
+            style={{ fontFamily: "var(--devtools-serif)" }}
           >
             {shown}
           </div>
@@ -941,9 +941,9 @@ function ResolvedContextCard({
               onClick={() => setExpanded((v) => !v)}
               className="block w-full px-3.5 py-2 text-left font-mono text-[11px]"
               style={{
-                color: "var(--qw-crux)",
-                borderTop: "1px solid var(--qw-border)",
-                background: "var(--qw-bg-muted)",
+                color: "var(--devtools-crux)",
+                borderTop: "1px solid var(--devtools-border)",
+                background: "var(--devtools-bg-muted)",
               }}
             >
               {expanded ? "↑ collapse" : "↓ expand"}
@@ -957,7 +957,7 @@ function ResolvedContextCard({
       ) : (
         <div
           className="px-3.5 py-3 text-[11.5px]"
-          style={{ color: "var(--qw-fg-faint)" }}
+          style={{ color: "var(--devtools-fg-faint)" }}
         >
           (no body recorded)
         </div>
@@ -977,8 +977,8 @@ function PartCard({ part, color }: { part: InspectPart; color: string }) {
     <div
       className="overflow-hidden rounded-[10px]"
       style={{
-        background: "var(--qw-bg-elev)",
-        border: "1px solid var(--qw-border)",
+        background: "var(--devtools-bg-elev)",
+        border: "1px solid var(--devtools-border)",
         borderLeft: `3px solid ${color}`,
         opacity: part.skipped ? 0.65 : 1,
       }}
@@ -986,13 +986,13 @@ function PartCard({ part, color }: { part: InspectPart; color: string }) {
       <div
         className="flex flex-wrap items-center gap-2 px-3.5 py-2"
         style={{
-          borderBottom: "1px solid var(--qw-border)",
-          background: "var(--qw-bg-muted)",
+          borderBottom: "1px solid var(--devtools-border)",
+          background: "var(--devtools-bg-muted)",
         }}
       >
         <span
           className="font-mono text-[10.5px] uppercase tracking-[0.08em]"
-          style={{ color: "var(--qw-fg-faint)" }}
+          style={{ color: "var(--devtools-fg-faint)" }}
         >
           system
         </span>
@@ -1005,7 +1005,7 @@ function PartCard({ part, color }: { part: InspectPart; color: string }) {
             )
           }
           className="font-mono text-[12px] transition-colors hover:underline"
-          style={{ color: "var(--qw-crux)" }}
+          style={{ color: "var(--devtools-crux)" }}
           title={`Open ${parsed.kind} · ${parsed.id}`}
         >
           {part.source}
@@ -1013,14 +1013,14 @@ function PartCard({ part, color }: { part: InspectPart; color: string }) {
         {part.skipped && <Chip tone="muted">skipped</Chip>}
         <span
           className="ml-auto font-mono text-[10.5px]"
-          style={{ color: "var(--qw-fg-muted)" }}
+          style={{ color: "var(--devtools-fg-muted)" }}
         >
           {fmtTokens(part.tokens)} tok
         </span>
       </div>
       <div
         className="whitespace-pre-wrap px-3.5 py-3 text-[12.5px] leading-[1.55]"
-        style={{ fontFamily: "var(--qw-serif)" }}
+        style={{ fontFamily: "var(--devtools-serif)" }}
       >
         {text}
       </div>
@@ -1029,9 +1029,9 @@ function PartCard({ part, color }: { part: InspectPart; color: string }) {
           onClick={() => setExpanded((v) => !v)}
           className="block w-full px-3.5 py-2 text-left font-mono text-[11px]"
           style={{
-            color: "var(--qw-crux)",
-            borderTop: "1px solid var(--qw-border)",
-            background: "var(--qw-bg-muted)",
+            color: "var(--devtools-crux)",
+            borderTop: "1px solid var(--devtools-border)",
+            background: "var(--devtools-bg-muted)",
           }}
         >
           {expanded ? "↑ collapse" : "↓ expand"}
@@ -1046,16 +1046,16 @@ function DroppedRow({ entry }: { entry: DroppedContext }) {
     <div
       className="flex items-center gap-2.5 rounded-[6px] px-3 py-1.5 font-mono text-[11.5px]"
       style={{
-        background: "var(--qw-warn-soft)",
-        border: "1px solid var(--qw-warn-soft)",
-        color: "var(--qw-warn)",
+        background: "var(--devtools-warn-soft)",
+        border: "1px solid var(--devtools-warn-soft)",
+        color: "var(--devtools-warn)",
       }}
     >
       <span style={{ fontWeight: 600 }}>{entry.source}</span>
-      <span style={{ color: "var(--qw-fg-muted)" }}>
+      <span style={{ color: "var(--devtools-fg-muted)" }}>
         priority {entry.priority} · {fmtTokens(entry.tokens)} tok
       </span>
-      <span className="truncate" style={{ color: "var(--qw-fg)" }}>
+      <span className="truncate" style={{ color: "var(--devtools-fg)" }}>
         {entry.text.slice(0, 160)}
       </span>
     </div>
@@ -1067,12 +1067,12 @@ function ExcludedRow({ entry }: { entry: ExcludedContext }) {
     <div
       className="flex items-center gap-2.5 rounded-[6px] px-3 py-1.5 font-mono text-[11.5px]"
       style={{
-        background: "var(--qw-bg-muted)",
-        border: "1px solid var(--qw-border)",
-        color: "var(--qw-fg-muted)",
+        background: "var(--devtools-bg-muted)",
+        border: "1px solid var(--devtools-border)",
+        color: "var(--devtools-fg-muted)",
       }}
     >
-      <span style={{ fontWeight: 600, color: "var(--qw-fg)" }}>
+      <span style={{ fontWeight: 600, color: "var(--devtools-fg)" }}>
         {entry.source}
       </span>
       <span>· {entry.reason}</span>
@@ -1142,7 +1142,7 @@ function MessageBlock({ raw, label }: { raw: unknown; label?: string }) {
     <CardShell label={computedLabel}>
       <div
         className="flex flex-col gap-px"
-        style={{ background: "var(--qw-border)" }}
+        style={{ background: "var(--devtools-border)" }}
       >
         {items.map((m, i) =>
           isContentPart(m) ? (
@@ -1168,13 +1168,13 @@ function ContentPartRow({ part }: { part: AssistantContentPart }) {
           <div
             className="whitespace-pre-wrap text-[12.5px] leading-[1.6]"
             style={{
-              color: "var(--qw-fg-muted)",
-              fontFamily: "var(--qw-serif)",
+              color: "var(--devtools-fg-muted)",
+              fontFamily: "var(--devtools-serif)",
               fontStyle: "italic",
             }}
           >
             {part.text || (
-              <span style={{ color: "var(--qw-fg-faint)" }}>
+              <span style={{ color: "var(--devtools-fg-faint)" }}>
                 (empty reasoning)
               </span>
             )}
@@ -1187,10 +1187,10 @@ function ContentPartRow({ part }: { part: AssistantContentPart }) {
         <PartRow tone="crux" label="assistant" icon="spark">
           <div
             className="whitespace-pre-wrap text-[13px] leading-[1.6]"
-            style={{ color: "var(--qw-fg)", fontFamily: "var(--qw-serif)" }}
+            style={{ color: "var(--devtools-fg)", fontFamily: "var(--devtools-serif)" }}
           >
             {part.text || (
-              <span style={{ color: "var(--qw-fg-faint)" }}>(empty)</span>
+              <span style={{ color: "var(--devtools-fg-faint)" }}>(empty)</span>
             )}
           </div>
         </PartRow>
@@ -1208,7 +1208,7 @@ function ContentPartRow({ part }: { part: AssistantContentPart }) {
               {part.toolName && (
                 <>
                   {" "}
-                  <span style={{ color: "var(--qw-warn)" }}>·</span>{" "}
+                  <span style={{ color: "var(--devtools-warn)" }}>·</span>{" "}
                   {part.toolName}
                 </>
               )}
@@ -1219,7 +1219,7 @@ function ContentPartRow({ part }: { part: AssistantContentPart }) {
             part.toolCallId && (
               <span
                 className="font-mono text-[10.5px]"
-                style={{ color: "var(--qw-fg-faint)" }}
+                style={{ color: "var(--devtools-fg-faint)" }}
               >
                 {part.toolCallId}
               </span>
@@ -1229,7 +1229,7 @@ function ContentPartRow({ part }: { part: AssistantContentPart }) {
           {part.title && (
             <div
               className="mb-1.5 text-[12.5px]"
-              style={{ color: "var(--qw-fg-muted)" }}
+              style={{ color: "var(--devtools-fg-muted)" }}
             >
               {part.title}
             </div>
@@ -1238,8 +1238,8 @@ function ContentPartRow({ part }: { part: AssistantContentPart }) {
             <div
               className="overflow-auto rounded-[6px] px-2.5 py-1.5 font-mono text-[11.5px]"
               style={{
-                background: "var(--qw-bg)",
-                border: "1px solid var(--qw-border)",
+                background: "var(--devtools-bg)",
+                border: "1px solid var(--devtools-border)",
                 maxHeight: 240,
               }}
             >
@@ -1248,7 +1248,7 @@ function ContentPartRow({ part }: { part: AssistantContentPart }) {
           ) : (
             <span
               className="text-[12px]"
-              style={{ color: "var(--qw-fg-faint)" }}
+              style={{ color: "var(--devtools-fg-faint)" }}
             >
               (no args)
             </span>
@@ -1268,7 +1268,7 @@ function ContentPartRow({ part }: { part: AssistantContentPart }) {
               {part.toolName && (
                 <>
                   {" "}
-                  <span style={{ color: "var(--qw-ok)" }}>·</span>{" "}
+                  <span style={{ color: "var(--devtools-ok)" }}>·</span>{" "}
                   {part.toolName}
                 </>
               )}
@@ -1279,7 +1279,7 @@ function ContentPartRow({ part }: { part: AssistantContentPart }) {
             part.toolCallId && (
               <span
                 className="font-mono text-[10.5px]"
-                style={{ color: "var(--qw-fg-faint)" }}
+                style={{ color: "var(--devtools-fg-faint)" }}
               >
                 {part.toolCallId}
               </span>
@@ -1290,7 +1290,7 @@ function ContentPartRow({ part }: { part: AssistantContentPart }) {
             typeof result === "string" ? (
               <div
                 className="whitespace-pre-wrap text-[12.5px] leading-[1.55]"
-                style={{ color: "var(--qw-fg)", fontFamily: "var(--qw-serif)" }}
+                style={{ color: "var(--devtools-fg)", fontFamily: "var(--devtools-serif)" }}
               >
                 {result}
               </div>
@@ -1298,8 +1298,8 @@ function ContentPartRow({ part }: { part: AssistantContentPart }) {
               <div
                 className="overflow-auto rounded-[6px] px-2.5 py-1.5 font-mono text-[11.5px]"
                 style={{
-                  background: "var(--qw-bg)",
-                  border: "1px solid var(--qw-border)",
+                  background: "var(--devtools-bg)",
+                  border: "1px solid var(--devtools-border)",
                   maxHeight: 240,
                 }}
               >
@@ -1309,7 +1309,7 @@ function ContentPartRow({ part }: { part: AssistantContentPart }) {
           ) : (
             <span
               className="text-[12px]"
-              style={{ color: "var(--qw-fg-faint)" }}
+              style={{ color: "var(--devtools-fg-faint)" }}
             >
               (no result)
             </span>
@@ -1326,7 +1326,7 @@ function ContentPartRow({ part }: { part: AssistantContentPart }) {
         <PartRow tone="muted" label={part.type} icon="folder">
           <div
             className="font-mono text-[11.5px]"
-            style={{ color: "var(--qw-fg-muted)" }}
+            style={{ color: "var(--devtools-fg-muted)" }}
           >
             {typeof url === "string" ? url : asString(part)}
           </div>
@@ -1342,8 +1342,8 @@ function ContentPartRow({ part }: { part: AssistantContentPart }) {
           <div
             className="overflow-auto rounded-[6px] px-2.5 py-1.5 font-mono text-[11.5px]"
             style={{
-              background: "var(--qw-bg)",
-              border: "1px solid var(--qw-border)",
+              background: "var(--devtools-bg)",
+              border: "1px solid var(--devtools-border)",
               maxHeight: 200,
             }}
           >
@@ -1369,7 +1369,7 @@ function PartRow({
   children: ReactNode;
 }) {
   return (
-    <div className="px-3.5 py-3" style={{ background: "var(--qw-bg-elev)" }}>
+    <div className="px-3.5 py-3" style={{ background: "var(--devtools-bg-elev)" }}>
       <div className="mb-1.5 flex items-center gap-2">
         <Chip tone={tone}>{label}</Chip>
         <span className="ml-auto">{right}</span>
@@ -1395,13 +1395,13 @@ function ChatMessageRow({ msg }: { msg: AnyMessageItem }) {
   // Content can be a string or an array of content parts (multimodal /
   // tool-call-bearing). Render either case clearly.
   return (
-    <div className="px-3.5 py-3" style={{ background: "var(--qw-bg-elev)" }}>
+    <div className="px-3.5 py-3" style={{ background: "var(--devtools-bg-elev)" }}>
       <div className="mb-1 flex items-center gap-2">
         <Chip tone={tone}>{role}</Chip>
         {typeof msg.name === "string" && (
           <span
             className="font-mono text-[11px]"
-            style={{ color: "var(--qw-fg-muted)" }}
+            style={{ color: "var(--devtools-fg-muted)" }}
           >
             {msg.name}
           </span>
@@ -1411,11 +1411,11 @@ function ChatMessageRow({ msg }: { msg: AnyMessageItem }) {
         <div
           className="whitespace-pre-wrap text-[12.5px] leading-[1.55]"
           style={{
-            fontFamily: role === "tool" ? "var(--qw-mono)" : "var(--qw-serif)",
+            fontFamily: role === "tool" ? "var(--devtools-mono)" : "var(--devtools-serif)",
           }}
         >
           {content || (
-            <span style={{ color: "var(--qw-fg-faint)" }}>(empty)</span>
+            <span style={{ color: "var(--devtools-fg-faint)" }}>(empty)</span>
           )}
         </div>
       ) : Array.isArray(content) ? (
@@ -1431,8 +1431,8 @@ function ChatMessageRow({ msg }: { msg: AnyMessageItem }) {
                 key={j}
                 className="overflow-auto rounded-[6px] px-2.5 py-1.5 font-mono text-[11.5px]"
                 style={{
-                  background: "var(--qw-bg)",
-                  border: "1px solid var(--qw-border)",
+                  background: "var(--devtools-bg)",
+                  border: "1px solid var(--devtools-border)",
                   maxHeight: 200,
                 }}
               >
@@ -1445,15 +1445,15 @@ function ChatMessageRow({ msg }: { msg: AnyMessageItem }) {
         <div
           className="overflow-auto rounded-[6px] px-2.5 py-1.5 font-mono text-[11.5px]"
           style={{
-            background: "var(--qw-bg)",
-            border: "1px solid var(--qw-border)",
+            background: "var(--devtools-bg)",
+            border: "1px solid var(--devtools-border)",
             maxHeight: 200,
           }}
         >
           <JsonTree data={content as unknown} />
         </div>
       ) : (
-        <span className="text-[12px]" style={{ color: "var(--qw-fg-faint)" }}>
+        <span className="text-[12px]" style={{ color: "var(--devtools-fg-faint)" }}>
           (empty)
         </span>
       )}
@@ -1479,7 +1479,7 @@ function SpanSection({
         <Eyebrow>{title}</Eyebrow>
         <div
           className="h-px flex-1"
-          style={{ background: "var(--qw-border)" }}
+          style={{ background: "var(--devtools-border)" }}
         />
         {right}
       </div>
@@ -1516,7 +1516,7 @@ function ToolCallBox({
       return (
         <pre
           className="m-0 max-h-[360px] overflow-auto whitespace-pre-wrap font-mono text-[11.5px] leading-[1.6]"
-          style={{ color: "var(--qw-fg-muted)" }}
+          style={{ color: "var(--devtools-fg-muted)" }}
         >
           {asString(v)}
         </pre>
@@ -1536,14 +1536,14 @@ function ToolCallBox({
     <div
       className="flex items-center justify-between px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.06em]"
       style={{
-        color: "var(--qw-fg-faint)",
-        background: "var(--qw-bg-muted)",
-        borderBottom: "1px solid var(--qw-border)",
+        color: "var(--devtools-fg-faint)",
+        background: "var(--devtools-bg-muted)",
+        borderBottom: "1px solid var(--devtools-border)",
       }}
     >
       <span>{label}</span>
       <span className="flex items-center gap-2 normal-case">
-        {note && <span style={{ color: "var(--qw-fg-faint)" }}>{note}</span>}
+        {note && <span style={{ color: "var(--devtools-fg-faint)" }}>{note}</span>}
         {right}
       </span>
     </div>
@@ -1554,11 +1554,11 @@ function ToolCallBox({
         <Eyebrow>Call</Eyebrow>
         <div
           className="h-px flex-1"
-          style={{ background: "var(--qw-border)" }}
+          style={{ background: "var(--devtools-border)" }}
         />
         <div
           className="inline-flex overflow-hidden rounded-[6px] font-mono text-[10.5px]"
-          style={{ boxShadow: "inset 0 0 0 1px var(--qw-border)" }}
+          style={{ boxShadow: "inset 0 0 0 1px var(--devtools-border)" }}
         >
           {(["pretty", "raw"] as const).map((m) => (
             <button
@@ -1567,8 +1567,8 @@ function ToolCallBox({
               onClick={() => setMode(m)}
               className="px-2.5 py-[3px]"
               style={{
-                background: mode === m ? "var(--qw-crux-soft)" : "transparent",
-                color: mode === m ? "var(--qw-crux)" : "var(--qw-fg-faint)",
+                background: mode === m ? "var(--devtools-crux-soft)" : "transparent",
+                color: mode === m ? "var(--devtools-crux)" : "var(--devtools-fg-faint)",
                 fontWeight: mode === m ? 600 : 450,
               }}
             >
@@ -1579,7 +1579,7 @@ function ToolCallBox({
       </div>
       <div
         className="overflow-hidden rounded-[8px]"
-        style={{ border: "1px solid var(--qw-border)" }}
+        style={{ border: "1px solid var(--devtools-border)" }}
       >
         <HeaderRow label="args ↓" note={argsNote} />
         <div className="px-3.5 py-3">
@@ -1587,7 +1587,7 @@ function ToolCallBox({
             args,
             <span
               className="text-[12px]"
-              style={{ color: "var(--qw-fg-faint)" }}
+              style={{ color: "var(--devtools-fg-faint)" }}
             >
               (args not recorded — the model embeds them in the parent
               generation's messages artifact)
@@ -1608,7 +1608,7 @@ function ToolCallBox({
             result,
             <span
               className="text-[12px]"
-              style={{ color: "var(--qw-fg-faint)" }}
+              style={{ color: "var(--devtools-fg-faint)" }}
             >
               {running ? "running…" : "(no result recorded)"}
             </span>,
@@ -1839,14 +1839,14 @@ function MemoryTab({ node }: { node: ObservabilityRunDetailNode }) {
         </Chip>
         <span
           className="font-mono text-[11px]"
-          style={{ color: "var(--qw-fg-muted)" }}
+          style={{ color: "var(--devtools-fg-muted)" }}
         >
           {op}
         </span>
         {blockKind && !isBlackboard && (
           <span
             className="font-mono text-[11px]"
-            style={{ color: "var(--qw-fg-faint)" }}
+            style={{ color: "var(--devtools-fg-faint)" }}
           >
             · {blockKind}
           </span>
@@ -1854,7 +1854,7 @@ function MemoryTab({ node }: { node: ObservabilityRunDetailNode }) {
         {recalled > 0 && (
           <span
             className="font-mono text-[11px]"
-            style={{ color: "var(--qw-fg-faint)" }}
+            style={{ color: "var(--devtools-fg-faint)" }}
           >
             · recalled {recalled}
           </span>
@@ -1895,7 +1895,7 @@ function MemoryTab({ node }: { node: ObservabilityRunDetailNode }) {
         {memoryId && (
           <span
             className="ml-auto truncate font-mono text-[11px]"
-            style={{ color: "var(--qw-fg-faint)" }}
+            style={{ color: "var(--devtools-fg-faint)" }}
           >
             {memoryId}
           </span>
@@ -1916,9 +1916,9 @@ function MemoryTab({ node }: { node: ObservabilityRunDetailNode }) {
           <div
             className="rounded-[8px] px-3.5 py-2.5 font-mono text-[12px]"
             style={{
-              background: "var(--qw-bg-elev)",
-              border: "1px solid var(--qw-border)",
-              color: "var(--qw-fg)",
+              background: "var(--devtools-bg-elev)",
+              border: "1px solid var(--devtools-border)",
+              color: "var(--devtools-fg)",
             }}
           >
             {query}
@@ -1943,8 +1943,8 @@ function MemoryTab({ node }: { node: ObservabilityRunDetailNode }) {
           <div
             className="grid gap-2 rounded-[8px] px-3.5 py-3"
             style={{
-              background: "var(--qw-bg-elev)",
-              border: "1px solid var(--qw-border)",
+              background: "var(--devtools-bg-elev)",
+              border: "1px solid var(--devtools-border)",
               gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
             }}
           >
@@ -1988,7 +1988,7 @@ function MemoryTab({ node }: { node: ObservabilityRunDetailNode }) {
           >
             <div
               className="text-[11.5px]"
-              style={{ color: "var(--qw-fg-faint)" }}
+              style={{ color: "var(--devtools-fg-faint)" }}
             >
               Block previews weren't captured for this run.
             </div>
@@ -2004,22 +2004,22 @@ function MemoryTab({ node }: { node: ObservabilityRunDetailNode }) {
             className="grid overflow-hidden rounded-[8px]"
             style={{
               gridTemplateColumns: "1fr 1fr",
-              border: "1px solid var(--qw-border)",
+              border: "1px solid var(--devtools-border)",
             }}
           >
             {(["before", "after"] as const).map((side, k) => (
               <div
                 key={side}
                 style={{
-                  borderRight: k === 0 ? "1px solid var(--qw-border)" : "none",
+                  borderRight: k === 0 ? "1px solid var(--devtools-border)" : "none",
                 }}
               >
                 <div
                   className="px-3 py-1.5 font-mono text-[9.5px] uppercase tracking-[0.06em]"
                   style={{
-                    color: "var(--qw-fg-faint)",
-                    background: "var(--qw-bg-muted)",
-                    borderBottom: "1px solid var(--qw-border)",
+                    color: "var(--devtools-fg-faint)",
+                    background: "var(--devtools-bg-muted)",
+                    borderBottom: "1px solid var(--devtools-border)",
                   }}
                 >
                   {side}
@@ -2037,21 +2037,21 @@ function MemoryTab({ node }: { node: ObservabilityRunDetailNode }) {
             <div
               className="flex flex-col gap-1.5 rounded-[8px] px-3.5 py-3"
               style={{
-                background: "var(--qw-bg-elev)",
-                border: "1px solid var(--qw-border)",
+                background: "var(--devtools-bg-elev)",
+                border: "1px solid var(--devtools-border)",
               }}
             >
               {stateEntries.map(([label, value], i) => (
                 <div key={i} className="flex gap-2 font-mono text-[11.5px]">
                   <span
                     className="shrink-0"
-                    style={{ color: "var(--qw-fg-faint)" }}
+                    style={{ color: "var(--devtools-fg-faint)" }}
                   >
                     {label}
                   </span>
                   <span
                     className="min-w-0 flex-1 break-words"
-                    style={{ color: "var(--qw-fg)" }}
+                    style={{ color: "var(--devtools-fg)" }}
                   >
                     {compactValue(value)}
                   </span>
@@ -2078,14 +2078,14 @@ function BudgetBlockList({
     <div className="min-w-0">
       <div
         className="mb-1.5 font-mono text-[10px] uppercase tracking-[0.08em]"
-        style={{ color: "var(--qw-fg-faint)" }}
+        style={{ color: "var(--devtools-fg-faint)" }}
       >
         {label}
       </div>
       {blocks.length === 0 ? (
         <span
           className="font-mono text-[11px]"
-          style={{ color: "var(--qw-fg-faint)" }}
+          style={{ color: "var(--devtools-fg-faint)" }}
         >
           none
         </span>
@@ -2153,20 +2153,20 @@ function MemoryRecalledRow({
     <div
       className="flex gap-2.5 rounded-[8px] px-3 py-2.5"
       style={{
-        background: "var(--qw-bg-elev)",
-        border: "1px solid var(--qw-border)",
+        background: "var(--devtools-bg-elev)",
+        border: "1px solid var(--devtools-border)",
       }}
     >
       <span
         className="h-fit rounded-[3px] px-1.5 py-px font-mono text-[9px] uppercase"
-        style={{ color: "var(--qw-iris)", background: "var(--qw-iris-soft)" }}
+        style={{ color: "var(--devtools-iris)", background: "var(--devtools-iris-soft)" }}
       >
         {block}
       </span>
       <div className="min-w-0 flex-1">
         <div
           className="font-mono text-[11px]"
-          style={{ color: "var(--qw-crux)" }}
+          style={{ color: "var(--devtools-crux)" }}
         >
           {key}
         </div>
@@ -2174,7 +2174,7 @@ function MemoryRecalledRow({
           <div
             className="mt-0.5 text-[11.5px] leading-[1.5]"
             style={{
-              color: "var(--qw-fg-muted)",
+              color: "var(--devtools-fg-muted)",
               display: "-webkit-box",
               WebkitLineClamp: 2,
               WebkitBoxOrient: "vertical",
@@ -2208,8 +2208,8 @@ function SnapshotSide({ value }: { value: unknown }) {
               className="font-mono text-[10.5px]"
               style={{
                 color: s.startsWith("+")
-                  ? "var(--qw-ok)"
-                  : "var(--qw-fg-muted)",
+                  ? "var(--devtools-ok)"
+                  : "var(--devtools-fg-muted)",
               }}
             >
               {s}
@@ -2226,7 +2226,7 @@ function SnapshotSide({ value }: { value: unknown }) {
           <span
             key={i}
             className="font-mono text-[10.5px]"
-            style={{ color: "var(--qw-fg-muted)" }}
+            style={{ color: "var(--devtools-fg-muted)" }}
           >
             {k}: {compactValue(v, 1)}
           </span>
@@ -2238,7 +2238,7 @@ function SnapshotSide({ value }: { value: unknown }) {
     <span
       className="font-mono text-[10.5px]"
       style={{
-        color: value == null ? "var(--qw-fg-faint)" : "var(--qw-fg-muted)",
+        color: value == null ? "var(--devtools-fg-faint)" : "var(--devtools-fg-muted)",
       }}
     >
       {value == null ? "—" : compactValue(value)}
@@ -2284,15 +2284,15 @@ function ApprovalCard({ node }: { node: ObservabilityRunDetailNode }) {
 
   const tone: ChipTone = approved ? "ok" : denied ? "danger" : "warn";
   const color = approved
-    ? "var(--qw-ok)"
+    ? "var(--devtools-ok)"
     : denied
-      ? "var(--qw-danger)"
-      : "var(--qw-warn)";
+      ? "var(--devtools-danger)"
+      : "var(--devtools-warn)";
   const bg = approved
-    ? "var(--qw-ok-soft)"
+    ? "var(--devtools-ok-soft)"
     : denied
-      ? "var(--qw-danger-soft)"
-      : "var(--qw-warn-soft)";
+      ? "var(--devtools-danger-soft)"
+      : "var(--devtools-warn-soft)";
   const verb = approved ? "Approved" : denied ? "Denied" : "Pending";
 
   return (
@@ -2308,7 +2308,7 @@ function ApprovalCard({ node }: { node: ObservabilityRunDetailNode }) {
           </div>
           <div
             className="mt-0.5 text-[11.5px]"
-            style={{ color: "var(--qw-fg-muted)" }}
+            style={{ color: "var(--devtools-fg-muted)" }}
           >
             Human-in-the-loop decision on a gated tool call
             {waitMs != null ? ` · waited ${fmtDuration(waitMs)}` : ""}
@@ -2323,14 +2323,14 @@ function ApprovalCard({ node }: { node: ObservabilityRunDetailNode }) {
       <SpanSection title="Requested call">
         <div
           className="overflow-hidden rounded-[8px]"
-          style={{ border: "1px solid var(--qw-border)" }}
+          style={{ border: "1px solid var(--devtools-border)" }}
         >
           <div
             className="px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.06em]"
             style={{
-              color: "var(--qw-fg-faint)",
-              background: "var(--qw-bg-muted)",
-              borderBottom: "1px solid var(--qw-border)",
+              color: "var(--devtools-fg-faint)",
+              background: "var(--devtools-bg-muted)",
+              borderBottom: "1px solid var(--devtools-border)",
             }}
           >
             {gatedTool ?? "tool"} — requires approval
@@ -2341,7 +2341,7 @@ function ApprovalCard({ node }: { node: ObservabilityRunDetailNode }) {
             ) : (
               <span
                 className="font-mono text-[11px]"
-                style={{ color: "var(--qw-fg-faint)" }}
+                style={{ color: "var(--devtools-fg-faint)" }}
               >
                 (args not recorded)
               </span>
@@ -2365,31 +2365,31 @@ function planTaskStyle(s: string): {
   const v = s.toLowerCase();
   if (/done|complete|success|finished/.test(v))
     return {
-      color: "var(--qw-ok)",
-      soft: "var(--qw-ok-soft)",
+      color: "var(--devtools-ok)",
+      soft: "var(--devtools-ok-soft)",
       label: "done",
       done: true,
       strike: false,
     };
   if (/doing|active|progress|running/.test(v))
     return {
-      color: "var(--qw-crux)",
-      soft: "var(--qw-crux-soft)",
+      color: "var(--devtools-crux)",
+      soft: "var(--devtools-crux-soft)",
       label: "doing",
       done: false,
       strike: false,
     };
   if (/abandon|cancel|skip|fail|drop/.test(v))
     return {
-      color: "var(--qw-fg-faint)",
-      soft: "var(--qw-bg-muted)",
+      color: "var(--devtools-fg-faint)",
+      soft: "var(--devtools-bg-muted)",
       label: v,
       done: false,
       strike: true,
     };
   return {
-    color: "var(--qw-fg-muted)",
-    soft: "var(--qw-bg-muted)",
+    color: "var(--devtools-fg-muted)",
+    soft: "var(--devtools-bg-muted)",
     label: "todo",
     done: false,
     strike: false,
@@ -2440,9 +2440,9 @@ function PlanCard({ node }: { node: ObservabilityRunDetailNode }) {
           <div
             className="rounded-[8px] px-3.5 py-2.5 text-[13px]"
             style={{
-              background: "var(--qw-bg-elev)",
-              border: "1px solid var(--qw-border)",
-              fontFamily: "var(--qw-serif)",
+              background: "var(--devtools-bg-elev)",
+              border: "1px solid var(--devtools-border)",
+              fontFamily: "var(--devtools-serif)",
             }}
           >
             {goal}
@@ -2459,8 +2459,8 @@ function PlanCard({ node }: { node: ObservabilityRunDetailNode }) {
                   key={i}
                   className="flex items-center gap-2.5 rounded-[8px] px-3 py-2"
                   style={{
-                    background: "var(--qw-bg-elev)",
-                    border: "1px solid var(--qw-border)",
+                    background: "var(--devtools-bg-elev)",
+                    border: "1px solid var(--devtools-border)",
                     opacity: st.strike ? 0.55 : 1,
                   }}
                 >
@@ -2505,11 +2505,11 @@ function AgentPill({ name, dim }: { name: string; dim?: boolean }) {
       style={
         dim
           ? {
-              background: "var(--qw-bg-elev)",
-              border: "1px solid var(--qw-border)",
-              color: "var(--qw-fg-muted)",
+              background: "var(--devtools-bg-elev)",
+              border: "1px solid var(--devtools-border)",
+              color: "var(--devtools-fg-muted)",
             }
-          : { background: "var(--qw-iris-soft)", color: "var(--qw-iris)" }
+          : { background: "var(--devtools-iris-soft)", color: "var(--devtools-iris)" }
       }
     >
       {name}
@@ -2528,7 +2528,7 @@ function PayloadGrid({
       className="grid overflow-hidden rounded-[8px]"
       style={{
         gridTemplateColumns: `repeat(${cells.length}, 1fr)`,
-        border: "1px solid var(--qw-border)",
+        border: "1px solid var(--devtools-border)",
       }}
     >
       {cells.map((c, i) => (
@@ -2536,15 +2536,15 @@ function PayloadGrid({
           key={c.label}
           style={{
             borderRight:
-              i < cells.length - 1 ? "1px solid var(--qw-border)" : "none",
+              i < cells.length - 1 ? "1px solid var(--devtools-border)" : "none",
           }}
         >
           <div
             className="flex items-center justify-between px-3 py-1.5 font-mono text-[9.5px] uppercase tracking-[0.06em]"
             style={{
-              color: "var(--qw-fg-faint)",
-              background: "var(--qw-bg-muted)",
-              borderBottom: "1px solid var(--qw-border)",
+              color: "var(--devtools-fg-faint)",
+              background: "var(--devtools-bg-muted)",
+              borderBottom: "1px solid var(--devtools-border)",
             }}
           >
             <span>{c.label}</span>
@@ -2555,7 +2555,7 @@ function PayloadGrid({
               typeof c.body === "string" ? (
                 <div
                   className="text-[11.5px] leading-[1.5]"
-                  style={{ color: "var(--qw-fg-muted)" }}
+                  style={{ color: "var(--devtools-fg-muted)" }}
                 >
                   {c.body}
                 </div>
@@ -2565,7 +2565,7 @@ function PayloadGrid({
             ) : (
               <span
                 className="font-mono text-[11px]"
-                style={{ color: "var(--qw-fg-faint)" }}
+                style={{ color: "var(--devtools-fg-faint)" }}
               >
                 (none)
               </span>
@@ -2640,20 +2640,20 @@ function HandoffTab({
         {/* call-and-return banner */}
         <div
           className="flex items-center gap-2.5 rounded-[8px] px-3.5 py-3"
-          style={{ background: "var(--qw-iris-soft)" }}
+          style={{ background: "var(--devtools-iris-soft)" }}
         >
-          <Icon name="layers" size={15} color="var(--qw-iris)" />
+          <Icon name="layers" size={15} color="var(--devtools-iris)" />
           <div className="flex-1">
             <div className="text-[13px] font-semibold">
               <span className="font-mono">{fromAgent}</span> called{" "}
-              <span className="font-mono" style={{ color: "var(--qw-iris)" }}>
+              <span className="font-mono" style={{ color: "var(--devtools-iris)" }}>
                 {toAgent}
               </span>{" "}
               as a tool
             </div>
             <div
               className="mt-0.5 text-[11.5px]"
-              style={{ color: "var(--qw-fg-muted)" }}
+              style={{ color: "var(--devtools-fg-muted)" }}
             >
               Call-and-return — the parent keeps control and gets a value back.
               {subRun
@@ -2667,9 +2667,9 @@ function HandoffTab({
               onClick={() => onSelect(subRun.id)}
               className="shrink-0 rounded-[8px] px-2.5 py-1.5 font-mono text-[11px]"
               style={{
-                background: "var(--qw-bg-elev)",
-                border: "1px solid var(--qw-border)",
-                color: "var(--qw-crux)",
+                background: "var(--devtools-bg-elev)",
+                border: "1px solid var(--devtools-border)",
+                color: "var(--devtools-crux)",
               }}
             >
               Open sub-run →
@@ -2690,19 +2690,19 @@ function HandoffTab({
               key={k}
               className="flex-1 rounded-[8px] px-2.5 py-2"
               style={{
-                background: on ? "var(--qw-crux-soft)" : "var(--qw-bg-elev)",
-                border: `1px solid ${on ? "var(--qw-crux-line)" : "var(--qw-border)"}`,
+                background: on ? "var(--devtools-crux-soft)" : "var(--devtools-bg-elev)",
+                border: `1px solid ${on ? "var(--devtools-crux-line)" : "var(--devtools-border)"}`,
               }}
             >
               <div
                 className="font-mono text-[10.5px] font-semibold"
-                style={{ color: on ? "var(--qw-crux)" : "var(--qw-fg)" }}
+                style={{ color: on ? "var(--devtools-crux)" : "var(--devtools-fg)" }}
               >
                 {k}
               </div>
               <div
                 className="mt-0.5 text-[10px]"
-                style={{ color: "var(--qw-fg-muted)" }}
+                style={{ color: "var(--devtools-fg-muted)" }}
               >
                 {d}
               </div>
@@ -2750,14 +2750,14 @@ function HandoffTab({
             y1="6"
             x2="32"
             y2="6"
-            stroke="var(--qw-iris)"
+            stroke="var(--devtools-iris)"
             strokeWidth="1.6"
             strokeDasharray="4 3"
           />
           <path
             d="M32 2l6 4-6 4"
             fill="none"
-            stroke="var(--qw-iris)"
+            stroke="var(--devtools-iris)"
             strokeWidth="1.6"
           />
         </svg>
@@ -2765,7 +2765,7 @@ function HandoffTab({
         {hop != null && (
           <span
             className="font-mono text-[10.5px]"
-            style={{ color: "var(--qw-fg-faint)" }}
+            style={{ color: "var(--devtools-fg-faint)" }}
           >
             hop {hop}
             {maxHops != null ? ` of ${maxHops}` : ""} · control moves on
@@ -2782,7 +2782,7 @@ function HandoffTab({
       {handoffPath.length > 0 && (
         <div
           className="font-mono text-[11px]"
-          style={{ color: "var(--qw-fg-faint)" }}
+          style={{ color: "var(--devtools-fg-faint)" }}
         >
           path · {handoffPath.join(" → ")}
         </div>
@@ -2813,7 +2813,7 @@ function HandoffTab({
       {reason && (
         <div
           className="font-mono text-[10.5px]"
-          style={{ color: "var(--qw-fg-faint)" }}
+          style={{ color: "var(--devtools-fg-faint)" }}
         >
           reason · {reason}
         </div>
@@ -2878,15 +2878,15 @@ function EmbeddingCard({ node }: { node: ObservabilityRunDetailNode }) {
         >
           <div
             className="flex h-6 overflow-hidden rounded-[6px]"
-            style={{ boxShadow: "inset 0 0 0 1px var(--qw-border)" }}
+            style={{ boxShadow: "inset 0 0 0 1px var(--devtools-border)" }}
           >
             <div
               className="flex items-center justify-center font-mono text-[9.5px] font-semibold"
               style={{
                 width: `${(hit / total) * 100}%`,
-                background: "var(--qw-ok)",
+                background: "var(--devtools-ok)",
                 opacity: 0.85,
-                color: "var(--qw-bg)",
+                color: "var(--devtools-bg)",
               }}
             >
               cache {hit}
@@ -2894,9 +2894,9 @@ function EmbeddingCard({ node }: { node: ObservabilityRunDetailNode }) {
             <div
               className="flex flex-1 items-center justify-center font-mono text-[9.5px] font-semibold"
               style={{
-                background: "var(--qw-crux)",
+                background: "var(--devtools-crux)",
                 opacity: 0.7,
-                color: "var(--qw-bg)",
+                color: "var(--devtools-bg)",
               }}
             >
               fresh {total - hit}
@@ -2917,13 +2917,13 @@ function EmbeddingCard({ node }: { node: ObservabilityRunDetailNode }) {
                 key={k}
                 className="rounded-[8px] px-3 py-2.5"
                 style={{
-                  background: "var(--qw-bg-elev)",
-                  border: "1px solid var(--qw-border)",
+                  background: "var(--devtools-bg-elev)",
+                  border: "1px solid var(--devtools-border)",
                 }}
               >
                 <div
                   className="font-mono text-[10px] uppercase tracking-[0.04em]"
-                  style={{ color: "var(--qw-fg-faint)" }}
+                  style={{ color: "var(--devtools-fg-faint)" }}
                 >
                   {k}
                 </div>
@@ -2970,9 +2970,9 @@ function RetrievalSpanTab({ node }: { node: ObservabilityRunDetailNode }) {
           <div
             className="rounded-[8px] px-3.5 py-2.5 font-mono text-[12px]"
             style={{
-              background: "var(--qw-bg-elev)",
-              border: "1px solid var(--qw-border)",
-              color: "var(--qw-fg)",
+              background: "var(--devtools-bg-elev)",
+              border: "1px solid var(--devtools-border)",
+              color: "var(--devtools-fg)",
             }}
           >
             {query}
@@ -2987,7 +2987,7 @@ function RetrievalSpanTab({ node }: { node: ObservabilityRunDetailNode }) {
             funnel.length > 0 ? (
               <span
                 className="font-mono text-[11px]"
-                style={{ color: "var(--qw-fg-faint)" }}
+                style={{ color: "var(--devtools-fg-faint)" }}
               >
                 {funnel.join(" → ")}
               </span>
@@ -3009,33 +3009,33 @@ function RetrievalSpanTab({ node }: { node: ObservabilityRunDetailNode }) {
                   key={i}
                   className="min-w-[84px] flex-1 rounded-[8px] px-2.5 py-2"
                   style={{
-                    background: "var(--qw-bg-elev)",
-                    border: "1px solid var(--qw-border)",
+                    background: "var(--devtools-bg-elev)",
+                    border: "1px solid var(--devtools-border)",
                   }}
                 >
                   <div className="flex items-center gap-1.5">
                     <span
                       className="truncate font-mono text-[10px]"
-                      style={{ color: "var(--qw-fg-muted)" }}
+                      style={{ color: "var(--devtools-fg-muted)" }}
                     >
                       {name}
                     </span>
                     {status && status !== "success" && (
                       <span
                         className="size-1.5 rounded-full"
-                        style={{ background: "var(--qw-warn)" }}
+                        style={{ background: "var(--devtools-warn)" }}
                       />
                     )}
                   </div>
                   <div
                     className="font-mono text-[13px] font-semibold"
-                    style={{ color: "var(--qw-ok)" }}
+                    style={{ color: "var(--devtools-ok)" }}
                   >
                     {out ?? "·"}
                     {inH != null && out != null && inH !== out && (
                       <span
                         className="ml-1 text-[10px] font-normal"
-                        style={{ color: "var(--qw-fg-faint)" }}
+                        style={{ color: "var(--devtools-fg-faint)" }}
                       >
                         ← {inH}
                       </span>
@@ -3117,14 +3117,14 @@ function ChunkHitRow({
     <div
       className="flex gap-2.5 rounded-[8px] px-3 py-2.5"
       style={{
-        background: "var(--qw-bg-elev)",
-        border: "1px solid var(--qw-border)",
+        background: "var(--devtools-bg-elev)",
+        border: "1px solid var(--devtools-border)",
         opacity: used ? 1 : 0.66,
       }}
     >
       <span
         className="w-4 shrink-0 font-mono text-[11px]"
-        style={{ color: "var(--qw-fg-faint)" }}
+        style={{ color: "var(--devtools-fg-faint)" }}
       >
         #{rank}
       </span>
@@ -3137,7 +3137,7 @@ function ChunkHitRow({
                 navigate({ view: "library-index", contextId: sourceId })
               }
               className="font-mono text-[11px] hover:underline"
-              style={{ color: "var(--qw-crux)" }}
+              style={{ color: "var(--devtools-crux)" }}
             >
               {sourceId}
             </button>
@@ -3145,7 +3145,7 @@ function ChunkHitRow({
           {chunkId && (
             <span
               className="truncate font-mono text-[10.5px]"
-              style={{ color: "var(--qw-fg-faint)" }}
+              style={{ color: "var(--devtools-fg-faint)" }}
             >
               {chunkId}
             </span>
@@ -3155,7 +3155,7 @@ function ChunkHitRow({
           <div
             className="text-[11.5px] leading-[1.5]"
             style={{
-              color: "var(--qw-fg-muted)",
+              color: "var(--devtools-fg-muted)",
               display: "-webkit-box",
               WebkitLineClamp: 2,
               WebkitBoxOrient: "vertical",
@@ -3175,7 +3175,7 @@ function ChunkHitRow({
         {!used && (
           <span
             className="font-mono text-[9.5px]"
-            style={{ color: "var(--qw-fg-faint)" }}
+            style={{ color: "var(--devtools-fg-faint)" }}
           >
             unused
           </span>
@@ -3212,7 +3212,7 @@ function ToolsTab({ scope }: { scope: ObservabilityRunDetailNode }) {
               key={`${r.toolCallId ?? i}`}
               label={
                 <span className="flex items-center gap-2">
-                  <Icon name="sparkle" size={11} color="var(--qw-warn)" />
+                  <Icon name="sparkle" size={11} color="var(--devtools-warn)" />
                   <span className="font-mono" style={{ textTransform: "none" }}>
                     {r.toolName ?? "tool"}
                   </span>
@@ -3221,7 +3221,7 @@ function ToolsTab({ scope }: { scope: ObservabilityRunDetailNode }) {
                       className="font-mono"
                       style={{
                         textTransform: "none",
-                        color: "var(--qw-fg-faint)",
+                        color: "var(--devtools-fg-faint)",
                       }}
                     >
                       · {r.toolCallId.slice(0, 12)}
@@ -3232,7 +3232,7 @@ function ToolsTab({ scope }: { scope: ObservabilityRunDetailNode }) {
               right={
                 <span
                   className="font-mono"
-                  style={{ color: "var(--qw-fg-faint)" }}
+                  style={{ color: "var(--devtools-fg-faint)" }}
                 >
                   requested by{" "}
                   {r.owner.display?.label ?? r.owner.name ?? r.owner.primitive}
@@ -3279,11 +3279,11 @@ function ToolsTab({ scope }: { scope: ObservabilityRunDetailNode }) {
               >
                 <div
                   className="grid gap-px"
-                  style={{ background: "var(--qw-border)" }}
+                  style={{ background: "var(--devtools-border)" }}
                 >
                   <div
                     className="px-3.5 py-2"
-                    style={{ background: "var(--qw-bg-elev)" }}
+                    style={{ background: "var(--devtools-bg-elev)" }}
                   >
                     <Eyebrow>Args</Eyebrow>
                     <div className="mt-1.5">
@@ -3292,7 +3292,7 @@ function ToolsTab({ scope }: { scope: ObservabilityRunDetailNode }) {
                       ) : (
                         <span
                           className="text-[12px]"
-                          style={{ color: "var(--qw-fg-faint)" }}
+                          style={{ color: "var(--devtools-fg-faint)" }}
                         >
                           (no args)
                         </span>
@@ -3301,7 +3301,7 @@ function ToolsTab({ scope }: { scope: ObservabilityRunDetailNode }) {
                   </div>
                   <div
                     className="px-3.5 py-2"
-                    style={{ background: "var(--qw-bg-elev)" }}
+                    style={{ background: "var(--devtools-bg-elev)" }}
                   >
                     <Eyebrow>Result</Eyebrow>
                     <div className="mt-1.5">
@@ -3310,7 +3310,7 @@ function ToolsTab({ scope }: { scope: ObservabilityRunDetailNode }) {
                       ) : (
                         <span
                           className="text-[12px]"
-                          style={{ color: "var(--qw-fg-faint)" }}
+                          style={{ color: "var(--devtools-fg-faint)" }}
                         >
                           (no result)
                         </span>
@@ -3371,7 +3371,7 @@ function RetrievalAggregateTab({
                   {hits.length === 0 ? (
                     <span
                       className="text-[12px]"
-                      style={{ color: "var(--qw-fg-faint)" }}
+                      style={{ color: "var(--devtools-fg-faint)" }}
                     >
                       (no hits)
                     </span>
@@ -3598,26 +3598,26 @@ function ScoresTab({
                 ? "danger"
                 : "warn";
         const palette = {
-          ok: { fg: "var(--qw-ok)", bg: "var(--qw-ok-soft)" },
-          crux: { fg: "var(--qw-crux)", bg: "var(--qw-crux-soft)" },
-          warn: { fg: "var(--qw-warn)", bg: "var(--qw-warn-soft)" },
-          danger: { fg: "var(--qw-danger)", bg: "var(--qw-danger-soft)" },
-          muted: { fg: "var(--qw-fg-muted)", bg: "var(--qw-bg-muted)" },
-          iris: { fg: "var(--qw-iris)", bg: "var(--qw-iris-soft)" },
+          ok: { fg: "var(--devtools-ok)", bg: "var(--devtools-ok-soft)" },
+          crux: { fg: "var(--devtools-crux)", bg: "var(--devtools-crux-soft)" },
+          warn: { fg: "var(--devtools-warn)", bg: "var(--devtools-warn-soft)" },
+          danger: { fg: "var(--devtools-danger)", bg: "var(--devtools-danger-soft)" },
+          muted: { fg: "var(--devtools-fg-muted)", bg: "var(--devtools-bg-muted)" },
+          iris: { fg: "var(--devtools-iris)", bg: "var(--devtools-iris-soft)" },
         }[tone];
         return (
           <div
             key={`${e.name}-${i}`}
             className="rounded-[10px] px-4 py-3"
             style={{
-              background: "var(--qw-bg-elev)",
-              border: "1px solid var(--qw-border)",
+              background: "var(--devtools-bg-elev)",
+              border: "1px solid var(--devtools-border)",
             }}
           >
             <div className="mb-2 flex items-center justify-between">
               <span
                 className="font-mono text-[12px]"
-                style={{ color: "var(--qw-fg-muted)" }}
+                style={{ color: "var(--devtools-fg-muted)" }}
               >
                 {e.name}
               </span>
@@ -3631,7 +3631,7 @@ function ScoresTab({
             {e.reasoning && (
               <div
                 className="text-[12px] leading-[1.55]"
-                style={{ color: "var(--qw-fg-faint)" }}
+                style={{ color: "var(--devtools-fg-faint)" }}
               >
                 {e.reasoning}
               </div>
@@ -3707,19 +3707,19 @@ function CitationsTab({ node }: { node: ObservabilityRunDetailNode }) {
             key={`${num}-${path}-${i}`}
             className="flex items-center gap-2.5 rounded-[6px] px-3 py-2"
             style={{
-              background: "var(--qw-bg-elev)",
-              border: "1px solid var(--qw-border)",
+              background: "var(--devtools-bg-elev)",
+              border: "1px solid var(--devtools-border)",
             }}
           >
             <span
               className="font-mono text-[11.5px]"
-              style={{ color: "var(--qw-crux)" }}
+              style={{ color: "var(--devtools-crux)" }}
             >
               {num}
             </span>
             <span
               className="flex-1 truncate font-mono text-[11.5px]"
-              style={{ color: "var(--qw-fg)" }}
+              style={{ color: "var(--devtools-fg)" }}
               title={path}
             >
               {path}
@@ -3766,8 +3766,8 @@ function ChildrenTab({
             className="grid items-center gap-2.5 rounded-[8px] px-3 py-2 text-left transition-opacity hover:opacity-90"
             style={{
               gridTemplateColumns: "88px 1fr 90px 70px 70px",
-              background: "var(--qw-bg-elev)",
-              border: "1px solid var(--qw-border)",
+              background: "var(--devtools-bg-elev)",
+              border: "1px solid var(--devtools-border)",
               borderLeft: `3px solid ${accent}`,
             }}
           >
@@ -3776,26 +3776,26 @@ function ChildrenTab({
             </Chip>
             <span className="flex min-w-0 items-center gap-2 truncate font-mono text-[12px]">
               <span style={{ color: accent }}>{c.primitive}</span>
-              <span style={{ color: "var(--qw-fg-faint)" }}>·</span>
-              <span className="truncate" style={{ color: "var(--qw-fg)" }}>
+              <span style={{ color: "var(--devtools-fg-faint)" }}>·</span>
+              <span className="truncate" style={{ color: "var(--devtools-fg)" }}>
                 {c.display?.label ?? c.name}
               </span>
             </span>
             <span
               className="text-right font-mono text-[11px]"
-              style={{ color: "var(--qw-fg-muted)" }}
+              style={{ color: "var(--devtools-fg-muted)" }}
             >
               {fmtDuration(nodeDuration(c))}
             </span>
             <span
               className="text-right font-mono text-[11px]"
-              style={{ color: "var(--qw-fg-muted)" }}
+              style={{ color: "var(--devtools-fg-muted)" }}
             >
               {fmtTokens(nodeTokens(c))}
             </span>
             <span
               className="text-right font-mono text-[11px]"
-              style={{ color: "var(--qw-fg-muted)" }}
+              style={{ color: "var(--devtools-fg-muted)" }}
             >
               {fmtCost(nodeCost(c))}
             </span>
@@ -3931,8 +3931,8 @@ function SelectedSpanHeader({
         className="flex flex-shrink-0 flex-wrap items-center gap-2 font-mono text-[12px]"
         style={{
           padding: "11px 24px",
-          borderBottom: "1px solid var(--qw-border)",
-          background: "var(--qw-bg)",
+          borderBottom: "1px solid var(--devtools-border)",
+          background: "var(--devtools-bg)",
         }}
       >
         <Chip tone={statusTone(node.status)} dot>
@@ -3941,11 +3941,11 @@ function SelectedSpanHeader({
         <span style={{ color: accent, fontWeight: 600 }}>{node.primitive}</span>
         {(primaryProvider || primaryModel) && (
           <>
-            <span style={{ color: "var(--qw-fg-faint)" }}>·</span>
+            <span style={{ color: "var(--devtools-fg-faint)" }}>·</span>
             <span title={distinctModels.join(", ")}>
               {[primaryProvider, primaryModel].filter(Boolean).join(" · ")}
               {distinctModels.length > 1 && (
-                <span style={{ color: "var(--qw-fg-faint)" }}>
+                <span style={{ color: "var(--devtools-fg-faint)" }}>
                   {" +"}
                   {distinctModels.length - 1}
                 </span>
@@ -3955,15 +3955,15 @@ function SelectedSpanHeader({
         )}
         {node.display?.label && node.display.label !== node.primitive && (
           <>
-            <span style={{ color: "var(--qw-fg-faint)" }}>·</span>
-            <span style={{ color: "var(--qw-fg-muted)" }}>
+            <span style={{ color: "var(--devtools-fg-faint)" }}>·</span>
+            <span style={{ color: "var(--devtools-fg-muted)" }}>
               {node.display.label}
             </span>
           </>
         )}
         {finishReasons.length > 0 && (
           <>
-            <span style={{ color: "var(--qw-fg-faint)" }}>·</span>
+            <span style={{ color: "var(--devtools-fg-faint)" }}>·</span>
             {finishReasons.map((r) => (
               <Chip
                 key={r}
@@ -3979,18 +3979,18 @@ function SelectedSpanHeader({
         )}
         <span
           className="ml-auto flex items-center gap-2"
-          style={{ color: "var(--qw-fg-muted)" }}
+          style={{ color: "var(--devtools-fg-muted)" }}
         >
           <span>{dur}</span>
           {tokens !== "—" && (
             <>
-              <span style={{ color: "var(--qw-fg-faint)" }}>·</span>
+              <span style={{ color: "var(--devtools-fg-faint)" }}>·</span>
               <span>{tokens}</span>
             </>
           )}
           {cost !== "—" && (
             <>
-              <span style={{ color: "var(--qw-fg-faint)" }}>·</span>
+              <span style={{ color: "var(--devtools-fg-faint)" }}>·</span>
               <span>{cost}</span>
             </>
           )}
@@ -4002,12 +4002,12 @@ function SelectedSpanHeader({
         <div
           className="flex flex-shrink-0 items-center gap-3 px-4 py-2.5 text-[12px]"
           style={{
-            background: "var(--qw-iris-soft)",
-            color: "var(--qw-iris)",
-            borderBottom: "1px solid var(--qw-border)",
+            background: "var(--devtools-iris-soft)",
+            color: "var(--devtools-iris)",
+            borderBottom: "1px solid var(--devtools-border)",
           }}
         >
-          <Icon name="alert" size={13} color="var(--qw-iris)" />
+          <Icon name="alert" size={13} color="var(--devtools-iris)" />
           <span className="font-semibold">
             {node.primitive === "flow.suspension"
               ? `Suspended at: ${(findAttribute(node, "suspendPoint") as string | undefined) ?? node.name ?? "unknown"}`
@@ -4015,7 +4015,7 @@ function SelectedSpanHeader({
           </span>
           <span
             className="font-mono opacity-80"
-            style={{ color: "var(--qw-fg-muted)" }}
+            style={{ color: "var(--devtools-fg-muted)" }}
           >
             {node.primitive === "flow.suspension"
               ? `flowId · ${(findAttribute(node, "flowId") as string | undefined) ?? "—"}`
@@ -4027,16 +4027,16 @@ function SelectedSpanHeader({
         <div
           className="flex flex-shrink-0 items-center gap-3 px-4 py-2.5 text-[12px]"
           style={{
-            background: "var(--qw-danger-soft)",
-            color: "var(--qw-danger)",
-            borderBottom: "1px solid var(--qw-border)",
+            background: "var(--devtools-danger-soft)",
+            color: "var(--devtools-danger)",
+            borderBottom: "1px solid var(--devtools-border)",
           }}
         >
-          <Icon name="alert" size={13} color="var(--qw-danger)" />
+          <Icon name="alert" size={13} color="var(--devtools-danger)" />
           <span className="font-semibold">Blocked</span>
           <span
             className="font-mono opacity-80"
-            style={{ color: "var(--qw-fg-muted)" }}
+            style={{ color: "var(--devtools-fg-muted)" }}
           >
             guardrail / constraint / safety check stopped execution
           </span>
@@ -4051,7 +4051,7 @@ function SelectedSpanHeader({
           className="grid flex-shrink-0 gap-2 px-4 py-3"
           style={{
             gridTemplateColumns: "repeat(4, 1fr)",
-            borderBottom: "1px solid var(--qw-border)",
+            borderBottom: "1px solid var(--devtools-border)",
           }}
         >
           <Kpi
@@ -4137,8 +4137,8 @@ function TabStrip({
     <div
       className="flex flex-shrink-0 items-center px-4 text-[12px]"
       style={{
-        borderBottom: "1px solid var(--qw-border)",
-        background: "var(--qw-bg)",
+        borderBottom: "1px solid var(--devtools-border)",
+        background: "var(--devtools-bg)",
       }}
     >
       {tabs.map((id) => {
@@ -4151,12 +4151,12 @@ function TabStrip({
             onClick={() => onSelect(id)}
             className="-mb-px flex items-center gap-1.5 px-2.5 py-2"
             style={{
-              color: isActive ? "var(--qw-fg)" : "var(--qw-fg-muted)",
+              color: isActive ? "var(--devtools-fg)" : "var(--devtools-fg-muted)",
               borderBottom: isActive
-                ? "2px solid var(--qw-crux)"
+                ? "2px solid var(--devtools-crux)"
                 : "2px solid transparent",
               fontWeight: isActive ? 600 : 450,
-              fontFamily: "var(--qw-mono)",
+              fontFamily: "var(--devtools-mono)",
             }}
           >
             {TAB_LABEL[id]}
@@ -4164,10 +4164,10 @@ function TabStrip({
               <span
                 className="rounded-[3px] px-[5px] py-px font-mono text-[10px]"
                 style={{
-                  color: isActive ? "var(--qw-crux)" : "var(--qw-fg-faint)",
+                  color: isActive ? "var(--devtools-crux)" : "var(--devtools-fg-faint)",
                   background: isActive
-                    ? "var(--qw-crux-soft)"
-                    : "var(--qw-bg-muted)",
+                    ? "var(--devtools-crux-soft)"
+                    : "var(--devtools-bg-muted)",
                 }}
               >
                 {count}
@@ -4201,7 +4201,7 @@ export function SpanDetailPanel({
     return (
       <div
         className="px-4 py-3 text-[12px]"
-        style={{ color: "var(--qw-fg-muted)" }}
+        style={{ color: "var(--devtools-fg-muted)" }}
       >
         Run detail unavailable.
       </div>
@@ -4505,8 +4505,7 @@ export function SpanDetailPanel({
             )}
             {activeTab === "citations" && <CitationsTab node={node} />}
             {activeTab === "eval" &&
-              (node.primitive === "eval.run" ||
-              node.primitive === "eval.suite" ? (
+              (node.primitive === "eval.run" ? (
                 <EvalRunCard
                   node={node}
                   onSelect={(id) => onSelectSpan?.(id)}

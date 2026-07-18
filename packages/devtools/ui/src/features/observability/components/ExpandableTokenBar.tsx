@@ -18,25 +18,25 @@ interface ExpandableTokenBarProps {
 }
 
 const COLORS = [
-  "bg-(--qw-blue)",
-  "bg-(--qw-ok)",
-  "bg-(--qw-warn)",
-  "bg-(--qw-iris)",
-  "bg-(--qw-plum)",
-  "bg-(--qw-crux)",
-  "bg-(--qw-gold)",
-  "bg-(--qw-blue)",
+  "bg-(--devtools-blue)",
+  "bg-(--devtools-ok)",
+  "bg-(--devtools-warn)",
+  "bg-(--devtools-iris)",
+  "bg-(--devtools-plum)",
+  "bg-(--devtools-crux)",
+  "bg-(--devtools-gold)",
+  "bg-(--devtools-blue)",
 ];
 
 const BAR_COLORS = [
-  "bg-(--qw-blue-soft)",
-  "bg-(--qw-ok-soft)",
-  "bg-(--qw-warn-soft)",
-  "bg-(--qw-iris-soft)",
-  "bg-(--qw-plum-soft)",
-  "bg-(--qw-crux-soft)",
-  "bg-(--qw-gold-soft)",
-  "bg-(--qw-blue-soft)",
+  "bg-(--devtools-blue-soft)",
+  "bg-(--devtools-ok-soft)",
+  "bg-(--devtools-warn-soft)",
+  "bg-(--devtools-iris-soft)",
+  "bg-(--devtools-plum-soft)",
+  "bg-(--devtools-crux-soft)",
+  "bg-(--devtools-gold-soft)",
+  "bg-(--devtools-blue-soft)",
 ];
 
 function formatTokens(tokens: number): string {
@@ -81,7 +81,7 @@ export function ExpandableTokenBar({
             <span
               className={cn(
                 "tabular-nums font-medium",
-                exceedsBaseline ? "text-(--qw-warn)" : "text-zinc-300",
+                exceedsBaseline ? "text-(--devtools-warn)" : "text-zinc-300",
               )}
             >
               {formatTokens(totalTokens)} tokens
@@ -96,7 +96,7 @@ export function ExpandableTokenBar({
           <div
             className={cn(
               "relative flex h-5 rounded overflow-hidden bg-zinc-800",
-              exceedsBaseline && "ring-1 ring-(--qw-warn-soft)",
+              exceedsBaseline && "ring-1 ring-(--devtools-warn-soft)",
             )}
           >
             {activeParts.map((part, i) => {
@@ -197,7 +197,7 @@ export function ExpandableTokenBar({
           {droppedContexts.length > 0 && (
             <div className="px-3 py-2 space-y-1.5">
               <div className="flex items-center gap-1.5 text-xs text-zinc-500">
-                <TriangleAlertIcon className="h-3.5 w-3.5 text-(--qw-warn)" />
+                <TriangleAlertIcon className="h-3.5 w-3.5 text-(--devtools-warn)" />
                 <span>Dropped contexts ({droppedContexts.length})</span>
               </div>
               {droppedContexts.map((ctx) => (
@@ -253,7 +253,7 @@ export function ExpandableTokenBar({
                   {formatTokens(baseline.avgTokens)} tokens
                 </span>
                 {exceedsBaseline && (
-                  <span className="text-(--qw-warn) tabular-nums">
+                  <span className="text-(--devtools-warn) tabular-nums">
                     +{((totalTokens / baseline.avgTokens - 1) * 100).toFixed(0)}
                     %
                   </span>

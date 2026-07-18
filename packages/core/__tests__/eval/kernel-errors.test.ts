@@ -4,6 +4,7 @@ import { evaluate } from "../../src/eval/evaluate";
 import { executeEvalPlan } from "../../src/eval/internal/executor";
 import { planEval } from "../../src/eval/internal/planner";
 import type { EvalExecutionPorts } from "../../src/eval/internal/ports";
+import { nonBillablePlanningPorts } from "./reuse-test-harness";
 
 const task = Object.assign(async () => "unused", {
   _tag: "CruxTask" as const,
@@ -20,9 +21,13 @@ function definition(overrides: Record<string, unknown> = {}) {
 }
 
 function plan() {
-  return planEval(definition(), {
-    sourceKey: { relativeFile: "support.eval.ts", export: "default" },
-  });
+  return planEval(
+    definition(),
+    {
+      sourceKey: { relativeFile: "support.eval.ts", export: "default" },
+    },
+    nonBillablePlanningPorts(),
+  );
 }
 
 describe("portable Eval kernel failures", () => {
@@ -36,7 +41,7 @@ describe("portable Eval kernel failures", () => {
           sourceKey: { relativeFile: "support.eval.ts", export: "default" },
         },
       ),
-    ).rejects.toThrow("does not yet support Case `only` flags");
+    ).rejects.toThrow("received unresolved Case `only` flags");
   });
 
   it("persists an incomplete run after a task-host failure", async () => {

@@ -36,6 +36,7 @@ describe("Eval release readiness", () => {
       /\bcassettes?\b/iu,
       /\breplay-strict\b/iu,
       /\brecord-new\b/iu,
+      /\.crux\/quality\b/iu,
       /\bcrux eval (?:progress|cell-evidence|promote|mcp|init|import-traces)\b/u,
       /@use-crux\/core\/eval[\s\S]{0,200}\b(?:quality|suite|target|cassette)\b/u,
     ];
@@ -44,6 +45,113 @@ describe("Eval release readiness", () => {
     for (const file of files) {
       const source = await readRepoFile(file);
       if (forbidden.some((pattern) => pattern.test(source)))
+        violations.push(file);
+    }
+
+    expect(violations).toEqual([]);
+  });
+
+  it("keeps public configuration and examples free of the removed Quality model", async () => {
+    const files = [
+      "packages/core/src/runtime/config.ts",
+      "packages/core/src/runtime/config-types.ts",
+      "packages/core/__type_tests__/config-contract.ts",
+      "packages/core/CLAUDE.md",
+    ];
+    const violations: string[] = [];
+
+    for (const file of files) {
+      const source = await readRepoFile(file);
+      if (
+        /\bquality\s*:/iu.test(source) ||
+        /\breplay\s*:\s*["']record-new["']/iu.test(source) ||
+        /Quality system/iu.test(source)
+      ) {
+        violations.push(file);
+      }
+    }
+
+    expect(violations).toEqual([]);
+  });
+
+  it("does not retain parallel pre-Eval authoring, storage, or wire models", async () => {
+    const promptTypes = await readRepoFile(
+      "packages/core/src/prompt/prompt-types.ts",
+    );
+    expect(promptTypes).not.toMatch(/\btests\??\s*:/u);
+
+    const exactLegacyFiles = [
+      "packages/local/internal/store/evals.go",
+      "packages/local/tapes/cassettes.tape",
+      "packages/local/tapes/datasets.tape",
+      "packages/local/tapes/experiments.tape",
+    ];
+    for (const file of exactLegacyFiles) {
+      await expect(fileExists(file)).resolves.toBe(false);
+    }
+
+    const activeSources = await Promise.all(
+      [
+        "packages/core/src",
+        "packages/indexer/src",
+        "packages/local/internal",
+        "packages/devtools/ui/src",
+        "scripts/generate-observability-coverage-fixture.mjs",
+      ].map(documentationFiles),
+    );
+    const forbidden = [
+      /\bRagEvalRun\b/u,
+      /\bquality:event\b/u,
+      /\bquality-owned\b/u,
+      /["']quality-join["']/u,
+      /\bIndexQuality\b/u,
+      /\bLegacyFlow(?:Run|s)\b/u,
+      /\bCrux(?:Diff|Run)ComparisonReportPreview\b/u,
+      /\bCruxBaselinePromotionPreview\b/u,
+      /["']comparison\.(?:report|baseline|candidate)["']/u,
+      /["']baseline\.promotion["']/u,
+      /\beval\.suite\b/u,
+      /\b(?:scorerNames|gateKeys|variantNames)\b/u,
+    ];
+    const violations: string[] = [];
+    for (const file of activeSources.flat()) {
+      const source = await readRepoFile(file);
+      if (forbidden.some((pattern) => pattern.test(source)))
+        violations.push(file);
+    }
+    expect(violations).toEqual([]);
+  }, 30_000);
+
+  it("keeps Devtools source and the embedded UI free of Quality Workbench names", async () => {
+    const files = (
+      await Promise.all(
+        [
+          "packages/devtools/ui/src",
+          "packages/local/internal/assets/ui-embed",
+        ].map(devtoolsArtifactFiles),
+      )
+    ).flat();
+    const sharedForbidden = [
+      /Quality Workbench/iu,
+      /\bQW_NAV\b/u,
+      /--qw-/u,
+      /\bqw:/u,
+    ];
+    const legacyQwIdentifier = /\bQw[A-Z][A-Za-z0-9_]*/u;
+    const embeddedLegacyQwIdentifier =
+      /\bQw(?:Confirm|Menu|Shell|Sidebar|Tooltip)\b/u;
+    const violations: string[] = [];
+
+    for (const file of files) {
+      const source = await readRepoFile(file);
+      const identifierPattern = file.startsWith("packages/devtools/ui/src/")
+        ? legacyQwIdentifier
+        : embeddedLegacyQwIdentifier;
+      if (
+        legacyQwIdentifier.test(file) ||
+        identifierPattern.test(source) ||
+        sharedForbidden.some((pattern) => pattern.test(source))
+      )
         violations.push(file);
     }
 
@@ -59,7 +167,18 @@ describe("Eval release readiness", () => {
     expect(core.exports).toHaveProperty("./eval/node");
     expect(core.exports).toHaveProperty("./feedback");
     expect(core.exports).not.toHaveProperty("./quality");
+    expect(core.typesVersions?.["*"]).toMatchObject({
+      eval: ["src/eval/index.ts"],
+      "eval/node": ["src/eval/node.ts"],
+      feedback: ["src/feedback/index.ts"],
+    });
     expect(ai.exports).toHaveProperty("./feedback");
+    expect(cloudflare.homepage).toBe(
+      "https://cruxjs.dev/docs/guides/evals/runtime-hosts#cloudflare-workers",
+    );
+    await expect(
+      readRepoFile("scripts/stage-npm-packages.mjs"),
+    ).resolves.toContain("@use-crux/cloudflare");
     expect(cloudflare.scripts?.["test:workerd"]).toBe(
       "vitest run --config vitest.workerd.config.ts",
     );
@@ -68,7 +187,7 @@ describe("Eval release readiness", () => {
     ).resolves.toContain("extendedDiagnostics");
   });
 
-  it("keeps CLI help and the product-model feedback seam aligned", async () => {
+  it("keeps CLI help and the feedback guide aligned", async () => {
     const cliHelpTest = await readRepoFile(
       "packages/local/internal/commands/evalcmd/help_test.go",
     );
@@ -86,11 +205,12 @@ describe("Eval release readiness", () => {
       expect(cliHelpTest).toContain(token);
     }
 
-    const productModel = await readRepoFile(
-      "docs/plans/quality-evals-product-model.html",
+    const feedbackGuide = await readRepoFile(
+      "apps/docs/content/docs/guides/evals/feedback-and-review.mdx",
     );
-    expect(productModel).toContain("@use-crux/ai/feedback");
-    expect(productModel).not.toMatch(
+    expect(feedbackGuide).toContain("@use-crux/ai/feedback");
+    expect(feedbackGuide).toContain("getOwned");
+    expect(feedbackGuide).not.toMatch(
       /@use-crux\/core\/feedback[\s\S]{0,400}feedback<\/span>\(message,/u,
     );
   });
@@ -104,11 +224,30 @@ describe("Eval release readiness", () => {
     expect(guide).toContain("--offline");
     expect(guide).toContain("performs no network or external work");
   });
+
+  it("records the clean Eval replacement as a breaking release", async () => {
+    const changeset = await readRepoFile(".changeset/bright-evals-review.md");
+    for (const [packageName, bump] of Object.entries({
+      "@use-crux/core": "major",
+      "@use-crux/local": "major",
+      "@use-crux/indexer": "major",
+      "@use-crux/ai": "minor",
+      "@use-crux/cloudflare": "minor",
+      "@use-crux/convex": "minor",
+      "@use-crux/devtools": "minor",
+    })) {
+      expect(changeset).toContain(`"${packageName}": ${bump}`);
+    }
+  });
 });
 
 interface PackageManifest {
+  readonly homepage?: string;
   readonly exports?: Readonly<Record<string, unknown>>;
   readonly scripts?: Readonly<Record<string, string>>;
+  readonly typesVersions?: Readonly<
+    Record<string, Readonly<Record<string, readonly string[]>>>
+  >;
 }
 
 async function readPackage(path: string): Promise<PackageManifest> {
@@ -123,8 +262,16 @@ function readRepoFile(path: string): Promise<string> {
   return readFile(resolve(repoRoot, path), "utf8");
 }
 
+async function fileExists(path: string): Promise<boolean> {
+  try {
+    return (await stat(resolve(repoRoot, path))).isFile();
+  } catch {
+    return false;
+  }
+}
+
 async function publicDocumentationFiles(): Promise<string[]> {
-  const roots = ["README.md", "apps/docs/content", "examples"];
+  const roots = ["README.md", "apps/docs/app", "apps/docs/content", "examples"];
   const packageEntries = await readdir(resolve(repoRoot, "packages"));
   for (const entry of packageEntries) {
     const readme = `packages/${entry}/README.md`;
@@ -140,7 +287,7 @@ async function publicDocumentationFiles(): Promise<string[]> {
 async function documentationFiles(path: string): Promise<string[]> {
   const absolute = resolve(repoRoot, path);
   if ((await stat(absolute)).isFile()) {
-    return /\.(?:html|json|md|mdx|ts)$/u.test(path) ? [path] : [];
+    return /\.(?:go|html|json|md|mdx|mjs|rs|ts|tsx)$/u.test(path) ? [path] : [];
   }
   const entries = await readdir(absolute, { withFileTypes: true });
   return (
@@ -151,6 +298,24 @@ async function documentationFiles(path: string): Promise<string[]> {
             entry.name !== "node_modules" && !entry.name.startsWith("."),
         )
         .map((entry) => documentationFiles(`${path}/${entry.name}`)),
+    )
+  ).flat();
+}
+
+async function devtoolsArtifactFiles(path: string): Promise<string[]> {
+  const absolute = resolve(repoRoot, path);
+  if ((await stat(absolute)).isFile()) {
+    return /\.(?:css|html|js|jsx|ts|tsx)$/u.test(path) ? [path] : [];
+  }
+  const entries = await readdir(absolute, { withFileTypes: true });
+  return (
+    await Promise.all(
+      entries
+        .filter(
+          (entry) =>
+            entry.name !== "node_modules" && !entry.name.startsWith("."),
+        )
+        .map((entry) => devtoolsArtifactFiles(`${path}/${entry.name}`)),
     )
   ).flat();
 }

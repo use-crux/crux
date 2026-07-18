@@ -304,7 +304,6 @@ fn shared_relation_rule_and_coverage_fixtures_decode() {
         rule_ids,
         vec![
             "definition.missing_eval_coverage",
-            "quality.missing_baseline",
             "agent.unobservable_handoff",
             "prompt.missing_input_schema",
             "prompt.missing_output_schema",

@@ -42,7 +42,7 @@ type Batch struct {
 }
 
 type item struct {
-	quality      *api.InspectEvent
+	inspect      *api.InspectEvent
 	storeChanged bool
 	indexChanged bool
 }
@@ -71,7 +71,7 @@ func startDrains(ctx context.Context, src Sources, in chan<- item) {
 					if !ok {
 						return
 					}
-					forward(ctx, in, item{quality: &ev})
+					forward(ctx, in, item{inspect: &ev})
 				}
 			}
 		}()
@@ -116,8 +116,8 @@ func startDrains(ctx context.Context, src Sources, in chan<- item) {
 					if !ok {
 						return
 					}
-					qev := inspectEventFromObservability(ev)
-					forward(ctx, in, item{quality: &qev})
+					inspectEvent := inspectEventFromObservability(ev)
+					forward(ctx, in, item{inspect: &inspectEvent})
 				}
 			}
 		}()
@@ -202,9 +202,9 @@ func (p *pendingBatch) drain(revs Revisions) Batch {
 
 func batchOf(it item, revs *Revisions) Batch {
 	batch := Batch{Changed: NewDomains()}
-	if it.quality != nil {
-		batch.Inspect = append(batch.Inspect, *it.quality)
-		batch.Changed.AddAll(revs.BumpInspect(*it.quality))
+	if it.inspect != nil {
+		batch.Inspect = append(batch.Inspect, *it.inspect)
+		batch.Changed.AddAll(revs.BumpInspect(*it.inspect))
 	}
 	if it.storeChanged {
 		batch.StoreChanged = true

@@ -7,7 +7,6 @@ package tui
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -100,14 +99,10 @@ func (a *App) SetQuitRequestedCallback(fn func())     { a.onQuitRequested = fn }
 // Triggers the active screen to re-fetch.
 func (a *App) SendStoreChanged() { a.sendMsg(storeChangedMsg{}) }
 
-// SendInspectEvent forwards a typed quality event into the TUI event loop.
-// Used by `runTUI` to bridge `quality.EventBus` subscriptions into Bubbletea
+// SendInspectEvent forwards a typed Inspect event into the TUI event loop.
+// Used by `runTUI` to bridge Inspect subscriptions into Bubble Tea
 // without a JSON roundtrip.
 func (a *App) SendInspectEvent(ev api.InspectEvent) { a.sendMsg(inspectEventMsg(ev)) }
-
-// SendWSEvent is preserved for back-compat with any external WS bridge. The
-// payload is ignored in V1 Panels; screens listen via SendInspectEvent.
-func (a *App) SendWSEvent(_ json.RawMessage) { a.sendMsg(storeChangedMsg{}) }
 
 // SendMsg injects an already-typed Bubble Tea message into the TUI event loop.
 // It is the bridge entrypoint for batched, revision-tagged live updates.

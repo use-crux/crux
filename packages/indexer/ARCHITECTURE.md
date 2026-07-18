@@ -125,7 +125,7 @@ Experimental third-party extractor and relation authoring lives under
 local worker bundles for config/runtime/semantic work and third-party Static
 Index extension evidence. Go/Rust produce source patches.
 
-- `resolveProjectModel(...)` is host-only and produces the JSON-safe config/read-model view with provenance for selected root, package metadata, config status, source roots, ignored conventions, config-derived definitions, Quality defaults, and Project Model diagnostics.
+- `resolveProjectModel(...)` is host-only and produces the JSON-safe config/read-model view with provenance for selected root, package metadata, config status, source roots, ignored conventions, config-derived definitions, discovered Evals, and Project Model diagnostics.
 - `inspectProjectConfig(...)` (in `indexer/project-config-inspect.ts`) produces the effective-config
   read model behind `crux config inspect`. It imports `crux.config.ts` via `loadProjectConfig`
   (`CRUX_INDEX=1`, inert), merges built-in defaults across every `CruxConfig` domain, and tags each
@@ -191,7 +191,7 @@ The architectural rule is:
 > Explicit construction decides behavior; Crux discovery provides visibility.
 
 The Indexer may infer prompts, contexts, tools, memories, retrieval definitions, flows, agents,
-quality suites, `use[]` relationships, source roots, package roots, and stable source references when
+Evals, `use[]` relationships, source roots, package roots, and stable source references when
 those facts are visible in code. If a relationship is authored in code, such as a prompt using a
 memory that was constructed with a store, a local tooling config must not also require the user to
 register that prompt, memory, and store in a registry list.

@@ -5,6 +5,22 @@ import { caseFile, evaluate } from "../../src/eval";
 import { getEvalDefinitionForInternalUse } from "../../src/eval/internal/definition";
 
 describe("evaluate()", () => {
+  it("rejects unknown and removed top-level options with actionable remedies", () => {
+    const base = {
+      task: async (input: string) => input,
+      cases: [{ input: "hello" }],
+    };
+    expect(() => evaluate({ ...base, typo: true } as never)).toThrowError(
+      /unknown top-level option `typo`/i,
+    );
+    expect(() => evaluate({ ...base, dataset: [] } as never)).toThrowError(
+      /`dataset` was removed.*use `cases`.*caseFile/i,
+    );
+    expect(() => evaluate({ ...base, baseline: "run" } as never)).toThrowError(
+      /`baseline` was removed.*CLI or Devtools/i,
+    );
+  });
+
   it("defines one frozen inert Eval from an opaque task and inline Case", () => {
     const support = async (input: { question: string }) => ({
       answer: input.question,

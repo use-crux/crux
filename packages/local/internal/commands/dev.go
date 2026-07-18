@@ -107,7 +107,7 @@ func NewDevCmd(f *cli.Factory) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			inspectDir := filepath.Join(root, ".crux", "quality")
+			inspectDir := filepath.Join(root, ".crux", "evals")
 
 			// Start the Go HTTP/WS server directly (no Node.js subprocess).
 			devSrv := server.NewDevServer(server.DevServerOptions{

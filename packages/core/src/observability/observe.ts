@@ -92,6 +92,7 @@ import {
   CruxDeploymentIdentitySchema,
   type CruxDeploymentIdentity,
 } from "../project-index";
+import { normalizeRedactPaths } from "../shared/redaction";
 
 export {
   subscribeObservability,
@@ -109,6 +110,10 @@ export type { DeliveryDiagnostic } from "./delivery/engine";
 
 export interface ConfigureObservabilityOptions {
   transport?: CruxObservabilityTransport;
+  /** Single durable destination for feedback mutations. */
+  feedbackDestination?: import('../feedback').CruxFeedbackDestination;
+  /** Data-only redaction paths shared by persisted Eval and feedback records. */
+  redactPaths?: readonly string[];
   delivery?: ObservabilityDeliveryOptions;
   /**
    * Correlators applied when no active observability context provides them.
@@ -317,6 +322,8 @@ interface ObservabilityConfigurationLayer {
   readonly previousDeliveryOptions: ObservabilityDeliveryOptions | undefined;
   readonly previousDefaultCorrelators: CruxCorrelators | undefined;
   readonly previousDeploymentIdentity: CruxDeploymentIdentity | undefined;
+  readonly previousFeedbackDestination: import('../feedback').CruxFeedbackDestination | undefined;
+  readonly previousRedactPaths: readonly string[];
 }
 
 const maxEndedRunIds = 10_000;
@@ -716,6 +723,8 @@ export function configureObservability(
     previousDeliveryOptions: observabilityRegistry.delivery,
     previousDefaultCorrelators: observabilityRegistry.defaultCorrelators,
     previousDeploymentIdentity: observabilityRegistry.deploymentIdentity,
+    previousFeedbackDestination: observabilityRegistry.feedbackDestination,
+    previousRedactPaths: observabilityRegistry.redactPaths,
   };
   observabilityRegistry.nextConfigurationToken = layer.token;
   observabilityRegistry.configurationParents.set(
@@ -738,6 +747,12 @@ export function configureObservability(
   if (Object.hasOwn(options, "identity")) {
     observabilityRegistry.deploymentIdentity = nextDeploymentIdentity;
   }
+  if (Object.hasOwn(options, "feedbackDestination")) {
+    observabilityRegistry.feedbackDestination = options.feedbackDestination;
+  }
+  if (Object.hasOwn(options, "redactPaths")) {
+    observabilityRegistry.redactPaths = normalizeRedactPaths(options.redactPaths);
+  }
   markObservabilityConfigurationChanged();
   let restored = false;
   return () => {
@@ -754,6 +769,8 @@ export function configureObservability(
     observabilityRegistry.delivery = layer.previousDeliveryOptions;
     observabilityRegistry.defaultCorrelators = layer.previousDefaultCorrelators;
     observabilityRegistry.deploymentIdentity = layer.previousDeploymentIdentity;
+    observabilityRegistry.feedbackDestination = layer.previousFeedbackDestination;
+    observabilityRegistry.redactPaths = layer.previousRedactPaths;
     markObservabilityConfigurationChanged();
   };
 }
@@ -856,6 +873,16 @@ export function currentObservabilityTransport():
   return observabilityRegistry.transport;
 }
 
+/** Read the explicit durable feedback owner configured for this runtime. @internal */
+export function currentObservabilityFeedbackDestination() {
+  return observabilityRegistry.feedbackDestination;
+}
+
+/** Read the data-only persistence redaction policy configured for this runtime. @internal */
+export function currentObservabilityRedactPaths(): readonly string[] {
+  return observabilityRegistry.redactPaths;
+}
+
 export function resetObservabilityRuntime(): void {
   observabilityRegistry.activeConfigurationToken = 0;
   observabilityRegistry.configurationParents.clear();
@@ -863,6 +890,8 @@ export function resetObservabilityRuntime(): void {
   observabilityRegistry.delivery = undefined;
   observabilityRegistry.defaultCorrelators = undefined;
   observabilityRegistry.deploymentIdentity = undefined;
+  observabilityRegistry.feedbackDestination = undefined;
+  observabilityRegistry.redactPaths = Object.freeze([]);
   observabilityRegistry.resetGeneration += 1;
   observabilityRegistry.configurationGeneration += 1;
   resetModuleObservabilityState();

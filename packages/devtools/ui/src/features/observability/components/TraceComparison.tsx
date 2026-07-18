@@ -38,8 +38,8 @@ function DeltaIndicator({
     Math.abs(pct) < 5
       ? "text-zinc-400"
       : delta > 0
-        ? "text-(--qw-danger)"
-        : "text-(--qw-ok)";
+        ? "text-(--devtools-danger)"
+        : "text-(--devtools-ok)";
 
   return (
     <div className="flex items-center justify-between text-xs py-1">
@@ -61,10 +61,10 @@ function TraceColumn({ trace, label }: { trace: Trace; label: string }) {
   const usage = trace.result?.usage;
   const statusColor =
     trace.status === "success"
-      ? "text-(--qw-ok)"
+      ? "text-(--devtools-ok)"
       : trace.status === "error"
-        ? "text-(--qw-danger)"
-        : "text-(--qw-blue)";
+        ? "text-(--devtools-danger)"
+        : "text-(--devtools-blue)";
 
   return (
     <div className="flex-1 min-w-0 space-y-3">
@@ -105,7 +105,7 @@ function TraceColumn({ trace, label }: { trace: Trace; label: string }) {
         {trace.result?.cost != null && (
           <div className="text-xs">
             <span className="text-zinc-500">Cost: </span>
-            <span className="tabular-nums text-(--qw-ok)">
+            <span className="tabular-nums text-(--devtools-ok)">
               {formatCost(trace.result.cost)}
             </span>
           </div>

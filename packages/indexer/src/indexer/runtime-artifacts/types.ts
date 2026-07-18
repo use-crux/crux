@@ -1,7 +1,7 @@
 import type { RuntimeArtifactManifest } from "@use-crux/core/runtime";
 import type { ProjectDefinition } from "@use-crux/core/project-index";
 
-export type RuntimeArtifactHost = "next" | "convex";
+export type RuntimeArtifactHost = "next" | "convex" | "cloudflare";
 
 /** Options for generating runtime target manifests and host entry files. */
 export interface GenerateRuntimeArtifactsOptions {

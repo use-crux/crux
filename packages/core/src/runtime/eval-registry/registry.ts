@@ -17,10 +17,16 @@ import type {
   ResolveDeployedEvalRequest,
   ResolvedDeployedEval,
 } from "./types";
+import {
+  fingerprintEvalPersistencePolicy,
+  normalizeEvalPersistencePolicy,
+  type EvalPersistencePolicy,
+} from "../../eval/internal/redact";
 
 /** Validate and freeze a generated deployed Eval allowlist. */
 export function createDeployedEvalRegistry(input: {
   readonly entries: readonly DeployedEvalRegistryEntryInput[];
+  readonly persistencePolicy?: EvalPersistencePolicy;
 }): DeployedEvalRegistry {
   const entries = input.entries.map(normalizeEntry);
   const seen = new Set<string>();
@@ -33,8 +39,13 @@ export function createDeployedEvalRegistry(input: {
     }
     seen.add(entry.id);
   }
+  const persistencePolicy = normalizeEvalPersistencePolicy(
+    input.persistencePolicy,
+  );
   return Object.freeze({
     _tag: "CruxDeployedEvalRegistry" as const,
+    persistencePolicy,
+    privacyFingerprint: fingerprintEvalPersistencePolicy(persistencePolicy),
     entries: Object.freeze(entries),
   });
 }

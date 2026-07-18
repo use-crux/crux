@@ -605,17 +605,17 @@ const STATUS_MAP = {
   success: {
     border: "#065f46",
     bg: "rgba(6,78,59,0.15)",
-    badge: "bg-(--qw-ok-soft) text-(--qw-ok)",
+    badge: "bg-(--devtools-ok-soft) text-(--devtools-ok)",
   },
   error: {
     border: "#991b1b",
     bg: "rgba(127,29,29,0.15)",
-    badge: "bg-(--qw-danger-soft) text-(--qw-danger)",
+    badge: "bg-(--devtools-danger-soft) text-(--devtools-danger)",
   },
   running: {
     border: "#1e40af",
     bg: "rgba(30,58,138,0.15)",
-    badge: "bg-(--qw-blue-soft) text-(--qw-blue)",
+    badge: "bg-(--devtools-blue-soft) text-(--devtools-blue)",
   },
 };
 
@@ -634,33 +634,33 @@ const RootFlowNode = memo(function RootFlowNode({
         background: s.bg,
       }}
     >
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-(--qw-border)/40">
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-(--devtools-border)/40">
         <span
           className={`text-[10px] font-bold uppercase tracking-wider ${s.badge} rounded-md px-1.5 py-0.5`}
         >
           {data.childCount > 0 ? "Pipeline" : "Flow"}
         </span>
-        <span className="text-[12px] font-mono text-(--qw-fg) font-semibold truncate">
+        <span className="text-[12px] font-mono text-(--devtools-fg) font-semibold truncate">
           {data.name}
         </span>
-        <div className="ml-auto flex items-center gap-2 text-[10px] text-(--qw-fg-muted) tabular-nums">
+        <div className="ml-auto flex items-center gap-2 text-[10px] text-(--devtools-fg-muted) tabular-nums">
           <span>{fmt(data.durationMs, "ms")}</span>
           {data.totalTokens > 0 && <span>{fmt(data.totalTokens, "tok")}</span>}
           {data.totalCost > 0 && (
-            <span className="text-(--qw-ok)">{fmt(data.totalCost, "$")}</span>
+            <span className="text-(--devtools-ok)">{fmt(data.totalCost, "$")}</span>
           )}
-          <span className="text-(--qw-fg-faint)">{data.traceCount}x</span>
+          <span className="text-(--devtools-fg-faint)">{data.traceCount}x</span>
         </div>
       </div>
       <Handle
         type="target"
         position={Position.Top}
-        className="!bg-(--qw-fg-faint) !w-2.5 !h-2.5 !border-0 !-top-1.5"
+        className="!bg-(--devtools-fg-faint) !w-2.5 !h-2.5 !border-0 !-top-1.5"
       />
       <Handle
         type="source"
         position={Position.Bottom}
-        className="!bg-(--qw-fg-faint) !w-2.5 !h-2.5 !border-0 !-bottom-1.5"
+        className="!bg-(--devtools-fg-faint) !w-2.5 !h-2.5 !border-0 !-bottom-1.5"
       />
     </div>
   );
@@ -691,33 +691,33 @@ const ChildFlowNode = memo(function ChildFlowNode({
         <span
           className={`text-[9px] font-bold uppercase tracking-wider rounded px-1 py-0.5 ${
             isError
-              ? "bg-(--qw-danger-soft) text-(--qw-danger)"
+              ? "bg-(--devtools-danger-soft) text-(--devtools-danger)"
               : isRunning
-                ? "bg-(--qw-blue-soft) text-(--qw-blue)"
-                : "bg-(--qw-iris-soft) text-(--qw-iris)"
+                ? "bg-(--devtools-blue-soft) text-(--devtools-blue)"
+                : "bg-(--devtools-iris-soft) text-(--devtools-iris)"
           }`}
         >
           Sub-flow
         </span>
-        <span className="text-[10px] font-mono text-(--qw-iris) font-medium truncate">
+        <span className="text-[10px] font-mono text-(--devtools-iris) font-medium truncate">
           {data.name}
         </span>
-        <div className="ml-auto flex items-center gap-1.5 text-[9px] text-(--qw-fg-faint) tabular-nums">
+        <div className="ml-auto flex items-center gap-1.5 text-[9px] text-(--devtools-fg-faint) tabular-nums">
           <span>{fmt(data.durationMs, "ms")}</span>
           {data.totalCost > 0 && (
-            <span className="text-(--qw-ok)">{fmt(data.totalCost, "$")}</span>
+            <span className="text-(--devtools-ok)">{fmt(data.totalCost, "$")}</span>
           )}
         </div>
       </div>
       <Handle
         type="target"
         position={Position.Top}
-        className="!bg-(--qw-iris) !w-2 !h-2 !border-0 !-top-1"
+        className="!bg-(--devtools-iris) !w-2 !h-2 !border-0 !-top-1"
       />
       <Handle
         type="source"
         position={Position.Bottom}
-        className="!bg-(--qw-iris) !w-2 !h-2 !border-0 !-bottom-1"
+        className="!bg-(--devtools-iris) !w-2 !h-2 !border-0 !-bottom-1"
       />
     </div>
   );
@@ -729,24 +729,24 @@ const STEP_STATUS: Record<
   { dot: string; bg: string; border: string }
 > = {
   success: {
-    dot: "bg-(--qw-ok)",
-    bg: "bg-(--qw-bg-elev)/80",
-    border: "border-(--qw-border-strong)/60",
+    dot: "bg-(--devtools-ok)",
+    bg: "bg-(--devtools-bg-elev)/80",
+    border: "border-(--devtools-border-strong)/60",
   },
   error: {
-    dot: "bg-(--qw-danger)",
-    bg: "bg-(--qw-danger-soft)",
-    border: "border-(--qw-danger-soft)",
+    dot: "bg-(--devtools-danger)",
+    bg: "bg-(--devtools-danger-soft)",
+    border: "border-(--devtools-danger-soft)",
   },
   running: {
-    dot: "bg-(--qw-blue)",
-    bg: "bg-(--qw-blue-soft)",
-    border: "border-(--qw-blue-line)",
+    dot: "bg-(--devtools-blue)",
+    bg: "bg-(--devtools-blue-soft)",
+    border: "border-(--devtools-blue-line)",
   },
   slow: {
-    dot: "bg-(--qw-warn)",
-    bg: "bg-(--qw-warn-soft)",
-    border: "border-(--qw-warn-soft)",
+    dot: "bg-(--devtools-warn)",
+    bg: "bg-(--devtools-warn-soft)",
+    border: "border-(--devtools-warn-soft)",
   },
 };
 
@@ -754,7 +754,7 @@ const StepNode = memo(function StepNode({
   data,
 }: NodeProps<Node<StepNodeData>>) {
   const s = STEP_STATUS[data.status];
-  const ring = data.selected ? "ring-2 ring-(--qw-fg-muted)/60" : "";
+  const ring = data.selected ? "ring-2 ring-(--devtools-fg-muted)/60" : "";
 
   return (
     <div
@@ -764,36 +764,36 @@ const StepNode = memo(function StepNode({
       <Handle
         type="target"
         position={Position.Left}
-        className="!bg-(--qw-border) !w-1.5 !h-1.5 !border-0"
+        className="!bg-(--devtools-border) !w-1.5 !h-1.5 !border-0"
       />
       <Handle
         type="source"
         position={Position.Right}
-        className="!bg-(--qw-border) !w-1.5 !h-1.5 !border-0"
+        className="!bg-(--devtools-border) !w-1.5 !h-1.5 !border-0"
       />
       <div className="px-2 py-1.5">
         <div className="flex items-center gap-1 mb-0.5">
           <span
             className={`w-1.5 h-1.5 rounded-full ${s.dot} shrink-0 ${data.status === "running" ? "animate-pulse" : ""}`}
           />
-          <span className="text-[10px] font-medium text-(--qw-fg) truncate">
+          <span className="text-[10px] font-medium text-(--devtools-fg) truncate">
             {data.stepLabel}
           </span>
           {data.traceCount > 1 && (
-            <span className="text-[9px] text-(--qw-fg-faint)">
+            <span className="text-[9px] text-(--devtools-fg-faint)">
               {data.traceCount}x
             </span>
           )}
         </div>
         {data.model && (
-          <div className="text-[8px] text-(--qw-fg-faint) font-mono truncate mb-0.5">
+          <div className="text-[8px] text-(--devtools-fg-faint) font-mono truncate mb-0.5">
             {data.model}
           </div>
         )}
-        <div className="flex items-center gap-1.5 text-[9px] text-(--qw-fg-faint) tabular-nums">
+        <div className="flex items-center gap-1.5 text-[9px] text-(--devtools-fg-faint) tabular-nums">
           <span>{fmt(data.totalDurationMs, "ms")}</span>
           {data.totalCost > 0 && (
-            <span className="text-(--qw-ok)">{fmt(data.totalCost, "$")}</span>
+            <span className="text-(--devtools-ok)">{fmt(data.totalCost, "$")}</span>
           )}
         </div>
       </div>
@@ -805,27 +805,27 @@ const StepNode = memo(function StepNode({
 const StandaloneNode = memo(function StandaloneNode({
   data,
 }: NodeProps<Node<StandaloneData>>) {
-  const ring = data.selected ? "ring-2 ring-(--qw-fg-muted)/60" : "";
+  const ring = data.selected ? "ring-2 ring-(--devtools-fg-muted)/60" : "";
   const dot =
     data.status === "running"
-      ? "bg-(--qw-blue)"
+      ? "bg-(--devtools-blue)"
       : data.status === "error"
-        ? "bg-(--qw-danger)"
-        : "bg-(--qw-ok)";
+        ? "bg-(--devtools-danger)"
+        : "bg-(--devtools-ok)";
 
   return (
     <div
-      className={`rounded border border-(--qw-border-strong)/60 bg-(--qw-bg-elev)/80 ${ring} cursor-pointer hover:brightness-110 transition-all`}
+      className={`rounded border border-(--devtools-border-strong)/60 bg-(--devtools-bg-elev)/80 ${ring} cursor-pointer hover:brightness-110 transition-all`}
       style={{ width: STANDALONE_W, height: STANDALONE_H }}
     >
       <div className="px-2.5 py-2">
         <div className="flex items-center gap-1.5 mb-1">
           <span className={`w-1.5 h-1.5 rounded-full ${dot} shrink-0`} />
-          <span className="text-[10px] font-medium text-(--qw-fg) truncate">
+          <span className="text-[10px] font-medium text-(--devtools-fg) truncate">
             {data.promptId}
           </span>
         </div>
-        <div className="flex items-center gap-2 text-[9px] text-(--qw-fg-faint) tabular-nums">
+        <div className="flex items-center gap-2 text-[9px] text-(--devtools-fg-faint) tabular-nums">
           {data.model && <span className="font-mono">{data.model}</span>}
           {data.durationMs != null && <span>{fmt(data.durationMs, "ms")}</span>}
         </div>
@@ -878,7 +878,7 @@ export function SessionCanvas({
   if (nodes.length === 0) {
     return (
       <div
-        className={`h-[400px] flex items-center justify-center text-sm text-(--qw-fg-faint) ${className ?? ""}`}
+        className={`h-[400px] flex items-center justify-center text-sm text-(--devtools-fg-faint) ${className ?? ""}`}
       >
         No traces in this session
       </div>
@@ -887,7 +887,7 @@ export function SessionCanvas({
 
   return (
     <div
-      className={`h-[400px] rounded-lg border border-(--qw-border) bg-(--qw-bg) ${className ?? ""}`}
+      className={`h-[400px] rounded-lg border border-(--devtools-border) bg-(--devtools-bg) ${className ?? ""}`}
     >
       <ReactFlow
         nodes={nodes}
@@ -905,7 +905,7 @@ export function SessionCanvas({
         <Background color="#27272a" gap={20} />
         <Controls
           showInteractive={false}
-          className="!bg-(--qw-bg-elev) !border-(--qw-border-strong) !shadow-none [&>button]:!bg-(--qw-bg-muted) [&>button]:!border-(--qw-border-strong) [&>button]:!text-(--qw-fg-muted) [&>button:hover]:!bg-(--qw-border-strong)"
+          className="!bg-(--devtools-bg-elev) !border-(--devtools-border-strong) !shadow-none [&>button]:!bg-(--devtools-bg-muted) [&>button]:!border-(--devtools-border-strong) [&>button]:!text-(--devtools-fg-muted) [&>button:hover]:!bg-(--devtools-border-strong)"
         />
       </ReactFlow>
     </div>

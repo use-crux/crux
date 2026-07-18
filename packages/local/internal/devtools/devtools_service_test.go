@@ -1468,31 +1468,6 @@ func TestReindexProjectUsesResolvedStaticAstIndex(t *testing.T) {
 	}
 }
 
-func TestServicePublishesIndexQualityOnStoreChange(t *testing.T) {
-	s := store.NewStore()
-	service := NewService(s, nil)
-	defer service.Shutdown()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	events := service.IndexEvents().Subscribe(ctx)
-
-	promptID := "writer.prompt"
-	service.RegisterIndexSnapshot(ctx, store.IndexData{
-		Definitions: []store.ProjectDefinition{
-			{ID: "prompt:writer.prompt", Kind: "prompt", Name: "writer", Fidelity: "resolved"},
-		},
-	})
-	readIndexEvent(t, events)
-
-	s.EvalStart(store.EvalStartEvent{EvalID: "writer-eval", PromptID: &promptID, StartedAt: 42, TotalCases: 1})
-
-	definition := readIndexDefinitionWithQuality(t, events, "prompt:writer.prompt")
-	if definition.Quality.RunCount != 1 || definition.Quality.LastRunID != "writer-eval" {
-		t.Fatalf("published quality = %+v", definition.Quality)
-	}
-}
-
 func TestServicePublishesIndexModelPromptlyOnStoreChange(t *testing.T) {
 	s := store.NewStore()
 	service := NewService(s, nil)
@@ -1606,23 +1581,6 @@ func readTestFactCache(t *testing.T, root string, projectName string) (store.Ind
 
 func legacyIndexCacheFile(root string) string {
 	return filepath.Join(root, ".crux", "cache", "index", "index.json")
-}
-
-func readIndexDefinitionWithQuality(t *testing.T, events <-chan store.IndexData, id string) *store.ProjectDefinition {
-	t.Helper()
-	timeout := time.After(time.Second)
-	for {
-		select {
-		case index := <-events:
-			definition := findDefinition(index.Definitions, id)
-			if definition != nil && definition.Quality != nil {
-				return definition
-			}
-		case <-timeout:
-			t.Fatalf("timed out waiting for index quality on %s", id)
-			return nil
-		}
-	}
 }
 
 func waitClosed(t *testing.T, ch <-chan struct{}, message string) {

@@ -2,7 +2,7 @@
 
 **The SDK-agnostic foundation for harness engineering in TypeScript.**
 
-`@use-crux/core` gives you typed building blocks for everything around the model call: prompts, contexts, memory, retrieval, tools, guardrails, constraints, routing, evaluation, agents, flows, and observability.
+`@use-crux/core` gives you typed building blocks for everything around the model call: prompts, contexts, memory, retrieval, tools, guardrails, constraints, routing, Evals, agents, flows, and observability.
 
 Your app still owns product logic, routing, deployment, and data. Your model SDK still makes the call. Crux makes the harness around that call deliberate, inspectable, testable, and portable across adapters.
 
@@ -88,7 +88,7 @@ import { prompt } from "@use-crux/core";
 import { memory, facts, recentMessages } from "@use-crux/core/memory";
 import { retriever } from "@use-crux/core/retrieval";
 import { boundary, constraint, guardrail } from "@use-crux/core/safety";
-import { generate } from "@use-crux/ai";
+import { generate, stableModel } from "@use-crux/ai";
 import { openai } from "@ai-sdk/openai";
 import { z } from "zod";
 
@@ -160,11 +160,12 @@ Create a normal callable task with your adapter, then point an inert Eval at
 that exact task. Cases and output remain inferred from the task.
 
 ```ts
-import { generate } from "@use-crux/ai";
+import { generate, stableModel } from "@use-crux/ai";
 import { evaluate } from "@use-crux/core/eval";
+import { supportModel, supportPrompt } from "./src/support-config";
 
 export const support = generate.task(supportPrompt, {
-  model: supportModel,
+  model: stableModel(supportModel),
   temperature: 0.2,
 });
 

@@ -5,18 +5,16 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/devtools"
 	"github.com/use-crux/crux/packages/local/internal/inspect"
 	"github.com/use-crux/crux/packages/local/internal/observability"
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"github.com/use-crux/crux/packages/local/internal/runtimebridge"
 	"github.com/use-crux/crux/packages/local/internal/store"
 	_ "modernc.org/sqlite"
@@ -214,6 +212,24 @@ func TestHTTPServer_cors_headers(t *testing.T) {
 	}
 	if v := deniedResp.Header.Get("Access-Control-Allow-Origin"); v != "" {
 		t.Errorf("CORS Allow-Origin = %q, want empty for denied origin", v)
+	}
+
+	// The same boundary protects local mutations such as Run Eval before the
+	// coordinator can start.
+	deniedMutationReq, _ := http.NewRequest(
+		http.MethodPost,
+		ts.URL+"/api/eval/runs",
+		strings.NewReader(`{"evalId":"support","confirmUnknownCost":true}`),
+	)
+	deniedMutationReq.Header.Set("Content-Type", "application/json")
+	deniedMutationReq.Header.Set("Origin", "https://evil.example")
+	deniedMutationResp, err := http.DefaultClient.Do(deniedMutationReq)
+	if err != nil {
+		t.Fatalf("denied-origin Run Eval error: %v", err)
+	}
+	defer deniedMutationResp.Body.Close()
+	if deniedMutationResp.StatusCode != http.StatusForbidden {
+		t.Errorf("denied-origin Run Eval status = %d, want %d", deniedMutationResp.StatusCode, http.StatusForbidden)
 	}
 }
 
@@ -492,25 +508,6 @@ func TestHTTPServer_index_snapshot_endpoint(t *testing.T) {
 
 func TestHTTPServer_project_index_reindex_endpoint(t *testing.T) {
 	dir := t.TempDir()
-	writeQualityRecordFixture(t, dir, "experiments", "exp-1", `{
-		"_tag":"Experiment",
-		"id":"exp-1",
-		"qualityId":"q",
-		"suite":{"id":"suite-1","caseCount":1},
-		"startedAt":"2026-05-25T10:00:00Z",
-		"endedAt":"2026-05-25T10:01:00Z",
-		"status":"completed",
-		"summary":{"total":1,"passed":1,"failed":0,"errored":0},
-		"variants":[{"id":"candidate","targetId":"p1","definitionFingerprint":"fp-old"}],
-		"cells":[{"caseId":"case-1","variantId":"candidate","status":"passed","traceId":"trace-1"}]
-	}`)
-	writeQualityRecordFixture(t, dir, "baselines", "baseline-1", `{
-		"_tag":"QualityBaseline",
-		"id":"baseline-1",
-		"qualityId":"q",
-		"experimentId":"exp-1",
-		"variantId":"candidate"
-	}`)
 	s := store.NewStore()
 	devSvc := devtools.NewService(s, inspect.NewService(s, inspect.Dir(dir))).WithProjectIndexer(fakeProjectIndexer{
 		index: store.IndexData{
@@ -522,12 +519,12 @@ func TestHTTPServer_project_index_reindex_endpoint(t *testing.T) {
 			IndexedAt:     "2026-05-25T00:00:00.000Z",
 			Definitions: []store.ProjectDefinition{
 				{ID: "prompt:p1", Kind: "prompt", Name: "p1", Fidelity: "resolved", Status: "active", Fingerprint: "fp-new"},
-				{ID: "eval.prompt:p1-eval", Kind: "eval.prompt", Name: "p1 eval", Fidelity: "resolved", Status: "active"},
-				{ID: "suite:regression", Kind: "suite", Name: "regression", Fidelity: "resolved", Status: "active"},
+				{ID: "eval:p1", Kind: "eval", Name: "p1 eval", Fidelity: "resolved", Status: "active"},
+				{ID: "eval.case:p1:refund", Kind: "eval.case", Name: "refund", Fidelity: "resolved", Status: "active"},
 			},
 			Relations: []store.ProjectRelation{
-				{ID: "relation:eval:p1", Type: "eval.targets_prompt", From: "eval.prompt:p1-eval", To: "prompt:p1", Fidelity: "resolved"},
-				{ID: "relation:suite:p1", Type: "suite.includes_eval", From: "suite:regression", To: "eval.prompt:p1-eval", Fidelity: "resolved"},
+				{ID: "relation:eval:p1", Type: "eval.covers_definition", From: "eval:p1", To: "prompt:p1", Fidelity: "resolved"},
+				{ID: "relation:eval-case:p1", Type: "eval.includes_case", From: "eval:p1", To: "eval.case:p1:refund", Fidelity: "resolved"},
 			},
 			Diagnostics: []store.IndexDiagnostic{},
 			Sources:     []store.IndexSourceFile{{File: "/tmp/project/crux.config.ts", Status: "indexed"}},
@@ -571,9 +568,6 @@ func TestHTTPServer_project_index_reindex_endpoint(t *testing.T) {
 	prompt := indexDefinitionByID(index.Definitions, "prompt:p1")
 	if prompt == nil {
 		t.Fatalf("definitions = %+v, want prompt:p1", index.Definitions)
-	}
-	if prompt.Quality != nil {
-		t.Fatalf("legacy file-backed Quality metadata must not enrich Project Index: %+v", prompt.Quality)
 	}
 }
 
@@ -724,7 +718,7 @@ func TestHTTPServer_project_index_reindex_endpoint_accepts_incremental_deltas(t 
 	}
 }
 
-func TestHTTPServerRejectsLegacyQualityFeedbackRoutes(t *testing.T) {
+func TestHTTPServerDoesNotExposeRetiredInspectFeedbackRoutes(t *testing.T) {
 	srv := NewHTTPServer(store.NewStore(), ServerOptions{InspectDir: t.TempDir()})
 	server := httptest.NewServer(srv)
 	defer server.Close()
@@ -744,33 +738,8 @@ func TestHTTPServerRejectsLegacyQualityFeedbackRoutes(t *testing.T) {
 		}
 	}
 }
-func TestHTTPServer_quality_runs_ignore_legacy_artifacts(t *testing.T) {
+func TestHTTPServer_inspect_runs_read_observability(t *testing.T) {
 	dir := t.TempDir()
-	writeQualityRecordFixture(t, dir, "experiments", "support-v1", `{
-		"_tag":"Experiment",
-		"id":"support-v1",
-		"suite":{"id":"support","caseCount":1},
-		"summary":{"total":1,"passed":1,"failed":0,"errored":0},
-		"cells":[{"caseId":"refunds","variantId":"main","status":"passed","traceId":"tr-1","scores":[{"kind":"numeric","name":"quality","value":0.92}]}]
-	}`)
-	if err := os.MkdirAll(filepath.Join(dir, "feedback"), 0755); err != nil {
-		t.Fatalf("mkdir feedback: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "feedback", "inbox.jsonl"), []byte(
-		`{"_tag":"QualityFeedback","id":"fb-1","traceId":"tr-1","rating":1}`+"\n",
-	), 0644); err != nil {
-		t.Fatalf("write feedback: %v", err)
-	}
-	cassetteDir := filepath.Join(dir, "cassettes")
-	if err := os.MkdirAll(cassetteDir, 0755); err != nil {
-		t.Fatalf("mkdir cassettes: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(cassetteDir, "support.cassette.json"), []byte(
-		`{"_tag":"Cassette","version":1,"entries":[{"id":"entry-1","request":{"kind":"generate","targetId":"support","inputHash":"abc"},"response":{"output":{"answer":"ok"}},"recordedAt":"2026-05-14T00:00:00.000Z"}]}`,
-	), 0644); err != nil {
-		t.Fatalf("write cassette: %v", err)
-	}
-
 	srv := newObservabilityHTTPServer(t, dir,
 		`{"schemaVersion":2,"recordId":"run-start-1","type":"run:start","runId":"run-1","segmentId":"run-1_seg","segmentSeq":1,"traceId":"tr-1","name":"support","rootPrimitive":"generation.call","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`,
 		`{"schemaVersion":2,"recordId":"span-start-1","type":"span:start","runId":"run-1","segmentId":"run-1_seg","segmentSeq":2,"traceId":"tr-1","spanId":"span-1","family":"generation","primitive":"generation.call","name":"support","startedAt":"2026-05-16T18:00:00.001Z","status":"running","model":"gpt-4o","provider":"openai","promptId":"support"}`,
@@ -799,21 +768,12 @@ func TestHTTPServer_quality_runs_ignore_legacy_artifacts(t *testing.T) {
 	if run["traceId"] != "run-1" || run["targetId"] != "support" || run["toolCallCount"] != float64(1) {
 		t.Fatalf("run = %#v", run)
 	}
-	if feedbackIDs, ok := run["feedbackIds"].([]any); ok && len(feedbackIDs) > 0 {
-		t.Fatalf("legacy feedback must not enrich Inspect runs: %#v", feedbackIDs)
-	}
-	if experimentIDs, ok := run["experimentIds"].([]any); ok && len(experimentIDs) > 0 {
-		t.Fatalf("V2 experiments must not enrich Inspect runs: %#v", experimentIDs)
-	}
-	if _, ok := run["cassetteStatus"]; ok {
-		t.Fatalf("legacy cassettes must not enrich Inspect runs: %#v", run)
-	}
 	if run["tokenCount"] != float64(22) {
 		t.Fatalf("run token fields = %#v", run)
 	}
 }
 
-func TestHTTPServer_quality_delete_runs_removes_observability(t *testing.T) {
+func TestHTTPServer_inspect_delete_runs_removes_observability(t *testing.T) {
 	dir := t.TempDir()
 	srv := newObservabilityHTTPServer(t, dir,
 		`{"schemaVersion":2,"recordId":"run-start-1","type":"run:start","runId":"run-1","segmentId":"run-1_seg","segmentSeq":1,"traceId":"trace-1","name":"support","rootPrimitive":"generation.call","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`,
@@ -885,10 +845,10 @@ func TestHTTPServer_quality_delete_runs_removes_observability(t *testing.T) {
 	}
 }
 
-func TestHTTPServer_quality_insight_silences_create_list_delete(t *testing.T) {
+func TestHTTPServer_inspect_insight_silences_create_list_delete(t *testing.T) {
 	dir := t.TempDir()
 	srv := newObservabilityHTTPServer(t, dir,
-		`{"schemaVersion":2,"recordId":"run-start-1","type":"run:start","runId":"run-1","segmentId":"run-1_seg","segmentSeq":1,"traceId":"run-1","name":"karyla-agent","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running","metrics":{"totalTokens":12000}}`,
+		`{"schemaVersion":2,"recordId":"run-start-1","type":"run:start","runId":"run-1","segmentId":"run-1_seg","segmentSeq":1,"traceId":"run-1","name":"support-agent","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running","metrics":{"totalTokens":12000}}`,
 		`{"schemaVersion":2,"recordId":"run-end-1","type":"run:end","runId":"run-1","segmentId":"run-1_seg","segmentSeq":2,"traceId":"run-1","endedAt":"2026-05-16T18:00:00.010Z","durationMs":10,"status":"ok","metrics":{"totalTokens":12000}}`,
 	)
 	ts := httptest.NewServer(srv)
@@ -910,7 +870,7 @@ func TestHTTPServer_quality_insight_silences_create_list_delete(t *testing.T) {
 	}
 	silenceID := silence["id"].(string)
 	pattern := silence["pattern"].(map[string]any)
-	if pattern["title"] != "Run has high token usage" || pattern["targetId"] != "karyla-agent" {
+	if pattern["title"] != "Run has high token usage" || pattern["targetId"] != "support-agent" {
 		t.Fatalf("silence = %#v, want pattern from insight", silence)
 	}
 
@@ -975,18 +935,8 @@ func TestHTTPServer_quality_insight_silences_create_list_delete(t *testing.T) {
 	}
 }
 
-func TestHTTPServer_quality_overview_endpoint_returns_workbench_counts(t *testing.T) {
+func TestHTTPServer_inspect_overview_endpoint_returns_workbench_counts(t *testing.T) {
 	dir := t.TempDir()
-	writeQualityRecordFixture(t, dir, "experiments", "01KTSUPPORTV1AAAAAAAAAAAAA", specOverviewExperimentFixture("01KTSUPPORTV1AAAAAAAAAAAAA", 1, 0))
-	writeQualityRecordFixture(t, dir, "baselines", "evals.support", `{"schemaVersion":1,"baselineId":"01KTBASE","evaluationId":"evals.support","experimentId":"01KTSUPPORTV1AAAAAAAAAAAAA","promotedAt":"2026-05-16T18:00:00.000Z","configFingerprint":"cf","reference":{}}`)
-	if err := os.MkdirAll(filepath.Join(dir, "feedback"), 0755); err != nil {
-		t.Fatalf("mkdir feedback: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "feedback", "inbox.jsonl"), []byte(
-		`{"_tag":"QualityFeedback","id":"fb-1","status":"new"}`+"\n",
-	), 0644); err != nil {
-		t.Fatalf("write feedback: %v", err)
-	}
 	srv := newObservabilityHTTPServer(t, dir,
 		`{"schemaVersion":2,"recordId":"run-start-1","type":"run:start","runId":"run-1","segmentId":"run-1_seg","segmentSeq":1,"traceId":"tr-1","name":"support","rootPrimitive":"generation.call","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`,
 		`{"schemaVersion":2,"recordId":"span-start-1","type":"span:start","runId":"run-1","segmentId":"run-1_seg","segmentSeq":2,"traceId":"tr-1","spanId":"span-1","family":"generation","primitive":"generation.call","name":"support","startedAt":"2026-05-16T18:00:00.001Z","status":"running","model":"gpt-4o","provider":"openai","promptId":"support"}`,
@@ -1016,9 +966,8 @@ func TestHTTPServer_quality_overview_endpoint_returns_workbench_counts(t *testin
 	}
 }
 
-func TestHTTPServer_quality_overview_endpoint_returns_design_kpis(t *testing.T) {
+func TestHTTPServer_inspect_overview_endpoint_returns_design_kpis(t *testing.T) {
 	dir := t.TempDir()
-	writeQualityRecordFixture(t, dir, "experiments", "01KTSUPPORTV1AAAAAAAAAAAAA", specOverviewExperimentFixture("01KTSUPPORTV1AAAAAAAAAAAAA", 1, 1))
 
 	srv := newObservabilityHTTPServer(t, dir,
 		`{"schemaVersion":2,"recordId":"run-start-1","type":"run:start","runId":"run-1","segmentId":"run-1_seg","segmentSeq":1,"traceId":"tr-1","name":"support","rootPrimitive":"generation.call","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`,
@@ -1052,59 +1001,6 @@ func TestHTTPServer_quality_overview_endpoint_returns_design_kpis(t *testing.T) 
 	}
 }
 
-func writeQualityRecordFixture(t *testing.T, dir string, kind string, id string, body string) {
-	t.Helper()
-	recordsDir := filepath.Join(dir, kind)
-	if err := os.MkdirAll(recordsDir, 0755); err != nil {
-		t.Fatalf("mkdir %s: %v", kind, err)
-	}
-	if err := os.WriteFile(filepath.Join(recordsDir, id+".json"), []byte(body), 0644); err != nil {
-		t.Fatalf("write %s fixture: %v", kind, err)
-	}
-	if err := os.WriteFile(filepath.Join(recordsDir, "ignore.txt"), []byte(`not json`), 0644); err != nil {
-		t.Fatalf("write non-json fixture: %v", err)
-	}
-}
-
-// specOverviewExperimentFixture renders a spec-02 ExperimentRecord with the
-// requested number of passed and failed cells (traceIds tr-1, tr-2, …).
-func specOverviewExperimentFixture(id string, passed int, failed int) string {
-	cells := []string{}
-	statuses := []string{}
-	for i := 0; i < passed; i++ {
-		statuses = append(statuses, "passed")
-	}
-	for i := 0; i < failed; i++ {
-		statuses = append(statuses, "failed")
-	}
-	for i, status := range statuses {
-		cells = append(cells, fmt.Sprintf(
-			`{"caseId":"case-%d","variantName":"main","trial":0,"status":"%s","input":{},"scores":[],"assertions":{"ran":1,"notEvaluated":0,"outcomes":[]},"durationMs":1,"traceIds":["tr-%d"],"capturedSignals":[]}`,
-			i+1, status, i+1,
-		))
-	}
-	total := passed + failed
-	passRate := 0.0
-	if total > 0 {
-		passRate = float64(passed) / float64(total)
-	}
-	return fmt.Sprintf(`{
-		"schemaVersion":1,
-		"experimentId":"%s",
-		"evaluationId":"evals.support",
-		"qualityId":"q",
-		"startedAt":"2026-05-16T18:00:00.000Z",
-		"endedAt":"2026-05-16T18:00:01.000Z",
-		"configFingerprint":"cf","taskFingerprint":"tf","filteredRun":false,
-		"replay":{"mode":"live"},
-		"variants":[{"name":"main","overrideKeys":[]}],
-		"aggregates":{"perVariant":{"main":{"cells":%d,"passed":%d,"failed":%d,"errored":0,"skipped":0,"passRate":%g,"scores":{},"latency":{"meanMs":1,"p95Ms":1}}}},
-		"gates":{"passed":%t,"informational":false,"results":[]},
-		"passed":%t,
-		"cells":[%s]
-	}`, id, total, passed, failed, passRate, failed == 0, failed == 0, strings.Join(cells, ","))
-}
-
 func newObservabilityHTTPServer(t *testing.T, inspectDir string, records ...string) http.Handler {
 	t.Helper()
 	db, err := sql.Open("sqlite", ":memory:")
@@ -1133,25 +1029,6 @@ func observabilityBatch(t *testing.T, records ...string) observability.Batch {
 		t.Fatalf("observability fixture: %v", err)
 	}
 	return batch
-}
-
-func qualityExperimentFixture(id string, variant string, status string, durationMs int, score float64) string {
-	return fmt.Sprintf(`{
-		"_tag":"Experiment",
-		"id":%q,
-		"qualityId":"local",
-		"suite":{"id":"support","caseCount":1},
-		"summary":{"total":1,"passed":1,"failed":0,"errored":0},
-		"variants":[{"id":%q,"targetId":"support"}],
-		"cells":[{
-			"caseId":"case-1",
-			"caseName":"Case 1",
-			"variantId":%q,
-			"status":%q,
-			"durationMs":%d,
-			"scores":[{"kind":"numeric","name":"quality","value":%f}]
-		}]
-	}`, id, variant, variant, status, durationMs, score)
 }
 
 func indexDefinitionByID(definitions []store.ProjectDefinition, id string) *store.ProjectDefinition {

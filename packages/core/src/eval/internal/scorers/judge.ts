@@ -2,7 +2,7 @@
  *
  * Judge-backed scorer implementations — `scorers.judge` and the `rag.*`
  * family — built on `scoring/judge` and bridged to the adapter
- * `GenerateFn` supplied by the evaluation runtime.
+ * `GenerateFn` supplied by the Eval runner.
  *
  * The bridge constructs a minimal structured prompt per judge call and runs
  * it through the adapter generate, so judge calls travel the same
@@ -41,8 +41,19 @@ export function asJudgeText(value: unknown): string {
  * Bridge the Eval adapter `GenerateFn` to the `GenerateObjectFn` shape
  * `judge` consumes while retaining the scorer trace identity.
  */
-export function bridgeGenerateForJudge(generate: GenerateFn): GenerateObjectFn {
-  return createGenerateObjectFnFromGenerate(generate, {
+export function bridgeGenerateForJudge(
+  generate: GenerateFn,
+  generationOptions?: Readonly<Record<string, unknown>>,
+): GenerateObjectFn {
+  const bound =
+    generationOptions === undefined
+      ? generate
+      : (((judgePrompt: never, options: never) =>
+          generate(judgePrompt, {
+            ...(options as object),
+            ...generationOptions,
+          } as never)) as GenerateFn);
+  return createGenerateObjectFnFromGenerate(bound, {
     promptId: "crux.eval.judge",
   });
 }
@@ -58,13 +69,24 @@ export function resolveJudgeModel(
   explicit: JudgeRuntimeBinding,
   context: ScorerRunContext | undefined,
   what: string,
-): { generate: GenerateFn; model: unknown } {
-  const generate = explicit.generate ?? context?.generate;
-  if (typeof generate !== "function") {
+): {
+  generate: GenerateFn;
+  model: unknown;
+  generationOptions?: Readonly<Record<string, unknown>>;
+} {
+  const baseGenerate = explicit.generate ?? context?.generate;
+  if (typeof baseGenerate !== "function") {
     throw new MissingEvalModelBindingError(
       `${what} needs an adapter generate fn — pass an explicit judge generate binding from the eval or an eval-local helper.`,
     );
   }
+  const generate: GenerateFn = context?.recordGenerationResult
+    ? async (judgePrompt: never, options: never) => {
+        const result = await baseGenerate(judgePrompt, options);
+        context.recordGenerationResult?.(result);
+        return result;
+      }
+    : baseGenerate;
   const model = resolveModelRef(
     explicit.model ?? context?.judgeModel ?? context?.model,
     context,
@@ -74,7 +96,13 @@ export function resolveJudgeModel(
       `${what} needs a judge model — pass \`model\` from the eval or an eval-local helper.`,
     );
   }
-  return { generate, model };
+  return {
+    generate,
+    model,
+    ...(context?.generationOptions !== undefined
+      ? { generationOptions: context.generationOptions }
+      : {}),
+  };
 }
 
 /** Options the runtime judge implementation receives (post type-level validation). */
@@ -130,7 +158,7 @@ export function runJudgeScorer(
   context: ScorerRunContext | undefined,
 ): Promise<Score> {
   const selected = selectOutput(opts, args.output);
-  const { generate, model } = resolveJudgeModel(
+  const { generate, model, generationOptions } = resolveJudgeModel(
     { generate: opts.generate, model: opts.model },
     context,
     `scorers.judge('${opts.name}')`,
@@ -146,7 +174,7 @@ export function runJudgeScorer(
       : {}),
   };
   const scoreOptions = {
-    generate: bridgeGenerateForJudge(generate),
+    generate: bridgeGenerateForJudge(generate, generationOptions),
     model,
     temperature: 0,
     topP: 1,
@@ -161,6 +189,7 @@ export function runJudgeScorer(
       generate,
       model,
       provenance,
+      generationOptions,
     );
   }
 
@@ -215,6 +244,7 @@ async function runMediaJudge(
   generate: GenerateFn,
   model: unknown,
   provenance: JudgeProvenance,
+  generationOptions?: Readonly<Record<string, unknown>>,
 ): Promise<Score> {
   const choices = opts.choiceScores
     ? Object.keys(opts.choiceScores)
@@ -262,6 +292,7 @@ async function runMediaJudge(
       input: {},
       temperature: 0,
       topP: 1,
+      ...generationOptions,
     } as never,
   )) as {
     object?: {

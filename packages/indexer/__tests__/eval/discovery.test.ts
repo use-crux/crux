@@ -14,7 +14,7 @@ afterEach(async () => {
 });
 
 describe("Eval Project Index discovery", () => {
-  it("emits safe default-export corroboration without inspecting private code", async () => {
+  it("emits managed host requirements from the discovered default Eval", async () => {
     const root = await mkdtemp(join(workspaceRoot, ".tmp-eval-discovery-"));
     roots.push(root);
     const source = join(root, "evals/support.eval.ts");
@@ -23,7 +23,15 @@ describe("Eval Project Index discovery", () => {
       source,
       [
         "import { evaluate } from '@use-crux/core/eval'",
-        "const task = Object.assign(async (input: unknown) => input, { __evalTypes: undefined as never })",
+        "import { attachEvalTaskDescriptorForInternalUse } from '@use-crux/core/eval/internal/task'",
+        "const task = attachEvalTaskDescriptorForInternalUse(async (input: unknown) => input, {",
+        "  _tag: 'CruxEvalTaskDescriptor', operation: 'generate', adapterId: 'fixture',",
+        "  capabilities: [], requiredHostCapabilities: ['record-store'], defaults: {}, overrideKeys: [],",
+        "  projectIdentity: () => ({ reusable: true, fingerprintMaterial: { fixture: true } }),",
+        "  execute: async (input: unknown) => ({ output: input }),",
+        "  projectOutput: (result: { output: unknown }) => result.output,",
+        "  projectResponse: (result: { output: unknown }) => result.output,",
+        "})",
         "export default evaluate({ id: 'support', task, cases: [{ input: {} }] })",
       ].join("\n"),
     );
@@ -36,14 +44,14 @@ describe("Eval Project Index discovery", () => {
 
     expect(result.definitions).toContainEqual(
       expect.objectContaining({
-        id: "evaluation:support",
-        kind: "evaluation",
+        id: "eval:support",
+        kind: "eval",
         name: "support",
         source: expect.objectContaining({ file: source }),
         metadata: expect.objectContaining({
           exportName: "default",
           evalContract: "crux.eval",
-          requiredHostCapabilities: [],
+          requiredHostCapabilities: ["record-store"],
         }),
       }),
     );

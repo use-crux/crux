@@ -16,22 +16,22 @@
  *   State         → plum   memory.* · plan.* · blackboard.* · operation · corpus/indexing/ingest.*
  *   Routing       → warn   routing.* · fallback.* · tool.approval
  *   Safety        → danger guardrail.* · constraint.* · security.*
- *   Quality       → gold   eval.* · scoring.*
+ *   Evaluation    → gold   eval.* · scoring.*
  *   Transition    → faint  handoff.* · transition.*  (render as edges, neutral tone)
  */
 
-import type { ChipTone } from "@/qw/shell/primitives";
+import type { ChipTone } from "@/devtools/shell/primitives";
 
 /** Chip/family tone token → CSS custom property. Single source of truth. */
 export const TONE_VAR: Record<ChipTone, string> = {
-  muted: "var(--qw-fg-muted)",
-  crux: "var(--qw-crux)",
-  danger: "var(--qw-danger)",
-  warn: "var(--qw-warn)",
-  ok: "var(--qw-ok)",
-  iris: "var(--qw-iris)",
-  gold: "var(--qw-gold)",
-  plum: "var(--qw-plum)",
+  muted: "var(--devtools-fg-muted)",
+  crux: "var(--devtools-crux)",
+  danger: "var(--devtools-danger)",
+  warn: "var(--devtools-warn)",
+  ok: "var(--devtools-ok)",
+  iris: "var(--devtools-iris)",
+  gold: "var(--devtools-gold)",
+  plum: "var(--devtools-plum)",
 };
 
 export type PrimitiveFamily =
@@ -42,7 +42,7 @@ export type PrimitiveFamily =
   | "state"
   | "routing"
   | "safety"
-  | "quality"
+  | "evaluation"
   | "transition"
   | "unknown";
 
@@ -61,7 +61,7 @@ export function primitiveFamily(
   // The run root is the outermost composite — read it in the Orchestration tone.
   if (p === "run") return "orchestration";
   if (hasPrefix(p, ["guardrail.", "constraint.", "security."])) return "safety";
-  if (hasPrefix(p, ["eval.", "scoring."])) return "quality";
+  if (hasPrefix(p, ["eval.", "scoring."])) return "evaluation";
   // A gated tool approval is a Routing concern, not a capability call.
   if (p === "tool.approval" || p.startsWith("approval")) return "routing";
   if (hasPrefix(p, ["routing.", "fallback."])) return "routing";
@@ -106,7 +106,7 @@ export function primitiveTone(primitive: string | undefined): ChipTone {
       return "warn";
     case "safety":
       return "danger";
-    case "quality":
+    case "evaluation":
       return "gold";
     case "state":
       return "plum";
@@ -121,7 +121,7 @@ export function primitiveTone(primitive: string | undefined): ChipTone {
 /** The CSS accent colour for a primitive — what tree rows, graph nodes and card
  *  rails tint with. Transition resolves to the faint token (edges, not nodes). */
 export function primitiveAccentVar(primitive: string | undefined): string {
-  if (primitiveFamily(primitive) === "transition") return "var(--qw-fg-faint)";
+  if (primitiveFamily(primitive) === "transition") return "var(--devtools-fg-faint)";
   return TONE_VAR[primitiveTone(primitive)];
 }
 

@@ -3,10 +3,9 @@
  */
 
 import { useDeferredValue, useMemo, useState } from "react";
-import { QwShell } from "@/qw/shell/QwShell";
-import { Chip, Eyebrow } from "@/qw/shell/primitives";
-import { Icon } from "@/qw/shell/Icon";
-import { navTarget } from "@/app/navigation/navTarget";
+import { DevtoolsShell } from "@/devtools/shell/DevtoolsShell";
+import { Chip, Eyebrow } from "@/devtools/shell/primitives";
+import { Icon } from "@/devtools/shell/Icon";
 import {
   useInspectInsights,
   useInspectInsightSilences,
@@ -17,9 +16,8 @@ import {
   useSilenceMutation,
   useUnsilenceMutation,
 } from "@/shared/hooks/inspect-mutations";
-import { useToast } from "@/qw/shell/useToast";
+import { useToast } from "@/devtools/shell/useToast";
 import { useNavigation } from "@/app/navigation/useNavigation";
-import { useConnected } from "@/app/runtime/runtimeStore";
 import {
   AddFilterButton,
   CollapsibleGroup,
@@ -27,10 +25,10 @@ import {
   MultiSelectChip,
   SearchChip,
   type AddFilterOption,
-} from "@/qw/shell/FilterPopover";
-import { QwTooltip } from "@/qw/shell/QwTooltip";
+} from "@/devtools/shell/FilterPopover";
+import { DevtoolsTooltip } from "@/devtools/shell/DevtoolsTooltip";
 import { InsightCard } from "@/features/insights/components/InsightCard";
-import { SectionBoundary } from "@/qw/shell/SectionBoundary";
+import { SectionBoundary } from "@/devtools/shell/SectionBoundary";
 import { SkeletonCard } from "@/shared/components/Skeleton";
 import { SEV_LABEL, timeAgo } from "@/features/insights/lib/insight-format";
 import type {
@@ -68,7 +66,6 @@ interface InsightsProps {
 
 export function InsightsView({ filters, groupBy }: InsightsProps) {
   const { navigate } = useNavigation();
-  const connected = useConnected();
   const {
     data: bffInsights,
     loading: insightsLoading,
@@ -252,19 +249,10 @@ export function InsightsView({ filters, groupBy }: InsightsProps) {
   }, [insights]);
 
   return (
-    <QwShell
-      activeView="insights"
-      onNavigate={(v) => navigate(navTarget(v))}
+    <DevtoolsShell
       breadcrumb="Inspect / Insights"
       title="What needs attention"
       subtitle={`${insights.length} open`}
-      connected={connected}
-      badges={{
-        insights:
-          insights.length > 0
-            ? { count: insights.length, tone: "danger" }
-            : undefined,
-      }}
       filterBar={
         <InsightsFilterChips
           filters={filters}
@@ -293,7 +281,7 @@ export function InsightsView({ filters, groupBy }: InsightsProps) {
         className="min-h-full px-8 pb-10 pt-6"
         style={{
           backgroundImage:
-            "linear-gradient(to right, var(--qw-grid) 1px, transparent 1px), linear-gradient(to bottom, var(--qw-grid) 1px, transparent 1px)",
+            "linear-gradient(to right, var(--devtools-grid) 1px, transparent 1px), linear-gradient(to bottom, var(--devtools-grid) 1px, transparent 1px)",
           backgroundSize: "48px 48px",
         }}
       >
@@ -307,7 +295,7 @@ export function InsightsView({ filters, groupBy }: InsightsProps) {
           <Eyebrow>Diagnosis feed</Eyebrow>
           <div
             className="h-px flex-1"
-            style={{ background: "var(--qw-border)" }}
+            style={{ background: "var(--devtools-border)" }}
           />
           <div className="flex gap-1.5">
             {counts.high > 0 && (
@@ -351,9 +339,9 @@ export function InsightsView({ filters, groupBy }: InsightsProps) {
           <div
             className="rounded-[10px] px-6 py-10 text-center text-[13px]"
             style={{
-              background: "var(--qw-bg-elev)",
-              border: "1px dashed var(--qw-border)",
-              color: "var(--qw-fg-muted)",
+              background: "var(--devtools-bg-elev)",
+              border: "1px dashed var(--devtools-border)",
+              color: "var(--devtools-fg-muted)",
             }}
           >
             No insights match the active filters. Diagnoses show up when
@@ -433,7 +421,7 @@ export function InsightsView({ filters, groupBy }: InsightsProps) {
           })}
         </div>
       </div>
-    </QwShell>
+    </DevtoolsShell>
   );
 }
 
@@ -457,21 +445,21 @@ function SilencesStrip({
     <div
       className="mb-[18px] flex flex-col gap-2 rounded-[10px] px-3.5 py-3"
       style={{
-        background: "var(--qw-bg-elev)",
-        border: "1px dashed var(--qw-border)",
+        background: "var(--devtools-bg-elev)",
+        border: "1px dashed var(--devtools-border)",
       }}
     >
       <div className="flex items-center gap-2">
-        <Icon name="x" size={12} color="var(--qw-fg-muted)" />
+        <Icon name="x" size={12} color="var(--devtools-fg-muted)" />
         <span
           className="font-mono text-[10.5px] uppercase tracking-[0.1em]"
-          style={{ color: "var(--qw-fg-faint)" }}
+          style={{ color: "var(--devtools-fg-faint)" }}
         >
           Silenced patterns · {silences.length}
         </span>
         <span
           className="font-mono text-[10.5px]"
-          style={{ color: "var(--qw-fg-muted)" }}
+          style={{ color: "var(--devtools-fg-muted)" }}
         >
           insights matching these are hidden from the feed
         </span>
@@ -480,7 +468,7 @@ function SilencesStrip({
             type="button"
             onClick={() => setExpanded((v) => !v)}
             className="ml-auto font-mono text-[10.5px] hover:opacity-80"
-            style={{ color: "var(--qw-crux)" }}
+            style={{ color: "var(--devtools-crux)" }}
           >
             {expanded ? "show less" : `show all ${silences.length}`}
           </button>
@@ -492,32 +480,32 @@ function SilencesStrip({
             key={s.id}
             className="inline-flex items-center gap-1.5 rounded-[4px] px-2 py-[3px] font-mono text-[11px]"
             style={{
-              background: "var(--qw-bg-muted)",
-              border: "1px solid var(--qw-border)",
-              color: "var(--qw-fg)",
+              background: "var(--devtools-bg-muted)",
+              border: "1px solid var(--devtools-border)",
+              color: "var(--devtools-fg)",
             }}
             title={`Silenced ${timeAgo(s.createdAt)}${s.note ? ` · ${s.note}` : ""}`}
           >
-            <span style={{ color: "var(--qw-fg-faint)" }}>
+            <span style={{ color: "var(--devtools-fg-faint)" }}>
               {s.pattern.targetId ? "pattern:" : "title:"}
             </span>
             <span>{s.pattern.title}</span>
             {s.pattern.targetId && (
-              <span style={{ color: "var(--qw-fg-faint)" }}>
+              <span style={{ color: "var(--devtools-fg-faint)" }}>
                 · {s.pattern.targetId}
               </span>
             )}
-            <QwTooltip content="Unsilence · matching insights return on next read">
+            <DevtoolsTooltip content="Unsilence · matching insights return on next read">
               <button
                 type="button"
                 onClick={() => onUnsilence(s.id)}
                 className="ml-1 opacity-70 hover:opacity-100"
-                style={{ color: "var(--qw-fg-faint)" }}
+                style={{ color: "var(--devtools-fg-faint)" }}
                 aria-label={`Unsilence ${s.pattern.title}`}
               >
                 <Icon name="x" size={10} />
               </button>
-            </QwTooltip>
+            </DevtoolsTooltip>
           </span>
         ))}
       </div>
@@ -590,13 +578,13 @@ function InsightsFilterChips({
     <div
       className="flex flex-shrink-0 flex-wrap items-center gap-1.5 px-8 py-2"
       style={{
-        borderBottom: "1px solid var(--qw-border)",
-        background: "var(--qw-bg)",
+        borderBottom: "1px solid var(--devtools-border)",
+        background: "var(--devtools-bg)",
       }}
     >
       <div
         className="mr-1 flex items-center gap-1.5 font-mono text-[11px] tracking-[0.04em]"
-        style={{ color: "var(--qw-fg-faint)" }}
+        style={{ color: "var(--devtools-fg-faint)" }}
       >
         <Icon name="filter" size={11} />
         filter

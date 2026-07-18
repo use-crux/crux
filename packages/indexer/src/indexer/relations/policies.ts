@@ -704,7 +704,7 @@ export const indexRelationPolicies = [
   },
   {
     type: 'eval.covers_definition',
-    fromKinds: ['evaluation'],
+    fromKinds: ['eval'],
     presentation: 'both',
     partial: true,
     runtimeJoin: true,

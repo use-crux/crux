@@ -32,7 +32,7 @@ its telemetry live inside one continuously-running process:
   spans did not parent correctly and no span survived a process boundary by construction, but nothing
   in the bridge treated that as an architectural fact either.
 - A duplicate `recordId` with different content could overwrite the first, immutable payload.
-- The DevTools Runs list merged a Quality-owned terminal-row list with a separately-fetched
+- The DevTools Runs list merged an older test-run terminal-row list with a separately-fetched
   observability-owned running-row list on the client, making two read models simultaneously
   authoritative for the same table.
 - Runtime coverage was Node-shaped: no real `workerd` gate, no Convex bundle/runtime conformance gate,
@@ -125,15 +125,15 @@ the host lifecycle port above instead of being fire-and-forget or blocking indef
 
 ### One revisioned Go Runs read model
 
-The Go service, not the DevTools client, owns the join between canonical observability runs and
-Quality annotations, keyed by an explicit persisted correlation field rather than an assumed
-`traceId`/`runId` equivalence. Ingest is one transaction that also bumps a monotonic read-model
-revision per affected run and publishes it after commit; DevTools performs a bounded revision-aware
-catch-up (or a full invalidation once that window has aged out) instead of merging a
-Quality-terminal list with a separately-fetched observability-running list on the client. Runs and run
-detail distinguish `running`/`suspended`/`incomplete`(stale segment, no suspend/end)/`conflicted` from
-ordinary terminal states, and delivery/export health is `unknown`/`healthy`/`degraded` — `unknown` is
-never presented as healthy.
+The Go service, not the DevTools client, owns the canonical observability Runs read model. Eval runs
+remain a separately named, explicitly linked read model rather than annotations merged through an
+assumed `traceId`/`runId` equivalence. Ingest is one transaction that also bumps a monotonic
+read-model revision per affected observability run and publishes it after commit; DevTools performs
+a bounded revision-aware catch-up (or a full invalidation once that window has aged out) instead of
+merging independently fetched lists on the client. Runs and run detail distinguish
+`running`/`suspended`/`incomplete` (stale segment, no suspend/end)/`conflicted` from ordinary terminal
+states, and delivery/export health is `unknown`/`healthy`/`degraded` — `unknown` is never presented
+as healthy.
 
 ## Alternatives Considered
 
@@ -153,11 +153,11 @@ object is tied to its process's SDK instance and cannot be serialized meaningful
 model instead treats "same trace, new root span" as the correct unit for a resumed segment, using
 remote-parent correlation or links for causality.
 
-**Keep the client-side Quality/Observability run-list merge and add more client-side reconciliation
-logic to patch its gaps.** Rejected: the merge's failure modes (a terminal Quality row and a running
-Observability row both existing, or neither) are a structural consequence of two independently-owned,
-independently-paginated read models. A single server-owned, revisioned join removes the class of bug
-rather than special-casing more of it.
+**Keep the client-side test-run/Observability list merge and add more client-side reconciliation logic
+to patch its gaps.** Rejected: the merge's failure modes (a terminal test row and a running
+Observability row both existing, or neither) are a structural consequence of two independently owned,
+independently paginated read models. A server-owned observability model plus explicit links to Eval
+runs removes the class of bug rather than special-casing more of it.
 
 ## Consequences
 

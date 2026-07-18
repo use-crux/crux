@@ -81,7 +81,7 @@ fn callback_level_near(lines: &[&str], line_index: usize) -> &'static str {
     for index in (start..=line_index).rev() {
         let text = lines[index].trim();
         if text.starts_with("expect:") || text.starts_with("afterScores:") {
-            return "evaluation";
+            return "eval";
         }
         if text.contains("expect:") && text.contains("input:") {
             return "case";

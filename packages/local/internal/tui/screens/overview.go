@@ -83,10 +83,8 @@ func (o *Overview) Interested(domains bridge.Domains) bool {
 	return domains.Intersects(bridge.NewDomains(
 		bridge.DomainRuns,
 		bridge.DomainInsights,
-		bridge.DomainExperiments,
 		bridge.DomainBaselines,
 		bridge.DomainFeedback,
-		bridge.DomainCassettes,
 		bridge.DomainActivity,
 	))
 }

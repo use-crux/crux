@@ -8,7 +8,11 @@ import {
   DeployedEvalRegistryError,
   resolveDeployedEval,
 } from "../eval-registry";
-import { decodeSubmitEvalJob, EvalHostProtocolError } from "./protocol";
+import {
+  decodeSubmitEvalJob,
+  EvalHostProtocolError,
+  readEvalHostRequestText,
+} from "./protocol";
 import { projectEvalJobStatus, workId } from "./status";
 import { EVAL_EXECUTE_TARGET_ID } from "./target";
 import type { CreateEvalHostOptions, EvalHostStore } from "./types";
@@ -33,7 +37,10 @@ export async function submitEvalJob(
 ): Promise<Response> {
   let job: ReturnType<typeof decodeSubmitEvalJob>;
   try {
-    job = decodeSubmitEvalJob(await request.text(), context.now());
+    job = decodeSubmitEvalJob(
+      await readEvalHostRequestText(request),
+      context.now(),
+    );
     const resolved = resolveDeployedEval(context.registry, job);
     if (
       resolved.entry.requiredHostCapabilities.some(

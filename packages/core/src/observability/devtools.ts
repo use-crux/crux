@@ -12,7 +12,7 @@
  * import { config } from '@use-crux/core'
  *
  * // Only when application runtime code should send records to a known local
- * // devtools server or tunnel. Quality CLI runs auto-attach locally.
+ * // devtools server or tunnel. Eval CLI runs auto-attach locally.
  * config({
  *   devtools: { serverUrl: process.env.DEVTOOLS_URL },
  * })

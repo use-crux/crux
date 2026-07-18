@@ -116,8 +116,8 @@ export function McpToolOrigin({
         <span
           className="w-fit rounded-full px-2 py-0.5 font-mono text-[10px] font-semibold"
           style={{
-            color: "var(--qw-crux)",
-            background: "var(--qw-crux-soft)",
+            color: "var(--devtools-crux)",
+            background: "var(--devtools-crux-soft)",
           }}
         >
           MCP

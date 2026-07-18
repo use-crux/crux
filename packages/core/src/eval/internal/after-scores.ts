@@ -22,7 +22,7 @@ import {
   runNormalizedEvalChecks,
 } from "./check-runtime";
 
-/** Run evaluation- and Case-level post-score assertions in authored order. */
+/** Run Eval- and Case-level post-score assertions in authored order. */
 export function runAfterScoreAssertions(input: {
   readonly planAfterScores?: NormalizedEvalCheck;
   readonly cell: EvalPlannedCell;
@@ -33,7 +33,7 @@ export function runAfterScoreAssertions(input: {
   readonly managedTask: boolean;
 }) {
   const cellScores = input.scores.flatMap((entry) =>
-    entry.status === "computed"
+    entry.status === "computed" || entry.status === "reused"
       ? [
           {
             name: entry.name,
@@ -49,7 +49,9 @@ export function runAfterScoreAssertions(input: {
   ): AssertContext<unknown, unknown, unknown, string, Capability> => ({
     input: input.cell.input,
     output: input.execution.output,
-    ...(input.managedTask ? { response: input.execution.response } : {}),
+    ...(input.managedTask && input.execution.response !== undefined
+      ? { response: input.execution.response }
+      : {}),
     expected: input.cell.expected,
     expect: guardEvalExpect(
       createRuntimeBoundExpect({
@@ -78,7 +80,7 @@ export function runAfterScoreAssertions(input: {
   });
   return runNormalizedEvalChecks({
     checks: [
-      { declaration: input.planAfterScores, level: "evaluation" },
+      { declaration: input.planAfterScores, level: "eval" },
       { declaration: input.cell.afterScores, level: "case" },
     ],
     phase: "afterScores",

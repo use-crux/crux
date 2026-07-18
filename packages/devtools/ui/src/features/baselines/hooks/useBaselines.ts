@@ -6,5 +6,6 @@ export function useEvalBaselines() {
   return useQuery({
     queryKey: qk.evals.baselines(),
     queryFn: ({ signal }) => baselinesService.list(signal),
+    refetchInterval: 2_000,
   });
 }

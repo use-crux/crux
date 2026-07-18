@@ -4,6 +4,11 @@ import type { Score } from "./scorers/types";
 import { SCORER_RESULT_CACHE_EPOCH } from "./evidence/cache-epochs";
 import { fingerprintEvalValue, isReusableEvalValue } from "./identity";
 import type { EvalPlannedCell, EvalTaskExecutionEvidence } from "./types";
+import type { ScorerEvidenceDependency } from "./scorers/runtime";
+import {
+  isEvalSnapshotPersistenceSafe,
+  type EvalPersistencePolicy,
+} from "./redact";
 
 export interface EvalScorerEvidenceEntry {
   readonly schemaVersion: 1;
@@ -21,14 +26,22 @@ export function createScorerEvidenceKey(input: {
   readonly contractFingerprint: string;
   readonly hostContractFingerprint: string;
   readonly occurrence: string;
+  readonly dependencies: readonly ScorerEvidenceDependency[];
 }): string | undefined {
+  const dependencies = new Set(input.dependencies);
   const material = {
     scorerResultCacheEpoch: SCORER_RESULT_CACHE_EPOCH,
-    input: input.cell.input,
-    expected: input.cell.expected ?? null,
-    output: input.execution.output,
-    response: input.execution.response,
-    capturedSignals: input.execution.capturedSignals,
+    ...(dependencies.has("input") ? { input: input.cell.input } : {}),
+    ...(dependencies.has("expected")
+      ? { expected: input.cell.expected ?? null }
+      : {}),
+    ...(dependencies.has("output") ? { output: input.execution.output } : {}),
+    ...(dependencies.has("response")
+      ? { response: input.execution.response }
+      : {}),
+    ...(dependencies.has("capturedSignals")
+      ? { capturedSignals: input.execution.capturedSignals }
+      : {}),
     scorerName: input.scorerName,
     contractFingerprint: input.contractFingerprint,
     hostContractFingerprint: input.hostContractFingerprint,
@@ -44,8 +57,14 @@ export function createScorerEvidenceKey(input: {
 export function createScorerEvidenceEntry(
   key: string,
   score: Score,
+  policy?: EvalPersistencePolicy,
 ): EvalScorerEvidenceEntry | undefined {
-  if (!isValidScore(score) || !isReusableEvalValue(score)) return undefined;
+  if (
+    !isValidScore(score) ||
+    !isReusableEvalValue(score) ||
+    !isEvalSnapshotPersistenceSafe(score, policy)
+  )
+    return undefined;
   return Object.freeze({
     schemaVersion: 1,
     scorerResultCacheEpoch: SCORER_RESULT_CACHE_EPOCH,

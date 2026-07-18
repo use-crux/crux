@@ -42,7 +42,7 @@
   {
     "type": "agent.runs_eval",
     "fromKinds": ["agent"],
-    "toKinds": ["evaluation"],
+    "toKinds": ["eval"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
@@ -336,7 +336,7 @@
   {
     "type": "context.runs_eval",
     "fromKinds": ["context"],
-    "toKinds": ["evaluation"],
+    "toKinds": ["eval"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
@@ -423,7 +423,7 @@
   },
   {
     "type": "eval.covers_definition",
-    "fromKinds": ["evaluation"],
+    "fromKinds": ["eval"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
@@ -535,7 +535,7 @@
   {
     "type": "flow.step.runs_eval",
     "fromKinds": ["flow.step"],
-    "toKinds": ["evaluation"],
+    "toKinds": ["eval"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
@@ -826,7 +826,7 @@
   {
     "type": "prompt.runs_eval",
     "fromKinds": ["prompt"],
-    "toKinds": ["evaluation"],
+    "toKinds": ["eval"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
@@ -1314,7 +1314,7 @@
   {
     "type": "tool.runs_eval",
     "fromKinds": ["tool"],
-    "toKinds": ["evaluation"],
+    "toKinds": ["eval"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true

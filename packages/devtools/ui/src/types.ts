@@ -660,16 +660,8 @@ export type PrimitiveSpecificFacts =
       criteriaPreview?: string;
     }
   | {
-      kind:
-        | "dataset"
-        | "suite"
-        | "suite.case"
-        | "eval.prompt"
-        | "eval.flow"
-        | "eval.rag"
-        | "eval.quality";
+      kind: "eval" | "eval.case";
       targetDefinitionId?: string;
-      suiteId?: string;
       caseCount?: number;
       scorerIds?: string[];
     };
@@ -798,23 +790,6 @@ export interface ProjectDefinition {
   status?: "active" | "missing" | "stale" | "removed";
   fingerprint?: string;
   metadata?: ProjectDefinitionMetadata;
-  quality?: ProjectDefinitionQuality;
-}
-
-export interface ProjectDefinitionQuality {
-  evalIds?: string[];
-  suiteIds?: string[];
-  runIds?: string[];
-  traceIds?: string[];
-  runCount?: number;
-  completedRunCount?: number;
-  failedRunCount?: number;
-  runningRunCount?: number;
-  lastRunId?: string;
-  lastRunAt?: number;
-  lastStatus?: string;
-  caseCount?: number;
-  passRate?: number;
 }
 
 export interface ProjectRelation {
@@ -1380,11 +1355,7 @@ export interface InspectEvent {
   _tag: "InspectEvent";
   id: string;
   timestamp: number;
-  kind:
-    | "run"
-    | "trace"
-    | "insight"
-    | string;
+  kind: "run" | "trace" | "insight" | string;
   action: string;
   severity: "info" | "warn" | "error" | string;
   refId: string;
@@ -1394,11 +1365,7 @@ export interface InspectEvent {
 export interface InspectActivityEvent {
   _tag: "InspectActivityEvent";
   timestamp: number;
-  kind:
-    | "run"
-    | "trace"
-    | "insight"
-    | string;
+  kind: "run" | "trace" | "insight" | string;
   severity: "info" | "warn" | "error";
   summary: string;
   refId: string;
@@ -1420,6 +1387,8 @@ export type SpanPrimitive =
   | "context.predicate"
   | "context.cache"
   | "agent.run"
+  | "flow.run"
+  | "flow.step"
   | "tool.call"
   | "tool.approval"
   | "retrieval.query"
@@ -1454,42 +1423,7 @@ export type SpanPrimitive =
   | "security.warning"
   | "cost.record"
   | "feedback.record"
-  | "custom.operation"
-  // Legacy aliases emitted by older local dev sessions. New code should use
-  // the canonical dotted primitives above.
-  | "trace"
-  | "generation"
-  | "flow.step"
-  | "eval.flow"
-  | "flow"
-  | "tool"
-  | "retrieval"
-  | "pipeline"
-  | "parallel"
-  | "consensus"
-  | "swarm"
-  | "agent"
-  | "delegate"
-  | "handoff"
-  | "retrieval"
-  | "retrieval.stage"
-  | "retrieval.step"
-  | "embed"
-  | "judge"
-  | "plan"
-  | "task"
-  | "memory"
-  | "blackboard"
-  | "compact"
-  | "index"
-  | "ingest"
-  | "corpus"
-  | "cache"
-  | "skill"
-  | "cost"
-  | "security"
-  | "budget"
-  | "other";
+  | "custom.operation";
 
 export type CompositionType = "pipeline" | "parallel" | "consensus" | "swarm";
 

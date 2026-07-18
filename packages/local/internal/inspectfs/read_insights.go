@@ -6,7 +6,7 @@ import (
 )
 
 // InsightState contains only Inspect-owned persistence. Loading it never reads
-// legacy experiments, baselines, feedback annotations, or cassettes.
+// unrelated Eval, Baseline, or Review records.
 type InsightState struct {
 	Statuses map[string]InsightStatus
 	Silences []InsightSilence
@@ -26,7 +26,7 @@ func (f *FS) ReadInsightState() (InsightState, error) {
 }
 
 // ReadInsightSilences loads active Inspect silence records without opening
-// archived experiment artifacts.
+// other persisted artifacts.
 func (f *FS) ReadInsightSilences(includeDeleted bool) ([]InsightSilence, error) {
 	return f.readInsightSilences(includeDeleted)
 }

@@ -222,12 +222,12 @@ function semanticTargetForDefinitionExpression(
       };
     }
     if (callName === "evaluate") {
-      const explicitId = firstArg
-        ? view.syntax.stringLiteralText(firstArg)
+      const explicitId = object
+        ? semanticStringLiteralProperty(object, "id", view.syntax)
         : undefined;
       return {
-        id: `evaluation:${safeId(explicitId ?? variableName ?? "anonymous")}`,
-        kind: "evaluation",
+        id: `eval:${safeId(explicitId ?? variableName ?? "anonymous")}`,
+        kind: "eval",
       };
     }
   }

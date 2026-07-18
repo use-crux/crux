@@ -226,11 +226,12 @@ fn analyze_relation_refs_are_finalize_compatible() {
 }
 
 #[test]
-fn analyze_evaluation_after_scores_assertion_sites_match_quality_authoring_api() {
+fn analyze_eval_after_scores_assertion_sites_match_eval_authoring_api() {
     let source = [
-        "export const supportEval = evaluate('support.answer', {",
+        "export const supportEval = evaluate({",
+        "  id: 'support.answer',",
         "  task: (input: { question: string }) => input.question,",
-        "  data: [{ name: 'refund', input: { question: 'refund?' } }],",
+        "  cases: [{ name: 'refund', input: { question: 'refund?' } }],",
         "  afterScores: (ctx) => {",
         "    ctx.expect(ctx.score.pass).toBeTruthy()",
         "    ctx.assert(ctx.output)",
@@ -246,19 +247,19 @@ fn analyze_evaluation_after_scores_assertion_sites_match_quality_authoring_api()
     let evaluation = facts
         .iter()
         .flat_map(|fact| fact["definitions"].as_array().into_iter().flatten())
-        .find(|definition| definition["id"] == "evaluation:support.answer")
-        .expect("evaluation definition");
+        .find(|definition| definition["id"] == "eval:support.answer")
+        .expect("Eval definition");
     let assertion_sites = evaluation["metadata"]["facts"]["assertionSites"]
         .as_array()
-        .expect("evaluation should expose assertion sites");
+        .expect("Eval should expose assertion sites");
 
     assert_eq!(
         assertion_sites.len(),
         1,
-        "ctx.assert is not a Quality assertion site after the Phase 1 API rename"
+        "ctx.assert is not an Eval assertion site"
     );
     assert_eq!(assertion_sites[0]["callbackKind"], "expect");
-    assert_eq!(assertion_sites[0]["callbackLevel"], "evaluation");
+    assert_eq!(assertion_sites[0]["callbackLevel"], "eval");
 }
 
 #[test]
@@ -279,7 +280,7 @@ fn analyze_default_exported_authored_eval_emits_registry_corroboration() {
     let evaluation = facts
         .iter()
         .flat_map(|fact| fact["definitions"].as_array().into_iter().flatten())
-        .find(|definition| definition["id"] == "evaluation:support")
+        .find(|definition| definition["id"] == "eval:support")
         .expect("authored Eval definition");
 
     assert_eq!(evaluation["metadata"]["exportName"], "default");
@@ -292,17 +293,13 @@ fn analyze_default_exported_authored_eval_emits_registry_corroboration() {
 }
 
 #[test]
-fn analyze_evaluation_emits_catalog_facts_from_literal_config() {
+fn analyze_eval_emits_current_definition_facts_from_literal_config() {
     let source = [
-        "export const supportEval = evaluate('support.answer', {",
+        "export const supportEval = evaluate({",
+        "  id: 'support.answer',",
         "  task: (input: { question: string }) => input.question,",
         "  covers: ['prompt:support.answer'],",
-        "  data: dataset('./cases/support.jsonl'),",
-        "  scorers: [scorers.exact(), scorers.judge({ name: 'helpful' }), { scorerName: 'custom' }],",
-        "  gates: { scores: { exact: { min: 1 }, helpful: { min: 0.7 } }, cost: { maxUsd: 1 } },",
-        "  variants: { baseline: {}, tuned: {} },",
-        "  trials: 3,",
-        "  replay: 'replay-strict',",
+        "  cases: [{ id: 'refund', input: { question: 'refund?' } }],",
         "})",
     ]
     .join("\n");
@@ -311,18 +308,15 @@ fn analyze_evaluation_emits_catalog_facts_from_literal_config() {
         &source,
     ));
     let facts = facts.into_wire_values();
-    let evaluation_group = facts
+    let evaluation = facts
         .iter()
-        .find(|fact| fact["definitions"][0]["id"] == "evaluation:support.answer")
-        .expect("evaluation fact group");
-    let facts = &evaluation_group["definitions"][0]["metadata"]["facts"];
+        .flat_map(|fact| fact["definitions"].as_array().into_iter().flatten())
+        .find(|definition| definition["id"] == "eval:support.answer")
+        .expect("Eval definition");
+    let facts = &evaluation["metadata"]["facts"];
 
-    assert_eq!(facts["datasetPaths"], json!(["./cases/support.jsonl"]));
-    assert_eq!(facts["scorerNames"], json!(["exact", "helpful", "custom"]));
-    assert_eq!(facts["gateKeys"], json!(["exact", "helpful", "cost"]));
-    assert_eq!(facts["variantNames"], json!(["baseline", "tuned"]));
-    assert_eq!(facts["trials"], json!(3));
-    assert_eq!(facts["replayMode"], json!("replay-strict"));
+    assert_eq!(facts["caseCount"], json!(1));
+    assert_eq!(facts["evalContract"], json!("crux.eval"));
     assert_eq!(facts["covers"], json!(["prompt:support.answer"]));
 }
 

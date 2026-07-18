@@ -10,7 +10,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/readmodel"
 )
 
-type fakeQuality struct {
+type fakeInspect struct {
 	activity          []api.InspectActivityEvent
 	runs              []api.InspectRunRecord
 	runOpts           api.InspectRunsOptions
@@ -20,28 +20,28 @@ type fakeQuality struct {
 	workbenchOverview api.InspectOverviewRecord
 }
 
-func (f *fakeQuality) ActivityAPI(context.Context, int) ([]api.InspectActivityEvent, error) {
+func (f *fakeInspect) ActivityAPI(context.Context, int) ([]api.InspectActivityEvent, error) {
 	return f.activity, nil
 }
 
-func (f *fakeQuality) OverviewRecordAPI(context.Context, ...string) (api.InspectOverviewRecord, error) {
+func (f *fakeInspect) OverviewRecordAPI(context.Context, ...string) (api.InspectOverviewRecord, error) {
 	return f.workbenchOverview, nil
 }
 
-func (f *fakeQuality) RunsWithOptionsAPI(_ context.Context, opts api.InspectRunsOptions) ([]api.InspectRunRecord, error) {
+func (f *fakeInspect) RunsWithOptionsAPI(_ context.Context, opts api.InspectRunsOptions) ([]api.InspectRunRecord, error) {
 	f.runOpts = opts
 	return f.runs, nil
 }
 
-func (f *fakeQuality) InsightsAPI(context.Context) ([]api.InspectInsightRecord, error) {
+func (f *fakeInspect) InsightsAPI(context.Context) ([]api.InspectInsightRecord, error) {
 	return f.insights, nil
 }
 
-func (f *fakeQuality) InsightSilencesAPI(context.Context, bool) ([]api.InspectInsightSilenceRecord, error) {
+func (f *fakeInspect) InsightSilencesAPI(context.Context, bool) ([]api.InspectInsightSilenceRecord, error) {
 	return f.silences, nil
 }
 
-func (f *fakeQuality) RunDetailAPI(context.Context, string) (api.InspectRunDetailRecord, bool, error) {
+func (f *fakeInspect) RunDetailAPI(context.Context, string) (api.InspectRunDetailRecord, bool, error) {
 	return f.detail, true, nil
 }
 
@@ -68,11 +68,11 @@ func TestParseRunsOptionsIncludesRunRowFilters(t *testing.T) {
 }
 
 func TestInspectRunsEndpointParsesFilterParams(t *testing.T) {
-	quality := &fakeQuality{
+	inspect := &fakeInspect{
 		runs: []api.InspectRunRecord{{TraceID: "trace-1", Status: "ok"}},
 	}
 
-	got, err := InspectRuns.Call(context.Background(), Deps{Inspect: quality}, &RunsParams{
+	got, err := InspectRuns.Call(context.Background(), Deps{Inspect: inspect}, &RunsParams{
 		InspectRunsOptions: api.InspectRunsOptions{
 			Status: []string{"ok"},
 			Limit:  25,
@@ -85,18 +85,18 @@ func TestInspectRunsEndpointParsesFilterParams(t *testing.T) {
 	if len(got) != 1 || got[0].TraceID != "trace-1" {
 		t.Fatalf("runs = %+v, want trace-1", got)
 	}
-	if !reflect.DeepEqual(quality.runOpts.Status, []string{"ok"}) || quality.runOpts.Limit != 25 || quality.runOpts.Offset != 5 {
-		t.Fatalf("run opts = %+v, want status/limit/offset", quality.runOpts)
+	if !reflect.DeepEqual(inspect.runOpts.Status, []string{"ok"}) || inspect.runOpts.Limit != 25 || inspect.runOpts.Offset != 5 {
+		t.Fatalf("run opts = %+v, want status/limit/offset", inspect.runOpts)
 	}
 }
 
-func TestInspectInsightsEndpointUsesQualityReadPort(t *testing.T) {
+func TestInspectInsightsEndpointUsesInspectReadPort(t *testing.T) {
 	want := []api.InspectInsightRecord{
 		{Tag: "Insight", InsightID: "insight-1", Title: "Missing coverage", Severity: "medium"},
 	}
 
 	got, err := InspectInsights.Call(context.Background(), Deps{
-		Inspect: &fakeQuality{insights: want},
+		Inspect: &fakeInspect{insights: want},
 	})
 	if err != nil {
 		t.Fatalf("InspectInsights.Call: %v", err)
@@ -113,7 +113,7 @@ func TestInspectRunDetailEndpointUsesTraceIDParam(t *testing.T) {
 	}
 
 	got, err := InspectRunDetail.Call(context.Background(), Deps{
-		Inspect: &fakeQuality{detail: want},
+		Inspect: &fakeInspect{detail: want},
 	}, &readmodel.PathID{ID: "trace-1"})
 	if err != nil {
 		t.Fatalf("InspectRunDetail.Call: %v", err)

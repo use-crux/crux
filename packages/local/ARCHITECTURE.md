@@ -2,7 +2,7 @@
 
 `@use-crux/local` is the Go runtime for local Crux development. It owns the HTTP server, WebSocket/SSE
 subscriptions, TUI, embedded devtools UI, observability read models, Project Index read models, and
-the local Quality Workbench filesystem boundary.
+the local Eval and insight filesystem boundary.
 
 ## Local Configuration Boundary
 
@@ -16,12 +16,12 @@ The product rule is:
 
 For `@use-crux/local`, this means:
 
-- `crux dev`, Devtools, lint, and Quality should be able to start from conventions and the Project
+- `crux dev`, Devtools, lint, and Evals should be able to start from conventions and the Project
   Index whenever possible.
-- Local defaults such as `.crux/quality`, `.crux/cache`, package-name quality ids, and conventional
+- Local defaults such as `.crux/evals`, `.crux/cache`, package-name Eval ids, and conventional
   `*.eval.ts` discovery are local tooling behavior, not production ownership decisions.
 - A future `crux config inspect` or equivalent Project Model view should explain inferred package
-  roots, source roots, ignored paths, discovered definitions, quality assets, explicit config files,
+  roots, source roots, ignored paths, discovered definitions, Eval assets, explicit config files,
   and diagnostics with inferred-vs-explicit provenance.
 - Runtime behavior that moves data, spends money, persists state, installs plugins, exports telemetry,
   enables cloud upload, or changes privacy/retention must remain explicitly authored or explicitly
@@ -35,14 +35,11 @@ return diagnostics and small fixes rather than turning config into a second prod
 
 ## Eval and Inspect Filesystem Boundaries
 
-Eval V3 artifacts and Inspect state retain the existing `.crux/quality` physical directory for an
-in-place migration, but the directory name is storage provenance—not a public product model.
+Eval V3 artifacts and Inspect state live under the explicit `.crux/evals` boundary.
 
-- `internal/evalfs` validates and reads authoritative Eval V3 run and Baseline records. It preserves
-  exact stored run bytes and never reinterprets archived V2 experiments as reusable evidence.
+- `internal/evalfs` validates and reads authoritative Eval V3 run and Baseline records while
+  preserving exact stored bytes.
 - `internal/inspectfs` owns Inspect insight records plus status and silence streams.
-- `internal/legacymigration` atomically archives V2 experiment records under the read-only legacy
-  boundary. It does not make archived data eligible for Eval reuse or Baseline comparison.
 - `internal/review` owns durable feedback and Review projections; repository writes go through
   `internal/reviewwriter` and the project-local Eval Case contract.
 
@@ -118,7 +115,6 @@ Keep the storage packages split by responsibility:
 - `internal/inspectfs`: normalize, persist, and fold Inspect insight state.
 - `internal/review`: persist immutable feedback submissions and Review action history.
 - `internal/reviewwriter`: coordinate validated, atomic Add-to-eval source writes.
-- `internal/legacymigration`: one-way archival of pre-Eval records only.
 
 Do not reintroduce a single cross-domain snapshot package. If a file starts owning more than one
 concern, split it before adding another behavior.

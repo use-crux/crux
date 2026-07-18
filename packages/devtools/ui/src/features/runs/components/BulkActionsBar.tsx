@@ -1,5 +1,5 @@
-import { Btn } from "@/qw/shell/primitives";
-import { Icon } from "@/qw/shell/Icon";
+import { Btn } from "@/devtools/shell/primitives";
+import { Icon } from "@/devtools/shell/Icon";
 
 interface BulkActionsBarProps {
   count: number;
@@ -18,9 +18,9 @@ export function BulkActionsBar({
     <div
       className="sticky top-0 z-20 flex items-center gap-3 px-8 py-2 font-mono text-[12px]"
       style={{
-        background: "var(--qw-crux-soft)",
-        borderBottom: "1px solid var(--qw-crux-line)",
-        color: "var(--qw-crux)",
+        background: "var(--devtools-crux-soft)",
+        borderBottom: "1px solid var(--devtools-crux-line)",
+        color: "var(--devtools-crux)",
       }}
     >
       <span className="font-semibold">
@@ -30,7 +30,7 @@ export function BulkActionsBar({
         type="button"
         onClick={onCancel}
         className="font-mono text-[11px] hover:opacity-80"
-        style={{ color: "var(--qw-fg-muted)" }}
+        style={{ color: "var(--devtools-fg-muted)" }}
         disabled={busy}
       >
         Cancel

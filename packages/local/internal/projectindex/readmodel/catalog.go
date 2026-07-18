@@ -43,7 +43,6 @@ func CatalogShow(index api.IndexData, id string, activity *api.CatalogRuntimeAct
 		Evidence:        sortedCatalogEvidence(evidence),
 		Diagnostics:     catalogDiagnostics(root, index.Diagnostics, id),
 		Lints:           catalogLints(root, index.LintFindings, id),
-		Quality:         definition.Quality,
 		RuntimeActivity: activity,
 	}, true
 }

@@ -64,6 +64,20 @@ export function planningPorts(
   };
 }
 
+/** Planning ports for fake task-host tests that intentionally perform no billable work. */
+export function nonBillablePlanningPorts(): EvalPlanningPorts {
+  return {
+    evidenceStore: memoryEvidenceStore(),
+    costEstimator: { estimate: () => ({ kind: "none" }) },
+    taskIdentity: {
+      describe: async () => ({
+        reusable: false,
+        reason: "identity_unavailable",
+      }),
+    },
+  };
+}
+
 export function taskResult(
   output: unknown = "yes",
   fingerprintMaterial: Readonly<Record<string, unknown>> = {

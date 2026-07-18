@@ -1,6 +1,6 @@
-import { Chip, Btn } from "@/qw/shell/primitives";
+import { Chip, Btn } from "@/devtools/shell/primitives";
 import type React from "react";
-import { Icon } from "@/qw/shell/Icon";
+import { Icon } from "@/devtools/shell/Icon";
 import { fmtRuntimeDate, runtimeStatusTone } from "../lib/runtime-format";
 import type {
   RuntimeInspectResponse,
@@ -35,8 +35,8 @@ export function RuntimeWorkTable({
   return (
     <div className="overflow-auto">
       <table className="w-full min-w-[900px] border-collapse text-left text-[12px]">
-        <thead style={{ color: "var(--qw-fg-faint)" }}>
-          <tr className="border-b" style={{ borderColor: "var(--qw-border)" }}>
+        <thead style={{ color: "var(--devtools-fg-faint)" }}>
+          <tr className="border-b" style={{ borderColor: "var(--devtools-border)" }}>
             <Th>status</Th>
             <Th>work</Th>
             <Th>target</Th>
@@ -61,10 +61,10 @@ export function RuntimeWorkTable({
                 key={row.workId}
                 className="border-b transition-colors"
                 style={{
-                  borderColor: "var(--qw-border)",
+                  borderColor: "var(--devtools-border)",
                   background:
                     row.workId === selectedWorkId
-                      ? "var(--qw-crux-soft)"
+                      ? "var(--devtools-crux-soft)"
                       : "transparent",
                 }}
               >
@@ -77,14 +77,14 @@ export function RuntimeWorkTable({
                   <button
                     type="button"
                     className="font-mono hover:underline"
-                    style={{ color: "var(--qw-fg)" }}
+                    style={{ color: "var(--devtools-fg)" }}
                     onClick={() => onSelect(row.workId)}
                   >
                     {row.workId}
                   </button>
                   <div
                     className="mt-0.5 font-mono text-[10.5px]"
-                    style={{ color: "var(--qw-fg-faint)" }}
+                    style={{ color: "var(--devtools-fg-faint)" }}
                   >
                     {row.work.kind}
                   </div>
@@ -93,7 +93,7 @@ export function RuntimeWorkTable({
                   <div className="font-mono">{row.targetId}</div>
                   <div
                     className="mt-0.5 font-mono text-[10.5px]"
-                    style={{ color: "var(--qw-fg-faint)" }}
+                    style={{ color: "var(--devtools-fg-faint)" }}
                   >
                     {row.namespace}
                   </div>
@@ -245,8 +245,8 @@ function SimpleTable({
   return (
     <div className="overflow-auto">
       <table className="w-full min-w-[720px] border-collapse text-left text-[12px]">
-        <thead style={{ color: "var(--qw-fg-faint)" }}>
-          <tr className="border-b" style={{ borderColor: "var(--qw-border)" }}>
+        <thead style={{ color: "var(--devtools-fg-faint)" }}>
+          <tr className="border-b" style={{ borderColor: "var(--devtools-border)" }}>
             {columns.map((column) => (
               <Th key={column}>{column}</Th>
             ))}
@@ -257,7 +257,7 @@ function SimpleTable({
             <tr
               key={rowIndex}
               className="border-b"
-              style={{ borderColor: "var(--qw-border)" }}
+              style={{ borderColor: "var(--devtools-border)" }}
             >
               {row.map((cell, cellIndex) => (
                 <Td key={cellIndex}>{cell}</Td>
@@ -299,13 +299,13 @@ function Kv({
     <div className={wide ? "md:col-span-2" : undefined}>
       <div
         className="font-mono text-[10.5px] uppercase tracking-[0.06em]"
-        style={{ color: "var(--qw-fg-faint)" }}
+        style={{ color: "var(--devtools-fg-faint)" }}
       >
         {label}
       </div>
       <div
         className="mt-1 break-words font-mono"
-        style={{ color: "var(--qw-fg)" }}
+        style={{ color: "var(--devtools-fg)" }}
       >
         {value}
       </div>
@@ -317,7 +317,7 @@ function EmptyRuntimeRows({ label }: { label: string }) {
   return (
     <div
       className="px-4 py-8 text-center text-[12px]"
-      style={{ color: "var(--qw-fg-muted)" }}
+      style={{ color: "var(--devtools-fg-muted)" }}
     >
       {label}
     </div>

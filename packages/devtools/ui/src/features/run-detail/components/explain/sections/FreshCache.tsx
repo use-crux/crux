@@ -6,8 +6,8 @@
  */
 
 import type { ReactNode } from "react";
-import { Icon } from "@/qw/shell/Icon";
-import type { IconName } from "@/qw/shell/nav";
+import { Icon } from "@/devtools/shell/Icon";
+import type { IconName } from "@/devtools/shell/nav";
 import { fmtAge } from "@/features/run-detail/lib/explain/format";
 import { fmtTokens } from "@/features/run-detail/lib/span-detail-inspection";
 import type {
@@ -36,22 +36,22 @@ function Column({
     <div
       className="min-w-0 flex-1 overflow-hidden rounded-[10px]"
       style={{
-        background: "var(--qw-bg)",
-        border: "1px solid var(--qw-border)",
+        background: "var(--devtools-bg)",
+        border: "1px solid var(--devtools-border)",
       }}
     >
       <div
         className="flex items-center gap-2 px-3.5 py-[9px]"
         style={{
-          borderBottom: "1px solid var(--qw-border)",
-          background: "var(--qw-bg-elev)",
+          borderBottom: "1px solid var(--devtools-border)",
+          background: "var(--devtools-bg-elev)",
         }}
       >
-        <Icon name={glyph} size={14} color="var(--qw-fg-muted)" />
+        <Icon name={glyph} size={14} color="var(--devtools-fg-muted)" />
         <span className="text-[12.5px] font-semibold">{title}</span>
         <span
           className="text-[11.5px] italic"
-          style={{ fontFamily: "var(--qw-serif)", color: "var(--qw-fg-faint)" }}
+          style={{ fontFamily: "var(--devtools-serif)", color: "var(--devtools-fg-faint)" }}
         >
           {blurb}
         </span>
@@ -75,20 +75,20 @@ function Row({
   return (
     <div
       className="flex items-start gap-[10px] px-3.5 py-[9px]"
-      style={{ borderBottom: "1px solid var(--qw-border)" }}
+      style={{ borderBottom: "1px solid var(--devtools-border)" }}
     >
       <div className="w-[124px] flex-shrink-0">
         <div className="mb-1">{chip}</div>
         <div
           className="truncate font-mono text-[10px]"
-          style={{ color: "var(--qw-fg-faint)" }}
+          style={{ color: "var(--devtools-fg-faint)" }}
         >
           {subject}
         </div>
         {meta && (
           <div
             className="mt-0.5 font-mono text-[9.5px]"
-            style={{ color: "var(--qw-fg-faint)" }}
+            style={{ color: "var(--devtools-fg-faint)" }}
           >
             {meta}
           </div>
@@ -96,7 +96,7 @@ function Row({
       </div>
       <span
         className="min-w-0 flex-1 text-[12px] leading-[1.45]"
-        style={{ fontFamily: "var(--qw-serif)", color: "var(--qw-fg-muted)" }}
+        style={{ fontFamily: "var(--devtools-serif)", color: "var(--devtools-fg-muted)" }}
       >
         {reason}
       </span>
@@ -108,7 +108,7 @@ function Empty({ children }: { children: ReactNode }) {
   return (
     <div
       className="px-3.5 py-3 text-[11.5px]"
-      style={{ color: "var(--qw-fg-faint)" }}
+      style={{ color: "var(--devtools-fg-faint)" }}
     >
       {children}
     </div>
@@ -154,7 +154,7 @@ export function FreshCacheBlock({
               subject={subjectLabel(c.subject)}
               meta={
                 c.savedTokens != null ? (
-                  <span style={{ color: "var(--qw-ok)" }}>
+                  <span style={{ color: "var(--devtools-ok)" }}>
                     saved {fmtTokens(c.savedTokens)} tok
                   </span>
                 ) : undefined

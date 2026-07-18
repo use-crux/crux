@@ -16,10 +16,18 @@ const LEGACY_GENERATED_HEADER =
 export async function writeGeneratedFile(
   file: string,
   contents: string,
-  options: { readonly protect?: boolean } = {},
+  options: {
+    readonly protect?: boolean;
+    readonly conflictNextStep?: string;
+  } = {},
 ): Promise<boolean> {
   const existing = await readExistingFile(file);
-  if (options.protect) assertGeneratedFileContentsWritable(file, existing);
+  if (options.protect)
+    assertGeneratedFileContentsWritable(
+      file,
+      existing,
+      options.conflictNextStep,
+    );
   if (existing === contents) return false;
   await mkdir(dirname(file), { recursive: true });
   await writeFile(file, contents);
@@ -38,6 +46,7 @@ async function readExistingFile(file: string): Promise<string | undefined> {
 function assertGeneratedFileContentsWritable(
   file: string,
   existing: string | undefined,
+  conflictNextStep?: string,
 ): void {
   if (existing === undefined || isGeneratedRuntimeArtifact(existing)) return;
   throw createRuntimeError({
@@ -47,6 +56,7 @@ function assertGeneratedFileContentsWritable(
     whatStillWorks:
       "The existing file is unchanged, and other generated artifacts can be regenerated after the path is cleared.",
     nextStep:
+      conflictNextStep ??
       "Move or rename the user-authored file, then run `crux runtime generate` again.",
   });
 }

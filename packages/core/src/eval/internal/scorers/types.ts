@@ -19,9 +19,10 @@
 
 import { canonicalJson } from "../evidence/canonical-json";
 import { JUDGE_PROMPT_VERSION } from "../evidence/cache-epochs";
-import { fingerprintPortableValue } from "../evidence/portable-fingerprint";
 import {
   SCORER_IDENTITY,
+  SCORER_DEPENDENCIES,
+  SCORER_BINDING,
   SCORER_INTERNAL,
   type ContextualScorerRun,
 } from "./runtime";
@@ -379,6 +380,21 @@ function makeScorer<N extends string>(
   return Object.assign(fn, { scorerName: name, costClass });
 }
 
+function makeBuiltinScorer<N extends string>(
+  name: N,
+  kind: string,
+  options: unknown,
+  fn: AnyScorerFn,
+): Scorer<unknown, unknown, unknown, N> {
+  return Object.assign(makeScorer(name, "code", fn), {
+    [SCORER_IDENTITY]: Object.freeze({
+      contract: "crux.eval.builtin-scorer.v1",
+      kind,
+      options,
+    }),
+  });
+}
+
 /**
  * Build a model-backed built-in: the plain callable delegates to the
  * contextual run with no context (standalone/autoevals path), while the
@@ -516,42 +532,28 @@ function judgeScorer(
     ),
     {
       [SCORER_IDENTITY]: {
+        contract: "crux.eval.judge.v1",
         kind: "judge",
         name: opts.name,
-        judge: judgeIdentity(opts),
-        rubric: opts.rubric,
-        choiceScores: opts.choiceScores,
-        model: opts.model,
-        generate: opts.generate,
-        useCoT: opts.useCoT,
-        select: opts.select,
+        promptVersion: JUDGE_PROMPT_VERSION,
+        rubric: opts.rubric ?? null,
+        choiceScores: opts.choiceScores ?? null,
+        useCoT: opts.useCoT ?? true,
+        settings: Object.freeze({ temperature: 0, topP: 1 }),
+        schema:
+          opts.choiceScores === undefined
+            ? "reasoning-score-v1"
+            : "reasoning-score-choice-v1",
+        select: opts.select === undefined ? "direct" : "authored_callback",
       },
+      [SCORER_DEPENDENCIES]: Object.freeze(["input", "output", "expected"]),
+      [SCORER_BINDING]: Object.freeze({
+        ...(opts.generate !== undefined ? { generate: opts.generate } : {}),
+        ...(opts.model !== undefined ? { model: opts.model } : {}),
+        ...(opts.select !== undefined ? { hasAuthoredSelect: true } : {}),
+      }),
     },
   );
-}
-
-function judgeIdentity(
-  opts: JudgeOptionsBase<string>,
-): Record<string, unknown> {
-  return {
-    ...(opts.model !== undefined ? { model: modelLabel(opts.model) } : {}),
-    promptVersion: JUDGE_PROMPT_VERSION,
-    rubricFingerprint: fingerprintPortableValue({
-      rubric: opts.rubric ?? null,
-      choiceScores: opts.choiceScores ?? null,
-    }),
-  };
-}
-
-function modelLabel(model: unknown): string {
-  if (typeof model === "string") return model;
-  if (model && typeof model === "object") {
-    const record = model as Record<string, unknown>;
-    if (typeof record.modelId === "string") return record.modelId;
-    if (typeof record.id === "string") return record.id;
-    if (typeof record.model === "string") return record.model;
-  }
-  return String(model);
 }
 
 /**
@@ -566,7 +568,7 @@ export const scorers: ScorerLibrary = {
   exact(opts) {
     const name =
       opts?.name ?? ("exact" as NonNullable<typeof opts>["name"] & string);
-    return makeScorer(name, "code", ({ output, expected }) => {
+    return makeBuiltinScorer(name, "exact", null, ({ output, expected }) => {
       if (expected === undefined) return { name, score: null };
       return {
         name,
@@ -577,36 +579,51 @@ export const scorers: ScorerLibrary = {
 
   contains(opts) {
     const name = opts?.name ?? "contains";
-    return makeScorer(name, "code", ({ output, expected }) => {
-      const needle =
-        opts?.value ?? (typeof expected === "string" ? expected : undefined);
-      if (needle === undefined) return { name, score: null };
-      return { name, score: outputText(output).includes(needle) ? 1 : 0 };
-    });
+    return makeBuiltinScorer(
+      name,
+      "contains",
+      { value: opts?.value ?? null },
+      ({ output, expected }) => {
+        const needle =
+          opts?.value ?? (typeof expected === "string" ? expected : undefined);
+        if (needle === undefined) return { name, score: null };
+        return { name, score: outputText(output).includes(needle) ? 1 : 0 };
+      },
+    );
   },
 
   regex(opts) {
     const name = opts.name ?? "regex";
     const pattern = opts.pattern;
-    return makeScorer(name, "code", ({ output }) => {
-      // Reset lastIndex so global/sticky patterns behave statelessly per cell.
-      pattern.lastIndex = 0;
-      return { name, score: pattern.test(outputText(output)) ? 1 : 0 };
-    });
+    return makeBuiltinScorer(
+      name,
+      "regex",
+      { source: pattern.source, flags: pattern.flags },
+      ({ output }) => {
+        // Reset lastIndex so global/sticky patterns behave statelessly per cell.
+        pattern.lastIndex = 0;
+        return { name, score: pattern.test(outputText(output)) ? 1 : 0 };
+      },
+    );
   },
 
   levenshtein(opts) {
     const name = opts?.name ?? "levenshtein";
-    return makeScorer(name, "code", ({ output, expected }) => {
-      if (typeof output !== "string" || typeof expected !== "string")
-        return { name, score: null };
-      return { name, score: stringSimilarity(output, expected) };
-    });
+    return makeBuiltinScorer(
+      name,
+      "levenshtein",
+      null,
+      ({ output, expected }) => {
+        if (typeof output !== "string" || typeof expected !== "string")
+          return { name, score: null };
+        return { name, score: stringSimilarity(output, expected) };
+      },
+    );
   },
 
   jsonValid(opts) {
     const name = opts?.name ?? "jsonValid";
-    return makeScorer(name, "code", ({ output }) => {
+    return makeBuiltinScorer(name, "jsonValid", null, ({ output }) => {
       if (output === undefined) return { name, score: 0 };
       if (typeof output !== "string") return { name, score: 1 };
       try {
@@ -620,7 +637,7 @@ export const scorers: ScorerLibrary = {
 
   jsonDiff(opts) {
     const name = opts?.name ?? "jsonDiff";
-    return makeScorer(name, "code", ({ output, expected }) => {
+    return makeBuiltinScorer(name, "jsonDiff", null, ({ output, expected }) => {
       if (expected === undefined) return { name, score: null };
       const actual = typeof output === "string" ? tryParse(output) : output;
       return { name, score: jsonSimilarity(actual, expected) };

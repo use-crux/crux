@@ -13,10 +13,7 @@
  * import { inMemoryRecordStore } from '@use-crux/core/storage'
  *
  * export default config({
- *   quality: {
- *     include: ['evals/**\/*.eval.ts', '**\/*.eval.ts'],
- *     defaults: { replay: 'record-new' },
- *   },
+ *   lint: { profile: 'recommended' },
  *   persistence: {
  *     records: inMemoryRecordStore(),
  *   },
@@ -29,12 +26,12 @@
  * @module
  */
 
-import type { PromptRegistry } from './configure'
-import type { CruxConfig } from './config-types'
-import { configure } from './configure'
-import { createRuntimeConfigTransaction } from './config-transaction'
-import type { CruxFlowRuntimeControls } from './api/flows'
-import { getCruxProcessRegistry } from './process-registry'
+import type { PromptRegistry } from "./configure";
+import type { CruxConfig } from "./config-types";
+import { configure } from "./configure";
+import { createRuntimeConfigTransaction } from "./config-transaction";
+import type { CruxFlowRuntimeControls } from "./api/flows";
+import { getCruxProcessRegistry } from "./process-registry";
 
 // ─────────────────────────────────────────────────────────────────
 // Types
@@ -59,24 +56,28 @@ export type {
   CruxObservabilityConfig,
   CruxPersistenceConfig,
   CruxRuntimeConfig,
-} from './config-types'
+} from "./config-types";
+export type {
+  CruxExperimentalEvalConfig,
+  CruxExperimentalEvalPrice,
+} from "./eval-config";
 
 /**
  * Crux instance returned by `config()`.
  * Extends `PromptRegistry` with access to the raw config.
  */
 export interface Crux extends PromptRegistry {
-  /** The raw config, for tooling to read quality settings etc. */
-  readonly config: Readonly<CruxConfig>
+  /** The raw project configuration. */
+  readonly config: Readonly<CruxConfig>;
   /** Name-bound Runtime Engine flow controls. */
-  readonly flows: CruxFlowRuntimeControls
+  readonly flows: CruxFlowRuntimeControls;
 }
 
 // ─────────────────────────────────────────────────────────────────
 // Main
 // ─────────────────────────────────────────────────────────────────
 
-const runtimeRegistry = getCruxProcessRegistry().runtime
+const runtimeRegistry = getCruxProcessRegistry().runtime;
 
 /**
  * Define and apply Crux configuration.
@@ -95,7 +96,7 @@ const runtimeRegistry = getCruxProcessRegistry().runtime
  * import { config } from '@use-crux/core'
  *
  * export default config({
- *   quality: { defaults: { replay: 'record-new' } },
+ *   lint: { profile: 'recommended' },
  *   persistence: { records },
  *   generation: { middleware, tokenizer },
  *   observability: { serverUrl: process.env.CRUX_OBSERVABILITY_URL },
@@ -103,24 +104,24 @@ const runtimeRegistry = getCruxProcessRegistry().runtime
  * ```
  */
 export function config(config: CruxConfig): Crux {
-  const transaction = createRuntimeConfigTransaction({ config })
-  if (transaction.inert) return transaction.createCrux()
+  const transaction = createRuntimeConfigTransaction({ config });
+  if (transaction.inert) return transaction.createCrux();
 
-  runtimeRegistry.activeInstallation?.restore()
-  runtimeRegistry.activeInstallation = undefined
-  const installation = transaction.apply()
-  runtimeRegistry.activeInstallation = installation
-  const registry = configure(transaction.configureOptions)
-  const bridgeConnection = installation.connectBridge(registry)
-  const crux = installation.createCrux(registry, bridgeConnection)
+  runtimeRegistry.activeInstallation?.restore();
+  runtimeRegistry.activeInstallation = undefined;
+  const installation = transaction.apply();
+  runtimeRegistry.activeInstallation = installation;
+  const registry = configure(transaction.configureOptions);
+  const bridgeConnection = installation.connectBridge(registry);
+  const crux = installation.createCrux(registry, bridgeConnection);
 
   return Object.freeze({
     ...crux,
     dispose() {
-      crux.dispose()
+      crux.dispose();
       if (runtimeRegistry.activeInstallation === installation) {
-        runtimeRegistry.activeInstallation = undefined
+        runtimeRegistry.activeInstallation = undefined;
       }
     },
-  }) as Crux
+  }) as Crux;
 }

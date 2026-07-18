@@ -14,11 +14,9 @@
  *   - refetchOnWindowFocus  — true; the user often Alt-Tabs back to
  *                             check if a run finished.
  *
- * WebSocket-driven invalidation lives in `useDevtools.ts`: when a
- * `quality:*` event arrives we call `queryClient.invalidateQueries`
- * with the matching key prefix. Query owns the read cache; the WS
- * reducer keeps owning push-only runtime state (judge events, runtime
- * flow steps, in-flight tool events).
+ * WebSocket-driven invalidation lives in `useDevtools.ts`. Eval file-backed
+ * read models additionally use bounded polling because filesystem changes do
+ * not have a durable push event yet.
  */
 
 import { QueryClient } from "@tanstack/react-query";
@@ -80,6 +78,8 @@ export const qk = {
     catalog: () => ["evals", "catalog"] as const,
     runs: () => ["evals", "runs"] as const,
     run: (runId?: string) => ["evals", "run", runId ?? null] as const,
+    localRunAvailability: (runIds: readonly string[]) =>
+      ["evals", "local-run-availability", runIds] as const,
     baselines: () => ["evals", "baselines"] as const,
     reviews: () => ["evals", "reviews"] as const,
     review: (reviewId?: string) =>

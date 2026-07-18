@@ -1,18 +1,46 @@
-import { open, readFile, rm, symlink } from "node:fs/promises";
+import {
+  cp,
+  mkdir,
+  mkdtemp,
+  open,
+  readFile,
+  rm,
+  symlink,
+} from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { addReviewCase } from "../../src/eval/node/runner";
 import { resolveReviewSidecar } from "../../src/eval/node/review/filesystem";
 
-const root = dirname(
+const fixtureRoot = dirname(
   fileURLToPath(
     new URL("./fixtures/node-run-project/package.json", import.meta.url),
   ),
 );
-const sidecar = join(root, "evals/review.cases.jsonl");
+let temporaryRoot: string;
+let root: string;
+let sidecar: string;
 
 describe.sequential("Review repository writer", () => {
+  beforeAll(async () => {
+    temporaryRoot = await mkdtemp(join(dirname(fixtureRoot), "review-writer-"));
+    root = temporaryRoot;
+    await mkdir(join(root, "evals"), { recursive: true });
+    await Promise.all([
+      cp(
+        join(fixtureRoot, "evals/review.eval.ts"),
+        join(root, "evals/review.eval.ts"),
+      ),
+      cp(join(fixtureRoot, "task.ts"), join(root, "task.ts")),
+    ]);
+    sidecar = join(root, "evals/review.cases.jsonl");
+  });
+
+  afterAll(async () => {
+    await rm(temporaryRoot, { recursive: true, force: true });
+  });
+
   afterEach(async () => {
     await rm(sidecar, { force: true });
     await rm(`${sidecar}.lock`, { force: true });
@@ -51,6 +79,25 @@ describe.sequential("Review repository writer", () => {
     ).rejects.toThrow(/saveCorrection.*correctionProposal/);
   });
 
+  it("applies the internal persistence policy before producing a Review row", async () => {
+    const pending = await addReviewCase(
+      {
+        projectRoot: root,
+        evalId: "review",
+        id: "review-private",
+        input: { question: "private" },
+        reviewId: "rv_private",
+        runId: "run_private",
+        repositoryWritable: false,
+      },
+      { persistencePolicy: { redactPaths: ["question"] } },
+    );
+
+    expect(JSON.parse(pending.row)).toMatchObject({
+      input: { question: "[redacted]" },
+    });
+  });
+
   it("validates, appends canonically, verifies rediscovery, and semantically links", async () => {
     const request = {
       projectRoot: root,
@@ -72,7 +119,55 @@ describe.sequential("Review repository writer", () => {
     expect((await readFile(sidecar, "utf8")).trim().split("\n")).toHaveLength(
       1,
     );
-  });
+  }, 20_000);
+
+  it("serializes concurrent semantic duplicates into one added and one linked Case", async () => {
+    const request = {
+      projectRoot: root,
+      evalId: "review",
+      input: { question: "concurrent duplicate" },
+      reviewId: "rv_concurrent",
+      runId: "run_concurrent",
+      now: () => new Date("2026-07-17T00:00:00.000Z"),
+    } as const;
+
+    const results = await Promise.all([
+      addReviewCase({ ...request, id: "concurrent-a" }),
+      addReviewCase({ ...request, id: "concurrent-b" }),
+    ]);
+
+    expect(results.map((result) => result.status).sort()).toEqual([
+      "added",
+      "linked",
+    ]);
+    expect((await readFile(sidecar, "utf8")).trim().split("\n")).toHaveLength(
+      1,
+    );
+  }, 15_000);
+
+  it("serializes concurrent same-ID conflicts without appending both rows", async () => {
+    const request = {
+      projectRoot: root,
+      evalId: "review",
+      id: "concurrent-id",
+      reviewId: "rv_concurrent_id",
+      runId: "run_concurrent_id",
+      now: () => new Date("2026-07-17T00:00:00.000Z"),
+    } as const;
+
+    const results = await Promise.all([
+      addReviewCase({ ...request, input: { question: "first" } }),
+      addReviewCase({ ...request, input: { question: "second" } }),
+    ]);
+
+    expect(results.map((result) => result.status).sort()).toEqual([
+      "added",
+      "conflict",
+    ]);
+    expect((await readFile(sidecar, "utf8")).trim().split("\n")).toHaveLength(
+      1,
+    );
+  }, 15_000);
 
   it("returns ID conflicts without overwriting and rejects invalid input", async () => {
     await expect(

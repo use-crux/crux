@@ -42,7 +42,8 @@ export function assertEvalHostEntry(
   }
   if (
     options.registry === undefined ||
-    !Array.isArray(options.registry.entries)
+    !Array.isArray(options.registry.entries) ||
+    typeof options.registry.privacyFingerprint !== "string"
   ) {
     throw setupError(
       "entry_missing",

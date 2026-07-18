@@ -15,7 +15,8 @@ SDK-agnostic AI orchestration toolkit for TypeScript. See README.md for full API
 - **`/retrieval`** — `knowledgeBase()`, `retriever()`, `retrievalRecipe()` (indexed knowledge → scored hits, tools, grounding)
 - **`/compaction`** — `summarizeMessages()`, `createSlidingWindow()`, `createBudgetManager()`, `extractKeyFacts()`
 - **`/scoring`** — `judge()`, pre-built metrics; runtime enforcement uses `constraint.judge(...)` from `/safety`
-- **`/quality`** — `evaluate()`, `target.*`, `scorers.*`, `dataset()`, `cassette()` (the Quality system: evaluations → experiments → baselines, replay at the executor boundary)
+- **`/eval`** — inert `evaluate()` definitions, typed Cases and Variants; execution is coordinated by `crux eval`
+- **`/feedback`** — awaited, run-linked production feedback submissions
 - **`/agent`** — `agent()`, `parallel()`, `pipeline()`, `consensus()`, `swarm()`, `blackboard()`, `handoff()`, `delegate()`
 - **`/storage`** — `RecordStore`, `VectorStore`, `AssetStore`, `storage()`, `inMemoryStorage()`
 - **`/plan` + `/tasks`** — `plan()`, `tasks()`, `task()`, handle contexts, handle tools, and workers
@@ -39,10 +40,10 @@ React bindings live in **`@use-crux/react`** (`CruxProvider`, hooks, transports,
 
 ## Testing & Evaluation
 
-- `evaluate()` from `@use-crux/core/eval` — author evaluations over any Crux primitive (prompt/flow/agent/retriever/fn)
-- `evaluation.run()` — programmatic runs (Vitest bridge); `crux eval run` — CLI runner with watch/replay/baselines
+- `evaluate()` from `@use-crux/core/eval` — author inert Evals over callable production tasks
+- `crux eval` — discover and run Evals; `runEval()` from `/eval/node` is the programmatic coordinator
 - Run unit tests: `pnpm --filter @use-crux/core test -- --run`
-- Evals: `packages/backend/evals/` directory (Karyla consumer)
+- Keep project Evals in `evals/**/*.eval.ts` files with one default export each
 
 ## Plugin System
 

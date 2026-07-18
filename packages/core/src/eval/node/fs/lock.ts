@@ -1,6 +1,6 @@
 /**
  *
- * Portable directory locks for multi-writer Quality artifacts.
+ * Portable directory locks for multi-writer Eval artifacts.
  *
  * `mkdir` is atomic on local filesystems, which is enough for the evidence,
  * baseline, and output-cache write paths without adding a platform-specific
@@ -18,12 +18,12 @@ const RETRY_MS = 50
 const TIMEOUT_MS = 10_000
 const STALE_MS = 30_000
 
-class QualityLockTimeoutError extends Error {
-  readonly code = 'quality-lock-timeout'
+class EvalLockTimeoutError extends Error {
+  readonly code = 'eval-lock-timeout'
 
   constructor(path: string) {
-    super(`timed out acquiring quality file lock for ${path}`)
-    this.name = 'QualityLockTimeoutError'
+    super(`timed out acquiring Eval file lock for ${path}`)
+    this.name = 'EvalLockTimeoutError'
   }
 }
 
@@ -60,7 +60,7 @@ async function acquireLock(lockPath: string, targetPath: string): Promise<void> 
         await rm(lockPath, { recursive: true, force: true })
         continue
       }
-      if (Date.now() - startedAt >= TIMEOUT_MS) throw new QualityLockTimeoutError(targetPath)
+      if (Date.now() - startedAt >= TIMEOUT_MS) throw new EvalLockTimeoutError(targetPath)
       await sleep(RETRY_MS)
     }
   }

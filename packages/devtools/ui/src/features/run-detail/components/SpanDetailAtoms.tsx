@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { JsonTree } from "@/shared/components/JsonTree";
 import { cn } from "@/shared/lib/utils";
-import { SectionErrorBoundary } from "@/qw/shell/SectionBoundary";
+import { SectionErrorBoundary } from "@/devtools/shell/SectionBoundary";
 import type { ContextMeta, CorrelatedEvent } from "@/types";
 import {
   formatTime,
@@ -103,16 +103,16 @@ export function MetricPill({
 }
 
 const CHUNK_COLORS = [
-  "bg-(--qw-blue-soft)",
-  "bg-(--qw-ok-soft)",
-  "bg-(--qw-warn-soft)",
-  "bg-(--qw-iris-soft)",
-  "bg-(--qw-plum-soft)",
-  "bg-(--qw-crux-soft)",
-  "bg-(--qw-gold-soft)",
-  "bg-(--qw-blue-soft)",
-  "bg-(--qw-ok-soft)",
-  "bg-(--qw-warn-soft)",
+  "bg-(--devtools-blue-soft)",
+  "bg-(--devtools-ok-soft)",
+  "bg-(--devtools-warn-soft)",
+  "bg-(--devtools-iris-soft)",
+  "bg-(--devtools-plum-soft)",
+  "bg-(--devtools-crux-soft)",
+  "bg-(--devtools-gold-soft)",
+  "bg-(--devtools-blue-soft)",
+  "bg-(--devtools-ok-soft)",
+  "bg-(--devtools-warn-soft)",
 ];
 
 export function StreamChunksView({
@@ -144,7 +144,7 @@ export function StreamChunksView({
           </span>
         ))}
         {isStreaming && (
-          <span className="inline-block w-[2px] h-[14px] bg-(--qw-blue) animate-pulse ml-0.5 align-middle" />
+          <span className="inline-block w-[2px] h-[14px] bg-(--devtools-blue) animate-pulse ml-0.5 align-middle" />
         )}
       </pre>
     </div>
@@ -152,14 +152,14 @@ export function StreamChunksView({
 }
 
 const BREAKDOWN_COLORS = [
-  "bg-(--qw-blue)",
-  "bg-(--qw-ok)",
-  "bg-(--qw-warn)",
-  "bg-(--qw-iris)",
-  "bg-(--qw-plum)",
-  "bg-(--qw-crux)",
-  "bg-(--qw-gold)",
-  "bg-(--qw-blue)",
+  "bg-(--devtools-blue)",
+  "bg-(--devtools-ok)",
+  "bg-(--devtools-warn)",
+  "bg-(--devtools-iris)",
+  "bg-(--devtools-plum)",
+  "bg-(--devtools-crux)",
+  "bg-(--devtools-gold)",
+  "bg-(--devtools-blue)",
 ];
 
 export function BudgetBreakdownBar({
@@ -295,7 +295,7 @@ export function EventList({ events }: { events: CorrelatedEvent[] }) {
                 {event.eventType === "tool:end" && (
                   <>
                     {event.data.error != null && (
-                      <div className="text-(--qw-danger) text-[11px] font-mono mb-1">
+                      <div className="text-(--devtools-danger) text-[11px] font-mono mb-1">
                         {String(event.data.error)}
                       </div>
                     )}
@@ -328,7 +328,7 @@ export function EventList({ events }: { events: CorrelatedEvent[] }) {
                             )}
                         </div>
                         {event.data.modelOutputError != null && (
-                          <div className="text-(--qw-danger) text-[11px] font-mono">
+                          <div className="text-(--devtools-danger) text-[11px] font-mono">
                             {String(event.data.modelOutputError)}
                           </div>
                         )}
@@ -507,7 +507,7 @@ export function PartContent({
       seg.highlighted ? (
         <span
           key={i}
-          className="bg-(--qw-warn-soft) text-(--qw-warn) border-b border-dashed border-(--qw-warn-soft)"
+          className="bg-(--devtools-warn-soft) text-(--devtools-warn) border-b border-dashed border-(--devtools-warn-soft)"
         >
           {seg.text}
         </span>
@@ -521,7 +521,7 @@ export function PartContent({
     <div className="relative">
       {hasHighlights && (
         <div className="px-3 pt-1.5 flex items-center gap-1.5 text-[9px] text-zinc-600">
-          <span className="inline-block w-3 h-0.5 bg-(--qw-warn-soft) border-b border-dashed border-(--qw-warn-soft)" />
+          <span className="inline-block w-3 h-0.5 bg-(--devtools-warn-soft) border-b border-dashed border-(--devtools-warn-soft)" />
           injected from input
         </div>
       )}
@@ -574,7 +574,7 @@ export function ContextPartCard({
           skipped
             ? "border-zinc-800/40 opacity-60"
             : isUser
-              ? "border-(--qw-crux-line)"
+              ? "border-(--devtools-crux-line)"
               : "border-zinc-800/60",
         )}
       >
@@ -582,20 +582,20 @@ export function ContextPartCard({
         <div
           className={cn(
             "flex items-center gap-2 px-3 py-1.5",
-            isUser ? "bg-(--qw-crux-soft)" : "bg-zinc-900/60",
+            isUser ? "bg-(--devtools-crux-soft)" : "bg-zinc-900/60",
           )}
         >
           {isUser ? (
-            <MessageSquareIcon className="size-3 text-(--qw-crux) shrink-0" />
+            <MessageSquareIcon className="size-3 text-(--devtools-crux) shrink-0" />
           ) : isPromptPart ? (
             <FileTextIcon className="size-3 text-zinc-500 shrink-0" />
           ) : isContext ? (
-            <PuzzleIcon className="size-3 text-(--qw-iris) shrink-0" />
+            <PuzzleIcon className="size-3 text-(--devtools-iris) shrink-0" />
           ) : null}
           <span
             className={cn(
               "text-[10px] font-medium uppercase tracking-wider",
-              isUser ? "text-(--qw-crux)" : "text-zinc-600",
+              isUser ? "text-(--devtools-crux)" : "text-zinc-600",
             )}
           >
             {role}
@@ -606,9 +606,9 @@ export function ContextPartCard({
               skipped
                 ? "text-zinc-600 line-through"
                 : isUser
-                  ? "text-(--qw-crux)"
+                  ? "text-(--devtools-crux)"
                   : isContext
-                    ? "text-(--qw-iris)"
+                    ? "text-(--devtools-iris)"
                     : "text-zinc-300",
             )}
           >
@@ -622,7 +622,7 @@ export function ContextPartCard({
           {onViewContext && (
             <button
               onClick={onViewContext}
-              className="text-[10px] text-(--qw-iris) hover:text-(--qw-iris) shrink-0"
+              className="text-[10px] text-(--devtools-iris) hover:text-(--devtools-iris) shrink-0"
             >
               view →
             </button>
@@ -644,7 +644,7 @@ export function ContextPartCard({
                   "text-[9px] rounded px-1",
                   ctxMeta.isStatic
                     ? "text-zinc-500 bg-zinc-800"
-                    : "text-(--qw-warn) bg-(--qw-warn-soft)",
+                    : "text-(--devtools-warn) bg-(--devtools-warn-soft)",
                 )}
               >
                 {ctxMeta.isStatic ? "static" : "dynamic"}
@@ -654,7 +654,7 @@ export function ContextPartCard({
               {tokens.toLocaleString()} tok
             </span>
             {tokens > 0 && tokenBudget && tokens / tokenBudget > 0.3 && (
-              <span className="text-[10px] text-(--qw-warn)">
+              <span className="text-[10px] text-(--devtools-warn)">
                 ⚠ {Math.round((tokens / tokenBudget) * 100)}%
               </span>
             )}

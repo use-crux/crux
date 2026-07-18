@@ -1,5 +1,5 @@
-import type { ChipTone } from "@/qw/shell/primitives";
-import type { IconName } from "@/qw/shell/nav";
+import type { ChipTone } from "@/devtools/shell/primitives";
+import type { IconName } from "@/devtools/shell/nav";
 import type { MemoryInspection, MemoryStoreType } from "@/types";
 
 interface TypeMeta {
@@ -13,25 +13,25 @@ const TYPE_META: Record<MemoryStoreType, TypeMeta> = {
   working: {
     icon: "brain",
     tone: "crux",
-    color: "var(--qw-crux)",
+    color: "var(--devtools-crux)",
     label: "working",
   },
   episodic: {
     icon: "book",
     tone: "iris",
-    color: "var(--qw-iris)",
+    color: "var(--devtools-iris)",
     label: "episodic",
   },
   semantic: {
     icon: "db",
     tone: "ok",
-    color: "var(--qw-ok)",
+    color: "var(--devtools-ok)",
     label: "semantic",
   },
   blackboard: {
     icon: "grid",
     tone: "warn",
-    color: "var(--qw-warn)",
+    color: "var(--devtools-warn)",
     label: "blackboard",
   },
 };
@@ -182,8 +182,8 @@ function decodeContent(content: unknown): unknown {
 }
 
 export function scoreTone(score: number | undefined | null): string {
-  if (score == null) return "var(--qw-fg-faint)";
-  if (score >= 0.85) return "var(--qw-ok)";
-  if (score >= 0.7) return "var(--qw-crux)";
-  return "var(--qw-warn)";
+  if (score == null) return "var(--devtools-fg-faint)";
+  if (score >= 0.85) return "var(--devtools-ok)";
+  if (score >= 0.7) return "var(--devtools-crux)";
+  return "var(--devtools-warn)";
 }

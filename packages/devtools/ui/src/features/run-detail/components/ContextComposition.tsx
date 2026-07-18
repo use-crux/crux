@@ -31,8 +31,8 @@
  */
 
 import { useMemo, useState, type ReactNode } from "react";
-import { Chip, Eyebrow } from "@/qw/shell/primitives";
-import { Icon } from "@/qw/shell/Icon";
+import { Chip, Eyebrow } from "@/devtools/shell/primitives";
+import { Icon } from "@/devtools/shell/Icon";
 import {
   InjectStateChip,
   type InjectState,
@@ -89,15 +89,15 @@ interface Contrib {
 }
 
 const INJ_COLOR: Record<string, string> = {
-  prompt: "var(--qw-fg)",
-  context: "var(--qw-crux)",
-  conditional: "var(--qw-warn)",
-  match: "var(--qw-warn)",
-  skill: "var(--qw-iris)",
-  memory: "var(--qw-iris)",
-  blackboard: "var(--qw-iris)",
-  retrieval: "var(--qw-ok)",
-  retriever: "var(--qw-ok)",
+  prompt: "var(--devtools-fg)",
+  context: "var(--devtools-crux)",
+  conditional: "var(--devtools-warn)",
+  match: "var(--devtools-warn)",
+  skill: "var(--devtools-iris)",
+  memory: "var(--devtools-iris)",
+  blackboard: "var(--devtools-iris)",
+  retrieval: "var(--devtools-ok)",
+  retriever: "var(--devtools-ok)",
 };
 const injLabel = (k: InjKind): string =>
   k === "retrieval" ? "retriever" : String(k);
@@ -344,12 +344,12 @@ function StateBadge({ state }: { state: CruxContextContributionState }) {
 }
 
 const COMP_TINTS = [
-  "var(--qw-ok)",
-  "var(--qw-crux)",
-  "var(--qw-iris)",
-  "var(--qw-warn)",
-  "var(--qw-fg-muted)",
-  "var(--qw-danger)",
+  "var(--devtools-ok)",
+  "var(--devtools-crux)",
+  "var(--devtools-iris)",
+  "var(--devtools-warn)",
+  "var(--devtools-fg-muted)",
+  "var(--devtools-danger)",
 ];
 
 function fmtSize(c: { sizeBytes?: number; tokens?: number }): string {
@@ -373,8 +373,8 @@ function renderSegments(segments: readonly TextSegment[]): {
       <span
         key={i}
         style={{
-          background: "var(--qw-crux-soft)",
-          boxShadow: "inset 0 0 0 1px var(--qw-crux-line)",
+          background: "var(--devtools-crux-soft)",
+          boxShadow: "inset 0 0 0 1px var(--devtools-crux-line)",
           borderRadius: 3,
           padding: "1px 3px",
         }}
@@ -383,7 +383,7 @@ function renderSegments(segments: readonly TextSegment[]): {
         {s.source && (
           <sub
             className="font-mono"
-            style={{ fontSize: 8.5, color: "var(--qw-crux)" }}
+            style={{ fontSize: 8.5, color: "var(--devtools-crux)" }}
           >
             {" "}
             {s.source}
@@ -408,8 +408,8 @@ function renderText(text: string): { nodes: ReactNode; dyn: number } {
         <span
           key={i}
           style={{
-            background: "var(--qw-crux-soft)",
-            boxShadow: "inset 0 0 0 1px var(--qw-crux-line)",
+            background: "var(--devtools-crux-soft)",
+            boxShadow: "inset 0 0 0 1px var(--devtools-crux-line)",
             borderRadius: 3,
             padding: "1px 3px",
           }}
@@ -417,7 +417,7 @@ function renderText(text: string): { nodes: ReactNode; dyn: number } {
           {p}
           <sub
             className="font-mono"
-            style={{ fontSize: 8.5, color: "var(--qw-crux)" }}
+            style={{ fontSize: 8.5, color: "var(--devtools-crux)" }}
           >
             {" "}
             {m[1].trim()}
@@ -446,7 +446,7 @@ function ContributionRow({
   const hasSegments = !!(c.segments && c.segments.length > 0);
   const hasText = hasSegments || !!c.text;
   const [open, setOpen] = useState(defaultOpen && hasText);
-  const color = INJ_COLOR[c.kind] ?? "var(--qw-fg-muted)";
+  const color = INJ_COLOR[c.kind] ?? "var(--devtools-fg-muted)";
   const skip = c.state !== "active";
   const rendered = hasSegments
     ? renderSegments(c.segments!)
@@ -462,8 +462,8 @@ function ContributionRow({
     <div
       className="overflow-hidden rounded-[8px]"
       style={{
-        background: skip ? "transparent" : "var(--qw-bg-elev)",
-        border: `1px ${skip ? "dashed" : "solid"} ${isBase ? "var(--qw-crux-line)" : "var(--qw-border)"}`,
+        background: skip ? "transparent" : "var(--devtools-bg-elev)",
+        border: `1px ${skip ? "dashed" : "solid"} ${isBase ? "var(--devtools-crux-line)" : "var(--devtools-border)"}`,
         opacity: c.state === "disabled" ? 0.5 : skip ? 0.72 : 1,
       }}
     >
@@ -472,8 +472,8 @@ function ContributionRow({
         style={
           isBase
             ? {
-                background: "var(--qw-crux-soft)",
-                borderBottom: open ? "1px solid var(--qw-crux-line)" : "none",
+                background: "var(--devtools-crux-soft)",
+                borderBottom: open ? "1px solid var(--devtools-crux-line)" : "none",
               }
             : undefined
         }
@@ -483,14 +483,14 @@ function ContributionRow({
           <Icon
             name={open ? "arrowDown" : "arrowRight"}
             size={12}
-            color="var(--qw-fg-faint)"
+            color="var(--devtools-fg-faint)"
           />
         ) : (
           <span
             className="shrink-0 self-stretch rounded-full"
             style={{
               width: 3,
-              background: skip ? "var(--qw-fg-faint)" : color,
+              background: skip ? "var(--devtools-fg-faint)" : color,
             }}
           />
         )}
@@ -510,7 +510,7 @@ function ContributionRow({
               }}
               className="font-mono text-[11.5px] font-medium hover:underline"
               style={{
-                color: skip ? "var(--qw-fg-muted)" : "var(--qw-fg)",
+                color: skip ? "var(--devtools-fg-muted)" : "var(--devtools-fg)",
                 textDecoration:
                   c.state === "dropped-budget" ? "line-through" : undefined,
               }}
@@ -521,20 +521,20 @@ function ContributionRow({
               <span
                 className="rounded-[3px] px-1 font-mono text-[9px]"
                 style={{
-                  color: "var(--qw-crux)",
-                  background: "var(--qw-crux-soft)",
+                  color: "var(--devtools-crux)",
+                  background: "var(--devtools-crux-soft)",
                 }}
               >
                 {rendered.dyn} dynamic
               </span>
             )}
-            <Icon name="link" size={10} color="var(--qw-fg-faint)" />
+            <Icon name="link" size={10} color="var(--devtools-fg-faint)" />
             <StateBadge state={c.state} />
           </div>
           {(c.injects || c.reason) && (
             <div
               className="mt-1 text-[11px]"
-              style={{ color: "var(--qw-fg-muted)" }}
+              style={{ color: "var(--devtools-fg-muted)" }}
             >
               {c.injects && <>injects: {c.injects}</>}
               {c.reason && (
@@ -542,8 +542,8 @@ function ContributionRow({
                   style={{
                     color:
                       c.state === "dropped-budget"
-                        ? "var(--qw-danger)"
-                        : "var(--qw-warn)",
+                        ? "var(--devtools-danger)"
+                        : "var(--devtools-warn)",
                   }}
                 >
                   {" "}
@@ -555,7 +555,7 @@ function ContributionRow({
         </div>
         <div
           className="flex shrink-0 flex-col items-end gap-0.5 font-mono text-[10px]"
-          style={{ color: "var(--qw-fg-faint)" }}
+          style={{ color: "var(--devtools-fg-faint)" }}
         >
           <span>
             {c.priority != null ? `p${c.priority}` : ""}
@@ -568,10 +568,10 @@ function ContributionRow({
               style={{
                 color:
                   c.cache === "hit"
-                    ? "var(--qw-ok)"
+                    ? "var(--devtools-ok)"
                     : c.cache === "disabled"
-                      ? "var(--qw-fg-faint)"
-                      : "var(--qw-fg-muted)",
+                      ? "var(--devtools-fg-faint)"
+                      : "var(--devtools-fg-muted)",
               }}
             >
               cache {c.cache}
@@ -582,7 +582,7 @@ function ContributionRow({
       {open && rendered && (
         <div
           className="whitespace-pre-wrap px-4 py-3 text-[13px] leading-[1.7]"
-          style={{ fontFamily: "var(--qw-serif)" }}
+          style={{ fontFamily: "var(--devtools-serif)" }}
         >
           {rendered.nodes}
         </div>
@@ -703,8 +703,8 @@ export function ContextComposition({
       <div
         className="rounded-[10px] px-6 py-10 text-center text-[12.5px]"
         style={{
-          border: "1px dashed var(--qw-border)",
-          color: "var(--qw-fg-muted)",
+          border: "1px dashed var(--devtools-border)",
+          color: "var(--devtools-fg-muted)",
         }}
       >
         No context composition captured for this generation.
@@ -762,7 +762,7 @@ export function ContextComposition({
       <div className="flex flex-wrap items-center gap-2.5">
         <span
           className="font-mono text-[11px]"
-          style={{ color: "var(--qw-fg-muted)" }}
+          style={{ color: "var(--devtools-fg-muted)" }}
         >
           {counts.active} active · {counts["checked-not-included"]} checked ·{" "}
           {counts["dropped-budget"] + counts.disabled} skipped ·{" "}
@@ -773,7 +773,7 @@ export function ContextComposition({
         <div className="flex-1" />
         <div
           className="inline-flex overflow-hidden rounded-[6px] font-mono text-[10.5px]"
-          style={{ boxShadow: "inset 0 0 0 1px var(--qw-border)" }}
+          style={{ boxShadow: "inset 0 0 0 1px var(--devtools-border)" }}
         >
           {(["composition", "preview"] as const).map((m) => (
             <button
@@ -782,8 +782,8 @@ export function ContextComposition({
               onClick={() => setMode(m)}
               className="px-2.5 py-[3px]"
               style={{
-                background: mode === m ? "var(--qw-crux-soft)" : "transparent",
-                color: mode === m ? "var(--qw-crux)" : "var(--qw-fg-faint)",
+                background: mode === m ? "var(--devtools-crux-soft)" : "transparent",
+                color: mode === m ? "var(--devtools-crux)" : "var(--devtools-fg-faint)",
                 fontWeight: mode === m ? 600 : 450,
               }}
             >
@@ -800,20 +800,20 @@ export function ContextComposition({
           <div
             className="flex flex-wrap items-center gap-2 rounded-[8px] px-3 py-2 text-[11px]"
             style={{
-              background: "var(--qw-bg-elev)",
-              border: "1px solid var(--qw-border)",
-              color: "var(--qw-fg-muted)",
+              background: "var(--devtools-bg-elev)",
+              border: "1px solid var(--devtools-border)",
+              color: "var(--devtools-fg-muted)",
             }}
           >
-            <Icon name="layers" size={12} color="var(--qw-iris)" />
+            <Icon name="layers" size={12} color="var(--devtools-iris)" />
             <span>Effective request</span>
             {req.representative?.strategy && (
-              <span style={{ color: "var(--qw-fg-faint)" }}>
+              <span style={{ color: "var(--devtools-fg-faint)" }}>
                 · {req.representative.strategy.replace(/-/g, " ")}
               </span>
             )}
             {req.turns && req.turns.length > 0 && (
-              <span style={{ color: "var(--qw-fg-faint)" }}>
+              <span style={{ color: "var(--devtools-fg-faint)" }}>
                 · representative of {req.turns.length} turn
                 {req.turns.length === 1 ? "" : "s"}
               </span>
@@ -827,7 +827,7 @@ export function ContextComposition({
         <div>
           <div
             className="mb-1.5 flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.08em]"
-            style={{ color: "var(--qw-fg-faint)" }}
+            style={{ color: "var(--devtools-fg-faint)" }}
           >
             <span>Budget</span>
             <span>
@@ -840,8 +840,8 @@ export function ContextComposition({
           <div
             className="h-2 overflow-hidden rounded-full"
             style={{
-              background: "var(--qw-bg-muted)",
-              boxShadow: "inset 0 0 0 1px var(--qw-border)",
+              background: "var(--devtools-bg-muted)",
+              boxShadow: "inset 0 0 0 1px var(--devtools-border)",
             }}
           >
             <div
@@ -850,8 +850,8 @@ export function ContextComposition({
                 width: `${Math.min(100, (budget.usedTokens / budget.totalTokens) * 100)}%`,
                 background:
                   budget.usedTokens > budget.totalTokens
-                    ? "var(--qw-danger)"
-                    : "var(--qw-crux)",
+                    ? "var(--devtools-danger)"
+                    : "var(--devtools-crux)",
               }}
             />
           </div>
@@ -863,7 +863,7 @@ export function ContextComposition({
         <div className="flex flex-col gap-2">
           <div
             className="flex h-[26px] overflow-hidden rounded-[8px]"
-            style={{ boxShadow: "inset 0 0 0 1px var(--qw-border)" }}
+            style={{ boxShadow: "inset 0 0 0 1px var(--devtools-border)" }}
           >
             {active.map((c, i) => {
               const w = ((c.sizeBytes ?? c.tokens ?? 0) / compBarTotal) * 100;
@@ -876,7 +876,7 @@ export function ContextComposition({
                     width: `${w}%`,
                     background: COMP_TINTS[i % COMP_TINTS.length],
                     opacity: 0.85,
-                    borderRight: "1px solid var(--qw-bg)",
+                    borderRight: "1px solid var(--devtools-bg)",
                   }}
                 />
               );
@@ -888,8 +888,8 @@ export function ContextComposition({
                 key={c.id}
                 className="inline-flex items-center gap-1.5 rounded-[6px] px-2 py-[3px] font-mono text-[10.5px]"
                 style={{
-                  background: "var(--qw-bg-elev)",
-                  border: "1px solid var(--qw-border)",
+                  background: "var(--devtools-bg-elev)",
+                  border: "1px solid var(--devtools-border)",
                 }}
               >
                 <span
@@ -898,12 +898,12 @@ export function ContextComposition({
                 />
                 {c.id}
                 {c.priority != null && (
-                  <span style={{ color: "var(--qw-fg-faint)" }}>
+                  <span style={{ color: "var(--devtools-fg-faint)" }}>
                     p{c.priority}
                   </span>
                 )}
                 {fmtSize(c) && (
-                  <span style={{ color: "var(--qw-fg-muted)" }}>
+                  <span style={{ color: "var(--devtools-fg-muted)" }}>
                     {fmtSize(c)}
                   </span>
                 )}
@@ -925,9 +925,9 @@ export function ContextComposition({
           <pre
             className="m-0 whitespace-pre-wrap rounded-[10px] px-4 py-3.5 font-mono text-[11px] leading-[1.7]"
             style={{
-              background: "var(--qw-bg-elev)",
-              border: "1px solid var(--qw-border)",
-              color: "var(--qw-fg-muted)",
+              background: "var(--devtools-bg-elev)",
+              border: "1px solid var(--devtools-border)",
+              color: "var(--devtools-fg-muted)",
               overflowWrap: "anywhere",
             }}
           >
@@ -960,7 +960,7 @@ export function ContextComposition({
               right={
                 <span
                   className="font-mono text-[11px]"
-                  style={{ color: "var(--qw-fg-faint)" }}
+                  style={{ color: "var(--devtools-fg-faint)" }}
                 >
                   use[] · {injected.length} entries
                 </span>
@@ -984,8 +984,8 @@ export function ContextComposition({
                       key={i}
                       className="flex gap-2.5 rounded-[8px] px-3 py-1.5"
                       style={{
-                        background: "var(--qw-bg-elev)",
-                        border: "1px solid var(--qw-border)",
+                        background: "var(--devtools-bg-elev)",
+                        border: "1px solid var(--devtools-border)",
                       }}
                     >
                       <span
@@ -996,7 +996,7 @@ export function ContextComposition({
                       </span>
                       <span
                         className="flex-1 truncate text-[11.5px]"
-                        style={{ color: "var(--qw-fg-muted)" }}
+                        style={{ color: "var(--devtools-fg-muted)" }}
                       >
                         {textOf(m)}
                       </span>
@@ -1020,7 +1020,7 @@ export function ContextComposition({
                 return (
                   <span
                     className="font-mono text-[11px]"
-                    style={{ color: "var(--qw-fg-faint)" }}
+                    style={{ color: "var(--devtools-fg-faint)" }}
                   >
                     {tools.length - injectedCount} base + {injectedCount}{" "}
                     injected
@@ -1047,9 +1047,9 @@ export function ContextComposition({
                       }
                       className="inline-flex items-center gap-[5px] rounded-[8px] px-[9px] py-1 font-mono text-[11px] hover:underline"
                       style={{
-                        background: "var(--qw-bg-elev)",
-                        border: "1px solid var(--qw-border)",
-                        color: "var(--qw-crux)",
+                        background: "var(--devtools-bg-elev)",
+                        border: "1px solid var(--devtools-border)",
+                        color: "var(--devtools-crux)",
                         opacity: tl.used ? 1 : 0.6,
                       }}
                     >
@@ -1058,7 +1058,7 @@ export function ContextComposition({
                         <span
                           className="text-[8.5px]"
                           style={{
-                            color: INJ_COLOR[src.kind] ?? "var(--qw-iris)",
+                            color: INJ_COLOR[src.kind] ?? "var(--devtools-iris)",
                           }}
                         >
                           ← {injLabel(src.kind)}
@@ -1093,7 +1093,7 @@ function Section({
         <Eyebrow>{title}</Eyebrow>
         <div
           className="h-px flex-1"
-          style={{ background: "var(--qw-border)" }}
+          style={{ background: "var(--devtools-border)" }}
         />
         {right}
       </div>
@@ -1123,12 +1123,12 @@ function roleOf(m: unknown): string {
 }
 function roleColor(role: string): string {
   return role === "system"
-    ? "var(--qw-iris)"
+    ? "var(--devtools-iris)"
     : role === "assistant"
-      ? "var(--qw-crux)"
+      ? "var(--devtools-crux)"
       : role === "tool"
-        ? "var(--qw-fg-muted)"
-        : "var(--qw-ok)";
+        ? "var(--devtools-fg-muted)"
+        : "var(--devtools-ok)";
 }
 function textOf(m: unknown): string {
   if (m && typeof m === "object") {

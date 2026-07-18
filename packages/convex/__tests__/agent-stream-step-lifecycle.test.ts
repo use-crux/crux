@@ -39,7 +39,7 @@ describe('agent stream step lifecycle', () => {
       return {} as never
     } as never)
     const agent = new Agent({} as never, {
-      name: 'Karyla',
+      name: 'Support Agent',
       languageModel: {} as never,
       tools: {},
     })
@@ -99,7 +99,7 @@ describe('agent stream step lifecycle', () => {
       return await new Promise(() => undefined)
     } as never)
     const agent = new Agent({} as any, {
-      name: 'Karyla',
+      name: 'Support Agent',
       languageModel: {} as any,
       tools: {},
     })
@@ -158,7 +158,7 @@ describe('agent stream step lifecycle', () => {
       return await new Promise(() => undefined)
     } as never)
     const agent = new Agent({} as any, {
-      name: 'Karyla',
+      name: 'Support Agent',
       languageModel: {} as any,
       tools: {},
     })
@@ -220,7 +220,7 @@ describe('agent stream step lifecycle', () => {
       return await new Promise(() => undefined)
     } as never)
     const agent = new Agent({} as any, {
-      name: 'Karyla',
+      name: 'Support Agent',
       languageModel: {} as any,
       tools: {},
     })

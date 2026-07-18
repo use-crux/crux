@@ -36,6 +36,7 @@
     "release": "pnpm release:stage && pnpm release:validate && pnpm release:publish-staged"
   },
   "devDependencies": {
+    "@use-crux/core": "workspace:*",
     "@changesets/cli": "^2.29.7",
     "@edge-runtime/vm": "^5.0.0",
     "@types/node": "^24.12.4",

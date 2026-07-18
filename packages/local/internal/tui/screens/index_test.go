@@ -16,7 +16,6 @@ func sampleIndex() api.IndexData {
 				Kind:     "prompt",
 				Name:     "writer.prompt",
 				Fidelity: "resolved",
-				Quality:  &api.IndexQuality{},
 			},
 			{
 				ID:       "agent:docs_agent",

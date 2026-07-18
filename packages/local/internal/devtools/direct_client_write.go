@@ -7,8 +7,8 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/inspect"
 )
 
-// Typed write accessors. Each method takes/returns api.Quality* types and
-// JSON-roundtrips through the internal quality records. This is the
+// Typed write accessors JSON-roundtrip through the internal Inspect records.
+// This is the
 // in-process mirror of the equivalent `POST /api/inspect/...` HTTP routes.
 
 // SetInsightStatus updates an insight's open/dismissed/resolved status.
@@ -28,8 +28,8 @@ func (c *DirectClient) SetInsightStatus(ctx context.Context, insightID string, r
 	return out, assignJSON(&out, rec)
 }
 
-// DeleteRuns removes one or more quality run projections and their canonical
-// observability records, then publishes the same quality event used by the HTTP
+// DeleteRuns removes one or more Inspect run projections and their canonical
+// observability records, then publishes the same Inspect event used by the HTTP
 // DELETE route.
 func (c *DirectClient) DeleteRuns(ctx context.Context, traceIDs []string) (api.InspectDeleteRunsRecord, error) {
 	if c.inspect == nil {

@@ -9,9 +9,9 @@
 
 import * as React from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Btn } from "@/qw/shell/primitives";
-import { Icon } from "@/qw/shell/Icon";
-import type { IconName } from "@/qw/shell/nav";
+import { Btn } from "@/devtools/shell/primitives";
+import { Icon } from "@/devtools/shell/Icon";
+import type { IconName } from "@/devtools/shell/nav";
 import { SkeletonCard, SkeletonRows } from "@/shared/components/Skeleton";
 import { useNavigation } from "@/app/navigation/useNavigation";
 import { navTarget } from "@/app/navigation/navTarget";
@@ -33,15 +33,15 @@ function StateCenter({
   body: string;
   action?: React.ReactNode;
 }) {
-  const toneColor = tone ? `var(--qw-${tone})` : "var(--qw-fg-muted)";
-  const toneSoft = tone ? `var(--qw-${tone}-soft)` : "var(--qw-bg-muted)";
+  const toneColor = tone ? `var(--devtools-${tone})` : "var(--devtools-fg-muted)";
+  const toneSoft = tone ? `var(--devtools-${tone}-soft)` : "var(--devtools-bg-muted)";
   return (
     <div className="flex h-full flex-col items-center justify-center gap-2.5 p-6 text-center">
       <div
         className="flex h-11 w-11 items-center justify-center rounded-[12px]"
         style={{
           background: toneSoft,
-          boxShadow: "inset 0 0 0 1px var(--qw-border)",
+          boxShadow: "inset 0 0 0 1px var(--devtools-border)",
         }}
       >
         <Icon name={icon} size={20} color={toneColor} />
@@ -49,7 +49,7 @@ function StateCenter({
       <div className="text-[15px] font-semibold">{title}</div>
       <div
         className="text-[12.5px] leading-[1.5]"
-        style={{ color: "var(--qw-fg-muted)", maxWidth: 320 }}
+        style={{ color: "var(--devtools-fg-muted)", maxWidth: 320 }}
       >
         {body}
       </div>
@@ -65,8 +65,8 @@ function StructureSkeleton() {
       <aside
         className="flex h-full flex-col gap-2 p-3"
         style={{
-          borderRight: "1px solid var(--qw-border)",
-          background: "var(--qw-bg)",
+          borderRight: "1px solid var(--devtools-border)",
+          background: "var(--devtools-bg)",
         }}
       >
         <SkeletonRows rows={14} rowHeight={28} />

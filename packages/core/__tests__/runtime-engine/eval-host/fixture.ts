@@ -18,6 +18,7 @@ export function fixtureRegistry(
   ) => ({ output: input }),
   requiredHostCapabilities: readonly EvalRequiredHostCapability[] = [],
   operation: "generate" | "stream" = "generate",
+  redactPaths: readonly string[] = [],
 ) {
   const task = attachEvalTaskDescriptorForInternalUse(
     async (input: { message: string }) => input.message,
@@ -71,6 +72,7 @@ export function fixtureRegistry(
     },
   });
   return createDeployedEvalRegistry({
+    persistencePolicy: { redactPaths },
     entries: [
       {
         eval: evalValue,

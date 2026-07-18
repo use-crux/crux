@@ -20,6 +20,9 @@ importers:
       '@typescript/native-preview':
         specifier: ^7.0.0-dev.20260325.1
         version: 7.0.0-dev.20260527.2
+      '@use-crux/core':
+        specifier: workspace:*
+        version: link:packages/core
       esbuild:
         specifier: ^0.28.0
         version: 0.28.1
@@ -266,6 +269,12 @@ importers:
 
   packages/core:
     dependencies:
+      es-module-lexer:
+        specifier: ^2.1.0
+        version: 2.1.0
+      import-meta-resolve:
+        specifier: ^4.2.0
+        version: 4.2.0
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -470,9 +479,6 @@ importers:
       tinyglobby:
         specifier: ^0.2.16
         version: 0.2.16
-      tsx:
-        specifier: ^4.22.3
-        version: 4.22.3
       typescript:
         specifier: 5.9.3
         version: 5.9.3

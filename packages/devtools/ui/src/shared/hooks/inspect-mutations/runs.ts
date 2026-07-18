@@ -20,7 +20,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { qk } from "@/shared/query/queryClient";
 import { deleteJson, expectOk } from "@/shared/services/http";
-import { useToast } from "@/qw/shell/useToast";
+import { useToast } from "@/devtools/shell/useToast";
 import type { InspectRunRecord } from "@/types";
 
 interface MutationResult {
@@ -102,7 +102,7 @@ export function useDeleteRunsMutation() {
       });
     },
     onSettled: () => {
-      // Invalidate the whole quality prefix — overview counts, insights
+      // Invalidate the whole Inspect prefix — overview counts, insights
       // referencing the deleted run, etc. all need to refetch.
       void client.invalidateQueries({ queryKey: qk.inspect.all });
       void client.invalidateQueries({ queryKey: ["observability"] });

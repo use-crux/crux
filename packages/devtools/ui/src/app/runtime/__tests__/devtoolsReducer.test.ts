@@ -87,10 +87,8 @@ describe("devtoolsReducer", () => {
   // `queryClient.setQueryData(qk.index(), ...)` directly. The
   // reducer test for this state is gone alongside the slice.
 
-  // Quality REST records (experiments / baselines / feedback /
-  // cassettes) are owned by TanStack Query — not the reducer. The
-  // legacy eval/rag-eval/flow snapshot + lifecycle slices were deleted
-  // with the legacy quality backend; their tests went with them.
+  // Eval, Baseline, and Review REST records are owned by TanStack Query,
+  // not the push-only runtime reducer.
 
   // -------------------------------------------------------------------------
   // Runtime flow events

@@ -562,8 +562,8 @@ export default function ObservabilityPage() {
             {/* Eval dashboard */}
             <DevWindow
               title="crux dev · evals"
-              tabs={['Live', 'Suites', 'Runs', 'Diff']}
-              active="Live"
+              tabs={['Evals', 'Runs', 'Baselines', 'Review']}
+              active="Runs"
               recording={false}
               status="prompt:reply · last 24h"
             >

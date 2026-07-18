@@ -57,8 +57,7 @@ export interface DevtoolsState {
    *  instead of waiting out the standard 2s backoff. */
   retryAttempt: number;
   runtime: {
-    // Quality REST records (experiments / baselines / feedback /
-    // cassettes) live in TanStack Query — see
+    // Eval, Baseline, and Review REST records live in TanStack Query — see
     // `shared/hooks/useInspectApi.ts`. The slices below are push-only
     // state that's only ever produced by WebSocket events; no REST
     // endpoint serves an equivalent snapshot.

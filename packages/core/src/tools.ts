@@ -12,14 +12,12 @@ export { tool } from "./tools/define-tool";
 export {
   TOOL_SOURCE,
   TOOL_SOURCE_PROVENANCE,
-  TOOL_SOURCE_QUALITY_IDENTITY,
   TOOL_SOURCE_REPLAY_IDENTITY,
   TOOL_SOURCE_SESSION_PROVENANCE,
   ToolSourceUnsupportedError,
   isToolSource,
   toolSourceReplayIdentity,
   toolSourceProvenance,
-  toolSourceQualityIdentity,
   toolSourceSessionProvenance,
   withToolSourceReplayIdentity,
   withToolSourceProvenance,
@@ -46,7 +44,6 @@ export type {
   ToolSourceMaterializationContext,
   ToolSourceMaterializer,
   ToolSourceProvenance,
-  ToolSourceQualityIdentity,
   ToolSourceSessionProvenance,
   ToolSourceSession,
 } from "./tools/tool-source";

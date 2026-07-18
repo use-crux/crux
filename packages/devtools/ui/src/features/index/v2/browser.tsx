@@ -5,7 +5,7 @@
  * (search · grouping axis · family filter · grouped list) on the left and
  * the full-width IndexDetail on the right. The graph + expand overlays
  * cover the content area. The page chrome (title / subtitle / header
- * actions) lives in IndexView's QwShell, so this renders the inner
+ * actions) lives in IndexView's DevtoolsShell, so this renders the inner
  * surface only; `selected` and `graphOpen` are controlled by the parent so
  * the header's Graph button can drive the overlay.
  */
@@ -24,7 +24,11 @@ import {
   type LintSeverity,
 } from "./kit";
 import type { IndexIndex, ViewDef } from "./adapt";
-import { IndexSelectProvider, useIndexIndex } from "./context";
+import {
+  IndexOpenEvalProvider,
+  IndexSelectProvider,
+  useIndexIndex,
+} from "./context";
 import { IndexDetail } from "./detail";
 import { IndexGraph } from "./graph";
 
@@ -37,7 +41,7 @@ const INDEX_AXES: Axis[] = [
   { id: "kind", label: "Kind" },
   { id: "file", label: "File" },
   { id: "module", label: "Module" },
-  { id: "quality", label: "Quality" },
+  { id: "evals", label: "Evals" },
   { id: "health", label: "Health" },
 ];
 
@@ -103,24 +107,25 @@ function buildGroups(idx: IndexIndex, defs: ViewDef[], axis: string): Group[] {
     });
     return groups.sort((a, b) => a.label.localeCompare(b.label));
   }
-  if (axis === "quality") {
+  if (axis === "evals") {
     const meta: Record<string, { label: string; tone: Tone }> = {
-      covered: { label: "Covered by evals", tone: "ok" },
-      runs: { label: "Runs · no baseline", tone: "warn" },
-      none: { label: "No coverage", tone: "muted" },
+      definitions: { label: "Eval definitions", tone: "gold" },
+      scorers: { label: "Scorers", tone: "gold" },
+      other: { label: "Other definitions", tone: "muted" },
     };
-    (["covered", "runs", "none"] as const).forEach((k) => ensure(k, meta[k]));
-    defs.forEach((d) => {
-      const q = d.quality ?? {};
-      const k =
-        (q.evalIds && q.evalIds.length) || (q.suiteIds && q.suiteIds.length)
-          ? "covered"
-          : q.runCount
-            ? "runs"
-            : "none";
-      ensure(k, meta[k]).items.push(d);
+    (["definitions", "scorers", "other"] as const).forEach((key) =>
+      ensure(key, meta[key]),
+    );
+    defs.forEach((definition) => {
+      const key =
+        definition.kind === "eval" || definition.kind === "eval.case"
+          ? "definitions"
+          : definition.kind === "scorer"
+            ? "scorers"
+            : "other";
+      ensure(key, meta[key]).items.push(definition);
     });
-    return groups.filter((g) => g.items.length);
+    return groups.filter((group) => group.items.length);
   }
   if (axis === "health") {
     // Errors · Warnings · Info · Clean. `info` is neutral (muted), never iris.
@@ -251,11 +256,13 @@ export function IndexBrowser({
   onSelect,
   graphOpen,
   onGraphClose,
+  onOpenEval,
 }: {
   selected: string | null;
   onSelect: (id: string) => void;
   graphOpen: boolean;
   onGraphClose: () => void;
+  onOpenEval: (evalId: string) => void;
 }) {
   const idx = useIndexIndex();
   const [axis, setAxis] = useState("family");
@@ -561,7 +568,9 @@ export function IndexBrowser({
 
         {/* ── detail ──────────────────────────────────── */}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <IndexDetail def={sel} onExpand={() => setExpanded(true)} />
+          <IndexOpenEvalProvider openEval={onOpenEval}>
+            <IndexDetail def={sel} onExpand={() => setExpanded(true)} />
+          </IndexOpenEvalProvider>
         </div>
 
         {/* ── graph overlay ───────────────────────────── */}
@@ -659,7 +668,9 @@ export function IndexBrowser({
               </Btn>
             </div>
             <div style={{ flex: 1, minHeight: 0 }}>
-              <IndexDetail def={sel} />
+              <IndexOpenEvalProvider openEval={onOpenEval}>
+                <IndexDetail def={sel} />
+              </IndexOpenEvalProvider>
             </div>
           </div>
         )}

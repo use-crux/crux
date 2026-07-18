@@ -2,7 +2,10 @@ import { createHash } from "node:crypto";
 import { dirname, join } from "node:path";
 import type { RuntimeArtifactManifest } from "@use-crux/core/runtime";
 import {
+  cloudflareGeneratedEntryFile,
   convexGeneratedEntryFile,
+  convexHttpEntryFile,
+  convexHttpRoutesFile,
   convexTargetEntryFile,
   importSpecifier,
   nextEntryFile,
@@ -19,6 +22,7 @@ import type {
   GenerateRuntimeArtifactsOptions,
   RuntimeArtifactGenerationResult,
 } from "./runtime-artifacts/types";
+import { loadProjectConfig } from "./config";
 
 export {
   diffRuntimeArtifactDrift,
@@ -37,10 +41,31 @@ export async function generateRuntimeArtifacts(
   options: GenerateRuntimeArtifactsOptions,
 ): Promise<RuntimeArtifactGenerationResult> {
   const host = await resolveRuntimeArtifactHost(options);
+  const projectConfig = await loadProjectConfig(
+    options.root,
+    undefined,
+    "runtime-rich",
+  );
+  if (projectConfig.loaded.configFile && !projectConfig.loaded.crux) {
+    throw new TypeError(
+      `Crux runtime artifacts could not load '${projectConfig.loaded.configFile}' to project the Eval privacy policy. Fix crux.config.ts, then run crux runtime generate again.`,
+    );
+  }
   const nextFile = join(options.root, "crux.generated/next.ts");
   const convexGeneratedFile = join(options.root, "convex/_crux/generated.ts");
   const convexTargetsFile = join(options.root, "convex/_crux/targets.ts");
-  const evalOutputFile = host === "next" ? nextFile : convexTargetsFile;
+  const convexHttpFile = join(options.root, "convex/http.ts");
+  const convexHttpRoutesOutputFile = join(options.root, "convex/_crux/http.ts");
+  const cloudflareGeneratedFile = join(
+    options.root,
+    "cloudflare/_crux/generated.ts",
+  );
+  const evalOutputFile =
+    host === "next"
+      ? nextFile
+      : host === "convex"
+        ? convexTargetsFile
+        : cloudflareGeneratedFile;
   const evalArtifacts = await generateEvalArtifacts({
     root: options.root,
     outputFile: evalOutputFile,
@@ -50,11 +75,14 @@ export async function generateRuntimeArtifacts(
         dirname(evalOutputFile),
         join(options.root, relativeFile),
       ),
+    redactPaths:
+      projectConfig.loaded.crux?.config.observability?.redactPaths ?? [],
   });
   const manifest: RuntimeArtifactManifest = {
     ...manifestFromDefinitions({
       root: options.root,
       definitions: options.definitions ?? [],
+      evalPrivacyFingerprint: evalArtifacts.privacyFingerprint,
     }),
     evals: evalArtifacts.manifestEntries,
   };
@@ -68,9 +96,25 @@ export async function generateRuntimeArtifacts(
     options.root,
     ".crux/generated/runtime/manifest.json",
   );
+  const privacyFile = join(
+    options.root,
+    ".crux/generated/runtime/privacy.json",
+  );
   const writtenFiles: string[] = [];
   if (await writeGeneratedFile(manifestFile, canonicalManifest)) {
     writtenFiles.push(manifestFile);
+  }
+  const privacySnapshot = `${JSON.stringify(
+    {
+      schemaVersion: 1,
+      privacyFingerprint: evalArtifacts.privacyFingerprint,
+      redactPaths: evalArtifacts.redactPaths,
+    },
+    null,
+    2,
+  )}\n`;
+  if (await writeGeneratedFile(privacyFile, privacySnapshot)) {
+    writtenFiles.push(privacyFile);
   }
   if (
     host === "next" &&
@@ -112,6 +156,39 @@ export async function generateRuntimeArtifacts(
     ) {
       writtenFiles.push(convexTargetsFile);
     }
+    if (
+      await writeGeneratedFile(
+        convexHttpRoutesOutputFile,
+        convexHttpRoutesFile(),
+        { protect: true },
+      )
+    ) {
+      writtenFiles.push(convexHttpRoutesOutputFile);
+    }
+    if (
+      await writeGeneratedFile(convexHttpFile, convexHttpEntryFile(), {
+        protect: true,
+        conflictNextStep:
+          "Keep the existing router, import `registerCruxEvalRoutes` from `./_crux/http`, call it with that router, then run `crux runtime generate` again.",
+      })
+    ) {
+      writtenFiles.push(convexHttpFile);
+    }
+  }
+  if (
+    host === "cloudflare" &&
+    (await writeGeneratedFile(
+      cloudflareGeneratedFile,
+      cloudflareGeneratedEntryFile({
+        manifest,
+        outputFile: cloudflareGeneratedFile,
+        root: options.root,
+        evalArtifacts,
+      }),
+      { protect: true },
+    ))
+  ) {
+    writtenFiles.push(cloudflareGeneratedFile);
   }
 
   return {

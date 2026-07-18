@@ -2,7 +2,7 @@
  * Run detail screen.
  *
  * One run, four lenses (Tree · Timeline · Graph · Story) over a single shared
- * selection. Nested in the shared app-shell chrome (`QwShell`: breadcrumb ·
+ * selection. Nested in the shared app-shell chrome (`DevtoolsShell`: breadcrumb ·
  * title · subtitle · actions) per the design's `RunDetailIntegrated` — the
  * standalone run header collapses into the shell header plus a slim
  * `RunContextStrip` (status + headline metrics + diagnostics). The lens switch
@@ -11,11 +11,11 @@
  */
 
 import { useCallback, useEffect, useMemo } from "react";
-import { QwShell } from "@/qw/shell/QwShell";
-import { SectionBoundary } from "@/qw/shell/SectionBoundary";
-import { Btn } from "@/qw/shell/primitives";
-import { Icon } from "@/qw/shell/Icon";
-import { useToast } from "@/qw/shell/useToast";
+import { DevtoolsShell } from "@/devtools/shell/DevtoolsShell";
+import { SectionBoundary } from "@/devtools/shell/SectionBoundary";
+import { Btn } from "@/devtools/shell/primitives";
+import { Icon } from "@/devtools/shell/Icon";
+import { useToast } from "@/devtools/shell/useToast";
 import { SkeletonCard, SkeletonRows } from "@/shared/components/Skeleton";
 import { useInspectRunDetailSuspense } from "@/shared/hooks/useInspectApi";
 import { qk } from "@/shared/query/queryClient";
@@ -34,7 +34,6 @@ import type {
   RunLens,
 } from "@/features/run-detail/types";
 import { useNavigation } from "@/app/navigation/useNavigation";
-import { navTarget } from "@/app/navigation/navTarget";
 import { useObservabilityGraph } from "@/features/observability/hooks/useObservabilityGraph";
 import { useJudgeEvents } from "@/app/runtime/runtimeStore";
 import {
@@ -295,18 +294,16 @@ export function RunDetailShell({
         message: "Restores run · selection · lens.",
       });
     }
-    window.addEventListener("qw:next-failure", onNextFailure);
-    window.addEventListener("qw:copy-permalink", onCopyPermalink);
+    window.addEventListener("devtools:next-failure", onNextFailure);
+    window.addEventListener("devtools:copy-permalink", onCopyPermalink);
     return () => {
-      window.removeEventListener("qw:next-failure", onNextFailure);
-      window.removeEventListener("qw:copy-permalink", onCopyPermalink);
+      window.removeEventListener("devtools:next-failure", onNextFailure);
+      window.removeEventListener("devtools:copy-permalink", onCopyPermalink);
     };
   }, [triage, stepFail, traceId, effectiveLens, navSpanId, toast]);
 
   return (
-    <QwShell
-      activeView="runs"
-      onNavigate={(v) => navigate(navTarget(v))}
+    <DevtoolsShell
       breadcrumb={`Inspect / Runs / ${traceId.slice(0, 12)}…`}
       title={runName}
       subtitle={subtitle}
@@ -362,7 +359,7 @@ export function RunDetailShell({
         )}
         <div
           className="relative min-h-0 flex-1 overflow-hidden"
-          style={{ background: "var(--qw-bg)" }}
+          style={{ background: "var(--devtools-bg)" }}
         >
           <SectionBoundary
             title="Run detail"
@@ -420,7 +417,7 @@ export function RunDetailShell({
           </SectionBoundary>
         </div>
       </div>
-    </QwShell>
+    </DevtoolsShell>
   );
 }
 
@@ -445,8 +442,8 @@ function RunDetailSkeleton({ lens }: { lens: RunLens }) {
       <aside
         className="flex h-full flex-col gap-2 p-3"
         style={{
-          borderRight: "1px solid var(--qw-border)",
-          background: "var(--qw-bg)",
+          borderRight: "1px solid var(--devtools-border)",
+          background: "var(--devtools-bg)",
         }}
       >
         <SkeletonRows rows={14} rowHeight={28} />
@@ -541,12 +538,12 @@ function ReplayMode({
   return (
     <div
       className="flex h-full min-h-0 flex-col"
-      style={{ background: "var(--qw-bg)" }}
+      style={{ background: "var(--devtools-bg)" }}
     >
       {/* Lens switch — same left offset as the tree's, so it doesn't jump. */}
       <div
         className="flex flex-shrink-0 items-center gap-3 px-2.5 py-2"
-        style={{ borderBottom: "1px solid var(--qw-border)" }}
+        style={{ borderBottom: "1px solid var(--devtools-border)" }}
       >
         <LensSwitch
           active={lens}
@@ -557,7 +554,7 @@ function ReplayMode({
         <div className="flex-1" />
         <span
           className="font-mono text-[11px]"
-          style={{ color: "var(--qw-fg-faint)" }}
+          style={{ color: "var(--devtools-fg-faint)" }}
         >
           {replayEvents.length} events ·{" "}
           {narrative && narrative.length > 0
@@ -635,7 +632,8 @@ function spanToReplay(s: InspectRunSpan, startMs: number): ReplayEvent | null {
   const baseMeta = [dur, toks, cost].filter(Boolean).join(" · ") || undefined;
 
   switch (s.primitive) {
-    case "tool": {
+    case "tool.call":
+    case "tool.approval": {
       const name = (spanField(s, "toolName", "name") as string) ?? s.name;
       const args = spanField(s, "args", "input");
       const result = spanField(s, "result", "output");
@@ -649,8 +647,8 @@ function spanToReplay(s: InspectRunSpan, startMs: number): ReplayEvent | null {
         tMs: offset,
       };
     }
-    case "generation":
-    case "trace": {
+    case "generation.call":
+    case "generation.stream": {
       const text =
         (spanField(s, "text") as string | undefined) ??
         (() => {
@@ -681,9 +679,7 @@ function spanToReplay(s: InspectRunSpan, startMs: number): ReplayEvent | null {
         tMs: offset,
       };
     }
-    case "retrieval":
-    case "retrieval.step":
-    case "retrieval.stage": {
+    case "retrieval.query": {
       const query = spanField(s, "query") as string | undefined;
       const hits = spanField(s, "hits");
       const k = spanField(s, "k") as number | undefined;
@@ -700,7 +696,7 @@ function spanToReplay(s: InspectRunSpan, startMs: number): ReplayEvent | null {
         tMs: offset,
       };
     }
-    case "judge": {
+    case "scoring.judge": {
       const score = spanField(s, "score") as number | undefined;
       const rationale = spanField(s, "rationale") as string | undefined;
       return {
@@ -713,7 +709,7 @@ function spanToReplay(s: InspectRunSpan, startMs: number): ReplayEvent | null {
         tMs: offset,
       };
     }
-    case "handoff": {
+    case "handoff.prepare": {
       const from = spanField(s, "fromAgent") as string | undefined;
       const to = spanField(s, "toAgent") as string | undefined;
       return {
@@ -726,7 +722,7 @@ function spanToReplay(s: InspectRunSpan, startMs: number): ReplayEvent | null {
         tMs: offset,
       };
     }
-    case "delegate": {
+    case "delegate.invoke": {
       const to = spanField(s, "to", "agent") as string | undefined;
       return {
         who: s.name,
@@ -738,13 +734,13 @@ function spanToReplay(s: InspectRunSpan, startMs: number): ReplayEvent | null {
         tMs: offset,
       };
     }
-    case "flow":
+    case "flow.run":
     case "flow.step": {
       const label = (spanField(s, "stepLabel") as string) ?? s.name;
       return {
         who: label,
-        kind: s.primitive === "flow" ? "flow" : "agent",
-        what: s.primitive === "flow" ? `${label} flow` : `Step · ${label}`,
+        kind: s.primitive === "flow.run" ? "flow" : "agent",
+        what: s.primitive === "flow.run" ? `${label} flow` : `Step · ${label}`,
         meta: baseMeta,
         t,
         tMs: offset,

@@ -1,4 +1,4 @@
-import type { ChipTone } from "@/qw/shell/primitives";
+import type { ChipTone } from "@/devtools/shell/primitives";
 import type { PlanSummary } from "@/types";
 
 export function fmtTime(ms: number | undefined | null): string | null {
@@ -80,13 +80,13 @@ export function taskStatusTone(status: string): ChipTone {
 }
 
 export function eventTone(kind: string): { tone: ChipTone; color: string } {
-  if (kind === "plan.created") return { tone: "iris", color: "var(--qw-iris)" };
-  if (kind === "plan.updated") return { tone: "crux", color: "var(--qw-crux)" };
-  if (kind === "task.added") return { tone: "iris", color: "var(--qw-iris)" };
-  if (kind === "task.updated") return { tone: "ok", color: "var(--qw-ok)" };
+  if (kind === "plan.created") return { tone: "iris", color: "var(--devtools-iris)" };
+  if (kind === "plan.updated") return { tone: "crux", color: "var(--devtools-crux)" };
+  if (kind === "task.added") return { tone: "iris", color: "var(--devtools-iris)" };
+  if (kind === "task.updated") return { tone: "ok", color: "var(--devtools-ok)" };
   if (kind === "task.removed")
-    return { tone: "muted", color: "var(--qw-fg-muted)" };
-  return { tone: "muted", color: "var(--qw-fg-muted)" };
+    return { tone: "muted", color: "var(--devtools-fg-muted)" };
+  return { tone: "muted", color: "var(--devtools-fg-muted)" };
 }
 
 interface TaskCountsLike {

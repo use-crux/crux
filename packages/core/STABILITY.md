@@ -27,16 +27,15 @@ The stable beta surface is:
   is explicitly unsupported unless a future subpath documents support
 
 Everything else is labelled by subpath. Memory, retrieval, skills, agents,
-flows, quality, and local/devtools surfaces keep their existing beta or
+flows, Evals, and local/devtools surfaces keep their existing beta or
 experimental status unless their own subpath documentation says otherwise.
 
-## Quality (`@use-crux/core/eval`)
+## Evals (`@use-crux/core/eval`)
 
-Quality is **beta**: the authoring surface (`evaluate`, `target`, `scorers`,
-`dataset`, `cassette`), the experiment/manifest record schemas
-(`quality/schemas`), CLI JSON outputs, and exit codes are stable within 0.x
-minors. Breaking changes get a changeset `minor` and a migration note.
-`quality/internal/runner` remains internal with no guarantees.
+Evals are **beta**: inert `evaluate()` authoring, typed Cases and Variants,
+Eval run and Baseline schemas, CLI JSON outputs, and exit codes are versioned
+contracts. Internal planner, executor, evidence, and host protocols are not
+public APIs unless a conditional package export explicitly says otherwise.
 
 ## Runtime Engine (`@use-crux/core/runtime`)
 
@@ -97,12 +96,12 @@ array order. The composed prefix is byte-stable across calls given identical
 prefix-context inputs. Budget pressure only ever drops uncached blocks, and
 never reorders anything.
 
-## Prompt-Level Quality Controls
+## Prompt-Level Safety Controls
 
 `constraints` and `guardrails` intentionally remain available on prompt and
 context config. This differs from frameworks that keep safety controls only at
 agent or middleware layers; Crux treats the prompt definition as the unit of
-quality, alongside colocated tests and output schemas.
+safety policy, alongside colocated tests and output schemas.
 
 ## Additive Metadata
 

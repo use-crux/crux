@@ -30,10 +30,12 @@ const allowedFeatureImports = new Map([
   ["run-detail", new Set(["observability", "index"])],
   ["runs", new Set(["observability"])],
   ["overview", new Set(["observability"])],
-  ["search", new Set(["observability", "index"])],
+  // Global Search composes the read models users can navigate to directly.
+  ["search", new Set(["observability", "index", "evals"])],
   ["index", new Set(["memory", "plans", "workspaces"])],
-  // Evaluations surface scorer-owned judge agreement reports in detail.
-  ["evaluations", new Set(["scorers"])],
+  // Eval catalog rows summarize Baseline status; Review selects discovered Evals.
+  ["evals", new Set(["baselines"])],
+  ["review", new Set(["evals"])],
 ]);
 
 function walk(dir) {
@@ -43,12 +45,19 @@ function walk(dir) {
     const stat = statSync(path);
     if (stat.isDirectory()) {
       out.push(...walk(path));
-    } else if (/\.(ts|tsx)$/.test(name)) {
+    } else if (/\.(css|ts|tsx)$/.test(name)) {
       out.push(path);
     }
   }
   return out;
 }
+
+const themeSource = readFileSync(join(root, "index.css"), "utf8");
+const definedThemeTokens = new Set(
+  [...themeSource.matchAll(/(--devtools-[\w-]+)\s*:/g)].map(
+    (match) => match[1],
+  ),
+);
 
 function currentFeature(relPath) {
   const parts = relPath.split(sep);
@@ -58,6 +67,12 @@ function currentFeature(relPath) {
 for (const file of walk(root)) {
   const rel = relative(root, file);
   const text = readFileSync(file, "utf8");
+  for (const match of text.matchAll(/var\(\s*(--devtools-[\w-]+)/g)) {
+    const token = match[1];
+    if (!definedThemeTokens.has(token)) {
+      errors.push(`${rel}: undefined Devtools theme token ${token}`);
+    }
+  }
   for (const spec of forbiddenImports) {
     if (text.includes(spec)) {
       errors.push(`${rel}: forbidden legacy import prefix ${spec}`);

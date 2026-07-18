@@ -62,12 +62,9 @@ Use product/domain names, not technical layer names:
 - `run-detail` - single run/trace inspection, span tree/detail, waterfall,
   replay/canvas-oriented UI
 - `insights` - quality/security insights, anomaly/error/severity UI
-- `experiments` - experiments, evals, comparisons
-- `datasets` - datasets and dataset detail
+- `evals` - Eval catalog, Eval runs, evidence, and comparisons
 - `baselines` - baseline management UI
-- `feedback` - feedback list/detail workflows
-- `cassettes` - cassette workflows
-- `scorers` - scorer workflows
+- `review` - durable feedback and human Review workflows
 - `index` - prompts, contexts, tools, source resolution
 - `memory` - memory instances and explorer UI
 - `workspaces` - workspace/file browsing UI
@@ -117,8 +114,7 @@ Use vertical, behavior-preserving slices:
 4. Update `FEATURE_STRUCTURE_PLAN.md` with the status.
 
 Do not combine folder moves with behavior rewrites. If a hand-rolled fetcher is
-touched, migrate it using the package-level TanStack Query guidance in
-`../CLAUDE.md`.
+touched, migrate it using the package-level TanStack Query guidance.
 
 ## TypeScript Guidance
 

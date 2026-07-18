@@ -7,7 +7,7 @@
  * the reason prose, and a `required` flag.
  */
 
-import { Icon } from "@/qw/shell/Icon";
+import { Icon } from "@/devtools/shell/Icon";
 import { InjectStateChip } from "@/shared/components/InjectionState";
 import { fmtTokens } from "@/features/run-detail/lib/span-detail-inspection";
 import {
@@ -22,14 +22,14 @@ function Identity({ name, id }: { name?: string; id?: string }) {
     <div className="min-w-0">
       <div
         className="truncate text-[12.5px] font-medium"
-        style={{ color: "var(--qw-fg)" }}
+        style={{ color: "var(--devtools-fg)" }}
       >
         {name ?? id ?? "unnamed"}
       </div>
       {id && (
         <div
           className="truncate font-mono text-[10px]"
-          style={{ color: "var(--qw-fg-faint)" }}
+          style={{ color: "var(--devtools-fg-faint)" }}
         >
           {id}
         </div>
@@ -52,7 +52,7 @@ export function SawRow({
   return (
     <div
       className="flex items-center gap-[10px] px-3.5 py-[9px]"
-      style={{ borderBottom: "1px solid var(--qw-border)" }}
+      style={{ borderBottom: "1px solid var(--devtools-border)" }}
     >
       <span className="flex-shrink-0">
         <InjectStateChip state="active" size="xs" />
@@ -68,7 +68,7 @@ export function SawRow({
       )}
       <span
         className="w-[64px] flex-shrink-0 text-right font-mono text-[11px]"
-        style={{ color: "var(--qw-fg-faint)" }}
+        style={{ color: "var(--devtools-fg-faint)" }}
       >
         {item.tokens != null ? `${fmtTokens(item.tokens)} tok` : "—"}
       </span>
@@ -80,7 +80,7 @@ export function SawRow({
         style={{ cursor: onOpen ? "pointer" : "default" }}
         aria-label={onOpen ? "Open in Context" : undefined}
       >
-        <Icon name="arrowRight" size={13} color="var(--qw-fg-faint)" />
+        <Icon name="arrowRight" size={13} color="var(--devtools-fg-faint)" />
       </button>
     </div>
   );
@@ -91,7 +91,7 @@ export function ConsideredRow({ item }: { item: TurnConsideredItem }) {
   return (
     <div
       className="flex items-center gap-[10px] px-3.5 py-[9px]"
-      style={{ borderBottom: "1px solid var(--qw-border)" }}
+      style={{ borderBottom: "1px solid var(--devtools-border)" }}
     >
       <div className="w-[180px] flex-shrink-0">
         <Identity name={item.name} id={item.id} />
@@ -101,7 +101,7 @@ export function ConsideredRow({ item }: { item: TurnConsideredItem }) {
       </span>
       <span
         className="min-w-0 flex-1 text-[12.5px] leading-[1.4]"
-        style={{ fontFamily: "var(--qw-serif)", color: "var(--qw-fg-muted)" }}
+        style={{ fontFamily: "var(--devtools-serif)", color: "var(--devtools-fg-muted)" }}
       >
         {item.reason?.text ?? "—"}
       </span>
@@ -109,9 +109,9 @@ export function ConsideredRow({ item }: { item: TurnConsideredItem }) {
         <span
           className="flex-shrink-0 rounded-[3px] px-[6px] py-px font-mono text-[9.5px]"
           style={{
-            color: "var(--qw-danger)",
-            background: "var(--qw-danger-soft)",
-            boxShadow: "inset 0 0 0 1px var(--qw-danger-line)",
+            color: "var(--devtools-danger)",
+            background: "var(--devtools-danger-soft)",
+            boxShadow: "inset 0 0 0 1px var(--devtools-danger-line)",
           }}
         >
           required
@@ -119,7 +119,7 @@ export function ConsideredRow({ item }: { item: TurnConsideredItem }) {
       )}
       <span
         className="w-[56px] flex-shrink-0 text-right font-mono text-[11px]"
-        style={{ color: "var(--qw-fg-faint)" }}
+        style={{ color: "var(--devtools-fg-faint)" }}
       >
         {item.tokens ? `${fmtTokens(item.tokens)} tok` : "—"}
       </span>

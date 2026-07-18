@@ -3,8 +3,8 @@ package shell
 import "testing"
 
 // TestNavRailDropsDeadConcepts asserts the nav rail no longer carries the
-// pre-spec-02 Suites and Compare screens — evaluations are source-defined
-// and comparisons live inside each experiment record now.
+// removed Suites and Compare screens — Evals are source-defined and Baseline
+// comparisons live with Eval runs.
 func TestNavRailDropsDeadConcepts(t *testing.T) {
 	for i := range DefaultNav {
 		switch DefaultNav[i].ID {

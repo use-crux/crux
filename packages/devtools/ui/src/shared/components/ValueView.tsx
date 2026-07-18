@@ -133,7 +133,7 @@ export function ValueView({
         <div
           className="whitespace-pre-wrap break-words"
           style={{
-            fontFamily: "var(--qw-serif)",
+            fontFamily: "var(--devtools-serif)",
             fontSize: 13,
             lineHeight: 1.6,
           }}
@@ -143,7 +143,7 @@ export function ValueView({
       )}
       {det.kind === "markdown" &&
         (mode === "rendered" ? (
-          <div className="qw-prose">
+          <div className="devtools-prose">
             <Streamdown>{det.text}</Streamdown>
           </div>
         ) : (
@@ -166,7 +166,7 @@ export function ValueView({
       {label ? (
         <span
           className="font-mono text-[10px] uppercase tracking-[0.1em]"
-          style={{ color: "var(--qw-fg-faint)" }}
+          style={{ color: "var(--devtools-fg-faint)" }}
         >
           {label}
         </span>
@@ -193,8 +193,8 @@ export function ValueView({
       <div
         className="rounded-[8px] px-3 py-2.5"
         style={{
-          background: "var(--qw-bg)",
-          boxShadow: `inset 0 0 0 1px ${tone === "danger" ? "var(--qw-danger-line)" : "var(--qw-border)"}`,
+          background: "var(--devtools-bg)",
+          boxShadow: `inset 0 0 0 1px ${tone === "danger" ? "var(--devtools-danger-line)" : "var(--devtools-border)"}`,
         }}
       >
         {content}
@@ -207,7 +207,7 @@ function RawText({ text }: { text: string }) {
   return (
     <pre
       className="m-0 whitespace-pre-wrap break-words font-mono text-[12px] leading-[1.6]"
-      style={{ color: "var(--qw-fg)" }}
+      style={{ color: "var(--devtools-fg)" }}
     >
       {text}
     </pre>
@@ -227,8 +227,8 @@ function ModeToggle({
     <span
       className="inline-flex overflow-hidden rounded-[6px] font-mono text-[10px]"
       style={{
-        border: "1px solid var(--qw-border)",
-        background: "var(--qw-bg)",
+        border: "1px solid var(--devtools-border)",
+        background: "var(--devtools-bg)",
       }}
     >
       {modes.map((m) => {
@@ -240,8 +240,8 @@ function ModeToggle({
             onClick={() => onChange(m)}
             className="px-2 py-[3px] lowercase"
             style={{
-              color: on ? "var(--qw-crux)" : "var(--qw-fg-muted)",
-              background: on ? "var(--qw-crux-soft)" : "transparent",
+              color: on ? "var(--devtools-crux)" : "var(--devtools-fg-muted)",
+              background: on ? "var(--devtools-crux-soft)" : "transparent",
             }}
           >
             {m}
@@ -254,13 +254,13 @@ function ModeToggle({
 
 const TH = "px-2.5 py-1.5 text-left font-semibold";
 const TH_STYLE = {
-  color: "var(--qw-fg-muted)",
-  background: "var(--qw-bg-muted)",
-  borderBottom: "1px solid var(--qw-border)",
+  color: "var(--devtools-fg-muted)",
+  background: "var(--devtools-bg-muted)",
+  borderBottom: "1px solid var(--devtools-border)",
 } as const;
 const TD_STYLE = {
-  borderBottom: "1px solid var(--qw-border)",
-  color: "var(--qw-fg)",
+  borderBottom: "1px solid var(--devtools-border)",
+  color: "var(--devtools-fg)",
 } as const;
 
 function JsonTable({ shape }: { shape: TableShape }) {
@@ -275,7 +275,7 @@ function JsonTable({ shape }: { shape: TableShape }) {
                 className="w-[180px] px-2.5 py-1.5 text-left align-top font-semibold"
                 style={TD_STYLE}
               >
-                <span style={{ color: "var(--qw-iris)" }}>{k}</span>
+                <span style={{ color: "var(--devtools-iris)" }}>{k}</span>
               </th>
               <td className="px-2.5 py-1.5 align-top" style={TD_STYLE}>
                 {cellText(v)}

@@ -3,7 +3,7 @@
  * `artifact.preview` reports the backend now emits (contract `Crux*ReportPreview`).
  *
  * These primitives previously fell through to a bare Output tab; each card here
- * renders the substance of its report. Content only — facts/quality stay in the
+ * renders the substance of its report. Content only — facts stay in the
  * Inspector. Every card degrades to an `EmptyHint` when its report is absent
  * (Output remains available as a secondary tab, so nothing is lost).
  *
@@ -14,7 +14,7 @@
 import { Fragment, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { JsonTree } from "@/shared/components/JsonTree";
-import { Chip, Eyebrow, ScoreBar, type ChipTone } from "@/qw/shell/primitives";
+import { Chip, Eyebrow, ScoreBar, type ChipTone } from "@/devtools/shell/primitives";
 import type {
   CruxCacheReportPreview,
   CruxCompactionReportPreview,
@@ -76,7 +76,7 @@ function Section({
         <Eyebrow>{title}</Eyebrow>
         <div
           className="h-px flex-1"
-          style={{ background: "var(--qw-border)" }}
+          style={{ background: "var(--devtools-border)" }}
         />
         {right}
       </div>
@@ -105,7 +105,7 @@ export function EvalCard({ node }: { node: ObservabilityRunDetailNode }) {
         label="Verdict"
         right={
           report.primaryFailureType ? (
-            <span style={{ color: "var(--qw-danger)" }}>
+            <span style={{ color: "var(--devtools-danger)" }}>
               {report.primaryFailureType}
             </span>
           ) : undefined
@@ -123,7 +123,7 @@ export function EvalCard({ node }: { node: ObservabilityRunDetailNode }) {
           {report.reasoningPreview && (
             <span
               className="flex-1 text-[12px]"
-              style={{ color: "var(--qw-fg-muted)" }}
+              style={{ color: "var(--devtools-fg-muted)" }}
             >
               {report.reasoningPreview}
             </span>
@@ -140,13 +140,13 @@ export function EvalCard({ node }: { node: ObservabilityRunDetailNode }) {
                 (j.score != null &&
                   j.threshold != null &&
                   j.score >= j.threshold);
-              const color = ok ? "var(--qw-ok)" : "var(--qw-warn)";
+              const color = ok ? "var(--devtools-ok)" : "var(--devtools-warn)";
               return (
                 <div key={j.name}>
                   <div className="mb-1 flex items-center gap-2">
                     <span
                       className="flex-1 truncate font-mono text-[11.5px]"
-                      style={{ color: "var(--qw-fg)" }}
+                      style={{ color: "var(--devtools-fg)" }}
                     >
                       {j.name}
                     </span>
@@ -157,7 +157,7 @@ export function EvalCard({ node }: { node: ObservabilityRunDetailNode }) {
                       >
                         {j.score.toFixed(2)}
                         {j.threshold != null && (
-                          <span style={{ color: "var(--qw-fg-faint)" }}>
+                          <span style={{ color: "var(--devtools-fg-faint)" }}>
                             {" "}
                             / {j.threshold.toFixed(2)}
                           </span>
@@ -175,7 +175,7 @@ export function EvalCard({ node }: { node: ObservabilityRunDetailNode }) {
                   {j.rationale && (
                     <div
                       className="mt-1 text-[11.5px] leading-[1.5]"
-                      style={{ color: "var(--qw-fg-muted)" }}
+                      style={{ color: "var(--devtools-fg-muted)" }}
                     >
                       {j.rationale}
                     </div>
@@ -219,7 +219,7 @@ export function EvalCard({ node }: { node: ObservabilityRunDetailNode }) {
 // child, each drilling to that case (Tree + spanId). Content-only, so it
 // mounts both in the detail pane and full-bleed as the Summary landing.
 // (A single case still renders `EvalCard`.) Cross-variant matrix stays in
-// the experiments feature — this is "this run's cases", not cases × variants.
+// the Evals feature — this is "this run's cases", not Cases × Variants.
 
 export function EvalRunCard({
   node,
@@ -253,16 +253,16 @@ export function EvalRunCard({
         <div className="px-3.5 py-3">
           <div
             className="h-2 overflow-hidden rounded-full"
-            style={{ background: "var(--qw-danger-soft)" }}
+            style={{ background: "var(--devtools-danger-soft)" }}
           >
             <div
               className="h-full rounded-full"
-              style={{ width: `${pct}%`, background: "var(--qw-ok)" }}
+              style={{ width: `${pct}%`, background: "var(--devtools-ok)" }}
             />
           </div>
           <div
             className="mt-1.5 font-mono text-[11px]"
-            style={{ color: "var(--qw-fg-muted)" }}
+            style={{ color: "var(--devtools-fg-muted)" }}
           >
             {passed} / {cases.length} passed
           </div>
@@ -272,7 +272,7 @@ export function EvalRunCard({
       <CardShell label="Results">
         <div
           className="flex flex-col gap-px"
-          style={{ background: "var(--qw-border)" }}
+          style={{ background: "var(--devtools-border)" }}
         >
           {cases.map((c) => (
             <button
@@ -280,13 +280,13 @@ export function EvalRunCard({
               onClick={() => onSelect(c.id)}
               className="grid items-center gap-2.5 px-3.5 py-2 text-left transition-opacity hover:opacity-90"
               style={{
-                background: "var(--qw-bg-elev)",
+                background: "var(--devtools-bg-elev)",
                 gridTemplateColumns: "1fr 78px 92px 48px",
               }}
             >
               <span
                 className="truncate font-mono text-[11.5px]"
-                style={{ color: "var(--qw-fg)" }}
+                style={{ color: "var(--devtools-fg)" }}
               >
                 {c.name}
               </span>
@@ -295,7 +295,7 @@ export function EvalRunCard({
               </Chip>
               <span
                 className="font-mono text-[10.5px]"
-                style={{ color: "var(--qw-fg-faint)" }}
+                style={{ color: "var(--devtools-fg-faint)" }}
               >
                 {c.judgesTotal != null
                   ? `${c.judgesPassed ?? 0}/${c.judgesTotal} judges`
@@ -303,7 +303,7 @@ export function EvalRunCard({
               </span>
               <span
                 className="text-right font-mono text-[11.5px] font-semibold"
-                style={{ color: "var(--qw-fg-muted)" }}
+                style={{ color: "var(--devtools-fg-muted)" }}
               >
                 {c.score != null ? c.score.toFixed(2) : ""}
               </span>
@@ -450,18 +450,18 @@ function CacheReport({ report }: { report: CruxCacheReportPreview }) {
     <div className="flex flex-col gap-5">
       <div
         className="flex items-center gap-2.5 rounded-[8px] px-3.5 py-3"
-        style={{ background: hit ? "var(--qw-ok-soft)" : "var(--qw-bg-muted)" }}
+        style={{ background: hit ? "var(--devtools-ok-soft)" : "var(--devtools-bg-muted)" }}
       >
         <div className="flex-1">
           <div
             className="text-[13px] font-semibold"
-            style={{ color: hit ? "var(--qw-ok)" : "var(--qw-fg)" }}
+            style={{ color: hit ? "var(--devtools-ok)" : "var(--devtools-fg)" }}
           >
             Cache {report.status}
           </div>
           <div
             className="mt-0.5 text-[11.5px]"
-            style={{ color: "var(--qw-fg-muted)" }}
+            style={{ color: "var(--devtools-fg-muted)" }}
           >
             {hit
               ? "An equivalent request was found — the downstream generation was skipped."
@@ -486,19 +486,19 @@ function CacheReport({ report }: { report: CruxCacheReportPreview }) {
                 key={k}
                 className="rounded-[8px] px-3 py-2.5"
                 style={{
-                  background: "var(--qw-bg-elev)",
-                  border: "1px solid var(--qw-border)",
+                  background: "var(--devtools-bg-elev)",
+                  border: "1px solid var(--devtools-border)",
                 }}
               >
                 <div
                   className="font-mono text-[17px] font-bold"
-                  style={{ color: "var(--qw-ok)" }}
+                  style={{ color: "var(--devtools-ok)" }}
                 >
                   {v}
                 </div>
                 <div
                   className="mt-0.5 text-[10px] uppercase"
-                  style={{ color: "var(--qw-fg-faint)" }}
+                  style={{ color: "var(--devtools-fg-faint)" }}
                 >
                   {k}
                 </div>
@@ -538,20 +538,20 @@ function CompactionReport({ report }: { report: CruxCompactionReportPreview }) {
           <div className="flex-1">
             <div
               className="mb-1 text-[10px] uppercase"
-              style={{ color: "var(--qw-fg-faint)" }}
+              style={{ color: "var(--devtools-fg-faint)" }}
             >
               before · {fmtTokens(before)}
             </div>
             <div
               className="h-[18px] rounded-[4px]"
-              style={{ background: "var(--qw-warn)", opacity: 0.7 }}
+              style={{ background: "var(--devtools-warn)", opacity: 0.7 }}
             />
           </div>
-          <span style={{ color: "var(--qw-fg-faint)" }}>→</span>
+          <span style={{ color: "var(--devtools-fg-faint)" }}>→</span>
           <div className="flex-1">
             <div
               className="mb-1 text-[10px] uppercase"
-              style={{ color: "var(--qw-fg-faint)" }}
+              style={{ color: "var(--devtools-fg-faint)" }}
             >
               after · {fmtTokens(after)}
             </div>
@@ -559,7 +559,7 @@ function CompactionReport({ report }: { report: CruxCompactionReportPreview }) {
               className="h-[18px] rounded-[4px]"
               style={{
                 width: `${afterW}%`,
-                background: "var(--qw-ok)",
+                background: "var(--devtools-ok)",
                 opacity: 0.8,
               }}
             />
@@ -571,10 +571,10 @@ function CompactionReport({ report }: { report: CruxCompactionReportPreview }) {
           <div
             className="whitespace-pre-wrap rounded-[8px] px-3.5 py-3 text-[12px] leading-[1.6]"
             style={{
-              background: "var(--qw-bg-elev)",
-              border: "1px solid var(--qw-border)",
-              color: "var(--qw-fg-muted)",
-              fontFamily: "var(--qw-serif)",
+              background: "var(--devtools-bg-elev)",
+              border: "1px solid var(--devtools-border)",
+              color: "var(--devtools-fg-muted)",
+              fontFamily: "var(--devtools-serif)",
             }}
           >
             {report.summarizedPreview}
@@ -603,7 +603,7 @@ function GuardrailReport({ report }: { report: CruxGuardrailReportPreview }) {
         {report.reason && (
           <div
             className="px-3.5 py-3 text-[12px]"
-            style={{ color: "var(--qw-fg-muted)" }}
+            style={{ color: "var(--devtools-fg-muted)" }}
           >
             {report.reason}
           </div>
@@ -613,29 +613,29 @@ function GuardrailReport({ report }: { report: CruxGuardrailReportPreview }) {
         <CardShell label={`Matches · ${report.matches.length}`}>
           <div
             className="flex flex-col gap-px"
-            style={{ background: "var(--qw-border)" }}
+            style={{ background: "var(--devtools-border)" }}
           >
             {report.matches.map((m, i) => (
               <div
                 key={i}
                 className="flex items-center gap-2 px-3.5 py-2 font-mono text-[11.5px]"
-                style={{ background: "var(--qw-bg-elev)" }}
+                style={{ background: "var(--devtools-bg-elev)" }}
               >
                 {m.kind && (
-                  <span style={{ color: "var(--qw-fg-faint)" }}>{m.kind}</span>
+                  <span style={{ color: "var(--devtools-fg-faint)" }}>{m.kind}</span>
                 )}
                 {m.from && (
                   <span
                     className="line-through"
-                    style={{ color: "var(--qw-danger)" }}
+                    style={{ color: "var(--devtools-danger)" }}
                   >
                     {m.from}
                   </span>
                 )}
                 {m.to && (
                   <>
-                    <span style={{ color: "var(--qw-fg-faint)" }}>→</span>
-                    <span style={{ color: "var(--qw-ok)" }}>{m.to}</span>
+                    <span style={{ color: "var(--devtools-fg-faint)" }}>→</span>
+                    <span style={{ color: "var(--devtools-ok)" }}>{m.to}</span>
                   </>
                 )}
               </div>
@@ -658,9 +658,9 @@ function ConstraintReport({ report }: { report: CruxConstraintReportPreview }) {
           <div
             className="rounded-[8px] px-3.5 py-2.5 font-mono text-[11.5px]"
             style={{
-              background: "var(--qw-bg-elev)",
-              border: "1px solid var(--qw-border)",
-              color: "var(--qw-fg-muted)",
+              background: "var(--devtools-bg-elev)",
+              border: "1px solid var(--devtools-border)",
+              color: "var(--devtools-fg-muted)",
             }}
           >
             {assertion}
@@ -691,9 +691,9 @@ function ConstraintReport({ report }: { report: CruxConstraintReportPreview }) {
                       className="flex size-[26px] items-center justify-center rounded-full font-mono text-[11px] font-bold"
                       style={{
                         background: ok
-                          ? "var(--qw-ok-soft)"
-                          : "var(--qw-danger-soft)",
-                        color: ok ? "var(--qw-ok)" : "var(--qw-danger)",
+                          ? "var(--devtools-ok-soft)"
+                          : "var(--devtools-danger-soft)",
+                        color: ok ? "var(--devtools-ok)" : "var(--devtools-danger)",
                       }}
                     >
                       {a.n ?? i + 1}
@@ -702,7 +702,7 @@ function ConstraintReport({ report }: { report: CruxConstraintReportPreview }) {
                       <div
                         className="w-0.5 flex-1"
                         style={{
-                          background: "var(--qw-border)",
+                          background: "var(--devtools-border)",
                           minHeight: 20,
                         }}
                       />
@@ -725,7 +725,7 @@ function ConstraintReport({ report }: { report: CruxConstraintReportPreview }) {
                     {note && (
                       <div
                         className="text-[12px]"
-                        style={{ color: "var(--qw-fg-muted)" }}
+                        style={{ color: "var(--devtools-fg-muted)" }}
                       >
                         {note}
                       </div>
@@ -734,13 +734,13 @@ function ConstraintReport({ report }: { report: CruxConstraintReportPreview }) {
                       <div
                         className="mt-1.5 rounded-[8px] px-3 py-2 text-[11.5px]"
                         style={{
-                          background: "var(--qw-warn-soft)",
-                          color: "var(--qw-fg)",
+                          background: "var(--devtools-warn-soft)",
+                          color: "var(--devtools-fg)",
                         }}
                       >
                         <span
                           className="font-mono text-[9.5px] uppercase tracking-[0.06em]"
-                          style={{ color: "var(--qw-warn)" }}
+                          style={{ color: "var(--devtools-warn)" }}
                         >
                           feedback → next attempt
                         </span>
@@ -760,8 +760,8 @@ function ConstraintReport({ report }: { report: CruxConstraintReportPreview }) {
 
 function SecurityReport({ report }: { report: CruxSecurityReportPreview }) {
   const danger = report.severity === "error";
-  const color = danger ? "var(--qw-danger)" : "var(--qw-warn)";
-  const bg = danger ? "var(--qw-danger-soft)" : "var(--qw-warn-soft)";
+  const color = danger ? "var(--devtools-danger)" : "var(--devtools-warn)";
+  const bg = danger ? "var(--devtools-danger-soft)" : "var(--devtools-warn-soft)";
   return (
     <div className="flex flex-col gap-5">
       <div
@@ -776,7 +776,7 @@ function SecurityReport({ report }: { report: CruxSecurityReportPreview }) {
           {report.message && (
             <div
               className="mt-0.5 text-[11.5px]"
-              style={{ color: "var(--qw-fg-muted)" }}
+              style={{ color: "var(--devtools-fg-muted)" }}
             >
               {report.message}
             </div>
@@ -793,14 +793,14 @@ function SecurityReport({ report }: { report: CruxSecurityReportPreview }) {
           <div
             className="rounded-[8px] px-3.5 py-2.5"
             style={{
-              background: "var(--qw-bg-elev)",
-              border: "1px solid var(--qw-border)",
+              background: "var(--devtools-bg-elev)",
+              border: "1px solid var(--devtools-border)",
             }}
           >
             {report.location && (
               <div
                 className="mb-1.5 font-mono text-[11px]"
-                style={{ color: "var(--qw-crux)" }}
+                style={{ color: "var(--devtools-crux)" }}
               >
                 {report.location}
               </div>
@@ -809,8 +809,8 @@ function SecurityReport({ report }: { report: CruxSecurityReportPreview }) {
               <div
                 className="text-[12.5px] leading-[1.55]"
                 style={{
-                  color: "var(--qw-fg-muted)",
-                  fontFamily: "var(--qw-serif)",
+                  color: "var(--devtools-fg-muted)",
+                  fontFamily: "var(--devtools-serif)",
                 }}
               >
                 {report.preview}
@@ -851,7 +851,7 @@ function PipelineFunnel({ stages }: { stages: CruxSourceStageCountsPreview }) {
             {i > 0 && (
               <div
                 className="flex w-8 shrink-0 items-center justify-center text-[13px]"
-                style={{ color: "var(--qw-fg-faint)" }}
+                style={{ color: "var(--devtools-fg-faint)" }}
               >
                 →
               </div>
@@ -859,13 +859,13 @@ function PipelineFunnel({ stages }: { stages: CruxSourceStageCountsPreview }) {
             <div
               className="flex-1 rounded-[10px] px-3.5 py-3"
               style={{
-                background: "var(--qw-bg-elev)",
-                border: "1px solid var(--qw-border)",
+                background: "var(--devtools-bg-elev)",
+                border: "1px solid var(--devtools-border)",
               }}
             >
               <div
                 className="font-mono text-[10px] uppercase tracking-[0.06em]"
-                style={{ color: "var(--qw-fg-faint)" }}
+                style={{ color: "var(--devtools-fg-faint)" }}
               >
                 {name}
               </div>
@@ -874,7 +874,7 @@ function PipelineFunnel({ stages }: { stages: CruxSourceStageCountsPreview }) {
               </div>
               <div
                 className="text-[10px]"
-                style={{ color: "var(--qw-fg-faint)" }}
+                style={{ color: "var(--devtools-fg-faint)" }}
               >
                 {STAGE_UNIT[name] ?? ""}
               </div>
@@ -896,13 +896,13 @@ const OUTCOME_KEYS = [
   "deleted",
 ] as const;
 const OUTCOME_TONE: Record<string, string> = {
-  added: "var(--qw-ok)",
-  changed: "var(--qw-crux)",
-  unchanged: "var(--qw-fg-muted)",
-  skipped: "var(--qw-fg-muted)",
-  failed: "var(--qw-danger)",
-  stale: "var(--qw-warn)",
-  deleted: "var(--qw-fg-muted)",
+  added: "var(--devtools-ok)",
+  changed: "var(--devtools-crux)",
+  unchanged: "var(--devtools-fg-muted)",
+  skipped: "var(--devtools-fg-muted)",
+  failed: "var(--devtools-danger)",
+  stale: "var(--devtools-warn)",
+  deleted: "var(--devtools-fg-muted)",
 };
 
 /** Sync-outcome tiles, colored by outcome (design `ArchIndexing`). */
@@ -926,8 +926,8 @@ function OutcomeTiles({
             key={k}
             className="rounded-[8px] px-3 py-2.5"
             style={{
-              background: "var(--qw-bg-elev)",
-              border: "1px solid var(--qw-border)",
+              background: "var(--devtools-bg-elev)",
+              border: "1px solid var(--devtools-border)",
             }}
           >
             <div
@@ -938,7 +938,7 @@ function OutcomeTiles({
             </div>
             <div
               className="mt-0.5 text-[10px] uppercase tracking-[0.04em]"
-              style={{ color: "var(--qw-fg-faint)" }}
+              style={{ color: "var(--devtools-fg-faint)" }}
             >
               {k}
             </div>
@@ -964,7 +964,7 @@ function SourceRows({
     <CardShell label={`Sources · ${sources.length}`}>
       <div
         className="flex flex-col gap-px"
-        style={{ background: "var(--qw-border)" }}
+        style={{ background: "var(--devtools-border)" }}
       >
         {sources.slice(0, 40).map((s) => {
           const failed = s.action === "failed";
@@ -974,20 +974,20 @@ function SourceRows({
               className="grid items-center gap-2 px-3.5 py-1.5 font-mono text-[11px]"
               style={{
                 background: failed
-                  ? "var(--qw-danger-soft)"
-                  : "var(--qw-bg-elev)",
+                  ? "var(--devtools-danger-soft)"
+                  : "var(--devtools-bg-elev)",
                 gridTemplateColumns: "1fr 90px 60px",
               }}
             >
               <div className="min-w-0">
-                <div className="truncate" style={{ color: "var(--qw-fg)" }}>
+                <div className="truncate" style={{ color: "var(--devtools-fg)" }}>
                   {s.id}
                 </div>
                 {s.reason && (
                   <div
                     className="truncate text-[10px]"
                     style={{
-                      color: failed ? "var(--qw-danger)" : "var(--qw-fg-faint)",
+                      color: failed ? "var(--devtools-danger)" : "var(--devtools-fg-faint)",
                     }}
                   >
                     {s.reason}
@@ -999,7 +999,7 @@ function SourceRows({
               </Chip>
               <span
                 className="text-right"
-                style={{ color: "var(--qw-fg-muted)" }}
+                style={{ color: "var(--devtools-fg-muted)" }}
               >
                 {s.chunks != null ? `${s.chunks} ch` : ""}
               </span>
@@ -1081,11 +1081,11 @@ function AgentLoopRow({
   const showKids = depth < AGENT_LOOP_MAX_DEPTH && kids.length > 0;
   const dotColor =
     node.status === "error"
-      ? "var(--qw-danger)"
+      ? "var(--devtools-danger)"
       : node.status === "running"
-        ? "var(--qw-crux)"
+        ? "var(--devtools-crux)"
         : node.status === "stale"
-          ? "var(--qw-warn)"
+          ? "var(--devtools-warn)"
           : undefined;
   return (
     <>
@@ -1116,14 +1116,14 @@ function AgentLoopRow({
         {!showKids && kids.length > 0 && (
           <span
             className="shrink-0 font-mono text-[9.5px]"
-            style={{ color: "var(--qw-fg-faint)" }}
+            style={{ color: "var(--devtools-fg-faint)" }}
           >
             +{kids.length}
           </span>
         )}
         <span
           className="shrink-0 text-right font-mono text-[10.5px]"
-          style={{ color: "var(--qw-fg-faint)", width: 50 }}
+          style={{ color: "var(--devtools-fg-faint)", width: 50 }}
         >
           {fmtDuration(nodeDuration(node))}
         </span>
@@ -1211,15 +1211,15 @@ export function AgentCard({
           <div
             className="rounded-[8px] px-3.5 py-3"
             style={{
-              background: "var(--qw-bg-elev)",
-              border: "1px solid var(--qw-border)",
+              background: "var(--devtools-bg-elev)",
+              border: "1px solid var(--devtools-border)",
             }}
           >
             <div
               className="whitespace-pre-wrap text-[12.5px] leading-[1.55]"
               style={{
-                fontFamily: "var(--qw-serif)",
-                color: "var(--qw-fg-muted)",
+                fontFamily: "var(--devtools-serif)",
+                color: "var(--devtools-fg-muted)",
               }}
             >
               {insLong && !insOpen
@@ -1232,7 +1232,7 @@ export function AgentCard({
                 type="button"
                 onClick={() => setInsOpen((o) => !o)}
                 className="mt-1.5 font-mono text-[10.5px]"
-                style={{ color: "var(--qw-crux)" }}
+                style={{ color: "var(--devtools-crux)" }}
               >
                 {insOpen ? "show less" : "show more"}
               </button>
@@ -1247,7 +1247,7 @@ export function AgentCard({
           right={
             <span
               className="font-mono text-[11px]"
-              style={{ color: "var(--qw-fg-faint)" }}
+              style={{ color: "var(--devtools-fg-faint)" }}
             >
               {used.size} of {toolNames.length} used
             </span>
@@ -1261,9 +1261,9 @@ export function AgentCard({
                   key={t}
                   className="inline-flex items-center gap-1.5 rounded-[8px] px-2.5 py-1 font-mono text-[11px]"
                   style={{
-                    background: isUsed ? "var(--qw-bg-elev)" : "transparent",
-                    color: isUsed ? "var(--qw-fg)" : "var(--qw-fg-faint)",
-                    border: `1px ${isUsed ? "solid" : "dashed"} var(--qw-border)`,
+                    background: isUsed ? "var(--devtools-bg-elev)" : "transparent",
+                    color: isUsed ? "var(--devtools-fg)" : "var(--devtools-fg-faint)",
+                    border: `1px ${isUsed ? "solid" : "dashed"} var(--devtools-border)`,
                   }}
                   title={isUsed ? `${t} · used` : `${t} · available (not used)`}
                 >
@@ -1271,7 +1271,7 @@ export function AgentCard({
                   {isUsed && (
                     <span
                       className="size-[5px] rounded-full"
-                      style={{ background: "var(--qw-ok)" }}
+                      style={{ background: "var(--devtools-ok)" }}
                     />
                   )}
                 </span>
@@ -1289,14 +1289,14 @@ export function AgentCard({
         right={
           <span
             className="font-mono text-[11px]"
-            style={{ color: "var(--qw-fg-faint)" }}
+            style={{ color: "var(--devtools-fg-faint)" }}
           >
             {children.length} step{children.length === 1 ? "" : "s"}
           </span>
         }
       >
         {children.length === 0 ? (
-          <div className="text-[12px]" style={{ color: "var(--qw-fg-faint)" }}>
+          <div className="text-[12px]" style={{ color: "var(--devtools-fg-faint)" }}>
             (no steps recorded)
           </div>
         ) : (
@@ -1350,7 +1350,7 @@ export function CompositionCard({
               </Chip>
             )}
             {report.quorum != null && (
-              <span style={{ color: "var(--qw-fg-muted)" }}>
+              <span style={{ color: "var(--devtools-fg-muted)" }}>
                 quorum · {String(report.quorum)}
               </span>
             )}
@@ -1365,16 +1365,16 @@ export function CompositionCard({
               return (
                 <Fragment key={`${a}-${i}`}>
                   {i > 0 && (
-                    <span style={{ color: "var(--qw-fg-faint)" }}>→</span>
+                    <span style={{ color: "var(--devtools-fg-faint)" }}>→</span>
                   )}
                   <span
                     className="rounded-[8px] px-2.5 py-1 font-mono text-[11.5px] font-semibold"
                     style={{
                       background: revisited
-                        ? "var(--qw-crux-soft)"
-                        : "var(--qw-bg-elev)",
-                      boxShadow: `inset 0 0 0 1px ${revisited ? "var(--qw-crux-line)" : "var(--qw-border)"}`,
-                      color: revisited ? "var(--qw-crux)" : "var(--qw-fg)",
+                        ? "var(--devtools-crux-soft)"
+                        : "var(--devtools-bg-elev)",
+                      boxShadow: `inset 0 0 0 1px ${revisited ? "var(--devtools-crux-line)" : "var(--devtools-border)"}`,
+                      color: revisited ? "var(--devtools-crux)" : "var(--devtools-fg)",
                     }}
                   >
                     {a}
@@ -1395,25 +1395,25 @@ export function CompositionCard({
         <CardShell label={`Votes · ${report.votes.length}`}>
           <div
             className="flex flex-col gap-px"
-            style={{ background: "var(--qw-border)" }}
+            style={{ background: "var(--devtools-border)" }}
           >
             {report.votes.map((v, i) => (
               <div
                 key={`${v.agent}-${i}`}
                 className="px-3.5 py-2"
-                style={{ background: "var(--qw-bg-elev)" }}
+                style={{ background: "var(--devtools-bg-elev)" }}
               >
                 <div className="flex items-center gap-2 font-mono text-[11.5px]">
-                  <span style={{ color: "var(--qw-fg)" }}>{v.agent}</span>
+                  <span style={{ color: "var(--devtools-fg)" }}>{v.agent}</span>
                   {v.answer && (
-                    <span style={{ color: "var(--qw-fg-muted)" }}>
+                    <span style={{ color: "var(--devtools-fg-muted)" }}>
                       · {v.answer}
                     </span>
                   )}
                   {v.confidence != null && (
                     <span
                       className="ml-auto"
-                      style={{ color: "var(--qw-fg-faint)" }}
+                      style={{ color: "var(--devtools-fg-faint)" }}
                     >
                       {Math.round(v.confidence * 100)}%
                     </span>
@@ -1422,7 +1422,7 @@ export function CompositionCard({
                 {v.reasoning && (
                   <div
                     className="mt-1 text-[11px]"
-                    style={{ color: "var(--qw-fg-muted)" }}
+                    style={{ color: "var(--devtools-fg-muted)" }}
                   >
                     {v.reasoning}
                   </div>
@@ -1448,8 +1448,8 @@ export function CompositionCard({
                   key={a.id}
                   className="rounded-[10px] px-3 py-2.5"
                   style={{
-                    background: "var(--qw-bg-elev)",
-                    border: `1px solid ${revisited ? "var(--qw-warn-soft)" : "var(--qw-border)"}`,
+                    background: "var(--devtools-bg-elev)",
+                    border: `1px solid ${revisited ? "var(--devtools-warn-soft)" : "var(--devtools-border)"}`,
                   }}
                 >
                   <div className="mb-1.5 flex items-center gap-2">
@@ -1461,19 +1461,19 @@ export function CompositionCard({
                   {a.role && (
                     <div
                       className="mb-1.5 truncate text-[10.5px]"
-                      style={{ color: "var(--qw-fg-faint)" }}
+                      style={{ color: "var(--devtools-fg-faint)" }}
                     >
                       {a.role}
                     </div>
                   )}
                   <div
                     className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[10.5px]"
-                    style={{ color: "var(--qw-fg-muted)" }}
+                    style={{ color: "var(--devtools-fg-muted)" }}
                   >
                     {a.turns != null && (
                       <span
                         style={{
-                          color: revisited ? "var(--qw-warn)" : undefined,
+                          color: revisited ? "var(--devtools-warn)" : undefined,
                         }}
                       >
                         ×{a.turns} turns
@@ -1495,13 +1495,13 @@ export function CompositionCard({
         <CardShell label={`Branches · ${report.branches.length}`}>
           <div
             className="flex flex-col gap-px"
-            style={{ background: "var(--qw-border)" }}
+            style={{ background: "var(--devtools-border)" }}
           >
             {report.branches.map((b) => (
               <div
                 key={b.id}
                 className="flex items-center gap-2 px-3.5 py-2 font-mono text-[11.5px]"
-                style={{ background: "var(--qw-bg-elev)" }}
+                style={{ background: "var(--devtools-bg-elev)" }}
               >
                 <Chip
                   tone={
@@ -1515,12 +1515,12 @@ export function CompositionCard({
                 >
                   {b.status}
                 </Chip>
-                <span style={{ color: "var(--qw-fg)" }}>
+                <span style={{ color: "var(--devtools-fg)" }}>
                   {b.agentId ?? b.id}
                 </span>
                 <span
                   className="ml-auto"
-                  style={{ color: "var(--qw-fg-muted)" }}
+                  style={{ color: "var(--devtools-fg-muted)" }}
                 >
                   {fmtDuration(b.durationMs)}
                   {b.tokens != null ? ` · ${fmtTokens(b.tokens)}` : ""}
@@ -1535,16 +1535,16 @@ export function CompositionCard({
         <CardShell label={`Stages · ${report.stages.length}`}>
           <div
             className="flex flex-col gap-px"
-            style={{ background: "var(--qw-border)" }}
+            style={{ background: "var(--devtools-border)" }}
           >
             {report.stages.map((s, i) => (
               <div
                 key={`${s.name}-${i}`}
                 className="flex items-center gap-2 px-3.5 py-2 font-mono text-[11.5px]"
-                style={{ background: "var(--qw-bg-elev)" }}
+                style={{ background: "var(--devtools-bg-elev)" }}
               >
-                <span style={{ color: "var(--qw-fg-faint)" }}>{i + 1}.</span>
-                <span style={{ color: "var(--qw-fg)" }}>{s.name}</span>
+                <span style={{ color: "var(--devtools-fg-faint)" }}>{i + 1}.</span>
+                <span style={{ color: "var(--devtools-fg)" }}>{s.name}</span>
                 {s.status && (
                   <Chip
                     tone={
@@ -1584,11 +1584,11 @@ function isReplayedStep(s: ObservabilityRunDetailNode): boolean {
   return Boolean(findAttribute(s, "replayed", "replayedFromPriorRun"));
 }
 function stepDotColor(s: ObservabilityRunDetailNode): string {
-  if (isSuspendedStep(s)) return "var(--qw-crux)";
-  if (s.status === "success") return "var(--qw-ok)";
-  if (s.status === "error") return "var(--qw-danger)";
-  if (s.status === "running") return "var(--qw-crux)";
-  return "var(--qw-fg-faint)";
+  if (isSuspendedStep(s)) return "var(--devtools-crux)";
+  if (s.status === "success") return "var(--devtools-ok)";
+  if (s.status === "error") return "var(--devtools-danger)";
+  if (s.status === "running") return "var(--devtools-crux)";
+  return "var(--devtools-fg-faint)";
 }
 export function FlowCard({
   node,
@@ -1737,8 +1737,8 @@ function NestedSpan({
     <div
       className="overflow-hidden rounded-[10px]"
       style={{
-        background: suspended ? "var(--qw-crux-soft)" : "var(--qw-bg-elev)",
-        border: `1px solid ${suspended ? "var(--qw-crux-line)" : "var(--qw-border)"}`,
+        background: suspended ? "var(--devtools-crux-soft)" : "var(--devtools-bg-elev)",
+        border: `1px solid ${suspended ? "var(--devtools-crux-line)" : "var(--devtools-border)"}`,
       }}
     >
       <div className="flex flex-wrap items-center gap-2 px-3 py-2.5">
@@ -1750,9 +1750,9 @@ function NestedSpan({
             className="flex size-4 shrink-0 items-center justify-center"
           >
             {open ? (
-              <ChevronDown size={13} className="text-(--qw-fg-faint)" />
+              <ChevronDown size={13} className="text-(--devtools-fg-faint)" />
             ) : (
-              <ChevronRight size={13} className="text-(--qw-fg-faint)" />
+              <ChevronRight size={13} className="text-(--devtools-fg-faint)" />
             )}
           </button>
         ) : (
@@ -1761,7 +1761,7 @@ function NestedSpan({
         {index != null && (
           <span
             className="font-mono text-[10px]"
-            style={{ color: "var(--qw-fg-faint)" }}
+            style={{ color: "var(--devtools-fg-faint)" }}
           >
             {String(index).padStart(2, "0")}
           </span>
@@ -1788,7 +1788,7 @@ function NestedSpan({
         {isReplayedStep(node) && (
           <span
             className="font-mono text-[9.5px]"
-            style={{ color: "var(--qw-iris)" }}
+            style={{ color: "var(--devtools-iris)" }}
           >
             ↺ replayed
           </span>
@@ -1797,7 +1797,7 @@ function NestedSpan({
         {ranChild && (
           <span
             className="inline-flex items-center gap-1.5 font-mono text-[9.5px]"
-            style={{ color: "var(--qw-fg-muted)" }}
+            style={{ color: "var(--devtools-fg-muted)" }}
           >
             ran{" "}
             <KindTag
@@ -1813,7 +1813,7 @@ function NestedSpan({
         {summary && (
           <span
             className="font-mono text-[9.5px]"
-            style={{ color: "var(--qw-fg-faint)" }}
+            style={{ color: "var(--devtools-fg-faint)" }}
           >
             {summary}
           </span>
@@ -1823,7 +1823,7 @@ function NestedSpan({
             type="button"
             onClick={() => onSelect(node.id)}
             className="inline-flex items-center gap-1 font-mono text-[10px]"
-            style={{ color: "var(--qw-crux)" }}
+            style={{ color: "var(--devtools-crux)" }}
           >
             drill in →
           </button>
@@ -1832,7 +1832,7 @@ function NestedSpan({
       {canNest && open && (
         <div
           className="flex flex-col gap-2 px-3 pb-3 pt-0.5"
-          style={{ marginLeft: 10, borderLeft: "1px solid var(--qw-border)" }}
+          style={{ marginLeft: 10, borderLeft: "1px solid var(--devtools-border)" }}
         >
           {kids.map((c, i) => (
             <NestedSpan
@@ -1853,7 +1853,7 @@ function NestedSpan({
 
 function Empty() {
   return (
-    <span className="text-[12px]" style={{ color: "var(--qw-fg-faint)" }}>
+    <span className="text-[12px]" style={{ color: "var(--devtools-fg-faint)" }}>
       —
     </span>
   );

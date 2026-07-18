@@ -1,8 +1,7 @@
 /** Load the project's Core Eval coordinator contract without a second Core copy. */
 
-import { existsSync, readFileSync } from 'node:fs'
-import { dirname, join, parse } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { join } from 'node:path'
+import { importUserSpecifier } from '@use-crux/indexer/internal/user-import'
 import type * as EvalRunnerModule from '@use-crux/core/eval/internal/runner'
 import type * as EvalNodeRunnerModule from '@use-crux/core/eval/internal/node-runner'
 
@@ -65,37 +64,19 @@ async function loadCoreExport(
     | './eval/internal/node-runner',
   checkProtocol: boolean,
 ): Promise<unknown> {
-  const packageDir = findPackageDir(projectRoot, '@use-crux/core')
-  if (packageDir === undefined) {
-    throw new Error(`@use-crux/core is not resolvable from ${projectRoot}; add it to the project before running Evals.`)
+  let imported: unknown
+  try {
+    imported = await importUserSpecifier(
+      `@use-crux/core/${exportName.slice(2)}`,
+      join(projectRoot, 'package.json'),
+      10_000,
+    )
+  } catch (error) {
+    throw new Error(
+      `@use-crux/core does not expose ${exportName} from ${projectRoot}; add or align @use-crux/core and Crux Local.`,
+      { cause: error },
+    )
   }
-  const manifest = JSON.parse(readFileSync(join(packageDir, 'package.json'), 'utf8')) as {
-    readonly exports?: Readonly<Record<string, unknown>>
-  }
-  const target = exportTarget(manifest.exports?.[exportName])
-  if (target === undefined) {
-    throw new Error(`@use-crux/core does not export ${exportName}; align @use-crux/core and Crux Local versions.`)
-  }
-  const imported = await import(pathToFileURL(join(packageDir, target)).href)
   if (checkProtocol) assertEvalRunnerProtocol(imported)
   return imported
-}
-
-function findPackageDir(start: string, packageName: string): string | undefined {
-  let current = start
-  const root = parse(current).root
-  while (true) {
-    const manifest = join(current, 'node_modules', ...packageName.split('/'), 'package.json')
-    if (existsSync(manifest)) return dirname(manifest)
-    if (current === root) return undefined
-    current = dirname(current)
-  }
-}
-
-function exportTarget(value: unknown): string | undefined {
-  if (typeof value === 'string') return value
-  if (value !== null && typeof value === 'object' && 'import' in value && typeof value.import === 'string') {
-    return value.import
-  }
-  return undefined
 }

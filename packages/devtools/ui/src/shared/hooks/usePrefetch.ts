@@ -20,7 +20,7 @@ import { observabilityService } from "@/features/observability/services/observab
 
 const HOVER_STALE_MS = 10_000;
 
-/** Prefetch the canonical run detail + the quality run detail in
+/** Prefetch the canonical observability and Inspect run detail in
  *  parallel. Call from a runs-list row's `onMouseEnter` / `onFocus`. */
 export function usePrefetchRunDetail() {
   const client = useQueryClient();

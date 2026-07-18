@@ -13,16 +13,25 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/use-crux/crux/packages/local/internal/privacy"
 	_ "modernc.org/sqlite"
 )
 
 var ErrNotFound = errors.New("review not found")
 
 type Service struct {
-	db *sql.DB
+	db      *sql.DB
+	privacy privacy.Provider
 }
 
-func OpenService(ctx context.Context, path string) (*Service, error) {
+type ServiceOption func(*Service)
+
+// WithPrivacyProvider applies the generated project policy at every write.
+func WithPrivacyProvider(provider privacy.Provider) ServiceOption {
+	return func(service *Service) { service.privacy = provider }
+}
+
+func OpenService(ctx context.Context, path string, options ...ServiceOption) (*Service, error) {
 	if path != ":memory:" {
 		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 			return nil, fmt.Errorf("create review directory: %w", err)
@@ -33,7 +42,10 @@ func OpenService(ctx context.Context, path string) (*Service, error) {
 		return nil, fmt.Errorf("open review database: %w", err)
 	}
 	db.SetMaxOpenConns(1)
-	service := &Service{db: db}
+	service := &Service{db: db, privacy: privacy.Static()}
+	for _, option := range options {
+		option(service)
+	}
 	if err := service.initialize(ctx); err != nil {
 		_ = db.Close()
 		return nil, err
@@ -44,7 +56,11 @@ func OpenService(ctx context.Context, path string) (*Service, error) {
 func (s *Service) Close() error { return s.db.Close() }
 
 func (s *Service) Submit(ctx context.Context, raw Submission, runExists bool) (Receipt, error) {
-	input, err := normalizeSubmission(raw)
+	policy, err := s.privacy.Current()
+	if err != nil {
+		return Receipt{}, fmt.Errorf("load project privacy policy: %w", err)
+	}
+	input, err := normalizeSubmission(raw, policy)
 	if err != nil {
 		return Receipt{}, err
 	}
@@ -129,6 +145,14 @@ INSERT INTO feedback_submissions(feedback_id, review_id, revision, payload_hash,
 func (s *Service) LinkRunContext(ctx context.Context, snapshot ContextSnapshot) error {
 	if !runIDPattern.MatchString(snapshot.RunID) {
 		return invalid("runId must be a valid Crux run ID")
+	}
+	policy, err := s.privacy.Current()
+	if err != nil {
+		return fmt.Errorf("load project privacy policy: %w", err)
+	}
+	snapshot, err = normalizeContextSnapshot(snapshot, policy)
+	if err != nil {
+		return err
 	}
 	encoded, err := json.Marshal(snapshot)
 	if err != nil || len(encoded) > 16*1_024 {

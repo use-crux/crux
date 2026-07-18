@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Streamdown } from "streamdown";
-import { Chip, SectionHead } from "@/qw/shell/primitives";
+import { Chip, SectionHead } from "@/devtools/shell/primitives";
 import { useNavigation } from "@/app/navigation/useNavigation";
 import {
   fmtRelative,
@@ -55,7 +55,7 @@ function RunLink({ id, label }: { id: string; label?: string }) {
       type="button"
       onClick={() => navigate({ view: "run-detail", traceId: id })}
       className="underline-offset-2 hover:underline"
-      style={{ color: "var(--qw-crux)" }}
+      style={{ color: "var(--devtools-crux)" }}
       title={id}
     >
       {label ?? shortTrace(id) ?? id}
@@ -111,7 +111,7 @@ export function EpisodicDetail({
             {store.scope && (
               <span
                 className="font-mono text-[11px]"
-                style={{ color: "var(--qw-fg-faint)" }}
+                style={{ color: "var(--devtools-fg-faint)" }}
               >
                 {store.scope.kind} ·{" "}
                 {shortTrace(store.scope.id) ?? store.scope.id}
@@ -143,7 +143,7 @@ export function EpisodicDetail({
                 {
                   label: "Embedding",
                   value: embeddingModel,
-                  color: "var(--qw-fg-muted)",
+                  color: "var(--devtools-fg-muted)",
                 },
               ]
             : []),
@@ -153,7 +153,7 @@ export function EpisodicDetail({
             <>
               <span
                 className="font-mono text-[11px]"
-                style={{ color: "var(--qw-fg-faint)" }}
+                style={{ color: "var(--devtools-fg-faint)" }}
               >
                 scope
               </span>
@@ -189,7 +189,7 @@ export function EpisodicDetail({
         right={
           <span
             className="font-mono text-[11px]"
-            style={{ color: "var(--qw-fg-faint)" }}
+            style={{ color: "var(--devtools-fg-faint)" }}
           >
             recent
           </span>
@@ -353,7 +353,7 @@ function TagFilterRow({
   return (
     <div
       className="flex flex-wrap items-center gap-1.5 px-4 py-2.5"
-      style={{ borderBottom: "1px solid var(--qw-border)" }}
+      style={{ borderBottom: "1px solid var(--devtools-border)" }}
     >
       <TagFilterChip
         label="All"
@@ -389,14 +389,14 @@ function TagFilterChip({
       style={
         selected
           ? {
-              background: "var(--qw-iris-soft)",
-              color: "var(--qw-iris)",
-              border: "1px solid var(--qw-iris)",
+              background: "var(--devtools-iris-soft)",
+              color: "var(--devtools-iris)",
+              border: "1px solid var(--devtools-iris)",
             }
           : {
-              background: "var(--qw-bg-muted)",
-              color: "var(--qw-fg-muted)",
-              border: "1px solid var(--qw-border)",
+              background: "var(--devtools-bg-muted)",
+              color: "var(--devtools-fg-muted)",
+              border: "1px solid var(--devtools-border)",
             }
       }
     >
@@ -421,12 +421,12 @@ function EpisodicEntryRow({
   return (
     <div
       className="px-4 py-3"
-      style={{ borderBottom: last ? "none" : "1px solid var(--qw-border)" }}
+      style={{ borderBottom: last ? "none" : "1px solid var(--devtools-border)" }}
     >
       <div className="mb-1.5 flex flex-wrap items-center gap-2">
         <span
           className="max-w-full truncate font-mono text-[11px]"
-          style={{ color: "var(--qw-crux)" }}
+          style={{ color: "var(--devtools-crux)" }}
           title={entry.id}
         >
           {shortEntryId(entry.id)}
@@ -434,7 +434,7 @@ function EpisodicEntryRow({
         {entry.timestamp && (
           <span
             className="font-mono text-[10.5px]"
-            style={{ color: "var(--qw-fg-faint)" }}
+            style={{ color: "var(--devtools-fg-faint)" }}
           >
             {fmtTime(entry.timestamp)}
           </span>
@@ -459,7 +459,7 @@ function EpisodicEntryRow({
       </div>
       <div className="relative mb-1">
         <div
-          className={`qw-prose break-words text-[13px] leading-[1.55] ${capped ? "max-h-28 overflow-hidden" : ""}`}
+          className={`devtools-prose break-words text-[13px] leading-[1.55] ${capped ? "max-h-28 overflow-hidden" : ""}`}
         >
           <Streamdown>{entry.content}</Streamdown>
         </div>
@@ -468,7 +468,7 @@ function EpisodicEntryRow({
             className="pointer-events-none absolute inset-x-0 bottom-0 h-10"
             style={{
               background:
-                "linear-gradient(to bottom, transparent, var(--qw-bg-elev))",
+                "linear-gradient(to bottom, transparent, var(--devtools-bg-elev))",
             }}
           />
         )}
@@ -478,7 +478,7 @@ function EpisodicEntryRow({
           type="button"
           onClick={() => setExpanded((v) => !v)}
           className="mb-1.5 font-mono text-[10.5px] underline-offset-2 hover:underline"
-          style={{ color: "var(--qw-crux)" }}
+          style={{ color: "var(--devtools-crux)" }}
         >
           {expanded ? "Show less" : "Show more"}
         </button>
@@ -486,12 +486,12 @@ function EpisodicEntryRow({
       {(entry.writtenBy || entry.sourceRun || entry.sourceTraceId) && (
         <div
           className="flex flex-wrap gap-3 font-mono text-[10.5px]"
-          style={{ color: "var(--qw-fg-muted)" }}
+          style={{ color: "var(--devtools-fg-muted)" }}
         >
           {entry.writtenBy && (
             <span>
               written by ·{" "}
-              <span style={{ color: "var(--qw-fg)" }}>{entry.writtenBy}</span>
+              <span style={{ color: "var(--devtools-fg)" }}>{entry.writtenBy}</span>
             </span>
           )}
           {entry.sourceRun && (
@@ -535,7 +535,7 @@ function EpisodicQueries({
   ];
   const gridCols = cols.map((c) => c.width).join(" ");
   return (
-    <LDCard title="Queries" color="var(--qw-crux)">
+    <LDCard title="Queries" color="var(--devtools-crux)">
       {queries.length === 0 ? (
         <EmptyInline>No queries captured yet.</EmptyInline>
       ) : (
@@ -550,22 +550,22 @@ function EpisodicQueries({
                 borderBottom:
                   i === queries.length - 1
                     ? "none"
-                    : "1px solid var(--qw-border)",
+                    : "1px solid var(--devtools-border)",
               }}
             >
-              <span style={{ color: "var(--qw-fg-faint)" }}>
+              <span style={{ color: "var(--devtools-fg-faint)" }}>
                 {fmtTime(q.timestamp)}
               </span>
               <span
                 className="truncate"
-                style={{ color: "var(--qw-fg)" }}
+                style={{ color: "var(--devtools-fg)" }}
                 title={q.query}
               >
                 {q.query}
               </span>
               <span
                 className="text-right"
-                style={{ color: "var(--qw-fg-muted)" }}
+                style={{ color: "var(--devtools-fg-muted)" }}
               >
                 {q.k ?? "—"}
               </span>
@@ -580,7 +580,7 @@ function EpisodicQueries({
               {hasLat && (
                 <span
                   className="text-right"
-                  style={{ color: "var(--qw-fg-faint)" }}
+                  style={{ color: "var(--devtools-fg-faint)" }}
                 >
                   {q.latencyMs != null ? `${q.latencyMs}ms` : "—"}
                 </span>
@@ -590,7 +590,7 @@ function EpisodicQueries({
                   {q.traceId ? (
                     <RunLink id={q.traceId} />
                   ) : (
-                    <span style={{ color: "var(--qw-fg-faint)" }}>—</span>
+                    <span style={{ color: "var(--devtools-fg-faint)" }}>—</span>
                   )}
                 </span>
               )}
@@ -625,7 +625,7 @@ function EpisodicWrites({
   ];
   const gridCols = cols.map((c) => c.width).join(" ");
   return (
-    <LDCard title="Writes & evictions" color="var(--qw-iris)">
+    <LDCard title="Writes & evictions" color="var(--devtools-iris)">
       {writes.length === 0 ? (
         <EmptyInline>No writes captured yet.</EmptyInline>
       ) : (
@@ -640,23 +640,23 @@ function EpisodicWrites({
                 borderBottom:
                   i === writes.length - 1
                     ? "none"
-                    : "1px solid var(--qw-border)",
+                    : "1px solid var(--devtools-border)",
               }}
             >
-              <span style={{ color: "var(--qw-fg-faint)" }}>
+              <span style={{ color: "var(--devtools-fg-faint)" }}>
                 {fmtTime(w.timestamp)}
               </span>
               <LDOpPill op={w.op} />
               <span
                 className="truncate"
-                style={{ color: "var(--qw-crux)" }}
+                style={{ color: "var(--devtools-crux)" }}
                 title={w.entryId}
               >
                 {w.entryId ? shortEntryId(w.entryId) : "—"}
               </span>
               <span
                 className="truncate"
-                style={{ color: "var(--qw-fg)" }}
+                style={{ color: "var(--devtools-fg)" }}
                 title={w.contentPreview}
               >
                 {w.contentPreview ?? "—"}
@@ -664,7 +664,7 @@ function EpisodicWrites({
               {hasBy && (
                 <span
                   className="truncate"
-                  style={{ color: "var(--qw-fg-muted)" }}
+                  style={{ color: "var(--devtools-fg-muted)" }}
                   title={w.writtenBy}
                 >
                   {w.writtenBy ?? "—"}
@@ -683,7 +683,7 @@ function EpisodicWrites({
                   {w.traceId ? (
                     <RunLink id={w.traceId} />
                   ) : (
-                    <span style={{ color: "var(--qw-fg-faint)" }}>—</span>
+                    <span style={{ color: "var(--devtools-fg-faint)" }}>—</span>
                   )}
                 </span>
               )}
@@ -710,11 +710,11 @@ function MetaRows({ rows }: { rows: readonly MetaRow[] }) {
           className="grid items-baseline gap-2.5 font-mono text-[11.5px]"
           style={{ gridTemplateColumns: "110px minmax(0, 1fr) auto" }}
         >
-          <span style={{ color: "var(--qw-fg-faint)" }}>{k}</span>
+          <span style={{ color: "var(--devtools-fg-faint)" }}>{k}</span>
           {v}
           <span
             className="text-right text-[10.5px]"
-            style={{ color: "var(--qw-fg-faint)" }}
+            style={{ color: "var(--devtools-fg-faint)" }}
           >
             {sub ?? null}
           </span>
@@ -725,9 +725,9 @@ function MetaRows({ rows }: { rows: readonly MetaRow[] }) {
 }
 
 function indexStatusColor(status: string): string {
-  if (status === "fresh") return "var(--qw-ok)";
-  if (status === "stale" || status === "rebuilding") return "var(--qw-warn)";
-  return "var(--qw-fg-muted)";
+  if (status === "fresh") return "var(--devtools-ok)";
+  if (status === "stale" || status === "rebuilding") return "var(--devtools-warn)";
+  return "var(--devtools-fg-muted)";
 }
 
 function EpisodicIndexCard({ index }: { index: MemoryEpisodicState["index"] }) {
@@ -739,13 +739,13 @@ function EpisodicIndexCard({ index }: { index: MemoryEpisodicState["index"] }) {
         <div
           className="text-[12px] leading-[1.5]"
           style={{
-            color: "var(--qw-fg-muted)",
-            fontFamily: "var(--qw-serif, Georgia, serif)",
+            color: "var(--devtools-fg-muted)",
+            fontFamily: "var(--devtools-serif, Georgia, serif)",
           }}
         >
           <div
             className="mb-1.5 font-mono text-[10.5px] uppercase tracking-[0.12em]"
-            style={{ color: "var(--qw-fg-faint)" }}
+            style={{ color: "var(--devtools-fg-faint)" }}
           >
             Recency-backed
           </div>
@@ -774,7 +774,7 @@ function EpisodicIndexCard({ index }: { index: MemoryEpisodicState["index"] }) {
   if (index.embeddingModel) {
     rows.push({
       k: "Embedding",
-      v: <span style={{ color: "var(--qw-fg)" }}>{index.embeddingModel}</span>,
+      v: <span style={{ color: "var(--devtools-fg)" }}>{index.embeddingModel}</span>,
       sub:
         index.dimensions != null ? <span>{index.dimensions}d</span> : undefined,
     });
@@ -782,7 +782,7 @@ function EpisodicIndexCard({ index }: { index: MemoryEpisodicState["index"] }) {
   if (index.distance) {
     rows.push({
       k: "Distance",
-      v: <span style={{ color: "var(--qw-fg)" }}>{index.distance}</span>,
+      v: <span style={{ color: "var(--devtools-fg)" }}>{index.distance}</span>,
     });
   }
   return (
@@ -790,7 +790,7 @@ function EpisodicIndexCard({ index }: { index: MemoryEpisodicState["index"] }) {
       {rows.length === 0 ? (
         <div
           className="font-mono text-[11.5px]"
-          style={{ color: "var(--qw-fg-muted)" }}
+          style={{ color: "var(--devtools-fg-muted)" }}
         >
           Indexed.
         </div>
@@ -811,7 +811,7 @@ function EpisodicRetentionCard({
   if (retention.policy) {
     rows.push({
       k: "Retention",
-      v: <span style={{ color: "var(--qw-fg)" }}>{retention.policy}</span>,
+      v: <span style={{ color: "var(--devtools-fg)" }}>{retention.policy}</span>,
       sub: <span>policy window</span>,
     });
   }
@@ -820,7 +820,7 @@ function EpisodicRetentionCard({
     rows.push({
       k: "Last GC",
       v: (
-        <span style={{ color: "var(--qw-fg-muted)" }}>
+        <span style={{ color: "var(--devtools-fg-muted)" }}>
           {fmtRelative(retention.lastGcAt)}
         </span>
       ),

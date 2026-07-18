@@ -147,8 +147,8 @@ fn eval_coverage_refs_do_not_resolve_through_project_wide_variable_fallback() {
         project_name: None,
         definitions: vec![
             definition(
-                "evaluation:classify-check",
-                "evaluation",
+                "eval:classify-check",
+                "eval",
                 "classify-check",
                 StaticIndexFidelity::Resolved,
                 None,
@@ -162,16 +162,16 @@ fn eval_coverage_refs_do_not_resolve_through_project_wide_variable_fallback() {
             ),
         ],
         relation_refs: vec![StaticIndexRelationRef {
-            from_id: Some("evaluation:classify-check".to_string()),
+            from_id: Some("eval:classify-check".to_string()),
             to_variable: Some("classify".to_string()),
-            ..relation_ref("evaluation:classify-check", "eval.covers_definition")
+            ..relation_ref("eval:classify-check", "eval.covers_definition")
         }],
         ..Default::default()
     };
 
     let policies = StaticIndexRelationPolicyTable::new(vec![vec![StaticIndexRelationPolicy {
         r#type: "eval.covers_definition".to_string(),
-        from_kinds: vec!["evaluation".to_string()],
+        from_kinds: vec!["eval".to_string()],
         to_kinds: vec!["prompt".to_string()],
         presentation: "both".to_string(),
         partial: true,
@@ -252,7 +252,6 @@ pub(crate) fn definition(
         status: Some("active".to_string()),
         fingerprint: None,
         metadata,
-        quality: None,
     }
 }
 

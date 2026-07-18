@@ -1,4 +1,4 @@
-import type { ChipTone } from "@/qw/shell/primitives";
+import type { ChipTone } from "@/devtools/shell/primitives";
 import type { RunKind, RunRow } from "../types";
 export {
   deliveryHealthTone,
@@ -26,16 +26,16 @@ export const KIND_TONE: Record<RunKind, ChipTone> = {
 };
 
 export const KIND_DOT_COLOR: Record<RunKind, string> = {
-  flow: "var(--qw-crux)",
-  swarm: "var(--qw-crux)",
-  pipeline: "var(--qw-crux)",
-  consensus: "var(--qw-crux)",
-  agent: "var(--qw-iris)",
-  retrieval: "var(--qw-ok)",
-  generate: "var(--qw-warn)",
-  resolve: "var(--qw-fg-muted)",
-  defer: "var(--qw-crux)",
-  trace: "var(--qw-fg-muted)",
+  flow: "var(--devtools-crux)",
+  swarm: "var(--devtools-crux)",
+  pipeline: "var(--devtools-crux)",
+  consensus: "var(--devtools-crux)",
+  agent: "var(--devtools-iris)",
+  retrieval: "var(--devtools-ok)",
+  generate: "var(--devtools-warn)",
+  resolve: "var(--devtools-fg-muted)",
+  defer: "var(--devtools-crux)",
+  trace: "var(--devtools-fg-muted)",
 };
 
 /**

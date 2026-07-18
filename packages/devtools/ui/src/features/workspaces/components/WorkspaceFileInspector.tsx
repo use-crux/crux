@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
-import { Btn, Chip, SectionHead } from "@/qw/shell/primitives";
-import { Icon } from "@/qw/shell/Icon";
+import { Btn, Chip, SectionHead } from "@/devtools/shell/primitives";
+import { Icon } from "@/devtools/shell/Icon";
 import { useWorkspaceFile } from "@/shared/hooks/useLibraryApi";
 import {
   fmtBytes,
@@ -57,7 +57,7 @@ export function FileInspector({
         <Icon
           name="doc"
           size={16}
-          color={isErr ? "var(--qw-danger)" : "var(--qw-crux)"}
+          color={isErr ? "var(--devtools-danger)" : "var(--devtools-crux)"}
           className="shrink-0"
         />
         <span
@@ -119,8 +119,8 @@ export function FileInspector({
       <div
         className="mb-4 inline-flex w-fit overflow-hidden rounded-[6px]"
         style={{
-          background: "var(--qw-bg)",
-          border: "1px solid var(--qw-border)",
+          background: "var(--devtools-bg)",
+          border: "1px solid var(--devtools-border)",
           padding: 2,
         }}
       >
@@ -139,10 +139,12 @@ export function FileInspector({
               onClick={() => setTab(id)}
               className="flex items-center gap-1.5 px-3 py-1 text-[12px] transition-colors"
               style={{
-                background: on ? "var(--qw-bg-elev)" : "transparent",
-                color: on ? "var(--qw-fg)" : "var(--qw-fg-muted)",
+                background: on ? "var(--devtools-bg-elev)" : "transparent",
+                color: on ? "var(--devtools-fg)" : "var(--devtools-fg-muted)",
                 fontWeight: on ? 600 : 450,
-                boxShadow: on ? "inset 0 0 0 1px var(--qw-border)" : "none",
+                boxShadow: on
+                  ? "inset 0 0 0 1px var(--devtools-border)"
+                  : "none",
                 borderRadius: 4,
               }}
             >
@@ -151,7 +153,9 @@ export function FileInspector({
                 <span
                   className="font-mono text-[10px]"
                   style={{
-                    color: on ? "var(--qw-crux)" : "var(--qw-fg-faint)",
+                    color: on
+                      ? "var(--devtools-crux)"
+                      : "var(--devtools-fg-faint)",
                   }}
                 >
                   {count}
@@ -196,33 +200,33 @@ function PreviewBlock({
     <div
       className="overflow-hidden rounded-[10px]"
       style={{
-        background: "var(--qw-bg-elev)",
-        border: "1px solid var(--qw-border)",
+        background: "var(--devtools-bg-elev)",
+        border: "1px solid var(--devtools-border)",
       }}
     >
       <div
         className="flex items-center gap-2 px-3.5 py-2 font-mono text-[11px]"
         style={{
-          borderBottom: "1px solid var(--qw-border)",
-          background: "var(--qw-bg-muted)",
-          color: "var(--qw-fg-muted)",
+          borderBottom: "1px solid var(--devtools-border)",
+          background: "var(--devtools-bg-muted)",
+          color: "var(--devtools-fg-muted)",
         }}
       >
         <Icon name="doc" size={11} />
         <span>{filePath}</span>
         {summary?.lastOpAt && (
-          <span style={{ color: "var(--qw-fg-faint)" }}>
+          <span style={{ color: "var(--devtools-fg-faint)" }}>
             · last touched {fmtRelative(summary.lastOpAt)}
           </span>
         )}
-        <span className="ml-auto" style={{ color: "var(--qw-fg-faint)" }}>
+        <span className="ml-auto" style={{ color: "var(--devtools-fg-faint)" }}>
           {preview?.contentType ?? summary?.mime ?? "—"}
         </span>
       </div>
       {loading ? (
         <div
           className="px-4 py-6 text-center text-[12px]"
-          style={{ color: "var(--qw-fg-muted)" }}
+          style={{ color: "var(--devtools-fg-muted)" }}
         >
           Loading preview…
         </div>
@@ -231,8 +235,8 @@ function PreviewBlock({
           <pre
             className="m-0 overflow-x-auto px-4 py-3 text-[11.5px] leading-[1.55]"
             style={{
-              fontFamily: "var(--qw-font-mono, ui-monospace)",
-              color: "var(--qw-fg)",
+              fontFamily: "var(--devtools-mono)",
+              color: "var(--devtools-fg)",
               maxHeight: "500px",
             }}
           >
@@ -242,9 +246,9 @@ function PreviewBlock({
             <div
               className="px-4 py-2 text-[10.5px]"
               style={{
-                background: "var(--qw-bg-muted)",
-                color: "var(--qw-fg-muted)",
-                borderTop: "1px solid var(--qw-border)",
+                background: "var(--devtools-bg-muted)",
+                color: "var(--devtools-fg-muted)",
+                borderTop: "1px solid var(--devtools-border)",
               }}
             >
               Preview truncated by backend.
@@ -280,7 +284,7 @@ function FileOperationsTable({ ops }: { ops: readonly WorkspaceOpRecord[] }) {
         right={
           <span
             className="font-mono text-[11px]"
-            style={{ color: "var(--qw-fg-faint)" }}
+            style={{ color: "var(--devtools-fg-faint)" }}
           >
             {ops.length} · chronological
           </span>
@@ -289,8 +293,8 @@ function FileOperationsTable({ ops }: { ops: readonly WorkspaceOpRecord[] }) {
       <div
         className="overflow-hidden rounded-[10px]"
         style={{
-          background: "var(--qw-bg-elev)",
-          border: "1px solid var(--qw-border)",
+          background: "var(--devtools-bg-elev)",
+          border: "1px solid var(--devtools-border)",
         }}
       >
         <TableHeader
@@ -329,28 +333,32 @@ function FileOperationsTable({ ops }: { ops: readonly WorkspaceOpRecord[] }) {
                 .filter(Boolean)
                 .join(" "),
               borderBottom:
-                i === ops.length - 1 ? "none" : "1px solid var(--qw-border)",
+                i === ops.length - 1
+                  ? "none"
+                  : "1px solid var(--devtools-border)",
             }}
           >
-            <span style={{ color: "var(--qw-fg-faint)" }}>
+            <span style={{ color: "var(--devtools-fg-faint)" }}>
               {fmtTime(o.timestamp)}
             </span>
             <OpPill op={o.op} />
             {hasDur && (
               <span
                 className="text-right"
-                style={{ color: "var(--qw-fg-faint)" }}
+                style={{ color: "var(--devtools-fg-faint)" }}
               >
                 {fmtDuration(o.durationMs) ?? "—"}
               </span>
             )}
             {hasActor && (
-              <span style={{ color: "var(--qw-fg)" }}>{o.actor ?? "—"}</span>
+              <span style={{ color: "var(--devtools-fg)" }}>
+                {o.actor ?? "—"}
+              </span>
             )}
             {hasSpan && (
               <span
                 className="truncate text-[10.5px]"
-                style={{ color: "var(--qw-fg-muted)" }}
+                style={{ color: "var(--devtools-fg-muted)" }}
                 title={o.spanId ?? undefined}
               >
                 {o.spanId ?? "—"}
@@ -359,7 +367,7 @@ function FileOperationsTable({ ops }: { ops: readonly WorkspaceOpRecord[] }) {
             {hasArtifact && (
               <span
                 className="truncate"
-                style={{ color: "var(--qw-fg-muted)" }}
+                style={{ color: "var(--devtools-fg-muted)" }}
                 title={o.uri}
               >
                 {[o.artifactStatus, o.artifactKind]
@@ -370,13 +378,16 @@ function FileOperationsTable({ ops }: { ops: readonly WorkspaceOpRecord[] }) {
             {hasBytes && (
               <span
                 className="text-right"
-                style={{ color: "var(--qw-fg-muted)" }}
+                style={{ color: "var(--devtools-fg-muted)" }}
               >
                 {fmtBytes(o.bytes) ?? "—"}
               </span>
             )}
             {hasTrace && (
-              <span className="text-right" style={{ color: "var(--qw-crux)" }}>
+              <span
+                className="text-right"
+                style={{ color: "var(--devtools-crux)" }}
+              >
                 {shortTrace(o.traceId) ?? "—"}
               </span>
             )}
@@ -412,8 +423,8 @@ function FileVersionsTable({
       <div
         className="overflow-hidden rounded-[10px]"
         style={{
-          background: "var(--qw-bg-elev)",
-          border: "1px solid var(--qw-border)",
+          background: "var(--devtools-bg-elev)",
+          border: "1px solid var(--devtools-border)",
         }}
       >
         <TableHeader
@@ -434,28 +445,35 @@ function FileVersionsTable({
               borderBottom:
                 i === versions.length - 1
                   ? "none"
-                  : "1px solid var(--qw-border)",
+                  : "1px solid var(--devtools-border)",
             }}
           >
-            <span style={{ color: "var(--qw-fg)" }}>{v.versionId}</span>
-            <span style={{ color: "var(--qw-fg-muted)" }}>
+            <span style={{ color: "var(--devtools-fg)" }}>{v.versionId}</span>
+            <span style={{ color: "var(--devtools-fg-muted)" }}>
               {fmtRelative(v.timestamp) ?? "—"}
             </span>
-            <span style={{ color: "var(--qw-fg)" }}>{v.actor ?? "—"}</span>
+            <span style={{ color: "var(--devtools-fg)" }}>
+              {v.actor ?? "—"}
+            </span>
             <span className="text-right">
               {v.diff ? (
                 <>
-                  <span style={{ color: "var(--qw-ok)" }}>+{v.diff.added}</span>
+                  <span style={{ color: "var(--devtools-ok)" }}>
+                    +{v.diff.added}
+                  </span>
                   {" / "}
-                  <span style={{ color: "var(--qw-danger)" }}>
+                  <span style={{ color: "var(--devtools-danger)" }}>
                     -{v.diff.removed}
                   </span>
                 </>
               ) : (
-                <span style={{ color: "var(--qw-fg-faint)" }}>—</span>
+                <span style={{ color: "var(--devtools-fg-faint)" }}>—</span>
               )}
             </span>
-            <span className="text-right" style={{ color: "var(--qw-crux)" }}>
+            <span
+              className="text-right"
+              style={{ color: "var(--devtools-crux)" }}
+            >
               {shortTrace(v.traceId) ?? "—"}
             </span>
           </div>

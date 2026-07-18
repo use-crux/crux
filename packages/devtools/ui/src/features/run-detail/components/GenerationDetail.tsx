@@ -7,14 +7,14 @@
  *    injected contributions (4 resolution states) + accumulated context + tools +
  *    budget + composition⇄preview toggle.
  *
- * Facts/quality (metrics detail, relations, scores, attributes) live in the
+ * Evidence (metrics detail, relations, scores, attributes) lives in the
  * Inspector, never here.
  */
 
 import { useEffect, useMemo, useState } from "react";
 import { JsonTree } from "@/shared/components/JsonTree";
-import { Chip } from "@/qw/shell/primitives";
-import { Icon } from "@/qw/shell/Icon";
+import { Chip } from "@/devtools/shell/primitives";
+import { Icon } from "@/devtools/shell/Icon";
 import type { ObservabilityRunDetailNode, Trace } from "@/types";
 import {
   turnHasWarningSignal,
@@ -53,7 +53,7 @@ import {
 type OutMode = "pretty" | "tokens" | "raw";
 type GenTab = "explain" | "output" | "context" | GovType;
 
-// ─── design atoms (mapped to --qw tokens) ───────────────────────────
+// ─── design atoms (mapped to --devtools tokens) ───────────────────────────
 
 /** A blinking caret shown at the end of a still-streaming generation. */
 function StreamCaret() {
@@ -64,7 +64,7 @@ function StreamCaret() {
       style={{
         width: 7,
         height: 15,
-        background: "var(--qw-crux)",
+        background: "var(--devtools-crux)",
         borderRadius: 1,
       }}
     />
@@ -82,15 +82,15 @@ function ChunkOutput({
   return (
     <div
       className="text-[14.5px] leading-[1.7]"
-      style={{ fontFamily: "var(--qw-serif)", color: "var(--qw-fg)" }}
+      style={{ fontFamily: "var(--devtools-serif)", color: "var(--devtools-fg)" }}
     >
       {chunks.map((c, i) => (
         <span
           key={i}
           style={{
-            background: i % 2 === 0 ? "var(--qw-crux-soft)" : "transparent",
+            background: i % 2 === 0 ? "var(--devtools-crux-soft)" : "transparent",
             boxShadow:
-              i % 2 === 0 ? "inset 0 -1px 0 var(--qw-crux-line)" : "none",
+              i % 2 === 0 ? "inset 0 -1px 0 var(--devtools-crux-line)" : "none",
             borderRadius: 2,
             padding: "1px 0",
           }}
@@ -101,13 +101,13 @@ function ChunkOutput({
               className="font-mono"
               style={{
                 fontSize: 9.5,
-                color: "var(--qw-crux)",
-                background: "var(--qw-crux-soft)",
+                color: "var(--devtools-crux)",
+                background: "var(--devtools-crux-soft)",
                 borderRadius: 3,
                 padding: "1px 3px",
                 margin: "0 1px",
                 fontWeight: 600,
-                boxShadow: "inset 0 0 0 1px var(--qw-crux-line)",
+                boxShadow: "inset 0 0 0 1px var(--devtools-crux-line)",
               }}
             >
               {c.cite}
@@ -123,18 +123,18 @@ function ChunkOutput({
 /** Per-token tinting (design `TokenOutput`) — reveals tokenization/granularity. */
 function TokenOutput({ text }: { text: string }) {
   const tints = [
-    "var(--qw-crux-soft)",
-    "var(--qw-iris-soft)",
-    "var(--qw-ok-soft)",
-    "var(--qw-warn-soft)",
-    "var(--qw-danger-soft)",
+    "var(--devtools-crux-soft)",
+    "var(--devtools-iris-soft)",
+    "var(--devtools-ok-soft)",
+    "var(--devtools-warn-soft)",
+    "var(--devtools-danger-soft)",
   ];
   const rings = [
-    "var(--qw-crux-line)",
-    "var(--qw-iris)",
-    "var(--qw-ok)",
-    "var(--qw-warn)",
-    "var(--qw-danger)",
+    "var(--devtools-crux-line)",
+    "var(--devtools-iris)",
+    "var(--devtools-ok)",
+    "var(--devtools-warn)",
+    "var(--devtools-danger)",
   ];
   const tokens = text.match(/\s+|[^\s]+/g) ?? [];
   let k = 0;
@@ -142,9 +142,9 @@ function TokenOutput({ text }: { text: string }) {
     <div
       className="text-[14.5px]"
       style={{
-        fontFamily: "var(--qw-serif)",
+        fontFamily: "var(--devtools-serif)",
         lineHeight: 2,
-        color: "var(--qw-fg)",
+        color: "var(--devtools-fg)",
       }}
     >
       {tokens.map((tok, i) => {
@@ -193,25 +193,25 @@ function ToolCallCard({ call }: { call: ToolCallPart }) {
     <div
       className="overflow-hidden rounded-[8px]"
       style={{
-        background: "var(--qw-bg-elev)",
-        border: "1px solid var(--qw-border)",
+        background: "var(--devtools-bg-elev)",
+        border: "1px solid var(--devtools-border)",
       }}
     >
       <div
         className="flex items-center gap-2 px-3 py-2"
-        style={{ borderBottom: "1px solid var(--qw-border)" }}
+        style={{ borderBottom: "1px solid var(--devtools-border)" }}
       >
         <KindTag kind="tool" primitive="tool.call" size={9} />
         <span
           className="font-mono text-[11.5px] font-medium"
-          style={{ color: "var(--qw-crux)" }}
+          style={{ color: "var(--devtools-crux)" }}
         >
           {call.toolName ?? call.name ?? "tool"}
         </span>
         {call.toolCallId && (
           <span
             className="font-mono text-[10px]"
-            style={{ color: "var(--qw-fg-faint)" }}
+            style={{ color: "var(--devtools-fg-faint)" }}
           >
             {call.toolCallId}
           </span>
@@ -229,7 +229,7 @@ function ToolCallCard({ call }: { call: ToolCallPart }) {
         <div className="flex-1" />
         <span
           className="font-mono text-[9.5px]"
-          style={{ color: "var(--qw-fg-faint)" }}
+          style={{ color: "var(--devtools-fg-faint)" }}
         >
           requested by model
         </span>
@@ -244,16 +244,16 @@ function ToolCallCard({ call }: { call: ToolCallPart }) {
             style={{
               borderRight:
                 i === 0 && cells.length > 1
-                  ? "1px solid var(--qw-border)"
+                  ? "1px solid var(--devtools-border)"
                   : "none",
             }}
           >
             <div
               className="px-3 py-1.5 font-mono text-[9.5px] uppercase tracking-[0.06em]"
               style={{
-                color: "var(--qw-fg-faint)",
-                background: "var(--qw-bg-muted)",
-                borderBottom: "1px solid var(--qw-border)",
+                color: "var(--devtools-fg-faint)",
+                background: "var(--devtools-bg-muted)",
+                borderBottom: "1px solid var(--devtools-border)",
               }}
             >
               {label}
@@ -264,7 +264,7 @@ function ToolCallCard({ call }: { call: ToolCallPart }) {
               ) : (
                 <span
                   className="font-mono text-[11px]"
-                  style={{ color: "var(--qw-fg-faint)" }}
+                  style={{ color: "var(--devtools-fg-faint)" }}
                 >
                   (none)
                 </span>
@@ -452,8 +452,8 @@ export function GenerationDetail({
         className="flex flex-shrink-0 flex-wrap items-center gap-2.5"
         style={{
           padding: "11px 24px",
-          borderBottom: "1px solid var(--qw-border)",
-          background: "var(--qw-bg)",
+          borderBottom: "1px solid var(--devtools-border)",
+          background: "var(--devtools-bg)",
         }}
       >
         <KindTag kind="generation" primitive={node.primitive} size={9} />
@@ -464,12 +464,12 @@ export function GenerationDetail({
         {node.status === "running" && (
           <span
             className="inline-flex items-center gap-1.5 font-mono text-[11px] font-semibold"
-            style={{ color: "var(--qw-crux)" }}
+            style={{ color: "var(--devtools-crux)" }}
           >
             <span
               aria-hidden
               className="inline-block size-[6px] rounded-full animate-running-pulse"
-              style={{ background: "var(--qw-crux)" }}
+              style={{ background: "var(--devtools-crux)" }}
             />
             streaming
           </span>
@@ -477,7 +477,7 @@ export function GenerationDetail({
         {model && (model.provider || model.model) && (
           <span
             className="font-mono text-[11px]"
-            style={{ color: "var(--qw-iris)" }}
+            style={{ color: "var(--devtools-iris)" }}
             title={model.model}
           >
             {[model.provider, shortModelId(model.model)]
@@ -488,7 +488,7 @@ export function GenerationDetail({
         {finish && (
           <span
             className="font-mono text-[11px]"
-            style={{ color: "var(--qw-fg-faint)" }}
+            style={{ color: "var(--devtools-fg-faint)" }}
           >
             finish · {finish}
           </span>
@@ -508,8 +508,8 @@ export function GenerationDetail({
       <div
         className="flex flex-shrink-0 items-center gap-0 px-6"
         style={{
-          borderBottom: "1px solid var(--qw-border)",
-          background: "var(--qw-bg)",
+          borderBottom: "1px solid var(--devtools-border)",
+          background: "var(--devtools-bg)",
         }}
       >
         {tabs.map((id) => {
@@ -521,10 +521,10 @@ export function GenerationDetail({
               onClick={() => setTab(id)}
               className="-mb-px flex items-center gap-1.5 px-3.5 py-2.5 font-mono text-[12.5px] capitalize"
               style={{
-                color: on ? "var(--qw-fg)" : "var(--qw-fg-muted)",
+                color: on ? "var(--devtools-fg)" : "var(--devtools-fg-muted)",
                 fontWeight: on ? 600 : 450,
                 borderBottom: on
-                  ? "2px solid var(--qw-crux)"
+                  ? "2px solid var(--devtools-crux)"
                   : "2px solid transparent",
               }}
             >
@@ -532,7 +532,7 @@ export function GenerationDetail({
                 <Icon
                   name="sparkle"
                   size={13}
-                  color={on ? "var(--qw-crux)" : "var(--qw-warn)"}
+                  color={on ? "var(--devtools-crux)" : "var(--devtools-warn)"}
                 />
               )}
               {id === "output" || id === "context" || id === "explain"
@@ -545,7 +545,7 @@ export function GenerationDetail({
         {activeTab === "output" && text != null && (
           <div
             className="inline-flex overflow-hidden rounded-[6px] font-mono text-[10.5px]"
-            style={{ boxShadow: "inset 0 0 0 1px var(--qw-border)" }}
+            style={{ boxShadow: "inset 0 0 0 1px var(--devtools-border)" }}
           >
             {(["pretty", "tokens", "raw"] as const).map((m) => (
               <button
@@ -555,9 +555,9 @@ export function GenerationDetail({
                 className="px-2.5 py-[3px]"
                 style={{
                   background:
-                    outMode === m ? "var(--qw-crux-soft)" : "transparent",
+                    outMode === m ? "var(--devtools-crux-soft)" : "transparent",
                   color:
-                    outMode === m ? "var(--qw-crux)" : "var(--qw-fg-faint)",
+                    outMode === m ? "var(--devtools-crux)" : "var(--devtools-fg-faint)",
                   fontWeight: outMode === m ? 600 : 450,
                 }}
               >
@@ -639,20 +639,20 @@ function OutputView({
         <div
           className="rounded-[8px] px-3.5 py-3"
           style={{
-            background: "var(--qw-danger-soft)",
-            border: "1px solid var(--qw-danger-soft)",
+            background: "var(--devtools-danger-soft)",
+            border: "1px solid var(--devtools-danger-soft)",
           }}
         >
           <div
             className="flex items-center gap-2 font-mono text-[12px] font-semibold"
-            style={{ color: "var(--qw-danger)" }}
+            style={{ color: "var(--devtools-danger)" }}
           >
-            <Icon name="alert" size={13} color="var(--qw-danger)" />
+            <Icon name="alert" size={13} color="var(--devtools-danger)" />
             {spanError.name ?? "Error"}
           </div>
           <div
             className="mt-1 text-[12.5px]"
-            style={{ color: "var(--qw-danger)" }}
+            style={{ color: "var(--devtools-danger)" }}
           >
             {spanError.summary}
           </div>
@@ -660,8 +660,8 @@ function OutputView({
             <pre
               className="mt-2 max-h-[220px] overflow-auto rounded-[6px] px-2.5 py-2 font-mono text-[11px]"
               style={{
-                background: "var(--qw-bg-muted)",
-                color: "var(--qw-fg-muted)",
+                background: "var(--devtools-bg-muted)",
+                color: "var(--devtools-fg-muted)",
               }}
             >
               {spanError.stack}
@@ -673,13 +673,13 @@ function OutputView({
       <div className="flex items-center gap-2.5">
         <span
           className="font-mono text-[10.5px] uppercase tracking-[0.16em]"
-          style={{ color: "var(--qw-crux)" }}
+          style={{ color: "var(--devtools-crux)" }}
         >
           Output{outMode === "pretty" && chunks.length > 1 ? " · stream" : ""}
         </span>
         <div
           className="h-px flex-1"
-          style={{ background: "var(--qw-border)" }}
+          style={{ background: "var(--devtools-border)" }}
         />
         {streaming && (
           <Chip tone="crux" dot>
@@ -701,15 +701,15 @@ function OutputView({
       <div
         className="rounded-[10px] px-4 py-3.5"
         style={{
-          background: "var(--qw-bg-elev)",
-          border: "1px solid var(--qw-border)",
+          background: "var(--devtools-bg-elev)",
+          border: "1px solid var(--devtools-border)",
         }}
       >
         {text != null ? (
           outMode === "raw" ? (
             <pre
               className="m-0 whitespace-pre-wrap font-mono text-[12px] leading-[1.7]"
-              style={{ color: "var(--qw-fg-muted)" }}
+              style={{ color: "var(--devtools-fg-muted)" }}
             >
               {text}
             </pre>
@@ -721,7 +721,7 @@ function OutputView({
         ) : obj != null ? (
           <JsonTree data={obj} />
         ) : (
-          <span className="text-[12px]" style={{ color: "var(--qw-fg-faint)" }}>
+          <span className="text-[12px]" style={{ color: "var(--devtools-fg-faint)" }}>
             (no output for this span)
           </span>
         )}
@@ -729,13 +729,13 @@ function OutputView({
 
       <div
         className="flex items-center gap-2 font-mono text-[11px]"
-        style={{ color: "var(--qw-fg-muted)" }}
+        style={{ color: "var(--devtools-fg-muted)" }}
       >
         <span
           className="inline-block size-2.5 rounded-[2px]"
           style={{
-            background: "var(--qw-crux-soft)",
-            boxShadow: "inset 0 0 0 1px var(--qw-crux-line)",
+            background: "var(--devtools-crux-soft)",
+            boxShadow: "inset 0 0 0 1px var(--devtools-crux-line)",
           }}
         />
         {outMode === "pretty"
@@ -753,13 +753,13 @@ function OutputView({
           <div className="flex items-center gap-2.5">
             <span
               className="font-mono text-[10.5px] uppercase tracking-[0.16em]"
-              style={{ color: "var(--qw-crux)" }}
+              style={{ color: "var(--devtools-crux)" }}
             >
               Grounding · {grounded} of {citations.length} cited
             </span>
             <div
               className="h-px flex-1"
-              style={{ background: "var(--qw-border)" }}
+              style={{ background: "var(--devtools-border)" }}
             />
             {citations.length - grounded > 0 && (
               <Chip tone="warn" dot>
@@ -780,15 +780,15 @@ function OutputView({
                 key={i}
                 className="flex items-center gap-2.5 rounded-[8px] px-3 py-2"
                 style={{
-                  background: "var(--qw-bg-elev)",
-                  border: "1px solid var(--qw-border)",
+                  background: "var(--devtools-bg-elev)",
+                  border: "1px solid var(--devtools-border)",
                   opacity: isG ? 1 : 0.7,
                 }}
               >
                 <span
                   className="w-5 font-mono text-[11px]"
                   style={{
-                    color: isG ? "var(--qw-crux)" : "var(--qw-fg-faint)",
+                    color: isG ? "var(--devtools-crux)" : "var(--devtools-fg-faint)",
                   }}
                 >
                   {c.marker != null ? `[${String(c.marker)}]` : "—"}
@@ -799,7 +799,7 @@ function OutputView({
                 {typeof c.chunkId === "string" && (
                   <span
                     className="font-mono text-[10.5px]"
-                    style={{ color: "var(--qw-fg-faint)" }}
+                    style={{ color: "var(--devtools-fg-faint)" }}
                   >
                     {c.chunkId}
                   </span>
@@ -824,18 +824,18 @@ function OutputView({
         <div className="flex items-center gap-2.5">
           <span
             className="font-mono text-[10.5px] uppercase tracking-[0.16em]"
-            style={{ color: "var(--qw-crux)" }}
+            style={{ color: "var(--devtools-crux)" }}
           >
             Requested tool calls
           </span>
           <div
             className="h-px flex-1"
-            style={{ background: "var(--qw-border)" }}
+            style={{ background: "var(--devtools-border)" }}
           />
           {toolCalls.length === 0 && (
             <span
               className="font-mono text-[11px]"
-              style={{ color: "var(--qw-fg-faint)" }}
+              style={{ color: "var(--devtools-fg-faint)" }}
             >
               none this turn
             </span>
@@ -848,12 +848,12 @@ function OutputView({
           <div
             className="rounded-[8px] px-3.5 py-2.5 font-mono text-[11.5px]"
             style={{
-              border: "1px dashed var(--qw-border)",
-              color: "var(--qw-fg-faint)",
+              border: "1px dashed var(--devtools-border)",
+              color: "var(--devtools-fg-faint)",
             }}
           >
             finish reason was{" "}
-            <span style={{ color: "var(--qw-fg-muted)" }}>{finish}</span> — the
+            <span style={{ color: "var(--devtools-fg-muted)" }}>{finish}</span> — the
             model returned prose, not a tool call.
           </div>
         )}

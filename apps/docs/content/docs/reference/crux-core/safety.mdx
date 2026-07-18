@@ -297,7 +297,7 @@ the canonical part type and original pre-strip indexes, never the media source.
 | Gate tool calls, tool results, or approvals as Safety decisions | `toolPolicy()`                                  |
 | Instrument or modify tool execution mechanics                   | `toolMiddleware()`                              |
 | Enforce a minimum LLM-judge score and retry                     | `constraint.judge(...)`                         |
-| Regression-test a production constraint in eval suites          | `constraintScorer()` from `@use-crux/core/eval` |
+| Regression-test production Safety behavior in Evals             | `ctx.expect.safety` or `ctx.expect.decisionReport.safety` |
 | Repair JSON/schema parse failures                               | `validationRetry`                               |
 
 ## Testing

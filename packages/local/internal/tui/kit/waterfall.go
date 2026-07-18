@@ -161,7 +161,7 @@ func PrimitiveColor(primitive string) color.Color {
 		return adapterPalette.Teal
 	case "tool":
 		return adapterPalette.Amber
-	case "flow", "flow.step", "eval.flow":
+	case "flow", "flow.step":
 		return adapterPalette.Violet
 	case "pipeline", "parallel", "consensus", "swarm":
 		return adapterPalette.Violet

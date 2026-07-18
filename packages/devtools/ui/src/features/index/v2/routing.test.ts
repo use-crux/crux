@@ -2,17 +2,12 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { ProjectDefinition, ProjectIndexData } from "@/types";
-import { glyphFor } from "@/features/index/components/IndexKind";
 import { buildIndex } from "./adapt";
 import { kindMeta } from "./kit";
 import { RoutingCatalogFacts } from "./routing-catalog";
 
 describe("routing index metadata", () => {
-  it("labels stable split and retry kinds in legacy and v2 index views", () => {
-    expect(glyphFor("routing.split")).toMatchObject({ label: "split" });
-    expect(glyphFor("routing.retry.target")).toMatchObject({
-      label: "retry target",
-    });
+  it("labels stable split and retry kinds", () => {
     expect(kindMeta("routing.split")).toMatchObject({
       label: "Split",
       family: "routing",

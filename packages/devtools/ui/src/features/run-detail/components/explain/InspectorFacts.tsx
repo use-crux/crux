@@ -1,7 +1,7 @@
 /**
  * Right-inspector Explain facts — the compact read-out that rides alongside the
  * span rail. For a generation turn it answers "why Explain opened" plus the
- * saw/checked/dropped/freshness/cache/quality facts; for the run root it shows
+ * saw/checked/dropped/freshness/cache/Eval-coverage facts; for the run root it shows
  * the failing-first roll-up across every turn's report. Facts only — the rail
  * never owns the deep evidence.
  */
@@ -19,10 +19,10 @@ import {
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="border-b border-(--qw-border) px-4 py-3">
+    <div className="border-b border-(--devtools-border) px-4 py-3">
       <div
         className="mb-2 font-mono text-[10px] uppercase tracking-[0.12em]"
-        style={{ color: "var(--qw-fg-faint)" }}
+        style={{ color: "var(--devtools-fg-faint)" }}
       >
         {title}
       </div>
@@ -36,13 +36,13 @@ function Fact({ k, v, tone }: { k: string; v: ReactNode; tone?: string }) {
     <div className="flex flex-col leading-tight">
       <span
         className="font-mono text-[9px] uppercase tracking-[0.04em]"
-        style={{ color: "var(--qw-fg-faint)" }}
+        style={{ color: "var(--devtools-fg-faint)" }}
       >
         {k}
       </span>
       <span
         className="font-mono text-[11.5px] font-medium"
-        style={{ color: tone ?? "var(--qw-fg)" }}
+        style={{ color: tone ?? "var(--devtools-fg)" }}
       >
         {v}
       </span>
@@ -111,33 +111,33 @@ export function TurnInspectorFacts({
         <Fact
           k="dropped"
           v={dropped}
-          tone={dropped > 0 ? "var(--qw-danger)" : undefined}
+          tone={dropped > 0 ? "var(--devtools-danger)" : undefined}
         />
         {fresh && (
           <Fact
             k="freshness"
             v={fresh}
-            tone={fresh === "stale-used" ? "var(--qw-warn)" : undefined}
+            tone={fresh === "stale-used" ? "var(--devtools-warn)" : undefined}
           />
         )}
         <Fact
           k="cache"
           v={cacheHit ? "hit" : "—"}
-          tone={cacheHit ? "var(--qw-crux)" : undefined}
+          tone={cacheHit ? "var(--devtools-crux)" : undefined}
         />
         <Fact
-          k="quality"
+          k="Eval coverage"
           v={covered}
           tone={
             cov.total > 0 && cov.covered < cov.total
-              ? "var(--qw-warn)"
-              : "var(--qw-ok)"
+              ? "var(--devtools-warn)"
+              : "var(--devtools-ok)"
           }
         />
       </div>
       <div
         className="mt-2 text-[10.5px] leading-[1.5]"
-        style={{ color: "var(--qw-fg-muted)" }}
+        style={{ color: "var(--devtools-fg-muted)" }}
       >
         {attentionReason(report)}
       </div>
@@ -153,30 +153,30 @@ function RunInsightBody({ agg }: { agg: RunAggregate }) {
       <Fact
         k="attention"
         v={agg.needAttention}
-        tone={agg.needAttention > 0 ? "var(--qw-warn)" : "var(--qw-ok)"}
+        tone={agg.needAttention > 0 ? "var(--devtools-warn)" : "var(--devtools-ok)"}
       />
       <Fact
         k="dropped"
         v={agg.dropped}
-        tone={agg.dropped > 0 ? "var(--qw-danger)" : undefined}
+        tone={agg.dropped > 0 ? "var(--devtools-danger)" : undefined}
       />
       <Fact
         k="stale used"
         v={agg.staleUsed}
-        tone={agg.staleUsed > 0 ? "var(--qw-warn)" : undefined}
+        tone={agg.staleUsed > 0 ? "var(--devtools-warn)" : undefined}
       />
       <Fact
         k="fallback"
         v={agg.fallback}
-        tone={agg.fallback > 0 ? "var(--qw-warn)" : undefined}
+        tone={agg.fallback > 0 ? "var(--devtools-warn)" : undefined}
       />
       <Fact
         k="protected"
         v={covered}
         tone={
           agg.total > 0 && agg.covered < agg.total
-            ? "var(--qw-warn)"
-            : "var(--qw-ok)"
+            ? "var(--devtools-warn)"
+            : "var(--devtools-ok)"
         }
       />
     </div>

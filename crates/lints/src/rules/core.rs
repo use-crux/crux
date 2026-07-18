@@ -2,7 +2,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use serde_json::{Map, Value, json};
+use serde_json::{Value, json};
 
 use crate::builder::{StaticIndexLintBuilder, StaticIndexLintFindingInput, definition_evidence};
 use crate::contracts::{
@@ -15,8 +15,8 @@ use crate::facts::{
     StaticIndexDefinition, StaticIndexLintFinding, StaticIndexPatchFacts, StaticIndexRelation,
 };
 use crate::helpers::{
-    child_definitions_by_parent, covered_definition_ids, has_items, relation_sources,
-    relations_by_source, should_require_coverage, targets_by_relation,
+    child_definitions_by_parent, covered_definition_ids, relation_sources, relations_by_source,
+    should_require_coverage, targets_by_relation,
 };
 use crate::rules::definition_tail::{DefinitionTailContext, definition_tail_findings};
 use crate::rules::relation::relation_lint_findings;
@@ -26,7 +26,7 @@ pub(crate) fn core_lint_findings(
     facts: &StaticIndexPatchFacts,
     by_id: &BTreeMap<&str, &StaticIndexDefinition>,
 ) -> Vec<StaticIndexLintFinding> {
-    let covered = covered_definition_ids(&facts.definitions, &facts.relations);
+    let covered = covered_definition_ids(&facts.relations);
     let guardrail_targets = targets_by_relation(&facts.relations, "guardrail.applies_to");
     let consensus_policies = relation_sources(
         &facts.relations,
@@ -235,26 +235,13 @@ fn append_definition_findings(
             "definition.missing_eval_coverage",
             definition,
             format!(
-                "{} \"{}\" is not covered by an eval relation or index quality join.",
+                "{} \"{}\" is not covered by an Eval relation.",
                 definition.kind, definition.name
             ),
             vec![definition_evidence(
                 definition,
                 "Definition without eval coverage",
             )],
-        );
-    }
-    if has_experiment_history_without_baseline(definition) {
-        push_definition_finding(
-            builder,
-            findings,
-            "quality.missing_baseline",
-            definition,
-            format!(
-                "{} has experiment history but no promoted baseline.",
-                definition.name
-            ),
-            vec![quality_baseline_evidence(definition)],
         );
     }
     if definition.kind == "tool" && !has_input_schema(definition) {
@@ -446,41 +433,4 @@ fn push_flow_suspend_finding(
     }) {
         findings.push(finding);
     }
-}
-
-fn has_experiment_history_without_baseline(definition: &StaticIndexDefinition) -> bool {
-    let Some(quality) = definition.quality.as_ref() else {
-        return false;
-    };
-    has_items(quality.get("experimentIds")) && !has_items(quality.get("baselineIds"))
-}
-
-fn quality_baseline_evidence(definition: &StaticIndexDefinition) -> Value {
-    let quality = definition.quality.as_ref();
-    let mut data = json!({
-        "experimentIds": quality.and_then(|value| value.get("experimentIds")).cloned().unwrap_or(Value::Array(Vec::new())),
-        "experimentCount": quality.and_then(|value| value.get("experimentCount")).cloned().unwrap_or(Value::Number(0.into())),
-    });
-    if let Some(pass_rate) = quality.and_then(|value| value.get("passRate")).cloned() {
-        data["passRate"] = pass_rate;
-    }
-    if let Some(last_run_id) = quality.and_then(|value| value.get("lastRunId")).cloned() {
-        data["lastRunId"] = last_run_id;
-    }
-    let mut evidence = Map::new();
-    evidence.insert("kind".to_string(), json!("quality"));
-    evidence.insert(
-        "label".to_string(),
-        json!("Experiment history without baseline"),
-    );
-    evidence.insert(
-        "description".to_string(),
-        json!("This definition has completed experiment data but no baseline quality record."),
-    );
-    evidence.insert("definitionId".to_string(), json!(definition.id));
-    if let Some(source) = definition.source.as_ref() {
-        evidence.insert("source".to_string(), json!(source));
-    }
-    evidence.insert("data".to_string(), data);
-    Value::Object(evidence)
 }

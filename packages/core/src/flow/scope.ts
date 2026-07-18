@@ -415,8 +415,8 @@ async function executeFlow<
       try {
         const result = await wrappedFn();
 
-        // Record the step output on the trace: the span model is the source
-        // of truth for step signals (quality ctx.step(), devtools detail).
+        // Record the step output on the trace so Devtools and other graph
+        // readers can inspect it without re-running the Flow.
         if (result !== undefined) {
           stepSpan.withContext(() => {
             observe.artifact({

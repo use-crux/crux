@@ -1,6 +1,11 @@
 /** Conservative external-action cost estimation and admission. @internal */
 
 import { resolveEvalScorers } from "./scorer-plan";
+import {
+  SCORER_BINDING,
+  SCORER_IDENTITY,
+  type MaybeIdentifiedScorer,
+} from "./scorers/runtime";
 import type { EvalCostConfirmationPort, EvalCostEstimator } from "./ports";
 import type { EvalPlannedCell } from "./types";
 import type {
@@ -43,7 +48,13 @@ export async function createEvalCostPlan(input: {
           ...publicActionFields(request),
           estimate: normalizeEstimate(
             input.estimator === undefined
-              ? { kind: "none" }
+              ? {
+                  kind: "unknown",
+                  source: "unknown",
+                  missingPricingKeys: [],
+                  remedy:
+                    "Install a managed Eval cost estimator or configure experimental.eval.pricing.",
+                }
               : await input.estimator.estimate(request),
           ),
         }),
@@ -126,6 +137,7 @@ function collectCostRequests(
           input: cell.input,
           ...(cell.call !== undefined ? { call: cell.call } : {}),
           scorer,
+          ...projectScorerBilling(scorer),
         });
         continue;
       }
@@ -146,6 +158,24 @@ function collectCostRequests(
     }
   }
   return Object.freeze(requests);
+}
+
+function projectScorerBilling(scorer: unknown): {
+  readonly billingModel?: unknown;
+  readonly inheritTaskModel?: true;
+} {
+  const identified = scorer as MaybeIdentifiedScorer;
+  const identity = identified[SCORER_IDENTITY];
+  if (!isRecord(identity) || identity.kind !== "judge") return {};
+  const binding = identified[SCORER_BINDING];
+  return {
+    inheritTaskModel: true,
+    ...(binding?.model !== undefined ? { billingModel: binding.model } : {}),
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 function publicActionFields(

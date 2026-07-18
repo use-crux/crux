@@ -11,6 +11,7 @@ import {
   Activity,
   AlertTriangle,
   BookOpen,
+  FlaskConical,
   Layers,
   Link2,
   Puzzle,
@@ -26,6 +27,8 @@ import { useInspectInsights } from "@/shared/hooks/useInspectApi";
 import { useIndex } from "@/features/index/hooks/useIndex";
 import { useJudgeEvents } from "@/app/runtime/runtimeStore";
 import { searchRuns } from "@/features/search/lib/search-runs";
+import { useEvalCatalog } from "@/features/evals/hooks/useEvals";
+import { searchEvals } from "@/features/search/lib/search-evals";
 import type {
   ContextMeta,
   JudgeEventData,
@@ -42,11 +45,17 @@ interface GlobalSearchProps {
   isOpen?: boolean;
   /** Controlled setter — pass from useGlobalSearchShortcut if wiring "/" shortcut from parent. */
   setIsOpen?: (open: boolean) => void;
-  /** Hide the inline trigger button — the QW shell has its own sidebar search button. */
+  /** Hide the inline trigger button — the Devtools shell has its own sidebar search button. */
   hideTrigger?: boolean;
 }
 
-type ResultCategory = "traces" | "prompts" | "contexts" | "judges" | "insights";
+type ResultCategory =
+  | "traces"
+  | "evals"
+  | "prompts"
+  | "contexts"
+  | "judges"
+  | "insights";
 
 interface SearchResult {
   category: ResultCategory;
@@ -63,6 +72,7 @@ const CATEGORY_CONFIG: Record<
   { label: string; icon: typeof Search }
 > = {
   traces: { label: "Traces", icon: Activity },
+  evals: { label: "Evals", icon: FlaskConical },
   prompts: { label: "Prompts", icon: BookOpen },
   contexts: { label: "Contexts", icon: Puzzle },
   judges: { label: "Judges", icon: Shield },
@@ -196,6 +206,7 @@ const LENS_HINT: Record<LensId, string> = {
 // Render + keyboard order for result groups — must match `results`' build order.
 const RENDER_ORDER: ResultCategory[] = [
   "traces",
+  "evals",
   "insights",
   "prompts",
   "contexts",
@@ -220,6 +231,8 @@ export function GlobalSearch({
   const prompts = index?.prompts ?? [];
   const contexts = index?.contexts ?? [];
   const judgeEvents = useJudgeEvents();
+  const { data: evalCatalog } = useEvalCatalog();
+  const evals = evalCatalog ?? [];
   const [internalIsOpen, internalSetIsOpen] = useState(false);
   const isOpen = controlledIsOpen ?? internalIsOpen;
   const setIsOpen = controlledSetIsOpen ?? internalSetIsOpen;
@@ -273,12 +286,13 @@ export function GlobalSearch({
     if (query.length < 2) return [];
     return [
       ...searchRuns(runs, query),
+      ...searchEvals(evals, query),
       ...searchInsights(insights, query),
       ...searchPrompts(prompts, query),
       ...searchContexts(contexts, query),
       ...searchJudgeEvents(judgeEvents, query),
     ];
-  }, [query, runs, insights, prompts, contexts, judgeEvents]);
+  }, [query, runs, evals, insights, prompts, contexts, judgeEvents]);
 
   // Group results by category for rendering
   const grouped = useMemo(() => {
@@ -310,15 +324,19 @@ export function GlobalSearch({
         id: "next-failure",
         label: "Next failure",
         hint: "e",
-        icon: <AlertTriangle className="h-3.5 w-3.5 text-(--qw-fg-muted)" />,
-        run: () => window.dispatchEvent(new CustomEvent("qw:next-failure")),
+        icon: (
+          <AlertTriangle className="h-3.5 w-3.5 text-(--devtools-fg-muted)" />
+        ),
+        run: () =>
+          window.dispatchEvent(new CustomEvent("devtools:next-failure")),
       },
       {
         id: "permalink",
         label: "Copy permalink to selection",
         hint: "⌘⇧C",
-        icon: <Link2 className="h-3.5 w-3.5 text-(--qw-fg-muted)" />,
-        run: () => window.dispatchEvent(new CustomEvent("qw:copy-permalink")),
+        icon: <Link2 className="h-3.5 w-3.5 text-(--devtools-fg-muted)" />,
+        run: () =>
+          window.dispatchEvent(new CustomEvent("devtools:copy-permalink")),
       },
     ];
     for (const l of LENS_IDS) {
@@ -327,7 +345,9 @@ export function GlobalSearch({
         id: `lens-${l}`,
         label: `Switch to ${LENS_LABEL[l]} lens`,
         hint: LENS_HINT[l],
-        icon: <SquareStack className="h-3.5 w-3.5 text-(--qw-fg-muted)" />,
+        icon: (
+          <SquareStack className="h-3.5 w-3.5 text-(--devtools-fg-muted)" />
+        ),
         run: () => navigate({ view: "run-detail", traceId, lens: l, spanId }),
       });
     }
@@ -411,14 +431,14 @@ export function GlobalSearch({
         <button
           onClick={open}
           className={cn(
-            "flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-(--qw-fg-muted)",
-            "hover:bg-(--qw-bg-muted) hover:text-(--qw-fg) transition-colors",
+            "flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-(--devtools-fg-muted)",
+            "hover:bg-(--devtools-bg-muted) hover:text-(--devtools-fg) transition-colors",
           )}
           title="Search (press /)"
         >
           <Search className="h-3.5 w-3.5" />
           <span className="hidden sm:inline">Search</span>
-          <kbd className="ml-1 hidden sm:inline rounded bg-(--qw-bg-muted) px-1 py-0.5 text-[10px] font-mono text-(--qw-fg-faint)">
+          <kbd className="ml-1 hidden sm:inline rounded bg-(--devtools-bg-muted) px-1 py-0.5 text-[10px] font-mono text-(--devtools-fg-faint)">
             /
           </kbd>
         </button>
@@ -436,14 +456,14 @@ export function GlobalSearch({
           {/* Dialog */}
           <div
             className={cn(
-              "relative w-full max-w-lg rounded-lg border border-(--qw-border-strong)/80",
-              "bg-(--qw-bg-elev) shadow-2xl overflow-hidden",
+              "relative w-full max-w-lg rounded-lg border border-(--devtools-border-strong)/80",
+              "bg-(--devtools-bg-elev) shadow-2xl overflow-hidden",
             )}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Search input */}
-            <div className="flex items-center gap-2 border-b border-(--qw-border) px-3 py-2.5">
-              <Search className="h-4 w-4 text-(--qw-fg-faint) shrink-0" />
+            <div className="flex items-center gap-2 border-b border-(--devtools-border) px-3 py-2.5">
+              <Search className="h-4 w-4 text-(--devtools-fg-faint) shrink-0" />
               <input
                 ref={inputRef}
                 type="text"
@@ -453,13 +473,13 @@ export function GlobalSearch({
                   setSelectedIndex(0);
                 }}
                 onKeyDown={onInputKeyDown}
-                placeholder="Search traces, experiments, insights, prompts, contexts…"
+                placeholder="Search runs, Evals, insights, prompts, contexts…"
                 className={cn(
-                  "flex-1 bg-transparent text-sm text-(--qw-fg) outline-none",
-                  "placeholder:text-(--qw-fg-faint)",
+                  "flex-1 bg-transparent text-sm text-(--devtools-fg) outline-none",
+                  "placeholder:text-(--devtools-fg-faint)",
                 )}
               />
-              <kbd className="rounded bg-(--qw-bg-muted) px-1.5 py-0.5 text-[10px] font-mono text-(--qw-fg-faint)">
+              <kbd className="rounded bg-(--devtools-bg-muted) px-1.5 py-0.5 text-[10px] font-mono text-(--devtools-fg-faint)">
                 ESC
               </kbd>
             </div>
@@ -470,8 +490,8 @@ export function GlobalSearch({
               {actions.length > 0 && (
                 <div>
                   <div className="flex items-center gap-1.5 px-3 pt-2 pb-1">
-                    <Layers className="h-3 w-3 text-(--qw-fg-faint)" />
-                    <span className="text-[11px] font-medium uppercase tracking-wider text-(--qw-fg-faint)">
+                    <Layers className="h-3 w-3 text-(--devtools-fg-faint)" />
+                    <span className="text-[11px] font-medium uppercase tracking-wider text-(--devtools-fg-faint)">
                       Actions · this run
                     </span>
                   </div>
@@ -491,8 +511,8 @@ export function GlobalSearch({
                         className={cn(
                           "flex w-full items-center gap-2.5 px-3 py-1.5 text-left transition-colors",
                           isSelected
-                            ? "bg-(--qw-bg-muted) text-(--qw-fg)"
-                            : "text-(--qw-fg-muted) hover:bg-(--qw-bg-muted)/50",
+                            ? "bg-(--devtools-bg-muted) text-(--devtools-fg)"
+                            : "text-(--devtools-fg-muted) hover:bg-(--devtools-bg-muted)/50",
                         )}
                       >
                         {action.icon}
@@ -500,7 +520,7 @@ export function GlobalSearch({
                           {action.label}
                         </span>
                         {action.hint && (
-                          <kbd className="rounded bg-(--qw-bg-muted) px-1 py-0.5 font-mono text-[10px] text-(--qw-fg-faint)">
+                          <kbd className="rounded bg-(--devtools-bg-muted) px-1 py-0.5 font-mono text-[10px] text-(--devtools-fg-faint)">
                             {action.hint}
                           </kbd>
                         )}
@@ -513,13 +533,13 @@ export function GlobalSearch({
               {actions.length === 0 &&
                 query.length >= 2 &&
                 results.length === 0 && (
-                  <div className="px-3 py-8 text-center text-sm text-(--qw-fg-faint)">
+                  <div className="px-3 py-8 text-center text-sm text-(--devtools-fg-faint)">
                     No results found
                   </div>
                 )}
 
               {actions.length === 0 && query.length > 0 && query.length < 2 && (
-                <div className="px-3 py-8 text-center text-sm text-(--qw-fg-faint)">
+                <div className="px-3 py-8 text-center text-sm text-(--devtools-fg-faint)">
                   Type at least 2 characters to search
                 </div>
               )}
@@ -533,8 +553,8 @@ export function GlobalSearch({
                 return (
                   <div key={category}>
                     <div className="flex items-center gap-1.5 px-3 pt-2 pb-1">
-                      <Icon className="h-3 w-3 text-(--qw-fg-faint)" />
-                      <span className="text-[11px] font-medium text-(--qw-fg-faint) uppercase tracking-wider">
+                      <Icon className="h-3 w-3 text-(--devtools-fg-faint)" />
+                      <span className="text-[11px] font-medium text-(--devtools-fg-faint) uppercase tracking-wider">
                         {config.label}
                       </span>
                     </div>
@@ -552,15 +572,15 @@ export function GlobalSearch({
                           className={cn(
                             "flex w-full items-center gap-2.5 px-3 py-1.5 text-left transition-colors",
                             isSelected
-                              ? "bg-(--qw-bg-muted) text-(--qw-fg)"
-                              : "text-(--qw-fg-muted) hover:bg-(--qw-bg-muted)/50",
+                              ? "bg-(--devtools-bg-muted) text-(--devtools-fg)"
+                              : "text-(--devtools-fg-muted) hover:bg-(--devtools-bg-muted)/50",
                           )}
                         >
                           <div className="min-w-0 flex-1">
                             <div className="truncate text-sm font-medium">
                               {result.label}
                             </div>
-                            <div className="truncate text-xs text-(--qw-fg-faint)">
+                            <div className="truncate text-xs text-(--devtools-fg-faint)">
                               {result.meta}
                             </div>
                           </div>
@@ -579,7 +599,7 @@ export function GlobalSearch({
                   const isSelected = idx === selectedIndex;
                   return (
                     <>
-                      <div className="mx-3 my-1 border-t border-(--qw-border)" />
+                      <div className="mx-3 my-1 border-t border-(--devtools-border)" />
                       <button
                         data-selected={isSelected}
                         onClick={runPayload}
@@ -587,16 +607,19 @@ export function GlobalSearch({
                         className={cn(
                           "flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors",
                           isSelected
-                            ? "bg-(--qw-bg-muted) text-(--qw-fg)"
-                            : "text-(--qw-fg-muted) hover:bg-(--qw-bg-muted)/50",
+                            ? "bg-(--devtools-bg-muted) text-(--devtools-fg)"
+                            : "text-(--devtools-fg-muted) hover:bg-(--devtools-bg-muted)/50",
                         )}
                       >
-                        <Search className="h-3.5 w-3.5 shrink-0 text-(--qw-fg-faint)" />
+                        <Search className="h-3.5 w-3.5 shrink-0 text-(--devtools-fg-faint)" />
                         <span className="min-w-0 flex-1 truncate text-sm">
                           Search inside trace payloads for “
-                          <span className="text-(--qw-fg)">{trimmed}</span>”
+                          <span className="text-(--devtools-fg)">
+                            {trimmed}
+                          </span>
+                          ”
                         </span>
-                        <kbd className="rounded bg-(--qw-bg-muted) px-1 py-0.5 font-mono text-[10px] text-(--qw-fg-faint)">
+                        <kbd className="rounded bg-(--devtools-bg-muted) px-1 py-0.5 font-mono text-[10px] text-(--devtools-fg-faint)">
                           &crarr;
                         </kbd>
                       </button>
@@ -607,21 +630,21 @@ export function GlobalSearch({
 
             {/* Footer hint */}
             {entries.length > 0 && (
-              <div className="flex items-center gap-3 border-t border-(--qw-border) px-3 py-1.5 text-[10px] text-(--qw-fg-faint)">
+              <div className="flex items-center gap-3 border-t border-(--devtools-border) px-3 py-1.5 text-[10px] text-(--devtools-fg-faint)">
                 <span>
-                  <kbd className="rounded bg-(--qw-bg-muted) px-1 py-0.5 font-mono">
+                  <kbd className="rounded bg-(--devtools-bg-muted) px-1 py-0.5 font-mono">
                     &uarr;&darr;
                   </kbd>{" "}
                   Navigate
                 </span>
                 <span>
-                  <kbd className="rounded bg-(--qw-bg-muted) px-1 py-0.5 font-mono">
+                  <kbd className="rounded bg-(--devtools-bg-muted) px-1 py-0.5 font-mono">
                     &crarr;
                   </kbd>{" "}
                   Open
                 </span>
                 <span>
-                  <kbd className="rounded bg-(--qw-bg-muted) px-1 py-0.5 font-mono">
+                  <kbd className="rounded bg-(--devtools-bg-muted) px-1 py-0.5 font-mono">
                     esc
                   </kbd>{" "}
                   Close

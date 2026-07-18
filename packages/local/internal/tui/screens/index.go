@@ -18,18 +18,13 @@ import (
 
 // Index is the Project Index screen: the design-plane sibling of
 // the runtime Run list. Each row is a ProjectDefinition (prompt /
-// context / tool / agent / flow / composition / suite / eval / …)
+// context / tool / agent / flow / composition / scorer / eval / …)
 // surfaced from the Go service's index read-model.
 //
 // Per the backend handoff, the TUI is purely presentational:
 //   - reads `c.ProjectIndex(ctx)` for the canonical view
 //   - does NOT walk relations or compute fingerprints client-side
 //   - missing Inspect renders as no signal, not as an error
-//
-// Cross-screen propagation: the workbench can read AffectedSuiteIDs() /
-// AffectedEvalIDs() from this screen to mark rows on Suites/Insights
-// as `affected` when their id appears in the union of all changed
-// definitions' affected lists. See ADR-0051 + plan S15.
 type Index struct {
 	index  api.IndexData
 	cursor int
@@ -84,20 +79,8 @@ func (s *Index) handleKey(m tea.KeyPressMsg, c DataClient) tea.Cmd {
 		s.moveCursor(+1)
 	case "k", "up":
 		s.moveCursor(-1)
-	case "enter":
-		// Open source file in $EDITOR — stubbed for V1 (needs
-		// `tea.ExecProcess` integration, same as Suites `^e`).
-		return nil
 	case "e":
 		return s.exportDefinition()
-	case "o":
-		// External-viewer stub.
-		return nil
-	case "r":
-		// `r run` is kind-dependent (prompt → one-shot run, suite →
-		// experiment). Backend gap: `RunDefinition` service method
-		// (plan B8). Stub until then.
-		return s.runDefinitionStub()
 	}
 	return nil
 }
@@ -265,18 +248,6 @@ func (s *Index) renderDetail(width, height int) string {
 		b.WriteString("\n")
 	}
 
-	if d.Quality != nil {
-		b.WriteString(" " + shell.SectionTag.Render("EVAL RUNS"))
-		b.WriteString("\n")
-		if d.Quality.RunCount > 0 {
-			b.WriteString(kvRow("runs", fmt.Sprintf("%d", d.Quality.RunCount), width))
-		}
-		if d.Quality.PassRate != nil {
-			b.WriteString(kvRow("pass rate", fmt.Sprintf("%.0f%%", *d.Quality.PassRate*100), width))
-		}
-		b.WriteString("\n")
-	}
-
 	lintFindings := s.lintFindingsForDefinition(d.ID)
 	if len(lintFindings) > 0 {
 		b.WriteString(" " + shell.SectionTag.Render("LINT"))
@@ -356,7 +327,7 @@ func indexKindGlyph(kind string) string {
 		return shell.Teal.Render("▣")
 	case "rag.pipeline", "rag.pipeline.stage", "rag.retriever":
 		return shell.Teal.Render("⌁")
-	case "suite", "eval":
+	case "eval", "eval.case":
 		return shell.Teal.Render("✓")
 	default:
 		return shell.TextMuted.Render("·")
@@ -414,21 +385,9 @@ func (s *Index) exportDefinition() tea.Cmd {
 	}
 }
 
-// runDefinitionStub is the placeholder until `RunDefinition` service
-// method lands (plan B8). The kind dispatch (prompt → one-shot,
-// suite → experiment, etc.) is service-side per the handoff.
-func (s *Index) runDefinitionStub() tea.Cmd {
-	id := s.SelectedDefinitionID()
-	if id == "" {
-		return nil
-	}
-	return func() tea.Msg { return definitionRunPendingMsg{defID: id} }
-}
-
 type (
-	indexLoadedMsg          api.IndexData
-	definitionExportedMsg   struct{ defID, path string }
-	definitionRunPendingMsg struct{ defID string }
+	indexLoadedMsg        api.IndexData
+	definitionExportedMsg struct{ defID, path string }
 )
 
 func fetchIndex(c DataClient) tea.Cmd {

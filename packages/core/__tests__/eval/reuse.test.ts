@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { executeEvalPlan } from "../../src/eval/internal/executor";
 import { planEval } from "../../src/eval/internal/planner";
 import { attachEvalTaskDescriptorForInternalUse } from "../../src/eval/internal/task";
+import { fingerprintEvalValue } from "../../src/eval/internal/identity";
 import type {
   EvalEvidenceStore,
   EvalExecutionPorts,
@@ -69,6 +70,109 @@ describe("automatic exact Eval task reuse", () => {
     });
   });
 
+  it("reuses only when the current rendered prompt matches the exact captured prompt", async () => {
+    let rendered = "refunds:v1";
+    const task = attachEvalTaskDescriptorForInternalUse(
+      Object.assign(async () => "unused", {
+        _tag: "CruxTask" as const,
+        operation: "function" as const,
+      }),
+      {
+        _tag: "CruxEvalTaskDescriptor",
+        operation: "generate",
+        adapterId: "ai-sdk",
+        capabilities: [],
+        defaults: {},
+        overrideKeys: [],
+        projectIdentity: () => ({
+          reusable: true,
+          fingerprintMaterial: { adapter: "fake-v1" },
+        }),
+        projectRenderedPromptIdentity: async () => ({
+          reusable: true,
+          fingerprintMaterial: { rendered },
+        }),
+        execute: async () => taskResult(),
+        projectOutput: (result) => result.output,
+        projectResponse: (result) => result.response,
+      },
+    );
+    const evidenceStore = memoryEvidenceStore();
+    const ports = planningPorts(evidenceStore);
+    const options = {
+      sourceKey: {
+        relativeFile: "support.eval.ts",
+        export: "default" as const,
+      },
+    };
+    const host = vi.fn(async () => ({
+      ...taskResult(),
+      renderedPromptFingerprint: fingerprintEvalValue({ rendered }),
+    }));
+    const execute = (plan: Awaited<ReturnType<typeof planEval>>) =>
+      executeEvalPlan(plan, {
+        taskHost: { execute: host },
+        clock: { now: () => 1 },
+        ids: { next: () => "eval-run-1" },
+        runStore: { write: async () => undefined },
+        evidenceStore,
+      });
+
+    await execute(await planEval(evalValue(task), options, ports));
+    const unchanged = await planEval(evalValue(task), options, ports);
+    expect(unchanged.cells[0]?.action).toMatchObject({
+      kind: "reuse",
+      reason: "exact_evidence",
+    });
+
+    rendered = "refunds:nondeterministic";
+    const changed = await planEval(evalValue(task), options, ports);
+    expect(changed.cells[0]?.action).toMatchObject({
+      kind: "execute",
+      reason: "nondeterministic_renderer",
+    });
+  });
+
+  it("keeps managed renderer evidence fresh when its adapter cannot capture the exact render", async () => {
+    const task = attachEvalTaskDescriptorForInternalUse(
+      Object.assign(async () => "unused", {
+        _tag: "CruxTask" as const,
+        operation: "function" as const,
+      }),
+      {
+        _tag: "CruxEvalTaskDescriptor",
+        operation: "generate",
+        adapterId: "ai-sdk",
+        capabilities: [],
+        defaults: {},
+        overrideKeys: [],
+        projectIdentity: () => ({
+          reusable: true,
+          fingerprintMaterial: {
+            prompt: { kind: "managed_renderer" },
+          },
+        }),
+        execute: async () => taskResult(),
+        projectOutput: (result) => result.output,
+        projectResponse: (result) => result.response,
+      },
+    );
+    const evidenceStore = memoryEvidenceStore();
+    const read = vi.spyOn(evidenceStore, "read");
+
+    const plan = await planEval(
+      evalValue(task),
+      { sourceKey: { relativeFile: "support.eval.ts", export: "default" } },
+      planningPorts(evidenceStore),
+    );
+
+    expect(plan.cells[0]?.action).toMatchObject({
+      kind: "execute",
+      reason: "untracked_external_dependency",
+    });
+    expect(read).not.toHaveBeenCalled();
+  });
+
   it("explains a best-effort write failure without falsifying the run", async () => {
     const evidenceStore: EvalEvidenceStore = {
       identity: "shared",
@@ -124,6 +228,31 @@ describe("automatic exact Eval task reuse", () => {
     expect(evidenceStore.entries.size).toBe(0);
     expect(run.provenance.evidenceStore).toMatchObject({
       write: "not_eligible",
+      writeReason: "implicit_media",
+    });
+  });
+
+  it("explains when redaction policy makes live output ineligible for exact reuse", async () => {
+    const evidenceStore = memoryEvidenceStore();
+    const plan = await planEval(
+      evalValue(),
+      { sourceKey: { relativeFile: "support.eval.ts", export: "default" } },
+      planningPorts(evidenceStore),
+    );
+    const run = await executeEvalPlan(plan, {
+      taskHost: {
+        execute: async () => taskResult({ answer: "yes", apiKey: "secret" }),
+      },
+      clock: { now: () => 1 },
+      ids: { next: () => "eval-run-1" },
+      runStore: { write: async () => undefined },
+      evidenceStore,
+    });
+
+    expect(evidenceStore.entries.size).toBe(0);
+    expect(run.provenance.evidenceStore).toMatchObject({
+      write: "not_eligible",
+      writeReason: "capture_policy",
     });
   });
 
@@ -236,10 +365,13 @@ describe("automatic exact Eval task reuse", () => {
     ["corrupt", { nope: true }],
     [
       "old epoch",
-      { schemaVersion: 1, outputCacheEpoch: 2, status: "complete" },
+      { schemaVersion: 1, taskEvidenceCacheEpoch: 2, status: "complete" },
     ],
-    ["error", { schemaVersion: 1, outputCacheEpoch: 3, status: "error" }],
-    ["partial", { schemaVersion: 1, outputCacheEpoch: 3, status: "partial" }],
+    ["error", { schemaVersion: 1, taskEvidenceCacheEpoch: 9, status: "error" }],
+    [
+      "partial",
+      { schemaVersion: 1, taskEvidenceCacheEpoch: 9, status: "partial" },
+    ],
   ])("treats a %s entry as a miss", async (_label, invalidEntry) => {
     const evidenceStore = memoryEvidenceStore();
     const ports: EvalPlanningPorts = {

@@ -26,7 +26,7 @@ export function fmt(
 export function Metric({
   label,
   value,
-  color = "text-(--qw-fg)",
+  color = "text-(--devtools-fg)",
   sub,
 }: {
   label: string;
@@ -36,7 +36,7 @@ export function Metric({
 }) {
   return (
     <div>
-      <div className="text-[11px] text-(--qw-fg-faint) leading-tight">
+      <div className="text-[11px] text-(--devtools-fg-faint) leading-tight">
         {label}
       </div>
       <div
@@ -44,7 +44,7 @@ export function Metric({
       >
         {value}
         {sub && (
-          <span className="ml-1 text-[11px] font-normal text-(--qw-fg-faint)">
+          <span className="ml-1 text-[11px] font-normal text-(--devtools-fg-faint)">
             {sub}
           </span>
         )}
@@ -55,7 +55,7 @@ export function Metric({
 
 export function Pill({ children }: { children: ReactNode }) {
   return (
-    <span className="inline-flex items-center border border-(--qw-border) bg-(--qw-bg-elev) px-1.5 py-0.5 text-[11px] tabular-nums text-(--qw-fg-muted)">
+    <span className="inline-flex items-center border border-(--devtools-border) bg-(--devtools-bg-elev) px-1.5 py-0.5 text-[11px] tabular-nums text-(--devtools-fg-muted)">
       {children}
     </span>
   );
@@ -63,7 +63,7 @@ export function Pill({ children }: { children: ReactNode }) {
 
 export function SectionHead({ children }: { children: ReactNode }) {
   return (
-    <h4 className="mb-3 text-sm font-medium text-(--qw-fg)">{children}</h4>
+    <h4 className="mb-3 text-sm font-medium text-(--devtools-fg)">{children}</h4>
   );
 }
 
@@ -77,12 +77,12 @@ export function StatCard({
   sub?: string;
 }) {
   return (
-    <div className="border border-(--qw-border) bg-(--qw-bg-elev) p-4">
-      <div className="text-sm text-(--qw-fg-faint)">{label}</div>
-      <div className="mt-1 text-2xl font-semibold tabular-nums text-(--qw-fg)">
+    <div className="border border-(--devtools-border) bg-(--devtools-bg-elev) p-4">
+      <div className="text-sm text-(--devtools-fg-faint)">{label}</div>
+      <div className="mt-1 text-2xl font-semibold tabular-nums text-(--devtools-fg)">
         {value}
       </div>
-      {sub && <div className="mt-1 text-xs text-(--qw-fg-faint)">{sub}</div>}
+      {sub && <div className="mt-1 text-xs text-(--devtools-fg-faint)">{sub}</div>}
     </div>
   );
 }
@@ -97,15 +97,15 @@ export function TabBar({
   onChange: (tab: string) => void;
 }) {
   return (
-    <div className="mb-4 flex gap-1 border-b border-(--qw-border)">
+    <div className="mb-4 flex gap-1 border-b border-(--devtools-border)">
       {tabs.map((tab) => (
         <button
           key={tab}
           onClick={() => onChange(tab)}
           className={`px-3 py-2 text-sm border-b-2 transition-colors ${
             active === tab
-              ? "border-(--qw-fg-muted) text-(--qw-fg)"
-              : "border-transparent text-(--qw-fg-faint) hover:text-(--qw-fg-muted)"
+              ? "border-(--devtools-fg-muted) text-(--devtools-fg)"
+              : "border-transparent text-(--devtools-fg-faint) hover:text-(--devtools-fg-muted)"
           }`}
         >
           {tab}
@@ -124,7 +124,7 @@ export function ChevronToggle({
 }) {
   return (
     <svg
-      className={`w-3.5 h-3.5 text-(--qw-fg-faint) transition-transform ${open ? "rotate-180" : ""} ${className ?? ""}`}
+      className={`w-3.5 h-3.5 text-(--devtools-fg-faint) transition-transform ${open ? "rotate-180" : ""} ${className ?? ""}`}
       fill="none"
       viewBox="0 0 24 24"
       stroke="currentColor"
@@ -141,16 +141,16 @@ export function ChevronToggle({
 
 /** Score on 0–1 scale → color class */
 export function scoreColor(score: number): string {
-  if (score >= 0.7) return "text-(--qw-ok)";
-  if (score >= 0.5) return "text-(--qw-warn)";
-  return "text-(--qw-danger)";
+  if (score >= 0.7) return "text-(--devtools-ok)";
+  if (score >= 0.5) return "text-(--devtools-warn)";
+  return "text-(--devtools-danger)";
 }
 
 /** Score on 0–1 scale → bg class */
 export function scoreBg(score: number): string {
-  if (score >= 0.7) return "bg-(--qw-ok)";
-  if (score >= 0.5) return "bg-(--qw-warn)";
-  return "bg-(--qw-danger)";
+  if (score >= 0.7) return "bg-(--devtools-ok)";
+  if (score >= 0.5) return "bg-(--devtools-warn)";
+  return "bg-(--devtools-danger)";
 }
 
 /** Score on 0–1 scale → hex color (for SVG fill) */
@@ -162,21 +162,21 @@ export function scoreHex(score: number): string {
 
 /** Agreement percentage → color class */
 export function agreementColor(pct: number): string {
-  if (pct >= 80) return "text-(--qw-ok)";
-  if (pct >= 50) return "text-(--qw-warn)";
-  return "text-(--qw-danger)";
+  if (pct >= 80) return "text-(--devtools-ok)";
+  if (pct >= 50) return "text-(--devtools-warn)";
+  return "text-(--devtools-danger)";
 }
 
 /** Pass rate (0–1) → color class */
 export function passRateColor(rate: number): string {
-  if (rate === 1) return "text-(--qw-ok)";
-  if (rate >= 0.5) return "text-(--qw-warn)";
-  return "text-(--qw-danger)";
+  if (rate === 1) return "text-(--devtools-ok)";
+  if (rate >= 0.5) return "text-(--devtools-warn)";
+  return "text-(--devtools-danger)";
 }
 
 /** Pass rate (0–1) → bg class */
 export function passRateBg(rate: number): string {
-  if (rate === 1) return "bg-(--qw-ok)";
-  if (rate >= 0.5) return "bg-(--qw-warn)";
-  return "bg-(--qw-danger)";
+  if (rate === 1) return "bg-(--devtools-ok)";
+  if (rate >= 0.5) return "bg-(--devtools-warn)";
+  return "bg-(--devtools-danger)";
 }

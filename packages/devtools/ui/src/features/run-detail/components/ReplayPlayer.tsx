@@ -10,8 +10,8 @@
  */
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Btn, Chip, SectionHead } from "@/qw/shell/primitives";
-import { Icon } from "@/qw/shell/Icon";
+import { Btn, Chip, SectionHead } from "@/devtools/shell/primitives";
+import { Icon } from "@/devtools/shell/Icon";
 import {
   canonicalKind,
   formatTime,
@@ -228,22 +228,22 @@ export function ReplayPlayer({
           so any narrative scrolling underneath gets covered cleanly. */}
       <div
         className="sticky top-0 z-20 px-8 pt-6 pb-4"
-        style={{ background: "var(--qw-bg)" }}
+        style={{ background: "var(--devtools-bg)" }}
       >
         {/* Scrubber card */}
         <div
           className="rounded-[12px] px-[18px] py-4"
           style={{
-            background: "var(--qw-bg-elev)",
-            border: "1px solid var(--qw-border)",
-            boxShadow: "0 8px 30px var(--qw-crux-glow)",
+            background: "var(--devtools-bg-elev)",
+            border: "1px solid var(--devtools-border)",
+            boxShadow: "0 8px 30px var(--devtools-crux-glow)",
           }}
         >
           <div className="mb-3 flex items-center gap-3.5">
             <button
               onClick={togglePlay}
               className="flex size-[34px] items-center justify-center rounded-full transition-opacity hover:opacity-90"
-              style={{ background: "var(--qw-crux)", color: "var(--qw-bg)" }}
+              style={{ background: "var(--devtools-crux)", color: "var(--devtools-bg)" }}
               aria-label={playing ? "Pause" : "Play"}
             >
               {playing ? (
@@ -251,18 +251,18 @@ export function ReplayPlayer({
                   width={12}
                   height={12}
                   viewBox="0 0 24 24"
-                  fill="var(--qw-bg)"
+                  fill="var(--devtools-bg)"
                 >
                   <rect x={6} y={4} width={4} height={16} rx={1} />
                   <rect x={14} y={4} width={4} height={16} rx={1} />
                 </svg>
               ) : (
-                <Icon name="play" size={14} color="var(--qw-bg)" />
+                <Icon name="play" size={14} color="var(--devtools-bg)" />
               )}
             </button>
             <span className="font-mono text-[12px] font-semibold">
               {live ? (
-                <span style={{ color: "var(--qw-crux)" }}>now</span>
+                <span style={{ color: "var(--devtools-crux)" }}>now</span>
               ) : (
                 <>
                   {formatTime(cursor)} / {formatTime(total)}
@@ -273,15 +273,15 @@ export function ReplayPlayer({
               <span
                 className="inline-flex items-center gap-1.5 rounded-[4px] px-1.5 py-0.5 font-mono text-[10.5px] uppercase tracking-[0.08em]"
                 style={{
-                  background: "var(--qw-crux-soft)",
-                  color: "var(--qw-crux)",
-                  boxShadow: "inset 0 0 0 1px var(--qw-crux-line)",
+                  background: "var(--devtools-crux-soft)",
+                  color: "var(--devtools-crux)",
+                  boxShadow: "inset 0 0 0 1px var(--devtools-crux-line)",
                 }}
                 title="Streaming live from a running run"
               >
                 <span
                   className="inline-block size-[6px] rounded-full animate-running-pulse"
-                  style={{ background: "var(--qw-crux)" }}
+                  style={{ background: "var(--devtools-crux)" }}
                 />
                 live
               </span>
@@ -295,9 +295,9 @@ export function ReplayPlayer({
                 onClick={() => setSpeed(speed === 1 ? 2 : speed === 2 ? 4 : 1)}
                 className="rounded-[4px] px-1.5 py-0.5 font-mono text-[11px]"
                 style={{
-                  background: "var(--qw-bg-muted)",
-                  color: "var(--qw-fg-muted)",
-                  boxShadow: "inset 0 0 0 1px var(--qw-border)",
+                  background: "var(--devtools-bg-muted)",
+                  color: "var(--devtools-fg-muted)",
+                  boxShadow: "inset 0 0 0 1px var(--devtools-border)",
                 }}
                 title="Playback speed"
               >
@@ -309,21 +309,21 @@ export function ReplayPlayer({
                 onClick={resumeLive}
                 className="inline-flex items-center gap-1.5 rounded-[4px] px-2 py-0.5 font-mono text-[11px]"
                 style={{
-                  background: "var(--qw-crux)",
-                  color: "var(--qw-bg)",
+                  background: "var(--devtools-crux)",
+                  color: "var(--devtools-bg)",
                 }}
                 title="Stick to the tail of the live run"
               >
                 <span
                   className="inline-block size-[6px] rounded-full"
-                  style={{ background: "var(--qw-bg)" }}
+                  style={{ background: "var(--devtools-bg)" }}
                 />
                 resume live
               </button>
             )}
             <span
               className="ml-auto font-mono text-[11px]"
-              style={{ color: "var(--qw-fg-muted)" }}
+              style={{ color: "var(--devtools-fg-muted)" }}
             >
               {topMeta?.map((m) => `${m.value}`).join(" · ")}
             </span>
@@ -345,7 +345,7 @@ export function ReplayPlayer({
           >
             <div
               className="absolute inset-x-0 inset-y-3.5 rounded-[4px]"
-              style={{ background: "var(--qw-bg-muted)" }}
+              style={{ background: "var(--devtools-bg-muted)" }}
             />
             {segments.map((s) => {
               const left = (s.offsetMs / total) * 100;
@@ -359,7 +359,7 @@ export function ReplayPlayer({
                     width: `${width}%`,
                     background: kindColor(s.kind),
                     opacity: 0.85,
-                    boxShadow: "inset 0 0 0 1px var(--qw-bg-elev)",
+                    boxShadow: "inset 0 0 0 1px var(--devtools-bg-elev)",
                   }}
                   title={`${s.name} · ${formatTime(s.durationMs)}`}
                 />
@@ -369,16 +369,16 @@ export function ReplayPlayer({
               className="pointer-events-none absolute inset-y-0 w-px"
               style={{
                 left: `${cursorPct}%`,
-                background: "var(--qw-crux)",
-                boxShadow: `0 0 8px var(--qw-crux)`,
+                background: "var(--devtools-crux)",
+                boxShadow: `0 0 8px var(--devtools-crux)`,
               }}
             />
             <div
               className="pointer-events-none absolute top-1.5 size-3 rounded-full"
               style={{
                 left: `calc(${cursorPct}% - 6px)`,
-                background: "var(--qw-crux)",
-                border: "2px solid var(--qw-bg-elev)",
+                background: "var(--devtools-crux)",
+                border: "2px solid var(--devtools-bg-elev)",
               }}
             />
           </div>
@@ -390,7 +390,7 @@ export function ReplayPlayer({
               <div
                 key={k}
                 className="flex items-center gap-1.5 font-mono text-[11px]"
-                style={{ color: "var(--qw-fg-muted)" }}
+                style={{ color: "var(--devtools-fg-muted)" }}
               >
                 <span
                   className="inline-block size-2 rounded-[2px]"
@@ -411,9 +411,9 @@ export function ReplayPlayer({
               }}
               className="rounded-[6px] px-2 py-1 font-mono text-[11px]"
               style={{
-                color: "var(--qw-fg)",
-                background: "var(--qw-bg-elev)",
-                boxShadow: "inset 0 0 0 1px var(--qw-border)",
+                color: "var(--devtools-fg)",
+                background: "var(--devtools-bg-elev)",
+                boxShadow: "inset 0 0 0 1px var(--devtools-border)",
               }}
               title="Previous event"
             >
@@ -428,9 +428,9 @@ export function ReplayPlayer({
               }}
               className="rounded-[6px] px-2 py-1 font-mono text-[11px]"
               style={{
-                color: "var(--qw-fg)",
-                background: "var(--qw-bg-elev)",
-                boxShadow: "inset 0 0 0 1px var(--qw-border)",
+                color: "var(--devtools-fg)",
+                background: "var(--devtools-bg-elev)",
+                boxShadow: "inset 0 0 0 1px var(--devtools-border)",
               }}
               title="Next event"
             >
@@ -444,9 +444,9 @@ export function ReplayPlayer({
               }}
               className="inline-flex items-center gap-1.5 rounded-[6px] px-2 py-1 font-mono text-[11px]"
               style={{
-                color: "var(--qw-fg)",
-                background: "var(--qw-bg-elev)",
-                boxShadow: "inset 0 0 0 1px var(--qw-border)",
+                color: "var(--devtools-fg)",
+                background: "var(--devtools-bg-elev)",
+                boxShadow: "inset 0 0 0 1px var(--devtools-border)",
               }}
               title="Restart"
             >
@@ -474,7 +474,7 @@ export function ReplayPlayer({
                   onClick={() => setShowNoise((v) => !v)}
                   className="font-mono text-[11px] hover:opacity-80"
                   style={{
-                    color: showNoise ? "var(--qw-crux)" : "var(--qw-fg-faint)",
+                    color: showNoise ? "var(--devtools-crux)" : "var(--devtools-fg-faint)",
                   }}
                   title={
                     showNoise
@@ -490,7 +490,7 @@ export function ReplayPlayer({
               {live ? (
                 <span
                   className="font-mono text-[11px]"
-                  style={{ color: "var(--qw-crux)" }}
+                  style={{ color: "var(--devtools-crux)" }}
                 >
                   tailing… switch to{" "}
                   <span style={{ fontWeight: 600 }}>Inspect</span> for waterfall
@@ -498,7 +498,7 @@ export function ReplayPlayer({
               ) : nextEvent ? (
                 <span
                   className="font-mono text-[11px]"
-                  style={{ color: "var(--qw-fg-faint)" }}
+                  style={{ color: "var(--devtools-fg-faint)" }}
                 >
                   next · {nextEvent.kind} at +{Math.round(nextEvent.tMs)}ms
                 </span>
@@ -515,9 +515,9 @@ export function ReplayPlayer({
             <div
               className="rounded-[10px] px-6 py-10 text-center text-[13px]"
               style={{
-                background: "var(--qw-bg-elev)",
-                border: "1px dashed var(--qw-border)",
-                color: "var(--qw-fg-muted)",
+                background: "var(--devtools-bg-elev)",
+                border: "1px dashed var(--devtools-border)",
+                color: "var(--devtools-fg-muted)",
               }}
             >
               {live
@@ -529,14 +529,14 @@ export function ReplayPlayer({
             <div
               className="ml-[120px] mt-2 inline-flex items-center gap-1.5 self-start rounded-[6px] px-2 py-1 font-mono text-[10.5px] uppercase tracking-[0.08em]"
               style={{
-                color: "var(--qw-crux)",
-                background: "var(--qw-crux-soft)",
-                border: "1px dashed var(--qw-crux-line)",
+                color: "var(--devtools-crux)",
+                background: "var(--devtools-crux-soft)",
+                border: "1px dashed var(--devtools-crux-line)",
               }}
             >
               <span
                 className="inline-block size-[6px] rounded-full animate-running-pulse"
-                style={{ background: "var(--qw-crux)" }}
+                style={{ background: "var(--devtools-crux)" }}
               />
               tailing live
             </div>

@@ -44,7 +44,7 @@ export interface TurnDecisionReport {
   decisions: TurnDecision[];
   /** Source definitions users can inspect or change. */
   source: TurnSourceGroup[];
-  /** Quality coverage scorecard for the behavior. */
+  /** Eval coverage scorecard for the behavior. */
   coverage: TurnDecisionCoverage;
   /** Missing or degraded evidence that affects report confidence. */
   gaps: TurnDecisionDiagnostic[];

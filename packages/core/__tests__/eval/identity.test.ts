@@ -4,7 +4,7 @@ import {
   createTaskEvidenceIdentity,
   fingerprintEvalValue,
   isReusableEvalValue,
-  OUTPUT_CACHE_EPOCH,
+  TASK_EVIDENCE_CACHE_EPOCH,
 } from "../../src/eval/internal/identity";
 
 describe("portable Eval evidence identity", () => {
@@ -22,9 +22,9 @@ describe("portable Eval evidence identity", () => {
       occurrence: "root",
     });
 
-    expect(OUTPUT_CACHE_EPOCH).toBe(3);
+    expect(TASK_EVIDENCE_CACHE_EPOCH).toBe(9);
     expect(identity.key).toBe(
-      "24189be77705a09acb1945c51c18e23ce258cbded7473df969e660467ab2e986",
+      "5ce3f8b4cef740f7f077d43b6476a9df30dab4c9befde5490911d52f1781546b",
     );
     expect(identity.fingerprint).toBe(identity.key);
     expect(Object.isFrozen(identity)).toBe(true);
@@ -51,5 +51,21 @@ describe("portable Eval evidence identity", () => {
         },
       }),
     ).toBe(true);
+  });
+
+  it("never aliases distinct JavaScript scalar and array values", () => {
+    const fingerprints = [
+      fingerprintEvalValue(undefined),
+      fingerprintEvalValue(null),
+      fingerprintEvalValue([undefined]),
+      fingerprintEvalValue(new Array(1)),
+      fingerprintEvalValue(Number.NaN),
+      fingerprintEvalValue(Number.POSITIVE_INFINITY),
+      fingerprintEvalValue(Number.NEGATIVE_INFINITY),
+      fingerprintEvalValue(-0),
+      fingerprintEvalValue(0),
+    ];
+
+    expect(new Set(fingerprints)).toHaveLength(fingerprints.length);
   });
 });

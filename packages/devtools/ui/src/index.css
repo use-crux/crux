@@ -57,46 +57,46 @@
   --color-zinc-900: var(--zinc-900);
   --color-zinc-950: var(--zinc-950);
 
-  /* Quality Workbench (Crux editorial) tokens */
-  --color-qw-bg: var(--qw-bg);
-  --color-qw-bg-elev: var(--qw-bg-elev);
-  --color-qw-bg-muted: var(--qw-bg-muted);
-  --color-qw-bg-subtle: var(--qw-bg-subtle);
-  --color-qw-fg: var(--qw-fg);
-  --color-qw-fg-muted: var(--qw-fg-muted);
-  --color-qw-fg-faint: var(--qw-fg-faint);
-  --color-qw-border: var(--qw-border);
-  --color-qw-border-strong: var(--qw-border-strong);
-  --color-qw-crux: var(--qw-crux);
-  --color-qw-crux-hover: var(--qw-crux-hover);
-  --color-qw-crux-soft: var(--qw-crux-soft);
-  --color-qw-crux-line: var(--qw-crux-line);
-  --color-qw-crux-glow: var(--qw-crux-glow);
-  --color-qw-danger: var(--qw-danger);
-  --color-qw-danger-soft: var(--qw-danger-soft);
-  --color-qw-danger-line: var(--qw-danger-line);
-  --color-qw-warn: var(--qw-warn);
-  --color-qw-warn-soft: var(--qw-warn-soft);
-  --color-qw-warn-line: var(--qw-warn-line);
-  --color-qw-ok: var(--qw-ok);
-  --color-qw-ok-soft: var(--qw-ok-soft);
-  --color-qw-ok-line: var(--qw-ok-line);
-  --color-qw-iris: var(--qw-iris);
-  --color-qw-iris-soft: var(--qw-iris-soft);
-  --color-qw-iris-line: var(--qw-iris-line);
-  --color-qw-blue: var(--qw-blue);
-  --color-qw-blue-soft: var(--qw-blue-soft);
-  --color-qw-blue-line: var(--qw-blue-line);
-  --color-qw-plum: var(--qw-plum);
-  --color-qw-plum-soft: var(--qw-plum-soft);
-  --color-qw-plum-line: var(--qw-plum-line);
-  --color-qw-gold: var(--qw-gold);
-  --color-qw-gold-soft: var(--qw-gold-soft);
-  --color-qw-gold-line: var(--qw-gold-line);
-  --color-qw-grid: var(--qw-grid);
-  --font-qw-sans: var(--qw-sans);
-  --font-qw-mono: var(--qw-mono);
-  --font-qw-serif: var(--qw-serif);
+  /* Crux Devtools editorial tokens */
+  --color-devtools-bg: var(--devtools-bg);
+  --color-devtools-bg-elev: var(--devtools-bg-elev);
+  --color-devtools-bg-muted: var(--devtools-bg-muted);
+  --color-devtools-bg-subtle: var(--devtools-bg-subtle);
+  --color-devtools-fg: var(--devtools-fg);
+  --color-devtools-fg-muted: var(--devtools-fg-muted);
+  --color-devtools-fg-faint: var(--devtools-fg-faint);
+  --color-devtools-border: var(--devtools-border);
+  --color-devtools-border-strong: var(--devtools-border-strong);
+  --color-devtools-crux: var(--devtools-crux);
+  --color-devtools-crux-hover: var(--devtools-crux-hover);
+  --color-devtools-crux-soft: var(--devtools-crux-soft);
+  --color-devtools-crux-line: var(--devtools-crux-line);
+  --color-devtools-crux-glow: var(--devtools-crux-glow);
+  --color-devtools-danger: var(--devtools-danger);
+  --color-devtools-danger-soft: var(--devtools-danger-soft);
+  --color-devtools-danger-line: var(--devtools-danger-line);
+  --color-devtools-warn: var(--devtools-warn);
+  --color-devtools-warn-soft: var(--devtools-warn-soft);
+  --color-devtools-warn-line: var(--devtools-warn-line);
+  --color-devtools-ok: var(--devtools-ok);
+  --color-devtools-ok-soft: var(--devtools-ok-soft);
+  --color-devtools-ok-line: var(--devtools-ok-line);
+  --color-devtools-iris: var(--devtools-iris);
+  --color-devtools-iris-soft: var(--devtools-iris-soft);
+  --color-devtools-iris-line: var(--devtools-iris-line);
+  --color-devtools-blue: var(--devtools-blue);
+  --color-devtools-blue-soft: var(--devtools-blue-soft);
+  --color-devtools-blue-line: var(--devtools-blue-line);
+  --color-devtools-plum: var(--devtools-plum);
+  --color-devtools-plum-soft: var(--devtools-plum-soft);
+  --color-devtools-plum-line: var(--devtools-plum-line);
+  --color-devtools-gold: var(--devtools-gold);
+  --color-devtools-gold-soft: var(--devtools-gold-soft);
+  --color-devtools-gold-line: var(--devtools-gold-line);
+  --color-devtools-grid: var(--devtools-grid);
+  --font-devtools-sans: var(--devtools-sans);
+  --font-devtools-mono: var(--devtools-mono);
+  --font-devtools-serif: var(--devtools-serif);
 }
 
 /* ── Light theme (default) ── */
@@ -155,46 +155,46 @@
   --scrollbar-thumb: oklch(0.75 0 0);
   --scrollbar-thumb-hover: oklch(0.65 0 0);
 
-  /* Quality Workbench — light */
-  --qw-bg: oklch(98.5% 0 0);
-  --qw-bg-elev: oklch(100% 0 0);
-  --qw-bg-muted: oklch(96.5% 0 0);
-  --qw-bg-subtle: oklch(94% 0 0);
-  --qw-fg: oklch(20% 0 0);
-  --qw-fg-muted: oklch(45% 0 0);
-  --qw-fg-faint: oklch(60% 0 0);
-  --qw-border: oklch(0% 0 0 / 0.1);
-  --qw-border-strong: oklch(0% 0 0 / 0.16);
-  --qw-crux: oklch(55% 0.09 192);
-  --qw-crux-hover: oklch(48% 0.09 192);
-  --qw-crux-soft: oklch(55% 0.09 192 / 0.1);
-  --qw-crux-line: oklch(55% 0.09 192 / 0.28);
-  --qw-crux-glow: oklch(70% 0.08 192 / 0.06);
-  --qw-danger: oklch(57% 0.22 27);
-  --qw-danger-soft: oklch(57% 0.22 27 / 0.1);
-  --qw-danger-line: oklch(57% 0.22 27 / 0.28);
-  --qw-warn: oklch(68% 0.16 75);
-  --qw-warn-soft: oklch(68% 0.16 75 / 0.12);
-  --qw-warn-line: oklch(68% 0.16 75 / 0.3);
-  --qw-ok: oklch(55% 0.13 155);
-  --qw-ok-soft: oklch(55% 0.13 155 / 0.1);
-  --qw-ok-line: oklch(55% 0.13 155 / 0.28);
-  --qw-iris: oklch(56% 0.16 280);
-  --qw-iris-soft: oklch(56% 0.16 280 / 0.12);
-  --qw-iris-line: oklch(56% 0.16 280 / 0.28);
-  --qw-blue: oklch(52% 0.14 250);
-  --qw-blue-soft: oklch(52% 0.14 250 / 0.11);
-  --qw-blue-line: oklch(52% 0.14 250 / 0.28);
-  --qw-plum: oklch(52% 0.16 320);
-  --qw-plum-soft: oklch(52% 0.16 320 / 0.11);
-  --qw-plum-line: oklch(52% 0.16 320 / 0.28);
-  --qw-gold: oklch(60% 0.12 95);
-  --qw-gold-soft: oklch(60% 0.12 95 / 0.13);
-  --qw-gold-line: oklch(60% 0.12 95 / 0.3);
-  --qw-grid: oklch(0% 0 0 / 0.04);
-  --qw-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --qw-mono: "JetBrains Mono", "SF Mono", ui-monospace, Menlo, monospace;
-  --qw-serif: "Source Serif 4", "Source Serif Pro", Georgia, serif;
+  /* Crux Devtools — light */
+  --devtools-bg: oklch(98.5% 0 0);
+  --devtools-bg-elev: oklch(100% 0 0);
+  --devtools-bg-muted: oklch(96.5% 0 0);
+  --devtools-bg-subtle: oklch(94% 0 0);
+  --devtools-fg: oklch(20% 0 0);
+  --devtools-fg-muted: oklch(45% 0 0);
+  --devtools-fg-faint: oklch(60% 0 0);
+  --devtools-border: oklch(0% 0 0 / 0.1);
+  --devtools-border-strong: oklch(0% 0 0 / 0.16);
+  --devtools-crux: oklch(55% 0.09 192);
+  --devtools-crux-hover: oklch(48% 0.09 192);
+  --devtools-crux-soft: oklch(55% 0.09 192 / 0.1);
+  --devtools-crux-line: oklch(55% 0.09 192 / 0.28);
+  --devtools-crux-glow: oklch(70% 0.08 192 / 0.06);
+  --devtools-danger: oklch(57% 0.22 27);
+  --devtools-danger-soft: oklch(57% 0.22 27 / 0.1);
+  --devtools-danger-line: oklch(57% 0.22 27 / 0.28);
+  --devtools-warn: oklch(68% 0.16 75);
+  --devtools-warn-soft: oklch(68% 0.16 75 / 0.12);
+  --devtools-warn-line: oklch(68% 0.16 75 / 0.3);
+  --devtools-ok: oklch(55% 0.13 155);
+  --devtools-ok-soft: oklch(55% 0.13 155 / 0.1);
+  --devtools-ok-line: oklch(55% 0.13 155 / 0.28);
+  --devtools-iris: oklch(56% 0.16 280);
+  --devtools-iris-soft: oklch(56% 0.16 280 / 0.12);
+  --devtools-iris-line: oklch(56% 0.16 280 / 0.28);
+  --devtools-blue: oklch(52% 0.14 250);
+  --devtools-blue-soft: oklch(52% 0.14 250 / 0.11);
+  --devtools-blue-line: oklch(52% 0.14 250 / 0.28);
+  --devtools-plum: oklch(52% 0.16 320);
+  --devtools-plum-soft: oklch(52% 0.16 320 / 0.11);
+  --devtools-plum-line: oklch(52% 0.16 320 / 0.28);
+  --devtools-gold: oklch(60% 0.12 95);
+  --devtools-gold-soft: oklch(60% 0.12 95 / 0.13);
+  --devtools-gold-line: oklch(60% 0.12 95 / 0.3);
+  --devtools-grid: oklch(0% 0 0 / 0.04);
+  --devtools-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --devtools-mono: "JetBrains Mono", "SF Mono", ui-monospace, Menlo, monospace;
+  --devtools-serif: "Source Serif 4", "Source Serif Pro", Georgia, serif;
 
   color-scheme: light;
 }
@@ -253,43 +253,43 @@
   --scrollbar-thumb: oklch(0.3 0 0);
   --scrollbar-thumb-hover: oklch(0.4 0 0);
 
-  /* Quality Workbench — dark */
-  --qw-bg: oklch(14% 0.003 240);
-  --qw-bg-elev: oklch(17% 0.004 240);
-  --qw-bg-muted: oklch(20% 0.005 240);
-  --qw-bg-subtle: oklch(24% 0.006 240);
-  --qw-fg: oklch(98% 0 0);
-  --qw-fg-muted: oklch(70% 0.01 240);
-  --qw-fg-faint: oklch(52% 0.01 240);
-  --qw-border: oklch(100% 0 0 / 0.08);
-  --qw-border-strong: oklch(100% 0 0 / 0.14);
-  --qw-crux: oklch(75% 0.1 192);
-  --qw-crux-hover: oklch(82% 0.1 192);
-  --qw-crux-soft: oklch(75% 0.1 192 / 0.1);
-  --qw-crux-line: oklch(75% 0.1 192 / 0.3);
-  --qw-crux-glow: oklch(75% 0.1 192 / 0.06);
-  --qw-danger: oklch(70% 0.19 22);
-  --qw-danger-soft: oklch(70% 0.19 22 / 0.14);
-  --qw-danger-line: oklch(70% 0.19 22 / 0.32);
-  --qw-warn: oklch(78% 0.15 75);
-  --qw-warn-soft: oklch(78% 0.15 75 / 0.14);
-  --qw-warn-line: oklch(78% 0.15 75 / 0.32);
-  --qw-ok: oklch(72% 0.16 155);
-  --qw-ok-soft: oklch(72% 0.16 155 / 0.12);
-  --qw-ok-line: oklch(72% 0.16 155 / 0.3);
-  --qw-iris: oklch(72% 0.16 280);
-  --qw-iris-soft: oklch(72% 0.16 280 / 0.14);
-  --qw-iris-line: oklch(72% 0.16 280 / 0.3);
-  --qw-blue: oklch(72% 0.14 250);
-  --qw-blue-soft: oklch(72% 0.14 250 / 0.14);
-  --qw-blue-line: oklch(72% 0.14 250 / 0.3);
-  --qw-plum: oklch(74% 0.16 320);
-  --qw-plum-soft: oklch(74% 0.16 320 / 0.14);
-  --qw-plum-line: oklch(74% 0.16 320 / 0.3);
-  --qw-gold: oklch(82% 0.13 95);
-  --qw-gold-soft: oklch(82% 0.13 95 / 0.14);
-  --qw-gold-line: oklch(82% 0.13 95 / 0.3);
-  --qw-grid: oklch(100% 0 0 / 0.025);
+  /* Crux Devtools — dark */
+  --devtools-bg: oklch(14% 0.003 240);
+  --devtools-bg-elev: oklch(17% 0.004 240);
+  --devtools-bg-muted: oklch(20% 0.005 240);
+  --devtools-bg-subtle: oklch(24% 0.006 240);
+  --devtools-fg: oklch(98% 0 0);
+  --devtools-fg-muted: oklch(70% 0.01 240);
+  --devtools-fg-faint: oklch(52% 0.01 240);
+  --devtools-border: oklch(100% 0 0 / 0.08);
+  --devtools-border-strong: oklch(100% 0 0 / 0.14);
+  --devtools-crux: oklch(75% 0.1 192);
+  --devtools-crux-hover: oklch(82% 0.1 192);
+  --devtools-crux-soft: oklch(75% 0.1 192 / 0.1);
+  --devtools-crux-line: oklch(75% 0.1 192 / 0.3);
+  --devtools-crux-glow: oklch(75% 0.1 192 / 0.06);
+  --devtools-danger: oklch(70% 0.19 22);
+  --devtools-danger-soft: oklch(70% 0.19 22 / 0.14);
+  --devtools-danger-line: oklch(70% 0.19 22 / 0.32);
+  --devtools-warn: oklch(78% 0.15 75);
+  --devtools-warn-soft: oklch(78% 0.15 75 / 0.14);
+  --devtools-warn-line: oklch(78% 0.15 75 / 0.32);
+  --devtools-ok: oklch(72% 0.16 155);
+  --devtools-ok-soft: oklch(72% 0.16 155 / 0.12);
+  --devtools-ok-line: oklch(72% 0.16 155 / 0.3);
+  --devtools-iris: oklch(72% 0.16 280);
+  --devtools-iris-soft: oklch(72% 0.16 280 / 0.14);
+  --devtools-iris-line: oklch(72% 0.16 280 / 0.3);
+  --devtools-blue: oklch(72% 0.14 250);
+  --devtools-blue-soft: oklch(72% 0.14 250 / 0.14);
+  --devtools-blue-line: oklch(72% 0.14 250 / 0.3);
+  --devtools-plum: oklch(74% 0.16 320);
+  --devtools-plum-soft: oklch(74% 0.16 320 / 0.14);
+  --devtools-plum-line: oklch(74% 0.16 320 / 0.3);
+  --devtools-gold: oklch(82% 0.13 95);
+  --devtools-gold-soft: oklch(82% 0.13 95 / 0.14);
+  --devtools-gold-line: oklch(82% 0.13 95 / 0.3);
+  --devtools-grid: oklch(100% 0 0 / 0.025);
 
   color-scheme: dark;
 }
@@ -329,7 +329,7 @@
   /* Iconography — one stroke language. lucide-react ships at stroke-width 2;
    * the Crux design system uses 1.6. A CSS stroke-width overrides the SVG
    * presentation attribute, so this normalizes every lucide icon app-wide
-   * without touching call sites. (Hand-rolled qw Icon/CatIcon are already 1.6.) */
+   * without touching call sites. (Hand-rolled devtools Icon/CatIcon are already 1.6.) */
   svg.lucide {
     stroke-width: 1.6;
   }
@@ -384,7 +384,7 @@
 }
 
 /* Suspense / skeleton fallback pulse. Honors prefers-reduced-motion. */
-@keyframes qw-skeleton-pulse {
+@keyframes devtools-skeleton-pulse {
   0%,
   100% {
     opacity: 0.55;
@@ -394,14 +394,14 @@
   }
 }
 
-.qw-skeleton {
-  animation: qw-skeleton-pulse 1.4s ease-in-out infinite;
+.devtools-skeleton {
+  animation: devtools-skeleton-pulse 1.4s ease-in-out infinite;
   will-change: opacity;
 }
 
 /* Subtle indeterminate top progress bar — shown while a route
  * transition is pending (useTransition). */
-@keyframes qw-progress-slide {
+@keyframes devtools-progress-slide {
   0% {
     transform: translateX(-100%);
   }
@@ -410,14 +410,14 @@
   }
 }
 
-.qw-progress-bar {
+.devtools-progress-bar {
   position: relative;
   height: 2px;
   background: transparent;
   overflow: hidden;
 }
 
-.qw-progress-bar::after {
+.devtools-progress-bar::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -425,10 +425,10 @@
   background: linear-gradient(
     90deg,
     transparent 0%,
-    var(--qw-crux) 50%,
+    var(--devtools-crux) 50%,
     transparent 100%
   );
-  animation: qw-progress-slide 1.1s ease-in-out infinite;
+  animation: devtools-progress-slide 1.1s ease-in-out infinite;
 }
 
 /* ── View transitions (browser-native) ────────────────────────────────
@@ -439,8 +439,8 @@
  * `data-nav-direction` attribute set on `<html>` right before the
  * transition runs.
  *
- * Scoping: only `.qw-page-content` (the main column) gets the
- * directional animation. `.qw-sidebar` is given its own snapshot but
+ * Scoping: only `.devtools-page-content` (the main column) gets the
+ * directional animation. `.devtools-sidebar` is given its own snapshot but
  * with `animation: none`, so it stays fixed during the transition.
  * The remaining `root` snapshot covers chrome around the app (toasts,
  * popovers, global overlays); we let it cross-fade by default.
@@ -452,71 +452,71 @@
 
 /* Give each major region its own snapshot so the page swap doesn't
  * animate the whole window. */
-.qw-sidebar {
-  view-transition-name: qw-sidebar;
+.devtools-sidebar {
+  view-transition-name: devtools-sidebar;
 }
-.qw-page-content {
-  view-transition-name: qw-page-content;
+.devtools-page-content {
+  view-transition-name: devtools-page-content;
 }
 
 /* Sidebar: never animate during nav. */
-::view-transition-old(qw-sidebar),
-::view-transition-new(qw-sidebar) {
+::view-transition-old(devtools-sidebar),
+::view-transition-new(devtools-sidebar) {
   animation: none;
 }
 
 /* Default page-content animation = cross-fade (browser default). The
  * directional slides only kick in when `data-nav-direction` is set. */
-::view-transition-old(qw-page-content),
-::view-transition-new(qw-page-content) {
+::view-transition-old(devtools-page-content),
+::view-transition-new(devtools-page-content) {
   animation-duration: 220ms;
   animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-@keyframes qw-nav-out-forward {
+@keyframes devtools-nav-out-forward {
   to {
     transform: translateX(-2%);
     opacity: 0;
   }
 }
-@keyframes qw-nav-in-forward {
+@keyframes devtools-nav-in-forward {
   from {
     transform: translateX(2%);
     opacity: 0;
   }
 }
-@keyframes qw-nav-out-back {
+@keyframes devtools-nav-out-back {
   to {
     transform: translateX(2%);
     opacity: 0;
   }
 }
-@keyframes qw-nav-in-back {
+@keyframes devtools-nav-in-back {
   from {
     transform: translateX(-2%);
     opacity: 0;
   }
 }
 
-html[data-nav-direction="forward"]::view-transition-old(qw-page-content) {
-  animation-name: qw-nav-out-forward;
+html[data-nav-direction="forward"]::view-transition-old(devtools-page-content) {
+  animation-name: devtools-nav-out-forward;
 }
-html[data-nav-direction="forward"]::view-transition-new(qw-page-content) {
-  animation-name: qw-nav-in-forward;
+html[data-nav-direction="forward"]::view-transition-new(devtools-page-content) {
+  animation-name: devtools-nav-in-forward;
 }
-html[data-nav-direction="back"]::view-transition-old(qw-page-content) {
-  animation-name: qw-nav-out-back;
+html[data-nav-direction="back"]::view-transition-old(devtools-page-content) {
+  animation-name: devtools-nav-out-back;
 }
-html[data-nav-direction="back"]::view-transition-new(qw-page-content) {
-  animation-name: qw-nav-in-back;
+html[data-nav-direction="back"]::view-transition-new(devtools-page-content) {
+  animation-name: devtools-nav-in-back;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .qw-skeleton {
+  .devtools-skeleton {
     animation: none;
     opacity: 0.7;
   }
-  .qw-progress-bar::after {
+  .devtools-progress-bar::after {
     animation: none;
     opacity: 0.5;
     width: 100%;
@@ -527,139 +527,139 @@ html[data-nav-direction="back"]::view-transition-new(qw-page-content) {
   .animate-trace-in {
     animation: none;
   }
-  ::view-transition-old(qw-page-content),
-  ::view-transition-new(qw-page-content),
-  ::view-transition-old(qw-sidebar),
-  ::view-transition-new(qw-sidebar),
+  ::view-transition-old(devtools-page-content),
+  ::view-transition-new(devtools-page-content),
+  ::view-transition-old(devtools-sidebar),
+  ::view-transition-new(devtools-sidebar),
   ::view-transition-old(root),
   ::view-transition-new(root) {
     animation: none !important;
   }
 }
 
-/* ── qw-prose: editorial markdown rendering inside Streamdown blocks ─
+/* ── devtools-prose: editorial markdown rendering inside Streamdown blocks ─
  *
  * Streamdown emits standard tags (h1-6, p, ul/ol/li, pre/code, blockquote,
  * table, hr). Tailwind's typography plugin isn't loaded here, so we set
  * tight spacing + Crux palette ourselves.
  */
-.qw-prose {
-  font-family: var(--qw-serif);
-  color: var(--qw-fg);
+.devtools-prose {
+  font-family: var(--devtools-serif);
+  color: var(--devtools-fg);
   line-height: 1.65;
 }
-.qw-prose > *:first-child {
+.devtools-prose > *:first-child {
   margin-top: 0;
 }
-.qw-prose > *:last-child {
+.devtools-prose > *:last-child {
   margin-bottom: 0;
 }
-.qw-prose p,
-.qw-prose ul,
-.qw-prose ol,
-.qw-prose blockquote,
-.qw-prose pre,
-.qw-prose table {
+.devtools-prose p,
+.devtools-prose ul,
+.devtools-prose ol,
+.devtools-prose blockquote,
+.devtools-prose pre,
+.devtools-prose table {
   margin: 0.6em 0;
 }
-.qw-prose h1,
-.qw-prose h2,
-.qw-prose h3,
-.qw-prose h4,
-.qw-prose h5,
-.qw-prose h6 {
-  font-family: var(--qw-sans);
+.devtools-prose h1,
+.devtools-prose h2,
+.devtools-prose h3,
+.devtools-prose h4,
+.devtools-prose h5,
+.devtools-prose h6 {
+  font-family: var(--devtools-sans);
   font-weight: 600;
   letter-spacing: -0.012em;
-  color: var(--qw-fg);
+  color: var(--devtools-fg);
   margin: 1.1em 0 0.4em;
   line-height: 1.3;
 }
-.qw-prose h1 {
+.devtools-prose h1 {
   font-size: 18px;
 }
-.qw-prose h2 {
+.devtools-prose h2 {
   font-size: 16px;
 }
-.qw-prose h3 {
+.devtools-prose h3 {
   font-size: 14.5px;
 }
-.qw-prose h4 {
+.devtools-prose h4 {
   font-size: 13.5px;
-  color: var(--qw-fg-muted);
+  color: var(--devtools-fg-muted);
 }
-.qw-prose h5,
-.qw-prose h6 {
-  font-family: var(--qw-mono);
+.devtools-prose h5,
+.devtools-prose h6 {
+  font-family: var(--devtools-mono);
   font-size: 12.5px;
   text-transform: uppercase;
   letter-spacing: 0.16em;
-  color: var(--qw-fg-faint);
+  color: var(--devtools-fg-faint);
 }
-.qw-prose ul,
-.qw-prose ol {
+.devtools-prose ul,
+.devtools-prose ol {
   padding-left: 1.4em;
 }
-.qw-prose li {
+.devtools-prose li {
   margin: 0.2em 0;
 }
-.qw-prose li > p {
+.devtools-prose li > p {
   margin: 0.2em 0;
 }
-.qw-prose strong {
+.devtools-prose strong {
   font-weight: 600;
-  color: var(--qw-fg);
+  color: var(--devtools-fg);
 }
-.qw-prose em {
+.devtools-prose em {
   font-style: italic;
 }
-.qw-prose a {
-  color: var(--qw-crux);
+.devtools-prose a {
+  color: var(--devtools-crux);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
-.qw-prose code {
-  font-family: var(--qw-mono);
+.devtools-prose code {
+  font-family: var(--devtools-mono);
   font-size: 0.9em;
   padding: 0.05em 0.35em;
   border-radius: 4px;
-  background: var(--qw-bg-muted);
-  color: var(--qw-fg);
+  background: var(--devtools-bg-muted);
+  color: var(--devtools-fg);
 }
-.qw-prose pre {
-  font-family: var(--qw-mono);
+.devtools-prose pre {
+  font-family: var(--devtools-mono);
   font-size: 11.5px;
   padding: 12px 14px;
   border-radius: 8px;
-  background: var(--qw-bg-muted);
-  border: 1px solid var(--qw-border);
+  background: var(--devtools-bg-muted);
+  border: 1px solid var(--devtools-border);
   overflow-x: auto;
 }
-.qw-prose pre code {
+.devtools-prose pre code {
   background: transparent;
   padding: 0;
 }
-.qw-prose blockquote {
-  border-left: 3px solid var(--qw-crux-line);
+.devtools-prose blockquote {
+  border-left: 3px solid var(--devtools-crux-line);
   padding-left: 0.8em;
-  color: var(--qw-fg-muted);
+  color: var(--devtools-fg-muted);
 }
-.qw-prose hr {
+.devtools-prose hr {
   border: 0;
-  border-top: 1px solid var(--qw-border);
+  border-top: 1px solid var(--devtools-border);
   margin: 1.2em 0;
 }
-.qw-prose table {
+.devtools-prose table {
   border-collapse: collapse;
   font-size: 12.5px;
 }
-.qw-prose th,
-.qw-prose td {
-  border: 1px solid var(--qw-border);
+.devtools-prose th,
+.devtools-prose td {
+  border: 1px solid var(--devtools-border);
   padding: 6px 10px;
   text-align: left;
 }
-.qw-prose th {
-  background: var(--qw-bg-muted);
+.devtools-prose th {
+  background: var(--devtools-bg-muted);
   font-weight: 600;
 }

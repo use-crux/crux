@@ -1,6 +1,7 @@
 /** Portable persisted Eval Baseline and granular comparison records. @internal */
 
 import type { EvalSourceKey } from "./types";
+import type { BASELINE_FINGERPRINT_EPOCH } from "./evidence/cache-epochs";
 
 export interface EvalBaselineMetricValue {
   readonly trial: number;
@@ -25,7 +26,7 @@ export interface EvalBaselineCase {
 
 export interface EvalBaselineV3 {
   readonly schemaVersion: 3;
-  readonly baselineFingerprintEpoch: 2;
+  readonly baselineFingerprintEpoch: typeof BASELINE_FINGERPRINT_EPOCH;
   readonly baselineId: string;
   readonly evalId: string;
   readonly runId: string;
@@ -80,4 +81,33 @@ export interface EvalBaselineComparison {
     readonly baselineOnly: readonly string[];
     readonly candidateOnly: readonly string[];
   };
+}
+
+export type EvalBaselineContractStatus =
+  | "compatible"
+  | "missing"
+  | "incompatible"
+  | "unknown";
+
+export interface EvalBaselineDefinitionCompatibility {
+  readonly status: "compatible" | "incompatible" | "unknown";
+  readonly reason?: string;
+  readonly currentDefinitionFingerprint: string;
+  readonly baselineDefinitionFingerprint: string;
+  readonly variant: {
+    readonly name: string;
+    readonly status: "compatible" | "missing";
+    readonly reason?: string;
+  };
+  readonly cases: readonly {
+    readonly caseId: string;
+    readonly status: EvalBaselineContractStatus;
+    readonly reason?: string;
+    readonly metrics: readonly {
+      readonly name: string;
+      readonly status: EvalBaselineContractStatus;
+      readonly reason?: string;
+    }[];
+  }[];
+  readonly currentOnlyCases: readonly string[];
 }

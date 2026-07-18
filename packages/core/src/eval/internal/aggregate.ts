@@ -12,7 +12,11 @@ export function aggregateVariant(
   );
   const scoreValues = new Map<string, number[]>();
   for (const score of cells.flatMap((cell) => cell.scores)) {
-    if (score.status !== "computed" || score.value === null) continue;
+    if (
+      (score.status !== "computed" && score.status !== "reused") ||
+      score.value === null
+    )
+      continue;
     const values = scoreValues.get(score.name) ?? [];
     values.push(score.value);
     scoreValues.set(score.name, values);

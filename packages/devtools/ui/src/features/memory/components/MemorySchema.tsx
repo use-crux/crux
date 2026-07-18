@@ -109,7 +109,7 @@ export function SchemaCard({
         <>
           <div
             className="font-mono text-[11px]"
-            style={{ color: "var(--qw-fg-muted)", lineHeight: 1.7 }}
+            style={{ color: "var(--devtools-fg-muted)", lineHeight: 1.7 }}
           >
             {fields.map((f, i) => (
               <SchemaFieldLine key={`${f.name ?? i}`} field={f} depth={0} />
@@ -119,9 +119,9 @@ export function SchemaCard({
             <div
               className="mt-2.5 pt-2.5 text-[12px] leading-[1.5]"
               style={{
-                borderTop: "1px dashed var(--qw-border)",
-                color: "var(--qw-fg-muted)",
-                fontFamily: "var(--qw-serif, Georgia, serif)",
+                borderTop: "1px dashed var(--devtools-border)",
+                color: "var(--devtools-fg-muted)",
+                fontFamily: "var(--devtools-serif, Georgia, serif)",
               }}
             >
               {s.description}
@@ -132,21 +132,21 @@ export function SchemaCard({
         <>
           <div
             className="font-mono text-[11px]"
-            style={{ color: "var(--qw-fg-muted)", lineHeight: 1.7 }}
+            style={{ color: "var(--devtools-fg-muted)", lineHeight: 1.7 }}
           >
             {inferredFields!.map((f) => (
               <div key={f.name}>
-                <span style={{ color: "var(--qw-crux)" }}>{f.name}</span>{" "}
-                <span style={{ color: "var(--qw-fg-faint)" }}>{f.ty}</span>
+                <span style={{ color: "var(--devtools-crux)" }}>{f.name}</span>{" "}
+                <span style={{ color: "var(--devtools-fg-faint)" }}>{f.ty}</span>
               </div>
             ))}
           </div>
           <div
             className="mt-2.5 pt-2.5 text-[11.5px] leading-[1.45]"
             style={{
-              borderTop: "1px dashed var(--qw-border)",
-              color: "var(--qw-fg-faint)",
-              fontFamily: "var(--qw-serif, Georgia, serif)",
+              borderTop: "1px dashed var(--devtools-border)",
+              color: "var(--devtools-fg-faint)",
+              fontFamily: "var(--devtools-serif, Georgia, serif)",
             }}
           >
             Authored schema not declared in this project — showing
@@ -174,13 +174,13 @@ function SchemaPlaceholderBody({ authoringHint }: { authoringHint?: string }) {
     <div
       className="text-[12px] leading-[1.5]"
       style={{
-        color: "var(--qw-fg-muted)",
-        fontFamily: "var(--qw-serif, Georgia, serif)",
+        color: "var(--devtools-fg-muted)",
+        fontFamily: "var(--devtools-serif, Georgia, serif)",
       }}
     >
       <div
         className="mb-1.5 font-mono text-[10.5px] uppercase tracking-[0.12em]"
-        style={{ color: "var(--qw-fg-faint)" }}
+        style={{ color: "var(--devtools-fg-faint)" }}
       >
         Pending authored schema
       </div>
@@ -189,7 +189,7 @@ function SchemaPlaceholderBody({ authoringHint }: { authoringHint?: string }) {
       {authoringHint && (
         <div className="mt-1.5">
           Declare with{" "}
-          <span className="font-mono" style={{ color: "var(--qw-fg)" }}>
+          <span className="font-mono" style={{ color: "var(--devtools-fg)" }}>
             {authoringHint}
           </span>{" "}
           and the typed fields will surface here automatically.
@@ -211,17 +211,17 @@ function SchemaFieldLine({
     <div style={{ paddingLeft: indent }}>
       <div className="flex flex-wrap items-baseline gap-1.5">
         {field.name && (
-          <span style={{ color: "var(--qw-crux)" }}>{field.name}</span>
+          <span style={{ color: "var(--devtools-crux)" }}>{field.name}</span>
         )}
         {field.type && (
-          <span style={{ color: "var(--qw-fg-faint)" }}>{field.type}</span>
+          <span style={{ color: "var(--devtools-fg-faint)" }}>{field.type}</span>
         )}
         {field.required && (
           <span
             className="rounded-[3px] px-[5px] text-[9px] font-semibold uppercase tracking-[0.06em]"
             style={{
-              color: "var(--qw-danger)",
-              background: "var(--qw-danger-soft)",
+              color: "var(--devtools-danger)",
+              background: "var(--devtools-danger-soft)",
             }}
           >
             required
@@ -232,8 +232,8 @@ function SchemaFieldLine({
         <div
           className="pb-1 text-[11.5px] leading-[1.45]"
           style={{
-            color: "var(--qw-fg-muted)",
-            fontFamily: "var(--qw-serif, Georgia, serif)",
+            color: "var(--devtools-fg-muted)",
+            fontFamily: "var(--devtools-serif, Georgia, serif)",
             maxWidth: 360,
           }}
         >

@@ -120,8 +120,8 @@ pub(crate) fn fallback_relation_target_id(
         "storage.scope.wraps_storage" | "rag.retriever.uses_storage" | "workspace.uses_storage" => {
             Some(format!("storage.bundle:{}", safe_use_entry_id(variable)))
         }
-        "evaluation.scores_prompt" => Some(format!("prompt:{}", safe_use_entry_id(variable))),
-        "evaluation.uses_scorer" => Some(format!("scorer:{}", safe_use_entry_id(variable))),
+        "eval.scores_prompt" => Some(format!("prompt:{}", safe_use_entry_id(variable))),
+        "eval.uses_scorer" => Some(format!("scorer:{}", safe_use_entry_id(variable))),
         "constraint.applies_to" | "guardrail.applies_to" | "eval.covers_definition" => {
             variable.contains(':').then(|| variable.to_string())
         }

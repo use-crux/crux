@@ -27,6 +27,9 @@ func TestRunsPageIncludesRevisionThatAdvancesOnlyAfterCommit(t *testing.T) {
 	if page.Revision != 0 {
 		t.Fatalf("initial revision = %d, want 0", page.Revision)
 	}
+	if page.Rows == nil {
+		t.Fatal("initial rows must encode as an empty array, not null")
+	}
 
 	ingestRunStart(t, service, "run_rev_a", "seg_rev_a", "trace_rev_a", "running", "2026-05-16T18:00:00.000Z")
 

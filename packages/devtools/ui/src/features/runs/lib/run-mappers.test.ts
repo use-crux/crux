@@ -71,7 +71,7 @@ describe("runs row mapping", () => {
     });
   });
 
-  it("annotates a canonical row with Quality metadata without changing row identity", () => {
+  it("annotates a canonical row with Inspect metadata without changing row identity", () => {
     const row = runRow("run-1", 100, undefined);
 
     const quality = {
@@ -100,12 +100,12 @@ describe("runs row mapping", () => {
     });
   });
 
-  it("leaves a row unchanged when it has no matching Quality annotation", () => {
+  it("leaves a row unchanged when it has no matching Inspect annotation", () => {
     const row = runRow("run-unmatched", 100, undefined);
     expect(annotateRunRowWithInspect(row, undefined)).toEqual(row);
   });
 
-  it("indexes Quality annotations by traceId (== observability runId)", () => {
+  it("indexes Inspect annotations by traceId (== observability runId)", () => {
     const quality = {
       _tag: "InspectRun",
       traceId: "run-1",

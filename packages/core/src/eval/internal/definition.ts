@@ -57,7 +57,7 @@ export interface EvalArmDeclaration {
   readonly overrideKeys: readonly string[];
 }
 
-/** Portable Phase 1 authoring manifest. */
+/** Portable authoring manifest consumed by Eval coordinators. */
 export interface EvalDefinitionV1 {
   readonly schemaVersion: 1;
   readonly explicitId?: string;

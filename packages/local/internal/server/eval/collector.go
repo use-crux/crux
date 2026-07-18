@@ -69,8 +69,8 @@ func (c *Collector) collectFromWorker(ctx context.Context) ([]json.RawMessage, e
 	found := false
 	result, err := workerproc.Stream(ctx, workerproc.OneShot{
 		CommandPath: node,
-		CommandArgs: []string{"--import", "tsx/esm", coordinator},
-		Args:        []string{"--list"},
+		CommandArgs: []string{coordinator},
+		Args:        []string{"--catalog-readiness"},
 		Dir:         c.projectRoot,
 	}, func(raw json.RawMessage) error {
 		var event struct {

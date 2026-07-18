@@ -7,7 +7,7 @@ import {
   useRef,
   type UIEvent as ReactUIEvent,
 } from "react";
-import { RowErrorBoundary } from "@/qw/shell/SectionBoundary";
+import { RowErrorBoundary } from "@/devtools/shell/SectionBoundary";
 import {
   ChevronRight,
   ChevronDown,
@@ -170,34 +170,34 @@ function KindIcon({ node }: { node: SpanNode }) {
   const size = 12;
   switch (node.kind) {
     case "session":
-      return <Users size={size} className="text-(--qw-fg-muted) shrink-0" />;
+      return <Users size={size} className="text-(--devtools-fg-muted) shrink-0" />;
     case "flow":
-      return <GitBranch size={size} className="text-(--qw-iris) shrink-0" />;
+      return <GitBranch size={size} className="text-(--devtools-iris) shrink-0" />;
     case "step":
-      return <Layers size={size} className="text-(--qw-iris) shrink-0" />;
+      return <Layers size={size} className="text-(--devtools-iris) shrink-0" />;
     case "handoff":
       return (
-        <ArrowRightLeft size={size} className="text-(--qw-warn) shrink-0" />
+        <ArrowRightLeft size={size} className="text-(--devtools-warn) shrink-0" />
       );
     case "composition":
       if (node.composition?.kind === "swarm") {
         return (
-          <ArrowLeftRight size={size} className="text-(--qw-warn) shrink-0" />
+          <ArrowLeftRight size={size} className="text-(--devtools-warn) shrink-0" />
         );
       }
       return <Network size={size} className="text-fuchsia-400 shrink-0" />;
     case "trace": {
       const role = node.trace?.role;
       if (role === "agent-step")
-        return <Bot size={size} className="text-(--qw-iris) shrink-0" />;
+        return <Bot size={size} className="text-(--devtools-iris) shrink-0" />;
       if (role === "resolve")
         return (
-          <CheckCircle size={size} className="text-(--qw-fg-muted) shrink-0" />
+          <CheckCircle size={size} className="text-(--devtools-fg-muted) shrink-0" />
         );
-      return <Sparkles size={size} className="text-(--qw-crux) shrink-0" />;
+      return <Sparkles size={size} className="text-(--devtools-crux) shrink-0" />;
     }
     default:
-      return <Sparkles size={12} className="text-(--qw-fg-faint) shrink-0" />;
+      return <Sparkles size={12} className="text-(--devtools-fg-faint) shrink-0" />;
   }
 }
 
@@ -208,7 +208,7 @@ function KindIcon({ node }: { node: SpanNode }) {
 function kindBorderColor(kind: SpanNode["kind"]): string {
   switch (kind) {
     case "session":
-      return "border-l-(--qw-fg-muted)";
+      return "border-l-(--devtools-fg-muted)";
     case "flow":
       return "border-l-violet-400";
     case "step":
@@ -230,13 +230,13 @@ function StatusDot({ status }: { status: SpanNode["status"] }) {
   const base = "w-1.5 h-1.5 rounded-full shrink-0";
   switch (status) {
     case "success":
-      return <span className={`${base} bg-(--qw-ok)`} />;
+      return <span className={`${base} bg-(--devtools-ok)`} />;
     case "error":
-      return <span className={`${base} bg-(--qw-danger)`} />;
+      return <span className={`${base} bg-(--devtools-danger)`} />;
     case "running":
-      return <span className={`${base} bg-(--qw-blue) animate-pulse`} />;
+      return <span className={`${base} bg-(--devtools-blue) animate-pulse`} />;
     case "stale":
-      return <span className={`${base} bg-(--qw-warn)`} />;
+      return <span className={`${base} bg-(--devtools-warn)`} />;
   }
 }
 
@@ -295,7 +295,7 @@ function SpanRow({
         data-span-id={node.id}
         className={`
         flex items-center w-full text-left text-[11px] h-7 group cursor-pointer
-        ${isSelected ? `bg-(--qw-bg-muted) border-l-2 ${kindBorderColor(node.kind)}` : "border-l-2 border-l-transparent hover:bg-(--qw-bg-muted)/50"}
+        ${isSelected ? `bg-(--devtools-bg-muted) border-l-2 ${kindBorderColor(node.kind)}` : "border-l-2 border-l-transparent hover:bg-(--devtools-bg-muted)/50"}
       `}
         style={{ paddingLeft: node.depth * 20 }}
         onClick={() => {
@@ -315,9 +315,9 @@ function SpanRow({
         >
           {hasChildren ? (
             isCollapsed ? (
-              <ChevronRight size={12} className="text-(--qw-fg-faint)" />
+              <ChevronRight size={12} className="text-(--devtools-fg-faint)" />
             ) : (
-              <ChevronDown size={12} className="text-(--qw-fg-faint)" />
+              <ChevronDown size={12} className="text-(--devtools-fg-faint)" />
             )
           ) : null}
         </span>
@@ -332,7 +332,7 @@ function SpanRow({
           className="mr-2 shrink-0 rounded-[3px] px-1.5 py-px font-mono text-[9px] uppercase tracking-[0.06em]"
           style={{
             color: kindHexColor(semanticKind),
-            background: "var(--qw-bg, transparent)",
+            background: "var(--devtools-bg, transparent)",
             boxShadow: `inset 0 0 0 1px ${kindHexColor(semanticKind)}`,
           }}
         >
@@ -341,7 +341,7 @@ function SpanRow({
 
         {/* Label */}
         <span
-          className={`truncate min-w-0 flex-1 ${node.kind === "handoff" ? "text-(--qw-warn) italic" : node.composition?.kind === "swarm" ? "text-(--qw-warn)" : node.kind === "composition" ? "text-fuchsia-300" : "text-(--qw-fg)"}`}
+          className={`truncate min-w-0 flex-1 ${node.kind === "handoff" ? "text-(--devtools-warn) italic" : node.composition?.kind === "swarm" ? "text-(--devtools-warn)" : node.kind === "composition" ? "text-fuchsia-300" : "text-(--devtools-fg)"}`}
         >
           {node.label}
         </span>
@@ -350,7 +350,7 @@ function SpanRow({
         {node.kind === "composition" &&
           node.composition?.kind === "swarm" &&
           node.composition.handoffPath && (
-            <span className="text-[9px] text-(--qw-warn) tabular-nums shrink-0 ml-1.5 truncate max-w-[200px]">
+            <span className="text-[9px] text-(--devtools-warn) tabular-nums shrink-0 ml-1.5 truncate max-w-[200px]">
               {node.composition.handoffPath.join(" → ")}
             </span>
           )}
@@ -359,7 +359,7 @@ function SpanRow({
         {node.kind === "composition" &&
           node.composition?.kind === "swarm" &&
           node.composition.handoffCount != null && (
-            <span className="text-[9px] text-(--qw-warn) tabular-nums shrink-0 ml-1">
+            <span className="text-[9px] text-(--devtools-warn) tabular-nums shrink-0 ml-1">
               {node.composition.handoffCount}{" "}
               {node.composition.handoffCount === 1 ? "hop" : "hops"}
             </span>
@@ -374,7 +374,7 @@ function SpanRow({
 
         {/* Handoff data sizing (ghost row) */}
         {node.kind === "handoff" && node.delegate && (
-          <span className="text-[9px] text-(--qw-warn) tabular-nums shrink-0 ml-1.5">
+          <span className="text-[9px] text-(--devtools-warn) tabular-nums shrink-0 ml-1.5">
             {node.delegate.inputSize != null && node.delegate.outputSize != null
               ? `${node.delegate.inputSize}B → ${node.delegate.outputSize}B`
               : ""}
@@ -384,7 +384,7 @@ function SpanRow({
 
         {/* Model badge */}
         {node.model && (
-          <span className="text-[9px] bg-(--qw-bg-muted) text-(--qw-fg-muted) rounded px-1 ml-1.5 shrink-0">
+          <span className="text-[9px] bg-(--devtools-bg-muted) text-(--devtools-fg-muted) rounded px-1 ml-1.5 shrink-0">
             {node.model}
           </span>
         )}
@@ -394,9 +394,9 @@ function SpanRow({
           <span
             className="ml-1.5 inline-flex shrink-0 items-center gap-[3px] rounded-[3px] px-1 text-[9px]"
             style={{
-              color: "var(--qw-warn)",
-              background: "var(--qw-warn-soft)",
-              boxShadow: "inset 0 0 0 1px var(--qw-warn-line)",
+              color: "var(--devtools-warn)",
+              background: "var(--devtools-warn-soft)",
+              boxShadow: "inset 0 0 0 1px var(--devtools-warn-line)",
             }}
             title="Turn explanation has a warning signal — open Explain"
           >
@@ -408,7 +408,7 @@ function SpanRow({
         {node.trace?.inspect?.droppedContexts?.length != null &&
           node.trace.inspect.droppedContexts.length > 0 && (
             <span
-              className="text-[9px] text-(--qw-warn) ml-1 shrink-0"
+              className="text-[9px] text-(--devtools-warn) ml-1 shrink-0"
               title={`${node.trace.inspect.droppedContexts.length} context(s) dropped`}
             >
               ⚠
@@ -421,7 +421,7 @@ function SpanRow({
           node.trace.inspect.totalTokens >
             node.trace.inspect.tokenBudget * 0.9 && (
             <span
-              className="text-[9px] text-(--qw-danger) ml-1 shrink-0"
+              className="text-[9px] text-(--devtools-danger) ml-1 shrink-0"
               title={`Token usage: ${node.trace.inspect.totalTokens}/${node.trace.inspect.tokenBudget} (${Math.round((node.trace.inspect.totalTokens / node.trace.inspect.tokenBudget) * 100)}%)`}
             >
               ●
@@ -430,20 +430,20 @@ function SpanRow({
 
         {/* Tokens */}
         {node.tokens != null && (
-          <span className="text-(--qw-fg-faint) tabular-nums ml-2 shrink-0">
+          <span className="text-(--devtools-fg-faint) tabular-nums ml-2 shrink-0">
             {formatTokens(node.tokens)}
           </span>
         )}
 
         {/* Duration — or a live "···" for an in-flight span with no end yet. */}
         {node.durationMs != null ? (
-          <span className="text-(--qw-fg-faint) tabular-nums ml-2 shrink-0">
+          <span className="text-(--devtools-fg-faint) tabular-nums ml-2 shrink-0">
             {formatDuration(node.durationMs)}
           </span>
         ) : (
           node.status === "running" && (
             <span
-              className="text-(--qw-crux) tabular-nums ml-2 shrink-0 animate-pulse"
+              className="text-(--devtools-crux) tabular-nums ml-2 shrink-0 animate-pulse"
               title="in flight"
             >
               ···
@@ -453,7 +453,7 @@ function SpanRow({
 
         {/* Cost */}
         {node.cost != null && (
-          <span className="text-(--qw-fg-faint) tabular-nums ml-2 shrink-0">
+          <span className="text-(--devtools-fg-faint) tabular-nums ml-2 shrink-0">
             {formatCost(node.cost)}
           </span>
         )}
@@ -469,7 +469,7 @@ function SpanRow({
           marginRight: 8,
           marginTop: 1,
           marginBottom: 1,
-          background: "var(--qw-bg-muted)",
+          background: "var(--devtools-bg-muted)",
           opacity: 0.85,
         }}
       >
@@ -528,7 +528,6 @@ function semanticKindFor(node: SpanNode): SemanticKind {
       return "swarm";
     case "flow.run":
     case "flow":
-    case "eval.flow":
     case "eval.run":
       return "flow";
     case "flow.step":
@@ -610,33 +609,33 @@ function semanticKindFor(node: SpanNode): SemanticKind {
 function kindHexColor(k: SemanticKind): string {
   switch (k) {
     case "flow":
-      return "var(--qw-crux)";
+      return "var(--devtools-crux)";
     case "agent":
     case "swarm":
     case "consensus":
-      return "var(--qw-iris)";
+      return "var(--devtools-iris)";
     case "generate":
     case "pipeline":
-      return "var(--qw-warn)";
+      return "var(--devtools-warn)";
     case "tool":
-      return "var(--qw-fg-muted)";
+      return "var(--devtools-fg-muted)";
     case "retrieval":
-      return "var(--qw-ok)";
+      return "var(--devtools-ok)";
     case "score":
     case "memory":
-      return "var(--qw-iris)";
+      return "var(--devtools-iris)";
     case "embed":
     case "security":
-      return "var(--qw-danger)";
+      return "var(--devtools-danger)";
     case "handoff":
-      return "var(--qw-fg-faint)";
+      return "var(--devtools-fg-faint)";
     case "session":
     case "step":
     case "resolve":
     case "trace":
-      return "var(--qw-fg-muted)";
+      return "var(--devtools-fg-muted)";
     case "other":
-      return "var(--qw-fg-muted)";
+      return "var(--devtools-fg-muted)";
   }
 }
 
@@ -647,15 +646,15 @@ function kindHexColor(k: SemanticKind): string {
 function kindBarColor(kind: SpanNode["kind"]): string {
   switch (kind) {
     case "session":
-      return "bg-(--qw-fg-faint)";
+      return "bg-(--devtools-fg-faint)";
     case "flow":
-      return "bg-(--qw-iris)";
+      return "bg-(--devtools-iris)";
     case "step":
-      return "bg-(--qw-iris)";
+      return "bg-(--devtools-iris)";
     case "trace":
-      return "bg-(--qw-crux)";
+      return "bg-(--devtools-crux)";
     case "handoff":
-      return "bg-(--qw-warn)";
+      return "bg-(--devtools-warn)";
     case "composition":
       return "bg-fuchsia-500";
   }
@@ -715,8 +714,8 @@ function WaterfallRow({
       type="button"
       data-span-id={node.id}
       className={`
-        flex items-center w-full text-left text-[11px] h-7 group cursor-pointer border-b border-(--qw-border)
-        ${isSelected ? "bg-(--qw-bg-muted)" : "hover:bg-(--qw-bg-muted)/50"}
+        flex items-center w-full text-left text-[11px] h-7 group cursor-pointer border-b border-(--devtools-border)
+        ${isSelected ? "bg-(--devtools-bg-muted)" : "hover:bg-(--devtools-bg-muted)/50"}
       `}
       onClick={() => {
         onSelect(node.id);
@@ -740,9 +739,9 @@ function WaterfallRow({
         >
           {hasChildren ? (
             isCollapsed ? (
-              <ChevronRight size={12} className="text-(--qw-fg-faint)" />
+              <ChevronRight size={12} className="text-(--devtools-fg-faint)" />
             ) : (
-              <ChevronDown size={12} className="text-(--qw-fg-faint)" />
+              <ChevronDown size={12} className="text-(--devtools-fg-faint)" />
             )
           ) : null}
         </span>
@@ -764,7 +763,7 @@ function WaterfallRow({
         </span>
 
         {/* Label */}
-        <span className="text-(--qw-fg) truncate min-w-0 flex-1 text-[10px]">
+        <span className="text-(--devtools-fg) truncate min-w-0 flex-1 text-[10px]">
           {node.label}
         </span>
 
@@ -772,7 +771,7 @@ function WaterfallRow({
         {warning && (
           <span
             className="ml-1 shrink-0 text-[10px]"
-            style={{ color: "var(--qw-warn)" }}
+            style={{ color: "var(--devtools-warn)" }}
             title="Turn explanation has a warning signal — open Explain"
           >
             ✦
@@ -784,15 +783,15 @@ function WaterfallRow({
           No horizontal padding so bars line up exactly with the ruler ticks. */}
       <div
         className="relative h-full min-w-0 flex-1"
-        style={{ borderLeft: "1px solid var(--qw-border)" }}
+        style={{ borderLeft: "1px solid var(--devtools-border)" }}
       >
         <div
           title={`${formatDuration(node.durationMs)}`}
           className={`
             absolute flex items-center overflow-hidden rounded-sm
-            ${isError ? "bg-(--qw-danger)" : kindBarColor(node.kind)}
+            ${isError ? "bg-(--devtools-danger)" : kindBarColor(node.kind)}
             ${isRunning && !isError ? "animate-pulse" : ""}
-            ${isSelected ? "ring-[1.5px] ring-(--qw-crux)" : ""}
+            ${isSelected ? "ring-[1.5px] ring-(--devtools-crux)" : ""}
           `}
           style={{
             top: "50%",
@@ -805,7 +804,7 @@ function WaterfallRow({
           }}
         >
           {showDur && (
-            <span className="px-1 text-[8.5px] font-semibold tabular-nums whitespace-nowrap text-(--qw-bg)">
+            <span className="px-1 text-[8.5px] font-semibold tabular-nums whitespace-nowrap text-(--devtools-bg)">
               {formatDuration(node.durationMs)}
             </span>
           )}
@@ -1034,37 +1033,37 @@ export function SpanTree({
   }, [showMinimap, visibleNodes]);
 
   return (
-    <div className="flex flex-col h-full min-h-0 bg-(--qw-bg)">
+    <div className="flex flex-col h-full min-h-0 bg-(--devtools-bg)">
       {/* Header controls */}
-      <div className="flex items-center gap-2 px-2 py-1.5 border-b border-(--qw-border) shrink-0">
-        <div className="flex items-center flex-1 gap-1.5 bg-(--qw-bg-muted) rounded px-2 py-1">
-          <Search size={12} className="text-(--qw-fg-faint) shrink-0" />
+      <div className="flex items-center gap-2 px-2 py-1.5 border-b border-(--devtools-border) shrink-0">
+        <div className="flex items-center flex-1 gap-1.5 bg-(--devtools-bg-muted) rounded px-2 py-1">
+          <Search size={12} className="text-(--devtools-fg-faint) shrink-0" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Filter spans..."
-            className="bg-transparent text-[11px] text-(--qw-fg) placeholder:text-(--qw-fg-faint) outline-none w-full"
+            className="bg-transparent text-[11px] text-(--devtools-fg) placeholder:text-(--devtools-fg-faint) outline-none w-full"
           />
         </div>
 
         {/* Total run duration — anchors the time axis (Timeline only). */}
         {viewMode === "timeline" && visibleNodes.length > 0 && (
-          <span className="shrink-0 font-mono text-[10.5px] tabular-nums text-(--qw-fg-faint)">
+          <span className="shrink-0 font-mono text-[10.5px] tabular-nums text-(--devtools-fg-faint)">
             {formatDuration(timelineEnd - timelineStart)}
           </span>
         )}
 
         {/* Tree / Timeline toggle — only when uncontrolled (no lens-driven layout) */}
         {layout == null && (
-          <div className="flex items-center bg-(--qw-bg-muted) rounded p-0.5 shrink-0">
+          <div className="flex items-center bg-(--devtools-bg-muted) rounded p-0.5 shrink-0">
             <button
               type="button"
               title="Tree view"
               className={`flex items-center justify-center w-6 h-5 rounded cursor-pointer ${
                 viewMode === "tree"
-                  ? "bg-(--qw-border-strong) text-(--qw-fg)"
-                  : "text-(--qw-fg-faint) hover:text-(--qw-fg-muted)"
+                  ? "bg-(--devtools-border-strong) text-(--devtools-fg)"
+                  : "text-(--devtools-fg-faint) hover:text-(--devtools-fg-muted)"
               }`}
               onClick={() => setViewMode("tree")}
             >
@@ -1075,8 +1074,8 @@ export function SpanTree({
               title="Timeline view"
               className={`flex items-center justify-center w-6 h-5 rounded cursor-pointer ${
                 viewMode === "timeline"
-                  ? "bg-(--qw-border-strong) text-(--qw-fg)"
-                  : "text-(--qw-fg-faint) hover:text-(--qw-fg-muted)"
+                  ? "bg-(--devtools-border-strong) text-(--devtools-fg)"
+                  : "text-(--devtools-fg-faint) hover:text-(--devtools-fg-muted)"
               }`}
               onClick={() => setViewMode("timeline")}
             >
@@ -1092,19 +1091,19 @@ export function SpanTree({
         <div
           className="flex shrink-0 items-center gap-2 px-2.5 py-1.5"
           style={{
-            background: "var(--qw-danger-soft)",
-            borderBottom: "1px solid var(--qw-border)",
+            background: "var(--devtools-danger-soft)",
+            borderBottom: "1px solid var(--devtools-border)",
           }}
         >
-          <AlertTriangle size={12} className="shrink-0 text-(--qw-danger)" />
-          <span className="text-[11.5px] font-medium text-(--qw-fg)">
+          <AlertTriangle size={12} className="shrink-0 text-(--devtools-danger)" />
+          <span className="text-[11.5px] font-medium text-(--devtools-fg)">
             failure path · {failurePath.size} of {fullStatuses.length} spans
           </span>
           <div className="flex-1" />
           <button
             type="button"
             onClick={expandAll}
-            className="cursor-pointer font-mono text-[10.5px] text-(--qw-crux) hover:underline"
+            className="cursor-pointer font-mono text-[10.5px] text-(--devtools-crux) hover:underline"
           >
             expand all
           </button>
@@ -1117,24 +1116,24 @@ export function SpanTree({
         filteredTree != null &&
         visibleNodes.length > 0 && (
           <div
-            className="grid shrink-0 border-b border-(--qw-border)"
+            className="grid shrink-0 border-b border-(--devtools-border)"
             style={{ gridTemplateColumns: `${TIMELINE_LABEL_W}px 1fr` }}
           >
-            <div className="px-2 py-1.5 font-mono text-[9px] uppercase tracking-[0.06em] text-(--qw-fg-faint)">
+            <div className="px-2 py-1.5 font-mono text-[9px] uppercase tracking-[0.06em] text-(--devtools-fg-faint)">
               span
             </div>
             <div
               className="relative h-6"
-              style={{ borderLeft: "1px solid var(--qw-border)" }}
+              style={{ borderLeft: "1px solid var(--devtools-border)" }}
             >
               {[0, 0.25, 0.5, 0.75].map((frac) => (
                 <div
                   key={frac}
-                  className="absolute inset-y-0 flex items-center pl-1 font-mono text-[9px] text-(--qw-fg-faint)"
+                  className="absolute inset-y-0 flex items-center pl-1 font-mono text-[9px] text-(--devtools-fg-faint)"
                   style={{
                     left: `${frac * 100}%`,
                     borderLeft:
-                      frac > 0 ? "1px solid var(--qw-border)" : "none",
+                      frac > 0 ? "1px solid var(--devtools-border)" : "none",
                   }}
                 >
                   {formatDuration(frac * (timelineEnd - timelineStart))}
@@ -1156,7 +1155,7 @@ export function SpanTree({
           style={{ opacity: isFilterPending ? 0.6 : 1 }}
         >
           {filteredTree == null ? (
-            <div className="flex items-center justify-center h-full text-(--qw-fg-faint) text-[11px]">
+            <div className="flex items-center justify-center h-full text-(--devtools-fg-faint) text-[11px]">
               No spans match filter
             </div>
           ) : viewMode === "tree" ? (
@@ -1196,7 +1195,7 @@ export function SpanTree({
         {showMinimap && filteredTree != null && (
           <div
             className="flex shrink-0 py-1.5 pl-1 pr-1.5"
-            style={{ borderLeft: "1px solid var(--qw-border)" }}
+            style={{ borderLeft: "1px solid var(--devtools-border)" }}
           >
             <TriageMinimap
               statuses={fullStatuses}

@@ -32,3 +32,17 @@ func TestEvalHelpExposesOnlyTheV1ProductSurface(t *testing.T) {
 		}
 	}
 }
+
+func TestBaselineSetHelpMakesFailingAcceptanceExplicit(t *testing.T) {
+	cmd := New(&cli.Factory{})
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"baseline", "set", "--help"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "--accept-failing") {
+		t.Fatalf("baseline set help missing explicit failing acceptance:\n%s", out.String())
+	}
+}

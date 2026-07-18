@@ -2,13 +2,14 @@ import type {
   CruxObservabilityTransport,
   ObservabilityDeliveryOptions,
 } from "../observability";
+import type { CruxFeedbackDestination } from "../feedback";
 import type { CruxCorrelators } from "../observability/correlators";
 import type { CruxDeploymentIdentity } from "../project-index";
 import type { RuntimeConfigInstallation } from "./config-transaction";
 import type { CruxHooks } from "./runtime";
 
-const PROCESS_REGISTRY_VERSION = 1;
-const PROCESS_REGISTRY_KEY = Symbol.for("@use-crux/core/process-registry/v1");
+const PROCESS_REGISTRY_VERSION = 2;
+const PROCESS_REGISTRY_KEY = Symbol.for("@use-crux/core/process-registry/v2");
 
 export type ObservabilityRegistryListener = () => void;
 
@@ -50,6 +51,8 @@ export interface CruxProcessRegistry {
     delivery: ObservabilityDeliveryOptions | undefined;
     defaultCorrelators: CruxCorrelators | undefined;
     deploymentIdentity: CruxDeploymentIdentity | undefined;
+    feedbackDestination: CruxFeedbackDestination | undefined;
+    redactPaths: readonly string[];
     nextConfigurationToken: number;
     activeConfigurationToken: number;
     configurationParents: Map<number, number>;
@@ -66,7 +69,7 @@ export function getCruxProcessRegistry(): CruxProcessRegistry {
 
   if (existing !== undefined) {
     throw new Error(
-      "Incompatible @use-crux/core process registry found at the v1 global symbol",
+      "Incompatible @use-crux/core process registry found at the v2 global symbol",
     );
   }
 
@@ -90,6 +93,8 @@ function createCruxProcessRegistry(): CruxProcessRegistry {
       delivery: undefined,
       defaultCorrelators: undefined,
       deploymentIdentity: undefined,
+      feedbackDestination: undefined,
+      redactPaths: Object.freeze([]),
       nextConfigurationToken: 0,
       activeConfigurationToken: 0,
       configurationParents: new Map(),
@@ -128,6 +133,13 @@ function isCruxProcessRegistry(value: unknown): value is CruxProcessRegistry {
     ) &&
     isRegistryNumber(observability.configurationGeneration) &&
     isRegistryNumber(observability.resetGeneration) &&
+    (observability.feedbackDestination === undefined ||
+      (typeof observability.feedbackDestination === "object" &&
+        observability.feedbackDestination !== null &&
+        typeof observability.feedbackDestination.submitFeedback ===
+          "function")) &&
+    Array.isArray(observability.redactPaths) &&
+    observability.redactPaths.every((path) => typeof path === "string") &&
     observability.listeners instanceof Set &&
     [...observability.listeners].every(isObservabilityListenerReference)
   );

@@ -21,7 +21,7 @@ func Dir(path string) string {
 	if path != "" {
 		return path
 	}
-	return filepath.Join(".crux", "quality")
+	return filepath.Join(".crux", "evals")
 }
 
 func (f *FS) Dir() string {

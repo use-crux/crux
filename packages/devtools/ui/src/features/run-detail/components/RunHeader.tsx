@@ -7,8 +7,8 @@
  * live here (run-level) so collapsing the inspector never hides the numbers.
  */
 
-import { Btn } from "@/qw/shell/primitives";
-import { Icon } from "@/qw/shell/Icon";
+import { Btn } from "@/devtools/shell/primitives";
+import { Icon } from "@/devtools/shell/Icon";
 import {
   fmtCost,
   fmtDuration,
@@ -70,13 +70,13 @@ export function RunHeader({
     <header
       className="flex flex-shrink-0 flex-col gap-3 px-7 pb-2.5 pt-3"
       style={{
-        borderBottom: "1px solid var(--qw-border)",
-        background: "var(--qw-bg)",
+        borderBottom: "1px solid var(--devtools-border)",
+        background: "var(--devtools-bg)",
       }}
     >
       <div
         className="font-mono text-[10.5px] uppercase tracking-[0.06em]"
-        style={{ color: "var(--qw-fg-faint)" }}
+        style={{ color: "var(--devtools-fg-faint)" }}
       >
         Runs / {traceId.slice(0, 16)}
       </div>
@@ -90,12 +90,12 @@ export function RunHeader({
         {(provider || model) && (
           <span
             className="font-mono text-[12px]"
-            style={{ color: "var(--qw-fg-muted)" }}
+            style={{ color: "var(--devtools-fg-muted)" }}
             title={modelTitle}
           >
             {[provider, model].filter(Boolean).join(" · ")}
             {modelExtraCount != null && modelExtraCount > 0 && (
-              <span style={{ color: "var(--qw-fg-faint)" }}>
+              <span style={{ color: "var(--devtools-fg-faint)" }}>
                 {" "}
                 +{modelExtraCount}
               </span>
@@ -105,7 +105,7 @@ export function RunHeader({
         {startedAt && (
           <span
             className="font-mono text-[11px]"
-            style={{ color: "var(--qw-fg-faint)" }}
+            style={{ color: "var(--devtools-fg-faint)" }}
           >
             · {startedAt}
           </span>
@@ -135,13 +135,13 @@ export function RunHeader({
         {diagnosticsCount > 0 && (
           <div
             className="flex items-center gap-1.5 rounded-[6px] px-2 py-1"
-            style={{ background: "var(--qw-warn-soft)" }}
+            style={{ background: "var(--devtools-warn-soft)" }}
             title={`${diagnosticsCount} run diagnostic${diagnosticsCount === 1 ? "" : "s"}`}
           >
-            <Icon name="alert" size={13} color="var(--qw-warn)" />
+            <Icon name="alert" size={13} color="var(--devtools-warn)" />
             <span
               className="text-[11px] font-semibold"
-              style={{ color: "var(--qw-warn)" }}
+              style={{ color: "var(--devtools-warn)" }}
             >
               {diagnosticsCount}
             </span>
@@ -150,7 +150,7 @@ export function RunHeader({
 
         <div
           className="mx-0.5 h-5 w-px"
-          style={{ background: "var(--qw-border)" }}
+          style={{ background: "var(--devtools-border)" }}
         />
 
         <Btn

@@ -1,11 +1,11 @@
 /**
  * "What source do I change?" — grouped definition joins (Prompt · Contexts ·
- * Retrievers · Tools · Routing · Guardrails · Constraints · Quality). Each row
+ * Retrievers · Tools · Routing · Guardrails · Constraints · Evals). Each row
  * carries the join status + fidelity and, when resolved, a file:line the user
  * can open. Unresolved is a real, honest state — never a blank row.
  */
 
-import { Icon } from "@/qw/shell/Icon";
+import { Icon } from "@/devtools/shell/Icon";
 import type { TurnSourceGroup, TurnSourceJoin } from "@/types";
 import { SourceFidelityTag, SourceStatusTag } from "../atoms";
 
@@ -20,11 +20,11 @@ function SourceRow({ item }: { item: TurnSourceJoin }) {
   return (
     <div
       className="flex items-center gap-[9px] px-3 py-2"
-      style={{ borderBottom: "1px solid var(--qw-border)" }}
+      style={{ borderBottom: "1px solid var(--devtools-border)" }}
     >
       <span
         className="min-w-0 flex-1 truncate font-mono text-[10.5px]"
-        style={{ color: "var(--qw-fg)" }}
+        style={{ color: "var(--devtools-fg)" }}
         title={label}
       >
         {label}
@@ -32,14 +32,14 @@ function SourceRow({ item }: { item: TurnSourceJoin }) {
       <span
         className="hidden min-w-0 max-w-[140px] truncate font-mono text-[10px] sm:inline"
         style={{
-          color: item.file ? "var(--qw-fg-muted)" : "var(--qw-fg-faint)",
+          color: item.file ? "var(--devtools-fg-muted)" : "var(--devtools-fg-faint)",
         }}
       >
         {fileLabel(item)}
       </span>
       <SourceStatusTag status={item.status} />
       <SourceFidelityTag fidelity={item.fidelity} />
-      {item.file && <Icon name="link" size={12} color="var(--qw-fg-faint)" />}
+      {item.file && <Icon name="link" size={12} color="var(--devtools-fg-faint)" />}
     </div>
   );
 }
@@ -54,8 +54,8 @@ export function SourceGroups({
       <div
         className="rounded-[10px] px-3.5 py-3 text-[12px]"
         style={{
-          border: "1px solid var(--qw-border)",
-          color: "var(--qw-fg-faint)",
+          border: "1px solid var(--devtools-border)",
+          color: "var(--devtools-fg-faint)",
         }}
       >
         No source definition was resolved for this turn.
@@ -72,16 +72,16 @@ export function SourceGroups({
           key={g.group}
           className="overflow-hidden rounded-[10px]"
           style={{
-            background: "var(--qw-bg)",
-            border: "1px solid var(--qw-border)",
+            background: "var(--devtools-bg)",
+            border: "1px solid var(--devtools-border)",
           }}
         >
           <div
             className="px-3 py-[7px] font-mono text-[10px] uppercase tracking-[0.1em]"
             style={{
-              borderBottom: "1px solid var(--qw-border)",
-              background: "var(--qw-bg-elev)",
-              color: "var(--qw-fg-faint)",
+              borderBottom: "1px solid var(--devtools-border)",
+              background: "var(--devtools-bg-elev)",
+              color: "var(--devtools-fg-faint)",
             }}
           >
             {g.group}
@@ -89,7 +89,7 @@ export function SourceGroups({
           {g.items.length === 0 ? (
             <div
               className="px-3 py-2 text-[11px]"
-              style={{ color: "var(--qw-fg-faint)" }}
+              style={{ color: "var(--devtools-fg-faint)" }}
             >
               No source definition was resolved for this item.
             </div>

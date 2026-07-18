@@ -22,6 +22,7 @@ describe("Cloudflare Eval host", () => {
       deploymentId: "production-eu",
       hostKind: "cloudflare",
       protocol: "crux.eval-host.v1",
+      privacyFingerprint: expect.stringMatching(/^[a-f0-9]{64}$/),
     });
     expect(env.CRUX_EVAL_HOST).toBeDefined();
   });

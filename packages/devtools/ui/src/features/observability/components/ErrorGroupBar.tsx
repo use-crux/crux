@@ -73,8 +73,8 @@ export function ErrorGroupBar({
         : `${Math.floor(timeSince / 3600000)}h ago`;
 
   return (
-    <div className="flex items-center gap-3 bg-(--qw-danger-soft) border border-(--qw-danger-soft) rounded-lg px-3 py-1.5 text-xs">
-      <span className="text-(--qw-danger) font-medium shrink-0">
+    <div className="flex items-center gap-3 bg-(--devtools-danger-soft) border border-(--devtools-danger-soft) rounded-lg px-3 py-1.5 text-xs">
+      <span className="text-(--devtools-danger) font-medium shrink-0">
         Top issue:
       </span>
       <span
@@ -86,7 +86,7 @@ export function ErrorGroupBar({
         {topIssue.message.slice(0, 80)}
         {topIssue.message.length > 80 ? "..." : ""}
       </span>
-      <span className="text-(--qw-danger) tabular-nums shrink-0">
+      <span className="text-(--devtools-danger) tabular-nums shrink-0">
         {topIssue.count}x
       </span>
       {topIssue.promptIds.size > 0 && (

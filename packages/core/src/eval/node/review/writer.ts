@@ -4,12 +4,20 @@ import { hydrateEvalCases } from "../cases";
 import { normalizeCaseRow } from "../case-rows";
 import { discoverProjectEvals, selectEvals } from "../discovery";
 import { canonicalCaseSemantics, canonicalReviewRow } from "./canonical";
-import { atomicAppend, resolveReviewSidecar } from "./filesystem";
+import { resolveReviewSidecar, withSidecarTransaction } from "./filesystem";
 import type { AddReviewCaseInput, AddReviewCaseResult } from "./types";
+import { loadProjectEvalSettings } from "../project-settings";
+import {
+  applyRedaction,
+  type EvalPersistencePolicy,
+} from "../../internal/redact";
 
 /** Validate and atomically add human-reviewed evidence to an Eval sidecar. */
 export async function addReviewCase(
   input: AddReviewCaseInput,
+  internal: {
+    readonly persistencePolicy?: EvalPersistencePolicy;
+  } = {},
 ): Promise<AddReviewCaseResult> {
   if (input.saveCorrection === true && input.correctionProposal === undefined) {
     throw new TypeError(
@@ -17,16 +25,23 @@ export async function addReviewCase(
     );
   }
   const discovered = await discoverOne(input.projectRoot, input.evalId);
-  const hydrated = await hydrateEvalCases(discovered, {
-    projectRoot: input.projectRoot,
-  });
+  const policy =
+    internal.persistencePolicy ??
+    (await loadProjectEvalSettings(input.projectRoot)).persistencePolicy;
   const row = {
     schemaVersion: 1 as const,
     id: input.id,
-    input: input.input,
-    ...(input.call !== undefined ? { call: input.call } : {}),
+    input: applyRedaction(input.input, policy.redactPaths),
+    ...(input.call !== undefined
+      ? { call: applyRedaction(input.call, policy.redactPaths) }
+      : {}),
     ...(input.saveCorrection === true
-      ? { expected: input.correctionProposal }
+      ? {
+          expected: applyRedaction(
+            input.correctionProposal,
+            policy.redactPaths,
+          ),
+        }
       : {}),
     ...(input.name !== undefined ? { name: input.name } : {}),
     ...(input.tags !== undefined ? { tags: input.tags } : {}),
@@ -69,25 +84,18 @@ export async function addReviewCase(
   const artifact = {
     path: discovered.sidecarFile,
     row: canonicalRow,
+    diff:
+      canonicalRow
+        .split("\n")
+        .filter(Boolean)
+        .map((line) => `+${line}`)
+        .join("\n") + "\n",
     unvalidatedExpected: normalized.unvalidatedExpected,
   };
   const semantics = canonicalCaseSemantics(normalized);
-  const linked = hydrated.cases.find(
-    (entry) => canonicalCaseSemantics(entry) === semantics,
-  );
-  if (linked !== undefined) {
-    return Object.freeze({ status: "linked", caseId: linked.id, ...artifact });
-  }
-  const conflict = hydrated.cases.find((entry) => entry.id === normalized.id);
-  if (conflict !== undefined) {
-    return Object.freeze({
-      status: "conflict",
-      caseId: normalized.id,
-      existing: canonicalJson(conflict.authored),
-      ...artifact,
-    });
-  }
   if (input.repositoryWritable === false) {
+    const existing = await classifyExisting();
+    if (existing !== undefined) return existing;
     return Object.freeze({
       status: "pending-sync",
       caseId: normalized.id,
@@ -98,20 +106,57 @@ export async function addReviewCase(
     input.projectRoot,
     discovered.sidecarFile,
   );
-  await atomicAppend(path, canonicalRow);
-  const verified = await hydrateEvalCases(discovered, {
-    projectRoot: input.projectRoot,
-  });
-  const matches = verified.cases.filter(
-    (entry) =>
-      entry.id === normalized.id && canonicalCaseSemantics(entry) === semantics,
-  );
-  if (matches.length !== 1) {
-    throw new TypeError(
-      `Add-to-eval verification failed for Case '${normalized.id}' in '${discovered.sidecarFile}'`,
+  return withSidecarTransaction(path, async (transaction) => {
+    const existing = await classifyExisting();
+    if (existing !== undefined) return existing;
+    await transaction.append(canonicalRow);
+    const verified = await hydrateEvalCases(discovered, {
+      projectRoot: input.projectRoot,
+    });
+    const matches = verified.cases.filter(
+      (entry) =>
+        entry.id === normalized.id &&
+        canonicalCaseSemantics(entry) === semantics,
     );
+    if (matches.length !== 1) {
+      throw new TypeError(
+        `Add-to-eval verification failed for Case '${normalized.id}' in '${discovered.sidecarFile}'`,
+      );
+    }
+    return Object.freeze({
+      status: "added" as const,
+      caseId: normalized.id,
+      ...artifact,
+    });
+  });
+
+  async function classifyExisting(): Promise<AddReviewCaseResult | undefined> {
+    const hydrated = await hydrateEvalCases(discovered, {
+      projectRoot: input.projectRoot,
+    });
+    const linked = hydrated.cases.find(
+      (entry) => canonicalCaseSemantics(entry) === semantics,
+    );
+    if (linked !== undefined) {
+      return Object.freeze({
+        status: "linked",
+        caseId: linked.id,
+        ...artifact,
+      });
+    }
+    const conflict = hydrated.cases.find(
+      (entry) => entry.id === normalized.id,
+    );
+    if (conflict !== undefined) {
+      return Object.freeze({
+        status: "conflict",
+        caseId: normalized.id,
+        existing: canonicalJson(conflict.authored),
+        ...artifact,
+      });
+    }
+    return undefined;
   }
-  return Object.freeze({ status: "added", caseId: normalized.id, ...artifact });
 }
 
 async function discoverOne(projectRoot: string, evalId: string) {

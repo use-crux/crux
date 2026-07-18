@@ -14,7 +14,7 @@ export const taskIdentity = {
   fingerprintMaterial: { task: "v1" },
 };
 
-export function response() {
+export function response(responseId = "response-1") {
   return {
     content: [],
     text: "yes",
@@ -23,7 +23,7 @@ export function response() {
       content: [],
       text: "yes",
       finishReason: "stop",
-      responseId: "response-1",
+      responseId,
       modelId: "fake",
       warnings: [],
     },
@@ -45,6 +45,17 @@ export const task = attachEvalTaskDescriptorForInternalUse(
     defaults: {},
     overrideKeys: [],
     projectIdentity: () => taskIdentity,
+    projectScorerContext: (request) => ({
+      reusable: true,
+      fingerprintMaterial: {
+        adapter: "fake",
+        model: request.model ?? "judge-v1",
+      },
+    }),
+    createScorerContext: () => ({
+      generate: async () => ({ object: { reasoning: "good", score: 1 } }),
+      model: "judge-v1",
+    }),
     execute: async () => ({ output: "yes" }),
     projectOutput: (result) => result.output,
     projectResponse: () => response(),
@@ -60,9 +71,10 @@ export function createManagedScorerHarness() {
     write: async (entry) => void entries.set(entry.key, entry),
   };
   let taskOutput = "yes";
+  let taskResponseId = "response-1";
   const taskExecute = vi.fn(async () => ({
     output: taskOutput,
-    response: response(),
+    response: response(taskResponseId),
     capturedSignals: [],
     runIds: ["task-run-1"],
     metrics: { durationMs: 1 },
@@ -70,15 +82,18 @@ export function createManagedScorerHarness() {
   }));
   const scorerExecute = vi.fn(
     async (request: { readonly scorerName: string }) => ({
-      name: request.scorerName,
-      score: 1,
-      metadata: { rationale: "good" },
+      score: {
+        name: request.scorerName,
+        score: 1,
+        metadata: { rationale: "good" },
+      },
     }),
   );
   const planning: EvalPlanningPorts = {
     evidenceStore,
     costEstimator: { estimate: () => ({ kind: "none" }) },
     externalScorerHostContractFingerprint: "judge-host-v1",
+    externalScorerSourceFingerprint: "eval-source-v1",
     taskIdentity: {
       describe: async () => ({
         reusable: true,
@@ -104,6 +119,9 @@ export function createManagedScorerHarness() {
     scorerExecute,
     setTaskOutput(output: string) {
       taskOutput = output;
+    },
+    setTaskResponseId(responseId: string) {
+      taskResponseId = responseId;
     },
   };
 }

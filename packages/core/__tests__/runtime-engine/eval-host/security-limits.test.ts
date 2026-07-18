@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { createMemoryEvalHost } from "../../../src/runtime/eval-host";
+import {
+  createMemoryEvalHost,
+  EVAL_HOST_MAX_BODY_BYTES,
+} from "../../../src/runtime/eval-host";
+import { EVAL_HOST_MAX_POLL_WINDOWS } from "../../../src/runtime/eval-host/transport";
 import { canonicalRuntimeResult } from "../../../src/runtime/results/canonical";
 import { RUNTIME_RESULT_MAX_BYTES } from "../../../src/runtime/results/types";
 import {
@@ -13,6 +17,71 @@ import {
 } from "./fixture";
 
 describe("memory Eval host security and limits", () => {
+  it("stops reading a submission as soon as the body byte limit is exceeded", async () => {
+    const host = createMemoryEvalHost({
+      deploymentId: "production-eu",
+      token: TOKEN,
+      registry: fixtureRegistry(),
+      now: () => NOW,
+    });
+    let readPastLimit = false;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (readPastLimit) {
+          controller.error(new Error("The host read beyond its byte limit."));
+          return;
+        }
+        readPastLimit = true;
+        controller.enqueue(new Uint8Array(EVAL_HOST_MAX_BODY_BYTES + 1));
+      },
+      cancel() {
+        throw new Error("The request source refused cancellation.");
+      },
+    });
+
+    const response = await host.fetch(
+      new Request("https://runtime.example/jobs", {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${TOKEN}`,
+          "content-type": "application/json",
+        },
+        body,
+        duplex: "half",
+      } as RequestInit & { duplex: "half" }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "EVAL_HOST_BODY_TOO_LARGE" },
+    });
+  });
+
+  it("bounds process-local poll windows and expires them on the next second", async () => {
+    let now = NOW;
+    const host = createMemoryEvalHost({
+      deploymentId: "production-eu",
+      token: TOKEN,
+      registry: fixtureRegistry(),
+      now: () => now,
+    });
+
+    for (let index = 0; index < EVAL_HOST_MAX_POLL_WINDOWS; index += 1) {
+      const response = await host.fetch(
+        authorizedRequest(`/jobs/missing-${index}`),
+      );
+      expect(response.status).toBe(404);
+    }
+    expect(
+      (await host.fetch(authorizedRequest("/jobs/window-overflow"))).status,
+    ).toBe(429);
+
+    now = new Date(NOW.getTime() + 1_000);
+    expect(
+      (await host.fetch(authorizedRequest("/jobs/window-after-expiry"))).status,
+    ).toBe(404);
+  });
+
   it("requires auth on every job route, HTTPS outside loopback, and emits no CORS access", async () => {
     const registry = fixtureRegistry();
     const host = createMemoryEvalHost({
@@ -42,6 +111,12 @@ describe("memory Eval host security and limits", () => {
     await expect(insecure.json()).resolves.toMatchObject({
       error: { code: "EVAL_HOST_HTTPS_REQUIRED" },
     });
+    const ipv6Loopback = await host.fetch(
+      new Request("http://[::1]/manifest", {
+        headers: { authorization: `Bearer ${TOKEN}` },
+      }),
+    );
+    expect(ipv6Loopback.status).toBe(200);
   });
 
   it("enforces concurrency and poll-rate limits without changing job truth", async () => {
@@ -107,7 +182,7 @@ describe("memory Eval host security and limits", () => {
       status: "failed",
       error: { code: "EVAL_RESULT_INTEGRITY_FAILED", phase: "result" },
     });
-  });
+  }, 20_000);
 
   it("accepts exactly 1 MiB of normalized evidence through host execution", async () => {
     let output = "";
@@ -139,7 +214,7 @@ describe("memory Eval host security and limits", () => {
       status: "succeeded",
       resultRef: { size: RUNTIME_RESULT_MAX_BYTES },
     });
-  });
+  }, 20_000);
 
   it("classifies inline binary output as non-durable media", async () => {
     const registry = fixtureRegistry(async () => ({

@@ -40,9 +40,6 @@ func MergeProjectDefinition(existing, incoming store.ProjectDefinition) store.Pr
 	} else if existing.Metadata != nil {
 		incoming.Metadata = mergeMetadataRaw(existing.Metadata, incoming.Metadata)
 	}
-	if incoming.Quality == nil {
-		incoming.Quality = existing.Quality
-	}
 	return incoming
 }
 

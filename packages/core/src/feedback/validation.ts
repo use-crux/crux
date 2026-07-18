@@ -7,6 +7,11 @@ import type {
   FeedbackReceipt,
   FeedbackSubmission,
 } from "./types";
+import {
+  applyRedaction,
+  DEFAULT_EVAL_PERSISTENCE_POLICY,
+  type EvalPersistencePolicy,
+} from "../eval/internal/redact";
 
 const MAX_COMMENT_LENGTH = 4_000;
 const MAX_DEDUPE_KEY_LENGTH = 128;
@@ -16,6 +21,7 @@ const MAX_CORRECTION_BYTES = 64 * 1_024;
 export function normalizeFeedbackSubmission(
   runId: string,
   input: FeedbackRating | FeedbackInput,
+  policy: EvalPersistencePolicy = DEFAULT_EVAL_PERSISTENCE_POLICY,
 ): FeedbackSubmission {
   if (!/^run_[0-9a-f]{24}$/u.test(runId)) {
     throw new TypeError("feedback() requires a valid Crux run ID.");
@@ -31,7 +37,7 @@ export function normalizeFeedbackSubmission(
     "dedupeKey",
     MAX_DEDUPE_KEY_LENGTH,
   );
-  const correction = normalizeCorrection(value.correction);
+  const correction = normalizeCorrection(value.correction, policy);
   return Object.freeze({
     runId: runId as CruxRunId,
     rating: value.rating,
@@ -44,7 +50,9 @@ export function normalizeFeedbackSubmission(
 }
 
 /** Validate and freeze the durable destination acknowledgement. @internal */
-export function normalizeFeedbackReceipt(value: FeedbackReceipt): FeedbackReceipt {
+export function normalizeFeedbackReceipt(
+  value: FeedbackReceipt,
+): FeedbackReceipt {
   if (
     typeof value?.feedbackId !== "string" ||
     value.feedbackId.length === 0 ||
@@ -81,10 +89,14 @@ function boundedString(
 
 function normalizeCorrection(
   value: JsonValue | undefined,
+  policy: EvalPersistencePolicy,
 ): JsonValue | undefined {
   if (value === undefined) return undefined;
   assertJsonValue(value, "correction", new WeakSet<object>());
-  const normalized = redactSensitiveValue(value) as JsonValue;
+  const normalized = applyRedaction(
+    redactSensitiveValue(value) as JsonValue,
+    policy.redactPaths,
+  ) as JsonValue;
   if (
     new TextEncoder().encode(JSON.stringify(normalized)).byteLength >
     MAX_CORRECTION_BYTES

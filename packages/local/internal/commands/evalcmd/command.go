@@ -50,7 +50,7 @@ preflight errors.`,
 func registerRunFlags(cmd *cobra.Command, opts *runOptions) {
 	cmd.Flags().StringVar(&opts.cwd, "cwd", "", "Working directory for Eval discovery")
 	cmd.Flags().StringArrayVar(&opts.cases, "case", nil, "Select a Case id/name; repeatable")
-	cmd.Flags().StringArrayVar(&opts.variants, "variant", nil, "Run Current plus this blocking Variant; repeatable")
+	cmd.Flags().StringArrayVar(&opts.variants, "variant", nil, "Run Current plus one blocking Variant")
 	cmd.Flags().BoolVar(&opts.watch, "watch", false, "Replan affected Evals when source changes")
 	cmd.Flags().BoolVar(&opts.fresh, "fresh", false, "Bypass reusable task and managed-scorer evidence")
 	cmd.Flags().BoolVar(&opts.offline, "offline", false, "Require exact external evidence before all work")
@@ -92,6 +92,7 @@ func newListCmd() *cobra.Command {
 func newBaselineCmd() *cobra.Command {
 	cmd := &cobra.Command{Use: "baseline", Short: "Manage accepted Eval Baselines"}
 	var cwd, variant string
+	var acceptFailing bool
 	set := &cobra.Command{
 		Use:          "set <run-id>",
 		Short:        "Set a complete Eval run arm as Baseline",
@@ -102,11 +103,15 @@ func newBaselineCmd() *cobra.Command {
 			if variant != "" {
 				workerArgs = append(workerArgs, "--variant", variant)
 			}
+			if acceptFailing {
+				workerArgs = append(workerArgs, "--accept-failing")
+			}
 			return runCoordinator(command, cwd, workerArgs)
 		},
 	}
 	set.Flags().StringVar(&cwd, "cwd", "", "Working directory containing the Eval run")
 	set.Flags().StringVar(&variant, "variant", "current", "Complete arm to accept")
+	set.Flags().BoolVar(&acceptFailing, "accept-failing", false, "Explicitly accept a complete failing run")
 	cmd.AddCommand(set)
 	return cmd
 }
@@ -117,6 +122,9 @@ func validateRunOptions(opts runOptions, maxCostSet bool) error {
 	}
 	if opts.watch && opts.plan {
 		return fmt.Errorf("--watch and --plan cannot be combined")
+	}
+	if len(opts.variants) > 1 {
+		return fmt.Errorf("--variant selects one blocking Variant; pass it at most once")
 	}
 	return nil
 }

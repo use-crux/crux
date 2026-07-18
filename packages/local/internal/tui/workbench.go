@@ -198,7 +198,7 @@ func (w *Workbench) View() string {
 
 	// The status bar reflects only the focused screen's keybinds — no mode
 	// chip. See ADR-0050.
-	statusBar := shell.StatusBar(statusRect.W, w.activeScreen().Keybinds(), ".crux/quality")
+	statusBar := shell.StatusBar(statusRect.W, w.activeScreen().Keybinds(), ".crux/evals")
 
 	path, right := w.activeScreen().Breadcrumb()
 	if right == "" {
@@ -379,7 +379,7 @@ var navIDByGoKey = map[string]string{
 func (w *Workbench) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	key := msg.String()
 
-	// If the active screen owns an embedded editor (Suites case editor),
+	// If the active screen owns an embedded editor,
 	// forward every keystroke straight to the screen so the textarea /
 	// textinput widgets receive raw input. Per ADR-0050 the TUI has no
 	// global mode flag — `Editing()` is a pass-through hint, not a mode.
@@ -408,9 +408,7 @@ func (w *Workbench) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		w.palette.Open()
 		return nil
 	case "?":
-		// Feed the focused screen's keybinds into the help overlay so the
-		// Act section is rendered contextually per KEYBINDS.md. No more
-		// static `s = save (case · variant · baseline · cassette)` lie.
+		// Feed the focused screen's keybinds into the contextual help overlay.
 		w.help.SetScreenKeybinds(w.activeNav, w.activeScreen().Keybinds())
 		w.help.Open()
 		return nil
@@ -514,10 +512,6 @@ func (w *Workbench) runPaletteCommand(c overlays.Chosen) tea.Cmd {
 			}
 			return paletteResultMsg{OK: "dismissed " + id}
 		}
-	case "target":
-		return w.toast("target switching: backend endpoint pending (gap I32)")
-	case "run":
-		return w.toast("run kickoff: backend endpoint pending (gap J34)")
 	}
 	return w.toast("unknown command: " + c.Verb)
 }
@@ -601,7 +595,7 @@ func (w *Workbench) fetchContext() tea.Cmd {
 	}
 }
 
-// SubscribeEvents wires the quality event bus into the tea program.
+// SubscribeEvents wires the Inspect event bus into the Bubble Tea program.
 // `send` is the program's Send func (captured from SetProgram).
 func (w *Workbench) SubscribeEvents(ctx context.Context, send func(tea.Msg)) {
 	ch := w.client.SubscribeInspect(ctx)

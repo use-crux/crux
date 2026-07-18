@@ -15,9 +15,10 @@
  * findings are shown struck (never hidden); `info` is neutral everywhere.
  */
 
-import { QwShell, type QwTab } from "@/qw/shell/QwShell";
-import { useNavigation } from "@/app/navigation/useNavigation";
-import { navTarget } from "@/app/navigation/navTarget";
+import {
+  DevtoolsShell,
+  type DevtoolsTab,
+} from "@/devtools/shell/DevtoolsShell";
 import { IndexHealthList, IndexIndexProvider, type IndexIndex } from "../v2";
 import { T } from "../v2/tokens";
 
@@ -27,7 +28,7 @@ interface IndexHealthProps {
   indexedAt: string | undefined;
   connected: boolean;
   /** Shared tab strip — owned by `IndexView` so both surfaces stay in sync. */
-  tabs?: readonly QwTab[];
+  tabs?: readonly DevtoolsTab[];
 }
 
 function fmtIndexedAt(iso: string | undefined): string | undefined {
@@ -46,8 +47,6 @@ export function IndexHealth({
   connected,
   tabs,
 }: IndexHealthProps) {
-  const { navigate } = useNavigation();
-
   const findings = index.healthFindings;
   const active = findings.filter((f) => !f.suppressed);
   const suppressedCount = findings.length - active.length;
@@ -74,13 +73,10 @@ export function IndexHealth({
           .join(" · ");
 
   return (
-    <QwShell
-      activeView="library-index"
-      onNavigate={(v) => navigate(navTarget(v))}
+    <DevtoolsShell
       breadcrumb="Library / Index / Health"
       title="Index health"
       subtitle={subtitle}
-      connected={connected}
       tabs={tabs}
     >
       <div style={{ background: T.bg }}>
@@ -96,6 +92,6 @@ export function IndexHealth({
           </IndexIndexProvider>
         </div>
       </div>
-    </QwShell>
+    </DevtoolsShell>
   );
 }

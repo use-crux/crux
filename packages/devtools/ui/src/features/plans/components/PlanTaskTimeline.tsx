@@ -84,10 +84,10 @@ function taskDescription(
 }
 
 const TASK_STATUS_COLOR: Record<string, string> = {
-  completed: "var(--qw-ok)",
-  failed: "var(--qw-danger)",
-  added: "var(--qw-crux)",
-  removed: "var(--qw-fg-faint)",
+  completed: "var(--devtools-ok)",
+  failed: "var(--devtools-danger)",
+  added: "var(--devtools-crux)",
+  removed: "var(--devtools-fg-faint)",
 };
 
 export function PlanTaskTimeline({
@@ -124,7 +124,7 @@ export function PlanTaskTimeline({
     return (
       <div
         className="py-4 text-center text-[12px]"
-        style={{ color: "var(--qw-fg-faint)" }}
+        style={{ color: "var(--devtools-fg-faint)" }}
       >
         No plan or task events
       </div>
@@ -136,19 +136,19 @@ export function PlanTaskTimeline({
       {entries.map((entry) => {
         const typeColor =
           entry.kind === "task"
-            ? (TASK_STATUS_COLOR[entry.type] ?? "var(--qw-fg-muted)")
-            : "var(--qw-fg-muted)";
+            ? (TASK_STATUS_COLOR[entry.type] ?? "var(--devtools-fg-muted)")
+            : "var(--devtools-fg-muted)";
         return (
           <div key={entry.key} className="flex items-center gap-2 px-3 py-1">
             <span
               className="w-16 shrink-0 font-mono text-[10.5px] tabular-nums"
-              style={{ color: "var(--qw-fg-faint)" }}
+              style={{ color: "var(--devtools-fg-faint)" }}
             >
               {formatTs(entry.timestamp)}
             </span>
             <span
               className="w-4 shrink-0 text-center font-mono text-[10.5px] uppercase tracking-[0.08em]"
-              style={{ color: "var(--qw-fg-muted)" }}
+              style={{ color: "var(--devtools-fg-muted)" }}
             >
               {entry.kind === "plan" ? "P" : "T"}
             </span>
@@ -160,14 +160,14 @@ export function PlanTaskTimeline({
             </span>
             <span
               className="truncate text-[12px]"
-              style={{ color: "var(--qw-fg)" }}
+              style={{ color: "var(--devtools-fg)" }}
             >
               {entry.description}
             </span>
             {entry.detail && (
               <span
                 className="ml-auto shrink-0 font-mono text-[10.5px]"
-                style={{ color: "var(--qw-fg-faint)" }}
+                style={{ color: "var(--devtools-fg-faint)" }}
               >
                 {entry.detail}
               </span>

@@ -567,27 +567,27 @@ const STATUS_COLORS: Record<
   { bg: string; border: string; dot: string; glow: string }
 > = {
   success: {
-    bg: "bg-(--qw-ok-soft)",
-    border: "border-(--qw-ok-soft)",
-    dot: "bg-(--qw-ok)",
+    bg: "bg-(--devtools-ok-soft)",
+    border: "border-(--devtools-ok-soft)",
+    dot: "bg-(--devtools-ok)",
     glow: "",
   },
   error: {
-    bg: "bg-(--qw-danger-soft)",
-    border: "border-(--qw-danger-soft)",
-    dot: "bg-(--qw-danger)",
+    bg: "bg-(--devtools-danger-soft)",
+    border: "border-(--devtools-danger-soft)",
+    dot: "bg-(--devtools-danger)",
     glow: "shadow-[0_0_12px_rgba(248,113,113,0.15)]",
   },
   running: {
-    bg: "bg-(--qw-blue-soft)",
-    border: "border-(--qw-blue-line)",
-    dot: "bg-(--qw-blue)",
+    bg: "bg-(--devtools-blue-soft)",
+    border: "border-(--devtools-blue-line)",
+    dot: "bg-(--devtools-blue)",
     glow: "shadow-[0_0_12px_rgba(96,165,250,0.15)]",
   },
   slow: {
-    bg: "bg-(--qw-warn-soft)",
-    border: "border-(--qw-warn-soft)",
-    dot: "bg-(--qw-warn)",
+    bg: "bg-(--devtools-warn-soft)",
+    border: "border-(--devtools-warn-soft)",
+    dot: "bg-(--devtools-warn)",
     glow: "",
   },
 };
@@ -646,12 +646,12 @@ const StepNode = memo(function StepNode({
           <span>{fmt(data.totalDurationMs, "ms")}</span>
           {data.totalTokens > 0 && <span>{fmt(data.totalTokens, "tok")}</span>}
           {data.totalCost > 0 && (
-            <span className="text-(--qw-ok)">{fmt(data.totalCost, "$")}</span>
+            <span className="text-(--devtools-ok)">{fmt(data.totalCost, "$")}</span>
           )}
         </div>
 
         {data.hasError && data.errorMessage && (
-          <div className="mt-1 text-[9px] text-(--qw-danger) truncate">
+          <div className="mt-1 text-[9px] text-(--devtools-danger) truncate">
             {data.errorMessage.slice(0, 40)}
           </div>
         )}
@@ -666,19 +666,19 @@ const CF_STATUS: Record<
   { border: string; bg: string; badge: string }
 > = {
   success: {
-    border: "border-(--qw-iris-line)",
-    bg: "bg-(--qw-iris-soft)",
-    badge: "bg-(--qw-iris-soft) text-(--qw-iris)",
+    border: "border-(--devtools-iris-line)",
+    bg: "bg-(--devtools-iris-soft)",
+    badge: "bg-(--devtools-iris-soft) text-(--devtools-iris)",
   },
   error: {
-    border: "border-(--qw-danger-soft)",
-    bg: "bg-(--qw-danger-soft)",
-    badge: "bg-(--qw-danger-soft) text-(--qw-danger)",
+    border: "border-(--devtools-danger-soft)",
+    bg: "bg-(--devtools-danger-soft)",
+    badge: "bg-(--devtools-danger-soft) text-(--devtools-danger)",
   },
   running: {
-    border: "border-(--qw-blue-line)",
-    bg: "bg-(--qw-blue-soft)",
-    badge: "bg-(--qw-blue-soft) text-(--qw-blue)",
+    border: "border-(--devtools-blue-line)",
+    bg: "bg-(--devtools-blue-soft)",
+    badge: "bg-(--devtools-blue-soft) text-(--devtools-blue)",
   },
 };
 
@@ -705,19 +705,19 @@ const ChildFlowNode = memo(function ChildFlowNode({
           <span>{fmt(data.durationMs, "ms")}</span>
           {data.totalTokens > 0 && <span>{fmt(data.totalTokens, "tok")}</span>}
           {data.totalCost > 0 && (
-            <span className="text-(--qw-ok)">{fmt(data.totalCost, "$")}</span>
+            <span className="text-(--devtools-ok)">{fmt(data.totalCost, "$")}</span>
           )}
         </div>
       </div>
       <Handle
         type="target"
         position={Position.Top}
-        className="!bg-(--qw-iris) !w-2 !h-2 !border-0 !-top-1"
+        className="!bg-(--devtools-iris) !w-2 !h-2 !border-0 !-top-1"
       />
       <Handle
         type="source"
         position={Position.Bottom}
-        className="!bg-(--qw-iris) !w-2 !h-2 !border-0 !-bottom-1"
+        className="!bg-(--devtools-iris) !w-2 !h-2 !border-0 !-bottom-1"
       />
     </div>
   );
@@ -758,7 +758,7 @@ const ChildStepNode = memo(function ChildStepNode({
         <div className="flex items-center gap-1.5 text-[8px] text-zinc-500 tabular-nums">
           <span>{fmt(data.totalDurationMs, "ms")}</span>
           {data.totalCost > 0 && (
-            <span className="text-(--qw-ok)">{fmt(data.totalCost, "$")}</span>
+            <span className="text-(--devtools-ok)">{fmt(data.totalCost, "$")}</span>
           )}
         </div>
       </div>

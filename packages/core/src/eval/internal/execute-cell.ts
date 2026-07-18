@@ -3,7 +3,9 @@
 import { assessEvalCell } from "./assess";
 import { createTaskEvidenceEntry } from "./evidence";
 import { executeExternalScorers } from "./external-scorer-executor";
-import { fingerprintEvalValue } from "./identity";
+import { fingerprintEvalValue, isReusableEvalValue } from "./identity";
+import { getEvalTaskDescriptorForInternalUse } from "./task";
+import { isEvalSnapshotPersistenceSafe } from "./redact";
 import type { EvalExecutionPorts } from "./ports";
 import type {
   EvalAssertionSummary,
@@ -22,8 +24,12 @@ export type EvidenceWriteStatus =
 
 export type EvidenceWriteReason =
   | "identity_unavailable"
+  | "model_identity_unattested"
   | "untracked_external_dependency"
+  | "task_binding_untracked"
+  | "unresolved_source_dependency"
   | "implicit_media"
+  | "capture_policy"
   | "observed_identity_mismatch";
 
 export interface EvalCellExecutionResult {
@@ -38,6 +44,7 @@ export async function executePlannedCell(input: {
   readonly plan: EvalPlan;
   readonly planned: EvalPlannedCell;
   readonly ports: EvalExecutionPorts;
+  readonly executionAttemptId: string;
 }): Promise<EvalCellExecutionResult> {
   if (input.planned.action.kind === "skip") {
     return Object.freeze({
@@ -70,6 +77,10 @@ export async function executePlannedCell(input: {
             task: input.planned.task,
             overrides: input.planned.overrides,
             input: input.planned.input,
+            ...(input.planned.action.reason === "fresh_requested" ||
+            input.planned.action.reason === "performance_freshness"
+              ? { executionAttemptId: input.executionAttemptId }
+              : {}),
             ...(input.planned.call !== undefined
               ? { call: input.planned.call }
               : {}),
@@ -86,19 +97,50 @@ export async function executePlannedCell(input: {
         evidenceWrite = "not_eligible";
         evidenceWriteReason = observed.reason;
       } else if (
-        fingerprintEvalValue(observed.fingerprintMaterial) !==
+        ("fingerprint" in observed
+          ? observed.fingerprint
+          : fingerprintEvalValue(observed.fingerprintMaterial)) !==
         input.planned.action.plannedAdapterFingerprint
       ) {
         evidenceWrite = "not_eligible";
         evidenceWriteReason = "observed_identity_mismatch";
       } else {
+        const descriptor = getEvalTaskDescriptorForInternalUse(
+          input.planned.task,
+        );
+        if (
+          descriptor.projectRenderedPromptIdentity !== undefined &&
+          liveResult.renderedPromptFingerprint === undefined
+        ) {
+          evidenceWrite = "not_eligible";
+          evidenceWriteReason = "untracked_external_dependency";
+          liveResult = undefined;
+        }
+      }
+      if (liveResult !== undefined && evidenceWrite === "not_attempted") {
         const entry = createTaskEvidenceEntry(
           input.planned.action.evidenceKey,
           liveResult,
+          input.ports.persistencePolicy,
         );
         if (entry === undefined) {
           evidenceWrite = "not_eligible";
-          evidenceWriteReason = "implicit_media";
+          evidenceWriteReason =
+            !isReusableEvalValue(liveResult.output) ||
+            (liveResult.response !== undefined &&
+              !isReusableEvalValue(liveResult.response))
+              ? "implicit_media"
+              : !isEvalSnapshotPersistenceSafe(
+              liveResult.output,
+              input.ports.persistencePolicy,
+            ) ||
+            (liveResult.response !== undefined &&
+              !isEvalSnapshotPersistenceSafe(
+                liveResult.response,
+                input.ports.persistencePolicy,
+              ))
+              ? "capture_policy"
+              : "implicit_media";
         } else {
           try {
             await input.ports.evidenceStore.write(entry);
@@ -161,7 +203,9 @@ export async function executePlannedCell(input: {
         scores: assessment.scores,
         assertions: assessment.assertions,
         output: execution.output,
-        response: execution.response,
+        ...(execution.response !== undefined
+          ? { response: execution.response }
+          : {}),
         ...(assessment.error !== undefined ? { error: assessment.error } : {}),
         metrics: execution.metrics,
         runIds: execution.runIds,
@@ -220,7 +264,7 @@ function dependencyFailedScores(planned: EvalPlannedCell): EvalCell["scores"] {
   return Object.freeze(
     planned.scorerActions.map((action) =>
       Object.freeze({
-        status: "errored" as const,
+        status: "missing" as const,
         reason: "dependency_failed" as const,
         name: action.scorerName,
         contractFingerprint:

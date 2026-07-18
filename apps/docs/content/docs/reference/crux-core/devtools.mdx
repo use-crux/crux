@@ -126,7 +126,7 @@ import {
 
 The bridge is a local-dev command plane. Long-lived Node runtimes can open a `/ws/runtime` peer; framework integrations such as `@use-crux/convex` use the same contract over HTTP.
 
-With `devtools.bridge: true`, Go services can send typed local-dev commands such as `store.read` to the live app. Primitives register inspectable resources automatically, so devtools can ask for `memory:<id>` or `blackboard:<id>` and read the attached store instead of reconstructing state from traces. `eval.run` is also routed through the Go bridge service using the embedded eval runner, so quality persistence and observability stay on the normal eval path. Web devtools and the TUI still talk only to Go: they never call runtime peers directly.
+With `devtools.bridge: true`, Go services can send typed local-dev commands such as `store.read` to the live app. Primitives register inspectable resources automatically, so devtools can ask for `memory:<id>` or `blackboard:<id>` and read the attached store instead of reconstructing state from traces. Eval coordination and observability use their normal Go-owned paths; Web Devtools and the TUI never call runtime peers directly.
 
 During `crux dev`, the Go server auto-discovers a Convex HTTP bridge peer from `CRUX_BRIDGE_URL`, `CONVEX_SITE_URL`, or Convex cloud URL variables such as `CONVEX_URL` / `NEXT_PUBLIC_CONVEX_URL` in the shell or project `.env.local` / `.env`. If only a `.convex.cloud` URL is present, Crux derives the matching `.convex.site/crux/bridge` URL before fetching the manifest.
 

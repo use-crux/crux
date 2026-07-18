@@ -158,7 +158,7 @@ describe("provided static syntax record indexing", () => {
     const root = await fixtureRoot();
     const configFile = join(
       root,
-      "packages/local-workers/lib/__fixtures__/quality-project/crux.config.ts",
+      "packages/local-workers/lib/__fixtures__/eval-project/crux.config.ts",
     );
     await mkdir(dirname(configFile), { recursive: true });
     await writeFile(

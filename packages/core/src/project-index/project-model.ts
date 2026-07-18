@@ -88,8 +88,6 @@ export type ProjectModelResolutionMode =
 export const PROJECT_MODEL_DIAGNOSTIC_CODES = [
   "project_model.dynamic_tool_map_unproven",
   "project_model.missing_stable_id",
-  "project_model.prompt_test_dependency_unproven",
-  "project_model.unknown_suite_target",
   "project_model.model_executor_missing",
   "project_model.source_skipped",
   "project_model.source_only_discovery",

@@ -1,0 +1,652 @@
+/**
+ * Shared popover-driven filter primitives.
+ *
+ * Two layers:
+ *  - low-level building blocks (`ChipPopover`, `CheckRow`, `RadioRow`,
+ *    `PopoverSection`, `AddFilterButton`) used by per-screen filter bars
+ *    to compose their chip strip.
+ *  - convenience presets (`MultiSelectChip`, `SingleSelectChip`,
+ *    `SearchChip`) for the common "multi / single / search" shapes —
+ *    screens drop these in and pass their value getter + setter.
+ *
+ * Filter state itself lives on `NavState` (so URLs are shareable) — these
+ * components are purely presentational. The parent screen owns the
+ * `RunsFilters` / `InsightsFilters` etc. and feeds the chips data +
+ * callbacks.
+ */
+
+import { useState, type ReactNode } from "react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/shared/components/ui/popover";
+import { Icon } from "./Icon";
+
+// ─── Low-level building blocks ──────────────────────────────────────
+
+interface ChipPopoverProps {
+  k: string;
+  value: string;
+  onRemove: () => void;
+  children: ReactNode;
+}
+
+export function ChipPopover({
+  k,
+  value,
+  onRemove,
+  children,
+}: ChipPopoverProps) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex items-center gap-1.5 rounded-[4px] px-2 py-[3px] font-mono text-[11.5px]"
+          style={{
+            background: "var(--devtools-crux-soft)",
+            border: "1px solid var(--devtools-crux-line)",
+            color: "var(--devtools-crux)",
+          }}
+        >
+          <span style={{ color: "var(--devtools-crux)" }}>{k}:</span>
+          <span
+            className="font-medium"
+            style={{
+              maxWidth: 160,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {value}
+          </span>
+          <span
+            role="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRemove();
+            }}
+            className="opacity-70 hover:opacity-100"
+            aria-label={`Remove ${k} filter`}
+            style={{ color: "var(--devtools-crux)" }}
+          >
+            <Icon name="x" size={10} />
+          </span>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        className="w-[260px] p-0"
+        style={{
+          background: "var(--devtools-bg-elev)",
+          border: "1px solid var(--devtools-border)",
+        }}
+      >
+        {children}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+export function PopoverSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <div>
+      <div
+        className="px-3 py-2 font-mono text-[10px] uppercase tracking-[0.08em]"
+        style={{
+          color: "var(--devtools-fg-faint)",
+          borderBottom: "1px solid var(--devtools-border)",
+        }}
+      >
+        {title}
+      </div>
+      <div className="py-1">{children}</div>
+    </div>
+  );
+}
+
+export function CheckRow({
+  checked,
+  label,
+  onClick,
+}: {
+  checked: boolean;
+  label: ReactNode;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-center gap-2 px-3 py-1.5 text-left transition-colors hover:opacity-90"
+      style={{ color: "var(--devtools-fg)" }}
+    >
+      <span
+        className="flex size-3.5 flex-shrink-0 items-center justify-center rounded-[3px]"
+        style={{
+          background: checked ? "var(--devtools-crux)" : "transparent",
+          border: `1px solid ${checked ? "var(--devtools-crux)" : "var(--devtools-border-strong)"}`,
+        }}
+      >
+        {checked && <Icon name="check" size={9} color="var(--devtools-bg)" />}
+      </span>
+      <span className="truncate font-mono text-[11.5px]">{label}</span>
+    </button>
+  );
+}
+
+export function RadioRow({
+  checked,
+  label,
+  onClick,
+}: {
+  checked: boolean;
+  label: ReactNode;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-center gap-2 px-3 py-1.5 text-left transition-colors hover:opacity-90"
+      style={{ color: "var(--devtools-fg)" }}
+    >
+      <span
+        className="flex size-3.5 flex-shrink-0 items-center justify-center rounded-full"
+        style={{
+          border: `1px solid ${checked ? "var(--devtools-crux)" : "var(--devtools-border-strong)"}`,
+        }}
+      >
+        {checked && (
+          <span
+            className="block size-1.5 rounded-full"
+            style={{ background: "var(--devtools-crux)" }}
+          />
+        )}
+      </span>
+      <span className="font-mono text-[11.5px]">{label}</span>
+    </button>
+  );
+}
+
+// ─── Convenience preset chips ───────────────────────────────────────
+
+interface MultiSelectChipProps {
+  k: string;
+  values: readonly string[];
+  options: readonly string[];
+  onChange: (next: readonly string[]) => void;
+  /** Pretty-print a single value (e.g. strip provider prefix). */
+  format?: (v: string) => string;
+  emptyHint?: string;
+}
+
+export function MultiSelectChip({
+  k,
+  values,
+  options,
+  onChange,
+  format,
+  emptyHint = "No values yet.",
+}: MultiSelectChipProps) {
+  const selected = new Set(values);
+  const display =
+    values.length === 0
+      ? "any"
+      : values.map((v) => (format ? format(v) : v)).join(", ");
+  return (
+    <ChipPopover k={k} value={display} onRemove={() => onChange([])}>
+      <PopoverSection title={`${k} · ${options.length}`}>
+        <div className="max-h-[240px] overflow-auto">
+          {options.length === 0 && (
+            <div
+              className="px-3 py-2 font-mono text-[11px]"
+              style={{ color: "var(--devtools-fg-faint)" }}
+            >
+              {emptyHint}
+            </div>
+          )}
+          {options.map((o) => (
+            <CheckRow
+              key={o}
+              checked={selected.has(o)}
+              label={format ? format(o) : o}
+              onClick={() => {
+                const next = new Set(selected);
+                if (next.has(o)) next.delete(o);
+                else next.add(o);
+                onChange(Array.from(next));
+              }}
+            />
+          ))}
+        </div>
+      </PopoverSection>
+    </ChipPopover>
+  );
+}
+
+interface SingleSelectChipProps<V extends string> {
+  k: string;
+  value: V | undefined;
+  options: ReadonlyArray<{ value: V; label: string }>;
+  onChange: (next: V | undefined) => void;
+  /** Value that means "no filter" (won't render a chip if equal). */
+  noneValue?: V;
+  title?: string;
+}
+
+export function SingleSelectChip<V extends string>({
+  k,
+  value,
+  options,
+  onChange,
+  noneValue,
+  title = k,
+}: SingleSelectChipProps<V>) {
+  const display = value ?? "—";
+  return (
+    <ChipPopover k={k} value={display} onRemove={() => onChange(undefined)}>
+      <PopoverSection title={title}>
+        {options.map((o) => (
+          <RadioRow
+            key={o.value}
+            checked={value === o.value}
+            label={o.label}
+            onClick={() =>
+              onChange(o.value === noneValue ? undefined : o.value)
+            }
+          />
+        ))}
+      </PopoverSection>
+    </ChipPopover>
+  );
+}
+
+interface SearchChipProps {
+  value: string | undefined;
+  onChange: (next: string | undefined) => void;
+  placeholder?: string;
+}
+
+export function SearchChip({
+  value,
+  onChange,
+  placeholder = "free text",
+}: SearchChipProps) {
+  const [draft, setDraft] = useState(value ?? "");
+  return (
+    <ChipPopover
+      k="search"
+      value={(value ?? "").trim() || "—"}
+      onRemove={() => onChange(undefined)}
+    >
+      <PopoverSection title="Search">
+        <form
+          className="flex flex-col gap-2 px-3 py-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            onChange(draft.trim() || undefined);
+          }}
+        >
+          <input
+            type="text"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder={placeholder}
+            className="rounded-[4px] px-2 py-1 font-mono text-[11.5px]"
+            style={{
+              background: "var(--devtools-bg)",
+              border: "1px solid var(--devtools-border)",
+              color: "var(--devtools-fg)",
+              outline: "none",
+            }}
+            autoFocus
+          />
+          <div className="flex items-center justify-between">
+            <button
+              type="button"
+              className="font-mono text-[11px]"
+              style={{ color: "var(--devtools-fg-faint)" }}
+              onClick={() => {
+                setDraft("");
+                onChange(undefined);
+              }}
+            >
+              Clear
+            </button>
+            <button
+              type="submit"
+              className="rounded-[4px] px-2 py-0.5 font-mono text-[11px]"
+              style={{ background: "var(--devtools-crux)", color: "var(--devtools-bg)" }}
+            >
+              Apply
+            </button>
+          </div>
+        </form>
+      </PopoverSection>
+    </ChipPopover>
+  );
+}
+
+// ─── Header filter buttons (design idiom) ───────────────────────────
+//
+// A single ghost button in the screen header (`actions` slot) that shows
+// the current selection and opens a small menu — matches the Inspect
+// Workbench design's `<Btn icon="filter">All</Btn>` header affordance.
+// Uses the shadcn Popover (not the menu) so the search variant can host a
+// text input without menu typeahead stealing focus.
+
+type IconName = Parameters<typeof Icon>[0]["name"];
+
+const HEADER_BTN_CLASS =
+  "inline-flex items-center gap-[6px] rounded-[6px] px-[10px] py-[6px] text-[12px] font-medium whitespace-nowrap transition-colors hover:opacity-90";
+
+function headerBtnStyle(active: boolean): React.CSSProperties {
+  return {
+    background: active ? "var(--devtools-crux-soft)" : "transparent",
+    color: active ? "var(--devtools-crux)" : "var(--devtools-fg)",
+    boxShadow: `inset 0 0 0 1px ${active ? "var(--devtools-crux-line)" : "var(--devtools-border)"}`,
+  };
+}
+
+interface FilterButtonProps<V extends string> {
+  icon?: IconName;
+  value: V;
+  options: ReadonlyArray<{ value: V; label: string }>;
+  onChange: (next: V) => void;
+  /** Heading shown above the option list. */
+  title?: string;
+  /** The value treated as "no filter" — when selected the button reads inactive. */
+  noneValue?: V;
+}
+
+/** Header single-select filter: ghost button + radio menu. */
+export function FilterButton<V extends string>({
+  icon = "filter",
+  value,
+  options,
+  onChange,
+  title,
+  noneValue,
+}: FilterButtonProps<V>) {
+  const [open, setOpen] = useState(false);
+  const cur = options.find((o) => o.value === value);
+  const active = noneValue != null && value !== noneValue;
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={HEADER_BTN_CLASS}
+          style={headerBtnStyle(active)}
+        >
+          <Icon
+            name={icon}
+            size={13}
+            color={active ? "var(--devtools-crux)" : "var(--devtools-fg-muted)"}
+          />
+          {cur?.label ?? value}
+          <Icon
+            name="arrowDown"
+            size={10}
+            color={active ? "var(--devtools-crux)" : "var(--devtools-fg-muted)"}
+          />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        className="w-[240px] p-0"
+        style={{
+          background: "var(--devtools-bg-elev)",
+          border: "1px solid var(--devtools-border)",
+        }}
+      >
+        <div className="max-h-[340px] overflow-auto">
+          <PopoverSection title={title ?? "Filter"}>
+            {options.map((o) => (
+              <RadioRow
+                key={o.value}
+                checked={o.value === value}
+                label={o.label}
+                onClick={() => {
+                  onChange(o.value);
+                  setOpen(false);
+                }}
+              />
+            ))}
+          </PopoverSection>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+interface SearchButtonProps {
+  value: string | undefined;
+  onChange: (next: string | undefined) => void;
+  placeholder?: string;
+  label?: string;
+}
+
+/** Header search filter: ghost button + text-input popover. */
+export function SearchButton({
+  value,
+  onChange,
+  placeholder = "search",
+  label = "Search",
+}: SearchButtonProps) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState(value ?? "");
+  const active = !!value?.trim();
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o);
+        if (o) setDraft(value ?? "");
+      }}
+    >
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={HEADER_BTN_CLASS}
+          style={headerBtnStyle(active)}
+        >
+          <Icon
+            name="search"
+            size={13}
+            color={active ? "var(--devtools-crux)" : "var(--devtools-fg-muted)"}
+          />
+          {active ? value : label}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        className="w-[240px] p-0"
+        style={{
+          background: "var(--devtools-bg-elev)",
+          border: "1px solid var(--devtools-border)",
+        }}
+      >
+        <form
+          className="flex flex-col gap-2 p-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            onChange(draft.trim() || undefined);
+            setOpen(false);
+          }}
+        >
+          <input
+            type="text"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder={placeholder}
+            className="rounded-[4px] px-2 py-1 font-mono text-[11.5px]"
+            style={{
+              background: "var(--devtools-bg)",
+              border: "1px solid var(--devtools-border)",
+              color: "var(--devtools-fg)",
+              outline: "none",
+            }}
+            autoFocus
+          />
+          <div className="flex items-center justify-between">
+            <button
+              type="button"
+              className="font-mono text-[11px]"
+              style={{ color: "var(--devtools-fg-faint)" }}
+              onClick={() => {
+                setDraft("");
+                onChange(undefined);
+                setOpen(false);
+              }}
+            >
+              Clear
+            </button>
+            <button
+              type="submit"
+              className="rounded-[4px] px-2 py-0.5 font-mono text-[11px]"
+              style={{ background: "var(--devtools-crux)", color: "var(--devtools-bg)" }}
+            >
+              Apply
+            </button>
+          </div>
+        </form>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// ─── Add-filter dropdown button ─────────────────────────────────────
+//
+// Backed by shadcn DropdownMenu via DevtoolsAddFilterMenu. We keep the existing
+// `AddFilterOption<K>` type + `AddFilterButton` export so the screens
+// don't churn — `DevtoolsAddFilterMenu` takes the same option shape.
+
+export type AddFilterOption<K extends string> = {
+  kind: K;
+  label: string;
+  enabled: boolean;
+};
+
+export { DevtoolsAddFilterMenu as AddFilterButton } from "./DevtoolsMenu";
+
+// ─── Group-by toggle (cycles through options on click) ──────────────
+//
+// Kept for screens that want a one-click cycle. Most screens should
+// prefer GroupByDropdown for discoverability — the cycle hides the
+// available options behind muscle memory.
+
+export function GroupByCycle<G extends string>({
+  value,
+  cycle,
+  onChange,
+  noneLabel = "off",
+}: {
+  value: G;
+  cycle: readonly G[];
+  onChange: (next: G) => void;
+  noneLabel?: string;
+}) {
+  return (
+    <button
+      onClick={() => {
+        const idx = cycle.indexOf(value);
+        const next = cycle[(idx + 1) % cycle.length];
+        onChange(next);
+      }}
+      className="font-mono text-[11px] hover:opacity-80"
+      style={{ color: "var(--devtools-fg-muted)" }}
+    >
+      group by · {value === cycle[0] ? noneLabel : value}
+    </button>
+  );
+}
+
+// ─── Group-by dropdown ──────────────────────────────────────────────
+//
+// Thin re-export of the shadcn-backed DevtoolsGroupBy so screens can keep
+// importing `GroupByDropdown` from this module without knowing about
+// the wrapper. New code should prefer `DevtoolsGroupBy` directly.
+
+export { DevtoolsGroupBy as GroupByDropdown } from "./DevtoolsMenu";
+
+// ─── Collapsible group section ──────────────────────────────────────
+//
+// Used by Runs / Insights / Evals to render group-by buckets as
+// expandable sections. The header is always visible (showing the group
+// key + summary stats); the body collapses with a single click.
+
+export interface CollapsibleGroupProps {
+  /** Unique group key — used for the React key + default expanded persistence. */
+  groupKey: string;
+  /** Title rendered prominently on the left (e.g. the group name). */
+  title: ReactNode;
+  /** Item count for the group; shown next to the title. */
+  count?: number;
+  /** Right-aligned summary chips / stat cluster. */
+  summary?: ReactNode;
+  /** Initial expanded state. Defaults to true (open). */
+  defaultExpanded?: boolean;
+  /** Hide the collapse chrome entirely when there's only one group (e.g. group=none). */
+  ungrouped?: boolean;
+  children: ReactNode;
+}
+
+export function CollapsibleGroup({
+  title,
+  count,
+  summary,
+  defaultExpanded = true,
+  ungrouped = false,
+  children,
+}: CollapsibleGroupProps) {
+  const [open, setOpen] = useState(defaultExpanded);
+  if (ungrouped) {
+    return <>{children}</>;
+  }
+  return (
+    <div className="flex flex-col">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-2.5 px-8 py-2.5 text-left text-[11.5px] font-mono transition-colors hover:opacity-90"
+        style={{
+          background: "var(--devtools-bg-muted)",
+          borderBottom: "1px solid var(--devtools-border)",
+          borderTop: "1px solid var(--devtools-border)",
+          color: "var(--devtools-fg-muted)",
+        }}
+      >
+        <Icon
+          name={open ? "arrowDown" : "arrowRight"}
+          size={11}
+          color="var(--devtools-crux)"
+        />
+        <span className="font-semibold" style={{ color: "var(--devtools-fg)" }}>
+          {title}
+        </span>
+        {count != null && (
+          <span style={{ color: "var(--devtools-fg-faint)" }}>· {count}</span>
+        )}
+        {summary && (
+          <span
+            className="ml-auto flex items-center gap-2"
+            style={{ color: "var(--devtools-fg-muted)" }}
+          >
+            {summary}
+          </span>
+        )}
+      </button>
+      {open && children}
+    </div>
+  );
+}

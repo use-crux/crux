@@ -15,7 +15,7 @@ export function fingerprintDeployedEvalCase(
 ): string {
   if (
     !isReusableEvalValue(authored.input) ||
-    !isReusableEvalValue(authored.call)
+    (authored.call !== undefined && !isReusableEvalValue(authored.call))
   ) {
     throw new TypeError(
       `Deployed Eval Case '${id}' contains dynamic or non-durable input/call data.`,

@@ -35,12 +35,67 @@ Convex environment, set only `CRUX_EVAL_HOST_TOKEN`; the adapter infers URL
 and deployment id. Explicit Crux URL and deployment variables override that
 inference.
 
-## Cloudflare
+`crux runtime generate` writes the Convex control entry, the Node target/Eval
+entry, and `convex/http.ts`. The HTTP router mounts the authenticated Eval
+protocol at `/manifest`, `/jobs`, and `/jobs/:id` on `CONVEX_SITE_URL`. The
+target entry imports the exact default-exported Evals and embeds validated Case
+and Variant identities; it never serializes prompts, models, functions, or
+credentials.
 
-Create the host with `createCloudflareEvalHost()`, export its Durable Object,
-bind the namespace in Wrangler, and store the execute bearer as a Worker
-secret. Durable Object storage holds canonical chunked results and alarms
-recover jobs; `waitUntil()` is not the correctness path.
+The generated registry also binds the normalized
+`observability.redactPaths` policy. Its authenticated manifest reveals only a
+secret-free fingerprint. The CLI requires that fingerprint to match before
+remote execution, and includes it in exact evidence identity; changing the
+policy therefore cannot reuse evidence or a deployment generated with the old
+policy. Run `crux runtime generate` and redeploy after a policy change.
+
+If the app already owns `convex/http.ts`, Crux preserves it and generates the
+composable helper at `convex/_crux/http.ts`. Register the reserved Eval routes
+on the existing router:
+
+```ts title="convex/http.ts"
+import { httpRouter } from "convex/server";
+import { registerCruxEvalRoutes } from "./_crux/http";
+
+const http = registerCruxEvalRoutes(httpRouter());
+// Register the app's other routes on `http` as usual.
+export default http;
+```
+
+Convex advertises `record-store` and `vector-store` only when a deployed Eval
+requires them and the request context can bind the corresponding component
+service. Unsupported requirements such as `asset-store` remain visible in the
+Eval manifest but absent from host capabilities, so readiness fails before
+inference instead of claiming a service that is not present.
+
+## Next.js and other serverless functions
+
+For a `serverless()` Runtime, `crux runtime generate` writes a Next-compatible
+handler that serves Runtime wakes and the authenticated Eval protocol from one
+catch-all route. Re-export `GET`, `POST`, and `DELETE` from that route. The
+generated module requires `CRUX_EVAL_HOST_DEPLOYMENT_ID` and
+`CRUX_EVAL_HOST_TOKEN` when it contains deployed Evals, and refuses
+process-memory-only storage.
+
+Signed Runtime wake POSTs are handled by the same Eval-aware Runtime instance
+as job admission. A serverless invocation can therefore admit a job, end, and
+later execute the exact generated Eval when the queue delivers its wake.
+
+```ts title="app/api/crux/[[...path]]/route.ts"
+export { GET, POST, DELETE } from "../../../../crux.generated/next";
+```
+
+The selected Runtime store must implement durable result storage. Model work
+is never kept alive by a function-local promise or `waitUntil()` equivalent.
+
+## Cloudflare Workers
+
+Run `crux runtime generate` to create
+`cloudflare/_crux/generated.ts`, then pass its `deployedEvals` and
+`runtimeTargets` exports to `createCloudflareEvalHost()`. Export the returned
+Durable Object, bind the namespace in Wrangler, and store the execute bearer as
+a Worker secret. Durable Object storage holds canonical chunked results and
+alarms recover jobs; `waitUntil()` is not the correctness path.
 
 The local CLI cannot infer Cloudflare connection values. Set all three
 explicit Crux environment variables for the selected deployment.
@@ -55,4 +110,10 @@ not functions, prompts, models, module paths, or credentials.
 `--plan` may make one authenticated read-only manifest request when remote
 work is required. Missing credentials produce an unverified plan with exact
 setup remedies. `--offline`, including `--offline --plan`, never accesses the
-network.
+network, imports `crux.config.*`, or invokes adapter inference.
+
+Remote hosts never silently redact task output because that could change Eval
+semantics. If output or response evidence contains a configured path or an
+always-sensitive key, the host fails before durable result storage with
+`EVAL_RESULT_REDACTION_REQUIRED`. Change the Eval to return a safe projection,
+or remove sensitive data before it reaches the task result.

@@ -29,7 +29,7 @@ export function DecisionRow({
   return (
     <div
       className="flex items-center gap-[11px] px-3.5 py-2.5"
-      style={{ borderBottom: "1px solid var(--qw-border)" }}
+      style={{ borderBottom: "1px solid var(--devtools-border)" }}
     >
       <span className="flex-shrink-0">
         <KindTag kind={decision.kind} size={9} />
@@ -37,20 +37,20 @@ export function DecisionRow({
       <div className="w-[150px] flex-shrink-0 min-w-0">
         <div
           className="truncate text-[12px] font-semibold"
-          style={{ color: "var(--qw-fg)" }}
+          style={{ color: "var(--devtools-fg)" }}
         >
           {subject}
         </div>
         <div
           className="truncate text-[11px]"
-          style={{ color: "var(--qw-fg-muted)" }}
+          style={{ color: "var(--devtools-fg-muted)" }}
         >
           {decision.outcome}
         </div>
       </div>
       <span
         className="min-w-0 flex-1 text-[12.5px] leading-[1.4]"
-        style={{ fontFamily: "var(--qw-serif)", color: "var(--qw-fg-muted)" }}
+        style={{ fontFamily: "var(--devtools-serif)", color: "var(--devtools-fg-muted)" }}
       >
         {decision.reason.text}
       </span>

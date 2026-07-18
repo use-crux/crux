@@ -5,14 +5,14 @@
  * honesty ladder (evidence level), and the source join tags. Status is the one
  * place saturated colour leads — filled when `solid`, hollow otherwise, always
  * label + dot/glyph + tone. Evidence level and source are quiet mono metadata,
- * shown by exception. Every colour resolves through the app's `--qw` palette via
+ * shown by exception. Every colour resolves through the app's `--devtools` palette via
  * {@link TONE_VAR}; nothing introduces a new hue or token.
  */
 
 import type { ReactNode } from "react";
-import { Icon } from "@/qw/shell/Icon";
-import type { IconName } from "@/qw/shell/nav";
-import type { ChipTone } from "@/qw/shell/primitives";
+import { Icon } from "@/devtools/shell/Icon";
+import type { IconName } from "@/devtools/shell/nav";
+import type { ChipTone } from "@/devtools/shell/primitives";
 import { TONE_VAR } from "@/features/run-detail/lib/families";
 import {
   SOURCE_FIDELITY_BLURB,
@@ -28,24 +28,24 @@ import type { TurnEvidenceLevel } from "@/types";
 // Soft background + ring per tone, matching the shared `Chip` atom so the
 // Explain chips sit in the same visual family as the rest of run-detail.
 const SOFT: Record<ChipTone, string> = {
-  muted: "var(--qw-bg-muted)",
-  crux: "var(--qw-crux-soft)",
-  danger: "var(--qw-danger-soft)",
-  warn: "var(--qw-warn-soft)",
-  ok: "var(--qw-ok-soft)",
-  iris: "var(--qw-iris-soft)",
-  gold: "var(--qw-gold-soft)",
-  plum: "var(--qw-plum-soft)",
+  muted: "var(--devtools-bg-muted)",
+  crux: "var(--devtools-crux-soft)",
+  danger: "var(--devtools-danger-soft)",
+  warn: "var(--devtools-warn-soft)",
+  ok: "var(--devtools-ok-soft)",
+  iris: "var(--devtools-iris-soft)",
+  gold: "var(--devtools-gold-soft)",
+  plum: "var(--devtools-plum-soft)",
 };
 const LINE: Record<ChipTone, string> = {
-  muted: "var(--qw-border)",
-  crux: "var(--qw-crux-line)",
-  danger: "var(--qw-danger-line)",
-  warn: "var(--qw-warn-line)",
-  ok: "var(--qw-ok-line)",
-  iris: "var(--qw-iris-line)",
-  gold: "var(--qw-gold-line)",
-  plum: "var(--qw-plum-line)",
+  muted: "var(--devtools-border)",
+  crux: "var(--devtools-crux-line)",
+  danger: "var(--devtools-danger-line)",
+  warn: "var(--devtools-warn-line)",
+  ok: "var(--devtools-ok-line)",
+  iris: "var(--devtools-iris-line)",
+  gold: "var(--devtools-gold-line)",
+  plum: "var(--devtools-plum-line)",
 };
 
 /** A filled-or-hollow status chip with an optional leading glyph + suffix. */
@@ -59,9 +59,9 @@ function StatusChip({
   suffix?: ReactNode;
 }) {
   if (meta.hidden)
-    return <span style={{ color: "var(--qw-fg-faint)" }}>—</span>;
-  const fg = meta.solid ? TONE_VAR[meta.tone] : "var(--qw-fg-muted)";
-  const glyphColor = meta.solid ? TONE_VAR[meta.tone] : "var(--qw-fg-faint)";
+    return <span style={{ color: "var(--devtools-fg-faint)" }}>—</span>;
+  const fg = meta.solid ? TONE_VAR[meta.tone] : "var(--devtools-fg-muted)";
+  const glyphColor = meta.solid ? TONE_VAR[meta.tone] : "var(--devtools-fg-faint)";
   return (
     <span
       title={meta.blurb}
@@ -69,7 +69,7 @@ function StatusChip({
       style={{
         color: fg,
         background: meta.solid ? SOFT[meta.tone] : "transparent",
-        boxShadow: `inset 0 0 0 1px ${meta.solid ? LINE[meta.tone] : "var(--qw-border)"}`,
+        boxShadow: `inset 0 0 0 1px ${meta.solid ? LINE[meta.tone] : "var(--devtools-border)"}`,
       }}
     >
       {icon ? (
@@ -85,7 +85,7 @@ function StatusChip({
       )}
       {meta.label}
       {suffix != null && (
-        <span style={{ color: "var(--qw-fg-faint)" }}>· {suffix}</span>
+        <span style={{ color: "var(--devtools-fg-faint)" }}>· {suffix}</span>
       )}
     </span>
   );
@@ -135,7 +135,7 @@ export function CoverageGauge({
       <div className="mb-[7px] flex items-center justify-between">
         <span
           className="font-mono text-[11px] uppercase tracking-[0.08em]"
-          style={{ color: "var(--qw-fg-faint)" }}
+          style={{ color: "var(--devtools-fg-faint)" }}
         >
           behaviours protected
         </span>
@@ -148,7 +148,7 @@ export function CoverageGauge({
       </div>
       <div
         className="h-2 w-full overflow-hidden rounded-full"
-        style={{ background: "var(--qw-bg-muted)" }}
+        style={{ background: "var(--devtools-bg-muted)" }}
       >
         <div
           className="h-full rounded-full"
@@ -170,10 +170,10 @@ export function EvidenceLevel({
   const missing = value === "missing";
   const lit = evidenceRank(value) - 1; // declared→3, observed→2, inferred→1, missing→0
   const col = missing
-    ? "var(--qw-fg-faint)"
+    ? "var(--devtools-fg-faint)"
     : value === "inferred"
-      ? "var(--qw-fg-muted)"
-      : "var(--qw-fg)";
+      ? "var(--devtools-fg-muted)"
+      : "var(--devtools-fg)";
   return (
     <span
       title={`evidence · ${value}`}
@@ -191,7 +191,7 @@ export function EvidenceLevel({
               boxShadow:
                 i < lit
                   ? "none"
-                  : `inset 0 0 0 1px ${missing ? "var(--qw-border-strong)" : "var(--qw-border)"}`,
+                  : `inset 0 0 0 1px ${missing ? "var(--devtools-border-strong)" : "var(--devtools-border)"}`,
             }}
           />
         ))}
@@ -212,21 +212,21 @@ export function EvidenceLevel({
 export function SourceStatusTag({ status }: { status: string }) {
   const m = sourceStatusMeta(status);
   const solid = status === "used";
-  const fg = m.tone === "muted" ? "var(--qw-fg-muted)" : TONE_VAR[m.tone];
+  const fg = m.tone === "muted" ? "var(--devtools-fg-muted)" : TONE_VAR[m.tone];
   return (
     <span
       className="inline-flex items-center gap-[5px] rounded-[3px] px-[6px] py-px font-mono text-[9.5px]"
       style={{
         color: fg,
         background: solid ? SOFT[m.tone] : "transparent",
-        boxShadow: `inset 0 0 0 1px ${solid ? LINE[m.tone] : "var(--qw-border)"}`,
+        boxShadow: `inset 0 0 0 1px ${solid ? LINE[m.tone] : "var(--devtools-border)"}`,
       }}
     >
       <span
         className="inline-block size-[4px] rounded-full"
         style={{
           background:
-            m.tone === "muted" ? "var(--qw-fg-faint)" : TONE_VAR[m.tone],
+            m.tone === "muted" ? "var(--devtools-fg-faint)" : TONE_VAR[m.tone],
         }}
       />
       {m.label}
@@ -242,8 +242,8 @@ export function SourceFidelityTag({ fidelity }: { fidelity: string }) {
       title={SOURCE_FIDELITY_BLURB[fidelity]}
       className="rounded-[3px] px-[6px] py-px font-mono text-[9.5px]"
       style={{
-        color: "var(--qw-fg-faint)",
-        border: `1px ${dashed ? "dashed" : "solid"} ${dashed ? "var(--qw-border-strong)" : "var(--qw-border)"}`,
+        color: "var(--devtools-fg-faint)",
+        border: `1px ${dashed ? "dashed" : "solid"} ${dashed ? "var(--devtools-border-strong)" : "var(--devtools-border)"}`,
       }}
     >
       {fidelity}

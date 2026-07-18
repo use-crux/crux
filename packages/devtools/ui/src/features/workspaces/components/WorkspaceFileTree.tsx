@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Icon } from "@/qw/shell/Icon";
+import { Icon } from "@/devtools/shell/Icon";
 import type { WorkspaceDetail, WorkspaceFileSummary } from "@/types";
 
 interface FolderNode {
@@ -71,20 +71,20 @@ export function FileTreePane({
     <aside
       className="flex h-full w-[280px] flex-shrink-0 flex-col overflow-y-auto"
       style={{
-        borderRight: "1px solid var(--qw-border)",
-        background: "var(--qw-bg)",
+        borderRight: "1px solid var(--devtools-border)",
+        background: "var(--devtools-bg)",
       }}
     >
       <div
         className="px-3 pb-2 pt-3 font-mono text-[10px] uppercase tracking-[0.14em]"
-        style={{ color: "var(--qw-fg-faint)" }}
+        style={{ color: "var(--devtools-fg-faint)" }}
       >
         files · {files.length}
       </div>
       {files.length === 0 ? (
         <div
           className="px-4 py-3 text-[12px]"
-          style={{ color: "var(--qw-fg-muted)" }}
+          style={{ color: "var(--devtools-fg-muted)" }}
         >
           No files touched yet.
         </div>
@@ -104,8 +104,8 @@ export function FileTreePane({
         <div
           className="mt-auto px-3 pb-3 pt-2 text-[10.5px]"
           style={{
-            borderTop: "1px solid var(--qw-border)",
-            color: "var(--qw-fg-faint)",
+            borderTop: "1px solid var(--devtools-border)",
+            color: "var(--devtools-fg-faint)",
           }}
         >
           <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.14em]">
@@ -114,11 +114,11 @@ export function FileTreePane({
           {mounts.map((m) => (
             <div key={m.path} className="mb-1 font-mono last:mb-0">
               <div>
-                <span style={{ color: "var(--qw-crux)" }}>{m.path}</span>
+                <span style={{ color: "var(--devtools-crux)" }}>{m.path}</span>
                 {m.mode && (
                   <span
                     className="ml-1.5"
-                    style={{ color: "var(--qw-fg-faint)" }}
+                    style={{ color: "var(--devtools-fg-faint)" }}
                   >
                     ({m.mode})
                   </span>
@@ -130,7 +130,7 @@ export function FileTreePane({
                 m.sourceRef) && (
                 <div
                   className="truncate"
-                  style={{ color: "var(--qw-fg-muted)" }}
+                  style={{ color: "var(--devtools-fg-muted)" }}
                 >
                   {[m.sourceKind, m.sourceHelper ?? m.retriever ?? m.sourceRef]
                     .filter(Boolean)
@@ -161,12 +161,12 @@ function TreeNodeRow({
           className="flex items-center gap-1.5 py-[3px] font-mono text-[11.5px] font-medium"
           style={{
             paddingLeft: 6 + node.depth * 14,
-            color: "var(--qw-fg)",
+            color: "var(--devtools-fg)",
             marginTop: node.depth === 0 ? 6 : 0,
           }}
         >
-          <Icon name="arrowDown" size={9} color="var(--qw-fg-faint)" />
-          <Icon name="folder" size={12} color="var(--qw-crux)" />
+          <Icon name="arrowDown" size={9} color="var(--devtools-fg-faint)" />
+          <Icon name="folder" size={12} color="var(--devtools-crux)" />
           <span>{node.name}</span>
         </div>
         {node.children.map((c, i) => (
@@ -192,10 +192,10 @@ function TreeNodeRow({
       style={{
         gridTemplateColumns: "14px minmax(0, 1fr) auto",
         paddingLeft: 6 + node.depth * 14 + 14,
-        background: on ? "var(--qw-crux-soft)" : "transparent",
-        boxShadow: on ? "inset 0 0 0 1px var(--qw-crux-line)" : "none",
+        background: on ? "var(--devtools-crux-soft)" : "transparent",
+        boxShadow: on ? "inset 0 0 0 1px var(--devtools-crux-line)" : "none",
         borderLeft: isErr
-          ? "2px solid var(--qw-danger)"
+          ? "2px solid var(--devtools-danger)"
           : "2px solid transparent",
         marginLeft: -2,
       }}
@@ -205,20 +205,20 @@ function TreeNodeRow({
         size={11}
         color={
           isErr
-            ? "var(--qw-danger)"
+            ? "var(--devtools-danger)"
             : on
-              ? "var(--qw-crux)"
-              : "var(--qw-fg-muted)"
+              ? "var(--devtools-crux)"
+              : "var(--devtools-fg-muted)"
         }
       />
       <span
         className="truncate font-mono text-[11.5px]"
         style={{
           color: isErr
-            ? "var(--qw-danger)"
+            ? "var(--devtools-danger)"
             : on
-              ? "var(--qw-crux)"
-              : "var(--qw-fg)",
+              ? "var(--devtools-crux)"
+              : "var(--devtools-fg)",
           fontWeight: on ? 600 : 450,
         }}
         title={f.path}
@@ -228,7 +228,7 @@ function TreeNodeRow({
       {f.operationCount != null && (
         <span
           className="font-mono text-[10px]"
-          style={{ color: "var(--qw-fg-faint)" }}
+          style={{ color: "var(--devtools-fg-faint)" }}
         >
           {f.operationCount}
         </span>

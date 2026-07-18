@@ -21,6 +21,7 @@ import { consumesFullPromptInput, withFullPromptInput } from './internal-full-in
 
 /** Module-scoped map: frozen context → definition-site source location. */
 const definitionSourceMap = new WeakMap<object, { file: string; line: number; column?: number }>()
+const CONTEXT_IDENTITY = Symbol.for('@use-crux/core/context-identity')
 
 /** Retrieve the definition-site source location for a context instance. */
 export function getContextDefinitionSource(ctx: object): { file: string; line: number; column?: number } | undefined {
@@ -222,6 +223,7 @@ export function context(def: StaticContextDef | ContextDef<z.ZodType>): Context<
     constraints: Object.freeze([...('constraints' in def && Array.isArray(def.constraints) ? def.constraints : [])]),
     guardrails: Object.freeze([...('guardrails' in def && Array.isArray(def.guardrails) ? def.guardrails : [])]),
     family: contextFamilyMap.get(def),
+    [CONTEXT_IDENTITY]: Object.freeze({ ...def }),
   })
 
   if (defSource) definitionSourceMap.set(ctx, defSource)

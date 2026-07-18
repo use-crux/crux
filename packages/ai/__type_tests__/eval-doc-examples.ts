@@ -2,7 +2,7 @@
 
 import type { LanguageModel } from "ai";
 import { z } from "zod";
-import { generate } from "@use-crux/ai";
+import { generate, stableModel } from "@use-crux/ai";
 import { feedback as messageFeedback } from "@use-crux/ai/feedback";
 import { prompt } from "@use-crux/core";
 import { caseFile, evaluate } from "@use-crux/core/eval";
@@ -24,7 +24,7 @@ const supportPrompt = prompt({
   prompt: ({ input }) => input.question,
 });
 const support = generate.task(supportPrompt, {
-  model: supportModel,
+  model: stableModel(supportModel),
   temperature: 0.2,
 });
 
@@ -43,7 +43,7 @@ evaluate({
     }),
   ],
   variants: {
-    cheaper: { model: cheaperModel, temperature: 0 },
+    cheaper: { model: stableModel(cheaperModel), temperature: 0 },
   },
   expect: ({ output, expected, expect }) => {
     if (expected) expect(output.answer).toContain(expected.phrase);

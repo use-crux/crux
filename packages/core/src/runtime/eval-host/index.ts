@@ -7,7 +7,12 @@ export { createServerlessEvalHost } from "./adapters/serverless";
 export {
   createEvalHostClient,
   EvalHostClientError,
+  EvalHostClientTransportError,
+  EVAL_HOST_MAX_RESPONSE_BYTES,
+  EVAL_HOST_REQUEST_TIMEOUT_MS,
   type EvalHostClient,
+  type EvalHostClientRequestOptions,
+  type EvalHostClientTransportErrorCode,
   type EvalHostTransport,
 } from "./client";
 export { createEvalHostManifest } from "./manifest";

@@ -14,7 +14,7 @@ The current `config()` surface can become a trap because it mixes several differ
 
 - primitive registration, such as prompts, contexts, and tools;
 - runtime behavior, such as plugins, stores, observability, and middleware;
-- local Quality discovery and run defaults;
+- local Eval discovery;
 - indexer extension trust and lint policy;
 - future cloud/training upload, retention, and raw-content policy.
 
@@ -46,10 +46,10 @@ Local tooling must not require duplicate primitive registration when authored so
 the relationship. The Project Index and local runtime evidence are responsible for discovering:
 
 - prompts, contexts, tools, memories, retrieval definitions, flows, agents, safety definitions,
-  scorers, and quality suites;
+  scorers, and Evals;
 - `use[]` relationships and prompt/context tree paths;
 - source roots, package roots, workspace roots, package manager, and framework/runtime signals;
-- conventional Quality assets such as `*.eval.ts`, `.crux/quality`, cassettes, and baselines;
+- conventional Eval assets such as `*.eval.ts` and sibling Baselines;
 - runtime joins from stable ids and emitted attributes.
 
 Config is reserved for policy, trust, overrides, and explicit behavior:
@@ -66,7 +66,7 @@ Every resolved project-model field should carry provenance:
 
 - `source`: inferred from authored source;
 - `runtime`: observed from runtime evidence;
-- `filesystem`: loaded from local conventions such as `.crux/quality`;
+- `filesystem`: loaded from local conventions such as a sibling Baseline;
 - `config`: explicitly provided by project config or CLI policy.
 
 If inference is ambiguous or incomplete, Crux emits diagnostics. Diagnostics should prefer fixes such
@@ -80,12 +80,10 @@ unless the missing value is actually policy, trust, ownership, cost, privacy, or
 - `crux.config.ts` becomes smaller and clearer: policy and behavior, not primitive inventory.
 - `crux config inspect` or an equivalent Project Model view becomes important because users need to
   see what Crux inferred, what came from runtime evidence, and what came from explicit policy.
-- Quality discovery should default to package id, `.crux/quality`, `evals/**/*.eval.ts`, and
-  `**/*.eval.ts`.
-- Ambient `quality.setup` should become a compatibility path rather than the recommended model-backed
-  eval pattern. Evals should import explicit local helpers for executor/model choices when possible.
-- Replay posture should be primarily a CLI/run-tier decision such as `--ci`, `--replay
-  replay-strict`, `--replay live`, or `--replay record-new`.
+- Eval discovery defaults to `evals/**/*.eval.ts` and `**/*.eval.ts`, with one
+  default Eval export per file. The imported production task owns execution.
+- Reuse is automatic and private. Invocation policy is expressed with
+  `--offline`, `--fresh`, `--plan`, `--max-cost`, and selectors.
 - Local devtools auto-attachment is acceptable only for local Crux dev environments. Production
   telemetry and cloud export remain explicit.
 
@@ -97,8 +95,7 @@ docs and APIs should lead with source discovery.
 
 Implementation should proceed test-first through public behavior:
 
-1. A conventional project with eval files and no `crux.config.ts` can be discovered by Quality
-   tooling.
+1. A conventional project with Eval files and no `crux.config.ts` can be discovered by Eval tooling.
 2. A project with authored prompts/contexts/tools but no primitive registry still appears in the
    Project Index when source discovery can prove it.
 3. Ambiguous dynamic code produces diagnostics with suggested fixes instead of silently disappearing.

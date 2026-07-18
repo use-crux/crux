@@ -6,16 +6,16 @@ export function BudgetGauge({ budget }: { budget: BudgetSnapshotData }) {
   const pct = total > 0 ? (budget.used / total) * 100 : 0;
   const color =
     budget.level === "critical"
-      ? "text-(--qw-danger)"
+      ? "text-(--devtools-danger)"
       : budget.level === "warning"
-        ? "text-(--qw-warn)"
-        : "text-(--qw-ok)";
+        ? "text-(--devtools-warn)"
+        : "text-(--devtools-ok)";
   const strokeColor =
     budget.level === "critical"
-      ? "var(--qw-danger)"
+      ? "var(--devtools-danger)"
       : budget.level === "warning"
-        ? "var(--qw-warn)"
-        : "var(--qw-ok)";
+        ? "var(--devtools-warn)"
+        : "var(--devtools-ok)";
 
   const r = 36;
   const circ = 2 * Math.PI * r;
@@ -30,7 +30,7 @@ export function BudgetGauge({ budget }: { budget: BudgetSnapshotData }) {
           cy="44"
           r={r}
           fill="none"
-          stroke="var(--qw-bg-subtle)"
+          stroke="var(--devtools-bg-subtle)"
           strokeWidth="6"
           strokeDasharray={`${arc} ${circ}`}
           strokeDashoffset="0"
@@ -64,7 +64,7 @@ export function BudgetGauge({ budget }: { budget: BudgetSnapshotData }) {
           y="56"
           textAnchor="middle"
           className="text-[9px] text-zinc-500"
-          fill="var(--qw-fg-faint)"
+          fill="var(--devtools-fg-faint)"
         >
           {fmt(budget.used, "tok")} /{" "}
           {fmt(budget.used + budget.available, "tok")}
@@ -100,16 +100,16 @@ export function InlineBudgetGauge({ budget }: { budget: BudgetSnapshotData }) {
   const pct = total > 0 ? Math.round((budget.used / total) * 100) : 0;
   const color =
     budget.level === "critical"
-      ? "text-(--qw-danger)"
+      ? "text-(--devtools-danger)"
       : budget.level === "warning"
-        ? "text-(--qw-warn)"
-        : "text-(--qw-ok)";
+        ? "text-(--devtools-warn)"
+        : "text-(--devtools-ok)";
   const barColor =
     budget.level === "critical"
-      ? "bg-(--qw-danger)"
+      ? "bg-(--devtools-danger)"
       : budget.level === "warning"
-        ? "bg-(--qw-warn)"
-        : "bg-(--qw-ok)";
+        ? "bg-(--devtools-warn)"
+        : "bg-(--devtools-ok)";
 
   return (
     <div className="flex items-center gap-2">

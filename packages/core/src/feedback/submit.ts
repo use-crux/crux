@@ -1,4 +1,8 @@
-import { currentObservabilityTransport } from "../observability/observe";
+import {
+  currentObservabilityFeedbackDestination,
+  currentObservabilityRedactPaths,
+  currentObservabilityTransport,
+} from "../observability/observe";
 import { observe } from "../observability/observe";
 import type { CruxRunId } from "../observability/contract";
 import {
@@ -11,18 +15,20 @@ import type {
   FeedbackRating,
   FeedbackReceipt,
 } from "./types";
+import { DEFAULT_EVAL_PERSISTENCE_POLICY } from "../eval/internal/redact";
 
 /**
  * Durably submit feedback for an authoritative Crux generation run.
  *
  * The promise resolves only after the configured destination returns its
- * durable receipt. Crux does not fall back to local Quality storage.
+ * durable receipt. Crux does not silently fall back to process-local storage.
  */
 export async function feedback(
   runId: CruxRunId,
   input: FeedbackRating | FeedbackInput,
 ): Promise<FeedbackReceipt> {
-  const destination = currentObservabilityTransport() as
+  const destination = (currentObservabilityFeedbackDestination() ??
+    currentObservabilityTransport()) as
     | (Partial<CruxFeedbackDestination> & object)
     | undefined;
   if (typeof destination?.submitFeedback !== "function") {
@@ -30,7 +36,10 @@ export async function feedback(
       "feedback() requires a configured durable feedback destination. Configure the Crux observability destination before submitting feedback.",
     );
   }
-  const submission = normalizeFeedbackSubmission(runId, input);
+  const submission = normalizeFeedbackSubmission(runId, input, {
+    ...DEFAULT_EVAL_PERSISTENCE_POLICY,
+    redactPaths: currentObservabilityRedactPaths(),
+  });
   const span = observe.openSpan({
     name: "feedback.record",
     primitive: "feedback.record",

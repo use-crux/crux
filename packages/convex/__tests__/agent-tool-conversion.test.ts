@@ -157,7 +157,7 @@ describe('agent tool conversion', () => {
       },
     })
     const agent = new Agent({} as never, {
-      name: 'Karyla',
+      name: 'Support Agent',
       languageModel: {} as never,
       instructions: 'test',
       tools,

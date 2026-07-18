@@ -7,8 +7,8 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/api"
 )
 
-func qualityRunDetailFromObservabilityDetail(detail api.ObservabilityRunDetail) api.InspectRunDetailRecord {
-	run := qualityRunFromObservability(detail.Run)
+func inspectRunDetailFromObservabilityDetail(detail api.ObservabilityRunDetail) api.InspectRunDetailRecord {
+	run := inspectRunFromObservability(detail.Run)
 	trace := api.InspectTraceRecord{
 		TraceID:    detail.Run.RunID,
 		StartedAt:  parseObservabilityTime(detail.Run.StartedAt),
@@ -17,7 +17,7 @@ func qualityRunDetailFromObservabilityDetail(detail api.ObservabilityRunDetail) 
 		DurationMs: durationPointer(detail.Run.DurationMs),
 		Status:     normalizeObservabilityStatus(detail.Run.Status),
 	}
-	spans := qualitySpansFromRunDetailNode(detail.Root)
+	spans := inspectSpansFromRunDetailNode(detail.Root)
 	events := make([]api.CorrelatedEvent, 0)
 	for _, span := range spans {
 		if len(span.Data) == 0 {
@@ -34,7 +34,7 @@ func qualityRunDetailFromObservabilityDetail(detail api.ObservabilityRunDetail) 
 	}
 }
 
-func qualitySpansFromRunDetailNode(root api.ObservabilityRunDetailNode) []api.InspectRunSpan {
+func inspectSpansFromRunDetailNode(root api.ObservabilityRunDetailNode) []api.InspectRunSpan {
 	var spans []api.InspectRunSpan
 	var visit func(api.ObservabilityRunDetailNode)
 	visit = func(node api.ObservabilityRunDetailNode) {
@@ -58,7 +58,7 @@ func qualitySpansFromRunDetailNode(root api.ObservabilityRunDetailNode) []api.In
 			ParentID:   strings.TrimPrefix(node.ParentID, "span:"),
 			Kind:       node.Display.Kind,
 			Op:         node.Primitive,
-			Primitive:  qualityPrimitiveFromObservability(node.Family, node.Primitive),
+			Primitive:  inspectPrimitiveFromObservability(node.Family, node.Primitive),
 			Name:       node.Display.Label,
 			Status:     normalizeObservabilityStatus(node.Status),
 			StartedAt:  parseObservabilityTime(node.Timing.StartedAt),

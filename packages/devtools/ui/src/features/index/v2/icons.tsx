@@ -22,8 +22,6 @@ export const ICONS: Record<string, string> = {
   compare: "M8 4v16m8-16v16M4 12h4m8 0h4",
   bookmark: "M6 3h12v18l-6-4-6 4V3z",
   inbox: "M4 13h4l2 3h4l2-3h4M4 13l3-9h10l3 9v6H4v-6z",
-  cassette:
-    "M3 6h18v12H3zM7 12h10M7 10a2 2 0 100-4 2 2 0 000 4zm10 0a2 2 0 100-4 2 2 0 000 4z",
   arrowRight: "M5 12h14m-6-6l6 6-6 6",
   arrowUp: "M12 19V5m-7 7l7-7 7 7",
   arrowDown: "M12 5v14m-7-7l7 7 7-7",
@@ -82,7 +80,6 @@ export const INDEX_ICONS: Record<string, string> = {
   shield: "M12 3.2l7 3v5c0 4.4-3 7.5-7 8.8-4-1.3-7-4.4-7-8.8v-5l7-3z",
   lock: "M7 10.5V8a5 5 0 0110 0v2.5M5.5 10.5h13v9h-13z",
   gauge: "M4 16a8 8 0 0116 0M12 16l4.5-4.5M4 16h2.4M17.6 16H20",
-  dataset: "M4 6h16v3.5H4zM4 10.5h16V14H4zM4 15h16v3.5H4z",
   case: "M7 3.5h7l4 4v13H7zM14 3.5v4h4M9.5 13l2 2 4-4",
   gitcompare:
     "M7 5a2 2 0 100 4 2 2 0 000-4zM7 9v6a2 2 0 002 2h4M17 19a2 2 0 100-4 2 2 0 000 4zm0-4V9a2 2 0 00-2-2h-4",

@@ -154,7 +154,7 @@ describe('first-party Phase 6 native fixtures', () => {
         "const name = 'runtimeTool'",
         'const driver = { createTool: (config: unknown) => config }',
         '',
-        'export const qualityTarget = target.prompt(supportAnswer, {',
+        'export const promptTarget = target.prompt(supportAnswer, {',
         '  generate: runtime.generate,',
         '  model: runtime.model,',
         '})',

@@ -1,6 +1,6 @@
 /**
  * Filter chip bar for the Runs list. Thin wrapper over the shared
- * chip primitives in `qw/shell/FilterPopover.tsx` — handles which kinds
+ * chip primitives in `devtools/shell/FilterPopover.tsx` — handles which kinds
  * are currently active and how to seed them.
  *
  * Filter state lives on `NavState` (URL-shareable) — `onChange` pushes
@@ -8,14 +8,14 @@
  */
 
 import { type ReactNode } from "react";
-import { Icon } from "@/qw/shell/Icon";
+import { Icon } from "@/devtools/shell/Icon";
 import {
   AddFilterButton,
   MultiSelectChip,
   SingleSelectChip,
   SearchChip,
   type AddFilterOption,
-} from "@/qw/shell/FilterPopover";
+} from "@/devtools/shell/FilterPopover";
 import type { RunsFilters } from "../types";
 export type { RunsFilters } from "../types";
 
@@ -100,13 +100,13 @@ export function RunsFilterBar({
     <div
       className="flex flex-shrink-0 flex-wrap items-center gap-1.5 px-8 py-2"
       style={{
-        borderBottom: "1px solid var(--qw-border)",
-        background: "var(--qw-bg)",
+        borderBottom: "1px solid var(--devtools-border)",
+        background: "var(--devtools-bg)",
       }}
     >
       <div
         className="mr-1 flex items-center gap-1.5 font-mono text-[11px] tracking-[0.04em]"
-        style={{ color: "var(--qw-fg-faint)" }}
+        style={{ color: "var(--devtools-fg-faint)" }}
       >
         <Icon name="filter" size={11} />
         filter

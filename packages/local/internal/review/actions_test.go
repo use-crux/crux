@@ -55,3 +55,25 @@ func TestReviewActionsAppendHistoryAndRecomputeProjection(t *testing.T) {
 		})
 	}
 }
+
+func TestReviewActionsAreAnEmptyCollectionBeforeTheFirstAction(t *testing.T) {
+	service, err := OpenService(context.Background(), filepath.Join(t.TempDir(), "review.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = service.Close() })
+	receipt, err := service.Submit(context.Background(), Submission{
+		RunID: "run_0123456789abcdef01234567", Rating: "down",
+	}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	actions, err := service.Actions(context.Background(), receipt.ReviewID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if actions == nil || len(actions) != 0 {
+		t.Fatalf("actions = %#v, want non-nil empty collection", actions)
+	}
+}

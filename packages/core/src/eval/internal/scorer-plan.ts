@@ -3,6 +3,8 @@
 import { boundScorerLib, type Scorer } from "./scorers/types";
 import {
   SCORER_IDENTITY,
+  SCORER_DEPENDENCIES,
+  SCORER_BINDING,
   type MaybeIdentifiedScorer,
 } from "./scorers/runtime";
 import { fingerprintEvalValue, isReusableEvalValue } from "./identity";
@@ -16,6 +18,10 @@ import type {
   EvalPlannedCell,
   EvalScorerAction,
 } from "./types";
+import {
+  getEvalTaskDescriptorForInternalUse,
+  isManagedEvalTaskForInternalUse,
+} from "./task";
 
 export function resolveEvalScorers(
   raw: unknown,
@@ -43,6 +49,7 @@ export async function planExternalScorers(input: {
   readonly hostContractFingerprint?: string;
   readonly actionPrefix?: string;
   readonly bypassEvidenceReason?: "fresh_requested" | "performance_freshness";
+  readonly authoredSourceFingerprint?: string;
 }): Promise<readonly EvalScorerAction[]> {
   const external = resolveEvalScorers(input.rawScorers).filter(
     (scorer) => scorer.costClass === "model",
@@ -61,12 +68,18 @@ async function planExternalScorer(
 ): Promise<EvalScorerAction> {
   const scorerName = scorer.scorerName ?? scorer.name ?? "(dynamic)";
   const actionId = `${input.actionPrefix ?? "score"}:score:${index}:${scorerName}`;
-  const contractFingerprint = projectScorerContract(scorer);
+  const contractFingerprint = projectScorerContract(
+    scorer,
+    input.cell,
+    input.authoredSourceFingerprint,
+  );
+  const dependencies = projectScorerDependencies(scorer);
   const common = {
     actionId,
     dependency: "task:root" as const,
     scorerName,
     occurrence: String(index),
+    dependencies,
     scorer,
     ...(contractFingerprint !== undefined ? { contractFingerprint } : {}),
     ...(input.hostContractFingerprint !== undefined
@@ -119,6 +132,7 @@ async function planExternalScorer(
     contractFingerprint,
     hostContractFingerprint: input.hostContractFingerprint,
     occurrence: String(index),
+    dependencies,
   });
   if (key === undefined) {
     return Object.freeze({
@@ -149,10 +163,58 @@ async function planExternalScorer(
       });
 }
 
+function projectScorerDependencies(scorer: Scorer<unknown, unknown, unknown>) {
+  const declared = (scorer as MaybeIdentifiedScorer)[SCORER_DEPENDENCIES];
+  return Object.freeze(
+    declared === undefined
+      ? ([
+          "input",
+          "output",
+          "expected",
+          "response",
+          "capturedSignals",
+        ] as const)
+      : [...declared],
+  );
+}
+
 function projectScorerContract(
   scorer: Scorer<unknown, unknown, unknown>,
+  cell: EvalPlannedCell,
+  authoredSourceFingerprint: string | undefined,
 ): string | undefined {
   const identity = (scorer as MaybeIdentifiedScorer)[SCORER_IDENTITY];
   if (!isReusableEvalValue(identity)) return undefined;
-  return identity === undefined ? undefined : fingerprintEvalValue(identity);
+  if (identity === undefined || !isManagedEvalTaskForInternalUse(cell.task)) {
+    return undefined;
+  }
+  const descriptor = getEvalTaskDescriptorForInternalUse(cell.task);
+  if (descriptor.projectScorerContext === undefined) return undefined;
+  const binding = (scorer as MaybeIdentifiedScorer)[SCORER_BINDING];
+  if (
+    binding?.hasAuthoredSelect === true &&
+    authoredSourceFingerprint === undefined
+  ) {
+    return undefined;
+  }
+  const context = descriptor.projectScorerContext({
+    input: cell.input,
+    ...(cell.call !== undefined ? { call: cell.call } : {}),
+    overrides: cell.overrides,
+    ...(binding?.model !== undefined ? { model: binding.model } : {}),
+    ...(binding?.generate !== undefined ? { generate: binding.generate } : {}),
+    ...(authoredSourceFingerprint !== undefined
+      ? { authoredSourceFingerprint }
+      : {}),
+  });
+  if (!context.reusable || !isReusableEvalValue(context.fingerprintMaterial)) {
+    return undefined;
+  }
+  return fingerprintEvalValue({
+    scorer: identity,
+    context: context.fingerprintMaterial,
+    ...(authoredSourceFingerprint !== undefined
+      ? { authoredSourceFingerprint }
+      : {}),
+  });
 }

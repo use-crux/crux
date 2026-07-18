@@ -16,8 +16,9 @@ export async function resolveRuntimeArtifactHost(
     "runtime-rich",
   );
   const runtime = loaded.loaded.crux?.config.runtime;
-  if (runtime?.kind === "host-bound" && runtime.host === "convex") {
-    return "convex";
+  if (runtime?.kind === "host-bound") {
+    if (runtime.host === "convex") return "convex";
+    if (runtime.host === "cloudflare") return "cloudflare";
   }
   if (loaded.loaded.configFile && !loaded.loaded.crux) {
     throw createRuntimeError({

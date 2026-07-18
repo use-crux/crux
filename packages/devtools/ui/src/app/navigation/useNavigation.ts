@@ -1,10 +1,10 @@
 /**
- * Quality Workbench navigation.
+ * Devtools navigation.
  *
  * URL-backed view state. Two screen kinds:
- *  - list-style screens (overview, runs, experiments, …) — identified by a
+ *  - list-style screens (overview, runs, Evals, …) — identified by a
  *    `view` discriminator.
- *  - detail screens that take an entity id (run, experiment, …).
+ *  - detail screens that take an entity id (run, Eval, …).
  */
 
 import {
@@ -78,7 +78,7 @@ function runViewTransition(
 }
 
 export type NavState =
-  // Quality screens
+  // Inspection screens
   | { view: "overview" }
   | {
       view: "insights";
@@ -115,7 +115,7 @@ export type NavState =
   | { view: "baselines" }
   | { view: "eval-runs"; runId?: string }
   | { view: "review"; reviewId?: string }
-  // Library group (legacy inspect screens)
+  // Library
   | {
       view: "library-index";
       promptId?: string;
@@ -126,30 +126,6 @@ export type NavState =
   | { view: "library-memory"; memoryId?: string }
   | { view: "library-workspaces"; workspaceId?: string; filePath?: string }
   | { view: "library-plans"; planId?: string }
-  // ── Legacy view aliases. Kept so orphan view files in `views/` keep
-  // ── type-checking after the redesign. They are not mounted by the
-  // ── new App shell; if hit, callers are coerced to a safe target.
-  | {
-      view: "traces";
-      traceId?: string;
-      sessionFilter?: string;
-      flowFilter?: string;
-    }
-  | { view: "detail"; traceId?: string; sessionId?: string; flowId?: string }
-  | {
-      view: "prompts";
-      promptId?: string;
-      contextId?: string;
-      toolName?: string;
-      tab?: string;
-    }
-  | { view: "memory"; memoryId?: string }
-  | { view: "workspaces" }
-  | { view: "sessions"; sessionId?: string }
-  | { view: "security" }
-  | { view: "constraints" }
-  | { view: "plans" }
-  | { view: "dashboard" }
   | { view: "evals"; evalId?: string };
 
 // ─── Path encoding ──────────────────────────────────────────────────
@@ -254,37 +230,6 @@ export function pathFromState(state: NavState): string {
       return state.planId
         ? `/library/plans/${encodeURIComponent(state.planId)}`
         : "/library/plans";
-    // Legacy aliases → coerce to nearest new screen
-    case "traces":
-      return state.traceId
-        ? `/runs/${encodeURIComponent(state.traceId)}`
-        : "/runs";
-    case "detail":
-      return state.traceId
-        ? `/runs/${encodeURIComponent(state.traceId)}`
-        : "/runs";
-    case "prompts":
-      return state.toolName
-        ? `/library/index/tool/${encodeURIComponent(state.toolName)}`
-        : state.promptId
-          ? `/library/index/${encodeURIComponent(state.promptId)}`
-          : "/library/index";
-    case "memory":
-      return state.memoryId
-        ? `/library/memory/${encodeURIComponent(state.memoryId)}`
-        : "/library/memory";
-    case "workspaces":
-      return "/library/workspaces";
-    case "sessions":
-      return "/runs?group=session";
-    case "security":
-      return "/insights";
-    case "constraints":
-      return "/runs";
-    case "plans":
-      return "/library/plans";
-    case "dashboard":
-      return "/";
     case "evals":
       return state.evalId
         ? `/evals/${encodeURIComponent(state.evalId)}`
@@ -401,12 +346,6 @@ export function stateFromPath(path: string, search?: string): NavState {
     }
     case "runtime":
       return { view: "runtime" };
-    case "evaluations":
-    case "experiments":
-    case "feedback":
-    case "cassettes":
-    case "scorers":
-      return { view: "overview" };
     case "baselines":
       return { view: "baselines" };
     case "evals":
@@ -423,9 +362,7 @@ export function stateFromPath(path: string, search?: string): NavState {
         : { view: "review" };
     case "library": {
       const section = a;
-      // `library/index/...` is canonical; `library/prompts/...` kept
-      // as a backward-compat alias so old bookmarks still resolve.
-      if (section === "index" || section === "prompts") {
+      if (section === "index") {
         if (b === "health" && !c)
           return { view: "library-index", tab: "health" };
         if (b === "tool" && c)

@@ -9,8 +9,46 @@ import type {
   EvalRunStore,
   EvalTaskHost,
 } from "../../src/eval/internal/ports";
+import { nonBillablePlanningPorts } from "./reuse-test-harness";
 
 describe("portable Eval kernel", () => {
+  it("preserves scalar opaque-task inputs in plans and persisted runs", async () => {
+    const task = Object.assign(async (input: string) => input.toUpperCase(), {
+      _tag: "CruxTask" as const,
+      operation: "function" as const,
+    });
+    const evalValue = evaluate({
+      id: "scalar-input",
+      task,
+      cases: [{ id: "one", input: "hello", expected: "HELLO" }],
+    });
+    const plan = await planEval(
+      evalValue,
+      {
+        sourceKey: { relativeFile: "scalar.eval.ts", export: "default" },
+      },
+      nonBillablePlanningPorts(),
+    );
+    const writes: unknown[] = [];
+    const run = await executeEvalPlan(plan, {
+      taskHost: {
+        execute: async ({ input }) => ({
+          output: String(input).toUpperCase(),
+          capturedSignals: [],
+          runIds: [],
+          metrics: { durationMs: 1 },
+        }),
+      },
+      clock: { now: () => 1 },
+      ids: { next: () => "scalar-run" },
+      runStore: { write: async (value) => void writes.push(value) },
+    });
+
+    expect(plan.cells[0]?.input).toBe("hello");
+    expect(run.cells[0]?.input).toBe("hello");
+    expect(writes).toEqual([run]);
+  });
+
   it("plans and executes one live Current cell before persisting the run", async () => {
     const task = Object.assign(
       async (input: { question: string }) => ({ answer: input.question }),
@@ -30,9 +68,13 @@ describe("portable Eval kernel", () => {
         assert(output.answer).toBe("yes");
       },
     });
-    const plan = await planEval(evalValue, {
-      sourceKey: { relativeFile: "support.eval.ts", export: "default" },
-    });
+    const plan = await planEval(
+      evalValue,
+      {
+        sourceKey: { relativeFile: "support.eval.ts", export: "default" },
+      },
+      nonBillablePlanningPorts(),
+    );
 
     expect(Object.isFrozen(plan)).toBe(true);
     expect(Object.isFrozen(plan.cells)).toBe(true);
@@ -41,7 +83,7 @@ describe("portable Eval kernel", () => {
       caseId: "refund",
       variant: "current",
       trial: 0,
-      action: { kind: "execute", reason: "live_required" },
+      action: { kind: "execute", reason: "identity_unavailable" },
     });
 
     const hostCalls: unknown[] = [];
@@ -108,7 +150,7 @@ describe("portable Eval kernel", () => {
           variant: "current",
           trial: 0,
           status: "passed",
-          task: { status: "executed", reason: "live_required" },
+          task: { status: "executed", reason: "identity_unavailable" },
           output: { answer: "yes" },
           expected: { answer: "yes" },
           assertions: { ran: 1, notEvaluated: 0 },

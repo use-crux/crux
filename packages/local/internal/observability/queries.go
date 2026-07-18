@@ -299,7 +299,7 @@ func decodeRunListCursor(cursor string) (string, string, error) {
 }
 
 // RunsPage is the one joined, revisioned Runs read model: it runs
-// filters/pagination in SQL before enrichment, batches Quality-correlation-
+// filters/pagination in SQL before enrichment, batches Inspect-correlation-
 // adjacent delivery-health/segment/rollup joins so they never scale per row,
 // and reports the server's current revision alongside a stable cursor for
 // the next page.
@@ -307,6 +307,9 @@ func (s *Service) RunsPage(ctx context.Context, opts RunListOptions) (RunsRespon
 	runs, appliedLimit, err := s.runsWithOptions(ctx, opts)
 	if err != nil {
 		return RunsResponse{}, err
+	}
+	if runs == nil {
+		runs = []RunSummary{}
 	}
 	revision, err := s.CurrentRevision(ctx)
 	if err != nil {

@@ -14,7 +14,7 @@ export const PERFORMANCE_EVIDENCE_GUIDANCE =
 export async function runNormalizedEvalChecks<TContext>(input: {
   readonly checks: readonly {
     readonly declaration?: NormalizedEvalCheck;
-    readonly level: "evaluation" | "case";
+    readonly level: "eval" | "case";
   }[];
   readonly phase: CellAssertionPhase;
   readonly recorder: AssertionRecorder;

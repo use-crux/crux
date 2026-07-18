@@ -14,9 +14,9 @@ const TYPE_ICONS: Record<string, string> = {
 };
 
 function getColor(deviation: number, type?: string): string {
-  if (type === "tokens") return "text-(--qw-warn) bg-(--qw-warn-soft)";
-  if (deviation > 0) return "text-(--qw-danger) bg-(--qw-danger-soft)";
-  return "text-(--qw-ok) bg-(--qw-ok-soft)";
+  if (type === "tokens") return "text-(--devtools-warn) bg-(--devtools-warn-soft)";
+  if (deviation > 0) return "text-(--devtools-danger) bg-(--devtools-danger-soft)";
+  return "text-(--devtools-ok) bg-(--devtools-ok-soft)";
 }
 
 export function AnomalyBadge({

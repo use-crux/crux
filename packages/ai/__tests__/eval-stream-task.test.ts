@@ -54,6 +54,8 @@ describe("stream.task()", () => {
       operation: "stream",
       adapterId: "ai-sdk",
     });
+    expect(task._tag).toBe("CruxTask");
+    expect(task.operation).toBe("stream");
     expectTypeOf<OutputOf<typeof task>>().toEqualTypeOf<string>();
   });
 

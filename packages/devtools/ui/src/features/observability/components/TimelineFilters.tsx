@@ -110,8 +110,8 @@ export function TimelineFilters({
           onClick={() => onSecurityFilterChange?.(!securityFilter)}
           className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] transition-colors ${
             securityFilter
-              ? "bg-(--qw-danger-soft) text-(--qw-danger) border border-(--qw-danger-soft)"
-              : "text-zinc-500 hover:text-(--qw-danger) border border-transparent"
+              ? "bg-(--devtools-danger-soft) text-(--devtools-danger) border border-(--devtools-danger-soft)"
+              : "text-zinc-500 hover:text-(--devtools-danger) border border-transparent"
           }`}
           title="Show only traces with security warnings"
         >

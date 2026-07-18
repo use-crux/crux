@@ -16,10 +16,16 @@ import type {
   RuntimeHostBinder,
   RuntimeHostBindingOptions,
   RuntimeTargetMap,
+  RuntimeHandlerTarget,
+  RuntimeTargetRuntimeRef,
   RuntimeResultPayloadPort,
   WakeEnvelope,
 } from "@use-crux/core/runtime";
-import { bindHostRuntime, runWithRuntimeHost } from "@use-crux/core/runtime";
+import {
+  bindHostRuntime,
+  normalizeRuntimeHandlerTargets,
+  runWithRuntimeHost,
+} from "@use-crux/core/runtime";
 import { createCloudflareRuntimeStore } from "./runtime/store";
 import { CLOUDFLARE_RUNTIME_CAPABILITIES } from "./runtime/definition";
 
@@ -59,7 +65,7 @@ export interface CreateCloudflareEvalHostOptions<TEnv> {
   /** Deterministic clock override for tests. */
   readonly now?: () => Date;
   /** Generated Runtime targets deployed in this Worker entry. */
-  readonly targets?: RuntimeTargetMap;
+  readonly targets?: readonly RuntimeHandlerTarget[];
   /**
    * Explicit alternate result payload storage, such as an R2-backed port.
    * The default chunks canonical payloads inside Durable Object storage.
@@ -100,6 +106,7 @@ export function createCloudflareEvalHost<TEnv>(
     readonly #host: ResolvedEvalHost<EvalHostStore>;
     readonly #store: EvalHostStore;
     readonly #bindRuntimeHost: RuntimeHostBinder;
+    readonly #targets: RuntimeTargetMap;
 
     constructor(
       readonly state: DurableObjectState,
@@ -109,6 +116,12 @@ export function createCloudflareEvalHost<TEnv>(
         ...(options.resultPayloads
           ? { results: options.resultPayloads({ state, env }) }
           : {}),
+      });
+      const runtimeRef: RuntimeTargetRuntimeRef = {};
+      this.#targets = normalizeRuntimeHandlerTargets({
+        targets: options.targets ?? [],
+        runtimeRef,
+        entry: "generated Cloudflare Eval host",
       });
       const runtime: InProcessRuntimeEngineDefinition<EvalHostStore> = {
         kind: "in-process",
@@ -135,8 +148,9 @@ export function createCloudflareEvalHost<TEnv>(
         hostKind: "cloudflare",
         wakeMode: "durable",
         leaseExtension: false,
-        ...(options.targets ? { targets: options.targets } : {}),
+        targets: this.#targets,
       });
+      runtimeRef.current = this.#host.runtime;
       this.#bindRuntimeHost = (
         definition: HostBoundRuntimeEngineDefinition,
         runtimeOptions: RuntimeHostBindingOptions,
@@ -145,7 +159,7 @@ export function createCloudflareEvalHost<TEnv>(
           ...runtimeOptions,
           store: this.#store,
           createWake: runtime.createWake,
-          targets: { ...options.targets, ...runtimeOptions.targets },
+          targets: { ...this.#targets, ...runtimeOptions.targets },
           leaseExtension: false,
           startMaintenance: false,
         });

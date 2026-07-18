@@ -9,7 +9,7 @@ import (
 
 // OverviewRecordAPI returns the read-only Inspect summary. It derives every
 // value from canonical observability runs and Inspect insights; legacy Inspect
-// experiments, baselines, feedback records, and cassettes are never opened.
+// Eval artifacts are read through the dedicated Eval filesystem model.
 func (s *Service) OverviewRecordAPI(ctx context.Context, windows ...string) (api.InspectOverviewRecord, error) {
 	windowName := "all"
 	if len(windows) > 0 {

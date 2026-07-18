@@ -43,9 +43,20 @@ import type {
 } from "./eval-task";
 import { AI_PROMPT_EVAL_CAPABILITIES } from "./eval-task";
 import {
+  aiTaskCallContract,
+  validateAiTaskVariantCall,
+  validateAiTaskVariantInput,
+  validateAiTaskVariantOverrides,
+} from "./eval-task-variant";
+import {
+  createAiScorerContextBinder,
+  createAiScorerContextProjector,
   createAiTaskIdentityProjector,
   resolveAiTaskInvocation,
 } from "./eval-task-identity";
+import { projectSchema } from "./eval-task-identity-projection";
+import { createAiTaskCostEstimator } from "./eval-task-cost";
+import { createRenderedPromptIdentity } from "./eval-rendered-prompt-identity";
 
 type StreamingPromptForModel<P extends AnyPrompt, M> = StructuredPromptForModel<
   P,
@@ -113,13 +124,19 @@ type ErasedStream = (
   prompt: AnyPrompt,
   options: object,
 ) => Promise<StreamResult<unknown, unknown>>;
+type ErasedGenerate = (prompt: AnyPrompt, options: object) => Promise<unknown>;
 
 /** Build the `stream.task()` factory over one existing AI streaming path. */
 export function createStreamTaskFactory(
   stream: ErasedStream,
+  generate: ErasedGenerate,
+  options: { readonly executionContractKnown: boolean },
 ): AIStreamTaskFactory {
   return ((prompt: AnyPrompt, defaults: object) => {
     const normalizedDefaults = Object.freeze({ ...defaults });
+    const renderedPromptIdentity = createRenderedPromptIdentity<
+      StreamCompletion<unknown>
+    >({ prompt, defaults: normalizedDefaults });
     const invoke = (
       input: unknown,
       callOptions: object = {},
@@ -133,8 +150,10 @@ export function createStreamTaskFactory(
       );
       return stream(invocation.prompt, { ...invocation.options, input });
     };
-    const task = (input: unknown, callOptions?: object) =>
-      invoke(input, callOptions);
+    const task = Object.assign(
+      (input: unknown, callOptions?: object) => invoke(input, callOptions),
+      { _tag: "CruxTask" as const, operation: "stream" as const },
+    );
     const descriptor: EvalTaskDescriptor<StreamCompletion<unknown>, unknown> = {
       _tag: "CruxEvalTaskDescriptor",
       operation: "stream",
@@ -144,22 +163,69 @@ export function createStreamTaskFactory(
         ? { inputSchema: prompt.inputSchema }
         : {}),
       outputSchema: prompt.outputSchema,
+      ...(schemaContract(prompt.outputSchema) !== undefined
+        ? { outputContractFingerprint: schemaContract(prompt.outputSchema) }
+        : {}),
+      ...(aiTaskCallContract("stream", normalizedDefaults) !== undefined
+        ? {
+            callContractFingerprint: aiTaskCallContract(
+              "stream",
+              normalizedDefaults,
+            ),
+          }
+        : {}),
       capabilities: AI_PROMPT_EVAL_CAPABILITIES,
       defaults: normalizedDefaults,
       overrideKeys: Object.keys(normalizedDefaults),
+      validateVariantOverrides: (overrides) =>
+        validateAiTaskVariantOverrides(overrides, prompt),
+      validateVariantInput: validateAiTaskVariantInput,
+      validateVariantCall: (call, overrides) =>
+        validateAiTaskVariantCall(call, overrides, normalizedDefaults),
       projectIdentity: createAiTaskIdentityProjector({
         operation: "stream",
         prompt,
         defaults: normalizedDefaults,
+        executionContractKnown: options.executionContractKnown,
       }),
-      execute: async (input, callOptions, overrides) =>
-        drainStream(await invoke(input, callOptions, overrides)),
+      projectRenderedPromptIdentity: renderedPromptIdentity.project,
+      readRenderedPromptIdentity: renderedPromptIdentity.read,
+      projectScorerContext: createAiScorerContextProjector({
+        prompt,
+        defaults: normalizedDefaults,
+        generate: generate as never,
+        executionContractKnown: options.executionContractKnown,
+      }),
+      createScorerContext: createAiScorerContextBinder({
+        prompt,
+        defaults: normalizedDefaults,
+        generate: generate as never,
+      }),
+      estimateCost: createAiTaskCostEstimator({
+        prompt,
+        defaults: normalizedDefaults,
+      }),
+      execute: (input, callOptions, overrides = {}) =>
+        renderedPromptIdentity.execute(
+          async (effectivePrompt, options) =>
+            drainStream(await stream(effectivePrompt, options)),
+          {
+            input,
+            ...(callOptions !== undefined ? { call: callOptions } : {}),
+            overrides,
+          },
+        ),
       projectOutput: (completion) =>
         prompt.outputSchema === undefined ? completion.text : completion.object,
       projectResponse: (completion) => Object.freeze({ ...completion }),
     };
     return attachEvalTaskDescriptorForInternalUse(task, descriptor);
   }) as unknown as AIStreamTaskFactory;
+}
+
+function schemaContract(schema: unknown): string | undefined {
+  const projected = projectSchema(schema);
+  return projected.ok ? JSON.stringify(projected.value) : undefined;
 }
 
 async function drainStream(

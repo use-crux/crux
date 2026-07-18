@@ -10,7 +10,7 @@ export interface CanonicalParityOptions {
 
 const allowedKeysByPath: Readonly<Record<string, readonly string[]>> = {
   '': [],
-  definitions: ['id', 'kind', 'name', 'description', 'tags', 'path', 'source', 'sourceSnippet', 'sourceRefs', 'fidelity', 'status', 'fingerprint', 'metadata', 'quality'],
+  definitions: ['id', 'kind', 'name', 'description', 'tags', 'path', 'source', 'sourceSnippet', 'sourceRefs', 'fidelity', 'status', 'fingerprint', 'metadata'],
   relations: ['id', 'type', 'from', 'to', 'fidelity', 'source', 'metadata'],
   sourceRefs: ['definitionId', 'ref'],
   diagnostics: ['id', 'severity', 'code', 'message', 'source', 'relatedDefinitionIds', 'suggestedFix'],
@@ -73,7 +73,6 @@ const allowedKeysByPath: Readonly<Record<string, readonly string[]>> = {
 
 const dynamicJsonPathParts = new Set([
   'metadata',
-  'quality',
   'inputSchema',
   'outputSchema',
   'settings',

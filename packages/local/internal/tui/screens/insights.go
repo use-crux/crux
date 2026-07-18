@@ -25,7 +25,7 @@ const (
 	focusInsightsDetail
 )
 
-// Insights renders the quality-insights workbench screen.
+// Insights renders the derived-insights workbench screen.
 //
 // The screen owns only interaction state. Data is loaded through DataClient,
 // live updates arrive through the bridge interest contract, and all rendering

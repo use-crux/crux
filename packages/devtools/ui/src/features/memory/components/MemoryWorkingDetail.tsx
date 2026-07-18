@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Chip, SectionHead } from "@/qw/shell/primitives";
+import { Chip, SectionHead } from "@/devtools/shell/primitives";
 import {
   fmtDuration,
   fmtTime,
@@ -89,7 +89,7 @@ export function WorkingDetail({
             {lastAt && (
               <span
                 className="font-mono text-[11px]"
-                style={{ color: "var(--qw-fg-faint)" }}
+                style={{ color: "var(--devtools-fg-faint)" }}
               >
                 last · {lastAt}
               </span>
@@ -106,8 +106,8 @@ export function WorkingDetail({
             value: store.stats?.conflicts ?? 0,
             color:
               (store.stats?.conflicts ?? 0) > 0
-                ? "var(--qw-warn)"
-                : "var(--qw-fg-faint)",
+                ? "var(--devtools-warn)"
+                : "var(--devtools-fg-faint)",
           },
           ...(lifetimeStr ? [{ label: "Lifetime", value: lifetimeStr }] : []),
         ]}
@@ -116,7 +116,7 @@ export function WorkingDetail({
             <>
               <span
                 className="font-mono text-[11px]"
-                style={{ color: "var(--qw-fg-faint)" }}
+                style={{ color: "var(--devtools-fg-faint)" }}
               >
                 scope
               </span>
@@ -183,7 +183,7 @@ function MutationHistory({ muts }: { muts: readonly MemoryWorkingMutation[] }) {
         right={
           <span
             className="font-mono text-[11px]"
-            style={{ color: "var(--qw-fg-faint)" }}
+            style={{ color: "var(--devtools-fg-faint)" }}
           >
             {muts.length} writes/updates · before → after
           </span>
@@ -192,8 +192,8 @@ function MutationHistory({ muts }: { muts: readonly MemoryWorkingMutation[] }) {
       <div
         className="overflow-hidden rounded-[10px]"
         style={{
-          background: "var(--qw-bg-elev)",
-          border: "1px solid var(--qw-border)",
+          background: "var(--devtools-bg-elev)",
+          border: "1px solid var(--devtools-border)",
         }}
       >
         <TableHeader
@@ -228,24 +228,24 @@ function MutationHistory({ muts }: { muts: readonly MemoryWorkingMutation[] }) {
                 .filter(Boolean)
                 .join(" "),
               borderBottom:
-                i === muts.length - 1 ? "none" : "1px solid var(--qw-border)",
+                i === muts.length - 1 ? "none" : "1px solid var(--devtools-border)",
             }}
           >
-            <span style={{ color: "var(--qw-fg-faint)" }}>
+            <span style={{ color: "var(--devtools-fg-faint)" }}>
               {fmtTime(m.timestamp)}
             </span>
             <LDOpPill op={m.op} />
-            <span style={{ color: "var(--qw-crux)" }}>{m.key}</span>
+            <span style={{ color: "var(--devtools-crux)" }}>{m.key}</span>
             <span
               className="truncate"
-              style={{ color: "var(--qw-fg-muted)" }}
+              style={{ color: "var(--devtools-fg-muted)" }}
               title={fmtValue(m.before)}
             >
               {fmtValue(m.before)}
             </span>
             <span
               className="truncate"
-              style={{ color: "var(--qw-fg)" }}
+              style={{ color: "var(--devtools-fg)" }}
               title={fmtValue(m.after)}
             >
               {fmtValue(m.after)}
@@ -253,14 +253,14 @@ function MutationHistory({ muts }: { muts: readonly MemoryWorkingMutation[] }) {
             {hasSpan && (
               <span
                 className="truncate text-[10.5px]"
-                style={{ color: "var(--qw-fg-muted)" }}
+                style={{ color: "var(--devtools-fg-muted)" }}
                 title={m.span ?? m.spanId}
               >
                 {m.span ?? m.spanId ?? "—"}
               </span>
             )}
             {hasTrace && (
-              <span className="text-right" style={{ color: "var(--qw-crux)" }}>
+              <span className="text-right" style={{ color: "var(--devtools-crux)" }}>
                 {shortTrace(m.traceId) ?? "—"}
               </span>
             )}

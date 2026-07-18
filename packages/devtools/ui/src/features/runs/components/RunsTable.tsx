@@ -1,10 +1,10 @@
 import type { KeyboardEvent, MouseEvent } from "react";
 import { usePrefetchRunDetail } from "@/shared/hooks/usePrefetch";
-import { Chip, ScoreBadge } from "@/qw/shell/primitives";
-import { RowErrorBoundary } from "@/qw/shell/SectionBoundary";
-import { Icon } from "@/qw/shell/Icon";
-import { QwTooltip } from "@/qw/shell/QwTooltip";
-import { CollapsibleGroup } from "@/qw/shell/FilterPopover";
+import { Chip, ScoreBadge } from "@/devtools/shell/primitives";
+import { RowErrorBoundary } from "@/devtools/shell/SectionBoundary";
+import { Icon } from "@/devtools/shell/Icon";
+import { DevtoolsTooltip } from "@/devtools/shell/DevtoolsTooltip";
+import { CollapsibleGroup } from "@/devtools/shell/FilterPopover";
 import type { ColumnId, RunRow } from "../types";
 import type { SelectionState } from "../hooks/useRunSelection";
 import { COLUMN_DEFS } from "../lib/run-columns";
@@ -57,9 +57,9 @@ export function RunsTable({
         className="sticky top-0 z-10 grid items-center gap-2.5 px-8 py-2 text-[10.5px] font-medium uppercase tracking-[0.08em]"
         style={{
           gridTemplateColumns: gridTemplate,
-          color: "var(--qw-fg-faint)",
-          background: "var(--qw-bg)",
-          borderBottom: "1px solid var(--qw-border)",
+          color: "var(--devtools-fg-faint)",
+          background: "var(--devtools-bg)",
+          borderBottom: "1px solid var(--devtools-border)",
         }}
       >
         <SelectAllCheckbox
@@ -146,7 +146,7 @@ function RunGroupRows({
       {group.rows.length === 0 && (
         <div
           className="px-8 py-10 text-center text-[12px]"
-          style={{ color: "var(--qw-fg-muted)" }}
+          style={{ color: "var(--devtools-fg-muted)" }}
         >
           No runs match.
         </div>
@@ -202,8 +202,8 @@ function RunRowCell({
       className="grid w-full cursor-pointer items-center gap-2.5 px-8 py-2 text-left text-[12px] transition-colors hover:opacity-90"
       style={{
         gridTemplateColumns: gridTemplate,
-        borderBottom: "1px solid var(--qw-border)",
-        background: selected ? "var(--qw-crux-soft)" : undefined,
+        borderBottom: "1px solid var(--devtools-border)",
+        background: selected ? "var(--devtools-crux-soft)" : undefined,
       }}
     >
       <RowCheckbox
@@ -248,11 +248,11 @@ function RowCheckbox({
       }}
       className="flex size-[14px] flex-shrink-0 cursor-pointer items-center justify-center rounded-[3px] transition-colors"
       style={{
-        border: `1px solid ${checked ? "var(--qw-crux)" : "var(--qw-border-strong)"}`,
-        background: checked ? "var(--qw-crux)" : "var(--qw-bg)",
+        border: `1px solid ${checked ? "var(--devtools-crux)" : "var(--devtools-border-strong)"}`,
+        background: checked ? "var(--devtools-crux)" : "var(--devtools-bg)",
       }}
     >
-      {checked && <Icon name="check" size={9} color="var(--qw-bg)" />}
+      {checked && <Icon name="check" size={9} color="var(--devtools-bg)" />}
     </span>
   );
 }
@@ -284,23 +284,23 @@ function SelectAllCheckbox({
       }}
       className="flex size-[14px] flex-shrink-0 cursor-pointer items-center justify-center rounded-[3px] transition-colors"
       style={{
-        border: `1px solid ${state !== "none" ? "var(--qw-crux)" : "var(--qw-border-strong)"}`,
+        border: `1px solid ${state !== "none" ? "var(--devtools-crux)" : "var(--devtools-border-strong)"}`,
         background:
           state === "all"
-            ? "var(--qw-crux)"
+            ? "var(--devtools-crux)"
             : state === "some"
-              ? "var(--qw-crux-soft)"
-              : "var(--qw-bg)",
+              ? "var(--devtools-crux-soft)"
+              : "var(--devtools-bg)",
         opacity: disabled ? 0.45 : 1,
         cursor: disabled ? "not-allowed" : "pointer",
       }}
       title={state === "all" ? "Deselect all visible" : "Select all visible"}
     >
-      {state === "all" && <Icon name="check" size={9} color="var(--qw-bg)" />}
+      {state === "all" && <Icon name="check" size={9} color="var(--devtools-bg)" />}
       {state === "some" && (
         <span
           className="block h-px w-2"
-          style={{ background: "var(--qw-crux)" }}
+          style={{ background: "var(--devtools-crux)" }}
         />
       )}
     </span>
@@ -319,9 +319,9 @@ function DiagnosticsGlyph({
   count: number;
   severity?: string;
 }) {
-  const color = severity === "error" ? "var(--qw-danger)" : "var(--qw-warn)";
+  const color = severity === "error" ? "var(--devtools-danger)" : "var(--devtools-warn)";
   return (
-    <QwTooltip
+    <DevtoolsTooltip
       content={`${count} diagnostic${count === 1 ? "" : "s"} — open the run to inspect`}
     >
       <span
@@ -332,7 +332,7 @@ function DiagnosticsGlyph({
         <Icon name="alert" size={10} color={color} />
         {count}
       </span>
-    </QwTooltip>
+    </DevtoolsTooltip>
   );
 }
 
@@ -365,7 +365,7 @@ function RunCell({
           {live && (
             <span
               className="size-1.5 flex-shrink-0 animate-pulse rounded-full"
-              style={{ background: "var(--qw-crux)" }}
+              style={{ background: "var(--devtools-crux)" }}
               aria-hidden
             />
           )}
@@ -387,7 +387,7 @@ function RunCell({
       return (
         <span
           className="truncate font-mono text-[11.5px]"
-          style={{ color: "var(--qw-crux)" }}
+          style={{ color: "var(--devtools-crux)" }}
           title={run.traceId}
         >
           {shortId}
@@ -403,41 +403,41 @@ function RunCell({
         !visibleSet.has("session") && Boolean(run.sessionId);
       return (
         <span className="flex min-w-0 items-center gap-1.5 font-mono text-[11.5px]">
-          <QwTooltip content={`Kind: ${run.kind}`}>
+          <DevtoolsTooltip content={`Kind: ${run.kind}`}>
             <span
               className="size-[5px] flex-shrink-0 rounded-full"
               style={{ background: KIND_DOT_COLOR[run.kind] }}
               aria-hidden
             />
-          </QwTooltip>
+          </DevtoolsTooltip>
           <span className="truncate">{run.target}</span>
           {showSpansInline && (
-            <QwTooltip
+            <DevtoolsTooltip
               content={`Family of ${run.childCount} traces - this row is the rolled-up root. Open to see all spans.`}
             >
               <span
                 className="font-mono text-[10.5px]"
-                style={{ color: "var(--qw-fg-faint)" }}
+                style={{ color: "var(--devtools-fg-faint)" }}
               >
                 · {run.childCount} traces
               </span>
-            </QwTooltip>
+            </DevtoolsTooltip>
           )}
           {showSessionInline && (
-            <QwTooltip content={`session · ${run.sessionId}`}>
+            <DevtoolsTooltip content={`session · ${run.sessionId}`}>
               <span
                 className="rounded-[3px] px-1 font-mono text-[10px]"
                 style={{
-                  background: "var(--qw-bg-muted)",
-                  color: "var(--qw-fg-faint)",
-                  border: "1px solid var(--qw-border)",
+                  background: "var(--devtools-bg-muted)",
+                  color: "var(--devtools-fg-faint)",
+                  border: "1px solid var(--devtools-border)",
                 }}
               >
                 {run.sessionId!.length > 8
                   ? `${run.sessionId!.slice(0, 8)}…`
                   : run.sessionId}
               </span>
-            </QwTooltip>
+            </DevtoolsTooltip>
           )}
           {run.diagnosticsCount != null && run.diagnosticsCount > 0 && (
             <DiagnosticsGlyph
@@ -450,18 +450,18 @@ function RunCell({
     }
     case "model":
       return run.model ? (
-        <QwTooltip content={run.model}>
+        <DevtoolsTooltip content={run.model}>
           <span
             className="truncate font-mono text-[11px]"
-            style={{ color: "var(--qw-fg-muted)" }}
+            style={{ color: "var(--devtools-fg-muted)" }}
           >
             {run.model.split("/").pop() ?? run.model}
           </span>
-        </QwTooltip>
+        </DevtoolsTooltip>
       ) : (
         <span
           className="truncate font-mono text-[11px]"
-          style={{ color: "var(--qw-fg-faint)" }}
+          style={{ color: "var(--devtools-fg-faint)" }}
         >
           -
         </span>
@@ -476,7 +476,7 @@ function RunCell({
       return (
         <span
           className="text-right font-mono text-[11.5px]"
-          style={{ color: "var(--qw-fg-muted)" }}
+          style={{ color: "var(--devtools-fg-muted)" }}
         >
           {run.tokenCount != null ? run.tokenCount.toLocaleString() : "-"}
         </span>
@@ -485,7 +485,7 @@ function RunCell({
       return (
         <span
           className="text-right font-mono text-[11.5px]"
-          style={{ color: "var(--qw-fg-muted)" }}
+          style={{ color: "var(--devtools-fg-muted)" }}
         >
           {formatCost(run.cost)}
         </span>
@@ -494,7 +494,7 @@ function RunCell({
       return (
         <span className="text-right">
           {run.score != null ? (
-            <QwTooltip
+            <DevtoolsTooltip
               content={`Aggregate scorer score (0..1) · tier: ${
                 run.score >= 0.85
                   ? "ok"
@@ -508,11 +508,11 @@ function RunCell({
               <span style={{ display: "inline-block" }}>
                 <ScoreBadge score={run.score} />
               </span>
-            </QwTooltip>
+            </DevtoolsTooltip>
           ) : (
             <span
               className="font-mono text-[11.5px]"
-              style={{ color: "var(--qw-fg-faint)" }}
+              style={{ color: "var(--devtools-fg-faint)" }}
             >
               -
             </span>
@@ -521,18 +521,18 @@ function RunCell({
       );
     case "provider":
       return run.provider ? (
-        <QwTooltip content={run.provider}>
+        <DevtoolsTooltip content={run.provider}>
           <span
             className="truncate font-mono text-[11px]"
-            style={{ color: "var(--qw-fg-muted)" }}
+            style={{ color: "var(--devtools-fg-muted)" }}
           >
             {run.provider}
           </span>
-        </QwTooltip>
+        </DevtoolsTooltip>
       ) : (
         <span
           className="truncate font-mono text-[11px]"
-          style={{ color: "var(--qw-fg-faint)" }}
+          style={{ color: "var(--devtools-fg-faint)" }}
         >
           -
         </span>
@@ -542,7 +542,7 @@ function RunCell({
         <span
           className="text-right font-mono text-[11.5px]"
           style={{
-            color: run.toolCallCount ? "var(--qw-iris)" : "var(--qw-fg-faint)",
+            color: run.toolCallCount ? "var(--devtools-iris)" : "var(--devtools-fg-faint)",
           }}
         >
           {run.toolCallCount ?? "-"}
@@ -550,31 +550,31 @@ function RunCell({
       );
     case "spans":
       return (
-        <QwTooltip content={graphCountsTitle(run) || "No graph rollups"}>
+        <DevtoolsTooltip content={graphCountsTitle(run) || "No graph rollups"}>
           <span
             className="text-right font-mono text-[11px]"
-            style={{ color: "var(--qw-fg-muted)" }}
+            style={{ color: "var(--devtools-fg-muted)" }}
           >
             {formatGraphCounts(run)}
           </span>
-        </QwTooltip>
+        </DevtoolsTooltip>
       );
     case "session":
       return run.sessionId ? (
-        <QwTooltip content={run.sessionId}>
+        <DevtoolsTooltip content={run.sessionId}>
           <span
             className="truncate font-mono text-[11px]"
-            style={{ color: "var(--qw-fg-muted)" }}
+            style={{ color: "var(--devtools-fg-muted)" }}
           >
             {run.sessionId.length > 12
               ? `${run.sessionId.slice(0, 12)}…`
               : run.sessionId}
           </span>
-        </QwTooltip>
+        </DevtoolsTooltip>
       ) : (
         <span
           className="truncate font-mono text-[11px]"
-          style={{ color: "var(--qw-fg-faint)" }}
+          style={{ color: "var(--devtools-fg-faint)" }}
         >
           -
         </span>
@@ -584,7 +584,7 @@ function RunCell({
         <span
           className="truncate font-mono text-[11px]"
           style={{
-            color: run.errorMessage ? "var(--qw-danger)" : "var(--qw-fg-faint)",
+            color: run.errorMessage ? "var(--devtools-danger)" : "var(--devtools-fg-faint)",
           }}
           title={run.errorMessage ?? ""}
         >
@@ -595,7 +595,7 @@ function RunCell({
       return (
         <span
           className="text-right font-mono text-[11px]"
-          style={{ color: "var(--qw-fg-faint)" }}
+          style={{ color: "var(--devtools-fg-faint)" }}
         >
           {new Date(run.startedAt).toLocaleTimeString("en-US", {
             hour12: false,

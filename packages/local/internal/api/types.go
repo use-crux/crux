@@ -16,7 +16,7 @@ type TokenUsage struct {
 	CacheWrites  int `json:"cacheCreationInputTokens,omitempty"`
 }
 
-// InspectTraceRecord is the bounded trace summary included in a quality detail
+// InspectTraceRecord is the bounded trace summary included in an Inspect detail
 // response. Normal inspection truth lives in ObservabilityRunDetail; raw graph
 // access is reserved for explicit export/debug flows.
 type InspectTraceRecord struct {
@@ -168,70 +168,67 @@ func (e *CorrelatedEvent) GetInt(key string) (int, bool) {
 
 // Stats holds aggregate statistics across all traces.
 type Stats struct {
-	TotalExecutions          int            `json:"totalExecutions"`
-	SuccessCount             int            `json:"successCount"`
-	ErrorCount               int            `json:"errorCount"`
-	RunningCount             int            `json:"runningCount"`
-	AvgDurationMs            float64        `json:"avgDurationMs"`
-	TotalCost                float64        `json:"totalCost"`
-	AvgCost                  float64        `json:"avgCost"`
-	TotalTokens              int            `json:"totalTokens"`
-	ErrorRate                float64        `json:"errorRate"`
-	MemoryReadCount          int            `json:"memoryReadCount"`
-	MemoryWriteCount         int            `json:"memoryWriteCount"`
-	CompactionCount          int            `json:"compactionCount"`
-	BudgetLevel              *string        `json:"budgetLevel"`
-	JudgeAvgScore            *float64       `json:"judgeAvgScore"`
-	AvgTtftMs                *float64       `json:"avgTtftMs"`
-	AvgThroughput            *float64       `json:"avgThroughput"`
-	StreamingTraceCount      int            `json:"streamingTraceCount"`
-	HandoffCount             int            `json:"handoffCount"`
-	BlackboardUpdateCount    int            `json:"blackboardUpdateCount"`
-	DelegateCount            int            `json:"delegateCount"`
-	ToolExecutionCount       int            `json:"toolExecutionCount"`
-	ToolApprovalRequestCount int            `json:"toolApprovalRequestCount"`
-	ToolApprovalDeniedCount  int            `json:"toolApprovalDeniedCount"`
-	ToolErrorCount           int            `json:"toolErrorCount"`
-	ToolTokenSavingsEstimate int            `json:"toolTokenSavingsEstimate"`
-	SecurityWarningCount     int            `json:"securityWarningCount"`
-	ContextCacheHitCount     int            `json:"contextCacheHitCount"`
-	ContextCacheMissCount    int            `json:"contextCacheMissCount"`
-	ContextCacheHitRate      *float64       `json:"contextCacheHitRate"`
-	SemanticCacheHitCount    int            `json:"semanticCacheHitCount"`
-	SemanticCacheMissCount   int            `json:"semanticCacheMissCount"`
-	SemanticCacheWriteCount  int            `json:"semanticCacheWriteCount"`
-	SemanticCacheHitRate     *float64       `json:"semanticCacheHitRate"`
-	EmbeddingCallCount       int            `json:"embeddingCallCount"`
-	TotalEmbeddingTexts      int            `json:"totalEmbeddingTexts"`
-	AvgEmbeddingDurationMs   *float64       `json:"avgEmbeddingDurationMs"`
-	TotalEmbeddingTokens     int            `json:"totalEmbeddingTokens"`
-	TotalEmbeddingCost       float64        `json:"totalEmbeddingCost"`
-	EmbeddingCacheHitCount   int            `json:"embeddingCacheHitCount"`
-	EmbeddingCacheMissCount  int            `json:"embeddingCacheMissCount"`
-	EmbeddingRetryCount      int            `json:"embeddingRetryCount"`
-	EmbeddingTruncatedCount  int            `json:"embeddingTruncatedCount"`
-	EmbeddingRateLimitWaitMs float64        `json:"embeddingRateLimitWaitMs"`
-	RetrievalCallCount       int            `json:"retrievalCallCount"`
-	RetrievalErrorCount      int            `json:"retrievalErrorCount"`
-	AvgRetrievalDurationMs   *float64       `json:"avgRetrievalDurationMs"`
-	TotalRetrievedHits       int            `json:"totalRetrievedHits"`
-	RetrievalStageCount      int            `json:"retrievalStageCount"`
-	RetrievalStageErrorCount int            `json:"retrievalStageErrorCount"`
-	WorkspaceOperationCount  int            `json:"workspaceOperationCount"`
-	WorkspaceErrorCount      int            `json:"workspaceErrorCount"`
-	RagEvalRunCount          int            `json:"ragEvalRunCount"`
-	RagEvalFailedCaseCount   int            `json:"ragEvalFailedCaseCount"`
-	RagEvalFailureCounts     map[string]int `json:"ragEvalFailureCounts"`
-	IndexOperationCount      int            `json:"indexOperationCount"`
-	IndexErrorCount          int            `json:"indexErrorCount"`
-	AvgIndexDurationMs       *float64       `json:"avgIndexDurationMs"`
-	TotalIndexedSources      int            `json:"totalIndexedSources"`
-	TotalIndexedChunks       int            `json:"totalIndexedChunks"`
-	IngestParseCount         int            `json:"ingestParseCount"`
-	IngestErrorCount         int            `json:"ingestErrorCount"`
-	AvgIngestDurationMs      *float64       `json:"avgIngestDurationMs"`
-	TotalIngestParts         int            `json:"totalIngestParts"`
-	TotalIngestWarnings      int            `json:"totalIngestWarnings"`
+	TotalExecutions          int      `json:"totalExecutions"`
+	SuccessCount             int      `json:"successCount"`
+	ErrorCount               int      `json:"errorCount"`
+	RunningCount             int      `json:"runningCount"`
+	AvgDurationMs            float64  `json:"avgDurationMs"`
+	TotalCost                float64  `json:"totalCost"`
+	AvgCost                  float64  `json:"avgCost"`
+	TotalTokens              int      `json:"totalTokens"`
+	ErrorRate                float64  `json:"errorRate"`
+	MemoryReadCount          int      `json:"memoryReadCount"`
+	MemoryWriteCount         int      `json:"memoryWriteCount"`
+	CompactionCount          int      `json:"compactionCount"`
+	BudgetLevel              *string  `json:"budgetLevel"`
+	JudgeAvgScore            *float64 `json:"judgeAvgScore"`
+	AvgTtftMs                *float64 `json:"avgTtftMs"`
+	AvgThroughput            *float64 `json:"avgThroughput"`
+	StreamingTraceCount      int      `json:"streamingTraceCount"`
+	HandoffCount             int      `json:"handoffCount"`
+	BlackboardUpdateCount    int      `json:"blackboardUpdateCount"`
+	DelegateCount            int      `json:"delegateCount"`
+	ToolExecutionCount       int      `json:"toolExecutionCount"`
+	ToolApprovalRequestCount int      `json:"toolApprovalRequestCount"`
+	ToolApprovalDeniedCount  int      `json:"toolApprovalDeniedCount"`
+	ToolErrorCount           int      `json:"toolErrorCount"`
+	ToolTokenSavingsEstimate int      `json:"toolTokenSavingsEstimate"`
+	SecurityWarningCount     int      `json:"securityWarningCount"`
+	ContextCacheHitCount     int      `json:"contextCacheHitCount"`
+	ContextCacheMissCount    int      `json:"contextCacheMissCount"`
+	ContextCacheHitRate      *float64 `json:"contextCacheHitRate"`
+	SemanticCacheHitCount    int      `json:"semanticCacheHitCount"`
+	SemanticCacheMissCount   int      `json:"semanticCacheMissCount"`
+	SemanticCacheWriteCount  int      `json:"semanticCacheWriteCount"`
+	SemanticCacheHitRate     *float64 `json:"semanticCacheHitRate"`
+	EmbeddingCallCount       int      `json:"embeddingCallCount"`
+	TotalEmbeddingTexts      int      `json:"totalEmbeddingTexts"`
+	AvgEmbeddingDurationMs   *float64 `json:"avgEmbeddingDurationMs"`
+	TotalEmbeddingTokens     int      `json:"totalEmbeddingTokens"`
+	TotalEmbeddingCost       float64  `json:"totalEmbeddingCost"`
+	EmbeddingCacheHitCount   int      `json:"embeddingCacheHitCount"`
+	EmbeddingCacheMissCount  int      `json:"embeddingCacheMissCount"`
+	EmbeddingRetryCount      int      `json:"embeddingRetryCount"`
+	EmbeddingTruncatedCount  int      `json:"embeddingTruncatedCount"`
+	EmbeddingRateLimitWaitMs float64  `json:"embeddingRateLimitWaitMs"`
+	RetrievalCallCount       int      `json:"retrievalCallCount"`
+	RetrievalErrorCount      int      `json:"retrievalErrorCount"`
+	AvgRetrievalDurationMs   *float64 `json:"avgRetrievalDurationMs"`
+	TotalRetrievedHits       int      `json:"totalRetrievedHits"`
+	RetrievalStageCount      int      `json:"retrievalStageCount"`
+	RetrievalStageErrorCount int      `json:"retrievalStageErrorCount"`
+	WorkspaceOperationCount  int      `json:"workspaceOperationCount"`
+	WorkspaceErrorCount      int      `json:"workspaceErrorCount"`
+	IndexOperationCount      int      `json:"indexOperationCount"`
+	IndexErrorCount          int      `json:"indexErrorCount"`
+	AvgIndexDurationMs       *float64 `json:"avgIndexDurationMs"`
+	TotalIndexedSources      int      `json:"totalIndexedSources"`
+	TotalIndexedChunks       int      `json:"totalIndexedChunks"`
+	IngestParseCount         int      `json:"ingestParseCount"`
+	IngestErrorCount         int      `json:"ingestErrorCount"`
+	AvgIngestDurationMs      *float64 `json:"avgIngestDurationMs"`
+	TotalIngestParts         int      `json:"totalIngestParts"`
+	TotalIngestWarnings      int      `json:"totalIngestWarnings"`
 }
 
 // CompositionKindStats holds per-kind composition metrics.
@@ -260,47 +257,6 @@ type SwarmAnalytics struct {
 type CompositionStats struct {
 	ByKind map[string]CompositionKindStats `json:"byKind"`
 	Swarm  *SwarmAnalytics                 `json:"swarm"`
-}
-
-// EvalCaseData holds the result of a single eval case execution.
-type EvalCaseData struct {
-	CaseName        string                 `json:"caseName"`
-	ModelID         string                 `json:"modelId"`
-	Passed          bool                   `json:"passed"`
-	DurationMs      float64                `json:"durationMs"`
-	Error           *string                `json:"error,omitempty"`
-	Usage           *TokenUsage            `json:"usage,omitempty"`
-	Cost            *float64               `json:"cost,omitempty"`
-	Scores          map[string]ScoreResult `json:"scores,omitempty"`
-	FailureCategory *string                `json:"failureCategory,omitempty"`
-}
-
-// ScoreResult holds a numeric score and optional reasoning from a judge eval.
-type ScoreResult struct {
-	Score     float64 `json:"score"`
-	Reasoning *string `json:"reasoning,omitempty"`
-}
-
-// EvalRun represents a complete eval run with its cases and summary.
-type EvalRun struct {
-	EvalID         string         `json:"evalId"`
-	PromptID       *string        `json:"promptId"`
-	StartedAt      int64          `json:"startedAt"`
-	Models         []string       `json:"models"`
-	CaseNames      []string       `json:"caseNames"`
-	TotalCases     int            `json:"totalCases"`
-	CompletedCases []EvalCaseData `json:"completedCases"`
-	Status         string         `json:"status"`
-	DurationMs     *float64       `json:"durationMs,omitempty"`
-	Summary        *EvalSummary   `json:"summary,omitempty"`
-}
-
-// EvalSummary aggregates pass/fail counts for an eval run.
-type EvalSummary struct {
-	Total   int                     `json:"total"`
-	Passed  int                     `json:"passed"`
-	Failed  int                     `json:"failed"`
-	ByModel map[string]ModelSummary `json:"byModel"`
 }
 
 // InspectOverviewRecord is the Inspect dashboard projection for observability
@@ -482,7 +438,7 @@ type InspectRunSpan struct {
 	LinkedInsightIDs []string            `json:"linkedInsightIds,omitempty"`
 }
 
-// InspectSpanTimings holds replay-quality timing breakdowns that go
+// InspectSpanTimings holds detailed timing breakdowns that go
 // beyond a single start/end pair. All fields are optional; absent means
 // the primitive doesn't record that signal.
 type InspectSpanTimings struct {
@@ -501,11 +457,11 @@ type InspectSpanTimings struct {
 	SelfMs *float64 `json:"selfMs,omitempty"`
 }
 
-// QualitySpanPrimitive enumerates the canonical primitives that can
+// InspectSpanPrimitive enumerates the canonical primitives that can
 // appear in a Run's span tree. Frontends should treat anything outside
 // this set as "other".
 //
-// Keep this list in lock-step with internal/inspect/quality_records.go's
+// Keep this list in lock-step with internal/inspect primitive classification
 // classifyPrimitive() and with packages/devtools/ui/src/types.ts.
 const (
 	SpanPrimitiveRun                  = "run"
@@ -559,13 +515,12 @@ const (
 	SpanPrimitiveCostRecord           = "cost.record"
 	SpanPrimitiveFeedbackRecord       = "feedback.record"
 	SpanPrimitiveCustomOperation      = "custom.operation"
-	// Short aliases kept for local Quality filters and older local fixtures.
+	// Compact display aliases used by the TUI.
 	SpanPrimitiveTrace          = "trace"           // root LLM/agent invocation
 	SpanPrimitiveGeneration     = "generation"      // LLM call (leaf)
 	SpanPrimitiveTool           = "tool"            // tool invocation
 	SpanPrimitiveFlow           = "flow"            // runtime-flow boundary
 	SpanPrimitiveFlowStep       = "flow.step"       // step inside a runtime-flow
-	SpanPrimitiveEvalFlow       = "eval.flow"       // eval flow (flow:start/end)
 	SpanPrimitivePipeline       = "pipeline"        // composition: pipeline
 	SpanPrimitiveParallel       = "parallel"        // composition: parallel
 	SpanPrimitiveConsensus      = "consensus"       // composition: consensus
@@ -721,13 +676,6 @@ type InspectRunsOptions struct {
 type InspectInsightStatusRequest struct {
 	Status string  `json:"status"`
 	Note   *string `json:"note,omitempty"`
-}
-
-// ModelSummary tracks per-model pass/fail counts.
-type ModelSummary struct {
-	Total  int `json:"total"`
-	Passed int `json:"passed"`
-	Failed int `json:"failed"`
 }
 
 // IndexData holds all registered prompts, contexts, and tools.
@@ -886,23 +834,6 @@ type ProjectDefinition struct {
 	Status        string             `json:"status,omitempty"`
 	Fingerprint   string             `json:"fingerprint,omitempty"`
 	Metadata      json.RawMessage    `json:"metadata,omitempty"`
-	Quality       *IndexQuality      `json:"quality,omitempty"`
-}
-
-type IndexQuality struct {
-	EvalIDs           []string `json:"evalIds,omitempty"`
-	SuiteIDs          []string `json:"suiteIds,omitempty"`
-	RunIDs            []string `json:"runIds,omitempty"`
-	TraceIDs          []string `json:"traceIds,omitempty"`
-	RunCount          int      `json:"runCount,omitempty"`
-	CompletedRunCount int      `json:"completedRunCount,omitempty"`
-	FailedRunCount    int      `json:"failedRunCount,omitempty"`
-	RunningRunCount   int      `json:"runningRunCount,omitempty"`
-	LastRunID         string   `json:"lastRunId,omitempty"`
-	LastRunAt         int64    `json:"lastRunAt,omitempty"`
-	LastStatus        string   `json:"lastStatus,omitempty"`
-	CaseCount         int      `json:"caseCount,omitempty"`
-	PassRate          *float64 `json:"passRate,omitempty"`
 }
 
 // ProjectRelation describes graph edges between authored Crux definitions.

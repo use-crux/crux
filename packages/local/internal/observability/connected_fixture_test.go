@@ -67,7 +67,7 @@ func TestConnectedFixtureDefinitionJoinDeliveryAndCatchup(t *testing.T) {
 		`{"schemaVersion":2,"recordId":"cf_h_anthropic","type":"span","runId":"run_cf_healthy","traceId":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","segmentId":"seg_cf_b","segmentSeq":4,"spanId":"sp_cf_anthropic","family":"generation","primitive":"generation.call","name":"anthropic","startedAt":"2026-07-01T12:00:02.620Z","status":"ok","provider":"anthropic","attributes":{"adapterPackage":"@use-crux/anthropic"}}`,
 		`{"schemaVersion":2,"recordId":"cf_h_google","type":"span","runId":"run_cf_healthy","traceId":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","segmentId":"seg_cf_b","segmentSeq":5,"spanId":"sp_cf_google","family":"generation","primitive":"generation.call","name":"google","startedAt":"2026-07-01T12:00:02.640Z","status":"ok","provider":"google","attributes":{"adapterPackage":"@use-crux/google"}}`,
 		`{"schemaVersion":2,"recordId":"cf_h_ai","type":"span","runId":"run_cf_healthy","traceId":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","segmentId":"seg_cf_b","segmentSeq":6,"spanId":"sp_cf_ai","family":"generation","primitive":"generation.call","name":"ai-sdk","startedAt":"2026-07-01T12:00:02.660Z","status":"ok","provider":"ai-sdk","attributes":{"adapterPackage":"@use-crux/ai"}}`,
-		// Secondary direct-runtime evidence for Quality-primary scorer (scoring.judge span).
+		// Secondary direct-runtime evidence for an Eval scorer (scoring.judge span).
 		`{"schemaVersion":2,"recordId":"cf_h_judge","type":"span","runId":"run_cf_healthy","traceId":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","segmentId":"seg_cf_b","segmentSeq":7,"spanId":"sp_cf_judge","family":"scoring","primitive":"scoring.judge","name":"judge","startedAt":"2026-07-01T12:00:02.700Z","status":"ok","definitionRefs":[{"id":"scorer:connected","kind":"scorer","role":"invoked-scorer"}]}`,
 	)
 
@@ -209,22 +209,22 @@ func TestConnectedFixtureDefinitionJoinDeliveryAndCatchup(t *testing.T) {
 		t.Fatalf("fresh revision %d must not expire: %#v", revisionAfterIngest, catchup)
 	}
 
-	// ── 8. Quality-correlation sibling: eval.case run does not pollute definition filters
+	// ── 8. Eval-correlation sibling: eval.case run does not pollute definition filters
 	mustIngest(t, service,
-		`{"schemaVersion":2,"recordId":"cf_q_start","type":"run:start","runId":"run_cf_quality","traceId":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","segmentId":"seg_cf_q","segmentSeq":1,"name":"quality case","rootPrimitive":"eval.case","startedAt":"2026-07-01T14:00:00.000Z","status":"running"}`,
-		`{"schemaVersion":2,"recordId":"cf_q_end","type":"run:end","runId":"run_cf_quality","traceId":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","segmentId":"seg_cf_q","segmentSeq":2,"endedAt":"2026-07-01T14:00:01.000Z","status":"ok"}`,
+		`{"schemaVersion":2,"recordId":"cf_eval_start","type":"run:start","runId":"run_cf_eval","traceId":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","segmentId":"seg_cf_eval","segmentSeq":1,"name":"eval case","rootPrimitive":"eval.case","startedAt":"2026-07-01T14:00:00.000Z","status":"running"}`,
+		`{"schemaVersion":2,"recordId":"cf_eval_end","type":"run:end","runId":"run_cf_eval","traceId":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","segmentId":"seg_cf_eval","segmentSeq":2,"endedAt":"2026-07-01T14:00:01.000Z","status":"ok"}`,
 	)
-	afterQuality, err := service.RunsPage(ctx, RunListOptions{DefinitionID: "prompt:connected"})
+	afterEval, err := service.RunsPage(ctx, RunListOptions{DefinitionID: "prompt:connected"})
 	if err != nil {
-		t.Fatalf("filtered after quality: %v", err)
+		t.Fatalf("filtered after eval: %v", err)
 	}
-	for _, row := range afterQuality.Rows {
-		if row.RunID == "run_cf_quality" {
-			t.Fatal("Quality-only eval.case run must not appear under a definition filter")
+	for _, row := range afterEval.Rows {
+		if row.RunID == "run_cf_eval" {
+			t.Fatal("Eval-only eval.case run must not appear under a definition filter")
 		}
 	}
-	if afterQuality.Revision <= revisionAfterIngest {
-		t.Fatalf("revision must advance after quality ingest: before=%d after=%d", revisionAfterIngest, afterQuality.Revision)
+	if afterEval.Revision <= revisionAfterIngest {
+		t.Fatalf("revision must advance after eval ingest: before=%d after=%d", revisionAfterIngest, afterEval.Revision)
 	}
 }
 

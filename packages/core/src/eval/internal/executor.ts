@@ -12,6 +12,7 @@ import { assertEvalPreflightReady } from "./offline";
 import { assertEvalCostAdmitted } from "./cost-plan";
 import { reserveEvalCostPlan } from "./reservation";
 import { compareEvalCellsToBaseline } from "./baseline";
+import { isManagedEvalTaskForInternalUse } from "./task";
 
 export async function executeEvalPlan(
   plan: EvalPlan,
@@ -57,12 +58,16 @@ async function executeReservedEvalPlan(
   const startedAt = ports.clock.now();
   const results: EvalCellExecutionResult[] = [];
   for (const planned of plan.cells) {
-    results.push(await executePlannedCell({ plan, planned, ports }));
+    results.push(
+      await executePlannedCell({
+        plan,
+        planned,
+        ports,
+        executionAttemptId: runId,
+      }),
+    );
   }
   const cells = Object.freeze(results.map((result) => result.cell));
-  const incompleteReasons = Object.freeze([
-    ...new Set(results.flatMap((result) => result.incompleteReason ?? [])),
-  ]);
   const blockingVariants = Object.freeze(
     plan.arms.filter((arm) => arm.blocking).map((arm) => arm.name),
   );
@@ -85,9 +90,29 @@ async function executeReservedEvalPlan(
     comparison,
     plan.evalId,
   );
-  const actualCosts = cells.flatMap((cell) =>
+  const incompleteReasons = Object.freeze([
+    ...new Set([
+      ...results.flatMap((result) => result.incompleteReason ?? []),
+      ...gates.results.flatMap((result) =>
+        result.informational !== true && result.evidence === "incomplete"
+          ? (result.reason ?? [])
+          : [],
+      ),
+    ]),
+  ]);
+  const taskCosts = cells.flatMap((cell) =>
     cell.metrics.costUsd === undefined ? [] : [cell.metrics.costUsd],
   );
+  const judgeCosts = cells.flatMap((cell) =>
+    cell.scores.flatMap((score) =>
+      score.status === "computed" &&
+      score.reason === "managed_external_executed" &&
+      score.metrics?.actualUsd !== undefined
+        ? [score.metrics.actualUsd]
+        : [],
+    ),
+  );
+  const actualCosts = [...taskCosts, ...judgeCosts];
   const actualUsd =
     actualCosts.length === 0
       ? undefined
@@ -126,12 +151,20 @@ async function executeReservedEvalPlan(
       reservedMaximumUsd: plan.cost.knownMaximumUsd,
       unknownActionCount: plan.cost.unknownActionCount,
       task: Object.freeze({
-        ...(actualUsd !== undefined ? { actualUsd } : {}),
+        ...(taskCosts.length > 0
+          ? { actualUsd: taskCosts.reduce((total, cost) => total + cost, 0) }
+          : {}),
       }),
-      judge: Object.freeze({}),
+      judge: Object.freeze({
+        ...(judgeCosts.length > 0
+          ? { actualUsd: judgeCosts.reduce((total, cost) => total + cost, 0) }
+          : {}),
+      }),
     }),
     provenance: Object.freeze({
-      task: "managed" as const,
+      task: isManagedEvalTaskForInternalUse(plan.task)
+        ? ("managed" as const)
+        : ("opaque" as const),
       host: "injected" as const,
       evidenceStore:
         ports.evidenceStore === undefined

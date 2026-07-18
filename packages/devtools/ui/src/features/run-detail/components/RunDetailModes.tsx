@@ -21,9 +21,9 @@ import { EmptyHint } from "@/features/run-detail/components/SpanDetailPanelAtoms
 import { LensSwitch } from "@/features/run-detail/components/atoms";
 import type { RunArchetype } from "@/features/run-detail/lib/archetype";
 import { warningTurnSpanIds } from "@/features/run-detail/lib/explain/rollup";
-import { SectionBoundary } from "@/qw/shell/SectionBoundary";
-import { Btn } from "@/qw/shell/primitives";
-import { Icon } from "@/qw/shell/Icon";
+import { SectionBoundary } from "@/devtools/shell/SectionBoundary";
+import { Btn } from "@/devtools/shell/primitives";
+import { Icon } from "@/devtools/shell/Icon";
 import { SkeletonCard } from "@/shared/components/Skeleton";
 import type { JudgeEventData, Trace } from "@/types";
 import type { RunLens } from "@/features/run-detail/types";
@@ -101,7 +101,7 @@ export function CanvasMode({
       {/* Canvas */}
       <div
         className="relative min-w-0 flex-1"
-        style={{ background: "var(--qw-bg)" }}
+        style={{ background: "var(--devtools-bg)" }}
       >
         {/* Lens switch — floats over the canvas at the same offset as the
             tree's structure-pane switch (px-2.5 py-2), so it doesn't jump. */}
@@ -144,8 +144,8 @@ export function CanvasMode({
         style={{
           width: 400,
           flex: "0 0 400px",
-          borderLeft: "1px solid var(--qw-border)",
-          background: "var(--qw-bg)",
+          borderLeft: "1px solid var(--devtools-border)",
+          background: "var(--devtools-bg)",
         }}
       >
         <div className="min-h-0 flex-1 overflow-hidden">
@@ -159,7 +159,7 @@ export function CanvasMode({
         </div>
         <div
           className="flex-shrink-0 p-2.5"
-          style={{ borderTop: "1px solid var(--qw-border)" }}
+          style={{ borderTop: "1px solid var(--devtools-border)" }}
         >
           <Btn
             variant="soft"
@@ -253,12 +253,12 @@ export function InspectMode({
           >
             <div
               className="flex h-full min-h-0 flex-col overflow-hidden"
-              style={{ background: "var(--qw-bg)" }}
+              style={{ background: "var(--devtools-bg)" }}
             >
               {/* Lens switch — heads the Structure pane (design `StructureTree`). */}
               <div
                 className="flex flex-shrink-0 items-center px-2.5 py-2"
-                style={{ borderBottom: "1px solid var(--qw-border)" }}
+                style={{ borderBottom: "1px solid var(--devtools-border)" }}
               >
                 <LensSwitch
                   active={lens}
@@ -279,11 +279,11 @@ export function InspectMode({
               </div>
             </div>
           </ResizablePanel>
-          <ResizableHandle withHandle className="bg-[var(--qw-border)]" />
+          <ResizableHandle withHandle className="bg-[var(--devtools-border)]" />
           <ResizablePanel defaultSize={isTimeline ? "54%" : "66%"}>
             <div
               className="h-full w-full overflow-hidden"
-              style={{ background: "var(--qw-bg)" }}
+              style={{ background: "var(--devtools-bg)" }}
             >
               <SpanDetailPanel
                 detail={canonical.runDetail}
@@ -296,7 +296,7 @@ export function InspectMode({
           </ResizablePanel>
         </ResizablePanelGroup>
       </div>
-      {/* Inspector — constant facts & quality rail; collapsible */}
+      {/* Inspector — constant facts and evidence rail; collapsible */}
       {inspectorOpen ? (
         <SpanInspector
           runDetail={canonical.runDetail}
@@ -341,11 +341,11 @@ export function SummaryMode({
   return (
     <div
       className="flex h-full min-h-0 flex-col"
-      style={{ background: "var(--qw-bg)" }}
+      style={{ background: "var(--devtools-bg)" }}
     >
       <div
         className="flex flex-shrink-0 items-center px-2.5 py-2"
-        style={{ borderBottom: "1px solid var(--qw-border)" }}
+        style={{ borderBottom: "1px solid var(--devtools-border)" }}
       >
         <LensSwitch
           active="tree"

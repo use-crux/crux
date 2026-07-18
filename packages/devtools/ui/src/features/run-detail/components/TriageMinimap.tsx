@@ -13,10 +13,10 @@ import { useMemo } from "react";
 import type { SpanNode } from "@/features/observability/lib/span-tree";
 
 const TONE: Record<SpanNode["status"], string> = {
-  success: "var(--qw-ok)",
-  error: "var(--qw-danger)",
-  running: "var(--qw-blue)",
-  stale: "var(--qw-warn)",
+  success: "var(--devtools-ok)",
+  error: "var(--devtools-danger)",
+  running: "var(--devtools-blue)",
+  stale: "var(--devtools-warn)",
 };
 
 interface TriageMinimapProps {
@@ -64,7 +64,7 @@ export function TriageMinimap({
           onJump(fraction);
         }}
         className="absolute inset-0 flex cursor-pointer flex-col overflow-hidden rounded"
-        style={{ boxShadow: "inset 0 0 0 1px var(--qw-border)" }}
+        style={{ boxShadow: "inset 0 0 0 1px var(--devtools-border)" }}
       >
         {segments.map((seg, i) => (
           <div
@@ -83,7 +83,7 @@ export function TriageMinimap({
           style={{
             top: `${Math.min(scrollRatio, 1 - viewportRatio) * 100}%`,
             height: `${Math.max(viewportRatio, 0.04) * 100}%`,
-            boxShadow: "0 0 0 1.5px var(--qw-fg)",
+            boxShadow: "0 0 0 1.5px var(--devtools-fg)",
             opacity: 0.5,
           }}
         />

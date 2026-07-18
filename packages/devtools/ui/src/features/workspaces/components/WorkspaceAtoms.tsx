@@ -26,7 +26,7 @@ export function Stat({
     <div className="flex flex-col">
       <span
         className="text-[10px] uppercase tracking-[0.08em]"
-        style={{ color: "var(--qw-fg-faint)" }}
+        style={{ color: "var(--devtools-fg-faint)" }}
       >
         {label}
       </span>
@@ -34,7 +34,7 @@ export function Stat({
         className="font-mono text-[14px] font-semibold"
         style={{
           color:
-            color ?? (value == null ? "var(--qw-fg-faint)" : "var(--qw-fg)"),
+            color ?? (value == null ? "var(--devtools-fg-faint)" : "var(--devtools-fg)"),
         }}
       >
         {value == null ? "—" : value}
@@ -53,9 +53,9 @@ export function TableHeader({
       className="grid gap-2.5 px-4 py-2 text-[10px] uppercase tracking-[0.1em]"
       style={{
         gridTemplateColumns: cols.map((c) => c.width).join(" "),
-        color: "var(--qw-fg-faint)",
-        borderBottom: "1px solid var(--qw-border)",
-        background: "var(--qw-bg-muted)",
+        color: "var(--devtools-fg-faint)",
+        borderBottom: "1px solid var(--devtools-border)",
+        background: "var(--devtools-bg-muted)",
       }}
     >
       {cols.map((c) => (
@@ -72,9 +72,9 @@ export function EmptyHint({ children }: { children: ReactNode }) {
     <div
       className="rounded-[10px] px-6 py-10 text-center text-[13px]"
       style={{
-        background: "var(--qw-bg-elev)",
-        border: "1px dashed var(--qw-border)",
-        color: "var(--qw-fg-muted)",
+        background: "var(--devtools-bg-elev)",
+        border: "1px dashed var(--devtools-border)",
+        color: "var(--devtools-fg-muted)",
       }}
     >
       {children}
@@ -86,7 +86,7 @@ export function EmptyInline({ children }: { children: ReactNode }) {
   return (
     <div
       className="px-4 py-5 text-center text-[12px]"
-      style={{ color: "var(--qw-fg-muted)" }}
+      style={{ color: "var(--devtools-fg-muted)" }}
     >
       {children}
     </div>
@@ -97,7 +97,7 @@ export function ErrorBanner({ message }: { message: string }) {
   return (
     <div
       className="mb-4 rounded-[8px] px-4 py-3 text-[12px]"
-      style={{ background: "var(--qw-danger-soft)", color: "var(--qw-danger)" }}
+      style={{ background: "var(--devtools-danger-soft)", color: "var(--devtools-danger)" }}
     >
       {message}
     </div>
@@ -115,18 +115,18 @@ export function PendingBackend({
     <div
       className="rounded-[10px] px-5 py-4 text-[12.5px]"
       style={{
-        background: "var(--qw-bg-elev)",
-        border: "1px dashed var(--qw-border)",
-        color: "var(--qw-fg-muted)",
+        background: "var(--devtools-bg-elev)",
+        border: "1px dashed var(--devtools-border)",
+        color: "var(--devtools-fg-muted)",
       }}
     >
       <div
         className="mb-1 text-[10px] font-medium uppercase tracking-[0.12em]"
-        style={{ color: "var(--qw-fg-faint)" }}
+        style={{ color: "var(--devtools-fg-faint)" }}
       >
         Pending backend projection
       </div>
-      <div className="font-medium" style={{ color: "var(--qw-fg)" }}>
+      <div className="font-medium" style={{ color: "var(--devtools-fg)" }}>
         {title}
       </div>
       <div className="mt-0.5">{body}</div>

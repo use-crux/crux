@@ -8,7 +8,7 @@ This npm package resolves and launches the platform-specific Go binary that prov
 - the local HTTP API and WebSocket/SSE subscriptions
 - the embedded web devtools UI
 - the TUI
-- local SQLite-backed Runs, Quality, Catalog, memory, workspace, and plan services
+- local SQLite-backed Runs, Evals, Catalog, memory, workspace, and plan services
 - bounded Node workers for source indexing, source lookup, and eval execution
 - the Rust/Oxc compiler worker used for native Catalog source analysis
 

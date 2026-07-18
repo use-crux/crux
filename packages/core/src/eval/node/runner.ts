@@ -25,7 +25,11 @@ export {
 export { hydrateEvalCases, loadCaseRows } from "./cases";
 export { discoverDeployableProjectEvals } from "./deployed-discovery";
 export { EvalCaseFileError, resolveAuthoredCaseFile } from "./case-path";
-export { coordinateNodeEval } from "./coordinator";
+export {
+  coordinateNodeEval,
+  createNodeEvalCoordinatorSession,
+} from "./coordinator";
+export { compareEvalDefinitionToBaseline } from "../internal/baseline";
 export { addReviewCase } from "./review";
 export type { AddReviewCaseInput, AddReviewCaseResult } from "./review";
 export {
@@ -33,6 +37,11 @@ export {
   projectDeployedEvalRequiredHostCapabilities,
   projectDeployedEvalVariants,
 } from "../../runtime/eval-registry/projection";
+export {
+  fingerprintEvalPersistencePolicy,
+  normalizeEvalPersistencePolicy,
+} from "../internal/redact";
+export type { EvalPersistencePolicy } from "../internal/redact";
 export {
   createEvalBaselineFileStore,
   createEvalEvidenceFileStore,
@@ -181,8 +190,15 @@ function assertExecutable(plan: EvalPlan, selector: string): void {
     );
   }
   if (plan.cost.admission.status !== "admitted") {
+    const unknown = plan.cost.actions
+      .map((action) => action.estimate)
+      .filter((estimate) => estimate.kind === "unknown");
+    const missingKeys = [
+      ...new Set(unknown.flatMap((estimate) => estimate.missingPricingKeys)),
+    ].sort();
+    const remedies = [...new Set(unknown.map((estimate) => estimate.remedy))];
     throw new TypeError(
-      `Eval '${selector}' was not admitted before spend (${plan.cost.admission.reason}). Use plan:true to inspect actions or provide maxCostUsd when every action has a known maximum.`,
+      `Eval '${selector}' was not admitted before spend (${plan.cost.admission.reason}).${missingKeys.length > 0 ? ` Missing pricing keys: ${missingKeys.join(", ")}.` : ""} ${remedies.join(" ")} Use plan:true to inspect actions.`,
     );
   }
 }

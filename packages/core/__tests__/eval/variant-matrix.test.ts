@@ -4,11 +4,44 @@ import { evaluate } from "../../src/eval/evaluate";
 import { executeEvalPlan } from "../../src/eval/internal/executor";
 import { planEval } from "../../src/eval/internal/planner";
 import type { EvalExecutionPorts } from "../../src/eval/internal/ports";
+import { attachEvalTaskDescriptorForInternalUse } from "../../src/eval/internal/task";
+import { nonBillablePlanningPorts } from "./reuse-test-harness";
 
-const task = Object.assign(async () => "unused", {
-  _tag: "CruxTask" as const,
-  operation: "function" as const,
-});
+const task = attachEvalTaskDescriptorForInternalUse(
+  Object.assign(async (input: { answer: string }) => input.answer, {
+    _tag: "CruxTask" as const,
+    operation: "function" as const,
+  }),
+  {
+    _tag: "CruxEvalTaskDescriptor",
+    operation: "generate",
+    adapterId: "ai-sdk",
+    capabilities: [],
+    defaults: {},
+    overrideKeys: ["temperature"],
+    projectIdentity: () => ({
+      reusable: false,
+      reason: "identity_unavailable",
+    }),
+    execute: async (input) => ({ output: input }),
+    projectOutput: (result) => result.output,
+    projectResponse: () => ({
+      content: [],
+      text: "",
+      steps: [],
+      finalStep: {
+        content: [],
+        text: "",
+        finishReason: "stop",
+        responseId: "response",
+        modelId: "fake",
+        warnings: [],
+      },
+      messages: [],
+      warnings: [],
+    }),
+  },
+);
 
 describe("Eval Case × Variant × trial matrix", () => {
   it("expands inline Cases, arms, and trials in stable nested order", async () => {
@@ -24,9 +57,13 @@ describe("Eval Case × Variant × trial matrix", () => {
       expect: ({ input, output, expect: assert }) =>
         assert(output).toBe(input.answer),
     });
-    const plan = await planEval(evalValue, {
-      sourceKey: { relativeFile: "support.eval.ts", export: "default" },
-    });
+    const plan = await planEval(
+      evalValue,
+      {
+        sourceKey: { relativeFile: "support.eval.ts", export: "default" },
+      },
+      nonBillablePlanningPorts(),
+    );
 
     expect(
       plan.cells.map((cell) => [cell.caseId, cell.variant, cell.trial]),

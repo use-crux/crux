@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { pathFromState, stateFromPath } from "./useNavigation";
-import { QW_NAV } from "@/qw/shell/nav";
+import { DEVTOOLS_NAV } from "@/devtools/shell/nav";
 
 describe("Eval V1 navigation", () => {
   it.each([
@@ -20,7 +20,7 @@ describe("Eval V1 navigation", () => {
   });
 
   it("has no legacy Quality lifecycle routes or navigation labels", () => {
-    const labels = QW_NAV.flatMap((group) =>
+    const labels = DEVTOOLS_NAV.flatMap((group) =>
       group.items.map((item) => item.label),
     );
     expect(labels).not.toEqual(

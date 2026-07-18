@@ -187,7 +187,7 @@ describe('Eval Case files', () => {
     expect(second.definitionFingerprint).toBe(first.definitionFingerprint)
   })
 
-  it('rejects an opaque task as a pre-execution discovery error', async () => {
+  it('hydrates inline Cases for an opaque callable without requiring a schema', async () => {
     const root = await mkdtemp(join(tmpdir(), 'crux-eval-opaque-'))
     await mkdir(join(root, 'evals'))
     await writeFile(join(root, 'evals', 'opaque.eval.ts'), '// fixture\n', 'utf8')
@@ -205,6 +205,6 @@ describe('Eval Case files', () => {
         },
         { projectRoot: root, core },
       ),
-    ).rejects.toThrow(/managed task created with generate\.task\(\) or stream\.task\(\)/i)
+    ).resolves.toMatchObject({ cases: [{ authored: { input: { question: 'A' } } }] })
   })
 })

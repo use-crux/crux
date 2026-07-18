@@ -121,7 +121,7 @@ function isIndexEntry(value: unknown): value is BaselineIndexEntry {
 }
 
 function pathForIndex(projectRoot: string): string {
-  return join(projectRoot, ".crux", "quality", "baseline-index.json");
+  return join(projectRoot, ".crux", "evals", "baseline-index.json");
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

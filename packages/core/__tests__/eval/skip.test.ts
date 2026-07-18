@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { evaluate } from "../../src/eval/evaluate";
-import { buildEvalBaseline, compareEvalRunToBaseline } from "../../src/eval/internal/baseline";
+import {
+  buildEvalBaseline,
+  compareEvalRunToBaseline,
+} from "../../src/eval/internal/baseline";
 import { executeEvalPlan } from "../../src/eval/internal/executor";
 import { planEval } from "../../src/eval/internal/planner";
 
@@ -54,9 +57,7 @@ describe("source-skipped Eval Cases", () => {
     });
     expect(baseline).toMatchObject({
       coverage: [],
-      skippedCases: [
-        { caseId: "refund", reason: "not supported on Windows" },
-      ],
+      skippedCases: [{ caseId: "refund", reason: "not supported on Windows" }],
     });
     const active = {
       ...run,
@@ -64,7 +65,10 @@ describe("source-skipped Eval Cases", () => {
         {
           ...run.cells[0]!,
           status: "passed" as const,
-          task: { status: "executed" as const, reason: "live_required" as const },
+          task: {
+            status: "executed" as const,
+            reason: "live_required" as const,
+          },
           skipReason: undefined,
         },
       ],
@@ -80,4 +84,3 @@ describe("source-skipped Eval Cases", () => {
     });
   });
 });
-

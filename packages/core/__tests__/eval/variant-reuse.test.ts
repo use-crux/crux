@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 import { evaluate } from "../../src/eval/evaluate";
 import { executeEvalPlan } from "../../src/eval/internal/executor";
@@ -21,6 +22,7 @@ const task = attachEvalTaskDescriptorForInternalUse(
     operation: "generate",
     adapterId: "ai-sdk",
     capabilities: [],
+    callContractFingerprint: "test.generate.call.v1",
     defaults: {},
     overrideKeys: ["temperature"],
     projectIdentity: (request) => ({
@@ -105,6 +107,42 @@ const source = {
 };
 
 describe("Variant-local exact reuse", () => {
+  it("rejects an untyped replacement task that cannot accept a selected Case", async () => {
+    const incompatible = attachEvalTaskDescriptorForInternalUse(
+      Object.assign(async () => "unused", {
+        _tag: "CruxTask" as const,
+        operation: "function" as const,
+      }),
+      {
+        _tag: "CruxEvalTaskDescriptor",
+        operation: "generate",
+        adapterId: "ai-sdk",
+        inputSchema: z.object({ accountId: z.string() }),
+        capabilities: [],
+        callContractFingerprint: "test.generate.call.v1",
+        defaults: {},
+        overrideKeys: [],
+        projectIdentity: () => ({
+          reusable: true,
+          fingerprintMaterial: { task: "incompatible" },
+        }),
+        execute: async () => ({ output: "yes" }),
+        projectOutput: (result) => result.output,
+        projectResponse: () => response("yes"),
+      },
+    );
+    const evalValue = evaluate({
+      id: "support",
+      task,
+      cases: [{ id: "refund", input: { question: "yes" } }],
+      variants: { incompatible: { task: incompatible } } as never,
+    });
+
+    await expect(planEval(evalValue, source)).rejects.toThrowError(
+      /Variant 'incompatible'.*does not accept Case 'refund'.*accountId/,
+    );
+  });
+
   it("runs only a newly added candidate after reusing cached Current", async () => {
     const run = harness();
     const initialPlan = await planEval(definition(false), source, run.planning);

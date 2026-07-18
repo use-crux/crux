@@ -1,5 +1,5 @@
 /**
- * Shared redaction primitives for safety, validation feedback, and quality
+ * Shared redaction primitives for safety, validation feedback, and Eval
  * snapshots.
  *
  * These helpers are intentionally conservative and dependency-free. They are
@@ -11,33 +11,70 @@
  */
 
 /** Replacement string for structurally redacted values. */
-export const REDACTED = '[redacted]'
+export const REDACTED = "[redacted]";
 
 /** Key names that are always redacted at every object depth. */
-export const SENSITIVE_KEY_PATTERN = /^(authorization|proxy[-_]?authorization|api[-_]?key|x[-_]?api[-_]?key|token|secret)$/i
+export const SENSITIVE_KEY_PATTERN =
+  /^(authorization|proxy[-_]?authorization|api[-_]?key|x[-_]?api[-_]?key|token|secret)$/i;
+
+/** Validate and canonicalize project-owned dot-path redaction policy. */
+export function normalizeRedactPaths(value: unknown): readonly string[] {
+  if (value === undefined) return Object.freeze([]);
+  if (!Array.isArray(value) || value.some((path) => typeof path !== "string")) {
+    throw new TypeError(
+      "observability.redactPaths must be an array of dot-path strings.",
+    );
+  }
+  const paths = [
+    ...new Set((value as string[]).map((path) => path.trim())),
+  ].sort();
+  if (
+    paths.some(
+      (path) =>
+        path.length === 0 ||
+        path.length > 512 ||
+        /[\u0000-\u001f\u007f]/u.test(path) ||
+        path.split(".").some((segment) => segment.length === 0),
+    )
+  ) {
+    throw new TypeError(
+      "observability.redactPaths must contain non-empty dot paths without control characters.",
+    );
+  }
+  return Object.freeze(paths);
+}
 
 /** Redact common sensitive text patterns from a preview string. */
 export function redactSensitiveText(content: string): string {
   return content
-    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{1,}/gi, '[redacted-email]')
-    .replace(/\b\d{3}-\d{2}-\d{4}\b/g, '[redacted-ssn]')
-    .replace(/\b(?:sk|pk|rk|key|token)-[A-Za-z0-9_-]{3,}\b/g, '[redacted-secret]')
-    .replace(/\b(?:authorization|proxy-authorization)\s*[:=]\s*bearer\s+[A-Za-z0-9._~+/=-]+\b/gi, '[redacted-authorization]')
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{1,}/gi, "[redacted-email]")
+    .replace(/\b\d{3}-\d{2}-\d{4}\b/g, "[redacted-ssn]")
+    .replace(
+      /\b(?:sk|pk|rk|key|token)-[A-Za-z0-9_-]{3,}\b/g,
+      "[redacted-secret]",
+    )
+    .replace(
+      /\b(?:authorization|proxy-authorization)\s*[:=]\s*bearer\s+[A-Za-z0-9._~+/=-]+\b/gi,
+      "[redacted-authorization]",
+    );
 }
 
 /** Recursively redact sensitive keys from JSON-like values. */
 export function redactSensitiveValue(value: unknown): unknown {
-  if (typeof value === 'string') return redactSensitiveText(value)
-  if (Array.isArray(value)) return value.map((item) => redactSensitiveValue(item))
-  if (!isRecord(value)) return value
+  if (typeof value === "string") return redactSensitiveText(value);
+  if (Array.isArray(value))
+    return value.map((item) => redactSensitiveValue(item));
+  if (!isRecord(value)) return value;
 
-  const output: Record<string, unknown> = {}
+  const output: Record<string, unknown> = {};
   for (const [key, entry] of Object.entries(value)) {
-    output[key] = SENSITIVE_KEY_PATTERN.test(key) ? REDACTED : redactSensitiveValue(entry)
+    output[key] = SENSITIVE_KEY_PATTERN.test(key)
+      ? REDACTED
+      : redactSensitiveValue(entry);
   }
-  return output
+  return output;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object'
+  return value !== null && typeof value === "object";
 }

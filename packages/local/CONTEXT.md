@@ -4,7 +4,7 @@
 
 **Eval Filesystem**:
 `internal/evalfs`, the read boundary for authoritative Eval V3 run and Baseline artifacts.
-_Avoid_: experiment store, generic evaluation snapshot
+_Avoid_: parallel evaluation stores and generic snapshots
 
 **Inspect Filesystem**:
 `internal/inspectfs`, the persistence boundary for Inspect insights, statuses, and silences.
@@ -61,7 +61,7 @@ _Avoid_: production telemetry default, cloud export default
 
 ## Relationships
 
-- EvalFS validates V3 artifacts without making archived V2 records reusable.
+- EvalFS validates V3 artifacts and preserves future-additive stored bytes.
 - InspectFS owns only Inspect persistence; Review owns durable feedback and human actions.
 - ReviewWriter adds validated Cases through the project-local Core contract and never copies model
   output into expected truth automatically.
@@ -75,10 +75,9 @@ _Avoid_: production telemetry default, cloud export default
 
 ## Rules
 
-- Keep Eval, Inspect, Review, and legacy-migration persistence in their focused packages; do not
+- Keep Eval, Inspect, and Review persistence in their focused packages; do not
   recreate a cross-domain snapshot or workbench service.
-- The physical `.crux/quality` directory is retained migration provenance, not a public API name.
-- Archived V2 records are read-only and cannot influence Eval reuse, Baselines, or current truth.
+- Store Eval and Inspect artifacts under `.crux/evals`; do not add alternate legacy roots.
 - Do not add new `host`, `indexwire`, `wire`, `staticindex/syntax`, or `staticindex/client` package
   references when adding Project Index runtime code; use the responsibility names above.
 - Keep production telemetry, cloud upload, raw-content capture, retention, durable stores, providers,

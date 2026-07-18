@@ -175,7 +175,7 @@ export const invocationAccessRelationPolicies = (
       {
         type: `${owner}.runs_eval`,
         fromKinds: [owner],
-        toKinds: ["evaluation"],
+        toKinds: ["eval"],
         presentation: "both",
         partial: true,
         runtimeJoin: true,
@@ -638,15 +638,9 @@ export const mediaRelationPolicies = [
     runtimeJoin: false,
   },
   {
-    type: "media.evaluation_target",
+    type: "media.eval_target",
     fromKinds: ["media.operation"],
-    toKinds: [
-      "evaluation",
-      "eval.prompt",
-      "eval.flow",
-      "eval.rag",
-      "eval.quality",
-    ],
+    toKinds: ["eval"],
     presentation: "both",
     partial: true,
     runtimeJoin: false,

@@ -20,7 +20,7 @@ Crux's value has three layers, and the relationship between them is what makes i
 
 ### Layer 1: The Building Blocks
 
-The primitives: typed prompts and contexts, memory blocks, retrieval and grounding, tools and approvals, guardrails and constraints, routing and fallback, plans and tasks, workspaces, compaction, orchestration patterns (pipeline, parallel, consensus, swarm, handoff, delegate), flows, and quality suites.
+The primitives: typed prompts and contexts, memory blocks, retrieval and grounding, tools and approvals, guardrails and constraints, routing and fallback, plans and tasks, workspaces, compaction, orchestration patterns (pipeline, parallel, consensus, swarm, handoff, delegate), flows, and Evals.
 
 Each primitive is genuinely valuable on its own. Most of them do not exist in the SDKs users already have — there is no memory layer, no guardrail framework, no plan/task primitive, no harness-level eval system in a raw provider SDK. The building blocks fill those gaps and are the practical reason most users install Crux.
 
@@ -42,30 +42,30 @@ This layer is organized as the three questions a developer asks about any model 
 
 1. **Before the turn — what will go into this turn, and why?** Which contexts, under which conditions, at which priority, within which budget. Which tools are eligible. Which model the router will pick. Which guardrails are armed. What the fallback and retry chain is. What memory will be recalled, and how fresh it all is. Crux's job: every one of those choices is deliberate and declared, never accidental.
 2. **After the turn — what actually happened, and why?** The observability graph records each decision with its reason: which contexts got in, which were excluded or dropped and why, which model was actually selected and on what grounds, which guardrail fired and what it did, what fell back, what was retried, what memory was written and under which policy.
-3. **Over time — can I prove it still behaves?** Quality suites assert the recorded decisions, not just the output text. Lint findings check the authored definitions. Changes to the harness are reviewable with evidence.
+3. **Over time — can I prove it still behaves?** Evals assert the recorded decisions, not just the output text. Lint findings check the authored definitions. Changes to the harness are reviewable with evidence.
 
 Every primitive passes through all three questions as an equal citizen. No primitive is the headline; the turn is the headline.
 
-| Primitive | Goes in deliberately | Leaves evidence | Provable |
-| --- | --- | --- | --- |
-| Context | contracts, conditions, budget, freshness | included / excluded / dropped / stale, with reasons | "context X is included when mode is research" |
-| Router | declared routing policy | which model was chosen, with rationale | "never downgrades below model X for task Y" |
-| Guardrail | armed, with a declared boundary | fired / blocked / redacted, with reason | "blocks the injection regression cases" |
-| Fallback | declared chain and retry policy | which fallback fired, caused by which error | "the chain engages in declared order" |
-| Memory | recall policy, retention, redaction | reads and writes recorded with policy decisions | "the write was redacted before persisting" |
+| Primitive | Goes in deliberately                     | Leaves evidence                                     | Provable                                      |
+| --------- | ---------------------------------------- | --------------------------------------------------- | --------------------------------------------- |
+| Context   | contracts, conditions, budget, freshness | included / excluded / dropped / stale, with reasons | "context X is included when mode is research" |
+| Router    | declared routing policy                  | which model was chosen, with rationale              | "never downgrades below model X for task Y"   |
+| Guardrail | armed, with a declared boundary          | fired / blocked / redacted, with reason             | "blocks the injection regression cases"       |
+| Fallback  | declared chain and retry policy          | which fallback fired, caused by which error         | "the chain engages in declared order"         |
+| Memory    | recall policy, retention, redaction      | reads and writes recorded with policy decisions     | "the write was redacted before persisting"    |
 
 Two things make this hard to reproduce:
 
-- **The Project Index.** Crux reads the authored AI system from source — prompts, contexts, tools, agents, flows, retrievers, memory, safety definitions, quality coverage — and joins it to runtime evidence. A runtime-only tool can show what happened; only a source-linked graph can show which authored definition caused it and which test protects it. This is the hardest part of Crux to copy, and the part that lives at design time.
+- **The Project Index.** Crux reads the authored AI system from source — prompts, contexts, tools, agents, flows, retrievers, memory, safety definitions, and Eval coverage — and joins it to runtime evidence. A runtime-only tool can show what happened; only a source-linked graph can show which authored definition caused it and which test protects it. This is the hardest part of Crux to copy, and the part that lives at design time.
 - **Standard transport, owned semantics.** Capture is becoming a commodity: model-call spans are standardized through OpenTelemetry GenAI conventions, and Crux emits compatible spans so it slots into existing pipelines. What the standards have no vocabulary for is the turn-assembly layer: inclusion decisions, budget arbitration, freshness, routing rationale, policy boundaries, provenance to source. Crux owns that vocabulary — and intends to publish it as an open specification once it has stabilized in real usage, so that other runtimes can emit the same evidence and adapter authors have a contract to build against.
 
 Honesty note: parts of this are built and parts are being completed. The composition model, the context primitives, and the canonical observability graph exist today. The full per-turn decision report, rationale artifacts for routing and consensus, the unified freshness vocabulary, and the harness-decision matcher library are in active development. The docs and roadmap mark shipped versus in-progress explicitly; the vision does not pretend otherwise.
 
 ## Proactive, Not Reactive
 
-The dominant tooling pattern in AI engineering is reactive: run the system, collect traces, score the outputs, and guess backwards at what went wrong. Output scoring tells you *that* something failed; it cannot tell you *why*, because the tools doing the scoring did not assemble the turn. Teams compensate for a weak harness the only way they can — by paying for ever-stronger models to power through the noise.
+The dominant tooling pattern in AI engineering is reactive: run the system, collect traces, score the outputs, and guess backwards at what went wrong. Output scoring tells you _that_ something failed; it cannot tell you _why_, because the tools doing the scoring did not assemble the turn. Teams compensate for a weak harness the only way they can — by paying for ever-stronger models to power through the noise.
 
-Crux is proactive. It measures what goes *into* every turn, in detail, and how that behaves — and gives you the instruments to shape it until it is exactly right. The economics follow: a solid harness works with almost any capable model. That makes model choice a routing decision instead of a crutch — switch and route models per task and per subtask (and, in time, per step) to get exactly the capability you need, when you need it, at the price that fits. Routing is not a convenience feature in Crux; it is a first-order part of the determinism story.
+Crux is proactive. It measures what goes _into_ every turn, in detail, and how that behaves — and gives you the instruments to shape it until it is exactly right. The economics follow: a solid harness works with almost any capable model. That makes model choice a routing decision instead of a crutch — switch and route models per task and per subtask (and, in time, per step) to get exactly the capability you need, when you need it, at the price that fits. Routing is not a convenience feature in Crux; it is a first-order part of the determinism story.
 
 ## Test-Driven Harness Design
 
@@ -76,7 +76,9 @@ The proactive stance has a concrete workflow: build the harness the way discipli
 3. Mark that as a **baseline**.
 4. Every change — prompt edit, context tweak, retriever swap, model upgrade, policy change — must meet at least that bar before it ships.
 
-Crux's quality system (suites, targets, experiments, cassettes, baselines) exists to make this workflow native. The expectation exists before the harness does; that is what proactive means in practice.
+Crux Evals make this workflow native with five concepts: Evals, Cases, Variants,
+Eval runs, and Baselines. The expectation exists before the harness does; that
+is what proactive means in practice.
 
 ## The Question Crux Answers
 
@@ -95,7 +97,7 @@ For any model turn:
 
 ### Bring Your SDK
 
-Crux composes with the user's provider and SDK choices. When the underlying SDK can own execution, Crux passes through to it; Crux provides native execution only where a crucial harness pattern would otherwise be inaccessible, unobservable, or untestable. Crux will never be a provider abstraction — provider independence is a *consequence* of a good harness, not a product in itself.
+Crux composes with the user's provider and SDK choices. When the underlying SDK can own execution, Crux passes through to it; Crux provides native execution only where a crucial harness pattern would otherwise be inaccessible, unobservable, or untestable. Crux will never be a provider abstraction — provider independence is a _consequence_ of a good harness, not a product in itself.
 
 ### Entry Points, and the Flagship Demo
 
@@ -137,7 +139,7 @@ Crux can include agents, retrieval, routing, prompt authoring, and devtools, but
 
 ## The Horizon
 
-This section is the long-term direction, not the near-term plan. The near-term plan is the core focus: explained, source-linked, tested turn assembly. The horizon explains what that focus is *for* — what becomes possible once a harness is deterministic and provable. None of it should pull attention from shipping the core, and none of it requires Crux to become an infrastructure company.
+This section is the long-term direction, not the near-term plan. The near-term plan is the core focus: explained, source-linked, tested turn assembly. The horizon explains what that focus is _for_ — what becomes possible once a harness is deterministic and provable. None of it should pull attention from shipping the core, and none of it requires Crux to become an infrastructure company.
 
 ### The Thesis: The Model Commoditizes, The Harness Is The Asset
 
@@ -150,11 +152,11 @@ A deterministic, eval-scored harness produces something rare as a byproduct: a c
 - **Inject in context** — pass curated, dynamically-selected examples into the prompt. Works on any model, including closed ones you cannot tune. Mostly expressible in Crux today as a retriever over eval-passing examples.
 - **Distill into weights** — bake the behavior into a smaller open model. Cheaper and faster per call, open models only.
 
-The user picks the mechanism based on cost, latency, and privacy. Crux owns the dataset and — critically — the same baseline suite certifies either path is good enough. This is "Same Prompt. Same Output. Every Time." pushed all the way down to the model layer: you choose how to get there — context injection, distillation, or routing — and the same bar proves it.
+The user picks the mechanism based on cost, latency, and privacy. Crux owns the dataset and — critically — the same accepted Baseline certifies either path is good enough. This is "Same Prompt. Same Output. Every Time." pushed all the way down to the model layer: you choose how to get there — context injection, distillation, or routing — and the same bar proves it.
 
 ### Own The Ends, Rent The Middle
 
-The compute step of fine-tuning is already a commodity: upload pairs, pick a base model, get a tuned model back from a training provider. The genuinely hard parts are the two ends — assembling good, quality-filtered data, and certifying the result did not regress. Crux already owns both: the graph and cassettes are the data end; the baselines are the eval end. So Crux's role in training mirrors its role in inference — **bring your SDK** for inference becomes **bring your training provider** for tuning. Crux assembles and certifies; it delegates execution. Crux owns no GPUs and hosts no weights; that is consistent with, not contrary to, the non-goals above.
+The compute step of fine-tuning is already a commodity: upload pairs, pick a base model, get a tuned model back from a training provider. The genuinely hard parts are the two ends — assembling consented, reviewed data and certifying that the result did not regress. Crux's observability graph and explicit Review workflow can become the data end; Baselines are the certification end. So Crux's role in training mirrors its role in inference — **bring your SDK** for inference becomes **bring your training provider** for tuning. Crux assembles and certifies; it delegates execution. Crux owns no GPUs and hosts no weights; that is consistent with, not contrary to, the non-goals above.
 
 ### Make The Complex Thing Dead-Simple
 
@@ -167,7 +169,7 @@ Each step is independently valuable. Take the next one only when the step below 
 1. **In-context specialization** — inject curated examples; works on any model. Near-term; mostly expressible today.
 2. **Export a governed dataset** — clean, redaction-aware, eligibility-gated (context, output, verdict) records. The one decision worth making now, because it keeps every later step open.
 3. **One-shot distill and certify** — push a button: assemble, delegate the training run, gate on baselines, download the model.
-4. **Managed, live auto-tune** — continuously retrain as new eligible data arrives, and **promote new weights only when they pass the baseline suite** (the baseline is the airbag that makes auto-tuning safe). Data-deletion requests are honored by exclude-and-retrain at the next cycle — surgical unlearning is unsolved, but a continuous-retrain architecture makes deletion compliant by design. Optional hosting through a provider passthrough.
+4. **Managed, live auto-tune** — continuously retrain as new eligible data arrives, and **promote new weights only when they pass the accepted Baseline** (the Baseline is the airbag that makes auto-tuning safe). Data-deletion requests are honored by exclude-and-retrain at the next cycle — surgical unlearning is unsolved, but a continuous-retrain architecture makes deletion compliant by design. Optional hosting through a provider passthrough.
 
 The far edge of step 4: very small models post-trained for a single use case — even a single customer — to get an extremely fast, cheap, private model. That becomes worthwhile only when provider training and hosting are cheap enough, which is a question of market timing, not of Crux architecture.
 
@@ -177,7 +179,10 @@ Turning interactions and memory into training data is a serious privacy and cons
 
 ### The Discipline
 
-All of the above is long-horizon. The only action it implies now is step 2: keep cassettes and traces designed as clean, governed, exportable records. That single contract keeps every later step open while Crux stays focused on the core. Everything else is "design the seams, build when there are users."
+All of the above is long-horizon. The action it implies now is to keep traces,
+feedback, Review decisions, and Eval evidence governed and exportable without
+silently treating production output as training truth. That contract keeps
+later post-training work open while Crux stays focused on the core.
 
 ## Product Principles
 
@@ -209,15 +214,15 @@ Every feature should help explain or improve a real model turn: its context, too
 
 ### 7. Every Decision Is Inspectable
 
-If Crux includes, excludes, drops, caches, refreshes, redacts, blocks, routes, retries, or falls back, that decision is visible in inspection, in the graph, and in quality results — with its reason, not just its outcome.
+If Crux includes, excludes, drops, caches, refreshes, redacts, blocks, routes, retries, or falls back, that decision is visible in inspection, in the graph, and in Eval results — with its reason, not just its outcome.
 
 ### 8. The Explanation-Parity Bar
 
-A primitive is complete only when it answers all three questions: declared deliberately, evidenced with reasons, assertable in quality suites. A primitive whose explanation is incomplete does not gain new capability.
+A primitive is complete only when it answers all three questions: declared deliberately, evidenced with reasons, and assertable in Evals. A primitive whose explanation is incomplete does not gain new capability.
 
 ### 9. Deterministic Assembly Is a Ship Condition
 
-Any feature that introduces nondeterminism into turn assembly must be deterministic-policy-first, replayable, and assertable by quality suites — or it does not ship. This applies in particular to any future planning or model-assisted context selection.
+Any feature that introduces nondeterminism into turn assembly must be deterministic-policy-first, observable, and assertable by Evals — or it does not ship. This applies in particular to any future planning or model-assisted context selection.
 
 ### 10. Coherence Before New Primitives
 
@@ -225,7 +230,7 @@ Crux already has many powerful pieces. The next advantage comes from connecting 
 
 ### 11. Privacy Is a Graph Property
 
-Sensitive data moves through retrieval hits, memory writes, tool args, workspace files, feedback records, traces, cassettes, and telemetry. Crux treats privacy as data flow through the harness — classification on evidence, policies at boundaries, lints and matchers as proof — not as a one-off guardrail.
+Sensitive data moves through retrieval hits, memory writes, tool args, workspace files, feedback records, Eval evidence, traces, and telemetry. Crux treats privacy as data flow through the harness — classification on evidence, policies at boundaries, lints and matchers as proof — not as a one-off guardrail.
 
 ### 12. Honest Status, Always
 
@@ -243,11 +248,11 @@ Crux shows:
 - Freshness state for the context that mattered.
 - Which model was selected, why, and what the fallback would have been.
 - Safety and privacy decisions, including redactions and blocked boundaries.
-- The quality baselines covering this prompt, and whether this turn would have passed them.
+- The Eval Baseline covering this prompt, and whether this turn would have passed it.
 - The source definitions and lint findings that explain the underlying design issue.
 - A suggested fix: tighten a condition, add a freshness policy, add a matcher, adjust routing policy, add a guardrail, or change a memory write policy.
 
-Then the team adds the missing expectation to a suite, fixes the harness until it passes, and marks the new baseline. Next time, the regression is caught before it ships.
+Then the team adds the missing Case to an Eval, fixes the harness until it passes, and accepts the new Baseline. Next time, the regression is caught before it ships.
 
 ## Success Metrics
 
@@ -257,7 +262,7 @@ Crux is succeeding if users can:
 - Identify missing, stale, unsafe, or redundant context quickly.
 - See why every routing, safety, memory, and recovery decision was made.
 - Describe expected harness behavior first, and build against it until green.
-- Review AI-system changes in source with quality evidence and baselines.
+- Review AI-system changes in source with Eval evidence and Baselines.
 - Run cheaper or better-fitting models because the harness, not the model, carries the system.
 - Keep sensitive data out of the wrong prompts, tools, stores, traces, and telemetry.
 

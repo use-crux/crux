@@ -78,7 +78,7 @@ FROM review_actions WHERE review_id = ? ORDER BY sequence`, reviewID)
 		return nil, err
 	}
 	defer rows.Close()
-	var actions []ActionRecord
+	actions := make([]ActionRecord, 0)
 	for rows.Next() {
 		var action ActionRecord
 		if err := rows.Scan(&action.ActionID, &action.ReviewID, &action.Sequence,

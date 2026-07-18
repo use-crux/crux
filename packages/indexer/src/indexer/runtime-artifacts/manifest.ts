@@ -11,6 +11,7 @@ import type { RuntimeArtifactDriftReport } from "./types";
 export function manifestFromDefinitions(input: {
   readonly root: string;
   readonly definitions: readonly ProjectDefinition[];
+  readonly evalPrivacyFingerprint?: string;
 }): RuntimeArtifactManifest {
   const targets = input.definitions.flatMap((definition) =>
     targetFromDefinition(input.root, definition),
@@ -22,6 +23,9 @@ export function manifestFromDefinitions(input: {
   }
   return {
     version: 1,
+    evalPrivacyFingerprint:
+      input.evalPrivacyFingerprint ??
+      "d2b7a3a9e0d3857b24b871ee585d118490dabd9edf81bcf10de9f5328e85cc29",
     targets: [...targets].sort(
       (a, b) =>
         compareCodepoint(a.name, b.name) || compareCodepoint(a.kind, b.kind),

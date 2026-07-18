@@ -38,8 +38,8 @@ func TestReindexProjectIncrementalInlinePrefetchesLintFactsWhileSemanticRuns(t *
 	case <-time.After(time.Second):
 		t.Fatal("ReindexProjectIncremental did not finish")
 	}
-	if !indexer.sawSemanticRuns {
-		t.Fatal("incremental lint request did not include semantic quality data")
+	if !indexer.sawSemanticDefinition {
+		t.Fatal("incremental lint request did not include the semantic definition")
 	}
 	if !indexer.sawPrefetchedRuleFacts {
 		t.Fatal("incremental lint request did not include prefetched rule facts")
@@ -56,7 +56,7 @@ type incrementalConcurrentLintProjectIndexer struct {
 	semanticStarted        chan struct{}
 	releaseSemantic        chan struct{}
 	prefetchStarted        chan struct{}
-	sawSemanticRuns        bool
+	sawSemanticDefinition  bool
 	sawPrefetchedRuleFacts bool
 	sawPrefetchStaticIndex bool
 	sawLintStaticIndex     bool
@@ -152,15 +152,12 @@ func (i *incrementalConcurrentLintProjectIndexer) IndexProjectSemanticPatch(ctx 
 		Status:        "ok",
 		Facts: projectindex.IndexPatchFacts{
 			Definitions: []store.ProjectDefinition{{
-				ID:       "prompt:writer",
-				Kind:     "prompt",
-				Name:     "writer",
-				Fidelity: "resolved",
-				Status:   "active",
-				Quality: &store.IndexQuality{
-					RunIDs:   []string{"experiment:writer"},
-					RunCount: 1,
-				},
+				ID:          "prompt:writer",
+				Kind:        "prompt",
+				Name:        "writer",
+				Fidelity:    "resolved",
+				Status:      "active",
+				Description: "semantic marker",
 			}},
 		},
 	}, nil
@@ -176,8 +173,8 @@ func (i *incrementalConcurrentLintProjectIndexer) PrefetchProjectLintFacts(_ con
 
 func (i *incrementalConcurrentLintProjectIndexer) IndexProjectLintPatch(_ context.Context, req projectindex.ProjectLintIndexRequest) (projectindex.IndexPatch, error) {
 	for _, definition := range req.PreviousIndex.Definitions {
-		if definition.ID == "prompt:writer" && definition.Quality != nil {
-			i.sawSemanticRuns = true
+		if definition.ID == "prompt:writer" && definition.Description == "semantic marker" {
+			i.sawSemanticDefinition = true
 		}
 	}
 	i.sawPrefetchedRuleFacts = req.Prefetch != nil && len(req.Prefetch.RuleFacts) == 1

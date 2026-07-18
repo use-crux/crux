@@ -4,11 +4,49 @@ import { evaluate } from "../../src/eval/evaluate";
 import { executeEvalPlan } from "../../src/eval/internal/executor";
 import { planEval } from "../../src/eval/internal/planner";
 import type { EvalExecutionPorts } from "../../src/eval/internal/ports";
+import { attachEvalTaskDescriptorForInternalUse } from "../../src/eval/internal/task";
+import { nonBillablePlanningPorts } from "./reuse-test-harness";
 
-const task = Object.assign(async () => "unused", {
-  _tag: "CruxTask" as const,
-  operation: "function" as const,
-});
+const task = attachEvalTaskDescriptorForInternalUse(
+  Object.assign(async () => "unused", {
+    _tag: "CruxTask" as const,
+    operation: "function" as const,
+  }),
+  {
+    _tag: "CruxEvalTaskDescriptor",
+    operation: "generate",
+    adapterId: "ai-sdk",
+    capabilities: [],
+    defaults: {},
+    overrideKeys: ["temperature"],
+    validateVariantOverrides: (value) => {
+      for (const key of Object.keys(value)) {
+        if (key !== "task" && key !== "temperature") throw new TypeError(key);
+      }
+    },
+    projectIdentity: () => ({
+      reusable: false,
+      reason: "identity_unavailable",
+    }),
+    execute: async () => ({ output: "yes" }),
+    projectOutput: (result) => result.output,
+    projectResponse: () => ({
+      content: [],
+      text: "yes",
+      steps: [],
+      messages: [],
+      warnings: [],
+      finalStep: {
+        content: [],
+        text: "yes",
+        finishReason: "stop",
+        responseId: "response",
+        modelId: "fake",
+        warnings: [],
+      },
+    }),
+  },
+);
 
 function definition() {
   return evaluate({
@@ -70,7 +108,11 @@ const source = {
 describe("Current and candidate Variants", () => {
   it("runs Current first and every declared candidate by default", async () => {
     const harness = ports();
-    const plan = await planEval(definition(), source);
+    const plan = await planEval(
+      definition(),
+      source,
+      nonBillablePlanningPorts(),
+    );
     const run = await executeEvalPlan(plan, harness.ports);
 
     expect(plan.cells.map((cell) => cell.variant)).toEqual([
@@ -101,7 +143,7 @@ describe("Current and candidate Variants", () => {
   it("keeps a candidate failure informational on a default run", async () => {
     const harness = ports({ cheaper: "no" });
     const run = await executeEvalPlan(
-      await planEval(definition(), source),
+      await planEval(definition(), source, nonBillablePlanningPorts()),
       harness.ports,
     );
 
@@ -142,7 +184,11 @@ describe("Current and candidate Variants", () => {
       expect: ({ output, expect: assert }) => assert(output).toBe("yes"),
     });
     const run = await executeEvalPlan(
-      await planEval(selectedDefinition, { ...source, variant: "cheaper" }),
+      await planEval(
+        selectedDefinition,
+        { ...source, variant: "cheaper" },
+        nonBillablePlanningPorts(),
+      ),
       harness.ports,
     );
 
@@ -164,32 +210,53 @@ describe("Current and candidate Variants", () => {
   });
 
   it("resolves task replacement separately from adapter overrides", async () => {
+    const opaque = Object.assign(async () => "opaque", {
+      _tag: "CruxTask" as const,
+      operation: "function" as const,
+    });
     const replacement = Object.assign(async () => "replacement", {
       _tag: "CruxTask" as const,
       operation: "function" as const,
     });
     const evalValue = evaluate({
       id: "support",
-      task,
+      task: opaque,
       cases: [{ id: "refund", input: { question: "yes" } }],
       variants: {
-        replacement: { task: replacement, temperature: 0 },
+        replacement: { task: replacement },
       },
     });
-    const plan = await planEval(evalValue, source);
+    const plan = await planEval(evalValue, source, nonBillablePlanningPorts());
 
     expect(plan.cells[1]).toMatchObject({
       variant: "replacement",
       task: replacement,
-      overrides: { temperature: 0 },
+      overrides: {},
     });
     expect(plan.cells[1]?.overrides).not.toHaveProperty("task");
+  });
+
+  it("rejects field overrides for opaque tasks before execution", async () => {
+    const opaque = Object.assign(async () => "opaque", {
+      _tag: "CruxTask" as const,
+      operation: "function" as const,
+    });
+    const evalValue = evaluate({
+      id: "support",
+      task: opaque,
+      cases: [{ id: "refund", input: { question: "yes" } }],
+      variants: { cheaper: { temperature: 0 } } as never,
+    });
+
+    await expect(
+      planEval(evalValue, source, nonBillablePlanningPorts()),
+    ).rejects.toThrowError(/cannot apply field overrides.*opaque task/i);
   });
 
   it("lets a failing Current cell block a default run", async () => {
     const harness = ports({ current: "no" });
     const run = await executeEvalPlan(
-      await planEval(definition(), source),
+      await planEval(definition(), source, nonBillablePlanningPorts()),
       harness.ports,
     );
 

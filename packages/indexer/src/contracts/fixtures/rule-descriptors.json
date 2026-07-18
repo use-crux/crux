@@ -4,7 +4,7 @@
       "id": "definition.missing_eval_coverage",
       "source": "builtin",
       "severity": "info",
-      "category": "evaluation",
+      "category": "evals",
       "maturity": "preview",
       "confidence": "medium",
       "profiles": ["recommended", "strict"],
@@ -16,7 +16,7 @@
       "fixes": [
         {
           "title": "Add eval coverage",
-          "description": "Add a prompt, flow, RAG, or quality eval that covers this definition, or connect it to a suite so regressions can be detected.",
+          "description": "Add an Eval that covers this definition so regressions can be detected.",
           "kind": "manual"
         }
       ],
@@ -526,7 +526,7 @@
       "id": "flow.suspension_without_coverage",
       "source": "builtin",
       "severity": "warning",
-      "category": "evaluation",
+      "category": "evals",
       "maturity": "preview",
       "confidence": "medium",
       "profiles": ["recommended", "strict"],
@@ -678,7 +678,7 @@
       "title": "Safety policy id is duplicated",
       "description": "Safety policy ids are used in decisions, traces, Project Index rows, and test matchers. Reusing an id makes it hard to tell which policy blocked, rewrote, or retried a turn.",
       "rationale": "Safety policy ids are used in decisions, traces, Project Index rows, and test matchers. Reusing an id makes it hard to tell which policy blocked, rewrote, or retried a turn.",
-      "impact": "Duplicate policy ids can make Devtools, observability, and quality assertions point at the wrong safety policy.",
+      "impact": "Duplicate policy ids can make Devtools, observability, and Eval assertions point at the wrong safety policy.",
       "docsUrl": "/docs/reference/crux-core/index-lints/safety-duplicate-policy-id",
       "fixes": [
         {
@@ -821,8 +821,8 @@
       "confidence": "high",
       "profiles": ["recommended", "strict"],
       "title": "Routing primitive has no stable id",
-      "description": "Stable routing ids let index definitions, route decision spans, and quality history join reliably even when variables or files are renamed.",
-      "rationale": "Stable routing ids let index definitions, route decision spans, and quality history join reliably even when variables or files are renamed.",
+      "description": "Stable routing ids let index definitions, route decision spans, and Eval history join reliably even when variables or files are renamed.",
+      "rationale": "Stable routing ids let index definitions, route decision spans, and Eval history join reliably even when variables or files are renamed.",
       "impact": "Routes can still be indexed from variable names, but runtime joins and historical comparisons are less durable across refactors.",
       "docsUrl": "/docs/reference/crux-core/index-lints/routing-missing-stable-id",
       "fixes": [

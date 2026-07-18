@@ -1,7 +1,7 @@
 /**
- * Quality Workbench root.
+ * Crux Devtools root.
  *
- * Mounts the QwShell with the right screen for the current navigation
+ * Mounts the DevtoolsShell with the right screen for the current navigation
  * state, plus theme + tooltip contexts. React 19 primitives in use:
  *
  *  - `useTransition` inside `useNavigation()` keeps the previous screen
@@ -27,9 +27,9 @@ import {
   useNavigation,
 } from "./app/navigation/useNavigation";
 import { TooltipProvider } from "@/shared/components/ui/tooltip";
-import { ErrorBoundary } from "./qw/shell/ErrorBoundary";
-import { QwSidebar } from "./qw/shell/QwSidebar";
-import { ToastProvider } from "./qw/shell/useToast";
+import { ErrorBoundary } from "./devtools/shell/ErrorBoundary";
+import { DevtoolsSidebar } from "./devtools/shell/DevtoolsSidebar";
+import { ToastProvider } from "./devtools/shell/useToast";
 import { GlobalSearch } from "./features/search/components/GlobalSearch";
 import { useGlobalSearchShortcut } from "./features/search/hooks/useGlobalSearchShortcut";
 import { AppRouter, WaitingShell } from "./app/router/AppRouter";
@@ -53,7 +53,7 @@ function AppInner() {
   const connected = useConnected();
   // `hasEverConnected` is the gate: once we land a single WS connection
   // we stop showing the onboarding shell, even on later disconnects
-  // (the ConnectionBanner inside QwShell handles those). This separates
+  // (the ConnectionBanner inside DevtoolsShell handles those). This separates
   // session-lifecycle state from index data — App.tsx no longer
   // reads index at all, so unrelated index WS pushes don't
   // re-render the root.
@@ -66,9 +66,9 @@ function AppInner() {
     function onOpen() {
       setIsOpen(true);
     }
-    window.addEventListener("qw:open-search", onOpen as EventListener);
+    window.addEventListener("devtools:open-search", onOpen as EventListener);
     return () =>
-      window.removeEventListener("qw:open-search", onOpen as EventListener);
+      window.removeEventListener("devtools:open-search", onOpen as EventListener);
   }, [setIsOpen]);
 
   if (!hasEverConnected) {
@@ -82,7 +82,7 @@ function AppInner() {
           pushing layout. */}
       {isNavigating && (
         <div
-          className="qw-progress-bar"
+          className="devtools-progress-bar"
           style={{
             position: "fixed",
             top: 0,
@@ -100,12 +100,12 @@ function AppInner() {
       <div
         className="flex h-screen min-h-0 overflow-hidden"
         style={{
-          background: "var(--qw-bg)",
-          color: "var(--qw-fg)",
-          fontFamily: "var(--qw-sans)",
+          background: "var(--devtools-bg)",
+          color: "var(--devtools-fg)",
+          fontFamily: "var(--devtools-sans)",
         }}
       >
-        <QwSidebar />
+        <DevtoolsSidebar />
         <ErrorBoundary resetKey={JSON.stringify(nav)}>
           <Suspense fallback={<SkeletonPage />}>
             <AppRouter nav={nav} />

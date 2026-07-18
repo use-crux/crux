@@ -1,4 +1,4 @@
-import { Icon } from "@/qw/shell/Icon";
+import { Icon } from "@/devtools/shell/Icon";
 
 export function KindBadge({
   name,
@@ -15,14 +15,14 @@ export function KindBadge({
       style={{
         width: size,
         height: size,
-        background: "var(--qw-bg-muted)",
-        boxShadow: "inset 0 0 0 1px var(--qw-border)",
+        background: "var(--devtools-bg-muted)",
+        boxShadow: "inset 0 0 0 1px var(--devtools-border)",
       }}
     >
       <Icon
         name={name}
         size={Math.round(size * 0.55)}
-        color={color ?? "var(--qw-fg-muted)"}
+        color={color ?? "var(--devtools-fg-muted)"}
       />
     </div>
   );
@@ -33,11 +33,11 @@ export function Checkbox({ done }: { done: boolean }) {
     <span
       className="flex size-[14px] items-center justify-center rounded-[3px]"
       style={{
-        background: done ? "var(--qw-ok)" : "var(--qw-bg)",
-        boxShadow: `inset 0 0 0 1px ${done ? "var(--qw-ok)" : "var(--qw-border-strong)"}`,
+        background: done ? "var(--devtools-ok)" : "var(--devtools-bg)",
+        boxShadow: `inset 0 0 0 1px ${done ? "var(--devtools-ok)" : "var(--devtools-border-strong)"}`,
       }}
     >
-      {done && <Icon name="check" size={9} color="var(--qw-bg)" />}
+      {done && <Icon name="check" size={9} color="var(--devtools-bg)" />}
     </span>
   );
 }
@@ -52,7 +52,7 @@ export function ProgressBar({
   return (
     <div
       className="h-[5px] flex-1 overflow-hidden rounded-full"
-      style={{ background: "var(--qw-bg-muted)" }}
+      style={{ background: "var(--devtools-bg-muted)" }}
     >
       <div
         className="h-full rounded-full transition-all"
@@ -70,9 +70,9 @@ export function EmptyHint({ children }: { children: React.ReactNode }) {
     <div
       className="rounded-[10px] px-6 py-10 text-center text-[13px]"
       style={{
-        background: "var(--qw-bg-elev)",
-        border: "1px dashed var(--qw-border)",
-        color: "var(--qw-fg-muted)",
+        background: "var(--devtools-bg-elev)",
+        border: "1px dashed var(--devtools-border)",
+        color: "var(--devtools-fg-muted)",
       }}
     >
       {children}
@@ -84,7 +84,7 @@ export function ErrorBanner({ message }: { message: string }) {
   return (
     <div
       className="mb-4 rounded-[8px] px-4 py-3 text-[12px]"
-      style={{ background: "var(--qw-danger-soft)", color: "var(--qw-danger)" }}
+      style={{ background: "var(--devtools-danger-soft)", color: "var(--devtools-danger)" }}
     >
       {message}
     </div>
@@ -102,18 +102,18 @@ export function PendingBackend({
     <div
       className="rounded-[10px] px-5 py-4 text-[12.5px]"
       style={{
-        background: "var(--qw-bg-elev)",
-        border: "1px dashed var(--qw-border)",
-        color: "var(--qw-fg-muted)",
+        background: "var(--devtools-bg-elev)",
+        border: "1px dashed var(--devtools-border)",
+        color: "var(--devtools-fg-muted)",
       }}
     >
       <div
         className="mb-1 text-[10px] font-medium uppercase tracking-[0.12em]"
-        style={{ color: "var(--qw-fg-faint)" }}
+        style={{ color: "var(--devtools-fg-faint)" }}
       >
         Pending backend projection
       </div>
-      <div className="font-medium" style={{ color: "var(--qw-fg)" }}>
+      <div className="font-medium" style={{ color: "var(--devtools-fg)" }}>
         {title}
       </div>
       <div className="mt-0.5">{body}</div>

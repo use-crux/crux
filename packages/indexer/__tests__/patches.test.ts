@@ -479,9 +479,9 @@ describe('index patch merge', () => {
       facts: {
         relations: [
           {
-            id: 'relation:agent:Karyla:agent.uses_tool:tool:searchDocs',
+            id: 'relation:agent:SupportAgent:agent.uses_tool:tool:searchDocs',
             type: 'agent.uses_tool',
-            from: 'agent:Karyla',
+            from: 'agent:SupportAgent',
             to: 'tool:searchDocs',
             fidelity: 'partial',
           },
@@ -499,9 +499,9 @@ describe('index patch merge', () => {
       facts: {
         relations: [
           {
-            id: 'relation:agent.uses_tool:agent:Karyla:tool:searchDocs',
+            id: 'relation:agent.uses_tool:agent:SupportAgent:tool:searchDocs',
             type: 'agent.uses_tool',
-            from: 'agent:Karyla',
+            from: 'agent:SupportAgent',
             to: 'tool:searchDocs',
             fidelity: 'resolved',
           },
@@ -511,9 +511,9 @@ describe('index patch merge', () => {
 
     expect(enriched.relations).toEqual([
       expect.objectContaining({
-        id: 'relation:agent.uses_tool:agent:Karyla:tool:searchDocs',
+        id: 'relation:agent.uses_tool:agent:SupportAgent:tool:searchDocs',
         type: 'agent.uses_tool',
-        from: 'agent:Karyla',
+        from: 'agent:SupportAgent',
         to: 'tool:searchDocs',
         fidelity: 'resolved',
       }),

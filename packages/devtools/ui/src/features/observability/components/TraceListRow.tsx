@@ -37,10 +37,10 @@ function TraceHoverPreview({ trace }: { trace: Trace }) {
         <span
           className={
             trace.status === "error"
-              ? "text-(--qw-danger)"
+              ? "text-(--devtools-danger)"
               : trace.status === "running"
-                ? "text-(--qw-blue)"
-                : "text-(--qw-ok)"
+                ? "text-(--devtools-blue)"
+                : "text-(--devtools-ok)"
           }
         >
           {trace.status}
@@ -55,7 +55,7 @@ function TraceHoverPreview({ trace }: { trace: Trace }) {
             <span>Out: {usage.outputTokens.toLocaleString()}</span>
           )}
           {trace.result?.cost != null && (
-            <span className="text-(--qw-ok)">
+            <span className="text-(--devtools-ok)">
               {formatCost(trace.result.cost)}
             </span>
           )}
@@ -81,11 +81,11 @@ export function InlineHandoff({ event }: { event: AgentEventData }) {
   const to = d.toAgent ?? "?";
   return (
     <div className="flex items-center gap-2 text-[10px] py-1 px-2">
-      <span className="w-1.5 h-1.5 rounded-full bg-(--qw-crux) shrink-0" />
-      <span className="text-(--qw-crux) font-mono">handoff</span>
+      <span className="w-1.5 h-1.5 rounded-full bg-(--devtools-crux) shrink-0" />
+      <span className="text-(--devtools-crux) font-mono">handoff</span>
       <span className="text-zinc-400">{from}</span>
       <svg
-        className="w-3 h-3 text-(--qw-crux)"
+        className="w-3 h-3 text-(--devtools-crux)"
         fill="none"
         viewBox="0 0 24 24"
         stroke="currentColor"
@@ -108,8 +108,8 @@ export function InlineBlackboard({ event }: { event: AgentEventData }) {
   const d = event as Partial<{ boardId: string; fieldsChanged: string[] }>;
   return (
     <div className="flex items-center gap-2 text-[10px] py-0.5 px-2">
-      <span className="w-1.5 h-1.5 rounded-sm bg-(--qw-crux) shrink-0" />
-      <span className="text-(--qw-crux) font-mono">board</span>
+      <span className="w-1.5 h-1.5 rounded-sm bg-(--devtools-crux) shrink-0" />
+      <span className="text-(--devtools-crux) font-mono">board</span>
       <span className="text-zinc-500">{d.boardId}</span>
       {d.fieldsChanged && (
         <span className="text-zinc-600">[{d.fieldsChanged.join(", ")}]</span>
@@ -156,10 +156,10 @@ export function TraceListRow({
         : "\u25CF";
   const statusColor =
     trace.status === "success"
-      ? "text-(--qw-ok)"
+      ? "text-(--devtools-ok)"
       : trace.status === "error"
-        ? "text-(--qw-danger)"
-        : "text-(--qw-blue)";
+        ? "text-(--devtools-danger)"
+        : "text-(--devtools-blue)";
 
   const resolvedSource = useResolvedSource(trace.source);
 
@@ -266,10 +266,10 @@ export function TraceListRow({
               <span
                 className={`w-2 h-2 rounded-full shrink-0 ${
                   judgeScore >= 0.7
-                    ? "bg-(--qw-ok)"
+                    ? "bg-(--devtools-ok)"
                     : judgeScore >= 0.5
-                      ? "bg-(--qw-warn)"
-                      : "bg-(--qw-danger)"
+                      ? "bg-(--devtools-warn)"
+                      : "bg-(--devtools-danger)"
                 }`}
                 title={`Judge: ${judgeScore.toFixed(2)}`}
               />
@@ -277,7 +277,7 @@ export function TraceListRow({
             {/* TTFT badge */}
             {trace.streaming?.ttftMs != null && (
               <span
-                className={`text-[10px] tabular-nums ${trace.streaming.ttftMs < 200 ? "text-(--qw-ok)" : trace.streaming.ttftMs < 500 ? "text-(--qw-warn)" : "text-(--qw-danger)"}`}
+                className={`text-[10px] tabular-nums ${trace.streaming.ttftMs < 200 ? "text-(--devtools-ok)" : trace.streaming.ttftMs < 500 ? "text-(--devtools-warn)" : "text-(--devtools-danger)"}`}
                 title={`TTFT: ${trace.streaming.ttftMs}ms`}
               >
                 {trace.streaming.ttftMs}ms
@@ -286,7 +286,7 @@ export function TraceListRow({
             {/* Slow indicator */}
             {isSlow && (
               <span
-                className="text-(--qw-warn) text-[10px]"
+                className="text-(--devtools-warn) text-[10px]"
                 title="Slow (P90+)"
               >
                 {"\uD83D\uDD25"}
@@ -303,7 +303,7 @@ export function TraceListRow({
                   <>
                     {trace.streamProgress.ttftMs != null && (
                       <span
-                        className={`text-[10px] ${trace.streamProgress.ttftMs < 200 ? "text-(--qw-ok)" : trace.streamProgress.ttftMs < 500 ? "text-(--qw-warn)" : "text-(--qw-danger)"}`}
+                        className={`text-[10px] ${trace.streamProgress.ttftMs < 200 ? "text-(--devtools-ok)" : trace.streamProgress.ttftMs < 500 ? "text-(--devtools-warn)" : "text-(--devtools-danger)"}`}
                       >
                         {trace.streamProgress.ttftMs}ms
                       </span>
@@ -311,15 +311,15 @@ export function TraceListRow({
                     <span className="text-[10px] text-zinc-500">
                       {trace.streamProgress.chunksReceived}ch
                     </span>
-                    <span className="text-[10px] text-(--qw-blue) tabular-nums">
+                    <span className="text-[10px] text-(--devtools-blue) tabular-nums">
                       {(trace.streamProgress.elapsedMs / 1000).toFixed(1)}s
                     </span>
-                    <span className="w-1.5 h-1.5 rounded-full bg-(--qw-blue) animate-pulse" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-(--devtools-blue) animate-pulse" />
                   </>
                 ) : (
                   <Shimmer
                     as="span"
-                    className="text-xs text-(--qw-blue)"
+                    className="text-xs text-(--devtools-blue)"
                     duration={2}
                   >
                     Running...
@@ -342,14 +342,14 @@ export function TraceListRow({
               </span>
             ) : null}
             {trace.result?.cost != null && trace.result.cost > 0 && (
-              <span className="text-(--qw-ok) tabular-nums text-[10px]">
+              <span className="text-(--devtools-ok) tabular-nums text-[10px]">
                 {formatCost(trace.result.cost)}
               </span>
             )}
             {/* Fallback badge */}
             {trace.fallback && (
               <span
-                className="text-[9px] px-1 py-0.5 rounded border shrink-0 text-(--qw-warn) bg-(--qw-warn-soft) border-(--qw-warn-soft)"
+                className="text-[9px] px-1 py-0.5 rounded border shrink-0 text-(--devtools-warn) bg-(--devtools-warn-soft) border-(--devtools-warn-soft)"
                 title={`Fallback: ${trace.fallback.attempts} attempts, failed: ${trace.fallback.failedModels.join(", ")}`}
               >
                 fallback {trace.fallback.attempts}x
@@ -358,7 +358,7 @@ export function TraceListRow({
             {/* Security warning badge */}
             {securityCount != null && securityCount > 0 && (
               <span
-                className="inline-flex items-center gap-0.5 rounded-full px-1 py-0.5 text-[9px] font-medium text-(--qw-danger) bg-(--qw-danger-soft) border border-(--qw-danger-soft) shrink-0"
+                className="inline-flex items-center gap-0.5 rounded-full px-1 py-0.5 text-[9px] font-medium text-(--devtools-danger) bg-(--devtools-danger-soft) border border-(--devtools-danger-soft) shrink-0"
                 title={`${securityCount} security warning${securityCount > 1 ? "s" : ""}`}
               >
                 {"\uD83D\uDEE1\uFE0F"}

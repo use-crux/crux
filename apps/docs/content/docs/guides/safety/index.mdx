@@ -110,8 +110,8 @@ Project Index definitions. Devtools opens safety interventions in Explain, and
 the index catalog shows policy ids, boundaries, strategy helper kinds, and
 duplicate policy-id lints.
 
-In quality tests, use the legacy span matchers for guardrail/constraint audits
-or the decision report matcher for the canonical safety read model:
+In Evals, use safety signal assertions for guardrail/constraint audits or the
+decision report matcher for the canonical safety read model:
 
 ```ts
 ctx.expect.safety.toHaveBlocked("pii");
@@ -152,6 +152,6 @@ ctx.expect.decisionReport.safety.toHaveOutcome("pii", "rewrite", {
 
 ## How this fits with the rest of Crux
 
-- **[Eval](/docs/guides/evals)** validates output quality _during testing_. Guardrails and constraints validate it _during execution_. `constraint.judge(...)` bridges a scoring judge into runtime Safety enforcement, while `constraintScorer()` runs production constraints in eval suites.
+- **[Eval](/docs/guides/evals)** validates output quality _during testing_. Guardrails and constraints validate it _during execution_. `constraint.judge(...)` bridges a scoring judge into runtime Safety enforcement; Eval safety and decision-report matchers regression-test the resulting production behavior.
 - **[Tools](/docs/guides/tools)** can implement domain-specific safety checks that need external data.
 - **[Devtools](/docs/guides/observability/devtools)** trace every guardrail hit and constraint retry.

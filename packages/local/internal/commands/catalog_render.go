@@ -43,9 +43,6 @@ func printCatalogDefinition(io *output.IO, catalog api.CatalogDefinitionV1) {
 	printCatalogSourceRefs(io, definition.SourceRefs)
 	printCatalogRelations(io, catalog.Relations)
 	printCatalogHealth(io, catalog.Diagnostics, catalog.Lints)
-	if catalog.Quality != nil {
-		fmt.Fprintf(io.Out, "\n  Eval runs: %d\n", catalog.Quality.RunCount)
-	}
 	if catalog.RuntimeActivity != nil {
 		fmt.Fprintf(io.Out, "\n  Runtime: %d runs", catalog.RuntimeActivity.RunCount)
 		if catalog.RuntimeActivity.LastRunID != "" {

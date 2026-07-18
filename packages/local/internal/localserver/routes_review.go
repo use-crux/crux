@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/use-crux/crux/packages/local/internal/privacy"
 	"github.com/use-crux/crux/packages/local/internal/review"
 )
 
@@ -24,7 +25,7 @@ type reviewActionRequest struct {
 	SaveCorrection     bool            `json:"saveCorrection,omitempty"`
 }
 
-func registerReviewRoutes(mux *http.ServeMux, service *review.Service, writer review.RepositoryWriter) {
+func registerReviewRoutes(mux *http.ServeMux, service *review.Service, writer review.RepositoryWriter, repositoryWritable bool) {
 	mux.HandleFunc("POST /api/reviews/{reviewId}/actions", func(w http.ResponseWriter, r *http.Request) {
 		if service == nil {
 			http.Error(w, "Review service unavailable", http.StatusServiceUnavailable)
@@ -35,7 +36,7 @@ func registerReviewRoutes(mux *http.ServeMux, service *review.Service, writer re
 			return
 		}
 		reviewID := r.PathValue("reviewId")
-		if input.Type == "add-to-eval" {
+		if input.Type == "add-to-eval" || input.Type == "preview-add-to-eval" {
 			projection, _, err := service.Review(r.Context(), reviewID)
 			if err != nil {
 				writeReviewError(w, err)
@@ -49,21 +50,26 @@ func registerReviewRoutes(mux *http.ServeMux, service *review.Service, writer re
 				return
 			}
 			if writer == nil {
-				http.Error(w, "Add-to-eval repository writer unavailable", http.StatusServiceUnavailable)
+				http.Error(w, "Add-to-eval projection unavailable; start Crux from the project root so it can produce the canonical pending-sync Case", http.StatusServiceUnavailable)
 				return
 			}
+			preview := input.Type == "preview-add-to-eval"
 			result, err := writer.AddReviewCase(r.Context(), review.AddCaseRequest{
 				EvalID: input.EvalID, ID: input.CaseID, Input: input.Input, Call: input.Call,
 				Name: input.Name, Tags: input.Tags, ReviewID: reviewID, RunID: projection.RunID,
 				CorrectionProposal: input.CorrectionProposal, SaveCorrection: input.SaveCorrection,
-				RepositoryWritable: true,
+				RepositoryWritable: repositoryWritable && !preview,
 			})
 			if err != nil {
 				slog.Warn("Add-to-eval failed", "error", err)
-				http.Error(w, "Add-to-eval failed", http.StatusBadRequest)
+				if errors.Is(err, privacy.ErrPolicyUnavailable) {
+					http.Error(w, privacy.PolicyUnavailableMessage, http.StatusServiceUnavailable)
+					return
+				}
+				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
-			if result.Status == "added" || result.Status == "linked" {
+			if !preview && (result.Status == "added" || result.Status == "linked") {
 				_, err = service.ApplyAction(r.Context(), review.Action{
 					ReviewID: reviewID, Type: "added-to-eval",
 					TargetEvalID: input.EvalID, TargetCaseID: result.CaseID,

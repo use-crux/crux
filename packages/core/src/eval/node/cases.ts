@@ -14,6 +14,7 @@ import {
   resolveAutomaticCaseFile,
 } from "./case-path";
 import { fingerprintEvalDefinition } from "./definition-identity";
+import type { EvalSourceClosureIdentity } from "./source-dependencies";
 import { loadCaseRows } from "./case-rows";
 
 export { loadCaseRows } from "./case-rows";
@@ -28,6 +29,7 @@ export interface LoadedEvalCase {
 export interface HydratedEval extends DiscoveredEval {
   readonly cases: readonly LoadedEvalCase[];
   readonly definitionFingerprint: string;
+  readonly sourceClosure: EvalSourceClosureIdentity;
   readonly caseFileDependencies: readonly string[];
   readonly filteredSelection?: true;
 }
@@ -63,11 +65,35 @@ export async function hydrateEvalCases(
   for (const position of definition.caseSourceOrder) {
     if (position.kind === "inline") {
       const authored = definition.cases[position.index]!;
+      const origin = `${discovered.sourceKey.relativeFile}:inline:${position.index + 1}`;
+      const input =
+        schemas.inputSchema === undefined
+          ? authored.input
+          : await validateInlineValue(
+              schemas.inputSchema,
+              authored.input,
+              origin,
+              "input",
+            );
+      const expected =
+        authored.expected === undefined || schemas.outputSchema === undefined
+          ? authored.expected
+          : await validateInlineValue(
+              schemas.outputSchema,
+              authored.expected,
+              origin,
+              "expected",
+            );
+      const normalized = Object.freeze({
+        ...authored,
+        input,
+        ...(authored.expected !== undefined ? { expected } : {}),
+      });
       merged.push(
         Object.freeze({
-          id: authored.id ?? fingerprintEvalValueForInternalUse(authored.input),
-          origin: `${discovered.sourceKey.relativeFile}:inline:${position.index + 1}`,
-          authored,
+          id: authored.id ?? fingerprintEvalValueForInternalUse(input),
+          origin,
+          authored: normalized,
           unvalidatedExpected: false,
         }),
       );
@@ -107,7 +133,7 @@ export async function hydrateEvalCases(
     );
   }
   assertUniqueCaseIds(merged);
-  const definitionFingerprint = await fingerprintEvalDefinition({
+  const definitionIdentity = await fingerprintEvalDefinition({
     discovered,
     definition,
     cases: merged,
@@ -122,8 +148,27 @@ export async function hydrateEvalCases(
     }),
     cases: Object.freeze(merged),
     caseFileDependencies: Object.freeze(caseFileDependencies),
-    definitionFingerprint,
+    definitionFingerprint: definitionIdentity.fingerprint,
+    sourceClosure: definitionIdentity.sourceClosure,
   });
+}
+
+async function validateInlineValue(
+  schema: NonNullable<
+    ReturnType<typeof getEvalTaskSchemasForInternalUse>["inputSchema"]
+  >,
+  value: unknown,
+  origin: string,
+  field: "input" | "expected",
+): Promise<unknown> {
+  const result = await schema["~standard"].validate(value);
+  if (result.issues !== undefined) {
+    throw new EvalCaseFileError(
+      origin,
+      `${field} failed schema validation: ${result.issues.map((issue) => issue.message).join("; ")}`,
+    );
+  }
+  return result.value;
 }
 
 function assertUniqueCaseIds(cases: readonly LoadedEvalCase[]): void {

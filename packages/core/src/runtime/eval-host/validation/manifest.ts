@@ -9,12 +9,14 @@ export function decodeEvalHostManifest(value: unknown): EvalHostManifestV1 {
       "protocol",
       "deploymentId",
       "hostKind",
+      "privacyFingerprint",
       "capabilities",
       "resultMaxBytes",
       "evals",
     ]) ||
     value.protocol !== CRUX_EVAL_HOST_PROTOCOL ||
     typeof value.deploymentId !== "string" ||
+    !isFingerprint(value.privacyFingerprint) ||
     !["memory", "node", "serverless", "convex", "cloudflare"].includes(
       value.hostKind as string,
     ) ||
@@ -63,4 +65,8 @@ function isStringRecord(value: unknown): boolean {
     isRecord(value) &&
     Object.values(value).every((entry) => typeof entry === "string")
   );
+}
+
+function isFingerprint(value: unknown): boolean {
+  return typeof value === "string" && /^[a-f0-9]{64}$/u.test(value);
 }

@@ -75,7 +75,7 @@ Ask: did routing, fallback, safety, or compaction change this turn?
 ## 6. Find what source to change
 
 Use **What source do I change?** to find the prompt, context, tool, route,
-guardrail, or quality definition that caused the behavior. Source joins report
+guardrail, or Eval that protects the behavior. Source joins report
 their fidelity:
 
 - `exact`
@@ -86,7 +86,7 @@ their fidelity:
 
 Ask: which definition caused this, and can Crux prove the source location?
 
-## 7. Protect it with a quality assertion
+## 7. Protect it with an Eval assertion
 
 Once you know the setup behavior you want, protect stable machine fields instead
 of human-facing text. `reason.text`, `turn.readout`, labels, and suggestions are

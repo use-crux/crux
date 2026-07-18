@@ -217,11 +217,7 @@ func (p *Palette) refilter() {
 
 func defaultCommands() []Command {
 	return []Command{
-		{ID: "promote", Cmd: ":promote exp-043:winner", Desc: "Promote an experiment variant to baseline", Glyph: "★"},
-		{ID: "run", Cmd: ":run docs_agent", Desc: "Run an evaluation", Glyph: "▶"},
 		{ID: "open-trace", Cmd: ":open trace 8af2", Desc: "Open a trace by id prefix", Glyph: "◐"},
-		{ID: "target", Cmd: ":target docs_agent@gpt-5", Desc: "Set the workbench target", Glyph: "⌖"},
-		{ID: "baseline-pin", Cmd: ":baseline pin exp-043", Desc: "Pin a baseline for this project", Glyph: "◎"},
 		{ID: "goto-overview", Cmd: ":goto overview", Desc: "Jump to Overview", Glyph: "→"},
 		{ID: "goto-insights", Cmd: ":goto insights", Desc: "Jump to Insights", Glyph: "→"},
 		{ID: "goto-runs", Cmd: ":goto runs", Desc: "Jump to Runs", Glyph: "→"},

@@ -12,7 +12,10 @@ user owns the message or run.
 ```ts
 import { feedback } from "@use-crux/core/feedback";
 
-const receipt = await feedback(runId, {
+const message = await messages.getOwned(messageId, user.id);
+if (!message) throw new Response("Not found", { status: 404 });
+
+const receipt = await feedback(message.cruxRunId, {
   rating: "down",
   comment: "The refund window is incorrect",
   dedupeKey: requestId,
@@ -23,10 +26,39 @@ The first argument is the canonical `run_...` id returned by Crux. The call
 is awaited and resolves only after the configured observability destination
 returns a durable receipt. There is no local fallback.
 
+Crux resolves exactly one durable destination: an explicit
+`observability.feedbackDestination` first, otherwise the configured
+observability transport when that transport implements `submitFeedback()`.
+If neither is capable, `feedback()` fails with the configuration step instead
+of pretending the feedback was saved. A tee may contain many capture
+transports but at most one feedback-capable transport.
+
+```ts title="crux.config.ts"
+export default config({
+  observability: {
+    serverUrl: process.env.CRUX_OBSERVABILITY_URL,
+    token: process.env.CRUX_DEVTOOLS_TOKEN,
+    redactPaths: ["customer.email"],
+  },
+});
+```
+
+The built-in HTTP observability transport already supports durable feedback.
+Use `feedbackDestination` only when feedback must go to a different custom
+sink than graph records.
+
+`redactPaths` is applied before submission and again at the local Review write
+boundary. Paths are relative to `correction`, so `customer.email` means
+`correction.customer.email`. Authorization, API-key, token, and secret keys
+are always redacted even when no paths are configured.
+
 ## AI message feedback
 
 ```ts
 import { feedback } from "@use-crux/ai/feedback";
+
+const message = await messages.getOwned(messageId, user.id);
+if (!message) throw new Response("Not found", { status: 404 });
 
 await feedback(message, "down");
 ```
@@ -45,3 +77,10 @@ Crux prefills input and call context, never output as expected truth. A
 correction remains a proposal until a reviewer saves it. Duplicate semantic
 Cases link to the existing row; id conflicts never overwrite; remote projects
 can report `pending-sync` with the exact proposed row and path.
+
+Review context and Add-to-eval sidecars use the same generated policy snapshot
+as feedback and Eval evidence. Crux Local refreshes the snapshot before it
+exposes mutation routes and temporarily rejects writes while a refresh is in
+progress. If the snapshot is missing, malformed, or no longer matches its
+fingerprint, the write fails closed with `503` and asks you to run
+`crux runtime generate` before retrying.

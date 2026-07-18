@@ -16,8 +16,8 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/assets"
 	"github.com/use-crux/crux/packages/local/internal/devtools"
 	"github.com/use-crux/crux/packages/local/internal/inspect"
-	"github.com/use-crux/crux/packages/local/internal/legacymigration"
 	"github.com/use-crux/crux/packages/local/internal/observability"
+	"github.com/use-crux/crux/packages/local/internal/privacy"
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"github.com/use-crux/crux/packages/local/internal/projectwatch"
 	"github.com/use-crux/crux/packages/local/internal/store"
@@ -97,10 +97,8 @@ func NewDevServer(opts DevServerOptions) *DevServer {
 	if runtimeArtifacts == nil {
 		runtimeArtifacts, closeRuntimeArtifacts = newRuntimeArtifactGeneratorForDev(opts.ProjectIndexerScript)
 	}
+	runtimeArtifacts = privacyGuardedRuntimeArtifactGenerator(runtimeArtifacts)
 	inspectDir := inspect.Dir(serverOpts.InspectDir)
-	if err := legacymigration.ArchiveExperiments(inspectDir); err != nil {
-		slog.Error("legacy Quality experiment archival failed", "error", err)
-	}
 	inspectSvc := inspect.NewService(s, inspectDir)
 	devtoolsSvc := devtools.NewService(s, inspectSvc)
 	if opts.ProjectIndexer != nil {
@@ -112,24 +110,20 @@ func NewDevServer(opts DevServerOptions) *DevServer {
 	}
 	serverOpts.ObservabilityService = observabilitySvc
 	handler := NewHTTPServerWithServicesContext(ctx, devtoolsSvc, serverOpts)
-	go func() {
-		cwd, err := os.Getwd()
-		if err != nil {
-			slog.Warn("project index startup reindex skipped", "error", err)
-			return
+	if serverOpts.ProjectRoot != "" {
+		if err := privacy.InvalidateGenerated(serverOpts.ProjectRoot); err != nil {
+			slog.Warn("privacy policy invalidation failed", "error", err)
 		}
-		index, err := devtoolsSvc.ReindexProjectWithOptions(ctx, cwd, "", "", devtools.ProjectReindexOptions{
+		index, err := devtoolsSvc.ReindexProjectWithOptions(ctx, serverOpts.ProjectRoot, "", "", devtools.ProjectReindexOptions{
 			Semantic: devtools.ProjectSemanticBackground,
 		})
 		if err != nil {
 			slog.Warn("project index startup reindex failed", "error", err)
-			return
-		}
-		if err := runtimeArtifacts(ctx, cwd, index.Definitions); err != nil {
+		} else if err := runtimeArtifacts(ctx, serverOpts.ProjectRoot, index.Definitions); err != nil {
 			slog.Warn("runtime artifact startup generation failed", "error", err)
 		}
-		startProjectIndexWatcher(ctx, cwd, devtoolsSvc, runtimeArtifacts)
-	}()
+		go startProjectIndexWatcher(ctx, serverOpts.ProjectRoot, devtoolsSvc, runtimeArtifacts)
+	}
 
 	// Mint a session token and gate the primary listener only when it is
 	// exposed beyond loopback. A normal loopback server stays auth-free, so
@@ -174,6 +168,15 @@ func NewDevServer(opts DevServerOptions) *DevServer {
 	}
 }
 
+func privacyGuardedRuntimeArtifactGenerator(generate RuntimeArtifactGenerator) RuntimeArtifactGenerator {
+	return func(ctx context.Context, root string, definitions []store.ProjectDefinition) error {
+		if err := privacy.InvalidateGenerated(root); err != nil {
+			return err
+		}
+		return generate(ctx, root, definitions)
+	}
+}
+
 // listenHost resolves the interface the local server binds to. It defaults to
 // the loopback interface so the unauthenticated devtools API is not exposed to
 // the local network. Setting CRUX_HOST (e.g. "0.0.0.0") opts into binding
@@ -200,6 +203,14 @@ func hostIsLoopback(host string) bool {
 
 func startProjectIndexWatcher(ctx context.Context, root string, devtoolsSvc *devtools.Service, runtimeArtifacts RuntimeArtifactGenerator) {
 	runner := projectwatch.NewRunner(func(runCtx context.Context, run projectwatch.Run) {
+		if err := privacy.InvalidateGenerated(root); err != nil {
+			slog.Warn(
+				"privacy policy invalidation failed",
+				"error", err,
+				"watchRunId", run.ID,
+			)
+			return
+		}
 		index, err := devtoolsSvc.ReindexProjectIncrementalWithOptions(runCtx, root, "", "", run.Delta.Files, run.Delta.DeletedFiles, devtools.ProjectReindexOptions{
 			Semantic: devtools.ProjectSemanticBackground,
 			Watch: devtools.ProjectWatchRunOptions{

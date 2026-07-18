@@ -9,7 +9,7 @@
  * *efficiency* axis (a hit is good news). They never share a tone family here.
  */
 
-import type { ChipTone } from "@/qw/shell/primitives";
+import type { ChipTone } from "@/devtools/shell/primitives";
 import type { TurnEvidenceLevel } from "@/types";
 
 /** Display metadata for a status chip. */
@@ -134,7 +134,7 @@ const COVERAGE: Record<string, StatusMeta> = {
     tone: "ok",
     solid: true,
     label: "covered",
-    blurb: "A quality record asserts this behaviour.",
+    blurb: "An Eval asserts this behaviour.",
   },
   partial: {
     tone: "warn",
@@ -146,7 +146,7 @@ const COVERAGE: Record<string, StatusMeta> = {
     tone: "warn",
     solid: false,
     label: "not covered",
-    blurb: "No quality record asserts this. A gap worth testing.",
+    blurb: "No Eval asserts this. A gap worth testing.",
   },
   unknown: {
     tone: "muted",

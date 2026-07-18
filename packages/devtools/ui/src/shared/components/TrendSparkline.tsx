@@ -9,10 +9,10 @@ interface TrendSparklineProps {
 }
 
 const COLOR_MAP: Record<string, { stroke: string; fill: string }> = {
-  emerald: { stroke: "stroke-(--qw-ok)", fill: "fill-(--qw-ok-soft)" },
-  red: { stroke: "stroke-(--qw-danger)", fill: "fill-(--qw-danger-soft)" },
-  amber: { stroke: "stroke-(--qw-warn)", fill: "fill-(--qw-warn-soft)" },
-  blue: { stroke: "stroke-(--qw-blue)", fill: "fill-(--qw-blue-soft)" },
+  emerald: { stroke: "stroke-(--devtools-ok)", fill: "fill-(--devtools-ok-soft)" },
+  red: { stroke: "stroke-(--devtools-danger)", fill: "fill-(--devtools-danger-soft)" },
+  amber: { stroke: "stroke-(--devtools-warn)", fill: "fill-(--devtools-warn-soft)" },
+  blue: { stroke: "stroke-(--devtools-blue)", fill: "fill-(--devtools-blue-soft)" },
   zinc: { stroke: "stroke-zinc-400", fill: "fill-zinc-400/10" },
 };
 

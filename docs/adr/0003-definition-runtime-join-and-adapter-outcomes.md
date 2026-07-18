@@ -37,21 +37,21 @@ This workstream closes both without redesigning either plane.
 - `runtime-observed-unjoined` — emits its own runtime primitives, but those records do not carry the
   authored definition id; Catalog names that limitation and withholds per-definition activity
 - `structural-child` — nested under a parent for Catalog display; identity may be direct or parent-derived
-- `quality-owned` — primary evidence is the Quality↔observability join
+- `eval-owned` — primary evidence is the Eval↔observability join
 - `static-only` — declarative; truthful empty runtime state
 - `fallback` — the `unknown` sentinel
 
-Secondary treatments (`direct-runtime`, `quality-owned`) cover dual cases such as `scorer`
-(Quality-primary with live `scoring.judge` secondary evidence). Catalog and DevTools derive treatment
+Secondary treatments (`direct-runtime`, `eval-owned`) cover dual cases such as `scorer`
+(Eval-primary with live `scoring.judge` secondary evidence). Catalog and DevTools derive treatment
 from this manifest; they do not hard-code a subset of definition kinds.
 
 `runtimeIdentity` refines how Catalog obtains activity for non-owner kinds:
 
 - `definition-ref` — the runtime holds the exact authored identity (e.g. knowledge base, tool policy,
-  executed flow step) and may show *Referenced by N runs* when the activity rollup reports `N > 0`
+  executed flow step) and may show _Referenced by N runs_ when the activity rollup reports `N > 0`
 - `parent-derived` — only the indexed structural parent is directly observed; Catalog reports the
-  parent's activity and labels the child *not independently observed*
-- `quality` — the existing Quality correlation is authoritative
+  parent's activity and labels the child _not independently observed_
+- `eval` — the Eval correlation is authoritative
 - `none` — no truthful definition-level identity path. Injectables and storage ports keep a
   zero-runtime / non-independent state; deferred work, media operations, and ingest sources retain
   their kind-level runtime primitives under `runtime-observed-unjoined`. Neither case selects an
@@ -95,7 +95,7 @@ aggregate timestamps/counts — never a denormalized Project Index snapshot. Fil
 stream. Since-deleted definitions remain filterable; read-time Catalog resolution marks them
 unresolved rather than dropping history.
 
-**Runtime evidence never participates in Project Index or Quality cache identity.**
+**Runtime evidence never participates in Project Index or Eval evidence-cache identity.**
 
 ### Normalized adapter outcomes
 
@@ -117,9 +117,9 @@ explanations for `suspended` / `incomplete` / `conflicted`. `healthy` is only se
 model can prove a clean terminal delivery (causal order, zero gaps, no alias conflict, no ingest
 rejects). `unknown` is never presented as healthy.
 
-### Quality nested-run signal capture
+### Eval nested-run signal capture
 
-Quality cells open an `eval.case` run; nested `flow()` tasks open durable child runs linked by
+Eval cells open an `eval.case` run; nested `flow()` tasks open durable child runs linked by
 `edgeType: 'triggered'`. Signal capture takes the **triggered-run closure** of the cell root so
 `flow.step` matchers see step spans instead of honest-failing as uncaptured.
 
@@ -137,7 +137,7 @@ revises; a second counter is strictly derivable and invites drift.
 **Progressive tool-call argument streaming.** Rejected: partial JSON is not a reliable product
 surface; completed calls already serve generate and stream uniformly.
 
-**Ship with known-red Quality/UI baselines reconfirmed unchanged.** Rejected: the release gate is
+**Ship with known-red Eval/UI baselines reconfirmed unchanged.** Rejected: the release gate is
 zero unexplained red checks; nested-run capture and architecture allowlist fixes close the baselines
 this workstream owns.
 
@@ -156,10 +156,10 @@ this workstream owns.
 - Unit/integration: DefinitionRef emission, kind coverage exhaustiveness, Go activity
   projection/filter/rebuild/retention, adapter normalized-outcome conformance for all four packages.
 - Connected fixture: generated from every manifest entry with direct, contributor, runtime-unjoined,
-  child, parent-derived, Quality, and zero-runtime treatments; multi-segment healthy run, degraded delivery
-  via record-id conflict, filtered Runs, revision catch-up, and real Quality experiment correlation
+  child, parent-derived, Eval, and zero-runtime treatments; multi-segment healthy run, degraded delivery
+  via record-id conflict, filtered Runs, revision catch-up, and real Eval-run correlation
   (`TestConnectedFixtureDefinitionJoinDeliveryAndCatchup`).
-- Quality: nested triggered-run closure so flow step matchers capture under `eval.case` cells.
+- Eval: nested triggered-run closure so flow step matchers capture under `eval.case` cells.
 - DevTools: `check:ui-architecture` green; Catalog coverage treatments unit-tested.
 - Docs: public guides for adapter outcomes, Catalog evidence, Runs/delivery, runtime setup, privacy,
   troubleshooting; stale hook samples removed.

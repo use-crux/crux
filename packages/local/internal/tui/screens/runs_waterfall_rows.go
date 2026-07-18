@@ -124,8 +124,6 @@ func primitiveLabel(sp kit.WaterfallSpan) string {
 		return sp.Primitive
 	case "flow.step":
 		return "step"
-	case "eval.flow":
-		return "eval"
 	case "retrieval.stage":
 		return "stage"
 	case "":

@@ -1,9 +1,7 @@
 /**
  * Index v2 — mid/low-tier detail sections.
  *
- * Ported from the design's index-sections.jsx:
- *   · IndexQuality       — exhaustive definition.quality (pass rate, run
- *     breakdown, coverage, linked run artifacts)
+ * Detail sections for runtime evidence, diagnostics, health, and provenance:
  *   · IndexObservability — runtimeJoin span correlation card
  *   · IndexDiagnostics    — intelligence.diagnostics
  *   · IndexHealthSection  — lint findings (direct + via deps)
@@ -16,7 +14,7 @@ import type { ReactNode } from "react";
 import { T, toneColor, type Tone } from "./tokens";
 import { Icon } from "./icons";
 import { Btn, Chip, SectionHead } from "./primitives";
-import { Bar, KindBadge, kindMeta } from "./kit";
+import { kindMeta } from "./kit";
 import type { ViewDef } from "./adapt";
 import { useIndexIndex } from "./context";
 import { useNavigation } from "@/app/navigation/useNavigation";
@@ -33,311 +31,6 @@ function statusTone(s?: string): Tone {
         ? "danger"
         : "muted";
 }
-
-function fmtRunAt(ts?: number): string | undefined {
-  if (ts == null) return undefined;
-  const diff = Date.now() - ts;
-  if (diff < 0 || !Number.isFinite(diff)) return new Date(ts).toLocaleString();
-  const m = Math.floor(diff / 60000);
-  if (m < 1) return "just now";
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  return `${Math.floor(h / 24)}d ago`;
-}
-
-// ── EVAL RUNS ────────────────────────────────────────────────────────────────
-export function IndexQuality({ def }: { def: ViewDef }) {
-  const q = def.quality;
-  if (!q || (q.passRate == null && !q.runCount && !q.evalIds && !q.suiteIds))
-    return null;
-  const pr = q.passRate;
-  const prTone: Tone =
-    pr == null ? "muted" : pr >= 0.9 ? "ok" : pr >= 0.75 ? "crux" : "warn";
-  const c = toneColor(T, prTone);
-  const runs = q.runCount ?? 0;
-  const comp = q.completedRunCount;
-  const fail = q.failedRunCount;
-  const run = q.runningRunCount;
-  const lastRunAt = fmtRunAt(q.lastRunAt);
-  const artifacts: Array<[string, number | undefined, string]> = [
-    ["runs", q.runCount, "trace"],
-    ["traces", q.traceIds?.length, "trace"],
-  ];
-  const usedArtifacts = artifacts.filter(([, n]) => Boolean(n));
-  const evalListLabel =
-    def.kind === "evaluation" ? "evaluation" : "protected by";
-
-  return (
-    <>
-      <SectionHead
-        eyebrow="Eval runs"
-        right={
-          <span style={{ display: "flex", gap: 6 }}>
-            {q.lastStatus && (
-              <Chip
-                tone={
-                  q.lastStatus === "pass" || q.lastStatus === "ok"
-                    ? "ok"
-                    : q.lastStatus === "running"
-                      ? "crux"
-                      : "danger"
-                }
-                dot
-              >
-                {q.lastStatus}
-              </Chip>
-            )}
-          </span>
-        }
-      />
-      <div
-        style={{
-          background: T.bgElev,
-          border: `1px solid ${T.border}`,
-          borderRadius: 11,
-          overflow: "hidden",
-          marginBottom: 22,
-        }}
-      >
-        {/* headline */}
-        <div
-          style={{
-            display: "flex",
-            gap: 24,
-            padding: "16px 18px",
-            flexWrap: "wrap",
-            alignItems: "center",
-          }}
-        >
-          {pr != null && (
-            <div style={{ minWidth: 116 }}>
-              <div
-                style={{
-                  fontFamily: T.mono,
-                  fontSize: 30,
-                  fontWeight: 600,
-                  letterSpacing: "-0.02em",
-                  color: c.fg,
-                }}
-              >
-                {Math.round(pr * 100)}%
-              </div>
-              <div
-                style={{
-                  fontSize: 11,
-                  color: T.fgFaint,
-                  fontFamily: T.mono,
-                  marginBottom: 7,
-                }}
-              >
-                pass rate{q.caseCount ? ` · ${q.caseCount} cases` : ""}
-              </div>
-              <Bar value={pr} tone={prTone} height={7} />
-            </div>
-          )}
-          {(comp != null || fail != null || run != null) && (
-            <>
-              <div
-                style={{ width: 1, background: T.border, alignSelf: "stretch" }}
-              />
-              <div style={{ minWidth: 150 }}>
-                <div
-                  style={{
-                    fontFamily: T.mono,
-                    fontSize: 10,
-                    color: T.fgFaint,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.1em",
-                    marginBottom: 8,
-                  }}
-                >
-                  {runs} runs
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    height: 8,
-                    borderRadius: 99,
-                    overflow: "hidden",
-                    marginBottom: 8,
-                  }}
-                >
-                  {comp ? (
-                    <div
-                      style={{
-                        width: `${(comp / runs) * 100}%`,
-                        background: T.ok,
-                      }}
-                    />
-                  ) : null}
-                  {run ? (
-                    <div
-                      style={{
-                        width: `${(run / runs) * 100}%`,
-                        background: T.crux,
-                      }}
-                    />
-                  ) : null}
-                  {fail ? (
-                    <div
-                      style={{
-                        width: `${(fail / runs) * 100}%`,
-                        background: T.danger,
-                      }}
-                    />
-                  ) : null}
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    gap: 12,
-                    fontFamily: T.mono,
-                    fontSize: 10.5,
-                  }}
-                >
-                  {comp != null && (
-                    <span style={{ color: T.ok }}>● {comp} done</span>
-                  )}
-                  {run ? (
-                    <span style={{ color: T.crux }}>● {run} running</span>
-                  ) : null}
-                  {fail ? (
-                    <span style={{ color: T.danger }}>● {fail} failed</span>
-                  ) : null}
-                </div>
-              </div>
-            </>
-          )}
-          {lastRunAt && (
-            <>
-              <div
-                style={{ width: 1, background: T.border, alignSelf: "stretch" }}
-              />
-              <div
-                style={{
-                  fontFamily: T.mono,
-                  fontSize: 11,
-                  color: T.fgMuted,
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 4,
-                }}
-              >
-                <span>
-                  <span style={{ color: T.fgFaint }}>last run · </span>
-                  {lastRunAt}
-                </span>
-                {q.lastRunId && (
-                  <span style={{ color: T.crux }}>{q.lastRunId}</span>
-                )}
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* coverage + artifacts */}
-        {(q.evalIds || q.suiteIds || usedArtifacts.length > 0) && (
-          <div
-            style={{
-              borderTop: `1px solid ${T.border}`,
-              padding: "12px 18px",
-              display: "flex",
-              gap: 26,
-              flexWrap: "wrap",
-              alignItems: "center",
-            }}
-          >
-            {q.evalIds && (
-              <div>
-                <div
-                  style={{
-                    fontFamily: T.mono,
-                    fontSize: 9.5,
-                    color: T.fgFaint,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.1em",
-                    marginBottom: 5,
-                  }}
-                >
-                  {evalListLabel}
-                </div>
-                <span style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                  {q.evalIds.map((e) => (
-                    <KindBadge key={e} kind="eval.quality" label={e} />
-                  ))}
-                </span>
-              </div>
-            )}
-            {q.suiteIds && (
-              <div>
-                <div
-                  style={{
-                    fontFamily: T.mono,
-                    fontSize: 9.5,
-                    color: T.fgFaint,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.1em",
-                    marginBottom: 5,
-                  }}
-                >
-                  suites
-                </div>
-                <span style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                  {q.suiteIds.map((s) => (
-                    <KindBadge key={s} kind="suite" label={s} />
-                  ))}
-                </span>
-              </div>
-            )}
-            {usedArtifacts.length > 0 && (
-              <div style={{ marginLeft: "auto" }}>
-                <div
-                  style={{
-                    fontFamily: T.mono,
-                    fontSize: 9.5,
-                    color: T.fgFaint,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.1em",
-                    marginBottom: 5,
-                  }}
-                >
-                  linked
-                </div>
-                <span style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                  {usedArtifacts.map(([label, n, icon]) => (
-                    <span
-                      key={label}
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 5,
-                        padding: "2px 8px",
-                        borderRadius: 5,
-                        background: T.bg,
-                        border: `1px solid ${T.border}`,
-                        fontFamily: T.mono,
-                        fontSize: 10.5,
-                        color: T.fgMuted,
-                      }}
-                    >
-                      <Icon name={icon} size={11} color={T.fgFaint} />
-                      <span style={{ color: T.fg, fontWeight: 600 }}>
-                        {n}
-                      </span>{" "}
-                      {label}
-                    </span>
-                  ))}
-                </span>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </>
-  );
-}
-
 // ── OBSERVABILITY (exhaustive coverage: direct / contributor / runtime-unjoined / no-runtime) ──
 function coverageNote(
   state: ReturnType<typeof describeCatalogCoverage>,
@@ -361,17 +54,17 @@ function coverageNote(
         state.coverage.primary === "structural-child" &&
         !state.coverage.runtimePrimitiveNames?.length
       ) {
-        return state.coverage.secondary?.includes("quality-owned")
-          ? "Structural child — Quality owns its primary evidence; it has no independent runtime span."
+        return state.coverage.secondary?.includes("eval-owned")
+          ? "Structural child — its primary evidence lives in Eval runs; it has no independent runtime span."
           : "Structural child of its Catalog parent — it has no independent runtime span.";
       }
       return state.runCount > 0
         ? `Referenced by ${state.runCount} run${state.runCount === 1 ? "" : "s"} — never itself the subject of a run.`
         : "Referenced by an owner’s span when invoked — never itself the subject of a run. No runs yet.";
-    case "quality-primary":
+    case "eval-primary":
       return state.hasRuntimeEvidence
-        ? `Quality-primary — correlates through the Quality ↔ observability join. Also invoked directly in ${state.runCount} run${state.runCount === 1 ? "" : "s"}${state.coverage.runtimePrimitiveNames ? ` (${state.coverage.runtimePrimitiveNames.join(", ")})` : ""}.`
-        : "Quality-primary — correlates through the Quality ↔ observability join, not direct runtime evidence.";
+        ? `Eval evidence is available. This definition was also observed directly in ${state.runCount} run${state.runCount === 1 ? "" : "s"}${state.coverage.runtimePrimitiveNames ? ` (${state.coverage.runtimePrimitiveNames.join(", ")})` : ""}.`
+        : "Evidence for this definition lives in Eval runs, not independent runtime spans.";
     case "direct-activity":
       return state.hasRuntimeEvidence
         ? ""

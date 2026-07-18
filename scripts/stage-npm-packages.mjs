@@ -249,6 +249,7 @@ async function collectReleaseSourceFiles() {
     .filter((file) => {
       const normalized = relative(repoRoot, file).replaceAll(sep, '/')
       if (normalized.includes('/__tests__/') || normalized.includes('/__type_tests__/')) return false
+      if (normalized.split('/').some((segment) => segment.startsWith('.tmp'))) return false
       if (normalized.includes('/.turbo/') || normalized.includes('/dist/')) return false
       if (normalized.includes('/scripts/')) return false
       if (normalized.endsWith('.test.ts') || normalized.endsWith('.test.tsx')) return false

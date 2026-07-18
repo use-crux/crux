@@ -1,11 +1,8 @@
 import { useMemo, useState } from "react";
-import { QwShell } from "@/qw/shell/QwShell";
-import { navTarget } from "@/app/navigation/navTarget";
-import { useNavigation } from "@/app/navigation/useNavigation";
-import { useConnected } from "@/app/runtime/runtimeStore";
-import { Btn, Chip, Kpi, SectionHead } from "@/qw/shell/primitives";
-import { Icon } from "@/qw/shell/Icon";
-import { useToast } from "@/qw/shell/useToast";
+import { DevtoolsShell } from "@/devtools/shell/DevtoolsShell";
+import { Btn, Chip, Kpi, SectionHead } from "@/devtools/shell/primitives";
+import { Icon } from "@/devtools/shell/Icon";
+import { useToast } from "@/devtools/shell/useToast";
 import { SkeletonRows } from "@/shared/components/Skeleton";
 import {
   useCancelRuntimeWork,
@@ -41,8 +38,6 @@ const STATUSES: readonly (RuntimeWorkStatus | "all")[] = [
 ];
 
 export function RuntimeView() {
-  const { navigate } = useNavigation();
-  const connected = useConnected();
   const { toast } = useToast();
   const statusQuery = useRuntimeStatus();
   const retry = useRetryRuntimeWork();
@@ -115,9 +110,7 @@ export function RuntimeView() {
   }
 
   return (
-    <QwShell
-      activeView="runtime"
-      onNavigate={(v) => navigate(navTarget(v))}
+    <DevtoolsShell
       breadcrumb="Inspect / Runtime"
       title="Runtime"
       subtitle={
@@ -125,7 +118,6 @@ export function RuntimeView() {
           ? `${status.namespace} namespace · ${workRows.length} work items`
           : "Runtime state"
       }
-      connected={connected}
       actions={
         <Btn
           size="sm"
@@ -197,8 +189,8 @@ export function RuntimeView() {
         <div
           className="rounded-[8px]"
           style={{
-            border: "1px solid var(--qw-border)",
-            background: "var(--qw-bg-elev)",
+            border: "1px solid var(--devtools-border)",
+            background: "var(--devtools-bg-elev)",
           }}
         >
           <SectionHead eyebrow={tabLabel(tab)} className="m-0 px-4 py-3" />
@@ -226,15 +218,15 @@ export function RuntimeView() {
         <div
           className="rounded-[8px]"
           style={{
-            border: "1px solid var(--qw-border)",
-            background: "var(--qw-bg-elev)",
+            border: "1px solid var(--devtools-border)",
+            background: "var(--devtools-bg-elev)",
           }}
         >
           <SectionHead eyebrow="detail" className="m-0 px-4 py-3" />
           <RuntimeWorkDetail detail={inspectQuery.data} />
         </div>
       </div>
-    </QwShell>
+    </DevtoolsShell>
   );
 }
 
@@ -252,7 +244,7 @@ function RuntimeFilterBar({
   return (
     <div
       className="flex flex-shrink-0 flex-wrap items-center gap-2 px-8 py-2"
-      style={{ borderBottom: "1px solid var(--qw-border)" }}
+      style={{ borderBottom: "1px solid var(--devtools-border)" }}
     >
       <Icon name="filter" size={11} />
       <Select
@@ -304,9 +296,9 @@ function Select({
     <select
       className="rounded-[6px] px-2 py-1 text-[12px]"
       style={{
-        background: "var(--qw-bg-elev)",
-        border: "1px solid var(--qw-border)",
-        color: "var(--qw-fg)",
+        background: "var(--devtools-bg-elev)",
+        border: "1px solid var(--devtools-border)",
+        color: "var(--devtools-fg)",
       }}
       value={value}
       onChange={(event) => onChange(event.target.value)}

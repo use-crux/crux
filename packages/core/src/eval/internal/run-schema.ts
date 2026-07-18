@@ -43,7 +43,14 @@ const gateSchema = z
           informational: z.literal(true).optional(),
           evidence: z.enum(["complete", "incomplete"]).optional(),
           reason: z
-            .enum(["baseline_missing", "baseline_evidence_incomplete"])
+            .enum([
+              "baseline_missing",
+              "baseline_evidence_incomplete",
+              "score_missing",
+              "score_null",
+              "score_errored",
+              "cost_missing",
+            ])
             .optional(),
           remediation: z.string().optional(),
         })
@@ -62,8 +69,12 @@ const evidenceStoreSchema = z.union([
       writeReason: z
         .enum([
           "identity_unavailable",
+          "model_identity_unattested",
           "untracked_external_dependency",
+          "task_binding_untracked",
+          "unresolved_source_dependency",
           "implicit_media",
+          "capture_policy",
           "observed_identity_mismatch",
         ])
         .optional(),
@@ -118,7 +129,7 @@ const runBase = z
       .passthrough(),
     provenance: z
       .object({
-        task: z.literal("managed"),
+        task: z.enum(["managed", "opaque"]),
         host: z.literal("injected"),
         evidenceStore: evidenceStoreSchema,
       })
@@ -132,7 +143,19 @@ export const evalRunV3Schema = z.discriminatedUnion("status", [
   runBase.extend({
     status: z.literal("incomplete"),
     passed: z.literal(false),
-    reasons: z.array(z.enum(["task_error", "assertion_error", "scorer_error"])),
+    reasons: z.array(
+      z.enum([
+        "task_error",
+        "assertion_error",
+        "scorer_error",
+        "baseline_missing",
+        "baseline_evidence_incomplete",
+        "score_missing",
+        "score_null",
+        "score_errored",
+        "cost_missing",
+      ]),
+    ),
   }),
 ]);
 
@@ -141,7 +164,7 @@ export function parseEvalRunV3(value: unknown): EvalRun {
   return evalRunV3Schema.parse(value) as EvalRun;
 }
 
-/** Only complete, passing V3 runs can become Baseline truth. */
+/** Complete V3 runs are eligible; failing runs still require explicit warned acceptance. */
 export function isEvalRunPromotable(run: EvalRun): boolean {
-  return run.status === "complete" && run.passed;
+  return run.status === "complete";
 }

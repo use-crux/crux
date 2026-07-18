@@ -1,6 +1,7 @@
 /** Immutable planner-admitted managed external-scorer actions. @internal */
 
 import type { Scorer } from "./scorers/types";
+import type { ScorerEvidenceDependency } from "./scorers/runtime";
 import type { EvalScorerEvidenceEntry } from "./scorer-evidence";
 
 interface EvalScorerActionBase {
@@ -8,6 +9,8 @@ interface EvalScorerActionBase {
   readonly dependency: "task:root";
   readonly scorerName: string;
   readonly occurrence: string;
+  /** Exact evidence dimensions declared by the managed scorer runtime. */
+  readonly dependencies: readonly ScorerEvidenceDependency[];
   readonly externalKind: "model";
   readonly price: { readonly kind: "unknown" };
   readonly admission: "admitted";

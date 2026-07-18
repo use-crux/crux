@@ -212,6 +212,7 @@ export function normalizeEvalDefinition(
   if (options === null || typeof options !== "object") {
     throw new TypeError("evaluate(): expected an options object.");
   }
+  assertTopLevelKeys(options as Readonly<Record<string, unknown>>);
   const raw = options as RawEvaluateOptions;
   if (raw.task === undefined)
     throw new TypeError("evaluate(): `task` is required.");
@@ -263,4 +264,48 @@ export function normalizeEvalDefinition(
       ) as readonly EvalCoverageTargetId[],
     }),
   };
+}
+
+const EVAL_OPTION_KEYS = new Set([
+  "id",
+  "task",
+  "cases",
+  "variants",
+  "expect",
+  "afterScores",
+  "scorers",
+  "gates",
+  "trials",
+  "tags",
+  "description",
+  "covers",
+]);
+
+function assertTopLevelKeys(options: Readonly<Record<string, unknown>>): void {
+  for (const key of Object.keys(options)) {
+    if (EVAL_OPTION_KEYS.has(key)) continue;
+    const legacy = legacyOptionRemedy(key);
+    throw new TypeError(
+      legacy ?? `evaluate(): unknown top-level option \`${key}\`. Check the Eval API spelling.`,
+    );
+  }
+}
+
+function legacyOptionRemedy(key: string): string | undefined {
+  switch (key) {
+    case "dataset":
+      return "evaluate(): `dataset` was removed. Use `cases` for inline values or caseFile() for external rows.";
+    case "baseline":
+      return "evaluate(): `baseline` was removed. Set a complete run as the Baseline through the CLI or Devtools.";
+    case "suite":
+      return "evaluate(): `suite` was removed. Export one Eval per evaluate() definition and select Evals with the CLI.";
+    case "target":
+      return "evaluate(): `target` was removed. Pass the production callable as `task`.";
+    case "cassette":
+    case "cassettes":
+    case "cache":
+      return `evaluate(): \`${key}\` was removed. Exact safe evidence reuse is automatic; use --fresh to bypass it.`;
+    default:
+      return undefined;
+  }
 }

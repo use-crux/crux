@@ -2,7 +2,6 @@ package evalfs
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 )
@@ -21,12 +20,15 @@ type Baseline struct {
 
 // ParseBaseline validates the known V3/epoch envelope and preserves all bytes.
 func ParseBaseline(raw []byte) (Baseline, error) {
+	if err := validateBaselineV3(raw); err != nil {
+		return Baseline{}, err
+	}
 	var baseline Baseline
 	if err := json.Unmarshal(raw, &baseline); err != nil {
 		return Baseline{}, err
 	}
-	if baseline.SchemaVersion != 3 || baseline.BaselineFingerprintEpoch != 2 {
-		return Baseline{}, fmt.Errorf("expected Eval Baseline schemaVersion 3 and fingerprint epoch 2")
+	if baseline.SchemaVersion != 3 || baseline.BaselineFingerprintEpoch != 4 {
+		return Baseline{}, fmt.Errorf("expected Eval Baseline schemaVersion 3 and fingerprint epoch 4")
 	}
 	if baseline.BaselineID == "" || baseline.EvalID == "" || baseline.RunID == "" ||
 		baseline.SelectedArm == "" || baseline.SnapshotFingerprint == "" {
@@ -37,14 +39,11 @@ func ParseBaseline(raw []byte) (Baseline, error) {
 		return Baseline{}, err
 	}
 	delete(material, "snapshotFingerprint")
-	var canonical bytes.Buffer
-	encoder := json.NewEncoder(&canonical)
-	encoder.SetEscapeHTML(false)
-	if err := encoder.Encode(material); err != nil {
+	fingerprint, err := fingerprintJSONValue(material)
+	if err != nil {
 		return Baseline{}, err
 	}
-	digest := sha256.Sum256(bytes.TrimSuffix(canonical.Bytes(), []byte("\n")))
-	if fmt.Sprintf("%x", digest) != baseline.SnapshotFingerprint {
+	if fingerprint != baseline.SnapshotFingerprint {
 		return Baseline{}, fmt.Errorf("Eval Baseline snapshot fingerprint mismatch")
 	}
 	baseline.Raw = bytes.Clone(raw)

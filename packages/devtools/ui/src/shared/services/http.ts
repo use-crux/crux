@@ -48,6 +48,9 @@ export async function expectOk(
   label: string,
 ): Promise<void> {
   if (!response.ok) {
-    throw new Error(`HTTP ${response.status} · ${label}`);
+    const detail = (await response.text()).trim();
+    throw new Error(
+      `HTTP ${response.status} · ${label}${detail ? ` · ${detail}` : ""}`,
+    );
   }
 }

@@ -2,7 +2,7 @@ import { relative } from "node:path";
 import type { ProjectDefinition } from "@use-crux/core/project-index";
 import type { RuntimeArtifactManifestEval } from "@use-crux/core/runtime";
 import type * as EvalNodeRunnerCore from "@use-crux/core/eval/internal/node-runner";
-import { importUserSpecifier } from "../imports";
+import { importUserSpecifier, withUserImportSession } from "../imports";
 
 type HydratedEval = EvalNodeRunnerCore.HydratedEval;
 
@@ -10,6 +10,8 @@ export interface GeneratedEvalArtifacts {
   readonly manifestEntries: readonly RuntimeArtifactManifestEval[];
   readonly entryImports: readonly string[];
   readonly registrySource: string;
+  readonly redactPaths: readonly string[];
+  readonly privacyFingerprint: string;
 }
 
 /** Discover and hydrate deployed Evals while requiring Index corroboration. */
@@ -18,6 +20,17 @@ export async function generateEvalArtifacts(input: {
   readonly outputFile: string;
   readonly definitions: readonly ProjectDefinition[];
   readonly importSpecifier: (sourceFile: string) => string;
+  readonly redactPaths?: unknown;
+}): Promise<GeneratedEvalArtifacts> {
+  return withUserImportSession(() => generateEvalArtifactsInSession(input));
+}
+
+async function generateEvalArtifactsInSession(input: {
+  readonly root: string;
+  readonly outputFile: string;
+  readonly definitions: readonly ProjectDefinition[];
+  readonly importSpecifier: (sourceFile: string) => string;
+  readonly redactPaths?: unknown;
 }): Promise<GeneratedEvalArtifacts> {
   const parentFile = `${input.root}/package.json`;
   const nodeRunner = (await importUserSpecifier(
@@ -25,6 +38,9 @@ export async function generateEvalArtifacts(input: {
     parentFile,
     4_000,
   )) as typeof EvalNodeRunnerCore;
+  const persistencePolicy = nodeRunner.normalizeEvalPersistencePolicy({
+    redactPaths: input.redactPaths,
+  });
   const discovered = await nodeRunner.discoverDeployableProjectEvals(
     input.root,
   );
@@ -47,6 +63,9 @@ export async function generateEvalArtifacts(input: {
     manifestEntries: Object.freeze(projected.map((entry) => entry.manifest)),
     entryImports: Object.freeze(projected.map((entry) => entry.importLine)),
     registrySource: registrySource(projected.map((entry) => entry.registry)),
+    redactPaths: persistencePolicy.redactPaths,
+    privacyFingerprint:
+      nodeRunner.fingerprintEvalPersistencePolicy(persistencePolicy),
   });
 }
 
@@ -130,7 +149,7 @@ function corroboratingDefinition(
 ) {
   const matches = definitions.filter(
     (definition) =>
-      definition.kind === "evaluation" &&
+      definition.kind === "eval" &&
       definition.name === entry.id &&
       definition.metadata?.evalContract === "crux.eval" &&
       definition.metadata?.exportName === "default" &&

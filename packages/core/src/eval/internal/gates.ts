@@ -2,13 +2,14 @@
 
 import type { EvalCell, EvalGateSummary } from "./types";
 import type { EvalBaselineComparison } from "./baseline-types";
+import type { EvalGateIncompleteReason } from "./gate-types";
 
 export function evaluateBlockingGates(
   cells: readonly EvalCell[],
   blockingVariants: readonly string[],
   authoredGates?: unknown,
   comparison?: EvalBaselineComparison,
-  evalId?: string,
+  _evalId?: string,
 ): EvalGateSummary {
   const blocking = new Set(blockingVariants);
   const variants = [...new Set(cells.map((cell) => cell.variant))];
@@ -23,7 +24,6 @@ export function evaluateBlockingGates(
               authoredGates,
               variant,
               comparison,
-              evalId,
             );
       return raw.map((result) =>
         Object.freeze({
@@ -56,7 +56,6 @@ function authoredGateResults(
   value: unknown,
   variant: string,
   comparison?: EvalBaselineComparison,
-  evalId?: string,
 ) {
   const gates = isRecord(value) ? value : {};
   cells = cells.filter((cell) => cell.status !== "skipped");
@@ -67,7 +66,7 @@ function authoredGateResults(
     passed: boolean;
     informational?: true;
     evidence?: "complete" | "incomplete";
-    reason?: "baseline_missing" | "baseline_evidence_incomplete";
+    reason?: EvalGateIncompleteReason;
     remediation?: string;
   }> = [];
   const passRate = numberAt(gates.passRate, "min");
@@ -100,20 +99,25 @@ function authoredGateResults(
     ),
   );
   const cost = isRecord(gates.cost) ? gates.cost : {};
-  const costs = cells.map((cell) => cell.metrics.costUsd ?? 0);
+  const costMissing = cells.some((cell) => cell.metrics.costUsd === undefined);
+  const costs = cells.flatMap((cell) =>
+    cell.metrics.costUsd === undefined ? [] : [cell.metrics.costUsd],
+  );
   addMaximum(
     results,
     "cost.maxPerCaseUsd",
     numberAt(cost, "maxPerCaseUsd"),
     costs.length === 0 ? 0 : Math.max(...costs),
+    costMissing ? "cost_missing" : undefined,
   );
   addMaximum(
     results,
     "cost.maxTotalUsd",
     numberAt(cost, "maxTotalUsd"),
     costs.reduce((total, entry) => total + entry, 0),
+    costMissing ? "cost_missing" : undefined,
   );
-  addScoreGates(results, cells, gates.scores, variant, comparison, evalId);
+  addScoreGates(results, cells, gates.scores, variant, comparison);
   addConsistencyGates(results, cells, gates.consistency);
   return results;
 }
@@ -164,14 +168,31 @@ function addScoreGates(
   value: unknown,
   variant: string,
   comparison?: EvalBaselineComparison,
-  evalId?: string,
 ): void {
   if (!isRecord(value)) return;
   for (const [name, raw] of Object.entries(value)) {
     if (!isRecord(raw)) continue;
+    const scoreEvidence = cells.map((cell) =>
+      cell.scores.find((score) => score.name === name),
+    );
+    const incompleteReason: EvalGateIncompleteReason | undefined =
+      scoreEvidence.some((score) => score?.status === "errored")
+        ? "score_errored"
+        : scoreEvidence.some(
+              (score) => score === undefined || score.status === "missing",
+            )
+          ? "score_missing"
+          : scoreEvidence.some(
+              (score) =>
+                  score !== undefined &&
+                  (score.status === "computed" || score.status === "reused") &&
+                  score.value === null,
+              )
+            ? "score_null"
+            : undefined;
     const values = cells.flatMap((cell) =>
       cell.scores.flatMap((score) =>
-        score.status === "computed" &&
+        (score.status === "computed" || score.status === "reused") &&
         score.name === name &&
         score.value !== null
           ? [score.value]
@@ -185,7 +206,10 @@ function addScoreGates(
         gate: `scores.${name}.min`,
         threshold: minimum,
         actual,
-        passed: actual >= minimum,
+        passed: incompleteReason === undefined && actual >= minimum,
+        ...(incompleteReason !== undefined
+          ? { evidence: "incomplete" as const, reason: incompleteReason }
+          : {}),
       });
     const maximum = numberAt(raw, "max");
     if (maximum !== undefined)
@@ -193,7 +217,10 @@ function addScoreGates(
         gate: `scores.${name}.max`,
         threshold: maximum,
         actual,
-        passed: actual <= maximum,
+        passed: incompleteReason === undefined && actual <= maximum,
+        ...(incompleteReason !== undefined
+          ? { evidence: "incomplete" as const, reason: incompleteReason }
+          : {}),
       });
     const delta = numberAt(raw, "minDeltaVsBaseline");
     if (delta !== undefined) {
@@ -225,17 +252,23 @@ function addScoreGates(
       const reason =
         comparison === undefined
           ? ("baseline_missing" as const)
-          : ("baseline_evidence_incomplete" as const);
+          : (incompleteReason ?? ("baseline_evidence_incomplete" as const));
       results.push({
         gate: `scores.${name}.minDeltaVsBaseline`,
         threshold: delta,
         actual,
-        passed: comparable ? actual >= delta : false,
-        evidence: comparable ? ("complete" as const) : ("incomplete" as const),
-        ...(!comparable
+        passed:
+          incompleteReason === undefined && comparable
+            ? actual >= delta
+            : false,
+        evidence:
+          incompleteReason === undefined && comparable
+            ? ("complete" as const)
+            : ("incomplete" as const),
+        ...(incompleteReason !== undefined || !comparable
           ? {
               reason,
-              remediation: `crux eval baseline set${evalId === undefined ? "" : ` ${evalId}`}`,
+              remediation: "crux eval baseline set <run-id>",
             }
           : {}),
       });
@@ -248,9 +281,18 @@ function addMaximum(
   gate: string,
   threshold: number | undefined,
   actual: number,
+  incompleteReason?: EvalGateIncompleteReason,
 ): void {
   if (threshold !== undefined)
-    results.push({ gate, threshold, actual, passed: actual <= threshold });
+    results.push({
+      gate,
+      threshold,
+      actual,
+      passed: incompleteReason === undefined && actual <= threshold,
+      ...(incompleteReason !== undefined
+        ? { evidence: "incomplete", reason: incompleteReason }
+        : {}),
+    });
 }
 
 function numberAt(value: unknown, key: string): number | undefined {

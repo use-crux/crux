@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/observability"
+	"github.com/use-crux/crux/packages/local/internal/privacy"
 	"github.com/use-crux/crux/packages/local/internal/review"
 )
 
@@ -73,6 +74,26 @@ func TestFeedbackRouteIsDurableIdempotentAndReconcilesOutOfOrderRun(t *testing.T
 	}
 	if !bytes.Contains(projection.Context, []byte(`"name":"feedback source"`)) {
 		t.Fatalf("linked context = %s, want bounded run summary", projection.Context)
+	}
+}
+
+func TestFeedbackRouteFailsClosedUntilGeneratedPrivacyPolicyIsReady(t *testing.T) {
+	reviews, err := review.OpenService(
+		context.Background(),
+		":memory:",
+		review.WithPrivacyProvider(privacy.Generated(t.TempDir())),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = reviews.Close() })
+	mux := http.NewServeMux()
+	registerFeedbackRoutes(mux, reviews, nil)
+
+	response := performFeedbackRequest(mux, []byte(`{"runId":"run_0123456789abcdef01234567","rating":"down"}`))
+
+	if response.Code != http.StatusServiceUnavailable || !bytes.Contains(response.Body.Bytes(), []byte("crux runtime generate")) {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
 	}
 }
 

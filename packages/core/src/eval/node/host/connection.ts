@@ -61,6 +61,36 @@ export async function resolveNodeEvalHostConnection(input: {
   });
 }
 
+/** Resolve only the expected deployment identity for evidence-key planning. */
+export async function resolveNodeEvalHostDeploymentId(input: {
+  readonly projectRoot: string;
+  readonly runtime?: RuntimeEngineDefinition;
+  readonly processEnvironment?: NodeJS.ProcessEnv;
+}): Promise<string | undefined> {
+  const environment = await readEvalHostEnvironment(
+    input.projectRoot,
+    input.processEnvironment,
+  );
+  const inferred = getEvalHostConnectionInference(input.runtime)?.infer(
+    environment,
+  );
+  return (
+    nonempty(environment.CRUX_EVAL_HOST_DEPLOYMENT_ID) ?? inferred?.deploymentId
+  );
+}
+
+/** Read explicit deployment identity for strict-offline evidence lookup. */
+export async function readExplicitNodeEvalHostDeploymentId(input: {
+  readonly projectRoot: string;
+  readonly processEnvironment?: NodeJS.ProcessEnv;
+}): Promise<string | undefined> {
+  const environment = await readEvalHostEnvironment(
+    input.projectRoot,
+    input.processEnvironment,
+  );
+  return nonempty(environment.CRUX_EVAL_HOST_DEPLOYMENT_ID);
+}
+
 function validateBaseUrl(value: string): string {
   let url: URL;
   try {

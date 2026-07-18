@@ -8,40 +8,8 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
-func (s *Service) EvalRuns(context.Context) []store.EvalRun {
-	return s.store.GetEvalRuns()
-}
-
-func (s *Service) RagEvalRuns(context.Context) []store.RagEvalRun {
-	return s.store.GetRagEvalRuns()
-}
-
-func (s *Service) FlowRuns(context.Context) []store.FlowRun {
-	return s.store.GetFlowRuns()
-}
-
 func (s *Service) RuntimeFlowRuns(context.Context) []store.RuntimeFlowRunData {
 	return s.store.GetRuntimeFlowRuns()
-}
-
-func (s *Service) EvalRun(_ context.Context, evalID string) (*store.EvalRun, bool) {
-	run := s.store.GetEvalRun(evalID)
-	return run, run != nil
-}
-
-func (s *Service) EvalBaseline(_ context.Context, promptID string) (*store.EvalRun, bool) {
-	run := s.store.GetEvalBaseline(promptID)
-	return run, run != nil
-}
-
-func (s *Service) RagEvalRun(_ context.Context, evalID string) (*store.RagEvalRun, bool) {
-	run := s.store.GetRagEvalRun(evalID)
-	return run, run != nil
-}
-
-func (s *Service) FlowRun(_ context.Context, flowID string) (*store.FlowRun, bool) {
-	run := s.store.GetFlowRun(flowID)
-	return run, run != nil
 }
 
 func (s *Service) ObservedInjection(ctx context.Context, limit int) (any, error) {

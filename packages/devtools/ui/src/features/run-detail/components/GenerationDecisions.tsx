@@ -202,7 +202,7 @@ export function governanceFacts(node: ObservabilityRunDetailNode): GovFacts[] {
       [
         "result",
         String(cache.status ?? "—"),
-        cache.status === "hit" ? "var(--qw-ok)" : undefined,
+        cache.status === "hit" ? "var(--devtools-ok)" : undefined,
       ],
     ];
     if (cache.saved?.tokens != null)
@@ -223,10 +223,10 @@ export function governanceFacts(node: ObservabilityRunDetailNode): GovFacts[] {
         "action",
         g.action,
         g.action === "block"
-          ? "var(--qw-danger)"
+          ? "var(--devtools-danger)"
           : g.action === "pass"
-            ? "var(--qw-ok)"
-            : "var(--qw-warn)",
+            ? "var(--devtools-ok)"
+            : "var(--devtools-warn)",
       ]);
     if (g.matches?.length) rows.push(["matches", String(g.matches.length)]);
     out.push({ type: "guardrail", label: "Guardrail", rows, note: g.reason });
@@ -240,9 +240,9 @@ export function governanceFacts(node: ObservabilityRunDetailNode): GovFacts[] {
       rows.push([
         "severity",
         s.severity,
-        s.severity === "error" ? "var(--qw-danger)" : "var(--qw-warn)",
+        s.severity === "error" ? "var(--devtools-danger)" : "var(--devtools-warn)",
       ]);
-    if (s.action) rows.push(["action", s.action, "var(--qw-warn)"]);
+    if (s.action) rows.push(["action", s.action, "var(--devtools-warn)"]);
     out.push({ type: "security", label: "Security", rows, note: s.message });
   }
 
@@ -259,7 +259,7 @@ export function governanceFacts(node: ObservabilityRunDetailNode): GovFacts[] {
       rows.push([
         "passed",
         c.pass ? "yes" : "no",
-        c.pass ? "var(--qw-ok)" : "var(--qw-warn)",
+        c.pass ? "var(--devtools-ok)" : "var(--devtools-warn)",
       ]);
     if (attempts.length > 1)
       rows.push(["retries", String(attempts.length - 1)]);
@@ -287,7 +287,7 @@ export function governanceFacts(node: ObservabilityRunDetailNode): GovFacts[] {
     const rows: [string, string, string?][] = [];
     if (before != null) rows.push(["before", fmtTokens(before)]);
     if (after != null) rows.push(["after", fmtTokens(after)]);
-    if (pct != null) rows.push(["saved", `${pct}%`, "var(--qw-ok)"]);
+    if (pct != null) rows.push(["saved", `${pct}%`, "var(--devtools-ok)"]);
     out.push({ type: "compaction", label: "Compaction", rows });
   }
 

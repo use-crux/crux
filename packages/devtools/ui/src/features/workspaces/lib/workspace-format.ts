@@ -1,4 +1,4 @@
-import type { ChipTone } from "@/qw/shell/primitives";
+import type { ChipTone } from "@/devtools/shell/primitives";
 
 export function fmtBytes(n: number | undefined | null): string | null {
   if (n == null || !Number.isFinite(n)) return null;
@@ -58,15 +58,15 @@ export function opPillTone(op: string | undefined): { bg: string; fg: string } {
   switch (op) {
     case "write":
     case "delete":
-      return { bg: "var(--qw-danger-soft)", fg: "var(--qw-danger)" };
+      return { bg: "var(--devtools-danger-soft)", fg: "var(--devtools-danger)" };
     case "edit":
-      return { bg: "var(--qw-warn-soft)", fg: "var(--qw-warn)" };
+      return { bg: "var(--devtools-warn-soft)", fg: "var(--devtools-warn)" };
     case "list":
-      return { bg: "var(--qw-iris-soft)", fg: "var(--qw-iris)" };
+      return { bg: "var(--devtools-iris-soft)", fg: "var(--devtools-iris)" };
     case "read":
-      return { bg: "var(--qw-ok-soft)", fg: "var(--qw-ok)" };
+      return { bg: "var(--devtools-ok-soft)", fg: "var(--devtools-ok)" };
     default:
-      return { bg: "var(--qw-bg-muted)", fg: "var(--qw-fg-muted)" };
+      return { bg: "var(--devtools-bg-muted)", fg: "var(--devtools-fg-muted)" };
   }
 }
 

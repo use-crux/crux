@@ -37,7 +37,7 @@ func TestWorkbenchNavigateRequestNoStagingWhenKindEmpty(t *testing.T) {
 		t.Errorf("activeNav = %q, want %q", w.activeNav, "insights")
 	}
 	// No selection store entries set.
-	for _, k := range []Kind{KindRun, KindInsight, KindExperiment} {
+	for _, k := range []Kind{KindRun, KindInsight} {
 		if got := w.GetSelection(k); got != "" {
 			t.Errorf("nav-only request leaked selection for %q: %q", k, got)
 		}

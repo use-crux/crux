@@ -5,8 +5,6 @@ import "sync"
 // Default ring buffer capacities matching the TypeScript store.
 const (
 	DefaultMaxTraces               = 500
-	DefaultMaxEvalRuns             = 50
-	DefaultMaxFlowRuns             = 50
 	DefaultMaxRuntimeFlowRuns      = 100
 	DefaultMaxMemoryEvents         = 500
 	DefaultMaxCompactEvents        = 200
@@ -40,18 +38,6 @@ type Store struct {
 
 	// Index
 	index IndexData
-
-	// Evals — managed manually for index cleanup on eviction.
-	evalList    []*EvalRun
-	maxEvalRuns int
-	evalByID    map[string]*EvalRun
-	ragEvalList []*RagEvalRun
-	ragEvalByID map[string]*RagEvalRun
-
-	// Flow evals — managed manually for index cleanup on eviction.
-	flowRunList []*FlowRun
-	maxFlowRuns int
-	flowByID    map[string]*FlowRun
 
 	// Runtime flows — managed manually for index cleanup on eviction.
 	runtimeFlowList  []*RuntimeFlowRunData
@@ -122,16 +108,6 @@ type memoryInstance struct {
 
 // NewStore creates a new store with default ring buffer capacities.
 func NewStore() *Store {
-	return NewStoreWithCapacities(
-		DefaultMaxTraces,
-		DefaultMaxEvalRuns,
-		DefaultMaxFlowRuns,
-		DefaultMaxRuntimeFlowRuns,
-	)
-}
-
-// NewStoreWithCapacities creates a new store with custom ring buffer capacities.
-func NewStoreWithCapacities(maxTraces, maxEvalRuns, maxFlowRuns, maxRuntimeFlowRuns int) *Store {
 	return &Store{
 		// Index
 		index: IndexData{
@@ -147,22 +123,9 @@ func NewStoreWithCapacities(maxTraces, maxEvalRuns, maxFlowRuns, maxRuntimeFlowR
 			Sources:       []IndexSourceFile{},
 		},
 
-		// Traces
-		// Evals
-		evalList:    make([]*EvalRun, 0, maxEvalRuns),
-		maxEvalRuns: maxEvalRuns,
-		evalByID:    make(map[string]*EvalRun),
-		ragEvalList: make([]*RagEvalRun, 0, maxEvalRuns),
-		ragEvalByID: make(map[string]*RagEvalRun),
-
-		// Flow evals
-		flowRunList: make([]*FlowRun, 0, maxFlowRuns),
-		maxFlowRuns: maxFlowRuns,
-		flowByID:    make(map[string]*FlowRun),
-
 		// Runtime flows
-		runtimeFlowList:  make([]*RuntimeFlowRunData, 0, maxRuntimeFlowRuns),
-		maxRuntimeFlows:  maxRuntimeFlowRuns,
+		runtimeFlowList:  make([]*RuntimeFlowRunData, 0, DefaultMaxRuntimeFlowRuns),
+		maxRuntimeFlows:  DefaultMaxRuntimeFlowRuns,
 		runtimeFlowByKey: make(map[string]*RuntimeFlowRunData),
 
 		// Event ring buffers

@@ -14,10 +14,9 @@
  */
 
 import { useMemo, useState } from "react";
-import { QwShell } from "@/qw/shell/QwShell";
-import { navTarget } from "@/app/navigation/navTarget";
-import { Btn, Chip, Kpi, SectionHead } from "@/qw/shell/primitives";
-import { Icon } from "@/qw/shell/Icon";
+import { DevtoolsShell } from "@/devtools/shell/DevtoolsShell";
+import { Btn, Chip, Kpi, SectionHead } from "@/devtools/shell/primitives";
+import { Icon } from "@/devtools/shell/Icon";
 import {
   Checkbox,
   EmptyHint,
@@ -27,7 +26,6 @@ import {
 } from "./PlanAtoms";
 import { usePrefetchPlan } from "@/shared/hooks/usePrefetch";
 import { PlanDetailScreen } from "./PlanDetailScreen";
-import { useConnected } from "@/app/runtime/runtimeStore";
 import { useNavigation } from "@/app/navigation/useNavigation";
 import { usePlan, usePlansSuspense } from "@/shared/hooks/useLibraryApi";
 import {
@@ -63,7 +61,6 @@ export function PlansView({ planId }: { planId?: string }) {
 
 function PlansOverview() {
   const { navigate } = useNavigation();
-  const connected = useConnected();
   // Suspends on first paint — caught by App-level Suspense.
   const list = usePlansSuspense();
   const [statusTab, setStatusTab] = useState<PlanStatusTab>("active");
@@ -133,9 +130,7 @@ function PlansOverview() {
   }, [buckets, featuredDetail.data]);
 
   return (
-    <QwShell
-      activeView="library-plans"
-      onNavigate={(v) => navigate(navTarget(v))}
+    <DevtoolsShell
       breadcrumb="Library / Plans"
       title="Plans & tasks"
       subtitle={
@@ -143,7 +138,6 @@ function PlansOverview() {
           ? "No plans observed yet"
           : `${buckets.active.length} active · ${buckets.suspended.length} suspended · ${buckets.completed.length} completed`
       }
-      connected={connected}
       actions={
         <>
           <Btn
@@ -284,7 +278,7 @@ function PlansOverview() {
           </div>
         )}
       </div>
-    </QwShell>
+    </DevtoolsShell>
   );
 }
 
@@ -304,8 +298,8 @@ function FeaturedPlanCard({
     <div
       className="overflow-hidden rounded-[10px]"
       style={{
-        background: "var(--qw-bg-elev)",
-        border: "1px solid var(--qw-crux-line)",
+        background: "var(--devtools-bg-elev)",
+        border: "1px solid var(--devtools-crux-line)",
       }}
     >
       <button
@@ -313,16 +307,16 @@ function FeaturedPlanCard({
         onClick={onOpen}
         className="flex w-full items-start gap-3 px-4 py-3 text-left transition-opacity hover:opacity-95"
         style={{
-          borderBottom: "1px solid var(--qw-border)",
-          background: "var(--qw-crux-soft)",
+          borderBottom: "1px solid var(--devtools-border)",
+          background: "var(--devtools-crux-soft)",
         }}
       >
-        <KindBadge name="tasks" color="var(--qw-crux)" />
+        <KindBadge name="tasks" color="var(--devtools-crux)" />
         <div className="min-w-0 flex-1">
           <div className="mb-1 flex flex-wrap items-center gap-2">
             <span
               className="min-w-0 truncate font-mono text-[11px]"
-              style={{ color: "var(--qw-crux)" }}
+              style={{ color: "var(--devtools-crux)" }}
               title={plan.id}
             >
               {plan.id}
@@ -337,7 +331,7 @@ function FeaturedPlanCard({
             </Chip>
             <span
               className="ml-auto shrink-0 font-mono text-[11px]"
-              style={{ color: "var(--qw-fg-faint)" }}
+              style={{ color: "var(--devtools-fg-faint)" }}
             >
               {plan.versionCount != null
                 ? `${plan.versionCount} version${plan.versionCount === 1 ? "" : "s"}`
@@ -372,8 +366,8 @@ function FeaturedPlanCard({
           <p
             className="m-0 text-[13.5px] leading-[1.55]"
             style={{
-              color: "var(--qw-fg)",
-              fontFamily: "var(--qw-serif, Georgia, serif)",
+              color: "var(--devtools-fg)",
+              fontFamily: "var(--devtools-serif, Georgia, serif)",
             }}
           >
             {detail?.content
@@ -383,7 +377,7 @@ function FeaturedPlanCard({
         ) : (
           <p
             className="m-0 text-[12.5px] italic"
-            style={{ color: "var(--qw-fg-muted)" }}
+            style={{ color: "var(--devtools-fg-muted)" }}
           >
             Plan body not captured yet.
           </p>
@@ -410,14 +404,14 @@ function VersionMiniRail({
     <div className="flex flex-col gap-1.5">
       <div
         className="text-[10px] font-medium uppercase tracking-[0.16em]"
-        style={{ color: "var(--qw-fg-faint)" }}
+        style={{ color: "var(--devtools-fg-faint)" }}
       >
         Versions
       </div>
       {versions.length === 0 ? (
         <span
           className="text-[11.5px] italic"
-          style={{ color: "var(--qw-fg-faint)" }}
+          style={{ color: "var(--devtools-fg-faint)" }}
         >
           Not captured yet.
         </span>
@@ -428,7 +422,7 @@ function VersionMiniRail({
             className="grid items-center gap-2 py-1"
             style={{
               gridTemplateColumns: "36px minmax(0, 1fr) 38px",
-              borderBottom: "1px dashed var(--qw-border)",
+              borderBottom: "1px dashed var(--devtools-border)",
             }}
           >
             <Chip tone={v.version === currentVersion ? "crux" : "muted"} mono>
@@ -437,7 +431,7 @@ function VersionMiniRail({
             <div className="min-w-0">
               <div
                 className="truncate text-[11.5px]"
-                style={{ color: "var(--qw-fg)" }}
+                style={{ color: "var(--devtools-fg)" }}
                 title={v.summary ?? undefined}
               >
                 {v.summary ?? "—"}
@@ -445,7 +439,7 @@ function VersionMiniRail({
               {v.author && (
                 <div
                   className="font-mono text-[10px]"
-                  style={{ color: "var(--qw-fg-faint)" }}
+                  style={{ color: "var(--devtools-fg-faint)" }}
                 >
                   {v.author}
                 </div>
@@ -453,7 +447,7 @@ function VersionMiniRail({
             </div>
             <span
               className="text-right font-mono text-[10px]"
-              style={{ color: "var(--qw-fg-faint)" }}
+              style={{ color: "var(--devtools-fg-faint)" }}
             >
               {fmtTime(v.timestamp) ?? "—"}
             </span>
@@ -522,31 +516,31 @@ function TaskListCard({
     <div
       className="overflow-hidden rounded-[10px]"
       style={{
-        background: "var(--qw-bg-elev)",
-        border: "1px solid var(--qw-border)",
+        background: "var(--devtools-bg-elev)",
+        border: "1px solid var(--devtools-border)",
       }}
     >
       <div
         className="flex items-center gap-2 px-4 py-2.5"
         style={{
-          borderBottom: "1px solid var(--qw-border)",
-          background: "var(--qw-bg-muted)",
+          borderBottom: "1px solid var(--devtools-border)",
+          background: "var(--devtools-bg-muted)",
         }}
       >
-        <Icon name="list" size={14} color="var(--qw-fg-muted)" />
+        <Icon name="list" size={14} color="var(--devtools-fg-muted)" />
         <span className="text-[13px] font-semibold">Task list ·</span>
         <button
           type="button"
           onClick={onOpen}
           className="min-w-0 truncate font-mono text-[11.5px] transition-opacity hover:opacity-80"
-          style={{ color: "var(--qw-crux)" }}
+          style={{ color: "var(--devtools-crux)" }}
           title={plan.id}
         >
           {plan.id}
         </button>
         <span
           className="ml-auto shrink-0 font-mono text-[11px]"
-          style={{ color: "var(--qw-fg-faint)" }}
+          style={{ color: "var(--devtools-fg-faint)" }}
         >
           {tasks.length === 0
             ? "0 tasks"
@@ -557,11 +551,11 @@ function TaskListCard({
       {tasks.length === 0 ? (
         <div
           className="px-4 py-6 text-center text-[12.5px]"
-          style={{ color: "var(--qw-fg-muted)" }}
+          style={{ color: "var(--devtools-fg-muted)" }}
         >
           <div
             className="mb-1 font-mono text-[10px] uppercase tracking-[0.12em]"
-            style={{ color: "var(--qw-fg-faint)" }}
+            style={{ color: "var(--devtools-fg-faint)" }}
           >
             No tasks captured yet
           </div>
@@ -588,8 +582,8 @@ function TaskTableHeader() {
       className="grid items-center gap-2.5 px-4 py-2 text-[10px] uppercase tracking-[0.1em]"
       style={{
         gridTemplateColumns: "24px 110px minmax(0, 1fr) 130px 130px auto",
-        color: "var(--qw-fg-faint)",
-        borderBottom: "1px solid var(--qw-border)",
+        color: "var(--devtools-fg-faint)",
+        borderBottom: "1px solid var(--devtools-border)",
       }}
     >
       <div />
@@ -634,18 +628,18 @@ function TaskRow({ task, depth }: { task: PlanTask; depth: number }) {
   const pct = task.progress != null ? Math.round(task.progress * 100) : null;
   const progressColor =
     task.status === "completed"
-      ? "var(--qw-ok)"
+      ? "var(--devtools-ok)"
       : task.status === "in_progress"
-        ? "var(--qw-crux)"
-        : "var(--qw-fg-faint)";
+        ? "var(--devtools-crux)"
+        : "var(--devtools-fg-faint)";
   const progressLabel = task.progressMessage ?? (pct != null ? `${pct}%` : "—");
   return (
     <div
       className="grid items-center gap-2.5 px-4 py-2.5 text-[12.5px]"
       style={{
         gridTemplateColumns: "24px 110px minmax(0, 1fr) 130px 130px auto",
-        borderBottom: "1px solid var(--qw-border)",
-        background: isSub ? "var(--qw-bg-muted)" : "transparent",
+        borderBottom: "1px solid var(--devtools-border)",
+        background: isSub ? "var(--devtools-bg-muted)" : "transparent",
         opacity: removed ? 0.5 : 1,
       }}
     >
@@ -671,7 +665,7 @@ function TaskRow({ task, depth }: { task: PlanTask; depth: number }) {
         <ProgressBar percent={pct ?? 0} color={progressColor} />
         <span
           className="min-w-[26px] truncate text-right font-mono text-[10.5px]"
-          style={{ color: "var(--qw-fg-muted)" }}
+          style={{ color: "var(--devtools-fg-muted)" }}
         >
           {progressLabel}
         </span>
@@ -679,7 +673,7 @@ function TaskRow({ task, depth }: { task: PlanTask; depth: number }) {
       <div className="flex min-w-0 flex-col">
         <span
           className="truncate font-mono text-[11.5px]"
-          style={{ color: "var(--qw-fg)" }}
+          style={{ color: "var(--devtools-fg)" }}
           title={task.assignee ?? undefined}
         >
           {task.assignee ?? "—"}
@@ -687,7 +681,7 @@ function TaskRow({ task, depth }: { task: PlanTask; depth: number }) {
         {task.model && (
           <span
             className="font-mono text-[10px]"
-            style={{ color: "var(--qw-fg-faint)" }}
+            style={{ color: "var(--devtools-fg-faint)" }}
           >
             {task.model}
           </span>
@@ -695,7 +689,7 @@ function TaskRow({ task, depth }: { task: PlanTask; depth: number }) {
       </div>
       <span
         className="text-right font-mono text-[11px]"
-        style={{ color: "var(--qw-fg-muted)" }}
+        style={{ color: "var(--devtools-fg-muted)" }}
       >
         {fmtDuration(task.durationMs) ?? "—"}
       </span>
@@ -718,22 +712,22 @@ function OtherPlansList({
     <div
       className="overflow-hidden rounded-[10px]"
       style={{
-        background: "var(--qw-bg-elev)",
-        border: "1px solid var(--qw-border)",
+        background: "var(--devtools-bg-elev)",
+        border: "1px solid var(--devtools-border)",
       }}
     >
       <div
         className="flex items-center gap-2 px-4 py-2.5"
         style={{
-          borderBottom: "1px solid var(--qw-border)",
-          background: "var(--qw-bg-muted)",
+          borderBottom: "1px solid var(--devtools-border)",
+          background: "var(--devtools-bg-muted)",
         }}
       >
-        <Icon name="tasks" size={12} color="var(--qw-fg-muted)" />
+        <Icon name="tasks" size={12} color="var(--devtools-fg-muted)" />
         <span className="text-[12px] font-semibold">Other plans</span>
         <span
           className="ml-auto font-mono text-[11px]"
-          style={{ color: "var(--qw-fg-faint)" }}
+          style={{ color: "var(--devtools-fg-faint)" }}
         >
           {plans.length}
         </span>
@@ -749,11 +743,13 @@ function OtherPlansList({
             onClick={() => onOpen(p.id)}
             onMouseEnter={() => prefetch(p.id)}
             onFocus={() => prefetch(p.id)}
-            className="grid w-full items-center gap-3 px-4 py-2 text-left transition-colors hover:bg-(--qw-bg-muted)"
+            className="grid w-full items-center gap-3 px-4 py-2 text-left transition-colors hover:bg-(--devtools-bg-muted)"
             style={{
               gridTemplateColumns: "minmax(0, 1fr) 90px 110px 70px",
               borderBottom:
-                i === plans.length - 1 ? "none" : "1px solid var(--qw-border)",
+                i === plans.length - 1
+                  ? "none"
+                  : "1px solid var(--devtools-border)",
             }}
           >
             <div className="min-w-0">
@@ -764,7 +760,7 @@ function OtherPlansList({
                 {p.version != null && (
                   <span
                     className="font-mono text-[10.5px]"
-                    style={{ color: "var(--qw-fg-faint)" }}
+                    style={{ color: "var(--devtools-fg-faint)" }}
                   >
                     v{p.version}
                   </span>
@@ -773,7 +769,7 @@ function OtherPlansList({
               {p.title && (
                 <div
                   className="truncate text-[11.5px]"
-                  style={{ color: "var(--qw-fg-muted)" }}
+                  style={{ color: "var(--devtools-fg-muted)" }}
                 >
                   {p.title}
                 </div>
@@ -784,10 +780,10 @@ function OtherPlansList({
             </Chip>
             {tot > 0 ? (
               <div className="flex items-center gap-1.5">
-                <ProgressBar percent={pct} color="var(--qw-crux)" />
+                <ProgressBar percent={pct} color="var(--devtools-crux)" />
                 <span
                   className="font-mono text-[10px]"
-                  style={{ color: "var(--qw-fg-muted)" }}
+                  style={{ color: "var(--devtools-fg-muted)" }}
                 >
                   {done}/{tot}
                 </span>
@@ -795,14 +791,14 @@ function OtherPlansList({
             ) : (
               <span
                 className="font-mono text-[10.5px]"
-                style={{ color: "var(--qw-fg-faint)" }}
+                style={{ color: "var(--devtools-fg-faint)" }}
               >
                 —
               </span>
             )}
             <span
               className="text-right font-mono text-[10.5px]"
-              style={{ color: "var(--qw-fg-faint)" }}
+              style={{ color: "var(--devtools-fg-faint)" }}
             >
               {fmtRelative(p.lastUpdatedAt) ?? "—"}
             </span>
@@ -826,24 +822,24 @@ function EventTimelinePanel({
     <div
       className="self-start overflow-hidden rounded-[10px]"
       style={{
-        background: "var(--qw-bg-elev)",
-        border: "1px solid var(--qw-border)",
+        background: "var(--devtools-bg-elev)",
+        border: "1px solid var(--devtools-border)",
       }}
     >
       <div
         className="flex items-center gap-2 px-4 py-2.5"
         style={{
-          borderBottom: "1px solid var(--qw-border)",
-          background: "var(--qw-bg-muted)",
+          borderBottom: "1px solid var(--devtools-border)",
+          background: "var(--devtools-bg-muted)",
         }}
       >
-        <Icon name="clock" size={14} color="var(--qw-fg-muted)" />
+        <Icon name="clock" size={14} color="var(--devtools-fg-muted)" />
         <span className="text-[13px] font-semibold">
           Plan &amp; task events
         </span>
         <span
           className="ml-auto font-mono text-[11px]"
-          style={{ color: "var(--qw-fg-faint)" }}
+          style={{ color: "var(--devtools-fg-faint)" }}
         >
           {events.length} events
         </span>
@@ -852,14 +848,14 @@ function EventTimelinePanel({
         {loading ? (
           <div
             className="py-4 text-center text-[12px]"
-            style={{ color: "var(--qw-fg-muted)" }}
+            style={{ color: "var(--devtools-fg-muted)" }}
           >
             Loading…
           </div>
         ) : events.length === 0 ? (
           <div
             className="py-4 text-center text-[12px]"
-            style={{ color: "var(--qw-fg-muted)" }}
+            style={{ color: "var(--devtools-fg-muted)" }}
           >
             No events recorded yet.
           </div>
@@ -892,7 +888,7 @@ function TimelineRow({
     >
       <span
         className="pt-1 font-mono text-[11px]"
-        style={{ color: "var(--qw-fg-faint)" }}
+        style={{ color: "var(--devtools-fg-faint)" }}
       >
         {fmtTime(event.timestamp) ?? "—"}
       </span>
@@ -901,14 +897,14 @@ function TimelineRow({
           className="z-[1] inline-block size-2 rounded-full"
           style={{
             background: t.color,
-            boxShadow: `0 0 0 3px var(--qw-bg-elev), 0 0 0 4px color-mix(in oklab, ${t.color} 30%, transparent)`,
+            boxShadow: `0 0 0 3px var(--devtools-bg-elev), 0 0 0 4px color-mix(in oklab, ${t.color} 30%, transparent)`,
           }}
         />
         {!isLast && (
           <span
             className="absolute left-1/2 top-3.5 w-px"
             style={{
-              background: "var(--qw-border)",
+              background: "var(--devtools-border)",
               bottom: "-10px",
               transform: "translateX(-50%)",
             }}
@@ -922,14 +918,14 @@ function TimelineRow({
         >
           {event.kind}
         </div>
-        <div className="text-[12px]" style={{ color: "var(--qw-fg)" }}>
+        <div className="text-[12px]" style={{ color: "var(--devtools-fg)" }}>
           {event.label ?? (
-            <span style={{ color: "var(--qw-fg-muted)" }}>—</span>
+            <span style={{ color: "var(--devtools-fg-muted)" }}>—</span>
           )}
           {event.agent && (
             <span
               className="ml-1.5 font-mono text-[10.5px]"
-              style={{ color: "var(--qw-fg-faint)" }}
+              style={{ color: "var(--devtools-fg-faint)" }}
             >
               · {event.agent}
             </span>

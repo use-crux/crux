@@ -10,6 +10,7 @@ import {
   managedScorerDefinition,
   managedScorerSource,
   task,
+  taskIdentity,
 } from "./managed-scorer-test-harness";
 
 function twoJudgeDefinition(firstRubric: string) {
@@ -73,6 +74,7 @@ describe("managed external scorer evidence", () => {
       work: { status: "executed" },
     });
     expect(second.cells[0].scores[0]).toMatchObject({
+      status: "reused",
       reason: "managed_external_reused",
       work: { status: "reused", reason: "exact_evidence" },
     });
@@ -102,6 +104,42 @@ describe("managed external scorer evidence", () => {
 
     expect(harness.taskExecute).toHaveBeenCalledOnce();
     expect(harness.scorerExecute).toHaveBeenCalledTimes(2);
+  });
+
+  it("changes only judge work when its explicit model changes", async () => {
+    const harness = createManagedScorerHarness();
+    const definition = (model: string) =>
+      evaluate({
+        id: "support",
+        task,
+        cases: [{ id: "refund", input: { question: "yes" }, expected: "yes" }],
+        scorers: [
+          scorers.judge({
+            name: "helpful",
+            rubric: "Is it helpful?",
+            model,
+          }),
+        ],
+      });
+    await executeEvalPlan(
+      await planEval(
+        definition("judge-v1"),
+        managedScorerSource,
+        harness.planning,
+      ),
+      harness.execution(),
+    );
+    const changed = await planEval(
+      definition("judge-v2"),
+      managedScorerSource,
+      harness.planning,
+    );
+
+    expect(changed.cells[0]?.action.kind).toBe("reuse");
+    expect(changed.scorerActions[0]).toMatchObject({
+      kind: "execute",
+      reason: "no_exact_evidence",
+    });
   });
 
   it("keeps an unchanged managed score reusable when another contract changes", async () => {
@@ -150,11 +188,76 @@ describe("managed external scorer evidence", () => {
       status: "errored",
       scores: [
         {
-          status: "errored",
+          status: "missing",
           reason: "dependency_failed",
           name: "helpful",
         },
       ],
+    });
+  });
+
+  it("separates actual task and judge spend in score evidence and run totals", async () => {
+    const harness = createManagedScorerHarness();
+    const plan = await planEval(
+      managedScorerDefinition("Is it helpful?"),
+      managedScorerSource,
+      harness.planning,
+    );
+    const run = await executeEvalPlan(plan, {
+      ...harness.execution(),
+      taskHost: {
+        execute: async () => ({
+          output: "yes",
+          response: {
+            content: [],
+            text: "yes",
+            steps: [],
+            finalStep: {
+              content: [],
+              text: "yes",
+              finishReason: "stop",
+              responseId: "response-cost",
+              modelId: "task-model",
+              warnings: [],
+            },
+            messages: [],
+            warnings: [],
+          },
+          capturedSignals: [],
+          runIds: ["task-run-cost"],
+          metrics: { durationMs: 2, costUsd: 0.02 },
+          observedIdentity: taskIdentity,
+        }),
+      },
+      externalScorerHost: {
+        execute: async () =>
+          ({
+            score: { name: "helpful", score: 1 },
+            usage: {
+              inputTokens: 10,
+              outputTokens: 2,
+              totalTokens: 12,
+              inputTokenDetails: {},
+              outputTokenDetails: {},
+            },
+            actualUsd: 0.03,
+          }) as never,
+      },
+    });
+
+    expect(run.cells[0]?.scores[0]).toMatchObject({
+      status: "computed",
+      metrics: {
+        actualUsd: 0.03,
+        usage: { inputTokens: 10, outputTokens: 2, totalTokens: 12 },
+      },
+    });
+    expect(run.cost).toEqual({
+      actualUsd: 0.05,
+      reservedMaximumUsd: 0,
+      unknownActionCount: 0,
+      task: { actualUsd: 0.02 },
+      judge: { actualUsd: 0.03 },
     });
   });
 });

@@ -14,6 +14,7 @@ import { DEFINITION_KIND_COVERAGE } from '../../src/project-index/definition-kin
 
 function expectedDefinitionRef(kind: string) {
   const descriptor = DEFINITION_KIND_COVERAGE[kind as keyof typeof DEFINITION_KIND_COVERAGE]
+  if (kind === 'scorer') return scorerDefinitionRef('connected')
   if (descriptor.primary === 'directly-observed') {
     return definitionRef(kind as Parameters<typeof definitionRef>[0], 'connected')
   }
@@ -23,7 +24,6 @@ function expectedDefinitionRef(kind: string) {
     case 'flow.step': return flowStepDefinitionRef('connected', 'connected')
     case 'composition.parallel.branch': return parallelBranchDefinitionRef('connected', 'connected')
     case 'rag.recipe.step': return recipeStepDefinitionRef('connected', 'connected')
-    case 'scorer': return scorerDefinitionRef('connected')
     default: return undefined
   }
 }

@@ -3,41 +3,31 @@ import { indexFactChips, type ViewDef } from "./adapt";
 import { kindMeta } from "./kit";
 
 describe("indexFactChips", () => {
-  it("renders evaluation catalog facts as at-a-glance chips", () => {
+  it("renders Eval catalog facts as at-a-glance chips", () => {
     const def = {
-      kind: "evaluation",
+      kind: "eval",
       facts: {
         caseCount: 2,
-        datasetPaths: ["./cases/support.jsonl"],
-        scorerNames: ["exact", "helpful"],
-        gateKeys: ["exact", "helpful", "cost"],
-        variantNames: ["baseline", "tuned"],
-        replayMode: "replay-strict",
-        covers: ["prompt:support.answer"],
+        scorerIds: ["exact", "helpful"],
       },
     } as ViewDef;
 
     expect(indexFactChips(def)).toEqual([
       ["cases", 2],
-      ["datasets", 1],
       ["scorers", 2],
-      ["gates", 3],
-      ["variants", 2],
-      ["replay", "replay-strict"],
-      ["covers", 1],
     ]);
   });
 });
 
 describe("kindMeta", () => {
-  it("registers evaluation definitions in the quality family", () => {
-    expect(kindMeta("evaluation")).toMatchObject({
-      label: "Evaluation",
-      family: "quality",
+  it("registers Eval definitions in the Evals family", () => {
+    expect(kindMeta("eval")).toMatchObject({
+      label: "Eval",
+      family: "evals",
     });
-    expect(kindMeta("evaluation.case")).toMatchObject({
-      label: "Evaluation case",
-      family: "quality",
+    expect(kindMeta("eval.case")).toMatchObject({
+      label: "Case",
+      family: "evals",
       child: true,
     });
   });

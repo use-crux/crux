@@ -1,5 +1,4 @@
-// Package evalfs reads private Eval V3 artifacts without reinterpreting
-// legacy Quality experiment records.
+// Package evalfs reads private Eval V3 artifacts.
 package evalfs
 
 import (
@@ -19,15 +18,20 @@ var safeID = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 // Run contains the validated fields used by Local and the exact stored bytes
 // served to future-additive clients.
 type Run struct {
-	SchemaVersion int             `json:"schemaVersion"`
-	RunID         string          `json:"runId"`
-	EvalID        string          `json:"evalId"`
-	Status        string          `json:"status"`
-	Passed        bool            `json:"passed"`
-	Raw           json.RawMessage `json:"-"`
+	SchemaVersion int    `json:"schemaVersion"`
+	RunID         string `json:"runId"`
+	EvalID        string `json:"evalId"`
+	SourceKey     struct {
+		RelativeFile string `json:"relativeFile"`
+		Export       string `json:"export"`
+	} `json:"sourceKey"`
+	DefinitionFingerprint string          `json:"definitionFingerprint"`
+	Status                string          `json:"status"`
+	Passed                bool            `json:"passed"`
+	Raw                   json.RawMessage `json:"-"`
 }
 
-// Store reads Eval records rooted at a project's `.crux/quality` directory.
+// Store reads Eval records rooted at a project's `.crux/evals` directory.
 type Store struct {
 	projectRoot string
 	runsDir     string
@@ -37,7 +41,7 @@ type Store struct {
 func OpenProject(projectRoot string) *Store {
 	return &Store{
 		projectRoot: projectRoot,
-		runsDir:     filepath.Join(projectRoot, ".crux", "quality", "runs"),
+		runsDir:     filepath.Join(projectRoot, ".crux", "evals", "runs"),
 	}
 }
 
@@ -94,6 +98,9 @@ func (s *Store) ListRuns() ([]json.RawMessage, error) {
 }
 
 func parseRun(raw []byte) (Run, error) {
+	if err := validateRunV3(raw); err != nil {
+		return Run{}, err
+	}
 	var run Run
 	if err := json.Unmarshal(raw, &run); err != nil {
 		return Run{}, err

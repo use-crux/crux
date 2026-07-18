@@ -17,6 +17,7 @@ export function createEvalHostManifest(input: {
     protocol: CRUX_EVAL_HOST_PROTOCOL,
     deploymentId: input.deploymentId,
     hostKind: input.hostKind,
+    privacyFingerprint: input.registry.privacyFingerprint,
     capabilities: Object.freeze(
       ["result-ref", ...(input.hostCapabilities ?? [])]
         .filter((value, index, values) => values.indexOf(value) === index)

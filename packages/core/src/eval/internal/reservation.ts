@@ -123,7 +123,11 @@ function actionActualUsd(
   ) {
     return 0;
   }
-  return maximumUsd;
+  return score !== undefined &&
+    score.status === "computed" &&
+    score.reason === "managed_external_executed"
+    ? (score.metrics?.actualUsd ?? maximumUsd)
+    : maximumUsd;
 }
 
 async function releaseAll(

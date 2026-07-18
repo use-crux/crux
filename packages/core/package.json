@@ -248,6 +248,24 @@
   },
   "typesVersions": {
     "*": {
+      "eval": [
+        "src/eval/index.ts"
+      ],
+      "eval/node": [
+        "src/eval/node.ts"
+      ],
+      "eval/internal/task": [
+        "src/eval/internal/task.ts"
+      ],
+      "eval/internal/runner": [
+        "src/eval/internal/runner.ts"
+      ],
+      "eval/internal/node-runner": [
+        "src/eval/node/runner.ts"
+      ],
+      "feedback": [
+        "src/feedback/index.ts"
+      ],
       "internal/async-scope": [
         "src/async-scope/index.ts"
       ],
@@ -269,6 +287,9 @@
       "project-index/serializers": [
         "src/project-index/serializers.ts"
       ],
+      "project-index/runtime": [
+        "src/project-index/runtime.ts"
+      ],
       "lint": [
         "src/lint/index.ts"
       ],
@@ -277,6 +298,12 @@
       ],
       "runtime": [
         "src/runtime/public.ts"
+      ],
+      "runtime/internal/eval-registry": [
+        "src/runtime/eval-registry/index.ts"
+      ],
+      "runtime/internal/eval-host": [
+        "src/runtime/eval-host/index.ts"
       ],
       "setup": [
         "src/setup/index.ts"
@@ -383,6 +410,8 @@
     }
   },
   "dependencies": {
+    "es-module-lexer": "^2.1.0",
+    "import-meta-resolve": "^4.2.0",
     "zod": "^4.4.3"
   },
   "scripts": {

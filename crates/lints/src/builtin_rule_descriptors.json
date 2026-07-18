@@ -3,7 +3,7 @@
     "id": "definition.missing_eval_coverage",
     "source": "builtin",
     "severity": "info",
-    "category": "evaluation",
+    "category": "evals",
     "maturity": "preview",
     "confidence": "medium",
     "profiles": ["recommended", "strict"],
@@ -15,7 +15,7 @@
     "fixes": [
       {
         "title": "Add eval coverage",
-        "description": "Add a prompt, flow, RAG, or quality eval that covers this definition, or connect it to a suite so regressions can be detected.",
+        "description": "Add an Eval that covers this definition so regressions can be detected.",
         "kind": "manual"
       }
     ],
@@ -23,35 +23,6 @@
       "supported": true,
       "scope": "next-line",
       "directive": "// crux-lint-disable-next-line definition.missing_eval_coverage -- reason"
-    },
-    "phase": "index",
-    "requires": ["definitions", "relations"],
-    "fidelity": "safe"
-  },
-  {
-    "id": "quality.missing_baseline",
-    "source": "builtin",
-    "severity": "info",
-    "category": "quality",
-    "maturity": "stable",
-    "confidence": "high",
-    "profiles": ["recommended", "strict"],
-    "title": "Quality target has no baseline",
-    "description": "A promoted baseline lets you compare future runs against known behavior and understand whether authored AI changes are regressions or improvements.",
-    "rationale": "A promoted baseline lets you compare future runs against known behavior and understand whether authored AI changes are regressions or improvements.",
-    "impact": "Without a baseline, quality history is visible but drift and regression checks cannot anchor to a known good run.",
-    "docsUrl": "/docs/reference/crux-core/index-lints/quality-missing-baseline",
-    "fixes": [
-      {
-        "title": "Promote a baseline",
-        "description": "Promote a trusted experiment or variant as the baseline for this definition so future changes can be compared.",
-        "kind": "manual"
-      }
-    ],
-    "suppression": {
-      "supported": true,
-      "scope": "next-line",
-      "directive": "// crux-lint-disable-next-line quality.missing_baseline -- reason"
     },
     "phase": "index",
     "requires": ["definitions", "relations"],
@@ -554,7 +525,7 @@
     "id": "flow.suspension_without_coverage",
     "source": "builtin",
     "severity": "warning",
-    "category": "evaluation",
+    "category": "evals",
     "maturity": "preview",
     "confidence": "medium",
     "profiles": ["recommended", "strict"],
@@ -706,7 +677,7 @@
     "title": "Safety policy id is duplicated",
     "description": "Safety policy ids are used in decisions, traces, Project Index rows, and test matchers. Reusing an id makes it hard to tell which policy blocked, rewrote, or retried a turn.",
     "rationale": "Safety policy ids are used in decisions, traces, Project Index rows, and test matchers. Reusing an id makes it hard to tell which policy blocked, rewrote, or retried a turn.",
-    "impact": "Duplicate policy ids can make Devtools, observability, and quality assertions point at the wrong safety policy.",
+    "impact": "Duplicate policy ids can make Devtools, observability, and Eval assertions point at the wrong safety policy.",
     "docsUrl": "/docs/reference/crux-core/index-lints/safety-duplicate-policy-id",
     "fixes": [
       {
@@ -849,8 +820,8 @@
     "confidence": "high",
     "profiles": ["recommended", "strict"],
     "title": "Routing primitive has no stable id",
-    "description": "Stable routing ids let index definitions, route decision spans, and quality history join reliably even when variables or files are renamed.",
-    "rationale": "Stable routing ids let index definitions, route decision spans, and quality history join reliably even when variables or files are renamed.",
+    "description": "Stable routing ids let index definitions, route decision spans, and Eval history join reliably even when variables or files are renamed.",
+    "rationale": "Stable routing ids let index definitions, route decision spans, and Eval history join reliably even when variables or files are renamed.",
     "impact": "Routes can still be indexed from variable names, but runtime joins and historical comparisons are less durable across refactors.",
     "docsUrl": "/docs/reference/crux-core/index-lints/routing-missing-stable-id",
     "fixes": [

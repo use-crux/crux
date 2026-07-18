@@ -2,8 +2,8 @@
  * Skeleton primitives.
  *
  * Used as Suspense fallbacks and inline loading states. Visual language
- * matches the editorial Quality Workbench: --qw-bg-muted base, no fancy
- * shimmer — a slow opacity pulse (`qw-skeleton`) on a real-shaped block.
+ * matches the editorial Devtools UI: --devtools-bg-muted base, no fancy
+ * shimmer — a slow opacity pulse (`devtools-skeleton`) on a real-shaped block.
  *
  * Two principles:
  *  1. Always reserve the same dimensions as the real content. Skeletons
@@ -32,13 +32,13 @@ export function Skeleton({
   return (
     <span
       aria-hidden
-      className={`qw-skeleton ${className ?? ""}`}
+      className={`devtools-skeleton ${className ?? ""}`}
       style={{
         display: "inline-block",
         width,
         height,
         borderRadius: radius,
-        background: "var(--qw-bg-muted)",
+        background: "var(--devtools-bg-muted)",
         ...style,
       }}
     />
@@ -96,8 +96,8 @@ export function SkeletonCard({
       aria-hidden
       className={className}
       style={{
-        background: "var(--qw-bg-elev)",
-        border: "1px solid var(--qw-border)",
+        background: "var(--devtools-bg-elev)",
+        border: "1px solid var(--devtools-border)",
         borderRadius: 10,
         padding: "14px 16px",
         height,
@@ -132,8 +132,8 @@ export function SkeletonRows({
         display: "flex",
         flexDirection: "column",
         gap: 1,
-        background: "var(--qw-border)",
-        border: "1px solid var(--qw-border)",
+        background: "var(--devtools-border)",
+        border: "1px solid var(--devtools-border)",
         borderRadius: 10,
         overflow: "hidden",
         ...style,
@@ -143,7 +143,7 @@ export function SkeletonRows({
         <div
           key={i}
           style={{
-            background: "var(--qw-bg-elev)",
+            background: "var(--devtools-bg-elev)",
             height: rowHeight,
             display: "flex",
             alignItems: "center",
@@ -174,8 +174,8 @@ export function SkeletonKpiStrip({ count = 4 }: { count?: number }) {
         <div
           key={i}
           style={{
-            background: "var(--qw-bg-elev)",
-            border: "1px solid var(--qw-border)",
+            background: "var(--devtools-bg-elev)",
+            border: "1px solid var(--devtools-border)",
             borderRadius: 10,
             padding: "12px 14px",
             display: "flex",
@@ -231,8 +231,8 @@ export function SkeletonSplit({
     <div className="grid h-full" style={{ gridTemplateColumns: "304px 1fr" }}>
       <aside
         style={{
-          borderRight: "1px solid var(--qw-border)",
-          background: "var(--qw-bg)",
+          borderRight: "1px solid var(--devtools-border)",
+          background: "var(--devtools-bg)",
         }}
       >
         <div style={{ padding: 12 }}>
@@ -255,14 +255,14 @@ export function SkeletonSplit({
 
 /** Page-loading placeholder used as the route-level Suspense fallback.
  *
- *  Renders as a `<main>` with the same `qw-page-content` view-transition
- *  name and column-flex layout as `QwShell`, so the persistent sidebar
+ *  Renders as a `<main>` with the same `devtools-page-content` view-transition
+ *  name and column-flex layout as `DevtoolsShell`, so the persistent sidebar
  *  (mounted at App.tsx) stays put and the page area slides cleanly. */
 export function SkeletonPage() {
   return (
     <main
-      className="qw-page-content flex h-full min-w-0 flex-1 flex-col overflow-auto"
-      style={{ background: "var(--qw-bg)" }}
+      className="devtools-page-content flex h-full min-w-0 flex-1 flex-col overflow-auto"
+      style={{ background: "var(--devtools-bg)" }}
     >
       <div
         style={{

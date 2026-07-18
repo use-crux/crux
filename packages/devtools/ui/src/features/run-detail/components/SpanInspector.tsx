@@ -3,17 +3,17 @@
  *
  * Same skeleton every time — sections fill in when the selected node carries
  * the data; the run root shows the run-level variant. Binds to the typed
- * `CruxRunDetailNode` from the observability projection (facts & quality;
+ * `CruxRunDetailNode` from the observability projection (facts and evidence;
  * the substance lives in the center Detail pane).
  *
  * Ported from the design's `v7-parts` `SpanInspector` / `v8` `InspectorPanel`
- * onto `--qw-*` tokens + the run-detail atoms.
+ * onto `--devtools-*` tokens + the run-detail atoms.
  */
 
 import { useMemo, type ReactNode } from "react";
 import { cn } from "@/shared/lib/utils";
-import { Chip, ScoreBar } from "@/qw/shell/primitives";
-import { Icon } from "@/qw/shell/Icon";
+import { Chip, ScoreBar } from "@/devtools/shell/primitives";
+import { Icon } from "@/devtools/shell/Icon";
 import { useNavigation } from "@/app/navigation/useNavigation";
 import { useProjectDefinitionIds } from "@/shared/query/useProjectDefinitionIds";
 import type {
@@ -86,11 +86,11 @@ function Section({
   children: ReactNode;
 }) {
   return (
-    <div className="border-b border-(--qw-border) px-4 py-3">
+    <div className="border-b border-(--devtools-border) px-4 py-3">
       <div className="mb-2 flex items-center">
         <span
           className="text-[10px] font-semibold uppercase tracking-[0.08em]"
-          style={{ color: "var(--qw-fg-faint)" }}
+          style={{ color: "var(--devtools-fg-faint)" }}
         >
           {title}
         </span>
@@ -107,13 +107,13 @@ function Metric({ k, v, tone }: { k: string; v: ReactNode; tone?: string }) {
     <div>
       <div
         className="text-[9.5px] uppercase tracking-[0.04em]"
-        style={{ color: "var(--qw-fg-faint)" }}
+        style={{ color: "var(--devtools-fg-faint)" }}
       >
         {k}
       </div>
       <div
         className="font-mono text-[13.5px] font-medium"
-        style={{ color: tone ?? "var(--qw-fg)" }}
+        style={{ color: tone ?? "var(--devtools-fg)" }}
       >
         {v}
       </div>
@@ -189,11 +189,11 @@ export function SpanInspector({
 
   if (!node) {
     return (
-      <aside className="flex w-[288px] shrink-0 flex-col border-l border-(--qw-border) bg-(--qw-bg)">
+      <aside className="flex w-[288px] shrink-0 flex-col border-l border-(--devtools-border) bg-(--devtools-bg)">
         <InspectorHeader runLevel onCollapse={onCollapse} />
         <div
           className="px-4 py-6 text-[12px]"
-          style={{ color: "var(--qw-fg-faint)" }}
+          style={{ color: "var(--devtools-fg-faint)" }}
         >
           Select a span to inspect.
         </div>
@@ -250,11 +250,11 @@ export function SpanInspector({
   const govFacts = governanceFacts(node);
 
   return (
-    <aside className="flex w-[288px] shrink-0 flex-col overflow-y-auto border-l border-(--qw-border) bg-(--qw-bg)">
+    <aside className="flex w-[288px] shrink-0 flex-col overflow-y-auto border-l border-(--devtools-border) bg-(--devtools-bg)">
       <InspectorHeader runLevel={runLevel} onCollapse={onCollapse} />
 
       {/* Identity */}
-      <div className="border-b border-(--qw-border) px-4 py-3">
+      <div className="border-b border-(--devtools-border) px-4 py-3">
         <div className="mb-1 flex items-center gap-2">
           <KindTag
             kind={(node.display?.kind ?? node.kind) as RunNodeKind}
@@ -269,7 +269,7 @@ export function SpanInspector({
         </div>
         <div
           className="font-mono text-[10.5px]"
-          style={{ color: "var(--qw-fg-faint)" }}
+          style={{ color: "var(--devtools-fg-faint)" }}
         >
           {[
             shortId(node.spanId || node.id),
@@ -282,13 +282,13 @@ export function SpanInspector({
       </div>
 
       {/* Metrics */}
-      <div className="grid grid-cols-2 gap-x-3 gap-y-3 border-b border-(--qw-border) px-4 py-3">
+      <div className="grid grid-cols-2 gap-x-3 gap-y-3 border-b border-(--devtools-border) px-4 py-3">
         <Metric k="duration" v={fmtDuration(duration)} />
         {ttft != null && <Metric k="ttft" v={fmtDuration(ttft)} />}
         {tps != null && <Metric k="tps" v={Math.round(tps)} />}
         <Metric k="tokens" v={fmtTokens(tokens)} />
         {cacheRead != null && (
-          <Metric k="cache rd" v={fmtTokens(cacheRead)} tone="var(--qw-ok)" />
+          <Metric k="cache rd" v={fmtTokens(cacheRead)} tone="var(--devtools-ok)" />
         )}
         <Metric k="cost" v={fmtCost(cost)} />
       </div>
@@ -324,7 +324,7 @@ export function SpanInspector({
               <Metric
                 k="under budget"
                 v={routing.underBudget ? "yes" : "no"}
-                tone={routing.underBudget ? "var(--qw-ok)" : "var(--qw-warn)"}
+                tone={routing.underBudget ? "var(--devtools-ok)" : "var(--devtools-warn)"}
               />
             )}
             {routing.budget != null && (
@@ -334,7 +334,7 @@ export function SpanInspector({
           {routing.why && (
             <div
               className="mt-2 text-[10.5px] leading-[1.5]"
-              style={{ color: "var(--qw-fg-muted)" }}
+              style={{ color: "var(--devtools-fg-muted)" }}
             >
               {routing.why}
             </div>
@@ -354,7 +354,7 @@ export function SpanInspector({
           {gf.note && (
             <div
               className="mt-2 text-[10.5px] leading-[1.5]"
-              style={{ color: "var(--qw-fg-muted)" }}
+              style={{ color: "var(--devtools-fg-muted)" }}
             >
               {gf.note}
             </div>
@@ -367,13 +367,13 @@ export function SpanInspector({
         <Section title="Timing · self vs children">
           <div
             className="flex h-4 overflow-hidden rounded-[6px]"
-            style={{ boxShadow: "inset 0 0 0 1px var(--qw-border)" }}
+            style={{ boxShadow: "inset 0 0 0 1px var(--devtools-border)" }}
           >
             {selfMs ? (
               <span
                 style={{
                   width: pct(selfMs, timingTotal),
-                  background: "var(--qw-warn)",
+                  background: "var(--devtools-warn)",
                   opacity: 0.8,
                 }}
                 title={`self ${fmtDuration(selfMs)}`}
@@ -383,7 +383,7 @@ export function SpanInspector({
               <span
                 style={{
                   width: pct(childrenMs, timingTotal),
-                  background: "var(--qw-crux)",
+                  background: "var(--devtools-crux)",
                   opacity: 0.8,
                 }}
                 title={`children ${fmtDuration(childrenMs)}`}
@@ -393,7 +393,7 @@ export function SpanInspector({
               <span
                 style={{
                   width: pct(detailsMs, timingTotal),
-                  background: "var(--qw-iris)",
+                  background: "var(--devtools-iris)",
                   opacity: 0.8,
                 }}
                 title={`details ${fmtDuration(detailsMs)}`}
@@ -402,23 +402,23 @@ export function SpanInspector({
           </div>
           <div
             className="mt-2 flex flex-wrap gap-3 font-mono text-[10.5px]"
-            style={{ color: "var(--qw-fg-muted)" }}
+            style={{ color: "var(--devtools-fg-muted)" }}
           >
             {selfMs ? (
               <span>
-                <span style={{ color: "var(--qw-warn)" }}>■</span> self{" "}
+                <span style={{ color: "var(--devtools-warn)" }}>■</span> self{" "}
                 {fmtDuration(selfMs)}
               </span>
             ) : null}
             {childrenMs ? (
               <span>
-                <span style={{ color: "var(--qw-crux)" }}>■</span> children{" "}
+                <span style={{ color: "var(--devtools-crux)" }}>■</span> children{" "}
                 {fmtDuration(childrenMs)}
               </span>
             ) : null}
             {detailsMs ? (
               <span>
-                <span style={{ color: "var(--qw-iris)" }}>■</span> details{" "}
+                <span style={{ color: "var(--devtools-iris)" }}>■</span> details{" "}
                 {fmtDuration(detailsMs)}
               </span>
             ) : null}
@@ -433,7 +433,7 @@ export function SpanInspector({
           right={
             <span
               className="font-mono text-[10px]"
-              style={{ color: "var(--qw-fg-faint)" }}
+              style={{ color: "var(--devtools-fg-faint)" }}
             >
               {fmtCost(cost)}
             </span>
@@ -441,13 +441,13 @@ export function SpanInspector({
         >
           <div
             className="flex h-5 overflow-hidden rounded-[6px]"
-            style={{ boxShadow: "inset 0 0 0 1px var(--qw-border)" }}
+            style={{ boxShadow: "inset 0 0 0 1px var(--devtools-border)" }}
           >
             {inTok ? (
               <span
                 style={{
                   width: pct(inTok, tokenSplitTotal),
-                  background: "var(--qw-crux)",
+                  background: "var(--devtools-crux)",
                   opacity: 0.85,
                 }}
                 title={`input ${fmtTokens(inTok)}`}
@@ -457,7 +457,7 @@ export function SpanInspector({
               <span
                 style={{
                   width: pct(cacheTok, tokenSplitTotal),
-                  background: "var(--qw-ok)",
+                  background: "var(--devtools-ok)",
                   opacity: 0.85,
                 }}
                 title={`cache ${fmtTokens(cacheTok)}`}
@@ -467,7 +467,7 @@ export function SpanInspector({
               <span
                 style={{
                   width: pct(outTok, tokenSplitTotal),
-                  background: "var(--qw-iris)",
+                  background: "var(--devtools-iris)",
                   opacity: 0.85,
                 }}
                 title={`output ${fmtTokens(outTok)}`}
@@ -476,29 +476,29 @@ export function SpanInspector({
           </div>
           <div
             className="mt-2 flex flex-wrap gap-x-3 gap-y-1 font-mono text-[10.5px]"
-            style={{ color: "var(--qw-fg-muted)" }}
+            style={{ color: "var(--devtools-fg-muted)" }}
           >
             {inTok ? (
               <span>
-                <span style={{ color: "var(--qw-crux)" }}>■</span> in · fresh{" "}
+                <span style={{ color: "var(--devtools-crux)" }}>■</span> in · fresh{" "}
                 {fmtTokens(inTok)}
               </span>
             ) : null}
             {cacheTok ? (
               <span>
-                <span style={{ color: "var(--qw-ok)" }}>■</span> cache read{" "}
+                <span style={{ color: "var(--devtools-ok)" }}>■</span> cache read{" "}
                 {fmtTokens(cacheTok)}
               </span>
             ) : null}
             {outTok ? (
               <span>
-                <span style={{ color: "var(--qw-iris)" }}>■</span> out{" "}
+                <span style={{ color: "var(--devtools-iris)" }}>■</span> out{" "}
                 {fmtTokens(outTok)}
               </span>
             ) : null}
             {reasoningTok ? (
               <span>
-                <span style={{ color: "var(--qw-warn)" }}>■</span> reasoning{" "}
+                <span style={{ color: "var(--devtools-warn)" }}>■</span> reasoning{" "}
                 {fmtTokens(reasoningTok)}
               </span>
             ) : null}
@@ -526,14 +526,14 @@ export function SpanInspector({
                 <span
                   className="w-[26px] font-mono text-[10px]"
                   style={{
-                    color: c.grounded ? "var(--qw-crux)" : "var(--qw-fg-faint)",
+                    color: c.grounded ? "var(--devtools-crux)" : "var(--devtools-fg-faint)",
                   }}
                 >
                   {c.marker != null ? `[${c.marker}]` : "—"}
                 </span>
                 <span
                   className="flex-1 truncate font-mono text-[10.5px]"
-                  style={{ color: "var(--qw-fg-muted)" }}
+                  style={{ color: "var(--devtools-fg-muted)" }}
                   title={c.sourceId}
                 >
                   {c.sourceId ?? c.chunkId ?? "—"}
@@ -541,14 +541,14 @@ export function SpanInspector({
                 {c.grounded && c.score != null ? (
                   <span
                     className="font-mono text-[10px]"
-                    style={{ color: "var(--qw-ok)" }}
+                    style={{ color: "var(--devtools-ok)" }}
                   >
                     {c.score.toFixed(2)}
                   </span>
                 ) : (
                   <span
                     className="font-mono text-[9.5px]"
-                    style={{ color: "var(--qw-warn)" }}
+                    style={{ color: "var(--devtools-warn)" }}
                   >
                     {c.note ?? "unused"}
                   </span>
@@ -576,19 +576,19 @@ export function SpanInspector({
               <div key={rel.edgeId} className="flex items-center gap-2 py-0.5">
                 <span
                   className="w-5 font-mono text-[9px] uppercase"
-                  style={{ color: "var(--qw-fg-faint)" }}
+                  style={{ color: "var(--devtools-fg-faint)" }}
                 >
                   {relationDirection(rel, node.spanId)}
                 </span>
                 <span
                   className="font-mono text-[10px]"
-                  style={{ color: "var(--qw-crux)" }}
+                  style={{ color: "var(--devtools-crux)" }}
                 >
                   {rel.edgeType}
                 </span>
                 <span
                   className="flex-1 truncate font-mono text-[10.5px]"
-                  style={{ color: "var(--qw-fg-muted)" }}
+                  style={{ color: "var(--devtools-fg-muted)" }}
                 >
                   {relationLabel(rel, node.spanId)}
                 </span>
@@ -608,12 +608,12 @@ export function SpanInspector({
                 (j.score != null &&
                   j.threshold != null &&
                   j.score >= j.threshold);
-              const color = passed ? "var(--qw-ok)" : "var(--qw-warn)";
+              const color = passed ? "var(--devtools-ok)" : "var(--devtools-warn)";
               return (
                 <div key={j.name} className="flex items-center gap-2">
                   <span
                     className="flex-1 truncate font-mono text-[10.5px]"
-                    style={{ color: "var(--qw-fg-muted)" }}
+                    style={{ color: "var(--devtools-fg-muted)" }}
                   >
                     {j.name}
                   </span>
@@ -659,26 +659,26 @@ export function SpanInspector({
         <Section title={`Attributes · ${attrs.length}`}>
           <div
             className="overflow-hidden rounded-[6px]"
-            style={{ border: "1px solid var(--qw-border)" }}
+            style={{ border: "1px solid var(--devtools-border)" }}
           >
             {attrs.map((row, i) => (
               <div
                 key={row.k}
                 className="flex justify-between gap-2 px-2.5 py-1"
                 style={{
-                  borderTop: i ? "1px solid var(--qw-border)" : "none",
-                  background: i % 2 ? "var(--qw-bg)" : "var(--qw-bg-elev)",
+                  borderTop: i ? "1px solid var(--devtools-border)" : "none",
+                  background: i % 2 ? "var(--devtools-bg)" : "var(--devtools-bg-elev)",
                 }}
               >
                 <span
                   className="font-mono text-[10px]"
-                  style={{ color: "var(--qw-fg-muted)" }}
+                  style={{ color: "var(--devtools-fg-muted)" }}
                 >
                   {row.k}
                 </span>
                 <span
                   className="truncate pl-2 font-mono text-[10px]"
-                  style={{ color: "var(--qw-fg)" }}
+                  style={{ color: "var(--devtools-fg)" }}
                 >
                   {row.v}
                 </span>
@@ -701,11 +701,11 @@ function InspectorHeader({
   onCollapse?: () => void;
 }) {
   return (
-    <div className="sticky top-0 z-[1] flex items-center gap-2 border-b border-(--qw-border) bg-(--qw-bg) px-4 py-2.5">
-      <Icon name="list" size={13} color="var(--qw-fg-muted)" />
+    <div className="sticky top-0 z-[1] flex items-center gap-2 border-b border-(--devtools-border) bg-(--devtools-bg) px-4 py-2.5">
+      <Icon name="list" size={13} color="var(--devtools-fg-muted)" />
       <span
         className="font-mono text-[11px] uppercase tracking-[0.04em]"
-        style={{ color: "var(--qw-fg-muted)" }}
+        style={{ color: "var(--devtools-fg-muted)" }}
       >
         inspector · {runLevel ? "run" : "span"}
       </span>
@@ -717,7 +717,7 @@ function InspectorHeader({
           title="Collapse inspector"
           className="cursor-pointer"
         >
-          <Icon name="arrowRight" size={13} color="var(--qw-fg-faint)" />
+          <Icon name="arrowRight" size={13} color="var(--devtools-fg-faint)" />
         </button>
       )}
     </div>
@@ -742,31 +742,31 @@ function IndexRow({ link }: { link: DefinitionRefLink }) {
     >
       <span
         className="w-[52px] font-mono text-[9.5px]"
-        style={{ color: "var(--qw-fg-faint)" }}
+        style={{ color: "var(--devtools-fg-faint)" }}
       >
         {link.label}
       </span>
       <div className="min-w-0 flex-1">
         <div
           className="truncate font-mono text-[11px]"
-          style={{ color: clickable ? "var(--qw-crux)" : "var(--qw-fg-muted)" }}
+          style={{ color: clickable ? "var(--devtools-crux)" : "var(--devtools-fg-muted)" }}
         >
           {link.value}
         </div>
         <div
           className="truncate font-mono text-[9px]"
-          style={{ color: "var(--qw-fg-faint)" }}
+          style={{ color: "var(--devtools-fg-faint)" }}
         >
           {link.role}
           {link.source ? ` · ${link.source.file}:${link.source.line}` : ""}
         </div>
       </div>
       {clickable ? (
-        <Icon name="link" size={11} color="var(--qw-fg-faint)" />
+        <Icon name="link" size={11} color="var(--devtools-fg-faint)" />
       ) : (
         <span
           className="font-mono text-[9px]"
-          style={{ color: "var(--qw-fg-faint)" }}
+          style={{ color: "var(--devtools-fg-faint)" }}
         >
           unresolved
         </span>
@@ -793,8 +793,8 @@ function DiagnosticRow({
     <div
       className="rounded-[6px] px-2.5 py-2"
       style={{
-        background: "var(--qw-bg-elev)",
-        border: "1px solid var(--qw-border)",
+        background: "var(--devtools-bg-elev)",
+        border: "1px solid var(--devtools-border)",
       }}
     >
       <div className="mb-1 flex items-center gap-2">
@@ -806,19 +806,19 @@ function DiagnosticRow({
             type="button"
             onClick={() => onJump(target)}
             className="ml-auto cursor-pointer font-mono text-[10px]"
-            style={{ color: "var(--qw-crux)" }}
+            style={{ color: "var(--devtools-crux)" }}
           >
             jump →
           </button>
         )}
       </div>
-      <div className="text-[11px]" style={{ color: "var(--qw-fg)" }}>
+      <div className="text-[11px]" style={{ color: "var(--devtools-fg)" }}>
         {diag.message}
       </div>
       {diag.suggestedFix && (
         <div
           className="mt-1 text-[10.5px]"
-          style={{ color: "var(--qw-fg-muted)" }}
+          style={{ color: "var(--devtools-fg-muted)" }}
         >
           fix · {diag.suggestedFix}
         </div>
@@ -850,17 +850,17 @@ export function InspectorRail({ onExpand }: { onExpand: () => void }) {
       type="button"
       onClick={onExpand}
       title="Expand inspector"
-      className="flex w-14 shrink-0 cursor-pointer flex-col items-center gap-2 border-l border-(--qw-border) bg-(--qw-bg) py-3"
+      className="flex w-14 shrink-0 cursor-pointer flex-col items-center gap-2 border-l border-(--devtools-border) bg-(--devtools-bg) py-3"
     >
       <Icon
         name="arrowUp"
         size={13}
-        color="var(--qw-fg-faint)"
+        color="var(--devtools-fg-faint)"
         className="rotate-[-90deg]"
       />
       <span
         className="font-mono text-[10px] uppercase tracking-[0.1em]"
-        style={{ color: "var(--qw-fg-faint)", writingMode: "vertical-rl" }}
+        style={{ color: "var(--devtools-fg-faint)", writingMode: "vertical-rl" }}
       >
         inspector
       </span>

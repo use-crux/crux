@@ -1,5 +1,5 @@
-import { Icon } from "@/qw/shell/Icon";
-import { QwTooltip } from "@/qw/shell/QwTooltip";
+import { Icon } from "@/devtools/shell/Icon";
+import { DevtoolsTooltip } from "@/devtools/shell/DevtoolsTooltip";
 import {
   reliabilityParts,
   reliabilityTone,
@@ -12,12 +12,12 @@ export function ReliabilityGlyph({ run }: { run: ReliabilitySignals }) {
   const tone = reliabilityTone(run);
   const color =
     tone === "danger"
-      ? "var(--qw-danger)"
+      ? "var(--devtools-danger)"
       : tone === "warn"
-        ? "var(--qw-warn)"
-        : "var(--qw-crux)";
+        ? "var(--devtools-warn)"
+        : "var(--devtools-crux)";
   return (
-    <QwTooltip content={parts.join(" · ")}>
+    <DevtoolsTooltip content={parts.join(" · ")}>
       <span
         className="flex flex-shrink-0 items-center"
         style={{ color }}
@@ -25,6 +25,6 @@ export function ReliabilityGlyph({ run }: { run: ReliabilitySignals }) {
       >
         <Icon name="layers" size={11} color={color} />
       </span>
-    </QwTooltip>
+    </DevtoolsTooltip>
   );
 }

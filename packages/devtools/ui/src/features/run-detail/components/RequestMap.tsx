@@ -14,40 +14,40 @@ interface RequestMapProps {
 // Semantic color palette — prompt template is neutral, contexts cycle through distinct colors
 const CONTEXT_COLORS = [
   {
-    bg: "bg-(--qw-blue)",
-    hover: "hover:bg-(--qw-blue)",
-    text: "text-(--qw-blue)",
+    bg: "bg-(--devtools-blue)",
+    hover: "hover:bg-(--devtools-blue)",
+    text: "text-(--devtools-blue)",
   },
-  { bg: "bg-(--qw-ok)", hover: "hover:bg-(--qw-ok)", text: "text-(--qw-ok)" },
+  { bg: "bg-(--devtools-ok)", hover: "hover:bg-(--devtools-ok)", text: "text-(--devtools-ok)" },
   {
-    bg: "bg-(--qw-warn)",
-    hover: "hover:bg-(--qw-warn)",
-    text: "text-(--qw-warn)",
-  },
-  {
-    bg: "bg-(--qw-iris)",
-    hover: "hover:bg-(--qw-iris)",
-    text: "text-(--qw-iris)",
+    bg: "bg-(--devtools-warn)",
+    hover: "hover:bg-(--devtools-warn)",
+    text: "text-(--devtools-warn)",
   },
   {
-    bg: "bg-(--qw-plum)",
-    hover: "hover:bg-(--qw-plum)",
-    text: "text-(--qw-plum)",
+    bg: "bg-(--devtools-iris)",
+    hover: "hover:bg-(--devtools-iris)",
+    text: "text-(--devtools-iris)",
   },
   {
-    bg: "bg-(--qw-crux)",
-    hover: "hover:bg-(--qw-crux)",
-    text: "text-(--qw-crux)",
+    bg: "bg-(--devtools-plum)",
+    hover: "hover:bg-(--devtools-plum)",
+    text: "text-(--devtools-plum)",
   },
   {
-    bg: "bg-(--qw-gold)",
-    hover: "hover:bg-(--qw-gold)",
-    text: "text-(--qw-gold)",
+    bg: "bg-(--devtools-crux)",
+    hover: "hover:bg-(--devtools-crux)",
+    text: "text-(--devtools-crux)",
   },
   {
-    bg: "bg-(--qw-blue)",
-    hover: "hover:bg-(--qw-blue)",
-    text: "text-(--qw-blue)",
+    bg: "bg-(--devtools-gold)",
+    hover: "hover:bg-(--devtools-gold)",
+    text: "text-(--devtools-gold)",
+  },
+  {
+    bg: "bg-(--devtools-blue)",
+    hover: "hover:bg-(--devtools-blue)",
+    text: "text-(--devtools-blue)",
   },
 ];
 
@@ -109,9 +109,9 @@ export function RequestMap({
       tokens: inspect.prompt.tokens,
       type: "user",
       color: {
-        bg: "bg-(--qw-blue)",
-        hover: "hover:bg-(--qw-blue)",
-        text: "text-(--qw-blue)",
+        bg: "bg-(--devtools-blue)",
+        hover: "hover:bg-(--devtools-blue)",
+        text: "text-(--devtools-blue)",
       },
     });
   }
@@ -139,10 +139,10 @@ export function RequestMap({
     budgetPct == null
       ? ""
       : budgetPct > 90
-        ? "text-(--qw-danger)"
+        ? "text-(--devtools-danger)"
         : budgetPct > 70
-          ? "text-(--qw-warn)"
-          : "text-(--qw-ok)";
+          ? "text-(--devtools-warn)"
+          : "text-(--devtools-ok)";
 
   return (
     <div className={cn("space-y-2", className)}>
@@ -258,10 +258,10 @@ export function RequestMap({
             className={cn(
               "h-full rounded-full transition-all",
               budgetPct > 90
-                ? "bg-(--qw-danger)"
+                ? "bg-(--devtools-danger)"
                 : budgetPct > 70
-                  ? "bg-(--qw-warn)"
-                  : "bg-(--qw-ok)",
+                  ? "bg-(--devtools-warn)"
+                  : "bg-(--devtools-ok)",
             )}
             style={{ width: `${Math.min(budgetPct, 100)}%` }}
           />
@@ -270,14 +270,14 @@ export function RequestMap({
 
       {/* Dropped contexts (ghost row) */}
       {inspect.droppedContexts.length > 0 && (
-        <div className="flex items-center gap-1.5 text-[10px] text-(--qw-warn)">
+        <div className="flex items-center gap-1.5 text-[10px] text-(--devtools-warn)">
           <AlertTriangleIcon className="size-3 shrink-0" />
           <span>{inspect.droppedContexts.length} dropped:</span>
           <div className="flex items-center gap-2 overflow-hidden">
             {inspect.droppedContexts.map((ctx) => (
               <span
                 key={ctx.source}
-                className="flex items-center gap-1 text-(--qw-warn)"
+                className="flex items-center gap-1 text-(--devtools-warn)"
               >
                 <span className="line-through">
                   {ctx.source.replace(/^context:/, "")}

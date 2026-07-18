@@ -10,10 +10,9 @@
  */
 
 import { lazy } from "react";
-import { navTarget } from "@/app/navigation/navTarget";
-import { useNavigation, type NavState } from "@/app/navigation/useNavigation";
-import { QwShell } from "@/qw/shell/QwShell";
-import { QwSidebar } from "@/qw/shell/QwSidebar";
+import { type NavState } from "@/app/navigation/useNavigation";
+import { DevtoolsShell } from "@/devtools/shell/DevtoolsShell";
+import { DevtoolsSidebar } from "@/devtools/shell/DevtoolsSidebar";
 import { CodeBlock } from "@/shared/components/ai-elements/code-block";
 
 const OverviewPage = lazy(() =>
@@ -59,44 +58,31 @@ const ReviewPage = lazy(() =>
 export function AppRouter({ nav }: { nav: NavState }) {
   switch (nav.view) {
     case "overview":
-    case "dashboard":
       return <OverviewPage />;
     case "insights":
-    case "security":
       return (
         <InsightsPage
-          filters={
-            nav.view === "insights"
-              ? {
-                  severity: nav.severity,
-                  target: nav.target,
-                  status: nav.status,
-                  search: nav.search,
-                }
-              : {}
-          }
-          groupBy={nav.view === "insights" ? (nav.groupBy ?? "none") : "none"}
+          filters={{
+            severity: nav.severity,
+            target: nav.target,
+            status: nav.status,
+            search: nav.search,
+          }}
+          groupBy={nav.groupBy ?? "none"}
         />
       );
     case "runs":
-    case "traces":
-    case "sessions":
-    case "constraints":
       return (
         <RunsPage
-          groupBy={nav.view === "runs" ? (nav.groupBy ?? "none") : "none"}
-          filters={
-            nav.view === "runs"
-              ? {
-                  status: nav.status,
-                  target: nav.target,
-                  model: nav.model,
-                  last: nav.last,
-                  search: nav.search,
-                  definitionId: nav.definitionId,
-                }
-              : {}
-          }
+          groupBy={nav.groupBy ?? "none"}
+          filters={{
+            status: nav.status,
+            target: nav.target,
+            model: nav.model,
+            last: nav.last,
+            search: nav.search,
+            definitionId: nav.definitionId,
+          }}
         />
       );
     case "runtime":
@@ -110,11 +96,6 @@ export function AppRouter({ nav }: { nav: NavState }) {
           summary={nav.summary}
         />
       );
-    case "detail":
-      if (nav.traceId) {
-        return <RunDetailPage traceId={nav.traceId} />;
-      }
-      return <RunsPage groupBy="none" filters={{}} />;
     case "evals":
       return <EvalsPage evalId={nav.evalId} />;
     case "eval-runs":
@@ -124,60 +105,47 @@ export function AppRouter({ nav }: { nav: NavState }) {
     case "baselines":
       return <BaselinesPage />;
     case "library-index":
-    case "prompts":
       return (
         <IndexPage
-          promptId={"promptId" in nav ? nav.promptId : undefined}
-          contextId={"contextId" in nav ? nav.contextId : undefined}
-          toolName={"toolName" in nav ? nav.toolName : undefined}
-          tab={"tab" in nav ? nav.tab : undefined}
+          promptId={nav.promptId}
+          contextId={nav.contextId}
+          toolName={nav.toolName}
+          tab={nav.tab}
         />
       );
     case "library-memory":
-    case "memory":
-      return (
-        <MemoryPage memoryId={"memoryId" in nav ? nav.memoryId : undefined} />
-      );
+      return <MemoryPage memoryId={nav.memoryId} />;
     case "library-workspaces":
-    case "workspaces":
       return (
-        <WorkspacesPage
-          workspaceId={"workspaceId" in nav ? nav.workspaceId : undefined}
-          filePath={"filePath" in nav ? nav.filePath : undefined}
-        />
+        <WorkspacesPage workspaceId={nav.workspaceId} filePath={nav.filePath} />
       );
     case "library-plans":
-    case "plans":
-      return <PlansPage planId={"planId" in nav ? nav.planId : undefined} />;
+      return <PlansPage planId={nav.planId} />;
   }
 }
 
 export function WaitingShell({ connected }: { connected: boolean }) {
-  const { navigate } = useNavigation();
   return (
     <div
       className="flex h-screen min-h-0 overflow-hidden"
       style={{
-        background: "var(--qw-bg)",
-        color: "var(--qw-fg)",
-        fontFamily: "var(--qw-sans)",
+        background: "var(--devtools-bg)",
+        color: "var(--devtools-fg)",
+        fontFamily: "var(--devtools-sans)",
       }}
     >
-      <QwSidebar />
-      <QwShell
-        activeView="overview"
-        onNavigate={(v) => navigate(navTarget(v))}
-        breadcrumb="Quality / Overview"
+      <DevtoolsSidebar />
+      <DevtoolsShell
+        breadcrumb="Overview"
         title="Waiting for connection"
         subtitle="Connect your app to start collecting traces"
-        connected={connected}
       >
         <div className="flex h-full items-center justify-center px-8 py-12">
           <div
             className="w-full max-w-[560px] space-y-4 rounded-[10px] p-6"
             style={{
-              background: "var(--qw-bg-elev)",
-              border: "1px solid var(--qw-border)",
+              background: "var(--devtools-bg-elev)",
+              border: "1px solid var(--devtools-border)",
             }}
           >
             <Step
@@ -205,7 +173,7 @@ enableDevtools({
             />
           </div>
         </div>
-      </QwShell>
+      </DevtoolsShell>
     </div>
   );
 }
@@ -228,9 +196,11 @@ function Step({
       <span
         className="flex h-6 w-6 flex-shrink-0 items-center justify-center text-[11px] font-medium"
         style={{
-          border: `1px solid ${done ? "var(--qw-ok)" : "var(--qw-border)"}`,
-          background: done ? "var(--qw-ok-soft)" : "var(--qw-bg-muted)",
-          color: done ? "var(--qw-ok)" : "var(--qw-fg-muted)",
+          border: `1px solid ${done ? "var(--devtools-ok)" : "var(--devtools-border)"}`,
+          background: done
+            ? "var(--devtools-ok-soft)"
+            : "var(--devtools-bg-muted)",
+          color: done ? "var(--devtools-ok)" : "var(--devtools-fg-muted)",
         }}
       >
         {done ? "OK" : n}
@@ -238,14 +208,16 @@ function Step({
       <div className="min-w-0">
         <div
           className="text-[13px] font-medium"
-          style={{ color: done ? "var(--qw-fg-muted)" : "var(--qw-fg)" }}
+          style={{
+            color: done ? "var(--devtools-fg-muted)" : "var(--devtools-fg)",
+          }}
         >
           {title}
         </div>
         {description && (
           <div
             className="mt-0.5 text-[12px]"
-            style={{ color: "var(--qw-fg-muted)" }}
+            style={{ color: "var(--devtools-fg-muted)" }}
           >
             {description}
           </div>

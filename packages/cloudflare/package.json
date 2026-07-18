@@ -12,7 +12,6 @@
   ],
   "license": "Apache-2.0",
   "author": "Crux",
-  "private": true,
   "publishConfig": {
     "access": "public"
   },
@@ -50,5 +49,5 @@
   "bugs": {
     "url": "https://github.com/use-crux/crux/issues"
   },
-  "homepage": "https://cruxjs.dev/docs/reference/runtime/cloudflare"
+  "homepage": "https://cruxjs.dev/docs/guides/evals/runtime-hosts#cloudflare-workers"
 }

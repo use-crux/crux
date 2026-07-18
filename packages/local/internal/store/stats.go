@@ -49,8 +49,6 @@ func (s *Store) GetStats() StatsResult {
 	var ingestDurationCount int
 	var totalIngestParts int
 	var totalIngestWarnings int
-	ragEvalFailureCounts := map[string]int{}
-	var ragEvalFailedCaseCount int
 
 	// Execution run aggregates are owned by internal/observability. This store
 	// now only tracks non-run collection/event buffers used by index-style
@@ -121,17 +119,6 @@ func (s *Store) GetStats() StatsResult {
 		workspaceOperationCount++
 		if e.Status == "error" || e.Error != nil {
 			workspaceErrorCount++
-		}
-	}
-
-	for _, run := range s.ragEvalList {
-		for _, c := range run.CompletedCases {
-			if c.Status == "failed" || c.Status == "error" {
-				ragEvalFailedCaseCount++
-			}
-			for _, failureType := range c.FailureTypes {
-				ragEvalFailureCounts[failureType]++
-			}
 		}
 	}
 
@@ -406,9 +393,6 @@ func (s *Store) GetStats() StatsResult {
 		RetrievalStageErrorCount: retrievalStageErrorCount,
 		WorkspaceOperationCount:  workspaceOperationCount,
 		WorkspaceErrorCount:      workspaceErrorCount,
-		RagEvalRunCount:          len(s.ragEvalList),
-		RagEvalFailedCaseCount:   ragEvalFailedCaseCount,
-		RagEvalFailureCounts:     ragEvalFailureCounts,
 		IndexOperationCount:      indexOperationCount,
 		IndexErrorCount:          indexErrorCount,
 		AvgIndexDurationMs:       avgIndexDurationMs,

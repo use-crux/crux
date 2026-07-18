@@ -163,12 +163,13 @@ complete run.
 
 ```ts
 import { evaluate } from "@use-crux/core/eval";
+import { support } from "./src/support";
 
 export default evaluate({
   id: "support",
   task: support,
   cases: [{ id: "refund", input: { question: "Can I get a refund?" } }],
-  variants: { cheaper: { model: cheaperModel } },
+  variants: { deterministic: { temperature: 0 } },
   expect: ({ output, expect }) => {
     expect(output.answer).toContain("refund");
   },
@@ -228,7 +229,7 @@ Crux is deliberately modular. Use one primitive or build the whole harness; eith
 | A scalable prompt system          | Shared definitions, context blocks, tests, and catalog visibility without moving prompts into a hosted system.              |
 | An alternative to a big framework | Small primitives around the SDK call: compose memory, retrieval, safety, evals, and observability only where you need them. |
 
-Use raw strings for one-off prompts. Reach for Crux when the call needs memory, retrieval, structured output, safety, evaluation, tracing, or provider flexibility. Start with one block, add more as the system asks for it, and replace any block with your own when you outgrow the default.
+Use raw strings for one-off prompts. Reach for Crux when the call needs memory, retrieval, structured output, safety, Evals, tracing, or provider flexibility. Start with one block, add more as the system asks for it, and replace any block with your own when you outgrow the default.
 
 ## How it works
 
@@ -257,20 +258,22 @@ This separation is the point. You can inspect what the model will see, run the s
 
 ## Packages
 
-| Package               | Purpose                                                                                                                                                    |
-| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@use-crux/core`      | SDK-agnostic primitives for prompts, contexts, memory, storage, retrieval, safety, routing, Evals, agents, flows, plans, tasks, skills, and observability. |
-| `@use-crux/ai`        | Vercel AI SDK adapter for `generate`, `stream`, structured output, and Crux-aware stream integration.                                                      |
-| `@use-crux/openai`    | OpenAI SDK adapter.                                                                                                                                        |
-| `@use-crux/anthropic` | Anthropic SDK adapter.                                                                                                                                     |
-| `@use-crux/google`    | Google GenAI SDK adapter.                                                                                                                                  |
-| `@use-crux/convex`    | Convex storage, server boundaries, agent bridge, compaction, and swarm integration.                                                                        |
-| `@use-crux/upstash`   | Upstash Vector and Redis-backed storage adapters.                                                                                                          |
-| `@use-crux/otel`      | OpenTelemetry integration for production traces.                                                                                                           |
-| `@use-crux/ingest`    | Source loaders for text, files, folders, globs, and URLs.                                                                                                  |
-| `@use-crux/react`     | React provider, hooks, transports, and SSE helpers for live Crux state.                                                                                    |
-| `@use-crux/devtools`  | React devtools UI bundle for traces, evals, source catalog, memory, plans, and runtime inspection.                                                         |
-| `@use-crux/local`     | Native local runtime, CLI, TUI, HTTP/WS server, embedded devtools, eval runner, catalog, lint, and bounded helper workers.                                 |
+| Package                | Purpose                                                                                                                                                    |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@use-crux/core`       | SDK-agnostic primitives for prompts, contexts, memory, storage, retrieval, safety, routing, Evals, agents, flows, plans, tasks, skills, and observability. |
+| `@use-crux/ai`         | Vercel AI SDK adapter for `generate`, `stream`, managed Eval tasks, feedback, structured output, and Crux-aware streams.                                   |
+| `@use-crux/openai`     | OpenAI SDK adapter.                                                                                                                                        |
+| `@use-crux/anthropic`  | Anthropic SDK adapter.                                                                                                                                     |
+| `@use-crux/google`     | Google GenAI SDK adapter.                                                                                                                                  |
+| `@use-crux/convex`     | Convex storage, Runtime and Eval hosting, server boundaries, agent bridge, compaction, and swarm integration.                                              |
+| `@use-crux/cloudflare` | Cloudflare Workers and Durable Object hosting for the Crux Runtime and deployed Evals.                                                                     |
+| `@use-crux/indexer`    | Compiler-style Project Index discovery, semantic enrichment, generated Runtime entries, and lint facts.                                                    |
+| `@use-crux/upstash`    | Upstash Vector and Redis-backed storage adapters.                                                                                                          |
+| `@use-crux/otel`       | OpenTelemetry integration for production traces.                                                                                                           |
+| `@use-crux/ingest`     | Source loaders for text, files, folders, globs, and URLs.                                                                                                  |
+| `@use-crux/react`      | React provider, hooks, transports, and SSE helpers for live Crux state.                                                                                    |
+| `@use-crux/devtools`   | React devtools UI bundle for traces, evals, source catalog, memory, plans, and runtime inspection.                                                         |
+| `@use-crux/local`      | Native local runtime, CLI, TUI, HTTP/WS server, embedded devtools, eval runner, catalog, lint, and bounded helper workers.                                 |
 
 ## Project status
 

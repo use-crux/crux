@@ -32,7 +32,7 @@ export type CatalogCoverageTreatment =
   | "direct-activity"
   | "contributor"
   | "runtime-unjoined"
-  | "quality-primary"
+  | "eval-primary"
   | "no-runtime";
 
 /** The Catalog Observability section's read model for one definition. */
@@ -59,8 +59,8 @@ export interface CatalogCoverageState {
  *   not carry this authored definition's canonical id. Catalog reports the
  *   available primitive family without inventing a definition-level count or
  *   exposing a dead "View Runs" link.
- * - `quality-primary` — `quality-owned` kinds (correlates through the
- *   Quality↔observability join elsewhere on the page). When `secondary`
+ * - `eval-primary` — `eval-owned` kinds correlate through persisted Eval
+ *   evidence elsewhere on the page. When `secondary`
  *   declares `direct-runtime` (e.g. `scorer`), the activity rollup still
  *   surfaces genuine secondary runtime evidence (e.g. live `scoring.judge`
  *   spans) instead of silently dropping it.
@@ -82,11 +82,11 @@ export function describeCatalogCoverage(
     Boolean(coverage.secondary?.includes("direct-runtime"));
 
   if (
-    coverage.primary === "quality-owned" ||
-    coverage.secondary?.includes("quality-owned")
+    coverage.primary === "eval-owned" ||
+    coverage.secondary?.includes("eval-owned")
   ) {
     return {
-      treatment: "quality-primary",
+      treatment: "eval-primary",
       coverage,
       runCount: declaresDirectRuntime ? runCount : 0,
       hasRuntimeEvidence: declaresDirectRuntime && runCount > 0,

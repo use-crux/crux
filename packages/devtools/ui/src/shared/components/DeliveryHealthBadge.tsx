@@ -1,4 +1,4 @@
-import { Chip } from "@/qw/shell/primitives";
+import { Chip } from "@/devtools/shell/primitives";
 import { deliveryHealthTone } from "@/shared/lib/run-reliability";
 
 /** Shared tri-state delivery-health badge for Runs and Run Detail. */

@@ -1,9 +1,9 @@
 package commands
 
-// Shared branding for the non-quality "observe" commands (cost, index, lint,
+// Shared branding for the observability commands (cost, index, lint,
 // inspect, traces, flows). They render a "◇ crux <command>" mark and route every
 // styled span through output.IO so `--no-color`/non-TTY output stays byte-clean,
-// matching the look the Quality renderers established in Phase 2/4 (spec 03 §3).
+// matching the rest of the local CLI.
 
 import (
 	"github.com/use-crux/crux/packages/local/internal/output"

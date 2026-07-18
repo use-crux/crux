@@ -27,7 +27,7 @@ func registerInspectRoutes(mux *http.ServeMux, inspectSvc *inspect.Service) {
 		}
 		record, err := inspectSvc.DeleteRuns(r.Context(), req.TraceIDs)
 		if err != nil {
-			slog.Warn("quality runs delete failed", "error", err)
+			slog.Warn("Inspect runs delete failed", "error", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -42,7 +42,7 @@ func registerInspectRoutes(mux *http.ServeMux, inspectSvc *inspect.Service) {
 		traceID := r.PathValue("traceId")
 		record, err := inspectSvc.DeleteRuns(r.Context(), []string{traceID})
 		if err != nil {
-			slog.Warn("quality run delete failed", "error", err, "traceId", traceID)
+			slog.Warn("Inspect run delete failed", "error", err, "traceId", traceID)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}

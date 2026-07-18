@@ -7,24 +7,8 @@
  * @module
  */
 
-import { generate } from "@use-crux/ai";
-import { prompt } from "@use-crux/core";
 import { evaluate } from "@use-crux/core/eval";
-import { z } from "zod";
-import { supportModel } from "./models";
-
-const concisePrompt = prompt({
-  id: "examples.concise-support",
-  input: z.object({ question: z.string() }),
-  output: z.object({ answer: z.string() }),
-  system: "Answer support questions in one concise sentence.",
-  prompt: ({ input }) => input.question,
-});
-
-const conciseSupport = generate.task(concisePrompt, {
-  model: supportModel,
-  temperature: 0.2,
-});
+import { conciseSupport } from "../support";
 
 export default evaluate({
   id: "examples.concise-support",

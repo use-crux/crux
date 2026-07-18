@@ -1,4 +1,4 @@
-import { Chip } from "@/qw/shell/primitives";
+import { Chip } from "@/devtools/shell/primitives";
 import { AlertTriangleIcon, XCircleIcon, WrenchIcon } from "lucide-react";
 
 /** Props for a single validation retry attempt display. */
@@ -67,11 +67,11 @@ export function ValidationRetryAttemptRow({
   repairSucceeded,
 }: ValidationRetryAttemptProps) {
   return (
-    <div className="flex items-start gap-2 rounded-md border border-(--qw-warn-soft) bg-(--qw-warn-soft) p-2 text-sm">
-      <AlertTriangleIcon className="mt-0.5 h-4 w-4 shrink-0 text-(--qw-warn)" />
+    <div className="flex items-start gap-2 rounded-md border border-(--devtools-warn-soft) bg-(--devtools-warn-soft) p-2 text-sm">
+      <AlertTriangleIcon className="mt-0.5 h-4 w-4 shrink-0 text-(--devtools-warn)" />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className="font-medium text-(--qw-warn)">
+          <span className="font-medium text-(--devtools-warn)">
             Validation retry {attemptNumber}/{maxAttempts}
           </span>
           {repairAttempted && (
@@ -81,7 +81,7 @@ export function ValidationRetryAttemptRow({
             </Chip>
           )}
         </div>
-        <p className="mt-1 truncate text-xs text-(--qw-fg-muted)">{error}</p>
+        <p className="mt-1 truncate text-xs text-(--devtools-fg-muted)">{error}</p>
       </div>
     </div>
   );
@@ -98,20 +98,20 @@ export function ValidationRetryExhaustedRow({
   promptId: string;
 }) {
   return (
-    <div className="flex items-start gap-2 rounded-md border border-(--qw-danger-soft) bg-(--qw-danger-soft) p-2 text-sm">
-      <XCircleIcon className="mt-0.5 h-4 w-4 shrink-0 text-(--qw-danger)" />
+    <div className="flex items-start gap-2 rounded-md border border-(--devtools-danger-soft) bg-(--devtools-danger-soft) p-2 text-sm">
+      <XCircleIcon className="mt-0.5 h-4 w-4 shrink-0 text-(--devtools-danger)" />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className="font-medium text-(--qw-danger)">
+          <span className="font-medium text-(--devtools-danger)">
             Validation retries exhausted
           </span>
           <Chip tone="muted">{totalAttempts} attempts</Chip>
         </div>
-        <p className="mt-1 text-xs text-(--qw-fg-muted)">
+        <p className="mt-1 text-xs text-(--devtools-fg-muted)">
           Prompt:{" "}
-          <code className="rounded bg-(--qw-bg-muted) px-1">{promptId}</code>
+          <code className="rounded bg-(--devtools-bg-muted) px-1">{promptId}</code>
         </p>
-        <p className="mt-0.5 truncate text-xs text-(--qw-danger)">
+        <p className="mt-0.5 truncate text-xs text-(--devtools-danger)">
           {lastError}
         </p>
       </div>

@@ -8,21 +8,19 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { QwShell } from "@/qw/shell/QwShell";
-import { Btn } from "@/qw/shell/primitives";
-import { Icon } from "@/qw/shell/Icon";
-import { navTarget } from "@/app/navigation/navTarget";
-import { useToast } from "@/qw/shell/useToast";
+import { DevtoolsShell } from "@/devtools/shell/DevtoolsShell";
+import { Btn } from "@/devtools/shell/primitives";
+import { Icon } from "@/devtools/shell/Icon";
+import { useToast } from "@/devtools/shell/useToast";
 import { useNavigation } from "@/app/navigation/useNavigation";
 import { useDeleteRunsMutation } from "@/shared/hooks/inspect-mutations";
-import { useConnected } from "@/app/runtime/runtimeStore";
 import { RunsFilterBar } from "./RunsFilterBar";
-import { GroupByDropdown } from "@/qw/shell/FilterPopover";
-import { QwTooltip } from "@/qw/shell/QwTooltip";
+import { GroupByDropdown } from "@/devtools/shell/FilterPopover";
+import { DevtoolsTooltip } from "@/devtools/shell/DevtoolsTooltip";
 import { ColumnsButton } from "./ColumnsButton";
 import { BulkActionsBar } from "./BulkActionsBar";
 import { RunsTable } from "./RunsTable";
-import { SectionBoundary } from "@/qw/shell/SectionBoundary";
+import { SectionBoundary } from "@/devtools/shell/SectionBoundary";
 import { SkeletonRows } from "@/shared/components/Skeleton";
 import { useRuns } from "../hooks/useRuns";
 import { useRunSelection } from "../hooks/useRunSelection";
@@ -41,7 +39,6 @@ import {
 
 export function RunsView({ groupBy, filters }: RunsProps) {
   const { navigate } = useNavigation();
-  const connected = useConnected();
   const { toast } = useToast();
   const {
     allRows,
@@ -92,48 +89,10 @@ export function RunsView({ groupBy, filters }: RunsProps) {
   }
 
   return (
-    <QwShell
-      activeView="runs"
-      onNavigate={(v) => navigate(navTarget(v))}
+    <DevtoolsShell
       breadcrumb="Inspect / Runs"
       title="Runs"
       subtitle={`${counts.total.toLocaleString()} in window${counts.live > 0 ? " · live" : ""}`}
-      connected={connected}
-      actions={
-        <>
-          <QwTooltip content="Multi-select + suite picker · coming soon">
-            <Btn
-              icon={<Icon name="layers" size={13} />}
-              onClick={() =>
-                toast({
-                  kind: "info",
-                  title: "Bulk save to suite",
-                  message:
-                    'Multi-select + dataset picker is next — for now open a run and use "Save as case".',
-                })
-              }
-            >
-              Save to suite
-            </Btn>
-          </QwTooltip>
-          <QwTooltip content="Runs are captured automatically when your app calls generate() / stream()">
-            <Btn
-              variant="primary"
-              icon={<Icon name="play" size={13} />}
-              onClick={() =>
-                toast({
-                  kind: "info",
-                  title: "Trigger a run",
-                  message:
-                    "Runs are captured automatically when your app calls generate()/stream().",
-                })
-              }
-            >
-              New run
-            </Btn>
-          </QwTooltip>
-        </>
-      }
       tabs={[
         {
           label: "All",
@@ -178,7 +137,7 @@ export function RunsView({ groupBy, filters }: RunsProps) {
                 visible={visibleColumns}
                 onChange={setVisibleColumns}
               />
-              <QwTooltip content="Download the currently-filtered rows as JSON">
+              <DevtoolsTooltip content="Download the currently-filtered rows as JSON">
                 <Btn
                   size="xs"
                   icon={<Icon name="arrowDown" size={12} />}
@@ -202,7 +161,7 @@ export function RunsView({ groupBy, filters }: RunsProps) {
                 >
                   export
                 </Btn>
-              </QwTooltip>
+              </DevtoolsTooltip>
             </>
           }
         />
@@ -211,13 +170,16 @@ export function RunsView({ groupBy, filters }: RunsProps) {
       <div>
         {filters.definitionId && (
           <div
-            className="flex items-center gap-2 border-b border-(--qw-border) px-4 py-2 text-[11.5px]"
-            style={{ color: "var(--qw-fg-muted)" }}
+            className="flex items-center gap-2 border-b border-(--devtools-border) px-4 py-2 text-[11.5px]"
+            style={{ color: "var(--devtools-fg-muted)" }}
           >
-            <Icon name="link" size={12} color="var(--qw-fg-faint)" />
+            <Icon name="link" size={12} color="var(--devtools-fg-faint)" />
             <span>
               Filtered to definition{" "}
-              <span className="font-mono" style={{ color: "var(--qw-fg)" }}>
+              <span
+                className="font-mono"
+                style={{ color: "var(--devtools-fg)" }}
+              >
                 {filters.definitionId}
               </span>
             </span>
@@ -274,6 +236,6 @@ export function RunsView({ groupBy, filters }: RunsProps) {
           )}
         </SectionBoundary>
       </div>
-    </QwShell>
+    </DevtoolsShell>
   );
 }

@@ -28,8 +28,8 @@ function JsonTreeNode({ data, depth = 0, label }: JsonTreeProps): ReactNode {
 
   if (data === null || data === undefined) {
     return (
-      <span className="text-(--qw-fg-faint)">
-        {label && <span className="text-(--qw-fg-muted)">{label}: </span>}
+      <span className="text-(--devtools-fg-faint)">
+        {label && <span className="text-(--devtools-fg-muted)">{label}: </span>}
         <span className="italic">{String(data)}</span>
       </span>
     );
@@ -39,8 +39,8 @@ function JsonTreeNode({ data, depth = 0, label }: JsonTreeProps): ReactNode {
     const truncated = data.length > 200 ? data.slice(0, 200) + "..." : data;
     return (
       <span>
-        {label && <span className="text-(--qw-fg-muted)">{label}: </span>}
-        <span className="text-(--qw-ok)">"{truncated}"</span>
+        {label && <span className="text-(--devtools-fg-muted)">{label}: </span>}
+        <span className="text-(--devtools-ok)">"{truncated}"</span>
       </span>
     );
   }
@@ -48,8 +48,8 @@ function JsonTreeNode({ data, depth = 0, label }: JsonTreeProps): ReactNode {
   if (typeof data === "number" || typeof data === "boolean") {
     return (
       <span>
-        {label && <span className="text-(--qw-fg-muted)">{label}: </span>}
-        <span className="text-(--qw-warn)">{String(data)}</span>
+        {label && <span className="text-(--devtools-fg-muted)">{label}: </span>}
+        <span className="text-(--devtools-warn)">{String(data)}</span>
       </span>
     );
   }
@@ -58,8 +58,8 @@ function JsonTreeNode({ data, depth = 0, label }: JsonTreeProps): ReactNode {
     if (data.length === 0) {
       return (
         <span>
-          {label && <span className="text-(--qw-fg-muted)">{label}: </span>}
-          <span className="text-(--qw-fg-faint)">[]</span>
+          {label && <span className="text-(--devtools-fg-muted)">{label}: </span>}
+          <span className="text-(--devtools-fg-faint)">[]</span>
         </span>
       );
     }
@@ -68,7 +68,7 @@ function JsonTreeNode({ data, depth = 0, label }: JsonTreeProps): ReactNode {
       <div style={{ paddingLeft: depth > 0 ? 16 : 0 }}>
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="text-(--qw-fg-muted) hover:text-(--qw-fg) text-left"
+          className="text-(--devtools-fg-muted) hover:text-(--devtools-fg) text-left"
         >
           {label && <span>{label}: </span>}
           <span>{collapsed ? `[...] (${data.length})` : "["}</span>
@@ -79,11 +79,11 @@ function JsonTreeNode({ data, depth = 0, label }: JsonTreeProps): ReactNode {
               <div key={i} className="pl-4">
                 <JsonTree data={item} depth={depth + 1} label={String(i)} />
                 {i < data.length - 1 && (
-                  <span className="text-(--qw-fg-faint)">,</span>
+                  <span className="text-(--devtools-fg-faint)">,</span>
                 )}
               </div>
             ))}
-            <span className="text-(--qw-fg-muted)">]</span>
+            <span className="text-(--devtools-fg-muted)">]</span>
           </>
         )}
       </div>
@@ -98,8 +98,8 @@ function JsonTreeNode({ data, depth = 0, label }: JsonTreeProps): ReactNode {
     if (entries.length === 0) {
       return (
         <span>
-          {label && <span className="text-(--qw-fg-muted)">{label}: </span>}
-          <span className="text-(--qw-fg-faint)">{"{}"}</span>
+          {label && <span className="text-(--devtools-fg-muted)">{label}: </span>}
+          <span className="text-(--devtools-fg-faint)">{"{}"}</span>
         </span>
       );
     }
@@ -108,7 +108,7 @@ function JsonTreeNode({ data, depth = 0, label }: JsonTreeProps): ReactNode {
       <div style={{ paddingLeft: depth > 0 ? 16 : 0 }}>
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="text-(--qw-fg-muted) hover:text-(--qw-fg) text-left"
+          className="text-(--devtools-fg-muted) hover:text-(--devtools-fg) text-left"
         >
           {label && <span>{label}: </span>}
           <span>{collapsed ? `{...} (${entries.length})` : "{"}</span>
@@ -119,16 +119,16 @@ function JsonTreeNode({ data, depth = 0, label }: JsonTreeProps): ReactNode {
               <div key={key} className="pl-4">
                 <JsonTree data={value} depth={depth + 1} label={key} />
                 {i < entries.length - 1 && (
-                  <span className="text-(--qw-fg-faint)">,</span>
+                  <span className="text-(--devtools-fg-faint)">,</span>
                 )}
               </div>
             ))}
-            <span className="text-(--qw-fg-muted)">{"}"}</span>
+            <span className="text-(--devtools-fg-muted)">{"}"}</span>
           </>
         )}
       </div>
     );
   }
 
-  return <span className="text-(--qw-fg-faint)">{String(data)}</span>;
+  return <span className="text-(--devtools-fg-faint)">{String(data)}</span>;
 }

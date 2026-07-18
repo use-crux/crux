@@ -5,6 +5,7 @@ import (
 
 	"github.com/use-crux/crux/packages/local/internal/devtools"
 	"github.com/use-crux/crux/packages/local/internal/evalfs"
+	"github.com/use-crux/crux/packages/local/internal/evalrunner"
 	"github.com/use-crux/crux/packages/local/internal/evalwriter"
 	"github.com/use-crux/crux/packages/local/internal/inspect"
 	"github.com/use-crux/crux/packages/local/internal/observability"
@@ -32,21 +33,23 @@ type SourceResolverOptions struct {
 // Options contains the services and assets needed to mount Crux Local HTTP
 // routes. It intentionally has no listener, port, or shutdown ownership.
 type Options struct {
-	Devtools           *devtools.Service
-	Inspect            *inspect.Service
-	Observability      *observability.Service
-	Review             *review.Service
-	ReviewWriter       review.RepositoryWriter
-	BaselineWriter     evalwriter.BaselineWriter
-	EvalCatalog        endpoints.EvalCatalogReads
-	RuntimeBridge      *runtimebridge.Service
-	ResourceInspection *resourceinspection.Service
-	Hub                Hub
-	ProjectRoot        string
-	ConfigPath         string
-	SourceResolver     SourceResolverOptions
-	UI                 http.Handler
-	OriginAllowed      func(*http.Request) bool
+	Devtools                 *devtools.Service
+	Inspect                  *inspect.Service
+	Observability            *observability.Service
+	Review                   *review.Service
+	ReviewWriter             review.RepositoryWriter
+	ReviewRepositoryWritable bool
+	BaselineWriter           evalwriter.BaselineWriter
+	EvalRunner               evalrunner.Runner
+	EvalCatalog              endpoints.EvalCatalogReads
+	RuntimeBridge            *runtimebridge.Service
+	ResourceInspection       *resourceinspection.Service
+	Hub                      Hub
+	ProjectRoot              string
+	ConfigPath               string
+	SourceResolver           SourceResolverOptions
+	UI                       http.Handler
+	OriginAllowed            func(*http.Request) bool
 }
 
 // New mounts the local runtime HTTP API and UI routes. Server lifecycle code
@@ -83,8 +86,8 @@ func New(options Options) http.Handler {
 	registerResourceRoutes(mux, resourceInspection)
 	registerObservabilityRoutesWithReview(mux, options.Observability, inspectEvents(options.Inspect), options.Devtools, options.Review)
 	registerFeedbackRoutes(mux, options.Review, options.Observability)
-	registerReviewRoutes(mux, options.Review, options.ReviewWriter)
-	registerEvalRoutes(mux, options.BaselineWriter)
+	registerReviewRoutes(mux, options.Review, options.ReviewWriter, options.ReviewRepositoryWritable)
+	registerEvalRoutes(mux, options.BaselineWriter, options.EvalRunner)
 	registerIndexRoutes(mux, options.Devtools)
 	registerRuntimeRoutes(mux, options.Devtools, options.ProjectRoot)
 

@@ -10,10 +10,10 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/readmodel/endpoints"
 )
 
-// Typed accessors over the in-process quality + devtools services.
+// Typed accessors over the in-process Inspect and devtools services.
 // These avoid the path-string dispatch in GetJSON and return strongly typed
 // records from `internal/api`. Internally they JSON-roundtrip the unexported
-// quality records into the exported api types so the TUI can depend only on
+// Inspect records into the exported api types so the TUI can depend only on
 // `internal/api` without importing `internal/inspect`.
 
 func (c *DirectClient) Overview(ctx context.Context) (api.InspectOverviewRecord, error) {

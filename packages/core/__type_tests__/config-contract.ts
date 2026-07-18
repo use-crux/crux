@@ -20,10 +20,6 @@ const plugin = {
 } satisfies CruxPlugin
 
 const launchConfig = {
-  quality: {
-    include: ['evals/**/*.eval.ts', '**/*.eval.ts'],
-    defaults: { replay: 'record-new' },
-  },
   lint: {
     profile: 'recommended',
   },

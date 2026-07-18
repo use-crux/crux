@@ -20,7 +20,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { qk } from "@/shared/query/queryClient";
 import { expectOk, postJson } from "@/shared/services/http";
-import { useToast } from "@/qw/shell/useToast";
+import { useToast } from "@/devtools/shell/useToast";
 import type { InspectInsightRecord } from "@/types";
 
 interface MutationResult {

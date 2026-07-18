@@ -26,20 +26,20 @@ export function ReadoutBand({
     <div
       className="mb-5 rounded-[12px] px-[18px] py-4"
       style={{
-        background: "var(--qw-bg-elev)",
-        border: "1px solid var(--qw-border)",
+        background: "var(--devtools-bg-elev)",
+        border: "1px solid var(--devtools-border)",
       }}
     >
       <div className="mb-2.5 flex items-baseline gap-2.5">
         <span
           className="font-mono text-[10.5px] uppercase tracking-[0.16em]"
-          style={{ color: "var(--qw-crux)" }}
+          style={{ color: "var(--devtools-crux)" }}
         >
           Turn explanation
         </span>
         <span
           className="text-[12.5px] italic"
-          style={{ fontFamily: "var(--qw-serif)", color: "var(--qw-fg-muted)" }}
+          style={{ fontFamily: "var(--devtools-serif)", color: "var(--devtools-fg-muted)" }}
         >
           Evidence for what shaped this model call.
         </span>
@@ -48,8 +48,8 @@ export function ReadoutBand({
         <p
           className="m-0 mb-3.5 text-[15px] leading-[1.5]"
           style={{
-            fontFamily: "var(--qw-serif)",
-            color: "var(--qw-fg)",
+            fontFamily: "var(--devtools-serif)",
+            color: "var(--devtools-fg)",
             maxWidth: 760,
           }}
         >

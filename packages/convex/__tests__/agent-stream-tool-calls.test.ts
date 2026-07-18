@@ -32,7 +32,7 @@ describe('agent stream tool calls', () => {
       return {} as never
     } as never)
     const agent = new Agent({} as any, {
-      name: 'Karyla',
+      name: 'Support Agent',
       languageModel: {} as any,
       tools: {},
     })
@@ -95,7 +95,7 @@ describe('agent stream tool calls', () => {
       return {} as never
     } as never)
     const agent = new Agent({} as never, {
-      name: 'Karyla',
+      name: 'Support Agent',
       languageModel: {} as never,
       tools: {},
     })
@@ -142,7 +142,7 @@ describe('agent stream tool calls', () => {
       } as never
     } as never)
     const agent = new Agent({} as any, {
-      name: 'Karyla',
+      name: 'Support Agent',
       languageModel: {} as any,
       tools: {},
     })

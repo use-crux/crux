@@ -14,7 +14,7 @@ import (
 // SpanSummary like Model/ToolName/FlowID, metrics with inputTokens/
 // outputTokens, attached artifacts for args/result/hits) through the
 // FULL TUI projection path: ObservabilityRunDetail →
-// qualityRunDetailFromObservabilityDetail → renderSpanDetail.
+// inspectRunDetailFromObservabilityDetail → renderSpanDetail.
 //
 // The unit tests in runs_span_detail_test.go bypass the projector and
 // hand a synthetic Data blob straight to the renderer — they pass even
@@ -177,7 +177,7 @@ func TestRealShapeProjectionSurfacesPerPrimitiveFields(t *testing.T) {
 				},
 				Root: tc.node,
 			}
-			projected := qualityRunDetailFromObservabilityDetail(detail)
+			projected := inspectRunDetailFromObservabilityDetail(detail)
 			if len(projected.Spans) == 0 {
 				t.Fatalf("projection produced no spans")
 			}

@@ -4,11 +4,11 @@
  * Index is the v2 master–detail browser (`features/index/v2`): a finder
  * rail grouped along six axes + a full-width per-kind detail view, plus an
  * architecture-graph overlay. It is driven entirely by the `/api/index`
- * read model (definitions / relations / metadata.* / sourceRefs / quality /
+ * read model (definitions / relations / metadata.* / sourceRefs /
  * lintFindings), adapted once via `buildIndex`.
  *
  * Memory / Workspaces / Plans are Library v2 screens that wrap themselves in
- * QwShell — this file just forwards the deep-link params from navigation.
+ * DevtoolsShell — this file just forwards the deep-link params from navigation.
  *
  * Lint findings ship in two surfaces:
  *   1. In-context Health section on the def detail page (Index v2).
@@ -18,11 +18,13 @@
  */
 
 import { useMemo, useState } from "react";
-import { QwShell, type QwTab } from "@/qw/shell/QwShell";
-import { SectionBoundary } from "@/qw/shell/SectionBoundary";
+import {
+  DevtoolsShell,
+  type DevtoolsTab,
+} from "@/devtools/shell/DevtoolsShell";
+import { SectionBoundary } from "@/devtools/shell/SectionBoundary";
 import { SkeletonSplit } from "@/shared/components/Skeleton";
 import { qk } from "@/shared/query/queryClient";
-import { navTarget } from "@/app/navigation/navTarget";
 import { useNavigation } from "@/app/navigation/useNavigation";
 import {
   useIndexSuspense,
@@ -82,7 +84,7 @@ export function IndexView({
   const [graphOpen, setGraphOpen] = useState(false);
 
   // Index | Health tab strip — matches the Library sibling screens.
-  const indexTabs: QwTab[] = [
+  const indexTabs: DevtoolsTab[] = [
     {
       label: "Index",
       iconName: "book",
@@ -113,7 +115,7 @@ export function IndexView({
 
   const subtitle = (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
-      <span style={{ fontFamily: "var(--qw-mono)", fontSize: 12.5 }}>
+      <span style={{ fontFamily: "var(--devtools-mono)", fontSize: 12.5 }}>
         {definitions.length} definition{definitions.length === 1 ? "" : "s"} ·{" "}
         {relations.length} relation
         {relations.length === 1 ? "" : "s"}
@@ -124,13 +126,10 @@ export function IndexView({
   );
 
   return (
-    <QwShell
-      activeView="library-index"
-      onNavigate={(v) => navigate(navTarget(v))}
+    <DevtoolsShell
       breadcrumb="Library / Index"
       title="Index"
       subtitle={subtitle}
-      connected={connected}
       noScroll
       tabs={indexTabs}
       actions={
@@ -169,10 +168,11 @@ export function IndexView({
             onSelect={setSelected}
             graphOpen={graphOpen}
             onGraphClose={() => setGraphOpen(false)}
+            onOpenEval={(evalId) => navigate({ view: "evals", evalId })}
           />
         </IndexIndexProvider>
       </SectionBoundary>
-    </QwShell>
+    </DevtoolsShell>
   );
 }
 

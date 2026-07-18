@@ -1,6 +1,6 @@
-import { Chip, SectionHead } from "@/qw/shell/primitives";
-import { Icon } from "@/qw/shell/Icon";
-import type { IconName } from "@/qw/shell/nav";
+import { Chip, SectionHead } from "@/devtools/shell/primitives";
+import { Icon } from "@/devtools/shell/Icon";
+import type { IconName } from "@/devtools/shell/nav";
 import {
   fmtCount,
   fmtTime,
@@ -30,7 +30,7 @@ export function SpotlightWorking({
     return (
       <SpotlightPlaceholder
         icon="brain"
-        color="var(--qw-crux)"
+        color="var(--devtools-crux)"
         title="Current state"
         message="No working memory store observed yet."
       />
@@ -42,8 +42,8 @@ export function SpotlightWorking({
     <div
       className="overflow-hidden rounded-[10px]"
       style={{
-        background: "var(--qw-bg-elev)",
-        border: "1px solid var(--qw-crux-line)",
+        background: "var(--devtools-bg-elev)",
+        border: "1px solid var(--devtools-crux-line)",
       }}
     >
       <button
@@ -51,14 +51,14 @@ export function SpotlightWorking({
         onClick={() => onOpen(store.id)}
         className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left transition-opacity hover:opacity-95"
         style={{
-          borderBottom: "1px solid var(--qw-border)",
-          background: "var(--qw-crux-soft)",
+          borderBottom: "1px solid var(--devtools-border)",
+          background: "var(--devtools-crux-soft)",
         }}
       >
         <Icon
           name="brain"
           size={14}
-          color="var(--qw-crux)"
+          color="var(--devtools-crux)"
           className="shrink-0"
         />
         <span className="shrink-0 text-[13px] font-semibold">
@@ -66,7 +66,7 @@ export function SpotlightWorking({
         </span>
         <span
           className="min-w-0 truncate font-mono text-[12px]"
-          style={{ color: "var(--qw-crux)" }}
+          style={{ color: "var(--devtools-crux)" }}
           title={store.id}
         >
           {store.id}
@@ -76,7 +76,7 @@ export function SpotlightWorking({
         </Chip>
         <span
           className="ml-auto shrink-0 font-mono text-[11px]"
-          style={{ color: "var(--qw-fg-faint)" }}
+          style={{ color: "var(--devtools-fg-faint)" }}
         >
           {fields.length} field{fields.length === 1 ? "" : "s"}
         </span>
@@ -109,7 +109,7 @@ export function SpotlightEpisodic({
     return (
       <SpotlightPlaceholder
         icon="book"
-        color="var(--qw-iris)"
+        color="var(--devtools-iris)"
         title="Stored entries"
         message="No episodic memory store observed yet."
       />
@@ -121,8 +121,8 @@ export function SpotlightEpisodic({
     <div
       className="overflow-hidden rounded-[10px]"
       style={{
-        background: "var(--qw-bg-elev)",
-        border: "1px solid var(--qw-border)",
+        background: "var(--devtools-bg-elev)",
+        border: "1px solid var(--devtools-border)",
       }}
     >
       <button
@@ -130,14 +130,14 @@ export function SpotlightEpisodic({
         onClick={() => onOpen(store.id)}
         className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left transition-opacity hover:opacity-95"
         style={{
-          borderBottom: "1px solid var(--qw-border)",
-          background: "var(--qw-bg-muted)",
+          borderBottom: "1px solid var(--devtools-border)",
+          background: "var(--devtools-bg-muted)",
         }}
       >
         <Icon
           name="book"
           size={14}
-          color="var(--qw-iris)"
+          color="var(--devtools-iris)"
           className="shrink-0"
         />
         <span className="shrink-0 text-[13px] font-semibold">
@@ -145,7 +145,7 @@ export function SpotlightEpisodic({
         </span>
         <span
           className="min-w-0 truncate font-mono text-[12px]"
-          style={{ color: "var(--qw-crux)" }}
+          style={{ color: "var(--devtools-crux)" }}
           title={store.id}
         >
           {store.id}
@@ -155,7 +155,7 @@ export function SpotlightEpisodic({
         </Chip>
         <span
           className="ml-auto shrink-0 font-mono text-[11px]"
-          style={{ color: "var(--qw-fg-faint)" }}
+          style={{ color: "var(--devtools-fg-faint)" }}
         >
           {preview.length} of {entries.length}
         </span>
@@ -171,13 +171,13 @@ export function SpotlightEpisodic({
               borderBottom:
                 i === preview.length - 1
                   ? "none"
-                  : "1px solid var(--qw-border)",
+                  : "1px solid var(--devtools-border)",
             }}
           >
             <div className="mb-1 flex flex-wrap items-center gap-2">
               <span
                 className="font-mono text-[11px]"
-                style={{ color: "var(--qw-fg-faint)" }}
+                style={{ color: "var(--devtools-fg-faint)" }}
               >
                 {fmtTime(e.timestamp) ?? "—"}
               </span>
@@ -185,7 +185,7 @@ export function SpotlightEpisodic({
                 <>
                   <span
                     className="font-mono text-[10.5px]"
-                    style={{ color: "var(--qw-fg-muted)" }}
+                    style={{ color: "var(--devtools-fg-muted)" }}
                   >
                     ·
                   </span>
@@ -200,7 +200,7 @@ export function SpotlightEpisodic({
             </div>
             <div
               className="text-[13px] leading-[1.5]"
-              style={{ fontFamily: "var(--qw-serif, Georgia, serif)" }}
+              style={{ fontFamily: "var(--devtools-serif, Georgia, serif)" }}
             >
               {e.content}
             </div>
@@ -226,15 +226,15 @@ function SpotlightPlaceholder({
     <div
       className="overflow-hidden rounded-[10px]"
       style={{
-        background: "var(--qw-bg-elev)",
-        border: "1px dashed var(--qw-border)",
+        background: "var(--devtools-bg-elev)",
+        border: "1px dashed var(--devtools-border)",
       }}
     >
       <div
         className="flex items-center gap-2 px-4 py-2.5"
         style={{
-          borderBottom: "1px solid var(--qw-border)",
-          background: "var(--qw-bg-muted)",
+          borderBottom: "1px solid var(--devtools-border)",
+          background: "var(--devtools-bg-muted)",
         }}
       >
         <Icon name={icon} size={14} color={color} />
@@ -242,7 +242,7 @@ function SpotlightPlaceholder({
       </div>
       <div
         className="px-4 py-6 text-center text-[12px]"
-        style={{ color: "var(--qw-fg-muted)" }}
+        style={{ color: "var(--devtools-fg-muted)" }}
       >
         {message}
       </div>
@@ -265,7 +265,7 @@ export function OperationHistoryTable({
         right={
           <span
             className="font-mono text-[11px]"
-            style={{ color: "var(--qw-fg-faint)" }}
+            style={{ color: "var(--devtools-fg-faint)" }}
           >
             all stores · last {operations.length}
           </span>
@@ -274,8 +274,8 @@ export function OperationHistoryTable({
       <div
         className="overflow-hidden rounded-[10px]"
         style={{
-          background: "var(--qw-bg-elev)",
-          border: "1px solid var(--qw-border)",
+          background: "var(--devtools-bg-elev)",
+          border: "1px solid var(--devtools-border)",
         }}
       >
         <TableHeader
@@ -297,7 +297,7 @@ export function OperationHistoryTable({
               key={o.eventId}
               type="button"
               onClick={() => onOpen(o.storeId)}
-              className="grid w-full items-center gap-2.5 px-4 py-2 text-left font-mono text-[11.5px] transition-colors hover:bg-(--qw-bg-muted)"
+              className="grid w-full items-center gap-2.5 px-4 py-2 text-left font-mono text-[11.5px] transition-colors hover:bg-(--devtools-bg-muted)"
               style={{
                 gridTemplateColumns: [
                   "70px",
@@ -312,10 +312,10 @@ export function OperationHistoryTable({
                 borderBottom:
                   i === operations.length - 1
                     ? "none"
-                    : "1px solid var(--qw-border)",
+                    : "1px solid var(--devtools-border)",
               }}
             >
-              <span style={{ color: "var(--qw-fg-faint)" }}>
+              <span style={{ color: "var(--devtools-fg-faint)" }}>
                 {fmtTime(o.timestamp)}
               </span>
               <LDOpPill op={o.op} />
@@ -328,14 +328,14 @@ export function OperationHistoryTable({
               </span>
               <span
                 className="truncate"
-                style={{ color: "var(--qw-fg)" }}
+                style={{ color: "var(--devtools-fg)" }}
                 title={o.key}
               >
                 {o.key}
               </span>
               <span
                 className="truncate"
-                style={{ color: "var(--qw-fg-muted)" }}
+                style={{ color: "var(--devtools-fg-muted)" }}
                 title={o.value}
               >
                 {o.value}
@@ -343,7 +343,7 @@ export function OperationHistoryTable({
               {hasTrace && (
                 <span
                   className="text-right"
-                  style={{ color: "var(--qw-crux)" }}
+                  style={{ color: "var(--devtools-crux)" }}
                 >
                   {shortTrace(o.traceId) ?? "—"}
                 </span>
@@ -375,10 +375,10 @@ export function StoreCard({
       onClick={onOpen}
       onMouseEnter={onHover}
       onFocus={onHover}
-      className="flex flex-col gap-2.5 rounded-[10px] border px-4 py-3.5 text-left transition-colors hover:border-(--qw-crux-line)"
+      className="flex flex-col gap-2.5 rounded-[10px] border px-4 py-3.5 text-left transition-colors hover:border-(--devtools-crux-line)"
       style={{
-        background: "var(--qw-bg-elev)",
-        borderColor: "var(--qw-border)",
+        background: "var(--devtools-bg-elev)",
+        borderColor: "var(--devtools-border)",
       }}
     >
       <div className="flex min-w-0 items-center gap-2">
@@ -398,7 +398,7 @@ export function StoreCard({
         {lastAt && (
           <span
             className="ml-auto shrink-0 font-mono text-[11px]"
-            style={{ color: "var(--qw-fg-faint)" }}
+            style={{ color: "var(--devtools-fg-faint)" }}
           >
             last · {lastAt}
           </span>
@@ -412,17 +412,17 @@ export function StoreCard({
           <Stat
             label="Conflicts"
             value={store.stats.conflicts}
-            color="var(--qw-warn)"
+            color="var(--devtools-warn)"
           />
         )}
         <div className="flex-1" />
         {store.lastTraceId && (
           <span
             className="font-mono text-[11px]"
-            style={{ color: "var(--qw-fg-muted)" }}
+            style={{ color: "var(--devtools-fg-muted)" }}
           >
             run ·{" "}
-            <span style={{ color: "var(--qw-crux)" }}>
+            <span style={{ color: "var(--devtools-crux)" }}>
               {shortTrace(store.lastTraceId)}
             </span>
           </span>
@@ -431,7 +431,7 @@ export function StoreCard({
       {store.label && store.label !== store.id && (
         <div
           className="font-mono text-[11px]"
-          style={{ color: "var(--qw-fg-faint)" }}
+          style={{ color: "var(--devtools-fg-faint)" }}
         >
           {store.label}
         </div>

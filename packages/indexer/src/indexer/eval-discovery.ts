@@ -9,7 +9,8 @@ import {
   definitionFromAuthoredEval,
   type DiscoveredAuthoredEval,
   isAuthoredEval,
-} from "./evaluations";
+  requiredHostCapabilitiesFromAuthoredEval,
+} from "./evals";
 import { codeFilesFromGlobs } from "./files";
 import { importUserModule, withCruxIndexMode } from "./imports";
 import { sourceStatus } from "./sources";
@@ -51,6 +52,7 @@ export async function discoverRuntimeEvalDefinitions(
           moduleResult.file,
           "default",
           authoredEvals[0]![1],
+          requiredHostCapabilitiesFromAuthoredEval(authoredEvals[0]![1]),
         ),
       );
     }

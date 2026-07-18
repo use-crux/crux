@@ -16,7 +16,7 @@ export function BlackboardDiff({
       {fieldsChanged.map((field) => {
         if (field === "*") {
           return (
-            <div key={field} className="text-[10px] text-(--qw-danger) italic">
+            <div key={field} className="text-[10px] text-(--devtools-danger) italic">
               Board cleared
             </div>
           );
@@ -31,16 +31,16 @@ export function BlackboardDiff({
 
         return (
           <div key={field} className="flex items-start gap-2 text-[10px]">
-            <span className="text-(--qw-fg-muted) font-medium shrink-0">
+            <span className="text-(--devtools-fg-muted) font-medium shrink-0">
               {field}:
             </span>
             <div className="min-w-0">
               {oldVal !== undefined && (
-                <div className="text-(--qw-danger) line-through truncate">
+                <div className="text-(--devtools-danger) line-through truncate">
                   {oldStr}
                 </div>
               )}
-              <div className="text-(--qw-ok) truncate">{newStr}</div>
+              <div className="text-(--devtools-ok) truncate">{newStr}</div>
             </div>
           </div>
         );

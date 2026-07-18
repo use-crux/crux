@@ -431,79 +431,6 @@ type SessionInfo struct {
 }
 
 // ----------------------------------------------------------------
-// Flow types — for eval flows (not runtime flows).
-// ----------------------------------------------------------------
-
-// FlowStepWireData holds performance data for one step in a flow eval.
-type FlowStepWireData struct {
-	ID           string         `json:"id"`
-	ModelID      string         `json:"modelId"`
-	DurationMs   float64        `json:"durationMs"`
-	InputTokens  int            `json:"inputTokens"`
-	OutputTokens int            `json:"outputTokens"`
-	TotalTokens  int            `json:"totalTokens"`
-	Cost         float64        `json:"cost"`
-	Skipped      bool           `json:"skipped"`
-	ToolCalls    []FlowToolCall `json:"toolCalls"`
-	Input        any            `json:"input,omitempty"`
-	Output       any            `json:"output,omitempty"`
-	Text         string         `json:"text,omitempty"`
-	Turns        []FlowTurn     `json:"turns,omitempty"`
-}
-
-// FlowToolCall represents a tool call within a flow step.
-type FlowToolCall struct {
-	Name   string `json:"name"`
-	Args   any    `json:"args,omitempty"`
-	Result any    `json:"result,omitempty"`
-}
-
-// FlowTurn represents a conversational turn within a flow step.
-type FlowTurn struct {
-	UserMessage  string         `json:"userMessage"`
-	Response     string         `json:"response"`
-	ToolCalls    []FlowToolCall `json:"toolCalls"`
-	DurationMs   float64        `json:"durationMs"`
-	InputTokens  int            `json:"inputTokens"`
-	OutputTokens int            `json:"outputTokens"`
-}
-
-// FlowCaseData holds the result of one case in a flow eval.
-type FlowCaseData struct {
-	CaseName     string           `json:"caseName"`
-	ConfigName   string           `json:"configName"`
-	Passed       bool             `json:"passed"`
-	DurationMs   float64          `json:"durationMs"`
-	Error        string           `json:"error,omitempty"`
-	TraceSummary FlowTraceSummary `json:"traceSummary"`
-}
-
-// FlowTraceSummary holds aggregate trace data for a flow case.
-type FlowTraceSummary struct {
-	StepCount     int                `json:"stepCount"`
-	ToolCallNames []string           `json:"toolCallNames"`
-	TotalTokens   int                `json:"totalTokens"`
-	TotalCost     float64            `json:"totalCost"`
-	Steps         []FlowStepWireData `json:"steps,omitempty"`
-}
-
-// FlowRun represents a flow evaluation run.
-type FlowRun struct {
-	FlowID         string          `json:"flowId"`
-	Name           string          `json:"name"`
-	Description    string          `json:"description,omitempty"`
-	StartedAt      int64           `json:"startedAt"`
-	StepIDs        []string        `json:"stepIds"`
-	ConfigNames    []string        `json:"configNames"`
-	CaseNames      []string        `json:"caseNames"`
-	TotalCases     int             `json:"totalCases"`
-	CompletedCases []FlowCaseData  `json:"completedCases"`
-	Status         string          `json:"status"` // "running" | "completed"
-	DurationMs     *float64        `json:"durationMs,omitempty"`
-	Summary        json.RawMessage `json:"summary,omitempty"`
-}
-
-// ----------------------------------------------------------------
 // Runtime flow types — extended from api.RuntimeFlowRun.
 // ----------------------------------------------------------------
 
@@ -591,80 +518,6 @@ type RuntimeFlowAggregate struct {
 	TotalSteps  int      `json:"totalSteps"`
 	TotalTokens *int     `json:"totalTokens,omitempty"`
 	TotalCost   *float64 `json:"totalCost,omitempty"`
-}
-
-// ----------------------------------------------------------------
-// Eval types — the store's authoritative eval representation.
-// ----------------------------------------------------------------
-
-// EvalCaseData holds the result of a single eval case execution.
-type EvalCaseData struct {
-	CaseName        string                 `json:"caseName"`
-	ModelID         string                 `json:"modelId"`
-	Passed          bool                   `json:"passed"`
-	DurationMs      float64                `json:"durationMs"`
-	Error           string                 `json:"error,omitempty"`
-	Usage           json.RawMessage        `json:"usage,omitempty"`
-	Cost            *float64               `json:"cost,omitempty"`
-	TraceID         string                 `json:"traceId,omitempty"`
-	Input           any                    `json:"input,omitempty"`
-	Output          any                    `json:"output,omitempty"`
-	Scores          map[string]ScoreResult `json:"scores,omitempty"`
-	FailureCategory string                 `json:"failureCategory,omitempty"`
-}
-
-// ScoreResult holds a numeric score and optional reasoning from a judge eval.
-type ScoreResult struct {
-	Score     float64 `json:"score"`
-	Reasoning string  `json:"reasoning,omitempty"`
-}
-
-// EvalRun represents a complete eval run with its cases and summary.
-type EvalRun struct {
-	EvalID         string          `json:"evalId"`
-	PromptID       *string         `json:"promptId"`
-	StartedAt      int64           `json:"startedAt"`
-	Models         []string        `json:"models"`
-	CaseNames      []string        `json:"caseNames"`
-	TotalCases     int             `json:"totalCases"`
-	CompletedCases []EvalCaseData  `json:"completedCases"`
-	Status         string          `json:"status"` // "running" | "completed"
-	DurationMs     *float64        `json:"durationMs,omitempty"`
-	Summary        json.RawMessage `json:"summary,omitempty"`
-}
-
-// ----------------------------------------------------------------
-// RAG eval types — stored separately from prompt evals because a case can
-// contain retrieval, answer, citation, and comparison-specific previews.
-// ----------------------------------------------------------------
-
-// RagEvalCaseData holds the bounded preview data for one RAG eval case.
-type RagEvalCaseData struct {
-	CaseID       string          `json:"caseId"`
-	CaseName     string          `json:"caseName"`
-	Status       string          `json:"status"`
-	ConfigRole   string          `json:"configRole,omitempty"`
-	ConfigLabel  string          `json:"configLabel,omitempty"`
-	FailureTypes []string        `json:"failureTypes"`
-	DurationMs   float64         `json:"durationMs"`
-	Metrics      json.RawMessage `json:"metrics,omitempty"`
-	Retrieval    json.RawMessage `json:"retrieval,omitempty"`
-	Answer       json.RawMessage `json:"answer,omitempty"`
-	Citations    json.RawMessage `json:"citations,omitempty"`
-	Trace        json.RawMessage `json:"trace,omitempty"`
-	Error        string          `json:"error,omitempty"`
-}
-
-// RagEvalRun represents a complete RAG eval run with its bounded case previews.
-type RagEvalRun struct {
-	EvalID         string            `json:"evalId"`
-	SuiteID        string            `json:"suiteId,omitempty"`
-	StartedAt      int64             `json:"startedAt"`
-	CaseCount      int               `json:"caseCount"`
-	ConfigLabels   []string          `json:"configLabels,omitempty"`
-	CompletedCases []RagEvalCaseData `json:"completedCases"`
-	Status         string            `json:"status"` // "running" | "completed" | "error"
-	Summary        json.RawMessage   `json:"summary,omitempty"`
 }
 
 // ----------------------------------------------------------------
@@ -817,24 +670,6 @@ type ProjectDefinition struct {
 	Status        string             `json:"status,omitempty"`
 	Fingerprint   string             `json:"fingerprint,omitempty"`
 	Metadata      json.RawMessage    `json:"metadata,omitempty"`
-	Quality       *IndexQuality      `json:"quality,omitempty"`
-}
-
-// IndexQuality links authored definitions to eval, suite, and run quality state.
-type IndexQuality struct {
-	EvalIDs           []string `json:"evalIds,omitempty"`
-	SuiteIDs          []string `json:"suiteIds,omitempty"`
-	RunIDs            []string `json:"runIds,omitempty"`
-	TraceIDs          []string `json:"traceIds,omitempty"`
-	RunCount          int      `json:"runCount,omitempty"`
-	CompletedRunCount int      `json:"completedRunCount,omitempty"`
-	FailedRunCount    int      `json:"failedRunCount,omitempty"`
-	RunningRunCount   int      `json:"runningRunCount,omitempty"`
-	LastRunID         string   `json:"lastRunId,omitempty"`
-	LastRunAt         int64    `json:"lastRunAt,omitempty"`
-	LastStatus        string   `json:"lastStatus,omitempty"`
-	CaseCount         int      `json:"caseCount,omitempty"`
-	PassRate          *float64 `json:"passRate,omitempty"`
 }
 
 // ProjectRelation describes graph edges between authored Crux definitions.
@@ -1047,9 +882,6 @@ type StatsResult struct {
 	RetrievalStageErrorCount int                        `json:"retrievalStageErrorCount"`
 	WorkspaceOperationCount  int                        `json:"workspaceOperationCount"`
 	WorkspaceErrorCount      int                        `json:"workspaceErrorCount"`
-	RagEvalRunCount          int                        `json:"ragEvalRunCount"`
-	RagEvalFailedCaseCount   int                        `json:"ragEvalFailedCaseCount"`
-	RagEvalFailureCounts     map[string]int             `json:"ragEvalFailureCounts"`
 	IndexOperationCount      int                        `json:"indexOperationCount"`
 	IndexErrorCount          int                        `json:"indexErrorCount"`
 	AvgIndexDurationMs       *float64                   `json:"avgIndexDurationMs"`

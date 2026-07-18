@@ -53,7 +53,7 @@ type TaskVariant<TTask> = VariantOf<TTask>;
 type TaskCapabilities<TTask> = CapsOf<TTask>;
 type TaskResponse<TTask> = ResponseOf<TTask>;
 
-/** Options accepted by the inert Phase 1 authoring surface. */
+/** Options accepted by the inert Eval authoring surface. */
 export interface EvaluateOptions<
   TTask extends EvalTaskLike,
   TExpected,

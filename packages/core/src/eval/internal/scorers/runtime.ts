@@ -19,45 +19,85 @@
  * @module
  */
 
-import type { Score, Scorer, ScorerArgs, EmbedFn } from './types'
-import type { GenerateFn } from '../capabilities'
-import type { CellSignals } from '../execution-signals'
+import type { Score, Scorer, ScorerArgs, EmbedFn } from "./types";
+import type { GenerateFn } from "../capabilities";
+import type { CellSignals } from "../execution-signals";
 
 /** Storage key for a built-in scorer's contextual run function. @internal */
-export const SCORER_INTERNAL: unique symbol = Symbol('crux.eval.scorer')
+export const SCORER_INTERNAL: unique symbol = Symbol("crux.eval.scorer");
 
 /** Storage key for cache/baseline identity metadata on built-in scorers. @internal */
-export const SCORER_IDENTITY: unique symbol = Symbol('crux.eval.scorer.identity')
+export const SCORER_IDENTITY: unique symbol = Symbol(
+  "crux.eval.scorer.identity",
+);
+
+/** Storage key for the exact cell evidence a managed scorer reads. @internal */
+export const SCORER_DEPENDENCIES: unique symbol = Symbol(
+  "crux.eval.scorer.dependencies",
+);
+
+/** Storage key for explicit scorer runtime bindings excluded from fingerprints. @internal */
+export const SCORER_BINDING: unique symbol = Symbol("crux.eval.scorer.binding");
+
+/** Cell evidence dimensions admitted into one managed scorer result key. @internal */
+export type ScorerEvidenceDependency =
+  | "input"
+  | "output"
+  | "expected"
+  | "response"
+  | "capturedSignals";
+
+/** Honest contract for local scorer callbacks whose semantics are not versioned. @internal */
+export const UNVERSIONED_LOCAL_SCORER_CONTRACT =
+  "crux.eval.local-scorer.unversioned";
 
 /**
  * Ambient providers + per-cell facts the engine hands to model-backed
  * scorers. `generate`/`model`/`models`/`judgeModel`/`embed` come from
- * the evaluation runner; `signals` are the executing cell's captured trace
+ * the Eval runner; `signals` are the executing cell's captured trace
  * signals (rag scorers read retrieved context from them).
  *
  * @internal
  */
 export interface ScorerRunContext {
-  generate?: GenerateFn
-  model?: unknown
-  models?: Record<string, unknown>
-  judgeModel?: unknown
-  embed?: EmbedFn
-  signals?: CellSignals
+  generate?: GenerateFn;
+  model?: unknown;
+  models?: Record<string, unknown>;
+  judgeModel?: unknown;
+  embed?: EmbedFn;
+  /** Adapter call context required by an inherited router (for example routing). */
+  generationOptions?: Readonly<Record<string, unknown>>;
+  /** Observe terminal adapter results without changing the public Score shape. */
+  recordGenerationResult?: (result: unknown) => void;
+  signals?: CellSignals;
 }
 
 /** The contextual run form of a built-in scorer. @internal */
-export type ContextualScorerRun = (args: ScorerArgs<unknown, unknown, unknown>, context: ScorerRunContext | undefined) => Score | Promise<Score>
+export type ContextualScorerRun = (
+  args: ScorerArgs<unknown, unknown, unknown>,
+  context: ScorerRunContext | undefined,
+) => Score | Promise<Score>;
 
 /** A scorer that may carry the contextual run form. @internal */
 type MaybeContextualScorer = Scorer<unknown, unknown, unknown, string> & {
-  [SCORER_INTERNAL]?: ContextualScorerRun
-}
+  [SCORER_INTERNAL]?: ContextualScorerRun;
+};
 
 /** A scorer that may carry explicit identity metadata. @internal */
-export type MaybeIdentifiedScorer = Scorer<unknown, unknown, unknown, string> & {
-  [SCORER_IDENTITY]?: unknown
-}
+export type MaybeIdentifiedScorer = Scorer<
+  unknown,
+  unknown,
+  unknown,
+  string
+> & {
+  [SCORER_IDENTITY]?: unknown;
+  [SCORER_DEPENDENCIES]?: readonly ScorerEvidenceDependency[];
+  [SCORER_BINDING]?: {
+    readonly generate?: GenerateFn;
+    readonly model?: unknown;
+    readonly hasAuthoredSelect?: boolean;
+  };
+};
 
 /**
  * Invoke a scorer the way the engine does: through the contextual run form
@@ -66,10 +106,14 @@ export type MaybeIdentifiedScorer = Scorer<unknown, unknown, unknown, string> & 
  *
  * @internal
  */
-export function invokeScorer(scorer: Scorer<unknown, unknown, unknown, string>, args: ScorerArgs<unknown, unknown, unknown>, context: ScorerRunContext | undefined): Score | Promise<Score> {
-  const contextual = (scorer as MaybeContextualScorer)[SCORER_INTERNAL]
-  if (contextual !== undefined) return contextual(args, context)
-  return scorer(args)
+export function invokeScorer(
+  scorer: Scorer<unknown, unknown, unknown, string>,
+  args: ScorerArgs<unknown, unknown, unknown>,
+  context: ScorerRunContext | undefined,
+): Score | Promise<Score> {
+  const contextual = (scorer as MaybeContextualScorer)[SCORER_INTERNAL];
+  if (contextual !== undefined) return contextual(args, context);
+  return scorer(args);
 }
 
 /**
@@ -79,9 +123,16 @@ export function invokeScorer(scorer: Scorer<unknown, unknown, unknown, string>, 
  *
  * @internal
  */
-export function resolveModelRef(ref: unknown, context: ScorerRunContext | undefined): unknown {
-  if (typeof ref === 'string' && context?.models !== undefined && ref in context.models) {
-    return context.models[ref]
+export function resolveModelRef(
+  ref: unknown,
+  context: ScorerRunContext | undefined,
+): unknown {
+  if (
+    typeof ref === "string" &&
+    context?.models !== undefined &&
+    ref in context.models
+  ) {
+    return context.models[ref];
   }
-  return ref
+  return ref;
 }

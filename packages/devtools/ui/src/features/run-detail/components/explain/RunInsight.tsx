@@ -8,7 +8,7 @@
  * opens that turn's Explain by default.
  */
 
-import { Icon } from "@/qw/shell/Icon";
+import { Icon } from "@/devtools/shell/Icon";
 import { TONE_VAR } from "@/features/run-detail/lib/families";
 import {
   aggregateRun,
@@ -34,19 +34,19 @@ function Stat({
     <div
       className="flex flex-col gap-1 rounded-[10px] px-3.5 py-3"
       style={{
-        background: "var(--qw-bg-elev)",
-        border: "1px solid var(--qw-border)",
+        background: "var(--devtools-bg-elev)",
+        border: "1px solid var(--devtools-border)",
       }}
     >
       <span
         className="font-mono text-[9.5px] uppercase tracking-[0.06em]"
-        style={{ color: "var(--qw-fg-faint)" }}
+        style={{ color: "var(--devtools-fg-faint)" }}
       >
         {label}
       </span>
       <span
         className="text-[20px] font-semibold tracking-[-0.02em]"
-        style={{ color: tone ?? "var(--qw-fg)" }}
+        style={{ color: tone ?? "var(--devtools-fg)" }}
       >
         {value}
       </span>
@@ -67,7 +67,7 @@ function MiniChips({ entry }: { entry: TurnEntry }) {
             className="inline-flex items-center gap-[4px] rounded-[3px] px-[6px] py-px font-mono text-[9.5px] whitespace-nowrap"
             style={{
               color: TONE_VAR[tone],
-              background: `var(--qw-${tone === "muted" ? "bg-muted" : tone + "-soft"})`,
+              background: `var(--devtools-${tone === "muted" ? "bg-muted" : tone + "-soft"})`,
             }}
           >
             {c.icon && <Icon name={c.icon} size={9} color={TONE_VAR[tone]} />}
@@ -92,21 +92,21 @@ function TurnRow({
     <button
       type="button"
       onClick={() => onSelect(entry.id)}
-      className="flex w-full items-center gap-3 px-3.5 py-2.5 text-left transition-colors hover:bg-(--qw-bg-muted)/50"
-      style={{ borderBottom: "1px solid var(--qw-border)" }}
+      className="flex w-full items-center gap-3 px-3.5 py-2.5 text-left transition-colors hover:bg-(--devtools-bg-muted)/50"
+      style={{ borderBottom: "1px solid var(--devtools-border)" }}
     >
       <KindTag kind="generation" size={9} />
       <div className="w-[180px] flex-shrink-0 min-w-0">
         <div
           className="truncate text-[12.5px] font-medium"
-          style={{ color: "var(--qw-fg)" }}
+          style={{ color: "var(--devtools-fg)" }}
         >
           {t.name ?? t.id}
         </div>
         {t.model && (
           <div
             className="truncate font-mono text-[10px]"
-            style={{ color: "var(--qw-fg-faint)" }}
+            style={{ color: "var(--devtools-fg-faint)" }}
           >
             {t.model}
           </div>
@@ -116,7 +116,7 @@ function TurnRow({
       {t.readout ? (
         <span
           className="min-w-0 flex-1 truncate text-[12px] italic"
-          style={{ fontFamily: "var(--qw-serif)", color: "var(--qw-fg-muted)" }}
+          style={{ fontFamily: "var(--devtools-serif)", color: "var(--devtools-fg-muted)" }}
         >
           {t.readout}
         </span>
@@ -124,7 +124,7 @@ function TurnRow({
         <span className="min-w-0 flex-1" />
       )}
       <MiniChips entry={entry} />
-      <Icon name="arrowRight" size={13} color="var(--qw-fg-faint)" />
+      <Icon name="arrowRight" size={13} color="var(--devtools-fg-faint)" />
     </button>
   );
 }
@@ -152,15 +152,15 @@ export function RunInsight({
         <div className="mb-4 flex items-baseline gap-2.5">
           <span
             className="font-mono text-[10.5px] uppercase tracking-[0.16em]"
-            style={{ color: "var(--qw-crux)" }}
+            style={{ color: "var(--devtools-crux)" }}
           >
             Run insight
           </span>
           <span
             className="text-[12.5px] italic"
             style={{
-              fontFamily: "var(--qw-serif)",
-              color: "var(--qw-fg-muted)",
+              fontFamily: "var(--devtools-serif)",
+              color: "var(--devtools-fg-muted)",
             }}
           >
             Turn Explanation rolled up across this run.
@@ -171,8 +171,8 @@ export function RunInsight({
           <div
             className="rounded-[10px] px-4 py-3 text-[12.5px]"
             style={{
-              border: "1px solid var(--qw-border)",
-              color: "var(--qw-fg-faint)",
+              border: "1px solid var(--devtools-border)",
+              color: "var(--devtools-fg-faint)",
             }}
           >
             No turn explanations were projected for this run yet.
@@ -187,56 +187,56 @@ export function RunInsight({
               <Stat
                 label="attention"
                 value={agg.needAttention}
-                tone={agg.needAttention > 0 ? "var(--qw-warn)" : "var(--qw-ok)"}
+                tone={agg.needAttention > 0 ? "var(--devtools-warn)" : "var(--devtools-ok)"}
               />
               <Stat
                 label="dropped"
                 value={agg.dropped}
-                tone={agg.dropped > 0 ? "var(--qw-danger)" : undefined}
+                tone={agg.dropped > 0 ? "var(--devtools-danger)" : undefined}
               />
               <Stat
                 label="stale used"
                 value={agg.staleUsed}
-                tone={agg.staleUsed > 0 ? "var(--qw-warn)" : undefined}
+                tone={agg.staleUsed > 0 ? "var(--devtools-warn)" : undefined}
               />
               <Stat
                 label="fallback"
                 value={agg.fallback}
-                tone={agg.fallback > 0 ? "var(--qw-warn)" : undefined}
+                tone={agg.fallback > 0 ? "var(--devtools-warn)" : undefined}
               />
               <Stat
                 label="protected"
                 value={covered}
                 tone={
                   agg.total > 0 && agg.covered < agg.total
-                    ? "var(--qw-warn)"
-                    : "var(--qw-ok)"
+                    ? "var(--devtools-warn)"
+                    : "var(--devtools-ok)"
                 }
               />
             </div>
 
             <div className="mb-3 flex items-center gap-2.5">
-              <Icon name="trace" size={15} color="var(--qw-fg-muted)" />
+              <Icon name="trace" size={15} color="var(--devtools-fg-muted)" />
               <span className="text-[13.5px] font-semibold">Turns</span>
               <span
                 className="text-[12px] italic"
                 style={{
-                  fontFamily: "var(--qw-serif)",
-                  color: "var(--qw-fg-muted)",
+                  fontFamily: "var(--devtools-serif)",
+                  color: "var(--devtools-fg-muted)",
                 }}
               >
                 needing attention first — select one to explain it
               </span>
               <div
                 className="h-px flex-1"
-                style={{ background: "var(--qw-border)" }}
+                style={{ background: "var(--devtools-border)" }}
               />
             </div>
             <div
               className="overflow-hidden rounded-[10px]"
               style={{
-                background: "var(--qw-bg)",
-                border: "1px solid var(--qw-border)",
+                background: "var(--devtools-bg)",
+                border: "1px solid var(--devtools-border)",
               }}
             >
               {ordered.map((entry) => (

@@ -8,15 +8,15 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/api"
 )
 
-func qualityRunsFromObservability(runs []api.ObservabilityRunSummary) []api.InspectRunRecord {
+func inspectRunsFromObservability(runs []api.ObservabilityRunSummary) []api.InspectRunRecord {
 	out := make([]api.InspectRunRecord, 0, len(runs))
 	for _, run := range runs {
-		out = append(out, qualityRunFromObservability(run))
+		out = append(out, inspectRunFromObservability(run))
 	}
 	return out
 }
 
-func qualityRunFromObservability(run api.ObservabilityRunSummary) api.InspectRunRecord {
+func inspectRunFromObservability(run api.ObservabilityRunSummary) api.InspectRunRecord {
 	metrics := observabilityMetrics(run.Metrics)
 	cost := optionalFloatMetric(metrics, "costUsd")
 	return api.InspectRunRecord{
@@ -83,7 +83,7 @@ func addStringAttr(attrs map[string]string, key string, value string) {
 	}
 }
 
-func qualityPrimitiveFromObservability(family, primitive string) string {
+func inspectPrimitiveFromObservability(family, primitive string) string {
 	switch family {
 	case "composition":
 		if suffix, ok := strings.CutPrefix(primitive, "composition."); ok {

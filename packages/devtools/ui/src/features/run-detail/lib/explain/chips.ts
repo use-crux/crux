@@ -14,7 +14,7 @@
  * `protect`, `gaps`).
  */
 
-import type { IconName } from "@/qw/shell/nav";
+import type { IconName } from "@/devtools/shell/nav";
 import type { TurnDecisionChip, TurnDecisionReport } from "@/types";
 import {
   normalizeTurnDecisionReport,
@@ -45,7 +45,7 @@ export interface ExplainChip {
   icon?: IconName;
   /** Section anchor this chip scrolls to when clicked. */
   jump?: ExplainSection;
-  /** Render hollow (a nudge, not a solid state) — e.g. unprotected quality. */
+  /** Render hollow (a nudge, not a solid state) — e.g. missing Eval coverage. */
   hollow?: boolean;
 }
 
@@ -151,7 +151,7 @@ function deriveChips(report: TurnDecisionReport): ExplainChip[] {
   if (report.coverage.covered < report.coverage.total)
     chips.push({
       id: "protect",
-      label: "Quality unprotected",
+      label: "Eval coverage missing",
       tone: "warning",
       icon: "spark",
       jump: "protect",

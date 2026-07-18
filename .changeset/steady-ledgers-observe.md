@@ -5,11 +5,10 @@
 "@use-crux/local": patch
 ---
 
-Restore observability configuration across bundled server module copies, retain
-configured Quality experiment history across `crux dev` restarts, and reconcile
-abandoned activity without treating it as currently running.
+Restore observability configuration across bundled server module copies and
+reconcile abandoned activity without treating it as currently running.
 
-Also harden Quality cassette identity and failure replay, preserve provider
-model metadata and grounded prompt types, and make omitted Static Index
-configuration use the documented default. Reject malformed shared runtime
-registry ancestry and hook layers before duplicate module copies adopt them.
+Also preserve provider model metadata and grounded prompt types, and make
+omitted Static Index configuration use the documented default. Reject malformed
+shared runtime registry ancestry and hook layers before duplicate module copies
+adopt them.

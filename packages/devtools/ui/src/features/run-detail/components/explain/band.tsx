@@ -9,9 +9,9 @@
  */
 
 import type { ReactNode } from "react";
-import { Icon } from "@/qw/shell/Icon";
-import type { IconName } from "@/qw/shell/nav";
-import type { ChipTone } from "@/qw/shell/primitives";
+import { Icon } from "@/devtools/shell/Icon";
+import type { IconName } from "@/devtools/shell/nav";
+import type { ChipTone } from "@/devtools/shell/primitives";
 import { TONE_VAR } from "@/features/run-detail/lib/families";
 import type {
   ExplainChip,
@@ -34,24 +34,24 @@ export function chipToneToTone(tone: ExplainChipTone): ChipTone {
 }
 
 const SOFT: Record<ChipTone, string> = {
-  muted: "var(--qw-bg-elev)",
-  crux: "var(--qw-crux-soft)",
-  danger: "var(--qw-danger-soft)",
-  warn: "var(--qw-warn-soft)",
-  ok: "var(--qw-ok-soft)",
-  iris: "var(--qw-iris-soft)",
-  gold: "var(--qw-gold-soft)",
-  plum: "var(--qw-plum-soft)",
+  muted: "var(--devtools-bg-elev)",
+  crux: "var(--devtools-crux-soft)",
+  danger: "var(--devtools-danger-soft)",
+  warn: "var(--devtools-warn-soft)",
+  ok: "var(--devtools-ok-soft)",
+  iris: "var(--devtools-iris-soft)",
+  gold: "var(--devtools-gold-soft)",
+  plum: "var(--devtools-plum-soft)",
 };
 const LINE: Record<ChipTone, string> = {
-  muted: "var(--qw-border)",
-  crux: "var(--qw-crux-line)",
-  danger: "var(--qw-danger-line)",
-  warn: "var(--qw-warn-line)",
-  ok: "var(--qw-ok-line)",
-  iris: "var(--qw-iris-line)",
-  gold: "var(--qw-gold-line)",
-  plum: "var(--qw-plum-line)",
+  muted: "var(--devtools-border)",
+  crux: "var(--devtools-crux-line)",
+  danger: "var(--devtools-danger-line)",
+  warn: "var(--devtools-warn-line)",
+  ok: "var(--devtools-ok-line)",
+  iris: "var(--devtools-iris-line)",
+  gold: "var(--devtools-gold-line)",
+  plum: "var(--devtools-plum-line)",
 };
 
 /** A clickable verdict-band scan chip that jumps to its section. */
@@ -66,7 +66,7 @@ export function SummaryChip({
 }) {
   const tone = chipToneToTone(chip.tone);
   const accent = TONE_VAR[tone];
-  const fg = tone === "muted" && !active ? "var(--qw-fg-muted)" : accent;
+  const fg = tone === "muted" && !active ? "var(--devtools-fg-muted)" : accent;
   return (
     <button
       type="button"
@@ -80,8 +80,8 @@ export function SummaryChip({
           ? SOFT[tone]
           : chip.hollow
             ? "transparent"
-            : "var(--qw-bg-elev)",
-        boxShadow: `inset 0 0 0 1px ${active ? LINE[tone] : "var(--qw-border)"}`,
+            : "var(--devtools-bg-elev)",
+        boxShadow: `inset 0 0 0 1px ${active ? LINE[tone] : "var(--devtools-border)"}`,
       }}
     >
       {chip.icon ? (
@@ -130,19 +130,19 @@ export function SecBand({
         <Icon
           name={icon}
           size={15}
-          color={tone === "muted" ? "var(--qw-fg-muted)" : TONE_VAR[tone]}
+          color={tone === "muted" ? "var(--devtools-fg-muted)" : TONE_VAR[tone]}
         />
       )}
       <span
         className="text-[13.5px] font-semibold tracking-[-0.01em]"
-        style={{ color: "var(--qw-fg)" }}
+        style={{ color: "var(--devtools-fg)" }}
       >
         {title}
       </span>
       {count != null && (
         <span
           className="font-mono text-[11.5px]"
-          style={{ color: "var(--qw-fg-faint)" }}
+          style={{ color: "var(--devtools-fg-faint)" }}
         >
           {count}
         </span>
@@ -150,12 +150,12 @@ export function SecBand({
       {hint && (
         <span
           className="text-[12px] italic"
-          style={{ fontFamily: "var(--qw-serif)", color: "var(--qw-fg-muted)" }}
+          style={{ fontFamily: "var(--devtools-serif)", color: "var(--devtools-fg-muted)" }}
         >
           {hint}
         </span>
       )}
-      <div className="h-px flex-1" style={{ background: "var(--qw-border)" }} />
+      <div className="h-px flex-1" style={{ background: "var(--devtools-border)" }} />
       {right}
     </div>
   );
@@ -175,10 +175,10 @@ export function OpenTabLink({
       type="button"
       onClick={onClick}
       className="inline-flex items-center gap-[4px] font-mono text-[10.5px]"
-      style={{ color: "var(--qw-crux)", cursor: "pointer" }}
+      style={{ color: "var(--devtools-crux)", cursor: "pointer" }}
     >
       {label}
-      <Icon name="arrowRight" size={11} color="var(--qw-crux)" />
+      <Icon name="arrowRight" size={11} color="var(--devtools-crux)" />
     </button>
   );
 }
@@ -190,13 +190,13 @@ export function SignalStrip({ chips }: { chips: readonly ExplainChip[] }) {
     <div
       className="flex flex-wrap items-center gap-2 px-6 pb-2.5"
       style={{
-        borderBottom: "1px solid var(--qw-border)",
-        background: "var(--qw-bg)",
+        borderBottom: "1px solid var(--devtools-border)",
+        background: "var(--devtools-bg)",
       }}
     >
       <span
         className="font-mono text-[9px] uppercase tracking-[0.12em]"
-        style={{ color: "var(--qw-fg-faint)" }}
+        style={{ color: "var(--devtools-fg-faint)" }}
       >
         signals
       </span>

@@ -17,7 +17,7 @@ func TestRegisteredEndpointHTTPMatchesDirectCall(t *testing.T) {
 			SchemaVersion: 1,
 			Prompts:       []api.PromptMeta{{ID: "prompt-1", HasOutput: true}},
 		}},
-		Inspect: &fakeQuality{
+		Inspect: &fakeInspect{
 			activity: []api.InspectActivityEvent{{
 				Tag: "InspectActivity", Kind: "run", Summary: "run completed", RefID: "trace-1",
 			}},
@@ -26,7 +26,7 @@ func TestRegisteredEndpointHTTPMatchesDirectCall(t *testing.T) {
 			insights: []api.InspectInsightRecord{{
 				Tag: "Insight", InsightID: "insight-1", Title: "Missing coverage", Severity: "medium",
 			}},
-			silences: []api.InspectInsightSilenceRecord{{Tag: "QualityInsightSilence", ID: "silence-1"}},
+			silences: []api.InspectInsightSilenceRecord{{Tag: "InspectInsightSilence", ID: "silence-1"}},
 			detail: api.InspectRunDetailRecord{
 				Tag: "InspectRunDetail",
 				Run: api.InspectRunRecord{TraceID: "trace-1", Status: "ok"},
