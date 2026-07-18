@@ -38,6 +38,10 @@ import { emitInputTokenEstimate } from "./media-token-budget";
 import { materializeToolSources } from "./tool-sources";
 import { createStreamSourceCleanup } from "./stream-source-cleanup";
 import type { CruxRunId } from "../../observability";
+import {
+  guardStreamCompletion,
+  trackSafetyStreamSeal,
+} from "./stream-completion";
 
 /**
  * Start one SDK-owned stream for a concrete model attempt.
@@ -136,6 +140,10 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     throw error;
   }
   const tools = lifecycle.tools;
+  const trackedSafety =
+    safety.enabled && !resolved.schema
+      ? trackSafetyStreamSeal(safety.openStream())
+      : undefined;
 
   const stepBudget = createBudgetSignal({
     budget: "step",
@@ -185,9 +193,7 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     abortSignal: composeAbortSignals(args.signal, stepBudget.signal),
     extra: args.extra,
     diagnostics,
-    ...(safety.enabled && !resolved.schema
-      ? { safety: safety.openStream() }
-      : {}),
+    ...(trackedSafety ? { safety: trackedSafety.stream } : {}),
     ...(resolved.schema ? { schema: resolved.schema } : {}),
   };
 
@@ -258,13 +264,21 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
   > => {
     try {
       const meta = await innerCompletion();
-      const stamped = meta ? safety.stamp(meta) : meta;
+      const guarded = await guardStreamCompletion({
+        safety,
+        meta,
+        liveText: trackedSafety
+          ? (trackedSafety.sealedText() ?? meta?.text)
+          : undefined,
+        representedText: trackedSafety ? meta?.text : undefined,
+        messages,
+      });
       await lifecycle.captureTurn({
         messages,
-        assistantText: stamped?.text,
-        toolCalls: stamped?.toolCalls,
+        assistantText: guarded?.text,
+        toolCalls: guarded?.toolCalls,
       });
-      return stamped;
+      return guarded;
     } finally {
       stepBudget.dispose();
       await closeSources();

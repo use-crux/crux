@@ -24,9 +24,10 @@ import { createCachedStreamHandle } from "./metadata";
 import { buildResolveOpts } from "./shared";
 import { isSafetyTextChunk } from "./stream-safety";
 import { emitInputTokenEstimate } from "./media-token-budget";
-import { responseContent } from "../assistant-output";
-import type { Message } from "../../generation/messages";
-import { replaceTextSlots } from "./stream-content";
+import {
+  guardStreamCompletion,
+  trackSafetyStreamSeal,
+} from "./stream-completion";
 import { materializeToolSources } from "./tool-sources";
 import { createStreamSourceCleanup } from "./stream-source-cleanup";
 import { trackRawStream } from "./stream-tracking";
@@ -151,6 +152,7 @@ export async function streamCore<
       extra: (args.extra ?? {}) as TExtra,
     };
 
+    let providerRawStream: TRawStream | undefined;
     const handle = await sourceSession.withContext(() =>
       orchestrateStream(
         {
@@ -174,7 +176,7 @@ export async function streamCore<
             media: dialect.media,
             tokenBudget: args.tokenBudget,
           });
-          return withBudget(
+          const providerHandle = await withBudget(
             (signal) =>
               dialect.stream(dialect.client, callArgs, {
                 signal: composeAbortSignals(args.signal, signal),
@@ -190,20 +192,28 @@ export async function streamCore<
               mapError: dialect.mapError,
             });
           });
+          providerRawStream = providerHandle.raw ?? providerHandle.rawStream;
+          return providerHandle;
         },
       ),
     );
 
-    const safetyStream = safety.enabled ? safety.openStream() : undefined;
-    const streamedAssistant = { text: "" };
+    const trackedSafety = safety.enabled
+      ? trackSafetyStreamSeal(safety.openStream())
+      : undefined;
+    const streamedAssistant = { text: "", providerText: "" };
     const closeSources = createStreamSourceCleanup(sourceSession, args.signal);
 
     return {
       ...handle,
+      raw: handle.raw ?? providerRawStream ?? handle.rawStream,
       rawStream: trackRawStream<TRawStream>({
         rawStream: handle.rawStream as AsyncIterable<unknown>,
         extractTextDelta: handle.extractTextDelta,
-        safetyStream,
+        safetyStream: trackedSafety?.stream,
+        observeText: (text) => {
+          streamedAssistant.providerText += text;
+        },
         appendText: (text) => {
           streamedAssistant.text += text;
         },
@@ -214,62 +224,23 @@ export async function streamCore<
       completion: async () => {
         try {
           const meta = await handle.completion();
-          const providerContent = responseContent({
-            content: meta?.content,
-            text: meta?.text ?? "",
-            toolCalls: meta?.toolCalls?.flatMap((call) =>
-              typeof call.id === "string"
-                ? [{ id: call.id, name: call.name, args: call.args }]
-                : [],
-            ),
+          const guarded = await guardStreamCompletion({
+            safety,
+            meta,
+            liveText:
+              trackedSafety?.sealedText() ??
+              (streamedAssistant.providerText
+                ? streamedAssistant.text
+                : undefined),
+            representedText: streamedAssistant.providerText || undefined,
+            messages,
           });
-          const providerTextSlots = providerContent.flatMap((part) =>
-            part.type === "text" ? [part.text] : [],
-          );
-          const hasMixedProviderText =
-            providerTextSlots.length > 1 ||
-            (providerTextSlots.length > 0 &&
-              providerContent.some((part) => part.type !== "text"));
-          const guardedSlots =
-            safety.enabled && hasMixedProviderText
-              ? await safety.guardOutputTextParts(providerTextSlots)
-              : undefined;
-          const text = guardedSlots
-            ? guardedSlots.join("")
-            : safety.enabled
-              ? streamedAssistant.text
-              : (meta?.text ?? streamedAssistant.text);
-          const content = guardedSlots
-            ? replaceTextSlots(providerContent, guardedSlots)
-            : safety.enabled
-              ? replaceTextSlots(
-                  providerContent,
-                  providerTextSlots.length === 0 ? [] : [text],
-                  text,
-                )
-              : providerContent;
-          const stamped = meta ? safety.stamp(meta) : meta;
-          const assistantMessage: Message = {
-            role: "assistant",
-            content,
-            ...(meta?.toolCalls
-              ? { metadata: { toolCalls: meta.toolCalls } }
-              : {}),
-          };
-          const completionMessages = meta?.messages
-            ? replaceFinalAssistant(meta.messages, assistantMessage)
-            : [...messages, assistantMessage];
           await lifecycle.captureTurn({
             messages,
-            assistantText: streamedAssistant.text || undefined,
+            assistantText: guarded?.text || undefined,
             toolCalls: meta?.toolCalls,
           });
-          return {
-            ...stamped,
-            text,
-            content,
-            messages: completionMessages,
-          };
+          return guarded;
         } finally {
           await closeSources();
         }
@@ -279,20 +250,4 @@ export async function streamCore<
     await sourceSession.close();
     throw error;
   }
-}
-
-/** Stamp authoritative assistant output into a provider-completed transcript. */
-function replaceFinalAssistant(
-  messages: readonly Message[],
-  assistant: Message,
-): readonly Message[] {
-  const result = [...messages];
-  for (let index = result.length - 1; index >= 0; index -= 1) {
-    if (result[index]?.role === "assistant") {
-      result[index] = assistant;
-      return result;
-    }
-  }
-  result.push(assistant);
-  return result;
 }

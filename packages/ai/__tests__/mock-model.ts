@@ -6,7 +6,10 @@
 
 import { MockLanguageModelV3, simulateReadableStream } from "ai/test";
 import type { LanguageModel } from "ai";
-import type { LanguageModelV3Content } from "@ai-sdk/provider";
+import type {
+  LanguageModelV3Content,
+  LanguageModelV3StreamPart,
+} from "@ai-sdk/provider";
 
 export interface MockEmission {
   /** Exact native model parts, for provider-executed tool and media tests. */
@@ -134,6 +137,35 @@ export function streamingModel(deltas: readonly string[]): LanguageModel {
             delta,
           })),
           { type: "text-end", id: "t1" },
+          {
+            type: "finish",
+            finishReason: { unified: "stop", raw: undefined },
+            usage: {
+              inputTokens: {
+                total: 5,
+                noCache: 5,
+                cacheRead: undefined,
+                cacheWrite: undefined,
+              },
+              outputTokens: { total: 7, text: 7, reasoning: undefined },
+            },
+          },
+        ] as never[],
+      }),
+    }),
+  }) as unknown as LanguageModel;
+}
+
+/** A V3 mock model that streams caller-supplied ordered content parts. */
+export function streamingPartsModel(
+  parts: readonly LanguageModelV3StreamPart[],
+): LanguageModel {
+  return new MockLanguageModelV3({
+    doStream: async () => ({
+      stream: simulateReadableStream({
+        chunks: [
+          { type: "stream-start", warnings: [] },
+          ...parts,
           {
             type: "finish",
             finishReason: { unified: "stop", raw: undefined },

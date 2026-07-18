@@ -125,9 +125,19 @@ export interface StreamResult<TRawStream, TOutput = unknown> {
   readonly runId: CruxRunId;
   /** Provider-neutral text delta stream. */
   readonly textStream: AsyncIterable<string>;
-  /** Raw provider or SDK stream handle. */
+  /**
+   * Raw provider or SDK stream handle.
+   *
+   * This is an explicitly unguarded escape surface. Canonical Safety applies
+   * to {@link textStream} and {@link completion}, not provider-native chunks.
+   */
   readonly raw: TRawStream;
-  /** Resolves to the canonical completion envelope when the stream finishes. */
+  /**
+   * Resolves after buffered reasoning and media pass completion Safety.
+   *
+   * A buffered-media block rejects this promise even when safe live text was
+   * already emitted through {@link textStream}; emitted text cannot be recalled.
+   */
   readonly completion: Promise<StreamCompletion<TOutput>>;
 }
 

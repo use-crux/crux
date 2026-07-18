@@ -60,3 +60,10 @@ pre-client-tool transform capability with Core-owned indexed text/media edits; i
 fail before provider I/O when step policies apply. Core and AI SDK dialects preserve tool calls,
 raw/provider identities, and guarded step/envelope consistency across reasoning, media, structured
 validation, and constraint regeneration.
+
+Stream completion now guards buffered reasoning and media through one shared Core gate before
+completion resolves in both adapter dialects. Live text retains its existing staged stream Safety
+and is not re-guarded at completion; completion-only text is guarded once, stripped media is
+removed consistently from content and assistant messages, and buffered blocks may reject after
+already emitted safe text. Raw provider and SDK stream handles remain unchanged and explicitly
+unguarded.

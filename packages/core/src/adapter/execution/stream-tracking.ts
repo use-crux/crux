@@ -7,6 +7,7 @@ interface TrackRawStreamOptions {
   readonly rawStream: AsyncIterable<unknown>;
   readonly extractTextDelta: (chunk: unknown) => string | undefined;
   readonly safetyStream?: SafetyStream;
+  readonly observeText?: (text: string) => void;
   readonly appendText: (text: string) => void;
   readonly close: () => Promise<void>;
 }
@@ -20,6 +21,7 @@ export function trackRawStream<TRawStream>(
     try {
       for await (const chunk of options.rawStream) {
         const delta = options.extractTextDelta(chunk);
+        if (delta !== undefined && delta !== "") options.observeText?.(delta);
         if (!options.safetyStream || delta === undefined || delta === "") {
           if (delta) options.appendText(delta);
           yield chunk as Chunk;

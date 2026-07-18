@@ -77,7 +77,9 @@ import {
   guardLanguageStepWithEdits,
 } from "./output/step";
 import { finalizeLanguageTerminal } from "./output/terminal";
+import { guardStreamCompletionContent } from "./output/completion";
 import type { ResultStepFacts } from "../adapter/result-accumulator";
+import type { AssistantContentPart } from "../types/content";
 import type {
   ExecutorModelStep,
   StepContentEdit,
@@ -108,6 +110,9 @@ const languageStepTransform: unique symbol = Symbol(
 );
 const languageTerminalFinalize: unique symbol = Symbol(
   "crux.safety.languageTerminalFinalize",
+);
+const streamCompletionGuard: unique symbol = Symbol(
+  "crux.safety.streamCompletionGuard",
 );
 
 // ─────────────────────────────────────────────────────────────────
@@ -349,6 +354,11 @@ interface SafetySession extends Safety {
       readonly schema?: z.ZodType;
     },
   ): Promise<SafetyOutput>;
+  [streamCompletionGuard](
+    content: readonly AssistantContentPart[],
+    liveText?: string,
+    representedText?: string,
+  ): Promise<readonly AssistantContentPart[]>;
   [inputOperationTextGuard](
     slots: readonly OperationInputTextSlot[],
     context?: OperationInputGuardContext,
@@ -412,6 +422,20 @@ export function finalizeSafetySessionLanguageOutput(
     output,
     regenerate,
     opts,
+  );
+}
+
+/** @internal Guard canonical content buffered behind a live text stream. */
+export function guardSafetySessionStreamCompletion(
+  safety: Safety,
+  content: readonly AssistantContentPart[],
+  liveText?: string,
+  representedText?: string,
+): Promise<readonly AssistantContentPart[]> {
+  return (safety as SafetySession)[streamCompletionGuard](
+    content,
+    liveText,
+    representedText,
   );
 }
 
@@ -880,6 +904,18 @@ function createSafetySession(
 
     async [languageTerminalFinalize](output, regenerate, opts) {
       return finalizeLanguageOutput(output, regenerate, opts, true);
+    },
+
+    async [streamCompletionGuard](content, liveText, representedText) {
+      return guardStreamCompletionContent({
+        content,
+        liveText,
+        representedText,
+        bindings: phaseBindings("output"),
+        context: guardContext("output", lastMessages),
+        appendAudit: appendGuardrailAudit,
+        transcript,
+      });
     },
 
     async guardInput(input) {
