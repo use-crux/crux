@@ -39,6 +39,18 @@ convexStorage({
   // @ts-expect-error — convexStorage({ blobs }) was removed; use convexStorage({ assets }).
   blobs: { ctx: { storage: storageLike } },
 });
+convexStorage({
+  component,
+  ctx: component.ctx,
+  // @ts-expect-error — bundled Convex storage does not accept a vector index.
+  vectorIndexName: 'by_embedding',
+});
+convexStorage({
+  component,
+  ctx: component.ctx,
+  // @ts-expect-error — bundled Convex storage does not expose semantic-cache vector capabilities.
+  semanticCache: { isolatedVectorNamespace: true },
+});
 // @ts-expect-error — ConvexStorageConfig.blobs was removed; use assets.
 type RemovedConvexStorageBlobs = ConvexStorageConfig["blobs"];
 // @ts-expect-error — convexWorkspaceBlobStore was removed from the workspace subpath.

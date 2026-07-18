@@ -103,4 +103,4 @@ This is deliberate. Semantic cache entries should live in a dedicated vector nam
 
 `inMemoryRecordStore()` supports this by default. Durable adapters opt in only when the configured backend is isolated. Plain Redis stores do not expose vector search unless product-specific vector hooks are configured.
 
-For Convex, `convexStorage({ semanticCache: { isolatedVectorNamespace: true } })` is an explicit safety declaration by the application, not a generic Convex limitation. Only pass it when the backing table/index is dedicated to semantic-cache entries. A shared memory/RAG index can create false misses because unrelated vectors may rank ahead of cache entries before filters are applied.
+Convex bundled storage provides records but not vector search. Pair `convexRecordStore()` with an explicit pre-filter-capable `VectorStore`, such as `upstashVectorStore()` in a dedicated semantic-cache namespace.

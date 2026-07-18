@@ -1,9 +1,9 @@
 /**
  * Types for the internal Convex store document boundary.
  *
- * These are intentionally structural so generated Convex documents, vector
- * hits, bridge fakes, and React query results can all enter through the same
- * small contract without importing Convex runtime types.
+ * These are intentionally structural so generated Convex documents, bridge
+ * fakes, and React query results can all enter through the same small contract
+ * without importing Convex runtime types.
  *
  * @module
  */
@@ -57,16 +57,6 @@ export interface StoreDocPage<TDoc extends StoreDocRecord = StoreDocRecord> {
   cursor?: string
 }
 
-/** Dense vector query passed to the optional vector-search port. */
-export interface StoreDocDenseSearchQuery {
-  /** Dense query vector. */
-  vector: number[]
-  /** Maximum number of hits to request. */
-  limit: number
-  /** Exact top-level scalar filter applied before vector result limiting. */
-  filter?: ExactFilter
-}
-
 /** Small component-facing I/O port used by the deep store implementation. */
 export interface ComponentDocumentPort<TDoc extends StoreDocRecord = StoreDocRecord> {
   /** Read one raw document by key. */
@@ -79,19 +69,14 @@ export interface ComponentDocumentPort<TDoc extends StoreDocRecord = StoreDocRec
   insert(doc: StoreDocWrite): Promise<boolean>
   /** Delete one document by key. */
   delete(key: string): Promise<void>
-  /** Optional dense vector search over raw documents. */
-  searchDense?(query: StoreDocDenseSearchQuery): Promise<readonly TDoc[]>
 }
 
-/**
 /** Decoded store document with policy metadata surfaced for callers. */
 export interface DecodedStoreDoc {
   /** Store key. */
   key: string
   /** Decoded store value. */
   value: JsonObject
-  /** Optional vector score from Convex `_score` hits. */
-  score?: number
   /** Whether the value is expired at the codec clock time. */
   expired: boolean
   /** Absolute expiry timestamp encoded in the value, when present. */

@@ -14,7 +14,6 @@ import {
   createCruxConvex,
   createConvexTransport,
   convexRecordStore,
-  convexVectorStore,
   convexStorage,
   convexAssetStore,
 } from "@use-crux/convex";
@@ -150,7 +149,6 @@ Advanced apps can override storage construction once at the profile boundary. Th
 export const crux = createCruxConvex({
   components: { crux: components.crux, agent: components.agent },
   storage: {
-    vectorIndexName: "by_embedding",
     create(ctx, defaults) {
       return defaults.createComponentStorage(ctx);
     },
@@ -162,13 +160,11 @@ export const crux = createCruxConvex({
 
 Create a Convex-backed beta `RecordStore` for a crux Convex component.
 
-| Field             | Type                                     | Description                                                                        |
-| ----------------- | ---------------------------------------- | ---------------------------------------------------------------------------------- |
-| `component`       | `ComponentApi`                           | `components.crux` from the installed Convex component                              |
-| `ctx`             | `ConvexCtxPort`                          | Convex action or mutation ctx with query/mutation runners                          |
-| `vectorIndexName` | `string?`                                | Optional vector index name for `ctx.vectorSearch()`. Defaults to `'by_embedding'`. |
-| `semanticCache`   | `{ isolatedVectorNamespace?: boolean }?` | Capability metadata for semantic-cache stores with a dedicated vector namespace.   |
-| `now`             | `() => number?`                          | Optional clock for deterministic tests and TTL writes.                             |
+| Field       | Type              | Description                                               |
+| ----------- | ----------------- | --------------------------------------------------------- |
+| `component` | `ComponentApi`    | `components.crux` from the installed Convex component     |
+| `ctx`       | `ConvexCtxPort`   | Convex action or mutation ctx with query/mutation runners |
+| `now`       | `(() => number)?` | Optional clock for deterministic tests and TTL writes.    |
 
 ```ts
 import { convexRecordStore } from "@use-crux/convex";
@@ -186,7 +182,7 @@ await records.put("memory:alpha", {
 
 Record values are written as `_cruxDoc` records with JSON `content`, optional top-level `embedding`, `updatedAt`, and an `_expiresAt` value inside the JSON payload when `ttlMs` is provided. The component I/O contract stays narrow: `components.crux.memory.insert` atomically inserts a document only when the key is absent, and `components.crux.memory.list` accepts `prefix`, `limit`, and `cursor`, reads the `by_key` index, and returns `{ docs, cursor }`.
 
-The same document boundary is used by server records, the HTTP bridge, and React transport: imperative reads suppress expired entries and lazily delete them, vector hits map Convex `_score` to `VectorHit.score`, and list/vector filters use top-level exact-match semantics. Filtered `list()` calls with a `limit` fill from additional component pages so `limit` means "up to N matching entries." Server and React reads are strict about current `_cruxDoc` records so malformed documents fail clearly.
+The same document boundary is used by server records, the HTTP bridge, and React transport. Imperative reads suppress expired entries and lazily delete them, while list filters use top-level exact-match semantics. Filtered `list()` calls with a `limit` fill from additional component pages so `limit` means "up to N matching entries." Server and React reads are strict about current `_cruxDoc` records so malformed documents fail clearly.
 
 ### Document Boundary Substitution
 
@@ -249,7 +245,7 @@ const io: ComponentDocumentPort = {
 };
 ```
 
-`convexComponentDocumentPort({ ctx, component })` is the generated Convex adapter for that port. It forwards raw document operations to `component.memory.*` and delegates dense vector search to `ctx.vectorSearch()` when the current context supports it.
+`convexComponentDocumentPort({ ctx, component })` is the generated Convex adapter for that port. It forwards raw document operations to `component.memory.*`.
 
 ### Storage Beta Factories
 
@@ -259,16 +255,10 @@ Use these factories for new Storage Beta wiring:
 import {
   convexRecordStore,
   convexStorage,
-  convexVectorStore,
   convexAssetStore,
 } from "@use-crux/convex";
 
 const records = convexRecordStore({
-  component: components.crux,
-  ctx,
-});
-
-const vectors = convexVectorStore({
   component: components.crux,
   ctx,
 });
@@ -282,19 +272,35 @@ const appStorage = convexStorage({
 
 Capability claims are intentionally narrow:
 
-| Adapter               | Capability     | Value      |
-| --------------------- | -------------- | ---------- |
-| `convexRecordStore()` | Record TTL     | `'lazy'`   |
-| `convexRecordStore()` | Record filters | `'scan'`   |
-| `convexRecordStore()` | Watch          | `false`    |
-| `convexRecordStore()` | Batch          | `false`    |
-| `convexVectorStore()` | Dense search   | `true`     |
-| `convexVectorStore()` | Sparse search  | `false`    |
-| `convexVectorStore()` | Hybrid search  | `false`    |
-| `convexVectorStore()` | Vector filters | `'post'`   |
-| `convexVectorStore()` | Consistency    | `'strong'` |
+| Adapter               | Capability     | Value    |
+| --------------------- | -------------- | -------- |
+| `convexRecordStore()` | Record TTL     | `'lazy'` |
+| `convexRecordStore()` | Record filters | `'scan'` |
+| `convexRecordStore()` | Watch          | `false`  |
+| `convexRecordStore()` | Batch          | `false`  |
 
-Convex vector filtering is post-filtered by the component port, so production retrieval paths that require exact filtered top-k results should use a pre-filter-capable vector backend.
+`convexStorage()` contains `records` and includes `assets` only when its `assets` option is configured. It does not contain `vectors`. Embeddings inside record values are mirrored to the component document's top-level `embedding` field, but the bundled component does not declare a vector index or perform vector search.
+
+Memory blocks configured with `embed` therefore fall back to record listing/recency when only Convex storage is present. For similarity-ranked recall, pass an explicit `VectorStore` such as Upstash:
+
+```ts
+import { memory, episodes } from "@use-crux/convex/memory";
+import { convexRecordStore } from "@use-crux/convex";
+import { upstashVectorStore } from "@use-crux/upstash";
+
+const assistantMemory = memory({
+  id: "assistant",
+  records: convexRecordStore({ component: components.crux, ctx }),
+  vectors: upstashVectorStore({
+    index: vectorIndex,
+    namespace: `memory:${threadId}`,
+  }),
+  namespace: `thread:${threadId}`,
+  blocks: [episodes({ id: "episodes", embed })],
+});
+```
+
+`convexVectorStore()` remains temporarily as a compatibility symbol, but construction throws `StorageError('unsupported_capability')` with guidance to pass an explicit `VectorStore`.
 
 ### `convexAssetStore(config)`
 
