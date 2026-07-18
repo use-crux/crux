@@ -11,6 +11,7 @@
 
 import type { TraceMeta } from "../../generation/types";
 import type { Message } from "../../generation/messages";
+import type { AssistantContentPart } from "../../types/content";
 import {
   findTriggeredStopCondition,
   normalizeStopConditions,
@@ -18,7 +19,11 @@ import {
 } from "../../generation/tool-control";
 import { getHooks } from "../../runtime/runtime";
 import { ValidationExhaustedError } from "../../generation/validation-retry";
-import { createSafety } from "../../safety/session";
+import {
+  createSafety,
+  finalizeSafetySessionLanguageOutput,
+  guardSafetySessionLanguageStep,
+} from "../../safety/session";
 import { orchestrateGenerate } from "../../generation/orchestrate";
 import { composeAbortSignals, withBudget } from "../../generation/timeout";
 import { normalizeAdapterCallError } from "../normalized-outcome";
@@ -49,7 +54,7 @@ import {
   withSkillActivationInput,
 } from "./shared";
 import { materializeToolSources } from "./tool-sources";
-import { replaceResponseText } from "./response-text";
+import { replaceResponseContent, replaceResponseText } from "./response-text";
 
 /**
  * Execute one prompt through the core-owned provider loop.
@@ -102,6 +107,7 @@ export async function generateCore<
   let pendingApprovals: readonly ApprovalRequestInfo[] | undefined;
   let stoppedBy: StopCondition | undefined;
   let steps = 0;
+  let providerResponseOrdinal = 0;
   const stepFacts: ResultStepFacts[] = [];
   const validationRetry = args.validationRetry;
   const maxValidationRetries = validationRetry?.maxRetries ?? 0;
@@ -143,7 +149,13 @@ export async function generateCore<
     );
     return normalized;
   };
-  messages = [...(await safety.guardInput({ messages })).messages];
+  const guardedInput = await safety.guardInput({
+    messages,
+    system: currentSystem,
+  });
+  messages = [...guardedInput.messages];
+  if (guardedInput.system !== currentSystem) currentSystemBlocks = undefined;
+  currentSystem = guardedInput.system;
   const sourceSession = await materializeToolSources({
     dialect: dialect.id,
     resolved,
@@ -254,20 +266,32 @@ export async function generateCore<
 
             const { raw, extracted } = await callProvider(callArgs);
             lastRaw = raw;
-            lastExtracted = extracted;
+            const providerStep = stepFactsFromResponse(extracted);
+            const guardedStep = await guardSafetySessionLanguageStep(
+              safety,
+              providerResponseOrdinal++,
+              providerStep,
+              resolved.schema,
+            );
+            lastExtracted = sameStepContent(
+              providerStep.content,
+              guardedStep.content,
+            )
+              ? extracted
+              : replaceResponseContent(extracted, guardedStep.content);
 
-            if (extracted.toolCalls && extracted.toolCalls.length > 0) {
+            if (lastExtracted.toolCalls && lastExtracted.toolCalls.length > 0) {
               // Tool calls are handled below after validation-only exits.
             } else if (resolved.schema && validationRetry) {
               const validationResult = validateStructuredOutput(
-                extracted.text,
+                lastExtracted.text,
                 resolved.schema,
               );
               if (validationResult.valid) {
                 const validText =
-                  validationResult.repairedText ?? extracted.text;
-                if (validText !== extracted.text) {
-                  lastExtracted = replaceResponseText(extracted, validText);
+                  validationResult.repairedText ?? lastExtracted.text;
+                if (validText !== lastExtracted.text) {
+                  lastExtracted = replaceResponseText(lastExtracted, validText);
                 }
                 rememberStep(lastExtracted);
                 break;
@@ -281,13 +305,13 @@ export async function generateCore<
                   validationRetries,
                   validationResult.error!,
                 );
-                messages = dialect.appendToolRound(messages, extracted, []);
+                messages = dialect.appendToolRound(messages, lastExtracted, []);
                 messages = [
                   ...messages,
                   {
                     role: "user" as const,
                     content: formatValidationFeedback(
-                      extracted.text,
+                      lastExtracted.text,
                       validationResult.error!,
                     ),
                   },
@@ -300,7 +324,7 @@ export async function generateCore<
                 validationResult.error!,
               );
               throw new ValidationExhaustedError({
-                lastRawOutput: extracted.text,
+                lastRawOutput: lastExtracted.text,
                 zodErrors: validationResult.error!,
                 attempts: validationRetries,
                 maxAttempts: maxValidationRetries,
@@ -311,21 +335,23 @@ export async function generateCore<
               break;
             }
 
-            if (!extracted.toolCalls || extracted.toolCalls.length === 0)
+            if (
+              !lastExtracted.toolCalls ||
+              lastExtracted.toolCalls.length === 0
+            )
               continue;
-            const round = await lifecycle.executeRound(extracted, messages);
+            const round = await lifecycle.executeRound(lastExtracted, messages);
             messages = round.messages;
             if (round.kind === "suspended") {
               // Suspension is tracked separately; the provider-normalized finish
               // reason on the tool-call turn (e.g. "tool-calls") stays truthful.
               suspendedApproval = true;
-              lastExtracted = extracted;
               pendingApprovals = [round.request];
               rememberStep(lastExtracted);
               break;
             }
             const amendment = await lifecycle.applySkillLoads(
-              extracted.toolCalls,
+              lastExtracted.toolCalls,
             );
             if (amendment) {
               currentSystem = amendment.system;
@@ -337,7 +363,7 @@ export async function generateCore<
             rememberStep(lastExtracted);
             const triggered = findTriggeredStopCondition(stopConditions, {
               steps,
-              toolCalls: extracted.toolCalls,
+              toolCalls: lastExtracted.toolCalls,
             });
             if (triggered) {
               stoppedBy = triggered;
@@ -355,7 +381,8 @@ export async function generateCore<
                 parsed = undefined;
               }
             }
-            const finalOutput = await safety.finalizeOutput(
+            const finalOutput = await finalizeSafetySessionLanguageOutput(
+              safety,
               { text: lastExtracted.text, parsed },
               async (corrective) => {
                 replaceLastStep(replaceResponseText(lastExtracted!, ""));
@@ -372,22 +399,44 @@ export async function generateCore<
                   messages: providerMessages,
                 });
                 lastRaw = regen.raw;
-                lastExtracted = regen.extracted;
                 steps++;
+                const providerRegenStep = stepFactsFromResponse(
+                  regen.extracted,
+                );
+                const guardedRegen = await guardSafetySessionLanguageStep(
+                  safety,
+                  providerResponseOrdinal++,
+                  providerRegenStep,
+                  resolved.schema,
+                );
+                lastExtracted = sameStepContent(
+                  providerRegenStep.content,
+                  guardedRegen.content,
+                )
+                  ? regen.extracted
+                  : replaceResponseContent(
+                      regen.extracted,
+                      guardedRegen.content,
+                    );
                 rememberStep(lastExtracted);
                 if (resolved.schema) {
                   const reVal = validateStructuredOutput(
-                    regen.extracted.text,
+                    lastExtracted.text,
                     resolved.schema,
                   );
-                  const reText = reVal.valid
-                    ? (reVal.repairedText ?? regen.extracted.text)
-                    : regen.extracted.text;
-                  if (reText !== regen.extracted.text) {
-                    lastExtracted = replaceResponseText(
-                      regen.extracted,
-                      reText,
-                    );
+                  if (!reVal.valid) {
+                    validationRetry?.onExhausted?.(0, reVal.error!);
+                    throw new ValidationExhaustedError({
+                      lastRawOutput: lastExtracted.text,
+                      zodErrors: reVal.error!,
+                      attempts: 0,
+                      maxAttempts: 0,
+                      promptId: prompt.id ?? "unknown",
+                    });
+                  }
+                  const reText = reVal.repairedText ?? lastExtracted.text;
+                  if (reText !== lastExtracted.text) {
+                    lastExtracted = replaceResponseText(lastExtracted, reText);
                     replaceLastStep(lastExtracted);
                   }
                   let reParsed: unknown;
@@ -398,7 +447,7 @@ export async function generateCore<
                   }
                   return { text: reText, parsed: reParsed };
                 }
-                return { text: regen.extracted.text, parsed: undefined };
+                return { text: lastExtracted.text, parsed: undefined };
               },
               { suspended, messages, schema: resolved.schema },
             );
@@ -487,4 +536,14 @@ function stepFactsFromResponse(response: AdapterResponse): ResultStepFacts {
       ? { providerMetadata: response.providerMetadata }
       : {}),
   };
+}
+
+function sameStepContent(
+  left: readonly AssistantContentPart[],
+  right: readonly AssistantContentPart[],
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every((part, index) => part === right[index])
+  );
 }

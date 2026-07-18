@@ -20,12 +20,12 @@
  * @module
  */
 
-import type { z } from 'zod'
-import type { ModelInfo } from '../types'
-import type { GenerationSettings } from '../generation/types'
-import type { AdapterSpec } from './spec'
-import type { ProviderMediaHooks } from './native-chat/media-hooks'
-import type { ToolSourceMaterializer } from '../tools/tool-source'
+import type { z } from "zod";
+import type { ModelInfo } from "../types";
+import type { GenerationSettings } from "../generation/types";
+import type { AdapterSpec } from "./spec";
+import type { ProviderMediaHooks } from "./native-chat/media-hooks";
+import type { ToolSourceMaterializer } from "../tools/tool-source";
 import type {
   ExecutorOutcome,
   ExecutorRequest,
@@ -33,7 +33,7 @@ import type {
   ExecutorStreamMeta,
   StructuredAttempt,
   StructuredRequest,
-} from './executor-types'
+} from "./executor-types";
 
 /**
  * A cached generation payload captured from a prior run, used to recreate a
@@ -41,11 +41,11 @@ import type {
  */
 export interface CachedStreamPayload {
   /** Cached final text, for text streams. */
-  readonly text?: string
+  readonly text?: string;
   /** Cached parsed object, for structured streams. */
-  readonly object?: unknown
+  readonly object?: unknown;
   /** Cached trace metadata to surface on the replayed completion. */
-  readonly meta?: Record<string, unknown>
+  readonly meta?: Record<string, unknown>;
 }
 
 /**
@@ -85,15 +85,25 @@ export interface CachedStreamPayload {
  * const result = await executor.generate(myPrompt, { model, input: { ... } })
  * ```
  */
-export interface LoopRuntimePort<TModel, TRawResponse = unknown, TRawStream = unknown> {
+export interface LoopRuntimePort<
+  TModel,
+  TRawResponse = unknown,
+  TRawStream = unknown,
+> {
   /** Runtime identifier used in observability and provider matching (e.g. `'ai-sdk'`). */
-  readonly id: string
+  readonly id: string;
+
+  /** Explicit timing guarantees implemented by this loop-owning runtime. */
+  readonly capabilities?: {
+    /** The runtime applies `request.stepTransformer` before SDK/Crux client tools. */
+    readonly stepTransform?: "before-client-tools";
+  };
 
   /** Provider-authored media validation consumed privately before SDK I/O. */
-  readonly media?: ProviderMediaHooks
+  readonly media?: ProviderMediaHooks;
 
   /** Materialize an inert prompt tool source for one SDK-loop invocation. */
-  readonly materializeToolSource?: ToolSourceMaterializer
+  readonly materializeToolSource?: ToolSourceMaterializer;
 
   /**
    * Extract provider/model identity from an SDK model reference.
@@ -102,14 +112,17 @@ export interface LoopRuntimePort<TModel, TRawResponse = unknown, TRawStream = un
    * again for provider-quirk decisions (schema sanitization, cache hints).
    * Must be cheap and side-effect free.
    */
-  describeModel(model: TModel): ModelInfo
+  describeModel(model: TModel): ModelInfo;
 
   /**
    * Map canonical {@link GenerationSettings} to the SDK's native option
    * names. Receives the model's identity so provider-specific renames can
    * happen here rather than leaking into request construction.
    */
-  mapSettings(settings: GenerationSettings, model: ModelInfo): Record<string, unknown>
+  mapSettings(
+    settings: GenerationSettings,
+    model: ModelInfo,
+  ): Record<string, unknown>;
 
   /**
    * Run a multi-step text + tools generation. The SDK owns the loop.
@@ -124,7 +137,9 @@ export interface LoopRuntimePort<TModel, TRawResponse = unknown, TRawStream = un
    *   `suspended` outcome instead.
    * - Pass `request.abortSignal` to the SDK for cooperative timeout.
    */
-  runTextLoop(request: ExecutorRequest<TModel>): Promise<ExecutorOutcome<TRawResponse>>
+  runTextLoop(
+    request: ExecutorRequest<TModel>,
+  ): Promise<ExecutorOutcome<TRawResponse>>;
 
   /**
    * Make exactly one structured-output attempt against the schema.
@@ -134,7 +149,9 @@ export interface LoopRuntimePort<TModel, TRawResponse = unknown, TRawStream = un
    * in corrective feedback. Run the SDK's cheap text-repair tier inside
    * the attempt before declaring it invalid.
    */
-  runStructuredAttempt(request: StructuredRequest<TModel>): Promise<StructuredAttempt<TRawResponse>>
+  runStructuredAttempt(
+    request: StructuredRequest<TModel>,
+  ): Promise<StructuredAttempt<TRawResponse>>;
 
   /**
    * Run a streaming generation (text, or structured when `schema` is set).
@@ -145,7 +162,7 @@ export interface LoopRuntimePort<TModel, TRawResponse = unknown, TRawStream = un
    */
   runStream(
     request: ExecutorRequest<TModel> & { readonly schema?: z.ZodType },
-  ): Promise<ExecutorStreamHandle<TRawStream>>
+  ): Promise<ExecutorStreamHandle<TRawStream>>;
 
   /**
    * Recreate a stream handle from a cached (semantic-cache) result, when
@@ -154,7 +171,7 @@ export interface LoopRuntimePort<TModel, TRawResponse = unknown, TRawStream = un
    *
    * @param cached - The cached payload captured from a prior run.
    */
-  replayStream?(cached: CachedStreamPayload): ExecutorStreamHandle<TRawStream>
+  replayStream?(cached: CachedStreamPayload): ExecutorStreamHandle<TRawStream>;
 }
 
 /**
@@ -165,10 +182,14 @@ export interface LoopRuntimePort<TModel, TRawResponse = unknown, TRawStream = un
  * Authoring `defineProviderRuntime({ loop })` returns this from `bind`; core
  * combines it with `describeModel`/`settings`/`id` to assemble the full port.
  */
-export type BoundLoopRuntime<TModel, TRawResponse = unknown, TRawStream = unknown> = Omit<
+export type BoundLoopRuntime<
+  TModel,
+  TRawResponse = unknown,
+  TRawStream = unknown,
+> = Omit<
   LoopRuntimePort<TModel, TRawResponse, TRawStream>,
-  'id' | 'describeModel' | 'mapSettings'
->
+  "id" | "describeModel" | "mapSettings"
+>;
 
 /** Convenience re-exports so port implementations import from one place. */
 export type {
@@ -178,4 +199,4 @@ export type {
   ExecutorStreamMeta,
   StructuredAttempt,
   StructuredRequest,
-}
+};

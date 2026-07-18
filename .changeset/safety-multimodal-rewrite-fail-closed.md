@@ -1,5 +1,6 @@
 ---
 "@use-crux/core": minor
+"@use-crux/ai": minor
 "@use-crux/indexer": patch
 ---
 
@@ -52,3 +53,10 @@ and system text at their exact boundaries, and hand providers a direct prepared 
 second resolution. Routed prompts require one candidate-stable ordered policy set, lazily guard only
 attempted candidates, and treat candidate input Safety failures as terminal rather than eligible for
 fallback.
+
+Language generation now guards every provider-produced step before client tools, history append,
+observation, continuation, or public accumulation. The loop-runtime contract exposes an optional
+pre-client-tool transform capability with Core-owned indexed text/media edits; incapable runtimes
+fail before provider I/O when step policies apply. Core and AI SDK dialects preserve tool calls,
+raw/provider identities, and guarded step/envelope consistency across reasoning, media, structured
+validation, and constraint regeneration.

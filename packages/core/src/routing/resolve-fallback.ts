@@ -18,6 +18,7 @@ import { getMeta } from "../generation/result-meta";
 import { Deadline, withBudget } from "../generation/timeout";
 import { observe } from "../observability";
 import { routingDefinitionRef } from "../observability/definition-ref";
+import { isPolicyTerminal } from "../safety/errors";
 import { FallbackExhaustedError } from "./errors";
 import { readRoutingFirstTokenAt } from "./first-token";
 import {
@@ -257,11 +258,9 @@ export async function resolveFallback<M, R>({
       const err = error instanceof Error ? error : new Error(String(error));
       const durationMs = Date.now() - attemptStart;
       const errorCategory = classifyError(err);
-      const willAttemptFallback = shouldAttemptFallbackSafely(
-        err,
-        options,
-        attemptSpan,
-      );
+      const willAttemptFallback =
+        !isPolicyTerminal(err) &&
+        shouldAttemptFallbackSafely(err, options, attemptSpan);
 
       details.push({
         model: modelId,

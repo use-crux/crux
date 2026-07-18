@@ -98,6 +98,18 @@ export interface ExecutorRequest<TModel> {
    */
   readonly observer: StepObserver | undefined;
   /**
+   * Optional canonical step transformer for runtimes that declare
+   * `capabilities.stepTransform: 'before-client-tools'`.
+   *
+   * The runtime must await it once after each model response and before local
+   * tool approval/execution, assistant-history append, observation, or
+   * continuation. The transformer returns indexed edits; it never replaces the
+   * provider-shaped result wholesale. Provider-executed server tools have
+   * already run remotely when their response arrives; the guarantee covers
+   * canonical exposure and SDK/Crux-owned client tools, not undoing remote work.
+   */
+  readonly stepTransformer?: StepTransformer;
+  /**
    * Cooperative cancellation from core's timeout policy. Pass to the SDK
    * (`abortSignal`) so a timed-out call stops consuming tokens.
    */
@@ -227,6 +239,40 @@ export interface StepObserver {
    * @returns The directive to apply before the next step.
    */
   onStepEnd(step: ExecutorStep): Promise<StepDirective>;
+}
+
+/** Canonical model output available before an SDK-owned client tool runs. */
+export interface ExecutorModelStep {
+  /** Monotonic provider-response ordinal; refunded steps never reuse an index. */
+  readonly index: number;
+  /** Ordered canonical assistant content projected from the native response. */
+  readonly content: readonly AssistantContentPart[];
+}
+
+/**
+ * One immutable edit against the original canonical step projection.
+ *
+ * Text replacement applies only to text/reasoning parts; removal applies only
+ * to media parts. Tool-call parts are never editable.
+ */
+export type StepContentEdit =
+  | {
+      readonly kind: "replace-text";
+      readonly partIndex: number;
+      readonly text: string;
+    }
+  | {
+      readonly kind: "remove";
+      readonly partIndex: number;
+    };
+
+/** Core-owned pre-continuation policy hook implemented mechanically by loop runtimes. */
+export interface StepTransformer {
+  /**
+   * Guard one canonical model step and return strictly ordered indexed edits.
+   * A thrown error is terminal for all client-side continuation of this step.
+   */
+  transform(step: ExecutorModelStep): Promise<readonly StepContentEdit[]>;
 }
 
 // ─────────────────────────────────────────────────────────────────

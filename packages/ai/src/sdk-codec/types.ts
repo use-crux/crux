@@ -71,15 +71,19 @@ export interface AiSdkCodec {
  *
  * @internal
  */
-export interface AiSdkStructuredPlan extends AiSdkCallPlan<
-  "generateObject",
-  StructuredAttempt<SdkLoopResultLike>
-> {
+interface AiSdkStructuredPlanBase {
   /** Decode SDK validation/parse errors into core's invalid-attempt variant. */
   decodeError(
     error: unknown,
   ): Promise<StructuredAttempt<SdkLoopResultLike> | undefined>;
 }
+
+/** One legacy or guarded structured attempt, selected by codec capability. */
+export type AiSdkStructuredPlan = AiSdkStructuredPlanBase &
+  (
+    | AiSdkCallPlan<"generateObject", StructuredAttempt<SdkLoopResultLike>>
+    | AiSdkCallPlan<"generateText", StructuredAttempt<SdkLoopResultLike>>
+  );
 
 /** A cached stream payload captured by core's semantic-cache middleware. */
 export interface CachedStreamPayload {
@@ -122,6 +126,7 @@ export interface AiSdkCodecDeps {
 export interface SdkLoopResultLike {
   text?: string;
   object?: unknown;
+  output?: unknown;
   content?: Array<
     Record<string, unknown> & {
       type?: string;

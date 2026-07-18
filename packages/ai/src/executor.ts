@@ -11,19 +11,24 @@
  * @module
  */
 
-import type { LanguageModel } from 'ai'
-import { normalizeAdapterCallError } from '@use-crux/core/adapter'
-import type { ExecutorRequest, LoopRuntimePort } from '@use-crux/core/adapter'
-import type { SdkGateway } from './gateway'
-import { mapAiSdkError } from './normalized-outcome'
-import { createAiSdkCodec } from './sdk-codec'
-import type { SdkLoopResultLike, SdkStreamResultLike } from './sdk-codec'
-import { materializeAiSdkToolSource } from './mcp-materializer'
+import type { LanguageModel } from "ai";
+import { normalizeAdapterCallError } from "@use-crux/core/adapter";
+import type { ExecutorRequest, LoopRuntimePort } from "@use-crux/core/adapter";
+import { isPolicyTerminal } from "@use-crux/core/safety";
+import type { SdkGateway } from "./gateway";
+import { mapAiSdkError } from "./normalized-outcome";
+import { createAiSdkCodec } from "./sdk-codec";
+import type { SdkLoopResultLike, SdkStreamResultLike } from "./sdk-codec";
+import { materializeAiSdkToolSource } from "./mcp-materializer";
 
-export type { SdkLoopResultLike, SdkStreamResultLike } from './sdk-codec'
+export type { SdkLoopResultLike, SdkStreamResultLike } from "./sdk-codec";
 
 /** The AI SDK loop runtime port, bound to one {@link SdkGateway}. */
-export type AiSdkLoopRuntime = LoopRuntimePort<LanguageModel, SdkLoopResultLike, SdkStreamResultLike>
+export type AiSdkLoopRuntime = LoopRuntimePort<
+  LanguageModel,
+  SdkLoopResultLike,
+  SdkStreamResultLike
+>;
 
 /**
  * Build the AI SDK {@link LoopRuntimePort} over a concrete {@link SdkGateway}.
@@ -37,10 +42,11 @@ export type AiSdkLoopRuntime = LoopRuntimePort<LanguageModel, SdkLoopResultLike,
  * @returns A loop runtime port bound to the gateway.
  */
 export function createAiSdkLoopRuntime(gateway: SdkGateway): AiSdkLoopRuntime {
-  const codec = createAiSdkCodec()
+  const codec = createAiSdkCodec();
 
   return {
     id: codec.executorId,
+    capabilities: { stepTransform: "before-client-tools" },
 
     materializeToolSource: materializeAiSdkToolSource,
 
@@ -49,35 +55,38 @@ export function createAiSdkLoopRuntime(gateway: SdkGateway): AiSdkLoopRuntime {
     mapSettings: codec.mapSettings,
 
     async runTextLoop(request) {
-      const call = codec.loop(request)
-      const raw = await runCall(() => gateway[call.method](call.args), request)
-      return call.decode(raw)
+      const call = codec.loop(request);
+      const raw = await runCall(() => gateway[call.method](call.args), request);
+      return call.decode(raw);
     },
 
     async runStructuredAttempt(request) {
-      const call = await codec.structured(request)
+      const call = await codec.structured(request);
       try {
-        return call.decode(await gateway.generateObject(call.args))
+        return call.method === "generateObject"
+          ? call.decode(await gateway.generateObject(call.args))
+          : call.decode(await gateway.generateText(call.args));
       } catch (error) {
-        const invalid = await call.decodeError(error)
-        if (invalid) return invalid
-        throw normalize(error, request)
+        const invalid = await call.decodeError(error);
+        if (invalid) return invalid;
+        if (isPolicyTerminal(error)) throw error;
+        throw normalize(error, request);
       }
     },
 
     async runStream(request) {
-      const call = await codec.stream(request)
+      const call = await codec.stream(request);
       return runCall(
         () =>
-          call.method === 'streamText'
+          call.method === "streamText"
             ? call.attach(gateway.streamText(call.args))
             : call.attach(gateway.streamObject(call.args)),
         request,
-      )
+      );
     },
 
     replayStream: codec.replayStream,
-  }
+  };
 }
 
 /**
@@ -91,17 +100,21 @@ async function runCall<T>(
   request: ExecutorRequest<LanguageModel>,
 ): Promise<T> {
   try {
-    return await run()
+    return await run();
   } catch (error) {
-    throw normalize(error, request)
+    if (isPolicyTerminal(error)) throw error;
+    throw normalize(error, request);
   }
 }
 
 /** Classify a thrown AI SDK call error via core's shared normalization path. */
-function normalize(error: unknown, request: ExecutorRequest<LanguageModel>): unknown {
+function normalize(
+  error: unknown,
+  request: ExecutorRequest<LanguageModel>,
+): unknown {
   return normalizeAdapterCallError(error, {
-    providerId: 'ai-sdk',
+    providerId: "ai-sdk",
     signal: request.abortSignal,
     mapError: mapAiSdkError,
-  })
+  });
 }

@@ -647,7 +647,7 @@ describe('dialect parity — output guards and suspension', () => {
     expect(strip(executorResult._meta.guardrails?.applied)).toEqual(strip(nativeResult._meta.guardrails?.applied))
   })
 
-    it('tool-approval suspension skips output safety in BOTH dialects', async () => {
+    it('tool-approval suspension guards the retained step but skips terminal constraints in BOTH dialects', async () => {
     const guardSpy = vi.fn()
     const spyGuard = () =>
       makeGuardrail({
@@ -694,9 +694,9 @@ describe('dialect parity — output guards and suspension', () => {
 
     expect(nativeResult._meta.finishReason).toBe('tool_approval_required')
     expect(executorResult._meta.finishReason).toBe('tool_approval_required')
-    // The suspension policy is decided once, in the session: no output
-    // guard and no constraint ran in either dialect.
-    expect(guardSpy).not.toHaveBeenCalled()
+    // Each provider-produced approval step is guarded before it can be
+    // retained. Suspension still skips terminal object/both constraints.
+    expect(guardSpy).toHaveBeenCalledTimes(2)
     expect(checkSpy).not.toHaveBeenCalled()
   })
 })

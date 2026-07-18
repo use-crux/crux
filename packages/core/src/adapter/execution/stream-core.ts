@@ -67,6 +67,8 @@ export async function streamCore<
   let resolved = await prompt.resolve(resolveOpts);
   const mappedSettings = dialect.mapSettings(resolved.settings);
   let messages = initialCoreMessages(resolved, args.messages);
+  let currentSystem = resolved.system;
+  let currentSystemBlocks = resolved.systemBlocks;
   const safety = createSafety({
     call: {
       constraints: args.constraints,
@@ -83,7 +85,13 @@ export async function streamCore<
     model: modelInfo.modelId,
     systemPrompt: resolved.system,
   });
-  messages = [...(await safety.guardInput({ messages })).messages];
+  const guardedInput = await safety.guardInput({
+    messages,
+    system: currentSystem,
+  });
+  messages = [...guardedInput.messages];
+  if (guardedInput.system !== currentSystem) currentSystemBlocks = undefined;
+  currentSystem = guardedInput.system;
   const sourceSession = await materializeToolSources({
     dialect: dialect.id,
     resolved,
@@ -133,8 +141,8 @@ export async function streamCore<
 
     const callArgs: CallArgs<TExtra> = {
       model: modelInfo.modelId,
-      system: resolved.system,
-      systemBlocks: resolved.systemBlocks,
+      system: currentSystem,
+      systemBlocks: currentSystemBlocks,
       messages: providerMessages,
       settings: mappedSettings,
       schema: resolved.schema,

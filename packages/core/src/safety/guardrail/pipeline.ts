@@ -14,6 +14,8 @@ import { safeCaptureSummary } from '../errors'
 import { observe } from '../../observability'
 import { guardrailDefinitionRef } from '../../observability/definition-ref'
 import { recordGuardrailBlockedEdge, recordGuardrailReport } from './observability'
+import type { z } from 'zod'
+import { applyTerminalRewrite, terminalSubject } from '../output/guardrail-state'
 
 // ── Pipeline Config ────────────────────────────────────────────────
 
@@ -28,6 +30,7 @@ export interface GuardrailPipelineConfig {
 
 export interface GuardrailPipelineResult {
   readonly content: string
+  readonly parsed?: unknown
   readonly audit: GuardrailAudit
 }
 
@@ -41,7 +44,7 @@ export interface GuardrailPipeline {
   readonly runOutput: (
     content: string,
     ctx: GuardrailContext,
-    opts?: { readonly parsed?: unknown },
+    opts?: { readonly parsed?: unknown; readonly schema?: z.ZodType },
   ) => Promise<GuardrailPipelineResult>
 
   /** All exact guardrail bindings in the pipeline. */
@@ -77,9 +80,9 @@ export function createGuardrailPipeline(
     async runOutput(
       content: string,
       ctx: GuardrailContext,
-      opts?: { readonly parsed?: unknown },
+      opts?: { readonly parsed?: unknown; readonly schema?: z.ZodType },
     ): Promise<GuardrailPipelineResult> {
-      return runGuards(outputBindings, content, ctx, 'output', config, opts?.parsed)
+      return runGuards(outputBindings, content, ctx, 'output', config, opts?.parsed, opts?.schema)
     },
   }
 }
@@ -93,6 +96,7 @@ async function runGuards(
   phase: 'input' | 'output',
   config?: GuardrailPipelineConfig,
   parsed?: unknown,
+  schema?: z.ZodType,
 ): Promise<GuardrailPipelineResult> {
   return observe.span(
     {
@@ -105,7 +109,7 @@ async function runGuards(
         guardrailCount: bindings.length,
       },
     },
-    async () => runGuardsInternal(bindings, content, ctx, phase, config, parsed),
+    async () => runGuardsInternal(bindings, content, ctx, phase, config, parsed, schema),
   )
 }
 
@@ -116,8 +120,9 @@ async function runGuardsInternal(
   phase: 'input' | 'output',
   config?: GuardrailPipelineConfig,
   parsed?: unknown,
+  schema?: z.ZodType,
 ): Promise<GuardrailPipelineResult> {
-  let currentContent = content
+  let current: import('../structured').StructuredSafetyOutput = { text: content, parsed }
   const entries: GuardrailAuditEntry[] = []
 
   for (const binding of bindings) {
@@ -148,7 +153,7 @@ async function runGuardsInternal(
       result = validateGuardrailRunResult(
         await span.withContext(async () =>
           guard.run(
-            subjectForBoundary(boundary, currentContent, parsed) as never,
+            terminalSubject(boundary, current) as never,
             runContext(binding, ctx) as never,
           ),
         ),
@@ -194,19 +199,23 @@ async function runGuardsInternal(
           guardrailId: guard.id,
           phase,
           reason: result.reason,
-          decisions: [guardDecision(binding, result, currentContent, durationMs)],
+          decisions: [guardDecision(binding, result, current.text, durationMs)],
         })
 
       case 'rewrite': {
         entries.push(entry)
         if (binding.mode !== 'report') {
-          const content = stringifyGuardrailValue(result.value)
+          const rewritten = applyTerminalRewrite(boundary, current, result.value, {
+            schema,
+            policyId: guard.id,
+          })
+          const content = rewritten.text
           if (result.rewrite.kind === 'normalize') {
             config?.onTransform?.(guard, { content })
           } else {
             config?.onRedact?.(guard, { content })
           }
-          currentContent = content
+          current = rewritten
         }
         break
       }
@@ -222,7 +231,8 @@ async function runGuardsInternal(
   }
 
   return {
-    content: currentContent,
+    content: current.text,
+    ...(current.parsed !== undefined ? { parsed: current.parsed } : {}),
     audit: { applied: entries, blocked: false },
   }
 }
@@ -275,15 +285,6 @@ function runContext<B extends BoundaryDef>(
     ...(ctx.stream ? { stream: ctx.stream } : {}),
     ...(boundary.path ? { path: boundary.path } : {}),
   }
-}
-
-function subjectForBoundary(boundary: BoundaryDef, content: string, parsed: unknown): unknown {
-  if (boundary.id === 'model.output') return { text: content, object: parsed }
-  return content
-}
-
-function stringifyGuardrailValue(value: unknown): string {
-  return typeof value === 'string' ? value : JSON.stringify(value)
 }
 
 function auditAction(result: GuardrailRunResult<unknown>): string {

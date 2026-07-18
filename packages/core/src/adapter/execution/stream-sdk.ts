@@ -68,6 +68,8 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
   const mappedSettings = dialect.mapSettings(resolved.settings, modelInfo);
   let { messages, promptText } = initialMessageState(resolved, args.messages);
   let nativeMessages = args.nativeMessages;
+  let currentSystem = resolved.system;
+  let currentSystemBlocks = resolved.systemBlocks;
   const safety = createSafety({
     call: {
       constraints: args.constraints,
@@ -87,10 +89,17 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
   const guardedInput = await safety.guardInput({
     messages,
     prompt: promptText,
+    system: currentSystem,
   });
-  if (guardedInput.messages !== messages) nativeMessages = undefined;
+  if (
+    guardedInput.messages !== messages ||
+    guardedInput.system !== currentSystem
+  )
+    nativeMessages = undefined;
   messages = [...guardedInput.messages];
   promptText = guardedInput.prompt;
+  if (guardedInput.system !== currentSystem) currentSystemBlocks = undefined;
+  currentSystem = guardedInput.system;
 
   const sourceSession = await materializeToolSources({
     dialect: dialect.id,
@@ -158,8 +167,8 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
   const request: ExecutorRequest<TModel> & { schema?: z.ZodType } = {
     model: args.model,
     modelInfo,
-    system: resolved.system,
-    systemBlocks: resolved.systemBlocks,
+    system: currentSystem,
+    systemBlocks: currentSystemBlocks,
     prompt: promptText,
     messages: providerMessages,
     nativeMessages,
@@ -197,8 +206,8 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
             prompt.config ?? ({} as NonNullable<typeof prompt.config>),
           preparedArgs: {
             model: modelInfo.modelId,
-            system: resolved.system,
-            systemBlocks: resolved.systemBlocks,
+            system: currentSystem,
+            systemBlocks: currentSystemBlocks,
             prompt: promptText,
             messages,
             settings: mappedSettings,
