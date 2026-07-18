@@ -1,0 +1,104 @@
+---
+title: "It was never the prompt. It was the harness."
+description: "Most production AI failures are not model failures. They are failures in the layer around the model call, and that layer is engineerable."
+date: "2026-06-02"
+type: Essay
+tags: [harness, philosophy, reliability]
+authors: [henri]
+featured: true
+draft: false
+readTime: 7
+---
+
+You shipped an AI feature. It worked in the demo. Three weeks later a customer pastes a screenshot of it confidently answering the wrong question, and the debugging session that follows goes like every other one: you reread the prompt, tweak a sentence, rerun the case, and it works. Probably. You ship the tweak. Two weeks later, a different screenshot.
+
+The uncomfortable part is that the prompt was probably never the problem.
+
+## What actually failed
+
+When we dig into a bad model turn, the root cause is rarely the instructions and almost never "the model is bad." It is the machinery around the call:
+
+- A retrieval hit that was six months stale, ranked 0.92 by cosine similarity because semantic similarity has no concept of time.
+- An instruction that silently fell out of the prompt because the context outgrew a token budget and *something* had to go.
+- A memory that recalled the wrong user's preference, or none at all.
+- A tool that was exposed to the model by accident, because tool lists merge implicitly.
+- A fallback to a cheaper model that nobody declared and nobody logged.
+- A retry that mutated state twice.
+
+None of these are prompt problems. All of them produce answers that *look* like prompt problems. So we keep editing prompts, which is like fixing a flaky integration test by rewording the assertion message.
+
+## The harness
+
+There is a name emerging for the layer where these failures live: the **harness**. It covers everything your application puts around the model call. Instructions, assembled context, memory, retrieved knowledge, tool definitions, safety policies, model choice, fallback chains, retries, output validation.
+
+The term has mostly been used for coding agents, the scaffolding that turns a raw model into a tool like Claude Code. But the idea is bigger than agents that write software. Every production AI feature has a harness, whether or not anyone designed it. A support bot's harness is its memory, its docs retrieval, its escalation tools, and its guardrails. If nobody engineered that layer, it was still built. Implicitly, by accretion, one merged PR at a time.
+
+**Harness engineering** is doing it on purpose: treating everything around the model call as designed, inspectable, testable software.
+
+The core observation that makes this a discipline rather than a vibe:
+
+> Models are probabilistic. The harness does not have to be.
+
+You cannot make a model deterministic. You *can* make everything you put in front of it deterministic: which context goes in, in what order, under which conditions, within what budget, with which tools, on which model, with which recovery path. When turn assembly is deliberate and reproducible, the only variance left is the model itself, and that residual variance is something you can measure, bound, and route around. When turn assembly is accidental, every failure is unexplainable by construction.
+
+## The reactive trap
+
+The dominant tooling pattern today is reactive. Run the system, collect traces, score outputs, and reason backwards from a bad answer to a guess about the cause. Observability platforms show you the request after the fact. Eval tools score what the model said.
+
+Both are useful. Neither can tell you *why* the request contained what it contained, because they did not assemble it. A tracing dashboard can show you the final prompt. It cannot tell you that a higher-priority context evicted your formatting rules, or that the router downgraded the model because of a rate limit, or that the retrieved paragraph was cached three deploys ago. The assembly decisions are invisible, so the debugging is archaeology.
+
+Teams compensate for an unexplainable harness the only way they can: pay for a stronger model and let it power through the noise. A surprising amount of frontier-model spend is not buying intelligence. It is buying tolerance for a harness nobody can see into. You are paying model prices for harness problems.
+
+## Three questions
+
+An engineered harness answers three questions about every model turn.
+
+**Before the turn: what will go in, and why?** Which contexts, under which conditions, at which priority, within which budget. Which tools are eligible. Which model the router will pick, and what the fallback chain is. What memory will be recalled. Every one of those choices should be deliberate and declared, never an accident of insertion order.
+
+**After the turn: what actually happened, and why?** Which contexts got in. Which were excluded or dropped, and for what reason. Which model actually served the request, on what grounds. Which guardrail fired and what it did. What fell back, what was retried, what was written to memory and under which policy. Recorded at decision time, with reasons, not reconstructed later from logs.
+
+**Over time: can I prove it still behaves?** Not just "the answer scored 4/5" but assertions about the assembly itself: the customer-profile context was active, the router selected the billing route, the stale cache entry was rejected. Runnable in CI, protecting a promoted baseline.
+
+Answer all three and debugging stops being archaeology. Answer none and every incident starts from zero.
+
+## What deliberate looks like
+
+Concretely, declared assembly reads like this:
+
+```ts
+const critical = context({ id: 'rules', priority: 100, system: RULES })
+const examples = context({ id: 'examples', priority: 20, system: EXAMPLES })
+
+const reply = prompt({
+  id: 'support-reply',
+  use: [critical, docs, userMemory, examples],
+  system: 'Answer from the provided context only.',
+})
+```
+
+If the budget forces a drop, `examples` goes before `rules`. Because you said so, not because of insertion order luck. The same principle extends to every other decision in the turn: routing is a declared policy with a receipt, guardrails are declared boundaries with recorded outcomes, memory writes carry their policy with them.
+
+Declared, evidenced, provable. That is the whole discipline.
+
+## Where to start on Monday
+
+You do not need a platform migration to start engineering your harness. The first steps are small:
+
+1. **Inventory one turn.** Take your most important AI feature and write down everything that enters the prompt, and what decides it. Most teams cannot complete this exercise from memory. That gap is the finding.
+2. **Make one accidental decision deliberate.** The most common: what gets cut when the prompt is too long. Declare priorities instead of trusting concatenation order.
+3. **Record one decision with its reason.** Even a log line that says *why* a context was skipped beats a perfect record of what was sent.
+4. **Assert one expectation in CI.** Pick the invariant that would embarrass you most if it broke ("the compliance disclaimer is always present" is a popular first choice) and make a test fail when it stops holding.
+
+Each step pays for itself independently. Together they compound into a system you can actually reason about.
+
+## Why we built Crux
+
+We kept rebuilding this layer for our own product: the typed prompts, the memory, the budget arbitration, the routing receipts, the eval harness. At some point we admitted we wanted the explanation layer to exist as infrastructure, so we extracted it.
+
+[Crux](https://cruxjs.dev) is an open-source TypeScript toolkit for harness engineering. It is not a model SDK; your Vercel AI SDK, OpenAI, Anthropic, or Google client still makes the call. It is not a framework; there is no runtime to adopt and no platform to sign up for. It is typed building blocks for the layer around the call: prompts, contexts, memory, retrieval, guardrails, routing, quality suites. All of it composes through one mechanism, emits evidence into one graph, and is assertable in CI. Use one block or ten.
+
+Crux is alpha. The composition model, the primitives, and the observability graph exist today. Parts of the deeper proof layer, like the full per-turn decision report and richer routing rationale, are still being completed, and the docs say so honestly.
+
+But the thesis does not depend on our implementation, and it is worth stating on its own: models are becoming a commodity you route between. The harness (versioned, explained, tested) is the part of your AI system you actually own. Engineer it like you mean it.
+
+*Next in this series: [What did the model actually see?](/blog/what-did-the-model-see), a debugging walkthrough of one bad turn, from wrong answer to root cause to regression test.*

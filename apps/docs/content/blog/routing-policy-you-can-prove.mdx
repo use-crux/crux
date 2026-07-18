@@ -1,0 +1,136 @@
+---
+title: "Cut your AI bill with a routing policy you can prove"
+description: "Vendors promise 40–85% savings from model routing. The claims are plausible, and unverifiable without two things most routing setups lack: a declared policy and a receipt per request."
+date: "2026-07-08"
+type: Engineering
+tags: [routing, cost, quality]
+authors: [henri]
+draft: false
+readTime: 9
+---
+
+Every LLM cost pitch cites the same arithmetic: most requests don't need your best model, frontier prices are 10–30× budget prices, so route the easy traffic down and save 40–85%. The arithmetic is right. Routine classification doesn't need a frontier model, and teams really do overspend by defaulting everything to the top tier.
+
+But the pitch quietly assumes three things: that you'll know which requests were "easy," that the cheap model handled them acceptably, and that your quality bar survived the router making model choices on your behalf. A percentage on a landing page can't tell you any of that about *your* traffic.
+
+So treat routing as an engineering decision with three requirements. The policy is **declared**. Every decision leaves a **receipt**. The quality claim is **tested against a baseline**. Then you can cut costs aggressively, because regressions are detectable.
+
+## Declare the policy
+
+Routing logic scattered across call sites isn't a policy. Make it one value. Crux routing primitives are model values: the entire policy passes as the `model` option and composes recursively.
+
+```ts
+import { fallback, retry, router, split, type RouteArgs } from '@use-crux/core/routing'
+
+const canary = split({
+  id: 'mini-canary',
+  seed: ({ context }: RouteArgs<{ sessionId: string }>) => context.sessionId,
+  routes: {
+    stable: { model: gpt4o, weight: 95 },
+    canary: { model: gpt5mini, weight: 5 },
+  },
+})
+
+export const supportModel = router({
+  id: 'support-model',
+  classify: ({ input, context }: RouteArgs<{ tier: 'free' | 'enterprise' }, { question: string }>) =>
+    context.tier === 'enterprise' || input.question.length > 2000 ? 'deep' : 'fast',
+  routes: {
+    fast: fallback([retry(gpt5nano, { id: 'nano-retry', attempts: 2 }), canary]),
+    deep: sonnet,
+    default: sonnet,
+  },
+})
+```
+
+Pass request context at the call site:
+
+```ts
+const result = await generate(supportPrompt, {
+  model: supportModel,
+  input: { question },
+  routing: { tier: account.tier, sessionId },
+})
+```
+
+The code *is* the policy. Enterprise and long questions go deep. Everything else tries the nano tier with two retries, then falls back through a seeded 5% canary. Nothing ever lands on an undeclared model.
+
+That last property matters more than it looks. In most stacks the fallback path is a `catch` block someone added during an incident: undocumented, untested, serving a different model to some traffic since March without anyone noticing. Here the recovery chain is part of the declared surface, reviewed in the same PR as everything else.
+
+## Five primitives, one decision guide
+
+The composable pieces, and when each earns its place:
+
+| Need | Primitive | Cost profile |
+| --- | --- | --- |
+| Choose a route before generation | `router()` | Free: classification is your code |
+| Stable percentage traffic split | `split()` | Free: seeded hashing |
+| Survive transient errors | `retry()` | Pays only on failure |
+| Recover across models/providers | `fallback()` | Pays only on failure |
+| Escalate when output isn't good enough | `cascade()` | Pays twice on escalation |
+
+Start simpler than you think. A two-route `router()` by task type captures most of the savings. `cascade()` is the sharper tool for quality-sensitive traffic: generate on the cheap model, inspect the result, escalate if it doesn't hold up. It's also the only generate-only primitive (it must see complete results), and its economics depend on the escalation rate. At 10% you pay double on one request in ten, which usually still wins. At 50% you'd have been better off routing that class of traffic upward from the start. The receipt data tells you which side you're on.
+
+One nuance for streaming apps: `router`, `split`, `retry`, and `fallback` all work with `stream()`, with a declared boundary. Failures before the first token can fail over invisibly; failures mid-stream surface rather than silently switching voices halfway through a response.
+
+## Demand a receipt
+
+Every routed result carries one append-only record of what actually happened:
+
+```ts
+result.routing
+// {
+//   model: 'claude-sonnet-4-5',
+//   cost: 0.018,
+//   trace: [
+//     { kind: 'router', id: 'support-model', route: 'deep' },
+//     { kind: 'fallback', attempts: [...] },
+//   ],
+// }
+```
+
+Receipts turn cost from a monthly-invoice surprise into an operational quantity. Real per-request cost by route, how often the fast tier exhausts retries, whether the canary is behaving. Queries over receipts, not spelunking through provider dashboards.
+
+Receipts also attach to stream completions and to routing errors: `FallbackExhaustedError` tells you which chain died and how. The same evidence shows up per turn in devtools under Decisions, joined back to the authored route definition that produced it.
+
+Three questions worth standing up as queries on day one, because they're the ones that catch policy rot:
+
+1. **Route distribution over time.** A classifier drifting from 80/20 to 60/40 fast/deep is a cost regression with no code change.
+2. **Fallback engagement rate.** Fallbacks firing on 0.1% of traffic is resilience. At 8%, your primary tier is misconfigured and you're paying retry latency on every twelfth request.
+3. **Effective cost per resolved request**, including retries and escalations, not just the winning call. This is the number the vendor percentage hides.
+
+## Prove the quality claim
+
+Now the part the gateway pitch skips. "No visible quality loss" is a testable hypothesis, and you already have the instrument if you run evals: a baseline promoted on your pre-routing setup, and a per-case diff after.
+
+```ts
+export default evaluate('support.routing', {
+  covers: ['prompt:support'],
+  task: target.prompt(supportPrompt, { generate, model: supportModel }),
+  data: productionShapedCases,
+  expect: (ctx) => {
+    if (ctx.input.tier === 'enterprise') {
+      ctx.expect.decisionReport.routing.toHaveOutcome(
+        'route:deep', 'selected',
+        { reasonCode: 'routing.router.selected' },
+      )
+    }
+  },
+})
+```
+
+Two different things are protected here.
+
+The scorers-and-baseline layer answers: did the cheap tier hold the quality bar? Per case, on your traffic shape, not the vendor's benchmark.
+
+The routing assertion answers: does the policy do what it says? Enterprise traffic never rides the nano tier because someone reordered a threshold. This bug class is nasty precisely because it *saves money* while it breaks your promise. Only an explicit assertion catches a failure that improves the invoice.
+
+## The compounding payoff
+
+With the proof standing, every future price-sheet change becomes cheap to exploit. A new budget model drops? Point the canary at it, watch the receipts and the baseline diff, widen or revert. Routing stops being a one-time migration project and becomes a knob you turn whenever the market moves. Lately, that's monthly.
+
+There's a deeper inversion underneath. If quality collapses whenever you step down from the frontier model, the model is carrying weaknesses in your harness: vague instructions, sloppy context, missing grounding. You're paying frontier prices to paper over them. A well-built harness works with almost any capable model, and the eval suite is how you know rather than hope.
+
+Stop paying model prices for harness problems.
+
+*Routing docs (router, split, retry, fallback, cascade, streaming semantics, receipts): [cruxjs.dev/docs/guides/routing](https://cruxjs.dev/docs/guides/routing). Crux is open source and alpha.*

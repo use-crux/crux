@@ -1,0 +1,138 @@
+---
+title: "Shipping a model migration without breaking production"
+description: "Every model deprecation email starts the same fire drill. A migration playbook built on baselines, side-by-side variants, provider adaptations, and canary splits, so 'upgrade the model' becomes a reviewable change."
+date: "2026-06-30"
+type: Engineering
+tags: [routing, quality, migration]
+authors: [henri]
+draft: false
+readTime: 9
+---
+
+The email arrives on a Tuesday: your production model is deprecated, retirement in 90 days. Or the cheerful version: the new model is 40% cheaper and "better on every benchmark." Either way, someone on your team is about to change one string in one config file, and silently re-roll the behavior of every AI feature you ship.
+
+Model migrations have gotten *harder*, not easier. Recent model generations aren't drop-in replacements. Parameters get removed outright, reasoning models spend tokens differently, refusal behavior shifts, and prompt patterns that were tuned for one model family actively hurt on the next. Provider migration guides now say it plainly: treat the new model as a new system to tune, not a faster version of the old one.
+
+Benchmarks tell you the new model is better *on average, at their tasks*. Your production risk is the tail: the 4% of *your* cases that regress. Averages don't page you at night. Tails do. Here's the playbook we use to make migrations boring.
+
+## Step 0: Baseline the old model, before touching anything
+
+You can't detect a regression against a memory. Before the migration branch even exists, run your eval suite on the current model and promote the result as an explicit baseline:
+
+```bash
+crux quality run --ci
+crux quality promote <experiment-id>
+```
+
+A baseline is a committed record of your current model's measured behavior: per-case outputs, scores, assertion results. From now on, every run auto-compares against it.
+
+If you don't have an eval suite yet, this is the forcing function. Even 30 real cases imported from production traces beat zero:
+
+```bash
+crux quality import-traces --definition support-reply --with-expected
+```
+
+Bias the dataset toward what would hurt: your highest-value flows, your weirdest known inputs, and any case that has caused an incident before. A migration suite is a regression suite, not a benchmark. Coverage of your own tail beats breadth.
+
+## Step 1: Change the model. Only the model.
+
+The classic migration mistake is bundling: new model, plus the prompt tweaks it "obviously" needs, plus that refactor someone had queued. Then quality shifts and nobody can attribute it. Discipline: first diff is model-only, prompts byte-identical.
+
+```bash
+crux quality run --ci
+crux quality diff <baseline> <new-run>
+```
+
+The diff is per-case, not aggregate. It shows which cases flipped from pass to fail, which improved, and how scores moved pairwise. The aggregate hides exactly the thing you're hunting: a new model can improve the mean and still break your ten most valuable cases.
+
+If you'd rather compare in one run than across two, declare the migration as variants and let paired statistics do the honest work:
+
+```ts
+export default evaluate('support.migration', {
+  task: target.prompt(supportPrompt, { generate, model: current }),
+  variants: {
+    current: { model: gpt4o },
+    candidate: { model: gpt5mini },
+  },
+  trials: 3,
+  data: cases,
+})
+```
+
+Same cases, both models, trial-repeated to keep single-sample noise from masquerading as regression. Set `trials` to at least 3 for anything judged by a scorer. One sample per case is exactly enough data to mislead you.
+
+Expect three buckets in the results, each with a different response:
+
+- **Clean passes.** The majority, ideally. No action.
+- **Real regressions.** Specific cases now failing an assertion or scoring below baseline. These go to step 2.
+- **Different-but-fine.** Outputs that changed shape without changing quality. Judge scorers absorb these; brittle exact-match assertions don't. If this bucket is large, your suite is testing phrasing rather than behavior. Fix the suite before blaming the model.
+
+## Step 2: Fix regressions with adaptations, not forked prompts
+
+Some cases will regress, and the temptation is to rewrite the shared prompt for the new model. That un-fixes it for the old one while both are still live. Keep one prompt; declare per-provider deltas where the new model needs different handling:
+
+```ts
+const supportPrompt = prompt({
+  system: 'You are a support assistant.',
+  adapt: {
+    openai: {
+      appendSystem: '\nReturn raw JSON, no markdown fences.',
+      settings: { temperature: 0.1 },
+    },
+  },
+})
+```
+
+Adaptations are applied during resolution, so inspection and evals see exactly what each provider receives. The delta between models is a reviewable declaration in the diff, not a fork that drifts. Resolution matches the exact provider first, then model-id prefixes, then the `'*'` wildcard, so one adaptation block covers a whole model family when that's what you mean.
+
+While iterating, replay cassettes keep the loop cheap. A cassette records the model calls from a real run and replays them deterministically, so re-running the suite while you tune adaptations costs zero tokens:
+
+```ts
+export default evaluate('support.migration', {
+  // ...
+  replay: 'cassette',
+})
+```
+
+Re-record only when you intend model behavior itself to change. Cassette identity is fingerprinted, so an out-of-date recording misses rather than lying to you.
+
+## Step 3: Canary in production, deterministically
+
+Evals de-risk what you thought to test. Production traffic contains what you didn't. Ship the new model to a sliver of traffic with a *seeded* split, so each session gets a stable assignment instead of coin-flipping per request:
+
+```ts
+import { split, type RouteArgs } from '@use-crux/core/routing'
+
+const migration = split({
+  id: 'gpt5-canary',
+  seed: ({ context }: RouteArgs<{ sessionId: string }>) => context.sessionId,
+  routes: {
+    stable: { model: gpt4o, weight: 95 },
+    candidate: { model: gpt5mini, weight: 5 },
+  },
+})
+```
+
+Every routed result carries a receipt (`result.routing`) recording which route fired. Canary traffic is identifiable in your traces and comparable in your metrics, so "the canary is fine" is a query, not an impression.
+
+Widen 5 → 25 → 100 as the evidence comes in. If the provider has a bad day mid-migration, wrap the candidate in `fallback([candidate, stable])`. The escape hatch is declared, not an emergency deploy.
+
+## Step 4: Promote the new baseline
+
+When the candidate holds, flip the default and promote the winning run as the new baseline:
+
+```bash
+crux quality promote <candidate-experiment>
+```
+
+This closes the loop for *next* time. The migration you just finished becomes the protected floor the next migration is measured against. Teams that do this once stop fearing deprecation emails, because the machinery is already standing.
+
+## The real lesson
+
+Nothing above is model-specific. It's the standard playbook for any risky dependency upgrade: pin current behavior, change one variable, diff, stage the rollout, ratchet.
+
+The reason most teams don't apply it to models is tooling. Without baselines, per-case diffs, declared adaptations, and receipts, each step is a science project, so the migration becomes vibes and a prayer.
+
+A model swap is the moment you discover whether you own your system's behavior or the model does. If the harness carries the system (declared context, tested expectations, measured baselines), then "which model" becomes what it should have been all along: a routing decision with evidence, revisitable every time the price sheet changes.
+
+*Tooling shown is [Crux](https://cruxjs.dev) (open source, alpha; the quality system is beta). The playbook works with any stack that can baseline, diff per-case, and split traffic deterministically. Guides: [variants and baselines](/docs/guides/quality/variants-and-baselines), [replay](/docs/guides/quality/replay), [routing](/docs/guides/routing).*

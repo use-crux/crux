@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/metadata";
 import Link from "next/link";
 import {
   CodePanel,
@@ -9,11 +10,12 @@ import {
 } from "../_components";
 import { TrackedLink } from "@/components/tracked-link";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: "Why Crux",
   description:
     "Bad LLM output is rarely a model problem. Crux is a kit of typed, modular building blocks for the harness around your LLM call. Use one. Use ten. Nothing to lock into.",
-};
+  path: "/why",
+});
 
 // ─────────────────────────────────────────────────────────────────────
 // What the harness handles — 7 capabilities, framed positively.

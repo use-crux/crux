@@ -1,0 +1,127 @@
+---
+title: "Silent truncation: the context your model never saw"
+description: "When a prompt outgrows its budget, something gets cut, and most stacks cut silently. What actually gets dropped, why 'lost instructions' bugs are so hard to diagnose, and how to make dropping a declared policy."
+date: "2026-06-24"
+type: Engineering
+tags: [context, token-budget, debugging]
+authors: [henri]
+draft: false
+readTime: 8
+---
+
+Somewhere in production right now, a model is answering without its system prompt.
+
+Not because anyone deleted it. The conversation grew, retrieval got generous, someone added a formatting policy last sprint, and the assembled prompt crossed a limit. At that point every layer of the stack has a truncation behavior, and almost all of them are silent. Provider APIs trim input without warning, some from the beginning, some from the middle. Chat frameworks evict oldest messages first. Hand-rolled string assembly just concatenates, and whatever falls past the limit is gone.
+
+No error. No log line. The model answers fluently from whatever survived, and the first symptom is behavioral: the assistant "forgot" a rule, "ignored" an instruction, "lost" its persona.
+
+These bugs are miserable to diagnose for a precise reason: the missing information is missing from the evidence too. The request log shows what was sent. Nothing shows what should have been sent.
+
+## Truncation is a policy decision nobody is making
+
+When a prompt doesn't fit, something must be cut. Dropping is unavoidable. But *which* thing gets cut is a policy decision, and silent truncation means that decision was delegated to accidents: insertion order, message age, provider internals.
+
+Try this on your own stack: if your prompt had to lose 500 tokens right now, what would go? If you can't answer, the answer is "whatever happens to be in the wrong place." One day that will be the compliance disclaimer instead of the third example.
+
+## Declaring a drop order
+
+A deliberate policy inverts this. Every piece of context declares how expendable it is:
+
+```ts
+import { prompt, context } from '@use-crux/core'
+import { generate } from '@use-crux/ai'
+
+const rules = context({ id: 'rules', priority: 100, system: CRITICAL_RULES })
+const guidelines = context({ id: 'guidelines', priority: 50, system: STYLE_GUIDE })
+const examples = context({ id: 'examples', priority: 20, system: FEW_SHOT })
+
+const reply = prompt({
+  use: [rules, examples, guidelines],
+  system: 'You are a support assistant.',
+})
+
+const result = await generate(reply, { model, input, tokenBudget: 2000 })
+```
+
+Under pressure, Crux drops the lowest-priority contexts first until the total fits. `examples` goes, then `guidelines`. `rules` outlives both, regardless of the order they appear in `use`.
+
+Two things are never dropped: the prompt's own system text, and provider-cached prefixes. Evicting a cached prefix would poison the cache and cost more than it saves. That points at a useful interaction between the two mechanisms. Stable blocks marked `cache: true` join a protected prefix *and* earn provider cache discounts, while volatile blocks compete by priority in the droppable tail. Structure prompts as a stable cached head plus a volatile prioritized tail and you get graceful degradation and cheaper tokens from the same declaration.
+
+## Excluded, dropped, or stale?
+
+Once dropping is deliberate, it pays to distinguish the ways context can legitimately not reach the model. They have different fixes:
+
+| The context is missing because... | Mechanism | The fix lives in |
+| --- | --- | --- |
+| It wasn't relevant to this request | Conditional exclusion (`when`/`match`), evaluated before resolution | Your predicate |
+| It was relevant but didn't fit | Budget dropping: resolved, then cut by priority | Your priorities or budget |
+| It was present but outdated | Freshness rejection | Your sync/refresh path |
+
+The distinction is not academic, because the mechanisms behave differently. An excluded context's resolver never runs: no wasted work, no tools contributed. A budget-dropped context *was* resolved, and any tools it contributes survive the drop. Dropping prose shouldn't silently disarm capabilities.
+
+Collapsing all of these into one undifferentiated "not in the prompt" is why truncation debugging is guesswork. Keeping them separate makes it a lookup.
+
+## How do I see what was cut?
+
+Dropping can be acceptable. Silent dropping never is. Every drop should leave a record with a reason, before and after the call.
+
+Before the call, inspect the arbitration for any input:
+
+```ts
+const inspection = reply.inspect({ input, tokenBudget: 2000 })
+
+inspection.droppedContexts   // [{ id: 'examples', reason: 'budget', ... }]
+inspection.excludedContexts  // predicate-excluded, with which predicate
+```
+
+After the call, the same evidence lands in the trace. In Crux devtools, a turn's Explain view lists every withheld candidate under "Checked but not sent" (dropped for budget, predicate false, stale rejected) next to what was sent, with token counts.
+
+The debugging session for "the assistant ignored the style guide" becomes: open the turn, see `guidelines — dropped (budget)`, done.
+
+## Getting the counts right
+
+Two practical notes that decide whether tight budgets are trustworthy.
+
+Token counting defaults to a `chars / 4` estimate. That is fine for coarse budgets and wrong enough to matter for tight ones. Wire a real tokenizer before trusting small margins:
+
+```ts
+config({
+  generation: {
+    tokenizer: (text) => encode(text).length,
+  },
+})
+```
+
+And leave headroom for output. The budget governs input; generation needs its own reserve. A prompt that consumes the whole window leaves the model nothing to answer with, and some providers fail that request in ways that look like model errors rather than budget errors.
+
+For conversation history specifically, budget-dropping is the wrong tool. Evicting the oldest messages wholesale loses the thread. That is what compaction is for: summarize the old turns into a compact block, keep the recent ones verbatim, and let the summary compete for budget as one unit. Use budgets for *composition* pressure and compaction for *history* pressure.
+
+## Then pin it in CI
+
+"Critical rules always survive" is a testable claim. It is also exactly the kind of invariant that erodes over months of unrelated edits, since every new context block shifts the arbitration. So assert it, against your worst-case inputs:
+
+```ts
+export default evaluate('reply.budget-contract', {
+  covers: ['prompt:reply'],
+  task: target.prompt(reply, { generate, model }),
+  data: worstCaseInputs, // longest histories, fattest retrieval
+  expect: (ctx) => {
+    ctx.expect.decisionReport.context.toHaveDisposition(
+      'context:rules', 'active',
+      { reasonCode: 'context.active' },
+    )
+  },
+})
+```
+
+Build `worstCaseInputs` deliberately: your longest real conversation, the query that retrieves the most chunks, the user with the largest memory. Truncation bugs live at the tail of the input distribution, so testing the median proves nothing. If you import cases from production traces, sort by prompt size and take the top decile.
+
+When next quarter's "add more examples" PR pushes the worst case over budget in a way that would cut the rules, CI fails naming `context:rules`, instead of a customer finding the persona-less assistant first.
+
+## The takeaway
+
+Silent truncation isn't really a context-window problem. Windows keep growing; prompts grow faster. It's an accountability problem: prompts get cut by code that doesn't record what it cut.
+
+Declare the drop order. Record every drop with its reason. Assert the invariants you can't afford to lose. The window can stay finite. The mystery shouldn't.
+
+Token budgets, priorities, and caching: [cruxjs.dev/docs/guides/contexts](https://cruxjs.dev/docs/guides/contexts). Crux is open source and alpha.

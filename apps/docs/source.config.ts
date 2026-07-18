@@ -1,6 +1,7 @@
-import { defineDocs, defineConfig } from 'fumadocs-mdx/config'
+import { defineDocs, defineCollections, defineConfig, frontmatterSchema } from 'fumadocs-mdx/config'
 import { transformerTwoslash } from 'fumadocs-twoslash'
 import { rehypeCodeDefaultOptions } from 'fumadocs-core/mdx-plugins'
+import { z } from 'zod'
 
 const enableTwoslash = process.env.CRUX_DOCS_TWOSLASH !== '0'
 const codeTransformers = rehypeCodeDefaultOptions.transformers ?? []
@@ -23,6 +24,21 @@ export const docs = defineDocs({
   docs: {
     async: true,
   },
+})
+
+export const blog = defineCollections({
+  type: 'doc',
+  dir: 'content/blog',
+  async: true,
+  schema: frontmatterSchema.extend({
+    date: z.string(),
+    type: z.enum(['Engineering', 'Essay', 'Release', 'Announcement']),
+    tags: z.array(z.string()).default([]),
+    authors: z.array(z.string()).default(['henri']),
+    featured: z.boolean().default(false),
+    draft: z.boolean().default(false),
+    readTime: z.number().optional(),
+  }),
 })
 
 export default defineConfig({
