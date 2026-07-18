@@ -32,8 +32,8 @@ var runsStyles = theme.NewStyles(theme.Resolve(colorprofile.TrueColor))
 // (loads run detail from the list, drills into span detail from the
 // waterfall).
 type Runs struct {
-	runs    []api.QualityRunRecord
-	detail  *api.QualityRunDetailRecord
+	runs    []api.InspectRunRecord
+	detail  *api.InspectRunDetailRecord
 	selRun  string
 	selSpan string
 	focus   runsFocus
@@ -41,7 +41,7 @@ type Runs struct {
 	err     string
 	loading bool
 
-	runList        kit.VList[api.QualityRunRecord]
+	runList        kit.VList[api.InspectRunRecord]
 	filteringRuns  bool
 	runQuery       string
 	runStatusIndex int
@@ -60,8 +60,8 @@ const (
 
 func NewRuns() *Runs {
 	r := &Runs{}
-	r.runList.SetIdentity(func(run api.QualityRunRecord) string { return run.TraceID })
-	r.runList.SetRowHeight(func(api.QualityRunRecord) int { return 2 })
+	r.runList.SetIdentity(func(run api.InspectRunRecord) string { return run.TraceID })
+	r.runList.SetRowHeight(func(api.InspectRunRecord) int { return 2 })
 	return r
 }
 
@@ -76,7 +76,7 @@ func (s *Runs) Init(c DataClient) tea.Cmd { return fetchRunsList(c) }
 func (s *Runs) Update(msg tea.Msg, c DataClient) tea.Cmd {
 	switch m := msg.(type) {
 	case runsListLoadedMsg:
-		s.runs = []api.QualityRunRecord(m)
+		s.runs = []api.InspectRunRecord(m)
 		s.runList.SetItems(s.runs)
 		s.loaded = true
 		s.bumpRenderRev()
@@ -87,7 +87,7 @@ func (s *Runs) Update(msg tea.Msg, c DataClient) tea.Cmd {
 		}
 		s.runList.SetCursorByIdentity(s.selRun)
 	case runDetailLoadedMsg:
-		d := api.QualityRunDetailRecord(m)
+		d := api.InspectRunDetailRecord(m)
 		// Preserve the user's span selection across refetches when the
 		// span still exists.
 		prevSel := s.selSpan
@@ -108,7 +108,7 @@ func (s *Runs) Update(msg tea.Msg, c DataClient) tea.Cmd {
 		s.err = string(m)
 		s.loading = false
 		s.bumpRenderRev()
-	case api.QualityEvent:
+	case api.InspectEvent:
 		// Typed live event from the bus (also used for the synthesized
 		// "store changed" signal — kind=="refresh"). Refresh the run list
 		// and refetch the active trace's detail when relevant.

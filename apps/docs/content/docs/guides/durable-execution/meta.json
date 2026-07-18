@@ -1,5 +1,12 @@
 {
   "title": "Durable Execution",
   "description": "The optional engine that makes flows and background work survive restarts, retries, and time.",
-  "pages": ["index", "next-vercel", "node", "convex", "testing", "custom-adapters"]
+  "pages": [
+    "index",
+    "next-vercel",
+    "node",
+    "convex",
+    "testing",
+    "custom-adapters"
+  ]
 }

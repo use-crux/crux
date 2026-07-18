@@ -89,7 +89,8 @@ export function isRoutingReportPreview(
     !isFiniteNumber(value.cost)
   )
     return false;
-  if (value.firstTokenAt !== undefined && !isFiniteNumber(value.firstTokenAt)) return false;
+  if (value.firstTokenAt !== undefined && !isFiniteNumber(value.firstTokenAt))
+    return false;
   return (
     Array.isArray(value.trace) &&
     value.trace.length > 0 &&
@@ -253,9 +254,7 @@ function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
-function isRoutingStepPreview(
-  value: unknown,
-): value is CruxRoutingStepPreview {
+function isRoutingStepPreview(value: unknown): value is CruxRoutingStepPreview {
   if (!isRecord(value)) return false;
   return (
     value.kind === "router" ||

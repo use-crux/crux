@@ -1,0 +1,192 @@
+---
+title: Eval
+description: Reference for @use-crux/core/eval, Node coordination, Cases, checks, Eval runs, and Baselines.
+---
+
+# `@use-crux/core/eval`
+
+The Eval subpath defines inert, provider-neutral Eval source. Importing a
+definition performs no work and the returned object has no mutable methods or
+Runtime configuration.
+
+```ts
+import { caseFile, evaluate } from "@use-crux/core/eval";
+import type {
+  AnyEval,
+  CaseFile,
+  CaseOf,
+  Eval,
+  EvalAssertContext,
+  EvalCapability,
+  EvalCase,
+  EvalCaseContext,
+  EvalGates,
+  EvalScorer,
+  EvalScorerFactory,
+  EvalTask,
+  InputOf,
+  OutputOf,
+  VariantOf,
+} from "@use-crux/core/eval";
+```
+
+## `evaluate(options)`
+
+```ts
+const definition = evaluate({
+  id: "support",
+  task,
+  cases,
+  variants: { cheaper: { model: cheaperModel } },
+  expect: ({ output, expected, expect }) => {
+    expect(output.answer).toBe(expected.answer);
+  },
+  scorers: [correctness],
+  gates: { correctness: { min: 0.9 } },
+});
+```
+
+| Field                              | Meaning                                                             |
+| ---------------------------------- | ------------------------------------------------------------------- |
+| `id?`                              | Stable Eval ID; discovery can derive one from the source path.      |
+| `task`                             | Callable managed production task and sole input/output type anchor. |
+| `cases`                            | Inline Cases and `caseFile()` references.                           |
+| `variants?`                        | Named compatible task, prompt, model, or settings differences.      |
+| `expect?`                          | Per-cell assertion or fresh callback descriptor.                    |
+| `afterScores?`                     | Post-score assertion or fresh callback descriptor.                  |
+| `scorers?`                         | Deterministic or managed scorers.                                   |
+| `gates?`                           | Blocking score, aggregate, Baseline, or latency policy.             |
+| `trials?`                          | Positive trial count per selected Case and arm.                     |
+| `tags?`, `description?`, `covers?` | Discovery and coverage metadata.                                    |
+
+The returned `Eval` is readonly and inert. It has no `.run()`, `.promote()`,
+source `baseline`, timeout, concurrency, or host option.
+
+## Callable and managed tasks
+
+An ordinary async function is a valid local task for inline Cases:
+
+```ts
+const localCheck = evaluate({
+  task: async (input: { question: string }) => answerQuestion(input),
+  cases: [{ input: { question: "Can I get a refund?" } }],
+});
+```
+
+Crux runs the function in a real observed Eval cell, including its canonical
+run ID and nested signals. Because arbitrary code has no provable stable task
+fingerprint or normalized provider response, its task evidence is always fresh
+and its external cost is unknown. Opaque functions cannot be placed in a
+generated remote registry. Use inline Cases and confirm unknown work when the
+CLI asks.
+
+`generate.task()` and `stream.task()` from `@use-crux/ai` produce ordinary
+callable tasks that satisfy `EvalTask`. Call them as
+`task(input, callOptions?)`; bound defaults make only corresponding call keys
+optional. `InputOf<T>`, `OutputOf<T>`, `CallOf<T>`, `VariantOf<T>`, and
+`CapsOf<T>` project their contracts without provider types entering Core.
+
+Structured tasks expose non-optional schema-parsed semantic output. Text tasks
+expose `string`. Callbacks additionally receive a normalized terminal
+`response`. Managed tasks also enable automatic exact evidence reuse,
+file-backed Case validation, typed Variants, and generated Runtime deployment.
+For an AI SDK object model, bind `stableModel(model)` from `@use-crux/ai`;
+custom endpoints or middleware use a secret-free versioned key.
+
+Function-form prompt, system, and message renderers remain reusable. The Node
+coordinator builds their initial identity without invoking them: it fingerprints the declaring
+Eval plus literal-ESM transitive project source, follows workspace symlink
+realpaths, and records installed package version/export identity without
+hashing package internals. Non-literal dynamic imports, CommonJS/generated
+source, unresolved local imports, or source without a portable workspace
+identity fail closed to fresh execution with
+`unresolved_source_dependency`. Ambient environment, filesystem, and network
+reads are outside the reusable callback contract; make them explicit through
+input, call options, or Variants, or request a fresh run.
+
+For an exact evidence candidate, Crux locally resolves the prompt and compares
+its one-way fingerprint with the exact normalized prompt captured by the
+original generate/stream request. A mismatch executes fresh and reports
+`nondeterministic_renderer`; raw prompt material is not persisted.
+
+## `caseFile(path, schemas)`
+
+Creates an inert JSON, JSONL, or CSV Case reference. Relative paths resolve
+from the declaring Eval directory. Input schema is required at a file boundary;
+expected schema is optional. The automatically loaded sibling
+`<eval-stem>.cases.jsonl` must not also be listed with `caseFile()`.
+
+## Checks and timing
+
+Ordinary callbacks receive typed input, output, expected evidence, normalized
+response where available, and capability-dependent assertion namespaces.
+Timing is available only when live execution is declared:
+
+```ts
+expect: {
+  fresh: true,
+  check: ({ expect, meta, step }) => {
+    expect.latency.toBeUnderMs(1_000);
+    expect(meta.durationMs).toBeLessThan(1_000);
+    expect(step("generation").durationMs).toBeLessThan(900);
+  },
+}
+```
+
+For ordinary policy, prefer `gates.latency: { meanMs?, p95Ms? }`; at least one
+threshold is required. Accessing timing from a non-fresh callback throws an
+actionable definition error.
+
+## Node coordination
+
+```ts
+import { runEval } from "@use-crux/core/eval/node";
+
+const run = await runEval("support", { offline: true });
+```
+
+`runEval(evalOrId, options?)` shares CLI discovery and execution semantics.
+Passing an Eval object requires the exact default-export instance found during
+in-process rediscovery and an explicit ID. Use a string selector for stale HMR
+objects or unusual loader aliases.
+
+Run controls correspond to CLI Case and Variant selection plus `fresh`,
+`offline`, `plan`, and maximum cost. A plan performs no execution, reservation,
+run creation, or write. Offline mode performs no network access.
+
+`maxCostUsd` is admitted only from conservative per-call ceilings configured at
+`experimental.eval.pricing[model].maxUsdPerCall` (or the optional `default`).
+Token-rate tables cannot prove a hard maximum. Routed and tool-loop tasks are
+expanded conservatively, including managed judge calls; any unknown path
+returns its missing pricing keys and configuration remedy before execution.
+
+## Eval runs and Baselines
+
+Eval runs distinguish `status: "complete"` from `status: "incomplete"`;
+incomplete always implies `passed: false`. Cells independently record task work
+decisions, score evidence, assertions, metrics, run IDs, and captured signals.
+
+Baselines are set through CLI or Devtools, never source configuration.
+Compatibility is per Case and metric. Task/model/settings changes remain
+comparable, while Case input/call/expected or scorer-contract changes
+invalidate only affected evidence.
+
+## Feedback
+
+Core feedback accepts a canonical run ID:
+
+```ts
+import { feedback } from "@use-crux/core/feedback";
+
+await feedback(runId, "up");
+await feedback(runId, { rating: "down", comment: "Incorrect policy" });
+```
+
+Use `@use-crux/ai/feedback` when starting from a message with
+`metadata.crux.runId`. A run ID correlates evidence; applications must still
+authorize that the user owns the message.
+
+## Private subpaths
+
+`@use-crux/core/eval/internal/*` exports are first-party adapter/coordinator
+seams. They are unsupported application APIs and omitted from public examples.

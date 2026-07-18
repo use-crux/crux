@@ -58,7 +58,7 @@ export const mediaRelationDeclarations = [
   ["media.derives_with", "derivation"],
   ["media.targets_index", "index"],
   ["media.targets_corpus", "corpus"],
-  ["media.evaluation_target", "evaluation"],
+  ["media.eval_target", "eval"],
   ["media.uses_storage", "storage"],
 ] as const;
 

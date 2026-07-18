@@ -4,49 +4,49 @@ description: LLM-as-a-judge scoring and pre-built quality metrics.
 ---
 
 ```ts
-import { judge, metrics } from '@use-crux/core/scoring'
+import { judge, metrics } from "@use-crux/core/scoring";
 ```
 
 ## `judge(config)`
 
 Create a reusable LLM-as-a-judge scorer.
 
-| Field | Type | Description |
-| --- | --- | --- |
-| `id` | `string` | Judge identifier. |
-| `criteria` | `string` | What to evaluate. |
-| `scale` | `{ min: number; max: number }` | Score range. |
-| `rubric` | `Record<number, string>?` | Optional score descriptions. |
-| `context` | `string?` | Extra evaluator context. |
-| `chainOfThought` | `boolean?` | Whether to request a concise explanation before scoring. Default: `true`. |
-| `fewShot` | `JudgeFewShot[]?` | Calibration examples. |
-| `generate` | `GenerateObjectFn?` | Structured generation function. |
-| `model` | `unknown?` | Judge model. |
-| `detailSchema` | `z.ZodType<TDetail>?` | Optional structured details beside the score. |
+| Field            | Type                           | Description                                                               |
+| ---------------- | ------------------------------ | ------------------------------------------------------------------------- |
+| `id`             | `string`                       | Judge identifier.                                                         |
+| `criteria`       | `string`                       | What to evaluate.                                                         |
+| `scale`          | `{ min: number; max: number }` | Score range.                                                              |
+| `rubric`         | `Record<number, string>?`      | Optional score descriptions.                                              |
+| `context`        | `string?`                      | Extra evaluator context.                                                  |
+| `chainOfThought` | `boolean?`                     | Whether to request a concise explanation before scoring. Default: `true`. |
+| `fewShot`        | `JudgeFewShot[]?`              | Calibration examples.                                                     |
+| `generate`       | `GenerateObjectFn?`            | Structured generation function.                                           |
+| `model`          | `unknown?`                     | Judge model.                                                              |
+| `detailSchema`   | `z.ZodType<TDetail>?`          | Optional structured details beside the score.                             |
 
 ```ts
 const brandVoice = judge({
-  id: 'brand-voice',
-  criteria: 'Does the copy match the warm, direct brand voice?',
+  id: "brand-voice",
+  criteria: "Does the copy match the warm, direct brand voice?",
   scale: { min: 1, max: 10 },
   generate: generateObjectFn,
   model,
-})
+});
 
 const result = await brandVoice.score({
-  input: 'Write onboarding copy',
-  output: 'Welcome. Let us get you set up.',
-})
+  input: "Write onboarding copy",
+  output: "Welcome. Let us get you set up.",
+});
 ```
 
 `score()` returns:
 
-| Field | Type | Description |
-| --- | --- | --- |
-| `score` | `number` | Clamped to the configured scale. |
-| `reasoning` | `string` | Concise explanation for the score. |
-| `metricId` | `string` | Judge id. |
-| `detail` | `TDetail?` | Structured details when `detailSchema` is configured. |
+| Field       | Type       | Description                                           |
+| ----------- | ---------- | ----------------------------------------------------- |
+| `score`     | `number`   | Clamped to the configured scale.                      |
+| `reasoning` | `string`   | Concise explanation for the score.                    |
+| `metricId`  | `string`   | Judge id.                                             |
+| `detail`    | `TDetail?` | Structured details when `detailSchema` is configured. |
 
 Per-call `score(input, options)` can override `generate`, `model`, and
 `evalId`.
@@ -56,18 +56,18 @@ Per-call `score(input, options)` can override `generate`, `model`, and
 Pre-built judges for common quality dimensions. Each factory takes
 `{ generate, model }` and returns a `JudgeInstance`.
 
-| Metric | Criteria | Scale |
-| --- | --- | --- |
-| `metrics.relevance()` | Is the output relevant to the input query? | 1-5 |
-| `metrics.faithfulness()` | Is the output faithful to provided context? | 1-5 |
-| `metrics.coherence()` | Is the output logically coherent and well-structured? | 1-5 |
-| `metrics.completeness()` | Does the output address all aspects of the query? | 1-5 |
-| `metrics.toxicity()` | Is the output free from harmful content? | 1-5 |
-| `metrics.conciseness()` | Is the output appropriately concise? | 1-5 |
+| Metric                   | Criteria                                              | Scale |
+| ------------------------ | ----------------------------------------------------- | ----- |
+| `metrics.relevance()`    | Is the output relevant to the input query?            | 1-5   |
+| `metrics.faithfulness()` | Is the output faithful to provided context?           | 1-5   |
+| `metrics.coherence()`    | Is the output logically coherent and well-structured? | 1-5   |
+| `metrics.completeness()` | Does the output address all aspects of the query?     | 1-5   |
+| `metrics.toxicity()`     | Is the output free from harmful content?              | 1-5   |
+| `metrics.conciseness()`  | Is the output appropriately concise?                  | 1-5   |
 
 ```ts
-const relevance = metrics.relevance({ generate: generateObjectFn, model })
-const result = await relevance.score({ input: query, output: response })
+const relevance = metrics.relevance({ generate: generateObjectFn, model });
+const result = await relevance.score({ input: query, output: response });
 ```
 
 ## Safety Integration
@@ -76,20 +76,26 @@ Runtime Safety enforcement is authored from the Safety subpath, not from
 scoring:
 
 ```ts
-import { boundary, constraint } from '@use-crux/core/safety'
-import { judge } from '@use-crux/core/scoring'
+import { boundary, constraint } from "@use-crux/core/safety";
+import { judge } from "@use-crux/core/scoring";
 
-const brandVoiceJudge = judge({ id: 'brand-voice', criteria, scale, generate, model })
+const brandVoiceJudge = judge({
+  id: "brand-voice",
+  criteria,
+  scale,
+  generate,
+  model,
+});
 
 const brandVoiceGate = constraint({
-  id: 'brand-voice',
+  id: "brand-voice",
   on: boundary.output.text(),
   run: constraint.judge({ judge: brandVoiceJudge, minScore: 7 }),
-})
+});
 ```
 
-For eval suites, `scorers.judge()` in
-[`@use-crux/core/quality`](/docs/reference/crux-core/quality) reuses the same
+For Evals, `scorers.judge()` in
+[`@use-crux/core/eval`](/docs/reference/crux-core/eval) reuses the same
 judge machinery with rubric and choice-score modes.
 
 ## Types
@@ -103,11 +109,11 @@ import type {
   JudgeResult,
   JudgeScoreOptions,
   MetricDefaults,
-} from '@use-crux/core/scoring'
+} from "@use-crux/core/scoring";
 ```
 
 ## Related
 
-- Guide: [Quality](/docs/guides/quality)
-- Reference: [Quality](/docs/reference/crux-core/quality)
+- Guide: [Eval](/docs/guides/evals)
+- Reference: [Eval](/docs/reference/crux-core/eval)
 - Reference: [Safety](/docs/reference/crux-core/safety)

@@ -4,7 +4,7 @@ title: definition.missing_eval_coverage
 
 ## What it checks
 
-Crux emits this finding when an authored runnable definition is visible in the Project Index but Crux cannot see eval, suite, experiment, baseline, or quality coverage for it.
+Crux emits this finding when an authored runnable definition is visible in the Project Index but Crux cannot see an Eval that declares coverage for it.
 
 ## Why it matters
 
@@ -12,7 +12,7 @@ Eval coverage lets you compare authored AI behavior against known cases and catc
 
 ## How to fix
 
-Add an eval or suite that covers the definition, or connect existing quality records to it so Crux can show affected checks when the definition changes.
+Add an Eval that covers the definition so Crux can show affected checks when the definition changes.
 
 ## When to suppress
 
@@ -25,7 +25,7 @@ Suppress only for prototypes, external test systems, or definitions that are int
 ## Rule metadata
 
 - Rule id: `definition.missing_eval_coverage`
-- Category: `evaluation`
+- Category: `evals`
 - Maturity: `preview`
 - Default profiles: `recommended`, `strict`
 - Default severity: `info`

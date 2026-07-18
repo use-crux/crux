@@ -4,7 +4,13 @@ description: Chunking and indexing primitives for turning documents into stored 
 ---
 
 ```ts
-import { chunker, corpus, indexer, indexingPipeline, transform } from '@use-crux/core/indexing'
+import {
+  chunker,
+  corpus,
+  indexer,
+  indexingPipeline,
+  transform,
+} from "@use-crux/core/indexing";
 import type {
   CruxDocument,
   CruxChunk,
@@ -18,7 +24,7 @@ import type {
   CorpusSyncResult,
   Indexer,
   Corpus,
-} from '@use-crux/core/indexing'
+} from "@use-crux/core/indexing";
 ```
 
 ## Overview
@@ -42,58 +48,58 @@ The easiest way to think about an indexer is that it turns source material into 
 
 ```ts
 const docsIndexer = indexer({
-  id: 'docs',
-  namespace: 'product-docs',
+  id: "docs",
+  namespace: "product-docs",
   records,
   vectors,
   dense,
-})
+});
 
 await docsIndexer.indexDocuments([
   {
-    namespace: 'product-docs',
-    sourceId: 'intro.md',
-    title: 'Intro',
-    content: '# Intro\n\nWelcome to the docs.',
+    namespace: "product-docs",
+    sourceId: "intro.md",
+    title: "Intro",
+    content: "# Intro\n\nWelcome to the docs.",
   },
-])
+]);
 ```
 
 ### Incremental corpus sync
 
 ```ts
 const docsCorpus = corpus({
-  id: 'docs',
-  namespace: 'product-docs',
+  id: "docs",
+  namespace: "product-docs",
   records,
   indexer: docsIndexer,
-})
+});
 
 await docsCorpus.sync(source.load(), {
-  sourceSet: 'complete',
-  stale: 'delete',
-})
+  sourceSet: "complete",
+  stale: "delete",
+});
 ```
 
 ### Hybrid indexing
 
 ```ts
 const docsIndexer = indexer({
-  id: 'docs',
-  namespace: 'product-docs',
+  id: "docs",
+  namespace: "product-docs",
   records,
   vectors,
   dense,
   sparse,
-})
+});
 ```
 
 ### Pipeline with cache
 
 ```ts
 const docsIndexer = indexer({
-  id: 'docs',
-  namespace: 'product-docs',
+  id: "docs",
+  namespace: "product-docs",
   records,
   vectors,
   dense,
@@ -101,8 +107,8 @@ const docsIndexer = indexer({
   pipeline: indexingPipeline({
     documents: [
       transform.document({
-        name: 'normalize',
-        version: '1',
+        name: "normalize",
+        version: "1",
         run: (document) => ({
           ...document,
           content: document.content.trim(),
@@ -111,15 +117,15 @@ const docsIndexer = indexer({
     ],
     chunker: chunker.structured({ maxChars: 1200 }),
   }),
-})
+});
 ```
 
 ### Parent-child indexing
 
 ```ts
 const docsIndexer = indexer({
-  id: 'docs',
-  namespace: 'product-docs',
+  id: "docs",
+  namespace: "product-docs",
   records,
   vectors,
   dense,
@@ -130,36 +136,36 @@ const docsIndexer = indexer({
       childOverlapChars: 120,
     }),
   }),
-})
+});
 ```
 
 ### Semantic chunking
 
 ```ts
 const docsIndexer = indexer({
-  id: 'docs',
-  namespace: 'product-docs',
+  id: "docs",
+  namespace: "product-docs",
   records,
   vectors,
   dense,
   pipeline: indexingPipeline({
     chunker: chunker.semantic({
-      strategy: 'embedding',
+      strategy: "embedding",
       dense,
       minChars: 300,
       maxChars: 1200,
       similarityThreshold: 0.76,
     }),
   }),
-})
+});
 ```
 
 ## Signature
 
 ```ts
 const docsIndexer = indexer({
-  id: 'docs',
-  namespace: 'product-docs',
+  id: "docs",
+  namespace: "product-docs",
   records,
   vectors,
   dense,
@@ -168,25 +174,25 @@ const docsIndexer = indexer({
   pipeline: indexingPipeline({
     documents: [
       transform.document({
-        name: 'normalize',
-        version: '1',
+        name: "normalize",
+        version: "1",
         run: (doc) => ({ ...doc, content: doc.content.trim() }),
       }),
     ],
     chunker: chunker.structured({ maxChars: 1200 }),
   }),
-})
+});
 ```
 
-| Field       | Type                   | Description                                         |
-| ----------- | ---------------------- | --------------------------------------------------- |
-| `id`        | `string`               | Stable indexer identifier                           |
-| `namespace` | `string`               | Required corpus boundary                            |
-| `records`   | `RecordStore`            | Chunk, parent, and corpus record storage           |
-| `vectors`   | `VectorStore?`         | Dense, sparse, or hybrid vector index              |
-| `dense`     | `DenseEmbedding?`      | Dense write-time embedding                          |
-| `sparse`    | `SparseEmbedding?`     | Sparse write-time embedding                         |
-| `pipeline`  | `IndexingPipeline?`    | Document transforms, chunker, and chunk transforms  |
+| Field       | Type                    | Description                                        |
+| ----------- | ----------------------- | -------------------------------------------------- |
+| `id`        | `string`                | Stable indexer identifier                          |
+| `namespace` | `string`                | Required corpus boundary                           |
+| `records`   | `RecordStore`           | Chunk, parent, and corpus record storage           |
+| `vectors`   | `VectorStore?`          | Dense, sparse, or hybrid vector index              |
+| `dense`     | `DenseEmbedding?`       | Dense write-time embedding                         |
+| `sparse`    | `SparseEmbedding?`      | Sparse write-time embedding                        |
+| `pipeline`  | `IndexingPipeline?`     | Document transforms, chunker, and chunk transforms |
 | `cache`     | `boolean \| { store? }` | Enables stage-level pipeline caching               |
 
 ## Canonical models
@@ -195,44 +201,44 @@ const docsIndexer = indexer({
 
 ```ts
 type CruxDocument = {
-  namespace: string
-  sourceId: string
-  content: string
-  parts?: CruxIngestPart[]
-  title?: string
-  metadata?: Record<string, unknown>
-  warnings?: CruxIngestWarning[]
-}
+  namespace: string;
+  sourceId: string;
+  content: string;
+  parts?: CruxIngestPart[];
+  title?: string;
+  metadata?: Record<string, unknown>;
+  warnings?: CruxIngestWarning[];
+};
 ```
 
 ### `CruxChunk`
 
 ```ts
 type CruxChunk = {
-  namespace: string
-  sourceId: string
-  chunkId: string
-  generationId?: string
-  active?: boolean
-  ordinal: number
-  content: string
-  metadata: Record<string, unknown>
+  namespace: string;
+  sourceId: string;
+  chunkId: string;
+  generationId?: string;
+  active?: boolean;
+  ordinal: number;
+  content: string;
+  metadata: Record<string, unknown>;
   provenance?: {
-    partIds?: string[]
-    pages?: number[]
-    sheets?: string[]
-    tables?: string[]
-    jsonPaths?: string[]
-    sourceSpans?: Array<{ start: number; end: number; partId?: string }>
-    confidence?: 'exact' | 'derived'
-  }
+    partIds?: string[];
+    pages?: number[];
+    sheets?: string[];
+    tables?: string[];
+    jsonPaths?: string[];
+    sourceSpans?: Array<{ start: number; end: number; partId?: string }>;
+    confidence?: "exact" | "derived";
+  };
   parent?: {
-    parentId?: string
-    key?: string
-    title?: string
-    summary?: string
-  }
-}
+    parentId?: string;
+    key?: string;
+    title?: string;
+    summary?: string;
+  };
+};
 ```
 
 Stored chunks also carry timestamps plus optional `embedding` and `sparseEmbedding`. Parent/child pipelines may also write `CruxParentChunk` records. Parent records are not searchable by default; retrievers filter for active child chunks.
@@ -249,10 +255,13 @@ These models are intentionally plain. The point is not to hide chunking from use
 const pipeline = indexingPipeline({
   documents: [
     transform.document({
-      name: 'strip-drafts',
-      version: '1',
+      name: "strip-drafts",
+      version: "1",
       run(document) {
-        return { ...document, content: document.content.replace(/<!-- draft -->/g, '') }
+        return {
+          ...document,
+          content: document.content.replace(/<!-- draft -->/g, ""),
+        };
       },
     }),
   ],
@@ -263,29 +272,29 @@ const pipeline = indexingPipeline({
   }),
   chunks: [
     transform.chunk({
-      name: 'tag-corpus',
-      version: '1',
+      name: "tag-corpus",
+      version: "1",
       run(chunks) {
         return chunks.map((chunk) => ({
           ...chunk,
-          metadata: { ...chunk.metadata, corpus: 'product-docs' },
-        }))
+          metadata: { ...chunk.metadata, corpus: "product-docs" },
+        }));
       },
     }),
   ],
-})
+});
 ```
 
 Document transforms run before chunking. Chunk transforms run after chunking and before embedding/writes. Every transform and chunker has a name, version, and fingerprintable options so `corpus.sync()` can detect when unchanged source text should still be reindexed.
 
 Built-in chunkers:
 
-| Chunker | Use it when |
-| ------- | ----------- |
-| `chunker.text()` | You want the plain text default with stable chunk IDs. |
-| `chunker.structured()` | You want page, table, sheet, JSON path, and source span provenance from `@use-crux/ingest`. |
-| `chunker.parentChild()` | You want large parent records for display/context and smaller child records for search. |
-| `chunker.semantic()` | You want embedding, model/custom, or hybrid segmentation before chunk creation. |
+| Chunker                 | Use it when                                                                                 |
+| ----------------------- | ------------------------------------------------------------------------------------------- |
+| `chunker.text()`        | You want the plain text default with stable chunk IDs.                                      |
+| `chunker.structured()`  | You want page, table, sheet, JSON path, and source span provenance from `@use-crux/ingest`. |
+| `chunker.parentChild()` | You want large parent records for display/context and smaller child records for search.     |
+| `chunker.semantic()`    | You want embedding, model/custom, or hybrid segmentation before chunk creation.             |
 
 ### `chunker.text(options?)`
 
@@ -297,13 +306,13 @@ indexingPipeline({
     maxChars: 1200,
     overlapChars: 150,
   }),
-})
+});
 ```
 
-| Option | Type | Default | Description |
-| --- | --- | --- | --- |
-| `maxChars` | `number` | `1200` | Target maximum characters per chunk. |
-| `overlapChars` | `number` | `150` | Characters copied from the previous chunk into the next chunk. |
+| Option         | Type     | Default | Description                                                    |
+| -------------- | -------- | ------- | -------------------------------------------------------------- |
+| `maxChars`     | `number` | `1200`  | Target maximum characters per chunk.                           |
+| `overlapChars` | `number` | `150`   | Characters copied from the previous chunk into the next chunk. |
 
 Behavior:
 
@@ -323,14 +332,14 @@ indexingPipeline({
     overlapChars: 150,
     tableRowsPerChunk: 25,
   }),
-})
+});
 ```
 
-| Option | Type | Default | Description |
-| --- | --- | --- | --- |
-| `maxChars` | `number` | `1200` | Target maximum characters per text/page/sheet/json chunk. |
-| `overlapChars` | `number` | `150` | Characters copied from the previous text chunk. |
-| `tableRowsPerChunk` | `number` | `25` | Table row window size. Header rows are repeated for table chunks. |
+| Option              | Type     | Default | Description                                                       |
+| ------------------- | -------- | ------- | ----------------------------------------------------------------- |
+| `maxChars`          | `number` | `1200`  | Target maximum characters per text/page/sheet/json chunk.         |
+| `overlapChars`      | `number` | `150`   | Characters copied from the previous text chunk.                   |
+| `tableRowsPerChunk` | `number` | `25`    | Table row window size. Header rows are repeated for table chunks. |
 
 Behavior:
 
@@ -351,14 +360,14 @@ indexingPipeline({
     childMaxChars: 900,
     childOverlapChars: 120,
   }),
-})
+});
 ```
 
-| Option | Type | Default | Description |
-| --- | --- | --- | --- |
-| `parentMaxChars` | `number` | `6000` | Maximum parent record size. |
-| `childMaxChars` | `number` | `900` | Maximum searchable child chunk size. |
-| `childOverlapChars` | `number` | `120` | Child chunk overlap inside each parent. |
+| Option              | Type     | Default | Description                             |
+| ------------------- | -------- | ------- | --------------------------------------- |
+| `parentMaxChars`    | `number` | `6000`  | Maximum parent record size.             |
+| `childMaxChars`     | `number` | `900`   | Maximum searchable child chunk size.    |
+| `childOverlapChars` | `number` | `120`   | Child chunk overlap inside each parent. |
 
 Behavior:
 
@@ -376,71 +385,71 @@ Use this when chunk boundaries should follow meaning rather than just size. Sema
 ```ts
 indexingPipeline({
   chunker: chunker.semantic({
-    strategy: 'embedding',
+    strategy: "embedding",
     dense,
     minChars: 300,
     maxChars: 1200,
     similarityThreshold: 0.76,
   }),
-})
+});
 ```
 
 Embedding strategy:
 
 ```ts
 chunker.semantic({
-  strategy: 'embedding',
+  strategy: "embedding",
   dense,
   minChars: 300,
   maxChars: 1200,
   similarityThreshold: 0.76,
-})
+});
 ```
 
 Model/custom strategy:
 
 ```ts
 chunker.semantic({
-  strategy: 'custom',
+  strategy: "custom",
   minChars: 300,
   maxChars: 1200,
   async segment({ segments }) {
     return segments
-      .filter((segment) => segment.text.startsWith('# '))
+      .filter((segment) => segment.text.startsWith("# "))
       .map((segment) => ({
         start: segment.start,
         end: segment.end,
-        reason: 'heading',
+        reason: "heading",
         confidence: 0.9,
-      }))
+      }));
   },
-})
+});
 ```
 
 Hybrid strategy:
 
 ```ts
 chunker.semantic({
-  strategy: 'hybrid',
+  strategy: "hybrid",
   dense,
   minChars: 300,
   maxChars: 1200,
   similarityThreshold: 0.76,
   async segment(input, ctx) {
-    return detectDomainBoundaries(input.document.content, ctx)
+    return detectDomainBoundaries(input.document.content, ctx);
   },
-})
+});
 ```
 
-| Option | Applies to | Default | Description |
-| --- | --- | --- | --- |
-| `strategy` | all | required | `'embedding'`, `'model'`, `'custom'`, or `'hybrid'`. |
-| `dense` | embedding, hybrid | required | Dense embedding used to detect low-similarity boundaries. |
-| `segment` | model, custom, hybrid | required | Function returning `{ start, end, reason?, confidence? }[]` boundaries. |
-| `minChars` | all | `200` | Minimum chunk size before semantic boundaries are accepted. |
-| `maxChars` | all | `1200` | Maximum chunk size before splitting is forced. |
-| `similarityThreshold` | embedding, hybrid | `0.75` | Split when adjacent sentence similarity falls below the threshold. |
-| `overlapChars` | accepted | inherited default | Present for API consistency; semantic chunks do not currently add overlap. |
+| Option                | Applies to            | Default           | Description                                                                |
+| --------------------- | --------------------- | ----------------- | -------------------------------------------------------------------------- |
+| `strategy`            | all                   | required          | `'embedding'`, `'model'`, `'custom'`, or `'hybrid'`.                       |
+| `dense`               | embedding, hybrid     | required          | Dense embedding used to detect low-similarity boundaries.                  |
+| `segment`             | model, custom, hybrid | required          | Function returning `{ start, end, reason?, confidence? }[]` boundaries.    |
+| `minChars`            | all                   | `200`             | Minimum chunk size before semantic boundaries are accepted.                |
+| `maxChars`            | all                   | `1200`            | Maximum chunk size before splitting is forced.                             |
+| `similarityThreshold` | embedding, hybrid     | `0.75`            | Split when adjacent sentence similarity falls below the threshold.         |
+| `overlapChars`        | accepted              | inherited default | Present for API consistency; semantic chunks do not currently add overlap. |
 
 Behavior:
 
@@ -457,10 +466,10 @@ Write a custom chunker when your domain already has better boundaries than gener
 
 ```ts
 const markdownSections: Chunker = {
-  _tag: 'Chunker',
-  name: 'markdown-sections',
-  version: '1',
-  fingerprint: () => 'markdown-sections:v1',
+  _tag: "Chunker",
+  name: "markdown-sections",
+  version: "1",
+  fingerprint: () => "markdown-sections:v1",
   chunkDocument(document) {
     return {
       chunks: splitByHeading(document.content).map((section, ordinal) => ({
@@ -474,11 +483,11 @@ const markdownSections: Chunker = {
           heading: section.heading,
         },
       })),
-    }
+    };
   },
-}
+};
 
-const pipeline = indexingPipeline({ chunker: markdownSections })
+const pipeline = indexingPipeline({ chunker: markdownSections });
 ```
 
 Custom chunkers must preserve the document namespace and source id, produce stable chunk ids, and return parent records only when later retrieval should be able to expand from child hits to parent context.
@@ -488,8 +497,8 @@ Custom chunkers must preserve the document namespace and source id, produce stab
 Set `cache: true` on the indexer to cache expensive document transforms, chunkers, and chunk transforms in the same store. Per-call options can override behavior:
 
 ```ts
-await docsIndexer.indexDocuments(docs, { cache: 'refresh' })
-await docsIndexer.indexDocuments(docs, { cache: 'bypass' })
+await docsIndexer.indexDocuments(docs, { cache: "refresh" });
+await docsIndexer.indexDocuments(docs, { cache: "bypass" });
 ```
 
 The cache key includes source hash, previous stage hash, stage kind, stage name, stage version, and stage fingerprint. Cached stages are also recorded in the source ledger so users can see what was reused.
@@ -512,7 +521,7 @@ Default chunking is character-based:
 await indexer.indexDocuments(docs, {
   replaceSources: true,
   chunking: { maxChars: 1000, overlapChars: 120 },
-})
+});
 ```
 
 Defaults:
@@ -526,7 +535,7 @@ Use it for tests, one-off writes, demos, and deliberately manual updates where y
 ### `indexChunks(chunks, options?)`
 
 ```ts
-await indexer.indexChunks(chunks, { replaceSources: false })
+await indexer.indexChunks(chunks, { replaceSources: false });
 ```
 
 Defaults:
@@ -554,7 +563,7 @@ Returns a stable hash of the indexing pipeline. The fingerprint includes indexer
 `indexDocuments()` and `indexChunks()` accept `{ dryRun: true }`.
 
 ```ts
-const plan = await docsIndexer.indexDocuments(docs, { dryRun: true })
+const plan = await docsIndexer.indexDocuments(docs, { dryRun: true });
 ```
 
 Dry runs prepare chunks and embeddings but do not delete or write store records. They return chunk and embedding counts so callers can preview work before committing it.
@@ -567,23 +576,23 @@ Dry runs also return prepared parent records and pipeline stages when the config
 
 ```ts
 const docsCorpus = corpus({
-  id: 'docs',
-  namespace: 'product-docs',
+  id: "docs",
+  namespace: "product-docs",
   records,
   indexer: docsIndexer,
-})
+});
 
 const result = await docsCorpus.sync(docs, {
-  sourceSet: 'complete',
-  stale: 'delete',
-})
+  sourceSet: "complete",
+  stale: "delete",
+});
 ```
 
 | Field       | Type                | Description                                                 |
 | ----------- | ------------------- | ----------------------------------------------------------- |
 | `id`        | `string`            | Stable corpus identifier                                    |
 | `namespace` | `string`            | Must match the wrapped indexer namespace                    |
-| `records`   | `RecordStore`         | Stores source ledger records                                |
+| `records`   | `RecordStore`       | Stores source ledger records                                |
 | `indexer`   | `Indexer`           | Performs chunking, embedding, and chunk writes              |
 | `hash?`     | `SourceHashOptions` | Customize metadata hashing and volatile metadata exclusions |
 
@@ -591,11 +600,11 @@ const result = await docsCorpus.sync(docs, {
 
 ```ts
 await docsCorpus.sync(loader.load(), {
-  mode: 'replaceChanged',
-  sourceSet: 'partial',
-  stale: 'keep',
+  mode: "replaceChanged",
+  sourceSet: "partial",
+  stale: "keep",
   dryRun: false,
-})
+});
 ```
 
 `documents` may be an array or async iterable of `CruxDocument`. It may also be an async iterable of ingest load results from `@use-crux/ingest`. Failed source results are recorded in the corpus ledger and do not stop the whole sync.
@@ -608,58 +617,72 @@ await docsCorpus.sync(loader.load(), {
 
 ```ts
 type CorpusSyncResult = {
-  corpusId: string
-  namespace: string
-  mode: 'replaceChanged' | 'appendOnly'
-  sourceSet: 'partial' | 'complete'
-  stalePolicy: 'keep' | 'delete'
-  dryRun: boolean
-  added: number
-  changed: number
-  unchanged: number
-  stale: number
-  skipped: number
-  deleted: number
-  failed: number
-  chunkCount: number
-  durationMs: number
+  corpusId: string;
+  namespace: string;
+  mode: "replaceChanged" | "appendOnly";
+  sourceSet: "partial" | "complete";
+  stalePolicy: "keep" | "delete";
+  dryRun: boolean;
+  added: number;
+  changed: number;
+  unchanged: number;
+  stale: number;
+  skipped: number;
+  deleted: number;
+  failed: number;
+  chunkCount: number;
+  durationMs: number;
   sources: Array<{
-    sourceId: string
-    action: 'added' | 'changed' | 'unchanged' | 'skipped' | 'failed' | 'stale' | 'deleted'
-    reason?: string
-    chunkCount?: number
-    stages?: SourceStageRecord[]
-    error?: { message: string; stack?: string }
-  }>
-}
+    sourceId: string;
+    action:
+      | "added"
+      | "changed"
+      | "unchanged"
+      | "skipped"
+      | "failed"
+      | "stale"
+      | "deleted";
+    reason?: string;
+    chunkCount?: number;
+    stages?: SourceStageRecord[];
+    error?: { message: string; stack?: string };
+  }>;
+};
 ```
 
 ### Source ledger methods
 
 ```ts
-await docsCorpus.getSource('guide.md')
-await docsCorpus.listSources({ includeDeleted: false })
-await docsCorpus.deleteSource('guide.md')
-await docsCorpus.clearSources()
+await docsCorpus.getSource("guide.md");
+await docsCorpus.listSources({ includeDeleted: false });
+await docsCorpus.deleteSource("guide.md");
+await docsCorpus.clearSources();
 ```
 
 The ledger stores source hashes, index hashes, status, chunk counts, timestamps, metadata, recent errors, and the latest pipeline stage records. It is intentionally separate from chunk records so operational sync state does not pollute retrieval results.
 
 ```ts
 type SourceStageRecord = {
-  name: string
-  kind?: 'parser' | 'document-transform' | 'chunker' | 'chunk-transform' | 'embedding' | 'promotion' | 'sync'
-  version?: string
-  status: 'pending' | 'success' | 'failed' | 'skipped'
-  cache?: 'hit' | 'miss' | 'write' | 'refresh' | 'bypass'
-  inputHash?: string
-  outputHash?: string
-  durationMs?: number
-  chunkCount?: number
-  parentCount?: number
-  error?: { message: string; stack?: string }
-  updatedAt: number
-}
+  name: string;
+  kind?:
+    | "parser"
+    | "document-transform"
+    | "chunker"
+    | "chunk-transform"
+    | "embedding"
+    | "promotion"
+    | "sync";
+  version?: string;
+  status: "pending" | "success" | "failed" | "skipped";
+  cache?: "hit" | "miss" | "write" | "refresh" | "bypass";
+  inputHash?: string;
+  outputHash?: string;
+  durationMs?: number;
+  chunkCount?: number;
+  parentCount?: number;
+  error?: { message: string; stack?: string };
+  updatedAt: number;
+};
 ```
 
 ### Change detection
@@ -675,14 +698,14 @@ Volatile metadata fields should not count as changes. Exclude them through `hash
 
 ```ts
 const docsCorpus = corpus({
-  id: 'docs',
-  namespace: 'product-docs',
+  id: "docs",
+  namespace: "product-docs",
   records,
   indexer: docsIndexer,
   hash: {
-    excludeMetadata: ['mtimeMs', 'lastFetchedAt'],
+    excludeMetadata: ["mtimeMs", "lastFetchedAt"],
   },
-})
+});
 ```
 
 ## Replacement model

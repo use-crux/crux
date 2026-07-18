@@ -80,10 +80,10 @@ function expectedTreatment(descriptor) {
     return "definition-ref";
   if (descriptor.runtimeIdentity === "parent-derived") return "parent-derived";
   if (
-    descriptor.primary === "quality-owned" ||
-    descriptor.secondary?.includes("quality-owned")
+    descriptor.primary === "eval-owned" ||
+    descriptor.secondary?.includes("eval-owned")
   )
-    return "quality";
+    return "eval";
   return "none";
 }
 

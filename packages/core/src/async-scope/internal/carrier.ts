@@ -7,10 +7,6 @@ type AsyncLocalStorageLike<T> = {
 
 type AsyncLocalStorageConstructor = new <T>() => AsyncLocalStorageLike<T>;
 
-interface AsyncHooksModule {
-  readonly AsyncLocalStorage?: AsyncLocalStorageConstructor;
-}
-
 interface AsyncScopeFrame {
   readonly parent?: AsyncScopeFrame;
   readonly key: symbol;
@@ -137,11 +133,10 @@ function resolveAsyncLocalStorage(): AsyncLocalStorageConstructor | undefined {
     const getBuiltinModule = (
       globalThis as { process?: { getBuiltinModule?: (id: string) => unknown } }
     ).process?.getBuiltinModule;
-    const hooks = (getBuiltinModule?.("node:async_hooks") ??
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      require("node:async_hooks")) as AsyncHooksModule;
-    return typeof hooks.AsyncLocalStorage === "function"
+    const hooks = getBuiltinModule?.("node:async_hooks") as
+      | { readonly AsyncLocalStorage?: AsyncLocalStorageConstructor }
+      | undefined;
+    return typeof hooks?.AsyncLocalStorage === "function"
       ? hooks.AsyncLocalStorage
       : undefined;
   } catch {

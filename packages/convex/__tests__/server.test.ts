@@ -111,7 +111,7 @@ describe('@use-crux/convex/server', () => {
       observabilityName: 'chat',
       observabilityRootPrimitive: 'agent.run',
       observabilityAttributes: (args) => ({
-        agentId: 'karyla-chat',
+        agentId: 'support-chat',
         sessionId: args.threadId,
       }),
       args: { threadId: 'validator-placeholder' },
@@ -134,7 +134,7 @@ describe('@use-crux/convex/server', () => {
         rootPrimitive: 'agent.run',
         attributes: expect.objectContaining({
           boundary: 'convex.action',
-          agentId: 'karyla-chat',
+          agentId: 'support-chat',
           sessionId: 'thread_1',
         }),
       }),

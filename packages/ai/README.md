@@ -36,6 +36,86 @@ const result = await generate(fixTypos, {
 result.text; // string
 ```
 
+## Managed Eval tasks
+
+Bind production defaults once with `generate.task()` or `stream.task()`. The
+result remains an ordinary callable, while `@use-crux/core/eval` can infer its
+Case input, semantic output, call options, Variants, and captured capabilities.
+
+```ts
+import { generate, stableModel } from "@use-crux/ai";
+
+const support = generate.task(supportPrompt, {
+  model: stableModel(openai("gpt-4o-mini")),
+  temperature: 0.2,
+});
+
+const result = await support({ question: "Can I get a refund?" });
+```
+
+`stableModel()` attests that the model's hidden endpoint, middleware, and
+provider configuration are stable, so Crux can reuse exact Eval evidence. It
+returns the same model with the same inferred type. Standard AI SDK models
+derive a key from `provider:modelId`; for custom providers or middleware, pass
+a secret-free versioned key and change it whenever hidden behavior changes:
+
+```ts
+const customModel = stableModel(createCustomModel(), "acme:support-model:v2");
+```
+
+`stableModel()` accepts leaf AI SDK models only. For `router()`, `split()`,
+`retry()`, `fallback()`, or `cascade()`, attest each object model leaf; Crux
+fingerprints callback-free route-tree structure recursively and records the
+resolved model target after execution. Route-tree evidence remains fresh when
+that target is not covered at planning; trees with runtime callbacks also run
+fresh because source provenance cannot cover closure or ambient state.
+
+Never include API keys, bearer tokens, headers, or other credentials in that
+key because it is fingerprint material. An unattested model still runs
+normally, but executes fresh and reports `model_identity_unattested` with the
+`stableModel(model)` remedy. Crux never guesses identity from constructor
+names or function source.
+
+Function-form `prompt`, `system`, and `messages` fields participate in automatic
+reuse when their managed task comes from a tracked literal-ESM source closure.
+Crux captures a one-way fingerprint of the exact normalized prompt resolved by
+the real generate/stream invocation. Only after finding an evidence candidate,
+it cheaply renders the same input again and compares fingerprints. A mismatch
+runs inference fresh with `nondeterministic_renderer`; raw prompt material never
+enters the evidence record. Route environment, time, random, filesystem, or
+network state through Case input, call options, or Variants. Non-literal dynamic
+imports, CommonJS/generated source, unresolved local imports, or non-portable
+outside source run fresh with `unresolved_source_dependency`.
+
+Imported pure-render contexts participate in the same identity proof. Static
+contexts, inline skills, and schema-only tools are fingerprinted as data.
+Dynamic context renderers, `when()`/`match()` selectors, executable or
+function-produced tools, memoized contexts, and
+memory/retriever/blackboard/contributor/tool-source entries run fresh because
+their effective output or effects are not covered by stable identity.
+
+Managed production tasks should be imported into the Eval. Keeping the task in
+its production module lets Crux reuse task evidence across assertion-only and
+deterministic-scorer-only Eval edits. Current and replacement Variant imports
+are fingerprinted independently, so editing an unselected candidate does not
+invalidate Current. An inline managed task runs fresh because Crux cannot
+safely separate its source from assessment code.
+
+For feedback on an AI message carrying Crux stream metadata, use the dedicated
+server-side helper:
+
+```ts
+import { feedback } from "@use-crux/ai/feedback";
+
+const message = await messages.getOwned(messageId, user.id);
+if (!message) throw new Response("Not found", { status: 404 });
+
+await feedback(message, "down");
+```
+
+The helper extracts the canonical run id and awaits the configured durable
+observability destination.
+
 A prompt with an `output` schema routes through `generateObject` and returns a typed `result.object`, with tiered repair/retry when `validationRetry` is set. Models may be plain or wrapped in core's `fallback()` / `router()` / `cascade()`. Tool loops run up to `maxSteps: 10` by default — identical to every Crux adapter (and unlike the raw AI SDK's single-step default), so prompts behave the same when moved between adapters. Use Crux's portable `maxTokens`, `topK`, `stopSequences`, `seed`, `toolChoice`, `stopWhen`, `maxSteps()`, `hasToolCall()`, `reasoning`, and `toolApproval` settings for adapter-neutral control; AI SDK-native stop conditions, tool-choice variants, `providerOptions`, headers, retries, and fine-grained provider reasoning controls belong under the typed `extra` option. Tools that declare `contextSchema` require `toolsContext.<toolName>` at the call site, and `runtimeContext` is threaded through tool execution, middleware, and function-form approval policies. `timeout` accepts structured budgets (`totalMs`, `stepMs`, `chunkMs`, `toolMs`, and `tools[name]`) and expired budgets reject with `TimeoutError`. `generate()` returns the canonical Crux envelope: accumulated `text`, optional complete `usage`, optional `cost`, `steps`, `finalStep`, provider-neutral `messages`, retained `_meta`, and typed `.raw` for the AI SDK result. `stream()` returns `{ textStream, raw, completion }`; `raw` is the AI SDK stream result, and `completion` resolves to the canonical completion envelope. Use `createUIMessageStreamResponse(result)` or `pipeUIMessageStreamToResponse(result, options)` for AI SDK `useChat` integration. `embedding()` binds AI SDK embedding models as Crux primitives, and `generateObjectFn` / `generateTextFn` satisfy `@use-crux/core` APIs that expect a generate function (e.g. `llmJudge`, `summarizeMessages`, and retrieval recipe model steps). `generateObjectFn` uses the same AI SDK structured-attempt mechanics as prompt structured generation: provider schema sanitation, core-backed `experimental_repairText`, and router/cascade model resolution before returning `{ object }`. If a `GenerateObjectFn` call needs to go through full adapter prompt execution, use `createGenerateObjectFnFromGenerate(generate)` from `@use-crux/core/compaction`.
 
 For `useChat` route handlers, keep the AI SDK message edge native:

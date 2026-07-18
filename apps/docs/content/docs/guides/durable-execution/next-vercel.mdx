@@ -14,10 +14,10 @@ pnpm add @use-crux/core @use-crux/postgres @use-crux/upstash pg @upstash/qstash
 ## Configure runtime
 
 ```ts
-import { config } from '@use-crux/core'
-import { serverless } from '@use-crux/core/runtime'
-import { postgres } from '@use-crux/postgres/runtime'
-import { qstash } from '@use-crux/upstash/runtime'
+import { config } from "@use-crux/core";
+import { serverless } from "@use-crux/core/runtime";
+import { postgres } from "@use-crux/postgres/runtime";
+import { qstash } from "@use-crux/upstash/runtime";
 
 export default config({
   runtime: serverless({
@@ -27,12 +27,12 @@ export default config({
     // Optional on Vercel: production and preview namespaces are inferred.
     namespace: process.env.CRUX_RUNTIME_NAMESPACE,
     retention: {
-      events: '24h',
-      terminalWork: '7d',
-      terminalSnapshots: '30d',
+      events: "24h",
+      terminalWork: "7d",
+      terminalSnapshots: "30d",
     },
   }),
-})
+});
 ```
 
 `publicUrl` can be omitted when Crux can infer a stable URL from Vercel environment variables. Production setup fails with `PUBLIC_URL_UNRESOLVED` when no stable URL exists.
@@ -50,16 +50,22 @@ crux runtime generate
 Generated Next files target the public handler API:
 
 ```ts
-import { createRuntimeHandler } from '@use-crux/core/runtime'
-import { reviewFlow } from '@/flows/review'
-import { embedDocument } from '@/tasks/embed-document'
+import { createRuntimeHandler } from "@use-crux/core/runtime";
+import { reviewFlow } from "@/flows/review";
+import { embedDocument } from "@/tasks/embed-document";
 
 export const { GET, POST } = createRuntimeHandler({
   targets: [reviewFlow, embedDocument],
-})
+});
 ```
 
 `POST` verifies the wake request before durable writes. `GET` returns health metadata for setup and preflight without exposing secrets.
+
+When deployable Evals are discovered, the same generated module also exports
+`DELETE` and dispatches authenticated `/manifest` and `/jobs/*` requests to
+the durable Eval host. Mount it from an optional catch-all route such as
+`app/api/crux/[[...path]]/route.ts`; set `CRUX_EVAL_HOST_DEPLOYMENT_ID` and
+`CRUX_EVAL_HOST_TOKEN` in the deployment secret store.
 
 ## Verify setup
 

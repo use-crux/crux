@@ -18,6 +18,7 @@ import {
   embedding,
   retrievalModel,
   reranker,
+  stableModel,
   aiSdkProviderRuntime,
 } from "@use-crux/ai";
 import {
@@ -43,6 +44,45 @@ The only module that calls AI SDK functions is the `SdkGateway`, inject a script
 Internally, `@use-crux/ai` keeps AI SDK request planning and result projection in a private call-plan codec. The loop runtime asks the codec for a `generateText`, `generateObject`, `streamText`, `streamObject`, or replay plan, invokes the selected `SdkGateway` method, then decodes or attaches the raw SDK result. This is not a public extension API; it exists to keep the gateway seam stable and the adapter behavior testable.
 
 For Anthropic AI SDK models, Crux converts resolved `systemBlocks` into AI SDK system messages and places `providerOptions.anthropic.cacheControl` on the single `cacheBoundary` block at the end of the stable cached prefix.
+
+### `stableModel(model, key?)`
+
+Attest an AI SDK model's stable identity for exact Eval evidence reuse:
+
+```ts
+import { stableModel } from "@use-crux/ai";
+import { openai } from "@ai-sdk/openai";
+
+const standard = stableModel(openai("gpt-4o-mini"));
+const custom = stableModel(createCustomModel(), "acme:support-model:v2");
+```
+
+The function returns the same reference with the exact inferred model type. A
+standard object derives `provider:modelId`. Supply a secret-free versioned key
+when endpoint, middleware, or provider configuration is hidden, and bump that
+key whenever those semantics change. Never include credentials: the key enters
+fingerprint material. Calling `stableModel()` again with a conflicting key on
+the same object throws; create a new provider model object for the new version.
+`stableModel()` is leaf-only: do not wrap a `router()`, `split()`, `retry()`,
+`fallback()`, or `cascade()` tree. Attest its object model leaves instead;
+Crux fingerprints callback-free wrapper options, routes, weights, and budgets
+recursively, then records the resolved model target after execution. Runtime
+routing callbacks remain fresh because source provenance does not attest
+closure or ambient state; route-tree evidence also remains fresh when the
+resolved target was not covered at planning.
+
+Bare model objects remain valid for generation and Evals, but execute fresh
+with `model_identity_unattested` because Crux will not trust constructor names,
+function source, or provider metadata without the explicit attestation.
+
+Exact Eval reuse covers the data-only prompt-rendering context class: static
+contexts, loaded inline skills, and tools that declare only schemas. Planning
+never invokes a renderer, selector, or tool. Function-form prompt content,
+dynamic Context renderers, `when()`/`match()` selectors, tools with `execute`,
+function-form context tools, memoized contexts, and
+memory/retriever/blackboard/contributor/tool-source entries remain fresh
+because their effective output or effects cannot be proven from source
+structure alone.
 
 ### Multimodal content
 
@@ -116,7 +156,7 @@ Execute a prompt using the Vercel AI SDK.
 | ------------------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `prompt`                        | `Prompt`                                                     | The prompt to execute                                                                                                                                                                                                                                |
 | `options.model`                 | `LanguageModel \| RoutableModel<LanguageModel>`              | AI SDK model or a [`router()`](/docs/guides/routing/router), [`split()`](/docs/guides/routing/split), [`retry()`](/docs/guides/routing/retry), [`fallback()`](/docs/guides/routing/fallback), or [`cascade()`](/docs/guides/routing/cascade) wrapper |
-| `options.input`                 | `MergedInput<TOwnInput, TContexts>`                          | Input values, merged across the prompt's own schema and every context's `input` schema                                                                                                                                                              |
+| `options.input`                 | `MergedInput<TOwnInput, TContexts>`                          | Input values, merged across the prompt's own schema and every context's `input` schema                                                                                                                                                               |
 | `options.tools`                 | `ToolSet?`                                                   | Additional tools to merge at call time                                                                                                                                                                                                               |
 | `options.toolMiddleware`        | `ToolMiddleware \| readonly ToolMiddleware[]?`               | Call-site tool wrappers. See [Tool Middleware](/docs/reference/crux-core/tool-middleware).                                                                                                                                                           |
 | `options.toolApproval`          | `ToolApprovalMap?`                                           | Call-site approval policy; exact tool names beat `'*'`, and call-site policy wins over prompt/context declarations.                                                                                                                                  |
@@ -155,7 +195,7 @@ Stream a prompt execution. Same options as `generate()`, except `cascade()` is n
 | -------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `prompt`                   | `Prompt`                                              | The prompt to execute                                                                                                                                                                                   |
 | `options.model`            | `LanguageModel \| RoutableModel<LanguageModel>`       | AI SDK model or a [`router()`](/docs/guides/routing/router), [`split()`](/docs/guides/routing/split), [`retry()`](/docs/guides/routing/retry), or [`fallback()`](/docs/guides/routing/fallback) wrapper |
-| `options.input`            | `MergedInput<TOwnInput, TContexts>`                   | Input values, merged across the prompt's own schema and every context's `input` schema                                                                                                                 |
+| `options.input`            | `MergedInput<TOwnInput, TContexts>`                   | Input values, merged across the prompt's own schema and every context's `input` schema                                                                                                                  |
 | `options.tools`            | `ToolSet?`                                            | Additional tools to merge at call time                                                                                                                                                                  |
 | `options.toolMiddleware`   | `ToolMiddleware \| readonly ToolMiddleware[]?`        | Call-site tool wrappers. See [Tool Middleware](/docs/reference/crux-core/tool-middleware).                                                                                                              |
 | `options.toolApproval`     | `ToolApprovalMap?`                                    | Call-site approval policy; exact tool names beat `'*'`, and call-site policy wins over prompt/context declarations.                                                                                     |

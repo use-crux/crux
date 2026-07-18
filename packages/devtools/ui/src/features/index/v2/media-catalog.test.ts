@@ -82,9 +82,7 @@ describe("media catalog projection", () => {
       sourceLine: 12,
       fidelity: "resolved",
       warningCount: 1,
-      relations: [
-        expect.objectContaining({ type: "media.uses_routing" }),
-      ],
+      relations: [expect.objectContaining({ type: "media.uses_routing" })],
     });
     expect(mediaCatalogBadges(view!)).toEqual(
       expect.arrayContaining([

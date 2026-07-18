@@ -24,8 +24,8 @@ Three common causes:
 3. **Not included in `use`**: The context must be listed in the prompt's `use` array.
 
 ```ts
-const debug = myPrompt.inspect({ input, tokenBudget: 4000 })
-debug.droppedContexts // [{ id, reason, priority }]
+const debug = myPrompt.inspect({ input, tokenBudget: 4000 });
+debug.droppedContexts; // [{ id, reason, priority }]
 ```
 
 ## How do I use the same prompt with different SDKs?
@@ -33,22 +33,22 @@ debug.droppedContexts // [{ id, reason, priority }]
 Prompts are SDK-agnostic: they don't import any adapter. Pass the prompt to whichever adapter you need:
 
 ```ts
-import { generate } from '@use-crux/ai'
-import { createOpenAI } from '@use-crux/openai'
-import { createAnthropic } from '@use-crux/anthropic'
-import OpenAI from 'openai'
-import Anthropic from '@anthropic-ai/sdk'
+import { generate } from "@use-crux/ai";
+import { createOpenAI } from "@use-crux/openai";
+import { createAnthropic } from "@use-crux/anthropic";
+import OpenAI from "openai";
+import Anthropic from "@anthropic-ai/sdk";
 
 // Vercel AI SDK
-await generate(myPrompt, { model: vercelModel, input })
+await generate(myPrompt, { model: vercelModel, input });
 
 // OpenAI SDK
-const oai = createOpenAI(new OpenAI())
-await oai.generate(myPrompt, { model: 'gpt-4o', input })
+const oai = createOpenAI(new OpenAI());
+await oai.generate(myPrompt, { model: "gpt-4o", input });
 
 // Anthropic SDK
-const claude = createAnthropic(new Anthropic())
-await claude.generate(myPrompt, { model: 'claude-sonnet-4-5-20250929', input })
+const claude = createAnthropic(new Anthropic());
+await claude.generate(myPrompt, { model: "claude-sonnet-4-5-20250929", input });
 ```
 
 See [Execution](/docs/guides/prompts/execution) for all adapter options.
@@ -58,9 +58,9 @@ See [Execution](/docs/guides/prompts/execution) for all adapter options.
 Use `.resolve()` to see the exact system message, prompt, schema, and tools:
 
 ```ts
-const resolved = await myPrompt.resolve({ input, provider: 'openai' })
-console.log(resolved.system) // composed system message
-console.log(resolved.tools) // merged tool set
+const resolved = await myPrompt.resolve({ input, provider: "openai" });
+console.log(resolved.system); // composed system message
+console.log(resolved.tools); // merged tool set
 ```
 
 Use `.inspect()` for token-level detail including which contexts were dropped.
@@ -81,13 +81,13 @@ prompt({ use: [a, b], ... }) // ✗ Type conflict on `name`
 Only if you use `tokenBudget` for context dropping. Without a tokenizer, Crux estimates tokens at ~4 characters per token. For accurate budget management, provide a real tokenizer:
 
 ```ts
-import { encode } from 'gpt-tokenizer'
+import { encode } from "gpt-tokenizer";
 
 config({
   generation: {
     tokenizer: (text) => encode(text).length,
   },
-})
+});
 ```
 
 ## How do I add memory to a prompt?
@@ -96,14 +96,14 @@ Compose memory blocks with `memory()` and put the composed memory directly in `u
 
 ```ts
 const chatMemory = memory({
-  id: 'chat',
-  namespace: 'thread:1',
-  blocks: [episodes({ id: 'episodes', embed })],
-})
+  id: "chat",
+  namespace: "thread:1",
+  blocks: [episodes({ id: "episodes", embed })],
+});
 
 const draftPrompt = prompt({
   use: [chatMemory],
-})
+});
 ```
 
 See [Memory](/docs/guides/memory) for the block model.
@@ -121,11 +121,12 @@ The Google adapter validates structured output with Zod after generation. If the
 Use the CLI runner:
 
 ```bash
-crux quality run --ci --json-out results.json   # machine-readable output
-crux quality run support.refunds            # run one evaluation by id
+crux eval --offline          # exact evidence only; zero network
+crux eval support.refunds    # run one Eval by id
 ```
 
-Assert on exit code (non-zero if any gate fails) or parse the JSON output for custom CI logic. See the [Quality guide](/docs/guides/quality).
+Assert on the exit code: `0` passed, `1` failed, and `2` means discovery or
+preflight rejected the run before spend. See the [Evals guide](/docs/guides/evals).
 
 ## Is there an llms.txt for AI tools?
 
@@ -136,7 +137,7 @@ Yes. The Crux docs expose an [`llms.txt`](/llms.txt) endpoint that AI assistants
 Yes. `@use-crux/core` is fully standalone. Use `.resolve()` to get the composed prompt data, then pass it to any SDK manually:
 
 ```ts
-const { system, prompt, schema, settings } = await myPrompt.resolve({ input })
+const { system, prompt, schema, settings } = await myPrompt.resolve({ input });
 // Use system/prompt/schema with any SDK or API call
 ```
 

@@ -379,7 +379,12 @@ describe("media run projection", () => {
                   path: "/private/SECRET.pdf",
                   assetRef: { uri: "asset://SECRET" },
                   mediaType: "application/pdf",
-                  location: { type: "time", unit: "seconds", start: 1.5, end: 3 },
+                  location: {
+                    type: "time",
+                    unit: "seconds",
+                    start: 1.5,
+                    end: 3,
+                  },
                 },
                 chunkId: "c1",
                 preview: "chunk text",
@@ -427,7 +432,9 @@ describe("media run projection", () => {
     const inputNode = view?.lineage.nodes.find((node) => node.kind === "input");
     expect(inputNode?.attribution).toEqual({ type: "pages", pageCount: 4 });
 
-    const outputNode = view?.lineage.nodes.find((node) => node.kind === "output");
+    const outputNode = view?.lineage.nodes.find(
+      (node) => node.kind === "output",
+    );
     expect(outputNode?.attribution).toEqual({ type: "page", pageNumber: 2 });
 
     const derived = view?.lineage.edges.find(
@@ -517,7 +524,10 @@ describe("media run projection", () => {
     expect(view?.summary.status).toBe("error");
     expect(view?.summary.executionKind).toBe("unknown");
     expect(view?.lineage.nodes).toEqual([
-      expect.objectContaining({ kind: "operation", label: "media.generate_image" }),
+      expect.objectContaining({
+        kind: "operation",
+        label: "media.generate_image",
+      }),
     ]);
     expect(view?.lineage.edges).toEqual([]);
     expect(view?.attempts[0]?.status).toBe("error");
@@ -581,7 +591,12 @@ describe("media run projection", () => {
         to: { kind: "span", id: "span_index" },
       },
       { type: "span:end", spanId: "span_gen", status: "ok" },
-      { type: "span:end", spanId: "span_describe", status: "ok", durationMs: 5 },
+      {
+        type: "span:end",
+        spanId: "span_describe",
+        status: "ok",
+        durationMs: 5,
+      },
       { type: "span:end", spanId: "span_transcribe", status: "ok" },
       { type: "span:end", spanId: "span_index", status: "ok" },
       { type: "span:end", spanId: "span_ingest", status: "ok" },
@@ -604,9 +619,9 @@ describe("media run projection", () => {
     expect(selected?.lineage.nodes.some((n) => n.id === "span_index")).toBe(
       true,
     );
-    expect(selected?.lineage.nodes.some((n) => n.id === "span_transcribe")).toBe(
-      false,
-    );
+    expect(
+      selected?.lineage.nodes.some((n) => n.id === "span_transcribe"),
+    ).toBe(false);
     expect(JSON.stringify(selected)).not.toContain("other transcript");
 
     const other = projectMediaRunView(records, {

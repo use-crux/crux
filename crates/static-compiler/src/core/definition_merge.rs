@@ -77,7 +77,6 @@ fn merge_definition(
         .clone()
         .or(existing.fingerprint.clone());
     merged.metadata = metadata;
-    merged.quality = incoming.quality.clone().or(existing.quality.clone());
     merged.source_refs = merge_source_refs(existing.source_refs, incoming.source_refs);
     merged
 }

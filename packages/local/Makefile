@@ -62,11 +62,11 @@ embed: embed-workers embed-ui
 
 .PHONY: embed-workers
 embed-workers: $(EMBED_DIR)
-	@if [ -f "$(LOCAL_WORKERS_DIST)/quality-runner.mjs" ]; then \
-		cp "$(LOCAL_WORKERS_DIST)/quality-runner.mjs" "$(EMBED_DIR)/quality-runner.mjs"; \
-		echo "Embedded quality-runner.mjs from local-workers dist"; \
+	@if [ -f "$(LOCAL_WORKERS_DIST)/eval-coordinator.mjs" ]; then \
+		cp "$(LOCAL_WORKERS_DIST)/eval-coordinator.mjs" "$(EMBED_DIR)/eval-coordinator.mjs"; \
+		echo "Embedded eval-coordinator.mjs from local-workers dist"; \
 	else \
-		echo "Error: $(LOCAL_WORKERS_DIST)/quality-runner.mjs not found"; \
+		echo "Error: $(LOCAL_WORKERS_DIST)/eval-coordinator.mjs not found"; \
 		echo "Run 'make build-local-workers' first"; \
 		exit 1; \
 	fi
@@ -189,12 +189,12 @@ clean:
 test:
 	$(GO) test ./...
 
-.PHONY: quality-go
-quality-go:
+.PHONY: inspect-go
+inspect-go:
 	$(GO) test ./...
-	$(GO) vet ./internal/observability ./internal/quality ./internal/store
+	$(GO) vet ./internal/observability ./internal/inspect ./internal/store
 	$(GO) test -race ./internal/store ./internal/observability
 
 .PHONY: bench
 bench:
-	$(GO) test -run '^$$' -bench . -benchmem ./internal/observability ./internal/quality ./internal/store
+	$(GO) test -run '^$$' -bench . -benchmem ./internal/observability ./internal/inspect ./internal/store

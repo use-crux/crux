@@ -190,10 +190,6 @@ fn prompt_fact_metadata(
         "hasMessages".to_string(),
         Value::Bool(has_property(config, "messages")),
     );
-    facts.insert(
-        "hasTests".to_string(),
-        Value::Bool(has_property(config, "tests")),
-    );
     Value::Object(facts)
 }
 

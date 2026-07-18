@@ -10,21 +10,21 @@ import {
   grounding,
   renderCitationContext,
   resolveCitations,
-} from '@use-crux/core/citations'
+} from "@use-crux/core/citations";
 ```
 
 `grounding()` is the normal user-facing primitive. It wraps a retriever or retrieval pipeline and injects the evidence policy into `prompt()` or `context()` through `use`.
 
 ```ts
 const groundedDocs = grounding({
-  id: 'product-docs',
+  id: "product-docs",
   retriever: advancedDocs,
   query: ({ input }) => input.question,
   citations: {
     required: true,
-    quotes: 'required',
+    quotes: "required",
   },
-})
+});
 
 const answer = prompt({
   use: [groundedDocs],
@@ -33,9 +33,9 @@ const answer = prompt({
     answer: z.string(),
     citations: z.array(citationSchema),
   }),
-  system: 'Answer only from the provided sources.',
+  system: "Answer only from the provided sources.",
   prompt: ({ input }) => input.question,
-})
+});
 ```
 
 This does three things in one resolution pass:
@@ -48,10 +48,10 @@ The same primitive can be placed inside a reusable `context()` when several prom
 
 ```ts
 const productDocsContext = context({
-  id: 'product-docs-context',
+  id: "product-docs-context",
   use: [groundedDocs],
-  system: 'Use this evidence when answering product documentation questions.',
-})
+  system: "Use this evidence when answering product documentation questions.",
+});
 
 const answer = prompt({
   use: [productDocsContext],
@@ -60,7 +60,7 @@ const answer = prompt({
     answer: z.string(),
     citations: z.array(citationSchema),
   }),
-})
+});
 ```
 
 ## Injection modes
@@ -69,29 +69,29 @@ Use `inject` to choose whether evidence is loaded up front or exposed on demand.
 
 ```ts
 const baseGrounding = {
-  id: 'docs',
+  id: "docs",
   retriever: advancedDocs,
   query: ({ input }) => input.question,
-}
+};
 
-grounding({ ...baseGrounding, inject: 'context' }) // default
-grounding({ ...baseGrounding, inject: 'tool' })
-grounding({ ...baseGrounding, inject: 'both' })
+grounding({ ...baseGrounding, inject: "context" }); // default
+grounding({ ...baseGrounding, inject: "tool" });
+grounding({ ...baseGrounding, inject: "both" });
 ```
 
 `context` is deterministic and easiest to evaluate. `tool` keeps the prompt smaller, but citations can only validate against hits returned by grounding tools during the generation. `both` gives the model initial evidence plus a way to search further.
 
 ```ts
 const groundedDocs = grounding({
-  id: 'docs',
+  id: "docs",
   retriever: advancedDocs,
   query: ({ input }) => input.question,
-  inject: 'both',
+  inject: "both",
   tools: {
     prefix: true,
-    include: ['search', 'getSource'],
+    include: ["search", "getSource"],
   },
-})
+});
 
 // Injected tools: docsSearch, docsGetSource
 ```
@@ -101,18 +101,18 @@ const groundedDocs = grounding({
 Structured citations are canonical.
 
 ```ts
-const Citation = citationSchema
+const Citation = citationSchema;
 
 type Citation = {
-  namespace?: string
-  sourceId: string
-  chunkId: string
-  quote?: string
-  span?: { start: number; end: number }
-  url?: string
-  path?: string
-  metadata?: Record<string, unknown>
-}
+  namespace?: string;
+  sourceId: string;
+  chunkId: string;
+  quote?: string;
+  span?: { start: number; end: number };
+  url?: string;
+  path?: string;
+  metadata?: Record<string, unknown>;
+};
 ```
 
 `namespace` is optional unless multiple allowed hits share the same `sourceId` and `chunkId`.
@@ -137,11 +137,11 @@ Use `resolveCitations()` in evals, UI code, and tests.
 
 ```ts
 const validation = resolveCitations(result.object.citations, hits, {
-  quotes: 'required',
-})
+  quotes: "required",
+});
 
 if (!validation.valid) {
-  console.log(validation.issues)
+  console.log(validation.issues);
 }
 ```
 
@@ -151,17 +151,17 @@ Use `citationConstraint()` when you already have hits and want manual wiring.
 const citeRetrieved = citationConstraint({
   hits,
   required: true,
-  quotes: 'required',
-})
+  quotes: "required",
+});
 ```
 
 Use `renderCitationContext()` when you want full control over prompt assembly.
 
 ```ts
 const sourceText = renderCitationContext(hits, {
-  title: 'Evidence',
+  title: "Evidence",
   maxContentChars: 2000,
-})
+});
 ```
 
 ## What this is not

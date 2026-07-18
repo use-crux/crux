@@ -145,13 +145,12 @@ fn finalize_protocol_round_trips_realistic_json() {
             {
                 "definitions": [
                     {
-                        "id": "quality-target:writer",
-                        "kind": "quality.target",
+                        "id": "eval:writer",
+                        "kind": "eval",
                         "name": "writer",
                         "fidelity": "resolved",
-                        "quality": {
-                            "experimentIds": ["experiment:writer"],
-                            "experimentCount": 1
+                        "metadata": {
+                            "evalContract": "crux.eval"
                         }
                     }
                 ]

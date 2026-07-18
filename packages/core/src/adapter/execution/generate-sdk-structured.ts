@@ -20,15 +20,11 @@ import { getHooks } from "../../runtime/runtime";
 import type { Safety } from "../../safety/session";
 import { ValidationExhaustedError } from "../../generation/validation-retry";
 import type { ExecutorRequest, StructuredRequest } from "../executor-types";
-import {
-  interceptGeneration,
-  type InterceptedGeneration,
-} from "../interception";
 import { formatValidationFeedback } from "../policy/validation-retry";
 import type { ResultStepFacts } from "../result-accumulator";
 import type {
   AdapterExecutionGenerateArgs,
-  AdapterExecutionGenerateResult,
+  AdapterExecutionGenerateResultWithoutRunId,
   SdkLoopDialect,
 } from "./types";
 import { appendCorrectiveExchange, appendCorrectiveMessages } from "./messages";
@@ -54,11 +50,6 @@ interface GenerateSdkStructuredContext<TModel, TRawResponse, TRawStream> {
   readonly retryId: string;
   /** Prompt id for exhaustion diagnostics. */
   readonly promptId: string | undefined;
-  /** Produces interception metadata for each SDK structured attempt. */
-  readonly describeCall: (
-    kind: "structured",
-    request: ExecutorRequest<TModel>,
-  ) => InterceptedGeneration;
   /** Step facts collected by the parent SDK-loop execution. */
   readonly stepFacts: ResultStepFacts[];
 }
@@ -75,7 +66,7 @@ interface GenerateSdkStructuredContext<TModel, TRawResponse, TRawStream> {
  */
 export async function generateSdkStructured<TModel, TRawResponse, TRawStream>(
   ctx: GenerateSdkStructuredContext<TModel, TRawResponse, TRawStream>,
-): Promise<AdapterExecutionGenerateResult<TRawResponse>> {
+): Promise<AdapterExecutionGenerateResultWithoutRunId<TRawResponse>> {
   const {
     dialect,
     args,
@@ -84,7 +75,6 @@ export async function generateSdkStructured<TModel, TRawResponse, TRawStream>(
     safety,
     retryId,
     promptId,
-    describeCall,
     stepFacts,
   } = ctx;
   const validationRetry = args.validationRetry;
@@ -108,10 +98,7 @@ export async function generateSdkStructured<TModel, TRawResponse, TRawStream>(
       ),
     };
     try {
-      return await interceptGeneration(
-        describeCall("structured", requestWithSignal),
-        () => dialect.runStructuredAttempt(requestWithSignal),
-      );
+      return await dialect.runStructuredAttempt(requestWithSignal);
     } finally {
       attemptBudget.dispose();
     }

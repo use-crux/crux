@@ -2,17 +2,12 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { ProjectDefinition, ProjectIndexData } from "@/types";
-import { glyphFor } from "@/features/index/components/IndexKind";
 import { buildIndex } from "./adapt";
 import { kindMeta } from "./kit";
 import { RoutingCatalogFacts } from "./routing-catalog";
 
 describe("routing index metadata", () => {
-  it("labels stable split and retry kinds in legacy and v2 index views", () => {
-    expect(glyphFor("routing.split")).toMatchObject({ label: "split" });
-    expect(glyphFor("routing.retry.target")).toMatchObject({
-      label: "retry target",
-    });
+  it("labels stable split and retry kinds", () => {
     expect(kindMeta("routing.split")).toMatchObject({
       label: "Split",
       family: "routing",
@@ -51,9 +46,9 @@ describe("routing index metadata", () => {
     });
 
     for (const [childId, targetId] of Object.entries(routingTargets)) {
-      expect(index.relationsOf(childId).outgoing.map((relation) => relation.to)).toContain(
-        targetId,
-      );
+      expect(
+        index.relationsOf(childId).outgoing.map((relation) => relation.to),
+      ).toContain(targetId);
     }
 
     const markup = renderToStaticMarkup(
@@ -177,21 +172,45 @@ function routingIndexData(): ProjectIndexData {
         profile: { weight: 100, temperature: 0.1 },
       },
     ),
-    parent(routingDefinitionIds.retry, "routing.retry", { kind: "routing.retry", attempts: 2 }),
-    child(routingDefinitionIds.retryTarget, "routing.retry.target", routingDefinitionIds.retry, {
-      kind: "routing.retry.target",
-      targetDefinitionId: routingTargets[routingDefinitionIds.retryTarget],
+    parent(routingDefinitionIds.retry, "routing.retry", {
+      kind: "routing.retry",
+      attempts: 2,
     }),
-    parent(routingDefinitionIds.cascade, "routing.cascade", { kind: "routing.cascade", tierCount: 1 }),
-    child(routingDefinitionIds.cascadeTier, "routing.cascade.tier", routingDefinitionIds.cascade, {
-      kind: "routing.cascade.tier",
-      targetDefinitionId: routingTargets[routingDefinitionIds.cascadeTier],
+    child(
+      routingDefinitionIds.retryTarget,
+      "routing.retry.target",
+      routingDefinitionIds.retry,
+      {
+        kind: "routing.retry.target",
+        targetDefinitionId: routingTargets[routingDefinitionIds.retryTarget],
+      },
+    ),
+    parent(routingDefinitionIds.cascade, "routing.cascade", {
+      kind: "routing.cascade",
+      tierCount: 1,
     }),
-    parent(routingDefinitionIds.fallback, "routing.fallback", { kind: "routing.fallback", optionCount: 1 }),
-    child(routingDefinitionIds.fallbackOption, "routing.fallback.option", routingDefinitionIds.fallback, {
-      kind: "routing.fallback.option",
-      targetDefinitionId: routingTargets[routingDefinitionIds.fallbackOption],
+    child(
+      routingDefinitionIds.cascadeTier,
+      "routing.cascade.tier",
+      routingDefinitionIds.cascade,
+      {
+        kind: "routing.cascade.tier",
+        targetDefinitionId: routingTargets[routingDefinitionIds.cascadeTier],
+      },
+    ),
+    parent(routingDefinitionIds.fallback, "routing.fallback", {
+      kind: "routing.fallback",
+      optionCount: 1,
     }),
+    child(
+      routingDefinitionIds.fallbackOption,
+      "routing.fallback.option",
+      routingDefinitionIds.fallback,
+      {
+        kind: "routing.fallback.option",
+        targetDefinitionId: routingTargets[routingDefinitionIds.fallbackOption],
+      },
+    ),
   ];
   return {
     prompts: [],
@@ -211,10 +230,7 @@ function routingIndexData(): ProjectIndexData {
   };
 }
 
-function requiredDefinition(
-  index: ReturnType<typeof buildIndex>,
-  id: string,
-) {
+function requiredDefinition(index: ReturnType<typeof buildIndex>, id: string) {
   const definition = index.byId(id);
   if (!definition) throw new Error(`Missing routing definition ${id}`);
   return definition;
@@ -225,6 +241,6 @@ function profileFromFacts(
 ): Record<string, unknown> | undefined {
   const profile = facts && "profile" in facts ? facts.profile : undefined;
   return profile && typeof profile === "object" && !Array.isArray(profile)
-    ? profile as Record<string, unknown>
+    ? (profile as Record<string, unknown>)
     : undefined;
 }

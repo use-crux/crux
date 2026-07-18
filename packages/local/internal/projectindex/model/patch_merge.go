@@ -93,9 +93,6 @@ func mergePatchDefinition(existing store.ProjectDefinition, existingPhase IndexP
 			existing.Description = incoming.Description
 		}
 		existing.Metadata = mergeMetadataRaw(existing.Metadata, incoming.Metadata)
-		if incoming.Quality != nil {
-			existing.Quality = incoming.Quality
-		}
 		existing.SourceRefs = mergeProjectSourceRefs(existing.SourceRefs, incoming.SourceRefs)
 		return existing
 	}

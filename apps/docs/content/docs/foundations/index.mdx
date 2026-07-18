@@ -8,27 +8,27 @@ Crux is an open-source TypeScript toolkit for the parts of an AI feature that li
 You still choose your SDK, provider, model, app framework, and runtime. Crux helps with the things that usually grow messy around that call: shared instructions, changing context, memory, retrieval, tools, safety rules, routing, quality checks, and debugging.
 
 ```ts
-import { prompt } from '@use-crux/core'
-import { generate } from '@use-crux/ai'
-import { openai } from '@ai-sdk/openai'
-import { z } from 'zod'
+import { prompt } from "@use-crux/core";
+import { generate } from "@use-crux/ai";
+import { openai } from "@ai-sdk/openai";
+import { z } from "zod";
 
 const classify = prompt({
-  id: 'classify',
+  id: "classify",
   input: z.object({ text: z.string() }),
   output: z.object({
-    sentiment: z.enum(['positive', 'negative', 'neutral']),
+    sentiment: z.enum(["positive", "negative", "neutral"]),
   }),
-  system: 'Classify the sentiment of the given text.',
+  system: "Classify the sentiment of the given text.",
   prompt: ({ input }) => input.text,
-})
+});
 
 const result = await generate(classify, {
-  model: openai('gpt-4o'),
-  input: { text: 'This is incredible.' },
-})
+  model: openai("gpt-4o"),
+  input: { text: "This is incredible." },
+});
 
-result.object.sentiment // 'positive' - fully typed
+result.object.sentiment; // 'positive' - fully typed
 ```
 
 ## The problem Crux is built for
@@ -48,7 +48,7 @@ Crux gives those surrounding pieces names, types, source locations, runtime trac
 
 ### Define the AI parts as code
 
-Prompts, contexts, memory blocks, retrievers, guardrails, routes, and quality suites live in your codebase. They can be typed, reviewed, reused, and changed deliberately.
+Prompts, contexts, memory blocks, retrievers, guardrails, routes, and Evals live in your codebase. They can be typed, reviewed, reused, and changed deliberately.
 
 ### Compose only what each call needs
 
@@ -64,7 +64,7 @@ Local devtools show what the model saw, where the pieces came from, which contex
 
 ### Test the behavior you care about
 
-Quality suites let you keep expectations close to the prompts, retrievers, flows, or app code they protect. The goal is to catch AI regressions before users do: not only "was the answer good?", but "did the system use the right ingredients to produce it?"
+Evals keep typed Cases and checks close to the production tasks they protect. The goal is to catch AI regressions before users do: not only "was the answer good?", but "did the system use the right ingredients to produce it?"
 
 ## When Crux is a good fit
 
@@ -104,5 +104,6 @@ Raw SDK calls are still great for small scripts and simple one-off prompts. Crux
 </Cards>
 
 <Callout type="info">
-  **Using an AI assistant?** Point it at [`/llms.txt`](/llms.txt) for a machine-readable index of these docs.
+  **Using an AI assistant?** Point it at [`/llms.txt`](/llms.txt) for a
+  machine-readable index of these docs.
 </Callout>

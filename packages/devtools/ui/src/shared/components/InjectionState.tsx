@@ -110,12 +110,12 @@ export function InjectStateChip({
         padding: size === "xs" ? "1px 6px" : "2px 8px",
         borderRadius: 4,
         whiteSpace: "nowrap",
-        fontFamily: "var(--qw-mono)",
+        fontFamily: "var(--devtools-mono)",
         fontSize: size === "xs" ? 9.5 : 10.5,
         letterSpacing: "0.02em",
-        color: meta.solid ? color.fg : "var(--qw-fg-muted)",
+        color: meta.solid ? color.fg : "var(--devtools-fg-muted)",
         background: meta.solid ? color.soft : "transparent",
-        boxShadow: `inset 0 0 0 1px ${meta.solid ? color.line : "var(--qw-border)"}`,
+        boxShadow: `inset 0 0 0 1px ${meta.solid ? color.line : "var(--devtools-border)"}`,
       }}
     >
       <span
@@ -130,7 +130,7 @@ export function InjectStateChip({
       />
       {meta.label}
       {count != null && (
-        <span style={{ color: "var(--qw-fg-faint)", fontWeight: 600 }}>
+        <span style={{ color: "var(--devtools-fg-faint)", fontWeight: 600 }}>
           · {count}
         </span>
       )}
@@ -158,8 +158,8 @@ export function InjectStateBar({
         height,
         borderRadius: 99,
         overflow: "hidden",
-        background: "var(--qw-bg-subtle)",
-        boxShadow: "inset 0 0 0 1px var(--qw-border)",
+        background: "var(--devtools-bg-subtle)",
+        boxShadow: "inset 0 0 0 1px var(--devtools-border)",
       }}
       title={INJECT_STATE_ORDER.filter((state) => counts[state])
         .map((state) => `${injectStateMeta(state).label}: ${counts[state]}`)
@@ -194,25 +194,25 @@ function injectionTone(
 ): Readonly<{ fg: string; soft: string; line: string }> {
   if (tone === "ok")
     return {
-      fg: "var(--qw-ok)",
-      soft: "var(--qw-ok-soft)",
-      line: "var(--qw-ok-soft)",
+      fg: "var(--devtools-ok)",
+      soft: "var(--devtools-ok-soft)",
+      line: "var(--devtools-ok-soft)",
     };
   if (tone === "warn")
     return {
-      fg: "var(--qw-warn)",
-      soft: "var(--qw-warn-soft)",
-      line: "var(--qw-warn-soft)",
+      fg: "var(--devtools-warn)",
+      soft: "var(--devtools-warn-soft)",
+      line: "var(--devtools-warn-soft)",
     };
   if (tone === "danger")
     return {
-      fg: "var(--qw-danger)",
-      soft: "var(--qw-danger-soft)",
-      line: "var(--qw-danger-soft)",
+      fg: "var(--devtools-danger)",
+      soft: "var(--devtools-danger-soft)",
+      line: "var(--devtools-danger-soft)",
     };
   return {
-    fg: "var(--qw-fg-muted)",
-    soft: "var(--qw-bg-muted)",
-    line: "var(--qw-border)",
+    fg: "var(--devtools-fg-muted)",
+    soft: "var(--devtools-bg-muted)",
+    line: "var(--devtools-border)",
   };
 }

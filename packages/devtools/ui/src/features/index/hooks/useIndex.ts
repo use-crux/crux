@@ -8,22 +8,31 @@
  * Used by App.tsx (GlobalSearch index) and Library.tsx.
  */
 
-import { useQuery, useSuspenseQuery } from '@tanstack/react-query'
-import { qk } from '@/shared/query/queryClient'
-import { indexService, type IndexData, type IndexWatchStatus } from '../services/index'
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
+import { qk } from "@/shared/query/queryClient";
+import {
+  indexService,
+  type IndexData,
+  type IndexWatchStatus,
+} from "../services/index";
 
 export function useIndex() {
   const q = useQuery<IndexData, Error>({
     queryKey: qk.index(),
     queryFn: ({ signal }) => indexService.getIndex(signal),
-  })
+  });
   return {
     data: q.data,
     /** True once `/api/index` (or a WS index push) has populated. */
     received: q.data !== undefined,
     loading: q.isPending || q.isFetching,
     error: q.error ?? null,
-  }
+  };
 }
 
 /**
@@ -37,7 +46,7 @@ export function useIndexSuspense(): IndexData {
   return useSuspenseQuery({
     queryKey: qk.index(),
     queryFn: ({ signal }) => indexService.getIndex(signal),
-  }).data
+  }).data;
 }
 
 /**
@@ -52,9 +61,24 @@ export function useProjectIndexWatchStatus() {
     queryKey: qk.indexWatch(),
     queryFn: ({ signal }) => indexService.getWatchStatus(signal),
     refetchInterval: (query) => {
-      const data = query.state.data
-      if (data?.state === 'running' || data?.lastRun?.semanticStatus === 'pending') return 750
-      return 3_000
+      const data = query.state.data;
+      if (
+        data?.state === "running" ||
+        data?.lastRun?.semanticStatus === "pending"
+      )
+        return 750;
+      return 3_000;
     },
-  })
+  });
+}
+
+/** Rebuild the project index and reconcile the cached read model. */
+export function useReindexProject() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => indexService.reindex(),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: qk.index() });
+    },
+  });
 }

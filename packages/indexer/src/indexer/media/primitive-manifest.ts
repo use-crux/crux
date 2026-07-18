@@ -31,13 +31,7 @@ const routingKinds = [
   'routing.fallback',
 ] as const
 
-const evaluationKinds = [
-  'evaluation',
-  'eval.prompt',
-  'eval.flow',
-  'eval.rag',
-  'eval.quality',
-] as const
+const evaluationKinds = ['eval'] as const
 
 /** Immutable first-party authored-media primitive manifest. */
 export const mediaPrimitiveManifest: IndexerExtension = Object.freeze({
@@ -74,7 +68,7 @@ export const mediaPrimitiveManifest: IndexerExtension = Object.freeze({
       ['rag.knowledgeBase', 'rag.pipeline'],
     ),
     relation('media.targets_corpus', ['ingest.source'], ['rag.knowledgeBase']),
-    relation('media.evaluation_target', ['media.operation'], evaluationKinds),
+    relation('media.eval_target', ['media.operation'], evaluationKinds),
     relation('media.uses_storage', ['media.operation'], ['storage.assetStore']),
   ],
 })

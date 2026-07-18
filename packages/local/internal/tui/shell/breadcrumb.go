@@ -8,7 +8,7 @@ import (
 
 // Breadcrumb renders the thin row above each screen body:
 //
-//	quality / insights / INS-014               · 8 of 8 shown ·
+//	inspect / insights / INS-014               · 8 of 8 shown ·
 //
 // `path` is the dotted hierarchy (last item highlighted), `right` is the
 // optional context note printed flush-right.

@@ -15,20 +15,20 @@ func TestStartCoalescesBurstWithFakeClock(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	quality := make(chan api.QualityEvent, 1100)
+	inspect := make(chan api.InspectEvent, 1100)
 	for i := 0; i < 1000; i++ {
-		quality <- api.QualityEvent{Kind: "run", Action: "changed", RefID: fmt.Sprintf("run-%d", i)}
+		inspect <- api.InspectEvent{Kind: "run", Action: "changed", RefID: fmt.Sprintf("run-%d", i)}
 	}
 
 	clock := newFakeClock()
 	delivered := make(chan Batch, 10)
-	Start(ctx, Sources{Quality: quality, Clock: clock}, func(msg tea.Msg) {
+	Start(ctx, Sources{Inspect: inspect, Clock: clock}, func(msg tea.Msg) {
 		delivered <- msg.(Batch)
 	})
 
 	first := waitBatch(t, delivered)
-	if len(first.Quality) != 1 {
-		t.Fatalf("first batch quality events = %d, want 1", len(first.Quality))
+	if len(first.Inspect) != 1 {
+		t.Fatalf("first batch inspect events = %d, want 1", len(first.Inspect))
 	}
 	if first.Revs.Runs != 1 {
 		t.Fatalf("first runs revision = %d, want 1", first.Revs.Runs)
@@ -38,7 +38,7 @@ func TestStartCoalescesBurstWithFakeClock(t *testing.T) {
 	// the collector may still be ingesting when the source channel reads
 	// empty. Drive the fake clock until every event has been delivered
 	// instead of assuming one window catches the whole burst.
-	received := len(first.Quality)
+	received := len(first.Inspect)
 	sends := 1
 	var last Batch
 	deadline := time.Now().Add(5 * time.Second)
@@ -49,7 +49,7 @@ func TestStartCoalescesBurstWithFakeClock(t *testing.T) {
 		clock.Advance()
 		select {
 		case b := <-delivered:
-			received += len(b.Quality)
+			received += len(b.Inspect)
 			sends++
 			last = b
 		case <-time.After(5 * time.Millisecond):
@@ -72,21 +72,21 @@ func TestStartCoalescesBurstWithFakeClock(t *testing.T) {
 	}
 }
 
-func TestStartDeduplicatesQualityEventsWithinTrailingBatch(t *testing.T) {
+func TestStartDeduplicatesInspectEventsWithinTrailingBatch(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	quality := make(chan api.QualityEvent, 4)
+	inspect := make(chan api.InspectEvent, 4)
 	clock := newFakeClock()
 	delivered := make(chan Batch, 10)
-	Start(ctx, Sources{Quality: quality, Clock: clock}, func(msg tea.Msg) {
+	Start(ctx, Sources{Inspect: inspect, Clock: clock}, func(msg tea.Msg) {
 		delivered <- msg.(Batch)
 	})
 
-	quality <- api.QualityEvent{Kind: "run", Action: "changed", RefID: "trace-1"}
+	inspect <- api.InspectEvent{Kind: "run", Action: "changed", RefID: "trace-1"}
 	waitBatch(t, delivered)
-	quality <- api.QualityEvent{Kind: "run", Action: "changed", RefID: "trace-2"}
-	quality <- api.QualityEvent{Kind: "run", Action: "changed", RefID: "trace-2"}
+	inspect <- api.InspectEvent{Kind: "run", Action: "changed", RefID: "trace-2"}
+	inspect <- api.InspectEvent{Kind: "run", Action: "changed", RefID: "trace-2"}
 
 	// Both trace-2 events may land in one trailing batch (deduped to one
 	// row) or split across windows depending on ingestion timing. The
@@ -102,10 +102,10 @@ func TestStartDeduplicatesQualityEventsWithinTrailingBatch(t *testing.T) {
 		select {
 		case b := <-delivered:
 			seen := map[string]bool{}
-			for _, ev := range b.Quality {
+			for _, ev := range b.Inspect {
 				key := ev.Kind + "\x00" + ev.Action + "\x00" + ev.RefID
 				if seen[key] {
-					t.Fatalf("batch contains duplicate event row %q: %#v", key, b.Quality)
+					t.Fatalf("batch contains duplicate event row %q: %#v", key, b.Inspect)
 				}
 				seen[key] = true
 			}

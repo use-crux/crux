@@ -12,15 +12,20 @@ import (
 
 	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/devtools"
+	"github.com/use-crux/crux/packages/local/internal/inspect"
 	"github.com/use-crux/crux/packages/local/internal/observability"
-	"github.com/use-crux/crux/packages/local/internal/quality"
+	"github.com/use-crux/crux/packages/local/internal/review"
 )
 
-func registerObservabilityRoutes(mux *http.ServeMux, service *observability.Service, qualityEvents *quality.EventBus) {
-	registerObservabilityRoutesWithCatalog(mux, service, qualityEvents, nil)
+func registerObservabilityRoutes(mux *http.ServeMux, service *observability.Service, inspectEvents *inspect.EventBus) {
+	registerObservabilityRoutesWithCatalog(mux, service, inspectEvents, nil)
 }
 
-func registerObservabilityRoutesWithCatalog(mux *http.ServeMux, service *observability.Service, qualityEvents *quality.EventBus, catalog *devtools.Service) {
+func registerObservabilityRoutesWithCatalog(mux *http.ServeMux, service *observability.Service, inspectEvents *inspect.EventBus, catalog *devtools.Service) {
+	registerObservabilityRoutesWithReview(mux, service, inspectEvents, catalog, nil)
+}
+
+func registerObservabilityRoutesWithReview(mux *http.ServeMux, service *observability.Service, inspectEvents *inspect.EventBus, catalog *devtools.Service, reviews *review.Service) {
 	mux.HandleFunc("POST /api/observability/records", func(w http.ResponseWriter, r *http.Request) {
 		if service == nil {
 			http.Error(w, "observability service unavailable", http.StatusServiceUnavailable)
@@ -58,12 +63,31 @@ func registerObservabilityRoutesWithCatalog(mux *http.ServeMux, service *observa
 				retryable = true
 			}
 		}
+		if accepted > 0 && reviews != nil {
+			seen := make(map[string]struct{})
+			for _, record := range batch.Records {
+				if record.RunID == "" {
+					continue
+				}
+				if _, ok := seen[record.RunID]; ok {
+					continue
+				}
+				seen[record.RunID] = struct{}{}
+				run, err := service.Run(r.Context(), record.RunID)
+				if err != nil {
+					continue
+				}
+				if err := reviews.LinkRunContext(r.Context(), feedbackContextSnapshot(r.Context(), service, run)); err != nil {
+					slog.Warn("feedback context reconciliation failed", "error", err)
+				}
+			}
+		}
 		if retryable {
 			w.Header().Set("Retry-After", "1")
 		}
-		if qualityEvents != nil && accepted > 0 {
-			qualityEvents.Publish(api.QualityEvent{
-				Tag:       "QualityEvent",
+		if inspectEvents != nil && accepted > 0 {
+			inspectEvents.Publish(api.InspectEvent{
+				Tag:       "InspectEvent",
 				Timestamp: time.Now().UnixMilli(),
 				Kind:      "refresh",
 				Action:    "observability ingested",

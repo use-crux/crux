@@ -10,14 +10,14 @@ import (
 
 	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/devtools"
-	"github.com/use-crux/crux/packages/local/internal/quality"
+	"github.com/use-crux/crux/packages/local/internal/inspect"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
 func TestHTTPServer_project_index_watch_endpoint_returns_idle_status(t *testing.T) {
 	s := store.NewStore()
-	devSvc := devtools.NewService(s, quality.NewService(s, quality.Dir(t.TempDir())))
-	srv := NewHTTPServerWithServices(devSvc, ServerOptions{QualityDir: t.TempDir()})
+	devSvc := devtools.NewService(s, inspect.NewService(s, inspect.Dir(t.TempDir())))
+	srv := NewHTTPServerWithServices(devSvc, ServerOptions{InspectDir: t.TempDir()})
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
 
@@ -74,7 +74,7 @@ func TestHTTPServer_project_index_watch_endpoint_returns_last_run_status(t *test
 		},
 	}
 	s := store.NewStore()
-	devSvc := devtools.NewService(s, quality.NewService(s, quality.Dir(t.TempDir()))).WithProjectIndexer(indexer)
+	devSvc := devtools.NewService(s, inspect.NewService(s, inspect.Dir(t.TempDir()))).WithProjectIndexer(indexer)
 	devSvc.ApplyIndexPatch(context.Background(), projectindex.IndexPatch{
 		SchemaVersion: 1,
 		Phase:         "ast",
@@ -107,7 +107,7 @@ func TestHTTPServer_project_index_watch_endpoint_returns_last_run_status(t *test
 		t.Fatalf("ReindexProjectIncrementalWithOptions error = %v", err)
 	}
 
-	srv := NewHTTPServerWithServices(devSvc, ServerOptions{QualityDir: t.TempDir()})
+	srv := NewHTTPServerWithServices(devSvc, ServerOptions{InspectDir: t.TempDir()})
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
 

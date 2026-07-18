@@ -12,6 +12,7 @@ import { getHooks, resetHooks, updateHooks } from '../src/runtime/runtime'
 import { inMemoryRecordStore } from '../src/storage'
 import { countTokens, defaultTokenizer, setTokenizer } from '../src/shared/tokenizer'
 import type { PromptMiddleware } from '../src/runtime/types'
+import { feedback } from '../src/feedback'
 
 describe('config — runtime domain mapping', () => {
   beforeEach(() => {
@@ -35,6 +36,43 @@ describe('config — runtime domain mapping', () => {
     expect(currentObservabilityTransport()).toBeUndefined()
 
     crux.dispose()
+  })
+
+  it('installs one explicit feedback destination and shared redaction paths', async () => {
+    const submissions: unknown[] = []
+    const crux = config({
+      observability: {
+        feedbackDestination: {
+          async submitFeedback(submission) {
+            submissions.push(submission)
+            return {
+              feedbackId: 'feedback-config',
+              reviewId: 'review-config',
+              revision: 1,
+              status: 'created',
+              acceptedAt: '2026-07-17T00:00:00.000Z',
+            }
+          },
+        },
+        redactPaths: ['customer.email'],
+      },
+    })
+
+    await feedback('run_0123456789abcdef01234567' as never, {
+      rating: 'down',
+      correction: { customer: { email: 'private@example.test' } },
+    })
+    expect(submissions).toEqual([
+      expect.objectContaining({
+        correction: { customer: { email: '[redacted]' } },
+      }),
+    ])
+    expect(currentObservabilityTransport()).toBeUndefined()
+
+    crux.dispose()
+    await expect(
+      feedback('run_0123456789abcdef01234567' as never, 'up'),
+    ).rejects.toThrow(/durable feedback destination/i)
   })
 
     it('installs observability capture policy without requiring a transport', () => {

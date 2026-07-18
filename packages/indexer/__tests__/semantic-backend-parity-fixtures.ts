@@ -847,7 +847,7 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
         import { workspace } from '@use-crux/core'
         import { blackboard } from '@use-crux/core/agent'
         import { memory, workingState } from '@use-crux/core/memory'
-        import { evaluate } from '@use-crux/core/quality'
+        import { evaluate } from '@use-crux/core/eval'
         import { retriever } from '@use-crux/core/retrieval'
         import { llmJudge } from '@use-crux/core/scoring'
         import { z } from 'zod'
@@ -860,7 +860,7 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
         export const scratch = workspace({ id: 'scratch', mounts: [{ path: '/drafts', access: 'readwrite' }] })
         export const docsRetriever = retriever({ id: 'docs', retrieve: async () => [] })
         export const factuality = llmJudge({ id: 'factuality', criteria: 'Factual', scale: { min: 0, max: 1 } })
-        export const writerEval = evaluate('writer-eval', { task: (input: { draft: string }) => input.draft, data: [] })
+        export const writerEval = evaluate({ id: 'writer-eval', task: (input: { draft: string }) => input.draft, cases: [] })
       `,
         "src/helpers.ts": `
         import { docsRetriever, factuality, notes, readBackMemory, scratch, writeOnlyMemory, writerEval } from './resources'

@@ -1,9 +1,7 @@
 /**
  * Index v2 — mid/low-tier detail sections.
  *
- * Ported from the design's index-sections.jsx:
- *   · IndexQuality       — exhaustive definition.quality (pass rate, run
- *     breakdown, coverage, linked artifacts, fingerprints, drift table)
+ * Detail sections for runtime evidence, diagnostics, health, and provenance:
  *   · IndexObservability — runtimeJoin span correlation card
  *   · IndexDiagnostics    — intelligence.diagnostics
  *   · IndexHealthSection  — lint findings (direct + via deps)
@@ -12,487 +10,125 @@
  * Sections render only when their data exists.
  */
 
-import type { ReactNode } from 'react'
-import { T, toneColor, type Tone } from './tokens'
-import { Icon } from './icons'
-import { Btn, Chip, SectionHead } from './primitives'
-import { Bar, KindBadge, KindGlyph, kindMeta } from './kit'
-import type { ViewDef } from './adapt'
-import { useIndexIndex } from './context'
-import { useNavigation } from '@/app/navigation/useNavigation'
-import { useDefinitionActivity } from '@/shared/query/useDefinitionActivity'
-import { describeCatalogCoverage } from './coverage'
-import { DeliveryHealthBadge } from '@/shared/components/DeliveryHealthBadge'
+import type { ReactNode } from "react";
+import { T, toneColor, type Tone } from "./tokens";
+import { Icon } from "./icons";
+import { Btn, Chip, SectionHead } from "./primitives";
+import { kindMeta } from "./kit";
+import type { ViewDef } from "./adapt";
+import { useIndexIndex } from "./context";
+import { useNavigation } from "@/app/navigation/useNavigation";
+import { useDefinitionActivity } from "@/shared/query/useDefinitionActivity";
+import { describeCatalogCoverage } from "./coverage";
+import { DeliveryHealthBadge } from "@/shared/components/DeliveryHealthBadge";
 
 function statusTone(s?: string): Tone {
-  return s === 'active' ? 'ok' : s === 'stale' ? 'warn' : s === 'missing' ? 'danger' : 'muted'
+  return s === "active"
+    ? "ok"
+    : s === "stale"
+      ? "warn"
+      : s === "missing"
+        ? "danger"
+        : "muted";
 }
-
-function fmtRunAt(ts?: number): string | undefined {
-  if (ts == null) return undefined
-  const diff = Date.now() - ts
-  if (diff < 0 || !Number.isFinite(diff)) return new Date(ts).toLocaleString()
-  const m = Math.floor(diff / 60000)
-  if (m < 1) return 'just now'
-  if (m < 60) return `${m}m ago`
-  const h = Math.floor(m / 60)
-  if (h < 24) return `${h}h ago`
-  return `${Math.floor(h / 24)}d ago`
-}
-
-// ── QUALITY (exhaustive) ─────────────────────────────────────────────────────
-export function IndexQuality({ def }: { def: ViewDef }) {
-  const q = def.quality
-  if (!q || (q.passRate == null && !q.runCount && !q.evalIds && !q.suiteIds)) return null
-  const pr = q.passRate
-  const prTone: Tone = pr == null ? 'muted' : pr >= 0.9 ? 'ok' : pr >= 0.75 ? 'crux' : 'warn'
-  const c = toneColor(T, prTone)
-  const runs = q.runCount ?? 0
-  const comp = q.completedRunCount
-  const fail = q.failedRunCount
-  const run = q.runningRunCount
-  const lastRunAt = fmtRunAt(q.lastRunAt)
-  const artifacts: Array<[string, number | undefined, string]> = [
-    ['runs', q.runCount, 'trace'],
-    ['traces', q.traceIds?.length, 'trace'],
-    ['experiments', q.experimentCount ?? q.experimentIds?.length, 'flask'],
-    ['baselines', q.baselineCount ?? q.baselineIds?.length, 'bookmark'],
-    ['comparisons', q.comparisonCount ?? q.comparisonIds?.length, 'diff'],
-    ['feedback', q.feedbackCount ?? q.feedbackIds?.length, 'inbox'],
-    ['cassettes', q.cassetteCount ?? q.cassettePaths?.length, 'cassette'],
-  ]
-  const usedArtifacts = artifacts.filter(([, n]) => Boolean(n))
-  const drift = q.drift && [
-    ...(q.drift.evals ?? []).map((d) => ({ ...d, kind: 'eval' as const })),
-    ...(q.drift.suites ?? []).map((d) => ({ ...d, kind: 'suite' as const })),
-  ]
-  const evalListLabel = def.kind === 'evaluation' ? 'evaluation' : 'protected by'
-
-  return (
-    <>
-      <SectionHead
-        eyebrow="Quality"
-        right={
-          <span style={{ display: 'flex', gap: 6 }}>
-            {q.lastStatus && (
-              <Chip
-                tone={
-                  q.lastStatus === 'pass' || q.lastStatus === 'ok'
-                    ? 'ok'
-                    : q.lastStatus === 'running'
-                      ? 'crux'
-                      : 'danger'
-                }
-                dot
-              >
-                {q.lastStatus}
-              </Chip>
-            )}
-            {q.changedSinceBaseline && (
-              <Chip tone="warn" dot>
-                changed vs baseline
-              </Chip>
-            )}
-          </span>
-        }
-      />
-      <div
-        style={{
-          background: T.bgElev,
-          border: `1px solid ${T.border}`,
-          borderRadius: 11,
-          overflow: 'hidden',
-          marginBottom: 22,
-        }}
-      >
-        {/* headline */}
-        <div
-          style={{
-            display: 'flex',
-            gap: 24,
-            padding: '16px 18px',
-            flexWrap: 'wrap',
-            alignItems: 'center',
-          }}
-        >
-          {pr != null && (
-            <div style={{ minWidth: 116 }}>
-              <div
-                style={{
-                  fontFamily: T.mono,
-                  fontSize: 30,
-                  fontWeight: 600,
-                  letterSpacing: '-0.02em',
-                  color: c.fg,
-                }}
-              >
-                {Math.round(pr * 100)}%
-              </div>
-              <div
-                style={{
-                  fontSize: 11,
-                  color: T.fgFaint,
-                  fontFamily: T.mono,
-                  marginBottom: 7,
-                }}
-              >
-                pass rate{q.caseCount ? ` · ${q.caseCount} cases` : ''}
-              </div>
-              <Bar value={pr} tone={prTone} height={7} />
-            </div>
-          )}
-          {(comp != null || fail != null || run != null) && (
-            <>
-              <div style={{ width: 1, background: T.border, alignSelf: 'stretch' }} />
-              <div style={{ minWidth: 150 }}>
-                <div
-                  style={{
-                    fontFamily: T.mono,
-                    fontSize: 10,
-                    color: T.fgFaint,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.1em',
-                    marginBottom: 8,
-                  }}
-                >
-                  {runs} runs
-                </div>
-                <div
-                  style={{
-                    display: 'flex',
-                    height: 8,
-                    borderRadius: 99,
-                    overflow: 'hidden',
-                    marginBottom: 8,
-                  }}
-                >
-                  {comp ? (
-                    <div
-                      style={{
-                        width: `${(comp / runs) * 100}%`,
-                        background: T.ok,
-                      }}
-                    />
-                  ) : null}
-                  {run ? (
-                    <div
-                      style={{
-                        width: `${(run / runs) * 100}%`,
-                        background: T.crux,
-                      }}
-                    />
-                  ) : null}
-                  {fail ? (
-                    <div
-                      style={{
-                        width: `${(fail / runs) * 100}%`,
-                        background: T.danger,
-                      }}
-                    />
-                  ) : null}
-                </div>
-                <div
-                  style={{
-                    display: 'flex',
-                    gap: 12,
-                    fontFamily: T.mono,
-                    fontSize: 10.5,
-                  }}
-                >
-                  {comp != null && <span style={{ color: T.ok }}>● {comp} done</span>}
-                  {run ? <span style={{ color: T.crux }}>● {run} running</span> : null}
-                  {fail ? <span style={{ color: T.danger }}>● {fail} failed</span> : null}
-                </div>
-              </div>
-            </>
-          )}
-          {lastRunAt && (
-            <>
-              <div style={{ width: 1, background: T.border, alignSelf: 'stretch' }} />
-              <div
-                style={{
-                  fontFamily: T.mono,
-                  fontSize: 11,
-                  color: T.fgMuted,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 4,
-                }}
-              >
-                <span>
-                  <span style={{ color: T.fgFaint }}>last run · </span>
-                  {lastRunAt}
-                </span>
-                {q.lastRunId && <span style={{ color: T.crux }}>{q.lastRunId}</span>}
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* coverage + artifacts */}
-        {(q.evalIds || q.suiteIds || usedArtifacts.length > 0) && (
-          <div
-            style={{
-              borderTop: `1px solid ${T.border}`,
-              padding: '12px 18px',
-              display: 'flex',
-              gap: 26,
-              flexWrap: 'wrap',
-              alignItems: 'center',
-            }}
-          >
-            {q.evalIds && (
-              <div>
-                <div
-                  style={{
-                    fontFamily: T.mono,
-                    fontSize: 9.5,
-                    color: T.fgFaint,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.1em',
-                    marginBottom: 5,
-                  }}
-                >
-                  {evalListLabel}
-                </div>
-                <span style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                  {q.evalIds.map((e) => (
-                    <KindBadge key={e} kind="eval.quality" label={e} />
-                  ))}
-                </span>
-              </div>
-            )}
-            {q.suiteIds && (
-              <div>
-                <div
-                  style={{
-                    fontFamily: T.mono,
-                    fontSize: 9.5,
-                    color: T.fgFaint,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.1em',
-                    marginBottom: 5,
-                  }}
-                >
-                  suites
-                </div>
-                <span style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                  {q.suiteIds.map((s) => (
-                    <KindBadge key={s} kind="suite" label={s} />
-                  ))}
-                </span>
-              </div>
-            )}
-            {usedArtifacts.length > 0 && (
-              <div style={{ marginLeft: 'auto' }}>
-                <div
-                  style={{
-                    fontFamily: T.mono,
-                    fontSize: 9.5,
-                    color: T.fgFaint,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.1em',
-                    marginBottom: 5,
-                  }}
-                >
-                  linked
-                </div>
-                <span style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                  {usedArtifacts.map(([label, n, icon]) => (
-                    <span
-                      key={label}
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 5,
-                        padding: '2px 8px',
-                        borderRadius: 5,
-                        background: T.bg,
-                        border: `1px solid ${T.border}`,
-                        fontFamily: T.mono,
-                        fontSize: 10.5,
-                        color: T.fgMuted,
-                      }}
-                    >
-                      <Icon name={icon} size={11} color={T.fgFaint} />
-                      <span style={{ color: T.fg, fontWeight: 600 }}>{n}</span> {label}
-                    </span>
-                  ))}
-                </span>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* fingerprints */}
-        {(q.currentFingerprint || q.baselineFingerprint) && (
-          <div
-            style={{
-              borderTop: `1px solid ${T.border}`,
-              padding: '10px 18px',
-              display: 'flex',
-              gap: 18,
-              alignItems: 'center',
-              fontFamily: T.mono,
-              fontSize: 11,
-            }}
-          >
-            <span style={{ color: T.fgFaint }}>fingerprint</span>
-            <span style={{ color: T.fg }}>{q.currentFingerprint}</span>
-            {q.baselineFingerprint && (
-              <>
-                <Icon name="arrowRight" size={12} color={T.fgFaint} style={{ transform: 'rotate(180deg)' }} />
-                <span style={{ color: T.fgFaint }}>baseline</span>
-                <span style={{ color: T.fgMuted }}>{q.baselineFingerprint}</span>
-              </>
-            )}
-            {q.changedSinceBaseline && (
-              <Chip tone="warn" dot>
-                drifted
-              </Chip>
-            )}
-          </div>
-        )}
-
-        {/* drift table */}
-        {drift && drift.length > 0 && (
-          <div style={{ borderTop: `1px solid ${T.border}` }}>
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '24px 1fr 90px 90px 70px 70px',
-                padding: '8px 18px',
-                gap: 10,
-                fontSize: 9.5,
-                color: T.fgFaint,
-                textTransform: 'uppercase',
-                letterSpacing: '0.1em',
-                background: T.bgMuted,
-              }}
-            >
-              <div />
-              <div>check</div>
-              <div style={{ textAlign: 'right' }}>baseline</div>
-              <div style={{ textAlign: 'right' }}>now</div>
-              <div style={{ textAlign: 'right' }}>runs</div>
-              <div style={{ textAlign: 'right' }}>drift</div>
-            </div>
-            {drift.map((d, i) => (
-              <div
-                key={d.id}
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '24px 1fr 90px 90px 70px 70px',
-                  padding: '9px 18px',
-                  gap: 10,
-                  alignItems: 'center',
-                  fontFamily: T.mono,
-                  fontSize: 11.5,
-                  borderTop: i ? `1px solid ${T.border}` : 'none',
-                }}
-              >
-                <KindGlyph kind={d.kind === 'suite' ? 'suite' : 'eval.quality'} size={20} />
-                <span style={{ color: T.fg }}>{d.id}</span>
-                <span style={{ textAlign: 'right', color: T.fgMuted }}>{Math.round(d.baselinePassRate * 100)}%</span>
-                <span style={{ textAlign: 'right', color: T.fg, fontWeight: 600 }}>
-                  {Math.round(d.passRate * 100)}%
-                </span>
-                <span style={{ textAlign: 'right', color: T.fgFaint }}>{d.runs}</span>
-                <span
-                  style={{
-                    textAlign: 'right',
-                    fontWeight: 600,
-                    color: d.driftPp < 0 ? T.danger : d.driftPp > 0 ? T.ok : T.fgMuted,
-                  }}
-                >
-                  {d.driftPp > 0 ? '+' : ''}
-                  {d.driftPp}pp
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </>
-  )
-}
-
-// ── OBSERVABILITY (exhaustive coverage: direct / contributor / runtime-unjoined / quality-primary / no-runtime) ──
-function coverageNote(state: ReturnType<typeof describeCatalogCoverage>): string {
+// ── OBSERVABILITY (exhaustive coverage: direct / contributor / runtime-unjoined / no-runtime) ──
+function coverageNote(
+  state: ReturnType<typeof describeCatalogCoverage>,
+): string {
   switch (state.treatment) {
-    case 'no-runtime':
-      return state.coverage.primary === 'static-only'
-        ? 'Static/declarative — never the target or subject of a runtime primitive.'
-        : 'No runtime evidence path is defined for this kind.'
-    case 'runtime-unjoined': {
-      const primitives = state.coverage.runtimePrimitiveNames?.join(', ')
-      return `Runtime-observed${primitives ? ` via ${primitives}` : ''}, but these records do not carry this definition’s canonical Catalog ID. Per-definition counts and View Runs are unavailable.`
+    case "no-runtime":
+      return state.coverage.primary === "static-only"
+        ? "Static/declarative — never the target or subject of a runtime primitive."
+        : "No runtime evidence path is defined for this kind.";
+    case "runtime-unjoined": {
+      const primitives = state.coverage.runtimePrimitiveNames?.join(", ");
+      return `Runtime-observed${primitives ? ` via ${primitives}` : ""}, but these records do not carry this definition’s canonical Catalog ID. Per-definition counts and View Runs are unavailable.`;
     }
-    case 'contributor':
+    case "contributor":
       if (state.parentDerived) {
         return state.runCount > 0
-          ? `Parent ran in ${state.runCount} run${state.runCount === 1 ? '' : 's'}; this definition is not independently observed.`
-          : 'Parent-derived evidence — this definition is not independently observed. No parent runs yet.'
+          ? `Parent ran in ${state.runCount} run${state.runCount === 1 ? "" : "s"}; this definition is not independently observed.`
+          : "Parent-derived evidence — this definition is not independently observed. No parent runs yet.";
       }
-      if (state.coverage.primary === 'structural-child' && !state.coverage.runtimePrimitiveNames?.length) {
-        return state.coverage.secondary?.includes('quality-owned')
-          ? 'Structural child — Quality owns its primary evidence; it has no independent runtime span.'
-          : 'Structural child of its Catalog parent — it has no independent runtime span.'
+      if (
+        state.coverage.primary === "structural-child" &&
+        !state.coverage.runtimePrimitiveNames?.length
+      ) {
+        return state.coverage.secondary?.includes("eval-owned")
+          ? "Structural child — its primary evidence lives in Eval runs; it has no independent runtime span."
+          : "Structural child of its Catalog parent — it has no independent runtime span.";
       }
       return state.runCount > 0
-        ? `Referenced by ${state.runCount} run${state.runCount === 1 ? '' : 's'} — never itself the subject of a run.`
-        : 'Referenced by an owner’s span when invoked — never itself the subject of a run. No runs yet.'
-    case 'quality-primary':
+        ? `Referenced by ${state.runCount} run${state.runCount === 1 ? "" : "s"} — never itself the subject of a run.`
+        : "Referenced by an owner’s span when invoked — never itself the subject of a run. No runs yet.";
+    case "eval-primary":
       return state.hasRuntimeEvidence
-        ? `Quality-primary — correlates through the Quality ↔ observability join. Also invoked directly in ${state.runCount} run${state.runCount === 1 ? '' : 's'}${state.coverage.runtimePrimitiveNames ? ` (${state.coverage.runtimePrimitiveNames.join(', ')})` : ''}.`
-        : 'Quality-primary — correlates through the Quality ↔ observability join, not direct runtime evidence.'
-    case 'direct-activity':
-      return state.hasRuntimeEvidence ? '' : 'No runs have referenced this definition yet.'
+        ? `Eval evidence is available. This definition was also observed directly in ${state.runCount} run${state.runCount === 1 ? "" : "s"}${state.coverage.runtimePrimitiveNames ? ` (${state.coverage.runtimePrimitiveNames.join(", ")})` : ""}.`
+        : "Evidence for this definition lives in Eval runs, not independent runtime spans.";
+    case "direct-activity":
+      return state.hasRuntimeEvidence
+        ? ""
+        : "No runs have referenced this definition yet.";
   }
 }
 
 export function IndexObservability({ def }: { def: ViewDef }) {
-  const { navigate } = useNavigation()
-  const idx = useIndexIndex()
-  const { activity } = useDefinitionActivity(def.id)
-  const parentDefinitionId = idx.parentOf(def.id)
-  const { activity: parentActivity } = useDefinitionActivity(parentDefinitionId)
-  const state = describeCatalogCoverage(def.kind, activity, parentActivity)
+  const { navigate } = useNavigation();
+  const idx = useIndexIndex();
+  const { activity } = useDefinitionActivity(def.id);
+  const parentDefinitionId = idx.parentOf(def.id);
+  const { activity: parentActivity } =
+    useDefinitionActivity(parentDefinitionId);
+  const state = describeCatalogCoverage(def.kind, activity, parentActivity);
   const displayedActivity =
-    state.treatment === 'runtime-unjoined' ? undefined : state.parentDerived ? parentActivity : activity
-  const runsDefinitionId = state.parentDerived ? parentDefinitionId : def.id
-  const rjn = def.runtimeJoin
-  const note = coverageNote(state)
+    state.treatment === "runtime-unjoined"
+      ? undefined
+      : state.parentDerived
+        ? parentActivity
+        : activity;
+  const runsDefinitionId = state.parentDerived ? parentDefinitionId : def.id;
+  const rjn = def.runtimeJoin;
+  const note = coverageNote(state);
   const idKeys = [
-    'promptId',
-    'contextId',
-    'agentId',
-    'toolName',
-    'retrieverId',
-    'memoryId',
-    'memoryStoreId',
-    'ragPipelineId',
-    'workspaceId',
-    'routingId',
-    'routeKey',
-    'flowName',
-    'stepLabel',
-  ] as const
-  const ids = rjn ? idKeys.filter((k) => rjn[k]).map((k) => [k, String(rjn[k])] as const) : []
+    "promptId",
+    "contextId",
+    "agentId",
+    "toolName",
+    "retrieverId",
+    "memoryId",
+    "memoryStoreId",
+    "ragPipelineId",
+    "workspaceId",
+    "routingId",
+    "routeKey",
+    "flowName",
+    "stepLabel",
+  ] as const;
+  const ids = rjn
+    ? idKeys.filter((k) => rjn[k]).map((k) => [k, String(rjn[k])] as const)
+    : [];
   const kv = (k: string, v: ReactNode) =>
     v ? (
-      <div style={{ display: 'flex', gap: 10, fontFamily: T.mono, fontSize: 11.5 }}>
+      <div
+        style={{ display: "flex", gap: 10, fontFamily: T.mono, fontSize: 11.5 }}
+      >
         <span style={{ color: T.fgFaint, minWidth: 110 }}>{k}</span>
         <span style={{ color: T.fg }}>{v}</span>
       </div>
-    ) : null
+    ) : null;
   return (
     <>
       <SectionHead
         eyebrow="Observability"
         right={
           state.runCount > 0 && runsDefinitionId ? (
-            <Btn size="xs" icon="trace" onClick={() => navigate({ view: 'runs', definitionId: runsDefinitionId })}>
+            <Btn
+              size="xs"
+              icon="trace"
+              onClick={() =>
+                navigate({ view: "runs", definitionId: runsDefinitionId })
+              }
+            >
               View {state.runCount} runs
             </Btn>
           ) : null
@@ -502,9 +138,9 @@ export function IndexObservability({ def }: { def: ViewDef }) {
         style={{
           background: T.bgElev,
           border: `1px solid ${T.border}`,
-          borderLeft: `3px solid ${state.treatment === 'no-runtime' ? T.border : T.crux}`,
+          borderLeft: `3px solid ${state.treatment === "no-runtime" ? T.border : T.crux}`,
           borderRadius: 11,
-          padding: '14px 18px',
+          padding: "14px 18px",
           marginBottom: 22,
         }}
       >
@@ -521,22 +157,32 @@ export function IndexObservability({ def }: { def: ViewDef }) {
           </div>
         )}
         {displayedActivity?.lastRun && (
-          <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px]" style={{ color: T.fgMuted }}>
+          <div
+            className="mb-3 flex flex-wrap items-center gap-2 text-[11px]"
+            style={{ color: T.fgMuted }}
+          >
             <span className="font-mono" style={{ color: T.fg }}>
               latest {displayedActivity.lastRun.status}
             </span>
             <span>·</span>
             <span>
-              {new Date(displayedActivity.lastRun.endedAt || displayedActivity.lastRun.startedAt).toLocaleString()}
+              {new Date(
+                displayedActivity.lastRun.endedAt ||
+                  displayedActivity.lastRun.startedAt,
+              ).toLocaleString()}
             </span>
             {displayedActivity.lastRun.durationMs > 0 && (
               <>
                 <span>·</span>
-                <span>{displayedActivity.lastRun.durationMs.toLocaleString()}ms</span>
+                <span>
+                  {displayedActivity.lastRun.durationMs.toLocaleString()}ms
+                </span>
               </>
             )}
             {displayedActivity.lastRun.deliveryHealth?.status && (
-              <DeliveryHealthBadge status={displayedActivity.lastRun.deliveryHealth.status} />
+              <DeliveryHealthBadge
+                status={displayedActivity.lastRun.deliveryHealth.status}
+              />
             )}
           </div>
         )}
@@ -544,11 +190,11 @@ export function IndexObservability({ def }: { def: ViewDef }) {
           <>
             <div
               style={{
-                display: 'flex',
-                alignItems: 'center',
+                display: "flex",
+                alignItems: "center",
                 gap: 10,
                 marginBottom: 12,
-                flexWrap: 'wrap',
+                flexWrap: "wrap",
               }}
             >
               <Icon name="trace" size={15} color={T.crux} />
@@ -575,21 +221,21 @@ export function IndexObservability({ def }: { def: ViewDef }) {
             </div>
             <div
               style={{
-                display: 'grid',
-                gridTemplateColumns: '1fr 1fr',
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
                 gap: 18,
               }}
             >
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {kv('primitive', rjn.primitive)}
-                {kv('backend', rjn.backend)}
-                {kv('resource', rjn.resource)}
-                {kv('id prefix', rjn.runtimeIdPrefix)}
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {kv("primitive", rjn.primitive)}
+                {kv("backend", rjn.backend)}
+                {kv("resource", rjn.resource)}
+                {kv("id prefix", rjn.runtimeIdPrefix)}
                 {ids.map(([k, v]) => (
                   <div
                     key={k}
                     style={{
-                      display: 'flex',
+                      display: "flex",
                       gap: 10,
                       fontFamily: T.mono,
                       fontSize: 11.5,
@@ -600,7 +246,9 @@ export function IndexObservability({ def }: { def: ViewDef }) {
                   </div>
                 ))}
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div
+                style={{ display: "flex", flexDirection: "column", gap: 10 }}
+              >
                 {rjn.correlationAttributes && (
                   <div>
                     <div
@@ -608,21 +256,21 @@ export function IndexObservability({ def }: { def: ViewDef }) {
                         fontFamily: T.mono,
                         fontSize: 9.5,
                         color: T.fgFaint,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.1em',
+                        textTransform: "uppercase",
+                        letterSpacing: "0.1em",
                         marginBottom: 6,
                       }}
                     >
                       correlation attributes
                     </div>
-                    <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                    <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
                       {rjn.correlationAttributes.map((a) => (
                         <span
                           key={a}
                           style={{
                             fontFamily: T.mono,
                             fontSize: 10.5,
-                            padding: '2px 7px',
+                            padding: "2px 7px",
                             borderRadius: 4,
                             background: T.cruxSoft,
                             color: T.crux,
@@ -641,8 +289,8 @@ export function IndexObservability({ def }: { def: ViewDef }) {
                         fontFamily: T.mono,
                         fontSize: 9.5,
                         color: T.fgFaint,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.1em',
+                        textTransform: "uppercase",
+                        letterSpacing: "0.1em",
                         marginBottom: 6,
                       }}
                     >
@@ -650,13 +298,16 @@ export function IndexObservability({ def }: { def: ViewDef }) {
                     </div>
                     <div
                       style={{
-                        display: 'flex',
-                        flexDirection: 'column',
+                        display: "flex",
+                        flexDirection: "column",
                         gap: 3,
                       }}
                     >
                       {Object.entries(rjn.spanAttributes).map(([k, v]) => (
-                        <div key={k} style={{ fontFamily: T.mono, fontSize: 10.5 }}>
+                        <div
+                          key={k}
+                          style={{ fontFamily: T.mono, fontSize: 10.5 }}
+                        >
                           <span style={{ color: T.fgFaint }}>{k}=</span>
                           <span style={{ color: T.fg }}>{v}</span>
                         </div>
@@ -670,41 +321,57 @@ export function IndexObservability({ def }: { def: ViewDef }) {
         )}
       </div>
     </>
-  )
+  );
 }
 
 // ── DIAGNOSTICS (intelligence.diagnostics) ───────────────────────────────────
 export function IndexDiagnostics({ def }: { def: ViewDef }) {
-  const ds = def.diagnostics
-  if (!ds || !ds.length) return null
+  const ds = def.diagnostics;
+  if (!ds || !ds.length) return null;
   return (
     <div style={{ marginBottom: 22 }}>
       {ds.map((d, i) => {
-        const c = toneColor(T, d.severity === 'error' ? 'danger' : d.severity === 'warning' ? 'warn' : 'crux')
+        const c = toneColor(
+          T,
+          d.severity === "error"
+            ? "danger"
+            : d.severity === "warning"
+              ? "warn"
+              : "crux",
+        );
         return (
           <div
             key={i}
             style={{
-              display: 'flex',
+              display: "flex",
               gap: 10,
-              alignItems: 'flex-start',
-              padding: '10px 14px',
+              alignItems: "flex-start",
+              padding: "10px 14px",
               background: T.bg,
               border: `1px dashed ${c.line}`,
               borderRadius: 8,
               marginBottom: 8,
             }}
           >
-            <Icon name="sparkle" size={13} color={c.fg} style={{ marginTop: 2 }} />
+            <Icon
+              name="sparkle"
+              size={13}
+              color={c.fg}
+              style={{ marginTop: 2 }}
+            />
             <div>
-              <span style={{ fontFamily: T.mono, fontSize: 10.5, color: c.fg }}>{d.code || d.severity}</span>
-              <div style={{ fontSize: 12.5, color: T.fgMuted, marginTop: 2 }}>{d.message}</div>
+              <span style={{ fontFamily: T.mono, fontSize: 10.5, color: c.fg }}>
+                {d.code || d.severity}
+              </span>
+              <div style={{ fontSize: 12.5, color: T.fgMuted, marginTop: 2 }}>
+                {d.message}
+              </div>
             </div>
           </div>
-        )
+        );
       })}
     </div>
-  )
+  );
 }
 
 // ── HEALTH (lint) ────────────────────────────────────────────────────────────
@@ -715,17 +382,17 @@ export function IndexDiagnostics({ def }: { def: ViewDef }) {
 
 // ── PROVENANCE (the quiet "everything else") ─────────────────────────────────
 export function IndexProvenance({ def }: { def: ViewDef }) {
-  const idx = useIndexIndex()
-  const m = kindMeta(def.kind)
-  const indexing = idx.indexing
+  const idx = useIndexIndex();
+  const m = kindMeta(def.kind);
+  const indexing = idx.indexing;
   const Row = ({ k, children }: { k: string; children?: ReactNode }) =>
-    children != null && children !== '' ? (
+    children != null && children !== "" ? (
       <div
         style={{
-          display: 'grid',
-          gridTemplateColumns: '120px 1fr',
+          display: "grid",
+          gridTemplateColumns: "120px 1fr",
           gap: 12,
-          padding: '6px 0',
+          padding: "6px 0",
           borderTop: `1px solid ${T.border}`,
         }}
       >
@@ -734,30 +401,36 @@ export function IndexProvenance({ def }: { def: ViewDef }) {
             fontFamily: T.mono,
             fontSize: 10.5,
             color: T.fgFaint,
-            textTransform: 'uppercase',
-            letterSpacing: '0.08em',
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
           }}
         >
           {k}
         </span>
-        <span style={{ fontFamily: T.mono, fontSize: 11.5, color: T.fg }}>{children}</span>
+        <span style={{ fontFamily: T.mono, fontSize: 11.5, color: T.fg }}>
+          {children}
+        </span>
       </div>
-    ) : null
+    ) : null;
   return (
     <>
       <SectionHead
         eyebrow="Provenance & indexing"
-        right={<span style={{ fontFamily: T.mono, fontSize: 11, color: T.fgFaint }}>read-model metadata</span>}
+        right={
+          <span style={{ fontFamily: T.mono, fontSize: 11, color: T.fgFaint }}>
+            read-model metadata
+          </span>
+        }
       />
       <div
         style={{
           background: T.bgElev,
           border: `1px solid ${T.border}`,
           borderRadius: 11,
-          padding: '6px 18px 14px',
+          padding: "6px 18px 14px",
           marginBottom: 8,
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
           columnGap: 36,
         }}
       >
@@ -767,40 +440,44 @@ export function IndexProvenance({ def }: { def: ViewDef }) {
           <Row k="status">
             <span
               style={{
-                color: toneColor(T, statusTone(def.status ?? 'active')).fg,
+                color: toneColor(T, statusTone(def.status ?? "active")).fg,
               }}
             >
-              {def.status ?? 'active'}
+              {def.status ?? "active"}
             </span>
           </Row>
           <Row k="fidelity">{def.fidelity}</Row>
           <Row k="confidence">{def.confidence}</Row>
           <Row k="fingerprint">{def.fingerprint}</Row>
-          <Row k="tags">{def.tags && def.tags.join(' · ')}</Row>
+          <Row k="tags">{def.tags && def.tags.join(" · ")}</Row>
         </div>
         <div>
           <Row k="source">
             {def.file}:{def.line}
-            {def.raw.source?.function ? ` · ${def.raw.source.function}()` : ''}
+            {def.raw.source?.function ? ` · ${def.raw.source.function}()` : ""}
           </Row>
-          <Row k="module path">{def.path && def.path.join('.')}</Row>
-          <Row k="import-safe">{def.sourceStatus ? String(def.sourceStatus.importSafe) : undefined}</Row>
+          <Row k="module path">{def.path && def.path.join(".")}</Row>
+          <Row k="import-safe">
+            {def.sourceStatus ? String(def.sourceStatus.importSafe) : undefined}
+          </Row>
           <Row k="partial reason">{def.sourceStatus?.partialReason}</Row>
           <Row k="updated">{def.updated}</Row>
           {indexing && (
             <Row k="ast index">
               {indexing.ast.status}
-              {indexing.ast.indexedAt ? ` · ${indexing.ast.indexedAt}` : ''}
+              {indexing.ast.indexedAt ? ` · ${indexing.ast.indexedAt}` : ""}
             </Row>
           )}
           {indexing && (
             <Row k="semantic index">
               {indexing.semantic.status}
-              {indexing.semantic.indexedAt ? ` · ${indexing.semantic.indexedAt}` : ''}
+              {indexing.semantic.indexedAt
+                ? ` · ${indexing.semantic.indexedAt}`
+                : ""}
             </Row>
           )}
         </div>
       </div>
     </>
-  )
+  );
 }

@@ -123,7 +123,7 @@ type GenerateObjectFn = <T>(opts: {
 
 Create a `GenerateObjectFn` backed by a full adapter `generate()` function. The bridge builds a synthetic structured prompt from `{ system, prompt, schema }`, calls the supplied adapter generate with `{ model, input: {} }`, and returns `result.object`.
 
-Use this when a compaction, scoring, retrieval, or quality API needs the `GenerateObjectFn` shape and the call should still run through adapter runtime behavior such as prompt hooks, validation retry, safety, cassettes, memory, or instrumentation.
+Use this when a compaction, scoring, retrieval, or Eval API needs the `GenerateObjectFn` shape and the call should still run through adapter runtime behavior such as prompt hooks, validation retry, safety, memory, or instrumentation.
 
 ```ts
 import { createGenerateObjectFnFromGenerate } from "@use-crux/core/compaction";

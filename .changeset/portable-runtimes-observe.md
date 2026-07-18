@@ -49,7 +49,7 @@ identical checkouts produce the same manifest ID; static, semantic, and Go
 snapshot cache epochs invalidate root-dependent historical fingerprints.
 
 Add deterministic `crux catalog` list, show, status, and explain projections
-with compiler provenance, safe source paths, Health/Quality/runtime joins, and
+with compiler provenance, safe source paths, Health/Eval/runtime joins, and
 truthful partial or unknown state. The beta `crux index` list/show paths now
 delegate to Catalog while category keywords and explicit reindex remain.
 Durable definition evidence now retains canonical extractor and resolved
@@ -68,7 +68,7 @@ delaying or replacing handler results or host-owned drain work.
 Portable MCP entrypoints now fail closed when stdio is selected, while Node
 runtimes resolve their lazy stdio adapters through private conditional imports.
 
-Align public documentation around Catalog, Runs, Quality, and Health. Narrow
+Align public documentation around Catalog, Runs, Evals, and Health. Narrow
 the published Indexer root to Crux-owned compiler contracts; third-party
 authoring stays on the experimental `/extensions` subpath and is declarative,
 limited to extractors plus relation declarations.

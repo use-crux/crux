@@ -1,13 +1,13 @@
 ---
-title: '@use-crux/ingest'
+title: "@use-crux/ingest"
 description: Source loaders for inline text, files, and URLs, produce IngestDocument streams for corpus sync.
 ---
 
 ```ts
-import { textSource } from '@use-crux/ingest'
-import { fileSource, filesSource } from '@use-crux/ingest/files'
-import { urlSource, urlsSource } from '@use-crux/ingest/urls'
-import type { IngestDocument, SourceLoader } from '@use-crux/ingest'
+import { textSource } from "@use-crux/ingest";
+import { fileSource, filesSource } from "@use-crux/ingest/files";
+import { urlSource, urlsSource } from "@use-crux/ingest/urls";
+import type { IngestDocument, SourceLoader } from "@use-crux/ingest";
 ```
 
 ## Overview
@@ -37,21 +37,24 @@ If your application already has a clean loading pipeline, you do not have to use
 
 Crux ships these source loaders:
 
-| Loader | Import | What it loads | Use it when |
-| --- | --- | --- | --- |
-| `textSource()` | `@use-crux/ingest` | One or more in-memory `IngestDocument`-like objects. | Your app already has text, CMS records, API results, or generated documents in memory. |
-| `fileSource()` | `@use-crux/ingest/files` | One local file. | You want to index a known file and optionally control its `sourceId`. |
-| `filesSource()` | `@use-crux/ingest/files` | An array of paths, a directory, or a glob. | You want to index a local docs folder or file set. |
-| `urlSource()` | `@use-crux/ingest/urls` | One HTTP(S) URL. | You want to index a known web page or remote document. |
-| `urlsSource()` | `@use-crux/ingest/urls` | A list of HTTP(S) URLs. | You have an explicit URL list and do not need crawler behavior. |
-| Custom `SourceLoader` | any package | Any async iterable of `IngestLoadResult`. | You are loading from a CMS, database, queue, API, crawler, or connector. |
+| Loader                | Import                   | What it loads                                        | Use it when                                                                            |
+| --------------------- | ------------------------ | ---------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `textSource()`        | `@use-crux/ingest`       | One or more in-memory `IngestDocument`-like objects. | Your app already has text, CMS records, API results, or generated documents in memory. |
+| `fileSource()`        | `@use-crux/ingest/files` | One local file.                                      | You want to index a known file and optionally control its `sourceId`.                  |
+| `filesSource()`       | `@use-crux/ingest/files` | An array of paths, a directory, or a glob.           | You want to index a local docs folder or file set.                                     |
+| `urlSource()`         | `@use-crux/ingest/urls`  | One HTTP(S) URL.                                     | You want to index a known web page or remote document.                                 |
+| `urlsSource()`        | `@use-crux/ingest/urls`  | A list of HTTP(S) URLs.                              | You have an explicit URL list and do not need crawler behavior.                        |
+| Custom `SourceLoader` | any package              | Any async iterable of `IngestLoadResult`.            | You are loading from a CMS, database, queue, API, crawler, or connector.               |
 
 All bundled loaders return the same `SourceLoader` shape:
 
 ```ts
-const loader = filesSource({ directory: './docs' }, { namespace: 'product-docs' })
+const loader = filesSource(
+  { directory: "./docs" },
+  { namespace: "product-docs" },
+);
 
-await docsCorpus.sync(loader.load(), { sourceSet: 'complete' })
+await docsCorpus.sync(loader.load(), { sourceSet: "complete" });
 ```
 
 Use `load()` for product sync jobs because failures are returned as values. Use `documents()` for scripts and tests where the first failed source should throw.
@@ -60,45 +63,45 @@ Use `load()` for product sync jobs because failures are returned as values. Use 
 
 Parsers turn bytes into structured `parts`. The source decides the format from file extension, URL content type, URL extension, or PDF magic bytes.
 
-| Parser | Formats | Parts produced | Notes |
-| --- | --- | --- | --- |
-| `text` | `txt`, `unknown` | `text` part | Plain text fallback. Unknown files/URLs are treated as text unless a custom parser overrides them. |
-| `markdown` | `md` | `text`, `table` parts | Parses Markdown + GFM. Preserves heading paths and table rows. |
-| `html` | `html` | `text`, `table` parts | Extracts title, headings, paragraphs, list items, code/pre blocks, and tables. |
-| `pdf` | `pdf` | `page` parts | Uses `pdfjs-dist`; visual-only pages can use the caller's `media.describe` operation. |
-| `image` | `image` | `text` parts | Uses the explicitly bound `media.describe` operation. |
-| `audio` | `audio` | `text` parts | Uses `media.transcribe` and preserves measured seconds intervals. |
-| `video` | `video` | `text` parts | Uses explicit visual description, soundtrack transcription, or both; never samples frames implicitly. |
-| `csv` | `csv` | `table` part | Produces one table with rows, columns, and row range metadata. |
-| `json` | `json` | `json` parts | Produces one part per JSON path, including nested objects and arrays. |
-| `docx` | `docx` | `text`, `table` parts | Converts DOCX to HTML with Mammoth, then uses the HTML parser. Mammoth warnings become ingest warnings. |
-| `xlsx` | `xlsx` | `sheet`, `table` parts | Uses ExcelJS. Produces a sheet part and a table part for each non-empty worksheet. |
+| Parser     | Formats          | Parts produced         | Notes                                                                                                   |
+| ---------- | ---------------- | ---------------------- | ------------------------------------------------------------------------------------------------------- |
+| `text`     | `txt`, `unknown` | `text` part            | Plain text fallback. Unknown files/URLs are treated as text unless a custom parser overrides them.      |
+| `markdown` | `md`             | `text`, `table` parts  | Parses Markdown + GFM. Preserves heading paths and table rows.                                          |
+| `html`     | `html`           | `text`, `table` parts  | Extracts title, headings, paragraphs, list items, code/pre blocks, and tables.                          |
+| `pdf`      | `pdf`            | `page` parts           | Uses `pdfjs-dist`; visual-only pages can use the caller's `media.describe` operation.                   |
+| `image`    | `image`          | `text` parts           | Uses the explicitly bound `media.describe` operation.                                                   |
+| `audio`    | `audio`          | `text` parts           | Uses `media.transcribe` and preserves measured seconds intervals.                                       |
+| `video`    | `video`          | `text` parts           | Uses explicit visual description, soundtrack transcription, or both; never samples frames implicitly.   |
+| `csv`      | `csv`            | `table` part           | Produces one table with rows, columns, and row range metadata.                                          |
+| `json`     | `json`           | `json` parts           | Produces one part per JSON path, including nested objects and arrays.                                   |
+| `docx`     | `docx`           | `text`, `table` parts  | Converts DOCX to HTML with Mammoth, then uses the HTML parser. Mammoth warnings become ingest warnings. |
+| `xlsx`     | `xlsx`           | `sheet`, `table` parts | Uses ExcelJS. Produces a sheet part and a table part for each non-empty worksheet.                      |
 
 Override parsers source-locally when a format needs domain-specific handling:
 
 ```ts
 const loader = filesSource(
-  { glob: '**/*.acme' },
+  { glob: "**/*.acme" },
   {
-    namespace: 'docs',
+    namespace: "docs",
     parsers: [
       {
-        name: 'acme',
-        formats: ['unknown'],
+        name: "acme",
+        formats: ["unknown"],
         parse: ({ text }) => ({
           parts: [
             {
-              id: 'acme:1',
-              kind: 'text',
-              role: 'paragraph',
-              content: text ?? '',
+              id: "acme:1",
+              kind: "text",
+              role: "paragraph",
+              content: text ?? "",
             },
           ],
         }),
       },
     ],
   },
-)
+);
 ```
 
 ## Types
@@ -108,26 +111,55 @@ const loader = filesSource(
 ```ts
 type IngestPart =
   | {
-      kind: 'text'
-      id: string
-      content: string
-      role?: 'heading' | 'paragraph' | 'list' | 'code'
-      headingPath?: string[]
+      kind: "text";
+      id: string;
+      content: string;
+      role?: "heading" | "paragraph" | "list" | "code";
+      headingPath?: string[];
     }
-  | { kind: 'page'; id: string; pageNumber: number; content: string; sourceLocation?: { type: 'page'; pageNumber: number } }
-  | { kind: 'table'; id: string; rows: string[][]; columns?: string[]; content: string }
-  | { kind: 'sheet'; id: string; sheetName: string; tables: IngestPart[]; content: string }
-  | { kind: 'json'; id: string; path: string; valueType: string; content: string }
+  | {
+      kind: "page";
+      id: string;
+      pageNumber: number;
+      content: string;
+      sourceLocation?: { type: "page"; pageNumber: number };
+    }
+  | {
+      kind: "table";
+      id: string;
+      rows: string[][];
+      columns?: string[];
+      content: string;
+    }
+  | {
+      kind: "sheet";
+      id: string;
+      sheetName: string;
+      tables: IngestPart[];
+      content: string;
+    }
+  | {
+      kind: "json";
+      id: string;
+      path: string;
+      valueType: string;
+      content: string;
+    };
 
 interface IngestDocument {
-  namespace: string
-  sourceId: string
-  source?: { url?: string; path?: string; assetRef?: AssetRef; mediaType?: string }
-  parts: IngestPart[]
-  content: string
-  title?: string
-  metadata?: Record<string, unknown>
-  warnings?: IngestWarning[]
+  namespace: string;
+  sourceId: string;
+  source?: {
+    url?: string;
+    path?: string;
+    assetRef?: AssetRef;
+    mediaType?: string;
+  };
+  parts: IngestPart[];
+  content: string;
+  title?: string;
+  metadata?: Record<string, unknown>;
+  warnings?: IngestWarning[];
 }
 ```
 
@@ -138,11 +170,17 @@ interface IngestDocument {
 ```ts
 type IngestLoadResult =
   | { ok: true; document: IngestDocument }
-  | { ok: false; namespace: string; sourceId: string; error: IngestError; metadata?: Record<string, unknown> }
+  | {
+      ok: false;
+      namespace: string;
+      sourceId: string;
+      error: IngestError;
+      metadata?: Record<string, unknown>;
+    };
 
 interface SourceLoader {
-  load(): AsyncIterable<IngestLoadResult>
-  documents(): AsyncIterable<IngestDocument>
+  load(): AsyncIterable<IngestLoadResult>;
+  documents(): AsyncIterable<IngestDocument>;
 }
 ```
 
@@ -153,26 +191,26 @@ Use `load()` for real sync jobs. It reports source-level failures as values, whi
 For when you already have the text in hand:
 
 ```ts
-import { textSource } from '@use-crux/ingest'
+import { textSource } from "@use-crux/ingest";
 
 const single = textSource({
-  namespace: 'docs',
-  sourceId: 'readme',
-  content: '# Hello\nThis is the readme.',
-  title: 'README',
-})
+  namespace: "docs",
+  sourceId: "readme",
+  content: "# Hello\nThis is the readme.",
+  title: "README",
+});
 
 const many = textSource([
-  { namespace: 'docs', sourceId: 'a', content: '...' },
-  { namespace: 'docs', sourceId: 'b', content: '...' },
-])
+  { namespace: "docs", sourceId: "a", content: "..." },
+  { namespace: "docs", sourceId: "b", content: "..." },
+]);
 
 // Product sync path.
-await docsCorpus.sync(single.load(), { sourceSet: 'partial' })
+await docsCorpus.sync(single.load(), { sourceSet: "partial" });
 
 // Fail-fast script path.
 for await (const document of single.documents()) {
-  console.log(document.content)
+  console.log(document.content);
 }
 ```
 
@@ -182,27 +220,37 @@ Throws if `namespace` or `sourceId` is empty.
 
 ```ts
 type IngestParser = {
-  name: string
-  formats: IngestFormat[]
-  parse(input: ParseInput, ctx: ParseContext): Promise<ParseResult> | ParseResult
-}
+  name: string;
+  formats: IngestFormat[];
+  parse(
+    input: ParseInput,
+    ctx: ParseContext,
+  ): Promise<ParseResult> | ParseResult;
+};
 ```
 
 Built-in parsers cover `txt`, `md`, `html`, `pdf`, `image`, `audio`, `video`, `csv`, `json`, `docx`, and `xlsx`. Pass `parsers` to a source to override a built-in parser or add a source-local parser. Custom parsers win over built-ins for matching formats.
 
 ```ts
-const loader = fileSource('./docs/manual.acme', {
-  namespace: 'docs',
+const loader = fileSource("./docs/manual.acme", {
+  namespace: "docs",
   parsers: [
     {
-      name: 'acme',
-      formats: ['unknown'],
+      name: "acme",
+      formats: ["unknown"],
       parse: ({ text }) => ({
-        parts: [{ id: 'acme:1', kind: 'text', role: 'paragraph', content: text ?? '' }],
+        parts: [
+          {
+            id: "acme:1",
+            kind: "text",
+            role: "paragraph",
+            content: text ?? "",
+          },
+        ],
       }),
     },
   ],
-})
+});
 ```
 
 Media derivation is application-bound and provider-neutral:
@@ -216,13 +264,14 @@ const media: IngestMediaOperations = {
       messages,
       maxOutputTokens,
       abortSignal,
-    })
-    return { text: result.text }
+    });
+    return { text: result.text };
   },
-  transcribe: ({ audio, abortSignal }) => transcribe({ model: audioModel, audio, abortSignal }),
-}
+  transcribe: ({ audio, abortSignal }) =>
+    transcribe({ model: audioModel, audio, abortSignal }),
+};
 
-const loader = fileSource('./docs/demo.mp4', { namespace: 'docs', media })
+const loader = fileSource("./docs/demo.mp4", { namespace: "docs", media });
 ```
 
 The application closes over provider and model choice. Ingest does not select a model, persist media, sample video frames, or expose a removed generation alias.
@@ -230,29 +279,32 @@ The application closes over provider and model choice. Ingest does not select a 
 ## Pattern: pipe into a corpus
 
 ```ts
-import { corpus, indexer } from '@use-crux/core/indexing'
-import { filesSource } from '@use-crux/ingest/files'
+import { corpus, indexer } from "@use-crux/core/indexing";
+import { filesSource } from "@use-crux/ingest/files";
 
 const docsIndexer = indexer({
-  id: 'docs',
-  namespace: 'product-docs',
+  id: "docs",
+  namespace: "product-docs",
   store,
   dense: embedding,
-})
+});
 
 const docsCorpus = corpus({
-  id: 'docs',
-  namespace: 'product-docs',
+  id: "docs",
+  namespace: "product-docs",
   store,
   indexer: docsIndexer,
-})
+});
 
-const source = filesSource({ directory: './docs', recursive: true }, { namespace: 'product-docs' })
+const source = filesSource(
+  { directory: "./docs", recursive: true },
+  { namespace: "product-docs" },
+);
 
 await docsCorpus.sync(source.load(), {
-  sourceSet: 'complete',
-  stale: 'delete',
-})
+  sourceSet: "complete",
+  stale: "delete",
+});
 ```
 
 Use `indexer.indexDocuments(source.load())` for one-off writes and tests. Use `corpus.sync()` for repeated ingestion jobs.

@@ -26,7 +26,6 @@ import type {
   ProjectIndexData,
   ProjectDefinition,
   ProjectDefinitionMetadata,
-  ProjectDefinitionQuality,
   ProjectRelation,
   ProjectRuntimeJoin,
   ProjectSourceRef,
@@ -243,21 +242,9 @@ export interface IndexFacts {
   hasDetailSchema?: boolean;
   chainOfThought?: boolean;
   criteriaPreview?: string;
-  // dataset / suite / evaluation
+  // Eval
   caseCount?: number;
   scorerIds?: string[];
-  /** Literal dataset paths passed through `dataset(...)`. */
-  datasetPaths?: string[];
-  /** Literal scorer names declared by an evaluation. */
-  scorerNames?: string[];
-  /** Literal score gate keys plus top-level gate kinds. */
-  gateKeys?: string[];
-  /** Literal variant names declared by an evaluation. */
-  variantNames?: string[];
-  /** Literal replay mode declared by an evaluation. */
-  replayMode?: string;
-  /** Project Index definition ids protected by an evaluation. */
-  covers?: string[];
   // config
   settings?: Record<string, unknown>;
 }
@@ -386,8 +373,6 @@ export interface ViewDef {
   runtimeJoin?: ProjectRuntimeJoin;
   sourceStatus?: ProjectDefinitionMetadata["sourceStatus"];
   presentation?: PresentationView;
-  quality?: ProjectDefinitionQuality;
-  changedSinceBaseline?: boolean;
   /** Source-file mtime as a short relative string (no author — see backend). */
   updated?: string;
   /** Observed-injection layer (prompt/context/injectable) — drives the
@@ -682,8 +667,6 @@ export function toViewDef(
           role: pres.role,
         }
       : undefined,
-    quality: def.quality,
-    changedSinceBaseline: def.quality?.changedSinceBaseline,
     updated: fmtAgo(meta.updated?.lastEditedAtMs) ?? meta.updated?.lastEditedAt,
     observed: readObserved(metaRec, intel),
     contributions: readContributions(def.kind, metaRec, intel),
@@ -870,7 +853,7 @@ export function buildIndex(index: ProjectIndexData): IndexIndex {
   };
 
   // Containment can be expressed two ways: `indexPresentation.parentDefinitionId`
-  // (flow steps, routes, …) OR a structural relation (e.g. `suite.includes_case`).
+  // (flow steps, routes, Eval Cases, …) or another structural relation.
   // Infer the parent from relations when presentation doesn't carry it, so child
   // kinds roll up under their parent instead of leaking to the top level.
   const inferredParent = new Map<string, string>();
@@ -1209,21 +1192,9 @@ export function indexFactChips(def: ViewDef): Array<[string, string | number]> {
         f.chainOfThought != null ? (f.chainOfThought ? "yes" : "no") : null,
       );
       break;
-    case "dataset":
-      push("cases", f.caseCount);
-      break;
-    case "suite":
+    case "eval":
       push("cases", f.caseCount);
       push("scorers", f.scorerIds);
-      break;
-    case "evaluation":
-      push("cases", f.caseCount);
-      push("datasets", f.datasetPaths);
-      push("scorers", f.scorerNames);
-      push("gates", f.gateKeys);
-      push("variants", f.variantNames);
-      push("replay", f.replayMode);
-      push("covers", f.covers);
       break;
     default:
       if (f.targetDefinitionId) push("covers", f.targetDefinitionId);

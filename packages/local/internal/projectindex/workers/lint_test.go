@@ -14,7 +14,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
-func TestWorkerIndexProjectLintPatchUsesNativeQualityFinalize(t *testing.T) {
+func TestWorkerIndexProjectLintPatchUsesNativeLintFinalize(t *testing.T) {
 	root := "/repo"
 	compiler := &staticIndexLintCompiler{root: root}
 	worker := &Bundle{syntaxParser: compiler}
@@ -26,14 +26,10 @@ func TestWorkerIndexProjectLintPatchUsesNativeQualityFinalize(t *testing.T) {
 		ASTUsedStaticIndex: true,
 		PreviousIndex: store.IndexData{
 			Definitions: []store.ProjectDefinition{{
-				ID:       "quality-target:writer",
-				Kind:     "quality.target",
+				ID:       "prompt:writer",
+				Kind:     "prompt",
 				Name:     "writer",
 				Fidelity: "resolved",
-				Quality: &store.IndexQuality{
-					ExperimentIDs:   []string{"experiment:writer"},
-					ExperimentCount: 1,
-				},
 			}},
 		},
 	})
@@ -46,8 +42,8 @@ func TestWorkerIndexProjectLintPatchUsesNativeQualityFinalize(t *testing.T) {
 	if patch.Phase != "quality" {
 		t.Fatalf("patch phase = %q, want quality", patch.Phase)
 	}
-	if len(patch.Facts.LintFindings) != 1 || patch.Facts.LintFindings[0].RuleID != "quality.missing_baseline" {
-		t.Fatalf("lint findings = %+v, want quality.missing_baseline", patch.Facts.LintFindings)
+	if len(patch.Facts.LintFindings) != 1 || patch.Facts.LintFindings[0].RuleID != "definition.missing_eval_coverage" {
+		t.Fatalf("lint findings = %+v, want definition.missing_eval_coverage", patch.Facts.LintFindings)
 	}
 	if bytes.Contains(compiler.finalizeLintFacts, []byte(`"lintFindings"`)) {
 		t.Fatalf("lint facts = %s, should not echo previous lint findings", compiler.finalizeLintFacts)
@@ -207,23 +203,23 @@ func staticIndexLintPatchEvents(root string) ([]json.RawMessage, error) {
 			"facts": []any{
 				map[string]any{
 					"schemaVersion": 1,
-					"factId":        "lintFindings:lint:quality.missing_baseline:quality-target:writer",
+					"factId":        "lintFindings:lint:definition.missing_eval_coverage:prompt:writer",
 					"kind":          "lintFindings",
 					"phase":         "quality",
 					"projectRoot":   root,
 					"producer":      map[string]any{"name": workerProducer, "version": "test"},
 					"fidelity":      "inferred",
-					"provenance":    map[string]any{"kind": "runtime", "attribute": "project-index.quality"},
+					"provenance":    map[string]any{"kind": "runtime", "attribute": "project-index.lint"},
 					"fact": map[string]any{
-						"id":         "lint:quality.missing_baseline:quality-target:writer",
-						"ruleId":     "quality.missing_baseline",
+						"id":         "lint:definition.missing_eval_coverage:prompt:writer",
+						"ruleId":     "definition.missing_eval_coverage",
 						"severity":   "info",
-						"category":   "quality",
+						"category":   "evals",
 						"maturity":   "preview",
 						"confidence": "high",
 						"profiles":   []any{"recommended", "strict"},
-						"title":      "Quality target has no baseline",
-						"message":    "writer has experiment history but no promoted baseline.",
+						"title":      "Definition has no Eval coverage",
+						"message":    "writer has no associated Eval coverage.",
 						"rationale":  "A promoted baseline lets you compare future runs against known behavior.",
 						"evidence":   []any{},
 						"fixes":      []any{},

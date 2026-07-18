@@ -27,6 +27,7 @@ import type { ExecutorStreamHandle, StepObserver } from "../executor-types";
 import type { ApprovalRequestInfo } from "../tool/approval";
 import type { FinalStepInfo } from "../result-accumulator";
 import type { CallHandle } from "../call-handle";
+import type { CruxRunId } from "../../observability";
 
 export type ExecutionResolveOpts = Parameters<AnyPrompt["resolve"]>[0];
 
@@ -146,6 +147,8 @@ export interface AdapterExecutionStreamArgs<
  * @typeParam TRawResponse - Provider or SDK response type.
  */
 export interface AdapterExecutionGenerateResult<TRawResponse> {
+  /** Authoritative Crux observability run opened for this generation. */
+  readonly runId: CruxRunId;
   /** Underlying provider/SDK response, when the run completed. */
   readonly raw: TRawResponse | undefined;
 
@@ -183,6 +186,12 @@ export interface AdapterExecutionGenerateResult<TRawResponse> {
   readonly pendingApprovals?: readonly ApprovalRequestInfo[];
 }
 
+/** Internal result shape produced before orchestration stamps the run ID. */
+export type AdapterExecutionGenerateResultWithoutRunId<TRawResponse> = Omit<
+  AdapterExecutionGenerateResult<TRawResponse>,
+  "runId"
+>;
+
 /**
  * Stream handle returned by either execution dialect.
  *
@@ -191,8 +200,8 @@ export interface AdapterExecutionGenerateResult<TRawResponse> {
  * metadata produced by that SDK.
  */
 export type AdapterExecutionStreamResult<TRawStream> =
-  | StreamHandle<TRawStream>
-  | ExecutorStreamHandle<TRawStream>;
+  | (StreamHandle<TRawStream> & { readonly runId: CruxRunId })
+  | (ExecutorStreamHandle<TRawStream> & { readonly runId: CruxRunId });
 
 /**
  * Shared execution facade used by `adapter()` and `loopRuntimeAdapter()`.

@@ -6,18 +6,27 @@ description: Use Crux in any Node.js script, CLI tool, or backend service. No fr
 Crux works in any Node.js (or Bun, or Deno) script. This guide covers the basic setup, batch processing, and the alternative SDK adapters.
 
 <Callout type="warning">
-  Crux is in alpha. Public packages are available on npm; use the install commands below to get started.
+  Crux is in alpha. Public packages are available on npm; use the install
+  commands below to get started.
 </Callout>
 
 ## Install
 
 {/* prettier-ignore-start */}
 
-<Tabs items={['npm', 'pnpm', 'yarn', 'bun']}>
-  <Tab value="npm">```bash npm install @use-crux/core @use-crux/ai @ai-sdk/openai zod ```</Tab>
-  <Tab value="pnpm">```bash pnpm add @use-crux/core @use-crux/ai @ai-sdk/openai zod ```</Tab>
-  <Tab value="yarn">```bash yarn add @use-crux/core @use-crux/ai @ai-sdk/openai zod ```</Tab>
-  <Tab value="bun">```bash bun add @use-crux/core @use-crux/ai @ai-sdk/openai zod ```</Tab>
+<Tabs items={["npm", "pnpm", "yarn", "bun"]}>
+  <Tab value="npm">
+    ```bash npm install @use-crux/core @use-crux/ai @ai-sdk/openai zod ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash pnpm add @use-crux/core @use-crux/ai @ai-sdk/openai zod ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash yarn add @use-crux/core @use-crux/ai @ai-sdk/openai zod ```
+  </Tab>
+  <Tab value="bun">
+    ```bash bun add @use-crux/core @use-crux/ai @ai-sdk/openai zod ```
+  </Tab>
 </Tabs>
 {/* prettier-ignore-end */}
 
@@ -30,7 +39,7 @@ export OPENAI_API_KEY=sk-...
 ```
 src/
   evals/
-    support.eval.ts    ← Quality evaluations discovered by convention
+    support.eval.ts    ← one default Eval discovered by convention
   prompts/
     index.ts          ← Prompt definitions
     contexts.ts       ← Shared contexts
@@ -40,28 +49,28 @@ src/
 ## Basic script
 
 ```ts title="src/index.ts"
-import { prompt } from '@use-crux/core'
-import { generate } from '@use-crux/ai'
-import { openai } from '@ai-sdk/openai'
-import { z } from 'zod'
+import { prompt } from "@use-crux/core";
+import { generate } from "@use-crux/ai";
+import { openai } from "@ai-sdk/openai";
+import { z } from "zod";
 
 const classify = prompt({
-  id: 'classify',
+  id: "classify",
   input: z.object({ text: z.string() }),
   output: z.object({
-    category: z.enum(['bug', 'feature', 'question', 'other']),
+    category: z.enum(["bug", "feature", "question", "other"]),
     confidence: z.number(),
   }),
-  system: 'Classify support tickets.',
+  system: "Classify support tickets.",
   prompt: ({ input }) => input.text,
-})
+});
 
 const result = await generate(classify, {
-  model: openai('gpt-4o-mini'),
-  input: { text: 'The login button is broken on mobile' },
-})
+  model: openai("gpt-4o-mini"),
+  input: { text: "The login button is broken on mobile" },
+});
 
-console.log(result.object)
+console.log(result.object);
 // { category: 'bug', confidence: 0.95 }
 ```
 
@@ -70,23 +79,23 @@ console.log(result.object)
 The same prompt can be reused across many inputs in parallel. The adapter is just a function call: there's no setup overhead per request.
 
 ```ts title="src/batch.ts"
-import { generate } from '@use-crux/ai'
-import { openai } from '@ai-sdk/openai'
-import { classify } from './prompts'
+import { generate } from "@use-crux/ai";
+import { openai } from "@ai-sdk/openai";
+import { classify } from "./prompts";
 
-const tickets = await loadTickets()
+const tickets = await loadTickets();
 
 const results = await Promise.all(
   tickets.map((ticket) =>
     generate(classify, {
-      model: openai('gpt-4o-mini'),
+      model: openai("gpt-4o-mini"),
       input: { text: ticket.body },
     }),
   ),
-)
+);
 
 for (const [i, result] of results.entries()) {
-  console.log(`${tickets[i].id}: ${result.object.category}`)
+  console.log(`${tickets[i].id}: ${result.object.category}`);
 }
 ```
 
@@ -95,57 +104,58 @@ for (const [i, result] of results.entries()) {
 If you'd rather call the OpenAI SDK directly (no Vercel AI SDK), use `@use-crux/openai`:
 
 ```ts title="src/openai-direct.ts"
-import { createOpenAI } from '@use-crux/openai'
-import OpenAI from 'openai'
+import { createOpenAI } from "@use-crux/openai";
+import OpenAI from "openai";
 
-import { classify } from './prompts'
+import { classify } from "./prompts";
 
-const client = new OpenAI()
-const adapter = createOpenAI(client)
+const client = new OpenAI();
+const adapter = createOpenAI(client);
 
 const result = await adapter.generate(classify, {
-  model: 'gpt-4o-mini',
-  input: { text: 'How do I reset my password?' },
-})
+  model: "gpt-4o-mini",
+  input: { text: "How do I reset my password?" },
+});
 ```
 
 ## Using the Anthropic SDK directly
 
 ```ts title="src/anthropic-direct.ts"
-import { createAnthropic } from '@use-crux/anthropic'
-import Anthropic from '@anthropic-ai/sdk'
+import { createAnthropic } from "@use-crux/anthropic";
+import Anthropic from "@anthropic-ai/sdk";
 
-import { classify } from './prompts'
+import { classify } from "./prompts";
 
-const client = new Anthropic()
-const adapter = createAnthropic(client)
+const client = new Anthropic();
+const adapter = createAnthropic(client);
 
 const result = await adapter.generate(classify, {
-  model: 'claude-haiku-4-5-20251001',
-  input: { text: 'How do I reset my password?' },
-})
+  model: "claude-haiku-4-5-20251001",
+  input: { text: "How do I reset my password?" },
+});
 ```
 
 ## Using Google GenAI directly
 
 ```ts title="src/google-direct.ts"
-import { createGoogle } from '@use-crux/google'
-import { GoogleGenAI } from '@google/genai'
+import { createGoogle } from "@use-crux/google";
+import { GoogleGenAI } from "@google/genai";
 
-import { classify } from './prompts'
+import { classify } from "./prompts";
 
-const client = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
-const adapter = createGoogle(client)
+const client = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const adapter = createGoogle(client);
 
 const result = await adapter.generate(classify, {
-  model: 'gemini-2.5-flash',
-  input: { text: 'How do I reset my password?' },
-})
+  model: "gemini-2.5-flash",
+  input: { text: "How do I reset my password?" },
+});
 ```
 
 <Callout type="info">
-  The same `classify` prompt definition works with all four adapters. That's the SDK-agnostic guarantee: you can switch
-  providers (or use multiple) without touching prompt code.
+  The same `classify` prompt definition works with all four adapters. That's the
+  SDK-agnostic guarantee: you can switch providers (or use multiple) without
+  touching prompt code.
 </Callout>
 
 ## Next steps
@@ -156,6 +166,14 @@ const result = await adapter.generate(classify, {
     description="Use config for explicit policy, overrides, and runtime defaults."
     href="/docs/guides/prompts"
   />
-  <Card title="Quality" description="Test prompts, flows, agents, and functions from discovered eval files." href="/docs/guides/quality" />
-  <Card title="Memory" description="Add persistent memory to agents and chat loops." href="/docs/guides/memory" />
+  <Card
+    title="Eval"
+    description="Test prompts, flows, agents, and functions from discovered eval files."
+    href="/docs/guides/evals"
+  />
+  <Card
+    title="Memory"
+    description="Add persistent memory to agents and chat loops."
+    href="/docs/guides/memory"
+  />
 </Cards>

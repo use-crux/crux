@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/use-crux/crux/packages/local/internal/inspect"
 	"github.com/use-crux/crux/packages/local/internal/observability"
-	"github.com/use-crux/crux/packages/local/internal/quality"
 	"github.com/use-crux/crux/packages/local/internal/store"
 
 	_ "modernc.org/sqlite"
@@ -38,7 +38,7 @@ func TestServiceStatsRoutesPreferObservability(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	service := NewService(store.NewStore(), quality.NewService(store.NewStore(), t.TempDir())).WithObservability(obs)
+	service := NewService(store.NewStore(), inspect.NewService(store.NewStore(), t.TempDir())).WithObservability(obs)
 
 	stats := service.Stats(ctx)
 	if stats.TotalExecutions != 1 || stats.SuccessCount != 1 || stats.TotalTokens != 60 || stats.TotalCost != 0.00042 {
@@ -129,7 +129,7 @@ func TestObservedInjectionReadModelUsesContextContributionArtifacts(t *testing.T
 		t.Fatal(err)
 	}
 
-	service := NewService(store.NewStore(), quality.NewService(store.NewStore(), t.TempDir())).WithObservability(obs)
+	service := NewService(store.NewStore(), inspect.NewService(store.NewStore(), t.TempDir())).WithObservability(obs)
 	value, err := service.ObservedInjection(ctx, 250)
 	if err != nil {
 		t.Fatalf("observed injection: %v", err)

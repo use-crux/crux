@@ -3,7 +3,7 @@ title: Cloud & Tunnel Setup
 description: Connect cloud backends like Convex, Vercel, or Lambda to your local devtools server.
 ---
 
-When your backend runs locally, Quality CLI auto-attach works against loopback `crux dev` origins
+When your backend runs locally, Eval CLI auto-attach works against loopback `crux dev` origins
 without project config. When application runtime code runs in the cloud (Convex, Vercel, AWS
 Lambda), the devtools server needs a **public URL** so that runtime can reach it.
 
@@ -46,7 +46,7 @@ config({
     serverUrl: process.env.DEVTOOLS_URL,
     token: process.env.CRUX_DEVTOOLS_TOKEN,
   },
-})
+});
 ```
 
 For other platforms, set `DEVTOOLS_URL` and `CRUX_DEVTOOLS_TOKEN` however your platform handles
@@ -54,8 +54,10 @@ environment variables (e.g. `.env` files, Vercel dashboard, AWS Parameter Store)
 transport also reads `CRUX_DEVTOOLS_TOKEN` automatically when `token` is omitted.
 
 <Callout type="warn">
-  Free ngrok plans generate a new URL on every restart. If traces stop appearing, check that `DEVTOOLS_URL` matches the
-  current tunnel origin. The `CRUX_DEVTOOLS_TOKEN` value persists unless `.crux/devtools/ingest-token` is deleted.
+  Free ngrok plans generate a new URL on every restart. If traces stop
+  appearing, check that `DEVTOOLS_URL` matches the current tunnel origin. The
+  `CRUX_DEVTOOLS_TOKEN` value persists unless `.crux/devtools/ingest-token` is
+  deleted.
 </Callout>
 
 ## Tunnel providers
@@ -88,13 +90,13 @@ When traces arrive from a cloud backend, they can be grouped into logical sessio
 `withSession` groups all `generate()` calls inside it under a single session ID, visible as a collapsible group in the Timeline.
 
 ```ts
-import { withSession, createSessionId } from '@use-crux/core'
+import { withSession, createSessionId } from "@use-crux/core";
 
-const sessionId = createSessionId()
+const sessionId = createSessionId();
 await withSession(sessionId, async () => {
-  await generate(titlePrompt, { model, input })
-  await generate(replyPrompt, { model, input })
-})
+  await generate(titlePrompt, { model, input });
+  await generate(replyPrompt, { model, input });
+});
 ```
 
 ### Flow scope
@@ -102,14 +104,16 @@ await withSession(sessionId, async () => {
 `flow` adds structured pipeline grouping within a session. Named steps via `flow.step()` tag every nested `generate()` call with a runtime `stepId` and the durable beta `stepLabel`.
 
 ```ts
-import { withSession, flow, createSessionId } from '@use-crux/core'
+import { withSession, flow, createSessionId } from "@use-crux/core";
 
-const researchFlow = flow('research', async (flow) => {
-  const plan = await flow.step('plan', () => generate(planner, { model, input }))
-  return flow.step('search', () => generate(searcher, { model, input: plan }))
-})
+const researchFlow = flow("research", async (flow) => {
+  const plan = await flow.step("plan", () =>
+    generate(planner, { model, input }),
+  );
+  return flow.step("search", () => generate(searcher, { model, input: plan }));
+});
 
-await withSession(createSessionId(), () => researchFlow.run())
+await withSession(createSessionId(), () => researchFlow.run());
 ```
 
 In the Timeline, the session appears as a collapsible group with each flow shown as a sub-group, and steps within each flow labeled and nested.
@@ -136,9 +140,9 @@ Session "chat-abc"
 
 Nested flows appear as children of their parent flow. The `parentFlowId` relationship is tracked automatically when you run a flow inside another flow.
 
-### Quality↔runtime comparison
+### Eval↔runtime comparison
 
-Quality evaluation cells and runtime flows share the same step labels in the trace model, so the Timeline can compare a production run against evaluation runs of the same flow.
+Eval Cases and production runs share the same canonical trace model, so the Timeline can compare task behavior without inventing a second observability format.
 
 ## Next steps
 

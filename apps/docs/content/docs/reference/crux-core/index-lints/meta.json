@@ -2,7 +2,6 @@
   "title": "Index Lints",
   "pages": [
     "definition-missing-eval-coverage",
-    "quality-missing-baseline",
     "agent-unobservable-handoff",
     "prompt-missing-input-schema",
     "prompt-missing-output-schema",

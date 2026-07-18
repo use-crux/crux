@@ -13,8 +13,8 @@ import {
   bindHostRuntime,
   durableTask,
   CruxRuntimeError,
-} from '@use-crux/core/runtime'
-import { createTestRuntime } from '@use-crux/core/runtime/testing'
+} from "@use-crux/core/runtime";
+import { createTestRuntime } from "@use-crux/core/runtime/testing";
 ```
 
 The Runtime Engine is the durable execution layer for event waits, timers, background tasks, automatic flow resume, HTTP wake delivery, and runtime inspection. Object-bound flow APIs keep working without it; name-bound, event-bound, time-bound, and background APIs require a configured runtime.
@@ -23,27 +23,27 @@ The Runtime Engine is the durable execution layer for event waits, timers, backg
 
 ## Composers
 
-| Export | Use |
-| --- | --- |
-| `node(options?)` | In-process local/test runtime. Defaults to an in-memory store and microtask wake. Pass `store: postgres()` for long-lived Node processes that need durable state. Accepts `retention`. |
-| `serverless({ store, wake, endpoint, publicUrl, namespace, retention })` | Durable store plus HTTP wake adapter for Next/Vercel-style deployments. `endpoint` defaults to `/api/crux`; production requires a stable public URL. |
-| `genericQueue({ enqueue, secret, devSecret, maxDelayMs })` | Dependency-free wake adapter for user-owned queues. With `secret`, messages include `x-crux-signature: sha256=<hmac>` headers for HTTP forwarding. |
-| `createRuntime({ runtime, targets, leaseTtlMs, leaseExtension })` | Resolve an in-process runtime definition for advanced host code and tests. Host-bound declarations such as `convex()` throw `RUNTIME_HOST_ONLY` here. |
-| `bindHostRuntime(definition, binding)` | Host adapter path for platforms whose store/wake require request context, such as Convex. It delegates through the same kernel as `createRuntime()` and can pass `leaseExtension: false` for timerless hosts. |
-| `withCrux(nextConfig, options?)` | `@use-crux/core/runtime/next` wrapper that runs `crux runtime generate` while Next evaluates config, covering Webpack and Turbopack builds. |
+| Export                                                                   | Use                                                                                                                                                                                                           |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `node(options?)`                                                         | In-process local/test runtime. Defaults to an in-memory store and microtask wake. Pass `store: postgres()` for long-lived Node processes that need durable state. Accepts `retention`.                        |
+| `serverless({ store, wake, endpoint, publicUrl, namespace, retention })` | Durable store plus HTTP wake adapter for Next/Vercel-style deployments. `endpoint` defaults to `/api/crux`; production requires a stable public URL.                                                          |
+| `genericQueue({ enqueue, secret, devSecret, maxDelayMs })`               | Dependency-free wake adapter for user-owned queues. With `secret`, messages include `x-crux-signature: sha256=<hmac>` headers for HTTP forwarding.                                                            |
+| `createRuntime({ runtime, targets, leaseTtlMs, leaseExtension })`        | Resolve an in-process runtime definition for advanced host code and tests. Host-bound declarations such as `convex()` throw `RUNTIME_HOST_ONLY` here.                                                         |
+| `bindHostRuntime(definition, binding)`                                   | Host adapter path for platforms whose store/wake require request context, such as Convex. It delegates through the same kernel as `createRuntime()` and can pass `leaseExtension: false` for timerless hosts. |
+| `withCrux(nextConfig, options?)`                                         | `@use-crux/core/runtime/next` wrapper that runs `crux runtime generate` while Next evaluates config, covering Webpack and Turbopack builds.                                                                   |
 
 ```ts
-import { config } from '@use-crux/core'
-import { serverless } from '@use-crux/core/runtime'
-import { postgres } from '@use-crux/postgres/runtime'
-import { qstash } from '@use-crux/upstash/runtime'
+import { config } from "@use-crux/core";
+import { serverless } from "@use-crux/core/runtime";
+import { postgres } from "@use-crux/postgres/runtime";
+import { qstash } from "@use-crux/upstash/runtime";
 
 export default config({
   runtime: serverless({
     store: postgres(),
     wake: qstash(),
   }),
-})
+});
 ```
 
 ## Runtime targets
@@ -51,14 +51,14 @@ export default config({
 `durableTask(name, { run })` defines executable durable background work. Import it from `@use-crux/core/runtime`; it is intentionally separate from the plan-ledger `task()` exported by `@use-crux/core/tasks`.
 
 ```ts
-import { durableTask, type RuntimeTaskContext } from '@use-crux/core/runtime'
+import { durableTask, type RuntimeTaskContext } from "@use-crux/core/runtime";
 
-export const embedDocument = durableTask('embed-document', {
+export const embedDocument = durableTask("embed-document", {
   run: async (input: { documentId: string }, _context: RuntimeTaskContext) => {
-    const { documentId } = input
-    await embed(documentId)
+    const { documentId } = input;
+    await embed(documentId);
   },
-})
+});
 ```
 
 Runtime targets must be top-level named exports with literal names so generated entry files can import them. `flow.defer()`, `flow.after()`, and `createRuntimeHandler({ targets })` accept durable task targets and exported flow handles.
@@ -68,13 +68,13 @@ Runtime targets must be top-level named exports with literal names so generated 
 `createRuntimeHandler({ targets, runtime?, verify?, manifestHash? })` returns fetch-compatible `{ GET, POST }` handlers. Generated Next artifacts and hand-written entry files use the same public API.
 
 ```ts
-import { createRuntimeHandler } from '@use-crux/core/runtime'
-import { reviewFlow } from '@/flows/review'
-import { embedDocument } from '@/tasks/embed-document'
+import { createRuntimeHandler } from "@use-crux/core/runtime";
+import { reviewFlow } from "@/flows/review";
+import { embedDocument } from "@/tasks/embed-document";
 
 export const { GET, POST } = createRuntimeHandler({
   targets: [reviewFlow, embedDocument],
-})
+});
 ```
 
 `GET` returns health metadata without secrets. `POST` verifies the wake request before decoding the envelope or touching durable state. Failed verification returns `WAKE_UNVERIFIED`; malformed envelopes return terminal client responses so queues do not poison-loop.
@@ -86,13 +86,13 @@ Production handlers fail closed when neither `verify` nor the configured wake ad
 Next projects can use the lightweight config wrapper:
 
 ```ts
-import { withCrux } from '@use-crux/core/runtime/next'
+import { withCrux } from "@use-crux/core/runtime/next";
 
 export default withCrux({
   experimental: {
     typedRoutes: true,
   },
-})
+});
 ```
 
 The wrapper delegates source discovery and file writing to `crux runtime generate`. It fails builds with `ARTIFACTS_STALE` when generation fails.
@@ -101,13 +101,13 @@ The wrapper delegates source discovery and file writing to `crux runtime generat
 
 With `config({ runtime })`, flows can use:
 
-| API | Durable behavior |
-| --- | --- |
-| `flow.waitFor(event, { match, timeout })` | Registers a waiter and resumes when a matching durable event arrives or the timeout fires. |
-| `flow.defer(task, input)` | Buffers a child task until the next suspension/completion barrier and returns its work id. |
-| `flow.after(task, delay, input)` | Schedules a child task at the next barrier. |
-| `flow.untilIdle({ scope: 'current-flow' })` | Suspends until the current flow's child work scope reaches zero. |
-| `crux.flows.signal/resume/cancel(name, flowId, ...)` | Name-bound operations for code that does not have the original flow handle. |
+| API                                                  | Durable behavior                                                                           |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `flow.waitFor(event, { match, timeout })`            | Registers a waiter and resumes when a matching durable event arrives or the timeout fires. |
+| `flow.defer(task, input)`                            | Buffers a child task until the next suspension/completion barrier and returns its work id. |
+| `flow.after(task, delay, input)`                     | Schedules a child task at the next barrier.                                                |
+| `flow.untilIdle({ scope: 'current-flow' })`          | Suspends until the current flow's child work scope reaches zero.                           |
+| `crux.flows.signal/resume/cancel(name, flowId, ...)` | Name-bound operations for code that does not have the original flow handle.                |
 
 Durable payloads must be JSON-compatible. Complex data should live in application storage with ids or URLs passed through runtime payloads.
 
@@ -131,14 +131,14 @@ Runtime composers accept:
 
 ```ts
 interface RuntimeRetentionConfig {
-  events?: string | number | false
-  terminalWork?: string | number | false
-  confirmedOutbox?: string | number | false
-  idempotencyKeys?: string | number | false
-  settledTimers?: string | number | false
-  settledWaiters?: string | number | false
-  terminalSnapshots?: string | number | false
-  sweepLimit?: number
+  events?: string | number | false;
+  terminalWork?: string | number | false;
+  confirmedOutbox?: string | number | false;
+  idempotencyKeys?: string | number | false;
+  settledTimers?: string | number | false;
+  settledWaiters?: string | number | false;
+  terminalSnapshots?: string | number | false;
+  sweepLimit?: number;
 }
 ```
 
@@ -157,14 +157,14 @@ Every finalizing wake commit checks the executor's lease token inside the same t
 `createTestRuntime({ targets, epoch? })` lives on `@use-crux/core/runtime/testing`. It installs a temporary in-memory Runtime Engine hook layer, exposes a controllable clock, and settles maintenance without real timers.
 
 ```ts
-import { createTestRuntime } from '@use-crux/core/runtime/testing'
+import { createTestRuntime } from "@use-crux/core/runtime/testing";
 
-const rt = createTestRuntime({ targets: [reviewFlow, sendReminder] })
+const rt = createTestRuntime({ targets: [reviewFlow, sendReminder] });
 
-const suspended = await reviewFlow.run({ userId: 'user_1' })
-await rt.clock.advance('2d')
+const suspended = await reviewFlow.run({ userId: "user_1" });
+await rt.clock.advance("2d");
 
-rt.dispose()
+rt.dispose();
 ```
 
 `targets` accepts the same exported flow handles and `durableTask()` targets as `createRuntimeHandler({ targets })`. `rt.tick()` runs one maintenance pass; `rt.settle({ maxTicks })` runs bounded maintenance until no outbox, timer, lease, waiter, or pending-work activity remains. Outbox delivery runs with bounded concurrency and defaults to eight in-flight deliveries per dispatch pass; delivery order across separate outbox rows is not a Runtime Engine guarantee.
@@ -177,9 +177,9 @@ Use the code discriminant for application-specific handling:
 
 ```ts
 try {
-  await flow.waitFor(event)
+  await flow.waitFor(event);
 } catch (error) {
-  if (error instanceof CruxRuntimeError && error.code === 'RUNTIME_REQUIRED') {
+  if (error instanceof CruxRuntimeError && error.code === "RUNTIME_REQUIRED") {
     // Show runtime setup guidance.
   }
 }
@@ -220,7 +220,7 @@ import {
   createTestRuntime,
   runStoreAdapterTests,
   runRuntimeEngineAdapterTests,
-} from '@use-crux/core/runtime/testing'
+} from "@use-crux/core/runtime/testing";
 ```
 
 Use `createTestRuntime()` for app-level flow and task tests. Use the conformance helpers for store adapters and full runtime adapters. Conformance tests cover namespace isolation, idempotency, leases, stale-lease fencing, waiter races, timers, outbox recovery, retention pruning, retry source guards, and idle-counter invariants.

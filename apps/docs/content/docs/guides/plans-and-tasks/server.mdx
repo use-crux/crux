@@ -6,21 +6,21 @@ description: Use plan and task handles from server functions, route handlers, an
 You created a plan in one request and need it in another process: a route handler, a queue worker, a cron job. Because plans and task ledgers persist through the configured `RecordStore`, the pattern is simple: pass the ID across the process boundary and rebind a handle with `plan.ref()` or `tasks.ref()` where the work runs.
 
 ```ts
-import { plan } from '@use-crux/core/plan'
-import { tasks } from '@use-crux/core/tasks'
+import { plan } from "@use-crux/core/plan";
+import { tasks } from "@use-crux/core/tasks";
 
 export async function createWork(request: string) {
   const roadmap = await plan({
-    title: 'User request',
+    title: "User request",
     content: request,
-  })
+  });
 
   const work = await tasks({
     plan: roadmap,
-    title: 'Request tasks',
-  })
+    title: "Request tasks",
+  });
 
-  return { planId: roadmap.id, taskListId: work.id }
+  return { planId: roadmap.id, taskListId: work.id };
 }
 ```
 
@@ -28,22 +28,22 @@ export async function createWork(request: string) {
 
 ```ts
 export async function POST(req: Request) {
-  const { planId, taskListId, taskId } = await req.json()
+  const { planId, taskListId, taskId } = await req.json();
 
-  const roadmap = plan.ref(planId)
-  const work = tasks.ref(taskListId)
-  const worker = work.worker(taskId)
+  const roadmap = plan.ref(planId);
+  const work = tasks.ref(taskListId);
+  const worker = work.worker(taskId);
 
   await generate(
     prompt({
       use: [roadmap.asContext(), worker.asContext()],
       tools: worker.asTools(),
-      system: 'Complete the assigned task.',
+      system: "Complete the assigned task.",
     }),
     { model, input: {} },
-  )
+  );
 
-  return Response.json({ ok: true })
+  return Response.json({ ok: true });
 }
 ```
 
@@ -52,18 +52,18 @@ export async function POST(req: Request) {
 Creation tools work on the server as normal prompt tools. Read their result with `created()` after the model uses the tool.
 
 ```ts
-const makePlan = plan.tool()
+const makePlan = plan.tool();
 
 await generate(
   prompt({
-    system: 'Create a short plan.',
+    system: "Create a short plan.",
     tools: { makePlan },
   }),
   { model, input: { request } },
-)
+);
 
-const roadmap = makePlan.created()
-const work = await tasks({ plan: roadmap, title: 'Execution' })
+const roadmap = makePlan.created();
+const work = await tasks({ plan: roadmap, title: "Execution" });
 ```
 
 ## Observability

@@ -7,8 +7,8 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/projectindex/workers"
 )
 
-//go:embed embed/quality-runner.mjs
-var embeddedQualityRunner []byte
+//go:embed embed/eval-coordinator.mjs
+var embeddedEvalCoordinator []byte
 
 //go:embed embed/source-resolver.mjs
 var embeddedSourceResolver []byte
@@ -25,9 +25,9 @@ var embeddedProjectRuntimeIndexer []byte
 //go:embed ui-embed/*
 var embeddedUI embed.FS
 
-// ExtractEmbeddedQualityRunner extracts the embedded quality runner script.
-func ExtractEmbeddedQualityRunner() (string, error) {
-	return ExtractQualityRunner(embeddedQualityRunner)
+// ExtractEmbeddedEvalCoordinator extracts the new Eval coordinator script.
+func ExtractEmbeddedEvalCoordinator() (string, error) {
+	return ExtractEvalCoordinator(embeddedEvalCoordinator)
 }
 
 // ExtractEmbeddedSourceResolver extracts the embedded source resolver script.

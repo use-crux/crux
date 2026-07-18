@@ -11,17 +11,13 @@ import (
 type Domain string
 
 const (
-	DomainRuns        Domain = "runs"
-	DomainInsights    Domain = "insights"
-	DomainExperiments Domain = "experiments"
-	DomainComparisons Domain = "comparisons"
-	DomainSuites      Domain = "suites"
-	DomainBaselines   Domain = "baselines"
-	DomainFeedback    Domain = "feedback"
-	DomainCassettes   Domain = "cassettes"
-	DomainActivity    Domain = "activity"
-	DomainIndex       Domain = "index"
-	DomainContext     Domain = "context"
+	DomainRuns      Domain = "runs"
+	DomainInsights  Domain = "insights"
+	DomainBaselines Domain = "baselines"
+	DomainFeedback  Domain = "feedback"
+	DomainActivity  Domain = "activity"
+	DomainIndex     Domain = "index"
+	DomainContext   Domain = "context"
 )
 
 // Domains is a small set used by screens to declare interest in changed data.
@@ -95,22 +91,18 @@ func (d Domains) List() []Domain {
 
 // Revisions carries monotonic counters for each live data domain.
 type Revisions struct {
-	Runs        uint64
-	Insights    uint64
-	Experiments uint64
-	Comparisons uint64
-	Suites      uint64
-	Baselines   uint64
-	Feedback    uint64
-	Cassettes   uint64
-	Activity    uint64
-	Index       uint64
-	Context     uint64
+	Runs      uint64
+	Insights  uint64
+	Baselines uint64
+	Feedback  uint64
+	Activity  uint64
+	Index     uint64
+	Context   uint64
 }
 
-// BumpQuality records the domains affected by ev and returns that domain set.
-func (r *Revisions) BumpQuality(ev api.QualityEvent) Domains {
-	return r.bump(domainsForQualityEvent(ev)...)
+// BumpInspect records the domains affected by ev and returns that domain set.
+func (r *Revisions) BumpInspect(ev api.InspectEvent) Domains {
+	return r.bump(domainsForInspectEvent(ev)...)
 }
 
 // BumpStore records a generic store change without forcing a context refetch.
@@ -127,18 +119,10 @@ func (r *Revisions) bump(domains ...Domain) Domains {
 			r.Runs++
 		case DomainInsights:
 			r.Insights++
-		case DomainExperiments:
-			r.Experiments++
-		case DomainComparisons:
-			r.Comparisons++
-		case DomainSuites:
-			r.Suites++
 		case DomainBaselines:
 			r.Baselines++
 		case DomainFeedback:
 			r.Feedback++
-		case DomainCassettes:
-			r.Cassettes++
 		case DomainActivity:
 			r.Activity++
 		case DomainIndex:
@@ -150,7 +134,7 @@ func (r *Revisions) bump(domains ...Domain) Domains {
 	return changed
 }
 
-func domainsForQualityEvent(ev api.QualityEvent) []Domain {
+func domainsForInspectEvent(ev api.InspectEvent) []Domain {
 	kind := strings.ToLower(ev.Kind)
 	action := strings.ToLower(ev.Action)
 	switch {
@@ -158,18 +142,12 @@ func domainsForQualityEvent(ev api.QualityEvent) []Domain {
 		return []Domain{DomainRuns, DomainActivity}
 	case strings.Contains(kind, "insight"):
 		return []Domain{DomainInsights, DomainActivity}
-	case strings.Contains(kind, "experiment"), strings.Contains(kind, "evaluation"), strings.Contains(kind, "eval"):
-		return []Domain{DomainExperiments, DomainActivity}
-	case strings.Contains(kind, "comparison"), strings.Contains(kind, "compare"):
-		return []Domain{DomainComparisons, DomainActivity}
-	case strings.Contains(kind, "suite"), strings.Contains(kind, "dataset"), strings.Contains(kind, "case"):
-		return []Domain{DomainSuites, DomainActivity}
+	case strings.Contains(kind, "eval"):
+		return []Domain{DomainActivity}
 	case strings.Contains(kind, "baseline"):
 		return []Domain{DomainBaselines, DomainContext, DomainActivity}
 	case strings.Contains(kind, "feedback"):
 		return []Domain{DomainFeedback, DomainActivity}
-	case strings.Contains(kind, "cassette"):
-		return []Domain{DomainCassettes, DomainActivity}
 	case strings.Contains(kind, "index"):
 		return []Domain{DomainIndex}
 	case strings.Contains(kind, "context"), strings.Contains(kind, "target"), strings.Contains(action, "promoted"):

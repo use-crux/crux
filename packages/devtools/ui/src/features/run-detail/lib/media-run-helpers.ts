@@ -49,7 +49,9 @@ export function stringValue(value: unknown): string | undefined {
 }
 
 export function numberValue(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
 }
 
 export function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -58,10 +60,7 @@ export function asRecord(value: unknown): Record<string, unknown> | undefined {
     : undefined;
 }
 
-function walkDescriptors(
-  value: unknown,
-  out: SafeRunMediaDescriptor[],
-): void {
+function walkDescriptors(value: unknown, out: SafeRunMediaDescriptor[]): void {
   if (Array.isArray(value)) {
     for (const item of value) walkDescriptors(item, out);
     return;
@@ -101,9 +100,10 @@ function walkDescriptors(
   for (const child of Object.values(record)) walkDescriptors(child, out);
 }
 
-function isDescriptor(
-  value: Record<string, unknown>,
-): value is Record<string, unknown> & {
+function isDescriptor(value: Record<string, unknown>): value is Record<
+  string,
+  unknown
+> & {
   kind: SafeRunMediaDescriptor["kind"];
   sourceCategory: unknown;
 } {

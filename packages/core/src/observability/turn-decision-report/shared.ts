@@ -1,7 +1,7 @@
 /**
  * Shared vocabulary for the Turn Decision Report contract.
  *
- * These types are intentionally small and string-based so projections, quality
+ * These types are intentionally small and string-based so projections, Eval
  * matchers, and Devtools UI code can agree on stable machine values while
  * keeping human copy free to improve.
  */
@@ -35,7 +35,7 @@ export type TurnSourceStatus =
   | "unresolved"
   | "unknown";
 
-/** Stable reason codes used by quality matchers and projections. */
+/** Stable reason codes used by Eval assertions and projections. */
 export type TurnDecisionReasonCode =
   | "context.active"
   | "context.checked"

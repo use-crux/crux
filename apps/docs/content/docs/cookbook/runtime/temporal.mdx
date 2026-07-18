@@ -10,24 +10,27 @@ Temporal can own much of durable execution, but it is recipe guidance in v1, not
 Keep user code in Crux terms. A future adapter can discover these exported targets and register Temporal workers from the manifest.
 
 ```ts
-import { flow } from '@use-crux/core/flow'
-import { durableTask, type RuntimeTaskContext } from '@use-crux/core/runtime'
+import { flow } from "@use-crux/core/flow";
+import { durableTask, type RuntimeTaskContext } from "@use-crux/core/runtime";
 
-export const chargeCustomer = durableTask('charge-customer', {
+export const chargeCustomer = durableTask("charge-customer", {
   run: async (input: { invoiceId: string }, _context: RuntimeTaskContext) => {
-    const { invoiceId } = input
-    await billing.charge(invoiceId)
+    const { invoiceId } = input;
+    await billing.charge(invoiceId);
   },
-})
+});
 
-export const invoiceFlow = flow('invoice', async (flow, input: { invoiceId: string }) => {
-  await flow.after(chargeCustomer, '1d', { invoiceId: input.invoiceId })
+export const invoiceFlow = flow(
+  "invoice",
+  async (flow, input: { invoiceId: string }) => {
+    await flow.after(chargeCustomer, "1d", { invoiceId: input.invoiceId });
 
-  return flow.waitFor(
-    { name: 'invoice.paid' },
-    { match: { invoiceId: input.invoiceId }, timeout: '7d' },
-  )
-})
+    return flow.waitFor(
+      { name: "invoice.paid" },
+      { match: { invoiceId: input.invoiceId }, timeout: "7d" },
+    );
+  },
+);
 ```
 
 ## Temporal workflow sketch
@@ -35,30 +38,41 @@ export const invoiceFlow = flow('invoice', async (flow, input: { invoiceId: stri
 One mapping is one Temporal workflow per Crux flow occurrence, with Crux event waits represented as Temporal signals.
 
 ```ts
-import { condition, defineSignal, proxyActivities, setHandler, sleep } from '@temporalio/workflow'
+import {
+  condition,
+  defineSignal,
+  proxyActivities,
+  setHandler,
+  sleep,
+} from "@temporalio/workflow";
 
-const invoicePaid = defineSignal<[payload: { invoiceId: string; paidAt: string }]>('invoice.paid')
+const invoicePaid =
+  defineSignal<[payload: { invoiceId: string; paidAt: string }]>(
+    "invoice.paid",
+  );
 
 const activities = proxyActivities<{
-  runCruxTask(targetName: string, input: unknown): Promise<void>
+  runCruxTask(targetName: string, input: unknown): Promise<void>;
 }>({
-  startToCloseTimeout: '5 minutes',
-})
+  startToCloseTimeout: "5 minutes",
+});
 
 export async function invoiceWorkflow(input: { invoiceId: string }) {
-  let paid: { invoiceId: string; paidAt: string } | undefined
+  let paid: { invoiceId: string; paidAt: string } | undefined;
 
   setHandler(invoicePaid, (payload) => {
-    if (payload.invoiceId === input.invoiceId) paid = payload
-  })
+    if (payload.invoiceId === input.invoiceId) paid = payload;
+  });
 
-  await sleep('1 day')
-  await activities.runCruxTask('charge-customer', { invoiceId: input.invoiceId })
+  await sleep("1 day");
+  await activities.runCruxTask("charge-customer", {
+    invoiceId: input.invoiceId,
+  });
 
-  await condition(() => paid !== undefined, '7 days')
-  if (!paid) throw new Error('invoice.paid timed out')
+  await condition(() => paid !== undefined, "7 days");
+  if (!paid) throw new Error("invoice.paid timed out");
 
-  return paid
+  return paid;
 }
 ```
 
@@ -67,40 +81,40 @@ export async function invoiceWorkflow(input: { invoiceId: string }) {
 The activity resolves a Crux durable task target by durable target name. A real adapter should use generated artifacts rather than a hand-written map.
 
 ```ts
-import { Worker } from '@temporalio/worker'
-import { chargeCustomer } from './targets'
+import { Worker } from "@temporalio/worker";
+import { chargeCustomer } from "./targets";
 
 const targets = {
-  'charge-customer': chargeCustomer,
-}
+  "charge-customer": chargeCustomer,
+};
 
 await Worker.create({
-  workflowsPath: require.resolve('./workflows'),
-  taskQueue: 'crux-runtime',
+  workflowsPath: require.resolve("./workflows"),
+  taskQueue: "crux-runtime",
   activities: {
     async runCruxTask(targetName: keyof typeof targets, input: unknown) {
-      const target = targets[targetName]
+      const target = targets[targetName];
       if (!target) {
-        throw new Error(`TARGET_NOT_FOUND: ${targetName}`)
+        throw new Error(`TARGET_NOT_FOUND: ${targetName}`);
       }
 
       await target.execute({
         work: makeTemporalWorkItem(targetName, input),
         lease: makeTemporalLease(),
-      })
+      });
     },
   },
-})
+});
 ```
 
 ## Mapping notes
 
-| Runtime concern | Temporal substrate |
-| --- | --- |
-| Flow runtime | Temporal workflow |
-| Runtime task target | Temporal activity |
-| Signals | Temporal signals or updates |
-| Timers | Temporal timers |
+| Runtime concern      | Temporal substrate                  |
+| -------------------- | ----------------------------------- |
+| Flow runtime         | Temporal workflow                   |
+| Runtime task target  | Temporal activity                   |
+| Signals              | Temporal signals or updates         |
+| Timers               | Temporal timers                     |
 | Read-only inspection | Temporal queries plus Crux metadata |
 
 The adapter must define which Crux primitives are represented as workflows versus activities, and it must keep Crux diagnostics visible for replay drift, missing targets, and non-JSON payloads.

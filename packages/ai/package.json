@@ -28,6 +28,10 @@
       "types": "./src/agent/index.ts",
       "import": "./src/agent/index.ts"
     },
+    "./feedback": {
+      "types": "./src/feedback/index.ts",
+      "import": "./src/feedback/index.ts"
+    },
     "./stream": {
       "types": "./src/stream/index.ts",
       "import": "./src/stream/index.ts"

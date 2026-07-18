@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/observability"
+	"github.com/use-crux/crux/packages/local/internal/privacy"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
@@ -35,7 +37,7 @@ func TestNewDevServerLoadsPersistentIngestToken(t *testing.T) {
 
 	srv := NewDevServer(DevServerOptions{
 		Port:                findFreePort(),
-		QualityDir:          t.TempDir(),
+		InspectDir:          t.TempDir(),
 		ObservabilityDBPath: filepath.Join(t.TempDir(), "observability.sqlite"),
 		IngestTokenPath:     tokenPath,
 	})
@@ -54,7 +56,7 @@ func devServerTestOptions(t *testing.T, port int) DevServerOptions {
 	dir := t.TempDir()
 	return DevServerOptions{
 		Port:                port,
-		QualityDir:          filepath.Join(dir, "quality"),
+		InspectDir:          filepath.Join(dir, "evals"),
 		ObservabilityDBPath: filepath.Join(dir, "observability.sqlite"),
 		IngestTokenPath:     filepath.Join(dir, ".crux", "devtools", "ingest-token"),
 		RuntimeArtifacts: func(context.Context, string, []store.ProjectDefinition) error {
@@ -63,7 +65,7 @@ func devServerTestOptions(t *testing.T, port int) DevServerOptions {
 	}
 }
 
-func TestNewDevServerGeneratesRuntimeArtifactsAfterStartupReindex(t *testing.T) {
+func TestNewDevServerGeneratesRuntimeArtifactsBeforeMutationRoutesAreExposed(t *testing.T) {
 	root := t.TempDir()
 	t.Chdir(root)
 	calls := make(chan runtimeArtifactCall, 1)
@@ -97,8 +99,32 @@ func TestNewDevServerGeneratesRuntimeArtifactsAfterStartupReindex(t *testing.T) 
 		if got.definitions[0].ID != "flow:startup" {
 			t.Fatalf("runtime artifact definition id = %q, want flow:startup", got.definitions[0].ID)
 		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("runtime artifact startup generation was not called")
+	default:
+		t.Fatal("runtime artifact generation did not finish before NewDevServer returned")
+	}
+}
+
+func TestRuntimeArtifactRefreshInvalidatesStalePrivacyPolicyBeforeGeneration(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, ".crux", "generated", "runtime", "privacy.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(`{"schemaVersion":1,"privacyFingerprint":"d2b7a3a9e0d3857b24b871ee585d118490dabd9edf81bcf10de9f5328e85cc29","redactPaths":[]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	expected := errors.New("generation failed")
+	generate := privacyGuardedRuntimeArtifactGenerator(func(context.Context, string, []store.ProjectDefinition) error {
+		if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("privacy snapshot remained visible during generation: %v", err)
+		}
+		return expected
+	})
+	if err := generate(context.Background(), root, nil); !errors.Is(err, expected) {
+		t.Fatalf("generation error = %v", err)
+	}
+	if _, err := privacy.Generated(root).Current(); !errors.Is(err, privacy.ErrPolicyUnavailable) {
+		t.Fatalf("policy error = %v, want unavailable", err)
 	}
 }
 

@@ -37,7 +37,7 @@ func formatTokensShort(n int) string {
 // idiomatic for the primitive it represents. Falls back to a pretty-printed
 // JSON block when the primitive is `other` or the payload doesn't match the
 // expected shape.
-func renderPrimitivePayload(span api.QualityRunSpan, width int) string {
+func renderPrimitivePayload(span api.InspectRunSpan, width int) string {
 	if len(span.Data) == 0 {
 		return ""
 	}
@@ -66,7 +66,7 @@ func renderPrimitivePayload(span api.QualityRunSpan, width int) string {
 
 	// --- flow ---
 	case api.SpanPrimitiveFlow, api.SpanPrimitiveFlowRun, api.SpanPrimitiveFlowStep,
-		api.SpanPrimitiveEvalFlow, api.SpanPrimitiveEvalRun, api.SpanPrimitiveEvalCase:
+		api.SpanPrimitiveEvalRun, api.SpanPrimitiveEvalCase:
 		return renderFlowPayload(payload, width)
 
 	// --- composition ---
@@ -115,7 +115,7 @@ func renderPrimitivePayload(span api.QualityRunSpan, width int) string {
 	}
 }
 
-func renderSpanError(span api.QualityRunSpan, width int) string {
+func renderSpanError(span api.InspectRunSpan, width int) string {
 	var b strings.Builder
 	if hasJSONValue(span.Error) {
 		b.WriteString(renderObservedError(span.Error, width))

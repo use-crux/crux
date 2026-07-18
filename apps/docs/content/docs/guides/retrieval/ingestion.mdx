@@ -6,17 +6,17 @@ description: Use @use-crux/ingest to produce documents for indexing.
 You have a folder of markdown docs, or a set of PDFs, HTML pages, and spreadsheets, and you want them searchable. `@use-crux/ingest` loads that source material and turns it into documents a corpus sync can consume. Indexing a folder takes a few lines:
 
 ```ts
-import { filesSource } from '@use-crux/ingest/files'
+import { filesSource } from "@use-crux/ingest/files";
 
 const loader = filesSource(
-  { directory: './docs', recursive: true },
-  { namespace: 'product-docs' },
-)
+  { directory: "./docs", recursive: true },
+  { namespace: "product-docs" },
+);
 
 await docsCorpus.sync(loader.load(), {
-  sourceSet: 'complete',
-  stale: 'delete',
-})
+  sourceSet: "complete",
+  stale: "delete",
+});
 ```
 
 (`docsCorpus` is a `corpus()` wrapping an `indexer()`; the [wiring section](#wiring-into-indexing) below shows the full setup.)
@@ -27,14 +27,14 @@ Use `@use-crux/ingest` when you want a first-party path for text, local files, f
 
 Crux ships a small set of loaders that all return the same `SourceLoader` interface.
 
-| Loader | What it loads | Best for |
-| --- | --- | --- |
-| `textSource()` | In-memory documents or text. | CMS records, API results, tests, fixtures, and custom connector output. |
-| `fileSource()` | One local file. | A known file with an optional custom `sourceId`. |
-| `filesSource()` | Local path arrays, directories, or globs. | Docs folders and local corpus sync jobs. |
-| `urlSource()` | One HTTP(S) URL. | A known page, PDF, Markdown file, JSON endpoint, or CSV URL. |
-| `urlsSource()` | An explicit URL list. | Small web source sets where you already know the URLs. |
-| Custom loader | Any async iterable of load results. | Crawlers, CMS integrations, database sources, queues, or connector packages. |
+| Loader          | What it loads                             | Best for                                                                     |
+| --------------- | ----------------------------------------- | ---------------------------------------------------------------------------- |
+| `textSource()`  | In-memory documents or text.              | CMS records, API results, tests, fixtures, and custom connector output.      |
+| `fileSource()`  | One local file.                           | A known file with an optional custom `sourceId`.                             |
+| `filesSource()` | Local path arrays, directories, or globs. | Docs folders and local corpus sync jobs.                                     |
+| `urlSource()`   | One HTTP(S) URL.                          | A known page, PDF, Markdown file, JSON endpoint, or CSV URL.                 |
+| `urlsSource()`  | An explicit URL list.                     | Small web source sets where you already know the URLs.                       |
+| Custom loader   | Any async iterable of load results.       | Crawlers, CMS integrations, database sources, queues, or connector packages. |
 
 Every loader plugs into a corpus sync exactly like the `filesSource()` example above.
 
@@ -44,35 +44,35 @@ Use `load()` for product jobs because one bad source becomes a failed source rec
 
 Loaders pick a parser from the file extension, URL content type, URL extension, or PDF magic bytes. Every parser produces `parts` first, then Crux derives `content`.
 
-| Parser | Input formats | Output parts | What to know |
-| --- | --- | --- | --- |
-| Text | `.txt`, unknown | `text` | Plain fallback. Override with a custom parser for unknown domain formats. |
-| Markdown | `.md`, `.markdown` | `text`, `table` | Preserves heading paths and GFM tables. |
-| HTML | `.html`, `.htm`, `text/html` | `text`, `table` | Extracts title, headings, paragraphs, lists, code, and tables. |
-| PDF | `.pdf`, `application/pdf`, PDF bytes | `page` | Extracts text per page. Image-only pages can use your OCR hook. |
-| CSV | `.csv`, CSV content type | `table` | Produces one table part with row and column metadata. |
-| JSON | `.json`, JSON content type | `json` | Produces path-addressed parts for nested values. |
-| DOCX | `.docx` | `text`, `table` | Converts with Mammoth, then parses the generated HTML. |
-| XLSX | `.xlsx` | `sheet`, `table` | Produces sheet/table parts for non-empty worksheets. |
+| Parser   | Input formats                        | Output parts     | What to know                                                              |
+| -------- | ------------------------------------ | ---------------- | ------------------------------------------------------------------------- |
+| Text     | `.txt`, unknown                      | `text`           | Plain fallback. Override with a custom parser for unknown domain formats. |
+| Markdown | `.md`, `.markdown`                   | `text`, `table`  | Preserves heading paths and GFM tables.                                   |
+| HTML     | `.html`, `.htm`, `text/html`         | `text`, `table`  | Extracts title, headings, paragraphs, lists, code, and tables.            |
+| PDF      | `.pdf`, `application/pdf`, PDF bytes | `page`           | Extracts text per page. Image-only pages can use your OCR hook.           |
+| CSV      | `.csv`, CSV content type             | `table`          | Produces one table part with row and column metadata.                     |
+| JSON     | `.json`, JSON content type           | `json`           | Produces path-addressed parts for nested values.                          |
+| DOCX     | `.docx`                              | `text`, `table`  | Converts with Mammoth, then parses the generated HTML.                    |
+| XLSX     | `.xlsx`                              | `sheet`, `table` | Produces sheet/table parts for non-empty worksheets.                      |
 
 If a built-in parser is too generic, override it at the source:
 
 ```ts
 const loader = filesSource(
-  { glob: '**/*.acme' },
+  { glob: "**/*.acme" },
   {
-    namespace: 'product-docs',
+    namespace: "product-docs",
     parsers: [
       {
-        name: 'acme',
-        formats: ['unknown'],
+        name: "acme",
+        formats: ["unknown"],
         parse: ({ text }) => ({
-          parts: [{ id: 'acme:1', kind: 'text', content: text ?? '' }],
+          parts: [{ id: "acme:1", kind: "text", content: text ?? "" }],
         }),
       },
     ],
   },
-)
+);
 ```
 
 ## The core contract
@@ -90,14 +90,14 @@ There are two read modes. `load()` yields result objects, including failed sourc
 If the content is already in your app, `textSource()` is the simplest path:
 
 ```ts
-import { textSource } from '@use-crux/ingest'
+import { textSource } from "@use-crux/ingest";
 
 const loader = textSource({
-  namespace: 'product-docs',
-  sourceId: 'faq',
-  title: 'FAQ',
+  namespace: "product-docs",
+  sourceId: "faq",
+  title: "FAQ",
   content: faqText,
-})
+});
 ```
 
 This is also the easiest bridge for your own connectors. If you already know how to fetch content from a CMS, API, or internal system, you can usually shape it into `IngestDocument` and either feed it into a corpus sync or wrap it in a small custom loader.
@@ -107,9 +107,12 @@ This is also the easiest bridge for your own connectors. If you already know how
 For local docs, `fileSource()` and `filesSource()` give you a standard path.
 
 ```ts
-import { filesSource } from '@use-crux/ingest'
+import { filesSource } from "@use-crux/ingest";
 
-const loader = filesSource({ directory: './docs', recursive: true }, { namespace: 'product-docs' })
+const loader = filesSource(
+  { directory: "./docs", recursive: true },
+  { namespace: "product-docs" },
+);
 ```
 
 Today that covers plain text, Markdown, HTML, PDF, CSV, JSON, DOCX, and XLSX files. PDFs become page parts. CSV and spreadsheet content becomes table/sheet parts. JSON becomes path-addressed parts. DOCX files are converted through Mammoth so headings, paragraphs, and tables can move through the same document model as everything else.
@@ -121,11 +124,14 @@ The point is not to hide the source format. It is to normalize common formats in
 For web-hosted content, `urlSource()` and `urlsSource()` fetch content and normalize it into the same document model.
 
 ```ts
-import { urlsSource } from '@use-crux/ingest'
+import { urlsSource } from "@use-crux/ingest";
 
-const loader = urlsSource(['https://example.com/docs/roadmap', 'https://example.com/docs/pricing'], {
-  namespace: 'product-docs',
-})
+const loader = urlsSource(
+  ["https://example.com/docs/roadmap", "https://example.com/docs/pricing"],
+  {
+    namespace: "product-docs",
+  },
+);
 ```
 
 HTML is converted into readable text parts with title extraction. PDF responses are parsed into pages. Source URLs are preserved in metadata. Failed requests are returned as failed source results through `load()` and throw through `documents()`. The goal is a pragmatic ingestion path, not a crawler framework.
@@ -137,27 +143,27 @@ That boundary matters. `@use-crux/ingest` should help users load documents, not 
 The normal product pattern is simple: create an indexer for the write rules, wrap it in a corpus, and sync loader output into that corpus.
 
 ```ts
-import { corpus, indexer } from '@use-crux/core/indexing'
+import { corpus, indexer } from "@use-crux/core/indexing";
 
 const docsIndexer = indexer({
-  id: 'docs',
-  namespace: 'product-docs',
+  id: "docs",
+  namespace: "product-docs",
   records,
   vectors,
   dense,
-})
+});
 
 const docsCorpus = corpus({
-  id: 'docs',
-  namespace: 'product-docs',
+  id: "docs",
+  namespace: "product-docs",
   records,
   indexer: docsIndexer,
-})
+});
 
 await docsCorpus.sync(loader.load(), {
-  sourceSet: 'complete',
-  stale: 'delete',
-})
+  sourceSet: "complete",
+  stale: "delete",
+});
 ```
 
 That is the whole point of giving ingestion and corpus sync matching document shapes. The layers connect naturally without needing a translation step in the middle.
@@ -172,32 +178,39 @@ Built-in parsers are source-local and overridable. If a file type needs custom t
 
 ```ts
 const loader = filesSource(
-  { glob: '**/*.acme' },
+  { glob: "**/*.acme" },
   {
-    namespace: 'product-docs',
+    namespace: "product-docs",
     parsers: [
       {
-        name: 'acme',
-        formats: ['unknown'],
+        name: "acme",
+        formats: ["unknown"],
         parse: ({ text }) => ({
-          parts: [{ id: 'acme:1', kind: 'text', role: 'paragraph', content: text ?? '' }],
+          parts: [
+            {
+              id: "acme:1",
+              kind: "text",
+              role: "paragraph",
+              content: text ?? "",
+            },
+          ],
         }),
       },
     ],
   },
-)
+);
 ```
 
 PDF extraction includes an OCR hook for image-only pages. Crux does not ship an OCR provider; the hook is the extension point for teams that already have one.
 
 ```ts
 const loader = filesSource(
-  { directory: './pdfs' },
+  { directory: "./pdfs" },
   {
-    namespace: 'docs',
+    namespace: "docs",
     ocr: async ({ pageNumber }) => `OCR text for page ${pageNumber}`,
   },
-)
+);
 ```
 
 ## Source IDs and metadata
@@ -245,5 +258,9 @@ It is not a crawler, a connector marketplace, a CMS framework, or a document int
     description="Turn loaded documents into retrieval chunks."
     href="/docs/guides/retrieval/indexing"
   />
-  <Card title="Ingest Reference" description="Full `@use-crux/ingest` API." href="/docs/reference/ingest" />
+  <Card
+    title="Ingest Reference"
+    description="Full `@use-crux/ingest` API."
+    href="/docs/reference/ingest"
+  />
 </Cards>

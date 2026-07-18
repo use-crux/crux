@@ -80,34 +80,12 @@ pub(crate) const PROPAGATING_RELATION_TYPES: &[&str] = &[
     "pipeline.stage.uses_routing",
 ];
 
-pub(crate) fn covered_definition_ids(
-    definitions: &[StaticIndexDefinition],
-    relations: &[StaticIndexRelation],
-) -> BTreeSet<String> {
-    let mut covered = relations
+pub(crate) fn covered_definition_ids(relations: &[StaticIndexRelation]) -> BTreeSet<String> {
+    relations
         .iter()
         .filter(|relation| relation.r#type == "eval.covers_definition")
         .map(|relation| relation.to.clone())
-        .collect::<BTreeSet<_>>();
-    for definition in definitions {
-        let Some(quality) = definition.quality.as_ref() else {
-            continue;
-        };
-        if [
-            "evalIds",
-            "affectedEvalIds",
-            "suiteIds",
-            "affectedSuiteIds",
-            "experimentIds",
-            "baselineIds",
-        ]
-        .iter()
-        .any(|key| has_items(quality.get(*key)))
-        {
-            covered.insert(definition.id.clone());
-        }
-    }
-    covered
+        .collect::<BTreeSet<_>>()
 }
 
 pub(crate) fn should_require_coverage(definition: &StaticIndexDefinition) -> bool {

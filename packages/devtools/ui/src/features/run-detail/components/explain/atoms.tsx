@@ -5,15 +5,15 @@
  * honesty ladder (evidence level), and the source join tags. Status is the one
  * place saturated colour leads — filled when `solid`, hollow otherwise, always
  * label + dot/glyph + tone. Evidence level and source are quiet mono metadata,
- * shown by exception. Every colour resolves through the app's `--qw` palette via
+ * shown by exception. Every colour resolves through the app's `--devtools` palette via
  * {@link TONE_VAR}; nothing introduces a new hue or token.
  */
 
-import type { ReactNode } from 'react'
-import { Icon } from '@/qw/shell/Icon'
-import type { IconName } from '@/qw/shell/nav'
-import type { ChipTone } from '@/qw/shell/primitives'
-import { TONE_VAR } from '@/features/run-detail/lib/families'
+import type { ReactNode } from "react";
+import { Icon } from "@/devtools/shell/Icon";
+import type { IconName } from "@/devtools/shell/nav";
+import type { ChipTone } from "@/devtools/shell/primitives";
+import { TONE_VAR } from "@/features/run-detail/lib/families";
 import {
   SOURCE_FIDELITY_BLURB,
   cacheMeta,
@@ -22,45 +22,54 @@ import {
   freshnessMeta,
   sourceStatusMeta,
   type StatusMeta,
-} from '@/features/run-detail/lib/explain/registries'
-import type { TurnEvidenceLevel } from '@/types'
+} from "@/features/run-detail/lib/explain/registries";
+import type { TurnEvidenceLevel } from "@/types";
 
 // Soft background + ring per tone, matching the shared `Chip` atom so the
 // Explain chips sit in the same visual family as the rest of run-detail.
 const SOFT: Record<ChipTone, string> = {
-  muted: 'var(--qw-bg-muted)',
-  crux: 'var(--qw-crux-soft)',
-  danger: 'var(--qw-danger-soft)',
-  warn: 'var(--qw-warn-soft)',
-  ok: 'var(--qw-ok-soft)',
-  iris: 'var(--qw-iris-soft)',
-  gold: 'var(--qw-gold-soft)',
-  plum: 'var(--qw-plum-soft)',
-}
+  muted: "var(--devtools-bg-muted)",
+  crux: "var(--devtools-crux-soft)",
+  danger: "var(--devtools-danger-soft)",
+  warn: "var(--devtools-warn-soft)",
+  ok: "var(--devtools-ok-soft)",
+  iris: "var(--devtools-iris-soft)",
+  gold: "var(--devtools-gold-soft)",
+  plum: "var(--devtools-plum-soft)",
+};
 const LINE: Record<ChipTone, string> = {
-  muted: 'var(--qw-border)',
-  crux: 'var(--qw-crux-line)',
-  danger: 'var(--qw-danger-line)',
-  warn: 'var(--qw-warn-line)',
-  ok: 'var(--qw-ok-line)',
-  iris: 'var(--qw-iris-line)',
-  gold: 'var(--qw-gold-line)',
-  plum: 'var(--qw-plum-line)',
-}
+  muted: "var(--devtools-border)",
+  crux: "var(--devtools-crux-line)",
+  danger: "var(--devtools-danger-line)",
+  warn: "var(--devtools-warn-line)",
+  ok: "var(--devtools-ok-line)",
+  iris: "var(--devtools-iris-line)",
+  gold: "var(--devtools-gold-line)",
+  plum: "var(--devtools-plum-line)",
+};
 
 /** A filled-or-hollow status chip with an optional leading glyph + suffix. */
-function StatusChip({ meta, icon, suffix }: { meta: StatusMeta; icon?: IconName; suffix?: ReactNode }) {
-  if (meta.hidden) return <span style={{ color: 'var(--qw-fg-faint)' }}>—</span>
-  const fg = meta.solid ? TONE_VAR[meta.tone] : 'var(--qw-fg-muted)'
-  const glyphColor = meta.solid ? TONE_VAR[meta.tone] : 'var(--qw-fg-faint)'
+function StatusChip({
+  meta,
+  icon,
+  suffix,
+}: {
+  meta: StatusMeta;
+  icon?: IconName;
+  suffix?: ReactNode;
+}) {
+  if (meta.hidden)
+    return <span style={{ color: "var(--devtools-fg-faint)" }}>—</span>;
+  const fg = meta.solid ? TONE_VAR[meta.tone] : "var(--devtools-fg-muted)";
+  const glyphColor = meta.solid ? TONE_VAR[meta.tone] : "var(--devtools-fg-faint)";
   return (
     <span
       title={meta.blurb}
       className="inline-flex items-center gap-[5px] rounded-[3px] px-[6px] py-px font-mono text-[9.5px] whitespace-nowrap"
       style={{
         color: fg,
-        background: meta.solid ? SOFT[meta.tone] : 'transparent',
-        boxShadow: `inset 0 0 0 1px ${meta.solid ? LINE[meta.tone] : 'var(--qw-border)'}`,
+        background: meta.solid ? SOFT[meta.tone] : "transparent",
+        boxShadow: `inset 0 0 0 1px ${meta.solid ? LINE[meta.tone] : "var(--devtools-border)"}`,
       }}
     >
       {icon ? (
@@ -68,59 +77,103 @@ function StatusChip({ meta, icon, suffix }: { meta: StatusMeta; icon?: IconName;
       ) : (
         <span
           className="inline-block size-[4px] rounded-full"
-          style={{ background: meta.solid ? TONE_VAR[meta.tone] : 'transparent', boxShadow: meta.solid ? 'none' : `inset 0 0 0 1px ${glyphColor}` }}
+          style={{
+            background: meta.solid ? TONE_VAR[meta.tone] : "transparent",
+            boxShadow: meta.solid ? "none" : `inset 0 0 0 1px ${glyphColor}`,
+          }}
         />
       )}
       {meta.label}
-      {suffix != null && <span style={{ color: 'var(--qw-fg-faint)' }}>· {suffix}</span>}
+      {suffix != null && (
+        <span style={{ color: "var(--devtools-fg-faint)" }}>· {suffix}</span>
+      )}
     </span>
-  )
+  );
 }
 
 /** Freshness chip (clock) — the loud correctness axis. */
-export function FreshnessChip({ status, suffix }: { status: string; suffix?: ReactNode }) {
-  return <StatusChip meta={freshnessMeta(status)} icon="clock" suffix={suffix} />
+export function FreshnessChip({
+  status,
+  suffix,
+}: {
+  status: string;
+  suffix?: ReactNode;
+}) {
+  return (
+    <StatusChip meta={freshnessMeta(status)} icon="clock" suffix={suffix} />
+  );
 }
 
 /** Cache chip (disk) — the calm efficiency axis, kept separate from freshness. */
-export function CacheChip({ status, saved }: { status: string; saved?: ReactNode }) {
-  return <StatusChip meta={cacheMeta(status)} icon="db" suffix={saved} />
+export function CacheChip({
+  status,
+  saved,
+}: {
+  status: string;
+  saved?: ReactNode;
+}) {
+  return <StatusChip meta={cacheMeta(status)} icon="db" suffix={saved} />;
 }
 
 /** Coverage chip — the protect scorecard. A nudge, never severity. */
 export function CoverageChip({ status }: { status: string }) {
-  return <StatusChip meta={coverageMeta(status)} />
+  return <StatusChip meta={coverageMeta(status)} />;
 }
 
 /** "N of M behaviours protected" gauge — ok-toned, filled = good. */
-export function CoverageGauge({ covered, total }: { covered: number; total: number }) {
-  const pct = total > 0 ? covered / total : 0
-  const tone: ChipTone = pct >= 1 ? 'ok' : pct > 0 ? 'warn' : 'muted'
+export function CoverageGauge({
+  covered,
+  total,
+}: {
+  covered: number;
+  total: number;
+}) {
+  const pct = total > 0 ? covered / total : 0;
+  const tone: ChipTone = pct >= 1 ? "ok" : pct > 0 ? "warn" : "muted";
   return (
     <div className="min-w-0">
       <div className="mb-[7px] flex items-center justify-between">
         <span
           className="font-mono text-[11px] uppercase tracking-[0.08em]"
-          style={{ color: 'var(--qw-fg-faint)' }}
+          style={{ color: "var(--devtools-fg-faint)" }}
         >
           behaviours protected
         </span>
-        <span className="font-mono text-[12.5px]" style={{ color: TONE_VAR[tone] }}>
+        <span
+          className="font-mono text-[12.5px]"
+          style={{ color: TONE_VAR[tone] }}
+        >
           {covered}/{total}
         </span>
       </div>
-      <div className="h-2 w-full overflow-hidden rounded-full" style={{ background: 'var(--qw-bg-muted)' }}>
-        <div className="h-full rounded-full" style={{ width: `${pct * 100}%`, background: TONE_VAR[tone] }} />
+      <div
+        className="h-2 w-full overflow-hidden rounded-full"
+        style={{ background: "var(--devtools-bg-muted)" }}
+      >
+        <div
+          className="h-full rounded-full"
+          style={{ width: `${pct * 100}%`, background: TONE_VAR[tone] }}
+        />
       </div>
     </div>
-  )
+  );
 }
 
 /** The 3-tick honesty ladder. Degraded levels read italic + faint. */
-export function EvidenceLevel({ value, showLabel = true }: { value: TurnEvidenceLevel; showLabel?: boolean }) {
-  const missing = value === 'missing'
-  const lit = evidenceRank(value) - 1 // declared→3, observed→2, inferred→1, missing→0
-  const col = missing ? 'var(--qw-fg-faint)' : value === 'inferred' ? 'var(--qw-fg-muted)' : 'var(--qw-fg)'
+export function EvidenceLevel({
+  value,
+  showLabel = true,
+}: {
+  value: TurnEvidenceLevel;
+  showLabel?: boolean;
+}) {
+  const missing = value === "missing";
+  const lit = evidenceRank(value) - 1; // declared→3, observed→2, inferred→1, missing→0
+  const col = missing
+    ? "var(--devtools-fg-faint)"
+    : value === "inferred"
+      ? "var(--devtools-fg-muted)"
+      : "var(--devtools-fg)";
   return (
     <span
       title={`evidence · ${value}`}
@@ -134,8 +187,11 @@ export function EvidenceLevel({ value, showLabel = true }: { value: TurnEvidence
             style={{
               width: 6,
               height: 7,
-              background: i < lit ? col : 'transparent',
-              boxShadow: i < lit ? 'none' : `inset 0 0 0 1px ${missing ? 'var(--qw-border-strong)' : 'var(--qw-border)'}`,
+              background: i < lit ? col : "transparent",
+              boxShadow:
+                i < lit
+                  ? "none"
+                  : `inset 0 0 0 1px ${missing ? "var(--devtools-border-strong)" : "var(--devtools-border)"}`,
             }}
           />
         ))}
@@ -143,51 +199,54 @@ export function EvidenceLevel({ value, showLabel = true }: { value: TurnEvidence
       {showLabel && (
         <span
           className="font-mono text-[10.5px] tracking-[0.03em]"
-          style={{ color: col, fontStyle: missing ? 'italic' : 'normal' }}
+          style={{ color: col, fontStyle: missing ? "italic" : "normal" }}
         >
           {value}
         </span>
       )}
     </span>
-  )
+  );
 }
 
 /** Source-join status tag — quiet, neutral; `used` reads filled. */
 export function SourceStatusTag({ status }: { status: string }) {
-  const m = sourceStatusMeta(status)
-  const solid = status === 'used'
-  const fg = m.tone === 'muted' ? 'var(--qw-fg-muted)' : TONE_VAR[m.tone]
+  const m = sourceStatusMeta(status);
+  const solid = status === "used";
+  const fg = m.tone === "muted" ? "var(--devtools-fg-muted)" : TONE_VAR[m.tone];
   return (
     <span
       className="inline-flex items-center gap-[5px] rounded-[3px] px-[6px] py-px font-mono text-[9.5px]"
       style={{
         color: fg,
-        background: solid ? SOFT[m.tone] : 'transparent',
-        boxShadow: `inset 0 0 0 1px ${solid ? LINE[m.tone] : 'var(--qw-border)'}`,
+        background: solid ? SOFT[m.tone] : "transparent",
+        boxShadow: `inset 0 0 0 1px ${solid ? LINE[m.tone] : "var(--devtools-border)"}`,
       }}
     >
       <span
         className="inline-block size-[4px] rounded-full"
-        style={{ background: m.tone === 'muted' ? 'var(--qw-fg-faint)' : TONE_VAR[m.tone] }}
+        style={{
+          background:
+            m.tone === "muted" ? "var(--devtools-fg-faint)" : TONE_VAR[m.tone],
+        }}
       />
       {m.label}
     </span>
-  )
+  );
 }
 
 /** Source-fidelity tag — `inferred`/`unresolved` read dashed (speculative). */
 export function SourceFidelityTag({ fidelity }: { fidelity: string }) {
-  const dashed = fidelity === 'unresolved' || fidelity === 'inferred'
+  const dashed = fidelity === "unresolved" || fidelity === "inferred";
   return (
     <span
       title={SOURCE_FIDELITY_BLURB[fidelity]}
       className="rounded-[3px] px-[6px] py-px font-mono text-[9.5px]"
       style={{
-        color: 'var(--qw-fg-faint)',
-        border: `1px ${dashed ? 'dashed' : 'solid'} ${dashed ? 'var(--qw-border-strong)' : 'var(--qw-border)'}`,
+        color: "var(--devtools-fg-faint)",
+        border: `1px ${dashed ? "dashed" : "solid"} ${dashed ? "var(--devtools-border-strong)" : "var(--devtools-border)"}`,
       }}
     >
       {fidelity}
     </span>
-  )
+  );
 }

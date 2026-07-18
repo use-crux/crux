@@ -8,27 +8,27 @@ Tool middleware wraps tools at the Crux boundary. Use it when the same policy sh
 Use the simple hooks when you only need to observe execution. Use `aroundExecute()` when the middleware needs to intercept the call, modify arguments, call the wrapped tool via `next()`, or return early without calling the tool.
 
 ```ts
-import { prompt, toolMiddleware } from '@use-crux/core'
+import { prompt, toolMiddleware } from "@use-crux/core";
 
 const auditTools = toolMiddleware({
-  id: 'audit-tools',
-  match: ['sendEmail', /^admin/],
+  id: "audit-tools",
+  match: ["sendEmail", /^admin/],
   beforeExecute: ({ toolName, toolCallId, input }) => {
-    audit.write({ phase: 'start', toolName, toolCallId, input })
+    audit.write({ phase: "start", toolName, toolCallId, input });
   },
   afterExecute: ({ toolName, toolCallId, durationMs }) => {
-    audit.write({ phase: 'end', toolName, toolCallId, durationMs })
+    audit.write({ phase: "end", toolName, toolCallId, durationMs });
   },
   onError: ({ toolName, toolCallId, error }) => {
-    audit.write({ phase: 'error', toolName, toolCallId, error: String(error) })
+    audit.write({ phase: "error", toolName, toolCallId, error: String(error) });
   },
-})
+});
 
 export const assistant = prompt({
-  id: 'support-agent',
+  id: "support-agent",
   tools: { sendEmail, createRefund },
   toolMiddleware: [auditTools],
-})
+});
 ```
 
 You can also attach middleware for one call. This is useful when a route or session has stricter policy than the prompt default.
@@ -36,15 +36,15 @@ You can also attach middleware for one call. This is useful when a route or sess
 ```ts
 await generate(assistant, {
   model,
-  input: { message: 'Refund this customer' },
+  input: { message: "Refund this customer" },
   toolMiddleware: [
     toolMiddleware({
-      id: 'log-refunds-for-this-route',
-      match: ['createRefund'],
+      id: "log-refunds-for-this-route",
+      match: ["createRefund"],
       beforeExecute: ({ input }) => logger.info(input),
     }),
   ],
-})
+});
 ```
 
 ## Matching tools
@@ -53,18 +53,18 @@ await generate(assistant, {
 
 ```ts
 const customerDataPolicy = toolMiddleware({
-  id: 'customer-data-policy',
+  id: "customer-data-policy",
   match: [
-    'exportCustomers',
+    "exportCustomers",
     /^admin/,
     ({ toolName, input }) =>
-      toolName === 'searchCustomers' &&
-      typeof input === 'object' &&
+      toolName === "searchCustomers" &&
+      typeof input === "object" &&
       input !== null &&
-      'email' in input,
+      "email" in input,
   ],
   beforeExecute: ({ toolName }) => audit.write({ toolName }),
-})
+});
 ```
 
 Omit `match` when the middleware should wrap every tool.
@@ -75,14 +75,14 @@ Throw from `beforeExecute()` to block a tool call before the tool runs.
 
 ```ts
 const blockProdMutations = toolMiddleware({
-  id: 'block-prod-mutations',
+  id: "block-prod-mutations",
   match: [/^delete/, /^admin/],
   beforeExecute: () => {
-    if (process.env.NODE_ENV === 'production') {
-      throw new Error('Production mutation requires the approval middleware.')
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("Production mutation requires the approval middleware.");
     }
   },
-})
+});
 ```
 
 Use [Tool approvals](/docs/guides/tools/approvals) when the block should be resumable by a user decision.
@@ -95,13 +95,13 @@ results. Tool policies emit Safety decisions, appear in Devtools Explain, and
 are indexed as Safety definitions.
 
 ```ts
-import { toolPolicy } from '@use-crux/core/safety'
+import { toolPolicy } from "@use-crux/core/safety";
 
 const requireApproval = toolPolicy.approval({
-  id: 'refund-approval',
-  match: { tool: 'createRefund' },
-  reason: 'Refunds require operator approval.',
-})
+  id: "refund-approval",
+  match: { tool: "createRefund" },
+  reason: "Refunds require operator approval.",
+});
 ```
 
 Use `toolMiddleware()` when the behavior is execution plumbing: logging,
@@ -115,22 +115,22 @@ not a Safety policy unless it came from `toolPolicy()`.
 
 ```ts
 const normalizeEmailTools = toolMiddleware({
-  id: 'normalize-email-tools',
-  match: ['sendEmail'],
+  id: "normalize-email-tools",
+  match: ["sendEmail"],
   aroundExecute: ({ input, options }, next) => {
-    if (typeof input !== 'object' || input === null) {
-      return next(input, options)
+    if (typeof input !== "object" || input === null) {
+      return next(input, options);
     }
 
     return next(
       {
         ...input,
-        subject: 'subject' in input ? String(input.subject).trim() : '',
+        subject: "subject" in input ? String(input.subject).trim() : "",
       },
       options,
-    )
+    );
   },
-})
+});
 ```
 
 ## Return early
@@ -139,17 +139,17 @@ Middleware can return a value without calling `next()`. Use this for cache hits,
 
 ```ts
 const cacheToolResults = toolMiddleware({
-  id: 'tool-result-cache',
-  match: ['lookupCustomer'],
+  id: "tool-result-cache",
+  match: ["lookupCustomer"],
   aroundExecute: async ({ input, options }, next) => {
-    const cached = await cache.get(input)
-    if (cached) return cached
+    const cached = await cache.get(input);
+    if (cached) return cached;
 
-    const output = await next(input, options)
-    await cache.set(input, output)
-    return output
+    const output = await next(input, options);
+    await cache.set(input, output);
+    return output;
   },
-})
+});
 ```
 
 If you return early, `afterExecute()` still runs with the returned output. If `aroundExecute()` throws, `onError()` runs and the error is rethrown.
@@ -160,13 +160,13 @@ Use middleware for cross-cutting policy. Keep business logic in the tool itself.
 
 ```ts
 const redactCustomerData = toolMiddleware({
-  id: 'redact-customer-data',
+  id: "redact-customer-data",
   match: [/Customer/],
   aroundExecute: async ({ input, options }, next) => {
-    const output = await next(input, options)
-    return redactForModel(output)
+    const output = await next(input, options);
+    return redactForModel(output);
   },
-})
+});
 ```
 
 For model-facing output shaping, prefer a tool-level `toModelOutput()` when only one tool needs the behavior. Use middleware when the same behavior applies across a family of tools.

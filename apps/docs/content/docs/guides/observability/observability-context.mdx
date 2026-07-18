@@ -10,13 +10,19 @@ When you run an agent that delegates work, to a subagent, a flow step, a paralle
 You don't normally write any of this yourself. Every built-in boundary primitive (`tool`, `delegate`, `flow`, `handoff`, `composition`, `retrieval`, `embedding`, `compaction`) already records a canonical span, and every new span captures the currently active span as its `parentSpanId` at creation:
 
 ```ts
-import { observe } from '@use-crux/core/observability'
+import { observe } from "@use-crux/core/observability";
 
-await observe.span({ name: 'handoff', primitive: 'handoff.prepare' }, async () => {
-  await observe.span({ name: 'delegate', primitive: 'delegate.invoke' }, async () => {
-    // The delegate span's parentSpanId points at the handoff span.
-  })
-})
+await observe.span(
+  { name: "handoff", primitive: "handoff.prepare" },
+  async () => {
+    await observe.span(
+      { name: "delegate", primitive: "delegate.invoke" },
+      async () => {
+        // The delegate span's parentSpanId points at the handoff span.
+      },
+    );
+  },
+);
 ```
 
 In-process this works via AsyncLocalStorage, modeled on W3C `traceparent`: the backend parents the child directly under the recorded span, no heuristics, no time-window guessing. When AsyncLocalStorage is not available, such as in browser-like or edge runtimes, Crux still records run lifecycles and synchronous `withContext()` spans. Contextless `observe.event()`, `observe.artifact()`, and `observe.edge()` calls are skipped and counted in `observabilityDiagnostics().contextlessRecords` instead of throwing.
@@ -27,19 +33,23 @@ That leaves two things you actually do by hand: share a `traceId` across intenti
 
 ## Share a traceId across multiple run roots
 
-When one workflow intentionally owns several run roots, pass `traceId` to `observe.openRun()` for the child roots. Quality uses this for evaluation traces: the `eval.run` umbrella and every `eval.case` run share one trace while staying separate runs.
+When one workflow intentionally owns several run roots, pass `traceId` to `observe.openRun()` for the child roots. Eval uses this for evaluation traces: the `eval.run` umbrella and every `eval.case` run share one trace while staying separate runs.
 
 Correlators ride on the same context machinery but do not define execution parentage. Use
 `propagateAttributes({ sessionId, userId, metadata }, fn)` to group records by session or user
 without adding graph nodes:
 
 ```ts
-import { observe, propagateAttributes } from '@use-crux/core/observability'
+import { observe, propagateAttributes } from "@use-crux/core/observability";
 
 await propagateAttributes(
-  { sessionId: 'checkout-123', userId: 'user-456', metadata: { plan: 'team' } },
-  () => observe.run({ name: 'checkout assistant', rootPrimitive: 'agent.run' }, runCheckout),
-)
+  { sessionId: "checkout-123", userId: "user-456", metadata: { plan: "team" } },
+  () =>
+    observe.run(
+      { name: "checkout assistant", rootPrimitive: "agent.run" },
+      runCheckout,
+    ),
+);
 ```
 
 Every record emitted inside the callback carries `sessionId` and `userId`. Metadata appears as
@@ -53,25 +63,29 @@ attributes named `meta.plan`, `meta.<key>`, and so on, with values capped for tr
 
 ```ts
 // Calling side, inside a Crux-aware action or tool:
-const result = await ctx.crux.runAction('research', iref.agent.subagent.runResearch, {
-  taskId,
-  projectId,
-  query,
-  userId,
-})
+const result = await ctx.crux.runAction(
+  "research",
+  iref.agent.subagent.runResearch,
+  {
+    taskId,
+    projectId,
+    query,
+    userId,
+  },
+);
 
 // Receiving side, via @use-crux/convex/server:
 export const runResearch = internalAction({
   args: {
-    taskId: v.id('subAgentTasks'),
+    taskId: v.id("subAgentTasks"),
     projectId: v.string(),
     query: v.string(),
   },
   handler: async (ctx, args) => {
     // Anything started here records the calling action's parentSpanId.
-    return researchFlow.handler(ctx, args)
+    return researchFlow.handler(ctx, args);
   },
-})
+});
 ```
 
 `ctx.crux.runAction()` captures the current observability context and packs it into the hidden `__crux` action args. `@use-crux/convex/server` actions restore that context before running the handler and await a bounded flush so Convex/serverless workers do not drop queued records after the handler returns.
@@ -80,7 +94,7 @@ export const runResearch = internalAction({
 
 | Runtime                | Pack into                                        | Unpack via                                        |
 | ---------------------- | ------------------------------------------------ | ------------------------------------------------- |
-| Convex action          | `ctx.crux.runAction(label, ref, args)`           | `@use-crux/convex/server` action wrapper              |
+| Convex action          | `ctx.crux.runAction(label, ref, args)`           | `@use-crux/convex/server` action wrapper          |
 | HTTP / fetch           | `traceparent` request header or payload metadata | parse header → `observe.withContext`              |
 | Cloudflare Workers     | service binding payload field                    | `observe.withContext` in the receiving worker     |
 | AWS Lambda             | event field or X-Ray segment                     | `observe.withContext` in the handler              |
@@ -95,17 +109,20 @@ For scheduled serverless workflows that resume in a later invocation, do not per
 Only when you build a primitive that wraps user work in a span the timeline should show do you need to write the span yourself. Follow this template:
 
 ```ts
-import { observe } from '@use-crux/core/observability'
+import { observe } from "@use-crux/core/observability";
 
-export async function myBoundary<T>(input: Input, fn: () => Promise<T>): Promise<T> {
+export async function myBoundary<T>(
+  input: Input,
+  fn: () => Promise<T>,
+): Promise<T> {
   return observe.span(
     {
-      name: 'my-boundary',
-      primitive: 'custom.operation',
+      name: "my-boundary",
+      primitive: "custom.operation",
       attributes: { inputKind: input.kind },
     },
     fn,
-  )
+  );
 }
 ```
 
@@ -114,22 +131,22 @@ export async function myBoundary<T>(input: Input, fn: () => Promise<T>): Promise
 For non-lexical lifetimes, use `observe.openSpan()`:
 
 ```ts
-import { observe } from '@use-crux/core/observability'
+import { observe } from "@use-crux/core/observability";
 
 const span = observe.openSpan({
-  name: 'my-stream',
-  primitive: 'custom.operation',
-})
+  name: "my-stream",
+  primitive: "custom.operation",
+});
 
 try {
   await span.withContext(async () => {
-    await streamWork()
-  })
-  span.setAttributes({ chunkCount: 12 })
-  span.end({ attributes: { streamCompleted: true } })
+    await streamWork();
+  });
+  span.setAttributes({ chunkCount: 12 });
+  span.end({ attributes: { streamCompleted: true } });
 } catch (error) {
-  span.error(error)
-  throw error
+  span.error(error);
+  throw error;
 }
 ```
 

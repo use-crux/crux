@@ -11,11 +11,11 @@ import (
 	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/api"
+	"github.com/use-crux/crux/packages/local/internal/inspect"
 	"github.com/use-crux/crux/packages/local/internal/observability"
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/readmodel"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/service"
-	"github.com/use-crux/crux/packages/local/internal/quality"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
@@ -23,7 +23,7 @@ type Service struct {
 	ctx           context.Context
 	cancel        context.CancelFunc
 	store         *store.Store
-	quality       *quality.Service
+	inspect       *inspect.Service
 	observability *observability.Service
 	resources     ResourceInspector
 	indexEvents   *IndexEventBus
@@ -38,18 +38,18 @@ type Service struct {
 
 const indexChangePublishDelay = 10 * time.Millisecond
 
-func NewService(s *store.Store, qualitySvc *quality.Service) *Service {
-	if qualitySvc == nil {
-		qualitySvc = quality.NewService(s, quality.Dir(""))
+func NewService(s *store.Store, inspectSvc *inspect.Service) *Service {
+	if inspectSvc == nil {
+		inspectSvc = inspect.NewService(s, inspect.Dir(""))
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	svc := &Service{
 		ctx:         ctx,
 		cancel:      cancel,
 		store:       s,
-		quality:     qualitySvc,
+		inspect:     inspectSvc,
 		indexEvents: NewIndexEventBus(),
-		indexModel:  readmodel.New(s, qualitySvc.Dir()),
+		indexModel:  readmodel.New(s),
 	}
 	svc.indexService = service.New(service.Options{
 		Context:   ctx,
@@ -69,7 +69,7 @@ func (s *Service) WithIndexModel(model *readmodel.Model) *Service {
 func (s *Service) WithObservability(service *observability.Service) *Service {
 	s.observability = service
 	if service != nil {
-		s.quality.WithObservability(service)
+		s.inspect.WithObservability(service)
 	}
 	return s
 }
@@ -131,8 +131,8 @@ func (s *Service) Shutdown() {
 	s.cancel()
 }
 
-func (s *Service) Quality() *quality.Service {
-	return s.quality
+func (s *Service) Inspect() *inspect.Service {
+	return s.inspect
 }
 
 func (s *Service) IndexEvents() *IndexEventBus {

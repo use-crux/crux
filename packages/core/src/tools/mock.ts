@@ -1,4 +1,4 @@
-/** Internal identity attached to tools scripted by the Quality runner. */
+/** Internal identity attached to tools scripted by Eval execution. */
 export const TOOL_EXECUTION_MOCK: unique symbol = Symbol.for(
   "crux.toolExecutionMock",
 );

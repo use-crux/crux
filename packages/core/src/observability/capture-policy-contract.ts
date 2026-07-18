@@ -136,8 +136,6 @@ export const ARTIFACT_CAPTURE_DECISIONS = {
   'compaction.report': 'output',
   'score.report': 'safety',
   'citation.report': 'output',
-  'comparison.report': 'output',
-  'baseline.promotion': 'output',
   'error.stack': 'exempt',
   'routing.report': 'exempt',
   'cache.report': 'exempt',

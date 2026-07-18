@@ -82,7 +82,7 @@ func (s *Runs) renderSpanDetail(width, height int) string {
 		b.WriteString("\n")
 	}
 
-	// TIMINGS — only when the primitive carries replay-quality signals.
+	// TIMINGS — only when the primitive carries detailed timing signals.
 	if span.Timings != nil {
 		b.WriteString(s.section("TIMINGS"))
 		if span.Timings.TTFTMs != nil {
@@ -135,15 +135,14 @@ func (s *Runs) section(label string) string {
 // block. Maps both legacy (`tool`) and detailed (`tool.call`) primitive
 // strings to the same family name. Generic primitives fall back to
 // `PAYLOAD` so the section still has a stable label.
-func spanDetailHeader(span *api.QualityRunSpan) string {
+func spanDetailHeader(span *api.InspectRunSpan) string {
 	switch span.Primitive {
 	case api.SpanPrimitiveTool, api.SpanPrimitiveToolCall, api.SpanPrimitiveToolApproval:
 		return "TOOL"
 	case api.SpanPrimitiveTrace, api.SpanPrimitiveGeneration,
 		api.SpanPrimitiveGenerationCall, api.SpanPrimitiveGenerationStream:
 		return "GENERATION"
-	case api.SpanPrimitiveFlow, api.SpanPrimitiveFlowRun, api.SpanPrimitiveFlowStep,
-		api.SpanPrimitiveEvalFlow:
+	case api.SpanPrimitiveFlow, api.SpanPrimitiveFlowRun, api.SpanPrimitiveFlowStep:
 		return "FLOW"
 	case api.SpanPrimitiveEvalRun, api.SpanPrimitiveEvalCase:
 		return "EVAL"
@@ -197,7 +196,7 @@ func spanDetailHeader(span *api.QualityRunSpan) string {
 	return "PAYLOAD"
 }
 
-func (s *Runs) childrenRow(span *api.QualityRunSpan, width int) string {
+func (s *Runs) childrenRow(span *api.InspectRunSpan, width int) string {
 	children, dup := s.childrenStats(span.ID)
 	if children == 0 {
 		return kvRow("children", "—", width)

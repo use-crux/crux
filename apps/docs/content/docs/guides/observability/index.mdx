@@ -14,7 +14,7 @@ Without observability:
 - You don't know which prompt, flow, or model is driving spend
 - You can't reproduce a bad output because you don't have the inputs
 
-With observability, every interesting moment in the pipeline emits one graph record, and every consumer (devtools, subscribers, plugins, OTel) reads the same sanitized stream. Quality runs use the same graph, so evaluations, baselines, and replays share one provenance model with production traces. How records are sanitized, fanned out, linked, and retained: [Observability reference](/docs/reference/crux-core/observability).
+With observability, every interesting moment in the pipeline emits one graph record, and every consumer (devtools, subscribers, plugins, OTel) reads the same sanitized stream. Eval runs use the same graph, so Cases, managed scorers, Baselines, and production traces share one provenance model. How records are sanitized, fanned out, linked, and retained: [Observability reference](/docs/reference/crux-core/observability).
 
 ## The layers
 
@@ -38,7 +38,7 @@ All layers are built on the same canonical graph-record spine:
 - **Always:** install devtools in dev. It's zero-cost when disabled.
 - **Production:** install `@use-crux/otel` if you have an existing OTel-compatible APM (Datadog, Honeycomb, Grafana, New Relic). Otherwise the lightweight HTTP/callback exporter works.
 - **Custom logic:** use `subscribeObservability()` for raw graph records, or a `CruxPlugin` when you need broader runtime composition.
-- **Per-call wrapping:** use middleware for things that wrap *every* generation: request logging, timing, multi-tenant scoping.
+- **Per-call wrapping:** use middleware for things that wrap _every_ generation: request logging, timing, multi-tenant scoping.
 - **Ephemeral hosts:** bind the host lifecycle wrappers in [Runtime setup](/docs/guides/observability/runtime-setup) so runs do not end as `incomplete` solely because the worker froze mid-flush.
 
 ## When should I NOT use middleware?
@@ -49,15 +49,59 @@ All layers are built on the same canonical graph-record spine:
 ## Pick a topic
 
 <Cards>
-  <Card title="Devtools" description="Visual tracing UI for development, with CLI and TUI dashboards." href="/docs/guides/observability/devtools" />
-  <Card title="Catalog runtime evidence" description="DefinitionRef join from Catalog to Runs and back." href="/docs/guides/observability/catalog-runtime-evidence" />
-  <Card title="Runs and delivery health" description="Status vocabulary and delivery tri-state matching the UI." href="/docs/guides/observability/runs-and-delivery" />
-  <Card title="Adapter outcomes" description="Normalized finish reasons, completed tool calls, and errors." href="/docs/guides/observability/adapter-outcomes" />
-  <Card title="Runtime setup" description="Node, serverless, Workers, and Convex flush bindings." href="/docs/guides/observability/runtime-setup" />
-  <Card title="Privacy" description="Capture modes, redaction, and sanitized definition sources." href="/docs/guides/observability/privacy" />
-  <Card title="Troubleshooting" description="Unknown delivery health, incomplete runs, empty Catalog activity." href="/docs/guides/observability/troubleshooting" />
-  <Card title="Cost tracking" description="Attribute model spend to prompts, models, sessions, flows, and steps." href="/docs/guides/observability/cost-tracking" />
-  <Card title="Telemetry" description="OpenTelemetry spans for production observability." href="/docs/guides/observability/telemetry" />
-  <Card title="Plugins" description="Build a custom CruxPlugin or graph-record subscriber." href="/docs/guides/observability/plugins" />
-  <Card title="Middleware" description="Global wrapper around every generate() / stream() call." href="/docs/guides/observability/middleware" />
+  <Card
+    title="Devtools"
+    description="Visual tracing UI for development, with CLI and TUI dashboards."
+    href="/docs/guides/observability/devtools"
+  />
+  <Card
+    title="Catalog runtime evidence"
+    description="DefinitionRef join from Catalog to Runs and back."
+    href="/docs/guides/observability/catalog-runtime-evidence"
+  />
+  <Card
+    title="Runs and delivery health"
+    description="Status vocabulary and delivery tri-state matching the UI."
+    href="/docs/guides/observability/runs-and-delivery"
+  />
+  <Card
+    title="Adapter outcomes"
+    description="Normalized finish reasons, completed tool calls, and errors."
+    href="/docs/guides/observability/adapter-outcomes"
+  />
+  <Card
+    title="Runtime setup"
+    description="Node, serverless, Workers, and Convex flush bindings."
+    href="/docs/guides/observability/runtime-setup"
+  />
+  <Card
+    title="Privacy"
+    description="Capture modes, redaction, and sanitized definition sources."
+    href="/docs/guides/observability/privacy"
+  />
+  <Card
+    title="Troubleshooting"
+    description="Unknown delivery health, incomplete runs, empty Catalog activity."
+    href="/docs/guides/observability/troubleshooting"
+  />
+  <Card
+    title="Cost tracking"
+    description="Attribute model spend to prompts, models, sessions, flows, and steps."
+    href="/docs/guides/observability/cost-tracking"
+  />
+  <Card
+    title="Telemetry"
+    description="OpenTelemetry spans for production observability."
+    href="/docs/guides/observability/telemetry"
+  />
+  <Card
+    title="Plugins"
+    description="Build a custom CruxPlugin or graph-record subscriber."
+    href="/docs/guides/observability/plugins"
+  />
+  <Card
+    title="Middleware"
+    description="Global wrapper around every generate() / stream() call."
+    href="/docs/guides/observability/middleware"
+  />
 </Cards>

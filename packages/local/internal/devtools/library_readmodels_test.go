@@ -7,8 +7,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/use-crux/crux/packages/local/internal/inspect"
 	"github.com/use-crux/crux/packages/local/internal/observability"
-	"github.com/use-crux/crux/packages/local/internal/quality"
 	"github.com/use-crux/crux/packages/local/internal/resourceinspection"
 	"github.com/use-crux/crux/packages/local/internal/store"
 
@@ -54,7 +54,7 @@ func TestMemoryStoreDetailJoinsIndexMetadataAndTrend(t *testing.T) {
 	st.MemoryRead(store.MemoryReadEvent{MemoryID: "session", MemoryType: "working", Operation: "get", TraceID: "trace_a", Timestamp: 1000})
 	st.MemoryWrite(store.MemoryWriteEvent{MemoryID: "session", MemoryType: "working", Operation: "set", EntryKey: "user_name", Content: "Henri", TraceID: "trace_a", Timestamp: 2000, Snapshot: json.RawMessage(`{"user_name":"Henri"}`)})
 
-	service := NewService(st, quality.NewService(st, t.TempDir()))
+	service := NewService(st, inspect.NewService(st, t.TempDir()))
 	value, found, err := service.MemoryStoreDetail(ctx, "session")
 	if err != nil || !found {
 		t.Fatalf("memory detail found=%v err=%v", found, err)
@@ -99,7 +99,7 @@ func TestMemoryStoreDetailIncludesProjectionBackedInspectionNotice(t *testing.T)
 		DocsURL:    resourceinspection.RuntimeBridgeDocsURL,
 	}}
 
-	service := NewService(st, quality.NewService(st, t.TempDir())).WithResourceInspection(inspector)
+	service := NewService(st, inspect.NewService(st, t.TempDir())).WithResourceInspection(inspector)
 	value, found, err := service.MemoryStoreDetail(ctx, "session")
 	if err != nil || !found {
 		t.Fatalf("memory detail found=%v err=%v", found, err)
@@ -133,7 +133,7 @@ func TestMemoryStoreDetailIncludesLiveInspectionEntries(t *testing.T) {
 		},
 	}}
 
-	service := NewService(st, quality.NewService(st, t.TempDir())).WithResourceInspection(inspector)
+	service := NewService(st, inspect.NewService(st, t.TempDir())).WithResourceInspection(inspector)
 	value, found, err := service.MemoryStoreDetail(ctx, "session")
 	if err != nil || !found {
 		t.Fatalf("memory detail found=%v err=%v", found, err)
@@ -186,7 +186,7 @@ func TestWorkspaceReadmodelsIncludeAuthoredSourceBackedMounts(t *testing.T) {
 		},
 	})
 
-	service := NewService(st, quality.NewService(st, t.TempDir()))
+	service := NewService(st, inspect.NewService(st, t.TempDir()))
 	value, err := service.Workspaces(ctx)
 	if err != nil {
 		t.Fatalf("workspaces error = %v", err)
@@ -238,7 +238,7 @@ func TestMemoryStoreDetailJoinsIndexDefinitionByRuntimePrefix(t *testing.T) {
 	})
 	st.MemoryWrite(store.MemoryWriteEvent{MemoryID: "thread:m57ew2", MemoryType: "blackboard", Operation: "patch", EntryKey: "decisions", TraceID: "trace_a", Timestamp: 2000})
 
-	service := NewService(st, quality.NewService(st, t.TempDir()))
+	service := NewService(st, inspect.NewService(st, t.TempDir()))
 	value, found, err := service.MemoryStoreDetail(ctx, "thread:m57ew2")
 	if err != nil || !found {
 		t.Fatalf("memory detail found=%v err=%v", found, err)
@@ -277,7 +277,7 @@ func TestBlackboardDetailDerivesFieldsFromLatestWriteSnapshots(t *testing.T) {
 		Snapshot:   json.RawMessage(`{"writerPlan":{"title":"Draft","sections":["Intro"]}}`),
 	})
 
-	service := NewService(st, quality.NewService(st, t.TempDir()))
+	service := NewService(st, inspect.NewService(st, t.TempDir()))
 	value, found, err := service.MemoryStoreDetail(ctx, "thread:m57ew2")
 	if err != nil || !found {
 		t.Fatalf("memory detail found=%v err=%v", found, err)
@@ -317,7 +317,7 @@ func TestBlackboardDetailDerivesFieldsFromReadSnapshots(t *testing.T) {
 		Snapshot:   json.RawMessage(`{"activePlanId":"plan_123","activeSkillIds":["fact-check"]}`),
 	})
 
-	service := NewService(st, quality.NewService(st, t.TempDir()))
+	service := NewService(st, inspect.NewService(st, t.TempDir()))
 	value, found, err := service.MemoryStoreDetail(ctx, "thread:m57ew2")
 	if err != nil || !found {
 		t.Fatalf("memory detail found=%v err=%v", found, err)
@@ -362,7 +362,7 @@ func TestMemoryStoreDetailIndexHealthIsEmbedderAware(t *testing.T) {
 		})
 		st.MemoryWrite(store.MemoryWriteEvent{MemoryID: "user-episodes:user:project", MemoryType: "episodic", Operation: "record", EntryKey: "episode_1", Content: "hello", TraceID: "trace_a", Timestamp: 2000, Snapshot: json.RawMessage(`{"key":"episode_1","content":"hello"}`)})
 
-		service := NewService(st, quality.NewService(st, t.TempDir()))
+		service := NewService(st, inspect.NewService(st, t.TempDir()))
 		value, found, err := service.MemoryStoreDetail(ctx, "user-episodes:user:project")
 		if err != nil || !found {
 			t.Fatalf("memory detail found=%v err=%v", found, err)
@@ -424,7 +424,7 @@ func TestMemoryStoreDetailUsesIndexedBlockRetention(t *testing.T) {
 		Snapshot:   json.RawMessage(`{"key":"episode_1","content":"hello"}`),
 	})
 
-	service := NewService(st, quality.NewService(st, t.TempDir()))
+	service := NewService(st, inspect.NewService(st, t.TempDir()))
 	value, found, err := service.MemoryStoreDetail(ctx, "user-episodes:user:project")
 	if err != nil || !found {
 		t.Fatalf("memory detail found=%v err=%v", found, err)
@@ -491,7 +491,7 @@ func TestMemoryOperationsEndpointFiltersAndLimits(t *testing.T) {
 	st.MemoryRead(store.MemoryReadEvent{SpanID: "span_read", RunID: "run_a", MemoryID: "session", MemoryType: "working", Operation: "get", TraceID: "trace_a", Timestamp: 1000})
 	st.MemoryWrite(store.MemoryWriteEvent{SpanID: "span_write", RunID: "run_a", MemoryID: "session", MemoryType: "working", Operation: "set", EntryKey: "name", Content: "Henri", TraceID: "trace_a", Timestamp: 2000})
 
-	service := NewService(st, quality.NewService(st, t.TempDir()))
+	service := NewService(st, inspect.NewService(st, t.TempDir()))
 	value, err := service.MemoryOperations(ctx, 1500, 0, 1)
 	if err != nil {
 		t.Fatalf("memory operations: %v", err)
@@ -531,7 +531,7 @@ func TestWorkspaceDetailUsesPathHashAndArtifactMetadataFromObservedActivity(t *t
 		t.Fatal(err)
 	}
 
-	service := NewService(st, quality.NewService(st, t.TempDir())).WithObservability(obs)
+	service := NewService(st, inspect.NewService(st, t.TempDir())).WithObservability(obs)
 	value, found, err := service.WorkspaceDetail(ctx, "drafts")
 	if err != nil || !found {
 		t.Fatalf("workspace detail found=%v err=%v", found, err)
@@ -589,7 +589,7 @@ func TestWorkspaceDetailRemovesDeletedFilesFromTree(t *testing.T) {
 		Timestamp:   3,
 	})
 
-	service := NewService(st, quality.NewService(st, t.TempDir()))
+	service := NewService(st, inspect.NewService(st, t.TempDir()))
 	value, found, err := service.WorkspaceDetail(ctx, "drafts")
 	if err != nil || !found {
 		t.Fatalf("workspace detail found=%v err=%v", found, err)
@@ -642,7 +642,7 @@ func TestWorkspaceDetailMovesRenamedFilesFromObservedActivity(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	service := NewService(st, quality.NewService(st, t.TempDir())).WithObservability(obs)
+	service := NewService(st, inspect.NewService(st, t.TempDir())).WithObservability(obs)
 	value, found, err := service.WorkspaceDetail(ctx, "drafts")
 	if err != nil || !found {
 		t.Fatalf("workspace detail found=%v err=%v", found, err)
@@ -688,7 +688,7 @@ func TestWorkspaceFileDetailReconstructsVersionHistoryWithoutDoubleCounting(t *t
 		t.Fatal(err)
 	}
 
-	service := NewService(st, quality.NewService(st, t.TempDir())).WithObservability(obs)
+	service := NewService(st, inspect.NewService(st, t.TempDir())).WithObservability(obs)
 	value, found, err := service.WorkspaceDetail(ctx, "drafts/files/hash:fnv1a:aaa111")
 	if err != nil || !found {
 		t.Fatalf("workspace file detail found=%v err=%v", found, err)
@@ -741,7 +741,7 @@ func TestPlansEndpointProjectsObservedPlanArtifacts(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	service := NewService(st, quality.NewService(st, t.TempDir())).WithObservability(obs)
+	service := NewService(st, inspect.NewService(st, t.TempDir())).WithObservability(obs)
 	value, err := service.Plans(ctx)
 	if err != nil {
 		t.Fatalf("plans: %v", err)
@@ -814,7 +814,7 @@ func TestPlanDetailProjectsObservedTaskActivity(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	service := NewService(st, quality.NewService(st, t.TempDir())).WithObservability(obs)
+	service := NewService(st, inspect.NewService(st, t.TempDir())).WithObservability(obs)
 	value, found, err := service.PlanDetail(ctx, "plan_tasks")
 	if err != nil || !found {
 		t.Fatalf("plan detail found=%v err=%v", found, err)

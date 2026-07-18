@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Chip } from "@/qw/shell/primitives";
+import { Chip } from "@/devtools/shell/primitives";
 import { AttemptStep, CascadeStep } from "./RoutingReceiptAttemptRows";
 import {
   RoutingReceiptSection,
@@ -92,15 +92,15 @@ function RouterStep({
           <span
             className="rounded-[4px] px-2 py-0.5"
             style={{
-              background: "var(--qw-crux-soft)",
-              color: "var(--qw-crux)",
+              background: "var(--devtools-crux-soft)",
+              color: "var(--devtools-crux)",
             }}
           >
             {step.classifiedAs}
           </span>
         )}
-        <span style={{ color: "var(--qw-fg-faint)" }}>route</span>
-        <span className="font-semibold" style={{ color: "var(--qw-fg)" }}>
+        <span style={{ color: "var(--devtools-fg-faint)" }}>route</span>
+        <span className="font-semibold" style={{ color: "var(--devtools-fg)" }}>
           {step.route ?? "default"}
         </span>
       </div>
@@ -121,17 +121,17 @@ function SplitStep({
         className="grid gap-2 font-mono text-[12px]"
         style={{ gridTemplateColumns: "80px minmax(0, 1fr)" }}
       >
-        <span style={{ color: "var(--qw-fg-faint)" }}>bucket</span>
+        <span style={{ color: "var(--devtools-fg-faint)" }}>bucket</span>
         <span
           className="truncate font-semibold"
-          style={{ color: "var(--qw-fg)" }}
+          style={{ color: "var(--devtools-fg)" }}
         >
           {step.route ?? "-"}
         </span>
         {step.seed && (
           <>
-            <span style={{ color: "var(--qw-fg-faint)" }}>seed</span>
-            <span className="truncate" style={{ color: "var(--qw-fg-muted)" }}>
+            <span style={{ color: "var(--devtools-fg-faint)" }}>seed</span>
+            <span className="truncate" style={{ color: "var(--devtools-fg-muted)" }}>
               {step.seed}
             </span>
           </>

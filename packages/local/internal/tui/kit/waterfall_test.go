@@ -16,7 +16,7 @@ import (
 func TestWaterfallSurvivesAbsoluteTimestamps(t *testing.T) {
 	dur := 1500.0
 	traceStart := int64(1_778_790_044_000) // ms since epoch
-	spans := []api.QualityRunSpan{
+	spans := []api.InspectRunSpan{
 		{ID: "root", Kind: "trace", Name: "support_swarm", StartedAt: traceStart, DurationMs: &dur},
 		{ID: "child", Kind: "tool", Name: "rag.search", ParentID: "root", StartedAt: traceStart + 200, DurationMs: &dur},
 	}
@@ -39,7 +39,7 @@ func TestWaterfallSurvivesAbsoluteTimestamps(t *testing.T) {
 
 func TestWaterfallNoTraceStartFallsBackToMinSpan(t *testing.T) {
 	dur := 100.0
-	spans := []api.QualityRunSpan{
+	spans := []api.InspectRunSpan{
 		{ID: "a", Name: "a", StartedAt: 5000, DurationMs: &dur},
 		{ID: "b", Name: "b", StartedAt: 5100, DurationMs: &dur, ParentID: "a"},
 	}

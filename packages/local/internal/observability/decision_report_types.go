@@ -172,14 +172,14 @@ type TurnSourceRef struct {
 	Snippet string `json:"snippet,omitempty"`
 }
 
-// TurnDecisionCoverage is the scorecard for quality protection.
+// TurnDecisionCoverage is the scorecard for Eval protection.
 type TurnDecisionCoverage struct {
 	Covered int                `json:"covered"`
 	Total   int                `json:"total"`
 	Areas   []TurnCoverageArea `json:"areas"`
 }
 
-// TurnCoverageArea describes one quality protection area. ID is stable for
+// TurnCoverageArea describes one Eval protection area. ID is stable for
 // matchers and filtering; Label is display copy.
 type TurnCoverageArea struct {
 	ID            string `json:"id"`

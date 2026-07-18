@@ -63,7 +63,6 @@ describe("Project Index deployment manifest privacy", () => {
           configuration: { apiKey: "sk-METADATA_SECRET" },
           settings: { password: "PASSWORD_SECRET" },
         },
-        quality: { cassettePaths: ["/private/cassette-secret.json"] },
       },
       {
         id: "context:missing",

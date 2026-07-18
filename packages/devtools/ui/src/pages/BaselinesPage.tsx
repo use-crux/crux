@@ -1,5 +1,5 @@
-import { BaselinesView } from '@/features/baselines/components/BaselinesView'
+import { BaselinesView } from "@/features/baselines/components/BaselinesView";
 
 export function BaselinesPage() {
-  return <BaselinesView />
+  return <BaselinesView />;
 }

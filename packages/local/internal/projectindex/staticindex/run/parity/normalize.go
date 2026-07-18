@@ -187,8 +187,7 @@ func pathField(path string) bool {
 		return true
 	default:
 		return strings.HasSuffix(path, ".source.file") ||
-			strings.HasSuffix(path, ".range.file") ||
-			strings.HasSuffix(path, ".cassettePaths[]")
+			strings.HasSuffix(path, ".range.file")
 	}
 }
 

@@ -97,7 +97,7 @@ func TestRequireSessionAuth_tokenizedApiRequestPassesWithoutRedirect(t *testing.
 	}
 }
 
-func TestRequireSessionAuth_ingestBearerCanOnlyPostObservabilityRecords(t *testing.T) {
+func TestRequireSessionAuth_ingestBearerCanOnlyIngestRecordsAndSubmitFeedback(t *testing.T) {
 	const sessionToken = "session-token"
 	const ingestToken = "ingest-token"
 	srv := httptest.NewServer(requireSessionAuth(sessionToken, ingestToken, okHandler()))
@@ -111,13 +111,23 @@ func TestRequireSessionAuth_ingestBearerCanOnlyPostObservabilityRecords(t *testi
 	if code := getStatusReq(t, srv.Client(), req); code != http.StatusOK {
 		t.Fatalf("POST /api/observability/records with ingest bearer = %d, want 200", code)
 	}
+	req, err = http.NewRequest(http.MethodPost, srv.URL+"/api/feedback", nil)
+	if err != nil {
+		t.Fatalf("new feedback request: %v", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+ingestToken)
+	if code := getStatusReq(t, srv.Client(), req); code != http.StatusOK {
+		t.Fatalf("POST /api/feedback with ingest bearer = %d, want 200", code)
+	}
 
 	for _, tc := range []struct {
 		method string
 		path   string
 	}{
 		{method: http.MethodGet, path: "/api/observability/runs/page"},
-		{method: http.MethodPost, path: "/api/quality/run"},
+		{method: http.MethodGet, path: "/api/feedback"},
+		{method: http.MethodPost, path: "/api/inspect/run"},
+		{method: http.MethodPost, path: "/api/reviews/review_1/actions"},
 		{method: http.MethodGet, path: "/ws/ui"},
 	} {
 		req, err := http.NewRequest(tc.method, srv.URL+tc.path, nil)

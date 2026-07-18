@@ -4,13 +4,16 @@ import (
 	"net/http"
 
 	"github.com/use-crux/crux/packages/local/internal/devtools"
+	"github.com/use-crux/crux/packages/local/internal/evalfs"
+	"github.com/use-crux/crux/packages/local/internal/evalrunner"
+	"github.com/use-crux/crux/packages/local/internal/evalwriter"
+	"github.com/use-crux/crux/packages/local/internal/inspect"
 	"github.com/use-crux/crux/packages/local/internal/observability"
-	"github.com/use-crux/crux/packages/local/internal/quality"
 	"github.com/use-crux/crux/packages/local/internal/readmodel"
 	"github.com/use-crux/crux/packages/local/internal/readmodel/endpoints"
 	"github.com/use-crux/crux/packages/local/internal/resourceinspection"
+	"github.com/use-crux/crux/packages/local/internal/review"
 	"github.com/use-crux/crux/packages/local/internal/runtimebridge"
-	qualityserver "github.com/use-crux/crux/packages/local/internal/server/quality"
 )
 
 // Hub is the route-facing websocket surface used by localserver. The concrete
@@ -30,18 +33,23 @@ type SourceResolverOptions struct {
 // Options contains the services and assets needed to mount Crux Local HTTP
 // routes. It intentionally has no listener, port, or shutdown ownership.
 type Options struct {
-	Devtools           *devtools.Service
-	Quality            *quality.Service
-	Observability      *observability.Service
-	RuntimeBridge      *runtimebridge.Service
-	ResourceInspection *resourceinspection.Service
-	Hub                Hub
-	ProjectRoot        string
-	ConfigPath         string
-	QualityRunner      qualityserver.RunnerDeps
-	SourceResolver     SourceResolverOptions
-	UI                 http.Handler
-	OriginAllowed      func(*http.Request) bool
+	Devtools                 *devtools.Service
+	Inspect                  *inspect.Service
+	Observability            *observability.Service
+	Review                   *review.Service
+	ReviewWriter             review.RepositoryWriter
+	ReviewRepositoryWritable bool
+	BaselineWriter           evalwriter.BaselineWriter
+	EvalRunner               evalrunner.Runner
+	EvalCatalog              endpoints.EvalCatalogReads
+	RuntimeBridge            *runtimebridge.Service
+	ResourceInspection       *resourceinspection.Service
+	Hub                      Hub
+	ProjectRoot              string
+	ConfigPath               string
+	SourceResolver           SourceResolverOptions
+	UI                       http.Handler
+	OriginAllowed            func(*http.Request) bool
 }
 
 // New mounts the local runtime HTTP API and UI routes. Server lifecycle code
@@ -62,23 +70,24 @@ func New(options Options) http.Handler {
 
 	mux := http.NewServeMux()
 	readmodel.Mount(mux, endpoints.Deps{
-		Devtools: options.Devtools,
-		Catalog:  options.Devtools,
-		Quality:  options.Quality,
-		Evaluations: qualityserver.NewEvaluationCollector(
-			options.ProjectRoot,
-			options.ConfigPath,
-			options.QualityRunner,
-		),
+		Devtools:    options.Devtools,
+		Catalog:     options.Devtools,
+		Inspect:     options.Inspect,
+		Eval:        evalfs.OpenProject(options.ProjectRoot),
+		EvalCatalog: options.EvalCatalog,
+		Reviews:     options.Review,
 	}, endpoints.Registry)
 
-	registerQualityRoutes(mux, options.Quality, options.Hub, options.ProjectRoot, options.ConfigPath, options.QualityRunner)
+	registerInspectRoutes(mux, options.Inspect)
 	if options.Hub != nil {
 		mux.HandleFunc("/ws/ui", options.Hub.HandleUpgrade)
 	}
 	registerRuntimeBridgeRoutes(mux, runtimeBridge, originAllowed)
 	registerResourceRoutes(mux, resourceInspection)
-	registerObservabilityRoutesWithCatalog(mux, options.Observability, qualityEvents(options.Quality), options.Devtools)
+	registerObservabilityRoutesWithReview(mux, options.Observability, inspectEvents(options.Inspect), options.Devtools, options.Review)
+	registerFeedbackRoutes(mux, options.Review, options.Observability)
+	registerReviewRoutes(mux, options.Review, options.ReviewWriter, options.ReviewRepositoryWritable)
+	registerEvalRoutes(mux, options.BaselineWriter, options.EvalRunner)
 	registerIndexRoutes(mux, options.Devtools)
 	registerRuntimeRoutes(mux, options.Devtools, options.ProjectRoot)
 
@@ -95,7 +104,7 @@ func New(options Options) http.Handler {
 	return corsMiddleware(mux, originAllowed)
 }
 
-func qualityEvents(service *quality.Service) *quality.EventBus {
+func inspectEvents(service *inspect.Service) *inspect.EventBus {
 	if service == nil {
 		return nil
 	}

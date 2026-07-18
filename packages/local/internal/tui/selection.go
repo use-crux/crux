@@ -7,14 +7,9 @@ package tui
 type Kind string
 
 const (
-	KindRun        Kind = "run"
-	KindSpan       Kind = "span"
-	KindInsight    Kind = "insight"
-	KindExperiment Kind = "experiment"
-	KindDataset    Kind = "dataset"
-	KindBaseline   Kind = "baseline"
-	KindFeedback   Kind = "feedback"
-	KindCassette   Kind = "cassette"
+	KindRun     Kind = "run"
+	KindSpan    Kind = "span"
+	KindInsight Kind = "insight"
 )
 
 // GetSelection returns the workbench's currently-staged id for `kind`,

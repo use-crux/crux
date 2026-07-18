@@ -14,7 +14,7 @@ import {
   evaluateGuardrail,
   guardrail,
   toolPolicy,
-} from '@use-crux/core/safety'
+} from "@use-crux/core/safety";
 ```
 
 `@use-crux/core/safety` is the runtime policy boundary engine. Policies are
@@ -26,20 +26,20 @@ policies and attaches them globally, to prompts/contexts, or per call.
 
 Policies bind to typed boundary descriptors:
 
-| Helper | Boundary |
-| --- | --- |
-| `boundary.input.text()` | User input text before provider execution. |
-| `boundary.input.media()` | Each canonical non-text part in user input before provider normalization. |
-| `boundary.input.model()` | Model input text. |
-| `boundary.output.text()` | Final model output text. |
-| `boundary.output.object<T>()` | Parsed structured output object. |
-| `boundary.output.both<T>()` | `{ text, object }` structured output pair. |
-| `boundary.output.path<T>()('a.b')` | Typed structured-output path. |
-| `boundary.tool.call()` / `boundary.tool.result()` | Tool arguments and results. |
-| `boundary.approval.request()` | Human approval request payloads. |
-| `boundary.retrieval.result()` | Retrieval hits before model consumption. |
-| `boundary.memory.write<T>()` | Candidate memory writes. |
-| `boundary.validation.feedback()` | Corrective validation feedback before re-prompting. |
+| Helper                                            | Boundary                                            |
+| ------------------------------------------------- | --------------------------------------------------- |
+| `boundary.input.text()`                           | User input text before provider execution.          |
+| `boundary.input.media()`                          | Each canonical non-text input part.                 |
+| `boundary.input.model()`                          | Model input text.                                   |
+| `boundary.output.text()`                          | Final model output text.                            |
+| `boundary.output.object<T>()`                     | Parsed structured output object.                    |
+| `boundary.output.both<T>()`                       | `{ text, object }` structured output pair.          |
+| `boundary.output.path<T>()('a.b')`                | Typed structured-output path.                       |
+| `boundary.tool.call()` / `boundary.tool.result()` | Tool arguments and results.                         |
+| `boundary.approval.request()`                     | Human approval request payloads.                    |
+| `boundary.retrieval.result()`                     | Retrieval hits before model consumption.            |
+| `boundary.memory.write<T>()`                      | Candidate memory writes.                            |
+| `boundary.validation.feedback()`                  | Corrective validation feedback before re-prompting. |
 
 Boundary ids are stable decision/config ids. `boundary.stream.*` is not a
 public boundary family; streaming is configured on output guardrails.
@@ -80,11 +80,11 @@ or `hold`.
 
 ```ts
 const pii = guardrail({
-  id: 'pii',
-  category: 'pii',
+  id: "pii",
+  category: "pii",
   on: [boundary.input.text(), boundary.output.text()],
-  run: guardrail.pii({ strategy: 'mask' }),
-})
+  run: guardrail.pii({ strategy: "mask" }),
+});
 ```
 
 Built-in strategies:
@@ -162,15 +162,15 @@ guarded output candidates.
 
 ```ts
 const citeSources = constraint({
-  id: 'cite-sources',
+  id: "cite-sources",
   on: boundary.output.text(),
-  severity: 'assert',
+  severity: "assert",
   maxRetries: 2,
   run: async (text) =>
-    text.includes('[1]')
+    text.includes("[1]")
       ? { pass: true }
-      : { pass: false, feedback: 'Include at least one citation.' },
-})
+      : { pass: false, feedback: "Include at least one citation." },
+});
 ```
 
 Built-in strategies include `constraint.judge({ judge, minScore })` and
@@ -187,20 +187,20 @@ and Devtools Explain entries.
 
 ```ts
 const blockDeletes = toolPolicy({
-  id: 'block-delete',
-  match: { tool: 'deleteUser' },
-  action: 'block',
-  reason: 'Delete user requires an operator override.',
-})
+  id: "block-delete",
+  match: { tool: "deleteUser" },
+  action: "block",
+  reason: "Delete user requires an operator override.",
+});
 
 const screenResults = toolPolicy.result({
-  id: 'screen-customer-result',
-  match: { tool: 'lookupCustomer' },
+  id: "screen-customer-result",
+  match: { tool: "lookupCustomer" },
   run: async ({ output }) =>
-    typeof output === 'string' && output.includes('ssn')
-      ? { action: 'block', reason: 'Tool result contained sensitive data.' }
-      : { action: 'allow' },
-})
+    typeof output === "string" && output.includes("ssn")
+      ? { action: "block", reason: "Tool result contained sensitive data." }
+      : { action: "allow" },
+});
 ```
 
 Use `toolMiddleware()` instead for execution plumbing such as logging, timing,
@@ -211,12 +211,14 @@ caching, retry wrapping, or argument normalization.
 Global policies are installed with `createSafetyPlugin()`:
 
 ```ts
-import { config } from '@use-crux/core'
-import { createSafetyPlugin } from '@use-crux/core/safety'
+import { config } from "@use-crux/core";
+import { createSafetyPlugin } from "@use-crux/core/safety";
 
 config({
-  plugins: [createSafetyPlugin({ guardrails: [pii], constraints: [citeSources] })],
-})
+  plugins: [
+    createSafetyPlugin({ guardrails: [pii], constraints: [citeSources] }),
+  ],
+});
 ```
 
 Prompt, context, and call-site policies compose into the same registry.
@@ -233,16 +235,22 @@ Adapters consume safety through `createSafety()`. Custom adapter dialects call:
 4. `openStream()` for streamed text.
 
 ```ts
-const safety = createSafety({ call: opts, resolved, promptId, model, systemPrompt })
+const safety = createSafety({
+  call: opts,
+  resolved,
+  promptId,
+  model,
+  systemPrompt,
+});
 
-;({ messages } = await safety.guardInput({ messages }))
+({ messages } = await safety.guardInput({ messages }));
 
 const final = await safety.finalizeOutput(output, regenerate, {
-  suspended: finishReason === 'tool_approval_required',
+  suspended: finishReason === "tool_approval_required",
   messages,
-})
+});
 
-const meta = safety.stamp(traceMeta)
+const meta = safety.stamp(traceMeta);
 ```
 
 `finalizeOutput()` applies output guardrails before constraints. Regenerated
@@ -266,11 +274,11 @@ await adapter.generate(prompt, {
   input,
   safety: {
     tune: {
-      pii: { mode: 'report' },
-      'cite-sources': { enabled: true },
+      pii: { mode: "report" },
+      "cite-sources": { enabled: true },
     },
   },
-})
+});
 ```
 
 Allowed tune fields are `mode`, `stream`, and `enabled`. Unknown ids throw.
@@ -282,23 +290,23 @@ the canonical part type and original pre-strip indexes, never the media source.
 
 ## Choosing The Primitive
 
-| Need | Use |
-| --- | --- |
-| Block, redact, transform, or warn on raw input/output | `guardrail()` |
-| Enforce business rules on generated output and retry | `constraint()` |
-| Gate tool calls, tool results, or approvals as Safety decisions | `toolPolicy()` |
-| Instrument or modify tool execution mechanics | `toolMiddleware()` |
-| Enforce a minimum LLM-judge score and retry | `constraint.judge(...)` |
-| Regression-test a production constraint in eval suites | `constraintScorer()` from `@use-crux/core/quality` |
-| Repair JSON/schema parse failures | `validationRetry` |
+| Need                                                            | Use                                             |
+| --------------------------------------------------------------- | ----------------------------------------------- |
+| Block, redact, transform, or warn on raw input/output           | `guardrail()`                                   |
+| Enforce business rules on generated output and retry            | `constraint()`                                  |
+| Gate tool calls, tool results, or approvals as Safety decisions | `toolPolicy()`                                  |
+| Instrument or modify tool execution mechanics                   | `toolMiddleware()`                              |
+| Enforce a minimum LLM-judge score and retry                     | `constraint.judge(...)`                         |
+| Regression-test production Safety behavior in Evals             | `ctx.expect.safety` or `ctx.expect.decisionReport.safety` |
+| Repair JSON/schema parse failures                               | `validationRetry`                               |
 
 ## Testing
 
 Use `evaluateGuardrail()` and `evaluateConstraint()` for focused policy tests.
-Use Quality decision-report matchers for runtime behavior:
+Use Eval decision-report matchers for runtime behavior:
 
 ```ts
-ctx.expect.decisionReport.safety.toHaveOutcome('pii', 'rewrite')
+ctx.expect.decisionReport.safety.toHaveOutcome("pii", "rewrite");
 ```
 
 ## Security Utilities
@@ -315,7 +323,7 @@ import {
   truncate,
   userContent,
   detectSuspiciousPatterns,
-} from '@use-crux/core'
+} from "@use-crux/core";
 ```
 
 ### `escapeXml(text)`
@@ -338,10 +346,10 @@ the text exceeds the limit, the result is sliced and a `… [truncated]` suffix
 is appended:
 
 ```ts
-import { truncate } from '@use-crux/core'
+import { truncate } from "@use-crux/core";
 
-truncate(longArticle) // → first 10,000 chars + "… [truncated]"
-truncate(userQuery, 500) // → first 500 chars + "… [truncated]"
+truncate(longArticle); // → first 10,000 chars + "… [truncated]"
+truncate(userQuery, 500); // → first 500 chars + "… [truncated]"
 ```
 
 ### `raw(text)`
@@ -354,7 +362,7 @@ source:
 safe`
   System-generated HTML: ${raw(trustedHtml)}
   User query: ${userQuery}
-`
+`;
 // trustedHtml is interpolated as-is; userQuery is escaped
 ```
 
@@ -367,7 +375,7 @@ Combines `truncate` and `escapeXml` in a single call. Returns a `SafeWrapper`:
 use only inside `safe` templates:
 
 ```ts
-safe`Query: ${limit(userQuery, 500)}`
+safe`Query: ${limit(userQuery, 500)}`;
 // userQuery is truncated to 500 chars, then XML-escaped
 ```
 
@@ -379,10 +387,10 @@ the model where user content starts and ends, reducing the chance of
 instruction following from injected content:
 
 ```ts
-safe`Instruction: ${wrap(instruction)}`
+safe`Instruction: ${wrap(instruction)}`;
 // → Instruction: <user-input>escaped content</user-input>
 
-safe`${wrap(feedback, 'customer-feedback')}`
+safe`${wrap(feedback, "customer-feedback")}`;
 // → <customer-feedback>escaped content</customer-feedback>
 ```
 
@@ -397,10 +405,10 @@ text and wraps it in `<user-input>` delimiters. Use this in regular template
 literals or anywhere outside `safe` templates:
 
 ```ts
-const prompt = `Instruction: ${userContent(instruction)}`
+const prompt = `Instruction: ${userContent(instruction)}`;
 // → Instruction: <user-input>escaped content</user-input>
 
-const prompt = `Feedback: ${userContent(feedback, 'customer-feedback')}`
+const prompt = `Feedback: ${userContent(feedback, "customer-feedback")}`;
 // → Feedback: <customer-feedback>escaped content</customer-feedback>
 ```
 
@@ -409,18 +417,18 @@ const prompt = `Feedback: ${userContent(feedback, 'customer-feedback')}`
 A dev-time heuristic that returns an array of warning strings. It checks for
 three categories of suspicious input:
 
-| Category                   | Examples detected                                                                                        |
-| -------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Category                   | Examples detected                                                                                       |
+| -------------------------- | ------------------------------------------------------------------------------------------------------- |
 | **Role injection**         | `</system>`, `</assistant>`, `<\|im_start\|>`: attempts to close or open model-level message delimiters |
 | **Instruction override**   | `ignore previous`, `disregard`, `new instructions`: attempts to override system-level instructions      |
 | **Delimiter manipulation** | `---`, `===`, `***`: attempts to inject visual separators that could confuse prompt structure           |
 
 ```ts title="validation.ts"
-import { detectSuspiciousPatterns } from '@use-crux/core'
+import { detectSuspiciousPatterns } from "@use-crux/core";
 
-const warnings = detectSuspiciousPatterns(userInput)
+const warnings = detectSuspiciousPatterns(userInput);
 if (warnings.length > 0) {
-  console.warn('Suspicious input:', warnings)
+  console.warn("Suspicious input:", warnings);
 }
 ```
 
@@ -437,19 +445,19 @@ triggered it. `emitSecurityWarningSpan` opens a real span, not a free-floating
 `span:event`. Subscribe to the graph stream for custom integrations:
 
 ```ts
-import { subscribeObservability } from '@use-crux/core/observability'
+import { subscribeObservability } from "@use-crux/core/observability";
 
 const unsubscribe = subscribeObservability((record) => {
   // emitSecurityWarningSpan opens a real span (not a free-floating span:event).
-  if (record.type === 'span:start' && record.primitive === 'security.warning') {
+  if (record.type === "span:start" && record.primitive === "security.warning") {
     // attributes: promptId, field, pattern, inputPreview
-    myLogger.send(record)
+    myLogger.send(record);
   }
-  if (record.type === 'artifact' && record.kind === 'security.report') {
+  if (record.type === "artifact" && record.kind === "security.report") {
     // JSON preview carries severity, message, field, pattern
-    myLogger.send(record)
+    myLogger.send(record);
   }
-})
+});
 
 // later: unsubscribe()
 ```

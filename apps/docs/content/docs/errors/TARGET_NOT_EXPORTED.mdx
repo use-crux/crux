@@ -20,9 +20,9 @@ Local object-bound calls can still use the value in the same module. Durable run
 Move the target to a top-level named export:
 
 ```ts
-export const reviewFlow = flow('review', async (flow) => {
+export const reviewFlow = flow("review", async (flow) => {
   // ...
-})
+});
 ```
 
 Then run `crux runtime generate`.

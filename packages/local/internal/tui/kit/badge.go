@@ -1,5 +1,5 @@
 // Package components contains small render-only widgets reused across the
-// Quality screens — chips/pills, sparklines, status dots, ASCII charts. None
+// Devtools screens — chips/pills, sparklines, status dots, ASCII charts. None
 // of these own state; they take inputs and return a string.
 package kit
 

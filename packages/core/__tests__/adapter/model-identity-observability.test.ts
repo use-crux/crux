@@ -48,6 +48,24 @@ afterEach(() => {
 })
 
 describe('SDK model identity boundaries', () => {
+  it('returns the authoritative generation run ID on the canonical result', async () => {
+    const { runtime } = objectModelRuntime()
+    const executor = loopRuntimeAdapter(runtime)
+    const spanStarts: Array<{ primitive?: string; runId?: string }> = []
+    subscribeObservability(['span:start'], (record) => spanStarts.push(record))
+
+    const result = await executor.generate(testPrompt, {
+      model,
+      input: { instruction: 'generate' },
+    })
+    const generation = spanStarts.find(
+      (record) => record.primitive === 'generation.call',
+    )
+
+    expect(result.runId).toMatch(/^run_[0-9a-f]{24}$/)
+    expect(result.runId).toBe(generation?.runId)
+  })
+
   it('keeps the original model in generate middleware while tracing the normalized model ID', async () => {
     const { runtime } = objectModelRuntime()
     const executor = loopRuntimeAdapter(runtime)
@@ -88,7 +106,7 @@ describe('SDK model identity boundaries', () => {
     })
     subscribeObservability(['span:start'], (record) => spanStarts.push(record))
 
-    await executor.stream(testPrompt, {
+    const result = await executor.stream(testPrompt, {
       model,
       input: { instruction: 'stream' },
     })
@@ -100,5 +118,9 @@ describe('SDK model identity boundaries', () => {
         attributes: expect.objectContaining({ model: model.modelId }),
       }),
     )
+    const generation = spanStarts.find(
+      (record) => record.primitive === 'generation.stream',
+    )
+    expect(result.runId).toBe(generation?.runId)
   })
 })

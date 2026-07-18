@@ -40,7 +40,6 @@ type CatalogDefinitionV1 struct {
 	Evidence        []CatalogEvidenceV1       `json:"evidence"`
 	Diagnostics     []IndexDiagnostic         `json:"diagnostics"`
 	Lints           []IndexLintFinding        `json:"lints"`
-	Quality         *IndexQuality             `json:"quality,omitempty"`
 	RuntimeActivity *CatalogRuntimeActivityV1 `json:"runtimeActivity,omitempty"`
 }
 

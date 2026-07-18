@@ -18,10 +18,7 @@ import { stringValue } from "./media-run-helpers";
 import type { MediaCatalogJoin } from "./media-run-projection-types";
 
 /** Exact attribute keys accepted as recorded Catalog definition identity. */
-const DEFINITION_ID_KEYS = [
-  "definitionId",
-  "catalogDefinitionId",
-] as const;
+const DEFINITION_ID_KEYS = ["definitionId", "catalogDefinitionId"] as const;
 
 const DEFINITION_NAME_KEYS = [
   "definitionName",

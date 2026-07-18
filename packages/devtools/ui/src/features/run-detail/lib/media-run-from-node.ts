@@ -76,7 +76,9 @@ function flattenNodeGraph(
     }
     for (const relation of node.relations ?? []) {
       const fromId =
-        typeof relation.from === "object" && relation.from && "id" in relation.from
+        typeof relation.from === "object" &&
+        relation.from &&
+        "id" in relation.from
           ? String(relation.from.id)
           : undefined;
       const toId =

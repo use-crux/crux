@@ -79,70 +79,6 @@ fn finalize_validates_lint_config_when_profile_is_off() {
 }
 
 #[test]
-fn finalize_emits_quality_missing_baseline_from_quality_metadata() {
-    let policies = built_in_relation_policy_table();
-    let output = finalize_static_index_values_with_lint_options(
-        &[],
-        &[json!({
-            "definitions": [{
-                "id": "quality-target:writer",
-                "kind": "quality.target",
-                "name": "writer",
-                "fidelity": "resolved",
-                "quality": {
-                    "experimentIds": ["experiment:writer"],
-                    "experimentCount": 1,
-                    "passRate": 0.8,
-                    "lastRunId": "experiment:writer"
-                }
-            }]
-        })],
-        &policies,
-        &StaticIndexLintOptions::default(),
-    );
-
-    assert!(
-        output
-            .model
-            .facts
-            .lint_findings
-            .iter()
-            .any(|finding| finding.rule_id == "quality.missing_baseline")
-    );
-}
-
-#[test]
-fn finalize_skips_quality_missing_baseline_when_baseline_exists() {
-    let policies = built_in_relation_policy_table();
-    let output = finalize_static_index_values_with_lint_options(
-        &[],
-        &[json!({
-            "definitions": [{
-                "id": "quality-target:writer",
-                "kind": "quality.target",
-                "name": "writer",
-                "fidelity": "resolved",
-                "quality": {
-                    "experimentIds": ["experiment:writer"],
-                    "baselineIds": ["baseline:writer"]
-                }
-            }]
-        })],
-        &policies,
-        &StaticIndexLintOptions::default(),
-    );
-
-    assert!(
-        output
-            .model
-            .facts
-            .lint_findings
-            .iter()
-            .all(|finding| finding.rule_id != "quality.missing_baseline")
-    );
-}
-
-#[test]
 fn finalize_uses_lint_facts_without_materializing_lint_input_definitions() {
     let policies = built_in_relation_policy_table();
     let output = finalize_static_index_values_with_lint_facts(
@@ -150,14 +86,18 @@ fn finalize_uses_lint_facts_without_materializing_lint_input_definitions() {
         &[],
         &[json!({
             "definitions": [{
-                "id": "quality-target:writer",
-                "kind": "quality.target",
+                "id": "eval:writer",
+                "kind": "eval",
                 "name": "writer",
-                "fidelity": "resolved",
-                "quality": {
-                    "experimentIds": ["experiment:writer"],
-                    "experimentCount": 1
-                }
+                "fidelity": "resolved"
+            }],
+            "lintFindings": [{
+                "id": "lint:writer",
+                "ruleId": "definition.missing_eval_coverage",
+                "severity": "info",
+                "title": "Definition has no eval coverage",
+                "message": "writer is not covered",
+                "evidence": []
             }]
         })],
         &policies,
@@ -171,7 +111,7 @@ fn finalize_uses_lint_facts_without_materializing_lint_input_definitions() {
             .facts
             .lint_findings
             .iter()
-            .any(|finding| finding.rule_id == "quality.missing_baseline")
+            .any(|finding| finding.rule_id == "definition.missing_eval_coverage")
     );
 }
 

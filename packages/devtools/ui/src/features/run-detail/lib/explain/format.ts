@@ -8,8 +8,8 @@
 
 /** Format an age in milliseconds as a compact `m`/`h` string (`'30m'`, `'1.5h'`). */
 export function fmtAge(ms: number | undefined): string {
-  if (ms == null || !Number.isFinite(ms)) return '—'
-  const hours = ms / 3_600_000
-  if (hours >= 1) return `${hours.toFixed(1).replace(/\.0$/, '')}h`
-  return `${Math.round(ms / 60_000)}m`
+  if (ms == null || !Number.isFinite(ms)) return "—";
+  const hours = ms / 3_600_000;
+  if (hours >= 1) return `${hours.toFixed(1).replace(/\.0$/, "")}h`;
+  return `${Math.round(ms / 60_000)}m`;
 }

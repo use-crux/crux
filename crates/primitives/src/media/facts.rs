@@ -230,7 +230,7 @@ fn media_relations(
     }
     for (relation, property) in [
         ("media.uses_routing", "model"),
-        ("media.evaluation_target", "evaluation"),
+        ("media.eval_target", "eval"),
         ("media.uses_storage", "storage"),
     ] {
         if let Some(target) =

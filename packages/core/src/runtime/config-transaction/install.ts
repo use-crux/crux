@@ -22,11 +22,13 @@ export function installRuntimeConfigPlan(
   if (plan.observability.kind === 'identity') {
     restoreObservability = ports.observability.configure({
       identity: plan.observability.identity,
+      ...observabilityPolicyOptions(plan.observability),
     })
   } else if (plan.observability.kind === 'owned') {
     restoreObservability = ports.observability.configure({
       transport: plan.observability.transport,
       delivery: plan.observability.delivery,
+      ...observabilityPolicyOptions(plan.observability),
       ...(Object.hasOwn(plan.observability, 'identity')
         ? { identity: plan.observability.identity }
         : {}),
@@ -41,10 +43,18 @@ export function installRuntimeConfigPlan(
     restoreObservability = ports.observability.configure({
       transport,
       delivery: plan.observability.delivery,
+      ...observabilityPolicyOptions(plan.observability),
       ...(Object.hasOwn(plan.observability, 'identity')
         ? { identity: plan.observability.identity }
         : {}),
     })
+  } else if (
+    plan.observability.feedbackDestination !== undefined ||
+    plan.observability.redactPaths !== undefined
+  ) {
+    restoreObservability = ports.observability.configure(
+      observabilityPolicyOptions(plan.observability),
+    )
   }
 
   let hooks: CruxHooks = { ...previousHooks, ...hooksPatch }
@@ -92,6 +102,17 @@ export function installRuntimeConfigPlan(
         },
       })
     },
+  }
+}
+
+function observabilityPolicyOptions(
+  plan: import('./types').RuntimeConfigObservabilityPlan,
+) {
+  return {
+    ...(plan.feedbackDestination !== undefined
+      ? { feedbackDestination: plan.feedbackDestination }
+      : {}),
+    ...(plan.redactPaths !== undefined ? { redactPaths: plan.redactPaths } : {}),
   }
 }
 

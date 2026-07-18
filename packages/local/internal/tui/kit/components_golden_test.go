@@ -21,10 +21,6 @@ func TestComponentGolden(t *testing.T) {
 	}
 	lines = append(lines, Box("Detail", []string{"body", "overflow text that clips"}, Rect{W: 24, H: 4}, true, styles)...)
 	lines = append(lines, Chart([]float64{88, 91, 94, 90}, Rect{W: 24, H: 4}, theme.ToneTeal, styles)...)
-	lines = append(lines, Matrix([]VariantMetrics{
-		{Name: "baseline", Pass: 0.96, Score: 0.8, Tokens: 4500, Delta: "0", Baseline: true},
-		{Name: "dedupe", Pass: 0.97, Score: 0.82, Tokens: 4200, Delta: "+1", Winner: true},
-	}, Rect{W: 48, H: 4}, 1, styles)...)
 	lines = append(lines, DiffBlock([]DiffLine{
 		{Kind: "-", Text: "maxIterations: 16"},
 		{Kind: "+", Text: "maxIterations: 3"},
@@ -39,7 +35,6 @@ func TestComponentsStayBounded(t *testing.T) {
 	cases := [][]string{
 		Box("Long title that should clip", []string{"Long body text that should clip"}, Rect{W: 12, H: 3}, true, styles),
 		DiffBlock([]DiffLine{{Kind: "+", Text: strings.Repeat("x", 40)}}, Rect{W: 10, H: 2}, styles),
-		Matrix([]VariantMetrics{{Name: strings.Repeat("v", 40)}}, Rect{W: 24, H: 3}, 0, styles),
 	}
 	for _, lines := range cases {
 		for _, line := range lines {

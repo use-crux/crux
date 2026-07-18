@@ -1,0 +1,287 @@
+---
+title: Evals
+description: Test production AI tasks with typed Cases, Variants, automatic evidence reuse, and explicit Baselines.
+---
+
+# Evals
+
+An Eval exercises the same callable task your application calls in production.
+It contains Cases and checks; running it produces an Eval run. A Variant
+describes a possible change, and a Baseline is a complete historical run you
+explicitly accepted for relative comparison.
+
+These are the five concepts to learn:
+
+- **Eval** — an inert source definition containing a task, Cases, and checks.
+- **Case** — one typed input with optional expected evidence and configuration.
+- **Variant** — a named candidate containing only differences from Current.
+- **Eval run** — persisted evidence from executing an Eval.
+- **Baseline** — an explicitly accepted complete Eval run and selected arm.
+
+Current is always the production task with its bound defaults. Evidence keys,
+host jobs, reservations, and fingerprints are automatic implementation details.
+
+## Define production behavior once
+
+```ts title="src/support.ts"
+import { generate, stableModel } from "@use-crux/ai";
+import { openai } from "@ai-sdk/openai";
+import { prompt } from "@use-crux/core";
+import { z } from "zod";
+
+export const supportInput = z.object({ question: z.string() });
+
+export const supportPrompt = prompt({
+  id: "support",
+  input: supportInput,
+  output: z.object({ answer: z.string() }),
+  system: "Answer support questions accurately and concisely.",
+  prompt: ({ input }) => input.question,
+});
+
+export const support = generate.task(supportPrompt, {
+  model: stableModel(openai("gpt-4o-mini")),
+  temperature: 0.2,
+});
+
+const result = await support({ question: "Can I get a refund?" });
+```
+
+`generate.task()` remains a normal callable production function. Evals use its
+private provider-neutral descriptor; you do not define an Eval-only copy.
+`stableModel()` returns the exact same AI SDK model and type while attesting
+that its hidden provider configuration is stable enough for exact evidence
+reuse. It needs no key for standard provider models.
+
+For a small local check, `task` may also be an ordinary async function. Crux
+runs it inside an observed Eval cell, but cannot prove a reusable fingerprint,
+structured response, remote deployment, or maximum cost for arbitrary code.
+Use a managed task when you want automatic evidence reuse, file-backed Cases,
+typed Variants, or Runtime-hosted execution.
+
+## Add an Eval
+
+```ts title="evals/support.eval.ts"
+import { evaluate } from "@use-crux/core/eval";
+import { support } from "../src/support";
+
+export default evaluate({
+  id: "support",
+  task: support,
+  cases: [
+    {
+      id: "refund",
+      input: { question: "Can I get a refund?" },
+      expected: { answer: "Yes" },
+    },
+  ],
+  expect: ({ output, expected, expect }) => {
+    expect(output.answer).toContain(expected.answer);
+  },
+});
+```
+
+Each `*.eval.ts` file has one default Eval export. The task controls Case input
+and semantic output types. Run it with `crux eval support`; bare `crux eval`
+discovers all Evals. Repeated runs reuse only exact safe task and managed-scorer
+evidence while deterministic assertions and Gates rerun locally.
+
+Function-form `prompt`, `system`, and `messages` fields work with automatic
+reuse. Crux does not call those functions or hash their JavaScript source to
+build the initial identity. Instead, the Node coordinator fingerprints the Eval file and its deterministic
+project-source dependency closure, including transitive relative imports and
+workspace packages reached through package-manager symlinks. Installed package
+internals are represented by their package version and export identity. An
+imported prompt edit or package upgrade therefore misses old evidence; an
+unchanged callback reuses it.
+
+When an exact evidence candidate exists, Crux re-renders the prompt locally for
+that Case without making a model call. It compares a one-way fingerprint with
+the exact normalized prompt captured by the original generate/stream request.
+If they differ, Crux runs only that cell fresh and reports
+`nondeterministic_renderer`. Raw rendered prompts are never stored for this
+check.
+
+Import the managed production task into the Eval, as in the example above.
+When a managed task is constructed inside the Eval file, Crux cannot separate
+task source from assertion/scorer edits conservatively, so it runs fresh and
+reports `task_binding_untracked`. Move the managed task to a production module
+and import it with literal ESM. This keeps ordinary
+assertion-only and deterministic-scorer-only edits cheap: task evidence is
+reused while the changed local assessment runs again.
+
+A Variant prompt containing callback-valued `system`, `prompt`, or `messages`
+is rejected because the Eval-local callback is not a durable arm identity.
+Move that prompt into an imported managed task and replace the Variant `task`.
+
+Keep authored prompt dependencies in literal ESM imports. A non-literal dynamic
+import, CommonJS or generated module, unreadable local module, or outside source
+without a portable workspace identity makes the run safely fresh and reports
+`unresolved_source_dependency`. Callback behavior may not depend invisibly on
+ambient environment variables, filesystem contents, or network state. Route
+that variability through Case input, call options, or Variants; use `--fresh`
+when ambient behavior is intentional.
+
+## Cases in files
+
+```ts
+import { caseFile, evaluate } from "@use-crux/core/eval";
+import { z } from "zod";
+import { support, supportInput } from "../src/support";
+
+const expected = z.object({ phrase: z.string() });
+
+export default evaluate({
+  task: support,
+  cases: [
+    caseFile("./fixtures/refunds.jsonl", {
+      input: supportInput,
+      expected,
+    }),
+  ],
+});
+```
+
+Relative `caseFile()` paths resolve from the declaring Eval file, like a
+relative import—not from the working directory. The sibling
+`<name>.cases.jsonl` file is loaded automatically and receives explicitly
+reviewed source-controlled regression Cases.
+
+## Variants and blocking
+
+```ts
+export default evaluate({
+  task: support,
+  cases: [{ id: "refund", input: { question: "Can I get a refund?" } }],
+  variants: { deterministic: { temperature: 0 } },
+});
+```
+
+Current and all Variants run by default, but only Current blocks the ordinary
+command. `crux eval support --variant deterministic` keeps Current for context
+and makes `deterministic` blocking too. `current` and `baseline` are reserved
+names.
+
+## Checks and performance
+
+Assertions verify semantic output. Scorers measure. Gates decide blocking:
+
+```ts
+gates: {
+  correctness: { min: 0.9 },
+  latency: { p95Ms: 2_000 },
+}
+```
+
+A latency Gate runs measured task cells live. For custom timing logic:
+
+```ts
+expect: {
+  fresh: true,
+  check: ({ expect, meta }) => {
+    expect.latency.toBeUnderMs(1_000);
+    expect(meta.durationMs).toBeLessThan(1_000);
+  },
+}
+```
+
+Ordinary callbacks cannot read timing evidence because a reused result is not
+a valid live measurement.
+
+## Plan, offline, fresh, and cost
+
+```bash
+crux eval support --plan
+crux eval support --offline
+crux eval support --fresh
+crux eval support --max-cost 0.50
+```
+
+- `--plan` prints actions without execution, reservation, or writes. It may
+  make one authenticated read-only manifest request for required-host work.
+- `--offline` performs no network or external work and reports every miss.
+- `--fresh` bypasses reusable external task and managed-scorer reads.
+- `--max-cost` is a hard pre-spend cap; unknown or excessive cost fails first.
+
+Hard caps use conservative per-provider-call USD ceilings, not token-rate
+pricing. Configure them once in `crux.config.ts`:
+
+```ts
+import { config } from "@use-crux/core";
+
+export default config({
+  experimental: {
+    eval: {
+      pricing: {
+        "gpt-5": { maxUsdPerCall: 0.25 },
+        "claude-sonnet-4": { maxUsdPerCall: 0.3 },
+        default: { maxUsdPerCall: 1 }, // optional fallback
+      },
+    },
+  },
+});
+```
+
+Model lookup uses the existing exact, provider-stripped, and version-stripped
+normalization. Crux takes the maximum router/split branch, sums every possible
+fallback/cascade call, includes managed judges, and multiplies task calls by
+the bounded tool-loop step count. Dynamic/effectful or unpriced paths remain
+unknown and block `--max-cost` before spend.
+
+## Run from Devtools
+
+Open **Library → Index**, select an Eval, and follow **Open in Evals**, or open
+**Evals** directly. **Run Eval** uses the same coordinator, admission rules,
+automatic evidence reuse, Runtime host, and persisted run format as
+`crux eval <id>`; it does not run a browser-only evaluator. Devtools asks for
+explicit confirmation because a cache miss may invoke a model or judge with
+an unknown maximum cost. Runtime readiness and all other preflight checks still
+apply. When the coordinator produces a run, Devtools opens it automatically,
+including failed runs that need inspection.
+
+## Baselines
+
+```bash
+crux eval baseline set <eval-run-id>
+crux eval baseline set <eval-run-id> --variant deterministic
+crux eval baseline set <failing-run-id> --accept-failing
+```
+
+Baselines live beside the Eval as `<name>.baseline.json`. They contain
+fingerprints and comparison evidence, never raw inputs, outputs, comments, or
+credentials. Filtered, incomplete, or unresolved runs cannot be promoted.
+A complete failing arm can be useful as an honest starting point, but the CLI
+requires `--accept-failing` and Devtools uses an explicit “Accept anyway”
+action. The persistence layer refuses a failing run without that intent.
+
+## Production feedback and Review
+
+```ts
+import { feedback } from "@use-crux/core/feedback";
+
+await feedback(result.runId, {
+  rating: "down",
+  comment: "Missed the refund window",
+});
+```
+
+For an AI message carrying Crux metadata:
+
+```ts
+import { feedback } from "@use-crux/ai/feedback";
+
+await feedback(message, "down");
+```
+
+Feedback creates Review work; it never changes expected evidence, Cases,
+Baselines, or training data automatically. A reviewer may explicitly save a
+correction to the Eval's sibling Case file.
+
+## Next
+
+- [Assertions](./assertions)
+- [Scorers and Gates](./scorers-and-gates)
+- [Variants and Baselines](./variants-and-baselines)
+- [Recipes](./recipes)
+- [`@use-crux/core/eval` reference](/docs/reference/crux-core/eval)
+- [`crux eval` reference](/docs/reference/local#crux-eval)

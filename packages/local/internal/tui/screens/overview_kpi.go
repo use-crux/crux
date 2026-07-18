@@ -32,7 +32,7 @@ func (o *Overview) renderKPIStrip(width int) string {
 	)
 	o2 := o.kpiCell(cellW, "Pass rate",
 		percent(o.overview.PassRate),
-		fmtBaselineDelta(o.overview.LatestExperimentPassRate, o.overview.PassRate),
+		"",
 		shell.ColorRose,
 		passRateSpark(o.overview),
 		shell.ColorRose,

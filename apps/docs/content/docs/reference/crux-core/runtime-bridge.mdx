@@ -12,7 +12,7 @@ import {
   connectRuntimeBridge,
   executeRuntimeBridgeCommand,
   getRuntimeBridgeManifest,
-} from '@use-crux/core/runtime-bridge'
+} from "@use-crux/core/runtime-bridge";
 ```
 
 The Runtime Bridge is the local-dev command plane between the `@use-crux/local` Go service and a live application runtime. It is used for inspectable resources and framework-specific local commands. It is not the execution trace transport; runtime traces use `@use-crux/core/observability`.
@@ -27,21 +27,21 @@ The local Go bridge preserves those details for WebSocket and HTTP bridge comman
 
 ## Schemas
 
-| Export | Description |
-| --- | --- |
-| `RuntimeBridgeConfigSchema` | Runtime bridge configuration accepted by Crux config/integrations. |
-| `RuntimeBridgeMessageSchema` | Union schema for bridge messages. |
-| `RuntimePeerHelloSchema` | Peer handshake payload. |
-| `BridgeCommandRequestSchema` | Command request sent by the Go service to a runtime peer. |
-| `BridgeCommandResultSchema` | Successful command response. |
-| `BridgeCommandErrorSchema` | Failed command response. |
+| Export                       | Description                                                        |
+| ---------------------------- | ------------------------------------------------------------------ |
+| `RuntimeBridgeConfigSchema`  | Runtime bridge configuration accepted by Crux config/integrations. |
+| `RuntimeBridgeMessageSchema` | Union schema for bridge messages.                                  |
+| `RuntimePeerHelloSchema`     | Peer handshake payload.                                            |
+| `BridgeCommandRequestSchema` | Command request sent by the Go service to a runtime peer.          |
+| `BridgeCommandResultSchema`  | Successful command response.                                       |
+| `BridgeCommandErrorSchema`   | Failed command response.                                           |
 
 ## Helpers
 
-| Export | Description |
-| --- | --- |
-| `getRuntimeBridgeManifest()` | Returns the runtime peer manifest exposed to the local service. |
-| `connectRuntimeBridge()` | Connects a long-lived runtime peer. |
+| Export                          | Description                                                           |
+| ------------------------------- | --------------------------------------------------------------------- |
+| `getRuntimeBridgeManifest()`    | Returns the runtime peer manifest exposed to the local service.       |
+| `connectRuntimeBridge()`        | Connects a long-lived runtime peer.                                   |
 | `executeRuntimeBridgeCommand()` | Executes a typed bridge command against registered runtime resources. |
 
 ## Related

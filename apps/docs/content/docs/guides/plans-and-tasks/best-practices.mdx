@@ -10,14 +10,14 @@ Plans should explain the objective, constraints, and intended approach. Avoid st
 ```ts
 await roadmap.update({
   content: [
-    '## Objective',
-    'Prepare the launch announcement.',
-    '',
-    '## Constraints',
-    '- Use approved positioning.',
-    '- Cite source material.',
-  ].join('\n'),
-})
+    "## Objective",
+    "Prepare the launch announcement.",
+    "",
+    "## Constraints",
+    "- Use approved positioning.",
+    "- Cite source material.",
+  ].join("\n"),
+});
 ```
 
 ## Choose Dynamic Or Defined Early
@@ -25,22 +25,22 @@ await roadmap.update({
 Use dynamic ledgers when task IDs are discovered at runtime.
 
 ```ts
-const work = await tasks({ title: 'Runtime checklist' })
-await work.add({ id: generatedId, label })
+const work = await tasks({ title: "Runtime checklist" });
+await work.add({ id: generatedId, label });
 ```
 
 Use defined ledgers when IDs and result schemas are part of your program contract.
 
 ```ts
-import { z } from 'zod'
+import { z } from "zod";
 
 const work = await tasks({
   items: {
-    review: task('Review output', {
+    review: task("Review output", {
       result: z.object({ approved: z.boolean() }),
     }),
   },
-})
+});
 ```
 
 ## Use Lifecycle Methods
@@ -48,9 +48,9 @@ const work = await tasks({
 Prefer `start()`, `progress()`, `complete()`, `fail()`, `skip()`, `cancel()`, and `remove()` over generic status mutation.
 
 ```ts
-await work.start('review')
-await work.progress('review', 'Checking facts')
-await work.complete('review', { approved: true })
+await work.start("review");
+await work.progress("review", "Checking facts");
+await work.complete("review", { approved: true });
 ```
 
 ## Keep Results JSON-Safe
@@ -58,10 +58,10 @@ await work.complete('review', { approved: true })
 Task metadata, progress details, and results are persisted. Store JSON-safe values only.
 
 ```ts
-await work.complete('extract', {
+await work.complete("extract", {
   rows: 1200,
-  warnings: ['Missing phone number on row 42'],
-})
+  warnings: ["Missing phone number on row 42"],
+});
 ```
 
 ## Scope Tools Narrowly
@@ -69,12 +69,12 @@ await work.complete('extract', {
 Give planners plan tools, coordinators ledger tools, and workers task-scoped tools.
 
 ```ts
-const worker = work.worker('draft')
+const worker = work.worker("draft");
 
 prompt({
   use: [roadmap.asContext(), worker.asContext()],
   tools: worker.asTools(),
-})
+});
 ```
 
 ## Do Not Treat Ledgers As Queues

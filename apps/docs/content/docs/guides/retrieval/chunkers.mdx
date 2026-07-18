@@ -19,13 +19,13 @@ custom Chunker         // your domain already has explicit boundaries
 
 ## Bundled chunkers
 
-| Chunker | What it does | Best for |
-| --- | --- | --- |
-| `chunker.text()` | Splits plain text by paragraphs, sentences, then hard character windows. | Simple prose or already-normalized text. |
-| `chunker.structured()` | Splits by ingest part and preserves page/table/sheet/JSON provenance. | Most file and URL ingestion. This is the default. |
-| `chunker.parentChild()` | Writes large parent records and smaller searchable child chunks with parent refs. | Long documents where citations should point to small chunks but prompts need surrounding context. |
-| `chunker.semantic()` | Uses embedding, custom/model boundaries, or hybrid fallback to split by meaning. | Docs where size-based chunking cuts through concepts or sections. |
-| Custom `Chunker` | Returns your own chunks and optional parent records. | Markdown sections, legal clauses, transcripts, tickets, CMS blocks, or domain-specific boundaries. |
+| Chunker                 | What it does                                                                      | Best for                                                                                           |
+| ----------------------- | --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `chunker.text()`        | Splits plain text by paragraphs, sentences, then hard character windows.          | Simple prose or already-normalized text.                                                           |
+| `chunker.structured()`  | Splits by ingest part and preserves page/table/sheet/JSON provenance.             | Most file and URL ingestion. This is the default.                                                  |
+| `chunker.parentChild()` | Writes large parent records and smaller searchable child chunks with parent refs. | Long documents where citations should point to small chunks but prompts need surrounding context.  |
+| `chunker.semantic()`    | Uses embedding, custom/model boundaries, or hybrid fallback to split by meaning.  | Docs where size-based chunking cuts through concepts or sections.                                  |
+| Custom `Chunker`        | Returns your own chunks and optional parent records.                              | Markdown sections, legal clauses, transcripts, tickets, CMS blocks, or domain-specific boundaries. |
 
 ## Plain text
 
@@ -37,7 +37,7 @@ indexingPipeline({
     maxChars: 1000,
     overlapChars: 120,
   }),
-})
+});
 ```
 
 It splits paragraph-first, then sentence-first for oversized paragraphs, then hard-splits very long sentences. Chunk IDs are stable hashes of source id, ordinal, content, and provenance.
@@ -51,7 +51,7 @@ indexingPipeline({
     overlapChars: 150,
     tableRowsPerChunk: 25,
   }),
-})
+});
 ```
 
 `chunker.structured()` is the best default for `@use-crux/ingest` output. PDF pages keep page provenance, tables are chunked by row windows with headers repeated, spreadsheets preserve sheet names, and JSON parts preserve paths.
@@ -67,19 +67,26 @@ indexingPipeline({
     childMaxChars: 900,
     childOverlapChars: 120,
   }),
-})
+});
 ```
 
 The retriever searches child chunks. Each child stores a parent reference; `expandParents({ records })` resolves that reference through the indexed read model at query time and adds parent content while keeping the child chunk as the citation.
 
 ```ts
-import { expandParents, retrievalRecipe, retrieve } from '@use-crux/core/retrieval'
+import {
+  expandParents,
+  retrievalRecipe,
+  retrieve,
+} from "@use-crux/core/retrieval";
 
 const expandedDocs = retrievalRecipe({
-  id: 'expanded-docs',
+  id: "expanded-docs",
   retriever: docs,
-  steps: [retrieve({ limit: 20 }), expandParents({ records, maxParentChars: 4000 })],
-})
+  steps: [
+    retrieve({ limit: 20 }),
+    expandParents({ records, maxParentChars: 4000 }),
+  ],
+});
 ```
 
 ## Semantic
@@ -89,13 +96,13 @@ Use semantic chunking when boundaries should follow meaning, not only size.
 ```ts
 indexingPipeline({
   chunker: chunker.semantic({
-    strategy: 'embedding',
+    strategy: "embedding",
     dense,
     minChars: 300,
     maxChars: 1200,
     similarityThreshold: 0.76,
   }),
-})
+});
 ```
 
 For model- or domain-driven boundaries, provide a segmenter:
@@ -103,14 +110,14 @@ For model- or domain-driven boundaries, provide a segmenter:
 ```ts
 indexingPipeline({
   chunker: chunker.semantic({
-    strategy: 'custom',
+    strategy: "custom",
     minChars: 300,
     maxChars: 1200,
     async segment({ document, segments }, ctx) {
-      return detectSectionBoundaries(document.content, segments, ctx)
+      return detectSectionBoundaries(document.content, segments, ctx);
     },
   }),
-})
+});
 ```
 
 Use `strategy: 'hybrid'` when you want your segmenter first, but want embedding-based boundaries as a fallback when it returns no boundaries.
@@ -121,10 +128,10 @@ You can also bring your own chunker:
 
 ```ts
 const markdownSections = {
-  _tag: 'Chunker' as const,
-  name: 'markdown-sections',
-  version: '1',
-  fingerprint: () => 'markdown-sections:v1',
+  _tag: "Chunker" as const,
+  name: "markdown-sections",
+  version: "1",
+  fingerprint: () => "markdown-sections:v1",
   chunkDocument(document) {
     return {
       chunks: splitByHeading(document.content).map((section, ordinal) => ({
@@ -138,11 +145,11 @@ const markdownSections = {
           heading: section.heading,
         },
       })),
-    }
+    };
   },
-}
+};
 
-const pipeline = indexingPipeline({ chunker: markdownSections })
+const pipeline = indexingPipeline({ chunker: markdownSections });
 ```
 
 Custom chunkers are best for domains with explicit boundaries: Markdown headings, legal clauses, API reference sections, support tickets, transcript turns, or CMS blocks. Keep `chunkId` stable across syncs so replacement, citations, and retrieval traces stay readable.

@@ -6,13 +6,13 @@ description: Track structured work with dynamic or typed task ledgers.
 When an agent works through multi-step jobs, you want to see which step is running, what finished, and what failed, without parsing chat history. `tasks()` creates a task ledger for exactly that. Ledgers can stand alone or attach to a plan handle or plan ID.
 
 ```ts
-import { z } from 'zod'
-import { task, tasks } from '@use-crux/core/tasks'
+import { z } from "zod";
+import { task, tasks } from "@use-crux/core/tasks";
 
 const work = await tasks({
-  title: 'Import job',
-  metadata: { jobId: 'import-42' },
-})
+  title: "Import job",
+  metadata: { jobId: "import-42" },
+});
 ```
 
 ## Dynamic Ledgers
@@ -21,14 +21,14 @@ Dynamic ledgers are best when task IDs come from user input, model output, or ru
 
 ```ts
 await work.add({
-  id: 'extract',
-  label: 'Extract CSV rows',
-  metadata: { file: 'customers.csv' },
-})
+  id: "extract",
+  label: "Extract CSV rows",
+  metadata: { file: "customers.csv" },
+});
 
-await work.start('extract')
-await work.progress('extract', 'Parsed 1,200 rows')
-await work.complete('extract', { rows: 1200 })
+await work.start("extract");
+await work.progress("extract", "Parsed 1,200 rows");
+await work.complete("extract", { rows: 1200 });
 ```
 
 Task IDs must be unique within the ledger, and results and metadata must be JSON-safe.
@@ -40,16 +40,16 @@ Defined ledgers are best when the task set is known at author time. IDs are infe
 ```ts
 const work = await tasks({
   items: {
-    research: task('Research channels', {
+    research: task("Research channels", {
       result: z.object({ channels: z.array(z.string()) }),
     }),
-    draft: task('Draft copy', {
+    draft: task("Draft copy", {
       result: z.object({ markdown: z.string() }),
     }),
   },
-})
+});
 
-await work.complete('research', { channels: ['partners', 'community'] })
+await work.complete("research", { channels: ["partners", "community"] });
 ```
 
 Defined ledgers do not accept dynamic `add()` calls. Use a dynamic ledger when new task IDs are discovered at runtime.
@@ -59,18 +59,18 @@ Defined ledgers do not accept dynamic `add()` calls. Use a dynamic ledger when n
 Use lifecycle methods instead of editing status fields directly:
 
 ```ts
-await work.start('draft')
-await work.progress('draft', 'Writing intro and offer')
-await work.complete('draft', { markdown: '# Launch\n\n...' })
+await work.start("draft");
+await work.progress("draft", "Writing intro and offer");
+await work.complete("draft", { markdown: "# Launch\n\n..." });
 ```
 
 Each terminal transition applies to a separate active task:
 
 ```ts
-await work.fail('fact-check', 'Source data was unavailable')
-await work.skip('legal-review', 'Covered by existing review')
-await work.cancel('publish', 'Launch paused')
-await work.remove('cleanup')
+await work.fail("fact-check", "Source data was unavailable");
+await work.skip("legal-review", "Covered by existing review");
+await work.cancel("publish", "Launch paused");
+await work.remove("cleanup");
 ```
 
 Terminal tasks are immutable through lifecycle methods. Removed tasks do not count toward the ledger status.
@@ -101,9 +101,9 @@ Task mutations throw typed lifecycle errors with structured fields:
 
 ```ts
 try {
-  await work.add({ id: 'research', label: 'Duplicate research task' })
+  await work.add({ id: "research", label: "Duplicate research task" });
 } catch (error) {
-  if (error instanceof Error && error.name === 'DuplicateTaskIdError') {
+  if (error instanceof Error && error.name === "DuplicateTaskIdError") {
     // error.taskListId and error.taskId are available on the structural error.
   }
 }
@@ -118,12 +118,12 @@ Common errors include `TaskListNotFoundError`, `TaskNotFoundError`, `DuplicateTa
 Bind an existing ledger by ID:
 
 ```ts
-const work = tasks.ref(taskListId)
-const current = await work.get()
+const work = tasks.ref(taskListId);
+const current = await work.get();
 ```
 
 List ledgers, optionally scoped to a plan:
 
 ```ts
-const ledgers = await tasks.list({ plan: launchPlan })
+const ledgers = await tasks.list({ plan: launchPlan });
 ```

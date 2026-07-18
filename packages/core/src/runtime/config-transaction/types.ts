@@ -100,7 +100,12 @@ export interface RuntimeConfigTransactionPorts {
 }
 
 /** How observability transport state should be installed. */
-export type RuntimeConfigObservabilityPlan =
+interface RuntimeConfigObservabilityPolicyPlan {
+  readonly feedbackDestination?: import('../../feedback').CruxFeedbackDestination
+  readonly redactPaths?: readonly string[]
+}
+
+export type RuntimeConfigObservabilityPlan = RuntimeConfigObservabilityPolicyPlan & (
   | { readonly kind: 'none' }
   | {
       /** Install deployment identity without taking ownership of transport. */
@@ -120,6 +125,7 @@ export type RuntimeConfigObservabilityPlan =
       readonly delivery?: ObservabilityDeliveryOptions
       readonly identity?: CruxDeploymentIdentity
     }
+)
 
 /** Pure plan produced from user config before any side effects run. */
 export interface RuntimeConfigPlan {

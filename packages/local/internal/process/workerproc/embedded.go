@@ -34,13 +34,29 @@ func ExtractEmbedded(name string, content []byte) (string, error) {
 		return path, nil
 	}
 
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, content, 0o644); err != nil {
-		return "", fmt.Errorf("cannot write %s: %w", tmp, err)
+	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return "", fmt.Errorf("cannot create temporary worker in %s: %w", dir, err)
 	}
-	if err := os.Rename(tmp, path); err != nil {
-		_ = os.Remove(tmp)
-		return "", fmt.Errorf("cannot rename %s to %s: %w", tmp, path, err)
+	tmpPath := tmp.Name()
+	defer func() { _ = os.Remove(tmpPath) }()
+	if _, err := tmp.Write(content); err != nil {
+		_ = tmp.Close()
+		return "", fmt.Errorf("cannot write %s: %w", tmpPath, err)
+	}
+	if err := tmp.Chmod(0o644); err != nil {
+		_ = tmp.Close()
+		return "", fmt.Errorf("cannot set permissions on %s: %w", tmpPath, err)
+	}
+	if err := tmp.Close(); err != nil {
+		return "", fmt.Errorf("cannot close %s: %w", tmpPath, err)
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		// Another process may have won the same content-addressed write.
+		if _, statErr := os.Stat(path); statErr == nil {
+			return path, nil
+		}
+		return "", fmt.Errorf("cannot rename %s to %s: %w", tmpPath, path, err)
 	}
 	return path, nil
 }

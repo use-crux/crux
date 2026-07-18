@@ -74,49 +74,22 @@ runtime resolution coverage only where the type correction exposes a real
 lowering path. Reuse core's exported types; do not duplicate the union or make
 core depend on the AI SDK.
 
-### CRUX-QUALITY-001 — deterministic thrown outcomes
+### Eval evidence replacement
 
-Cassette recording must treat a model throw as a first-class replayable outcome.
-Persist it as `{ status: 'thrown', error: { name, message } }`. For an `Error`,
-`name` is its non-empty string name (falling back to `Error`) and `message` is its
-message. For a non-`Error` throw, use `name: 'NonErrorThrow'` and the bounded
-`String(value)` as `message`. Never persist raw provider errors, codes, causes,
-stacks, credentials, or arbitrary enumerable properties. Apply the same
-redaction boundary used for successful results.
+The former pre-launch record/replay items no longer describe implementation
+work. Evals V1 has one automatic exact-evidence path instead of public
+record/replay modes or a second persistence resource:
 
-On replay, throw a core-owned `CassetteRecordedError extends Error`. Its public
-`name` and `message` equal the recorded fields and it carries no provider object,
-stack from the original call, cause, or arbitrary data. A recorded throw must not
-become a returned value, and record-new single-flight/concurrent callers must
-observe the same rejection. Start with a public Quality run that records both an
-`Error` and a non-`Error` throw, proves the cassette shape is safe, then replays
-without invoking the model and observes the exact restored `name` and `message`.
+- a task failure produces an errored Eval cell and is not reusable task evidence;
+- only complete, persistence-safe task results can be written as evidence;
+- malformed, stale, incomplete, or wrong-key evidence is a miss and never a hit;
+- persisted Eval diagnostics pass through the Eval redaction boundary; and
+- evidence identity changes follow `TASK_EVIDENCE_CACHE_EPOCH` and
+  `BASELINE_FINGERPRINT_EPOCH` as documented in `AGENTS.md`.
 
-### CRUX-QUALITY-002 — fail-closed cassette loading
-
-Every loaded entry must prove that its map key matches the canonical normalized
-`call` stored in that entry under the current cassette identity. A mismatch is a
-corrupt cassette, not a miss and never a replay hit. Reject the cassette before
-executing or replaying any model call, with a diagnostic naming the cassette and
-offending key but not leaking prompt content. Apply validation to all replay and
-record modes that load existing entries so a later flush cannot legitimize bad
-data.
-
-Run the same validation again inside the file lock against the disk cassette
-reloaded by `flush()`. If another process introduced a mismatched entry after the
-session opened, abort the merge and leave the corrupt file untouched.
-
-Start with a public cassette file whose entry is moved under a different key and
-prove replay fails before provider execution. Add coverage for custom matchers:
-validation must use the cassette session's effective match function rather than
-assuming the default SHA key.
-
-Thrown-outcome persistence changes cassette payload semantics, while key/call
-validation strengthens loading semantics without changing normalized-call
-construction. Review `CASSETTE_CACHE_EPOCH`; bump it if old entries cannot be
-interpreted safely under the new outcome contract. No output-cache, baseline, or
-judge identity changes are expected because their keys and comparability do not
-change. Over-invalidate if implementation evidence contradicts that expectation.
+The Eval reuse, freshness, kernel-error, and persistence tests are the binding
+coverage. Do not restore public record/replay modes, custom evidence matchers,
+or a parallel normalized-call store.
 
 ### CRUX-DX-006 — privacy warning arity
 
@@ -149,11 +122,8 @@ Delegate implementation as bounded, non-overlapping CLI-agent slices:
 1. Local default Static Index scheduling and Project Index identity.
 2. Docs truth fixes (`DOC-001` and documentation-only `DX-001`).
 3. AI adapter tuple types and type tests (`DX-002`).
-4. Quality thrown outcomes (`QUALITY-001`).
-5. Quality cassette integrity (`QUALITY-002`), coordinated after the outcome
-   slice because both touch cassette loading.
-6. Privacy warning arity (`DX-006`).
-7. AI SDK trace model normalization (`DX-008`).
+4. Privacy warning arity (`DX-006`).
+5. AI SDK trace model normalization (`DX-008`).
 
 Each agent owns only its tests and production files, reports cache/package impact,
 and does not create a changeset. The orchestrator reviews diffs centrally, runs
@@ -161,11 +131,13 @@ focused tests after every slice, then package typechecks/tests and the applicabl
 root build. It owns one combined changeset for directly affected npm packages
 (expected: `@use-crux/core`, `@use-crux/ai`, and `@use-crux/local`, adjusted to
 actual public impact). Docs-site-only edits are described in the same delivery
-but do not add a package bump.
+but do not add a package bump. The superseded record/replay items above are
+excluded from this delivery sequence.
 
 ## Deferred RFCs
 
 This batch does not design or implement embedding-stage caching, public result
-`traceId`, `.quality.ts` discovery/custom-target capability declarations,
-deep/aggregate sanitization declarations, or strict provider-portable structured
-output normalization. Those remain separate RFC candidates.
+`traceId`, deep/aggregate sanitization declarations, or strict provider-portable
+structured output normalization. Those remain separate RFC candidates. Eval
+authoring and execution were designed separately and now use the first-class
+`*.eval.ts` contract.

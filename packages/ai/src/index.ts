@@ -109,6 +109,15 @@ import { prepareAiSdkMessages } from "./native-messages";
 import type { AITranscribe } from "./transcription";
 import type { AIGenerateImage } from "./image-generation";
 import type { AIGenerateSpeech } from "./speech";
+import {
+  createGenerateTaskFactory,
+  type AIGenerateTaskFactory,
+} from "./eval-task";
+import {
+  createStreamTaskFactory,
+  type AIStreamTaskFactory,
+} from "./eval-stream-task";
+export { stableModel } from "./stable-model";
 export { fromResponse, toParams } from "./codec";
 export type { AiSdkCodecOptions } from "./codec";
 
@@ -243,16 +252,9 @@ export interface CruxAiOptions {
   gateway?: SdkGateway;
 }
 
-/** The bound API surface returned by {@link createCruxAi}. */
-export interface CruxAi {
-  /** Run one stateless AI SDK image operation without entering a language loop. */
-  generateImage: AIGenerateImage;
-  /** Run one stateless AI SDK transcription operation. */
-  transcribe: AITranscribe;
-  /** Run one stateless AI SDK speech operation. */
-  generateSpeech: AIGenerateSpeech;
-  /** See the package-level {@link generate}. */
-  generate<
+/** Production `generate()` plus its managed structured-task factory. */
+interface AIGenerate {
+  <
     TOwnInput extends z.ZodType,
     TOutput extends z.ZodType | undefined,
     TContexts extends readonly ContextEntry[],
@@ -274,8 +276,14 @@ export interface CruxAi {
       TModel
     >,
   ): Promise<GenerateReturn<TOutput>>;
-  /** See the package-level {@link stream}. */
-  stream<
+
+  /** Bind a structured prompt and input-independent defaults as an Eval task. */
+  readonly task: AIGenerateTaskFactory;
+}
+
+/** Production `stream()` plus its managed Eval task factory. */
+interface AIStream {
+  <
     TOwnInput extends z.ZodType,
     TOutput extends z.ZodType | undefined,
     TContexts extends readonly ContextEntry[],
@@ -297,6 +305,23 @@ export interface CruxAi {
       TModel
     >,
   ): Promise<StreamReturn<TOutput>>;
+
+  /** Bind a prompt and input-independent defaults as a streaming Eval task. */
+  readonly task: AIStreamTaskFactory;
+}
+
+/** The bound API surface returned by {@link createCruxAi}. */
+export interface CruxAi {
+  /** Run one stateless AI SDK image operation without entering a language loop. */
+  generateImage: AIGenerateImage;
+  /** Run one stateless AI SDK transcription operation. */
+  transcribe: AITranscribe;
+  /** Run one stateless AI SDK speech operation. */
+  generateSpeech: AIGenerateSpeech;
+  /** See the package-level {@link generate}. */
+  generate: AIGenerate;
+  /** See the package-level {@link stream}. */
+  stream: AIStream;
   /** Prepare a sans-I/O AI SDK call handle for one `generateText()` or `generateObject()` request. */
   prepare?<
     TOwnInput extends z.ZodType,
@@ -575,7 +600,29 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
   }
 
   const generateFn = generateImpl as unknown as CruxAi["generate"];
+  Object.defineProperty(generateFn, "task", {
+    value: createGenerateTaskFactory(
+      (prompt, taskOptions) => generateImpl(prompt, taskOptions as CallOpts),
+      { executionContractKnown: options.gateway === undefined },
+    ),
+    enumerable: true,
+    writable: false,
+    configurable: false,
+  });
   const streamFn = streamImpl as unknown as CruxAi["stream"];
+  Object.defineProperty(streamFn, "task", {
+    value: createStreamTaskFactory(
+      (prompt, taskOptions) =>
+        streamImpl(prompt, taskOptions as CallOpts) as unknown as Promise<
+          StreamResult<unknown, unknown>
+        >,
+      (prompt, taskOptions) => generateImpl(prompt, taskOptions as CallOpts),
+      { executionContractKnown: options.gateway === undefined },
+    ),
+    enumerable: true,
+    writable: false,
+    configurable: false,
+  });
   const prepareFn = prepareImpl as unknown as NonNullable<CruxAi["prepare"]>;
 
   const generateObjectFnImpl: GenerateObjectFn =

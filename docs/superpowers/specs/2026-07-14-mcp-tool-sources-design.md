@@ -55,7 +55,7 @@ elicitation, tasks, or persistent application-scoped connections.
 - Automatic discovery of desktop/IDE MCP configuration files.
 - A persistent connection pool or application-scoped client lifecycle.
 - Static TypeScript inference from schemas that exist only on a remote server.
-- A second MCP-specific Quality cassette system.
+- A second MCP-specific Eval evidence store.
 
 ## Terminology
 
@@ -71,7 +71,7 @@ The exact name advertised by the MCP server.
 ### Exposed tool name
 
 The name made available to the model after an optional prefix. Existing Crux
-middleware, approval, policy matching, Quality mocks, and runtime tool identity
+middleware, approval, policy matching, Eval mocks, and runtime tool identity
 use this name.
 
 ### Tool source
@@ -572,10 +572,10 @@ View Runs sections remain visible.
   warn against mutating production systems from deterministic evals.
 - Tests should prefer the fixture server or explicit tool mocks.
 
-If current cache identity is computed before source materialization, the
-ordering must change and the affected cassette, output, and baseline epochs
+If current evidence identity is computed before source materialization, the
+ordering must change and the affected Eval output-evidence and Baseline epochs
 must be bumped with red tests. If existing identities already observe the final
-materialized schemas, no Quality epoch changes are required.
+materialized schemas, no Eval cache-identity changes are required.
 
 ## Error model
 

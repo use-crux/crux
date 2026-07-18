@@ -53,7 +53,8 @@ export function projectMediaRunView(
   }> = {},
 ): MediaRunView | undefined {
   const mediaStart = selectMediaStart(records, options.selectedSpanId);
-  if (!mediaStart || !mediaStart.spanId || !mediaStart.primitive) return undefined;
+  if (!mediaStart || !mediaStart.spanId || !mediaStart.primitive)
+    return undefined;
 
   const mediaSpanId = mediaStart.spanId;
   const mediaEnd = records.find(
@@ -169,7 +170,9 @@ export function projectMediaRunView(
 }
 
 /** Assert a Runs media panel never retains or renders forbidden media fields. */
-export function assertNoRetainedMediaSecrets(value: unknown): readonly string[] {
+export function assertNoRetainedMediaSecrets(
+  value: unknown,
+): readonly string[] {
   const serialized = JSON.stringify(value) ?? "";
   return [
     "data:",
@@ -276,7 +279,9 @@ function projectTranscript(
               : numberValue(record.endSecond) !== undefined
                 ? { end: numberValue(record.endSecond) }
                 : {}),
-            ...(stringValue(record.text) ? { text: stringValue(record.text) } : {}),
+            ...(stringValue(record.text)
+              ? { text: stringValue(record.text) }
+              : {}),
             ...(stringValue(record.speaker)
               ? { speaker: stringValue(record.speaker) }
               : {}),

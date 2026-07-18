@@ -12,7 +12,7 @@ experimental. TypeScript-Go is the first native engine because the upstream nati
 Crux a native TypeScript parser/checker path, but it is not the public product concept.
 
 As of 2026-06-20, the native backend has exact normalized fact parity for the current supported
-semantic contract and for the real Karyla backend package. It remains experimental because the
+semantic contract and for a production application backend package. It remains experimental because the
 upstream TypeScript-Go native-preview API is unstable and because default-switch confidence needs
 longer-running benchmark coverage.
 

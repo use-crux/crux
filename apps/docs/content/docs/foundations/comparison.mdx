@@ -8,7 +8,9 @@ Crux is not trying to replace your SDK, provider, app framework, agent framework
 The key distinction is where Crux sits. Many tools help you inspect or score what happened after the model responded. Crux also helps you prepare what the model sees before the call and test whether that setup keeps working.
 
 <Callout type="info">
-  Use this page as a fit check. For small scripts, raw SDK calls may be enough. For shared context, memory, retrieval, safety, routing, or repeatable quality checks, Crux starts to help.
+  Use this page as a fit check. For small scripts, raw SDK calls may be enough.
+  For shared context, memory, retrieval, safety, routing, or repeatable quality
+  checks, Crux starts to help.
 </Callout>
 
 ## vs. Vercel AI SDK (alone)
@@ -21,7 +23,7 @@ The Vercel AI SDK is an excellent execution and UI toolkit. Crux integrates with
 | **Context composition** | Manual string concatenation           | Declarative `context()` with priority-based merging            |
 | **Request setup**       | Owned by application code             | Prompt and context setup is reusable and inspectable           |
 | **Multi-provider**      | Provider-specific model imports       | Same prompt definition, adapter at execution boundary          |
-| **Quality**             | Not included                          | Suites, targets, experiments, cassettes, and baselines         |
+| **Evals**               | Not included                          | Production tasks, typed Cases, Variants, reuse, and Baselines  |
 | **Memory**              | Not included                          | Working, episodic, semantic (with `asContext()` / `asTools()`) |
 | **Compaction**          | Not included                          | Sliding window, budget tracking, key facts extraction          |
 | **Debugging**           | Trace the model call                  | Inspect what was assembled around the call                     |
@@ -30,18 +32,18 @@ The Vercel AI SDK is an excellent execution and UI toolkit. Crux integrates with
 
 ## vs. Raw SDK calls
 
-Raw SDK calls (OpenAI SDK, Anthropic SDK, Google GenAI) give you maximum control and minimal ceremony. Crux sits around the call: it composes context, validates schemas, adds safety, quality, and observability, then delegates execution to the SDK. You keep full SDK access through `adapt`.
+Raw SDK calls (OpenAI SDK, Anthropic SDK, Google GenAI) give you maximum control and minimal ceremony. Crux sits around the call: it composes context, validates schemas, adds safety, Evals, and observability, then delegates execution to the SDK. You keep full SDK access through `adapt`.
 
-|                      | Raw SDK                            | Crux + adapter                                         |
-| -------------------- | ---------------------------------- | ------------------------------------------------------ |
-| **Type safety**      | Manual `JSON.parse` + casting      | Zod schemas, fully inferred types                      |
-| **Context reuse**    | Copy-paste strings between prompts | Composable `context()` fragments with priority         |
-| **Provider switch**  | Rewrite every call site            | Change one adapter import                              |
-| **Quality**          | Build your own tests               | `quality()` suites, targets, variants, and comparisons |
-| **Observability**    | Request logs and custom telemetry  | Devtools show assembled requests and related details   |
-| **Token management** | Count tokens manually              | Budget tracking + automatic context dropping           |
+|                      | Raw SDK                            | Crux + adapter                                                 |
+| -------------------- | ---------------------------------- | -------------------------------------------------------------- |
+| **Type safety**      | Manual `JSON.parse` + casting      | Zod schemas, fully inferred types                              |
+| **Context reuse**    | Copy-paste strings between prompts | Composable `context()` fragments with priority                 |
+| **Provider switch**  | Rewrite every call site            | Change one adapter import                                      |
+| **Evals**            | Build your own tests               | Managed production tasks, typed Cases, Variants, and Baselines |
+| **Observability**    | Request logs and custom telemetry  | Devtools show assembled requests and related details           |
+| **Token management** | Count tokens manually              | Budget tracking + automatic context dropping                   |
 
-**Bottom line:** Use raw SDKs for one-off scripts or when you want to own every concern manually. Use Crux when shared context, memory, safety, routing, or quality needs a durable home.
+**Bottom line:** Use raw SDKs for one-off scripts or when you want to own every concern manually. Use Crux when shared context, memory, safety, routing, or repeatable Evals need a durable home.
 
 ## vs. Prompt strings in code
 
@@ -53,7 +55,7 @@ If your app has one or two simple prompts, raw template strings are fine. Crux a
 | **Shared context**     | Copy-paste between files         | Define once, compose with `use: [...]`  |
 | **Structured output**  | `JSON.parse` + manual validation | Zod schema → typed `result.object`      |
 | **Multiple models**    | Separate code paths per provider | Same prompt, different adapter          |
-| **Quality assurance**  | Manual testing in playground     | Automated eval across model matrix      |
+| **Eval assurance**     | Manual testing in playground     | Automated eval across model matrix      |
 | **Team collaboration** | Hard to discover, hard to review | Registry, tags, devtools, introspection |
 
 **Bottom line:** Start with strings. Adopt Crux when you have shared context, need structured output, or want automated evaluation.
@@ -62,28 +64,28 @@ If your app has one or two simple prompts, raw template strings are fine. Crux a
 
 Tracing tools are useful and often necessary. They show requests, spans, latency, cost, errors, and production behavior. Crux can emit OpenTelemetry spans into those pipelines.
 
-The difference is that Crux also knows how the request was assembled. A runtime-only trace can show what was sent; Crux can connect the sent request back to authored prompts, contexts, memory, retrieval, routing, safety, and quality records.
+The difference is that Crux also knows how the request was assembled. A runtime-only trace can show what was sent; Crux can connect the sent request back to authored prompts, contexts, memory, retrieval, routing, safety, and Eval runs.
 
 |                         | Tracing tool                         | Crux                                                        |
 | ----------------------- | ------------------------------------ | ----------------------------------------------------------- |
 | **Primary lens**        | What happened after execution        | What was assembled before execution and what happened after |
-| **Source link**         | Usually runtime span metadata        | Crux can connect runtime behavior to authored definitions       |
-| **Setup details**       | Custom attributes if you emit them   | Prompt/context/memory/tool setup can be shown by Crux           |
-| **Quality connection**  | External or custom                   | Quality suites and baselines use the same Crux definitions      |
-| **Production pipeline** | Strong export and analysis workflows | Crux can emit compatible spans into those systems               |
+| **Source link**         | Usually runtime span metadata        | Crux can connect runtime behavior to authored definitions   |
+| **Setup details**       | Custom attributes if you emit them   | Prompt/context/memory/tool setup can be shown by Crux       |
+| **Eval connection**     | External or custom                   | Evals use the same callable production tasks and Baselines  |
+| **Production pipeline** | Strong export and analysis workflows | Crux can emit compatible spans into those systems           |
 
 **Bottom line:** Keep your tracing stack. Use Crux when you also need to understand how the request was assembled from code.
 
 ## vs. eval tools
 
-Eval tools judge behavior. Crux's quality system also cares about the setup that produced the behavior.
+Eval tools judge behavior. Crux Evals also preserve the setup identity that produced the behavior.
 
-|                         | Eval tool                         | Crux quality                                                  |
-| ----------------------- | --------------------------------- | ------------------------------------------------------------- |
-| **Common assertion**    | Did the final output pass?        | Did the output and the setup meet expectations?               |
-| **Inputs under test**   | Prompt, model, fixture, scorer    | Prompt, context, memory, retrieval, routing, safety, fallback |
-| **Baselines**           | Often score snapshots             | Recorded quality expectations tied to source and runtime facts |
-| **System checks**       | Custom or tool-specific           | Crux is expanding first-class checks for setup behavior        |
+|                       | Eval tool                      | Crux Evals                                                    |
+| --------------------- | ------------------------------ | ------------------------------------------------------------- |
+| **Common assertion**  | Did the final output pass?     | Did the output and the setup meet expectations?               |
+| **Inputs under test** | Prompt, model, fixture, scorer | Prompt, context, memory, retrieval, routing, safety, fallback |
+| **Baselines**         | Often score snapshots          | Explicit complete run arms with compatibility evidence        |
+| **System checks**     | Custom or tool-specific        | Crux is expanding first-class checks for setup behavior       |
 
 **Bottom line:** If an eval tool already fits your team, Crux can complement it. Crux matters when you need to test how the answer was produced, not only the text that came back.
 
@@ -91,14 +93,14 @@ Eval tools judge behavior. Crux's quality system also cares about the setup that
 
 LangChain and LlamaIndex are broad orchestration and retrieval frameworks. They can own chains, agents, retrieval, vector stores, and execution end-to-end. Crux is the lightweight alternative for TypeScript teams that want typed AI building blocks around their existing SDK call.
 
-|                 | LangChain / LlamaIndex                                  | Crux                                                                                   |
-| --------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+|                 | LangChain / LlamaIndex                                  | Crux                                                                                           |
+| --------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
 | **Scope**       | Full orchestration (chains, agents, RAG, vector stores) | Building blocks around the SDK call (prompts, memory, retrieval, safety, evals, observability) |
-| **Execution**   | Own runtime with own abstractions                       | Delegates to AI SDK / OpenAI / Google / Anthropic directly                             |
-| **TypeScript**  | Ported from Python, partial type coverage               | TypeScript-first, full inference from Zod schemas                                      |
-| **API surface** | Large: many concepts, many ways to do things           | Small: ~10 core functions, consistent interfaces                                      |
-| **Integration** | Use their patterns or fight the framework               | Compose into any existing architecture                                                 |
-| **Memory**      | Built-in vector store + retriever abstractions          | Block-based memory + pluggable stores                                                  |
+| **Execution**   | Own runtime with own abstractions                       | Delegates to AI SDK / OpenAI / Google / Anthropic directly                                     |
+| **TypeScript**  | Ported from Python, partial type coverage               | TypeScript-first, full inference from Zod schemas                                              |
+| **API surface** | Large: many concepts, many ways to do things            | Small: ~10 core functions, consistent interfaces                                               |
+| **Integration** | Use their patterns or fight the framework               | Compose into any existing architecture                                                         |
+| **Memory**      | Built-in vector store + retriever abstractions          | Block-based memory + pluggable stores                                                          |
 
 **Bottom line:** Choose a framework when you want it to own the workflow. Choose Crux when you want reusable AI building blocks, debugging, and quality checks without moving your app into a new runtime.
 
@@ -110,6 +112,14 @@ LangChain and LlamaIndex are broad orchestration and retrieval frameworks. They 
     description="Try Crux with your stack: pick a framework and ship a prompt."
     href="/docs/getting-started"
   />
-  <Card title="Thinking in Crux" description="The principles behind Crux's design." href="/docs/foundations/thinking-in-crux" />
-  <Card title="Packages" description="Which packages to install for your setup." href="/docs/foundations/packages" />
+  <Card
+    title="Thinking in Crux"
+    description="The principles behind Crux's design."
+    href="/docs/foundations/thinking-in-crux"
+  />
+  <Card
+    title="Packages"
+    description="Which packages to install for your setup."
+    href="/docs/foundations/packages"
+  />
 </Cards>

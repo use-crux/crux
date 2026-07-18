@@ -292,6 +292,7 @@ jobs:
                 @use-crux/core
                 @use-crux/ai
                 @use-crux/anthropic
+                @use-crux/cloudflare
                 @use-crux/convex
                 @use-crux/google
                 @use-crux/indexer

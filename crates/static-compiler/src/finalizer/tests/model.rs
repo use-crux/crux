@@ -222,8 +222,14 @@ fn finalize_emits_builtin_resource_write_without_read_lint() {
                     "kind": "agent",
                     "name": "Writer",
                     "fidelity": "resolved",
-                    "status": "active",
-                    "quality": { "evalIds": ["eval:writer"] }
+                    "status": "active"
+                },
+                {
+                    "id": "eval:writer",
+                    "kind": "eval",
+                    "name": "Writer Eval",
+                    "fidelity": "resolved",
+                    "status": "active"
                 },
                 {
                     "id": "memory:session",
@@ -235,6 +241,13 @@ fn finalize_emits_builtin_resource_write_without_read_lint() {
                 }
             ],
             "relations": [
+                {
+                    "id": "relation:eval.covers_definition:eval:writer:agent:writer",
+                    "type": "eval.covers_definition",
+                    "from": "eval:writer",
+                    "to": "agent:writer",
+                    "fidelity": "resolved"
+                },
                 {
                     "id": "relation:agent.writes_memory:agent:writer:memory:session",
                     "type": "agent.writes_memory",

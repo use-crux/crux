@@ -46,7 +46,7 @@ export interface CompactionMediaConfig {
  * Provider-native helpers send `schema` to their provider's structured-output
  * mechanism and return the provider/schema validated `{ object }`. They do not
  * imply the full Crux prompt runtime: prompt resolution, validation retry,
- * safety, cassettes, tools, memory, and instrumentation are only present when
+ * safety, Eval evidence, tools, memory, and instrumentation are only present when
  * the helper is explicitly adapter-backed, such as one created with
  * `createGenerateObjectFnFromGenerate()`.
  */

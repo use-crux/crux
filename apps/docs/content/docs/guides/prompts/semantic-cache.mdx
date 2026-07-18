@@ -6,43 +6,43 @@ description: Skip repeated model calls when a new request is semantically equiva
 You classify, route, or normalize thousands of near-identical requests, and most of those model calls repeat work: "cancel my subscription" and "I want to cancel my plan" deserve the same answer without paying for a second generation. Semantic response caching returns the previous result when a new request means the same thing. Install the plugin once and opt in per prompt:
 
 ```ts
-import { config, prompt } from '@use-crux/core'
-import { createSemanticCache } from '@use-crux/core/cache'
-import { embedding } from '@use-crux/openai'
-import { inMemoryStorage } from '@use-crux/core/storage'
-import { z } from 'zod'
+import { config, prompt } from "@use-crux/core";
+import { createSemanticCache } from "@use-crux/core/cache";
+import { embedding } from "@use-crux/openai";
+import { inMemoryStorage } from "@use-crux/core/storage";
+import { z } from "zod";
 
 const classifyIntent = prompt({
-  id: 'classify-intent',
+  id: "classify-intent",
   input: z.object({
     userId: z.string(),
     message: z.string(),
   }),
   output: z.object({
-    intent: z.enum(['billing', 'support', 'sales']),
+    intent: z.enum(["billing", "support", "sales"]),
   }),
   cache: {
     semantic: {
-      version: 'v1',
+      version: "v1",
       query: ({ input }) => input.message,
     },
   },
   prompt: ({ input }) => `Classify this message: ${input.message}`,
-})
+});
 
 config({
   plugins: [
     createSemanticCache({
       storage: inMemoryStorage(),
       embedding: embedding({
-        name: 'cache',
-        model: 'text-embedding-3-small',
+        name: "cache",
+        model: "text-embedding-3-small",
       }),
       ttl: 60_000,
       scope: ({ input }) => `user:${input.userId}`,
     }),
   ],
-})
+});
 ```
 
 On the first request, Crux runs the model and writes the result. On a later semantically similar request, Crux embeds the query, searches the cache namespace, and returns the cached text or object when the score is above the threshold.
@@ -50,8 +50,8 @@ On the first request, Crux runs the model and writes the result. On a later sema
 <Callout type="info">
   This is the third of Crux's three caching layers. Provider caching reduces
   token cost for stable prefixes, [context
-  caching](/docs/guides/contexts/caching) skips expensive context resolvers,
-  and semantic response caching skips the model call itself.
+  caching](/docs/guides/contexts/caching) skips expensive context resolvers, and
+  semantic response caching skips the model call itself.
 </Callout>
 
 ## When To Use It
@@ -96,7 +96,10 @@ If a prompt opts in but no plugin is installed, Crux warns in development and co
 The default write policy caches successful responses with a normal stop finish reason. For prompts with tools or other side effects, pass explicit policies:
 
 ```ts
-import { createSemanticCache, semanticCachePolicies } from '@use-crux/core/cache'
+import {
+  createSemanticCache,
+  semanticCachePolicies,
+} from "@use-crux/core/cache";
 
 createSemanticCache({
   store,
@@ -105,10 +108,10 @@ createSemanticCache({
   scope: ({ input }) => `tenant:${input.tenantId}`,
   shouldLookup: semanticCachePolicies.skipWhenToolsPresent(),
   shouldCache: semanticCachePolicies.all([
-    semanticCachePolicies.finishReason('stop'),
+    semanticCachePolicies.finishReason("stop"),
     semanticCachePolicies.skipWhenToolCallsPresent(),
   ]),
-})
+});
 ```
 
 If the built-in helpers are not enough, provide your own callback. See the [semantic cache reference](/docs/reference/crux-core/cache#policy-callbacks) for the arguments policy callbacks receive.
@@ -120,21 +123,21 @@ Lookup uses dense embeddings only; the [reference](/docs/reference/crux-core/cac
 The cache needs records with TTL support and a dense vector store with pre-filter support:
 
 ```ts
-import { upstashRedisRecordStore, upstashVectorStore } from '@use-crux/upstash'
+import { upstashRedisRecordStore, upstashVectorStore } from "@use-crux/upstash";
 
 createSemanticCache({
   records: upstashRedisRecordStore({
     redis,
-    prefix: 'semantic-cache:',
+    prefix: "semantic-cache:",
   }),
   vectors: upstashVectorStore({
     index,
-    namespace: 'semantic-cache',
+    namespace: "semantic-cache",
   }),
   embedding,
   ttl: 60_000,
   scope: ({ input }) => `tenant:${input.tenantId}`,
-})
+});
 ```
 
 Use a dedicated namespace/table/index for cache entries. Do not point the cache at the same vector namespace used for RAG chunks or long-term memory.
@@ -142,14 +145,14 @@ Use a dedicated namespace/table/index for cache entries. Do not point the cache 
 For Convex, declare that the backing table/index is dedicated to semantic-cache entries:
 
 ```ts
-import { convexStorage } from '@use-crux/convex'
+import { convexStorage } from "@use-crux/convex";
 
 const cacheStorage = convexStorage({
   component: components.crux,
   ctx,
-  vectorIndexName: 'by_embedding',
+  vectorIndexName: "by_embedding",
   semanticCache: { isolatedVectorNamespace: true },
-})
+});
 ```
 
 See the [store capability rule](/docs/reference/crux-core/cache#store-capability-rule) for what this declaration means and why shared indexes are refused.

@@ -29,8 +29,8 @@ func generateSessionToken() string {
 }
 
 // requireSessionAuth gates non-loopback exposure of the dev server with a
-// session token. A separate ingest token may authenticate only the canonical
-// observability records endpoint for server-to-server local dev delivery.
+// session token. A separate ingest token may authenticate only canonical
+// observability ingest and durable feedback submission.
 // The token-to-cookie exchange happens transparently: any
 // browser request carrying a valid `?t=` token is issued an HttpOnly session
 // cookie and redirected to a clean URL, after which every REST and WebSocket
@@ -43,7 +43,7 @@ func generateSessionToken() string {
 // or trigger any action without a valid session.
 func requireSessionAuth(token string, ingestToken string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if isObservabilityIngestRequest(r) && hasValidIngestBearer(r, ingestToken) {
+		if isIngestWriteRequest(r) && hasValidIngestBearer(r, ingestToken) {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -92,8 +92,9 @@ func requireSessionAuth(token string, ingestToken string, next http.Handler) htt
 	})
 }
 
-func isObservabilityIngestRequest(r *http.Request) bool {
-	return r.Method == http.MethodPost && r.URL.Path == "/api/observability/records"
+func isIngestWriteRequest(r *http.Request) bool {
+	return r.Method == http.MethodPost &&
+		(r.URL.Path == "/api/observability/records" || r.URL.Path == "/api/feedback")
 }
 
 func isProtectedPath(path string) bool {

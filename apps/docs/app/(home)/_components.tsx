@@ -1,62 +1,76 @@
 // Shared building blocks for the Crux landing pages.
 // Used by /, /why, and /observability.
 
-import Link from 'next/link'
-import type { ReactNode } from 'react'
-import { TrackedLink } from '@/components/tracked-link'
+import Link from "next/link";
+import type { ReactNode } from "react";
+import { TrackedLink } from "@/components/tracked-link";
 
 // ─────────────────────────────────────────────────────────────────────
 // Snap-notch tile — the primary visual motif across all three landings.
 // Used for the hero block diagram, /why "what the harness handles" grid,
 // and the multi-agent row.
 
-type TileState = 'filled' | 'empty'
+type TileState = "filled" | "empty";
 
 export function Tile({
   name,
   sub,
   badge,
-  state = 'filled',
+  state = "filled",
   soft = false,
   strong = false,
 }: {
-  name: string
-  sub?: string
-  badge?: string
-  state?: TileState
-  soft?: boolean
-  strong?: boolean
+  name: string;
+  sub?: string;
+  badge?: string;
+  state?: TileState;
+  soft?: boolean;
+  strong?: boolean;
 }) {
-  const isEmpty = state === 'empty'
-  const baseBorder = isEmpty ? 'border-dashed border-fd-border' : strong ? 'border-crux/60' : 'border-fd-border'
-  const baseBg = isEmpty ? 'bg-transparent' : strong ? 'bg-crux-soft' : soft ? 'bg-crux-soft/40' : 'bg-fd-card/50'
+  const isEmpty = state === "empty";
+  const baseBorder = isEmpty
+    ? "border-dashed border-fd-border"
+    : strong
+      ? "border-crux/60"
+      : "border-fd-border";
+  const baseBg = isEmpty
+    ? "bg-transparent"
+    : strong
+      ? "bg-crux-soft"
+      : soft
+        ? "bg-crux-soft/40"
+        : "bg-fd-card/50";
 
   return (
     <div
-      className={`group relative h-full rounded-lg border ${baseBorder} ${baseBg} px-3.5 py-3 flex flex-col gap-1 ${strong ? 'border-[1.5px]' : ''}`}
+      className={`group relative h-full rounded-lg border ${baseBorder} ${baseBg} px-3.5 py-3 flex flex-col gap-1 ${strong ? "border-[1.5px]" : ""}`}
     >
       {/* Snap-notch — top-left */}
       <div
-        className={`absolute -top-[3px] left-3.5 h-1.5 w-3.5 rounded-b-[5px] ${strong ? 'border-x-[1.5px] border-b-[1.5px] border-crux/60' : 'border-x border-b border-fd-border'} ${isEmpty ? 'border-dashed' : ''}`}
-        style={{ background: 'var(--color-fd-background)' }}
+        className={`absolute -top-[3px] left-3.5 h-1.5 w-3.5 rounded-b-[5px] ${strong ? "border-x-[1.5px] border-b-[1.5px] border-crux/60" : "border-x border-b border-fd-border"} ${isEmpty ? "border-dashed" : ""}`}
+        style={{ background: "var(--color-fd-background)" }}
       />
       {/* Snap-notch — bottom-right */}
       <div
-        className={`absolute -bottom-[3px] right-3.5 h-1.5 w-3.5 rounded-t-[5px] ${strong ? 'border-x-[1.5px] border-t-[1.5px] border-crux/60' : 'border-x border-t border-fd-border'} ${isEmpty ? 'border-dashed' : ''}`}
-        style={{ background: 'var(--color-fd-background)' }}
+        className={`absolute -bottom-[3px] right-3.5 h-1.5 w-3.5 rounded-t-[5px] ${strong ? "border-x-[1.5px] border-t-[1.5px] border-crux/60" : "border-x border-t border-fd-border"} ${isEmpty ? "border-dashed" : ""}`}
+        style={{ background: "var(--color-fd-background)" }}
       />
 
       {isEmpty ? (
         <>
           <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-fd-muted-foreground/60">
-            {badge ?? 'SLOT'}
+            {badge ?? "SLOT"}
           </span>
-          <p className="text-[11px] text-fd-muted-foreground/70">{sub ?? 'available'}</p>
+          <p className="text-[11px] text-fd-muted-foreground/70">
+            {sub ?? "available"}
+          </p>
         </>
       ) : (
         <>
           <div className="flex items-center justify-between gap-2">
-            <code className={`font-mono text-[12px] font-semibold ${strong ? 'text-crux' : 'text-fd-foreground'}`}>
+            <code
+              className={`font-mono text-[12px] font-semibold ${strong ? "text-crux" : "text-fd-foreground"}`}
+            >
               {name}
             </code>
             {badge && (
@@ -65,11 +79,15 @@ export function Tile({
               </span>
             )}
           </div>
-          {sub && <p className="text-[11px] leading-[1.45] text-fd-muted-foreground">{sub}</p>}
+          {sub && (
+            <p className="text-[11px] leading-[1.45] text-fd-muted-foreground">
+              {sub}
+            </p>
+          )}
         </>
       )}
     </div>
-  )
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -79,48 +97,57 @@ export function SectionHead({
   kicker,
   title,
   subtitle,
-  align = 'center',
-  maxWidth = '36rem',
+  align = "center",
+  maxWidth = "36rem",
 }: {
-  kicker?: string
-  title: ReactNode
-  subtitle?: ReactNode
-  align?: 'center' | 'left'
-  maxWidth?: string
+  kicker?: string;
+  title: ReactNode;
+  subtitle?: ReactNode;
+  align?: "center" | "left";
+  maxWidth?: string;
 }) {
-  const alignCls = align === 'center' ? 'text-center mx-auto' : 'text-left'
+  const alignCls = align === "center" ? "text-center mx-auto" : "text-left";
   return (
-    <div className={`mb-14 ${alignCls}`} style={{ maxWidth: align === 'center' ? maxWidth : undefined }}>
-      {kicker && <p className="mb-3 text-xs font-medium tracking-[0.2em] uppercase text-crux">{kicker}</p>}
-      <h2 className="text-3xl font-[700] tracking-[-0.025em] sm:text-4xl">{title}</h2>
+    <div
+      className={`mb-14 ${alignCls}`}
+      style={{ maxWidth: align === "center" ? maxWidth : undefined }}
+    >
+      {kicker && (
+        <p className="mb-3 text-xs font-medium tracking-[0.2em] uppercase text-crux">
+          {kicker}
+        </p>
+      )}
+      <h2 className="text-3xl font-[700] tracking-[-0.025em] sm:text-4xl">
+        {title}
+      </h2>
       {subtitle && (
         <p
-          className={`mt-4 text-[0.95rem] text-fd-muted-foreground ${align === 'center' ? 'mx-auto max-w-xl' : 'max-w-2xl'}`}
+          className={`mt-4 text-[0.95rem] text-fd-muted-foreground ${align === "center" ? "mx-auto max-w-xl" : "max-w-2xl"}`}
         >
           {subtitle}
         </p>
       )}
     </div>
-  )
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────
 // Devtools window chrome — used in /observability hero mock + zoom-ins.
 
 export function DevWindow({
-  title = 'crux dev',
-  tabs = ['Traces', 'Memory', 'Evals', 'Security', 'Catalog'],
-  active = 'Traces',
+  title = "crux dev",
+  tabs = ["Traces", "Memory", "Evals", "Security", "Catalog"],
+  active = "Traces",
   recording = true,
-  status = 'localhost:4400',
+  status = "localhost:4400",
   children,
 }: {
-  title?: string
-  tabs?: string[]
-  active?: string
-  recording?: boolean
-  status?: string
-  children: ReactNode
+  title?: string;
+  tabs?: string[];
+  active?: string;
+  recording?: boolean;
+  status?: string;
+  children: ReactNode;
 }) {
   return (
     <div className="overflow-hidden rounded-2xl border border-fd-border bg-fd-card/40 shadow-[0_30px_80px_-30px_rgba(0,0,0,0.5)]">
@@ -131,7 +158,9 @@ export function DevWindow({
           <div className="h-2.5 w-2.5 rounded-full bg-[#F4BF4F]" />
           <div className="h-2.5 w-2.5 rounded-full bg-[#61C554]" />
         </div>
-        <span className="font-mono text-[11px] text-fd-muted-foreground">{title}</span>
+        <span className="font-mono text-[11px] text-fd-muted-foreground">
+          {title}
+        </span>
         <div className="flex-1" />
         {recording && (
           <div className="inline-flex items-center gap-1.5 rounded-md border border-fd-border bg-fd-card/60 px-2 py-1 font-mono text-[10.5px] text-fd-muted-foreground">
@@ -147,8 +176,8 @@ export function DevWindow({
             key={t}
             className={`px-3.5 py-2.5 font-mono text-[11.5px] ${
               t === active
-                ? 'border-b-2 border-crux font-semibold text-fd-foreground'
-                : 'border-b-2 border-transparent text-fd-muted-foreground'
+                ? "border-b-2 border-crux font-semibold text-fd-foreground"
+                : "border-b-2 border-transparent text-fd-muted-foreground"
             }`}
           >
             {t}
@@ -159,22 +188,24 @@ export function DevWindow({
       <div>{children}</div>
       {/* Status bar */}
       <div className="flex items-center justify-between border-t border-fd-border bg-fd-muted/30 px-4 py-2">
-        <span className="font-mono text-[10px] text-fd-muted-foreground">@use-crux/devtools · {status}</span>
+        <span className="font-mono text-[10px] text-fd-muted-foreground">
+          @use-crux/devtools · {status}
+        </span>
         <span className="font-mono text-[10px] text-fd-muted-foreground">
           traces · memory · evals · security · index
         </span>
       </div>
     </div>
-  )
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────
 // Code block — minimal panel with optional title bar.
 
 export type CodeLine = {
-  text: string
-  type: 'import' | 'code' | 'highlight' | 'comment' | 'blank'
-}
+  text: string;
+  type: "import" | "code" | "highlight" | "comment" | "blank";
+};
 
 export function CodePanel({
   filename,
@@ -183,34 +214,37 @@ export function CodePanel({
   borderAccent = false,
   headerKicker,
 }: {
-  filename?: string
-  footer?: ReactNode
-  lines: CodeLine[]
-  borderAccent?: boolean
-  headerKicker?: ReactNode
+  filename?: string;
+  footer?: ReactNode;
+  lines: CodeLine[];
+  borderAccent?: boolean;
+  headerKicker?: ReactNode;
 }) {
   return (
     <div
       className={`overflow-hidden rounded-xl border bg-fd-card/50 ${
-        borderAccent ? 'border-crux/35' : 'border-fd-border'
+        borderAccent ? "border-crux/35" : "border-fd-border"
       }`}
     >
       {(filename || headerKicker) && (
         <div
           className={`flex items-center gap-2.5 border-b px-4 py-2.5 ${
-            borderAccent ? 'border-crux/25 bg-crux-soft/30' : 'border-fd-border'
+            borderAccent ? "border-crux/25 bg-crux-soft/30" : "border-fd-border"
           }`}
         >
           {headerKicker ?? (
             <div className="flex gap-1.5">
               {[0, 1, 2].map((i) => (
-                <div key={i} className="h-2 w-2 rounded-full bg-fd-muted-foreground/20" />
+                <div
+                  key={i}
+                  className="h-2 w-2 rounded-full bg-fd-muted-foreground/20"
+                />
               ))}
             </div>
           )}
           {filename && (
             <span
-              className={`ml-auto font-mono text-[11px] ${borderAccent ? 'text-fd-muted-foreground' : 'text-fd-muted-foreground/60'}`}
+              className={`ml-auto font-mono text-[11px] ${borderAccent ? "text-fd-muted-foreground" : "text-fd-muted-foreground/60"}`}
             >
               {filename}
             </span>
@@ -223,114 +257,145 @@ export function CodePanel({
             <div
               key={i}
               className={
-                line.type === 'highlight'
-                  ? 'rounded-sm bg-crux-soft px-1 -mx-1 text-fd-foreground'
-                  : line.type === 'import'
-                    ? 'text-fd-muted-foreground/70'
-                    : line.type === 'comment'
-                      ? 'text-fd-muted-foreground/50 italic'
-                      : line.type === 'blank'
-                        ? 'h-[1.7em]'
-                        : 'text-fd-foreground/85'
+                line.type === "highlight"
+                  ? "rounded-sm bg-crux-soft px-1 -mx-1 text-fd-foreground"
+                  : line.type === "import"
+                    ? "text-fd-muted-foreground/70"
+                    : line.type === "comment"
+                      ? "text-fd-muted-foreground/50 italic"
+                      : line.type === "blank"
+                        ? "h-[1.7em]"
+                        : "text-fd-foreground/85"
               }
             >
-              {line.text || ' '}
+              {line.text || " "}
             </div>
           ))}
         </pre>
       </div>
-      {footer && <div className="border-t border-fd-border bg-fd-muted/30 px-4 py-2">{footer}</div>}
+      {footer && (
+        <div className="border-t border-fd-border bg-fd-muted/30 px-4 py-2">
+          {footer}
+        </div>
+      )}
     </div>
-  )
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────
 // Site footer — 5-column. Shared across all landings.
 
 type FooterLink = {
-  label: string
-  href: string
-  event?: string
-  properties?: Record<string, unknown>
-  external?: boolean
-}
+  label: string;
+  href: string;
+  event?: string;
+  properties?: Record<string, unknown>;
+  external?: boolean;
+};
 
 type FooterColumn = {
-  heading: string
-  links: FooterLink[]
-}
+  heading: string;
+  links: FooterLink[];
+};
 
 export function CruxFooter() {
   const columns = [
     {
-      heading: 'Foundations',
+      heading: "Foundations",
       links: [
-        { label: 'Thinking in Crux', href: '/docs/foundations/thinking-in-crux' },
-        { label: 'Mental model', href: '/docs/foundations/mental-model' },
-        { label: 'Primitives', href: '/docs/foundations/primitives' },
-        { label: 'Best practices', href: '/docs/foundations/best-practices' },
-      ],
-    },
-    {
-      heading: 'Capabilities',
-      links: [
-        { label: 'Memory', href: '/docs/guides/memory' },
-        { label: 'Retrieval', href: '/docs/guides/retrieval' },
-        { label: 'Guardrails', href: '/docs/guides/safety/guardrails' },
-        { label: 'Routing', href: '/docs/guides/routing' },
-        { label: 'Quality', href: '/docs/guides/quality' },
-        { label: 'Observability', href: '/observability' },
-      ],
-    },
-    {
-      heading: 'Adapters',
-      links: [
-        { label: 'Vercel AI SDK', href: '/docs/reference/adapters/ai' },
-        { label: 'OpenAI SDK', href: '/docs/reference/adapters/openai' },
-        { label: 'Anthropic SDK', href: '/docs/reference/adapters/anthropic' },
-        { label: 'Google GenAI', href: '/docs/reference/adapters/google' },
-      ],
-    },
-    {
-      heading: 'Resources',
-      links: [
-        { label: 'Cookbook', href: '/docs/cookbook' },
-        { label: 'Compare', href: '/compare' },
-        { label: 'Examples', href: '/docs/cookbook' },
         {
-          label: 'GitHub',
-          href: 'https://github.com/use-crux/crux',
-          event: 'github_link_clicked',
-          properties: { location: 'footer' },
+          label: "Thinking in Crux",
+          href: "/docs/foundations/thinking-in-crux",
+        },
+        { label: "Mental model", href: "/docs/foundations/mental-model" },
+        { label: "Primitives", href: "/docs/foundations/primitives" },
+        { label: "Best practices", href: "/docs/foundations/best-practices" },
+      ],
+    },
+    {
+      heading: "Capabilities",
+      links: [
+        { label: "Memory", href: "/docs/guides/memory" },
+        { label: "Retrieval", href: "/docs/guides/retrieval" },
+        { label: "Guardrails", href: "/docs/guides/safety/guardrails" },
+        { label: "Routing", href: "/docs/guides/routing" },
+        { label: "Evals", href: "/docs/guides/evals" },
+        { label: "Observability", href: "/observability" },
+      ],
+    },
+    {
+      heading: "Adapters",
+      links: [
+        { label: "Vercel AI SDK", href: "/docs/reference/adapters/ai" },
+        { label: "OpenAI SDK", href: "/docs/reference/adapters/openai" },
+        { label: "Anthropic SDK", href: "/docs/reference/adapters/anthropic" },
+        { label: "Google GenAI", href: "/docs/reference/adapters/google" },
+      ],
+    },
+    {
+      heading: "Resources",
+      links: [
+        { label: "Cookbook", href: "/docs/cookbook" },
+        { label: "Compare", href: "/compare" },
+        { label: "Examples", href: "/docs/cookbook" },
+        {
+          label: "GitHub",
+          href: "https://github.com/use-crux/crux",
+          event: "github_link_clicked",
+          properties: { location: "footer" },
           external: true,
         },
         {
-          label: 'npm',
-          href: 'https://www.npmjs.com/package/@use-crux/core',
-          event: 'npm_link_clicked',
-          properties: { location: 'footer' },
+          label: "npm",
+          href: "https://www.npmjs.com/package/@use-crux/core",
+          event: "npm_link_clicked",
+          properties: { location: "footer" },
           external: true,
         },
-        { label: 'Reference', href: '/docs/reference' },
+        { label: "Reference", href: "/docs/reference" },
       ],
     },
-  ] satisfies FooterColumn[]
+  ] satisfies FooterColumn[];
 
   return (
     <footer className="border-t border-fd-border bg-fd-background px-6 pb-10 pt-16">
       <div className="mx-auto grid max-w-[80rem] gap-12 lg:grid-cols-[1.4fr_repeat(4,1fr)]">
         <div>
           <div className="flex items-center gap-2">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" className="text-fd-foreground">
-              <path d="M12 2L2 7v10l10 5 10-5V7L12 2z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
-              <path d="M12 22V12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-              <path d="M2 7l10 5 10-5" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              className="text-fd-foreground"
+            >
+              <path
+                d="M12 2L2 7v10l10 5 10-5V7L12 2z"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M12 22V12"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
+              <path
+                d="M2 7l10 5 10-5"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinejoin="round"
+              />
             </svg>
-            <span className="text-[15px] font-bold tracking-[-0.02em]">Crux</span>
+            <span className="text-[15px] font-bold tracking-[-0.02em]">
+              Crux
+            </span>
           </div>
           <p className="mt-4 max-w-[20rem] text-[13px] leading-relaxed text-fd-muted-foreground">
-            TypeScript building blocks for prompts, context, memory, quality, and debugging around your model calls.
-            Bring your SDK; see what the model saw, why it saw it, and whether it worked.
+            TypeScript building blocks for prompts, context, memory, quality,
+            and debugging around your model calls. Bring your SDK; see what the
+            model saw, why it saw it, and whether it worked.
           </p>
           <p className="mt-6 font-mono text-[11px] tracking-[0.1em] text-fd-muted-foreground/60">
             Apache-2.0 · @use-crux/core
@@ -344,10 +409,10 @@ export function CruxFooter() {
             <ul className="space-y-2.5">
               {col.links.map((link) => {
                 const className =
-                  'text-[13px] text-fd-muted-foreground transition-colors hover:text-fd-foreground'
+                  "text-[13px] text-fd-muted-foreground transition-colors hover:text-fd-foreground";
                 const externalProps = link.external
-                  ? { target: '_blank', rel: 'noreferrer noopener' }
-                  : {}
+                  ? { target: "_blank", rel: "noreferrer noopener" }
+                  : {};
                 return (
                   <li key={link.label}>
                     {link.event ? (
@@ -366,7 +431,7 @@ export function CruxFooter() {
                       </Link>
                     )}
                   </li>
-                )
+                );
               })}
             </ul>
           </div>
@@ -381,5 +446,5 @@ export function CruxFooter() {
         </p>
       </div>
     </footer>
-  )
+  );
 }

@@ -1,34 +1,38 @@
-import type { InspectPart, DroppedContext } from '@/types'
+import type { InspectPart, DroppedContext } from "@/types";
 
 interface TokenBarProps {
-  parts: InspectPart[]
-  droppedContexts?: DroppedContext[]
-  totalTokens: number
+  parts: InspectPart[];
+  droppedContexts?: DroppedContext[];
+  totalTokens: number;
 }
 
 const COLORS = [
-  'bg-(--qw-blue)',
-  'bg-(--qw-ok)',
-  'bg-(--qw-warn)',
-  'bg-(--qw-iris)',
-  'bg-(--qw-plum)',
-  'bg-(--qw-crux)',
-  'bg-(--qw-gold)',
-  'bg-(--qw-blue)',
-]
+  "bg-(--devtools-blue)",
+  "bg-(--devtools-ok)",
+  "bg-(--devtools-warn)",
+  "bg-(--devtools-iris)",
+  "bg-(--devtools-plum)",
+  "bg-(--devtools-crux)",
+  "bg-(--devtools-gold)",
+  "bg-(--devtools-blue)",
+];
 
-export function TokenBar({ parts, droppedContexts = [], totalTokens }: TokenBarProps) {
-  if (totalTokens === 0) return null
+export function TokenBar({
+  parts,
+  droppedContexts = [],
+  totalTokens,
+}: TokenBarProps) {
+  if (totalTokens === 0) return null;
 
-  const activeParts = parts.filter((p) => !p.skipped && p.tokens > 0)
+  const activeParts = parts.filter((p) => !p.skipped && p.tokens > 0);
 
   return (
     <div className="space-y-2">
       {/* Bar */}
       <div className="flex h-6 rounded overflow-hidden bg-zinc-800">
         {activeParts.map((part, i) => {
-          const width = (part.tokens / totalTokens) * 100
-          if (width < 0.5) return null
+          const width = (part.tokens / totalTokens) * 100;
+          if (width < 0.5) return null;
           return (
             <div
               key={part.source}
@@ -37,10 +41,10 @@ export function TokenBar({ parts, droppedContexts = [], totalTokens }: TokenBarP
               title={`${part.source}: ${part.tokens} tokens`}
             >
               <div className="absolute inset-0 flex items-center justify-center text-[10px] text-white font-medium overflow-hidden whitespace-nowrap px-1">
-                {width > 8 ? part.source : ''}
+                {width > 8 ? part.source : ""}
               </div>
             </div>
-          )
+          );
         })}
       </div>
 
@@ -48,7 +52,9 @@ export function TokenBar({ parts, droppedContexts = [], totalTokens }: TokenBarP
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
         {activeParts.map((part, i) => (
           <div key={part.source} className="flex items-center gap-1.5">
-            <div className={`w-2.5 h-2.5 rounded-sm ${COLORS[i % COLORS.length]}`} />
+            <div
+              className={`w-2.5 h-2.5 rounded-sm ${COLORS[i % COLORS.length]}`}
+            />
             <span className="text-zinc-300">{part.source}</span>
             <span className="text-zinc-500">{part.tokens}</span>
           </div>
@@ -56,10 +62,12 @@ export function TokenBar({ parts, droppedContexts = [], totalTokens }: TokenBarP
         {droppedContexts.length > 0 && (
           <div className="flex items-center gap-1.5">
             <div className="w-2.5 h-2.5 rounded-sm bg-zinc-600 opacity-50" />
-            <span className="text-zinc-500">{droppedContexts.length} dropped</span>
+            <span className="text-zinc-500">
+              {droppedContexts.length} dropped
+            </span>
           </div>
         )}
       </div>
     </div>
-  )
+  );
 }

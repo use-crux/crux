@@ -5,7 +5,7 @@
  * overlap streaming bodies, while named intent states stay explicit.
  */
 
-import { Chip } from "@/qw/shell/primitives";
+import { Chip } from "@/devtools/shell/primitives";
 import type { ObservabilityRunDetailNode } from "@/types";
 import {
   deferPresentationFromAttributes,
@@ -23,7 +23,10 @@ export function DeferredWorkCard({
   );
   if (!presentation) {
     return (
-      <div className="text-[12px]" style={{ color: "var(--qw-fg-muted)" }}>
+      <div
+        className="text-[12px]"
+        style={{ color: "var(--devtools-fg-muted)" }}
+      >
         Deferred work details unavailable.
       </div>
     );
@@ -32,9 +35,7 @@ export function DeferredWorkCard({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
-        {presentation.mode && (
-          <Chip tone="crux">{presentation.mode}</Chip>
-        )}
+        {presentation.mode && <Chip tone="crux">{presentation.mode}</Chip>}
         {presentation.stateLabel && (
           <Chip tone={stateTone(presentation)} dot>
             {presentation.stateLabel}
@@ -49,9 +50,9 @@ export function DeferredWorkCard({
         <div
           className="rounded-md border px-3 py-2 text-[12px] leading-relaxed"
           style={{
-            borderColor: "var(--qw-line)",
-            background: "var(--qw-bg-soft)",
-            color: "var(--qw-fg-muted)",
+            borderColor: "var(--devtools-border)",
+            background: "var(--devtools-bg-muted)",
+            color: "var(--devtools-fg-muted)",
           }}
         >
           {presentation.streamingNote}
@@ -61,19 +62,19 @@ export function DeferredWorkCard({
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[12px]">
         {presentation.sequence !== undefined && (
           <>
-            <dt style={{ color: "var(--qw-fg-muted)" }}>Sequence</dt>
+            <dt style={{ color: "var(--devtools-fg-muted)" }}>Sequence</dt>
             <dd>{presentation.sequence}</dd>
           </>
         )}
         {presentation.targetId && (
           <>
-            <dt style={{ color: "var(--qw-fg-muted)" }}>Target</dt>
+            <dt style={{ color: "var(--devtools-fg-muted)" }}>Target</dt>
             <dd className="font-mono break-all">{presentation.targetId}</dd>
           </>
         )}
         {presentation.workId && (
           <>
-            <dt style={{ color: "var(--qw-fg-muted)" }}>Work</dt>
+            <dt style={{ color: "var(--devtools-fg-muted)" }}>Work</dt>
             <dd className="font-mono break-all">{presentation.workId}</dd>
           </>
         )}

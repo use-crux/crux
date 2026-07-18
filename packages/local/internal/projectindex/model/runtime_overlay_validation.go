@@ -87,7 +87,7 @@ func validateMCPRuntimeReplace(update ProjectIndexRuntimeUpdate, ownerServerID s
 			return fmt.Errorf("MCP runtime child %q must be resolved and fingerprinted", definition.ID)
 		}
 		if len(definition.Tags) != 0 || len(definition.Path) != 0 || definition.Source != nil ||
-			len(definition.SourceRefs) != 0 || definition.Quality != nil {
+			len(definition.SourceRefs) != 0 {
 			return fmt.Errorf("MCP runtime child %q contains unsupported authored or derived fields", definition.ID)
 		}
 		if definition.Status != "" && definition.Status != "active" {

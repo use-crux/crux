@@ -36,7 +36,7 @@ import type { RoutingReceipt } from "../routing/receipt";
  * `router()`, `cascade()`) are unwrapped to a concrete `model`, settings
  * are mapped through `mapSettings()`, and tools are merged, middleware-
  * wrapped, and instrumented. The spec's only job is to translate this
-   * into its SDK's native arguments and run the call.
+ * into its SDK's native arguments and run the call.
  *
  * @typeParam TModel - The SDK's model type (e.g. AI SDK `LanguageModel`).
  */
@@ -77,14 +77,12 @@ export interface ExecutorRequest<TModel> {
    * SDK adapters adapt this to their native approval hook, but policy remains
    * resolved by core from context, prompt, call-site, and middleware inputs.
    */
-  readonly toolApproval?: (
-        call: {
-          readonly toolName: string;
-          readonly toolCallId: string;
-          readonly input: unknown;
-          readonly messages?: readonly Message[];
-        },
-      ) => boolean | PromiseLike<boolean>;
+  readonly toolApproval?: (call: {
+    readonly toolName: string;
+    readonly toolCallId: string;
+    readonly input: unknown;
+    readonly messages?: readonly Message[];
+  }) => boolean | PromiseLike<boolean>;
   /** Restrict which tools the model may call this run, when set. */
   readonly activeTools: readonly string[] | undefined;
   /**
@@ -346,6 +344,8 @@ export type StructuredAttempt<TRawResponse> =
 export interface ExecutorStreamMeta extends TraceMeta {
   /** Final assistant text, when the stream produced text. */
   readonly text?: string;
+  /** Parsed, schema-valid object produced by a structured stream. */
+  readonly object?: unknown;
   /** Exact final assistant output buffered by the SDK stream. */
   readonly content?: readonly AssistantContentPart[];
   /** Complete canonical transcript buffered by the SDK stream. */

@@ -1,7 +1,6 @@
 package kit
 
 import (
-	"fmt"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -24,19 +23,6 @@ type Hint struct {
 type DiffLine struct {
 	Kind string
 	Text string
-}
-
-// VariantMetrics is one row in the experiment matrix component.
-type VariantMetrics struct {
-	Name     string
-	Pass     float64
-	Score    float64
-	Tokens   int
-	Latency  string
-	Cost     string
-	Delta    string
-	Baseline bool
-	Winner   bool
 }
 
 // ProgressBar renders a single-line progress bar.
@@ -157,32 +143,6 @@ func Chart(vals []float64, r Rect, tone theme.Tone, styles theme.Styles) []strin
 	return out
 }
 
-// Matrix renders experiment variants and metrics.
-func Matrix(rows []VariantMetrics, r Rect, sel int, styles theme.Styles) []string {
-	if r.W <= 0 || r.H <= 0 {
-		return nil
-	}
-	table := NewTable[VariantMetrics]([]Col[VariantMetrics]{
-		{Title: "variant", C: Ratio(2, 5), Value: func(v VariantMetrics) string { return variantName(v) }},
-		{Title: "pass", C: Ratio(1, 8), Align: AlignRight, Value: func(v VariantMetrics) string { return fmt.Sprintf("%.0f%%", v.Pass*100) }},
-		{Title: "score", C: Ratio(1, 8), Align: AlignRight, Value: func(v VariantMetrics) string { return fmt.Sprintf("%.2f", v.Score) }},
-		{Title: "tok", C: Ratio(1, 8), Align: AlignRight, Value: func(v VariantMetrics) string { return fmt.Sprintf("%d", v.Tokens) }},
-		{Title: "lat", C: Ratio(1, 8), Align: AlignRight, Value: func(v VariantMetrics) string { return v.Latency }},
-		{Title: "cost", C: Ratio(1, 8), Align: AlignRight, Value: func(v VariantMetrics) string { return v.Cost }},
-		{Title: "Δpass", C: Fill(), Align: AlignRight, Value: func(v VariantMetrics) string { return v.Delta }},
-	})
-	table.SetItems(rows)
-	table.SetHeight(r.H)
-	lines := table.Render(r.W, styles)
-	for len(lines) < r.H {
-		lines = append(lines, strings.Repeat(" ", r.W))
-	}
-	if len(lines) > r.H {
-		lines = lines[:r.H]
-	}
-	return lines
-}
-
 // DiffBlock renders bounded diff text.
 func DiffBlock(lines []DiffLine, r Rect, styles theme.Styles) []string {
 	out := make([]string, 0, r.H)
@@ -202,16 +162,6 @@ func DiffBlock(lines []DiffLine, r Rect, styles theme.Styles) []string {
 		out = append(out, strings.Repeat(" ", r.W))
 	}
 	return out
-}
-
-func variantName(v VariantMetrics) string {
-	prefix := " "
-	if v.Baseline {
-		prefix = "◎"
-	} else if v.Winner {
-		prefix = "★"
-	}
-	return prefix + " " + v.Name
 }
 
 type boxDrawing struct {

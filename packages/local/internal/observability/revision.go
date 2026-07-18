@@ -14,7 +14,7 @@ const defaultRevisionLogRetention = 5000
 // RunChange names one run whose read-model projection changed as of Revision.
 // Entity is always "run" today; the field exists so the wire shape matches
 // the wider `{entity, id, revision}` push contract without a breaking change
-// when segment/quality/delivery-health entities publish their own deltas.
+// when segment/inspection/delivery-health entities publish their own deltas.
 type RunChange struct {
 	Entity   string `json:"entity"`
 	ID       string `json:"id"`

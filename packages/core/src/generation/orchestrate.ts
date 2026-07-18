@@ -37,6 +37,8 @@ import {
   linkResolvedContextArtifacts,
 } from './orchestrate-observability'
 import { createGenerationPerformanceTracker } from './performance-metrics'
+import type { CruxRunId } from '../observability'
+import { stampCruxRunId } from './run-id'
 
 // ─────────────────────────────────────────────────────────────────
 // orchestrateGenerate
@@ -67,10 +69,10 @@ import { createGenerationPerformanceTracker } from './performance-metrics'
  * )
  * ```
  */
-export async function orchestrateGenerate<TArgs extends Record<string, unknown>, TResult>(
+export async function orchestrateGenerate<TArgs extends Record<string, unknown>, TResult extends object>(
   spec: OrchestrationSpec<TArgs>,
   doGenerate: (args: TArgs) => Promise<TResult>,
-): Promise<TResult> {
+): Promise<TResult & { readonly runId: CruxRunId }> {
   const span = observe.openSpan({
     name: spec.promptId ? `generate ${spec.promptId}` : 'generate',
     primitive: 'generation.call',
@@ -112,7 +114,7 @@ export async function orchestrateGenerate<TArgs extends Record<string, unknown>,
       return result
     })
     span.end({ metrics: performance.metrics(getMeta(result)) })
-    return result
+    return { ...result, runId: span.runId }
   } catch (error) {
     span.error(error)
     throw error
@@ -184,7 +186,7 @@ async function orchestrateGenerateInner<TArgs extends Record<string, unknown>, T
  * @param doStream - Adapter-specific streaming function
  * @returns The SDK stream result
  */
-export async function orchestrateStream<TArgs extends Record<string, unknown>, TResult>(
+export async function orchestrateStream<TArgs extends Record<string, unknown>, TResult extends object>(
   spec: Pick<
     OrchestrationSpec<TArgs>,
     | 'promptId'
@@ -200,7 +202,7 @@ export async function orchestrateStream<TArgs extends Record<string, unknown>, T
     | 'timeout'
   >,
   doStream: (args: TArgs) => Promise<TResult>,
-): Promise<TResult> {
+): Promise<TResult & { readonly runId: CruxRunId }> {
   const span = observe.openSpan({
     name: spec.promptId ? `stream ${spec.promptId}` : 'stream',
     primitive: 'generation.stream',
@@ -223,7 +225,7 @@ export async function orchestrateStream<TArgs extends Record<string, unknown>, T
         limitMs: spec.timeout?.totalMs,
       })
       attachStreamObservability(result, span, performance, spec.timeout?.chunkMs)
-      return result
+      return stampCruxRunId(result, span.runId)
     })
   } catch (error) {
     span.error(error)

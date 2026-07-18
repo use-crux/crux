@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Eyebrow } from "@/qw/shell/primitives";
+import { Eyebrow } from "@/devtools/shell/primitives";
 
 export function RoutingReceiptSection({
   title,
@@ -16,7 +16,7 @@ export function RoutingReceiptSection({
         <Eyebrow>{title}</Eyebrow>
         <div
           className="h-px flex-1"
-          style={{ background: "var(--qw-border)" }}
+          style={{ background: "var(--devtools-border)" }}
         />
         {right}
       </div>
@@ -40,23 +40,23 @@ export function RoutingStepShell({
     <div
       className="rounded-[8px]"
       style={{
-        background: "var(--qw-bg-elev)",
-        border: "1px solid var(--qw-border)",
+        background: "var(--devtools-bg-elev)",
+        border: "1px solid var(--devtools-border)",
       }}
     >
       <div
         className="flex items-center gap-2 px-3 py-2"
-        style={{ borderBottom: "1px solid var(--qw-border)" }}
+        style={{ borderBottom: "1px solid var(--devtools-border)" }}
       >
         <span
           className="font-mono text-[10px]"
-          style={{ color: "var(--qw-fg-faint)", width: 18 }}
+          style={{ color: "var(--devtools-fg-faint)", width: 18 }}
         >
           {index + 1}
         </span>
         <span
           className="flex-1 text-[12px] font-semibold"
-          style={{ color: "var(--qw-fg)" }}
+          style={{ color: "var(--devtools-fg)" }}
         >
           {title}
         </span>

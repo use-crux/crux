@@ -6,15 +6,15 @@ description: Handle tool approval requests in React Native with a normal app scr
 Mobile approval works the same way as web approval: render the request from the returned message parts, then send a response with the approval id.
 
 ```tsx title="ApprovalChat.tsx"
-import { useChat } from '@ai-sdk/react'
-import { lastAssistantMessageIsCompleteWithApprovalResponses } from 'ai'
-import { Button, FlatList, Text, View } from 'react-native'
+import { useChat } from "@ai-sdk/react";
+import { lastAssistantMessageIsCompleteWithApprovalResponses } from "ai";
+import { Button, FlatList, Text, View } from "react-native";
 
 export function ApprovalChat() {
   const { messages, sendMessage, addToolApprovalResponse } = useChat({
-    api: 'https://api.example.com/chat',
+    api: "https://api.example.com/chat",
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
-  })
+  });
 
   return (
     <View>
@@ -24,11 +24,14 @@ export function ApprovalChat() {
         renderItem={({ item }) => (
           <View>
             {item.parts.map((part) => {
-              if (part.type === 'text') {
-                return <Text key={part.text}>{part.text}</Text>
+              if (part.type === "text") {
+                return <Text key={part.text}>{part.text}</Text>;
               }
 
-              if (part.type === 'tool-sendEmail' && part.state === 'approval-requested') {
+              if (
+                part.type === "tool-sendEmail" &&
+                part.state === "approval-requested"
+              ) {
                 return (
                   <View key={part.toolCallId}>
                     <Text>Approve email to {part.input.to}?</Text>
@@ -47,15 +50,15 @@ export function ApprovalChat() {
                         addToolApprovalResponse({
                           id: part.approval.id,
                           approved: false,
-                          reason: 'Denied from mobile',
+                          reason: "Denied from mobile",
                         })
                       }
                     />
                   </View>
-                )
+                );
               }
 
-              return null
+              return null;
             })}
           </View>
         )}
@@ -63,10 +66,12 @@ export function ApprovalChat() {
 
       <Button
         title="Ask assistant"
-        onPress={() => sendMessage({ text: 'Send the customer a shipping update.' })}
+        onPress={() =>
+          sendMessage({ text: "Send the customer a shipping update." })
+        }
       />
     </View>
-  )
+  );
 }
 ```
 

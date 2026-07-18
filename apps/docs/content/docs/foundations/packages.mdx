@@ -13,45 +13,47 @@ Crux is split into focused packages. Everyone needs `@use-crux/core`. Pick an ad
 
 ## Quick reference
 
-| Package               | What it does                                                                                                                              | Install when                                           |
-| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| `@use-crux/core`      | Prompts, contexts, memory, plans, tasks, compaction, scoring, agents, index contracts, lint contracts, runtime bridge, observability, request-scoped `defer()` | Always: this is the base                              |
-| `@use-crux/next`      | Next.js host wrapper for request-scoped `defer()` via `after()`                                                                           | Next.js App Router / route handlers using inline defer |
-| `@use-crux/react`     | React provider, hooks, transports, and SSE server helper                                                                                  | You render Crux plans/tasks/memory in React            |
-| `@use-crux/ai`        | Vercel AI SDK adapter (`generate`, `stream`), `@use-crux/ai/agent`, and stream integration for plans/tasks                                | You use `ai` / `@ai-sdk/*`                             |
-| `@use-crux/openai`    | OpenAI SDK adapter (`createOpenAI`)                                                                                                       | You use the `openai` package directly                  |
-| `@use-crux/google`    | Google GenAI adapter (`createGoogle`)                                                                                                     | You use `@google/genai`                                |
-| `@use-crux/anthropic` | Anthropic SDK adapter (`createAnthropic`)                                                                                                 | You use `@anthropic-ai/sdk` directly                   |
-| `@use-crux/convex`    | Convex RecordStore adapter, dense VectorStore adapter, workspace AssetStore, server boundaries, Agent bridge, compaction, swarm component | Your backend is Convex                                 |
-| `@use-crux/upstash`   | Upstash VectorStore and Redis RecordStore adapters                                                                                        | You need managed vector search or Redis-backed storage |
-| `@use-crux/otel`      | OpenTelemetry spans for production observability                                                                                          | You need traces in Datadog, Honeycomb, Grafana, etc.   |
-| `@use-crux/local`     | Local Go runtime, dev server, web UI host, TUI, eval runner, index, lint, and trace services                                              | Development and debugging                              |
-| `@use-crux/devtools`  | React web devtools UI bundle                                                                                                              | Usually installed through `@use-crux/local`            |
+| Package               | What it does                                                                                                                                                   | Install when                                           |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| `@use-crux/core`      | Prompts, contexts, memory, plans, tasks, compaction, scoring, agents, index contracts, lint contracts, runtime bridge, observability, request-scoped `defer()` | Always: this is the base                               |
+| `@use-crux/next`      | Next.js host wrapper for request-scoped `defer()` via `after()`                                                                                                | Next.js App Router / route handlers using inline defer |
+| `@use-crux/react`     | React provider, hooks, transports, and SSE server helper                                                                                                       | You render Crux plans/tasks/memory in React            |
+| `@use-crux/ai`        | Vercel AI SDK adapter (`generate`, `stream`), `@use-crux/ai/agent`, and stream integration for plans/tasks                                                     | You use `ai` / `@ai-sdk/*`                             |
+| `@use-crux/openai`    | OpenAI SDK adapter (`createOpenAI`)                                                                                                                            | You use the `openai` package directly                  |
+| `@use-crux/google`    | Google GenAI adapter (`createGoogle`)                                                                                                                          | You use `@google/genai`                                |
+| `@use-crux/anthropic` | Anthropic SDK adapter (`createAnthropic`)                                                                                                                      | You use `@anthropic-ai/sdk` directly                   |
+| `@use-crux/convex`    | Convex RecordStore adapter, dense VectorStore adapter, workspace AssetStore, server boundaries, Agent bridge, compaction, swarm component                      | Your backend is Convex                                 |
+| `@use-crux/upstash`   | Upstash VectorStore and Redis RecordStore adapters                                                                                                             | You need managed vector search or Redis-backed storage |
+| `@use-crux/otel`      | OpenTelemetry spans for production observability                                                                                                               | You need traces in Datadog, Honeycomb, Grafana, etc.   |
+| `@use-crux/local`     | Local Go runtime, dev server, web UI host, TUI, eval runner, index, lint, and trace services                                                                   | Development and debugging                              |
+| `@use-crux/devtools`  | React web devtools UI bundle                                                                                                                                   | Usually installed through `@use-crux/local`            |
 
 ## `@use-crux/core`
 
 The base package. Contains all SDK-agnostic primitives, organized into subpath exports:
 
-| Subpath                         | Exports                                                                              |
-| ------------------------------- | ------------------------------------------------------------------------------------ |
-| `@use-crux/core`                | `prompt`, `context`, `createPrompts`, `createContexts`, `config`, `when`, `match`, `defer` |
-| `@use-crux/core/defer/node`     | `withNodeDefer`, `createNodeDeferHost` for Node HTTP                                 |
-| `@use-crux/core/defer/serverless` | `withWaitUntilDefer`, `withAfterDefer`, `withNamedOnlyDefer`, lifetime factories   |
-| `@use-crux/core/memory`         | `memory`, `workingState`, `episodes`, `facts`, `procedures`                          |
-| `@use-crux/core/storage`        | `RecordStore`, `VectorStore`, `AssetStore`, `storage`, `inMemoryStorage`             |
-| `@use-crux/core/compaction`     | `createSlidingWindow`, `createBudgetManager`, `extractKeyFacts`, `summarizeMessages` |
-| `@use-crux/core/scoring`        | `judge`, `metrics`                                                                   |
-| `@use-crux/core/agent`          | `agent`, `blackboard`, `handoff`, `delegate`, composition factories                  |
-| `@use-crux/core/flow`           | `flow`, `signalFlow`, `cancelFlow`, `createFlowId`                                   |
-| `@use-crux/core/plan`           | `plan`, plan handles, plan listing, plan creation tools                              |
-| `@use-crux/core/tasks`          | `tasks`, `task`, task-ledger handles, task workers, task creation tools              |
-| `@use-crux/core/skill`          | `skill.inline`, `skill.fromRegistry`                                                 |
-| `@use-crux/core/skill/node`     | `skill.fromFile`, `fileSkill` for Node.js filesystem skill loading                   |
-| `@use-crux/core/safety`         | `guardrail`, `constraint`, safety plugins                                            |
-| `@use-crux/core/project-index`  | Project Index contracts and serializers                                              |
-| `@use-crux/core/lint`           | Authored-graph lint contracts                                                        |
-| `@use-crux/core/runtime-bridge` | Runtime bridge command-plane contract                                                |
-| `@use-crux/core/quality`        | `quality`, `suite`, `target`, `expect`, `cassette`                                   |
+| Subpath                           | Exports                                                                                    |
+| --------------------------------- | ------------------------------------------------------------------------------------------ |
+| `@use-crux/core`                  | `prompt`, `context`, `createPrompts`, `createContexts`, `config`, `when`, `match`, `defer` |
+| `@use-crux/core/defer/node`       | `withNodeDefer`, `createNodeDeferHost` for Node HTTP                                       |
+| `@use-crux/core/defer/serverless` | `withWaitUntilDefer`, `withAfterDefer`, `withNamedOnlyDefer`, lifetime factories           |
+| `@use-crux/core/memory`           | `memory`, `workingState`, `episodes`, `facts`, `procedures`                                |
+| `@use-crux/core/storage`          | `RecordStore`, `VectorStore`, `AssetStore`, `storage`, `inMemoryStorage`                   |
+| `@use-crux/core/compaction`       | `createSlidingWindow`, `createBudgetManager`, `extractKeyFacts`, `summarizeMessages`       |
+| `@use-crux/core/scoring`          | `judge`, `metrics`                                                                         |
+| `@use-crux/core/agent`            | `agent`, `blackboard`, `handoff`, `delegate`, composition factories                        |
+| `@use-crux/core/flow`             | `flow`, `signalFlow`, `cancelFlow`, `createFlowId`                                         |
+| `@use-crux/core/plan`             | `plan`, plan handles, plan listing, plan creation tools                                    |
+| `@use-crux/core/tasks`            | `tasks`, `task`, task-ledger handles, task workers, task creation tools                    |
+| `@use-crux/core/skill`            | `skill.inline`, `skill.fromRegistry`                                                       |
+| `@use-crux/core/skill/node`       | `skill.fromFile`, `fileSkill` for Node.js filesystem skill loading                         |
+| `@use-crux/core/safety`           | `guardrail`, `constraint`, safety plugins                                                  |
+| `@use-crux/core/project-index`    | Project Index contracts and serializers                                                    |
+| `@use-crux/core/lint`             | Authored-graph lint contracts                                                              |
+| `@use-crux/core/runtime-bridge`   | Runtime bridge command-plane contract                                                      |
+| `@use-crux/core/eval`             | `evaluate`, `caseFile`, and Eval authoring types                                           |
+| `@use-crux/core/eval/node`        | `runEval` and Node coordination                                                            |
+| `@use-crux/core/feedback`         | durable feedback for a canonical run id                                                    |
 
 ## Adapter packages
 
@@ -136,9 +138,10 @@ config({
 crux dev                # start server + open web UI
 crux dev --tui          # interactive terminal dashboard
 crux traces             # list recent traces
-crux quality list       # list discovered evaluations
-crux quality run        # run all Quality evaluations
-crux quality run --ci   # CI mode with exit codes
+crux eval list          # list discovered Evals
+crux eval               # run all Evals
+crux eval --offline     # exact evidence only; no network
+crux eval --plan        # inspect admitted work without writes
 ```
 
 ## Typical setups

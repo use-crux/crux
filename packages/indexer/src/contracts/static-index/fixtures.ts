@@ -19,70 +19,84 @@ import {
   type StaticIndexRunIdentity,
   type StaticIndexSourceFile,
   type StaticIndexTelemetry,
-} from './schema'
-import { readStaticIndexRuntimeSharedFixture } from '../fixtures/shared'
+} from "./schema";
+import { readStaticIndexRuntimeSharedFixture } from "../fixtures/shared";
 
 /** Shared Static Index compiler-owned identity manifest fixture. */
-export const staticIndexIdentityManifestFixture = StaticIndexIdentityManifestSchema.parse(
-  readStaticIndexRuntimeSharedFixture('static-index-identity'),
-) satisfies StaticIndexIdentityManifest
+export const staticIndexIdentityManifestFixture =
+  StaticIndexIdentityManifestSchema.parse(
+    readStaticIndexRuntimeSharedFixture("static-index-identity"),
+  ) satisfies StaticIndexIdentityManifest;
 
 /** Shared Static Index run identity fixture. */
-export const staticIndexRunIdentityFixture = createStaticIndexRunIdentity(staticIndexIdentityManifestFixture, {
-  extensionManifests: [{ name: '@use-crux/indexer/crux-core', version: '0.1.0', digest: 'sha256:core' }],
-}) satisfies StaticIndexRunIdentity
+export const staticIndexRunIdentityFixture = createStaticIndexRunIdentity(
+  staticIndexIdentityManifestFixture,
+  {
+    extensionManifests: [
+      {
+        name: "@use-crux/indexer/crux-core",
+        version: "0.1.0",
+        digest: "sha256:core",
+      },
+    ],
+  },
+) satisfies StaticIndexRunIdentity;
 
 /** Shared Static Index source file fixture. */
 export const staticIndexSourceFileFixture = {
-  file: '/repo/src/contract.ts',
-  sourceHash: 'sha256:contract',
-  cacheKey: 'static:/repo/src/contract.ts:contract',
-} satisfies StaticIndexSourceFile
+  file: "/repo/src/contract.ts",
+  sourceHash: "sha256:contract",
+  cacheKey: "static:/repo/src/contract.ts:contract",
+} satisfies StaticIndexSourceFile;
 
 type StaticIndexParserInterestsFixture = Pick<
   StaticIndexPreparedPlan,
-  'callNames' | 'callInterests' | 'constructorNames' | 'constructorInterests' | 'pruneNativeFactCallNames'
->
+  | "callNames"
+  | "callInterests"
+  | "constructorNames"
+  | "constructorInterests"
+  | "pruneNativeFactCallNames"
+>;
 
 const staticIndexParserInterestsFixture = {
-  callNames: ['agent', 'prompt'],
+  callNames: ["agent", "prompt"],
   callInterests: [
     {
-      name: 'tool',
-      importFrom: ['@use-crux/core'],
+      name: "tool",
+      importFrom: ["@use-crux/core"],
       configArg: 0,
-      properties: ['id', 'handler'],
-      callbacks: [{ property: 'handler', maxDepth: 2 }],
-      source: 'manifest',
+      properties: ["id", "handler"],
+      callbacks: [{ property: "handler", maxDepth: 2 }],
+      source: "manifest",
     },
   ],
-  constructorNames: ['Agent'],
+  constructorNames: ["Agent"],
   constructorInterests: [
     {
-      name: 'Agent',
-      importFrom: ['@use-crux/core'],
+      name: "Agent",
+      importFrom: ["@use-crux/core"],
       configArg: 0,
-      properties: ['name', 'instructions'],
+      properties: ["name", "instructions"],
     },
   ],
-  pruneNativeFactCallNames: ['router'],
-} satisfies StaticIndexParserInterestsFixture
+  pruneNativeFactCallNames: ["router"],
+} satisfies StaticIndexParserInterestsFixture;
 
 /** Prepared Static Index plan fixture shared by analyze and compile requests. */
 export const staticIndexPreparedPlanFixture = {
-  root: '/repo',
-  projectName: 'contract-spine',
+  root: "/repo",
+  projectName: "contract-spine",
   files: [staticIndexSourceFileFixture],
   cacheHits: [],
   cacheMisses: [staticIndexSourceFileFixture],
   ...staticIndexParserInterestsFixture,
-} satisfies StaticIndexPreparedPlan
+} satisfies StaticIndexPreparedPlan;
 
 /** Shared Static Index telemetry fixture. */
 export const staticIndexTelemetryFixture = {
-  node: { started: true, reasons: ['typescript-extension-host'] },
-  nativeOnly: { eligible: false, reasons: ['extension host required'] },
-  timings: [{ name: 'prepare', durationMs: 1.5, count: 1 }],
+  node: { started: true, reasons: ["typescript-extension-host"] },
+  nativeOnly: { eligible: false, reasons: ["extension host required"] },
+  timings: [{ name: "prepare", durationMs: 1.5, count: 1 }],
   files: { selected: 1, cacheHits: 0, cacheMisses: 1, analyzed: 1, skipped: 0 },
   cache: { readHits: 0, readMisses: 1, writes: 1, writeErrors: 0 },
   facts: {
@@ -95,91 +109,93 @@ export const staticIndexTelemetryFixture = {
     sources: 1,
     sourceGraph: 1,
   },
-} satisfies StaticIndexTelemetry
+} satisfies StaticIndexTelemetry;
 
 /** Request fixtures for every Static Index compiler method. */
 export const staticIndexCompilerRequestFixtures = [
   {
     protocolVersion: STATIC_INDEX_COMPILER_PROTOCOL_VERSION,
-    method: 'staticIndexPrepare',
-    root: '/repo',
-    projectName: 'contract-spine',
-    configPath: '/repo/crux.config.ts',
+    method: "staticIndexPrepare",
+    root: "/repo",
+    projectName: "contract-spine",
+    configPath: "/repo/crux.config.ts",
     identity: staticIndexRunIdentityFixture,
     files: [staticIndexSourceFileFixture],
     ...staticIndexParserInterestsFixture,
-    cacheInputs: [{ name: 'static-parse', version: 'v1' }],
+    cacheInputs: [{ name: "static-parse", version: "v1" }],
   },
   {
     protocolVersion: STATIC_INDEX_COMPILER_PROTOCOL_VERSION,
-    method: 'staticIndexAnalyze',
+    method: "staticIndexAnalyze",
     stream: true,
     identity: staticIndexRunIdentityFixture,
     plan: staticIndexPreparedPlanFixture,
-    files: [{ file: '/repo/src/contract.ts', sourceHash: 'sha256:contract', sourceText: 'export {}' }],
-    extensionEvidenceInterests: { calls: ['prompt'] },
+    files: [
+      {
+        file: "/repo/src/contract.ts",
+        sourceHash: "sha256:contract",
+        sourceText: "export {}",
+      },
+    ],
+    extensionEvidenceInterests: { calls: ["prompt"] },
   },
   {
     protocolVersion: STATIC_INDEX_COMPILER_PROTOCOL_VERSION,
-    method: 'staticIndexFinalize',
+    method: "staticIndexFinalize",
     stream: true,
     identity: staticIndexRunIdentityFixture,
-    nativeFacts: [{ kind: 'definitions', fact: { id: 'prompt:contract-spine' } }],
-    extensionFacts: [],
-    lintFacts: [
-      {
-        definitions: [
-          {
-            id: 'quality-target:contract-spine',
-            kind: 'quality.target',
-            name: 'contractSpine',
-            fidelity: 'resolved',
-            quality: { experimentIds: ['experiment:contract-spine'] },
-          },
-        ],
-      },
+    nativeFacts: [
+      { kind: "definitions", fact: { id: "prompt:contract-spine" } },
     ],
+    extensionFacts: [],
+    lintFacts: [],
     relationSpecs: { policies: [] },
     ruleResults: { findings: [] },
     lintSuppressions: [
       {
-        file: '/repo/src/contract.ts',
+        file: "/repo/src/contract.ts",
         line: 1,
         column: 1,
-        scope: 'next-line',
-        ruleId: 'prompt.missing_input_schema',
+        scope: "next-line",
+        ruleId: "prompt.missing_input_schema",
       },
     ],
-    patchPhase: 'quality',
+    patchPhase: "quality",
     patchInvalidates: {},
     cache: { writes: [] },
   },
   {
     protocolVersion: STATIC_INDEX_COMPILER_PROTOCOL_VERSION,
-    method: 'staticIndexCompile',
+    method: "staticIndexCompile",
     stream: true,
     identity: staticIndexRunIdentityFixture,
     plan: staticIndexPreparedPlanFixture,
-    files: [{ file: '/repo/src/contract.ts', sourceHash: 'sha256:contract', sourceText: 'export {}' }],
+    files: [
+      {
+        file: "/repo/src/contract.ts",
+        sourceHash: "sha256:contract",
+        sourceText: "export {}",
+      },
+    ],
     nativeFacts: [],
     extensionFacts: [],
     relationSpecs: { policies: [] },
     emitBuiltinLints: false,
   },
-] satisfies readonly StaticIndexCompilerRequest[]
+] satisfies readonly StaticIndexCompilerRequest[];
 
 /** Response fixtures for every Static Index compiler method. */
 export const staticIndexCompilerResponseFixtures = [
   {
     protocolVersion: STATIC_INDEX_COMPILER_PROTOCOL_VERSION,
-    method: 'staticIndexPrepare',
+    method: "staticIndexPrepare",
     plan: staticIndexPreparedPlanFixture,
     diagnostics: [],
     telemetry: staticIndexTelemetryFixture,
   },
   {
     protocolVersion: STATIC_INDEX_COMPILER_PROTOCOL_VERSION,
-    method: 'staticIndexAnalyze',
+    method: "staticIndexAnalyze",
     facts: [],
     diagnostics: [],
     extensionEvidenceJobs: [],
@@ -187,14 +203,14 @@ export const staticIndexCompilerResponseFixtures = [
   },
   {
     protocolVersion: STATIC_INDEX_COMPILER_PROTOCOL_VERSION,
-    method: 'staticIndexFinalize',
+    method: "staticIndexFinalize",
     events: [],
     telemetry: staticIndexTelemetryFixture,
   },
   {
     protocolVersion: STATIC_INDEX_COMPILER_PROTOCOL_VERSION,
-    method: 'staticIndexCompile',
+    method: "staticIndexCompile",
     events: [],
     telemetry: staticIndexTelemetryFixture,
   },
-] satisfies readonly StaticIndexCompilerResponse[]
+] satisfies readonly StaticIndexCompilerResponse[];

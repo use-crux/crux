@@ -15,7 +15,7 @@ export interface TurnSourceGroup {
     | "Routing"
     | "Guardrails"
     | "Constraints"
-    | "Quality"
+    | "Evals"
   >;
   items: TurnSourceJoin[];
 }
@@ -49,7 +49,7 @@ export interface TurnSourceRef {
   snippet?: string;
 }
 
-/** Coverage scorecard for quality assertions protecting this turn. */
+/** Coverage scorecard for Eval assertions protecting this turn. */
 export interface TurnDecisionCoverage {
   covered: number;
   total: number;

@@ -1,3 +1,10 @@
 {
-  "pages": ["foundations", "getting-started", "guides", "reference", "cookbook", "errors"]
+  "pages": [
+    "foundations",
+    "getting-started",
+    "guides",
+    "reference",
+    "cookbook",
+    "errors"
+  ]
 }

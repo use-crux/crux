@@ -11,8 +11,8 @@ import (
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/devtools"
+	"github.com/use-crux/crux/packages/local/internal/inspect"
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
-	"github.com/use-crux/crux/packages/local/internal/quality"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
@@ -23,7 +23,7 @@ func TestRuntimeUpdateRouteAppliesOwnerScopedReplacement(t *testing.T) {
 	indexStore := store.NewStore()
 	devtoolsService := devtools.NewService(
 		indexStore,
-		quality.NewService(indexStore, quality.Dir(t.TempDir())),
+		inspect.NewService(indexStore, inspect.Dir(t.TempDir())),
 	)
 	devtoolsService.ApplyIndexPatch(context.Background(), projectindex.PatchFromSnapshot(store.IndexData{
 		SchemaVersion: 1,
@@ -179,7 +179,7 @@ func TestRuntimeUpdateRouteUsesRegisteredSnapshotAsAuthoredBase(t *testing.T) {
 	indexStore := store.NewStore()
 	devtoolsService := devtools.NewService(
 		indexStore,
-		quality.NewService(indexStore, quality.Dir(t.TempDir())),
+		inspect.NewService(indexStore, inspect.Dir(t.TempDir())),
 	)
 	devtoolsService.RegisterIndexSnapshot(context.Background(), store.IndexData{
 		SchemaVersion: 1,
@@ -207,7 +207,7 @@ func TestRuntimeUpdateRouteRejectsOversizedBody(t *testing.T) {
 	server := httptest.NewServer(New(Options{
 		Devtools: devtools.NewService(
 			store.NewStore(),
-			quality.NewService(store.NewStore(), quality.Dir(t.TempDir())),
+			inspect.NewService(store.NewStore(), inspect.Dir(t.TempDir())),
 		),
 		OriginAllowed: func(*http.Request) bool { return true },
 	}))

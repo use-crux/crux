@@ -53,7 +53,7 @@ func (s *Runs) renderWaterfall(width, height int) string {
 		// Note: `f flame chart` and `t timeline` are intentionally absent —
 		// they were aspirational footer labels that never had handlers. Per
 		// the KEYBINDS.md contract, footer/status hints must reflect what
-		// the screen actually does. See plans/tui-v1-quality-workbench-implementation.md S7.
+		// the screen actually does.
 	})
 	footerH := strings.Count(footer, "\n") + 1
 	bodyRows := height - hdrH - footerH
@@ -163,7 +163,7 @@ func stringifyJSON(v any) string {
 
 // renderTraceChips builds the small chip cluster shown on the right of the
 // waterfall pane header (e.g. RETRIEVAL-LOOP, INS-014).
-func renderTraceChips(d *api.QualityRunDetailRecord) string {
+func renderTraceChips(d *api.InspectRunDetailRecord) string {
 	if d == nil {
 		return ""
 	}

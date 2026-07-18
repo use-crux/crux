@@ -1,5 +1,5 @@
-// Package screens hosts the V1 Panels Quality workbench screens (Overview,
-// Insights, Runs, Experiments, Baselines, Feedback, Cassettes, Index). Each
+// Package screens hosts the local inspection screens (Overview, Insights,
+// Runs, and Index). Each
 // screen implements the Screen interface and renders into a rectangle
 // already cropped to the body area (i.e. excluding chrome, tabs, nav rail,
 // breadcrumb, status bar).
@@ -15,40 +15,28 @@ import (
 )
 
 // DataClient is the subset of the tui DataClient interface that screens use
-// for in-process Quality access. Implemented by `internal/devtools.DirectClient`.
+// for in-process inspection access. Implemented by `internal/devtools.DirectClient`.
 type DataClient interface {
 	// Reads.
-	Overview(ctx context.Context) (api.QualityOverviewRecord, error)
-	Insights(ctx context.Context) ([]api.QualityInsightRecord, error)
-	Runs(ctx context.Context) ([]api.QualityRunRecord, error)
-	RunsWithOptions(ctx context.Context, opts api.QualityRunsOptions) ([]api.QualityRunRecord, error)
-	RunDetail(ctx context.Context, traceID string) (api.QualityRunDetailRecord, bool, error)
+	Overview(ctx context.Context) (api.InspectOverviewRecord, error)
+	Insights(ctx context.Context) ([]api.InspectInsightRecord, error)
+	Runs(ctx context.Context) ([]api.InspectRunRecord, error)
+	RunsWithOptions(ctx context.Context, opts api.InspectRunsOptions) ([]api.InspectRunRecord, error)
+	RunDetail(ctx context.Context, traceID string) (api.InspectRunDetailRecord, bool, error)
 	ObservabilityRuns(ctx context.Context) ([]api.ObservabilityRunSummary, error)
 	ObservabilityRunDetail(ctx context.Context, runID string) (api.ObservabilityRunDetail, bool, error)
 	ObservabilityResourceActivity(ctx context.Context, family string) ([]api.ObservabilityResourceActivity, error)
 	ProjectIndex(ctx context.Context) (api.IndexData, error)
-	ExperimentSummaries(ctx context.Context) ([]api.QualityExperimentSummary, error)
-	ExperimentDetail(ctx context.Context, experimentID string) (api.QualityExperimentDetail, bool, error)
-	EvaluationProgress(ctx context.Context, evaluationID string, limit int) (api.QualityEvaluationProgress, bool, error)
-	PromotedBaselines(ctx context.Context) ([]api.QualityPromotedBaseline, error)
-	CassetteFiles(ctx context.Context) ([]api.QualityCassetteFileRecord, error)
-	ScorerStats(ctx context.Context) ([]api.QualityScorerStats, error)
-	Feedback(ctx context.Context) ([]api.QualityFeedbackRecord, error)
-	Activity(ctx context.Context, limit int) ([]api.QualityActivityEvent, error)
+	Activity(ctx context.Context, limit int) ([]api.InspectActivityEvent, error)
 	DevtoolsContext(ctx context.Context) (api.DevtoolsContext, error)
-	SubscribeQuality(ctx context.Context) <-chan api.QualityEvent
-	InsightSilences(ctx context.Context, includeDeleted bool) ([]api.QualityInsightSilenceRecord, error)
+	SubscribeInspect(ctx context.Context) <-chan api.InspectEvent
+	InsightSilences(ctx context.Context, includeDeleted bool) ([]api.InspectInsightSilenceRecord, error)
 
 	// Writes.
-	SetInsightStatus(ctx context.Context, insightID string, req api.QualityInsightStatusRequest) (api.QualityInsightStatusRecord, error)
-	CreateFeedbackAnnotation(ctx context.Context, req api.QualityFeedbackAnnotationPostRequest) (api.QualityFeedbackAnnotationRecord, error)
-	DeleteRuns(ctx context.Context, traceIDs []string) (api.QualityDeleteRunsRecord, error)
-	CreateInsightSilence(ctx context.Context, req api.QualityInsightSilenceRequest) (api.QualityInsightSilenceRecord, error)
-	DeleteInsightSilence(ctx context.Context, silenceID string) (api.QualityInsightSilenceRecord, error)
-	// PromoteBaseline runs the server-side promotion (the embedded
-	// worker's --promote mode). Variant and pinID are optional ("" =
-	// let the worker decide / refuse with its own explanatory error).
-	PromoteBaseline(ctx context.Context, experimentID, variant, pinID string) (api.QualityPromoteResult, error)
+	SetInsightStatus(ctx context.Context, insightID string, req api.InspectInsightStatusRequest) (api.InspectInsightStatusRecord, error)
+	DeleteRuns(ctx context.Context, traceIDs []string) (api.InspectDeleteRunsRecord, error)
+	CreateInsightSilence(ctx context.Context, req api.InspectInsightSilenceRequest) (api.InspectInsightSilenceRecord, error)
+	DeleteInsightSilence(ctx context.Context, silenceID string) (api.InspectInsightSilenceRecord, error)
 }
 
 // Size is the screen body rect.
@@ -75,7 +63,7 @@ type NavigateRequest struct {
 	ID string
 }
 
-// Screen is implemented by every Quality screen.
+// Screen is implemented by every inspection screen.
 type Screen interface {
 	// ID is the route/nav identifier (e.g. "overview", "insights").
 	ID() string
@@ -109,7 +97,7 @@ type Screen interface {
 	// Focus is called by the workbench before a screen becomes active when
 	// the navigation that produced the activation carried a record reference
 	// the screen knows how to surface. `kind` is one of the workbench Kind
-	// constants ("run", "insight", "experiment", …) and `id` is the staged
+	// constants ("run" or "insight") and `id` is the staged
 	// record id. Screens MAY ignore unknown kinds. Focus is best-effort: if
 	// the referenced id is not present in the screen's data, the screen
 	// falls back to its own default selection. See ADR-0051.

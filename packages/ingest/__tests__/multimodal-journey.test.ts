@@ -1,12 +1,11 @@
 import { embedding } from '@use-crux/core/embedding'
 import { indexer, retriever } from '@use-crux/core'
-import { scorers, type GenerateFn } from '@use-crux/core/quality'
 import { inMemoryRecordStore, inMemoryVectorStore } from '@use-crux/core/storage'
 import { describe, expect, it, vi } from 'vitest'
 import { fileSource } from '../src'
 
 describe('multimodal ingest product journey', () => {
-  it('derives, indexes, retrieves, and judges timed video evidence without hydration', async () => {
+  it('derives, indexes, and retrieves timed video evidence without hydration', async () => {
     const video = {
       type: 'data' as const, data: new Uint8Array([1, 2, 3]), mediaType: 'video/mp4',
       ref: { uri: 'asset://demo-video' },
@@ -32,14 +31,6 @@ describe('multimodal ingest product journey', () => {
     } })
     expect(transcribe).toHaveBeenCalledTimes(1)
 
-    const judgeGenerate = vi.fn(async () => ({ object: { reasoning: 'timing is attributed', score: 1 } })) as GenerateFn
-    const judge = scorers.judge<'attribution', { evidence: readonly [{ type: 'text'; text: string }] }>({
-      name: 'attribution', rubric: 'Is the evidence attributed?', select: (output) => output.evidence,
-      generate: judgeGenerate, model: 'fake-judge',
-    })
-    await expect(judge({ input: hits[0]!.source, output: { evidence: [{ type: 'text', text: hits[0]!.content }] }, expected: undefined }))
-      .resolves.toMatchObject({ score: 1 })
-    expect(judgeGenerate).toHaveBeenCalledTimes(1)
     expect(transcribe).toHaveBeenCalledTimes(1)
   })
 })

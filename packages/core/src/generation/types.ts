@@ -155,7 +155,7 @@ export interface TokenUsage {
  * Normalized metadata attached to generate() results by each adapter.
  *
  * Adapters set `result._meta` after SDK calls so devtools middleware,
- * evals, and quality experiments can extract data without knowing which SDK
+ * evals and trace analysis can extract data without knowing which SDK
  * produced it.
  */
 export interface TraceMeta {

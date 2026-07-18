@@ -18,14 +18,14 @@ _Avoid_: index, registry, knowledge graph
 
 **Project Index Snapshot**:
 The raw Project Index value stored by `@use-crux/local` and written to cache. It contains compiler and
-runtime snapshot facts, but not derived quality annotations.
+runtime snapshot facts, but not Eval runs, Baselines, or Review records.
 _Avoid_: enriched index, devtools read model
 
 **Project Index Read Model**:
 The devtools-facing Project Index produced by `@use-crux/local/internal/projectindex/readmodel`. It
-starts from a Project Index Snapshot and joins in-memory runs, file-backed quality records, source
-mtimes, and safety target metadata.
-_Avoid_: store index, quality pass, hidden enrichment
+starts from a Project Index Snapshot and adds only local source metadata and safety target metadata.
+Eval runs, Baselines, and Review records remain separate read models.
+_Avoid_: store index, Eval overlay, hidden enrichment
 
 **Resolved Project Model**:
 The user-facing project shape assembled from Project Index source facts, local filesystem
@@ -199,7 +199,7 @@ _Avoid_: JavaScript fallback, partial native coverage
 **Semantic Facts Cache**:
 The projected semantic fact cache keyed by semantic source profile, backend identity, TypeScript and
 compiler-option identity, and explicit epoch. Current writes use the binary local envelope after the
-`semantic-facts-v29` hard migration.
+`semantic-facts-v30` hard migration.
 _Avoid_: legacy JSON cache, backend-agnostic cache blob
 
 **Runtime Index**:
@@ -254,9 +254,9 @@ _Avoid_: hints, assumptions
 - A **Project Index** contains zero or more **Index Source Rows**.
 - A **Project Index Compiler** produces **Extracted Facts** that are merged into a **Project Index**.
 - `@use-crux/local` stores a raw **Project Index Snapshot**; `GetIndex()` callers should treat it as
-  cache/snapshot data, not the devtools-facing quality view.
-- `@use-crux/local/internal/projectindex/readmodel` produces the **Project Index Read Model**. It is
-  the only owner of derived `IndexQuality` annotations.
+  cache/snapshot data, not an Eval run or Review read model.
+- `@use-crux/local/internal/projectindex/readmodel` produces the **Project Index Read Model** and
+  never joins Eval runs, Baselines, or Review records into compiler facts.
 - A **Resolved Project Model** combines Project Index source facts with filesystem conventions,
   runtime evidence, and **Tooling Policy Config**.
 - **Tooling Policy Config** may override or constrain discovery, but must not be required to repeat
@@ -295,7 +295,7 @@ _Avoid_: hints, assumptions
   `indexer` policy config, so unstable backend experiments have an obvious graduation path.
 - The **Extension Runtime** executes **Compiler Slots** and owns deterministic extension ordering, contribution identity, result policy, and cache identity inputs.
 - **Index Rule** identities participate in **Extension Runtime** cache identity inputs.
-- **Cache Identity** means structured input plus an explicit epoch. Structured inputs cover source/config hashes, extension/extractor/rule identity, compiler profile identity, compiler-owned projection identity, TypeScript version, and semantic compiler options. Current hard migration epochs are `static-parse-v67`, `semantic-facts-v29`, and Go snapshot `epoch-37` under `.crux/cache/index-v2/`. Epochs live in `indexer/cache-identity.ts` and `@use-crux/local`'s `projectindex/cache/identity.go`; they are migration levers, not hidden magic constants.
+- **Cache Identity** means structured input plus an explicit epoch. Structured inputs cover source/config hashes, extension/extractor/rule identity, compiler profile identity, compiler-owned projection identity, TypeScript version, and semantic compiler options. Current hard migration epochs are `static-parse-v69`, `semantic-facts-v30`, and Go snapshot `epoch-40` under `.crux/cache/index-v2/`. Epochs live in `indexer/cache-identity.ts` and `@use-crux/local`'s `projectindex/cache/identity.go`; they are migration levers, not hidden magic constants.
 - **Index Rule** metadata provides docs, option schema, and message declarations before a rule can run.
 - An **Indexer Extension** contributes **Extracted Facts** through the **Extension Boundary**.
 - First-party static primitive call names are owned by the Rust/Oxc Static Index primitive manifest. Bundled primitives do not have a TypeScript implementation.

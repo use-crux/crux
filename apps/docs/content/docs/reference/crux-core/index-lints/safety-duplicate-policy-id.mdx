@@ -10,7 +10,7 @@ policy id across guardrails, constraints, or tool policies.
 ## Why it matters
 
 Policy ids appear in Safety decisions, observability artifacts, Devtools
-Explain rows, Project Index definitions, and quality assertions. Reusing an id
+Explain rows, Project Index definitions, and Eval assertions. Reusing an id
 makes it hard to tell which policy blocked, rewrote, retried, or requested
 approval.
 
@@ -19,8 +19,16 @@ approval.
 Rename one policy so each Safety policy id is unique within the project:
 
 ```ts
-guardrail({ id: 'pii-output', on: boundary.output.text(), run: guardrail.pii() })
-toolPolicy({ id: 'delete-user-block', match: { tool: 'deleteUser' }, action: 'block' })
+guardrail({
+  id: "pii-output",
+  on: boundary.output.text(),
+  run: guardrail.pii(),
+});
+toolPolicy({
+  id: "delete-user-block",
+  match: { tool: "deleteUser" },
+  action: "block",
+});
 ```
 
 ## When to suppress

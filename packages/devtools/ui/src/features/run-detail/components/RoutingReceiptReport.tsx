@@ -1,8 +1,12 @@
 import type { CruxRoutingReportPreview } from "@use-crux/core/observability";
-import { Chip } from "@/qw/shell/primitives";
+import { Chip } from "@/devtools/shell/primitives";
 import { EmptyHint } from "./SpanDetailPanelAtoms";
 import { RoutingReceiptSteps } from "./RoutingReceiptSteps";
-import { fmtCost, fmtDuration, shortModelId } from "../lib/span-detail-inspection";
+import {
+  fmtCost,
+  fmtDuration,
+  shortModelId,
+} from "../lib/span-detail-inspection";
 import {
   routingFactsFromReport,
   routingStepViews,

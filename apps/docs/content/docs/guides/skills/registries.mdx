@@ -10,10 +10,10 @@ Skills can come from three places: inline in your code, a file on disk, or a rem
 [skills.sh](https://skills.sh) is the community registry for SKILL.md files. Crux exports it as the `skillsSh` registry value:
 
 ```ts
-import { skill, skillsSh } from '@use-crux/core/skill'
+import { skill, skillsSh } from "@use-crux/core/skill";
 
-const seo = skill.fromRegistry(skillsSh, 'mattpocock/skills/seo-analysis')
-const research = skill.fromRegistry(skillsSh, 'owner/repo/skill-name')
+const seo = skill.fromRegistry(skillsSh, "mattpocock/skills/seo-analysis");
+const research = skill.fromRegistry(skillsSh, "owner/repo/skill-name");
 ```
 
 Registry skills use the same shape everywhere: pass a registry value and the skill path inside that registry.
@@ -25,24 +25,24 @@ Content is fetched lazily on the first `prompt.resolve()` and cached in process 
 Host your own skills on any HTTPS server that implements the `.well-known/agent-skills/` protocol. Useful for shared internal skills (brand voice, legal review, compliance checks) that you don't want to publish publicly.
 
 ```ts
-import { skill, registry } from '@use-crux/core/skill'
+import { skill, registry } from "@use-crux/core/skill";
 
 const internal = registry({
-  name: 'internal',
-  baseUrl: 'https://skills.mycompany.com',
+  name: "internal",
+  baseUrl: "https://skills.mycompany.com",
   auth: () => process.env.SKILLS_TOKEN,
-})
+});
 
-const brand = skill.fromRegistry(internal, 'brand-guidelines')
-const legal = skill.fromRegistry(internal, 'legal/disclosure-language')
+const brand = skill.fromRegistry(internal, "brand-guidelines");
+const legal = skill.fromRegistry(internal, "legal/disclosure-language");
 ```
 
 ### Registry configuration
 
 | Field     | Type                        | Description                                                                                                        |
 | --------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `name`    | `string`                    | Stable registry name used in skill ids and local Project Model output                                             |
-| `baseUrl` | `string`                    | Registry base URL: requests go to `<baseUrl>/.well-known/agent-skills/<path>`                                     |
+| `name`    | `string`                    | Stable registry name used in skill ids and local Project Model output                                              |
+| `baseUrl` | `string`                    | Registry base URL: requests go to `<baseUrl>/.well-known/agent-skills/<path>`                                      |
 | `auth`    | `() => string \| undefined` | Optional callback returning a bearer token. Called per request, so it can read fresh env vars or refreshed tokens. |
 
 `registry()` returns a registry value. Pass that value to `skill.fromRegistry(internal, 'brand-guidelines')`; do not repeat registries in `crux.config.ts`. Crux does not scan project files at runtime to find custom registries, so create registry-backed skills from the registry value in the module that uses them.
@@ -53,9 +53,9 @@ For skills you own and version-control inside your repo, import the Node
 subpath and use `skill.fromFile()`:
 
 ```ts
-import { skill } from '@use-crux/core/skill/node'
+import { skill } from "@use-crux/core/skill/node";
 
-const seo = skill.fromFile('./skills/seo-analysis/SKILL.md')
+const seo = skill.fromFile("./skills/seo-analysis/SKILL.md");
 ```
 
 This reads synchronously at import time and automatically picks up any sibling `references/*.md` files. See [Writing skills](/docs/guides/skills/writing) for the directory layout.
@@ -66,28 +66,28 @@ Disk-loaded skills don't need a registry. They're already available the moment t
 
 All three loaders throw `SkillLoadError` (a tagged error) when something goes wrong:
 
-| Cause                   | When                                                                                 |
-| ----------------------- | ------------------------------------------------------------------------------------ |
-| File not found          | `skill.fromFile()` from `@use-crux/core/skill/node` with a bad path                  |
-| Invalid frontmatter     | Missing `name` or `description`, or malformed YAML                                   |
-| Missing path            | `skill.fromRegistry(internal)` without a registry-local skill path                   |
-| Unknown registry value  | Passing a value that is not a `Registry`                                             |
-| Network failure / 404   | Registry fetch fails at resolve time                                                 |
+| Cause                  | When                                                                |
+| ---------------------- | ------------------------------------------------------------------- |
+| File not found         | `skill.fromFile()` from `@use-crux/core/skill/node` with a bad path |
+| Invalid frontmatter    | Missing `name` or `description`, or malformed YAML                  |
+| Missing path           | `skill.fromRegistry(internal)` without a registry-local skill path  |
+| Unknown registry value | Passing a value that is not a `Registry`                            |
+| Network failure / 404  | Registry fetch fails at resolve time                                |
 
 For `fromFile` and `inline`, errors surface at import time. For
 `fromRegistry`, remote fetch errors surface at the first `prompt.resolve()`
 because registry content is loaded lazily.
 
 ```ts
-import { SkillLoadError } from '@use-crux/core/skill'
+import { SkillLoadError } from "@use-crux/core/skill";
 
 try {
-  await myPrompt.resolve({ input })
+  await myPrompt.resolve({ input });
 } catch (err) {
   if (err instanceof SkillLoadError) {
-    console.error(`Skill ${err.skillId} failed: ${err.reason}`)
+    console.error(`Skill ${err.skillId} failed: ${err.reason}`);
   }
-  throw err
+  throw err;
 }
 ```
 

@@ -452,7 +452,9 @@ describe("projectMediaRunFromNode", () => {
     expect(view?.attempts.map((a) => a.primitive)).not.toContain(
       "media.transcribe",
     );
-    expect(view?.attempts.map((a) => a.primitive)).not.toContain("ingest.parse");
+    expect(view?.attempts.map((a) => a.primitive)).not.toContain(
+      "ingest.parse",
+    );
 
     // Inputs/outputs/transcript scoped to selected media artifacts.
     expect(view?.inputs).toEqual([
@@ -472,7 +474,15 @@ describe("projectMediaRunFromNode", () => {
       ...new Set(view?.lineage.nodes.map((node) => node.kind) ?? []),
     ].sort();
     expect(kinds).toEqual(
-      ["index", "ingest", "input", "operation", "output", "report", "retrieval"].sort(),
+      [
+        "index",
+        "ingest",
+        "input",
+        "operation",
+        "output",
+        "report",
+        "retrieval",
+      ].sort(),
     );
 
     expect(
@@ -493,7 +503,9 @@ describe("projectMediaRunFromNode", () => {
 
     const inputNode = view?.lineage.nodes.find((node) => node.kind === "input");
     expect(inputNode?.attribution).toEqual({ type: "pages", pageCount: 3 });
-    const outputNode = view?.lineage.nodes.find((node) => node.kind === "output");
+    const outputNode = view?.lineage.nodes.find(
+      (node) => node.kind === "output",
+    );
     expect(outputNode?.attribution).toEqual({ type: "page", pageNumber: 2 });
     const retrievalNode = view?.lineage.nodes.find(
       (node) => node.id === "art_hits" || node.id === "span_retrieve",
@@ -537,9 +549,9 @@ describe("projectMediaRunFromNode", () => {
     expect(view?.summary.primitive).toBe("media.transcribe");
     expect(view?.attempts.map((a) => a.spanId)).toEqual(["span_transcribe"]);
     expect(view?.transcript.present).toBe(true);
-    expect(view?.lineage.nodes.some((node) => node.id === "span_describe")).toBe(
-      false,
-    );
+    expect(
+      view?.lineage.nodes.some((node) => node.id === "span_describe"),
+    ).toBe(false);
     expect(view?.lineage.nodes.some((node) => node.id === "span_index")).toBe(
       false,
     );

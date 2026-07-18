@@ -63,7 +63,7 @@ describe('runtime use target resolution', () => {
   it('keeps app-specific ids out of the relation resolver implementation', async () => {
     const source = await readFile(join(testDir, '..', 'src/indexer/relations/index.ts'), 'utf8')
 
-    expect(source.toLowerCase()).not.toContain('karyla')
+    expect(source.toLowerCase()).not.toContain('private-app')
   })
 })
 

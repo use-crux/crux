@@ -10,11 +10,14 @@ Peer dependencies:
 - `@upstash/qstash` when you use `qstash()` from `@use-crux/upstash/runtime`
 
 ```ts
-import { upstashRedisRecordStore, upstashVectorStore } from '@use-crux/upstash'
+import { upstashRedisRecordStore, upstashVectorStore } from "@use-crux/upstash";
 ```
 
 <Callout type="info">
-For setup guidance and usage patterns, see the [Storage guide](/docs/guides/storage), [RecordStore guide](/docs/guides/storage/crux-store), and [VectorStore guide](/docs/guides/storage/vector-store).
+  For setup guidance and usage patterns, see the [Storage
+  guide](/docs/guides/storage), [RecordStore
+  guide](/docs/guides/storage/crux-store), and [VectorStore
+  guide](/docs/guides/storage/vector-store).
 </Callout>
 
 ## `upstashRedisRecordStore(config)`
@@ -22,44 +25,44 @@ For setup guidance and usage patterns, see the [Storage guide](/docs/guides/stor
 Create a Storage Beta `RecordStore` backed by Upstash Redis.
 
 ```ts
-import { Redis } from '@upstash/redis'
-import { upstashRedisRecordStore } from '@use-crux/upstash'
+import { Redis } from "@upstash/redis";
+import { upstashRedisRecordStore } from "@use-crux/upstash";
 
 const records = upstashRedisRecordStore({
   redis: new Redis({
     url: process.env.UPSTASH_REDIS_REST_URL!,
     token: process.env.UPSTASH_REDIS_REST_TOKEN!,
   }),
-  prefix: 'crux:',
-})
+  prefix: "crux:",
+});
 ```
 
 ### Redis Capabilities
 
-| Capability | Value | Notes |
-| --- | --- | --- |
-| Record TTL | `'native'` | Uses Redis `PX` expiry for `ttlMs`. |
-| Record filters | `'scan'` | Uses cursor `SCAN` and applies exact top-level scalar filters locally. |
-| Watch | `true` when `subscriber` is configured | Uses Redis pub/sub and cleans up backend listeners when unsubscribed. |
-| Batch | `false` | The beta adapter does not claim native batch operations. |
+| Capability     | Value                                  | Notes                                                                  |
+| -------------- | -------------------------------------- | ---------------------------------------------------------------------- |
+| Record TTL     | `'native'`                             | Uses Redis `PX` expiry for `ttlMs`.                                    |
+| Record filters | `'scan'`                               | Uses cursor `SCAN` and applies exact top-level scalar filters locally. |
+| Watch          | `true` when `subscriber` is configured | Uses Redis pub/sub and cleans up backend listeners when unsubscribed.  |
+| Batch          | `false`                                | The beta adapter does not claim native batch operations.               |
 
 `list(prefix)` is cursor-backed and does not use Redis `KEYS`.
 
 ### Redis Config
 
-| Field | Type | Description |
-| --- | --- | --- |
-| `redis` | `RedisRecordClient` | Redis client with `get`, `set`, `del`, and `scan`. |
-| `prefix` | `string?` | Prefix for Redis keys. Defaults to `'crux:'`. |
-| `subscriber` | `RedisSubscriber?` | Optional pub/sub connection for `watch()`. |
-| `scanCount` | `number?` | Redis `SCAN` count hint. Defaults to `100`. |
+| Field        | Type                | Description                                        |
+| ------------ | ------------------- | -------------------------------------------------- |
+| `redis`      | `RedisRecordClient` | Redis client with `get`, `set`, `del`, and `scan`. |
+| `prefix`     | `string?`           | Prefix for Redis keys. Defaults to `'crux:'`.      |
+| `subscriber` | `RedisSubscriber?`  | Optional pub/sub connection for `watch()`.         |
+| `scanCount`  | `number?`           | Redis `SCAN` count hint. Defaults to `100`.        |
 
 Use it with a bundle:
 
 ```ts
-import { storage } from '@use-crux/core/storage'
+import { storage } from "@use-crux/core/storage";
 
-const appStorage = storage({ records, vectors })
+const appStorage = storage({ records, vectors });
 ```
 
 ## `upstashVectorStore(config)`
@@ -67,43 +70,43 @@ const appStorage = storage({ records, vectors })
 Create a Storage Beta `VectorStore` backed by Upstash Vector.
 
 ```ts
-import { Index } from '@upstash/vector'
-import { upstashVectorStore } from '@use-crux/upstash'
+import { Index } from "@upstash/vector";
+import { upstashVectorStore } from "@use-crux/upstash";
 
 const vectors = upstashVectorStore({
   index: new Index({
     url: process.env.UPSTASH_VECTOR_REST_URL!,
     token: process.env.UPSTASH_VECTOR_REST_TOKEN!,
   }),
-  namespace: 'product-docs',
-})
+  namespace: "product-docs",
+});
 ```
 
 ### Vector Capabilities
 
 Upstash index mode is deployment configuration, so the adapter defaults conservatively:
 
-| Capability | Default | Notes |
-| --- | --- | --- |
-| Dense search | `true` | Dense vectors are the default Upstash path. |
-| Sparse search | `false` | Opt in only when the backing index supports sparse vectors. |
-| Hybrid search | `false` | Opt in only when the backing index supports hybrid search. |
-| Fusion | `[]` | Configure supported fusion modes, such as `['rrf', 'dbsf']`. |
-| Filters | `'pre'` | Upstash applies supported metadata filters before top-k search. |
-| Consistency | `'eventual'` | Matches managed vector-index behavior. |
+| Capability    | Default      | Notes                                                           |
+| ------------- | ------------ | --------------------------------------------------------------- |
+| Dense search  | `true`       | Dense vectors are the default Upstash path.                     |
+| Sparse search | `false`      | Opt in only when the backing index supports sparse vectors.     |
+| Hybrid search | `false`      | Opt in only when the backing index supports hybrid search.      |
+| Fusion        | `[]`         | Configure supported fusion modes, such as `['rrf', 'dbsf']`.    |
+| Filters       | `'pre'`      | Upstash applies supported metadata filters before top-k search. |
+| Consistency   | `'eventual'` | Matches managed vector-index behavior.                          |
 
 Declare sparse, hybrid, or fusion support explicitly:
 
 ```ts
 const vectors = upstashVectorStore({
   index,
-  namespace: 'product-docs',
+  namespace: "product-docs",
   capabilities: {
     sparse: true,
     hybrid: true,
-    fusion: ['rrf', 'dbsf'],
+    fusion: ["rrf", "dbsf"],
   },
-})
+});
 ```
 
 Unsupported query modes throw `StorageError` code `unsupported_capability`. Unsupported filter values throw `StorageError` code `invalid_filter` before querying Upstash.
@@ -114,23 +117,23 @@ Use the beta storage fields:
 
 ```ts
 const docsIndexer = indexer({
-  id: 'docs',
-  namespace: 'product-docs',
+  id: "docs",
+  namespace: "product-docs",
   records,
   vectors,
   dense,
   sparse,
-})
+});
 
 const docs = retriever({
-  id: 'docs',
-  namespace: 'product-docs',
+  id: "docs",
+  namespace: "product-docs",
   records,
   vectors,
   dense,
   sparse,
-  search: { mode: 'hybrid', fusion: 'dbsf', limit: 10 },
-})
+  search: { mode: "hybrid", fusion: "dbsf", limit: 10 },
+});
 ```
 
 Filtered retrieval requires a vector store with `capabilities().filter === 'pre'`.
@@ -146,17 +149,17 @@ Filtered retrieval requires a vector store with `capabilities().filter === 'pre'
 Use `qstash()` from `@use-crux/upstash/runtime` as the first-party HTTP wake adapter for serverless Runtime Engine deployments.
 
 ```ts
-import { config } from '@use-crux/core'
-import { serverless } from '@use-crux/core/runtime'
-import { postgres } from '@use-crux/postgres/runtime'
-import { qstash } from '@use-crux/upstash/runtime'
+import { config } from "@use-crux/core";
+import { serverless } from "@use-crux/core/runtime";
+import { postgres } from "@use-crux/postgres/runtime";
+import { qstash } from "@use-crux/upstash/runtime";
 
 export default config({
   runtime: serverless({
     store: postgres(),
     wake: qstash(),
   }),
-})
+});
 ```
 
 QStash publishes small wake envelopes to the configured runtime endpoint and verifies incoming `Upstash-Signature` headers with the official receiver. Use it with a durable store such as `postgres()`; `@use-crux/upstash/runtime` does not ship an Upstash Redis runtime store in v1.

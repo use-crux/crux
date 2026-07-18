@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import type { QualityRunRecord } from "@/types";
+import type { InspectRunRecord } from "@/types";
 import { groupRuns } from "./run-groups";
 import type { RunRow } from "../types";
 import {
-  annotateRunRowWithQuality,
-  qualityAnnotationsByRunId,
+  annotateRunRowWithInspect,
+  inspectAnnotationsByRunId,
   rowFromRunSummary,
   runsPageOptionsFromFilters,
 } from "./run-mappers";
@@ -71,11 +71,11 @@ describe("runs row mapping", () => {
     });
   });
 
-  it("annotates a canonical row with Quality metadata without changing row identity", () => {
+  it("annotates a canonical row with Inspect metadata without changing row identity", () => {
     const row = runRow("run-1", 100, undefined);
 
     const quality = {
-      _tag: "QualityRun",
+      _tag: "InspectRun",
       traceId: "run-1",
       targetId: "support reply",
       rootPrimitive: "generation.call",
@@ -88,34 +88,32 @@ describe("runs row mapping", () => {
       toolCallCount: 2,
       spanCount: 3,
       childCount: 3,
-      feedbackCount: 1,
-      feedbackIds: ["feedback-1"],
-      experimentIds: [],
       diagnosticsCount: 2,
       diagnosticsMaxSeverity: "warn",
-    } satisfies QualityRunRecord;
+    } satisfies InspectRunRecord;
 
-    expect(annotateRunRowWithQuality(row, quality)).toMatchObject({
+    expect(annotateRunRowWithInspect(row, quality)).toMatchObject({
       traceId: "run-1",
-      feedbackCount: 1,
       toolCallCount: 2,
       diagnosticsCount: 2,
       diagnosticsMaxSeverity: "warn",
     });
   });
 
-  it("leaves a row unchanged when it has no matching Quality annotation", () => {
+  it("leaves a row unchanged when it has no matching Inspect annotation", () => {
     const row = runRow("run-unmatched", 100, undefined);
-    expect(annotateRunRowWithQuality(row, undefined)).toEqual(row);
+    expect(annotateRunRowWithInspect(row, undefined)).toEqual(row);
   });
 
-  it("indexes Quality annotations by traceId (== observability runId)", () => {
+  it("indexes Inspect annotations by traceId (== observability runId)", () => {
     const quality = {
-      _tag: "QualityRun",
+      _tag: "InspectRun",
       traceId: "run-1",
-      feedbackCount: 3,
-    } as QualityRunRecord;
-    const byRunId = qualityAnnotationsByRunId([quality]);
+      status: "ok",
+      startedAt: 1_775_000_000_000,
+      toolCallCount: 0,
+    } as InspectRunRecord;
+    const byRunId = inspectAnnotationsByRunId([quality]);
     expect(byRunId.get("run-1")).toBe(quality);
     expect(byRunId.get("missing")).toBeUndefined();
   });
@@ -363,6 +361,5 @@ function runRow(
     sessionId,
     status: "ok",
     startedAt,
-    feedbackCount: 0,
   };
 }

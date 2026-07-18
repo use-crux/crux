@@ -5,7 +5,7 @@ Portable Model Context Protocol tool sources for Crux.
 `mcp()` describes a remote tool source once and composes it through a prompt or
 context `use[]`. Crux connects and discovers tools for each invocation, then
 runs the selected tools through the same middleware, approval, Safety,
-guardrail, timeout, observability, and Quality lifecycle as authored tools.
+guardrail, timeout, observability, and Eval lifecycle as authored tools.
 
 ## Install
 
@@ -140,30 +140,13 @@ The approval token and replay commitment bind the call, input, discovered MCP
 identity, schema, and requesting policies. Missing or changed provenance returns
 an ordinary `approval-invalid` tool result and never reaches remote execution.
 
-## Quality
+## Evals
 
-A live MCP evaluation can affect real systems. Quality makes discovery and
-execution visible, and bypasses reusable cell-output caching for live sources.
-Mock by the final exposed tool name when discovery is acceptable but remote
-`tools/call` is not:
-
-```ts
-import { agent } from "@use-crux/core/agent";
-import { target } from "@use-crux/core/quality";
-
-const supportAgent = agent({ id: "support-agent", prompt: support });
-const evaluatedSupport = target.agent(supportAgent, {
-  tools: {
-    crm_search_customer: { id: "fixture-customer", status: "active" },
-  },
-});
-```
-
-The trace marks the call as mocked. Live discovery can still connect to the
-server. For a fully offline evaluation, run a deterministic no-network MCP
-fixture with stable fixture identity instead of a real endpoint. Cassettes do
-not skip materialization: matching happens after discovery using exposed names
-and schema fingerprints.
+A live MCP source can affect real systems. Point an Eval at the callable
+managed production task, and use a deterministic in-process or spawned MCP
+fixture when the run must avoid remote side effects. Give the fixture a stable
+revision so task identity changes with fixture behavior. Dynamic dependencies
+whose identity cannot be proven execute normally but are not reusable.
 
 ## Devtools
 
@@ -191,7 +174,7 @@ auto-discovery, rename maps, and configurable binary limits are deferred.
 
 Provider-hosted MCP options are not equivalent to `mcp()`: they bypass Crux's
 portable materialization, policy, approval replay, result normalization,
-observability, Quality identity, and Project Index contracts. First-party Crux
+observability, Eval identity, and Project Index contracts. First-party Crux
 adapters use the portable client paths instead.
 
 See the [MCP guide](https://cruxjs.dev/docs/guides/tools/mcp) and

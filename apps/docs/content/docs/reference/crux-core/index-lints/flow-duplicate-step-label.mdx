@@ -15,8 +15,8 @@ For the Flows beta, a step label is the durable replay identity. Completed step 
 Give each durable step a distinct, stable label:
 
 ```ts
-await flow.step("draft-plan", draftPlan)
-await flow.step("publish-plan", publishPlan)
+await flow.step("draft-plan", draftPlan);
+await flow.step("publish-plan", publishPlan);
 ```
 
 Dynamic labels are an advanced escape hatch. Use them only when the generated value is stable across retries and resumes, such as a deterministic branch or loop key from persisted input.

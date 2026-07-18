@@ -7,18 +7,17 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
-// RunSource provides an atomic snapshot of the raw index and in-memory runs.
-type RunSource interface {
-	Snapshot() (index store.IndexData, evals []store.EvalRun, rags []store.RagEvalRun, flows []store.FlowRun)
+// IndexSource provides an atomic snapshot of the raw Project Index.
+type IndexSource interface {
+	Snapshot() store.IndexData
 }
 
 type statFunc func(string) (fs.FileInfo, error)
 
 // Model owns the Project Index read model enrichment pipeline.
 type Model struct {
-	runs       RunSource
-	qualityDir string
-	stat       statFunc
+	index IndexSource
+	stat  statFunc
 }
 
 // Option customizes Model.
@@ -34,11 +33,10 @@ func WithStat(stat statFunc) Option {
 }
 
 // New wires the default fully-enriched Project Index read model.
-func New(runs RunSource, qualityDir string, opts ...Option) *Model {
+func New(index IndexSource, opts ...Option) *Model {
 	m := &Model{
-		runs:       runs,
-		qualityDir: qualityDir,
-		stat:       os.Stat,
+		index: index,
+		stat:  os.Stat,
 	}
 	for _, opt := range opts {
 		opt(m)
@@ -48,26 +46,21 @@ func New(runs RunSource, qualityDir string, opts ...Option) *Model {
 
 // Raw returns the un-enriched index snapshot for cache writes and snapshot merges.
 func (m *Model) Raw() store.IndexData {
-	if m == nil || m.runs == nil {
+	if m == nil || m.index == nil {
 		return store.IndexData{}
 	}
-	index, _, _, _ := m.runs.Snapshot()
-	return index
+	return m.index.Snapshot()
 }
 
 // Index runs all read-model enrichment passes in fixed order:
-//  1. in-memory eval/rag/flow run joins
-//  2. file-backed quality records and lint policy
-//  3. source mtime metadata, safety target metadata, and storage summaries
+//  1. source mtime metadata and safety target metadata
+//  2. storage summaries
 func (m *Model) Index() store.IndexData {
-	if m == nil || m.runs == nil {
+	if m == nil || m.index == nil {
 		return store.IndexData{}
 	}
-	index, evals, rags, flows := m.runs.Snapshot()
-	index = enrichRuns(index, evals, rags, flows)
-	if m.qualityDir != "" {
-		index = enrichFileBackedQuality(index, m.qualityDir)
-	}
+	index := m.index.Snapshot()
+	applyIndexLintPolicy(&index)
 	index = enrichDefinitionUpdated(index, m.stat)
 	index = enrichSafetyTargets(index)
 	return enrichStorage(index)

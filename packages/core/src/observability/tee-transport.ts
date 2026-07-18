@@ -7,6 +7,7 @@ import {
   type CruxObservabilityTransport,
 } from './transport'
 import { partitionDeliveryReceipt } from './delivery/receipt'
+import type { CruxFeedbackDestination } from '../feedback/types'
 
 /**
  * Create a transport that fans each batch out to multiple transports.
@@ -32,6 +33,13 @@ import { partitionDeliveryReceipt } from './delivery/receipt'
 export function teeObservabilityTransport(
   ...transports: readonly CruxObservabilityTransport[]
 ): CruxObservabilityTransport {
+  const feedbackDestinations = transports.filter(isFeedbackDestination)
+  if (feedbackDestinations.length > 1) {
+    throw new TypeError(
+      'teeObservabilityTransport() accepts at most one durable feedback destination; keep capture-only legs without submitFeedback().',
+    )
+  }
+  const feedbackDestination = feedbackDestinations[0]
   let warnedAboutPartialSendFailure = false
   let warnedAboutPartialFlushFailure = false
   let warnedAboutPartialShutdownFailure = false
@@ -39,6 +47,12 @@ export function teeObservabilityTransport(
   return {
     maxRecordsPerRequest: minTransportLimit(transports, 'maxRecordsPerRequest'),
     maxRequestBytes: minTransportLimit(transports, 'maxRequestBytes'),
+    ...(feedbackDestination !== undefined
+      ? {
+          submitFeedback: (submission) =>
+            feedbackDestination.submitFeedback(submission),
+        }
+      : {}),
     async send(records, context) {
       if (transports.length === 0) return acceptedDeliveryReceipt(records)
 
@@ -74,6 +88,12 @@ export function teeObservabilityTransport(
       throwIfEveryLegFailed(results, 'shutdown')
     },
   }
+}
+
+function isFeedbackDestination(
+  transport: CruxObservabilityTransport,
+): transport is CruxObservabilityTransport & CruxFeedbackDestination {
+  return typeof transport.submitFeedback === 'function'
 }
 
 function sendToTransport(

@@ -44,7 +44,6 @@ import {
   createSafety,
   createSafetyPlugin,
 } from '@use-crux/core/safety'
-import { evaluate, target, scorers, dataset, cassette } from '@use-crux/core/quality'
 
 // ─────────────────────────────────────────────────────────────────
 // @use-crux/core — prompt + context authoring root barrel
@@ -221,21 +220,5 @@ describe('@use-crux/core/safety', () => {
     const plugin = createSafetyPlugin({})
     expect(plugin.name).toBe('crux:safety')
     expect(typeof plugin.install).toBe('function')
-  })
-})
-
-// ─────────────────────────────────────────────────────────────────
-// @use-crux/core/quality — evaluation authoring surface
-// ─────────────────────────────────────────────────────────────────
-
-describe('@use-crux/core/quality', () => {
-  it('exposes exactly the five documented authoring values', () => {
-    expect(typeof evaluate).toBe('function')
-    expect(typeof target).toBe('function')
-    expect(typeof dataset).toBe('function')
-    expect(typeof cassette).toBe('function')
-    // `scorers` is the bound scorer library namespace, not a function.
-    expect(typeof scorers).toBe('object')
-    expect(scorers).not.toBeNull()
   })
 })

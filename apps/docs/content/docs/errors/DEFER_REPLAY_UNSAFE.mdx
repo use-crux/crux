@@ -23,9 +23,9 @@ also re-fire on every replay.
 
 ```ts
 // Inside a flow:
-await flow.defer(embedDocument, { documentId })
+await flow.defer(embedDocument, { documentId });
 
 // Not:
-defer(() => embed(documentId))
-await defer(embedDocument, { documentId })
+defer(() => embed(documentId));
+await defer(embedDocument, { documentId });
 ```

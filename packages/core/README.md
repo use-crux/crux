@@ -2,7 +2,7 @@
 
 **The SDK-agnostic foundation for harness engineering in TypeScript.**
 
-`@use-crux/core` gives you typed building blocks for everything around the model call: prompts, contexts, memory, retrieval, tools, guardrails, constraints, routing, evaluation, agents, flows, and observability.
+`@use-crux/core` gives you typed building blocks for everything around the model call: prompts, contexts, memory, retrieval, tools, guardrails, constraints, routing, Evals, agents, flows, and observability.
 
 Your app still owns product logic, routing, deployment, and data. Your model SDK still makes the call. Crux makes the harness around that call deliberate, inspectable, testable, and portable across adapters.
 
@@ -34,7 +34,7 @@ pnpm add @use-crux/google @google/genai
 To compose portable tools from an MCP server, install `@use-crux/mcp` and add
 its inert `mcp()` definition to a prompt or context `use[]`. The active adapter
 materializes that source before provider I/O, while the resulting tools keep the
-ordinary middleware, approval, Safety, observability, and Quality lifecycle.
+ordinary middleware, approval, Safety, observability, and Eval lifecycle.
 Core owns only this provider-neutral tool-source boundary; the opt-in MCP
 package owns protocol clients and transports.
 
@@ -49,7 +49,7 @@ const catalog = mcp({
 ```
 
 See the [MCP guide](https://cruxjs.dev/docs/guides/tools/mcp) for credentials,
-approval resume, Quality mocks, and lifecycle guidance.
+approval resume, Eval materialization, and lifecycle guidance.
 
 ## Start with one prompt
 
@@ -88,7 +88,7 @@ import { prompt } from "@use-crux/core";
 import { memory, facts, recentMessages } from "@use-crux/core/memory";
 import { retriever } from "@use-crux/core/retrieval";
 import { boundary, constraint, guardrail } from "@use-crux/core/safety";
-import { generate } from "@use-crux/ai";
+import { generate, stableModel } from "@use-crux/ai";
 import { openai } from "@ai-sdk/openai";
 import { z } from "zod";
 
@@ -152,7 +152,36 @@ const result = await generate(reply, {
 });
 ```
 
-Now the same call has memory, retrieval, input screening, structured output, retryable quality checks, and traceable events. The SDK still makes the model call; Crux makes the harness around it deliberate.
+Now the same call has memory, retrieval, input screening, structured output, retryable constraints, and traceable events. The SDK still makes the model call; Crux makes the harness around it deliberate.
+
+## Test the production task
+
+Create a normal callable task with your adapter, then point an inert Eval at
+that exact task. Cases and output remain inferred from the task.
+
+```ts
+import { generate, stableModel } from "@use-crux/ai";
+import { evaluate } from "@use-crux/core/eval";
+import { supportModel, supportPrompt } from "./src/support-config";
+
+export const support = generate.task(supportPrompt, {
+  model: stableModel(supportModel),
+  temperature: 0.2,
+});
+
+export default evaluate({
+  id: "support",
+  task: support,
+  cases: [{ id: "refund", input: { question: "Can I get a refund?" } }],
+  expect: ({ output, expect }) => {
+    expect(output.answer).toContain("refund");
+  },
+});
+```
+
+`crux eval` always includes Current, compares declared Variants, and reuses
+only exact safe evidence. Use `--offline` for zero network access, `--plan` to
+inspect admitted work, or explicitly accept a complete run as a Baseline.
 
 ## What's inside
 
@@ -164,14 +193,16 @@ Now the same call has memory, retrieval, input screening, structured output, ret
 | `@use-crux/core/memory`        | Memory blocks, stores, capture, recall, and compaction hooks.                                      |
 | `@use-crux/core/retrieval`     | Retrievers, rerankers, grounding inputs, and RAG pipelines.                                        |
 | `@use-crux/core/safety`        | Guardrails, constraints, safety plugins, and validation retry.                                     |
-| `@use-crux/core/quality`       | Evaluations, suites, assertions, scorers, gates, variants, and baselines.                          |
+| `@use-crux/core/eval`          | Inert Evals, typed Cases, Variants, checks, scorers, and Gates.                                    |
+| `@use-crux/core/eval/node`     | Node discovery, Case hydration, planning, execution, and `runEval()`.                              |
+| `@use-crux/core/feedback`      | Awaited durable production feedback linked to a canonical run id.                                  |
 | `@use-crux/core/agent`         | Agents, blackboards, handoffs, delegates, and compositions (parallel, pipeline, consensus, swarm). |
 | `@use-crux/core/flow`          | Suspendable, resumable typed workflows.                                                            |
 | `@use-crux/core/runtime`       | The durable Runtime Engine composers, ports, and diagnostics.                                      |
 | `@use-crux/core/observability` | Canonical graph records, transports, and the per-turn decision report read model.                  |
 | `@use-crux/core/skill`         | Skill authoring with inline and registry loaders.                                                  |
 
-Node-only/build-time subpaths are explicit: `quality`, `setup`,
+Node-only/build-time subpaths are explicit: `eval/node`, `setup`,
 `runtime/next`, `defer/node`, `observability/node`, `transcription/node`,
 `skill/node`, and the Vitest testing helpers. Portable application code should
 not re-export them from a Workers or browser entrypoint.
@@ -185,7 +216,7 @@ The README stays short on purpose. Full guides and the complete API reference li
 - [Safety](https://cruxjs.dev/docs/guides/safety) (guardrails, constraints) and [Routing & Fallback](https://cruxjs.dev/docs/guides/routing)
 - [Agents](https://cruxjs.dev/docs/guides/agents), [Flows](https://cruxjs.dev/docs/guides/flows), and [Workspaces](https://cruxjs.dev/docs/guides/workspaces)
 - [Durable Execution](https://cruxjs.dev/docs/guides/durable-execution) (the Runtime Engine)
-- [Quality](https://cruxjs.dev/docs/guides/quality) and [Observability](https://cruxjs.dev/docs/guides/observability)
+- [Evals](https://cruxjs.dev/docs/guides/evals) and [Observability](https://cruxjs.dev/docs/guides/observability)
 - [Multimodal messages](https://cruxjs.dev/docs/guides/advanced/multimodal), [tool approvals](https://cruxjs.dev/docs/guides/tools/approvals), and [headless calls](https://cruxjs.dev/docs/guides/advanced/headless)
 - [Full `@use-crux/core` API reference](https://cruxjs.dev/docs/reference/crux-core)
 

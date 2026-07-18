@@ -14,13 +14,14 @@
  * gate render with a simple boolean.
  */
 
-const FALLBACK_BASE = 'http://localhost:3001'
+const FALLBACK_BASE = "http://localhost:3001";
 
 function baseUrl(): string {
   // `import.meta.env` is replaced at build time by Vite. The
   // `CRUX_DOCS_URL` key is exposed via `envPrefix` in vite.config.ts.
-  const fromEnv = (import.meta.env as Record<string, string | undefined>).CRUX_DOCS_URL
-  return (fromEnv && fromEnv.trim()) || FALLBACK_BASE
+  const fromEnv = (import.meta.env as Record<string, string | undefined>)
+    .CRUX_DOCS_URL;
+  return (fromEnv && fromEnv.trim()) || FALLBACK_BASE;
 }
 
 /** Resolve a docs slug or path to an absolute URL, or `null` if the
@@ -31,11 +32,11 @@ function baseUrl(): string {
  *  - relative (with or without a leading slash) → joined onto the base
  */
 export function cruxDocsUrl(docsUrl: string | null | undefined): string | null {
-  if (!docsUrl) return null
-  const trimmed = docsUrl.trim()
-  if (!trimmed) return null
-  if (/^https?:\/\//i.test(trimmed)) return trimmed
-  const base = baseUrl().replace(/\/+$/, '')
-  const path = trimmed.replace(/^\/+/, '')
-  return `${base}/${path}`
+  if (!docsUrl) return null;
+  const trimmed = docsUrl.trim();
+  if (!trimmed) return null;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  const base = baseUrl().replace(/\/+$/, "");
+  const path = trimmed.replace(/^\/+/, "");
+  return `${base}/${path}`;
 }

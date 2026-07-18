@@ -6,21 +6,21 @@ description: SDK-agnostic Crux tool definitions for prompts, contexts, adapters,
 Use `tool()` from `@use-crux/core/tools` when you want an SDK-agnostic Crux tool definition:
 
 ```ts
-import { tool } from '@use-crux/core/tools'
-import { z } from 'zod'
+import { tool } from "@use-crux/core/tools";
+import { z } from "zod";
 
 export const searchDocs = tool({
-  name: 'searchDocs',
-  description: 'Search product documentation.',
+  name: "searchDocs",
+  description: "Search product documentation.",
   input: z.object({
     query: z.string(),
   }),
   contextSchema: z.object({ apiKey: z.string() }),
   execute: async ({ query }, { context }) => {
     // context is typed as { apiKey: string }
-    return searchDocumentation(query)
+    return searchDocumentation(query);
   },
-})
+});
 ```
 
 The helper returns a normal `ToolDef`. It exists to preserve input and output inference and to give adapter/runtime packages a stable API to mirror.
@@ -33,24 +33,24 @@ Index discovers statically visible `tool(...)` definitions from source; do not r
 
 ### `tool(config)`
 
-| Field | Type | Description |
-| ----- | ---- | ----------- |
-| `name` | `string?` | Optional stable name for adapters that need named registries. Prompt tool objects still use their object key as canonical. |
-| `description` | `string` | Model-facing description. |
-| `input` | `ZodType?` | Tool input schema. |
-| `parameters` | `ZodType?` | Alias for `input`, matching AI SDK naming. |
-| `contextSchema` | `ZodType?` | Per-tool dependency schema. Calls that compose this tool must pass `toolsContext.<toolName>`. |
-| `execute` | `(input, options) => output \| Promise<output>` | Application code that runs the tool. `options.context` is present and typed when `contextSchema` is declared; `options.runtimeContext` is shared for the run. |
-| `toModelOutput` | `(args) => ToolModelOutput \| Promise<ToolModelOutput>` | Optional mapper from raw output to the model-facing output. |
+| Field           | Type                                                    | Description                                                                                                                                                   |
+| --------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`          | `string?`                                               | Optional stable name for adapters that need named registries. Prompt tool objects still use their object key as canonical.                                    |
+| `description`   | `string`                                                | Model-facing description.                                                                                                                                     |
+| `input`         | `ZodType?`                                              | Tool input schema.                                                                                                                                            |
+| `parameters`    | `ZodType?`                                              | Alias for `input`, matching AI SDK naming.                                                                                                                    |
+| `contextSchema` | `ZodType?`                                              | Per-tool dependency schema. Calls that compose this tool must pass `toolsContext.<toolName>`.                                                                 |
+| `execute`       | `(input, options) => output \| Promise<output>`         | Application code that runs the tool. `options.context` is present and typed when `contextSchema` is declared; `options.runtimeContext` is shared for the run. |
+| `toModelOutput` | `(args) => ToolModelOutput \| Promise<ToolModelOutput>` | Optional mapper from raw output to the model-facing output.                                                                                                   |
 
 If neither `input` nor `parameters` is provided, the tool receives an empty object.
 
 ```ts
 const now = tool({
-  name: 'now',
-  description: 'Return the current timestamp.',
+  name: "now",
+  description: "Return the current timestamp.",
   execute: () => ({ timestamp: Date.now() }),
-})
+});
 ```
 
 ## Tool Context
@@ -61,18 +61,18 @@ global state:
 
 ```ts
 const weather = tool({
-  description: 'Get weather.',
+  description: "Get weather.",
   input: z.object({ city: z.string() }),
   contextSchema: z.object({ apiKey: z.string() }),
   execute: async ({ city }, { context, runtimeContext }) =>
     fetchWeather(city, context.apiKey, runtimeContext),
-})
+});
 
 await generate(answerQuestion, {
   model,
   toolsContext: { weather: { apiKey: process.env.WEATHER_API_KEY } },
-  runtimeContext: { tenantId: 'tenant_1' },
-})
+  runtimeContext: { tenantId: "tenant_1" },
+});
 ```
 
 `toolsContext` is keyed by the final tool name. If a composed tool declares
@@ -85,29 +85,29 @@ without `contextSchema` also fails.
 Tools can be declared directly on prompts or contributed by contexts:
 
 ```ts
-import { context, prompt } from '@use-crux/core'
-import { tool } from '@use-crux/core/tools'
-import { z } from 'zod'
+import { context, prompt } from "@use-crux/core";
+import { tool } from "@use-crux/core/tools";
+import { z } from "zod";
 
 const projectSearch = context({
-  id: 'project-search',
+  id: "project-search",
   input: z.object({ projectId: z.string() }),
-  system: 'Use searchProject when project context is required.',
+  system: "Use searchProject when project context is required.",
   tools: {
     searchProject: tool({
-      description: 'Search project material.',
+      description: "Search project material.",
       input: z.object({ query: z.string() }),
       execute: async ({ query }) => searchProject(query),
     }),
   },
-})
+});
 
 export const answerQuestion = prompt({
-  id: 'answer-question',
+  id: "answer-question",
   input: z.object({ question: z.string() }),
   use: [projectSearch],
   prompt: ({ input }) => input.question,
-})
+});
 ```
 
 ## Merge Order and Collisions

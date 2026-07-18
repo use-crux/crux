@@ -6,47 +6,47 @@ description: Build durable Convex-aware flows with start, suspend, signal, and r
 Some AI work cannot finish inside one Convex action: a plan needs human approval, an external system must call back, or a pipeline outlives a single worker. `flow()` from `@use-crux/convex/server` makes that work durable: a flow can cross Convex action boundaries, suspend at a named point, receive a signal, and resume where it left off.
 
 ```ts
-import { action, flow } from '@use-crux/convex/server'
+import { action, flow } from "@use-crux/convex/server";
 ```
 
 ## Define A Flow
 
 ```ts title="convex/workflows/writerFlow.ts"
-'use node'
+"use node";
 
-import { action, flow } from '@use-crux/convex/server'
-import { internal } from '../_generated/api'
-import { v } from 'convex/values'
-import { z } from 'zod'
+import { action, flow } from "@use-crux/convex/server";
+import { internal } from "../_generated/api";
+import { v } from "convex/values";
+import { z } from "zod";
 
 export const writerFlow = flow({
-  name: 'writer',
+  name: "writer",
   args: {
-    draftId: v.id('drafts'),
+    draftId: v.id("drafts"),
     brief: v.string(),
   },
   signals: {
     approval: z.object({ approved: z.boolean() }),
   },
   handler: async (scope, args, ctx) => {
-    const plan = await scope.step('plan', () =>
-      ctx.crux.runAction('plan draft', internal.writer.plan, {
+    const plan = await scope.step("plan", () =>
+      ctx.crux.runAction("plan draft", internal.writer.plan, {
         draftId: args.draftId,
         brief: args.brief,
       }),
-    )
+    );
 
-    const approval = await scope.suspend('approval')
-    if (!approval.approved) return { status: 'rejected' as const }
+    const approval = await scope.suspend("approval");
+    if (!approval.approved) return { status: "rejected" as const };
 
-    return scope.step('write', () =>
-      ctx.crux.runAction('write draft', internal.writer.write, {
+    return scope.step("write", () =>
+      ctx.crux.runAction("write draft", internal.writer.write, {
         draftId: args.draftId,
         plan,
       }),
-    )
+    );
   },
-})
+});
 ```
 
 ## The Flow Handle
@@ -68,16 +68,16 @@ Do not expose `.action` publicly when you need auth or tenant policy. Wrap `.han
 export const startWriter = action({
   args: writerFlow.args,
   handler: async (ctx, args) => {
-    await requireDraftAccess(ctx, args.draftId)
-    return writerFlow.handler(ctx, args)
+    await requireDraftAccess(ctx, args.draftId);
+    return writerFlow.handler(ctx, args);
   },
-})
+});
 ```
 
 Export `.action` for internal start/resume when policy is already enforced elsewhere:
 
 ```ts
-export const writer = writerFlow.action
+export const writer = writerFlow.action;
 ```
 
 ## Signal And Resume
@@ -91,11 +91,17 @@ export const approvePlan = action({
     approved: v.boolean(),
   },
   handler: async (ctx, args) => {
-    await writerFlow.signal(ctx, internal.workflows.writerFlow.writer, args.flowId, 'approval', {
-      approved: args.approved,
-    })
+    await writerFlow.signal(
+      ctx,
+      internal.workflows.writerFlow.writer,
+      args.flowId,
+      "approval",
+      {
+        approved: args.approved,
+      },
+    );
   },
-})
+});
 ```
 
 If the flow declares `signals`, `.signal()` uses the same core schema contract as `flow.suspend()`: invalid payloads

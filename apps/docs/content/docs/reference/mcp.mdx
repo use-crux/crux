@@ -139,15 +139,16 @@ metadata, and idempotent `close()`. The public testing subpath
 `@use-crux/mcp/testing/vitest` exports shared materializer and adapter
 conformance helpers for integration authors.
 
-## Middleware, Safety, approval, and Quality
+## Middleware, Safety, approval, and Evals
 
 Materialized tools use their final exposed names in `toolMiddleware` and
 `toolPolicy`. Remote annotations are untrusted and never relax local policy.
 Approval resume uses `appendToolApprovalResponse`; it reconnects, rediscovers,
 and validates the committed identity before execution.
 
-Live MCP Quality runs can affect real systems and bypass reusable cell-output
-cache. `target.agent(..., { tools: { exposed_name: fixture } })` prevents remote
+Live MCP tasks can affect real systems. Evals should bind the same managed
+production task to a deterministic fixture when remote side effects are not
+acceptable. The fixture prevents remote
 execution but may still discover. Use a deterministic no-network fixture for a
 fully offline run.
 

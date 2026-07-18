@@ -1,0 +1,21 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": [],
+  "files": [
+    "../../__type_tests__/fixtures/eval-perf/task.ts",
+    "../../__type_tests__/fixtures/eval-perf/part-1.ts",
+    "../../__type_tests__/fixtures/eval-perf/part-2.ts",
+    "../../__type_tests__/fixtures/eval-perf/part-3.ts",
+    "../../__type_tests__/fixtures/eval-perf/part-4.ts",
+    "../../__type_tests__/fixtures/eval-perf/part-5.ts",
+    "../../__type_tests__/fixtures/eval-perf/part-6.ts",
+    "../../__type_tests__/fixtures/eval-perf/part-7.ts",
+    "../../__type_tests__/fixtures/eval-perf/part-8.ts",
+    "../../__type_tests__/fixtures/eval-perf/part-9.ts",
+    "../../__type_tests__/fixtures/eval-perf/part-10.ts"
+  ]
+}

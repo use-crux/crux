@@ -1,9 +1,9 @@
-import { MemoryView } from '@/features/memory/components/MemoryView'
+import { MemoryView } from "@/features/memory/components/MemoryView";
 
 interface MemoryPageProps {
-  memoryId?: string
+  memoryId?: string;
 }
 
 export function MemoryPage(props: MemoryPageProps) {
-  return <MemoryView {...props} />
+  return <MemoryView {...props} />;
 }

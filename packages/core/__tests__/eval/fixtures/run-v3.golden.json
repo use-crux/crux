@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 3,
+  "runId": "eval-run-golden",
+  "evalId": "support",
+  "sourceKey": { "relativeFile": "support.eval.ts", "export": "default" },
+  "startedAt": 100,
+  "endedAt": 125,
+  "definitionFingerprint": "definition-v1",
+  "selection": {
+    "cases": ["refund"],
+    "variants": ["current"],
+    "trials": 1,
+    "caseTrials": { "refund": 1 }
+  },
+  "costControl": "not_required",
+  "blockingVariants": ["current"],
+  "cells": [
+    {
+      "caseId": "refund",
+      "variant": "current",
+      "trial": 0,
+      "status": "passed",
+      "task": { "status": "executed", "reason": "no_exact_evidence" },
+      "scores": [],
+      "assertions": { "ran": 0, "notEvaluated": 0, "outcomes": [] },
+      "input": { "question": "Can I get a refund?" },
+      "output": "Yes",
+      "metrics": { "durationMs": 25 },
+      "runIds": ["task-run-1"],
+      "capturedSignals": [],
+      "futureCellField": { "preserve": true }
+    }
+  ],
+  "variants": [
+    {
+      "name": "current",
+      "fingerprint": "arm-v1",
+      "overrideKeys": [],
+      "blocking": true
+    }
+  ],
+  "aggregates": {
+    "current": {
+      "cells": 1,
+      "passed": 1,
+      "failed": 0,
+      "errored": 0,
+      "skipped": 0,
+      "passRate": 1,
+      "scores": {},
+      "trialConsistency": 1,
+      "latencyMs": 25
+    }
+  },
+  "gates": { "passed": true, "blockingPassed": true, "results": [] },
+  "cost": {
+    "reservedMaximumUsd": 0,
+    "unknownActionCount": 0,
+    "task": {},
+    "judge": {}
+  },
+  "provenance": { "task": "managed", "host": "injected", "evidenceStore": "none" },
+  "status": "complete",
+  "passed": true,
+  "futureTopLevelField": { "producer": "future-core", "revision": 4 }
+}

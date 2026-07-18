@@ -12,8 +12,8 @@ import (
 
 type mediaRoundTripSource struct{ index store.IndexData }
 
-func (s mediaRoundTripSource) Snapshot() (store.IndexData, []store.EvalRun, []store.RagEvalRun, []store.FlowRun) {
-	return s.index, nil, nil, nil
+func (s mediaRoundTripSource) Snapshot() store.IndexData {
+	return s.index
 }
 
 func TestMediaFactsPreserveRawJSONThroughEventReadModelAndAPI(t *testing.T) {
@@ -40,7 +40,7 @@ func TestMediaFactsPreserveRawJSONThroughEventReadModelAndAPI(t *testing.T) {
 	}
 
 	state := projectmodel.ApplyPatch(projectmodel.EmptyPatchState(), patches[0])
-	index := projectreadmodel.New(mediaRoundTripSource{index: state.Index}, "").Index()
+	index := projectreadmodel.New(mediaRoundTripSource{index: state.Index}).Index()
 	assertMediaRawMessages(t, index.Definitions, index.Relations, index.LintFindings)
 
 	encoded, err := json.Marshal(index)

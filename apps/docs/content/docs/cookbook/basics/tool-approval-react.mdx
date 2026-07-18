@@ -8,85 +8,88 @@ This recipe uses `@use-crux/ai`, `approvalMiddleware()`, and the AI SDK approval
 ## Prompt and policy
 
 ```ts title="lib/assistant.ts"
-import { approvalMiddleware, prompt } from '@use-crux/core'
-import { tool } from '@use-crux/ai'
-import { z } from 'zod'
+import { approvalMiddleware, prompt } from "@use-crux/core";
+import { tool } from "@use-crux/ai";
+import { z } from "zod";
 
 export const sendEmail = tool({
-  description: 'Send an email to a customer.',
+  description: "Send an email to a customer.",
   inputSchema: z.object({
     to: z.string().email(),
     subject: z.string(),
     body: z.string(),
   }),
   execute: async ({ to, subject, body }) => {
-    await email.send({ to, subject, body })
-    return { sent: true }
+    await email.send({ to, subject, body });
+    return { sent: true };
   },
-})
+});
 
 export const emailApprovals = approvalMiddleware({
-  id: 'email-approval',
-  match: ['sendEmail'],
+  id: "email-approval",
+  match: ["sendEmail"],
   onApproved: ({ approvalId, input }) => {
-    audit.write({ approvalId, action: 'approved', input })
+    audit.write({ approvalId, action: "approved", input });
   },
   onDenied: ({ approvalId, reason }) => {
-    audit.write({ approvalId, action: 'denied', reason })
+    audit.write({ approvalId, action: "denied", reason });
   },
-})
+});
 
 export const assistant = prompt({
-  id: 'support-assistant',
+  id: "support-assistant",
   input: z.object({ message: z.string() }),
-  system: 'Help support agents, but never send email without approval.',
+  system: "Help support agents, but never send email without approval.",
   prompt: ({ input }) => input.message,
   tools: { sendEmail },
   toolMiddleware: [emailApprovals],
-})
+});
 ```
 
 ## Route
 
 ```ts title="app/api/chat/route.ts"
-import { createUIMessageStreamResponse, stream } from '@use-crux/ai'
-import { openai } from '@ai-sdk/openai'
-import { assistant } from '@/lib/assistant'
+import { createUIMessageStreamResponse, stream } from "@use-crux/ai";
+import { openai } from "@ai-sdk/openai";
+import { assistant } from "@/lib/assistant";
 
 export async function POST(req: Request) {
-  const { messages } = await req.json()
-  const last = messages.at(-1)
+  const { messages } = await req.json();
+  const last = messages.at(-1);
 
   const result = await stream(assistant, {
-    model: openai('gpt-4o'),
-    input: { message: last?.content ?? '' },
+    model: openai("gpt-4o"),
+    input: { message: last?.content ?? "" },
     messages,
-  })
+  });
 
-  return createUIMessageStreamResponse(result)
+  return createUIMessageStreamResponse(result);
 }
 ```
 
 ## Client
 
 ```tsx title="app/chat.tsx"
-'use client'
+"use client";
 
-import { useChat } from '@ai-sdk/react'
-import { lastAssistantMessageIsCompleteWithApprovalResponses } from 'ai'
+import { useChat } from "@ai-sdk/react";
+import { lastAssistantMessageIsCompleteWithApprovalResponses } from "ai";
 
 export function Chat() {
   const { messages, sendMessage, addToolApprovalResponse } = useChat({
-    api: '/api/chat',
+    api: "/api/chat",
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
-  })
+  });
 
   return (
     <main>
       {messages.map((message) => (
         <article key={message.id}>
           {message.parts.map((part) => {
-            if (part.type === 'tool-sendEmail' && part.state === 'approval-requested') {
+            if (
+              part.type === "tool-sendEmail" &&
+              part.state === "approval-requested"
+            ) {
               return (
                 <div key={part.toolCallId}>
                   <p>Approve email to {part.input.to}?</p>
@@ -105,27 +108,29 @@ export function Chat() {
                       addToolApprovalResponse({
                         id: part.approval.id,
                         approved: false,
-                        reason: 'Denied by user',
+                        reason: "Denied by user",
                       })
                     }
                   >
                     Deny
                   </button>
                 </div>
-              )
+              );
             }
 
-            if (part.type === 'text') return <p key={part.text}>{part.text}</p>
-            return null
+            if (part.type === "text") return <p key={part.text}>{part.text}</p>;
+            return null;
           })}
         </article>
       ))}
 
-      <button onClick={() => sendMessage({ text: 'Email Sam about the refund.' })}>
+      <button
+        onClick={() => sendMessage({ text: "Email Sam about the refund." })}
+      >
         Ask
       </button>
     </main>
-  )
+  );
 }
 ```
 

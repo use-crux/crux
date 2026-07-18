@@ -1,16 +1,16 @@
 /** Generic canonical DefinitionRef → Catalog link projection for Run Detail. */
 
-import type { DefinitionRef } from '@use-crux/core/observability'
-import type { NavState } from '@/app/navigation/useNavigation'
+import type { DefinitionRef } from "@use-crux/core/observability";
+import type { NavState } from "@/app/navigation/useNavigation";
 
 export interface DefinitionRefLink {
-  label: string
-  value: string
-  kind: string
-  role: string
-  source?: DefinitionRef['source']
-  resolved: boolean
-  to?: NavState
+  label: string;
+  value: string;
+  kind: string;
+  role: string;
+  source?: DefinitionRef["source"];
+  resolved: boolean;
+  to?: NavState;
 }
 
 /**
@@ -23,7 +23,7 @@ export function definitionRefLinks(
   knownDefinitionIds: ReadonlySet<string> | undefined,
 ): DefinitionRefLink[] {
   return refs.map((ref) => {
-    const resolved = knownDefinitionIds?.has(ref.id) === true
+    const resolved = knownDefinitionIds?.has(ref.id) === true;
     return {
       label: ref.kind,
       value: ref.id,
@@ -31,7 +31,9 @@ export function definitionRefLinks(
       role: ref.role,
       source: ref.source,
       resolved,
-      ...(resolved ? { to: { view: 'library-index', promptId: ref.id } as NavState } : {}),
-    }
-  })
+      ...(resolved
+        ? { to: { view: "library-index", promptId: ref.id } as NavState }
+        : {}),
+    };
+  });
 }

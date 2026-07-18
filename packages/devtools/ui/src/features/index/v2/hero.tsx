@@ -26,7 +26,7 @@ import {
 } from "./kit";
 import type { IndexIndex, IndexFacts, ViewDef } from "./adapt";
 import { RoutingCatalogFacts } from "./routing-catalog";
-import { useIndexIndex, useIndexSelect } from "./context";
+import { useIndexIndex, useIndexOpenEval, useIndexSelect } from "./context";
 
 /** A single authored `use`/injection reference (a `facts.useEntries[]` item). */
 type UseEntry = NonNullable<IndexFacts["useEntries"]>[number];
@@ -692,6 +692,7 @@ function AuthoringHero({ def }: { def: ViewDef }) {
 export function IndexHero({ def }: { def: ViewDef }) {
   const idx = useIndexIndex();
   const select = useIndexSelect();
+  const openEval = useIndexOpenEval();
   const f = def.facts ?? {};
   const kids = idx.childrenOf(def.id);
   const rels = idx.relationsOf(def.id);
@@ -1816,116 +1817,63 @@ export function IndexHero({ def }: { def: ViewDef }) {
     );
   }
 
-  // DATASET / SUITE
-  if (k === "dataset" || k === "suite") {
-    const cases = kids.filter((c) => c.kind === "suite.case");
+  // EVAL
+  if (k === "eval" || k === "eval.case") {
+    const cases = kids.filter((child) => child.kind === "eval.case");
     return (
       <HeroFrame
-        title={k === "suite" ? "Suite" : "Dataset"}
+        title={k === "eval.case" ? "Case" : "Eval"}
         tone="gold"
         right={
-          <HWrap>
-            <Chip tone="gold" mono>
-              {f.caseCount ?? cases.length} cases
-            </Chip>
-            {(f.scorerIds ?? []).map((s) => (
-              <KindBadge key={s} kind="scorer" label={s} />
-            ))}
-          </HWrap>
+          k === "eval" ? (
+            <HWrap>
+              <Chip tone="gold" mono>
+                {f.caseCount ?? cases.length} Cases
+              </Chip>
+              {(f.scorerIds ?? []).map((scorer) => (
+                <KindBadge key={scorer} kind="scorer" label={scorer} />
+              ))}
+            </HWrap>
+          ) : undefined
         }
       >
-        {cases.length ? (
+        {k === "eval" ? (
+          <button
+            type="button"
+            onClick={() => openEval(def.name)}
+            style={{
+              all: "unset",
+              boxSizing: "border-box",
+              cursor: "pointer",
+              fontFamily: T.mono,
+              fontSize: 11.5,
+              color: T.crux,
+              marginBottom: 12,
+            }}
+          >
+            Open {def.name} in Evals →
+          </button>
+        ) : null}
+        {k === "eval" && cases.length > 0 ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            {cases.map((cs) => (
+            {cases.map((item) => (
               <HNode
-                key={cs.id}
-                kind="suite.case"
-                label={cs.name}
-                onClick={navTo(cs.id)}
+                key={item.id}
+                kind="eval.case"
+                label={item.name}
+                onClick={navTo(item.id)}
               />
             ))}
-            {f.caseCount != null && f.caseCount > cases.length && (
-              <span
-                style={{
-                  fontFamily: T.mono,
-                  fontSize: 11,
-                  color: T.fgFaint,
-                  paddingLeft: 4,
-                }}
-              >
-                +{f.caseCount - cases.length} more cases
-              </span>
-            )}
           </div>
-        ) : f.caseCount ? (
-          <span
-            style={{ fontFamily: T.mono, fontSize: 11.5, color: T.fgMuted }}
-          >
-            {f.caseCount} case{f.caseCount === 1 ? "" : "s"} declared · per-case
-            results come from the suite’s runs.
-          </span>
         ) : (
           <span
             style={{ fontFamily: T.mono, fontSize: 11.5, color: T.fgMuted }}
           >
-            No cases captured.
+            {k === "eval"
+              ? "Cases and execution evidence are available in the Evals views."
+              : "One authored Eval Case."}
           </span>
         )}
-      </HeroFrame>
-    );
-  }
-
-  // EVAL.*
-  if (k.startsWith("eval.")) {
-    const target = f.targetDefinitionId ? lookup(f.targetDefinitionId) : null;
-    return (
-      <HeroFrame
-        title="Eval"
-        tone="gold"
-        right={(f.scorerIds ?? []).map((s) => (
-          <KindBadge key={s} kind="scorer" label={s} />
-        ))}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <span style={{ fontFamily: T.mono, fontSize: 11, color: T.fgFaint }}>
-            covers
-          </span>
-          {target ? (
-            <HNode
-              kind={target.kind}
-              label={target.name}
-              onClick={navTo(target.id)}
-            />
-          ) : (
-            <span
-              style={{ fontFamily: T.mono, fontSize: 11, color: T.fgMuted }}
-            >
-              {f.targetDefinitionId ?? "—"}
-            </span>
-          )}
-          {def.quality?.passRate != null && (
-            <span
-              style={{
-                marginLeft: "auto",
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-              }}
-            >
-              <span style={{ width: 80 }}>
-                <Bar
-                  value={def.quality.passRate}
-                  tone={def.quality.passRate >= 0.9 ? "ok" : "crux"}
-                />
-              </span>
-              <span
-                style={{ fontFamily: T.mono, fontSize: 13, fontWeight: 600 }}
-              >
-                {Math.round(def.quality.passRate * 100)}%
-              </span>
-            </span>
-          )}
-        </div>
       </HeroFrame>
     );
   }

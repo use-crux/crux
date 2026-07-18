@@ -1,5 +1,13 @@
 {
   "title": "Foundations",
   "description": "Concept-first introduction to Crux: what problem it solves, how to think about it, how it works, and when to use each primitive.",
-  "pages": ["index", "thinking-in-crux", "mental-model", "primitives", "best-practices", "packages", "comparison"]
+  "pages": [
+    "index",
+    "thinking-in-crux",
+    "mental-model",
+    "primitives",
+    "best-practices",
+    "packages",
+    "comparison"
+  ]
 }

@@ -1,5 +1,10 @@
 import type { CruxGraphRecord } from './contract'
-import { acceptedDeliveryReceipt, type CruxDeliveryAttemptContext, type CruxDeliveryReceipt } from './delivery/receipt'
+import type { CruxFeedbackDestination } from '../feedback/types'
+import {
+  acceptedDeliveryReceipt,
+  type CruxDeliveryAttemptContext,
+  type CruxDeliveryReceipt,
+} from './delivery/receipt'
 
 export type {
   CruxDeliveryAttemptContext,
@@ -8,10 +13,13 @@ export type {
   CruxDeliverySourceHealth,
 } from './delivery/receipt'
 export { acceptedDeliveryReceipt } from './delivery/receipt'
-export { createHttpObservabilityTransport, type HttpObservabilityTransportOptions } from './http-transport'
+export {
+  createHttpObservabilityTransport,
+  type HttpObservabilityTransportOptions,
+} from './http-transport'
 
 /** Receipt-aware boundary for canonical observability graph delivery. */
-export interface CruxObservabilityTransport {
+export interface CruxObservabilityTransport extends Partial<CruxFeedbackDestination> {
   /**
    * Deliver records and account for every submitted index.
    *

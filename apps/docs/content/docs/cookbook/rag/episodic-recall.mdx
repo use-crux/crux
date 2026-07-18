@@ -6,39 +6,39 @@ description: Recall relevant past chat events with the episodes memory block.
 Use `episodes()` when the agent needs to answer questions about what happened before. It is append-only, scoped by namespace, and can use dense vector search when the backing store supports it.
 
 ```ts
-import { prompt } from '@use-crux/core'
-import { generate } from '@use-crux/ai'
-import { memory, episodes } from '@use-crux/core/memory'
-import { z } from 'zod'
+import { prompt } from "@use-crux/core";
+import { generate } from "@use-crux/ai";
+import { memory, episodes } from "@use-crux/core/memory";
+import { z } from "zod";
 
 const chatEpisodes = episodes({
-  id: 'episodes',
+  id: "episodes",
   embed: dense,
-})
+});
 
 const chatMemory = memory({
-  id: 'chat',
+  id: "chat",
   store,
   namespace: ({ input }) => `user:${input.userId}:thread:${input.threadId}`,
   blocks: [chatEpisodes],
-})
+});
 
 const assistantInput = z.object({
   userId: z.string(),
   threadId: z.string(),
   message: z.string(),
-})
+});
 
 const assistant = prompt({
-  id: 'assistant',
+  id: "assistant",
   use: [chatMemory],
   input: assistantInput,
-  system: 'Use relevant prior episodes when answering.',
+  system: "Use relevant prior episodes when answering.",
   prompt: ({ input }) => input.message,
-})
+});
 
 export async function handleMessage(input: z.infer<typeof assistantInput>) {
-  return generate(assistant, { model, input })
+  return generate(assistant, { model, input });
 }
 ```
 
@@ -47,15 +47,15 @@ You can also record non-chat events directly:
 ```ts
 await chatEpisodes.record(
   {
-    content: 'User accepted the pricing recommendation',
-    metadata: { source: 'ui', event: 'accepted_recommendation' },
+    content: "User accepted the pricing recommendation",
+    metadata: { source: "ui", event: "accepted_recommendation" },
   },
   {
     store,
-    namespace: 'user:u1:thread:t1',
-    memoryId: 'chat',
+    namespace: "user:u1:thread:t1",
+    memoryId: "chat",
   },
-)
+);
 ```
 
 Direct calls should pass the same `memoryId` and namespace as the composed `memory()` instance so reads and writes share keys.

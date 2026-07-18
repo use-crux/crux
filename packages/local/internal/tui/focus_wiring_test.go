@@ -67,11 +67,11 @@ func TestGotoNavInvokesFocusOnDestination(t *testing.T) {
 // signal that the screen should keep its own default selection.
 func TestGotoNavSkipsFocusWhenNoSelection(t *testing.T) {
 	w := NewWorkbench(nil, nil, "http://localhost:4400")
-	fake := &fakeScreen{id: "experiments"}
-	w.screens["experiments"] = fake
+	fake := &fakeScreen{id: "index"}
+	w.screens["index"] = fake
 
-	// Nothing staged for KindExperiment.
-	w.gotoNav("experiments")
+	// No record has been staged for any mounted destination.
+	w.gotoNav("index")
 
 	if len(fake.focusCalls) != 0 {
 		t.Errorf("expected zero Focus calls when no selection staged, got %d: %v", len(fake.focusCalls), fake.focusCalls)

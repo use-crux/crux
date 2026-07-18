@@ -4,8 +4,11 @@ description: urlSource, urlsSource, fetch HTTP(S) URLs and load them as IngestDo
 ---
 
 ```ts
-import { urlSource, urlsSource } from '@use-crux/ingest/urls'
-import type { UrlSourceOptions, UrlsSourceOptions } from '@use-crux/ingest/urls'
+import { urlSource, urlsSource } from "@use-crux/ingest/urls";
+import type {
+  UrlSourceOptions,
+  UrlsSourceOptions,
+} from "@use-crux/ingest/urls";
 ```
 
 ## What it does
@@ -34,13 +37,13 @@ urlSource('https://example.com/article', {
 })
 ```
 
-| Option      | Type              | Description                                                                    |
-| ----------- | ----------------- | ------------------------------------------------------------------------------ |
-| `namespace` | `string`          | Required, non-empty                                                            |
-| `sourceId`  | `string?`         | Defaults to the URL                                                            |
-| `fetch`     | `typeof fetch?`   | Inject a custom fetch (e.g. for testing or proxies)                            |
-| `parsers`   | `IngestParser[]?` | Optional parser overrides. Custom parsers beat built-ins for matching formats. |
-| `media`     | `IngestMediaOperations?` | Bound semantic description/transcription operations for media sources. |
+| Option      | Type                     | Description                                                                    |
+| ----------- | ------------------------ | ------------------------------------------------------------------------------ |
+| `namespace` | `string`                 | Required, non-empty                                                            |
+| `sourceId`  | `string?`                | Defaults to the URL                                                            |
+| `fetch`     | `typeof fetch?`          | Inject a custom fetch (e.g. for testing or proxies)                            |
+| `parsers`   | `IngestParser[]?`        | Optional parser overrides. Custom parsers beat built-ins for matching formats. |
+| `media`     | `IngestMediaOperations?` | Bound semantic description/transcription operations for media sources.         |
 
 ### Document metadata
 
@@ -82,15 +85,18 @@ For non-HTML responses (`text/plain`, `text/markdown`, `text/csv`, `application/
 Load many URLs:
 
 ```ts
-urlsSource(['https://example.com/a', 'https://example.com/b', 'https://example.com/c'], { namespace: 'web' })
+urlsSource(
+  ["https://example.com/a", "https://example.com/b", "https://example.com/c"],
+  { namespace: "web" },
+);
 ```
 
-| Option      | Type              | Description                             |
-| ----------- | ----------------- | --------------------------------------- |
-| `namespace` | `string`          | Required, non-empty                     |
-| `fetch`     | `typeof fetch?`   | Custom fetch shared across all URLs     |
-| `parsers`   | `IngestParser[]?` | Parser overrides shared across all URLs |
-| `media`     | `IngestMediaOperations?` | Media operations shared across URLs |
+| Option      | Type                     | Description                             |
+| ----------- | ------------------------ | --------------------------------------- |
+| `namespace` | `string`                 | Required, non-empty                     |
+| `fetch`     | `typeof fetch?`          | Custom fetch shared across all URLs     |
+| `parsers`   | `IngestParser[]?`        | Parser overrides shared across all URLs |
+| `media`     | `IngestMediaOperations?` | Media operations shared across URLs     |
 
 URLs are loaded **sequentially** (one at a time). For high-volume ingestion, batch your own concurrency above this layer.
 
@@ -101,32 +107,36 @@ URLs are loaded **sequentially** (one at a time). For high-volume ingestion, bat
 ## Example
 
 ```ts
-import { corpus, indexer } from '@use-crux/core/indexing'
-import { urlsSource } from '@use-crux/ingest/urls'
+import { corpus, indexer } from "@use-crux/core/indexing";
+import { urlsSource } from "@use-crux/ingest/urls";
 
 const docsIndexer = indexer({
-  id: 'web',
-  namespace: 'kb',
+  id: "web",
+  namespace: "kb",
   store,
   dense: embedding,
-})
+});
 
 const docsCorpus = corpus({
-  id: 'web',
-  namespace: 'kb',
+  id: "web",
+  namespace: "kb",
   store,
   indexer: docsIndexer,
-})
+});
 
 const source = urlsSource(
-  ['https://docs.example.com/intro', 'https://docs.example.com/setup', 'https://docs.example.com/api'],
-  { namespace: 'kb' },
-)
+  [
+    "https://docs.example.com/intro",
+    "https://docs.example.com/setup",
+    "https://docs.example.com/api",
+  ],
+  { namespace: "kb" },
+);
 
 await docsCorpus.sync(source.load(), {
-  sourceSet: 'complete',
-  stale: 'delete',
-})
+  sourceSet: "complete",
+  stale: "delete",
+});
 ```
 
 ## Related

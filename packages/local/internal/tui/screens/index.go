@@ -18,18 +18,13 @@ import (
 
 // Index is the Project Index screen: the design-plane sibling of
 // the runtime Run list. Each row is a ProjectDefinition (prompt /
-// context / tool / agent / flow / composition / suite / eval / …)
+// context / tool / agent / flow / composition / scorer / eval / …)
 // surfaced from the Go service's index read-model.
 //
 // Per the backend handoff, the TUI is purely presentational:
 //   - reads `c.ProjectIndex(ctx)` for the canonical view
 //   - does NOT walk relations or compute fingerprints client-side
-//   - missing Quality renders as no signal, not as an error
-//
-// Cross-screen propagation: the workbench can read AffectedSuiteIDs() /
-// AffectedEvalIDs() from this screen to mark rows on Suites/Insights
-// as `affected` when their id appears in the union of all changed
-// definitions' affected lists. See ADR-0051 + plan S15.
+//   - missing Inspect renders as no signal, not as an error
 type Index struct {
 	index  api.IndexData
 	cursor int
@@ -68,7 +63,7 @@ func (s *Index) Update(msg tea.Msg, c DataClient) tea.Cmd {
 		s.index = api.IndexData(m)
 		s.loaded = true
 		s.clampCursor()
-	case api.QualityEvent:
+	case api.InspectEvent:
 		return fetchIndex(c)
 	case dataErrMsg:
 		s.err = string(m)
@@ -84,20 +79,8 @@ func (s *Index) handleKey(m tea.KeyPressMsg, c DataClient) tea.Cmd {
 		s.moveCursor(+1)
 	case "k", "up":
 		s.moveCursor(-1)
-	case "enter":
-		// Open source file in $EDITOR — stubbed for V1 (needs
-		// `tea.ExecProcess` integration, same as Suites `^e`).
-		return nil
 	case "e":
 		return s.exportDefinition()
-	case "o":
-		// External-viewer stub.
-		return nil
-	case "r":
-		// `r run` is kind-dependent (prompt → one-shot run, suite →
-		// experiment). Backend gap: `RunDefinition` service method
-		// (plan B8). Stub until then.
-		return s.runDefinitionStub()
 	}
 	return nil
 }
@@ -138,38 +121,6 @@ func (s *Index) SelectedDefinitionID() string {
 		return ""
 	}
 	return defs[s.cursor].ID
-}
-
-// AffectedSuiteIDs returns the set-union of `AffectedSuiteIDs` across
-// every Quality-changed definition. Used by the workbench to mark
-// affected Suites rows in cross-screen propagation. Backend-owned per
-// the handoff — TUI does NOT walk relations.
-func (s *Index) AffectedSuiteIDs() map[string]struct{} {
-	out := make(map[string]struct{})
-	for _, d := range s.index.Definitions {
-		if d.Quality == nil || d.Quality.ChangedSinceBaseline == nil || !*d.Quality.ChangedSinceBaseline {
-			continue
-		}
-		for _, id := range d.Quality.AffectedSuiteIDs {
-			out[id] = struct{}{}
-		}
-	}
-	return out
-}
-
-// AffectedEvalIDs returns the set-union of `AffectedEvalIDs` across
-// every Quality-changed definition. Same model as AffectedSuiteIDs.
-func (s *Index) AffectedEvalIDs() map[string]struct{} {
-	out := make(map[string]struct{})
-	for _, d := range s.index.Definitions {
-		if d.Quality == nil || d.Quality.ChangedSinceBaseline == nil || !*d.Quality.ChangedSinceBaseline {
-			continue
-		}
-		for _, id := range d.Quality.AffectedEvalIDs {
-			out[id] = struct{}{}
-		}
-	}
-	return out
 }
 
 func (s *Index) Breadcrumb() ([]string, string) {
@@ -254,26 +205,6 @@ func (s *Index) renderListRow(d api.ProjectDefinition, width int, selected bool)
 	if d.Fidelity != "" && d.Fidelity != "resolved" {
 		parts = append(parts, " ", indexFidelityChip(d.Fidelity))
 	}
-	// `changed` chip — subtle but visible. State markers preserve case
-	// per the design (lowercase `changed`, `curated`, `pinned`, etc.).
-	if d.Quality != nil && d.Quality.ChangedSinceBaseline != nil && *d.Quality.ChangedSinceBaseline {
-		parts = append(parts, " ", kit.ChipState("changed", shell.ColorAmber))
-	}
-	// Affected counts.
-	if d.Quality != nil {
-		nE := len(d.Quality.AffectedEvalIDs)
-		nS := len(d.Quality.AffectedSuiteIDs)
-		if nE+nS > 0 {
-			affected := []string{}
-			if nE > 0 {
-				affected = append(affected, fmt.Sprintf("evals %d", nE))
-			}
-			if nS > 0 {
-				affected = append(affected, fmt.Sprintf("suites %d", nS))
-			}
-			parts = append(parts, "  ", shell.TextDim.Render(strings.Join(affected, " · ")))
-		}
-	}
 	if count := len(s.lintFindingsForDefinition(d.ID)); count > 0 {
 		parts = append(parts, " ", kit.ChipState(fmt.Sprintf("lint %d", count), shell.ColorAmber))
 	}
@@ -315,39 +246,6 @@ func (s *Index) renderDetail(width, height int) string {
 			b.WriteString(kvRow("line", fmt.Sprintf("%d", d.Source.Line), width))
 		}
 		b.WriteString("\n")
-	}
-
-	if d.Quality != nil {
-		b.WriteString(" " + shell.SectionTag.Render("QUALITY"))
-		b.WriteString("\n")
-		if d.Quality.ChangedSinceBaseline != nil && *d.Quality.ChangedSinceBaseline {
-			b.WriteString(" " + shell.Amber.Render("changed since baseline") + "\n")
-		}
-		if d.Quality.BaselineFingerprint != "" {
-			b.WriteString(kvRow("baseline fp", truncate(d.Quality.BaselineFingerprint, 12), width))
-		}
-		if d.Quality.CurrentFingerprint != "" {
-			b.WriteString(kvRow("current fp", truncate(d.Quality.CurrentFingerprint, 12), width))
-		}
-		if d.Quality.RunCount > 0 {
-			b.WriteString(kvRow("runs", fmt.Sprintf("%d", d.Quality.RunCount), width))
-		}
-		if d.Quality.PassRate != nil {
-			b.WriteString(kvRow("pass rate", fmt.Sprintf("%.0f%%", *d.Quality.PassRate*100), width))
-		}
-		b.WriteString("\n")
-
-		if len(d.Quality.AffectedEvalIDs)+len(d.Quality.AffectedSuiteIDs) > 0 {
-			b.WriteString(" " + shell.SectionTag.Render("AFFECTED CHECKS"))
-			b.WriteString("\n")
-			if len(d.Quality.AffectedEvalIDs) > 0 {
-				b.WriteString(kvRow("evals", clipIDs(d.Quality.AffectedEvalIDs, width-12), width))
-			}
-			if len(d.Quality.AffectedSuiteIDs) > 0 {
-				b.WriteString(kvRow("suites", clipIDs(d.Quality.AffectedSuiteIDs, width-12), width))
-			}
-			b.WriteString("\n")
-		}
 	}
 
 	lintFindings := s.lintFindingsForDefinition(d.ID)
@@ -429,7 +327,7 @@ func indexKindGlyph(kind string) string {
 		return shell.Teal.Render("▣")
 	case "rag.pipeline", "rag.pipeline.stage", "rag.retriever":
 		return shell.Teal.Render("⌁")
-	case "suite", "eval":
+	case "eval", "eval.case":
 		return shell.Teal.Render("✓")
 	default:
 		return shell.TextMuted.Render("·")
@@ -487,21 +385,9 @@ func (s *Index) exportDefinition() tea.Cmd {
 	}
 }
 
-// runDefinitionStub is the placeholder until `RunDefinition` service
-// method lands (plan B8). The kind dispatch (prompt → one-shot,
-// suite → experiment, etc.) is service-side per the handoff.
-func (s *Index) runDefinitionStub() tea.Cmd {
-	id := s.SelectedDefinitionID()
-	if id == "" {
-		return nil
-	}
-	return func() tea.Msg { return definitionRunPendingMsg{defID: id} }
-}
-
 type (
-	indexLoadedMsg          api.IndexData
-	definitionExportedMsg   struct{ defID, path string }
-	definitionRunPendingMsg struct{ defID string }
+	indexLoadedMsg        api.IndexData
+	definitionExportedMsg struct{ defID, path string }
 )
 
 func fetchIndex(c DataClient) tea.Cmd {

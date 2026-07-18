@@ -16,10 +16,10 @@ type TokenUsage struct {
 	CacheWrites  int `json:"cacheCreationInputTokens,omitempty"`
 }
 
-// QualityTraceRecord is the bounded trace summary included in a quality detail
+// InspectTraceRecord is the bounded trace summary included in an Inspect detail
 // response. Normal inspection truth lives in ObservabilityRunDetail; raw graph
 // access is reserved for explicit export/debug flows.
-type QualityTraceRecord struct {
+type InspectTraceRecord struct {
 	TraceID    string          `json:"traceId"`
 	PromptID   *string         `json:"promptId,omitempty"`
 	StartedAt  int64           `json:"startedAt"`
@@ -168,70 +168,67 @@ func (e *CorrelatedEvent) GetInt(key string) (int, bool) {
 
 // Stats holds aggregate statistics across all traces.
 type Stats struct {
-	TotalExecutions          int            `json:"totalExecutions"`
-	SuccessCount             int            `json:"successCount"`
-	ErrorCount               int            `json:"errorCount"`
-	RunningCount             int            `json:"runningCount"`
-	AvgDurationMs            float64        `json:"avgDurationMs"`
-	TotalCost                float64        `json:"totalCost"`
-	AvgCost                  float64        `json:"avgCost"`
-	TotalTokens              int            `json:"totalTokens"`
-	ErrorRate                float64        `json:"errorRate"`
-	MemoryReadCount          int            `json:"memoryReadCount"`
-	MemoryWriteCount         int            `json:"memoryWriteCount"`
-	CompactionCount          int            `json:"compactionCount"`
-	BudgetLevel              *string        `json:"budgetLevel"`
-	JudgeAvgScore            *float64       `json:"judgeAvgScore"`
-	AvgTtftMs                *float64       `json:"avgTtftMs"`
-	AvgThroughput            *float64       `json:"avgThroughput"`
-	StreamingTraceCount      int            `json:"streamingTraceCount"`
-	HandoffCount             int            `json:"handoffCount"`
-	BlackboardUpdateCount    int            `json:"blackboardUpdateCount"`
-	DelegateCount            int            `json:"delegateCount"`
-	ToolExecutionCount       int            `json:"toolExecutionCount"`
-	ToolApprovalRequestCount int            `json:"toolApprovalRequestCount"`
-	ToolApprovalDeniedCount  int            `json:"toolApprovalDeniedCount"`
-	ToolErrorCount           int            `json:"toolErrorCount"`
-	ToolTokenSavingsEstimate int            `json:"toolTokenSavingsEstimate"`
-	SecurityWarningCount     int            `json:"securityWarningCount"`
-	ContextCacheHitCount     int            `json:"contextCacheHitCount"`
-	ContextCacheMissCount    int            `json:"contextCacheMissCount"`
-	ContextCacheHitRate      *float64       `json:"contextCacheHitRate"`
-	SemanticCacheHitCount    int            `json:"semanticCacheHitCount"`
-	SemanticCacheMissCount   int            `json:"semanticCacheMissCount"`
-	SemanticCacheWriteCount  int            `json:"semanticCacheWriteCount"`
-	SemanticCacheHitRate     *float64       `json:"semanticCacheHitRate"`
-	EmbeddingCallCount       int            `json:"embeddingCallCount"`
-	TotalEmbeddingTexts      int            `json:"totalEmbeddingTexts"`
-	AvgEmbeddingDurationMs   *float64       `json:"avgEmbeddingDurationMs"`
-	TotalEmbeddingTokens     int            `json:"totalEmbeddingTokens"`
-	TotalEmbeddingCost       float64        `json:"totalEmbeddingCost"`
-	EmbeddingCacheHitCount   int            `json:"embeddingCacheHitCount"`
-	EmbeddingCacheMissCount  int            `json:"embeddingCacheMissCount"`
-	EmbeddingRetryCount      int            `json:"embeddingRetryCount"`
-	EmbeddingTruncatedCount  int            `json:"embeddingTruncatedCount"`
-	EmbeddingRateLimitWaitMs float64        `json:"embeddingRateLimitWaitMs"`
-	RetrievalCallCount       int            `json:"retrievalCallCount"`
-	RetrievalErrorCount      int            `json:"retrievalErrorCount"`
-	AvgRetrievalDurationMs   *float64       `json:"avgRetrievalDurationMs"`
-	TotalRetrievedHits       int            `json:"totalRetrievedHits"`
-	RetrievalStageCount      int            `json:"retrievalStageCount"`
-	RetrievalStageErrorCount int            `json:"retrievalStageErrorCount"`
-	WorkspaceOperationCount  int            `json:"workspaceOperationCount"`
-	WorkspaceErrorCount      int            `json:"workspaceErrorCount"`
-	RagEvalRunCount          int            `json:"ragEvalRunCount"`
-	RagEvalFailedCaseCount   int            `json:"ragEvalFailedCaseCount"`
-	RagEvalFailureCounts     map[string]int `json:"ragEvalFailureCounts"`
-	IndexOperationCount      int            `json:"indexOperationCount"`
-	IndexErrorCount          int            `json:"indexErrorCount"`
-	AvgIndexDurationMs       *float64       `json:"avgIndexDurationMs"`
-	TotalIndexedSources      int            `json:"totalIndexedSources"`
-	TotalIndexedChunks       int            `json:"totalIndexedChunks"`
-	IngestParseCount         int            `json:"ingestParseCount"`
-	IngestErrorCount         int            `json:"ingestErrorCount"`
-	AvgIngestDurationMs      *float64       `json:"avgIngestDurationMs"`
-	TotalIngestParts         int            `json:"totalIngestParts"`
-	TotalIngestWarnings      int            `json:"totalIngestWarnings"`
+	TotalExecutions          int      `json:"totalExecutions"`
+	SuccessCount             int      `json:"successCount"`
+	ErrorCount               int      `json:"errorCount"`
+	RunningCount             int      `json:"runningCount"`
+	AvgDurationMs            float64  `json:"avgDurationMs"`
+	TotalCost                float64  `json:"totalCost"`
+	AvgCost                  float64  `json:"avgCost"`
+	TotalTokens              int      `json:"totalTokens"`
+	ErrorRate                float64  `json:"errorRate"`
+	MemoryReadCount          int      `json:"memoryReadCount"`
+	MemoryWriteCount         int      `json:"memoryWriteCount"`
+	CompactionCount          int      `json:"compactionCount"`
+	BudgetLevel              *string  `json:"budgetLevel"`
+	JudgeAvgScore            *float64 `json:"judgeAvgScore"`
+	AvgTtftMs                *float64 `json:"avgTtftMs"`
+	AvgThroughput            *float64 `json:"avgThroughput"`
+	StreamingTraceCount      int      `json:"streamingTraceCount"`
+	HandoffCount             int      `json:"handoffCount"`
+	BlackboardUpdateCount    int      `json:"blackboardUpdateCount"`
+	DelegateCount            int      `json:"delegateCount"`
+	ToolExecutionCount       int      `json:"toolExecutionCount"`
+	ToolApprovalRequestCount int      `json:"toolApprovalRequestCount"`
+	ToolApprovalDeniedCount  int      `json:"toolApprovalDeniedCount"`
+	ToolErrorCount           int      `json:"toolErrorCount"`
+	ToolTokenSavingsEstimate int      `json:"toolTokenSavingsEstimate"`
+	SecurityWarningCount     int      `json:"securityWarningCount"`
+	ContextCacheHitCount     int      `json:"contextCacheHitCount"`
+	ContextCacheMissCount    int      `json:"contextCacheMissCount"`
+	ContextCacheHitRate      *float64 `json:"contextCacheHitRate"`
+	SemanticCacheHitCount    int      `json:"semanticCacheHitCount"`
+	SemanticCacheMissCount   int      `json:"semanticCacheMissCount"`
+	SemanticCacheWriteCount  int      `json:"semanticCacheWriteCount"`
+	SemanticCacheHitRate     *float64 `json:"semanticCacheHitRate"`
+	EmbeddingCallCount       int      `json:"embeddingCallCount"`
+	TotalEmbeddingTexts      int      `json:"totalEmbeddingTexts"`
+	AvgEmbeddingDurationMs   *float64 `json:"avgEmbeddingDurationMs"`
+	TotalEmbeddingTokens     int      `json:"totalEmbeddingTokens"`
+	TotalEmbeddingCost       float64  `json:"totalEmbeddingCost"`
+	EmbeddingCacheHitCount   int      `json:"embeddingCacheHitCount"`
+	EmbeddingCacheMissCount  int      `json:"embeddingCacheMissCount"`
+	EmbeddingRetryCount      int      `json:"embeddingRetryCount"`
+	EmbeddingTruncatedCount  int      `json:"embeddingTruncatedCount"`
+	EmbeddingRateLimitWaitMs float64  `json:"embeddingRateLimitWaitMs"`
+	RetrievalCallCount       int      `json:"retrievalCallCount"`
+	RetrievalErrorCount      int      `json:"retrievalErrorCount"`
+	AvgRetrievalDurationMs   *float64 `json:"avgRetrievalDurationMs"`
+	TotalRetrievedHits       int      `json:"totalRetrievedHits"`
+	RetrievalStageCount      int      `json:"retrievalStageCount"`
+	RetrievalStageErrorCount int      `json:"retrievalStageErrorCount"`
+	WorkspaceOperationCount  int      `json:"workspaceOperationCount"`
+	WorkspaceErrorCount      int      `json:"workspaceErrorCount"`
+	IndexOperationCount      int      `json:"indexOperationCount"`
+	IndexErrorCount          int      `json:"indexErrorCount"`
+	AvgIndexDurationMs       *float64 `json:"avgIndexDurationMs"`
+	TotalIndexedSources      int      `json:"totalIndexedSources"`
+	TotalIndexedChunks       int      `json:"totalIndexedChunks"`
+	IngestParseCount         int      `json:"ingestParseCount"`
+	IngestErrorCount         int      `json:"ingestErrorCount"`
+	AvgIngestDurationMs      *float64 `json:"avgIngestDurationMs"`
+	TotalIngestParts         int      `json:"totalIngestParts"`
+	TotalIngestWarnings      int      `json:"totalIngestWarnings"`
 }
 
 // CompositionKindStats holds per-kind composition metrics.
@@ -262,150 +259,36 @@ type CompositionStats struct {
 	Swarm  *SwarmAnalytics                 `json:"swarm"`
 }
 
-// EvalCaseData holds the result of a single eval case execution.
-type EvalCaseData struct {
-	CaseName        string                 `json:"caseName"`
-	ModelID         string                 `json:"modelId"`
-	Passed          bool                   `json:"passed"`
-	DurationMs      float64                `json:"durationMs"`
-	Error           *string                `json:"error,omitempty"`
-	Usage           *TokenUsage            `json:"usage,omitempty"`
-	Cost            *float64               `json:"cost,omitempty"`
-	Scores          map[string]ScoreResult `json:"scores,omitempty"`
-	FailureCategory *string                `json:"failureCategory,omitempty"`
+// InspectOverviewRecord is the Inspect dashboard projection for observability
+// runs and derived insight tallies.
+type InspectOverviewRecord struct {
+	Tag                       string              `json:"_tag"`
+	RunCount                  int                 `json:"runCount"`
+	SkippedRecords            int                 `json:"skippedRecords,omitempty"`
+	InsightCount              int                 `json:"insightCount"`
+	PassRate                  *float64            `json:"passRate,omitempty"`
+	MeanScore                 *float64            `json:"meanScore,omitempty"`
+	TotalCost                 float64             `json:"totalCost"`
+	P50LatencyMs              *float64            `json:"p50LatencyMs,omitempty"`
+	P95LatencyMs              *float64            `json:"p95LatencyMs,omitempty"`
+	CostPer100Runs            *float64            `json:"costPer100Runs,omitempty"`
+	PassRateHistory           []float64           `json:"passRateHistory"`
+	OpenInsightsHistory       []int               `json:"openInsightsHistory"`
+	PassRateSpark             []float64           `json:"passRateSpark"`
+	CostSpark                 []float64           `json:"costSpark"`
+	LatencySpark              []float64           `json:"latencySpark"`
+	OpenInsightSeverityCounts map[string]int      `json:"openInsightSeverityCounts,omitempty"`
+	RunTabCounts              InspectRunTabCounts `json:"runTabCounts"`
+	RecentRuns                []InspectRunRecord  `json:"recentRuns,omitempty"`
 }
 
-// ScoreResult holds a numeric score and optional reasoning from a judge eval.
-type ScoreResult struct {
-	Score     float64 `json:"score"`
-	Reasoning *string `json:"reasoning,omitempty"`
+type InspectRunTabCounts struct {
+	All      int `json:"all"`
+	Live     int `json:"live"`
+	Failures int `json:"failures"`
 }
 
-// EvalRun represents a complete eval run with its cases and summary.
-type EvalRun struct {
-	EvalID         string         `json:"evalId"`
-	PromptID       *string        `json:"promptId"`
-	StartedAt      int64          `json:"startedAt"`
-	Models         []string       `json:"models"`
-	CaseNames      []string       `json:"caseNames"`
-	TotalCases     int            `json:"totalCases"`
-	CompletedCases []EvalCaseData `json:"completedCases"`
-	Status         string         `json:"status"`
-	DurationMs     *float64       `json:"durationMs,omitempty"`
-	Summary        *EvalSummary   `json:"summary,omitempty"`
-}
-
-// EvalSummary aggregates pass/fail counts for an eval run.
-type EvalSummary struct {
-	Total   int                     `json:"total"`
-	Passed  int                     `json:"passed"`
-	Failed  int                     `json:"failed"`
-	ByModel map[string]ModelSummary `json:"byModel"`
-}
-
-type QualityExperimentRecord struct {
-	Tag       string `json:"_tag"`
-	ID        string `json:"id"`
-	QualityID string `json:"qualityId"`
-	Suite     struct {
-		ID        string `json:"id"`
-		Name      string `json:"name,omitempty"`
-		Source    any    `json:"source,omitempty"`
-		Path      string `json:"path,omitempty"`
-		CaseCount int    `json:"caseCount"`
-	} `json:"suite"`
-	StartedAt string `json:"startedAt"`
-	EndedAt   string `json:"endedAt"`
-	Status    string `json:"status"`
-	Summary   struct {
-		Total   int `json:"total"`
-		Passed  int `json:"passed"`
-		Failed  int `json:"failed"`
-		Errored int `json:"errored"`
-	} `json:"summary"`
-	Variants       []QualityExperimentVariant          `json:"variants"`
-	VariantConfigs map[string]QualityVariantConfigDiff `json:"variantConfigs,omitempty"`
-	Progress       *QualityExperimentProgress          `json:"progress,omitempty"`
-	PrimaryScore   string                              `json:"primaryScore,omitempty"`
-}
-
-type QualityExperimentVariant struct {
-	ID                    string   `json:"id"`
-	TargetID              string   `json:"targetId"`
-	DefinitionFingerprint string   `json:"definitionFingerprint,omitempty"`
-	Label                 string   `json:"label,omitempty"`
-	PassRate              *float64 `json:"passRate,omitempty"`
-	MeanScore             *float64 `json:"meanScore,omitempty"`
-	TokensAvg             *float64 `json:"tokensAvg,omitempty"`
-	LatencyP95Ms          *float64 `json:"latencyP95Ms,omitempty"`
-	CostTotal             *float64 `json:"costTotal,omitempty"`
-	IsBaseline            bool     `json:"isBaseline,omitempty"`
-	IsWinner              bool     `json:"isWinner,omitempty"`
-	BaselineDeltaPassPts  *float64 `json:"baselineDeltaPassPts,omitempty"`
-}
-
-type QualityVariantConfigDiff struct {
-	VsBaselineVariantID string           `json:"vsBaselineVariantId"`
-	Lines               []ConfigDiffLine `json:"lines"`
-}
-
-type ConfigDiffLine struct {
-	Op   string `json:"op"`
-	Text string `json:"text"`
-	Note string `json:"note,omitempty"`
-}
-
-type QualityExperimentProgress struct {
-	CasesDone      int      `json:"casesDone"`
-	CasesTotal     int      `json:"casesTotal"`
-	VariantsTotal  int      `json:"variantsTotal"`
-	ProviderCalls  int      `json:"providerCalls"`
-	EstRemainingMs *int64   `json:"estRemainingMs,omitempty"`
-	Seed           *int64   `json:"seed,omitempty"`
-	Temperature    *float64 `json:"temperature,omitempty"`
-}
-
-// QualityOverviewRecord is the workbench dashboard projection: counts from
-// the spec-02 records (experiments/baselines/cassettes), KPIs and sparks
-// from observability runs, and derived insight tallies.
-type QualityOverviewRecord struct {
-	Tag                         string              `json:"_tag"`
-	RunCount                    int                 `json:"runCount"`
-	ExperimentCount             int                 `json:"experimentCount"`
-	BaselineCount               int                 `json:"baselineCount"`
-	SkippedRecords              int                 `json:"skippedRecords,omitempty"`
-	FeedbackCount               int                 `json:"feedbackCount"`
-	FeedbackNeedingReviewCount  int                 `json:"feedbackNeedingReviewCount"`
-	CassetteCount               int                 `json:"cassetteCount"`
-	StaleCassetteCount          int                 `json:"staleCassetteCount"`
-	InsightCount                int                 `json:"insightCount"`
-	LatestExperimentID          string              `json:"latestExperimentId,omitempty"`
-	LatestExperimentPassRate    *float64            `json:"latestExperimentPassRate,omitempty"`
-	LatestExperimentCompletedAt string              `json:"latestExperimentCompletedAt,omitempty"`
-	PassRate                    *float64            `json:"passRate,omitempty"`
-	MeanScore                   *float64            `json:"meanScore,omitempty"`
-	TotalCost                   float64             `json:"totalCost"`
-	P50LatencyMs                *float64            `json:"p50LatencyMs,omitempty"`
-	P95LatencyMs                *float64            `json:"p95LatencyMs,omitempty"`
-	CostPer100Runs              *float64            `json:"costPer100Runs,omitempty"`
-	PassRateHistory             []float64           `json:"passRateHistory"`
-	OpenInsightsHistory         []int               `json:"openInsightsHistory"`
-	PassRateSpark               []float64           `json:"passRateSpark"`
-	CostSpark                   []float64           `json:"costSpark"`
-	LatencySpark                []float64           `json:"latencySpark"`
-	OpenInsightSeverityCounts   map[string]int      `json:"openInsightSeverityCounts,omitempty"`
-	RunTabCounts                QualityRunTabCounts `json:"runTabCounts"`
-	RecentRuns                  []QualityRunRecord  `json:"recentRuns,omitempty"`
-}
-
-type QualityRunTabCounts struct {
-	All         int `json:"all"`
-	Live        int `json:"live"`
-	Failures    int `json:"failures"`
-	HasFeedback int `json:"hasFeedback"`
-}
-
-type QualityEvent struct {
+type InspectEvent struct {
 	Tag       string          `json:"_tag"`
 	ID        string          `json:"id"`
 	Timestamp int64           `json:"timestamp"`
@@ -416,7 +299,7 @@ type QualityEvent struct {
 	Payload   json.RawMessage `json:"payload,omitempty"`
 }
 
-type QualityActivityEvent struct {
+type InspectActivityEvent struct {
 	Tag       string `json:"_tag"`
 	Timestamp int64  `json:"timestamp"`
 	Kind      string `json:"kind"`
@@ -448,7 +331,7 @@ type DevtoolsContext struct {
 	Version string `json:"version"`
 }
 
-type QualityRunRecord struct {
+type InspectRunRecord struct {
 	Tag           string         `json:"_tag"`
 	TraceID       string         `json:"traceId"`
 	TargetID      string         `json:"targetId,omitempty"`
@@ -483,42 +366,37 @@ type QualityRunRecord struct {
 	// run-grouping; that's purely structural (parent / flow / time-window
 	// overlap).
 	SessionID             string   `json:"sessionId,omitempty"`
-	FeedbackCount         int      `json:"feedbackCount,omitempty"`
-	FeedbackIDs           []string `json:"feedbackIds"`
-	ExperimentIDs         []string `json:"experimentIds"`
-	CassetteStatus        string   `json:"cassetteStatus,omitempty"`
-	CassettePaths         []string `json:"cassettePaths,omitempty"`
 	DiagnosticCount       int      `json:"diagnosticsCount,omitempty"`
 	DiagnosticMaxSeverity string   `json:"diagnosticsMaxSeverity,omitempty"`
 	DiagnosticCodes       []string `json:"diagnosticCodes,omitempty"`
 }
 
-type QualityRunDetailRecord struct {
+type InspectRunDetailRecord struct {
 	Tag       string                     `json:"_tag"`
-	Run       QualityRunRecord           `json:"run"`
-	Trace     QualityTraceRecord         `json:"trace"`
+	Run       InspectRunRecord           `json:"run"`
+	Trace     InspectTraceRecord         `json:"trace"`
 	Events    []CorrelatedEvent          `json:"events"`
-	Spans     []QualityRunSpan           `json:"spans"`
-	Narrative []QualityRunNarrativeEvent `json:"narrative"`
+	Spans     []InspectRunSpan           `json:"spans"`
+	Narrative []InspectRunNarrativeEvent `json:"narrative"`
 }
 
-type QualityDeleteRunsRequest struct {
+type InspectDeleteRunsRequest struct {
 	TraceIDs []string `json:"traceIds"`
 }
 
-type QualityDeleteRunsRecord struct {
+type InspectDeleteRunsRecord struct {
 	Tag             string   `json:"_tag"`
 	TraceIDs        []string `json:"traceIds"`
 	DeletedTraceIDs []string `json:"deletedTraceIds"`
 	MissingTraceIDs []string `json:"missingTraceIds"`
 }
 
-// QualityRunSpan is one node in a Run's execution tree. The Primitive
+// InspectRunSpan is one node in a Run's execution tree. The Primitive
 // field is a closed taxonomy mapping to a @use-crux/core primitive so the UI
 // can pick a color/glyph/attributes-layout without reverse-engineering
 // the EventType string. CompositionType is set only when Primitive is
 // "composition" (the kind: pipeline | parallel | consensus | swarm).
-type QualityRunSpan struct {
+type InspectRunSpan struct {
 	ID                string   `json:"id"`
 	ParentID          string   `json:"parentId,omitempty"`
 	Kind              string   `json:"kind"`
@@ -556,14 +434,14 @@ type QualityRunSpan struct {
 	// Timings carries optional sub-event timing useful for replay and
 	// stream visualizations. Populated when the underlying primitive
 	// records it (currently: streaming generations).
-	Timings          *QualitySpanTimings `json:"timings,omitempty"`
+	Timings          *InspectSpanTimings `json:"timings,omitempty"`
 	LinkedInsightIDs []string            `json:"linkedInsightIds,omitempty"`
 }
 
-// QualitySpanTimings holds replay-quality timing breakdowns that go
+// InspectSpanTimings holds detailed timing breakdowns that go
 // beyond a single start/end pair. All fields are optional; absent means
 // the primitive doesn't record that signal.
-type QualitySpanTimings struct {
+type InspectSpanTimings struct {
 	// TTFTMs is the time-to-first-token for streaming generations.
 	TTFTMs *float64 `json:"ttftMs,omitempty"`
 	// ChunksReceived is the count of streamed chunks observed.
@@ -579,11 +457,11 @@ type QualitySpanTimings struct {
 	SelfMs *float64 `json:"selfMs,omitempty"`
 }
 
-// QualitySpanPrimitive enumerates the canonical primitives that can
+// InspectSpanPrimitive enumerates the canonical primitives that can
 // appear in a Run's span tree. Frontends should treat anything outside
 // this set as "other".
 //
-// Keep this list in lock-step with internal/quality/quality_records.go's
+// Keep this list in lock-step with internal/inspect primitive classification
 // classifyPrimitive() and with packages/devtools/ui/src/types.ts.
 const (
 	SpanPrimitiveRun                  = "run"
@@ -637,13 +515,12 @@ const (
 	SpanPrimitiveCostRecord           = "cost.record"
 	SpanPrimitiveFeedbackRecord       = "feedback.record"
 	SpanPrimitiveCustomOperation      = "custom.operation"
-	// Short aliases kept for local Quality filters and older local fixtures.
+	// Compact display aliases used by the TUI.
 	SpanPrimitiveTrace          = "trace"           // root LLM/agent invocation
 	SpanPrimitiveGeneration     = "generation"      // LLM call (leaf)
 	SpanPrimitiveTool           = "tool"            // tool invocation
 	SpanPrimitiveFlow           = "flow"            // runtime-flow boundary
 	SpanPrimitiveFlowStep       = "flow.step"       // step inside a runtime-flow
-	SpanPrimitiveEvalFlow       = "eval.flow"       // eval flow (flow:start/end)
 	SpanPrimitivePipeline       = "pipeline"        // composition: pipeline
 	SpanPrimitiveParallel       = "parallel"        // composition: parallel
 	SpanPrimitiveConsensus      = "consensus"       // composition: consensus
@@ -671,7 +548,7 @@ const (
 	SpanPrimitiveOther          = "other"           // catch-all
 )
 
-type QualityRunNarrativeEvent struct {
+type InspectRunNarrativeEvent struct {
 	ID        string         `json:"id"`
 	Kind      string         `json:"kind"`
 	Label     string         `json:"label"`
@@ -680,45 +557,7 @@ type QualityRunNarrativeEvent struct {
 	Data      map[string]any `json:"data,omitempty"`
 }
 
-type QualitySuiteRecord struct {
-	Tag              string             `json:"_tag"`
-	SuiteID          string             `json:"suiteId"`
-	Name             string             `json:"name,omitempty"`
-	Version          string             `json:"version,omitempty"`
-	Source           string             `json:"source,omitempty"`
-	Path             string             `json:"path,omitempty"`
-	CaseCount        int                `json:"caseCount"`
-	Tags             []string           `json:"tags,omitempty"`
-	Scorers          []string           `json:"scorers,omitempty"`
-	LastExperimentID string             `json:"lastExperimentId,omitempty"`
-	LastRunAt        string             `json:"lastRunAt,omitempty"`
-	LastPassRate     *float64           `json:"lastPassRate,omitempty"`
-	State            string             `json:"state"`
-	Cases            []QualitySuiteCase `json:"cases"`
-}
-
-type QualitySuiteCase struct {
-	CaseID              string                  `json:"caseId"`
-	Name                string                  `json:"name,omitempty"`
-	Input               any                     `json:"input,omitempty"`
-	Expected            any                     `json:"expected,omitempty"`
-	Tags                []string                `json:"tags,omitempty"`
-	Metadata            map[string]any          `json:"metadata,omitempty"`
-	Origin              any                     `json:"origin,omitempty"`
-	LastRunStatus       string                  `json:"lastRunStatus,omitempty"`
-	LastRunExperimentID string                  `json:"lastRunExperimentId,omitempty"`
-	LastRunAt           string                  `json:"lastRunAt,omitempty"`
-	Assertions          []QualitySuiteAssertion `json:"assertions,omitempty"`
-	FeedbackRating      string                  `json:"feedbackRating,omitempty"`
-}
-
-type QualitySuiteAssertion struct {
-	Op       string `json:"op"`
-	Arg      string `json:"arg"`
-	LastPass *bool  `json:"lastPass,omitempty"`
-}
-
-type QualityInsightRecord struct {
+type InspectInsightRecord struct {
 	Tag                  string                     `json:"_tag"`
 	InsightID            string                     `json:"insightId"`
 	Title                string                     `json:"title"`
@@ -727,17 +566,15 @@ type QualityInsightRecord struct {
 	Summary              string                     `json:"summary"`
 	TargetID             string                     `json:"targetId,omitempty"`
 	LinkedTraceIDs       []string                   `json:"linkedTraceIds,omitempty"`
-	LinkedExperimentIDs  []string                   `json:"linkedExperimentIds,omitempty"`
 	LinkedCaseIDs        []string                   `json:"linkedCaseIds,omitempty"`
-	LinkedCassettePaths  []string                   `json:"linkedCassettePaths,omitempty"`
 	LinkedDefinitionIDs  []string                   `json:"linkedDefinitionIds,omitempty"`
 	LinkedSources        []SourceLoc                `json:"linkedSources,omitempty"`
 	SuspectedCause       string                     `json:"suspectedCause,omitempty"`
 	ProposedFix          string                     `json:"proposedFix,omitempty"`
 	OccurrenceCount      int                        `json:"occurrenceCount"`
 	Trend                []float64                  `json:"trend"`
-	ProposedFixConfig    *QualityInsightFixConfig   `json:"proposedFixConfig,omitempty"`
-	DetailStats          *QualityInsightDetailStats `json:"detailStats,omitempty"`
+	ProposedFixConfig    *InspectInsightFixConfig   `json:"proposedFixConfig,omitempty"`
+	DetailStats          *InspectInsightDetailStats `json:"detailStats,omitempty"`
 	Status               string                     `json:"status"`
 	UpdatedAt            string                     `json:"updatedAt,omitempty"`
 	ResolvedAt           string                     `json:"resolvedAt,omitempty"`
@@ -746,12 +583,12 @@ type QualityInsightRecord struct {
 	PreviousResolutionAt string                     `json:"previousResolutionAt,omitempty"`
 }
 
-type QualityInsightFixConfig struct {
+type InspectInsightFixConfig struct {
 	YAML       string   `json:"yaml,omitempty"`
 	ConfigKeys []string `json:"configKeys,omitempty"`
 }
 
-type QualityInsightDetailStats struct {
+type InspectInsightDetailStats struct {
 	TokensPerRun           float64   `json:"tokensPerRun"`
 	TokensSpark            []float64 `json:"tokensSpark"`
 	TokensDeltaVsBaseline  string    `json:"tokensDeltaVsBaseline"`
@@ -763,7 +600,7 @@ type QualityInsightDetailStats struct {
 	CostDeltaVsBaseline    string    `json:"costDeltaVsBaseline"`
 }
 
-type QualityInsightStatusRecord struct {
+type InspectInsightStatusRecord struct {
 	Tag                 string  `json:"_tag"`
 	InsightID           string  `json:"insightId"`
 	Status              string  `json:"status"`
@@ -773,31 +610,31 @@ type QualityInsightStatusRecord struct {
 	ResolvedOccurrences int     `json:"resolvedOccurrences,omitempty"`
 }
 
-type QualityInsightSilencePattern struct {
+type InspectInsightSilencePattern struct {
 	Title    string `json:"title"`
 	TargetID string `json:"targetId,omitempty"`
 }
 
-type QualityInsightSilenceRequest struct {
+type InspectInsightSilenceRequest struct {
 	InsightID *string                       `json:"insightId,omitempty"`
-	Pattern   *QualityInsightSilencePattern `json:"pattern,omitempty"`
+	Pattern   *InspectInsightSilencePattern `json:"pattern,omitempty"`
 	Note      *string                       `json:"note,omitempty"`
 }
 
-type QualityInsightSilenceRecord struct {
+type InspectInsightSilenceRecord struct {
 	Tag       string                       `json:"_tag"`
 	ID        string                       `json:"id"`
-	Pattern   QualityInsightSilencePattern `json:"pattern"`
+	Pattern   InspectInsightSilencePattern `json:"pattern"`
 	Note      *string                      `json:"note,omitempty"`
 	CreatedAt string                       `json:"createdAt"`
 	DeletedAt string                       `json:"deletedAt,omitempty"`
 }
 
-// QualityRunsOptions parameterizes `/api/quality/runs`. Every field is
+// InspectRunsOptions parameterizes `/api/inspect/runs`. Every field is
 // optional — zero values mean "no filter / default". Mirrored in the
 // HTTP layer's query-string parser so both the in-process DirectClient
 // and remote HTTP consumers see the same surface.
-type QualityRunsOptions struct {
+type InspectRunsOptions struct {
 	// Status filters on run-level aggregate status. Multiple values are
 	// OR'd ("running,error" returns both).
 	Status []string `json:"status,omitempty"`
@@ -810,9 +647,6 @@ type QualityRunsOptions struct {
 	// Model filters by the model surfaced on the run row. Multiple
 	// values OR'd.
 	Model []string `json:"model,omitempty"`
-	// Has filters by linked quality state such as "feedback" or
-	// "experiment". Multiple values OR'd.
-	Has []string `json:"has,omitempty"`
 	// Primitive filters by the root span's primitive (generation, flow,
 	// pipeline, swarm, …). Multiple values OR'd.
 	Primitive []string `json:"primitive,omitempty"`
@@ -838,221 +672,10 @@ type QualityRunsOptions struct {
 	Offset int `json:"offset,omitempty"`
 }
 
-// QualityInsightStatusRequest is the body of `POST /api/quality/insights/{id}/status`.
-type QualityInsightStatusRequest struct {
+// InspectInsightStatusRequest is the body of `POST /api/inspect/insights/{id}/status`.
+type InspectInsightStatusRequest struct {
 	Status string  `json:"status"`
 	Note   *string `json:"note,omitempty"`
-}
-
-// QualityComparisonSideRequest names one side (baseline/candidate) of a
-// comparison request.
-type QualityComparisonSideRequest struct {
-	Experiment string  `json:"experiment"`
-	VariantID  *string `json:"variantId,omitempty"`
-	Label      *string `json:"label,omitempty"`
-}
-
-// QualityComparisonPostRequest is the body of `POST /api/quality/comparisons`.
-type QualityComparisonPostRequest struct {
-	ID        string                       `json:"id,omitempty"`
-	Baseline  QualityComparisonSideRequest `json:"baseline"`
-	Candidate QualityComparisonSideRequest `json:"candidate"`
-}
-
-// QualityBaselinePostRequest is the body of `POST /api/quality/baselines`.
-type QualityBaselinePostRequest struct {
-	ID         string  `json:"id"`
-	Experiment string  `json:"experiment"`
-	VariantID  *string `json:"variantId,omitempty"`
-	Label      *string `json:"label,omitempty"`
-}
-
-// QualityFeedbackAnnotationPostRequest is the body of `POST /api/quality/feedback/annotations`.
-type QualityFeedbackAnnotationPostRequest struct {
-	FeedbackID string                 `json:"feedbackId"`
-	Status     string                 `json:"status,omitempty"`
-	Note       *string                `json:"note,omitempty"`
-	Expected   map[string]interface{} `json:"expected,omitempty"`
-	Tags       []string               `json:"tags,omitempty"`
-	Metadata   map[string]interface{} `json:"metadata,omitempty"`
-}
-
-type QualityComparisonSummary struct {
-	ExperimentID  string             `json:"experimentId"`
-	VariantID     *string            `json:"variantId,omitempty"`
-	Label         *string            `json:"label,omitempty"`
-	Total         int                `json:"total"`
-	Passed        int                `json:"passed"`
-	Failed        int                `json:"failed"`
-	Errored       int                `json:"errored"`
-	PassRate      float64            `json:"passRate"`
-	AvgDurationMs float64            `json:"avgDurationMs"`
-	NumericScores map[string]float64 `json:"numericScores"`
-}
-
-type QualityGateSummary struct {
-	Status  string `json:"status"`
-	Results []struct {
-		Name     string  `json:"name"`
-		Passed   bool    `json:"passed"`
-		Actual   float64 `json:"actual"`
-		Expected float64 `json:"expected"`
-		Operator string  `json:"operator"`
-	} `json:"results"`
-}
-
-type QualityComparisonRecord struct {
-	Tag        string                   `json:"_tag"`
-	ID         string                   `json:"id"`
-	QualityID  string                   `json:"qualityId"`
-	ComparedAt string                   `json:"comparedAt"`
-	Baseline   QualityComparisonSummary `json:"baseline"`
-	Candidate  QualityComparisonSummary `json:"candidate"`
-	Metrics    struct {
-		PassRateDelta      float64 `json:"passRateDelta"`
-		AvgDurationMsDelta float64 `json:"avgDurationMsDelta"`
-	} `json:"metrics"`
-	CaseDeltas []QualityComparisonCaseDelta `json:"caseDeltas,omitempty"`
-	Gates      *QualityGateSummary          `json:"gates,omitempty"`
-	Status     string                       `json:"status"`
-}
-
-type QualityComparisonCaseDelta struct {
-	CaseID       string                     `json:"caseId"`
-	CaseName     string                     `json:"caseName,omitempty"`
-	Status       string                     `json:"status"`
-	Baseline     *QualityComparisonCaseSide `json:"baseline,omitempty"`
-	Candidate    *QualityComparisonCaseSide `json:"candidate,omitempty"`
-	ScoreDelta   *float64                   `json:"scoreDelta,omitempty"`
-	OutputChange string                     `json:"outputChange,omitempty"`
-}
-
-type QualityComparisonCaseSide struct {
-	TraceID       string   `json:"traceId,omitempty"`
-	Status        string   `json:"status"`
-	OutputPreview string   `json:"outputPreview,omitempty"`
-	Score         *float64 `json:"score,omitempty"`
-	DurationMs    float64  `json:"durationMs"`
-}
-
-type QualityBaselineRecord struct {
-	Tag          string                   `json:"_tag"`
-	ID           string                   `json:"id"`
-	QualityID    string                   `json:"qualityId"`
-	ExperimentID string                   `json:"experimentId"`
-	VariantID    *string                  `json:"variantId,omitempty"`
-	Label        *string                  `json:"label,omitempty"`
-	PromotedAt   string                   `json:"promotedAt"`
-	Summary      QualityComparisonSummary `json:"summary"`
-}
-
-type QualityFeedbackRecord struct {
-	Tag          string                 `json:"_tag"`
-	ID           string                 `json:"id"`
-	QualityID    string                 `json:"qualityId"`
-	CreatedAt    string                 `json:"createdAt"`
-	Status       string                 `json:"status"`
-	TraceID      *string                `json:"traceId,omitempty"`
-	ExperimentID *string                `json:"experimentId,omitempty"`
-	CaseID       *string                `json:"caseId,omitempty"`
-	Rating       *int                   `json:"rating,omitempty"`
-	Comment      *string                `json:"comment,omitempty"`
-	Expected     map[string]interface{} `json:"expected,omitempty"`
-	Tags         []string               `json:"tags,omitempty"`
-	Metadata     map[string]interface{} `json:"metadata,omitempty"`
-}
-
-type QualityFeedbackAnnotationRecord struct {
-	Tag        string                 `json:"_tag"`
-	ID         string                 `json:"id"`
-	QualityID  string                 `json:"qualityId"`
-	FeedbackID string                 `json:"feedbackId"`
-	CreatedAt  string                 `json:"createdAt"`
-	Status     string                 `json:"status,omitempty"`
-	Note       *string                `json:"note,omitempty"`
-	Expected   map[string]interface{} `json:"expected,omitempty"`
-	Tags       []string               `json:"tags,omitempty"`
-	Metadata   map[string]interface{} `json:"metadata,omitempty"`
-}
-
-type QualityFeedbackMemoryProposalRecord struct {
-	Tag        string                 `json:"_tag"`
-	ID         string                 `json:"id"`
-	QualityID  string                 `json:"qualityId"`
-	FeedbackID string                 `json:"feedbackId"`
-	CreatedAt  string                 `json:"createdAt"`
-	Status     string                 `json:"status"`
-	MemoryID   *string                `json:"memoryId,omitempty"`
-	MemoryKind *string                `json:"memoryKind,omitempty"`
-	Proposal   map[string]interface{} `json:"proposal"`
-	Reason     *string                `json:"reason,omitempty"`
-	Tags       []string               `json:"tags,omitempty"`
-	Metadata   map[string]interface{} `json:"metadata,omitempty"`
-}
-
-type QualityCassetteRecord struct {
-	Path                 string                                    `json:"path"`
-	Mode                 string                                    `json:"mode,omitempty"`
-	Status               string                                    `json:"status"`
-	Coverage             float64                                   `json:"coverage"`
-	EntryCount           int                                       `json:"entryCount"`
-	MissingCount         int                                       `json:"missingCount"`
-	MismatchCount        int                                       `json:"mismatchCount"`
-	ProviderCallsAvoided int                                       `json:"providerCallsAvoided"`
-	Boundaries           map[string]QualityCassetteBoundarySummary `json:"boundaries,omitempty"`
-	Matchers             []string                                  `json:"matchers,omitempty"`
-	Entries              []QualityCassetteEntrySummary             `json:"entries,omitempty"`
-	RecordedAt           string                                    `json:"recordedAt,omitempty"`
-}
-
-type QualityCassetteBoundarySummary struct {
-	Count      int `json:"count"`
-	Missing    int `json:"missing,omitempty"`
-	Mismatched int `json:"mismatched,omitempty"`
-}
-
-type QualityCassetteEntrySummary struct {
-	ID         string `json:"id,omitempty"`
-	CaseID     string `json:"caseId,omitempty"`
-	Kind       string `json:"kind,omitempty"`
-	TargetID   string `json:"targetId,omitempty"`
-	Provider   string `json:"provider,omitempty"`
-	Model      string `json:"model,omitempty"`
-	Status     string `json:"status"`
-	Reason     string `json:"reason,omitempty"`
-	RecordedAt string `json:"recordedAt,omitempty"`
-}
-
-type QualityCassetteIssueRecord struct {
-	Tag        string `json:"_tag"`
-	Path       string `json:"path"`
-	EntryID    string `json:"entryId,omitempty"`
-	CaseID     string `json:"caseId,omitempty"`
-	Kind       string `json:"kind,omitempty"`
-	TargetID   string `json:"targetId,omitempty"`
-	Provider   string `json:"provider,omitempty"`
-	Model      string `json:"model,omitempty"`
-	Status     string `json:"status"`
-	Reason     string `json:"reason,omitempty"`
-	RecordedAt string `json:"recordedAt"`
-}
-
-type QualityScorerRecord struct {
-	Tag        string   `json:"_tag"`
-	Name       string   `json:"name"`
-	Kind       string   `json:"kind"`
-	SuiteIDs   []string `json:"suiteIds,omitempty"`
-	RunCount   int      `json:"runCount"`
-	PassRate   *float64 `json:"passRate,omitempty"`
-	MeanScore  *float64 `json:"meanScore,omitempty"`
-	LastUsedAt string   `json:"lastUsedAt,omitempty"`
-}
-
-// ModelSummary tracks per-model pass/fail counts.
-type ModelSummary struct {
-	Total  int `json:"total"`
-	Passed int `json:"passed"`
-	Failed int `json:"failed"`
 }
 
 // IndexData holds all registered prompts, contexts, and tools.
@@ -1211,53 +834,6 @@ type ProjectDefinition struct {
 	Status        string             `json:"status,omitempty"`
 	Fingerprint   string             `json:"fingerprint,omitempty"`
 	Metadata      json.RawMessage    `json:"metadata,omitempty"`
-	Quality       *IndexQuality      `json:"quality,omitempty"`
-}
-
-type IndexQuality struct {
-	EvalIDs              []string           `json:"evalIds,omitempty"`
-	SuiteIDs             []string           `json:"suiteIds,omitempty"`
-	ExperimentIDs        []string           `json:"experimentIds,omitempty"`
-	BaselineIDs          []string           `json:"baselineIds,omitempty"`
-	ComparisonIDs        []string           `json:"comparisonIds,omitempty"`
-	FeedbackIDs          []string           `json:"feedbackIds,omitempty"`
-	CassettePaths        []string           `json:"cassettePaths,omitempty"`
-	RunIDs               []string           `json:"runIds,omitempty"`
-	TraceIDs             []string           `json:"traceIds,omitempty"`
-	AffectedEvalIDs      []string           `json:"affectedEvalIds,omitempty"`
-	AffectedSuiteIDs     []string           `json:"affectedSuiteIds,omitempty"`
-	RunCount             int                `json:"runCount,omitempty"`
-	ExperimentCount      int                `json:"experimentCount,omitempty"`
-	BaselineCount        int                `json:"baselineCount,omitempty"`
-	ComparisonCount      int                `json:"comparisonCount,omitempty"`
-	FeedbackCount        int                `json:"feedbackCount,omitempty"`
-	CassetteCount        int                `json:"cassetteCount,omitempty"`
-	CompletedRunCount    int                `json:"completedRunCount,omitempty"`
-	FailedRunCount       int                `json:"failedRunCount,omitempty"`
-	RunningRunCount      int                `json:"runningRunCount,omitempty"`
-	LastRunID            string             `json:"lastRunId,omitempty"`
-	LastRunAt            int64              `json:"lastRunAt,omitempty"`
-	LastStatus           string             `json:"lastStatus,omitempty"`
-	CaseCount            int                `json:"caseCount,omitempty"`
-	PassRate             *float64           `json:"passRate,omitempty"`
-	CurrentFingerprint   string             `json:"currentFingerprint,omitempty"`
-	BaselineFingerprint  string             `json:"baselineFingerprint,omitempty"`
-	ChangedSinceBaseline *bool              `json:"changedSinceBaseline,omitempty"`
-	Drift                *IndexQualityDrift `json:"drift,omitempty"`
-}
-
-type IndexQualityDrift struct {
-	Evals  []IndexQualityDriftRow `json:"evals"`
-	Suites []IndexQualityDriftRow `json:"suites"`
-}
-
-type IndexQualityDriftRow struct {
-	ID                   string  `json:"id"`
-	PassRate             float64 `json:"passRate"`
-	Runs                 int     `json:"runs"`
-	BaselineExperimentID string  `json:"baselineExperimentId"`
-	BaselinePassRate     float64 `json:"baselinePassRate"`
-	DriftPp              float64 `json:"driftPp"`
 }
 
 // ProjectRelation describes graph edges between authored Crux definitions.

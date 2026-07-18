@@ -22,92 +22,100 @@ This recipe builds a research pipeline: a planner produces a list of search quer
 ### `lib/research/agents.ts`
 
 ```ts
-import { agent } from '@use-crux/core/agent'
-import { prompt } from '@use-crux/core'
-import { z } from 'zod'
+import { agent } from "@use-crux/core/agent";
+import { prompt } from "@use-crux/core";
+import { z } from "zod";
 
 const PlanSchema = z.object({
   queries: z.array(z.string()).min(1).max(5),
   rationale: z.string(),
-})
+});
 
 const planner = agent({
-  id: 'planner',
+  id: "planner",
   prompt: prompt({
-    id: 'research-plan',
+    id: "research-plan",
     input: z.object({ topic: z.string() }),
     output: PlanSchema,
-    system: 'Plan research. Generate 1-5 focused search queries for the topic.',
+    system: "Plan research. Generate 1-5 focused search queries for the topic.",
     prompt: ({ input }) => `Topic: ${input.topic}`,
   }),
-})
+});
 
 const SearchResultsSchema = z.object({
-  results: z.array(z.object({
-    query: z.string(),
-    findings: z.array(z.object({
-      url: z.string(),
-      excerpt: z.string(),
-    })),
-  })),
-})
+  results: z.array(
+    z.object({
+      query: z.string(),
+      findings: z.array(
+        z.object({
+          url: z.string(),
+          excerpt: z.string(),
+        }),
+      ),
+    }),
+  ),
+});
 
 const searcher = agent({
-  id: 'searcher',
+  id: "searcher",
   prompt: prompt({
-    id: 'research-search',
+    id: "research-search",
     input: PlanSchema,
     output: SearchResultsSchema,
-    system: 'Execute the queries and return findings with sources.',
+    system: "Execute the queries and return findings with sources.",
     prompt: ({ input }) =>
-      `Run these queries:\n${input.queries.map((q, i) => `${i + 1}. ${q}`).join('\n')}`,
+      `Run these queries:\n${input.queries.map((q, i) => `${i + 1}. ${q}`).join("\n")}`,
   }),
   tools: { searchWeb: webSearchTool },
-})
+});
 
 const writer = agent({
-  id: 'writer',
+  id: "writer",
   prompt: prompt({
-    id: 'research-write',
+    id: "research-write",
     input: SearchResultsSchema,
     output: z.object({ answer: z.string(), citations: z.array(z.string()) }),
-    system: 'Write a concise answer with [n] citations referencing the findings.',
+    system:
+      "Write a concise answer with [n] citations referencing the findings.",
     prompt: ({ input }) =>
-      input.results.map((r) =>
-        `Q: ${r.query}\n${r.findings.map((f) => `- ${f.excerpt} (${f.url})`).join('\n')}`
-      ).join('\n\n'),
+      input.results
+        .map(
+          (r) =>
+            `Q: ${r.query}\n${r.findings.map((f) => `- ${f.excerpt} (${f.url})`).join("\n")}`,
+        )
+        .join("\n\n"),
   }),
-})
+});
 
-export { planner, searcher, writer }
+export { planner, searcher, writer };
 ```
 
 ### Run the pipeline
 
 ```ts
-import { createPipeline } from '@use-crux/core/agent'
-import { generate } from '@use-crux/ai'
-import { openai } from '@ai-sdk/openai'
+import { createPipeline } from "@use-crux/core/agent";
+import { generate } from "@use-crux/ai";
+import { openai } from "@ai-sdk/openai";
 
-import { planner, searcher, writer } from './agents'
+import { planner, searcher, writer } from "./agents";
 
-const pipeline = createPipeline((agent, opts) => generate(agent.prompt, opts))
+const pipeline = createPipeline((agent, opts) => generate(agent.prompt, opts));
 
 const result = await pipeline({
-  id: 'research-pipeline-pipeline-1',
-  context: { topic: 'agentic workflows in 2026' },
-  model: openai('gpt-4o'),
+  id: "research-pipeline-pipeline-1",
+  context: { topic: "agentic workflows in 2026" },
+  model: openai("gpt-4o"),
   steps: [
-    { name: 'plan', agent: planner, input: (ctx) => ({ topic: ctx.topic }) },
-    { name: 'search', agent: searcher, input: (ctx) => ctx.plan },
-    { name: 'write', agent: writer, input: (ctx) => ctx.search },
+    { name: "plan", agent: planner, input: (ctx) => ({ topic: ctx.topic }) },
+    { name: "search", agent: searcher, input: (ctx) => ctx.plan },
+    { name: "write", agent: writer, input: (ctx) => ctx.search },
   ],
-})
+});
 
-result.status       // 'completed' | 'suspended' | 'expired'
-if (result.status === 'completed') {
-  result.context    // { topic, plan, search, write }, every step's output keyed by name
-  result.finalOutput // the last step's output (write)
+result.status; // 'completed' | 'suspended' | 'expired'
+if (result.status === "completed") {
+  result.context; // { topic, plan, search, write }, every step's output keyed by name
+  result.finalOutput; // the last step's output (write)
 }
 ```
 
@@ -126,25 +134,25 @@ Slot a verifier between searcher and writer:
 
 ```ts
 const verifier = agent({
-  id: 'verifier',
+  id: "verifier",
   prompt: prompt({
     input: SearchResultsSchema,
     output: SearchResultsSchema, // same shape, drops unverified findings
     // ...
   }),
-})
+});
 
 await pipeline({
-  id: 'research-pipeline-pipeline-2',
-  context: { topic: '...' },
-  model: openai('gpt-4o'),
+  id: "research-pipeline-pipeline-2",
+  context: { topic: "..." },
+  model: openai("gpt-4o"),
   steps: [
-    { name: 'plan', agent: planner, input: (ctx) => ({ topic: ctx.topic }) },
-    { name: 'search', agent: searcher, input: (ctx) => ctx.plan },
-    { name: 'verify', agent: verifier, input: (ctx) => ctx.search },
-    { name: 'write', agent: writer, input: (ctx) => ctx.verify },
+    { name: "plan", agent: planner, input: (ctx) => ({ topic: ctx.topic }) },
+    { name: "search", agent: searcher, input: (ctx) => ctx.plan },
+    { name: "verify", agent: verifier, input: (ctx) => ctx.search },
+    { name: "write", agent: writer, input: (ctx) => ctx.verify },
   ],
-})
+});
 ```
 
 Adjacent steps share types as long as the upstream output schema matches the downstream input schema.
@@ -156,6 +164,14 @@ If the pipeline is long-running and may exceed your function timeout, wrap it in
 ## Where to next
 
 <Cards>
-  <Card title="Compositions" description="Pipeline, parallel, consensus, swarm: when to use which." href="/docs/guides/compositions" />
-  <Card title="Long-running flow" description="Make this pipeline suspendable across action boundaries." href="/docs/cookbook/workflows/long-running-flow" />
+  <Card
+    title="Compositions"
+    description="Pipeline, parallel, consensus, swarm: when to use which."
+    href="/docs/guides/compositions"
+  />
+  <Card
+    title="Long-running flow"
+    description="Make this pipeline suspendable across action boundaries."
+    href="/docs/cookbook/workflows/long-running-flow"
+  />
 </Cards>

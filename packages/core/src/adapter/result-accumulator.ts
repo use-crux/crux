@@ -16,6 +16,7 @@ import { textFromAssistantContent } from "./assistant-output";
 import type { ApprovalRequestInfo } from "./tool/approval";
 import type { RoutingReceipt } from "../routing/receipt";
 import { sumUsageWhenComplete } from "./result-usage";
+import type { CruxRunId } from "../observability";
 
 export { createStreamResult } from "./result-stream";
 export { sumUsageWhenComplete } from "./result-usage";
@@ -49,6 +50,8 @@ export interface FinalStepInfo {
 
 /** Canonical managed `generate()` result shared by provider adapters. */
 export interface GenerateResult<TRaw, TOutput = unknown> {
+  /** Authoritative Crux observability run opened for this generation. */
+  readonly runId: CruxRunId;
   /**
    * Exact ordered assistant output across all provider-call steps.
    *
@@ -104,8 +107,22 @@ export type StreamCompletion<TOutput = unknown> = Omit<
   "raw" | "_meta"
 >;
 
+/** Canonical generate envelope before orchestration stamps its run identity. */
+export type GenerateResultWithoutRunId<TRaw, TOutput = unknown> = Omit<
+  GenerateResult<TRaw, TOutput>,
+  "runId"
+>;
+
+/** Canonical stream completion before its immediate stream identity is copied. */
+export type StreamCompletionWithoutRunId<TOutput = unknown> = Omit<
+  StreamCompletion<TOutput>,
+  "runId"
+>;
+
 /** Canonical managed `stream()` result shared by provider adapters. */
 export interface StreamResult<TRawStream, TOutput = unknown> {
+  /** Authoritative Crux run, available before the first stream chunk. */
+  readonly runId: CruxRunId;
   /** Provider-neutral text delta stream. */
   readonly textStream: AsyncIterable<string>;
   /** Raw provider or SDK stream handle. */
@@ -165,7 +182,7 @@ export function createResultAccumulator() {
     /** Finalize all recorded step facts into the canonical `generate()` envelope. */
     finalize<TRaw, TOutput = unknown>(
       base: ResultEnvelopeBase<TRaw, TOutput>,
-    ): GenerateResult<TRaw, TOutput> {
+    ): GenerateResultWithoutRunId<TRaw, TOutput> {
       const usage = sumUsageWhenComplete(steps);
       const publicSteps = Object.freeze(steps.map(finalStepInfo));
       const finalStep = publicSteps.at(-1) ?? emptyStepInfo();
@@ -197,7 +214,7 @@ export function createResultAccumulator() {
     /** Finalize all recorded step facts into a canonical stream completion. */
     finalizeCompletion<TOutput = unknown>(
       base: Omit<ResultEnvelopeBase<never, TOutput>, "raw" | "_meta">,
-    ): StreamCompletion<TOutput> {
+    ): StreamCompletionWithoutRunId<TOutput> {
       const usage = sumUsageWhenComplete(steps);
       const publicSteps = Object.freeze(steps.map(finalStepInfo));
       const finalStep = publicSteps.at(-1) ?? emptyStepInfo();

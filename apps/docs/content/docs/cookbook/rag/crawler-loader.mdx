@@ -24,35 +24,35 @@ This is not meant to be a production crawler. It is meant to show the extension 
 ### `lib/rag/site-loader.ts`
 
 ```ts
-import { convert } from 'html-to-text' // any HTML-to-text library works
-import type { IngestDocument, SourceLoader } from '@use-crux/ingest'
+import { convert } from "html-to-text"; // any HTML-to-text library works
+import type { IngestDocument, SourceLoader } from "@use-crux/ingest";
 
 export function crawlSite(options: {
-  namespace: string
-  startUrl: string
-  maxPages?: number
-  fetch?: typeof fetch
+  namespace: string;
+  startUrl: string;
+  maxPages?: number;
+  fetch?: typeof fetch;
 }): SourceLoader {
-  const fetchImpl = options.fetch ?? fetch
+  const fetchImpl = options.fetch ?? fetch;
 
   return {
     async *load(): AsyncIterable<IngestDocument> {
-      const queue = [options.startUrl]
-      const seen = new Set<string>()
-      const origin = new URL(options.startUrl).origin
-      const maxPages = options.maxPages ?? 20
+      const queue = [options.startUrl];
+      const seen = new Set<string>();
+      const origin = new URL(options.startUrl).origin;
+      const maxPages = options.maxPages ?? 20;
 
       while (queue.length > 0 && seen.size < maxPages) {
-        const url = queue.shift()!
-        if (seen.has(url)) continue
-        seen.add(url)
+        const url = queue.shift()!;
+        if (seen.has(url)) continue;
+        seen.add(url);
 
-        const response = await fetchImpl(url)
-        if (!response.ok) continue
+        const response = await fetchImpl(url);
+        if (!response.ok) continue;
 
-        const html = await response.text()
-        const content = convert(html, { wordwrap: false })
-        const title = html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1]?.trim()
+        const html = await response.text();
+        const content = convert(html, { wordwrap: false });
+        const title = html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1]?.trim();
 
         yield {
           namespace: options.namespace,
@@ -61,28 +61,28 @@ export function crawlSite(options: {
           content,
           title,
           metadata: {
-            format: 'html',
+            format: "html",
           },
-        }
+        };
 
         for (const nextUrl of extractLinks(html, url, origin)) {
-          if (!seen.has(nextUrl)) queue.push(nextUrl)
+          if (!seen.has(nextUrl)) queue.push(nextUrl);
         }
       }
     },
-  }
+  };
 }
 
 function extractLinks(html: string, baseUrl: string, origin: string): string[] {
   const hrefs = [...html.matchAll(/href=["']([^"']+)["']/gi)]
     .map((match) => match[1])
-    .filter(Boolean)
+    .filter(Boolean);
 
   const urls = hrefs
     .map((href) => new URL(href, baseUrl).toString())
-    .filter((url) => url.startsWith(origin))
+    .filter((url) => url.startsWith(origin));
 
-  return [...new Set(urls)]
+  return [...new Set(urls)];
 }
 ```
 
@@ -152,6 +152,14 @@ Those are crawler concerns, not retrieval concerns.
 ## Related
 
 <Cards>
-  <Card title="Ingestion Guide" description="The built-in loader layer and its boundaries." href="/docs/guides/retrieval/ingestion" />
-  <Card title="Indexing Guide" description="How crawled pages become retrieval chunks." href="/docs/guides/retrieval/indexing" />
+  <Card
+    title="Ingestion Guide"
+    description="The built-in loader layer and its boundaries."
+    href="/docs/guides/retrieval/ingestion"
+  />
+  <Card
+    title="Indexing Guide"
+    description="How crawled pages become retrieval chunks."
+    href="/docs/guides/retrieval/indexing"
+  />
 </Cards>

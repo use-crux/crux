@@ -17,16 +17,16 @@ also required for stable local discovery and devtools joins.
 ```ts
 // Bad: missing id
 const broken = prompt({
-  system: 'You are helpful.',
+  system: "You are helpful.",
   prompt: ({ input }) => input.text,
-})
+});
 
 // Good
 const working = prompt({
-  id: 'my-prompt', // ← required
-  system: 'You are helpful.',
+  id: "my-prompt", // ← required
+  system: "You are helpful.",
   prompt: ({ input }) => input.text,
-})
+});
 ```
 
 ### `configure: duplicate prompt id "{id}"`
@@ -49,8 +49,8 @@ createPrompts({
 You called a prompt registry lookup with an id that doesn't exist.
 
 ```ts
-const crux = configure({ prompts })
-crux.get('nonexistent') // throws
+const crux = configure({ prompts });
+crux.get("nonexistent"); // throws
 ```
 
 **Fix:** Use `crux.find(id)` if the prompt might not exist: it returns `undefined` instead of throwing. Or check `crux.list()` to see registered prompts.
@@ -64,22 +64,22 @@ A prompt can use either `messages` mode (for multi-turn/few-shot) or `system` + 
 ```ts
 // Bad: both modes
 prompt({
-  id: 'broken',
-  system: 'You are helpful.', // system+prompt mode
+  id: "broken",
+  system: "You are helpful.", // system+prompt mode
   messages: ({ input }) => [
     // messages mode
-    { role: 'user', content: '...' },
+    { role: "user", content: "..." },
   ],
-})
+});
 
 // Good: pick one
 prompt({
-  id: 'multi-turn',
+  id: "multi-turn",
   messages: ({ input }) => [
-    { role: 'system', content: 'You are helpful.' },
-    { role: 'user', content: input.text },
+    { role: "system", content: "You are helpful." },
+    { role: "user", content: input.text },
   ],
-})
+});
 ```
 
 ## Input and schema errors
@@ -91,16 +91,16 @@ Two contexts in the same prompt declare the same input field name. Context input
 ```ts
 // Bad: both declare 'name'
 const ctxA = context({
-  id: 'a',
+  id: "a",
   input: z.object({ name: z.string() }),
   system: ({ input }) => input.name,
-})
+});
 const ctxB = context({
-  id: 'b',
+  id: "b",
   input: z.object({ name: z.string() }), // collision
   system: ({ input }) => input.name,
-})
-prompt({ id: 'broken', use: [ctxA, ctxB] })
+});
+prompt({ id: "broken", use: [ctxA, ctxB] });
 ```
 
 **Fix:** Rename one of the fields, or extract the shared field into a single context that both prompts use.
@@ -111,18 +111,18 @@ The input you passed to `generate()` or `.resolve()` doesn't match the merged in
 
 ```ts
 const draftPrompt = prompt({
-  id: 'greet',
+  id: "greet",
   input: z.object({ name: z.string() }),
-  system: 'Greet the user.',
+  system: "Greet the user.",
   prompt: ({ input }) => `Hello ${input.name}`,
-})
+});
 
 // Bad: missing required field
-await generate(prompt, { model, input: {} })
+await generate(prompt, { model, input: {} });
 // Error: Input validation failed: [{"code":"invalid_type","expected":"string","received":"undefined","path":["name"],...}]
 
 // Good
-await generate(prompt, { model, input: { name: 'Henri' } })
+await generate(prompt, { model, input: { name: "Henri" } });
 ```
 
 **Fix:** Check the error's `issues` array: it tells you exactly which fields are wrong and why. Common causes:
@@ -141,16 +141,16 @@ A value in the tree passed to `createPrompts()` is not a `Prompt` instance or a 
 // Bad: raw object instead of Prompt
 createPrompts({
   editor: {
-    edit: { system: 'Edit things' }, // not a Prompt
+    edit: { system: "Edit things" }, // not a Prompt
   },
-})
+});
 
 // Good
 createPrompts({
   editor: {
-    edit: prompt({ id: 'edit', system: 'Edit things', prompt: '...' }),
+    edit: prompt({ id: "edit", system: "Edit things", prompt: "..." }),
   },
-})
+});
 ```
 
 ### `createContexts: invalid value at "{path}"`
@@ -164,57 +164,42 @@ Same as above, but for `createContexts()`. Every leaf must be a `Context` instan
 You called `judge.score()` without providing a `generate` function, either in the judge config or in the `score()` call.
 
 ```ts
-import { judge } from '@use-crux/core/scoring'
+import { judge } from "@use-crux/core/scoring";
 
 // Bad: no generate anywhere
 const missingGeneratorJudge = judge({
-  id: 'quality',
-  criteria: 'Does the output satisfy the quality bar?',
+  id: "quality",
+  criteria: "Does the output satisfy the quality bar?",
   scale: { min: 1, max: 5 },
-})
-await missingGeneratorJudge.score({ input: '...', output: '...' }) // throws
+});
+await missingGeneratorJudge.score({ input: "...", output: "..." }); // throws
 
 // Good: provide in config
 const configuredJudge = judge({
-  id: 'quality',
-  criteria: 'Does the output satisfy the quality bar?',
+  id: "quality",
+  criteria: "Does the output satisfy the quality bar?",
   scale: { min: 1, max: 5 },
   generate: generateObjectFn,
   model: myModel,
-})
-await configuredJudge.score({ input: '...', output: '...' })
+});
+await configuredJudge.score({ input: "...", output: "..." });
 
 // Good: provide per-call
-await missingGeneratorJudge.score({ input: '...', output: '...' }, { generate: generateObjectFn, model })
+await missingGeneratorJudge.score(
+  { input: "...", output: "..." },
+  { generate: generateObjectFn, model },
+);
 ```
 
 ### `Judge "{id}": no model provided`
 
 Same as above but for the `model` parameter. Provide it in the judge config or in the `score()` call.
 
-## Quality errors
+## Eval errors
 
-### `steps (uncaptured)` / `UncapturedSignalError`
-
-An evaluation's `expect` callback asserted on a signal namespace (`steps`,
-`toolCalls`, `retrieval`, …) that the run never captured. The assertion fails
-loudly instead of passing vacuously: the message names the task kinds that
-capture the signal. **Fix:** point `task` at a primitive that emits the
-signal (e.g. a flow handle for `steps`), or drop the assertion.
-
-### `Cassette miss (replay-strict)`
-
-A replay-strict run hit a model call with no matching cassette entry. The
-cell fails closed and the error carries the missing key plus a re-record
-hint. **Fix:** re-record once with `--replay record-new` (or `refresh`) and
-commit the cassette.
-
-### `QualityDefinitionError`
-
-A definition-time mistake: an unknown `gates.scores` key, an unknown variant
-name in `--variant`, a promotion on a derived id (pin an explicit id first),
-or non-live replay without an evaluation id or named cassette. These exit
-with code 2 before anything executes.
+Eval discovery, task-contract, host-readiness, and Baseline errors fail before
+spend where possible and include the exact remedy. See [Eval errors and
+remedies](/docs/guides/evals/errors) for the canonical messages.
 
 ## Adapter errors
 

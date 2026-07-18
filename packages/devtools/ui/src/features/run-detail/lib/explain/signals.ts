@@ -14,37 +14,53 @@
  * unprotected, and crying wolf on every turn would defeat the triage default.
  */
 
-import type { TurnDecisionReport } from '@/types'
-import { normalizeTurnDecisionReport, type RuntimeTurnDecisionReport } from './report'
-import type { ExplainGenTab } from './tabs'
+import type { TurnDecisionReport } from "@/types";
+import {
+  normalizeTurnDecisionReport,
+  type RuntimeTurnDecisionReport,
+} from "./report";
+import type { ExplainGenTab } from "./tabs";
 
 /** A turn status that is not a clean success. */
 function statusIsWarning(status: string | undefined): boolean {
-  return status != null && status !== 'ok' && status !== 'success' && status !== 'running'
+  return (
+    status != null &&
+    status !== "ok" &&
+    status !== "success" &&
+    status !== "running"
+  );
 }
 
 /** True when a fired fallback is recorded among the decisions. */
 function hasFiredFallback(report: TurnDecisionReport): boolean {
-  return report.decisions.some((d) => d.reason.code.startsWith('routing.fallback'))
+  return report.decisions.some((d) =>
+    d.reason.code.startsWith("routing.fallback"),
+  );
 }
 
 /** True when a safety policy blocked, rewrote, or rejected a turn artifact. */
 function hasSafetyIntervention(report: TurnDecisionReport): boolean {
   return report.decisions.some((d) =>
-    ['guardrail.blocked', 'guardrail.redacted', 'guardrail.stripped', 'constraint.failed', 'security.blocked'].includes(
-      d.reason.code,
-    ),
-  )
+    [
+      "guardrail.blocked",
+      "guardrail.redacted",
+      "guardrail.stripped",
+      "constraint.failed",
+      "security.blocked",
+    ].includes(d.reason.code),
+  );
 }
 
 /** True when evidence was used while stale (the risk a debugger must not miss). */
 function hasStaleUsed(report: TurnDecisionReport): boolean {
-  return report.freshness.some((f) => f.status === 'stale-used')
+  return report.freshness.some((f) => f.status === "stale-used");
 }
 
 /** True when a context the turn declared as required was dropped before sending. */
 function hasDroppedRequired(report: TurnDecisionReport): boolean {
-  return report.considered.some((c) => c.required === true && c.disposition === 'dropped')
+  return report.considered.some(
+    (c) => c.required === true && c.disposition === "dropped",
+  );
 }
 
 /**
@@ -53,16 +69,18 @@ function hasDroppedRequired(report: TurnDecisionReport): boolean {
  * Pure over recorded report facts; see the module note for why coverage gaps
  * are intentionally excluded from this set.
  */
-export function turnHasWarningSignal(report: TurnDecisionReport | RuntimeTurnDecisionReport): boolean {
-  const normalized = normalizeTurnDecisionReport(report)
-  if (!normalized) return false
+export function turnHasWarningSignal(
+  report: TurnDecisionReport | RuntimeTurnDecisionReport,
+): boolean {
+  const normalized = normalizeTurnDecisionReport(report);
+  if (!normalized) return false;
   return (
     statusIsWarning(normalized.turn.status) ||
     hasStaleUsed(normalized) ||
     hasDroppedRequired(normalized) ||
     hasFiredFallback(normalized) ||
     hasSafetyIntervention(normalized)
-  )
+  );
 }
 
 /**
@@ -71,7 +89,9 @@ export function turnHasWarningSignal(report: TurnDecisionReport | RuntimeTurnDec
  * `Explain` for a turn with a warning signal, `Output` otherwise — including
  * when no report is available, preserving the existing default.
  */
-export function turnInitialTab(report: TurnDecisionReport | RuntimeTurnDecisionReport | null | undefined): ExplainGenTab {
-  if (report && turnHasWarningSignal(report)) return 'explain'
-  return 'output'
+export function turnInitialTab(
+  report: TurnDecisionReport | RuntimeTurnDecisionReport | null | undefined,
+): ExplainGenTab {
+  if (report && turnHasWarningSignal(report)) return "explain";
+  return "output";
 }

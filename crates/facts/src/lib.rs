@@ -233,8 +233,6 @@ pub struct StaticIndexDefinition {
     pub fingerprint: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<Value>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub quality: Option<Value>,
 }
 
 /// Resolver-owned relation reference before it becomes a graph edge.
@@ -445,7 +443,6 @@ mod tests {
             status: Some("active".to_string()),
             fingerprint: None,
             metadata: None,
-            quality: None,
         };
 
         let encoded = serde_json::to_value(&definition).expect("encoded definition");

@@ -3,26 +3,35 @@
  *
  * Same skeleton every time — sections fill in when the selected node carries
  * the data; the run root shows the run-level variant. Binds to the typed
- * `CruxRunDetailNode` from the observability projection (facts & quality;
+ * `CruxRunDetailNode` from the observability projection (facts and evidence;
  * the substance lives in the center Detail pane).
  *
  * Ported from the design's `v7-parts` `SpanInspector` / `v8` `InspectorPanel`
- * onto `--qw-*` tokens + the run-detail atoms.
+ * onto `--devtools-*` tokens + the run-detail atoms.
  */
 
-import { useMemo, type ReactNode } from 'react'
-import { cn } from '@/shared/lib/utils'
-import { Chip, ScoreBar } from '@/qw/shell/primitives'
-import { Icon } from '@/qw/shell/Icon'
-import { useNavigation } from '@/app/navigation/useNavigation'
-import { useProjectDefinitionIds } from '@/shared/query/useProjectDefinitionIds'
-import type { ObservabilityRunDetail, ObservabilityRunDetailNode } from '@/types'
-import type { CruxCitationReportPreview, CruxScoreReportPreview } from '@use-crux/core/observability'
-import { KindTag, StatusPill, type RunNodeKind } from './atoms'
-import { definitionRefLinks, type DefinitionRefLink } from '../lib/definition-ref-links'
-import { routingFacts, governanceFacts } from './GenerationDecisions'
-import { RunInsightFacts, TurnInspectorFacts } from './explain/InspectorFacts'
-import { collectTurnReports } from '@/features/run-detail/lib/explain/rollup'
+import { useMemo, type ReactNode } from "react";
+import { cn } from "@/shared/lib/utils";
+import { Chip, ScoreBar } from "@/devtools/shell/primitives";
+import { Icon } from "@/devtools/shell/Icon";
+import { useNavigation } from "@/app/navigation/useNavigation";
+import { useProjectDefinitionIds } from "@/shared/query/useProjectDefinitionIds";
+import type {
+  ObservabilityRunDetail,
+  ObservabilityRunDetailNode,
+} from "@/types";
+import type {
+  CruxCitationReportPreview,
+  CruxScoreReportPreview,
+} from "@use-crux/core/observability";
+import { KindTag, StatusPill, type RunNodeKind } from "./atoms";
+import {
+  definitionRefLinks,
+  type DefinitionRefLink,
+} from "../lib/definition-ref-links";
+import { routingFacts, governanceFacts } from "./GenerationDecisions";
+import { RunInsightFacts, TurnInspectorFacts } from "./explain/InspectorFacts";
+import { collectTurnReports } from "@/features/run-detail/lib/explain/rollup";
 import {
   findArtifact,
   findNode,
@@ -36,34 +45,53 @@ import {
   readMetric,
   shortModelId,
   tokensPerSecond,
-} from '../lib/span-detail-inspection'
+} from "../lib/span-detail-inspection";
 
-type Relation = ObservabilityRunDetailNode['relations'][number]
-type Diagnostic = ObservabilityRunDetailNode['diagnostics'][number]
+type Relation = ObservabilityRunDetailNode["relations"][number];
+type Diagnostic = ObservabilityRunDetailNode["diagnostics"][number];
 
 /** Narrow an artifact preview to a score report (judges attached to this node). */
 function asScoreReport(preview: unknown): CruxScoreReportPreview | null {
-  if (typeof preview === 'object' && preview !== null && (preview as { kind?: unknown }).kind === 'score.report') {
-    return preview as CruxScoreReportPreview
+  if (
+    typeof preview === "object" &&
+    preview !== null &&
+    (preview as { kind?: unknown }).kind === "score.report"
+  ) {
+    return preview as CruxScoreReportPreview;
   }
-  return null
+  return null;
 }
 
 /** Narrow an artifact preview to a citation report (grounding for the output). */
 function asCitationReport(preview: unknown): CruxCitationReportPreview | null {
-  if (typeof preview === 'object' && preview !== null && (preview as { kind?: unknown }).kind === 'citation.report') {
-    return preview as CruxCitationReportPreview
+  if (
+    typeof preview === "object" &&
+    preview !== null &&
+    (preview as { kind?: unknown }).kind === "citation.report"
+  ) {
+    return preview as CruxCitationReportPreview;
   }
-  return null
+  return null;
 }
 
 // ─── small layout helpers ───────────────────────────────────────────
 
-function Section({ title, right, children }: { title: string; right?: ReactNode; children: ReactNode }) {
+function Section({
+  title,
+  right,
+  children,
+}: {
+  title: string;
+  right?: ReactNode;
+  children: ReactNode;
+}) {
   return (
-    <div className="border-b border-(--qw-border) px-4 py-3">
+    <div className="border-b border-(--devtools-border) px-4 py-3">
       <div className="mb-2 flex items-center">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--qw-fg-faint)' }}>
+        <span
+          className="text-[10px] font-semibold uppercase tracking-[0.08em]"
+          style={{ color: "var(--devtools-fg-faint)" }}
+        >
           {title}
         </span>
         <div className="flex-1" />
@@ -71,50 +99,65 @@ function Section({ title, right, children }: { title: string; right?: ReactNode;
       </div>
       {children}
     </div>
-  )
+  );
 }
 
 function Metric({ k, v, tone }: { k: string; v: ReactNode; tone?: string }) {
   return (
     <div>
-      <div className="text-[9.5px] uppercase tracking-[0.04em]" style={{ color: 'var(--qw-fg-faint)' }}>
+      <div
+        className="text-[9.5px] uppercase tracking-[0.04em]"
+        style={{ color: "var(--devtools-fg-faint)" }}
+      >
         {k}
       </div>
-      <div className="font-mono text-[13.5px] font-medium" style={{ color: tone ?? 'var(--qw-fg)' }}>
+      <div
+        className="font-mono text-[13.5px] font-medium"
+        style={{ color: tone ?? "var(--devtools-fg)" }}
+      >
         {v}
       </div>
     </div>
-  )
+  );
 }
 
 // ─── attributes (metadata catch-all) ────────────────────────────────
 
-function attributeRows(node: ObservabilityRunDetailNode): { k: string; v: string }[] {
-  const attrs = node.attributes
-  if (!attrs || typeof attrs !== 'object') return []
-  const rows: { k: string; v: string }[] = []
+function attributeRows(
+  node: ObservabilityRunDetailNode,
+): { k: string; v: string }[] {
+  const attrs = node.attributes;
+  if (!attrs || typeof attrs !== "object") return [];
+  const rows: { k: string; v: string }[] = [];
   for (const [k, raw] of Object.entries(attrs)) {
-    if (k === 'presentation') continue // display hints, surfaced elsewhere
-    if (raw == null) continue
-    if (typeof raw === 'string' || typeof raw === 'number' || typeof raw === 'boolean') {
-      rows.push({ k, v: String(raw) })
+    if (k === "presentation") continue; // display hints, surfaced elsewhere
+    if (raw == null) continue;
+    if (
+      typeof raw === "string" ||
+      typeof raw === "number" ||
+      typeof raw === "boolean"
+    ) {
+      rows.push({ k, v: String(raw) });
     }
   }
-  return rows
+  return rows;
 }
 
 // ─── relations ──────────────────────────────────────────────────────
 
-function relationDirection(rel: Relation, spanId: string | undefined): 'in' | 'out' | '—' {
-  if (!spanId) return '—'
-  if (rel.from?.id === spanId) return 'out'
-  if (rel.to?.id === spanId) return 'in'
-  return '—'
+function relationDirection(
+  rel: Relation,
+  spanId: string | undefined,
+): "in" | "out" | "—" {
+  if (!spanId) return "—";
+  if (rel.from?.id === spanId) return "out";
+  if (rel.to?.id === spanId) return "in";
+  return "—";
 }
 
 function relationLabel(rel: Relation, spanId: string | undefined): string {
-  const other = rel.from?.id === spanId ? rel.to : rel.from
-  return other?.id ?? rel.edgeType
+  const other = rel.from?.id === spanId ? rel.to : rel.from;
+  return other?.id ?? rel.edgeType;
 }
 
 // ─── inspector ──────────────────────────────────────────────────────
@@ -125,132 +168,174 @@ export function SpanInspector({
   onSelectSpan,
   onCollapse,
 }: {
-  runDetail: ObservabilityRunDetail | null
-  selectedNodeId: string | null
-  onSelectSpan: (id: string) => void
-  onCollapse?: () => void
+  runDetail: ObservabilityRunDetail | null;
+  selectedNodeId: string | null;
+  onSelectSpan: (id: string) => void;
+  onCollapse?: () => void;
 }) {
   const node = useMemo(() => {
-    if (!runDetail) return null
-    if (selectedNodeId) return findNode(runDetail.root, selectedNodeId)
-    return runDetail.root
-  }, [runDetail, selectedNodeId])
+    if (!runDetail) return null;
+    if (selectedNodeId) return findNode(runDetail.root, selectedNodeId);
+    return runDetail.root;
+  }, [runDetail, selectedNodeId]);
 
   // Read-time resolution against the *current* Project Index snapshot — a
   // DefinitionRef captured at run time can outlive a rename/delete of its
   // source definition, so every id is checked here rather than assumed live.
-  const knownDefinitionIds = useProjectDefinitionIds()
+  const knownDefinitionIds = useProjectDefinitionIds();
 
-  const runLevel = !node || node.id === runDetail?.root.id || node.kind === 'run'
+  const runLevel =
+    !node || node.id === runDetail?.root.id || node.kind === "run";
 
   if (!node) {
     return (
-      <aside className="flex w-[288px] shrink-0 flex-col border-l border-(--qw-border) bg-(--qw-bg)">
+      <aside className="flex w-[288px] shrink-0 flex-col border-l border-(--devtools-border) bg-(--devtools-bg)">
         <InspectorHeader runLevel onCollapse={onCollapse} />
-        <div className="px-4 py-6 text-[12px]" style={{ color: 'var(--qw-fg-faint)' }}>
+        <div
+          className="px-4 py-6 text-[12px]"
+          style={{ color: "var(--devtools-fg-faint)" }}
+        >
           Select a span to inspect.
         </div>
       </aside>
-    )
+    );
   }
 
-  const duration = nodeDuration(node)
+  const duration = nodeDuration(node);
   // Resolve every usage stat through `readMetric` (inspection rollup → metric
   // buckets → flat metrics → usage.observed events) so the inspector is as
   // complete as the span sub-header — cost / ttft / tps / reasoning included.
-  const inTok = readMetric(node, 'inputTokens') ?? 0
-  const outTok = readMetric(node, 'outputTokens') ?? 0
-  const cacheTok = nodeCacheTokens(node) ?? 0
-  const reasoningTok = readMetric(node, 'reasoningTokens')
-  const tokens = nodeTokens(node) ?? (inTok + outTok > 0 ? inTok + outTok : undefined)
-  const cost = nodeCost(node)
-  const ttft = readMetric(node, 'ttftMs')
-  const tps = readMetric(node, 'tokensPerSecond') ?? tokensPerSecond(node)
-  const cacheRead = cacheTok || undefined
-  const tokenSplitTotal = inTok + cacheTok + outTok
+  const inTok = readMetric(node, "inputTokens") ?? 0;
+  const outTok = readMetric(node, "outputTokens") ?? 0;
+  const cacheTok = nodeCacheTokens(node) ?? 0;
+  const reasoningTok = readMetric(node, "reasoningTokens");
+  const tokens =
+    nodeTokens(node) ?? (inTok + outTok > 0 ? inTok + outTok : undefined);
+  const cost = nodeCost(node);
+  const ttft = readMetric(node, "ttftMs");
+  const tps = readMetric(node, "tokensPerSecond") ?? tokensPerSecond(node);
+  const cacheRead = cacheTok || undefined;
+  const tokenSplitTotal = inTok + cacheTok + outTok;
 
-  const timing = node.timing
-  const selfMs = timing?.selfMs
-  const childrenMs = timing?.childrenMs
-  const detailsMs = timing?.detailsMs
-  const timingTotal = (selfMs ?? 0) + (childrenMs ?? 0) + (detailsMs ?? 0)
+  const timing = node.timing;
+  const selfMs = timing?.selfMs;
+  const childrenMs = timing?.childrenMs;
+  const detailsMs = timing?.detailsMs;
+  const timingTotal = (selfMs ?? 0) + (childrenMs ?? 0) + (detailsMs ?? 0);
 
-  const links = runLevel ? definitionRefLinks(runDetail?.definitionRefs ?? [], knownDefinitionIds) : []
-  const relations = node.relations ?? []
-  const diagnostics = node.diagnostics ?? []
-  const attrs = attributeRows(node)
+  const links = runLevel
+    ? definitionRefLinks(runDetail?.definitionRefs ?? [], knownDefinitionIds)
+    : [];
+  const relations = node.relations ?? [];
+  const diagnostics = node.diagnostics ?? [];
+  const attrs = attributeRows(node);
 
-  const scoreReport = asScoreReport(findArtifact(node, 'score.report')?.preview)
-  const judges = scoreReport?.judges ?? []
+  const scoreReport = asScoreReport(
+    findArtifact(node, "score.report")?.preview,
+  );
+  const judges = scoreReport?.judges ?? [];
 
-  const citationReport = asCitationReport(findArtifact(node, 'citation.report')?.preview)
-  const citations = citationReport?.markers ?? []
-  const grounded = citations.filter((c) => c.grounded).length
+  const citationReport = asCitationReport(
+    findArtifact(node, "citation.report")?.preview,
+  );
+  const citations = citationReport?.markers ?? [];
+  const grounded = citations.filter((c) => c.grounded).length;
 
   // Routing/cascade folded onto this generation (design `CardRouting` InspectorPanel:
   // chosen · tiers · escalated · under-budget + Why). Folds the routing screen's
   // inspector into the generation's rail per the chosen UX.
-  const routing = routingFacts(node)
+  const routing = routingFacts(node);
   // The other governance screens' inspector facts (cache / guardrail / security /
   // constraint / compaction), folded into this span's rail alongside Routing.
-  const govFacts = governanceFacts(node)
+  const govFacts = governanceFacts(node);
 
   return (
-    <aside className="flex w-[288px] shrink-0 flex-col overflow-y-auto border-l border-(--qw-border) bg-(--qw-bg)">
+    <aside className="flex w-[288px] shrink-0 flex-col overflow-y-auto border-l border-(--devtools-border) bg-(--devtools-bg)">
       <InspectorHeader runLevel={runLevel} onCollapse={onCollapse} />
 
       {/* Identity */}
-      <div className="border-b border-(--qw-border) px-4 py-3">
+      <div className="border-b border-(--devtools-border) px-4 py-3">
         <div className="mb-1 flex items-center gap-2">
-          <KindTag kind={(node.display?.kind ?? node.kind) as RunNodeKind} primitive={node.primitive} size={9} />
-          <span className="font-mono text-[11.5px] font-semibold">{node.primitive || node.kind}</span>
+          <KindTag
+            kind={(node.display?.kind ?? node.kind) as RunNodeKind}
+            primitive={node.primitive}
+            size={9}
+          />
+          <span className="font-mono text-[11.5px] font-semibold">
+            {node.primitive || node.kind}
+          </span>
           <div className="flex-1" />
           <StatusPill status={node.status} />
         </div>
-        <div className="font-mono text-[10.5px]" style={{ color: 'var(--qw-fg-faint)' }}>
+        <div
+          className="font-mono text-[10.5px]"
+          style={{ color: "var(--devtools-fg-faint)" }}
+        >
           {[
             shortId(node.spanId || node.id),
             node.parentSpanId ? `parent ${shortId(node.parentSpanId)}` : null,
             modelLine(node),
           ]
             .filter(Boolean)
-            .join(' · ')}
+            .join(" · ")}
         </div>
       </div>
 
       {/* Metrics */}
-      <div className="grid grid-cols-2 gap-x-3 gap-y-3 border-b border-(--qw-border) px-4 py-3">
+      <div className="grid grid-cols-2 gap-x-3 gap-y-3 border-b border-(--devtools-border) px-4 py-3">
         <Metric k="duration" v={fmtDuration(duration)} />
         {ttft != null && <Metric k="ttft" v={fmtDuration(ttft)} />}
         {tps != null && <Metric k="tps" v={Math.round(tps)} />}
         <Metric k="tokens" v={fmtTokens(tokens)} />
-        {cacheRead != null && <Metric k="cache rd" v={fmtTokens(cacheRead)} tone="var(--qw-ok)" />}
+        {cacheRead != null && (
+          <Metric k="cache rd" v={fmtTokens(cacheRead)} tone="var(--devtools-ok)" />
+        )}
         <Metric k="cost" v={fmtCost(cost)} />
       </div>
 
       {/* Turn Explanation — run-root roll-up, then this turn's compact facts */}
-      {runLevel && runDetail && <RunInsightFacts reports={collectTurnReports(runDetail.root)} />}
-      {!runLevel && node.decisionReport && <TurnInspectorFacts report={node.decisionReport} />}
+      {runLevel && runDetail && (
+        <RunInsightFacts reports={collectTurnReports(runDetail.root)} />
+      )}
+      {!runLevel && node.decisionReport && (
+        <TurnInspectorFacts report={node.decisionReport} />
+      )}
 
       {/* Routing — folded cascade/router decision (see Decisions tab for the body) */}
       {routing && (
         <Section title="Routing">
           <div className="grid grid-cols-2 gap-x-3 gap-y-3">
-            {routing.chosen && <Metric k="chosen" v={shortModelId(routing.chosen) ?? routing.chosen} />}
-            {routing.classifiedAs && <Metric k="route" v={routing.classifiedAs} />}
-            {routing.tiers != null && <Metric k="tiers" v={String(routing.tiers)} />}
-            {routing.escalated != null && <Metric k="escalated" v={String(routing.escalated)} />}
+            {routing.chosen && (
+              <Metric
+                k="chosen"
+                v={shortModelId(routing.chosen) ?? routing.chosen}
+              />
+            )}
+            {routing.classifiedAs && (
+              <Metric k="route" v={routing.classifiedAs} />
+            )}
+            {routing.tiers != null && (
+              <Metric k="tiers" v={String(routing.tiers)} />
+            )}
+            {routing.escalated != null && (
+              <Metric k="escalated" v={String(routing.escalated)} />
+            )}
             {routing.underBudget != null && (
               <Metric
                 k="under budget"
-                v={routing.underBudget ? 'yes' : 'no'}
-                tone={routing.underBudget ? 'var(--qw-ok)' : 'var(--qw-warn)'}
+                v={routing.underBudget ? "yes" : "no"}
+                tone={routing.underBudget ? "var(--devtools-ok)" : "var(--devtools-warn)"}
               />
             )}
-            {routing.budget != null && <Metric k="budget" v={fmtCost(routing.budget)} />}
+            {routing.budget != null && (
+              <Metric k="budget" v={fmtCost(routing.budget)} />
+            )}
           </div>
           {routing.why && (
-            <div className="mt-2 text-[10.5px] leading-[1.5]" style={{ color: 'var(--qw-fg-muted)' }}>
+            <div
+              className="mt-2 text-[10.5px] leading-[1.5]"
+              style={{ color: "var(--devtools-fg-muted)" }}
+            >
               {routing.why}
             </div>
           )}
@@ -267,7 +352,10 @@ export function SpanInspector({
             ))}
           </div>
           {gf.note && (
-            <div className="mt-2 text-[10.5px] leading-[1.5]" style={{ color: 'var(--qw-fg-muted)' }}>
+            <div
+              className="mt-2 text-[10.5px] leading-[1.5]"
+              style={{ color: "var(--devtools-fg-muted)" }}
+            >
               {gf.note}
             </div>
           )}
@@ -279,41 +367,59 @@ export function SpanInspector({
         <Section title="Timing · self vs children">
           <div
             className="flex h-4 overflow-hidden rounded-[6px]"
-            style={{ boxShadow: 'inset 0 0 0 1px var(--qw-border)' }}
+            style={{ boxShadow: "inset 0 0 0 1px var(--devtools-border)" }}
           >
             {selfMs ? (
               <span
-                style={{ width: pct(selfMs, timingTotal), background: 'var(--qw-warn)', opacity: 0.8 }}
+                style={{
+                  width: pct(selfMs, timingTotal),
+                  background: "var(--devtools-warn)",
+                  opacity: 0.8,
+                }}
                 title={`self ${fmtDuration(selfMs)}`}
               />
             ) : null}
             {childrenMs ? (
               <span
-                style={{ width: pct(childrenMs, timingTotal), background: 'var(--qw-crux)', opacity: 0.8 }}
+                style={{
+                  width: pct(childrenMs, timingTotal),
+                  background: "var(--devtools-crux)",
+                  opacity: 0.8,
+                }}
                 title={`children ${fmtDuration(childrenMs)}`}
               />
             ) : null}
             {detailsMs ? (
               <span
-                style={{ width: pct(detailsMs, timingTotal), background: 'var(--qw-iris)', opacity: 0.8 }}
+                style={{
+                  width: pct(detailsMs, timingTotal),
+                  background: "var(--devtools-iris)",
+                  opacity: 0.8,
+                }}
                 title={`details ${fmtDuration(detailsMs)}`}
               />
             ) : null}
           </div>
-          <div className="mt-2 flex flex-wrap gap-3 font-mono text-[10.5px]" style={{ color: 'var(--qw-fg-muted)' }}>
+          <div
+            className="mt-2 flex flex-wrap gap-3 font-mono text-[10.5px]"
+            style={{ color: "var(--devtools-fg-muted)" }}
+          >
             {selfMs ? (
               <span>
-                <span style={{ color: 'var(--qw-warn)' }}>■</span> self {fmtDuration(selfMs)}
+                <span style={{ color: "var(--devtools-warn)" }}>■</span> self{" "}
+                {fmtDuration(selfMs)}
               </span>
             ) : null}
             {childrenMs ? (
               <span>
-                <span style={{ color: 'var(--qw-crux)' }}>■</span> children {fmtDuration(childrenMs)}
+                <span style={{ color: "var(--devtools-crux)" }}>■</span> children{" "}
+                {fmtDuration(childrenMs)}
               </span>
             ) : null}
             {detailsMs ? (
               <span>
-                <span style={{ color: 'var(--qw-iris)' }}>■</span> details {fmtDuration(detailsMs)}
+                <span style={{ color: "var(--devtools-iris)" }}>■</span> details{" "}
+                {fmtDuration(detailsMs)}
               </span>
             ) : null}
           </div>
@@ -325,56 +431,75 @@ export function SpanInspector({
         <Section
           title="Cost split"
           right={
-            <span className="font-mono text-[10px]" style={{ color: 'var(--qw-fg-faint)' }}>
+            <span
+              className="font-mono text-[10px]"
+              style={{ color: "var(--devtools-fg-faint)" }}
+            >
               {fmtCost(cost)}
             </span>
           }
         >
           <div
             className="flex h-5 overflow-hidden rounded-[6px]"
-            style={{ boxShadow: 'inset 0 0 0 1px var(--qw-border)' }}
+            style={{ boxShadow: "inset 0 0 0 1px var(--devtools-border)" }}
           >
             {inTok ? (
               <span
-                style={{ width: pct(inTok, tokenSplitTotal), background: 'var(--qw-crux)', opacity: 0.85 }}
+                style={{
+                  width: pct(inTok, tokenSplitTotal),
+                  background: "var(--devtools-crux)",
+                  opacity: 0.85,
+                }}
                 title={`input ${fmtTokens(inTok)}`}
               />
             ) : null}
             {cacheTok ? (
               <span
-                style={{ width: pct(cacheTok, tokenSplitTotal), background: 'var(--qw-ok)', opacity: 0.85 }}
+                style={{
+                  width: pct(cacheTok, tokenSplitTotal),
+                  background: "var(--devtools-ok)",
+                  opacity: 0.85,
+                }}
                 title={`cache ${fmtTokens(cacheTok)}`}
               />
             ) : null}
             {outTok ? (
               <span
-                style={{ width: pct(outTok, tokenSplitTotal), background: 'var(--qw-iris)', opacity: 0.85 }}
+                style={{
+                  width: pct(outTok, tokenSplitTotal),
+                  background: "var(--devtools-iris)",
+                  opacity: 0.85,
+                }}
                 title={`output ${fmtTokens(outTok)}`}
               />
             ) : null}
           </div>
           <div
             className="mt-2 flex flex-wrap gap-x-3 gap-y-1 font-mono text-[10.5px]"
-            style={{ color: 'var(--qw-fg-muted)' }}
+            style={{ color: "var(--devtools-fg-muted)" }}
           >
             {inTok ? (
               <span>
-                <span style={{ color: 'var(--qw-crux)' }}>■</span> in · fresh {fmtTokens(inTok)}
+                <span style={{ color: "var(--devtools-crux)" }}>■</span> in · fresh{" "}
+                {fmtTokens(inTok)}
               </span>
             ) : null}
             {cacheTok ? (
               <span>
-                <span style={{ color: 'var(--qw-ok)' }}>■</span> cache read {fmtTokens(cacheTok)}
+                <span style={{ color: "var(--devtools-ok)" }}>■</span> cache read{" "}
+                {fmtTokens(cacheTok)}
               </span>
             ) : null}
             {outTok ? (
               <span>
-                <span style={{ color: 'var(--qw-iris)' }}>■</span> out {fmtTokens(outTok)}
+                <span style={{ color: "var(--devtools-iris)" }}>■</span> out{" "}
+                {fmtTokens(outTok)}
               </span>
             ) : null}
             {reasoningTok ? (
               <span>
-                <span style={{ color: 'var(--qw-warn)' }}>■</span> reasoning {fmtTokens(reasoningTok)}
+                <span style={{ color: "var(--devtools-warn)" }}>■</span> reasoning{" "}
+                {fmtTokens(reasoningTok)}
               </span>
             ) : null}
           </div>
@@ -386,7 +511,7 @@ export function SpanInspector({
         <Section
           title="Grounding"
           right={
-            <Chip tone={grounded === citations.length ? 'ok' : 'warn'} dot>
+            <Chip tone={grounded === citations.length ? "ok" : "warn"} dot>
               {grounded} / {citations.length}
             </Chip>
           }
@@ -400,24 +525,32 @@ export function SpanInspector({
               >
                 <span
                   className="w-[26px] font-mono text-[10px]"
-                  style={{ color: c.grounded ? 'var(--qw-crux)' : 'var(--qw-fg-faint)' }}
+                  style={{
+                    color: c.grounded ? "var(--devtools-crux)" : "var(--devtools-fg-faint)",
+                  }}
                 >
-                  {c.marker != null ? `[${c.marker}]` : '—'}
+                  {c.marker != null ? `[${c.marker}]` : "—"}
                 </span>
                 <span
                   className="flex-1 truncate font-mono text-[10.5px]"
-                  style={{ color: 'var(--qw-fg-muted)' }}
+                  style={{ color: "var(--devtools-fg-muted)" }}
                   title={c.sourceId}
                 >
-                  {c.sourceId ?? c.chunkId ?? '—'}
+                  {c.sourceId ?? c.chunkId ?? "—"}
                 </span>
                 {c.grounded && c.score != null ? (
-                  <span className="font-mono text-[10px]" style={{ color: 'var(--qw-ok)' }}>
+                  <span
+                    className="font-mono text-[10px]"
+                    style={{ color: "var(--devtools-ok)" }}
+                  >
                     {c.score.toFixed(2)}
                   </span>
                 ) : (
-                  <span className="font-mono text-[9.5px]" style={{ color: 'var(--qw-warn)' }}>
-                    {c.note ?? 'unused'}
+                  <span
+                    className="font-mono text-[9.5px]"
+                    style={{ color: "var(--devtools-warn)" }}
+                  >
+                    {c.note ?? "unused"}
                   </span>
                 )}
               </div>
@@ -441,13 +574,22 @@ export function SpanInspector({
           <div className="flex flex-col gap-1">
             {relations.map((rel) => (
               <div key={rel.edgeId} className="flex items-center gap-2 py-0.5">
-                <span className="w-5 font-mono text-[9px] uppercase" style={{ color: 'var(--qw-fg-faint)' }}>
+                <span
+                  className="w-5 font-mono text-[9px] uppercase"
+                  style={{ color: "var(--devtools-fg-faint)" }}
+                >
                   {relationDirection(rel, node.spanId)}
                 </span>
-                <span className="font-mono text-[10px]" style={{ color: 'var(--qw-crux)' }}>
+                <span
+                  className="font-mono text-[10px]"
+                  style={{ color: "var(--devtools-crux)" }}
+                >
                   {rel.edgeType}
                 </span>
-                <span className="flex-1 truncate font-mono text-[10.5px]" style={{ color: 'var(--qw-fg-muted)' }}>
+                <span
+                  className="flex-1 truncate font-mono text-[10.5px]"
+                  style={{ color: "var(--devtools-fg-muted)" }}
+                >
                   {relationLabel(rel, node.spanId)}
                 </span>
               </div>
@@ -461,21 +603,37 @@ export function SpanInspector({
         <Section title="Scores">
           <div className="flex flex-col gap-2">
             {judges.map((j) => {
-              const passed = j.status === 'passed' || (j.score != null && j.threshold != null && j.score >= j.threshold)
-              const color = passed ? 'var(--qw-ok)' : 'var(--qw-warn)'
+              const passed =
+                j.status === "passed" ||
+                (j.score != null &&
+                  j.threshold != null &&
+                  j.score >= j.threshold);
+              const color = passed ? "var(--devtools-ok)" : "var(--devtools-warn)";
               return (
                 <div key={j.name} className="flex items-center gap-2">
-                  <span className="flex-1 truncate font-mono text-[10.5px]" style={{ color: 'var(--qw-fg-muted)' }}>
+                  <span
+                    className="flex-1 truncate font-mono text-[10.5px]"
+                    style={{ color: "var(--devtools-fg-muted)" }}
+                  >
                     {j.name}
                   </span>
-                  {j.score != null && <ScoreBar score={j.score} threshold={j.threshold} color={color} />}
                   {j.score != null && (
-                    <span className="w-7 text-right font-mono text-[10.5px] font-semibold" style={{ color }}>
+                    <ScoreBar
+                      score={j.score}
+                      threshold={j.threshold}
+                      color={color}
+                    />
+                  )}
+                  {j.score != null && (
+                    <span
+                      className="w-7 text-right font-mono text-[10.5px] font-semibold"
+                      style={{ color }}
+                    >
                       {j.score.toFixed(2)}
                     </span>
                   )}
                 </div>
-              )
+              );
             })}
           </div>
         </Section>
@@ -486,7 +644,11 @@ export function SpanInspector({
         <Section title={`Diagnostics · ${diagnostics.length}`}>
           <div className="flex flex-col gap-2">
             {diagnostics.map((d) => (
-              <DiagnosticRow key={d.code + d.message} diag={d} onJump={onSelectSpan} />
+              <DiagnosticRow
+                key={d.code + d.message}
+                diag={d}
+                onJump={onSelectSpan}
+              />
             ))}
           </div>
         </Section>
@@ -495,20 +657,29 @@ export function SpanInspector({
       {/* Attributes */}
       {attrs.length > 0 && (
         <Section title={`Attributes · ${attrs.length}`}>
-          <div className="overflow-hidden rounded-[6px]" style={{ border: '1px solid var(--qw-border)' }}>
+          <div
+            className="overflow-hidden rounded-[6px]"
+            style={{ border: "1px solid var(--devtools-border)" }}
+          >
             {attrs.map((row, i) => (
               <div
                 key={row.k}
                 className="flex justify-between gap-2 px-2.5 py-1"
                 style={{
-                  borderTop: i ? '1px solid var(--qw-border)' : 'none',
-                  background: i % 2 ? 'var(--qw-bg)' : 'var(--qw-bg-elev)',
+                  borderTop: i ? "1px solid var(--devtools-border)" : "none",
+                  background: i % 2 ? "var(--devtools-bg)" : "var(--devtools-bg-elev)",
                 }}
               >
-                <span className="font-mono text-[10px]" style={{ color: 'var(--qw-fg-muted)' }}>
+                <span
+                  className="font-mono text-[10px]"
+                  style={{ color: "var(--devtools-fg-muted)" }}
+                >
                   {row.k}
                 </span>
-                <span className="truncate pl-2 font-mono text-[10px]" style={{ color: 'var(--qw-fg)' }}>
+                <span
+                  className="truncate pl-2 font-mono text-[10px]"
+                  style={{ color: "var(--devtools-fg)" }}
+                >
                   {row.v}
                 </span>
               </div>
@@ -517,70 +688,114 @@ export function SpanInspector({
         </Section>
       )}
     </aside>
-  )
+  );
 }
 
 // ─── header ─────────────────────────────────────────────────────────
 
-function InspectorHeader({ runLevel, onCollapse }: { runLevel: boolean; onCollapse?: () => void }) {
+function InspectorHeader({
+  runLevel,
+  onCollapse,
+}: {
+  runLevel: boolean;
+  onCollapse?: () => void;
+}) {
   return (
-    <div className="sticky top-0 z-[1] flex items-center gap-2 border-b border-(--qw-border) bg-(--qw-bg) px-4 py-2.5">
-      <Icon name="list" size={13} color="var(--qw-fg-muted)" />
-      <span className="font-mono text-[11px] uppercase tracking-[0.04em]" style={{ color: 'var(--qw-fg-muted)' }}>
-        inspector · {runLevel ? 'run' : 'span'}
+    <div className="sticky top-0 z-[1] flex items-center gap-2 border-b border-(--devtools-border) bg-(--devtools-bg) px-4 py-2.5">
+      <Icon name="list" size={13} color="var(--devtools-fg-muted)" />
+      <span
+        className="font-mono text-[11px] uppercase tracking-[0.04em]"
+        style={{ color: "var(--devtools-fg-muted)" }}
+      >
+        inspector · {runLevel ? "run" : "span"}
       </span>
       <div className="flex-1" />
       {onCollapse && (
-        <button type="button" onClick={onCollapse} title="Collapse inspector" className="cursor-pointer">
-          <Icon name="arrowRight" size={13} color="var(--qw-fg-faint)" />
+        <button
+          type="button"
+          onClick={onCollapse}
+          title="Collapse inspector"
+          className="cursor-pointer"
+        >
+          <Icon name="arrowRight" size={13} color="var(--devtools-fg-faint)" />
         </button>
       )}
     </div>
-  )
+  );
 }
 
 function IndexRow({ link }: { link: DefinitionRefLink }) {
-  const { navigate } = useNavigation()
-  const clickable = link.resolved && link.to != null
+  const { navigate } = useNavigation();
+  const clickable = link.resolved && link.to != null;
   return (
     <div
-      className={cn('flex items-center gap-2 py-0.5', clickable && 'cursor-pointer')}
+      className={cn(
+        "flex items-center gap-2 py-0.5",
+        clickable && "cursor-pointer",
+      )}
       onClick={clickable ? () => navigate(link.to!) : undefined}
-      title={link.resolved ? undefined : 'Not found in the current Project Index — the source definition may have been renamed or deleted.'}
+      title={
+        link.resolved
+          ? undefined
+          : "Not found in the current Project Index — the source definition may have been renamed or deleted."
+      }
     >
-      <span className="w-[52px] font-mono text-[9.5px]" style={{ color: 'var(--qw-fg-faint)' }}>
+      <span
+        className="w-[52px] font-mono text-[9.5px]"
+        style={{ color: "var(--devtools-fg-faint)" }}
+      >
         {link.label}
       </span>
       <div className="min-w-0 flex-1">
         <div
           className="truncate font-mono text-[11px]"
-          style={{ color: clickable ? 'var(--qw-crux)' : 'var(--qw-fg-muted)' }}
+          style={{ color: clickable ? "var(--devtools-crux)" : "var(--devtools-fg-muted)" }}
         >
           {link.value}
         </div>
-        <div className="truncate font-mono text-[9px]" style={{ color: 'var(--qw-fg-faint)' }}>
+        <div
+          className="truncate font-mono text-[9px]"
+          style={{ color: "var(--devtools-fg-faint)" }}
+        >
           {link.role}
-          {link.source ? ` · ${link.source.file}:${link.source.line}` : ''}
+          {link.source ? ` · ${link.source.file}:${link.source.line}` : ""}
         </div>
       </div>
       {clickable ? (
-        <Icon name="link" size={11} color="var(--qw-fg-faint)" />
+        <Icon name="link" size={11} color="var(--devtools-fg-faint)" />
       ) : (
-        <span className="font-mono text-[9px]" style={{ color: 'var(--qw-fg-faint)' }}>
+        <span
+          className="font-mono text-[9px]"
+          style={{ color: "var(--devtools-fg-faint)" }}
+        >
           unresolved
         </span>
       )}
     </div>
-  )
+  );
 }
 
-function DiagnosticRow({ diag, onJump }: { diag: Diagnostic; onJump: (id: string) => void }) {
-  const tone = diag.severity === 'error' ? 'danger' : diag.severity === 'warn' ? 'warn' : 'muted'
-  const target = diag.spanIds?.[0]
+function DiagnosticRow({
+  diag,
+  onJump,
+}: {
+  diag: Diagnostic;
+  onJump: (id: string) => void;
+}) {
+  const tone =
+    diag.severity === "error"
+      ? "danger"
+      : diag.severity === "warn"
+        ? "warn"
+        : "muted";
+  const target = diag.spanIds?.[0];
   return (
     <div
       className="rounded-[6px] px-2.5 py-2"
-      style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)' }}
+      style={{
+        background: "var(--devtools-bg-elev)",
+        border: "1px solid var(--devtools-border)",
+      }}
     >
       <div className="mb-1 flex items-center gap-2">
         <Chip tone={tone} dot>
@@ -591,38 +806,41 @@ function DiagnosticRow({ diag, onJump }: { diag: Diagnostic; onJump: (id: string
             type="button"
             onClick={() => onJump(target)}
             className="ml-auto cursor-pointer font-mono text-[10px]"
-            style={{ color: 'var(--qw-crux)' }}
+            style={{ color: "var(--devtools-crux)" }}
           >
             jump →
           </button>
         )}
       </div>
-      <div className="text-[11px]" style={{ color: 'var(--qw-fg)' }}>
+      <div className="text-[11px]" style={{ color: "var(--devtools-fg)" }}>
         {diag.message}
       </div>
       {diag.suggestedFix && (
-        <div className="mt-1 text-[10.5px]" style={{ color: 'var(--qw-fg-muted)' }}>
+        <div
+          className="mt-1 text-[10.5px]"
+          style={{ color: "var(--devtools-fg-muted)" }}
+        >
           fix · {diag.suggestedFix}
         </div>
       )}
     </div>
-  )
+  );
 }
 
 // ─── tiny helpers ───────────────────────────────────────────────────
 
 function shortId(id: string | undefined): string {
-  if (!id) return ''
-  return id.length > 12 ? `${id.slice(0, 10)}…` : id
+  if (!id) return "";
+  return id.length > 12 ? `${id.slice(0, 10)}…` : id;
 }
 
 function modelLine(node: ObservabilityRunDetailNode): string | null {
-  if (node.provider && node.model) return `${node.provider}/${node.model}`
-  return node.model || node.provider || null
+  if (node.provider && node.model) return `${node.provider}/${node.model}`;
+  return node.model || node.provider || null;
 }
 
 function pct(value: number, total: number): string {
-  return `${Math.max(0, Math.min(100, (value / total) * 100))}%`
+  return `${Math.max(0, Math.min(100, (value / total) * 100))}%`;
 }
 
 /** Collapsed inspector — a thin rail that re-expands on click. */
@@ -632,15 +850,20 @@ export function InspectorRail({ onExpand }: { onExpand: () => void }) {
       type="button"
       onClick={onExpand}
       title="Expand inspector"
-      className="flex w-14 shrink-0 cursor-pointer flex-col items-center gap-2 border-l border-(--qw-border) bg-(--qw-bg) py-3"
+      className="flex w-14 shrink-0 cursor-pointer flex-col items-center gap-2 border-l border-(--devtools-border) bg-(--devtools-bg) py-3"
     >
-      <Icon name="arrowUp" size={13} color="var(--qw-fg-faint)" className="rotate-[-90deg]" />
+      <Icon
+        name="arrowUp"
+        size={13}
+        color="var(--devtools-fg-faint)"
+        className="rotate-[-90deg]"
+      />
       <span
         className="font-mono text-[10px] uppercase tracking-[0.1em]"
-        style={{ color: 'var(--qw-fg-faint)', writingMode: 'vertical-rl' }}
+        style={{ color: "var(--devtools-fg-faint)", writingMode: "vertical-rl" }}
       >
         inspector
       </span>
     </button>
-  )
+  );
 }

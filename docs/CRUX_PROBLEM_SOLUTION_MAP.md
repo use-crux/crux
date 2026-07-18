@@ -116,7 +116,7 @@ What to improve (in progress):
 - These TTL systems are currently independent. Define one freshness vocabulary across context, memory, retrieval, corpus, cache, and runtime artifacts.
 - Record `observedAt`, `validUntil`, `sourceVersion`, or equivalent freshness evidence where the primitive can know it.
 - Surface freshness evidence in Run Detail for every contribution that affected a generation.
-- Add freshness-aware quality matchers.
+- Add freshness-aware Eval assertions.
 - Add strict/experimental lints for dynamic context without freshness contracts.
 
 ## Problem 4: The System Cannot Explain A Bad Answer
@@ -138,9 +138,9 @@ Crux solutions today:
 
 What to improve (in progress):
 
-- The graph records most decisions but not yet all of their *reasons*. Add rationale artifacts: why a route was chosen, how a consensus vote split, why a fallback fired, which policy allowed a boundary crossing.
+- The graph records most decisions but not yet all of their _reasons_. Add rationale artifacts: why a route was chosen, how a consensus vote split, why a fallback fired, which policy allowed a boundary crossing.
 - Make the Run Detail view answer "why did this happen?" directly via the per-turn decision report.
-- Add definition-centric health pages linking source, runtime runs, quality, lint, and governance.
+- Add definition-centric health pages linking source, runtime runs, Eval coverage, lint, and governance.
 - Document the turn-assembly vocabulary the OTel conventions lack, and publish it as an open specification when stable.
 
 ## Problem 5: Evals Only Judge The Final Text
@@ -155,9 +155,9 @@ Symptoms:
 
 Crux solutions today:
 
-- Quality suites, targets, experiments, cassettes, and baselines.
+- Evals with typed Cases and Variants, automatic exact evidence reuse, Eval runs, and explicit Baselines.
 - Execution facts exposed for output, structured output, tools, retrieval, citations/grounding, usage/budgets, artifacts, safety, memory, workspace, routing, scoring, cache, compaction, embeddings, errors, retries, latency, events, spans, contexts, and handoffs.
-- Trace-linked quality results.
+- Eval cells linked to their canonical production runs.
 
 What to improve (in progress):
 
@@ -186,7 +186,7 @@ Crux solutions today:
 
 What to improve (in progress):
 
-- These primitives are recorded but not yet fully *explained*. Apply the explanation-parity bar: consensus needs per-agent vote edges and disagreement evidence; swarm needs routing justification; compositions need reports on what was tried and why the result won — before any of them gains new capability.
+- These primitives are recorded but not yet fully _explained_. Apply the explanation-parity bar: consensus needs per-agent vote edges and disagreement evidence; swarm needs routing justification; compositions need reports on what was tried and why the result won — before any of them gains new capability.
 - Keep these primitives framed as harness patterns, not an agent-framework replacement.
 - Pass execution to the underlying SDK whenever possible; provide native execution only where required for portability, debuggability, or missing SDK behavior.
 - Add visual explanations for common orchestration patterns in Devtools.
@@ -198,7 +198,7 @@ Symptoms:
 - Users like Crux observability but already have a memory framework.
 - Users want durable workflows from another runtime but still want Crux `flow()`-level insight.
 - Users want another agent framework's multi-agent execution but still want Crux routing, guardrails, context contracts, and quality.
-- Crux-native primitives become the only path to first-class Devtools and Quality support.
+- Crux-native primitives become the only path to first-class Devtools and Eval support.
 
 Crux's answer: the composition contract.
 
@@ -227,7 +227,7 @@ Crux solutions today:
 
 - `router()`, `cascade()`, fallback, model resolution, cost tracking, and routing reports.
 - Provider-specific prompt adaptation.
-- Quality facts for routing, usage, budgets, latency, and scoring.
+- Eval evidence for routing, usage, budgets, latency, and scoring.
 
 What to improve (in progress):
 
@@ -244,7 +244,7 @@ Symptoms:
 - Sensitive context is sent to the wrong provider.
 - Memory writes store secrets.
 - Tool calls receive data they should not receive.
-- Cassettes, feedback, or eval records preserve sensitive fields.
+- Feedback or persisted Eval evidence preserves sensitive fields.
 
 Crux solutions today:
 
@@ -259,9 +259,9 @@ What to improve (in progress):
 
 - These redaction and policy layers work independently; privacy is not yet a coordinated graph property. Treat it as data flow through the harness.
 - Add classification metadata for context contributions and artifacts.
-- Define boundary policies for provider requests, tools, memory writes, retrieval, workspace writes, feedback, cassettes, and telemetry — and emit policy decision artifacts when data crosses a boundary.
+- Define boundary policies for provider requests, tools, memory writes, retrieval, workspace writes, feedback, Eval evidence, and telemetry — and emit policy decision artifacts when data crosses a boundary.
 - Design the classification/boundary vocabulary once, inside the open-spec effort, so the pieces that ship incrementally share one model.
-- Add quality matchers and lints for policy-boundary behavior.
+- Add Eval matchers and lints for policy-boundary behavior.
 
 ## Problem 9: Teams Cannot Review AI-System Changes
 
@@ -271,13 +271,13 @@ Symptoms:
 - Context changes do not show affected prompts.
 - Retriever changes do not show affected evals.
 - Safety/routing/memory changes do not show runtime impact.
-- Reviewers cannot tell what quality evidence protects a change.
+- Reviewers cannot tell which Eval and Baseline evidence protects a change.
 
 Crux solutions today:
 
 - Project Index definitions and relations.
-- Quality joins and lint findings.
-- `crux lint` and `crux quality run`.
+- Eval coverage joins and lint findings.
+- `crux lint` and `crux eval`.
 - Source refs and runtime joins.
 
 What to improve:
@@ -316,8 +316,8 @@ What to improve:
 
 Symptoms:
 
-- Users define prompts, contexts, stores, memories, retrievers, tools, and suites in code, then must also register them in a central config object.
-- A forgotten config entry makes authored code invisible to Devtools, Quality, or lint.
+- Users define prompts, contexts, stores, memories, retrievers, tools, and Evals in code, then must also register them in a central config object.
+- A forgotten config entry makes authored code invisible to Devtools, Evals, or lint.
 - A dashboard or config file becomes a second source of truth for harness behavior.
 - Global `setup()` functions hide model, provider, or executor dependencies from the suite that uses them.
 - Users cannot tell which settings came from code, defaults, CLI flags, environment, local config, or cloud policy.
@@ -328,14 +328,14 @@ Crux solutions today:
 - `createPrompts()` and `createContexts()` preserve typed namespace paths.
 - Contexts used by prompts are auto-collected.
 - Runtime snapshots enrich source-indexed definitions.
-- Quality definitions are already discovered by convention in projects such as Karyla backend.
+- Evals are discovered by their `*.eval.ts` convention without central registration.
 
 What to improve:
 
 - Make local tools work from source discovery without `config({ prompts })`.
 - Treat `crux.config.ts` as policy/override/trust/boundary config, not primitive registration.
 - Add a resolved project model view showing inferred values, explicit overrides, source locations, and diagnostics.
-- Move Quality away from ambient global `setup()` toward eval-local imports/helpers for model-backed tasks.
+- Keep model/provider dependencies on the callable production task an Eval imports; do not add ambient Eval setup.
 - Keep cloud/training config focused on upload, retention, classification, and dataset eligibility, not harness registration.
 
 ## Prioritized Solution Themes
@@ -390,7 +390,7 @@ When the vocabulary stabilizes in real usage:
 Long-term v2 direction. Deliver:
 
 - The composition model's contribution/evidence contracts as published adapter interfaces.
-- Compatibility suites proving adapters emit enough evidence for Devtools, Quality, governance, and Project Index joins.
+- Compatibility suites proving adapters emit enough evidence for Devtools, Evals, governance, and Project Index joins.
 - Documentation for "bring your own memory/workflow/agent runtime."
 
 ### Theme 7: Optional Config And Project Discovery
@@ -398,7 +398,7 @@ Long-term v2 direction. Deliver:
 Deliver:
 
 - No central registry tax for local tools.
-- Source-discovered prompts, contexts, tools, memory, retrieval, flows, agents, safety, and quality suites.
+- Source-discovered prompts, contexts, tools, memory, retrieval, flows, agents, safety, and Evals.
 - A resolved project model inspector.
 - Discovery diagnostics with minimal fixes.
 - Explicit config only for behavior, policy, trust, data movement, and unusual overrides.
@@ -407,7 +407,7 @@ Deliver:
 
 The ten problems above are the near-term focus. One forward-looking problem is worth naming so today's seams are designed for it, without building it yet: **as the model commoditizes, the durable asset becomes the harness and the curated, eval-scored dataset it produces.** A deterministic, provable harness emits (context, decision, output, quality verdict) records as a byproduct; the same baselines that prove the harness can certify a specialized or distilled model built from those records. See the vision's [The Horizon](./CRUX_VISION.md#the-horizon).
 
-The only near-term implication: keep cassettes and traces designed as clean, governed, eligibility-gated, exportable records (this rides Problem 8's privacy-as-graph-property work). Everything else — distillation, certification, auto-tune — is "design the seams, build when there are users," and Crux owns no GPUs and hosts no weights.
+The only near-term implication: keep Eval evidence and traces designed as clean, governed, eligibility-gated, exportable records (this rides Problem 8's privacy-as-graph-property work). Everything else — distillation, certification, auto-tune — is "design the seams, build when there are users," and Crux owns no GPUs and hosts no weights.
 
 ## What To Say No To
 
@@ -429,7 +429,7 @@ Before adding a feature, ask:
 3. Does it make context, tools, memory, retrieval, routing, or safety more testable?
 4. Does it keep turn assembly deterministic — and if not, is it replayable and assertable?
 5. Does it preserve SDK choice and avoid unnecessary framework lock-in?
-6. Can it be represented in the authored graph, runtime graph, or quality graph?
+6. Can it be represented in the authored graph, runtime graph, or Eval evidence graph?
 7. Could an external runtime implement the same insight contract later?
 8. Does this avoid a duplicate-registration failure mode?
 

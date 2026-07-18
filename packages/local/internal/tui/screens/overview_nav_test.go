@@ -14,7 +14,7 @@ import (
 func TestOverviewCursorCyclesInsights(t *testing.T) {
 	o := NewOverview()
 	o.loaded = true
-	o.insights = []api.QualityInsightRecord{
+	o.insights = []api.InspectInsightRecord{
 		{InsightID: "INS-1"},
 		{InsightID: "INS-2"},
 		{InsightID: "INS-3"},
@@ -55,10 +55,10 @@ func TestOverviewCursorCyclesInsights(t *testing.T) {
 func TestOverviewLTogglesToRunsPanel(t *testing.T) {
 	o := NewOverview()
 	o.loaded = true
-	o.insights = []api.QualityInsightRecord{
+	o.insights = []api.InspectInsightRecord{
 		{InsightID: "INS-1"}, {InsightID: "INS-2"},
 	}
-	o.runs = []api.QualityRunRecord{
+	o.runs = []api.InspectRunRecord{
 		{TraceID: "RUN-1"}, {TraceID: "RUN-2"}, {TraceID: "RUN-3"},
 	}
 
@@ -97,7 +97,7 @@ func TestOverviewLTogglesToRunsPanel(t *testing.T) {
 func TestOverviewEnterOnInsightEmitsNavigateRequest(t *testing.T) {
 	o := NewOverview()
 	o.loaded = true
-	o.insights = []api.QualityInsightRecord{
+	o.insights = []api.InspectInsightRecord{
 		{InsightID: "INS-014"},
 	}
 
@@ -126,7 +126,7 @@ func TestOverviewEnterOnInsightEmitsNavigateRequest(t *testing.T) {
 func TestOverviewEnterOnRunEmitsNavigateRequest(t *testing.T) {
 	o := NewOverview()
 	o.loaded = true
-	o.runs = []api.QualityRunRecord{
+	o.runs = []api.InspectRunRecord{
 		{TraceID: "8af2f1c"},
 	}
 	o.Update(tea.KeyPressMsg(tea.Key{Text: "l", Code: 'l'}), nil)
@@ -148,7 +148,7 @@ func TestOverviewActivityScrollLatchKeepsHistoricalRowsVisible(t *testing.T) {
 	o := NewOverview()
 	o.loaded = true
 	o.focusedPanel = panelActivity
-	o.activity = []api.QualityActivityEvent{
+	o.activity = []api.InspectActivityEvent{
 		{Timestamp: 4000, Kind: "run", Summary: "newest"},
 		{Timestamp: 3000, Kind: "run", Summary: "middle"},
 		{Timestamp: 2000, Kind: "run", Summary: "older"},
@@ -160,7 +160,7 @@ func TestOverviewActivityScrollLatchKeepsHistoricalRowsVisible(t *testing.T) {
 		t.Fatalf("activity scroll after j = %d, want 1", o.activityScroll)
 	}
 
-	o.Update(api.QualityEvent{Timestamp: 5000, Kind: "run", RefID: "fresh", Action: "completed"}, nil)
+	o.Update(api.InspectEvent{Timestamp: 5000, Kind: "run", RefID: "fresh", Action: "completed"}, nil)
 	if o.activityScroll != 2 {
 		t.Fatalf("activity scroll after prepended event = %d, want 2 to preserve visible historical rows", o.activityScroll)
 	}

@@ -10,9 +10,9 @@
  * @module
  */
 
-import type { ProjectDefinitionKind, SourceLocation } from './index'
+import type { ProjectDefinitionKind, SourceLocation } from "./index";
 
-type Brand<T, Name extends string> = T & { readonly __brand: Name }
+type Brand<T, Name extends string> = T & { readonly __brand: Name };
 
 /**
  * Stable id for a definition in a resolved Project Model.
@@ -21,7 +21,10 @@ type Brand<T, Name extends string> = T & { readonly __brand: Name }
  * strings while remaining plain strings when serialized across CLI, Go, and
  * devtools boundaries.
  */
-export type ProjectModelDefinitionId = Brand<string, 'ProjectModelDefinitionId'>
+export type ProjectModelDefinitionId = Brand<
+  string,
+  "ProjectModelDefinitionId"
+>;
 
 /**
  * Stable id for a relation in a resolved Project Model.
@@ -29,7 +32,7 @@ export type ProjectModelDefinitionId = Brand<string, 'ProjectModelDefinitionId'>
  * Relation ids use a separate brand from definition ids because they cross the
  * same JSON and worker boundaries while representing graph edges, not nodes.
  */
-export type ProjectModelRelationId = Brand<string, 'ProjectModelRelationId'>
+export type ProjectModelRelationId = Brand<string, "ProjectModelRelationId">;
 
 /**
  * Stable id for a user-facing Project Model diagnostic.
@@ -37,21 +40,30 @@ export type ProjectModelRelationId = Brand<string, 'ProjectModelRelationId'>
  * The id identifies one diagnostic instance; use {@link ProjectModelDiagnosticCode}
  * for the stable reason code.
  */
-export type ProjectModelDiagnosticId = Brand<string, 'ProjectModelDiagnosticId'>
+export type ProjectModelDiagnosticId = Brand<
+  string,
+  "ProjectModelDiagnosticId"
+>;
 
 /** Create a branded Project Model definition id at a construction boundary. */
-export function createProjectModelDefinitionId(value: string): ProjectModelDefinitionId {
-  return value as ProjectModelDefinitionId
+export function createProjectModelDefinitionId(
+  value: string,
+): ProjectModelDefinitionId {
+  return value as ProjectModelDefinitionId;
 }
 
 /** Create a branded Project Model relation id at a construction boundary. */
-export function createProjectModelRelationId(value: string): ProjectModelRelationId {
-  return value as ProjectModelRelationId
+export function createProjectModelRelationId(
+  value: string,
+): ProjectModelRelationId {
+  return value as ProjectModelRelationId;
 }
 
 /** Create a branded Project Model diagnostic id at a construction boundary. */
-export function createProjectModelDiagnosticId(value: string): ProjectModelDiagnosticId {
-  return value as ProjectModelDiagnosticId
+export function createProjectModelDiagnosticId(
+  value: string,
+): ProjectModelDiagnosticId {
+  return value as ProjectModelDiagnosticId;
 }
 
 /**
@@ -61,28 +73,33 @@ export function createProjectModelDiagnosticId(value: string): ProjectModelDiagn
  * read model. `config-policy` may import the selected Crux config, but authored
  * source modules remain execution-free.
  */
-export const PROJECT_MODEL_RESOLUTION_MODES = ['source-only', 'config-policy', 'semantic', 'runtime-rich'] as const
+export const PROJECT_MODEL_RESOLUTION_MODES = [
+  "source-only",
+  "config-policy",
+  "semantic",
+  "runtime-rich",
+] as const;
 
 /** Controls how much evidence Project Model resolution may gather. */
-export type ProjectModelResolutionMode = (typeof PROJECT_MODEL_RESOLUTION_MODES)[number]
+export type ProjectModelResolutionMode =
+  (typeof PROJECT_MODEL_RESOLUTION_MODES)[number];
 
 /** Stable Project Model diagnostic reason codes. */
 export const PROJECT_MODEL_DIAGNOSTIC_CODES = [
-  'project_model.dynamic_tool_map_unproven',
-  'project_model.missing_stable_id',
-  'project_model.prompt_test_dependency_unproven',
-  'project_model.unknown_suite_target',
-  'project_model.model_executor_missing',
-  'project_model.source_skipped',
-  'project_model.source_only_discovery',
-  'project_model.config_import_failed',
-] as const
+  "project_model.dynamic_tool_map_unproven",
+  "project_model.missing_stable_id",
+  "project_model.model_executor_missing",
+  "project_model.source_skipped",
+  "project_model.source_only_discovery",
+  "project_model.config_import_failed",
+] as const;
 
 /** Stable reason code for a Project Model diagnostic. */
-export type ProjectModelDiagnosticCode = (typeof PROJECT_MODEL_DIAGNOSTIC_CODES)[number]
+export type ProjectModelDiagnosticCode =
+  (typeof PROJECT_MODEL_DIAGNOSTIC_CODES)[number];
 
 /** User-facing Project Model diagnostic severity. */
-export type ProjectModelDiagnosticSeverity = 'info' | 'warning' | 'error'
+export type ProjectModelDiagnosticSeverity = "info" | "warning" | "error";
 
 /**
  * Provenance for a resolved Project Model field.
@@ -92,39 +109,56 @@ export type ProjectModelDiagnosticSeverity = 'info' | 'warning' | 'error'
  * worker and devtools transport.
  */
 export type ProjectModelProvenance =
-  | { readonly kind: 'source'; readonly file: string; readonly exportName?: string }
-  | { readonly kind: 'runtime'; readonly traceId?: string; readonly attribute: string }
-  | { readonly kind: 'filesystem'; readonly path: string; readonly convention: string }
-  | { readonly kind: 'config'; readonly path: string; readonly key: string }
-  | { readonly kind: 'cli'; readonly flag: string }
+  | {
+      readonly kind: "source";
+      readonly file: string;
+      readonly exportName?: string;
+    }
+  | {
+      readonly kind: "runtime";
+      readonly traceId?: string;
+      readonly attribute: string;
+    }
+  | {
+      readonly kind: "filesystem";
+      readonly path: string;
+      readonly convention: string;
+    }
+  | { readonly kind: "config"; readonly path: string; readonly key: string }
+  | { readonly kind: "cli"; readonly flag: string };
 
 /** A Project Model value plus the provenance that selected it. */
 export interface ProjectModelField<T> {
-  readonly value: T
-  readonly provenance: ProjectModelProvenance
+  readonly value: T;
+  readonly provenance: ProjectModelProvenance;
 }
 
 /** Whether a visible Project Model fact was inferred or explicitly provided. */
-export type ProjectModelVisibility = 'inferred' | 'explicit'
+export type ProjectModelVisibility = "inferred" | "explicit";
 
 /** Status of a config file considered by Project Model resolution. */
-export type ProjectConfigFileStatus = 'loaded' | 'missing' | 'import-failed' | 'ignored' | 'source-only'
+export type ProjectConfigFileStatus =
+  | "loaded"
+  | "missing"
+  | "import-failed"
+  | "ignored"
+  | "source-only";
 
 /** Config file fact included in the resolved Project Model. */
 export interface ProjectConfigFile {
   /** Absolute or project-relative config path, depending on the resolver boundary. */
-  readonly path: ProjectModelField<string>
+  readonly path: ProjectModelField<string>;
   /** How the resolver treated the config file. */
-  readonly status: ProjectModelField<ProjectConfigFileStatus>
+  readonly status: ProjectModelField<ProjectConfigFileStatus>;
   /** Import or validation failure text, when status is `import-failed`. */
-  readonly errorMessage?: string
+  readonly errorMessage?: string;
 }
 
 /** One source-visible definition in the resolved Project Model. */
 export interface ProjectModelDefinition {
-  readonly id: ProjectModelDefinitionId
-  readonly kind: ProjectDefinitionKind | (string & {})
-  readonly name?: ProjectModelField<string>
+  readonly id: ProjectModelDefinitionId;
+  readonly kind: ProjectDefinitionKind | (string & {});
+  readonly name?: ProjectModelField<string>;
   /**
    * Authored namespace path from source-discovered prompt/context bundles.
    *
@@ -132,47 +166,33 @@ export interface ProjectModelDefinition {
    * `["support", "answer"]` with provenance pointing at the exported prompt
    * definition that owns the path.
    */
-  readonly path?: ProjectModelField<readonly string[]>
-  readonly source?: SourceLocation
-  readonly visibility: ProjectModelField<ProjectModelVisibility>
-  readonly metadata?: Record<string, unknown>
+  readonly path?: ProjectModelField<readonly string[]>;
+  readonly source?: SourceLocation;
+  readonly visibility: ProjectModelField<ProjectModelVisibility>;
+  readonly metadata?: Record<string, unknown>;
 }
 
 /** Source-visible relationship between definitions in the resolved Project Model. */
 export interface ProjectModelRelation {
-  readonly id: ProjectModelRelationId
-  readonly type: string
-  readonly from: ProjectModelDefinitionId
-  readonly to: ProjectModelDefinitionId
-  readonly source?: SourceLocation
-  readonly visibility: ProjectModelField<ProjectModelVisibility>
-  readonly metadata?: Record<string, unknown>
-}
-
-/** Quality discovery and persistence settings in the resolved Project Model. */
-export interface ProjectModelQuality {
-  /** Effective Quality id, when explicit config or package metadata supplied one. */
-  readonly id?: ProjectModelField<string>
-  /** Effective persistence root for Quality artifacts. */
-  readonly persistenceRoot: ProjectModelField<string>
-  /** Effective include globs after config/default resolution. */
-  readonly includeGlobs: readonly ProjectModelField<string>[]
-  /** Effective exclude globs after config/default resolution. */
-  readonly excludeGlobs: readonly ProjectModelField<string>[]
-  /** Evaluation files discovered by source conventions. */
-  readonly evaluationFiles: readonly ProjectModelField<string>[]
+  readonly id: ProjectModelRelationId;
+  readonly type: string;
+  readonly from: ProjectModelDefinitionId;
+  readonly to: ProjectModelDefinitionId;
+  readonly source?: SourceLocation;
+  readonly visibility: ProjectModelField<ProjectModelVisibility>;
+  readonly metadata?: Record<string, unknown>;
 }
 
 /** User-facing Project Model fact with a stable reason code and small fix. */
 export interface ProjectModelDiagnostic {
-  readonly id: ProjectModelDiagnosticId
-  readonly code: ProjectModelDiagnosticCode
-  readonly severity: ProjectModelDiagnosticSeverity
-  readonly message: string
-  readonly source?: SourceLocation
-  readonly suggestedFix?: string
-  readonly provenance?: ProjectModelProvenance
-  readonly details?: Record<string, unknown>
+  readonly id: ProjectModelDiagnosticId;
+  readonly code: ProjectModelDiagnosticCode;
+  readonly severity: ProjectModelDiagnosticSeverity;
+  readonly message: string;
+  readonly source?: SourceLocation;
+  readonly suggestedFix?: string;
+  readonly provenance?: ProjectModelProvenance;
+  readonly details?: Record<string, unknown>;
 }
 
 /**
@@ -183,54 +203,74 @@ export interface ProjectModelDiagnostic {
  * preserving provenance for inferred versus explicit visibility.
  */
 export interface ResolvedProjectModel {
-  readonly root: ProjectModelField<string>
+  readonly root: ProjectModelField<string>;
   /** Resolution mode that produced this read model. */
-  readonly resolutionMode: ProjectModelField<ProjectModelResolutionMode>
-  readonly packageName?: ProjectModelField<string>
-  readonly configFiles: readonly ProjectConfigFile[]
-  readonly sourceRoots: readonly ProjectModelField<string>[]
-  readonly ignoredPaths: readonly ProjectModelField<string>[]
-  readonly definitions: readonly ProjectModelDefinition[]
-  readonly relations: readonly ProjectModelRelation[]
-  readonly quality: ProjectModelQuality
-  readonly diagnostics: readonly ProjectModelDiagnostic[]
+  readonly resolutionMode: ProjectModelField<ProjectModelResolutionMode>;
+  readonly packageName?: ProjectModelField<string>;
+  readonly configFiles: readonly ProjectConfigFile[];
+  readonly sourceRoots: readonly ProjectModelField<string>[];
+  readonly ignoredPaths: readonly ProjectModelField<string>[];
+  readonly definitions: readonly ProjectModelDefinition[];
+  readonly relations: readonly ProjectModelRelation[];
+  readonly diagnostics: readonly ProjectModelDiagnostic[];
 }
 
-const PROJECT_MODEL_DIAGNOSTIC_CODE_SET = new Set<string>(PROJECT_MODEL_DIAGNOSTIC_CODES)
-const PROJECT_MODEL_RESOLUTION_MODE_SET = new Set<string>(PROJECT_MODEL_RESOLUTION_MODES)
+const PROJECT_MODEL_DIAGNOSTIC_CODE_SET = new Set<string>(
+  PROJECT_MODEL_DIAGNOSTIC_CODES,
+);
+const PROJECT_MODEL_RESOLUTION_MODE_SET = new Set<string>(
+  PROJECT_MODEL_RESOLUTION_MODES,
+);
 
 /** Narrow unknown input from JSON or worker boundaries to a known diagnostic code. */
-export function isProjectModelDiagnosticCode(value: unknown): value is ProjectModelDiagnosticCode {
-  return typeof value === 'string' && PROJECT_MODEL_DIAGNOSTIC_CODE_SET.has(value)
+export function isProjectModelDiagnosticCode(
+  value: unknown,
+): value is ProjectModelDiagnosticCode {
+  return (
+    typeof value === "string" && PROJECT_MODEL_DIAGNOSTIC_CODE_SET.has(value)
+  );
 }
 
 /** Narrow unknown input from JSON or worker boundaries to a Project Model resolution mode. */
-export function isProjectModelResolutionMode(value: unknown): value is ProjectModelResolutionMode {
-  return typeof value === 'string' && PROJECT_MODEL_RESOLUTION_MODE_SET.has(value)
+export function isProjectModelResolutionMode(
+  value: unknown,
+): value is ProjectModelResolutionMode {
+  return (
+    typeof value === "string" && PROJECT_MODEL_RESOLUTION_MODE_SET.has(value)
+  );
 }
 
 /** Narrow unknown input from JSON or worker boundaries to Project Model provenance. */
-export function isProjectModelProvenance(value: unknown): value is ProjectModelProvenance {
-  if (value === null || typeof value !== 'object') return false
-  const candidate = value as Record<string, unknown>
+export function isProjectModelProvenance(
+  value: unknown,
+): value is ProjectModelProvenance {
+  if (value === null || typeof value !== "object") return false;
+  const candidate = value as Record<string, unknown>;
   switch (candidate.kind) {
-    case 'source':
+    case "source":
       return (
-        typeof candidate.file === 'string' &&
-        (candidate.exportName === undefined || typeof candidate.exportName === 'string')
-      )
-    case 'runtime':
+        typeof candidate.file === "string" &&
+        (candidate.exportName === undefined ||
+          typeof candidate.exportName === "string")
+      );
+    case "runtime":
       return (
-        typeof candidate.attribute === 'string' &&
-        (candidate.traceId === undefined || typeof candidate.traceId === 'string')
-      )
-    case 'filesystem':
-      return typeof candidate.path === 'string' && typeof candidate.convention === 'string'
-    case 'config':
-      return typeof candidate.path === 'string' && typeof candidate.key === 'string'
-    case 'cli':
-      return typeof candidate.flag === 'string'
+        typeof candidate.attribute === "string" &&
+        (candidate.traceId === undefined ||
+          typeof candidate.traceId === "string")
+      );
+    case "filesystem":
+      return (
+        typeof candidate.path === "string" &&
+        typeof candidate.convention === "string"
+      );
+    case "config":
+      return (
+        typeof candidate.path === "string" && typeof candidate.key === "string"
+      );
+    case "cli":
+      return typeof candidate.flag === "string";
     default:
-      return false
+      return false;
   }
 }

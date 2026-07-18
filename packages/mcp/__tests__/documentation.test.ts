@@ -33,7 +33,7 @@ describe("MCP documentation", () => {
       "toolMiddleware",
       "toolPolicy",
       "appendToolApprovalResponse",
-      "target.agent",
+      "managed production task",
       "Run Detail",
       "Catalog",
       "redirect",

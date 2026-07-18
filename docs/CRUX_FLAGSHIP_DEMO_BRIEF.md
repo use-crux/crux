@@ -41,7 +41,7 @@ The demo starts with an existing SDK call that already works but is hard to debu
 
 1. A prompt includes product instructions and user input.
 2. Context is assembled from account state, retrieved documents, and a few conditional rules.
-3. The app has safety expectations, a fallback model, and at least one quality check.
+3. The app has safety expectations, a fallback model, and at least one Eval.
 4. A bad answer happens because the setup, not the model alone, changed.
 
 The Crux version should preserve the user's execution choice. The story is not "replace your SDK." The story is:
@@ -66,9 +66,9 @@ The current foundation can truthfully show:
 - retrieval, grounding, indexing, stores, and stale-source handling;
 - guardrails, constraints, safety reports, redaction actions, and stream transforms;
 - routing, fallback, cascades, model/cost metadata, and routing reports;
-- quality suites, targets, experiments, cassettes, baselines, feedback records, and redaction support;
+- Evals, typed Cases and Variants, exact evidence reuse, Baselines, feedback, Review, and redaction support;
 - the canonical observability graph, local devtools/runtime, and OTel-safe telemetry;
-- Project Index source intelligence, runtime joins, quality joins, and lint findings.
+- Project Index source intelligence, runtime joins, Eval coverage, and lint findings.
 
 The demo should label these as shipped foundation capabilities, not future promises.
 
@@ -92,7 +92,7 @@ The complete "whole turn explained" demo waits on the roadmap work for:
 - Phase 2.1, Turn Decision Report: one normalized view of inclusion, exclusion, budget drops, cache/refresh decisions, redaction, blocking, tool eligibility, model selection, guardrails, fallback, retries, and source links.
 - Phase 2.2, Rationale Artifacts: reason-bearing records for routing, consensus, swarm, fallback, retry, and policy-boundary decisions.
 
-Until those are shaped and implemented, the first public demo should avoid promising that every decision has a complete reason in one surface. It can still show the current pieces that exist: resolved requests, context inspection, routing reports, safety records, quality results, traces, and source links.
+Until those are shaped and implemented, the first public demo should avoid promising that every decision has a complete reason in one surface. It can still show the current pieces that exist: resolved requests, context inspection, routing reports, safety records, Eval results, traces, and source links.
 
 ## First Demo Non-Goals
 
@@ -113,9 +113,9 @@ The strongest first version is a short, concrete path:
 
 1. Start from an ordinary SDK call in a real app-shaped scenario.
 2. Add the smallest Crux definitions needed to name prompt setup and context.
-3. Introduce one or two additional pieces, such as retrieval plus quality or routing plus safety.
+3. Introduce one or two additional pieces, such as retrieval plus Evals or routing plus safety.
 4. Open devtools and show the assembled request plus related runtime facts.
-5. Show a quality check catching a behavior change.
+5. Show an Eval catching a behavior change.
 6. Close by naming what is shipped today and what the roadmap will make clearer next.
 
 This sequence keeps the demo honest while still showing the strategic story: a visitor can adopt one Crux primitive, and every additional primitive joins the same inspectable and testable model-turn workflow.

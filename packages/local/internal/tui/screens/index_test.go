@@ -9,7 +9,6 @@ import (
 )
 
 func sampleIndex() api.IndexData {
-	changed := true
 	return api.IndexData{
 		Definitions: []api.ProjectDefinition{
 			{
@@ -17,20 +16,13 @@ func sampleIndex() api.IndexData {
 				Kind:     "prompt",
 				Name:     "writer.prompt",
 				Fidelity: "resolved",
-				Quality: &api.IndexQuality{
-					AffectedEvalIDs:      []string{"writer-eval"},
-					AffectedSuiteIDs:     []string{"regression"},
-					ChangedSinceBaseline: &changed,
-					CurrentFingerprint:   "fp-new-1234",
-					BaselineFingerprint:  "fp-old-9876",
-				},
 			},
 			{
 				ID:       "agent:docs_agent",
 				Kind:     "agent",
 				Name:     "docs_agent",
 				Fidelity: "resolved",
-				// No Quality block — should render with no signal.
+				// No Inspect block — should render with no signal.
 			},
 			{
 				ID:       "context:fragment.broken",
@@ -69,50 +61,13 @@ func TestIndexCursorCyclesDefinitions(t *testing.T) {
 // build cross-screen affected-marker sets from. Per the backend
 // handoff: TUI must NOT walk relations — it consumes the
 // `ChangedSinceBaseline` flag the Go service supplies.
-func TestIndexChangedDefinitionsExposed(t *testing.T) {
-	c := NewIndex()
-	c.loaded = true
-	c.index = sampleIndex()
-
-	affectedSuites := c.AffectedSuiteIDs()
-	if _, ok := affectedSuites["regression"]; !ok {
-		t.Errorf("AffectedSuiteIDs missing \"regression\"; got %v", affectedSuites)
-	}
-	affectedEvals := c.AffectedEvalIDs()
-	if _, ok := affectedEvals["writer-eval"]; !ok {
-		t.Errorf("AffectedEvalIDs missing \"writer-eval\"; got %v", affectedEvals)
-	}
-}
-
-// TestIndexAffectedNilQualityIsNoSignal asserts a definition with
-// no Quality field contributes nothing to the affected sets — per
-// the backend handoff: missing Quality renders as no signal, not an
-// error.
-func TestIndexAffectedNilQualityIsNoSignal(t *testing.T) {
-	c := NewIndex()
-	c.loaded = true
-	c.index = api.IndexData{
-		Definitions: []api.ProjectDefinition{
-			{ID: "agent:no-quality", Kind: "agent", Name: "no-quality"},
-		},
-	}
-	if got := c.AffectedSuiteIDs(); len(got) != 0 {
-		t.Errorf("AffectedSuiteIDs from quality-less def = %v, want empty", got)
-	}
-	if got := c.AffectedEvalIDs(); len(got) != 0 {
-		t.Errorf("AffectedEvalIDs from quality-less def = %v, want empty", got)
-	}
-}
-
-// TestIndexBreadcrumbDropsQualityPrefix asserts the breadcrumb path
-// is `index [/ {def-id}]` — never starts with `quality`.
-func TestIndexBreadcrumbDropsQualityPrefix(t *testing.T) {
+func TestIndexBreadcrumbUsesIndexRoot(t *testing.T) {
 	c := NewIndex()
 	c.loaded = true
 	c.index = sampleIndex()
 
 	path, _ := c.Breadcrumb()
-	if len(path) == 0 || path[0] == "quality" {
+	if len(path) == 0 || path[0] == "legacy" {
 		t.Errorf("breadcrumb path starts wrong: %v", path)
 	}
 	if path[0] != "index" {
@@ -123,17 +78,6 @@ func TestIndexBreadcrumbDropsQualityPrefix(t *testing.T) {
 // TestIndexViewShowsChangedChip asserts the rendered list row for a
 // definition with ChangedSinceBaseline=true contains a "changed"
 // marker. Subtle but present per the backend handoff.
-func TestIndexViewShowsChangedChip(t *testing.T) {
-	c := NewIndex()
-	c.loaded = true
-	c.index = sampleIndex()
-
-	out := c.View(Size{Width: 160, Height: 40})
-	if !strings.Contains(out, "changed") {
-		t.Errorf("index View() does not contain `changed` chip for a ChangedSinceBaseline definition")
-	}
-}
-
 func TestIndexViewShowsBackendLintFindings(t *testing.T) {
 	c := NewIndex()
 	c.loaded = true

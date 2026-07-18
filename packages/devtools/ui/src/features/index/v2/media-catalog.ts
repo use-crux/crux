@@ -109,17 +109,19 @@ const MODALITIES = new Set<string>([
 ]);
 
 /** Project a Project Index definition into a media-operation Catalog card. */
-export function projectMediaOperationCatalog(input: Readonly<{
-  id: string;
-  name: string;
-  kind: string;
-  fidelity?: string;
-  file?: string;
-  line?: number;
-  facts?: unknown;
-  warningCount?: number;
-  relations?: readonly MediaCatalogRelation[];
-}>): MediaOperationCatalogView | undefined {
+export function projectMediaOperationCatalog(
+  input: Readonly<{
+    id: string;
+    name: string;
+    kind: string;
+    fidelity?: string;
+    file?: string;
+    line?: number;
+    facts?: unknown;
+    warningCount?: number;
+    relations?: readonly MediaCatalogRelation[];
+  }>,
+): MediaOperationCatalogView | undefined {
   if (input.kind !== "media.operation") return undefined;
   const facts = asRecord(input.facts);
   const operation = stringValue(facts?.operation);
@@ -128,9 +130,10 @@ export function projectMediaOperationCatalog(input: Readonly<{
     kind: "media.operation",
     id: input.id,
     name: input.name,
-    operation: operation && MEDIA_OPS.has(operation)
-      ? (operation as MediaOperationName)
-      : "unknown",
+    operation:
+      operation && MEDIA_OPS.has(operation)
+        ? (operation as MediaOperationName)
+        : "unknown",
     inputModalities: modalityList(facts?.inputModalities),
     outputModalities: modalityList(facts?.outputModalities),
     ...(stringValue(facts?.adapter)
@@ -148,17 +151,19 @@ export function projectMediaOperationCatalog(input: Readonly<{
 }
 
 /** Project a Project Index definition into an ingest-source Catalog card. */
-export function projectIngestSourceCatalog(input: Readonly<{
-  id: string;
-  name: string;
-  kind: string;
-  fidelity?: string;
-  file?: string;
-  line?: number;
-  facts?: unknown;
-  warningCount?: number;
-  relations?: readonly MediaCatalogRelation[];
-}>): IngestSourceCatalogView | undefined {
+export function projectIngestSourceCatalog(
+  input: Readonly<{
+    id: string;
+    name: string;
+    kind: string;
+    fidelity?: string;
+    file?: string;
+    line?: number;
+    facts?: unknown;
+    warningCount?: number;
+    relations?: readonly MediaCatalogRelation[];
+  }>,
+): IngestSourceCatalogView | undefined {
   if (input.kind !== "ingest.source") return undefined;
   const facts = asRecord(input.facts);
   const sourceKind = stringValue(facts?.sourceKind);
@@ -198,7 +203,9 @@ function projectAuthoredOptions(value: unknown): MediaAuthoredOptions {
   const record = asRecord(value);
   if (!record) return Object.freeze({});
   return Object.freeze({
-    ...(numberValue(record.n) !== undefined ? { n: numberValue(record.n) } : {}),
+    ...(numberValue(record.n) !== undefined
+      ? { n: numberValue(record.n) }
+      : {}),
     ...(stringValue(record.size) ? { size: stringValue(record.size) } : {}),
     ...(stringValue(record.aspectRatio)
       ? { aspectRatio: stringValue(record.aspectRatio) }
@@ -244,7 +251,9 @@ function stringValue(value: unknown): string | undefined {
 }
 
 function numberValue(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {

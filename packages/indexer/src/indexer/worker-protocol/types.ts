@@ -130,7 +130,7 @@ export type ProjectIndexPatchMetadata = Omit<IndexPatch, 'facts'>
  * versioned NDJSON boundary.
  */
 export interface ProjectIndexArtifactMap {
-  /** Source-discovery Project Model used by config and quality workflows. */
+  /** Source-discovery Project Model used by config and compiler workflows. */
   readonly projectModel: ResolvedProjectModel
   /** Effective configuration read model rendered by `crux config inspect`. */
   readonly projectConfig: ProjectConfigInspect

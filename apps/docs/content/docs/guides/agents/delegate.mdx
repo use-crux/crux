@@ -6,15 +6,15 @@ description: Call a subagent as a tool from an orchestrator, with the result val
 Your orchestrator agent needs to call a subagent as a tool and trust what comes back. A delegate does that in one step: it wraps a [handoff](/docs/guides/agents/handoff) contract with an execution function, so when the orchestrating agent calls the tool, the subagent runs and the result is validated and transformed through the handoff automatically.
 
 ```ts title="delegate.ts"
-import { delegate } from '@use-crux/core/agent'
-import { z } from 'zod'
+import { delegate } from "@use-crux/core/agent";
+import { z } from "zod";
 
 const researchDelegate = delegate({
-  id: 'delegate-research',
+  id: "delegate-research",
   argsSchema: z.object({ query: z.string() }),
   handoff: researchToWriter,
   execute: async (args) => await runResearchSubagent(args.query),
-})
+});
 ```
 
 ## Using as a tool
@@ -23,9 +23,9 @@ For AI SDK-compatible tools where no framework context is needed, `.asTools()` r
 
 ```ts
 const agent = prompt({
-  id: 'orchestrator',
+  id: "orchestrator",
   tools: researchDelegate.asTools(),
-})
+});
 ```
 
 When the agent calls the `research` tool, the delegate:
@@ -36,8 +36,9 @@ When the agent calls the `research` tool, the delegate:
 4. Returns the transformed data as a JSON string
 
 <Callout type="info">
-  Each delegation validates data at three points: the LLM's tool args, the subagent's return value, and the final
-  transformed output. See the [API reference](/docs/reference/crux-core/agent#delegateconfig) for the
+  Each delegation validates data at three points: the LLM's tool args, the
+  subagent's return value, and the final transformed output. See the [API
+  reference](/docs/reference/crux-core/agent#delegateconfig) for the
   schema-by-schema breakdown.
 </Callout>
 
@@ -47,27 +48,30 @@ Use `.run()` to execute a delegate programmatically:
 
 ```ts twoslash
 // @noErrors
-import { delegate } from '@use-crux/core/agent'
-import { z } from 'zod'
-declare const researchToWriter: any
-declare const runResearchSubagent: any
+import { delegate } from "@use-crux/core/agent";
+import { z } from "zod";
+declare const researchToWriter: any;
+declare const runResearchSubagent: any;
 // ---cut---
 
 const researchDelegate = delegate({
-  id: 'delegate-research',
+  id: "delegate-research",
   argsSchema: z.object({ query: z.string() }),
   handoff: researchToWriter,
   execute: async (args) => await runResearchSubagent(args.query),
-})
+});
 
 // ---cut---
-const result = await researchDelegate.run({ query: 'cloud migration' }, undefined)
+const result = await researchDelegate.run(
+  { query: "cloud migration" },
+  undefined,
+);
 
-result.delegateId // 'delegate-research'
-result.data
+result.delegateId; // 'delegate-research'
+result.data;
 //     ^?
-result.summary // LLM-generated summary, if the handoff configured one
-result.durationMs // execution time
+result.summary; // LLM-generated summary, if the handoff configured one
+result.durationMs; // execution time
 ```
 
 ## Typed context
@@ -75,17 +79,17 @@ result.durationMs // execution time
 When your subagent needs framework-specific data (action context, user IDs, project IDs, etc.), type the delegate's context so `execute` and `.run()` both enforce it:
 
 ```ts title="typed-delegate.ts"
-import { delegate } from '@use-crux/core/agent'
-import { z } from 'zod'
+import { delegate } from "@use-crux/core/agent";
+import { z } from "zod";
 
 type DelegateCtx = {
-  actionCtx: ActionCtx
-  projectId: string
-  userId?: string
-}
+  actionCtx: ActionCtx;
+  projectId: string;
+  userId?: string;
+};
 
 const researchDelegate = delegate({
-  id: 'delegate-research',
+  id: "delegate-research",
   argsSchema: z.object({ query: z.string() }),
   handoff: researchToWriter,
   execute: async (args, ctx: DelegateCtx) => {
@@ -93,9 +97,9 @@ const researchDelegate = delegate({
     return await ctx.actionCtx.runAction(runResearch, {
       projectId: ctx.projectId,
       query: args.query,
-    })
+    });
   },
-})
+});
 ```
 
 See the [API reference](/docs/reference/crux-core/agent#delegateconfig) for the `TCtx` generic mechanics.
@@ -105,27 +109,29 @@ See the [API reference](/docs/reference/crux-core/agent#delegateconfig) for the 
 For frameworks that have their own tool format, use `.run()` directly instead of `.asTools()`. In Convex Agent, prefer `createTool()` from `@use-crux/convex/agent` so nested delegate work stays observable:
 
 ```ts title="convex-tool.ts"
-import { createTool } from '@use-crux/convex/agent'
+import { createTool } from "@use-crux/convex/agent";
 
 const research = createTool({
-  description: 'Delegate research to a specialist',
+  description: "Delegate research to a specialist",
   inputSchema: researchDelegate.argsSchema,
   execute: async (toolCtx, args, options) => {
     const result = await researchDelegate.run(args, {
       actionCtx: ctx,
       projectId,
       userId,
-    })
-    return result.data
+    });
+    return result.data;
   },
-})
+});
 ```
 
 This gives full control over how the framework context maps to the delegate context. See the [Convex Agent guide](/docs/guides/convex/agent-tools-skills) for the full Convex setup.
 
 <Callout type="info">
-  All delegate executions are instrumented automatically: `delegate:start` and `delegate:complete` events appear in
-  [Devtools](/docs/guides/observability/devtools) with input/output payload snapshots and duration.
+  All delegate executions are instrumented automatically: `delegate:start` and
+  `delegate:complete` events appear in
+  [Devtools](/docs/guides/observability/devtools) with input/output payload
+  snapshots and duration.
 </Callout>
 
 ## Next steps
@@ -141,5 +147,9 @@ This gives full control over how the framework context maps to the delegate cont
     description="Shared typed scratchpad for multi-agent coordination."
     href="/docs/guides/agents/blackboard"
   />
-  <Card title="Agents" description="Multi-agent coordination patterns at a glance." href="/docs/guides/agents" />
+  <Card
+    title="Agents"
+    description="Multi-agent coordination patterns at a glance."
+    href="/docs/guides/agents"
+  />
 </Cards>

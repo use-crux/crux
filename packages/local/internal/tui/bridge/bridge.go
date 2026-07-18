@@ -25,7 +25,7 @@ func (realClock) After(d time.Duration) <-chan time.Time { return time.After(d) 
 
 // Sources groups the in-process event streams consumed by the TUI bridge.
 type Sources struct {
-	Quality       <-chan api.QualityEvent
+	Inspect       <-chan api.InspectEvent
 	StoreChanged  <-chan struct{}
 	IndexChanged  <-chan store.IndexData
 	Observability <-chan observability.Event
@@ -34,7 +34,7 @@ type Sources struct {
 
 // Batch is the single Bubble Tea message emitted by the bridge.
 type Batch struct {
-	Quality      []api.QualityEvent
+	Inspect      []api.InspectEvent
 	StoreChanged bool
 	IndexChanged bool
 	Revs         Revisions
@@ -42,7 +42,7 @@ type Batch struct {
 }
 
 type item struct {
-	quality      *api.QualityEvent
+	inspect      *api.InspectEvent
 	storeChanged bool
 	indexChanged bool
 }
@@ -61,17 +61,17 @@ func Start(ctx context.Context, src Sources, send func(tea.Msg)) {
 }
 
 func startDrains(ctx context.Context, src Sources, in chan<- item) {
-	if src.Quality != nil {
+	if src.Inspect != nil {
 		go func() {
 			for {
 				select {
 				case <-ctx.Done():
 					return
-				case ev, ok := <-src.Quality:
+				case ev, ok := <-src.Inspect:
 					if !ok {
 						return
 					}
-					forward(ctx, in, item{quality: &ev})
+					forward(ctx, in, item{inspect: &ev})
 				}
 			}
 		}()
@@ -116,8 +116,8 @@ func startDrains(ctx context.Context, src Sources, in chan<- item) {
 					if !ok {
 						return
 					}
-					qev := qualityEventFromObservability(ev)
-					forward(ctx, in, item{quality: &qev})
+					inspectEvent := inspectEventFromObservability(ev)
+					forward(ctx, in, item{inspect: &inspectEvent})
 				}
 			}
 		}()
@@ -170,7 +170,7 @@ func newPendingBatch() *pendingBatch {
 }
 
 func (p *pendingBatch) empty() bool {
-	return len(p.batch.Quality) == 0 && !p.batch.StoreChanged && !p.batch.IndexChanged
+	return len(p.batch.Inspect) == 0 && !p.batch.StoreChanged && !p.batch.IndexChanged
 }
 
 func (p *pendingBatch) add(it item, revs *Revisions) {
@@ -181,14 +181,14 @@ func (p *pendingBatch) add(it item, revs *Revisions) {
 	p.batch.StoreChanged = p.batch.StoreChanged || batch.StoreChanged
 	p.batch.IndexChanged = p.batch.IndexChanged || batch.IndexChanged
 	p.batch.Changed.AddAll(batch.Changed)
-	for _, ev := range batch.Quality {
+	for _, ev := range batch.Inspect {
 		key := ev.Kind + "\x00" + ev.Action + "\x00" + ev.RefID
 		if index, ok := p.seen[key]; ok {
-			p.batch.Quality[index] = ev
+			p.batch.Inspect[index] = ev
 			continue
 		}
-		p.seen[key] = len(p.batch.Quality)
-		p.batch.Quality = append(p.batch.Quality, ev)
+		p.seen[key] = len(p.batch.Inspect)
+		p.batch.Inspect = append(p.batch.Inspect, ev)
 	}
 }
 
@@ -202,9 +202,9 @@ func (p *pendingBatch) drain(revs Revisions) Batch {
 
 func batchOf(it item, revs *Revisions) Batch {
 	batch := Batch{Changed: NewDomains()}
-	if it.quality != nil {
-		batch.Quality = append(batch.Quality, *it.quality)
-		batch.Changed.AddAll(revs.BumpQuality(*it.quality))
+	if it.inspect != nil {
+		batch.Inspect = append(batch.Inspect, *it.inspect)
+		batch.Changed.AddAll(revs.BumpInspect(*it.inspect))
 	}
 	if it.storeChanged {
 		batch.StoreChanged = true
@@ -218,13 +218,13 @@ func batchOf(it item, revs *Revisions) Batch {
 	return batch
 }
 
-func qualityEventFromObservability(ev observability.Event) api.QualityEvent {
+func inspectEventFromObservability(ev observability.Event) api.InspectEvent {
 	payload := ev.Payload
 	if len(payload) == 0 {
 		payload, _ = json.Marshal(ev)
 	}
-	return api.QualityEvent{
-		Tag:       "QualityEvent",
+	return api.InspectEvent{
+		Tag:       "InspectEvent",
 		ID:        ev.ID,
 		Timestamp: ev.Timestamp,
 		Kind:      "observability",

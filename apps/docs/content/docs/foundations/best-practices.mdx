@@ -13,13 +13,13 @@ prompt({
   system: `You are an editor. Here are the brand rules: ...
   Here are the formatting rules: ...
   Here are the SEO guidelines: ...`,
-})
+});
 
 // ✓ Composed from focused contexts
 prompt({
   use: [brandRules, formattingRules, seoGuidelines],
-  system: 'You are an editor.',
-})
+  system: "You are an editor.",
+});
 ```
 
 ## Use contexts for shared instructions
@@ -51,13 +51,14 @@ General guidelines:
 - **0–20**: Nice-to-have (terminology glosses, formatting hints)
 
 ```ts
-context({ priority: 90, system: `Today is ${date}.` }) // always kept
-context({ priority: 70, system: '## Editor schema\n...' }) // kept unless budget is tight
-context({ priority: 30, system: '## Brand voice\n...' }) // first to drop
+context({ priority: 90, system: `Today is ${date}.` }); // always kept
+context({ priority: 70, system: "## Editor schema\n..." }); // kept unless budget is tight
+context({ priority: 30, system: "## Brand voice\n..." }); // first to drop
 ```
 
 <Callout type="idea">
-  Use `.inspect()` during development to verify your priority ordering works as expected under different token budgets.
+  Use `.inspect()` during development to verify your priority ordering works as
+  expected under different token budgets.
 </Callout>
 
 ## Use `when` to skip irrelevant contexts
@@ -68,21 +69,22 @@ Don't waste tokens resolving contexts that will return empty strings. If a conte
 // ✗ Resolves systemFn, counts tokens, then drops the empty string
 const brand = context({
   input: z.object({ brandVoice: z.string().optional() }),
-  system: ({ input }) => (input.brandVoice ? `## Brand\n${input.brandVoice}` : ''),
-})
+  system: ({ input }) =>
+    input.brandVoice ? `## Brand\n${input.brandVoice}` : "",
+});
 
 // ✓ Never resolved when data is absent, zero cost
 const brand = context({
   input: z.object({ brandVoice: z.string().optional() }),
   when: ({ input }) => !!input.brandVoice,
   system: ({ input }) => `## Brand\n${input.brandVoice}`,
-})
+});
 ```
 
 For mode-based switching, use `match()` instead of multiple `when()` calls:
 
 ```ts
-import { match } from '@use-crux/core'
+import { match } from "@use-crux/core";
 
 prompt({
   use: [
@@ -95,8 +97,8 @@ prompt({
       },
     }),
   ],
-  input: z.object({ mode: z.enum(['research', 'create', 'optimize']) }),
-})
+  input: z.object({ mode: z.enum(["research", "create", "optimize"]) }),
+});
 ```
 
 For feature flags or static conditions known at module load time, use falsy-tolerant `use`:
@@ -104,12 +106,13 @@ For feature flags or static conditions known at module load time, use falsy-tole
 ```ts
 prompt({
   use: [baseCtx, featureFlags.experimental && experimentalCtx],
-})
+});
 ```
 
 <Callout type="info">
-  `when` and `match` exclusion is stronger than token-budget dropping. Excluded contexts contribute nothing, not even
-  tools. Combine both: use `when` for relevance, `priority` for graceful degradation.
+  `when` and `match` exclusion is stronger than token-budget dropping. Excluded
+  contexts contribute nothing, not even tools. Combine both: use `when` for
+  relevance, `priority` for graceful degradation.
 </Callout>
 
 ## Cache expensive context resolvers
@@ -118,19 +121,20 @@ If a context calls a database, API, or RAG system, add `memo` to skip redundant 
 
 ```ts
 const brand = context({
-  id: 'brand-voice',
+  id: "brand-voice",
   input: z.object({ orgId: z.string() }),
   system: async ({ input }) => fetchBrandProfile(input.orgId),
   memo: { ttl: 300_000 }, // 5min resolver memoization
   cache: true, // provider cache hint for stable prefixes
-})
+});
 ```
 
 `memo.ttl` is the app-side freshness tolerance. `cache: true` is a separate provider cache hint for adapters with native prefix caching, such as Anthropic `cache_control` breakpoints or Google `CachedContent` prefixes.
 
 <Callout type="info">
-  Contexts with `memo` require an `id` for cache key derivation. Static string contexts cannot use `memo`; use
-  `cache: true` when stable static content should participate in provider prefix caching.
+  Contexts with `memo` require an `id` for cache key derivation. Static string
+  contexts cannot use `memo`; use `cache: true` when stable static content
+  should participate in provider prefix caching.
 </Callout>
 
 ## Prefer structured output for reliability
@@ -139,18 +143,18 @@ When you need specific fields from the model, use an `output` schema instead of 
 
 ```ts
 // ✗ Parsing text output
-const result = await generate(prompt, { model, input })
-const parsed = JSON.parse(result.text) // might fail
+const result = await generate(prompt, { model, input });
+const parsed = JSON.parse(result.text); // might fail
 
 // ✓ Structured output
 const draftPrompt = prompt({
   output: z.object({
-    sentiment: z.enum(['positive', 'negative', 'neutral']),
+    sentiment: z.enum(["positive", "negative", "neutral"]),
     confidence: z.number().min(0).max(1),
   }),
-})
-const result = await generate(prompt, { model, input })
-result.object.sentiment // typed, validated
+});
+const result = await generate(prompt, { model, input });
+result.object.sentiment; // typed, validated
 ```
 
 ## Use `settings` for model control
@@ -162,11 +166,11 @@ These settings can reduce model variance, but they cannot make a model perfectly
 ```ts
 prompt({
   settings: { temperature: 0 }, // classification, validation
-})
+});
 
 prompt({
   settings: { temperature: 0.3 }, // editing, summarization
-})
+});
 ```
 
 Settings are SDK-agnostic: every adapter maps them to the provider's native controls.
@@ -182,48 +186,58 @@ For user-facing input, rely on Crux's top-level auto-escaping (enabled by defaul
 Memory blocks can run on an in-memory `RecordStore` first, then move to `convexRecordStore()` or a custom `RecordStore` for production. The block API does not change; only the records implementation does.
 
 ```ts
-import { convexRecordStore } from '@use-crux/convex'
-import { inMemoryRecordStore } from '@use-crux/core/storage'
+import { convexRecordStore } from "@use-crux/convex";
+import { inMemoryRecordStore } from "@use-crux/core/storage";
 
 // Development
-const devRecords = inMemoryRecordStore()
-const factsBlock = facts({ id: 'facts', embed })
-const devMemory = memory({ id: 'assistant', namespace: 'user:123', records: devRecords, blocks: [factsBlock] })
+const devRecords = inMemoryRecordStore();
+const factsBlock = facts({ id: "facts", embed });
+const devMemory = memory({
+  id: "assistant",
+  namespace: "user:123",
+  records: devRecords,
+  blocks: [factsBlock],
+});
 
 // Production -- same memory shape, persistent records
-const prodRecords = convexRecordStore({ component: components.crux, ctx })
+const prodRecords = convexRecordStore({ component: components.crux, ctx });
 const prodMemory = memory({
-  id: 'assistant',
-  namespace: 'user:123',
+  id: "assistant",
+  namespace: "user:123",
   records: prodRecords,
   blocks: [factsBlock],
-})
+});
 ```
 
 ## Test prompts like code
 
-Add inline test cases to prompt definitions. Run them in CI with `pnpm eval`. Use judges for subjective quality, `expect()` for structural assertions.
+Keep the production task callable, then define an inert Eval beside it. Run the
+same command locally and in CI; use scorers for subjective quality and
+assertions for structural behavior.
 
 ```ts
-prompt({
-  id: 'classify',
-  // ...
-  tests: [
+import { evaluate } from "@use-crux/core/eval";
+import { classify } from "../src/classify";
+
+export default evaluate({
+  task: classify,
+  cases: [
     {
-      name: 'positive-sentiment',
-      input: { text: 'This is amazing!' },
-      assert: (r) => {
-        expect(r.object.sentiment).toBe('positive')
-        expect(r.object.confidence).toBeGreaterThan(0.8)
-        return true
-      },
+      id: "positive-sentiment",
+      input: { text: "This is amazing!" },
+      expected: { sentiment: "positive" },
     },
   ],
-})
+  expect: ({ output, expected, expect }) => {
+    expect(output.sentiment).toBe(expected.sentiment);
+    expect(output.confidence).toBeGreaterThan(0.8);
+  },
+});
 ```
 
 <Callout type="info">
-  Run `pnpm eval --devtools` to send results to the visual tracing UI for debugging score disagreements across models.
+  Run `crux eval --plan` to inspect work before inference, then `crux eval`.
+  Eval runs and their linked production runs appear in Devtools automatically.
 </Callout>
 
 ## Use middleware for observability, not logic
@@ -235,13 +249,13 @@ Global middleware should observe, not mutate. Use it for logging, timing, and me
 config({
   generation: {
     middleware: async (args, next) => {
-      const start = Date.now()
-      const result = await next(args)
-      metrics.record(args.promptId, Date.now() - start)
-      return result
+      const start = Date.now();
+      const result = await next(args);
+      metrics.record(args.promptId, Date.now() - start);
+      return result;
     },
   },
-})
+});
 
 // ✗ Don't mutate in middleware, use hooks or context logic instead
 ```
@@ -252,14 +266,14 @@ When passing data between agents, use handoffs with `transform` to strip unneces
 
 ```ts
 handoff({
-  id: 'research-to-writer',
+  id: "research-to-writer",
   inputSchema: z.object({ findings: z.array(findingSchema), rawData: z.any() }),
   outputSchema: z.object({ keyPoints: z.array(z.string()) }),
   transform: (input) => ({
     keyPoints: input.findings.map((f) => f.summary).slice(0, 5),
     // rawData is intentionally dropped
   }),
-})
+});
 ```
 
 ## Name everything
@@ -285,6 +299,14 @@ blackboard({ id: 'pipeline-state', ... })
     description="Organize prompts, configure project policy, and wire up devtools."
     href="/docs/getting-started"
   />
-  <Card title="Recipes" description="Full working examples combining multiple primitives." href="/docs/cookbook" />
-  <Card title="FAQ" description="Common questions and troubleshooting." href="/docs/guides/faq" />
+  <Card
+    title="Recipes"
+    description="Full working examples combining multiple primitives."
+    href="/docs/cookbook"
+  />
+  <Card
+    title="FAQ"
+    description="Common questions and troubleshooting."
+    href="/docs/guides/faq"
+  />
 </Cards>

@@ -8,51 +8,53 @@ description: Test Runtime Engine flows, timers, and durable tasks with createTes
 ## Flow effects
 
 ```ts
-import { expect, test } from 'vitest'
-import { flow } from '@use-crux/core'
-import { durableTask } from '@use-crux/core/runtime'
-import { createTestRuntime } from '@use-crux/core/runtime/testing'
+import { expect, test } from "vitest";
+import { flow } from "@use-crux/core";
+import { durableTask } from "@use-crux/core/runtime";
+import { createTestRuntime } from "@use-crux/core/runtime/testing";
 
-test('sends onboarding reminders after two days', async () => {
-  const prepared: string[] = []
-  const sent: string[] = []
-  const prepareAccount = durableTask('prepare-account', {
+test("sends onboarding reminders after two days", async () => {
+  const prepared: string[] = [];
+  const sent: string[] = [];
+  const prepareAccount = durableTask("prepare-account", {
     run: async (input: { userId: string }) => {
-      prepared.push(input.userId)
+      prepared.push(input.userId);
     },
-  })
-  const sendReminder = durableTask('send-reminder', {
+  });
+  const sendReminder = durableTask("send-reminder", {
     run: async (input: { userId: string }) => {
-      sent.push(input.userId)
+      sent.push(input.userId);
     },
-  })
+  });
   const onboarding = flow(
-    'onboarding',
+    "onboarding",
     async (scope, input: { userId: string }) => {
-      await scope.defer(prepareAccount, { userId: input.userId })
-      await scope.after(sendReminder, '2d', { userId: input.userId })
-      await scope.suspend('approval')
+      await scope.defer(prepareAccount, { userId: input.userId });
+      await scope.after(sendReminder, "2d", { userId: input.userId });
+      await scope.suspend("approval");
     },
-  )
-  const rt = createTestRuntime({ targets: [onboarding, prepareAccount, sendReminder] })
+  );
+  const rt = createTestRuntime({
+    targets: [onboarding, prepareAccount, sendReminder],
+  });
 
   try {
-    const suspended = await onboarding.run({ userId: 'user_1' })
-    expect(suspended.status).toBe('suspended')
-    expect(prepared).toEqual([])
-    expect(sent).toEqual([])
+    const suspended = await onboarding.run({ userId: "user_1" });
+    expect(suspended.status).toBe("suspended");
+    expect(prepared).toEqual([]);
+    expect(sent).toEqual([]);
 
-    await rt.settle()
-    expect(prepared).toEqual(['user_1'])
-    expect(sent).toEqual([])
+    await rt.settle();
+    expect(prepared).toEqual(["user_1"]);
+    expect(sent).toEqual([]);
 
-    await rt.clock.advance('2d')
+    await rt.clock.advance("2d");
 
-    expect(sent).toEqual(['user_1'])
+    expect(sent).toEqual(["user_1"]);
   } finally {
-    rt.dispose()
+    rt.dispose();
   }
-})
+});
 ```
 
 `clock.advance(duration)` accepts the same duration strings as `flow.after()`, then runs bounded maintenance ticks until due timers, wake outbox rows, and resumed work settle.
@@ -64,9 +66,9 @@ The harness exposes the resolved runtime and in-memory store for state checks:
 ```ts
 const snapshot = await rt.store.state.getSnapshot(flowId, {
   namespace: rt.runtime.namespace,
-})
+});
 
-expect(snapshot?.scheduledWork?.['after:1']).toBeDefined()
+expect(snapshot?.scheduledWork?.["after:1"]).toBeDefined();
 ```
 
 Use `await rt.tick()` for one maintenance pass, or `await rt.settle({ maxTicks: 50 })` when the test creates work without advancing the clock. If settle exceeds the bound, it throws with guidance to advance the clock or raise `maxTicks`.
@@ -76,7 +78,7 @@ Use `await rt.tick()` for one maintenance pass, or `await rt.settle({ maxTicks: 
 `@use-crux/core/runtime/testing` also exports adapter conformance helpers:
 
 ```ts
-import { runStoreAdapterTests } from '@use-crux/core/runtime/testing'
+import { runStoreAdapterTests } from "@use-crux/core/runtime/testing";
 ```
 
 Use `createTestRuntime()` for application behavior tests. Use `runStoreAdapterTests()` and `runRuntimeEngineAdapterTests()` when implementing a Runtime Engine adapter.

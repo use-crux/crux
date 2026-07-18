@@ -289,7 +289,7 @@ func TestApplyIndexPatchPrunesDeletedSourceEdges(t *testing.T) {
 	assertStringSet(t, consumer.Dependencies, nil)
 }
 
-func TestApplyIndexPatchQualityLintPatchReplacesQualityFindingsOnly(t *testing.T) {
+func TestApplyIndexPatchLintPatchReplacesLintFindingsOnly(t *testing.T) {
 	state := ApplyPatch(EmptyPatchState(), IndexPatch{
 		SchemaVersion: 1,
 		Phase:         PhaseAST,
@@ -311,10 +311,10 @@ func TestApplyIndexPatchQualityLintPatchReplacesQualityFindingsOnly(t *testing.T
 		Status:        "ok",
 		Facts: IndexPatchFacts{
 			LintFindings: []store.IndexLintFinding{
-				{ID: "lint:quality.missing_baseline:old", RuleID: "quality.missing_baseline", Severity: "info"},
+				{ID: "lint:definition.missing_eval_coverage:old", RuleID: "definition.missing_eval_coverage", Severity: "info"},
 			},
 			Diagnostics: []store.IndexDiagnostic{
-				{ID: "diagnostic:quality:old", Severity: "info", Code: "index.lint_unused_suppression", Message: "old"},
+				{ID: "diagnostic:lint:old", Severity: "info", Code: "index.lint_unused_suppression", Message: "old"},
 			},
 		},
 	})
@@ -326,10 +326,10 @@ func TestApplyIndexPatchQualityLintPatchReplacesQualityFindingsOnly(t *testing.T
 		Status:        "ok",
 		Facts: IndexPatchFacts{
 			LintFindings: []store.IndexLintFinding{
-				{ID: "lint:quality.missing_baseline:new", RuleID: "quality.missing_baseline", Severity: "info"},
+				{ID: "lint:definition.missing_eval_coverage:new", RuleID: "definition.missing_eval_coverage", Severity: "info"},
 			},
 			Diagnostics: []store.IndexDiagnostic{
-				{ID: "diagnostic:quality:new", Severity: "info", Code: "index.lint_unused_suppression", Message: "new"},
+				{ID: "diagnostic:lint:new", Severity: "info", Code: "index.lint_unused_suppression", Message: "new"},
 			},
 		},
 	})
@@ -337,20 +337,20 @@ func TestApplyIndexPatchQualityLintPatchReplacesQualityFindingsOnly(t *testing.T
 	if findTestLintFinding(next.Index.LintFindings, "lint:@acme/rules/require-owner:workflow") == nil {
 		t.Fatalf("AST extension lint finding was removed: %+v", next.Index.LintFindings)
 	}
-	if findTestLintFinding(next.Index.LintFindings, "lint:quality.missing_baseline:old") != nil {
-		t.Fatalf("stale quality lint finding survived: %+v", next.Index.LintFindings)
+	if findTestLintFinding(next.Index.LintFindings, "lint:definition.missing_eval_coverage:old") != nil {
+		t.Fatalf("stale lint finding survived: %+v", next.Index.LintFindings)
 	}
-	if findTestLintFinding(next.Index.LintFindings, "lint:quality.missing_baseline:new") == nil {
-		t.Fatalf("replacement quality lint finding missing: %+v", next.Index.LintFindings)
+	if findTestLintFinding(next.Index.LintFindings, "lint:definition.missing_eval_coverage:new") == nil {
+		t.Fatalf("replacement lint finding missing: %+v", next.Index.LintFindings)
 	}
 	if findTestDiagnostic(next.Index.Diagnostics, "diagnostic:ast") == nil {
 		t.Fatalf("AST diagnostic was removed: %+v", next.Index.Diagnostics)
 	}
-	if findTestDiagnostic(next.Index.Diagnostics, "diagnostic:quality:old") != nil {
-		t.Fatalf("stale quality diagnostic survived: %+v", next.Index.Diagnostics)
+	if findTestDiagnostic(next.Index.Diagnostics, "diagnostic:lint:old") != nil {
+		t.Fatalf("stale lint diagnostic survived: %+v", next.Index.Diagnostics)
 	}
-	if findTestDiagnostic(next.Index.Diagnostics, "diagnostic:quality:new") == nil {
-		t.Fatalf("replacement quality diagnostic missing: %+v", next.Index.Diagnostics)
+	if findTestDiagnostic(next.Index.Diagnostics, "diagnostic:lint:new") == nil {
+		t.Fatalf("replacement lint diagnostic missing: %+v", next.Index.Diagnostics)
 	}
 }
 

@@ -14,16 +14,16 @@
  * bordered card (e.g. when the caller already provides one).
  */
 
-import * as React from 'react'
-import { Streamdown } from 'streamdown'
-import { JsonTree } from './JsonTree'
+import * as React from "react";
+import { Streamdown } from "streamdown";
+import { JsonTree } from "./JsonTree";
 
-type Kind = 'text' | 'markdown' | 'json'
+type Kind = "text" | "markdown" | "json";
 
 interface Detected {
-  kind: Kind
-  text: string
-  data?: unknown
+  kind: Kind;
+  text: string;
+  data?: unknown;
 }
 
 const MARKDOWN_MARKERS: readonly RegExp[] = [
@@ -35,60 +35,65 @@ const MARKDOWN_MARKERS: readonly RegExp[] = [
   /\[[^\]]+\]\([^)]+\)/, // link
   /\*\*[^*\n]+\*\*/, // bold
   /^\|.+\|\s*$/m, // table row
-]
+];
 
 function looksMarkdown(s: string): boolean {
-  return MARKDOWN_MARKERS.some((re) => re.test(s))
+  return MARKDOWN_MARKERS.some((re) => re.test(s));
 }
 
 /** Sniff a value into one of the three render kinds. */
 function detect(value: unknown): Detected {
-  if (value != null && typeof value === 'object') {
-    return { kind: 'json', text: safeStringify(value), data: value }
+  if (value != null && typeof value === "object") {
+    return { kind: "json", text: safeStringify(value), data: value };
   }
-  if (typeof value === 'string') {
-    const trimmed = value.trim()
-    if (trimmed && (trimmed[0] === '{' || trimmed[0] === '[')) {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed && (trimmed[0] === "{" || trimmed[0] === "[")) {
       try {
-        const parsed: unknown = JSON.parse(trimmed)
-        if (parsed != null && typeof parsed === 'object') {
-          return { kind: 'json', text: value, data: parsed }
+        const parsed: unknown = JSON.parse(trimmed);
+        if (parsed != null && typeof parsed === "object") {
+          return { kind: "json", text: value, data: parsed };
         }
       } catch {
         // not JSON — fall through
       }
     }
-    if (looksMarkdown(value)) return { kind: 'markdown', text: value }
-    return { kind: 'text', text: value }
+    if (looksMarkdown(value)) return { kind: "markdown", text: value };
+    return { kind: "text", text: value };
   }
   // numbers, booleans, null/undefined
-  return { kind: 'text', text: value == null ? '—' : String(value) }
+  return { kind: "text", text: value == null ? "—" : String(value) };
 }
 
 function safeStringify(v: unknown): string {
   try {
-    return JSON.stringify(v, null, 2)
+    return JSON.stringify(v, null, 2);
   } catch {
-    return String(v)
+    return String(v);
   }
 }
 
 type TableShape =
-  | { kind: 'rows'; rows: Record<string, unknown>[] } // array of objects → columns
-  | { kind: 'kv'; entries: [string, unknown][] } // single object → field/value
+  | { kind: "rows"; rows: Record<string, unknown>[] } // array of objects → columns
+  | { kind: "kv"; entries: [string, unknown][] }; // single object → field/value
 
 /** Whether JSON can be shown as a table — array of objects, or a single object. */
 function tableShape(data: unknown): TableShape | null {
   if (Array.isArray(data)) {
-    if (data.length === 0) return null
-    if (!data.every((r) => r != null && typeof r === 'object' && !Array.isArray(r))) return null
-    return { kind: 'rows', rows: data as Record<string, unknown>[] }
+    if (data.length === 0) return null;
+    if (
+      !data.every(
+        (r) => r != null && typeof r === "object" && !Array.isArray(r),
+      )
+    )
+      return null;
+    return { kind: "rows", rows: data as Record<string, unknown>[] };
   }
-  if (data != null && typeof data === 'object') {
-    const entries = Object.entries(data)
-    if (entries.length > 0) return { kind: 'kv', entries }
+  if (data != null && typeof data === "object") {
+    const entries = Object.entries(data);
+    if (entries.length > 0) return { kind: "kv", entries };
   }
-  return null
+  return null;
 }
 
 export function ValueView({
@@ -98,65 +103,81 @@ export function ValueView({
   bare = false,
   className,
 }: {
-  value: unknown
-  label?: React.ReactNode
-  tone?: 'danger'
-  bare?: boolean
-  className?: string
+  value: unknown;
+  label?: React.ReactNode;
+  tone?: "danger";
+  bare?: boolean;
+  className?: string;
 }) {
-  const det = React.useMemo(() => detect(value), [value])
-  const table = React.useMemo(() => (det.kind === 'json' ? tableShape(det.data) : null), [det])
+  const det = React.useMemo(() => detect(value), [value]);
+  const table = React.useMemo(
+    () => (det.kind === "json" ? tableShape(det.data) : null),
+    [det],
+  );
 
   const modes = React.useMemo<string[]>(() => {
-    if (det.kind === 'markdown') return ['rendered', 'raw']
-    if (det.kind === 'json') return table ? ['tree', 'table', 'raw'] : ['tree', 'raw']
-    return ['text']
-  }, [det.kind, table])
+    if (det.kind === "markdown") return ["rendered", "raw"];
+    if (det.kind === "json")
+      return table ? ["tree", "table", "raw"] : ["tree", "raw"];
+    return ["text"];
+  }, [det.kind, table]);
 
   // `mode` is uncontrolled-with-reset: if the stored choice isn't valid for the
   // current value (it changed kind), fall back to the first mode.
-  const [picked, setPicked] = React.useState<string | null>(null)
-  const mode = picked && modes.includes(picked) ? picked : modes[0]
+  const [picked, setPicked] = React.useState<string | null>(null);
+  const mode = picked && modes.includes(picked) ? picked : modes[0];
 
   const content = (
     <div className="max-h-[440px] overflow-auto">
-      {det.kind === 'text' && (
-        <div className="whitespace-pre-wrap break-words" style={{ fontFamily: 'var(--qw-serif)', fontSize: 13, lineHeight: 1.6 }}>
+      {det.kind === "text" && (
+        <div
+          className="whitespace-pre-wrap break-words"
+          style={{
+            fontFamily: "var(--devtools-serif)",
+            fontSize: 13,
+            lineHeight: 1.6,
+          }}
+        >
           {det.text}
         </div>
       )}
-      {det.kind === 'markdown' &&
-        (mode === 'rendered' ? (
-          <div className="qw-prose">
+      {det.kind === "markdown" &&
+        (mode === "rendered" ? (
+          <div className="devtools-prose">
             <Streamdown>{det.text}</Streamdown>
           </div>
         ) : (
           <RawText text={det.text} />
         ))}
-      {det.kind === 'json' &&
-        (mode === 'table' && table ? (
+      {det.kind === "json" &&
+        (mode === "table" && table ? (
           <JsonTable shape={table} />
-        ) : mode === 'raw' ? (
+        ) : mode === "raw" ? (
           <RawText text={safeStringify(det.data)} />
         ) : (
           <JsonTree data={det.data} />
         ))}
     </div>
-  )
+  );
 
-  const showToolbar = Boolean(label) || modes.length > 1
+  const showToolbar = Boolean(label) || modes.length > 1;
   const toolbar = showToolbar && (
     <div className="mb-1.5 flex items-center justify-between gap-2">
       {label ? (
-        <span className="font-mono text-[10px] uppercase tracking-[0.1em]" style={{ color: 'var(--qw-fg-faint)' }}>
+        <span
+          className="font-mono text-[10px] uppercase tracking-[0.1em]"
+          style={{ color: "var(--devtools-fg-faint)" }}
+        >
           {label}
         </span>
       ) : (
         <span />
       )}
-      {modes.length > 1 && <ModeToggle modes={modes} active={mode} onChange={setPicked} />}
+      {modes.length > 1 && (
+        <ModeToggle modes={modes} active={mode} onChange={setPicked} />
+      )}
     </div>
-  )
+  );
 
   if (bare) {
     return (
@@ -164,65 +185,97 @@ export function ValueView({
         {toolbar}
         {content}
       </div>
-    )
+    );
   }
   return (
     <div className={className}>
       {toolbar}
       <div
         className="rounded-[8px] px-3 py-2.5"
-        style={{ background: 'var(--qw-bg)', boxShadow: `inset 0 0 0 1px ${tone === 'danger' ? 'var(--qw-danger-line)' : 'var(--qw-border)'}` }}
+        style={{
+          background: "var(--devtools-bg)",
+          boxShadow: `inset 0 0 0 1px ${tone === "danger" ? "var(--devtools-danger-line)" : "var(--devtools-border)"}`,
+        }}
       >
         {content}
       </div>
     </div>
-  )
+  );
 }
 
 function RawText({ text }: { text: string }) {
   return (
-    <pre className="m-0 whitespace-pre-wrap break-words font-mono text-[12px] leading-[1.6]" style={{ color: 'var(--qw-fg)' }}>
+    <pre
+      className="m-0 whitespace-pre-wrap break-words font-mono text-[12px] leading-[1.6]"
+      style={{ color: "var(--devtools-fg)" }}
+    >
       {text}
     </pre>
-  )
+  );
 }
 
-function ModeToggle({ modes, active, onChange }: { modes: string[]; active: string; onChange: (m: string) => void }) {
+function ModeToggle({
+  modes,
+  active,
+  onChange,
+}: {
+  modes: string[];
+  active: string;
+  onChange: (m: string) => void;
+}) {
   return (
-    <span className="inline-flex overflow-hidden rounded-[6px] font-mono text-[10px]" style={{ border: '1px solid var(--qw-border)', background: 'var(--qw-bg)' }}>
+    <span
+      className="inline-flex overflow-hidden rounded-[6px] font-mono text-[10px]"
+      style={{
+        border: "1px solid var(--devtools-border)",
+        background: "var(--devtools-bg)",
+      }}
+    >
       {modes.map((m) => {
-        const on = m === active
+        const on = m === active;
         return (
           <button
             key={m}
             type="button"
             onClick={() => onChange(m)}
             className="px-2 py-[3px] lowercase"
-            style={{ color: on ? 'var(--qw-crux)' : 'var(--qw-fg-muted)', background: on ? 'var(--qw-crux-soft)' : 'transparent' }}
+            style={{
+              color: on ? "var(--devtools-crux)" : "var(--devtools-fg-muted)",
+              background: on ? "var(--devtools-crux-soft)" : "transparent",
+            }}
           >
             {m}
           </button>
-        )
+        );
       })}
     </span>
-  )
+  );
 }
 
-const TH =
-  'px-2.5 py-1.5 text-left font-semibold'
-const TH_STYLE = { color: 'var(--qw-fg-muted)', background: 'var(--qw-bg-muted)', borderBottom: '1px solid var(--qw-border)' } as const
-const TD_STYLE = { borderBottom: '1px solid var(--qw-border)', color: 'var(--qw-fg)' } as const
+const TH = "px-2.5 py-1.5 text-left font-semibold";
+const TH_STYLE = {
+  color: "var(--devtools-fg-muted)",
+  background: "var(--devtools-bg-muted)",
+  borderBottom: "1px solid var(--devtools-border)",
+} as const;
+const TD_STYLE = {
+  borderBottom: "1px solid var(--devtools-border)",
+  color: "var(--devtools-fg)",
+} as const;
 
 function JsonTable({ shape }: { shape: TableShape }) {
-  if (shape.kind === 'kv') {
+  if (shape.kind === "kv") {
     // Single object → two-column field/value table.
     return (
       <table className="w-full border-collapse font-mono text-[11.5px]">
         <tbody>
           {shape.entries.map(([k, v]) => (
             <tr key={k}>
-              <th className="w-[180px] px-2.5 py-1.5 text-left align-top font-semibold" style={TD_STYLE}>
-                <span style={{ color: 'var(--qw-iris)' }}>{k}</span>
+              <th
+                className="w-[180px] px-2.5 py-1.5 text-left align-top font-semibold"
+                style={TD_STYLE}
+              >
+                <span style={{ color: "var(--devtools-iris)" }}>{k}</span>
               </th>
               <td className="px-2.5 py-1.5 align-top" style={TD_STYLE}>
                 {cellText(v)}
@@ -231,12 +284,14 @@ function JsonTable({ shape }: { shape: TableShape }) {
           ))}
         </tbody>
       </table>
-    )
+    );
   }
   // Array of objects → columnar table keyed by the union of fields.
-  const cols: string[] = []
-  const seen = new Set<string>()
-  for (const r of shape.rows) for (const k of Object.keys(r)) if (!seen.has(k)) (seen.add(k), cols.push(k))
+  const cols: string[] = [];
+  const seen = new Set<string>();
+  for (const r of shape.rows)
+    for (const k of Object.keys(r))
+      if (!seen.has(k)) (seen.add(k), cols.push(k));
   return (
     <table className="w-full border-collapse font-mono text-[11.5px]">
       <thead>
@@ -260,11 +315,11 @@ function JsonTable({ shape }: { shape: TableShape }) {
         ))}
       </tbody>
     </table>
-  )
+  );
 }
 
 function cellText(v: unknown): string {
-  if (v == null) return '—'
-  if (typeof v === 'object') return safeStringify(v)
-  return String(v)
+  if (v == null) return "—";
+  if (typeof v === "object") return safeStringify(v);
+  return String(v);
 }

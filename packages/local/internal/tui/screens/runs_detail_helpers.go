@@ -13,7 +13,7 @@ import (
 
 // --- helpers ---------------------------------------------------------------
 
-func (s *Runs) currentSpan() *api.QualityRunSpan {
+func (s *Runs) currentSpan() *api.InspectRunSpan {
 	if s.detail == nil {
 		return nil
 	}
@@ -25,7 +25,7 @@ func (s *Runs) currentSpan() *api.QualityRunSpan {
 	return nil
 }
 
-func parentLabel(span *api.QualityRunSpan) string {
+func parentLabel(span *api.InspectRunSpan) string {
 	if span.ParentID == "" {
 		return "— (root)"
 	}

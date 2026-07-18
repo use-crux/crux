@@ -13,16 +13,16 @@ func (w *Workbench) handleBridgeBatch(batch bridge.Batch) tea.Cmd {
 	}
 	w.markInactiveStale(changed)
 
-	cmds := make([]tea.Cmd, 0, len(batch.Quality)+2)
+	cmds := make([]tea.Cmd, 0, len(batch.Inspect)+2)
 	active := w.activeScreen()
 	if active.Interested(changed) {
-		if len(batch.Quality) > 0 {
-			for _, ev := range batch.Quality {
+		if len(batch.Inspect) > 0 {
+			for _, ev := range batch.Inspect {
 				cmds = append(cmds, active.Update(ev, w.client))
 			}
 		} else if batch.IndexChanged {
-			cmds = append(cmds, active.Update(api.QualityEvent{
-				Tag:       "QualityEvent",
+			cmds = append(cmds, active.Update(api.InspectEvent{
+				Tag:       "InspectEvent",
 				Timestamp: timeNowMs(),
 				Kind:      string(bridge.DomainIndex),
 				Action:    "changed",

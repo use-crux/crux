@@ -13,11 +13,9 @@
  */
 
 import { useMemo } from "react";
-import { QwShell } from "@/qw/shell/QwShell";
-import { navTarget } from "@/app/navigation/navTarget";
-import { Btn, Chip, Kpi, SectionHead } from "@/qw/shell/primitives";
-import { Icon } from "@/qw/shell/Icon";
-import { useConnected } from "@/app/runtime/runtimeStore";
+import { DevtoolsShell } from "@/devtools/shell/DevtoolsShell";
+import { Btn, Chip, Kpi, SectionHead } from "@/devtools/shell/primitives";
+import { Icon } from "@/devtools/shell/Icon";
 import { useNavigation } from "@/app/navigation/useNavigation";
 import {
   useWorkspaceDetails,
@@ -40,7 +38,7 @@ import {
   Stat,
   TableHeader,
 } from "@/features/workspaces/components/WorkspaceAtoms";
-import { SectionBoundary } from "@/qw/shell/SectionBoundary";
+import { SectionBoundary } from "@/devtools/shell/SectionBoundary";
 import { SkeletonCard, SkeletonRows } from "@/shared/components/Skeleton";
 import { qk } from "@/shared/query/queryClient";
 import { FileTreePane } from "@/features/workspaces/components/WorkspaceFileTree";
@@ -72,7 +70,6 @@ export function WorkspacesView({
 
 function WorkspacesOverview() {
   const { navigate } = useNavigation();
-  const connected = useConnected();
   // Suspends on first paint — caught by App-level Suspense.
   const list = useWorkspacesSuspense();
 
@@ -116,9 +113,7 @@ function WorkspacesOverview() {
   }, [details]);
 
   return (
-    <QwShell
-      activeView="library-workspaces"
-      onNavigate={(v) => navigate(navTarget(v))}
+    <DevtoolsShell
       breadcrumb="Library / Workspaces"
       title="Workspaces"
       subtitle={
@@ -126,7 +121,6 @@ function WorkspacesOverview() {
           ? "No workspaces observed yet"
           : `${list.length} workspace${list.length === 1 ? "" : "s"} · ${kpis.totalOps.toLocaleString()} ops${kpis.totalErrors > 0 ? ` · ${kpis.totalErrors} error${kpis.totalErrors === 1 ? "" : "s"}` : ""}`
       }
-      connected={connected}
       actions={
         <>
           <Btn
@@ -189,7 +183,7 @@ function WorkspacesOverview() {
           right={
             <span
               className="font-mono text-[11px]"
-              style={{ color: "var(--qw-fg-faint)" }}
+              style={{ color: "var(--devtools-fg-faint)" }}
             >
               {list.length} of {list.length}
             </span>
@@ -236,7 +230,7 @@ function WorkspacesOverview() {
           />
         )}
       </div>
-    </QwShell>
+    </DevtoolsShell>
   );
 }
 
@@ -282,12 +276,12 @@ function WorkspaceCard({
     <div
       className="overflow-hidden rounded-[10px] border"
       style={{
-        background: "var(--qw-bg-elev)",
-        borderColor: "var(--qw-border)",
+        background: "var(--devtools-bg-elev)",
+        borderColor: "var(--devtools-border)",
         borderLeft:
           errs > 0
-            ? "3px solid var(--qw-danger)"
-            : "1px solid var(--qw-border)",
+            ? "3px solid var(--devtools-danger)"
+            : "1px solid var(--devtools-border)",
       }}
     >
       {/* Header */}
@@ -295,8 +289,8 @@ function WorkspaceCard({
         className="grid items-center gap-4 px-4 py-3"
         style={{
           gridTemplateColumns: "minmax(0, 1.5fr) minmax(0, 1fr) auto",
-          borderBottom: "1px solid var(--qw-border)",
-          background: "var(--qw-bg-muted)",
+          borderBottom: "1px solid var(--devtools-border)",
+          background: "var(--devtools-bg-muted)",
         }}
       >
         <div className="min-w-0">
@@ -304,7 +298,7 @@ function WorkspaceCard({
             <Icon
               name="folder"
               size={14}
-              color="var(--qw-crux)"
+              color="var(--devtools-crux)"
               className="shrink-0"
             />
             <button
@@ -324,7 +318,7 @@ function WorkspaceCard({
           {workspace.namespace && (
             <span
               className="font-mono text-[11px]"
-              style={{ color: "var(--qw-fg-muted)" }}
+              style={{ color: "var(--devtools-fg-muted)" }}
             >
               namespace · {workspace.namespace}
             </span>
@@ -336,7 +330,9 @@ function WorkspaceCard({
           <Stat
             label="Errors"
             value={errs}
-            color={errs > 0 ? "var(--qw-danger)" : "var(--qw-fg-faint)"}
+            color={
+              errs > 0 ? "var(--devtools-danger)" : "var(--devtools-fg-faint)"
+            }
           />
           {workspace.stats?.p50LatencyMs != null && (
             <Stat
@@ -376,20 +372,24 @@ function WorkspaceCard({
                 borderBottom:
                   mi === filesByMount.length - 1
                     ? "none"
-                    : "1px solid var(--qw-border)",
+                    : "1px solid var(--devtools-border)",
               }}
             >
               <div
                 className="flex items-center gap-2 px-4 py-2 font-mono text-[11px]"
                 style={{
-                  background: "var(--qw-bg)",
-                  color: "var(--qw-fg-muted)",
-                  borderBottom: "1px solid var(--qw-border)",
+                  background: "var(--devtools-bg)",
+                  color: "var(--devtools-fg-muted)",
+                  borderBottom: "1px solid var(--devtools-border)",
                 }}
               >
-                <Icon name="folder" size={11} color="var(--qw-fg-faint)" />
-                <span style={{ color: "var(--qw-crux)" }}>{mount}</span>
-                <span style={{ color: "var(--qw-fg-faint)" }}>
+                <Icon
+                  name="folder"
+                  size={11}
+                  color="var(--devtools-fg-faint)"
+                />
+                <span style={{ color: "var(--devtools-crux)" }}>{mount}</span>
+                <span style={{ color: "var(--devtools-fg-faint)" }}>
                   · {mountFiles.length} file{mountFiles.length === 1 ? "" : "s"}
                 </span>
               </div>
@@ -427,22 +427,24 @@ function WorkspaceFileRow({
     <button
       type="button"
       onClick={onClick}
-      className="grid w-full items-center gap-2.5 px-4 py-2 text-left transition-colors hover:bg-(--qw-bg-muted)"
+      className="grid w-full items-center gap-2.5 px-4 py-2 text-left transition-colors hover:bg-(--devtools-bg-muted)"
       style={{
         gridTemplateColumns: "24px minmax(0, 1fr) auto auto auto auto auto",
-        borderBottom: last ? "none" : "1px solid var(--qw-border)",
-        background: isErr ? "var(--qw-danger-soft)" : "transparent",
+        borderBottom: last ? "none" : "1px solid var(--devtools-border)",
+        background: isErr ? "var(--devtools-danger-soft)" : "transparent",
       }}
     >
       <Icon
         name="doc"
         size={12}
-        color={isErr ? "var(--qw-danger)" : "var(--qw-fg-faint)"}
+        color={isErr ? "var(--devtools-danger)" : "var(--devtools-fg-faint)"}
       />
       <div className="min-w-0">
         <span
           className="truncate font-mono text-[12px] font-medium"
-          style={{ color: isErr ? "var(--qw-danger)" : "var(--qw-fg)" }}
+          style={{
+            color: isErr ? "var(--devtools-danger)" : "var(--devtools-fg)",
+          }}
           title={file.path}
         >
           {file.path}
@@ -450,7 +452,7 @@ function WorkspaceFileRow({
         {file.lastError && (
           <div
             className="mt-0.5 font-mono text-[10.5px]"
-            style={{ color: "var(--qw-danger)" }}
+            style={{ color: "var(--devtools-danger)" }}
           >
             ✕ {file.lastError}
           </div>
@@ -462,7 +464,7 @@ function WorkspaceFileRow({
             {file.uri && (
               <span
                 className="truncate"
-                style={{ color: "var(--qw-crux)" }}
+                style={{ color: "var(--devtools-crux)" }}
                 title={file.uri}
               >
                 ref
@@ -474,14 +476,17 @@ function WorkspaceFileRow({
       {file.op ? (
         <OpPill op={file.op} />
       ) : (
-        <span className="text-[10.5px]" style={{ color: "var(--qw-fg-faint)" }}>
+        <span
+          className="text-[10.5px]"
+          style={{ color: "var(--devtools-fg-faint)" }}
+        >
           —
         </span>
       )}
       {hasMime && (
         <span
           className="font-mono text-[10.5px]"
-          style={{ color: "var(--qw-fg-faint)" }}
+          style={{ color: "var(--devtools-fg-faint)" }}
         >
           {file.mime}
         </span>
@@ -489,7 +494,7 @@ function WorkspaceFileRow({
       {hasSize && (
         <span
           className="font-mono text-[11px]"
-          style={{ color: "var(--qw-fg-muted)" }}
+          style={{ color: "var(--devtools-fg-muted)" }}
         >
           {fmtBytes(file.size)}
         </span>
@@ -497,7 +502,7 @@ function WorkspaceFileRow({
       {hasDur && (
         <span
           className="font-mono text-[11px]"
-          style={{ color: "var(--qw-fg-faint)" }}
+          style={{ color: "var(--devtools-fg-faint)" }}
         >
           {fmtDuration(file.lastOpDurationMs)}
         </span>
@@ -505,7 +510,7 @@ function WorkspaceFileRow({
       {hasTime && (
         <span
           className="font-mono text-[11px]"
-          style={{ color: "var(--qw-fg-faint)" }}
+          style={{ color: "var(--devtools-fg-faint)" }}
         >
           {fmtTime(file.lastOpAt)}
         </span>
@@ -518,7 +523,10 @@ function ArtifactTag({ label }: { label: string }) {
   return (
     <span
       className="rounded-[4px] px-1.5 py-0.5"
-      style={{ background: "var(--qw-bg-muted)", color: "var(--qw-fg-muted)" }}
+      style={{
+        background: "var(--devtools-bg-muted)",
+        color: "var(--devtools-fg-muted)",
+      }}
     >
       {label}
     </span>
@@ -544,7 +552,7 @@ function AuditTrailTable({
         right={
           <span
             className="font-mono text-[11px]"
-            style={{ color: "var(--qw-fg-faint)" }}
+            style={{ color: "var(--devtools-fg-faint)" }}
           >
             chronological · last {ops.length}
           </span>
@@ -553,8 +561,8 @@ function AuditTrailTable({
       <div
         className="overflow-hidden rounded-[10px]"
         style={{
-          background: "var(--qw-bg-elev)",
-          border: "1px solid var(--qw-border)",
+          background: "var(--devtools-bg-elev)",
+          border: "1px solid var(--devtools-border)",
         }}
       >
         <TableHeader
@@ -579,7 +587,7 @@ function AuditTrailTable({
             key={o.eventId}
             type="button"
             onClick={() => onOpenWorkspace(o.workspaceId)}
-            className="grid w-full items-center gap-2.5 px-4 py-2 text-left font-mono text-[11.5px] transition-colors hover:bg-(--qw-bg-muted)"
+            className="grid w-full items-center gap-2.5 px-4 py-2 text-left font-mono text-[11.5px] transition-colors hover:bg-(--devtools-bg-muted)"
             style={{
               gridTemplateColumns: [
                 "70px",
@@ -593,16 +601,18 @@ function AuditTrailTable({
                 .filter(Boolean)
                 .join(" "),
               borderBottom:
-                i === ops.length - 1 ? "none" : "1px solid var(--qw-border)",
+                i === ops.length - 1
+                  ? "none"
+                  : "1px solid var(--devtools-border)",
             }}
           >
-            <span style={{ color: "var(--qw-fg-faint)" }}>
+            <span style={{ color: "var(--devtools-fg-faint)" }}>
               {fmtTime(o.timestamp)}
             </span>
             <OpPill op={o.op} />
             <span
               className="truncate"
-              style={{ color: "var(--qw-fg-muted)" }}
+              style={{ color: "var(--devtools-fg-muted)" }}
               title={o.workspaceId}
             >
               {o.workspaceId}
@@ -610,7 +620,7 @@ function AuditTrailTable({
             <div className="min-w-0">
               <span
                 className="block truncate"
-                style={{ color: "var(--qw-fg)" }}
+                style={{ color: "var(--devtools-fg)" }}
                 title={o.path}
               >
                 {o.path}
@@ -618,7 +628,7 @@ function AuditTrailTable({
               {(o.artifactStatus || o.artifactKind || o.uri) && (
                 <span
                   className="block truncate text-[10px]"
-                  style={{ color: "var(--qw-fg-faint)" }}
+                  style={{ color: "var(--devtools-fg-faint)" }}
                   title={o.uri}
                 >
                   {artifactLabel(o)}
@@ -628,7 +638,7 @@ function AuditTrailTable({
             {hasDur && (
               <span
                 className="text-right"
-                style={{ color: "var(--qw-fg-faint)" }}
+                style={{ color: "var(--devtools-fg-faint)" }}
               >
                 {fmtDuration(o.durationMs) ?? "—"}
               </span>
@@ -639,10 +649,10 @@ function AuditTrailTable({
                 style={{
                   color:
                     o.status === "ok"
-                      ? "var(--qw-ok)"
+                      ? "var(--devtools-ok)"
                       : o.status === "err"
-                        ? "var(--qw-danger)"
-                        : "var(--qw-fg-muted)",
+                        ? "var(--devtools-danger)"
+                        : "var(--devtools-fg-muted)",
                 }}
               >
                 {o.status === "ok" ? "●" : o.status === "err" ? "✕" : "—"}{" "}
@@ -650,7 +660,10 @@ function AuditTrailTable({
               </span>
             )}
             {hasTrace && (
-              <span className="text-right" style={{ color: "var(--qw-crux)" }}>
+              <span
+                className="text-right"
+                style={{ color: "var(--devtools-crux)" }}
+              >
                 {shortTrace(o.traceId) ?? "—"}
               </span>
             )}
@@ -679,7 +692,6 @@ function WorkspaceDetailScreen({
   filePath: string | undefined;
 }) {
   const { navigate } = useNavigation();
-  const connected = useConnected();
   // Suspends on first paint — caught by the App-level Suspense.
   // Errors throw to the App-level ErrorBoundary.
   const data = useWorkspaceSuspense(workspaceId);
@@ -690,13 +702,10 @@ function WorkspaceDetailScreen({
   const selectedPath = filePath ?? files[0]?.path;
 
   return (
-    <QwShell
-      activeView="library-workspaces"
-      onNavigate={(v) => navigate(navTarget(v))}
+    <DevtoolsShell
       breadcrumb={`Library / Workspaces / ${shortBreadcrumbId(workspaceId)}`}
       title={workspaceId}
       subtitle={buildDetailSubtitle(data)}
-      connected={connected}
       noScroll
       actions={
         <>
@@ -747,14 +756,14 @@ function WorkspaceDetailScreen({
           ) : (
             <div
               className="flex h-full items-center justify-center text-[13px]"
-              style={{ color: "var(--qw-fg-faint)" }}
+              style={{ color: "var(--devtools-fg-faint)" }}
             >
               Select a file to inspect.
             </div>
           )}
         </div>
       </div>
-    </QwShell>
+    </DevtoolsShell>
   );
 }
 

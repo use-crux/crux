@@ -29,9 +29,9 @@ describe('multimodal release tracer', () => {
       specificationVersion: 'v3',
     } as unknown as LanguageModel
 
-    await ai.generate(chat, { model })
+    const generated = await ai.generate(chat, { model })
     const streamed = await ai.stream(chat, { model })
-    await streamed.completion
+    const completion = await streamed.completion
     await observe.flush()
 
     const generationStarts = transport.records.filter(
@@ -51,6 +51,15 @@ describe('multimodal release tracer', () => {
         }),
       ]),
     )
+    const generateStart = generationStarts.find(
+      (record) => record.attributes?.operation === 'generate',
+    )
+    const streamStart = generationStarts.find(
+      (record) => record.attributes?.operation === 'stream',
+    )
+    expect(generated.runId).toBe(generateStart?.runId)
+    expect(streamed.runId).toBe(streamStart?.runId)
+    expect(completion.runId).toBe(streamed.runId)
     for (const record of generationStarts) {
       expect(record).toMatchObject({
         attributes: {

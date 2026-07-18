@@ -4,6 +4,7 @@ import {
   type HostBoundRuntimeEngineDefinition,
   type RuntimeRetentionConfig,
 } from '@use-crux/core/runtime'
+import { attachEvalHostConnectionInference } from '@use-crux/core/runtime/internal/eval-host'
 
 /** Default generated Convex runtime entry point for host-bound execution. */
 export const CONVEX_RUNTIME_ENTRY = 'createConvexRuntimeHandlers({ targetExecutor }) in convex/_crux/generated.ts'
@@ -34,7 +35,7 @@ export type ConvexRuntimeEngineDefinition = HostBoundRuntimeEngineDefinition<Con
  * kernel via `bindHostRuntime()`.
  */
 export function convex(options: ConvexRuntimeEngineOptions = {}): ConvexRuntimeEngineDefinition {
-  return Object.freeze({
+  return attachEvalHostConnectionInference({
     kind: 'host-bound' as const,
     id: 'convex',
     host: 'convex',
@@ -43,6 +44,11 @@ export function convex(options: ConvexRuntimeEngineOptions = {}): ConvexRuntimeE
     ...(options.namespace ? { namespace: options.namespace } : {}),
     ...(options.retention ? { retention: options.retention } : {}),
     options: Object.freeze({ ...options }),
+  }, {
+    infer: (environment) => ({
+      ...(environment.CONVEX_SITE_URL ? { url: environment.CONVEX_SITE_URL } : {}),
+      ...(environment.CONVEX_DEPLOYMENT ? { deploymentId: environment.CONVEX_DEPLOYMENT } : {}),
+    }),
   })
 }
 

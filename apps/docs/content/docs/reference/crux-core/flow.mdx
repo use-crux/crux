@@ -13,7 +13,7 @@ import {
   FlowSuspendedError,
   FlowCancelledError,
   FlowExpiredError,
-} from '@use-crux/core/flow'
+} from "@use-crux/core/flow";
 ```
 
 ## Overview
@@ -26,25 +26,32 @@ Flows support suspend/resume for human-in-the-loop workflows. When `flow.suspend
 
 Define a named flow and return a frozen `FlowHandle`. Separates definition from execution: the handler is captured once, then `.run()` can be called repeatedly with different inputs and options. Input-bearing flows infer their input type from the handler's second parameter.
 
-| Parameter | Type                                                   | Description                                                                                          |
-| --------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| `name`    | `string`                                               | Human-readable flow name                                                                             |
+| Parameter | Type                                                    | Description                                                                                            |
+| --------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `name`    | `string`                                                | Human-readable flow name                                                                               |
 | `handler` | `(flow: FlowScope<TInput>, input?: TInput) => T \| ...` | Flow function with access to `flow.step()`, `flow.suspend()`, `flow.cancel()`, and optional input data |
 
 **Returns:** `FlowHandle<T, TInput>` -- frozen handle with `.run()`, `.resume()`, `.signal()`, `.cancel()`, and `.name`
 
 ```ts
-import { flow } from '@use-crux/core/flow'
-import { generate } from '@use-crux/ai'
+import { flow } from "@use-crux/core/flow";
+import { generate } from "@use-crux/ai";
 
-const researchFlow = flow('research', async (flow, input: { topic: string }) => {
-  const plan = await flow.step('plan', () => generate(planner, { model, input: { topic: input.topic } }))
-  return flow.step('search', () => generate(searcher, { model, input: { plan } }))
-})
+const researchFlow = flow(
+  "research",
+  async (flow, input: { topic: string }) => {
+    const plan = await flow.step("plan", () =>
+      generate(planner, { model, input: { topic: input.topic } }),
+    );
+    return flow.step("search", () =>
+      generate(searcher, { model, input: { plan } }),
+    );
+  },
+);
 
-const result = await researchFlow.run({ topic: 'TypeScript monorepos' })
-if (result.status === 'completed') {
-  console.log(result.output)
+const result = await researchFlow.run({ topic: "TypeScript monorepos" });
+if (result.status === "completed") {
+  console.log(result.output);
 }
 ```
 
@@ -86,15 +93,15 @@ The scope object passed to the flow handler. Generic over `TInput` (defaults to 
 | Property / Method                        | Type                      | Description                                                             |
 | ---------------------------------------- | ------------------------- | ----------------------------------------------------------------------- |
 | `flowId`                                 | `string`                  | The flow's unique identifier                                            |
-| `input`                                  | `TInput`                  | Typed input data restored from the run input                             |
+| `input`                                  | `TInput`                  | Typed input data restored from the run input                            |
 | `results`                                | `Record<string, unknown>` | Auto-populated after each step completes, keyed by step label           |
 | `step(label, fn, options?)`              | `Promise<T>`              | Execute a named step. `fn` can be `() => T` or `(flow: FlowScope) => T` |
 | `suspend(name, options?)`                | `Promise<T>`              | Suspend the flow at a named point and wait for an external signal       |
 | `waitUntil(name, conditionFn, options?)` | `Promise<void>`           | Suspend until a condition function returns `true`                       |
-| `waitFor(event, options?)`               | `Promise<TPayload>`       | Runtime-bound durable event wait                                       |
-| `defer(task, input)`                     | `Promise<{ workId }>`     | Runtime-bound durable child task enqueue at the next barrier           |
-| `after(task, delay, input)`              | `Promise<void>`           | Runtime-bound durable child task timer at the next barrier             |
-| `untilIdle({ scope: 'current-flow' })`   | `Promise<void>`           | Runtime-bound wait for child work in the current flow                  |
+| `waitFor(event, options?)`               | `Promise<TPayload>`       | Runtime-bound durable event wait                                        |
+| `defer(task, input)`                     | `Promise<{ workId }>`     | Runtime-bound durable child task enqueue at the next barrier            |
+| `after(task, delay, input)`              | `Promise<void>`           | Runtime-bound durable child task timer at the next barrier              |
+| `untilIdle({ scope: 'current-flow' })`   | `Promise<void>`           | Runtime-bound wait for child work in the current flow                   |
 | `cancel(reason?)`                        | `never`                   | Cancel the flow with an optional reason                                 |
 
 ### `step(label, fn, options?)`
@@ -125,9 +132,9 @@ Suspend until a durable event arrives. On first execution Crux registers a waite
 
 ```ts
 const approval = await flow.waitFor(
-  { name: 'document.approved', schema: approvalSchema },
-  { match: { documentId }, timeout: '24h' },
-)
+  { name: "document.approved", schema: approvalSchema },
+  { match: { documentId }, timeout: "24h" },
+);
 ```
 
 `match` compares top-level JSON payload fields. `timeout` schedules a durable timeout through the runtime.
@@ -137,7 +144,7 @@ const approval = await flow.waitFor(
 Buffer an executable durable task to run independently. The task becomes durable at the next suspension or completion barrier, so replay cannot enqueue it twice.
 
 ```ts
-const { workId } = await flow.defer(embedDocument, { documentId })
+const { workId } = await flow.defer(embedDocument, { documentId });
 ```
 
 The target must be a `durableTask()` from `@use-crux/core/runtime`, not a plan-ledger task.
@@ -147,7 +154,7 @@ The target must be a `durableTask()` from `@use-crux/core/runtime`, not a plan-l
 Buffer a durable child task timer. The timer is independent of the parent flow and becomes durable at the next barrier.
 
 ```ts
-await flow.after(sendReminder, '2d', { userId })
+await flow.after(sendReminder, "2d", { userId });
 ```
 
 ### `untilIdle({ scope: 'current-flow' })`
@@ -155,7 +162,7 @@ await flow.after(sendReminder, '2d', { userId })
 Suspend until child work created by the current flow reaches terminal state.
 
 ```ts
-await flow.untilIdle({ scope: 'current-flow' })
+await flow.untilIdle({ scope: "current-flow" });
 ```
 
 Global idle is not a v1 runtime primitive.
@@ -194,26 +201,29 @@ Discriminated union on `status`:
 
 Persisted flow state stored in `RecordStore` under the `crux:flow:{flowId}` key.
 
-| Field            | Type                                     | Description                    |
-| ---------------- | ---------------------------------------- | ------------------------------ |
-| `flowId`         | `string`                                 | Flow identifier                |
-| `name`           | `string`                                 | Flow name                      |
-| `status`         | `string`                                 | Current status                 |
-| `suspendedAt`    | `string`                                 | Suspend point name             |
+| Field            | Type                                     | Description                                     |
+| ---------------- | ---------------------------------------- | ----------------------------------------------- |
+| `flowId`         | `string`                                 | Flow identifier                                 |
+| `name`           | `string`                                 | Flow name                                       |
+| `status`         | `string`                                 | Current status                                  |
+| `suspendedAt`    | `string`                                 | Suspend point name                              |
 | `completedSteps` | `Record<string, { output, durationMs }>` | Cached step results keyed by durable step label |
-| `traceContext`   | `Record<string, string \| undefined>`    | Trace context metadata         |
-| `createdAt`      | `number`                                 | Unix timestamp (ms)            |
-| `updatedAt`      | `number`                                 | Unix timestamp (ms)            |
+| `traceContext`   | `Record<string, string \| undefined>`    | Trace context metadata                          |
+| `createdAt`      | `number`                                 | Unix timestamp (ms)                             |
+| `updatedAt`      | `number`                                 | Unix timestamp (ms)                             |
 
 ## Lifecycle Functions
 
 ### `signalFlow(flowId, name, payload?)`
 
 <Callout type="warn">
-  **Low-level primitive.** `signalFlow()` only writes the signal to the RecordStore -- it does NOT trigger the flow to
-  resume. Prefer `handle.signal()` which delegates to this internally. In Convex mutation-only modules, pair
-  `signalFlow()` with `ctx.scheduler.runAfter()` in an app-local helper that also schedules the resume action.
-  For flows with local signal maps, prefer `handle.signal()` so declared schemas validate before persistence.
+  **Low-level primitive.** `signalFlow()` only writes the signal to the
+  RecordStore -- it does NOT trigger the flow to resume. Prefer
+  `handle.signal()` which delegates to this internally. In Convex mutation-only
+  modules, pair `signalFlow()` with `ctx.scheduler.runAfter()` in an app-local
+  helper that also schedules the resume action. For flows with local signal
+  maps, prefer `handle.signal()` so declared schemas validate before
+  persistence.
 </Callout>
 
 Write a signal payload to the store at `crux:signal:{flowId}:{name}`. The signal is picked up on the next resume.
@@ -270,38 +280,51 @@ These errors are used internally for control flow -- they are caught by the flow
 ## Suspend/Resume Example
 
 ```ts
-import { flow, signalFlow } from '@use-crux/core/flow'
-import { z } from 'zod'
+import { flow, signalFlow } from "@use-crux/core/flow";
+import { z } from "zod";
 
-const approvalFlow = flow('content-approval', async (flow, input: { topic: string }) => {
-  const draft = await flow.step('draft', () => generate(writer, { model, input }))
+const approvalFlow = flow(
+  "content-approval",
+  async (flow, input: { topic: string }) => {
+    const draft = await flow.step("draft", () =>
+      generate(writer, { model, input }),
+    );
 
-  // Suspend and wait for human approval
-  const approval = await flow.suspend('review', {
-    schema: z.object({ approved: z.boolean(), feedback: z.string().optional() }),
-    timeout: '24h',
-    onExpired: ({ flowId }) => console.log(`Flow ${flowId} expired`),
-  })
+    // Suspend and wait for human approval
+    const approval = await flow.suspend("review", {
+      schema: z.object({
+        approved: z.boolean(),
+        feedback: z.string().optional(),
+      }),
+      timeout: "24h",
+      onExpired: ({ flowId }) => console.log(`Flow ${flowId} expired`),
+    });
 
-  if (!approval.approved) {
-    flow.cancel('Rejected by reviewer')
-  }
+    if (!approval.approved) {
+      flow.cancel("Rejected by reviewer");
+    }
 
-  return flow.step('publish', () => generate(publisher, { model, input: { draft, feedback: approval.feedback } }))
-})
+    return flow.step("publish", () =>
+      generate(publisher, {
+        model,
+        input: { draft, feedback: approval.feedback },
+      }),
+    );
+  },
+);
 
 // Start the flow
-const result = await approvalFlow.run({ topic: 'AI safety' })
+const result = await approvalFlow.run({ topic: "AI safety" });
 // result.status === 'suspended'
 
 // Later, signal the flow to resume
-await approvalFlow.signal(result.flowId, 'review', {
+await approvalFlow.signal(result.flowId, "review", {
   approved: true,
-  feedback: 'Great draft, just fix the intro.',
-})
+  feedback: "Great draft, just fix the intro.",
+});
 
 // Resume the flow
-const final = await approvalFlow.resume(result.flowId)
+const final = await approvalFlow.resume(result.flowId);
 // final.status === 'completed'
 ```
 
@@ -319,9 +342,13 @@ import type {
   ListFlowsOptions,
   SuspendOptions,
   StepOptions,
-} from '@use-crux/core/flow'
+} from "@use-crux/core/flow";
 
-import { FlowSuspendedError, FlowCancelledError, FlowExpiredError } from '@use-crux/core/flow'
+import {
+  FlowSuspendedError,
+  FlowCancelledError,
+  FlowExpiredError,
+} from "@use-crux/core/flow";
 ```
 
 ## Related

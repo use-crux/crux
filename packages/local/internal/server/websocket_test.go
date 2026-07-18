@@ -13,13 +13,13 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/use-crux/crux/packages/local/internal/devtools"
-	"github.com/use-crux/crux/packages/local/internal/quality"
+	"github.com/use-crux/crux/packages/local/internal/inspect"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
 func newTestWSServer(t *testing.T, s *store.Store) http.Handler {
 	t.Helper()
-	return NewHTTPServer(s, ServerOptions{QualityDir: t.TempDir()})
+	return NewHTTPServer(s, ServerOptions{InspectDir: t.TempDir()})
 }
 
 func dialWS(t *testing.T, ts *httptest.Server) *websocket.Conn {
@@ -104,36 +104,36 @@ func readObservabilityEvent(t *testing.T, ws *websocket.Conn) map[string]any {
 	}
 }
 
-func readQualityEvent(t *testing.T, ws *websocket.Conn) map[string]any {
+func readInspectEvent(t *testing.T, ws *websocket.Conn) map[string]any {
 	t.Helper()
 	ws.SetReadDeadline(time.Now().Add(2 * time.Second))
 	for {
 		_, msg, err := ws.ReadMessage()
 		if err != nil {
-			t.Fatalf("expected quality:event, got error: %v", err)
+			t.Fatalf("expected inspect:event, got error: %v", err)
 		}
 		var envelope map[string]any
 		if err := json.Unmarshal(msg, &envelope); err != nil {
 			t.Fatalf("JSON decode error: %v", err)
 		}
-		if envelope["type"] == "quality:event" {
-			if envelope["_tag"] != "QualityEvent" {
-				t.Fatalf("quality:event missing top-level QualityEvent fields: %#v", envelope)
+		if envelope["type"] == "inspect:event" {
+			if envelope["_tag"] != "InspectEvent" {
+				t.Fatalf("inspect:event missing top-level InspectEvent fields: %#v", envelope)
 			}
 			return envelope
 		}
 	}
 }
 
-func readObservabilityAndQualityEvents(t *testing.T, ws *websocket.Conn) (map[string]any, map[string]any) {
+func readObservabilityAndInspectEvents(t *testing.T, ws *websocket.Conn) (map[string]any, map[string]any) {
 	t.Helper()
 	ws.SetReadDeadline(time.Now().Add(2 * time.Second))
 	var observabilityEvent map[string]any
-	var qualityEvent map[string]any
-	for observabilityEvent == nil || qualityEvent == nil {
+	var inspectEvent map[string]any
+	for observabilityEvent == nil || inspectEvent == nil {
 		_, msg, err := ws.ReadMessage()
 		if err != nil {
-			t.Fatalf("expected observability:event and quality:event, got error: %v", err)
+			t.Fatalf("expected observability:event and inspect:event, got error: %v", err)
 		}
 		var envelope map[string]any
 		if err := json.Unmarshal(msg, &envelope); err != nil {
@@ -146,14 +146,14 @@ func readObservabilityAndQualityEvents(t *testing.T, ws *websocket.Conn) (map[st
 				t.Fatalf("observability:event missing event payload: %#v", envelope)
 			}
 			observabilityEvent = event
-		case "quality:event":
-			if envelope["_tag"] != "QualityEvent" {
-				t.Fatalf("quality:event missing top-level QualityEvent fields: %#v", envelope)
+		case "inspect:event":
+			if envelope["_tag"] != "InspectEvent" {
+				t.Fatalf("inspect:event missing top-level InspectEvent fields: %#v", envelope)
 			}
-			qualityEvent = envelope
+			inspectEvent = envelope
 		}
 	}
-	return observabilityEvent, qualityEvent
+	return observabilityEvent, inspectEvent
 }
 
 func readIndexEvent(t *testing.T, ws *websocket.Conn) map[string]any {
@@ -288,11 +288,6 @@ func readServerSource(t *testing.T, name string) string {
 
 func TestRegisteredSnapshotMessageUsesRegistryMetadata(t *testing.T) {
 	s := store.NewStore()
-	s.EvalStart(store.EvalStartEvent{
-		EvalID:     "eval-1",
-		StartedAt:  1,
-		TotalCases: 1,
-	})
 	actualCost := 0.12
 	s.RecordCostEvent("report", store.CostEvent{
 		TraceID:   "trace-1",
@@ -300,17 +295,8 @@ func TestRegisteredSnapshotMessageUsesRegistryMetadata(t *testing.T) {
 		Actual:    &actualCost,
 		Entry:     map[string]any{"model": "test-model"},
 	})
-	qualitySvc := quality.NewService(s, quality.Dir(t.TempDir()))
-	hub := &WSHub{devtools: devtools.NewService(s, qualitySvc)}
-
-	evalMessage, ok := registeredSnapshotMessage(hub, "eval:snapshot")
-	if !ok {
-		t.Fatal("eval:snapshot was not built")
-	}
-	evalRuns, ok := evalMessage["evalRuns"].([]store.EvalRun)
-	if !ok || len(evalRuns) != 1 || evalRuns[0].EvalID != "eval-1" {
-		t.Fatalf("evalRuns = %#v, want eval-1", evalMessage["evalRuns"])
-	}
+	inspectSvc := inspect.NewService(s, inspect.Dir(t.TempDir()))
+	hub := &WSHub{devtools: devtools.NewService(s, inspectSvc)}
 
 	runtimeMessage, ok := registeredSnapshotMessage(hub, "runtime:snapshot")
 	if !ok {
@@ -420,16 +406,16 @@ func TestWebSocket_broadcast_on_event(t *testing.T) {
 	drainSnapshot(t, ws)
 
 	postObservabilityRun(t, ts.Client(), ts.URL, "run_ws")
-	event, qualityEvent := readObservabilityAndQualityEvents(t, ws)
+	event, inspectEvent := readObservabilityAndInspectEvents(t, ws)
 	if event["kind"] != "observability.records" || event["action"] != "ingested" || event["refId"] != "run_ws" {
 		t.Fatalf("observability event = %#v", event)
 	}
-	if qualityEvent["kind"] != "refresh" || qualityEvent["refId"] != "run_ws" {
-		t.Fatalf("quality event = %#v", qualityEvent)
+	if inspectEvent["kind"] != "refresh" || inspectEvent["refId"] != "run_ws" {
+		t.Fatalf("inspect event = %#v", inspectEvent)
 	}
 }
 
-func TestWebSocket_broadcasts_quality_run_delete(t *testing.T) {
+func TestWebSocket_broadcasts_inspect_run_delete(t *testing.T) {
 	s := store.NewStore()
 	srv := newTestWSServer(t, s)
 	ts := httptest.NewServer(srv)
@@ -442,28 +428,28 @@ func TestWebSocket_broadcasts_quality_run_delete(t *testing.T) {
 	postObservabilityRun(t, ts.Client(), ts.URL, "run_delete_ws")
 	_ = readObservabilityEvent(t, ws)
 
-	req, err := http.NewRequest(http.MethodDelete, ts.URL+"/api/quality/runs/run_delete_ws", nil)
+	req, err := http.NewRequest(http.MethodDelete, ts.URL+"/api/inspect/runs/run_delete_ws", nil)
 	if err != nil {
 		t.Fatalf("create delete request: %v", err)
 	}
 	resp, err := ts.Client().Do(req)
 	if err != nil {
-		t.Fatalf("DELETE quality run: %v", err)
+		t.Fatalf("DELETE Inspect run: %v", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("DELETE quality run status = %d, want 200", resp.StatusCode)
+		t.Fatalf("DELETE Inspect run status = %d, want 200", resp.StatusCode)
 	}
 
 	var event map[string]any
 	for i := 0; i < 3; i++ {
-		event = readQualityEvent(t, ws)
+		event = readInspectEvent(t, ws)
 		if event["kind"] == "run" && event["action"] == "deleted" {
 			break
 		}
 	}
 	if event["kind"] != "run" || event["action"] != "deleted" || event["refId"] != "run_delete_ws" {
-		t.Fatalf("quality delete event = %#v", event)
+		t.Fatalf("Inspect delete event = %#v", event)
 	}
 }
 

@@ -4,7 +4,7 @@ description: Reference for task ledgers, task specs, lifecycle methods, workers,
 ---
 
 ```ts
-import { task, tasks } from '@use-crux/core/tasks'
+import { task, tasks } from "@use-crux/core/tasks";
 
 import type {
   AddTaskInput,
@@ -20,8 +20,8 @@ import type {
   TaskStatus,
   TasksHandle,
   TasksInput,
-} from '@use-crux/core/tasks'
-import type { PlanHandle } from '@use-crux/core/plan'
+} from "@use-crux/core/tasks";
+import type { PlanHandle } from "@use-crux/core/plan";
 ```
 
 ## Overview
@@ -30,17 +30,17 @@ import type { PlanHandle } from '@use-crux/core/plan'
 
 ```ts
 const work = await tasks({
-  title: 'Launch tasks',
-})
+  title: "Launch tasks",
+});
 ```
 
 ```ts
 const work = await tasks({
   items: {
-    research: task('Research channels'),
-    draft: task('Draft announcement'),
+    research: task("Research channels"),
+    draft: task("Draft announcement"),
   },
-})
+});
 ```
 
 ## `tasks(input?)`
@@ -50,17 +50,17 @@ Creates a task ledger.
 ```ts
 const work = await tasks({
   plan: roadmap,
-  title: 'Launch tasks',
-  metadata: { threadId: 'thread-123' },
-})
+  title: "Launch tasks",
+  metadata: { threadId: "thread-123" },
+});
 ```
 
 ```ts
 interface TasksInput<TItems = undefined> {
-  plan?: PlanHandle | string
-  title?: string
-  items?: TItems
-  metadata?: JsonObject
+  plan?: PlanHandle | string;
+  title?: string;
+  items?: TItems;
+  metadata?: JsonObject;
 }
 ```
 
@@ -71,12 +71,12 @@ interface TasksInput<TItems = undefined> {
 Defines an initial task spec for `tasks({ items })`. It does not persist anything by itself.
 
 ```ts
-const spec = task('Draft announcement', {
-  description: 'Write the announcement in markdown.',
-  assignee: { agent: 'writer' },
+const spec = task("Draft announcement", {
+  description: "Write the announcement in markdown.",
+  assignee: { agent: "writer" },
   result: z.object({ markdown: z.string() }),
-  metadata: { phase: 'writing' },
-})
+  metadata: { phase: "writing" },
+});
 ```
 
 ## `tasks.ref(taskListId)`
@@ -84,8 +84,8 @@ const spec = task('Draft announcement', {
 Returns a handle for an existing task ledger without reading the store first.
 
 ```ts
-const work = tasks.ref(taskListId)
-const current = await work.get()
+const work = tasks.ref(taskListId);
+const current = await work.get();
 ```
 
 ## `tasks.list(options?)`
@@ -96,15 +96,15 @@ Lists task ledgers from the configured store.
 const ledgers = await tasks.list({
   plan: roadmap,
   limit: 20,
-})
+});
 ```
 
 ```ts
 interface TaskListListOptions {
-  plan?: PlanHandle | string
-  metadata?: Record<string, JsonValue>
-  limit?: number
-  cursor?: string
+  plan?: PlanHandle | string;
+  metadata?: Record<string, JsonValue>;
+  limit?: number;
+  cursor?: string;
 }
 ```
 
@@ -115,45 +115,47 @@ Creates a focused prompt tool that persists a new task ledger. After a model cal
 ```ts
 const makeTasks = tasks.tool({
   plan: roadmap,
-  title: 'Execution tasks',
-  template: 'Create short task labels with stable snake_case IDs.',
-})
+  title: "Execution tasks",
+  template: "Create short task labels with stable snake_case IDs.",
+});
 
 await generate(
   prompt({
-    system: 'Create a task ledger for the plan.',
+    system: "Create a task ledger for the plan.",
     tools: { makeTasks },
   }),
   { model, input: {} },
-)
+);
 
-const work = makeTasks.created()
+const work = makeTasks.created();
 ```
 
 ## `TasksHandle`
 
 ```ts
 interface TasksHandle<TItems = undefined> {
-  readonly id: string
-  get(): Promise<TaskList | null>
-  list(options?: { includeRemoved?: boolean }): Promise<Task[]>
-  getTask(id: TaskId<TItems>): Promise<Task | null>
-  add(input: TItems extends TaskSpecRecord ? never : AddTaskInput): Promise<Task>
-  edit(id: TaskId<TItems>, patch: TaskEdit): Promise<Task>
-  start(id: TaskId<TItems>): Promise<Task>
-  progress(id: TaskId<TItems>, message: string): Promise<Task>
+  readonly id: string;
+  get(): Promise<TaskList | null>;
+  list(options?: { includeRemoved?: boolean }): Promise<Task[]>;
+  getTask(id: TaskId<TItems>): Promise<Task | null>;
+  add(
+    input: TItems extends TaskSpecRecord ? never : AddTaskInput,
+  ): Promise<Task>;
+  edit(id: TaskId<TItems>, patch: TaskEdit): Promise<Task>;
+  start(id: TaskId<TItems>): Promise<Task>;
+  progress(id: TaskId<TItems>, message: string): Promise<Task>;
   complete<TTaskId extends TaskId<TItems>>(
     id: TTaskId,
     ...args: TaskCompleteArgs<TItems, TTaskId>
-  ): Promise<Task>
-  fail(id: TaskId<TItems>, error: string): Promise<Task>
-  skip(id: TaskId<TItems>, reason?: string): Promise<Task>
-  cancel(id: TaskId<TItems>, reason?: string): Promise<Task>
-  remove(id: TaskId<TItems>): Promise<void>
-  discard(reason?: string): Promise<void>
-  asContext(options?: TasksContextOptions): Context
-  asTools(): Record<string, ToolDef>
-  worker(id: TaskId<TItems>, options?: TaskWorkerOptions): TaskWorker
+  ): Promise<Task>;
+  fail(id: TaskId<TItems>, error: string): Promise<Task>;
+  skip(id: TaskId<TItems>, reason?: string): Promise<Task>;
+  cancel(id: TaskId<TItems>, reason?: string): Promise<Task>;
+  remove(id: TaskId<TItems>): Promise<void>;
+  discard(reason?: string): Promise<void>;
+  asContext(options?: TasksContextOptions): Context;
+  asTools(): Record<string, ToolDef>;
+  worker(id: TaskId<TItems>, options?: TaskWorkerOptions): TaskWorker;
 }
 ```
 
@@ -164,10 +166,10 @@ Dynamic `add()` calls require each task ID to be unique within the ledger. Dupli
 ## Lifecycle
 
 ```ts
-await work.add({ id: 'research', label: 'Research channels' })
-await work.start('research')
-await work.progress('research', 'Checking partner launches')
-await work.complete('research', { channels: ['partners'] })
+await work.add({ id: "research", label: "Research channels" });
+await work.start("research");
+await work.progress("research", "Checking partner launches");
+await work.complete("research", { channels: ["partners"] });
 ```
 
 Allowed lifecycle methods:
@@ -184,10 +186,10 @@ Allowed lifecycle methods:
 `edit()` updates non-status display fields only:
 
 ```ts
-await work.edit('research', {
-  label: 'Research launch channels',
-  metadata: { owner: 'growth' },
-})
+await work.edit("research", {
+  label: "Research launch channels",
+  metadata: { owner: "growth" },
+});
 ```
 
 ## Workers
@@ -195,34 +197,34 @@ await work.edit('research', {
 `worker(id)` creates a task-scoped handle with context and tools bound to one task.
 
 ```ts
-const worker = work.worker('research', {
-  guidelines: 'Return source URLs in the result.',
-})
+const worker = work.worker("research", {
+  guidelines: "Return source URLs in the result.",
+});
 
 prompt({
   use: [roadmap.asContext(), worker.asContext()],
   tools: worker.asTools(),
-})
+});
 ```
 
 ## Statuses
 
 ```ts
 type TaskStatus =
-  | 'pending'
-  | 'in_progress'
-  | 'completed'
-  | 'failed'
-  | 'skipped'
-  | 'cancelled'
+  | "pending"
+  | "in_progress"
+  | "completed"
+  | "failed"
+  | "skipped"
+  | "cancelled";
 
 type TaskListStatus =
-  | 'pending'
-  | 'in_progress'
-  | 'completed'
-  | 'failed'
-  | 'cancelled'
-  | 'discarded'
+  | "pending"
+  | "in_progress"
+  | "completed"
+  | "failed"
+  | "cancelled"
+  | "discarded";
 ```
 
 Ledger status is derived from active task rows:
@@ -242,9 +244,9 @@ Task lifecycle failures throw typed structural errors:
 
 ```ts
 try {
-  await work.complete('missing')
+  await work.complete("missing");
 } catch (error) {
-  if (error instanceof Error && error.name === 'TaskNotFoundError') {
+  if (error instanceof Error && error.name === "TaskNotFoundError") {
     // Read structured fields from the error object.
   }
 }
@@ -265,33 +267,33 @@ Public task errors:
 
 ```ts
 interface TaskList {
-  id: string
-  planId?: string
-  title?: string
-  status: TaskListStatus
-  metadata?: JsonObject
-  createdAt: number
-  updatedAt: number
-  completedAt?: number
-  discardedAt?: number
-  discardReason?: string
+  id: string;
+  planId?: string;
+  title?: string;
+  status: TaskListStatus;
+  metadata?: JsonObject;
+  createdAt: number;
+  updatedAt: number;
+  completedAt?: number;
+  discardedAt?: number;
+  discardReason?: string;
 }
 
 interface Task {
-  id: string
-  taskListId: string
-  label: string
-  description?: string
-  status: TaskStatus
-  progress?: string
-  assignee?: { agent?: string; model?: string }
-  metadata?: JsonObject
-  result?: JsonValue
-  error?: string
-  durationMs?: number
-  createdAt: number
-  updatedAt: number
-  removedAt?: number
+  id: string;
+  taskListId: string;
+  label: string;
+  description?: string;
+  status: TaskStatus;
+  progress?: string;
+  assignee?: { agent?: string; model?: string };
+  metadata?: JsonObject;
+  result?: JsonValue;
+  error?: string;
+  durationMs?: number;
+  createdAt: number;
+  updatedAt: number;
+  removedAt?: number;
 }
 ```
 

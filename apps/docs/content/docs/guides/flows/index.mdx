@@ -6,26 +6,36 @@ description: Compose generate() calls into structured pipelines with named steps
 A single `generate()` call handles one prompt. Real applications chain multiple calls into pipelines: research then synthesize, plan then execute, draft then validate. `flow` makes those pipelines a first-class primitive: every step has a name, every retry is declarative, and every trace is grouped automatically.
 
 ```ts
-import { flow } from '@use-crux/core'
+import { flow } from "@use-crux/core";
 
-const researchFlow = flow('research', async (flow) => {
-  const plan = await flow.step('plan', () => generate(planner, { model, input: { query } }))
-  const results = await flow.step('search', () => generate(searcher, { model, input: { plan: plan.object } }))
-  return flow.step('synthesize', () => generate(synthesizer, { model, input: { results: results.object } }))
-})
+const researchFlow = flow("research", async (flow) => {
+  const plan = await flow.step("plan", () =>
+    generate(planner, { model, input: { query } }),
+  );
+  const results = await flow.step("search", () =>
+    generate(searcher, { model, input: { plan: plan.object } }),
+  );
+  return flow.step("synthesize", () =>
+    generate(synthesizer, { model, input: { results: results.object } }),
+  );
+});
 
-await researchFlow.run()
+await researchFlow.run();
 ```
 
 <Callout type="info">
-  **Before reaching for `flow`, check if a composition pattern already covers your use case.**
-  [`pipeline()`](/docs/guides/compositions/pipeline) handles sequential agent chains with typed context accumulation,
-  [`parallel()`](/docs/guides/compositions/parallel) handles concurrent execution with named results,
+  **Before reaching for `flow`, check if a composition pattern already covers
+  your use case.** [`pipeline()`](/docs/guides/compositions/pipeline) handles
+  sequential agent chains with typed context accumulation,
+  [`parallel()`](/docs/guides/compositions/parallel) handles concurrent
+  execution with named results,
   [`consensus()`](/docs/guides/compositions/consensus) handles voting, and
-  [`swarm()`](/docs/guides/compositions/swarm) handles dynamic LLM-decided routing. These are simpler, require less
-  code, and come with pattern-aware devtools rendering. Reach for `flow` when you need **per-step retries/fallbacks**,
-  **suspend/resume**, **custom orchestration logic** that doesn't fit a composition pattern, or **step-level tracing
-  inside an agent's tool**.
+  [`swarm()`](/docs/guides/compositions/swarm) handles dynamic LLM-decided
+  routing. These are simpler, require less code, and come with pattern-aware
+  devtools rendering. Reach for `flow` when you need **per-step
+  retries/fallbacks**, **suspend/resume**, **custom orchestration logic** that
+  doesn't fit a composition pattern, or **step-level tracing inside an agent's
+  tool**.
 </Callout>
 
 ## When You Need This
@@ -48,22 +58,26 @@ If you're making a single `generate()` call, you don't need a flow, just call `g
 - **Suspend/resume**: pause for human approval, external events, or async dependencies; resume later, even in a different process
 - **Structured tracing**: every `generate()` inside a step is tagged with `flowId`, `stepId`, and `stepLabel` automatically
 - **Devtools grouping**: the Timeline groups traces by flow and step instead of guessing from timing
-- **Quality↔runtime comparison**: flow step labels show up as typed `steps` signals in Quality evaluations, so test assertions and production traces speak the same names
+- **Eval↔runtime comparison**: production tasks and Eval Cases share canonical run and trace identities
 - **Cross-boundary**: works across Convex actions, microservices, or any multi-process setup by passing IDs
 - **Define once, run many**: `flow()` returns a frozen handle; call `.run()` repeatedly with different inputs
 
 ## Basic Usage
 
 ```ts
-import { flow } from '@use-crux/core'
-import { generate } from '@use-crux/ai'
+import { flow } from "@use-crux/core";
+import { generate } from "@use-crux/ai";
 
-const editPipeline = flow('edit-pipeline', async (flow) => {
-  const analysis = await flow.step('analyze', () => generate(analyzer, { model, input: { document } }))
-  return flow.step('edit', () => generate(editor, { model, input: { analysis: analysis.object, document } }))
-})
+const editPipeline = flow("edit-pipeline", async (flow) => {
+  const analysis = await flow.step("analyze", () =>
+    generate(analyzer, { model, input: { document } }),
+  );
+  return flow.step("edit", () =>
+    generate(editor, { model, input: { analysis: analysis.object, document } }),
+  );
+});
 
-const result = await editPipeline.run()
+const result = await editPipeline.run();
 ```
 
 `flow` returns a `FlowHandle` with a `.run()` method that returns whatever the handler returns (wrapped in a `FlowResult`). Each `flow.step()` returns the result of its function: use it to thread data between steps. Step labels are durable replay identities for the Flows beta, so keep each label unique and stable. Dynamic labels are advanced; use them only when the generated label is deterministic across retries and resumes.
@@ -73,23 +87,23 @@ const result = await editPipeline.run()
 `withSession` groups traces by user interaction. `flow` structures them into pipelines within that session.
 
 ```ts
-import { withSession, flow, createSessionId } from '@use-crux/core'
+import { withSession, flow, createSessionId } from "@use-crux/core";
 
-const researchFlow = flow('research', async (flow) => {
-  await flow.step('plan', () => generate(planner, { model, input }))
-  await flow.step('search', () => generate(searcher, { model, input }))
-})
+const researchFlow = flow("research", async (flow) => {
+  await flow.step("plan", () => generate(planner, { model, input }));
+  await flow.step("search", () => generate(searcher, { model, input }));
+});
 
-await withSession(createSessionId(), () => researchFlow.run())
+await withSession(createSessionId(), () => researchFlow.run());
 ```
 
 Sessions and flows compose in any order. Multiple flows can run within one session:
 
 ```ts
 await withSession(sessionId, async () => {
-  await researchFlow.run()
-  await writeFlow.run()
-})
+  await researchFlow.run();
+  await writeFlow.run();
+});
 ```
 
 ## Retry and Fallback
@@ -97,10 +111,14 @@ await withSession(sessionId, async () => {
 LLM calls fail: rate limits, timeouts, malformed output. Instead of wrapping every step in try/catch, declare retry and fallback behavior:
 
 ```ts
-await flow.step('search', () => generate(searcher, { model: primaryModel, input }), {
-  retry: { attempts: 3, delay: 1000, backoff: 'exponential' },
-  fallback: () => generate(searcher, { model: cheapModel, input }),
-})
+await flow.step(
+  "search",
+  () => generate(searcher, { model: primaryModel, input }),
+  {
+    retry: { attempts: 3, delay: 1000, backoff: "exponential" },
+    fallback: () => generate(searcher, { model: cheapModel, input }),
+  },
+);
 ```
 
 This retries up to 3 times with exponential backoff (1s, 2s delays), then falls back to a cheaper model if all attempts fail. The step still returns its result transparently: callers don't need to know about the retry logic.
@@ -118,12 +136,18 @@ Crux policy-terminal errors are not retried by default and do not run execution 
 
 ```ts
 // Retry only, fail hard after 3 attempts
-await flow.step('validate', () => generate(validator, { model, input }), { retry: { attempts: 3, delay: 500 } })
+await flow.step("validate", () => generate(validator, { model, input }), {
+  retry: { attempts: 3, delay: 500 },
+});
 
 // Fallback only, no retry, just switch strategy on first failure
-await flow.step('summarize', () => generate(summarizer, { model: premiumModel, input }), {
-  fallback: () => generate(summarizer, { model: cheapModel, input }),
-})
+await flow.step(
+  "summarize",
+  () => generate(summarizer, { model: premiumModel, input }),
+  {
+    fallback: () => generate(summarizer, { model: cheapModel, input }),
+  },
+);
 ```
 
 ## Parallel Flows
@@ -131,40 +155,31 @@ await flow.step('summarize', () => generate(summarizer, { model: premiumModel, i
 Run independent pipelines concurrently:
 
 ```ts
-const topicResearch = flow('research', async (flow, input: { query: string }) => {
-  const plan = await flow.step('plan', () => generate(planner, { model, input: { query: input.query } }))
-  await flow.step('search', () => generate(searcher, { model, input: { query: input.query, plan } }))
-})
+const topicResearch = flow(
+  "research",
+  async (flow, input: { query: string }) => {
+    const plan = await flow.step("plan", () =>
+      generate(planner, { model, input: { query: input.query } }),
+    );
+    await flow.step("search", () =>
+      generate(searcher, { model, input: { query: input.query, plan } }),
+    );
+  },
+);
 
-await withSession(sessionId, () => Promise.all(queries.map((q) => topicResearch.run({ query: q }))))
+await withSession(sessionId, () =>
+  Promise.all(queries.map((q) => topicResearch.run({ query: q }))),
+);
 ```
 
 Each `.run()` call gets its own `flowId` and groups independently in devtools.
 
-## Evaluating flows
+## Testing flow-backed model behavior
 
-Point a Quality evaluation's `task` at the flow handle; step labels become
-trace-backed `steps` signals you can assert on:
-
-```ts
-import { evaluate } from '@use-crux/core/quality'
-
-const researchFlow = flow('research', async (flow) => {
-  await flow.step('plan', () => generate(planner, { model, input }))
-  await flow.step('search', () => generate(searcher, { model, input }))
-})
-
-export default evaluate('research.pipeline', {
-  task: researchFlow,
-  data: [{ input: { query: 'launch plan' } }],
-  expect: (ctx) => {
-    ctx.expect.steps.toHaveSucceeded('plan')
-    ctx.expect.steps.toHaveOrder('plan', 'search')
-  },
-})
-```
-
-See the [Quality guide](/docs/guides/quality) for variants, gates, and replay.
+Keep focused flow control tests beside the flow. For model behavior, expose the
+production `generate.task()` or `stream.task()` used by a flow step and point
+an Eval at that managed task. This preserves the task identity and host
+contract required for exact reuse. See the [Evals guide](/docs/guides/evals).
 
 ## Signaling Handles
 

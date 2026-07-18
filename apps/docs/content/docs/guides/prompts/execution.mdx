@@ -323,9 +323,8 @@ const generateTxt = createGenerateTextFn(client, "claude-haiku-4-5-20251001");
 <Callout type="info">
   These helpers are provider-native, lightweight wrappers. They pass the schema
   to the provider structured-output API and return `{object}`, but they do not
-  run Crux prompt resolution, validation retry, safety, cassettes, tools, memory
-  capture, or instrumentation. Use full adapter `generate()` for normal prompt
-  execution.
+  run Crux prompt resolution, validation retry, safety, tools, memory capture,
+  or instrumentation. Use full adapter `generate()` for normal prompt execution.
 </Callout>
 
 When a core API needs a `GenerateObjectFn` but you also need the full adapter runtime, bridge an existing adapter `generate()` function:

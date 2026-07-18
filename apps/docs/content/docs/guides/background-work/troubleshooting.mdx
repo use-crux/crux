@@ -8,28 +8,28 @@ Hit a `DEFER_*` error? Match the code below. Public defer failures use
 (`https://cruxjs.dev/docs/errors/<CODE>`).
 
 ```ts
-import { CruxDeferError, defer } from '@use-crux/core'
+import { CruxDeferError, defer } from "@use-crux/core";
 
 try {
-  defer(() => {})
+  defer(() => {});
 } catch (error) {
   if (error instanceof CruxDeferError) {
-    console.error(error.code, error.docsUrl)
+    console.error(error.code, error.docsUrl);
   }
 }
 ```
 
 ## Quick map
 
-| Code | Typical cause |
-| --- | --- |
-| [`DEFER_SCOPE_REQUIRED`](/docs/errors/DEFER_SCOPE_REQUIRED) | No active invocation scope (missing host wrapper) |
-| [`DEFER_CAPABILITY_MISSING`](/docs/errors/DEFER_CAPABILITY_MISSING) | Scope exists but cannot support this overload (inline unsupported, missing waitUntil/after, named without durable finalization) |
-| [`DEFER_SCOPE_SEALED`](/docs/errors/DEFER_SCOPE_SEALED) | Registration after seal |
-| [`DEFER_LIMIT_EXCEEDED`](/docs/errors/DEFER_LIMIT_EXCEEDED) | Callback count/nesting/concurrency bounds |
-| [`DEFER_REPLAY_UNSAFE`](/docs/errors/DEFER_REPLAY_UNSAFE) | Public `defer()` inside a replayable flow, use `flow.defer()` |
-| [`DEFER_TARGET_INPUT_REQUIRED`](/docs/errors/DEFER_TARGET_INPUT_REQUIRED) | Named target called without required JSON input |
-| [`DEFER_COMMIT_FAILED`](/docs/errors/DEFER_COMMIT_FAILED) | Strict named staging/finalization failed; response discarded |
+| Code                                                                      | Typical cause                                                                                                                   |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| [`DEFER_SCOPE_REQUIRED`](/docs/errors/DEFER_SCOPE_REQUIRED)               | No active invocation scope (missing host wrapper)                                                                               |
+| [`DEFER_CAPABILITY_MISSING`](/docs/errors/DEFER_CAPABILITY_MISSING)       | Scope exists but cannot support this overload (inline unsupported, missing waitUntil/after, named without durable finalization) |
+| [`DEFER_SCOPE_SEALED`](/docs/errors/DEFER_SCOPE_SEALED)                   | Registration after seal                                                                                                         |
+| [`DEFER_LIMIT_EXCEEDED`](/docs/errors/DEFER_LIMIT_EXCEEDED)               | Callback count/nesting/concurrency bounds                                                                                       |
+| [`DEFER_REPLAY_UNSAFE`](/docs/errors/DEFER_REPLAY_UNSAFE)                 | Public `defer()` inside a replayable flow, use `flow.defer()`                                                                   |
+| [`DEFER_TARGET_INPUT_REQUIRED`](/docs/errors/DEFER_TARGET_INPUT_REQUIRED) | Named target called without required JSON input                                                                                 |
+| [`DEFER_COMMIT_FAILED`](/docs/errors/DEFER_COMMIT_FAILED)                 | Strict named staging/finalization failed; response discarded                                                                    |
 
 Runtime-bound failures still use Runtime codes such as
 [`RUNTIME_REQUIRED`](/docs/errors/RUNTIME_REQUIRED).

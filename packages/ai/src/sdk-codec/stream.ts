@@ -89,9 +89,27 @@ export async function createStreamCallPlan(
     );
     args.onFinish = async (event: SdkStreamFinishEvent) => {
       try {
+        const content = event.content
+          ? decodeAssistantContentFromAiSdkParts(event.content)
+          : undefined;
         resolveCompletion({
           usage: normalizeUsage(event.usage),
+          finishReason: event.finishReason,
+          responseId: event.response?.id,
+          actualModelId: event.response?.modelId,
           cost: extractCost(event.providerMetadata),
+          text: event.text,
+          ...(event.object !== undefined ? { object: event.object } : {}),
+          ...(content !== undefined && (content.length > 0 || !event.text)
+            ? { content }
+            : {}),
+          ...(event.response?.messages !== undefined
+            ? { messages: fromResponseMessages(event.response.messages) }
+            : {}),
+          ...(event.warnings !== undefined ? { warnings: event.warnings } : {}),
+          ...(event.providerMetadata !== undefined
+            ? { providerMetadata: event.providerMetadata }
+            : {}),
           streaming: {
             ttftMs:
               firstChunkTime != null

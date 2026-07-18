@@ -6,7 +6,12 @@ description: Preserve Crux run/span context across Convex actions, queries, muta
 Convex runs each action, query, and mutation in its own worker, so Crux run/span context does not survive `ctx.runAction()`, `ctx.runQuery()`, or scheduled work. The drop-in wrappers in `@use-crux/convex/server` preserve it: they keep Convex's normal function shape while restoring incoming context, exposing `ctx.crux` helpers inside handlers, and flushing observability before action workers exit.
 
 ```ts
-import { action, internalAction, query, mutation } from '@use-crux/convex/server'
+import {
+  action,
+  internalAction,
+  query,
+  mutation,
+} from "@use-crux/convex/server";
 ```
 
 Context travels in a hidden optional `__crux` argument added by the wrappers; see the [`@use-crux/convex` reference](/docs/reference/storage/convex) for the propagation envelope details.
@@ -14,33 +19,33 @@ Context travels in a hidden optional `__crux` argument added by the wrappers; se
 ## Public Action Entrypoint
 
 ```ts title="convex/chat/actions.ts"
-'use node'
+"use node";
 
-import { action } from '@use-crux/convex/server'
-import { generate } from '@use-crux/ai'
-import { openai } from '@ai-sdk/openai'
-import { v } from 'convex/values'
-import { chatPrompt } from '../prompts/support'
+import { action } from "@use-crux/convex/server";
+import { generate } from "@use-crux/ai";
+import { openai } from "@ai-sdk/openai";
+import { v } from "convex/values";
+import { chatPrompt } from "../prompts/support";
 
 export const respond = action({
-  observabilityName: 'support chat',
-  observabilityRootPrimitive: 'agent.run',
-  observabilityAttributes: { agentId: 'support-chat' },
+  observabilityName: "support chat",
+  observabilityRootPrimitive: "agent.run",
+  observabilityAttributes: { agentId: "support-chat" },
   args: {
     threadId: v.string(),
     message: v.string(),
   },
   handler: async (ctx, args) => {
-    await requireThreadAccess(ctx, args.threadId)
+    await requireThreadAccess(ctx, args.threadId);
 
     const result = await generate(chatPrompt, {
-      model: openai('gpt-4o'),
+      model: openai("gpt-4o"),
       input: { message: args.message, threadId: args.threadId },
-    })
+    });
 
-    return { text: result.text }
+    return { text: result.text };
   },
-})
+});
 ```
 
 When a Crux-aware public action starts without incoming context, it can become the run root. Set `observabilityName`, `observabilityRootPrimitive`, and `observabilityAttributes` on entrypoints so the visible run is the semantic operation (`support chat`, `daily briefing`, `agent.run`) instead of a random infrastructure call.
@@ -50,17 +55,21 @@ When a Crux-aware public action starts without incoming context, it can become t
 Use `ctx.crux.runAction()` for related AI work:
 
 ```ts title="convex/chat/actions.ts"
-import { internal } from '../_generated/api'
+import { internal } from "../_generated/api";
 
-const plan = await ctx.crux.runAction('plan research', internal.research.plan, {
+const plan = await ctx.crux.runAction("plan research", internal.research.plan, {
   threadId: args.threadId,
   message: args.message,
-})
+});
 
-const answer = await ctx.crux.runAction('write answer', internal.writer.answer, {
-  threadId: args.threadId,
-  plan,
-})
+const answer = await ctx.crux.runAction(
+  "write answer",
+  internal.writer.answer,
+  {
+    threadId: args.threadId,
+    plan,
+  },
+);
 ```
 
 This records an inspectable `runtime.convex.action` boundary, flushes the boundary start before the child worker runs, and propagates `__crux` to the child. The devtools backend can fold infrastructure-only boundaries while keeping every canonical record searchable.
@@ -70,26 +79,30 @@ This records an inspectable `runtime.convex.action` boundary, flushes the bounda
 Use `query()` and `mutation()` when a read/write needs Crux context propagation, but should not create a standalone run.
 
 ```ts title="convex/research/data.ts"
-import { query } from '@use-crux/convex/server'
-import { v } from 'convex/values'
+import { query } from "@use-crux/convex/server";
+import { v } from "convex/values";
 
 export const getResearchInputs = query({
   args: { threadId: v.string() },
   handler: async (ctx, args) => {
     return ctx.db
-      .query('researchInputs')
-      .withIndex('by_thread', (q) => q.eq('threadId', args.threadId))
-      .collect()
+      .query("researchInputs")
+      .withIndex("by_thread", (q) => q.eq("threadId", args.threadId))
+      .collect();
   },
-})
+});
 ```
 
 Inside an active Crux action, call it with `ctx.crux.runQuery()`:
 
 ```ts
-const inputs = await ctx.crux.runQuery('load research inputs', internal.research.data.getResearchInputs, {
-  threadId,
-})
+const inputs = await ctx.crux.runQuery(
+  "load research inputs",
+  internal.research.data.getResearchInputs,
+  {
+    threadId,
+  },
+);
 ```
 
 Best practice: keep routine app reads/writes as normal Convex functions unless they are part of a Crux execution and need trace continuity.
@@ -99,21 +112,26 @@ Best practice: keep routine app reads/writes as normal Convex functions unless t
 Use `ctx.crux.scheduler.runAfter()` for detached scheduled work. By default it records the enqueue operation in the current trace, but the scheduled action starts its own run when it executes later:
 
 ```ts
-await ctx.crux.scheduler?.runAfter('stream chat response', 0, internal.chat.streamResponse, {
-  threadId,
-})
+await ctx.crux.scheduler?.runAfter(
+  "stream chat response",
+  0,
+  internal.chat.streamResponse,
+  {
+    threadId,
+  },
+);
 ```
 
 Only propagate observability explicitly when the scheduled action is a true continuation of the same durable run, such as a flow resume that stored the original observability context:
 
 ```ts
 await ctx.crux.scheduler?.runAfter(
-  'resume writer flow',
+  "resume writer flow",
   0,
   internal.writer.resume,
   { resume: flowId },
   { observability: snapshot.observabilityContext },
-)
+);
 ```
 
 Scheduling crosses both time and worker boundaries, so detached work should not inherit a parent span that may already be closed.

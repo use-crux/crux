@@ -12,9 +12,21 @@ New to Crux? Start with [Foundations](/docs/foundations) for the mental model, t
 The core authoring primitives. Most projects start here.
 
 <Cards>
-  <Card title="Prompts" description="Typed, reusable prompt definitions with input/output schemas that run on any SDK." href="/docs/guides/prompts" />
-  <Card title="Contexts" description="Reusable instruction fragments with conditional inclusion, priority, and caching." href="/docs/guides/contexts" />
-  <Card title="Tools" description="LLM-callable functions declared on prompts and contexts, merged for the adapter." href="/docs/guides/tools" />
+  <Card
+    title="Prompts"
+    description="Typed, reusable prompt definitions with input/output schemas that run on any SDK."
+    href="/docs/guides/prompts"
+  />
+  <Card
+    title="Contexts"
+    description="Reusable instruction fragments with conditional inclusion, priority, and caching."
+    href="/docs/guides/contexts"
+  />
+  <Card
+    title="Tools"
+    description="LLM-callable functions declared on prompts and contexts, merged for the adapter."
+    href="/docs/guides/tools"
+  />
 </Cards>
 
 ## Context & memory
@@ -22,9 +34,21 @@ The core authoring primitives. Most projects start here.
 Control what the model sees and what it remembers across turns.
 
 <Cards>
-  <Card title="Memory" description="Working state, episodes, facts, and procedures that persist across turns." href="/docs/guides/memory" />
-  <Card title="Retrieval & RAG" description="Load, index, sync, and retrieve documents so answers can cite sources." href="/docs/guides/retrieval" />
-  <Card title="Compaction" description="Keep long conversations under the context window without losing what matters." href="/docs/guides/compaction" />
+  <Card
+    title="Memory"
+    description="Working state, episodes, facts, and procedures that persist across turns."
+    href="/docs/guides/memory"
+  />
+  <Card
+    title="Retrieval & RAG"
+    description="Load, index, sync, and retrieve documents so answers can cite sources."
+    href="/docs/guides/retrieval"
+  />
+  <Card
+    title="Compaction"
+    description="Keep long conversations under the context window without losing what matters."
+    href="/docs/guides/compaction"
+  />
 </Cards>
 
 ## Agents & workflows
@@ -32,12 +56,36 @@ Control what the model sees and what it remembers across turns.
 Coordinate multiple model calls into agents, compositions, and resumable flows.
 
 <Cards>
-  <Card title="Agents" description="A prompt with an identity, default model, allowed tools, and handoffs." href="/docs/guides/agents" />
-  <Card title="Skills" description="Markdown instruction sets that agents load on demand." href="/docs/guides/skills" />
-  <Card title="Compositions" description="Pipeline, parallel, consensus, and swarm patterns over multiple agents." href="/docs/guides/compositions" />
-  <Card title="Flows" description="Suspendable, resumable orchestration where each step is cached." href="/docs/guides/flows" />
-  <Card title="Background work" description="Run work after the response is sent, without blocking the user." href="/docs/guides/background-work" />
-  <Card title="Plans & Tasks" description="Freeform plans and live task lists with reactive UI hooks." href="/docs/guides/plans-and-tasks" />
+  <Card
+    title="Agents"
+    description="A prompt with an identity, default model, allowed tools, and handoffs."
+    href="/docs/guides/agents"
+  />
+  <Card
+    title="Skills"
+    description="Markdown instruction sets that agents load on demand."
+    href="/docs/guides/skills"
+  />
+  <Card
+    title="Compositions"
+    description="Pipeline, parallel, consensus, and swarm patterns over multiple agents."
+    href="/docs/guides/compositions"
+  />
+  <Card
+    title="Flows"
+    description="Suspendable, resumable orchestration where each step is cached."
+    href="/docs/guides/flows"
+  />
+  <Card
+    title="Background work"
+    description="Run work after the response is sent, without blocking the user."
+    href="/docs/guides/background-work"
+  />
+  <Card
+    title="Plans & Tasks"
+    description="Freeform plans and live task lists with reactive UI hooks."
+    href="/docs/guides/plans-and-tasks"
+  />
 </Cards>
 
 ## Reliability
@@ -45,9 +93,21 @@ Coordinate multiple model calls into agents, compositions, and resumable flows.
 Make model choice, safety, and regressions explicit instead of hidden.
 
 <Cards>
-  <Card title="Routing & Fallback" description="Declare model routing, cascades, and fallback instead of hiding them in call sites." href="/docs/guides/routing" />
-  <Card title="Safety" description="Guardrails that block or redact I/O, and constraints that validate and retry." href="/docs/guides/safety" />
-  <Card title="Quality" description="Regression suites, targets, baselines, and LLM-as-judge scoring for AI behavior." href="/docs/guides/quality" />
+  <Card
+    title="Routing & Fallback"
+    description="Declare model routing, cascades, and fallback instead of hiding them in call sites."
+    href="/docs/guides/routing"
+  />
+  <Card
+    title="Safety"
+    description="Guardrails that block or redact I/O, and constraints that validate and retry."
+    href="/docs/guides/safety"
+  />
+  <Card
+    title="Eval"
+    description="Typed Cases, Variants, Baselines, and LLM-as-judge scoring for production AI behavior."
+    href="/docs/guides/evals"
+  />
 </Cards>
 
 ## State & storage
@@ -55,8 +115,16 @@ Make model choice, safety, and regressions explicit instead of hidden.
 Give runs a filesystem and give Crux somewhere to persist.
 
 <Cards>
-  <Card title="Workspaces" description="A versioned, transactional file surface agents and tools can read and write." href="/docs/guides/workspaces" />
-  <Card title="Storage" description="The store adapters behind memory, retrieval, plans, and runtime." href="/docs/guides/storage" />
+  <Card
+    title="Workspaces"
+    description="A versioned, transactional file surface agents and tools can read and write."
+    href="/docs/guides/workspaces"
+  />
+  <Card
+    title="Storage"
+    description="The store adapters behind memory, retrieval, plans, and runtime."
+    href="/docs/guides/storage"
+  />
 </Cards>
 
 ## Runtime & operations
@@ -64,21 +132,49 @@ Give runs a filesystem and give Crux somewhere to persist.
 Make execution durable, then see and lint what happened.
 
 <Cards>
-  <Card title="Durable Execution" description="The optional engine that makes flows and background work survive restarts and retries." href="/docs/guides/durable-execution" />
-  <Card title="Observability" description="Local devtools and OpenTelemetry to see exactly what the model saw and did." href="/docs/guides/observability" />
-  <Card title="Project Health" description="Static analysis and lints over your Crux definitions." href="/docs/guides/project-health" />
-  <Card title="Project setup" description="Check and safely apply setup contributed by Crux subsystems with crux setup." href="/docs/guides/setup" />
+  <Card
+    title="Durable Execution"
+    description="The optional engine that makes flows and background work survive restarts and retries."
+    href="/docs/guides/durable-execution"
+  />
+  <Card
+    title="Observability"
+    description="Local devtools and OpenTelemetry to see exactly what the model saw and did."
+    href="/docs/guides/observability"
+  />
+  <Card
+    title="Project Health"
+    description="Static analysis and lints over your Crux definitions."
+    href="/docs/guides/project-health"
+  />
+  <Card
+    title="Project setup"
+    description="Check and safely apply setup contributed by Crux subsystems with crux setup."
+    href="/docs/guides/setup"
+  />
 </Cards>
 
 ## Platforms
 
 <Cards>
-  <Card title="Convex" description="Run prompts in Convex actions and persist memory in the crux component." href="/docs/guides/convex" />
+  <Card
+    title="Convex"
+    description="Run prompts in Convex actions and persist memory in the crux component."
+    href="/docs/guides/convex"
+  />
 </Cards>
 
 ## More
 
 <Cards>
-  <Card title="Advanced" description="Building adapters, headless calls, multimodal, the type system, and indexer extensions." href="/docs/guides/advanced" />
-  <Card title="FAQ" description="Common questions about adopting Crux." href="/docs/guides/faq" />
+  <Card
+    title="Advanced"
+    description="Building adapters, headless calls, multimodal, the type system, and indexer extensions."
+    href="/docs/guides/advanced"
+  />
+  <Card
+    title="FAQ"
+    description="Common questions about adopting Crux."
+    href="/docs/guides/faq"
+  />
 </Cards>

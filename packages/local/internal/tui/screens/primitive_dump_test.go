@@ -134,9 +134,9 @@ func TestDumpPrimitiveRenders(t *testing.T) {
 		r := NewRuns()
 		r.loaded = true
 		r.selRun = "run-x"
-		r.detail = &api.QualityRunDetailRecord{
-			Run: api.QualityRunRecord{TraceID: "run-x"},
-			Spans: []api.QualityRunSpan{
+		r.detail = &api.InspectRunDetailRecord{
+			Run: api.InspectRunRecord{TraceID: "run-x"},
+			Spans: []api.InspectRunSpan{
 				{
 					ID:        "sp1",
 					Name:      tc.name,
@@ -146,7 +146,7 @@ func TestDumpPrimitiveRenders(t *testing.T) {
 					Data:      json.RawMessage(body),
 				},
 			},
-			Trace: api.QualityTraceRecord{StartedAt: 1716730000000},
+			Trace: api.InspectTraceRecord{StartedAt: 1716730000000},
 		}
 		r.selSpan = "sp1"
 

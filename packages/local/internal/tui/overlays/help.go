@@ -12,17 +12,12 @@ import (
 
 // Help is the `?` keybinds overlay.
 //
-// Per KEYBINDS.md the help renders three layers:
+// The help renders two layers:
 //
 //   - Layer 1 (truly global) — palette, this help, jump, search, quit, j/k,
 //     h/l. These are shell-owned and always visible.
-//   - Layer 2/3 (focused screen's actions) — injected via SetScreenKeybinds.
-//     The Act section is named after the active screen and lists the
-//     screen's own keymap. There is no static `s = save (case · variant ·
-//     baseline · cassette)` composite — that lied.
-//   - Editor (when an EditingScreen is editing) — exposed via the same
-//     SetScreenKeybinds path; the workbench feeds the editor's binds in
-//     that case.
+//   - Focused screen actions — injected via SetScreenKeybinds. The Act
+//     section is named after the active screen and lists its own keymap.
 type Help struct {
 	open   bool
 	filter string
@@ -96,12 +91,8 @@ var staticGroups = []keyGroup{
 			{"g o", "overview"},
 			{"g i", "insights"},
 			{"g r", "runs"},
-			{"g x", "experiments"},
-			{"g b", "baselines"},
-			{"g f", "feedback"},
-			{"g k", "cassettes"},
 			{"g d", "index"},
-			{"1-8", "numeric jump to nav rail"},
+			{"1-4", "numeric jump to nav rail"},
 		},
 	},
 	{

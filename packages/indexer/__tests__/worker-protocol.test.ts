@@ -296,19 +296,6 @@ describe("project index worker protocol", () => {
       ignoredPaths: [],
       definitions: [],
       relations: [],
-      quality: {
-        persistenceRoot: {
-          value: "/repo/.crux/quality",
-          provenance: {
-            kind: "filesystem",
-            path: "/repo/.crux/quality",
-            convention: "default quality persistence root",
-          },
-        },
-        includeGlobs: [],
-        excludeGlobs: [],
-        evaluationFiles: [],
-      },
       diagnostics: [],
     } satisfies ResolvedProjectModel;
 

@@ -9,9 +9,9 @@ import (
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/devtools"
+	"github.com/use-crux/crux/packages/local/internal/inspect"
 	"github.com/use-crux/crux/packages/local/internal/observability"
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
-	"github.com/use-crux/crux/packages/local/internal/quality"
 	"github.com/use-crux/crux/packages/local/internal/resourceinspection"
 	"github.com/use-crux/crux/packages/local/internal/runtimebridge"
 	"github.com/use-crux/crux/packages/local/internal/store"
@@ -20,8 +20,8 @@ import (
 func TestNewMountsLocalRuntimeRouteGroups(t *testing.T) {
 	ctx := context.Background()
 	s := store.NewStore()
-	qualitySvc := quality.NewService(s, quality.Dir(t.TempDir()))
-	devtoolsSvc := devtools.NewService(s, qualitySvc)
+	inspectSvc := inspect.NewService(s, inspect.Dir(t.TempDir()))
+	devtoolsSvc := devtools.NewService(s, inspectSvc)
 	runtimeIndexer := &recordingRuntimeOperationIndexer{}
 	devtoolsSvc.WithProjectIndexer(runtimeIndexer)
 	observabilitySvc, err := observability.OpenService(ctx, ":memory:")
@@ -32,7 +32,7 @@ func TestNewMountsLocalRuntimeRouteGroups(t *testing.T) {
 	runtimeBridge := runtimebridge.NewService(nil)
 	handler := New(Options{
 		Devtools:           devtoolsSvc,
-		Quality:            qualitySvc,
+		Inspect:            inspectSvc,
 		Observability:      observabilitySvc,
 		RuntimeBridge:      runtimeBridge,
 		ResourceInspection: resourceinspection.New(runtimeBridge),
@@ -66,7 +66,7 @@ func TestNewMountsLocalRuntimeRouteGroups(t *testing.T) {
 		t.Fatalf("runtime call = %+v, want detailed status for project root", runtimeIndexer)
 	}
 	assertStatusAndClose(t, http.MethodPost, ts.URL+"/api/observability/records", []byte(`{"schemaVersion":2,"records":[]}`), http.StatusAccepted)
-	assertStatusAndClose(t, http.MethodDelete, ts.URL+"/api/quality/runs", []byte(`{"traceIds":[]}`), http.StatusBadRequest)
+	assertStatusAndClose(t, http.MethodDelete, ts.URL+"/api/inspect/runs", []byte(`{"traceIds":[]}`), http.StatusBadRequest)
 	assertStatusAndClose(t, http.MethodPost, ts.URL+"/api/resolve-source", []byte(`{`), http.StatusBadRequest)
 	assertStatusAndClose(t, http.MethodGet, ts.URL+"/api/does-not-exist", nil, http.StatusNotFound)
 

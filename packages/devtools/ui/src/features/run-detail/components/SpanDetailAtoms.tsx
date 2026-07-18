@@ -1,10 +1,22 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { ChevronDownIcon, CopyIcon, FileTextIcon, MessageSquareIcon, PuzzleIcon } from 'lucide-react'
-import { JsonTree } from '@/shared/components/JsonTree'
-import { cn } from '@/shared/lib/utils'
-import { SectionErrorBoundary } from '@/qw/shell/SectionBoundary'
-import type { ContextMeta, CorrelatedEvent } from '@/types'
-import { formatTime, formatTokens, getEventColor, summarizeEvent, tryParseJson } from '../lib/span-detail-format'
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  ChevronDownIcon,
+  CopyIcon,
+  FileTextIcon,
+  MessageSquareIcon,
+  PuzzleIcon,
+} from "lucide-react";
+import { JsonTree } from "@/shared/components/JsonTree";
+import { cn } from "@/shared/lib/utils";
+import { SectionErrorBoundary } from "@/devtools/shell/SectionBoundary";
+import type { ContextMeta, CorrelatedEvent } from "@/types";
+import {
+  formatTime,
+  formatTokens,
+  getEventColor,
+  summarizeEvent,
+  tryParseJson,
+} from "../lib/span-detail-format";
 
 /**
  * Span detail section.
@@ -24,21 +36,28 @@ export function Section({
   defaultOpen = true,
   className,
 }: {
-  title: string
-  badge?: React.ReactNode
-  children: React.ReactNode
-  defaultOpen?: boolean
-  className?: string
+  title: string;
+  badge?: React.ReactNode;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+  className?: string;
 }) {
-  const [open, setOpen] = useState(defaultOpen)
+  const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className={cn('border-t border-zinc-800/80', className)}>
+    <div className={cn("border-t border-zinc-800/80", className)}>
       <button
         onClick={() => setOpen(!open)}
         className="flex w-full items-center gap-2 px-5 py-2.5 text-left hover:bg-zinc-800/30 transition-colors"
       >
-        <ChevronDownIcon className={cn('size-3.5 text-zinc-500 transition-transform', !open && '-rotate-90')} />
-        <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">{title}</span>
+        <ChevronDownIcon
+          className={cn(
+            "size-3.5 text-zinc-500 transition-transform",
+            !open && "-rotate-90",
+          )}
+        />
+        <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">
+          {title}
+        </span>
         {badge}
       </button>
       {open && (
@@ -49,7 +68,7 @@ export function Section({
         </div>
       )}
     </div>
-  )
+  );
 }
 
 export function MetricPill({
@@ -58,79 +77,109 @@ export function MetricPill({
   sub,
   className,
 }: {
-  label: string
-  value: React.ReactNode
-  sub?: React.ReactNode
-  className?: string
+  label: string;
+  value: React.ReactNode;
+  sub?: React.ReactNode;
+  className?: string;
 }) {
   return (
-    <div className={cn('flex flex-col gap-0.5 bg-zinc-800/60 rounded-lg px-2.5 py-1.5 min-w-[70px]', className)}>
-      <span className="text-[10px] text-zinc-500 uppercase tracking-wider">{label}</span>
-      <span className="text-sm font-medium tabular-nums text-zinc-100">{value}</span>
-      {sub && <span className="text-[10px] text-zinc-500 tabular-nums">{sub}</span>}
+    <div
+      className={cn(
+        "flex flex-col gap-0.5 bg-zinc-800/60 rounded-lg px-2.5 py-1.5 min-w-[70px]",
+        className,
+      )}
+    >
+      <span className="text-[10px] text-zinc-500 uppercase tracking-wider">
+        {label}
+      </span>
+      <span className="text-sm font-medium tabular-nums text-zinc-100">
+        {value}
+      </span>
+      {sub && (
+        <span className="text-[10px] text-zinc-500 tabular-nums">{sub}</span>
+      )}
     </div>
-  )
+  );
 }
 
 const CHUNK_COLORS = [
-  'bg-(--qw-blue-soft)',
-  'bg-(--qw-ok-soft)',
-  'bg-(--qw-warn-soft)',
-  'bg-(--qw-iris-soft)',
-  'bg-(--qw-plum-soft)',
-  'bg-(--qw-crux-soft)',
-  'bg-(--qw-gold-soft)',
-  'bg-(--qw-blue-soft)',
-  'bg-(--qw-ok-soft)',
-  'bg-(--qw-warn-soft)',
-]
+  "bg-(--devtools-blue-soft)",
+  "bg-(--devtools-ok-soft)",
+  "bg-(--devtools-warn-soft)",
+  "bg-(--devtools-iris-soft)",
+  "bg-(--devtools-plum-soft)",
+  "bg-(--devtools-crux-soft)",
+  "bg-(--devtools-gold-soft)",
+  "bg-(--devtools-blue-soft)",
+  "bg-(--devtools-ok-soft)",
+  "bg-(--devtools-warn-soft)",
+];
 
-export function StreamChunksView({ chunks, isStreaming }: { chunks: string[]; isStreaming: boolean }) {
-  const scrollRef = useRef<HTMLDivElement>(null)
+export function StreamChunksView({
+  chunks,
+  isStreaming,
+}: {
+  chunks: string[];
+  isStreaming: boolean;
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const el = scrollRef.current
-    if (el) el.scrollTop = el.scrollHeight
-  }, [chunks.length])
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [chunks.length]);
 
   return (
-    <div ref={scrollRef} className="rounded border border-zinc-800 max-h-96 overflow-y-auto">
+    <div
+      ref={scrollRef}
+      className="rounded border border-zinc-800 max-h-96 overflow-y-auto"
+    >
       <pre className="text-xs text-zinc-300 whitespace-pre-wrap font-mono leading-relaxed p-3">
         {chunks.map((chunk, i) => (
-          <span key={i} className={`${CHUNK_COLORS[i % CHUNK_COLORS.length]} rounded-sm`}>
+          <span
+            key={i}
+            className={`${CHUNK_COLORS[i % CHUNK_COLORS.length]} rounded-sm`}
+          >
             {chunk}
           </span>
         ))}
         {isStreaming && (
-          <span className="inline-block w-[2px] h-[14px] bg-(--qw-blue) animate-pulse ml-0.5 align-middle" />
+          <span className="inline-block w-[2px] h-[14px] bg-(--devtools-blue) animate-pulse ml-0.5 align-middle" />
         )}
       </pre>
     </div>
-  )
+  );
 }
 
 const BREAKDOWN_COLORS = [
-  'bg-(--qw-blue)',
-  'bg-(--qw-ok)',
-  'bg-(--qw-warn)',
-  'bg-(--qw-iris)',
-  'bg-(--qw-plum)',
-  'bg-(--qw-crux)',
-  'bg-(--qw-gold)',
-  'bg-(--qw-blue)',
-]
+  "bg-(--devtools-blue)",
+  "bg-(--devtools-ok)",
+  "bg-(--devtools-warn)",
+  "bg-(--devtools-iris)",
+  "bg-(--devtools-plum)",
+  "bg-(--devtools-crux)",
+  "bg-(--devtools-gold)",
+  "bg-(--devtools-blue)",
+];
 
-export function BudgetBreakdownBar({ breakdown }: { breakdown: Record<string, number> }) {
-  const entries = Object.entries(breakdown).sort((a, b) => b[1] - a[1])
-  const total = entries.reduce((sum, [, v]) => sum + v, 0)
-  if (total === 0) return null
+export function BudgetBreakdownBar({
+  breakdown,
+}: {
+  breakdown: Record<string, number>;
+}) {
+  const entries = Object.entries(breakdown).sort((a, b) => b[1] - a[1]);
+  const total = entries.reduce((sum, [, v]) => sum + v, 0);
+  if (total === 0) return null;
   return (
     <div className="mt-1.5 space-y-1">
       <div className="flex h-2 rounded-full overflow-hidden bg-zinc-800">
         {entries.map(([source, tokens], i) => (
           <div
             key={source}
-            className={cn(BREAKDOWN_COLORS[i % BREAKDOWN_COLORS.length], 'h-full')}
+            className={cn(
+              BREAKDOWN_COLORS[i % BREAKDOWN_COLORS.length],
+              "h-full",
+            )}
             style={{ width: `${(tokens / total) * 100}%` }}
             title={`${source}: ${tokens.toLocaleString()} tokens`}
           />
@@ -138,87 +187,130 @@ export function BudgetBreakdownBar({ breakdown }: { breakdown: Record<string, nu
       </div>
       <div className="flex flex-wrap gap-x-3 gap-y-0.5">
         {entries.map(([source, tokens], i) => (
-          <span key={source} className="flex items-center gap-1 text-[10px] text-zinc-500">
-            <span className={cn('w-1.5 h-1.5 rounded-sm shrink-0', BREAKDOWN_COLORS[i % BREAKDOWN_COLORS.length])} />
-            {source} <span className="tabular-nums text-zinc-600">{formatTokens(tokens)}</span>
+          <span
+            key={source}
+            className="flex items-center gap-1 text-[10px] text-zinc-500"
+          >
+            <span
+              className={cn(
+                "w-1.5 h-1.5 rounded-sm shrink-0",
+                BREAKDOWN_COLORS[i % BREAKDOWN_COLORS.length],
+              )}
+            />
+            {source}{" "}
+            <span className="tabular-nums text-zinc-600">
+              {formatTokens(tokens)}
+            </span>
           </span>
         ))}
       </div>
     </div>
-  )
+  );
 }
 
 export function EventList({ events }: { events: CorrelatedEvent[] }) {
-  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const toggle = useCallback((id: string) => {
     setExpanded((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }, [])
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
   return (
     <div className="p-5 space-y-0.5">
       {events.map((event) => {
         const hasExpandable =
-          (event.eventType === 'blackboard:update' && event.data.snapshot != null) ||
-          (event.eventType === 'tool:end' &&
+          (event.eventType === "blackboard:update" &&
+            event.data.snapshot != null) ||
+          (event.eventType === "tool:end" &&
             (event.data.result != null ||
               event.data.modelOutput != null ||
               event.data.modelOutputType != null ||
               event.data.error != null)) ||
-          (event.eventType === 'delegate:complete' && event.data.durationMs != null) ||
-          (event.eventType === 'handoff:prepare' && (event.data.inputSize != null || event.data.summary != null))
-        const isExpanded = expanded.has(event.id)
+          (event.eventType === "delegate:complete" &&
+            event.data.durationMs != null) ||
+          (event.eventType === "handoff:prepare" &&
+            (event.data.inputSize != null || event.data.summary != null));
+        const isExpanded = expanded.has(event.id);
         return (
           <div key={event.id}>
             <div
               className={cn(
-                'flex items-start gap-2.5 rounded-lg px-2 py-1.5 text-[11px] hover:bg-zinc-900/50 transition-colors',
-                hasExpandable && 'cursor-pointer',
+                "flex items-start gap-2.5 rounded-lg px-2 py-1.5 text-[11px] hover:bg-zinc-900/50 transition-colors",
+                hasExpandable && "cursor-pointer",
               )}
               onClick={hasExpandable ? () => toggle(event.id) : undefined}
             >
-              <span className={cn('h-2 w-2 mt-1 shrink-0 rounded-full', getEventColor(event))} />
+              <span
+                className={cn(
+                  "h-2 w-2 mt-1 shrink-0 rounded-full",
+                  getEventColor(event),
+                )}
+              />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <span className="text-zinc-500 tabular-nums shrink-0">{formatTime(event.timestamp)}</span>
-                  <span className="font-mono text-zinc-400">{event.eventType}</span>
+                  <span className="text-zinc-500 tabular-nums shrink-0">
+                    {formatTime(event.timestamp)}
+                  </span>
+                  <span className="font-mono text-zinc-400">
+                    {event.eventType}
+                  </span>
                   {hasExpandable && (
                     <ChevronDownIcon
-                      className={cn('size-3 text-zinc-600 transition-transform', isExpanded && 'rotate-180')}
+                      className={cn(
+                        "size-3 text-zinc-600 transition-transform",
+                        isExpanded && "rotate-180",
+                      )}
                     />
                   )}
                 </div>
-                <div className="text-zinc-500 truncate">{summarizeEvent(event)}</div>
-                {event.eventType === 'handoff:prepare' && event.data.summary != null && (
-                  <div className="text-zinc-600 italic truncate mt-0.5">{String(event.data.summary)}</div>
-                )}
-                {event.eventType === 'budget:check' && event.data.breakdown != null && (
-                  <BudgetBreakdownBar breakdown={event.data.breakdown as Record<string, number>} />
-                )}
+                <div className="text-zinc-500 truncate">
+                  {summarizeEvent(event)}
+                </div>
+                {event.eventType === "handoff:prepare" &&
+                  event.data.summary != null && (
+                    <div className="text-zinc-600 italic truncate mt-0.5">
+                      {String(event.data.summary)}
+                    </div>
+                  )}
+                {event.eventType === "budget:check" &&
+                  event.data.breakdown != null && (
+                    <BudgetBreakdownBar
+                      breakdown={event.data.breakdown as Record<string, number>}
+                    />
+                  )}
               </div>
             </div>
             {hasExpandable && isExpanded && (
               <div className="ml-7 mt-1 mb-2">
-                {event.eventType === 'blackboard:update' && event.data.snapshot != null && (
-                  <JsonBlock data={event.data.snapshot} maxHeight="max-h-48" />
-                )}
-                {event.eventType === 'tool:end' && (
+                {event.eventType === "blackboard:update" &&
+                  event.data.snapshot != null && (
+                    <JsonBlock
+                      data={event.data.snapshot}
+                      maxHeight="max-h-48"
+                    />
+                  )}
+                {event.eventType === "tool:end" && (
                   <>
                     {event.data.error != null && (
-                      <div className="text-(--qw-danger) text-[11px] font-mono mb-1">{String(event.data.error)}</div>
+                      <div className="text-(--devtools-danger) text-[11px] font-mono mb-1">
+                        {String(event.data.error)}
+                      </div>
                     )}
                     {event.data.result != null && (
                       <JsonBlock
                         data={
-                          typeof event.data.result === 'string' ? tryParseJson(event.data.result) : event.data.result
+                          typeof event.data.result === "string"
+                            ? tryParseJson(event.data.result)
+                            : event.data.result
                         }
                         maxHeight="max-h-48"
                       />
                     )}
-                    {(event.data.modelOutput != null || event.data.modelOutputType != null) && (
+                    {(event.data.modelOutput != null ||
+                      event.data.modelOutputType != null) && (
                       <div className="mt-2 space-y-1">
                         <div className="text-[10px] uppercase tracking-wide text-zinc-600">
                           Model output
@@ -227,68 +319,87 @@ export function EventList({ events }: { events: CorrelatedEvent[] }) {
                               ({String(event.data.modelOutputType)})
                             </span>
                           )}
-                          {typeof event.data.outputSize === 'number' &&
-                            typeof event.data.modelOutputSize === 'number' && (
+                          {typeof event.data.outputSize === "number" &&
+                            typeof event.data.modelOutputSize === "number" && (
                               <span className="ml-1 normal-case text-zinc-500">
-                                {event.data.outputSize}B → {event.data.modelOutputSize}B
+                                {event.data.outputSize}B →{" "}
+                                {event.data.modelOutputSize}B
                               </span>
                             )}
                         </div>
                         {event.data.modelOutputError != null && (
-                          <div className="text-(--qw-danger) text-[11px] font-mono">
+                          <div className="text-(--devtools-danger) text-[11px] font-mono">
                             {String(event.data.modelOutputError)}
                           </div>
                         )}
                         {event.data.modelOutput != null && (
-                          <JsonBlock data={event.data.modelOutput} maxHeight="max-h-48" />
+                          <JsonBlock
+                            data={event.data.modelOutput}
+                            maxHeight="max-h-48"
+                          />
                         )}
                       </div>
                     )}
                   </>
                 )}
-                {event.eventType === 'delegate:complete' && (
+                {event.eventType === "delegate:complete" && (
                   <div className="text-[11px] text-zinc-500 space-y-0.5">
                     <div>
-                      Duration:{' '}
-                      <span className="text-zinc-300 tabular-nums">{Number(event.data.durationMs ?? 0)}ms</span>
-                    </div>
-                    <div>
-                      Handoff: <span className="text-zinc-400 font-mono">{String(event.data.handoffId ?? '-')}</span>
-                    </div>
-                    <div>
-                      Data:{' '}
+                      Duration:{" "}
                       <span className="text-zinc-300 tabular-nums">
-                        {Number(event.data.inputSize ?? 0)}B → {Number(event.data.outputSize ?? 0)}B
+                        {Number(event.data.durationMs ?? 0)}ms
+                      </span>
+                    </div>
+                    <div>
+                      Handoff:{" "}
+                      <span className="text-zinc-400 font-mono">
+                        {String(event.data.handoffId ?? "-")}
+                      </span>
+                    </div>
+                    <div>
+                      Data:{" "}
+                      <span className="text-zinc-300 tabular-nums">
+                        {Number(event.data.inputSize ?? 0)}B →{" "}
+                        {Number(event.data.outputSize ?? 0)}B
                       </span>
                     </div>
                   </div>
                 )}
-                {event.eventType === 'handoff:prepare' && (
+                {event.eventType === "handoff:prepare" && (
                   <div className="text-[11px] text-zinc-500 space-y-0.5">
-                    {event.data.fromAgent != null && event.data.toAgent != null && (
-                      <div>
-                        <span className="text-zinc-300">{String(event.data.fromAgent)}</span> →{' '}
-                        <span className="text-zinc-300">{String(event.data.toAgent)}</span>
-                      </div>
-                    )}
+                    {event.data.fromAgent != null &&
+                      event.data.toAgent != null && (
+                        <div>
+                          <span className="text-zinc-300">
+                            {String(event.data.fromAgent)}
+                          </span>{" "}
+                          →{" "}
+                          <span className="text-zinc-300">
+                            {String(event.data.toAgent)}
+                          </span>
+                        </div>
+                      )}
                     <div>
-                      Data:{' '}
+                      Data:{" "}
                       <span className="text-zinc-300 tabular-nums">
-                        {Number(event.data.inputSize ?? 0)}B → {Number(event.data.outputSize ?? 0)}B
+                        {Number(event.data.inputSize ?? 0)}B →{" "}
+                        {Number(event.data.outputSize ?? 0)}B
                       </span>
                     </div>
                     {event.data.summary != null && (
-                      <div className="text-zinc-600 italic mt-1">{String(event.data.summary)}</div>
+                      <div className="text-zinc-600 italic mt-1">
+                        {String(event.data.summary)}
+                      </div>
                     )}
                   </div>
                 )}
               </div>
             )}
           </div>
-        )
+        );
       })}
     </div>
-  )
+  );
 }
 
 /** Compute highlight ranges for injected input values in resolved text. */
@@ -296,117 +407,121 @@ export function computeHighlights(
   text: string,
   input: Record<string, unknown>,
   meta?: {
-    inputSchema?: Record<string, unknown> | undefined
-    isStatic?: boolean
+    inputSchema?: Record<string, unknown> | undefined;
+    isStatic?: boolean;
   },
 ): Array<{ start: number; end: number }> {
-  if (!meta || meta.isStatic === true || !meta.inputSchema) return []
-  const props = (meta.inputSchema as { properties?: Record<string, unknown> }).properties
-  if (!props || typeof props !== 'object') return []
+  if (!meta || meta.isStatic === true || !meta.inputSchema) return [];
+  const props = (meta.inputSchema as { properties?: Record<string, unknown> })
+    .properties;
+  if (!props || typeof props !== "object") return [];
 
   // Collect candidate values: only strings 8+ chars
-  const candidates: Array<{ value: string }> = []
+  const candidates: Array<{ value: string }> = [];
   for (const key of Object.keys(props)) {
-    const val = input[key]
-    if (typeof val === 'string' && val.length >= 8) {
-      candidates.push({ value: val })
+    const val = input[key];
+    if (typeof val === "string" && val.length >= 8) {
+      candidates.push({ value: val });
     }
   }
-  if (candidates.length === 0) return []
+  if (candidates.length === 0) return [];
 
   // Sort by length descending (longest first to avoid overlap)
-  candidates.sort((a, b) => b.value.length - a.value.length)
+  candidates.sort((a, b) => b.value.length - a.value.length);
 
   // Find all occurrences, marking claimed positions
-  const claimed = new Set<number>()
-  const ranges: Array<{ start: number; end: number }> = []
+  const claimed = new Set<number>();
+  const ranges: Array<{ start: number; end: number }> = [];
 
   for (const { value } of candidates) {
-    let idx = 0
+    let idx = 0;
     while (true) {
-      const found = text.indexOf(value, idx)
-      if (found === -1) break
-      const end = found + value.length
+      const found = text.indexOf(value, idx);
+      if (found === -1) break;
+      const end = found + value.length;
       // Check no overlap with already-claimed ranges
-      let overlaps = false
+      let overlaps = false;
       for (let i = found; i < end; i++) {
         if (claimed.has(i)) {
-          overlaps = true
-          break
+          overlaps = true;
+          break;
         }
       }
       if (!overlaps) {
-        ranges.push({ start: found, end })
-        for (let i = found; i < end; i++) claimed.add(i)
+        ranges.push({ start: found, end });
+        for (let i = found; i < end; i++) claimed.add(i);
       }
-      idx = found + 1
+      idx = found + 1;
     }
   }
 
-  return ranges.sort((a, b) => a.start - b.start)
+  return ranges.sort((a, b) => a.start - b.start);
 }
 
 export function PartContent({
   text,
   highlights,
 }: {
-  text: string
-  highlights?: Array<{ start: number; end: number }>
+  text: string;
+  highlights?: Array<{ start: number; end: number }>;
 }) {
-  const [expanded, setExpanded] = useState(false)
-  const isLong = text.length > 300
-  const displayText = expanded || !isLong ? text : text.slice(0, 300) + '…'
-  const hasHighlights = highlights && highlights.length > 0
+  const [expanded, setExpanded] = useState(false);
+  const isLong = text.length > 300;
+  const displayText = expanded || !isLong ? text : text.slice(0, 300) + "…";
+  const hasHighlights = highlights && highlights.length > 0;
 
   // Split text into segments for highlighting
   const renderContent = () => {
-    if (!hasHighlights) return displayText
+    if (!hasHighlights) return displayText;
 
     // Adjust highlights to display text bounds
-    const displayLen = displayText.length
-    const visibleHighlights = highlights!.filter((h) => h.start < displayLen)
+    const displayLen = displayText.length;
+    const visibleHighlights = highlights!.filter((h) => h.start < displayLen);
 
-    if (visibleHighlights.length === 0) return displayText
+    if (visibleHighlights.length === 0) return displayText;
 
-    const segments: Array<{ text: string; highlighted: boolean }> = []
-    let pos = 0
+    const segments: Array<{ text: string; highlighted: boolean }> = [];
+    let pos = 0;
     for (const h of visibleHighlights) {
-      const start = Math.max(h.start, pos)
-      const end = Math.min(h.end, displayLen)
+      const start = Math.max(h.start, pos);
+      const end = Math.min(h.end, displayLen);
       if (start > pos) {
         segments.push({
           text: displayText.slice(pos, start),
           highlighted: false,
-        })
+        });
       }
       if (end > start) {
         segments.push({
           text: displayText.slice(start, end),
           highlighted: true,
-        })
+        });
       }
-      pos = end
+      pos = end;
     }
     if (pos < displayLen) {
-      segments.push({ text: displayText.slice(pos), highlighted: false })
+      segments.push({ text: displayText.slice(pos), highlighted: false });
     }
 
     return segments.map((seg, i) =>
       seg.highlighted ? (
-        <span key={i} className="bg-(--qw-warn-soft) text-(--qw-warn) border-b border-dashed border-(--qw-warn-soft)">
+        <span
+          key={i}
+          className="bg-(--devtools-warn-soft) text-(--devtools-warn) border-b border-dashed border-(--devtools-warn-soft)"
+        >
           {seg.text}
         </span>
       ) : (
         <span key={i}>{seg.text}</span>
       ),
-    )
-  }
+    );
+  };
 
   return (
     <div className="relative">
       {hasHighlights && (
         <div className="px-3 pt-1.5 flex items-center gap-1.5 text-[9px] text-zinc-600">
-          <span className="inline-block w-3 h-0.5 bg-(--qw-warn-soft) border-b border-dashed border-(--qw-warn-soft)" />
+          <span className="inline-block w-3 h-0.5 bg-(--devtools-warn-soft) border-b border-dashed border-(--devtools-warn-soft)" />
           injected from input
         </div>
       )}
@@ -418,11 +533,11 @@ export function PartContent({
           onClick={() => setExpanded(!expanded)}
           className="absolute bottom-1 right-2 text-[10px] text-zinc-500 hover:text-zinc-300 bg-zinc-900 rounded px-1.5 py-0.5 border border-zinc-800"
         >
-          {expanded ? 'collapse' : 'expand'}
+          {expanded ? "collapse" : "expand"}
         </button>
       )}
     </div>
-  )
+  );
 }
 
 export function ContextPartCard({
@@ -438,104 +553,145 @@ export function ContextPartCard({
   onViewContext,
   highlights,
 }: {
-  source: string
-  text: string
-  tokens: number
-  skipped: boolean
-  role: 'system' | 'user'
-  isPromptPart: boolean
-  isContext: boolean
-  ctxMeta?: ContextMeta
-  tokenBudget?: number
-  onViewContext?: () => void
-  highlights?: Array<{ start: number; end: number }>
+  source: string;
+  text: string;
+  tokens: number;
+  skipped: boolean;
+  role: "system" | "user";
+  isPromptPart: boolean;
+  isContext: boolean;
+  ctxMeta?: ContextMeta;
+  tokenBudget?: number;
+  onViewContext?: () => void;
+  highlights?: Array<{ start: number; end: number }>;
 }) {
-  const isUser = role === 'user'
+  const isUser = role === "user";
   return (
     <div className="overflow-hidden min-w-0">
       <div
         className={cn(
-          'rounded-lg border overflow-hidden',
-          skipped ? 'border-zinc-800/40 opacity-60' : isUser ? 'border-(--qw-crux-line)' : 'border-zinc-800/60',
+          "rounded-lg border overflow-hidden",
+          skipped
+            ? "border-zinc-800/40 opacity-60"
+            : isUser
+              ? "border-(--devtools-crux-line)"
+              : "border-zinc-800/60",
         )}
       >
         {/* Part header */}
-        <div className={cn('flex items-center gap-2 px-3 py-1.5', isUser ? 'bg-(--qw-crux-soft)' : 'bg-zinc-900/60')}>
+        <div
+          className={cn(
+            "flex items-center gap-2 px-3 py-1.5",
+            isUser ? "bg-(--devtools-crux-soft)" : "bg-zinc-900/60",
+          )}
+        >
           {isUser ? (
-            <MessageSquareIcon className="size-3 text-(--qw-crux) shrink-0" />
+            <MessageSquareIcon className="size-3 text-(--devtools-crux) shrink-0" />
           ) : isPromptPart ? (
             <FileTextIcon className="size-3 text-zinc-500 shrink-0" />
           ) : isContext ? (
-            <PuzzleIcon className="size-3 text-(--qw-iris) shrink-0" />
+            <PuzzleIcon className="size-3 text-(--devtools-iris) shrink-0" />
           ) : null}
           <span
             className={cn(
-              'text-[10px] font-medium uppercase tracking-wider',
-              isUser ? 'text-(--qw-crux)' : 'text-zinc-600',
+              "text-[10px] font-medium uppercase tracking-wider",
+              isUser ? "text-(--devtools-crux)" : "text-zinc-600",
             )}
           >
             {role}
           </span>
           <span
             className={cn(
-              'text-xs font-medium',
+              "text-xs font-medium",
               skipped
-                ? 'text-zinc-600 line-through'
+                ? "text-zinc-600 line-through"
                 : isUser
-                  ? 'text-(--qw-crux)'
+                  ? "text-(--devtools-crux)"
                   : isContext
-                    ? 'text-(--qw-iris)'
-                    : 'text-zinc-300',
+                    ? "text-(--devtools-iris)"
+                    : "text-zinc-300",
             )}
           >
             {source}
           </span>
-          {ctxMeta?.description && <span className="text-[10px] text-zinc-500 truncate">{ctxMeta.description}</span>}
+          {ctxMeta?.description && (
+            <span className="text-[10px] text-zinc-500 truncate">
+              {ctxMeta.description}
+            </span>
+          )}
           {onViewContext && (
-            <button onClick={onViewContext} className="text-[10px] text-(--qw-iris) hover:text-(--qw-iris) shrink-0">
+            <button
+              onClick={onViewContext}
+              className="text-[10px] text-(--devtools-iris) hover:text-(--devtools-iris) shrink-0"
+            >
               view →
             </button>
           )}
           <div className="ml-auto flex items-center gap-2 shrink-0">
-            {skipped && <span className="text-[9px] text-zinc-600 bg-zinc-800 rounded px-1">skipped</span>}
-            {ctxMeta && <span className="text-[9px] text-zinc-600">priority {ctxMeta.priority}</span>}
+            {skipped && (
+              <span className="text-[9px] text-zinc-600 bg-zinc-800 rounded px-1">
+                skipped
+              </span>
+            )}
+            {ctxMeta && (
+              <span className="text-[9px] text-zinc-600">
+                priority {ctxMeta.priority}
+              </span>
+            )}
             {ctxMeta && (
               <span
                 className={cn(
-                  'text-[9px] rounded px-1',
-                  ctxMeta.isStatic ? 'text-zinc-500 bg-zinc-800' : 'text-(--qw-warn) bg-(--qw-warn-soft)',
+                  "text-[9px] rounded px-1",
+                  ctxMeta.isStatic
+                    ? "text-zinc-500 bg-zinc-800"
+                    : "text-(--devtools-warn) bg-(--devtools-warn-soft)",
                 )}
               >
-                {ctxMeta.isStatic ? 'static' : 'dynamic'}
+                {ctxMeta.isStatic ? "static" : "dynamic"}
               </span>
             )}
-            <span className="text-[10px] text-zinc-600 tabular-nums">{tokens.toLocaleString()} tok</span>
+            <span className="text-[10px] text-zinc-600 tabular-nums">
+              {tokens.toLocaleString()} tok
+            </span>
             {tokens > 0 && tokenBudget && tokens / tokenBudget > 0.3 && (
-              <span className="text-[10px] text-(--qw-warn)">⚠ {Math.round((tokens / tokenBudget) * 100)}%</span>
+              <span className="text-[10px] text-(--devtools-warn)">
+                ⚠ {Math.round((tokens / tokenBudget) * 100)}%
+              </span>
             )}
           </div>
         </div>
         {/* Part content (collapsible) */}
-        {!skipped && text && <PartContent text={text} highlights={highlights} />}
+        {!skipped && text && (
+          <PartContent text={text} highlights={highlights} />
+        )}
       </div>
     </div>
-  )
+  );
 }
 
-export function JsonBlock({ data, maxHeight = 'max-h-64' }: { data: unknown; maxHeight?: string }) {
-  const [showRaw, setShowRaw] = useState(false)
-  const jsonStr = typeof data === 'string' ? data : JSON.stringify(data, null, 2)
+export function JsonBlock({
+  data,
+  maxHeight = "max-h-64",
+}: {
+  data: unknown;
+  maxHeight?: string;
+}) {
+  const [showRaw, setShowRaw] = useState(false);
+  const jsonStr =
+    typeof data === "string" ? data : JSON.stringify(data, null, 2);
 
   return (
     <div className="relative group min-w-0 overflow-hidden">
       <div
         className={cn(
           maxHeight,
-          'overflow-auto rounded-lg bg-zinc-950 p-3 font-mono text-xs border border-zinc-800/50',
+          "overflow-auto rounded-lg bg-zinc-950 p-3 font-mono text-xs border border-zinc-800/50",
         )}
       >
         {showRaw ? (
-          <pre className="whitespace-pre-wrap text-zinc-300 break-all">{jsonStr}</pre>
+          <pre className="whitespace-pre-wrap text-zinc-300 break-all">
+            {jsonStr}
+          </pre>
         ) : (
           <JsonTree data={data} />
         )}
@@ -545,11 +701,11 @@ export function JsonBlock({ data, maxHeight = 'max-h-64' }: { data: unknown; max
           onClick={() => setShowRaw(!showRaw)}
           className="text-[10px] text-zinc-500 hover:text-zinc-300 bg-zinc-800 rounded px-1.5 py-0.5 border border-zinc-700"
         >
-          {showRaw ? 'tree' : 'raw'}
+          {showRaw ? "tree" : "raw"}
         </button>
         <button
           onClick={() => {
-            navigator.clipboard?.writeText(jsonStr)
+            navigator.clipboard?.writeText(jsonStr);
           }}
           className="text-[10px] text-zinc-500 hover:text-zinc-300 bg-zinc-800 rounded px-1.5 py-0.5 border border-zinc-700"
         >
@@ -557,5 +713,5 @@ export function JsonBlock({ data, maxHeight = 'max-h-64' }: { data: unknown; max
         </button>
       </div>
     </div>
-  )
+  );
 }

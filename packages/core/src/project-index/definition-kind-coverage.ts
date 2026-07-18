@@ -6,8 +6,8 @@
  * "where used" come from the compiler-owned Project Index. Not every
  * `ProjectDefinitionKind` is itself the subject of a runtime span: some are
  * only ever referenced by an owner's span, some are structurally nested
- * under a parent kind, some are Quality-owned artifacts correlated through a
- * separate existing join, and a few are genuinely static/declarative and
+ * under a parent kind, Evals correlate through their dedicated run read model,
+ * and a few are genuinely static/declarative and
  * never runtime-observable at all. A final group is observable at runtime but
  * cannot yet carry its authored Catalog identity. This manifest is the single
  * source of truth for which treatment applies to each kind, so Catalog
@@ -38,8 +38,7 @@ import type { ProjectDefinitionKind } from "./index";
  * - `structural-child` — nested under a parent kind for Catalog display,
  *   per the mechanical `<parent>.<child>` rule where `parent` is itself a
  *   `ProjectDefinitionKind` member.
- * - `quality-owned` — correlates through the existing Quality↔observability
- *   join, not the `DefinitionRef` join this workstream adds.
+ * - `eval-owned` — correlates through the dedicated Eval run read model.
  * - `static-only` — declarative/config; never the target or subject of any
  *   runtime primitive.
  * - `fallback` — the `unknown` sentinel; never a real definition.
@@ -49,7 +48,7 @@ export type DefinitionKindCoveragePrimary =
   | "runtime-contributor"
   | "runtime-observed-unjoined"
   | "structural-child"
-  | "quality-owned"
+  | "eval-owned"
   | "static-only"
   | "fallback";
 
@@ -61,13 +60,12 @@ export type DefinitionKindCoveragePrimary =
  *   (e.g. `scorer` invoked live as `scoring.judge`) despite its primary
  *   treatment being something else. Every kind declaring this must also
  *   declare at least one entry in `runtimePrimitiveNames`.
- * - `quality-owned` — the kind also correlates through the existing
- *   Quality↔observability join (e.g. `evaluation.case`/`suite.case`, whose
- *   primary treatment is `structural-child` per the mechanical parent rule).
+ * - `eval-owned` — the kind also correlates through the Eval read model while
+ *   remaining a structural child in the Catalog.
  */
 export type DefinitionKindCoverageSecondary =
   | "direct-runtime"
-  | "quality-owned";
+  | "eval-owned";
 
 /** Coverage classification for a single `ProjectDefinitionKind`. */
 export interface CoverageDescriptor {
@@ -90,7 +88,7 @@ export interface CoverageDescriptor {
    *
    * - `definition-ref` — an executed record can carry this definition's exact id.
    * - `parent-derived` — only the indexed parent is directly observed.
-   * - `quality` — the existing Quality correlation is authoritative.
+   * - `eval` — the Eval run read model is authoritative.
    * - `none` — no live runtime identity exists.
    *
    * Directly-observed kinds implicitly use `definition-ref`; static/fallback
@@ -99,7 +97,7 @@ export interface CoverageDescriptor {
   readonly runtimeIdentity?:
     | "definition-ref"
     | "parent-derived"
-    | "quality"
+    | "eval"
     | "none";
 }
 
@@ -275,8 +273,8 @@ export const DEFINITION_KIND_COVERAGE = {
     runtimePrimitiveNames: ["ingest.parse", "corpus.sync"],
   },
 
-  // Category D — structural child (14 kinds; `evaluation.case`/`suite.case`
-  // are also Quality-owned via `secondary`). Classified mechanically: a
+  // Category D — structural child (13 kinds; `eval.case` is also Eval-owned
+  // via `secondary`). Classified mechanically: a
   // `<parent>.<child>` kind whose `parent` is itself a union member.
   "flow.step": {
     primary: "structural-child",
@@ -330,33 +328,20 @@ export const DEFINITION_KIND_COVERAGE = {
     primary: "structural-child",
     runtimeIdentity: "parent-derived",
   },
-  "evaluation.case": {
+  "eval.case": {
     primary: "structural-child",
-    secondary: ["quality-owned"],
-    runtimeIdentity: "quality",
-  },
-  "suite.case": {
-    primary: "structural-child",
-    secondary: ["quality-owned"],
-    runtimeIdentity: "quality",
+    secondary: ["eval-owned"],
+    runtimeIdentity: "eval",
   },
 
-  // Category E — Quality-owned artifact (10 kinds total; `evaluation.case`/
-  // `suite.case` above account for the other 2). `scorer` is dual-use:
-  // Quality-primary, but must not omit live `scoring.judge` spans.
+  // Category E — Eval-owned source definition. Scorers are directly observed
+  // when invoked and Evals correlate through their dedicated run read model.
   scorer: {
-    primary: "quality-owned",
-    secondary: ["direct-runtime"],
+    primary: "directly-observed",
     runtimeIdentity: "definition-ref",
     runtimePrimitiveNames: ["scoring.judge"],
   },
-  dataset: { primary: "quality-owned" },
-  evaluation: { primary: "quality-owned" },
-  suite: { primary: "quality-owned" },
-  "eval.prompt": { primary: "quality-owned" },
-  "eval.flow": { primary: "quality-owned" },
-  "eval.rag": { primary: "quality-owned" },
-  "eval.quality": { primary: "quality-owned" },
+  eval: { primary: "eval-owned", runtimeIdentity: "eval" },
   // Category F — genuinely static-only (4 kinds). Declarative/config; never
   // the target or subject of any runtime primitive.
   registry: { primary: "static-only" },
@@ -385,9 +370,8 @@ export const DEFINITION_KIND_COVERAGE = {
  * union and forces the `DefinitionRef` role/builder map in
  * `../observability/definition-ref` to cover it (a compile error otherwise).
  *
- * Kinds whose runtime evidence is only a `secondary: ["direct-runtime"]`
- * treatment (e.g. `scorer`) are intentionally excluded: they correlate through
- * the Quality↔observability join, not the `DefinitionRef` join.
+ * Kinds whose runtime evidence is only a secondary treatment are intentionally
+ * excluded.
  */
 export type DirectlyObservedKind = {
   [K in keyof typeof DEFINITION_KIND_COVERAGE]: (typeof DEFINITION_KIND_COVERAGE)[K]["primary"] extends "directly-observed"

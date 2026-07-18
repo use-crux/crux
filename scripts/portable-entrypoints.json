@@ -1,31 +1,6 @@
 {
   "version": 1,
-  "guardedNodeFallbacks": [
-    {
-      "owner": "@use-crux/core",
-      "sourceImporter": "src/async-scope/internal/carrier.ts",
-      "stagedImporter": "dist/async-scope/internal/carrier.js",
-      "specifier": "node:async_hooks",
-      "kind": "require-call",
-      "smoke": "core-guarded-fallbacks"
-    },
-    {
-      "owner": "@use-crux/core",
-      "sourceImporter": "src/observability/channel.ts",
-      "stagedImporter": "dist/observability/channel.js",
-      "specifier": "node:diagnostics_channel",
-      "kind": "require-call",
-      "smoke": "core-guarded-fallbacks"
-    },
-    {
-      "owner": "@use-crux/core",
-      "sourceImporter": "src/observability/channel.ts",
-      "stagedImporter": "dist/observability/channel.js",
-      "specifier": "node:diagnostics_channel",
-      "kind": "dynamic-import",
-      "smoke": "core-guarded-fallbacks"
-    }
-  ],
+  "guardedNodeFallbacks": [],
   "smokes": {
     "core-guarded-fallbacks": "scripts/fixtures/portability/core-guarded-fallbacks.ts"
   },
@@ -35,9 +10,12 @@
       "manifest": "packages/core/package.json",
       "entrypoints": {
         ".": "portable-web",
-        "./quality": "node-only",
-        "./quality/schemas": "portable-web",
-        "./quality/internal/runner": "node-only",
+        "./eval": "portable-web",
+        "./feedback": "portable-web",
+        "./eval/node": "node-only",
+        "./eval/internal/task": "portable-web",
+        "./eval/internal/runner": "portable-web",
+        "./eval/internal/node-runner": "node-only",
         "./internal/async-scope": "portable-web",
         "./internal/defer-host": "portable-web",
         "./internal/defer-lifecycle": "portable-web",
@@ -49,6 +27,8 @@
         "./lint": "portable-web",
         "./runtime-bridge": "portable-web",
         "./runtime": "portable-web",
+        "./runtime/internal/eval-registry": "portable-web",
+        "./runtime/internal/eval-host": "portable-web",
         "./setup": "node-only",
         "./runtime/testing": "node-only",
         "./runtime/next": "node-only",
@@ -92,6 +72,7 @@
       "entrypoints": {
         ".": "portable-web",
         "./agent": "portable-web",
+        "./feedback": "portable-web",
         "./stream": "portable-web",
         "./transcription/node": "node-only"
       }
@@ -118,6 +99,13 @@
       "name": "@use-crux/google",
       "manifest": "packages/google/package.json",
       "entrypoints": { ".": "node-only" }
+    },
+    {
+      "name": "@use-crux/cloudflare",
+      "manifest": "packages/cloudflare/package.json",
+      "entrypoints": {
+        ".": "portable-web"
+      }
     },
     {
       "name": "@use-crux/convex",
@@ -197,7 +185,8 @@
         "./contracts/static-syntax": "compiler-local",
         "./contracts/semantic": "compiler-local",
         "./contracts/parity": "compiler-local",
-        "./source-resolver": "compiler-local"
+        "./source-resolver": "compiler-local",
+        "./internal/user-import": "compiler-local"
       }
     },
     {

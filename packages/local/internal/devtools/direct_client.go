@@ -10,43 +10,35 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/use-crux/crux/packages/local/internal/api"
+	"github.com/use-crux/crux/packages/local/internal/inspect"
 	"github.com/use-crux/crux/packages/local/internal/observability"
-	"github.com/use-crux/crux/packages/local/internal/quality"
 	"github.com/use-crux/crux/packages/local/internal/readmodel"
 	"github.com/use-crux/crux/packages/local/internal/readmodel/endpoints"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
-var errNoQualityService = fmt.Errorf("quality service not configured")
+var errNoInspectService = fmt.Errorf("Inspect service not configured")
 var errNoObservabilityService = fmt.Errorf("observability service not configured")
 
 // DirectClient exposes the devtools read API against an in-process store.
 // It lets native clients use the same logical routes as the HTTP API without a
 // loopback HTTP/WebSocket dependency.
-// PromoteFunc runs a server-side baseline promotion (the embedded quality
-// worker's --promote mode). Injected by the server wiring (commands/dev.go)
-// because promotion spawns the worker, which lives in internal/server —
-// importing it here would create a cycle.
-type PromoteFunc func(ctx context.Context, experimentID, variant, pinID string) (api.QualityPromoteResult, error)
-
 type DirectClient struct {
 	devtools      *Service
-	quality       *quality.Service
+	inspect       *inspect.Service
 	observability *observability.Service
-	promote       PromoteFunc
 }
 
-func NewDirectClient(s *store.Store, qualityServices ...*quality.Service) *DirectClient {
-	var qualitySvc *quality.Service
-	if len(qualityServices) > 0 {
-		qualitySvc = qualityServices[0]
+func NewDirectClient(s *store.Store, inspectServices ...*inspect.Service) *DirectClient {
+	var inspectSvc *inspect.Service
+	if len(inspectServices) > 0 {
+		inspectSvc = inspectServices[0]
 	}
-	return NewDirectClientFromService(NewService(s, qualitySvc))
+	return NewDirectClientFromService(NewService(s, inspectSvc))
 }
 
 func NewDirectClientFromService(devtools *Service) *DirectClient {
-	return &DirectClient{devtools: devtools, quality: devtools.Quality()}
+	return &DirectClient{devtools: devtools, inspect: devtools.Inspect()}
 }
 
 func (c *DirectClient) WithObservability(service *observability.Service) *DirectClient {
@@ -55,24 +47,9 @@ func (c *DirectClient) WithObservability(service *observability.Service) *Direct
 	return c
 }
 
-// WithQualityPromote injects the server-side promotion function.
-func (c *DirectClient) WithQualityPromote(fn PromoteFunc) *DirectClient {
-	c.promote = fn
-	return c
-}
-
-// PromoteBaseline runs the injected server-side promotion. Without a wired
-// promote function (e.g. headless construction) it reports the limitation.
-func (c *DirectClient) PromoteBaseline(ctx context.Context, experimentID, variant, pinID string) (api.QualityPromoteResult, error) {
-	if c.promote == nil {
-		return api.QualityPromoteResult{}, fmt.Errorf("promotion is unavailable: no quality worker wired")
-	}
-	return c.promote(ctx, experimentID, variant, pinID)
-}
-
 func (c *DirectClient) GetJSON(ctx context.Context, path string, target any) error {
-	if strings.HasPrefix(path, "/api/quality/") {
-		return c.getQualityJSON(ctx, path, target)
+	if strings.HasPrefix(path, "/api/inspect/") {
+		return c.getInspectJSON(ctx, path, target)
 	}
 	if strings.HasPrefix(path, "/api/observability/") {
 		return c.getObservabilityJSON(ctx, path, target)
@@ -82,7 +59,7 @@ func (c *DirectClient) GetJSON(ctx context.Context, path string, target any) err
 
 func (c *DirectClient) getRegisteredJSON(ctx context.Context, path string, target any) error {
 	mux := http.NewServeMux()
-	readmodel.Mount(mux, endpoints.Deps{Devtools: c.devtools, Quality: c.quality}, endpoints.Registry)
+	readmodel.Mount(mux, endpoints.Deps{Devtools: c.devtools, Inspect: c.inspect}, endpoints.Registry)
 	resp := httptest.NewRecorder()
 	req := httptest.NewRequestWithContext(ctx, http.MethodGet, path, nil)
 	mux.ServeHTTP(resp, req)
@@ -132,148 +109,52 @@ func (c *DirectClient) getObservabilityJSON(ctx context.Context, path string, ta
 	return fmt.Errorf("unsupported direct observability API path %q", path)
 }
 
-func (c *DirectClient) getQualityJSON(ctx context.Context, path string, target any) error {
-	if c.quality == nil {
-		return fmt.Errorf("quality service not configured")
+func (c *DirectClient) getInspectJSON(ctx context.Context, path string, target any) error {
+	if c.inspect == nil {
+		return fmt.Errorf("Inspect service not configured")
 	}
 	route, query := splitURL(path)
-	deps := endpoints.Deps{Quality: c.quality}
+	deps := endpoints.Deps{Inspect: c.inspect}
 
-	if traceID, ok := strings.CutPrefix(route, "/api/quality/runs/"); ok {
-		record, err := endpoints.QualityRunDetail.Call(ctx, deps, &readmodel.PathID{ID: traceID})
+	if traceID, ok := strings.CutPrefix(route, "/api/inspect/runs/"); ok {
+		record, err := endpoints.InspectRunDetail.Call(ctx, deps, &readmodel.PathID{ID: traceID})
 		return assignEndpointJSON(target, record, err)
-	}
-
-	// Spec-02 canonical data surface.
-	if experimentRoute, ok := strings.CutPrefix(route, "/api/quality/experiments/"); ok {
-		if experimentID, ok := strings.CutSuffix(experimentRoute, "/cell-evidence"); ok {
-			params := &endpoints.CellEvidenceParams{}
-			err := params.Parse(readmodel.Req{
-				Query: query,
-				PathValue: func(name string) string {
-					if name == "experimentId" {
-						return experimentID
-					}
-					return ""
-				},
-			})
-			if err != nil {
-				return err
-			}
-			record, err := endpoints.QualityCellEvidence.Call(ctx, deps, params)
-			return assignEndpointJSON(target, record, err)
-		}
-		record, err := endpoints.QualityExperimentRecord.Call(ctx, deps, &readmodel.PathID{ID: experimentRoute})
-		return assignEndpointJSON(target, record, err)
-	}
-	if evaluationID, ok := strings.CutPrefix(route, "/api/quality/baselines/"); ok {
-		record, err := endpoints.QualityBaselineRecord.Call(ctx, deps, &readmodel.PathID{ID: evaluationID})
-		return assignEndpointJSON(target, record, err)
-	}
-	if route == "/api/quality/evaluations/experiment-groups" {
-		params := &readmodel.Limit{Default: 20}
-		if err := params.Parse(readmodel.Req{Query: query}); err != nil {
-			return err
-		}
-		record, err := endpoints.QualityEvaluationExperimentGroups.Call(ctx, deps, params)
-		return assignEndpointJSON(target, record, err)
-	}
-	if evaluationRoute, ok := strings.CutPrefix(route, "/api/quality/evaluations/"); ok {
-		if evaluationID, ok := strings.CutSuffix(evaluationRoute, "/progress"); ok {
-			params := &endpoints.EvaluationIDLimitParams{}
-			err := params.Parse(readmodel.Req{
-				Query: query,
-				PathValue: func(name string) string {
-					if name == "evaluationId" {
-						return evaluationID
-					}
-					return ""
-				},
-			})
-			if err != nil {
-				return err
-			}
-			record, err := endpoints.QualityEvaluationProgress.Call(ctx, deps, params)
-			return assignEndpointJSON(target, record, err)
-		}
-		if evaluationID, ok := strings.CutSuffix(evaluationRoute, "/experiments"); ok {
-			params := &endpoints.EvaluationIDLimitParams{}
-			err := params.Parse(readmodel.Req{
-				Query: query,
-				PathValue: func(name string) string {
-					if name == "evaluationId" {
-						return evaluationID
-					}
-					return ""
-				},
-			})
-			if err != nil {
-				return err
-			}
-			record, err := endpoints.QualityEvaluationExperiments.Call(ctx, deps, params)
-			return assignEndpointJSON(target, record, err)
-		}
 	}
 
 	switch route {
-	case "/api/quality/overview":
-		params := &endpoints.QualityOverviewParams{}
+	case "/api/inspect/overview":
+		params := &endpoints.InspectOverviewParams{}
 		if err := params.Parse(readmodel.Req{Query: query}); err != nil {
 			return err
 		}
-		record, err := endpoints.QualityWorkbenchOverview.Call(ctx, deps, params)
+		record, err := endpoints.InspectOverview.Call(ctx, deps, params)
 		return assignEndpointJSON(target, record, err)
-	case "/api/quality/experiments":
-		params := &endpoints.QualityExperimentsParams{}
-		if err := params.Parse(readmodel.Req{Query: query}); err != nil {
-			return err
-		}
-		records, err := endpoints.QualityExperimentSummaries.Call(ctx, deps, params)
-		return assignEndpointJSON(target, records, err)
-	case "/api/quality/baselines":
-		records, err := endpoints.QualityBaselineRecords.Call(ctx, deps)
-		return assignEndpointJSON(target, records, err)
-	case "/api/quality/cassettes":
-		records, err := endpoints.QualityCassetteFiles.Call(ctx, deps)
-		return assignEndpointJSON(target, records, err)
-	case "/api/quality/scorers":
-		records, err := endpoints.QualityScorerStats.Call(ctx, deps)
-		return assignEndpointJSON(target, records, err)
-	case "/api/quality/activity":
+	case "/api/inspect/activity":
 		params := &readmodel.Limit{}
 		if err := params.Parse(readmodel.Req{Query: query}); err != nil {
 			return err
 		}
-		records, err := endpoints.QualityActivity.Call(ctx, deps, params)
+		records, err := endpoints.InspectActivity.Call(ctx, deps, params)
 		return assignEndpointJSON(target, records, err)
-	case "/api/quality/runs":
+	case "/api/inspect/runs":
 		params := &endpoints.RunsParams{}
 		if err := params.Parse(readmodel.Req{Query: query}); err != nil {
 			return err
 		}
-		records, err := endpoints.QualityRuns.Call(ctx, deps, params)
+		records, err := endpoints.InspectRuns.Call(ctx, deps, params)
 		return assignEndpointJSON(target, records, err)
-	case "/api/quality/insights":
-		records, err := endpoints.QualityInsights.Call(ctx, deps)
+	case "/api/inspect/insights":
+		records, err := endpoints.InspectInsights.Call(ctx, deps)
 		return assignEndpointJSON(target, records, err)
-	case "/api/quality/insights/silences":
+	case "/api/inspect/insights/silences":
 		params := &endpoints.IncludeDeletedParams{}
 		if err := params.Parse(readmodel.Req{Query: query}); err != nil {
 			return err
 		}
-		records, err := endpoints.QualityInsightSilences.Call(ctx, deps, params)
-		return assignEndpointJSON(target, records, err)
-	case "/api/quality/feedback":
-		records, err := endpoints.QualityFeedback.Call(ctx, deps)
-		return assignEndpointJSON(target, records, err)
-	case "/api/quality/feedback/annotations":
-		records, err := endpoints.QualityFeedbackAnnotations.Call(ctx, deps)
-		return assignEndpointJSON(target, records, err)
-	case "/api/quality/feedback/memory-proposals":
-		records, err := endpoints.QualityMemoryProposals.Call(ctx, deps)
+		records, err := endpoints.InspectInsightSilences.Call(ctx, deps, params)
 		return assignEndpointJSON(target, records, err)
 	default:
-		return fmt.Errorf("unsupported direct quality API path %q", path)
+		return fmt.Errorf("unsupported direct Inspect API path %q", path)
 	}
 }
 

@@ -433,30 +433,6 @@ describe("static extraction engine", () => {
   );
 
   itWithRustOxc(
-    "keeps member prompt calls on the TypeScript extractor fallback path",
-    async () => {
-      const root = "/fixture";
-      const file = "/fixture/src/eval.ts";
-      const source = [
-        "import { target } from '@use-crux/core/quality'",
-        "",
-        "export const task = target.prompt(writer, { model: runtime.model })",
-      ].join("\n");
-      const record = await createRustOxcStaticSyntaxFrontend({
-        callNames: ["prompt"],
-      }).parseFile({
-        root,
-        file,
-        source,
-      });
-
-      expect(record.matches).toHaveLength(1);
-      expect(record.nativeFacts ?? []).toEqual([]);
-    },
-    30_000,
-  );
-
-  itWithRustOxc(
     "emits exact native routing facts from the Rust/Oxc frontend",
     async () => {
       const root = "/fixture";
@@ -510,7 +486,8 @@ describe("static extraction engine", () => {
         ]),
       );
       const routerRouteFacts = nativeOut.definitions.find(
-        (definition) => definition.id === "routing.router:quality-router:route:draft",
+        (definition) =>
+          definition.id === "routing.router:quality-router:route:draft",
       )?.metadata?.facts;
       expect(
         routerRouteFacts?.kind === "routing.router.route"
@@ -518,7 +495,8 @@ describe("static extraction engine", () => {
           : undefined,
       ).toEqual({ temperature: 0.2, maxTokens: 1200 });
       const splitRouteFacts = nativeOut.definitions.find(
-        (definition) => definition.id === "routing.split:canary-split:route:stable",
+        (definition) =>
+          definition.id === "routing.split:canary-split:route:stable",
       )?.metadata?.facts;
       expect(
         splitRouteFacts?.kind === "routing.split.route"
@@ -797,7 +775,6 @@ function nativePromptFactsForTest(
               hasSystem: true,
               hasPrompt: false,
               hasMessages: false,
-              hasTests: false,
             },
             intelligence: { confidence: "static" },
             static: true,

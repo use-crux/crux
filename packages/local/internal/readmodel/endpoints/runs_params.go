@@ -10,21 +10,20 @@ import (
 )
 
 type RunsParams struct {
-	api.QualityRunsOptions
+	api.InspectRunsOptions
 }
 
 func (p *RunsParams) Parse(req readmodel.Req) error {
-	p.QualityRunsOptions = ParseRunsOptions(req.Query)
+	p.InspectRunsOptions = ParseRunsOptions(req.Query)
 	return nil
 }
 
-func ParseRunsOptions(q url.Values) api.QualityRunsOptions {
-	opts := api.QualityRunsOptions{
+func ParseRunsOptions(q url.Values) api.InspectRunsOptions {
+	opts := api.InspectRunsOptions{
 		Status:    splitCSV(q.Get("status")),
 		Target:    splitCSV(q.Get("target")),
 		Kind:      splitCSV(q.Get("kind")),
 		Model:     splitCSV(q.Get("model")),
-		Has:       splitCSV(q.Get("has")),
 		Primitive: splitCSV(q.Get("primitive")),
 		Session:   splitCSV(q.Get("session")),
 		Search:    strings.TrimSpace(q.Get("search")),

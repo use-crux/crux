@@ -147,7 +147,7 @@ await docs.retrieve({
 
 ## Observability
 
-Retrieval uses the same canonical observability graph as generation, tools, memory, and Quality runs.
+Retrieval uses the same canonical observability graph as generation, tools, memory, and Eval runs.
 Direct `retrieve()` calls emit a `retrieval.query` span, attach a bounded `retrieval.hits` artifact,
 and connect returned chunks with `retrieval.returned` edges. Recipe calls open a parent
 `retrieval.recipe` span and record query rewrite, fanout, federated retrieval, rerank, parent
@@ -342,42 +342,25 @@ New retrieval spans use public beta nouns:
 
 Recipe runs attach `retrieval.hits` artifacts with score provenance and step/source attribution.
 
-## Quality
+## Evals
 
-RAG evaluation is part of `@use-crux/core/quality`.
-
-```ts
-import { evaluate, scorers, target } from "@use-crux/core/quality";
-
-export default evaluate({
-  task: target.retrievalRecipe(docsAnswer, {
-    query: ({ question }) => question,
-  }),
-  scorers: [
-    scorers.rag.recallAtK(5),
-    scorers.rag.mrr(),
-    scorers.rag.expectedSourceCoverage(),
-    scorers.rag.contextPrecision(),
-    scorers.rag.citationValidity(),
-    scorers.rag.traceShapeSnapshot(),
-  ],
-});
-```
-
-There is no standalone `ragEval` module.
+Point `evaluate()` at the callable managed generation task that consumes this
+retrieval behavior. The task preserves prompt, schema, tool, routing, and
+retrieval identity for exact reuse; use ordinary output checks or admitted
+managed scorers. See the [Eval reference](/docs/reference/crux-core/eval).
 
 ## Embedding governance
 
 `embedding()` (from `@use-crux/core/embedding`) owns the policies that affect how vectors are generated. The core option table lives in the [core reference](/docs/reference/crux-core#embedding); the governance options are:
 
-| Option              | Type                                                               | Behavior                                                                    |
-| ------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------- |
-| `batch`             | `{ maxSize?, concurrency? }`                                       | Chunking and parallelism inside one `embedMany()` call                      |
-| `preprocess`        | `EmbeddingPreprocessor \| EmbeddingPreprocessor[]`                 | Normalization before cache lookup and before the provider call              |
-| `truncate`          | `{ strategy: 'fail' } \| { strategy: 'chars'; maxChars: number }`  | Input-limit policy; `'fail'` is the default so truncation is never silent   |
-| `retry`             | `{ maxAttempts; baseDelayMs?; maxDelayMs?; shouldRetry? }`         | Provider batch retry policy                                                  |
-| `cache`             | `EmbeddingCache`                                                   | Policy-aware per-text vector cache                                           |
-| `rateLimit`         | `{ concurrency: number }`                                          | Caps provider calls across overlapping calls on the same embedding instance |
+| Option       | Type                                                              | Behavior                                                                    |
+| ------------ | ----------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `batch`      | `{ maxSize?, concurrency? }`                                      | Chunking and parallelism inside one `embedMany()` call                      |
+| `preprocess` | `EmbeddingPreprocessor \| EmbeddingPreprocessor[]`                | Normalization before cache lookup and before the provider call              |
+| `truncate`   | `{ strategy: 'fail' } \| { strategy: 'chars'; maxChars: number }` | Input-limit policy; `'fail'` is the default so truncation is never silent   |
+| `retry`      | `{ maxAttempts; baseDelayMs?; maxDelayMs?; shouldRetry? }`        | Provider batch retry policy                                                 |
+| `cache`      | `EmbeddingCache`                                                  | Policy-aware per-text vector cache                                          |
+| `rateLimit`  | `{ concurrency: number }`                                         | Caps provider calls across overlapping calls on the same embedding instance |
 
 `batch.concurrency` and `rateLimit.concurrency` differ in scope: `batch.concurrency` controls how many chunks one `embedMany()` call can run at once, while `rateLimit.concurrency` is stricter and caps provider calls across all concurrent callers of the same embedding instance.
 
@@ -388,13 +371,13 @@ The embedding cache is per normalized text, not per batch. Crux builds policy-aw
 Custom preprocessors must declare a stable fingerprint so cache keys change when the behavior changes:
 
 ```ts
-import { embeddingPreprocessor, normalizeText } from '@use-crux/core/embedding'
+import { embeddingPreprocessor, normalizeText } from "@use-crux/core/embedding";
 
 const stripMarkdown = embeddingPreprocessor({
-  id: 'strip-markdown',
-  fingerprint: 'strip-markdown:v1',
-  run: (text) => text.replace(/[#*_`]/g, ''),
-})
+  id: "strip-markdown",
+  fingerprint: "strip-markdown:v1",
+  run: (text) => text.replace(/[#*_`]/g, ""),
+});
 
 const dense = embedding({
   // ...
@@ -402,7 +385,7 @@ const dense = embedding({
     normalizeText({ trim: true, collapseWhitespace: true }),
     stripMarkdown,
   ],
-})
+});
 ```
 
 ### Why there is no `kind: 'hybrid'`

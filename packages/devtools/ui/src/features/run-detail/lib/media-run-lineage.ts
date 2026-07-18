@@ -188,7 +188,8 @@ export function collectConnectedIds(
     }
   }
   for (const id of [...seed]) {
-    for (const artifactId of artifactsBySpan.get(id) ?? []) seed.add(artifactId);
+    for (const artifactId of artifactsBySpan.get(id) ?? [])
+      seed.add(artifactId);
   }
 
   const connected = new Set<string>(seed);

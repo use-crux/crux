@@ -9,8 +9,6 @@ type IndexDiagnosticInput =
   | { kind: 'multiple-configs'; root: string; configFile: string; count: number }
   | { kind: 'config-unrecognized'; configFile: string }
   | { kind: 'config-import-failed'; configFile: string; message: string }
-  | { kind: 'suite-json-invalid'; jsonFile: string }
-  | { kind: 'suite-json-read-failed'; jsonFile: string; message: string }
   | { kind: 'module-import-failed'; root: string; file: string; message: string }
   | { kind: 'rich-import-failed'; root: string; file: string; message: string }
   | { kind: 'static-parse-failed'; root: string; file: string; message: string }
@@ -53,7 +51,7 @@ function indexDiagnostic(input: IndexDiagnosticInput): IndexDiagnostic {
         id: `diagnostic:index:config-shape:${fingerprint(input.configFile)}`,
         severity: 'warning',
         code: 'index.config_unrecognized',
-        message: 'Crux config was imported, but it did not export a config() instance or legacy eval runner config.',
+        message: 'Crux config was imported, but it did not export a config() instance.',
         source: sourceForFile(input.configFile),
       }
     case 'config-import-failed':
@@ -65,22 +63,6 @@ function indexDiagnostic(input: IndexDiagnosticInput): IndexDiagnostic {
         source: sourceForFile(input.configFile),
         suggestedFix: 'Ensure config imports are side-effect safe in CRUX_INDEX=1 mode.',
       }
-    case 'suite-json-invalid':
-      return {
-        id: `diagnostic:index:suite-json:${fingerprint(input.jsonFile)}`,
-        severity: 'warning',
-        code: 'index.suite_json_invalid',
-        message: 'Suite JSON was found but does not match the portable suite shape.',
-        source: sourceForFile(input.jsonFile),
-      }
-    case 'suite-json-read-failed':
-      return {
-        id: `diagnostic:index:suite-json-read:${fingerprint(input.jsonFile)}`,
-        severity: 'error',
-        code: 'index.suite_json_read_failed',
-        message: `Could not read suite JSON: ${input.message}`,
-        source: sourceForFile(input.jsonFile),
-      }
     case 'module-import-failed':
       return {
         id: `diagnostic:index:module-import:${fingerprint(input.file)}`,
@@ -88,7 +70,7 @@ function indexDiagnostic(input: IndexDiagnosticInput): IndexDiagnostic {
         code: 'index.module_import_failed',
         message: `Could not import index candidate ${relative(input.root, input.file)}: ${input.message}`,
         source: sourceForFile(input.file),
-        suggestedFix: 'Keep eval and suite modules import-safe; move runtime-only work inside test execution.',
+        suggestedFix: 'Keep Eval modules import-safe; move runtime-only work inside task execution.',
       }
     case 'rich-import-failed':
       return {

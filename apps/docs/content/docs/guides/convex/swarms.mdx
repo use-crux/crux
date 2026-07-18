@@ -10,22 +10,22 @@ For launch-critical code, keep swarms as immediate adapter compositions inside o
 ## Define The Swarm Runner
 
 ```ts title="convex/workflows/swarm.ts"
-'use node'
+"use node";
 
-import { action, internalAction, query } from '@use-crux/convex/server'
-import { createComponentSwarm } from '@use-crux/convex/swarm'
-import { generate } from '@use-crux/ai'
-import { openai } from '@ai-sdk/openai'
-import { components, internal } from '../_generated/api'
-import { v } from 'convex/values'
-import { triage, research, writer } from '../prompts/agents'
+import { action, internalAction, query } from "@use-crux/convex/server";
+import { createComponentSwarm } from "@use-crux/convex/swarm";
+import { generate } from "@use-crux/ai";
+import { openai } from "@ai-sdk/openai";
+import { components, internal } from "../_generated/api";
+import { v } from "convex/values";
+import { triage, research, writer } from "../prompts/agents";
 
-const model = openai('gpt-4o')
+const model = openai("gpt-4o");
 
 const swarm = createComponentSwarm({
   component: components.crux,
   generate: (prompt, opts) => generate(prompt, { ...opts, model }),
-})
+});
 ```
 
 ## Start
@@ -36,13 +36,13 @@ export const start = action({
   handler: async (ctx, args) => {
     return swarm.start(ctx, {
       agents: { triage, research, writer },
-      startAgent: 'triage',
+      startAgent: "triage",
       input: { message: args.message },
       resumeAction: internal.workflows.swarm.resume,
       maxHandoffs: 8,
-    })
+    });
   },
-})
+});
 ```
 
 ## Resume
@@ -55,7 +55,7 @@ export const resume = internalAction({
       agents: { triage, research, writer },
       resumeAction: internal.workflows.swarm.resume,
     }),
-})
+});
 ```
 
 ## Inspect State
@@ -64,7 +64,7 @@ export const resume = internalAction({
 export const getState = query({
   args: { swarmRunId: v.string() },
   handler: (ctx, args) => swarm.getState(ctx, args.swarmRunId),
-})
+});
 ```
 
 ## How It Works

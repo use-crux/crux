@@ -75,8 +75,8 @@ describe("MCP package boundary", () => {
     expect(stagingScript).toMatch(
       /\{ name: ["']@use-crux\/mcp["'], dir: ["']packages\/mcp["'], sourceRoot: ["']src["'] \}/,
     );
-    expect(readRepoFile("scripts/typecheck-typescript-compat.mjs")).toContain(
-      "'packages/mcp'",
+    expect(readRepoFile("scripts/typecheck-typescript-compat.mjs")).toMatch(
+      /["']packages\/mcp["']/,
     );
     expect(manifest.engines).toBeUndefined();
 

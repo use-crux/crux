@@ -96,7 +96,7 @@ fn finalize_request_is_accepted_through_worker_path() {
     assert_eq!(parsed.events[2]["summary"]["factCount"], 52);
     assert_eq!(stage["method"], STATIC_INDEX_FINALIZE_METHOD);
     assert_eq!(stage["telemetry"]["facts"]["definitions"], 1);
-    assert_eq!(stage["telemetry"]["facts"]["ruleDescriptors"], 51);
+    assert_eq!(stage["telemetry"]["facts"]["ruleDescriptors"], 50);
     assert_eq!(stage["telemetry"]["cache"]["writes"], 1);
 }
 

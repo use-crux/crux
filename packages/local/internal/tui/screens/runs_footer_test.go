@@ -15,9 +15,9 @@ import (
 func TestRunsFooterOmitsUnbuiltVerbs(t *testing.T) {
 	r := NewRuns()
 	r.loaded = true
-	r.detail = &api.QualityRunDetailRecord{
-		Run: api.QualityRunRecord{TraceID: "8af2f1c", TargetID: "docs_agent"},
-		Spans: []api.QualityRunSpan{
+	r.detail = &api.InspectRunDetailRecord{
+		Run: api.InspectRunRecord{TraceID: "8af2f1c", TargetID: "docs_agent"},
+		Spans: []api.InspectRunSpan{
 			{ID: "sp1", Name: "agent", Kind: "agent"},
 		},
 	}

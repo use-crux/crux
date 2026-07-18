@@ -11,6 +11,7 @@
 import type { ApprovalRequestInfo } from "../../adapter/tool/approval";
 import type { Message } from "../../generation/messages";
 import type { TraceMeta } from "../../generation/types";
+import type { CruxRunId } from "../../observability/contract";
 import type { AssistantContentPart } from "../../types/content";
 
 /** Nested token usage shape required by the canonical result envelope. */
@@ -44,6 +45,8 @@ export interface CanonicalGenerateResultLike<
   TRaw = unknown,
   TOutput = unknown,
 > {
+  /** Authoritative identifier created by the generation orchestration span. */
+  readonly runId: CruxRunId;
   readonly text: string;
   readonly content: readonly AssistantContentPart[];
   readonly object?: TOutput;
@@ -93,6 +96,7 @@ export function assertCanonicalResult(
 ): asserts result is CanonicalGenerateResultLike {
   const envelope = asRecord(result, "result");
 
+  assertRunId(requireField(envelope, "runId", "result"), "result.runId");
   assertString(requireField(envelope, "text", "result"), "result.text");
   assertArray(requireField(envelope, "content", "result"), "result.content");
   const usage =
@@ -118,6 +122,12 @@ export function assertCanonicalResult(
 
   if (expectation.steps) {
     assertAccumulation(envelope, usage, expectation.steps);
+  }
+}
+
+function assertRunId(value: unknown, path: string): asserts value is CruxRunId {
+  if (typeof value !== "string" || !/^run_[0-9a-f]{24}$/u.test(value)) {
+    fail(path, "an authoritative Crux run ID");
   }
 }
 

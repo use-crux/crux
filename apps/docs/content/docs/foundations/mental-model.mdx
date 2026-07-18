@@ -28,12 +28,12 @@ define     ->     resolve     ->     adapt     ->     observe
 (authoring)       (composition)    (translation)     (instrumentation)
 ```
 
-| Stage       | Where it happens                | Output                                                               |
-| ----------- | ------------------------------- | -------------------------------------------------------------------- |
+| Stage       | Where it happens                | Output                                                              |
+| ----------- | ------------------------------- | ------------------------------------------------------------------- |
 | **Define**  | At authoring time, in your code | Frozen `Prompt`, `Context`, `Agent`, etc.: pure data                |
 | **Resolve** | When you call an adapter        | SDK-agnostic `ResolvedPrompt`: system text, schema, tools, settings |
-| **Adapt**   | Inside the adapter              | Provider-specific API call (OpenAI body, Anthropic messages, etc.)   |
-| **Observe** | Throughout                      | Events fan out to devtools, OTel, and custom plugins                 |
+| **Adapt**   | Inside the adapter              | Provider-specific API call (OpenAI body, Anthropic messages, etc.)  |
+| **Observe** | Throughout                      | Events fan out to devtools, OTel, and custom plugins                |
 
 Crux's portability claim - "define once, run anywhere" - is only true because the stages are clean-cut. Definition produces data, resolution composes it, adaptation translates it, and observation records what happened without interfering.
 
@@ -42,25 +42,25 @@ Crux's portability claim - "define once, run anywhere" - is only true because th
 Definitions are pure data structures. They carry no SDK reference and no runtime state.
 
 ```ts
-import { prompt, context } from '@use-crux/core'
-import { z } from 'zod'
+import { prompt, context } from "@use-crux/core";
+import { z } from "zod";
 
 const brand = context({
-  id: 'brand',
+  id: "brand",
   priority: 30,
   input: z.object({ tone: z.string().optional() }),
   when: ({ input }) => !!input.tone,
   system: ({ input }) => `Write in a ${input.tone} tone.`,
-})
+});
 
 const reply = prompt({
-  id: 'reply',
+  id: "reply",
   use: [brand],
   input: z.object({ message: z.string() }),
   output: z.object({ text: z.string() }),
-  system: 'You are a helpful assistant.',
+  system: "You are a helpful assistant.",
   prompt: ({ input }) => input.message,
-})
+});
 ```
 
 The output of `prompt()` is a frozen `Prompt`: you can serialize it, list its contexts, inspect its input schema. You cannot execute it directly because it has no idea what model to call.
@@ -70,15 +70,15 @@ The output of `prompt()` is a frozen `Prompt`: you can serialize it, list its co
 When you pass a prompt to an adapter, Crux calls `prompt.resolve(options)` first. This composes everything into a single SDK-agnostic structure:
 
 ```ts
-const resolved = prompt.resolve({ input: { message: 'hi', tone: 'casual' } })
+const resolved = prompt.resolve({ input: { message: "hi", tone: "casual" } });
 
-resolved.system // composed system text from all contexts + prompt's own
-resolved.systemBlocks // structured blocks for provider-cache hints
-resolved.prompt // user prompt text
-resolved.messages // alternative to system+prompt for multi-turn
-resolved.schema // output Zod schema (if any)
-resolved.tools // prompt-time tool set from skills, contexts, contributors, blackboards, and prompt config
-resolved.settings // merged settings (config < adapt < call-site)
+resolved.system; // composed system text from all contexts + prompt's own
+resolved.systemBlocks; // structured blocks for provider-cache hints
+resolved.prompt; // user prompt text
+resolved.messages; // alternative to system+prompt for multi-turn
+resolved.schema; // output Zod schema (if any)
+resolved.tools; // prompt-time tool set from skills, contexts, contributors, blackboards, and prompt config
+resolved.settings; // merged settings (config < adapt < call-site)
 ```
 
 What happens during resolution:
@@ -99,14 +99,14 @@ Adapters take a `ResolvedPrompt` and translate it to the SDK's native API call.
 
 ```ts
 // @use-crux/ai (Vercel AI SDK)
-import { generate } from '@use-crux/ai'
-await generate(prompt, { model: openai('gpt-4o'), input })
+import { generate } from "@use-crux/ai";
+await generate(prompt, { model: openai("gpt-4o"), input });
 // Internally: prompt.resolve(...) → generateObject({ model, system, prompt, schema, tools, ...settings })
 
 // @use-crux/anthropic
-import { createAnthropic } from '@use-crux/anthropic'
-const anthropic = createAnthropic(client)
-await anthropic.generate(prompt, { model: 'claude-haiku-4-5', input })
+import { createAnthropic } from "@use-crux/anthropic";
+const anthropic = createAnthropic(client);
+await anthropic.generate(prompt, { model: "claude-haiku-4-5", input });
 // Internally: prompt.resolve(...) → client.messages.create({ system, messages, tools, ...settings })
 ```
 
@@ -123,10 +123,10 @@ prompt({
   // ...
   adapt: {
     openai: { settings: { temperature: 0.1 } },
-    anthropic: { appendSystem: 'Return concise JSON only.' },
-    '*': { appendSystem: 'Respond with valid JSON only.' },
+    anthropic: { appendSystem: "Return concise JSON only." },
+    "*": { appendSystem: "Respond with valid JSON only." },
   },
-})
+});
 ```
 
 Adapt is matched by exact provider first, then a slash-prefixed `modelId` provider such as `openai/gpt-4o`, then the `'*'` fallback. System adaptations become typed system blocks before messages are folded; prompt text and settings adaptations are merged before translation.
@@ -146,25 +146,30 @@ plugins subscribe to graph records and clean up in `dispose`; they do not instal
 per-event callback maps on `CruxHooks`.
 
 ```ts
-import { config } from '@use-crux/core'
-import { withTelemetry } from '@use-crux/otel'
+import { config } from "@use-crux/core";
+import { withTelemetry } from "@use-crux/otel";
 
 config({
-  plugins: [withTelemetry({ serviceName: 'my-app' })],
+  plugins: [withTelemetry({ serviceName: "my-app" })],
   observability: {
     serverUrl: process.env.DEVTOOLS_URL,
     token: process.env.CRUX_DEVTOOLS_TOKEN,
   },
-})
+});
 ```
 
 Devtools are zero-cost when disabled: instrumentation hooks are no-ops if no plugin installs them.
 
 ## 5. Test
 
-Testing is the loop around the runtime pipeline. Quality suites, targets, experiments, cassettes, baselines, and feedback records let you check whether the AI feature still behaves the way you intended.
+Testing is the loop around the runtime pipeline. An Eval points at a callable
+production task, adds typed Cases and checks, and produces an Eval run. Current
+is always present; Variants contain only differences. A complete accepted run
+arm becomes a Baseline, while production feedback creates separate Review work.
 
-Today, those quality foundations can test outputs and many execution facts. More direct assertions for things like context inclusion, routing, memory, safety, and fallback behavior are still being expanded.
+Exact task and managed-scorer evidence is reused automatically. `--offline`
+guarantees zero network access, `--plan` shows admitted work without writes,
+and `--fresh` explicitly bypasses reusable external evidence.
 
 ## How everything else fits in
 
@@ -175,14 +180,15 @@ Once you see the four stages, the rest of Crux becomes legible:
 - **Agents** are prompts with a defined identity, a model preference, and a list of allowed handoffs. Compositions (pipeline / parallel / consensus / swarm) are higher-order functions over agents.
 - **Flows** are suspendable/resumable wrappers over multi-step orchestration. A flow records its `step` results so a resume re-runs only the work after the suspension point.
 - **Plans / Tasks** are structured documents that persist via `RecordStore`: read by humans (UI), written by agents (tools).
-- **Quality** runs suites across targets, optionally scored by LLM judges, and uses the same prompt setup as production.
+- **Evals** run typed Cases against callable production tasks, compare Variants, and optionally use LLM judges.
 - **Devtools / OTel** are plugins that subscribe to instrumentation hooks.
 
 Every primitive should make the AI feature easier to understand, not harder.
 
 <Callout type="info">
-  Crux already supports typed prompts, composable context, local devtools, tracing, and quality foundations. Some deeper
-  debugging and test helpers are still being expanded.
+  Crux already supports typed prompts, composable context, local devtools,
+  tracing, and quality foundations. Some deeper debugging and test helpers are
+  still being expanded.
 </Callout>
 
 ## Where to next

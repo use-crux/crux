@@ -10,27 +10,27 @@ That return-and-resume shape works in serverless, Convex actions, CLI programs, 
 ## Add an approval policy
 
 ```ts
-import { approvalMiddleware, prompt } from '@use-crux/core'
+import { approvalMiddleware, prompt } from "@use-crux/core";
 
 const approvals = approvalMiddleware({
-  id: 'dangerous-actions',
-  match: ['sendEmail', 'createRefund'],
+  id: "dangerous-actions",
+  match: ["sendEmail", "createRefund"],
   onRequest: ({ toolName, input }) => {
-    audit.write({ phase: 'requested', toolName, input })
+    audit.write({ phase: "requested", toolName, input });
   },
   onApproved: ({ approvalId, toolName }) => {
-    audit.write({ phase: 'approved', approvalId, toolName })
+    audit.write({ phase: "approved", approvalId, toolName });
   },
   onDenied: ({ approvalId, toolName, reason }) => {
-    audit.write({ phase: 'denied', approvalId, toolName, reason })
+    audit.write({ phase: "denied", approvalId, toolName, reason });
   },
-})
+});
 
 export const assistant = prompt({
-  id: 'support-agent',
+  id: "support-agent",
   tools: { sendEmail, createRefund },
   toolMiddleware: [approvals],
-})
+});
 ```
 
 ## Native adapters
@@ -38,27 +38,30 @@ export const assistant = prompt({
 Native adapters return Crux message history on `result.messages`. Use the message-shape helpers from `@use-crux/core/adapter/tool` (also exported from the `@use-crux/core` root) to find approval requests and append decisions.
 
 ```ts
-import { appendToolApprovalResponse, findToolApprovalRequests } from '@use-crux/core/adapter/tool'
-import { createOpenAI } from '@use-crux/openai'
+import {
+  appendToolApprovalResponse,
+  findToolApprovalRequests,
+} from "@use-crux/core/adapter/tool";
+import { createOpenAI } from "@use-crux/openai";
 
 const first = await openai.generate(assistant, {
-  model: 'gpt-4o',
-  input: { message: 'Refund this customer and email them.' },
-})
+  model: "gpt-4o",
+  input: { message: "Refund this customer and email them." },
+});
 
-const [request] = findToolApprovalRequests(first.messages)
+const [request] = findToolApprovalRequests(first.messages);
 
 if (request) {
   const final = await openai.generate(assistant, {
-    model: 'gpt-4o',
+    model: "gpt-4o",
     messages: appendToolApprovalResponse(first.messages, {
       approvalId: request.approvalId,
       approved: true,
       approvalToken: request.approvalToken,
     }),
-  })
+  });
 
-  console.log(final.text)
+  console.log(final.text);
 }
 ```
 
@@ -73,20 +76,23 @@ The approval helpers are message-shape utilities and types only, safe to import 
 `@use-crux/ai` maps approval middleware to the AI SDK approval protocol. In React, render the tool UI part with `state === 'approval-requested'` and call `addToolApprovalResponse()`.
 
 ```tsx
-'use client'
+"use client";
 
-import { useChat } from '@ai-sdk/react'
-import { lastAssistantMessageIsCompleteWithApprovalResponses } from 'ai'
+import { useChat } from "@ai-sdk/react";
+import { lastAssistantMessageIsCompleteWithApprovalResponses } from "ai";
 
 export function Chat() {
   const { messages, sendMessage, addToolApprovalResponse } = useChat({
-    api: '/api/chat',
+    api: "/api/chat",
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
-  })
+  });
 
   return messages.map((message) =>
     message.parts.map((part) => {
-      if (part.type === 'tool-sendEmail' && part.state === 'approval-requested') {
+      if (
+        part.type === "tool-sendEmail" &&
+        part.state === "approval-requested"
+      ) {
         return (
           <div key={part.toolCallId}>
             <p>Approve email to {part.input.to}?</p>
@@ -101,11 +107,11 @@ export function Chat() {
               Approve
             </button>
           </div>
-        )
+        );
       }
-      return null
+      return null;
     }),
-  )
+  );
 }
 ```
 
@@ -115,29 +121,35 @@ Use a predicate matcher when approval depends on a user, session, or database gr
 
 ```ts
 const approvals = approvalMiddleware({
-  id: 'send-email-once',
+  id: "send-email-once",
   match: [
     async ({ toolName, input }) => {
-      if (toolName !== 'sendEmail') return false
-      const scope = typeof input === 'object' && input !== null && 'to' in input ? String(input.to) : 'unknown'
+      if (toolName !== "sendEmail") return false;
+      const scope =
+        typeof input === "object" && input !== null && "to" in input
+          ? String(input.to)
+          : "unknown";
 
       return !(await approvalsDb.hasApproval({
         userId: session.user.id,
         toolName,
         scope,
-      }))
+      }));
     },
   ],
   onApproved: async ({ toolName, input }) => {
-    const scope = typeof input === 'object' && input !== null && 'to' in input ? String(input.to) : 'unknown'
+    const scope =
+      typeof input === "object" && input !== null && "to" in input
+        ? String(input.to)
+        : "unknown";
 
     await approvalsDb.recordApproval({
       userId: session.user.id,
       toolName,
       scope,
-    })
+    });
   },
-})
+});
 ```
 
 The first matching call pauses. After the approval is recorded, the predicate returns `false` for the same scope, so future calls execute normally.

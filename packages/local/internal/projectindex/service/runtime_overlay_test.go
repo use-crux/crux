@@ -88,7 +88,7 @@ func TestApplyRuntimeUpdateReplacesOneMCPServerOverlay(t *testing.T) {
 	assertRelation(t, second, "mcp.server:catalog", "tool:beta")
 	assertRelation(t, second, "mcp.server:catalog", "tool:gamma")
 	tombstone := definitionByID(t, second, "tool:alpha")
-	if tombstone.Description != "" || len(tombstone.Tags) != 0 || tombstone.Quality != nil {
+	if tombstone.Description != "" || len(tombstone.Tags) != 0 {
 		t.Fatalf("tool:alpha tombstone retained non-contract fields: %+v", tombstone)
 	}
 }

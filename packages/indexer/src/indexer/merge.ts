@@ -36,7 +36,6 @@ function mergeDefinition(existing: ProjectDefinition, incoming: ProjectDefinitio
     status: incoming.status ?? existing.status,
     fingerprint: incoming.fingerprint ?? existing.fingerprint,
     metadata,
-    quality: incoming.quality ?? existing.quality,
     sourceRefs: mergeSourceRefs(existing.sourceRefs, incoming.sourceRefs),
   }
 }

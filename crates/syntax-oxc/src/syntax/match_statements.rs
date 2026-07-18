@@ -5,7 +5,7 @@ use crate::{
     protocol::StaticSourceMatch,
     syntax::match_build::{MatchContext, match_from_declarator, new_match, traversal_needles},
     syntax::match_expressions::{
-        visit_expression, visit_expression_call, visit_expression_children,
+        visit_bound_expression_call, visit_expression, visit_expression_children,
     },
     syntax::match_interests::CalleeMatcher,
     syntax::semantic_imports::SemanticImportIndex,
@@ -239,7 +239,7 @@ fn visit_export_default(
 ) {
     match declaration {
         ExportDefaultDeclarationKind::CallExpression(call) => {
-            visit_expression_call(context, call, matches);
+            visit_bound_expression_call(context, call, "default".to_string(), true, matches);
         }
         ExportDefaultDeclarationKind::NewExpression(new_expression) => {
             if let Some(match_record) = new_match(

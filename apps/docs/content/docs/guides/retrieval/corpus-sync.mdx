@@ -13,47 +13,50 @@ corpus.sync()            -> repeated ingestion job
 ## Basic Sync
 
 ```ts
-import { embedding } from '@use-crux/core/embedding'
-import { corpus, indexer } from '@use-crux/core/indexing'
-import { inMemoryRecordStore, inMemoryVectorStore } from '@use-crux/core/storage'
-import { filesSource } from '@use-crux/ingest/files'
+import { embedding } from "@use-crux/core/embedding";
+import { corpus, indexer } from "@use-crux/core/indexing";
+import {
+  inMemoryRecordStore,
+  inMemoryVectorStore,
+} from "@use-crux/core/storage";
+import { filesSource } from "@use-crux/ingest/files";
 
 const dense = embedding({
-  kind: 'dense',
-  name: 'text-embedding-3-small',
+  kind: "dense",
+  name: "text-embedding-3-small",
   dimensions: 1536,
   maxInputTokens: 8191,
   embed: async (texts) => ({ embeddings: await embedDense(texts) }),
-})
-const records = inMemoryRecordStore()
-const vectors = inMemoryVectorStore()
+});
+const records = inMemoryRecordStore();
+const vectors = inMemoryVectorStore();
 
 const docsIndexer = indexer({
-  id: 'docs',
-  namespace: 'product-docs',
+  id: "docs",
+  namespace: "product-docs",
   records,
   vectors,
   dense,
-})
+});
 
 const docsCorpus = corpus({
-  id: 'docs',
-  namespace: 'product-docs',
+  id: "docs",
+  namespace: "product-docs",
   records,
   indexer: docsIndexer,
-})
+});
 
 const source = filesSource(
-  { directory: './docs', recursive: true },
-  { namespace: 'product-docs' },
-)
+  { directory: "./docs", recursive: true },
+  { namespace: "product-docs" },
+);
 
 const result = await docsCorpus.sync(source.load(), {
-  sourceSet: 'complete',
-  stale: 'delete',
-})
+  sourceSet: "complete",
+  stale: "delete",
+});
 
-console.log(result)
+console.log(result);
 ```
 
 Add a `sparse` embedding to the indexer when your retriever runs sparse or hybrid search. See [Embeddings](/docs/guides/retrieval/embeddings) for defining both.
@@ -69,7 +72,7 @@ const result = {
   deleted: 2,
   failed: 0,
   chunkCount: 84,
-}
+};
 ```
 
 ## Partial Updates
@@ -78,8 +81,8 @@ Use partial syncs for webhooks, CMS callbacks, file watchers, or any job that on
 
 ```ts
 await docsCorpus.sync(changedFiles.load(), {
-  sourceSet: 'partial',
-})
+  sourceSet: "partial",
+});
 ```
 
 Partial syncs can add and update sources. They do not delete missing sources because Crux cannot know whether those sources are actually gone.
@@ -90,18 +93,18 @@ Use complete syncs when the input is the full authoritative source set.
 
 ```ts
 await docsCorpus.sync(allDocs.load(), {
-  sourceSet: 'complete',
-  stale: 'delete',
-})
+  sourceSet: "complete",
+  stale: "delete",
+});
 ```
 
 `stale: 'delete'` requires `sourceSet: 'complete'`. This fails fast:
 
 ```ts
 await docsCorpus.sync(changedFiles.load(), {
-  sourceSet: 'partial',
-  stale: 'delete',
-})
+  sourceSet: "partial",
+  stale: "delete",
+});
 ```
 
 Crux throws instead of guessing.
@@ -112,10 +115,10 @@ Preview a sync without writing chunks or source records.
 
 ```ts
 const plan = await docsCorpus.sync(source.load(), {
-  sourceSet: 'complete',
-  stale: 'delete',
+  sourceSet: "complete",
+  stale: "delete",
   dryRun: true,
-})
+});
 
 console.table(
   plan.sources.map((source) => ({
@@ -124,7 +127,7 @@ console.table(
     reason: source.reason,
     chunks: source.chunkCount,
   })),
-)
+);
 ```
 
 Use this for admin previews, deploy checks, and tests.
@@ -135,19 +138,19 @@ Use append-only mode when existing sources should not be rewritten by routine sy
 
 ```ts
 await docsCorpus.sync(source.load(), {
-  mode: 'appendOnly',
-  sourceSet: 'partial',
-})
+  mode: "appendOnly",
+  sourceSet: "partial",
+});
 ```
 
 Changed existing sources are reported as skipped:
 
 ```ts
 const sourceResult = {
-  sourceId: 'audit-log-2026-05-10',
-  action: 'skipped',
-  reason: 'appendOnly',
-}
+  sourceId: "audit-log-2026-05-10",
+  action: "skipped",
+  reason: "appendOnly",
+};
 ```
 
 ## Pipeline Cache
@@ -158,34 +161,34 @@ If the indexer has `cache: true`, sync can control the pipeline cache per run.
 
 ```ts
 await docsCorpus.sync(source.load(), {
-  cache: 'readwrite',
-})
+  cache: "readwrite",
+});
 ```
 
 Force recomputation:
 
 ```ts
 await docsCorpus.sync(source.load(), {
-  cache: 'refresh',
-})
+  cache: "refresh",
+});
 ```
 
 Bypass cache while debugging:
 
 ```ts
 await docsCorpus.sync(source.load(), {
-  cache: 'bypass',
-})
+  cache: "bypass",
+});
 ```
 
 ## Inspect A Source
 
 ```ts
-const sourceRecord = await docsCorpus.getSource('guides/retrieval.md')
+const sourceRecord = await docsCorpus.getSource("guides/retrieval.md");
 
-console.log(sourceRecord?.status)
-console.log(sourceRecord?.chunkCount)
-console.log(sourceRecord?.lastError)
+console.log(sourceRecord?.status);
+console.log(sourceRecord?.chunkCount);
+console.log(sourceRecord?.lastError);
 ```
 
 The stage ledger shows what happened during the latest successful index:
@@ -199,7 +202,7 @@ for (const stage of sourceRecord?.stages ?? []) {
     chunks: stage.chunkCount,
     parents: stage.parentCount,
     durationMs: stage.durationMs,
-  })
+  });
 }
 ```
 
@@ -208,36 +211,39 @@ Example output:
 ```ts
 [
   {
-    name: 'normalize-docs',
-    kind: 'document-transform',
-    cache: 'hit',
+    name: "normalize-docs",
+    kind: "document-transform",
+    cache: "hit",
     durationMs: 1,
   },
   {
-    name: 'structured',
-    kind: 'chunker',
-    cache: 'miss',
+    name: "structured",
+    kind: "chunker",
+    cache: "miss",
     chunks: 12,
     parents: 0,
     durationMs: 9,
   },
-]
+];
 ```
 
 ## List Sources
 
 ```ts
-const failed = await docsCorpus.listSources({ status: 'failed' })
-const active = await docsCorpus.listSources({ includeDeleted: false })
+const failed = await docsCorpus.listSources({ status: "failed" });
+const active = await docsCorpus.listSources({ includeDeleted: false });
 ```
 
 Retry failed sources by loading the source IDs again:
 
 ```ts
-await docsCorpus.sync(retryLoader(failed.map((source) => source.sourceId)).load(), {
-  sourceSet: 'partial',
-  cache: 'refresh',
-})
+await docsCorpus.sync(
+  retryLoader(failed.map((source) => source.sourceId)).load(),
+  {
+    sourceSet: "partial",
+    cache: "refresh",
+  },
+);
 ```
 
 ## Delete Sources
@@ -245,13 +251,13 @@ await docsCorpus.sync(retryLoader(failed.map((source) => source.sourceId)).load(
 Delete one source:
 
 ```ts
-await docsCorpus.deleteSource('old-guide.md')
+await docsCorpus.deleteSource("old-guide.md");
 ```
 
 Clear all active sources for a corpus:
 
 ```ts
-await docsCorpus.clearSources()
+await docsCorpus.clearSources();
 ```
 
 ## What Counts As Changed
@@ -260,14 +266,14 @@ Content changes, stable-metadata changes, and indexer pipeline changes all trigg
 
 ```ts
 const docsCorpus = corpus({
-  id: 'docs',
-  namespace: 'product-docs',
+  id: "docs",
+  namespace: "product-docs",
   records,
   indexer: docsIndexer,
   hash: {
-    excludeMetadata: ['mtimeMs', 'lastFetchedAt'],
+    excludeMetadata: ["mtimeMs", "lastFetchedAt"],
   },
-})
+});
 ```
 
 See [change detection](/docs/reference/crux-core/indexing#change-detection) in the indexing reference for the exact hash and fingerprint rules.

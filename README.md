@@ -41,38 +41,38 @@
 
 Crux is an open-source TypeScript toolkit for **harness engineering**: typed building blocks for everything around the model call.
 
-Your app still owns the product logic, routing, deployment, and data. Your chosen SDK still calls the model. Crux composes around that call with typed, observable building blocks: prompts, contexts, memory, retrieved knowledge, tools, guardrails, constraints, routing, quality suites, traces, costs, and local devtools.
+Your app still owns the product logic, routing, deployment, and data. Your chosen SDK still calls the model. Crux composes around that call with typed, observable building blocks: prompts, contexts, memory, retrieved knowledge, tools, guardrails, constraints, routing, Evals, traces, costs, and local devtools.
 
 When AI features fail, the problem is often not "the model is bad." It is stale context, missing memory, dropped instructions, unsafe input, an undeclared fallback, or a test that should have caught the regression. Crux gives those pieces structure so you can see what the model saw, why it saw it, and whether the setup still works.
 
-Use one block or use ten. Start with a typed prompt, add memory when state gets messy, add retrieval when facts matter, add guardrails when inputs get risky, add quality suites when regressions start hurting. Crux stays modular while the pieces keep working together around the SDK you already use.
+Use one block or use ten. Start with a typed prompt, add memory when state gets messy, add retrieval when facts matter, add guardrails when inputs get risky, and add Evals when regressions start hurting. Crux stays modular while the pieces keep working together around the SDK you already use.
 
 The mission line is "Same Prompt. Same Output. Every Time." In practice, that means deterministic setup around the model call, not a claim that model outputs are deterministic.
 
 ## Start With One Prompt
 
 ```ts
-import { prompt } from '@use-crux/core'
-import { generate } from '@use-crux/ai'
-import { openai } from '@ai-sdk/openai'
-import { z } from 'zod'
+import { prompt } from "@use-crux/core";
+import { generate } from "@use-crux/ai";
+import { openai } from "@ai-sdk/openai";
+import { z } from "zod";
 
 const classify = prompt({
-  id: 'classify',
+  id: "classify",
   input: z.object({ text: z.string() }),
   output: z.object({
-    sentiment: z.enum(['positive', 'negative', 'neutral']),
+    sentiment: z.enum(["positive", "negative", "neutral"]),
   }),
-  system: 'Classify the sentiment of the given text.',
+  system: "Classify the sentiment of the given text.",
   prompt: ({ input }) => input.text,
-})
+});
 
 const result = await generate(classify, {
-  model: openai('gpt-4o'),
-  input: { text: 'This is incredible.' },
-})
+  model: openai("gpt-4o"),
+  input: { text: "This is incredible." },
+});
 
-result.object.sentiment // 'positive' | 'negative' | 'neutral'
+result.object.sentiment; // 'positive' | 'negative' | 'neutral'
 ```
 
 That is a complete Crux program: typed input, typed output, and your SDK still making the model call.
@@ -82,65 +82,103 @@ That is a complete Crux program: typed input, typed output, and your SDK still m
 The `use` array is the bus. Memory, retrieval, guardrails, skills, blackboards, and custom blocks all plug into the same prompt without forcing a framework or runtime around your app.
 
 ```ts
-import { prompt } from '@use-crux/core'
-import { memory, facts, recentMessages } from '@use-crux/core/memory'
-import { retriever } from '@use-crux/core/retrieval'
-import { boundary, constraint, guardrail } from '@use-crux/core/safety'
-import { generate } from '@use-crux/ai'
-import { openai } from '@ai-sdk/openai'
-import { z } from 'zod'
+import { prompt } from "@use-crux/core";
+import { memory, facts, recentMessages } from "@use-crux/core/memory";
+import { retriever } from "@use-crux/core/retrieval";
+import { boundary, constraint, guardrail } from "@use-crux/core/safety";
+import { generate } from "@use-crux/ai";
+import { openai } from "@ai-sdk/openai";
+import { z } from "zod";
 
 const chat = memory({
-  id: 'assistant',
+  id: "assistant",
   store,
   namespace: ({ input }) => `user:${input.userId}`,
-  blocks: [recentMessages({ id: 'recent', maxMessages: 12 }), facts({ id: 'about-user', embed })],
-})
+  blocks: [
+    recentMessages({ id: "recent", maxMessages: 12 }),
+    facts({ id: "about-user", embed }),
+  ],
+});
 
 const docs = retriever({
-  id: 'docs',
-  namespace: 'product-docs',
+  id: "docs",
+  namespace: "product-docs",
   records,
   vectors,
   dense,
   context: { query: ({ question }) => question },
-})
+});
 
 const injection = guardrail({
-  id: 'injection',
+  id: "injection",
   on: boundary.input.text(),
-  run: guardrail.injection({ action: 'block' }),
-})
+  run: guardrail.injection({ action: "block" }),
+});
 
 const grounded = constraint({
-  id: 'grounded',
-  on: boundary.output.object<{ answer: string; citations: { title: string; url: string }[] }>(),
-  severity: 'assert',
+  id: "grounded",
+  on: boundary.output.object<{
+    answer: string;
+    citations: { title: string; url: string }[];
+  }>(),
+  severity: "assert",
   run: async (output) =>
-    output.citations.length > 0 ? { pass: true } : { pass: false, feedback: 'Cite at least one source.' },
-})
+    output.citations.length > 0
+      ? { pass: true }
+      : { pass: false, feedback: "Cite at least one source." },
+});
 
 const reply = prompt({
-  id: 'reply',
+  id: "reply",
   use: [chat, docs],
   input: z.object({ userId: z.string(), question: z.string() }),
   output: z.object({
     answer: z.string(),
     citations: z.array(z.object({ title: z.string(), url: z.string() })),
   }),
-  system: 'Answer from memory and product docs. Do not invent facts.',
+  system: "Answer from memory and product docs. Do not invent facts.",
   prompt: ({ input }) => input.question,
-})
+});
 
 const result = await generate(reply, {
-  model: openai('gpt-4o'),
-  input: { userId: 'user_123', question: 'What did we decide about the launch plan?' },
+  model: openai("gpt-4o"),
+  input: {
+    userId: "user_123",
+    question: "What did we decide about the launch plan?",
+  },
   guardrails: [injection],
   constraints: [grounded],
-})
+});
 ```
 
-Now the call has memory, retrieval, input screening, structured output, retryable quality checks, adapter execution, and traceable events. The SDK still makes the model call; Crux makes the harness around it deliberate.
+Now the call has memory, retrieval, input screening, structured output, retryable constraints, adapter execution, and traceable events. The SDK still makes the model call; Crux makes the harness around it deliberate.
+
+## Test production behavior
+
+Bind a prompt once with `generate.task()`, then point an inert Eval at the same
+callable task. An Eval contains typed Cases and checks; Variants describe only
+candidate differences. Every run includes Current, safely reuses exact
+evidence, and compares against a Baseline only after you explicitly accept a
+complete run.
+
+```ts
+import { evaluate } from "@use-crux/core/eval";
+import { support } from "./src/support";
+
+export default evaluate({
+  id: "support",
+  task: support,
+  cases: [{ id: "refund", input: { question: "Can I get a refund?" } }],
+  variants: { deterministic: { temperature: 0 } },
+  expect: ({ output, expect }) => {
+    expect(output.answer).toContain("refund");
+  },
+});
+```
+
+Run `crux eval --plan` to inspect admitted work, `crux eval --offline` for a
+zero-network evidence-only run, or `crux eval --fresh` to bypass task and
+managed-scorer evidence. See the [Eval guide](https://cruxjs.dev/docs/guides/evals).
 
 ## Get started
 
@@ -160,9 +198,9 @@ Pick a walkthrough:
 ## For agents
 
 Point coding agents at [`/llms.txt`](https://cruxjs.dev/llms.txt) for the
-machine-readable docs index. Quality projects scaffold a local
-`.crux/skills/quality/SKILL.md` with the repeatable loop for listing evals,
-running targeted subsets, inspecting failures, and recording human labels.
+machine-readable docs index. The Eval guide documents the repeatable loop for
+listing Evals, planning work, running targeted Cases, inspecting failures, and
+reviewing production feedback.
 
 ## What the harness handles
 
@@ -175,7 +213,7 @@ running targeted subsets, inspecting failures, and recording human labels.
 | Tools              | Prompt tools, context tools, middleware, approval flows, and audit events                                                  |
 | Safety             | Guardrails for I/O filtering plus constraints for semantic output validation and retry                                     |
 | Routing and cost   | Model routers, fallback, semantic cache, pricing tables, budgets, and cost spans                                           |
-| Evaluation         | Local quality suites, prompt tests, judges, variants, cassettes, baselines, and CI-friendly runs                           |
+| Evals              | Production tasks, typed Cases, Variants, exact evidence reuse, explicit Baselines, and CI-friendly runs                    |
 | Agents and flows   | Agents, pipelines, parallel runs, consensus, swarms, blackboards, handoffs, delegates, suspendable flows, plans, and tasks |
 | Observability      | Devtools, trace timelines, event graphs, source catalog, lint findings, and OpenTelemetry export                           |
 
@@ -191,7 +229,7 @@ Crux is deliberately modular. Use one primitive or build the whole harness; eith
 | A scalable prompt system          | Shared definitions, context blocks, tests, and catalog visibility without moving prompts into a hosted system.              |
 | An alternative to a big framework | Small primitives around the SDK call: compose memory, retrieval, safety, evals, and observability only where you need them. |
 
-Use raw strings for one-off prompts. Reach for Crux when the call needs memory, retrieval, structured output, safety, evaluation, tracing, or provider flexibility. Start with one block, add more as the system asks for it, and replace any block with your own when you outgrow the default.
+Use raw strings for one-off prompts. Reach for Crux when the call needs memory, retrieval, structured output, safety, Evals, tracing, or provider flexibility. Start with one block, add more as the system asks for it, and replace any block with your own when you outgrow the default.
 
 ## How it works
 
@@ -208,7 +246,7 @@ define -> resolve -> adapt -> observe
 | Adapt   | An adapter maps that resolved prompt to Vercel AI SDK, OpenAI, Anthropic, Google GenAI, Convex Agent, or another runner.                                        |
 | Observe | Hooks emit structured events for generations, context resolution, memory reads/writes, retrieval, tools, evals, judge scores, artifacts, errors, and cost.      |
 
-This separation is the point. You can inspect what the model will see, run the same prompt through multiple providers, and keep quality checks tied to the definitions they protect. See the [mental model](https://cruxjs.dev/docs/foundations/mental-model) for how the pieces compose.
+This separation is the point. You can inspect what the model will see, run the same prompt through multiple providers, and keep Eval checks tied to the definitions they protect. See the [mental model](https://cruxjs.dev/docs/foundations/mental-model) for how the pieces compose.
 
 ## What Crux Is Not
 
@@ -220,24 +258,26 @@ This separation is the point. You can inspect what the model will see, run the s
 
 ## Packages
 
-| Package               | Purpose                                                                                                                                                      |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `@use-crux/core`      | SDK-agnostic primitives for prompts, contexts, memory, storage, retrieval, safety, routing, quality, agents, flows, plans, tasks, skills, and observability. |
-| `@use-crux/ai`        | Vercel AI SDK adapter for `generate`, `stream`, structured output, and Crux-aware stream integration.                                                        |
-| `@use-crux/openai`    | OpenAI SDK adapter.                                                                                                                                          |
-| `@use-crux/anthropic` | Anthropic SDK adapter.                                                                                                                                       |
-| `@use-crux/google`    | Google GenAI SDK adapter.                                                                                                                                    |
-| `@use-crux/convex`    | Convex storage, server boundaries, agent bridge, compaction, and swarm integration.                                                                          |
-| `@use-crux/upstash`   | Upstash Vector and Redis-backed storage adapters.                                                                                                            |
-| `@use-crux/otel`      | OpenTelemetry integration for production traces.                                                                                                             |
-| `@use-crux/ingest`    | Source loaders for text, files, folders, globs, and URLs.                                                                                                    |
-| `@use-crux/react`     | React provider, hooks, transports, and SSE helpers for live Crux state.                                                                                      |
-| `@use-crux/devtools`  | React devtools UI bundle for traces, evals, source catalog, memory, plans, and runtime inspection.                                                           |
-| `@use-crux/local`     | Native local runtime, CLI, TUI, HTTP/WS server, embedded devtools, eval runner, catalog, lint, and bounded helper workers.                                   |
+| Package                | Purpose                                                                                                                                                    |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@use-crux/core`       | SDK-agnostic primitives for prompts, contexts, memory, storage, retrieval, safety, routing, Evals, agents, flows, plans, tasks, skills, and observability. |
+| `@use-crux/ai`         | Vercel AI SDK adapter for `generate`, `stream`, managed Eval tasks, feedback, structured output, and Crux-aware streams.                                   |
+| `@use-crux/openai`     | OpenAI SDK adapter.                                                                                                                                        |
+| `@use-crux/anthropic`  | Anthropic SDK adapter.                                                                                                                                     |
+| `@use-crux/google`     | Google GenAI SDK adapter.                                                                                                                                  |
+| `@use-crux/convex`     | Convex storage, Runtime and Eval hosting, server boundaries, agent bridge, compaction, and swarm integration.                                              |
+| `@use-crux/cloudflare` | Cloudflare Workers and Durable Object hosting for the Crux Runtime and deployed Evals.                                                                     |
+| `@use-crux/indexer`    | Compiler-style Project Index discovery, semantic enrichment, generated Runtime entries, and lint facts.                                                    |
+| `@use-crux/upstash`    | Upstash Vector and Redis-backed storage adapters.                                                                                                          |
+| `@use-crux/otel`       | OpenTelemetry integration for production traces.                                                                                                           |
+| `@use-crux/ingest`     | Source loaders for text, files, folders, globs, and URLs.                                                                                                  |
+| `@use-crux/react`      | React provider, hooks, transports, and SSE helpers for live Crux state.                                                                                    |
+| `@use-crux/devtools`   | React devtools UI bundle for traces, evals, source catalog, memory, plans, and runtime inspection.                                                         |
+| `@use-crux/local`      | Native local runtime, CLI, TUI, HTTP/WS server, embedded devtools, eval runner, catalog, lint, and bounded helper workers.                                 |
 
 ## Project status
 
-Crux is alpha. The shipped foundation includes typed prompts and contexts, conditional and budgeted context resolution, memory blocks, retrieval and grounding, guardrails and constraints, routing and fallback, quality suites, a canonical observability graph, local devtools/runtime, OpenTelemetry export, and Project Index source intelligence.
+Crux is alpha. The shipped foundation includes typed prompts and contexts, conditional and budgeted context resolution, memory blocks, retrieval and grounding, guardrails and constraints, routing and fallback, Evals, a canonical observability graph, local devtools/runtime, OpenTelemetry export, and Project Index source intelligence.
 
 The deeper proof layer is still being completed. The whole-call decision report, richer rationale artifacts for routing/consensus/fallback/boundaries, a unified freshness vocabulary, context contract metadata, and the polished harness-decision matcher library are in progress.
 

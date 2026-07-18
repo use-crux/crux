@@ -89,6 +89,7 @@ export const DIRECTLY_OBSERVED_DEFINITION_REF_ROLES: Record<
   constraint: "invoked-constraint",
   guardrail: "invoked-guardrail",
   blackboard: "invoked-blackboard",
+  scorer: "invoked-scorer",
 };
 
 /**

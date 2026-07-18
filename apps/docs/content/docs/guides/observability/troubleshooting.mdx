@@ -9,7 +9,7 @@ Most “broken” observability UI states are **accurate reports** of partial te
 
 **This is the default.** The local server only promotes `healthy` when it can prove a clean terminal delivery: ended run, causal ordering, zero gaps, no trace-alias conflict, and no ingest rejections. Still-running work, incomplete reconciliation, and partial ordering stay `unknown`.
 
-UI tooltip: *The server has not observed enough delivery evidence to call this run healthy or degraded.*
+UI tooltip: _The server has not observed enough delivery evidence to call this run healthy or degraded._
 
 **What to check**
 
@@ -21,7 +21,7 @@ UI tooltip: *The server has not observed enough delivery evidence to call this r
 
 ## Why is my run `incomplete`?
 
-UI copy: *Telemetry ended without a run:end record: the run may still be executing out of view, or its process exited before reporting a terminal status.* (Plus gap wording when sequence gaps exist.)
+UI copy: _Telemetry ended without a run:end record: the run may still be executing out of view, or its process exited before reporting a terminal status._ (Plus gap wording when sequence gaps exist.)
 
 **Common causes**
 
@@ -39,25 +39,25 @@ UI copy: *Telemetry ended without a run:end record: the run may still be executi
 
 ## Why is my run `conflicted`?
 
-- *A trace alias identifies more than one logical run…* when `traceAliasConflict` is set
-- Otherwise *stored terminal evidence … conflicts with what was previously recorded*
+- _A trace alias identifies more than one logical run…_ when `traceAliasConflict` is set
+- Otherwise _stored terminal evidence … conflicts with what was previously recorded_
 
 Usually a propagation / identity bug: two logical runs sharing an alias, or contradictory terminal records under one `runId`. Fix identity at the source; do not merge client-side.
 
 ## Why doesn’t my definition show any runs?
 
-Catalog zero-activity copy: *No runs have referenced this definition yet.*
+Catalog zero-activity copy: _No runs have referenced this definition yet._
 
 **Checklist**
 
-| Check | Detail |
-| --- | --- |
-| Did it run under a Crux adapter / primitive that emits spans? | Static-only kinds never get direct activity. |
-| Does the handle carry a canonical id? | Anonymous prompts/contexts/tools and non-literal composition ids omit `DefinitionRef`. Compositions need required authored `id`. |
-| Is the kind a contributor / structural child? | You may see “referenced by N runs” rather than being the subject of a run. |
-| Quality-owned kinds | Primary lens is Quality; secondary direct runtime only when the manifest declares it (e.g. `scorer` / `scoring.judge`). |
-| File-loaded skills | Registry skills join; bare file-loaded directory ids are a different id space and intentionally do not emit refs. |
-| Since-deleted definitions | Runs still filter by historical id. Imported exact manifests resolve the old definition; a missing manifest stays explicitly unresolved. |
+| Check                                                         | Detail                                                                                                                                   |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Did it run under a Crux adapter / primitive that emits spans? | Static-only kinds never get direct activity.                                                                                             |
+| Does the handle carry a canonical id?                         | Anonymous prompts/contexts/tools and non-literal composition ids omit `DefinitionRef`. Compositions need required authored `id`.         |
+| Is the kind a contributor / structural child?                 | You may see “referenced by N runs” rather than being the subject of a run.                                                               |
+| Eval-owned kinds                                              | Primary lens is Eval; secondary direct runtime only when the manifest declares it (e.g. `scorer` / `scoring.judge`).                     |
+| File-loaded skills                                            | Registry skills join; bare file-loaded directory ids are a different id space and intentionally do not emit refs.                        |
+| Since-deleted definitions                                     | Runs still filter by historical id. Imported exact manifests resolve the old definition; a missing manifest stays explicitly unresolved. |
 
 View Runs appears only when the activity rollup reports `runCount > 0`. An empty state with no button is intentional.
 

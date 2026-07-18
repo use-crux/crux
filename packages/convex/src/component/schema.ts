@@ -53,12 +53,31 @@ export default defineSchema({
     idleScope: v.optional(v.string()),
     leaseToken: v.optional(v.string()),
     lastError: v.optional(v.any()),
+    resultRef: v.optional(v.any()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
     .index('by_work_id', ['workId'])
     .index('by_namespace_status_updated', ['namespace', 'status', 'updatedAt'])
     .index('by_status_updated', ['status', 'updatedAt']),
+
+  runtimeResults: defineTable({
+    namespace: v.string(),
+    sha256: v.string(),
+    size: v.number(),
+    mediaType: v.string(),
+    location: v.string(),
+    chunkCount: v.number(),
+    createdAt: v.number(),
+  })
+    .index('by_location', ['location'])
+    .index('by_namespace_created', ['namespace', 'createdAt']),
+
+  runtimeResultChunks: defineTable({
+    location: v.string(),
+    index: v.number(),
+    content: v.string(),
+  }).index('by_location_index', ['location', 'index']),
 
   runtimeSnapshots: defineTable({
     flowId: v.string(),

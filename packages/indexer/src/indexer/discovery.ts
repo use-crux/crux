@@ -55,18 +55,11 @@ export async function discoverProjectDefinitions(
     semanticProfileByFile: new Map(),
     interfaceHashByFile: new Map(),
   };
-  const promptIds = new Set(
-    initialFacts.prompts
-      .map((prompt) => prompt.id)
-      .filter((id): id is string => typeof id === "string"),
-  );
-
   const failedImportFiles: string[] = [];
   if (loaded.sourceImports) {
     const evalResult = await discoverRuntimeEvalDefinitions(
       root,
       evalGlobs(loaded),
-      promptIds,
       sources,
     );
     definitions.push(...evalResult.definitions);

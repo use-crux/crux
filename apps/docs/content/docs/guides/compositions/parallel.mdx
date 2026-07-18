@@ -10,7 +10,7 @@ import { parallel } from "@use-crux/ai";
 import { agent } from "@use-crux/core/agent";
 
 const result = await parallel({
-  id: 'parallel-parallel-1',
+  id: "parallel-parallel-1",
   agents: {
     factCheck: factCheckerAgent,
     style: styleReviewerAgent,
@@ -41,7 +41,7 @@ Results are returned as a named record, so you access each agent's output by nam
 
 ```ts
 const { results, durationMs } = await parallel({
-  id: 'parallel-parallel-2',
+  id: "parallel-parallel-2",
   agents: { factCheck: factCheckerAgent, style: styleReviewerAgent },
   context: { content: draft },
   model,
@@ -64,7 +64,7 @@ For best-effort execution, use `onError: 'continue'`:
 
 ```ts title="best-effort.ts"
 const result = await parallel({
-  id: 'parallel-parallel-3',
+  id: "parallel-parallel-3",
   agents: { a: agentA, b: agentB },
   context: { content: draft },
   model,

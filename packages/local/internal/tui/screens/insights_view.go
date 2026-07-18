@@ -17,7 +17,7 @@ func (s *Insights) View(size Size) string {
 		return ""
 	}
 	if len(s.items) == 0 {
-		return centerMsg(size, "no insights yet - collect more traces, run an experiment, or wait for the analyzer.")
+		return centerMsg(size, "no insights yet - collect more traces or wait for the analyzer.")
 	}
 
 	root := kit.Rect{W: size.Width, H: size.Height}

@@ -7,17 +7,17 @@
  * detail always has a `traceId`.)
  */
 
-import * as React from 'react'
-import { useQueryClient } from '@tanstack/react-query'
-import { Btn } from '@/qw/shell/primitives'
-import { Icon } from '@/qw/shell/Icon'
-import type { IconName } from '@/qw/shell/nav'
-import { SkeletonCard, SkeletonRows } from '@/shared/components/Skeleton'
-import { useNavigation } from '@/app/navigation/useNavigation'
-import { navTarget } from '@/app/navigation/navTarget'
-import { qk } from '@/shared/query/queryClient'
+import * as React from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Btn } from "@/devtools/shell/primitives";
+import { Icon } from "@/devtools/shell/Icon";
+import type { IconName } from "@/devtools/shell/nav";
+import { SkeletonCard, SkeletonRows } from "@/shared/components/Skeleton";
+import { useNavigation } from "@/app/navigation/useNavigation";
+import { navTarget } from "@/app/navigation/navTarget";
+import { qk } from "@/shared/query/queryClient";
 
-type StateTone = 'danger' | 'warn' | 'crux' | 'ok'
+type StateTone = "danger" | "warn" | "crux" | "ok";
 
 /** Centered icon + title + body + action — the `ShellStates` `Center`. */
 function StateCenter({
@@ -27,38 +27,47 @@ function StateCenter({
   body,
   action,
 }: {
-  icon: IconName
-  tone?: StateTone
-  title: string
-  body: string
-  action?: React.ReactNode
+  icon: IconName;
+  tone?: StateTone;
+  title: string;
+  body: string;
+  action?: React.ReactNode;
 }) {
-  const toneColor = tone ? `var(--qw-${tone})` : 'var(--qw-fg-muted)'
-  const toneSoft = tone ? `var(--qw-${tone}-soft)` : 'var(--qw-bg-muted)'
+  const toneColor = tone ? `var(--devtools-${tone})` : "var(--devtools-fg-muted)";
+  const toneSoft = tone ? `var(--devtools-${tone}-soft)` : "var(--devtools-bg-muted)";
   return (
     <div className="flex h-full flex-col items-center justify-center gap-2.5 p-6 text-center">
       <div
         className="flex h-11 w-11 items-center justify-center rounded-[12px]"
-        style={{ background: toneSoft, boxShadow: 'inset 0 0 0 1px var(--qw-border)' }}
+        style={{
+          background: toneSoft,
+          boxShadow: "inset 0 0 0 1px var(--devtools-border)",
+        }}
       >
         <Icon name={icon} size={20} color={toneColor} />
       </div>
       <div className="text-[15px] font-semibold">{title}</div>
-      <div className="text-[12.5px] leading-[1.5]" style={{ color: 'var(--qw-fg-muted)', maxWidth: 320 }}>
+      <div
+        className="text-[12.5px] leading-[1.5]"
+        style={{ color: "var(--devtools-fg-muted)", maxWidth: 320 }}
+      >
         {body}
       </div>
       {action && <div className="mt-1">{action}</div>}
     </div>
-  )
+  );
 }
 
 /** Structure | detail skeleton shown while the projection loads. */
 function StructureSkeleton() {
   return (
-    <div className="grid h-full" style={{ gridTemplateColumns: '320px 1fr' }}>
+    <div className="grid h-full" style={{ gridTemplateColumns: "320px 1fr" }}>
       <aside
         className="flex h-full flex-col gap-2 p-3"
-        style={{ borderRight: '1px solid var(--qw-border)', background: 'var(--qw-bg)' }}
+        style={{
+          borderRight: "1px solid var(--devtools-border)",
+          background: "var(--devtools-bg)",
+        }}
       >
         <SkeletonRows rows={14} rowHeight={28} />
       </aside>
@@ -68,11 +77,11 @@ function StructureSkeleton() {
         <SkeletonCard bodyLines={4} />
       </div>
     </div>
-  )
+  );
 }
 
 function shortTrace(traceId: string): string {
-  return traceId.length > 18 ? `${traceId.slice(0, 14)}…` : traceId
+  return traceId.length > 18 ? `${traceId.slice(0, 14)}…` : traceId;
 }
 
 /**
@@ -85,12 +94,12 @@ export function RunStructureState({
   error,
   loading,
 }: {
-  traceId: string
-  error: Error | null
-  loading: boolean
+  traceId: string;
+  error: Error | null;
+  loading: boolean;
 }) {
-  const client = useQueryClient()
-  const { navigate } = useNavigation()
+  const client = useQueryClient();
+  const { navigate } = useNavigation();
 
   if (error) {
     return (
@@ -104,20 +113,27 @@ export function RunStructureState({
             <Btn
               size="sm"
               icon={<Icon name="loop" size={13} />}
-              onClick={() => void client.invalidateQueries({ queryKey: qk.observability.run(traceId) })}
+              onClick={() =>
+                void client.invalidateQueries({
+                  queryKey: qk.observability.run(traceId),
+                })
+              }
             >
               Retry
             </Btn>
-            <Btn size="sm" onClick={() => void navigator.clipboard?.writeText(traceId)}>
+            <Btn
+              size="sm"
+              onClick={() => void navigator.clipboard?.writeText(traceId)}
+            >
               Copy trace id
             </Btn>
           </div>
         }
       />
-    )
+    );
   }
 
-  if (loading) return <StructureSkeleton />
+  if (loading) return <StructureSkeleton />;
 
   return (
     <StateCenter
@@ -130,11 +146,11 @@ export function RunStructureState({
           size="sm"
           variant="soft"
           icon={<Icon name="arrowRight" size={13} />}
-          onClick={() => navigate(navTarget('runs'))}
+          onClick={() => navigate(navTarget("runs"))}
         >
           Back to runs
         </Btn>
       }
     />
-  )
+  );
 }

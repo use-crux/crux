@@ -26,13 +26,13 @@ export function MediaRunPanel({
   return (
     <section
       aria-label="Multimodal run"
-      className="grid gap-3 rounded-lg border border-(--qw-border) p-3"
+      className="grid gap-3 rounded-lg border border-(--devtools-border) p-3"
     >
       <header className="grid gap-1">
-        <h3 className="text-sm font-semibold text-(--qw-fg)">
+        <h3 className="text-sm font-semibold text-(--devtools-fg)">
           {view.summary.primitive}
         </h3>
-        <p className="text-xs text-(--qw-fg-muted)">
+        <p className="text-xs text-(--devtools-fg-muted)">
           {[
             view.summary.provider,
             view.summary.model,
@@ -55,7 +55,7 @@ export function MediaRunPanel({
       <AttemptTimeline attempts={view.attempts} />
 
       <div aria-label="Transcript timeline" className="grid gap-1">
-        <h4 className="text-xs font-medium text-(--qw-fg-muted)">Transcript</h4>
+        <h4 className="text-xs font-medium text-(--devtools-fg-muted)">Transcript</h4>
         {view.transcript.present ? (
           <ol className="grid gap-1 text-xs">
             {view.transcript.segments.map((segment, index) => (
@@ -69,7 +69,7 @@ export function MediaRunPanel({
             ))}
           </ol>
         ) : (
-          <p role="status" className="text-xs text-(--qw-fg-muted)">
+          <p role="status" className="text-xs text-(--devtools-fg-muted)">
             {view.transcript.reason === "export-absent"
               ? "Transcript text is absent in production-exported capture."
               : view.transcript.reason === "not-transcription"
@@ -97,8 +97,8 @@ function AttemptTimeline({
   if (attempts.length === 0) {
     return (
       <div aria-label="Attempt timeline" className="grid gap-1">
-        <h4 className="text-xs font-medium text-(--qw-fg-muted)">Attempts</h4>
-        <p role="status" className="text-xs text-(--qw-fg-muted)">
+        <h4 className="text-xs font-medium text-(--devtools-fg-muted)">Attempts</h4>
+        <p role="status" className="text-xs text-(--devtools-fg-muted)">
           No attempts recorded.
         </p>
       </div>
@@ -109,7 +109,7 @@ function AttemptTimeline({
 
   return (
     <div aria-label="Attempt timeline" className="grid gap-1">
-      <h4 className="text-xs font-medium text-(--qw-fg-muted)">Attempts</h4>
+      <h4 className="text-xs font-medium text-(--devtools-fg-muted)">Attempts</h4>
       <ol className="grid gap-1 text-xs">
         {attempts.map((attempt) => {
           const depth = attemptDepth(attempt, byId);
@@ -123,7 +123,7 @@ function AttemptTimeline({
               data-depth={depth}
               className={
                 depth > 0
-                  ? `border-l border-(--qw-border) ${depth >= 2 ? "depth-2" : "depth-1"}`
+                  ? `border-l border-(--devtools-border) ${depth >= 2 ? "depth-2" : "depth-1"}`
                   : "depth-0"
               }
               style={depth > 0 ? { paddingLeft } : undefined}
@@ -133,7 +133,7 @@ function AttemptTimeline({
                 {attempt.primitive}
                 {parent ? ` (child of ${parent.primitive})` : ""}
               </span>
-              <span className="text-(--qw-fg-muted)">
+              <span className="text-(--devtools-fg-muted)">
                 {" · "}
                 {[
                   attempt.provider,
@@ -185,9 +185,9 @@ function LineageSection({
 
   return (
     <div aria-label="Media lineage" className="grid gap-1">
-      <h4 className="text-xs font-medium text-(--qw-fg-muted)">Lineage</h4>
+      <h4 className="text-xs font-medium text-(--devtools-fg-muted)">Lineage</h4>
       {empty ? (
-        <p role="status" className="text-xs text-(--qw-fg-muted)">
+        <p role="status" className="text-xs text-(--devtools-fg-muted)">
           No lineage relationships were recorded for this run.
         </p>
       ) : (
@@ -204,7 +204,10 @@ function LineageSection({
             })}
           </ul>
           {edges.length > 0 ? (
-            <ul aria-label="Lineage relationships" className="grid gap-1 text-xs">
+            <ul
+              aria-label="Lineage relationships"
+              className="grid gap-1 text-xs"
+            >
               {edges.map((edge, index) => {
                 const from = nodeById.get(edge.from);
                 const to = nodeById.get(edge.to);
@@ -219,7 +222,7 @@ function LineageSection({
               })}
             </ul>
           ) : (
-            <p role="status" className="text-xs text-(--qw-fg-muted)">
+            <p role="status" className="text-xs text-(--devtools-fg-muted)">
               No lineage relationships were recorded for this run.
             </p>
           )}
@@ -239,7 +242,7 @@ function CatalogJoinStatus({
 }) {
   if (join.status === "unavailable") {
     return (
-      <p role="status" className="text-xs text-(--qw-fg-muted)">
+      <p role="status" className="text-xs text-(--devtools-fg-muted)">
         Catalog source join unavailable — no authored definition identity was
         recorded for this run.
       </p>
@@ -248,11 +251,11 @@ function CatalogJoinStatus({
 
   if (onOpenCatalog) {
     return (
-      <p className="text-xs text-(--qw-fg-muted)">
+      <p className="text-xs text-(--devtools-fg-muted)">
         Catalog source{" "}
         <button
           type="button"
-          className="text-(--qw-crux) hover:underline"
+          className="text-(--devtools-crux) hover:underline"
           onClick={() => onOpenCatalog(join.definitionId)}
         >
           {join.label}
@@ -262,9 +265,7 @@ function CatalogJoinStatus({
   }
 
   return (
-    <p className="text-xs text-(--qw-fg-muted)">
-      Catalog source {join.label}
-    </p>
+    <p className="text-xs text-(--devtools-fg-muted)">Catalog source {join.label}</p>
   );
 }
 
@@ -277,9 +278,9 @@ function DescriptorList({
 }) {
   return (
     <div aria-label={title} className="grid gap-1">
-      <h4 className="text-xs font-medium text-(--qw-fg-muted)">{title}</h4>
+      <h4 className="text-xs font-medium text-(--devtools-fg-muted)">{title}</h4>
       {descriptors.length === 0 ? (
-        <p className="text-xs text-(--qw-fg-muted)">No descriptors.</p>
+        <p className="text-xs text-(--devtools-fg-muted)">No descriptors.</p>
       ) : (
         <ul className="grid gap-1 text-xs">
           {descriptors.map((descriptor, index) => (

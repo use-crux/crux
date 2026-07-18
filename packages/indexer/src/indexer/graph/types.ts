@@ -15,7 +15,6 @@ export type IndexCapability =
   | 'schema'
   | 'source'
   | 'runtime-join'
-  | 'quality-join'
   | 'partial'
 
 export interface IndexDefinitionNode {

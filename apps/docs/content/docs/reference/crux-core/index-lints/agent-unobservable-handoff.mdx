@@ -16,15 +16,15 @@ Define and export the target agent with a stable `id`, or update the handoff id 
 
 ```ts
 export const billing = agent({
-  id: 'billing',
+  id: "billing",
   prompt: billingPrompt,
-})
+});
 
 export const triage = agent({
-  id: 'triage',
+  id: "triage",
   prompt: triagePrompt,
-  handoffs: ['billing'],
-})
+  handoffs: ["billing"],
+});
 ```
 
 ## When to suppress
@@ -33,7 +33,7 @@ Suppress this rule only when the handoff intentionally targets an agent outside 
 
 ```ts
 // crux-lint-disable-next-line agent.unobservable_handoff -- external agent is registered at runtime
-export const triage = agent({ id: 'triage', handoffs: ['external-billing'] })
+export const triage = agent({ id: "triage", handoffs: ["external-billing"] });
 ```
 
 ## Rule metadata

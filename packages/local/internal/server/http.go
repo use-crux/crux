@@ -11,14 +11,19 @@ import (
 
 	"github.com/use-crux/crux/packages/local/internal/assets"
 	"github.com/use-crux/crux/packages/local/internal/devtools"
+	"github.com/use-crux/crux/packages/local/internal/evalrunner"
+	"github.com/use-crux/crux/packages/local/internal/evalwriter"
+	"github.com/use-crux/crux/packages/local/internal/inspect"
 	"github.com/use-crux/crux/packages/local/internal/localserver"
 	"github.com/use-crux/crux/packages/local/internal/observability"
+	"github.com/use-crux/crux/packages/local/internal/privacy"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/manifeststore"
-	"github.com/use-crux/crux/packages/local/internal/quality"
 	"github.com/use-crux/crux/packages/local/internal/resourceinspection"
+	"github.com/use-crux/crux/packages/local/internal/review"
+	"github.com/use-crux/crux/packages/local/internal/reviewwriter"
 	"github.com/use-crux/crux/packages/local/internal/runtimebridge"
 	"github.com/use-crux/crux/packages/local/internal/server/bridge"
-	qualityserver "github.com/use-crux/crux/packages/local/internal/server/quality"
+	evalserver "github.com/use-crux/crux/packages/local/internal/server/eval"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
@@ -30,13 +35,16 @@ type ServerOptions struct {
 	// ProjectIndexerScript overrides the embedded project-indexer.mjs path.
 	// If empty, the embedded worker is extracted lazily on first use.
 	ProjectIndexerScript string
-	// QualityDir is the local quality workbench directory.
-	// Defaults to .crux/quality relative to the server working directory.
-	QualityDir string
+	// InspectDir is the local Eval and insight directory.
+	// Defaults to .crux/evals relative to the server working directory.
+	InspectDir string
 	// ObservabilityDBPath is the local SQLite path for canonical graph records.
 	// Defaults to an in-memory database for direct handler construction.
 	ObservabilityDBPath  string
 	ObservabilityService *observability.Service
+	ReviewDBPath         string
+	ReviewService        *review.Service
+	ReviewWriter         review.RepositoryWriter
 	RuntimeBridge        *runtimebridge.Service
 	ProjectRoot          string
 	ConfigPath           string
@@ -48,16 +56,16 @@ func NewHTTPServer(s *store.Store, opts ...ServerOptions) http.Handler {
 	if len(opts) > 0 {
 		opt = opts[0]
 	}
-	qualitySvc := quality.NewService(s, quality.Dir(opt.QualityDir))
-	return NewHTTPServerWithServices(devtools.NewService(s, qualitySvc), opt)
+	inspectSvc := inspect.NewService(s, inspect.Dir(opt.InspectDir))
+	return NewHTTPServerWithServices(devtools.NewService(s, inspectSvc), opt)
 }
 
-// NewHTTPServerWithQuality creates an HTTP handler backed by an explicit quality service.
-func NewHTTPServerWithQuality(s *store.Store, qualitySvc *quality.Service, opt ServerOptions) http.Handler {
-	if qualitySvc == nil {
-		qualitySvc = quality.NewService(s, quality.Dir(opt.QualityDir))
+// NewHTTPServerWithInspect creates an HTTP handler backed by an explicit Inspect service.
+func NewHTTPServerWithInspect(s *store.Store, inspectSvc *inspect.Service, opt ServerOptions) http.Handler {
+	if inspectSvc == nil {
+		inspectSvc = inspect.NewService(s, inspect.Dir(opt.InspectDir))
 	}
-	return NewHTTPServerWithServices(devtools.NewService(s, qualitySvc), opt)
+	return NewHTTPServerWithServices(devtools.NewService(s, inspectSvc), opt)
 }
 
 // NewHTTPServerWithServices creates an HTTP handler backed by explicit services.
@@ -68,7 +76,8 @@ func NewHTTPServerWithServices(devSvc *devtools.Service, opt ServerOptions) http
 // NewHTTPServerWithServicesContext composes local runtime services and returns
 // the HTTP route graph. Listener lifecycle remains owned by DevServer.
 func NewHTTPServerWithServicesContext(ctx context.Context, devSvc *devtools.Service, opt ServerOptions) http.Handler {
-	qualitySvc := devSvc.Quality()
+	inspectSvc := devSvc.Inspect()
+	privacyProvider := privacy.Generated(opt.ProjectRoot)
 	if !devSvc.HasProjectIndexer() {
 		projectIndexer := assets.NewEmbeddedProjectIndexer(opt.ProjectIndexerScript)
 		devSvc.WithProjectIndexer(projectIndexer)
@@ -110,6 +119,26 @@ func NewHTTPServerWithServicesContext(ctx context.Context, devSvc *devtools.Serv
 	if observabilitySvc != nil {
 		devSvc.WithObservability(observabilitySvc)
 	}
+	reviewSvc := opt.ReviewService
+	if reviewSvc == nil {
+		reviewPath := opt.ReviewDBPath
+		if reviewPath == "" {
+			reviewPath = ":memory:"
+		}
+		var err error
+		reviewSvc, err = review.OpenService(ctx, reviewPath, review.WithPrivacyProvider(privacyProvider))
+		if err != nil {
+			slog.Error("review service initialization failed", "error", err)
+		}
+	}
+	if reviewSvc != nil && opt.ReviewService == nil {
+		go func() {
+			<-ctx.Done()
+			if err := reviewSvc.Close(); err != nil {
+				slog.Warn("review service close failed", "error", err)
+			}
+		}()
+	}
 
 	runtimeBridge := opt.RuntimeBridge
 	if runtimeBridge == nil {
@@ -118,22 +147,27 @@ func NewHTTPServerWithServicesContext(ctx context.Context, devSvc *devtools.Serv
 	resourceInspection := resourceinspection.New(runtimeBridge)
 	devSvc.WithResourceInspection(resourceInspection)
 
-	wsHub := NewWSHub(ctx, devSvc, qualitySvc.Events(), observabilityEvents(observabilitySvc), runtimeBridge)
+	wsHub := NewWSHub(ctx, devSvc, inspectSvc.Events(), observabilityEvents(observabilitySvc), runtimeBridge)
 	go bridge.DiscoverPeers(ctx, runtimeBridge, opt.ProjectRoot)
 
+	reviewCaseWriter, reviewRepositoryWritable := reviewWriter(opt, privacyProvider)
 	return localserver.New(localserver.Options{
-		Devtools:           devSvc,
-		Quality:            qualitySvc,
-		Observability:      observabilitySvc,
+		Devtools:                 devSvc,
+		Inspect:                  inspectSvc,
+		Observability:            observabilitySvc,
+		Review:                   reviewSvc,
+		ReviewWriter:             reviewCaseWriter,
+		ReviewRepositoryWritable: reviewRepositoryWritable,
+		BaselineWriter:           evalwriter.Writer{ProjectRoot: opt.ProjectRoot},
+		EvalRunner:               evalrunner.Coordinator{ProjectRoot: opt.ProjectRoot},
+		EvalCatalog: evalserver.NewCollector(opt.ProjectRoot, evalserver.CollectorDeps{
+			FindNode: assets.FindNode, ExtractCoordinator: assets.ExtractEmbeddedEvalCoordinator,
+		}),
 		RuntimeBridge:      runtimeBridge,
 		ResourceInspection: resourceInspection,
 		Hub:                wsHub,
 		ProjectRoot:        opt.ProjectRoot,
 		ConfigPath:         opt.ConfigPath,
-		QualityRunner: qualityserver.RunnerDeps{
-			FindNode:      assets.FindNode,
-			ExtractRunner: assets.ExtractEmbeddedQualityRunner,
-		},
 		SourceResolver: localserver.SourceResolverOptions{
 			ScriptPath:     opt.SourceResolverScript,
 			EmbeddedScript: assets.EmbeddedSourceResolverScript(),
@@ -141,6 +175,16 @@ func NewHTTPServerWithServicesContext(ctx context.Context, devSvc *devtools.Serv
 		UI:            assets.EmbeddedUIHandler(),
 		OriginAllowed: originAllowed,
 	})
+}
+
+func reviewWriter(opt ServerOptions, privacyProvider privacy.Provider) (review.RepositoryWriter, bool) {
+	if opt.ReviewWriter != nil {
+		return opt.ReviewWriter, true
+	}
+	// The project-local Core worker is also the canonical projector. When the
+	// server has no repository root it still returns pending-sync artifacts and
+	// must not claim that a file was written.
+	return reviewwriter.Writer{ProjectRoot: opt.ProjectRoot, Privacy: privacyProvider}, opt.ProjectRoot != ""
 }
 
 func observabilityEvents(service *observability.Service) *observability.EventBus {

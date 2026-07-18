@@ -40,8 +40,7 @@ const CRUX_SIGNAL_PATTERNS = [
   /\btoolPolicy\s*\(/,
   /\bscorer\s*\(/,
   /\bllmJudge\s*\(/,
-  /\bevaluation\s*\(/,
-  /\bsuite\s*\(/,
+  /\bevaluate\s*\(/,
   /\bnew\s+Agent\s*\(/,
 ]
 

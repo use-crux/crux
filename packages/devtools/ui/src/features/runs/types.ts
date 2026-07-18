@@ -1,14 +1,13 @@
-export type RunsGroupBy = 'none' | 'primitive' | 'session' | 'target'
+export type RunsGroupBy = "none" | "primitive" | "session" | "target";
 
 export interface RunsFilters {
-  status?: readonly string[]
-  target?: readonly string[]
-  model?: readonly string[]
-  last?: 'all' | '1h' | '24h' | '7d' | '30d'
-  has?: 'feedback' | 'experiment'
-  search?: string
+  status?: readonly string[];
+  target?: readonly string[];
+  model?: readonly string[];
+  last?: "all" | "1h" | "24h" | "7d" | "30d";
+  search?: string;
   /** Pre-filter to runs whose DefinitionRefs include this Catalog definition (Phase 3 filter). */
-  definitionId?: string
+  definitionId?: string;
 }
 
 export interface RunsProps {
@@ -17,98 +16,93 @@ export interface RunsProps {
    * `session` groups by the literal `sessionId` from the root trace:
    * metadata only, since runs are already structurally grouped by root.
    */
-  groupBy: RunsGroupBy
-  filters: RunsFilters
+  groupBy: RunsGroupBy;
+  filters: RunsFilters;
 }
 
-export type RunsTab = 'all' | 'live' | 'failures' | 'has-feedback'
+export type RunsTab = "all" | "live" | "failures";
 
 export type RunKind =
-  | 'flow'
-  | 'swarm'
-  | 'pipeline'
-  | 'consensus'
-  | 'agent'
-  | 'retrieval'
-  | 'generate'
-  | 'resolve'
-  | 'defer'
-  | 'trace'
+  | "flow"
+  | "swarm"
+  | "pipeline"
+  | "consensus"
+  | "agent"
+  | "retrieval"
+  | "generate"
+  | "resolve"
+  | "defer"
+  | "trace";
 
 export type ColumnId =
-  | 'kind'
-  | 'status'
-  | 'trace'
-  | 'target'
-  | 'model'
-  | 'provider'
-  | 'dur'
-  | 'tokens'
-  | 'cost'
-  | 'score'
-  | 'fdbk'
-  | 'tools'
-  | 'spans'
-  | 'session'
-  | 'cassette'
-  | 'error'
-  | 'time'
+  | "kind"
+  | "status"
+  | "trace"
+  | "target"
+  | "model"
+  | "provider"
+  | "dur"
+  | "tokens"
+  | "cost"
+  | "score"
+  | "tools"
+  | "spans"
+  | "session"
+  | "error"
+  | "time";
 
 export interface ColumnDef {
-  id: ColumnId
-  label: string
-  width: string
-  align?: 'right'
+  id: ColumnId;
+  label: string;
+  width: string;
+  align?: "right";
 }
 
 export interface RunRow {
-  kind: RunKind
+  kind: RunKind;
   /** The id used by the URL (traceId for traces, flow's first traceId for flows). */
-  traceId: string
+  traceId: string;
   /** A stable id for React keys + onclick navigation. */
-  id: string
+  id: string;
   /** Display name. */
-  target: string
+  target: string;
   /** Session id from the root trace - metadata only, not used for rollup. */
-  sessionId?: string
-  model?: string
-  provider?: string
-  status: string
-  startedAt: number
-  durationMs?: number
-  tokenCount?: number
-  cost?: number
-  score?: number
-  feedbackCount: number
+  sessionId?: string;
+  model?: string;
+  provider?: string;
+  status: string;
+  startedAt: number;
+  durationMs?: number;
+  tokenCount?: number;
+  cost?: number;
+  score?: number;
   /** Number of tool invocations across the run family. */
-  toolCallCount?: number
+  toolCallCount?: number;
   /** Number of nested traces if this is a flow rollup. */
-  childCount?: number
+  childCount?: number;
   /** Server-owned canonical graph rollups from the observability run list. */
-  recordCount?: number
-  spanCount?: number
-  eventCount?: number
-  artifactCount?: number
-  edgeCount?: number
-  /** Cassette replay state: 'recorded' | 'missing' | 'mismatch' | etc. */
-  cassetteStatus?: string
+  recordCount?: number;
+  spanCount?: number;
+  eventCount?: number;
+  artifactCount?: number;
+  edgeCount?: number;
   /** Run-level diagnostics from the backend read model. */
-  diagnosticsCount?: number
-  diagnosticsMaxSeverity?: string
+  diagnosticsCount?: number;
+  diagnosticsMaxSeverity?: string;
   /** Short error preview, only meaningful when `status` is error-ish. */
-  errorMessage?: string
+  errorMessage?: string;
   /** Server-owned read-model revision this row was current as of. */
-  revision?: number
+  revision?: number;
   /** Number of physical execution segments observed for this logical run. */
-  segmentCount?: number
+  segmentCount?: number;
   /** The only live segment, omitted when none or more than one is live. */
-  activeSegmentId?: string
+  activeSegmentId?: string;
   /** Whether the server could establish one causal display order. */
-  orderingConfidence?: 'causal' | 'partial' | string
+  orderingConfidence?: "causal" | "partial" | string;
   /** Missing segment-local sequence values and unresolved parent references. */
-  gapCount?: number
+  gapCount?: number;
   /** True when a trace alias identifies more than one logical run. */
-  traceAliasConflict?: boolean
+  traceAliasConflict?: boolean;
   /** Delivery/export health; "unknown" is distinct from "healthy". */
-  deliveryHealth?: 'unknown' | 'healthy' | 'degraded' | string
+  deliveryHealth?: "unknown" | "healthy" | "degraded" | string;
 }

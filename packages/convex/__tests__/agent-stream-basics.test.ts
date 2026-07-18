@@ -65,7 +65,7 @@ describe('agent stream basics', () => {
       modelId: 'google/gemini-3.1-flash-lite-preview-20260303',
     }
     const agent = new Agent({} as any, {
-      name: 'Karyla',
+      name: 'Support Agent',
       languageModel: languageModel as any,
       tools: {},
     })
@@ -90,7 +90,7 @@ describe('agent stream basics', () => {
         family: 'generation',
         primitive: 'generation.stream',
         attributes: expect.objectContaining({
-          agentName: 'Karyla',
+          agentName: 'Support Agent',
           output: 'text',
           source: 'convex.agent',
           provider: 'openrouter',
@@ -107,7 +107,7 @@ describe('agent stream basics', () => {
         family: 'generation',
         primitive: 'generation.call',
         attributes: expect.objectContaining({
-          agentName: 'Karyla',
+          agentName: 'Support Agent',
           stepMode: 'stream',
           output: 'text',
           source: 'convex.agent.step',
@@ -198,7 +198,7 @@ describe('agent stream basics', () => {
       } as never,
     )
     const agent = new Agent({} as never, {
-      name: 'Karyla',
+      name: 'Support Agent',
       languageModel: {} as never,
       tools: {},
     })
@@ -246,7 +246,7 @@ describe('agent stream basics', () => {
       text: 'ok',
     } as never)
     const agent = new Agent({} as never, {
-      name: 'Karyla',
+      name: 'Support Agent',
       languageModel: {} as never,
       tools: {},
     })
@@ -302,7 +302,7 @@ describe('agent stream basics', () => {
       text: 'ok',
     } as never)
     const agent = new Agent({} as never, {
-      name: 'Karyla',
+      name: 'Support Agent',
       languageModel: {} as never,
       tools: {},
     })

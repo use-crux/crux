@@ -67,12 +67,6 @@ func TestWorker_resolveProjectModelUsesArtifactStreamProtocol(t *testing.T) {
 					ignoredPaths: [],
 					definitions: [],
 					relations: [],
-					quality: {
-						persistenceRoot: { value: req.root + '/.crux/quality', provenance: { kind: 'filesystem', path: req.root, convention: 'default quality persistence root' } },
-						includeGlobs: [],
-						excludeGlobs: [],
-						evaluationFiles: []
-					},
 					diagnostics: []
 				}
 			}) + '\n')

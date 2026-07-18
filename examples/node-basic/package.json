@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "start": "tsx hello.ts",
-    "quality": "crux quality run examples.support-citations"
+    "eval:plan": "crux eval examples.support-citations --plan"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.64",

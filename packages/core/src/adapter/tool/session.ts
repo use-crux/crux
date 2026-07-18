@@ -550,7 +550,7 @@ function normalizeMiddlewareChain(
   ];
 }
 
-/** Preserve discovered origin when an explicit Quality mock shadows execution. */
+/** Preserve discovered origin when an explicit Eval mock shadows execution. */
 function inheritMockSourceProvenance(
   resolvedTools: Readonly<Record<string, unknown>> | undefined,
   callTools: Readonly<Record<string, unknown>> | undefined,

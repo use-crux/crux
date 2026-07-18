@@ -30,6 +30,7 @@ const tsPackages = [
   { name: '@use-crux/core', dir: 'packages/core', sourceRoot: 'src' },
   { name: '@use-crux/ai', dir: 'packages/ai', sourceRoot: 'src' },
   { name: '@use-crux/anthropic', dir: 'packages/anthropic', sourceRoot: 'src' },
+  { name: '@use-crux/cloudflare', dir: 'packages/cloudflare', sourceRoot: 'src' },
   { name: '@use-crux/convex', dir: 'packages/convex', sourceRoot: 'src' },
   { name: '@use-crux/google', dir: 'packages/google', sourceRoot: 'src' },
   { name: '@use-crux/indexer', dir: 'packages/indexer', sourceRoot: 'src' },
@@ -192,9 +193,10 @@ async function createReleaseTsconfig() {
       types: ['node'],
       paths,
     },
-    files: (await collectReleaseSourceFiles()).map((file) =>
-      relative(dirname(releaseTsconfig), file).replaceAll(sep, '/'),
-    ),
+    files: [
+      ...(await collectReleaseSourceFiles()),
+      resolve(repoRoot, 'packages/cloudflare/node_modules/@cloudflare/workers-types/index.d.ts'),
+    ].map((file) => relative(dirname(releaseTsconfig), file).replaceAll(sep, '/')),
   }
 }
 
@@ -247,6 +249,7 @@ async function collectReleaseSourceFiles() {
     .filter((file) => {
       const normalized = relative(repoRoot, file).replaceAll(sep, '/')
       if (normalized.includes('/__tests__/') || normalized.includes('/__type_tests__/')) return false
+      if (normalized.split('/').some((segment) => segment.startsWith('.tmp'))) return false
       if (normalized.includes('/.turbo/') || normalized.includes('/dist/')) return false
       if (normalized.includes('/scripts/')) return false
       if (normalized.endsWith('.test.ts') || normalized.endsWith('.test.tsx')) return false
@@ -268,7 +271,8 @@ async function stageTypeScriptPackage(pkg) {
   await createDirectoryIndexBridges(distDir)
   await rewriteRelativeJsSpecifiers(distDir)
   await copyIfExists(join(sourceDir, 'README.md'), join(stageDir, 'README.md'))
-  await copyIfExists(join(sourceDir, 'LICENSE'), join(stageDir, 'LICENSE'))
+  const packageLicense = join(sourceDir, 'LICENSE')
+  await copyIfExists(existsSync(packageLicense) ? packageLicense : join(repoRoot, 'LICENSE'), join(stageDir, 'LICENSE'))
   await rewriteTextFileIfExists(join(stageDir, 'README.md'), rewritePublishedScopeText)
 
   const manifest = transformTypeScriptManifest(sourceManifest, pkg)

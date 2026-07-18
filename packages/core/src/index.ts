@@ -21,7 +21,7 @@
  * - `@use-crux/google` — Google GenAI adapter (`createGoogle()`)
  *
  * **Other subpaths:**
- * - `@use-crux/core/quality` — `quality()`, `suite()`, and `target()` for local quality loops
+ * - `@use-crux/core/eval` — inert Eval authoring with `evaluate()` and `caseFile()`
  * - `@use-crux/core/observability` — `enableDevtools()` for local canonical observability delivery
  * @example
  * ```ts
@@ -132,13 +132,11 @@ export { CONTRIBUTOR } from "./resolver/contract";
 export {
   TOOL_SOURCE,
   TOOL_SOURCE_PROVENANCE,
-  TOOL_SOURCE_QUALITY_IDENTITY,
   TOOL_SOURCE_SESSION_PROVENANCE,
   ToolSourceCollisionError,
   ToolSourceUnsupportedError,
   isToolSource,
   toolSourceProvenance,
-  toolSourceQualityIdentity,
   toolSourceSessionProvenance,
   withToolSourceProvenance,
   withToolSourceSessionProvenance,
@@ -148,7 +146,6 @@ export type {
   ToolSourceMaterializationContext,
   ToolSourceMaterializer,
   ToolSourceProvenance,
-  ToolSourceQualityIdentity,
   ToolSourceSessionProvenance,
   ToolSourceSession,
 } from "./tools/tool-source";
@@ -327,7 +324,6 @@ export type {
   CruxPersistenceConfig,
   CruxRuntimeConfig,
 } from "./runtime";
-export type { QualityConfig } from "./quality/config";
 export type { PromptRegistry } from "./runtime";
 
 export {

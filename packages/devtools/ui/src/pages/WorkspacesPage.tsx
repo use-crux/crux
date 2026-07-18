@@ -1,10 +1,10 @@
-import { WorkspacesView } from '@/features/workspaces/components/WorkspacesView'
+import { WorkspacesView } from "@/features/workspaces/components/WorkspacesView";
 
 interface WorkspacesPageProps {
-  workspaceId?: string
-  filePath?: string
+  workspaceId?: string;
+  filePath?: string;
 }
 
 export function WorkspacesPage(props: WorkspacesPageProps) {
-  return <WorkspacesView {...props} />
+  return <WorkspacesView {...props} />;
 }

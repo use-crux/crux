@@ -460,15 +460,8 @@ export type ProjectDefinitionKind =
   | "guardrail"
   | "toolPolicy"
   | "scorer"
-  | "dataset"
-  | "evaluation"
-  | "evaluation.case"
-  | "suite"
-  | "suite.case"
-  | "eval.prompt"
-  | "eval.flow"
-  | "eval.rag"
-  | "eval.quality"
+  | "eval"
+  | "eval.case"
   | "media.operation"
   | "ingest.source"
   | "unknown";
@@ -539,7 +532,6 @@ export interface PromptFacts {
   hasSystem?: boolean;
   hasPrompt?: boolean;
   hasMessages?: boolean;
-  hasTests?: boolean;
   settings?: Record<string, unknown>;
   fragments?: SourceRefSummary[];
 }
@@ -942,16 +934,9 @@ export interface ScorerFacts {
 }
 
 export interface EvalFacts {
-  kind:
-    | "dataset"
-    | "suite"
-    | "suite.case"
-    | "eval.prompt"
-    | "eval.flow"
-    | "eval.rag"
-    | "eval.quality";
+  kind: "eval" | "eval.case";
   targetDefinitionId?: string;
-  suiteId?: string;
+  evalId?: string;
   caseCount?: number;
   scorerIds?: string[];
 }
@@ -1013,51 +998,6 @@ export interface ProjectDefinition {
   status?: "active" | "missing" | "stale" | "removed";
   fingerprint?: string;
   metadata?: ProjectDefinitionMetadata;
-  quality?: ProjectDefinitionQuality;
-}
-
-export interface ProjectDefinitionQuality {
-  evalIds?: string[];
-  suiteIds?: string[];
-  experimentIds?: string[];
-  baselineIds?: string[];
-  comparisonIds?: string[];
-  feedbackIds?: string[];
-  cassettePaths?: string[];
-  runIds?: string[];
-  traceIds?: string[];
-  affectedEvalIds?: string[];
-  affectedSuiteIds?: string[];
-  runCount?: number;
-  experimentCount?: number;
-  baselineCount?: number;
-  comparisonCount?: number;
-  feedbackCount?: number;
-  cassetteCount?: number;
-  completedRunCount?: number;
-  failedRunCount?: number;
-  runningRunCount?: number;
-  lastRunId?: string;
-  lastRunAt?: number;
-  lastStatus?: string;
-  caseCount?: number;
-  passRate?: number;
-  currentFingerprint?: string;
-  baselineFingerprint?: string;
-  changedSinceBaseline?: boolean;
-  drift?: {
-    evals: ProjectDefinitionQualityDriftRow[];
-    suites: ProjectDefinitionQualityDriftRow[];
-  };
-}
-
-export interface ProjectDefinitionQualityDriftRow {
-  id: string;
-  passRate: number;
-  runs: number;
-  baselineExperimentId: string;
-  baselinePassRate: number;
-  driftPp: number;
 }
 
 export type ProjectRelationFidelity = DefinitionFidelity;
@@ -1085,7 +1025,7 @@ export interface IndexDiagnostic {
 export type CruxLintCategory =
   | "contracts"
   | "observability"
-  | "evaluation"
+  | "evals"
   | "safety"
   | "memory"
   | "runtime"
@@ -1427,15 +1367,8 @@ export const ProjectDefinitionKindSchema = z.enum([
   "guardrail",
   "toolPolicy",
   "scorer",
-  "dataset",
-  "evaluation",
-  "evaluation.case",
-  "suite",
-  "suite.case",
-  "eval.prompt",
-  "eval.flow",
-  "eval.rag",
-  "eval.quality",
+  "eval",
+  "eval.case",
   "media.operation",
   "ingest.source",
   "unknown",
@@ -1846,52 +1779,6 @@ export const ProjectDefinitionMetadataSchema = z
   })
   .catchall(z.unknown()) satisfies z.ZodType<ProjectDefinitionMetadata>;
 
-export const ProjectDefinitionQualityDriftRowSchema = z.object({
-  id: z.string(),
-  passRate: z.number(),
-  runs: z.number(),
-  baselineExperimentId: z.string(),
-  baselinePassRate: z.number(),
-  driftPp: z.number(),
-}) satisfies z.ZodType<ProjectDefinitionQualityDriftRow>;
-
-export const ProjectDefinitionQualitySchema = z.object({
-  evalIds: z.array(z.string()).optional(),
-  suiteIds: z.array(z.string()).optional(),
-  experimentIds: z.array(z.string()).optional(),
-  baselineIds: z.array(z.string()).optional(),
-  comparisonIds: z.array(z.string()).optional(),
-  feedbackIds: z.array(z.string()).optional(),
-  cassettePaths: z.array(z.string()).optional(),
-  runIds: z.array(z.string()).optional(),
-  traceIds: z.array(z.string()).optional(),
-  affectedEvalIds: z.array(z.string()).optional(),
-  affectedSuiteIds: z.array(z.string()).optional(),
-  runCount: z.number().optional(),
-  experimentCount: z.number().optional(),
-  baselineCount: z.number().optional(),
-  comparisonCount: z.number().optional(),
-  feedbackCount: z.number().optional(),
-  cassetteCount: z.number().optional(),
-  completedRunCount: z.number().optional(),
-  failedRunCount: z.number().optional(),
-  runningRunCount: z.number().optional(),
-  lastRunId: z.string().optional(),
-  lastRunAt: z.number().optional(),
-  lastStatus: z.string().optional(),
-  caseCount: z.number().optional(),
-  passRate: z.number().optional(),
-  currentFingerprint: z.string().optional(),
-  baselineFingerprint: z.string().optional(),
-  changedSinceBaseline: z.boolean().optional(),
-  drift: z
-    .object({
-      evals: z.array(ProjectDefinitionQualityDriftRowSchema),
-      suites: z.array(ProjectDefinitionQualityDriftRowSchema),
-    })
-    .optional(),
-}) satisfies z.ZodType<ProjectDefinitionQuality>;
-
 export const ProjectDefinitionSchema = z.object({
   id: z.string(),
   kind: ProjectDefinitionKindSchema,
@@ -1906,7 +1793,6 @@ export const ProjectDefinitionSchema = z.object({
   status: z.enum(["active", "missing", "stale", "removed"]).optional(),
   fingerprint: z.string().optional(),
   metadata: ProjectDefinitionMetadataSchema.optional(),
-  quality: ProjectDefinitionQualitySchema.optional(),
 }) satisfies z.ZodType<ProjectDefinition>;
 
 export const ProjectRelationSchema = z.object({
@@ -1932,7 +1818,7 @@ export const IndexDiagnosticSchema = z.object({
 export const CruxLintCategorySchema = z.enum([
   "contracts",
   "observability",
-  "evaluation",
+  "evals",
   "safety",
   "memory",
   "runtime",

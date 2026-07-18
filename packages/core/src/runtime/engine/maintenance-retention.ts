@@ -1,25 +1,27 @@
-import type { RuntimePruneResult } from '../ports/retention'
-import type { RuntimeStoreAdapter } from '../store'
-import type { ResolvedRuntimeRetentionConfig } from './retention'
+import type { RuntimePruneResult } from "../ports/retention";
+import type { RuntimeStoreAdapter } from "../store";
+import type { ResolvedRuntimeRetentionConfig } from "./retention";
 
 /** Dependencies for pruning retained runtime records during maintenance. */
 export interface KernelRetentionMaintenanceDeps {
-  readonly store: RuntimeStoreAdapter
-  readonly retention: ResolvedRuntimeRetentionConfig
+  readonly store: RuntimeStoreAdapter;
+  readonly retention: ResolvedRuntimeRetentionConfig;
 }
 
 /** Prune terminal runtime records owned by the kernel retention policy. */
 export async function pruneRetainedRecords(
   deps: KernelRetentionMaintenanceDeps,
   options: {
-    readonly namespace?: string
-    readonly now: Date
+    readonly namespace?: string;
+    readonly now: Date;
   },
 ): Promise<RuntimePruneResult> {
-  if (!options.namespace) return { removed: 0, truncated: false }
+  if (!options.namespace) return { removed: 0, truncated: false };
 
-  const retention = deps.retention
-  const limit = retention.sweepLimit
+  const retention = deps.retention;
+  const namespace = options.namespace;
+  const limit = retention.sweepLimit;
+  const resultStore = deps.store.results;
   const results = await Promise.all([
     pruneIfEnabled(retention.events, options.now, (before) =>
       deps.store.events.prune({ namespace: options.namespace, before, limit }),
@@ -54,7 +56,16 @@ export async function pruneRetainedRecords(
     pruneIfEnabled(retention.settledWaiters, options.now, (before) =>
       deps.store.waiters.prune({ namespace: options.namespace, before, limit }),
     ),
-  ])
+    resultStore
+      ? pruneIfEnabled(retention.terminalWork, options.now, (before) =>
+          resultStore.pruneUnreferenced({
+            namespace,
+            before,
+            limit,
+          }),
+        )
+      : { removed: 0, truncated: false },
+  ]);
 
   return results.reduce(
     (total, result) => ({
@@ -62,11 +73,11 @@ export async function pruneRetainedRecords(
       truncated: total.truncated || result.truncated,
     }),
     { removed: 0, truncated: false },
-  )
+  );
 }
 
 function cutoff(now: Date, ttlMs: number): Date {
-  return new Date(now.getTime() - ttlMs)
+  return new Date(now.getTime() - ttlMs);
 }
 
 async function pruneIfEnabled(
@@ -74,6 +85,6 @@ async function pruneIfEnabled(
   now: Date,
   prune: (before: Date) => Promise<RuntimePruneResult>,
 ): Promise<RuntimePruneResult> {
-  if (ttlMs === false) return { removed: 0, truncated: false }
-  return await prune(cutoff(now, ttlMs))
+  if (ttlMs === false) return { removed: 0, truncated: false };
+  return await prune(cutoff(now, ttlMs));
 }

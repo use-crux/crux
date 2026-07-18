@@ -3,22 +3,22 @@ title: Compaction
 description: Four primitives for keeping long conversations within token limits. Pick the one that matches your access pattern.
 ---
 
-LLM context windows are finite, and conversations grow. Compaction is how you keep the model's view of history small without losing the parts that matter. Crux gives you four primitives: pick the one that matches *how* you need to compact, not what.
+LLM context windows are finite, and conversations grow. Compaction is how you keep the model's view of history small without losing the parts that matter. Crux gives you four primitives: pick the one that matches _how_ you need to compact, not what.
 
 ## What problem does this solve?
 
 Without compaction, a long-running chat or agent loop eventually overflows the context window. Naive solutions (drop the oldest messages, or summarize everything every N turns) either lose information or burn tokens summarizing things you didn't need to summarize.
 
-Crux's four primitives target four different access patterns: stateful rolling compression, advisory pressure tracking, one-shot stateless summarization, and structured fact extraction. They compose: budget tracking *decides when* to call sliding window or extraction.
+Crux's four primitives target four different access patterns: stateful rolling compression, advisory pressure tracking, one-shot stateless summarization, and structured fact extraction. They compose: budget tracking _decides when_ to call sliding window or extraction.
 
 ## The four primitives, side by side
 
-| Primitive | Stateful? | Calls LLM? | Use when |
-|---|---|---|---|
-| **`createSlidingWindow()`** | Yes: keeps a running summary in store | Yes: summarizes evicted messages | Building a chat that needs auto-rolling history |
-| **`createBudgetManager()`** | No: pure tracker | No | You want to *decide* when to compact based on token pressure |
-| **`summarizeMessages()`** | No: pure function | Yes: one summarization call | Ad-hoc summarization of a batch of messages |
-| **`extractKeyFacts()`** | No: pure function | Yes: one structured-generation call | Pull typed objects (decisions, action items) out of a conversation |
+| Primitive                   | Stateful?                             | Calls LLM?                          | Use when                                                           |
+| --------------------------- | ------------------------------------- | ----------------------------------- | ------------------------------------------------------------------ |
+| **`createSlidingWindow()`** | Yes: keeps a running summary in store | Yes: summarizes evicted messages    | Building a chat that needs auto-rolling history                    |
+| **`createBudgetManager()`** | No: pure tracker                      | No                                  | You want to _decide_ when to compact based on token pressure       |
+| **`summarizeMessages()`**   | No: pure function                     | Yes: one summarization call         | Ad-hoc summarization of a batch of messages                        |
+| **`extractKeyFacts()`**     | No: pure function                     | Yes: one structured-generation call | Pull typed objects (decisions, action items) out of a conversation |
 
 ```ts
 import {
@@ -26,28 +26,32 @@ import {
   createBudgetManager,
   summarizeMessages,
   extractKeyFacts,
-} from '@use-crux/core/compaction'
+} from "@use-crux/core/compaction";
 ```
 
 ## When should I use which?
 
 **Sliding window** is right when:
+
 - You're building a **long-running chat or agent loop**
 - You want compaction to happen **automatically** when the message count crosses a threshold
 - A running summary is acceptable as the representation of older history
 
 **Budget manager** is right when:
-- You want to **measure pressure** and decide *when* to compact, but apply your own strategy
+
+- You want to **measure pressure** and decide _when_ to compact, but apply your own strategy
 - You're combining multiple compaction approaches (e.g. extract first, then summarize the rest)
 - You want pressure-level callbacks for telemetry
 
 **Summarize messages** is right when:
+
 - You have a **bounded batch** of messages and want one summary right now
 - You don't need a stateful pipeline: fire and forget
 
 **Extract key facts** is right when:
+
 - You want **typed structured output** out of a conversation, not prose
-- You're capturing *decisions, action items, agreements*: discrete facts, not narrative
+- You're capturing _decisions, action items, agreements_: discrete facts, not narrative
 - The summary alone would lose structure you need to act on
 
 ## When should I NOT use compaction?
@@ -65,19 +69,35 @@ In production chat apps you usually layer:
 2. When it crosses warning, **extract key facts** from older messages so structured info survives
 3. When it crosses critical, **sliding window** evicts and summarizes oldest messages
 
-This is more work than a single primitive, but the result is *targeted* compaction: extraction preserves the structure you'll need next turn; summarization compresses what's safe to lose.
+This is more work than a single primitive, but the result is _targeted_ compaction: extraction preserves the structure you'll need next turn; summarization compresses what's safe to lose.
 
 ## How this fits with the rest of Crux
 
-- **[Token budget](/docs/guides/contexts/token-budget)** drops *contexts* under pressure. Compaction shortens *messages*. They compose: budget tracking can include both.
+- **[Token budget](/docs/guides/contexts/token-budget)** drops _contexts_ under pressure. Compaction shortens _messages_. They compose: budget tracking can include both.
 - **[Memory](/docs/guides/memory)** stores entries permanently. Compaction operates on the message history fed to a single LLM call.
-- **[Eval](/docs/guides/quality)** can score compaction quality with `evaluateCompaction()` and pre-built judges.
+- **[Eval](/docs/guides/evals)** can test a compaction task with ordinary Cases and checks, or measure semantic preservation with a judge scorer.
 
 ## Pick a topic
 
 <Cards>
-  <Card title="Sliding window" description="Stateful auto-rolling compression for chat." href="/docs/guides/compaction/sliding-window" />
-  <Card title="Budget manager" description="Measure token pressure, react with your own strategy." href="/docs/guides/compaction/budget" />
-  <Card title="Summarize messages" description="One-shot stateless summarization." href="/docs/guides/compaction/summarization" />
-  <Card title="Extract key facts" description="Typed structured extraction with Zod schemas." href="/docs/guides/compaction/extraction" />
+  <Card
+    title="Sliding window"
+    description="Stateful auto-rolling compression for chat."
+    href="/docs/guides/compaction/sliding-window"
+  />
+  <Card
+    title="Budget manager"
+    description="Measure token pressure, react with your own strategy."
+    href="/docs/guides/compaction/budget"
+  />
+  <Card
+    title="Summarize messages"
+    description="One-shot stateless summarization."
+    href="/docs/guides/compaction/summarization"
+  />
+  <Card
+    title="Extract key facts"
+    description="Typed structured extraction with Zod schemas."
+    href="/docs/guides/compaction/extraction"
+  />
 </Cards>

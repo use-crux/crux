@@ -38,14 +38,8 @@ func TestSelectionStoreRoundTrips(t *testing.T) {
 	}
 }
 
-// TestSelectionKindsCoverWorkflow asserts every kind referenced in the
-// implementation plan is declared as a constant. Adding a kind is an
-// additive change; this guards against accidental removal.
-func TestSelectionKindsCoverWorkflow(t *testing.T) {
-	required := []Kind{
-		KindRun, KindSpan, KindInsight, KindExperiment,
-		KindDataset, KindBaseline, KindFeedback, KindCassette,
-	}
+func TestSelectionKindsCoverMountedScreens(t *testing.T) {
+	required := []Kind{KindRun, KindSpan, KindInsight}
 	seen := make(map[Kind]struct{}, len(required))
 	for _, k := range required {
 		if k == "" {

@@ -6,23 +6,23 @@ description: Agent definitions, composition utilities, blackboard, handoff, and 
 ## Composition utilities
 
 ```ts
-import { agent, isAgent, createCompositions } from '@use-crux/core/agent'
+import { agent, isAgent, createCompositions } from "@use-crux/core/agent";
 
 // Pre-bound versions from adapters:
-import { parallel, pipeline, consensus, agent } from '@use-crux/ai'
+import { parallel, pipeline, consensus, agent } from "@use-crux/ai";
 ```
 
 ### `agent(config)`
 
 Bundle a prompt with optional model and tools into a frozen agent instance.
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | `string` | Unique identifier |
-| `description` | `string?` | Human-readable description |
-| `prompt` | `Prompt` | The prompt this agent executes |
-| `model` | `AnyModel?` | Default model override (takes precedence over composition-level model) |
-| `tools` | `AnyToolSet?` | Default tools |
+| Field         | Type          | Description                                                            |
+| ------------- | ------------- | ---------------------------------------------------------------------- |
+| `id`          | `string`      | Unique identifier                                                      |
+| `description` | `string?`     | Human-readable description                                             |
+| `prompt`      | `Prompt`      | The prompt this agent executes                                         |
+| `model`       | `AnyModel?`   | Default model override (takes precedence over composition-level model) |
+| `tools`       | `AnyToolSet?` | Default tools                                                          |
 
 **Returns:** `Agent<TOwnInput, TOutput, TContexts>`, frozen object with `_tag: 'Agent'`
 
@@ -34,22 +34,23 @@ Type guard, returns `true` if the value is an `Agent` instance created by `agent
 
 Run multiple agents concurrently and return typed results as a named record.
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `agents` | `Record<string, AgentLike>` | Named map of agents (or plain functions) |
-| `context` | `unknown` | Context data passed to all agents |
-| `model` | `AnyModel?` | Shared model (agent-level model takes precedence) |
-| `onError` | `'fail-fast' \| 'continue'?` | Error handling strategy. Default: `'fail-fast'` |
+| Field     | Type                         | Description                                       |
+| --------- | ---------------------------- | ------------------------------------------------- |
+| `agents`  | `Record<string, AgentLike>`  | Named map of agents (or plain functions)          |
+| `context` | `unknown`                    | Context data passed to all agents                 |
+| `model`   | `AnyModel?`                  | Shared model (agent-level model takes precedence) |
+| `onError` | `'fail-fast' \| 'continue'?` | Error handling strategy. Default: `'fail-fast'`   |
 
 **Returns:** `ParallelResult`
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `results` | `Record<name, AgentResult<typed>>` | Results keyed by agent name, typed from each agent's output schema |
-| `durationMs` | `number` | Total wall-clock duration |
-| `settled` | `Record<name, SettledResult>?` | Only present with `onError: 'continue'`, discriminated results for all agents |
+| Field        | Type                               | Description                                                                   |
+| ------------ | ---------------------------------- | ----------------------------------------------------------------------------- |
+| `results`    | `Record<name, AgentResult<typed>>` | Results keyed by agent name, typed from each agent's output schema            |
+| `durationMs` | `number`                           | Total wall-clock duration                                                     |
+| `settled`    | `Record<name, SettledResult>?`     | Only present with `onError: 'continue'`, discriminated results for all agents |
 
 In `continue` mode, each entry in `settled` is a `SettledResult<AgentResult>`:
+
 - `{ status: 'success', value: AgentResult }`
 - `{ status: 'error', error: Error }`
 
@@ -57,76 +58,79 @@ In `continue` mode, each entry in `settled` is a `SettledResult<AgentResult>`:
 
 Chain agents sequentially with typed data flow between immediate steps via a context accumulator. Use `flow()` when you need suspend/resume or durable gates.
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `steps` | `Array<AgentStep \| FnStep>` | Ordered steps to execute |
-| `context` | `unknown` | Seed data available to all steps |
-| `model` | `AnyModel?` | Shared model |
+| Field     | Type                         | Description                      |
+| --------- | ---------------------------- | -------------------------------- |
+| `steps`   | `Array<AgentStep \| FnStep>` | Ordered steps to execute         |
+| `context` | `unknown`                    | Seed data available to all steps |
+| `model`   | `AnyModel?`                  | Shared model                     |
 
 Agent step (inline object):
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `agent` | `AgentLike` | Agent or plain function |
-| `name` | `string` | Step name (for devtools and error messages) |
+| Field   | Type                                    | Description                                                                                                                     |
+| ------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `agent` | `AgentLike`                             | Agent or plain function                                                                                                         |
+| `name`  | `string`                                | Step name (for devtools and error messages)                                                                                     |
 | `input` | `(ctx: AccumulatedContext) => unknown?` | Transform accumulated context to this step's input. `ctx` contains all previous step outputs keyed by name, plus the seed data. |
 
 Plain function step (inline object):
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `name` | `string` | Step name |
-| `fn` | `(ctx: AccumulatedContext) => Promise<unknown>` | Custom function receiving accumulated context |
+| Field  | Type                                            | Description                                   |
+| ------ | ----------------------------------------------- | --------------------------------------------- |
+| `name` | `string`                                        | Step name                                     |
+| `fn`   | `(ctx: AccumulatedContext) => Promise<unknown>` | Custom function receiving accumulated context |
 
 **Returns:** `PipelineResult`
 
-| Field | Description |
-|-------|-------------|
-| `status` | Always `completed` when returned |
-| `context` | Accumulated seed data and named step outputs |
-| `finalOutput` | Output from the last step |
-| `results` | Ordered agent/function step results |
-| `durationMs` | Total wall-clock duration |
+| Field         | Description                                  |
+| ------------- | -------------------------------------------- |
+| `status`      | Always `completed` when returned             |
+| `context`     | Accumulated seed data and named step outputs |
+| `finalOutput` | Output from the last step                    |
+| `results`     | Ordered agent/function step results          |
+| `durationMs`  | Total wall-clock duration                    |
 
 ### `consensus(options)`
 
 Run multiple agents and determine a winner via voting.
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `agents` | `AgentLike[]` | Agents to run as voters |
-| `context` | `unknown` | Context data passed to all agents |
-| `model` | `AnyModel?` | Shared model |
-| `extract` | `(result: AgentResult) => string` | Extract a vote string from each result |
-| `quorum` | `'majority' \| 'unanimous' \| number?` | Quorum requirement. Default: `'majority'` |
+| Field     | Type                                   | Description                               |
+| --------- | -------------------------------------- | ----------------------------------------- |
+| `agents`  | `AgentLike[]`                          | Agents to run as voters                   |
+| `context` | `unknown`                              | Context data passed to all agents         |
+| `model`   | `AnyModel?`                            | Shared model                              |
+| `extract` | `(result: AgentResult) => string`      | Extract a vote string from each result    |
+| `quorum`  | `'majority' \| 'unanimous' \| number?` | Quorum requirement. Default: `'majority'` |
 
 **Returns:** `ConsensusResult`
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `result` | `string` | Winning vote value |
-| `votes` | `Record<string, number>` | Vote breakdown |
-| `details` | `AgentResult[]` | Each agent's full result |
-| `agreement` | `number` | Agreement ratio (0–1) |
-| `durationMs` | `number` | Total duration |
+| Field        | Type                     | Description              |
+| ------------ | ------------------------ | ------------------------ |
+| `result`     | `string`                 | Winning vote value       |
+| `votes`      | `Record<string, number>` | Vote breakdown           |
+| `details`    | `AgentResult[]`          | Each agent's full result |
+| `agreement`  | `number`                 | Agreement ratio (0–1)    |
+| `durationMs` | `number`                 | Total duration           |
 
 Throws `ConsensusError` when quorum is not met. The error has `.votes` and `.quorum` properties.
 
 ### `AgentResult`
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `agentId` | `string` | Agent identifier |
-| `output` | `unknown` | The agent's output |
-| `durationMs` | `number` | Execution time |
-| `usage` | `TokenUsage | undefined` | Token usage if available |
+| Field        | Type        | Description        |
+| ------------ | ----------- | ------------------ | ------------------------ |
+| `agentId`    | `string`    | Agent identifier   |
+| `output`     | `unknown`   | The agent's output |
+| `durationMs` | `number`    | Execution time     |
+| `usage`      | `TokenUsage | undefined`         | Token usage if available |
 
 ### `AgentExecutor`
 
 SDK-agnostic executor interface. Each adapter implements this to bridge agents to their SDK's `generate()`. Used by `createCompositions(executor)` to create pre-bound composition functions.
 
 ```ts
-type AgentExecutor = (agent: Agent, options: ExecuteOptions) => Promise<AgentResult>
+type AgentExecutor = (
+  agent: Agent,
+  options: ExecuteOptions,
+) => Promise<AgentResult>;
 ```
 
 ### `createCompositions(executor)`
@@ -138,30 +142,34 @@ Factory that creates adapter-bound `parallel`, `pipeline`, and `consensus` funct
 A conformant in-memory `AgentExecutor` for **testing** how compositions drive the executor without an SDK (the agent-layer analogue of the resolver fakes). Exported from `@use-crux/core/agent` and the package root.
 
 ```ts
-import { createFakeAgentExecutor, createPipeline } from '@use-crux/core/agent'
+import { createFakeAgentExecutor, createPipeline } from "@use-crux/core/agent";
 
 const executor = createFakeAgentExecutor({
   agents: {
-    reviewer: { output: { score: 0.9 } },           // return output
-    triage: { transfer: 'billing', reason: 'fees' }, // drive a swarm handoff
-    flaky: { throws: 'LLM unavailable' },            // exercise an error path
+    reviewer: { output: { score: 0.9 } }, // return output
+    triage: { transfer: "billing", reason: "fees" }, // drive a swarm handoff
+    flaky: { throws: "LLM unavailable" }, // exercise an error path
   },
-  fallback: 'echo', // unconfigured agents echo `{ _agent, _input }`
-})
+  fallback: "echo", // unconfigured agents echo `{ _agent, _input }`
+});
 
-await createPipeline(executor)({ context: { seed: 1 }, model: 'm', steps: [{ name: 'r', agent: reviewer }] })
+await createPipeline(executor)({
+  context: { seed: 1 },
+  model: "m",
+  steps: [{ name: "r", agent: reviewer }],
+});
 
 // Every invocation is recorded for assertions:
-executor.calls[0].options.input        // { seed: 1 }
-executor.calls[0].resolvedModel        // agent.model ?? options.model
-executor.calls[0].executionContext     // ambient context observed per call
+executor.calls[0].options.input; // { seed: 1 }
+executor.calls[0].resolvedModel; // agent.model ?? options.model
+executor.calls[0].executionContext; // ambient context observed per call
 ```
 
-| Config field | Type | Description |
-|-------|------|-------------|
-| `agents` | `Record<string, Behavior \| Resolver>` | Per-agent behavior, keyed by `agent.id` |
-| `fallback` | `Behavior \| Resolver \| 'echo'` | Used when no `agents` entry matches; omitted ⇒ throws |
-| `durationMs` | `number` | Reported on every result (default `10`) |
+| Config field | Type                                   | Description                                           |
+| ------------ | -------------------------------------- | ----------------------------------------------------- |
+| `agents`     | `Record<string, Behavior \| Resolver>` | Per-agent behavior, keyed by `agent.id`               |
+| `fallback`   | `Behavior \| Resolver \| 'echo'`       | Used when no `agents` entry matches; omitted ⇒ throws |
+| `durationMs` | `number`                               | Reported on every result (default `10`)               |
 
 A `Behavior` is `{ output }`, `{ transfer, reason }` (executes the generated `transfer_to_<id>` tool), or `{ throws }`; non-throwing forms may carry `usage`. A `Resolver` is `(agent, options, callIndex) => Behavior` for call-order-dependent fakes (e.g. consensus voters). The returned executor exposes a readonly `calls` array of `{ agent, options, resolvedModel, executionContext }`.
 
@@ -170,37 +178,37 @@ A `Behavior` is `{ output }`, `{ transfer, reason }` (executes the generated `tr
 ## Building-block primitives
 
 ```ts
-import { blackboard, handoff, delegate } from '@use-crux/core/agent'
+import { blackboard, handoff, delegate } from "@use-crux/core/agent";
 ```
 
 ### `blackboard(config)`
 
 Shared typed state for multi-agent coordination.
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | `string` | Unique identifier |
-| `schema` | `ZodType` | Schema for state fields |
-| `store` | `RecordStore?` | Persistent storage |
+| Field    | Type           | Description             |
+| -------- | -------------- | ----------------------- |
+| `id`     | `string`       | Unique identifier       |
+| `schema` | `ZodType`      | Schema for state fields |
+| `store`  | `RecordStore?` | Persistent storage      |
 
 **Returns:** `Blackboard<T>`
 
-| Method | Description |
-|--------|-------------|
-| `.get(field)` | Get a single field value |
-| `.getAll()` | Get all fields |
-| `.set(field, value)` | Set a field (Zod-validated) |
-| `.patch(partial)` | Merge partial update |
-| `.subscribe(callback)` | Listen for field changes: `(field, value) => void` |
-| `.asContext(opts?)` | Context (default priority: 70) |
-| `.asTools()` | Returns `{ readBlackboard, writeBlackboard, patchBlackboard, clearBlackboard }`, focused tools for LLM interaction |
+| Method                 | Description                                                                                                        |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `.get(field)`          | Get a single field value                                                                                           |
+| `.getAll()`            | Get all fields                                                                                                     |
+| `.set(field, value)`   | Set a field (Zod-validated)                                                                                        |
+| `.patch(partial)`      | Merge partial update                                                                                               |
+| `.subscribe(callback)` | Listen for field changes: `(field, value) => void`                                                                 |
+| `.asContext(opts?)`    | Context (default priority: 70)                                                                                     |
+| `.asTools()`           | Returns `{ readBlackboard, writeBlackboard, patchBlackboard, clearBlackboard }`, focused tools for LLM interaction |
 
 Use a board directly in prompt `use` when the agent should see and update shared state:
 
 ```ts
 prompt({
   use: [board], // context + focused tools
-})
+});
 ```
 
 Use `board.asContext()` for context-only injection, and `board.asTools()` when you want manual tool selection.
@@ -208,71 +216,85 @@ Use `board.asContext()` for context-only injection, and `board.asTools()` when y
 **Focused tools pattern.** `.asTools()` returns an object of individual tools. Pick which to expose based on the agent's role:
 
 ```ts
-const board = blackboard({ id: 'shared', schema: mySchema, store })
+const board = blackboard({ id: "shared", schema: mySchema, store });
 
 // Read-only agent, can observe shared state but not modify it
-const { readBlackboard } = board.asTools()
-prompt({ tools: { readBlackboard } })
+const { readBlackboard } = board.asTools();
+prompt({ tools: { readBlackboard } });
 
 // Full access agent, can read and write
-prompt({ tools: board.asTools() })
+prompt({ tools: board.asTools() });
 ```
 
 When a prompt uses more than one blackboard directly, give each board a prefix:
 
 ```ts
-const research = blackboard({ id: 'research', schema, tools: { prefix: 'research' } })
-const writing = blackboard({ id: 'writing', schema, tools: { prefix: 'writing' } })
+const research = blackboard({
+  id: "research",
+  schema,
+  tools: { prefix: "research" },
+});
+const writing = blackboard({
+  id: "writing",
+  schema,
+  tools: { prefix: "writing" },
+});
 
-prompt({ use: [research, writing] })
+prompt({ use: [research, writing] });
 // readResearchBlackboard, writeResearchBlackboard, readWritingBlackboard, ...
 ```
 
 Override descriptions for domain-specific language:
 
 ```ts
-const { readBlackboard, writeBlackboard } = board.asTools()
+const { readBlackboard, writeBlackboard } = board.asTools();
 const tools = {
-  getSharedState: { ...readBlackboard, description: 'Read the current analysis results from the shared workspace.' },
-  updateSharedState: { ...writeBlackboard, description: 'Write your analysis results to the shared workspace.' },
-}
+  getSharedState: {
+    ...readBlackboard,
+    description: "Read the current analysis results from the shared workspace.",
+  },
+  updateSharedState: {
+    ...writeBlackboard,
+    description: "Write your analysis results to the shared workspace.",
+  },
+};
 ```
 
 ### `handoff(config)`
 
 Structured context transfer between agents. Supports stateless (in-process) and stored (distributed) modes.
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | `string` | Unique identifier |
-| `inputSchema` | `ZodType` | Validates producer output |
-| `outputSchema` | `ZodType` | Validates transformed data |
-| `transform` | `(input) => output` | Transform function (may be async) |
-| `summarize` | `{ generate, model, system? }?` | Optional LLM summarization |
-| `store` | `RecordStore?` | Persistent storage, enables `send()` and `receive()` for distributed agents |
-| `fromAgent` | `string?` | Name of sending agent (for devtools identification) |
-| `toAgent` | `string?` | Name of receiving agent (for devtools identification) |
+| Field          | Type                            | Description                                                                 |
+| -------------- | ------------------------------- | --------------------------------------------------------------------------- |
+| `id`           | `string`                        | Unique identifier                                                           |
+| `inputSchema`  | `ZodType`                       | Validates producer output                                                   |
+| `outputSchema` | `ZodType`                       | Validates transformed data                                                  |
+| `transform`    | `(input) => output`             | Transform function (may be async)                                           |
+| `summarize`    | `{ generate, model, system? }?` | Optional LLM summarization                                                  |
+| `store`        | `RecordStore?`                  | Persistent storage, enables `send()` and `receive()` for distributed agents |
+| `fromAgent`    | `string?`                       | Name of sending agent (for devtools identification)                         |
+| `toAgent`      | `string?`                       | Name of receiving agent (for devtools identification)                       |
 
 **Returns:** `HandoffInstance<TInput, TOutput>`
 
-| Method | Description |
-|--------|-------------|
-| `.prepare(input)` | Validate, transform, optionally summarize → `HandoffPayload { data, summary? }` |
-| `.send(input)` | Like `prepare()` but also persists to store. Requires `store`. |
-| `.receive()` | Read latest payload from store. Returns `null` if not sent yet. Requires `store`. |
-| `.asContext(payload)` | Context from prepared payload (default priority: 80) |
-| `.id` | Handoff identifier |
+| Method                | Description                                                                       |
+| --------------------- | --------------------------------------------------------------------------------- |
+| `.prepare(input)`     | Validate, transform, optionally summarize → `HandoffPayload { data, summary? }`   |
+| `.send(input)`        | Like `prepare()` but also persists to store. Requires `store`.                    |
+| `.receive()`          | Read latest payload from store. Returns `null` if not sent yet. Requires `store`. |
+| `.asContext(payload)` | Context from prepared payload (default priority: 80)                              |
+| `.id`                 | Handoff identifier                                                                |
 
 ### `delegate(config)`
 
 Orchestration wrapper combining handoff + subagent execution.
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | `string` | Unique identifier |
-| `argsSchema` | `ZodType` | What the LLM provides when calling the tool |
-| `handoff` | `HandoffInstance` | Handoff contract for validation |
-| `execute` | `(args: TArgs, ctx: TCtx) => Promise<THandoffInput>` | Run the subagent with typed context |
+| Field        | Type                                                 | Description                                 |
+| ------------ | ---------------------------------------------------- | ------------------------------------------- |
+| `id`         | `string`                                             | Unique identifier                           |
+| `argsSchema` | `ZodType`                                            | What the LLM provides when calling the tool |
+| `handoff`    | `HandoffInstance`                                    | Handoff contract for validation             |
+| `execute`    | `(args: TArgs, ctx: TCtx) => Promise<THandoffInput>` | Run the subagent with typed context         |
 
 **Generic parameters:** `delegate<TArgs, THandoffInput, THandoffOutput, TCtx>`
 
@@ -280,44 +302,45 @@ Orchestration wrapper combining handoff + subagent execution.
 
 **Returns:** `Delegate<TArgs, TInput, TOutput, TCtx>`
 
-| Method | Description |
-|--------|-------------|
-| `.run(args, ctx)` | Execute: run subagent → validate via handoff → return `DelegateResult`. `ctx` is required and typed. |
+| Method            | Description                                                                                                              |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `.run(args, ctx)` | Execute: run subagent → validate via handoff → return `DelegateResult`. `ctx` is required and typed.                     |
 | `.asTools(opts?)` | Returns `{ delegate }`, focused tool for LLM interaction. For frameworks with custom tool shapes, use `.run()` directly. |
 
 **Focused tools pattern.** `.asTools()` returns `{ delegate }`, a single focused tool for triggering the delegation. Override the description to match your domain:
 
 ```ts
 const researchDelegate = delegate({
-  id: 'research',
+  id: "research",
   argsSchema: z.object({ topic: z.string() }),
   handoff: researchHandoff,
   execute: async (args) => runResearchAgent(args),
-})
+});
 
 // Default: generic "delegate" tool name
-prompt({ tools: researchDelegate.asTools() })
+prompt({ tools: researchDelegate.asTools() });
 
 // Custom: rename and describe for your domain
-const { delegate } = researchDelegate.asTools()
+const { delegate } = researchDelegate.asTools();
 prompt({
   tools: {
     requestResearch: {
       ...delegate,
-      description: 'Assign a research task to the research team. Provide the topic to investigate.',
+      description:
+        "Assign a research task to the research team. Provide the topic to investigate.",
     },
   },
-})
+});
 ```
 
 `DelegateResult`:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `delegateId` | `string` | Delegate identifier |
-| `data` | `TOutput` | Transformed output from handoff |
-| `summary` | `string?` | LLM summary if handoff configured one |
-| `durationMs` | `number` | Execution time |
+| Field        | Type      | Description                           |
+| ------------ | --------- | ------------------------------------- |
+| `delegateId` | `string`  | Delegate identifier                   |
+| `data`       | `TOutput` | Transformed output from handoff       |
+| `summary`    | `string?` | LLM summary if handoff configured one |
+| `durationMs` | `number`  | Execution time                        |
 
 **Three-layer validation.** Each delegation validates data at three points:
 
@@ -331,15 +354,15 @@ prompt({
 
 All primitives emit instrumentation events automatically:
 
-| Event | Emitted by | Fields |
-|-------|-----------|--------|
-| `blackboard:update` | `.set()`, `.patch()`, `.clear()` | `boardId`, `fieldsChanged`, `snapshot` |
-| `handoff:prepare` | `.prepare()`, `.send()` | `handoffId`, `inputSize`, `outputSize`, `input`, `output`, `fromAgent`, `toAgent` |
-| `delegate:start` | `.run()` | `delegateId`, `handoffId`, `inputSize`, `input` |
-| `delegate:complete` | `.run()` | `delegateId`, `handoffId`, `inputSize`, `outputSize`, `durationMs`, `output` |
-| `composition:start` | `parallel()`, `pipeline()`, `consensus()` | `compositionId`, `kind`, `agentIds` |
-| `composition:agent` | Each agent in a composition | `compositionId`, `agentId`, `index`, `status`, `durationMs`, `error?` |
-| `composition:end` | `parallel()`, `pipeline()`, `consensus()` | `compositionId`, `kind`, `status`, `durationMs`, `agentCount`, `successCount`, `errorCount`, `agreement?` |
+| Event               | Emitted by                                | Fields                                                                                                    |
+| ------------------- | ----------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `blackboard:update` | `.set()`, `.patch()`, `.clear()`          | `boardId`, `fieldsChanged`, `snapshot`                                                                    |
+| `handoff:prepare`   | `.prepare()`, `.send()`                   | `handoffId`, `inputSize`, `outputSize`, `input`, `output`, `fromAgent`, `toAgent`                         |
+| `delegate:start`    | `.run()`                                  | `delegateId`, `handoffId`, `inputSize`, `input`                                                           |
+| `delegate:complete` | `.run()`                                  | `delegateId`, `handoffId`, `inputSize`, `outputSize`, `durationMs`, `output`                              |
+| `composition:start` | `parallel()`, `pipeline()`, `consensus()` | `compositionId`, `kind`, `agentIds`                                                                       |
+| `composition:agent` | Each agent in a composition               | `compositionId`, `agentId`, `index`, `status`, `durationMs`, `error?`                                     |
+| `composition:end`   | `parallel()`, `pipeline()`, `consensus()` | `compositionId`, `kind`, `status`, `durationMs`, `agentCount`, `successCount`, `errorCount`, `agreement?` |
 
 Events are correlated to the enclosing trace when emitted within a `generate()` or agent step. For handoffs, canonical traces also attach the validated handoff input to `inspection.input` and the prepared handoff payload to `inspection.output`.
 
@@ -348,18 +371,30 @@ Events are correlated to the enclosing trace when emitted within a `generate()` 
 ```ts
 import type {
   // Composition
-  Agent, AgentConfig, AgentLike,
-  AgentExecutor, AgentResult, ExecuteOptions,
-  ParallelOptions, ParallelResult, SettledResult,
+  Agent,
+  AgentConfig,
+  AgentLike,
+  AgentExecutor,
+  AgentResult,
+  ExecuteOptions,
+  ParallelOptions,
+  ParallelResult,
+  SettledResult,
   PipelineResult,
-  ConsensusOptions, ConsensusResult,
+  ConsensusOptions,
+  ConsensusResult,
   // Building blocks
-  Blackboard, BlackboardConfig,
-  HandoffInstance, HandoffConfig, HandoffPayload,
-  Delegate, DelegateConfig, DelegateResult,
-} from '@use-crux/core/agent'
+  Blackboard,
+  BlackboardConfig,
+  HandoffInstance,
+  HandoffConfig,
+  HandoffPayload,
+  Delegate,
+  DelegateConfig,
+  DelegateResult,
+} from "@use-crux/core/agent";
 
-import { ConsensusError } from '@use-crux/core/agent'
+import { ConsensusError } from "@use-crux/core/agent";
 ```
 
 ## Related

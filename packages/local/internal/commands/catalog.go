@@ -39,7 +39,7 @@ func NewCatalogCmd(f *cli.Factory) *cobra.Command {
   crux catalog status --json
   crux catalog explain agent:writer
   crux catalog import .crux/project-index.manifest.json`,
-		Args:  cobra.NoArgs,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runCatalogList(cmd.Context(), f, kind, jsonOutput)
 		},

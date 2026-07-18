@@ -47,22 +47,22 @@ fn duplicate_missing_policy_refs_count_once_per_relation_identity() {
         root: None,
         project_name: None,
         definitions: vec![definition(
-            "evaluation:quality",
-            "evaluation",
+            "eval:coverage",
+            "eval",
             "quality",
             StaticIndexFidelity::Partial,
             None,
         )],
         relation_refs: vec![
             StaticIndexRelationRef {
-                from_id: Some("evaluation:quality".to_string()),
-                to_id: Some("evaluation.case:quality:refund".to_string()),
-                ..relation_ref("evaluation:quality", "evaluation.includes_case")
+                from_id: Some("eval:coverage".to_string()),
+                to_id: Some("eval.case:quality:refund".to_string()),
+                ..relation_ref("eval:coverage", "eval.includes_case")
             },
             StaticIndexRelationRef {
-                from_id: Some("evaluation:quality".to_string()),
-                to_id: Some("evaluation.case:quality:refund".to_string()),
-                ..relation_ref("evaluation:quality", "evaluation.includes_case")
+                from_id: Some("eval:coverage".to_string()),
+                to_id: Some("eval.case:quality:refund".to_string()),
+                ..relation_ref("eval:coverage", "eval.includes_case")
             },
         ],
         ..Default::default()
@@ -79,7 +79,7 @@ fn duplicate_missing_policy_refs_count_once_per_relation_identity() {
         .expect("policy gap diagnostic");
     assert_eq!(
         policy_diagnostic.message,
-        "No relation policy matched 1 \"evaluation.includes_case\" relation reference(s)."
+        "No relation policy matched 1 \"eval.includes_case\" relation reference(s)."
     );
 }
 
@@ -90,15 +90,15 @@ fn missing_policy_gap_count_keeps_first_owner_scope() {
         project_name: None,
         definitions: vec![
             definition(
-                "evaluation:first",
-                "evaluation",
+                "eval:first",
+                "eval",
                 "first",
                 StaticIndexFidelity::Partial,
                 None,
             ),
             definition(
-                "evaluation:second",
-                "evaluation",
+                "eval:second",
+                "eval",
                 "second",
                 StaticIndexFidelity::Partial,
                 None,
@@ -106,14 +106,14 @@ fn missing_policy_gap_count_keeps_first_owner_scope() {
         ],
         relation_refs: vec![
             StaticIndexRelationRef {
-                from_id: Some("evaluation:first".to_string()),
-                to_id: Some("evaluation.case:first:a".to_string()),
-                ..relation_ref("evaluation:first", "evaluation.includes_case")
+                from_id: Some("eval:first".to_string()),
+                to_id: Some("eval.case:first:a".to_string()),
+                ..relation_ref("eval:first", "eval.includes_case")
             },
             StaticIndexRelationRef {
-                from_id: Some("evaluation:second".to_string()),
-                to_id: Some("evaluation.case:second:b".to_string()),
-                ..relation_ref("evaluation:second", "evaluation.includes_case")
+                from_id: Some("eval:second".to_string()),
+                to_id: Some("eval.case:second:b".to_string()),
+                ..relation_ref("eval:second", "eval.includes_case")
             },
         ],
         ..Default::default()
@@ -124,7 +124,7 @@ fn missing_policy_gap_count_keeps_first_owner_scope() {
     assert_eq!(model.report.policy_gaps[0].count, 1);
     assert_eq!(
         model.report.policy_gaps[0].sample_fact.owner_definition_id,
-        "evaluation:first"
+        "eval:first"
     );
 }
 

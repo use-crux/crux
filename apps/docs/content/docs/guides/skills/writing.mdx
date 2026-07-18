@@ -31,14 +31,14 @@ When asked to analyze content for SEO, follow these steps:
 
 ### Frontmatter Fields
 
-| Field | Required | Used by Crux | Notes |
-|---|---|---|---|
-| `name` | yes | yes | Becomes the skill `id` and the index entry name |
-| `description` | yes | yes | One-line summary shown in the index, this is what the LLM sees when deciding to load |
-| `version` | no | yes | Surfaced in metadata and instrumentation |
-| `license` | no | yes | Surfaced in metadata |
-| `tags` | no | yes | Comma-separated; surfaced in metadata |
-| `allowed-tools`, `model`, `argument-hint`, `user-invocable` | n/a | no | Claude Code / IDE-specific fields; safely ignored |
+| Field                                                       | Required | Used by Crux | Notes                                                                                |
+| ----------------------------------------------------------- | -------- | ------------ | ------------------------------------------------------------------------------------ |
+| `name`                                                      | yes      | yes          | Becomes the skill `id` and the index entry name                                      |
+| `description`                                               | yes      | yes          | One-line summary shown in the index, this is what the LLM sees when deciding to load |
+| `version`                                                   | no       | yes          | Surfaced in metadata and instrumentation                                             |
+| `license`                                                   | no       | yes          | Surfaced in metadata                                                                 |
+| `tags`                                                      | no       | yes          | Comma-separated; surfaced in metadata                                                |
+| `allowed-tools`, `model`, `argument-hint`, `user-invocable` | n/a      | no           | Claude Code / IDE-specific fields; safely ignored                                    |
 
 The description does most of the work, it is the only thing the model sees before it decides whether the skill is relevant. Write it like a router prompt, not like a tagline.
 
@@ -61,10 +61,10 @@ every `.md` file in `references/` and registers it. The model can then call
 
 References behave differently from the main skill body in one important way:
 
-| | Channel | Authority |
-|---|---|---|
-| Main `SKILL.md` body | System prompt (after `LoadSkill`) | Authoritative instruction |
-| `references/*.md` | Tool result (after `LoadReference`) | Supplementary information |
+|                      | Channel                             | Authority                 |
+| -------------------- | ----------------------------------- | ------------------------- |
+| Main `SKILL.md` body | System prompt (after `LoadSkill`)   | Authoritative instruction |
+| `references/*.md`    | Tool result (after `LoadReference`) | Supplementary information |
 
 Use the main body for the things the model **must** do. Use references for material it should **consult** when relevant.
 
@@ -72,14 +72,14 @@ For inline skills, pass references via the `references` map:
 
 ```ts
 const seo = skill.inline({
-  id: 'seo',
-  description: 'SEO checks',
-  instructions: 'Run the SEO checklist...',
+  id: "seo",
+  description: "SEO checks",
+  instructions: "Run the SEO checklist...",
   references: {
-    examples: '## Strong title examples\n- ...',
-    patterns: '## Common anti-patterns\n- ...',
+    examples: "## Strong title examples\n- ...",
+    patterns: "## Common anti-patterns\n- ...",
   },
-})
+});
 ```
 
 ## Writing Instructions the Model Will Follow
@@ -90,16 +90,16 @@ A skill ends up at the **system prompt level** once loaded, it carries the same 
 
 **Don't restate the agent's role.** Skills are loaded into an existing agent that already has a role and a job. Skip the "You are a helpful assistant" preamble; jump straight to the procedure.
 
-**Optimize the description for routing, not marketing.** The model loads a skill based on the index description alone. Make it answer the question *"what kind of task would I use this for?"* in one line.
+**Optimize the description for routing, not marketing.** The model loads a skill based on the index description alone. Make it answer the question _"what kind of task would I use this for?"_ in one line.
 
 **Keep the body small enough to be cheap.** A loaded skill is paid for in tokens for the rest of the turn. If a skill is ~200 lines and only one section is relevant per use, split the rest into `references/` so the model loads them only when needed.
 
 ## Choosing Between `inline`, `fromFile`, and `fromRegistry`
 
-| Loader | When to reach for it |
-|---|---|
-| `skill.inline()` | Short, app-specific instructions that live next to the agent code. No need for a separate file. |
-| `skill.fromFile()` from `@use-crux/core/skill/node` | Skills owned by your repo that benefit from version control, review, and reuse across agents. Read synchronously at import time. |
-| `skill.fromRegistry()` | Community skills from `skillsSh` or skills hosted on a custom registry value. Fetched lazily on first `prompt.resolve()` and cached in memory. See [Registries](/docs/guides/skills/registries). |
+| Loader                                              | When to reach for it                                                                                                                                                                             |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `skill.inline()`                                    | Short, app-specific instructions that live next to the agent code. No need for a separate file.                                                                                                  |
+| `skill.fromFile()` from `@use-crux/core/skill/node` | Skills owned by your repo that benefit from version control, review, and reuse across agents. Read synchronously at import time.                                                                 |
+| `skill.fromRegistry()`                              | Community skills from `skillsSh` or skills hosted on a custom registry value. Fetched lazily on first `prompt.resolve()` and cached in memory. See [Registries](/docs/guides/skills/registries). |
 
 You can mix all three in the same `use` array, the resolver treats them identically once loaded.

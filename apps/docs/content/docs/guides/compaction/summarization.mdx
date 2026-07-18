@@ -24,21 +24,21 @@ Sometimes you don't want a stateful, automatic compaction pipeline. You have a f
 ## Quick start
 
 ```ts title="summarize.ts"
-import { summarizeMessages } from '@use-crux/core/compaction'
-import { generateTextFn } from '@use-crux/ai'
+import { summarizeMessages } from "@use-crux/core/compaction";
+import { generateTextFn } from "@use-crux/ai";
 
 const result = await summarizeMessages({
   messages: conversationHistory,
   generate: generateTextFn,
   model: cheapModel,
   maxTokens: 500,
-  focus: ['decisions', 'action-items'],
-})
+  focus: ["decisions", "action-items"],
+});
 
-result.summary       // string
-result.tokensBefore  // original token count
-result.tokensAfter   // summary token count
-result.ratio         // compression ratio (e.g. 0.15 = 85% reduction)
+result.summary; // string
+result.tokensBefore; // original token count
+result.tokensAfter; // summary token count
+result.ratio; // compression ratio (e.g. 0.15 = 85% reduction)
 ```
 
 ## Steering with `focus`
@@ -46,9 +46,9 @@ result.ratio         // compression ratio (e.g. 0.15 = 85% reduction)
 The `focus` parameter is an array of topic keywords. The summarizer prioritizes information related to those topics:
 
 ```ts
-focus: ['decisions', 'action-items']     // project conversations
-focus: ['user-preferences', 'questions'] // support conversations
-focus: ['blockers', 'risks']             // status updates
+focus: ["decisions", "action-items"]; // project conversations
+focus: ["user-preferences", "questions"]; // support conversations
+focus: ["blockers", "risks"]; // status updates
 ```
 
 Common values: `decisions`, `action-items`, `questions`, `agreements`, `blockers`, `risks`, `user-preferences`, `open-questions`.
@@ -60,14 +60,27 @@ await summarizeMessages({
   messages,
   generate: generateTextFn,
   model: cheapModel,
-  system: 'You are summarizing a customer support conversation. Preserve customer concerns verbatim.',
-})
+  system:
+    "You are summarizing a customer support conversation. Preserve customer concerns verbatim.",
+});
 ```
 
 ## Where to next
 
 <Cards>
-  <Card title="Compaction overview" description="All four primitives at a glance." href="/docs/guides/compaction" />
-  <Card title="Sliding window" description="Stateful auto-compaction built on top of summarizeMessages." href="/docs/guides/compaction/sliding-window" />
-  <Card title="Extract key facts" description="When you want structured output instead of prose." href="/docs/guides/compaction/extraction" />
+  <Card
+    title="Compaction overview"
+    description="All four primitives at a glance."
+    href="/docs/guides/compaction"
+  />
+  <Card
+    title="Sliding window"
+    description="Stateful auto-compaction built on top of summarizeMessages."
+    href="/docs/guides/compaction/sliding-window"
+  />
+  <Card
+    title="Extract key facts"
+    description="When you want structured output instead of prose."
+    href="/docs/guides/compaction/extraction"
+  />
 </Cards>

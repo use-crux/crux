@@ -33,7 +33,7 @@ describe('agent stream completion', () => {
       return { usage: { inputTokens: 9, outputTokens: 4, totalTokens: 13 } } as never
     } as never)
     const agent = new Agent({} as any, {
-      name: 'Karyla',
+      name: 'Support Agent',
       languageModel: {} as any,
       tools: {},
     })
@@ -90,7 +90,7 @@ describe('agent stream completion', () => {
       return { totalUsage: { inputTokens: 18, outputTokens: 13, totalTokens: 31 } } as never
     } as never)
     const agent = new Agent({} as any, {
-      name: 'Karyla',
+      name: 'Support Agent',
       languageModel: {} as any,
       tools: {},
     })
@@ -159,7 +159,7 @@ describe('agent stream completion', () => {
       } as never
     } as never)
     const agent = new Agent({} as any, {
-      name: 'Karyla',
+      name: 'Support Agent',
       languageModel: {} as any,
       tools: {},
     })
@@ -208,7 +208,7 @@ describe('agent stream completion', () => {
       } as never
     } as never)
     const agent = new Agent({} as any, {
-      name: 'Karyla',
+      name: 'Support Agent',
       languageModel: {} as any,
       tools: {},
     })

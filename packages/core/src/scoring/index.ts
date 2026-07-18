@@ -1,12 +1,10 @@
 /**
  * LLM-as-a-judge scoring primitives.
  *
- * General-purpose runtime primitives for quality scoring — usable both
- * at runtime (filtering, quality gates) and in testing (eval assertions).
+ * General-purpose runtime primitives for scoring model output.
  *
  * Safety integration is authored through `constraint.judge(...)` from
- * `@use-crux/core/safety`; the reverse bridge (`constraintScorer()`) lives
- * in `@use-crux/core/quality`.
+ * `@use-crux/core/safety`.
  *
  * @module
  */

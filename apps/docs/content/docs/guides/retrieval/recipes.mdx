@@ -13,51 +13,54 @@ import {
   retrievalRecipe,
   retrieve,
   rerank,
-} from '@use-crux/core/retrieval'
+} from "@use-crux/core/retrieval";
 
 const docsAnswer = retrievalRecipe({
-  id: 'docs-answer',
+  id: "docs-answer",
   retriever: docs.retriever(),
   model,
   steps: [
     fanout({ maxQueries: 4 }),
     retrieve({ limit: 30 }),
-    expandParents({ records, indexerId: 'docs', maxParentChars: 4000 }),
-    rerank({ engine: judgeReranker({ name: 'docs-judge', model }), topK: 8 }),
+    expandParents({ records, indexerId: "docs", maxParentChars: 4000 }),
+    rerank({ engine: judgeReranker({ name: "docs-judge", model }), topK: 8 }),
     compressToBudget({ tokens: 3500 }),
   ],
-})
+});
 
-const hits = await docsAnswer.retrieve('enterprise SSO rollout')
+const hits = await docsAnswer.retrieve("enterprise SSO rollout");
 ```
 
 ## Built-In Steps
 
 Recipes move through two phases: planned queries, then hits. Query steps must come before the `retrieve()` step; hit steps run after retrieval.
 
-| Step | Phase | What it does |
-| --- | --- | --- |
-| `rewriteQuery()` | queries -> queries | Rewrites the original question with a model-backed query. |
-| `fanout()` | queries -> queries | Generates alternate queries and dedupes them. |
-| `retrieve()` | queries -> hits | Runs each planned query against the recipe source retriever or retrievers. |
-| `rerank()` | hits -> hits | Reorders and optionally trims hits with a required, named `Reranker` engine. |
-| `expandParents()` | hits -> hits | Reads parent records and attaches larger context while preserving child citations. |
-| `compressToBudget()` | hits -> hits | Keeps query-relevant verbatim excerpts inside a token budget. |
-| `retrievalStep()` | either phase | Adds a custom typed step. |
+| Step                 | Phase              | What it does                                                                       |
+| -------------------- | ------------------ | ---------------------------------------------------------------------------------- |
+| `rewriteQuery()`     | queries -> queries | Rewrites the original question with a model-backed query.                          |
+| `fanout()`           | queries -> queries | Generates alternate queries and dedupes them.                                      |
+| `retrieve()`         | queries -> hits    | Runs each planned query against the recipe source retriever or retrievers.         |
+| `rerank()`           | hits -> hits       | Reorders and optionally trims hits with a required, named `Reranker` engine.       |
+| `expandParents()`    | hits -> hits       | Reads parent records and attaches larger context while preserving child citations. |
+| `compressToBudget()` | hits -> hits       | Keeps query-relevant verbatim excerpts inside a token budget.                      |
+| `retrievalStep()`    | either phase       | Adds a custom typed step.                                                          |
 
 Model-backed steps use a recipe-level `model` by default. A step can also provide its own model.
 
 ```ts
 const recipe = retrievalRecipe({
-  id: 'docs-answer',
+  id: "docs-answer",
   retriever: docs.retriever(),
   model: defaultRetrievalModel,
   steps: [
     fanout({ maxQueries: 4 }),
     retrieve({ limit: 30 }),
-    rerank({ engine: judgeReranker({ name: 'docs-judge', model: rankingModel }), topK: 8 }),
+    rerank({
+      engine: judgeReranker({ name: "docs-judge", model: rankingModel }),
+      topK: 8,
+    }),
   ],
-})
+});
 ```
 
 If a model-backed step has no model in scope, recipe construction fails before the first query.
@@ -69,51 +72,68 @@ There is one recipe step: `rerank()`. It always takes an explicit, named `engine
 Use the shared judge implementation over a recipe/step model:
 
 ```ts
-import { judgeReranker } from '@use-crux/core/retrieval'
+import { judgeReranker } from "@use-crux/core/retrieval";
 
 const recipe = retrievalRecipe({
-  id: 'docs-answer',
+  id: "docs-answer",
   retriever: docs.retriever(),
   model: retrievalModel,
   steps: [
     retrieve({ limit: 30 }),
-    rerank({ engine: judgeReranker({ name: 'docs-judge', model: retrievalModel }), topK: 8 }),
+    rerank({
+      engine: judgeReranker({ name: "docs-judge", model: retrievalModel }),
+      topK: 8,
+    }),
   ],
-})
+});
 ```
 
 Use an adapter instance when you want that adapter to bind the reranker. Direct SDK adapters use Crux's judge implementation over their generation model:
 
 ```ts
-import Anthropic from '@anthropic-ai/sdk'
-import { createAnthropic } from '@use-crux/anthropic'
+import Anthropic from "@anthropic-ai/sdk";
+import { createAnthropic } from "@use-crux/anthropic";
 
-const anthropic = createAnthropic(new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }))
+const anthropic = createAnthropic(
+  new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }),
+);
 
 const recipe = retrievalRecipe({
-  id: 'docs-answer',
+  id: "docs-answer",
   retriever: docs.retriever(),
   steps: [
     retrieve({ limit: 30 }),
-    rerank({ engine: anthropic.reranker({ name: 'anthropic-reranker', model: 'claude-haiku-4-5' }), topK: 8 }),
+    rerank({
+      engine: anthropic.reranker({
+        name: "anthropic-reranker",
+        model: "claude-haiku-4-5",
+      }),
+      topK: 8,
+    }),
   ],
-})
+});
 ```
 
 Use `@use-crux/ai` when the provider has a native AI SDK reranking model:
 
 ```ts
-import { cohere } from '@ai-sdk/cohere'
-import { reranker } from '@use-crux/ai'
+import { cohere } from "@ai-sdk/cohere";
+import { reranker } from "@use-crux/ai";
 
 const recipe = retrievalRecipe({
-  id: 'docs-answer',
+  id: "docs-answer",
   retriever: docs.retriever(),
   steps: [
     retrieve({ limit: 30 }),
-    rerank({ engine: reranker({ name: 'cohere-reranker', model: cohere.reranking('rerank-v3.5') }), topK: 8 }),
+    rerank({
+      engine: reranker({
+        name: "cohere-reranker",
+        model: cohere.reranking("rerank-v3.5"),
+      }),
+      topK: 8,
+    }),
   ],
-})
+});
 ```
 
 The adapter surface is uniform: adapters expose the same verbs (`generate`, `stream`) and the same capability factories (`embedding` where available, `retrievalModel`, `reranker`). Native rerank endpoints are dedicated ranking calls. Judge-backed rerankers in Anthropic, OpenAI, and Google spend generation tokens because they ask the model to rank candidates.
@@ -124,19 +144,19 @@ Use `retrievalStep()` for product-specific filtering, routing, enrichment, or va
 
 ```ts
 const onlyPublic = retrievalStep({
-  id: 'only-public',
-  kind: 'filter',
-  phase: { in: 'hits', out: 'hits' },
+  id: "only-public",
+  kind: "filter",
+  phase: { in: "hits", out: "hits" },
   run: ({ hits }) => ({
     hits: hits.filter((hit) => hit.metadata.public === true),
   }),
-})
+});
 
 const publicDocs = retrievalRecipe({
-  id: 'public-docs',
+  id: "public-docs",
   retriever: docs.retriever(),
   steps: [retrieve({ limit: 20 }), onlyPublic],
-})
+});
 ```
 
 Custom steps participate in the same ordering checks, trace capture, and observability spans as built-ins.
@@ -147,14 +167,17 @@ The retrieve step accepts one or more sources. Use weighted sources when one cor
 
 ```ts
 const supportAndDocs = retrievalRecipe({
-  id: 'support-and-docs',
+  id: "support-and-docs",
   retriever: [
     { retriever: docs.retriever(), weight: 1 },
     { retriever: supportTickets, weight: 0.5 },
   ],
-  onSourceError: 'skip-with-warning',
-  steps: [retrieve({ limit: 25 }), rerank({ engine: judgeReranker({ name: 'docs-judge', model }), topK: 8 })],
-})
+  onSourceError: "skip-with-warning",
+  steps: [
+    retrieve({ limit: 25 }),
+    rerank({ engine: judgeReranker({ name: "docs-judge", model }), topK: 8 }),
+  ],
+});
 ```
 
 Federated retrieval runs sources concurrently, fuses duplicate hits by `namespace/source.id/chunkId`, and records per-source attribution in hit provenance and recipe traces.
@@ -170,14 +193,14 @@ Federated retrieval runs sources concurrently, fuses duplicate hits by `namespac
 Historical scores live in structured provenance:
 
 ```ts
-const [hit] = await docsAnswer.retrieve('refund policy')
+const [hit] = await docsAnswer.retrieve("refund policy");
 
-hit.score
-hit.provenance?.rawScore
-hit.provenance?.fusedScore
-hit.provenance?.rerankScore
-hit.provenance?.matchedQueries
-hit.provenance?.perSource
+hit.score;
+hit.provenance?.rawScore;
+hit.provenance?.fusedScore;
+hit.provenance?.rerankScore;
+hit.provenance?.matchedQueries;
+hit.provenance?.perSource;
 ```
 
 No recipe step writes internal `_crux` metadata keys.
@@ -187,7 +210,7 @@ No recipe step writes internal `_crux` metadata keys.
 Use `retrieveWithTrace()` when you need to debug retrieval behavior.
 
 ```ts
-const { hits, trace } = await docsAnswer.retrieveWithTrace('pricing changes')
+const { hits, trace } = await docsAnswer.retrieveWithTrace("pricing changes");
 
 console.table(
   trace.steps.map((step) => ({
@@ -198,7 +221,7 @@ console.table(
     outputHits: step.outputHitCount,
     warnings: step.warnings.length,
   })),
-)
+);
 ```
 
 If a step throws, the trace captures the failed step before the error is surfaced.
@@ -208,15 +231,15 @@ If a step throws, the trace captures the failed step before the error is surface
 Recipes expose the same useful forms as retrievers:
 
 ```ts
-const recipeRetriever = docsAnswer.asRetriever()
+const recipeRetriever = docsAnswer.asRetriever();
 const recipeTools = docsAnswer.asTools({
-  prefix: 'docs',
-  include: ['search', 'getSource'],
-})
+  prefix: "docs",
+  include: ["search", "getSource"],
+});
 const groundedRecipe = docsAnswer.asGrounding({
   query: ({ input }) => input.question as string,
-  citations: { required: true, quotes: 'required' },
-})
+  citations: { required: true, quotes: "required" },
+});
 ```
 
 Use `asGrounding()` or `grounding({ retriever: recipe.asRetriever() })` when final answers must cite validated evidence.
@@ -224,7 +247,19 @@ Use `asGrounding()` or `grounding({ retriever: recipe.asRetriever() })` when fin
 ## Related
 
 <Cards>
-  <Card title="Querying" description="Create the base retrievers used by recipes." href="/docs/guides/retrieval/querying" />
-  <Card title="Grounding" description="Validate citations over recipe output and tool-discovered hits." href="/docs/guides/retrieval/grounding" />
-  <Card title="Retrieval Reference" description="Full Retrieval & RAG API reference." href="/docs/reference/crux-core/retrieval" />
+  <Card
+    title="Querying"
+    description="Create the base retrievers used by recipes."
+    href="/docs/guides/retrieval/querying"
+  />
+  <Card
+    title="Grounding"
+    description="Validate citations over recipe output and tool-discovered hits."
+    href="/docs/guides/retrieval/grounding"
+  />
+  <Card
+    title="Retrieval Reference"
+    description="Full Retrieval & RAG API reference."
+    href="/docs/reference/crux-core/retrieval"
+  />
 </Cards>

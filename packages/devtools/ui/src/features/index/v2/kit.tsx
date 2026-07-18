@@ -35,7 +35,7 @@ export type FamilyId =
   | "routing"
   | "state"
   | "safety"
-  | "quality"
+  | "evals"
   | "media";
 
 export interface FamilyDef {
@@ -84,10 +84,10 @@ export const INDEX_FAMILIES: Record<FamilyId, FamilyDef> = {
     tone: "danger",
     blurb: "Constraints and guardrails that gate what the system may do.",
   },
-  quality: {
-    label: "Quality",
+  evals: {
+    label: "Evals",
     tone: "gold",
-    blurb: "How behaviour is measured — scorers, datasets, suites and evals.",
+    blurb: "How model behaviour is measured — Eval definitions and scorers.",
   },
   media: {
     label: "Media",
@@ -105,7 +105,7 @@ export const INDEX_FAMILY_ORDER: FamilyId[] = [
   "routing",
   "state",
   "safety",
-  "quality",
+  "evals",
   "media",
 ];
 
@@ -290,29 +290,13 @@ export const INDEX_KINDS: Record<string, KindDef> = {
   },
   constraint: { label: "Constraint", family: "safety", glyph: "lock" },
   guardrail: { label: "Guardrail", family: "safety", glyph: "shield" },
-  scorer: { label: "Scorer", family: "quality", glyph: "gauge" },
-  dataset: { label: "Dataset", family: "quality", glyph: "dataset" },
-  suite: { label: "Suite", family: "quality", glyph: "list" },
-  "suite.case": {
+  scorer: { label: "Scorer", family: "evals", glyph: "gauge" },
+  eval: { label: "Eval", family: "evals", glyph: "sparkle" },
+  "eval.case": {
     label: "Case",
-    family: "quality",
+    family: "evals",
     glyph: "case",
     child: true,
-  },
-  evaluation: { label: "Evaluation", family: "quality", glyph: "sparkle" },
-  "evaluation.case": {
-    label: "Evaluation case",
-    family: "quality",
-    glyph: "case",
-    child: true,
-  },
-  "eval.prompt": { label: "Prompt eval", family: "quality", glyph: "sparkle" },
-  "eval.flow": { label: "Flow eval", family: "quality", glyph: "sparkle" },
-  "eval.rag": { label: "RAG eval", family: "quality", glyph: "sparkle" },
-  "eval.quality": {
-    label: "Quality eval",
-    family: "quality",
-    glyph: "sparkle",
   },
   unknown: { label: "Unknown", family: null, glyph: "doc" },
 };

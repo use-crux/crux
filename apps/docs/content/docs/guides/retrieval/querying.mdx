@@ -9,32 +9,34 @@ Most apps create retrievers through `knowledgeBase()`:
 
 ```ts
 const docs = knowledgeBase({
-  id: 'docs',
+  id: "docs",
   storage,
   embeddings: dense,
   sparseEmbeddings: sparse,
-})
+});
 
-const hits = await docs.retriever({
-  mode: 'hybrid',
-  limit: 8,
-}).retrieve('how do refunds work?')
+const hits = await docs
+  .retriever({
+    mode: "hybrid",
+    limit: 8,
+  })
+  .retrieve("how do refunds work?");
 ```
 
 A store-backed retriever can also be created directly:
 
 ```ts
-import { retriever } from '@use-crux/core/retrieval'
+import { retriever } from "@use-crux/core/retrieval";
 
 const docs = retriever({
-  id: 'docs',
-  namespace: 'product-docs',
+  id: "docs",
+  namespace: "product-docs",
   records,
   vectors,
   dense,
   sparse,
-  search: { mode: 'hybrid', limit: 8 },
-})
+  search: { mode: "hybrid", limit: 8 },
+});
 ```
 
 Store-backed retrievers read indexed chunk and parent records written by `indexer()` or `knowledgeBase().index()`.
@@ -44,23 +46,23 @@ Store-backed retrievers read indexed chunk and parent records written by `indexe
 Dense is the natural-language default:
 
 ```ts
-await docs.retrieve({ query: 'refund policy', mode: 'dense', limit: 5 })
+await docs.retrieve({ query: "refund policy", mode: "dense", limit: 5 });
 ```
 
 Sparse is useful for exact terms, codes, identifiers, and product names:
 
 ```ts
-await docs.retrieve({ query: 'ERR_BILLING_CREDIT_409', mode: 'sparse' })
+await docs.retrieve({ query: "ERR_BILLING_CREDIT_409", mode: "sparse" });
 ```
 
 Hybrid combines dense and sparse signals when the vector store supports it:
 
 ```ts
 await docs.retrieve({
-  query: 'enterprise SSO setup',
-  mode: 'hybrid',
-  fusion: { strategy: 'rrf', k: 60 },
-})
+  query: "enterprise SSO setup",
+  mode: "hybrid",
+  fusion: { strategy: "rrf", k: 60 },
+});
 ```
 
 Unsupported combinations fail clearly. Crux does not silently downgrade sparse or hybrid retrieval to dense-only search.
@@ -70,14 +72,15 @@ If the retriever `id` differs from the `indexer()` id that wrote the records, pa
 
 ```ts
 const docs = retriever({
-  id: 'docs-search',
-  indexerId: 'docs',
-  namespace: 'product-docs',
+  id: "docs-search",
+  indexerId: "docs",
+  namespace: "product-docs",
   records,
   vectors,
   dense,
-})
+});
 ```
+
 </Callout>
 
 ## Typed Filters
@@ -86,29 +89,31 @@ When a knowledge base has a metadata schema, filter keys and literal values are 
 
 ```ts
 const docs = knowledgeBase({
-  id: 'docs',
+  id: "docs",
   storage,
   embeddings: dense,
   metadataSchema: z.object({
-    section: z.enum(['guide', 'reference', 'api']),
+    section: z.enum(["guide", "reference", "api"]),
     public: z.boolean(),
   }),
-})
+});
 
-const hits = await docs.retriever({
-  filter: { section: 'guide', public: true },
-}).retrieve('routing')
+const hits = await docs
+  .retriever({
+    filter: { section: "guide", public: true },
+  })
+  .retrieve("routing");
 ```
 
 Tool-exposed filters are opt-in:
 
 ```ts
 const tools = docs.tools({
-  prefix: 'docs',
-  include: ['search', 'getSource'],
-  filters: ['section', 'public'],
+  prefix: "docs",
+  include: ["search", "getSource"],
+  filters: ["section", "public"],
   limit: { default: 5, max: 10 },
-})
+});
 ```
 
 ## Prompt Context Or Tools
@@ -118,51 +123,51 @@ Use context injection when the model should always receive retrieved evidence be
 ```ts
 const promptDocs = docs.retriever({
   limit: 6,
-})
+});
 
 const answerDocs = prompt({
-  id: 'answer-docs',
+  id: "answer-docs",
   use: [
     promptDocs.asContext({
       query: ({ question }) => question,
     }),
   ],
   input: z.object({ question: z.string() }),
-  system: 'Answer from the retrieved docs.',
-})
+  system: "Answer from the retrieved docs.",
+});
 ```
 
 Use tools when the model should decide whether to search:
 
 ```ts
 const searchableDocs = retriever({
-  id: 'docs',
-  namespace: 'product-docs',
+  id: "docs",
+  namespace: "product-docs",
   records,
   vectors,
   dense,
-  inject: 'tool',
+  inject: "tool",
   tools: {
-    prefix: 'docs',
-    include: ['search', 'getSource'],
-    getSource: { visibility: 'namespace' },
+    prefix: "docs",
+    include: ["search", "getSource"],
+    getSource: { visibility: "namespace" },
   },
-})
+});
 
 const assistant = prompt({
-  id: 'assistant',
+  id: "assistant",
   use: [searchableDocs],
-  system: 'Use docsSearch before answering detailed product questions.',
-})
+  system: "Use docsSearch before answering detailed product questions.",
+});
 ```
 
 Manual tools are still available for integrations that do not run Crux prompt resolution:
 
 ```ts
 const docsTools = docs.retriever().asTools({
-  prefix: 'docs',
-  include: ['search', 'getSource'],
-})
+  prefix: "docs",
+  include: ["search", "getSource"],
+});
 ```
 
 For citation validation, prefer [grounding](/docs/guides/retrieval/grounding). It records both injected and tool-discovered hits in the grounding session.
@@ -173,26 +178,26 @@ Use a custom retriever when your backend is not a Crux `RecordStore` plus `Vecto
 
 ```ts
 const docs = retriever({
-  id: 'internal-search',
-  namespace: 'product-docs',
+  id: "internal-search",
+  namespace: "product-docs",
   async retrieve(query, options) {
     const results = await internalSearch.search({
       query,
       limit: options.limit ?? 5,
       filter: options.filter,
-    })
+    });
 
     return results.map((result) => ({
-      namespace: 'product-docs',
+      namespace: "product-docs",
       source: { id: result.documentId, url: result.url },
       chunkId: result.sectionId,
       content: result.text,
       metadata: result.metadata,
       score: result.score,
       provenance: { rawScore: result.score },
-    }))
+    }));
   },
-})
+});
 ```
 
 Custom retrievers can be used directly, inside recipes, or as grounded evidence sources.
@@ -200,7 +205,19 @@ Custom retrievers can be used directly, inside recipes, or as grounded evidence 
 ## Related
 
 <Cards>
-  <Card title="Recipes" description="Add fanout, reranking, parent expansion, compression, and federation." href="/docs/guides/retrieval/recipes" />
-  <Card title="Grounding" description="Turn retrieved hits into cited, validated evidence." href="/docs/guides/retrieval/grounding" />
-  <Card title="Retrieval Reference" description="Full Retrieval & RAG API reference." href="/docs/reference/crux-core/retrieval" />
+  <Card
+    title="Recipes"
+    description="Add fanout, reranking, parent expansion, compression, and federation."
+    href="/docs/guides/retrieval/recipes"
+  />
+  <Card
+    title="Grounding"
+    description="Turn retrieved hits into cited, validated evidence."
+    href="/docs/guides/retrieval/grounding"
+  />
+  <Card
+    title="Retrieval Reference"
+    description="Full Retrieval & RAG API reference."
+    href="/docs/reference/crux-core/retrieval"
+  />
 </Cards>

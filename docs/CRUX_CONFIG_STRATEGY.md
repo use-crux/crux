@@ -61,10 +61,10 @@ config({
   setup() {
     // setup
   },
-})
+});
 ```
 
-If `assistantMemory` was constructed with `store`, and a prompt uses `assistantMemory`, that relationship is already authored. If `docs` is used by a prompt, context, or evaluation, that relationship is already authored. If a suite imports a model helper, that dependency is already authored.
+If `assistantMemory` was constructed with `store`, and a prompt uses `assistantMemory`, that relationship is already authored. If `docs` is used by a prompt, context, or Eval, that relationship is already authored. If an Eval imports a task, that dependency is already authored.
 
 Central config should not complete the authored graph.
 
@@ -92,14 +92,13 @@ Crux should infer these from source and runtime evidence:
 - project root, package root, workspace root, and package manager;
 - framework/runtime signals such as Next, Convex, Expo, Node, or package scripts;
 - source roots and path aliases from `tsconfig.json` and package metadata;
-- prompts, contexts, tools, agents, flows, compositions, retrieval, memory, workspaces, guardrails, constraints, scorers, and quality suites;
+- prompts, contexts, tools, agents, flows, compositions, retrieval, memory, workspaces, guardrails, constraints, scorers, and Evals;
 - `use[]` relationships;
 - prompt/context tree paths where authored through `createPrompts()` / `createContexts()`;
 - memory -> store relationships when a memory is constructed with a store;
 - retriever/corpus/indexer -> store relationships when constructed in code;
 - tool maps and tool-producing contexts where statically visible;
-- evaluation definitions from `*.eval.ts`;
-- cassettes and baselines from conventional paths;
+- Eval definitions from `*.eval.ts` and their sibling Baseline files;
 - runtime joins from stable IDs and runtime-emitted attributes.
 
 When inference is partial, Crux should emit a diagnostic with a suggested fix. The fix should usually be "make this relationship statically visible" or "add a stable id," not "register it in config."
@@ -111,9 +110,9 @@ When the user explicitly runs Crux tooling, Crux can safely set up local tooling
 - start the local devtools server;
 - run Project Index discovery;
 - run source resolver workers;
-- run the quality runner;
+- run the Eval coordinator;
 - use local `.crux/cache`;
-- use local `.crux/quality`;
+- use local `.crux/evals`;
 - use the default lint profile;
 - attach local observability when `crux dev` provides a local URL;
 - emit runtime snapshots to local devtools;
@@ -138,80 +137,17 @@ These should require explicit authored code or explicit policy:
 - enabling destructive tools or workspace writes;
 - enabling automatic long-term memory writes.
 
-## Quality Config Is The Current Smell
+## Evals Need No Config Block
 
-`packages/backend/crux.config.ts` is a useful example. It currently mixes:
+Eval discovery is convention-based: one default `evaluate()` export per
+`*.eval.ts` file. The production task already owns its prompt, model, settings,
+tools, schemas, and Runtime requirements. Cases and Variants live in the Eval;
+the CLI controls one invocation with `--offline`, `--fresh`, `--plan`,
+`--max-cost`, and selectors. Crux derives evidence reuse automatically.
 
-- duplicate graph registration: `prompts`, `contexts`, `tools`;
-- local discovery settings: `quality.id`, `quality.dir`, `quality.include`;
-- run defaults: concurrency, timeout, replay mode;
-- global executor/model setup: `quality.setup`;
-- conscious runtime behavior: cost tracking and safety plugins;
-- local observability transport wiring.
-
-Those should be split by responsibility.
-
-### Remove Or Infer
-
-These should not be required in config:
-
-- `prompts`;
-- `contexts`;
-- `tools`;
-- `quality.id` when it can default to nearest `package.json` name;
-- `quality.dir` when it can default to `.crux/quality`;
-- `quality.include` when `evals/**/*.eval.ts` and `**/*.eval.ts` can be discovered;
-- `quality.defaults.concurrency` if it is the default;
-- `quality.defaults.timeoutMs` if it is the default.
-
-### Move To CLI Or Run Policy
-
-Replay posture is a run decision:
-
-```sh
-crux quality run --ci --replay replay-strict
-crux quality run --replay live
-crux quality run --replay record-new
-```
-
-Project config can still set a default replay policy, but CI scripts and run tiers are the clearer primary place.
-
-### Move To Eval-Local Code
-
-`quality.setup` is an ambient service locator. It hides model and executor choices from the eval that needs them.
-
-Instead, suites should import their own helpers:
-
-```ts
-// evals/_shared/qualityModels.ts
-import { generate } from '@use-crux/ai'
-import { createAIClient, models } from '@packages/ai'
-
-const client = createAIClient()
-
-export const qualityModels = {
-  generate,
-  structuredFast: client.model(models.structured.fast),
-  structuredPowerful: client.model(models.structured.powerful),
-}
-```
-
-Then a model-backed eval is explicit:
-
-```ts
-import { qualityModels } from '../_shared/qualityModels'
-
-export const modeAutoDetectLive = evaluate('prompt.mode-auto-detect.live', {
-  task: modeAutoDetectPrompt.withExecutor({
-    generate: qualityModels.generate,
-    model: qualityModels.structuredFast,
-  }),
-  replay: { mode: 'replay-strict', cassette: cassette('mode-auto-detect') },
-  data: cases,
-})
-```
-
-The API does not have to look exactly like this, but the dependency should be local to the suite or imported helper, not hidden in global config.
+There is no Eval config block, Eval executor setup, reuse mode, or
+registration list. If a required model, host, credential, or durable feedback
+destination is missing, collection or preflight fails with the exact action.
 
 ### Keep Explicit Runtime Behavior
 
@@ -232,28 +168,32 @@ The stable center should be a resolved Project Model with typed provenance:
 
 ```ts
 type ProjectModelProvenance =
-  | { kind: 'source'; file: string; exportName?: string }
-  | { kind: 'runtime'; traceId?: string; attribute: string }
-  | { kind: 'filesystem'; path: string; convention: string }
-  | { kind: 'config'; path: string; key: string }
-  | { kind: 'cli'; flag: string }
+  | { kind: "source"; file: string; exportName?: string }
+  | { kind: "runtime"; traceId?: string; attribute: string }
+  | { kind: "filesystem"; path: string; convention: string }
+  | { kind: "config"; path: string; key: string }
+  | { kind: "cli"; flag: string };
 ```
 
 Diagnostics should also be a discriminated union with stable reason codes:
 
 ```ts
 type ProjectModelDiagnostic =
-  | { kind: 'dynamic-tool-map'; file: string; suggestion: 'make-static' | 'add-stable-id' }
-  | { kind: 'missing-stable-id'; file: string; symbol?: string }
-  | { kind: 'unknown-suite-target'; suiteId: string; targetId: string }
-  | { kind: 'model-backed-eval-missing-executor'; suiteId: string }
-  | { kind: 'skipped-generated-source'; path: string; reason: string }
+  | {
+      kind: "dynamic-tool-map";
+      file: string;
+      suggestion: "make-static" | "add-stable-id";
+    }
+  | { kind: "missing-stable-id"; file: string; symbol?: string }
+  | { kind: "unknown-eval-coverage-target"; evalId: string; targetId: string }
+  | { kind: "eval-host-unavailable"; evalId: string; capabilities: string[] }
+  | { kind: "skipped-generated-source"; path: string; reason: string };
 ```
 
 Use branded ids for stable project-model identities, discriminated unions for provenance and
 diagnostics, type guards at config-loading boundaries, and type-level tests for exhaustiveness. Keep
 the public interface small: callers should ask for one resolved Project Model and diagnostics, not
-manually coordinate source scanning, config loading, quality discovery, and runtime evidence.
+manually coordinate source scanning, config loading, Eval discovery, and runtime evidence.
 
 ## Desired End State
 
@@ -263,7 +203,7 @@ Crux should:
 
 1. scan code;
 2. build the Project Index;
-3. discover quality suites;
+3. discover Evals;
 4. infer the authored graph;
 5. enrich it with runtime snapshots;
 6. show everything in Devtools/TUI/CLI.
@@ -272,14 +212,14 @@ If a project needs overrides, it can add a small config:
 
 ```ts
 export default defineConfig({
-  lint: { profile: 'strict' },
+  lint: { profile: "strict" },
   discovery: {
-    include: ['apps/web/src/**'],
+    include: ["apps/web/src/**"],
   },
   cloud: {
     upload: { rawContent: false },
   },
-})
+});
 ```
 
 This is policy and discovery override, not registration.
@@ -292,14 +232,14 @@ These are concrete near-term items.
 
 Docs and examples should lead with source discovery. `config({ prompts })` can remain as a runtime helper or escape hatch, but not the main local tooling path.
 
-### 2. Make Quality Discovery Truly Default
+### 2. Keep Eval Discovery Truly Default
 
-Ensure `crux quality run` can discover:
+Ensure `crux eval` can discover:
 
 - `evals/**/*.eval.ts`;
 - `**/*.eval.ts`;
-- `.crux/quality` baselines and cassettes;
-- nearest package name as quality id.
+- sibling `.baseline.json` files;
+- private `.crux/evals` run and evidence records without treating them as source.
 
 ### 3. Add A Resolved Project Model View
 
@@ -316,8 +256,7 @@ Show:
 - source roots;
 - ignored paths;
 - discovered definitions;
-- discovered quality suites;
-- cassettes and baselines;
+- discovered Evals and their Baseline readiness;
 - lint profile;
 - explicit config file if present;
 - inferred vs explicit values;
@@ -329,19 +268,11 @@ Examples:
 
 - dynamic tool map cannot be proven;
 - prompt has no stable id;
-- suite target is unknown;
-- model-backed eval needs explicit executor/model;
+- Eval coverage target is unknown;
+- a task requires a Runtime host that cannot be resolved;
 - source root skipped as generated/dependency output.
 
-### 5. Deprecate Ambient `quality.setup` In Favor Of Suite-Local Helpers
-
-Keep `setup` for compatibility, but make the new recommended path explicit imports in eval files.
-
-### 6. Move Replay Defaults Toward CLI/Run Tiers
-
-Make `--ci` imply safe replay defaults where appropriate, or document run-tier scripts as the primary way to choose replay posture.
-
-### 7. Auto-Attach Local Devtools Only
+### 5. Auto-Attach Local Devtools Only
 
 If `crux dev` provides a local devtools URL, Crux runtime can attach non-fatally. Production telemetry/cloud export remains explicit.
 
@@ -385,8 +316,8 @@ Cloud/training config should not duplicate harness registration. It should only 
 CI should be able to report when inferred project shape changed:
 
 - newly discovered prompt/context/tool;
-- missing quality coverage;
-- changed replay/cassette status;
+- missing Eval coverage;
+- changed Eval or Baseline compatibility;
 - changed cloud/training eligibility;
 - changed explicit policy.
 

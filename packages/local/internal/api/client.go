@@ -218,48 +218,48 @@ func (c *Client) ObservabilityResourceActivity(ctx context.Context, family strin
 	return activity, err
 }
 
-func (c *Client) DeleteQualityRuns(ctx context.Context, traceIDs []string) (QualityDeleteRunsRecord, error) {
-	var record QualityDeleteRunsRecord
-	err := c.DeleteJSON(ctx, "/api/quality/runs", QualityDeleteRunsRequest{TraceIDs: traceIDs}, &record)
+func (c *Client) DeleteInspectRuns(ctx context.Context, traceIDs []string) (InspectDeleteRunsRecord, error) {
+	var record InspectDeleteRunsRecord
+	err := c.DeleteJSON(ctx, "/api/inspect/runs", InspectDeleteRunsRequest{TraceIDs: traceIDs}, &record)
 	return record, err
 }
 
-func (c *Client) DeleteQualityRun(ctx context.Context, traceID string) (QualityDeleteRunsRecord, bool, error) {
-	var record QualityDeleteRunsRecord
-	err := c.DeleteJSON(ctx, "/api/quality/runs/"+url.PathEscape(traceID), nil, &record)
+func (c *Client) DeleteInspectRun(ctx context.Context, traceID string) (InspectDeleteRunsRecord, bool, error) {
+	var record InspectDeleteRunsRecord
+	err := c.DeleteJSON(ctx, "/api/inspect/runs/"+url.PathEscape(traceID), nil, &record)
 	if err != nil {
 		if err.Error() == "not found" {
-			return QualityDeleteRunsRecord{}, false, nil
+			return InspectDeleteRunsRecord{}, false, nil
 		}
-		return QualityDeleteRunsRecord{}, false, err
+		return InspectDeleteRunsRecord{}, false, err
 	}
 	return record, true, nil
 }
 
-func (c *Client) QualityInsightSilences(ctx context.Context, includeDeleted bool) ([]QualityInsightSilenceRecord, error) {
-	path := "/api/quality/insights/silences"
+func (c *Client) InspectInsightSilences(ctx context.Context, includeDeleted bool) ([]InspectInsightSilenceRecord, error) {
+	path := "/api/inspect/insights/silences"
 	if includeDeleted {
 		path += "?include=deleted"
 	}
-	var silences []QualityInsightSilenceRecord
+	var silences []InspectInsightSilenceRecord
 	err := c.GetJSON(ctx, path, &silences)
 	return silences, err
 }
 
-func (c *Client) CreateQualityInsightSilence(ctx context.Context, req QualityInsightSilenceRequest) (QualityInsightSilenceRecord, error) {
-	var record QualityInsightSilenceRecord
-	err := c.PostJSON(ctx, "/api/quality/insights/silences", req, &record)
+func (c *Client) CreateInspectInsightSilence(ctx context.Context, req InspectInsightSilenceRequest) (InspectInsightSilenceRecord, error) {
+	var record InspectInsightSilenceRecord
+	err := c.PostJSON(ctx, "/api/inspect/insights/silences", req, &record)
 	return record, err
 }
 
-func (c *Client) DeleteQualityInsightSilence(ctx context.Context, silenceID string) (QualityInsightSilenceRecord, bool, error) {
-	var record QualityInsightSilenceRecord
-	err := c.DeleteJSON(ctx, "/api/quality/insights/silences/"+url.PathEscape(silenceID), nil, &record)
+func (c *Client) DeleteInspectInsightSilence(ctx context.Context, silenceID string) (InspectInsightSilenceRecord, bool, error) {
+	var record InspectInsightSilenceRecord
+	err := c.DeleteJSON(ctx, "/api/inspect/insights/silences/"+url.PathEscape(silenceID), nil, &record)
 	if err != nil {
 		if err.Error() == "not found" {
-			return QualityInsightSilenceRecord{}, false, nil
+			return InspectInsightSilenceRecord{}, false, nil
 		}
-		return QualityInsightSilenceRecord{}, false, err
+		return InspectInsightSilenceRecord{}, false, err
 	}
 	return record, true, nil
 }

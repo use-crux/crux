@@ -118,9 +118,9 @@ The public type surface is kept compatible with TypeScript 5.5 so projects do no
     href="/docs/reference/crux-core/scoring"
   />
   <Card
-    title="Quality"
-    description="quality, suite, expect, target, cassette, constraintScorer, and persisted local experiments."
-    href="/docs/reference/crux-core/quality"
+    title="Eval"
+    description="evaluate, caseFile, typed Cases, Variants, checks, Gates, Eval runs, and Baselines."
+    href="/docs/reference/crux-core/eval"
   />
   <Card
     title="Storage"
@@ -214,13 +214,7 @@ import { skill } from "@use-crux/core/skill";
 import { guardrail } from "@use-crux/core/safety";
 import { constraint } from "@use-crux/core/safety";
 import { judge, metrics } from "@use-crux/core/scoring";
-import {
-  constraintScorer,
-  expect,
-  quality,
-  suite,
-  target,
-} from "@use-crux/core/quality";
+import { caseFile, evaluate } from "@use-crux/core/eval";
 import {
   createSemanticCache,
   semanticCachePolicies,
@@ -258,8 +252,8 @@ import type {
 
 ## Tooling Config
 
-Use `config()` for Crux project policy and explicit runtime behavior: Quality discovery, Project
-Index lint, Indexer extensions, experimental indexer flags, persistence, generation hooks, devtools,
+Use `config()` for Crux project policy and explicit runtime behavior: Project Index lint,
+Indexer extensions, experimental indexer flags, persistence, generation hooks, devtools,
 observability, and plugins. Prompts, contexts, tools, agents, flows, registries, and skills remain
 normal TypeScript exports discovered from source.
 
@@ -310,7 +304,6 @@ For defaults, stability notes, and every nested option, see [Config](/docs/refer
 
 | Domain                        | Type                       | Description                                                                          |
 | ----------------------------- | -------------------------- | ------------------------------------------------------------------------------------ |
-| `quality`                     | `QualityConfig`            | Local quality discovery, persistence root, redaction, and run defaults.              |
 | `lint`                        | `CruxLintConfig`           | Project Index lint profile and rule overrides.                                       |
 | `indexer`                     | `CruxIndexerConfig`        | Extension references, extension trust policy, and indexer rule options.              |
 | `experimental`                | `CruxExperimentalConfig`   | Unstable opt-in tooling features such as the TypeScript-Go semantic indexer backend. |
@@ -364,8 +357,8 @@ import { mergeHooks, applyPlugins } from "@use-crux/core";
 
 `CruxPluginResult` extends `Partial<CruxHooks>` with optional `dispose?: () => void`.
 
-| Built-in plugin           | Package                                                 |
-| ------------------------- | ------------------------------------------------------- |
+| Built-in plugin           | Package                                                |
+| ------------------------- | ------------------------------------------------------ |
 | `withDevtools(options)`   | `@use-crux/core/observability`, name `'crux:devtools'` |
 | `withTelemetry(options?)` | `@use-crux/otel`, name `'crux:otel'`                   |
 

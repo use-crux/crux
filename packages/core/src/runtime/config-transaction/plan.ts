@@ -79,15 +79,25 @@ function planObservability(
   identity: CruxDeploymentIdentity | undefined,
 ): RuntimeConfigPlan['observability'] {
   const observability = config.observability
+  const policy = {
+    ...(observability?.feedbackDestination !== undefined
+      ? { feedbackDestination: observability.feedbackDestination }
+      : {}),
+    ...(observability?.redactPaths !== undefined
+      ? { redactPaths: Object.freeze([...observability.redactPaths]) }
+      : {}),
+  }
   if (observability?.enabled === false) {
     return {
       kind: 'owned',
+      ...policy,
       ...(hasIdentity ? { identity } : {}),
     }
   }
   if (observability?.transport) {
     return {
       kind: 'owned',
+      ...policy,
       transport: observability.transport,
       delivery: observability.delivery,
       ...(hasIdentity ? { identity } : {}),
@@ -96,14 +106,15 @@ function planObservability(
   if (observability?.serverUrl) {
     return {
       kind: 'http',
+      ...policy,
       serverUrl: observability.serverUrl,
       token: observability.token,
       delivery: observability.delivery,
       ...(hasIdentity ? { identity } : {}),
     }
   }
-  if (hasIdentity) return { kind: 'identity', identity }
-  return { kind: 'none' }
+  if (hasIdentity) return { kind: 'identity', identity, ...policy }
+  return { kind: 'none', ...policy }
 }
 
 function validateDeploymentIdentity(

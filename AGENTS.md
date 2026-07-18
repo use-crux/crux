@@ -5,10 +5,12 @@ Crux is a TypeScript context engineering SDK with adapters, devtools, docs, and 
 # Personal preferences
 
 ## Code style
+
 - Always strive for concise, simple solutions
 - If a problem can be solved in a simpler way, propose it.
 
 ## Subagents
+
 If you're Fable 5, you're not allowed to run subagents by yourself. Follow the guide below (Picking the right models for workflows and subagents).
 
 If you're not Fable 5, you may use subagents, but preferable follow the guide below to actually use the model that fits the job.
@@ -17,22 +19,22 @@ If you're not Fable 5, you may use subagents, but preferable follow the guide be
 
 Rankings, higher = better. Cost reflects what I actually pay (OpenAI is near-free for me) not a list price. Intelligence is how hard a problem you can hand to model unsupervised. Taste covers UI/UX, code quality, API design, and copy.
 
-| model         | cost | intelligence | taste |
-| gpt-5.6-sol   | 7    | 9            | 7     |
-| gpt-5.6-terra | 8    | 7            | 6     |
-| gpt-5.6-luna  | 9    | 5            | 6     |
-| grok-build    | 9    | 6            | 5     |
-| sonnet-5      | 5    | 5            | 7     |
-| opus-4.8      | 4    | 7            | 8     |
-| fable-5       | 2    | 9            | 9     |
+| model | cost | intelligence | taste |
+| gpt-5.6-sol | 7 | 9 | 7 |
+| gpt-5.6-terra | 8 | 7 | 6 |
+| gpt-5.6-luna | 9 | 5 | 6 |
+| grok-build | 9 | 6 | 5 |
+| sonnet-5 | 5 | 5 | 7 |
+| opus-4.8 | 4 | 7 | 8 |
+| fable-5 | 2 | 9 | 9 |
 
 How to apply:
+
 - These are defaults, not limits. You have standing persmission to override them: if a cheaper model's output doesn't meet the bar, rerun or redo the work with a smarter model. Judge the output. Escalating costs less then shipping mediocre work.
 - Bulk/mechanical work (clear-spec, implementation, data analysis, migrations): gpt-5.5 - It's effectively free.
 - Anything user-facing (UI, copy, API design) needs taste >= 7.
 - Reviews of plans/implementations: fable-5 or opus-4.8, optionally gpt-5.5 as an extra independent perspective.
-- Mechanics: gpt-5.5 is only reachable through the Codex CLI - `codex exec` / `codex review`.
-
+- Mechanics: gpt-5.5 is only reachable through the OpenAI coding-agent CLI.
 
 ## Architecture
 
@@ -126,16 +128,16 @@ Project Index cache identity is part of the read-model contract. If an indexer o
 
 For features that span AST output, semantic enrichment, and the Go snapshot, update all affected identities/epochs. Rebuild with `make build`, restart the local server, and run `crux index reindex` (or the reindex HTTP endpoint) to verify the fresh snapshot. Do not ask users to manually delete `.crux/cache` for normal contract migrations.
 
-## Quality Cache Identity
+## Eval Evidence Cache Identity
 
-Quality cache identity is part of the evaluation replay contract. Over-invalidate, never under-invalidate: a stale cache hit is a correctness bug, while an extra model/task run is only slower. If a Quality engine change would alter cassette keys, output-cache keys, baseline comparability, or judge score comparability for unchanged user eval source, update the relevant identity epoch in the same change:
+Eval evidence identity is part of the automatic reuse contract. Over-invalidate, never under-invalidate: a stale evidence hit is a correctness bug, while an extra task or scorer run is only slower. If an Eval engine change would alter task-evidence keys, managed-scorer keys, Baseline comparability, or judge score comparability for unchanged user Eval source, update the relevant identity epoch in the same change:
 
-- `packages/core/src/quality/internal/cache-identity.ts`: bump `CASSETTE_CACHE_EPOCH` when normalized model-call identity changes in a way not already captured by prompt/model/settings, structured-output schema fingerprints, tool parameter-schema fingerprints, or other normalized-call fields.
-- `packages/core/src/quality/internal/cache-identity.ts`: bump `OUTPUT_CACHE_EPOCH` when cell output-cache key semantics change in a way not already captured by evaluation id, case input fingerprint, variant, trial, task fingerprint, or params fingerprint.
-- `packages/core/src/quality/internal/cache-identity.ts`: bump `BASELINE_FINGERPRINT_EPOCH` when promoted-baseline comparability changes in a way not already captured by case/dataset/scorer/variant/params/gate fingerprints.
-- `packages/core/src/quality/internal/cache-identity.ts`: bump `JUDGE_PROMPT_VERSION` when the built-in judge prompt template changes in a way that can affect judge score comparability.
+- `packages/core/src/eval/internal/evidence/cache-epochs.ts`: bump `TASK_EVIDENCE_CACHE_EPOCH` when task evidence identity or reuse semantics change in a way not already captured by Eval/Case input and call, Variant, trial, managed-task, adapter, host-contract, and occurrence fingerprints.
+- `packages/core/src/eval/internal/evidence/cache-epochs.ts`: bump `SCORER_RESULT_CACHE_EPOCH` when managed external-scorer evidence identity changes in a way not already captured by input, expected value, task output/response/signals, scorer contract, host contract, Variant, trial, and occurrence.
+- `packages/core/src/eval/internal/evidence/cache-epochs.ts`: bump `BASELINE_FINGERPRINT_EPOCH` when Baseline snapshot or granular Case/metric comparability changes in a way not already captured by the stored coverage and provenance fingerprints.
+- `packages/core/src/eval/internal/evidence/cache-epochs.ts`: bump `JUDGE_PROMPT_VERSION` when the built-in judge prompt template changes in a way that can affect judge score comparability.
 
-For changes spanning cassette replay, task output reuse, and promoted baselines, update all affected epochs and add focused red tests proving stale artifacts are missed or demoted instead of reused.
+For changes spanning task evidence reuse, scorer evidence reuse, and Baselines, update all affected epochs and add focused red tests proving stale artifacts are missed or marked incompatible instead of reused.
 
 ## Indexer Extensions
 

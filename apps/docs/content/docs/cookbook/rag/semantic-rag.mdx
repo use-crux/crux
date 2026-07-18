@@ -24,65 +24,71 @@ This recipe sets up a complete production-style RAG flow: ingest a directory of 
 ### `lib/rag/embedding.ts`
 
 ```ts
-import { embedding } from '@use-crux/core/embedding'
-import { openai } from '@ai-sdk/openai'
+import { embedding } from "@use-crux/core/embedding";
+import { openai } from "@ai-sdk/openai";
 
 export const dense = embedding({
-  kind: 'dense',
-  name: 'text-embedding-3-small',
+  kind: "dense",
+  name: "text-embedding-3-small",
   dimensions: 1536,
   maxInputTokens: 8191,
   embed: async (texts) => {
-    const { embedMany } = await import('ai')
+    const { embedMany } = await import("ai");
     const { embeddings } = await embedMany({
-      model: openai.embedding('text-embedding-3-small'),
+      model: openai.embedding("text-embedding-3-small"),
       values: texts,
-    })
-    return { embeddings }
+    });
+    return { embeddings };
   },
-})
+});
 
 export const sparse = embedding({
-  kind: 'sparse',
-  name: 'bm25',
+  kind: "sparse",
+  name: "bm25",
   maxInputTokens: 8191,
   embed: async (texts) => ({ embeddings: texts.map(toSparseVector) }),
-})
+});
 ```
 
 ### `lib/rag/storage.ts`
 
 ```ts
-import { convexRecordStore } from '@use-crux/convex'
-import { upstashVectorStore } from '@use-crux/upstash'
-import { Index } from '@upstash/vector'
+import { convexRecordStore } from "@use-crux/convex";
+import { upstashVectorStore } from "@use-crux/upstash";
+import { Index } from "@upstash/vector";
 
 export const records = convexRecordStore({
   component: components.crux,
   ctx,
-})
+});
 
 export const vectors = upstashVectorStore({
   index: new Index({
     url: process.env.UPSTASH_VECTOR_URL!,
     token: process.env.UPSTASH_VECTOR_TOKEN!,
   }),
-  namespace: 'product-docs',
-})
+  namespace: "product-docs",
+});
 ```
 
 ### `lib/rag/index-docs.ts`
 
 ```ts
-import { chunker, corpus, indexer, indexingPipeline, transform } from '@use-crux/core/indexing'
-import { filesSource } from '@use-crux/ingest/files'
+import {
+  chunker,
+  corpus,
+  indexer,
+  indexingPipeline,
+  transform,
+} from "@use-crux/core/indexing";
+import { filesSource } from "@use-crux/ingest/files";
 
-import { dense, sparse } from './embedding'
-import { records, vectors } from './storage'
+import { dense, sparse } from "./embedding";
+import { records, vectors } from "./storage";
 
 export const docsIndexer = indexer({
-  id: 'product-docs',
-  namespace: 'product-docs',
+  id: "product-docs",
+  namespace: "product-docs",
   records,
   vectors,
   dense,
@@ -91,36 +97,36 @@ export const docsIndexer = indexer({
   pipeline: indexingPipeline({
     documents: [
       transform.document({
-        name: 'tag-source',
-        version: '1',
+        name: "tag-source",
+        version: "1",
         run(document) {
           return {
             ...document,
-            metadata: { ...document.metadata, corpus: 'product-docs' },
-          }
+            metadata: { ...document.metadata, corpus: "product-docs" },
+          };
         },
       }),
     ],
     chunker: chunker.structured({ tableRowsPerChunk: 25 }),
   }),
-})
+});
 
 export const docsCorpus = corpus({
-  id: 'product-docs',
-  namespace: 'product-docs',
+  id: "product-docs",
+  namespace: "product-docs",
   records,
   indexer: docsIndexer,
-})
+});
 
 export async function syncDocs() {
   const source = filesSource(
-    { directory: './docs', recursive: true },
-    { namespace: 'product-docs' },
-  )
+    { directory: "./docs", recursive: true },
+    { namespace: "product-docs" },
+  );
   return docsCorpus.sync(source.load(), {
-    sourceSet: 'complete',
-    stale: 'delete',
-  })
+    sourceSet: "complete",
+    stale: "delete",
+  });
 }
 ```
 
@@ -129,30 +135,43 @@ Run `pnpm tsx lib/rag/index-docs.ts` (or invoke `syncDocs()`) when content chang
 ### `lib/rag/retriever.ts`
 
 ```ts
-import { retrievalRecipe, retrieve, rerank, retriever } from '@use-crux/core/retrieval'
+import {
+  retrievalRecipe,
+  retrieve,
+  rerank,
+  retriever,
+} from "@use-crux/core/retrieval";
 
-import { dense, sparse } from './embedding'
-import { retrievalModel } from './retrieval-model'
-import { records, vectors } from './storage'
+import { dense, sparse } from "./embedding";
+import { retrievalModel } from "./retrieval-model";
+import { records, vectors } from "./storage";
 
 export const docs = retriever({
-  id: 'product-docs',
-  namespace: 'product-docs',
+  id: "product-docs",
+  namespace: "product-docs",
   records,
   vectors,
   dense,
   sparse,
-  search: { mode: 'hybrid', limit: 5, fusion: 'rrf' },
-})
+  search: { mode: "hybrid", limit: 5, fusion: "rrf" },
+});
 
 export const docsAnswer = retrievalRecipe({
-  id: 'product-docs-answer',
+  id: "product-docs-answer",
   retriever: docs,
   model: retrievalModel,
-  steps: [retrieve({ limit: 20 }), rerank({ engine: judgeReranker({ name: 'docs-judge', model: retrievalModel }), topK: 5 })],
-})
+  steps: [
+    retrieve({ limit: 20 }),
+    rerank({
+      engine: judgeReranker({ name: "docs-judge", model: retrievalModel }),
+      topK: 5,
+    }),
+  ],
+});
 
-const { hits, trace } = await docsAnswer.retrieveWithTrace('enterprise SSO setup')
+const { hits, trace } = await docsAnswer.retrieveWithTrace(
+  "enterprise SSO setup",
+);
 ```
 
 Use the plain `docs` retriever when hybrid retrieval is enough. Use `docsAnswer` when you need traceable recipe steps such as reranking, parent expansion, compression, or federation.
@@ -160,45 +179,44 @@ Use the plain `docs` retriever when hybrid retrieval is enough. Use `docsAnswer`
 ### `lib/rag/answer.ts`
 
 ```ts
-import { prompt } from '@use-crux/core'
-import { generate } from '@use-crux/ai'
-import { grounding, citationSchema } from '@use-crux/core/citations'
-import { openai } from '@ai-sdk/openai'
-import { z } from 'zod'
+import { prompt } from "@use-crux/core";
+import { generate } from "@use-crux/ai";
+import { grounding, citationSchema } from "@use-crux/core/citations";
+import { openai } from "@ai-sdk/openai";
+import { z } from "zod";
 
-import { docsAnswer } from './retriever'
+import { docsAnswer } from "./retriever";
 
 const groundedDocs = grounding({
-  id: 'product-docs',
+  id: "product-docs",
   retriever: docsAnswer.asRetriever(),
   query: ({ input }) => input.question,
   limit: 5,
   citations: {
     required: true,
-    quotes: 'required',
+    quotes: "required",
   },
-})
+});
 
 const answerPrompt = prompt({
-  id: 'docs-answer',
+  id: "docs-answer",
   use: [groundedDocs],
   input: z.object({ question: z.string() }),
   output: z.object({
     answer: z.string(),
     citations: z.array(citationSchema),
   }),
-  system:
-    `Answer using only the provided retrieved docs. Cite the chunks you used.
+  system: `Answer using only the provided retrieved docs. Cite the chunks you used.
      If the docs don't contain the answer, say so.`,
   prompt: ({ input }) => input.question,
-})
+});
 
 export async function answer(question: string) {
   const result = await generate(answerPrompt, {
-    model: openai('gpt-4o'),
+    model: openai("gpt-4o"),
     input: { question },
-  })
-  return result.object
+  });
+  return result.object;
 }
 ```
 
@@ -219,9 +237,9 @@ When a single doc changes and your job only sees that one file, use a partial so
 
 ```ts
 await docsCorpus.sync(
-  fileSource('./docs/changed.md', { namespace: 'product-docs' }).load(),
-  { sourceSet: 'partial' },
-)
+  fileSource("./docs/changed.md", { namespace: "product-docs" }).load(),
+  { sourceSet: "partial" },
+);
 ```
 
 ### Citations as URLs
@@ -230,7 +248,7 @@ If your docs come from URLs (`urlsSource`), the hit carries `source.url`. Overri
 
 ```ts
 const urlGrounding = grounding({
-  id: 'url-docs',
+  id: "url-docs",
   retriever: docs,
   query: ({ input }) => input.question,
   render: ({ hits }) =>
@@ -239,19 +257,35 @@ const urlGrounding = grounding({
         (hit, index) =>
           `[${index + 1}] ${hit.parent?.title ?? hit.source.id} - ${hit.source.url ?? hit.chunkId}\n${hit.content}`,
       )
-      .join('\n\n'),
+      .join("\n\n"),
   citations: {
     required: true,
-    quotes: 'optional',
+    quotes: "optional",
   },
-})
+});
 ```
 
 ## Where to next
 
 <Cards>
-  <Card title="Local files RAG" description="The same retrieval stack with an in-memory local corpus." href="/docs/cookbook/rag/local-files-rag" />
-  <Card title="Retrieval guide" description="The full RAG architecture: embeddings, ingestion, indexing, retrieval." href="/docs/guides/retrieval" />
-  <Card title="Episodic recall" description="Auto-recall past chat turns instead of indexed docs." href="/docs/cookbook/rag/episodic-recall" />
-  <Card title="@use-crux/upstash reference" description="Upstash VectorStore and Redis RecordStore APIs." href="/docs/reference/storage/upstash" />
+  <Card
+    title="Local files RAG"
+    description="The same retrieval stack with an in-memory local corpus."
+    href="/docs/cookbook/rag/local-files-rag"
+  />
+  <Card
+    title="Retrieval guide"
+    description="The full RAG architecture: embeddings, ingestion, indexing, retrieval."
+    href="/docs/guides/retrieval"
+  />
+  <Card
+    title="Episodic recall"
+    description="Auto-recall past chat turns instead of indexed docs."
+    href="/docs/cookbook/rag/episodic-recall"
+  />
+  <Card
+    title="@use-crux/upstash reference"
+    description="Upstash VectorStore and Redis RecordStore APIs."
+    href="/docs/reference/storage/upstash"
+  />
 </Cards>

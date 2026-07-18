@@ -77,29 +77,6 @@ func TestForwardCompatFixturesPreserveRawPayloads(t *testing.T) {
 	}
 }
 
-func TestComparisonFixtureToleratesExternalRunEdgeRefs(t *testing.T) {
-	ctx := context.Background()
-	fixtures := loadConformanceFixtures(t)
-	var comparison *conformanceFixture
-	for i := range fixtures {
-		if fixtures[i].Name == "comparison-report.json" {
-			comparison = &fixtures[i]
-			break
-		}
-	}
-	if comparison == nil {
-		t.Fatal("comparison-report.json fixture missing")
-	}
-
-	service := newTestService(t)
-	if err := service.Ingest(ctx, comparison.Batch); err != nil {
-		t.Fatalf("comparison fixture ingest failed: %v", err)
-	}
-	if _, err := service.RunDetail(ctx, "run_dddddddddddddddddddddddd"); err != nil {
-		t.Fatalf("RunDetail failed for comparison fixture with external edge target: %v", err)
-	}
-}
-
 func TestSharedTaxonomyFixtureMatchesGoTaxonomy(t *testing.T) {
 	var taxonomy taxonomyFixture
 	raw := readCoreObservabilityFixture(t, "taxonomy.json")

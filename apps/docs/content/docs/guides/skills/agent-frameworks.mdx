@@ -8,26 +8,26 @@ You added skills to a prompt, pointed Convex Agent or Mastra at it, and they sil
 `createAgentSkillKit()` is the fix: it gives you the same session-backed `LoadSkill` semantics, driven through a persistence port you provide.
 
 ```ts
-import { createAgentSkillKit } from '@use-crux/core/skill'
+import { createAgentSkillKit } from "@use-crux/core/skill";
 
 // In your agent factory function (called per conversation/thread):
 const kit = await createAgentSkillKit(myPrompt, {
   target: { threadId },
   persistence: {
-    load: async () => (await records.get('activeSkills')) ?? null,
+    load: async () => (await records.get("activeSkills")) ?? null,
     save: async (_target, snapshot) => {
-      await records.put('activeSkills', snapshot)
+      await records.put("activeSkills", snapshot);
     },
   },
-})
+});
 
 // Merge skill tools into your agent's tool set.
-const allTools = { ...myTools, ...kit.tools }
+const allTools = { ...myTools, ...kit.tools };
 
 // At the start of each turn, before resolving the prompt:
 const resolved = await myPrompt.resolve({
   input: await kit.resolveInput(dynamicData),
-})
+});
 ```
 
 ## The Problem the Kit Solves
@@ -60,8 +60,8 @@ For Convex Agent, use `@use-crux/convex/agent` and pass skill tools through `con
 
 Frameworks that compose the system prompt before running tools have one quirk worth understanding: when `LoadSkill` fires, the system prompt for that turn was already composed. So the skill content reaches the model two different ways depending on the turn:
 
-| Turn                              | Where the skill content lives                                                          |
-| --------------------------------- | -------------------------------------------------------------------------------------- |
+| Turn                              | Where the skill content lives                                                         |
+| --------------------------------- | ------------------------------------------------------------------------------------- |
 | The turn `LoadSkill` is called on | **Tool result**: immediate and functional, but presented as supplementary information |
 | Every subsequent turn             | **System prompt**: authoritative and persistent, via `kit.resolveInput()`             |
 
@@ -71,12 +71,12 @@ In practice this is rarely a problem: the tool-result version is still rich enou
 
 The kit is intentionally agnostic about where activation snapshots live. A few patterns:
 
-| Storage                           | Good for                                                            |
-| --------------------------------- | ------------------------------------------------------------------- |
-| Convex contract store keyed by thread | Convex backends, co-locates skill state with the thread            |
-| A field on the thread document    | Simplest if you already store thread metadata                       |
-| Redis                             | Stateless function runtimes that need fast per-conversation lookups |
-| In-memory map                     | Local development, tests, or single-process agents                  |
+| Storage                               | Good for                                                            |
+| ------------------------------------- | ------------------------------------------------------------------- |
+| Convex contract store keyed by thread | Convex backends, co-locates skill state with the thread             |
+| A field on the thread document        | Simplest if you already store thread metadata                       |
+| Redis                                 | Stateless function runtimes that need fast per-conversation lookups |
+| In-memory map                         | Local development, tests, or single-process agents                  |
 
 Whatever you pick, `load()` and `save()` must agree on the storage: they are called from the same conversation but at different points in the request lifecycle.
 

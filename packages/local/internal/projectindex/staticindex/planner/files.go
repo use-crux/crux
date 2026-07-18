@@ -203,8 +203,6 @@ var cruxSignalPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`\btoolPolicy\s*\(`),
 	regexp.MustCompile(`\bscorer\s*\(`),
 	regexp.MustCompile(`\bllmJudge\s*\(`),
-	regexp.MustCompile(`\bevaluation\s*\(`),
-	regexp.MustCompile(`\bsuite\s*\(`),
 	regexp.MustCompile(`\bnew\s+Agent\s*\(`),
 }
 

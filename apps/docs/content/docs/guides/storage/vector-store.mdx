@@ -8,12 +8,16 @@ description: Store dense, sparse, and hybrid vectors for retrieval and semantic 
 Use it when a feature needs dense, sparse, or hybrid vector search. Keep JSON records in [`RecordStore`](/docs/guides/storage/crux-store), then store searchable vectors in `VectorStore` using the same keys.
 
 ```ts
-import { inMemoryRecordStore, inMemoryVectorStore, storage } from '@use-crux/core/storage'
+import {
+  inMemoryRecordStore,
+  inMemoryVectorStore,
+  storage,
+} from "@use-crux/core/storage";
 
-const records = inMemoryRecordStore()
-const vectors = inMemoryVectorStore()
+const records = inMemoryRecordStore();
+const vectors = inMemoryVectorStore();
 
-const appStorage = storage({ records, vectors })
+const appStorage = storage({ records, vectors });
 ```
 
 `search()` returns keys and scores. Crux hydrates full records through `RecordStore` when it needs document content or metadata.
@@ -24,38 +28,38 @@ Dense search uses one dense vector:
 
 ```ts
 await vectors.search({
-  mode: 'dense',
+  mode: "dense",
   dense: [0.12, 0.4, 0.9],
   limit: 10,
-})
+});
 ```
 
 Sparse search uses token indices and weights:
 
 ```ts
 await vectors.search({
-  mode: 'sparse',
+  mode: "sparse",
   sparse: {
     indices: [12, 98, 322],
     values: [0.8, 0.3, 0.6],
   },
   limit: 10,
-})
+});
 ```
 
 Hybrid search sends both:
 
 ```ts
 await vectors.search({
-  mode: 'hybrid',
+  mode: "hybrid",
   dense: [0.12, 0.4, 0.9],
   sparse: {
     indices: [12, 98, 322],
     values: [0.8, 0.3, 0.6],
   },
-  fusion: 'dbsf',
+  fusion: "dbsf",
   limit: 10,
-})
+});
 ```
 
 Unsupported modes should throw `StorageError` code `unsupported_capability`. Never silently degrade hybrid to dense-only or sparse-only.
@@ -66,20 +70,20 @@ Vector filters use the same exact top-level scalar equality as records:
 
 ```ts
 await vectors.search({
-  mode: 'dense',
+  mode: "dense",
   dense,
   limit: 10,
-  filter: { namespace: 'product-docs', active: true },
-})
+  filter: { namespace: "product-docs", active: true },
+});
 ```
 
 Capability truth matters:
 
-| `capabilities().filter` | Meaning |
-| --- | --- |
-| `'pre'` | The backend applies filters before top-k scoring. This is required for production filtered retrieval. |
-| `'post'` | The adapter can filter returned hits after top-k. Useful for local/dev tooling, but approximate. |
-| `false` | Filtered vector searches throw. |
+| `capabilities().filter` | Meaning                                                                                               |
+| ----------------------- | ----------------------------------------------------------------------------------------------------- |
+| `'pre'`                 | The backend applies filters before top-k scoring. This is required for production filtered retrieval. |
+| `'post'`                | The adapter can filter returned hits after top-k. Useful for local/dev tooling, but approximate.      |
+| `false`                 | Filtered vector searches throw.                                                                       |
 
 Crux retrieval and indexed-knowledge paths that rely on exact filtered top-k results reject `post` and `false` vector stores.
 
@@ -89,14 +93,14 @@ Most users do not call `VectorStore` directly. They pass records and vectors to 
 
 ```ts
 const docs = retriever({
-  id: 'docs',
-  namespace: 'product-docs',
+  id: "docs",
+  namespace: "product-docs",
   records,
   vectors,
   dense,
   sparse,
-  search: { mode: 'hybrid', fusion: 'dbsf', limit: 8 },
-})
+  search: { mode: "hybrid", fusion: "dbsf", limit: 8 },
+});
 ```
 
 The retriever handles embedding the query, searching vectors, hydrating records, and returning hits.
@@ -106,30 +110,30 @@ The retriever handles embedding the query, searching vectors, hydrating records,
 Use `inMemoryVectorStore()` for tests and examples:
 
 ```ts
-import { inMemoryVectorStore } from '@use-crux/core/storage'
+import { inMemoryVectorStore } from "@use-crux/core/storage";
 
-const vectors = inMemoryVectorStore()
+const vectors = inMemoryVectorStore();
 ```
 
 Use Upstash Vector for managed retrieval:
 
 ```ts
-import { upstashVectorStore } from '@use-crux/upstash'
-import { Index } from '@upstash/vector'
+import { upstashVectorStore } from "@use-crux/upstash";
+import { Index } from "@upstash/vector";
 
 const vectors = upstashVectorStore({
   index: new Index({
     url: process.env.UPSTASH_VECTOR_REST_URL!,
     token: process.env.UPSTASH_VECTOR_REST_TOKEN!,
   }),
-  namespace: 'product-docs',
+  namespace: "product-docs",
   capabilities: {
     dense: true,
     sparse: true,
     hybrid: true,
-    fusion: ['rrf', 'dbsf'],
+    fusion: ["rrf", "dbsf"],
   },
-})
+});
 ```
 
 Upstash index mode is deployment-owned, so the adapter defaults conservatively and only claims sparse, hybrid, or fusion support when you configure those capabilities.
@@ -141,7 +145,7 @@ See [Retrieval](/docs/guides/retrieval) for the user-facing retrieval APIs, [Ups
 Implement `VectorStore` when your vector database can upsert records by key and search them by dense, sparse, or hybrid query. This is the full contract:
 
 ```ts
-import type { VectorStore } from '@use-crux/core/storage'
+import type { VectorStore } from "@use-crux/core/storage";
 
 const vectors: VectorStore = {
   async upsert(records) {
@@ -154,7 +158,7 @@ const vectors: VectorStore = {
 
   async search(query) {
     // query.mode is 'dense', 'sparse', or 'hybrid'
-    return []
+    return [];
   },
 
   capabilities() {
@@ -163,48 +167,50 @@ const vectors: VectorStore = {
       sparse: false,
       hybrid: false,
       fusion: [],
-      filter: 'pre',
-      consistency: 'strong',
-    }
+      filter: "pre",
+      consistency: "strong",
+    };
   },
-}
+};
 ```
 
 A vector-database-backed implementation:
 
 ```ts
-import type { VectorStore } from '@use-crux/core/storage'
+import type { VectorStore } from "@use-crux/core/storage";
 
 export function myVectorStore(): VectorStore {
   return {
     async upsert(records) {
-      await vectorDb.upsert(records.map((record) => ({
-        id: record.key,
-        vector: record.dense,
-        sparseVector: record.sparse,
-        metadata: record.metadata,
-      })))
+      await vectorDb.upsert(
+        records.map((record) => ({
+          id: record.key,
+          vector: record.dense,
+          sparseVector: record.sparse,
+          metadata: record.metadata,
+        })),
+      );
     },
 
     async delete(keys) {
-      await vectorDb.delete(keys)
+      await vectorDb.delete(keys);
     },
 
     async search(query) {
       const results = await vectorDb.query({
         mode: query.mode,
-        vector: query.mode !== 'sparse' ? query.dense : undefined,
-        sparseVector: query.mode !== 'dense' ? query.sparse : undefined,
+        vector: query.mode !== "sparse" ? query.dense : undefined,
+        sparseVector: query.mode !== "dense" ? query.sparse : undefined,
         topK: query.limit ?? 10,
-        fusion: query.mode === 'hybrid' ? query.fusion : undefined,
+        fusion: query.mode === "hybrid" ? query.fusion : undefined,
         filter: query.filter,
-      })
+      });
 
       return results.map((result) => ({
         key: result.id,
         score: result.score,
         metadata: result.metadata,
-      }))
+      }));
     },
 
     capabilities() {
@@ -212,12 +218,12 @@ export function myVectorStore(): VectorStore {
         dense: true,
         sparse: true,
         hybrid: true,
-        fusion: ['rrf', 'dbsf'],
-        filter: 'pre',
-        consistency: 'eventual',
-      }
+        fusion: ["rrf", "dbsf"],
+        filter: "pre",
+        consistency: "eventual",
+      };
     },
-  }
+  };
 }
 ```
 

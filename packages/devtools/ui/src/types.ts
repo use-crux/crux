@@ -660,16 +660,8 @@ export type PrimitiveSpecificFacts =
       criteriaPreview?: string;
     }
   | {
-      kind:
-        | "dataset"
-        | "suite"
-        | "suite.case"
-        | "eval.prompt"
-        | "eval.flow"
-        | "eval.rag"
-        | "eval.quality";
+      kind: "eval" | "eval.case";
       targetDefinitionId?: string;
-      suiteId?: string;
       caseCount?: number;
       scorerIds?: string[];
     };
@@ -798,51 +790,6 @@ export interface ProjectDefinition {
   status?: "active" | "missing" | "stale" | "removed";
   fingerprint?: string;
   metadata?: ProjectDefinitionMetadata;
-  quality?: ProjectDefinitionQuality;
-}
-
-export interface ProjectDefinitionQuality {
-  evalIds?: string[];
-  suiteIds?: string[];
-  experimentIds?: string[];
-  baselineIds?: string[];
-  comparisonIds?: string[];
-  feedbackIds?: string[];
-  cassettePaths?: string[];
-  runIds?: string[];
-  traceIds?: string[];
-  affectedEvalIds?: string[];
-  affectedSuiteIds?: string[];
-  runCount?: number;
-  experimentCount?: number;
-  baselineCount?: number;
-  comparisonCount?: number;
-  feedbackCount?: number;
-  cassetteCount?: number;
-  completedRunCount?: number;
-  failedRunCount?: number;
-  runningRunCount?: number;
-  lastRunId?: string;
-  lastRunAt?: number;
-  lastStatus?: string;
-  caseCount?: number;
-  passRate?: number;
-  currentFingerprint?: string;
-  baselineFingerprint?: string;
-  changedSinceBaseline?: boolean;
-  drift?: {
-    evals: ProjectDefinitionQualityDriftRow[];
-    suites: ProjectDefinitionQualityDriftRow[];
-  };
-}
-
-export interface ProjectDefinitionQualityDriftRow {
-  id: string;
-  passRate: number;
-  runs: number;
-  baselineExperimentId: string;
-  baselinePassRate: number;
-  driftPp: number;
 }
 
 export interface ProjectRelation {
@@ -1367,29 +1314,19 @@ export type {
   TurnSourceStatus,
 } from "@use-crux/core/observability";
 
-export type QualityJsonValue =
+export type InspectJsonValue =
   | string
   | number
   | boolean
   | null
-  | readonly QualityJsonValue[]
-  | { readonly [key: string]: QualityJsonValue };
+  | readonly InspectJsonValue[]
+  | { readonly [key: string]: InspectJsonValue };
 
-export interface QualityOverviewRecord {
-  _tag: "QualityOverview";
+export interface InspectOverviewRecord {
+  _tag: "InspectOverview";
   runCount: number;
-  experimentCount: number;
-  baselineCount: number;
   skippedRecords?: number;
-  feedbackCount: number;
-  feedbackNeedingReviewCount: number;
-  cassetteCount: number;
-  /** Cassettes past the engine's 90-day replay staleness window. */
-  staleCassetteCount: number;
   insightCount: number;
-  latestExperimentId?: string;
-  latestExperimentPassRate?: number;
-  latestExperimentCompletedAt?: string;
   passRate?: number;
   meanScore?: number;
   totalCost: number;
@@ -1404,46 +1341,31 @@ export interface QualityOverviewRecord {
   openInsightSeverityCounts?: Partial<
     Record<"low" | "medium" | "high", number>
   >;
-  runTabCounts: QualityRunTabCounts;
-  recentRuns?: readonly QualityRunRecord[];
+  runTabCounts: InspectRunTabCounts;
+  recentRuns?: readonly InspectRunRecord[];
 }
 
-export interface QualityRunTabCounts {
+export interface InspectRunTabCounts {
   all: number;
   live: number;
   failures: number;
-  hasFeedback: number;
 }
 
-export interface QualityEvent {
-  _tag: "QualityEvent";
+export interface InspectEvent {
+  _tag: "InspectEvent";
   id: string;
   timestamp: number;
-  kind:
-    | "trace"
-    | "insight"
-    | "experiment"
-    | "cassette"
-    | "feedback"
-    | "dataset"
-    | string;
+  kind: "run" | "trace" | "insight" | string;
   action: string;
   severity: "info" | "warn" | "error" | string;
   refId: string;
-  payload?: QualityJsonValue;
+  payload?: InspectJsonValue;
 }
 
-export interface QualityActivityEvent {
-  _tag: "QualityActivityEvent";
+export interface InspectActivityEvent {
+  _tag: "InspectActivityEvent";
   timestamp: number;
-  kind:
-    | "trace"
-    | "insight"
-    | "experiment"
-    | "cassette"
-    | "feedback"
-    | "dataset"
-    | string;
+  kind: "run" | "trace" | "insight" | string;
   severity: "info" | "warn" | "error";
   summary: string;
   refId: string;
@@ -1465,6 +1387,8 @@ export type SpanPrimitive =
   | "context.predicate"
   | "context.cache"
   | "agent.run"
+  | "flow.run"
+  | "flow.step"
   | "tool.call"
   | "tool.approval"
   | "retrieval.query"
@@ -1499,42 +1423,7 @@ export type SpanPrimitive =
   | "security.warning"
   | "cost.record"
   | "feedback.record"
-  | "custom.operation"
-  // Legacy aliases emitted by older local dev sessions. New code should use
-  // the canonical dotted primitives above.
-  | "trace"
-  | "generation"
-  | "flow.step"
-  | "eval.flow"
-  | "flow"
-  | "tool"
-  | "retrieval"
-  | "pipeline"
-  | "parallel"
-  | "consensus"
-  | "swarm"
-  | "agent"
-  | "delegate"
-  | "handoff"
-  | "retrieval"
-  | "retrieval.stage"
-  | "retrieval.step"
-  | "embed"
-  | "judge"
-  | "plan"
-  | "task"
-  | "memory"
-  | "blackboard"
-  | "compact"
-  | "index"
-  | "ingest"
-  | "corpus"
-  | "cache"
-  | "skill"
-  | "cost"
-  | "security"
-  | "budget"
-  | "other";
+  | "custom.operation";
 
 export type CompositionType = "pipeline" | "parallel" | "consensus" | "swarm";
 
@@ -1542,8 +1431,8 @@ export type CompositionType = "pipeline" | "parallel" | "consensus" | "swarm";
  * Aggregated record for one ROOT trace family. Server-side rollup: a
  * trace with 18 children renders as 1 record with `traceCount = 19`.
  */
-export interface QualityRunRecord {
-  _tag: "QualityRun";
+export interface InspectRunRecord {
+  _tag: "InspectRun";
   traceId: string;
   targetId?: string;
   promptId?: string;
@@ -1589,10 +1478,10 @@ export interface QualityRunRecord {
   durationMs?: number;
   model?: string;
   provider?: string;
-  input?: { readonly [key: string]: QualityJsonValue };
-  output?: QualityJsonValue;
-  error?: QualityJsonValue;
-  usage?: QualityJsonValue;
+  input?: { readonly [key: string]: InspectJsonValue };
+  output?: InspectJsonValue;
+  error?: InspectJsonValue;
+  usage?: InspectJsonValue;
   /** Family-wide sum. */
   cost?: number;
   /** Family-wide sum. */
@@ -1601,25 +1490,18 @@ export interface QualityRunRecord {
   scoreName?: string;
   /** Family-wide sum. */
   toolCallCount: number;
-  feedbackCount?: number;
-  /** Deduped across family. */
-  feedbackIds: readonly string[];
-  /** Deduped across family. */
-  experimentIds: readonly string[];
-  cassetteStatus?: "recorded" | "missing" | "mismatch" | string;
-  cassettePaths?: readonly string[];
   diagnosticsCount?: number;
   diagnosticsMaxSeverity?: "info" | "warn" | "error" | string;
   diagnosticCodes?: readonly string[];
 }
 
-export interface QualityRunDetailRecord {
-  _tag: "QualityRunDetail";
-  run: QualityRunRecord;
+export interface InspectRunDetailRecord {
+  _tag: "InspectRunDetail";
+  run: InspectRunRecord;
   trace: Trace;
   events: readonly CorrelatedEvent[];
-  spans: readonly QualityRunSpan[];
-  narrative: readonly QualityRunNarrativeEvent[];
+  spans: readonly InspectRunSpan[];
+  narrative: readonly InspectRunNarrativeEvent[];
 }
 
 /**
@@ -1627,16 +1509,16 @@ export interface QualityRunDetailRecord {
  * Backend merges: end-event keys win; start payload preserved under `_start`.
  * Fields documented in the API design doc — most are optional.
  */
-export interface QualityRunSpanData {
+export interface InspectRunSpanData {
   status?: string;
   error?: { message?: string; code?: string; stack?: string };
   /** Original start-event payload (kept for replay). */
-  _start?: { readonly [key: string]: QualityJsonValue };
+  _start?: { readonly [key: string]: InspectJsonValue };
   /** Allow any primitive-specific keys (input, output, args, hits, etc.). */
-  readonly [key: string]: QualityJsonValue | undefined;
+  readonly [key: string]: InspectJsonValue | undefined;
 }
 
-export interface QualityRunSpanTimings {
+export interface InspectRunSpanTimings {
   /** Streaming: time-to-first-token. */
   ttftMs?: number;
   /** Streaming: chunks observed mid-flight. */
@@ -1651,7 +1533,7 @@ export interface QualityRunSpanTimings {
   selfMs?: number;
 }
 
-export interface QualityRunSpan {
+export interface InspectRunSpan {
   id: string;
   parentId?: string;
   /** Authoritative for UI rendering. Switch on this, NOT `eventType`. */
@@ -1675,23 +1557,23 @@ export interface QualityRunSpan {
   duplicateOfSpanId?: string;
   attributes?: Readonly<Record<string, string>>;
   /** Primitive-specific payload (merged start+end event data). */
-  data?: QualityRunSpanData;
+  data?: InspectRunSpanData;
   /** Streaming / retry / self-time. */
-  timings?: QualityRunSpanTimings;
+  timings?: InspectRunSpanTimings;
   linkedInsightIds?: readonly string[];
 }
 
-export interface QualityRunNarrativeEvent {
+export interface InspectRunNarrativeEvent {
   id: string;
   kind: string;
   label: string;
   timestamp: number;
   offsetMs: number;
-  data?: { readonly [key: string]: QualityJsonValue };
+  data?: { readonly [key: string]: InspectJsonValue };
 }
 
-export interface QualityInsightRecord {
-  _tag: "QualityInsight";
+export interface InspectInsightRecord {
+  _tag: "InspectInsight";
   insightId: string;
   title: string;
   severity: "low" | "medium" | "high";
@@ -1699,9 +1581,7 @@ export interface QualityInsightRecord {
   summary: string;
   targetId?: string;
   linkedTraceIds?: readonly string[];
-  linkedExperimentIds?: readonly string[];
   linkedCaseIds?: readonly string[];
-  linkedCassettePaths?: readonly string[];
   linkedDefinitionIds?: readonly string[];
   linkedSources?: readonly {
     file: string;
@@ -1727,8 +1607,8 @@ export interface QualityInsightRecord {
   previousResolutionAt?: string;
 }
 
-export interface QualityInsightStatusRecord {
-  _tag: "QualityInsightStatus";
+export interface InspectInsightStatusRecord {
+  _tag: "InspectInsightStatus";
   insightId: string;
   status: "open" | "dismissed" | "resolved";
   note?: string;
@@ -1742,8 +1622,8 @@ export interface QualityInsightStatusRecord {
  * from the read model before they reach the UI. Soft-deleted (DeletedAt
  * set) silences are kept in the log for audit + restore.
  */
-export interface QualityInsightSilence {
-  _tag: "QualityInsightSilence";
+export interface InspectInsightSilence {
+  _tag: "InspectInsightSilence";
   id: string;
   pattern: {
     title: string;
@@ -1753,894 +1633,6 @@ export interface QualityInsightSilence {
   createdAt: string;
   /** Set when the silence has been removed; the insight returns on next read. */
   deletedAt?: string;
-}
-
-// ─── Spec-02 Quality contracts ───────────────────────────────────────
-//
-// The Go server serves the rewritten Quality engine's records: experiment
-// summaries (presentation rows), the full ExperimentRecord verbatim,
-// BaselineRecords verbatim, executor-boundary cassette files, scorer stats
-// derived from experiment cells, and evaluation manifests. The record
-// schemas evolve additively — render unknown statuses defensively.
-
-/** One row of `GET /api/quality/experiments` — the list projection of a spec-02 ExperimentRecord. */
-export interface QualityExperimentSummary {
-  experimentId: string;
-  evaluationId: string;
-  qualityId: string;
-  experimentLabel?: string;
-  startedAt: string;
-  endedAt: string;
-  filteredRun: boolean;
-  replayMode: string;
-  cassette?: string;
-  /** Promoted baseline this run compared against, if any. */
-  baselineId?: string;
-  variants: readonly string[];
-  /** Cell counts aggregated across all variants. */
-  cells: number;
-  cellsPassed: number;
-  cellsFailed: number;
-  cellsErrored: number;
-  cellsSkipped: number;
-  /** Gate verdicts (spec-02 §1 gates block). */
-  gatesPassed: boolean;
-  gatesInformational: boolean;
-  gateFailures: number;
-  hasComparison: boolean;
-  comparisonDemoted?: boolean;
-  /** The record's top-level convenience verdict. */
-  passed: boolean;
-  /**
-   * Backend-owned lifecycle/verdict status. Completed rows report
-   * `passed | failed | informational`; in-flight rows from run events report
-   * `running` and carry a synthetic `running:` experimentId (no persisted detail).
-   */
-  status?: "passed" | "failed" | "informational" | "running";
-}
-
-/** Faceted counts over the current evaluation+window scope, ignoring `status`. */
-export interface QualityExperimentStatusCounts {
-  all: number;
-  passed: number;
-  failed: number;
-  informational: number;
-  running: number;
-}
-
-/** Server-side filter + paging options for the experiments list. */
-export interface QualityExperimentsOptions {
-  status?: "passed" | "failed" | "informational" | "running";
-  evaluation?: string;
-  window?: "24h" | "7d" | "30d" | "all";
-  limit?: number;
-  cursor?: string;
-}
-
-/**
- * One page of the server-filtered, server-paged experiments list.
- *
- * `statusCounts` and `evaluations` are facets the backend computes over the
- * current evaluation+window scope (ignoring `status`) so the UI can render tab
- * counts and the evaluation filter without scanning the full record set.
- */
-export interface QualityExperimentsPage {
-  _tag: "QualityExperimentsPage";
-  experiments: readonly QualityExperimentSummary[];
-  total: number;
-  skippedRecords?: number;
-  nextCursor?: string;
-  statusCounts: QualityExperimentStatusCounts;
-  evaluations: readonly string[];
-}
-
-/**
- * Backend-owned relation read for one evaluation's retained experiments.
- *
- * `total` is the full retained count before `limit` is applied, so evaluation
- * detail screens can show "latest N of total" without scanning all records.
- */
-export interface QualityEvaluationExperiments {
-  readonly _tag: "QualityEvaluationExperiments";
-  readonly schemaVersion: 1;
-  readonly evaluationId: string;
-  readonly generatedAt: string;
-  readonly limit: number;
-  readonly total: number;
-  readonly experiments: readonly QualityExperimentSummary[];
-}
-
-/** One evaluation bucket in the grouped experiment relation read model. */
-export interface QualityEvaluationExperimentGroup {
-  readonly evaluationId: string;
-  readonly total: number;
-  readonly experiments: readonly QualityExperimentSummary[];
-}
-
-/**
- * Backend-owned grouping for experiment list screens.
- *
- * Groups are ordered by their latest retained experiment. Each group's
- * `experiments` list is newest-first and capped by the requested `limit`.
- */
-export interface QualityEvaluationExperimentGroups {
-  readonly _tag: "QualityEvaluationExperimentGroups";
-  readonly schemaVersion: 1;
-  readonly generatedAt: string;
-  readonly limit: number;
-  readonly totalEvaluations: number;
-  readonly totalExperiments: number;
-  readonly groups: readonly QualityEvaluationExperimentGroup[];
-}
-
-export interface QualityExperimentReplay {
-  mode: string;
-  cassette?: string;
-  trialsCollapsed?: boolean;
-  staleSince?: string;
-}
-
-export interface QualityExperimentBaselineRef {
-  baselineId: string;
-  experimentId: string;
-  variantName?: string;
-}
-
-export interface QualityExperimentVariantDecl {
-  name: string;
-  overrideKeys: readonly string[];
-  overrides?: { readonly [key: string]: QualityJsonValue };
-}
-
-export interface QualityCellScore {
-  name: string;
-  score: number | null;
-  label?: string;
-  costClass?: string;
-  metadata?: { readonly [key: string]: QualityJsonValue };
-}
-
-export interface QualityAssertionFailure {
-  level: string;
-  index: number;
-  matcher: string;
-  soft: boolean;
-  message: string;
-  expectedPreview?: string;
-  actualPreview?: string;
-  sourceRef?: string;
-}
-
-export interface QualityAssertionValue {
-  label: string;
-  value: QualityJsonValue;
-  preview: string;
-  redacted: boolean;
-}
-
-export type QualityEvidenceValue = QualityAssertionValue;
-
-export type QualityEvaluatedExpressionOperator =
-  | ">="
-  | ">"
-  | "<="
-  | "<"
-  | "=="
-  | "!="
-  | "contains"
-  | "matches"
-  | "custom";
-
-/**
- * Structured matcher expression captured by the backend.
- *
- * `rendered` is server-owned so CLI, TUI, and web clients show the same
- * compact statement instead of rebuilding matcher text independently.
- */
-export interface QualityEvaluatedExpression {
-  readonly left: QualityAssertionValue;
-  readonly operator: QualityEvaluatedExpressionOperator;
-  readonly right?: QualityAssertionValue;
-  readonly result: boolean;
-  readonly rendered: string;
-}
-
-export type QualitySourceFrameRole =
-  | "context"
-  | "failed"
-  | "passed"
-  | "not-evaluated";
-
-/** One authored source line in a retained evidence frame. */
-export interface QualitySourceFrameLine {
-  line: number;
-  text: string;
-  role: QualitySourceFrameRole;
-}
-
-/**
- * Authored source context for an assertion outcome.
- *
- * `source-frame` means the backend resolved the runtime stack location to
- * authored source and retained a narrow snapshot. `unavailable` is an honest
- * degradation path for missing sourcemaps, missing source files, unsupported
- * source, or generated-only locations.
- */
-export type QualitySourceFrame =
-  | {
-      kind: "source-frame";
-      sourceRef: string;
-      authoredFile: string;
-      authoredLine: number;
-      authoredColumn?: number;
-      frameStartLine: number;
-      frameEndLine: number;
-      lines: readonly QualitySourceFrameLine[];
-      contentHash: string;
-      capturedAt: string;
-      stale: boolean;
-      resolver: "source-map" | "catalog" | "disk";
-    }
-  | {
-      kind: "unavailable";
-      reason:
-        | "no-source-ref"
-        | "invalid-source-ref"
-        | "source-map-missing"
-        | "source-file-missing"
-        | "source-line-missing"
-        | "source-root-missing"
-        | "source-outside-project"
-        | "unsupported-language"
-        | "unsupported-source-file";
-    };
-
-/**
- * One assertion outcome in execution order.
- *
- * Outcomes include passes and not-evaluated placeholders, not just failures,
- * so clients can render where an assertion callback stopped without replaying
- * matcher control flow locally.
- */
-export interface QualityAssertionOutcome {
-  id: string;
-  level: "evaluation" | "case";
-  phase: "expect" | "assert" | "afterScores";
-  index: number;
-  status: "passed" | "failed" | "not-evaluated" | "uncaptured";
-  matcher: string;
-  soft: boolean;
-  message?: string;
-  subjectExpr?: string;
-  actual?: QualityAssertionValue;
-  expected?: QualityAssertionValue;
-  expression?: QualityEvaluatedExpression;
-  sourceRef?: string;
-  assertionSiteId?: string;
-  spanIds?: readonly string[];
-  sourceFrame?: QualitySourceFrame;
-}
-
-export interface QualityCellError {
-  message: string;
-  phase: string;
-  missingCassetteKey?: string;
-  sourceRef?: string;
-  sourceFrame?: QualitySourceFrame;
-}
-
-/** One cell (case × variant × trial) of a spec-02 ExperimentRecord. */
-export interface QualityExperimentCell {
-  caseId: string;
-  caseName?: string;
-  variantName: string;
-  trial: number;
-  status: "passed" | "failed" | "errored" | "skipped";
-  skipReason?: string;
-  input: QualityJsonValue;
-  output?: QualityJsonValue;
-  expected?: QualityJsonValue;
-  scores: readonly QualityCellScore[];
-  assertions: {
-    ran: number;
-    notEvaluated: number;
-    failures: readonly QualityAssertionFailure[];
-    outcomes: readonly QualityAssertionOutcome[];
-  };
-  error?: QualityCellError;
-  durationMs: number;
-  costUsd?: number;
-  usage?: { inputTokens: number; outputTokens: number };
-  traceIds: readonly string[];
-  capturedSignals: readonly string[];
-  metadata?: { readonly [key: string]: QualityJsonValue };
-}
-
-export interface QualityVariantAggregate {
-  cells: number;
-  passed: number;
-  failed: number;
-  errored: number;
-  skipped: number;
-  passRate: number;
-  scores: Readonly<Record<string, { mean: number; sem: number; n: number }>>;
-  consistency?: { passAtK: number; passAllTrials: number };
-  latency: { meanMs: number; p95Ms: number };
-  costUsd?: number;
-}
-
-export interface QualityComparisonDelta {
-  variantName: string;
-  scoreName: string;
-  meanDelta: number;
-  sem: number;
-  n: number;
-}
-
-export interface QualityExperimentComparison {
-  kind: "variant" | "promoted";
-  baseline: string;
-  deltas: readonly QualityComparisonDelta[];
-  unmatchedCases: {
-    baselineOnly: readonly string[];
-    candidateOnly: readonly string[];
-  };
-  demoted?: { reason: string };
-}
-
-export interface QualityGateResult {
-  gate: string;
-  variantName?: string;
-  threshold: QualityJsonValue;
-  actual: QualityJsonValue;
-  passed: boolean;
-  informational?: boolean;
-}
-
-/** Full spec-02 ExperimentRecord — `GET /api/quality/experiments/{experimentId}` serves it verbatim. */
-export interface QualityExperimentDetail {
-  schemaVersion: number;
-  experimentId: string;
-  evaluationId: string;
-  qualityId: string;
-  experimentLabel?: string;
-  startedAt: string;
-  endedAt: string;
-  configFingerprint: string;
-  taskFingerprint: string;
-  filteredRun: boolean;
-  replay: QualityExperimentReplay;
-  baselineRef?: QualityExperimentBaselineRef;
-  variants: readonly QualityExperimentVariantDecl[];
-  cells: readonly QualityExperimentCell[];
-  aggregates: { perVariant: Readonly<Record<string, QualityVariantAggregate>> };
-  comparison?: QualityExperimentComparison;
-  gates: {
-    passed: boolean;
-    informational: boolean;
-    results: readonly QualityGateResult[];
-  };
-  passed: boolean;
-  /**
-   * Core-owned per-cell failure artifacts embedded in the record. Each carries
-   * the fix-surface classification and dataset provenance the UI renders as
-   * chips and the failure panel (blueprint §6.2/§12.1).
-   */
-  failures?: readonly QualityFailureArtifact[];
-}
-
-/** Core-owned fix-surface classification for a failing cell. */
-export type QualitySuggestedFixSurface =
-  | "prompt"
-  | "context"
-  | "retriever"
-  | "tool-schema"
-  | "handoff"
-  | "judge"
-  | "flake"
-  | "unknown";
-
-/** One machine-readable failure entry embedded in an experiment record. */
-export interface QualityFailureArtifact {
-  caseId: string;
-  caseName?: string;
-  variant: string;
-  trial: number;
-  phase: string;
-  scores: readonly QualityFailureArtifactScore[];
-  sourceRef?: string;
-  covers: readonly string[];
-  traceId?: string;
-  spanIds: readonly string[];
-  cassetteId?: string;
-  cost?: { usd?: number };
-  durationMs?: number;
-  datasetProvenance?: { path: string; contentFingerprint: string };
-  suggestedFixSurfaces: readonly QualitySuggestedFixSurface[];
-}
-
-/** One score entry in a failure artifact, with baseline delta and rationale. */
-export interface QualityFailureArtifactScore {
-  name: string;
-  score: number | null;
-  baselineScore?: number | null;
-  delta?: number;
-  rationale?: string;
-}
-
-/** Judge-vs-human agreement report for one evaluation (blueprint §4.5). */
-export interface QualityJudgeReport {
-  schemaVersion: 1;
-  evaluationId: string;
-  scorers: readonly QualityJudgeReportScorer[];
-}
-
-/** Per-scorer judge-vs-human agreement stats. */
-export interface QualityJudgeReportScorer {
-  name: string;
-  threshold: number;
-  labeled: number;
-  confusion: { tp: number; fp: number; fn: number; tn: number };
-  agreement: number;
-  precision: number;
-  recall: number;
-  kappa: number | null;
-  disagreements: readonly QualityJudgeReportDisagreement[];
-}
-
-/** One judge-vs-human disagreement, linkable to its cell evidence. */
-export interface QualityJudgeReportDisagreement {
-  experimentId: string;
-  caseId: string;
-  variant: string;
-  trial: number;
-  human: string;
-  judgeScore: number;
-  rationale?: string;
-}
-
-/** Machine-readable experiment-to-experiment diff (blueprint §6.3). */
-export interface QualityExperimentDiff {
-  schemaVersion: 1;
-  a: { experimentId: string };
-  b: { experimentId: string };
-  comparable: boolean;
-  fingerprintDrift: readonly string[];
-  scores: readonly QualityExperimentDiffScore[];
-  cases: readonly QualityExperimentDiffCase[];
-  onlyInA: readonly string[];
-  onlyInB: readonly string[];
-  gatesVerdict: { aPassed: boolean; bPassed: boolean };
-}
-
-/** Aggregate score delta in an experiment diff. */
-export interface QualityExperimentDiffScore {
-  name: string;
-  aMean: number;
-  bMean: number;
-  delta: number;
-  sem: number;
-  significant: boolean;
-}
-
-/** One matched case+variant row in an experiment diff. */
-export interface QualityExperimentDiffCase {
-  caseId: string;
-  variant: string;
-  aPassed: boolean;
-  bPassed: boolean;
-  scoreDeltas: Readonly<Record<string, number>>;
-  datasetProvenance?: { path: string; contentFingerprint: string };
-}
-
-export type QualityCellEvidenceStatus =
-  | "passed"
-  | "failed"
-  | "errored"
-  | "skipped";
-
-export type QualityCellEvidenceErrorPhase =
-  | "execute"
-  | "expect"
-  | "assert"
-  | "afterScores"
-  | "score"
-  | "replay"
-  | "timeout";
-
-/**
- * Backend-owned evidence record for one case x variant x trial cell.
- *
- * The server performs the joins across experiment records, source frames,
- * score details, baseline availability, and trace references. Clients should
- * render this record directly rather than reconstructing it from raw records.
- */
-export interface QualityCellEvidence {
-  readonly _tag: "QualityCellEvidence";
-  readonly schemaVersion: 1;
-  readonly experimentId: string;
-  readonly evaluationId?: string;
-  readonly generatedAt: string;
-  readonly cell: QualityCellIdentity;
-  readonly trialSummary: QualityTrialSummary;
-  readonly io: QualityCellIOEvidence;
-  readonly scores: readonly QualityScoreEvidence[];
-  readonly assertions: QualityAssertionEvidence;
-  readonly checks: readonly QualityCheckEvidence[];
-  readonly code: QualityCodeEvidence;
-  readonly baseline: QualityBaselineEvidence;
-  readonly trace: QualityTraceEvidence;
-  readonly repro: QualityReproEvidence;
-  readonly provenance: QualityEvidenceProvenance;
-}
-
-/** Stable identity and execution state for the selected cell. */
-export interface QualityCellIdentity {
-  readonly caseId: string;
-  readonly caseName?: string;
-  readonly variantName: string;
-  readonly trial: number;
-  readonly status: QualityCellEvidenceStatus;
-  readonly durationMs: number;
-  readonly costUsd?: number;
-  readonly usage?: {
-    readonly inputTokens: number;
-    readonly outputTokens: number;
-  };
-  readonly traceIds: readonly string[];
-  readonly capturedSignals: readonly string[];
-  readonly error?: {
-    readonly message: string;
-    readonly phase: QualityCellEvidenceErrorPhase;
-    readonly missingCassetteKey?: string;
-    readonly sourceRef?: string;
-    readonly sourceFrame?: QualitySourceFrame;
-  };
-}
-
-/** Sibling-trial rollup for the same case and variant. */
-export interface QualityTrialSummary {
-  readonly selectedTrial: number;
-  readonly total: number;
-  readonly passed: number;
-  readonly failed: number;
-  readonly errored: number;
-  readonly skipped: number;
-  readonly verdict:
-    | "stable-pass"
-    | "stable-fail"
-    | "flaky"
-    | "all-errored"
-    | "mixed";
-  readonly trials: readonly {
-    readonly trial: number;
-    readonly status: QualityCellEvidenceStatus;
-    readonly durationMs: number;
-    readonly primaryFailure?: string;
-  }[];
-}
-
-/** Already-redacted input/output values from the stored experiment cell. */
-export interface QualityCellIOEvidence {
-  readonly input: QualityJsonValue;
-  readonly output?: QualityJsonValue;
-  readonly expected?: QualityJsonValue;
-  readonly outputTruncated: boolean;
-  readonly redactionApplied: boolean;
-}
-
-/** Normalized score evidence, including model-judge rationale when present. */
-export interface QualityScoreEvidence {
-  readonly name: string;
-  readonly score: number;
-  readonly label?: string;
-  readonly costClass?: "code" | "judge" | "hybrid" | string;
-  readonly rationale?: string;
-  readonly metadata?: Readonly<Record<string, QualityJsonValue>>;
-  readonly threshold?: {
-    readonly source: "assertion" | "gate" | "baseline";
-    readonly operator: QualityEvaluatedExpressionOperator;
-    readonly value: number;
-    readonly passed: boolean;
-  };
-  readonly deltaFromBaseline?: number;
-}
-
-/** Ordered assertion ledger for the selected cell. */
-export interface QualityAssertionEvidence {
-  readonly ran: number;
-  readonly notEvaluated: number;
-  readonly outcomes: readonly QualityAssertionOutcome[];
-}
-
-/** Human-debuggable checks normalized from assertions, thresholds, and errors. */
-export type QualityCheckEvidence =
-  | {
-      readonly kind: "assertion";
-      readonly outcomeId: string;
-      readonly status: QualityAssertionOutcome["status"];
-      readonly summary: string;
-      readonly message?: string;
-      readonly sourceFrame?: QualitySourceFrame;
-      readonly expression?: QualityEvaluatedExpression;
-      readonly spanIds?: readonly string[];
-    }
-  | {
-      readonly kind: "score-threshold";
-      readonly scoreName: string;
-      readonly score: number;
-      readonly operator: QualityEvaluatedExpressionOperator;
-      readonly threshold: number;
-      readonly passed: boolean;
-      readonly source: "assertion" | "gate" | "baseline";
-      readonly message?: string;
-      readonly sourceFrame?: QualitySourceFrame;
-      readonly rationale?: string;
-    }
-  | {
-      readonly kind: "runtime-error";
-      readonly phase: QualityCellEvidenceErrorPhase;
-      readonly message: string;
-      readonly sourceFrame?: QualitySourceFrame;
-      readonly spanIds: readonly string[];
-    };
-
-/** Authored source context and curated values available at the selected check. */
-export interface QualityCodeEvidence {
-  readonly primaryFrame: QualitySourceFrame;
-  readonly valuesAtCheck: readonly QualityEvidenceValue[];
-  readonly openedInEditor?: {
-    readonly file: string;
-    readonly line: number;
-    readonly column?: number;
-  };
-}
-
-/** Baseline comparison evidence or an explicit degradation reason. */
-export type QualityBaselineEvidence =
-  | {
-      readonly kind: "available";
-      readonly baselineId: string;
-      readonly experimentId?: string;
-      readonly sameInput: boolean;
-      readonly sameCase: boolean;
-      readonly baselineCell: {
-        readonly status: QualityCellEvidenceStatus;
-        readonly output?: QualityJsonValue;
-        readonly scores: readonly QualityScoreEvidence[];
-      };
-      readonly deltas: readonly {
-        readonly scoreName: string;
-        readonly baseline: number;
-        readonly candidate: number;
-        readonly delta: number;
-      }[];
-    }
-  | {
-      readonly kind: "unavailable";
-      readonly baselineId?: string;
-      readonly experimentId?: string;
-      readonly reason:
-        | "no-baseline"
-        | "baseline-has-no-output-evidence"
-        | "baseline-experiment-missing"
-        | "case-not-in-baseline"
-        | "variant-not-comparable";
-    };
-
-/** Trace references for the cell; span waterfalls appear only when defensible. */
-export interface QualityTraceEvidence {
-  readonly traceIds: readonly string[];
-  readonly retainedTraceIds: readonly string[];
-  readonly hotSpanIds: readonly string[];
-  readonly rootCause?: {
-    readonly summary: string;
-    readonly spanId?: string;
-    readonly confidence: "exact" | "heuristic";
-  };
-  readonly spans: readonly {
-    readonly spanId: string;
-    readonly parentSpanId?: string;
-    readonly name: string;
-    readonly kind?: string;
-    readonly startMs: number;
-    readonly durationMs: number;
-    readonly status: "ok" | "error" | "unknown";
-    readonly hot: boolean;
-  }[];
-}
-
-/** Command surface that can refetch the same evidence record. */
-export interface QualityReproEvidence {
-  readonly command: string;
-  readonly args: readonly string[];
-}
-
-/** Local sources used to build the evidence record, when known. */
-export interface QualityEvidenceProvenance {
-  readonly experimentRecordPath?: string;
-  readonly baselineRecordPath?: string;
-  readonly sourceCatalogVersion?: string;
-  readonly sourceResolverVersion?: string;
-}
-
-/** Spec-02 BaselineRecord — committed at `baselines/<evaluationId>.json`, served verbatim. */
-export interface QualityBaselineRecord {
-  schemaVersion: number;
-  baselineId: string;
-  evaluationId: string;
-  experimentId: string;
-  variantName?: string;
-  promotedAt: string;
-  promotedBy?: string;
-  configFingerprint: string;
-  /** caseId → scoreName → reference value. */
-  reference: Readonly<Record<string, Readonly<Record<string, number>>>>;
-}
-
-export type QualityEvaluationProgressVerdict =
-  | "passed"
-  | "failed"
-  | "errored"
-  | "skipped";
-
-/**
- * Backend-owned progress strip data for one evaluation.
- *
- * The local service computes recent run rows, score series, and baseline
- * overlays from quality records. UI clients should use this record directly
- * instead of scanning experiments in the browser.
- */
-export interface QualityEvaluationProgress {
-  readonly _tag: "QualityEvaluationProgress";
-  readonly schemaVersion: 1;
-  readonly evaluationId: string;
-  readonly generatedAt: string;
-  readonly limit: number;
-  readonly runs: readonly QualityEvaluationProgressRun[];
-  readonly scoreSeries: readonly QualityScoreProgressSeries[];
-}
-
-/** One recent experiment row in evaluation progress. */
-export interface QualityEvaluationProgressRun {
-  readonly experimentId: string;
-  readonly startedAt?: string;
-  readonly finishedAt?: string;
-  readonly verdict: QualityEvaluationProgressVerdict;
-  readonly passRate: number;
-  readonly durationMs?: number;
-  readonly costUsd?: number;
-}
-
-/** One score's recent run series, with an optional current-baseline line. */
-export interface QualityScoreProgressSeries {
-  readonly scoreName: string;
-  readonly baseline?: {
-    readonly value: number;
-    readonly baselineId: string;
-  };
-  readonly points: readonly QualityScoreProgressPoint[];
-}
-
-/** Aggregate score point for one experiment in an evaluation series. */
-export interface QualityScoreProgressPoint {
-  readonly experimentId: string;
-  readonly mean: number;
-  readonly sem: number;
-  readonly n: number;
-  readonly passedGate?: boolean;
-}
-
-/** `POST /api/quality/promote` success payload. */
-export interface QualityPromoteResult {
-  baselineId: string;
-  evaluationId: string;
-  experimentId: string;
-  variantName?: string;
-  path: string;
-  pinHint?: string;
-}
-
-/** One evaluation manifest from `GET /api/quality/evaluations` (spec-02 EvaluationManifest). */
-export interface QualityEvaluationManifest {
-  schemaVersion: number;
-  id: string;
-  explicitId: boolean;
-  file: string;
-  exportName: string;
-  source: "file" | "prompt-tests" | string;
-  description?: string;
-  tags: readonly string[];
-  task: {
-    kind: "prompt" | "flow" | "agent" | "retriever" | "fn" | string;
-    ref?: string;
-    capabilities: readonly string[];
-  };
-  cases: readonly {
-    caseId: string;
-    name?: string;
-    hasExpect: boolean;
-    trials: number;
-    tags: readonly string[];
-    skip?: boolean | string;
-    only?: boolean;
-  }[];
-  datasets: readonly { path: string; caseCount?: number }[];
-  hasEvaluationExpect: boolean;
-  scorers: readonly { name: string; costClass: "code" | "model" | string }[];
-  variants: readonly { name: string; overrideKeys: readonly string[] }[];
-  baseline?: string;
-  trials: number;
-  gates?: { readonly [key: string]: QualityJsonValue };
-  replay?: { mode: string; cassette?: string };
-  flags: { only: boolean; skip: boolean };
-}
-
-export interface QualityFeedbackRecord {
-  _tag: "QualityFeedback";
-  id: string;
-  qualityId: string;
-  createdAt: string;
-  status: "new" | "reviewed" | "dismissed";
-  traceId?: string;
-  experimentId?: string;
-  caseId?: string;
-  rating?: -1 | 0 | 1;
-  comment?: string;
-  expected?: { readonly [key: string]: QualityJsonValue };
-  tags?: readonly string[];
-  metadata?: { readonly [key: string]: QualityJsonValue };
-}
-
-export interface QualityFeedbackAnnotationRecord {
-  _tag: "QualityFeedbackAnnotation";
-  id: string;
-  qualityId: string;
-  feedbackId: string;
-  createdAt: string;
-  status?: "new" | "reviewed" | "dismissed";
-  note?: string;
-  expected?: { readonly [key: string]: QualityJsonValue };
-  tags?: readonly string[];
-  metadata?: { readonly [key: string]: QualityJsonValue };
-}
-
-export interface QualityFeedbackMemoryProposalRecord {
-  _tag: "QualityFeedbackMemoryProposal";
-  id: string;
-  qualityId: string;
-  feedbackId: string;
-  createdAt: string;
-  status: "proposed";
-  memoryId?: string;
-  memoryKind?: string;
-  proposal: { readonly [key: string]: QualityJsonValue };
-  reason?: string;
-  tags?: readonly string[];
-  metadata?: { readonly [key: string]: QualityJsonValue };
-}
-
-/** One executor-boundary cassette file from `GET /api/quality/cassettes`. */
-export interface QualityCassetteRecord {
-  name: string;
-  path: string;
-  recordedAt: string;
-  sdkVersion: string;
-  models: readonly string[];
-  entryCount: number;
-  /** Mirrors the engine's 90-day replay staleness window. */
-  stale: boolean;
-  sizeBytes: number;
-}
-
-/** Scorer usage stats from `GET /api/quality/scorers`, derived from experiment cells. */
-export interface QualityScorerRecord {
-  name: string;
-  costClass?: string;
-  evaluationIds: readonly string[];
-  cellCount: number;
-  meanScore?: number;
-  lastUsedAt?: string;
 }
 
 export interface EmbeddingUsage {

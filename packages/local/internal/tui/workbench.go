@@ -33,8 +33,8 @@ func osc8Link(url, text string) string {
 }
 
 // Workbench is the post-boot V1 Panels root model. It owns the nav rail,
-// status bar, breadcrumb, and the active Quality screen. The four-section
-// tab strip was dropped in S2 — the workbench IS the Quality workbench;
+// status bar, breadcrumb, and the active Inspect screen. The four-section
+// tab strip was dropped in S2 — the workbench IS the Inspect workbench;
 // there is no second-level navigation above the nav rail.
 type Workbench struct {
 	client          screens.DataClient
@@ -80,15 +80,10 @@ func NewWorkbench(client screens.DataClient, rawClient DataClient, serverURL str
 		inspect:     overlays.NewInspect(),
 	}
 	w.screens = map[string]screens.Screen{
-		"overview":    screens.NewOverview(),
-		"insights":    screens.NewInsights(),
-		"runs":        screens.NewRuns(),
-		"experiments": screens.NewExperiments(),
-		"datasets":    screens.NewDatasets(),
-		"baselines":   screens.NewBaselines(),
-		"feedback":    screens.NewFeedback(),
-		"cassettes":   screens.NewCassettes(),
-		"index":       screens.NewIndex(),
+		"overview": screens.NewOverview(),
+		"insights": screens.NewInsights(),
+		"runs":     screens.NewRuns(),
+		"index":    screens.NewIndex(),
 	}
 	return w
 }
@@ -140,12 +135,12 @@ func (w *Workbench) Update(msg tea.Msg) tea.Cmd {
 		return nil
 	case bridge.Batch:
 		return w.handleBridgeBatch(m)
-	case qualityEventMsg:
-		ev := api.QualityEvent(m)
+	case inspectEventMsg:
+		ev := api.InspectEvent(m)
 		var revs bridge.Revisions
-		changed := revs.BumpQuality(ev)
+		changed := revs.BumpInspect(ev)
 		return w.handleBridgeBatch(bridge.Batch{
-			Quality: []api.QualityEvent{ev},
+			Inspect: []api.InspectEvent{ev},
 			Revs:    revs,
 			Changed: changed,
 		})
@@ -157,7 +152,7 @@ func (w *Workbench) Update(msg tea.Msg) tea.Cmd {
 		return nil
 	case paletteResultMsg:
 		// Project palette outcomes into the Overview activity feed by
-		// synthesizing a QualityEvent and looping it back through Update.
+		// synthesizing a InspectEvent and looping it back through Update.
 		now := timeNowMs()
 		summary := m.OK
 		severity := "info"
@@ -165,8 +160,8 @@ func (w *Workbench) Update(msg tea.Msg) tea.Cmd {
 			summary = "✗ " + m.Err
 			severity = "error"
 		}
-		ev := api.QualityEvent{
-			Tag:       "QualityEvent",
+		ev := api.InspectEvent{
+			Tag:       "InspectEvent",
 			Timestamp: now,
 			Kind:      "palette",
 			Severity:  severity,
@@ -189,7 +184,7 @@ func (w *Workbench) Update(msg tea.Msg) tea.Cmd {
 // Layout (top → bottom): breadcrumb row · body (nav rail │ screen) · status
 // bar. The four-section tab strip was dropped in S2 because three of its
 // four tabs were placeholders for surfaces that have been folded into the
-// Quality workbench. The breadcrumb row absorbs the system-health block
+// Inspect workbench. The breadcrumb row absorbs the system-health block
 // (server · collector · version · project:target git) on its right side.
 func (w *Workbench) View() string {
 	if w.width == 0 || w.height == 0 {
@@ -203,7 +198,7 @@ func (w *Workbench) View() string {
 
 	// The status bar reflects only the focused screen's keybinds — no mode
 	// chip. See ADR-0050.
-	statusBar := shell.StatusBar(statusRect.W, w.activeScreen().Keybinds(), ".crux/quality")
+	statusBar := shell.StatusBar(statusRect.W, w.activeScreen().Keybinds(), ".crux/evals")
 
 	path, right := w.activeScreen().Breadcrumb()
 	if right == "" {
@@ -365,36 +360,26 @@ func compactURLLabel(raw string) string {
 // --- key handling ------------------------------------------------------------
 
 // navIDByKey maps numeric keys to nav IDs. Order follows the grouped
-// visual order of shell.DefaultNav (Inspect / Evaluate / Loop / Library)
+// visual order of shell.DefaultNav.
 // so the digits run top-to-bottom down the rail.
 var navIDByKey = map[string]string{
 	"1": "overview",
 	"2": "insights",
 	"3": "runs",
-	"4": "experiments",
-	"5": "baselines",
-	"6": "datasets",
-	"7": "feedback",
-	"8": "cassettes",
-	"9": "index",
+	"4": "index",
 }
 
 var navIDByGoKey = map[string]string{
 	"o": "overview",
 	"i": "insights",
 	"r": "runs",
-	"x": "experiments",
-	"b": "baselines",
-	"d": "datasets",
-	"f": "feedback",
-	"k": "cassettes", // `g k` is the mnemonic jump for cassettes
-	"p": "index",     // `g p` = project index
+	"p": "index", // `g p` = project index
 }
 
 func (w *Workbench) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	key := msg.String()
 
-	// If the active screen owns an embedded editor (Suites case editor),
+	// If the active screen owns an embedded editor,
 	// forward every keystroke straight to the screen so the textarea /
 	// textinput widgets receive raw input. Per ADR-0050 the TUI has no
 	// global mode flag — `Editing()` is a pass-through hint, not a mode.
@@ -423,9 +408,7 @@ func (w *Workbench) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		w.palette.Open()
 		return nil
 	case "?":
-		// Feed the focused screen's keybinds into the help overlay so the
-		// Act section is rendered contextually per KEYBINDS.md. No more
-		// static `s = save (case · variant · baseline · cassette)` lie.
+		// Feed the focused screen's keybinds into the contextual help overlay.
 		w.help.SetScreenKeybinds(w.activeNav, w.activeScreen().Keybinds())
 		w.help.Open()
 		return nil
@@ -463,13 +446,8 @@ func (w *Workbench) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 // screen receives Focus(kind, id) so it can pre-select that record. See
 // ADR-0051.
 var navKind = map[string]Kind{
-	"insights":    KindInsight,
-	"runs":        KindRun,
-	"experiments": KindExperiment,
-	"datasets":    KindDataset,
-	"baselines":   KindBaseline,
-	"feedback":    KindFeedback,
-	"cassettes":   KindCassette,
+	"insights": KindInsight,
+	"runs":     KindRun,
 	// "overview" is intentionally absent — it's a dashboard, not record-shaped.
 }
 
@@ -516,27 +494,6 @@ func (w *Workbench) runPaletteCommand(c overlays.Chosen) tea.Cmd {
 			return tea.Batch(cmd, w.toast("trace selection from palette is a follow-up"))
 		}
 		return w.toast("usage: open trace <id>")
-	case "promote", "baseline":
-		// `promote <experiment>[:<variant>]` or `baseline pin <experiment>`.
-		// Runs the server-side promote (the embedded worker's --promote
-		// mode); the worker surfaces its own pin-id / filtered-run
-		// refusals, which we relay verbatim.
-		args := c.Args
-		if c.Verb == "baseline" && len(args) >= 1 && args[0] == "pin" {
-			args = args[1:]
-		}
-		if len(args) == 0 {
-			return w.toast("usage: promote <experiment>[:<variant>]")
-		}
-		exp, variant := splitColon(args[0])
-		client := w.client
-		return func() tea.Msg {
-			res, err := client.PromoteBaseline(context.Background(), exp, variant, "")
-			if err != nil {
-				return paletteResultMsg{Err: err.Error()}
-			}
-			return paletteResultMsg{OK: "baseline " + res.BaselineID + " promoted"}
-		}
 	case "dismiss":
 		// `dismiss insight <ID>` or just `dismiss <ID>` on Insights screen.
 		id := ""
@@ -549,16 +506,12 @@ func (w *Workbench) runPaletteCommand(c overlays.Chosen) tea.Cmd {
 		}
 		client := w.client
 		return func() tea.Msg {
-			_, err := client.SetInsightStatus(context.Background(), id, api.QualityInsightStatusRequest{Status: "dismissed"})
+			_, err := client.SetInsightStatus(context.Background(), id, api.InspectInsightStatusRequest{Status: "dismissed"})
 			if err != nil {
 				return paletteResultMsg{Err: err.Error()}
 			}
 			return paletteResultMsg{OK: "dismissed " + id}
 		}
-	case "target":
-		return w.toast("target switching: backend endpoint pending (gap I32)")
-	case "run":
-		return w.toast("run kickoff: backend endpoint pending (gap J34)")
 	}
 	return w.toast("unknown command: " + c.Verb)
 }
@@ -575,14 +528,6 @@ func (w *Workbench) toast(text string) tea.Cmd {
 	return func() tea.Msg {
 		return paletteResultMsg{OK: text}
 	}
-}
-
-func splitColon(s string) (string, string) {
-	parts := strings.SplitN(s, ":", 2)
-	if len(parts) == 2 {
-		return parts[0], parts[1]
-	}
-	return parts[0], ""
 }
 
 // --- helpers -----------------------------------------------------------------
@@ -638,7 +583,7 @@ func truncateStr(s string, n int) string {
 // --- data-fetch commands ----------------------------------------------------
 
 type devCtxLoadedMsg api.DevtoolsContext
-type qualityEventMsg api.QualityEvent
+type inspectEventMsg api.InspectEvent
 
 func (w *Workbench) fetchContext() tea.Cmd {
 	return func() tea.Msg {
@@ -650,13 +595,13 @@ func (w *Workbench) fetchContext() tea.Cmd {
 	}
 }
 
-// SubscribeEvents wires the quality event bus into the tea program.
+// SubscribeEvents wires the Inspect event bus into the Bubble Tea program.
 // `send` is the program's Send func (captured from SetProgram).
 func (w *Workbench) SubscribeEvents(ctx context.Context, send func(tea.Msg)) {
-	ch := w.client.SubscribeQuality(ctx)
+	ch := w.client.SubscribeInspect(ctx)
 	go func() {
 		for ev := range ch {
-			send(qualityEventMsg(ev))
+			send(inspectEventMsg(ev))
 		}
 	}()
 }

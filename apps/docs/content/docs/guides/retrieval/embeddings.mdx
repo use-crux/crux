@@ -6,30 +6,30 @@ description: Dense, sparse, and hybrid retrieval in Crux without mixing vector g
 You want to search your docs by meaning, so "docs about login problems" finds the SSO troubleshooting page even though it never says "login problems". That needs vectors, and `embedding()` is the Crux primitive that turns text into them:
 
 ```ts
-import { embedding } from '@use-crux/core/embedding'
+import { embedding } from "@use-crux/core/embedding";
 
 declare const provider: {
-  embedMany(texts: string[]): Promise<number[][]>
-}
+  embedMany(texts: string[]): Promise<number[][]>;
+};
 
 const dense = embedding({
-  kind: 'dense',
-  name: 'text-embedding-3-small',
+  kind: "dense",
+  name: "text-embedding-3-small",
   dimensions: 1536,
   maxInputTokens: 8191,
   batch: { maxSize: 100, concurrency: 3 },
   embed: async (texts) => ({
     embeddings: await provider.embedMany(texts),
   }),
-})
+});
 ```
 
 Define it once and reuse it everywhere Crux needs to embed text:
 
 ```ts
-indexer({ dense, sparse })   // write-time vectors
-retriever({ dense, sparse }) // query-time vectors
-facts({ embed: dense })      // dense memory recall
+indexer({ dense, sparse }); // write-time vectors
+retriever({ dense, sparse }); // query-time vectors
+facts({ embed: dense }); // dense memory recall
 ```
 
 The practical rule for picking a kind:
@@ -55,12 +55,12 @@ One note on the architecture: `embedding()` only generates vectors. Stores execu
 
 ## Choose the right pattern
 
-| Goal | Use |
-|------|-----|
-| `episodes()`, `facts()`, `procedures()`, or dense similarity search | One dense embedding |
-| Keyword-weighted or BM25-style retrieval | One sparse embedding plus `vectors.search({ mode: 'sparse', sparse })` |
-| Upstash hybrid retrieval | One dense embedding, one sparse embedding, plus `vectors.search({ mode: 'hybrid', dense, sparse })` |
-| Store-specific or fully custom retrieval | Your own store or retriever logic |
+| Goal                                                                | Use                                                                                                 |
+| ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `episodes()`, `facts()`, `procedures()`, or dense similarity search | One dense embedding                                                                                 |
+| Keyword-weighted or BM25-style retrieval                            | One sparse embedding plus `vectors.search({ mode: 'sparse', sparse })`                              |
+| Upstash hybrid retrieval                                            | One dense embedding, one sparse embedding, plus `vectors.search({ mode: 'hybrid', dense, sparse })` |
+| Store-specific or fully custom retrieval                            | Your own store or retriever logic                                                                   |
 
 ## Dense: semantic similarity
 
@@ -75,20 +75,20 @@ Use dense embeddings when meaning matters more than exact wording. They are the 
 ## Sparse: exact terms and keywords
 
 ```ts
-import { embedding } from '@use-crux/core/embedding'
-import type { SparseVector } from '@use-crux/core/storage'
+import { embedding } from "@use-crux/core/embedding";
+import type { SparseVector } from "@use-crux/core/storage";
 
-declare function toSparseVector(text: string): SparseVector
+declare function toSparseVector(text: string): SparseVector;
 
 const sparse = embedding({
-  kind: 'sparse',
-  name: 'bm25',
+  kind: "sparse",
+  name: "bm25",
   maxInputTokens: 8191,
   batch: { maxSize: 100, concurrency: 3 },
   embed: async (texts) => ({
     embeddings: texts.map(toSparseVector),
   }),
-})
+});
 ```
 
 Sparse embeddings expose `embed()` and `embedMany()`, but not `asEmbedFn()`, because dense-only callback APIs expect `number[]`.
@@ -101,20 +101,20 @@ You do not define a hybrid embedding. You define one dense embedding and one spa
 
 ```ts
 const docs = retriever({
-  id: 'docs',
-  namespace: 'product-docs',
+  id: "docs",
+  namespace: "product-docs",
   records,
   vectors,
   dense,
   sparse,
   search: {
-    mode: 'hybrid',
-    fusion: 'dbsf',
+    mode: "hybrid",
+    fusion: "dbsf",
     limit: 8,
   },
-})
+});
 
-const hits = await docs.retrieve('SAML setup error SSO_403')
+const hits = await docs.retrieve("SAML setup error SSO_403");
 ```
 
 Crux embeds the query with both embeddings and asks the store to search with both vectors. Stores that cannot support sparse or hybrid search throw clearly instead of silently falling back to dense-only behavior.
@@ -124,14 +124,18 @@ Crux embeds the query with both embeddings and asks the store to search with bot
 The same primitive owns the policies that affect how vectors are generated. Put preprocessing, truncation, caching, retries, and provider rate limits on `embedding()` once, then reuse that embedding in memory, indexing, retrieval, and semantic cache code.
 
 ```ts
-import { embedding, embeddingCache, normalizeText } from '@use-crux/core/embedding'
-import { inMemoryRecordStore } from '@use-crux/core/storage'
+import {
+  embedding,
+  embeddingCache,
+  normalizeText,
+} from "@use-crux/core/embedding";
+import { inMemoryRecordStore } from "@use-crux/core/storage";
 
-const store = inMemoryRecordStore()
+const store = inMemoryRecordStore();
 
 const dense = embedding({
-  kind: 'dense',
-  name: 'docs-embedding',
+  kind: "dense",
+  name: "docs-embedding",
   dimensions: 1536,
   maxInputTokens: 8191,
   batch: { maxSize: 100, concurrency: 3 },
@@ -141,15 +145,15 @@ const dense = embedding({
     collapseWhitespace: true,
   }),
 
-  truncate: { strategy: 'fail' },
+  truncate: { strategy: "fail" },
   retry: { maxAttempts: 3, baseDelayMs: 250 },
-  cache: embeddingCache({ store, namespace: 'embed-cache' }),
+  cache: embeddingCache({ store, namespace: "embed-cache" }),
   rateLimit: { concurrency: 3 },
 
   embed: async (texts) => ({
     embeddings: await provider.embedMany(texts),
   }),
-})
+});
 ```
 
 The behavior worth knowing day to day:
@@ -173,17 +177,17 @@ Memory blocks that perform semantic recall are dense-oriented today. `episodes()
 The recommended path is the embedding object:
 
 ```ts
-import { episodes, facts } from '@use-crux/core/memory'
+import { episodes, facts } from "@use-crux/core/memory";
 
 const history = episodes({
-  id: 'conversation-log',
+  id: "conversation-log",
   embed: dense,
-})
+});
 
 const profileFacts = facts({
-  id: 'facts',
+  id: "facts",
   embed: dense,
-})
+});
 ```
 
 Memory does not consume sparse or hybrid embeddings directly. If you need sparse-only or hybrid recall over documents, use `retriever()` with a `VectorStore`.
@@ -194,23 +198,23 @@ Indexers use embeddings when writing chunks. Retrievers use the same embeddings 
 
 ```ts
 const docsIndexer = indexer({
-  id: 'docs',
-  namespace: 'product-docs',
+  id: "docs",
+  namespace: "product-docs",
   records,
   vectors,
   dense,
   sparse,
-})
+});
 
 const docs = retriever({
-  id: 'docs',
-  namespace: 'product-docs',
+  id: "docs",
+  namespace: "product-docs",
   records,
   vectors,
   dense,
   sparse,
-  search: { mode: 'hybrid' },
-})
+  search: { mode: "hybrid" },
+});
 ```
 
 That symmetry is important: the query vector should be produced by the same embedding definition as the indexed vectors.
@@ -221,25 +225,25 @@ Vector stores receive the vector query shape directly:
 
 ```ts
 const denseResults = await vectors.search({
-  mode: 'dense',
-  dense: await dense.embed('roadmap'),
-})
+  mode: "dense",
+  dense: await dense.embed("roadmap"),
+});
 ```
 
 Sparse-only and hybrid-capable stores use the same method:
 
 ```ts
 const sparseResults = await vectors.search({
-  mode: 'sparse',
-  sparse: await sparse.embed('roadmap'),
-})
+  mode: "sparse",
+  sparse: await sparse.embed("roadmap"),
+});
 
 const hybridResults = await vectors.search({
-  mode: 'hybrid',
-  dense: await dense.embed('roadmap'),
-  sparse: await sparse.embed('roadmap'),
-  fusion: 'dbsf',
-})
+  mode: "hybrid",
+  dense: await dense.embed("roadmap"),
+  sparse: await sparse.embed("roadmap"),
+  fusion: "dbsf",
+});
 ```
 
 A store that cannot support the requested mode fails explicitly instead of degrading to dense-only search.
@@ -249,20 +253,20 @@ A store that cannot support the requested mode fails explicitly instead of degra
 Upstash is the reference hybrid-capable adapter in Crux. Users define one dense embedding and one sparse embedding once, then let the store combine them.
 
 ```ts
-import { Index } from '@upstash/vector'
-import { upstashVectorStore } from '@use-crux/upstash'
+import { Index } from "@upstash/vector";
+import { upstashVectorStore } from "@use-crux/upstash";
 
 const vectors = upstashVectorStore({
-  index: new Index({ url: '...', token: '...' }),
-  namespace: 'docs',
-})
+  index: new Index({ url: "...", token: "..." }),
+  namespace: "docs",
+});
 
 const results = await vectors.search({
-  mode: 'hybrid',
-  dense: await dense.embed('latest roadmap'),
-  sparse: await sparse.embed('latest roadmap'),
-  fusion: 'dbsf',
-})
+  mode: "hybrid",
+  dense: await dense.embed("latest roadmap"),
+  sparse: await sparse.embed("latest roadmap"),
+  fusion: "dbsf",
+});
 ```
 
 This keeps the user story clean:
@@ -276,9 +280,9 @@ This keeps the user story clean:
 If you are using first-party adapter packages, you do not always have to wrap the provider SDK manually:
 
 ```ts
-import { embedding as aiEmbedding } from '@use-crux/ai'
-import { embedding as openAIEmbedding } from '@use-crux/openai'
-import { embedding as googleEmbedding } from '@use-crux/google'
+import { embedding as aiEmbedding } from "@use-crux/ai";
+import { embedding as openAIEmbedding } from "@use-crux/openai";
+import { embedding as googleEmbedding } from "@use-crux/google";
 ```
 
 Provider packages export the same noun, `embedding()`, from their own package. Alias at import sites when a file uses multiple providers.
@@ -313,9 +317,29 @@ OTel receives the same privacy-safe counts as span attributes. It does not recei
 ## Next steps
 
 <Cards>
-  <Card title="Indexing" description="Use embeddings when writing searchable chunks." href="/docs/guides/retrieval/indexing" />
-  <Card title="Querying" description="Use dense, sparse, or hybrid embeddings through retrievers." href="/docs/guides/retrieval/querying" />
-  <Card title="Memory" description="How memory blocks use dense embeddings today." href="/docs/guides/memory" />
-  <Card title="Upstash" description="Reference adapter for dense, sparse, and hybrid search." href="/docs/reference/storage/upstash" />
-  <Card title="Core Reference" description="Full `embedding()` API." href="/docs/reference/crux-core" />
+  <Card
+    title="Indexing"
+    description="Use embeddings when writing searchable chunks."
+    href="/docs/guides/retrieval/indexing"
+  />
+  <Card
+    title="Querying"
+    description="Use dense, sparse, or hybrid embeddings through retrievers."
+    href="/docs/guides/retrieval/querying"
+  />
+  <Card
+    title="Memory"
+    description="How memory blocks use dense embeddings today."
+    href="/docs/guides/memory"
+  />
+  <Card
+    title="Upstash"
+    description="Reference adapter for dense, sparse, and hybrid search."
+    href="/docs/reference/storage/upstash"
+  />
+  <Card
+    title="Core Reference"
+    description="Full `embedding()` API."
+    href="/docs/reference/crux-core"
+  />
 </Cards>

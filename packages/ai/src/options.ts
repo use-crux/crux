@@ -26,17 +26,11 @@ import type {
   ToolsContextOption,
 } from "@use-crux/core";
 import type {
-  FallbackModel,
   ToolApprovalMap,
   ToolMiddleware,
   ValidationRetryOptions,
 } from "@use-crux/core";
-import type { AnyRouterModel, CascadeModel } from "@use-crux/core/routing";
-import type {
-  RetryModel,
-  RoutingCallOptions,
-  SplitModel,
-} from "@use-crux/core/routing";
+import type { AnyRoutable, RoutingCallOptions } from "@use-crux/core/routing";
 import type {
   Constraint,
   Guardrail,
@@ -57,6 +51,9 @@ type AiTransportResult = SdkLoopResultLike;
 
 /** Message history accepted by `@use-crux/ai` generation calls. */
 export type AIMessageHistory = readonly Message[] | readonly ModelMessage[];
+
+/** Language model or Core routing wrapper accepted by this adapter. @internal */
+export type AISupportedModel = LanguageModel | AnyRoutable;
 
 /** Metadata passed to an AI SDK adapter `transport` callback. */
 export interface AITransportInfo {
@@ -100,7 +97,9 @@ export interface AIExtra extends Record<string, unknown> {
 type AIPromptForOptions<
   TOwnInput extends z.ZodType,
   TContexts extends readonly ContextEntry[],
-  TPromptTools extends Record<string, unknown> | undefined = Record<string, unknown> | undefined,
+  TPromptTools extends Record<string, unknown> | undefined =
+    | Record<string, unknown>
+    | undefined,
 > = Prompt<TOwnInput, z.ZodType | undefined, TContexts, TPromptTools>;
 
 interface AIGenerateBaseOptions<
@@ -168,17 +167,14 @@ export type AIGenerateOptions<
   TOwnInput extends z.ZodType,
   TContexts extends readonly ContextEntry[],
   TCallTools extends ToolSet | undefined = ToolSet | undefined,
-  TPrompt extends AIPromptForOptions<TOwnInput, TContexts> | undefined = undefined,
+  TPrompt extends AIPromptForOptions<TOwnInput, TContexts> | undefined =
+    undefined,
   TRuntimeContext = unknown,
-  TModel =
-    | LanguageModel
-    | FallbackModel<LanguageModel>
-    | AnyRouterModel<LanguageModel>
-    | CascadeModel<LanguageModel>
-    | SplitModel<Record<string, { model: LanguageModel; weight: number }>>
-    | RetryModel<LanguageModel>,
-> = {
-} & Omit<AIGenerateBaseOptions<TCallTools, TRuntimeContext, TModel>, "toolsContext"> &
+  TModel = AISupportedModel,
+> = {} & Omit<
+  AIGenerateBaseOptions<TCallTools, TRuntimeContext, TModel>,
+  "toolsContext"
+> &
   ToolsContextOption<KnownToolsFor<TPrompt, TCallTools>> &
   GenerationSettings &
   RoutingCallOptions<TModel> &

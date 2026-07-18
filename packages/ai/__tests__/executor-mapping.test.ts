@@ -14,6 +14,7 @@ import { fallback } from "@use-crux/core";
 import { ValidationExhaustedError } from "@use-crux/core";
 import { assertCanonicalResult } from "@use-crux/core/adapter/testing";
 import type { StreamResult } from "@use-crux/core/adapter";
+import { createCruxRunId } from "@use-crux/core/observability";
 import type { SystemBlock } from "@use-crux/core";
 import type { LanguageModel, StopCondition, ToolSet } from "ai";
 import { createCruxAi } from "../src";
@@ -646,7 +647,9 @@ describe("stream — metrics and completion", () => {
 describe("UI-message helpers", () => {
   it("creates an SSE response from the raw AI SDK UI-message stream", async () => {
     let called = 0;
+    const runId = createCruxRunId();
     const result = {
+      runId,
       textStream: (async function* () {})(),
       raw: {
         toUIMessageStream() {
@@ -659,6 +662,7 @@ describe("UI-message helpers", () => {
         },
       },
       completion: Promise.resolve({
+        runId,
         text: "",
         content: [],
         steps: [{

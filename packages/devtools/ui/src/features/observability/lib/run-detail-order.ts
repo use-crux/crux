@@ -1,10 +1,10 @@
 export interface SequencedRunDetailChild {
-  id: string
-  seq?: number
-  startedAt?: string
+  id: string;
+  seq?: number;
+  startedAt?: string;
   timing?: {
-    startedAt?: string
-  }
+    startedAt?: string;
+  };
 }
 
 /**
@@ -14,24 +14,30 @@ export interface SequencedRunDetailChild {
  * future/present projection includes `seq`, use it to disambiguate same-ms
  * siblings while preserving backend order for older payloads.
  */
-export function orderRunDetailChildren<T extends SequencedRunDetailChild>(children: readonly T[]): readonly T[] {
+export function orderRunDetailChildren<T extends SequencedRunDetailChild>(
+  children: readonly T[],
+): readonly T[] {
   return children
     .map((node, index) => ({ node, index }))
     .sort((a, b) => {
-      const aTime = startedAtMs(a.node)
-      const bTime = startedAtMs(b.node)
-      if (aTime !== bTime) return aTime - bTime
-      if (a.node.seq != null && b.node.seq != null && a.node.seq !== b.node.seq) {
-        return a.node.seq - b.node.seq
+      const aTime = startedAtMs(a.node);
+      const bTime = startedAtMs(b.node);
+      if (aTime !== bTime) return aTime - bTime;
+      if (
+        a.node.seq != null &&
+        b.node.seq != null &&
+        a.node.seq !== b.node.seq
+      ) {
+        return a.node.seq - b.node.seq;
       }
-      return a.index - b.index
+      return a.index - b.index;
     })
-    .map((entry) => entry.node)
+    .map((entry) => entry.node);
 }
 
 function startedAtMs(node: SequencedRunDetailChild): number {
-  const value = node.timing?.startedAt ?? node.startedAt
-  if (!value) return 0
-  const parsed = Date.parse(value)
-  return Number.isNaN(parsed) ? 0 : parsed
+  const value = node.timing?.startedAt ?? node.startedAt;
+  if (!value) return 0;
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? 0 : parsed;
 }

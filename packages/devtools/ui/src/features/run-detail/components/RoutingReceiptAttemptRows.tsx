@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Chip, type ChipTone } from "@/qw/shell/primitives";
+import { Chip, type ChipTone } from "@/devtools/shell/primitives";
 import { RoutingStepShell } from "./RoutingReceiptStepShell";
 import {
   fmtCost,
@@ -65,17 +65,17 @@ function AttemptRow({
         className="grid items-center gap-2 font-mono text-[11.5px]"
         style={{ gridTemplateColumns: "22px minmax(0, 1fr) 72px 64px auto" }}
       >
-        <span style={{ color: "var(--qw-fg-faint)" }}>{index + 1}</span>
+        <span style={{ color: "var(--devtools-fg-faint)" }}>{index + 1}</span>
         <span
           className="truncate font-semibold"
-          style={{ color: "var(--qw-fg)" }}
+          style={{ color: "var(--devtools-fg)" }}
         >
           {shortModelId(attempt.model) ?? attempt.model}
         </span>
-        <span style={{ color: "var(--qw-fg-muted)" }}>
+        <span style={{ color: "var(--devtools-fg-muted)" }}>
           {attempt.durationMs != null ? fmtDuration(attempt.durationMs) : ""}
         </span>
-        <span style={{ color: "var(--qw-fg-muted)" }}>
+        <span style={{ color: "var(--devtools-fg-muted)" }}>
           {attempt.cost != null ? fmtCost(attempt.cost) : ""}
         </span>
         <Chip tone={ok ? "ok" : "warn"} dot>
@@ -85,9 +85,11 @@ function AttemptRow({
       {(attempt.delayMs != null || attempt.error) && (
         <div
           className="flex flex-wrap gap-x-3 gap-y-1 pl-[30px] font-mono text-[10.5px]"
-          style={{ color: "var(--qw-fg-faint)" }}
+          style={{ color: "var(--devtools-fg-faint)" }}
         >
-          {attempt.delayMs != null && <span>delay {fmtDuration(attempt.delayMs)}</span>}
+          {attempt.delayMs != null && (
+            <span>delay {fmtDuration(attempt.delayMs)}</span>
+          )}
           {attempt.error && (
             <span title={attempt.error} style={{ overflowWrap: "anywhere" }}>
               {boundedReceiptText(attempt.error)}
@@ -135,22 +137,24 @@ function TierRow({ tier }: { tier: RoutingTierView }) {
     <div className="flex flex-col gap-1">
       <div
         className="grid items-center gap-2 font-mono text-[11.5px]"
-        style={{ gridTemplateColumns: "22px minmax(0, 1fr) 72px 76px 72px auto" }}
+        style={{
+          gridTemplateColumns: "22px minmax(0, 1fr) 72px 76px 72px auto",
+        }}
       >
-        <span style={{ color: "var(--qw-fg-faint)" }}>{tier.index + 1}</span>
+        <span style={{ color: "var(--devtools-fg-faint)" }}>{tier.index + 1}</span>
         <span
           className="truncate font-semibold"
-          style={{ color: "var(--qw-fg)" }}
+          style={{ color: "var(--devtools-fg)" }}
         >
           {shortModelId(tier.model) ?? tier.model}
         </span>
-        <span style={{ color: "var(--qw-fg-muted)" }}>
+        <span style={{ color: "var(--devtools-fg-muted)" }}>
           {tier.durationMs != null ? fmtDuration(tier.durationMs) : ""}
         </span>
-        <span style={{ color: "var(--qw-fg-muted)" }}>
+        <span style={{ color: "var(--devtools-fg-muted)" }}>
           {tier.cost != null ? fmtCost(tier.cost) : ""}
         </span>
-        <span style={{ color: "var(--qw-fg-muted)" }}>
+        <span style={{ color: "var(--devtools-fg-muted)" }}>
           {tier.judgeCost != null ? `judge ${fmtCost(tier.judgeCost)}` : ""}
         </span>
         <Chip tone={tierTone(tier.status)} dot>
@@ -162,7 +166,7 @@ function TierRow({ tier }: { tier: RoutingTierView }) {
       {(tier.budget != null || tier.note) && (
         <div
           className="flex flex-wrap gap-x-3 gap-y-1 pl-[30px] font-mono text-[10.5px]"
-          style={{ color: "var(--qw-fg-faint)" }}
+          style={{ color: "var(--devtools-fg-faint)" }}
         >
           {tier.budget != null && <span>budget {fmtCost(tier.budget)}</span>}
           {tier.note && (
@@ -178,7 +182,9 @@ function TierRow({ tier }: { tier: RoutingTierView }) {
 
 function boundedReceiptText(value: string, limit = 180): string {
   const normalized = value.replace(/\s+/g, " ").trim();
-  return normalized.length <= limit ? normalized : `${normalized.slice(0, limit - 3)}...`;
+  return normalized.length <= limit
+    ? normalized
+    : `${normalized.slice(0, limit - 3)}...`;
 }
 
 function tierTone(status: string): ChipTone {
