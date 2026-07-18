@@ -101,10 +101,13 @@ For conversation history specifically, budget-dropping is the wrong tool. Evicti
 "Critical rules always survive" is a testable claim. It is also exactly the kind of invariant that erodes over months of unrelated edits, since every new context block shifts the arbitration. So assert it, against your worst-case inputs:
 
 ```ts
-export default evaluate('reply.budget-contract', {
-  covers: ['prompt:reply'],
-  task: target.prompt(reply, { generate, model }),
-  data: worstCaseInputs, // longest histories, fattest retrieval
+import { evaluate } from '@use-crux/core/eval'
+import { replyTask } from '../src/reply'
+
+export default evaluate({
+  id: 'reply-budget-contract',
+  task: replyTask,
+  cases: worstCaseInputs, // longest histories, fattest retrieval
   expect: (ctx) => {
     ctx.expect.decisionReport.context.toHaveDisposition(
       'context:rules', 'active',

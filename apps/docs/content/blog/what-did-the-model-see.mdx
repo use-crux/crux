@@ -88,10 +88,15 @@ The fix is boring, which is the point: schedule the corpus sync, and the stale r
 A fix without a test is a fix until the next refactor. Because the harness records decisions as structured evidence, the expectation is assertable. Not "the answer mentions Q3" (brittle, model-dependent) but the harness behavior itself:
 
 ```ts title="evals/reply.eval.ts"
-export default evaluate('reply.launch-freshness', {
-  covers: ['prompt:reply'],
-  task: target.prompt(reply, { generate, model }),
-  data: [{ input: { userId: 'u1', question: 'What did we decide about the launch plan?' } }],
+import { evaluate } from '@use-crux/core/eval'
+import { replyTask } from '../src/reply' // generate.task(reply, { model: stableModel(...) })
+
+export default evaluate({
+  id: 'reply-launch-freshness',
+  task: replyTask,
+  cases: [
+    { id: 'launch-plan', input: { userId: 'u1', question: 'What did we decide about the launch plan?' } },
+  ],
   expect: (ctx) => {
     ctx.expect.decisionReport.cache.toHaveFreshnessAcceptance(
       'retrieval:docs', 'accepted',
@@ -100,6 +105,8 @@ export default evaluate('reply.launch-freshness', {
   },
 })
 ```
+
+The Eval exercises `replyTask`, the same callable the application ships, so the assertion runs against real production assembly rather than an eval-only copy.
 
 And since the memory table listed "wrong memory recalled" as a suspect, pin that side down too while you are here:
 
@@ -112,7 +119,7 @@ expect: (ctx) => {
 }
 ```
 
-Run both in CI with `crux quality run --ci`. If the sync job breaks again, the pipeline fails with "stale evidence rejected on prompt:reply" instead of a customer screenshot three weeks later.
+Run both in CI with `crux eval`. If the sync job breaks again, the pipeline fails with "stale evidence rejected on prompt:reply" instead of a customer screenshot three weeks later.
 
 ## No devtools? Run the checklist anyway
 

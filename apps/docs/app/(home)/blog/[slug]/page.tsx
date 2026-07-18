@@ -126,13 +126,16 @@ export default async function BlogPostPage(props: { params: Promise<{ slug: stri
 }
 
 export function generateStaticParams() {
-  return blogSource.getPages().map((page) => ({ slug: page.slugs.join('/') }))
+  return blogSource
+    .getPages()
+    .filter((page) => showDrafts || !page.data.draft)
+    .map((page) => ({ slug: page.slugs.join('/') }))
 }
 
 export async function generateMetadata(props: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const params = await props.params
   const page = blogSource.getPage([params.slug])
-  if (!page) notFound()
+  if (!page || (!showDrafts && page.data.draft)) notFound()
 
   const { title, description, date, tags, authors } = page.data
 

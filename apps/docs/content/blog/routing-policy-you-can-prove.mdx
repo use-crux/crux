@@ -79,11 +79,13 @@ Every routed result carries one append-only record of what actually happened:
 
 ```ts
 result.routing
+// A 'fast' request that survived one retry and fell back to the canary:
 // {
-//   model: 'claude-sonnet-4-5',
-//   cost: 0.018,
+//   model: 'gpt-5-mini',
+//   cost: 0.004,
 //   trace: [
-//     { kind: 'router', id: 'support-model', route: 'deep' },
+//     { kind: 'router', id: 'support-model', route: 'fast' },
+//     { kind: 'retry', id: 'nano-retry', attempts: 2 },
 //     { kind: 'fallback', attempts: [...] },
 //   ],
 // }
@@ -104,10 +106,13 @@ Three questions worth standing up as queries on day one, because they're the one
 Now the part the gateway pitch skips. "No visible quality loss" is a testable hypothesis, and you already have the instrument if you run evals: a baseline promoted on your pre-routing setup, and a per-case diff after.
 
 ```ts
-export default evaluate('support.routing', {
-  covers: ['prompt:support'],
-  task: target.prompt(supportPrompt, { generate, model: supportModel }),
-  data: productionShapedCases,
+import { evaluate } from '@use-crux/core/eval'
+import { supportTask } from '../src/support' // generate.task(supportPrompt, { model: supportModel })
+
+export default evaluate({
+  id: 'support-routing',
+  task: supportTask,
+  cases: productionShapedCases,
   expect: (ctx) => {
     if (ctx.input.tier === 'enterprise') {
       ctx.expect.decisionReport.routing.toHaveOutcome(

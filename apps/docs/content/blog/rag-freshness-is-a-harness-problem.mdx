@@ -50,10 +50,13 @@ Collapsing these into one "cache freshness" blob is how the wrong-launch-plan bu
 **3. Freshness is assertable.** Once staleness decisions are recorded evidence, they're testable like any other harness behavior:
 
 ```ts
-export default evaluate('docs.freshness-contract', {
-  covers: ['prompt:answer-docs'],
-  task: target.prompt(answerDocs, { generate, model }),
-  data: pricingAndPolicyCases,
+import { evaluate } from '@use-crux/core/eval'
+import { answerDocsTask } from '../src/answer-docs'
+
+export default evaluate({
+  id: 'docs-freshness-contract',
+  task: answerDocsTask,
+  cases: pricingAndPolicyCases,
   expect: (ctx) => {
     ctx.expect.decisionReport.cache.toHaveFreshnessAcceptance(
       'context:docs', 'accepted',

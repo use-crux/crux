@@ -8,6 +8,7 @@ function escapeXml(value: string): string {
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
+    .replaceAll("'", '&apos;')
 }
 
 export function GET() {

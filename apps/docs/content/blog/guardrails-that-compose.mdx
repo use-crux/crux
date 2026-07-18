@@ -72,13 +72,13 @@ const redactEmail = guardrail({
   id: 'email-redactor',
   on: boundary.output.text(),
   run: async (text) => {
-    const next = text.replace(/\S+@\S+/g, '[email]')
-    if (next === text) return { action: 'allow' }
+    const matches = text.match(/\S+@\S+/g) ?? []
+    if (matches.length === 0) return { action: 'allow' }
     return {
       action: 'rewrite',
-      value: next,
+      value: text.replace(/\S+@\S+/g, '[email]'),
       rewrite: { kind: 'redact' },
-      findings: [{ type: 'email', count: 1 }],
+      findings: [{ type: 'email', count: matches.length }],
     }
   },
 })
@@ -140,10 +140,13 @@ Every decision (allow, warn, block, rewrite, with findings and strategy metadata
 And declared policies are testable policies. Your incident-response regression cases belong in CI:
 
 ```ts
-export default evaluate('safety.injection-contract', {
-  covers: ['prompt:support'],
-  task: target.prompt(supportPrompt, { generate, model }),
-  data: knownInjectionCases,
+import { evaluate } from '@use-crux/core/eval'
+import { supportTask } from '../src/support'
+
+export default evaluate({
+  id: 'safety-injection-contract',
+  task: supportTask,
+  cases: knownInjectionCases,
   expect: (ctx) => {
     ctx.expect.decisionReport.guardrail.toHaveOutcome(
       'guardrail:prompt-injection', 'blocked',

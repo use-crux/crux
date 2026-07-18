@@ -64,7 +64,7 @@ A fair question for any "add a layer" pitch. The honest answer for Crux, in orde
 
 1. **First prompt: an afternoon.** Wrap one existing SDK call in a typed `prompt()`. The SDK call site barely changes; you gain schemas and inspection on that one call.
 2. **First blocks: incremental, per feature.** Memory, retrieval, or a guardrail on the prompts that need them. Each block is useful alone; nothing forces the next one.
-3. **First evals: an afternoon per prompt.** `crux quality init` scaffolds from what the Project Index sees, and importing traces beats writing cases by hand.
+3. **First Evals: an afternoon per task.** An Eval exercises the same callable task you already ship, so authoring one is a file with typed Cases; your best Cases are real production inputs you already have.
 4. **Devtools: free.** `crux dev` reads what the definitions already emit.
 
 What you do *not* pay: no runtime adoption, no data migration, no platform account, no rewrite of working SDK code. The exit cost is symmetric. Definitions are plain TypeScript values, and deleting a block returns you to the SDK call you already had.
@@ -76,7 +76,7 @@ A layer has to pay rent. Skip Crux (for now) if:
 - **You're prototyping.** A prompt string and `generateText` is the right amount of machinery for a demo. Harness discipline earns its keep when regressions start costing you, not before.
 - **One prompt, no memory, no retrieval, no routing.** The debugging surface is small enough to hold in your head. Come back when `use[]` would have five things in it.
 - **You want one vendor to own everything**: runtime, tracing, evals, deploy, support contract. That's a reasonable enterprise posture; it points at an integrated platform, not a composable toolkit.
-- **You need boring-stable today.** Crux is alpha, its quality system is beta, and parts of the proof layer (the full per-turn decision report, richer routing rationale) are still being completed. The docs label shipped vs. in-progress honestly, but alpha is alpha.
+- **You need boring-stable today.** Crux is alpha, and parts of the proof layer (the full per-turn decision report, richer routing rationale) are still being completed. The docs label shipped vs. in-progress honestly, but alpha is alpha.
 
 ## The one-sentence version
 

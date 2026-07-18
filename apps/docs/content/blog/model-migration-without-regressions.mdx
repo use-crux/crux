@@ -17,49 +17,45 @@ Benchmarks tell you the new model is better *on average, at their tasks*. Your p
 
 ## Step 0: Baseline the old model, before touching anything
 
-You can't detect a regression against a memory. Before the migration branch even exists, run your eval suite on the current model and promote the result as an explicit baseline:
+You can't detect a regression against a memory. Before the migration branch even exists, run your Evals on the current model and accept the result as an explicit Baseline:
 
 ```bash
-crux quality run --ci
-crux quality promote <experiment-id>
+crux eval
+crux eval baseline set <eval-run-id>
 ```
 
-A baseline is a committed record of your current model's measured behavior: per-case outputs, scores, assertion results. From now on, every run auto-compares against it.
+A Baseline is a run you explicitly accepted, with a small pointer file committed beside the Eval. From then on, every run compares against it: per-Case outputs, scores, check results.
 
-If you don't have an eval suite yet, this is the forcing function. Even 30 real cases imported from production traces beat zero:
-
-```bash
-crux quality import-traces --definition support-reply --with-expected
-```
-
-Bias the dataset toward what would hurt: your highest-value flows, your weirdest known inputs, and any case that has caused an incident before. A migration suite is a regression suite, not a benchmark. Coverage of your own tail beats breadth.
+If you don't have Evals yet, this is the forcing function. Even 30 Cases built from real production inputs beat zero. Bias them toward what would hurt: your highest-value flows, your weirdest known inputs, and any input that has caused an incident before. A migration Eval is a regression net, not a benchmark. Coverage of your own tail beats breadth.
 
 ## Step 1: Change the model. Only the model.
 
-The classic migration mistake is bundling: new model, plus the prompt tweaks it "obviously" needs, plus that refactor someone had queued. Then quality shifts and nobody can attribute it. Discipline: first diff is model-only, prompts byte-identical.
+The classic migration mistake is bundling: new model, plus the prompt tweaks it "obviously" needs, plus that refactor someone had queued. Then quality shifts and nobody can attribute it. Discipline: the candidate changes the model and nothing else.
 
-```bash
-crux quality run --ci
-crux quality diff <baseline> <new-run>
-```
-
-The diff is per-case, not aggregate. It shows which cases flipped from pass to fail, which improved, and how scores moved pairwise. The aggregate hides exactly the thing you're hunting: a new model can improve the mean and still break your ten most valuable cases.
-
-If you'd rather compare in one run than across two, declare the migration as variants and let paired statistics do the honest work:
+Declare the migration as a Variant. Current is always your production task with its bound defaults; the Variant carries only the difference:
 
 ```ts
-export default evaluate('support.migration', {
-  task: target.prompt(supportPrompt, { generate, model: current }),
+import { evaluate } from '@use-crux/core/eval'
+import { support } from '../src/support'
+
+export default evaluate({
+  id: 'support-migration',
+  task: support,
   variants: {
-    current: { model: gpt4o },
     candidate: { model: gpt5mini },
   },
-  trials: 3,
-  data: cases,
+  cases,
 })
 ```
 
-Same cases, both models, trial-repeated to keep single-sample noise from masquerading as regression. Set `trials` to at least 3 for anything judged by a scorer. One sample per case is exactly enough data to mislead you.
+Same Cases, both arms, one run. Then diff:
+
+```bash
+crux eval support-migration
+crux eval diff <baseline-run> <candidate-run>
+```
+
+The diff is per-Case, not aggregate. It shows which Cases flipped from pass to fail, which improved, and how scores moved. The aggregate hides exactly the thing you're hunting: a new model can improve the mean and still break your ten most valuable Cases.
 
 Expect three buckets in the results, each with a different response:
 
@@ -85,16 +81,7 @@ const supportPrompt = prompt({
 
 Adaptations are applied during resolution, so inspection and evals see exactly what each provider receives. The delta between models is a reviewable declaration in the diff, not a fork that drifts. Resolution matches the exact provider first, then model-id prefixes, then the `'*'` wildcard, so one adaptation block covers a whole model family when that's what you mean.
 
-While iterating, replay cassettes keep the loop cheap. A cassette records the model calls from a real run and replays them deterministically, so re-running the suite while you tune adaptations costs zero tokens:
-
-```ts
-export default evaluate('support.migration', {
-  // ...
-  replay: 'cassette',
-})
-```
-
-Re-record only when you intend model behavior itself to change. Cassette identity is fingerprinted, so an out-of-date recording misses rather than lying to you.
+While iterating, automatic evidence reuse keeps the loop cheap. Repeated runs reuse exact, safe task evidence from earlier runs, so re-running the Eval while you tune checks and adaptations costs zero model calls; only changed arms run fresh. Reuse is fingerprinted against the Eval file and its source dependencies, so an out-of-date result misses rather than lying to you. Use `--fresh` when you intend model behavior itself to be re-measured, and `--offline` in CI jobs that must never touch the network.
 
 ## Step 3: Canary in production, deterministically
 
@@ -119,10 +106,10 @@ Widen 5 → 25 → 100 as the evidence comes in. If the provider has a bad day m
 
 ## Step 4: Promote the new baseline
 
-When the candidate holds, flip the default and promote the winning run as the new baseline:
+When the candidate holds, flip the production task's model and accept the winning run as the new Baseline:
 
 ```bash
-crux quality promote <candidate-experiment>
+crux eval baseline set <candidate-run-id>
 ```
 
 This closes the loop for *next* time. The migration you just finished becomes the protected floor the next migration is measured against. Teams that do this once stop fearing deprecation emails, because the machinery is already standing.
@@ -135,4 +122,4 @@ The reason most teams don't apply it to models is tooling. Without baselines, pe
 
 A model swap is the moment you discover whether you own your system's behavior or the model does. If the harness carries the system (declared context, tested expectations, measured baselines), then "which model" becomes what it should have been all along: a routing decision with evidence, revisitable every time the price sheet changes.
 
-*Tooling shown is [Crux](https://cruxjs.dev) (open source, alpha; the quality system is beta). The playbook works with any stack that can baseline, diff per-case, and split traffic deterministically. Guides: [variants and baselines](/docs/guides/quality/variants-and-baselines), [replay](/docs/guides/quality/replay), [routing](/docs/guides/routing).*
+*Tooling shown is [Crux](https://cruxjs.dev) (open source, alpha). The playbook works with any stack that can baseline, diff per-case, and split traffic deterministically. Guides: [variants and baselines](/docs/guides/evals/variants-and-baselines), [evals](/docs/guides/evals), [routing](/docs/guides/routing).*

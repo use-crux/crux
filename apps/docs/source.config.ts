@@ -31,13 +31,13 @@ export const blog = defineCollections({
   dir: 'content/blog',
   async: true,
   schema: frontmatterSchema.extend({
-    date: z.string(),
+    date: z.iso.date(),
     type: z.enum(['Engineering', 'Essay', 'Release', 'Announcement']),
     tags: z.array(z.string()).default([]),
     authors: z.array(z.string()).default(['henri']),
     featured: z.boolean().default(false),
     draft: z.boolean().default(false),
-    readTime: z.number().optional(),
+    readTime: z.number().int().positive().optional(),
   }),
 })
 
