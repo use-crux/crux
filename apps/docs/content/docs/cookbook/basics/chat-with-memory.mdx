@@ -19,7 +19,7 @@ import { z } from "zod";
 
 const assistantMemory = memory({
   id: "chat-assistant",
-  store,
+  records,
   namespace: ({ input }) => `user:${input.userId}:thread:${input.threadId}`,
   blocks: [
     recentMessages({ id: "recent", maxMessages: 12 }),

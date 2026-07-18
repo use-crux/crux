@@ -226,9 +226,13 @@ compatibility shims, while every implementation lives in a domain folder.
 ├── cost/
 │   └── index.ts        withCostTracking(), modelPricing(), CostLimitError — per-call cost attribution and canonical budget spans
 ├── memory/
-│   ├── index.ts        Barrel: memory(), memoryBlock(), recentMessages(), workingState(), episodes(), facts(), procedures()
+│   ├── index.ts        Barrel: memory(), memoryBlock(), recentMessages(), workingState(), episodes(), facts(), procedures(), reflections()
 │   ├── block-system.ts Block memory implementation
-│   ├── types.ts        Memory types
+│   ├── contracts.ts    Composed memory contracts
+│   ├── block-contracts.ts Block, runtime, capture, and proposal contracts
+│   ├── namespace.ts    Shared sync/async namespace resolution
+│   ├── rendering.ts    Entry strategies and token-budget rendering
+│   ├── policy-safety.ts Candidate policy application and observability
 │   └── utils.ts        Memory helpers
 ├── plan/
 │   ├── index.ts        Barrel: plan, tasks, task specs, types
@@ -500,7 +504,7 @@ The entry-resolution half of the pipeline lives in `resolver/` (use-crux/crux#29
 - **`resolver/driver.ts`** — `resolveUse()` walks lowered contributors: gate facts emit first, children merge before the entry's own contribution, `Contribution.use` re-enters the pipeline with branch-local indices, tool collisions throw with the owning entry attributed, and all `context.contribution` artifact emission happens at exactly two sites (gate steps + contribution facts).
 - **`resolver/skills.ts`** — the cross-entry collector for skills. The shared pass calls it from the post-merge phase before either `PromptResolution.args` or `PromptResolution.inspect()` is projected, so skill indexing, lazy registry fetches, and loaded-skill contexts cannot drift between resolve and inspect. Registry fetch, skill-index generation, and activation-session creation all flow through the `SkillSourcePort` (no direct skill-module imports in the pass). Resolve-mode skill tools are bound to a `SkillActivationSession` and the resolved prompt carries `_skillSession` as the explicit activation boundary.
 - **`resolver/ports.ts`** — the pipeline's ambient capabilities as injectable ports (pure contracts): `ObservabilityPort` (spans + artifact/edge choreography), `SkillSourcePort` (registry fetch + index + activation-session creation), `ContextCachePort`, `ClockPort`, `TokenizerPort` (every reported token count flows through it, so a deterministic counter pins budget behavior), `policy()` (auto-escape / security warnings), `DiagnosticsPort`, `InstrumentationPort`. The production adapters live in `resolver/default-ports.ts`; `withDefaultResolverPorts()` wraps the pre-existing globals lazily, so `setHooks()` / `configureObservability()` / `setTokenizer()` keep their install-takes-effect-immediately semantics. `compilePrompt(config, { ports })` binds the pipeline to explicit ports; in-memory fakes for every port — plus the one-call `createResolverFakes()` bundle — ship from `@use-crux/core` (`resolver/fakes.ts`).
-- Contributor-internal I/O (memory stores, retriever indexes, blackboard stores) deliberately has **no pipeline port** — those factories take their dependencies explicitly (`memory({ store })`), which is the correct seam.
+- Contributor-internal I/O (memory stores, retriever indexes, blackboard stores) deliberately has **no pipeline port** — those factories take their dependencies explicitly (`memory({ records })`), which is the correct seam.
 - The lowered `Contributor` contract types are exported from `@use-crux/core` as advanced API for adapter and primitive authors. The lowering, driver, and schema collection functions stay internal to the compiled prompt boundary. The everyday authoring surface is `contributor()` — a first-class `use:` entry with `when` gating, nested `use`, and full-channel contributions through the same channels as other entries.
 - Memory entries contribute their context (reported with family `memory`) and a memory binding; memory tools are opt-in via `memory.asTools()` and are neither merged nor reported as injected. The legacy sync `flattenContextEntries()` pass has been removed — the driver is the only gating code path.
 
@@ -1155,6 +1159,7 @@ memory()
   ├── episodes()        Append-only event memory with dense recall; optional `retention` policy + `evict()` GC telemetry
   ├── facts()           Extracted declarative knowledge, proposed by default
   ├── procedures()      Extracted operating memory, proposed by default
+  ├── reflections()     Generated higher-order memory with direct reflection
   └── memoryBlock()     Custom render/tools/capture/approval behavior
 ```
 
@@ -1180,27 +1185,15 @@ Crux public storage is split by capability:
 
 The in-memory implementations are Map-backed and suitable for testing and single-process development: `inMemoryRecordStore()`, `inMemoryVectorStore()`, `inMemoryAssetStore()`, and `inMemoryStorage()`.
 
-### Tool Description Override
-
-Memory primitives accept an optional `tool?: ToolConfig` in their config. For `blackboard()`, `tool.description` is appended as domain guidance to focused `.asTools()` descriptions. Focused blackboard tools can also be disambiguated with `tools.prefix` when multiple boards are injected into the same prompt.
-
-The `ToolConfig` type is exported from `@use-crux/core/memory`:
-
-```ts
-interface ToolConfig {
-  description: string;
-}
-```
-
 ### Working Memory Internals
 
-A thin wrapper around a single store key. Schema validation runs on every `set()` and `patch()`. TTL support uses `updatedAt` timestamp comparison against `Date.now()` — expired entries return `null` from `get()` but are only cleaned up lazily.
+A thin wrapper around a single block-scoped record key. Schema validation runs on every `set()` and `patch()`.
 
 `patch()` merges via `{ ...existing, ...partial }` then calls `set()` internally, so validation runs on the merged result.
 
 ### Episodic Memory Internals
 
-Keys are auto-generated as `episodic:{id}:{timestamp}-{counter}-{random}`. The `record()` method optionally embeds content via the provided `embed` function before storing.
+Keys use the standard block prefix plus an auto-generated episode ID. The `record()` method optionally embeds content via the provided `embed` function before storing.
 
 `recall()` has two paths:
 
@@ -1209,15 +1202,9 @@ Keys are auto-generated as `episodic:{id}:{timestamp}-{counter}-{random}`. The `
 
 Both paths respect `filter` for metadata matching.
 
-### Semantic Memory Internals
+### Extractive Memory Internals
 
-Like episodic but adds confidence scoring. Each entry stores `confidence` and `confirmedAt` in metadata. Time-based decay is computed on read:
-
-```
-effectiveConfidence = storedConfidence × 2^(-elapsed / decayMs)
-```
-
-`confirm()` resets confidence to 1.0 and updates `confirmedAt`. `prune()` evaluates decay for all entries and deletes those below the threshold.
+`facts()` and `procedures()` share the extractive block path. Capture extracts candidates, applies policy, then proposes them by default; `write.mode` can instead be `auto` for immediate writes or `manual`, where capture extracts nothing automatically and writes happen only through direct methods. Direct `add()`, `find()`, `list()`, `delete()`, and `render()` methods use `MemoryRuntimeOptions` with a required `records` store and optional `storage` and `vectors`.
 
 ## Compaction Primitives
 

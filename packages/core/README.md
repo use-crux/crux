@@ -94,7 +94,7 @@ import { z } from "zod";
 
 const chat = memory({
   id: "assistant",
-  store,
+  records,
   namespace: ({ input }) => `user:${input.userId}`,
   blocks: [
     recentMessages({ id: "recent", maxMessages: 12 }),
@@ -190,7 +190,7 @@ inspect admitted work, or explicitly accept a complete run as a Baseline.
 | Import                         | Area                                                                                               |
 | ------------------------------ | -------------------------------------------------------------------------------------------------- |
 | `@use-crux/core`               | Prompts, contexts, config, injection-defense helpers (`safe`, `escapeXml`), and common types.      |
-| `@use-crux/core/memory`        | Memory blocks, stores, capture, recall, and compaction hooks.                                      |
+| `@use-crux/core/memory`        | Memory blocks, storage, capture, proposals, and recall.                                            |
 | `@use-crux/core/retrieval`     | Retrievers, rerankers, grounding inputs, and RAG pipelines.                                        |
 | `@use-crux/core/safety`        | Guardrails, constraints, safety plugins, and validation retry.                                     |
 | `@use-crux/core/eval`          | Inert Evals, typed Cases, Variants, checks, scorers, and Gates.                                    |

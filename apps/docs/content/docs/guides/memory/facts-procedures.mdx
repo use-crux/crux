@@ -32,7 +32,7 @@ const operatingMemory = procedures({
 
 const agentMemory = memory({
   id: "assistant",
-  store,
+  records,
   namespace: ({ input }) => `user:${input.userId}`,
   blocks: [profileFacts, operatingMemory],
 });
@@ -51,7 +51,7 @@ await agentMemory.proposals.approve(proposals[0].id);
 
 Only pending proposals can be approved, rejected, or edited. Once a proposal is decided, trying to change it again is an error, so a decision cannot accidentally write duplicate memory.
 
-If your product has a safe write path, set `write: { mode: 'auto' }`. For example, a procedure extracted from an explicit settings screen can be auto-written; a preference inferred from a casual message should probably remain proposed.
+If your product has a safe write path, set `write: { mode: 'auto' }`. For example, a procedure extracted from an explicit settings screen can be auto-written; a preference inferred from a casual message should probably remain proposed. Use `write: { mode: 'manual' }` when capture should extract nothing automatically and writes should happen only through direct block method calls.
 
 ## Policy
 
@@ -77,7 +77,7 @@ Both blocks support `find(query, options)` when a dense embedding is configured.
 
 ```ts
 const activeProcedures = await operatingMemory.find("writing style", {
-  store,
+  records,
   namespace: "user:123",
   memoryId: "assistant",
   limit: 5,

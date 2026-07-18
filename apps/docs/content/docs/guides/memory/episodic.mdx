@@ -21,7 +21,7 @@ const history = episodes({
 
 const agentMemory = memory({
   id: "assistant",
-  store,
+  records,
   namespace: ({ input }) => `user:${input.userId}`,
   blocks: [history],
 });
@@ -35,11 +35,11 @@ await history.record(
     content: "User asked about pricing tiers",
     metadata: { source: "chat", topic: "pricing" },
   },
-  { store, namespace: "user:123", memoryId: "assistant" },
+  { records, namespace: "user:123", memoryId: "assistant" },
 );
 
 const matches = await history.recall("pricing discussion", {
-  store,
+  records,
   namespace: "user:123",
   memoryId: "assistant",
   limit: 5,
