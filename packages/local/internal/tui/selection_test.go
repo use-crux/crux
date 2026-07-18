@@ -6,7 +6,7 @@ import "testing"
 // selection store round-trips Set → Get → Clear for every recognised
 // record kind, as required by the approved TUI stabilization design.
 func TestSelectionStoreRoundTrips(t *testing.T) {
-	w := NewWorkbench(nil, nil, "http://localhost:4400")
+	w := newTestWorkbench(nil, nil, "http://localhost:4400")
 
 	// Default: empty.
 	if got := w.GetSelection(KindRun); got != "" {

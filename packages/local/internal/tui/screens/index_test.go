@@ -68,12 +68,12 @@ func TestIndexCursorCyclesDefinitions(t *testing.T) {
 		t.Fatalf("initial = %q", got)
 	}
 
-	c.Update(tea.KeyPressMsg(tea.Key{Text: "j", Code: 'j'}), nil)
+	c.Update(testContext, tea.KeyPressMsg(tea.Key{Text: "j", Code: 'j'}), nil)
 	if got := c.SelectedDefinitionID(); got != "agent:docs_agent" {
 		t.Errorf("after j = %q, want %q", got, "agent:docs_agent")
 	}
 
-	c.Update(tea.KeyPressMsg(tea.Key{Text: "k", Code: 'k'}), nil)
+	c.Update(testContext, tea.KeyPressMsg(tea.Key{Text: "k", Code: 'k'}), nil)
 	if got := c.SelectedDefinitionID(); got != "prompt:writer.prompt" {
 		t.Errorf("after k = %q, want %q", got, "prompt:writer.prompt")
 	}
@@ -133,7 +133,7 @@ func TestIndexExportEmitsCmd(t *testing.T) {
 	c.loaded = true
 	c.index = sampleIndex()
 
-	cmd := c.Update(tea.KeyPressMsg(tea.Key{Text: "e", Code: 'e'}), nil)
+	cmd := c.Update(testContext, tea.KeyPressMsg(tea.Key{Text: "e", Code: 'e'}), nil)
 	if cmd == nil {
 		t.Error("pressing `e` returned nil; expected export cmd")
 	}

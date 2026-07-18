@@ -53,11 +53,11 @@ func (s *Insights) Interested(domains bridge.Domains) bool {
 	return domains.Has(bridge.DomainInsights)
 }
 
-func (s *Insights) Init(client DataClient) tea.Cmd {
+func (s *Insights) Init(_ context.Context, client DataClient) tea.Cmd {
 	return fetchInsightsList(client)
 }
 
-func (s *Insights) Update(msg tea.Msg, client DataClient) tea.Cmd {
+func (s *Insights) Update(_ context.Context, msg tea.Msg, client DataClient) tea.Cmd {
 	switch m := msg.(type) {
 	case insightsListLoadedMsg:
 		s.applyInsights([]api.InspectInsightRecord(m))

@@ -36,7 +36,7 @@ func (w *Workbench) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	// Active editors and filters receive raw input before pane, workflow, or
 	// workspace bindings. Overlays remain the more-specific scope.
 	if editor, ok := w.activeScreen().(screens.EditingScreen); ok && editor.Editing() {
-		return w.activeScreen().Update(msg, w.client)
+		return w.activeScreen().Update(w.ctx, msg, w.client)
 	}
 
 	// A prefix already claimed by the workspace owns its suffix before the
@@ -53,11 +53,11 @@ func (w *Workbench) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	screen, migrated := w.activeScreen().(screens.ActionScreen)
 	legacy, legacyAdapted := w.activeScreen().(screens.LegacyKeyScreen)
 	if migrated {
-		if cmd, handled := interaction.Dispatch(screen.Actions(w.client), msg); handled {
+		if cmd, handled := interaction.Dispatch(screen.Actions(w.ctx, w.client), msg); handled {
 			return cmd
 		}
 	} else if legacyAdapted && legacy.HandlesKey(msg) {
-		return w.activeScreen().Update(msg, w.client)
+		return w.activeScreen().Update(w.ctx, msg, w.client)
 	}
 
 	if cmd, handled := interaction.Dispatch(w.workspaceActions(), msg); handled {
@@ -69,7 +69,7 @@ func (w *Workbench) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 
 	// Unmigrated screens retain their legacy key handler until their workflow
 	// moves to ActionScreen in its planned phase.
-	return w.activeScreen().Update(msg, w.client)
+	return w.activeScreen().Update(w.ctx, msg, w.client)
 }
 
 func (w *Workbench) workspaceActions() []interaction.Action {
@@ -131,7 +131,7 @@ func (w *Workbench) workspaceActions() []interaction.Action {
 
 func (w *Workbench) screenKeybinds() []shell.Keybind {
 	if screen, ok := w.activeScreen().(screens.ActionScreen); ok {
-		return actionKeybinds(screen.Actions(w.client))
+		return actionKeybinds(screen.Actions(w.ctx, w.client))
 	}
 	return nil
 }

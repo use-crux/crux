@@ -143,7 +143,7 @@ func NewDevCmd(f *cli.Factory) *cobra.Command {
 				if !noOpen {
 					openBrowser(devSrv.LocalURL())
 				}
-				return runTUI(io, devSrv, serverURL, port, startup, tunnelReady)
+				return runTUI(ctx, io, devSrv, serverURL, port, startup, tunnelReady)
 			}
 
 			printIngestTokenHint(io, devSrv)
@@ -211,7 +211,11 @@ func printIngestTokenHint(io *output.IO, devSrv *server.DevServer) {
 		suffix)
 }
 
-func runTUI(io *output.IO, devSrv *server.DevServer, serverURL string, port int, startup *startupTracker, tunnelReady <-chan string) error {
+func newTUIApp(ctx context.Context, serverURL string, client tui.DataClient, startup *startupTracker) *tui.App {
+	return tui.NewApp(ctx, serverURL, client, startup.Mode(), startup.Enabled())
+}
+
+func runTUI(ctx context.Context, io *output.IO, devSrv *server.DevServer, serverURL string, port int, startup *startupTracker, tunnelReady <-chan string) error {
 	// Server is already running (Go native) — no boot wait needed.
 	if devSrv == nil {
 		return fmt.Errorf("native TUI requires an owned dev server")
@@ -233,17 +237,17 @@ func runTUI(io *output.IO, devSrv *server.DevServer, serverURL string, port int,
 	// Phase 3: Launch Bubbletea TUI (server is ready, WS connected).
 	c := devtools.NewDirectClientFromService(devSrv.Devtools).
 		WithObservability(devSrv.Observability)
-	app := tui.NewApp(serverURL, c, startup.Mode(), startup.Enabled())
+	app := newTUIApp(ctx, serverURL, c, startup)
 	app.SendIngestToken(devSrv.IngestToken, devSrv.IngestTokenPath)
 
 	// Mark boot as complete immediately — server is already up.
 	app.MarkBootComplete()
 
-	p := tea.NewProgram(app)
+	p := tea.NewProgram(app, tea.WithContext(ctx))
 	app.SetProgram(p)
 
 	// Pipe in-process event buses into the TUI without a WebSocket round-trip.
-	bridgeCtx, stopBridge := context.WithCancel(context.Background())
+	bridgeCtx, stopBridge := context.WithCancel(ctx)
 	sources := bridge.Sources{
 		StoreChanged: devSrv.Devtools.SubscribeChanges(),
 		Inspect:      devSrv.Devtools.Inspect().Events().Subscribe(bridgeCtx),
@@ -257,8 +261,12 @@ func runTUI(io *output.IO, devSrv *server.DevServer, serverURL string, port int,
 	// Send tunnel URL to TUI when it's ready.
 	if tunnelReady != nil {
 		go func() {
-			if url, ok := <-tunnelReady; ok && url != "" {
-				app.SendTunnelURL(url)
+			select {
+			case url, ok := <-tunnelReady:
+				if ok && url != "" {
+					app.SendTunnelURL(url)
+				}
+			case <-ctx.Done():
 			}
 		}()
 	}

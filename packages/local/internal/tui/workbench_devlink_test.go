@@ -12,7 +12,7 @@ import (
 // stripped the URL scheme for display — the OSC 8 wrapper restores it
 // while keeping the chip compact.
 func TestWorkbenchBreadcrumbDevtoolsLinkIsHyperlink(t *testing.T) {
-	w := NewWorkbench(nil, nil, "http://localhost:4317")
+	w := newTestWorkbench(nil, nil, "http://localhost:4317")
 	w.Resize(160, 30)
 
 	out := w.View()
@@ -31,7 +31,7 @@ func TestWorkbenchBreadcrumbDevtoolsLinkIsHyperlink(t *testing.T) {
 
 func TestWorkbenchBreadcrumbTunnelLinkIsHyperlink(t *testing.T) {
 	const tunnelURL = "https://example.ngrok.app?t=session-token"
-	w := NewWorkbench(nil, nil, "http://localhost:4317")
+	w := newTestWorkbench(nil, nil, "http://localhost:4317")
 	w.SetTunnelURL(tunnelURL)
 	w.Resize(200, 30)
 
@@ -47,7 +47,7 @@ func TestWorkbenchBreadcrumbTunnelLinkIsHyperlink(t *testing.T) {
 }
 
 func TestWorkbenchBreadcrumbSurfacesIngestTokenPath(t *testing.T) {
-	w := NewWorkbench(nil, nil, "http://localhost:4317")
+	w := newTestWorkbench(nil, nil, "http://localhost:4317")
 	w.SetIngestToken("secret-project-token", ".crux/devtools/ingest-token")
 	w.Resize(200, 30)
 

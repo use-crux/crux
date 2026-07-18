@@ -8,7 +8,7 @@ import (
 )
 
 func TestWorkbenchBridgeBatchMarksInactiveScreenStaleUntilFocus(t *testing.T) {
-	w := NewWorkbench(nil, nil, "http://localhost:4400")
+	w := newTestWorkbench(nil, nil, "http://localhost:4400")
 	active := &fakeScreen{id: "overview", interest: bridge.NewDomains(bridge.DomainRuns)}
 	inactive := &fakeScreen{id: "insights", interest: bridge.NewDomains(bridge.DomainInsights)}
 	w.screens["overview"] = active
@@ -31,7 +31,7 @@ func TestWorkbenchBridgeBatchMarksInactiveScreenStaleUntilFocus(t *testing.T) {
 }
 
 func TestWorkbenchGotoNavDoesNotRefetchCleanInitializedScreen(t *testing.T) {
-	w := NewWorkbench(nil, nil, "http://localhost:4400")
+	w := newTestWorkbench(nil, nil, "http://localhost:4400")
 	overview := &fakeScreen{id: "overview", interest: bridge.NewDomains(bridge.DomainRuns)}
 	insights := &fakeScreen{id: "insights", interest: bridge.NewDomains(bridge.DomainInsights)}
 	w.screens["overview"] = overview

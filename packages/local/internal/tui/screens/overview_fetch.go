@@ -13,9 +13,9 @@ type runsLoadedMsg []api.InspectRunRecord
 type activityLoadedMsg []api.InspectActivityEvent
 type dataErrMsg string
 
-func fetchOverview(c DataClient) tea.Cmd {
+func fetchOverview(ctx context.Context, c DataClient) tea.Cmd {
 	return func() tea.Msg {
-		rec, err := c.Overview(context.Background())
+		rec, err := c.Overview(ctx)
 		if err != nil {
 			return dataErrMsg(err.Error())
 		}
@@ -23,9 +23,9 @@ func fetchOverview(c DataClient) tea.Cmd {
 	}
 }
 
-func fetchInsights(c DataClient) tea.Cmd {
+func fetchInsights(ctx context.Context, c DataClient) tea.Cmd {
 	return func() tea.Msg {
-		rec, err := c.Insights(context.Background())
+		rec, err := c.Insights(ctx)
 		if err != nil {
 			return dataErrMsg(err.Error())
 		}
@@ -33,9 +33,9 @@ func fetchInsights(c DataClient) tea.Cmd {
 	}
 }
 
-func fetchRuns(c DataClient) tea.Cmd {
+func fetchRuns(ctx context.Context, c DataClient) tea.Cmd {
 	return func() tea.Msg {
-		rec, err := c.Runs(context.Background())
+		rec, err := c.Runs(ctx)
 		if err != nil {
 			return dataErrMsg(err.Error())
 		}
@@ -43,9 +43,9 @@ func fetchRuns(c DataClient) tea.Cmd {
 	}
 }
 
-func fetchActivity(c DataClient, limit int) tea.Cmd {
+func fetchActivity(ctx context.Context, c DataClient, limit int) tea.Cmd {
 	return func() tea.Msg {
-		rec, err := c.Activity(context.Background(), limit)
+		rec, err := c.Activity(ctx, limit)
 		if err != nil {
 			return dataErrMsg(err.Error())
 		}

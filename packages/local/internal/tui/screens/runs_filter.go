@@ -1,8 +1,12 @@
 package screens
 
-import tea "charm.land/bubbletea/v2"
+import (
+	"context"
 
-func (s *Runs) updateRunFilter(msg tea.KeyPressMsg, c DataClient) tea.Cmd {
+	tea "charm.land/bubbletea/v2"
+)
+
+func (s *Runs) updateRunFilter(ctx context.Context, msg tea.KeyPressMsg, c DataClient) tea.Cmd {
 	switch msg.String() {
 	case "esc", "enter":
 		s.filteringRuns = false
@@ -16,5 +20,5 @@ func (s *Runs) updateRunFilter(msg tea.KeyPressMsg, c DataClient) tea.Cmd {
 			s.runQuery += msg.Text
 		}
 	}
-	return s.ensureFilteredRunSelection(c)
+	return s.ensureFilteredRunSelection(ctx, c)
 }

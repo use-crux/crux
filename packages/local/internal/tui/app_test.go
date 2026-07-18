@@ -8,7 +8,7 @@ import (
 )
 
 func TestAppQueuesExternalMessagesUntilProgramInit(t *testing.T) {
-	app := NewApp("http://localhost:4400", nil, "", false)
+	app := newTestApp("http://localhost:4400", nil, "", false)
 	p := tea.NewProgram(app)
 	app.SetProgram(p)
 
@@ -35,7 +35,7 @@ func TestAppQueuesExternalMessagesUntilProgramInit(t *testing.T) {
 }
 
 func TestAppTunnelMessageUpdatesWorkbench(t *testing.T) {
-	app := NewApp("http://localhost:4400", nil, "", false)
+	app := newTestApp("http://localhost:4400", nil, "", false)
 
 	_, _ = app.Update(tunnelURLMsg{url: "https://example.ngrok.app?t=session-token"})
 
@@ -48,7 +48,7 @@ func TestAppTunnelMessageUpdatesWorkbench(t *testing.T) {
 }
 
 func TestAppIngestTokenMessageUpdatesWorkbench(t *testing.T) {
-	app := NewApp("http://localhost:4400", nil, "", false)
+	app := newTestApp("http://localhost:4400", nil, "", false)
 
 	_, _ = app.Update(ingestTokenMsg{token: "project-token", path: ".crux/devtools/ingest-token"})
 

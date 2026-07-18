@@ -24,7 +24,7 @@ func TestRunsListScrollsWithCursor(t *testing.T) {
 
 	// Move cursor down 5 times — past the visible window (capacity 3).
 	for i := 0; i < 5; i++ {
-		r.cycleRun(nil, +1)
+		r.cycleRun(testContext, nil, +1)
 	}
 
 	if r.selRun != r.runs[5].TraceID {
@@ -56,7 +56,7 @@ func TestRunsListScrollsBackUp(t *testing.T) {
 
 	// Cursor back up to index 1 — scroll should follow.
 	for i := 0; i < 7; i++ {
-		r.cycleRun(nil, -1)
+		r.cycleRun(testContext, nil, -1)
 	}
 
 	if r.selRun != r.runs[1].TraceID {

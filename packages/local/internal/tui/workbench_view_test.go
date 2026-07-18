@@ -10,7 +10,7 @@ import (
 // · shell`) was superseded by the unified breadcrumb-with-status row
 // (see plans/tui-v1-quality-workbench-implementation.md S2).
 func TestWorkbenchViewHasNoTabStrip(t *testing.T) {
-	w := NewWorkbench(nil, nil, "http://localhost:4400")
+	w := newTestWorkbench(nil, nil, "http://localhost:4400")
 	w.Resize(120, 30)
 	out := w.View()
 

@@ -1,27 +1,29 @@
 package screens
 
 import (
+	"context"
+
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"github.com/use-crux/crux/packages/local/internal/tui/interaction"
 	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
 
-func (s *Runs) updateKey(msg tea.KeyPressMsg, client DataClient) tea.Cmd {
-	if cmd, handled := interaction.Dispatch(s.Actions(client), msg); handled {
+func (s *Runs) updateKey(ctx context.Context, msg tea.KeyPressMsg, client DataClient) tea.Cmd {
+	if cmd, handled := interaction.Dispatch(s.Actions(ctx, client), msg); handled {
 		return cmd
 	}
 	if s.filteringRuns {
-		return s.updateRunFilter(msg, client)
+		return s.updateRunFilter(ctx, msg, client)
 	}
 	return nil
 }
 
 // Actions returns the executable actions for the active Runs interaction
 // scope. Filter controls replace workflow actions while filtering.
-func (s *Runs) Actions(client DataClient) []interaction.Action {
+func (s *Runs) Actions(ctx context.Context, client DataClient) []interaction.Action {
 	if s.filteringRuns {
-		return s.filterActions(client)
+		return s.filterActions(ctx, client)
 	}
 
 	inspectReason := ""
@@ -45,12 +47,12 @@ func (s *Runs) Actions(client DataClient) []interaction.Action {
 		{
 			ID:      "runs.next",
 			Binding: key.NewBinding(key.WithKeys("j", "down"), key.WithHelp("j/↓", "next "+s.focusItemLabel())),
-			Run:     func() tea.Cmd { return s.moveDown(client) },
+			Run:     func() tea.Cmd { return s.moveDown(ctx, client) },
 		},
 		{
 			ID:      "runs.previous",
 			Binding: key.NewBinding(key.WithKeys("k", "up"), key.WithHelp("k/↑", "previous "+s.focusItemLabel())),
-			Run:     func() tea.Cmd { return s.moveUp(client) },
+			Run:     func() tea.Cmd { return s.moveUp(ctx, client) },
 		},
 		{
 			ID:      "runs.previous-pane",
@@ -72,7 +74,7 @@ func (s *Runs) Actions(client DataClient) []interaction.Action {
 			ID:             "runs.activate",
 			Binding:        key.NewBinding(key.WithKeys("enter"), key.WithHelp("↵", focusActionLabel(s.focus))),
 			DisabledReason: activateReason,
-			Run:            func() tea.Cmd { return s.activateFocus(client) },
+			Run:            func() tea.Cmd { return s.activateFocus(ctx, client) },
 		},
 		{
 			ID:             "runs.filter",
@@ -87,7 +89,7 @@ func (s *Runs) Actions(client DataClient) []interaction.Action {
 			ID:             "runs.status-filter",
 			Binding:        key.NewBinding(key.WithKeys("f"), key.WithHelp("f", "status filter")),
 			DisabledReason: disabledUnless(s.focus == focusRuns, "focus the run list to filter"),
-			Run:            func() tea.Cmd { return s.cycleRunStatusFilter(client) },
+			Run:            func() tea.Cmd { return s.cycleRunStatusFilter(ctx, client) },
 		},
 		{
 			ID:             "runs.inspect",
@@ -104,14 +106,14 @@ func (s *Runs) Actions(client DataClient) []interaction.Action {
 	}
 }
 
-func (s *Runs) filterActions(client DataClient) []interaction.Action {
+func (s *Runs) filterActions(ctx context.Context, client DataClient) []interaction.Action {
 	return []interaction.Action{
 		{
 			ID:      "runs.filter.finish",
 			Binding: key.NewBinding(key.WithKeys("enter", "esc"), key.WithHelp("enter/esc", "finish filter")),
 			Run: func() tea.Cmd {
 				s.filteringRuns = false
-				return s.ensureFilteredRunSelection(client)
+				return s.ensureFilteredRunSelection(ctx, client)
 			},
 		},
 		{
@@ -121,21 +123,21 @@ func (s *Runs) filterActions(client DataClient) []interaction.Action {
 			Run: func() tea.Cmd {
 				runes := []rune(s.runQuery)
 				s.runQuery = string(runes[:len(runes)-1])
-				return s.ensureFilteredRunSelection(client)
+				return s.ensureFilteredRunSelection(ctx, client)
 			},
 		},
 	}
 }
 
 func (s *Runs) Keybinds() []shell.Keybind {
-	return actionKeybinds(s.Actions(nil), nil)
+	return actionKeybinds(s.Actions(context.TODO(), nil), nil)
 }
 
 func (s *Runs) waterfallKeybinds() []shell.Keybind {
 	if s.focus != focusWaterfall {
 		return nil
 	}
-	return actionKeybinds(s.Actions(nil), map[string]bool{
+	return actionKeybinds(s.Actions(context.TODO(), nil), map[string]bool{
 		"runs.activate": true,
 		"runs.inspect":  true,
 		"runs.export":   true,

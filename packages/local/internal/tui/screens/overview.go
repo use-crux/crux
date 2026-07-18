@@ -1,6 +1,8 @@
 package screens
 
 import (
+	"context"
+
 	tea "charm.land/bubbletea/v2"
 	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/tui/bridge"
@@ -89,16 +91,16 @@ func (o *Overview) Interested(domains bridge.Domains) bool {
 	))
 }
 
-func (o *Overview) Init(client DataClient) tea.Cmd {
+func (o *Overview) Init(ctx context.Context, client DataClient) tea.Cmd {
 	return tea.Batch(
-		fetchOverview(client),
-		fetchInsights(client),
-		fetchRuns(client),
-		fetchActivity(client, 12),
+		fetchOverview(ctx, client),
+		fetchInsights(ctx, client),
+		fetchRuns(ctx, client),
+		fetchActivity(ctx, client, 12),
 	)
 }
 
-func (o *Overview) Update(msg tea.Msg, client DataClient) tea.Cmd {
+func (o *Overview) Update(ctx context.Context, msg tea.Msg, client DataClient) tea.Cmd {
 	switch m := msg.(type) {
 	case overviewLoadedMsg:
 		o.overview = api.InspectOverviewRecord(m.rec)
@@ -128,8 +130,8 @@ func (o *Overview) Update(msg tea.Msg, client DataClient) tea.Cmd {
 		}
 		o.bumpRenderRev()
 		return tea.Batch(
-			fetchOverview(client),
-			fetchActivity(client, 12),
+			fetchOverview(ctx, client),
+			fetchActivity(ctx, client, 12),
 		)
 	case tea.KeyPressMsg:
 		return o.handleKey(m)

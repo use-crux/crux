@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -15,12 +16,12 @@ type fakeActionScreen struct {
 	actions []interaction.Action
 }
 
-func (s *fakeActionScreen) Actions(screens.DataClient) []interaction.Action {
+func (s *fakeActionScreen) Actions(context.Context, screens.DataClient) []interaction.Action {
 	return s.actions
 }
 
 func TestWorkbenchHelpRendersExecutableWorkspaceActionsForLegacyScreen(t *testing.T) {
-	w := NewWorkbench(nil, nil, "http://localhost:4400")
+	w := newTestWorkbench(nil, nil, "http://localhost:4400")
 	w.Resize(160, 40)
 	w.Update(tea.KeyPressMsg(tea.Key{Text: "?", Code: '?'}))
 	out := w.View()
@@ -37,7 +38,7 @@ func TestWorkbenchHelpRendersExecutableWorkspaceActionsForLegacyScreen(t *testin
 }
 
 func TestWorkbenchHelpAdvertisesOnlyExecutableActions(t *testing.T) {
-	w := NewWorkbench(nil, nil, "http://localhost:4400")
+	w := newTestWorkbench(nil, nil, "http://localhost:4400")
 	w.Resize(160, 40)
 	w.screens["overview"] = &fakeActionScreen{
 		fakeScreen: &fakeScreen{id: "overview"},

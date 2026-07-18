@@ -47,7 +47,7 @@ func (s *Index) SetIndexForTest(data api.IndexData) {
 
 func (s *Index) ID() string { return "index" }
 
-func (s *Index) Init(c DataClient) tea.Cmd { return fetchIndex(c) }
+func (s *Index) Init(_ context.Context, c DataClient) tea.Cmd { return fetchIndex(c) }
 
 func (s *Index) Interested(domains bridge.Domains) bool {
 	return domains.Has(bridge.DomainIndex)
@@ -57,7 +57,7 @@ func (s *Index) Counts() map[string]int {
 	return map[string]int{"index": len(s.index.Definitions)}
 }
 
-func (s *Index) Update(msg tea.Msg, c DataClient) tea.Cmd {
+func (s *Index) Update(_ context.Context, msg tea.Msg, c DataClient) tea.Cmd {
 	switch m := msg.(type) {
 	case indexLoadedMsg:
 		s.index = api.IndexData(m)

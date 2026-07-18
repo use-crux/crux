@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -23,17 +24,21 @@ type focusCall struct{ kind, id string }
 
 type passiveScreen struct{ id string }
 
-func (s *passiveScreen) ID() string                                 { return s.id }
-func (s *passiveScreen) Init(screens.DataClient) tea.Cmd            { return nil }
-func (s *passiveScreen) Update(tea.Msg, screens.DataClient) tea.Cmd { return nil }
-func (s *passiveScreen) View(screens.Size) string                   { return "" }
-func (s *passiveScreen) Breadcrumb() ([]string, string)             { return []string{s.id}, "" }
-func (s *passiveScreen) Keybinds() []shell.Keybind                  { return nil }
-func (s *passiveScreen) Counts() map[string]int                     { return nil }
-func (s *passiveScreen) Interested(bridge.Domains) bool             { return false }
+func (s *passiveScreen) ID() string { return s.id }
+func (s *passiveScreen) Init(context.Context, screens.DataClient) tea.Cmd {
+	return nil
+}
+func (s *passiveScreen) Update(context.Context, tea.Msg, screens.DataClient) tea.Cmd {
+	return nil
+}
+func (s *passiveScreen) View(screens.Size) string       { return "" }
+func (s *passiveScreen) Breadcrumb() ([]string, string) { return []string{s.id}, "" }
+func (s *passiveScreen) Keybinds() []shell.Keybind      { return nil }
+func (s *passiveScreen) Counts() map[string]int         { return nil }
+func (s *passiveScreen) Interested(bridge.Domains) bool { return false }
 
 func TestGotoNavAllowsDestinationWithoutFocusCapability(t *testing.T) {
-	w := NewWorkbench(nil, nil, "http://localhost:4400")
+	w := newTestWorkbench(nil, nil, "http://localhost:4400")
 	w.screens["index"] = &passiveScreen{id: "index"}
 
 	w.gotoNav("index")
@@ -44,13 +49,13 @@ func TestGotoNavAllowsDestinationWithoutFocusCapability(t *testing.T) {
 }
 
 func (s *fakeScreen) ID() string { return s.id }
-func (s *fakeScreen) Init(_ screens.DataClient) tea.Cmd {
+func (s *fakeScreen) Init(_ context.Context, _ screens.DataClient) tea.Cmd {
 	return func() tea.Msg {
 		s.initCalls++
 		return nil
 	}
 }
-func (s *fakeScreen) Update(msg tea.Msg, _ screens.DataClient) tea.Cmd {
+func (s *fakeScreen) Update(_ context.Context, msg tea.Msg, _ screens.DataClient) tea.Cmd {
 	s.updateMsgs = append(s.updateMsgs, msg)
 	return nil
 }
@@ -65,7 +70,7 @@ func (s *fakeScreen) Focus(kind, id string)                  { s.focusCalls = ap
 // screen can still consume selection-store state until route ownership moves
 // into that workflow.
 func TestGotoNavInvokesFocusForLegacySelectionAdapter(t *testing.T) {
-	w := NewWorkbench(nil, nil, "http://localhost:4400")
+	w := newTestWorkbench(nil, nil, "http://localhost:4400")
 	// Replace one of the real screens with our recorder.
 	fake := &fakeScreen{id: "insights"}
 	w.screens["insights"] = fake
@@ -84,7 +89,7 @@ func TestGotoNavInvokesFocusForLegacySelectionAdapter(t *testing.T) {
 }
 
 func TestGotoNavDoesNotReplayLegacyRunSelection(t *testing.T) {
-	w := NewWorkbench(nil, nil, "http://localhost:4400")
+	w := newTestWorkbench(nil, nil, "http://localhost:4400")
 	fake := &fakeScreen{id: "runs"}
 	w.screens["runs"] = fake
 	w.SetSelection(KindRun, "stale-run")
@@ -100,7 +105,7 @@ func TestGotoNavDoesNotReplayLegacyRunSelection(t *testing.T) {
 // with no staged record does NOT invoke Focus — silent no-call is the
 // signal that the screen should keep its own default selection.
 func TestGotoNavSkipsFocusWhenNoSelection(t *testing.T) {
-	w := NewWorkbench(nil, nil, "http://localhost:4400")
+	w := newTestWorkbench(nil, nil, "http://localhost:4400")
 	fake := &fakeScreen{id: "index"}
 	w.screens["index"] = fake
 

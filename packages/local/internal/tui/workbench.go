@@ -37,6 +37,7 @@ func osc8Link(url, text string) string {
 // tab strip was dropped in S2 — the workbench IS the Inspect workbench;
 // there is no second-level navigation above the nav rail.
 type Workbench struct {
+	ctx             context.Context
 	client          screens.DataClient
 	rawClient       DataClient // legacy/shared helpers
 	capabilities    Capabilities
@@ -71,9 +72,11 @@ type Workbench struct {
 	onQuitRequested func()
 }
 
-// NewWorkbench constructs the workbench root.
-func NewWorkbench(client screens.DataClient, rawClient DataClient, serverURL string) *Workbench {
+// NewWorkbench constructs the workbench root. All asynchronous work started by
+// the workbench descends from ctx.
+func NewWorkbench(ctx context.Context, client screens.DataClient, rawClient DataClient, serverURL string) *Workbench {
 	w := &Workbench{
+		ctx:          ctx,
 		client:       client,
 		rawClient:    rawClient,
 		capabilities: discoverCapabilities(client),
@@ -119,7 +122,7 @@ func (w *Workbench) Init() tea.Cmd {
 	w.initialized[w.activeNav] = true
 	return tea.Batch(
 		w.fetchContext(),
-		w.activeScreen().Init(w.client),
+		w.activeScreen().Init(w.ctx, w.client),
 	)
 }
 
@@ -177,14 +180,14 @@ func (w *Workbench) Update(msg tea.Msg) tea.Cmd {
 			Severity:  severity,
 			Action:    summary,
 		}
-		cmd := w.activeScreen().Update(ev, w.client)
+		cmd := w.activeScreen().Update(w.ctx, ev, w.client)
 		// If the action likely changed state (no error), kick a re-fetch.
 		if m.Err == "" {
-			cmd = tea.Batch(cmd, w.activeScreen().Init(w.client))
+			cmd = tea.Batch(cmd, w.activeScreen().Init(w.ctx, w.client))
 		}
 		return cmd
 	}
-	cmd := w.activeScreen().Update(msg, w.client)
+	cmd := w.activeScreen().Update(w.ctx, msg, w.client)
 	w.refreshCounts()
 	return cmd
 }
@@ -388,8 +391,9 @@ func (w *Workbench) runPaletteCommand(c overlays.Chosen) tea.Cmd {
 			return w.toast("usage: dismiss insight <ID>")
 		}
 		client := w.client
+		ctx := w.ctx
 		return func() tea.Msg {
-			_, err := client.SetInsightStatus(context.Background(), id, api.InspectInsightStatusRequest{Status: "dismissed"})
+			_, err := client.SetInsightStatus(ctx, id, api.InspectInsightStatusRequest{Status: "dismissed"})
 			if err != nil {
 				return paletteResultMsg{Err: err.Error()}
 			}
@@ -458,7 +462,7 @@ type inspectEventMsg api.InspectEvent
 
 func (w *Workbench) fetchContext() tea.Cmd {
 	return func() tea.Msg {
-		ctx, err := w.client.DevtoolsContext(context.Background())
+		ctx, err := w.client.DevtoolsContext(w.ctx)
 		if err != nil {
 			return nil
 		}

@@ -10,7 +10,7 @@ func TestRunsKeepsExactRouteTargetOutsideLoadedList(t *testing.T) {
 	runs := NewRuns()
 	runs.Focus("run", "run-outside-current-page")
 
-	cmd := runs.Update(runsListLoadedMsg{
+	cmd := runs.Update(testContext, runsListLoadedMsg{
 		api.InspectRunRecord{TraceID: "first-visible-run"},
 		api.InspectRunRecord{TraceID: "second-visible-run"},
 	}, nil)
@@ -28,7 +28,7 @@ func TestRunsKeepsExactRouteTargetOutsideLoadedList(t *testing.T) {
 	if got := runs.Counts()["runs"]; got != 2 {
 		t.Fatalf("server-backed run count = %d, want 2", got)
 	}
-	runs.cycleRun(nil, +1)
+	runs.cycleRun(testContext, nil, +1)
 	if got := runs.SelectedRunID(); got != "first-visible-run" {
 		t.Fatalf("first downward movement selected %q, want first loaded row", got)
 	}
@@ -36,7 +36,7 @@ func TestRunsKeepsExactRouteTargetOutsideLoadedList(t *testing.T) {
 
 func TestRunsFocusRepresentsOffPageTargetBeforeRefresh(t *testing.T) {
 	runs := NewRuns()
-	runs.Update(runsListLoadedMsg{
+	runs.Update(testContext, runsListLoadedMsg{
 		api.InspectRunRecord{TraceID: "first-visible-run"},
 		api.InspectRunRecord{TraceID: "second-visible-run"},
 	}, nil)

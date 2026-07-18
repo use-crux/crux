@@ -1,26 +1,30 @@
 package screens
 
-import tea "charm.land/bubbletea/v2"
+import (
+	"context"
 
-func (s *Runs) moveDown(c DataClient) tea.Cmd {
+	tea "charm.land/bubbletea/v2"
+)
+
+func (s *Runs) moveDown(ctx context.Context, c DataClient) tea.Cmd {
 	switch s.focus {
 	case focusRuns:
-		return s.cycleRun(c, +1)
+		return s.cycleRun(ctx, c, +1)
 	default:
 		return s.cycleSpan(+1)
 	}
 }
 
-func (s *Runs) moveUp(c DataClient) tea.Cmd {
+func (s *Runs) moveUp(ctx context.Context, c DataClient) tea.Cmd {
 	switch s.focus {
 	case focusRuns:
-		return s.cycleRun(c, -1)
+		return s.cycleRun(ctx, c, -1)
 	default:
 		return s.cycleSpan(-1)
 	}
 }
 
-func (s *Runs) cycleRun(c DataClient, delta int) tea.Cmd {
+func (s *Runs) cycleRun(ctx context.Context, c DataClient, delta int) tea.Cmd {
 	runs := s.filteredRuns()
 	if len(runs) == 0 {
 		return nil
@@ -41,15 +45,15 @@ func (s *Runs) cycleRun(c DataClient, delta int) tea.Cmd {
 	s.selRun = run.TraceID
 	s.loading = true
 	s.detail = nil
-	return fetchRunDetail(c, s.selRun)
+	return fetchRunDetail(ctx, c, s.selRun)
 }
 
-func (s *Runs) cycleRunStatusFilter(c DataClient) tea.Cmd {
+func (s *Runs) cycleRunStatusFilter(ctx context.Context, c DataClient) tea.Cmd {
 	s.runStatusIndex = (s.runStatusIndex + 1) % (len(runStatusFilters) + 1)
-	return s.ensureFilteredRunSelection(c)
+	return s.ensureFilteredRunSelection(ctx, c)
 }
 
-func (s *Runs) ensureFilteredRunSelection(c DataClient) tea.Cmd {
+func (s *Runs) ensureFilteredRunSelection(ctx context.Context, c DataClient) tea.Cmd {
 	runs := s.filteredRuns()
 	s.runList.SetItems(runs)
 	if len(runs) == 0 {
@@ -67,7 +71,7 @@ func (s *Runs) ensureFilteredRunSelection(c DataClient) tea.Cmd {
 	}
 	s.loading = true
 	s.detail = nil
-	return fetchRunDetail(c, s.selRun)
+	return fetchRunDetail(ctx, c, s.selRun)
 }
 
 func (s *Runs) cycleSpan(delta int) tea.Cmd {

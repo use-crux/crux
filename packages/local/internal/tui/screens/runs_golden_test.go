@@ -83,7 +83,7 @@ func TestRunsStatusFilterLimitsVisibleRows(t *testing.T) {
 	screen.selRun = "failed-000"
 	screen.runList.SetItems(screen.runs)
 
-	screen.Update(tea.KeyPressMsg(tea.Key{Text: "f", Code: 'f'}), nil)
+	screen.Update(testContext, tea.KeyPressMsg(tea.Key{Text: "f", Code: 'f'}), nil)
 	out := stripANSI(screen.View(Size{Width: 100, Height: 24}))
 
 	if !strings.Contains(out, "failed") {
@@ -106,11 +106,11 @@ func TestRunsTextFilterLimitsVisibleRows(t *testing.T) {
 	screen.selRun = "docs-000"
 	screen.runList.SetItems(screen.runs)
 
-	screen.Update(tea.KeyPressMsg(tea.Key{Text: "/", Code: '/'}), nil)
+	screen.Update(testContext, tea.KeyPressMsg(tea.Key{Text: "/", Code: '/'}), nil)
 	for _, r := range "triage" {
-		screen.Update(tea.KeyPressMsg(tea.Key{Text: string(r), Code: r}), nil)
+		screen.Update(testContext, tea.KeyPressMsg(tea.Key{Text: string(r), Code: r}), nil)
 	}
-	screen.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}), nil)
+	screen.Update(testContext, tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}), nil)
 
 	out := stripANSI(screen.View(Size{Width: 100, Height: 24}))
 	if strings.Contains(out, "docs_agent") {
@@ -147,7 +147,7 @@ func TestRunsWaterfallCollapsesDuplicateGroups(t *testing.T) {
 		t.Fatalf("collapsed waterfall rendered a hidden duplicate id:\n%s", collapsed)
 	}
 
-	screen.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}), nil)
+	screen.Update(testContext, tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}), nil)
 	expanded := stripANSI(screen.View(Size{Width: 140, Height: 28}))
 	if strings.Contains(expanded, "+ 3 more") {
 		t.Fatalf("expanded waterfall still rendered duplicate summary:\n%s", expanded)

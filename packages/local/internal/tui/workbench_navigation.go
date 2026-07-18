@@ -91,7 +91,7 @@ func (w *Workbench) activateTarget(target NavTarget, forceInit bool) tea.Cmd {
 		return nil
 	}
 	w.initialized[target.NavID] = true
-	return dest.Init(w.client)
+	return dest.Init(w.ctx, w.client)
 }
 
 func (w *Workbench) rememberCurrentLocation(next NavTarget) {

@@ -13,7 +13,6 @@ import (
 
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/tui/screens"
 )
@@ -70,25 +69,6 @@ type App struct {
 	initialDataNotified bool
 	dashboardNotified   bool
 	quitRequested       bool
-}
-
-// NewApp creates the root TUI model.
-func NewApp(serverURL string, c DataClient, startupMode string, startupDebug bool) *App {
-	s := spinner.New(spinner.WithSpinner(spinner.MiniDot))
-	s.Style = lipgloss.NewStyle().Foreground(accent)
-	app := &App{
-		client:         c,
-		serverURL:      serverURL,
-		spinner:        s,
-		pendingMsgs:    make(chan tea.Msg, 256),
-		programStarted: make(chan struct{}),
-		bootPhase:      bootPhaseOrder[0],
-		startupMode:    startupMode,
-		startupDebug:   startupDebug,
-	}
-	app.workbench = NewWorkbench(c, c, serverURL)
-	app.workbench.SetQuitRequestedCallback(app.requestQuit)
-	return app
 }
 
 // --- External API (called from dev.go) ---

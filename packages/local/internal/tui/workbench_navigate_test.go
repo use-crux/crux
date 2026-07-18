@@ -9,7 +9,7 @@ import (
 // TestWorkbenchHandlesNavigateRequest asserts that a cross-screen drill sends
 // its exact route parameter directly to a destination that owns focus.
 func TestWorkbenchHandlesNavigateRequest(t *testing.T) {
-	w := NewWorkbench(nil, nil, "http://localhost:4400")
+	w := newTestWorkbench(nil, nil, "http://localhost:4400")
 	fake := &fakeScreen{id: "runs"}
 	w.screens["runs"] = fake
 
@@ -30,7 +30,7 @@ func TestWorkbenchHandlesNavigateRequest(t *testing.T) {
 // NavigateRequest with no Kind only switches active nav (no selection
 // write). Used for nav-only drills like `g i` chord equivalents.
 func TestWorkbenchNavigateRequestNoStagingWhenKindEmpty(t *testing.T) {
-	w := NewWorkbench(nil, nil, "http://localhost:4400")
+	w := newTestWorkbench(nil, nil, "http://localhost:4400")
 	w.screens["insights"] = &fakeScreen{id: "insights"}
 
 	w.Update(screens.NavigateRequest{NavID: "insights"})
@@ -47,7 +47,7 @@ func TestWorkbenchNavigateRequestNoStagingWhenKindEmpty(t *testing.T) {
 }
 
 func TestGotoNavCurrentRoutePreservesExactTargetAndBackHistory(t *testing.T) {
-	w := NewWorkbench(nil, nil, "http://localhost:4400")
+	w := newTestWorkbench(nil, nil, "http://localhost:4400")
 	w.screens["runs"] = &fakeScreen{id: "runs"}
 	exact := NavTarget{NavID: "runs", Kind: KindRun, ID: "run-exact"}
 

@@ -15,7 +15,7 @@ func (datasetSuiteCapableClient) SupportsDatasetSuites() bool { return true }
 
 func TestWorkbenchDerivesUnsupportedDatasetsFromProductionClient(t *testing.T) {
 	var client screens.DataClient = (*devtools.DirectClient)(nil)
-	w := NewWorkbench(client, nil, "")
+	w := newTestWorkbench(client, nil, "")
 
 	if w.Capabilities().DatasetSuites {
 		t.Fatal("production DirectClient unexpectedly advertises dataset suites")
@@ -27,7 +27,7 @@ func TestWorkbenchDerivesUnsupportedDatasetsFromProductionClient(t *testing.T) {
 
 func TestWorkbenchDiscoversInjectedDatasetSuiteCapability(t *testing.T) {
 	client := datasetSuiteCapableClient{DataClient: (*devtools.DirectClient)(nil)}
-	w := NewWorkbench(client, nil, "")
+	w := newTestWorkbench(client, nil, "")
 
 	if !w.Capabilities().DatasetSuites {
 		t.Fatal("workbench did not discover the injected dataset-suite capability")
@@ -38,7 +38,7 @@ func TestWorkbenchDiscoversInjectedDatasetSuiteCapability(t *testing.T) {
 }
 
 func TestWorkbenchNavigationOmitsUnregisteredScreens(t *testing.T) {
-	w := NewWorkbench((*devtools.DirectClient)(nil), nil, "")
+	w := newTestWorkbench((*devtools.DirectClient)(nil), nil, "")
 	delete(w.screens, "index")
 
 	for _, item := range w.navWithCounts() {

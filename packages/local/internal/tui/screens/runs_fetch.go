@@ -12,9 +12,9 @@ import (
 type runsListLoadedMsg []api.InspectRunRecord
 type runDetailLoadedMsg api.InspectRunDetailRecord
 
-func fetchRunsList(c DataClient) tea.Cmd {
+func fetchRunsList(ctx context.Context, c DataClient) tea.Cmd {
 	return func() tea.Msg {
-		observabilityRuns, err := c.ObservabilityRuns(context.Background())
+		observabilityRuns, err := c.ObservabilityRuns(ctx)
 		if err != nil {
 			return dataErrMsg(err.Error())
 		}
@@ -22,9 +22,9 @@ func fetchRunsList(c DataClient) tea.Cmd {
 	}
 }
 
-func fetchRunDetail(c DataClient, traceID string) tea.Cmd {
+func fetchRunDetail(ctx context.Context, c DataClient, traceID string) tea.Cmd {
 	return func() tea.Msg {
-		detail, found, detailErr := c.ObservabilityRunDetail(context.Background(), traceID)
+		detail, found, detailErr := c.ObservabilityRunDetail(ctx, traceID)
 		if detailErr != nil {
 			return dataErrMsg(detailErr.Error())
 		}

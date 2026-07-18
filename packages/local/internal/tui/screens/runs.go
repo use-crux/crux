@@ -1,6 +1,7 @@
 package screens
 
 import (
+	"context"
 	"fmt"
 
 	tea "charm.land/bubbletea/v2"
@@ -98,9 +99,9 @@ func (s *Runs) Interested(domains bridge.Domains) bool {
 	return domains.Has(bridge.DomainRuns)
 }
 
-func (s *Runs) Init(c DataClient) tea.Cmd { return fetchRunsList(c) }
+func (s *Runs) Init(ctx context.Context, c DataClient) tea.Cmd { return fetchRunsList(ctx, c) }
 
-func (s *Runs) Update(msg tea.Msg, c DataClient) tea.Cmd {
+func (s *Runs) Update(ctx context.Context, msg tea.Msg, c DataClient) tea.Cmd {
 	switch m := msg.(type) {
 	case runsListLoadedMsg:
 		s.runs = []api.InspectRunRecord(m)
@@ -117,7 +118,7 @@ func (s *Runs) Update(msg tea.Msg, c DataClient) tea.Cmd {
 				return nil
 			}
 			s.loading = true
-			return fetchRunDetail(c, s.selRun)
+			return fetchRunDetail(ctx, c, s.selRun)
 		}
 	case runDetailLoadedMsg:
 		d := api.InspectRunDetailRecord(m)
@@ -146,9 +147,9 @@ func (s *Runs) Update(msg tea.Msg, c DataClient) tea.Cmd {
 		// Typed live event from the bus (also used for the synthesized
 		// "store changed" signal — kind=="refresh"). Refresh the run list
 		// and refetch the active trace's detail when relevant.
-		return s.liveRefresh(c, m.RefID)
+		return s.liveRefresh(ctx, c, m.RefID)
 	case tea.KeyPressMsg:
-		return s.updateKey(m, c)
+		return s.updateKey(ctx, m, c)
 	}
 	return nil
 }
@@ -180,10 +181,10 @@ func (s *Runs) openInspect() tea.Cmd {
 // currently-selected trace (or the refId is empty so we can't be sure),
 // also refetches that trace's detail. Returning batched commands keeps
 // the screen in sync without losing focus or selection state.
-func (s *Runs) liveRefresh(c DataClient, refID string) tea.Cmd {
-	cmds := []tea.Cmd{fetchRunsList(c)}
+func (s *Runs) liveRefresh(ctx context.Context, c DataClient, refID string) tea.Cmd {
+	cmds := []tea.Cmd{fetchRunsList(ctx, c)}
 	if s.selRun != "" && (refID == "" || refID == s.selRun) {
-		cmds = append(cmds, fetchRunDetail(c, s.selRun))
+		cmds = append(cmds, fetchRunDetail(ctx, c, s.selRun))
 	}
 	return tea.Batch(cmds...)
 }
@@ -199,7 +200,7 @@ func (s *Runs) shiftFocus(delta int) {
 	s.focus = runsFocus(next)
 }
 
-func (s *Runs) activateFocus(c DataClient) tea.Cmd {
+func (s *Runs) activateFocus(ctx context.Context, c DataClient) tea.Cmd {
 	switch s.focus {
 	case focusRuns:
 		if s.selRun == "" {
@@ -207,7 +208,7 @@ func (s *Runs) activateFocus(c DataClient) tea.Cmd {
 		}
 		s.loading = true
 		s.detail = nil
-		return fetchRunDetail(c, s.selRun)
+		return fetchRunDetail(ctx, c, s.selRun)
 	case focusWaterfall:
 		if s.toggleSelectedDuplicateGroup() {
 			return nil

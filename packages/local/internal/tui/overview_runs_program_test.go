@@ -144,7 +144,7 @@ func keyCommand(key tea.KeyPressMsg) tea.Cmd {
 
 func TestOverviewDrillSelectsExactRunThroughRealProgram(t *testing.T) {
 	client := newOverviewRunsProgramClient()
-	app := NewApp("http://localhost:4400", client, "", false)
+	app := newTestApp("http://localhost:4400", client, "", false)
 	app.MarkBootComplete()
 	driver := &overviewRunsProgramDriver{app: app}
 
@@ -228,7 +228,7 @@ func (d *overviewRunsBackProgramDriver) View() tea.View {
 
 func TestBackRestoresOverviewRouteFocusAndRunSelection(t *testing.T) {
 	client := newOverviewRunsProgramClient()
-	app := NewApp("http://localhost:4400", client, "", false)
+	app := newTestApp("http://localhost:4400", client, "", false)
 	app.MarkBootComplete()
 	driver := &overviewRunsBackProgramDriver{app: app}
 

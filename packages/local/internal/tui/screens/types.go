@@ -68,13 +68,14 @@ type Screen interface {
 	// ID is the route/nav identifier (e.g. "overview", "insights").
 	ID() string
 
-	// Init is called once when the screen first becomes active. Return any
-	// initial data-fetch commands.
-	Init(client DataClient) tea.Cmd
+	// Init is called once when the screen first becomes active. Asynchronous
+	// commands must descend from ctx.
+	Init(ctx context.Context, client DataClient) tea.Cmd
 
 	// Update handles a tea.Msg routed to this screen. Returning a non-nil cmd
-	// triggers follow-up work (e.g. re-fetches after a WS event).
-	Update(msg tea.Msg, client DataClient) tea.Cmd
+	// triggers follow-up work (e.g. re-fetches after a WS event), which must
+	// descend from ctx.
+	Update(ctx context.Context, msg tea.Msg, client DataClient) tea.Cmd
 
 	// View renders the screen body at the given size.
 	View(size Size) string
@@ -131,10 +132,11 @@ type EditingScreen interface {
 }
 
 // ActionScreen exposes executable workflow actions in precedence order.
-// Focused-pane actions, when present, precede workflow-wide actions.
+// Focused-pane actions, when present, precede workflow-wide actions. Actions
+// that start asynchronous work must descend from the provided context.
 type ActionScreen interface {
 	Screen
-	Actions(DataClient) []interaction.Action
+	Actions(context.Context, DataClient) []interaction.Action
 }
 
 // LegacyKeyScreen is the temporary handled-aware adapter for workflows that

@@ -18,10 +18,10 @@ func (w *Workbench) handleBridgeBatch(batch bridge.Batch) tea.Cmd {
 	if active.Interested(changed) {
 		if len(batch.Inspect) > 0 {
 			for _, ev := range batch.Inspect {
-				cmds = append(cmds, active.Update(ev, w.client))
+				cmds = append(cmds, active.Update(w.ctx, ev, w.client))
 			}
 		} else if batch.IndexChanged {
-			cmds = append(cmds, active.Update(api.InspectEvent{
+			cmds = append(cmds, active.Update(w.ctx, api.InspectEvent{
 				Tag:       "InspectEvent",
 				Timestamp: timeNowMs(),
 				Kind:      string(bridge.DomainIndex),

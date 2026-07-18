@@ -24,7 +24,7 @@ func TestFinalSweepRetiredMarkerFilesRemoved(t *testing.T) {
 
 func TestBootViewsFuzzResize(t *testing.T) {
 	uitest.FuzzResize(t, func(width, height int) string {
-		app := NewApp("http://localhost:4400", nil, "local", true)
+		app := newTestApp("http://localhost:4400", nil, "local", true)
 		app.ready = true
 		app.width = width
 		app.height = height
@@ -34,7 +34,7 @@ func TestBootViewsFuzzResize(t *testing.T) {
 	})
 
 	uitest.FuzzResize(t, func(width, height int) string {
-		app := NewApp("http://localhost:4400", nil, "local", true)
+		app := newTestApp("http://localhost:4400", nil, "local", true)
 		app.ready = true
 		app.width = width
 		app.height = height

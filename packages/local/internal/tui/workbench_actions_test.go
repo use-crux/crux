@@ -21,7 +21,7 @@ func (s *fakeLegacyHandledScreen) HandlesKey(msg tea.KeyPressMsg) bool {
 }
 
 func TestWorkbenchFilteringHintsHideWorkspaceActions(t *testing.T) {
-	w := NewWorkbench(nil, nil, "http://localhost:4400")
+	w := newTestWorkbench(nil, nil, "http://localhost:4400")
 	w.Resize(120, 30)
 	w.activeNav = "runs"
 	w.screens["runs"] = screens.NewRuns()
@@ -48,7 +48,7 @@ func TestWorkbenchMigratedScreenDoesNotFallThroughToLegacyUpdate(t *testing.T) {
 			},
 		},
 	}
-	w := NewWorkbench(nil, nil, "http://localhost:4400")
+	w := newTestWorkbench(nil, nil, "http://localhost:4400")
 	w.screens["overview"] = screen
 
 	w.Update(tea.KeyPressMsg(tea.Key{Text: "x", Code: 'x'}))
@@ -59,7 +59,7 @@ func TestWorkbenchMigratedScreenDoesNotFallThroughToLegacyUpdate(t *testing.T) {
 }
 
 func TestWorkbenchHelpDoesNotTreatLegacyHintsAsExecutableActions(t *testing.T) {
-	w := NewWorkbench(nil, nil, "http://localhost:4400")
+	w := newTestWorkbench(nil, nil, "http://localhost:4400")
 	w.Resize(160, 40)
 	w.activeNav = "index"
 
@@ -76,7 +76,7 @@ func TestWorkbenchLegacyWorkflowPrecedesWorkspaceActions(t *testing.T) {
 		fakeScreen: &fakeScreen{id: "overview"},
 		handledKey: "q",
 	}
-	w := NewWorkbench(nil, nil, "http://localhost:4400")
+	w := newTestWorkbench(nil, nil, "http://localhost:4400")
 	w.screens["overview"] = screen
 	quitRequested := false
 	w.SetQuitRequestedCallback(func() { quitRequested = true })
@@ -93,7 +93,7 @@ func TestWorkbenchLegacyWorkflowPrecedesWorkspaceActions(t *testing.T) {
 
 func TestWorkbenchClaimedPrefixResolvesBeforeWorkflowActions(t *testing.T) {
 	workflowCalls := 0
-	w := NewWorkbench(nil, nil, "http://localhost:4400")
+	w := newTestWorkbench(nil, nil, "http://localhost:4400")
 	w.screens["overview"] = &fakeActionScreen{
 		fakeScreen: &fakeScreen{id: "overview"},
 		actions: []interaction.Action{
@@ -127,7 +127,7 @@ func TestWorkbenchLegacyAdapterDropsUnclaimedKeys(t *testing.T) {
 		fakeScreen: &fakeScreen{id: "overview"},
 		handledKey: "e",
 	}
-	w := NewWorkbench(nil, nil, "http://localhost:4400")
+	w := newTestWorkbench(nil, nil, "http://localhost:4400")
 	w.screens["overview"] = screen
 
 	w.Update(tea.KeyPressMsg(tea.Key{Text: "x", Code: 'x'}))

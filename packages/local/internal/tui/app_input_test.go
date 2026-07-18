@@ -17,7 +17,7 @@ func (programFixtureClient) GetJSON(context.Context, string, any) error {
 }
 
 func TestAppRoutesQIntoRunsFilterBeforeWorkspaceQuit(t *testing.T) {
-	app := NewApp("http://localhost:4400", programFixtureClient{uitest.NewFixtureClient()}, "", false)
+	app := newTestApp("http://localhost:4400", programFixtureClient{uitest.NewFixtureClient()}, "", false)
 	app.MarkBootComplete()
 
 	final, output, err := runTestProgram(t, app, "3/q\rq")
