@@ -95,12 +95,12 @@ The devtools wire protocol uses matching `semantic-cache:*` event names.
 `createSemanticCache()` refuses stores that cannot prove both requirements:
 
 ```ts
-store.searchVectors; // or store.vectorSearch
-store.capabilities().semanticCache.isolatedVectorNamespace === true;
+records.capabilities().ttl !== false; // record store must support TTL
+vectors.capabilities().filter === "pre"; // vector store must pre-filter
 ```
 
-This is deliberate. Semantic cache entries should live in a dedicated vector namespace/table/index. Shared memory or RAG indexes can cause unrelated vectors to rank ahead of cache entries before filters are applied.
+This is deliberate. Cache entries expire through record-store TTL, and lookups scope by namespace and version before ranking, so a vector store that only post-filters can let unrelated vectors crowd out cache entries. Keep semantic-cache entries in a dedicated vector namespace/index rather than sharing one with memory or RAG vectors.
 
-`inMemoryRecordStore()` supports this by default. Durable adapters opt in only when the configured backend is isolated. Plain Redis stores do not expose vector search unless product-specific vector hooks are configured.
+`inMemoryStorage()` satisfies both by default. Durable adapters qualify when the record store supports TTL and the vector backend applies filters before ranking. Plain Redis stores do not expose vector search unless product-specific vector hooks are configured.
 
 Convex bundled storage provides records but not vector search. Pair `convexRecordStore()` with an explicit pre-filter-capable `VectorStore`, such as `upstashVectorStore()` in a dedicated semantic-cache namespace.

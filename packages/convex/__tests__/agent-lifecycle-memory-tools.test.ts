@@ -94,6 +94,14 @@ describe('Convex Agent memory tool capture', () => {
     ])
   })
 
+  it('does not fabricate an error when the error property is present but undefined', () => {
+    const calls = collectResultToolCalls({
+      toolCalls: [{ toolCallId: 'call-1', toolName: 'search', input: { query: 'one' }, error: undefined }],
+    })
+
+    expect(calls).toEqual([{ id: 'call-1', name: 'search', args: { query: 'one' } }])
+  })
+
   it('forwards enriched tool events through lifecycle persistence before flushing', async () => {
     const records = inMemoryRecordStore()
     const episodeBlock = episodes({ id: 'episodes' })

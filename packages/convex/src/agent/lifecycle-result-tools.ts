@@ -28,7 +28,7 @@ function appendResultToolCalls(
       args: value.args ?? value.input ?? value.arguments,
     }
     if (Object.hasOwn(value, 'output')) call.result = value.output
-    if (Object.hasOwn(value, 'error')) call.error = toolErrorText(value.error)
+    if (value.error !== undefined) call.error = toolErrorText(value.error)
     if (!existing) target.push(call)
   }
   appendResultToolCalls(target, value.toolCalls)
