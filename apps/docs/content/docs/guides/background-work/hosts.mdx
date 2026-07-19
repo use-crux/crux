@@ -1,27 +1,20 @@
 ---
 title: Host support
-description: Configure retention once, and add a strict lifecycle wrapper only when the handler boundary needs it.
+description: Per-platform recipes — most platforms need one config line or nothing at all.
 ---
 
-Application code always imports `defer` from `@use-crux/core`. A host binding
-describes how the platform retains the root pending set; it never changes where
-an inner primitive drain starts.
+Start with the [decision table](/docs/guides/background-work#do-i-need-to-set-anything-up)
+if you have not read it: on most platforms `defer()` needs one config line or
+nothing. This page is the per-platform detail — the recipe, why the platform
+needs what it needs, and when to add the optional handler wrapper.
 
-## Binding matrix
-
-| Environment                  | Retention binding                           | Recommended setup                         | Inline work                        | Strict boundary                                         |
-| ---------------------------- | ------------------------------------------- | ----------------------------------------- | ---------------------------------- | ------------------------------------------------------- |
-| Long-lived Node process      | `node()`                                    | Optional inside Crux primitives           | Process-local                      | `withNodeDefer` for Node HTTP response finish           |
-| Next.js 15.1+                | `next()`                                    | `config({ host: next() })`                | Retained through `after()`         | `withCrux` or `withNextDefer`                           |
-| Vercel Functions             | `vercel()`                                  | `config({ host: vercel() })`              | Retained through `waitUntil()`     | `withServerlessDefer` when outcome grouping is required |
-| Cloudflare Workers           | `workers({ ctx })`                          | Per request; use `withCrux` by default    | Retained through `ctx.waitUntil()` | `@use-crux/cloudflare` `withCrux`                       |
-| Lambda-class named-only host | Custom binding with `supportsInline: false` | Named Runtime work only                   | Rejected explicitly                | `withNamedOnlyDefer`                                    |
-| Convex bridge                | Installed by `createCruxConvex().run()`     | No separate binding                       | Rejected explicitly                | Bridge run is the boundary                              |
-| Other serverless host        | Custom `CruxHostBinding`                    | Platform package or `withServerlessDefer` | Binding-defined                    | `withServerlessDefer`                                   |
+Application code always imports `defer` from `@use-crux/core` and never changes
+per platform. Setup only tells Crux how *this* platform keeps the invocation
+alive until deferred work settles.
 
 ## Next.js
 
-Configure ambient retention once:
+**Setup: one line. Done.**
 
 ```ts title="crux.config.ts"
 import { config } from "@use-crux/core";
@@ -30,11 +23,14 @@ import { next } from "@use-crux/next";
 export default config({ host: next() });
 ```
 
-Inside Crux primitives, drains start immediately at their own boundary. A
-root-level call gets an ephemeral invocation and runs inside Next `after()`.
+Every `defer()` inside your agents, tools, and flows now survives the
+invocation — drains still start at their own step's boundary; Next's `after()`
+just keeps the function alive until they finish. Root-level `defer()` in plain
+route code also works ambient, running after the response.
 
-Add `withCrux` when the route needs one grouped invocation, handler outcome
-classification, and the structured observability drain:
+Add `withCrux` only for the [three wrapper cases](/docs/guides/background-work#when-is-the-config-line-not-enough)
+(grouped root-level calls, handler outcome classification, strict commit
+barrier) — it also installs the structured observability drain for the route:
 
 ```ts
 import { defer } from "@use-crux/core";
@@ -46,7 +42,9 @@ export const POST = withCrux(async () => {
 });
 ```
 
-## Vercel Functions
+## Vercel Functions (non-Next)
+
+**Setup: one line. Done.**
 
 ```ts title="crux.config.ts"
 import { config } from "@use-crux/core";
@@ -55,13 +53,15 @@ import { vercel } from "@use-crux/vercel";
 export default config({ host: vercel() });
 ```
 
-Vercel calls `waitUntil(work())`. Deferred callbacks may therefore overlap a
-streaming response body after the handler returns.
+Retention rides `waitUntil()`, which starts retained work as soon as the
+handler returns — deferred callbacks may overlap a still-streaming response
+body. Use `withServerlessDefer` for the wrapper cases.
 
 ## Cloudflare Workers
 
-`ExecutionContext` belongs to one request. Prefer the package lifecycle
-boundary, which receives the right `ctx` for every invocation:
+**Setup: wrap the fetch handler.** Workers hand each request its own
+`ExecutionContext`, and retention needs that exact `ctx` — this is the one
+mainstream platform where a process-global config line cannot work:
 
 ```ts
 import { defer } from "@use-crux/core";
@@ -78,15 +78,15 @@ export default {
 };
 ```
 
-For a custom per-request boundary, construct `workers({ ctx })` for that
-request and pass it as the binding. Calling `workers()` without a reachable
-context fails with `DEFER_CAPABILITY_MISSING`; Crux does not accept unretained
-work.
+Building your own boundary instead? Construct `workers({ ctx })` per request
+and pass it as the binding. `workers()` without a reachable context fails with
+`DEFER_CAPABILITY_MISSING` — Crux does not accept work it cannot keep alive.
 
-## Node HTTP
+## Long-lived Node (servers, containers, VPS)
 
-Node's process lifetime needs no retention binding for primitive-local work.
-Root-level request work needs the response boundary:
+**Setup: nothing** for `defer()` inside Crux primitives — the process outlives
+the work. For root-level `defer()` in raw HTTP handler code, wrap with
+`withNodeDefer` so drains run after the response finishes:
 
 ```ts
 import { createServer } from "node:http";
@@ -101,31 +101,58 @@ createServer(
 ).listen(3000);
 ```
 
-Multiprocess Node keeps inline work local to one worker. Use named Runtime work
+Multiprocess Node keeps inline work local to one worker; use
+[durable work](/docs/guides/background-work#choosing-between-best-effort-and-durable)
 when execution must survive or cross workers.
 
-## Named-only hosts
+## AWS Lambda and other freeze-on-return hosts
 
-Lambda-class hosts without a real post-return retention port must not accept
-inline closures. `withNamedOnlyDefer` rejects the callback overload and keeps
-the named Runtime path explicit:
+**Setup: use durable work, not callbacks.** Lambda offers no way to run a
+closure after the handler returns, so inline `defer(callback)` is rejected
+explicitly rather than silently lost. Stage durable Runtime work instead:
 
 ```ts
 export const handler = withNamedOnlyDefer(
   async (event: { id: string }) => {
-    await defer(postProcess, { id: event.id });
+    await defer(postProcess, { id: event.id }); // durable, survives the freeze
     return { ok: true };
   },
   { host: "lambda", durableFinalization: true },
 );
 ```
 
-## Config-only trade-off
+## Convex
 
-Core has no request identity without a wrapper. Each ambient root-level
-`defer()` call therefore owns its own ephemeral invocation and retention task.
-Limits apply per call; cross-call limits, handler outcome classification, and
-the strict response commit barrier require a real wrapper or primitive scope.
+**Setup: none.** `createCruxConvex().run()` is the boundary. Like Lambda,
+inline callbacks are rejected; use durable named work with `runtime: convex()`.
+
+## Any other platform
+
+Bring your own `CruxHostBinding` (how the platform keeps an invocation alive)
+and either set it as `config({ host })` or wrap handlers with
+`withServerlessDefer(handler, { binding })`. See
+[Author a host adapter](/docs/guides/background-work/host-adapters).
+
+## The matrix
+
+| Environment | Setup | Inline `defer(callback)` | Durable `await defer(task, input)` | Optional strict wrapper |
+| --- | --- | --- | --- | --- |
+| Long-lived Node | none | ✓ process-local | ✓ with a Runtime | `withNodeDefer` |
+| Next.js 15.1+ | `config({ host: next() })` | ✓ via `after()` | ✓ | `withCrux` / `withNextDefer` |
+| Vercel Functions | `config({ host: vercel() })` | ✓ via `waitUntil()` | ✓ | `withServerlessDefer` |
+| Cloudflare Workers | `withCrux` wrapper (per-request `ctx`) | ✓ via `ctx.waitUntil()` | ✓ | included in `withCrux` |
+| AWS Lambda | `withNamedOnlyDefer` | ✗ rejected | ✓ Runtime required | `withNamedOnlyDefer` |
+| Convex | none (bridge run) | ✗ rejected | ✓ `runtime: convex()` | bridge is the boundary |
+| Custom | `CruxHostBinding` | binding-defined | ✓ with a Runtime | `withServerlessDefer` |
+
+## Fine print for config-only mode
+
+Without a wrapper, Crux has no request identity, so each root-level `defer()`
+call in plain handler code gets its own ephemeral invocation and retention
+task: correct timing and retention, but no cross-call grouping, no handler
+outcome classification, and no strict commit barrier. Work inside Crux
+primitives is unaffected — that is grouped by its real scope. This trade-off is
+the entire content of the "three wrapper cases".
 
 ## Related
 

@@ -13,6 +13,11 @@ import {
 } from "@use-crux/core";
 ```
 
+Run follow-up work (emails, analytics, memory writes) after the current step
+finishes, without delaying its result. New here? Start with the
+[Background Work guide](/docs/guides/background-work) — it covers the problem,
+use cases, and the one-line platform setup. This page is the API contract.
+
 `defer()` has two overloads. It always registers on the nearest compatible
 execution scope.
 

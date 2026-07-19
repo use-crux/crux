@@ -1,37 +1,63 @@
 ---
 title: Background Work
-description: Start follow-up work at the nearest Crux boundary and retain it for the life of the host invocation.
+description: Run follow-up work after your agent responds — without making the user wait, and without losing it on serverless.
 ---
 
-`defer()` starts with the execution boundary you already have. Inside an agent
-turn, adapter call, tool execution, or Safety session, Crux opens that boundary
-automatically:
+## The problem
+
+Almost every agent turn ends with work the user should not wait for:
+
+- send the confirmation email, fire the webhook
+- write analytics, usage metering, audit events
+- update the search index, warm a cache
+- persist memory or summarize the conversation
+
+Doing this inline adds seconds to every response. The usual escapes are worse:
+a fire-and-forget promise (`void doWork()`) dies silently on Vercel, Workers,
+and Lambda the moment the invocation freezes; "after the response" hooks fire
+at the wrong moment when your response is a stream; and a job queue is real
+infrastructure for what is often one function call.
+
+## The solution
 
 ```ts
 import { defer } from "@use-crux/core";
 
-const enrichCustomer = async (customer: Customer) => {
-  defer(() => updateSearchIndex(customer));
-  return customer;
-};
+const createAccount = tool({
+  execute: async ({ email }) => {
+    const user = await db.users.create({ email });
+
+    defer(() => sendWelcomeEmail(user));   // runs after this tool finishes
+    defer(() => track("signup", user.id)); // never delays the response
+
+    return user;
+  },
+});
 ```
 
-The callback is lazy. It starts when the nearest execution scope closes, not
-when an enclosing request eventually finishes. A tool can therefore begin its
-cleanup while the enclosing agent continues.
+`defer(callback)` schedules work to start **when the current Crux step
+finishes** — the tool call, agent turn, adapter call, or Safety session you are
+already inside. The caller gets its result immediately; the work runs right
+behind it; and Crux keeps the process alive until it settles.
 
-## Choose the smallest integration that proves enough
+Because Crux owns the boundary, the timing is right even where "after the
+response" is wrong: work deferred during a streaming turn runs when the stream
+actually completes, and work deferred in a tool starts when the tool finishes —
+it does not wait for the rest of the request.
 
-### Level 0: use a Crux primitive
+## Do I need to set anything up?
 
-On a long-lived process, nothing else is required inside a defer-capable Crux
-primitive. Registrations belong to the nearest scope and its limits, evidence,
-and outcome.
+Usually not. The full decision:
 
-### Level 1: configure host retention
+| You run on | Setup | Why |
+| --- | --- | --- |
+| A long-lived server (Node, containers, a VPS) | **Nothing** | The process outlives the work |
+| Next.js on Vercel | **One line:** `config({ host: next() })` | Serverless freezes after the response; the binding keeps it alive via `after()` |
+| Vercel Functions (non-Next) | **One line:** `config({ host: vercel() })` | Same, via `waitUntil()` |
+| Cloudflare Workers | **Wrap the handler** with `withCrux` from `@use-crux/cloudflare` | Workers scope retention to one request's `ctx`; config alone cannot reach it |
+| AWS Lambda, Convex | **Skip inline callbacks** — use [durable work](#choosing-between-best-effort-and-durable) | These hosts offer no way to run closures after returning, and Crux refuses to pretend otherwise |
 
-Freezing platforms need a promise that keeps the invocation alive. Configure
-the platform binding once:
+The one line, concretely:
 
 ```ts title="crux.config.ts"
 import { config } from "@use-crux/core";
@@ -40,23 +66,27 @@ import { next } from "@use-crux/next";
 export default config({ host: next() });
 ```
 
-This does not delay primitive drains. They still start when their scope closes;
-the binding only retains the root until every drain under it settles.
+That is the whole setup. Every `defer()` inside your agents, tools, flows, and
+Safety sessions now survives the platform. If you skip it where it is needed,
+Crux throws (`DEFER_SCOPE_REQUIRED` / `DEFER_CAPABILITY_MISSING`) instead of
+silently dropping your work — and `crux setup` tells you exactly which line to
+add.
 
-With an ambient-capable binding, root-level `defer()` also works without a
-route wrapper. Each root-level call owns a separate ephemeral invocation. That
-mode deliberately has no cross-call grouping, handler outcome classification,
-or strict response commit barrier.
+### When is the config line NOT enough?
 
-Cloudflare Workers needs the request's `ExecutionContext`. Use the Workers
-`withCrux` boundary or pass `workers({ ctx })` to a per-request boundary; do not
-put one request's `ctx` in process-global configuration.
+Three specific situations — if none applies to you, stop here and use the table
+above:
 
-### Level 2: add a strict boundary when the handler matters
+1. **You call `defer()` in plain handler code, outside any Crux primitive, and
+   want those calls treated as one unit** (shared limits, one invocation in
+   observability). Config-only mode runs each root-level call independently.
+2. **You want a whole failed request to skip its deferred work.** Inside Crux
+   primitives this is automatic per step; classifying the *handler's* HTTP
+   outcome needs the handler boundary.
+3. **You stage durable work and need the response to fail if staging fails**
+   (a strict commit barrier).
 
-Use a wrapper when you need root-level calls grouped into one real invocation,
-failed-handler outcome classification, a strict named-work commit barrier, or
-framework observability cleanup:
+All three are solved the same way — wrap the handler:
 
 ```ts
 import { defer } from "@use-crux/core";
@@ -68,29 +98,19 @@ export const POST = withCrux(async () => {
 });
 ```
 
-Wrappers are the strict layer, not the prerequisite for using `defer()` inside
-Crux primitives.
+Wrappers are an upgrade for those cases, not a prerequisite. Platform recipes
+and the full matrix live in [Host support](/docs/guides/background-work/hosts).
 
-## Drain and retention are different guarantees
+## Choosing between best-effort and durable
 
-- **Drain:** work starts when its registering scope closes.
-- **Retention:** the configured host keeps the root alive until all drains are
-  empty, including work registered while another drain is running.
-- **Outcome:** inline callbacks registered by a failed, cancelled, or timed-out
-  scope are recorded as skipped and are not invoked.
-- **Acceptance:** a retention-port failure propagates. Crux will not report
-  success after accepting work the host cannot keep alive.
+**`defer(callback)` is best-effort by design.** It runs in-process: fast, no
+infrastructure, perfect for analytics, cache warming, notifications, cleanup —
+work you would not page anyone over losing to a process crash.
 
-Callback failures after acceptance are contained and observed; they do not
-replace an already-produced handler result.
-
-## Best-effort and durable work
-
-Inline callbacks are process-local. Use them for analytics, cache warming,
-cleanup, and other work that may be retried elsewhere or safely lost after a
-process crash.
-
-Use named Runtime work when the work must survive restarts:
+**`await defer(task, input)` is for work you cannot afford to lose** — a
+payment receipt, a legally required audit record. It stages the work durably
+through the [Runtime Engine](/docs/guides/durable-execution), survives crashes
+and restarts, and retries:
 
 ```ts
 import { defer } from "@use-crux/core";
@@ -101,15 +121,30 @@ const sendReceipt = durableTask("send-receipt", {
 });
 
 const ref = await defer(sendReceipt, { orderId: order.id });
+// resolves once the work is durably accepted; execution survives restarts
 ```
 
-The promise resolves after durable acceptance. Design named targets to be
-idempotent because durable execution may retry them.
+Durable targets can retry, so make them idempotent. This is also the only mode
+that works on Lambda and Convex, where in-process callbacks cannot outlive the
+handler.
 
-## Replayable flows
+## What you get without asking
 
-Public `defer()` is not a replay escape hatch. Inside a replayable flow body,
-use `flow.defer()` so the work keeps stable replay identity:
+- **Failure isolation.** A crashing callback is recorded and contained; it can
+  never corrupt or replace the response the user already received.
+- **Error-aware skipping.** Work deferred by a step that then fails is skipped
+  (and recorded as skipped), so a failed signup never sends its welcome email.
+- **Observability.** Every deferred callback — yours and Crux's own — shows up
+  in the run's trace with its outcome, timing, and the scope that scheduled it.
+- **Evals stay side-effect free.** Under `crux eval`, deferred work is captured
+  as evidence instead of executing, so evaluating an agent never sends its
+  emails.
+
+## Inside replayable flows
+
+Flow bodies replay; a bare `defer()` there would double-fire, so it throws
+`DEFER_REPLAY_UNSAFE`. Use `flow.defer()`, which keeps stable identity across
+replay:
 
 ```ts
 await flow.defer(sendReceipt, { orderId: order.id });
@@ -117,8 +152,8 @@ await flow.defer(sendReceipt, { orderId: order.id });
 
 ## Related
 
-- [Host support](/docs/guides/background-work/hosts)
-- [Troubleshooting](/docs/guides/background-work/troubleshooting)
-- [Author a host adapter](/docs/guides/background-work/host-adapters)
-- [Durable Execution](/docs/guides/durable-execution)
+- [Host support](/docs/guides/background-work/hosts) — per-platform recipes and the full matrix
+- [Troubleshooting](/docs/guides/background-work/troubleshooting) — every `DEFER_*` error explained
+- [Durable Execution](/docs/guides/durable-execution) — the Runtime behind named work
 - [`defer()` API reference](/docs/reference/crux-core/defer)
+- [Author a host adapter](/docs/guides/background-work/host-adapters) — for platforms Crux does not ship a binding for
