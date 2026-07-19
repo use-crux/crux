@@ -299,9 +299,23 @@ a source reference navigates to Project Index with the matching definition and
 source location selected. Back returns to the same run, span, pane focus, and
 viewport anchors.
 
-External browser/editor actions appear only when implemented and supported.
-The first slice may ship without them; source inspection inside Project Index
-is the required path.
+Runs exposes one executable `d` action for this navigation. With no exact
+definition IDs it is disabled with a reason. With one distinct ID it navigates
+directly. With multiple IDs it opens a Workbench-owned modal chooser; opening
+the chooser does not add history, while choosing a row adds the single normal
+navigation entry. The chooser is scrollable at `70x24`, shows exact ID, kind,
+role, and source, and uses `j/k` or arrows, page/home/end, Enter, and Escape.
+Repeated refs for one ID become one choice with their metadata retained;
+backend order is stable.
+
+For run scope, candidates are the same aggregated, deduplicated references
+shown by the run diagnosis. For span scope, candidates are only refs attached
+to the selected activity and its attached details. Runs does not query Project
+Index before navigation. Missing-ID presentation remains Index-owned.
+
+External editor actions appear only when implemented and supported. Source
+inspection inside Project Index remains the required path; the browser action
+defined under Interactive startup is a separate workspace capability.
 
 ## Async data and failure contract
 
@@ -357,9 +371,12 @@ serialization errors.
 
 ### Interactive startup
 
-In an interactive terminal, `crux dev` starts the server and TUI. It does not
-open the browser automatically. A contextual `o` action may open browser
-devtools only when that action is implemented and executable.
+No `crux dev` mode opens a browser by default, including explicit interactive
+`--no-tui` mode and the existing-server path. `--open` is the explicit startup
+opt-in in every mode, including non-TTY/CI. In the TUI, an executable
+workspace-level `o` action opens browser devtools. Browser opening uses an
+injected capability and failures are reported as non-fatal status. The inverse
+`--no-open` flag is removed rather than retained as a meaningless no-op.
 
 In CI, redirected output, or unsupported terminals, `crux dev` runs as a plain
 server command with concise status on stderr and stable result/output behavior.
@@ -371,6 +388,14 @@ idempotent shutdown coordinator stops UI, event bridges, workers, server, and
 temporary resources in a documented order under a bounded timeout. The TUI
 does not install a second signal handler. Repeated signals cannot start
 overlapping shutdown sequences.
+
+Normal `q`/clean completion exits `0`. After the same graceful cleanup,
+SIGINT exits `130` and SIGTERM exits `143`; raw-mode `Ctrl+C` follows the
+SIGINT path. Expected cancellation is not printed as an error. On a signal
+path, the signal status wins even if cleanup also reports an error, though that
+cleanup error is written to stderr. A cleanup failure after normal `q` exits
+`1`. Once graceful cleanup begins, a second signal restores immediate default
+termination so shutdown always has an escape hatch.
 
 ## Testing strategy
 
