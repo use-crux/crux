@@ -10,6 +10,7 @@ export function embedding(client: GoogleGenAI, config: GoogleEmbeddingConfig): D
     name: config.name,
     dimensions: config.dimensions,
     maxInputTokens: config.maxInputTokens,
+    version: embeddingVersion(config),
     batch: {
       maxSize: config.batch?.maxSize ?? 100,
       concurrency: config.batch?.concurrency ?? 1,
@@ -39,4 +40,21 @@ export function embedding(client: GoogleGenAI, config: GoogleEmbeddingConfig): D
       }
     },
   })
+}
+
+/** Build a stable identity from vector-producing Google request fields. */
+function embeddingVersion(config: GoogleEmbeddingConfig): string {
+  return [
+    `google:model=${JSON.stringify(config.model)}`,
+    `taskType=${optionalIdentityValue(config.taskType)}`,
+    `title=${optionalIdentityValue(config.title)}`,
+    `mimeType=${optionalIdentityValue(config.mimeType)}`,
+    `autoTruncate=${optionalIdentityValue(config.autoTruncate)}`,
+    ...(config.version === undefined ? [] : [`version=${JSON.stringify(config.version)}`]),
+  ].join(';')
+}
+
+/** Encode an optional identity field without conflating omission with a value. */
+function optionalIdentityValue(value: string | boolean | undefined): string {
+  return value === undefined ? 'default' : JSON.stringify(value)
 }

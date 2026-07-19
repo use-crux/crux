@@ -494,14 +494,21 @@ Custom chunkers must preserve the document namespace and source id, produce stab
 
 ### Stage cache
 
-Set `cache: true` on the indexer to cache expensive document transforms, chunkers, and chunk transforms in the same store. Per-call options can override behavior:
+Set `cache: true` on the indexer to cache expensive document transforms,
+chunkers, chunk transforms, and final dense/sparse source bundles in the same
+record store. Per-call options can override behavior:
 
 ```ts
 await docsIndexer.indexDocuments(docs, { cache: "refresh" });
 await docsIndexer.indexDocuments(docs, { cache: "bypass" });
+await docsIndexer.indexChunks(chunks, { cache: "refresh" });
 ```
 
-The cache key includes source hash, previous stage hash, stage kind, stage name, stage version, and stage fingerprint. Cached stages are also recorded in the source ledger so users can see what was reused.
+Preparation-stage keys include source and stage identity. Embedding-stage keys
+include source id, vector kind, embedding fingerprint, and ordered chunk-content
+hashes. Cache entries are reused only after strict count and vector-shape
+validation. Cached embeddings produce `SourceStageRecord` entries with
+`kind: "embedding"`, `embeddingKind`, and the cache outcome.
 
 ## Indexer API
 
@@ -535,7 +542,10 @@ Use it for tests, one-off writes, demos, and deliberately manual updates where y
 ### `indexChunks(chunks, options?)`
 
 ```ts
-await indexer.indexChunks(chunks, { replaceSources: false });
+await indexer.indexChunks(chunks, {
+  replaceSources: false,
+  cache: "readwrite",
+});
 ```
 
 Defaults:
@@ -566,7 +576,10 @@ Returns a stable hash of the indexing pipeline. The fingerprint includes indexer
 const plan = await docsIndexer.indexDocuments(docs, { dryRun: true });
 ```
 
-Dry runs prepare chunks and embeddings but do not delete or write store records. They return chunk and embedding counts so callers can preview work before committing it.
+Dry runs prepare chunks and embeddings but do not delete or write indexed chunks
+or corpus source records. With indexer caching enabled, they may read and write
+stage-cache entries so a later real run can reuse the completed work. They return
+chunk and embedding counts so callers can preview work before committing it.
 
 Dry runs also return prepared parent records and pipeline stages when the configured pipeline produces them.
 
@@ -743,6 +756,12 @@ Hybrid indexing uses both.
 The important contract is that indexing batches by chunk content rather than making one provider call per chunk.
 
 That keeps indexing aligned with the batching, telemetry, and cost-accounting model from `embedding()`.
+
+With `cache: true`, Crux stores one ordered vector bundle per source and kind.
+Dense runs complete before sparse runs. Hits scatter into the current invocation
+order; misses across sources flatten into one `embedMany()` call for that kind.
+Embeddings without `fingerprint` are always recomputed and never receive a stage
+cache outcome.
 
 ## Hooks emitted
 

@@ -173,7 +173,11 @@ indexingPipeline({
 
 ## Cache Expensive Stages
 
-Pipeline caching covers document and chunk preparation stages. It does not cache dense or sparse embedding calls; those calls still run when the indexer writes a fresh generation. See [Embeddings](/docs/guides/retrieval/embeddings) for embedding configuration.
+Pipeline caching covers document preparation and final dense/sparse embedding
+bundles. Vectors are stored per source and vector kind, so an unchanged source
+can be written into a fresh generation without another provider call. A change
+to one source invalidates only that source; all misses are still batched once
+per embedding kind.
 
 Enable stage caching on the indexer:
 
@@ -195,9 +199,22 @@ Then control cache behavior per sync or write:
 await docsCorpus.sync(source.load(), { cache: "readwrite" });
 await docsCorpus.sync(source.load(), { cache: "refresh" });
 await docsCorpus.sync(source.load(), { cache: "bypass" });
+
+await docsIndexer.indexChunks(chunks, { cache: "refresh" });
 ```
 
 Use `readwrite` for normal jobs, `refresh` when you want to recompute and replace cached stages, and `bypass` when you are debugging the pipeline itself.
+
+Dry runs read and populate stage entries even though they do not write indexed
+chunks or corpus ledger records. This makes a later real run reusable. Cache
+hits and misses appear as `embedding` stages with `embeddingKind: "dense"` or
+`"sparse"`.
+
+Embedding-stage reuse requires a vector-semantic fingerprint. Built-in
+`embedding()` instances and provider helpers supply one; a hand-written
+structural embedding without `fingerprint` is recomputed on every run. See
+[Embeddings](/docs/guides/retrieval/embeddings#choose-the-right-cache-layer)
+for the per-text versus pipeline-cache decision.
 
 ## Preview A Sync
 

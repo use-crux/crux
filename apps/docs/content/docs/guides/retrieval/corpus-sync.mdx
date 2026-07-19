@@ -155,7 +155,11 @@ const sourceResult = {
 
 ## Pipeline Cache
 
-Pipeline caching covers document and chunk preparation stages. It does not cache dense or sparse embedding calls; those calls still run when the indexer writes a fresh generation. See [Embeddings](/docs/guides/retrieval/embeddings) for embedding configuration.
+Pipeline caching covers document/chunk preparation and final dense/sparse source
+bundles. An `indexVersion`-only reindex can therefore write a fresh generation
+without another embedding provider call when ordered chunk content is unchanged.
+See [Embeddings](/docs/guides/retrieval/embeddings#choose-the-right-cache-layer)
+for the cache-layer decision.
 
 If the indexer has `cache: true`, sync can control the pipeline cache per run.
 
@@ -172,6 +176,11 @@ await docsCorpus.sync(source.load(), {
   cache: "refresh",
 });
 ```
+
+In `appendOnly` mode, an embedding or index fingerprint change is reported as
+`indexChanged` and skipped without updating the source record. It will be
+reported and skipped again on later append-only syncs until a replace-mode sync
+accepts the new index identity.
 
 Bypass cache while debugging:
 

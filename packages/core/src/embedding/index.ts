@@ -30,5 +30,6 @@ export type {
 } from './types'
 
 export { embedding } from './define-embedding'
+export { embeddingIdentity } from './identity'
 export { embeddingPreprocessor, normalizeText } from './preprocess'
 export { embeddingCache } from './cache'

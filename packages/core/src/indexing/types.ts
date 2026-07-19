@@ -344,11 +344,11 @@ export interface Indexer {
   ): Promise<IndexResult>
   indexChunks(
     chunks: AsyncIterable<CruxChunk> | CruxChunk[],
-    options: { dryRun: true; replaceSources?: boolean },
+    options: { dryRun: true; replaceSources?: boolean; cache?: PipelineCacheMode },
   ): Promise<IndexDryRunResult>
   indexChunks(
     chunks: AsyncIterable<CruxChunk> | CruxChunk[],
-    options?: { dryRun?: false; replaceSources?: boolean },
+    options?: { dryRun?: false; replaceSources?: boolean; cache?: PipelineCacheMode },
   ): Promise<IndexResult>
   fingerprint(options?: IndexFingerprintOptions): string
   deleteSource(sourceId: string): Promise<number>
@@ -387,6 +387,8 @@ export interface SourceError {
 export interface SourceStageRecord {
   name: string
   kind?: 'parser' | 'document-transform' | 'chunker' | 'chunk-transform' | 'embedding' | 'promotion' | 'sync'
+  /** Distinguishes dense from sparse records when `kind` is `embedding`. */
+  embeddingKind?: 'dense' | 'sparse'
   version?: string
   status: 'pending' | 'success' | 'failed' | 'skipped'
   cache?: 'hit' | 'miss' | 'write' | 'refresh' | 'bypass'

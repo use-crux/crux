@@ -44,6 +44,8 @@ export interface GoogleEmbeddingConfig {
   readonly name: string
   /** Google embedding model id. */
   readonly model: string
+  /** Additional vector-semantic revision appended to the derived request identity. */
+  readonly version?: string
   /** Output vector dimensionality. */
   readonly dimensions: number
   /** Maximum input tokens advertised to Crux callers. */

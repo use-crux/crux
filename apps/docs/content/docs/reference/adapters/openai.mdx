@@ -264,10 +264,15 @@ Known OpenAI embedding models infer their default dimensions automatically. For 
 | `config.name`              | `string`  | Stable embedding identifier                                            |
 | `config.model`             | `string`  | OpenAI embedding model                                                 |
 | `config.dimensions`        | `number?` | Explicit vector dimensionality. Required for unknown/custom model IDs. |
+| `config.version`           | `string?` | Extra vector-semantic revision for cache invalidation.                 |
 | `config.maxInputTokens`    | `number?` | Per-input token ceiling. Defaults to `8192`.                           |
 | `config.batch.maxSize`     | `number?` | Top-level Crux batch size. Defaults to `100`.                          |
 | `config.batch.concurrency` | `number?` | Top-level Crux batch concurrency. Defaults to `1`.                     |
 | `config.user`              | `string?` | Optional OpenAI end-user identifier                                    |
+
+The helper fingerprint always includes the model and explicit dimensions, then
+appends `version` when supplied. A user version never replaces model identity,
+so either change invalidates cached vectors.
 
 ### Types
 

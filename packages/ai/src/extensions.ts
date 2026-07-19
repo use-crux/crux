@@ -36,6 +36,8 @@ export interface AIRerankerConfig {
 export interface AIEmbeddingConfig {
   name: string;
   model: EmbeddingModel;
+  /** Additional vector-semantic revision appended to the derived model identity. */
+  version?: string;
   dimensions: number;
   maxInputTokens: number;
   batch?: {
@@ -69,6 +71,7 @@ export function createAiSdkRuntimeExtensions(
         name: config.name,
         dimensions: config.dimensions,
         maxInputTokens: config.maxInputTokens,
+        version: embeddingVersion(config),
         batch: {
           maxSize: config.batch?.maxSize ?? 100,
           concurrency: config.batch?.concurrency ?? 1,
@@ -149,4 +152,21 @@ export function createAiSdkRuntimeExtensions(
       return engine;
     },
   });
+}
+
+/** Build a stable identity from an AI SDK embedding model. */
+function embeddingVersion(config: AIEmbeddingConfig): string {
+  const modelIdentity =
+    typeof config.model === "string"
+      ? `model=${JSON.stringify(config.model)}`
+      : [
+          `provider=${JSON.stringify(config.model.provider)}`,
+          `modelId=${JSON.stringify(config.model.modelId)}`,
+        ].join(";");
+  return [
+    `ai-sdk:${modelIdentity}`,
+    ...(config.version === undefined
+      ? []
+      : [`version=${JSON.stringify(config.version)}`]),
+  ].join(";");
 }

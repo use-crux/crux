@@ -223,6 +223,8 @@ instead of public `defer()`.
 | ------------------------------ | -------------------------------------------------------------------------------------------------- |
 | `@use-crux/core`               | Prompts, contexts, config, injection-defense helpers (`safe`, `escapeXml`), and common types.      |
 | `@use-crux/core/memory`        | Memory blocks, storage, capture, proposals, and recall.                                            |
+| `@use-crux/core/embedding`     | Dense/sparse embeddings, vector-semantic identity, governance, and per-text caching.               |
+| `@use-crux/core/indexing`      | Document/chunk indexing, corpus sync, and source-bundle embedding-stage caching.                    |
 | `@use-crux/core/retrieval`     | Retrievers, rerankers, grounding inputs, and RAG pipelines.                                        |
 | `@use-crux/core/safety`        | Guardrails, constraints, safety plugins, and validation retry.                                     |
 | `@use-crux/core/eval`          | Inert Evals, typed Cases, Variants, checks, scorers, and Gates.                                    |
@@ -238,6 +240,20 @@ Node-only/build-time subpaths are explicit: `eval/node`, `setup`,
 `runtime/next` (`withCruxBuild`), `defer/node`, `observability/node`, `transcription/node`,
 `skill/node`, and the Vitest testing helpers. Portable application code should
 not re-export them from a Workers or browser entrypoint.
+
+## Cache expensive indexing work
+
+`indexer({ cache: true })` caches both preparation stages and final dense/sparse
+embedding bundles per source. Identical content can therefore be reindexed—after
+an `indexVersion` change or a dry run—without another embedding provider call.
+Use `{ cache: "refresh" }` to recompute and replace entries, or
+`{ cache: "bypass" }` to read and write no stage entries for that call.
+
+Embeddings created with `embedding()` carry a vector-semantic `fingerprint`.
+Set `version` when provider behavior can change without changing the embedding
+name; hand-written structural embeddings without a fingerprint are deliberately
+never stage-cached. The optional `embeddingCache()` is a separate, finer-grained
+per-text cache and can be used together with the indexer cache.
 
 ## Documentation
 
