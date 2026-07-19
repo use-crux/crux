@@ -1,6 +1,8 @@
 ---
 "@use-crux/core": minor
 "@use-crux/ai": minor
+"@use-crux/openai": minor
+"@use-crux/google": minor
 "@use-crux/indexer": patch
 ---
 
