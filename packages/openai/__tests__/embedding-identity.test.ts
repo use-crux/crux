@@ -28,9 +28,10 @@ describe('OpenAI embedding identity', () => {
     expect(fingerprint({ model: 'model-b', dimensions: 1536, version: 'pinned' })).not.toBe(
       fingerprint({ model: 'model-a', dimensions: 1536, version: 'pinned' }),
     )
-    expect(fingerprint({ model: 'text-embedding-3-small' })).not.toBe(
+    expect(fingerprint({ model: 'text-embedding-3-small' })).toBe(
       fingerprint({ model: 'text-embedding-3-small', dimensions: 1536 }),
     )
+    expect(fingerprint({ model: 'model-a', dimensions: 3072 })).not.toBe(base)
     expect(
       fingerprint({ model: 'model-a', dimensions: 1536, batch: { maxSize: 2, concurrency: 2 } }),
     ).toBe(base)

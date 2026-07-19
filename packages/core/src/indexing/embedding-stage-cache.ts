@@ -7,17 +7,23 @@
  * @module
  */
 
+import { sha256Hex } from '../content/sha256'
 import type { JsonObject, SparseVector } from '../storage'
-import { stableHash } from './hash'
+import { stableStringify } from './hash'
 import type { CruxChunk } from './types'
 
 /** Cache-format epoch for embedding-stage bundle keys and records. */
-export const EMBEDDING_STAGE_CACHE_EPOCH = 1
+export const EMBEDDING_STAGE_CACHE_EPOCH = 2
+
+/** Collision-resistant digest of a JSON-serializable value. */
+function digest(value: unknown): string {
+  return sha256Hex(new TextEncoder().encode(stableStringify(value)))
+}
 
 /** Persisted dense vector bundle for one source and embedding identity. */
 export interface DenseEmbeddingStageEntry extends JsonObject {
   readonly _cruxRecordType: 'pipeline-embedding-cache'
-  readonly version: 1
+  readonly version: typeof EMBEDDING_STAGE_CACHE_EPOCH
   readonly kind: 'dense'
   readonly namespace: string
   readonly sourceId: string
@@ -38,7 +44,7 @@ export interface StoredSparseVector extends JsonObject, SparseVector {
 /** Persisted sparse vector bundle for one source and embedding identity. */
 export interface SparseEmbeddingStageEntry extends JsonObject {
   readonly _cruxRecordType: 'pipeline-embedding-cache'
-  readonly version: 1
+  readonly version: typeof EMBEDDING_STAGE_CACHE_EPOCH
   readonly kind: 'sparse'
   readonly namespace: string
   readonly sourceId: string
@@ -64,7 +70,7 @@ type SparseEntryExpectation = Omit<DenseEntryExpectation, 'dimensions'>
 export function embeddingStageInputHash(
   orderedChunks: readonly Pick<CruxChunk, 'content'>[],
 ): string {
-  return stableHash(orderedChunks.map((chunk) => stableHash(chunk.content)))
+  return digest(orderedChunks.map((chunk) => chunk.content))
 }
 
 /** Build the record-store key for one source and embedding kind. */
@@ -76,7 +82,7 @@ export function embeddingStageCacheKey(args: {
   embeddingFingerprint: string
   inputHash: string
 }): string {
-  return `indexer:${args.scope}:namespace:${args.namespace}:embedding-cache:${stableHash({
+  return `indexer:${args.scope}:namespace:${args.namespace}:embedding-cache:${digest({
     epoch: EMBEDDING_STAGE_CACHE_EPOCH,
     sourceId: args.sourceId,
     kind: args.kind,

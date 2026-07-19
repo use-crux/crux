@@ -61,7 +61,6 @@ export function embedding(client: OpenAI, config: OpenAIEmbeddingConfig): DenseE
 function embeddingVersion(config: OpenAIEmbeddingConfig): string {
   return [
     `openai:model=${JSON.stringify(config.model)}`,
-    `dimensions=${config.dimensions === undefined ? 'default' : JSON.stringify(config.dimensions)}`,
     ...(config.version === undefined ? [] : [`version=${JSON.stringify(config.version)}`]),
   ].join(';')
 }

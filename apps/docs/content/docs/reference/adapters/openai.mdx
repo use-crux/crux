@@ -270,9 +270,10 @@ Known OpenAI embedding models infer their default dimensions automatically. For 
 | `config.batch.concurrency` | `number?` | Top-level Crux batch concurrency. Defaults to `1`.                     |
 | `config.user`              | `string?` | Optional OpenAI end-user identifier                                    |
 
-The helper fingerprint always includes the model and explicit dimensions, then
-appends `version` when supplied. A user version never replaces model identity,
-so either change invalidates cached vectors.
+The helper fingerprint always includes the model, then appends `version` when
+supplied; resolved dimensions participate through the core embedding
+fingerprint. A user version never replaces model identity, so either change
+invalidates cached vectors.
 
 ### Types
 

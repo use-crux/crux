@@ -85,8 +85,7 @@ describe('embedding-stage observability', () => {
     const serialized = JSON.stringify(transport.records)
     expect(serialized).not.toContain(privateContent)
     expect(serialized).not.toContain(privateVersion)
-    expect(serialized).not.toContain('73191')
-    expect(serialized).not.toContain('28463')
+    expect(serialized).not.toContain('[73191,28463]')
   })
 })
 

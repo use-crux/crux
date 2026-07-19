@@ -172,13 +172,14 @@ Crux has two complementary vector caches:
 | Need | Configure | Reuse unit |
 | --- | --- | --- |
 | Reuse vectors anywhere the embedding primitive is called | `cache: embeddingCache(...)` on `embedding()` | One normalized text |
-| Reuse final indexing work across generations, retries, or dry runs | `cache: true` on `indexer()` | One ordered source bundle per dense/sparse kind |
+| Reuse final embedding work across generations, retries, or dry runs | `cache: true` on `indexer()` | One ordered embedding bundle per source and dense/sparse kind |
 | Maximize reuse for both indexing and direct embedding calls | Configure both | Pipeline bundles first; per-text cache for remaining provider work |
 
 The indexer cache validates complete vector count and shape before reuse. It
 records one privacy-safe `embedding` stage per source and kind. A full bundle
-hit does not call `embedMany()` at all; `refresh` recomputes and replaces the
-bundle, while `bypass` reads and writes no bundle.
+hit does not call `embedMany()` at all, though generation persistence and
+index-store writes still run; `refresh` recomputes and replaces the bundle,
+while `bypass` reads and writes no bundle.
 
 ### Version vector-producing behavior
 

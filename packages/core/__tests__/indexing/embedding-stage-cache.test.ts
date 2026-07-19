@@ -35,9 +35,9 @@ describe('embedding stage cache contract', () => {
     }
     const key = embeddingStageCacheKey(base)
 
-    expect(EMBEDDING_STAGE_CACHE_EPOCH).toBe(1)
+    expect(EMBEDDING_STAGE_CACHE_EPOCH).toBe(2)
     expect(renamedInputHash).toBe(inputHash)
-    expect(key).toMatch(/^indexer:docs:namespace:kb:embedding-cache:[0-9a-f]{8}$/)
+    expect(key).toMatch(/^indexer:docs:namespace:kb:embedding-cache:[0-9a-f]{64}$/)
     expect(embeddingStageCacheKey({ ...base, inputHash: renamedInputHash })).toBe(key)
     expect(embeddingStageInputHash(chunks(['beta', 'alpha']))).not.toBe(inputHash)
     expect(embeddingStageInputHash(chunks(['alpha', 'changed']))).not.toBe(inputHash)
@@ -68,7 +68,7 @@ describe('embedding stage cache contract', () => {
 
     expect(entry).toMatchObject({
       _cruxRecordType: 'pipeline-embedding-cache',
-      version: 1,
+      version: EMBEDDING_STAGE_CACHE_EPOCH,
       kind: 'dense',
       namespace: 'kb',
       sourceId: 'source-a',
@@ -82,7 +82,7 @@ describe('embedding stage cache contract', () => {
       [1, 2],
       [3, 4],
     ])
-    expect(readDenseEmbeddingStageEntry({ ...entry, version: 2 }, expected)).toBeUndefined()
+    expect(readDenseEmbeddingStageEntry({ ...entry, version: 1 }, expected)).toBeUndefined()
     expect(readDenseEmbeddingStageEntry({ ...entry, sourceId: 'source-b' }, expected)).toBeUndefined()
     expect(readDenseEmbeddingStageEntry({ ...entry, vectors: [[1, 2]] }, expected)).toBeUndefined()
     expect(readDenseEmbeddingStageEntry({ ...entry, vectors: [[1], [2]] }, expected)).toBeUndefined()
@@ -111,7 +111,7 @@ describe('embedding stage cache contract', () => {
 
     expect(entry).toMatchObject({
       _cruxRecordType: 'pipeline-embedding-cache',
-      version: 1,
+      version: EMBEDDING_STAGE_CACHE_EPOCH,
       kind: 'sparse',
       namespace: 'kb',
       sourceId: 'source-a',
