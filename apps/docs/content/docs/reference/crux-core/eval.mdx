@@ -80,6 +80,12 @@ and its external cost is unknown. Opaque functions cannot be placed in a
 generated remote registry. Use inline Cases and confirm unknown work when the
 CLI asks.
 
+Eval cells capture calls to `defer()` rather than executing deferred side
+effects. Inline callbacks are evidenced but never invoked. Named registrations
+return a captured work reference without resolving Runtime, writing durable
+state, or engaging the commit barrier. The same `defer()` calls execute normally
+outside Eval cells.
+
 `generate.task()` and `stream.task()` from `@use-crux/ai` produce ordinary
 callable tasks that satisfy `EvalTask`. Call them as
 `task(input, callOptions?)`; bound defaults make only corresponding call keys

@@ -1,17 +1,65 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { defer } from "@use-crux/core";
 import { durableTask } from "@use-crux/core/runtime";
 import { createTestRuntime } from "@use-crux/core/runtime/testing";
-import { runWithDeferInvocation } from "@use-crux/core/internal/defer-host";
-import type { DeferLifetimeCapability } from "@use-crux/core/internal/defer-host";
+import { runWithDeferInvocation } from "@use-crux/core/internal/scope";
+import type { CruxHostBinding } from "@use-crux/core/internal/scope";
 import { getHooks, setHooks } from "../../src/runtime/runtime";
-import { testLifetime } from "./test-lifetime";
+import { testBinding } from "./test-binding";
 
 describe("named defer()", () => {
   const previousHooks = getHooks();
 
   afterEach(() => {
     setHooks(previousHooks);
+  });
+
+  it("uses the caller await as the ambient staging barrier", async () => {
+    const target = durableTask("ambient-named", {
+      run: async (input: { readonly id: string }) => input.id,
+    });
+    const testRuntime = createTestRuntime({ targets: [target] });
+    let retained: (() => Promise<void>) | undefined;
+    try {
+      setHooks({
+        ...getHooks(),
+        hostBinding: {
+          kind: "test",
+          invocationScope: true,
+          retain: (work) => {
+            retained = work;
+          },
+        },
+      });
+
+      const reference = await defer(target, { id: "ambient-1" });
+
+      expect(reference.targetId).toBe("ambient-named");
+      expect(retained).toBeTypeOf("function");
+      await retained?.();
+      await expect(
+        testRuntime.store.state.getWork(reference.workId, {
+          namespace: "local",
+        }),
+      ).resolves.toMatchObject({ status: "pending" });
+    } finally {
+      testRuntime.dispose();
+    }
+  });
+
+  it("surfaces ambient staging failure without commit wrapping", async () => {
+    const target = durableTask("ambient-runtime-required", {
+      run: async (input: { readonly id: string }) => input.id,
+    });
+    const retain = vi.fn();
+    setHooks({
+      hostBinding: { kind: "test", invocationScope: true, retain },
+    });
+
+    await expect(
+      defer(target, { id: "ambient-failure" }),
+    ).rejects.toMatchObject({ code: "RUNTIME_REQUIRED" });
+    expect(retain).toHaveBeenCalledOnce();
   });
 
   it("resolves after durable staging and releases work only when the invocation finalizes", async () => {
@@ -55,7 +103,7 @@ describe("named defer()", () => {
           return "response";
         },
         {
-          lifetime: namedLifetime(),
+          binding: namedBinding(),
           classifyOutcome: () => "success",
         },
       );
@@ -94,7 +142,7 @@ describe("named defer()", () => {
           return "response";
         },
         {
-          lifetime: namedLifetime(),
+          binding: namedBinding(),
           classifyOutcome: () => "success",
         },
       ),
@@ -121,7 +169,7 @@ describe("named defer()", () => {
             return "discard-me";
           },
           {
-            lifetime: namedLifetime(),
+            binding: namedBinding(),
             classifyOutcome: () => "success",
           },
         ),
@@ -161,7 +209,7 @@ describe("named defer()", () => {
             return "discard-me";
           },
           {
-            lifetime: namedLifetime(),
+            binding: namedBinding(),
             classifyOutcome: () => "success",
           },
         ),
@@ -219,7 +267,7 @@ describe("named defer()", () => {
               return "discard-me";
             },
             {
-              lifetime: namedLifetime(),
+              binding: namedBinding(),
               classifyOutcome: () => "success",
             },
           ),
@@ -247,7 +295,7 @@ describe("named defer()", () => {
             return "discard-me";
           },
           {
-            lifetime: testLifetime(() => {}),
+            binding: testBinding(() => {}),
             classifyOutcome: () => "success",
           },
         ),
@@ -261,9 +309,9 @@ describe("named defer()", () => {
   });
 });
 
-function namedLifetime(): DeferLifetimeCapability {
+function namedBinding(): CruxHostBinding {
   return {
-    ...testLifetime(() => {}),
+    ...testBinding(() => {}),
     durableFinalization: true,
   };
 }

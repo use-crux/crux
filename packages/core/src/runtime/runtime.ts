@@ -28,6 +28,7 @@ import type { CruxPropagationCarrier } from "../observability/continuation";
 import type { ProjectIndexRuntimeTransport } from "../project-index/runtime";
 import type { RecordStore } from "../storage";
 import type { RuntimeEngineDefinition } from "./api/runtime-definition";
+import type { CruxHostBinding } from "../scope/types";
 import { getCruxProcessRegistry } from "./process-registry";
 
 /**
@@ -132,6 +133,8 @@ export interface CruxHooks {
   records?: RecordStore;
   /** Durable Runtime Engine composer configured for runtime-bound APIs. */
   runtimeEngine?: RuntimeEngineDefinition;
+  /** Explicit host binding configured for invocation retention. */
+  hostBinding?: CruxHostBinding;
   /** Global constraints registered via createConstraintPlugin(). */
   globalConstraints?: import("../safety/constraint/types").Constraint[];
   /** Global guardrails registered via createGuardrailPlugin(). */

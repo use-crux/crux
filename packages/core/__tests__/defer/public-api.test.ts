@@ -17,7 +17,7 @@ describe("defer()", () => {
     expect(callback).not.toHaveBeenCalled();
   });
 
-  it("throws DEFER_CAPABILITY_MISSING in a scope without a lifetime capability", () => {
+  it("throws DEFER_CAPABILITY_MISSING in a scope without a binding capability", () => {
     const callback = vi.fn();
 
     expect(() =>

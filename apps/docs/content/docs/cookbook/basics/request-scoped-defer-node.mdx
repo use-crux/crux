@@ -1,23 +1,33 @@
 ---
 title: Node request-scoped defer
-description: Drain post-response work after Node HTTP response finish without a Runtime.
+description: Use primitive-local work directly, or add a Node HTTP boundary for response-scoped work.
 ---
 
-Use `@use-crux/core/defer/node` for single-process Node HTTP servers. Inline
-callbacks are process-local and start after `response` `finish`.
+Inside an agent, adapter, tool, or Safety session, a long-lived Node process
+needs no host setup:
+
+```ts
+import { defer } from "@use-crux/core";
+
+const indexCustomer = async (customer: Customer) => {
+  defer(() => updateSearchIndex(customer));
+  return customer;
+};
+```
+
+Root-level request work needs the Node response boundary so Crux knows when the
+response finishes. Use `createNodeDeferHost` when graceful shutdown matters:
 
 ```ts
 import { createServer } from "node:http";
 import { defer } from "@use-crux/core";
-import { createNodeDeferHost, withNodeDefer } from "@use-crux/core/defer/node";
+import { createNodeDeferHost } from "@use-crux/core/defer/node";
 
 const deferHost = createNodeDeferHost();
 
 const server = createServer(
   deferHost.wrap(async (_request, response) => {
-    defer(() => {
-      // analytics, cleanup, non-critical side work
-    });
+    defer(() => flushAnalytics());
     response.statusCode = 200;
     response.end("ok");
   }),
@@ -31,20 +41,20 @@ process.once("SIGTERM", async () => {
 });
 ```
 
-Convenience API for one module-local host:
+For a module-local boundary without an explicit shutdown handle:
 
 ```ts
+import { withNodeDefer } from "@use-crux/core/defer/node";
+
 const server = createServer(
   withNodeDefer(async (_request, response) => {
-    defer(() => {});
+    defer(() => flushAnalytics());
     response.end("ok");
   }),
 );
 ```
 
-## Notes
+Inline work remains local to one process. Use named Runtime work when execution
+must survive a crash or cross Node workers.
 
-- Completion class: `response-finished`
-- No Runtime required for inline work
-- Multiprocess deployments need named Runtime work for cross-worker durability
-- See [host matrix](/docs/guides/background-work/hosts)
+See [Host support](/docs/guides/background-work/hosts) for the complete ladder.

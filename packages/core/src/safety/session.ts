@@ -54,6 +54,7 @@ import { createSafetyStream } from './stream/engine'
 import { resyncStructuredText } from './structured'
 import { guardOutputTextParts as guardCompletionTextParts } from './output-text-parts'
 import { guardInput as guardSafetyInput } from './input/runner'
+import { createScopedSafetySession } from './scope-session'
 
 // ─────────────────────────────────────────────────────────────────
 // Public types
@@ -540,7 +541,7 @@ export function createSafety(options: SafetyCallOptions): Safety {
 
   // ── The session ────────────────────────────────────────────────
 
-  return {
+  const session: Safety = {
     enabled,
 
     async guardInput(input) {
@@ -613,6 +614,7 @@ export function createSafety(options: SafetyCallOptions): Safety {
 
     transcript,
   }
+  return createScopedSafetySession(options.promptId, session)
 }
 
 function latestRewritePolicyId(entries: readonly GuardrailAuditEntry[]): string | undefined {

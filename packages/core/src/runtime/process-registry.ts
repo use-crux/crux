@@ -32,6 +32,7 @@ const CRUX_HOOK_KEYS = new Set<keyof CruxHooks>([
   "telemetryResumeAttributesHook",
   "records",
   "runtimeEngine",
+  "hostBinding",
   "globalConstraints",
   "globalGuardrails",
   "semanticCacheInstalled",

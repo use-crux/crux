@@ -204,11 +204,9 @@ fn shared_static_index_protocol_case_fixture_decodes() {
     assert!(!fixture.analyze_stream_error["ok"].as_bool().unwrap_or(true));
     assert_eq!(fixture.analyze_stream_error["type"], "error");
     assert_eq!(fixture.analyze_stream_error["error"], "analyze failed");
-    assert!(
-        !fixture.finalize_stream_error["ok"]
-            .as_bool()
-            .unwrap_or(true)
-    );
+    assert!(!fixture.finalize_stream_error["ok"]
+        .as_bool()
+        .unwrap_or(true));
     assert_eq!(fixture.finalize_stream_error["type"], "error");
     assert_eq!(fixture.finalize_stream_error["error"], "finalize failed");
     assert_eq!(fixture.invalid_analyze_stream_event["type"], "unknown");
@@ -342,7 +340,6 @@ fn shared_relation_rule_and_coverage_fixtures_decode() {
             "runtime.closure_defer",
             "defer.replay_unsafe",
             "defer.floating_named_promise",
-            "defer.missing_scope",
             "runtime.missing_runtime_config",
             "flow.nondeterministic_code",
             "runtime.non_serializable_payload",
@@ -359,12 +356,10 @@ fn shared_relation_rule_and_coverage_fixtures_decode() {
     let coverage: PrimitiveCoverageIdentitiesFixture =
         fixture_json("primitive-coverage-identities.json");
     assert_eq!(coverage.required_fixture_classes.len(), 10);
-    assert!(
-        coverage
-            .required_fixture_classes
-            .iter()
-            .any(|class| class == "dependencies")
-    );
+    assert!(coverage
+        .required_fixture_classes
+        .iter()
+        .any(|class| class == "dependencies"));
     assert_eq!(coverage.identities.len(), 23);
 
     // The Rust first-party projection manifest must cover exactly these

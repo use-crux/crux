@@ -1,31 +1,62 @@
 ---
-title: Named defer on serverless / Convex
-description: Stage durable post-response work with await defer(target, input) and Runtime.
+title: Named defer on serverless and Convex
+description: Await durable acceptance with config-only ambient mode or a strict host boundary.
 ---
 
-Named `defer` stages durable Runtime work and returns only after acceptance.
-The host must finalize successfully before the response commits.
+Named `defer` stages Runtime work and resolves after durable acceptance.
 
-## Serverless / Lambda-style
+## Config-only ambient mode
+
+On an ambient-capable platform, configure Runtime and retention once:
+
+```ts title="crux.config.ts"
+import { config } from "@use-crux/core";
+import { serverless } from "@use-crux/core/runtime";
+import { vercel } from "@use-crux/vercel";
+
+export default config({
+  host: vercel(),
+  runtime: serverless({ store, wake }),
+});
+```
+
+Then await acceptance at the call site:
 
 ```ts
-import { config, defer } from "@use-crux/core";
-import { durableTask, serverless } from "@use-crux/core/runtime";
-import { withNamedOnlyDefer } from "@use-crux/core/defer/serverless";
-// import { postgres } from '@use-crux/postgres/runtime'
-// import { qstash } from '@use-crux/upstash/runtime' // example wake adapter
+import { defer } from "@use-crux/core";
+import { durableTask } from "@use-crux/core/runtime";
 
 const postProcess = durableTask("post-process", {
-  run: async (input: { jobId: string }) => {
-    // wakeable target body
-    return input.jobId;
-  },
+  run: async (input: { jobId: string }) => input.jobId,
 });
 
-// config({
-//   runtime: serverless({ store: postgres(), wake: qstash() }),
-// })
+export async function POST(request: Request) {
+  const { jobId } = await request.json();
+  const ref = await defer(postProcess, { jobId });
+  return Response.json({ accepted: true, workId: ref.workId });
+}
+```
 
+The user's `await` is the acceptance barrier. Each ambient call owns an
+ephemeral root; it does not classify the enclosing handler or provide a strict
+response commit barrier.
+
+## Strict serverless boundary
+
+Use `withServerlessDefer` when handler outcome and response commitment belong
+to one real invocation:
+
+```ts
+import { withServerlessDefer } from "@use-crux/core/defer/serverless";
+
+export const handler = withServerlessDefer(appHandler, { binding });
+```
+
+Lambda-class hosts without a retention port should use
+`withNamedOnlyDefer`. Inline callbacks then fail explicitly with
+`DEFER_CAPABILITY_MISSING`; named Runtime work remains available:
+
+```ts
 export const handler = withNamedOnlyDefer(
   async (event: { jobId: string }) => {
     const ref = await defer(postProcess, { jobId: event.jobId });
@@ -35,21 +66,17 @@ export const handler = withNamedOnlyDefer(
 );
 ```
 
-Inline `defer(callback)` throws `DEFER_CAPABILITY_MISSING` on named-only hosts.
+If staging or strict finalization fails, the wrapper reports
+`DEFER_COMMIT_FAILED` and must not commit a successful response.
 
 ## Convex
 
-Configure `runtime: convex()` and run work through the Convex Crux bridge.
-Bridge runs install a named-only lifetime automatically: use
-`await defer(target, input)` and keep targets JSON-safe and exported for wake.
-
-## Strict commit
-
-If staging or finalization fails, the host receives `DEFER_COMMIT_FAILED` and
-must not send a successful response. Catching the promise cannot restore success.
+Configure `runtime: convex()` and execute through
+`createCruxConvex().run()`. The bridge installs its named-only execution scope;
+await named work and keep targets JSON-safe and exported for wake.
 
 ## Related
 
-- [Request-scoped defer](/docs/guides/background-work)
-- [Runtime Engine](/docs/guides/durable-execution)
-- [`DEFER_COMMIT_FAILED`](/docs/errors/DEFER_COMMIT_FAILED)
+- [Background Work](/docs/guides/background-work)
+- [Host support](/docs/guides/background-work/hosts)
+- [Durable Execution](/docs/guides/durable-execution)

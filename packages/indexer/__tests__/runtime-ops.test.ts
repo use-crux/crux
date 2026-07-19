@@ -330,6 +330,7 @@ async function runtimeOpsFixtureRoot(options: {
       "const globalPools = globalThis as typeof globalThis & { __cruxRuntimeOpsPools?: Pool[] }",
       "globalPools.__cruxRuntimeOpsPools ??= []",
       `const pool = new Pool({ connectionString: ${JSON.stringify(database.url)}, allowExitOnIdle: true })`,
+      "pool.on('error', () => undefined)",
       "globalPools.__cruxRuntimeOpsPools.push(pool)",
       "",
       "export default config({",

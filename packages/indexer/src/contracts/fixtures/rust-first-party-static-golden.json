@@ -5,12 +5,12 @@
   "fileSelection": "staticDefinitionFiles(root)",
   "projection": "canonicalStaticExtractionJson(definitions,relations,diagnostics,dependencies)",
   "totals": {
-    "files": 728,
+    "files": 727,
     "definitions": 72,
     "relations": 3,
     "diagnostics": 17,
-    "dependencies": 1341,
-    "canonicalBytes": 189487
+    "dependencies": 1337,
+    "canonicalBytes": 189240
   },
   "files": [
     {
@@ -951,6 +951,33 @@
     },
     {
       "file": "packages/cloudflare/src/runtime/waiters.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/cloudflare/src/with-crux.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/cloudflare/src/workers.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/cloudflare/vitest.observability.config.ts",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
       "definitions": 0,
@@ -2256,12 +2283,12 @@
     },
     {
       "file": "packages/core/src/adapter/tool/session.ts",
-      "sha256": "f6cbc7fa197341b273d3c325c890e1f7fd27a37abf7fc79be8d8251b852d16ca",
-      "bytes": 1051,
+      "sha256": "d0522309e9540a574db323c9b543427819fd9480461a5b65849a23024d707371",
+      "bytes": 1100,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 19
+      "dependencies": 20
     },
     {
       "file": "packages/core/src/agent/agent.ts",
@@ -2444,22 +2471,13 @@
       "dependencies": 0
     },
     {
-      "file": "packages/core/src/defer/host-types.ts",
-      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
-      "bytes": 68,
-      "definitions": 0,
-      "relations": 0,
-      "diagnostics": 0,
-      "dependencies": 0
-    },
-    {
       "file": "packages/core/src/defer/index.ts",
-      "sha256": "f1be9a791a5b98dae6aceca4d8737f2fd4c1ed8a74369aa1e883d6b6dd2fa1ce",
-      "bytes": 327,
+      "sha256": "2dda05c282e7f38e5cbcb38111dd81ee48e8d9690b2f0e22cae51c74f7c90f0b",
+      "bytes": 428,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 5
+      "dependencies": 7
     },
     {
       "file": "packages/core/src/defer/internal/callback-boundary.ts",
@@ -2472,8 +2490,8 @@
     },
     {
       "file": "packages/core/src/defer/internal/durable.ts",
-      "sha256": "95d60faa0e194fd304786da09e2535a503d010039ce353d789b5da81e0920964",
-      "bytes": 611,
+      "sha256": "a15e980a9552bf02b99ceeebef30a09f14b31e1920a22b5545a6e22fbe45f396",
+      "bytes": 612,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
@@ -2481,8 +2499,8 @@
     },
     {
       "file": "packages/core/src/defer/internal/invocation-scope.ts",
-      "sha256": "c305e62be502bc4bd70fe632d75cab8a7b4812257dd1838c094cfa073ca3da2d",
-      "bytes": 442,
+      "sha256": "e9c4540b0f180a7b84efe0900d04fc14dceffe1577845bebfaaae169a201921c",
+      "bytes": 446,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
@@ -2490,17 +2508,17 @@
     },
     {
       "file": "packages/core/src/defer/internal/observability.ts",
-      "sha256": "6e308b66478f2ecee5caf3c41c56aaca91fd30525eb1b51a28f62fbaae249a9d",
-      "bytes": 117,
+      "sha256": "9b2e508d5251c00e187edfcfc9e2629e5461741f1f02f90c5eb24188c0af8624",
+      "bytes": 184,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 1
+      "dependencies": 2
     },
     {
       "file": "packages/core/src/defer/internal/port.ts",
-      "sha256": "386a29bf4c057e3a90f92ef445afda3d02ad502ad802ae8fa746195b75504fea",
-      "bytes": 120,
+      "sha256": "1d12b5e7c5074ad618199baa2a2517f73f348c6f149057aa9db14427631857ac",
+      "bytes": 125,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
@@ -2508,12 +2526,12 @@
     },
     {
       "file": "packages/core/src/defer/node.ts",
-      "sha256": "8fd5ab3e58784c2f0dc3ab71f80090aa86b0d2d5e79edcdfae704ef0f5cea848",
-      "bytes": 113,
+      "sha256": "754a8b4134c526e19dd16cb3fb35b291b59a8a023df0fe79d40ed7448260e3a0",
+      "bytes": 161,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 1
+      "dependencies": 2
     },
     {
       "file": "packages/core/src/defer/serverless.ts",
@@ -2525,40 +2543,13 @@
       "dependencies": 0
     },
     {
-      "file": "packages/core/src/defer/serverless/after.ts",
-      "sha256": "3d81224662dfec8532ce6f0e9dc6b572ab08afec3b9d1aa96912e10df8f381c5",
-      "bytes": 164,
-      "definitions": 0,
-      "relations": 0,
-      "diagnostics": 0,
-      "dependencies": 2
-    },
-    {
-      "file": "packages/core/src/defer/serverless/named-only.ts",
-      "sha256": "8e1179bfd79a5d60776666ab793bc5c6c2dd3ceee5c627e45567be4a4194c2af",
-      "bytes": 167,
-      "definitions": 0,
-      "relations": 0,
-      "diagnostics": 0,
-      "dependencies": 2
-    },
-    {
-      "file": "packages/core/src/defer/serverless/wait-until.ts",
-      "sha256": "7abda2f85f4e392341d342aa881201960a62abd828aa767f19e5e01c7d6c75e2",
-      "bytes": 210,
+      "file": "packages/core/src/defer/serverless/wrap.ts",
+      "sha256": "07a2e40330e016eb9d100fb3778ab05531ca496eb061a8bff5fe1b72f89ef373",
+      "bytes": 205,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
       "dependencies": 3
-    },
-    {
-      "file": "packages/core/src/defer/serverless/wrap.ts",
-      "sha256": "fd643d1b379f2638fd395c821bfdcfe6db7ef35939b1e6a7f0f4dd92be6e5330",
-      "bytes": 277,
-      "definitions": 0,
-      "relations": 0,
-      "diagnostics": 0,
-      "dependencies": 4
     },
     {
       "file": "packages/core/src/defer/types.ts",
@@ -2607,12 +2598,12 @@
     },
     {
       "file": "packages/core/src/eval/internal/execution-signals.ts",
-      "sha256": "f457040a7d8692ca92ce7468adaae0a2defeae1134682ff373da810e0ec5fb4d",
-      "bytes": 256,
+      "sha256": "4d20573f3f984136b5b80540456ab6e59e4b5f743c1fe884557cd586bb7326b2",
+      "bytes": 146,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 3
+      "dependencies": 1
     },
     {
       "file": "packages/core/src/eval/internal/gate-contract.ts",
@@ -2751,12 +2742,12 @@
     },
     {
       "file": "packages/core/src/flow/scope.ts",
-      "sha256": "e5a9c3f23d424bca1776a9e38069ec286051ab2f9a8735faa7535d2dab843a95",
-      "bytes": 1293,
+      "sha256": "670a7357caca9701f690e306c613c868c2f5f68bfe32c1c0f3f23650d8bee2c8",
+      "bytes": 1336,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 24
+      "dependencies": 25
     },
     {
       "file": "packages/core/src/flow/signals.ts",
@@ -2919,15 +2910,6 @@
       "relations": 0,
       "diagnostics": 0,
       "dependencies": 1
-    },
-    {
-      "file": "packages/core/src/observability/workers.ts",
-      "sha256": "87567c49396cbfb5a9db2d96c8d17b01b9793c65b968a5ffe0afead38401d7b1",
-      "bytes": 166,
-      "definitions": 0,
-      "relations": 0,
-      "diagnostics": 0,
-      "dependencies": 2
     },
     {
       "file": "packages/core/src/plan/agent.ts",
@@ -3543,12 +3525,12 @@
     },
     {
       "file": "packages/core/src/safety/session.ts",
-      "sha256": "3c0018727eccb0ab4491083d9d2361ce4429e86bc7fad8da51e9873da211f84c",
-      "bytes": 474,
+      "sha256": "bfe0e3c0f7454973440223c10e8245d258ddd93cff97d915adabc465492b81a6",
+      "bytes": 525,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 8
+      "dependencies": 9
     },
     {
       "file": "packages/core/src/safety/toolPolicy/types.ts",
@@ -3813,15 +3795,6 @@
     },
     {
       "file": "packages/core/vitest.config.ts",
-      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
-      "bytes": 68,
-      "definitions": 0,
-      "relations": 0,
-      "diagnostics": 0,
-      "dependencies": 0
-    },
-    {
-      "file": "packages/core/vitest.workers.config.ts",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
       "definitions": 0,
@@ -5136,12 +5109,21 @@
     },
     {
       "file": "packages/indexer/src/indexer/setup/defer-contributor.ts",
-      "sha256": "cbe863989094729b149828caaa4e6d5ef1255368001f1c581368bd303d9b2e70",
-      "bytes": 183,
+      "sha256": "90febb80e93bdb84aa10d7b783f594b83b9eead5d97d11ee61cfb9435b2ff453",
+      "bytes": 252,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 2
+      "dependencies": 3
+    },
+    {
+      "file": "packages/indexer/src/indexer/setup/defer-host-capability.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
     },
     {
       "file": "packages/indexer/src/indexer/setup/defer-source-evidence.ts",
@@ -6483,6 +6465,15 @@
       "relations": 0,
       "diagnostics": 0,
       "dependencies": 2
+    },
+    {
+      "file": "packages/vercel/src/index.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
     },
     {
       "file": "scripts/fixtures/portability/core-guarded-fallbacks.ts",

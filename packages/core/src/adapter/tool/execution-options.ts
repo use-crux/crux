@@ -9,6 +9,7 @@
  */
 
 import { createToolRegistry } from '../../tools/tool-registry'
+import { runToolScope } from './scope'
 
 /** Canonical options passed to one tool execution. */
 export interface ToolLifecycleExecutionOptions {
@@ -20,7 +21,8 @@ export interface ToolLifecycleExecutionOptions {
 }
 
 /** Partial options accepted from SDK-owned tool-loop callbacks. */
-export type PartialToolLifecycleExecutionOptions = Partial<ToolLifecycleExecutionOptions>
+export type PartialToolLifecycleExecutionOptions =
+  Partial<ToolLifecycleExecutionOptions>
 
 type ExecutionOptionsResolver = (
   toolName: string,
@@ -62,8 +64,14 @@ export function withToolLifecycleExecutionOptions(
     ) => unknown
     contextual[toolName] = {
       ...tool,
-      execute(this: unknown, input: unknown, rawOptions?: PartialToolLifecycleExecutionOptions) {
-        return execute.call(this, input, resolveOptions(toolName, rawOptions))
+      execute(
+        this: unknown,
+        input: unknown,
+        rawOptions?: PartialToolLifecycleExecutionOptions,
+      ) {
+        return runToolScope(toolName, () =>
+          execute.call(this, input, resolveOptions(toolName, rawOptions)),
+        )
       },
     }
   }

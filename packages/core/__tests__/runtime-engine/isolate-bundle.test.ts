@@ -17,8 +17,7 @@ describe("runtime isolate bundle compatibility", () => {
         "import '@use-crux/core/transcription'",
         "import '@use-crux/core/runtime'",
         "import '@use-crux/core/internal/async-scope'",
-        "import '@use-crux/core/internal/defer-host'",
-        "import '@use-crux/core/internal/defer-lifecycle'",
+        "import '@use-crux/core/internal/scope'",
         "import '@use-crux/convex/runtime'",
         importStatement(
           repoRoot,
@@ -102,10 +101,8 @@ function coreSubpath(specifier: string): string {
   if (subpath === "storage") return "packages/core/src/storage/index.ts";
   if (subpath === "internal/async-scope")
     return "packages/core/src/async-scope/index.ts";
-  if (subpath === "internal/defer-host")
-    return "packages/core/src/defer/host.ts";
-  if (subpath === "internal/defer-lifecycle")
-    return "packages/core/src/defer/lifecycle.ts";
+  if (subpath === "internal/scope")
+    return "packages/core/src/scope/internal.ts";
   if (subpath === "transcription")
     return "packages/core/src/transcription/index.ts";
   return `packages/core/src/${subpath}.ts`;

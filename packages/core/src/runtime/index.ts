@@ -15,7 +15,7 @@
 // Configuration — the single `config()` entry point
 // ─────────────────────────────────────────────────────────────────
 
-export { config } from './config'
+export { config } from "./config";
 export type {
   Crux,
   CruxConfig,
@@ -26,6 +26,7 @@ export type {
   CruxExperimentalIndexerNativeConfig,
   CruxExperimentalIndexerNativeEngine,
   CruxGenerationConfig,
+  CruxHostBinding,
   CruxIndexerConfig,
   CruxIndexerExtensionReference,
   CruxIndexerExtensionTrustMode,
@@ -36,8 +37,8 @@ export type {
   CruxObservabilityConfig,
   CruxPersistenceConfig,
   CruxRuntimeConfig,
-} from './config'
-export type { PromptRegistry } from './configure'
+} from "./config";
+export type { PromptRegistry } from "./configure";
 
 // ─────────────────────────────────────────────────────────────────
 // Global hooks store
@@ -51,7 +52,7 @@ export {
   resolveRecords,
   setHooks,
   updateHooks,
-} from './runtime'
+} from "./runtime";
 export type {
   CruxHooks,
   HooksLayerToken,
@@ -60,24 +61,37 @@ export type {
   TelemetryFlushHookOptions,
   TelemetryFlushHookResult,
   TelemetryResumeAttributesHook,
-} from './runtime'
+} from "./runtime";
 
 // ─────────────────────────────────────────────────────────────────
 // Plugins
 // ─────────────────────────────────────────────────────────────────
 
-export { mergeHooks, applyPlugins } from './plugin'
-export type { CruxPlugin, CruxPluginResult, ApplyPluginsResult } from './plugin'
+export { mergeHooks, applyPlugins } from "./plugin";
+export type {
+  CruxPlugin,
+  CruxPluginResult,
+  ApplyPluginsResult,
+} from "./plugin";
 
 // ─────────────────────────────────────────────────────────────────
 // Middleware contracts
 // ─────────────────────────────────────────────────────────────────
 
-export type { PromptMiddleware, PromptMiddlewareArgs, MiddlewareResult } from './types'
+export type {
+  PromptMiddleware,
+  PromptMiddlewareArgs,
+  MiddlewareResult,
+} from "./types";
 
 // ─────────────────────────────────────────────────────────────────
 // Execution context
 // ─────────────────────────────────────────────────────────────────
 
-export { withSession, createSessionId, getExecutionContext, runWithExecutionContext } from './execution-context'
-export type { ExecutionContext } from './execution-context'
+export {
+  withSession,
+  createSessionId,
+  getExecutionContext,
+  runWithExecutionContext,
+} from "./execution-context";
+export type { ExecutionContext } from "./execution-context";

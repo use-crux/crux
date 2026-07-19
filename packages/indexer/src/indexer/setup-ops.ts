@@ -29,7 +29,10 @@ export async function runSetupOperation(
   const planner = createSetupPlanner([
     ...(loaded.importFailed ? [configFailureContributor()] : []),
     ...(runtime ? [createRuntimeSetupContributor(runtime)] : []),
-    createDeferSetupContributor({ runtime }),
+    createDeferSetupContributor({
+      runtime,
+      host: loaded.crux?.config.host,
+    }),
   ])
   const context = { root: options.root, mode: options.mode }
   switch (options.mode) {

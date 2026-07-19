@@ -6,6 +6,8 @@ import type { DefinitionRef } from '../../observability'
 import { agentDefinitionRef } from '../../observability/definition-ref'
 import { runWithExecutionContext } from '../../runtime/execution-context'
 import type { ExecutionContext } from '../../runtime/execution-context'
+import { runScope } from '../../scope/kernel'
+import { promptScopeSourceRef } from '../../scope/source-ref'
 import type {
   CompositionAgentExecution,
   CompositionFunctionExecution,
@@ -37,10 +39,23 @@ export async function executeAgent<TOutput>(
           kind: 'agent',
         },
       },
-      () => executeAgentRun(compositionId, childContext, input, stepId, childDefinitionRef),
+      () =>
+        executeAgentRun(
+          compositionId,
+          childContext,
+          input,
+          stepId,
+          childDefinitionRef,
+        ),
     )
   }
-  return executeAgentRun(compositionId, childContext, input, undefined, childDefinitionRef)
+  return executeAgentRun(
+    compositionId,
+    childContext,
+    input,
+    undefined,
+    childDefinitionRef,
+  )
 }
 
 async function executeAgentRun<TOutput>(
@@ -87,7 +102,18 @@ async function executeAgentRun<TOutput>(
   return agentSpan.withContext(() =>
     runWithExecutionContext(stepCtx, async () => {
       try {
-        const result = await invokeAgent(input, startedAt)
+        const sourceRef = isAgent(input.agent)
+          ? promptScopeSourceRef(input.agent.prompt)
+          : undefined
+        const result = await runScope(
+          {
+            kind: 'agent-turn',
+            name: agentId,
+            ...(sourceRef ? { sourceRef } : {}),
+          },
+          {},
+          () => invokeAgent(input, startedAt),
+        )
         agentSpan.end({ attributes: { agentId: result.agentId } })
         return result
       } catch (error) {

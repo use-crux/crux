@@ -17,36 +17,34 @@ describe("defer package surfaces", () => {
     expect(runtime).not.toHaveProperty("runWithDeferInvocation");
   });
 
-  it("declares the exact first-party defer-host SPI subpath", async () => {
+  it("folds the first-party defer SPI into the scope subpath", async () => {
     const manifest = JSON.parse(
       await readFile(new URL("../../package.json", import.meta.url), "utf8"),
     ) as CorePackageManifest;
 
-    expect(manifest.exports?.["./internal/defer-host"]).toEqual({
-      types: "./src/defer/host.ts",
-      import: "./src/defer/host.ts",
+    expect(manifest.exports?.["./internal/scope"]).toEqual({
+      types: "./src/scope/internal.ts",
+      import: "./src/scope/internal.ts",
     });
-    expect(manifest.typesVersions?.["*"]?.["internal/defer-host"]).toEqual([
-      "src/defer/host.ts",
+    expect(manifest.typesVersions?.["*"]?.["internal/scope"]).toEqual([
+      "src/scope/internal.ts",
     ]);
-    expect(
-      Object.keys(await import("@use-crux/core/internal/defer-host")),
-    ).toEqual(["runWithDeferInvocation"]);
+    expect(await import("@use-crux/core/internal/scope")).toHaveProperty(
+      "runWithDeferInvocation",
+    );
   });
 
   it("does not expose raw invocation scope or drain controls", async () => {
-    const host = await import("@use-crux/core/internal/defer-host");
+    const scope = await import("@use-crux/core/internal/scope");
 
-    expect(host).not.toHaveProperty("createInvocationDeferScope");
-    expect(host).not.toHaveProperty("seal");
-    expect(host).not.toHaveProperty("registerInline");
+    expect(scope).not.toHaveProperty("seal");
+    expect(scope).not.toHaveProperty("registerInline");
     expect(core).not.toHaveProperty("runWithDeferInvocation");
-    expect(core).not.toHaveProperty("createInvocationDeferScope");
     expect(core).not.toHaveProperty("scheduleDiagnosticsOnlyDeferredCallback");
     expect(runtime).not.toHaveProperty(
       "scheduleDiagnosticsOnlyDeferredCallback",
     );
-    expect(host).not.toHaveProperty("scheduleDiagnosticsOnlyDeferredCallback");
+    expect(scope).not.toHaveProperty("scheduleDiagnosticsOnlyDeferredCallback");
   });
 
   it("does not declare a diagnostics-only defer package subpath", async () => {

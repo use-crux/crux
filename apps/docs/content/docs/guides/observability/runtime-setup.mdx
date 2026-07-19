@@ -12,7 +12,7 @@ Your code ran fine on Lambda or Workers, but the run shows up as `incomplete` in
 | Long-lived Node    | Background batching is fine; flush on graceful shutdown.                                                  | `observe.flush()` / `observe.shutdown()`                                               |
 | Generic serverless | Wrap each invocation; await a bounded drain before return.                                                | `withObservableInvocation()` from `@use-crux/core/observability`                       |
 | Node Lambda-style  | Same, with `context.getRemainingTimeInMillis()` derived automatically.                                    | `withNodeObservableInvocation()` from `@use-crux/core/observability/node`              |
-| Cloudflare Workers | Install defer and drain through `ctx.waitUntil` (no added response latency; no `nodejs_compat` required). | `withCrux()` from `@use-crux/core/observability/workers`                               |
+| Cloudflare Workers | Install defer and drain through `ctx.waitUntil` (no added response latency; no `nodejs_compat` required). | `withCrux()` from `@use-crux/cloudflare`                                               |
 | Next.js            | Install response-finished defer and drain through the same `after()` port.                                | `withCrux()` from `@use-crux/next`                                                     |
 | Convex             | Use the profile-owned boundary or first-party function wrappers.                                          | `createCruxConvex().run()`, `action` / `internalAction` from `@use-crux/convex/server` |
 
@@ -88,7 +88,7 @@ export const handler = withNodeObservableInvocation(
 
 ```ts
 import { defer } from "@use-crux/core";
-import { withCrux } from "@use-crux/core/observability/workers";
+import { withCrux } from "@use-crux/cloudflare";
 
 const fetch = withCrux(
   async (request, env, ctx) => {
@@ -104,7 +104,7 @@ const fetch = withCrux(
 export default { fetch };
 ```
 
-Workers isolates may serve concurrent requests without ambient async storage. The Workers wrapper drains the shared delivery queue via `waitUntil` after the handler settles, coarser than per-request host scoping, but lossless for concurrent in-flight work. It does **not** call `observe.withHostLifecycle()` around the handler. `withWorkersObservableInvocation()` remains available when only the low-level observability drain is wanted.
+Workers isolates may serve concurrent requests without ambient async storage. The Cloudflare wrapper retains deferred work and its structured drain through one `waitUntil` task. It does **not** call `observe.withHostLifecycle()` around the handler.
 
 Cross-request logical continuity still uses explicit suspend/resume carriers (`observe.openRun().suspend()` → persist carrier → `observe.resumeRun(carrier)`), not isolate-local ambient context.
 

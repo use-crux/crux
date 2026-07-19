@@ -46,6 +46,41 @@ Crux public APIs use names that describe the thing a user is declaring or doing:
 - Use `createX()` for runtime infrastructure factories that produce machinery rather than domain definitions: transports, middleware, plugins, reporters, stores, adapter clients, pipelines, and other operational helpers.
 - Use verbs for one-off operations: `generate()`, `stream()`, `retrieve()`, `indexDocuments()`, `signalFlow()`, `cancelFlow()`, and similar execution functions.
 - Avoid `defineX()` for new public Crux APIs. The project is pre-launch, so naming changes are breaking changes rather than deprecated aliases.
+- Keep platform names on Runtime composers, name host/retention bindings for their mechanism, reserve `withCrux` for framework lifecycle boundaries, and use `withCruxBuild`-style names for build plugins.
+
+### Host retention bindings
+
+`config({ host })` installs a provider-neutral `CruxHostBinding` in the same
+restorable hook layer as `runtime`. Every configured execution root lazily owns
+one functional retention gate: completion-gated invocation tasks queue until
+the platform callback runs, while primitive drains start immediately and extend
+the shared live pending set. The first pending signal calls
+`binding.retain(work)` exactly once. A retention-port failure propagates after
+deterministic sealing because Core could not establish the acceptance guarantee.
+
+Core exports `node()` from `/defer/node`; `@use-crux/next`,
+`@use-crux/cloudflare`, and `@use-crux/vercel` inject `after()`,
+`ExecutionContext.waitUntil()`, and Vercel `waitUntil()` respectively. Core does
+not detect platforms or import their SDKs.
+
+### Execution scope boundaries
+
+Core opens execution scopes at its real runtime boundaries: adapter calls,
+agent-member turns, tool executions, Safety sessions, and flow steps. The
+Convex runtime bridge adds the corresponding `bridge-run` boundary in its own
+package. Boundaries are descriptor-only until code calls `defer()`; the first
+registration lazily creates the exact scope's controller and shares
+invocation-global limits, durable staging, commit tracking, and evidence with
+the root.
+
+Call-shaped work uses `runScope()`. Streaming adapters use `openScope()` and
+restore one immutable carrier frame around setup, each Core-owned raw-stream
+iterator segment, and completion; provider-owned raw SDK objects are never
+wrapped. Inner scope drains start as soon as that scope closes and extend the
+root pending set, allowing tool cleanup to overlap later request work without
+losing root retention. Replayable flow steps still enforce
+`DEFER_REPLAY_UNSAFE`; their scope exists for attribution and internal work,
+not as an escape from replay rules.
 
 This keeps the SDK readable at call sites: users define nouns once, execute verbs when work happens, and reach for `createX()` only when building infrastructure.
 
@@ -161,6 +196,16 @@ compatibility shims, while every implementation lives in a domain folder.
 │   ├── sanitize.ts     Injection-defense helpers (escapeXml, safe, raw, limit, wrap, userContent, truncate, detectSuspiciousPatterns)
 │   ├── tokenizer.ts    Pluggable token counter (countTokens/setTokenizer; default chars/4)
 │   └── schema-compat.ts  sanitizeJsonSchema() — provider JSON-schema sanitization (@internal)
+├── scope/              Internal execution-scope kernel shared by Core and first-party integrations
+│   ├── internal.ts     Curated `@use-crux/core/internal/scope` SPI; not application-facing
+│   ├── kernel.ts       Scope lifecycle, nesting, close hooks, write routing, manual controllers, and root-idle waits
+│   ├── contracts.ts    Typed scope/controller/close-hook contracts and the sealed-write error
+│   ├── facets.ts       Nominal typed facet slots with nearest-ancestor resolution
+│   ├── lifecycle.ts    Settlement helpers shared by automatic and manual close paths
+│   ├── overrides.ts    Immutable execution-local facet overrides on the canonical carrier
+│   ├── pending.ts      Live root pending-set and drain-to-empty microtask re-check
+│   ├── state.ts        Functional scope state, facet writes, sealing, and reroute policy
+│   └── types.ts        Closed scope kinds, descriptors, policies, outcomes, state, and sealing reasons
 ├── observability/
 │   ├── index.ts        Barrel: canonical graph contract, presentation read models, schemas, ID helpers, observe runtime, transports
 │   ├── contract.ts     Wire-only canonical graph records; branded IDs; taxonomies
@@ -179,7 +224,6 @@ compatibility shims, while every implementation lives in a domain folder.
 │   ├── continuation.ts W3C/Crux propagation carrier: create/sanitize/inject/extract, continuation identity
 │   ├── handler.ts       withObservableInvocation() — generic serverless wrapper: scoped host lifecycle, bounded final drain
 │   ├── node.ts (subpath `/observability/node`)     withNodeObservableInvocation() — Lambda-style (event, context) adapter over handler.ts
-│   ├── workers.ts (subpath `/observability/workers`)  withWorkersObservableInvocation() — structural ExecutionContext wrapper; registers the final drain with `ctx.waitUntil()` instead of awaiting it, so it never needs `observe.withHostLifecycle()`'s AsyncLocalStorage-dependent ambient scoping
 │   └── fixtures/       Shared TS/Go contract fixtures
 ├── routing/
 │   ├── index.ts        Barrel: router(), split(), retry(), cascade(), fallback(), resolveModel(), receipt helpers, and error types
@@ -1681,15 +1725,17 @@ Tool primitives write the graph from the shared adapter loop. This keeps user-de
 
 Delivery is intentionally non-blocking for normal Node.js use. The first queued delivery starts immediately so devtools can show live span starts during long-running actions. Later records coalesce per microtask and are delivered FIFO behind the active transport send, so a later `span:end` cannot overtake its own `span:start` across HTTP delivery attempts. HTTP batches are JSON-normalized before transport: cyclic values, `bigint`, functions, non-finite numbers, deep objects, and oversized strings are converted into inspectable safe previews instead of poisoning the POST. If the Go backend rejects a multi-record batch, the transport isolates records and still delivers valid lifecycle records such as `span:end` / `run:end`, so one bad detail artifact cannot strand a successful run as visually running. The Go observability service still reconciles out-of-order lifecycle records by stable ids and timestamps defensively, so externally reordered records do not corrupt the read model. Streaming generation spans close through a single finalizer shared by raw stream drain, stream cancellation, and stream errors. Only the stream's own terminal signal ends the span, immediately, with stream-derived metrics - there is no grace timer and no terminal signal driven by provider completion when a raw stream is observed. Provider completion metadata that is still pending, or that arrives after, is attached by the caller as a linked `usage.observed` span event and output artifact and can never reopen the span or change its recorded duration/status; a late completion error is likewise linked as a diagnostic event rather than mutating the terminal record. When no raw stream is observed, provider completion is itself the sole terminal signal. Generation `timeout.totalMs` is enforced in core orchestration, not only in provider adapters: if a model call never settles, `generation.call` / `generation.stream` emits a terminal error span instead of relying on backend deadline reconciliation. For presentation only, terminal ancestor scopes such as suspended flows can close still-running descendants before operation deadline fallback marks them incomplete; output or usage evidence lets completed generations render as `ok` while the enclosing flow renders as `suspended`. Transport errors are collected by diagnostics and do not throw into user code. Failed batches requeue behind the delivery engine and retry on an unref'd capped backoff, so terminal records do not wait for an unrelated future emit before reaching devtools. Runtime reset and transport replacement advance the delivery epoch; stale in-flight failures are counted as dropped instead of being requeued into a later transport. Bounded `observe.flush({ timeoutMs })` and `observe.shutdown({ timeoutMs })` exist for serverless runtimes and Convex-style request lifecycles where queued writes must be awaited before the platform freezes or kills the process. Bounded flush uses a cancelable timeout primitive so a successful delivery does not leave a timer alive after the flush returns, and it also force-flushes an installed telemetry manager's exporter/processor work (see below), not only the delivery queue.
 
-Delivery success is per record, not per HTTP status: the v2 receipt carries one indexed disposition (`accepted` / `rejected`, with a `retryable` flag) per input record, a malformed or partial receipt retries every unaccounted record, and `recordId` identity is immutable — an exact duplicate is accepted idempotently, a conflicting payload under the same id is rejected permanently and diagnosed rather than overwriting the original. `packages/core/src/observability/delivery/{engine,retry,host-scope,drain}.ts` implement bounded batching/backoff/overflow accounting against a small provider-neutral host lifecycle port (`context`, `defer`, `deadline`) rather than a runtime import; `handler.ts` (generic serverless), `handler.ts`'s Node variant, and `workers.ts` (`/observability/workers`, `ExecutionContext.waitUntil`, no `nodejs_compat`) bind that port for their respective hosts and report a structured `ObservabilityFlushResult` instead of a boolean. `@use-crux/otel`'s `withTelemetry()` activates a real OTel span around the instrumented callback (not a span created after the fact), ends the segment's root span on `run:suspend`, starts a fresh root span sharing the original `traceId` on `run:resume`, and round-trips the same `CruxPropagationCarrier` through W3C `traceparent`/`tracestate`/an allowlisted baggage projection via `injectCruxPropagationCarrier()` / `extractCruxPropagationCarrier()`.
+Delivery success is per record, not per HTTP status: the v2 receipt carries one indexed disposition (`accepted` / `rejected`, with a `retryable` flag) per input record, a malformed or partial receipt retries every unaccounted record, and `recordId` identity is immutable — an exact duplicate is accepted idempotently, a conflicting payload under the same id is rejected permanently and diagnosed rather than overwriting the original. `packages/core/src/observability/delivery/{engine,retry,host-scope,drain}.ts` implement bounded batching/backoff/overflow accounting against a small provider-neutral host lifecycle port (`context`, `defer`, `deadline`) rather than a runtime import; `handler.ts` and the Node subpath bind that port for generic serverless hosts. Cloudflare's `withCrux` boundary lives in `@use-crux/cloudflare` and registers its structured drain on the execution-scope controller before retaining the whole root through `ExecutionContext.waitUntil()`. Every wrapper reports a structured `ObservabilityFlushResult` instead of a boolean. `@use-crux/otel`'s `withTelemetry()` activates a real OTel span around the instrumented callback (not a span created after the fact), ends the segment's root span on `run:suspend`, starts a fresh root span sharing the original `traceId` on `run:resume`, and round-trips the same `CruxPropagationCarrier` through W3C `traceparent`/`tracestate`/an allowlisted baggage projection via `injectCruxPropagationCarrier()` / `extractCruxPropagationCarrier()`.
 
 `config({ observability })` wires a custom transport or an HTTP transport as explicit export behavior.
 Default `config()` does not install telemetry, upload, raw-content capture, or delivery policy.
 `teeObservabilityTransport()` fans records to multiple sinks while isolating a failing leg.
-Evals capture per-cell signal records through the canonical run-scoped async context
-instead of swapping the process transport; configured devtools transports still receive records
-through the normal delivery engine. Token-guarded restore prevents nested config cleanup from
-resurrecting a disposed transport. The HTTP transport posts canonical `{ records }` batches to
+Evals open an `eval-run` execution scope with a persistent capture-session facet and one
+`eval-cell` scope per Case/Variant/trial. Cell scopes use `drain: "capture"` and
+`sealedWrites: "drop"`: inline defers become evidence without invoking their callbacks, named
+defers return captured references without resolving or writing to Runtime, and observability writes
+restored into a timed-out cell are dropped without affecting sibling work. Configured devtools
+transports still receive accepted records through the normal delivery engine. The HTTP transport posts canonical `{ records }` batches to
 `/api/observability/records`; HTTP, WebSocket, and SSE layers should remain adapters around Go
 services rather than owning graph semantics.
 

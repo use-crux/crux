@@ -30,6 +30,13 @@ import { createCloudflareRuntimeStore } from "./runtime/store";
 import { CLOUDFLARE_RUNTIME_CAPABILITIES } from "./runtime/definition";
 
 export { CLOUDFLARE_RUNTIME_ENTRY, cloudflare } from "./runtime/definition";
+export { workers } from "./workers";
+export type {
+  WorkersExecutionContext,
+  WorkersHostBindingOptions,
+} from "./workers";
+export { withCrux } from "./with-crux";
+export type { CruxWorkersInvocation, CruxWorkersOptions } from "./with-crux";
 export type {
   CloudflareRuntimeEngineDefinition,
   CloudflareRuntimeEngineOptions,

@@ -6,18 +6,22 @@ import {
   resetObservabilityRuntime,
   setObservabilityTransport,
 } from "@use-crux/core/observability";
-import {
-  createNextDeferLifetime,
-  withCrux,
-  withNextDefer,
-} from "@use-crux/next";
+import { next, withCrux, withNextDefer } from "@use-crux/next";
 
 describe("withNextDefer", () => {
   afterEach(() => {
     resetObservabilityRuntime();
   });
 
-  it("declares response-finished completion and starts work only when after runs", async () => {
+  it("declares an ambient response-finished host binding", () => {
+    expect(next()).toMatchObject({
+      kind: "next",
+      invocationScope: true,
+      supportsInline: true,
+    });
+  });
+
+  it("starts work only when after runs", async () => {
     let runAfter: (() => void | Promise<void>) | undefined;
     const after = vi.fn((task: () => void | Promise<void>) => {
       runAfter = task;
@@ -37,10 +41,6 @@ describe("withNextDefer", () => {
     const response = await handle();
     expect(response).toBeInstanceOf(Response);
     expect(started).not.toHaveBeenCalled();
-    expect(createNextDeferLifetime({ after }).completion).toBe(
-      "response-finished",
-    );
-
     await runAfter?.();
     expect(started).toHaveBeenCalledOnce();
   });
@@ -74,7 +74,7 @@ describe("withNextDefer", () => {
 
   it("rejects unsupported Next versions that lack after()", () => {
     expect(() =>
-      createNextDeferLifetime({
+      withNextDefer(async () => undefined, {
         // Simulate an older next/server export surface without after().
         after: null as unknown as () => void,
       }),
@@ -273,7 +273,8 @@ describe("Next withCrux lifecycle", () => {
     await handler();
     await afterTasks[0]!();
 
-    expect(flush).toHaveBeenLastCalledWith({ timeoutMs: 5_000 });
+    expect(flush).toHaveBeenNthCalledWith(1, { timeoutMs: 5_000 });
+    expect(flush).toHaveBeenNthCalledWith(2, { timeoutMs: 3_000 });
   });
 
   it("preserves the handler argument tuple and awaited result type", () => {

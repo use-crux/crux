@@ -20,17 +20,28 @@
  */
 
 import {
-  createAfterDeferLifetime,
   withAfterDefer,
   type AfterDeferWrapOptions,
   type DeferAfterPort,
 } from "@use-crux/core/defer/serverless";
-import type { DeferLifetimeCapability } from "@use-crux/core/internal/defer-host";
+import { onDeferDrainSettled } from "@use-crux/core/internal/scope";
+import type { CruxHostBinding } from "@use-crux/core";
 import type { ObservabilityFlushResult } from "@use-crux/core/observability";
 import { resolveNextAfterPort } from "./after";
 import { reportNextObservabilityDrain } from "./observability-drain";
 
 export type { DeferAfterPort };
+
+/** Bind ambient invocation retention to Next.js `after()`. */
+export function next(): CruxHostBinding {
+  return Object.freeze({
+    kind: "next",
+    invocationScope: true,
+    supportsInline: true,
+    durableFinalization: false,
+    retain: (work) => resolveNextAfterPort()(work),
+  } satisfies CruxHostBinding);
+}
 
 /** Options for the opinionated Next lifecycle boundary created by {@link withCrux}. */
 export interface NextCruxOptions<T> extends NextDeferWrapOptions<T> {
@@ -41,7 +52,10 @@ export interface NextCruxOptions<T> extends NextDeferWrapOptions<T> {
 }
 
 /** Options for {@link withNextDefer}. */
-export type NextDeferWrapOptions<T> = Omit<AfterDeferWrapOptions<T>, "after"> & {
+export type NextDeferWrapOptions<T> = Omit<
+  AfterDeferWrapOptions<T>,
+  "after"
+> & {
   /**
    * Override the Next `after` port.
    *
@@ -52,33 +66,10 @@ export type NextDeferWrapOptions<T> = Omit<AfterDeferWrapOptions<T>, "after"> & 
 };
 
 /**
- * Create a response-finished Next lifetime capability.
- *
- * @param options - Optional after override and durability flags.
- */
-export function createNextDeferLifetime(
-  options: {
-    readonly after?: DeferAfterPort;
-    readonly durableFinalization?: boolean;
-    readonly supportsInline?: boolean;
-  } = {},
-): DeferLifetimeCapability {
-  return createAfterDeferLifetime({
-    after: resolveNextAfterPort(options.after),
-    ...(options.durableFinalization !== undefined
-      ? { durableFinalization: options.durableFinalization }
-      : {}),
-    ...(options.supportsInline !== undefined
-      ? { supportsInline: options.supportsInline }
-      : {}),
-  });
-}
-
-/**
  * Wrap a Next route/handler so `defer(callback)` drains after the response.
  *
- * Declares completion class `response-finished`. Named `defer(target, input)`
- * still requires a configured Runtime and `durableFinalization: true`.
+ * Named `defer(target, input)` still requires a configured Runtime and
+ * `durableFinalization: true`.
  */
 export function withNextDefer<TArgs extends unknown[], TResult>(
   handler: (...args: TArgs) => TResult | PromiseLike<TResult>,
@@ -123,19 +114,16 @@ export function withCrux<TArgs extends unknown[], TResult>(
     onDrain,
     ...deferOptions
   } = options;
-  const after = resolveNextAfterPort(afterOverride);
-  const lifecycleAfter: DeferAfterPort = (task) => {
-    after(async () => {
-      try {
-        await task();
-      } finally {
-        await reportNextObservabilityDrain({
+  return withNextDefer(
+    (...args) => {
+      onDeferDrainSettled(() =>
+        reportNextObservabilityDrain({
           ...(flushTimeoutMs === undefined ? {} : { flushTimeoutMs }),
           ...(onDrain ? { onDrain } : {}),
-        });
-      }
-    });
-  };
-
-  return withNextDefer(handler, { ...deferOptions, after: lifecycleAfter });
+        }),
+      );
+      return handler(...args);
+    },
+    { ...deferOptions, after: resolveNextAfterPort(afterOverride) },
+  );
 }

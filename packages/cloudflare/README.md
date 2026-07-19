@@ -9,6 +9,31 @@ Evals.
 pnpm add @use-crux/cloudflare @use-crux/core
 ```
 
+## Request lifecycle
+
+Use `withCrux` when a Worker handler needs request-scoped `defer()` and a
+bounded observability drain. The wrapper retains the whole root through one
+structural `ExecutionContext.waitUntil()` call and requires no `nodejs_compat`.
+
+```ts
+import { defer } from "@use-crux/core";
+import { withCrux } from "@use-crux/cloudflare";
+
+export default {
+  fetch: withCrux(
+    async (request, env, ctx) => {
+      defer(() => env.ANALYTICS.writeDataPoint({ blobs: [request.url] }));
+      return new Response("ok");
+    },
+    { context: (_request, _env, ctx) => ctx },
+  ),
+};
+```
+
+For a custom boundary, construct `workers({ ctx })` from the current request and
+pass it to that boundary. Do not install one request's `ctx` in process-global
+configuration.
+
 ## Worker entry
 
 Run `crux runtime generate`, then create one host from

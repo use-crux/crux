@@ -4,6 +4,8 @@
 "@use-crux/convex": patch
 "@use-crux/indexer": minor
 "@use-crux/next": minor
+"@use-crux/cloudflare": minor
+"@use-crux/vercel": minor
 "@use-crux/otel": minor
 "@use-crux/local": minor
 "@use-crux/react": patch
@@ -65,6 +67,35 @@ deferred work with contained, bounded post-response observability drains;
 preserves deployment identity across durable continuation boundaries.
 Rejected promises returned by advisory drain reporters are contained without
 delaying or replacing handler results or host-owned drain work.
+Rename the Next Runtime artifact build plugin to `withCruxBuild`, reserving
+`withCrux` for framework lifecycle boundaries without a compatibility alias.
+Add explicit `config({ host })` retention bindings for Node, Next.js,
+Cloudflare Workers, and Vercel. Config-only ambient defer uses an ephemeral
+invocation per call; failed or cancelled scopes now record and skip inline
+callbacks instead of running them.
+Remove defer completion classes and lifetime factories in favor of the scope
+kernel's host bindings. Serverless and Node wrappers now enqueue retained work
+through the root gate. Move the Workers `withCrux` lifecycle boundary from
+Core's deleted `/observability/workers` subpath to `@use-crux/cloudflare`,
+where its structured drain runs before the kernel flush.
+Open lazy execution scopes at Crux agent, adapter, tool, Safety, flow-step, and
+Convex bridge boundaries. Inline `defer()` now works with zero host setup inside
+defer-capable primitives on long-lived processes; nested work drains at its
+nearest boundary and streaming adapters restore one scope across Core-owned
+iteration and completion segments.
+Configured host retention now applies uniformly when any Crux primitive is the
+execution root. Primitive drains still start immediately, while retention-port
+failures propagate after deterministic sealing instead of silently accepting
+work the host cannot keep alive.
+Run Evals and their cells as execution scopes. Deferred work registered by an
+Eval task is captured as cell evidence instead of invoking inline callbacks or
+staging named Runtime work, and expired remote cells drop late observability
+writes through the shared scope-sealing policy.
+Teach setup diagnostics, the built-in defer lint, and public documentation the
+same primitive-first host-retention ladder, including exact Next, Vercel, and
+Workers remediations and the generic serverless adapter contract.
+Remove the config-dependent `defer.missing_scope` bundled lint; `crux setup`
+now owns host-retention diagnostics using selected config and platform evidence.
 Portable MCP entrypoints now fail closed when stdio is selected, while Node
 runtimes resolve their lazy stdio adapters through private conditional imports.
 

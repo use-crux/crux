@@ -31,5 +31,5 @@ downgrade durability to best-effort.
 
 1. Read `error.cause` (often `RUNTIME_REQUIRED`, store, or validation errors)
 2. Ensure `config({ runtime })` and adapter schema are healthy
-3. Ensure the host lifetime sets `durableFinalization: true` for named work
+3. Ensure the host binding sets `durableFinalization: true` for named work
 4. Use the callback overload only when best-effort is acceptable

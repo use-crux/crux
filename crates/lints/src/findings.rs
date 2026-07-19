@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::builder::StaticIndexLintBuilder;
 use crate::facts::{StaticIndexLintFinding, StaticIndexPatchFacts};
-use crate::filter::{StaticIndexLintOptions, apply_lint_filters};
+use crate::filter::{apply_lint_filters, StaticIndexLintOptions};
 use crate::injection::rules::injection_lint_findings;
 use crate::propagation::propagate_findings;
 use crate::rules::core::core_lint_findings;
@@ -101,7 +101,7 @@ mod tests {
     }
 
     #[test]
-    fn named_defer_reports_floating_scope_and_explicit_runtime_evidence() {
+    fn named_defer_reports_only_source_decidable_and_explicit_runtime_evidence() {
         let mut facts: StaticIndexPatchFacts = serde_json::from_value(json!({
             "project": { "root": "/fixture", "runtimeConfigured": false },
             "definitions": [{
@@ -120,7 +120,7 @@ mod tests {
             .map(|finding| finding.rule_id.as_str())
             .collect::<Vec<_>>();
         assert!(rule_ids.contains(&"defer.floating_named_promise"));
-        assert!(rule_ids.contains(&"defer.missing_scope"));
+        assert!(!rule_ids.contains(&"defer.missing_scope"));
         assert!(rule_ids.contains(&"runtime.missing_runtime_config"));
     }
 }

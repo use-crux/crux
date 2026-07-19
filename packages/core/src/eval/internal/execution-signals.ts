@@ -28,13 +28,8 @@ import type {
   CruxRoutingStepPreview,
   CruxSpanStatus,
 } from "../../observability/contract";
-import { observe } from "../../observability";
 import type { TokenUsage } from "../../generation/types";
 import type { Capability } from "./capabilities";
-import {
-  withEvalCaptureSession,
-  type EvalCaptureSession,
-} from "./capture-context";
 import {
   extractTurnDecisionReportSignals,
   type TurnDecisionReportSignal,
@@ -191,110 +186,6 @@ export function emptyCellSignals(): CellSignals {
     retries: 0,
     usedFallback: false,
   };
-}
-
-// ─────────────────────────────────────────────────────────────────
-// Capture
-// ─────────────────────────────────────────────────────────────────
-
-/** A per-run record capture. @internal */
-export interface SignalCapture extends EvalCaptureSession {
-  /**
-   * Records for one Eval cell: the cell's root run plus every nested run
-   * linked by a `triggered` edge (BFS closure). Concurrent cells share the
-   * same capture session and must not see each other's nested runs.
-   */
-  take(runId: string): CruxGraphRecord[];
-  /** Drain pending deliveries so `take()` sees everything emitted so far. */
-  settle(): Promise<void>;
-  /** End the capture scope. Present for the runner's existing finally path. */
-  dispose(): void;
-}
-
-/**
- * Create a per-run capture bucket. Existing transports (devtools) keep
- * receiving records through the normal observability runtime; this capture is
- * fed directly by the emitter while active in AsyncLocalStorage.
- *
- * @internal
- */
-export function installSignalCapture(): SignalCapture {
-  const byRun = new Map<string, CruxGraphRecord[]>();
-  return {
-    send(records) {
-      for (const record of records) {
-        const bucket = byRun.get(record.runId);
-        if (bucket) bucket.push(record);
-        else byRun.set(record.runId, [record]);
-      }
-    },
-    take(runId) {
-      return collectTriggeredRunClosure(byRun, runId);
-    },
-    async settle() {
-      // The tee receives records synchronously when the queue dispatches —
-      // flush()'s first iteration performs that dispatch. Waiting longer only
-      // serves FORWARDING deliveries (devtools), which are not the runner's
-      // job and can hang indefinitely when a dead transport is configured
-      // (observe.flush awaits the global pendingDeliveries set). A short
-      // grace covers microtask-async emitters without holding cells hostage.
-      await observe.flush({ timeoutMs: 250 });
-    },
-    dispose() {
-      byRun.clear();
-    },
-  };
-}
-
-/**
- * Collect records for `rootRunId` and every run it transitively triggered.
- *
- * Nested flows (and other primitives that open a durable child run under an
- * ambient Eval `eval.case` run) emit `edgeType: 'triggered'` on the parent
- * run, pointing `to: { kind: 'run', id }`. Without following those edges,
- * step/tool signals living on the child run are invisible to expect matchers
- * and honest-fail as "uncaptured".
- *
- * @internal
- */
-export function collectTriggeredRunClosure(
-  byRun: ReadonlyMap<string, readonly CruxGraphRecord[]>,
-  rootRunId: string,
-): CruxGraphRecord[] {
-  const visited = new Set<string>();
-  const ordered: CruxGraphRecord[] = [];
-  const queue = [rootRunId];
-
-  while (queue.length > 0) {
-    const runId = queue.shift()!;
-    if (visited.has(runId)) continue;
-    visited.add(runId);
-
-    const records = byRun.get(runId) ?? [];
-    for (const record of records) {
-      ordered.push(record);
-      if (record.type !== "edge" || record.edgeType !== "triggered") continue;
-      if (record.to.kind !== "run") continue;
-      const childRunId = record.to.id;
-      if (
-        typeof childRunId === "string" &&
-        childRunId.length > 0 &&
-        !visited.has(childRunId)
-      ) {
-        queue.push(childRunId);
-      }
-    }
-  }
-
-  return ordered;
-}
-
-/** Run `fn` while `capture` receives Eval observability records. @internal */
-export function withSignalCapture<T>(
-  capture: SignalCapture,
-  fn: () => Promise<T>,
-): Promise<T> {
-  return withEvalCaptureSession(capture, fn);
 }
 
 // ─────────────────────────────────────────────────────────────────

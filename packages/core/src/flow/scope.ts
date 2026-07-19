@@ -61,6 +61,7 @@ import {
   flowStepDefinitionRef,
 } from "../observability/definition-ref";
 import { runWithDeferReplayGuard } from "../defer/internal/replay-guard";
+import { runScope } from "../scope/kernel";
 
 // Import from decomposed modules
 import type {
@@ -406,10 +407,29 @@ async function executeFlow<
         },
       });
       const wrappedFn = () =>
-        stepSpan.withContext(() =>
-          runWithExecutionContext(stepContext, () =>
-            executeWithRetry(boundStepFn, flowStepRetryOptions(stepOptions)),
-          ),
+        runScope(
+          {
+            kind: "flow-step",
+            name: label,
+            ...(stepSource
+              ? {
+                  sourceRef: {
+                    file: stepSource.file,
+                    line: stepSource.line,
+                  },
+                }
+              : {}),
+          },
+          {},
+          () =>
+            stepSpan.withContext(() =>
+              runWithExecutionContext(stepContext, () =>
+                executeWithRetry(
+                  boundStepFn,
+                  flowStepRetryOptions(stepOptions),
+                ),
+              ),
+            ),
         );
 
       try {

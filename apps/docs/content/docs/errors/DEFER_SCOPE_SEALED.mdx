@@ -5,7 +5,7 @@ description: defer() registration happened after the invocation was sealed.
 
 ## What failed
 
-`defer()` was called after the invocation scope sealed registration (the host
+`defer()` was called after the execution scope sealed registration (the host
 already finalized the logical outcome and handed drain control to the lifetime).
 
 ## Why

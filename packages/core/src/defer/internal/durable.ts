@@ -14,10 +14,6 @@ import type {
   DeferredScopeId,
   Lease,
 } from "../../runtime/ports";
-import {
-  assertRuntimeJsonValue,
-  cloneRuntimeJsonValue,
-} from "../../runtime/engine/json-value";
 import { createCruxSpanId } from "../../observability";
 import { createRuntimeError } from "../../runtime/engine/errors";
 import { startLeaseExtensionHeartbeat } from "../../runtime/engine/kernel-leases";
@@ -26,12 +22,10 @@ import {
   namedDeferProvenanceAsJson,
   type RuntimeNamedDeferProvenance,
 } from "../../runtime/engine/named-defer-evidence";
-import type {
-  DeferInvocationOutcome,
-  DeferLifetimeCapability,
-} from "../host-types";
+import type { DeferInvocationOutcome } from "../host-types";
 import type { DeferredWorkRef } from "../types";
 import { createDeferError } from "../errors";
+import { snapshotNamedDeferInput } from "./named-input";
 
 const DEFER_SCOPE_LEASE_TTL_MS = 60_000;
 
@@ -103,8 +97,9 @@ export interface DurableDeferEvidenceHooks {
 
 /** Create a lazy Runtime bridge; inline-only invocations allocate nothing. */
 export function createDurableDeferController(
-  lifetime: DeferLifetimeCapability,
+  policy: { readonly durableFinalization: boolean },
   evidence?: DurableDeferEvidenceHooks,
+  options: { readonly acceptanceMode?: boolean } = {},
 ): DurableDeferController {
   let sessionPromise: Promise<DurableSession> | undefined;
   let nextIntent = 0;
@@ -122,7 +117,7 @@ export function createDurableDeferController(
   }
 
   async function createSession(): Promise<DurableSession> {
-    if (!lifetime.durableFinalization) {
+    if (!policy.durableFinalization && !options.acceptanceMode) {
       throw createDeferError({
         code: "DEFER_CAPABILITY_MISSING",
         message:
@@ -224,17 +219,7 @@ export function createDurableDeferController(
 
   return {
     async stage(target, input) {
-      if (input === undefined) {
-        throw createDeferError({
-          code: "DEFER_TARGET_INPUT_REQUIRED",
-          message: `Named defer target \`${target.name}\` requires a JSON input argument.`,
-        });
-      }
-      assertRuntimeJsonValue(input, "deferred target input");
-      const acceptedInput = cloneRuntimeJsonValue(
-        input,
-        "deferred target input",
-      );
+      const acceptedInput = snapshotNamedDeferInput(target, input);
       const session = await ensureSession();
       assertFenceHealthy(session);
       const sequence = nextIntent;
@@ -248,7 +233,6 @@ export function createDurableDeferController(
       const provisionalProvenance: RuntimeNamedDeferProvenance = {
         mode: "named",
         sequence,
-        completion: lifetime.completion,
         scopeId: session.scopeId,
         // Kernel stamps the durable workId at createIntent time.
         workId: "pending",

@@ -182,6 +182,38 @@ export default evaluate({
 `crux eval` always includes Current, compares declared Variants, and reuses
 only exact safe evidence. Use `--offline` for zero network access, `--plan` to
 inspect admitted work, or explicitly accept a complete run as a Baseline.
+Each Eval cell is an isolated execution scope. Calls to `defer()` made by the
+task are captured as cell evidence instead of executing side effects or
+staging named Runtime work.
+
+## Background work
+
+Inside a Crux agent turn, adapter call, tool execution, or Safety session,
+`defer()` works without a wrapper or host configuration. Work registers on the
+nearest execution scope and starts when that scope closes, so a nested tool can
+begin its cleanup while the enclosing model call continues.
+
+On a freezing platform, the configured `host` capability applies to these
+primitive roots too: it keeps an already-started drain alive without delaying
+that drain until the response boundary.
+
+At a handler's root level, configure an explicit platform retention capability
+once, then call `defer()` without a route wrapper on ambient hosts:
+
+```ts
+import { config, defer } from "@use-crux/core";
+import { next } from "@use-crux/next";
+
+config({ host: next() });
+defer(() => flushAnalytics());
+```
+
+Each config-only call owns an ephemeral invocation. Crux primitives group
+registrations within their execution lifetime; use a wrapper when the handler
+needs outcome classification or a strict named-work commit barrier. Inline
+callbacks registered by failed or cancelled scopes are recorded as skipped and
+are not invoked. Replayable flow bodies remain special: use `flow.defer()`
+instead of public `defer()`.
 
 ## What's inside
 
@@ -203,7 +235,7 @@ inspect admitted work, or explicitly accept a complete run as a Baseline.
 | `@use-crux/core/skill`         | Skill authoring with inline and registry loaders.                                                  |
 
 Node-only/build-time subpaths are explicit: `eval/node`, `setup`,
-`runtime/next`, `defer/node`, `observability/node`, `transcription/node`,
+`runtime/next` (`withCruxBuild`), `defer/node`, `observability/node`, `transcription/node`,
 `skill/node`, and the Vitest testing helpers. Portable application code should
 not re-export them from a Workers or browser entrypoint.
 

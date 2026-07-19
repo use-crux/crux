@@ -32,6 +32,7 @@ import { generateSdk } from './generate-sdk'
 import { streamCore } from './stream-core'
 import { streamSdk } from './stream-sdk'
 import { prepareCoreHandle } from './handle-core'
+import { runAdapterCallScope, runAdapterStreamScope } from './scope-boundary'
 
 export type {
   AdapterExecution,
@@ -83,29 +84,57 @@ export function createAdapterExecution<
   TRawStream,
   TExtra extends Record<string, unknown> = Record<string, unknown>,
 >(
-  dialect: AdapterExecutionDialect<TClient, TModel, TRawResponse, TRawStream, TExtra>,
+  dialect: AdapterExecutionDialect<
+    TClient,
+    TModel,
+    TRawResponse,
+    TRawStream,
+    TExtra
+  >,
 ): AdapterExecution<TModel, TRawResponse, TRawStream, TExtra> {
   async function generate(
     args: AdapterExecutionGenerateArgs<TModel, TExtra>,
   ): Promise<AdapterExecutionGenerateResult<TRawResponse>> {
-    if (dialect.kind === 'core-step') {
-      return generateCore(dialect, args as AdapterExecutionGenerateArgs<string, TExtra>)
-    }
-    return generateSdk(dialect, args as AdapterExecutionGenerateArgs<TModel, Record<string, unknown>>)
+    return runAdapterCallScope(args.prompt, () => {
+      if (dialect.kind === 'core-step') {
+        return generateCore(
+          dialect,
+          args as AdapterExecutionGenerateArgs<string, TExtra>,
+        )
+      }
+      return generateSdk(
+        dialect,
+        args as AdapterExecutionGenerateArgs<TModel, Record<string, unknown>>,
+      )
+    })
   }
 
   async function stream(
     args: AdapterExecutionStreamArgs<TModel, TExtra>,
   ): Promise<AdapterExecutionStreamResult<TRawStream>> {
-    if (dialect.kind === 'core-step') {
-      return streamCore(dialect, args as AdapterExecutionStreamArgs<string, TExtra>)
-    }
-    return streamSdk(dialect, args as AdapterExecutionStreamArgs<TModel, Record<string, unknown>>)
+    return runAdapterStreamScope<TRawStream>(args.prompt, args.signal, () => {
+      if (dialect.kind === 'core-step') {
+        return streamCore(
+          dialect,
+          args as AdapterExecutionStreamArgs<string, TExtra>,
+        )
+      }
+      return streamSdk(
+        dialect,
+        args as AdapterExecutionStreamArgs<TModel, Record<string, unknown>>,
+      )
+    })
   }
 
   async function prepare(args: AdapterExecutionGenerateArgs<TModel, TExtra>) {
-    if (dialect.kind !== 'core-step' || !dialect.toParams || !dialect.fromResponse) {
-      throw new TypeError(`Adapter "${dialect.id}" does not expose public call-handle codecs.`)
+    if (
+      dialect.kind !== 'core-step' ||
+      !dialect.toParams ||
+      !dialect.fromResponse
+    ) {
+      throw new TypeError(
+        `Adapter "${dialect.id}" does not expose public call-handle codecs.`,
+      )
     }
     return prepareCoreHandle(
       dialect,
@@ -120,6 +149,8 @@ export function createAdapterExecution<
   return Object.freeze({
     generate,
     stream,
-    ...(dialect.kind === 'core-step' && dialect.toParams && dialect.fromResponse ? { prepare } : {}),
+    ...(dialect.kind === 'core-step' && dialect.toParams && dialect.fromResponse
+      ? { prepare }
+      : {}),
   })
 }

@@ -1,5 +1,5 @@
 import type { DeferredCallback } from "../types";
-import { currentDeferRegistration } from "./context";
+import { resolveDeferRegistration } from "./registration";
 
 /**
  * Schedule internal callback work with diagnostics-only evidence.
@@ -12,7 +12,7 @@ import { currentDeferRegistration } from "./context";
 export function scheduleDiagnosticsOnlyDeferredCallback(
   callback: DeferredCallback,
 ): void {
-  const registration = currentDeferRegistration();
+  const registration = resolveDeferRegistration();
   if (!registration) {
     throw new Error(
       "Internal deferred callback scheduling requires an active invocation.",

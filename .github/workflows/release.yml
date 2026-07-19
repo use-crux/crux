@@ -298,6 +298,7 @@ jobs:
                 @use-crux/indexer
                 @use-crux/ingest
                 @use-crux/next
+                @use-crux/vercel
                 @use-crux/mcp
                 @use-crux/openai
                 @use-crux/otel

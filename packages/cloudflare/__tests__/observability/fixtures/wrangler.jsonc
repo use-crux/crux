@@ -1,0 +1,15 @@
+{
+  "name": "crux-cloudflare-observability-fixture",
+  "main": "./worker.ts",
+  "compatibility_date": "2026-01-01",
+  "services": [
+    {
+      "binding": "RESUMER",
+      "service": "crux-observability-workers-resumer"
+    },
+    {
+      "binding": "MODULE_SCOPE_CHECK",
+      "service": "crux-observability-workers-module-scope-check"
+    }
+  ]
+}
