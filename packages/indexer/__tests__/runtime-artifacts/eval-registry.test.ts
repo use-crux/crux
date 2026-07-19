@@ -209,11 +209,12 @@ describe("generated deployed Eval registry", () => {
       [
         "import { evaluate } from '@use-crux/core/eval'",
         "import { attachEvalTaskDescriptorForInternalUse } from '@use-crux/core/eval/internal/task'",
+        "import { createCruxSpanId, createCruxTraceId } from '@use-crux/core/observability'",
         "const task = attachEvalTaskDescriptorForInternalUse(async (input: unknown) => input, {",
         "  _tag: 'CruxEvalTaskDescriptor', operation: 'generate', adapterId: 'ai-sdk', capabilities: [], requiredHostCapabilities: [], overrideKeys: [], defaults: {},",
         "  projectIdentity: () => ({ reusable: true, fingerprintMaterial: {} }), execute: async (input: unknown) => ({ output: input }),",
         "  projectOutput: (result: { output: unknown }) => result.output,",
-        "  projectResponse: (result: { output: unknown }) => ({ runId: 'run_generated', content: [], text: JSON.stringify(result.output), steps: [], finalStep: { content: [], text: JSON.stringify(result.output), finishReason: 'stop', responseId: 'generated', modelId: 'fixture', warnings: [] }, messages: [], warnings: [] }),",
+        "  projectResponse: (result: { output: unknown }) => ({ runId: 'run_generated', _meta: { traceId: createCruxTraceId(), spanId: createCruxSpanId() }, content: [], text: JSON.stringify(result.output), steps: [], finalStep: { content: [], text: JSON.stringify(result.output), finishReason: 'stop', responseId: 'generated', modelId: 'fixture', warnings: [] }, messages: [], warnings: [] }),",
         "})",
         "export default evaluate({ id: 'support', task, cases: [{ id: 'refund', input: { question: 'refund?' } }] })",
       ].join("\n"),
