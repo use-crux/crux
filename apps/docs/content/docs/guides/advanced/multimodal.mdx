@@ -76,6 +76,19 @@ const narration = await generateSpeech({
 
 `generateImage()` returns immediately usable images, `transcribe()` returns honest measured intervals when available, and `generateSpeech()` returns one usable audio asset. These are bounded non-streaming operations with cancellation and total/per-attempt timeouts. Their typed `extra` option is the provider-native escape hatch.
 
+Each bounded call supports canonical Safety. Image and speech accept
+`guardrails` and `safety`; transcription also accepts output-text `constraints`
+that run once without provider regeneration. Enforced image strips retain
+siblings and reset `picture.image`, while stripping the final image or required
+speech/transcription audio blocks. An edit mask cannot survive without a
+reference image. `result.safety` reports applied canonical decisions; raw and
+provider-native fields remain unguarded. See the
+[content-primitive matrix](/docs/reference/crux-core/safety-content-primitives).
+
+Use ordinary multimodal `generate()` when the task is to describe media. Crux
+does not add a separate description API; specialized operations exist only for
+guaranteed image, transcript, or audio result shapes.
+
 Unsupported operations are absent from an adapter's type and runtime object. Anthropic, for example, exports none of the three specialized operations. Google transcription is a text-only composition: it returns no word timing or diarization and rejects timing requests instead of inventing measurements.
 
 ## Persist only when you want reuse
@@ -125,16 +138,16 @@ Observability and Runs show actual `media.generate_image`, `media.transcribe`, `
 
 This table is generated from private conformance fixtures. It is documentation, not a runtime capability API; the owning adapter still validates the selected model before I/O.
 
-| Capability | OpenAI | Google | Anthropic | AI SDK | Convex Agent |
-| --- | --- | --- | --- | --- | --- |
-| Image input | native | native | native | model-owned | AI SDK-owned |
-| Audio input | audio models | native | unsupported | model-owned | AI SDK-owned |
-| Video input | unsupported | native | unsupported | model-owned | AI SDK-owned |
-| PDF/document input | native | native | native | model-owned | AI SDK-owned |
-| Mixed assistant media | model-owned | model-owned | limited native file/tool output | model-owned | AI SDK-owned |
-| `generateImage` | native | Imagen/Gemini native | absent | native | exact Crux AI re-export |
-| `transcribe` | native | honest composition, no word timing/diarization | absent | native | exact Crux AI re-export |
-| `generateSpeech` | native | native incl. multi-speaker | absent | native | exact Crux AI re-export |
+| Capability            | OpenAI       | Google                                         | Anthropic                       | AI SDK      | Convex Agent            |
+| --------------------- | ------------ | ---------------------------------------------- | ------------------------------- | ----------- | ----------------------- |
+| Image input           | native       | native                                         | native                          | model-owned | AI SDK-owned            |
+| Audio input           | audio models | native                                         | unsupported                     | model-owned | AI SDK-owned            |
+| Video input           | unsupported  | native                                         | unsupported                     | model-owned | AI SDK-owned            |
+| PDF/document input    | native       | native                                         | native                          | model-owned | AI SDK-owned            |
+| Mixed assistant media | model-owned  | model-owned                                    | limited native file/tool output | model-owned | AI SDK-owned            |
+| `generateImage`       | native       | Imagen/Gemini native                           | absent                          | native      | exact Crux AI re-export |
+| `transcribe`          | native       | honest composition, no word timing/diarization | absent                          | native      | exact Crux AI re-export |
+| `generateSpeech`      | native       | native incl. multi-speaker                     | absent                          | native      | exact Crux AI re-export |
 
 ## Errors and remediation
 

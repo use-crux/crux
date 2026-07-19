@@ -96,7 +96,7 @@ export async function visitMedia(options: VisitMediaOptions): Promise<MediaVisit
       const escalatedToBlock =
         result.action === 'strip' &&
         binding.mode === 'enforce' &&
-        retainedCount(retainedByGroup, item.groupId) <= minimumCount(minimumByGroup, item.groupId)
+        groupCount(retainedByGroup, item.groupId) <= groupCount(minimumByGroup, item.groupId)
       const durationMs = performance.now() - start
       const evaluation: MediaEvaluation = {
         groupId: item.groupId,
@@ -121,7 +121,7 @@ export async function visitMedia(options: VisitMediaOptions): Promise<MediaVisit
           finalizeMediaEvaluations(options, evaluations, evaluation)
           throw mediaBlockedError(options.phase, binding, result.reason, location, durationMs, true, context.model)
         }
-        retainedByGroup.set(item.groupId, retainedCount(retainedByGroup, item.groupId) - 1)
+        retainedByGroup.set(item.groupId, groupCount(retainedByGroup, item.groupId) - 1)
         stripped.add(item.subject)
         options.onStrip?.(item)
         break
@@ -172,13 +172,7 @@ function lastEnforcedStrip(evaluations: readonly MediaEvaluation[], groupId: str
   return undefined
 }
 
-function retainedCount(groups: ReadonlyMap<string, number>, groupId: string): number {
-  const count = groups.get(groupId)
-  if (count === undefined) throw new Error(`Missing media retention group "${groupId}".`)
-  return count
-}
-
-function minimumCount(groups: ReadonlyMap<string, number>, groupId: string): number {
+function groupCount(groups: ReadonlyMap<string, number>, groupId: string): number {
   const count = groups.get(groupId)
   if (count === undefined) throw new Error(`Missing media retention group "${groupId}".`)
   return count

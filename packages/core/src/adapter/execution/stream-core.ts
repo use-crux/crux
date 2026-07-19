@@ -10,7 +10,9 @@
  */
 
 import type { MiddlewareResult } from "../../runtime/types";
-import { createSafety } from "../../safety/session";
+import { createSafetyWithBindingApplicability } from "../../safety/session";
+import { languageBindingApplicability } from "../../safety/language-applicability";
+import type { LiveTextSlot } from "../../safety/output/completion";
 import { orchestrateStream } from "../../generation/orchestrate";
 import { composeAbortSignals, withBudget } from "../../generation/timeout";
 import { normalizeAdapterCallError } from "../normalized-outcome";
@@ -70,22 +72,25 @@ export async function streamCore<
   let messages = initialCoreMessages(resolved, args.messages);
   let currentSystem = resolved.system;
   let currentSystemBlocks = resolved.systemBlocks;
-  const safety = createSafety({
-    call: {
-      constraints: args.constraints,
-      guardrails: args.guardrails,
-      constraintMaxRetries: args.constraintMaxRetries,
+  const safety = createSafetyWithBindingApplicability(
+    {
+      call: {
+        constraints: args.constraints,
+        guardrails: args.guardrails,
+        constraintMaxRetries: args.constraintMaxRetries,
+      },
+      safety: args.safety,
+      resolved: {
+        constraints: resolved.constraints,
+        guardrails: resolved.guardrails,
+        metadata: resolved.metadata,
+      },
+      promptId: prompt.id,
+      model: modelInfo.modelId,
+      systemPrompt: resolved.system,
     },
-    safety: args.safety,
-    resolved: {
-      constraints: resolved.constraints,
-      guardrails: resolved.guardrails,
-      metadata: resolved.metadata,
-    },
-    promptId: prompt.id,
-    model: modelInfo.modelId,
-    systemPrompt: resolved.system,
-  });
+    languageBindingApplicability(resolved.schema !== undefined),
+  );
   const guardedInput = await safety.guardInput({
     messages,
     system: currentSystem,
@@ -201,7 +206,12 @@ export async function streamCore<
     const trackedSafety = safety.enabled
       ? trackSafetyStreamSeal(safety.openStream())
       : undefined;
-    const streamedAssistant = { text: "", providerText: "" };
+    const streamedAssistant: {
+      text: string;
+      providerText: string;
+      exactSlots: boolean;
+      slots: LiveTextSlot[];
+    } = { text: "", providerText: "", exactSlots: true, slots: [] };
     const closeSources = createStreamSourceCleanup(sourceSession, args.signal);
 
     return {
@@ -217,6 +227,10 @@ export async function streamCore<
         appendText: (text) => {
           streamedAssistant.text += text;
         },
+        recordText: (providerText, guardedText, directive) => {
+          if (directive === "hold") streamedAssistant.exactSlots = false;
+          streamedAssistant.slots.push({ providerText, guardedText });
+        },
         close: closeSources,
       }),
       extractTextDelta: (chunk: unknown) =>
@@ -224,15 +238,28 @@ export async function streamCore<
       completion: async () => {
         try {
           const meta = await handle.completion();
+          const liveText =
+            trackedSafety?.sealedText() ??
+            (streamedAssistant.providerText
+              ? streamedAssistant.text
+              : undefined);
+          const liveTextSlots =
+            trackedSafety &&
+            streamedAssistant.exactSlots &&
+            streamedAssistant.slots
+              .map((slot) => slot.providerText)
+              .join("") === streamedAssistant.providerText &&
+            streamedAssistant.slots.map((slot) => slot.guardedText).join("") ===
+              liveText
+              ? streamedAssistant.slots
+              : undefined;
           const guarded = await guardStreamCompletion({
             safety,
             meta,
-            liveText:
-              trackedSafety?.sealedText() ??
-              (streamedAssistant.providerText
-                ? streamedAssistant.text
-                : undefined),
+            assembleWithoutSafety: true,
+            liveText,
             representedText: streamedAssistant.providerText || undefined,
+            liveTextSlots,
             messages,
           });
           await lifecycle.captureTurn({

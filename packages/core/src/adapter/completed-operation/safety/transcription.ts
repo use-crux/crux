@@ -1,5 +1,10 @@
 import type { MediaPartSubject } from '../../../safety/boundary'
-import { freezeSafetyAudit, hasSafetyAudit, type SafetyAudit } from '../../../safety/audit'
+import {
+  freezeSafetyAudit,
+  hasSafetyAudit,
+  isRewriteAuditAction,
+  type SafetyAudit,
+} from '../../../safety/audit'
 import type { GuardrailAuditEntry } from '../../../safety/guardrail/types'
 import { SafetyResultError } from '../../../safety/errors'
 import {
@@ -89,7 +94,7 @@ function lastEnforcedTranscriptRewrite(entries: readonly GuardrailAuditEntry[]):
     if (
       entry?.boundary === 'model.output.text' &&
       entry.mode === 'enforce' &&
-      (entry.action === 'redact' || entry.action === 'transform')
+      isRewriteAuditAction(entry.action)
     ) {
       return index
     }

@@ -25,6 +25,7 @@
     "tasks",
     "skill",
     "safety",
+    "safety-content-primitives",
     "scoring",
     "eval",
     "storage",

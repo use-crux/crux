@@ -46,7 +46,8 @@ provider retry: assert failures throw and suggest/report failures remain in cano
 Completed operations now validate every exact Safety binding against their primitive before
 provider work. Inapplicable call and prompt bindings fail closed, while global tuple members remain
 auditable as dormant without suppressing applicable members; duplicate IDs and invalid media tuning
-still fail before dormancy classification.
+still fail before dormancy classification. Guarded completed-operation results expose canonical
+decisions through the new optional `result.safety` field and exported `SafetyAudit` type.
 
 Typed image prompts now merge prompt guardrails with global and call policies, guard resolved user
 and system text at their exact boundaries, and hand providers a direct prepared prompt without a
@@ -59,7 +60,8 @@ observation, continuation, or public accumulation. The loop-runtime contract exp
 pre-client-tool transform capability with Core-owned indexed text/media edits; incapable runtimes
 fail before provider I/O when step policies apply. Core and AI SDK dialects preserve tool calls,
 raw/provider identities, and guarded step/envelope consistency across reasoning, media, structured
-validation, and constraint regeneration.
+validation, and constraint regeneration. Text-only language prompts reject local structured-output
+bindings before provider I/O while keeping equivalent global bindings auditable as dormant.
 
 Stream completion now guards buffered reasoning and media through one shared Core gate before
 completion resolves in both adapter dialects. Live text retains its existing staged stream Safety
@@ -67,3 +69,10 @@ and is not re-guarded at completion; completion-only text is guarded once, strip
 removed consistently from content and assistant messages, and buffered blocks may reject after
 already emitted safe text. Raw provider and SDK stream handles remain unchanged and explicitly
 unguarded.
+
+Project Index now recognizes output-media boundaries, ordered input/output media tuples, media
+strategy metadata, and completed-operation Safety policy/options references in both static lanes.
+The static cache namespace advances so existing checkouts cannot reuse facts produced before the
+expanded boundary vocabulary. Devtools Catalog renders those authored boundaries, strategy/action
+configuration, and operation attachments, while Runs explains privacy-safe model, origin, and
+required-media escalation evidence.

@@ -5,6 +5,7 @@ import type { TraceMeta } from "../../generation/types";
 import type { Safety } from "../../safety/session";
 import type { SafetyStream } from "../../safety/session";
 import { guardSafetySessionStreamCompletion } from "../../safety/session";
+import type { LiveTextSlot } from "../../safety/output/completion";
 import type { AssistantContentPart } from "../../types/content";
 import { responseContent, textFromAssistantContent } from "../assistant-output";
 
@@ -19,10 +20,14 @@ interface BufferedStreamMeta extends TraceMeta {
 interface GuardStreamCompletionOptions {
   readonly safety: Safety;
   readonly meta: BufferedStreamMeta | undefined;
+  /** Whether this runtime owns canonical assembly when no policy is active. */
+  readonly assembleWithoutSafety: boolean;
   /** Sealed live text, or undefined when the stream emitted no text slot. */
   readonly liveText?: string;
   /** Provider text represented by that live slot before Safety rewrites. */
   readonly representedText?: string;
+  /** Exact per-delta ownership when every represented live chunk emitted. */
+  readonly liveTextSlots?: readonly LiveTextSlot[];
   readonly messages: readonly Message[];
 }
 
@@ -36,8 +41,10 @@ interface GuardStreamCompletionOptions {
 export async function guardStreamCompletion(
   options: GuardStreamCompletionOptions,
 ): Promise<BufferedStreamMeta | undefined> {
-  if (!options.safety.enabled) return options.meta;
   if (!options.meta && options.liveText === undefined) return undefined;
+  if (!options.safety.enabled && !options.assembleWithoutSafety) {
+    return options.meta;
+  }
 
   const providerContent = responseContent({
     content: options.meta?.content,
@@ -52,12 +59,15 @@ export async function guardStreamCompletion(
     options.meta?.content === undefined && options.meta?.text === undefined
       ? options.liveText
       : options.representedText;
-  const content = await guardSafetySessionStreamCompletion(
-    options.safety,
-    providerContent,
-    options.liveText,
-    representedText,
-  );
+  const content = options.safety.enabled
+    ? await guardSafetySessionStreamCompletion(
+        options.safety,
+        providerContent,
+        options.liveText,
+        representedText,
+        options.liveTextSlots,
+      )
+    : providerContent;
   const text = textFromAssistantContent(content);
   const messages = options.meta?.messages
     ? replaceFinalAssistant(
@@ -70,12 +80,13 @@ export async function guardStreamCompletion(
         createAssistantMessage(content, options.meta?.toolCalls),
       ];
 
-  return options.safety.stamp({
+  const result = {
     ...options.meta,
     text,
     content,
     messages,
-  });
+  };
+  return options.safety.enabled ? options.safety.stamp(result) : result;
 }
 
 function replaceFinalAssistant(

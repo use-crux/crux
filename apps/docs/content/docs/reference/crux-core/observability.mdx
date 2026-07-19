@@ -177,12 +177,18 @@ Common detail artifacts use stable kinds so `RunDetail.inspection` can route the
 | `security.report`                                                          | Prompt-injection warning severity, pattern, field/location, action, and bounded preview.                                                                                                                     |
 
 Both enforce- and report-mode media strips emit a `guardrail.report` artifact
-and a `guardrail.action` span event with `action: 'strip'`. Report mode preserves the
-provider input; it changes mutation behavior, not whether the action is
-observed. `guardrail.stripped` is only the Turn Decision Report reason code.
-When an enforced strip empties a media-only message, the strip report and action
-are followed by a `guardrail.blocked` edge. Media sources, bytes, provider file ids,
-filenames, and provider options are never included in these records.
+and a `guardrail.action` span event with `action: 'strip'`. Report mode preserves
+the canonical input or result; it changes mutation behavior, not whether the
+action is observed. `guardrail.stripped` is only the Turn Decision Report reason
+code. When an enforced strip violates a required group—an empty media-only
+message, final generated image, required speech/transcription audio, or retained
+image-edit mask without a reference—the strip report/action are followed by a
+`guardrail.blocked` edge and the audit entry records escalation. Transcript
+rewrites record when timed segments/words were removed. Media records expose
+only the boundary, mode, action, primitive/phase/field, canonical part type,
+stable original indexes, safe model id when known, and escalation/detail-loss
+flags. Sources, bytes, URLs, provider file ids, filenames, raw responses, and
+provider options are never included.
 
 ## Turn Explanation (`decisionReport`)
 

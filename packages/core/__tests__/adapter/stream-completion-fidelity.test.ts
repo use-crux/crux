@@ -12,6 +12,56 @@ import { boundary, guardrail } from "../../src/safety";
 import type { AssistantContentPart } from "../../src/types/content";
 
 describe("stream completion fidelity — Core", () => {
+  it("keeps independently rewritten live slots around buffered media", async () => {
+    const image = Object.freeze({
+      type: "image" as const,
+      source: new Uint8Array([1]),
+      mediaType: "image/png",
+    });
+    const result = await start(
+      {
+        content: [
+          { type: "text", text: "alpha" },
+          image,
+          { type: "text", text: "beta" },
+        ],
+        chunks: ["alpha", "beta"],
+      },
+      [
+        guardrail({
+          id: "independent-live-slots",
+          on: boundary.output.text(),
+          stream: "chunk",
+          run: (text) => ({
+            action: "rewrite",
+            value: text === "alpha" ? "A" : "B",
+            rewrite: { kind: "normalize" },
+          }),
+        }),
+      ],
+    );
+
+    expect(await collect(result.textStream)).toBe("AB");
+    const completion = await result.completion;
+    expect(completion.content).toEqual([
+      { type: "text", text: "A" },
+      image,
+      { type: "text", text: "B" },
+    ]);
+    expect(completion.messages.at(-1)?.content).toEqual(completion.content);
+  });
+
+  it("assembles canonical assistant messages without an enabled policy", async () => {
+    const result = await start(
+      { content: [{ type: "text", text: "plain" }], chunks: ["plain"] },
+      [],
+    );
+
+    await collect(result.textStream);
+    const completion = await result.completion;
+    expect(completion.messages.at(-1)?.content).toEqual(completion.content);
+  });
+
   it("guards a reused part object by its original slot index", async () => {
     const shared = Object.freeze({ type: "text" as const, text: "live" });
     const seen: string[] = [];

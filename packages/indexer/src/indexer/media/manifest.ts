@@ -64,7 +64,7 @@ export const mediaRelationDeclarations = [
 
 /** Data-only first-party declaration shared by static and native projection lanes. */
 export const authoredMediaPrimitiveManifest = Object.freeze({
-  version: 2,
+  version: 3,
   definitions: Object.freeze([
     Object.freeze({
       kind: "media.operation",
@@ -80,7 +80,11 @@ export const authoredMediaPrimitiveManifest = Object.freeze({
         "authoredOptions",
       ]),
       authoredOptions: mediaAuthoredOptionFields,
-      sourceRefRoles: Object.freeze({ model: "config", options: "config" }),
+      sourceRefRoles: Object.freeze({
+        model: "config",
+        options: "config",
+        safety: "config",
+      }),
     }),
     Object.freeze({
       kind: "ingest.source",

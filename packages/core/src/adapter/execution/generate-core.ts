@@ -20,10 +20,11 @@ import {
 import { getHooks } from "../../runtime/runtime";
 import { ValidationExhaustedError } from "../../generation/validation-retry";
 import {
-  createSafety,
+  createSafetyWithBindingApplicability,
   finalizeSafetySessionLanguageOutput,
   guardSafetySessionLanguageStep,
 } from "../../safety/session";
+import { languageBindingApplicability } from "../../safety/language-applicability";
 import { orchestrateGenerate } from "../../generation/orchestrate";
 import { composeAbortSignals, withBudget } from "../../generation/timeout";
 import { normalizeAdapterCallError } from "../normalized-outcome";
@@ -115,23 +116,26 @@ export async function generateCore<
   const retryId = validationRetry
     ? `vr_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
     : "";
-  const safety = createSafety({
-    call: {
-      constraints: args.constraints,
-      guardrails: args.guardrails,
-      constraintMaxRetries: args.constraintMaxRetries,
+  const safety = createSafetyWithBindingApplicability(
+    {
+      call: {
+        constraints: args.constraints,
+        guardrails: args.guardrails,
+        constraintMaxRetries: args.constraintMaxRetries,
+      },
+      safety: args.safety,
+      resolved: {
+        constraints: resolved.constraints,
+        guardrails: resolved.guardrails,
+        metadata: resolved.metadata,
+      },
+      promptId: prompt.id,
+      model: modelInfo.modelId,
+      traceId: retryId || undefined,
+      systemPrompt: resolved.system,
     },
-    safety: args.safety,
-    resolved: {
-      constraints: resolved.constraints,
-      guardrails: resolved.guardrails,
-      metadata: resolved.metadata,
-    },
-    promptId: prompt.id,
-    model: modelInfo.modelId,
-    traceId: retryId || undefined,
-    systemPrompt: resolved.system,
-  });
+    languageBindingApplicability(resolved.schema !== undefined),
+  );
 
   let currentSystem = resolved.system;
   let currentSystemBlocks = resolved.systemBlocks;

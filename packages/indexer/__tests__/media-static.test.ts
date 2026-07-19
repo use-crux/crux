@@ -220,7 +220,11 @@ describe('authored media static indexing', () => {
       expect.arrayContaining([
         expect.objectContaining({
           kind: 'media.operation',
-          sourceRefRoles: { model: 'config', options: 'config' },
+          sourceRefRoles: {
+            model: 'config',
+            options: 'config',
+            safety: 'config',
+          },
         }),
       ]),
     )

@@ -17,6 +17,33 @@ describe("indexFactChips", () => {
       ["scorers", 2],
     ]);
   });
+
+  it("renders Safety boundaries and strategy as at-a-glance chips", () => {
+    const def = {
+      id: "guardrail:media",
+      kind: "guardrail",
+      name: "media",
+      fidelity: "resolved",
+      confidence: "static",
+      facts: {
+        boundaries: ["user.input.media", "model.output.media"],
+        strategy: { kind: "media", config: { action: "strip" } },
+      },
+      lint: [],
+      raw: {
+        id: "guardrail:media",
+        kind: "guardrail",
+        name: "media",
+        fidelity: "resolved",
+      },
+    } satisfies ViewDef;
+
+    expect(indexFactChips(def)).toEqual([
+      ["boundaries", 2],
+      ["strategy", "media"],
+      ["action", "strip"],
+    ]);
+  });
 });
 
 describe("kindMeta", () => {

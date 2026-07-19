@@ -6,6 +6,7 @@ import { textFromAssistantContent } from "../../adapter/assistant-output";
 import { repairJsonText } from "../../generation/repair-json";
 import type { AssistantContentPart } from "../../types/content";
 import type { z } from "zod";
+import { latestRewritePolicyId } from "../audit";
 import { createGuardrailPipeline } from "../guardrail/pipeline";
 import type { GuardrailAudit, GuardrailContext } from "../guardrail/types";
 import type { GuardrailBinding } from "../registry";
@@ -163,20 +164,4 @@ function freezeStep(
     ...facts,
     content: Object.freeze([...content]),
   });
-}
-
-function latestRewritePolicyId(
-  entries: readonly GuardrailAudit["applied"][number][],
-): string | undefined {
-  for (let index = entries.length - 1; index >= 0; index--) {
-    const entry = entries[index];
-    if (
-      entry?.action === "redact" ||
-      entry?.action === "transform" ||
-      entry?.action === "rewrite"
-    ) {
-      return entry.guard;
-    }
-  }
-  return undefined;
 }

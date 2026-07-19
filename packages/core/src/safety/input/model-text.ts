@@ -1,6 +1,7 @@
 import { messageText } from "../../content";
 import type { Message } from "../../generation/messages";
 import type { MessageContent } from "../../types/content";
+import { latestRewritePolicyId } from "../audit";
 import { SafetyResultError } from "../errors";
 import { createGuardrailPipeline } from "../guardrail/pipeline";
 import type {
@@ -96,19 +97,4 @@ export async function guardModelTextInput(
     actions,
     ran,
   };
-}
-
-function latestRewritePolicyId(
-  entries: readonly GuardrailAuditEntry[],
-): string | undefined {
-  for (let index = entries.length - 1; index >= 0; index--) {
-    const entry = entries[index];
-    if (
-      entry?.action === "redact" ||
-      entry?.action === "transform" ||
-      entry?.action === "rewrite"
-    )
-      return entry.guard;
-  }
-  return undefined;
 }

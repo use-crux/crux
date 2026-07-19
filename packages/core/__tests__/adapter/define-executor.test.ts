@@ -195,7 +195,17 @@ describe("loopRuntimeAdapter — structured output + validation retry", () => {
             run: (text) => ({
               action: "rewrite",
               value: text.replace('"count":2', '"count":"two"'),
-              rewrite: { kind: "normalize" },
+              rewrite: { kind: "mask" },
+            }),
+          }),
+          guardrail({
+            id: "shadow-rewrite",
+            on: boundary.output.text(),
+            mode: "report",
+            run: (text) => ({
+              action: "rewrite",
+              value: text.replace("private", "[shadowed]"),
+              rewrite: { kind: "hash" },
             }),
           }),
         ],
@@ -205,6 +215,7 @@ describe("loopRuntimeAdapter — structured output + validation retry", () => {
 
     expect(error).toBeInstanceOf(SafetyStructuredSyncError);
     expect(error).toMatchObject({ policyId: "break-count" });
+    expect(fake.calls.runStructuredAttempt).toHaveLength(1);
   });
 
   it("retries with corrective feedback on invalid output, then succeeds", async () => {

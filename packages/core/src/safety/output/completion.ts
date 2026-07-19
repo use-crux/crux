@@ -7,6 +7,12 @@ import type { GuardrailBinding } from "../registry";
 import type { SafetyProtocolEvent } from "../session";
 import { guardOutputMedia } from "./media";
 
+/** Exact source/output ownership for one independently emitted live delta. */
+export interface LiveTextSlot {
+  readonly providerText: string;
+  readonly guardedText: string;
+}
+
 interface GuardStreamCompletionOptions {
   /** Exact buffered assistant content reported when the stream completed. */
   readonly content: readonly AssistantContentPart[];
@@ -14,6 +20,8 @@ interface GuardStreamCompletionOptions {
   readonly liveText?: string;
   /** Provider text represented by live text before enforcing rewrites. */
   readonly representedText?: string;
+  /** Exact source/output ownership for independently emitted live deltas. */
+  readonly liveTextSlots?: readonly LiveTextSlot[];
   /** Enabled output bindings for this Safety session. */
   readonly bindings: readonly GuardrailBinding[];
   /** Safe policy context for this call. */
@@ -49,6 +57,7 @@ export async function guardStreamCompletionContent(
       indexContent(options.content),
       options.liveText,
       representedPrefixes,
+      options.liveTextSlots,
     );
   }
 
@@ -109,7 +118,12 @@ export async function guardStreamCompletionContent(
       actions,
     });
   }
-  return synchronizeLiveText(content, options.liveText, representedPrefixes);
+  return synchronizeLiveText(
+    content,
+    options.liveText,
+    representedPrefixes,
+    options.liveTextSlots,
+  );
 }
 
 interface IndexedPart {
@@ -127,6 +141,7 @@ function synchronizeLiveText(
   content: readonly IndexedPart[],
   liveText: string | undefined,
   representedPrefixes: ReadonlyMap<number, number>,
+  liveTextSlots?: readonly LiveTextSlot[],
 ): readonly AssistantContentPart[] {
   if (liveText === undefined) {
     return Object.freeze(content.map(({ part }) => part));
@@ -140,6 +155,22 @@ function synchronizeLiveText(
     return liveText === ""
       ? Object.freeze(parts)
       : Object.freeze([{ type: "text", text: liveText }, ...parts]);
+  }
+  const guardedPrefixes = liveTextSlots
+    ? mapGuardedPrefixes(content, representedPrefixes, liveTextSlots)
+    : undefined;
+  if (guardedPrefixes) {
+    return Object.freeze(
+      content.map(({ part, originalIndex }) => {
+        if (part.type !== "text") return part;
+        const representedLength = representedPrefixes.get(originalIndex) ?? 0;
+        if (representedLength === 0) return part;
+        const text =
+          (guardedPrefixes.get(originalIndex) ?? "") +
+          part.text.slice(representedLength);
+        return text === part.text ? part : Object.freeze({ ...part, text });
+      }),
+    );
   }
   const providerText = representedParts
     .map(({ part, originalIndex }) =>
@@ -166,6 +197,34 @@ function synchronizeLiveText(
       },
     ),
   );
+}
+
+function mapGuardedPrefixes(
+  content: readonly IndexedPart[],
+  representedPrefixes: ReadonlyMap<number, number>,
+  slots: readonly LiveTextSlot[],
+): ReadonlyMap<number, string> | undefined {
+  const guarded = new Map<number, string>();
+  let slotIndex = 0;
+  for (const { part, originalIndex } of content) {
+    const representedLength = representedPrefixes.get(originalIndex) ?? 0;
+    if (part.type !== "text" || representedLength === 0) continue;
+    const providerPrefix = part.text.slice(0, representedLength);
+    let consumed = "";
+    let replacement = "";
+    while (consumed.length < providerPrefix.length) {
+      const slot = slots[slotIndex];
+      if (!slot || !providerPrefix.startsWith(consumed + slot.providerText)) {
+        return undefined;
+      }
+      consumed += slot.providerText;
+      replacement += slot.guardedText;
+      slotIndex += 1;
+    }
+    if (consumed !== providerPrefix) return undefined;
+    guarded.set(originalIndex, replacement);
+  }
+  return slotIndex === slots.length ? guarded : undefined;
 }
 
 function findRepresentedTextPrefixes(

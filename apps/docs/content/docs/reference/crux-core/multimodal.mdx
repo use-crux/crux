@@ -117,6 +117,16 @@ Malformed media throws `InvalidMediaSourceError`. Valid media that the selected 
 
 Adapters omit unsupported operations structurally. Portable options are validated before I/O; provider-native options belong in the operation's typed `extra` record. Returned media is immediately usable and may be persisted explicitly with `assetStore.put(asset)`.
 
+Completed operations accept boundary-targeted Safety directly. Image and speech
+calls expose `guardrails` and `safety`; transcription additionally exposes
+one-shot output-text `constraints`. Image references/masks and transcription
+audio are guarded before provider normalization. Generated images and speech
+audio are guarded before canonical results return. `result.safety` contains the
+canonical audit when an entry was recorded, while `raw`, provider metadata, and
+warnings stay provider-owned and unguarded. See
+[Safety for content primitives](/docs/reference/crux-core/safety-content-primitives)
+for the exact matrix and strip/escalation rules.
+
 ## Privacy
 
 Observability uses a stricter descriptor projection than `contentText()`. At every capture level it excludes bytes, base64/data URLs, bearer refs, provider file IDs, filenames, signed URL details, and native media payloads. Local text/transcript capture defaults on and production export defaults off; neither mode enables raw media.

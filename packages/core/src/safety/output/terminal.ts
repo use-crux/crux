@@ -2,10 +2,10 @@
 
 import type { z } from "zod";
 import type { Message } from "../../generation/messages";
+import { latestRewritePolicyId } from "../audit";
 import { createGuardrailPipeline } from "../guardrail/pipeline";
 import type {
   GuardrailAudit,
-  GuardrailAuditEntry,
   GuardrailContext,
 } from "../guardrail/types";
 import type { GuardrailBinding } from "../registry";
@@ -93,24 +93,8 @@ async function applyTerminalGuards(
     { text: output.text, parsed: result.parsed ?? output.parsed },
     result.content,
     {
-    schema: options.schema,
-    policyId: latestRewritePolicyId(result.audit.applied),
+      schema: options.schema,
+      policyId: latestRewritePolicyId(result.audit.applied),
     },
   );
-}
-
-function latestRewritePolicyId(
-  entries: readonly GuardrailAuditEntry[],
-): string | undefined {
-  for (let index = entries.length - 1; index >= 0; index--) {
-    const entry = entries[index];
-    if (
-      entry?.action === "redact" ||
-      entry?.action === "transform" ||
-      entry?.action === "rewrite"
-    ) {
-      return entry.guard;
-    }
-  }
-  return undefined;
 }

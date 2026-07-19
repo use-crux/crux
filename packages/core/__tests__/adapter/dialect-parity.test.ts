@@ -426,10 +426,10 @@ function recordSafetyProtocol() {
 const needsShip = () =>
   makeConstraint({
     id: 'mentions-ship',
-    on: boundary.output.both(),
+    on: boundary.output.text(),
     maxRetries: 2,
-    run: async (output) =>
-      output.text.includes('ship') ? { pass: true as const } : { pass: false as const, feedback: 'must mention ship' },
+    run: async (text) =>
+      text.includes('ship') ? { pass: true as const } : { pass: false as const, feedback: 'must mention ship' },
   })
 
 describe('dialect parity — constraint retry protocol', () => {
@@ -520,7 +520,7 @@ describe('dialect parity — clean pass and blocks', () => {
     const passGuard = () =>
       makeGuardrail({ id: 'g-in', on: boundary.input.text(), run: async () => ({ action: 'allow' as const }) })
     const passConstraint = () =>
-      makeConstraint({ id: 'c-pass', on: boundary.output.both(), run: async () => ({ pass: true as const }) })
+      makeConstraint({ id: 'c-pass', on: boundary.output.text(), run: async () => ({ pass: true as const }) })
 
     const nativeEvents = recordSafetyProtocol()
     const native = scriptedAdapterSpec([{ text: 'a ship!' }])
@@ -662,7 +662,7 @@ describe('dialect parity — output guards and suspension', () => {
     const spyConstraint = () =>
       makeConstraint({
         id: 'spy-c',
-        on: boundary.output.both(),
+        on: boundary.output.text(),
         run: async () => {
           checkSpy()
           return { pass: true as const }

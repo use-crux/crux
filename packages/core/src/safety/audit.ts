@@ -1,5 +1,5 @@
 import type { ConstraintAudit } from './constraint/types'
-import type { GuardrailAudit } from './guardrail/types'
+import type { GuardrailAudit, GuardrailAuditEntry } from './guardrail/types'
 
 /** Applied canonical Safety decisions for one public operation. */
 export interface SafetyAudit {
@@ -38,4 +38,18 @@ export function freezeSafetyAudit(audit: SafetyAudit): SafetyAudit {
         }
       : {}),
   })
+}
+
+/** Return whether an audit action represents an enforced text rewrite. @internal */
+export function isRewriteAuditAction(action: string): boolean {
+  return action === 'redact' || action === 'mask' || action === 'hash' || action === 'transform'
+}
+
+/** Find the policy responsible for the latest enforced text rewrite. @internal */
+export function latestRewritePolicyId(entries: readonly GuardrailAuditEntry[]): string | undefined {
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const entry = entries[index]
+    if (entry?.mode === 'enforce' && isRewriteAuditAction(entry.action)) return entry.guard
+  }
+  return undefined
 }

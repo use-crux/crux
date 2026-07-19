@@ -11,7 +11,8 @@
 
 import type { z } from "zod";
 import type { MiddlewareResult } from "../../runtime/types";
-import { createSafety } from "../../safety/session";
+import { createSafetyWithBindingApplicability } from "../../safety/session";
+import { languageBindingApplicability } from "../../safety/language-applicability";
 import { orchestrateStream } from "../../generation/orchestrate";
 import {
   composeAbortSignals,
@@ -74,22 +75,25 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
   let nativeMessages = args.nativeMessages;
   let currentSystem = resolved.system;
   let currentSystemBlocks = resolved.systemBlocks;
-  const safety = createSafety({
-    call: {
-      constraints: args.constraints,
-      guardrails: args.guardrails,
-      constraintMaxRetries: args.constraintMaxRetries,
+  const safety = createSafetyWithBindingApplicability(
+    {
+      call: {
+        constraints: args.constraints,
+        guardrails: args.guardrails,
+        constraintMaxRetries: args.constraintMaxRetries,
+      },
+      safety: args.safety,
+      resolved: {
+        constraints: resolved.constraints,
+        guardrails: resolved.guardrails,
+        metadata: resolved.metadata,
+      },
+      promptId: prompt.id,
+      model: modelInfo.modelId,
+      systemPrompt: resolved.system,
     },
-    safety: args.safety,
-    resolved: {
-      constraints: resolved.constraints,
-      guardrails: resolved.guardrails,
-      metadata: resolved.metadata,
-    },
-    promptId: prompt.id,
-    model: modelInfo.modelId,
-    systemPrompt: resolved.system,
-  });
+    languageBindingApplicability(resolved.schema !== undefined),
+  );
   const guardedInput = await safety.guardInput({
     messages,
     prompt: promptText,
@@ -267,6 +271,7 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
       const guarded = await guardStreamCompletion({
         safety,
         meta,
+        assembleWithoutSafety: false,
         liveText: trackedSafety
           ? (trackedSafety.sealedText() ?? meta?.text)
           : undefined,

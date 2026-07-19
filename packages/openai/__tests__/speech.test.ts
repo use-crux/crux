@@ -2,9 +2,46 @@ import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import type OpenAI from "openai";
 import { fallback } from "@use-crux/core";
 import { speechConformanceRow } from "@use-crux/core/adapter/testing";
+import { boundary, guardrail } from "@use-crux/core/safety";
 import { createOpenAI } from "../src";
 
 describe("OpenAI speech", () => {
+  it("guards speech options around the native request and canonical audio", async () => {
+    const raw = new Response(new Uint8Array([1, 2, 3]));
+    const create = vi.fn(async (_body: unknown, _options?: unknown) => raw);
+    const result = await createOpenAI(client(create)).generateSpeech({
+      model: "gpt-4o-mini-tts",
+      text: "private speech",
+      guardrails: [
+        guardrail({
+          id: "openai-speech-input",
+          on: boundary.input.user(),
+          run: () => ({
+            action: "rewrite",
+            value: "guarded speech",
+            rewrite: { kind: "redact" },
+          }),
+        }),
+        guardrail({
+          id: "openai-speech-output",
+          on: boundary.output.media(),
+          run: () => ({ action: "allow" }),
+        }),
+      ],
+      safety: { tune: { "openai-speech-output": { mode: "report" } } },
+    });
+
+    expect(create.mock.calls[0]?.[0]).toMatchObject({
+      input: "guarded speech",
+    });
+    expect(create.mock.calls[0]?.[0]).not.toHaveProperty("guardrails");
+    expect(create.mock.calls[0]?.[0]).not.toHaveProperty("safety");
+    expect(result.raw).toBe(raw);
+    expect(
+      result.safety?.guardrails?.applied.map((entry) => entry.guard),
+    ).toEqual(["openai-speech-input", "openai-speech-output"]);
+  });
+
   it("performs one native call and returns immediately usable audio bytes", async () => {
     expect(speechConformanceRow("openai").support).toBe("native");
     const raw = new Response(new Uint8Array([1, 2, 3]));

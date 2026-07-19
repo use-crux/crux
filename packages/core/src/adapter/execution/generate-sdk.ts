@@ -12,11 +12,12 @@
 
 import type { Message } from "../../generation/messages";
 import {
-  createSafety,
+  createSafetyWithBindingApplicability,
   createSafetyLanguageStepTransformer,
   finalizeSafetySessionLanguageOutput,
   safetyRequiresLanguageStepTransform,
 } from "../../safety/session";
+import { languageBindingApplicability } from "../../safety/language-applicability";
 import type { Safety } from "../../safety/session";
 import { SafetyConfigError } from "../../safety/errors";
 import { orchestrateGenerate } from "../../generation/orchestrate";
@@ -98,23 +99,26 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
   const retryId = args.validationRetry
     ? `vr_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
     : "";
-  const safety: Safety = createSafety({
-    call: {
-      constraints: args.constraints,
-      guardrails: args.guardrails,
-      constraintMaxRetries: args.constraintMaxRetries,
+  const safety: Safety = createSafetyWithBindingApplicability(
+    {
+      call: {
+        constraints: args.constraints,
+        guardrails: args.guardrails,
+        constraintMaxRetries: args.constraintMaxRetries,
+      },
+      safety: args.safety,
+      resolved: {
+        constraints: resolved.constraints,
+        guardrails: resolved.guardrails,
+        metadata: resolved.metadata,
+      },
+      promptId: prompt.id,
+      model: modelInfo.modelId,
+      traceId: retryId || undefined,
+      systemPrompt: resolved.system,
     },
-    safety: args.safety,
-    resolved: {
-      constraints: resolved.constraints,
-      guardrails: resolved.guardrails,
-      metadata: resolved.metadata,
-    },
-    promptId: prompt.id,
-    model: modelInfo.modelId,
-    traceId: retryId || undefined,
-    systemPrompt: resolved.system,
-  });
+    languageBindingApplicability(resolved.schema !== undefined),
+  );
   if (
     safetyRequiresLanguageStepTransform(safety) &&
     dialect.capabilities?.stepTransform !== "before-client-tools"

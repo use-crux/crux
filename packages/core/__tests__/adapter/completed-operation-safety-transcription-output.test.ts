@@ -130,7 +130,7 @@ describe('completed operation Safety — transcription output', () => {
           run: () => ({
             action: 'rewrite',
             value: 'safe transcript',
-            rewrite: { kind: 'redact' },
+            rewrite: { kind: 'mask' },
           }),
         }),
       ],
@@ -152,7 +152,8 @@ describe('completed operation Safety — transcription output', () => {
     expect(result.raw).toBe(validated?.raw)
     expect(result.safety?.guardrails?.applied[0]).toMatchObject({
       guard: 'transcript-rewrite-policy',
-      action: 'redact',
+      action: 'mask',
+      timedTranscriptDetailRemoved: true,
     })
   })
 

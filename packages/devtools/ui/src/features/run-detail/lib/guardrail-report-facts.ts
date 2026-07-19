@@ -12,7 +12,7 @@ export function guardrailReportRows(
   const location = guardrailLocation(report);
   if (location) rows.push(["origin", location]);
   if (report.escalatedToBlock)
-    rows.push(["escalation", "strip to block", "var(--qw-danger)"]);
+    rows.push(["escalation", "strip to block", "var(--devtools-danger)"]);
   if (report.matches?.length)
     rows.push(["matches", String(report.matches.length)]);
   return rows;
@@ -48,7 +48,7 @@ function guardrailLocation(
 }
 
 function actionColor(action: string): string {
-  if (action === "block") return "var(--qw-danger)";
-  if (action === "pass" || action === "allow") return "var(--qw-ok)";
-  return "var(--qw-warn)";
+  if (action === "block") return "var(--devtools-danger)";
+  if (action === "pass" || action === "allow") return "var(--devtools-ok)";
+  return "var(--devtools-warn)";
 }

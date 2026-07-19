@@ -30,12 +30,16 @@ export type GuardrailRunResult<TValue = string> =
   | { readonly action: 'hold' }
 
 /**
- * Result returned by a guardrail attached to `boundary.input.media()` whose
- * callback receives a {@link MediaPartSubject}.
+ * Result returned by a guardrail attached to `boundary.input.media()` or
+ * `boundary.output.media()`. The callback receives a
+ * {@link MediaPartSubject}; narrow `subject.part.type` and
+ * `subject.origin.kind` before reading variant-specific fields.
  *
- * `strip` removes the current part only in enforce mode; report mode records
- * the decision without changing provider input. Warn, block, and strip
- * results require a reason.
+ * `strip` removes the current canonical part only in enforce mode. It escalates
+ * to a block when removal would violate a required group, such as the final
+ * generated image, speech audio, transcription audio, or an edit mask's image
+ * dependency. Report mode records intent without changing input or result.
+ * Warn, block, and strip results require a reason.
  */
 export type MediaGuardrailRunResult =
   | { readonly action: 'allow' }

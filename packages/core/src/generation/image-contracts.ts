@@ -18,7 +18,14 @@ import type { SafetyTuneOptions } from "../safety/tune";
 /** A direct text prompt, composed Crux prompt, or native image-edit prompt. */
 export type ImagePrompt = string | AnyImageCruxPrompt | ImagePromptContent;
 
-/** Text plus optional reference images and one edit mask. */
+/**
+ * Canonical image prompt text plus provider-ordered references and one edit mask.
+ *
+ * `images` indexes remain stable during Safety evaluation. An enforced strip
+ * removes only the selected reference. A retained `mask` always requires at
+ * least one retained reference, so stripping the final reference while keeping
+ * the mask blocks before provider I/O. Report-mode strips preserve the prompt.
+ */
 export type ImagePromptContent =
   | Readonly<{
       text: string;
@@ -85,7 +92,7 @@ export type GenerateImageCommonOptions = Readonly<{
    * Provider-native `raw` and metadata are not guarded.
    */
   guardrails?: readonly Guardrail[];
-  /** Per-policy enablement, mode, and stream tuning for attached guardrails. */
+  /** Per-policy enablement and enforcement mode for attached guardrails. */
   safety?: SafetyTuneOptions;
 }>;
 
@@ -107,7 +114,15 @@ export type GenerateImageOptions<
     readonly extra?: TExtra;
   };
 
-/** Result of one image operation. `image` is the first provider-ordered asset. */
+/**
+ * Result of one image operation.
+ *
+ * `images` is provider ordered and `image` is always its first retained asset.
+ * Enforced output-media strips remove siblings immutably and reset `image` to
+ * the first remaining asset; stripping the final image blocks. Provider-native
+ * `raw`, metadata, and warnings retain their original identities and remain
+ * outside canonical Safety guarantees.
+ */
 export type GenerateImageResult<
   TRaw = unknown,
   TProviderMetadata = unknown,
