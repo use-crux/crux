@@ -31,6 +31,8 @@ export interface OpenAIEmbeddingConfig {
   readonly name: string
   /** OpenAI embedding model id. */
   readonly model: string
+  /** Additional vector-semantic revision appended to the derived model identity. */
+  readonly version?: string
   /** Override output dimensions for custom or dimension-selectable models. */
   readonly dimensions?: number
   /** Maximum input tokens advertised to Crux callers. */

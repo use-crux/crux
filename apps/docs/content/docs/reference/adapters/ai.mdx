@@ -355,6 +355,13 @@ Use it with memory, indexers, or retrievers when you want the AI SDK model regis
 | `maxParallelCalls`  | `number?`                  | Internal AI SDK split-call concurrency. Defaults to `1`. |
 | `headers`           | `Record<string, string>?`  | Optional request headers                                 |
 | `providerOptions`   | `Record<string, unknown>?` | Provider-specific AI SDK options                         |
+| `version`           | `string?`                   | Extra vector-semantic revision for cache invalidation    |
+
+For object models, the helper identity uses `{ provider, modelId }`; string
+models use the raw string id. The user `version` is appended rather than
+replacing that identity. Headers and `providerOptions` are deliberately excluded
+because they may be sensitive or non-canonical—bump `version` when an option
+changes vector semantics.
 
 ### `retrievalModel(config)`
 

@@ -318,6 +318,11 @@ This helper is dense-only. Google's SDK returns token counts per embedded input 
 | `config.title`             | `string?`     | Document title. Only applies to retrieval-document tasks. |
 | `config.mimeType`          | `string?`     | Optional input MIME type                                  |
 | `config.autoTruncate`      | `boolean?`    | Vertex-only truncation behavior                           |
+| `config.version`           | `string?`     | Extra vector-semantic revision for cache invalidation     |
+
+The helper fingerprint includes model, task type, title, MIME type, and
+auto-truncation behavior, then appends `version` when supplied. Operational
+batch settings do not change that identity.
 
 ### Types
 

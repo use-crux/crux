@@ -464,9 +464,17 @@ Built-in chunkers are intentionally separate strategies:
 
 Replacement is generation-aware. New chunks and parent records are written with a fresh `generationId` and `active: true`; only after the write succeeds does the indexed knowledge read-model boundary mark previous generations for the same source inactive. The same internal boundary owns chunk/parent key derivation, vector metadata projection, active chunk search filters, vector-hit hydration, parent lookup, source deletion, and namespace clearing so indexing, retrieval, and parent expansion share one persisted contract.
 
-Pipeline caching is stage-level, not whole-indexer caching. When `cache: true` is configured, document transforms, chunking, and chunk transforms are cached by source hash, previous stage hash, stage identity, and stage fingerprint. `cache: 'bypass'` skips reads/writes for one call, while `cache: 'refresh'` recomputes and replaces cached outputs.
+Pipeline caching is stage-level, not whole-indexer caching. When `cache: true` is configured, document transforms, chunking, and chunk transforms are cached by source hash, previous stage hash, stage identity, and stage fingerprint. Final dense and sparse vectors are cached separately as ordered source bundles keyed by source id, vector kind, embedding fingerprint, and a hash of ordered chunk content. Source metadata and generated chunk ids are deliberately absent: identical ordered provider input is safe to reuse even when an `indexVersion` change requests a new generation. Hits scatter back into invocation order; all misses for one kind flatten into one `embedMany()` call and are strictly validated before any cache or generation write.
+
+`cache: 'bypass'` skips reads/writes for one call, while `cache: 'refresh'` recomputes and replaces cached outputs. Dry runs may populate stage entries even though they do not write indexed chunks or corpus ledger records. Dense runs complete before sparse runs, preserving provider load characteristics and exact hybrid ordering.
 
 The source ledger stores the emitted `SourceStageRecord[]` for indexed sources. The same records flow through `index:end` and `corpus:source:*` instrumentation so devtools, CLI/TUI, and OTel can show stage counts, cache hits, chunk counts, parent counts, durations, and failures without inventing a parallel observability model.
+
+Embedding bundles emit one privacy-safe `embedding` stage record per source and
+vector kind. A full hit still produces its `indexing.pipeline` stage span and
+bounded `indexing.report`, but does not fabricate an `embedding.call` span.
+Artifacts contain counts and hashes, never chunk text, vector values, or raw
+fingerprints.
 
 ## Resolution Pipeline
 
@@ -693,7 +701,16 @@ Cache keys include:
 - `maxInputTokens`
 - preprocessor fingerprints
 - truncation policy
+- declared vector-semantic `version`
 - normalized input hash
+
+Every `embedding()` instance exposes the stable serialization of those
+vector-producing fields as `fingerprint`. Operational policy such as batching,
+retry, rate limiting, and cache placement is excluded. Provider helpers merge
+their model/request identity with an optional user `version`; untyped headers
+and provider options are never serialized. Structural embedding implementations
+may omit `fingerprint`, in which case indexing computes them on every run rather
+than guessing whether cached vectors remain compatible.
 
 Embedding cache access emits nested `cache.lookup` spans with cache namespace, hit/miss counts, write counts, and per-entry hit/miss events. Raw input text and raw vector values are never emitted to OTel. Devtools/CLI/TUI receive bounded embedding metadata such as cache hits, misses, retries, truncated counts, duration, dimensions, usage, and cost.
 
@@ -752,7 +769,12 @@ Loaders expose two read modes. `load()` yields `{ ok: true, document } | { ok: f
 
 `corpus()` sits next to `indexer()` because it is still write-side retrieval infrastructure. The indexer knows how to prepare and write chunks for a single operation. The corpus owns the source ledger around repeated operations: content hashes, metadata hashes, index-pipeline fingerprints, source status, stale-source policy, and dry-run planning. This keeps incremental sync explicit without pushing loader state into `@use-crux/ingest` or query semantics into `@use-crux/core/retrieval`.
 
-Corpus and indexing observability write the canonical graph directly. `indexer().chunk()`, `indexer().indexDocuments()`, and `indexer().indexChunks()` open `indexing.pipeline` spans; document transforms, chunkers, and chunk transforms open child `indexing.pipeline` stage spans and attach bounded `indexing.report` artifacts with cache status, hashes, counts, and timings. `corpus().sync()` opens `corpus.sync`, records loader results as `ingest.parse` with `ingest.report`, nests indexing work below the corpus span, and attaches a `corpus.report` source-ledger summary artifact. Parser execution opens `ingest.parse` spans with parser name, format, byte length, part count, warning count, and error status; devtools, subscribers, and `@use-crux/otel` consume those records from the same spine.
+In `appendOnly` mode, an index-fingerprint-only change is intentionally reported
+and skipped without updating the source ledger. The same source remains
+`indexChanged` on later syncs until a non-append-only sync accepts the new index
+identity.
+
+Corpus and indexing observability write the canonical graph directly. `indexer().chunk()`, `indexer().indexDocuments()`, and `indexer().indexChunks()` open `indexing.pipeline` spans; document transforms, chunkers, chunk transforms, and source-bundle embedding stages open child `indexing.pipeline` spans and attach bounded `indexing.report` artifacts with cache status, hashes, counts, and timings. `corpus().sync()` opens `corpus.sync`, records loader results as `ingest.parse` with `ingest.report`, nests indexing work below the corpus span, and attaches a `corpus.report` source-ledger summary artifact. Parser execution opens `ingest.parse` spans with parser name, format, byte length, part count, warning count, and error status; devtools, subscribers, and `@use-crux/otel` consume those records from the same spine.
 
 ## Durable Runtime Engine
 
