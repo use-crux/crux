@@ -4,6 +4,8 @@ import { openScope, runScope, type ScopeCloseOutcome } from '../../scope/kernel'
 import { promptScopeSourceRef } from '../../scope/source-ref'
 import type { AnyPrompt } from '../../prompt/prompt-types'
 import type { AdapterExecutionStreamResult } from './run-types'
+import type { StreamHandle } from '../types'
+import type { CruxRunId, WithOperationResultMeta } from '../../observability'
 
 /** Run one call-shaped adapter execution to settlement. */
 export function runAdapterCallScope<R>(
@@ -37,8 +39,7 @@ export async function runAdapterStreamScope<TRawStream>(
     seal(signal?.aborted ? 'cancelled' : 'error'),
   )
 
-  const completion = handle.completion.bind(handle)
-  const wrappedCompletion = async () =>
+  const wrapCompletion = <T>(completion: () => Promise<T>) => async () =>
     controller.run(async () => {
       try {
         const result = await completion()
@@ -50,8 +51,11 @@ export async function runAdapterStreamScope<TRawStream>(
       }
     })
 
-  if (!('rawStream' in handle)) {
-    return { ...handle, completion: wrappedCompletion }
+  if (!isCoreStreamHandle(handle)) {
+    return {
+      ...handle,
+      completion: wrapCompletion(handle.completion.bind(handle)),
+    }
   }
 
   return {
@@ -61,8 +65,15 @@ export async function runAdapterStreamScope<TRawStream>(
       controller.run,
       (outcome) => seal(signal?.aborted ? 'cancelled' : outcome),
     ) as TRawStream & AsyncIterable<unknown>,
-    completion: wrappedCompletion,
+    completion: wrapCompletion(handle.completion.bind(handle)),
   }
+}
+
+function isCoreStreamHandle<TRawStream>(
+  handle: AdapterExecutionStreamResult<TRawStream>,
+): handle is WithOperationResultMeta<StreamHandle<TRawStream>> &
+  Readonly<{ runId: CruxRunId }> {
+  return 'rawStream' in handle
 }
 
 async function runStreamSetup<T>(

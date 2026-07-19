@@ -13,6 +13,7 @@ import type { AnyAgent, InferAgentOutput } from './agent'
 import type { AgentExecutor, AgentResult } from './executor'
 import { createCompositionRuntime } from './composition-runtime'
 import type { RetryOptions } from '../generation/retry'
+import type { OperationResultMeta } from '../observability'
 import { isCreationToolNotCreatedError } from '../types/tool'
 
 // ── Types ───────────────────────────────────────────────────────────
@@ -35,6 +36,8 @@ export type StepOutput<S> = S extends {
 
 /** The result of a completed pipeline execution. */
 export interface PipelineResult<TContext = unknown> {
+  /** Exact `composition.pipeline` span that produced this parent envelope. */
+  readonly _meta: OperationResultMeta
   status: 'completed'
   context: TContext
   finalOutput: unknown
@@ -588,7 +591,7 @@ export function createPipeline(executor: AgentExecutor) {
       })
 
       return {
-        status: 'completed',
+        status: 'completed' as const,
         context: accumulatedContext,
         finalOutput:
           results.length > 0 ? results[results.length - 1].output : undefined,

@@ -1,5 +1,9 @@
 import { attachEvalTaskDescriptorForInternalUse } from "@use-crux/core/eval/internal/task";
-import { createCruxRunId } from "@use-crux/core/observability";
+import {
+  createCruxRunId,
+  createCruxSpanId,
+  createCruxTraceId,
+} from "@use-crux/core/observability";
 import { z } from "zod";
 
 export const inputSchema = z.object({ question: z.string() });
@@ -24,6 +28,10 @@ export const managedTask = attachEvalTaskDescriptorForInternalUse(
     projectOutput: (result) => result.output,
     projectResponse: (result) => ({
       runId: createCruxRunId(),
+      _meta: {
+        traceId: createCruxTraceId(),
+        spanId: createCruxSpanId(),
+      },
       content: [],
       text: result.output,
       object: result.output,

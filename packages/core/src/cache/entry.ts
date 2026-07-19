@@ -54,12 +54,18 @@ export async function lookupEntry(
   return isSemanticCacheEntry(value) ? { key: hit.key, value, score: hit.score } : null
 }
 
-/** Serialize a generate result into the persisted entry `result` shape. */
+/**
+ * Serialize a generate result into the persisted entry `result` shape.
+ *
+ * Operation trace/span IDs identify one invocation and are intentionally not
+ * cacheable. Provider response and policy metadata remain durable.
+ */
 export function serializeResult(
   result: CacheableResult | undefined,
   resultKind: 'text' | 'object',
 ): SemanticCacheEntry['result'] {
   const meta = result?._meta ?? {}
+  const cacheableMeta = stripOperationIds(meta)
   const finishReason = meta.finishReason ?? result?.finishReason
   const usage = meta.usage ?? result?.usage
   return {
@@ -67,7 +73,7 @@ export function serializeResult(
     ...(resultKind === 'object' && result?.object !== undefined ? { object: result.object } : {}),
     ...(finishReason !== undefined ? { finishReason } : {}),
     ...(usage !== undefined ? { usage } : {}),
-    meta,
+    meta: cacheableMeta,
   }
 }
 
@@ -83,7 +89,7 @@ export function hydrateResult(entry: SemanticCacheEntry, score: number): Middlew
 /** Build the `_meta` payload for a cache hit, including semantic-cache details. */
 export function buildHitMeta(entry: SemanticCacheEntry, score: number): Record<string, unknown> {
   return {
-    ...(entry.result.meta ?? {}),
+    ...stripOperationIds(entry.result.meta ?? {}),
     usage: entry.result.usage,
     finishReason: entry.result.finishReason,
     semanticCache: {
@@ -96,14 +102,43 @@ export function buildHitMeta(entry: SemanticCacheEntry, score: number): Record<s
   }
 }
 
-/** Attach miss metadata to a freshly produced (and now written) result, in place. */
-export function attachMissMeta(result: unknown): void {
-  if (!result || typeof result !== 'object') return
-  const ref = result as CacheableResult
-  ref._meta = {
-    ...(ref._meta ?? {}),
-    semanticCache: { hit: false, written: true },
+/** Clone JSON metadata without invocation identity or absent optional fields. */
+function stripOperationIds(meta: Record<string, unknown>): Record<string, unknown> {
+  const cacheableMeta: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(meta)) {
+    if (key === 'traceId' || key === 'spanId' || value === undefined) continue
+    cacheableMeta[key] = value
   }
+  return cacheableMeta
+}
+
+/**
+ * Return a freshly written result with semantic-cache miss facts.
+ *
+ * Result envelopes and metadata may already be frozen by the owning operation
+ * finalizer, so this preserves descriptors instead of mutating either object.
+ */
+export function attachMissMeta(result: MiddlewareResult): MiddlewareResult {
+  const resultDescriptors = Object.getOwnPropertyDescriptors(result)
+  delete resultDescriptors._meta
+
+  const existingMeta = result._meta ?? {}
+  const metaDescriptors = Object.getOwnPropertyDescriptors(existingMeta)
+  delete metaDescriptors.semanticCache
+
+  const meta = Object.create(Object.getPrototypeOf(existingMeta)) as object
+  Object.defineProperties(meta, metaDescriptors)
+  Object.defineProperty(meta, 'semanticCache', {
+    enumerable: true,
+    value: Object.freeze({ hit: false, written: true }),
+  })
+  if (!Object.isExtensible(existingMeta)) Object.preventExtensions(meta)
+
+  const cloned = Object.create(Object.getPrototypeOf(result)) as MiddlewareResult
+  Object.defineProperties(cloned, resultDescriptors)
+  Object.defineProperty(cloned, '_meta', { enumerable: true, value: meta })
+  if (!Object.isExtensible(result)) Object.preventExtensions(cloned)
+  return cloned
 }
 
 /** Extract tool calls from a result's `_meta` or top-level fields. */

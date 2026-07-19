@@ -604,6 +604,8 @@ export type {
 // Type exports — generation lifecycle domain (settings, adaptation, usage)
 export type {
   GenerationSettings,
+  GenerationMeta,
+  GenerateResultMeta,
   HasToolCallStopCondition,
   MaxStepsStopCondition,
   PromptAdaptation,
@@ -907,6 +909,7 @@ export type {
   FinalStepInfo,
   GenerateResult,
   StreamCompletion,
+  StreamCompletionPayload,
   StreamResult,
 } from "./adapter/index";
 
@@ -928,6 +931,8 @@ export type {
   ExecutorMeta,
   PendingToolApproval,
   StructuredAttempt,
+  ExecutorProviderStreamHandle,
+  ExecutorStreamCompletionPayload,
   ExecutorStreamHandle,
   ExecutorStreamMeta,
   CruxExecutor,

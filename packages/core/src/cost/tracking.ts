@@ -17,6 +17,7 @@ import type { PromptMiddlewareArgs } from '../runtime/types'
 import type { TokenUsage, TraceMeta } from '../generation/types'
 import type { CostEntry, CostReport, CostTracker, CostTrackingOptions } from './types'
 import { buildReport, costEntryAttributes } from './report'
+import { streamCompletionPromise } from './internal/stream-completion'
 
 /** Thrown when a cost-tracking session reaches its configured hard `limit`. */
 export class CostLimitError extends Error {
@@ -205,7 +206,7 @@ export function withCostTracking(options: CostTrackingOptions = {}): CostTracker
               const result = await next(args)
               const meta = getResultMeta(result)
               recordFromMeta(args, meta)
-              void recordStreamCompletion(args, meta)
+              void recordStreamCompletion(args, result, meta)
               return result
             },
             executionHook(args) {
@@ -254,10 +255,19 @@ export function withCostTracking(options: CostTrackingOptions = {}): CostTracker
     })
   }
 
-  async function recordStreamCompletion(args: PromptMiddlewareArgs, meta: TraceMeta | undefined): Promise<void> {
-    const completion = (meta as { _streamCompletion?: unknown } | undefined)?._streamCompletion
-    if (!completion || typeof (completion as PromiseLike<unknown>).then !== 'function') return
-    const streamMeta = (await (completion as Promise<TraceMeta | undefined>)) as TraceMeta | undefined
+  async function recordStreamCompletion(
+    args: PromptMiddlewareArgs,
+    result: unknown,
+    meta: TraceMeta | undefined,
+  ): Promise<void> {
+    const completion = streamCompletionPromise(result, meta)
+    if (!completion) return
+    let streamMeta: TraceMeta | undefined
+    try {
+      streamMeta = await completion
+    } catch {
+      return
+    }
     recordFromMeta(args, streamMeta)
   }
 }

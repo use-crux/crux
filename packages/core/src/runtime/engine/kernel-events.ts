@@ -171,6 +171,7 @@ async function registerSuspend(
     deliveryKey: suspend.deliveryKey,
     waiterId: waiter.waiterId,
     timerId: timer?.timerId,
+    timeoutAt: suspend.timeoutAt,
   }
 }
 

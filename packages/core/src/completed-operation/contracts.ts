@@ -1,4 +1,5 @@
 import type { SafetyAudit } from '../safety/audit'
+import type { WithOperationResultMeta } from '../observability/result-meta'
 
 /** Timeout budgets shared by bounded, non-streaming media operations. */
 export type OperationTimeout = Readonly<{
@@ -14,13 +15,13 @@ export type OperationExecution =
   | Readonly<{ kind: 'composed'; calls: number; operations: readonly string[] }>
 
 /**
- * Common result fields returned by every completed media operation.
+ * Provider-authored facts for one completed media operation.
  *
  * Missing provider facts stay omitted and warnings always exists. `raw` is the
- * provider-owned response; Crux does not rewrite transport failures into this
- * result shape.
+ * provider-owned response. Adapter validation returns this ID-free payload;
+ * the shared Core runner owns correlation and creates the public result.
  */
-export type CompletedOperationResult<TRaw = unknown, TMetadata = unknown, TWarning = unknown> = Readonly<{
+export type CompletedOperationPayload<TRaw = unknown, TMetadata = unknown, TWarning = unknown> = Readonly<{
   warnings: readonly TWarning[]
   providerMetadata?: TMetadata
   execution: OperationExecution
@@ -33,6 +34,24 @@ export type CompletedOperationResult<TRaw = unknown, TMetadata = unknown, TWarni
    */
   safety?: SafetyAudit
 }>
+
+/** @internal Constraint that prevents provider definitions from returning observed results. */
+export type CompletedOperationProviderPayload<
+  TRaw = unknown,
+  TMetadata = unknown,
+  TWarning = unknown,
+> = CompletedOperationPayload<TRaw, TMetadata, TWarning> &
+  Readonly<{ _meta?: never }>
+
+/**
+ * Public completed-media result correlated to its exact producing media span.
+ *
+ * The shared runner adds `_meta` after provider validation and before success
+ * reporting. Provider packages must construct {@link CompletedOperationPayload}
+ * instead.
+ */
+export type CompletedOperationResult<TRaw = unknown, TMetadata = unknown, TWarning = unknown> =
+  WithOperationResultMeta<CompletedOperationPayload<TRaw, TMetadata, TWarning>>
 
 /** Validate completed-operation timeout budgets before provider I/O. */
 export function validateOperationTimeout(timeout: OperationTimeout | undefined): void {

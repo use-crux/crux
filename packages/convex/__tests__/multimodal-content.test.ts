@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { setTokenizer } from '@use-crux/core'
 import { mediaConformanceFixture } from '@use-crux/core/adapter/testing'
+import { compactConversation as compactCoreConversation } from '@use-crux/core/compaction'
 import { afterPreparedAgentCall } from '../src/agent/lifecycle-persistence'
 import { compactConversation, contentText, messageText, textPart } from '../src'
 
@@ -10,6 +11,10 @@ afterEach(() => {
 })
 
 describe('@use-crux/convex multimodal content helpers', () => {
+  it('re-exports the Core conversation compaction operation unchanged', () => {
+    expect(compactConversation).toBe(compactCoreConversation)
+  })
+
   it('re-exports the core content builders and projection helpers', () => {
     const content = mediaConformanceFixture('convex-agent').supported[0]!.content
 

@@ -10,6 +10,7 @@
  */
 
 import { observe } from '../observability'
+import { withOperationResultMeta } from '../observability/internal/result-meta'
 import type { RetrieverHit } from '../retrieval'
 import { citationSchema, type Citation } from './schema'
 import { groundingHitKey } from './session'
@@ -22,6 +23,8 @@ import type {
   ResolvedCitation,
 } from './types'
 import { createArtifact, formatCitation, issue, validateQuote, validateSpan } from './validation'
+
+type CitationValidationPayload = Omit<CitationValidationResult, '_meta'>
 
 /**
  * Validate citations against the hits the model was allowed to cite.
@@ -54,12 +57,15 @@ export function resolveCitations(
   })
 
   try {
-    let result: CitationValidationResult | undefined
+    let result: CitationValidationPayload | undefined
     span.withContext(() => {
       result = resolveCitationsInner(citations, allowedHits, quotePolicy)
     })
     if (!result) throw new Error('citation.resolve did not produce a validation result.')
-    const validationResult = result
+    const validationResult = withOperationResultMeta(result, {
+      traceId: span.traceId,
+      spanId: span.spanId,
+    })
     span.withContext(() => {
       emitCitationArtifact(span.spanId, validationResult.artifact)
     })
@@ -90,7 +96,7 @@ function resolveCitationsInner(
   citations: readonly Citation[],
   hits: readonly RetrieverHit[],
   quotePolicy: CitationQuotePolicy,
-): CitationValidationResult {
+): CitationValidationPayload {
   const resolved: ResolvedCitation[] = []
   const issues: CitationIssue[] = []
 

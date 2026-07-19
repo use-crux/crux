@@ -4,7 +4,7 @@ import { getHooks } from "@use-crux/core";
 import { observe } from "@use-crux/core/observability";
 import type {
   ExecutorRequest,
-  ExecutorStreamMeta,
+  ExecutorStreamCompletionPayload,
 } from "@use-crux/core/adapter";
 import type { SdkGateway } from "../gateway";
 import { extractCost, normalizeUsage } from "../meta";
@@ -67,9 +67,9 @@ export async function createStreamCallPlan(
     | ((event: SdkStreamFinishEvent) => unknown)
     | undefined;
 
-  let resolveCompletion!: (meta: ExecutorStreamMeta) => void;
+  let resolveCompletion!: (meta: ExecutorStreamCompletionPayload) => void;
   let rejectCompletion!: (error: unknown) => void;
-  const completionPromise = new Promise<ExecutorStreamMeta>(
+  const completionPromise = new Promise<ExecutorStreamCompletionPayload>(
     (resolve, reject) => {
       resolveCompletion = resolve;
       rejectCompletion = reject;
@@ -93,6 +93,7 @@ export async function createStreamCallPlan(
           ? decodeAssistantContentFromAiSdkParts(event.content)
           : undefined;
         resolveCompletion({
+          ...(event.object !== undefined ? { object: event.object } : {}),
           usage: normalizeUsage(event.usage),
           finishReason: event.finishReason,
           responseId: event.response?.id,
@@ -253,7 +254,7 @@ function warnForStructuredStreamTools(
 
 function attachStreamResult(
   raw: SdkStreamResultLike,
-  completionPromise: Promise<ExecutorStreamMeta>,
+  completionPromise: Promise<ExecutorStreamCompletionPayload>,
 ) {
   return withLegacyStreamMeta(
     { raw, completion: () => completionPromise },

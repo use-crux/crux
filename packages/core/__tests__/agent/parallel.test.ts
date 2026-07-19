@@ -7,6 +7,9 @@ import { createFakeAgentExecutor } from '../../src/agent/fakes'
 // One concurrency-timing test below needs a real delaying executor the shared
 // fake doesn't model — it keeps a bespoke inline executor (see SCRATCHPAD).
 import type { AgentExecutor } from '../../src/agent/executor'
+import { registerParallelResultCorrelationCases } from './parallel-result-correlation.cases'
+
+registerParallelResultCorrelationCases()
 
 const promptA = makePrompt({
   id: 'prompt-a',

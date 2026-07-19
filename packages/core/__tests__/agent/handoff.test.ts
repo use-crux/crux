@@ -86,12 +86,20 @@ describe('handoff', () => {
     await expect(badHandoff.prepare({ x: 'test' })).rejects.toThrow()
   })
 
-    it('prepare returns payload with correct shape', async () => {
+  it('prepare returns payload with correct shape', async () => {
     const h = makeHandoff()
     const payload = await h.prepare(sampleInput)
     expect(payload.handoffId).toBe('research-to-writer')
     expect(payload.createdAt).toBeInstanceOf(Date)
     expect(payload.data).toBeDefined()
+  })
+
+  it('keeps handoff payloads as unobserved domain values', async () => {
+    const h = makeHandoff()
+    const payload = await h.prepare(sampleInput)
+
+    expect(payload).not.toHaveProperty('_meta')
+    expect(payload.data).not.toHaveProperty('_meta')
   })
 
 describe('without summarize', () => {

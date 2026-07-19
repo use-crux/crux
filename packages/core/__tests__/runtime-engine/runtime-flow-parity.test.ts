@@ -4,6 +4,10 @@ import { node } from '@use-crux/core/runtime'
 import { getExecutionContext } from '../../src/runtime/execution-context'
 import { resetHooks, updateHooks } from '../../src/runtime/runtime'
 import { inMemoryRecordStore } from '../../src/storage'
+import './runtime-flow-result-correlation.cases'
+import './runtime-flow-persistence.cases'
+import './runtime-flow-control-persistence.cases'
+import './runtime-flow-expiry-control.cases'
 
 afterEach(() => {
   resetHooks()

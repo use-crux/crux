@@ -6,6 +6,7 @@
 
 import { createRuntimeError } from '../engine/errors'
 import type { WorkStatus } from '../engine/work'
+import type { FlowSnapshot } from '../ports/state'
 
 /** Create a `TARGET_NOT_FOUND` diagnostic for an unknown flow id. */
 export function runtimeFlowNotFoundError(input: {
@@ -60,13 +61,15 @@ export function runtimeFlowWorkNotFoundError(input: {
 export function runtimeFlowNotResumableError(input: {
   readonly api: string
   readonly flowId: string
-  readonly status: WorkStatus
+  readonly status: WorkStatus | FlowSnapshot['status']
+  readonly subject?: 'work' | 'flow snapshot'
 }): ReturnType<typeof createRuntimeError> {
-  const deadLettered = input.status === 'dead-letter'
+  const subject = input.subject ?? 'work'
+  const deadLettered = subject === 'work' && input.status === 'dead-letter'
   return createRuntimeError({
     code: deadLettered ? 'WORK_DEAD_LETTERED' : 'TARGET_NOT_FOUND',
     whatFailed: `${input.api} could not resume flow \`${input.flowId}\`.`,
-    why: `The durable work is ${input.status}, not suspended.`,
+    why: `The durable ${subject} is ${input.status}, not suspended.`,
     whatStillWorks:
       'Suspended flow work can still be resumed; blocked or dead-lettered work can be inspected from runtime tooling.',
     nextStep: deadLettered

@@ -25,6 +25,7 @@ import { indexingPipeline, stageFingerprint } from './pipeline'
 import { embeddingIdentity } from '../embedding'
 import { createIndexedKnowledgeStore } from '../indexed-knowledge'
 import { observe } from '../observability'
+import { withOperationResultMeta } from '../observability/internal/result-meta'
 import type { RecordStore, SparseVector } from '../storage'
 import type {
   ChunkingOptions,
@@ -41,6 +42,10 @@ import type {
   PipelineCacheMode,
   SourceStageRecord,
 } from './types'
+
+type IndexResultPayload = Omit<IndexResult, '_meta'>
+type IndexDryRunResultPayload = Omit<IndexDryRunResult, '_meta'>
+type IndexOperationPayload = IndexResultPayload | IndexDryRunResultPayload
 
 /**
  * Create an {@link Indexer} for a namespace.
@@ -170,10 +175,14 @@ export function indexer(config: IndexerConfig): Indexer {
         })
         return result
       })
+      const observedResult = withOperationResultMeta(result, {
+        traceId: span.traceId,
+        spanId: span.spanId,
+      })
       span.end({
         attributes: { sourceCount: result.sourceCount, chunkCount: result.chunkCount, dryRun: options?.dryRun === true },
       })
-      return result
+      return observedResult
     } catch (error) {
       span.error(error)
       throw error
@@ -243,10 +252,14 @@ export function indexer(config: IndexerConfig): Indexer {
         })
         return result
       })
+      const observedResult = withOperationResultMeta(result, {
+        traceId: span.traceId,
+        spanId: span.spanId,
+      })
       span.end({
         attributes: { sourceCount: result.sourceCount, chunkCount: result.chunkCount, dryRun: options?.dryRun === true },
       })
-      return result
+      return observedResult
     } catch (error) {
       span.error(error)
       throw error
@@ -379,7 +392,7 @@ export function indexer(config: IndexerConfig): Indexer {
   async function indexPreparedChunks(
     prepared: Required<Pick<ChunkingResult, 'chunks' | 'parents'>> & { stages?: SourceStageRecord[] },
     options: { replaceSources: boolean; dryRun: boolean; cacheMode: PipelineCacheMode | 'disabled' },
-  ): Promise<IndexResult | IndexDryRunResult> {
+  ): Promise<IndexOperationPayload> {
     const chunks = prepared.chunks.map((inputChunk) => normalizeChunk(inputChunk, config.namespace))
     const parents = prepared.parents.map((inputParent) => normalizeParentChunk(inputParent, config.namespace))
     const sourceIds = unique(chunks.map((chunkItem) => chunkItem.sourceId))

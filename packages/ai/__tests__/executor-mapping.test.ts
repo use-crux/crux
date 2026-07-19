@@ -16,6 +16,10 @@ import { assertCanonicalResult } from "@use-crux/core/adapter/testing";
 import type { StreamResult } from "@use-crux/core/adapter";
 import { createCruxRunId } from "@use-crux/core/observability";
 import type { SystemBlock } from "@use-crux/core";
+import {
+  createCruxSpanId,
+  createCruxTraceId,
+} from "@use-crux/core/observability";
 import type { LanguageModel, StopCondition, ToolSet } from "ai";
 import { createCruxAi } from "../src";
 import { createUIMessageStreamResponse } from "../src";
@@ -648,6 +652,10 @@ describe("UI-message helpers", () => {
   it("creates an SSE response from the raw AI SDK UI-message stream", async () => {
     let called = 0;
     const runId = createCruxRunId();
+    const operation = {
+      traceId: createCruxTraceId(),
+      spanId: createCruxSpanId(),
+    };
     const result = {
       runId,
       textStream: (async function* () {})(),
@@ -683,7 +691,9 @@ describe("UI-message helpers", () => {
         },
         messages: [],
         warnings: [],
+        _meta: operation,
       }),
+      _meta: operation,
     } satisfies StreamResult<{
       toUIMessageStream(): ReadableStream;
     }>;

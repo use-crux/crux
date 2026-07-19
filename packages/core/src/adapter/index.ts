@@ -70,7 +70,9 @@ export type {
 export type {
   FinalStepInfo,
   GenerateResult,
+  GenerateResultPayload,
   StreamCompletion,
+  StreamCompletionPayload,
   StreamResult,
 } from "./result-accumulator";
 export type {
@@ -138,6 +140,11 @@ export type {
   BoundCompletedOperation,
   CompletedOperationCall,
   CompletedOperationModel,
+  CompletedMediaOperationResult,
+  CompletedOperationPayload,
+  GenerateImagePayload,
+  GenerateSpeechPayload,
+  TranscriptionPayload,
   CompletedOperationConformanceCase,
   CompletedOperationContext,
   CompletedOperationDefinition,
@@ -188,6 +195,8 @@ export type {
   ExecutorMeta,
   PendingToolApproval,
   StructuredAttempt,
+  ExecutorProviderStreamHandle,
+  ExecutorStreamCompletionPayload,
   ExecutorStreamHandle,
   ExecutorStreamMeta,
 } from "./executor-types";

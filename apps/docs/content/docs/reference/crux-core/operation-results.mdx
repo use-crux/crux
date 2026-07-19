@@ -1,0 +1,127 @@
+---
+title: Operation Result Correlation
+description: Exact logical-run, trace, span, and provider identity on successful Crux results.
+---
+
+Crux result metadata identifies the operation that produced a successful public envelope. It is a pointer into the observability graph, not a copy of the graph and not a provider response identifier.
+
+```ts
+import type {
+  OperationResultMeta,
+  OperationRunRef,
+  WithOperationResultMeta,
+} from "@use-crux/core/observability";
+```
+
+## Identity vocabulary
+
+| Identity     | Meaning                                                        | Where it belongs                                          |
+| ------------ | -------------------------------------------------------------- | --------------------------------------------------------- |
+| `runId`      | One logical run, stable across durable suspend/resume segments | `OperationRunRef` and multi-run aggregates                |
+| `traceId`    | The 32-hex W3C trace containing causally related operations    | Result `_meta`, run refs, propagation carriers            |
+| `spanId`     | The 16-hex exact operation span that produced one envelope     | Result `_meta`, assertion evidence                        |
+| `segmentId`  | One physical process/isolate execution segment                 | Observability records only; never result metadata         |
+| `responseId` | A provider-issued response identifier                          | Existing result `_meta.responseId`; never a Crux trace ID |
+
+`OperationResultMeta` is exactly `{ traceId, spanId }`. `WithOperationResultMeta<T>` adds that pair shallowly while preserving non-reserved metadata such as `responseId`, model, usage, policy, and cache facts.
+
+```ts
+const result = await generate(supportPrompt, { model, input });
+
+result.runId; // logical generation run
+result._meta.traceId; // W3C trace
+result._meta.spanId; // exact generation.call span
+result._meta.responseId; // provider response, when supplied
+```
+
+Nested results normally share a trace and own different spans. A pipeline result points at `composition.pipeline`; its child `AgentResult` points at `agent.run`; a generation returned by that agent points at `generation.call`. Parent envelopes never copy the last child span.
+
+## Generation and hooks
+
+Managed `GenerateResult` values always carry the exact `generation.call` pair. Provider and policy facts remain in the same `_meta` object. `hooks.onGenerate` receives the finalized result with the same pair the caller receives.
+
+Middleware that awaits `next()` also sees authoritative current-operation IDs. Short-circuits, replacements, routing, retry, fallback, and semantic-cache replay are finalized at the owning managed-generation boundary. Cached invocation IDs are stripped; a replayed result points at the current call.
+
+Thrown failures retain their existing error type and identity. This contract does not add metadata to errors.
+
+## Streaming lifecycle
+
+A public `StreamResult` exposes `runId` and `_meta` immediately. Its `completion` promise resolves to generation facts plus the same logical run and exact `traceId`/`spanId` pair.
+
+```ts
+const stream = await adapter.stream(prompt, { model });
+const operation = stream._meta;
+
+for await (const text of stream.textStream) {
+  process.stdout.write(text); // chunks remain plain strings
+}
+
+const completion = await stream.completion;
+completion.runId === stream.runId; // true
+completion._meta.traceId === operation.traceId; // true
+completion._meta.spanId === operation.spanId; // true
+```
+
+The pair is stable whether provider completion or stream drain settles first, during partial consumption, and when asynchronous ambient context is unavailable. If iteration or completion later fails, the already-returned handle remains the navigation reference. Crux never annotates individual chunks.
+
+## Media and higher-level results
+
+Completed image, transcription, and speech results point at their outer `media.*` operation. Warnings, provider metadata, execution facts, and `raw` retain their existing meaning. A composed child generation has a different span.
+
+The same exact-owner rule applies to:
+
+- `AgentResult`, `ParallelResult`, `PipelineResult`, `ConsensusResult`, `SwarmResult`, and `DelegateResult`;
+- every successful/in-band `FlowResult` variant, including suspended, cancelled, and expired;
+- `JudgeResult`, `CompactionResult`, and `CitationValidationResult`;
+- `IndexResult`, `IndexDryRunResult`, and `CorpusSyncResult`.
+
+`compactConversation()` is observed even when there is no work. Generated conversation compaction may create a child summary span, but the returned result is restamped by the outer `compaction.run` owner.
+
+Flow resume preserves the validated `traceId` and opens a fresh `flow.run` span, so the resumed result has a fresh `spanId`. Invocation-local result IDs are removed recursively from persisted flow inputs, step outputs, signals, and scheduled inputs; continuation trace carriers remain intact deliberately.
+
+## Eval evidence
+
+An Eval cell is an evidence aggregate, not one operation result, so the cell itself does not claim an `_meta` pair. It stores task-run navigation separately from exact operation and assertion evidence:
+
+```ts
+cell.runIds; // logical task runs, including reused historical evidence
+cell.response?._meta; // exact producing task operation, when retained
+cell.assertions.outcomes.flatMap((outcome) => outcome.spanIds ?? []);
+```
+
+Managed AI Eval tasks retain the correlated response envelope after removing only provider `raw`. Exact-evidence reuse keeps the historical `runIds` and response metadata that produced that evidence; fresh execution records the new task run. Assertion outcomes keep exact related span IDs where the matcher can identify them. These fields must not be relabelled as W3C trace IDs.
+
+## Adapter author boundary
+
+Providers describe facts; Core owns operation identity. Adapter callbacks and validators return payload contracts such as `GenerateResultPayload`, `StreamCompletionPayload`, completed-media payloads, or `AgentResultPayload` without manufacturing Crux IDs. The managed Core boundary converts those payloads into observed public results.
+
+```ts
+import type { GenerateResultPayload } from "@use-crux/core/adapter";
+
+type AcmeProviderPayload = GenerateResultPayload<AcmeResponse>;
+
+// The provider boundary returns AcmeProviderPayload. Its `_meta` carries
+// provider facts such as responseId, without requiring traceId or spanId.
+```
+
+Do not copy a child generation pair onto a media, agent, or composition payload. Do not write Crux IDs into provider `raw` objects or durable cache records.
+
+## Compatibility matrix
+
+| Surface                                                                                 | Correlation contract                                                                              |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Managed generate and stream                                                             | Included: exact `generation.*` pair; stream handle and completion match                           |
+| Completed image/transcription/speech                                                    | Included: exact outer `media.*` pair                                                              |
+| Agent/composition/delegate                                                              | Included: parent and nested child envelopes retain their own spans                                |
+| Flow public results                                                                     | Included: current invocation pair; IDs are not persisted with business values                     |
+| Judge, compaction, citations, content indexing summaries                                | Included: exact owning-operation pair                                                             |
+| Eval cells                                                                              | Aggregate only: logical `runIds`, correlated task response when retained, assertion `spanIds`      |
+| Provider payloads, callbacks, validators, and `raw`                                     | Excluded: provider-authored and ID-free                                                           |
+| Prompt resolve/inspect values, tools, MCP payloads                                      | Excluded: portable/domain/protocol values                                                         |
+| Bare retrieval arrays, embeddings, chunks, progress items, numeric delete/clear returns | Excluded: no envelope shape change                                                                |
+| Durable memory, plan, task, workspace, flow step/signal data                            | Excluded from ephemeral result identity                                                           |
+| Project Index compiler facts, snapshots, HTTP read model, and caches                    | Excluded; content indexing summaries are a separate included system                               |
+| Convex upstream Agent aliases, swarm durable state, and turn results                    | Excluded; only Core-owned `compactConversation()` is re-exported with its observed result         |
+| Errors                                                                                  | Excluded: thrown identity remains unchanged                                                       |
+
+The runtime finalizer is intentionally not exported. Application code consumes typed observed results; adapter authors consume payload contracts and let Core finalize them.

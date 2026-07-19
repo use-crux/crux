@@ -14,14 +14,19 @@ import type { RuntimeTargetOutcome } from "../runtime/engine/kernel";
 import type { RuntimeScheduledWorkIntent } from "../runtime/engine/kernel";
 import type { ReplayFingerprint } from "../runtime/engine/replay";
 import type { WorkItem } from "../runtime/engine/work";
+import type { RuntimeWork } from "../runtime/ports/work";
 import type { FlowResumeOptions } from "./types";
 import type { FlowId as RuntimeFlowId, WorkId } from "../runtime/ports/ids";
 import type {
   FlowSnapshot as RuntimeFlowSnapshot,
   RuntimeDeliveredSuspend,
+  RuntimeDeliveredSuspends,
 } from "../runtime/ports/state";
 import type { FlowResult } from "./types";
-import { assertFlowJsonValue } from "./serialization";
+import {
+  flowOutputForPersistence,
+  flowValueForPersistence,
+} from "./serialization";
 import { createRuntimeError } from "../runtime/engine/errors";
 
 /** Mutable execution bridge for one runtime-backed flow target invocation. */
@@ -40,8 +45,6 @@ export interface RuntimeFlowExecution {
   readonly scheduledWork: RuntimeScheduledWorkIntent[];
   /** Kernel outcome produced by the flow executor. */
   outcome?: RuntimeTargetOutcome;
-  /** Object-bound result returned to the caller when execution is inline. */
-  result?: FlowResult<unknown>;
 }
 
 /** Shared state between a resolved runtime and its flow target closure. */
@@ -50,8 +53,8 @@ export interface RuntimeFlowTargetRef {
   current?: ResolvedRuntimeEngine;
   /** Object-bound run/resume options used while delivering an inline wake. */
   executionOptions?: FlowResumeOptions;
-  /** Flow result observed during inline object-bound execution. */
-  result?: unknown;
+  /** Typed flow result observed during inline object-bound execution. */
+  flowResult?: FlowResult<unknown>;
   /** Handler error observed during inline object-bound execution. */
   error?: unknown;
 }
@@ -65,7 +68,10 @@ export function completedStepsFromRuntimeSnapshot(
     { output: JsonValue; durationMs: number }
   > = {};
   for (const [label, output] of Object.entries(snapshot.completedSteps)) {
-    completedSteps[label] = { output, durationMs: 0 };
+    completedSteps[label] = {
+      output: flowOutputForPersistence(output, `step "${label}" output`),
+      durationMs: 0,
+    };
   }
   return completedSteps;
 }
@@ -76,7 +82,10 @@ export function runtimeCompletedSteps(
 ): Record<string, JsonValue> {
   const runtimeSteps: Record<string, JsonValue> = {};
   for (const [label, completed] of Object.entries(completedSteps)) {
-    runtimeSteps[label] = completed.output;
+    runtimeSteps[label] = flowOutputForPersistence(
+      completed.output,
+      `step "${label}" output`,
+    );
   }
   return runtimeSteps;
 }
@@ -84,8 +93,37 @@ export function runtimeCompletedSteps(
 /** Normalize a flow input for the runtime's JSON-only snapshot boundary. */
 export function runtimeInputValue(input: unknown): JsonValue {
   if (input === undefined) return null;
-  assertFlowJsonValue(input, { boundary: "flow input" });
-  return input as JsonValue;
+  return flowValueForPersistence(input, { boundary: "flow input" });
+}
+
+/** Normalize one defer/after task input before it enters a durable intent. */
+export function runtimeScheduledWorkInput(
+  input: unknown,
+  path: string,
+): JsonValue {
+  return flowValueForPersistence(input, {
+    boundary: "scheduled work input",
+    path,
+  });
+}
+
+/** Sanitize occurrence-keyed delivered payloads before snapshot persistence. */
+export function runtimeDeliveredSuspendsForPersistence(
+  deliveredSuspends: RuntimeDeliveredSuspends | undefined,
+): RuntimeDeliveredSuspends | undefined {
+  if (!deliveredSuspends) return undefined;
+  const persisted: Record<string, RuntimeDeliveredSuspend> = {};
+  for (const [deliveryKey, delivery] of Object.entries(deliveredSuspends)) {
+    if (!delivery) continue;
+    persisted[deliveryKey] = {
+      eventId: delivery.eventId,
+      payload: flowValueForPersistence(delivery.payload, {
+        boundary: "signal payload",
+        path: `$.deliveredSuspends[${JSON.stringify(deliveryKey)}].payload`,
+      }),
+    };
+  }
+  return persisted;
 }
 
 /** Build a runtime-owned flow snapshot from the current executor state. */
@@ -113,7 +151,9 @@ export function runtimeFlowSnapshot(
     completedSteps: runtimeCompletedSteps(options.completedSteps),
     fingerprint: execution.fingerprint.observed,
     pendingSuspends: [],
-    deliveredSuspends: execution.snapshot.deliveredSuspends,
+    deliveredSuspends: runtimeDeliveredSuspendsForPersistence(
+      execution.snapshot.deliveredSuspends,
+    ),
     scheduledWork:
       options.scheduledWork ?? execution.snapshot.scheduledWork ?? {},
     updatedAt: execution.runtime.now(),
@@ -132,6 +172,41 @@ export function flowIdForRuntimeWork(work: WorkItem): RuntimeFlowId {
         `Runtime target \`${work.targetId}\` received non-flow work \`${work.work.kind}\`.`,
       );
   }
+}
+
+/** Whether the current Runtime wake owns expiry for this exact suspend point. */
+export function runtimeTimeoutMatches(
+  execution: RuntimeFlowExecution,
+  suspendPoint: string,
+): boolean {
+  return (
+    execution.work.work.kind === "flow.timeout" &&
+    execution.work.work.suspendPoint === suspendPoint
+  );
+}
+
+/** Select normal or timeout replay for the first due undelivered occurrence. */
+export function runtimeResumeWork(
+  snapshot: RuntimeFlowSnapshot,
+  now: Date,
+): RuntimeWork {
+  const due = snapshot.pendingSuspends.find((suspend) => {
+    const deliveryKey = suspend.deliveryKey ?? suspend.label;
+    const delivered =
+      suspend.delivered ?? snapshot.deliveredSuspends?.[deliveryKey];
+    return (
+      delivered === undefined &&
+      suspend.timeoutAt !== undefined &&
+      suspend.timeoutAt.getTime() <= now.getTime()
+    );
+  });
+  return due
+    ? {
+        kind: "flow.timeout",
+        flowId: snapshot.flowId,
+        suspendPoint: due.label,
+      }
+    : { kind: "flow.resume", flowId: snapshot.flowId };
 }
 
 /** Load delivered suspend payloads from the runtime snapshot only. */
@@ -186,7 +261,12 @@ function deliveredPayload(
   const payload = (
     delivery as RuntimeDeliveredSuspend & { readonly payload?: JsonValue }
   ).payload;
-  if (payload !== undefined) return payload;
+  if (payload !== undefined) {
+    return flowValueForPersistence(payload, {
+      boundary: "signal payload",
+      path: `$.deliveredSuspends[${JSON.stringify(deliveryKey)}].payload`,
+    });
+  }
   throw createRuntimeError({
     code: "REPLAY_DIVERGED",
     whatFailed: `Runtime flow replay could not load delivered payload for suspend \`${deliveryKey}\`.`,

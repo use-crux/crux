@@ -1,4 +1,5 @@
 import { observe } from '../../observability'
+import { withOperationResultMeta } from '../../observability/internal/result-meta'
 import { compositionDefinitionRef, parallelBranchDefinitionRef } from '../../observability/definition-ref'
 import { getExecutionContext } from '../../runtime/execution-context'
 import type { ExecutionContext } from '../../runtime/execution-context'
@@ -35,7 +36,9 @@ export function createCompositionRuntime(
   return {
     compositionId,
     definitionId,
-    async run<T>(body: (scope: CompositionScope) => Promise<T>): Promise<T> {
+    async run<T extends object>(
+      body: (scope: CompositionScope) => Promise<T>,
+    ) {
       const childContext = (
         input: CompositionStepContextInput,
       ): ExecutionContext => {
@@ -64,20 +67,30 @@ export function createCompositionRuntime(
         childContext,
       }
 
-      return observe.span(
-        {
-          name: config.kind,
-          primitive: `composition.${config.kind}`,
-          attributes: {
-            compositionId,
-            definitionId,
-            agentIds: [...config.agentIds],
-            ...config.attributes,
-          },
-          definitionRefs: [definitionRef],
+      const compositionSpan = observe.openSpan({
+        name: config.kind,
+        primitive: `composition.${config.kind}`,
+        attributes: {
+          compositionId,
+          definitionId,
+          agentIds: [...config.agentIds],
+          ...config.attributes,
         },
-        () => body(scope),
-      )
+        definitionRefs: [definitionRef],
+      })
+
+      try {
+        const payload = await compositionSpan.withContext(() => body(scope))
+        const result = withOperationResultMeta(payload, {
+          traceId: compositionSpan.traceId,
+          spanId: compositionSpan.spanId,
+        })
+        compositionSpan.end()
+        return result
+      } catch (error) {
+        compositionSpan.error(error)
+        throw error
+      }
     },
   }
 }

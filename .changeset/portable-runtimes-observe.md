@@ -1,7 +1,13 @@
 ---
 "@use-crux/ai": minor
 "@use-crux/core": minor
-"@use-crux/convex": patch
+"@use-crux/convex": minor
+"@use-crux/devtools": minor
+"@use-crux/openai": minor
+"@use-crux/postgres": patch
+"@use-crux/anthropic": minor
+"@use-crux/google": minor
+"@use-crux/ingest": patch
 "@use-crux/indexer": minor
 "@use-crux/next": minor
 "@use-crux/cloudflare": minor
@@ -103,3 +109,24 @@ Align public documentation around Catalog, Runs, Evals, and Health. Narrow
 the published Indexer root to Crux-owned compiler contracts; third-party
 authoring stays on the experimental `/extensions` subpath and is declarative,
 limited to extractors plus relation declarations.
+
+Correlate successful managed operation results with the exact Core-owned W3C
+trace and producing span. Generation hooks and middleware receive finalized
+results; stream handles expose identity immediately and repeat it on
+completion; completed media, agent/composition, flow, scoring, compaction,
+citation, and content-indexing summary envelopes follow the same exact-owner
+contract while provider payloads and raw values remain ID-free.
+Completed-operation bindings now use the documented exact media-operation
+vocabulary; formerly normalized spellings such as `generate-image` or
+`generateimage` no longer imply a Core-owned media span.
+
+Managed AI Eval tasks retain correlated response metadata after removing raw
+provider values. Eval cells continue to store logical task `runIds`, while
+assertion outcomes store exact related span IDs; neither is relabelled as a W3C
+trace ID. Semantic-cache and flow persistence boundaries prevent
+invocation-local IDs from leaking across replay or durable execution. The
+private deployed-Eval result wire advances to schema version 2 so retained task
+responses require the same correlation contract across hosts.
+
+Postgres Runtime snapshot decoding now revives nested suspend deadlines, and
+terminal retention recognizes expired flow snapshots.

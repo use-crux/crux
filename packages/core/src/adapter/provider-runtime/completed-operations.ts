@@ -4,10 +4,11 @@
  * @module
  */
 
-import type { CompletedOperationResult } from "../../completed-operation/contracts";
+import type { CompletedOperationProviderPayload } from "../../completed-operation/contracts";
 import {
   bindCompletedOperation,
   type BoundCompletedOperation,
+  type CompletedMediaOperationResult,
   type CompletedOperationCall,
 } from "../completed-operation";
 import type { CompletedOperationDefinition } from "../completed-operation";
@@ -17,7 +18,7 @@ type CompletedDefinition = Readonly<{
   normalize: (...args: never[]) => unknown;
   support: (...args: never[]) => "supported" | "unsupported" | "unknown";
   invoke: (...args: never[]) => Promise<unknown>;
-  validate: (...args: never[]) => CompletedOperationResult;
+  validate: (...args: never[]) => CompletedOperationProviderPayload;
   report: (...args: never[]) => unknown;
   conformance: readonly unknown[];
 }>;
@@ -49,7 +50,10 @@ export interface ProviderCompletedOperationFactories<
   readonly speech?: TSpeech;
 }
 
-type BoundFromFactory<TFactory> = TFactory extends (
+type BoundFromFactory<
+  TFactory,
+  TOperation extends "generateImage" | "transcribe" | "generateSpeech",
+> = TFactory extends (
   client: never,
 ) => CompletedOperationDefinition<
   infer TModel,
@@ -60,20 +64,28 @@ type BoundFromFactory<TFactory> = TFactory extends (
   infer _TReport
 >
   ? [TInput] extends [CompletedOperationCall<TModel>]
-    ? BoundCompletedOperation<TModel, TInput, TResult>
+    ? BoundCompletedOperation<
+        TModel,
+        TInput,
+        CompletedMediaOperationResult<TOperation, TResult>
+      >
     : never
   : never;
 
 /** Runtime functions compiled only for operation definitions that exist. */
 export type DefinedCompletedOperations<TImage, TTranscription, TSpeech> =
   (TImage extends ProviderCompletedOperationFactory<never>
-    ? Readonly<{ generateImage: BoundFromFactory<TImage> }>
+    ? Readonly<{ generateImage: BoundFromFactory<TImage, "generateImage"> }>
     : Record<never, never>) &
     (TTranscription extends ProviderCompletedOperationFactory<never>
-      ? Readonly<{ transcribe: BoundFromFactory<TTranscription> }>
+      ? Readonly<{
+          transcribe: BoundFromFactory<TTranscription, "transcribe">;
+        }>
       : Record<never, never>) &
     (TSpeech extends ProviderCompletedOperationFactory<never>
-      ? Readonly<{ generateSpeech: BoundFromFactory<TSpeech> }>
+      ? Readonly<{
+          generateSpeech: BoundFromFactory<TSpeech, "generateSpeech">;
+        }>
       : Record<never, never>);
 
 /** @internal Bind present definitions without manufacturing unsupported stubs. */
@@ -99,7 +111,7 @@ export function bindProviderCompletedOperations(
               CompletedOperationCall<unknown>,
               unknown,
               unknown,
-              CompletedOperationResult,
+              CompletedOperationProviderPayload,
               unknown
             >,
             provider,
@@ -117,7 +129,7 @@ export function bindProviderCompletedOperations(
               CompletedOperationCall<unknown>,
               unknown,
               unknown,
-              CompletedOperationResult,
+              CompletedOperationProviderPayload,
               unknown
             >,
             provider,
@@ -135,7 +147,7 @@ export function bindProviderCompletedOperations(
               CompletedOperationCall<unknown>,
               unknown,
               unknown,
-              CompletedOperationResult,
+              CompletedOperationProviderPayload,
               unknown
             >,
             provider,

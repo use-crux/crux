@@ -13,20 +13,42 @@ import type { AnyAgent } from './agent'
 import type { AnyModel, AnyToolSet } from '../types'
 import type { ValidationRetryOptions } from '../generation/validation-retry'
 import type { TokenUsage } from '../generation/types'
+import type { WithOperationResultMeta } from '../observability'
 
 // ── Types ───────────────────────────────────────────────────────────
 
-/** The result of executing an agent. */
-export interface AgentResult<TOutput = unknown> {
+/**
+ * ID-free facts returned by an adapter or application agent executor.
+ *
+ * Executors describe what happened but do not own Crux operation identity.
+ * The composition runtime adds that identity after the payload is produced.
+ */
+export interface AgentResultPayload<TOutput = unknown> {
   /** Agent identifier. */
-  agentId: string
+  readonly agentId: string
   /** The output (typed from prompt's outputSchema, or string for text prompts). */
-  output: TOutput
+  readonly output: TOutput
   /** Duration in milliseconds. */
-  durationMs: number
+  readonly durationMs: number
   /** Token usage if available. */
-  usage?: TokenUsage
+  readonly usage?: TokenUsage
 }
+
+/**
+ * Result of one public agent execution.
+ *
+ * `_meta` identifies the exact `agent.run` span that produced this envelope,
+ * including when the agent is nested inside a composition or flow step.
+ *
+ * @example
+ * ```ts
+ * const child = result.results.reviewer
+ * console.log(child._meta.spanId)
+ * ```
+ */
+export type AgentResult<TOutput = unknown> = WithOperationResultMeta<
+  AgentResultPayload<TOutput>
+>
 
 /** Options passed to the executor for a single agent invocation. */
 export interface ExecuteOptions {
@@ -61,7 +83,7 @@ export interface ExecuteOptions {
  *
  * @param agent - The agent to execute.
  * @param options - Execution options (input, model, tools).
- * @returns The agent's result.
+ * @returns ID-free execution facts for Core to finalize at `agent.run`.
  *
  * @example
  * ```ts
@@ -74,5 +96,5 @@ export interface ExecuteOptions {
  * ```
  */
 export interface AgentExecutor {
-  (agent: AnyAgent, options: ExecuteOptions): Promise<AgentResult>
+  (agent: AnyAgent, options: ExecuteOptions): Promise<AgentResultPayload>
 }

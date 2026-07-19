@@ -1,12 +1,15 @@
 import type {
-  CompletedOperationResult,
+  CompletedOperationProviderPayload,
   OperationTimeout,
 } from "../../completed-operation/contracts";
 import type { CompletedOperationDefinition } from "./definition";
 import {
   runCompletedMediaOperation,
-  type RunCompletedMediaOperationOptions,
 } from "./runner";
+import type {
+  CompletedMediaOperationResult,
+  RunCompletedMediaOperationOptions,
+} from "./runner-types";
 import type {
   CompletedOperationModelGuard,
   RoutingCallOptions,
@@ -32,7 +35,7 @@ export interface CompletedOperationCall<TModel> {
 export type BoundCompletedOperation<
   TModel,
   TInput extends CompletedOperationCall<TModel>,
-  TResult extends CompletedOperationResult,
+  TResult extends object,
 > = ((input: TInput) => Promise<TResult>) &
   (<TSelectedModel>(
     input: Omit<TInput, "model" | "routing" | "route"> &
@@ -47,8 +50,9 @@ export interface BindCompletedOperationOptions<
   TInput extends CompletedOperationCall<TModel>,
   TNormalized,
   TNative,
-  TResult extends CompletedOperationResult,
+  TResult extends CompletedOperationProviderPayload,
   TReport,
+  TOperation extends string = string,
 > {
   readonly definition: CompletedOperationDefinition<
     TModel,
@@ -59,13 +63,17 @@ export interface BindCompletedOperationOptions<
     TReport
   >;
   readonly provider: string;
-  readonly operation: string;
+  readonly operation: TOperation;
   /** Internal safe-descriptor sink; raw media must never be reported. */
   readonly onReport?: (report: unknown) => void;
 }
 
 /**
  * Bind a provider-authored completed operation to the shared Crux lifecycle.
+ *
+ * Definitions validate ID-free payloads. A known media `operation` returns a
+ * public result carrying the exact shared-runner span pair; a custom name stays
+ * payload-only because it has no declared observability owner.
  *
  * The returned function performs no persistence and accepts no asset store.
  * Known unsupported requests fail before native I/O; native errors propagate
@@ -85,8 +93,9 @@ export function bindCompletedOperation<
   TInput extends CompletedOperationCall<TModel>,
   TNormalized,
   TNative,
-  TResult extends CompletedOperationResult,
+  TResult extends CompletedOperationProviderPayload,
   TReport = unknown,
+  const TOperation extends string = string,
 >(
   options: BindCompletedOperationOptions<
     TModel,
@@ -94,9 +103,14 @@ export function bindCompletedOperation<
     TNormalized,
     TNative,
     TResult,
-    TReport
+    TReport,
+    TOperation
   >,
-): BoundCompletedOperation<TModel, TInput, TResult> {
+): BoundCompletedOperation<
+  TModel,
+  TInput,
+  CompletedMediaOperationResult<TOperation, TResult>
+> {
   const run = <TSelectedModel>(
     input: Omit<TInput, "model" | "routing" | "route"> &
       Readonly<{ model: TSelectedModel }> &
@@ -130,9 +144,14 @@ export function bindCompletedOperation<
         TNative,
         TResult,
         TReport,
-        TSelectedModel
+        TSelectedModel,
+        TOperation
       >,
     );
   };
-  return run as BoundCompletedOperation<TModel, TInput, TResult>;
+  return run as BoundCompletedOperation<
+    TModel,
+    TInput,
+    CompletedMediaOperationResult<TOperation, TResult>
+  >;
 }

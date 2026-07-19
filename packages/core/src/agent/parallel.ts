@@ -16,6 +16,7 @@ import type {
 import type { AgentExecutor, AgentResult } from './executor'
 import { createCompositionRuntime } from './composition-runtime'
 import type { RetryOptions } from '../generation/retry'
+import type { OperationResultMeta } from '../observability'
 
 /**
  * Intersect the input shapes of every agent in a `parallel()` map.
@@ -40,6 +41,8 @@ export type SettledResult<T> =
 
 /** Result of a parallel execution. */
 export interface ParallelResult<TResults extends Record<string, AgentResult>> {
+  /** Exact `composition.parallel` span that produced this parent envelope. */
+  readonly _meta: OperationResultMeta
   /** Named results keyed by agent name. */
   results: TResults
   /** Settled results when `onError: 'continue'`. Only present in continue mode. */
@@ -120,10 +123,6 @@ export function createParallel(executor: AgentExecutor) {
 
     type TypedResults = {
       [K in keyof TAgents]: AgentResult<InferAgentLikeOutput<TAgents[K]>>
-    }
-
-    if (entries.length === 0) {
-      return { results: {} as TypedResults, durationMs: 0 }
     }
 
     const start = Date.now()

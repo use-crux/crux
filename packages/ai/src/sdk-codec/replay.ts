@@ -1,4 +1,7 @@
-import type { ExecutorStreamHandle, ExecutorStreamMeta } from '@use-crux/core/adapter'
+import type {
+  ExecutorProviderStreamHandle,
+  ExecutorStreamCompletionPayload,
+} from '@use-crux/core/adapter'
 import { withLegacyStreamMeta } from './stream-meta'
 import type { CachedStreamPayload, SdkStreamResultLike } from './types'
 
@@ -10,15 +13,16 @@ import type { CachedStreamPayload, SdkStreamResultLike } from './types'
  *
  * @internal
  */
-export function replayStream(cached: CachedStreamPayload): ExecutorStreamHandle<SdkStreamResultLike> {
+export function replayStream(cached: CachedStreamPayload): ExecutorProviderStreamHandle<SdkStreamResultLike> {
   const text = cached.text ?? (cached.object !== undefined ? JSON.stringify(cached.object) : '')
   const cachedMeta = (cached.meta ?? {}) as Record<string, unknown>
   const existingSemanticCache = (cachedMeta.semanticCache as Record<string, unknown> | undefined) ?? {}
-  const completionMeta: ExecutorStreamMeta = {
-    ...(cachedMeta as ExecutorStreamMeta),
+  const completionMeta: ExecutorStreamCompletionPayload = {
+    ...(cachedMeta as ExecutorStreamCompletionPayload),
     text,
+    ...(cached.object !== undefined ? { object: cached.object } : {}),
     semanticCache: { ...existingSemanticCache, replay: true },
-  } as ExecutorStreamMeta
+  }
 
   function* chunkText(): Generator<string> {
     for (let index = 0; index < text.length; index += 64) {

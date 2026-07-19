@@ -11,6 +11,7 @@
 
 import type { DenseEmbedding, SparseEmbedding } from '../embedding'
 import type { AssetRef } from '../asset'
+import type { OperationResultMeta } from '../observability'
 import type { JsonObject, RecordStore, Storage, VectorStore } from '../storage'
 
 /** A loaded source document, optionally split into typed parts. */
@@ -303,6 +304,8 @@ export interface IndexResult {
   chunkCount: number
   stages?: SourceStageRecord[]
   dryRun?: false
+  /** Exact `indexing.pipeline` operation that produced this summary. */
+  readonly _meta: OperationResultMeta
 }
 
 /** The result of a dry-run index: chunks/parents without persistence. */
@@ -318,6 +321,8 @@ export interface IndexDryRunResult {
     dense: boolean
     sparse: boolean
   }
+  /** Exact `indexing.pipeline` operation that produced this dry-run summary. */
+  readonly _meta: OperationResultMeta
 }
 
 /** Options affecting the indexer fingerprint. */
@@ -516,6 +521,8 @@ export interface CorpusSyncResult {
   chunkCount: number
   durationMs: number
   sources: CorpusSourceResult[]
+  /** Exact `corpus.sync` operation that produced this aggregate summary. */
+  readonly _meta: OperationResultMeta
 }
 
 /** A per-source progress event emitted during a sync. */

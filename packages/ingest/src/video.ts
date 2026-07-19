@@ -1,4 +1,5 @@
-import type { Asset, TranscriptInterval, TranscriptionResult } from '@use-crux/core'
+import type { Asset, TranscriptInterval } from '@use-crux/core'
+import type { TranscriptionPayload } from '@use-crux/core/adapter'
 import type { IngestParser, IngestPart, IngestWarning } from './types'
 import { observeIngestMediaCall } from './media-observation'
 
@@ -57,7 +58,7 @@ export const videoParser: IngestParser = {
   },
 }
 
-function transcriptParts(result: TranscriptionResult<unknown, unknown, unknown>, sourceId: string): IngestPart[] {
+function transcriptParts(result: TranscriptionPayload<unknown, unknown, unknown>, sourceId: string): IngestPart[] {
   const text = result.text.trim()
   if (!text) throw new Error(`Video source "${sourceId}" returned empty text from media.transcribe.`)
   if (!Array.isArray(result.segments)) throw new Error(`Video source "${sourceId}" returned invalid segments from media.transcribe.`)

@@ -5,12 +5,15 @@ import {
   runCompletedMediaOperation,
 } from "@use-crux/core/adapter";
 import { router, type RouteArgs } from "@use-crux/core/routing";
+import type { CruxSpanId, CruxTraceId } from "@use-crux/core/observability";
 // @ts-expect-error - support evidence stays private to operation definitions.
 import type { Support } from "@use-crux/core/adapter";
 // @ts-expect-error - completed operations intentionally expose no cache contract.
 import type { CompletedOperationCache } from "@use-crux/core/adapter";
 
 const completedInput: Readonly<{ text: string }> = { text: "hello" };
+declare const traceId: CruxTraceId;
+declare const spanId: CruxSpanId;
 
 const definition = defineCompletedOperation({
   normalize: (input: Readonly<{ text: string }>) => ({
@@ -61,6 +64,38 @@ expectTypeOf(result).toEqualTypeOf<
     raw: { text: string; model: string };
   }>
 >();
+void result.then((payload) => {
+  // @ts-expect-error - unmapped generic operations do not fabricate identity.
+  void payload._meta;
+});
+
+const observedResult = runCompletedMediaOperation({
+  definition,
+  provider: "test",
+  operation: "generateImage",
+  model: "future-model",
+  input: { text: "hello" },
+});
+void observedResult.then((observed) => {
+  void observed._meta.traceId;
+  void observed._meta.spanId;
+});
+
+defineCompletedOperation({
+  normalize: (input: Readonly<{ text: string }>) => input,
+  support: () => "supported" as const,
+  invoke: async (input) => input,
+  validate: (raw) => ({
+    text: raw.text,
+    warnings: [] as const,
+    execution: { kind: "native" as const, calls: 1 },
+    raw,
+    // @ts-expect-error - provider validation cannot manufacture Core identity.
+    _meta: { traceId, spanId },
+  }),
+  report: () => ({}),
+  conformance: [],
+});
 
 const boundDefinition = defineCompletedOperation({
   normalize: (input: Readonly<{ model: string; text: string }>) => ({

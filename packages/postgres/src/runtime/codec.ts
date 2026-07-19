@@ -69,7 +69,12 @@ export function decodeFlowSnapshot(row: JsonRecord): FlowSnapshot {
     fingerprint: Object.freeze([...(row.fingerprint as string[])]),
     pendingSuspends: Object.freeze(
       (row.pending_suspends as RuntimePendingSuspend[]).map((suspend) =>
-        Object.freeze({ ...suspend }),
+        Object.freeze({
+          ...suspend,
+          ...(suspend.timeoutAt
+            ? { timeoutAt: new Date(String(suspend.timeoutAt)) }
+            : {}),
+        }),
       ),
     ),
     deliveredSuspends: row.delivered_suspends

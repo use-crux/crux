@@ -21,7 +21,7 @@ import { createCompositionRuntime } from "./composition-runtime";
 import type { CompositionScope } from "./composition-runtime";
 import type { GenerateTextFn } from "../compaction/types";
 import { observe } from "../observability";
-import type { CruxSpanId } from "../observability";
+import type { CruxSpanId, OperationResultMeta } from "../observability";
 import type { RetryOptions } from "../generation/retry";
 import {
   sumUsageWhenComplete,
@@ -182,6 +182,8 @@ export interface SwarmOptions<
 export interface SwarmResult<
   TAgents extends Record<string, AnyAgent> = Record<string, AnyAgent>,
 > {
+  /** Exact identity of the `composition.swarm` operation that produced this result. */
+  readonly _meta: OperationResultMeta;
   /** The final agent's output — union of every possible agent output. */
   output: InferAgentOutput<TAgents[Extract<keyof TAgents, string>]>;
   /** ID of the agent that produced the final output. */
@@ -437,20 +439,6 @@ export function createSwarm(executor: AgentExecutor) {
     type SwarmAgentKey = Extract<keyof TAgents, string>;
     type SwarmOutput = InferAgentOutput<TAgents[SwarmAgentKey]>;
 
-    // Dry run: return estimates without executing
-    if (dryRun) {
-      return {
-        output: null as SwarmOutput,
-        finalAgentId: startAgent,
-        handoffPath: [startAgent],
-        handoffCount: 0,
-        durationMs: 0,
-        agentResults: [],
-        agentCount: Object.keys(agents).length,
-        maxPossibleHops: maxHandoffs,
-      };
-    }
-
     const start = Date.now();
     const agentIds = Object.keys(agents);
     const runtime = createCompositionRuntime({
@@ -460,6 +448,21 @@ export function createSwarm(executor: AgentExecutor) {
       sessionId,
       attributes: { startAgent, maxHandoffs },
     });
+
+    // Dry run: return estimates without executing
+    if (dryRun) {
+      return runtime.run(async () => ({
+        output: null as SwarmOutput,
+        finalAgentId: startAgent,
+        handoffPath: [startAgent],
+        handoffCount: 0,
+        durationMs: 0,
+        agentResults: [],
+        agentCount: Object.keys(agents).length,
+        maxPossibleHops: maxHandoffs,
+      }));
+    }
+
     const handoffPath: SwarmAgentKey[] = [startAgent];
     const agentResults: AgentResult[] = [];
     const meteredAgentFacts: ResultStepFacts[] = [];

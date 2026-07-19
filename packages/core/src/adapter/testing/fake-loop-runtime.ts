@@ -19,8 +19,8 @@ import type { AdapterResponse } from "../types";
 import type { LoopRuntimePort } from "../loop-runtime-port";
 import type {
   ExecutorOutcome,
+  ExecutorProviderStreamHandle,
   ExecutorRequest,
-  ExecutorStreamHandle,
   PendingToolApproval,
   StepDirective,
   StepTransformer,
@@ -401,7 +401,7 @@ export function fakeLoopRuntime(
       };
     },
 
-    async runStream(request): Promise<ExecutorStreamHandle<FakeRawStream>> {
+    async runStream(request): Promise<ExecutorProviderStreamHandle<FakeRawStream>> {
       calls.runStream.push(request);
       const scripted = streams.shift() ?? ["fake ", "stream"];
 

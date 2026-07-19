@@ -89,7 +89,16 @@ Summarize messages into compact text.
 | `maxTokens` | `number?`        | Max summary tokens (default: 500)                            |
 | `focus`     | `string[]?`      | Aspects to prioritize (e.g. `['decisions', 'action-items']`) |
 
-**Returns:** `Promise<CompactionResult>`: `{ text, metrics: { inputTokens, outputTokens, compressionRatio } }`
+**Returns:** `Promise<CompactionResult>` with `summary`, `tokensBefore`,
+`tokensAfter`, `ratio`, and the exact outer `compaction.run` pair in `_meta`.
+Direct `summarizeMessages()` owns its summary span.
+
+`compactConversation()` applies the same observed result contract to a
+stateless evicted-message batch, including both zero-work paths. Generated work
+may call `summarizeMessages()` as a child, but the returned envelope points at
+the outer conversation compaction span. `@use-crux/convex` re-exports this Core
+implementation under the same name. See
+[Operation Result Correlation](/docs/reference/crux-core/operation-results#media-and-higher-level-results).
 
 ### Types
 

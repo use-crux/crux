@@ -9,7 +9,7 @@
  * @module
  */
 
-import type { TraceMeta } from "../../generation/types";
+import type { GenerationMeta } from "../../generation/types";
 import type { Message } from "../../generation/messages";
 import type { AssistantContentPart } from "../../types/content";
 import {
@@ -47,6 +47,7 @@ import type {
   AdapterExecutionGenerateArgs,
   AdapterExecutionGenerateResult,
   CoreStepDialect,
+  ObservedAdapterExecutionGenerateResult,
 } from "./types";
 import { appendAssistantResultMessage, initialCoreMessages } from "./messages";
 import {
@@ -77,7 +78,7 @@ export async function generateCore<
 >(
   dialect: CoreStepDialect<TClient, TRawResponse, TRawStream, TExtra>,
   args: AdapterExecutionGenerateArgs<string, TExtra>,
-): Promise<AdapterExecutionGenerateResult<TRawResponse>> {
+): Promise<ObservedAdapterExecutionGenerateResult<TRawResponse>> {
   const prompt = args.prompt;
   const modelInfo = args.modelInfo ?? {
     provider: args.provider ?? dialect.id,
@@ -465,7 +466,7 @@ export async function generateCore<
             parsedObject = finalOutput.parsed;
           }
 
-          const meta: TraceMeta = safety.stamp({
+          const meta: GenerationMeta = safety.stamp({
             usage: lastExtracted?.usage,
             finishReason: suspendedApproval
               ? "tool_approval_required"

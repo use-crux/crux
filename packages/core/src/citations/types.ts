@@ -9,6 +9,7 @@
  */
 
 import type { z } from 'zod'
+import type { OperationResultMeta } from '../observability'
 import type { Retriever, RetrieverHit, RetrievalInjectMode, RetrievalToolConfig } from '../retrieval'
 import type { InternalInjectableEntry } from '../prompt/internal-injection'
 import type { Citation } from './schema'
@@ -85,6 +86,8 @@ export interface CitationValidationResult {
   citations: ResolvedCitation[]
   issues: CitationIssue[]
   artifact: CitationValidationArtifact
+  /** Exact `citation.check` operation that produced this result. */
+  readonly _meta: OperationResultMeta
 }
 
 /** Config for {@link citationConstraint}: the grounded-citation safety check. */

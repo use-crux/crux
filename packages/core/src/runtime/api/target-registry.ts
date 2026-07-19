@@ -12,13 +12,14 @@
 
 import type { ResolvedRuntimeEngine } from './create-runtime'
 import type { RuntimeTarget, RuntimeTargetMap } from '../engine/kernel'
+import type { FlowResult } from '../../flow/types'
 
 /** Shared mutable reference passed to targets created before runtime resolution. */
 export interface RuntimeTargetRuntimeRef {
   /** Resolved runtime currently executing registered targets. */
   current?: ResolvedRuntimeEngine
-  /** Last flow result produced by an inline runtime target execution. */
-  result?: unknown
+  /** Observed flow result produced by an inline runtime target execution. */
+  flowResult?: FlowResult<unknown>
 }
 
 /** Factory that materializes a runtime target for a resolved runtime. */

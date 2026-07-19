@@ -16,6 +16,7 @@ import type {
 } from './agent'
 import type { AgentExecutor, AgentResult } from './executor'
 import { createCompositionRuntime } from './composition-runtime'
+import type { OperationResultMeta } from '../observability'
 import type { RetryOptions } from '../generation/retry'
 
 // ── Types ───────────────────────────────────────────────────────────
@@ -74,6 +75,8 @@ export interface ConsensusOptions<
 
 /** The result of a consensus vote. */
 export interface ConsensusResult<TVote extends string = string> {
+  /** Exact identity of the `composition.consensus` operation that produced this result. */
+  readonly _meta: OperationResultMeta
   /** The winning vote value. */
   result: TVote
   /** Vote breakdown: { value: count }. */

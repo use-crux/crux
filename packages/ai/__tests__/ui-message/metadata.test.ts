@@ -1,5 +1,9 @@
 import type { StreamResult } from "@use-crux/core/adapter";
-import { createCruxRunId } from "@use-crux/core/observability";
+import {
+  createCruxRunId,
+  createCruxSpanId,
+  createCruxTraceId,
+} from "@use-crux/core/observability";
 import { describe, expect, it, vi } from "vitest";
 import { createUIMessageStreamResponse } from "../../src/ui-message";
 
@@ -63,8 +67,13 @@ function streamResult(
     readonly messageMetadata?: (input: { readonly part: never }) => unknown;
   }) => void,
 ): StreamResult<{ toUIMessageStream(options?: unknown): ReadableStream }> {
+  const operation = {
+    traceId: createCruxTraceId(),
+    spanId: createCruxSpanId(),
+  };
   return {
     runId,
+    _meta: operation,
     textStream: (async function* () {})(),
     raw: {
       toUIMessageStream(options?: unknown) {
@@ -84,6 +93,7 @@ function streamResult(
     },
     completion: Promise.resolve({
       runId,
+      _meta: operation,
       text: "",
       content: [],
       steps: [],

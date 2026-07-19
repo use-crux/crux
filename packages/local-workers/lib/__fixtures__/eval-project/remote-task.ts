@@ -1,5 +1,9 @@
 import { attachEvalTaskDescriptorForInternalUse } from "@use-crux/core/eval/internal/task";
-import { createCruxRunId } from "@use-crux/core/observability";
+import {
+  createCruxRunId,
+  createCruxSpanId,
+  createCruxTraceId,
+} from "@use-crux/core/observability";
 
 export const remoteTask = attachEvalTaskDescriptorForInternalUse(
   async (input: { question: string }) => input.question,
@@ -21,6 +25,10 @@ export const remoteTask = attachEvalTaskDescriptorForInternalUse(
     projectOutput: (result) => result.output,
     projectResponse: (result) => ({
       runId: createCruxRunId(),
+      _meta: {
+        traceId: createCruxTraceId(),
+        spanId: createCruxSpanId(),
+      },
       content: [],
       text: result.output,
       object: result.output,

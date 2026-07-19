@@ -146,6 +146,12 @@ A dialect only ever sees neutral units (`ProviderToolCall`, `ProviderToolResult`
 
 Runtime hooks should be narrow and typed. Request hooks build SDK-native input; response hooks normalize metadata only; transcript hooks own assistant text/tool calls.
 
+Response hooks, payload validators, and SDK-loop ports return provider facts,
+not Crux correlation IDs. Preserve provider identity as `responseId`; the Core
+managed-operation boundary adds the exact `traceId` and `spanId` after the
+payload is complete. See the
+[payload-versus-observed-result contract](/docs/reference/crux-core/operation-results#adapter-author-boundary).
+
 ```ts
 import type { GenerationSettings } from "@use-crux/core";
 import type {

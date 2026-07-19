@@ -252,8 +252,11 @@ function isPrunableWorkStatus(status: WorkItem["status"]): boolean {
 
 function isPrunableSnapshotStatus(status: FlowSnapshot["status"]): boolean {
   return (
-    status === "completed" || status === "blocked" || status === "cancelled"
-  );
+    status === 'completed' ||
+    status === 'blocked' ||
+    status === 'expired' ||
+    status === 'cancelled'
+  )
 }
 
 export function cloneWorkItem(work: WorkItem): WorkItem {
@@ -375,6 +378,7 @@ function clonePendingSuspend(
     deliveryKey: suspend.deliveryKey,
     waiterId: suspend.waiterId,
     timerId: suspend.timerId,
+    timeoutAt: suspend.timeoutAt ? new Date(suspend.timeoutAt) : undefined,
     delivered: suspend.delivered
       ? cloneDeliveredSuspend(
           suspend.delivered,

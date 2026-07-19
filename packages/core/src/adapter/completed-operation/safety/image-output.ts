@@ -1,5 +1,5 @@
 import type { Asset } from "../../../asset/types";
-import type { CompletedOperationResult } from "../../../completed-operation/contracts";
+import type { CompletedOperationProviderPayload } from "../../../completed-operation/contracts";
 import type { MediaPartSubject } from "../../../safety/boundary";
 import { freezeSafetyAudit, hasSafetyAudit } from "../../../safety/audit";
 import { SafetyResultError } from "../../../safety/errors";
@@ -8,7 +8,7 @@ import {
   type Safety,
 } from "../../../safety/session";
 
-type GeneratedImageResult = CompletedOperationResult &
+type GeneratedImageResult = CompletedOperationProviderPayload &
   Readonly<{
     readonly images: readonly [Asset, ...Asset[]];
     readonly image: Asset;
@@ -16,7 +16,7 @@ type GeneratedImageResult = CompletedOperationResult &
 
 /** Guard generated images and write retained canonical assets back immutably. */
 export async function guardGeneratedImageOutput<
-  TResult extends CompletedOperationResult,
+  TResult extends CompletedOperationProviderPayload,
 >(result: TResult, safety: Safety, model?: string): Promise<TResult> {
   if (!isGeneratedImageResult(result)) {
     throw new SafetyResultError({
@@ -81,7 +81,7 @@ function imageSubject(image: Asset, partIndex: number): MediaPartSubject {
 }
 
 function isGeneratedImageResult(
-  result: CompletedOperationResult,
+  result: CompletedOperationProviderPayload,
 ): result is GeneratedImageResult {
   return (
     "images" in result &&

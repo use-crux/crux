@@ -30,6 +30,7 @@ import {
   guardStreamCompletion,
   trackSafetyStreamSeal,
 } from "./stream-completion";
+import type { WithOperationResultMeta } from "../../observability";
 import { materializeToolSources } from "./tool-sources";
 import { createStreamSourceCleanup } from "./stream-source-cleanup";
 import { trackRawStream } from "./stream-tracking";
@@ -54,7 +55,10 @@ export async function streamCore<
 >(
   dialect: CoreStepDialect<TClient, TRawResponse, TRawStream, TExtra>,
   args: AdapterExecutionStreamArgs<string, TExtra>,
-): Promise<StreamHandle<TRawStream> & { readonly runId: CruxRunId }> {
+): Promise<
+  WithOperationResultMeta<StreamHandle<TRawStream>> &
+    Readonly<{ runId: CruxRunId }>
+> {
   const prompt = args.prompt;
   const modelInfo = args.modelInfo ?? {
     provider: args.provider ?? dialect.id,

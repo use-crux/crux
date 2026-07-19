@@ -1,6 +1,6 @@
 /** Candidate-aware Safety preparation for completed operations. */
 
-import type { CompletedOperationResult } from '../../../completed-operation/contracts'
+import type { CompletedOperationProviderPayload } from '../../../completed-operation/contracts'
 import { isImageCruxPrompt, prepareImagePrompt, type PreparedImagePrompt } from '../../../generation/image-prompt'
 import type { ImagePrompt } from '../../../generation/image-contracts'
 import { SafetyConfigError } from '../../../safety/errors'
@@ -35,7 +35,7 @@ export async function prepareCompletedOperationCandidates<
   TInput,
   TNormalized,
   TNative,
-  TResult extends CompletedOperationResult,
+  TResult extends CompletedOperationProviderPayload,
   TReport,
 >(
   options: Readonly<{
@@ -72,7 +72,7 @@ async function prepareTypedImageCandidates<
   TInput,
   TNormalized,
   TNative,
-  TResult extends CompletedOperationResult,
+  TResult extends CompletedOperationProviderPayload,
   TReport,
 >(
   options: Readonly<{

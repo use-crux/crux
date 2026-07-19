@@ -33,15 +33,19 @@
  */
 
 import type { AnyAgent } from './agent'
-import type { AgentExecutor, AgentResult, ExecuteOptions } from './executor'
+import type {
+  AgentExecutor,
+  AgentResultPayload,
+  ExecuteOptions,
+} from './executor'
 import type { AnyModel } from '../types'
 import { getExecutionContext } from '../runtime/execution-context'
 import type { ExecutionContext } from '../runtime/execution-context'
 
 // ── Behavior config ────────────────────────────────────────────────
 
-/** Token usage shape carried on an {@link AgentResult}. */
-export type FakeAgentUsage = NonNullable<AgentResult['usage']>
+/** Token usage shape carried on an {@link AgentResultPayload}. */
+export type FakeAgentUsage = NonNullable<AgentResultPayload['usage']>
 
 /**
  * What the fake does for a single agent invocation.
@@ -125,7 +129,7 @@ interface TransferTool {
  * Create a conformant in-memory {@link AgentExecutor} for composition tests.
  *
  * Resolves the model as `agent.model ?? options.model`, returns a well-formed
- * {@link AgentResult}, records each invocation on {@link FakeAgentExecutor.calls},
+ * {@link AgentResultPayload}, records each invocation on {@link FakeAgentExecutor.calls},
  * and runs its body inside the ambient execution context the composition
  * established — so `executionContext` on each call reflects the parent/child
  * threading `parallel()`/`pipeline()`/`swarm()` set up.
@@ -149,7 +153,10 @@ export function createFakeAgentExecutor(config: FakeAgentExecutorConfig = {}): F
     return typeof fallback === 'function' ? fallback(agent, options, callIndex) : fallback
   }
 
-  const executor = async (agent: AnyAgent, options: ExecuteOptions): Promise<AgentResult> => {
+  const executor = async (
+    agent: AnyAgent,
+    options: ExecuteOptions,
+  ): Promise<AgentResultPayload> => {
     const callIndex = calls.length
     const resolvedModel = (agent.model ?? options.model) as AnyModel | undefined
     calls.push({ agent, options, resolvedModel, executionContext: getExecutionContext() })

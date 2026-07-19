@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { delegate as cruxDelegate } from '../../src/agent/delegate'
 import { handoff as makeHandoff } from '../../src/agent/handoff'
 import { updateHooks, resetHooks } from '../../src/runtime/runtime'
+import './delegate-result-correlation.cases'
 
 const inputSchema = z.object({
   synthesis: z.string(),

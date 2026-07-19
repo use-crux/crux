@@ -15,14 +15,14 @@ import {
   type Safety,
 } from '../../../safety/session'
 import type { AudioSource } from '../../../transcription/contracts'
-import type { CompletedOperationResult } from '../../../completed-operation/contracts'
+import type { CompletedOperationProviderPayload } from '../../../completed-operation/contracts'
 
 type TranscriptionInput = Readonly<{
   readonly audio: AudioSource
   readonly prompt?: string
 }>
 
-type CanonicalTranscriptionResult = CompletedOperationResult &
+type CanonicalTranscriptionResult = CompletedOperationProviderPayload &
   Readonly<{
     readonly text: string
     readonly segments: readonly unknown[]
@@ -43,7 +43,7 @@ export async function guardTranscriptionInput<TInput>(input: TInput, safety: Saf
 }
 
 /** Guard canonical transcript text and attach accumulated Safety audit immutably. */
-export async function guardTranscriptionOutput<TResult extends CompletedOperationResult>(
+export async function guardTranscriptionOutput<TResult extends CompletedOperationProviderPayload>(
   result: TResult,
   safety: Safety,
   model?: string,
@@ -130,7 +130,7 @@ function isTranscriptionInput(value: unknown): value is TranscriptionInput {
   return typeof value === 'object' && value !== null && 'audio' in value
 }
 
-function isTranscriptionResult(result: CompletedOperationResult): result is CanonicalTranscriptionResult {
+function isTranscriptionResult(result: CompletedOperationProviderPayload): result is CanonicalTranscriptionResult {
   return (
     'text' in result &&
     typeof result.text === 'string' &&

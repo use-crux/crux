@@ -8,6 +8,34 @@ import { prompt } from "../../src/prompt/prompt";
 import { boundary, guardrail } from "../../src/safety";
 
 describe("stream completion media Safety — SDK runtime", () => {
+  it("does not start completion work until a caller observes completion", async () => {
+    let completionCalls = 0;
+    const fake = fakeLoopRuntime({ streams: [[]] });
+    const runtime = loopRuntimeAdapter({
+      ...fake.runtime,
+      async runStream() {
+        return {
+          raw: Object.freeze({ kind: "lazy-sdk-stream" as const }),
+          completion: async () => {
+            completionCalls += 1;
+            return { text: "done", finishReason: "stop" };
+          },
+        };
+      },
+    });
+
+    const handle = await runtime.stream(streamPrompt(), {
+      model: "fake:stream-model",
+    });
+
+    expect(completionCalls).toBe(0);
+    const first = handle.completion();
+    const second = handle.completion();
+    expect((await first)?.text).toBe("done");
+    expect((await second)?.text).toBe("done");
+    expect(completionCalls).toBe(1);
+  });
+
   it("guards buffered structured text when no live Safety stream exists", async () => {
     const unsafe = '{"value":"unsafe"}';
     const safe = '{"value":"safe"}';
@@ -53,7 +81,7 @@ describe("stream completion media Safety — SDK runtime", () => {
     expect(completion?.content).toEqual([{ type: "text", text: safe }]);
   });
 
-  it("passes native completion metadata through unchanged without Safety", async () => {
+  it("preserves native completion facts while adding Core correlation", async () => {
     const raw = Object.freeze({ kind: "sdk-stream" as const });
     const meta = Object.freeze({
       text: "visible",
@@ -79,7 +107,13 @@ describe("stream completion media Safety — SDK runtime", () => {
       model: "fake:stream-model",
     });
 
-    expect(await handle.completion()).toBe(meta);
+    const completion = await handle.completion();
+    expect(completion).not.toBe(meta);
+    expect(completion).toMatchObject(meta);
+    expect(completion?._meta).toEqual(handle._meta);
+    expect(completion?.runId).toBe(handle.runId);
+    expect(meta).not.toHaveProperty("_meta");
+    expect(meta).not.toHaveProperty("runId");
   });
 
   it("strips buffered media before completion and preserves the raw handle", async () => {

@@ -11,7 +11,11 @@
  */
 
 import { observe } from "../../observability";
-import type { CruxArtifactId, CruxSpanId } from "../../observability/contract";
+import type {
+  CruxArtifactId,
+  CruxSpanId,
+  CruxTraceId,
+} from "../../observability/contract";
 import { sanitizeMediaPreview } from "../../observability/media-preview";
 import type { CompletedOperationResult } from "../../completed-operation/contracts";
 import { safeCompletedOperationReport } from "./report";
@@ -25,6 +29,9 @@ import {
 /** Identity carried through one instrumented completed-media lifecycle. */
 export interface CompletedMediaObservation {
   readonly primitive: MediaPrimitiveName;
+  /** Trace containing the explicitly opened media span. */
+  readonly traceId: CruxTraceId;
+  /** Exact media span that owns the eventual public result. */
   readonly spanId: CruxSpanId;
   withContext<T>(fn: () => T | Promise<T>): T | Promise<T>;
   observeChildCall<T>(operation: string, start: () => Promise<T>): Promise<T>;
@@ -68,6 +75,7 @@ export function openCompletedMediaObservation(
 
   return {
     primitive,
+    traceId: span.traceId,
     spanId: span.spanId,
     withContext: span.withContext.bind(span),
     async observeChildCall(operation, start) {

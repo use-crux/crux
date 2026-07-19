@@ -19,8 +19,8 @@ import {
 } from "../call-handle";
 import type {
   AdapterExecutionGenerateArgs,
-  AdapterExecutionGenerateResult,
   CoreStepDialect,
+  ObservedAdapterExecutionGenerateResult,
 } from "./types";
 import { generateCore } from "./generate-core";
 
@@ -60,8 +60,8 @@ export async function prepareCoreHandle<
     readonly toParams: (args: Parameters<CoreStepDialect<TClient, TRawResponse, TRawStream, TExtra>["call"]>[1]) => TParams | Promise<TParams>;
     readonly fromResponse: (raw: TRawResponse) => AdapterResponse;
   },
-): Promise<CallHandle<TParams, TRawResponse, AdapterExecutionGenerateResult<TRawResponse>>> {
-  const controller = createManualController<TParams, TRawResponse, AdapterExecutionGenerateResult<TRawResponse>>();
+): Promise<CallHandle<TParams, TRawResponse, ObservedAdapterExecutionGenerateResult<TRawResponse>>> {
+  const controller = createManualController<TParams, TRawResponse, ObservedAdapterExecutionGenerateResult<TRawResponse>>();
   const manualDialect: CoreStepDialect<TClient, TRawResponse, TRawStream, TExtra> = {
     ...dialect,
     async call(_client, callArgs) {

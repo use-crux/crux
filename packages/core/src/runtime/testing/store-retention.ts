@@ -82,6 +82,18 @@ export function registerStoreRetentionTests<TStore extends RuntimeStoreAdapter>(
       updatedAt: new Date('2026-07-01T00:00:00.000Z'),
     })
     await store.state.putSnapshot({
+      flowId: 'flow_expired' as FlowId,
+      workId: 'work_completed' as WorkId,
+      targetId: 'review' as RuntimeTargetId,
+      namespace: 'tenant-a',
+      status: 'expired',
+      input: {},
+      completedSteps: {},
+      fingerprint: [],
+      pendingSuspends: [],
+      updatedAt: new Date('2026-07-01T00:00:00.000Z'),
+    })
+    await store.state.putSnapshot({
       flowId: 'flow_done' as FlowId,
       workId: 'work_completed' as WorkId,
       targetId: 'review' as RuntimeTargetId,
@@ -99,7 +111,7 @@ export function registerStoreRetentionTests<TStore extends RuntimeStoreAdapter>(
         before: cutoff,
         limit: 10,
       }),
-    ).resolves.toEqual({ removed: 1, truncated: false })
+    ).resolves.toEqual({ removed: 2, truncated: false })
     await expect(
       store.state.getSnapshot('flow_live' as FlowId, {
         namespace: 'tenant-a',

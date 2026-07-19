@@ -537,6 +537,10 @@ Defaults:
 
 This is the direct document-write path.
 
+Successful writes return `IndexResult` with the exact `indexing.pipeline`
+operation pair in `_meta`. A dry run returns `IndexDryRunResult` with the same
+ownership rule for its own pipeline invocation.
+
 Use it for tests, one-off writes, demos, and deliberately manual updates where you want Crux to own chunking and replacement semantics without source-ledger tracking. For repeated ingestion jobs, prefer `corpus().sync()`.
 
 ### `indexChunks(chunks, options?)`
@@ -582,6 +586,12 @@ stage-cache entries so a later real run can reuse the completed work. They retur
 chunk and embedding counts so callers can preview work before committing it.
 
 Dry runs also return prepared parent records and pipeline stages when the configured pipeline produces them.
+
+Chunk arrays, stored source records, progress items, and numeric
+`deleteSource()`/`clear()` results remain ordinary domain values without result
+metadata. This content-indexing contract does not change Project Index compiler
+facts, snapshots, HTTP read models, or caches. See
+[Operation Result Correlation](/docs/reference/crux-core/operation-results#compatibility-matrix).
 
 ## Corpus API
 
@@ -660,8 +670,12 @@ type CorpusSyncResult = {
     stages?: SourceStageRecord[];
     error?: { message: string; stack?: string };
   }>;
+  _meta: OperationResultMeta;
 };
 ```
+
+The pair identifies the outer `corpus.sync` operation; per-source progress and
+ledger records remain unobserved domain data.
 
 ### Source ledger methods
 

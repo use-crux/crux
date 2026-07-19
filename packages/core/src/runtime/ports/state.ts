@@ -38,6 +38,7 @@ export interface FlowSnapshot {
     | 'suspended'
     | 'completed'
     | 'blocked'
+    | 'expired'
     | 'cancelled'
   /** JSON input captured at first run. */
   readonly input: JsonValue
@@ -81,6 +82,8 @@ export interface RuntimePendingSuspend {
   readonly waiterId?: WaiterId
   /** Timer registered for timeout delivery. */
   readonly timerId?: TimerId
+  /** Deadline that makes this suspend occurrence eligible for timeout replay. */
+  readonly timeoutAt?: Date
   /** Event delivery selected for this suspend point. */
   readonly delivered?: RuntimeDeliveredSuspend
 }
