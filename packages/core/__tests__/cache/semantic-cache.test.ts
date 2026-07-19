@@ -2,62 +2,34 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { prompt as makePrompt } from '../../src/prompt/prompt'
 import { createSemanticCache, semanticCachePolicies } from '../../src/cache'
-import { embedding } from '../../src/embedding'
 import { inMemoryStorage } from '../../src/storage'
-import { applyPlugins } from '../../src/runtime/plugin'
-import { getHooks, resetHooks, setHooks } from '../../src/runtime/runtime'
+import { resetHooks } from '../../src/runtime/runtime'
 import { orchestrateGenerate, orchestrateStream } from '../../src/generation/orchestrate'
 import { textPart } from '../../src/content'
 import { resolveQueryText } from '../../src/cache/query'
-
-function denseEmbedding() {
-  return embedding({
-    kind: 'dense',
-    name: 'test-dense',
-    dimensions: 3,
-    maxInputTokens: 8192,
-    batch: { maxSize: 16 },
-    embed: async (texts) => ({
-      embeddings: texts.map((text) => {
-        if (text.includes('billing') || text.includes('invoice')) return [1, 0, 0]
-        if (text.includes('refund')) return [0, 1, 0]
-        return [0, 0, 1]
-      }),
-    }),
-  })
-}
-
-function sparseEmbedding() {
-  return embedding({
-    kind: 'sparse',
-    name: 'test-sparse',
-    maxInputTokens: 8192,
-    batch: { maxSize: 16 },
-    embed: async (texts) => texts.map(() => ({ indices: [1], values: [1] })),
-  })
-}
-
-function install(plugin: ReturnType<typeof createSemanticCache>) {
-  const applied = applyPlugins([plugin], getHooks())
-  setHooks(applied.hooks)
-  return applied
-}
-
-function cacheablePrompt() {
-  return makePrompt({
-    id: 'intent',
-    input: z.object({ message: z.string(), userId: z.string() }),
-    output: z.object({ intent: z.string() }),
-    cache: { semantic: { version: 'v1', query: ({ input }) => String(input.message) } },
-    prompt: ({ input }) => input.message,
-  })
-}
+import { resetObservabilityRuntime } from '../../src/observability'
+import {
+  createInMemoryObservabilityTransport,
+  observe,
+  setObservabilityTransport,
+} from '../../src/observability'
+import { createStreamResult } from '../../src/adapter/result-accumulator'
+import {
+  cacheablePrompt,
+  denseEmbedding,
+  installSemanticCachePlugins as install,
+  sparseEmbedding,
+} from './semantic-cache.fixtures'
+import { semanticCacheResultCorrelationCases } from './semantic-cache-result-correlation.cases'
 
 describe('createSemanticCache', () => {
   afterEach(() => {
     resetHooks()
+    resetObservabilityRuntime()
     vi.restoreAllMocks()
   })
+
+  semanticCacheResultCorrelationCases()
 
     it('requires a dense embedding', () => {
     expect(() =>
@@ -128,58 +100,6 @@ describe('createSemanticCache', () => {
     expect(query).not.toContain('AQID')
   })
 
-    it('writes on miss and hydrates a cached structured result on semantic hit', async () => {
-    const storage = inMemoryStorage()
-    install(
-      createSemanticCache({
-        storage,
-        embedding: denseEmbedding(),
-        ttl: 60_000,
-        scope: ({ input }) => String(input.userId),
-      }),
-    )
-
-    const p = cacheablePrompt()
-    const doGenerate = vi.fn().mockResolvedValue({
-      object: { intent: 'billing' },
-      text: '{"intent":"billing"}',
-      _meta: {
-        finishReason: 'stop',
-        usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2, inputTokenDetails: {}, outputTokenDetails: {} },
-      },
-    })
-
-    const first = await orchestrateGenerate(
-      {
-        promptId: p.id,
-        promptConfig: p.config,
-        preparedArgs: {},
-        input: { message: 'billing help', userId: 'u1' },
-        model: 'mock',
-        resolved: await p.resolve({ input: { message: 'billing help', userId: 'u1' } }),
-        outputMode: 'object',
-      },
-      doGenerate,
-    )
-    const second = await orchestrateGenerate(
-      {
-        promptId: p.id,
-        promptConfig: p.config,
-        preparedArgs: {},
-        input: { message: 'invoice support', userId: 'u1' },
-        model: 'mock',
-        resolved: await p.resolve({ input: { message: 'invoice support', userId: 'u1' } }),
-        outputMode: 'object',
-      },
-      doGenerate,
-    )
-
-    expect(first._meta.semanticCache).toEqual({ hit: false, written: true })
-    expect(second.object).toEqual({ intent: 'billing' })
-    expect(second._meta.semanticCache.hit).toBe(true)
-    expect(doGenerate).toHaveBeenCalledTimes(1)
-  })
-
     it('isolates hits by scope', async () => {
     install(
       createSemanticCache({
@@ -246,6 +166,8 @@ describe('createSemanticCache', () => {
   })
 
     it('returns a synthetic cached stream replay', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
     install(
       createSemanticCache({
         storage: inMemoryStorage(),
@@ -282,14 +204,28 @@ describe('createSemanticCache', () => {
       }),
     }
 
-    await orchestrateStream(baseSpec, doStream)
-    const replay = await orchestrateStream(baseSpec, doStream)
+    const fill = await orchestrateStream(baseSpec, doStream)
+    const replayHandle = await orchestrateStream(baseSpec, doStream)
+    const replay = createStreamResult(replayHandle)
     const chunks: string[] = []
-    for await (const chunk of replay.rawStream) {
-      chunks.push(replay.extractTextDelta(chunk) ?? '')
-    }
+    for await (const chunk of replay.textStream) chunks.push(chunk)
+    const completion = await replay.completion
+    await observe.flush()
+
+    const spans = transport.records.filter(
+      (record) => record.type === 'span:start' && record.primitive === 'generation.stream',
+    )
+    const fillSpan = spans[0]
+    const replaySpan = spans[1]
 
     expect(chunks.join('')).toBe('hello stream')
     expect(doStream).toHaveBeenCalledTimes(1)
+    expect(fill._meta).toMatchObject({ traceId: fillSpan?.traceId, spanId: fillSpan?.spanId })
+    expect(replay._meta).toEqual({ traceId: replaySpan?.traceId, spanId: replaySpan?.spanId })
+    expect(replay._meta.traceId).not.toBe(fill._meta.traceId)
+    expect(replay._meta.spanId).not.toBe(fill._meta.spanId)
+    expect(completion._meta).toMatchObject(replay._meta)
+    expect(completion._meta.traceId).not.toBe(fill._meta.traceId)
+    expect(completion._meta.spanId).not.toBe(fill._meta.spanId)
   })
 })

@@ -11,8 +11,12 @@
 
 import type { ModelInfo } from "../../types";
 import type { AnyPrompt } from "../../prompt/prompt-types";
-import type { GenerationSettings, TraceMeta } from "../../generation/types";
-import type { TokenUsage } from "../../generation/types";
+import type {
+  GenerationMeta,
+  GenerationSettings,
+  TokenUsage,
+} from "../../generation/types";
+import type { WithOperationResultMeta } from "../../observability/result-meta";
 import type { TimeoutOptions } from "../../generation/timeout";
 import type { Message } from "../../generation/messages";
 import type { AssistantContentPart } from "../../types/content";
@@ -160,14 +164,14 @@ export interface AdapterExecutionGenerateResult<TRawResponse> {
   /** Parsed structured output, present when the prompt has an output schema. */
   readonly object?: unknown;
 
-  /** Trace metadata stamped with safety and provider information. */
-  _meta: TraceMeta;
+  /** Provider-neutral generation facts before operation correlation. */
+  _meta: GenerationMeta;
 
   /** Usage accumulated across all provider-call steps, when fully metered. */
   readonly usage?: TokenUsage;
 
   /** Provider-reported cost promoted from `_meta`, when present. */
-  readonly cost?: TraceMeta["cost"];
+  readonly cost?: GenerationMeta["cost"];
 
   /** Ordered model-attempt or loop-step facts. */
   readonly steps: readonly FinalStepInfo[];
@@ -192,6 +196,10 @@ export type AdapterExecutionGenerateResultWithoutRunId<TRawResponse> = Omit<
   "runId"
 >;
 
+/** Core-observed execution result returned after generation orchestration. */
+export type ObservedAdapterExecutionGenerateResult<TRawResponse> =
+  WithOperationResultMeta<AdapterExecutionGenerateResult<TRawResponse>>;
+
 /**
  * Stream handle returned by either execution dialect.
  *
@@ -200,8 +208,9 @@ export type AdapterExecutionGenerateResultWithoutRunId<TRawResponse> = Omit<
  * metadata produced by that SDK.
  */
 export type AdapterExecutionStreamResult<TRawStream> =
-  | (StreamHandle<TRawStream> & { readonly runId: CruxRunId })
-  | (ExecutorStreamHandle<TRawStream> & { readonly runId: CruxRunId });
+  | (WithOperationResultMeta<StreamHandle<TRawStream>> &
+      Readonly<{ runId: CruxRunId }>)
+  | ExecutorStreamHandle<TRawStream>;
 
 /**
  * Shared execution facade used by `adapter()` and `loopRuntimeAdapter()`.
@@ -220,7 +229,7 @@ export interface AdapterExecution<
   /** Run a prompt to completion, including tools, validation retry, and safety. */
   generate(
     args: AdapterExecutionGenerateArgs<TModel, TExtra>,
-  ): Promise<AdapterExecutionGenerateResult<TRawResponse>>;
+  ): Promise<ObservedAdapterExecutionGenerateResult<TRawResponse>>;
 
   /** Start a streaming prompt run and wrap completion for safety/memory capture. */
   stream(
@@ -234,7 +243,7 @@ export interface AdapterExecution<
     CallHandle<
       TParams,
       TRawResponse,
-      AdapterExecutionGenerateResult<TRawResponse>
+      ObservedAdapterExecutionGenerateResult<TRawResponse>
     >
   >;
 }

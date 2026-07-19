@@ -60,6 +60,8 @@ export type {
 } from "./tool-control";
 export type {
   GenerationSettings,
+  GenerationMeta,
+  GenerateResultMeta,
   PromptAdaptation,
   ProviderAdaptations,
   TokenUsage,

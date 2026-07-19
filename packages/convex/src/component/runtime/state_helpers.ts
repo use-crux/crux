@@ -2,7 +2,12 @@ import type { MutationCtx } from '../_generated/server.js'
 import { pruneBatch } from './shared'
 
 const TERMINAL_WORK_STATUSES = ['completed', 'cancelled', 'dead-letter'] as const
-const TERMINAL_SNAPSHOT_STATUSES = ['completed', 'blocked', 'cancelled'] as const
+const TERMINAL_SNAPSHOT_STATUSES = [
+  'completed',
+  'blocked',
+  'expired',
+  'cancelled',
+] as const
 
 type RuntimeStateTableName = 'runtimeWork' | 'runtimeSnapshots'
 type RuntimeStatus = (typeof TERMINAL_WORK_STATUSES | typeof TERMINAL_SNAPSHOT_STATUSES)[number]

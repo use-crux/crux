@@ -1,5 +1,5 @@
 import type { DataAsset } from '../../../asset/types'
-import type { CompletedOperationResult } from '../../../completed-operation/contracts'
+import type { CompletedOperationProviderPayload } from '../../../completed-operation/contracts'
 import type { MediaPartSubject } from '../../../safety/boundary'
 import { freezeSafetyAudit, hasSafetyAudit } from '../../../safety/audit'
 import { SafetyResultError } from '../../../safety/errors'
@@ -9,7 +9,7 @@ import {
   type Safety,
 } from '../../../safety/session'
 
-type GeneratedSpeechResult = CompletedOperationResult & Readonly<{ readonly audio: DataAsset }>
+type GeneratedSpeechResult = CompletedOperationProviderPayload & Readonly<{ readonly audio: DataAsset }>
 
 type SpeechInput = Readonly<{
   readonly text: string
@@ -32,7 +32,7 @@ export async function guardGeneratedSpeechInput<TInput>(input: TInput, safety: S
 }
 
 /** Guard required generated audio and attach canonical Safety audit immutably. */
-export async function guardGeneratedSpeechOutput<TResult extends CompletedOperationResult>(
+export async function guardGeneratedSpeechOutput<TResult extends CompletedOperationProviderPayload>(
   result: TResult,
   safety: Safety,
   model?: string,
@@ -76,7 +76,7 @@ function audioSubject(audio: DataAsset): MediaPartSubject {
   })
 }
 
-function isGeneratedSpeechResult(result: CompletedOperationResult): result is GeneratedSpeechResult {
+function isGeneratedSpeechResult(result: CompletedOperationProviderPayload): result is GeneratedSpeechResult {
   return 'audio' in result
 }
 

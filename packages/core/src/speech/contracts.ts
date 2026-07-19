@@ -1,6 +1,6 @@
 import type { DataAsset } from "../asset/types";
 import type {
-  CompletedOperationResult,
+  CompletedOperationPayload,
   OperationTimeout,
 } from "../completed-operation/contracts";
 import type {
@@ -9,6 +9,7 @@ import type {
 } from "../routing/types";
 import type { Guardrail } from "../safety/guardrail/types";
 import type { SafetyTuneOptions } from "../safety/tune";
+import type { WithOperationResultMeta } from "../observability/result-meta";
 
 /** Portable controls accepted by a flat speech-generation operation. */
 export type GenerateSpeechOptions<
@@ -41,13 +42,22 @@ export type GenerateSpeechOptions<
   extra?: TExtra;
 }>;
 
-/** Result of one speech operation with immediately usable audio bytes. */
+/** Provider-authored speech facts before Core adds operation correlation. */
+export type GenerateSpeechPayload<
+  TRaw = unknown,
+  TMetadata = unknown,
+  TWarning = unknown,
+> = CompletedOperationPayload<TRaw, TMetadata, TWarning> &
+  Readonly<{ audio: DataAsset }>;
+
+/** Public speech result with usable audio and its exact media span pair. */
 export type GenerateSpeechResult<
   TRaw = unknown,
   TMetadata = unknown,
   TWarning = unknown,
-> = CompletedOperationResult<TRaw, TMetadata, TWarning> &
-  Readonly<{ audio: DataAsset }>;
+> = WithOperationResultMeta<
+  GenerateSpeechPayload<TRaw, TMetadata, TWarning>
+>;
 
 /**
  * Flat stateless speech-generation function. Provider errors propagate unchanged.

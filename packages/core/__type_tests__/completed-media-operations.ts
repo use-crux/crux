@@ -1,5 +1,5 @@
-import { fallback } from '../src'
-import { cascade, retry, router, split } from '../src/routing'
+import { fallback } from '@use-crux/core'
+import { cascade, retry, router, split } from '@use-crux/core/routing'
 import type {
   Asset,
   AssetStore,
@@ -13,7 +13,13 @@ import type {
   TranscriptInterval,
   TranscribeOptions,
   TranscriptionResult,
-} from '../src'
+} from '@use-crux/core'
+import type {
+  CompletedOperationPayload,
+  GenerateImagePayload,
+  GenerateSpeechPayload,
+  TranscriptionPayload,
+} from '@use-crux/core/adapter'
 
 declare const image: Asset
 declare const store: AssetStore
@@ -119,16 +125,35 @@ const transcription = {
 void transcription
 
 declare const tail: CompletedOperationResult
+declare const payload: CompletedOperationPayload
+declare const imagePayload: GenerateImagePayload
+declare const transcriptionPayload: TranscriptionPayload
+declare const speechPayload: GenerateSpeechPayload
 declare const imageResult: GenerateImageResult
 declare const transcriptionResult: TranscriptionResult
 declare const speechResult: GenerateSpeechResult
 
+void payload.warnings
+void imagePayload.image
+void transcriptionPayload.words
+void speechPayload.audio
+
+// @ts-expect-error provider-authored payloads never contain core-owned identity
+void payload._meta
+// @ts-expect-error operation-specific provider payloads remain unobserved
+void imagePayload._meta
+
 void tail.warnings
 void tail.execution
 void tail.raw
+void tail._meta.traceId
+void tail._meta.spanId
 void imageResult.image
+void imageResult._meta.traceId
 void transcriptionResult.words
+void transcriptionResult._meta.spanId
 void speechResult.audio
+void speechResult._meta.traceId
 
 // @ts-expect-error obsolete specialized results do not expose metadata
 void transcriptionResult.metadata

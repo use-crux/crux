@@ -118,8 +118,9 @@ import { createFlowStepIdentityTracker } from "./step-identity";
 import { flowStepRetryOptions } from "./retry-control";
 import {
   assertFlowJsonValue,
-  assertFlowSnapshotMetadata,
   completedStepsForSnapshot,
+  flowSnapshotForPersistence,
+  flowValueForPersistence,
 } from "./serialization";
 import {
   completedStepsFromRuntimeSnapshot,
@@ -127,13 +128,25 @@ import {
   deliveredRuntimePayloads,
   flowIdForRuntimeWork,
   runtimeCompletedSteps,
+  runtimeDeliveredSuspendsForPersistence,
   runtimeFlowSnapshot,
   runtimeInputValue,
+  runtimeResumeWork,
+  runtimeScheduledWorkInput,
   runtimeSignalEventId,
+  runtimeTimeoutMatches,
   runtimeWorkId,
   type RuntimeFlowExecution,
   type RuntimeFlowTargetRef,
 } from "./runtime-engine";
+import {
+  cancelledFlowResultPayload,
+  completedFlowResultPayload,
+  expiredFlowResultPayload,
+  finalizeFlowResult,
+  flowResultOperation,
+  suspendedFlowResultPayload,
+} from "./result";
 
 // Re-export types and errors so existing internal `../flow/scope` imports
 // keep working while the public flow surface stays centered on `flow()`.
@@ -265,7 +278,7 @@ async function executeFlow<
   > = runtimeExecution
     ? completedStepsFromRuntimeSnapshot(runtimeExecution.snapshot)
     : snapshot?.completedSteps
-      ? { ...snapshot.completedSteps }
+      ? completedStepsForSnapshot(snapshot.completedSteps)
       : {};
   const deliveredSignals = runtimeExecution
     ? {}
@@ -341,6 +354,7 @@ async function executeFlow<
     });
   });
   const spanId = flowSpan.spanId;
+  const resultOperation = flowResultOperation(flowSpan);
 
   // Track aggregates across steps
   let stepCount = 0;
@@ -507,6 +521,16 @@ async function executeFlow<
         return validateSignalPayload(_name, payloadSpec, replayPayload) as S;
       }
 
+      if (
+        runtimeExecution &&
+        runtimeTimeoutMatches(runtimeExecution, _name)
+      ) {
+        if (suspendOptions?.onExpired) {
+          await suspendOptions.onExpired({ flowId, suspendedAt: _name });
+        }
+        throw new FlowExpiredError(_name);
+      }
+
       // On resume, first check for expiration
       if (isResume && snapshot) {
         const timeoutAt = snapshot.timeoutAt as number | undefined;
@@ -613,6 +637,13 @@ async function executeFlow<
         return validateWaitForPayload(eventSpec, replayPayload);
       }
 
+      if (
+        runtimeExecution &&
+        runtimeTimeoutMatches(runtimeExecution, suspendPoint)
+      ) {
+        throw new FlowExpiredError(suspendPoint);
+      }
+
       if (!runtimeExecution) {
         throw runtimeRequiredError({ api: "flow.waitFor()" });
       }
@@ -642,7 +673,6 @@ async function executeFlow<
       const recorded = runtimeExecution.snapshot.scheduledWork?.[key];
       if (recorded?.workId) return { workId: recorded.workId };
 
-      assertFlowJsonValue(input, { boundary: "flow snapshot metadata" });
       const workId = runtimeWorkId();
       runtimeExecution.scheduledWork.push({
         kind: "defer",
@@ -651,7 +681,7 @@ async function executeFlow<
         targetId: taskTarget.targetId,
         taskId: workId as unknown as TaskId,
         workId,
-        input: input as JsonValue,
+        input: runtimeScheduledWorkInput(input, `flow.defer("${key}") input`),
         idleScope: `flow:${flowId}`,
       });
       return { workId };
@@ -670,7 +700,6 @@ async function executeFlow<
       const key = `after:${scheduledWorkCount}`;
       if (runtimeExecution.snapshot.scheduledWork?.[key]) return;
 
-      assertFlowJsonValue(input, { boundary: "flow snapshot metadata" });
       runtimeExecution.scheduledWork.push({
         kind: "after",
         key,
@@ -678,7 +707,7 @@ async function executeFlow<
         targetId: taskTarget.targetId,
         taskId: `${flowId}:${key}:${taskTarget.name}` as TaskId,
         fireAt: new Date(currentTimeMs() + parseDuration(delay)),
-        input: input as JsonValue,
+        input: runtimeScheduledWorkInput(input, `flow.after("${key}") input`),
         idleScope: `flow:${flowId}`,
       });
     },
@@ -738,6 +767,8 @@ async function executeFlow<
         : invokeHandler(),
     );
 
+    const completedResult = completedFlowResultPayload(result, flowId);
+
     if (runtimeExecution) {
       runtimeExecution.fingerprint.complete();
       runtimeExecution.outcome = {
@@ -751,7 +782,6 @@ async function executeFlow<
         }),
         scheduledWork: runtimeExecution.scheduledWork,
       };
-      runtimeExecution.result = { status: "completed", output: result, flowId };
     }
 
     if (isResume && store && snapshot) {
@@ -769,18 +799,28 @@ async function executeFlow<
         completedAt,
         continuation: flowRun.captureContinuation(),
       };
-      assertFlowSnapshotMetadata(completedSnapshot);
-      await store.put(`${FLOW_KEY_PREFIX}${flowId}`, completedSnapshot);
+      await store.put(
+        `${FLOW_KEY_PREFIX}${flowId}`,
+        flowSnapshotForPersistence(completedSnapshot),
+      );
     }
 
+    const observedResult = finalizeFlowResult(
+      completedResult,
+      resultOperation,
+    );
     flowSpan.end({
       attributes: { flowStatus: "completed", totalSteps: stepCount },
     });
     flowRun.end();
-    return { status: "completed", output: result, flowId };
+    return observedResult;
   } catch (error) {
     // Handle suspension — persist state and return suspended result
     if (error instanceof FlowSuspendedError) {
+      const suspendedResult = suspendedFlowResultPayload<T>(
+        flowId,
+        error.suspendPoint,
+      );
       if (runtimeExecution) {
         runtimeExecution.fingerprint.complete();
         const timeoutAt = error.options?.timeout
@@ -804,7 +844,9 @@ async function executeFlow<
               input: runtimeInputValue(flowInput),
               completedSteps: runtimeCompletedSteps(completedSteps),
               fingerprint: runtimeExecution.fingerprint.observed,
-              deliveredSuspends: runtimeExecution.snapshot.deliveredSuspends,
+              deliveredSuspends: runtimeDeliveredSuspendsForPersistence(
+                runtimeExecution.snapshot.deliveredSuspends,
+              ),
               continuation: flowRun.captureContinuation(),
               scheduledWork: runtimeExecution.snapshot.scheduledWork,
             },
@@ -821,11 +863,6 @@ async function executeFlow<
             ],
             scheduledWork: runtimeExecution.scheduledWork,
           },
-        };
-        runtimeExecution.result = {
-          status: "suspended",
-          flowId,
-          suspendedAt: error.suspendPoint,
         };
 
         await flowSpan.withContext(async () => {
@@ -848,7 +885,7 @@ async function executeFlow<
           attributes: { flowId, suspendPoint: error.suspendPoint },
         });
         await observe.flush();
-        return runtimeExecution.result as FlowResult<T>;
+        return finalizeFlowResult(suspendedResult, resultOperation);
       }
 
       const flowStore = store ?? getHooks().records;
@@ -880,8 +917,10 @@ async function executeFlow<
             ? { input: flowInput as unknown as JsonValue }
             : {}),
         };
-        assertFlowSnapshotMetadata(snapshotData);
-        await flowStore.put(`${FLOW_KEY_PREFIX}${flowId}`, snapshotData);
+        await flowStore.put(
+          `${FLOW_KEY_PREFIX}${flowId}`,
+          flowSnapshotForPersistence(snapshotData),
+        );
       }
 
       await flowSpan.withContext(async () => {
@@ -901,11 +940,15 @@ async function executeFlow<
         attributes: { flowId, suspendPoint: error.suspendPoint },
       });
       await observe.flush();
-      return { status: "suspended", flowId, suspendedAt: error.suspendPoint };
+      return finalizeFlowResult(suspendedResult, resultOperation);
     }
 
     // Handle cancellation
     if (error instanceof FlowCancelledError) {
+      const cancelledResult = cancelledFlowResultPayload<T>(
+        flowId,
+        error.reason,
+      );
       if (runtimeExecution) {
         runtimeExecution.fingerprint.complete();
         runtimeExecution.outcome = {
@@ -919,11 +962,6 @@ async function executeFlow<
           }),
           scheduledWork: runtimeExecution.scheduledWork,
         };
-        runtimeExecution.result = {
-          status: "cancelled",
-          flowId,
-          cancelReason: error.reason,
-        };
         flowSpan.end({
           status: "cancelled",
           attributes: {
@@ -932,7 +970,7 @@ async function executeFlow<
           },
         });
         flowRun.end({ status: "cancelled" });
-        return runtimeExecution.result as FlowResult<T>;
+        return finalizeFlowResult(cancelledResult, resultOperation);
       }
 
       const flowStore = store ?? getHooks().records;
@@ -968,8 +1006,10 @@ async function executeFlow<
             ? { input: flowInput as unknown as JsonValue }
             : {}),
         };
-        assertFlowSnapshotMetadata(snapshotData);
-        await flowStore.put(`${FLOW_KEY_PREFIX}${flowId}`, snapshotData);
+        await flowStore.put(
+          `${FLOW_KEY_PREFIX}${flowId}`,
+          flowSnapshotForPersistence(snapshotData),
+        );
       }
 
       flowSpan.end({
@@ -980,12 +1020,28 @@ async function executeFlow<
         },
       });
       flowRun.end({ status: "cancelled" });
-      return { status: "cancelled", flowId, cancelReason: error.reason };
+      return finalizeFlowResult(cancelledResult, resultOperation);
     }
 
     // Handle expiration
     if (error instanceof FlowExpiredError) {
-      const flowStore = store ?? getHooks().records;
+      if (runtimeExecution) {
+        runtimeExecution.fingerprint.complete();
+        runtimeExecution.outcome = {
+          status: "completed",
+          flowSnapshot: runtimeFlowSnapshot(runtimeExecution, {
+            status: "expired",
+            input: flowInput,
+            completedSteps,
+            continuation: flowRun.captureContinuation(),
+            scheduledWork: runtimeExecution.snapshot.scheduledWork,
+          }),
+          scheduledWork: runtimeExecution.scheduledWork,
+        };
+      }
+      const flowStore = runtimeExecution
+        ? undefined
+        : (store ?? getHooks().records);
       if (flowStore) {
         const expiredAt = currentTimeMs();
         const deliveredSignalsSnapshot =
@@ -1000,8 +1056,10 @@ async function executeFlow<
           expiredAt,
           updatedAt: expiredAt,
         } as FlowSnapshot;
-        assertFlowSnapshotMetadata(snapshotData);
-        await flowStore.put(`${FLOW_KEY_PREFIX}${flowId}`, snapshotData);
+        await flowStore.put(
+          `${FLOW_KEY_PREFIX}${flowId}`,
+          flowSnapshotForPersistence(snapshotData),
+        );
       }
 
       flowSpan.error(error, {
@@ -1010,7 +1068,10 @@ async function executeFlow<
         totalSteps: stepCount,
       });
       flowRun.error(error);
-      return { status: "expired", flowId, suspendedAt: error.suspendPoint };
+      return finalizeFlowResult(
+        expiredFlowResultPayload<T>(flowId, error.suspendPoint),
+        resultOperation,
+      );
     }
 
     // Signal validation is a recoverable delivery failure: the persisted flow
@@ -1023,8 +1084,10 @@ async function executeFlow<
           continuation: flowRun.captureContinuation(),
           updatedAt: currentTimeMs(),
         };
-        assertFlowSnapshotMetadata(retryableSnapshot);
-        await flowStore.put(`${FLOW_KEY_PREFIX}${flowId}`, retryableSnapshot);
+        await flowStore.put(
+          `${FLOW_KEY_PREFIX}${flowId}`,
+          flowSnapshotForPersistence(retryableSnapshot),
+        );
       }
       flowSpan.error(error, { flowStatus: "suspended", totalSteps: stepCount });
       flowRun.suspend({
@@ -1051,8 +1114,10 @@ async function executeFlow<
           continuation: flowRun.captureContinuation(),
           updatedAt: currentTimeMs(),
         };
-        assertFlowSnapshotMetadata(retryableSnapshot);
-        await flowStore.put(`${FLOW_KEY_PREFIX}${flowId}`, retryableSnapshot);
+        await flowStore.put(
+          `${FLOW_KEY_PREFIX}${flowId}`,
+          flowSnapshotForPersistence(retryableSnapshot),
+        );
       }
       flowSpan.error(error, { totalSteps: stepCount });
       flowRun.suspend({ reason: "flow.error", attributes: { flowId } });
@@ -1279,7 +1344,11 @@ export function flow(
         scheduledWork: [],
       };
       try {
-        await executeFlow<unknown, unknown, FlowSignalMap | undefined>(
+        const result = await executeFlow<
+          unknown,
+          unknown,
+          FlowSignalMap | undefined
+        >(
           name,
           executeHandler,
           {
@@ -1289,7 +1358,7 @@ export function flow(
             signals: definitionOptions?.signals,
           },
         );
-        runtimeRef.result = runtimeExecution.result;
+        runtimeRef.flowResult = result;
         return runtimeExecution.outcome ?? { status: "completed" };
       } catch (error) {
         runtimeRef.error = error;
@@ -1397,6 +1466,14 @@ export function flow(
           flowId,
         });
       }
+      if (snapshot.status !== "suspended") {
+        throw runtimeFlowNotResumableError({
+          api: `${name}.resume()`,
+          flowId,
+          status: snapshot.status,
+          subject: "flow snapshot",
+        });
+      }
       const idempotencyKey = flowManualResumeKey(
         snapshot.workId,
         runtime.now(),
@@ -1405,7 +1482,7 @@ export function flow(
         current.status === "suspended"
           ? await runtime.store.state.setWorkPending(snapshot.workId, {
               namespace: runtime.namespace,
-              work: { kind: "flow.resume", flowId: snapshot.flowId },
+              work: runtimeResumeWork(snapshot, runtime.now()),
               idempotencyKey,
               now: runtime.now(),
             })
@@ -1436,10 +1513,13 @@ export function flow(
     options?: FlowSignalOptions,
   ): Promise<void> {
     await withRuntime(async (runtime) => {
+      const persistedPayload = flowValueForPersistence(payload, {
+        boundary: "signal payload",
+      });
       await runtime.kernel.emitEvent({
         namespace: runtime.namespace,
         name: runtimeSignalEventName(flowId, signalName),
-        payload,
+        payload: persistedPayload,
         eventId: runtimeSignalEventId(flowId, signalName),
       });
       if (options?.resume !== false) {
@@ -1453,7 +1533,7 @@ export function flow(
     flowId: string,
   ): FlowResult<unknown> {
     if (runtimeRef.error) throw runtimeRef.error;
-    if (runtimeRef.result) return runtimeRef.result as FlowResult<unknown>;
+    if (runtimeRef.flowResult) return runtimeRef.flowResult;
     throw new Error(
       `Runtime flow \`${flowId}\` did not produce an inline result.`,
     );

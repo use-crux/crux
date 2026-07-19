@@ -11,6 +11,7 @@ import type { CompactionResult } from '../generation/messages'
 import type { SummarizeConfig } from './types'
 import { countTokens } from '../shared/tokenizer'
 import { observe } from '../observability'
+import { withOperationResultMeta } from '../observability/internal/result-meta'
 import { messageText } from '../content'
 import type { ContentPart } from '../types/content'
 import type { Message } from '../generation/messages'
@@ -46,7 +47,10 @@ export async function summarizeMessages(config: SummarizeConfig): Promise<Compac
   try {
     const result = await span.withContext(async () => {
       if (messages.length === 0) {
-        const empty = { summary: '', tokensBefore: 0, tokensAfter: 0, ratio: 1 }
+        const empty = withOperationResultMeta(
+          { summary: '', tokensBefore: 0, tokensAfter: 0, ratio: 1 },
+          { traceId: span.traceId, spanId: span.spanId },
+        )
         emitSummaryArtifact(span.spanId, empty, { model, maxTokens, focus, messageCount: 0 })
         return empty
       }
@@ -74,12 +78,15 @@ export async function summarizeMessages(config: SummarizeConfig): Promise<Compac
 
       const tokensAfter = countTokens(text)
 
-      const summary = {
-        summary: text,
-        tokensBefore,
-        tokensAfter,
-        ratio: tokensBefore > 0 ? tokensAfter / tokensBefore : 1,
-      }
+      const summary = withOperationResultMeta(
+        {
+          summary: text,
+          tokensBefore,
+          tokensAfter,
+          ratio: tokensBefore > 0 ? tokensAfter / tokensBefore : 1,
+        },
+        { traceId: span.traceId, spanId: span.spanId },
+      )
       emitSummaryArtifact(span.spanId, summary, { model, maxTokens, focus, messageCount: messages.length })
       return summary
     })

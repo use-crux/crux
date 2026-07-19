@@ -4,6 +4,9 @@ import { prompt as makePrompt } from '../../src/prompt/prompt'
 import { agent as makeAgent } from '../../src/agent/agent'
 import { createPipeline } from '../../src/agent/pipeline'
 import { createFakeAgentExecutor } from '../../src/agent/fakes'
+import { registerPipelineResultCorrelationCases } from './pipeline-result-correlation.cases'
+
+registerPipelineResultCorrelationCases()
 
 // ── Test prompts + agents ───────────────────────────────────────
 

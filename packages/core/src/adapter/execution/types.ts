@@ -13,6 +13,7 @@ export type {
   AdapterExecutionGenerateArgs,
   AdapterExecutionGenerateResult,
   AdapterExecutionGenerateResultWithoutRunId,
+  ObservedAdapterExecutionGenerateResult,
   AdapterExecutionStreamArgs,
   AdapterExecutionStreamResult,
   ExecutionResolveOpts,

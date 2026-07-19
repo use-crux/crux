@@ -1,7 +1,11 @@
 import { evaluate } from "@use-crux/core/eval";
 import { attachEvalTaskDescriptorForInternalUse } from "@use-crux/core/eval/internal/task";
 import type { EvalRequiredHostCapability } from "@use-crux/core/eval/internal/task";
-import { createCruxRunId } from "@use-crux/core/observability";
+import {
+  createCruxRunId,
+  createCruxSpanId,
+  createCruxTraceId,
+} from "@use-crux/core/observability";
 import {
   createDeployedEvalRegistry,
   fingerprintDeployedEvalCase,
@@ -36,6 +40,10 @@ export function fixtureRegistry(
       projectOutput: (result) => result.output,
       projectResponse: () => ({
         runId: createCruxRunId(),
+        _meta: {
+          traceId: createCruxTraceId(),
+          spanId: createCruxSpanId(),
+        },
         content: [],
         text: "",
         steps: [],

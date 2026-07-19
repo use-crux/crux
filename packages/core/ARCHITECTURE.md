@@ -175,10 +175,12 @@ compatibility shims, while every implementation lives in a domain folder.
 │   ├── plugin.ts / merge-runtime.ts   CruxPlugin, applyPlugins(), mergeHooks() layered composition
 │   ├── middleware.ts / instrumentation-hooks.ts   per-call hook function types + the graph-record subscribers contract
 │   ├── execution-context.ts   session/execution context helpers
+│   ├── internal/middleware-result-finalizer.ts   Private symbol-carried current-operation result finalizer for layered middleware
 │   └── types.ts        Runtime middleware contracts (PromptMiddleware, PromptMiddlewareArgs, MiddlewareResult)
 ├── generation/         Provider-neutral generation lifecycle policy
 │   ├── index.ts        Curated barrel: messages, fallback, retry, validation-retry, JSON repair + @internal orchestration
 │   ├── orchestrate.ts  Shared adapter orchestration (generic OrchestrationSpec<T>) split across observability/result-meta/timeout/stream-interception concern files
+│   ├── stream-observability.ts  Private descriptor-safe stream observation wrapper preserving one immediate/completion operation pair
 │   ├── fallback.ts / retry.ts / validation-retry.ts   fallback policy, retry-with-backoff, validation-feedback retry types
 │   ├── repair-json.ts  repairJsonText() — zero-cost JSON text repair (markdown fences, trailing commas, bracket extraction)
 │   ├── messages.ts     canonical Message type + helpers
@@ -215,6 +217,8 @@ compatibility shims, while every implementation lives in a domain folder.
 │   ├── turn-decision-report/  Per-turn TurnDecisionReport explanation read model (report/items/evidence/source-coverage/targets/shared), barrelled by turn-decision-report.ts
 │   ├── schema.ts       Zod schemas for graph records and batches
 │   ├── ids.ts          Runtime-owned public graph ID helpers
+│   ├── result-meta.ts  Public operation-result metadata types and run-reference contract
+│   ├── internal/result-meta.ts  Private descriptor-preserving result finalization and persistence stripping
 │   ├── observe.ts      Non-blocking runtime emitters with a zero-listener fast path, manual/open run lifecycles for serverless resumes, AsyncLocalStorage context propagation with synchronous no-ALS degradation, flush/shutdown
 │   ├── context.ts      AsyncLocalStorage acquisition, synchronous fallback context frames, and the internal no-ALS test hook
 │   ├── delivery/       Functional delivery engine, option normalization, batching/chunking, retry timers, lifecycle hooks, and flush timeouts
@@ -268,7 +272,8 @@ compatibility shims, while every implementation lives in a domain folder.
 ├── indexing/
 │   └── index.ts        indexer() + corpus() + indexingPipeline() — document transforms, structured/parent-child/semantic chunkers, stage cache, generation-aware promotion, source ledger sync, dry runs, and store writes
 ├── cost/
-│   └── index.ts        withCostTracking(), modelPricing(), CostLimitError — per-call cost attribution and canonical budget spans
+│   ├── index.ts        withCostTracking(), modelPricing(), CostLimitError — per-call cost attribution and canonical budget spans
+│   └── internal/stream-completion.ts  Private legacy/current stream-completion capability detection for cost tracking
 ├── memory/
 │   ├── index.ts        Barrel: memory(), memoryBlock(), recentMessages(), workingState(), episodes(), facts(), procedures(), reflections()
 │   ├── block-system.ts Block memory implementation
@@ -289,6 +294,7 @@ compatibility shims, while every implementation lives in a domain folder.
 │   └── index.ts        Barrel: canonical @use-crux/core/tasks import (re-exports task APIs and types, incl. TaskCompleteArgs, from plan/)
 ├── compaction/
 │   ├── types.ts        GenerateTextFn, GenerateObjectFn (SDK-agnostic)
+│   ├── compact-conversation.ts  Core-owned observed conversation compaction; Convex name-identically re-exports it
 │   ├── summarize.ts    summarizeMessages() — stateless batch LLM summarization
 │   ├── sliding-window.ts  createSlidingWindow() — rolling window with auto-eviction
 │   ├── budget.ts       createBudgetManager() — advisory pressure tracking
@@ -300,6 +306,7 @@ compatibility shims, while every implementation lives in a domain folder.
 │   └── types.ts        JudgeConfig, JudgeResult, JudgeInstance, JudgeScoreOptions
 ├── flow/
 │   ├── index.ts        Barrel — flow, signalFlow, cancelFlow, listFlows, createFlowId
+│   ├── result.ts       Private FlowResult construction, current-operation finalization, and persisted-result sanitization
 │   └── scope.ts        flow(name, handler), FlowHandle<T, TInput>, FlowRunOptions, FlowResumeOptions, FlowScope<TInput> — input inferred from the handler's second parameter, flow.input restored for scope-aware helpers, flow.results (auto-populated Record<string, unknown>), auto-pass (step fns accepting FlowScope receive it automatically), suspend/resume/cancel — throw-to-unwind pattern with RecordStore persistence
 ├── agent/
 │   ├── index.ts        Barrel: agent, AnyAgent, InferAgentInput, InferAgentOutput, composition utilities, blackboard, handoff, delegate
@@ -353,6 +360,9 @@ compatibility shims, while every implementation lives in a domain folder.
     ├── provider-runtime/   defineSingleTurnProviderBundle() and defineProviderRuntime() — public provider authoring compilers
     ├── spec.ts             AdapterSpec — provider contract for SDKs WITHOUT a tool loop (core drives)
     ├── types.ts            Canonical adapter types: AdapterResponse, CallArgs, StreamHandle, ToolResultEntry
+    ├── completed-operation/runner-types.ts  Provider payload versus observed completed-media result contracts
+    ├── executor-stream-types.ts  SDK-loop provider/public stream-handle type split
+    ├── stream-result-types.ts  Public stream result and completion projections
     ├── codec.ts            ResolvedPrompt → CallArgs helper for public adapter codec wrappers
     ├── call-handle.ts      Public CallHandle plus incomplete/stale handle errors
     ├── define-adapter.ts   adapter() factory — thin AdapterSpec wiring to the execution session, plus adapter-bound compositions
@@ -368,6 +378,7 @@ compatibility shims, while every implementation lives in a domain folder.
     │   ├── generate-core.ts / stream-core.ts   Crux-owned one-step provider loop
     │   ├── handle-core.ts   Manual pause/resume shell over generate-core for prepare/step/finish
     │   ├── generate-sdk.ts / stream-sdk.ts     SDK-owned loop boundary, timeout and replay wiring
+    │   ├── stream-legacy-completion.ts   Private compatibility bridge for legacy raw stream completion metadata
     │   └── shared helpers  Prompt resolution, message shaping, metadata/cache replay, stream safety, and structured retry helpers
     ├── testing.ts          Testing barrel: providerRuntimeConformance(), adapterSpecConformance(), transcriptCodecConformance(), fakeLoopRuntime(), loopRuntimePortConformance()
     ├── testing/
@@ -1698,9 +1709,11 @@ result = {
 
 `createCruxConvex({ components, storage })` is the request-scoped Convex runtime profile boundary. It owns the default component-backed storage resolver, optional `storage.create` override, namespace default, ctx/target runtime binding, profile-created Convex Agent wrappers, and HTTP bridge record reads. `crux.run(ctx, target, fn)`, `crux.convexAgent(config)`, and `crux.bridge(http, cruxConfig)` all normalize through the same storage resolver. The profile-backed Convex Agent facade keeps a Convex-Agent-compatible public shape while routing turn preparation through an internal lifecycle and `ConvexAgentDriver` port; only the production SDK adapter imports `@convex-dev/agent`, and boundary tests use a fake driver for request-scoped storage binding, prompt/use merging, tool adaptation, stream callbacks, persistence, and driver failures. Lower-level storage and transport helpers remain package-internal implementation details; application integrations should start from the profile or the Storage Beta factories. The store-doc module remains the document policy boundary for serialization, TTL cleanup, filters, and capability reporting.
 
-Also exports Convex-specific helpers:
-
-**`compactConversation(args)`** — Stateless conversation compaction for Convex's action-per-message model. Takes evicted messages + existing summary, returns a merged summary via `summarizeMessages()`. No internal state — the caller manages persistence (e.g., thread metadata). Emits `onCompactStart`/`onCompactEnd` instrumentation hooks.
+Conversation compaction is Core-owned in `compaction/compact-conversation.ts`.
+`@use-crux/convex` name-identically re-exports `compactConversation()` and its
+argument type for compatibility; it does not own a separate lifecycle or
+result finalizer. The operation takes evicted messages plus an existing summary
+and returns the outer `compaction.run` result while the caller owns persistence.
 
 ### Upstash (`upstash/`)
 
@@ -1797,6 +1810,8 @@ Eval run and Baseline records are versioned durable contracts. Reuse is automati
 prove exact task, input, Variant, trial, schema, and scorer identity. `--offline` performs no external
 work, `--fresh` bypasses reusable task and managed-scorer evidence, and incomplete runs never pass or
 become Baselines. The Go CLI reports plans and results but does not redefine those policies.
+Cell execution evidence stores ordered logical run IDs, while assertion outcomes
+store exact assertion span IDs; neither field is a substitute for W3C trace IDs.
 
 Production feedback uses the configured observability destination. `@use-crux/core/feedback` accepts
 the canonical run ID; `@use-crux/ai/feedback` extracts that identity from AI message metadata. Local

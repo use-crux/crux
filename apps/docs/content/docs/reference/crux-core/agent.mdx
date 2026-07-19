@@ -115,23 +115,26 @@ Throws `ConsensusError` when quorum is not met. The error has `.votes` and `.quo
 
 ### `AgentResult`
 
-| Field        | Type        | Description        |
-| ------------ | ----------- | ------------------ | ------------------------ |
-| `agentId`    | `string`    | Agent identifier   |
-| `output`     | `unknown`   | The agent's output |
-| `durationMs` | `number`    | Execution time     |
-| `usage`      | `TokenUsage | undefined`         | Token usage if available |
+| Field        | Type                       | Description                                      |
+| ------------ | -------------------------- | ------------------------------------------------ |
+| `agentId`    | `string`                   | Agent identifier                                 |
+| `output`     | `unknown`                  | The agent's output                               |
+| `durationMs` | `number`                   | Execution time                                   |
+| `usage`      | `TokenUsage \| undefined` | Token usage if available                         |
+| `_meta`      | `OperationResultMeta`      | Exact `agent.run` trace and span owned by Core   |
 
 ### `AgentExecutor`
 
 SDK-agnostic executor interface. Each adapter implements this to bridge agents to their SDK's `generate()`. Used by `createCompositions(executor)` to create pre-bound composition functions.
 
 ```ts
-type AgentExecutor = (
-  agent: Agent,
-  options: ExecuteOptions,
-) => Promise<AgentResult>;
+type AgentExecutor = (agent: Agent, options: ExecuteOptions) => Promise<AgentResultPayload>
 ```
+
+Executors are adapter/application ports and return ID-free payload facts. Core
+finalizes the public `AgentResult` at `agent.run`. Composition parent results
+point at their own `composition.*` spans while nested agent results retain
+their child spans. See [Operation Result Correlation](/docs/reference/crux-core/operation-results#media-and-higher-level-results).
 
 ### `createCompositions(executor)`
 

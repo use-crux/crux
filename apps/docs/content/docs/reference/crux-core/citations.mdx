@@ -145,6 +145,11 @@ if (!validation.valid) {
 }
 ```
 
+`CitationValidationResult._meta` identifies the exact synchronous
+`citation.check` span that produced the validation envelope. Retrieved hits,
+citations, and grounding payloads are not decorated individually. See
+[Operation Result Correlation](/docs/reference/crux-core/operation-results#media-and-higher-level-results).
+
 Use `citationConstraint()` when you already have hits and want manual wiring.
 
 ```ts

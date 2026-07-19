@@ -1,7 +1,7 @@
 import type { DataAsset } from '../asset/types'
 import { validateOperationExecution, validateOperationTimeout } from '../completed-operation/contracts'
-import type { CompletedOperationResult, OperationTimeout } from '../completed-operation/contracts'
-import type { GenerateSpeechResult } from './contracts'
+import type { CompletedOperationPayload, OperationTimeout } from '../completed-operation/contracts'
+import type { GenerateSpeechPayload } from './contracts'
 
 /** Validate portable speech controls before provider I/O. */
 export function validateGenerateSpeechOptions(options: Readonly<{
@@ -22,11 +22,14 @@ export function validateGenerateSpeechOptions(options: Readonly<{
   validateOperationTimeout(options.timeout)
 }
 
-/** Validate one successful native audio asset and construct the common result. */
+/**
+ * Validate one successful native audio asset and construct an ID-free payload.
+ * The shared media runner owns the eventual public operation metadata.
+ */
 export function createGenerateSpeechResult<TRaw, TMetadata = unknown, TWarning = unknown>(
   audio: DataAsset,
-  result: CompletedOperationResult<TRaw, TMetadata, TWarning>,
-): GenerateSpeechResult<TRaw, TMetadata, TWarning> {
+  result: CompletedOperationPayload<TRaw, TMetadata, TWarning>,
+): GenerateSpeechPayload<TRaw, TMetadata, TWarning> {
   if (!/^audio\/[a-z0-9.+-]+$/i.test(audio.mediaType)) throw new TypeError('Speech audio must use an audio MIME type.')
   if (audio.data instanceof Uint8Array && audio.data.byteLength === 0) throw new TypeError('Speech audio bytes must not be empty.')
   if (audio.data instanceof Blob && audio.data.size === 0) throw new TypeError('Speech audio blob must not be empty.')

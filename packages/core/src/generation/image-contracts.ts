@@ -1,9 +1,10 @@
 import type { z } from "zod";
 import type { Asset } from "../asset/types";
 import type {
-  CompletedOperationResult,
+  CompletedOperationPayload,
   OperationTimeout,
 } from "../completed-operation/contracts";
+import type { WithOperationResultMeta } from "../observability/result-meta";
 import type { ContextEntry } from "../prompt/context-types";
 import type { Prompt } from "../prompt/prompt-types";
 import type { MergedInput } from "../prompt/type-utils";
@@ -115,7 +116,7 @@ export type GenerateImageOptions<
   };
 
 /**
- * Result of one image operation.
+ * Provider-authored image facts before Core adds operation correlation.
  *
  * `images` is provider ordered and `image` is always its first retained asset.
  * Enforced output-media strips remove siblings immutably and reset `image` to
@@ -123,15 +124,27 @@ export type GenerateImageOptions<
  * `raw`, metadata, and warnings retain their original identities and remain
  * outside canonical Safety guarantees.
  */
-export type GenerateImageResult<
+export type GenerateImagePayload<
   TRaw = unknown,
   TProviderMetadata = unknown,
   TWarning = unknown,
-> = CompletedOperationResult<TRaw, TProviderMetadata, TWarning> &
+> = CompletedOperationPayload<TRaw, TProviderMetadata, TWarning> &
   Readonly<{
     images: readonly [Asset, ...Asset[]];
     image: Asset;
   }>;
+
+/**
+ * Public image result correlated to its exact media span.
+ * `image` is the first provider-ordered asset.
+ */
+export type GenerateImageResult<
+  TRaw = unknown,
+  TProviderMetadata = unknown,
+  TWarning = unknown,
+> = WithOperationResultMeta<
+  GenerateImagePayload<TRaw, TProviderMetadata, TWarning>
+>;
 
 /**
  * Flat image-generation function. Prompt input is inferred from a typed Crux prompt.

@@ -1,7 +1,7 @@
 import { validateOperationExecution, validateOperationTimeout } from '../completed-operation/contracts'
 import type { OperationExecution, OperationTimeout } from '../completed-operation/contracts'
 import type { Asset } from '../asset/types'
-import type { GenerateImageResult, ImagePrompt, NativeGeneratedImage } from './image-contracts'
+import type { GenerateImagePayload, ImagePrompt, NativeGeneratedImage } from './image-contracts'
 
 /** Tagged failure for a native success response that contains no usable image. */
 export type NoImageGeneratedError = Error & {
@@ -18,11 +18,16 @@ export interface GenerateImageResultFields<TRaw, TProviderMetadata = unknown, TW
   readonly execution: OperationExecution
 }
 
-/** Validate native bytes and create an ordered, immediately usable image result. */
+/**
+ * Validate native bytes and create an ID-free image payload.
+ *
+ * Provider definitions return this payload; the shared media runner adds the
+ * public operation metadata after validation.
+ */
 export function createGeneratedImageResult<TRaw, TProviderMetadata = unknown, TWarning = unknown>(
   nativeImages: readonly NativeGeneratedImage[],
   metadata: GenerateImageResultFields<TRaw, TProviderMetadata, TWarning>,
-): GenerateImageResult<TRaw, TProviderMetadata, TWarning> {
+): GenerateImagePayload<TRaw, TProviderMetadata, TWarning> {
   let nonEmpty: [Asset, ...Asset[]]
   try {
     if (nativeImages.length === 0) throw new Error('Native response contained no images.')

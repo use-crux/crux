@@ -23,9 +23,14 @@ import { assertProviderMediaSupported } from "../native-chat/media-hooks";
 import { withDefaultResolverPorts } from "../../resolver/ports";
 import type {
   ExecutorRequest,
+  ExecutorProviderStreamHandle,
+  ExecutorStreamCompletionPayload,
   ExecutorStreamHandle,
   ExecutorStreamMeta,
 } from "../executor-types";
+import { withOperationResultMeta } from "../../observability/internal/result-meta";
+import type { CruxRunId, WithOperationResultMeta } from "../../observability";
+import { stampCruxRunId } from "../../generation/run-id";
 import { createToolLifecycle } from "../tool/session";
 import type { AdapterExecutionStreamArgs, SdkLoopDialect } from "./types";
 import { initialMessageState } from "./messages";
@@ -38,11 +43,15 @@ import {
 import { emitInputTokenEstimate } from "./media-token-budget";
 import { materializeToolSources } from "./tool-sources";
 import { createStreamSourceCleanup } from "./stream-source-cleanup";
-import type { CruxRunId } from "../../observability";
 import {
   guardStreamCompletion,
   trackSafetyStreamSeal,
 } from "./stream-completion";
+import {
+  lazyCompletionPromise,
+  operationMetaWithLegacyCompletion,
+  replaceLegacyStreamCompletion,
+} from "./stream-legacy-completion";
 
 /**
  * Start one SDK-owned stream for a concrete model attempt.
@@ -201,14 +210,14 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     ...(resolved.schema ? { schema: resolved.schema } : {}),
   };
 
-  let handle: ExecutorStreamHandle<TRawStream> & {
-    readonly runId: CruxRunId;
-  };
+  let handle: WithOperationResultMeta<
+    ExecutorProviderStreamHandle<TRawStream>
+  > & { readonly runId: CruxRunId };
   try {
     handle = await sourceSession.withContext(async () =>
       orchestrateStream<
         Record<string, unknown>,
-        ExecutorStreamHandle<TRawStream>
+        ExecutorProviderStreamHandle<TRawStream>
       >(
         {
           promptId: prompt.id,
@@ -283,12 +292,41 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
         assistantText: guarded?.text,
         toolCalls: guarded?.toolCalls,
       });
-      return guarded;
+      return guarded
+        ? stampCruxRunId(
+            withOperationResultMeta(
+              guarded as ExecutorStreamCompletionPayload,
+              handle._meta,
+            ),
+            handle.runId,
+          )
+        : undefined;
     } finally {
       stepBudget.dispose();
       await closeSources();
     }
   };
 
-  return { ...handle, completion: wrappedCompletion };
+  let completion: Promise<ExecutorStreamMeta | undefined> | undefined;
+  const getCompletion = (): Promise<ExecutorStreamMeta | undefined> => {
+    if (completion) return completion;
+    completion = wrappedCompletion();
+    void completion.catch(() => undefined);
+    return completion;
+  };
+  const legacyCompletion = lazyCompletionPromise(getCompletion);
+  const hasLegacyCompletion = replaceLegacyStreamCompletion(
+    handle.raw,
+    legacyCompletion,
+  );
+  const publicMeta = hasLegacyCompletion
+    ? operationMetaWithLegacyCompletion(handle._meta, legacyCompletion)
+    : handle._meta;
+  return {
+    runId: handle.runId,
+    raw: handle.raw,
+    ...(handle.routing !== undefined ? { routing: handle.routing } : {}),
+    _meta: publicMeta,
+    completion: getCompletion,
+  };
 }

@@ -8,7 +8,7 @@
  * @module
  */
 
-import type { TraceMeta } from "../../generation/types";
+import type { GenerationMeta } from "../../generation/types";
 import type { Message } from "../../generation/messages";
 import type { AdapterResponse } from "../types";
 import { responseContent } from "../assistant-output";
@@ -60,7 +60,7 @@ export function finalizeSdkResultEnvelope<TRawResponse>(args: {
   readonly response: AdapterResponse;
   readonly text: string;
   readonly object?: unknown;
-  readonly _meta: TraceMeta;
+  readonly _meta: GenerationMeta;
   readonly messages: Message[];
   readonly pendingApprovals?: readonly ApprovalRequestInfo[];
   readonly stepFacts?: readonly ResultStepFacts[];

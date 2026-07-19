@@ -346,6 +346,12 @@ const generateObj = createGenerateObjectFnFromGenerate(generate, {
   client and model upfront.
 </Callout>
 
+Managed generation results are finalized before `hooks.onGenerate` runs. The
+hook and public caller therefore see the same exact `generation.call`
+`_meta.traceId`/`_meta.spanId`; provider `_meta.responseId` remains separate.
+Streaming exposes its operation pair immediately and repeats it on completion.
+See [Operation Result Correlation](/docs/reference/crux-core/operation-results).
+
 ## Next steps
 
 <Cards>

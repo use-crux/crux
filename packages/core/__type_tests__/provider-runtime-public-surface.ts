@@ -11,7 +11,7 @@ import type {
   CruxExecutor,
   ExecutorOutcome,
   ExecutorRequest,
-  ExecutorStreamHandle,
+  ExecutorProviderStreamHandle,
   NativeProviderPort,
   LoopOwnedRuntimeContract,
   ProviderRuntimeConformanceHarness,
@@ -165,7 +165,7 @@ declare const loopClient: LoopClient
 declare const loopModel: LoopModel
 declare const loopOutcome: ExecutorOutcome<LoopRawResponse>
 declare const loopStructured: StructuredAttempt<LoopRawResponse>
-declare const loopStream: ExecutorStreamHandle<LoopRawStream>
+declare const loopStream: ExecutorProviderStreamHandle<LoopRawStream>
 
 const loopContract = {
   describeModel(model: LoopModel): ModelInfo {

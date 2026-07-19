@@ -5,6 +5,7 @@ import { agent as makeAgent } from '../../src/agent/agent'
 import { createSwarm } from '../../src/agent/swarm'
 import { createFakeAgentExecutor } from '../../src/agent/fakes'
 import type { FakeAgentBehavior } from '../../src/agent/fakes'
+import './swarm-result-correlation.cases'
 
 // ── Test helpers ──────────────────────────────────────────────────
 

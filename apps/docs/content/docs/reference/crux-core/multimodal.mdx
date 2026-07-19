@@ -115,6 +115,12 @@ Malformed media throws `InvalidMediaSourceError`. Valid media that the selected 
 
 `generateImage()`, `transcribe()`, and `generateSpeech()` are separate bounded operations for callers that require a guaranteed image, transcript, or audio result. They share cancellation, timeout, warning, execution, provider-metadata, and raw-result conventions, but they are not a universal executor and do not stream or persist.
 
+Each successful result carries `_meta.traceId` and `_meta.spanId` for its exact
+outer `media.generate_image`, `media.transcribe`, or `media.generate_speech`
+operation. A composed child generation shares the trace but owns a different
+span. Provider validators construct ID-free payloads, and `raw` is never
+rewritten. See [Operation Result Correlation](/docs/reference/crux-core/operation-results#media-and-higher-level-results).
+
 Adapters omit unsupported operations structurally. Portable options are validated before I/O; provider-native options belong in the operation's typed `extra` record. Returned media is immediately usable and may be persisted explicitly with `assetStore.put(asset)`.
 
 Completed operations accept boundary-targeted Safety directly. Image and speech

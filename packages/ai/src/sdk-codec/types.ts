@@ -3,8 +3,8 @@ import type { z } from "zod";
 import type { GenerationSettings, ModelInfo } from "@use-crux/core";
 import type {
   ExecutorOutcome,
+  ExecutorProviderStreamHandle,
   ExecutorRequest,
-  ExecutorStreamHandle,
   StructuredAttempt,
   StructuredRequest,
 } from "@use-crux/core/adapter";
@@ -59,7 +59,7 @@ export interface AiSdkCodec {
   /** Recreate an SDK-shaped stream handle from a cached result. */
   replayStream(
     cached: CachedStreamPayload,
-  ): ExecutorStreamHandle<SdkStreamResultLike>;
+  ): ExecutorProviderStreamHandle<SdkStreamResultLike>;
 }
 
 /**
@@ -106,14 +106,14 @@ export type AiSdkStreamPlan =
       readonly args: Parameters<SdkGateway["streamText"]>[0];
       attach(
         raw: ReturnType<SdkGateway["streamText"]>,
-      ): ExecutorStreamHandle<SdkStreamResultLike>;
+      ): ExecutorProviderStreamHandle<SdkStreamResultLike>;
     }
   | {
       readonly method: "streamObject";
       readonly args: Parameters<SdkGateway["streamObject"]>[0];
       attach(
         raw: ReturnType<SdkGateway["streamObject"]>,
-      ): ExecutorStreamHandle<SdkStreamResultLike>;
+      ): ExecutorProviderStreamHandle<SdkStreamResultLike>;
     };
 
 /** Optional dependencies for deterministic codec tests. */

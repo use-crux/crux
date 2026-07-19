@@ -1,4 +1,4 @@
-import type { CompletedOperationResult } from "../../../completed-operation/contracts";
+import type { CompletedOperationProviderPayload } from "../../../completed-operation/contracts";
 import {
   createSafetyWithBindingApplicability,
   type Safety,
@@ -74,7 +74,7 @@ export async function guardCompletedOperationInput<TInput>(
 
 /** Apply the Core-owned output projection for one completed operation. */
 export async function guardCompletedOperationOutput<
-  TResult extends CompletedOperationResult,
+  TResult extends CompletedOperationProviderPayload,
 >(
   operation: string,
   result: TResult,
@@ -91,7 +91,7 @@ export async function guardCompletedOperationOutput<
   );
 }
 
-async function guardKnownOutput<TResult extends CompletedOperationResult>(
+async function guardKnownOutput<TResult extends CompletedOperationProviderPayload>(
   operation: SafetyCompletedOperation,
   result: TResult,
   safety: Safety,

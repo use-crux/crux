@@ -4,6 +4,7 @@ import { prompt as makePrompt } from '../../src/prompt/prompt'
 import { agent as makeAgent } from '../../src/agent/agent'
 import { createConsensus } from '../../src/agent/consensus'
 import { createFakeAgentExecutor } from '../../src/agent/fakes'
+import './consensus-result-correlation.cases'
 
 const classifyPrompt = makePrompt({
   id: 'classify',

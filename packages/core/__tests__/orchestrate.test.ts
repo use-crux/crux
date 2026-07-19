@@ -484,7 +484,7 @@ describe('orchestrateGenerate', () => {
 // ─────────────────────────────────────────────────────────────────
 
 describe('orchestrateStream', () => {
-  it('calls doStream directly when no middleware is set', async () => {
+  it('calls doStream and finalizes its handle when no middleware is set', async () => {
     const stream = mockStream([{ text: 'hi' }])
     const doStream = vi.fn().mockResolvedValue(stream)
 
@@ -498,7 +498,12 @@ describe('orchestrateStream', () => {
     )
 
     expect(doStream).toHaveBeenCalled()
-    expect(result).toBe(stream)
+    expect(result).not.toBe(stream)
+    expect(result[Symbol.asyncIterator]).toBe(stream[Symbol.asyncIterator])
+    expect(result._meta).toEqual({
+      traceId: expect.any(String),
+      spanId: expect.any(String),
+    })
   })
 
     it('fires onError hook on failure and re-throws', async () => {

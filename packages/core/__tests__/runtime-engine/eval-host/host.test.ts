@@ -135,7 +135,7 @@ describe("memory Eval host", () => {
         location: expect.stringMatching(/^memory:/),
       },
       result: {
-        schemaVersion: 1,
+        schemaVersion: 2,
         protocol: CRUX_EVAL_HOST_PROTOCOL,
         jobId: body.jobId,
         evalRunId: body.evalRunId,

@@ -1,8 +1,8 @@
 import {
   validateOperationTimeout,
-  type CompletedOperationResult,
-  type OperationTimeout,
+  type CompletedOperationProviderPayload,
 } from "../../completed-operation/contracts";
+import { withOperationResultMeta } from "../../observability/internal/result-meta";
 import {
   composeAbortSignals,
   createBudgetSignal,
@@ -12,10 +12,6 @@ import type {
   CompletedOperationDefinition,
   CompletedOperationContext,
 } from "./definition";
-import type {
-  CompletedOperationModelGuard,
-  RoutingCallOptions,
-} from "../../routing/types";
 import { resolveCompletedModel, type CompletedRoutingState } from "./routing";
 import { safeCompletedOperationReport } from "./report";
 import {
@@ -30,43 +26,11 @@ import {
   type CompletedMediaObservation,
 } from "./observability-graph";
 import { guardCompletedOperationOutput } from "./safety/execute";
-import type { CompletedOperationSafetyOptions } from "./safety/options";
 import { prepareCompletedOperationCandidates } from "./safety/candidate";
-
-/** Options owned by the shared bounded-media lifecycle. */
-export type RunCompletedMediaOperationOptions<
-  TModel,
-  TInput,
-  TNormalized,
-  TNative,
-  TResult extends CompletedOperationResult,
-  TReport,
-  TSelectedModel = TModel,
-> = Readonly<{
-  readonly definition: CompletedOperationDefinition<
-    TModel,
-    TInput,
-    TNormalized,
-    TNative,
-    TResult,
-    TReport
-  >;
-  readonly provider: string;
-  readonly operation: string;
-  readonly model: TSelectedModel;
-  readonly input: TInput;
-  readonly abortSignal?: AbortSignal;
-  readonly timeout?: OperationTimeout;
-  /** Context consumed by router/split callbacks. */
-  readonly routing?: object;
-  /** Optional top-level route override. */
-  readonly route?: string;
-  /** Internal descriptor sink. Reports must contain safe facts only. */
-  readonly onReport?: (report: unknown) => void;
-}> &
-  CompletedOperationSafetyOptions &
-  CompletedOperationModelGuard<TModel, TSelectedModel> &
-  RoutingCallOptions<TSelectedModel>;
+import type {
+  CompletedMediaOperationResult,
+  RunCompletedMediaOperationOptions,
+} from "./runner-types";
 
 /**
  * Run a bounded media operation through one provider-neutral lifecycle.
@@ -80,6 +44,8 @@ export type RunCompletedMediaOperationOptions<
  * `generateSpeech`, `describe`), the lifecycle emits one media span, safe
  * input/output/`media.report` artifacts, `derived.from` lineage, and nested
  * child spans for composed primitives such as `generation.call`.
+ * Provider validation remains ID-free. The exact media pair is attached only
+ * after payload finalization and is visible to success reporting and callers.
  *
  * @example
  * ```ts
@@ -99,9 +65,10 @@ export async function runCompletedMediaOperation<
   TInput,
   TNormalized,
   TNative,
-  TResult extends CompletedOperationResult,
+  TResult extends CompletedOperationProviderPayload,
   TReport = unknown,
   TSelectedModel = TModel,
+  const TOperation extends string = string,
 >(
   options: RunCompletedMediaOperationOptions<
     TModel,
@@ -110,9 +77,10 @@ export async function runCompletedMediaOperation<
     TNative,
     TResult,
     TReport,
-    TSelectedModel
+    TSelectedModel,
+    TOperation
   >,
-): Promise<TResult> {
+): Promise<CompletedMediaOperationResult<TOperation, TResult>> {
   validateOperationTimeout(options.timeout);
   throwIfAborted(options.abortSignal);
   const totalBudget = createBudgetSignal({
@@ -142,9 +110,10 @@ async function runWithObservation<
   TInput,
   TNormalized,
   TNative,
-  TResult extends CompletedOperationResult,
+  TResult extends CompletedOperationProviderPayload,
   TReport,
   TSelectedModel,
+  TOperation extends string,
 >(
   options: RunCompletedMediaOperationOptions<
     TModel,
@@ -153,12 +122,15 @@ async function runWithObservation<
     TNative,
     TResult,
     TReport,
-    TSelectedModel
+    TSelectedModel,
+    TOperation
   >,
   signal: AbortSignal,
   observation: CompletedMediaObservation | undefined,
-): Promise<TResult> {
-  const execute = async (): Promise<TResult> => {
+): Promise<CompletedMediaOperationResult<TOperation, TResult>> {
+  const execute = async (): Promise<
+    CompletedMediaOperationResult<TOperation, TResult>
+  > => {
     const state: CompletedRoutingState = { calls: 0 };
     const inputPreview = safeMediaInputPreview(options.input);
     try {
@@ -201,10 +173,10 @@ async function runWithObservation<
           return options.definition.validate(native, normalized, context);
         },
       );
-      const finalized = finalizeCompletedResult(result, state.calls);
+      const payload = finalizeCompletedResult(result, state.calls);
       const guarded = await guardCompletedOperationOutput(
         options.operation,
-        finalized,
+        payload,
         safety,
         state.selectedModel,
       );
@@ -215,14 +187,22 @@ async function runWithObservation<
         options,
         state.selectedModel,
       );
-      const report = emitReport(options, guarded, selected);
-      observation?.succeed(
-        guarded,
+      if (!observation) {
+        emitReport(options, guarded, selected);
+        return guarded as CompletedMediaOperationResult<TOperation, TResult>;
+      }
+      const finalized = withOperationResultMeta(guarded, {
+        traceId: observation.traceId,
+        spanId: observation.spanId,
+      });
+      const report = emitReport(options, finalized as TResult, selected);
+      observation.succeed(
+        finalized,
         report,
         inputPreview,
         safeMediaOutputPreview(guarded),
       );
-      return guarded;
+      return finalized as CompletedMediaOperationResult<TOperation, TResult>;
     } catch (error) {
       observation?.fail(error, inputPreview);
       throw error;
@@ -237,7 +217,7 @@ function emitReport<
   TInput,
   TNormalized,
   TNative,
-  TResult extends CompletedOperationResult,
+  TResult extends CompletedOperationProviderPayload,
   TReport,
 >(
   options: Readonly<{

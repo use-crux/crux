@@ -39,6 +39,7 @@ import type {
   AdapterExecutionGenerateArgs,
   AdapterExecutionGenerateResult,
   AdapterExecutionGenerateResultWithoutRunId,
+  ObservedAdapterExecutionGenerateResult,
   SdkLoopDialect,
 } from "./types";
 import type { ResultStepFacts } from "../result-accumulator";
@@ -80,7 +81,7 @@ const unreachableRegenerate = (): Promise<never> => {
 export async function generateSdk<TModel, TRawResponse, TRawStream>(
   dialect: SdkLoopDialect<TModel, TRawResponse, TRawStream>,
   args: AdapterExecutionGenerateArgs<TModel, Record<string, unknown>>,
-): Promise<AdapterExecutionGenerateResult<TRawResponse>> {
+): Promise<ObservedAdapterExecutionGenerateResult<TRawResponse>> {
   const prompt = args.prompt;
   const modelInfo = dialect.describeModel(args.model);
   const resolveOpts = buildResolveOpts({

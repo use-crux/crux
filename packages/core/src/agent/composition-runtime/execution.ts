@@ -1,9 +1,10 @@
 import { isAgent } from '../agent'
-import type { AgentResult } from '../executor'
+import type { AgentResult, AgentResultPayload } from '../executor'
 import { executeWithRetry } from '../../generation/retry'
 import { observe } from '../../observability'
 import type { DefinitionRef } from '../../observability'
 import { agentDefinitionRef } from '../../observability/definition-ref'
+import { withOperationResultMeta } from '../../observability/internal/result-meta'
 import { runWithExecutionContext } from '../../runtime/execution-context'
 import type { ExecutionContext } from '../../runtime/execution-context'
 import { runScope } from '../../scope/kernel'
@@ -16,6 +17,72 @@ import type {
 
 function agentIdFor(input: CompositionAgentExecution): string {
   return isAgent(input.agent) ? input.agent.id : input.label
+}
+
+interface ObservedAgentRun<TOutput> {
+  readonly compositionId: string
+  readonly label: string
+  readonly index: number
+  readonly agentId: string
+  readonly context: ExecutionContext
+  readonly attributes?: Readonly<Record<string, unknown>>
+  readonly definitionRefs?: readonly DefinitionRef[]
+  readonly triggeredBy?: CompositionAgentExecution['triggeredBy']
+  readonly sourceRef?: ReturnType<typeof promptScopeSourceRef>
+  readonly invoke: () => Promise<AgentResultPayload<TOutput>>
+}
+
+async function observeAgentRun<TOutput>(
+  input: ObservedAgentRun<TOutput>,
+): Promise<AgentResult<TOutput>> {
+  const agentSpan = observe.openSpan({
+    name: input.label,
+    primitive: 'agent.run',
+    attributes: {
+      compositionId: input.compositionId,
+      agentId: input.agentId,
+      stepLabel: input.label,
+      index: input.index,
+      ...input.attributes,
+    },
+    ...(input.definitionRefs && input.definitionRefs.length > 0
+      ? { definitionRefs: [...input.definitionRefs] }
+      : {}),
+  })
+
+  if (input.triggeredBy) {
+    observe.edge({
+      edgeType: 'triggered',
+      from: { kind: 'span', id: input.triggeredBy.spanId },
+      to: { kind: 'span', id: agentSpan.spanId },
+      attributes: input.triggeredBy.attributes,
+    })
+  }
+
+  try {
+    const payload = await agentSpan.withContext(() =>
+      runWithExecutionContext(input.context, () =>
+        runScope(
+          {
+            kind: 'agent-turn',
+            name: input.agentId,
+            ...(input.sourceRef ? { sourceRef: input.sourceRef } : {}),
+          },
+          {},
+          input.invoke,
+        ),
+      ),
+    )
+    const result = withOperationResultMeta(payload, {
+      traceId: agentSpan.traceId,
+      spanId: agentSpan.spanId,
+    })
+    agentSpan.end({ attributes: { agentId: result.agentId } })
+    return result
+  } catch (error) {
+    agentSpan.error(error)
+    throw error
+  }
 }
 
 /** Execute an agent or plain function under shared composition lifecycle handling. */
@@ -77,57 +144,26 @@ async function executeAgentRun<TOutput>(
     ...(isAgent(input.agent) ? [agentDefinitionRef(input.agent.id)] : []),
     ...(childDefinitionRef ? [childDefinitionRef] : []),
   ]
-  const agentSpan = observe.openSpan({
-    name: input.label,
-    primitive: 'agent.run',
-    attributes: {
-      compositionId,
-      agentId,
-      stepLabel: input.label,
-      index: input.index,
-      ...input.attributes,
-    },
-    ...(definitionRefs.length > 0 ? { definitionRefs } : {}),
+  return observeAgentRun({
+    compositionId,
+    label: input.label,
+    index: input.index,
+    agentId,
+    context: stepCtx,
+    attributes: input.attributes,
+    definitionRefs,
+    triggeredBy: input.triggeredBy,
+    sourceRef: isAgent(input.agent)
+      ? promptScopeSourceRef(input.agent.prompt)
+      : undefined,
+    invoke: () => invokeAgent(input, startedAt),
   })
-
-  if (input.triggeredBy) {
-    observe.edge({
-      edgeType: 'triggered',
-      from: { kind: 'span', id: input.triggeredBy.spanId },
-      to: { kind: 'span', id: agentSpan.spanId },
-      attributes: input.triggeredBy.attributes,
-    })
-  }
-
-  return agentSpan.withContext(() =>
-    runWithExecutionContext(stepCtx, async () => {
-      try {
-        const sourceRef = isAgent(input.agent)
-          ? promptScopeSourceRef(input.agent.prompt)
-          : undefined
-        const result = await runScope(
-          {
-            kind: 'agent-turn',
-            name: agentId,
-            ...(sourceRef ? { sourceRef } : {}),
-          },
-          {},
-          () => invokeAgent(input, startedAt),
-        )
-        agentSpan.end({ attributes: { agentId: result.agentId } })
-        return result
-      } catch (error) {
-        agentSpan.error(error)
-        throw error
-      }
-    }),
-  )
 }
 
 async function invokeAgent<TOutput>(
   input: CompositionAgentExecution<TOutput>,
   startedAt: number,
-): Promise<AgentResult<TOutput>> {
+): Promise<AgentResultPayload<TOutput>> {
   const agent = input.agent
   if (isAgent(agent)) {
     return (await executeWithRetry(
@@ -140,7 +176,7 @@ async function invokeAgent<TOutput>(
           validationRetry: input.validationRetry,
         }),
       input.retry,
-    )) as AgentResult<TOutput>
+    )) as AgentResultPayload<TOutput>
   }
 
   const run = agent as (value: unknown) => Promise<TOutput>
@@ -178,14 +214,18 @@ export async function executeFunctionStep<TOutput>(
       },
     },
     () =>
-      runWithExecutionContext(stepCtx, async () => {
-        const output = await executeWithRetry(input.run, input.retry)
-        const result: AgentResult<TOutput> = {
+      observeAgentRun({
+        compositionId,
+        label: input.label,
+        index: input.index,
+        agentId: input.label,
+        context: stepCtx,
+        attributes: input.attributes,
+        invoke: async () => ({
           agentId: input.label,
-          output,
+          output: await executeWithRetry(input.run, input.retry),
           durationMs: Date.now() - startedAt,
-        }
-        return result
+        }),
       }),
   )
 }

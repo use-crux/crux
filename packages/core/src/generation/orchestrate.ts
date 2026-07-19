@@ -19,13 +19,17 @@
  * @internal
  */
 
-import { observe } from '../observability'
+import { observe, type OperationResultMeta, type WithOperationResultMeta } from '../observability'
+import { withOperationResultMeta } from '../observability/internal/result-meta'
 import { warnMissingSemanticCachePlugin } from '../cache'
 import { getHooks } from '../runtime/runtime'
-import type { MiddlewareResult } from '../runtime/types'
 import type { AnyPromptConfig } from '../prompt/prompt-types'
-import type { OrchestrationSpec } from './orchestrate-types'
+import type { OrchestrationSpec, StreamOrchestrationSpec } from './orchestrate-types'
 import { getMeta, generationUsageAttributes } from './result-meta'
+import {
+  captureOperationResultMeta,
+  createFinalizingMiddlewareNext,
+} from '../runtime/internal/middleware-result-finalizer'
 import { withBudget } from './timeout'
 import {
   attachStreamObservability,
@@ -72,12 +76,13 @@ import { stampCruxRunId } from './run-id'
 export async function orchestrateGenerate<TArgs extends Record<string, unknown>, TResult extends object>(
   spec: OrchestrationSpec<TArgs>,
   doGenerate: (args: TArgs) => Promise<TResult>,
-): Promise<TResult & { readonly runId: CruxRunId }> {
+): Promise<WithOperationResultMeta<TResult> & { readonly runId: CruxRunId }> {
   const span = observe.openSpan({
     name: spec.promptId ? `generate ${spec.promptId}` : 'generate',
     primitive: 'generation.call',
     attributes: generationAttributes(spec, 'generate'),
   })
+  const operation = captureOperationResultMeta(span)
   const performance = createGenerationPerformanceTracker()
   try {
     const result = await span.withContext(async () => {
@@ -91,7 +96,7 @@ export async function orchestrateGenerate<TArgs extends Record<string, unknown>,
       linkActiveSpanToArtifact('consumed', inputArtifactId)
       linkResolvedContextArtifacts(spec.resolved)
 
-      const result = await withBudget(() => orchestrateGenerateInner(spec, doGenerate), {
+      const result = await withBudget(() => orchestrateGenerateInner(spec, doGenerate, operation), {
         budget: 'total',
         limitMs: spec.timeout?.totalMs,
       })
@@ -114,17 +119,21 @@ export async function orchestrateGenerate<TArgs extends Record<string, unknown>,
       return result
     })
     span.end({ metrics: performance.metrics(getMeta(result)) })
-    return { ...result, runId: span.runId }
+    return stampCruxRunId(result, span.runId)
   } catch (error) {
     span.error(error)
     throw error
   }
 }
 
-async function orchestrateGenerateInner<TArgs extends Record<string, unknown>, TResult>(
+async function orchestrateGenerateInner<
+  TArgs extends Record<string, unknown>,
+  TResult extends object,
+>(
   spec: OrchestrationSpec<TArgs>,
   doGenerate: (args: TArgs) => Promise<TResult>,
-): Promise<TResult> {
+  operation: OperationResultMeta,
+): Promise<WithOperationResultMeta<TResult>> {
   const middleware = getHooks().middleware
   const start = Date.now()
   maybeWarnMissingSemanticCache(spec)
@@ -132,6 +141,7 @@ async function orchestrateGenerateInner<TArgs extends Record<string, unknown>, T
   try {
     let result: TResult
     if (middleware) {
+      const next = createFinalizingMiddlewareNext(doGenerate, operation)
       result = (await middleware(
         {
           promptId: spec.promptId,
@@ -144,12 +154,13 @@ async function orchestrateGenerateInner<TArgs extends Record<string, unknown>, T
           resolved: spec.resolved,
           outputMode: spec.outputMode,
         },
-        async (mArgs) => (await doGenerate(mArgs.preparedArgs as TArgs)) as unknown as MiddlewareResult,
+        next,
       )) as unknown as TResult
     } else {
       result = await doGenerate(spec.preparedArgs)
     }
 
+    const observedResult = withOperationResultMeta(result, operation)
     const durationMs = Date.now() - start
 
     // Fire onGenerate hook — `TResult` is erased at this boundary; the typed
@@ -157,11 +168,11 @@ async function orchestrateGenerateInner<TArgs extends Record<string, unknown>, T
     if (spec.promptConfig.hooks?.onGenerate) {
       spec.promptConfig.hooks.onGenerate(
         { promptId: spec.promptId, durationMs },
-        result as unknown as Parameters<NonNullable<typeof spec.promptConfig.hooks.onGenerate>>[1],
+        observedResult as unknown as Parameters<NonNullable<typeof spec.promptConfig.hooks.onGenerate>>[1],
       )
     }
 
-    return result
+    return observedResult
   } catch (error) {
     if (spec.promptConfig.hooks?.onError) {
       spec.promptConfig.hooks.onError({ promptId: spec.promptId, error })
@@ -187,27 +198,15 @@ async function orchestrateGenerateInner<TArgs extends Record<string, unknown>, T
  * @returns The SDK stream result
  */
 export async function orchestrateStream<TArgs extends Record<string, unknown>, TResult extends object>(
-  spec: Pick<
-    OrchestrationSpec<TArgs>,
-    | 'promptId'
-    | 'promptConfig'
-    | 'preparedArgs'
-    | 'input'
-    | 'provider'
-    | 'model'
-    | 'traceModel'
-    | 'resolved'
-    | 'outputMode'
-    | 'createCachedStreamResult'
-    | 'timeout'
-  >,
+  spec: StreamOrchestrationSpec<TArgs>,
   doStream: (args: TArgs) => Promise<TResult>,
-): Promise<TResult & { readonly runId: CruxRunId }> {
+): Promise<WithOperationResultMeta<TResult> & { readonly runId: CruxRunId }> {
   const span = observe.openSpan({
     name: spec.promptId ? `stream ${spec.promptId}` : 'stream',
     primitive: 'generation.stream',
     attributes: generationAttributes(spec, 'stream'),
   })
+  const operation = captureOperationResultMeta(span)
   const performance = createGenerationPerformanceTracker()
   try {
     return await span.withContext(async () => {
@@ -220,12 +219,17 @@ export async function orchestrateStream<TArgs extends Record<string, unknown>, T
       })
       linkActiveSpanToArtifact('consumed', inputArtifactId)
       linkResolvedContextArtifacts(spec.resolved)
-      const result = await withBudget(() => orchestrateStreamInner(spec, doStream), {
+      const result = await withBudget(() => orchestrateStreamInner(spec, doStream, operation), {
         budget: 'total',
         limitMs: spec.timeout?.totalMs,
       })
-      attachStreamObservability(result, span, performance, spec.timeout?.chunkMs)
-      return stampCruxRunId(result, span.runId)
+      const observed = attachStreamObservability(
+        result,
+        span,
+        performance,
+        spec.timeout?.chunkMs,
+      )
+      return stampCruxRunId(observed, span.runId)
     })
   } catch (error) {
     span.error(error)
@@ -233,28 +237,18 @@ export async function orchestrateStream<TArgs extends Record<string, unknown>, T
   }
 }
 
-async function orchestrateStreamInner<TArgs extends Record<string, unknown>, TResult>(
-  spec: Pick<
-    OrchestrationSpec<TArgs>,
-    | 'promptId'
-    | 'promptConfig'
-    | 'preparedArgs'
-    | 'input'
-    | 'provider'
-    | 'model'
-    | 'resolved'
-    | 'outputMode'
-    | 'createCachedStreamResult'
-  >,
+async function orchestrateStreamInner<TArgs extends Record<string, unknown>, TResult extends object>(
+  spec: StreamOrchestrationSpec<TArgs>,
   doStream: (args: TArgs) => Promise<TResult>,
-): Promise<TResult> {
+  operation: OperationResultMeta,
+): Promise<WithOperationResultMeta<TResult>> {
   const middleware = getHooks().middleware
   maybeWarnMissingSemanticCache(spec)
 
   try {
     if (middleware) {
-      // Middleware is transparent — passes the result through from next()
-      return (await middleware(
+      const next = createFinalizingMiddlewareNext(doStream, operation)
+      const result = (await middleware(
         {
           promptId: spec.promptId,
           preparedArgs: spec.preparedArgs,
@@ -267,10 +261,14 @@ async function orchestrateStreamInner<TArgs extends Record<string, unknown>, TRe
           outputMode: spec.outputMode,
           createCachedStreamResult: spec.createCachedStreamResult,
         },
-        async (mArgs) => (await doStream(mArgs.preparedArgs as TArgs)) as unknown as MiddlewareResult,
+        next,
       )) as unknown as TResult
+      return withOperationResultMeta(result, operation)
     }
-    return await doStream(spec.preparedArgs)
+    return withOperationResultMeta(
+      await doStream(spec.preparedArgs),
+      operation,
+    )
   } catch (error) {
     if (spec.promptConfig.hooks?.onError) {
       spec.promptConfig.hooks.onError({ promptId: spec.promptId, error })

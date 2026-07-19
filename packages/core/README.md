@@ -79,6 +79,16 @@ result.object.sentiment; // 'positive' | 'negative' | 'neutral'
 
 That is a complete Crux program: typed input, typed output, and your SDK still making the model call.
 
+## Operation result correlation
+
+Successful observed public operation envelopes expose readonly `_meta.traceId`
+and `_meta.spanId`, identifying the exact Core span that produced the result.
+That operation pair is distinct from a provider's `_meta.responseId`, a logical
+`runId`, and a physical execution `segmentId`. Streaming exposes the stable pair
+immediately and retains it on completion. See the
+[operation result correlation reference](https://cruxjs.dev/docs/reference/crux-core/operation-results)
+for ownership and compatibility details.
+
 ## Compose more as you need it
 
 Prompts declare what they need through the `use` array. Memory, retrieval, guardrails, skills, and custom blocks all plug into the same call, so you add capability without adopting a framework or runtime:

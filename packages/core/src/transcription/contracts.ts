@@ -1,7 +1,7 @@
 import type { MediaSource } from "../types/content";
 import type { BoundaryDef } from "../safety/boundary";
 import type {
-  CompletedOperationResult,
+  CompletedOperationPayload,
   OperationTimeout,
 } from "../completed-operation/contracts";
 import type {
@@ -11,6 +11,7 @@ import type {
 import type { Constraint } from "../safety/constraint/types";
 import type { Guardrail } from "../safety/guardrail/types";
 import type { SafetyTuneOptions } from "../safety/tune";
+import type { WithOperationResultMeta } from "../observability/result-meta";
 
 /** Audio accepted by flat transcription operations without storage access. */
 export type AudioSource = MediaSource;
@@ -74,18 +75,18 @@ export type TranscribeOptions<
   }>;
 
 /**
- * Provider-neutral result of one transcription operation.
+ * Provider-authored transcription facts before Core adds correlation.
  *
  * Segment and word arrays always exist. Providers must leave unavailable
  * timing or speaker facts empty rather than estimating them. An enforced
  * transcript rewrite clears both arrays so stale text cannot survive there.
  * Provider-native `raw`, metadata, and warnings are preserved but unguarded.
  */
-export type TranscriptionResult<
+export type TranscriptionPayload<
   TRaw = unknown,
   TMetadata = unknown,
   TWarning = unknown,
-> = CompletedOperationResult<TRaw, TMetadata, TWarning> &
+> = CompletedOperationPayload<TRaw, TMetadata, TWarning> &
   Readonly<{
     text: string;
     segments: readonly TranscriptInterval[];
@@ -93,6 +94,15 @@ export type TranscriptionResult<
     language?: string;
     durationInSeconds?: number;
   }>;
+
+/** Public transcription result correlated to its exact media span. */
+export type TranscriptionResult<
+  TRaw = unknown,
+  TMetadata = unknown,
+  TWarning = unknown,
+> = WithOperationResultMeta<
+  TranscriptionPayload<TRaw, TMetadata, TWarning>
+>;
 
 /**
  * Flat stateless transcription function. Provider errors propagate unchanged.

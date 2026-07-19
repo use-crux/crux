@@ -11,12 +11,13 @@
  */
 
 import type { StreamHandle } from "../types";
-import type { CruxRunId } from "../../observability";
+import type { CruxRunId, WithOperationResultMeta } from "../../observability";
 
 /** Narrow an execution stream result to the core-step provider handle. */
 export function assertStreamHandle<TRawStream>(
   value: unknown,
-): asserts value is StreamHandle<TRawStream> & { readonly runId: CruxRunId } {
+): asserts value is WithOperationResultMeta<StreamHandle<TRawStream>> &
+  Readonly<{ runId: CruxRunId }> {
   if (!isStreamHandle(value)) {
     throw new TypeError(
       "Core-step adapter execution returned an SDK-loop stream handle.",

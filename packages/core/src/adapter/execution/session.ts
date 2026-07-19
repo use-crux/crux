@@ -22,6 +22,7 @@ import type {
   AdapterExecutionDialect,
   AdapterExecutionGenerateArgs,
   AdapterExecutionGenerateResult,
+  ObservedAdapterExecutionGenerateResult,
   AdapterExecutionStreamArgs,
   AdapterExecutionStreamResult,
   CoreStepDialect,
@@ -94,7 +95,7 @@ export function createAdapterExecution<
 ): AdapterExecution<TModel, TRawResponse, TRawStream, TExtra> {
   async function generate(
     args: AdapterExecutionGenerateArgs<TModel, TExtra>,
-  ): Promise<AdapterExecutionGenerateResult<TRawResponse>> {
+  ): Promise<ObservedAdapterExecutionGenerateResult<TRawResponse>> {
     return runAdapterCallScope(args.prompt, () => {
       if (dialect.kind === 'core-step') {
         return generateCore(

@@ -1,11 +1,11 @@
-import type { CompletedOperationResult } from "../../completed-operation/contracts";
+import type { CompletedOperationPayload } from "../../completed-operation/contracts";
 
 /** Completed operation names covered by the shared adapter test law. */
 export type CompletedMediaOperationName = "image" | "transcription" | "speech";
 
 /** One fixture-driven completed-operation tracer case. */
 export interface CompletedMediaConformanceCase<
-  TResult extends CompletedOperationResult,
+  TResult extends CompletedOperationPayload,
 > {
   readonly operation: CompletedMediaOperationName;
   readonly run: () => Promise<TResult>;
@@ -24,7 +24,7 @@ export interface CompletedMediaConformanceViolation {
  * explicit fixtures so omission remains a structural property of the runtime.
  */
 export async function completedMediaConformance(
-  cases: readonly CompletedMediaConformanceCase<CompletedOperationResult>[],
+  cases: readonly CompletedMediaConformanceCase<CompletedOperationPayload>[],
 ): Promise<readonly CompletedMediaConformanceViolation[]> {
   const violations: CompletedMediaConformanceViolation[] = [];
   for (const fixture of cases) {

@@ -432,6 +432,12 @@ inferred from another:
 | `traceId`   | Distributed causal correlation; interoperates with W3C `traceparent`.                               | Every record, propagation carrier          |
 | `segmentId` | One contiguous execution in one process/isolate/invocation. Never survives a host boundary.         | Every record, via `segmentId`/`segmentSeq` |
 
+Successful public operation envelopes use `{ traceId, spanId }` to point at
+their exact producing span. They do not include `runId` or `segmentId`, and a
+provider `_meta.responseId` remains a separate identifier. See
+[Operation Result Correlation](/docs/reference/crux-core/operation-results) for
+the result, streaming, Eval evidence, and adapter-author contracts.
+
 `segmentSeq` is monotonic only within its `segmentId`, it is not a distributed total order and the
 backend never treats it as one. Ordering across segments is a partial order: exact edges and parent
 IDs first, then lifecycle boundaries, then `(segmentId, segmentSeq)`, then timestamp, then `recordId`

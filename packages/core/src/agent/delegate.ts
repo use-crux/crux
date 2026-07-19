@@ -16,8 +16,8 @@
 import { z } from 'zod'
 import type { HandoffInstance } from './handoff'
 import type { ToolDef } from '../types/tool'
-import { getHooks } from '../runtime/runtime'
-import { observe } from '../observability'
+import { observe, type OperationResultMeta } from '../observability'
+import { withOperationResultMeta } from '../observability/internal/result-meta'
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -43,6 +43,8 @@ export interface DelegateConfig<
 
 /** The result of a delegation, after handoff validation and transform. */
 export interface DelegateResult<TOutput> {
+  /** Exact identity of the `delegate.invoke` operation that produced this result. */
+  readonly _meta: OperationResultMeta
   /** Delegation identifier. */
   delegateId: string
   /** Transformed data from the handoff. */
@@ -144,13 +146,14 @@ export function delegate<
 
     const inputSize = JSON.stringify(validatedArgs).length
 
-    return observe.span(
-      {
-        name: id,
-        primitive: 'delegate.invoke',
-        attributes: { delegateId: id, handoffId: handoff.id, inputSize },
-      },
-      async () => {
+    const delegateSpan = observe.openSpan({
+      name: id,
+      primitive: 'delegate.invoke',
+      attributes: { delegateId: id, handoffId: handoff.id, inputSize },
+    })
+
+    try {
+      const result = await delegateSpan.withContext(async () => {
         const observedContext = observe.captureContext()
         const inputArtifactId = observe.artifact({
           kind: 'input',
@@ -230,15 +233,23 @@ export function delegate<
           })
         }
 
-
         return {
           delegateId: id,
           data: payload.data,
           ...(payload.summary !== undefined ? { summary: payload.summary } : {}),
           durationMs,
         }
-      },
-    )
+      })
+      const observedResult = withOperationResultMeta(result, {
+        traceId: delegateSpan.traceId,
+        spanId: delegateSpan.spanId,
+      })
+      delegateSpan.end()
+      return observedResult
+    } catch (error) {
+      delegateSpan.error(error)
+      throw error
+    }
   }
 
   function asTools(options?: { description?: string }): {

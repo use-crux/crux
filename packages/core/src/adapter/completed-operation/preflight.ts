@@ -1,6 +1,6 @@
 /** Support preflight for every leaf model before completed-media I/O. */
 
-import type { CompletedOperationResult } from "../../completed-operation/contracts";
+import type { CompletedOperationProviderPayload } from "../../completed-operation/contracts";
 import { createUnsupportedCapabilityError } from "../../content/media-errors";
 import type { CompletedOperationDefinition } from "./definition";
 import { completedLifecycleContext, withSelectedModel } from "./lifecycle";
@@ -12,7 +12,7 @@ export async function preflightCompletedCandidates<
   TInput,
   TNormalized,
   TNative,
-  TResult extends CompletedOperationResult,
+  TResult extends CompletedOperationProviderPayload,
   TReport,
 >(
   options: Readonly<{
@@ -50,7 +50,7 @@ export async function preflightCompletedCandidate<
   TInput,
   TNormalized,
   TNative,
-  TResult extends CompletedOperationResult,
+  TResult extends CompletedOperationProviderPayload,
   TReport,
 >(
   options: Readonly<{

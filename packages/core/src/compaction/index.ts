@@ -6,6 +6,7 @@
 
 // Compaction primitives
 export { summarizeMessages } from './summarize'
+export { compactConversation } from './compact-conversation'
 export { createSlidingWindow } from './sliding-window'
 export { createBudgetManager } from './budget'
 export { extractKeyFacts } from './extract'
@@ -17,6 +18,7 @@ export type {
   CompactionMediaConfig,
   GenerateObjectFn,
   SummarizeConfig,
+  CompactConversationArgs,
   SlidingWindowConfig,
   SlidingWindow,
   SlidingWindowStats,

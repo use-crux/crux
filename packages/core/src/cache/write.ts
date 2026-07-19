@@ -31,7 +31,7 @@ import type { CacheableResult, SemanticCacheCall, SemanticCacheEntry, SemanticCa
  *
  * @param call - The per-call cache context.
  * @param result - The result produced by the downstream middleware chain.
- * @returns The same result, with miss metadata attached when it was written.
+ * @returns The result with miss metadata attached when it was written.
  */
 export async function performWrite(call: SemanticCacheCall, result: MiddlewareResult): Promise<MiddlewareResult> {
   const { config, namespace, args, promptHint, cacheId, scopeHash, ttl, lookupCtx } = call
@@ -175,6 +175,5 @@ export async function performWrite(call: SemanticCacheCall, result: MiddlewareRe
     throw error
   }
 
-  attachMissMeta(result)
-  return result
+  return attachMissMeta(result)
 }

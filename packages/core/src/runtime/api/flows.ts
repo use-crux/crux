@@ -28,6 +28,8 @@ import { wakeEnvelopeForWork } from '../engine/kernel'
 import { runtimeSignalEventName } from '../engine/replay'
 import type { FlowId, RuntimeTargetId } from '../ports/ids'
 import type { CancelWorkResult } from '../engine/kernel'
+import { flowValueForPersistence } from '../../flow/serialization'
+import { runtimeResumeWork } from '../../flow/runtime-engine'
 
 /** Name-bound flow controls exposed by `config({ runtime })`. */
 export interface CruxFlowRuntimeControls {
@@ -90,10 +92,13 @@ export function createCruxFlowRuntimeControls(): CruxFlowRuntimeControls {
           })
         }
 
+        const persistedPayload = flowValueForPersistence(payload, {
+          boundary: 'signal payload',
+        })
         await runtime.kernel.emitEvent({
           namespace: runtime.namespace,
           name: runtimeSignalEventName(flowId, signalName),
-          payload,
+          payload: persistedPayload,
         })
         await runtime.dispatcher.nudge()
       }),
@@ -127,18 +132,27 @@ export function createCruxFlowRuntimeControls(): CruxFlowRuntimeControls {
             flowId,
           })
         }
+        if (snapshot.status !== 'suspended') {
+          throw runtimeFlowNotResumableError({
+            api: 'crux.flows.resume()',
+            flowId,
+            status: snapshot.status,
+            subject: 'flow snapshot',
+          })
+        }
 
+        const now = runtime.now()
         const idempotencyKey = flowManualResumeKey(
           snapshot.workId,
-          runtime.now(),
+          now,
         )
         const wakeWork =
           current.status === 'suspended'
             ? await runtime.store.state.setWorkPending(snapshot.workId, {
                 namespace: runtime.namespace,
-                work: { kind: 'flow.resume', flowId: snapshot.flowId },
+                work: runtimeResumeWork(snapshot, now),
                 idempotencyKey,
-                now: runtime.now(),
+                now,
               })
             : current
         if (!wakeWork) {
@@ -154,7 +168,7 @@ export function createCruxFlowRuntimeControls(): CruxFlowRuntimeControls {
           idempotencyKey:
             current.status === 'suspended' ? idempotencyKey : wakeWork.idempotencyKey,
         })
-        return runtimeRef.result
+        return runtimeRef.flowResult
       }),
 
     cancel: (targetName: string, flowId: string) =>

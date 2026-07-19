@@ -6,7 +6,7 @@ import { z } from 'zod'
 import * as core from '@use-crux/core/eval/internal/runner'
 import { caseFile, evaluate } from '@use-crux/core/eval'
 import { attachEvalTaskDescriptorForInternalUse } from '@use-crux/core/eval/internal/task'
-import { createCruxRunId } from '@use-crux/core/observability'
+import { createCruxRunId, createCruxSpanId, createCruxTraceId } from '@use-crux/core/observability'
 import { hydrateEvalCases, loadCaseRows } from './eval-cases'
 
 const inputSchema = z.object({ question: z.string() })
@@ -25,6 +25,7 @@ const managedTask = attachEvalTaskDescriptorForInternalUse(task, {
   projectOutput: () => 'unused',
   projectResponse: () => ({
     runId: createCruxRunId(),
+    _meta: { traceId: createCruxTraceId(), spanId: createCruxSpanId() },
     content: [],
     text: 'unused',
     object: 'unused',

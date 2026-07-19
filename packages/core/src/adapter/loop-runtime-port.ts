@@ -29,8 +29,8 @@ import type { ToolSourceMaterializer } from "../tools/tool-source";
 import type {
   ExecutorOutcome,
   ExecutorRequest,
-  ExecutorStreamHandle,
-  ExecutorStreamMeta,
+  ExecutorProviderStreamHandle,
+  ExecutorStreamCompletionPayload,
   StructuredAttempt,
   StructuredRequest,
 } from "./executor-types";
@@ -162,7 +162,7 @@ export interface LoopRuntimePort<
    */
   runStream(
     request: ExecutorRequest<TModel> & { readonly schema?: z.ZodType },
-  ): Promise<ExecutorStreamHandle<TRawStream>>;
+  ): Promise<ExecutorProviderStreamHandle<TRawStream>>
 
   /**
    * Recreate a stream handle from a cached (semantic-cache) result, when
@@ -171,7 +171,7 @@ export interface LoopRuntimePort<
    *
    * @param cached - The cached payload captured from a prior run.
    */
-  replayStream?(cached: CachedStreamPayload): ExecutorStreamHandle<TRawStream>;
+  replayStream?(cached: CachedStreamPayload): ExecutorProviderStreamHandle<TRawStream>
 }
 
 /**
@@ -195,8 +195,8 @@ export type BoundLoopRuntime<
 export type {
   ExecutorOutcome,
   ExecutorRequest,
-  ExecutorStreamHandle,
-  ExecutorStreamMeta,
+  ExecutorProviderStreamHandle,
+  ExecutorStreamCompletionPayload,
   StructuredAttempt,
   StructuredRequest,
 };

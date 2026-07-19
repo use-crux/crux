@@ -1,4 +1,4 @@
-import type { CompletedOperationResult } from "../../completed-operation/contracts";
+import type { CompletedOperationProviderPayload } from "../../completed-operation/contracts";
 
 /** Stable identity passed to every completed-operation lifecycle hook. */
 export interface CompletedOperationContext<TModel> {
@@ -36,15 +36,18 @@ export interface CompletedOperationConformanceCase<TInput, TModel> {
  * Immutable mechanics for one bounded media operation.
  *
  * Provider packages own normalization and native translation. Core owns the
- * lifecycle around these pure hooks. `support` is deliberately local to the
- * definition: Crux does not expose runtime capability discovery.
+ * lifecycle around these pure hooks. `validate` constructs an ID-free payload;
+ * `report` receives that payload contract even though the shared runner has
+ * already added correlation at runtime. Providers never manufacture Crux IDs.
+ * `support` is deliberately local to the definition: Crux does not expose
+ * runtime capability discovery.
  */
 export interface CompletedOperationDefinition<
   TModel,
   TInput,
   TNormalized,
   TNative,
-  TResult extends CompletedOperationResult,
+  TResult extends CompletedOperationProviderPayload,
   TReport = unknown,
 > {
   readonly normalize: (
@@ -85,7 +88,9 @@ export interface CompletedOperationDefinition<
  *
  * The returned record is safe to reuse across bound clients and calls. Hooks
  * must not depend on `this`; capture an immutable client binding in closures.
- * Definitions perform no I/O until the shared runner calls `invoke`.
+ * Definitions perform no I/O until the shared runner calls `invoke`. The
+ * definition remains a payload producer; binding it under a known media name
+ * creates the observed public result.
  *
  * @example
  * ```ts
@@ -104,7 +109,7 @@ export function defineCompletedOperation<
   TInput,
   TNormalized,
   TNative,
-  TResult extends CompletedOperationResult,
+  TResult extends CompletedOperationProviderPayload,
   TReport = unknown,
   TModel = TInput extends Readonly<{ model: infer TInputModel }>
     ? TInputModel

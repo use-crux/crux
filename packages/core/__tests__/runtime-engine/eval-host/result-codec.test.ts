@@ -10,6 +10,22 @@ const evidence = {
   output: "yes",
   response: {
     runId: "run-provider-1",
+    _meta: {
+      traceId: "0123456789abcdef0123456789abcdef",
+      spanId: "0123456789abcdef",
+      responseId: "response-1",
+      actualModelId: "model-1",
+      finishReason: "stop",
+      cost: 0.01,
+      usage: {
+        inputTokens: 1,
+        outputTokens: 2,
+        totalTokens: 3,
+        inputTokenDetails: {},
+        outputTokenDetails: {},
+      },
+      providerExtension: { cache: "hit" },
+    },
     content: [],
     text: "yes",
     steps: [],
@@ -34,6 +50,21 @@ const evidence = {
 };
 
 describe("Eval host result codec", () => {
+  it("retains realistic generation metadata alongside the required operation pair", () => {
+    const encoded = encodeEvalHostResult({
+      jobId: "job-1",
+      evalRunId: "eval-run-1",
+      evidence,
+    });
+
+    expect(
+      decodeEvalHostResult(encoded, {
+        jobId: "job-1",
+        evalRunId: "eval-run-1",
+      }).response._meta,
+    ).toEqual(evidence.response._meta);
+  });
+
   it("hashes adapter identity before the canonical envelope crosses the wire", () => {
     const privateEvidence = {
       ...evidence,
@@ -121,6 +152,10 @@ describe("Eval host result codec", () => {
       { observedIdentity: { reusable: true, reason: "identity_unavailable" } },
     ],
     ["incomplete response", { response: { text: "yes" } }],
+    [
+      "response without operation metadata",
+      { response: { ...evidence.response, _meta: undefined } },
+    ],
   ])("rejects %s", (_label, replacement) => {
     const encoded = encodeEvalHostResult({
       jobId: "job-1",

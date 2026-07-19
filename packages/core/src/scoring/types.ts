@@ -6,6 +6,7 @@
 
 import type { z } from 'zod'
 import type { GenerateObjectFn } from '../compaction/types'
+import type { OperationResultMeta } from '../observability'
 
 // ── Judge Configuration ─────────────────────────────────────────────
 
@@ -62,6 +63,8 @@ export interface JudgeResult<TDetail = unknown> {
   cost?: number
   /** Structured details when judge was configured with `detailSchema`. */
   detail?: TDetail
+  /** Exact `scoring.judge` operation that produced this result. */
+  readonly _meta: OperationResultMeta
 }
 
 // ── Judge Instance ──────────────────────────────────────────────────
