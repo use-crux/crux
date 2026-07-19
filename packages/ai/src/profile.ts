@@ -33,6 +33,7 @@ export const aiSdkProviderRuntime = defineProviderRuntime({
     media: aiSdkMediaHooks,
     bind: (gateway: SdkGateway) => {
       const {
+        capabilities,
         materializeToolSource,
         runTextLoop,
         runStructuredAttempt,
@@ -40,6 +41,7 @@ export const aiSdkProviderRuntime = defineProviderRuntime({
         replayStream,
       } = createAiSdkLoopRuntime(gateway);
       return {
+        capabilities,
         materializeToolSource,
         runTextLoop,
         runStructuredAttempt,

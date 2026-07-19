@@ -17,7 +17,10 @@ import {
   createBudgetSignal,
 } from "../../generation/timeout";
 import { getHooks } from "../../runtime/runtime";
-import type { Safety } from "../../safety/session";
+import {
+  finalizeSafetySessionLanguageOutput,
+  type Safety,
+} from "../../safety/session";
 import { ValidationExhaustedError } from "../../generation/validation-retry";
 import type { ExecutorRequest, StructuredRequest } from "../executor-types";
 import { formatValidationFeedback } from "../policy/validation-retry";
@@ -119,7 +122,8 @@ export async function generateSdkStructured<TModel, TRawResponse, TRawStream>(
       let finalObject = attempt.object;
       let finalRaw = attempt.raw;
       let finalResponse = attempt.response;
-      const finalOutput = await safety.finalizeOutput(
+      const finalOutput = await finalizeSafetySessionLanguageOutput(
+        safety,
         { text: finalText, parsed: finalObject },
         async (corrective) => {
           const regenMessages = appendCorrectiveMessages(
@@ -150,7 +154,14 @@ export async function generateSdkStructured<TModel, TRawResponse, TRawStream>(
             stepFacts.push(sdkResponseFacts(regen.response));
             return { text: regen.response.text, parsed: regen.object };
           }
-          return { text: regen.rawText, parsed: undefined };
+          validationRetry?.onExhausted?.(0, regen.error);
+          throw new ValidationExhaustedError({
+            lastRawOutput: regen.rawText,
+            zodErrors: regen.error,
+            attempts: 0,
+            maxAttempts: 0,
+            promptId: promptId ?? "unknown",
+          });
         },
         { messages: currentMessages, schema },
       );

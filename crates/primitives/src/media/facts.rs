@@ -1,8 +1,9 @@
 use serde_json::{Map, Value, json};
 
 use crate::{
-    context::{CallParts, PrimitiveContext},
+    context::{CallParts, PrimitiveContext, source_ref_for_static_property},
     definition::{NativeDefinitionInput, safe_id, static_index_definition},
+    injection::tools::identifier_refs_for_property,
     protocol::{LiteralValue, StaticSyntaxValue},
     record_values::{
         direct_string_property, number_property, object_value, property_value, reference_property,
@@ -73,8 +74,9 @@ pub(crate) fn media_operation_facts(
             json!({ "standalone": true })
         },
     );
+    let definition_id = format!("media.operation:{}", safe_id(parts.variable_name));
     let mut definition = static_index_definition(NativeDefinitionInput {
-        id: format!("media.operation:{}", safe_id(parts.variable_name)),
+        id: definition_id.clone(),
         kind: "media.operation",
         name: parts.variable_name.to_string(),
         file: context.fingerprint_file,
@@ -83,12 +85,23 @@ pub(crate) fn media_operation_facts(
         metadata,
     });
     definition.as_object_mut()?.remove("sourceSnippet");
+    let mut source_refs = Vec::new();
+    if let Some(config) = config {
+        for property in ["guardrails", "constraints", "safety"] {
+            if let Some(source_ref) =
+                source_ref_for_static_property(context, &definition_id, config, property, "config")
+                    .flatten()
+            {
+                source_refs.push(source_ref);
+            }
+        }
+    }
     Some(extracted_facts(
         parts.variable_name,
         definition,
         Vec::new(),
         media_relations(config, parts, context),
-        Vec::new(),
+        source_refs,
     ))
 }
 
@@ -237,6 +250,21 @@ fn media_relations(
             config.and_then(|value| reference_property(value, property, &context.initializers))
         {
             relations.push(json!({ "type": relation, "toVariable": target }));
+        }
+    }
+    let operation_id = format!("media.operation:{}", safe_id(parts.variable_name));
+    if let Some(config) = config {
+        for (relation, property) in [
+            ("guardrail.applies_to", "guardrails"),
+            ("constraint.applies_to", "constraints"),
+        ] {
+            relations.extend(
+                identifier_refs_for_property(context, config, property)
+                    .into_iter()
+                    .map(|from_variable| {
+                        json!({ "type": relation, "fromVariable": from_variable, "toId": operation_id })
+                    }),
+            );
         }
     }
     relations

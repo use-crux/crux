@@ -38,7 +38,12 @@ export interface SafetyDecision {
   readonly action: SafetyDecisionAction
   readonly severity?: 'info' | 'warn' | 'error'
   readonly reason?: string
+  /** Safe model id for this media decision, when one is known. */
+  readonly model?: string
+  /** Safe original coordinates for a media-boundary decision. */
   readonly location?: MediaPartLocation
+  /** Present only when an enforced strip could not preserve a required invariant. */
+  readonly escalatedToBlock?: true
   readonly findings?: readonly SafetyFinding[]
   readonly tuned?: readonly ('mode' | 'stream' | 'enabled')[]
   readonly durationMs: number

@@ -1,0 +1,165 @@
+---
+title: Safety for content primitives
+description: Exact Safety boundaries and guarantees for language, image, speech, and transcription operations.
+---
+
+Crux applies the same boundary vocabulary to ordinary language generation and
+bounded media operations. Policies inspect canonical content; adapters retain
+ownership of provider normalization and provider-native response objects.
+
+## Primitive and boundary matrix
+
+| Primitive          | Guardrail input boundaries                                                                           | Guardrail output boundaries                                                                 | Constraints                                                |
+| ------------------ | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `generate()`       | `user.input`, `user.input.media`, `model.input`                                                      | `model.output.text`, `model.output.media`, and structured object/both/path boundaries       | Text and structured output, with regeneration              |
+| `stream()`         | `user.input`, `user.input.media`, `model.input`                                                      | Live `model.output.text`; completion-only `model.output.media`; final structured boundaries | Completion/report semantics; live output cannot regenerate |
+| `generateImage()`  | `user.input` prompt text, `model.input` typed-prompt system text, `user.input.media` references/mask | `model.output.media` images                                                                 | Unsupported                                                |
+| `generateSpeech()` | `user.input` speech text, `model.input` instructions                                                 | `model.output.media` audio                                                                  | Unsupported                                                |
+| `transcribe()`     | `user.input` prompt hint, `user.input.media` audio                                                   | `model.output.text` transcript                                                              | Output text only, evaluated once without provider retry    |
+
+An inapplicable call-, prompt-, or context-local policy is a configuration
+error before provider I/O. An inapplicable global policy is dormant for that
+primitive instead, so one application-wide registry can cover several
+primitive families without weakening strict local configuration.
+
+## Media subjects and stable origins
+
+`boundary.input.media()` and `boundary.output.media()` infer the same
+`{ part, origin }` callback shape. Narrow both discriminants before reading
+variant fields:
+
+```ts
+import { boundary, guardrail } from "@use-crux/core/safety";
+
+const pngMedia = guardrail({
+  id: "png-media",
+  on: [boundary.input.media(), boundary.output.media()],
+  run: ({ part, origin }) => {
+    if (part.type !== "image") return { action: "allow" };
+
+    if (origin.kind === "operation" && origin.operation === "generateImage") {
+      console.log(origin.phase, origin.field, origin.partIndex);
+    }
+
+    return part.mediaType === "image/png"
+      ? { action: "allow" }
+      : { action: "strip", reason: "Only PNG images are allowed." };
+  },
+});
+```
+
+Origins are coordinates in the original canonical surface, before any earlier
+policy strips a sibling. They never shift during one evaluation. Message and
+step origins retain their original message/step and part indexes. Operation
+origins additionally identify the primitive, phase, and field; mask, speech
+audio, and transcription audio use literal index `0`.
+
+The callback receives the original canonical part or an operation wrapper whose
+`source` is the original `Asset` or `MediaSource` identity. No top-level
+`messageIndex` or `partIndex` compatibility fields exist: read coordinates from
+`origin`.
+
+## Strip and required-media behavior
+
+Media policies return `allow`, `warn`, `block`, or `strip`. `warn`, `block`, and
+`strip` require a reason.
+
+In enforce mode, `strip` removes the selected canonical part with shallow-copy
+write-back. Unmodified parts and provider-owned fields keep their identities.
+In report mode, the same action is audited but input and result are unchanged.
+
+Required-media rules fail closed:
+
+- Generated-image siblings may be stripped; `result.image` is reset to the
+  first remaining entry in `result.images`. Stripping the final image blocks.
+- Generated speech has one required `audio`; stripping it blocks.
+- Transcription has one required input `audio`; stripping it blocks before
+  normalization or provider I/O.
+- An image edit `mask` may remain only while at least one reference image
+  remains. Stripping the last reference while retaining the mask blocks.
+
+## Completed-operation options and audit
+
+Attach policies directly to each bounded call:
+
+```ts
+const picture = await generateImage({
+  model: imageModel,
+  prompt: { text: "Restyle this", images: [reference], mask },
+  guardrails: [pngMedia],
+  safety: { tune: { "png-media": { mode: "enforce" } } },
+});
+
+const speech = await generateSpeech({
+  model: speechModel,
+  text: "Welcome",
+  guardrails: [pngMedia],
+  safety: { tune: { "png-media": { mode: "report" } } },
+});
+
+const transcript = await transcribe({
+  model: transcriptionModel,
+  audio,
+  guardrails: [audioPolicy, transcriptPolicy],
+  constraints: [transcriptRequirement],
+  safety: { tune: { "transcript-requirement": { mode: "report" } } },
+});
+```
+
+`generateImage()` and `generateSpeech()` expose `guardrails` and `safety` but
+not `constraints` or constraint retry controls. `transcribe()` additionally
+accepts output-text `constraints`; it does not expose `constraintMaxRetries`.
+Assert failures throw and suggest failures return in `result.safety`, but the
+provider is never re-called to repair a transcript.
+
+Every completed operation can return `result.safety` when an entry was
+recorded. It contains the applied canonical guardrail and constraint audit.
+An enforced transcript rewrite updates `result.text` and clears `segments` and
+`words`, because their timed text would otherwise disagree with the rewritten
+transcript. The audit marks that detail loss.
+
+## Language steps and streams
+
+Every provider-produced language step is guarded once before canonical
+accumulation and before Crux/SDK client-tool approval or execution. Text and
+reasoning parts use `model.output.text`; image, audio, video, and file parts use
+`model.output.media` with a stable step origin. Tool-call parts are preserved
+and cannot be edited by Safety. Provider-executed server tools have already run
+remotely by the time their response is available and cannot be undone.
+
+The final `content`, `text`, `steps`, `finalStep`, and assistant messages are all
+derived from the guarded step values. A loop-owning runtime that cannot apply
+step Safety before client tools fails before provider I/O when such policies
+are applicable.
+
+For `stream()`, live deltas remain text-only. Media is buffered and guarded when
+`completion` settles. A completion media block rejects `completion`, but text
+already emitted from `textStream` cannot be recalled. The provider-native raw
+stream is an explicitly unguarded escape surface.
+
+## Canonical versus provider-native surfaces
+
+Safety guarantees apply to canonical request fields and canonical results.
+Provider-native `raw` values, stream handles/chunks, metadata, and warnings are
+preserved and are not rewritten or covered by the canonical audit. They may
+repeat content that canonical Safety removed, so do not expose them to an
+untrusted consumer without a provider-specific review.
+
+To describe an image, audio clip, video, or document, use ordinary multimodal
+`generate()` with canonical content parts. Crux does not add a separate
+description helper; specialized operations are reserved for guaranteed image,
+speech, and transcript result shapes.
+
+## Inspect Safety in Devtools
+
+Catalog is the authored view. Guardrail and constraint details show their
+ordered boundary tuple, static strategy helper and configuration, enforcement
+action, and linked completed operations. A `media.operation` detail shows its
+attached guardrails and constraints plus whether a `safety` options binding was
+authored. These are Project Index facts, not evidence that a policy ran.
+
+Runs is the execution view. Explain and Guardrail details show the selected
+model, action, stable original message/step/operation coordinates, media part
+type, and required-media strip escalation. Reports remain descriptor-only: no
+media source, bytes, URL, filename, provider file id, raw response, or provider
+options are rendered.

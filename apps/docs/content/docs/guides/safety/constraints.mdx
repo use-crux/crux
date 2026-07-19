@@ -141,6 +141,24 @@ Use `constraint.citations(...)` when the output must cite retrieved or injected
 sources. Both helpers carry safe strategy metadata for observability, Devtools,
 and Project Index.
 
+## Completed operations
+
+`transcribe()` accepts constraints only at `boundary.output.text()`. They run
+once against the guarded top-level transcript. An assert failure throws;
+a suggest failure is retained in `result.safety`. The provider is not re-called
+and `constraintMaxRetries` is intentionally absent from transcription options.
+
+`generateImage()` and `generateSpeech()` do not expose constraints because
+their required outputs have no constraint boundary. A typed image prompt that
+resolves any constraints fails before provider I/O; remove those constraints
+or move the semantic requirement to an ordinary language generation.
+
+Transcription constraints inspect only the guarded top-level transcript text,
+never timed details. An enforced rewrite clears `segments` and `words` in the
+returned canonical result so callers cannot mistake stale timing for guarded
+text. See the full
+[content-primitive matrix](/docs/reference/crux-core/safety-content-primitives).
+
 ## Report Mode And Tuning
 
 Constraints do not have a `mode` field on their definition. Use per-call

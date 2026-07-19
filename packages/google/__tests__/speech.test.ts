@@ -1,9 +1,56 @@
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import type { GoogleGenAI } from "@google/genai";
 import { speechConformanceRow } from "@use-crux/core/adapter/testing";
+import { boundary, guardrail } from "@use-crux/core/safety";
 import { createGoogle } from "../src";
 
 describe("Google speech", () => {
+  it("guards speech options around the native request and canonical audio", async () => {
+    const raw = {
+      candidates: [
+        {
+          content: {
+            parts: [{ inlineData: { data: "AQID", mimeType: "audio/L16" } }],
+          },
+        },
+      ],
+    };
+    const generateContent = vi.fn(async (_args: unknown) => raw);
+    const result = await createGoogle(client(generateContent), {
+      cachedContent: false,
+    }).generateSpeech({
+      model: "gemini-2.5-flash-preview-tts",
+      text: "private speech",
+      guardrails: [
+        guardrail({
+          id: "google-speech-input",
+          on: boundary.input.user(),
+          run: () => ({
+            action: "rewrite",
+            value: "guarded speech",
+            rewrite: { kind: "redact" },
+          }),
+        }),
+        guardrail({
+          id: "google-speech-output",
+          on: boundary.output.media(),
+          run: () => ({ action: "allow" }),
+        }),
+      ],
+      safety: { tune: { "google-speech-output": { mode: "report" } } },
+    });
+
+    expect(generateContent.mock.calls[0]?.[0]).toMatchObject({
+      contents: [{ role: "user", parts: [{ text: "guarded speech" }] }],
+    });
+    expect(generateContent.mock.calls[0]?.[0]).not.toHaveProperty("guardrails");
+    expect(generateContent.mock.calls[0]?.[0]).not.toHaveProperty("safety");
+    expect(result.raw).toBe(raw);
+    expect(
+      result.safety?.guardrails?.applied.map((entry) => entry.guard),
+    ).toEqual(["google-speech-input", "google-speech-output"]);
+  });
+
   it("performs one native audio generation with a structured multi-speaker voice", async () => {
     expect(speechConformanceRow("google").support).toBe("native");
     const raw = {

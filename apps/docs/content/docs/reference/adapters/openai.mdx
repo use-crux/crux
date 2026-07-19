@@ -35,6 +35,10 @@ The package also exports native `generateImage()`, `transcribe()`, and
 transcription task union; requested timing/detail must match the selected
 endpoint. Returned image/audio assets are usable immediately and are never
 persisted implicitly. Typed `extra` records expose endpoint-specific controls.
+These operations also accept portable canonical Safety options: image and
+speech expose `guardrails`/`safety`, while transcription additionally exposes
+one-shot output-text `constraints`. Provider-native `raw` values remain
+unguarded; see the [content-primitive matrix](/docs/reference/crux-core/safety-content-primitives).
 
 | Field    | Type     | Description                |
 | -------- | -------- | -------------------------- |

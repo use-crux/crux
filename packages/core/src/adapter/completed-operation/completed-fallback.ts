@@ -5,6 +5,7 @@ import type {
 import { shouldAttemptFallback } from "../../generation/fallback";
 import { withBudget } from "../../generation/timeout";
 import { observe } from "../../observability";
+import { isPolicyTerminal } from "../../safety/errors";
 import type {
   CompletedRoutingOptions,
   CompletedRoutingState,
@@ -55,6 +56,7 @@ export async function resolveCompletedFallback<TResult>(
       }
       return result;
     } catch (error) {
+      if (isPolicyTerminal(error)) throw error;
       causes.push(error);
       if (index === model.models.length - 1) break;
       if (!(error instanceof Error) || !completedShouldFallback(error, model.options))

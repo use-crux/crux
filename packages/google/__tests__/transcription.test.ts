@@ -2,6 +2,7 @@ import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import type { GoogleGenAI } from "@google/genai";
 import { transcriptionConformanceRow } from "@use-crux/core/adapter/testing";
 import { fallback } from "@use-crux/core";
+import { boundary, constraint, guardrail } from "@use-crux/core/safety";
 import { createGoogle } from "../src";
 
 const wav = new Uint8Array([
@@ -9,6 +10,55 @@ const wav = new Uint8Array([
 ]);
 
 describe("Google transcription", () => {
+  it("guards and constrains the canonical transcript around one composed call", async () => {
+    const raw = response({ text: "private transcript" });
+    const generateContent = vi.fn(async (_args: unknown) => raw);
+    const result = await createGoogle(client(generateContent), {
+      cachedContent: false,
+    }).transcribe({
+      model: "gemini-2.5-flash",
+      audio: wav,
+      guardrails: [
+        guardrail({
+          id: "google-transcript-output",
+          on: boundary.output.text(),
+          run: () => ({
+            action: "rewrite",
+            value: "guarded transcript",
+            rewrite: { kind: "redact" },
+          }),
+        }),
+      ],
+      constraints: [
+        constraint({
+          id: "google-transcript-constraint",
+          on: boundary.output.text(),
+          run: (text) => {
+            expect(text).toBe("guarded transcript");
+            return { pass: true as const };
+          },
+        }),
+      ],
+      safety: { tune: { "google-transcript-output": { mode: "enforce" } } },
+    });
+
+    expect(generateContent).toHaveBeenCalledOnce();
+    expect(generateContent.mock.calls[0]?.[0]).not.toHaveProperty("guardrails");
+    expect(generateContent.mock.calls[0]?.[0]).not.toHaveProperty(
+      "constraints",
+    );
+    expect(generateContent.mock.calls[0]?.[0]).not.toHaveProperty("safety");
+    expect(result.raw).toBe(raw);
+    expect(result).toMatchObject({
+      text: "guarded transcript",
+      segments: [],
+      safety: {
+        guardrails: { blocked: false },
+        constraints: { allPassed: true },
+      },
+    });
+  });
+
   it("accepts routing wrappers and sends only the selected leaf model", async () => {
     const generateContent = vi.fn(async (_args: unknown) =>
       response({ text: "Hello" }),

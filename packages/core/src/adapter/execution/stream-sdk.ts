@@ -11,7 +11,8 @@
 
 import type { z } from "zod";
 import type { MiddlewareResult } from "../../runtime/types";
-import { createSafety } from "../../safety/session";
+import { createSafetyWithBindingApplicability } from "../../safety/session";
+import { languageBindingApplicability } from "../../safety/language-applicability";
 import { orchestrateStream } from "../../generation/orchestrate";
 import {
   composeAbortSignals,
@@ -38,6 +39,10 @@ import { emitInputTokenEstimate } from "./media-token-budget";
 import { materializeToolSources } from "./tool-sources";
 import { createStreamSourceCleanup } from "./stream-source-cleanup";
 import type { CruxRunId } from "../../observability";
+import {
+  guardStreamCompletion,
+  trackSafetyStreamSeal,
+} from "./stream-completion";
 
 /**
  * Start one SDK-owned stream for a concrete model attempt.
@@ -68,29 +73,41 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
   const mappedSettings = dialect.mapSettings(resolved.settings, modelInfo);
   let { messages, promptText } = initialMessageState(resolved, args.messages);
   let nativeMessages = args.nativeMessages;
-  const safety = createSafety({
-    call: {
-      constraints: args.constraints,
-      guardrails: args.guardrails,
-      constraintMaxRetries: args.constraintMaxRetries,
+  let currentSystem = resolved.system;
+  let currentSystemBlocks = resolved.systemBlocks;
+  const safety = createSafetyWithBindingApplicability(
+    {
+      call: {
+        constraints: args.constraints,
+        guardrails: args.guardrails,
+        constraintMaxRetries: args.constraintMaxRetries,
+      },
+      safety: args.safety,
+      resolved: {
+        constraints: resolved.constraints,
+        guardrails: resolved.guardrails,
+        metadata: resolved.metadata,
+      },
+      promptId: prompt.id,
+      model: modelInfo.modelId,
+      systemPrompt: resolved.system,
     },
-    safety: args.safety,
-    resolved: {
-      constraints: resolved.constraints,
-      guardrails: resolved.guardrails,
-      metadata: resolved.metadata,
-    },
-    promptId: prompt.id,
-    model: modelInfo.modelId,
-    systemPrompt: resolved.system,
-  });
+    languageBindingApplicability(resolved.schema !== undefined),
+  );
   const guardedInput = await safety.guardInput({
     messages,
     prompt: promptText,
+    system: currentSystem,
   });
-  if (guardedInput.messages !== messages) nativeMessages = undefined;
+  if (
+    guardedInput.messages !== messages ||
+    guardedInput.system !== currentSystem
+  )
+    nativeMessages = undefined;
   messages = [...guardedInput.messages];
   promptText = guardedInput.prompt;
+  if (guardedInput.system !== currentSystem) currentSystemBlocks = undefined;
+  currentSystem = guardedInput.system;
 
   const sourceSession = await materializeToolSources({
     dialect: dialect.id,
@@ -127,6 +144,10 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     throw error;
   }
   const tools = lifecycle.tools;
+  const trackedSafety =
+    safety.enabled && !resolved.schema
+      ? trackSafetyStreamSeal(safety.openStream())
+      : undefined;
 
   const stepBudget = createBudgetSignal({
     budget: "step",
@@ -158,8 +179,8 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
   const request: ExecutorRequest<TModel> & { schema?: z.ZodType } = {
     model: args.model,
     modelInfo,
-    system: resolved.system,
-    systemBlocks: resolved.systemBlocks,
+    system: currentSystem,
+    systemBlocks: currentSystemBlocks,
     prompt: promptText,
     messages: providerMessages,
     nativeMessages,
@@ -176,9 +197,7 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     abortSignal: composeAbortSignals(args.signal, stepBudget.signal),
     extra: args.extra,
     diagnostics,
-    ...(safety.enabled && !resolved.schema
-      ? { safety: safety.openStream() }
-      : {}),
+    ...(trackedSafety ? { safety: trackedSafety.stream } : {}),
     ...(resolved.schema ? { schema: resolved.schema } : {}),
   };
 
@@ -197,8 +216,8 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
             prompt.config ?? ({} as NonNullable<typeof prompt.config>),
           preparedArgs: {
             model: modelInfo.modelId,
-            system: resolved.system,
-            systemBlocks: resolved.systemBlocks,
+            system: currentSystem,
+            systemBlocks: currentSystemBlocks,
             prompt: promptText,
             messages,
             settings: mappedSettings,
@@ -249,13 +268,22 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
   > => {
     try {
       const meta = await innerCompletion();
-      const stamped = meta ? safety.stamp(meta) : meta;
+      const guarded = await guardStreamCompletion({
+        safety,
+        meta,
+        assembleWithoutSafety: false,
+        liveText: trackedSafety
+          ? (trackedSafety.sealedText() ?? meta?.text)
+          : undefined,
+        representedText: trackedSafety ? meta?.text : undefined,
+        messages,
+      });
       await lifecycle.captureTurn({
         messages,
-        assistantText: stamped?.text,
-        toolCalls: stamped?.toolCalls,
+        assistantText: guarded?.text,
+        toolCalls: guarded?.toolCalls,
       });
-      return stamped;
+      return guarded;
     } finally {
       stepBudget.dispose();
       await closeSources();

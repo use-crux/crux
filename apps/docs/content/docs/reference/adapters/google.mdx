@@ -9,6 +9,10 @@ Gemini `generateSpeech()` (including two-speaker configuration), and composed
 `transcribe()`. Composed transcription returns text with no word timing or
 diarization and rejects those requests before I/O. Endpoint-specific options
 stay separated in typed `extra` records.
+All three operations use the portable completed-operation Safety contract;
+canonical audits are returned in `result.safety`, while provider-native `raw`
+values remain unguarded. See the
+[content-primitive matrix](/docs/reference/crux-core/safety-content-primitives).
 
 Peer dependency: `@google/genai` (`^1.0.0 || ^2.0.0`)
 

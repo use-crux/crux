@@ -160,6 +160,7 @@ func TestProjectRunDetailAddsRuntimeDecisionEvidenceToTurnDecisionReport(t *test
 				StartedAt:    started.Add(30 * time.Millisecond).Format(time.RFC3339Nano),
 				EndedAt:      started.Add(40 * time.Millisecond).Format(time.RFC3339Nano),
 				DurationMs:   10,
+				Attributes:   json.RawMessage(`{"action":"strip","model":"selected-model","originKind":"step","stepIndex":3,"partIndex":2,"mediaPartType":"image","escalatedToBlock":true}`),
 			},
 			{
 				RunID:        runID,
@@ -213,10 +214,17 @@ func TestProjectRunDetailAddsRuntimeDecisionEvidenceToTurnDecisionReport(t *test
 	report := generation.DecisionReport
 
 	assertDecisionReason(t, report.Decisions, "decision:span_generation:routing:artifact_routing:0", "routing.router.selected", "observed")
-	assertDecisionReason(t, report.Decisions, "decision:span_generation:guardrail:span_guardrail", "guardrail.passed", "observed")
+	assertDecisionReason(t, report.Decisions, "decision:span_generation:guardrail:span_guardrail", "guardrail.stripped", "observed")
 	assertDecisionReason(t, report.Decisions, "decision:span_generation:security:span_security", "security.warned", "observed")
 	if !hasDecisionTab(report.Decisions, "decision:span_generation:routing:artifact_routing:0", "Routing") {
 		t.Fatalf("routing decision missing Routing tab target: %#v", report.Decisions)
+	}
+	guardrail := findDecision(report.Decisions, "decision:span_generation:guardrail:span_guardrail")
+	if guardrail == nil || guardrail.Model != "selected-model" || !guardrail.EscalatedToBlock {
+		t.Fatalf("guardrail decision = %#v, want safe selected model and strip escalation", guardrail)
+	}
+	if guardrail.Location == nil || guardrail.Location.PartType != "image" || guardrail.Location.Origin.Kind != "step" || guardrail.Location.Origin.StepIndex == nil || *guardrail.Location.Origin.StepIndex != 3 || guardrail.Location.Origin.PartIndex != 2 {
+		t.Fatalf("guardrail location = %#v, want exact step origin", guardrail.Location)
 	}
 }
 
@@ -386,6 +394,15 @@ func assertDecisionReason(t *testing.T, decisions []TurnDecision, id string, cod
 		return
 	}
 	t.Fatalf("decision %q missing from %#v", id, decisions)
+}
+
+func findDecision(decisions []TurnDecision, id string) *TurnDecision {
+	for index := range decisions {
+		if decisions[index].ID == id {
+			return &decisions[index]
+		}
+	}
+	return nil
 }
 
 func hasDecisionTab(decisions []TurnDecision, id string, tab string) bool {

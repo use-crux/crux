@@ -43,6 +43,7 @@ import {
   isRoutingReportPreview,
   routingFactsFromReport,
 } from "../lib/routing-receipt";
+import { guardrailReportRows } from "../lib/guardrail-report-facts";
 
 // Governance presence + per-type tabs live further down (`presentGovernance`,
 // `GovernanceTab`, `governanceFacts`). Routing keeps its dedicated path.
@@ -216,20 +217,12 @@ export function governanceFacts(node: ObservabilityRunDetailNode): GovFacts[] {
 
   const g = reportPreview<CruxGuardrailReportPreview>(node, "guardrail.report");
   if (g) {
-    const rows: [string, string, string?][] = [];
-    if (g.phase) rows.push(["phase", g.phase]);
-    if (g.action)
-      rows.push([
-        "action",
-        g.action,
-        g.action === "block"
-          ? "var(--devtools-danger)"
-          : g.action === "pass"
-            ? "var(--devtools-ok)"
-            : "var(--devtools-warn)",
-      ]);
-    if (g.matches?.length) rows.push(["matches", String(g.matches.length)]);
-    out.push({ type: "guardrail", label: "Guardrail", rows, note: g.reason });
+    out.push({
+      type: "guardrail",
+      label: "Guardrail",
+      rows: guardrailReportRows(g),
+      note: g.reason,
+    });
   }
 
   const s = reportPreview<CruxSecurityReportPreview>(node, "security.report");

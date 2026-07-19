@@ -8,10 +8,10 @@
  * @module
  */
 
-import type { AdapterSpec } from '../spec'
-import type { LoopRuntimePort } from '../loop-runtime-port'
-import type { CoreStepDialect, SdkLoopDialect } from './types'
-import { providerMediaHooksFor } from '../native-chat/media-hooks'
+import type { AdapterSpec } from "../spec";
+import type { LoopRuntimePort } from "../loop-runtime-port";
+import type { CoreStepDialect, SdkLoopDialect } from "./types";
+import { providerMediaHooksFor } from "../native-chat/media-hooks";
 
 /**
  * Convert an `AdapterSpec` and bound client into the core-step dialect.
@@ -35,7 +35,7 @@ export function coreStepDialect<
   client: TClient,
 ): CoreStepDialect<TClient, TRawResponse, TRawStream, TExtra, TParams> {
   return {
-    kind: 'core-step',
+    kind: "core-step",
     id: spec.providerId,
     media: providerMediaHooksFor(spec),
     client,
@@ -49,7 +49,7 @@ export function coreStepDialect<
     appendToolRound: spec.appendToolRound,
     sanitizeToolSchema: spec.sanitizeToolSchema,
     wrapOutputSchema: spec.wrapOutputSchema,
-  }
+  };
 }
 
 /**
@@ -68,8 +68,9 @@ export function sdkLoopDialect<TModel, TRawResponse, TRawStream>(
   // Forward each member explicitly (not via spread) so class-based ports keep
   // their prototype methods and receiver, and `kind` cannot be overridden.
   const dialect: SdkLoopDialect<TModel, TRawResponse, TRawStream> = {
-    kind: 'sdk-loop',
+    kind: "sdk-loop",
     id: port.id,
+    capabilities: port.capabilities,
     media: port.media,
     materializeToolSource: port.materializeToolSource,
     describeModel: (model) => port.describeModel(model),
@@ -77,9 +78,9 @@ export function sdkLoopDialect<TModel, TRawResponse, TRawStream>(
     runTextLoop: (request) => port.runTextLoop(request),
     runStructuredAttempt: (request) => port.runStructuredAttempt(request),
     runStream: (request) => port.runStream(request),
-  }
+  };
   if (port.replayStream) {
-    dialect.replayStream = (cached) => port.replayStream!(cached)
+    dialect.replayStream = (cached) => port.replayStream!(cached);
   }
-  return dialect
+  return dialect;
 }

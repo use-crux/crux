@@ -602,6 +602,17 @@ export interface CruxGuardrailReportPreview {
   kind: "guardrail.report";
   phase?: string;
   action: "pass" | "block" | "redact" | "transform" | "warn" | string;
+  boundary?: string;
+  mode?: "enforce" | "report" | string;
+  mediaPartType?: "image" | "audio" | "video" | "file" | string;
+  originKind?: "message" | "step" | "operation" | string;
+  messageIndex?: number;
+  stepIndex?: number;
+  operation?: string;
+  operationPhase?: "input" | "output" | string;
+  field?: string;
+  partIndex?: number;
+  escalatedToBlock?: true;
   matches?: readonly CruxGuardrailMatchPreview[];
   reason?: string;
   beforePreview?: string;

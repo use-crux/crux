@@ -48,9 +48,9 @@ describe("corrective media normalization", () => {
       constraints: [
         constraint({
           id: "mentions-ship",
-          on: boundary.output.both(),
-          run: async (output) =>
-            output.text.includes("ship")
+          on: boundary.output.text(),
+          run: async (text) =>
+            text.includes("ship")
               ? { pass: true as const }
               : { pass: false as const, feedback: "must mention ship" },
         }),

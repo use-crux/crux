@@ -12,17 +12,16 @@ import type {
   CompletedOperationDefinition,
   CompletedOperationContext,
 } from "./definition";
-import type { CompletedOperationModelGuard, RoutingCallOptions } from "../../routing/types";
-import {
-  resolveCompletedModel,
-  type CompletedRoutingState,
-} from "./routing";
+import type {
+  CompletedOperationModelGuard,
+  RoutingCallOptions,
+} from "../../routing/types";
+import { resolveCompletedModel, type CompletedRoutingState } from "./routing";
 import { safeCompletedOperationReport } from "./report";
 import {
   completedLifecycleContext,
   finalizeCompletedResult,
   selectedCompletedInput,
-  withSelectedModel,
 } from "./lifecycle";
 import {
   openCompletedMediaObservation,
@@ -30,7 +29,9 @@ import {
   safeMediaOutputPreview,
   type CompletedMediaObservation,
 } from "./observability-graph";
-import { preflightCompletedCandidates } from "./preflight";
+import { guardCompletedOperationOutput } from "./safety/execute";
+import type { CompletedOperationSafetyOptions } from "./safety/options";
+import { prepareCompletedOperationCandidates } from "./safety/candidate";
 
 /** Options owned by the shared bounded-media lifecycle. */
 export type RunCompletedMediaOperationOptions<
@@ -63,6 +64,7 @@ export type RunCompletedMediaOperationOptions<
   /** Internal descriptor sink. Reports must contain safe facts only. */
   readonly onReport?: (report: unknown) => void;
 }> &
+  CompletedOperationSafetyOptions &
   CompletedOperationModelGuard<TModel, TSelectedModel> &
   RoutingCallOptions<TSelectedModel>;
 
@@ -160,11 +162,15 @@ async function runWithObservation<
     const state: CompletedRoutingState = { calls: 0 };
     const inputPreview = safeMediaInputPreview(options.input);
     try {
-      const prepared = await preflightCompletedCandidates(options, signal);
+      const candidates = await prepareCompletedOperationCandidates(
+        options,
+        signal,
+      );
+      const { input, safety, normalized: prepared } = candidates;
       const result = await resolveCompletedModel(
         options.model,
         {
-          input: options.input,
+          input,
           context: options.routing,
           route: options.route,
           signal,
@@ -176,10 +182,7 @@ async function runWithObservation<
             options,
             candidate as TModel,
           );
-          const candidateInput = withSelectedModel(options.input, candidate);
-          const normalized =
-            prepared.get(candidate) ??
-            (await options.definition.normalize(candidateInput, context));
+          const normalized = await candidates.prepare(candidate, attemptSignal);
           const native = await options.definition.invoke(normalized, {
             ...context,
             signal: attemptSignal,
@@ -199,21 +202,27 @@ async function runWithObservation<
         },
       );
       const finalized = finalizeCompletedResult(result, state.calls);
+      const guarded = await guardCompletedOperationOutput(
+        options.operation,
+        finalized,
+        safety,
+        state.selectedModel,
+      );
       const selected = await selectedCompletedInput(
         prepared,
-        options.input,
+        input,
         options.definition,
         options,
         state.selectedModel,
       );
-      const report = emitReport(options, finalized, selected);
+      const report = emitReport(options, guarded, selected);
       observation?.succeed(
-        finalized,
+        guarded,
         report,
         inputPreview,
-        safeMediaOutputPreview(finalized),
+        safeMediaOutputPreview(guarded),
       );
-      return finalized;
+      return guarded;
     } catch (error) {
       observation?.fail(error, inputPreview);
       throw error;

@@ -40,10 +40,15 @@ export const grounded = constraint({
 });
 ```
 
-Useful targets include `boundary.input.text()`, `boundary.output.text()`,
+Useful targets include `boundary.input.text()`, `boundary.input.media()`,
+`boundary.output.text()`, `boundary.output.media()`,
 `boundary.output.object<T>()`, `boundary.tool.call()`, `boundary.tool.result()`,
 `boundary.approval.request()`, `boundary.retrieval.result()`,
 `boundary.memory.write<T>()`, and `boundary.validation.feedback()`.
+
+See [Safety for content primitives](/docs/reference/crux-core/safety-content-primitives)
+for the exact language, structured, stream, image, speech, and transcription
+coverage matrix.
 
 ## Report mode and streaming
 
@@ -106,8 +111,10 @@ Rules of thumb:
 ## Inspect and test safety
 
 Safety decisions emit observability artifacts, Turn Decision Report rows, and
-Project Index definitions. Devtools opens safety interventions in Explain, and
-the index catalog shows policy ids, boundaries, strategy helper kinds, and
+Project Index definitions. Devtools opens runtime interventions in Runs Explain
+with model, action, original content coordinates, and strip escalation. Catalog
+shows authored boundary tuples, strategy helper configuration and action, links
+from policies to completed operations, operation-side Safety attachments, and
 duplicate policy-id lints.
 
 In Evals, use safety signal assertions for guardrail/constraint audits or the

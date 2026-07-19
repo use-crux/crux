@@ -2,6 +2,7 @@ import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import type { ImageModel } from "ai";
 import { imageGenerationConformanceRow } from "@use-crux/core/adapter/testing";
 import { fallback } from "@use-crux/core";
+import { boundary, guardrail } from "@use-crux/core/safety";
 import { createCruxAi, generateImage, type SdkGateway } from "../src";
 
 function imageGateway(raw: unknown): {
@@ -33,6 +34,61 @@ function imageGateway(raw: unknown): {
 }
 
 describe("AI SDK image generation", () => {
+  it("guards public options around the native payload and canonical result", async () => {
+    const file = {
+      base64: "AQI=",
+      uint8Array: new Uint8Array([1, 2]),
+      mediaType: "image/png",
+    };
+    const raw = {
+      image: file,
+      images: [file],
+      warnings: [],
+      responses: [],
+      providerMetadata: {},
+      usage: {},
+    };
+    const scripted = imageGateway(raw);
+    const result = await createCruxAi({
+      gateway: scripted.gateway,
+    }).generateImage({
+      model: {} as ImageModel,
+      prompt: "private prompt",
+      guardrails: [
+        guardrail({
+          id: "ai-image-input",
+          on: boundary.input.user(),
+          run: () => ({
+            action: "rewrite",
+            value: "guarded prompt",
+            rewrite: { kind: "redact" },
+          }),
+        }),
+        guardrail({
+          id: "ai-image-output",
+          on: boundary.output.media(),
+          run: () => ({ action: "warn", reason: "Review image." }),
+        }),
+      ],
+      safety: { tune: { "ai-image-output": { mode: "report" } } },
+    });
+
+    expect(scripted.image.mock.calls[0]?.[0]).toMatchObject({
+      prompt: "guarded prompt",
+    });
+    expect(scripted.image.mock.calls[0]?.[0]).not.toHaveProperty("guardrails");
+    expect(scripted.image.mock.calls[0]?.[0]).not.toHaveProperty("safety");
+    expect(result.raw).toBe(raw);
+    expect(result.safety?.guardrails?.applied).toEqual([
+      expect.objectContaining({ guard: "ai-image-input", action: "redact" }),
+      expect.objectContaining({
+        guard: "ai-image-output",
+        action: "warn",
+        mode: "report",
+      }),
+    ]);
+  });
+
   it("accepts routing wrappers and sends only the selected leaf model", async () => {
     const file = {
       base64: "AQI=",

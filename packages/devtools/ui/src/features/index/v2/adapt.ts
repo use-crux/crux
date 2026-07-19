@@ -233,6 +233,15 @@ export interface IndexFacts {
   policy?: string;
   appliesTo?: string[];
   severity?: string;
+  /** Ordered authored Safety boundaries; tuple order is significant. */
+  boundaries?: string[];
+  /** Compatibility primary boundary emitted beside `boundaries`. */
+  boundary?: string;
+  /** Static helper metadata safe for authored Catalog presentation. */
+  strategy?: {
+    kind?: string;
+    config?: Record<string, unknown>;
+  };
   // scorer
   model?: string;
   threshold?: number;
@@ -1175,10 +1184,15 @@ export function indexFactChips(def: ViewDef): Array<[string, string | number]> {
     case "guardrail":
       push("policy", f.policy);
       push("applies to", f.appliesTo);
+      push("boundaries", f.boundaries ?? (f.boundary ? [f.boundary] : []));
+      push("strategy", f.strategy?.kind);
+      push("action", f.strategy?.config?.action);
       break;
     case "constraint":
       push("policy", f.policy);
       push("severity", f.severity);
+      push("boundaries", f.boundaries ?? (f.boundary ? [f.boundary] : []));
+      push("strategy", f.strategy?.kind);
       break;
     case "scorer":
       push("model", f.model);

@@ -75,6 +75,7 @@ describe('input media safety observability', () => {
           action: 'strip',
           reason: 'Image is outside policy.',
           mediaPartType: 'image',
+          originKind: 'message',
           messageIndex: 0,
           partIndex: 1,
         },
@@ -133,7 +134,10 @@ describe('input media safety observability', () => {
       boundary: 'user.input.media',
       action: 'block',
       reason: 'Only image is outside policy.',
-      location: { messageIndex: 1, partIndex: 0, partType: 'image' },
+      location: {
+        origin: { kind: 'message', messageIndex: 1, partIndex: 0 },
+        partType: 'image',
+      },
     })
     expect(callbacks).toBe(1)
 

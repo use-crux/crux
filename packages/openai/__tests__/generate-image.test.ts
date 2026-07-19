@@ -2,6 +2,7 @@ import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import type OpenAI from "openai";
 import { imageGenerationConformanceRow } from "@use-crux/core/adapter/testing";
 import { fallback } from "@use-crux/core";
+import { boundary, guardrail } from "@use-crux/core/safety";
 import { createOpenAI } from "../src";
 
 function clientWith(response: unknown) {
@@ -17,6 +18,42 @@ function clientWith(response: unknown) {
 }
 
 describe("OpenAI image generation", () => {
+  it("guards image options without leaking policy controls into OpenAI", async () => {
+    const raw = { created: 1, data: [{ b64_json: "AQI=" }] };
+    const { client, generate } = clientWith(raw);
+    const result = await createOpenAI(client).generateImage({
+      model: "gpt-image-1",
+      prompt: "private prompt",
+      guardrails: [
+        guardrail({
+          id: "openai-image-input",
+          on: boundary.input.user(),
+          run: () => ({
+            action: "rewrite",
+            value: "guarded prompt",
+            rewrite: { kind: "redact" },
+          }),
+        }),
+        guardrail({
+          id: "openai-image-output",
+          on: boundary.output.media(),
+          run: () => ({ action: "warn", reason: "Review image." }),
+        }),
+      ],
+      safety: { tune: { "openai-image-output": { mode: "report" } } },
+    });
+
+    expect(generate.mock.calls[0]?.[0]).toMatchObject({
+      prompt: "guarded prompt",
+    });
+    expect(generate.mock.calls[0]?.[0]).not.toHaveProperty("guardrails");
+    expect(generate.mock.calls[0]?.[0]).not.toHaveProperty("safety");
+    expect(result.raw).toBe(raw);
+    expect(
+      result.safety?.guardrails?.applied.map((entry) => entry.guard),
+    ).toEqual(["openai-image-input", "openai-image-output"]);
+  });
+
   it("accepts routing wrappers and sends only the selected leaf model", async () => {
     const { client, generate } = clientWith({
       created: 1,

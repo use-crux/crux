@@ -19,6 +19,7 @@ import type {
   TurnDeepTabTarget,
   TurnEvidenceRef,
 } from "./targets";
+import type { MediaPartLocation } from "../../safety/media/types";
 
 /** One canonical explanation report for a model call or stream turn. */
 export interface TurnDecisionReport {
@@ -70,6 +71,12 @@ export interface TurnDecision {
   subject: TurnDecisionSubject;
   outcome: string;
   reason: TurnDecisionReason;
+  /** Safe model id for this media decision, when one is known. */
+  model?: string;
+  /** Safe original coordinates when the decision evaluated canonical media. */
+  location?: MediaPartLocation;
+  /** Present only when an enforced media strip escalated to a terminal block. */
+  escalatedToBlock?: true;
   source?: TurnSourceJoin;
   coverage?: TurnCoverageArea;
   tab?: TurnDeepTabTarget;

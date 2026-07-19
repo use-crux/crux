@@ -39,6 +39,18 @@ func numericAttribute(raw json.RawMessage, key string) (float64, bool) {
 	return number, ok
 }
 
+func booleanAttribute(raw json.RawMessage, key string) bool {
+	if len(raw) == 0 {
+		return false
+	}
+	var attrs map[string]any
+	if err := json.Unmarshal(raw, &attrs); err != nil {
+		return false
+	}
+	value, ok := attrs[key].(bool)
+	return ok && value
+}
+
 func nullIfEmpty(value string) interface{} {
 	if value == "" {
 		return nil

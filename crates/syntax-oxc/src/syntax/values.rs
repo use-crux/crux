@@ -57,6 +57,9 @@ pub fn syntax_value_from_expression(
         Expression::ParenthesizedExpression(parenthesized) => {
             syntax_value_from_expression(view, &parenthesized.expression, imports)
         }
+        Expression::TSAsExpression(expression) => {
+            syntax_value_from_expression(view, &expression.expression, imports)
+        }
         Expression::ArrowFunctionExpression(function) => {
             function_value_from_arrow(view, function, imports, None)
         }

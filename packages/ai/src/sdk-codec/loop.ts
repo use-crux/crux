@@ -11,6 +11,7 @@ import { mapAiSdkFinishReason } from "../normalized-outcome";
 import { canonicalBase, buildBaseArgs } from "./request-args";
 import { withToolCallRepair } from "./tool-call-repair";
 import { decodeAssistantContentFromAiSdkParts } from "../assistant-content";
+import { createStepTransformModelWrapper } from "./step-transform";
 import type {
   AiSdkCallPlan,
   SdkLoopResultLike,
@@ -18,7 +19,10 @@ import type {
 } from "./types";
 
 type LoopStepFacts = NonNullable<
-  Extract<ExecutorOutcome<SdkLoopResultLike>, { status: "complete" }>["stepFacts"]
+  Extract<
+    ExecutorOutcome<SdkLoopResultLike>,
+    { status: "complete" }
+  >["stepFacts"]
 >;
 
 const APPROVAL_PART = "tool-approval-request";
@@ -39,6 +43,9 @@ export function createLoopCallPlan(
 ): AiSdkCallPlan<"generateText", ExecutorOutcome<SdkLoopResultLike>> {
   const args = buildBaseArgs(request, { includeTools: true });
   withToolCallRepair(args);
+  const wrapStepModel = request.stepTransformer
+    ? createStepTransformModelWrapper(request.stepTransformer)
+    : undefined;
 
   let stopReason: string | undefined;
   let refunds = 0;
@@ -84,10 +91,17 @@ export function createLoopCallPlan(
       }>;
       finishReason?: string;
       usage?: SdkUsageLike;
+      content?: Array<Record<string, unknown>>;
     }) => {
+      const content = step.content
+        ? decodeAssistantContentFromAiSdkParts(step.content)
+        : step.text
+          ? ([{ type: "text", text: step.text }] as const)
+          : [];
       const directive = await observer.onStepEnd({
         index: stepIndex,
         text: step.text,
+        content,
         toolCalls: step.toolCalls.map((tc) => ({
           id: tc.toolCallId,
           name: tc.toolName,
@@ -126,17 +140,19 @@ export function createLoopCallPlan(
         };
       }
     };
-    args.prepareStep = () =>
-      overrides
-        ? {
-            ...(overrides.system !== undefined
-              ? { system: overrides.system }
-              : {}),
-            ...(overrides.activeTools !== undefined
-              ? { activeTools: [...overrides.activeTools] }
-              : {}),
-          }
-        : {};
+  }
+  if (request.observer || wrapStepModel) {
+    args.prepareStep = ({
+      model,
+    }: {
+      model: Parameters<NonNullable<typeof wrapStepModel>>[0];
+    }) => ({
+      ...(wrapStepModel ? { model: wrapStepModel(model) } : {}),
+      ...(overrides?.system !== undefined ? { system: overrides.system } : {}),
+      ...(overrides?.activeTools !== undefined
+        ? { activeTools: [...overrides.activeTools] }
+        : {}),
+    });
   }
 
   return {
@@ -229,9 +245,7 @@ function sdkStepFacts(
 
 function hasStepFact(fact: LoopStepFacts[number]): boolean {
   return (
-    fact.content.some(
-      (part) => part.type !== "text" || part.text !== "",
-    ) ||
+    fact.content.some((part) => part.type !== "text" || part.text !== "") ||
     fact.usage !== undefined ||
     fact.finishReason !== undefined ||
     fact.responseId !== undefined ||

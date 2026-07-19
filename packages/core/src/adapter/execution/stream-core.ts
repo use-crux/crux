@@ -10,7 +10,9 @@
  */
 
 import type { MiddlewareResult } from "../../runtime/types";
-import { createSafety } from "../../safety/session";
+import { createSafetyWithBindingApplicability } from "../../safety/session";
+import { languageBindingApplicability } from "../../safety/language-applicability";
+import type { LiveTextSlot } from "../../safety/output/completion";
 import { orchestrateStream } from "../../generation/orchestrate";
 import { composeAbortSignals, withBudget } from "../../generation/timeout";
 import { normalizeAdapterCallError } from "../normalized-outcome";
@@ -24,9 +26,10 @@ import { createCachedStreamHandle } from "./metadata";
 import { buildResolveOpts } from "./shared";
 import { isSafetyTextChunk } from "./stream-safety";
 import { emitInputTokenEstimate } from "./media-token-budget";
-import { responseContent } from "../assistant-output";
-import type { Message } from "../../generation/messages";
-import { replaceTextSlots } from "./stream-content";
+import {
+  guardStreamCompletion,
+  trackSafetyStreamSeal,
+} from "./stream-completion";
 import { materializeToolSources } from "./tool-sources";
 import { createStreamSourceCleanup } from "./stream-source-cleanup";
 import { trackRawStream } from "./stream-tracking";
@@ -67,23 +70,34 @@ export async function streamCore<
   let resolved = await prompt.resolve(resolveOpts);
   const mappedSettings = dialect.mapSettings(resolved.settings);
   let messages = initialCoreMessages(resolved, args.messages);
-  const safety = createSafety({
-    call: {
-      constraints: args.constraints,
-      guardrails: args.guardrails,
-      constraintMaxRetries: args.constraintMaxRetries,
+  let currentSystem = resolved.system;
+  let currentSystemBlocks = resolved.systemBlocks;
+  const safety = createSafetyWithBindingApplicability(
+    {
+      call: {
+        constraints: args.constraints,
+        guardrails: args.guardrails,
+        constraintMaxRetries: args.constraintMaxRetries,
+      },
+      safety: args.safety,
+      resolved: {
+        constraints: resolved.constraints,
+        guardrails: resolved.guardrails,
+        metadata: resolved.metadata,
+      },
+      promptId: prompt.id,
+      model: modelInfo.modelId,
+      systemPrompt: resolved.system,
     },
-    safety: args.safety,
-    resolved: {
-      constraints: resolved.constraints,
-      guardrails: resolved.guardrails,
-      metadata: resolved.metadata,
-    },
-    promptId: prompt.id,
-    model: modelInfo.modelId,
-    systemPrompt: resolved.system,
+    languageBindingApplicability(resolved.schema !== undefined),
+  );
+  const guardedInput = await safety.guardInput({
+    messages,
+    system: currentSystem,
   });
-  messages = [...(await safety.guardInput({ messages })).messages];
+  messages = [...guardedInput.messages];
+  if (guardedInput.system !== currentSystem) currentSystemBlocks = undefined;
+  currentSystem = guardedInput.system;
   const sourceSession = await materializeToolSources({
     dialect: dialect.id,
     resolved,
@@ -133,8 +147,8 @@ export async function streamCore<
 
     const callArgs: CallArgs<TExtra> = {
       model: modelInfo.modelId,
-      system: resolved.system,
-      systemBlocks: resolved.systemBlocks,
+      system: currentSystem,
+      systemBlocks: currentSystemBlocks,
       messages: providerMessages,
       settings: mappedSettings,
       schema: resolved.schema,
@@ -143,6 +157,7 @@ export async function streamCore<
       extra: (args.extra ?? {}) as TExtra,
     };
 
+    let providerRawStream: TRawStream | undefined;
     const handle = await sourceSession.withContext(() =>
       orchestrateStream(
         {
@@ -166,7 +181,7 @@ export async function streamCore<
             media: dialect.media,
             tokenBudget: args.tokenBudget,
           });
-          return withBudget(
+          const providerHandle = await withBudget(
             (signal) =>
               dialect.stream(dialect.client, callArgs, {
                 signal: composeAbortSignals(args.signal, signal),
@@ -182,22 +197,39 @@ export async function streamCore<
               mapError: dialect.mapError,
             });
           });
+          providerRawStream = providerHandle.raw ?? providerHandle.rawStream;
+          return providerHandle;
         },
       ),
     );
 
-    const safetyStream = safety.enabled ? safety.openStream() : undefined;
-    const streamedAssistant = { text: "" };
+    const trackedSafety = safety.enabled
+      ? trackSafetyStreamSeal(safety.openStream())
+      : undefined;
+    const streamedAssistant: {
+      text: string;
+      providerText: string;
+      exactSlots: boolean;
+      slots: LiveTextSlot[];
+    } = { text: "", providerText: "", exactSlots: true, slots: [] };
     const closeSources = createStreamSourceCleanup(sourceSession, args.signal);
 
     return {
       ...handle,
+      raw: handle.raw ?? providerRawStream ?? handle.rawStream,
       rawStream: trackRawStream<TRawStream>({
         rawStream: handle.rawStream as AsyncIterable<unknown>,
         extractTextDelta: handle.extractTextDelta,
-        safetyStream,
+        safetyStream: trackedSafety?.stream,
+        observeText: (text) => {
+          streamedAssistant.providerText += text;
+        },
         appendText: (text) => {
           streamedAssistant.text += text;
+        },
+        recordText: (providerText, guardedText, directive) => {
+          if (directive === "hold") streamedAssistant.exactSlots = false;
+          streamedAssistant.slots.push({ providerText, guardedText });
         },
         close: closeSources,
       }),
@@ -206,62 +238,36 @@ export async function streamCore<
       completion: async () => {
         try {
           const meta = await handle.completion();
-          const providerContent = responseContent({
-            content: meta?.content,
-            text: meta?.text ?? "",
-            toolCalls: meta?.toolCalls?.flatMap((call) =>
-              typeof call.id === "string"
-                ? [{ id: call.id, name: call.name, args: call.args }]
-                : [],
-            ),
-          });
-          const providerTextSlots = providerContent.flatMap((part) =>
-            part.type === "text" ? [part.text] : [],
-          );
-          const hasMixedProviderText =
-            providerTextSlots.length > 1 ||
-            (providerTextSlots.length > 0 &&
-              providerContent.some((part) => part.type !== "text"));
-          const guardedSlots =
-            safety.enabled && hasMixedProviderText
-              ? await safety.guardOutputTextParts(providerTextSlots)
-              : undefined;
-          const text = guardedSlots
-            ? guardedSlots.join("")
-            : safety.enabled
+          const liveText =
+            trackedSafety?.sealedText() ??
+            (streamedAssistant.providerText
               ? streamedAssistant.text
-              : (meta?.text ?? streamedAssistant.text);
-          const content = guardedSlots
-            ? replaceTextSlots(providerContent, guardedSlots)
-            : safety.enabled
-              ? replaceTextSlots(
-                  providerContent,
-                  providerTextSlots.length === 0 ? [] : [text],
-                  text,
-                )
-              : providerContent;
-          const stamped = meta ? safety.stamp(meta) : meta;
-          const assistantMessage: Message = {
-            role: "assistant",
-            content,
-            ...(meta?.toolCalls
-              ? { metadata: { toolCalls: meta.toolCalls } }
-              : {}),
-          };
-          const completionMessages = meta?.messages
-            ? replaceFinalAssistant(meta.messages, assistantMessage)
-            : [...messages, assistantMessage];
+              : undefined);
+          const liveTextSlots =
+            trackedSafety &&
+            streamedAssistant.exactSlots &&
+            streamedAssistant.slots
+              .map((slot) => slot.providerText)
+              .join("") === streamedAssistant.providerText &&
+            streamedAssistant.slots.map((slot) => slot.guardedText).join("") ===
+              liveText
+              ? streamedAssistant.slots
+              : undefined;
+          const guarded = await guardStreamCompletion({
+            safety,
+            meta,
+            assembleWithoutSafety: true,
+            liveText,
+            representedText: streamedAssistant.providerText || undefined,
+            liveTextSlots,
+            messages,
+          });
           await lifecycle.captureTurn({
             messages,
-            assistantText: streamedAssistant.text || undefined,
+            assistantText: guarded?.text || undefined,
             toolCalls: meta?.toolCalls,
           });
-          return {
-            ...stamped,
-            text,
-            content,
-            messages: completionMessages,
-          };
+          return guarded;
         } finally {
           await closeSources();
         }
@@ -271,20 +277,4 @@ export async function streamCore<
     await sourceSession.close();
     throw error;
   }
-}
-
-/** Stamp authoritative assistant output into a provider-completed transcript. */
-function replaceFinalAssistant(
-  messages: readonly Message[],
-  assistant: Message,
-): readonly Message[] {
-  const result = [...messages];
-  for (let index = result.length - 1; index >= 0; index -= 1) {
-    if (result[index]?.role === "assistant") {
-      result[index] = assistant;
-      return result;
-    }
-  }
-  result.push(assistant);
-  return result;
 }

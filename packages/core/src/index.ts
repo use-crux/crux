@@ -539,6 +539,7 @@ export type {
   SafetyStream,
   SafetyProtocolEvent,
 } from "./safety/session";
+export type { SafetyAudit } from "./safety/audit";
 export { createSafetyPlugin } from "./safety/plugin";
 export type { SafetyPolicy } from "./safety/plugin";
 
@@ -918,6 +919,9 @@ export type {
   ExecutorRequest,
   StructuredRequest,
   ExecutorStep,
+  ExecutorModelStep,
+  StepContentEdit,
+  StepTransformer,
   StepDirective,
   StepObserver,
   ExecutorOutcome,

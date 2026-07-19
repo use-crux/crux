@@ -15,9 +15,9 @@ export function replaceTextSlots(
   let textIndex = 0;
   const result = content.map((part): AssistantContentPart => {
     if (part.type !== "text") return part;
-    const replacement = { ...part, text: replacements[textIndex] ?? "" };
+    const text = replacements[textIndex] ?? "";
     textIndex += 1;
-    return replacement;
+    return text === part.text ? part : { ...part, text };
   });
   return textIndex === 0 && fallbackText
     ? [{ type: "text", text: fallbackText }, ...result]

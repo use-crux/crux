@@ -11,12 +11,21 @@ import type {
   CompletedOperationModelGuard,
   RoutingCallOptions,
 } from "../../routing/types";
+import type { Guardrail } from "../../safety/guardrail/types";
+import type { Constraint } from "../../safety/constraint/types";
+import type { SafetyTuneOptions } from "../../safety/tune";
 
 /** Minimum call shape shared by all bounded provider media operations. */
 export interface CompletedOperationCall<TModel> {
   readonly model: TModel;
   readonly abortSignal?: AbortSignal;
   readonly timeout?: OperationTimeout;
+  /** Canonical guardrails attached to this completed operation. */
+  readonly guardrails?: readonly Guardrail[];
+  /** Terminal constraints where the concrete operation contract supports them. */
+  readonly constraints?: readonly Constraint[];
+  /** Per-call posture tuning for attached guardrails. */
+  readonly safety?: SafetyTuneOptions;
 }
 
 /** Public call signature compiled from one provider-authored definition. */
@@ -106,6 +115,9 @@ export function bindCompletedOperation<
       input: call,
       abortSignal: input.abortSignal,
       timeout: input.timeout,
+      guardrails: input.guardrails,
+      constraints: input.constraints,
+      safety: input.safety,
       ...(call.routing !== undefined ? { routing: call.routing } : {}),
       ...(call.route !== undefined ? { route: call.route } : {}),
       ...(options.onReport === undefined ? {} : { onReport: options.onReport }),

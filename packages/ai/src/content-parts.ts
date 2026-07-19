@@ -86,8 +86,9 @@ export function decodeContentFromAiSdkParts(parts: readonly Record<string, unkno
       continue
     }
     if (type === 'file') {
-      const data = part.data
-      const mediaType = readString(part, 'mediaType')
+      const generatedFile = isRecord(part.file) ? part.file : undefined
+      const data = part.data ?? generatedFile?.uint8Array
+      const mediaType = readString(part, 'mediaType') ?? readString(generatedFile, 'mediaType')
       const filename = readString(part, 'filename')
       const source = nativeMediaSource(data, mediaType)
       if (source !== undefined) {

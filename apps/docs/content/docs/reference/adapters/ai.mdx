@@ -8,6 +8,10 @@ preserves image/audio/video/file input and ordered mixed assistant output, and
 exports native SDK `generateImage()`, `transcribe()`, and `generateSpeech()`
 operations. Convex re-exports those functions by exact identity. Provider
 options stay in typed `extra`, and no operation persists media implicitly.
+Completed image and speech calls accept `guardrails`/`safety`; transcription
+also accepts one-shot output-text `constraints`. Canonical decisions appear in
+`result.safety`, while AI SDK-native raw results remain unguarded. See the
+[content-primitive matrix](/docs/reference/crux-core/safety-content-primitives).
 
 ```ts
 import {
@@ -355,7 +359,7 @@ Use it with memory, indexers, or retrievers when you want the AI SDK model regis
 | `maxParallelCalls`  | `number?`                  | Internal AI SDK split-call concurrency. Defaults to `1`. |
 | `headers`           | `Record<string, string>?`  | Optional request headers                                 |
 | `providerOptions`   | `Record<string, unknown>?` | Provider-specific AI SDK options                         |
-| `version`           | `string?`                   | Extra vector-semantic revision for cache invalidation    |
+| `version`           | `string?`                  | Extra vector-semantic revision for cache invalidation    |
 
 For object models, the helper identity uses `{ provider, modelId }`; string
 models use the raw string id. The user `version` is appended rather than

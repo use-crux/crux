@@ -74,6 +74,7 @@ function portForBoundLoop(
 ): LoopRuntimePort<unknown, unknown, unknown> {
   const port: LoopRuntimePort<unknown, unknown, unknown> = {
     id,
+    capabilities: bound.capabilities,
     media: loop.media,
     materializeToolSource: bound.materializeToolSource,
     describeModel:

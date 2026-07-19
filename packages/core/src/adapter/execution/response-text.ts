@@ -6,6 +6,8 @@
 
 import type { AdapterResponse } from "../types";
 import { responseContent } from "../assistant-output";
+import { textFromAssistantContent } from "../assistant-output";
+import type { AssistantContentPart } from "../../types/content";
 import { replaceTextSlots } from "./stream-content";
 
 /** Replace response text without leaving stale provider text content behind. */
@@ -23,5 +25,17 @@ export function replaceResponseText(
       textSlots.map((_, index) => (index === 0 ? text : "")),
       text,
     ),
+  };
+}
+
+/** Replace canonical response content while retaining every provider-owned fact. */
+export function replaceResponseContent(
+  response: AdapterResponse,
+  content: readonly AssistantContentPart[],
+): AdapterResponse {
+  return {
+    ...response,
+    content,
+    text: textFromAssistantContent(content),
   };
 }

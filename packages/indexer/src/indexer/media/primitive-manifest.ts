@@ -16,6 +16,10 @@ import {
   mediaOperationNames,
   mediaRelationDeclarations,
 } from './manifest'
+import {
+  operationPolicyReferences,
+  operationSafetySourceRefs,
+} from './operation-safety-references'
 export {
   authoredMediaPrimitiveManifest,
   mediaAuthoredOptionFields,
@@ -36,7 +40,7 @@ const evaluationKinds = ['eval'] as const
 /** Immutable first-party authored-media primitive manifest. */
 export const mediaPrimitiveManifest: IndexerExtension = Object.freeze({
   name: '@use-crux/indexer/crux-core-media',
-  version: '2',
+  version: '3',
   extractors: [
     {
       name: 'media.operation',
@@ -93,6 +97,8 @@ function extractMediaOperation(ctx: ExtractContext) {
     ...authoredOptions(ctx),
   }
   const references = relationReferences(ctx)
+  references.push(...operationPolicyReferences(ctx, definitionId))
+  const sourceRefs = operationSafetySourceRefs(ctx, definitionId)
   return facts({
     definitions: [
       sanitizedDefinition(
@@ -112,6 +118,7 @@ function extractMediaOperation(ctx: ExtractContext) {
       ),
     ],
     ...(references.length ? { references } : {}),
+    ...(sourceRefs.length ? { sourceRefs } : {}),
   })
 }
 

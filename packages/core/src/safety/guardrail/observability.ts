@@ -1,6 +1,7 @@
 import { observe } from '../../observability'
 import type { MediaGuardrailRunResult } from './types'
 import type { MediaPartLocation } from '../boundary'
+import { mediaLocationAttributes } from '../media/location'
 import type { GuardrailBinding } from '../registry'
 
 /** Record the safe observability projection for one guardrail result. */
@@ -34,12 +35,24 @@ export function recordGuardrailReport(
       edgeType: 'produced',
       from: { kind: 'span', id: activeSpanId },
       to: { kind: 'artifact', id: artifactId },
-      attributes: { guardrailName, boundary: binding.boundary.id, mode: binding.mode, action },
+      attributes: {
+        guardrailName,
+        boundary: binding.boundary.id,
+        mode: binding.mode,
+        action,
+      },
     })
   }
   observe.event({
     name: 'guardrail.action',
-    attributes: { guardrailName, boundary: binding.boundary.id, mode: binding.mode, phase, action, durationMs },
+    attributes: {
+      guardrailName,
+      boundary: binding.boundary.id,
+      mode: binding.mode,
+      phase,
+      action,
+      durationMs,
+    },
   })
 }
 
@@ -58,6 +71,7 @@ export function recordMediaGuardrailReport(
 ): void {
   const guardrailName = binding.policy.id
   const media = mediaAttributes(location, escalatedToBlock)
+  const phase = binding.boundary.id === 'model.output.media' ? 'output' : 'input'
   const reason = result.action === 'allow' ? {} : { reason: result.reason }
   const activeSpanId = observe.captureContext()?.currentSpanId
   const artifactId = observe.artifact({
@@ -66,7 +80,7 @@ export function recordMediaGuardrailReport(
     encoding: 'json',
     preview: {
       kind: 'guardrail.report',
-      phase: 'input',
+      phase,
       action: result.action,
       ...reason,
       ...media,
@@ -76,7 +90,7 @@ export function recordMediaGuardrailReport(
       category: binding.policy.category,
       boundary: binding.boundary.id,
       mode: binding.mode,
-      phase: 'input',
+      phase,
       action: result.action,
       ...reason,
       ...media,
@@ -103,7 +117,7 @@ export function recordMediaGuardrailReport(
       guardrailName,
       boundary: binding.boundary.id,
       mode: binding.mode,
-      phase: 'input',
+      phase,
       action: result.action,
       ...reason,
       ...media,
@@ -148,7 +162,13 @@ function recordBlockedEdge(
       edgeType: 'guardrail.blocked',
       from: { kind: 'span', id: activeSpanId },
       to: { kind: 'artifact', id: artifactId },
-      attributes: { guardrailName, boundary: binding.boundary.id, mode: binding.mode, reason, ...details },
+      attributes: {
+        guardrailName,
+        boundary: binding.boundary.id,
+        mode: binding.mode,
+        reason,
+        ...details,
+      },
     })
   }
 }
@@ -158,18 +178,12 @@ function mediaAttributes(
   escalatedToBlock: boolean,
 ): Readonly<Record<string, string | number | true>> {
   return {
-    mediaPartType: location.partType,
-    messageIndex: location.messageIndex,
-    partIndex: location.partIndex,
+    ...mediaLocationAttributes(location),
     ...(escalatedToBlock ? { escalatedToBlock: true as const } : {}),
   }
 }
 
-function guardrailReportPreview(
-  phase: 'input' | 'output',
-  action: string,
-  result: unknown,
-): Record<string, unknown> {
+function guardrailReportPreview(phase: 'input' | 'output', action: string, result: unknown): Record<string, unknown> {
   const base = {
     kind: 'guardrail.report',
     phase,
@@ -178,10 +192,17 @@ function guardrailReportPreview(
   if (!result || typeof result !== 'object') return base
 
   const record = result as Record<string, unknown>
+  const rewrite =
+    record.rewrite &&
+    typeof record.rewrite === 'object' &&
+    typeof (record.rewrite as { readonly kind?: unknown }).kind === 'string'
+      ? {
+          rewrite: { kind: (record.rewrite as { readonly kind: string }).kind },
+        }
+      : {}
   return {
     ...base,
-    ...record,
-    ...(typeof record.value === 'string' ? { afterPreview: record.value.slice(0, 500) } : {}),
+    ...rewrite,
     ...(typeof record.reason === 'string' ? { reason: record.reason } : {}),
   }
 }

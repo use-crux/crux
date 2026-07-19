@@ -11,8 +11,15 @@
  */
 
 import type { Message } from "../../generation/messages";
-import { createSafety } from "../../safety/session";
+import {
+  createSafetyWithBindingApplicability,
+  createSafetyLanguageStepTransformer,
+  finalizeSafetySessionLanguageOutput,
+  safetyRequiresLanguageStepTransform,
+} from "../../safety/session";
+import { languageBindingApplicability } from "../../safety/language-applicability";
 import type { Safety } from "../../safety/session";
+import { SafetyConfigError } from "../../safety/errors";
 import { orchestrateGenerate } from "../../generation/orchestrate";
 import {
   composeAbortSignals,
@@ -87,33 +94,57 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
   const mappedSettings = dialect.mapSettings(resolved.settings, modelInfo);
   let { messages, promptText } = initialMessageState(resolved, args.messages);
   let nativeMessages = args.nativeMessages;
+  let currentSystem = resolved.system;
+  let currentSystemBlocks = resolved.systemBlocks;
   const retryId = args.validationRetry
     ? `vr_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
     : "";
-  const safety: Safety = createSafety({
-    call: {
-      constraints: args.constraints,
-      guardrails: args.guardrails,
-      constraintMaxRetries: args.constraintMaxRetries,
+  const safety: Safety = createSafetyWithBindingApplicability(
+    {
+      call: {
+        constraints: args.constraints,
+        guardrails: args.guardrails,
+        constraintMaxRetries: args.constraintMaxRetries,
+      },
+      safety: args.safety,
+      resolved: {
+        constraints: resolved.constraints,
+        guardrails: resolved.guardrails,
+        metadata: resolved.metadata,
+      },
+      promptId: prompt.id,
+      model: modelInfo.modelId,
+      traceId: retryId || undefined,
+      systemPrompt: resolved.system,
     },
-    safety: args.safety,
-    resolved: {
-      constraints: resolved.constraints,
-      guardrails: resolved.guardrails,
-      metadata: resolved.metadata,
-    },
-    promptId: prompt.id,
-    model: modelInfo.modelId,
-    traceId: retryId || undefined,
-    systemPrompt: resolved.system,
-  });
+    languageBindingApplicability(resolved.schema !== undefined),
+  );
+  if (
+    safetyRequiresLanguageStepTransform(safety) &&
+    dialect.capabilities?.stepTransform !== "before-client-tools"
+  ) {
+    throw new SafetyConfigError({
+      message: `Loop runtime "${dialect.id}" must support step transform before client tools for the applicable language output guardrails.`,
+    });
+  }
+  const stepTransformer = createSafetyLanguageStepTransformer(
+    safety,
+    resolved.schema,
+  );
   const guardedInput = await safety.guardInput({
     messages,
     prompt: promptText,
+    system: currentSystem,
   });
-  if (guardedInput.messages !== messages) nativeMessages = undefined;
+  if (
+    guardedInput.messages !== messages ||
+    guardedInput.system !== currentSystem
+  )
+    nativeMessages = undefined;
   messages = [...guardedInput.messages];
   promptText = guardedInput.prompt;
+  if (guardedInput.system !== currentSystem) currentSystemBlocks = undefined;
+  currentSystem = guardedInput.system;
 
   const sourceSession = await materializeToolSources({
     dialect: dialect.id,
@@ -148,8 +179,6 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
     await sourceSession.close();
     throw error;
   }
-  let currentSystem = resolved.system;
-  let currentSystemBlocks = resolved.systemBlocks;
   const maxSteps =
     args.maxSteps ?? resolved.settings.maxSteps ?? DEFAULT_MAX_STEPS;
 
@@ -223,6 +252,7 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
       activeTools: args.activeTools,
       maxSteps,
       observer: loopObserver,
+      ...(stepTransformer !== undefined ? { stepTransformer } : {}),
       abortSignal: composeAbortSignals(args.signal, signal),
       extra: args.extra,
     };
@@ -306,7 +336,8 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
 
     if (outcome.status === "suspended") {
       const result = buildSuspendedResult(outcome);
-      await safety.finalizeOutput(
+      await finalizeSafetySessionLanguageOutput(
+        safety,
         { text: result.text },
         unreachableRegenerate,
         {
@@ -323,7 +354,8 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
     let finalCostUsd = outcome.meta.costUsd;
     const resultStepFacts = [...(outcome.stepFacts ?? stepFacts)];
     let resultMessages = [...outcome.messages];
-    const finalOutput = await safety.finalizeOutput(
+    const finalOutput = await finalizeSafetySessionLanguageOutput(
+      safety,
       { text: finalText, parsed: undefined },
       async (corrective) => {
         const regenMessages: Message[] = [...resultMessages, ...corrective];
