@@ -5,12 +5,12 @@
   "fileSelection": "staticDefinitionFiles(root)",
   "projection": "canonicalStaticExtractionJson(definitions,relations,diagnostics,dependencies)",
   "totals": {
-    "files": 727,
-    "definitions": 72,
-    "relations": 3,
-    "diagnostics": 17,
-    "dependencies": 1337,
-    "canonicalBytes": 189240
+    "files": 734,
+    "definitions": 75,
+    "relations": 7,
+    "diagnostics": 20,
+    "dependencies": 1352,
+    "canonicalBytes": 195056
   },
   "files": [
     {
@@ -555,12 +555,12 @@
     },
     {
       "file": "packages/ai/src/sdk-codec/loop.ts",
-      "sha256": "20cf2561012213eb6fdf3b49bb14a19a459d5ffbec6fb5b2e7675e1771747896",
-      "bytes": 422,
+      "sha256": "0be1504e934954ff0ac9a7260eec77335cdf36a3da3fa49d9c707a124ae52f8e",
+      "bytes": 475,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 8
+      "dependencies": 9
     },
     {
       "file": "packages/ai/src/sdk-codec/replay.ts",
@@ -579,6 +579,15 @@
       "relations": 0,
       "diagnostics": 0,
       "dependencies": 2
+    },
+    {
+      "file": "packages/ai/src/sdk-codec/step-transform.ts",
+      "sha256": "4a553f2b63162b096358d9769e4fd389b7013dbc3315f9eac917168bf9b71474",
+      "bytes": 113,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
     },
     {
       "file": "packages/ai/src/sdk-codec/stream-meta.ts",
@@ -609,12 +618,12 @@
     },
     {
       "file": "packages/ai/src/sdk-codec/structured.ts",
-      "sha256": "cf17119b46b5d2cd02c2ef7561f30accf264b45e1dbd81771bf1242da25668e2",
-      "bytes": 237,
+      "sha256": "03e32761a6feb6c1f65b241d9e7f8c1d22139da484c2bf3def21ec50605ad5d8",
+      "bytes": 290,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 4
+      "dependencies": 5
     },
     {
       "file": "packages/ai/src/sdk-codec/types.ts",
@@ -1661,6 +1670,15 @@
       "dependencies": 3
     },
     {
+      "file": "packages/core/__type_tests__/completed-image-safety-options.ts",
+      "sha256": "26aa08553e3530f11bd233ed708dea0de3d1d685b4e9077feacb729ec12ed35e",
+      "bytes": 1537,
+      "definitions": 1,
+      "relations": 1,
+      "diagnostics": 1,
+      "dependencies": 2
+    },
+    {
       "file": "packages/core/__type_tests__/completed-operation-runner.ts",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
@@ -1668,6 +1686,24 @@
       "relations": 0,
       "diagnostics": 0,
       "dependencies": 0
+    },
+    {
+      "file": "packages/core/__type_tests__/completed-speech-safety-options.ts",
+      "sha256": "5f9f1bba89179547f1058b2f29073f9b83dfb6e3c75ac2cf3d1e689032b02d56",
+      "bytes": 1578,
+      "definitions": 1,
+      "relations": 1,
+      "diagnostics": 1,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/core/__type_tests__/completed-transcription-safety-options.ts",
+      "sha256": "273bf4941dc83ab31fec3348858dc701b742bde89db5cd325ccd518802d2391f",
+      "bytes": 1903,
+      "definitions": 1,
+      "relations": 2,
+      "diagnostics": 1,
+      "dependencies": 2
     },
     {
       "file": "packages/core/__type_tests__/composition-inference-pass2.ts",
@@ -2048,6 +2084,15 @@
       "dependencies": 1
     },
     {
+      "file": "packages/core/__type_tests__/safety-output-media-contract.ts",
+      "sha256": "edbc7989d3940c5013763a64ee4710014e3d52b101c6da964ae14d8686ee90b8",
+      "bytes": 110,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
       "file": "packages/core/__type_tests__/setup-contract.ts",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
@@ -2220,21 +2265,21 @@
     },
     {
       "file": "packages/core/src/adapter/testing/fake-loop-runtime.ts",
-      "sha256": "9215845a0d15169c0cc690ac71a56dceef3eb87c69477a708b831388d16d31f1",
-      "bytes": 181,
+      "sha256": "68be5868f359be54df959df394afa69698b301c234653b54db72988d7876d82d",
+      "bytes": 289,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 2
+      "dependencies": 4
     },
     {
       "file": "packages/core/src/adapter/testing/loop-runtime-conformance.ts",
-      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
-      "bytes": 68,
+      "sha256": "fb9de0c675e4472ca70f0617042b96bf515024e2c47db2a9535fc8e9af3e8c8b",
+      "bytes": 153,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 0
+      "dependencies": 1
     },
     {
       "file": "packages/core/src/adapter/testing/normalized-outcome-conformance.ts",
@@ -3453,12 +3498,12 @@
     },
     {
       "file": "packages/core/src/safety/constraint/boundary.ts",
-      "sha256": "fede6a02b3e8e6959769af26f5ee8e9b27aeed6087774fffa039c1e487ecaf51",
-      "bytes": 111,
+      "sha256": "c5c11138e5e7c3746c1c036c7a90a790d4f2526fa351a717a6031b82557d94a6",
+      "bytes": 157,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 1
+      "dependencies": 2
     },
     {
       "file": "packages/core/src/safety/constraint/runner.ts",
@@ -3480,12 +3525,12 @@
     },
     {
       "file": "packages/core/src/safety/guardrail/pipeline.ts",
-      "sha256": "5f7f6dcf5feebbe2c08974cdda8fb09c5c327443ec16d9ac42003247668510f2",
-      "bytes": 388,
+      "sha256": "a9195ed16718a8af040264ea24d6a4914a9148890e5b2f39b44acce21996fe2f",
+      "bytes": 448,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 6
+      "dependencies": 7
     },
     {
       "file": "packages/core/src/safety/guardrail/strategies/media/index.ts",
@@ -3507,30 +3552,39 @@
     },
     {
       "file": "packages/core/src/safety/input/media.ts",
-      "sha256": "5f7f6dcf5feebbe2c08974cdda8fb09c5c327443ec16d9ac42003247668510f2",
-      "bytes": 388,
+      "sha256": "403e9d965bddd8d59fb8142ed3ced36ec55972821d4c379fe5a3f1e443ea1842",
+      "bytes": 116,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/core/src/safety/input/model-text.ts",
+      "sha256": "971e700eb350c4773335577fb1ca2a6fb823ae0103da3bcd381bbb29a651c443",
+      "bytes": 312,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 5
+    },
+    {
+      "file": "packages/core/src/safety/input/projected-text.ts",
+      "sha256": "14ec6d043ddf6042423e41a0cbaf21b6f6a69860789cc246ab1d4fee852231b6",
+      "bytes": 254,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 4
+    },
+    {
+      "file": "packages/core/src/safety/media/visit.ts",
+      "sha256": "d26b0b39379912f20c76cd548f4079e1820df018f11782a9513eb76f490baa2e",
+      "bytes": 385,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
       "dependencies": 6
-    },
-    {
-      "file": "packages/core/src/safety/input/projected-text.ts",
-      "sha256": "5f3a699f29b19892567044a7045bd5c9cada6761e3565647108fcf424e51d2a1",
-      "bytes": 211,
-      "definitions": 0,
-      "relations": 0,
-      "diagnostics": 0,
-      "dependencies": 3
-    },
-    {
-      "file": "packages/core/src/safety/session.ts",
-      "sha256": "bfe0e3c0f7454973440223c10e8245d258ddd93cff97d915adabc465492b81a6",
-      "bytes": 525,
-      "definitions": 0,
-      "relations": 0,
-      "diagnostics": 0,
-      "dependencies": 9
     },
     {
       "file": "packages/core/src/safety/toolPolicy/types.ts",
@@ -3876,12 +3930,12 @@
     },
     {
       "file": "packages/devtools/ui/src/features/run-detail/components/GenerationDecisions.tsx",
-      "sha256": "4715534db3c83431be30aa1b4e336d91f44c930f4335692e6ac4ff0907612044",
-      "bytes": 492,
+      "sha256": "957648fed7507491ba9bb1688b0c2b48bce5dadf367c997fb385a60a91aec330",
+      "bytes": 576,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 5
+      "dependencies": 6
     },
     {
       "file": "packages/devtools/ui/src/features/run-detail/components/PrimitiveCards.tsx",
@@ -3930,6 +3984,15 @@
     },
     {
       "file": "packages/devtools/ui/src/features/run-detail/lib/definition-ref-links.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/devtools/ui/src/features/run-detail/lib/guardrail-report-facts.ts",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
       "definitions": 0,
@@ -4560,12 +4623,12 @@
     },
     {
       "file": "packages/indexer/src/indexer/media/primitive-manifest.ts",
-      "sha256": "0142c8aad2a71417ba4e4321a47c328da9b40f54d3244431d2bea9133a4c7ee6",
-      "bytes": 181,
+      "sha256": "b6eeea4de2d1084af8706c00fd6e8f1ae26e44112a42fd53a3eb5f68061408e3",
+      "bytes": 256,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 2
+      "dependencies": 3
     },
     {
       "file": "packages/indexer/src/indexer/merge.ts",

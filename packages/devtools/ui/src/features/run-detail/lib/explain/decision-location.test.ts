@@ -47,7 +47,7 @@ describe('decisionLocationLabel', () => {
     ).toEqual(
       expect.arrayContaining([
         ['origin', 'generateImage · output · images · part 1 · image'],
-        ['escalation', 'strip to block', 'var(--qw-danger)'],
+        ['escalation', 'strip to block', 'var(--devtools-danger)'],
       ]),
     )
   })

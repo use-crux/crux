@@ -138,16 +138,16 @@ Observability and Runs show actual `media.generate_image`, `media.transcribe`, `
 
 This table is generated from private conformance fixtures. It is documentation, not a runtime capability API; the owning adapter still validates the selected model before I/O.
 
-| Capability            | OpenAI       | Google                                         | Anthropic                       | AI SDK      | Convex Agent            |
-| --------------------- | ------------ | ---------------------------------------------- | ------------------------------- | ----------- | ----------------------- |
-| Image input           | native       | native                                         | native                          | model-owned | AI SDK-owned            |
-| Audio input           | audio models | native                                         | unsupported                     | model-owned | AI SDK-owned            |
-| Video input           | unsupported  | native                                         | unsupported                     | model-owned | AI SDK-owned            |
-| PDF/document input    | native       | native                                         | native                          | model-owned | AI SDK-owned            |
-| Mixed assistant media | model-owned  | model-owned                                    | limited native file/tool output | model-owned | AI SDK-owned            |
-| `generateImage`       | native       | Imagen/Gemini native                           | absent                          | native      | exact Crux AI re-export |
-| `transcribe`          | native       | honest composition, no word timing/diarization | absent                          | native      | exact Crux AI re-export |
-| `generateSpeech`      | native       | native incl. multi-speaker                     | absent                          | native      | exact Crux AI re-export |
+| Capability | OpenAI | Google | Anthropic | AI SDK | Convex Agent |
+| --- | --- | --- | --- | --- | --- |
+| Image input | native | native | native | model-owned | AI SDK-owned |
+| Audio input | audio models | native | unsupported | model-owned | AI SDK-owned |
+| Video input | unsupported | native | unsupported | model-owned | AI SDK-owned |
+| PDF/document input | native | native | native | model-owned | AI SDK-owned |
+| Mixed assistant media | model-owned | model-owned | limited native file/tool output | model-owned | AI SDK-owned |
+| `generateImage` | native | Imagen/Gemini native | absent | native | exact Crux AI re-export |
+| `transcribe` | native | honest composition, no word timing/diarization | absent | native | exact Crux AI re-export |
+| `generateSpeech` | native | native incl. multi-speaker | absent | native | exact Crux AI re-export |
 
 ## Errors and remediation
 
