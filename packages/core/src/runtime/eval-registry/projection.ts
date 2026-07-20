@@ -6,7 +6,18 @@ import {
   isReusableEvalValue,
 } from "../../eval/internal/identity";
 import { getEvalDefinitionForInternalUse } from "../../eval/internal/definition";
-import { getEvalTaskDescriptorForInternalUse } from "../../eval/internal/task";
+import { EvalTaskExecutionError } from "../../eval/internal/task";
+import { projectEvalExecutionArms } from "../../eval/internal/execution-placement";
+export {
+  projectEvalExecutionArms,
+  projectEvalTaskExecution,
+} from "../../eval/internal/execution-placement";
+export type {
+  EvalExecutionArmProjection,
+  EvalTaskExecutionProjection,
+  InvalidEvalTaskExecutionProjection,
+  ReadyEvalTaskExecutionProjection,
+} from "../../eval/internal/execution-placement";
 
 /** Fingerprint one deployed Case without diagnostic-only metadata. */
 export function fingerprintDeployedEvalCase(
@@ -51,11 +62,18 @@ export function projectDeployedEvalVariants(
 export function projectDeployedEvalRequiredHostCapabilities(
   evalValue: AnyEval,
 ): readonly string[] {
-  const definition = getEvalDefinitionForInternalUse(evalValue);
-  const capabilities = resolveEvalArms(definition).flatMap(
-    (arm) =>
-      getEvalTaskDescriptorForInternalUse(arm.task).requiredHostCapabilities ??
-      [],
+  const arms = projectEvalExecutionArms(evalValue);
+  const invalid = arms.find((arm) => arm.status === "invalid");
+  if (invalid !== undefined) {
+    throw new EvalTaskExecutionError(
+      "descriptor_incompatible",
+      invalid.reason,
+    );
+  }
+  const capabilities = arms.flatMap((arm) =>
+    arm.status === "ready" && arm.execution === "runtime"
+      ? arm.requiredHostCapabilities
+      : [],
   );
   return Object.freeze([...new Set(capabilities)].sort(compareCodepoint));
 }

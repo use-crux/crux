@@ -16,11 +16,11 @@ import { createEvalPreflight } from "./offline";
 import { createEvalCostPlan } from "./cost-plan";
 import { planExternalScorers } from "./scorer-plan";
 import { resolveEvalHostReadiness } from "./placement";
+import { projectEvalTaskExecution } from "./execution-placement";
 import { assertTaskAcceptsCase } from "./task-case-compatibility";
 import {
   EvalTaskExecutionError,
   getEvalTaskDescriptorForInternalUse,
-  isManagedEvalTaskForInternalUse,
   projectEvalTaskIdentityForInternalUse,
 } from "./task";
 import type {
@@ -224,11 +224,14 @@ async function planCell(input: {
 }
 
 function requiredHostCapabilities(task: unknown): readonly string[] {
-  if (!isManagedEvalTaskForInternalUse(task)) return Object.freeze([]);
-  return Object.freeze([
-    ...(getEvalTaskDescriptorForInternalUse(task).requiredHostCapabilities ??
-      []),
-  ]);
+  const projection = projectEvalTaskExecution(task);
+  if (projection.status === "invalid") {
+    throw new EvalTaskExecutionError(
+      "descriptor_incompatible",
+      projection.reason,
+    );
+  }
+  return projection.requiredHostCapabilities;
 }
 
 async function planTaskAction(
