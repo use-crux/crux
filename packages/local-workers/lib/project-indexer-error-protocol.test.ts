@@ -19,6 +19,19 @@ describe('project index worker errors', () => {
       'runtime requires its host',
       'RUNTIME_HOST_ONLY',
       'generate host handlers',
+      [
+        {
+          code: 'RUNTIME_EVAL_INVALID',
+          category: 'authored',
+          featureKind: 'eval',
+          featureId: 'answer-quality',
+          arm: 'current',
+          source: 'evals/answer.eval.ts',
+          summary: "Eval 'answer-quality' is not ready.",
+          reason: 'Eval task must be callable.',
+          remediation: 'Pass a callable task to evaluate() and save the file.',
+        },
+      ],
     )
 
     expect(events).toEqual([
@@ -28,6 +41,13 @@ describe('project index worker errors', () => {
           message: 'runtime requires its host',
           code: 'RUNTIME_HOST_ONLY',
           remediation: 'generate host handlers',
+          findings: [
+            expect.objectContaining({
+              code: 'RUNTIME_EVAL_INVALID',
+              featureId: 'answer-quality',
+              arm: 'current',
+            }),
+          ],
         },
       }),
     ])
@@ -62,8 +82,60 @@ describe('project index worker errors', () => {
           type: 'artifact:error',
           artifact: 'runtimeArtifacts',
           error: expect.objectContaining({
-            code: 'SETUP_REQUIRED',
-            remediation: expect.stringContaining('Fix crux.config.ts'),
+            code: 'RUNTIME_ARTIFACT_GENERATION_FAILED',
+            findings: [
+              expect.objectContaining({
+                code: 'SETUP_REQUIRED',
+                category: 'configuration',
+                remediation: expect.stringContaining('Fix crux.config.ts'),
+              }),
+            ],
+          }),
+        }),
+      )
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  }, 30_000)
+
+  it('keeps every generation finding in deterministic order through the built worker', async () => {
+    const root = await mkdtemp(join(packageRoot, '.tmp-worker-findings-'))
+    try {
+      const invalidDefinition = (name: string) => ({
+        id: `eval:${name}`,
+        kind: 'eval',
+        name,
+        fidelity: 'resolved',
+        source: { file: join(root, `evals/${name}.eval.ts`), line: 1 },
+        metadata: {
+          exportName: 'default',
+          evalContract: 'crux.eval',
+          evalExecutionArms: [
+            {
+              name: 'current',
+              status: 'invalid',
+              code: 'task_not_callable',
+              reason: 'Eval task must be callable.',
+            },
+          ],
+        },
+      })
+      const event = await runBuiltWorker({
+        method: 'generateRuntimeArtifacts',
+        protocolVersion: 2,
+        root,
+        definitions: [invalidDefinition('zeta'), invalidDefinition('alpha')],
+      })
+
+      expect(event).toEqual(
+        expect.objectContaining({
+          type: 'artifact:error',
+          error: expect.objectContaining({
+            code: 'RUNTIME_ARTIFACT_GENERATION_FAILED',
+            findings: [
+              expect.objectContaining({ featureId: 'alpha', code: 'RUNTIME_EVAL_INVALID' }),
+              expect.objectContaining({ featureId: 'zeta', code: 'RUNTIME_EVAL_INVALID' }),
+            ],
           }),
         }),
       )

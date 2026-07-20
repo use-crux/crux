@@ -72,7 +72,13 @@ describe("Runtime artifact plan", () => {
     });
 
     await expect(preflightRuntimeArtifactPlan(plan)).rejects.toMatchObject({
-      code: expect.stringMatching(/EISDIR|EACCES/),
+      code: "RUNTIME_ARTIFACT_GENERATION_FAILED",
+      findings: [
+        expect.objectContaining({
+          code: expect.stringMatching(/EISDIR|EACCES/),
+          category: "environment",
+        }),
+      ],
     });
     await expect(readFile(join(root, "first.txt"), "utf8")).resolves.toBe(
       "old-first\n",

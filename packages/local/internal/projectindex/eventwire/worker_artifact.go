@@ -1,6 +1,7 @@
 package eventwire
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -186,19 +187,61 @@ func (c *ProjectIndexArtifactStreamCollector) handleArtifactChunk(raw json.RawMe
 
 func (c *ProjectIndexArtifactStreamCollector) handleArtifactError(raw json.RawMessage) error {
 	var event struct {
-		Error struct {
-			Message     string `json:"message"`
-			Code        string `json:"code,omitempty"`
-			Remediation string `json:"remediation,omitempty"`
+		ProtocolVersion int                      `json:"protocolVersion"`
+		Type            string                   `json:"type"`
+		TransactionID   string                   `json:"transactionId"`
+		Artifact        ProjectIndexArtifactKind `json:"artifact,omitempty"`
+		Error           *struct {
+			Message     string                   `json:"message"`
+			Code        string                   `json:"code,omitempty"`
+			Remediation string                   `json:"remediation,omitempty"`
+			Findings    []RuntimeArtifactFinding `json:"findings,omitempty"`
 		} `json:"error"`
 	}
-	if err := json.Unmarshal(raw, &event); err != nil {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&event); err != nil {
 		return fmt.Errorf("decode artifact:error: %w", err)
 	}
-	if event.Error.Message == "" {
-		return &WorkerEventError{Scope: "artifact", Code: event.Error.Code, Remediation: event.Error.Remediation}
+	if c.options.Artifact != "" && event.Artifact != c.options.Artifact {
+		return fmt.Errorf("project index worker artifact = %s, want %s", event.Artifact, c.options.Artifact)
 	}
-	return &WorkerEventError{Scope: "artifact", Message: event.Error.Message, Code: event.Error.Code, Remediation: event.Error.Remediation}
+	if event.Error == nil || event.Error.Message == "" {
+		return fmt.Errorf("decode artifact:error: error.message is required")
+	}
+	for index, finding := range event.Error.Findings {
+		if err := validateRuntimeArtifactFinding(finding); err != nil {
+			return fmt.Errorf("decode artifact:error finding %d: %w", index, err)
+		}
+	}
+	workerError := &WorkerEventError{
+		Scope:       "artifact",
+		Message:     event.Error.Message,
+		Code:        event.Error.Code,
+		Remediation: event.Error.Remediation,
+		Findings:    append([]RuntimeArtifactFinding(nil), event.Error.Findings...),
+	}
+	if event.Error.Message == "" {
+		workerError.Message = ""
+	}
+	return workerError
+}
+
+func validateRuntimeArtifactFinding(finding RuntimeArtifactFinding) error {
+	if finding.Code == "" || finding.Summary == "" || finding.Reason == "" {
+		return fmt.Errorf("code, summary, and reason are required")
+	}
+	switch finding.Category {
+	case "authored", "configuration", "environment", "internal":
+	default:
+		return fmt.Errorf("unknown category %q", finding.Category)
+	}
+	switch finding.FeatureKind {
+	case "", "eval", "runtime", "target", "generated-file":
+	default:
+		return fmt.Errorf("unknown featureKind %q", finding.FeatureKind)
+	}
+	return nil
 }
 
 func (c *ProjectIndexArtifactStreamCollector) validateRoot(root string) error {

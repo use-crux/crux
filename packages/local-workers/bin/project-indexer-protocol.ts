@@ -8,6 +8,7 @@ import {
   type ProjectIndexFactProducer,
   type ProjectIndexPhaseTiming,
   type ProjectIndexWorkerEvent,
+  type RuntimeArtifactFinding,
 } from '@use-crux/indexer/contracts/worker-events'
 
 export type { ProjectIndexFactProducer } from '@use-crux/indexer/contracts/worker-events'
@@ -120,6 +121,7 @@ export async function writeProjectIndexArtifactError(
   message: string,
   code?: string,
   remediation?: string,
+  findings?: readonly RuntimeArtifactFinding[],
 ): Promise<void> {
   const event: ProjectIndexWorkerEvent = {
     protocolVersion: PROJECT_INDEX_WORKER_PROTOCOL_VERSION,
@@ -130,6 +132,7 @@ export async function writeProjectIndexArtifactError(
       message,
       ...(code ? { code } : {}),
       ...(remediation ? { remediation } : {}),
+      ...(findings && findings.length > 0 ? { findings } : {}),
     },
   }
   await write(event)

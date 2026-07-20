@@ -29,6 +29,7 @@ import {
   writeProjectIndexPhaseError,
   type ProjectIndexWorkerErrorContext,
 } from './project-indexer-protocol'
+import type { RuntimeArtifactFinding } from '@use-crux/indexer/contracts/worker-events'
 import { writeStaticHostArtifactRequest } from './project-indexer-static-host'
 import { isRuntimeOperationKind } from '../lib/runtime-operation-kind'
 import { writeDeploymentManifestArtifact } from './project-indexer-deployment-manifest'
@@ -107,6 +108,7 @@ async function handleLine(line: string): Promise<void> {
         message,
         details.code,
         details.remediation,
+        details.findings,
       )
     } else {
       await writeResponse({ error: message })
@@ -117,13 +119,16 @@ async function handleLine(line: string): Promise<void> {
 function workerErrorDetails(error: unknown): {
   readonly code?: string
   readonly remediation?: string
+  readonly findings?: readonly RuntimeArtifactFinding[]
 } {
   if (typeof error !== 'object' || error === null) return {}
   const code = 'code' in error ? error.code : undefined
   const remediation = 'nextStep' in error ? error.nextStep : undefined
+  const findings = 'findings' in error ? error.findings : undefined
   return {
     ...(typeof code === 'string' && code.length > 0 ? { code } : {}),
     ...(typeof remediation === 'string' && remediation.length > 0 ? { remediation } : {}),
+    ...(Array.isArray(findings) ? { findings } : {}),
   }
 }
 
@@ -254,6 +259,7 @@ async function runAssembledRequest(
         message,
         details.code,
         details.remediation,
+        details.findings,
       )
     } else {
       await writeResponse({ error: message })

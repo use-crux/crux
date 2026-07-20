@@ -3,6 +3,21 @@ import type { ProjectDefinition } from "@use-crux/core/project-index";
 
 export type RuntimeArtifactHost = "next" | "convex" | "cloudflare";
 
+/** One stable child explanation from Runtime artifact planning or commit. */
+export interface RuntimeArtifactFinding {
+  readonly code: string;
+  readonly category: "authored" | "configuration" | "environment" | "internal";
+  readonly featureKind?: "eval" | "runtime" | "target" | "generated-file";
+  readonly featureId?: string;
+  readonly arm?: string;
+  readonly source?: string;
+  readonly summary: string;
+  readonly reason: string;
+  readonly whatStillWorks?: string;
+  readonly remediation?: string;
+  readonly docs?: string;
+}
+
 /** Options for generating runtime target manifests and host entry files. */
 export interface GenerateRuntimeArtifactsOptions {
   /** Project root containing authored Crux source files. */

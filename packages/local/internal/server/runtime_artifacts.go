@@ -3,6 +3,8 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 
@@ -10,6 +12,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/devtools"
 	"github.com/use-crux/crux/packages/local/internal/privacy"
 	"github.com/use-crux/crux/packages/local/internal/process/workerproc"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/eventwire"
 	"github.com/use-crux/crux/packages/local/internal/projectwatch"
 	"github.com/use-crux/crux/packages/local/internal/startup"
 	"github.com/use-crux/crux/packages/local/internal/store"
@@ -100,10 +103,7 @@ func (d *DevServer) refreshProjectIndex(ctx context.Context, root string) bool {
 	if d.runtimeArtifacts != nil {
 		if err := d.runtimeArtifacts(ctx, root, index.Definitions); err != nil {
 			d.logger.Warn("runtime artifact startup generation failed", "error", err)
-			d.startup.Update("runtime-artifacts", "Generating runtime artifacts", startup.Degraded, []startup.Diagnostic{{
-				ID: "runtime-artifacts-startup-failed", Code: "RUNTIME_ARTIFACTS_STARTUP_FAILED", Severity: "warning",
-				Message: err.Error(), Remediation: "Run `crux runtime generate` after fixing the reported runtime configuration error.",
-			}})
+			d.startup.Update("runtime-artifacts", "Generating runtime artifacts", startup.Degraded, []startup.Diagnostic{runtimeArtifactStartupDiagnostic(err)})
 			return true
 		}
 	}
@@ -133,14 +133,56 @@ func (d *DevServer) refreshProjectIndexDelta(ctx context.Context, root string, r
 		d.startup.Update("runtime-artifacts", "Generating runtime artifacts", startup.Active, nil)
 		if err := d.runtimeArtifacts(ctx, root, index.Definitions); err != nil {
 			d.logger.Warn("runtime artifact watch generation failed", "error", err, "watchRunId", run.ID, "files", len(run.Delta.Files), "deletedFiles", len(run.Delta.DeletedFiles))
-			d.startup.Update("runtime-artifacts", "Generating runtime artifacts", startup.Degraded, []startup.Diagnostic{{
-				ID: "runtime-artifacts-startup-failed", Code: "RUNTIME_ARTIFACTS_STARTUP_FAILED", Severity: "warning",
-				Message: err.Error(), Remediation: "Run `crux runtime generate` after fixing the reported runtime configuration error.",
-			}})
+			d.startup.Update("runtime-artifacts", "Generating runtime artifacts", startup.Degraded, []startup.Diagnostic{runtimeArtifactStartupDiagnostic(err)})
 			return
 		}
 		d.startup.Update("runtime-artifacts", "Generating runtime artifacts", startup.Succeeded, nil)
 	}
+}
+
+func runtimeArtifactStartupDiagnostic(err error) startup.Diagnostic {
+	diagnostic := startup.Diagnostic{
+		ID:       "runtime-artifacts-startup-failed",
+		Code:     "RUNTIME_ARTIFACTS_STARTUP_FAILED",
+		Severity: "warning",
+		Message:  "Crux could not refresh the generated Runtime files. The last working files remain active.",
+	}
+	var workerErr *eventwire.WorkerEventError
+	if !errors.As(err, &workerErr) || len(workerErr.Findings) == 0 {
+		return diagnostic
+	}
+	diagnostic.Code = workerErr.Code
+	if diagnostic.Code == "" {
+		diagnostic.Code = "RUNTIME_ARTIFACT_GENERATION_FAILED"
+	}
+	diagnostic.Children = make([]startup.Diagnostic, 0, len(workerErr.Findings))
+	for index, finding := range workerErr.Findings {
+		child := startup.Diagnostic{
+			ID:             fmt.Sprintf("runtime-artifact-finding-%03d-%s", index, finding.Code),
+			Code:           finding.Code,
+			Severity:       "warning",
+			Category:       finding.Category,
+			FeatureKind:    finding.FeatureKind,
+			FeatureID:      finding.FeatureID,
+			Arm:            finding.Arm,
+			Source:         finding.Source,
+			Message:        finding.Summary,
+			Reason:         finding.Reason,
+			WhatStillWorks: finding.WhatStillWorks,
+			Docs:           finding.Docs,
+		}
+		if finding.Remediation != "" {
+			child.Remediation = finding.Remediation + " Crux dev will retry automatically after the next relevant save."
+		}
+		diagnostic.Children = append(diagnostic.Children, child)
+	}
+	first := workerErr.Findings[0]
+	diagnostic.Message = first.Summary
+	if len(workerErr.Findings) > 1 {
+		diagnostic.Message = fmt.Sprintf("%d issues · %s", len(workerErr.Findings), first.Summary)
+	}
+	diagnostic.Remediation = diagnostic.Children[0].Remediation
+	return diagnostic
 }
 
 type runtimeArtifactWorker interface {

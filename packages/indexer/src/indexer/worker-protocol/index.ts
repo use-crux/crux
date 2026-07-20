@@ -19,6 +19,7 @@ export type {
   ProjectIndexPhaseSummary,
   ProjectIndexPhaseTiming,
   ProjectIndexWorkerEvent,
+  RuntimeArtifactFinding,
 } from './types'
 export { PROJECT_INDEX_WORKER_PROTOCOL_VERSION } from './types'
 export type { ProjectIndexArtifactToWorkerEventOptions } from './artifact-events'

@@ -17,17 +17,18 @@ import (
 // tab strip was dropped in S2 — the workbench IS the Inspect workbench;
 // there is no second-level navigation above the nav rail.
 type Workbench struct {
-	ctx             context.Context
-	client          screens.DataClient
-	rawClient       DataClient // legacy/shared helpers
-	capabilities    Capabilities
-	serverURL       string
-	tunnelURL       string
-	ingestTokenPath string
-	browserURL      string
-	openBrowser     BrowserOpener
-	browserStatus   string
-	startupStatus   string
+	ctx               context.Context
+	client            screens.DataClient
+	rawClient         DataClient // legacy/shared helpers
+	capabilities      Capabilities
+	serverURL         string
+	tunnelURL         string
+	ingestTokenPath   string
+	browserURL        string
+	openBrowser       BrowserOpener
+	browserStatus     string
+	startupStatus     string
+	startupDiagnostic *startup.Diagnostic
 
 	width  int
 	height int
@@ -107,13 +108,23 @@ func (w *Workbench) SetIngestToken(_ string, path string) {
 func (w *Workbench) SetStartupSnapshot(snapshot startup.Snapshot) {
 	if len(snapshot.Diagnostics) > 0 {
 		diagnostic := snapshot.Diagnostics[0]
+		w.startupDiagnostic = &diagnostic
+		if len(diagnostic.Children) > 0 {
+			detail := diagnostic.Message
+			if detail == "" {
+				detail = diagnostic.Children[0].Message
+			}
+			w.startupStatus = kit.SanitizeInline(diagnostic.Code + " · " + detail + " · ! details")
+			return
+		}
 		detail := diagnostic.Remediation
 		if detail == "" {
 			detail = diagnostic.Message
 		}
-		w.startupStatus = kit.SanitizeInline(diagnostic.Code + " · " + detail)
+		w.startupStatus = kit.SanitizeInline(diagnostic.Code + " · " + detail + " · ! details")
 		return
 	}
+	w.startupDiagnostic = nil
 	if snapshot.Active && snapshot.Phase != "" {
 		w.startupStatus = kit.SanitizeInline("starting · " + snapshot.Phase)
 		return

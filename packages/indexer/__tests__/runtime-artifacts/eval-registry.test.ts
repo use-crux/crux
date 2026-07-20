@@ -169,21 +169,26 @@ describe("generated deployed Eval registry", () => {
       else process.env.CRUX_EVAL_HOST_TOKEN = token;
     }
 
-    await expect(
-      generateRuntimeArtifacts({
-        root,
-        host: "next",
-        definitions: [
-          {
-            ...definitions[0],
-            metadata: {
-              ...definitions[0]!.metadata,
-              requiredHostCapabilities: [],
-            },
+    const indexMismatch = await generateRuntimeArtifacts({
+      root,
+      host: "next",
+      definitions: [
+        {
+          ...definitions[0],
+          metadata: {
+            ...definitions[0]!.metadata,
+            requiredHostCapabilities: [],
           },
-        ],
-      }),
-    ).rejects.toThrow(/Project Index capability facts disagree.*support/i);
+        },
+      ],
+    }).catch((error: unknown) => error);
+    expect(indexMismatch).toBeInstanceOf(Error);
+    expect((indexMismatch as Error).message).toMatch(
+      /Project Index capability facts disagree.*support/i,
+    );
+    expect((indexMismatch as Error & { cause?: unknown }).cause).toEqual([
+      expect.any(TypeError),
+    ]);
 
     await expect(
       generateRuntimeArtifacts({
@@ -266,7 +271,9 @@ describe("generated deployed Eval registry", () => {
     const generated = (await importUserModule(
       join(root, "crux.generated/next.ts"),
       4_000,
-    )) as { readonly GET: (request: Request) => Promise<Response> };
+    )) as {
+      readonly GET: (request: Request) => Promise<Response>;
+    };
 
     expect(result.manifest.evals).toEqual([]);
     expect(entry).not.toContain("createServerlessEvalHost");
@@ -366,9 +373,16 @@ describe("generated deployed Eval registry", () => {
 
     await expect(
       generateRuntimeArtifacts({ root, host: "next", definitions }),
-    ).rejects.toThrow(
-      /Eval 'broken'.*evals\/broken\.eval\.ts.*native-import-boom/i,
-    );
+    ).rejects.toMatchObject({
+      findings: [
+        expect.objectContaining({
+          code: "RUNTIME_EVAL_IMPORT_FAILED",
+          featureId: "broken",
+          source: "evals/broken.eval.ts",
+          reason: expect.stringContaining("native-import-boom"),
+        }),
+      ],
+    });
   });
 
   it("fails invalid or missing execution facts before Case hydration", async () => {
@@ -401,10 +415,21 @@ describe("generated deployed Eval registry", () => {
         host: "next",
         definitions: [definition],
       }),
-    ).rejects.toThrow(/Eval 'invalid'.*current.*callable/i);
+    ).rejects.toMatchObject({
+      findings: [
+        expect.objectContaining({
+          code: "RUNTIME_EVAL_INVALID",
+          featureId: "invalid",
+          arm: "current",
+          reason: expect.stringMatching(/callable/i),
+        }),
+      ],
+    });
     await expect(
       readFile(join(root, ".crux/generated/runtime/manifest.json"), "utf8"),
-    ).rejects.toMatchObject({ code: "ENOENT" });
+    ).rejects.toMatchObject({
+      code: "ENOENT",
+    });
 
     const { evalExecutionArms: _arms, ...metadataWithoutArms } =
       definition.metadata!;
@@ -416,7 +441,15 @@ describe("generated deployed Eval registry", () => {
           { ...definition, metadata: metadataWithoutArms },
         ] satisfies readonly ProjectDefinition[],
       }),
-    ).rejects.toThrow(/execution facts.*invalid.*missing or malformed/i);
+    ).rejects.toMatchObject({
+      findings: [
+        expect.objectContaining({
+          code: "RUNTIME_EVAL_INDEX_FACTS_INVALID",
+          featureId: "invalid",
+          category: "internal",
+        }),
+      ],
+    });
     await expect(
       generateRuntimeArtifacts({
         root,
@@ -428,6 +461,48 @@ describe("generated deployed Eval registry", () => {
           },
         ],
       }),
-    ).rejects.toThrow(/execution facts.*invalid.*missing or malformed/i);
+    ).rejects.toMatchObject({
+      findings: [
+        expect.objectContaining({
+          code: "RUNTIME_EVAL_INDEX_FACTS_INVALID",
+          featureId: "invalid",
+          category: "internal",
+        }),
+      ],
+    });
+
+    const packageSkew = await generateRuntimeArtifacts({
+      root,
+      host: "next",
+      definitions: [
+        {
+          ...definition,
+          metadata: {
+            ...definition.metadata,
+            evalExecutionArms: [
+              {
+                name: "current",
+                status: "invalid",
+                code: "task_contract_incompatible",
+                reason: "Managed Eval task descriptor is incompatible.",
+              },
+            ],
+          },
+        },
+      ],
+    }).catch((error: unknown) => error);
+    expect(packageSkew).toMatchObject({
+      findings: [
+        expect.objectContaining({
+          code: "RUNTIME_EVAL_TASK_CONTRACT_INCOMPATIBLE",
+          category: "configuration",
+          reason: expect.stringMatching(/packages.*task contract/i),
+        }),
+      ],
+    });
+    expect(packageSkew).toBeInstanceOf(Error);
+    expect((packageSkew as Error).message).not.toMatch(
+      /descriptor|opaque|placement|eligibility/i,
+    );
   });
 });

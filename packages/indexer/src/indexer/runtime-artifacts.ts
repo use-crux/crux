@@ -12,6 +12,11 @@ import {
 } from "./runtime-artifacts/entries";
 import { generateEvalArtifacts } from "./runtime-artifacts/eval-registry";
 import {
+  RuntimeArtifactGenerationError,
+  runtimeArtifactGenerationError,
+  runtimeArtifactInternalCauses,
+} from "./runtime-artifacts/findings";
+import {
   commitRuntimeArtifactPlan,
   createRuntimeArtifactPlan,
   preflightRuntimeArtifactPlan,
@@ -21,6 +26,7 @@ import { resolveRuntimeArtifactHost } from "./runtime-artifacts/host";
 import {
   diffRuntimeArtifactDrift,
   manifestFromDefinitions,
+  manifestPlanFromDefinitions,
 } from "./runtime-artifacts/manifest";
 import { validateTargetExports } from "./runtime-artifacts/target-validation";
 import type {
@@ -35,6 +41,7 @@ export {
 } from "./runtime-artifacts/manifest";
 export type {
   GenerateRuntimeArtifactsOptions,
+  RuntimeArtifactFinding,
   RuntimeArtifactDriftReport,
   RuntimeArtifactGenerationResult,
   RuntimeArtifactHost,
@@ -43,6 +50,16 @@ export type {
 
 /** Generate the runtime manifest and default Next/Convex entry files for a project. */
 export async function generateRuntimeArtifacts(
+  options: GenerateRuntimeArtifactsOptions,
+): Promise<RuntimeArtifactGenerationResult> {
+  try {
+    return await generateRuntimeArtifactsUnchecked(options);
+  } catch (error) {
+    throw runtimeArtifactGenerationError(error);
+  }
+}
+
+async function generateRuntimeArtifactsUnchecked(
   options: GenerateRuntimeArtifactsOptions,
 ): Promise<RuntimeArtifactGenerationResult> {
   const host = await resolveRuntimeArtifactHost(options);
@@ -68,27 +85,66 @@ export async function generateRuntimeArtifacts(
       : host === "convex"
         ? convexTargetsFile
         : cloudflareGeneratedFile;
-  const evalArtifacts = await generateEvalArtifacts({
-    root: options.root,
-    outputFile: evalOutputFile,
-    definitions: options.definitions ?? [],
-    importSpecifier: (relativeFile) =>
-      importSpecifier(
-        dirname(evalOutputFile),
-        join(options.root, relativeFile),
-      ),
-    redactPaths:
-      projectConfig.loaded.crux?.config.observability?.redactPaths ?? [],
-  });
-  const manifest: RuntimeArtifactManifest = {
-    ...manifestFromDefinitions({
+  const [evalResult, targetResult] = await Promise.allSettled([
+    generateEvalArtifacts({
       root: options.root,
+      outputFile: evalOutputFile,
       definitions: options.definitions ?? [],
-      evalPrivacyFingerprint: evalArtifacts.privacyFingerprint,
+      importSpecifier: (relativeFile) =>
+        importSpecifier(
+          dirname(evalOutputFile),
+          join(options.root, relativeFile),
+        ),
+      redactPaths:
+        projectConfig.loaded.crux?.config.observability?.redactPaths ?? [],
     }),
+    (async () => {
+      const targetPlan = manifestPlanFromDefinitions({
+        root: options.root,
+        definitions: options.definitions ?? [],
+      });
+      const findings = [...targetPlan.findings];
+      const causes: unknown[] = [];
+      try {
+        await validateTargetExports(options.root, targetPlan.manifest.targets);
+      } catch (error) {
+        findings.push(...runtimeArtifactGenerationError(error).findings);
+        causes.push(...runtimeArtifactInternalCauses([error]));
+      }
+      if (findings.length > 0) {
+        throw new RuntimeArtifactGenerationError(
+          findings,
+          causes.length > 0 ? { cause: Object.freeze(causes) } : {},
+        );
+      }
+      return targetPlan.manifest;
+    })(),
+  ]);
+  const planningErrors = [evalResult, targetResult].flatMap((result) =>
+    result.status === "rejected" ? [result.reason] : [],
+  );
+  const planningFindings = planningErrors.flatMap(
+    (error) => runtimeArtifactGenerationError(error).findings,
+  );
+  const planningCauses = runtimeArtifactInternalCauses(planningErrors);
+  if (planningFindings.length > 0) {
+    throw new RuntimeArtifactGenerationError(
+      planningFindings,
+      planningCauses.length > 0 ? { cause: planningCauses } : {},
+    );
+  }
+  if (
+    evalResult.status !== "fulfilled" ||
+    targetResult.status !== "fulfilled"
+  ) {
+    throw new TypeError("Runtime artifact planning did not produce a result.");
+  }
+  const evalArtifacts = evalResult.value;
+  const manifest: RuntimeArtifactManifest = {
+    ...targetResult.value,
+    evalPrivacyFingerprint: evalArtifacts.privacyFingerprint,
     evals: evalArtifacts.manifestEntries,
   };
-  await validateTargetExports(options.root, manifest.targets);
   const canonicalManifest = `${JSON.stringify(manifest, null, 2)}\n`;
   const contentHash = createHash("sha256")
     .update(canonicalManifest)

@@ -61,6 +61,9 @@ func (w *Workbench) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	if w.openBrowser != nil && key.Matches(msg, browserBinding()) {
 		return w.browserAction().Run()
 	}
+	if w.startupDiagnostic != nil && key.Matches(msg, startupDiagnosticsBinding()) {
+		return w.startupDiagnosticsAction().Run()
+	}
 
 	// Migrated screens list focused-pane actions before workflow actions.
 	screen, migrated := w.activeScreen().(screens.ActionScreen)
@@ -133,6 +136,9 @@ func (w *Workbench) workspaceActions() []interaction.Action {
 	)
 	if w.openBrowser != nil {
 		actions = append(actions, w.browserAction())
+	}
+	if w.startupDiagnostic != nil {
+		actions = append(actions, w.startupDiagnosticsAction())
 	}
 	for _, nav := range w.navigationItems() {
 		nav := nav

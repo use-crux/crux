@@ -10,6 +10,10 @@ import {
 } from "node:fs/promises";
 import { dirname, isAbsolute, posix, relative, resolve, sep } from "node:path";
 import { createRuntimeError } from "@use-crux/core/runtime";
+import {
+  RuntimeArtifactGenerationError,
+  runtimeArtifactFindingFromError,
+} from "./findings";
 
 export const GENERATED_HEADER = [
   "/*",
@@ -72,26 +76,50 @@ export async function preflightRuntimeArtifactPlan(
 ): Promise<PreparedRuntimeArtifactPlan> {
   const rootRealPath = await realpath(plan.root);
   const files: PreparedRuntimeArtifactFile[] = [];
+  const findings = [];
   for (const planned of plan.files) {
-    const file = resolve(plan.root, planned.destination);
-    assertWithinRoot(plan.root, file, planned.destination);
-    await assertRealPathSafe(rootRealPath, file, planned.destination);
-    const existing = await readExistingFile(file);
-    if (planned.ownership === "generated-marker") {
-      assertGeneratedFileContentsWritable(
-        file,
-        existing,
-        planned.conflictNextStep,
+    try {
+      const file = resolve(plan.root, planned.destination);
+      assertWithinRoot(plan.root, file, planned.destination);
+      await assertRealPathSafe(rootRealPath, file, planned.destination);
+      const existing = await readExistingFile(file);
+      if (planned.ownership === "generated-marker") {
+        assertGeneratedFileContentsWritable(
+          file,
+          existing,
+          planned.conflictNextStep,
+        );
+      }
+      files.push(
+        Object.freeze({
+          ...planned,
+          file,
+          existing,
+          changed: existing !== planned.contents,
+        }),
+      );
+    } catch (error) {
+      const protectedConflict =
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        error.code === "ARTIFACTS_STALE";
+      findings.push(
+        runtimeArtifactFindingFromError(error, {
+          featureKind: "generated-file",
+          featureId: planned.destination,
+          source: planned.destination,
+          ...(protectedConflict
+            ? {
+                summary: `Crux cannot update '${planned.destination}' because it is not a generated file.`,
+              }
+            : {}),
+        }),
       );
     }
-    files.push(
-      Object.freeze({
-        ...planned,
-        file,
-        existing,
-        changed: existing !== planned.contents,
-      }),
-    );
+  }
+  if (findings.length > 0) {
+    throw new RuntimeArtifactGenerationError(findings);
   }
   return Object.freeze({ root: plan.root, files: Object.freeze(files) });
 }
@@ -150,6 +178,7 @@ export async function commitRuntimeArtifactPlan(
 
 export class RuntimeArtifactCommitError extends Error {
   override readonly name = "RuntimeArtifactCommitError";
+  readonly code = "RUNTIME_ARTIFACT_COMMIT_FAILED";
   readonly activatedFiles: readonly string[];
   readonly rollbackFailures: readonly string[];
 

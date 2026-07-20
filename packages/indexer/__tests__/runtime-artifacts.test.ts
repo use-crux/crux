@@ -318,7 +318,8 @@ describe("runtime artifacts", () => {
     );
 
     await expect(generateRuntimeArtifacts({ root })).rejects.toMatchObject({
-      code: "SETUP_REQUIRED",
+      code: "RUNTIME_ARTIFACT_GENERATION_FAILED",
+      findings: [expect.objectContaining({ code: "SETUP_REQUIRED" })],
     });
   });
 
@@ -342,7 +343,8 @@ describe("runtime artifacts", () => {
     await expect(
       generateRuntimeArtifacts({ root, host: "next" }),
     ).rejects.toMatchObject({
-      code: "ARTIFACTS_STALE",
+      code: "RUNTIME_ARTIFACT_GENERATION_FAILED",
+      findings: [expect.objectContaining({ code: "ARTIFACTS_STALE" })],
     });
     await expect(
       readFile(join(root, "crux.generated/next.ts"), "utf8"),
@@ -412,11 +414,205 @@ describe("runtime artifacts", () => {
         host: "convex",
         definitions,
       }),
-    ).rejects.toMatchObject({ code: "ARTIFACTS_STALE" });
+    ).rejects.toMatchObject({
+      code: "RUNTIME_ARTIFACT_GENERATION_FAILED",
+      findings: [expect.objectContaining({ code: "ARTIFACTS_STALE" })],
+    });
 
     await expect(
       Promise.all(artifactFiles.map((file) => readFile(file, "utf8"))),
     ).resolves.toEqual(before);
+  });
+
+  it("reports every protected conflict in stable path order without writing", async () => {
+    const root = await fixtureRoot();
+    const first = join(root, "convex/_crux/generated.ts");
+    const second = join(root, "convex/http.ts");
+    await mkdir(dirname(first), { recursive: true });
+    await writeFile(first, "export const userControl = true\n");
+    await writeFile(second, "export const userRouter = true\n");
+
+    await expect(
+      generateRuntimeArtifacts({ root, host: "convex" }),
+    ).rejects.toMatchObject({
+      findings: [
+        expect.objectContaining({
+          code: "ARTIFACTS_STALE",
+          source: "convex/_crux/generated.ts",
+        }),
+        expect.objectContaining({
+          code: "ARTIFACTS_STALE",
+          source: "convex/http.ts",
+        }),
+      ],
+    });
+    await expect(readFile(first, "utf8")).resolves.toBe(
+      "export const userControl = true\n",
+    );
+    await expect(readFile(second, "utf8")).resolves.toBe(
+      "export const userRouter = true\n",
+    );
+    await expect(
+      readFile(join(root, ".crux/generated/runtime/manifest.json"), "utf8"),
+    ).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+  });
+
+  it("aggregates independent Eval and target failures in stable source order", async () => {
+    const root = await fixtureRoot();
+    const targetSource = join(root, "src/review.ts");
+    await mkdir(dirname(targetSource), { recursive: true });
+    await writeFile(targetSource, "export const differentName = true\n");
+    const definitions = [
+      {
+        id: "flow:review",
+        kind: "flow",
+        name: "review",
+        fidelity: "resolved",
+        source: { file: targetSource, line: 1 },
+        metadata: { exportName: "reviewFlow" },
+      },
+      {
+        id: "eval:invalid",
+        kind: "eval",
+        name: "invalid",
+        fidelity: "resolved",
+        source: { file: join(root, "evals/invalid.eval.ts"), line: 1 },
+        metadata: {
+          exportName: "default",
+          evalContract: "crux.eval",
+          evalExecutionArms: [
+            {
+              name: "current",
+              status: "invalid",
+              code: "task_not_callable",
+              reason: "Eval task must be callable.",
+            },
+          ],
+        },
+      },
+    ] satisfies readonly ProjectDefinition[];
+
+    await expect(
+      generateRuntimeArtifacts({ root, host: "next", definitions }),
+    ).rejects.toMatchObject({
+      findings: [
+        expect.objectContaining({
+          code: "RUNTIME_EVAL_INVALID",
+          source: "evals/invalid.eval.ts",
+        }),
+        expect.objectContaining({
+          code: "TARGET_NOT_EXPORTED",
+          source: "src/review.ts",
+        }),
+      ],
+    });
+  });
+
+  it("retains every deterministic failure within the Eval planning branch", async () => {
+    const root = await fixtureRoot();
+    const brokenSource = join(root, "evals/z-broken.eval.ts");
+    await mkdir(dirname(brokenSource), { recursive: true });
+    await writeFile(brokenSource, "throw new Error('broken Eval module')\n");
+    const definitions = [
+      {
+        id: "eval:a-invalid",
+        kind: "eval",
+        name: "a-invalid",
+        fidelity: "resolved",
+        source: { file: join(root, "evals/a-invalid.eval.ts"), line: 1 },
+        metadata: {
+          exportName: "default",
+          evalContract: "crux.eval",
+          evalExecutionArms: [
+            {
+              name: "current",
+              status: "invalid",
+              code: "task_not_callable",
+              reason: "Eval task must be callable.",
+            },
+          ],
+        },
+      },
+      {
+        id: "eval:z-broken",
+        kind: "eval",
+        name: "z-broken",
+        fidelity: "resolved",
+        source: { file: brokenSource, line: 1 },
+        metadata: {
+          exportName: "default",
+          evalContract: "crux.eval",
+          evalExecutionArms: [
+            {
+              name: "current",
+              execution: "runtime",
+              requiredHostCapabilities: [],
+            },
+          ],
+        },
+      },
+    ] satisfies readonly ProjectDefinition[];
+
+    await expect(
+      generateRuntimeArtifacts({ root, host: "next", definitions }),
+    ).rejects.toMatchObject({
+      findings: [
+        expect.objectContaining({
+          code: "RUNTIME_EVAL_INVALID",
+          featureId: "a-invalid",
+        }),
+        expect.objectContaining({
+          code: "RUNTIME_EVAL_IMPORT_FAILED",
+          featureId: "z-broken",
+        }),
+      ],
+    });
+  });
+
+  it("retains duplicate and export failures within target planning", async () => {
+    const root = await fixtureRoot();
+    const source = join(root, "src/targets.ts");
+    await mkdir(dirname(source), { recursive: true });
+    await writeFile(source, "export const unrelated = true\n");
+    const definitions = [
+      {
+        id: "flow:first-review",
+        kind: "flow",
+        name: "review",
+        fidelity: "resolved",
+        source: { file: source, line: 1 },
+        metadata: { exportName: "firstReview" },
+      },
+      {
+        id: "flow:second-review",
+        kind: "flow",
+        name: "review",
+        fidelity: "resolved",
+        source: { file: source, line: 2 },
+        metadata: { exportName: "secondReview" },
+      },
+    ] satisfies readonly ProjectDefinition[];
+
+    await expect(
+      generateRuntimeArtifacts({ root, host: "next", definitions }),
+    ).rejects.toMatchObject({
+      findings: [
+        expect.objectContaining({
+          code: "TARGET_NOT_EXPORTED",
+          featureId: "firstReview",
+        }),
+        expect.objectContaining({
+          code: "TARGET_DUPLICATE",
+          featureId: "review",
+        }),
+        expect.objectContaining({
+          code: "TARGET_NOT_EXPORTED",
+          featureId: "secondReview",
+        }),
+      ],
+    });
   });
 
   it("overwrites entry files with the legacy generated marker during upgrades", async () => {

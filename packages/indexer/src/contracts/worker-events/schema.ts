@@ -32,6 +32,7 @@ export type {
   ProjectIndexPhaseSummary,
   ProjectIndexPhaseTiming,
   ProjectIndexWorkerEvent,
+  RuntimeArtifactFinding,
 } from '../../indexer/worker-protocol'
 export {
   PROJECT_INDEX_WORKER_PROTOCOL_VERSION,

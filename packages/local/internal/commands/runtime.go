@@ -3,6 +3,7 @@ package commands
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,8 +12,10 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/use-crux/crux/packages/local/internal/assets"
 	"github.com/use-crux/crux/packages/local/internal/cli"
+	"github.com/use-crux/crux/packages/local/internal/domain"
 	"github.com/use-crux/crux/packages/local/internal/output"
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/eventwire"
 )
 
 type runtimeGenerateOptions struct {
@@ -61,6 +64,12 @@ entry files. It does not create infrastructure or mutate runtime state.`,
 			}
 			result, err := generateRuntimeArtifactsForCommand(cmd.Context(), root, newCommandWorkerProcess(io))
 			if err != nil {
+				if opts.jsonOutput {
+					return printRuntimeGenerateErrorJSON(io, err)
+				}
+				if handled := printRuntimeGenerateError(io, err); handled != nil {
+					return handled
+				}
 				return err
 			}
 			if opts.jsonOutput {
@@ -79,6 +88,43 @@ entry files. It does not create infrastructure or mutate runtime state.`,
 	cmd.AddCommand(newRuntimeRetryCmd(f, opts))
 	cmd.AddCommand(newRuntimeCancelCmd(f, opts))
 	return cmd
+}
+
+func printRuntimeGenerateError(io *output.IO, err error) error {
+	var workerErr *eventwire.WorkerEventError
+	if !errors.As(err, &workerErr) || len(workerErr.Findings) == 0 {
+		return nil
+	}
+	fmt.Fprintln(io.Err, workerErr.Message)
+	return domain.ExitError{Code: 1}
+}
+
+func printRuntimeGenerateErrorJSON(io *output.IO, err error) error {
+	payload := struct {
+		OK    bool `json:"ok"`
+		Error struct {
+			Code        string                             `json:"code,omitempty"`
+			Message     string                             `json:"message"`
+			Remediation string                             `json:"remediation,omitempty"`
+			Findings    []eventwire.RuntimeArtifactFinding `json:"findings"`
+		} `json:"error"`
+	}{OK: false}
+	payload.Error.Message = err.Error()
+	var workerErr *eventwire.WorkerEventError
+	if errors.As(err, &workerErr) {
+		payload.Error.Message = workerErr.Message
+		payload.Error.Code = workerErr.Code
+		payload.Error.Remediation = workerErr.Remediation
+		payload.Error.Findings = append([]eventwire.RuntimeArtifactFinding(nil), workerErr.Findings...)
+	}
+	encoded, marshalErr := json.MarshalIndent(payload, "", "  ")
+	if marshalErr != nil {
+		return fmt.Errorf("encode runtime generation error: %w", marshalErr)
+	}
+	if _, writeErr := fmt.Fprintf(io.Out, "%s\n", encoded); writeErr != nil {
+		return writeErr
+	}
+	return domain.ExitError{Code: 1}
 }
 
 func resolveRuntimeGenerateRoot(cwd string) (string, error) {

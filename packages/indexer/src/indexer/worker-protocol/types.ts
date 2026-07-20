@@ -24,12 +24,13 @@ import type {
   ExtractStaticEvidenceBatchResult,
   LoadStaticExtensionHostManifestResult,
 } from '../extensions'
-import type { RuntimeArtifactGenerationResult } from '../runtime-artifacts'
+import type { RuntimeArtifactFinding, RuntimeArtifactGenerationResult } from '../runtime-artifacts'
 import type { RuntimeOperationResult } from '../runtime-ops'
 import type { SetupReport } from '@use-crux/core/setup'
 import type { ProjectIndexFactExtractorProvenance, ProjectIndexFactProvenance } from '../fact-provenance'
 
 export type { ProjectIndexFactExtractorProvenance, ProjectIndexFactProvenance } from '../fact-provenance'
+export type { RuntimeArtifactFinding } from '../runtime-artifacts'
 
 /** Current Project Index worker stream protocol version. */
 export const PROJECT_INDEX_WORKER_PROTOCOL_VERSION = 2 as const
@@ -281,6 +282,7 @@ export interface ProjectIndexArtifactErrorEvent extends ProjectIndexWorkerEventB
     readonly message: string
     readonly code?: string
     readonly remediation?: string
+    readonly findings?: readonly RuntimeArtifactFinding[]
   }
 }
 

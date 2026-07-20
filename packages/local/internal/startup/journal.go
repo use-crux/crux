@@ -33,11 +33,20 @@ type TaskStatus struct {
 }
 
 type Diagnostic struct {
-	ID          string
-	Code        string
-	Severity    string
-	Message     string
-	Remediation string
+	ID             string       `json:"id"`
+	Code           string       `json:"code"`
+	Severity       string       `json:"severity"`
+	Category       string       `json:"category,omitempty"`
+	FeatureKind    string       `json:"featureKind,omitempty"`
+	FeatureID      string       `json:"featureId,omitempty"`
+	Arm            string       `json:"arm,omitempty"`
+	Source         string       `json:"source,omitempty"`
+	Message        string       `json:"summary"`
+	Reason         string       `json:"reason,omitempty"`
+	WhatStillWorks string       `json:"whatStillWorks,omitempty"`
+	Remediation    string       `json:"remediation,omitempty"`
+	Docs           string       `json:"docs,omitempty"`
+	Children       []Diagnostic `json:"findings,omitempty"`
 }
 
 type Snapshot struct {

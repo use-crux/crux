@@ -18,6 +18,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/observability"
 	"github.com/use-crux/crux/packages/local/internal/privacy"
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/eventwire"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
@@ -394,6 +395,56 @@ func TestRuntimeArtifactGeneratorForWorkerReusesWorker(t *testing.T) {
 	}
 	if got, want := worker.definitionIDs, []string{"prompt:one", "task:two"}; fmt.Sprint(got) != fmt.Sprint(want) {
 		t.Fatalf("worker definition ids = %#v, want %#v", got, want)
+	}
+}
+
+func TestRuntimeArtifactStartupDiagnosticRetainsEveryFinding(t *testing.T) {
+	diagnostic := runtimeArtifactStartupDiagnostic(&eventwire.WorkerEventError{
+		Scope: "artifact",
+		Code:  "RUNTIME_ARTIFACT_GENERATION_FAILED",
+		Findings: []eventwire.RuntimeArtifactFinding{
+			{
+				Code: "RUNTIME_EVAL_INVALID", Category: "authored", FeatureKind: "eval", FeatureID: "answer",
+				Arm: "current", Source: "evals/answer.eval.ts", Summary: "Eval answer is not ready.",
+				Reason: "Eval task must be callable.", WhatStillWorks: "Other Evals still work.",
+				Remediation: "Pass a callable task and save the file.", Docs: "https://cruxjs.dev/docs/evals",
+			},
+			{
+				Code: "RUNTIME_ARTIFACT_INTERNAL", Category: "internal", Summary: "Crux could not verify the index.",
+				Reason: "The index snapshot was inconsistent.",
+			},
+		},
+	})
+
+	if diagnostic.Code != "RUNTIME_ARTIFACT_GENERATION_FAILED" || !strings.Contains(diagnostic.Message, "2 issues") {
+		t.Fatalf("aggregate diagnostic = %#v, want typed summary and count", diagnostic)
+	}
+	if len(diagnostic.Children) != 2 {
+		t.Fatalf("children = %#v, want both worker findings", diagnostic.Children)
+	}
+	first := diagnostic.Children[0]
+	if first.Category != "authored" || first.FeatureKind != "eval" || first.FeatureID != "answer" || first.Arm != "current" || first.Source != "evals/answer.eval.ts" || first.Reason != "Eval task must be callable." || first.WhatStillWorks != "Other Evals still work." || first.Docs != "https://cruxjs.dev/docs/evals" {
+		t.Fatalf("child metadata = %#v, want lossless worker finding", first)
+	}
+	if !strings.Contains(diagnostic.Children[0].Remediation, "retry automatically") {
+		t.Fatalf("authored remediation = %q, want watcher retry copy", diagnostic.Children[0].Remediation)
+	}
+	if diagnostic.Children[1].Remediation != "" {
+		t.Fatalf("internal remediation = %q, want no invented user action", diagnostic.Children[1].Remediation)
+	}
+	if strings.Contains(strings.ToLower(fmt.Sprint(diagnostic)), "descriptor") || strings.Contains(diagnostic.Remediation, "runtime generate") {
+		t.Fatalf("diagnostic uses internal jargon or tells active watcher to rerun: %#v", diagnostic)
+	}
+}
+
+func TestRuntimeArtifactStartupDiagnosticDoesNotBlameUserForUnknownFailure(t *testing.T) {
+	diagnostic := runtimeArtifactStartupDiagnostic(errors.New("unexpected worker failure"))
+
+	if diagnostic.Remediation != "" {
+		t.Fatalf("remediation = %q, want no invented user action", diagnostic.Remediation)
+	}
+	if strings.Contains(diagnostic.Message, "unexpected worker failure") {
+		t.Fatalf("message = %q, want stable non-blaming copy", diagnostic.Message)
 	}
 }
 

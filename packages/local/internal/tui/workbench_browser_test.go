@@ -28,6 +28,64 @@ func TestWorkbenchShowsTypedStartupDiagnostic(t *testing.T) {
 	}
 }
 
+func TestWorkbenchSummarizesAggregateStartupDiagnostic(t *testing.T) {
+	w := newTestWorkbench(nil, nil, "http://localhost:4400")
+	w.Resize(120, 30)
+	w.SetStartupSnapshot(startup.Snapshot{Diagnostics: []startup.Diagnostic{{
+		ID: "runtime-artifacts", Code: "RUNTIME_ARTIFACT_GENERATION_FAILED", Severity: "warning",
+		Message: "3 issues · Eval answer is not ready.",
+		Children: []startup.Diagnostic{
+			{ID: "one", Code: "RUNTIME_EVAL_INVALID", Category: "authored", FeatureKind: "eval", FeatureID: "answer", Arm: "current", Source: "evals/answer.eval.ts", Message: "Eval answer is not ready.", Reason: "The task is not callable.", WhatStillWorks: "Other Evals still work.", Remediation: "Use a managed task.", Docs: "https://cruxjs.dev/docs/evals"},
+			{ID: "two", Code: "TARGET_NOT_EXPORTED", Message: "Target review is not exported."},
+			{ID: "three", Code: "ARTIFACTS_STALE", Message: "A generated path is occupied."},
+		},
+	}}})
+
+	view := ansi.Strip(w.View())
+	if !strings.Contains(view, "3 issues") || !strings.Contains(view, "Eval answer is not ready") {
+		t.Fatalf("aggregate startup diagnostic was not summarized in workbench:\n%s", view)
+	}
+
+	w.Update(tea.KeyPressMsg(tea.Key{Text: "!", Code: '!'}))
+	details := ansi.Strip(w.View())
+	for _, want := range []string{"Runtime setup", "answer", "current", "evals/answer.eval.ts", "The task is not callable", "Other Evals still work", "Use a managed task", "https://cruxjs.dev/docs/evals"} {
+		if !strings.Contains(details, want) {
+			t.Fatalf("startup diagnostic details missing %q:\n%s", want, details)
+		}
+	}
+	if strings.Contains(details, `"findings"`) || strings.Contains(details, `"featureKind"`) {
+		t.Fatalf("startup details exposed transport JSON instead of human copy:\n%s", details)
+	}
+}
+
+func TestWorkbenchStartupDetailsWrapLongCopyWithoutLosingItsTail(t *testing.T) {
+	w := newTestWorkbench(nil, nil, "http://localhost:4400")
+	w.Resize(70, 24)
+	tail := "KEEP_THIS_REMEDIATION_TAIL"
+	w.SetStartupSnapshot(startup.Snapshot{Diagnostics: []startup.Diagnostic{{
+		ID: "runtime-artifacts", Code: "RUNTIME_ARTIFACT_GENERATION_FAILED", Severity: "warning",
+		Message: "1 issue · Runtime target is not exported.",
+		Children: []startup.Diagnostic{{
+			ID: "one", Code: "TARGET_NOT_EXPORTED", Category: "authored", Message: "Runtime target is not exported.",
+			Reason:      "The named export is missing from a deeply nested source module.",
+			Remediation: strings.Repeat("Use the exported target from this module and save the source file. ", 5) + tail,
+		}},
+	}}})
+
+	w.Update(tea.KeyPressMsg(tea.Key{Text: "!", Code: '!'}))
+	_ = w.View()
+	w.Update(tea.KeyPressMsg(tea.Key{Text: "G", Code: 'G'}))
+	view := ansi.Strip(w.View())
+	if !strings.Contains(view, tail) {
+		t.Fatalf("wrapped startup details lost long remediation tail:\n%s", view)
+	}
+	for lineNumber, line := range strings.Split(w.View(), "\n") {
+		if width := lipgloss.Width(line); width > 70 {
+			t.Fatalf("line %d width = %d, want <= 70", lineNumber+1, width)
+		}
+	}
+}
+
 func TestWorkspaceOpenBrowserCallsInjectedCapabilityOnce(t *testing.T) {
 	w := newTestWorkbench(nil, nil, "http://localhost:4400")
 	calls := 0
