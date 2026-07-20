@@ -32,6 +32,30 @@ func TestNewDevServerDerivesOwnedWorkFromParentContext(t *testing.T) {
 	}
 }
 
+func TestDevServerWorkersRejectAdmissionAfterClose(t *testing.T) {
+	workers := &devServerWorkers{}
+	release := make(chan struct{})
+	if !workers.Go(func() { <-release }) {
+		t.Fatal("initial worker was rejected")
+	}
+	workers.Close()
+	lateWorkerRan := make(chan struct{})
+	if workers.Go(func() { close(lateWorkerRan) }) {
+		t.Fatal("worker was admitted after shutdown closed admission")
+	}
+	close(release)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := workers.Wait(ctx); err != nil {
+		t.Fatalf("wait for admitted worker: %v", err)
+	}
+	select {
+	case <-lateWorkerRan:
+		t.Fatal("rejected worker ran")
+	default:
+	}
+}
+
 func TestDevServerShutdownDisconnectsWebSockets(t *testing.T) {
 	port := findFreePort()
 	srv := NewDevServer(devServerTestOptions(t, port))
@@ -66,6 +90,20 @@ func TestDevServerShutdownReleasesListener(t *testing.T) {
 	}
 	if !IsPortAvailable(port) {
 		t.Fatalf("port %d remained occupied after Shutdown", port)
+	}
+}
+
+func TestDevServerCannotStartOrLeakListenerAfterShutdown(t *testing.T) {
+	port := findFreePort()
+	srv := NewDevServer(devServerTestOptions(t, port))
+	if err := srv.Shutdown(context.Background()); err != nil {
+		t.Fatalf("Shutdown() error: %v", err)
+	}
+	if err := srv.Start(); err == nil {
+		t.Fatal("Start() after shutdown succeeded")
+	}
+	if !IsPortAvailable(port) {
+		t.Fatalf("Start() after shutdown leaked listener on port %d", port)
 	}
 }
 

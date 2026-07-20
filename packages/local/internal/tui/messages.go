@@ -1,5 +1,7 @@
 package tui
 
+import "github.com/use-crux/crux/packages/local/internal/startup"
+
 // Message types for the Bubbletea event loop.
 //
 // The V1 Panels Workbench owns its own screen-specific msg types (see
@@ -16,6 +18,7 @@ type bootLogMsg struct {
 type bootErrorMsg struct{ err string }
 type liveReadyMsg struct{}
 type startupSummaryMsg struct{ summary string }
+type startupSnapshotMsg struct{ snapshot startup.Snapshot }
 type tunnelURLMsg struct{ url string }
 type ingestTokenMsg struct {
 	token string

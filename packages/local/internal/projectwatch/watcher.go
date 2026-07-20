@@ -46,14 +46,31 @@ func New(options Options) (*Watcher, error) {
 
 // Run starts watching until the context is cancelled.
 func (w *Watcher) Run(ctx context.Context) error {
+	return w.RunReady(ctx, nil)
+}
+
+// RunReady starts watching until the context is cancelled and reports once
+// every existing project directory has been subscribed. The callback runs
+// exactly once, before any delta can be dispatched, with the startup result.
+func (w *Watcher) RunReady(ctx context.Context, ready func(error)) error {
 	fsWatcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		return fmt.Errorf("create project watcher: %w", err)
+		err = fmt.Errorf("create project watcher: %w", err)
+		if ready != nil {
+			ready(err)
+		}
+		return err
 	}
 	defer fsWatcher.Close()
 
 	if err := addProjectDirs(fsWatcher, w.root); err != nil {
+		if ready != nil {
+			ready(err)
+		}
 		return err
+	}
+	if ready != nil {
+		ready(nil)
 	}
 
 	events := make(chan classifiedEvent)

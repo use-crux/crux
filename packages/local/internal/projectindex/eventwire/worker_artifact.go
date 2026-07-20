@@ -187,17 +187,18 @@ func (c *ProjectIndexArtifactStreamCollector) handleArtifactChunk(raw json.RawMe
 func (c *ProjectIndexArtifactStreamCollector) handleArtifactError(raw json.RawMessage) error {
 	var event struct {
 		Error struct {
-			Message string `json:"message"`
-			Code    string `json:"code,omitempty"`
+			Message     string `json:"message"`
+			Code        string `json:"code,omitempty"`
+			Remediation string `json:"remediation,omitempty"`
 		} `json:"error"`
 	}
 	if err := json.Unmarshal(raw, &event); err != nil {
 		return fmt.Errorf("decode artifact:error: %w", err)
 	}
 	if event.Error.Message == "" {
-		return fmt.Errorf("project index worker artifact failed")
+		return &WorkerEventError{Scope: "artifact", Code: event.Error.Code, Remediation: event.Error.Remediation}
 	}
-	return fmt.Errorf("project index worker artifact failed: %s", event.Error.Message)
+	return &WorkerEventError{Scope: "artifact", Message: event.Error.Message, Code: event.Error.Code, Remediation: event.Error.Remediation}
 }
 
 func (c *ProjectIndexArtifactStreamCollector) validateRoot(root string) error {

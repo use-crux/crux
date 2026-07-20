@@ -11,13 +11,210 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/observability"
 	"github.com/use-crux/crux/packages/local/internal/privacy"
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
+
+func TestNewDevServerDoesNotWaitForInitialRuntimeArtifacts(t *testing.T) {
+	root := t.TempDir()
+	t.Chdir(root)
+	artifactsStarted := make(chan struct{})
+	releaseArtifacts := make(chan struct{})
+	opts := devServerTestOptions(t, findFreePort())
+	opts.ProjectIndexer = fakeProjectIndexer{}
+	opts.RuntimeArtifacts = func(context.Context, string, []store.ProjectDefinition) error {
+		close(artifactsStarted)
+		<-releaseArtifacts
+		return nil
+	}
+
+	serverReady := make(chan *DevServer, 1)
+	go func() { serverReady <- NewDevServer(opts) }()
+
+	select {
+	case srv := <-serverReady:
+		close(releaseArtifacts)
+		t.Cleanup(func() { _ = srv.Shutdown(context.Background()) })
+	case <-time.After(time.Second):
+		close(releaseArtifacts)
+		srv := <-serverReady
+		_ = srv.Shutdown(context.Background())
+		t.Fatal("NewDevServer waited for initial runtime artifacts")
+	}
+	select {
+	case <-artifactsStarted:
+		t.Fatal("initial runtime artifacts started during construction")
+	default:
+	}
+}
+
+func TestDevServerAppliesEditsCapturedDuringInitialProjectIndex(t *testing.T) {
+	root := t.TempDir()
+	t.Chdir(root)
+	source := filepath.Join(root, "prompt.ts")
+	if err := os.WriteFile(source, []byte("export const prompt = 1\n"), 0o644); err != nil {
+		t.Fatalf("write initial source: %v", err)
+	}
+	indexer := &blockingLifecycleProjectIndexer{
+		baselineStarted: make(chan struct{}),
+		releaseBaseline: make(chan struct{}),
+		incremental:     make(chan []string, 1),
+	}
+	opts := devServerTestOptions(t, findFreePort())
+	opts.ProjectIndexer = indexer
+	srv := NewDevServer(opts)
+	if err := srv.Start(); err != nil {
+		t.Fatalf("start server: %v", err)
+	}
+	t.Cleanup(func() { _ = srv.Shutdown(context.Background()) })
+
+	select {
+	case <-indexer.baselineStarted:
+	case <-time.After(time.Second):
+		t.Fatal("initial Project Index did not start")
+	}
+	if err := os.WriteFile(source, []byte("export const prompt = 2\n"), 0o644); err != nil {
+		t.Fatalf("edit source during initial Project Index: %v", err)
+	}
+	close(indexer.releaseBaseline)
+
+	select {
+	case files := <-indexer.incremental:
+		if len(files) != 1 || files[0] != source {
+			t.Fatalf("incremental files = %#v, want [%q]", files, source)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("edit captured during initial Project Index was not applied")
+	}
+}
+
+func TestDevServerRetriesFullIndexAfterInitialFailureAndBufferedEdit(t *testing.T) {
+	root := t.TempDir()
+	t.Chdir(root)
+	source := filepath.Join(root, "prompt.ts")
+	if err := os.WriteFile(source, []byte("export const prompt = 1\n"), 0o644); err != nil {
+		t.Fatalf("write initial source: %v", err)
+	}
+	indexer := &failingBaselineProjectIndexer{
+		baselineStarted: make(chan struct{}),
+		releaseBaseline: make(chan struct{}),
+		fullRetry:       make(chan struct{}),
+	}
+	opts := devServerTestOptions(t, findFreePort())
+	opts.ProjectIndexer = indexer
+	srv := NewDevServer(opts)
+	if err := srv.Start(); err != nil {
+		t.Fatalf("start server: %v", err)
+	}
+	t.Cleanup(func() { _ = srv.Shutdown(context.Background()) })
+
+	select {
+	case <-indexer.baselineStarted:
+	case <-time.After(time.Second):
+		t.Fatal("initial Project Index did not start")
+	}
+	if err := os.WriteFile(source, []byte("export const prompt = 2\n"), 0o644); err != nil {
+		t.Fatalf("edit source during initial Project Index: %v", err)
+	}
+	close(indexer.releaseBaseline)
+
+	select {
+	case <-indexer.fullRetry:
+	case <-time.After(2 * time.Second):
+		t.Fatal("buffered edit did not trigger a full retry after initial Project Index failure")
+	}
+	indexer.mu.Lock()
+	incrementalCalled := indexer.incrementalCalled
+	indexer.mu.Unlock()
+	if incrementalCalled {
+		t.Fatal("incremental Project Index ran without a successful baseline")
+	}
+}
+
+type blockingLifecycleProjectIndexer struct {
+	baselineStarted chan struct{}
+	releaseBaseline chan struct{}
+	incremental     chan []string
+	baselineOnce    sync.Once
+}
+
+type failingBaselineProjectIndexer struct {
+	baselineStarted   chan struct{}
+	releaseBaseline   chan struct{}
+	fullRetry         chan struct{}
+	mu                sync.Mutex
+	fullCalls         int
+	incrementalCalled bool
+}
+
+func (i *failingBaselineProjectIndexer) IndexProjectAstPatch(ctx context.Context, root, _, _ string) (projectindex.IndexPatch, error) {
+	i.mu.Lock()
+	i.fullCalls++
+	call := i.fullCalls
+	i.mu.Unlock()
+	if call == 1 {
+		close(i.baselineStarted)
+		select {
+		case <-i.releaseBaseline:
+		case <-ctx.Done():
+			return projectindex.IndexPatch{}, ctx.Err()
+		}
+		return projectindex.IndexPatch{}, errors.New("initial index failed")
+	}
+	select {
+	case i.fullRetry <- struct{}{}:
+	default:
+	}
+	return projectindex.IndexPatch{
+		SchemaVersion: 1,
+		Phase:         projectindex.PhaseAST,
+		Project:       store.ProjectIdentity{Root: root, Name: "project"},
+		Status:        "ok",
+		Invalidates:   &projectindex.IndexPatchInvalidation{All: true},
+	}, nil
+}
+
+func (i *failingBaselineProjectIndexer) IndexProjectIncremental(context.Context, string, string, string, store.IndexData, []string, []string, string) (projectindex.ProjectIndexIncrementalResult, error) {
+	i.mu.Lock()
+	i.incrementalCalled = true
+	i.mu.Unlock()
+	return projectindex.ProjectIndexIncrementalResult{}, nil
+}
+
+func (i *blockingLifecycleProjectIndexer) IndexProjectAstPatch(ctx context.Context, root, _, _ string) (projectindex.IndexPatch, error) {
+	i.baselineOnce.Do(func() { close(i.baselineStarted) })
+	select {
+	case <-i.releaseBaseline:
+	case <-ctx.Done():
+		return projectindex.IndexPatch{}, ctx.Err()
+	}
+	return projectindex.IndexPatch{
+		SchemaVersion: 1,
+		Phase:         projectindex.PhaseAST,
+		Project:       store.ProjectIdentity{Root: root, Name: "project"},
+		Status:        "ok",
+		Invalidates:   &projectindex.IndexPatchInvalidation{All: true},
+		Facts: projectindex.IndexPatchFacts{
+			Sources: []store.IndexSourceFile{{File: filepath.Join(root, "prompt.ts"), Status: "indexed", ShardID: "."}},
+			SourceGraph: &store.ProjectIndexSourceGraph{
+				SchemaVersion: 1,
+				Capabilities:  []string{"project-shards"},
+				Shards:        []store.ProjectIndexShard{{ID: ".", Root: root}},
+			},
+		},
+	}, nil
+}
+
+func (i *blockingLifecycleProjectIndexer) IndexProjectIncremental(_ context.Context, _ string, _ string, _ string, _ store.IndexData, files, _ []string, _ string) (projectindex.ProjectIndexIncrementalResult, error) {
+	i.incremental <- append([]string(nil), files...)
+	return projectindex.ProjectIndexIncrementalResult{}, nil
+}
 
 func TestQuietDevServerDoesNotReplaceProcessLogger(t *testing.T) {
 	root := t.TempDir()
@@ -39,13 +236,14 @@ func TestQuietDevServerDoesNotReplaceProcessLogger(t *testing.T) {
 	slog.SetDefault(processLogger)
 	t.Cleanup(func() { slog.SetDefault(previous) })
 
-	serverReady := make(chan *DevServer, 1)
-	go func() { serverReady <- NewDevServer(opts) }()
+	srv := NewDevServer(opts)
+	if err := srv.Start(); err != nil {
+		t.Fatalf("start server: %v", err)
+	}
+	t.Cleanup(func() { _ = srv.Shutdown(context.Background()) })
 	<-started
 	slog.Info("concurrent process log")
 	close(finish)
-	srv := <-serverReady
-	t.Cleanup(func() { _ = srv.Shutdown(context.Background()) })
 
 	if slog.Default() != processLogger {
 		t.Fatal("quiet dev server replaced the process-global logger")
@@ -106,7 +304,7 @@ func devServerTestOptions(t *testing.T, port int) DevServerOptions {
 	}
 }
 
-func TestNewDevServerGeneratesRuntimeArtifactsBeforeMutationRoutesAreExposed(t *testing.T) {
+func TestDevServerStartsInitialRuntimeArtifactsAfterListenerStart(t *testing.T) {
 	root := t.TempDir()
 	t.Chdir(root)
 	calls := make(chan runtimeArtifactCall, 1)
@@ -128,6 +326,14 @@ func TestNewDevServerGeneratesRuntimeArtifactsBeforeMutationRoutesAreExposed(t *
 
 	srv := NewDevServer(opts)
 	defer srv.Shutdown(context.Background())
+	select {
+	case <-calls:
+		t.Fatal("runtime artifact generation started before server Start")
+	default:
+	}
+	if err := srv.Start(); err != nil {
+		t.Fatalf("Start() error: %v", err)
+	}
 
 	select {
 	case got := <-calls:
@@ -140,8 +346,8 @@ func TestNewDevServerGeneratesRuntimeArtifactsBeforeMutationRoutesAreExposed(t *
 		if got.definitions[0].ID != "flow:startup" {
 			t.Fatalf("runtime artifact definition id = %q, want flow:startup", got.definitions[0].ID)
 		}
-	default:
-		t.Fatal("runtime artifact generation did not finish before NewDevServer returned")
+	case <-time.After(time.Second):
+		t.Fatal("runtime artifact generation did not run after server Start")
 	}
 }
 

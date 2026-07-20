@@ -8,17 +8,18 @@ import (
 func (c *ProjectIndexPatchStreamCollector) handleError(raw json.RawMessage) error {
 	var event struct {
 		Error struct {
-			Message string `json:"message"`
-			Code    string `json:"code,omitempty"`
+			Message     string `json:"message"`
+			Code        string `json:"code,omitempty"`
+			Remediation string `json:"remediation,omitempty"`
 		} `json:"error"`
 	}
 	if err := json.Unmarshal(raw, &event); err != nil {
 		return fmt.Errorf("decode phase:error: %w", err)
 	}
 	if event.Error.Message == "" {
-		return fmt.Errorf("project index worker phase failed")
+		return &WorkerEventError{Scope: "phase", Code: event.Error.Code, Remediation: event.Error.Remediation}
 	}
-	return fmt.Errorf("project index worker phase failed: %s", event.Error.Message)
+	return &WorkerEventError{Scope: "phase", Message: event.Error.Message, Code: event.Error.Code, Remediation: event.Error.Remediation}
 }
 
 func (c *ProjectIndexPatchStreamCollector) openTransaction(id string) (*projectIndexPatchTransaction, error) {

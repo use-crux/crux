@@ -85,3 +85,34 @@ func TestDevServerReportsTunnelStartupFailure(t *testing.T) {
 		t.Fatal("tunnel startup failure was not reported")
 	}
 }
+
+func TestDevServerReportsCancellationWhenTunnelStartsAfterShutdown(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	server := &DevServer{
+		ctx:     ctx,
+		cancel:  func() {},
+		tunnel:  true,
+		logger:  slog.New(slog.NewTextHandler(io.Discard, nil)),
+		workers: &devServerWorkers{},
+		startTunnel: func(context.Context, *slog.Logger) (*TunnelResult, error) {
+			t.Fatal("tunnel startup ran after worker admission closed")
+			return nil, nil
+		},
+	}
+	server.workers.Close()
+	reported := make(chan TunnelStartupResult, 1)
+
+	server.StartTunnel(context.Background(), func(result TunnelStartupResult) {
+		reported <- result
+	})
+
+	select {
+	case result := <-reported:
+		if !errors.Is(result.Err, context.Canceled) {
+			t.Fatalf("startup result error = %v, want context cancellation", result.Err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("late tunnel startup did not report cancellation")
+	}
+}

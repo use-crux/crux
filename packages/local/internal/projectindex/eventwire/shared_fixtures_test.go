@@ -2,6 +2,7 @@ package eventwire
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -13,6 +14,27 @@ func TestSharedWorkerEventFixturesAreDeclaredByContractManifest(t *testing.T) {
 	assertSharedWorkerEventManifestFixture(t, "worker-events.json")
 	assertSharedWorkerEventManifestFixture(t, "worker-event-cases.json")
 	assertSharedWorkerEventManifestGoMirror(t)
+}
+
+func TestArtifactErrorPreservesStructuredWorkerCode(t *testing.T) {
+	collector := NewProjectIndexArtifactStreamCollector(ProjectIndexArtifactStreamOptions{})
+	err := collector.Handle(json.RawMessage(`{
+		"protocolVersion":2,
+		"type":"artifact:error",
+		"transactionId":"error:runRuntimeOperation:runtimeOperation",
+		"artifact":"runtimeOperation",
+		"error":{"message":"runtime requires its host","code":"RUNTIME_HOST_ONLY","remediation":"generate host handlers"}
+	}`))
+	var workerErr *WorkerEventError
+	if !errors.As(err, &workerErr) {
+		t.Fatalf("error = %T %v, want WorkerEventError", err, err)
+	}
+	if workerErr.Code != "RUNTIME_HOST_ONLY" || workerErr.Message != "runtime requires its host" {
+		t.Fatalf("worker error = %#v, want preserved code and message", workerErr)
+	}
+	if workerErr.Remediation != "generate host handlers" {
+		t.Fatalf("worker error remediation = %q, want typed remediation", workerErr.Remediation)
+	}
 }
 
 func TestSharedWorkerEventFixtureDecodes(t *testing.T) {

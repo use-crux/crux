@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"sync"
+
+	"github.com/use-crux/crux/packages/local/internal/lifecycle"
 )
 
 type devServerShutdown struct {
@@ -11,38 +13,7 @@ type devServerShutdown struct {
 	err  error
 }
 
-type devServerWorkers struct {
-	wg sync.WaitGroup
-}
-
-func (w *devServerWorkers) Go(run func()) {
-	if w == nil {
-		go run()
-		return
-	}
-	w.wg.Add(1)
-	go func() {
-		defer w.wg.Done()
-		run()
-	}()
-}
-
-func (w *devServerWorkers) Wait(ctx context.Context) error {
-	if w == nil {
-		return nil
-	}
-	done := make(chan struct{})
-	go func() {
-		w.wg.Wait()
-		close(done)
-	}()
-	select {
-	case <-done:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
+type devServerWorkers = lifecycle.Group
 
 // Shutdown gracefully stops the server and all services it owns. Concurrent
 // callers observe the same cleanup result; owned resources are released once.
@@ -55,6 +26,7 @@ func (d *DevServer) Shutdown(ctx context.Context) error {
 
 func (d *DevServer) shutdownOnce(ctx context.Context) error {
 	d.logger.Info("shutting down devtools server")
+	d.workers.Close()
 	d.cancel()
 	if d.Devtools != nil {
 		d.Devtools.Shutdown()

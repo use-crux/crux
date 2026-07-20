@@ -2,16 +2,19 @@
 package commands
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"path/filepath"
-	"time"
+	"sync"
 
 	"github.com/spf13/cobra"
 	"github.com/use-crux/crux/packages/local/internal/cli"
+	"github.com/use-crux/crux/packages/local/internal/lifecycle"
 	"github.com/use-crux/crux/packages/local/internal/output"
 	"github.com/use-crux/crux/packages/local/internal/server"
+	startuplifecycle "github.com/use-crux/crux/packages/local/internal/startup"
 )
 
 // NewDevCmd creates the "crux dev" command for starting the devtools server.
@@ -27,6 +30,7 @@ func newDevCmd(f *cli.Factory, dependencies devDependencies) *cobra.Command {
 	var port int
 	var tunnel bool
 	var open bool
+	var forceTUI bool
 	var noTUI bool
 	var startupDebug bool
 
@@ -39,12 +43,48 @@ func newDevCmd(f *cli.Factory, dependencies devDependencies) *cobra.Command {
 			io := f.Streams()
 			startup := newStartupTracker(startupDebugEnabled(startupDebug))
 			serverURL := fmt.Sprintf("http://localhost:%d", port)
-			alreadyRunning := dependencies.serverRunning(port)
-			tuiMode := selectDevMode(devModeInput{
-				NoTUI: noTUI, StdinTTY: io.IsStdinTTY(), StdoutTTY: io.IsStdoutTTY(),
+			mode, err := resolveDevMode(devModeInput{
+				TUI: forceTUI, NoTUI: noTUI, StdinTTY: io.IsStdinTTY(), StdoutTTY: io.IsStdoutTTY(),
 				CI: io.IsCI(), Term: io.Terminal(),
-			}) == devModeTUI
-			dependencies.runtimePreflight(ctx, io)
+			})
+			if err != nil {
+				return err
+			}
+			tuiMode := mode == devModeTUI
+			alreadyRunning := dependencies.serverRunning(port)
+			sessionWorkers := &lifecycle.Group{}
+			sessionCtx, cancelSession := context.WithCancel(context.WithoutCancel(ctx))
+			var stopSessionOnce sync.Once
+			stopSession := func() {
+				stopSessionOnce.Do(func() {
+					sessionWorkers.Close()
+					cancelSession()
+				})
+			}
+			stopParentCancellation := context.AfterFunc(ctx, stopSession)
+			if ctx.Err() != nil {
+				stopSession()
+			}
+			var preflightOutput bytes.Buffer
+			preflightIO := *io
+			preflightIO.Err = &preflightOutput
+			sessionWorkers.Go(func() {
+				startup.journal.Update("runtime-preflight", "Checking runtime", startuplifecycle.Active, nil)
+				diagnostics := dependencies.runtimePreflightStatus(sessionCtx, &preflightIO)
+				disposition := startuplifecycle.Succeeded
+				if len(diagnostics) > 0 {
+					disposition = startuplifecycle.Degraded
+				}
+				startup.journal.Update("runtime-preflight", "Checking runtime", disposition, diagnostics)
+				if !tuiMode && sessionCtx.Err() == nil && preflightOutput.Len() > 0 {
+					_, _ = io.Err.Write(preflightOutput.Bytes())
+				}
+			})
+			defer func() {
+				stopParentCancellation()
+				stopSession()
+				_ = sessionWorkers.Wait(context.Background())
+			}()
 
 			if alreadyRunning {
 				startup.SetMode("existing-server")
@@ -108,20 +148,28 @@ func newDevCmd(f *cli.Factory, dependencies devDependencies) *cobra.Command {
 			inspectDir := filepath.Join(root, ".crux", "evals")
 
 			// Start the Go HTTP/WS server directly (no Node.js subprocess).
-			sessionCtx, cancelSession := context.WithCancel(ctx)
 			process := newDevServerProcess(io.Err, startupDebugEnabled(startupDebug))
 			devSrv := dependencies.newServer(server.DevServerOptions{
-				Context:    sessionCtx,
-				Port:       port,
-				Tunnel:     tunnel,
-				Quiet:      tuiMode,
-				InspectDir: inspectDir,
-				Logger:     process.logger,
-				Stderr:     process.stderr,
+				Context:        sessionCtx,
+				Port:           port,
+				Tunnel:         tunnel,
+				Quiet:          tuiMode,
+				InspectDir:     inspectDir,
+				Logger:         process.logger,
+				Stderr:         process.stderr,
+				StartupJournal: startup.journal,
+				SessionWorkers: sessionWorkers,
 			})
-			shutdown := newShutdownCoordinator(cancelSession, 3*time.Second, devSrv.Shutdown)
+			shutdown := newShutdownCoordinator(stopSession, dependencies.shutdownTimeout, func(ctx context.Context) error {
+				serverErr := devSrv.Shutdown(ctx)
+				return errors.Join(serverErr, sessionWorkers.Wait(ctx))
+			})
+			shutdownAndJoin := func() error {
+				shutdownErr := shutdown.Shutdown()
+				return errors.Join(shutdownErr, sessionWorkers.Wait(context.Background()))
+			}
 			if err := devSrv.Start(); err != nil {
-				return errors.Join(err, shutdown.Shutdown())
+				return errors.Join(err, shutdownAndJoin())
 			}
 
 			startup.SetMode("go-native")
@@ -144,8 +192,8 @@ func newDevCmd(f *cli.Factory, dependencies devDependencies) *cobra.Command {
 					}
 				})
 				launchBrowser(ctx, io, open, devSrv.LocalURL(), dependencies.browser)
-				runErr := dependencies.runTUI(sessionCtx, io, devSrv, serverURL, port, startup, tunnelReady, dependencies.browser, shutdown.Shutdown)
-				cleanupErr := shutdown.Shutdown()
+				runErr := dependencies.runTUI(sessionCtx, io, devSrv, serverURL, port, startup, tunnelReady, dependencies.browser, shutdownAndJoin)
+				cleanupErr := shutdownAndJoin()
 				if runErr != nil {
 					if cleanupErr != nil && !errors.Is(runErr, cleanupErr) {
 						return errors.Join(runErr, cleanupErr)
@@ -169,7 +217,7 @@ func newDevCmd(f *cli.Factory, dependencies devDependencies) *cobra.Command {
 				case result := <-tunnelDone:
 					if errors.Is(result.Err, context.Canceled) || errors.Is(result.Err, context.DeadlineExceeded) {
 						devStatusf(io, "\n%s Shutting down...\n", devBullet(io))
-						return shutdown.Shutdown()
+						return shutdownAndJoin()
 					}
 					if result.Err != nil {
 						devStatusf(io, "%s Tunnel failed to start: %v\n", devBullet(io), result.Err)
@@ -180,7 +228,7 @@ func newDevCmd(f *cli.Factory, dependencies devDependencies) *cobra.Command {
 					}
 				case <-sessionCtx.Done():
 					devStatusf(io, "\n%s Shutting down...\n", devBullet(io))
-					return shutdown.Shutdown()
+					return shutdownAndJoin()
 				}
 			}
 
@@ -197,15 +245,17 @@ func newDevCmd(f *cli.Factory, dependencies devDependencies) *cobra.Command {
 			// Wait for shutdown signal (context already wired from main).
 			<-sessionCtx.Done()
 			devStatusf(io, "\n%s Shutting down...\n", devBullet(io))
-			return shutdown.Shutdown()
+			return shutdownAndJoin()
 		},
 	}
 
 	cmd.Flags().IntVar(&port, "port", 4400, "Server port")
 	cmd.Flags().BoolVar(&tunnel, "tunnel", false, "Create a public tunnel")
 	cmd.Flags().BoolVar(&open, "open", false, "Open browser devtools after startup")
+	cmd.Flags().BoolVar(&forceTUI, "tui", false, "Use the interactive terminal UI")
 	cmd.Flags().BoolVar(&noTUI, "no-tui", false, "Skip the interactive terminal UI (server-only mode)")
 	cmd.Flags().BoolVar(&startupDebug, "startup-debug", false, "Show startup timing diagnostics")
+	cmd.MarkFlagsMutuallyExclusive("tui", "no-tui")
 
 	return cmd
 }

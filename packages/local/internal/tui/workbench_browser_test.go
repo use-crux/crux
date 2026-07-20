@@ -10,8 +10,23 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/use-crux/crux/packages/local/internal/startup"
 	"github.com/use-crux/crux/packages/local/internal/tui/interaction"
 )
+
+func TestWorkbenchShowsTypedStartupDiagnostic(t *testing.T) {
+	w := newTestWorkbench(nil, nil, "http://localhost:4400")
+	w.Resize(120, 30)
+	w.SetStartupSnapshot(startup.Snapshot{Diagnostics: []startup.Diagnostic{{
+		ID: "runtime-host-only", Code: "RUNTIME_HOST_ONLY", Severity: "warning",
+		Message: "Runtime setup requires its configured host.", Remediation: "Generate the configured host handlers.",
+	}}})
+
+	view := ansi.Strip(w.View())
+	if !strings.Contains(view, "RUNTIME_HOST_ONLY") || !strings.Contains(view, "Generate the configured") {
+		t.Fatalf("startup diagnostic was not visible in workbench:\n%s", view)
+	}
+}
 
 func TestWorkspaceOpenBrowserCallsInjectedCapabilityOnce(t *testing.T) {
 	w := newTestWorkbench(nil, nil, "http://localhost:4400")

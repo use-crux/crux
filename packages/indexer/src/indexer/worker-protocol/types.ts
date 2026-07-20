@@ -27,10 +27,7 @@ import type {
 import type { RuntimeArtifactGenerationResult } from '../runtime-artifacts'
 import type { RuntimeOperationResult } from '../runtime-ops'
 import type { SetupReport } from '@use-crux/core/setup'
-import type {
-  ProjectIndexFactExtractorProvenance,
-  ProjectIndexFactProvenance,
-} from '../fact-provenance'
+import type { ProjectIndexFactExtractorProvenance, ProjectIndexFactProvenance } from '../fact-provenance'
 
 export type { ProjectIndexFactExtractorProvenance, ProjectIndexFactProvenance } from '../fact-provenance'
 
@@ -53,11 +50,7 @@ export interface ProjectIndexFactProducer {
 }
 
 /** Evidence fidelity attached to streamed fact envelopes. */
-export type ProjectIndexFactFidelity =
-  | 'authoritative'
-  | 'inferred'
-  | 'best-effort'
-  | 'runtime-observed'
+export type ProjectIndexFactFidelity = 'authoritative' | 'inferred' | 'best-effort' | 'runtime-observed'
 
 /**
  * Typed mapping between `IndexPatchFacts` fields and streamed fact values.
@@ -75,9 +68,7 @@ export interface ProjectIndexPatchFactMap {
   readonly sourceRefs: ArrayItem<NonNullable<IndexPatchFacts['sourceRefs']>>
   readonly diagnostics: ArrayItem<NonNullable<IndexPatchFacts['diagnostics']>>
   readonly lintFindings: ArrayItem<NonNullable<IndexPatchFacts['lintFindings']>>
-  readonly ruleDescriptors: ArrayItem<
-    NonNullable<IndexPatchFacts['ruleDescriptors']>
-  >
+  readonly ruleDescriptors: ArrayItem<NonNullable<IndexPatchFacts['ruleDescriptors']>>
   readonly sources: ArrayItem<NonNullable<IndexPatchFacts['sources']>>
   readonly sourceGraph: NonNullable<IndexPatchFacts['sourceGraph']>
 }
@@ -91,9 +82,7 @@ export type ProjectIndexPatchFactKind = keyof ProjectIndexPatchFactMap
  * The generic parameter narrows `fact` from the envelope kind, giving worker
  * helpers precise inference without exposing raw compiler objects.
  */
-export interface ProjectIndexFactEnvelopeFor<
-  TKind extends ProjectIndexPatchFactKind,
-> {
+export interface ProjectIndexFactEnvelopeFor<TKind extends ProjectIndexPatchFactKind> {
   /** Envelope schema version. */
   readonly schemaVersion: 1
   /** Stable identifier for this fact within the transaction. */
@@ -240,6 +229,7 @@ export interface ProjectIndexPhaseErrorEvent extends ProjectIndexWorkerEventBase
   readonly error: {
     readonly message: string
     readonly code?: string
+    readonly remediation?: string
   }
   /** Whether the worker intentionally degraded instead of crashing. */
   readonly degraded?: boolean
@@ -290,6 +280,7 @@ export interface ProjectIndexArtifactErrorEvent extends ProjectIndexWorkerEventB
   readonly error: {
     readonly message: string
     readonly code?: string
+    readonly remediation?: string
   }
 }
 

@@ -1,5 +1,5 @@
 ---
-"@use-crux/local": minor
+'@use-crux/local': minor
 ---
 
 Make TUI input routing deterministic so focused filters consume text before
@@ -44,14 +44,20 @@ location when navigating Back.
 Select the interactive workbench only when stdin and stdout are capable
 terminals outside CI and `TERM=dumb`, while keeping plain output free of
 terminal control sequences. Browser launch is now explicit: use `--open` at
-startup or `o` inside the workbench; the legacy `--no-open` and hidden `--tui`
-flags are removed.
+startup or `o` inside the workbench; the legacy `--no-open` flag is removed,
+while `--tui` and `--no-tui` explicitly select a mode and reject conflicts.
 Route command input, JSON output, diagnostics, worker logs, and subprocess
 stderr through scoped injectable boundaries, propagating JSON write failures
 without mutating the process-wide logger.
 Unify dev-command, TUI, event-bridge, server, WebSocket, tunnel, watcher, and
 worker shutdown under one cancelable session with idempotent bounded cleanup.
-Clean `q` exits `0`, SIGINT and raw Ctrl+C exit `130`, and SIGTERM exits `143`;
-signal status wins
+Clean `q` and raw TUI Ctrl+C exit `0`, process SIGINT exits `130`, and SIGTERM
+exits `143`; signal status wins
 over reported cleanup failures, expected cancellation stays silent, and a
 second signal terminates immediately.
+Render the TUI immediately after listener binding while runtime preflight,
+Project Index, and runtime-artifact warmup continue under owned cancellation.
+Replay typed startup diagnostics such as `RUNTIME_HOST_ONLY` in the workbench,
+buffer edits made during the initial index, retry a failed baseline on the next
+edit, and prevent delayed terminal capability replies from leaking into the
+shell. Preserve graceful cleanup and exit status through the npm launcher.

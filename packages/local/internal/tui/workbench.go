@@ -5,7 +5,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/use-crux/crux/packages/local/internal/api"
+	"github.com/use-crux/crux/packages/local/internal/startup"
 	"github.com/use-crux/crux/packages/local/internal/tui/bridge"
+	"github.com/use-crux/crux/packages/local/internal/tui/kit"
 	"github.com/use-crux/crux/packages/local/internal/tui/overlays"
 	"github.com/use-crux/crux/packages/local/internal/tui/screens"
 )
@@ -25,6 +27,7 @@ type Workbench struct {
 	browserURL      string
 	openBrowser     BrowserOpener
 	browserStatus   string
+	startupStatus   string
 
 	width  int
 	height int
@@ -97,6 +100,25 @@ func (w *Workbench) SetTunnelURL(url string) {
 // The token secret itself is intentionally kept out of the persistent chrome.
 func (w *Workbench) SetIngestToken(_ string, path string) {
 	w.ingestTokenPath = path
+}
+
+// SetStartupSnapshot projects asynchronous initialization state into the
+// persistent workbench status line.
+func (w *Workbench) SetStartupSnapshot(snapshot startup.Snapshot) {
+	if len(snapshot.Diagnostics) > 0 {
+		diagnostic := snapshot.Diagnostics[0]
+		detail := diagnostic.Remediation
+		if detail == "" {
+			detail = diagnostic.Message
+		}
+		w.startupStatus = kit.SanitizeInline(diagnostic.Code + " · " + detail)
+		return
+	}
+	if snapshot.Active && snapshot.Phase != "" {
+		w.startupStatus = kit.SanitizeInline("starting · " + snapshot.Phase)
+		return
+	}
+	w.startupStatus = ""
 }
 
 // Init is called once to fire initial fetches for the active screen and the

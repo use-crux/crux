@@ -66,6 +66,13 @@ func TestDevOwnedServerBrowserBehaviorAcrossModes(t *testing.T) {
 			wantQuiet:    true,
 		},
 		{
+			name:         "explicit TUI",
+			terminal:     interactiveDevTestIO(),
+			args:         []string{"--tui"},
+			wantTUICalls: 1,
+			wantQuiet:    true,
+		},
+		{
 			name:             "TUI explicit open",
 			terminal:         interactiveDevTestIO(),
 			args:             []string{"--open"},

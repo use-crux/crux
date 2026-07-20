@@ -188,9 +188,12 @@ func TestDevBrowserFlagsExposeOnlyExplicitOpen(t *testing.T) {
 	if cmd.Flags().Lookup("open") == nil {
 		t.Fatal("dev command is missing --open")
 	}
-	for _, removed := range []string{"no-open", "tui"} {
+	for _, removed := range []string{"no-open"} {
 		if cmd.Flags().Lookup(removed) != nil {
 			t.Fatalf("dev command retained removed --%s flag", removed)
 		}
+	}
+	if cmd.Flags().Lookup("tui") == nil || cmd.Flags().Lookup("no-tui") == nil {
+		t.Fatal("dev command is missing explicit TUI mode flags")
 	}
 }
