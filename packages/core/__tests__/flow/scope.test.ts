@@ -349,12 +349,16 @@ describe('nested flows', () => {
     const outerRunId = runStarts[0]?.type === 'run:start' ? runStarts[0].runId : undefined
     const innerRunId = runStarts[1]?.type === 'run:start' ? runStarts[1].runId : undefined
     expect(runStarts[1]?.traceId).toBe(runStarts[0]?.traceId)
+    expect(runStarts[0]?.operationId).toBe(outerRunId)
+    expect(runStarts[1]?.operationId).toBe(outerRunId)
+    expect(runStarts[1]).toMatchObject({ parentRunId: outerRunId })
     expect(innerRunId).not.toBe(outerRunId)
 
     const delegateSpan = transport.records.find(
       (record) => record.type === 'span:start' && record.primitive === 'flow.step' && record.name === 'delegate',
     )
     const delegateSpanId = delegateSpan?.type === 'span:start' ? delegateSpan.spanId : undefined
+    expect(runStarts[1]).toMatchObject({ triggeredBySpanId: delegateSpanId })
     expect(transport.records).toContainEqual(
       expect.objectContaining({
         type: 'edge',
@@ -364,6 +368,43 @@ describe('nested flows', () => {
         to: { kind: 'run', id: innerRunId },
       }),
     )
+  })
+
+  it('keeps parallel research flows in one originating agent operation', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+    const agentRun = observe.openRun({
+      name: 'karyla request',
+      rootPrimitive: 'agent.run',
+    })
+
+    await agentRun.withContext(async () => {
+      const research = observe.openSpan({
+        name: 'research tool',
+        primitive: 'tool.call',
+      })
+      await research.withContext(() =>
+        Promise.all([
+          makeFlow('research-a', async () => 'a').run(),
+          makeFlow('research-b', async () => 'b').run(),
+        ]),
+      )
+      research.end()
+    })
+    agentRun.end()
+    await observe.flush()
+
+    const runStarts = transport.records.filter(
+      (record) => record.type === 'run:start',
+    )
+    expect(runStarts).toHaveLength(3)
+    expect(new Set(runStarts.map((record) => record.operationId))).toEqual(
+      new Set([agentRun.runId]),
+    )
+    expect(
+      runStarts.filter((record) => record.parentRunId === agentRun.runId),
+    ).toHaveLength(2)
+    expect(new Set(runStarts.map((record) => record.runId)).size).toBe(3)
   })
 })
 

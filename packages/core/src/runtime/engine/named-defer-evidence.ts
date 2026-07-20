@@ -10,9 +10,13 @@
 
 import {
   observe,
+  type CapturedObservabilityContext,
+  type CruxRunId,
+  type CruxSegmentId,
   type CruxSpanId,
   type CruxTraceId,
 } from "../../observability";
+import type { CruxDeploymentIdentity } from "../../project-index";
 import type { JsonValue } from "../../storage";
 import type { WorkItem } from "./work";
 
@@ -26,7 +30,12 @@ export interface RuntimeNamedDeferProvenance {
   readonly workId: string;
   readonly targetId: string;
   readonly scheduledAtMs?: number;
+  readonly operationId?: string;
+  readonly runId?: string;
+  readonly parentRunId?: string;
   readonly traceId?: string;
+  readonly segmentId?: string;
+  readonly deployment?: CruxDeploymentIdentity;
   /** Durable acceptance-span identity used for the later causal edge. */
   readonly scheduledSpanId: string;
 }
@@ -60,7 +69,16 @@ export function cloneNamedDeferProvenance(
     ...(provenance.scheduledAtMs !== undefined
       ? { scheduledAtMs: provenance.scheduledAtMs }
       : {}),
+    ...(provenance.operationId
+      ? { operationId: provenance.operationId }
+      : {}),
+    ...(provenance.runId ? { runId: provenance.runId } : {}),
+    ...(provenance.parentRunId
+      ? { parentRunId: provenance.parentRunId }
+      : {}),
     ...(provenance.traceId ? { traceId: provenance.traceId } : {}),
+    ...(provenance.segmentId ? { segmentId: provenance.segmentId } : {}),
+    ...(provenance.deployment ? { deployment: provenance.deployment } : {}),
     scheduledSpanId: provenance.scheduledSpanId,
   });
 }
@@ -92,15 +110,9 @@ export async function executeWithNamedDeferEvidence<T>(
   const queueDelayMs = Math.max(0, Date.now() - scheduledAtMs);
   const scheduledSpanId = provenance.scheduledSpanId;
 
-  // Durable work may wake after its originating run is terminal. It therefore
-  // owns a fresh run and segment, while the trace and explicit edge preserve
-  // causality across the durable boundary.
-  const run = observe.openRun({
-    ...(provenance.traceId
-      ? { traceId: provenance.traceId as CruxTraceId }
-      : {}),
+  const runOptions = {
     name: `defer named ${provenance.targetId}`,
-    rootPrimitive: "defer.run",
+    rootPrimitive: "defer.run" as const,
     attributes: {
       mode: "named",
       sequence: provenance.sequence,
@@ -109,7 +121,16 @@ export async function executeWithNamedDeferEvidence<T>(
       scopeId: provenance.scopeId,
       queueDelayMs,
     },
-  });
+  };
+  const parentContext = namedDeferParentContext(provenance, scheduledSpanId);
+  const run = parentContext
+    ? observe.openChildRun(parentContext, runOptions)
+    : observe.openRun({
+        ...runOptions,
+        ...(provenance.traceId
+          ? { traceId: provenance.traceId as CruxTraceId }
+          : {}),
+      });
 
   return run.withContext(async (): Promise<T> => {
     const span = observe.openSpan({
@@ -189,6 +210,56 @@ export async function executeWithNamedDeferEvidence<T>(
     });
     return result;
   }) as Promise<T>;
+}
+
+function namedDeferParentContext(
+  provenance: RuntimeNamedDeferProvenance,
+  scheduledSpanId: string,
+): CapturedObservabilityContext | undefined {
+  if (
+    !isRunId(provenance.operationId) ||
+    !isRunId(provenance.runId) ||
+    !isTraceId(provenance.traceId) ||
+    !isSegmentId(provenance.segmentId) ||
+    !/^[0-9a-f]{16}$/u.test(scheduledSpanId) ||
+    (provenance.parentRunId !== undefined &&
+      !isRunId(provenance.parentRunId)) ||
+    (provenance.parentRunId === undefined &&
+      provenance.operationId !== provenance.runId) ||
+    (provenance.parentRunId !== undefined &&
+      (provenance.operationId === provenance.runId ||
+        provenance.parentRunId === provenance.runId))
+  ) {
+    return undefined;
+  }
+  return {
+    operationId: provenance.operationId as CruxRunId,
+    runId: provenance.runId as CruxRunId,
+    ...(provenance.parentRunId
+      ? { parentRunId: provenance.parentRunId as CruxRunId }
+      : {}),
+    traceId: provenance.traceId as CruxTraceId,
+    segmentId: provenance.segmentId as CruxSegmentId,
+    ...(provenance.deployment ? { deployment: provenance.deployment } : {}),
+    spanStack: [scheduledSpanId as CruxSpanId],
+    currentSpanId: scheduledSpanId as CruxSpanId,
+  };
+}
+
+function isRunId(value: string | undefined): value is string {
+  return typeof value === "string" && /^run_[0-9a-f]{24}$/u.test(value);
+}
+
+function isSegmentId(value: string | undefined): value is string {
+  return typeof value === "string" && /^seg_[0-9a-f]{24}$/u.test(value);
+}
+
+function isTraceId(value: string | undefined): value is string {
+  return (
+    typeof value === "string" &&
+    /^[0-9a-f]{32}$/u.test(value) &&
+    !/^0+$/u.test(value)
+  );
 }
 
 /**

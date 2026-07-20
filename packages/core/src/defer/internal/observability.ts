@@ -87,8 +87,8 @@ export interface DeferScopeObservability {
     scope: ScopeDescriptor,
   ): DeferredScheduledObservation;
 
-  /** Ensure a public originating run exists and return its durable trace id. */
-  ensurePublicTraceId(): string;
+  /** Ensure a public originating run exists and capture its family identity. */
+  ensurePublicParentContext(): CapturedObservabilityContext;
 
   /**
    * Record durable named acceptance for one staged target.
@@ -246,9 +246,8 @@ export function createDeferScopeObservability(): DeferScopeObservability {
       });
     },
 
-    ensurePublicTraceId() {
-      const context = ensurePublicContext();
-      return context.traceId;
+    ensurePublicParentContext() {
+      return ensurePublicContext();
     },
 
     recordInlineScheduled(sequence, policy, scope) {

@@ -82,6 +82,9 @@ describe('canonical orchestration observability', () => {
       type: 'run:start',
       rootPrimitive: 'composition.parallel',
     })
+    expect(
+      transport.records.filter((record) => record.type === 'run:start'),
+    ).toHaveLength(1)
     expect(composition).toMatchObject({
       family: 'composition',
       primitive: 'composition.parallel',
@@ -158,6 +161,9 @@ describe('canonical orchestration observability', () => {
       type: 'run:start',
       rootPrimitive: 'composition.pipeline',
     })
+    expect(
+      transport.records.filter((record) => record.type === 'run:start'),
+    ).toHaveLength(1)
     expect(pipelineSpan).toBeTruthy()
 
     const stepSpans = spanStarts.filter(
@@ -214,6 +220,9 @@ describe('canonical orchestration observability', () => {
       type: 'run:start',
       rootPrimitive: 'flow.run',
     })
+    expect(
+      transport.records.filter((record) => record.type === 'run:start'),
+    ).toHaveLength(1)
     expect(flowRun).toMatchObject({
       family: 'flow',
       primitive: 'flow.run',
@@ -256,6 +265,9 @@ describe('canonical orchestration observability', () => {
       type: 'run:start',
       rootPrimitive: 'delegate.invoke',
     })
+    expect(
+      transport.records.filter((record) => record.type === 'run:start'),
+    ).toHaveLength(1)
     expect(spanStarts.map((record) => record.primitive)).toContain(
       'delegate.invoke',
     )
@@ -354,6 +366,9 @@ describe('canonical orchestration observability', () => {
       rootPrimitive: 'composition.consensus',
     })
     expect(
+      transport.records.filter((record) => record.type === 'run:start'),
+    ).toHaveLength(1)
+    expect(
       spanStarts.find((record) => record.primitive === 'composition.parallel'),
     ).toBeUndefined()
     expect(
@@ -444,6 +459,9 @@ describe('canonical orchestration observability', () => {
       type: 'run:start',
       rootPrimitive: 'composition.swarm',
     })
+    expect(
+      transport.records.filter((record) => record.type === 'run:start'),
+    ).toHaveLength(1)
     expect(
       spanStarts.filter((record) => record.primitive === 'composition.swarm'),
     ).toHaveLength(1)
