@@ -81,14 +81,14 @@ interface CruxRunTopology {
 
 The identity meanings become:
 
-| Identity | Meaning |
-| --- | --- |
-| `operationId` | Root `runId` for one Runs-page operation family |
-| `runId` | One independently owned logical lifecycle |
-| `traceId` | Distributed causal correlation; may contain several operations |
-| `segmentId` | One contiguous physical execution of a run |
-| `parentRunId` | Immediate structural parent within an operation |
-| `triggeredBySpanId` | Parent span under which the child run is presented |
+| Identity            | Meaning                                                        |
+| ------------------- | -------------------------------------------------------------- |
+| `operationId`       | Root `runId` for one Runs-page operation family                |
+| `runId`             | One independently owned logical lifecycle                      |
+| `traceId`           | Distributed causal correlation; may contain several operations |
+| `segmentId`         | One contiguous physical execution of a run                     |
+| `parentRunId`       | Immediate structural parent within an operation                |
+| `triggeredBySpanId` | Parent span under which the child run is presented             |
 
 ## Run-opening contract
 
@@ -117,7 +117,7 @@ observe.openChildRun(parentContext, {
   rootPrimitive,
   attributes,
   definitionRefs,
-})
+});
 ```
 
 It must:
@@ -145,6 +145,12 @@ record to carry the same operation membership. Implementations may retain
 `parentRunId` in the carrier as an integrity check if that avoids a process
 registry lookup; it must never change on resume.
 
+Persisted carriers written before this contract may omit `operationId`. During
+carrier sanitization only, treat that legacy run's own `runId` as its
+`operationId`, preserving resumability as a root operation. Never infer a
+legacy family from `traceId`, graph edges, names, or timing. A malformed or
+internally inconsistent explicit `operationId` remains an error.
+
 ### Non-suspending host continuation
 
 Crossing a physical host boundary without suspending must not reuse the
@@ -152,7 +158,7 @@ caller's `segmentId`. Add a context-only host continuation operation, for
 example:
 
 ```ts
-observe.continueInNewSegment(parentContext, fn)
+observe.continueInNewSegment(parentContext, fn);
 ```
 
 It retains `operationId`, `runId`, `traceId`, parent topology, correlators, and
@@ -179,22 +185,22 @@ boundary was crossed.
 
 Ownership follows lifecycle capability, not primitive name.
 
-| Primitive or boundary | Ownership |
-| --- | --- |
-| Standalone request, action, cron, or command | Root run and new operation |
+| Primitive or boundary                                       | Ownership                                                       |
+| ----------------------------------------------------------- | --------------------------------------------------------------- |
+| Standalone request, action, cron, or command                | Root run and new operation                                      |
 | Incoming Convex/serverless boundary with propagated context | Continue the current run in a fresh segment; boundary span only |
-| Generation, tool call, retrieval, memory, guardrail | Span in current run |
-| Agent invocation inside an observed operation | Span in current run |
-| Delegate invocation | Span in current run |
-| Core pipeline, parallel, consensus | Composition span in current run |
-| In-process Core swarm | Composition span in current run |
-| Standalone durable Flow | Root run and new operation |
-| Durable Flow invoked inside an operation | Child run in the same operation |
-| Convex durable swarm invoked inside an operation | Child run in the same operation |
-| Named durable `defer` execution | Child run in the scheduling operation |
-| Inline deferred callback | Span in the current run |
-| Future durable pipeline/workflow | Child run when nested; root run when standalone |
-| Eval case | Explicit root operation, even when sharing an Eval trace |
+| Generation, tool call, retrieval, memory, guardrail         | Span in current run                                             |
+| Agent invocation inside an observed operation               | Span in current run                                             |
+| Delegate invocation                                         | Span in current run                                             |
+| Core pipeline, parallel, consensus                          | Composition span in current run                                 |
+| In-process Core swarm                                       | Composition span in current run                                 |
+| Standalone durable Flow                                     | Root run and new operation                                      |
+| Durable Flow invoked inside an operation                    | Child run in the same operation                                 |
+| Convex durable swarm invoked inside an operation            | Child run in the same operation                                 |
+| Named durable `defer` execution                             | Child run in the scheduling operation                           |
+| Inline deferred callback                                    | Span in the current run                                         |
+| Future durable pipeline/workflow                            | Child run when nested; root run when standalone                 |
+| Eval case                                                   | Explicit root operation, even when sharing an Eval trace        |
 
 This keeps the current Core composition runtime mostly unchanged: pipeline,
 parallel, consensus, and the in-process swarm already open spans. The affected

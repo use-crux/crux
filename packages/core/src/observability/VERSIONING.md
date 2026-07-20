@@ -8,12 +8,16 @@ whenever graph records change.
 
 ## Current Version
 
-`CRUX_OBSERVABILITY_SCHEMA_VERSION` is `3`.
+`CRUX_OBSERVABILITY_SCHEMA_VERSION` is `4`.
 
-Version 3 adds optional, validated `deployment` identity to the record envelope.
-Writers emit v3 only. TypeScript and Go aggregate readers continue accepting
-persisted v2 records as deployment-unspecified; v2 records carrying a
-`deployment` field are rejected rather than reinterpreted.
+Version 4 adds required `operationId` identity to every record and immutable
+`parentRunId`/`triggeredBySpanId` topology to child `run:start` records. Writers
+and readers accept v4 only: earlier records cannot be assigned truthful
+operation families from trace, timing, names, or edges. The local runtime resets
+only observability-owned storage when it detects the older schema.
+
+Version 3 added optional, validated `deployment` identity to the record
+envelope.
 
 Version 2 was a clean pre-launch cutover. Graph records carry execution segment
 identity with `segmentId` and positive segment-local `segmentSeq`; the old

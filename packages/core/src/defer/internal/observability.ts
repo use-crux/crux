@@ -183,7 +183,12 @@ export function createDeferScopeObservability(): DeferScopeObservability {
     const current = observe.captureContext();
     if (current) {
       baseContext = {
+        operationId: current.operationId,
         runId: current.runId,
+        ...(current.parentRunId ? { parentRunId: current.parentRunId } : {}),
+        ...(current.triggeredBySpanId
+          ? { triggeredBySpanId: current.triggeredBySpanId }
+          : {}),
         traceId: current.traceId,
         segmentId: current.segmentId,
         ...(current.startedAtMs !== undefined
@@ -261,7 +266,14 @@ export function createDeferScopeObservability(): DeferScopeObservability {
           ...(context
             ? {
                 context: {
+                  operationId: context.operationId,
                   runId: context.runId,
+                  ...(context.parentRunId
+                    ? { parentRunId: context.parentRunId }
+                    : {}),
+                  ...(context.triggeredBySpanId
+                    ? { triggeredBySpanId: context.triggeredBySpanId }
+                    : {}),
                   traceId: context.traceId,
                   segmentId: context.segmentId,
                   ...(context.startedAtMs !== undefined
@@ -310,7 +322,12 @@ export function createDeferScopeObservability(): DeferScopeObservability {
         scope,
         spanId,
         context: {
+          operationId: context.operationId,
           runId: context.runId,
+          ...(context.parentRunId ? { parentRunId: context.parentRunId } : {}),
+          ...(context.triggeredBySpanId
+            ? { triggeredBySpanId: context.triggeredBySpanId }
+            : {}),
           traceId: context.traceId,
           segmentId: context.segmentId,
           ...(context.startedAtMs !== undefined
@@ -382,7 +399,12 @@ export function createDeferScopeObservability(): DeferScopeObservability {
         ...(input.scopeId ? { scopeId: input.scopeId } : {}),
         ...(input.definitionId ? { definitionId: input.definitionId } : {}),
         context: {
+          operationId: context.operationId,
           runId: context.runId,
+          ...(context.parentRunId ? { parentRunId: context.parentRunId } : {}),
+          ...(context.triggeredBySpanId
+            ? { triggeredBySpanId: context.triggeredBySpanId }
+            : {}),
           traceId: context.traceId,
           segmentId: context.segmentId,
           ...(context.startedAtMs !== undefined
@@ -457,7 +479,12 @@ export function createDeferScopeObservability(): DeferScopeObservability {
       const context = observation.context ?? ensurePublicContext();
       const queueDelayMs = Math.max(0, Date.now() - observation.scheduledAtMs);
       const runContext: CapturedObservabilityContext = {
+        operationId: context.operationId,
         runId: context.runId,
+        ...(context.parentRunId ? { parentRunId: context.parentRunId } : {}),
+        ...(context.triggeredBySpanId
+          ? { triggeredBySpanId: context.triggeredBySpanId }
+          : {}),
         traceId: context.traceId,
         segmentId: context.segmentId,
         ...(context.startedAtMs !== undefined

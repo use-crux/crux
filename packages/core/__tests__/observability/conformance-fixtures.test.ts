@@ -10,7 +10,10 @@ import {
   CruxGraphRecordSchema,
 } from '../../src/observability'
 
-const fixturesDir = new URL('../../src/observability/fixtures/', import.meta.url)
+const fixturesDir = new URL(
+  '../../src/observability/fixtures/',
+  import.meta.url,
+)
 const producerRecordTypes = [
   'run:start',
   'run:suspend',
@@ -49,7 +52,7 @@ describe('observability conformance fixture corpus', () => {
 
     const lifecycleCorpus = JSON.parse(
       await readFile(new URL('v2-contract-cases.json', fixturesDir), 'utf8'),
-    ) as V2ContractCorpus
+    ) as V4ContractCorpus
     for (const testCase of lifecycleCorpus.cases) {
       for (const record of testCase.records) {
         const parsed = CruxGraphRecordSchema.parse(record)
@@ -96,10 +99,10 @@ describe('observability conformance fixture corpus', () => {
     })
   })
 
-  it('validates every shared v2 contract fixture with segment-local identity', async () => {
+  it('validates every shared v4 contract fixture with segment-local identity', async () => {
     const corpus = JSON.parse(
       await readFile(new URL('v2-contract-cases.json', fixturesDir), 'utf8'),
-    ) as V2ContractCorpus
+    ) as V4ContractCorpus
 
     expect(corpus.cases.map((testCase) => testCase.name)).toEqual([
       'one-segment-success',
@@ -161,11 +164,11 @@ async function readFixtureBatches(): Promise<
   )
 }
 
-interface V2ContractCorpus {
-  readonly cases: readonly V2ContractCase[]
+interface V4ContractCorpus {
+  readonly cases: readonly V4ContractCase[]
 }
 
-interface V2ContractCase {
+interface V4ContractCase {
   readonly name: string
   readonly records: readonly {
     readonly recordId: string
@@ -174,7 +177,7 @@ interface V2ContractCase {
   }[]
   readonly expected: readonly {
     readonly recordId: string
-    readonly schemaVersion: 2
+    readonly schemaVersion: 4
     readonly segmentId: string
     readonly segmentSeq: number
   }[]

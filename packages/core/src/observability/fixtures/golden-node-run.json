@@ -1,10 +1,11 @@
 {
   "records": [
     {
-      "schemaVersion": 2,
+      "schemaVersion": 4,
       "recordId": "rec_786c5e938ac79c85_e",
       "type": "run:start",
       "runId": "run_2cc8dba8a16d4b9adb515f8d",
+      "operationId": "run_2cc8dba8a16d4b9adb515f8d",
       "traceId": "35a77c4be960d1ccb93108c757946d1a",
       "name": "chat",
       "rootPrimitive": "agent.run",
@@ -14,10 +15,11 @@
       "segmentSeq": 1
     },
     {
-      "schemaVersion": 2,
+      "schemaVersion": 4,
       "recordId": "rec_73bd06d8ecacbb65_f",
       "type": "span:start",
       "runId": "run_2cc8dba8a16d4b9adb515f8d",
+      "operationId": "run_2cc8dba8a16d4b9adb515f8d",
       "traceId": "35a77c4be960d1ccb93108c757946d1a",
       "spanId": "6f729a15e9610652",
       "family": "agent",
@@ -30,10 +32,11 @@
       "segmentSeq": 2
     },
     {
-      "schemaVersion": 2,
+      "schemaVersion": 4,
       "recordId": "rec_19b83552880fcb16_g",
       "type": "span",
       "runId": "run_2cc8dba8a16d4b9adb515f8d",
+      "operationId": "run_2cc8dba8a16d4b9adb515f8d",
       "traceId": "35a77c4be960d1ccb93108c757946d1a",
       "spanId": "f354f3b6b1e5eeaa",
       "parentSpanId": "6f729a15e9610652",
@@ -55,10 +58,11 @@
       "segmentSeq": 3
     },
     {
-      "schemaVersion": 2,
+      "schemaVersion": 4,
       "recordId": "rec_342385e67bca4073_h",
       "type": "span",
       "runId": "run_2cc8dba8a16d4b9adb515f8d",
+      "operationId": "run_2cc8dba8a16d4b9adb515f8d",
       "traceId": "35a77c4be960d1ccb93108c757946d1a",
       "spanId": "12da920debbd78e7",
       "parentSpanId": "6f729a15e9610652",
@@ -80,10 +84,11 @@
       "segmentSeq": 4
     },
     {
-      "schemaVersion": 2,
+      "schemaVersion": 4,
       "recordId": "rec_cf718f44734c7419_i",
       "type": "span",
       "runId": "run_2cc8dba8a16d4b9adb515f8d",
+      "operationId": "run_2cc8dba8a16d4b9adb515f8d",
       "traceId": "35a77c4be960d1ccb93108c757946d1a",
       "spanId": "0fe2bbc9a127739c",
       "parentSpanId": "6f729a15e9610652",
@@ -106,10 +111,11 @@
       "segmentSeq": 5
     },
     {
-      "schemaVersion": 2,
+      "schemaVersion": 4,
       "recordId": "rec_4375f3089d083a57_j",
       "type": "span:event",
       "runId": "run_2cc8dba8a16d4b9adb515f8d",
+      "operationId": "run_2cc8dba8a16d4b9adb515f8d",
       "traceId": "35a77c4be960d1ccb93108c757946d1a",
       "spanId": "0fe2bbc9a127739c",
       "eventId": "event_4e5cb338441cd3f6",
@@ -126,10 +132,11 @@
       "segmentSeq": 6
     },
     {
-      "schemaVersion": 2,
+      "schemaVersion": 4,
       "recordId": "rec_5e8911e5d0378e05_k",
       "type": "span",
       "runId": "run_2cc8dba8a16d4b9adb515f8d",
+      "operationId": "run_2cc8dba8a16d4b9adb515f8d",
       "traceId": "35a77c4be960d1ccb93108c757946d1a",
       "spanId": "286bfbdbea44d4bf",
       "parentSpanId": "6f729a15e9610652",
@@ -145,10 +152,11 @@
       "segmentSeq": 7
     },
     {
-      "schemaVersion": 2,
+      "schemaVersion": 4,
       "recordId": "rec_8ec7334fae39161d_l",
       "type": "span",
       "runId": "run_2cc8dba8a16d4b9adb515f8d",
+      "operationId": "run_2cc8dba8a16d4b9adb515f8d",
       "traceId": "35a77c4be960d1ccb93108c757946d1a",
       "spanId": "8f3227aa4c6f0565",
       "parentSpanId": "6f729a15e9610652",
@@ -167,10 +175,11 @@
       "segmentSeq": 8
     },
     {
-      "schemaVersion": 2,
+      "schemaVersion": 4,
       "recordId": "rec_ddf0bfba178e41d5_m",
       "type": "span",
       "runId": "run_2cc8dba8a16d4b9adb515f8d",
+      "operationId": "run_2cc8dba8a16d4b9adb515f8d",
       "traceId": "35a77c4be960d1ccb93108c757946d1a",
       "spanId": "84ad13f9602f65db",
       "parentSpanId": "8f3227aa4c6f0565",
@@ -186,10 +195,11 @@
       "segmentSeq": 9
     },
     {
-      "schemaVersion": 2,
+      "schemaVersion": 4,
       "recordId": "rec_f8e5c83419426e80_n",
       "type": "span",
       "runId": "run_2cc8dba8a16d4b9adb515f8d",
+      "operationId": "run_2cc8dba8a16d4b9adb515f8d",
       "traceId": "35a77c4be960d1ccb93108c757946d1a",
       "spanId": "821dd6f3eb2d4ec9",
       "parentSpanId": "84ad13f9602f65db",
@@ -205,10 +215,11 @@
       "segmentSeq": 10
     },
     {
-      "schemaVersion": 2,
+      "schemaVersion": 4,
       "recordId": "rec_fb86fa6175301203_o",
       "type": "span",
       "runId": "run_2cc8dba8a16d4b9adb515f8d",
+      "operationId": "run_2cc8dba8a16d4b9adb515f8d",
       "traceId": "35a77c4be960d1ccb93108c757946d1a",
       "spanId": "cb23162423184f41",
       "parentSpanId": "8f3227aa4c6f0565",
@@ -224,10 +235,11 @@
       "segmentSeq": 11
     },
     {
-      "schemaVersion": 2,
+      "schemaVersion": 4,
       "recordId": "rec_a54e4cc065a76674_p",
       "type": "span",
       "runId": "run_2cc8dba8a16d4b9adb515f8d",
+      "operationId": "run_2cc8dba8a16d4b9adb515f8d",
       "traceId": "35a77c4be960d1ccb93108c757946d1a",
       "spanId": "7b56e1ad6e4d0e8e",
       "parentSpanId": "8f3227aa4c6f0565",
@@ -243,10 +255,11 @@
       "segmentSeq": 12
     },
     {
-      "schemaVersion": 2,
+      "schemaVersion": 4,
       "recordId": "rec_4859f2ec15b8a737_q",
       "type": "span",
       "runId": "run_2cc8dba8a16d4b9adb515f8d",
+      "operationId": "run_2cc8dba8a16d4b9adb515f8d",
       "traceId": "35a77c4be960d1ccb93108c757946d1a",
       "spanId": "21479f80b48712fc",
       "parentSpanId": "8f3227aa4c6f0565",
@@ -262,10 +275,11 @@
       "segmentSeq": 13
     },
     {
-      "schemaVersion": 2,
+      "schemaVersion": 4,
       "recordId": "rec_2f9371cb5d845fca_r",
       "type": "artifact",
       "runId": "run_2cc8dba8a16d4b9adb515f8d",
+      "operationId": "run_2cc8dba8a16d4b9adb515f8d",
       "traceId": "35a77c4be960d1ccb93108c757946d1a",
       "spanId": "0fe2bbc9a127739c",
       "artifactId": "artifact_afa98f8751a35526",
@@ -279,10 +293,11 @@
       "segmentSeq": 14
     },
     {
-      "schemaVersion": 2,
+      "schemaVersion": 4,
       "recordId": "rec_670d0b3da9a4a975_s",
       "type": "artifact",
       "runId": "run_2cc8dba8a16d4b9adb515f8d",
+      "operationId": "run_2cc8dba8a16d4b9adb515f8d",
       "traceId": "35a77c4be960d1ccb93108c757946d1a",
       "spanId": "821dd6f3eb2d4ec9",
       "artifactId": "artifact_4f9c62d113914ed2",
@@ -320,10 +335,11 @@
       "segmentSeq": 15
     },
     {
-      "schemaVersion": 2,
+      "schemaVersion": 4,
       "recordId": "rec_315fd51f154ffd59_t",
       "type": "artifact",
       "runId": "run_2cc8dba8a16d4b9adb515f8d",
+      "operationId": "run_2cc8dba8a16d4b9adb515f8d",
       "traceId": "35a77c4be960d1ccb93108c757946d1a",
       "spanId": "0fe2bbc9a127739c",
       "artifactId": "artifact_c08c7d9961ceab97",
@@ -348,10 +364,11 @@
       "segmentSeq": 16
     },
     {
-      "schemaVersion": 2,
+      "schemaVersion": 4,
       "recordId": "rec_4babfd5b9d243e09_u",
       "type": "artifact",
       "runId": "run_2cc8dba8a16d4b9adb515f8d",
+      "operationId": "run_2cc8dba8a16d4b9adb515f8d",
       "traceId": "35a77c4be960d1ccb93108c757946d1a",
       "spanId": "0fe2bbc9a127739c",
       "artifactId": "artifact_b695e9d5ea5cd009",
@@ -377,10 +394,11 @@
       "segmentSeq": 17
     },
     {
-      "schemaVersion": 2,
+      "schemaVersion": 4,
       "recordId": "rec_af40fbbb3aad33d1_v",
       "type": "artifact",
       "runId": "run_2cc8dba8a16d4b9adb515f8d",
+      "operationId": "run_2cc8dba8a16d4b9adb515f8d",
       "traceId": "35a77c4be960d1ccb93108c757946d1a",
       "spanId": "8f3227aa4c6f0565",
       "artifactId": "artifact_856377d4e216d41a",
@@ -408,10 +426,11 @@
       "segmentSeq": 18
     },
     {
-      "schemaVersion": 2,
+      "schemaVersion": 4,
       "recordId": "rec_ed436a8ed6ed0a3b_w",
       "type": "artifact",
       "runId": "run_2cc8dba8a16d4b9adb515f8d",
+      "operationId": "run_2cc8dba8a16d4b9adb515f8d",
       "traceId": "35a77c4be960d1ccb93108c757946d1a",
       "spanId": "8f3227aa4c6f0565",
       "artifactId": "artifact_54505b10af4eaa43",
@@ -433,10 +452,11 @@
       "segmentSeq": 19
     },
     {
-      "schemaVersion": 2,
+      "schemaVersion": 4,
       "recordId": "rec_b62e2aaf3d66ff8d_x",
       "type": "artifact",
       "runId": "run_2cc8dba8a16d4b9adb515f8d",
+      "operationId": "run_2cc8dba8a16d4b9adb515f8d",
       "traceId": "35a77c4be960d1ccb93108c757946d1a",
       "spanId": "6f729a15e9610652",
       "artifactId": "artifact_6860253fd63b92cf",
@@ -458,10 +478,11 @@
       "segmentSeq": 20
     },
     {
-      "schemaVersion": 2,
+      "schemaVersion": 4,
       "recordId": "rec_98bfb2dacb2f8000_y",
       "type": "artifact",
       "runId": "run_2cc8dba8a16d4b9adb515f8d",
+      "operationId": "run_2cc8dba8a16d4b9adb515f8d",
       "traceId": "35a77c4be960d1ccb93108c757946d1a",
       "spanId": "0fe2bbc9a127739c",
       "artifactId": "artifact_5a73bccf9ecf4c24",
@@ -484,10 +505,11 @@
       "segmentSeq": 21
     },
     {
-      "schemaVersion": 2,
+      "schemaVersion": 4,
       "recordId": "rec_76c2327a50dd0f4d_z",
       "type": "artifact",
       "runId": "run_2cc8dba8a16d4b9adb515f8d",
+      "operationId": "run_2cc8dba8a16d4b9adb515f8d",
       "traceId": "35a77c4be960d1ccb93108c757946d1a",
       "spanId": "0fe2bbc9a127739c",
       "artifactId": "artifact_f7a180bcc6bd7629",
@@ -506,10 +528,11 @@
       "segmentSeq": 22
     },
     {
-      "schemaVersion": 2,
+      "schemaVersion": 4,
       "recordId": "rec_8e8f4150480e7e54_10",
       "type": "artifact",
       "runId": "run_2cc8dba8a16d4b9adb515f8d",
+      "operationId": "run_2cc8dba8a16d4b9adb515f8d",
       "traceId": "35a77c4be960d1ccb93108c757946d1a",
       "spanId": "0fe2bbc9a127739c",
       "artifactId": "artifact_b1b33f6e8de24244",
@@ -544,10 +567,11 @@
       "segmentSeq": 23
     },
     {
-      "schemaVersion": 2,
+      "schemaVersion": 4,
       "recordId": "rec_28be4003cc59eeed_11",
       "type": "artifact",
       "runId": "run_2cc8dba8a16d4b9adb515f8d",
+      "operationId": "run_2cc8dba8a16d4b9adb515f8d",
       "traceId": "35a77c4be960d1ccb93108c757946d1a",
       "spanId": "0fe2bbc9a127739c",
       "artifactId": "artifact_53ff15f697eb5958",
@@ -572,10 +596,11 @@
       "segmentSeq": 24
     },
     {
-      "schemaVersion": 2,
+      "schemaVersion": 4,
       "recordId": "rec_35e862f0e0ab57da_12",
       "type": "artifact",
       "runId": "run_2cc8dba8a16d4b9adb515f8d",
+      "operationId": "run_2cc8dba8a16d4b9adb515f8d",
       "traceId": "35a77c4be960d1ccb93108c757946d1a",
       "spanId": "0fe2bbc9a127739c",
       "artifactId": "artifact_d1d70cea942fb7cc",
@@ -595,10 +620,11 @@
       "segmentSeq": 25
     },
     {
-      "schemaVersion": 2,
+      "schemaVersion": 4,
       "recordId": "rec_c90b63d2ff26b551_13",
       "type": "artifact",
       "runId": "run_2cc8dba8a16d4b9adb515f8d",
+      "operationId": "run_2cc8dba8a16d4b9adb515f8d",
       "traceId": "35a77c4be960d1ccb93108c757946d1a",
       "spanId": "6f729a15e9610652",
       "artifactId": "artifact_fe1a646c675acb10",
@@ -623,10 +649,11 @@
       "segmentSeq": 26
     },
     {
-      "schemaVersion": 2,
+      "schemaVersion": 4,
       "recordId": "rec_e1ec77ecd7fb5820_14",
       "type": "artifact",
       "runId": "run_2cc8dba8a16d4b9adb515f8d",
+      "operationId": "run_2cc8dba8a16d4b9adb515f8d",
       "traceId": "35a77c4be960d1ccb93108c757946d1a",
       "spanId": "821dd6f3eb2d4ec9",
       "artifactId": "artifact_a3fe0829eeb6460e",
@@ -649,10 +676,11 @@
       "segmentSeq": 27
     },
     {
-      "schemaVersion": 2,
+      "schemaVersion": 4,
       "recordId": "rec_43945d0e4df13744_15",
       "type": "artifact",
       "runId": "run_2cc8dba8a16d4b9adb515f8d",
+      "operationId": "run_2cc8dba8a16d4b9adb515f8d",
       "traceId": "35a77c4be960d1ccb93108c757946d1a",
       "spanId": "821dd6f3eb2d4ec9",
       "artifactId": "artifact_a379eaaf8790e246",
@@ -681,10 +709,11 @@
       "segmentSeq": 28
     },
     {
-      "schemaVersion": 2,
+      "schemaVersion": 4,
       "recordId": "rec_ea2a9ccf1675f947_16",
       "type": "artifact",
       "runId": "run_2cc8dba8a16d4b9adb515f8d",
+      "operationId": "run_2cc8dba8a16d4b9adb515f8d",
       "traceId": "35a77c4be960d1ccb93108c757946d1a",
       "spanId": "821dd6f3eb2d4ec9",
       "artifactId": "artifact_e62eee136fa68c63",
@@ -705,10 +734,11 @@
       "segmentSeq": 29
     },
     {
-      "schemaVersion": 2,
+      "schemaVersion": 4,
       "recordId": "rec_a4ff49211b37833b_17",
       "type": "artifact",
       "runId": "run_2cc8dba8a16d4b9adb515f8d",
+      "operationId": "run_2cc8dba8a16d4b9adb515f8d",
       "traceId": "35a77c4be960d1ccb93108c757946d1a",
       "spanId": "821dd6f3eb2d4ec9",
       "artifactId": "artifact_02cd31328572cc90",
@@ -743,10 +773,11 @@
       "segmentSeq": 30
     },
     {
-      "schemaVersion": 2,
+      "schemaVersion": 4,
       "recordId": "rec_cfc849bd8229215c_18",
       "type": "artifact",
       "runId": "run_2cc8dba8a16d4b9adb515f8d",
+      "operationId": "run_2cc8dba8a16d4b9adb515f8d",
       "traceId": "35a77c4be960d1ccb93108c757946d1a",
       "spanId": "f354f3b6b1e5eeaa",
       "artifactId": "artifact_e26165b8d345c18b",
@@ -767,10 +798,11 @@
       "segmentSeq": 31
     },
     {
-      "schemaVersion": 2,
+      "schemaVersion": 4,
       "recordId": "rec_fcbfb736f6f38bc1_19",
       "type": "edge",
       "runId": "run_2cc8dba8a16d4b9adb515f8d",
+      "operationId": "run_2cc8dba8a16d4b9adb515f8d",
       "traceId": "35a77c4be960d1ccb93108c757946d1a",
       "edgeId": "edge_f617f71294beb623",
       "edgeType": "explains",
@@ -790,10 +822,11 @@
       "segmentSeq": 32
     },
     {
-      "schemaVersion": 2,
+      "schemaVersion": 4,
       "recordId": "rec_247cb60dbb4f7fa1_1a",
       "type": "span:end",
       "runId": "run_2cc8dba8a16d4b9adb515f8d",
+      "operationId": "run_2cc8dba8a16d4b9adb515f8d",
       "traceId": "35a77c4be960d1ccb93108c757946d1a",
       "spanId": "6f729a15e9610652",
       "endedAt": "2026-05-16T18:00:02.200Z",
@@ -803,10 +836,11 @@
       "segmentSeq": 33
     },
     {
-      "schemaVersion": 2,
+      "schemaVersion": 4,
       "recordId": "rec_763b7ca5bf1b1579_1b",
       "type": "run:end",
       "runId": "run_2cc8dba8a16d4b9adb515f8d",
+      "operationId": "run_2cc8dba8a16d4b9adb515f8d",
       "traceId": "35a77c4be960d1ccb93108c757946d1a",
       "endedAt": "2026-05-16T18:00:02.210Z",
       "durationMs": 2210,

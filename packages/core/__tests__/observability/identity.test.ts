@@ -41,9 +41,15 @@ describe('Crux observability identity', () => {
   })
 
   it('rejects legacy prefixed trace and span identifiers at the schema boundary', () => {
-    expect(CruxTraceIdSchema.safeParse('trace_generation_fixture_01').success).toBe(false)
-    expect(CruxTraceIdSchema.safeParse('00000000000000000000000000000000').success).toBe(false)
-    expect(CruxSpanIdSchema.safeParse('span_generation_fixture_01').success).toBe(false)
+    expect(
+      CruxTraceIdSchema.safeParse('trace_generation_fixture_01').success,
+    ).toBe(false)
+    expect(
+      CruxTraceIdSchema.safeParse('00000000000000000000000000000000').success,
+    ).toBe(false)
+    expect(
+      CruxSpanIdSchema.safeParse('span_generation_fixture_01').success,
+    ).toBe(false)
     expect(CruxSpanIdSchema.safeParse('0000000000000000').success).toBe(false)
   })
 
@@ -52,6 +58,7 @@ describe('Crux observability identity', () => {
       schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
       recordId: 'rec_1111111111111111_1',
       type: 'run:start',
+      operationId: 'run_111111111111111111111111',
       runId: 'run_111111111111111111111111',
       traceId: '11111111111111111111111111111111',
       name: 'identity test',
@@ -76,22 +83,31 @@ describe('Crux observability identity', () => {
       records.push(record)
     })
 
-    await observe.run({ name: 'sequenced graph', rootPrimitive: 'custom.operation' }, async () => {
-      await observe.span({ name: 'sequenced span', primitive: 'custom.operation' }, async () => {
-        observe.event({ name: 'checkpoint' })
-        const artifactId = observe.artifact({
-          kind: 'output',
-          contentType: 'application/json',
-          encoding: 'json',
-          preview: { ok: true },
-        })
-        observe.edge({
-          edgeType: 'produced',
-          from: { kind: 'span', id: observe.captureContext()!.currentSpanId! },
-          to: { kind: 'artifact', id: artifactId! },
-        })
-      })
-    })
+    await observe.run(
+      { name: 'sequenced graph', rootPrimitive: 'custom.operation' },
+      async () => {
+        await observe.span(
+          { name: 'sequenced span', primitive: 'custom.operation' },
+          async () => {
+            observe.event({ name: 'checkpoint' })
+            const artifactId = observe.artifact({
+              kind: 'output',
+              contentType: 'application/json',
+              encoding: 'json',
+              preview: { ok: true },
+            })
+            observe.edge({
+              edgeType: 'produced',
+              from: {
+                kind: 'span',
+                id: observe.captureContext()!.currentSpanId!,
+              },
+              to: { kind: 'artifact', id: artifactId! },
+            })
+          },
+        )
+      },
+    )
 
     expect(records.map((record) => record.type)).toEqual([
       'run:start',
@@ -103,6 +119,8 @@ describe('Crux observability identity', () => {
       'run:end',
     ])
     expect(new Set(records.map((record) => record.segmentId)).size).toBe(1)
-    expect(records.map((record) => record.segmentSeq)).toEqual([1, 2, 3, 4, 5, 6, 7])
+    expect(records.map((record) => record.segmentSeq)).toEqual([
+      1, 2, 3, 4, 5, 6, 7,
+    ])
   })
 })
