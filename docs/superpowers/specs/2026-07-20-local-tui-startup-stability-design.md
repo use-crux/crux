@@ -49,6 +49,14 @@ the background startup pipeline. It cannot delay construction, listener
 binding, or the first frame. Plain mode consumes the same background result and
 prints it without terminal control sequences.
 
+The dev command creates one session-scoped lifecycle group before constructing
+the server. Runtime preflight, initial index/runtime-artifact warmup, watcher,
+tunnel, bridge, and other lifetime work are all admitted to this same closeable
+group. Every task inherits the session context. Shutdown atomically closes
+admission, cancels the context, and joins every admitted task before Bubble Tea
+restores the terminal or plain mode returns. Preflight has no independent
+goroutine or output path that can outlive this boundary.
+
 `server.NewDevServer` constructs services, storage, handlers, and owned worker
 registries, but does not perform the initial Project Index reindex or runtime
 artifact generation synchronously. `DevServer.Start` binds the HTTP listener,
@@ -80,11 +88,19 @@ uncommitted cache load as last-good or clear a previously committed snapshot.
 
 ### Startup status boundary
 
-An internal startup journal is shared by command-owned runtime preflight and
-server-owned warmup rather than coupling the TUI to indexer internals. Each
-immutable status has a monotonically increasing revision, phase, active and
-terminal flags, and zero or more structured diagnostics. Diagnostics retain a
-stable identity, code, severity, message, and remediation.
+An internal startup journal is shared by runtime preflight and server warmup
+rather than coupling the TUI to indexer internals. Each immutable status has a
+monotonically increasing revision, per-task states, and zero or more structured
+diagnostics. The fixed task set is registered before startup work begins. Each
+task state has a phase plus pending, active, or terminal disposition.
+Diagnostics retain a stable identity, code, severity, message, and remediation.
+
+Aggregate `active` is true while any task is active. Aggregate `terminal` is
+true only when every registered task is terminal. The displayed phase is the
+first active task in a fixed documented priority order, falling back to the
+most recently terminal task when none is active. Thus preflight and index
+warmup may finish in either order without prematurely declaring startup
+complete or making rendering timing-dependent.
 
 `SnapshotAndSubscribe(ctx)` atomically returns the latest snapshot and a stream
 of strictly newer revisions. Terminal results remain replayable for the command
@@ -151,8 +167,10 @@ Tests are added one behavior at a time using public boundaries:
    controllable child and proves Unix process replacement, Windows status
    mapping, cleanup ordering, and no leaked terminal capability replies after
    return.
-8. A shutdown race test cancels while baseline handoff is occurring and proves
-   no worker is admitted after registry closure and every admitted worker joins.
+8. Shutdown race tests cancel while baseline handoff and runtime preflight are
+   independently blocked. They prove no worker is admitted after registry
+   closure, every admitted worker joins, and no output arrives after terminal
+   restoration.
 9. Existing Go, integration, race, vet, cross-compile, and package checks remain
    green.
 
