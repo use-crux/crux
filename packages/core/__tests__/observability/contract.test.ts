@@ -52,11 +52,11 @@ describe("Crux observability graph contract", () => {
     );
   });
 
-  it("reads the shared persisted v2 generation run fixture", () => {
+  it("reads the shared v4 generation run fixture", () => {
     const parsed = CruxGraphRecordBatchSchema.parse(fixture);
 
     expect(parsed.records).toHaveLength(13);
-    expect(parsed.records.every((record) => record.schemaVersion === 2)).toBe(
+    expect(parsed.records.every((record) => record.schemaVersion === 4)).toBe(
       true,
     );
     expect(parsed.records.map((record) => record.type)).toEqual([
@@ -321,6 +321,7 @@ describe("Crux observability graph contract", () => {
         schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
         recordId: "rec_1111111111111111_1",
         type: "span",
+        operationId: "run_111111111111111111111111",
         runId: "run_111111111111111111111111",
         segmentId: "seg_111111111111111111111111",
         segmentSeq: 1,
@@ -339,6 +340,7 @@ describe("Crux observability graph contract", () => {
         schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
         recordId: "rec_2222222222222222_2",
         type: "span",
+        operationId: "run_222222222222222222222222",
         runId: "run_222222222222222222222222",
         segmentId: "seg_222222222222222222222222",
         segmentSeq: 1,
@@ -359,6 +361,7 @@ describe("Crux observability graph contract", () => {
       schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
       recordId: "rec_suspend",
       type: "run:suspend",
+      operationId: "run_lifecycle",
       runId: "run_lifecycle",
       segmentId: "seg_lifecycle_a",
       segmentSeq: 2,
@@ -371,6 +374,7 @@ describe("Crux observability graph contract", () => {
       schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
       recordId: "rec_resume",
       type: "run:resume",
+      operationId: "run_lifecycle",
       runId: "run_lifecycle",
       segmentId: "seg_lifecycle_b",
       segmentSeq: 1,
@@ -402,6 +406,7 @@ describe("Crux observability graph contract", () => {
         schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
         recordId: "rec_3333333333333333_3",
         type: "span:start",
+        operationId: "run_333333333333333333333333",
         runId: "run_333333333333333333333333",
         segmentId: "seg_333333333333333333333333",
         segmentSeq: 1,

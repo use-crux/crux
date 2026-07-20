@@ -45,7 +45,7 @@ export function useRuns(filters: RunsFilters): UseRunsResult {
   const runsPage = useObservabilityRunsPage(pageOptions);
   // Inspect is an annotation source only — its own filters would reintroduce
   // a second, independently-filtered row set, so it's fetched unfiltered and
-  // joined onto the canonical rows below by runId.
+  // joined onto the canonical rows below by operationId.
   const inspectRuns = useInspectRuns();
   const inspectByRunId = useMemo(
     () => inspectAnnotationsByRunId(inspectRuns.data ?? []),
@@ -56,7 +56,7 @@ export function useRuns(filters: RunsFilters): UseRunsResult {
     const rows = (runsPage.page?.rows ?? []).map((summary) =>
       annotateRunRowWithInspect(
         rowFromRunSummary(summary),
-        inspectByRunId.get(summary.runId),
+        inspectByRunId.get(summary.operationId),
       ),
     );
 
@@ -74,7 +74,7 @@ export function useRuns(filters: RunsFilters): UseRunsResult {
     if (deferredFilters.search?.trim()) {
       const query = deferredFilters.search.trim().toLowerCase();
       filtered = filtered.filter((run) =>
-        `${run.traceId} ${run.target ?? ""} ${run.model ?? ""}`
+        `${run.operationId} ${run.target ?? ""} ${run.model ?? ""}`
           .toLowerCase()
           .includes(query),
       );
@@ -85,7 +85,7 @@ export function useRuns(filters: RunsFilters): UseRunsResult {
   const distinctTargets = useMemo(() => {
     const values = new Set<string>();
     for (const run of runsPage.page?.rows ?? []) {
-      const name = run.name || run.rootPrimitive || run.runId;
+      const name = run.name || run.rootPrimitive || run.operationId;
       if (name) values.add(name);
     }
     return Array.from(values).sort().slice(0, 50);

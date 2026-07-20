@@ -34,6 +34,7 @@ export function searchRuns(
     if (
       matches(
         query,
+        run.operationId,
         run.runId,
         run.traceId,
         run.promptId,
@@ -44,10 +45,10 @@ export function searchRuns(
     ) {
       results.push({
         category: "traces",
-        id: run.runId,
-        label: run.promptId || run.name || run.runId.slice(0, 12),
+        id: run.operationId,
+        label: run.promptId || run.name || run.operationId.slice(0, 12),
         meta: `${run.model || run.rootPrimitive} · ${run.status}`,
-        nav: { view: "run-detail", traceId: run.runId },
+        nav: { view: "run-detail", traceId: run.operationId },
       });
     }
   }

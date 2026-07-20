@@ -87,7 +87,7 @@ func filterInspectInsightRuns(insight inspectInsightRecord, runs []inspectRunRec
 	}
 	filtered := make([]inspectRunRecord, 0, len(runs))
 	for _, run := range runs {
-		if containsString(insight.LinkedTraceIDs, run.TraceID) {
+		if containsString(insight.LinkedTraceIDs, inspectRunIdentity(run)) {
 			filtered = append(filtered, run)
 		}
 	}

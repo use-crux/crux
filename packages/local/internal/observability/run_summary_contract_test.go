@@ -56,7 +56,9 @@ func TestRunSummaryJSONFieldSetMatchesDevtoolsContract(t *testing.T) {
 	// field set exactly (optional TS fields are still always emitted here
 	// because every value above is non-zero/non-empty).
 	expectedFields := []string{
-		"runId", "traceId", "sessionId", "userId", "name", "rootPrimitive",
+		"runId", "operationId", "rootRunId", "rootPresent", "firstSeenAt",
+		"childRunCount", "activeChildCount", "suspendedChildCount", "failedChildCount", "topologyHealth",
+		"traceId", "sessionId", "userId", "name", "rootPrimitive",
 		"status", "startedAt", "endedAt", "lastActivityAt", "durationMs",
 		"model", "provider", "promptId", "recordCount", "spanCount",
 		"eventCount", "artifactCount", "edgeCount", "segmentCount",

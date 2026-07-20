@@ -60,8 +60,8 @@ export interface ColumnDef {
 
 export interface RunRow {
   kind: RunKind;
-  /** The id used by the URL (traceId for traces, flow's first traceId for flows). */
-  traceId: string;
+  /** The operation-family id used by list identity, selection, and navigation. */
+  operationId: string;
   /** A stable id for React keys + onclick navigation. */
   id: string;
   /** Display name. */
@@ -101,8 +101,12 @@ export interface RunRow {
   orderingConfidence?: "causal" | "partial" | string;
   /** Missing segment-local sequence values and unresolved parent references. */
   gapCount?: number;
-  /** True when a trace alias identifies more than one logical run. */
+  /** Deprecated compatibility field; operation identity is never inferred from traceId. */
   traceAliasConflict?: boolean;
   /** Delivery/export health; "unknown" is distinct from "healthy". */
   deliveryHealth?: "unknown" | "healthy" | "degraded" | string;
+  topologyHealth?: "healthy" | "incomplete" | "conflicted" | string;
+  activeChildCount?: number;
+  suspendedChildCount?: number;
+  failedChildCount?: number;
 }

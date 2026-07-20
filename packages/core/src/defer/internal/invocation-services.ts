@@ -153,7 +153,7 @@ function createNamedEvidenceHooks(
   evidence: DeferScopeObservability,
 ): DurableDeferEvidenceHooks {
   return {
-    ensurePublicTraceId: () => evidence.ensurePublicTraceId(),
+    ensurePublicParentContext: () => evidence.ensurePublicParentContext(),
     onStaged(input) {
       const observation = evidence.recordNamedScheduled({
         sequence: input.sequence,

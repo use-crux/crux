@@ -13,6 +13,7 @@ import {
 const runStart = {
   schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
   recordId: "rec_1",
+  operationId: "run_1",
   runId: "run_1",
   segmentId: "seg_1",
   segmentSeq: 1,
@@ -26,6 +27,7 @@ const runStart = {
 const spanStart = {
   schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
   recordId: "rec_2",
+  operationId: "run_1",
   runId: "run_1",
   segmentId: "seg_1",
   segmentSeq: 2,
@@ -41,6 +43,7 @@ const spanStart = {
 const spanRecord = {
   schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
   recordId: "rec_3",
+  operationId: "run_1",
   runId: "run_1",
   segmentId: "seg_1",
   segmentSeq: 3,

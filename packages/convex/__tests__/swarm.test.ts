@@ -320,6 +320,8 @@ describe('createComponentSwarm', () => {
     const observedRunId = swarmStart?.type === 'run:start' ? swarmStart.runId : undefined
     expect(observedRunId).toBeDefined()
     expect(observedRunId).not.toBe(actionRun.runId)
+    expect(swarmStart?.operationId).toBe(actionRun.operationId)
+    expect(swarmStart).toMatchObject({ parentRunId: actionRun.runId })
     expect(swarmStart?.traceId).toBe(actionRun.traceId)
     expect(transport.records).toContainEqual(expect.objectContaining({ type: 'run:suspend', runId: observedRunId }))
 

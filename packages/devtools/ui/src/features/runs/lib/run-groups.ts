@@ -80,7 +80,7 @@ export function countRuns(rows: readonly RunRow[]) {
 export function exportableRunRows(rows: readonly RunRow[]) {
   return rows.map((run) => ({
     kind: run.kind,
-    traceId: run.traceId,
+    operationId: run.operationId,
     target: run.target,
     model: run.model,
     status: run.status,

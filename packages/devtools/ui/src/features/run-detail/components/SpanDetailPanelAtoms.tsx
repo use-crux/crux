@@ -71,7 +71,7 @@ export function PendingFromBackend({ what }: { what: string }) {
           style={{ color: "var(--devtools-fg-muted)" }}
         >
           This card lights up once the backend includes the data on
-          /api/inspect/runs/{"{traceId}"}.
+          /api/inspect/runs/{"{operationId}"}.
         </div>
       </div>
     </div>

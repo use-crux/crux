@@ -1110,6 +1110,15 @@ export interface ObservabilityRunDeliveryHealth {
 // Runs list/detail row; do not reintroduce a second, narrower duplicate.
 export interface ObservabilityRunSummary {
   runId: string;
+  operationId: string;
+  rootRunId: string;
+  rootPresent: boolean;
+  firstSeenAt: string;
+  childRunCount: number;
+  activeChildCount: number;
+  suspendedChildCount: number;
+  failedChildCount: number;
+  topologyHealth: "healthy" | "incomplete" | "conflicted" | string;
   traceId: string;
   sessionId?: string;
   userId?: string;
@@ -1136,7 +1145,7 @@ export interface ObservabilityRunSummary {
   orderingConfidence: "causal" | "partial" | string;
   /** Missing segment-local sequence values and unresolved parent references. */
   gapCount: number;
-  /** True when a trace alias identifies more than one logical run. */
+  /** Deprecated compatibility field; operation identity is never inferred from traceId. */
   traceAliasConflict?: boolean;
   /** Server-owned read-model revision this row was current as of. */
   revision: number;
@@ -1433,6 +1442,7 @@ export type CompositionType = "pipeline" | "parallel" | "consensus" | "swarm";
  */
 export interface InspectRunRecord {
   _tag: "InspectRun";
+  operationId?: string;
   traceId: string;
   targetId?: string;
   promptId?: string;

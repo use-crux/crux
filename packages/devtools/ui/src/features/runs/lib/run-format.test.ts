@@ -16,7 +16,7 @@ function row(overrides: Partial<RunRow> = {}): RunRow {
   return {
     kind: "trace",
     id: "run:r1",
-    traceId: "r1",
+    operationId: "r1",
     target: "r1",
     status: "ok",
     startedAt: 0,
@@ -29,7 +29,7 @@ describe("run format helpers", () => {
     const run = {
       kind: "trace",
       id: "run:1",
-      traceId: "run:1",
+      operationId: "run:1",
       target: "run",
       status: "ok",
       startedAt: 1,

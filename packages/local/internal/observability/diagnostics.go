@@ -52,10 +52,6 @@ func runDiagnostics(run RunSummary) []RunDetailDiagnostic {
 }
 
 func runDiagnosticsAt(run RunSummary, now time.Time) []RunDetailDiagnostic {
-	// TraceAliasConflict is deterministic lookup/ambiguity metadata (see
-	// ResolveRunIDs' newest-wins alias rule), not a lifecycle problem: multiple
-	// logical runs legitimately share one trace id (e.g. nested flows), so it
-	// must not surface as a diagnostic warning or suppress the checks below.
 	if presentationReconciledFrom(run.Attributes) == "descendant.operation.deadline" {
 		return []RunDetailDiagnostic{{
 			Code:         "descendant-operation-deadline-exceeded",

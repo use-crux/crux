@@ -36,17 +36,17 @@ type RunsDelta struct {
 	Expired bool `json:"expired"`
 }
 
-// bumpRunRevisions assigns the next global revision to each run in runIDs,
+// bumpRunRevisions assigns the next global revision to each operation family.
 // records it in the bounded change log, and returns the per-run revision
 // assigned. It must run inside the same transaction as the records it
 // accounts for, so a rollback undoes the revision bump along with the data.
-func bumpRunRevisions(ctx context.Context, tx *sql.Tx, runIDs []string, retain int) (map[string]int64, error) {
-	revisions := make(map[string]int64, len(runIDs))
-	if len(runIDs) == 0 {
+func bumpRunRevisions(ctx context.Context, tx *sql.Tx, operationIDs []string, retain int) (map[string]int64, error) {
+	revisions := make(map[string]int64, len(operationIDs))
+	if len(operationIDs) == 0 {
 		return revisions, nil
 	}
-	for _, runID := range runIDs {
-		if runID == "" {
+	for _, operationID := range operationIDs {
+		if operationID == "" {
 			continue
 		}
 		if _, err := tx.ExecContext(ctx, `UPDATE observability_revision SET value = value + 1 WHERE id = 1`); err != nil {
@@ -56,15 +56,18 @@ func bumpRunRevisions(ctx context.Context, tx *sql.Tx, runIDs []string, retain i
 		if err := tx.QueryRowContext(ctx, `SELECT value FROM observability_revision WHERE id = 1`).Scan(&revision); err != nil {
 			return nil, fmt.Errorf("read observability revision counter: %w", err)
 		}
-		if _, err := tx.ExecContext(ctx, `UPDATE runs SET revision = ? WHERE run_id = ?`, revision, runID); err != nil {
-			return nil, fmt.Errorf("persist observability run revision: %w", err)
+		if _, err := tx.ExecContext(ctx, `UPDATE operations SET revision = ? WHERE operation_id = ?`, revision, operationID); err != nil {
+			return nil, fmt.Errorf("persist observability operation revision: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE runs SET revision = ? WHERE operation_id = ?`, revision, operationID); err != nil {
+			return nil, fmt.Errorf("persist member run revision: %w", err)
 		}
 		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO observability_run_revision_log (revision, run_id) VALUES (?, ?)
-		`, revision, runID); err != nil {
-			return nil, fmt.Errorf("append observability run revision log: %w", err)
+			INSERT INTO observability_run_revision_log (revision, operation_id) VALUES (?, ?)
+		`, revision, operationID); err != nil {
+			return nil, fmt.Errorf("append observability operation revision log: %w", err)
 		}
-		revisions[runID] = revision
+		revisions[operationID] = revision
 	}
 	if err := pruneRevisionLog(ctx, tx, retain); err != nil {
 		return nil, err
@@ -139,7 +142,7 @@ func (s *Service) RunsSince(ctx context.Context, sinceRevision int64) (RunsDelta
 	}
 
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT revision, run_id FROM observability_run_revision_log
+		SELECT revision, operation_id FROM observability_run_revision_log
 		WHERE revision > ?
 		ORDER BY revision ASC
 	`, sinceRevision)
@@ -151,11 +154,11 @@ func (s *Service) RunsSince(ctx context.Context, sinceRevision int64) (RunsDelta
 	var changes []RunChange
 	for rows.Next() {
 		var revision int64
-		var runID string
-		if err := rows.Scan(&revision, &runID); err != nil {
+		var operationID string
+		if err := rows.Scan(&revision, &operationID); err != nil {
 			return RunsDelta{}, fmt.Errorf("scan observability revision log delta: %w", err)
 		}
-		changes = append(changes, RunChange{Entity: "run", ID: runID, Revision: revision})
+		changes = append(changes, RunChange{Entity: "operation", ID: operationID, Revision: revision})
 	}
 	if err := rows.Err(); err != nil {
 		return RunsDelta{}, fmt.Errorf("iterate observability revision log delta: %w", err)

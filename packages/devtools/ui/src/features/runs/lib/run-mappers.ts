@@ -68,9 +68,9 @@ export function rowFromRunSummary(r: ObservabilityRunSummary): RunRow {
         : undefined;
   return {
     kind: canonicalPrimitiveKind(r.rootPrimitive),
-    id: `run:${r.runId}`,
-    traceId: r.runId,
-    target: r.name || r.rootPrimitive || r.runId,
+    id: `operation:${r.operationId}`,
+    operationId: r.operationId,
+    target: r.name || r.rootPrimitive || r.operationId,
     sessionId:
       r.sessionId ??
       stringValue(attributes.sessionId) ??
@@ -87,7 +87,7 @@ export function rowFromRunSummary(r: ObservabilityRunSummary): RunRow {
     eventCount: r.eventCount,
     artifactCount: r.artifactCount,
     edgeCount: r.edgeCount,
-    childCount: r.spanCount,
+    childCount: r.childRunCount,
     errorMessage,
     revision: r.revision,
     segmentCount: r.segmentCount,
@@ -96,6 +96,10 @@ export function rowFromRunSummary(r: ObservabilityRunSummary): RunRow {
     gapCount: r.gapCount,
     traceAliasConflict: r.traceAliasConflict,
     deliveryHealth: r.deliveryHealth?.status,
+    topologyHealth: r.topologyHealth,
+    activeChildCount: r.activeChildCount,
+    suspendedChildCount: r.suspendedChildCount,
+    failedChildCount: r.failedChildCount,
   };
 }
 
@@ -123,16 +127,17 @@ export function annotateRunRowWithInspect(
 }
 
 /**
- * Inspect's run record keys its trace-scoped metadata by `traceId`, which
- * for an observability-sourced run is set to the run's `RunID` (see
- * `inspectRunFromObservabilitySummary` in
- * packages/local/internal/inspect/observability.go) — so joining on the
- * canonical row's `traceId` (== runId) is the correct, unambiguous key.
+ * Inspect carries the same explicit operation id. Distributed trace ids are
+ * intentionally not accepted as list-row identity.
  */
 export function inspectAnnotationsByRunId(
   inspectRuns: readonly InspectRunRecord[],
 ): ReadonlyMap<string, InspectRunRecord> {
-  return new Map(inspectRuns.map((run) => [run.traceId, run]));
+  return new Map(
+    inspectRuns.flatMap((run) =>
+      run.operationId ? [[run.operationId, run] as const] : [],
+    ),
+  );
 }
 
 export function sinceFromLast(

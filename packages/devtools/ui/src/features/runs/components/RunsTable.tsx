@@ -31,8 +31,8 @@ interface RunsTableProps {
   selected: ReadonlySet<string>;
   selectionState: SelectionState;
   onToggleAllVisible: () => void;
-  onToggleSelected: (traceId: string) => void;
-  onOpenRun: (traceId: string) => void;
+  onToggleSelected: (operationId: string) => void;
+  onOpenRun: (operationId: string) => void;
 }
 
 export function RunsTable({
@@ -107,8 +107,8 @@ function RunGroupRows({
   gridTemplate: string;
   visibleSet: ReadonlySet<ColumnId>;
   selected: ReadonlySet<string>;
-  onToggleSelected: (traceId: string) => void;
-  onOpenRun: (traceId: string) => void;
+  onToggleSelected: (operationId: string) => void;
+  onOpenRun: (operationId: string) => void;
 }) {
   const summary = summarizeRunGroup(group.rows);
 
@@ -157,10 +157,10 @@ function RunGroupRows({
             run={run}
             visibleSet={visibleSet}
             gridTemplate={gridTemplate}
-            selected={selected.has(run.traceId)}
-            onToggleSelected={() => onToggleSelected(run.traceId)}
-            onOpen={() => onOpenRun(run.traceId)}
-            traceId={run.traceId}
+            selected={selected.has(run.operationId)}
+            onToggleSelected={() => onToggleSelected(run.operationId)}
+            onOpen={() => onOpenRun(run.operationId)}
+            operationId={run.operationId}
           />
         </RowErrorBoundary>
       ))}
@@ -175,7 +175,7 @@ function RunRowCell({
   selected,
   onToggleSelected,
   onOpen,
-  traceId,
+  operationId,
 }: {
   run: RunRow;
   visibleSet: ReadonlySet<ColumnId>;
@@ -183,14 +183,14 @@ function RunRowCell({
   selected: boolean;
   onToggleSelected: () => void;
   onOpen: () => void;
-  traceId: string;
+  operationId: string;
 }) {
   const prefetch = usePrefetchRunDetail();
   return (
     <div
       onClick={onOpen}
-      onMouseEnter={() => prefetch(traceId)}
-      onFocus={() => prefetch(traceId)}
+      onMouseEnter={() => prefetch(operationId)}
+      onFocus={() => prefetch(operationId)}
       role="button"
       tabIndex={0}
       onKeyDown={(event) => {
@@ -381,14 +381,14 @@ function RunCell({
     }
     case "trace": {
       const shortId =
-        run.traceId.length > 8
-          ? `${run.traceId.slice(0, 4)}…${run.traceId.slice(-2)}`
-          : run.traceId;
+        run.operationId.length > 8
+          ? `${run.operationId.slice(0, 4)}…${run.operationId.slice(-2)}`
+          : run.operationId;
       return (
         <span
           className="truncate font-mono text-[11.5px]"
           style={{ color: "var(--devtools-crux)" }}
-          title={run.traceId}
+          title={run.operationId}
         >
           {shortId}
         </span>

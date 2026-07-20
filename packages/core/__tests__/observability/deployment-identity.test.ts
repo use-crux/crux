@@ -62,24 +62,18 @@ describe('observability deployment identity', () => {
     await crux.dispose()
   })
 
-  it('writes schema v3 while reading deployment-unspecified v2 records', () => {
-    expect(CRUX_OBSERVABILITY_SCHEMA_VERSION).toBe(3)
-    expect(CruxGraphRecordSchema.parse(persistedV2RunStart)).toEqual(
-      persistedV2RunStart,
+  it('writes schema v4 and rejects records without operation identity', () => {
+    expect(CRUX_OBSERVABILITY_SCHEMA_VERSION).toBe(4)
+    expect(CruxGraphRecordSchema.safeParse(persistedV2RunStart).success).toBe(
+      false,
     )
-    expect(
-      CruxGraphRecordSchema.safeParse({
-        ...persistedV2RunStart,
-        deployment: identity,
-      }).success,
-    ).toBe(false)
-    expect(
-      CruxGraphRecordSchema.safeParse({
-        ...persistedV2RunStart,
-        schemaVersion: 3,
-        deployment: identity,
-      }).success,
-    ).toBe(true)
+    const current = {
+      ...persistedV2RunStart,
+      schemaVersion: 4,
+      operationId: persistedV2RunStart.runId,
+      deployment: identity,
+    }
+    expect(CruxGraphRecordSchema.safeParse(current).success).toBe(true)
   })
 
   it('rejects malformed configured identity before changing the active layer', async () => {
@@ -101,9 +95,12 @@ describe('observability deployment identity', () => {
 
     expect(records).not.toHaveLength(0)
     expect(records.every((record) => record.deployment !== identity)).toBe(true)
-    expect(records.every((record) =>
-      JSON.stringify(record.deployment) === JSON.stringify(identity),
-    )).toBe(true)
+    expect(
+      records.every(
+        (record) =>
+          JSON.stringify(record.deployment) === JSON.stringify(identity),
+      ),
+    ).toBe(true)
   })
 
   it('restores layered identity and keeps an open run on its captured identity', () => {
@@ -140,9 +137,14 @@ describe('observability deployment identity', () => {
     restoreOuter()
 
     const byRun = Map.groupBy(records, (record) => record.runId)
-    expect(byRun.get(openRun.runId)?.every(
-      (record) => record.deployment?.deploymentId === outerIdentity.deploymentId,
-    )).toBe(true)
+    expect(
+      byRun
+        .get(openRun.runId)
+        ?.every(
+          (record) =>
+            record.deployment?.deploymentId === outerIdentity.deploymentId,
+        ),
+    ).toBe(true)
     const starts = records.filter((record) => record.type === 'run:start')
     expect(starts.map((record) => record.deployment)).toEqual([
       outerIdentity,

@@ -63,7 +63,7 @@ func TestRunsScrollableDetailGolden(t *testing.T) {
 func fixtureRuns() (*Runs, time.Time) {
 	client := uitest.NewFixtureClient()
 	runs, _ := client.Runs(nil)
-	detail, _, _ := client.ObservabilityRunDetail(nil, runs[0].TraceID)
+	detail, _, _ := client.ObservabilityRunDetail(nil, inspectOperationID(runs[0]))
 	screen := NewRuns()
 	summaries := make([]api.ObservabilityRunSummary, len(runs))
 	for index, run := range runs {
@@ -71,7 +71,7 @@ func fixtureRuns() (*Runs, time.Time) {
 	}
 	setRunsForTest(screen, summaries...)
 	setRunDetailForTest(screen, detail)
-	selectRunForTest(screen, runs[0].TraceID)
+	selectRunForTest(screen, inspectOperationID(runs[0]))
 	selectSpanForTest(screen, "retrieve")
 	screen.runList.SetItems(summaries)
 	return screen, client.Now

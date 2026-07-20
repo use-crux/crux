@@ -137,13 +137,13 @@ func (s *Service) runRetention(ctx context.Context, settings retentionSettings, 
 	ctx, cancel := s.maintenanceContext(ctx)
 	defer cancel()
 
-	deleteIDs, err := s.retentionRunIDsByAge(ctx, now.Add(-settings.MaxRunAge), retentionDeleteBatchSize)
+	deleteIDs, err := s.retentionOperationIDsByAge(ctx, now.Add(-settings.MaxRunAge), retentionDeleteBatchSize)
 	if err != nil {
 		return 0, err
 	}
 	if len(deleteIDs) < retentionDeleteBatchSize {
 		remaining := retentionDeleteBatchSize - len(deleteIDs)
-		ids, err := s.retentionRunIDsByCount(ctx, settings.MaxRuns, deleteIDs, remaining)
+		ids, err := s.retentionOperationIDsByCount(ctx, settings.MaxRuns, deleteIDs, remaining)
 		if err != nil {
 			return 0, err
 		}
@@ -171,8 +171,17 @@ func (s *Service) runRetention(ctx context.Context, settings retentionSettings, 
 	if _, err := bumpRunRevisions(ctx, tx, deleteIDs, s.revisionLogRetentionOrDefault()); err != nil {
 		return 0, fmt.Errorf("advance observability revision for retained-out runs: %w", err)
 	}
-	if err := deleteRunRows(ctx, tx, deleteIDs); err != nil {
+	memberRunIDs, err := operationMemberRunIDs(ctx, tx, deleteIDs)
+	if err != nil {
 		return 0, err
+	}
+	if len(memberRunIDs) > 0 {
+		if err := deleteRunRows(ctx, tx, memberRunIDs); err != nil {
+			return 0, err
+		}
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM operations WHERE operation_id IN (`+queryPlaceholders(len(deleteIDs))+`)`, queryArgs(deleteIDs)...); err != nil {
+		return 0, fmt.Errorf("delete retained operation shells: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
 		return 0, fmt.Errorf("commit observability retention transaction: %w", err)
@@ -184,13 +193,14 @@ func (s *Service) runRetention(ctx context.Context, settings retentionSettings, 
 	return len(deleteIDs), nil
 }
 
-func (s *Service) retentionRunIDsByAge(ctx context.Context, cutoff time.Time, limit int) ([]string, error) {
+func (s *Service) retentionOperationIDsByAge(ctx context.Context, cutoff time.Time, limit int) ([]string, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT run_id
-		FROM runs
-		WHERE started_at IS NOT NULL AND started_at != '' AND started_at < ?
-			AND ifnull(status, '') != 'running'
-		ORDER BY started_at ASC, run_id ASC
+		SELECT o.operation_id
+		FROM operations o JOIN runs m ON m.operation_id = o.operation_id
+		GROUP BY o.operation_id, o.first_seen_at
+		HAVING max(ifnull(m.last_activity_at, o.first_seen_at)) < ?
+			AND sum(CASE WHEN (`+strings.ReplaceAll(effectiveRunStatusSQL, "r.", "m.")+`) IN ('running', 'suspended') THEN 1 ELSE 0 END) = 0
+		ORDER BY o.first_seen_at ASC, o.operation_id ASC
 		LIMIT ?
 	`, cutoff.UTC().Format(time.RFC3339Nano), limit)
 	if err != nil {
@@ -200,12 +210,17 @@ func (s *Service) retentionRunIDsByAge(ctx context.Context, cutoff time.Time, li
 	return scanRetentionRunIDs(rows)
 }
 
-func (s *Service) retentionRunIDsByCount(ctx context.Context, maxRuns int, excluded []string, limit int) ([]string, error) {
+func (s *Service) retentionOperationIDsByCount(ctx context.Context, maxRuns int, excluded []string, limit int) ([]string, error) {
 	if limit <= 0 {
 		return nil, nil
 	}
 	var total int
-	if err := s.db.QueryRowContext(ctx, `SELECT count(*) FROM runs WHERE ifnull(status, '') != 'running'`).Scan(&total); err != nil {
+	if err := s.db.QueryRowContext(ctx, `
+		SELECT count(*) FROM operations o
+		WHERE NOT EXISTS (
+			SELECT 1 FROM runs m WHERE m.operation_id = o.operation_id AND (`+strings.ReplaceAll(effectiveRunStatusSQL, "r.", "m.")+`) IN ('running', 'suspended')
+		)
+	`).Scan(&total); err != nil {
 		return nil, fmt.Errorf("count observability runs for retention: %w", err)
 	}
 	overflow := total - len(excluded) - maxRuns
@@ -216,18 +231,18 @@ func (s *Service) retentionRunIDsByCount(ctx context.Context, maxRuns int, exclu
 		overflow = limit
 	}
 	query := `
-		SELECT run_id
-		FROM runs`
+		SELECT o.operation_id
+		FROM operations o`
 	args := make([]any, 0, len(excluded)+1)
 	if len(excluded) > 0 {
-		query += ` WHERE ifnull(status, '') != 'running' AND run_id NOT IN (` + strings.TrimRight(strings.Repeat("?,", len(excluded)), ",") + `)`
+		query += ` WHERE NOT EXISTS (SELECT 1 FROM runs m WHERE m.operation_id = o.operation_id AND (` + strings.ReplaceAll(effectiveRunStatusSQL, "r.", "m.") + `) IN ('running', 'suspended')) AND o.operation_id NOT IN (` + strings.TrimRight(strings.Repeat("?,", len(excluded)), ",") + `)`
 		for _, id := range excluded {
 			args = append(args, id)
 		}
 	} else {
-		query += ` WHERE ifnull(status, '') != 'running'`
+		query += ` WHERE NOT EXISTS (SELECT 1 FROM runs m WHERE m.operation_id = o.operation_id AND (` + strings.ReplaceAll(effectiveRunStatusSQL, "r.", "m.") + `) IN ('running', 'suspended'))`
 	}
-	query += ` ORDER BY started_at ASC, run_id ASC LIMIT ?`
+	query += ` ORDER BY o.first_seen_at ASC, o.operation_id ASC LIMIT ?`
 	args = append(args, overflow)
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {

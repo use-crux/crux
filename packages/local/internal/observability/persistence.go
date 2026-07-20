@@ -6,10 +6,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 )
 
 type recordIDConflictError struct {
 	recordID string
+}
+
+type operationDeletedError struct {
+	operationID string
+}
+
+func (e *operationDeletedError) Error() string {
+	return fmt.Sprintf("operation_deleted: operation %s was explicitly deleted", e.operationID)
 }
 
 func (e *recordIDConflictError) Error() string {
@@ -82,6 +91,9 @@ func (s *Service) configureSQLite(ctx context.Context) error {
 }
 
 func upsertStoredRecord(ctx context.Context, statements *ingestStatements, record Record) (bool, error) {
+	if err := ensureOperationMembership(ctx, statements, record); err != nil {
+		return false, err
+	}
 	canonicalPayload, err := canonicalJSON(record.Payload)
 	if err != nil {
 		return false, fmt.Errorf("canonicalize record payload: %w", err)
@@ -104,9 +116,9 @@ func upsertStoredRecord(ctx context.Context, statements *ingestStatements, recor
 		return false, err
 	}
 	result, err := statements.exec(ctx, `
-		INSERT INTO records (record_id, run_id, trace_id, segment_id, segment_seq, type, payload_json)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
-	`, record.RecordID, record.RunID, nullIfEmpty(record.TraceID), record.SegmentID, record.SegmentSeq, record.Type, string(record.Payload))
+		INSERT INTO records (record_id, run_id, operation_id, trace_id, segment_id, segment_seq, type, payload_json)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`, record.RecordID, record.RunID, record.OperationID, nullIfEmpty(record.TraceID), record.SegmentID, record.SegmentSeq, record.Type, string(record.Payload))
 	if err != nil {
 		return false, classifySQLiteConstraintError(err, record)
 	}
@@ -121,6 +133,93 @@ func upsertStoredRecord(ctx context.Context, statements *ingestStatements, recor
 		return true, nil
 	}
 	return false, nil
+}
+
+func ensureOperationMembership(ctx context.Context, statements *ingestStatements, record Record) error {
+	var deleted int
+	if err := statements.queryRow(ctx, `SELECT EXISTS(SELECT 1 FROM operation_tombstones WHERE operation_id = ?)`, record.OperationID).Scan(&deleted); err != nil {
+		return fmt.Errorf("check operation tombstone %q: %w", record.OperationID, err)
+	}
+	if deleted != 0 {
+		return &operationDeletedError{operationID: record.OperationID}
+	}
+	if _, err := statements.exec(ctx, `
+		INSERT INTO operations (operation_id, first_seen_at) VALUES (?, ?)
+		ON CONFLICT(operation_id) DO NOTHING
+	`, record.OperationID, operationFirstSeenAt(record)); err != nil {
+		return fmt.Errorf("reserve operation %q: %w", record.OperationID, err)
+	}
+
+	var existingOperationID string
+	var existingTraceID, existingParentRunID, existingTriggeredBySpanID sql.NullString
+	err := statements.queryRow(ctx, `
+		SELECT operation_id, trace_id, parent_run_id, triggered_by_span_id
+		FROM runs WHERE run_id = ?
+	`, record.RunID).Scan(&existingOperationID, &existingTraceID, &existingParentRunID, &existingTriggeredBySpanID)
+	if err != nil && err != sql.ErrNoRows {
+		return fmt.Errorf("load operation membership for run %q: %w", record.RunID, err)
+	}
+	if err == sql.ErrNoRows {
+		if _, err := statements.exec(ctx, `
+			INSERT INTO runs (run_id, operation_id, trace_id) VALUES (?, ?, ?)
+		`, record.RunID, record.OperationID, nullIfEmpty(record.TraceID)); err != nil {
+			return fmt.Errorf("reserve operation member %q: %w", record.RunID, err)
+		}
+	} else {
+		if existingOperationID != record.OperationID {
+			return fmt.Errorf("operation_identity_conflict: run %s belongs to operation %s, not %s", record.RunID, existingOperationID, record.OperationID)
+		}
+		if existingTraceID.Valid && record.TraceID != "" && existingTraceID.String != record.TraceID {
+			return fmt.Errorf("trace_identity_conflict: run %s belongs to trace %s, not %s", record.RunID, existingTraceID.String, record.TraceID)
+		}
+		if !existingTraceID.Valid && record.TraceID != "" {
+			if _, err := statements.exec(ctx, `UPDATE runs SET trace_id = ? WHERE run_id = ?`, record.TraceID, record.RunID); err != nil {
+				return err
+			}
+		}
+	}
+
+	if record.Type != RecordRunStart {
+		return nil
+	}
+	var start RunStartRecord
+	if err := json.Unmarshal(record.Payload, &start); err != nil {
+		return fmt.Errorf("decode operation topology for run %q: %w", record.RunID, err)
+	}
+	if err != sql.ErrNoRows {
+		if existingParentRunID.Valid && existingParentRunID.String != start.ParentRunID {
+			return fmt.Errorf("parent_run_identity_conflict: run %s belongs to parent %s, not %s", record.RunID, existingParentRunID.String, start.ParentRunID)
+		}
+		if existingTriggeredBySpanID.Valid && existingTriggeredBySpanID.String != start.TriggeredBySpanID {
+			return fmt.Errorf("trigger_span_identity_conflict: run %s was triggered by span %s, not %s", record.RunID, existingTriggeredBySpanID.String, start.TriggeredBySpanID)
+		}
+	}
+	if _, err := statements.exec(ctx, `
+		UPDATE runs SET
+			parent_run_id = coalesce(parent_run_id, ?),
+			triggered_by_span_id = coalesce(triggered_by_span_id, ?)
+		WHERE run_id = ?
+	`, nullIfEmpty(start.ParentRunID), nullIfEmpty(start.TriggeredBySpanID), record.RunID); err != nil {
+		return err
+	}
+	if record.RunID == record.OperationID {
+		if _, err := statements.exec(ctx, `UPDATE operations SET root_present = 1 WHERE operation_id = ?`, record.OperationID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func operationFirstSeenAt(record Record) string {
+	var fields map[string]any
+	if json.Unmarshal(record.Payload, &fields) == nil {
+		for _, key := range []string{"startedAt", "resumedAt", "suspendedAt", "endedAt", "timestamp", "createdAt"} {
+			if value := stringMapField(fields, key); value != "" {
+				return value
+			}
+		}
+	}
+	return time.Now().UTC().Format(time.RFC3339Nano)
 }
 
 func validateSegmentOwnership(ctx context.Context, statements *ingestStatements, record Record) error {
@@ -266,7 +365,7 @@ func (s *Service) ingestRecord(ctx context.Context, tx *sql.Tx, statements *inge
 	if err := upsertRunDeployment(ctx, statements, record.RunID, record.Deployment); err != nil {
 		return err
 	}
-	statements.markAffected(record.RunID, record.SegmentID)
+	statements.markAffected(record.OperationID, record.RunID, record.SegmentID)
 	// Project the runtime↔definition join in the same transaction as the record
 	// ingest and the run-revision bump. A rollback undoes this write with
 	// everything else; a duplicate record never reaches here (storedInserted is
@@ -289,7 +388,7 @@ func (s *Service) ingestRecord(ctx context.Context, tx *sql.Tx, statements *inge
 		if err := json.Unmarshal(record.Payload, &run); err != nil {
 			return fmt.Errorf("decode run suspend record: %w", err)
 		}
-		if err := upsertRunBoundary(ctx, statements, run.RunID, run.TraceID, run.Attributes); err != nil {
+		if err := upsertRunBoundary(ctx, statements, run.RunID, run.OperationID, run.TraceID, run.Attributes); err != nil {
 			return err
 		}
 		return updateRunRollups(ctx, statements, runRollupDelta{runID: run.RunID, recordCount: 1, lastActivityAt: run.SuspendedAt})
@@ -298,7 +397,7 @@ func (s *Service) ingestRecord(ctx context.Context, tx *sql.Tx, statements *inge
 		if err := json.Unmarshal(record.Payload, &run); err != nil {
 			return fmt.Errorf("decode run resume record: %w", err)
 		}
-		if err := upsertRunBoundary(ctx, statements, run.RunID, run.TraceID, run.Attributes); err != nil {
+		if err := upsertRunBoundary(ctx, statements, run.RunID, run.OperationID, run.TraceID, run.Attributes); err != nil {
 			return err
 		}
 		return updateRunRollups(ctx, statements, runRollupDelta{runID: run.RunID, recordCount: 1, lastActivityAt: run.ResumedAt})
@@ -401,13 +500,24 @@ func upsertRunDeployment(
 	deployment *DeploymentIdentity,
 ) error {
 	var projectID, manifestID, deploymentID sql.NullString
+	var observed int
 	err := statements.queryRow(ctx, `
-		SELECT project_id, manifest_id, deployment_id FROM runs WHERE run_id = ?
-	`, runID).Scan(&projectID, &manifestID, &deploymentID)
+		SELECT project_id, manifest_id, deployment_id, deployment_observed FROM runs WHERE run_id = ?
+	`, runID).Scan(&projectID, &manifestID, &deploymentID, &observed)
 	if err != nil && err != sql.ErrNoRows {
 		return fmt.Errorf("load deployment identity for run %q: %w", runID, err)
 	}
 	if err == nil {
+		if observed == 0 {
+			if deployment == nil {
+				_, err = statements.exec(ctx, `UPDATE runs SET deployment_observed = 1 WHERE run_id = ?`, runID)
+				return err
+			}
+			_, err = statements.exec(ctx, `
+				UPDATE runs SET project_id = ?, manifest_id = ?, deployment_id = ?, deployment_observed = 1 WHERE run_id = ?
+			`, deployment.ProjectID, nullIfEmpty(deployment.ManifestID), nullIfEmpty(deployment.DeploymentID), runID)
+			return err
+		}
 		if deployment == nil {
 			if projectID.Valid || manifestID.Valid || deploymentID.Valid {
 				return fmt.Errorf("deployment_identity_conflict: run %s removed deployment identity", runID)
@@ -422,22 +532,7 @@ func upsertRunDeployment(
 		}
 		return nil
 	}
-	if deployment == nil {
-		_, err = statements.exec(ctx, `
-			INSERT INTO runs (run_id) VALUES (?)
-			ON CONFLICT(run_id) DO NOTHING
-		`, runID)
-		return err
-	}
-	_, err = statements.exec(ctx, `
-		INSERT INTO runs (run_id, project_id, manifest_id, deployment_id)
-		VALUES (?, ?, ?, ?)
-		ON CONFLICT(run_id) DO UPDATE SET
-			project_id = excluded.project_id,
-			manifest_id = excluded.manifest_id,
-			deployment_id = excluded.deployment_id
-	`, runID, deployment.ProjectID, nullIfEmpty(deployment.ManifestID), nullIfEmpty(deployment.DeploymentID))
-	return err
+	return fmt.Errorf("operation member %q was not reserved before deployment projection", runID)
 }
 
 func reserveSpanRollup(ctx context.Context, statements *ingestStatements, runID string, spanID string) (bool, error) {
@@ -494,8 +589,8 @@ func shouldRollupUsageEvent(ctx context.Context, tx *sql.Tx, event SpanEventReco
 
 func upsertRunStart(ctx context.Context, statements *ingestStatements, run RunStartRecord) error {
 	_, err := statements.exec(ctx, `
-		INSERT INTO runs (run_id, trace_id, session_id, user_id, name, root_primitive, status, started_at, attributes_json)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO runs (run_id, operation_id, parent_run_id, triggered_by_span_id, trace_id, session_id, user_id, name, root_primitive, status, started_at, attributes_json)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(run_id) DO UPDATE SET
 			trace_id = coalesce(excluded.trace_id, runs.trace_id),
 			session_id = coalesce(excluded.session_id, runs.session_id),
@@ -508,14 +603,14 @@ func upsertRunStart(ctx context.Context, statements *ingestStatements, run RunSt
 					WHEN runs.attributes_json IS NOT NULL AND excluded.attributes_json IS NOT NULL THEN json_patch(runs.attributes_json, excluded.attributes_json)
 					ELSE coalesce(excluded.attributes_json, runs.attributes_json)
 				END
-	`, run.RunID, nullIfEmpty(run.TraceID), nullIfEmpty(run.SessionID), nullIfEmpty(run.UserID), run.Name, run.RootPrimitive, run.Status, run.StartedAt, nullJSON(run.Attributes))
+	`, run.RunID, run.OperationID, nullIfEmpty(run.ParentRunID), nullIfEmpty(run.TriggeredBySpanID), nullIfEmpty(run.TraceID), nullIfEmpty(run.SessionID), nullIfEmpty(run.UserID), run.Name, run.RootPrimitive, run.Status, run.StartedAt, nullJSON(run.Attributes))
 	return err
 }
 
 func upsertRunEnd(ctx context.Context, statements *ingestStatements, run RunEndRecord) error {
 	_, err := statements.exec(ctx, `
-		INSERT INTO runs (run_id, trace_id, status, ended_at, duration_ms, metrics_json, error_json, attributes_json)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO runs (run_id, operation_id, trace_id, status, ended_at, duration_ms, metrics_json, error_json, attributes_json)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(run_id) DO UPDATE SET
 			trace_id = coalesce(excluded.trace_id, runs.trace_id),
 			status = CASE
@@ -543,7 +638,7 @@ func upsertRunEnd(ctx context.Context, statements *ingestStatements, run RunEndR
 					WHEN runs.attributes_json IS NOT NULL AND excluded.attributes_json IS NOT NULL THEN json_patch(runs.attributes_json, excluded.attributes_json)
 					ELSE coalesce(excluded.attributes_json, runs.attributes_json)
 				END
-	`, run.RunID, nullIfEmpty(run.TraceID), run.Status, run.EndedAt, run.DurationMs, nullJSON(run.Metrics), nullJSON(run.Error), nullJSON(run.Attributes))
+	`, run.RunID, run.OperationID, nullIfEmpty(run.TraceID), run.Status, run.EndedAt, run.DurationMs, nullJSON(run.Metrics), nullJSON(run.Error), nullJSON(run.Attributes))
 	return err
 }
 

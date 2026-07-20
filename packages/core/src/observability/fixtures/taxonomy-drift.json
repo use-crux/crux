@@ -1,10 +1,11 @@
 {
   "records": [
     {
-      "schemaVersion": 2,
+      "schemaVersion": 4,
       "recordId": "rec_cccccccccccccccc_1",
       "type": "run:start",
       "runId": "run_cccccccccccccccccccccccc",
+      "operationId": "run_cccccccccccccccccccccccc",
       "traceId": "33333333333333333333333333333333",
       "name": "taxonomy drift",
       "rootPrimitive": "routing.fallback",
@@ -14,10 +15,11 @@
       "segmentSeq": 1
     },
     {
-      "schemaVersion": 2,
+      "schemaVersion": 4,
       "recordId": "rec_cccccccccccccccc_2",
       "type": "span:start",
       "runId": "run_cccccccccccccccccccccccc",
+      "operationId": "run_cccccccccccccccccccccccc",
       "traceId": "33333333333333333333333333333333",
       "spanId": "3333333333333333",
       "family": "routing",
@@ -29,10 +31,11 @@
       "segmentSeq": 2
     },
     {
-      "schemaVersion": 2,
+      "schemaVersion": 4,
       "recordId": "rec_cccccccccccccccc_3",
       "type": "span",
       "runId": "run_cccccccccccccccccccccccc",
+      "operationId": "run_cccccccccccccccccccccccc",
       "traceId": "33333333333333333333333333333333",
       "spanId": "4444444444444444",
       "family": "compaction",
@@ -45,10 +48,11 @@
       "segmentSeq": 3
     },
     {
-      "schemaVersion": 2,
+      "schemaVersion": 4,
       "recordId": "rec_cccccccccccccccc_4",
       "type": "span",
       "runId": "run_cccccccccccccccccccccccc",
+      "operationId": "run_cccccccccccccccccccccccc",
       "traceId": "33333333333333333333333333333333",
       "spanId": "5555555555555555",
       "family": "eval",
@@ -61,10 +65,11 @@
       "segmentSeq": 4
     },
     {
-      "schemaVersion": 2,
+      "schemaVersion": 4,
       "recordId": "rec_cccccccccccccccc_5",
       "type": "artifact",
       "runId": "run_cccccccccccccccccccccccc",
+      "operationId": "run_cccccccccccccccccccccccc",
       "traceId": "33333333333333333333333333333333",
       "artifactId": "artifact_memory_recall",
       "kind": "memory.recall",
@@ -75,10 +80,11 @@
       "segmentSeq": 5
     },
     {
-      "schemaVersion": 2,
+      "schemaVersion": 4,
       "recordId": "rec_cccccccccccccccc_6",
       "type": "artifact",
       "runId": "run_cccccccccccccccccccccccc",
+      "operationId": "run_cccccccccccccccccccccccc",
       "traceId": "33333333333333333333333333333333",
       "artifactId": "artifact_memory_diff",
       "kind": "memory.diff",
@@ -89,10 +95,11 @@
       "segmentSeq": 6
     },
     {
-      "schemaVersion": 2,
+      "schemaVersion": 4,
       "recordId": "rec_cccccccccccccccc_7",
       "type": "span:end",
       "runId": "run_cccccccccccccccccccccccc",
+      "operationId": "run_cccccccccccccccccccccccc",
       "traceId": "33333333333333333333333333333333",
       "spanId": "3333333333333333",
       "endedAt": "2026-07-03T12:01:00.080Z",
@@ -101,10 +108,11 @@
       "segmentSeq": 7
     },
     {
-      "schemaVersion": 2,
+      "schemaVersion": 4,
       "recordId": "rec_cccccccccccccccc_8",
       "type": "run:end",
       "runId": "run_cccccccccccccccccccccccc",
+      "operationId": "run_cccccccccccccccccccccccc",
       "traceId": "33333333333333333333333333333333",
       "endedAt": "2026-07-03T12:01:00.090Z",
       "status": "ok",

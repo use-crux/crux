@@ -223,15 +223,15 @@ func (c *Client) ObservabilityResourceActivity(ctx context.Context, family strin
 	return activity, err
 }
 
-func (c *Client) DeleteInspectRuns(ctx context.Context, traceIDs []string) (InspectDeleteRunsRecord, error) {
+func (c *Client) DeleteInspectRuns(ctx context.Context, operationIDs []string) (InspectDeleteRunsRecord, error) {
 	var record InspectDeleteRunsRecord
-	err := c.DeleteJSON(ctx, "/api/inspect/runs", InspectDeleteRunsRequest{TraceIDs: traceIDs}, &record)
+	err := c.DeleteJSON(ctx, "/api/inspect/runs", InspectDeleteRunsRequest{OperationIDs: operationIDs}, &record)
 	return record, err
 }
 
-func (c *Client) DeleteInspectRun(ctx context.Context, traceID string) (InspectDeleteRunsRecord, bool, error) {
+func (c *Client) DeleteInspectRun(ctx context.Context, operationID string) (InspectDeleteRunsRecord, bool, error) {
 	var record InspectDeleteRunsRecord
-	err := c.DeleteJSON(ctx, "/api/inspect/runs/"+url.PathEscape(traceID), nil, &record)
+	err := c.DeleteJSON(ctx, "/api/inspect/runs/"+url.PathEscape(operationID), nil, &record)
 	if err != nil {
 		if err.Error() == "not found" {
 			return InspectDeleteRunsRecord{}, false, nil

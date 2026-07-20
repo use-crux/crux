@@ -111,7 +111,8 @@ func observabilityRunSummaryForTest(run api.InspectRunRecord) api.ObservabilityR
 		startedAt = time.UnixMilli(run.StartedAt).UTC().Format(time.RFC3339Nano)
 	}
 	return api.ObservabilityRunSummary{
-		RunID:         run.TraceID,
+		RunID:         inspectOperationID(run),
+		OperationID:   inspectOperationID(run),
 		TraceID:       run.TraceID,
 		SessionID:     run.SessionID,
 		Name:          run.TargetID,

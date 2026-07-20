@@ -123,12 +123,15 @@ explicit baggage allowlist round-trip through the same serializable carrier Flow
 in-process resume. `forceFlush`/bounded `shutdown` track real exporter/processor promises and bind to
 the host lifecycle port above instead of being fire-and-forget or blocking indefinitely.
 
-### One revisioned Go Runs read model
+### One revisioned Go operation-family Runs read model
 
-The Go service, not the DevTools client, owns the canonical observability Runs read model. Eval runs
-remain a separately named, explicitly linked read model rather than annotations merged through an
-assumed `traceId`/`runId` equivalence. Ingest is one transaction that also bumps a monotonic
-read-model revision per affected observability run and publishes it after commit; DevTools performs
+The Go service, not the DevTools client, owns the canonical observability Runs read model. One row is
+one `operationId`: the root run is authoritative for the operation lifecycle, while independently
+durable child runs retain their own lifecycle and contribute aggregate health. Membership and
+topology come only from `operationId`, `parentRunId`, and `triggeredBySpanId`, never from W3C trace
+identity. Eval runs remain a separately named, explicitly linked read model. Ingest is one
+transaction that also bumps a monotonic read-model revision per affected operation and publishes it
+after commit; DevTools performs
 a bounded revision-aware catch-up (or a full invalidation once that window has aged out) instead of
 merging independently fetched lists on the client. Runs and run detail distinguish
 `running`/`suspended`/`incomplete` (stale segment, no suspend/end)/`conflicted` from ordinary terminal

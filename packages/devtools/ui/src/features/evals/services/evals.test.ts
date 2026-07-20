@@ -121,7 +121,9 @@ describe("Eval services", () => {
       const url = String(input);
       return new Response(
         JSON.stringify(
-          url.includes("search=run-known") ? [{ traceId: "run-known" }] : [],
+          url.includes("search=run-known")
+            ? [{ operationId: "run-known" }]
+            : [],
         ),
       );
     });

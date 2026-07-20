@@ -148,9 +148,6 @@ func reserveRunRollup(ctx context.Context, statements *ingestStatements, runID s
 	if _, ok := statements.reservedRunRollups[runID]; ok {
 		return nil
 	}
-	if _, err := statements.exec(ctx, `INSERT INTO runs (run_id) VALUES (?) ON CONFLICT(run_id) DO NOTHING`, runID); err != nil {
-		return err
-	}
 	statements.reservedRunRollups[runID] = struct{}{}
 	return nil
 }

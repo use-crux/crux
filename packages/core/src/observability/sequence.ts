@@ -1,8 +1,10 @@
-import type { CruxGraphRecord, CruxSegmentId } from './contract'
+import type { CruxGraphRecord, CruxRunId, CruxSegmentId } from './contract'
 
 export type UnsequencedCruxGraphRecord = CruxGraphRecord extends infer Record
   ? Record extends CruxGraphRecord
-    ? Omit<Record, 'segmentSeq'>
+    ? Omit<Record, 'segmentSeq' | 'operationId'> & {
+        readonly operationId?: CruxRunId
+      }
     : never
   : never
 
@@ -37,7 +39,10 @@ export function createRecordSequencer(): CruxRecordSequencer {
   }
 }
 
-function nextSegmentSeq(counters: Map<CruxSegmentId, number>, segmentId: CruxSegmentId): number {
+function nextSegmentSeq(
+  counters: Map<CruxSegmentId, number>,
+  segmentId: CruxSegmentId,
+): number {
   const current = counters.get(segmentId) ?? 0
   counters.delete(segmentId)
   const next = current + 1

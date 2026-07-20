@@ -39,7 +39,7 @@ func TestOverviewReadModelGolden(t *testing.T) {
 		P95LatencyMs: overview.P95LatencyMs,
 	}
 	for _, run := range overview.RecentRuns {
-		got.RecentRuns = append(got.RecentRuns, run.TraceID)
+		got.RecentRuns = append(got.RecentRuns, run.OperationID)
 	}
 	assertInspectGoldenJSON(t, "testdata/overview_generation.golden.json", got)
 }

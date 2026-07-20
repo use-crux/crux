@@ -51,14 +51,21 @@ func (o *Overview) SelectedInsightID() string {
 	return insight.InsightID
 }
 
-// SelectedRunID returns the TraceID of the cursor-focused Recent Runs
+func inspectOperationID(run api.InspectRunRecord) string {
+	if run.OperationID != "" {
+		return run.OperationID
+	}
+	return run.TraceID
+}
+
+// SelectedRunID returns the operation ID of the cursor-focused Recent Runs
 // row, or "" if no runs are loaded.
 func (o *Overview) SelectedRunID() string {
 	run, _, ok := o.runList.Selected()
 	if !ok {
 		return ""
 	}
-	return run.TraceID
+	return inspectOperationID(run)
 }
 
 // NewOverview constructs an empty Overview screen.
@@ -77,7 +84,7 @@ func NewOverview() *Overview {
 			return len(activity) == 0
 		}),
 		insightList: kit.NewListPane(func(ins api.InspectInsightRecord) string { return ins.InsightID }),
-		runList:     kit.NewListPane(func(run api.InspectRunRecord) string { return run.TraceID }),
+		runList:     kit.NewListPane(inspectOperationID),
 	}
 	o.setFocusedPanel(panelInsights)
 	return o

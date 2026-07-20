@@ -40,11 +40,14 @@ func invalidationsForBatch(batch bridge.Batch) bridge.Invalidations {
 }
 
 type runInvalidationPayload struct {
-	RunID           string   `json:"runId"`
-	RunIDs          []string `json:"runIds"`
-	TraceIDs        []string `json:"traceIds"`
-	DeletedTraceIDs []string `json:"deletedTraceIds"`
-	Revision        int64    `json:"revision"`
+	OperationID         string   `json:"operationId"`
+	OperationIDs        []string `json:"operationIds"`
+	DeletedOperationIDs []string `json:"deletedOperationIds"`
+	RunID               string   `json:"runId"`
+	RunIDs              []string `json:"runIds"`
+	TraceIDs            []string `json:"traceIds"`
+	DeletedTraceIDs     []string `json:"deletedTraceIds"`
+	Revision            int64    `json:"revision"`
 }
 
 func addRunsInvalidations(invalidations bridge.Invalidations, events []api.InspectEvent) {
@@ -84,7 +87,7 @@ func isObservabilityRefreshBatch(event api.InspectEvent) bool {
 }
 
 func appendCompleteRunInvalidationIDs(ids []string, payload runInvalidationPayload) []string {
-	for _, group := range [][]string{payload.RunIDs, payload.DeletedTraceIDs, payload.TraceIDs} {
+	for _, group := range [][]string{payload.OperationIDs, payload.DeletedOperationIDs, payload.RunIDs, payload.DeletedTraceIDs, payload.TraceIDs} {
 		for _, id := range group {
 			ids = appendUniqueString(ids, id)
 		}
@@ -101,8 +104,9 @@ func decodeRunInvalidationPayload(payload json.RawMessage) runInvalidationPayloa
 }
 
 func appendRunInvalidationIDs(ids []string, payload runInvalidationPayload, fallback string) []string {
+	ids = appendUniqueString(ids, payload.OperationID)
 	ids = appendUniqueString(ids, payload.RunID)
-	for _, group := range [][]string{payload.RunIDs, payload.DeletedTraceIDs, payload.TraceIDs} {
+	for _, group := range [][]string{payload.OperationIDs, payload.DeletedOperationIDs, payload.RunIDs, payload.DeletedTraceIDs, payload.TraceIDs} {
 		for _, id := range group {
 			ids = appendUniqueString(ids, id)
 		}

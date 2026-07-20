@@ -22,41 +22,6 @@ func (s *Service) enrichRunSegmentSummaries(ctx context.Context, runIDs []string
 			return err
 		}
 	}
-	return s.enrichTraceAliasConflicts(ctx, runIDs, byRunID)
-}
-
-func (s *Service) enrichTraceAliasConflicts(ctx context.Context, runIDs []string, byRunID map[string]*RunSummary) error {
-	placeholders := strings.TrimRight(strings.Repeat("?,", len(runIDs)), ",")
-	args := make([]any, len(runIDs))
-	for index, runID := range runIDs {
-		args[index] = runID
-	}
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT trace_id
-		FROM runs
-		WHERE trace_id != '' AND trace_id IS NOT NULL
-			AND trace_id IN (SELECT DISTINCT trace_id FROM runs WHERE run_id IN (`+placeholders+`))
-		GROUP BY trace_id
-		HAVING count(*) > 1
-	`, args...)
-	if err != nil {
-		return err
-	}
-	conflicts := map[string]struct{}{}
-	for rows.Next() {
-		var traceID string
-		if err := rows.Scan(&traceID); err != nil {
-			rows.Close()
-			return err
-		}
-		conflicts[traceID] = struct{}{}
-	}
-	if err := rows.Close(); err != nil {
-		return err
-	}
-	for _, run := range byRunID {
-		_, run.TraceAliasConflict = conflicts[run.TraceID]
-	}
 	return nil
 }
 

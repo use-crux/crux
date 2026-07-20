@@ -54,14 +54,14 @@ by their package documentation may still be experimental.
 
 ## Observability (`@use-crux/core/observability`, `@use-crux/otel`)
 
-Observability is **stable beta** for the v3 graph record contract (`schemaVersion: 3`, `runId` /
-`traceId` / `segmentId` / `segmentSeq`), the `run:start` / `run:suspend` / `run:resume` / `run:end`
+Observability is **stable beta** for the v4 graph record contract (`schemaVersion: 4`, `operationId` /
+`runId` / `traceId` / `segmentId` / `segmentSeq`), the `run:start` / `run:suspend` / `run:resume` / `run:end`
 lifecycle and its explicit ownership API (`observe.openRun()`, `observe.resumeRun()`, the returned
 handle's `.suspend()` / `.end()` / `.error()`), the delivery receipt/idempotence contract, the host
 lifecycle port and its first-party Node/serverless/Workers/Convex wrappers, and `@use-crux/otel`'s
-active execution bridge and W3C propagation helpers. There is no v1 wire/storage compatibility: the
-pre-launch v2 cutover destructively removed pre-v2 local observability rows rather than carrying a
-dual-read window, so this beta line starts clean at v2.
+active execution bridge and W3C propagation helpers. Earlier wire records are not accepted because
+operation-family membership cannot be reconstructed truthfully from trace IDs or timing. The local
+runtime resets only its observability-owned storage when it detects an older contract.
 
 Real cross-runtime conformance (fresh-process Node, real workerd, a serverless freeze harness, and
 Convex bundle/runtime tests) backs this contract. See the current release's changeset and CHANGELOG

@@ -4211,7 +4211,7 @@ export function SpanDetailPanel({
   const node = findNode(detail.root, selectedNodeId) ?? detail.root;
   const focusedSpanId = node.spanId || node.id;
   const focusedTokenEvents = useObservabilitySpanEvents(
-    detail.run.runId,
+    node.runId || detail.run.runId,
     focusedSpanId,
     {
       name: "token.chunk",
@@ -4252,9 +4252,9 @@ export function SpanDetailPanel({
         (j) =>
           !j.traceId ||
           j.traceId === node.traceId ||
-          j.traceId === detail.run.runId,
+          j.traceId === detail.run.traceId,
       ),
-    [judges, node.traceId, detail.run.runId],
+    [judges, node.traceId, detail.run.traceId],
   );
 
   const counts: Partial<Record<InspectTabId, number>> = useMemo(() => {

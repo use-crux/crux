@@ -550,7 +550,7 @@ async function runWithBoundary<T>(
   fn: () => Promise<T>,
 ): Promise<T> {
   if (incoming) {
-    return await observe.withContext(incoming, async () => {
+    return await observe.continueInNewSegment(incoming, async () => {
       emitConvexBoundaryEvent('received', boundary)
       try {
         const result = await fn()

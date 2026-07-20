@@ -1,4 +1,7 @@
-import { CRUX_OBSERVABILITY_SCHEMA_VERSION, type CruxGraphRecord } from './contract'
+import {
+  CRUX_OBSERVABILITY_SCHEMA_VERSION,
+  type CruxGraphRecord,
+} from './contract'
 import { CruxGraphRecordSchema } from './schema'
 import { CruxDeploymentIdentitySchema } from '../project-index'
 
@@ -19,7 +22,9 @@ export type EmitValidationResult =
  * guard before the same fail-open coercion path so observability remains cheap
  * while still dropping obviously malformed records.
  */
-export function validateRecordForEmission(record: unknown): EmitValidationResult {
+export function validateRecordForEmission(
+  record: unknown,
+): EmitValidationResult {
   const parsed = validateRecord(record)
   if (parsed.ok) return parsed
 
@@ -37,10 +42,13 @@ function validateRecord(record: unknown): EmitValidationResult {
   }
 
   const parsed = CruxGraphRecordSchema.safeParse(record)
-  if (parsed.success) return { ok: true, record: parsed.data as CruxGraphRecord }
+  if (parsed.success)
+    return { ok: true, record: parsed.data as CruxGraphRecord }
   return {
     ok: false,
-    issues: parsed.error.issues.map((issue) => `${issue.path.join('.') || '<root>'}: ${issue.message}`),
+    issues: parsed.error.issues.map(
+      (issue) => `${issue.path.join('.') || '<root>'}: ${issue.message}`,
+    ),
   }
 }
 
@@ -73,7 +81,9 @@ function coerceRecord(record: unknown): unknown {
   return coerced
 }
 
-function coerceMetrics(metrics: Record<string, unknown>): Record<string, number> {
+function coerceMetrics(
+  metrics: Record<string, unknown>,
+): Record<string, number> {
   const coerced: Record<string, number> = {}
   for (const [key, value] of Object.entries(metrics)) {
     if (typeof value === 'number' && Number.isFinite(value)) {
@@ -87,23 +97,30 @@ function structuralCheck(record: unknown): record is CruxGraphRecord {
   if (!isRecord(record)) return false
   if (record.schemaVersion !== CRUX_OBSERVABILITY_SCHEMA_VERSION) return false
   if (!requiredString(record, 'recordId')) return false
+  if (!requiredString(record, 'operationId')) return false
   if (!requiredString(record, 'runId')) return false
-  if (record.traceId !== undefined && !requiredString(record, 'traceId')) return false
+  if (record.traceId !== undefined && !requiredString(record, 'traceId'))
+    return false
   if (
     record.deployment !== undefined &&
     !CruxDeploymentIdentitySchema.safeParse(record.deployment).success
-  ) return false
+  )
+    return false
 
   switch (record.type) {
     case 'run:start':
       return (
         record.segmentSeq === 1 &&
+        validRunTopology(record) &&
         requiredString(record, 'name') &&
         requiredString(record, 'rootPrimitive') &&
         requiredString(record, 'startedAt')
       )
     case 'run:suspend':
-      return requiredString(record, 'suspendedAt') && requiredString(record, 'reason')
+      return (
+        requiredString(record, 'suspendedAt') &&
+        requiredString(record, 'reason')
+      )
     case 'run:resume':
       return (
         record.segmentSeq === 1 &&
@@ -111,7 +128,9 @@ function structuralCheck(record: unknown): record is CruxGraphRecord {
         requiredString(record, 'reason')
       )
     case 'run:end':
-      return requiredString(record, 'endedAt') && requiredString(record, 'status')
+      return (
+        requiredString(record, 'endedAt') && requiredString(record, 'status')
+      )
     case 'span:start':
       return (
         requiredString(record, 'spanId') &&
@@ -121,7 +140,11 @@ function structuralCheck(record: unknown): record is CruxGraphRecord {
         requiredString(record, 'startedAt')
       )
     case 'span:end':
-      return requiredString(record, 'spanId') && requiredString(record, 'endedAt') && requiredString(record, 'status')
+      return (
+        requiredString(record, 'spanId') &&
+        requiredString(record, 'endedAt') &&
+        requiredString(record, 'status')
+      )
     case 'span':
       return (
         requiredString(record, 'spanId') &&
@@ -132,10 +155,16 @@ function structuralCheck(record: unknown): record is CruxGraphRecord {
         requiredString(record, 'status')
       )
     case 'span:event':
-      return requiredString(record, 'spanId') && requiredString(record, 'eventId') && requiredString(record, 'name')
+      return (
+        requiredString(record, 'spanId') &&
+        requiredString(record, 'eventId') &&
+        requiredString(record, 'name')
+      )
     case 'edge':
       return (
-        requiredString(record, 'edgeId') && requiredString(record, 'edgeType') && requiredString(record, 'createdAt')
+        requiredString(record, 'edgeId') &&
+        requiredString(record, 'edgeType') &&
+        requiredString(record, 'createdAt')
       )
     case 'artifact':
       return (
@@ -148,6 +177,24 @@ function structuralCheck(record: unknown): record is CruxGraphRecord {
     default:
       return false
   }
+}
+
+function validRunTopology(record: Record<string, unknown>): boolean {
+  const operationId = record.operationId
+  const runId = record.runId
+  const parentRunId = record.parentRunId
+  const triggeredBySpanId = record.triggeredBySpanId
+  if (parentRunId === undefined) {
+    return operationId === runId && triggeredBySpanId === undefined
+  }
+  return (
+    typeof parentRunId === 'string' &&
+    parentRunId.length > 0 &&
+    parentRunId !== runId &&
+    operationId !== runId &&
+    (triggeredBySpanId === undefined ||
+      (typeof triggeredBySpanId === 'string' && triggeredBySpanId.length > 0))
+  )
 }
 
 function requiredString(record: Record<string, unknown>, key: string): boolean {

@@ -56,7 +56,7 @@ func inspectPatternInsights(runs []inspectRunRecord) ([]inspectInsightRecord, in
 			}
 			patterns[key] = p
 		}
-		p.traceIDs = appendUniqueString(p.traceIDs, run.TraceID)
+		p.traceIDs = appendUniqueString(p.traceIDs, inspectRunIdentity(run))
 		if run.StartedAt > p.latestMillis {
 			p.latestMillis = run.StartedAt
 		}

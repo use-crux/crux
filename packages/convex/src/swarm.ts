@@ -535,12 +535,14 @@ export function createComponentSwarm(config: ComponentSwarmConfig) {
         const existingContext = observe.captureContext()
         // A swarm always owns a durable run. Ambient context supplies trace
         // identity, but cannot replace the resumable lifecycle owner.
-        const openedRun = observe.openRun({
+        const runOptions = {
           name: `swarm ${options.startAgent}`,
-          rootPrimitive: 'composition.swarm',
-          traceId: existingContext?.traceId,
+          rootPrimitive: 'composition.swarm' as const,
           attributes: { 'swarm.start_agent': options.startAgent },
-        })
+        }
+        const openedRun = existingContext
+          ? observe.openChildRun(existingContext, runOptions)
+          : observe.openRun(runOptions)
 
         const execute = async () => {
           return await observe.span(
