@@ -111,7 +111,9 @@ export function sanitizePropagationCarrier(
     'crux.runId',
   ) as CruxRunId
   const operationId = requiredId(
-    crux.operationId ?? runId,
+    Object.prototype.hasOwnProperty.call(crux, 'operationId')
+      ? crux.operationId
+      : runId,
     /^run_[0-9a-f]{24}$/u,
     'crux.operationId',
   ) as CruxRunId

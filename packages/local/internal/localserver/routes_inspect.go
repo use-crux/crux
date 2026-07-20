@@ -15,16 +15,12 @@ func registerInspectRoutes(mux *http.ServeMux, inspectSvc *inspect.Service) {
 		}
 		var req struct {
 			OperationIDs []string `json:"operationIds"`
-			TraceIDs     []string `json:"traceIds"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "invalid JSON body", http.StatusBadRequest)
 			return
 		}
 		ids := req.OperationIDs
-		if len(ids) == 0 {
-			ids = req.TraceIDs
-		}
 		if len(ids) == 0 {
 			http.Error(w, "operationIds is required", http.StatusBadRequest)
 			return

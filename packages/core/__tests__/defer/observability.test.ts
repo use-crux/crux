@@ -4,6 +4,7 @@ import { runWithDeferInvocation } from '@use-crux/core/internal/scope'
 import { durableTask } from '@use-crux/core/runtime'
 import { createTestRuntime } from '@use-crux/core/runtime/testing'
 import {
+  configureObservability,
   createInMemoryObservabilityTransport,
   observe,
   resetObservabilityRuntime,
@@ -772,6 +773,11 @@ describe('named evidence lifecycle vs drain settlement', () => {
       },
     })
     const testRuntime = createTestRuntime({ targets: [target] })
+    const deployment = {
+      projectId: 'named-defer-project',
+      deploymentId: 'origin-deployment',
+    }
+    configureObservability({ identity: deployment })
     const accept = transport.send.bind(transport)
     setObservabilityTransport(
       {
@@ -856,6 +862,7 @@ describe('named evidence lifecycle vs drain settlement', () => {
           operationId: scheduledStart?.operationId,
           runId: scheduledStart?.runId,
           segmentId: scheduledStart?.segmentId,
+          deployment,
         }),
       })
 

@@ -131,7 +131,10 @@ export interface CruxObservabilityRecordsNotification {
   severity: "info";
   refId: CruxRunId | string;
   payload?: {
-    runId: CruxRunId | string;
+    operationId: CruxRunId | string;
+    entity: "operation";
+    traceId?: CruxTraceId | string;
+    revision?: number;
   };
 }
 

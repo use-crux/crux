@@ -49,7 +49,9 @@ pipeline, parallel, consensus, delegate, generation, and host continuations
 remain spans or fresh segments. Local Runs projects one row per operation with
 aggregate child/topology health, child-before-root shells, family-atomic
 retention, and deletion tombstones. Older observability storage resets in
-place because family membership cannot be reconstructed from trace IDs.
+place because family membership cannot be reconstructed from trace IDs. Run
+lookup and deletion now require an operation or member-run ID; W3C trace IDs
+remain correlation data and never select an operation implicitly.
 
 Add daemon-free `crux check` with deterministic JSON and explicit CI exit
 codes. `crux lint` now uses the same one-shot Project Index service and embedded

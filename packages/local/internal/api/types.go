@@ -383,7 +383,6 @@ type InspectRunDetailRecord struct {
 
 type InspectDeleteRunsRequest struct {
 	OperationIDs []string `json:"operationIds"`
-	TraceIDs     []string `json:"traceIds,omitempty"`
 }
 
 type InspectDeleteRunsRecord struct {

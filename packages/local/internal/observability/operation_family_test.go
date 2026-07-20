@@ -93,6 +93,80 @@ func TestOperationFamiliesNeverGroupBySharedTrace(t *testing.T) {
 	if len(runs) != 2 {
 		t.Fatalf("shared trace produced %d operations, want 2", len(runs))
 	}
+	deleted, err := service.DeleteRuns(context.Background(), []string{traceID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(deleted) != 0 {
+		t.Fatalf("shared trace deleted arbitrary operations: %#v", deleted)
+	}
+	runs, err = service.Runs(context.Background())
+	if err != nil || len(runs) != 2 {
+		t.Fatalf("operations after trace delete attempt = %#v, err = %v", runs, err)
+	}
+}
+
+func TestOperationFamilyChildHealthMatchesListAndDetail(t *testing.T) {
+	service := newTestService(t)
+	ctx := context.Background()
+	if err := service.Ingest(ctx, mustBatch(t,
+		`{"schemaVersion":4,"recordId":"health-root","type":"run:start","runId":"run_health_root","operationId":"run_health_root","segmentId":"health-root-seg","segmentSeq":1,"name":"root","rootPrimitive":"agent.run","startedAt":"2026-07-20T13:30:00Z","status":"running"}`,
+		`{"schemaVersion":4,"recordId":"health-blocked-start","type":"run:start","runId":"run_health_blocked","operationId":"run_health_root","parentRunId":"run_health_root","triggeredBySpanId":"health-trigger-1","segmentId":"health-blocked-seg","segmentSeq":1,"name":"blocked","rootPrimitive":"flow.run","startedAt":"2026-07-20T13:30:01Z","status":"running"}`,
+		`{"schemaVersion":4,"recordId":"health-blocked-end","type":"run:end","runId":"run_health_blocked","operationId":"run_health_root","segmentId":"health-blocked-seg","segmentSeq":2,"endedAt":"2026-07-20T13:30:02Z","status":"blocked"}`,
+		`{"schemaVersion":4,"recordId":"health-incomplete-start","type":"run:start","runId":"run_health_incomplete","operationId":"run_health_root","parentRunId":"run_health_root","triggeredBySpanId":"health-trigger-2","segmentId":"health-incomplete-seg","segmentSeq":1,"name":"incomplete","rootPrimitive":"flow.run","startedAt":"2026-07-20T13:30:03Z","status":"running"}`,
+	)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.db.ExecContext(ctx, `UPDATE runs SET lifecycle_status = 'reconciled-incomplete' WHERE run_id = 'run_health_incomplete'`); err != nil {
+		t.Fatal(err)
+	}
+
+	rows, err := service.Runs(ctx)
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("health rows = %#v, err = %v", rows, err)
+	}
+	detail, err := service.RunDetail(ctx, "run_health_root")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rows[0].ActiveChildCount != 0 || rows[0].FailedChildCount != 2 {
+		t.Fatalf("list child health = %#v", rows[0])
+	}
+	if detail.Run.ActiveChildCount != rows[0].ActiveChildCount || detail.Run.FailedChildCount != rows[0].FailedChildCount {
+		t.Fatalf("detail/list child health disagree: detail=%#v list=%#v", detail.Run, rows[0])
+	}
+}
+
+func TestOperationFamilyForeignParentConflictsInListAndDetail(t *testing.T) {
+	service := newTestService(t)
+	ctx := context.Background()
+	if err := service.Ingest(ctx, mustBatch(t,
+		`{"schemaVersion":4,"recordId":"foreign-parent","type":"run:start","runId":"run_foreign_parent","operationId":"run_foreign_parent","segmentId":"foreign-parent-seg","segmentSeq":1,"traceId":"trace_foreign","name":"foreign","rootPrimitive":"agent.run","startedAt":"2026-07-20T13:40:00Z","status":"running"}`,
+		`{"schemaVersion":4,"recordId":"foreign-root","type":"run:start","runId":"run_foreign_root","operationId":"run_foreign_root","segmentId":"foreign-root-seg","segmentSeq":1,"traceId":"trace_foreign","name":"root","rootPrimitive":"agent.run","startedAt":"2026-07-20T13:40:01Z","status":"running"}`,
+		`{"schemaVersion":4,"recordId":"foreign-child","type":"run:start","runId":"run_foreign_child","operationId":"run_foreign_root","parentRunId":"run_foreign_parent","triggeredBySpanId":"foreign-trigger","segmentId":"foreign-child-seg","segmentSeq":1,"traceId":"trace_foreign","name":"child","rootPrimitive":"flow.run","startedAt":"2026-07-20T13:40:02Z","status":"running"}`,
+	)); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := service.Runs(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var health string
+	for _, row := range rows {
+		if row.OperationID == "run_foreign_root" {
+			health = row.TopologyHealth
+		}
+	}
+	if health != "conflicted" {
+		t.Fatalf("foreign-parent list topology health = %q", health)
+	}
+	detail, err := service.RunDetail(ctx, "run_foreign_root")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasRunDetailDiagnosticCode(detail.Diagnostics, "foreign-parent-run") {
+		t.Fatalf("foreign-parent detail diagnostics = %#v", detail.Diagnostics)
+	}
 }
 
 func TestOperationIdentityIsImmutable(t *testing.T) {

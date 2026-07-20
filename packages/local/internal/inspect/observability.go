@@ -27,11 +27,11 @@ func buildInspectRunsFromObservabilityWithOptions(ctx context.Context, obs *obse
 	if err != nil {
 		return nil, err
 	}
-	runIDs := make([]string, 0, len(summaries))
+	operationIDs := make([]string, 0, len(summaries))
 	for _, summary := range summaries {
-		runIDs = append(runIDs, summary.RunID)
+		operationIDs = append(operationIDs, summary.OperationID)
 	}
-	signals, err := obs.RunSignalsForRuns(ctx, runIDs)
+	signals, err := obs.RunSignalsForOperations(ctx, operationIDs)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
 			signals = map[string]observability.RunSignals{}
@@ -42,7 +42,7 @@ func buildInspectRunsFromObservabilityWithOptions(ctx context.Context, obs *obse
 	runs := make([]inspectRunRecord, 0, len(summaries))
 	for _, summary := range summaries {
 		run := inspectRunFromObservabilitySummary(summary)
-		run = applyObservabilityRunSignals(run, signals[summary.RunID])
+		run = applyObservabilityRunSignals(run, signals[summary.OperationID])
 		runs = append(runs, run)
 	}
 	return runs, nil

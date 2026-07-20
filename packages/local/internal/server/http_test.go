@@ -789,13 +789,13 @@ func TestHTTPServer_inspect_delete_runs_removes_observability(t *testing.T) {
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
 
-	req, err := http.NewRequest(http.MethodDelete, ts.URL+"/api/inspect/runs/trace-1", nil)
+	req, err := http.NewRequest(http.MethodDelete, ts.URL+"/api/inspect/runs/run-1", nil)
 	if err != nil {
 		t.Fatalf("create delete request: %v", err)
 	}
 	resp, err := ts.Client().Do(req)
 	if err != nil {
-		t.Fatalf("DELETE /api/inspect/runs/trace-1 error: %v", err)
+		t.Fatalf("DELETE /api/inspect/runs/run-1 error: %v", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {

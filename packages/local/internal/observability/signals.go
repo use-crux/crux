@@ -23,6 +23,7 @@ type RunSignals struct {
 	DiagnosticCount         int
 	DiagnosticMaxSeverity   string
 	DiagnosticCodes         []string
+	toolCounts              map[string]int
 }
 
 // RunSignals returns one aggregate per run using a single pass over spans.
@@ -38,6 +39,84 @@ func (s *Service) RunSignalsForRuns(ctx context.Context, runIDs []string) (map[s
 		return map[string]RunSignals{}, nil
 	}
 	return s.runSignals(ctx, uniqueRunIDs)
+}
+
+// RunSignalsForOperations aggregates the lightweight signals of every member
+// run under the operation identity used by the Runs read model.
+func (s *Service) RunSignalsForOperations(ctx context.Context, operationIDs []string) (map[string]RunSignals, error) {
+	requested := uniqueNonEmptyStrings(operationIDs)
+	if len(requested) == 0 {
+		return map[string]RunSignals{}, nil
+	}
+	queryCtx, cancel := s.queryContext(ctx)
+	defer cancel()
+	rows, err := s.db.QueryContext(queryCtx, `
+		SELECT run_id, operation_id FROM runs
+		WHERE operation_id IN (`+queryPlaceholders(len(requested))+`)
+	`, queryArgs(requested)...)
+	if err != nil {
+		return nil, fmt.Errorf("query operation signal members: %w", err)
+	}
+	operationByRun := map[string]string{}
+	memberRunIDs := []string{}
+	for rows.Next() {
+		var runID, operationID string
+		if err := rows.Scan(&runID, &operationID); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		operationByRun[runID] = operationID
+		memberRunIDs = append(memberRunIDs, runID)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if len(memberRunIDs) == 0 {
+		return map[string]RunSignals{}, nil
+	}
+	memberSignals, err := s.runSignals(ctx, memberRunIDs)
+	if err != nil {
+		return nil, err
+	}
+	result := map[string]RunSignals{}
+	toolCountsByOperation := map[string]map[string]int{}
+	for runID, member := range memberSignals {
+		operationID := operationByRun[runID]
+		operation := result[operationID]
+		operation.RunID = operationID
+		operation.ToolCallCount += member.ToolCallCount
+		operation.ToolErrorCount += member.ToolErrorCount
+		operation.RetrievalIssueCount += member.RetrievalIssueCount
+		operation.InspectSignalIssueCount += member.InspectSignalIssueCount
+		operation.SuspensionSignalCount += member.SuspensionSignalCount
+		operation.BlockedSignalCount += member.BlockedSignalCount
+		operation.DiagnosticCount += member.DiagnosticCount
+		for _, code := range member.DiagnosticCodes {
+			operation.DiagnosticCodes = appendUniqueString(operation.DiagnosticCodes, code)
+		}
+		if diagnosticSeverityRank(member.DiagnosticMaxSeverity) > diagnosticSeverityRank(operation.DiagnosticMaxSeverity) {
+			operation.DiagnosticMaxSeverity = member.DiagnosticMaxSeverity
+		}
+		if toolCountsByOperation[operationID] == nil {
+			toolCountsByOperation[operationID] = map[string]int{}
+		}
+		for name, count := range member.toolCounts {
+			toolCountsByOperation[operationID][name] += count
+		}
+		result[operationID] = operation
+	}
+	for operationID, counts := range toolCountsByOperation {
+		operation := result[operationID]
+		operation.toolCounts = counts
+		for name, count := range counts {
+			if count > operation.RepeatedToolCount || (count == operation.RepeatedToolCount && (operation.RepeatedToolName == "" || name < operation.RepeatedToolName)) {
+				operation.RepeatedToolName = name
+				operation.RepeatedToolCount = count
+			}
+		}
+		result[operationID] = operation
+	}
+	return result, nil
 }
 
 func (s *Service) runSignals(ctx context.Context, runIDs []string) (map[string]RunSignals, error) {
@@ -168,8 +247,9 @@ func (s *Service) runSignals(ctx context.Context, runIDs []string) (map[string]R
 
 	for runID, counts := range toolCountsByRun {
 		signal := signals[runID]
+		signal.toolCounts = counts
 		for name, count := range counts {
-			if count > signal.RepeatedToolCount {
+			if count > signal.RepeatedToolCount || (count == signal.RepeatedToolCount && (signal.RepeatedToolName == "" || name < signal.RepeatedToolName)) {
 				signal.RepeatedToolName = name
 				signal.RepeatedToolCount = count
 			}

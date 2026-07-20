@@ -197,6 +197,9 @@ export function createDeferScopeObservability(): DeferScopeObservability {
         ...(current.correlators !== undefined
           ? { correlators: current.correlators }
           : {}),
+        ...(current.deployment !== undefined
+          ? { deployment: current.deployment }
+          : {}),
         // Capture the active parent stack for scheduled emission, but keep the
         // run identity for later causal execution that must not nest under a
         // closed response span.

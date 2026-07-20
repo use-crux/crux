@@ -556,9 +556,8 @@ func (s *Service) resolveOperationIDs(ctx context.Context, ids []string) (map[st
 	placeholders := queryPlaceholders(len(requested))
 	args := append(queryArgs(requested), queryArgs(requested)...)
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT run_id, operation_id, ifnull(trace_id, '') FROM runs
-		WHERE run_id IN (`+placeholders+`) OR trace_id IN (`+placeholders+`)
-		ORDER BY ifnull(started_at, '') DESC, run_id DESC
+		SELECT run_id, operation_id FROM runs
+		WHERE run_id IN (`+placeholders+`) OR operation_id IN (`+placeholders+`)
 	`, args...)
 	if err != nil {
 		return nil, err
@@ -570,11 +569,11 @@ func (s *Service) resolveOperationIDs(ctx context.Context, ids []string) (map[st
 	}
 	resolved := map[string]string{}
 	for rows.Next() {
-		var runID, operationID, traceID string
-		if err := rows.Scan(&runID, &operationID, &traceID); err != nil {
+		var runID, operationID string
+		if err := rows.Scan(&runID, &operationID); err != nil {
 			return nil, err
 		}
-		for _, candidate := range []string{runID, operationID, traceID} {
+		for _, candidate := range []string{runID, operationID} {
 			if _, wanted := requestedSet[candidate]; wanted {
 				if _, exists := resolved[candidate]; !exists {
 					resolved[candidate] = operationID
@@ -1310,11 +1309,11 @@ func aggregateOperationDetail(detail *RunDetail, members []RunDetail) {
 		}
 		detail.Run.ChildRunCount++
 		switch member.Run.Status {
-		case "running", "incomplete":
+		case "running":
 			detail.Run.ActiveChildCount++
 		case "suspended":
 			detail.Run.SuspendedChildCount++
-		case "error", "failed", "cancelled", "conflicted":
+		case "error", "failed", "blocked", "cancelled", "conflicted", "incomplete":
 			detail.Run.FailedChildCount++
 		}
 	}

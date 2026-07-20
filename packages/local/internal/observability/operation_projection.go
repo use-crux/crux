@@ -201,6 +201,36 @@ func (s *Service) enrichOperationTopologyBatch(ctx context.Context, operationIDs
 	if err := rows.Close(); err != nil {
 		return err
 	}
+	missingParentIDs := []string{}
+	for _, member := range members {
+		if member.parentRunID == "" {
+			continue
+		}
+		if _, exists := members[member.parentRunID]; !exists {
+			missingParentIDs = append(missingParentIDs, member.parentRunID)
+		}
+	}
+	missingParentIDs = uniqueNonEmptyStrings(missingParentIDs)
+	if len(missingParentIDs) > 0 {
+		parentRows, err := s.db.QueryContext(ctx, `
+			SELECT run_id, operation_id, ifnull(parent_run_id, ''), ifnull(triggered_by_span_id, ''), ifnull(trace_id, '')
+			FROM runs WHERE run_id IN (`+queryPlaceholders(len(missingParentIDs))+`)
+		`, queryArgs(missingParentIDs)...)
+		if err != nil {
+			return err
+		}
+		for parentRows.Next() {
+			var parent operationMemberTopology
+			if err := parentRows.Scan(&parent.runID, &parent.operationID, &parent.parentRunID, &parent.triggeredBySpanID, &parent.traceID); err != nil {
+				parentRows.Close()
+				return err
+			}
+			members[parent.runID] = parent
+		}
+		if err := parentRows.Close(); err != nil {
+			return err
+		}
+	}
 	triggerOwners := map[string]string{}
 	if len(triggerIDs) > 0 {
 		spanRows, err := s.db.QueryContext(ctx, `SELECT span_id, run_id FROM spans WHERE span_id IN (`+queryPlaceholders(len(triggerIDs))+`)`, queryArgs(triggerIDs)...)
