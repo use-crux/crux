@@ -13,6 +13,7 @@ import (
 
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
+	"github.com/use-crux/crux/packages/local/internal/startup"
 	"github.com/use-crux/crux/packages/local/internal/tui/screens"
 )
 
@@ -87,7 +88,10 @@ func (a *App) SendBootPhase(phase string)       { a.sendMsg(bootPhaseMsg{phase: 
 func (a *App) SendBootLog(stream, text string)  { a.sendMsg(bootLogMsg{stream: stream, text: text}) }
 func (a *App) SendLiveReady()                   { a.sendMsg(liveReadyMsg{}) }
 func (a *App) SetStartupSummary(summary string) { a.sendMsg(startupSummaryMsg{summary: summary}) }
-func (a *App) SendTunnelURL(url string)         { a.sendMsg(tunnelURLMsg{url: url}) }
+func (a *App) SendStartupSnapshot(snapshot startup.Snapshot) {
+	a.sendMsg(startupSnapshotMsg{snapshot: snapshot})
+}
+func (a *App) SendTunnelURL(url string) { a.sendMsg(tunnelURLMsg{url: url}) }
 func (a *App) SendIngestToken(token, path string) {
 	a.sendMsg(ingestTokenMsg{token: token, path: path})
 }
@@ -214,6 +218,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case startupSummaryMsg:
 		a.startupSummary = m.summary
+
+	case startupSnapshotMsg:
+		a.workbench.SetStartupSnapshot(m.snapshot)
 
 	case tunnelURLMsg:
 		a.tunnelURL = m.url

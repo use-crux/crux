@@ -33,6 +33,8 @@ export interface RuntimeArtifactManifestEvalCase {
 export interface RuntimeArtifactManifestEvalVariant {
   readonly name: string;
   readonly fingerprint: string;
+  readonly execution: "coordinator" | "runtime";
+  readonly requiredHostCapabilities: readonly string[];
 }
 
 /** One allowlisted Eval imported by a generated Runtime host entry. */
@@ -49,7 +51,7 @@ export interface RuntimeArtifactManifestEval {
 /** Versioned runtime artifact manifest written to `.crux/generated/runtime/manifest.json`. */
 export interface RuntimeArtifactManifest {
   /** Manifest schema version. */
-  readonly version: 1;
+  readonly version: 2;
   /** Secret-free identity of the generated Eval persistence policy. */
   readonly evalPrivacyFingerprint: string;
   /** Deterministically sorted runtime targets. */

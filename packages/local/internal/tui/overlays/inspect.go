@@ -27,14 +27,22 @@ func NewInspect() *Inspect { return &Inspect{} }
 
 // Open shows the overlay with the given header + JSON payload.
 func (i *Inspect) Open(title, subtitle string, payload json.RawMessage) {
+	i.openBody(title, subtitle, prettyJSON(payload))
+}
+
+// OpenText shows an already-curated human-readable document without treating
+// it as transport JSON.
+func (i *Inspect) OpenText(title, subtitle, body string) {
+	i.openBody(title, subtitle, body)
+}
+
+func (i *Inspect) openBody(title, subtitle, body string) {
 	i.open = true
 	i.title = title
 	i.subtitle = subtitle
 	i.scroll = 0
-	// Pretty-print whatever JSON came in.
-	pretty := prettyJSON(payload)
-	i.body = pretty
-	i.lines = strings.Split(pretty, "\n")
+	i.body = body
+	i.lines = strings.Split(body, "\n")
 }
 
 // Close hides the overlay.
@@ -102,12 +110,14 @@ func (i *Inspect) View(viewportWidth, viewportHeight int) string {
 		"  " + shell.TextMuted.Render(kit.SanitizeInline(i.subtitle))
 	header = padToWidth(header, w)
 
-	// Visible window into the body.
+	// Visible window into the body. Wrapping keeps long values reachable with
+	// vertical scrolling instead of permanently truncating their tails.
 	bodyRows := h - 4 // header + 2 rules + footer
 	if bodyRows < 1 {
 		bodyRows = 1
 	}
-	visible := i.lines
+	visible := wrapInspectBody(i.body, w-2)
+	i.lines = visible
 	start := i.scroll
 	if start > len(visible)-bodyRows {
 		start = len(visible) - bodyRows
@@ -127,7 +137,7 @@ func (i *Inspect) View(viewportWidth, viewportHeight int) string {
 	rowStyle := lipgloss.NewStyle().Foreground(shell.ColorText)
 	body := make([]string, len(rows))
 	for j, r := range rows {
-		body[j] = padToWidth(" "+rowStyle.Render(truncateRight(kit.SanitizeInline(r), w-2)), w)
+		body[j] = padToWidth(" "+rowStyle.Render(r), w)
 	}
 
 	footer := " " + shell.TextMuted.Render(
@@ -150,6 +160,18 @@ func (i *Inspect) View(viewportWidth, viewportHeight int) string {
 	inner := header + "\n" + rule + "\n" +
 		strings.Join(body, "\n") + "\n" + rule + "\n" + footer
 	return border(inner)
+}
+
+func wrapInspectBody(body string, width int) []string {
+	if width < 1 {
+		width = 1
+	}
+	lines := make([]string, 0, strings.Count(body, "\n")+1)
+	for _, raw := range strings.Split(body, "\n") {
+		wrapped := lipgloss.Wrap(kit.SanitizeInline(raw), width, "/._-")
+		lines = append(lines, strings.Split(wrapped, "\n")...)
+	}
+	return lines
 }
 
 func prettyJSON(raw json.RawMessage) string {

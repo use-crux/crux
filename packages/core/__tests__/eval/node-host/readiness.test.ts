@@ -18,6 +18,7 @@ import {
   connectionEnvironment,
   hydratedEntry,
   manifest,
+  mixedAdapterEntry,
   registry,
 } from "./fixture";
 
@@ -197,6 +198,24 @@ describe("Node Eval host manifest readiness", () => {
     expect(transport.mock.calls[0]?.[0].headers.get("authorization")).toBe(
       "Bearer top-secret-token",
     );
+  });
+
+  it("accepts a v1 host manifest for an all-adapter mixed-placement Eval", async () => {
+    const entry = mixedAdapterEntry();
+    const deployed = manifest(entry, "production");
+    const provider = createNodeEvalHostReadiness({
+      entry,
+      projectRoot: "/does-not-read-files",
+      processEnvironment: connectionEnvironment(),
+      transport: async () => Response.json(deployed),
+    });
+
+    expect(deployed.evals[0]?.variants).toHaveProperty("current");
+    expect(deployed.evals[0]?.variants).toHaveProperty("hosted");
+    await expect(provider.resolve([])).resolves.toMatchObject({
+      status: "verified",
+      deploymentId: "production",
+    });
   });
 
   it("rejects a deployment generated with a stale redaction policy", async () => {

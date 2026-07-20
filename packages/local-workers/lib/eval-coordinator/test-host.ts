@@ -3,6 +3,7 @@ import {
   discoverProjectEvals,
   fingerprintDeployedEvalCase,
   hydrateEvalCases,
+  projectEvalExecutionArms,
   projectDeployedEvalRequiredHostCapabilities,
   projectDeployedEvalVariants,
 } from "@use-crux/core/eval/internal/node-runner";
@@ -44,6 +45,16 @@ export async function startTestEvalHost(
           fingerprint: fingerprintDeployedEvalCase(item.id, item.authored),
         })),
         variants: projectDeployedEvalVariants(entry.eval),
+        runtimeArms: projectEvalExecutionArms(entry.eval).flatMap((arm) =>
+          arm.status === "ready" && arm.execution === "runtime"
+            ? [
+                {
+                  name: arm.name,
+                  requiredHostCapabilities: arm.requiredHostCapabilities,
+                },
+              ]
+            : [],
+        ),
         requiredHostCapabilities,
         index: {
           id: entry.id,

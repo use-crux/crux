@@ -3,6 +3,7 @@ package commands
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,8 +12,12 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/use-crux/crux/packages/local/internal/assets"
 	"github.com/use-crux/crux/packages/local/internal/cli"
+	"github.com/use-crux/crux/packages/local/internal/domain"
 	"github.com/use-crux/crux/packages/local/internal/output"
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/eventwire"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/oneshot"
+	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
 type runtimeGenerateOptions struct {
@@ -23,6 +28,13 @@ type runtimeGenerateOptions struct {
 type runtimeArtifactGenerateFunc func(ctx context.Context, root string, process commandWorkerProcess) (json.RawMessage, error)
 type runtimeOperationFunc func(ctx context.Context, root, operation, workID string, process commandWorkerProcess) (json.RawMessage, error)
 type setupOperationFunc func(ctx context.Context, root, mode string, process commandWorkerProcess) (json.RawMessage, error)
+
+type setupOperationWorker interface {
+	projectindex.ProjectIndexer
+	RunSetupPlanningOperation(ctx context.Context, root, mode string) (json.RawMessage, error)
+	IndexProjectAstPatchWithResult(ctx context.Context, root, configPath, projectName string) (projectindex.ProjectAstIndexResult, error)
+	RunSetupOperation(ctx context.Context, root, mode string, setupReport json.RawMessage, definitions []store.ProjectDefinition, generationFindings []eventwire.RuntimeArtifactFinding) (json.RawMessage, error)
+}
 
 var generateRuntimeArtifactsForCommand runtimeArtifactGenerateFunc = generateRuntimeArtifactsWithWorker
 var runRuntimeOperationForCommand runtimeOperationFunc = runRuntimeOperationWithWorker
@@ -43,12 +55,13 @@ func NewRuntimeCmd(f *cli.Factory) *cobra.Command {
 
 	generateCmd := &cobra.Command{
 		Use:   "generate",
-		Short: "Generate Runtime Engine manifest and host entry files",
-		Long: `Generate the Runtime Engine manifest and host entry files for the current project.
+		Short: "Refresh generated Runtime files once",
+		Long: `Refresh the generated Runtime files for the current project once.
 
-The command discovers exported flow() handles and durableTask() targets, writes
-.crux/generated/runtime/manifest.json, and refreshes the default Next and Convex
-entry files. It does not create infrastructure or mutate runtime state.`,
+Crux dev keeps these files current while you work, and framework build plugins
+refresh them before a build. Use this one-shot command for CI, recovery, or to
+inspect generation directly. It discovers Runtime targets and Evals, writes the
+manifest and host entry files, and never creates infrastructure or credentials.`,
 		Example: `  crux runtime generate
   crux runtime generate --cwd packages/app
   crux runtime generate --json`,
@@ -61,6 +74,12 @@ entry files. It does not create infrastructure or mutate runtime state.`,
 			}
 			result, err := generateRuntimeArtifactsForCommand(cmd.Context(), root, newCommandWorkerProcess(io))
 			if err != nil {
+				if opts.jsonOutput {
+					return printRuntimeGenerateErrorJSON(io, err)
+				}
+				if handled := printRuntimeGenerateError(io, err); handled != nil {
+					return handled
+				}
 				return err
 			}
 			if opts.jsonOutput {
@@ -81,6 +100,43 @@ entry files. It does not create infrastructure or mutate runtime state.`,
 	return cmd
 }
 
+func printRuntimeGenerateError(io *output.IO, err error) error {
+	var workerErr *eventwire.WorkerEventError
+	if !errors.As(err, &workerErr) || len(workerErr.Findings) == 0 {
+		return nil
+	}
+	fmt.Fprintln(io.Err, workerErr.Message)
+	return domain.ExitError{Code: 1}
+}
+
+func printRuntimeGenerateErrorJSON(io *output.IO, err error) error {
+	payload := struct {
+		OK    bool `json:"ok"`
+		Error struct {
+			Code        string                             `json:"code,omitempty"`
+			Message     string                             `json:"message"`
+			Remediation string                             `json:"remediation,omitempty"`
+			Findings    []eventwire.RuntimeArtifactFinding `json:"findings"`
+		} `json:"error"`
+	}{OK: false}
+	payload.Error.Message = err.Error()
+	var workerErr *eventwire.WorkerEventError
+	if errors.As(err, &workerErr) {
+		payload.Error.Message = workerErr.Message
+		payload.Error.Code = workerErr.Code
+		payload.Error.Remediation = workerErr.Remediation
+		payload.Error.Findings = append([]eventwire.RuntimeArtifactFinding(nil), workerErr.Findings...)
+	}
+	encoded, marshalErr := json.MarshalIndent(payload, "", "  ")
+	if marshalErr != nil {
+		return fmt.Errorf("encode runtime generation error: %w", marshalErr)
+	}
+	if _, writeErr := fmt.Fprintf(io.Out, "%s\n", encoded); writeErr != nil {
+		return writeErr
+	}
+	return domain.ExitError{Code: 1}
+}
+
 func resolveRuntimeGenerateRoot(cwd string) (string, error) {
 	if cwd != "" {
 		return filepath.Abs(cwd)
@@ -99,12 +155,14 @@ func generateRuntimeArtifactsWithWorker(ctx context.Context, root string, proces
 		ctx, cancel = context.WithTimeout(ctx, runtimeGenerateTimeout)
 		defer cancel()
 	}
-	astResult, err := worker.IndexProjectAstPatchWithResult(ctx, root, "", "")
+	indexResult, err := oneshot.New(worker, nil).Run(ctx, oneshot.Options{
+		Root:        root,
+		RuntimeRich: true,
+	})
 	if err != nil {
 		return nil, err
 	}
-	index := projectindex.ApplyPatch(projectindex.EmptyPatchState(), astResult.Patch).Index
-	return worker.GenerateRuntimeArtifacts(ctx, root, index.Definitions)
+	return worker.GenerateRuntimeArtifacts(ctx, root, indexResult.Index.Definitions)
 }
 
 func runRuntimeOperationWithWorker(ctx context.Context, root, operation, workID string, process commandWorkerProcess) (json.RawMessage, error) {
@@ -126,7 +184,67 @@ func runSetupOperationWithWorker(ctx context.Context, root, mode string, process
 		ctx, cancel = context.WithTimeout(ctx, runtimeGenerateTimeout)
 		defer cancel()
 	}
-	return worker.RunSetupOperation(ctx, root, mode)
+	return runSetupOperationWithPreparedWorker(ctx, root, mode, worker)
+}
+
+func runSetupOperationWithPreparedWorker(ctx context.Context, root, mode string, worker setupOperationWorker) (json.RawMessage, error) {
+	setupReport, err := worker.RunSetupPlanningOperation(ctx, root, mode)
+	if err != nil {
+		return nil, err
+	}
+	decoded, err := decodeSetupPlanningReport(setupReport)
+	if err != nil {
+		return nil, err
+	}
+	var definitions []store.ProjectDefinition
+	if decoded.OK {
+		indexRunner := oneshot.New(worker, nil)
+		if mode == "check" {
+			indexRunner = oneshot.NewReadOnly(worker)
+		}
+		indexResult, err := indexRunner.Run(ctx, oneshot.Options{
+			Root:        root,
+			RuntimeRich: true,
+		})
+		if err != nil {
+			return worker.RunSetupOperation(
+				ctx,
+				root,
+				mode,
+				setupReport,
+				nil,
+				setupIndexFailureFindings(err),
+			)
+		}
+		definitions = indexResult.Index.Definitions
+	}
+	return worker.RunSetupOperation(ctx, root, mode, setupReport, definitions, nil)
+}
+
+func setupIndexFailureFindings(err error) []eventwire.RuntimeArtifactFinding {
+	var workerErr *eventwire.WorkerEventError
+	if errors.As(err, &workerErr) && len(workerErr.Findings) > 0 {
+		return append([]eventwire.RuntimeArtifactFinding(nil), workerErr.Findings...)
+	}
+	code := "PROJECT_INDEX_FAILED"
+	reason := "Project indexing did not complete."
+	if errors.As(err, &workerErr) {
+		if workerErr.Code != "" {
+			code = workerErr.Code
+		}
+		if workerErr.Message != "" {
+			reason = workerErr.Message
+		}
+	}
+	return []eventwire.RuntimeArtifactFinding{{
+		Code:           code,
+		Category:       "internal",
+		FeatureKind:    "runtime",
+		FeatureID:      "project-index",
+		Summary:        "Crux could not inspect the project before refreshing Runtime files.",
+		Reason:         reason,
+		WhatStillWorks: "Existing generated Runtime files are unchanged.",
+	}}
 }
 
 func printRuntimeGenerateResult(io *output.IO, raw json.RawMessage) error {

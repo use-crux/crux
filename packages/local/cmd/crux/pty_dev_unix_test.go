@@ -27,7 +27,9 @@ func TestPTYDevShutdownExitContract(t *testing.T) {
 		exitCode int
 	}{
 		{name: "q", stop: func(session *ptyDevSession) error { return session.write([]byte("q")) }, exitCode: 0},
-		{name: "raw Ctrl+C", stop: func(session *ptyDevSession) error { return session.write([]byte{3}) }, exitCode: 130},
+		{name: "raw Ctrl+C", stop: func(session *ptyDevSession) error {
+			return session.write([]byte("\x1b[?2026;2$y\x1b[?2027;3$y\x03"))
+		}, exitCode: 0},
 		{name: "SIGINT", stop: func(session *ptyDevSession) error { return session.command.Process.Signal(os.Interrupt) }, exitCode: 130},
 		{name: "SIGTERM", stop: func(session *ptyDevSession) error { return session.command.Process.Signal(syscall.SIGTERM) }, exitCode: 143},
 	}
@@ -44,6 +46,16 @@ func TestPTYDevShutdownExitContract(t *testing.T) {
 			transcript := session.output()
 			if strings.Contains(transcript, "context canceled") {
 				t.Fatalf("expected cancellation leaked into terminal output:\n%s", transcript)
+			}
+			for _, query := range []string{"\x1b[?2026$p", "\x1b[?2027$p"} {
+				if strings.Contains(transcript, query) {
+					t.Fatalf("terminal capability query %q can leak a delayed reply after shutdown:\n%s", query, transcript)
+				}
+			}
+			for _, reply := range []string{"\x1b[?2026;2$y", "\x1b[?2027;3$y"} {
+				if strings.Contains(transcript, reply) {
+					t.Fatalf("terminal capability reply %q leaked into output:\n%s", reply, transcript)
+				}
 			}
 			if !strings.Contains(transcript, "Workbench closed. Dev server stopped.") {
 				t.Fatalf("shutdown completion missing from terminal output:\n%s", transcript)

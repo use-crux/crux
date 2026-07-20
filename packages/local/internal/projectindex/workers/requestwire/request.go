@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/eventwire"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
@@ -45,10 +46,13 @@ type Request struct {
 	Mode                          string                                   `json:"mode,omitempty"`
 	MaxAffectedFiles              int                                      `json:"maxAffectedFiles,omitempty"`
 	IncludeStaticCacheStatus      bool                                     `json:"includeStaticCacheStatus,omitempty"`
+	CacheDisabled                 bool                                     `json:"cacheDisabled,omitempty"`
 	RuntimeOperation              string                                   `json:"runtimeOperation,omitempty"`
 	RuntimeWorkID                 string                                   `json:"runtimeWorkId,omitempty"`
 	RuntimeIncludeDetails         bool                                     `json:"runtimeIncludeDetails,omitempty"`
 	SetupMode                     string                                   `json:"setupMode,omitempty"`
+	SetupReport                   json.RawMessage                          `json:"setupReport,omitempty"`
+	GenerationFindings            []eventwire.RuntimeArtifactFinding       `json:"generationFindings,omitempty"`
 	StaticCacheHits               []projectindex.StaticCacheHit            `json:"staticCacheHits,omitempty"`
 	NativeCompilerProtocolVersion int                                      `json:"nativeCompilerProtocolVersion,omitempty"`
 }

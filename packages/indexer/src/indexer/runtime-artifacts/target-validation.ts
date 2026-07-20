@@ -1,8 +1,12 @@
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import type { RuntimeArtifactManifestTarget } from "@use-crux/core/runtime";
-import { createRuntimeError } from "@use-crux/core/runtime";
 import ts from "typescript";
+import {
+  RuntimeArtifactGenerationError,
+  runtimeArtifactFindingFromError,
+} from "./findings";
+import type { RuntimeArtifactFinding } from "./types";
 
 /** Verify that every discovered durable target remains a named value export. */
 export async function validateTargetExports(
@@ -16,17 +20,39 @@ export async function validateTargetExports(
     exports.add(target.export);
     byFile.set(file, exports);
   }
-  await Promise.all(
-    [...byFile].map(async ([file, exports]) => {
-      const source = await readFile(file, "utf8");
-      const namedExports = namedValueExports(file, source);
-      for (const exportName of exports) {
-        if (!namedExports.has(exportName)) {
-          throw targetNotExportedError(file, exportName);
+  const findings = (
+    await Promise.all(
+      [...byFile].map(async ([file, exports]) => {
+        const sourcePath = relative(root, file).replace(/\\/g, "/");
+        let source: string;
+        try {
+          source = await readFile(file, "utf8");
+        } catch (error) {
+          return [
+            runtimeArtifactFindingFromError(error, {
+              code: "RUNTIME_TARGET_SOURCE_UNREADABLE",
+              category: "environment",
+              featureKind: "target",
+              featureId: [...exports].sort(compareCodepoint)[0],
+              source: sourcePath,
+              summary: `Crux could not read Runtime target source '${sourcePath}'.`,
+              whatStillWorks:
+                "Other readable Runtime target files are unchanged.",
+            }),
+          ];
         }
-      }
-    }),
-  );
+        const namedExports = namedValueExports(file, source);
+        return [...exports].flatMap((exportName) =>
+          namedExports.has(exportName)
+            ? []
+            : [targetNotExportedFinding(sourcePath, exportName)],
+        );
+      }),
+    )
+  ).flat();
+  if (findings.length > 0) {
+    throw new RuntimeArtifactGenerationError(findings);
+  }
 }
 
 function namedValueExports(file: string, source: string): Set<string> {
@@ -75,13 +101,25 @@ function hasExportModifier(statement: ts.Statement): boolean {
   );
 }
 
-function targetNotExportedError(file: string, exportName: string): never {
-  throw createRuntimeError({
+function targetNotExportedFinding(
+  source: string,
+  exportName: string,
+): RuntimeArtifactFinding {
+  return {
     code: "TARGET_NOT_EXPORTED",
-    whatFailed: `Runtime target export \`${exportName}\` was not found in \`${file}\`.`,
-    why: "Generated runtime entries import targets by named export, and default or local-only targets cannot be wired durably.",
+    category: "authored",
+    featureKind: "target",
+    featureId: exportName,
+    source,
+    summary: `Runtime target '${exportName}' is not exported from '${source}'.`,
+    reason:
+      "Runtime targets need a named export so generated host code can import the intended value.",
     whatStillWorks:
       "Other runtime targets with named exports can still be generated.",
-    nextStep: `Export the target as \`export const ${exportName} = ...\`, then run \`crux runtime generate\` again.`,
-  });
+    remediation: `Export it as \`export const ${exportName} = ...\` and save the file.`,
+  };
+}
+
+function compareCodepoint(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
 }

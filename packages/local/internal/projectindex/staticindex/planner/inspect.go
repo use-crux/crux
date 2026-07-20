@@ -75,7 +75,7 @@ func Inspect(
 		nodeReasons = append(nodeReasons, ReasonExtensions)
 	}
 
-	planResult, err := BuildWithExtensionManifest(root, projectName, config, extensionManifest)
+	planResult, err := BuildWithExtensionManifestContext(ctx, root, projectName, config, extensionManifest)
 	if err != nil {
 		return InspectResult{}, err
 	}

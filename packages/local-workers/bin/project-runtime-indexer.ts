@@ -10,6 +10,7 @@
 
 import { createInterface } from 'node:readline'
 import { indexProjectRuntimeForHost } from '@use-crux/indexer/host/runtime'
+import { isUserImportTimeoutError } from '@use-crux/indexer/internal/user-import'
 import type { ProjectIndexSnapshot } from '@use-crux/core/project-index'
 import {
   assertProjectIndexWorkerProtocolV2,
@@ -96,6 +97,7 @@ async function handleLine(line: string): Promise<void> {
     const message = error instanceof Error ? error.message : String(error)
     process.stderr.write(`[project-runtime-indexer] error: ${message}\n`)
     await writeProjectIndexPhaseError(writeResponse, streamError?.method ?? 'indexProjectRuntime', 'runtime', message)
+    if (isUserImportTimeoutError(error)) process.exit(1)
   }
 }
 

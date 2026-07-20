@@ -5,12 +5,12 @@
   "fileSelection": "staticDefinitionFiles(root)",
   "projection": "canonicalStaticExtractionJson(definitions,relations,diagnostics,dependencies)",
   "totals": {
-    "files": 736,
+    "files": 737,
     "definitions": 84,
     "relations": 7,
     "diagnostics": 25,
-    "dependencies": 1356,
-    "canonicalBytes": 203283
+    "dependencies": 1367,
+    "canonicalBytes": 204064
   },
   "files": [
     {
@@ -2697,12 +2697,12 @@
     },
     {
       "file": "packages/core/src/eval/internal/planner.ts",
-      "sha256": "aa380eae3eeb2a0875cdc366614ca99b1ac1203152c38a2ed69236e8c1dfc08e",
-      "bytes": 1310,
+      "sha256": "7f584864bddeb0b61fa744ccb638ae0e3803776c6bd0f006280172d82a40fb45",
+      "bytes": 1374,
       "definitions": 1,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 12
+      "dependencies": 13
     },
     {
       "file": "packages/core/src/eval/internal/runner.ts",
@@ -4299,12 +4299,12 @@
     },
     {
       "file": "packages/indexer/src/host/runtime.ts",
-      "sha256": "9ecb027f596641762d523c6a2ed6a3e728b7e1d1b9107b86462e02228775ba6d",
-      "bytes": 115,
+      "sha256": "237fb9093f3e27117cdb6627247b6854cfc7cd2fd37e65d4054087ca16629a88",
+      "bytes": 218,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 1
+      "dependencies": 3
     },
     {
       "file": "packages/indexer/src/index.ts",
@@ -4758,12 +4758,12 @@
     },
     {
       "file": "packages/indexer/src/indexer/runtime-artifacts.ts",
-      "sha256": "024f1ae5faaa756b01331c6966b3cd24c35a3ee4479ebf49a6b0828643c0d954",
-      "bytes": 539,
+      "sha256": "45447a2b4d01724ce7e0a72960d294a2f70d062761a495b0fe8e1e051cb30e67",
+      "bytes": 607,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 7
+      "dependencies": 8
     },
     {
       "file": "packages/indexer/src/indexer/runtime-artifacts/entries.ts",
@@ -4776,12 +4776,12 @@
     },
     {
       "file": "packages/indexer/src/indexer/runtime-artifacts/eval-registry.ts",
-      "sha256": "5b2df0de8405f50dca5d9a8c0659c6ccaf3ad35e74e30df020676da45549fc07",
-      "bytes": 116,
+      "sha256": "f3b39d5ce188accd612f7666e7f634c1c579a035f072826ee1157f2a8e6d7c4d",
+      "bytes": 184,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 1
+      "dependencies": 2
     },
     {
       "file": "packages/indexer/src/indexer/runtime-artifacts/host.ts",
@@ -4793,7 +4793,7 @@
       "dependencies": 1
     },
     {
-      "file": "packages/indexer/src/indexer/runtime-artifacts/manifest.ts",
+      "file": "packages/indexer/src/indexer/runtime-artifacts/manifest-codec.ts",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
       "definitions": 0,
@@ -4802,13 +4802,22 @@
       "dependencies": 0
     },
     {
-      "file": "packages/indexer/src/indexer/runtime-artifacts/target-validation.ts",
-      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
-      "bytes": 68,
+      "file": "packages/indexer/src/indexer/runtime-artifacts/manifest.ts",
+      "sha256": "09d40b288c6a732c69983577d36afddc2480795fbdf187e4850c802d8a400eea",
+      "bytes": 135,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 0
+      "dependencies": 1
+    },
+    {
+      "file": "packages/indexer/src/indexer/runtime-artifacts/target-validation.ts",
+      "sha256": "09d40b288c6a732c69983577d36afddc2480795fbdf187e4850c802d8a400eea",
+      "bytes": 135,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
     },
     {
       "file": "packages/indexer/src/indexer/runtime-artifacts/types.ts",
@@ -4830,12 +4839,12 @@
     },
     {
       "file": "packages/indexer/src/indexer/runtime-ops.ts",
-      "sha256": "910a4d91371308274f9779f9081c53337bfdd8473564fcfe0ae5a08982c8a4d8",
-      "bytes": 229,
+      "sha256": "24736e1e341b2fb022541a6c76cd31fc575b28f9e3fe3e762656ab7f34276ec2",
+      "bytes": 303,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 3
+      "dependencies": 4
     },
     {
       "file": "packages/indexer/src/indexer/semantic-support.ts",
@@ -5181,12 +5190,12 @@
     },
     {
       "file": "packages/indexer/src/indexer/setup-ops.ts",
-      "sha256": "247a2f2f53017268fdb4d0645b4a8cab5c96cd88f63582b50ba0d544da31090e",
-      "bytes": 247,
+      "sha256": "6a0cd2f7766712361a9dfc2bf69ad1c6186b6b6aacfa612488a7b6c1daad2304",
+      "bytes": 449,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 3
+      "dependencies": 6
     },
     {
       "file": "packages/indexer/src/indexer/setup/defer-contributor.ts",

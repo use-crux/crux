@@ -24,15 +24,14 @@ import type {
   ExtractStaticEvidenceBatchResult,
   LoadStaticExtensionHostManifestResult,
 } from '../extensions'
-import type { RuntimeArtifactGenerationResult } from '../runtime-artifacts'
+import type { RuntimeArtifactFinding, RuntimeArtifactGenerationResult } from '../runtime-artifacts'
 import type { RuntimeOperationResult } from '../runtime-ops'
 import type { SetupReport } from '@use-crux/core/setup'
-import type {
-  ProjectIndexFactExtractorProvenance,
-  ProjectIndexFactProvenance,
-} from '../fact-provenance'
+import type { SetupCommandResult } from '../setup-ops'
+import type { ProjectIndexFactExtractorProvenance, ProjectIndexFactProvenance } from '../fact-provenance'
 
 export type { ProjectIndexFactExtractorProvenance, ProjectIndexFactProvenance } from '../fact-provenance'
+export type { RuntimeArtifactFinding } from '../runtime-artifacts'
 
 /** Current Project Index worker stream protocol version. */
 export const PROJECT_INDEX_WORKER_PROTOCOL_VERSION = 2 as const
@@ -53,11 +52,7 @@ export interface ProjectIndexFactProducer {
 }
 
 /** Evidence fidelity attached to streamed fact envelopes. */
-export type ProjectIndexFactFidelity =
-  | 'authoritative'
-  | 'inferred'
-  | 'best-effort'
-  | 'runtime-observed'
+export type ProjectIndexFactFidelity = 'authoritative' | 'inferred' | 'best-effort' | 'runtime-observed'
 
 /**
  * Typed mapping between `IndexPatchFacts` fields and streamed fact values.
@@ -75,9 +70,7 @@ export interface ProjectIndexPatchFactMap {
   readonly sourceRefs: ArrayItem<NonNullable<IndexPatchFacts['sourceRefs']>>
   readonly diagnostics: ArrayItem<NonNullable<IndexPatchFacts['diagnostics']>>
   readonly lintFindings: ArrayItem<NonNullable<IndexPatchFacts['lintFindings']>>
-  readonly ruleDescriptors: ArrayItem<
-    NonNullable<IndexPatchFacts['ruleDescriptors']>
-  >
+  readonly ruleDescriptors: ArrayItem<NonNullable<IndexPatchFacts['ruleDescriptors']>>
   readonly sources: ArrayItem<NonNullable<IndexPatchFacts['sources']>>
   readonly sourceGraph: NonNullable<IndexPatchFacts['sourceGraph']>
 }
@@ -91,9 +84,7 @@ export type ProjectIndexPatchFactKind = keyof ProjectIndexPatchFactMap
  * The generic parameter narrows `fact` from the envelope kind, giving worker
  * helpers precise inference without exposing raw compiler objects.
  */
-export interface ProjectIndexFactEnvelopeFor<
-  TKind extends ProjectIndexPatchFactKind,
-> {
+export interface ProjectIndexFactEnvelopeFor<TKind extends ProjectIndexPatchFactKind> {
   /** Envelope schema version. */
   readonly schemaVersion: 1
   /** Stable identifier for this fact within the transaction. */
@@ -148,8 +139,10 @@ export interface ProjectIndexArtifactMap {
   readonly runtimeArtifacts: RuntimeArtifactGenerationResult
   /** Runtime operation result emitted for Crux Local CLI commands. */
   readonly runtimeOperation: RuntimeOperationResult
-  /** Aggregate project setup result emitted for `crux setup`. */
-  readonly setupOperation: SetupReport
+  /** Contributor-only setup report used before a fresh Runtime-rich Index. */
+  readonly setupReport: SetupReport
+  /** Aggregate setup and Runtime generation result emitted for `crux setup`. */
+  readonly setupOperation: SetupCommandResult
   /** Privacy-safe content-addressed Catalog projection for deployment joins. */
   readonly deploymentManifest: ProjectIndexDeploymentManifestV1
 }
@@ -240,6 +233,7 @@ export interface ProjectIndexPhaseErrorEvent extends ProjectIndexWorkerEventBase
   readonly error: {
     readonly message: string
     readonly code?: string
+    readonly remediation?: string
   }
   /** Whether the worker intentionally degraded instead of crashing. */
   readonly degraded?: boolean
@@ -290,6 +284,8 @@ export interface ProjectIndexArtifactErrorEvent extends ProjectIndexWorkerEventB
   readonly error: {
     readonly message: string
     readonly code?: string
+    readonly remediation?: string
+    readonly findings?: readonly RuntimeArtifactFinding[]
   }
 }
 

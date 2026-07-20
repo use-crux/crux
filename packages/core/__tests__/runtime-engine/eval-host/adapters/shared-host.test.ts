@@ -14,6 +14,7 @@ import {
 import {
   authorizedRequest,
   fixtureRegistry,
+  HOST_CAPABILITIES,
   jobBody,
   NOW,
   pollUntilTerminal,
@@ -41,6 +42,7 @@ const adapters = [
           deploymentId: "production-eu",
           token: TOKEN,
           registry,
+          hostCapabilities: HOST_CAPABILITIES,
           store,
           now: () => NOW,
         }),
@@ -72,6 +74,7 @@ const adapters = [
         deploymentId: "production-eu",
         token: TOKEN,
         registry,
+        hostCapabilities: HOST_CAPABILITIES,
         runtime,
         now: () => NOW,
       });
@@ -102,7 +105,9 @@ describe.each(adapters)("$name Eval host adapter", ({ create }) => {
 
     await expect(
       harness.host.fetch(new Request("https://runtime.example/manifest")),
-    ).resolves.toMatchObject({ status: 401 });
+    ).resolves.toMatchObject({
+      status: 401,
+    });
     await expect(
       (await harness.host.fetch(authorizedRequest("/manifest"))).json(),
     ).resolves.toMatchObject({

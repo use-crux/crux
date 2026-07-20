@@ -28,7 +28,7 @@ export async function resolveRuntimeArtifactHost(
       why: `The config file \`${loaded.loaded.configFile}\` did not load to a Crux config object, so the generator cannot choose a host entry safely.`,
       whatStillWorks: "The runtime manifest and entry files are unchanged.",
       nextStep:
-        "Fix crux.config.ts or pass an explicit host to crux runtime generate.",
+        "Fix crux.config.ts so it exports a valid Crux config, then save the file. Crux dev will retry automatically.",
     });
   }
   return "next";

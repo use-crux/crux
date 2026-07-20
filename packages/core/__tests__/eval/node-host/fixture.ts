@@ -47,6 +47,19 @@ export function hydratedEntry() {
   });
 }
 
+export function mixedAdapterEntry() {
+  const entry = hydratedEntry();
+  return Object.freeze({
+    ...entry,
+    eval: evaluate({
+      id: entry.id,
+      task: remoteTask([]),
+      cases: entry.cases.map((item) => item.authored),
+      variants: { hosted: { task: remoteTask(["record-store"]) } },
+    }),
+  });
+}
+
 export function manifest(
   entry: ReturnType<typeof hydratedEntry>,
   deploymentId: string,
@@ -102,6 +115,9 @@ export function registry(entry: ReturnType<typeof hydratedEntry>) {
           },
         ],
         variants,
+        runtimeArms: [
+          { name: "current", requiredHostCapabilities: ["record-store"] },
+        ],
         requiredHostCapabilities: ["record-store"],
         index: {
           id: entry.id,
@@ -121,7 +137,13 @@ export function connectionEnvironment() {
   };
 }
 
-function remoteTask() {
+function remoteTask(
+  requiredHostCapabilities: readonly (
+    | "asset-store"
+    | "record-store"
+    | "vector-store"
+  )[] = ["record-store"],
+) {
   return attachEvalTaskDescriptorForInternalUse(
     Object.assign(async () => "unused", {
       _tag: "CruxTask" as const,
@@ -132,7 +154,8 @@ function remoteTask() {
       operation: "generate",
       adapterId: "ai-sdk",
       capabilities: [],
-      requiredHostCapabilities: ["record-store"],
+      requiredHostCapabilities,
+      callContractFingerprint: "node-host-fixture-call-v1",
       defaults: {},
       overrideKeys: [],
       projectIdentity: () => ({

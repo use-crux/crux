@@ -6,6 +6,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/use-crux/crux/packages/local/internal/startup"
 )
 
 type startupTracker struct {
@@ -14,6 +16,7 @@ type startupTracker struct {
 	mu      sync.Mutex
 	mode    string
 	marks   map[string]time.Time
+	journal *startup.Journal
 }
 
 func newStartupTracker(enabled bool) *startupTracker {
@@ -21,6 +24,11 @@ func newStartupTracker(enabled bool) *startupTracker {
 		enabled: enabled,
 		started: time.Now(),
 		marks:   map[string]time.Time{},
+		journal: startup.NewJournal([]startup.TaskSpec{
+			{ID: "runtime-preflight", Phase: "Checking runtime"},
+			{ID: "project-index", Phase: "Indexing project"},
+			{ID: "runtime-artifacts", Phase: "Generating runtime artifacts"},
+		}),
 	}
 }
 

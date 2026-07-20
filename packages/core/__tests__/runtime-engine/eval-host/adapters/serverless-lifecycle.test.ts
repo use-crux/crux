@@ -12,6 +12,7 @@ import {
 import {
   authorizedRequest,
   fixtureRegistry,
+  HOST_CAPABILITIES,
   jobBody,
   NOW,
   pollUntilTerminal,
@@ -48,6 +49,7 @@ describe("serverless Eval host lifecycle", () => {
         deploymentId: "production-eu",
         token: TOKEN,
         registry: fixtureRegistry(execute),
+        hostCapabilities: HOST_CAPABILITIES,
         runtime: serverless({
           store,
           publicUrl: "https://runtime.example",
@@ -128,6 +130,7 @@ describe("serverless Eval host lifecycle", () => {
       deploymentId: "production-eu",
       token: TOKEN,
       registry,
+      hostCapabilities: HOST_CAPABILITIES,
       runtime,
       now: () => NOW,
     });

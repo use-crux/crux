@@ -17,10 +17,18 @@ Hand-written runtime entries can still work if they include the correct targets.
 
 ## Fix
 
-Regenerate artifacts:
+During normal development, save the corrected source and `crux dev` retries
+automatically. To finish safe project setup and refresh the files, run:
+
+```bash
+crux setup --apply
+```
+
+For CI, recovery, or direct one-shot inspection, run:
 
 ```bash
 crux runtime generate
 ```
 
-Run generation before framework build in CI and deployment.
+Framework integrations refresh automatically before builds. A manual one-shot
+is not required before every `crux dev`.

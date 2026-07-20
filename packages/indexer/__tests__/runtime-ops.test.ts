@@ -54,6 +54,33 @@ describe("runtime operations", () => {
     }
   });
 
+  it("treats host-bound runtime preflight as metadata-only", async () => {
+    const root = await mkdtemp(
+      join(dirname(fileURLToPath(import.meta.url)), ".tmp-runtime-host-"),
+    );
+    roots.push(root);
+    await writeFile(join(root, "package.json"), '{"type":"module"}\n');
+    await writeFile(
+      join(root, "crux.config.ts"),
+      [
+        "import { config } from '@use-crux/core'",
+        "export default config({ runtime: {",
+        "  kind: 'host-bound', id: 'convex', host: 'convex',",
+        "  entry: 'convex/_crux/generated.ts', capabilities: {},",
+        "} as never })",
+      ].join("\n"),
+    );
+
+    await expect(
+      runRuntimeOperation({ root, operation: "preflight" }),
+    ).resolves.toEqual({
+      operation: "preflight",
+      ok: true,
+      setup: { ok: true, findings: [] },
+      missingTargets: [],
+    });
+  });
+
   it("runs setup/status/inspect/retry/cancel against node({ store: postgres() })", async () => {
     const schema = `crux_runtime_ops_${Date.now()}`;
     schemas.push(schema);
@@ -62,20 +89,23 @@ describe("runtime operations", () => {
     await expect(
       runSetupOperation({ root, mode: "check" }),
     ).resolves.toMatchObject({
-      mode: "check",
       ok: false,
+      setup: { mode: "check", ok: false },
+      generation: { status: "blocked" },
     });
     await expect(
       runSetupOperation({ root, mode: "apply" }),
     ).resolves.toMatchObject({
-      mode: "apply",
       ok: true,
+      setup: { mode: "apply", ok: true },
+      generation: { status: "generated" },
     });
     await expect(
       runSetupOperation({ root, mode: "check" }),
     ).resolves.toMatchObject({
-      mode: "check",
       ok: true,
+      setup: { mode: "check", ok: true },
+      generation: { status: "current" },
     });
 
     const seedStore = postgres({
@@ -234,8 +264,9 @@ describe("runtime operations", () => {
     await expect(
       runSetupOperation({ root, mode: "apply" }),
     ).resolves.toMatchObject({
-      mode: "apply",
       ok: true,
+      setup: { mode: "apply", ok: true },
+      generation: { status: "generated" },
     });
 
     const seedStore = postgres({
@@ -355,7 +386,9 @@ async function runtimeOpsFixtureRoot(options: {
     join(root, ".crux/generated/runtime/manifest.json"),
     `${JSON.stringify(
       {
-        version: 1,
+        version: 2,
+        evalPrivacyFingerprint:
+          "d2b7a3a9e0d3857b24b871ee585d118490dabd9edf81bcf10de9f5328e85cc29",
         targets: [
           {
             name: "runtime-ops-review",
@@ -364,6 +397,7 @@ async function runtimeOpsFixtureRoot(options: {
             export: "reviewFlow",
           },
         ],
+        evals: [],
       },
       null,
       2,

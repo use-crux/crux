@@ -78,6 +78,42 @@ func TestRunnerMatchesDaemonConfigFailure(t *testing.T) {
 	}
 }
 
+func TestRunnerIncludesRuntimeRichEvidenceWhenRequested(t *testing.T) {
+	root := t.TempDir()
+	indexer := &parityIndexer{root: root}
+	result, err := New(indexer, noCacheStore{}).Run(context.Background(), Options{
+		Root: root, ProjectID: "fixture", RuntimeRich: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !indexer.runtimeCalled {
+		t.Fatal("runtime-rich indexer was not called")
+	}
+	found := false
+	for _, definition := range result.Index.Definitions {
+		if definition.ID == "eval:runtime" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("definitions = %#v, want runtime-rich Eval evidence", result.Index.Definitions)
+	}
+}
+
+func TestReadOnlyRunnerDisablesIndexerCaches(t *testing.T) {
+	root := t.TempDir()
+	indexer := &parityIndexer{root: root}
+	if _, err := NewReadOnly(indexer).Run(context.Background(), Options{
+		Root: root, ProjectID: "fixture",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if !indexer.cacheDisabled {
+		t.Fatal("read-only runner did not propagate cache policy to the indexer")
+	}
+}
+
 func TestRunnerReportsWarmCacheHit(t *testing.T) {
 	root := t.TempDir()
 	cached := store.IndexData{
@@ -115,12 +151,22 @@ func TestRunnerRejectsCacheCommitFailure(t *testing.T) {
 }
 
 type parityIndexer struct {
-	root        string
-	semanticErr error
-	configErr   error
+	root          string
+	semanticErr   error
+	configErr     error
+	runtimeCalled bool
+	cacheDisabled bool
 }
 
-func (i *parityIndexer) IndexProjectAstPatch(_ context.Context, root, configPath, projectName string) (projectindex.IndexPatch, error) {
+func (i *parityIndexer) IndexProjectRuntimePatch(_ context.Context, request projectindex.ProjectRuntimeIndexRequest) (projectindex.IndexPatch, error) {
+	i.runtimeCalled = true
+	return parityPatch(request.Root, request.ConfigPath, request.ProjectName, projectindex.PhaseRuntime, projectindex.IndexPatchFacts{
+		Definitions: []store.ProjectDefinition{{ID: "eval:runtime", Kind: "eval", Name: "runtime", Fidelity: "resolved", Status: "active"}},
+	}), nil
+}
+
+func (i *parityIndexer) IndexProjectAstPatch(ctx context.Context, root, configPath, projectName string) (projectindex.IndexPatch, error) {
+	i.cacheDisabled = projectindex.CacheDisabled(ctx)
 	if i.configErr != nil {
 		return projectindex.IndexPatch{}, i.configErr
 	}

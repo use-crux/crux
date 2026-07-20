@@ -17,6 +17,10 @@ import {
 import { loadProjectConfig } from './config'
 import { importUserModule } from './imports'
 import { namespaceFallbackFinding } from './setup/namespace-finding'
+import {
+  decodeRuntimeArtifactManifest,
+  RuntimeArtifactManifestDecodeError,
+} from './runtime-artifacts/manifest-codec'
 import type {
   RuntimeInspectOperationResult,
   RuntimeOperationOptions,
@@ -24,7 +28,6 @@ import type {
   RuntimePreflightMissingTarget,
   RuntimeStatusCount,
 } from './runtime-ops-types'
-import type { RuntimeArtifactManifest } from '@use-crux/core/runtime'
 
 export type {
   RuntimeCancelOperationResult,
@@ -216,6 +219,14 @@ export async function preflightRuntime(
   root: string,
   runtimeDefinition: RuntimeEngineDefinition,
 ): Promise<RuntimeOperationResult> {
+  if (runtimeDefinition.kind === 'host-bound') {
+    return {
+      operation: 'preflight',
+      ok: true,
+      setup: { ok: true, findings: [] },
+      missingTargets: [],
+    }
+  }
   const setup = appendNamespaceFallbackFinding(
     await setupPort(runtimeDefinition).check(),
     runtimeDefinition,
@@ -256,14 +267,35 @@ function appendNamespaceFallbackFinding(
 
 async function readRuntimeArtifactManifest(
   root: string,
-): Promise<RuntimeArtifactManifest> {
-  return JSON.parse(
+): Promise<{ readonly targets: readonly { readonly name: string }[] }> {
+  const parsed: unknown = JSON.parse(
     await readFile(join(root, '.crux/generated/runtime/manifest.json'), 'utf8'),
-  ) as RuntimeArtifactManifest
+  )
+  try {
+    return decodeRuntimeArtifactManifest(parsed)
+  } catch (error) {
+    if (!(error instanceof RuntimeArtifactManifestDecodeError)) throw error
+    const incompatible = error.code === 'version_incompatible'
+    throw createRuntimeError({
+      code: incompatible
+        ? 'RUNTIME_ARTIFACT_MANIFEST_INCOMPATIBLE'
+        : 'RUNTIME_ARTIFACT_MANIFEST_INVALID',
+      whatFailed: incompatible
+        ? `Runtime artifact manifest schema version ${String(error.version ?? 'unknown')} is not supported.`
+        : 'The generated Runtime artifact manifest is incomplete or malformed.',
+      why: incompatible
+        ? 'This Crux version requires the current generated Runtime file format.'
+        : 'Its fields do not match the Runtime artifact manifest v2 contract.',
+      whatStillWorks:
+        'Authored Runtime targets and Eval definitions are unchanged.',
+      nextStep:
+        'Run `crux runtime generate` to recreate the generated Runtime files.',
+    })
+  }
 }
 
 function missingRuntimeTargets(
-  manifest: RuntimeArtifactManifest,
+  manifest: { readonly targets: readonly { readonly name: string }[] },
   counts: readonly RuntimeStatusCount[],
 ): readonly RuntimePreflightMissingTarget[] {
   const known = new Set(manifest.targets.map((target) => target.name))

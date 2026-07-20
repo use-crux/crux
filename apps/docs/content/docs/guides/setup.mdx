@@ -10,9 +10,10 @@ crux setup
 crux setup --check
 ```
 
-The command exits unsuccessfully when a contributor reports an error. Use
-`--json` for CI and coding-agent workflows: its stable report includes findings,
-planned actions, and application results.
+The command also checks whether generated Runtime files match the current
+project. It exits unsuccessfully when setup blocks generation or those files
+need a refresh. Use `--json` for CI and automation: its stable report keeps the
+setup report and generation status separate.
 
 ## Apply safe changes
 
@@ -21,9 +22,10 @@ crux setup --apply
 ```
 
 Apply mode runs only safe, additive actions, in plan order, and then inspects
-the project again. It never automatically performs destructive migrations, paid
-provisioning, production mutations, or ambiguous edits; anything requiring
-approval stays a finding with exact remediation.
+the project again. When setup is ready, it refreshes generated Runtime files
+from that final project state. It never automatically performs destructive
+migrations, paid provisioning, production mutations, credentials, or ambiguous
+edits; anything requiring approval stays a finding with exact remediation.
 
 Use `--cwd <path>` to inspect another project root. Findings may include a docs
 URL, a copy-paste remediation, and a privacy-safe coding-agent prompt. They do
@@ -34,3 +36,20 @@ earlier successful actions, so rerun `crux setup --apply` after correcting the
 reported problem.
 
 Action classification and the `--json` report details: [`crux setup` reference](/docs/reference/local#crux-setup).
+
+## Which command should I run?
+
+| Situation | Command | What happens |
+| --- | --- | --- |
+| Check a project without changing it | `crux setup` | Checks wiring and generated files. |
+| Safely finish initial setup | `crux setup --apply` | Applies safe additions, checks again, then refreshes generated files. |
+| Normal development | `crux dev` | Starts immediately, refreshes in the background, and retries after the next relevant save if generation fails. |
+| Framework build or deployment | Build as usual | Crux build integrations refresh before compilation. |
+| CI, recovery, or direct inspection | `crux runtime generate` | Runs the same generation pipeline once. |
+
+You do not need to run `crux runtime generate` before every `crux dev`. It is
+the explicit one-shot tool, not another setup ritual.
+
+Host-bound runtimes such as Convex are inspected as declarations by local
+setup and preflight. Crux generates their host files locally but does not try
+to execute Convex-only storage or functions from the CLI.

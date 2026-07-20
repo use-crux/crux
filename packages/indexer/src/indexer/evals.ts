@@ -1,4 +1,9 @@
 import type { ProjectDefinition } from "@use-crux/core/project-index";
+import {
+  projectEvalTaskExecution,
+  projectEvalVariantTaskExecution,
+  type EvalTaskExecutionProjection,
+} from "@use-crux/core/runtime/internal/eval-registry";
 import { definition, safeId } from "./definitions";
 
 /** Inert Eval handle shape visible to runtime-rich Project Index discovery. */
@@ -7,8 +12,12 @@ export interface DiscoveredAuthoredEval {
   readonly id?: string;
 }
 
+/** Runtime-rich placement projected from one authored Current or Variant arm. */
+export type AuthoredEvalExecutionArm = Readonly<
+  { readonly name: string } & EvalTaskExecutionProjection
+>;
+
 const EVAL_DEFINITION_SYMBOL_DESCRIPTION = "crux.eval.definition";
-const EVAL_TASK_DESCRIPTOR = Symbol.for("@use-crux/core/eval/task-descriptor");
 const REQUIRED_HOST_CAPABILITIES = new Set([
   "asset-store",
   "record-store",
@@ -33,9 +42,24 @@ export async function definitionFromAuthoredEval(
   file: string,
   exportName: string,
   evalValue: DiscoveredAuthoredEval,
-  requiredHostCapabilities: readonly string[],
+  executionArms: readonly AuthoredEvalExecutionArm[],
 ): Promise<ProjectDefinition> {
   const name = evalValue.id ?? derivedEvalId(root, file);
+  const projectedArms = executionArms.map((arm) =>
+    arm.status === "ready"
+      ? Object.freeze({
+          name: arm.name,
+          execution: arm.execution,
+          requiredHostCapabilities: arm.requiredHostCapabilities,
+        })
+      : Object.freeze({
+          name: arm.name,
+          status: arm.status,
+          code: arm.code,
+          reason: arm.reason,
+        }),
+  );
+  const requiredHostCapabilities = runtimeCapabilityUnion(executionArms);
   return definition(
     root,
     file,
@@ -48,43 +72,65 @@ export async function definitionFromAuthoredEval(
       evalContract: "crux.eval",
       explicitId: evalValue.id !== undefined,
       requiredHostCapabilities,
+      evalExecutionArms: projectedArms,
       facts: {
         kind: "eval",
         evalContract: "crux.eval",
         requiredHostCapabilities,
+        evalExecutionArms: projectedArms,
       },
     },
   );
 }
 
-/** Read only the allowlisted deployment requirements from an inert Eval. */
-export function requiredHostCapabilitiesFromAuthoredEval(
+/** Project every effective arm using Core's shared total task classifier. */
+export function executionArmsFromAuthoredEval(
   evalValue: DiscoveredAuthoredEval,
-): readonly string[] {
+): readonly AuthoredEvalExecutionArm[] {
   const definitionSymbol = Object.getOwnPropertySymbols(evalValue).find(
     (symbol) => symbol.description === EVAL_DEFINITION_SYMBOL_DESCRIPTION,
   );
   const definition = definitionSymbol
     ? (evalValue as unknown as Record<PropertyKey, unknown>)[definitionSymbol]
     : undefined;
-  if (!isRecord(definition) || definition.schemaVersion !== 1) return [];
-  const task = definition.task;
-  if (typeof task !== "function") return [];
-  const descriptor = (task as unknown as Record<PropertyKey, unknown>)[
-    EVAL_TASK_DESCRIPTOR
-  ];
-  if (
-    !isRecord(descriptor) ||
-    !Array.isArray(descriptor.requiredHostCapabilities)
-  ) {
-    return [];
+  if (!isRecord(definition) || definition.schemaVersion !== 1) {
+    return Object.freeze([]);
   }
+  const variants = isRecord(definition.variants) ? definition.variants : {};
+  const names = Object.freeze([
+    "current",
+    ...Object.keys(variants).sort(compareCodepoint),
+  ]);
   return Object.freeze(
-    [...new Set(descriptor.requiredHostCapabilities)]
-      .filter(
-        (value): value is string =>
-          typeof value === "string" && REQUIRED_HOST_CAPABILITIES.has(value),
-      )
+    names.map((name) => {
+      const variant = name === "current" ? undefined : variants[name];
+      const execution =
+        name === "current"
+          ? projectEvalTaskExecution(definition.task)
+          : projectEvalVariantTaskExecution(
+              definition.task,
+              name,
+              isRecord(variant) ? variant : {},
+            );
+      return Object.freeze({ name, ...execution });
+    }),
+  );
+}
+
+function runtimeCapabilityUnion(
+  arms: readonly AuthoredEvalExecutionArm[],
+): readonly string[] {
+  return Object.freeze(
+    [
+      ...new Set(
+        arms.flatMap((arm) =>
+          arm.status === "ready" && arm.execution === "runtime"
+            ? arm.requiredHostCapabilities
+            : [],
+        ),
+      ),
+    ]
+      .filter((value) => REQUIRED_HOST_CAPABILITIES.has(value))
       .sort(compareCodepoint),
   );
 }

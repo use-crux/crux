@@ -2,6 +2,7 @@ package eventwire
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -13,6 +14,58 @@ func TestSharedWorkerEventFixturesAreDeclaredByContractManifest(t *testing.T) {
 	assertSharedWorkerEventManifestFixture(t, "worker-events.json")
 	assertSharedWorkerEventManifestFixture(t, "worker-event-cases.json")
 	assertSharedWorkerEventManifestGoMirror(t)
+}
+
+func TestArtifactErrorPreservesStructuredWorkerCode(t *testing.T) {
+	collector := NewProjectIndexArtifactStreamCollector(ProjectIndexArtifactStreamOptions{})
+	err := collector.Handle(json.RawMessage(`{
+		"protocolVersion":2,
+		"type":"artifact:error",
+		"transactionId":"error:runRuntimeOperation:runtimeOperation",
+		"artifact":"runtimeOperation",
+		"error":{"message":"runtime requires its host","code":"RUNTIME_HOST_ONLY","remediation":"generate host handlers","findings":[
+			{"code":"RUNTIME_EVAL_INVALID","category":"authored","featureKind":"eval","featureId":"answer","arm":"current","source":"evals/answer.eval.ts","summary":"Eval answer is not ready.","reason":"Eval task must be callable.","remediation":"Pass a callable task and save the file."},
+			{"code":"RUNTIME_ARTIFACT_INTERNAL","category":"internal","summary":"Crux could not prepare an artifact.","reason":"Internal consistency check failed."}
+		]}
+	}`))
+	var workerErr *WorkerEventError
+	if !errors.As(err, &workerErr) {
+		t.Fatalf("error = %T %v, want WorkerEventError", err, err)
+	}
+	if workerErr.Code != "RUNTIME_HOST_ONLY" || workerErr.Message != "runtime requires its host" {
+		t.Fatalf("worker error = %#v, want preserved code and message", workerErr)
+	}
+	if workerErr.Remediation != "generate host handlers" {
+		t.Fatalf("worker error remediation = %q, want typed remediation", workerErr.Remediation)
+	}
+	if len(workerErr.Findings) != 2 || workerErr.Findings[0].FeatureID != "answer" || workerErr.Findings[1].Category != "internal" {
+		t.Fatalf("worker error findings = %#v, want both structured children", workerErr.Findings)
+	}
+}
+
+func TestArtifactErrorRejectsMalformedFinding(t *testing.T) {
+	err := NewProjectIndexArtifactStreamCollector(ProjectIndexArtifactStreamOptions{}).Handle(json.RawMessage(`{
+		"protocolVersion":2,
+		"type":"artifact:error",
+		"transactionId":"error:generateRuntimeArtifacts:runtimeArtifacts",
+		"artifact":"runtimeArtifacts",
+		"error":{"message":"failed","findings":[{"code":"E_BAD","category":"blame","summary":"bad","reason":"bad"}]}
+	}`))
+	if err == nil || !strings.Contains(err.Error(), "unknown category") {
+		t.Fatalf("error = %v, want strict finding category rejection", err)
+	}
+}
+
+func TestArtifactErrorRequiresErrorMessage(t *testing.T) {
+	for _, raw := range []string{
+		`{"protocolVersion":2,"type":"artifact:error","transactionId":"missing-error","artifact":"runtimeArtifacts"}`,
+		`{"protocolVersion":2,"type":"artifact:error","transactionId":"empty-message","artifact":"runtimeArtifacts","error":{"message":""}}`,
+	} {
+		err := NewProjectIndexArtifactStreamCollector(ProjectIndexArtifactStreamOptions{}).Handle(json.RawMessage(raw))
+		if err == nil || !strings.Contains(err.Error(), "error.message") {
+			t.Fatalf("error = %v, want required error.message rejection", err)
+		}
+	}
 }
 
 func TestSharedWorkerEventFixtureDecodes(t *testing.T) {

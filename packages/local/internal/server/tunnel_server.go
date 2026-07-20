@@ -16,7 +16,7 @@ func (d *DevServer) StartTunnel(ctx context.Context, report func(TunnelStartupRe
 		return
 	}
 
-	d.workers.Go(func() {
+	if !d.workers.Go(func() {
 		tunnelCtx, cancelTunnel := context.WithCancel(d.ctx)
 		defer cancelTunnel()
 		stopCallerCancellation := func() bool { return false }
@@ -63,5 +63,7 @@ func (d *DevServer) StartTunnel(ctx context.Context, report func(TunnelStartupRe
 		if err := tunnelServer.Serve(result.Listener); err != nil && err != http.ErrServerClosed && tunnelCtx.Err() == nil {
 			d.logger.Error("tunnel serve error", "error", err)
 		}
-	})
+	}) && report != nil {
+		report(TunnelStartupResult{Err: context.Canceled})
+	}
 }

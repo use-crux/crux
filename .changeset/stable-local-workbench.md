@@ -1,5 +1,8 @@
 ---
-"@use-crux/local": minor
+'@use-crux/core': minor
+'@use-crux/indexer': minor
+'@use-crux/convex': minor
+'@use-crux/local': minor
 ---
 
 Make TUI input routing deterministic so focused filters consume text before
@@ -44,14 +47,34 @@ location when navigating Back.
 Select the interactive workbench only when stdin and stdout are capable
 terminals outside CI and `TERM=dumb`, while keeping plain output free of
 terminal control sequences. Browser launch is now explicit: use `--open` at
-startup or `o` inside the workbench; the legacy `--no-open` and hidden `--tui`
-flags are removed.
+startup or `o` inside the workbench; the legacy `--no-open` flag is removed,
+while `--tui` and `--no-tui` explicitly select a mode and reject conflicts.
 Route command input, JSON output, diagnostics, worker logs, and subprocess
 stderr through scoped injectable boundaries, propagating JSON write failures
 without mutating the process-wide logger.
 Unify dev-command, TUI, event-bridge, server, WebSocket, tunnel, watcher, and
 worker shutdown under one cancelable session with idempotent bounded cleanup.
-Clean `q` exits `0`, SIGINT and raw Ctrl+C exit `130`, and SIGTERM exits `143`;
-signal status wins
+Clean `q` and raw TUI Ctrl+C exit `0`, process SIGINT exits `130`, and SIGTERM
+exits `143`; signal status wins
 over reported cleanup failures, expected cancellation stays silent, and a
 second signal terminates immediately.
+Render the TUI immediately after listener binding while runtime preflight,
+Project Index, and runtime-artifact warmup continue under owned cancellation.
+Replay typed startup diagnostics such as `RUNTIME_HOST_ONLY` in the workbench,
+buffer edits made during the initial index, retry a failed baseline on the next
+edit, and prevent delayed terminal capability replies from leaking into the
+shell. Preserve graceful cleanup and exit status through the npm launcher.
+Allow ordinary callable Evals and adapter-managed Evals to coexist without
+placement flags: Crux derives execution per Current/Variant arm, keeps
+coordinator-only Evals out of deployed host artifacts, and validates exact
+host requirements before paid work. Generate Runtime files through one
+preflighted, atomic, manifest-last pipeline with complete structured findings.
+Make `crux setup` dry-run generated-file freshness and make
+`crux setup --apply` re-inspect before safely refreshing files; `crux dev`
+continues serving while background generation reports and retries failures.
+Preserve existing Convex routers that already call `crux.bridge(...)`, with the
+bridge registering authenticated Eval routes automatically. The local Runtime
+artifact manifest moves to v2 while the authenticated host wire remains v1.
+Index Eval placement in a bounded runtime-rich pass for setup, one-shot
+generation, and watcher refreshes, and treat host-bound preflight as
+metadata-only instead of executing host-only functions from the local CLI.

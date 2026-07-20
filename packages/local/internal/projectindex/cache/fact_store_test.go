@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"os"
@@ -11,59 +12,57 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
-func TestSnapshotEpoch37IgnoresEpoch36ThenReindexesAndReloads(t *testing.T) {
+func TestSnapshotEpoch41IgnoresEpoch40EvalFactsThenReindexesAndReloads(t *testing.T) {
 	root := t.TempDir()
 	ctx := context.Background()
 	stalePatch := IndexPatch{
 		SchemaVersion: 1,
 		Phase:         PhaseAST,
-		Project:       store.ProjectIdentity{Root: root, Name: "media"},
+		Project:       store.ProjectIdentity{Root: root, Name: "eval-placement"},
 		FinishedAt:    "2026-07-12T00:00:01Z",
 		Status:        "ok",
 		Invalidates:   &IndexPatchInvalidation{All: true},
 		Facts: IndexPatchFacts{Definitions: []store.ProjectDefinition{
-			{ID: "media.operation:stale", Kind: "media.operation", Name: "stale", Fidelity: "resolved", Status: "active"},
+			{ID: "eval:placement", Kind: "eval", Name: "placement", Fidelity: "resolved", Status: "active", Metadata: json.RawMessage(`{"requiredHostCapabilities":[]}`)},
 		}},
 	}
 	if err := NewSQLiteIndexFactStore().CommitPhase(ctx, FactTransactionFromPatch(stalePatch)); err != nil {
-		t.Fatalf("seed epoch 37 store before downgrade: %v", err)
+		t.Fatalf("seed epoch 41 store before downgrade: %v", err)
 	}
 
 	currentDir := filepath.Dir(projectIndexFactStoreDBFile(root))
-	staleDir := filepath.Join(root, ".crux", "cache", "index-v2", "epoch-36")
+	staleDir := filepath.Join(root, ".crux", "cache", "index-v2", "epoch-40")
 	if err := os.Rename(currentDir, staleDir); err != nil {
-		t.Fatalf("move seeded cache to epoch 36: %v", err)
+		t.Fatalf("move seeded cache to epoch 40: %v", err)
 	}
 	staleDB := filepath.Join(staleDir, "index.db")
 
 	facts := NewSQLiteIndexFactStore()
-	if index, ok, err := facts.LoadSnapshot(ctx, root, "media", time.Now()); err != nil {
-		t.Fatalf("restart load with only epoch 36: %v", err)
+	if index, ok, err := facts.LoadSnapshot(ctx, root, "eval-placement", time.Now()); err != nil {
+		t.Fatalf("restart load with only epoch 40: %v", err)
 	} else if ok {
-		t.Fatalf("restart loaded stale epoch 36 snapshot: %+v", index.Definitions)
+		t.Fatalf("restart loaded stale epoch 40 Eval facts: %+v", index.Definitions)
 	}
 
 	freshPatch := stalePatch
 	freshPatch.FinishedAt = "2026-07-12T00:01:01Z"
 	freshPatch.Facts.Definitions = []store.ProjectDefinition{
-		{ID: "media.operation:fresh", Kind: "media.operation", Name: "fresh", Fidelity: "resolved", Status: "active"},
+		{ID: "eval:placement", Kind: "eval", Name: "placement", Fidelity: "resolved", Status: "active", Metadata: json.RawMessage(`{"requiredHostCapabilities":["record-store"],"evalExecutionArms":[{"name":"current","execution":"coordinator","requiredHostCapabilities":[]},{"name":"remote","execution":"runtime","requiredHostCapabilities":["record-store"]}]}`)},
 	}
 	if err := facts.CommitPhase(ctx, FactTransactionFromPatch(freshPatch)); err != nil {
-		t.Fatalf("reindex into epoch 37: %v", err)
+		t.Fatalf("reindex into epoch 41: %v", err)
 	}
 
-	reloaded, ok, err := NewSQLiteIndexFactStore().LoadSnapshot(ctx, root, "media", time.Now())
+	reloaded, ok, err := NewSQLiteIndexFactStore().LoadSnapshot(ctx, root, "eval-placement", time.Now())
 	if err != nil {
-		t.Fatalf("reload epoch 37 after reindex: %v", err)
+		t.Fatalf("reload epoch 41 after reindex: %v", err)
 	}
-	if !ok || findTestDefinition(reloaded.Definitions, "media.operation:fresh") == nil {
-		t.Fatalf("reloaded definitions = %+v, want fresh epoch 37 fact", reloaded.Definitions)
-	}
-	if findTestDefinition(reloaded.Definitions, "media.operation:stale") != nil {
-		t.Fatalf("reloaded stale epoch 36 fact: %+v", reloaded.Definitions)
+	fresh := findTestDefinition(reloaded.Definitions, "eval:placement")
+	if !ok || fresh == nil || !bytes.Contains(fresh.Metadata, []byte(`"evalExecutionArms"`)) {
+		t.Fatalf("reloaded definitions = %+v, want fresh epoch 41 Eval arm facts", reloaded.Definitions)
 	}
 	if _, err := os.Stat(staleDB); err != nil {
-		t.Fatalf("epoch 36 cache was deleted during migration: %v", err)
+		t.Fatalf("epoch 40 cache was deleted during migration: %v", err)
 	}
 }
 

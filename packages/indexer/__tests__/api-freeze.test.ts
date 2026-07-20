@@ -27,6 +27,7 @@ describe('API freeze guardrails', () => {
       'manifestFromDefinitions',
       'runRuntimeOperation',
       'runSetupOperation',
+      'runSetupPlanningOperation',
       'resolveProjectModel',
       'inspectProjectConfig',
       'createProjectIndexDeploymentManifest',

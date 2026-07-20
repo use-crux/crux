@@ -4,6 +4,7 @@ import type { EvalRequiredHostCapability } from "../../../src/eval/internal/task
 import {
   createDeployedEvalRegistry,
   fingerprintDeployedEvalCase,
+  projectEvalExecutionArms,
   projectDeployedEvalVariants,
 } from "../../../src/runtime/eval-registry";
 import { CRUX_EVAL_HOST_PROTOCOL } from "../../../src/runtime/eval-host";
@@ -15,53 +16,58 @@ import {
 
 export const TOKEN = "eval-execute-capability-token-32-bytes";
 export const NOW = new Date("2026-07-16T18:00:00.000Z");
+export const HOST_CAPABILITIES = ["asset-store"] as const;
 
 export function fixtureRegistry(
   execute: (input: unknown) => Promise<{ output: unknown }> = async (
     input,
   ) => ({ output: input }),
-  requiredHostCapabilities: readonly EvalRequiredHostCapability[] = [],
+  requiredHostCapabilities: readonly EvalRequiredHostCapability[] = HOST_CAPABILITIES,
   operation: "generate" | "stream" = "generate",
   redactPaths: readonly string[] = [],
+  alphaHostCapabilities?: readonly EvalRequiredHostCapability[],
 ) {
-  const task = attachEvalTaskDescriptorForInternalUse(
-    async (input: { message: string }) => input.message,
-    {
-      _tag: "CruxEvalTaskDescriptor",
-      operation,
-      adapterId: "ai-sdk",
-      capabilities: [],
-      requiredHostCapabilities,
-      defaults: { prompt: "refund policy" },
-      overrideKeys: ["temperature"],
-      projectIdentity: () => ({
-        reusable: true,
-        fingerprintMaterial: { adapter: "fixture-v1" },
-      }),
-      execute,
-      projectOutput: (result) => result.output,
-      projectResponse: (result) => ({
-        runId: createCruxRunId(),
-        _meta: {
-          traceId: createCruxTraceId(),
-          spanId: createCruxSpanId(),
-        },
-        content: [],
-        text: responseText(result.output),
-        steps: [],
-        finalStep: {
+  const fixtureTask = (capabilities: readonly EvalRequiredHostCapability[]) =>
+    attachEvalTaskDescriptorForInternalUse(
+      async (input: { message: string }) => input.message,
+      {
+        _tag: "CruxEvalTaskDescriptor",
+        operation,
+        adapterId: "ai-sdk",
+        capabilities: [],
+        requiredHostCapabilities: capabilities,
+        callContractFingerprint: "fixture-call-v1",
+        defaults: { prompt: "refund policy" },
+        overrideKeys: ["temperature"],
+        projectIdentity: () => ({
+          reusable: true,
+          fingerprintMaterial: { adapter: "fixture-v1" },
+        }),
+        execute,
+        projectOutput: (result) => result.output,
+        projectResponse: (result) => ({
+          runId: createCruxRunId(),
+          _meta: {
+            traceId: createCruxTraceId(),
+            spanId: createCruxSpanId(),
+          },
           content: [],
           text: responseText(result.output),
-          finishReason: "stop",
-          responseId: "response-1",
-          modelId: "fixture",
+          steps: [],
+          finalStep: {
+            content: [],
+            text: responseText(result.output),
+            finishReason: "stop",
+            responseId: "response-1",
+            modelId: "fixture",
+            warnings: [],
+          },
+          messages: [],
           warnings: [],
-        },
-        messages: [],
-        warnings: [],
-      }),
-    },
-  );
+        }),
+      },
+    );
+  const task = fixtureTask(requiredHostCapabilities);
   const authored = {
     id: "refund",
     input: { message: "Can I get a refund?" },
@@ -76,9 +82,17 @@ export function fixtureRegistry(
     cases: [authored, account],
     variants: {
       zeta: { temperature: 1 },
-      alpha: { temperature: 0 },
+      alpha: {
+        temperature: 0,
+        ...(alphaHostCapabilities
+          ? { task: fixtureTask(alphaHostCapabilities) }
+          : {}),
+      },
     },
   });
+  const allRequiredHostCapabilities = [
+    ...new Set([...requiredHostCapabilities, ...(alphaHostCapabilities ?? [])]),
+  ].sort();
   return createDeployedEvalRegistry({
     persistencePolicy: { redactPaths },
     entries: [
@@ -100,11 +114,21 @@ export function fixtureRegistry(
           },
         ],
         variants: projectDeployedEvalVariants(evalValue),
-        requiredHostCapabilities,
+        runtimeArms: projectEvalExecutionArms(evalValue).flatMap((arm) =>
+          arm.status === "ready" && arm.execution === "runtime"
+            ? [
+                {
+                  name: arm.name,
+                  requiredHostCapabilities: arm.requiredHostCapabilities,
+                },
+              ]
+            : [],
+        ),
+        requiredHostCapabilities: allRequiredHostCapabilities,
         index: {
           id: "support",
           source: "evals/support.eval.ts",
-          requiredHostCapabilities,
+          requiredHostCapabilities: allRequiredHostCapabilities,
         },
       },
     ],

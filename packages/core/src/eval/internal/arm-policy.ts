@@ -35,33 +35,50 @@ export function resolveEvalArms(
             (arm) => arm.name === "current" || arm.name === selector,
           );
   return Object.freeze(
-    declarations.map((declaration) => {
-      const authored = definition.variants[declaration.name] ?? EMPTY_OVERRIDES;
-      validateVariant(definition.task, declaration.name, authored);
-      const task = authored.task ?? definition.task;
-      const { task: _task, ...adapterOverrides } = authored;
-      const overrides = Object.freeze(adapterOverrides);
-      return Object.freeze({
-        name: declaration.name,
-        task,
-        overrides,
-        overrideKeys: declaration.overrideKeys,
-        fingerprint: armFingerprint(
-          definition.explicitId ?? "(path-derived)",
-          declaration.name,
-          declaration.overrideKeys,
-          task,
-          overrides,
-          authored.task !== undefined,
-        ),
-        blocking:
-          declaration.name === "current" || declaration.name === selector,
-      });
-    }),
+    declarations.map((declaration) =>
+      resolveEvalArmForInternalUse(
+        definition,
+        declaration.name,
+        declaration.name === "current" || declaration.name === selector,
+      ),
+    ),
   );
 }
 
-function validateVariant(
+/** Resolve one arm without requiring sibling arms to be valid. @internal */
+export function resolveEvalArmForInternalUse(
+  definition: EvalDefinitionV1,
+  name: string,
+  blocking = false,
+): EvalPlannedArm {
+  const declaration = definition.arms.find((arm) => arm.name === name);
+  if (declaration === undefined) {
+    throw new TypeError(`planEval(): unknown Variant selector '${name}'.`);
+  }
+  const authored = definition.variants[name] ?? EMPTY_OVERRIDES;
+  validateEvalVariantForInternalUse(definition.task, name, authored);
+  const task = authored.task ?? definition.task;
+  const { task: _task, ...adapterOverrides } = authored;
+  const overrides = Object.freeze(adapterOverrides);
+  return Object.freeze({
+    name,
+    task,
+    overrides,
+    overrideKeys: declaration.overrideKeys,
+    fingerprint: armFingerprint(
+      definition.explicitId ?? "(path-derived)",
+      name,
+      declaration.overrideKeys,
+      task,
+      overrides,
+      authored.task !== undefined,
+    ),
+    blocking,
+  });
+}
+
+/** Validate one raw Variant without resolving or fingerprinting its arm. @internal */
+export function validateEvalVariantForInternalUse(
   baseTask: unknown,
   name: string,
   authored: Readonly<Record<string, unknown>>,

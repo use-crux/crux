@@ -7,6 +7,7 @@ import {
 import {
   authorizedRequest,
   fixtureRegistry,
+  HOST_CAPABILITIES,
   jobBody,
   NOW,
   pollUntilTerminal,
@@ -17,10 +18,12 @@ import { fingerprintEvalValue } from "../../../src/eval/internal/identity";
 
 describe("memory Eval host", () => {
   it("returns the authenticated, sorted deployed manifest without source content", async () => {
+    const registry = fixtureRegistry();
     const host = createMemoryEvalHost({
       deploymentId: "production-eu",
       token: TOKEN,
-      registry: fixtureRegistry(),
+      registry,
+      hostCapabilities: HOST_CAPABILITIES,
       now: () => NOW,
     });
     expect(
@@ -30,30 +33,34 @@ describe("memory Eval host", () => {
     const response = await host.fetch(authorizedRequest("/manifest"));
     expect(response.status).toBe(200);
     const raw = await response.clone().text();
-    await expect(response.json()).resolves.toEqual({
+    const entry = registry.entries[0]!;
+    const expected = {
       protocol: CRUX_EVAL_HOST_PROTOCOL,
       deploymentId: "production-eu",
       hostKind: "memory",
-      privacyFingerprint: expect.stringMatching(/^[a-f0-9]{64}$/),
-      capabilities: ["result-ref"],
+      privacyFingerprint: registry.privacyFingerprint,
+      capabilities: ["asset-store", "result-ref"],
       resultMaxBytes: 1024 * 1024,
       evals: [
         {
-          id: "support",
-          evalFingerprint: "eval-support-v1",
-          cases: {
-            account: expect.stringMatching(/^[a-f0-9]{64}$/),
-            refund: expect.stringMatching(/^[a-f0-9]{64}$/),
-          },
-          variants: {
-            alpha: expect.stringMatching(/^[a-f0-9]{64}$/),
-            current: expect.stringMatching(/^[a-f0-9]{64}$/),
-            zeta: expect.stringMatching(/^[a-f0-9]{64}$/),
-          },
-          requiredHostCapabilities: [],
+          id: entry.id,
+          evalFingerprint: entry.evalFingerprint,
+          cases: Object.fromEntries(
+            entry.cases
+              .map((item) => [item.id, item.fingerprint] as const)
+              .sort(([left], [right]) => left.localeCompare(right)),
+          ),
+          variants: Object.fromEntries(
+            entry.variants
+              .map((item) => [item.name, item.fingerprint] as const)
+              .sort(([left], [right]) => left.localeCompare(right)),
+          ),
+          requiredHostCapabilities: ["asset-store"],
         },
       ],
-    });
+    };
+    await expect(response.json()).resolves.toEqual(expected);
+    expect(raw).toBe(JSON.stringify(expected));
     expect(raw).not.toContain("refund policy");
     expect(raw).not.toContain("redactPaths");
   });
@@ -63,7 +70,7 @@ describe("memory Eval host", () => {
       async () => ({
         output: { customer: { email: "private@example.test" } },
       }),
-      [],
+      HOST_CAPABILITIES,
       "generate",
       ["customer.email"],
     );
@@ -71,6 +78,7 @@ describe("memory Eval host", () => {
       deploymentId: "production-eu",
       token: TOKEN,
       registry,
+      hostCapabilities: HOST_CAPABILITIES,
       now: () => NOW,
     });
     const body = jobBody(registry);
@@ -97,11 +105,12 @@ describe("memory Eval host", () => {
       await gate;
       return { output: input };
     });
-    const registry = fixtureRegistry(execute, [], "stream");
+    const registry = fixtureRegistry(execute, HOST_CAPABILITIES, "stream");
     const host = createMemoryEvalHost({
       deploymentId: "production-eu",
       token: TOKEN,
       registry,
+      hostCapabilities: HOST_CAPABILITIES,
       now: () => NOW,
     });
     const body = jobBody(registry);
@@ -165,6 +174,7 @@ describe("memory Eval host", () => {
       deploymentId: "production-eu",
       token: TOKEN,
       registry,
+      hostCapabilities: HOST_CAPABILITIES,
       now: () => NOW,
     });
     const body = jobBody(registry);
@@ -194,6 +204,7 @@ describe("memory Eval host", () => {
       deploymentId: "production-eu",
       token: TOKEN,
       registry,
+      hostCapabilities: HOST_CAPABILITIES,
       now: () => NOW,
     });
     const client = createEvalHostClient({

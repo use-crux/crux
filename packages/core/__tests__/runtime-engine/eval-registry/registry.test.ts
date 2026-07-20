@@ -17,6 +17,7 @@ function managedTask() {
       operation: "generate",
       adapterId: "ai-sdk",
       capabilities: [],
+      requiredHostCapabilities: ["asset-store"],
       defaults: {},
       overrideKeys: ["temperature"],
       projectIdentity: () => ({ reusable: true, fingerprintMaterial: {} }),
@@ -27,7 +28,89 @@ function managedTask() {
   );
 }
 
+function hostedTask() {
+  return attachEvalTaskDescriptorForInternalUse(
+    async (input: { message: string }) => input.message,
+    {
+      _tag: "CruxEvalTaskDescriptor",
+      operation: "generate",
+      adapterId: "ai-sdk",
+      capabilities: [],
+      requiredHostCapabilities: ["asset-store"],
+      defaults: {},
+      overrideKeys: [],
+      projectIdentity: () => ({
+        reusable: true,
+        fingerprintMaterial: { task: "hosted" },
+      }),
+      execute: async (input) => ({ output: input }),
+      projectOutput: (result) => result.output,
+      projectResponse: (result) => ({ output: result.output }),
+    },
+  );
+}
+
 describe("deployed Eval registry", () => {
+  it("advertises every arm identity but resolves only runtime arms", () => {
+    const evalValue = evaluate({
+      id: "mixed",
+      task: async (input: { message: string }) => input.message,
+      cases: [{ id: "case", input: { message: "hello" } }],
+      variants: { hosted: { task: hostedTask() } } as never,
+    });
+    const authored = { id: "case", input: { message: "hello" } } as const;
+    const variants = projectDeployedEvalVariants(evalValue);
+    const registry = createDeployedEvalRegistry({
+      entries: [
+        {
+          eval: evalValue,
+          id: "mixed",
+          source: "evals/mixed.eval.ts",
+          evalFingerprint: "eval",
+          cases: [
+            {
+              id: "case",
+              fingerprint: fingerprintDeployedEvalCase("case", authored),
+              authored,
+            },
+          ],
+          variants,
+          runtimeArms: [
+            { name: "hosted", requiredHostCapabilities: ["asset-store"] },
+          ],
+          requiredHostCapabilities: ["asset-store"],
+          index: {
+            id: "mixed",
+            source: "evals/mixed.eval.ts",
+            requiredHostCapabilities: ["asset-store"],
+          },
+        },
+      ],
+    });
+    const request = {
+      evalId: "mixed",
+      evalFingerprint: "eval",
+      caseId: "case",
+      caseFingerprint: fingerprintDeployedEvalCase("case", authored),
+    };
+
+    expect(registry.entries[0]?.variants).toHaveLength(2);
+    expect(() =>
+      resolveDeployedEval(registry, {
+        ...request,
+        variant: "current",
+        variantFingerprint: variants[0]!.fingerprint,
+      }),
+    ).toThrowError(expect.objectContaining({ code: "variant_missing" }));
+    expect(
+      resolveDeployedEval(registry, {
+        ...request,
+        variant: "hosted",
+        variantFingerprint: variants[1]!.fingerprint,
+      }).variant.name,
+    ).toBe("hosted");
+  });
+
   it("resolves one exact Eval, Case, and Variant tuple", () => {
     const task = managedTask();
     const evalValue = evaluate({
@@ -52,11 +135,15 @@ describe("deployed Eval registry", () => {
             },
           ],
           variants: projectDeployedEvalVariants(evalValue),
-          requiredHostCapabilities: [],
+          runtimeArms: [
+            { name: "current", requiredHostCapabilities: ["asset-store"] },
+            { name: "concise", requiredHostCapabilities: ["asset-store"] },
+          ],
+          requiredHostCapabilities: ["asset-store"],
           index: {
             id: "support",
             source: "evals/support.eval.ts",
-            requiredHostCapabilities: [],
+            requiredHostCapabilities: ["asset-store"],
           },
         },
       ],
@@ -89,6 +176,7 @@ describe("deployed Eval registry", () => {
       operation: "generate",
       adapterId: "ai-sdk",
       capabilities: [],
+      requiredHostCapabilities: ["asset-store"],
       defaults: {},
       overrideKeys: [],
       projectIdentity: () => ({ reusable: true, fingerprintMaterial: {} }),
@@ -117,11 +205,14 @@ describe("deployed Eval registry", () => {
             },
           ],
           variants: projectDeployedEvalVariants(evalValue),
-          requiredHostCapabilities: [],
+          runtimeArms: [
+            { name: "current", requiredHostCapabilities: ["asset-store"] },
+          ],
+          requiredHostCapabilities: ["asset-store"],
           index: {
             id: "support",
             source: "evals/support.eval.ts",
-            requiredHostCapabilities: [],
+            requiredHostCapabilities: ["asset-store"],
           },
         },
       ],
@@ -164,6 +255,7 @@ describe("deployed Eval registry", () => {
               },
             ],
             variants: [{ name: "current", fingerprint: "current" }],
+            runtimeArms: [],
             requiredHostCapabilities: ["asset-store"],
             index: {
               id: "support",
@@ -185,6 +277,7 @@ describe("deployed Eval registry", () => {
         operation: "generate",
         adapterId: "ai-sdk",
         capabilities: [],
+        requiredHostCapabilities: ["asset-store"],
         defaults: {},
         overrideKeys: [],
         projectIdentity: () => ({ reusable: true, fingerprintMaterial: {} }),
@@ -211,11 +304,14 @@ describe("deployed Eval registry", () => {
           evalFingerprint: "eval",
           cases: [{ id: "refund", fingerprint: caseFingerprint, authored }],
           variants: projectDeployedEvalVariants(evalValue),
-          requiredHostCapabilities: [],
+          runtimeArms: [
+            { name: "current", requiredHostCapabilities: ["asset-store"] },
+          ],
+          requiredHostCapabilities: ["asset-store"],
           index: {
             id: "support",
             source: "evals/support.eval.ts",
-            requiredHostCapabilities: [],
+            requiredHostCapabilities: ["asset-store"],
           },
         },
       ],

@@ -12,9 +12,10 @@ import (
 
 	"github.com/use-crux/crux/packages/local/internal/devtools"
 	"github.com/use-crux/crux/packages/local/internal/inspect"
+	"github.com/use-crux/crux/packages/local/internal/lifecycle"
 	"github.com/use-crux/crux/packages/local/internal/observability"
-	"github.com/use-crux/crux/packages/local/internal/privacy"
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
+	"github.com/use-crux/crux/packages/local/internal/startup"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
@@ -35,10 +36,13 @@ type DevServer struct {
 	httpServer            *http.Server
 	webSocketHub          *WSHub
 	closeRuntimeArtifacts func() error
+	runtimeArtifacts      RuntimeArtifactGenerator
+	projectRoot           string
 	startTunnel           func(context.Context, *slog.Logger) (*TunnelResult, error)
 	logger                *slog.Logger
 	shutdown              devServerShutdown
 	workers               *devServerWorkers
+	startup               *startup.Journal
 	// token gates the server whenever it is reachable beyond loopback (tunnel
 	// or CRUX_HOST). Empty on a plain loopback server, where no auth is needed.
 	token string
@@ -61,6 +65,8 @@ type DevServerOptions struct {
 	IngestTokenPath      string
 	RuntimeArtifacts     RuntimeArtifactGenerator
 	ProjectIndexer       projectindex.ProjectIndexer
+	StartupJournal       *startup.Journal
+	SessionWorkers       *lifecycle.Group
 	// Logger receives server and owned-worker lifecycle diagnostics. It defaults
 	// to slog.Default when omitted and is scoped to this server instance.
 	Logger *slog.Logger
@@ -97,7 +103,10 @@ func NewDevServer(opts DevServerOptions) *DevServer {
 		parentCtx = context.Background()
 	}
 	ctx, cancel := context.WithCancel(parentCtx)
-	workers := &devServerWorkers{}
+	workers := opts.SessionWorkers
+	if workers == nil {
+		workers = &devServerWorkers{}
+	}
 	serverOpts := ServerOptions{
 		SourceResolverScript: opts.SourceResolverScript,
 		ProjectIndexerScript: opts.ProjectIndexerScript,
@@ -138,20 +147,6 @@ func NewDevServer(opts DevServerOptions) *DevServer {
 	}
 	serverOpts.ObservabilityService = observabilitySvc
 	handler := NewHTTPServerWithServicesContext(ctx, devtoolsSvc, serverOpts)
-	if serverOpts.ProjectRoot != "" {
-		if err := privacy.InvalidateGenerated(serverOpts.ProjectRoot); err != nil {
-			logger.Warn("privacy policy invalidation failed", "error", err)
-		}
-		index, err := devtoolsSvc.ReindexProjectWithOptions(ctx, serverOpts.ProjectRoot, "", "", devtools.ProjectReindexOptions{
-			Semantic: devtools.ProjectSemanticBackground,
-		})
-		if err != nil {
-			logger.Warn("project index startup reindex failed", "error", err)
-		} else if err := runtimeArtifacts(ctx, serverOpts.ProjectRoot, index.Definitions); err != nil {
-			logger.Warn("runtime artifact startup generation failed", "error", err)
-		}
-	}
-
 	// Gate only a non-loopback listener. Loopback remains auth-free; exposed
 	// and tunneled servers require the session token carried by their URL.
 	host := listenHost()
@@ -191,14 +186,12 @@ func NewDevServer(opts DevServerOptions) *DevServer {
 		},
 		webSocketHub:          webSocketHub,
 		closeRuntimeArtifacts: closeRuntimeArtifacts,
+		runtimeArtifacts:      runtimeArtifacts,
+		projectRoot:           serverOpts.ProjectRoot,
 		startTunnel:           startNgrokTunnel,
 		logger:                logger,
 		workers:               workers,
-	}
-	if serverOpts.ProjectRoot != "" {
-		devServer.workers.Go(func() {
-			startProjectIndexWatcher(ctx, logger, serverOpts.ProjectRoot, devtoolsSvc, runtimeArtifacts)
-		})
+		startup:               opts.StartupJournal,
 	}
 	return devServer
 }
@@ -210,12 +203,21 @@ func (d *DevServer) Start() error {
 		return fmt.Errorf("listen on port %d: %w", d.Port, err)
 	}
 
-	d.workers.Go(func() {
+	if !d.workers.Go(func() {
 		d.logger.Info("devtools server started", "port", d.Port)
 		if err := d.httpServer.Serve(ln); err != nil && err != http.ErrServerClosed {
 			d.logger.Error("server error", "error", err)
 		}
-	})
+	}) {
+		_ = ln.Close()
+		return fmt.Errorf("start devtools server: server is shutting down")
+	}
+	if d.projectRoot != "" {
+		if !d.workers.Go(d.runProjectIndexLifecycle) {
+			_ = d.httpServer.Close()
+			return fmt.Errorf("start devtools server warmup: server is shutting down")
+		}
+	}
 
 	return nil
 }

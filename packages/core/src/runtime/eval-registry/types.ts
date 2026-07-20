@@ -17,6 +17,12 @@ export interface DeployedEvalVariant {
   readonly fingerprint: string;
 }
 
+/** One arm admitted for deployed execution and its exact host requirements. */
+export interface DeployedEvalRuntimeArm {
+  readonly name: string;
+  readonly requiredHostCapabilities: readonly string[];
+}
+
 /** Project Index evidence used only to corroborate generated source facts. */
 export interface DeployedEvalIndexFacts {
   readonly id: string;
@@ -32,6 +38,7 @@ export interface DeployedEvalRegistryEntryInput {
   readonly evalFingerprint: string;
   readonly cases: readonly DeployedEvalCase[];
   readonly variants: readonly DeployedEvalVariant[];
+  readonly runtimeArms: readonly DeployedEvalRuntimeArm[];
   readonly requiredHostCapabilities: readonly string[];
   readonly index: DeployedEvalIndexFacts;
 }
@@ -74,4 +81,5 @@ export interface ResolvedDeployedEval {
   readonly entry: DeployedEvalRegistryEntry;
   readonly case: DeployedEvalCase;
   readonly variant: EvalPlannedArm;
+  readonly requiredHostCapabilities: readonly string[];
 }

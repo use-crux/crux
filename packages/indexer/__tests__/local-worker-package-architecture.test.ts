@@ -201,6 +201,20 @@ describe("local worker package architecture", () => {
         { mode: 0o755 },
       );
       writeFileSync(
+        join(wrapperDir, "bin", "child-exit-status.cjs"),
+        readFileSync(
+          join(
+            repoRoot,
+            "packages",
+            "local",
+            "npm",
+            "local",
+            "bin",
+            "child-exit-status.cjs",
+          ),
+        ),
+      );
+      writeFileSync(
         join(platformDir, "bin", "crux"),
         '#!/bin/sh\necho "Crux help"\n',
         {

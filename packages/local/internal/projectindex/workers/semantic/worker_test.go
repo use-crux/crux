@@ -23,7 +23,7 @@ func TestWorker_semanticPatchUsesDedicatedStreamProtocol(t *testing.T) {
 		process.stdin.setEncoding('utf8')
 		process.stdin.once('data', (chunk) => {
 			const req = JSON.parse(chunk.trim())
-			if (req.method !== 'indexProjectSemantic' || req.protocolVersion !== 2) {
+			if (req.method !== 'indexProjectSemantic' || req.protocolVersion !== 2 || req.cacheDisabled !== true) {
 				process.stdout.write(JSON.stringify({
 					protocolVersion: 2,
 					type: 'phase:error',
@@ -88,7 +88,7 @@ func TestWorker_semanticPatchUsesDedicatedStreamProtocol(t *testing.T) {
 	defer worker.Close()
 
 	patch, err := worker.IndexProjectSemanticPatch(
-		context.Background(),
+		projectindex.WithoutCache(context.Background()),
 		projectindex.ProjectSemanticIndexRequest{
 			Root:        t.TempDir(),
 			ProjectName: "semantic-project",

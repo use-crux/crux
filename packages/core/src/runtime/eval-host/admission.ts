@@ -43,7 +43,7 @@ export async function submitEvalJob(
     );
     const resolved = resolveDeployedEval(context.registry, job);
     if (
-      resolved.entry.requiredHostCapabilities.some(
+      resolved.requiredHostCapabilities.some(
         (capability) => !context.hostCapabilities.includes(capability),
       )
     ) {

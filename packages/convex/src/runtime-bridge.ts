@@ -18,7 +18,7 @@ import {
   type RuntimeHostBinder,
 } from '@use-crux/core/runtime'
 import type { RecordStore, Storage } from '@use-crux/core/storage'
-import { makeFunctionReference } from 'convex/server'
+import { makeFunctionReference, type PublicHttpAction } from 'convex/server'
 import { setup as setupBridge } from './bridge'
 import type {
   CruxConvexBridgeHttpRouter,
@@ -49,6 +49,7 @@ import type { ConvexCtxPort } from './store'
 import { flushObservability } from './observability'
 
 const DEFAULT_TARGET_EXECUTOR = '_crux/targets:executeTarget'
+const DEFAULT_EVAL_HTTP_HANDLER = '_crux/targets:handleEvalRequest'
 
 /** HTTP bridge options accepted by `ConvexRuntimeBridge.bridge()`. */
 export type ConvexRuntimeBridgeSetupOptions = Omit<
@@ -245,8 +246,19 @@ export function createConvexRuntimeBridge<
           return storageForCtx(ctx as TCtx)
         },
       })
+      registerEvalHttpRoutes(http)
     },
   })
+}
+
+function registerEvalHttpRoutes(http: CruxConvexBridgeHttpRouter): void {
+  const handler = makeFunctionReference<'action'>(
+    DEFAULT_EVAL_HTTP_HANDLER,
+  ) as unknown as PublicHttpAction
+  http.route({ path: '/manifest', method: 'GET', handler })
+  http.route({ path: '/jobs', method: 'POST', handler })
+  http.route({ pathPrefix: '/jobs/', method: 'GET', handler })
+  http.route({ pathPrefix: '/jobs/', method: 'DELETE', handler })
 }
 
 function defaultTargetExecutor(): unknown {

@@ -3,6 +3,7 @@ import { createMemoryEvalHost } from "../../../src/runtime/eval-host";
 import {
   authorizedRequest,
   fixtureRegistry,
+  HOST_CAPABILITIES,
   jobBody,
   NOW,
   pollUntilTerminal,
@@ -18,6 +19,7 @@ describe("memory Eval host conformance", () => {
       deploymentId: "production-eu",
       token: TOKEN,
       registry,
+      hostCapabilities: HOST_CAPABILITIES,
       now: () => NOW,
     });
     const valid = jobBody(registry);
@@ -51,6 +53,7 @@ describe("memory Eval host conformance", () => {
       deploymentId: "production-eu",
       token: TOKEN,
       registry,
+      hostCapabilities: HOST_CAPABILITIES,
       now: () => NOW,
     });
     const valid = jobBody(registry);
@@ -102,6 +105,49 @@ describe("memory Eval host conformance", () => {
     ).resolves.toEqual([]);
   });
 
+  it("admits against the selected arm instead of the Eval-wide capability union", async () => {
+    const execute = vi.fn(async (input: unknown) => ({ output: input }));
+    const registry = fixtureRegistry(
+      execute,
+      ["asset-store"],
+      "generate",
+      [],
+      ["record-store"],
+    );
+    const host = createMemoryEvalHost({
+      deploymentId: "production-eu",
+      token: TOKEN,
+      registry,
+      hostCapabilities: ["record-store"],
+      now: () => NOW,
+    });
+    const current = jobBody(registry);
+    const rejected = await host.fetch(
+      authorizedRequest("/jobs", post(current)),
+    );
+    expect(rejected.status).toBe(409);
+
+    const alpha = registry.entries[0]!.variants.find(
+      (variant) => variant.name === "alpha",
+    )!;
+    const accepted = await host.fetch(
+      authorizedRequest(
+        "/jobs",
+        post({
+          ...current,
+          jobId: "job-support-refund-alpha-0",
+          variant: alpha.name,
+          variantFingerprint: alpha.fingerprint,
+        }),
+      ),
+    );
+    expect(accepted.status).toBe(202);
+    await expect(
+      pollUntilTerminal(host, "job-support-refund-alpha-0"),
+    ).resolves.toMatchObject({ status: "succeeded" });
+    expect(execute).toHaveBeenCalledOnce();
+  });
+
   it("redacts task failures and rejects oversized normalized results", async () => {
     const failing = fixtureRegistry(async () => {
       throw new Error("secret-provider-key");
@@ -110,6 +156,7 @@ describe("memory Eval host conformance", () => {
       deploymentId: "production-eu",
       token: TOKEN,
       registry: failing,
+      hostCapabilities: HOST_CAPABILITIES,
       now: () => NOW,
     });
     const failedBody = jobBody(failing);
@@ -132,6 +179,7 @@ describe("memory Eval host conformance", () => {
       deploymentId: "production-eu",
       token: TOKEN,
       registry: oversized,
+      hostCapabilities: HOST_CAPABILITIES,
       now: () => NOW,
     });
     const oversizedBody = jobBody(oversized);
@@ -163,6 +211,7 @@ describe("memory Eval host conformance", () => {
       deploymentId: "production-eu",
       token: TOKEN,
       registry,
+      hostCapabilities: HOST_CAPABILITIES,
       now: () => NOW,
     });
     const body = jobBody(registry);

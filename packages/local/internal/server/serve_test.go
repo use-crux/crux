@@ -11,13 +11,339 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/observability"
 	"github.com/use-crux/crux/packages/local/internal/privacy"
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/eventwire"
+	"github.com/use-crux/crux/packages/local/internal/startup"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
+
+func TestNewDevServerDoesNotWaitForInitialRuntimeArtifacts(t *testing.T) {
+	root := t.TempDir()
+	t.Chdir(root)
+	artifactsStarted := make(chan struct{})
+	releaseArtifacts := make(chan struct{})
+	opts := devServerTestOptions(t, findFreePort())
+	opts.ProjectIndexer = fakeProjectIndexer{}
+	opts.RuntimeArtifacts = func(context.Context, string, []store.ProjectDefinition) error {
+		close(artifactsStarted)
+		<-releaseArtifacts
+		return nil
+	}
+
+	serverReady := make(chan *DevServer, 1)
+	go func() { serverReady <- NewDevServer(opts) }()
+
+	select {
+	case srv := <-serverReady:
+		close(releaseArtifacts)
+		t.Cleanup(func() { _ = srv.Shutdown(context.Background()) })
+	case <-time.After(time.Second):
+		close(releaseArtifacts)
+		srv := <-serverReady
+		_ = srv.Shutdown(context.Background())
+		t.Fatal("NewDevServer waited for initial runtime artifacts")
+	}
+	select {
+	case <-artifactsStarted:
+		t.Fatal("initial runtime artifacts started during construction")
+	default:
+	}
+}
+
+func TestDevServerAppliesEditsCapturedDuringInitialProjectIndex(t *testing.T) {
+	root := t.TempDir()
+	t.Chdir(root)
+	source := filepath.Join(root, "prompt.ts")
+	if err := os.WriteFile(source, []byte("export const prompt = 1\n"), 0o644); err != nil {
+		t.Fatalf("write initial source: %v", err)
+	}
+	indexer := &blockingLifecycleProjectIndexer{
+		baselineStarted: make(chan struct{}),
+		releaseBaseline: make(chan struct{}),
+		incremental:     make(chan []string, 1),
+	}
+	opts := devServerTestOptions(t, findFreePort())
+	opts.ProjectIndexer = indexer
+	srv := NewDevServer(opts)
+	if err := srv.Start(); err != nil {
+		t.Fatalf("start server: %v", err)
+	}
+	t.Cleanup(func() { _ = srv.Shutdown(context.Background()) })
+
+	select {
+	case <-indexer.baselineStarted:
+	case <-time.After(time.Second):
+		t.Fatal("initial Project Index did not start")
+	}
+	if err := os.WriteFile(source, []byte("export const prompt = 2\n"), 0o644); err != nil {
+		t.Fatalf("edit source during initial Project Index: %v", err)
+	}
+	close(indexer.releaseBaseline)
+
+	select {
+	case files := <-indexer.incremental:
+		if len(files) != 1 || files[0] != source {
+			t.Fatalf("incremental files = %#v, want [%q]", files, source)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("edit captured during initial Project Index was not applied")
+	}
+}
+
+func TestDevServerRetriesFullIndexAfterInitialFailureAndBufferedEdit(t *testing.T) {
+	root := t.TempDir()
+	t.Chdir(root)
+	source := filepath.Join(root, "prompt.ts")
+	if err := os.WriteFile(source, []byte("export const prompt = 1\n"), 0o644); err != nil {
+		t.Fatalf("write initial source: %v", err)
+	}
+	indexer := &failingBaselineProjectIndexer{
+		baselineStarted: make(chan struct{}),
+		releaseBaseline: make(chan struct{}),
+		fullRetry:       make(chan struct{}),
+	}
+	opts := devServerTestOptions(t, findFreePort())
+	opts.ProjectIndexer = indexer
+	srv := NewDevServer(opts)
+	if err := srv.Start(); err != nil {
+		t.Fatalf("start server: %v", err)
+	}
+	t.Cleanup(func() { _ = srv.Shutdown(context.Background()) })
+
+	select {
+	case <-indexer.baselineStarted:
+	case <-time.After(time.Second):
+		t.Fatal("initial Project Index did not start")
+	}
+	if err := os.WriteFile(source, []byte("export const prompt = 2\n"), 0o644); err != nil {
+		t.Fatalf("edit source during initial Project Index: %v", err)
+	}
+	close(indexer.releaseBaseline)
+
+	select {
+	case <-indexer.fullRetry:
+	case <-time.After(2 * time.Second):
+		t.Fatal("buffered edit did not trigger a full retry after initial Project Index failure")
+	}
+	indexer.mu.Lock()
+	incrementalCalled := indexer.incrementalCalled
+	indexer.mu.Unlock()
+	if incrementalCalled {
+		t.Fatal("incremental Project Index ran without a successful baseline")
+	}
+}
+
+func TestDevServerRetriesFailedRuntimeArtifactsWithFreshIndexAfterNextEdit(t *testing.T) {
+	root := t.TempDir()
+	t.Chdir(root)
+	source := filepath.Join(root, "prompt.ts")
+	if err := os.WriteFile(source, []byte("export const prompt = 1\n"), 0o644); err != nil {
+		t.Fatalf("write initial source: %v", err)
+	}
+	indexer := &fakeIncrementalProjectIndexer{
+		fullIndex: store.IndexData{
+			Definitions: []store.ProjectDefinition{{ID: "prompt:baseline", Kind: "prompt", Name: "baseline"}},
+			Sources:     []store.IndexSourceFile{{File: source, Status: "indexed", ShardID: "."}},
+			SourceGraph: &store.ProjectIndexSourceGraph{
+				SchemaVersion: 1,
+				Capabilities:  []string{"project-shards"},
+				Shards:        []store.ProjectIndexShard{{ID: ".", Root: root}},
+			},
+		},
+		result: projectindex.ProjectIndexIncrementalResult{Patches: []projectindex.IndexPatch{{
+			SchemaVersion: 1,
+			Phase:         projectindex.PhaseAST,
+			Project:       store.ProjectIdentity{Root: root, Name: "project"},
+			Status:        "ok",
+			Invalidates:   &projectindex.IndexPatchInvalidation{All: true},
+			Facts: projectindex.IndexPatchFacts{
+				Definitions: []store.ProjectDefinition{{ID: "prompt:fresh", Kind: "prompt", Name: "fresh"}},
+				Sources:     []store.IndexSourceFile{{File: source, Status: "indexed", ShardID: "."}},
+			},
+		}}},
+	}
+	journal := startup.NewJournal([]startup.TaskSpec{
+		{ID: "project-index", Phase: "Indexing project"},
+		{ID: "runtime-artifacts", Phase: "Generating runtime artifacts"},
+	})
+	calls := make(chan string, 2)
+	callCount := 0
+	opts := devServerTestOptions(t, findFreePort())
+	opts.ProjectIndexer = indexer
+	opts.StartupJournal = journal
+	opts.RuntimeArtifacts = func(_ context.Context, _ string, definitions []store.ProjectDefinition) error {
+		callCount++
+		definitionID := ""
+		if len(definitions) > 0 {
+			definitionID = definitions[0].ID
+			var metadata struct {
+				RuntimeRich bool `json:"runtimeRich"`
+			}
+			if err := json.Unmarshal(definitions[0].Metadata, &metadata); err == nil && metadata.RuntimeRich {
+				definitionID += ":runtime-rich"
+			}
+		}
+		calls <- definitionID
+		if callCount == 1 {
+			return &eventwire.WorkerEventError{
+				Code: "RUNTIME_ARTIFACT_GENERATION_FAILED",
+				Findings: []eventwire.RuntimeArtifactFinding{{
+					Code: "RUNTIME_EVAL_INVALID", Category: "authored", Summary: "Eval source needs attention.", Reason: "The task is not callable.",
+				}},
+			}
+		}
+		return nil
+	}
+
+	srv := NewDevServer(opts)
+	if err := srv.Start(); err != nil {
+		t.Fatalf("start server: %v", err)
+	}
+	t.Cleanup(func() { _ = srv.Shutdown(context.Background()) })
+
+	select {
+	case got := <-calls:
+		if got != "prompt:baseline:runtime-rich" {
+			t.Fatalf("initial generation definition = %q, want runtime-rich baseline", got)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("initial runtime artifact generation did not run")
+	}
+
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	defer cancel()
+	snapshot, updates := journal.SnapshotAndSubscribe(ctx)
+	snapshot = awaitStartupTask(t, ctx, snapshot, updates, "runtime-artifacts", startup.Degraded)
+	if len(snapshot.Diagnostics) != 1 || len(snapshot.Diagnostics[0].Children) != 1 {
+		t.Fatalf("retained generation diagnostics = %#v, want aggregate and child", snapshot.Diagnostics)
+	}
+
+	if err := os.WriteFile(source, []byte("export const prompt = 2\n"), 0o644); err != nil {
+		t.Fatalf("write recovery edit: %v", err)
+	}
+	select {
+	case got := <-calls:
+		if got != "prompt:fresh:runtime-rich" {
+			t.Fatalf("retry generation definition = %q, want fresh runtime-rich incremental snapshot (incremental=%v runtime=%d files=%v)", got, indexer.calledIncrement, indexer.calledRuntime, indexer.files)
+		}
+	case <-ctx.Done():
+		t.Fatal("runtime artifact generation did not retry after the next edit")
+	}
+
+	snapshot = awaitStartupTask(t, ctx, snapshot, updates, "runtime-artifacts", startup.Succeeded)
+	if len(snapshot.Diagnostics) != 0 {
+		t.Fatalf("recovered generation diagnostics = %#v, want cleared", snapshot.Diagnostics)
+	}
+}
+
+func awaitStartupTask(
+	t *testing.T,
+	ctx context.Context,
+	snapshot startup.Snapshot,
+	updates <-chan startup.Snapshot,
+	taskID string,
+	want startup.Disposition,
+) startup.Snapshot {
+	t.Helper()
+	for {
+		for _, task := range snapshot.Tasks {
+			if task.ID == taskID && task.Disposition == want {
+				return snapshot
+			}
+		}
+		select {
+		case next := <-updates:
+			snapshot = next
+		case <-ctx.Done():
+			t.Fatalf("startup task %q did not reach %q", taskID, want)
+		}
+	}
+}
+
+type blockingLifecycleProjectIndexer struct {
+	baselineStarted chan struct{}
+	releaseBaseline chan struct{}
+	incremental     chan []string
+	baselineOnce    sync.Once
+}
+
+type failingBaselineProjectIndexer struct {
+	baselineStarted   chan struct{}
+	releaseBaseline   chan struct{}
+	fullRetry         chan struct{}
+	mu                sync.Mutex
+	fullCalls         int
+	incrementalCalled bool
+}
+
+func (i *failingBaselineProjectIndexer) IndexProjectAstPatch(ctx context.Context, root, _, _ string) (projectindex.IndexPatch, error) {
+	i.mu.Lock()
+	i.fullCalls++
+	call := i.fullCalls
+	i.mu.Unlock()
+	if call == 1 {
+		close(i.baselineStarted)
+		select {
+		case <-i.releaseBaseline:
+		case <-ctx.Done():
+			return projectindex.IndexPatch{}, ctx.Err()
+		}
+		return projectindex.IndexPatch{}, errors.New("initial index failed")
+	}
+	select {
+	case i.fullRetry <- struct{}{}:
+	default:
+	}
+	return projectindex.IndexPatch{
+		SchemaVersion: 1,
+		Phase:         projectindex.PhaseAST,
+		Project:       store.ProjectIdentity{Root: root, Name: "project"},
+		Status:        "ok",
+		Invalidates:   &projectindex.IndexPatchInvalidation{All: true},
+	}, nil
+}
+
+func (i *failingBaselineProjectIndexer) IndexProjectIncremental(context.Context, string, string, string, store.IndexData, []string, []string, string) (projectindex.ProjectIndexIncrementalResult, error) {
+	i.mu.Lock()
+	i.incrementalCalled = true
+	i.mu.Unlock()
+	return projectindex.ProjectIndexIncrementalResult{}, nil
+}
+
+func (i *blockingLifecycleProjectIndexer) IndexProjectAstPatch(ctx context.Context, root, _, _ string) (projectindex.IndexPatch, error) {
+	i.baselineOnce.Do(func() { close(i.baselineStarted) })
+	select {
+	case <-i.releaseBaseline:
+	case <-ctx.Done():
+		return projectindex.IndexPatch{}, ctx.Err()
+	}
+	return projectindex.IndexPatch{
+		SchemaVersion: 1,
+		Phase:         projectindex.PhaseAST,
+		Project:       store.ProjectIdentity{Root: root, Name: "project"},
+		Status:        "ok",
+		Invalidates:   &projectindex.IndexPatchInvalidation{All: true},
+		Facts: projectindex.IndexPatchFacts{
+			Sources: []store.IndexSourceFile{{File: filepath.Join(root, "prompt.ts"), Status: "indexed", ShardID: "."}},
+			SourceGraph: &store.ProjectIndexSourceGraph{
+				SchemaVersion: 1,
+				Capabilities:  []string{"project-shards"},
+				Shards:        []store.ProjectIndexShard{{ID: ".", Root: root}},
+			},
+		},
+	}, nil
+}
+
+func (i *blockingLifecycleProjectIndexer) IndexProjectIncremental(_ context.Context, _ string, _ string, _ string, _ store.IndexData, files, _ []string, _ string) (projectindex.ProjectIndexIncrementalResult, error) {
+	i.incremental <- append([]string(nil), files...)
+	return projectindex.ProjectIndexIncrementalResult{}, nil
+}
 
 func TestQuietDevServerDoesNotReplaceProcessLogger(t *testing.T) {
 	root := t.TempDir()
@@ -39,13 +365,14 @@ func TestQuietDevServerDoesNotReplaceProcessLogger(t *testing.T) {
 	slog.SetDefault(processLogger)
 	t.Cleanup(func() { slog.SetDefault(previous) })
 
-	serverReady := make(chan *DevServer, 1)
-	go func() { serverReady <- NewDevServer(opts) }()
+	srv := NewDevServer(opts)
+	if err := srv.Start(); err != nil {
+		t.Fatalf("start server: %v", err)
+	}
+	t.Cleanup(func() { _ = srv.Shutdown(context.Background()) })
 	<-started
 	slog.Info("concurrent process log")
 	close(finish)
-	srv := <-serverReady
-	t.Cleanup(func() { _ = srv.Shutdown(context.Background()) })
 
 	if slog.Default() != processLogger {
 		t.Fatal("quiet dev server replaced the process-global logger")
@@ -106,7 +433,7 @@ func devServerTestOptions(t *testing.T, port int) DevServerOptions {
 	}
 }
 
-func TestNewDevServerGeneratesRuntimeArtifactsBeforeMutationRoutesAreExposed(t *testing.T) {
+func TestDevServerStartsInitialRuntimeArtifactsAfterListenerStart(t *testing.T) {
 	root := t.TempDir()
 	t.Chdir(root)
 	calls := make(chan runtimeArtifactCall, 1)
@@ -128,6 +455,14 @@ func TestNewDevServerGeneratesRuntimeArtifactsBeforeMutationRoutesAreExposed(t *
 
 	srv := NewDevServer(opts)
 	defer srv.Shutdown(context.Background())
+	select {
+	case <-calls:
+		t.Fatal("runtime artifact generation started before server Start")
+	default:
+	}
+	if err := srv.Start(); err != nil {
+		t.Fatalf("Start() error: %v", err)
+	}
 
 	select {
 	case got := <-calls:
@@ -140,8 +475,8 @@ func TestNewDevServerGeneratesRuntimeArtifactsBeforeMutationRoutesAreExposed(t *
 		if got.definitions[0].ID != "flow:startup" {
 			t.Fatalf("runtime artifact definition id = %q, want flow:startup", got.definitions[0].ID)
 		}
-	default:
-		t.Fatal("runtime artifact generation did not finish before NewDevServer returned")
+	case <-time.After(time.Second):
+		t.Fatal("runtime artifact generation did not run after server Start")
 	}
 }
 
@@ -188,6 +523,56 @@ func TestRuntimeArtifactGeneratorForWorkerReusesWorker(t *testing.T) {
 	}
 	if got, want := worker.definitionIDs, []string{"prompt:one", "task:two"}; fmt.Sprint(got) != fmt.Sprint(want) {
 		t.Fatalf("worker definition ids = %#v, want %#v", got, want)
+	}
+}
+
+func TestRuntimeArtifactStartupDiagnosticRetainsEveryFinding(t *testing.T) {
+	diagnostic := runtimeArtifactStartupDiagnostic(&eventwire.WorkerEventError{
+		Scope: "artifact",
+		Code:  "RUNTIME_ARTIFACT_GENERATION_FAILED",
+		Findings: []eventwire.RuntimeArtifactFinding{
+			{
+				Code: "RUNTIME_EVAL_INVALID", Category: "authored", FeatureKind: "eval", FeatureID: "answer",
+				Arm: "current", Source: "evals/answer.eval.ts", Summary: "Eval answer is not ready.",
+				Reason: "Eval task must be callable.", WhatStillWorks: "Other Evals still work.",
+				Remediation: "Pass a callable task and save the file.", Docs: "https://cruxjs.dev/docs/evals",
+			},
+			{
+				Code: "RUNTIME_ARTIFACT_INTERNAL", Category: "internal", Summary: "Crux could not verify the index.",
+				Reason: "The index snapshot was inconsistent.",
+			},
+		},
+	})
+
+	if diagnostic.Code != "RUNTIME_ARTIFACT_GENERATION_FAILED" || !strings.Contains(diagnostic.Message, "2 issues") {
+		t.Fatalf("aggregate diagnostic = %#v, want typed summary and count", diagnostic)
+	}
+	if len(diagnostic.Children) != 2 {
+		t.Fatalf("children = %#v, want both worker findings", diagnostic.Children)
+	}
+	first := diagnostic.Children[0]
+	if first.Category != "authored" || first.FeatureKind != "eval" || first.FeatureID != "answer" || first.Arm != "current" || first.Source != "evals/answer.eval.ts" || first.Reason != "Eval task must be callable." || first.WhatStillWorks != "Other Evals still work." || first.Docs != "https://cruxjs.dev/docs/evals" {
+		t.Fatalf("child metadata = %#v, want lossless worker finding", first)
+	}
+	if !strings.Contains(diagnostic.Children[0].Remediation, "retry automatically") {
+		t.Fatalf("authored remediation = %q, want watcher retry copy", diagnostic.Children[0].Remediation)
+	}
+	if diagnostic.Children[1].Remediation != "" {
+		t.Fatalf("internal remediation = %q, want no invented user action", diagnostic.Children[1].Remediation)
+	}
+	if strings.Contains(strings.ToLower(fmt.Sprint(diagnostic)), "descriptor") || strings.Contains(diagnostic.Remediation, "runtime generate") {
+		t.Fatalf("diagnostic uses internal jargon or tells active watcher to rerun: %#v", diagnostic)
+	}
+}
+
+func TestRuntimeArtifactStartupDiagnosticDoesNotBlameUserForUnknownFailure(t *testing.T) {
+	diagnostic := runtimeArtifactStartupDiagnostic(errors.New("unexpected worker failure"))
+
+	if diagnostic.Remediation != "" {
+		t.Fatalf("remediation = %q, want no invented user action", diagnostic.Remediation)
+	}
+	if strings.Contains(diagnostic.Message, "unexpected worker failure") {
+		t.Fatalf("message = %q, want stable non-blaming copy", diagnostic.Message)
 	}
 }
 

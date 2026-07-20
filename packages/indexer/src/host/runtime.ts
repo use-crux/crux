@@ -12,6 +12,8 @@ import { resolve } from 'node:path'
 import type { ProjectIdentity, ProjectIndexSnapshot } from '@use-crux/core/project-index'
 import { indexDefinitionsFromSnapshot, serializeIndex } from '@use-crux/core/project-index/serializers'
 import { loadProjectConfig } from '../indexer/config'
+import { discoverRuntimeEvalDefinitions } from '../indexer/eval-discovery'
+import { evalGlobs } from '../indexer/files'
 import type { IndexPatch } from '../indexer/patches'
 
 /** Host-only options for the runtime-rich worker phase. */
@@ -48,7 +50,8 @@ export async function indexProjectRuntimeForHost(options: IndexProjectRuntimeHos
     undefined,
   )
   const derived = indexDefinitionsFromSnapshot(index)
-  const diagnostics = [...derived.diagnostics, ...configDiagnostics]
+  const evals = await discoverRuntimeEvalDefinitions(root, evalGlobs(loaded), sources)
+  const diagnostics = [...derived.diagnostics, ...configDiagnostics, ...evals.diagnostics]
 
   return {
     schemaVersion: 1,
@@ -68,12 +71,12 @@ export async function indexProjectRuntimeForHost(options: IndexProjectRuntimeHos
       contexts: index.contexts,
       tools: index.tools,
       lint: loaded.lint,
-      definitions: derived.definitions,
-      relations: derived.relations,
+      definitions: [...derived.definitions, ...evals.definitions],
+      relations: [...derived.relations, ...evals.relations],
       diagnostics,
       lintFindings: [],
       ruleDescriptors: [],
-      sources,
+      sources: evals.sources,
     },
   }
 }

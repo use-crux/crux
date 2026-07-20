@@ -4,34 +4,61 @@ import type {
   RuntimeArtifactManifest,
   RuntimeArtifactManifestTarget,
 } from "@use-crux/core/runtime";
-import { createRuntimeError } from "@use-crux/core/runtime";
+import { RuntimeArtifactGenerationError } from "./findings";
 import type { RuntimeArtifactDriftReport } from "./types";
+import type { RuntimeArtifactFinding } from "./types";
 
-/** Project runtime definitions into the v1 runtime artifact manifest. */
+/** Project runtime definitions into the v2 runtime artifact manifest. */
 export function manifestFromDefinitions(input: {
   readonly root: string;
   readonly definitions: readonly ProjectDefinition[];
   readonly evalPrivacyFingerprint?: string;
 }): RuntimeArtifactManifest {
+  const plan = manifestPlanFromDefinitions(input);
+  if (plan.findings.length > 0) {
+    throw new RuntimeArtifactGenerationError(plan.findings);
+  }
+  return plan.manifest;
+}
+
+/** Build a target manifest while retaining validation findings for aggregation. */
+export function manifestPlanFromDefinitions(input: {
+  readonly root: string;
+  readonly definitions: readonly ProjectDefinition[];
+  readonly evalPrivacyFingerprint?: string;
+}): {
+  readonly manifest: RuntimeArtifactManifest;
+  readonly findings: readonly RuntimeArtifactFinding[];
+} {
   const targets = input.definitions.flatMap((definition) =>
     targetFromDefinition(input.root, definition),
   );
-  const seen = new Set<string>();
+  const byName = new Map<string, RuntimeArtifactManifestTarget[]>();
   for (const target of targets) {
-    if (seen.has(target.name)) throw duplicateTargetError(target.name);
-    seen.add(target.name);
+    const matching = byName.get(target.name) ?? [];
+    matching.push(target);
+    byName.set(target.name, matching);
   }
-  return {
-    version: 1,
-    evalPrivacyFingerprint:
-      input.evalPrivacyFingerprint ??
-      "d2b7a3a9e0d3857b24b871ee585d118490dabd9edf81bcf10de9f5328e85cc29",
-    targets: [...targets].sort(
-      (a, b) =>
-        compareCodepoint(a.name, b.name) || compareCodepoint(a.kind, b.kind),
-    ),
-    evals: [],
-  };
+  const duplicateFindings = [...byName]
+    .filter((entry) => entry[1].length > 1)
+    .map(([name, matching]) => duplicateTargetFinding(name, matching));
+  return Object.freeze({
+    manifest: Object.freeze({
+      version: 2,
+      evalPrivacyFingerprint:
+        input.evalPrivacyFingerprint ??
+        "d2b7a3a9e0d3857b24b871ee585d118490dabd9edf81bcf10de9f5328e85cc29",
+      targets: Object.freeze(
+        [...targets].sort(
+          (a, b) =>
+            compareCodepoint(a.name, b.name) ||
+            compareCodepoint(a.kind, b.kind),
+        ),
+      ),
+      evals: Object.freeze([]),
+    }),
+    findings: Object.freeze(duplicateFindings),
+  });
 }
 
 /** Compare manifest target names with target ids found in non-terminal runtime store rows. */
@@ -75,16 +102,22 @@ function targetFromDefinition(
   ];
 }
 
-function duplicateTargetError(name: string): never {
-  throw createRuntimeError({
+function duplicateTargetFinding(
+  name: string,
+  targets: readonly RuntimeArtifactManifestTarget[],
+): RuntimeArtifactFinding {
+  return {
     code: "TARGET_DUPLICATE",
-    whatFailed: `Runtime target \`${name}\` is discovered more than once.`,
-    why: "Generated runtime artifacts need one stable target for each durable name.",
+    category: "authored",
+    featureKind: "target",
+    featureId: name,
+    source: targets[0]?.module.replace(/^\.\//, ""),
+    summary: `Runtime target '${name}' is declared more than once.`,
+    reason: `Crux found ${targets.length} definitions with that durable name and cannot choose between them.`,
     whatStillWorks:
       "Other uniquely named runtime targets can still be discovered.",
-    nextStep:
-      "Rename one target or remove the duplicate export, then run `crux runtime generate` again.",
-  });
+    remediation: "Rename one target or remove the duplicate definition.",
+  };
 }
 
 function compareCodepoint(left: string, right: string): number {

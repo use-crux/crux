@@ -5,7 +5,6 @@ import {
   type SetupFinding,
 } from '@use-crux/core/setup'
 import {
-  runtimeHostOnlyError,
   type RuntimeEngineDefinition,
   type RuntimeSetupFinding,
   type RuntimeSetupPort,
@@ -18,6 +17,7 @@ const DOCS_URL = 'https://cruxjs.dev/docs/guides/setup#apply-safe-changes'
 type RuntimeSetupResolution =
   | { readonly kind: 'port'; readonly port: RuntimeSetupPort }
   | { readonly kind: 'finding'; readonly finding: SetupFinding }
+  | { readonly kind: 'metadata-only' }
 
 function mapFinding(finding: RuntimeSetupFinding): SetupFinding {
   const resource = redactSetupText(finding.resource)
@@ -49,26 +49,7 @@ function resolveSetup(
   runtime: RuntimeEngineDefinition,
 ): RuntimeSetupResolution {
   if (runtime.kind === 'host-bound') {
-    const error = runtimeHostOnlyError({
-      api: 'crux setup',
-      host: runtime.host,
-      entry: runtime.entry,
-    })
-    return {
-      kind: 'finding',
-      finding: {
-        contributorId: 'runtime',
-        code: error.code,
-        resource: runtime.host,
-        severity: 'error',
-        message: redactSetupText(error.message),
-        docsUrl: DOCS_URL,
-        ...(runtime.entry === undefined
-          ? {}
-          : { remediation: redactSetupText(runtime.entry) }),
-        agentPrompt: `Configure the host-bound Crux Runtime for ${runtime.host} using the generated host entry.`,
-      },
-    }
+    return { kind: 'metadata-only' }
   }
 
   const port = (runtime.store as { readonly setup?: RuntimeSetupPort }).setup
@@ -102,7 +83,9 @@ export function createRuntimeSetupContributor(
     inspect: async (_project: SetupContext) => [
       ...(resolution.kind === 'port'
         ? (await resolution.port.check()).findings.map(mapFinding)
-        : [resolution.finding]),
+        : resolution.kind === 'finding'
+          ? [resolution.finding]
+          : []),
       ...(namespaceFinding === undefined ? [] : [namespaceFinding]),
     ],
     plan: async (_project: SetupContext) => {

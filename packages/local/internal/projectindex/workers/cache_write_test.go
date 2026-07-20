@@ -6,9 +6,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/oneshot"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/cache"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/frontend"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/planner"
@@ -67,6 +70,58 @@ func TestWorkerStaticIndexWritesWarmStaticCacheManifest(t *testing.T) {
 	if extraction.SemanticProfile.File != sourceFile ||
 		extraction.SemanticProfile.SourceHash != status.CacheEntries[0].SourceHash {
 		t.Fatalf("written cache semantic profile = %+v, want source file and manifest hash", extraction.SemanticProfile)
+	}
+}
+
+func TestWorkerStaticIndexDoesNotReadOrWriteCachesWhenDisabled(t *testing.T) {
+	t.Setenv(cache.StatusEnv, "1")
+
+	root := t.TempDir()
+	sourceFile := writeStaticIndexPlanCacheFixtureFile(
+		t,
+		root,
+		"src/writer.ts",
+		"export const writer = prompt({ id: 'cache-free' })\n",
+	)
+	writeStaticIndexEnabledConfig(t, root)
+
+	compiler := &staticIndexCacheWriteCompiler{root: root, sourceFile: sourceFile}
+	worker := newTestWorker(t)
+	worker.WithSyntaxParser(compiler)
+	defer worker.Close()
+
+	ctx := projectindex.WithoutCache(context.Background())
+	if _, err := worker.IndexProjectAstPatch(ctx, root, "", "static-index-cache-free"); err != nil {
+		t.Fatalf("IndexProjectAstPatch error = %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".crux", "cache")); !os.IsNotExist(err) {
+		t.Fatalf("cache path stat error = %v, want no cache reads or writes", err)
+	}
+}
+
+func TestReadOnlyRunnerWithRealWorkerBundleDoesNotCreateAnyIndexCache(t *testing.T) {
+	t.Setenv(cache.StatusEnv, "1")
+
+	root := t.TempDir()
+	sourceFile := writeStaticIndexPlanCacheFixtureFile(
+		t,
+		root,
+		"src/writer.ts",
+		"export const writer = prompt({ id: 'runner-cache-free' })\n",
+	)
+	writeStaticIndexEnabledConfig(t, root)
+
+	worker := newTestWorker(t)
+	worker.WithSyntaxParser(&staticIndexCacheWriteCompiler{root: root, sourceFile: sourceFile})
+	defer worker.Close()
+
+	if _, err := oneshot.NewReadOnly(worker).Run(context.Background(), oneshot.Options{
+		Root: root, ProjectID: "runner-cache-free",
+	}); err != nil {
+		t.Fatalf("read-only runner error = %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".crux", "cache")); !os.IsNotExist(err) {
+		t.Fatalf("cache path stat error = %v, want no cache reads or writes", err)
 	}
 }
 

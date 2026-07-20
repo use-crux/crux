@@ -51,8 +51,11 @@ func (w *Workbench) handleBrowserResult(result browserResultMsg) tea.Cmd {
 }
 
 func (w *Workbench) statusText(width int) string {
-	if w.browserStatus == "" {
-		return ".crux/evals"
+	if w.browserStatus != "" {
+		return kit.Truncate(w.browserStatus, width, "…")
 	}
-	return kit.Truncate(w.browserStatus, width, "…")
+	if w.startupStatus != "" {
+		return kit.Truncate(w.startupStatus, width, "…")
+	}
+	return ".crux/evals"
 }

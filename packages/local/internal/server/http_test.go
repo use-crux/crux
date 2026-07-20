@@ -32,6 +32,22 @@ type fakeIncrementalProjectIndexer struct {
 	deletedFiles    []string
 	calledFull      bool
 	calledIncrement bool
+	calledRuntime   int
+}
+
+func (f *fakeIncrementalProjectIndexer) IndexProjectRuntimePatch(_ context.Context, req projectindex.ProjectRuntimeIndexRequest) (projectindex.IndexPatch, error) {
+	f.calledRuntime++
+	definitions := append([]store.ProjectDefinition(nil), req.PreviousIndex.Definitions...)
+	for index := range definitions {
+		definitions[index].Metadata = json.RawMessage(`{"runtimeRich":true}`)
+	}
+	return projectindex.IndexPatch{
+		SchemaVersion: 1,
+		Phase:         projectindex.PhaseRuntime,
+		Project:       store.ProjectIdentity{Root: req.Root, Name: req.ProjectName},
+		Status:        "ok",
+		Facts:         projectindex.IndexPatchFacts{Definitions: definitions},
+	}, nil
 }
 
 type fakeRuntimeProjectIndexer struct {
@@ -86,6 +102,7 @@ func (f *fakeIncrementalProjectIndexer) IndexProjectAstPatch(context.Context, st
 		Facts: projectindex.IndexPatchFacts{
 			Definitions: f.fullIndex.Definitions,
 			Sources:     f.fullIndex.Sources,
+			SourceGraph: f.fullIndex.SourceGraph,
 		},
 	}, nil
 }

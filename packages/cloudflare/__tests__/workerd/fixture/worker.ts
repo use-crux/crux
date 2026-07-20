@@ -11,6 +11,7 @@ const host = createCloudflareEvalHost<Env>({
   binding: "CRUX_EVAL_HOST",
   deploymentId: "production-eu",
   registry: fixtureRegistry(),
+  hostCapabilities: ["asset-store"],
   targets: [nestedTask],
   token: (env) => env.CRUX_EVAL_HOST_TOKEN,
   limits: { maxConcurrentJobs: 1 },
