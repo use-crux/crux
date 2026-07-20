@@ -145,6 +145,29 @@ record to carry the same operation membership. Implementations may retain
 `parentRunId` in the carrier as an integrity check if that avoids a process
 registry lookup; it must never change on resume.
 
+### Non-suspending host continuation
+
+Crossing a physical host boundary without suspending must not reuse the
+caller's `segmentId`. Add a context-only host continuation operation, for
+example:
+
+```ts
+observe.continueInNewSegment(parentContext, fn)
+```
+
+It retains `operationId`, `runId`, `traceId`, parent topology, correlators, and
+the propagated parent span, but generates a fresh `segmentId` with a fresh
+segment-local sequence. It does not emit `run:suspend` or `run:resume`, and it
+does not gain authority to end the run. The original run owner remains the
+only code that can terminalize the logical lifecycle.
+
+Convex and serverless receivers use this operation whenever propagated work
+enters a new process, isolate, or invocation. In-process context restoration
+may continue using `observe.withContext()`. Host adapters, not application
+callers, own this distinction. This preserves ADR 0002's rule that every
+physical invocation has a distinct segment without falsely representing an
+ordinary host hop as a suspension.
+
 ### Detached work
 
 Work deliberately presented as a new operation calls `openRun()`, even when it
@@ -159,7 +182,7 @@ Ownership follows lifecycle capability, not primitive name.
 | Primitive or boundary | Ownership |
 | --- | --- |
 | Standalone request, action, cron, or command | Root run and new operation |
-| Incoming Convex/serverless boundary with propagated context | Continue current run context; boundary span only |
+| Incoming Convex/serverless boundary with propagated context | Continue the current run in a fresh segment; boundary span only |
 | Generation, tool call, retrieval, memory, guardrail | Span in current run |
 | Agent invocation inside an observed operation | Span in current run |
 | Delegate invocation | Span in current run |
@@ -208,6 +231,12 @@ The local schema gains:
 - one revision stream keyed by `operation_id` for operation-list and detail
   invalidation.
 
+A segment first seen through non-suspending host continuation is valid without
+a `run:resume` record. Its first ordinary graph record establishes the segment
+and starts at `segmentSeq: 1`; only explicit durable resumption emits
+`run:resume`. Segment ownership remains immutable, and the segment carries no
+authority to terminalize the run independently of its run handle.
+
 Ingest must accept a child before its parent. Missing parents are incomplete
 topology, not invalid input. Once both arrive, conflicting operation or trace
 membership is an immutable identity conflict and must be diagnosed without
@@ -248,6 +277,29 @@ root request may be terminal while background children remain active; the row
 shows the root outcome plus background activity instead of changing the root
 status back to `running`.
 
+Operation membership counts cover every non-root descendant, not only direct
+children. `childRunCount` is therefore `memberRunCount - 1`; active, suspended,
+and failed child counts likewise include the complete descendant set.
+
+### Child-before-root presentation
+
+The first accepted record for an unknown `operationId` creates an operation
+shell with an immutable `firstSeenAt`. If the root `run:start` has not arrived,
+the Runs page returns that shell rather than hiding observed work:
+
+- `rootPresent: false`;
+- status `incomplete`;
+- a neutral `Incomplete operation` label plus the known operation id;
+- aggregate member counts and topology health from the records already seen;
+- no fabricated session, user, root primitive, or root error.
+
+Shell rows match the ordinary unfiltered list and the `incomplete` status
+filter only. When the root arrives, the same operation row and revision are
+enriched in place. Pagination order and cursors use immutable `firstSeenAt`
+plus `operationId`, so late root delivery cannot move the row across page
+boundaries. The displayed root start time is separate from this stable list
+ordering key.
+
 Status filtering applies to root status. Separate descendant-health filters
 can be added only if demanded by product usage; they are not required for the
 first implementation. Definition filtering matches an operation when any
@@ -270,6 +322,12 @@ trigger span is unavailable, it mounts beneath the parent run with an
 `incomplete-topology` diagnostic. If the parent run is also unavailable, the
 child remains visible as an orphan member of the operation.
 
+Malformed parent topology never prevents detail rendering. A parent outside
+the claimed operation, self-parent, or parent cycle produces a topology
+conflict diagnostic. Graph construction cuts the invalid edge at the first
+repeated or foreign node and renders the affected run as an orphan member;
+raw immutable records remain available for diagnosis.
+
 The parent topology on `run:start` is sufficient to synthesize the structural
 run edge in the read model. Emitters may continue producing a canonical
 `triggered` graph edge for raw graph consumers, but product grouping and
@@ -281,10 +339,24 @@ result metadata based on `traceId` plus `spanId` remains valid and is outside
 this design's public result-envelope scope.
 
 Deleting an operation from the Runs page deletes all member observability
-records transactionally. Retention expires the family from the root operation
-policy and must not leave child rows promoted to accidental roots. A dedicated
-internal child-run deletion operation may remain available for diagnostics,
-but it is not part of the ordinary Runs UI.
+records transactionally and writes a compact `operationId` tombstone in the
+same transaction. Explicit-deletion tombstones do not expire automatically:
+Crux operation ids are never reused, and the tombstone is the durable proof
+that late records from an already-running child must be permanently rejected
+with an `operation_deleted` receipt instead of resurrecting the family.
+Deleting observability does not implicitly cancel application work.
+
+Automatic retention evaluates the family atomically. The first version does
+not expire an operation while any member run is `running` or `suspended`.
+Terminal families become eligible only when their latest family activity is
+older than the configured cutoff, and all members are deleted together. This
+must not leave child rows promoted to accidental roots. A future hard ceiling
+for abandoned suspended work requires an explicit product decision and is not
+part of this design.
+
+A dedicated internal child-run deletion operation may remain available for
+diagnostics, but it cannot change operation membership or promote descendants
+and is not part of the ordinary Runs UI.
 
 ## Failure and consistency behavior
 
@@ -298,6 +370,16 @@ but it is not part of the ordinary Runs UI.
   not root lifecycle status.
 - A continuation with a mismatched operation identity is rejected before any
   resumed record is emitted.
+- A propagated non-suspending host continuation always creates a fresh segment
+  without emitting false suspend/resume lifecycle records.
+- A child received before its root appears as an incomplete operation shell
+  with stable pagination identity.
+- Late records for an explicitly deleted operation are permanently rejected by
+  its tombstone.
+- Automatic retention removes terminal families atomically and preserves
+  running or suspended families.
+- Malformed or cyclic parent topology degrades diagnostically and cannot trap
+  graph construction in recursion.
 - Delivery health and topology health remain separate so a structurally
   incomplete family is not mislabeled as transport loss without evidence.
 
@@ -317,7 +399,8 @@ Implementation must include these vertical proofs:
    originating operation across fresh invocations.
 6. Eval cases sharing one trace remain separate operations.
 7. Go ingest handles child-before-parent delivery, rejects conflicting family
-   identity, and synthesizes detail topology without requiring a second edge.
+   identity, returns a stable incomplete shell before root arrival, and
+   synthesizes detail topology without requiring a second edge.
 8. The operation page returns one Karyla row for a root agent plus parallel
    research Flows, with aggregate counts and correct child-health fields.
 9. A successful root with failed children remains successful and reports the
@@ -326,7 +409,13 @@ Implementation must include these vertical proofs:
 10. Web Devtools, TUI, CLI, search, definition activity, deletion, retention,
     pagination, and revision catch-up use the same operation identity.
 11. TypeScript/Go schema fixtures and real Convex/serverless delivery gates
-    prove operation identity survives transport and host boundaries.
+    prove operation identity survives transport and host boundaries, while
+    each physical invocation uses a fresh segment without false resumption.
+12. Explicit deletion tombstones reject late child records, retention removes
+    terminal families atomically, and active or suspended families remain
+    eligible for future continuation.
+13. Cyclic, self-parented, foreign-parent, and missing-parent records produce
+    bounded topology diagnostics and still render every member once.
 
 The current nested-Flow test that asserts different `runId` values remains
 valid but gains an `operationId` assertion. New tests must reject grouping by
