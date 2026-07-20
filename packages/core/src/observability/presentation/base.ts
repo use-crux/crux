@@ -41,6 +41,15 @@ export interface CruxRunDeliveryHealth {
 /** Run-level summary projected by the local observability read path. */
 export interface CruxRunSummaryView {
   runId: CruxRunId
+  operationId: CruxRunId
+  rootRunId: CruxRunId
+  rootPresent: boolean
+  firstSeenAt: string
+  childRunCount: number
+  activeChildCount: number
+  suspendedChildCount: number
+  failedChildCount: number
+  topologyHealth: 'healthy' | 'incomplete' | 'conflicted' | string
   traceId: CruxTraceId | ''
   name: string
   rootPrimitive: CruxPrimitiveName | string

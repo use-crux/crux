@@ -19,6 +19,15 @@ describe("runs row mapping", () => {
   it("uses observability list rollups, root session ids, and reliability fields directly", () => {
     const run = {
       runId: "run_live",
+      operationId: "run_live",
+      rootRunId: "run_live",
+      rootPresent: true,
+      firstSeenAt: "2026-07-03T10:00:00.000Z",
+      childRunCount: 2,
+      activeChildCount: 0,
+      suspendedChildCount: 0,
+      failedChildCount: 0,
+      topologyHealth: "healthy",
       traceId: "trace_live",
       name: "streaming answer",
       rootPrimitive: "generation.call",
@@ -52,7 +61,7 @@ describe("runs row mapping", () => {
     };
 
     expect(rowFromRunSummary(run)).toMatchObject({
-      traceId: "run_live",
+      operationId: "run_live",
       sessionId: "session_root",
       tokenCount: 987,
       cost: 0.0123,
@@ -61,7 +70,7 @@ describe("runs row mapping", () => {
       eventCount: 42,
       artifactCount: 3,
       edgeCount: 2,
-      childCount: 7,
+      childCount: 2,
       segmentCount: 2,
       activeSegmentId: "segment_2",
       orderingConfidence: "partial",
@@ -76,6 +85,7 @@ describe("runs row mapping", () => {
 
     const quality = {
       _tag: "InspectRun",
+      operationId: "run-1",
       traceId: "run-1",
       targetId: "support reply",
       rootPrimitive: "generation.call",
@@ -93,7 +103,7 @@ describe("runs row mapping", () => {
     } satisfies InspectRunRecord;
 
     expect(annotateRunRowWithInspect(row, quality)).toMatchObject({
-      traceId: "run-1",
+      operationId: "run-1",
       toolCallCount: 2,
       diagnosticsCount: 2,
       diagnosticsMaxSeverity: "warn",
@@ -105,9 +115,10 @@ describe("runs row mapping", () => {
     expect(annotateRunRowWithInspect(row, undefined)).toEqual(row);
   });
 
-  it("indexes Inspect annotations by traceId (== observability runId)", () => {
+  it("indexes Inspect annotations by explicit operationId", () => {
     const quality = {
       _tag: "InspectRun",
+      operationId: "run-1",
       traceId: "run-1",
       status: "ok",
       startedAt: 1_775_000_000_000,
@@ -129,6 +140,15 @@ describe("runs row mapping", () => {
   it("reflects a live-to-terminal transition as the same row identity with an updated status", () => {
     const base = {
       runId: "run_transition",
+      operationId: "run_transition",
+      rootRunId: "run_transition",
+      rootPresent: true,
+      firstSeenAt: "2026-07-03T10:00:00.000Z",
+      childRunCount: 0,
+      activeChildCount: 0,
+      suspendedChildCount: 0,
+      failedChildCount: 0,
+      topologyHealth: "healthy",
       traceId: "trace_transition",
       name: "answer",
       rootPrimitive: "generation.call",
@@ -151,7 +171,7 @@ describe("runs row mapping", () => {
 
     const live = rowFromRunSummary({ ...base, status: "running", endedAt: "" });
     expect(live).toMatchObject({
-      traceId: "run_transition",
+      operationId: "run_transition",
       status: "running",
     });
 
@@ -162,18 +182,27 @@ describe("runs row mapping", () => {
       revision: 2,
     });
     expect(terminal).toMatchObject({
-      traceId: "run_transition",
+      operationId: "run_transition",
       status: "ok",
       revision: 2,
     });
-    // Same logical row (id/traceId), only the lifecycle state advanced.
+    // Same operation row; only the lifecycle state advanced.
     expect(terminal.id).toBe(live.id);
-    expect(terminal.traceId).toBe(live.traceId);
+    expect(terminal.operationId).toBe(live.operationId);
   });
 
   it("reflects suspend/resume as a multi-segment row without treating the pause as terminal", () => {
     const suspended = rowFromRunSummary({
       runId: "run_suspend",
+      operationId: "run_suspend",
+      rootRunId: "run_suspend",
+      rootPresent: true,
+      firstSeenAt: "2026-07-03T10:00:00.000Z",
+      childRunCount: 0,
+      activeChildCount: 0,
+      suspendedChildCount: 0,
+      failedChildCount: 0,
+      topologyHealth: "healthy",
       traceId: "trace_suspend",
       name: "durable flow",
       rootPrimitive: "flow",
@@ -198,6 +227,15 @@ describe("runs row mapping", () => {
 
     const resumed = rowFromRunSummary({
       runId: "run_suspend",
+      operationId: "run_suspend",
+      rootRunId: "run_suspend",
+      rootPresent: true,
+      firstSeenAt: "2026-07-03T10:00:00.000Z",
+      childRunCount: 0,
+      activeChildCount: 0,
+      suspendedChildCount: 0,
+      failedChildCount: 0,
+      topologyHealth: "healthy",
       traceId: "trace_suspend",
       name: "durable flow",
       rootPrimitive: "flow",
@@ -232,6 +270,15 @@ describe("runs row mapping", () => {
     // linked telemetry, not a mutation of the row's timing/status.
     const summaryBase = {
       runId: "run_late",
+      operationId: "run_late",
+      rootRunId: "run_late",
+      rootPresent: true,
+      firstSeenAt: "2026-07-03T10:00:00.000Z",
+      childRunCount: 0,
+      activeChildCount: 0,
+      suspendedChildCount: 0,
+      failedChildCount: 0,
+      topologyHealth: "healthy",
       traceId: "trace_late",
       name: "stream",
       rootPrimitive: "generation.call",
@@ -272,6 +319,15 @@ describe("runs row mapping", () => {
   it('renders "unknown" delivery health as distinct from "healthy", not defaulted to it', () => {
     const unknown = rowFromRunSummary({
       runId: "run_health_unknown",
+      operationId: "run_health_unknown",
+      rootRunId: "run_health_unknown",
+      rootPresent: true,
+      firstSeenAt: "2026-07-03T10:00:00.000Z",
+      childRunCount: 0,
+      activeChildCount: 0,
+      suspendedChildCount: 0,
+      failedChildCount: 0,
+      topologyHealth: "healthy",
       traceId: "trace_health_unknown",
       name: "r",
       rootPrimitive: "generation.call",
@@ -295,6 +351,15 @@ describe("runs row mapping", () => {
     });
     const noHealthReported = rowFromRunSummary({
       runId: "run_health_none",
+      operationId: "run_health_none",
+      rootRunId: "run_health_none",
+      rootPresent: true,
+      firstSeenAt: "2026-07-03T10:00:00.000Z",
+      childRunCount: 0,
+      activeChildCount: 0,
+      suspendedChildCount: 0,
+      failedChildCount: 0,
+      topologyHealth: "healthy",
       traceId: "trace_health_none",
       name: "r",
       rootPrimitive: "generation.call",
@@ -337,11 +402,11 @@ describe("runs row mapping", () => {
       "-",
       "session-b",
     ]);
-    expect(groups[0]!.rows.map((run) => run.traceId)).toEqual([
+    expect(groups[0]!.rows.map((run) => run.operationId)).toEqual([
       "new-a",
       "old-a",
     ]);
-    expect(groups[2]!.rows.map((run) => run.traceId)).toEqual([
+    expect(groups[2]!.rows.map((run) => run.operationId)).toEqual([
       "new-b",
       "old-b",
     ]);
@@ -349,15 +414,15 @@ describe("runs row mapping", () => {
 });
 
 function runRow(
-  traceId: string,
+	operationId: string,
   startedAt: number,
   sessionId: string | undefined,
 ): RunRow {
   return {
     kind: "trace",
-    id: `run:${traceId}`,
-    traceId,
-    target: traceId,
+    id: `operation:${operationId}`,
+    operationId,
+    target: operationId,
     sessionId,
     status: "ok",
     startedAt,

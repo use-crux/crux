@@ -228,8 +228,8 @@ export function RunsView({ groupBy, filters }: RunsProps) {
                 selectionState={selection.visibleSelectionState}
                 onToggleAllVisible={selection.toggleAllVisible}
                 onToggleSelected={selection.toggleSelected}
-                onOpenRun={(traceId) =>
-                  navigate({ view: "run-detail", traceId })
+                onOpenRun={(operationId) =>
+                  navigate({ view: "run-detail", traceId: operationId })
                 }
               />
             </div>

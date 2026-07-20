@@ -36,28 +36,28 @@ export function useDeleteRunsMutation() {
   const mutation = useMutation<
     MutationResult,
     Error,
-    { traceIds: readonly string[] },
+    { operationIds: readonly string[] },
     { prevByKey: Map<readonly unknown[], readonly InspectRunRecord[]> }
   >({
-    mutationFn: async ({ traceIds }) => {
-      if (traceIds.length === 0) return { ok: true };
+    mutationFn: async ({ operationIds }) => {
+      if (operationIds.length === 0) return { ok: true };
       // Single id → single-resource DELETE; many → bulk DELETE.
-      if (traceIds.length === 1) {
+      if (operationIds.length === 1) {
         const r = await deleteJson(
-          `/api/inspect/runs/${encodeURIComponent(traceIds[0])}`,
+          `/api/inspect/runs/${encodeURIComponent(operationIds[0])}`,
         );
-        await expectOk(r, `Delete run ${traceIds[0]}`);
+        await expectOk(r, `Delete operation ${operationIds[0]}`);
       } else {
-        const r = await deleteJson("/api/inspect/runs", { traceIds });
-        await expectOk(r, `Delete ${traceIds.length} runs`);
+        const r = await deleteJson("/api/inspect/runs", { operationIds });
+		await expectOk(r, `Delete ${operationIds.length} operations`);
       }
       return { ok: true };
     },
     // Optimistic: snip the deleted rows out of every cached runs query
     // (the screen passes various filter options, each one a separate
     // cache entry). Snapshot all of them so we can roll back on failure.
-    onMutate: async ({ traceIds }) => {
-      const ids = new Set(traceIds);
+    onMutate: async ({ operationIds }) => {
+      const ids = new Set(operationIds);
       await client.cancelQueries({ queryKey: qk.inspect.all });
       const prevByKey = new Map<
         readonly unknown[],
@@ -71,12 +71,12 @@ export function useDeleteRunsMutation() {
         prevByKey.set(key, data);
         client.setQueryData<readonly InspectRunRecord[]>(
           key,
-          data.filter((r) => !ids.has(r.traceId)),
+          data.filter((r) => !r.operationId || !ids.has(r.operationId)),
         );
       }
       return { prevByKey };
     },
-    onError: (err, { traceIds }, ctx) => {
+    onError: (err, { operationIds }, ctx) => {
       // Roll back optimistic deletions
       if (ctx?.prevByKey) {
         for (const [key, prev] of ctx.prevByKey) {
@@ -86,19 +86,19 @@ export function useDeleteRunsMutation() {
       toast({
         kind: "danger",
         title:
-          traceIds.length === 1
+          operationIds.length === 1
             ? "Could not delete run"
-            : `Could not delete ${traceIds.length} runs`,
+            : `Could not delete ${operationIds.length} operations`,
         message: err.message,
       });
     },
-    onSuccess: (_data, { traceIds }) => {
+    onSuccess: (_data, { operationIds }) => {
       toast({
         kind: "ok",
         title:
-          traceIds.length === 1
+          operationIds.length === 1
             ? "Run deleted"
-            : `${traceIds.length} runs deleted`,
+            : `${operationIds.length} operations deleted`,
       });
     },
     onSettled: () => {
@@ -109,9 +109,9 @@ export function useDeleteRunsMutation() {
     },
   });
   return useCallback(
-    async (traceIds: readonly string[]) => {
+    async (operationIds: readonly string[]) => {
       try {
-        return await mutation.mutateAsync({ traceIds });
+        return await mutation.mutateAsync({ operationIds });
       } catch {
         return { ok: false };
       }

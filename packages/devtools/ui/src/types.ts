@@ -1110,6 +1110,15 @@ export interface ObservabilityRunDeliveryHealth {
 // Runs list/detail row; do not reintroduce a second, narrower duplicate.
 export interface ObservabilityRunSummary {
   runId: string;
+  operationId: string;
+  rootRunId: string;
+  rootPresent: boolean;
+  firstSeenAt: string;
+  childRunCount: number;
+  activeChildCount: number;
+  suspendedChildCount: number;
+  failedChildCount: number;
+  topologyHealth: "healthy" | "incomplete" | "conflicted" | string;
   traceId: string;
   sessionId?: string;
   userId?: string;
@@ -1433,6 +1442,7 @@ export type CompositionType = "pipeline" | "parallel" | "consensus" | "swarm";
  */
 export interface InspectRunRecord {
   _tag: "InspectRun";
+  operationId?: string;
   traceId: string;
   targetId?: string;
   promptId?: string;

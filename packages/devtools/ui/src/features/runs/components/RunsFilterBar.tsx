@@ -157,7 +157,7 @@ export function RunsFilterBar({
         <SearchChip
           value={filters.search}
           onChange={(v) => update("search", v)}
-          placeholder="traceId / target / input text"
+          placeholder="operationId / target / input text"
         />
       )}
 

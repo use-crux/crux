@@ -4252,9 +4252,9 @@ export function SpanDetailPanel({
         (j) =>
           !j.traceId ||
           j.traceId === node.traceId ||
-          j.traceId === detail.run.runId,
+          j.traceId === detail.run.traceId,
       ),
-    [judges, node.traceId, detail.run.runId],
+    [judges, node.traceId, detail.run.traceId],
   );
 
   const counts: Partial<Record<InspectTabId, number>> = useMemo(() => {

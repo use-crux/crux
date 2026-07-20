@@ -60,8 +60,8 @@ export interface ColumnDef {
 
 export interface RunRow {
   kind: RunKind;
-  /** The id used by the URL (traceId for traces, flow's first traceId for flows). */
-  traceId: string;
+  /** The operation-family id used by list identity, selection, and navigation. */
+  operationId: string;
   /** A stable id for React keys + onclick navigation. */
   id: string;
   /** Display name. */
@@ -105,4 +105,8 @@ export interface RunRow {
   traceAliasConflict?: boolean;
   /** Delivery/export health; "unknown" is distinct from "healthy". */
   deliveryHealth?: "unknown" | "healthy" | "degraded" | string;
+  topologyHealth?: "healthy" | "incomplete" | "conflicted" | string;
+  activeChildCount?: number;
+  suspendedChildCount?: number;
+  failedChildCount?: number;
 }
