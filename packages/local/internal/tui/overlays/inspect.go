@@ -6,10 +6,11 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/use-crux/crux/packages/local/internal/tui/kit"
 	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
 
-// Inspect is the `o open in viewer` overlay for a span. Shows the full
+// Inspect is the in-TUI raw payload overlay for a span. It shows the full
 // JSON payload in a scrollable modal so the user can see args/result/
 // messages/etc. that don't fit in the right-pane summary.
 type Inspect struct {
@@ -42,8 +43,7 @@ func (i *Inspect) Close() { i.open = false }
 // IsOpen reports whether the overlay is shown.
 func (i *Inspect) IsOpen() bool { return i.open }
 
-// Update handles keys while the overlay is open. Returns a tea.Cmd (none
-// generated today; reserved for future copy/export actions).
+// Update handles navigation and close keys while the overlay is open.
 func (i *Inspect) Update(msg tea.KeyPressMsg) tea.Cmd {
 	switch msg.String() {
 	case "esc", "o", "q":
@@ -98,8 +98,8 @@ func (i *Inspect) View(viewportWidth, viewportHeight int) string {
 		h = 10
 	}
 
-	header := " " + shell.TealBold.Render("◧ inspect · "+i.title) +
-		"  " + shell.TextMuted.Render(i.subtitle)
+	header := " " + shell.TealBold.Render("◧ inspect · "+kit.SanitizeInline(i.title)) +
+		"  " + shell.TextMuted.Render(kit.SanitizeInline(i.subtitle))
 	header = padToWidth(header, w)
 
 	// Visible window into the body.
@@ -127,7 +127,7 @@ func (i *Inspect) View(viewportWidth, viewportHeight int) string {
 	rowStyle := lipgloss.NewStyle().Foreground(shell.ColorText)
 	body := make([]string, len(rows))
 	for j, r := range rows {
-		body[j] = padToWidth(" "+rowStyle.Render(truncateRight(r, w-2)), w)
+		body[j] = padToWidth(" "+rowStyle.Render(truncateRight(kit.SanitizeInline(r), w-2)), w)
 	}
 
 	footer := " " + shell.TextMuted.Render(
@@ -169,17 +169,7 @@ func padToWidth(s string, width int) string {
 }
 
 func truncateRight(s string, width int) string {
-	if lipgloss.Width(s) <= width {
-		return s
-	}
-	if width <= 1 {
-		return s[:width]
-	}
-	// Naive byte-truncation suffices for JSON which is ASCII-dominant.
-	if len(s) > width-1 {
-		s = s[:width-1] + "…"
-	}
-	return s
+	return kit.Truncate(s, width, "…")
 }
 
 func formatInt(n int) string {

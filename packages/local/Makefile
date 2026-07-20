@@ -43,7 +43,9 @@ help:
 	@echo "  make build-go        Build only the Go binary using current embedded assets"
 	@echo "  make all             Build devtools assets, embed them, then package all platform binaries"
 	@echo "  make check-local-all-toolchain  Verify Rust targets/linkers for all platform bundles"
-	@echo "  make test            Run Go tests"
+	@echo "  make test-go         Prepare embedded assets and run hermetic Go tests"
+	@echo "  make test-go-integration  Run Go tests with the current Rust/Oxc indexer worker"
+	@echo "  make test            Alias for test-go"
 	@echo "  make clean           Remove local runtime build outputs"
 
 .PHONY: build-local-workers
@@ -185,9 +187,21 @@ $(eval $(call PLATFORM_TARGET,win32-arm64,windows,arm64,aarch64-pc-windows-gnull
 clean:
 	rm -rf dist/ $(BINARY) $(INDEXER_WORKER_BINARY)
 
-.PHONY: test
-test:
+.PHONY: prepare-test-assets
+prepare-test-assets:
+	$(MAKE) build-devtools
+	$(MAKE) embed
+
+.PHONY: test-go
+test-go: prepare-test-assets
 	$(GO) test ./...
+
+.PHONY: test
+test: test-go
+
+.PHONY: test-go-integration
+test-go-integration: prepare-test-assets build-indexer-worker
+	CRUX_STATIC_INDEX_WORKER="$(CURDIR)/$(INDEXER_WORKER_BINARY)" $(GO) test ./...
 
 .PHONY: inspect-go
 inspect-go:

@@ -1,36 +1,36 @@
 package screens
 
 import (
+	"context"
+
 	tea "charm.land/bubbletea/v2"
 	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/tui/bridge"
+	"github.com/use-crux/crux/packages/local/internal/tui/interaction"
 	"github.com/use-crux/crux/packages/local/internal/tui/kit"
-	"github.com/use-crux/crux/packages/local/internal/tui/shell"
+	"github.com/use-crux/crux/packages/local/internal/tui/resource"
 )
 
 // Overview screen: 4-column KPI strip, top-insights queue, recent runs,
 // 14-day pass-rate ASCII chart, live activity log.
 type Overview struct {
-	overview api.InspectOverviewRecord
-	insights []api.InspectInsightRecord
-	runs     []api.InspectRunRecord
-	activity []api.InspectActivityEvent
-	loaded   bool
-	err      string
+	summaryResource  *resource.Resource[api.InspectOverviewRecord]
+	insightsResource *resource.Resource[[]api.InspectInsightRecord]
+	runsResource     *resource.Resource[[]api.InspectRunRecord]
+	activityResource *resource.Resource[[]api.InspectActivityEvent]
+	activityOverlay  []api.InspectActivityEvent
 
 	// Cross-pane cursor state. Overview is the workflow launchpad — j/k
 	// moves a cursor through the focused panel; h/l toggles the focused
 	// panel between Top Insights and Recent Runs. See S6 in the plan.
 	focusedPanel overviewPanel
-	insightCur   int
-	runCur       int
 	// activityScroll is zero when the activity feed is pinned to newest rows.
 	// Positive values latch the feed onto older rows while live events arrive.
 	activityScroll int
-	insightList    kit.VList[api.InspectInsightRecord]
-	runList        kit.VList[api.InspectRunRecord]
-	renderRev      uint64
-	memo           kit.Memo
+	insightList    *kit.ListPane[api.InspectInsightRecord]
+	runList        *kit.ListPane[api.InspectRunRecord]
+	size           Size
+	activityPage   int
 }
 
 type overviewPanel int
@@ -44,95 +44,110 @@ const (
 // SelectedInsightID returns the InsightID of the cursor-focused Top
 // Insights row, or "" if no insights are loaded.
 func (o *Overview) SelectedInsightID() string {
-	if o.insightCur < 0 || o.insightCur >= len(o.insights) {
+	insight, _, ok := o.insightList.Selected()
+	if !ok {
 		return ""
 	}
-	return o.insights[o.insightCur].InsightID
+	return insight.InsightID
 }
 
 // SelectedRunID returns the TraceID of the cursor-focused Recent Runs
 // row, or "" if no runs are loaded.
 func (o *Overview) SelectedRunID() string {
-	runs := o.recentRunsList()
-	if o.runCur < 0 || o.runCur >= len(runs) {
+	run, _, ok := o.runList.Selected()
+	if !ok {
 		return ""
 	}
-	return runs[o.runCur].TraceID
-}
-
-// recentRunsList resolves the right source for the runs panel — the
-// overview-embedded list if present, otherwise the recent-runs fallback.
-func (o *Overview) recentRunsList() []api.InspectRunRecord {
-	if len(o.overview.RecentRuns) > 0 {
-		return o.overview.RecentRuns
-	}
-	return o.runs
+	return run.TraceID
 }
 
 // NewOverview constructs an empty Overview screen.
 func NewOverview() *Overview {
-	o := &Overview{}
-	o.insightList.SetIdentity(func(ins api.InspectInsightRecord) string { return ins.InsightID })
-	o.runList.SetIdentity(func(run api.InspectRunRecord) string { return run.TraceID })
+	o := &Overview{
+		summaryResource: resource.New(func(summary api.InspectOverviewRecord) bool {
+			return summary.Tag == ""
+		}),
+		insightsResource: resource.New(func(insights []api.InspectInsightRecord) bool {
+			return len(insights) == 0
+		}),
+		runsResource: resource.New(func(runs []api.InspectRunRecord) bool {
+			return len(runs) == 0
+		}),
+		activityResource: resource.New(func(activity []api.InspectActivityEvent) bool {
+			return len(activity) == 0
+		}),
+		insightList: kit.NewListPane(func(ins api.InspectInsightRecord) string { return ins.InsightID }),
+		runList:     kit.NewListPane(func(run api.InspectRunRecord) string { return run.TraceID }),
+	}
+	o.setFocusedPanel(panelInsights)
 	return o
 }
 
 func (o *Overview) ID() string { return "overview" }
 
-func (o *Overview) Interested(domains bridge.Domains) bool {
-	return domains.Intersects(bridge.NewDomains(
-		bridge.DomainRuns,
-		bridge.DomainInsights,
-		bridge.DomainBaselines,
-		bridge.DomainFeedback,
-		bridge.DomainActivity,
-	))
+func (o *Overview) Init(ctx context.Context, client DataClient) tea.Cmd {
+	return o.Refresh(ctx, client, bridge.Invalidations{
+		bridge.OverviewSummaryResource:  0,
+		bridge.OverviewInsightsResource: 0,
+		bridge.OverviewRunsResource:     0,
+		bridge.OverviewActivityResource: 0,
+	})
 }
 
-func (o *Overview) Init(client DataClient) tea.Cmd {
-	return tea.Batch(
-		fetchOverview(client),
-		fetchInsights(client),
-		fetchRuns(client),
-		fetchActivity(client, 12),
-	)
+// Deactivate cancels in-flight projections and returns the exact names that
+// must be retried if Overview is opened again.
+func (o *Overview) Deactivate() bridge.Invalidations {
+	invalidations := bridge.Invalidations{}
+	cancelPendingResource(invalidations, bridge.OverviewSummaryResource, o.summaryResource)
+	cancelPendingResource(invalidations, bridge.OverviewInsightsResource, o.insightsResource)
+	cancelPendingResource(invalidations, bridge.OverviewRunsResource, o.runsResource)
+	cancelPendingResource(invalidations, bridge.OverviewActivityResource, o.activityResource)
+	return invalidations
 }
 
-func (o *Overview) Update(msg tea.Msg, client DataClient) tea.Cmd {
+// Refresh schedules each named Overview projection at most once.
+func (o *Overview) Refresh(ctx context.Context, client DataClient, invalidations bridge.Invalidations) tea.Cmd {
+	commands := make([]tea.Cmd, 0, 4)
+	if revision, ok := invalidations.Revision(bridge.OverviewSummaryResource); ok || o.summaryResource.Snapshot().State == resource.ResourceIdle {
+		commands = append(commands, o.fetchSummaryAtRevision(ctx, client, revision))
+	}
+	if revision, ok := invalidations.Revision(bridge.OverviewInsightsResource); ok || o.insightsResource.Snapshot().State == resource.ResourceIdle {
+		commands = append(commands, o.fetchInsightsAtRevision(ctx, client, revision))
+	}
+	if revision, ok := invalidations.Revision(bridge.OverviewRunsResource); ok || o.runsResource.Snapshot().State == resource.ResourceIdle {
+		commands = append(commands, o.fetchRunsAtRevision(ctx, client, revision))
+	}
+	if revision, ok := invalidations.Revision(bridge.OverviewActivityResource); ok || o.activityResource.Snapshot().State == resource.ResourceIdle {
+		commands = append(commands, o.fetchActivityAtRevision(ctx, client, 12, revision))
+	}
+	return tea.Batch(commands...)
+}
+
+func (o *Overview) Update(ctx context.Context, msg tea.Msg, client DataClient) tea.Cmd {
 	switch m := msg.(type) {
 	case overviewLoadedMsg:
-		o.overview = api.InspectOverviewRecord(m.rec)
-		o.loaded = true
-		o.syncLists()
-		o.bumpRenderRev()
+		o.summaryResource.Apply(resource.ResourceResult[api.InspectOverviewRecord](m))
 	case insightsLoadedMsg:
-		o.insights = []api.InspectInsightRecord(m)
-		o.syncLists()
-		o.bumpRenderRev()
-	case runsLoadedMsg:
-		o.runs = []api.InspectRunRecord(m)
-		o.syncLists()
-		o.bumpRenderRev()
-	case activityLoadedMsg:
-		o.activity = []api.InspectActivityEvent(m)
-		o.bumpRenderRev()
-	case dataErrMsg:
-		o.err = string(m)
-		o.bumpRenderRev()
-	case api.InspectEvent:
-		// A typed event arrived from the bus. Optimistically prepend it as
-		// an activity row + re-fetch in the background.
-		o.activity = prependActivity(o.activity, activityFromEvent(m), 12)
-		if o.activityScroll > 0 {
-			o.activityScroll++
+		if o.insightsResource.Apply(resource.ResourceResult[[]api.InspectInsightRecord](m)) {
+			o.insightList.SetItems(o.insightRows())
 		}
-		o.bumpRenderRev()
-		return tea.Batch(
-			fetchOverview(client),
-			fetchActivity(client, 12),
-		)
+	case runsLoadedMsg:
+		if o.runsResource.Apply(resource.ResourceResult[[]api.InspectRunRecord](m)) {
+			o.runList.SetItems(o.runRows())
+		}
+	case activityLoadedMsg:
+		if o.activityResource.Apply(resource.ResourceResult[[]api.InspectActivityEvent](m)) {
+			o.reconcileActivityOverlay(o.activityResource.Snapshot().Value)
+			o.clampActivityScroll()
+		}
+	case LiveEvents:
+		inserted := o.prependLiveActivities(m.Events, 12)
+		if inserted > 0 && o.activityScroll > 0 {
+			o.activityScroll += inserted
+			o.clampActivityScroll()
+		}
 	case tea.KeyPressMsg:
-		return o.handleKey(m)
+		return o.handleKey(ctx, m, client)
 	}
 	return nil
 }
@@ -140,20 +155,9 @@ func (o *Overview) Update(msg tea.Msg, client DataClient) tea.Cmd {
 // handleKey owns the navigable-Overview keymap. j/k cycles within the
 // focused panel; h/l toggles focus between Top Insights and Recent Runs.
 // See S6 in the implementation plan.
-func (o *Overview) handleKey(msg tea.KeyPressMsg) tea.Cmd {
-	switch msg.String() {
-	case "j", "down":
-		o.moveCursor(+1)
-	case "k", "up":
-		o.moveCursor(-1)
-	case "h", "left":
-		o.shiftFocus(-1)
-	case "l", "right":
-		o.shiftFocus(+1)
-	case "enter":
-		return o.drill()
-	}
-	return nil
+func (o *Overview) handleKey(ctx context.Context, msg tea.KeyPressMsg, client DataClient) tea.Cmd {
+	cmd, _ := interaction.Dispatch(o.Actions(ctx, client), msg)
+	return cmd
 }
 
 func (o *Overview) shiftFocus(delta int) {
@@ -164,13 +168,12 @@ func (o *Overview) shiftFocus(delta int) {
 	if next > int(panelActivity) {
 		next = int(panelActivity)
 	}
-	o.focusedPanel = overviewPanel(next)
+	o.setFocusedPanel(overviewPanel(next))
 }
 
-// drill returns a tea.Cmd that emits a NavigateRequest based on the
-// focused panel + cursor — the workbench picks it up, stages the id in
-// the cross-screen selection store, and jumps to the destination screen.
-// See ADR-0051. If no record is focused (empty list), returns nil.
+// drill returns a tea.Cmd that emits a NavigateRequest based on the focused
+// panel and cursor. The destination owns the exact record ID as a route
+// parameter. An empty focused list returns nil.
 func (o *Overview) drill() tea.Cmd {
 	var req NavigateRequest
 	switch o.focusedPanel {
@@ -195,36 +198,23 @@ func (o *Overview) drill() tea.Cmd {
 func (o *Overview) moveCursor(delta int) {
 	switch o.focusedPanel {
 	case panelInsights:
-		o.insightList.SetItems(o.insights)
-		o.insightList.SetCursorByIdentity(o.SelectedInsightID())
 		if delta > 0 {
-			o.insightList.CursorDown()
+			o.insightList.Update(tea.KeyPressMsg{Text: "j", Code: 'j'})
 		} else {
-			o.insightList.CursorUp()
-		}
-		_, idx, ok := o.insightList.Cursor()
-		if ok {
-			o.insightCur = idx
+			o.insightList.Update(tea.KeyPressMsg{Text: "k", Code: 'k'})
 		}
 	case panelRuns:
-		runs := o.recentRunsList()
-		o.runList.SetItems(runs)
-		o.runList.SetCursorByIdentity(o.SelectedRunID())
 		if delta > 0 {
-			o.runList.CursorDown()
+			o.runList.Update(tea.KeyPressMsg{Text: "j", Code: 'j'})
 		} else {
-			o.runList.CursorUp()
-		}
-		_, idx, ok := o.runList.Cursor()
-		if ok {
-			o.runCur = idx
+			o.runList.Update(tea.KeyPressMsg{Text: "k", Code: 'k'})
 		}
 	case panelActivity:
 		o.activityScroll += delta
 		if o.activityScroll < 0 {
 			o.activityScroll = 0
 		}
-		maxScroll := len(o.activity) - 1
+		maxScroll := len(o.projectedActivityRows()) - 1
 		if maxScroll < 0 {
 			maxScroll = 0
 		}
@@ -234,37 +224,13 @@ func (o *Overview) moveCursor(delta int) {
 	}
 }
 
-func (o *Overview) syncLists() {
-	o.insightList.SetItems(o.insights)
-	if o.insightCur < len(o.insights) {
-		o.insightList.SetCursorByIdentity(o.SelectedInsightID())
-	}
-	runs := o.recentRunsList()
-	o.runList.SetItems(runs)
-	if o.runCur < len(runs) {
-		o.runList.SetCursorByIdentity(o.SelectedRunID())
-	}
-}
-
 func (o *Overview) Breadcrumb() ([]string, string) {
 	return []string{"overview"}, ""
 }
 
-func (o *Overview) Keybinds() []shell.Keybind {
-	// Overview is read-only — no selection state, no row-level actions. The
-	// hints below are the nav shortcuts that work everywhere.
-	return []shell.Keybind{
-		{Key: "g i", Label: "insights"},
-		{Key: "g r", Label: "runs"},
-		{Key: ":", Label: "cmd"},
-		{Key: "?", Label: "help"},
-		{Key: "q", Label: "quit"},
-	}
-}
-
 func (o *Overview) Counts() map[string]int {
 	return map[string]int{
-		"insights": o.overview.InsightCount,
-		"runs":     o.overview.RunCount,
+		"insights": o.overviewSummary().InsightCount,
+		"runs":     o.overviewSummary().RunCount,
 	}
 }

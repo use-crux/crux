@@ -13,38 +13,81 @@ import (
 // --- right pane: span detail ------------------------------------------------
 
 func (s *Runs) renderSpanDetail(width, height int) string {
-	if s.detail == nil || len(s.detail.Spans) == 0 {
-		header := shell.PaneHeader(width, "span: —", "", "")
-		body := centerMsg(Size{Width: width, Height: height - 1}, "no span selected")
-		return header + "\n" + body
+	if width <= 0 || height <= 0 {
+		return ""
 	}
+	if s.currentSpan() == nil {
+		header := s.spanDetailHeader(width, height)
+		if s.diagnosis == nil {
+			headerHeight := strings.Count(header, "\n") + 1
+			body := centerMsg(Size{Width: width, Height: max(0, height-headerHeight)}, "no span selected")
+			return kit.PadBlock(header+"\n"+body, width, height)
+		}
+		lines := strings.Split(kit.PadBlock(header, width, min(strings.Count(header, "\n")+1, height)), "\n")
+		lines = append(lines, s.spanDocument.Render()...)
+		return strings.Join(lines, "\n")
+	}
+	header := s.spanDetailHeader(width, height)
+	lines := strings.Split(kit.PadBlock(header, width, min(strings.Count(header, "\n")+1, height)), "\n")
+	lines = append(lines, s.spanDocument.Render()...)
+	return kit.PadBlock(strings.Join(lines, "\n"), width, height)
+}
+
+func (s *Runs) spanDetailHeader(width, height int) string {
+	status := s.spanDetailLifecycleStatus()
 	span := s.currentSpan()
 	if span == nil {
-		span = &s.detail.Spans[0]
+		return appendRunsLifecycleStatus(shell.PaneHeader(width, "Run diagnosis", "", ""), status, width)
 	}
-	title := focusTitle("span: "+truncate(span.Name, width-15), s.focus == focusSpanDetail)
-	header := shell.PaneHeader(width, title, formatSpanDuration(deref(span.DurationMs)), "")
+	headerHeight := 3
+	if status != "" {
+		headerHeight++
+	}
+	position := s.spanDocument.Position()
+	right := ""
+	if bodyHeight := max(0, height-headerHeight); position.TotalLines > bodyHeight && bodyHeight > 0 {
+		right = shell.TextMuted.Render(formatDocumentPosition(position))
+	}
+	duration := formatSpanDuration(deref(span.DurationMs))
+	title := spanDocumentTitle(sanitizeRunsInline(span.Name), width, duration, right, s.focus == focusSpanDetail)
+	return appendRunsLifecycleStatus(shell.PaneHeader(width, title, duration, right), status, width)
+}
 
+func appendRunsLifecycleStatus(header, status string, width int) string {
+	if status == "" {
+		return header
+	}
+	return header + "\n" + lifecycleStatusRow(status, width)
+}
+
+func (s *Runs) renderSpanDetailDocument(span *api.InspectRunSpan, width int) string {
 	var b strings.Builder
-	b.WriteString(header)
-	b.WriteString("\n")
+	if overview := renderDiagnosisOverview(s.diagnosis, width); overview != "" {
+		b.WriteString(overview)
+		b.WriteString("\n\n")
+	}
 
 	// IDENTITY — exactly 4 rows per the design: span_id · parent · kind · op.
 	// `primitive` is intentionally omitted — for agent/tool/llm spans it
 	// duplicates `kind`/`op`, and surfacing it as a separate row crowded
 	// the panel.
 	b.WriteString(s.section("IDENTITY"))
-	b.WriteString(kvRow("span_id", truncate(span.ID, 18), width))
+	b.WriteString(kvRow("span_id", truncateRunsInline(span.ID, 18), width))
 	b.WriteString(kvRow("parent", parentLabel(span), width))
 	b.WriteString(kvRow("kind", span.Kind, width))
 	b.WriteString(kvRowColored("op", span.Op, spanOpColor(span.Op), width))
+	status := span.Status
+	if activity := s.currentActivity(); activity != nil && diagnosisNodeID(activity.SpanID, activity.ID) == span.ID {
+		status = firstNonEmpty(activity.Status, status)
+	}
+	b.WriteString(kvRow("status", status, width))
 	b.WriteString("\n")
 
 	// TIMING
 	b.WriteString(s.section("TIMING"))
-	b.WriteString(kvRow("start", formatSpanStart(span.StartedAt, s.detail.Trace.StartedAt), width))
+	b.WriteString(kvRow("start", formatSpanStart(span.StartedAt, s.runStartedAtMillis()), width))
 	dur := formatSpanDuration(deref(span.DurationMs))
-	b.WriteString(kvRowColored("duration", dur, durationColor(span.DurationMs, s.detail.Run.DurationMs), width))
+	b.WriteString(kvRowColored("duration", dur, durationColor(span.DurationMs, s.runDurationPointer()), width))
 	b.WriteString(kvRow("self", "—", width)) // self time not exposed by backend
 	b.WriteString(s.childrenRow(span, width))
 	b.WriteString("\n")
@@ -110,21 +153,36 @@ func (s *Runs) renderSpanDetail(width, height int) string {
 		b.WriteString("\n")
 	}
 
-	// LINKED INSIGHTS — colored bullet + ID + (placeholder note).
+	// LINKED INSIGHTS — colored bullet + ID + compact relationship note.
 	if len(span.LinkedInsightIDs) > 0 {
 		b.WriteString(s.section("LINKED INSIGHTS"))
 		for _, id := range span.LinkedInsightIDs {
 			bullet := lipgloss.NewStyle().Foreground(shell.ColorRose).Render("●")
 			b.WriteString(" " + bullet + "  ")
-			b.WriteString(shell.Text.Render(padString2(id, 10)))
+			b.WriteString(shell.Text.Render(padRunsInline(id, 10)))
 			b.WriteString("  ")
 			b.WriteString(shell.TextMuted.Render("linked"))
 			b.WriteString("\n")
 		}
 	}
 
-	hdrH := strings.Count(header, "\n") + 1
-	return kit.PadBlock(b.String(), width, height-hdrH+1)
+	return strings.TrimRight(b.String(), "\n")
+}
+
+func formatDocumentPosition(position kit.DocumentPosition) string {
+	return fmt.Sprintf("%d-%d/%d", position.FirstLine, position.LastLine, position.TotalLines)
+}
+
+func spanDocumentTitle(name string, width int, subtitle, right string, focused bool) string {
+	available := width - lipgloss.Width(subtitle) - lipgloss.Width(right) - 7
+	if subtitle == "" {
+		available += 4
+	}
+	if focused {
+		available -= 2
+	}
+	nameWidth := max(0, available-lipgloss.Width("span: "))
+	return focusTitle("span: "+kit.Truncate(name, nameWidth, "…"), focused)
 }
 
 func (s *Runs) section(label string) string {
@@ -210,10 +268,8 @@ func (s *Runs) childrenRow(span *api.InspectRunSpan, width int) string {
 }
 
 func (s *Runs) childrenStats(parentID string) (count, dups int) {
-	if s.detail == nil {
-		return 0, 0
-	}
-	for _, sp := range s.detail.Spans {
+	for _, row := range s.allTimelineRows() {
+		sp := row.Span
 		if sp.ParentID == parentID {
 			count++
 			if sp.Duplicate {

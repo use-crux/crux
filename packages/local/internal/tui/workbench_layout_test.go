@@ -8,7 +8,7 @@ import (
 )
 
 func TestWorkbenchShellFuzzResize(t *testing.T) {
-	w := NewWorkbench(nil, nil, "http://localhost:4400")
+	w := newTestWorkbench(nil, nil, "http://localhost:4400")
 
 	uitest.FuzzResize(t, func(width, height int) string {
 		w.Resize(width, height)
@@ -17,11 +17,15 @@ func TestWorkbenchShellFuzzResize(t *testing.T) {
 }
 
 func TestWorkbenchHidesNavRailInSingleColumn(t *testing.T) {
-	w := NewWorkbench(nil, nil, "http://localhost:4400")
+	w := newTestWorkbench(nil, nil, "http://localhost:4400")
 	w.Resize(70, 24)
 
 	out := w.View()
-	if strings.Contains(out, "Overview") {
-		t.Fatalf("single-column workbench rendered nav rail label: %q", out)
+	lines := strings.Split(out, "\n")
+	body := strings.Join(lines[:len(lines)-1], "\n")
+	for _, navLabel := range []string{" Insights ", " Runs ", " Index "} {
+		if strings.Contains(body, navLabel) {
+			t.Fatalf("single-column workbench rendered nav rail label %q: %q", navLabel, out)
+		}
 	}
 }

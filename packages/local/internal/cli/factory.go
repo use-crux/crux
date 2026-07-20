@@ -29,6 +29,18 @@ type Factory struct {
 	io     *output.IO
 }
 
+// NewFactoryWithStreams builds a Factory whose command output is routed
+// through streams. It is the deterministic construction boundary for command
+// embeddings and tests; production may continue to use a zero-value Factory,
+// which lazily binds the process streams in [Factory.Streams].
+func NewFactoryWithStreams(streams *output.IO) *Factory {
+	f := &Factory{}
+	f.ioOnce.Do(func() {
+		f.io = streams
+	})
+	return f
+}
+
 // Client returns the API client for the devtools server, creating it on first
 // call. The client targets http://localhost:{Port}. Safe for concurrent use.
 func (f *Factory) Client() *api.Client {

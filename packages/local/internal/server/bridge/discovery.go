@@ -33,9 +33,10 @@ func DiscoverPeers(ctx context.Context, bridge *runtimebridge.Service, projectRo
 	if bridge == nil {
 		return
 	}
-	for _, endpoint := range discoverRuntimeBridgeURLs(projectRoot) {
+	logger := bridge.Logger()
+	for _, endpoint := range discoverRuntimeBridgeURLsWithLogger(projectRoot, logger) {
 		if err := registerHTTPRuntimeBridgePeer(ctx, bridge, endpoint); err != nil {
-			slog.Debug("runtime bridge HTTP peer discovery skipped", "url", endpoint, "error", err)
+			logger.Debug("runtime bridge HTTP peer discovery skipped", "url", endpoint, "error", err)
 		}
 	}
 }
@@ -83,7 +84,11 @@ func registerHTTPRuntimeBridgePeer(ctx context.Context, bridge *runtimebridge.Se
 }
 
 func discoverRuntimeBridgeURLs(projectRoot string) []string {
-	values := readRuntimeBridgeEnv(projectRoot)
+	return discoverRuntimeBridgeURLsWithLogger(projectRoot, slog.Default())
+}
+
+func discoverRuntimeBridgeURLsWithLogger(projectRoot string, logger *slog.Logger) []string {
+	values := readRuntimeBridgeEnv(projectRoot, logger)
 	var candidates []string
 	if raw := values["CRUX_BRIDGE_URL"]; raw != "" {
 		candidates = append(candidates, raw)
@@ -101,7 +106,7 @@ func discoverRuntimeBridgeURLs(projectRoot string) []string {
 	return uniqueURLs(candidates)
 }
 
-func readRuntimeBridgeEnv(projectRoot string) map[string]string {
+func readRuntimeBridgeEnv(projectRoot string, logger *slog.Logger) map[string]string {
 	values := map[string]string{}
 	for _, env := range os.Environ() {
 		key, value, ok := strings.Cut(env, "=")
@@ -110,7 +115,7 @@ func readRuntimeBridgeEnv(projectRoot string) map[string]string {
 		}
 	}
 	for _, path := range runtimeBridgeEnvFiles(projectRoot) {
-		readEnvFile(path, values)
+		readEnvFile(path, values, logger)
 	}
 	return values
 }
@@ -130,7 +135,7 @@ func runtimeBridgeEnvFiles(projectRoot string) []string {
 	}
 }
 
-func readEnvFile(path string, values map[string]string) {
+func readEnvFile(path string, values map[string]string, logger *slog.Logger) {
 	file, err := os.Open(path)
 	if err != nil {
 		return
@@ -159,7 +164,7 @@ func readEnvFile(path string, values map[string]string) {
 		values[key] = cleanEnvValue(value)
 	}
 	if err := scanner.Err(); err != nil {
-		slog.Debug("runtime bridge env file read failed", "path", path, "error", err)
+		logger.Debug("runtime bridge env file read failed", "path", path, "error", err)
 	}
 }
 

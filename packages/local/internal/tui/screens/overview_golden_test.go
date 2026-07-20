@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/tui/uitest"
 )
 
@@ -29,8 +30,9 @@ func TestOverviewGoldens(t *testing.T) {
 			screen := overview
 			if tc.name == "overview-empty" {
 				screen = NewOverview()
-				screen.loaded = true
+				setOverviewDataForTest(screen, api.InspectOverviewRecord{Tag: "InspectOverviewRecord"}, nil, nil, nil)
 			}
+			screen.Resize(Size{Width: tc.width, Height: tc.height})
 			uitest.Golden(t, tc.name, screen.View(Size{Width: tc.width, Height: tc.height}))
 		})
 	}
@@ -42,6 +44,7 @@ func TestOverviewFuzzResize(t *testing.T) {
 	relTimeNow = func() time.Time { return now }
 	defer func() { relTimeNow = prevNow }()
 	uitest.FuzzResize(t, func(width, height int) string {
+		overview.Resize(Size{Width: width, Height: height})
 		return overview.View(Size{Width: width, Height: height})
 	})
 }
@@ -52,6 +55,7 @@ func TestOverviewLayoutTwoKeepsChartAndActivity(t *testing.T) {
 	relTimeNow = func() time.Time { return now }
 	defer func() { relTimeNow = prevNow }()
 
+	overview.Resize(Size{Width: 100, Height: 30})
 	view := overview.View(Size{Width: 100, Height: 30})
 	for _, want := range []string{"Pass rate", "Activity"} {
 		if !strings.Contains(view, want) {
@@ -66,11 +70,7 @@ func fixtureOverview() (*Overview, time.Time) {
 	insights, _ := client.Insights(nil)
 	runs, _ := client.Runs(nil)
 	activity, _ := client.Activity(nil, 12)
-	return &Overview{
-		overview: overview,
-		insights: insights,
-		runs:     runs,
-		activity: activity,
-		loaded:   true,
-	}, client.Now
+	screen := NewOverview()
+	setOverviewDataForTest(screen, overview, insights, runs, activity)
+	return screen, client.Now
 }

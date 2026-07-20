@@ -15,7 +15,7 @@ func TestRunsInspectKeyIsI(t *testing.T) {
 	r := buildRunWithSpan()
 
 	// `i` should emit an InspectRequest via the returned tea.Cmd.
-	cmd := r.Update(tea.KeyPressMsg(tea.Key{Text: "i", Code: 'i'}), nil)
+	cmd := r.Update(testContext, tea.KeyPressMsg(tea.Key{Text: "i", Code: 'i'}), nil)
 	if cmd == nil {
 		t.Fatal("`i` returned nil cmd; expected an InspectRequest emitter")
 	}
@@ -24,44 +24,37 @@ func TestRunsInspectKeyIsI(t *testing.T) {
 	}
 }
 
-// TestRunsOKeyDoesNotInspect asserts that the legacy `o` binding no
-// longer triggers the raw-inspect overlay. `o` becomes the external-
-// viewer hook (stubbed for now); this guards against regressions.
+// TestRunsOKeyDoesNotInspect asserts that the removed `o` binding does not
+// trigger the raw-inspect overlay.
 func TestRunsOKeyDoesNotInspect(t *testing.T) {
 	r := buildRunWithSpan()
 
-	cmd := r.Update(tea.KeyPressMsg(tea.Key{Text: "o", Code: 'o'}), nil)
+	cmd := r.Update(testContext, tea.KeyPressMsg(tea.Key{Text: "o", Code: 'o'}), nil)
 	if cmd == nil {
-		return // perfectly fine — `o` is a stub for now
+		return
 	}
 	if _, ok := cmd().(InspectRequest); ok {
 		t.Errorf("`o` still emits InspectRequest — it should be reserved for external viewer per KEYBINDS contract")
 	}
 }
 
-// TestRunsKeybindsAdvertiseInspectKey asserts the Keybinds() list now
-// surfaces `i inspect raw` and `o open in viewer` — matching what
-// Update() actually does. No more `o inspect` lie.
-func TestRunsKeybindsAdvertiseInspectKey(t *testing.T) {
-	r := NewRuns()
+// TestRunsKeybindsAdvertiseOnlyExecutableInspectAction asserts that raw
+// inspection is visible when the selected span has data, while the unimplemented
+// external-viewer action remains absent.
+func TestRunsKeybindsAdvertiseOnlyExecutableInspectAction(t *testing.T) {
+	r := buildRunWithSpan()
 	binds := r.Keybinds()
-	gotI, gotO := false, false
+	gotI := false
 	for _, b := range binds {
 		if b.Key == "i" {
 			gotI = true
 		}
-		if b.Key == "o" && b.Label != "inspect" {
-			gotO = true
-		}
-		if b.Key == "o" && b.Label == "inspect" {
-			t.Errorf("Runs Keybinds still labels `o` as \"inspect\" — should be \"open in viewer\" per KEYBINDS contract")
+		if b.Key == "o" {
+			t.Errorf("Runs Keybinds advertised unimplemented external viewer action")
 		}
 	}
 	if !gotI {
 		t.Errorf("Runs Keybinds missing `i` (inspect raw)")
-	}
-	if !gotO {
-		t.Errorf("Runs Keybinds missing or wrongly-labelled `o`")
 	}
 }
 
@@ -69,14 +62,14 @@ func TestRunsKeybindsAdvertiseInspectKey(t *testing.T) {
 // loaded and selected — enough to exercise the inspect path.
 func buildRunWithSpan() *Runs {
 	r := NewRuns()
-	r.loaded = true
+	setRunsForTest(r)
 	body, _ := json.Marshal(map[string]any{"hello": "world"})
-	r.detail = &api.InspectRunDetailRecord{
+	setRunDiagnosisForTest(r, runDiagnosisFixture{
 		Spans: []api.InspectRunSpan{
 			{ID: "sp1", Name: "agent.run", Data: json.RawMessage(body)},
 		},
-	}
-	r.selRun = "8af2f1c"
-	r.selSpan = "sp1"
+	})
+	selectRunForTest(r, "8af2f1c")
+	selectSpanForTest(r, "sp1")
 	return r
 }

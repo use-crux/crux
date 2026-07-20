@@ -45,6 +45,7 @@ func renderPrimitivePayload(span api.InspectRunSpan, width int) string {
 	if err := json.Unmarshal(span.Data, &payload); err != nil {
 		return ""
 	}
+	payload = sanitizeRunsRenderValue(payload).(map[string]any)
 	// _start is preserved for replay; strip from the visible projection.
 	delete(payload, "_start")
 
@@ -124,18 +125,18 @@ func renderSpanError(span api.InspectRunSpan, width int) string {
 		if item.Type == "span.error" && sameJSON(item.Data, span.Error) {
 			continue
 		}
-		label := firstNonEmpty(item.Label, item.Kind, item.Type, item.ID)
+		label := sanitizeRunsInline(firstNonEmpty(item.Label, item.Kind, item.Type, item.ID))
 		if label == "" {
 			label = "error"
 		}
-		preview := errorPreview(item.Data, previewMax(width))
+		preview := sanitizeRunsInline(errorPreview(item.Data, previewMax(width)))
 		if preview == "" {
 			preview = item.ID
 		}
 		if preview == "" {
 			continue
 		}
-		b.WriteString(kvRowColored(label, truncate(preview, previewMax(width)), shell.ColorRose, width))
+		b.WriteString(kvRowColored(label, truncateRunsInline(preview, previewMax(width)), shell.ColorRose, width))
 	}
 	return b.String()
 }
@@ -143,19 +144,20 @@ func renderSpanError(span api.InspectRunSpan, width int) string {
 func renderObservedError(raw json.RawMessage, width int) string {
 	payload := decodeRawObject(raw)
 	if len(payload) == 0 {
-		text := strings.TrimSpace(string(raw))
+		text := strings.TrimSpace(sanitizeRunsInline(string(raw)))
 		if text == "" || text == "null" || text == "{}" {
 			return ""
 		}
-		return kvRowColored("error", truncate(text, previewMax(width)), shell.ColorRose, width)
+		return kvRowColored("error", truncateRunsInline(text, previewMax(width)), shell.ColorRose, width)
 	}
+	payload = sanitizeRunsRenderValue(payload).(map[string]any)
 
 	var b strings.Builder
 	if name := firstNonEmpty(stringField(payload, "name"), stringField(payload, "type"), stringField(payload, "thrown")); name != "" {
 		b.WriteString(kvRowColored("name", name, shell.ColorRose, width))
 	}
 	if msg := firstNonEmpty(stringField(payload, "message"), stringField(payload, "summary"), stringField(payload, "error")); msg != "" {
-		b.WriteString(kvRowColored("message", truncate(msg, previewMax(width)), shell.ColorRose, width))
+		b.WriteString(kvRowColored("message", truncateRunsInline(msg, previewMax(width)), shell.ColorRose, width))
 	}
 	if category := stringField(payload, "category"); category != "" {
 		b.WriteString(kvRow("category", category, width))
@@ -175,8 +177,9 @@ func renderObservedError(raw json.RawMessage, width int) string {
 func errorPreview(raw json.RawMessage, max int) string {
 	payload := decodeRawObject(raw)
 	if len(payload) == 0 {
-		return valuePreview(strings.TrimSpace(string(raw)), max)
+		return valuePreview(strings.TrimSpace(sanitizeRunsInline(string(raw))), max)
 	}
+	payload = sanitizeRunsRenderValue(payload).(map[string]any)
 	if msg := firstNonEmpty(stringField(payload, "message"), stringField(payload, "summary"), stringField(payload, "error")); msg != "" {
 		return msg
 	}
@@ -205,7 +208,7 @@ func stackPreview(stack string, max int) string {
 	if len(parts) == 0 {
 		return ""
 	}
-	return truncate(strings.Join(parts, " | "), max)
+	return truncateRunsInline(strings.Join(parts, " | "), max)
 }
 
 func hasJSONValue(raw json.RawMessage) bool {
@@ -233,7 +236,7 @@ func renderToolPayload(p map[string]any, width int) string {
 		b.WriteString(kvRow("result", valuePreview(result, previewMax(width)), width))
 	}
 	if e := stringField(p, "error"); e != "" {
-		b.WriteString(kvRowColored("error", truncate(e, previewMax(width)), shell.ColorRose, width))
+		b.WriteString(kvRowColored("error", truncateRunsInline(e, previewMax(width)), shell.ColorRose, width))
 	}
 	if size := intField(p, "outputSize"); size > 0 {
 		b.WriteString(kvRow("output size", fmt.Sprintf("%d bytes", size), width))
@@ -309,7 +312,7 @@ func renderGenerationPayload(p map[string]any, width int) string {
 		b.WriteString(kvRow("output", valuePreview(output, previewMax(width)), width))
 	}
 	if e := stringField(p, "error"); e != "" {
-		b.WriteString(kvRowColored("error", truncate(e, previewMax(width)), shell.ColorRose, width))
+		b.WriteString(kvRowColored("error", truncateRunsInline(e, previewMax(width)), shell.ColorRose, width))
 	}
 	return b.String()
 }
@@ -415,7 +418,7 @@ func renderDelegatePayload(p map[string]any, width int) string {
 		b.WriteString(kvRowColored("to", to, shell.ColorTeal, width))
 	}
 	if reason := stringField(p, "reason"); reason != "" {
-		b.WriteString(kvRow("reason", truncate(reason, previewMax(width)), width))
+		b.WriteString(kvRow("reason", truncateRunsInline(reason, previewMax(width)), width))
 	}
 	if payload, ok := p["payload"]; ok && payload != nil {
 		b.WriteString(kvRow("payload", valuePreview(payload, previewMax(width)), width))
@@ -443,10 +446,10 @@ func renderHandoffPayload(p map[string]any, width int) string {
 		b.WriteString(padRow(row, width) + "\n")
 	}
 	if id := stringField(p, "handoffId"); id != "" {
-		b.WriteString(kvRow("handoff id", truncate(id, 24), width))
+		b.WriteString(kvRow("handoff id", truncateRunsInline(id, 24), width))
 	}
 	if summary := stringField(p, "summary"); summary != "" {
-		b.WriteString(kvRow("summary", truncate(summary, previewMax(width)), width))
+		b.WriteString(kvRow("summary", truncateRunsInline(summary, previewMax(width)), width))
 	}
 	if inSize := intField(p, "inputSize"); inSize > 0 {
 		b.WriteString(kvRow("input size", fmt.Sprintf("%d bytes", inSize), width))
@@ -496,7 +499,7 @@ func renderRetrievalPayload(p map[string]any, width int) string {
 				line := shell.Amber.Render(scoreStr) +
 					shell.Text.Render(id) +
 					"  " +
-					shell.TextDim.Render(truncate(content, width-len(id)-12))
+					shell.TextDim.Render(truncateRunsInline(content, width-lipgloss.Width(id)-12))
 				b.WriteString(" · " + line + "\n")
 			}
 		}
@@ -541,7 +544,7 @@ func renderJudgePayload(p map[string]any, width int) string {
 	}
 	if r := stringField(p, "rationale"); r != "" {
 		// One-line preview — full rationale is in the `i` inspect overlay.
-		b.WriteString(kvRow("rationale", truncate(r, previewMax(width)), width))
+		b.WriteString(kvRow("rationale", truncateRunsInline(r, previewMax(width)), width))
 	}
 	if subs, ok := p["subScores"].(map[string]any); ok && len(subs) > 0 {
 		// Per-metric sub-scores get one row each — these are the
@@ -637,7 +640,7 @@ func renderGenericPayload(p map[string]any, width int) string {
 		v := p[k]
 		switch t := v.(type) {
 		case string:
-			b.WriteString(kvRow(k, truncate(t, width-16), width))
+			b.WriteString(kvRow(k, truncateRunsInline(t, width-16), width))
 		case bool:
 			b.WriteString(kvRow(k, fmt.Sprintf("%t", t), width))
 		case float64:
@@ -645,7 +648,7 @@ func renderGenericPayload(p map[string]any, width int) string {
 		case nil:
 			b.WriteString(kvRow(k, shell.TextMuted.Render("—"), width))
 		default:
-			b.WriteString(kvRow(k, truncate(jsonOneLine(v), width-16), width))
+			b.WriteString(kvRow(k, truncateRunsInline(jsonOneLine(v), width-16), width))
 		}
 	}
 	return b.String()
@@ -703,15 +706,11 @@ func valuePreview(v any, max int) string {
 	}
 	switch t := v.(type) {
 	case string:
-		s := strings.ReplaceAll(t, "\n", " ")
-		s = strings.TrimSpace(s)
+		s := strings.TrimSpace(sanitizeRunsInline(t))
 		if s == "" {
 			return `""`
 		}
-		if len(s) > max {
-			return s[:max-1] + "…"
-		}
-		return s
+		return truncateRunsInline(s, max)
 	case bool:
 		if t {
 			return "true"
@@ -744,13 +743,9 @@ func valuePreview(v any, max int) string {
 		if more > 0 {
 			summary += fmt.Sprintf(" +%d", more)
 		}
-		return fmt.Sprintf("%d keys · %s", len(keys), summary)
+		return truncateRunsInline(fmt.Sprintf("%d keys · %s", len(keys), summary), max)
 	default:
-		one := jsonOneLine(v)
-		if len(one) > max {
-			return one[:max-1] + "…"
-		}
-		return one
+		return truncateRunsInline(jsonOneLine(v), max)
 	}
 }
 

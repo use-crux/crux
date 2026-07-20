@@ -2,8 +2,10 @@ package assets
 
 import (
 	"embed"
+	"log/slog"
 	"net/http"
 
+	"github.com/use-crux/crux/packages/local/internal/process/workerproc"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/workers"
 )
 
@@ -42,7 +44,7 @@ func EmbeddedSourceResolverScript() []byte {
 
 // NewEmbeddedProjectIndexer creates the local Project Index worker bundle with the
 // scripts embedded by the local runtime.
-func NewEmbeddedProjectIndexer(scriptPath string) *workers.Bundle {
+func NewEmbeddedProjectIndexer(scriptPath string, processOptions ...workerproc.Option) *workers.Bundle {
 	return NewProjectIndexer(ProjectIndexerOptions{
 		ScriptPath: scriptPath,
 		Assets: ProjectIndexerAssets{
@@ -50,13 +52,19 @@ func NewEmbeddedProjectIndexer(scriptPath string) *workers.Bundle {
 			ProjectSemanticIndexer: embeddedProjectSemanticIndexer,
 			ProjectRuntimeIndexer:  embeddedProjectRuntimeIndexer,
 		},
+		ProcessOptions: processOptions,
 	})
 }
 
 // EmbeddedUIHandler serves the embedded local devtools UI.
-func EmbeddedUIHandler() http.Handler {
+func EmbeddedUIHandler(logger ...*slog.Logger) http.Handler {
+	var scopedLogger *slog.Logger
+	if len(logger) > 0 {
+		scopedLogger = logger[0]
+	}
 	return UIHandler(UIOptions{
 		EmbeddedFS: embeddedUI,
+		Logger:     scopedLogger,
 	})
 }
 

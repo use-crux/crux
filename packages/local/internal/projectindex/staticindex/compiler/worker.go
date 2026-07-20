@@ -39,8 +39,16 @@ func NewPool(size int, commandPath string, commandArgs ...string) *Pool {
 	return &Pool{Pool: frontend.NewPool(size, commandPath, commandArgs...)}
 }
 
+func NewPoolWithProcessOptions(size int, commandPath string, processOptions []workerproc.Option, commandArgs ...string) *Pool {
+	return &Pool{Pool: frontend.NewPoolWithProcessOptions(size, commandPath, processOptions, commandArgs...)}
+}
+
 func NewAdaptivePool(maxSize int, commandPath string, commandArgs ...string) *Pool {
 	return &Pool{Pool: frontend.NewAdaptivePool(maxSize, commandPath, commandArgs...)}
+}
+
+func NewAdaptivePoolWithProcessOptions(maxSize int, commandPath string, processOptions []workerproc.Option, commandArgs ...string) *Pool {
+	return &Pool{Pool: frontend.NewAdaptivePoolWithProcessOptions(maxSize, commandPath, processOptions, commandArgs...)}
 }
 
 func (p *Pool) staticIndexWorker() (*Worker, error) {

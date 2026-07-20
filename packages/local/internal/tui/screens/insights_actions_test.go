@@ -27,7 +27,7 @@ func TestInsightsTKeyDrillsToLinkedTrace(t *testing.T) {
 	i.selectedID = "INS-014"
 	i.loaded = true
 
-	cmd := i.Update(tea.KeyPressMsg(tea.Key{Text: "t", Code: 't'}), nil)
+	cmd := i.Update(testContext, tea.KeyPressMsg(tea.Key{Text: "t", Code: 't'}), nil)
 	if cmd == nil {
 		t.Fatal("pressing `t` returned nil; expected NavigateRequest")
 	}
@@ -48,7 +48,7 @@ func TestInsightsTKeyNoopWhenNoLinkedTraces(t *testing.T) {
 	i.selectedID = "INS-99"
 	i.loaded = true
 
-	cmd := i.Update(tea.KeyPressMsg(tea.Key{Text: "t", Code: 't'}), nil)
+	cmd := i.Update(testContext, tea.KeyPressMsg(tea.Key{Text: "t", Code: 't'}), nil)
 	if cmd != nil {
 		t.Errorf("pressing `t` with no linked traces returned non-nil %v; expected no-op", cmd)
 	}
@@ -60,12 +60,12 @@ func TestInsightsBracketKeysSwitchTabs(t *testing.T) {
 	i.selectedID = "INS-014"
 	i.loaded = true
 
-	i.Update(tea.KeyPressMsg(tea.Key{Text: "]", Code: ']'}), nil)
+	i.Update(testContext, tea.KeyPressMsg(tea.Key{Text: "]", Code: ']'}), nil)
 	if i.tab != "traces" {
 		t.Fatalf("] should advance to traces tab, got %q", i.tab)
 	}
 
-	i.Update(tea.KeyPressMsg(tea.Key{Text: "[", Code: '['}), nil)
+	i.Update(testContext, tea.KeyPressMsg(tea.Key{Text: "[", Code: '['}), nil)
 	if i.tab != "diagnosis" {
 		t.Fatalf("[ should return to diagnosis tab, got %q", i.tab)
 	}
@@ -79,7 +79,7 @@ func TestInsightsExportEmitsCmd(t *testing.T) {
 	i.selectedID = "INS-014"
 	i.loaded = true
 
-	cmd := i.Update(tea.KeyPressMsg(tea.Key{Text: "e", Code: 'e'}), nil)
+	cmd := i.Update(testContext, tea.KeyPressMsg(tea.Key{Text: "e", Code: 'e'}), nil)
 	if cmd == nil {
 		t.Error("pressing `e` returned nil; expected export cmd")
 	}
@@ -104,7 +104,7 @@ func TestInsightsUnsupportedActionsDoNotEmitStubs(t *testing.T) {
 			i.selectedID = "INS-014"
 			i.loaded = true
 
-			cmd := i.Update(tea.KeyPressMsg(tea.Key{Text: string(tc.key), Code: tc.key}), nil)
+			cmd := i.Update(testContext, tea.KeyPressMsg(tea.Key{Text: string(tc.key), Code: tc.key}), nil)
 			if cmd != nil {
 				t.Errorf("pressing %q returned a stub command; missing backend actions must stay blocked", tc.key)
 			}
@@ -114,6 +114,7 @@ func TestInsightsUnsupportedActionsDoNotEmitStubs(t *testing.T) {
 
 func TestInsightsKeybindsOnlyAdvertiseWiredActions(t *testing.T) {
 	i := NewInsights()
+	i.applyInsights([]api.InspectInsightRecord{sampleInsight()})
 	got := make([]string, 0)
 	for _, bind := range i.Keybinds() {
 		got = append(got, bind.Key+" "+bind.Label)
@@ -128,5 +129,27 @@ func TestInsightsKeybindsOnlyAdvertiseWiredActions(t *testing.T) {
 		if strings.Contains(text, blocked) {
 			t.Fatalf("keybinds advertised blocked action %q: %s", blocked, text)
 		}
+	}
+}
+
+func TestInsightsKeybindsOmitRecordActionsWithoutSelection(t *testing.T) {
+	i := NewInsights()
+
+	for _, bind := range i.Keybinds() {
+		switch bind.Key {
+		case "t", "f", "x", "e":
+			t.Errorf("Insights advertised record action %q without a selected insight", bind.Key)
+		}
+	}
+}
+
+func TestInsightsTabCycleOmitsUnimplementedCompare(t *testing.T) {
+	i := NewInsights()
+	i.tab = "cases"
+
+	i.Update(testContext, tea.KeyPressMsg(tea.Key{Code: tea.KeyTab}), nil)
+
+	if i.tab != "fix" {
+		t.Fatalf("tab after cases = %q, want fix", i.tab)
 	}
 }

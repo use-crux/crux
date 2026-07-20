@@ -132,10 +132,9 @@ func TestDumpPrimitiveRenders(t *testing.T) {
 	for _, tc := range cases {
 		body, _ := json.Marshal(tc.payload)
 		r := NewRuns()
-		r.loaded = true
-		r.selRun = "run-x"
-		r.detail = &api.InspectRunDetailRecord{
-			Run: api.InspectRunRecord{TraceID: "run-x"},
+		selectRunForTest(r, "run-x")
+		setRunDiagnosisForTest(r, runDiagnosisFixture{
+			RunID: "run-x",
 			Spans: []api.InspectRunSpan{
 				{
 					ID:        "sp1",
@@ -146,11 +145,11 @@ func TestDumpPrimitiveRenders(t *testing.T) {
 					Data:      json.RawMessage(body),
 				},
 			},
-			Trace: api.InspectTraceRecord{StartedAt: 1716730000000},
-		}
-		r.selSpan = "sp1"
+			StartedAt: 1716730000000,
+		})
+		selectSpanForTest(r, "sp1")
 
-		out := stripANSI(r.renderSpanDetail(80, 60))
+		out := stripANSI(renderSpanDetailForTest(r, 80, 60))
 		// Trim trailing all-whitespace lines for readability.
 		lines := strings.Split(out, "\n")
 		end := len(lines)

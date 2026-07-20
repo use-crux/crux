@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/use-crux/crux/packages/local/internal/process/workerproc"
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	staticcompiler "github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/compiler"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/frontend"
@@ -19,15 +20,15 @@ func (w *Bundle) WithSyntaxParser(worker frontend.Parser) *Bundle {
 	return w
 }
 
-func syntaxWorkerFromEnv() frontend.Parser {
+func syntaxWorkerFromEnv(processOptions []workerproc.Option) frontend.Parser {
 	commandPath, ok := frontend.CommandPathFromEnv()
 	if !ok {
 		return nil
 	}
 	if frontend.UseAdaptivePoolFromEnv() {
-		return staticcompiler.NewAdaptivePool(frontend.DefaultPoolSize(), commandPath, "serve")
+		return staticcompiler.NewAdaptivePoolWithProcessOptions(frontend.DefaultPoolSize(), commandPath, processOptions, "serve")
 	}
-	return staticcompiler.NewPool(frontend.PoolSizeFromEnv(), commandPath, "serve")
+	return staticcompiler.NewPoolWithProcessOptions(frontend.PoolSizeFromEnv(), commandPath, processOptions, "serve")
 }
 
 // InspectProjectStaticSyntaxPlan returns the static parser plan used by the

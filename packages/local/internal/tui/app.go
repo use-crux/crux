@@ -6,15 +6,13 @@
 package tui
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
-	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/tui/screens"
 )
 
@@ -25,10 +23,6 @@ import (
 // this one) so they remain independently testable.
 type DataClient interface {
 	screens.DataClient
-
-	// Legacy raw access — used only by the boot phase and any future
-	// non-Inspect screens (e.g. the "traces" tab body).
-	GetJSON(ctx context.Context, path string, target any) error
 }
 
 // App is the root Bubbletea model. It owns boot lifecycle + the workbench.
@@ -66,43 +60,24 @@ type App struct {
 	// Callbacks.
 	onInitialDataLoaded func()
 	onDashboardVisible  func()
-	onQuitRequested     func()
 	initialDataNotified bool
 	dashboardNotified   bool
 	quitRequested       bool
-}
-
-// NewApp creates the root TUI model.
-func NewApp(serverURL string, c DataClient, startupMode string, startupDebug bool) *App {
-	s := spinner.New(spinner.WithSpinner(spinner.MiniDot))
-	s.Style = lipgloss.NewStyle().Foreground(accent)
-	return &App{
-		client:         c,
-		serverURL:      serverURL,
-		spinner:        s,
-		pendingMsgs:    make(chan tea.Msg, 256),
-		programStarted: make(chan struct{}),
-		bootPhase:      bootPhaseOrder[0],
-		startupMode:    startupMode,
-		startupDebug:   startupDebug,
-		workbench:      NewWorkbench(c, c, serverURL),
-	}
+	shutdownStarted     atomic.Bool
+	shutdownCallback    func() error
+	shutdownResult      ShutdownResult
+	shutdownMu          sync.RWMutex
+	rootDone            <-chan struct{}
 }
 
 // --- External API (called from dev.go) ---
 
 func (a *App) SetInitialDataLoadedCallback(fn func()) { a.onInitialDataLoaded = fn }
 func (a *App) SetDashboardVisibleCallback(fn func())  { a.onDashboardVisible = fn }
-func (a *App) SetQuitRequestedCallback(fn func())     { a.onQuitRequested = fn }
 
 // SendStoreChanged injects a local store change into the TUI event loop.
 // Triggers the active screen to re-fetch.
 func (a *App) SendStoreChanged() { a.sendMsg(storeChangedMsg{}) }
-
-// SendInspectEvent forwards a typed Inspect event into the TUI event loop.
-// Used by `runTUI` to bridge Inspect subscriptions into Bubble Tea
-// without a JSON roundtrip.
-func (a *App) SendInspectEvent(ev api.InspectEvent) { a.sendMsg(inspectEventMsg(ev)) }
 
 // SendMsg injects an already-typed Bubble Tea message into the TUI event loop.
 // It is the bridge entrypoint for batched, revision-tagged live updates.
@@ -129,6 +104,9 @@ func (a *App) SendBootError(err error) {
 }
 
 func (a *App) sendMsg(msg tea.Msg) {
+	if a.shutdownStarted.Load() {
+		return
+	}
 	a.programMu.RLock()
 	p := a.program
 	a.programMu.RUnlock()
@@ -170,13 +148,23 @@ func (a *App) Init() tea.Cmd {
 		close(a.programStarted)
 	})
 	if a.bootComplete {
-		return tea.Batch(a.spinner.Tick, a.workbench.Init())
+		return tea.Batch(a.watchRootCancellation(), a.spinner.Tick, a.workbench.Init())
 	}
-	return a.spinner.Tick
+	return tea.Batch(a.watchRootCancellation(), a.spinner.Tick)
 }
 
 func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if finished, ok := msg.(shutdownFinishedMsg); ok {
+		return a, a.finishShutdown(finished.result)
+	}
+	if a.shutdownStarted.Load() {
+		return a, nil
+	}
+
 	switch m := msg.(type) {
+	case shutdownRequestMsg:
+		return a, a.beginShutdown(m.cause)
+
 	case tea.WindowSizeMsg:
 		a.width = m.Width
 		a.height = m.Height
@@ -188,15 +176,15 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		if !a.bootComplete || a.bootError != "" {
 			switch m.String() {
-			case "q", "ctrl+c":
-				a.requestQuit()
-				return a, tea.Quit
+			case "q":
+				return a, a.requestShutdown(ShutdownClean)
+			case "ctrl+c":
+				return a, a.requestShutdown(ShutdownRawInterrupt)
 			}
 			return a, nil
 		}
-		if m.String() == "q" || m.String() == "ctrl+c" {
-			a.requestQuit()
-			return a, tea.Quit
+		if m.String() == "ctrl+c" {
+			return a, a.requestShutdown(ShutdownRawInterrupt)
 		}
 		return a, a.workbench.Update(m)
 
@@ -275,16 +263,6 @@ func (a *App) viewContent() string {
 }
 
 // --- State helpers ---
-
-func (a *App) requestQuit() {
-	if a.quitRequested {
-		return
-	}
-	a.quitRequested = true
-	if a.onQuitRequested != nil {
-		go a.onQuitRequested()
-	}
-}
 
 func (a *App) maybeNotifyDashboardVisible() {
 	if a.dashboardNotified || !a.ready || !a.bootComplete {

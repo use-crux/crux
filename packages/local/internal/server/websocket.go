@@ -31,39 +31,59 @@ type WSHub struct {
 	mu                  sync.Mutex
 	clients             map[*wsClient]struct{}
 	ctx                 context.Context
+	cancel              context.CancelFunc
+	closed              bool
+	closeOnce           sync.Once
+	closeDone           chan struct{}
+	workers             sync.WaitGroup
 	devtools            *devtools.Service
 	inspectEvents       *inspect.EventBus
 	observabilityEvents *observability.EventBus
 	runtimeBridge       *runtimebridge.Service
+	logger              *slog.Logger
 	indexMu             sync.Mutex
 	lastIndex           store.IndexData
 	hasLastIndex        bool
 	indexGeneration     uint64
 }
 
-// NewWSHub creates a WebSocket hub for the given store.
-func NewWSHub(ctx context.Context, devtoolsSvc *devtools.Service, inspectEvents *inspect.EventBus, observabilityEvents *observability.EventBus, runtimeBridge *runtimebridge.Service) *WSHub {
+// NewWSHub creates a WebSocket hub and routes its diagnostics to logger.
+func NewWSHub(ctx context.Context, devtoolsSvc *devtools.Service, inspectEvents *inspect.EventBus, observabilityEvents *observability.EventBus, runtimeBridge *runtimebridge.Service, logger *slog.Logger) *WSHub {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	hubCtx, cancel := context.WithCancel(ctx)
+	if logger == nil {
+		logger = slog.Default()
+	}
 	h := &WSHub{
 		clients:       make(map[*wsClient]struct{}),
-		ctx:           ctx,
+		ctx:           hubCtx,
+		cancel:        cancel,
+		closeDone:     make(chan struct{}),
 		devtools:      devtoolsSvc,
 		runtimeBridge: runtimeBridge,
+		logger:        logger,
 	}
 	if inspectEvents != nil {
 		h.inspectEvents = inspectEvents
-		go h.forwardInspectEvents(inspectEvents.Subscribe(ctx))
+		h.startWorker(func() { h.forwardInspectEvents(inspectEvents.Subscribe(hubCtx)) })
 	}
 	if observabilityEvents != nil {
 		h.observabilityEvents = observabilityEvents
-		go h.forwardObservabilityEvents(observabilityEvents.Subscribe(ctx))
+		h.startWorker(func() { h.forwardObservabilityEvents(observabilityEvents.Subscribe(hubCtx)) })
 	}
 	if devtoolsSvc != nil && devtoolsSvc.IndexEvents() != nil {
 		h.rememberIndex(devtoolsSvc.ProjectIndexSnapshot())
-		go h.forwardIndexEvents(devtoolsSvc.IndexEvents().Subscribe(ctx))
+		h.startWorker(func() { h.forwardIndexEvents(devtoolsSvc.IndexEvents().Subscribe(hubCtx)) })
 	}
 	if runtimeBridge != nil {
-		go h.forwardRuntimeBridgeEvents(runtimeBridge.Subscribe(ctx))
+		h.startWorker(func() { h.forwardRuntimeBridgeEvents(runtimeBridge.Subscribe(hubCtx)) })
 	}
+	h.startWorker(func() {
+		<-hubCtx.Done()
+		h.initiateClose()
+	})
 	return h
 }
 
@@ -71,35 +91,61 @@ func NewWSHub(ctx context.Context, devtoolsSvc *devtools.Service, inspectEvents 
 func (h *WSHub) HandleUpgrade(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		slog.Error("websocket upgrade failed", "error", err)
+		h.log().Error("websocket upgrade failed", "error", err)
 		return
 	}
 
 	client := newWSClient(h, conn)
 	h.mu.Lock()
+	if h.closed {
+		h.mu.Unlock()
+		_ = conn.Close()
+		return
+	}
 	h.clients[client] = struct{}{}
 	clientCount := len(h.clients)
+	h.workers.Add(1)
 	h.mu.Unlock()
 
-	go client.writePump()
+	go func() {
+		defer h.workers.Done()
+		client.writePump()
+	}()
 
 	// Register before the snapshot so a caller that mutates immediately after
 	// receiving the snapshot cannot miss the live event.
 	h.sendSnapshot(client)
 
-	slog.Info("websocket client connected", "clients", clientCount)
+	h.log().Info("websocket client connected", "clients", clientCount)
 
 	// Read pump — just drain messages (we don't expect client→server messages)
+	h.mu.Lock()
+	if h.closed {
+		h.mu.Unlock()
+		client.close()
+		return
+	}
+	h.workers.Add(1)
+	h.mu.Unlock()
 	go func() {
+		defer h.workers.Done()
 		defer func() {
 			remaining := client.close()
-			slog.Info("websocket client disconnected", "clients", remaining)
+			h.log().Info("websocket client disconnected", "clients", remaining)
 		}()
 		for {
 			if _, _, err := conn.ReadMessage(); err != nil {
 				return
 			}
 		}
+	}()
+}
+
+func (h *WSHub) startWorker(run func()) {
+	h.workers.Add(1)
+	go func() {
+		defer h.workers.Done()
+		run()
 	}()
 }
 
@@ -133,10 +179,17 @@ func (h *WSHub) removeClient(client *wsClient) int {
 func (h *WSHub) BroadcastJSON(v any) {
 	data, err := json.Marshal(v)
 	if err != nil {
-		slog.Error("websocket marshal failed", "error", err)
+		h.log().Error("websocket marshal failed", "error", err)
 		return
 	}
 	h.Broadcast(data)
+}
+
+func (h *WSHub) log() *slog.Logger {
+	if h.logger != nil {
+		return h.logger
+	}
+	return slog.Default()
 }
 
 // ClientCount returns the number of connected WebSocket clients.

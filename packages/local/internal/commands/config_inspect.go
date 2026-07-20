@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"os"
 	"path"
 	"path/filepath"
@@ -29,7 +28,7 @@ type configInspectOptions struct {
 	project    string
 }
 
-type projectConfigResolveFunc func(ctx context.Context, root, configPath, projectName string) (json.RawMessage, error)
+type projectConfigResolveFunc func(ctx context.Context, root, configPath, projectName string, process commandWorkerProcess) (json.RawMessage, error)
 
 var resolveProjectConfigForInspect projectConfigResolveFunc = inspectProjectConfigWithWorker
 
@@ -65,26 +64,18 @@ side effects) so explicit overrides are reflected, not just defaults.`,
   crux config inspect --json`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Resolution spawns a Node worker whose lifecycle logs (slog "node
-			// worker started"/"stopping…") are internal noise for a one-shot
-			// command. Silence them so the rendered config is the only output;
-			// CRUX_STARTUP_DEBUG=1 keeps them for troubleshooting.
-			if !startupDebugEnabled(false) {
-				slog.SetDefault(slog.New(slog.NewTextHandler(io.Discard, nil)))
-			}
-
 			root, err := resolveConfigInspectRoot(opts.cwd)
 			if err != nil {
 				return err
 			}
 
 			io := f.Streams()
-			config, err := resolveProjectConfigWithProgress(cmd.Context(), io, root, opts.configPath, opts.project)
+			config, err := resolveProjectConfigWithProgress(cmd.Context(), io, root, opts.configPath, opts.project, newCommandWorkerProcess(io))
 			if err != nil {
 				return err
 			}
 			if opts.jsonOutput {
-				return writePrettyJSON(cmd.OutOrStdout(), config)
+				return writePrettyJSON(io.Out, config)
 			}
 			return printConfigInspect(io, config)
 		},
@@ -115,10 +106,11 @@ func resolveProjectConfigWithProgress(
 	ctx context.Context,
 	io *output.IO,
 	root, configPath, projectName string,
+	process commandWorkerProcess,
 ) (json.RawMessage, error) {
 	line := io.NewStatusLine()
 	if !line.Active() {
-		return resolveProjectConfigForInspect(ctx, root, configPath, projectName)
+		return resolveProjectConfigForInspect(ctx, root, configPath, projectName, process)
 	}
 
 	frames := []rune(commandui.SpinnerFrames)
@@ -139,7 +131,7 @@ func resolveProjectConfigWithProgress(
 		}
 	}()
 
-	config, err := resolveProjectConfigForInspect(ctx, root, configPath, projectName)
+	config, err := resolveProjectConfigForInspect(ctx, root, configPath, projectName, process)
 	close(done)
 	<-stopped
 	line.Clear()
@@ -151,8 +143,9 @@ func inspectProjectConfigWithWorker(
 	root string,
 	configPath string,
 	projectName string,
+	process commandWorkerProcess,
 ) (json.RawMessage, error) {
-	worker := assets.NewEmbeddedProjectIndexer("")
+	worker := assets.NewEmbeddedProjectIndexer("", process.options()...)
 	defer worker.Close()
 
 	if _, ok := ctx.Deadline(); !ok {

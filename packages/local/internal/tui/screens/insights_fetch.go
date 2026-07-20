@@ -9,9 +9,9 @@ import (
 
 type insightsListLoadedMsg []api.InspectInsightRecord
 
-func fetchInsightsList(c DataClient) tea.Cmd {
+func fetchInsightsList(ctx context.Context, c DataClient) tea.Cmd {
 	return func() tea.Msg {
-		recs, err := c.Insights(context.Background())
+		recs, err := c.Insights(ctx)
 		if err != nil {
 			return dataErrMsg(err.Error())
 		}

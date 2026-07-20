@@ -1,6 +1,9 @@
 package assets
 
-import "github.com/use-crux/crux/packages/local/internal/projectindex/workers"
+import (
+	"github.com/use-crux/crux/packages/local/internal/process/workerproc"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/workers"
+)
 
 // ProjectIndexerAssets carries the embedded worker scripts used by the local
 // Project Index workers.
@@ -17,6 +20,8 @@ type ProjectIndexerOptions struct {
 	ProjectSemanticScriptPath string
 	ProjectRuntimeScriptPath  string
 	Assets                    ProjectIndexerAssets
+	// ProcessOptions route lifecycle logs and child stderr for owned workers.
+	ProcessOptions []workerproc.Option
 }
 
 // NewProjectIndexer creates the Go-owned Project Index worker bundle from local runtime
@@ -32,5 +37,6 @@ func NewProjectIndexer(options ProjectIndexerOptions) *workers.Bundle {
 			ProjectSemanticIndexer: options.Assets.ProjectSemanticIndexer,
 			ProjectRuntimeIndexer:  options.Assets.ProjectRuntimeIndexer,
 		},
+		ProcessOptions: options.ProcessOptions,
 	})
 }

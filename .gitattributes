@@ -1,2 +1,2 @@
 * text=auto eol=lf
-
+*.golden whitespace=-blank-at-eof

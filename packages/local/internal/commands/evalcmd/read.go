@@ -8,11 +8,12 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/use-crux/crux/packages/local/internal/cli"
 	"github.com/use-crux/crux/packages/local/internal/evalfs"
 	"github.com/use-crux/crux/packages/local/internal/projectroot"
 )
 
-func newShowCmd() *cobra.Command {
+func newShowCmd(f *cli.Factory) *cobra.Command {
 	var cwd string
 	cmd := &cobra.Command{
 		Use:          "show <eval-run-id>",
@@ -28,14 +29,14 @@ func newShowCmd() *cobra.Command {
 			if !found {
 				return fmt.Errorf("Eval run %q was not found under %s", args[0], root)
 			}
-			return renderSavedRun(cmd.OutOrStdout(), raw)
+			return renderSavedRun(f.Streams().Out, raw)
 		},
 	}
 	cmd.Flags().StringVar(&cwd, "cwd", "", "Project root containing the Eval run")
 	return cmd
 }
 
-func newDiffCmd() *cobra.Command {
+func newDiffCmd(f *cli.Factory) *cobra.Command {
 	var cwd string
 	cmd := &cobra.Command{
 		Use:          "diff <run-a> <run-b>",
@@ -58,7 +59,7 @@ func newDiffCmd() *cobra.Command {
 			if a.EvalID != b.EvalID {
 				return fmt.Errorf("cannot diff Evals %q and %q; choose two runs of the same Eval", a.EvalID, b.EvalID)
 			}
-			return renderRunDiff(cmd.OutOrStdout(), a.Raw, b.Raw)
+			return renderRunDiff(f.Streams().Out, a.Raw, b.Raw)
 		},
 	}
 	cmd.Flags().StringVar(&cwd, "cwd", "", "Project root containing Eval runs")

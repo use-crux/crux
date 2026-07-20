@@ -1,8 +1,8 @@
 package tui
 
 // Kind names a record type that screens can stage in the workbench's
-// cross-screen selection store. See ADR-0051 for the architectural
-// rationale. Adding a kind is additive; removing one is a breaking
+// cross-screen selection store from the approved stabilization design.
+// Adding a kind is additive; removing one is a breaking
 // change for every screen that reads it.
 type Kind string
 

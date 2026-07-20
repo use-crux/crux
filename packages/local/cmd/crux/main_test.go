@@ -7,7 +7,25 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/use-crux/crux/packages/local/internal/cli"
+	"github.com/use-crux/crux/packages/local/internal/output"
 )
+
+func TestRootHelpUsesFactoryOutputWithoutCobraStreamOverrides(t *testing.T) {
+	var out, errOut bytes.Buffer
+	streams := output.NewTestIO(&out, &errOut, output.TestIOOptions{})
+	cmd := newRootCommand(cli.NewFactoryWithStreams(streams))
+	cmd.SetArgs([]string{"--help"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "crux <command> [flags]") {
+		t.Fatalf("root help did not use factory output: %q", out.String())
+	}
+	if errOut.Len() != 0 {
+		t.Fatalf("root help wrote diagnostics: %q", errOut.String())
+	}
+}
 
 func TestRootHelpNamesEvalAsCanonicalSurfaceAndRemovesQuality(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")

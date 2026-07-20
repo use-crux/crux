@@ -77,11 +77,27 @@ func TestRunManifestRejectsInvalidArtifactBeforeReplacement(t *testing.T) {
 	}
 }
 
+func TestDeploymentManifestWorkerRequiresExplicitPath(t *testing.T) {
+	t.Setenv("CRUX_STATIC_INDEX_WORKER", "")
+
+	if workerPath, ok := deploymentManifestWorkerPath(); ok {
+		t.Fatalf("worker path = %q, want no implicitly discovered workspace worker", workerPath)
+	}
+}
+
+func TestDeploymentManifestWorkerUsesExplicitPath(t *testing.T) {
+	t.Setenv("CRUX_STATIC_INDEX_WORKER", " /tmp/crux-static-index-worker ")
+
+	workerPath, ok := deploymentManifestWorkerPath()
+	if !ok || workerPath != "/tmp/crux-static-index-worker" {
+		t.Fatalf("worker path = %q, %t; want explicit path", workerPath, ok)
+	}
+}
+
 func TestCompileDeploymentManifestIsStableAcrossCheckoutRoots(t *testing.T) {
-	workerPath := filepath.Join(filepath.Dir(deploymentManifestGoldenPath(t)), "..", "..", "..", "..", "local", "crux-static-index-worker")
-	workerPath = filepath.Clean(workerPath)
-	if _, err := os.Stat(workerPath); err != nil {
-		t.Skip("build crux-static-index-worker to exercise the production manifest pipeline")
+	workerPath, ok := deploymentManifestWorkerPath()
+	if !ok {
+		t.Skip("set CRUX_STATIC_INDEX_WORKER to exercise the production manifest pipeline")
 	}
 	t.Setenv("CRUX_STATIC_INDEX_WORKER", workerPath)
 	fixture := filepath.Dir(deploymentManifestGoldenPath(t))
@@ -106,6 +122,13 @@ func TestCompileDeploymentManifestIsStableAcrossCheckoutRoots(t *testing.T) {
 	if manifestIDs[0] != manifestIDs[1] {
 		t.Fatalf("manifest IDs differ across roots: %q != %q", manifestIDs[0], manifestIDs[1])
 	}
+}
+
+func deploymentManifestWorkerPath() (string, bool) {
+	if explicit := strings.TrimSpace(os.Getenv("CRUX_STATIC_INDEX_WORKER")); explicit != "" {
+		return explicit, true
+	}
+	return "", false
 }
 
 func assertExitCode(t *testing.T, err error, want int) {

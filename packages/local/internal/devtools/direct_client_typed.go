@@ -2,7 +2,6 @@ package devtools
 
 import (
 	"context"
-	"errors"
 
 	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/observability"
@@ -44,28 +43,22 @@ func (c *DirectClient) RunsWithOptions(ctx context.Context, opts api.InspectRuns
 	return endpoints.InspectRuns.Call(ctx, endpoints.Deps{Inspect: c.inspect}, &endpoints.RunsParams{InspectRunsOptions: opts})
 }
 
-func (c *DirectClient) RunDetail(ctx context.Context, traceID string) (api.InspectRunDetailRecord, bool, error) {
-	if c.inspect == nil {
-		return api.InspectRunDetailRecord{}, false, errNoInspectService
-	}
-	record, err := endpoints.InspectRunDetail.Call(ctx, endpoints.Deps{Inspect: c.inspect}, &readmodel.PathID{ID: traceID})
-	if errors.Is(err, readmodel.ErrNotFound) {
-		return api.InspectRunDetailRecord{}, false, nil
-	}
-	return record, err == nil, err
-}
-
-// ObservabilityRuns loads the revisioned runs page and returns its rows for
-// list-oriented TUI and CLI rendering.
-func (c *DirectClient) ObservabilityRuns(ctx context.Context) ([]api.ObservabilityRunSummary, error) {
+// ObservabilityRunsPage loads the revisioned Runs read-model page.
+func (c *DirectClient) ObservabilityRunsPage(ctx context.Context) (api.ObservabilityRunsPage, error) {
 	if c.observability == nil {
-		return nil, errNoObservabilityService
+		return api.ObservabilityRunsPage{}, errNoObservabilityService
 	}
 	page, err := c.observability.RunsPage(ctx, observability.RunListOptions{})
 	if err != nil {
-		return nil, err
+		return api.ObservabilityRunsPage{}, err
 	}
-	return page.Rows, nil
+	return page, nil
+}
+
+// ObservabilityRuns loads Runs rows for list-oriented CLI rendering.
+func (c *DirectClient) ObservabilityRuns(ctx context.Context) ([]api.ObservabilityRunSummary, error) {
+	page, err := c.ObservabilityRunsPage(ctx)
+	return page.Rows, err
 }
 
 func (c *DirectClient) ObservabilityRunDetail(ctx context.Context, runID string) (api.ObservabilityRunDetail, bool, error) {
@@ -101,13 +94,4 @@ func (c *DirectClient) Activity(ctx context.Context, limit int) ([]api.InspectAc
 
 func (c *DirectClient) DevtoolsContext(_ context.Context) (api.DevtoolsContext, error) {
 	return c.devtools.Context(), nil
-}
-
-func (c *DirectClient) SubscribeInspect(ctx context.Context) <-chan api.InspectEvent {
-	if c.inspect == nil {
-		ch := make(chan api.InspectEvent)
-		close(ch)
-		return ch
-	}
-	return c.inspect.Events().Subscribe(ctx)
 }

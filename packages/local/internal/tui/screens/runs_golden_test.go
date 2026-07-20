@@ -17,7 +17,7 @@ func TestRunsFuzzResize(t *testing.T) {
 	defer func() { relTimeNow = prevNow }()
 
 	uitest.FuzzResize(t, func(width, height int) string {
-		return runs.View(Size{Width: width, Height: height})
+		return viewRunsForTest(runs, Size{Width: width, Height: height})
 	})
 }
 
@@ -43,53 +43,58 @@ func TestRunsGoldens(t *testing.T) {
 			screen := runs
 			if tc.empty {
 				screen = NewRuns()
-				screen.loaded = true
+				setRunsForTest(screen)
 			}
-			uitest.Golden(t, tc.name, screen.View(Size{Width: tc.width, Height: tc.height}))
+			uitest.Golden(t, tc.name, viewRunsForTest(screen, Size{Width: tc.width, Height: tc.height}))
 		})
 	}
+}
+
+func TestRunsScrollableDetailGolden(t *testing.T) {
+	runs, now := fixtureRuns()
+	prevNow := relTimeNow
+	relTimeNow = func() time.Time { return now }
+	defer func() { relTimeNow = prevNow }()
+	runs.setFocus(focusSpanDetail)
+
+	uitest.Golden(t, "runs-detail-scroll-160x18", viewRunsForTest(runs, Size{Width: 160, Height: 18}))
 }
 
 func fixtureRuns() (*Runs, time.Time) {
 	client := uitest.NewFixtureClient()
 	runs, _ := client.Runs(nil)
-	detail, _, _ := client.RunDetail(nil, runs[0].TraceID)
+	detail, _, _ := client.ObservabilityRunDetail(nil, runs[0].TraceID)
 	screen := NewRuns()
-	screen.runs = runs
-	screen.detail = &detail
-	screen.selRun = runs[0].TraceID
-	if len(detail.Spans) > 0 {
-		screen.selSpan = detail.Spans[0].ID
-		for _, span := range detail.Spans {
-			if span.ID == "retrieve" {
-				screen.selSpan = span.ID
-				break
-			}
-		}
+	summaries := make([]api.ObservabilityRunSummary, len(runs))
+	for index, run := range runs {
+		summaries[index] = observabilityRunSummaryForTest(run)
 	}
-	screen.loaded = true
-	screen.runList.SetItems(runs)
+	setRunsForTest(screen, summaries...)
+	setRunDetailForTest(screen, detail)
+	selectRunForTest(screen, runs[0].TraceID)
+	selectSpanForTest(screen, "retrieve")
+	screen.runList.SetItems(summaries)
 	return screen, client.Now
 }
 
 func TestRunsStatusFilterLimitsVisibleRows(t *testing.T) {
 	screen := NewRuns()
-	screen.loaded = true
-	screen.runs = []api.InspectRunRecord{
-		{TraceID: "failed-000", TargetID: "docs_agent", Status: "failed"},
-		{TraceID: "passed-000", TargetID: "docs_agent", Status: "passed"},
-		{TraceID: "running-0", TargetID: "docs_agent", Status: "running"},
+	values := []api.ObservabilityRunSummary{
+		{RunID: "error-1", Name: "docs_agent", Status: "error"},
+		{RunID: "ok-1", Name: "docs_agent", Status: "ok"},
+		{RunID: "run-1", Name: "docs_agent", Status: "running"},
 	}
-	screen.selRun = "failed-000"
-	screen.runList.SetItems(screen.runs)
+	setRunsForTest(screen, values...)
+	selectRunForTest(screen, "error-1")
+	screen.runList.SetItems(values)
 
-	screen.Update(tea.KeyPressMsg(tea.Key{Text: "f", Code: 'f'}), nil)
-	out := stripANSI(screen.View(Size{Width: 100, Height: 24}))
+	screen.Update(testContext, tea.KeyPressMsg(tea.Key{Text: "f", Code: 'f'}), nil)
+	out := stripANSI(viewRunsForTest(screen, Size{Width: 100, Height: 24}))
 
-	if !strings.Contains(out, "failed") {
-		t.Fatalf("filtered runs view lost failed row:\n%s", out)
+	if !strings.Contains(out, "error-1") {
+		t.Fatalf("failed filter lost the error-status row:\n%s", out)
 	}
-	for _, hidden := range []string{"passed", "running"} {
+	for _, hidden := range []string{"ok-1", "run-1"} {
 		if strings.Contains(out, hidden) {
 			t.Fatalf("status filter rendered hidden %q row:\n%s", hidden, out)
 		}
@@ -98,21 +103,21 @@ func TestRunsStatusFilterLimitsVisibleRows(t *testing.T) {
 
 func TestRunsTextFilterLimitsVisibleRows(t *testing.T) {
 	screen := NewRuns()
-	screen.loaded = true
-	screen.runs = []api.InspectRunRecord{
-		{TraceID: "docs-000", TargetID: "docs_agent", Status: "failed"},
-		{TraceID: "triage-0", TargetID: "triage", Status: "passed"},
+	values := []api.ObservabilityRunSummary{
+		{RunID: "docs-000", Name: "docs_agent", Status: "failed"},
+		{RunID: "triage-0", Name: "triage", Status: "passed"},
 	}
-	screen.selRun = "docs-000"
-	screen.runList.SetItems(screen.runs)
+	setRunsForTest(screen, values...)
+	selectRunForTest(screen, "docs-000")
+	screen.runList.SetItems(values)
 
-	screen.Update(tea.KeyPressMsg(tea.Key{Text: "/", Code: '/'}), nil)
+	screen.Update(testContext, tea.KeyPressMsg(tea.Key{Text: "/", Code: '/'}), nil)
 	for _, r := range "triage" {
-		screen.Update(tea.KeyPressMsg(tea.Key{Text: string(r), Code: r}), nil)
+		screen.Update(testContext, tea.KeyPressMsg(tea.Key{Text: string(r), Code: r}), nil)
 	}
-	screen.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}), nil)
+	screen.Update(testContext, tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}), nil)
 
-	out := stripANSI(screen.View(Size{Width: 100, Height: 24}))
+	out := stripANSI(viewRunsForTest(screen, Size{Width: 100, Height: 24}))
 	if strings.Contains(out, "docs_agent") {
 		t.Fatalf("text filter rendered hidden docs row:\n%s", out)
 	}
@@ -123,23 +128,25 @@ func TestRunsTextFilterLimitsVisibleRows(t *testing.T) {
 
 func TestRunsWaterfallCollapsesDuplicateGroups(t *testing.T) {
 	screen := NewRuns()
-	screen.loaded = true
+	setRunsForTest(screen)
 	duration := 10_000.0
 	spanDuration := 100.0
-	screen.detail = &api.InspectRunDetailRecord{
-		Run: api.InspectRunRecord{TraceID: "run-dup", TargetID: "docs_agent", DurationMs: &duration},
+	setRunDiagnosisForTest(screen, runDiagnosisFixture{
+		RunID:      "run-dup",
+		Name:       "docs_agent",
+		DurationMs: duration,
 		Spans: []api.InspectRunSpan{
 			{ID: "root", Name: "docs_agent.run", Primitive: api.SpanPrimitiveAgent, DurationMs: &duration},
 			{ID: "dup-1", ParentID: "root", Name: "rag.search \"typed prompts\"", Primitive: api.SpanPrimitiveTool, Duplicate: true, DuplicateOfSpanID: "search", StartedAt: 100, DurationMs: &spanDuration},
 			{ID: "dup-2", ParentID: "root", Name: "rag.search \"typed prompts\"", Primitive: api.SpanPrimitiveTool, Duplicate: true, DuplicateOfSpanID: "search", StartedAt: 200, DurationMs: &spanDuration},
 			{ID: "dup-3", ParentID: "root", Name: "rag.search \"typed prompts\"", Primitive: api.SpanPrimitiveTool, Duplicate: true, DuplicateOfSpanID: "search", StartedAt: 300, DurationMs: &spanDuration},
 		},
-	}
-	screen.selRun = "run-dup"
-	screen.selSpan = "dup-1"
+	})
+	selectRunForTest(screen, "run-dup")
+	selectSpanForTest(screen, "dup-1")
 	screen.focus = focusWaterfall
 
-	collapsed := stripANSI(screen.View(Size{Width: 140, Height: 28}))
+	collapsed := stripANSI(viewRunsForTest(screen, Size{Width: 140, Height: 28}))
 	if !strings.Contains(collapsed, "+ 3 more") {
 		t.Fatalf("collapsed waterfall missing duplicate summary:\n%s", collapsed)
 	}
@@ -147,8 +154,8 @@ func TestRunsWaterfallCollapsesDuplicateGroups(t *testing.T) {
 		t.Fatalf("collapsed waterfall rendered a hidden duplicate id:\n%s", collapsed)
 	}
 
-	screen.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}), nil)
-	expanded := stripANSI(screen.View(Size{Width: 140, Height: 28}))
+	screen.Update(testContext, tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}), nil)
+	expanded := stripANSI(viewRunsForTest(screen, Size{Width: 140, Height: 28}))
 	if strings.Contains(expanded, "+ 3 more") {
 		t.Fatalf("expanded waterfall still rendered duplicate summary:\n%s", expanded)
 	}

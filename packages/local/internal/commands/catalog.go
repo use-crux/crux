@@ -2,7 +2,6 @@ package commands
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -83,9 +82,7 @@ func runCatalogImport(ctx context.Context, ioStreams *output.IO, store *manifest
 		Relations:   len(result.Manifest.Content.Relations),
 	}
 	if jsonOutput {
-		encoder := json.NewEncoder(ioStreams.Out)
-		encoder.SetIndent("", "  ")
-		if err := encoder.Encode(summary); err != nil {
+		if err := ioStreams.WriteJSON(summary); err != nil {
 			return domain.ExitError{Code: 2}
 		}
 		return nil

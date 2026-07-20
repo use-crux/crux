@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -303,7 +304,7 @@ func TestHTTPServer_runtime_bridge_http_peer_dispatch(t *testing.T) {
 		if req.Command != "store.read" {
 			t.Fatalf("command = %q, want store.read", req.Command)
 		}
-		writeJSON(w, runtimebridge.CommandResult{
+		writeJSON(slog.Default(), w, runtimebridge.CommandResult{
 			Type:      "command.result",
 			CommandID: req.CommandID,
 			Result:    json.RawMessage(`{"value":{"ok":true}}`),
@@ -360,7 +361,7 @@ func TestHTTPServer_resource_inspection_capabilities_and_blackboard(t *testing.T
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			t.Fatalf("decode runtime command: %v", err)
 		}
-		writeJSON(w, runtimebridge.CommandResult{
+		writeJSON(slog.Default(), w, runtimebridge.CommandResult{
 			Type:      "command.result",
 			CommandID: req.CommandID,
 			Result:    json.RawMessage(`{"value":{"content":"{\"status\":\"ready\"}"}}`),

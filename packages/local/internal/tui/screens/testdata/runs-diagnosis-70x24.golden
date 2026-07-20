@@ -1,0 +1,24 @@
+[38;2;42;53;47m──────────────────────────────────────────────────────────────────────[m
+ [38;2;204;214;207m[38;2;95;227;200m▸ [m[1;38;2;95;227;200mspan: support agent[m[m  [38;2;69;78;73m· 2.50s[m                               [38;2;69;78;73m1-21/47[m
+[38;2;42;53;47m──────────────────────────────────────────────────────────────────────[m
+ [38;2;69;78;73mRUN SUMMARY[m
+ [38;2;69;78;73mstatus        [m [38;2;204;214;207mfailed[m
+ [38;2;69;78;73mduration      [m [38;2;204;214;207m2.50s[m
+ [38;2;69;78;73mstarted       [m [38;2;204;214;207m20:00:00Z[m
+ [38;2;69;78;73mspans         [m [38;2;204;214;207m1[m
+
+ [38;2;69;78;73mCRITICAL PATH · TIMING INFERENCE[m
+ [38;2;69;78;73mactivity      [m [38;2;204;214;207msupport agent · 2.50s[m
+
+ [38;2;69;78;73mATTENTION[m
+ [38;2;69;78;73mactivity      [m [38;2;204;214;207msupport agent[m
+ [38;2;69;78;73mevidence      [m [38;2;204;214;207mfailed status[m
+
+ [38;2;69;78;73mDIAGNOSTICS[m
+ [38;2;69;78;73mevidence      [m [38;2;204;214;207mmodel.timeout · error[m
+ [38;2;69;78;73mmessage       [m [38;2;204;214;207mprovider timed out[m
+ [38;2;69;78;73msuggested fix [m [38;2;204;214;207mcheck provider latency[m
+
+ [38;2;69;78;73mARTIFACTS[m
+ [38;2;69;78;73martifact      [m [38;2;204;214;207martifact-output · output · 42 bytes[m
+ [38;2;69;78;73mactivity      [m [38;2;204;214;207msupport agent[m

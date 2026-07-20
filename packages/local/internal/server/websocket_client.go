@@ -1,7 +1,6 @@
 package server
 
 import (
-	"log/slog"
 	"sync"
 	"time"
 
@@ -50,11 +49,11 @@ func (c *wsClient) writePump() {
 			return
 		case data := <-c.send:
 			if err := c.conn.SetWriteDeadline(time.Now().Add(websocketWriteDeadline)); err != nil {
-				slog.Debug("websocket write deadline failed, removing client", "error", err)
+				c.hub.log().Debug("websocket write deadline failed, removing client", "error", err)
 				return
 			}
 			if err := c.conn.WriteMessage(websocket.TextMessage, data); err != nil {
-				slog.Debug("websocket write failed, removing client", "error", err)
+				c.hub.log().Debug("websocket write failed, removing client", "error", err)
 				return
 			}
 		}

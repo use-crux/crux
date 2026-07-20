@@ -2,7 +2,6 @@ package commands
 
 import (
 	"context"
-	"encoding/json"
 	"net/url"
 
 	"github.com/spf13/cobra"
@@ -103,7 +102,5 @@ func catalogDefinitionPath(id string) string {
 }
 
 func writeCatalogJSON(f *cli.Factory, value any) error {
-	encoder := json.NewEncoder(f.Streams().Out)
-	encoder.SetIndent("", "  ")
-	return encoder.Encode(value)
+	return f.Streams().WriteJSON(value)
 }

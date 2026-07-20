@@ -13,7 +13,7 @@ import (
 // shows "where am I" now that the four-section tab strip is gone — see
 // plans/tui-v1-quality-workbench-implementation.md S2.
 func TestWorkbenchViewPrependsProjectTarget(t *testing.T) {
-	w := NewWorkbench(nil, nil, "http://localhost:4400")
+	w := newTestWorkbench(nil, nil, "http://localhost:4400")
 	w.devContext = api.DevtoolsContext{}
 	w.devContext.Project.Name = "atlas"
 	w.devContext.Target.ID = "docs_agent"
@@ -29,7 +29,7 @@ func TestWorkbenchViewPrependsProjectTarget(t *testing.T) {
 // TestWorkbenchViewOmitsPrefixWhenContextEmpty asserts the workbench does
 // not render a stray `:` separator when project or target is missing.
 func TestWorkbenchViewOmitsPrefixWhenContextEmpty(t *testing.T) {
-	w := NewWorkbench(nil, nil, "http://localhost:4400")
+	w := newTestWorkbench(nil, nil, "http://localhost:4400")
 	// devContext zero-value: no project, no target.
 	w.Resize(120, 30)
 	out := w.View()
@@ -47,7 +47,7 @@ func TestWorkbenchViewOmitsPrefixWhenContextEmpty(t *testing.T) {
 // row's right-meta now carries what the tab strip used to: server URL,
 // version. (Tab strip was dropped in S2.)
 func TestWorkbenchBreadcrumbAbsorbsServerAndVersion(t *testing.T) {
-	w := NewWorkbench(nil, nil, "http://localhost:4317")
+	w := newTestWorkbench(nil, nil, "http://localhost:4317")
 	w.devContext = api.DevtoolsContext{}
 	w.devContext.Version = "v0.14.2"
 	w.Resize(160, 30)

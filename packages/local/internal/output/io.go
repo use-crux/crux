@@ -25,6 +25,9 @@ import (
 // emits zero ANSI bytes, so `--no-color`, `NO_COLOR`, a non-TTY pipe, and
 // `TERM=dumb` all yield byte-clean plain text.
 type IO struct {
+	// In is the interactive input stream (default os.Stdin). Bubble Tea and
+	// commands that prompt the user read from this injected boundary.
+	In io.Reader
 	// Out is the primary, machine-readable stream (default os.Stdout). Results
 	// and `--json` records go here so `| jq` and `> file` stay clean.
 	Out io.Writer
@@ -34,9 +37,11 @@ type IO struct {
 
 	colorEnabled bool
 	colorProfile colorprofile.Profile
+	stdinTTY     bool
 	stdoutTTY    bool
 	stderrTTY    bool
 	ci           bool
+	term         string
 
 	// fixedWidth, when > 0, pins Width() to a constant (test IO). When 0, Width
 	// queries outFile live so terminal resizes are reflected.
@@ -54,17 +59,21 @@ type IO struct {
 // not opted out via NO_COLOR/TERM=dumb, unless explicitly forced via
 // CLICOLOR_FORCE or CRUX_FORCE_TTY. See the detection helpers below.
 func NewIO(noColor bool) *IO {
+	stdinFileTTY := isFileTTY(os.Stdin)
 	stdoutFileTTY := isFileTTY(os.Stdout)
 	stderrFileTTY := isFileTTY(os.Stderr)
 	force := forceTTY()
 	return &IO{
+		In:           os.Stdin,
 		Out:          os.Stdout,
 		Err:          os.Stderr,
 		colorEnabled: colorEnabledFor(noColor, stdoutFileTTY || stderrFileTTY),
 		colorProfile: colorprofile.Detect(os.Stdout, os.Environ()),
+		stdinTTY:     stdinFileTTY || force,
 		stdoutTTY:    stdoutFileTTY || force,
 		stderrTTY:    stderrFileTTY || force,
 		ci:           detectCI(),
+		term:         os.Getenv("TERM"),
 		outFile:      os.Stdout,
 	}
 }
@@ -73,11 +82,14 @@ func NewIO(noColor bool) *IO {
 // report. Every field is explicit so tests are deterministic and never depend on
 // the host's real TTY or environment.
 type TestIOOptions struct {
+	In           io.Reader
+	StdinTTY     bool
 	StdoutTTY    bool
 	StderrTTY    bool
 	ColorEnabled bool
 	ColorProfile colorprofile.Profile
 	CI           bool
+	Term         string
 	// Width is the reported terminal width. Zero defaults to 80. The value is
 	// still clamped to [40, 200] by Width().
 	Width int
@@ -87,21 +99,33 @@ type TestIOOptions struct {
 // verbatim from opts — no environment or TTY probing. Use it to pin reporter
 // output in tests (e.g. assert the colorless invariant or a status-line redraw).
 func NewTestIO(out, err io.Writer, opts TestIOOptions) *IO {
+	input := opts.In
+	if input == nil {
+		input = bytes.NewReader(nil)
+	}
 	width := opts.Width
 	if width == 0 {
 		width = 80
 	}
 	return &IO{
+		In:           input,
 		Out:          out,
 		Err:          err,
 		colorEnabled: opts.ColorEnabled,
 		colorProfile: testColorProfile(opts.ColorProfile),
+		stdinTTY:     opts.StdinTTY,
 		stdoutTTY:    opts.StdoutTTY,
 		stderrTTY:    opts.StderrTTY,
 		ci:           opts.CI,
+		term:         opts.Term,
 		fixedWidth:   width,
 	}
 }
+
+// IsStdinTTY reports whether the interactive input stream is a terminal (or a
+// force override is set). Bubble Tea requires terminal input before it may own
+// the process UI.
+func (io *IO) IsStdinTTY() bool { return io.stdinTTY }
 
 // IsStdoutTTY reports whether the primary stream is an interactive terminal (or
 // a force override is set). Drives whether stdout-bound hyperlinks are emitted.
@@ -118,6 +142,10 @@ func (io *IO) ColorEnabled() bool { return io.colorEnabled }
 // IsCI reports whether the process appears to run under a recognized CI system.
 // Reporters use it to prefer plain, non-animated output even on a pseudo-TTY.
 func (io *IO) IsCI() bool { return io.ci }
+
+// Terminal returns the TERM value captured when this IO boundary was created.
+// Capturing it once keeps mode selection deterministic for the command run.
+func (io *IO) Terminal() string { return io.term }
 
 // Width returns the terminal column count of the Out stream, clamped to
 // [40, 200]. It falls back to 80 for a non-TTY stream or on query error.
@@ -217,8 +245,8 @@ func detectCI() bool {
 // isFileTTY reports whether w is an *os.File that the OS considers a terminal
 // (including Cygwin/MSYS pseudo-terminals on Windows). Buffer writers are never
 // TTYs, which is what keeps test output deterministic.
-func isFileTTY(w io.Writer) bool {
-	f, ok := w.(*os.File)
+func isFileTTY(stream any) bool {
+	f, ok := stream.(*os.File)
 	if !ok {
 		return false
 	}

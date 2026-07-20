@@ -30,3 +30,12 @@ func TestRevisionsBumpDomainsFromInspectEvent(t *testing.T) {
 		})
 	}
 }
+
+func TestObservabilityRefreshEventInvalidatesRunsAndActivity(t *testing.T) {
+	event := api.InspectEvent{Kind: "refresh", Action: "observability ingested", RefID: "run-a"}
+	got := DomainsForInspectEvent(event)
+	want := NewDomains(DomainRuns, DomainActivity)
+	if !got.Equal(want) {
+		t.Fatalf("observability refresh domains = %v, want %v", got.List(), want.List())
+	}
+}

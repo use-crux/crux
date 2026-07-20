@@ -13,8 +13,7 @@ import (
 // Run — breadcrumbs, labels, and nav items in the TUI must say "run".
 func TestRunsBreadcrumbUsesRunNotTrace(t *testing.T) {
 	r := NewRuns()
-	r.selRun = "8af2f1c0deadbeef"
-	r.loaded = true
+	selectRunForTest(r, "8af2f1c0deadbeef")
 
 	path, _ := r.Breadcrumb()
 
@@ -38,7 +37,7 @@ func TestRunsBreadcrumbUsesRunNotTrace(t *testing.T) {
 // counter says "N runs", not "N traces".
 func TestRunsBreadcrumbRightMetaUsesRunsNotTraces(t *testing.T) {
 	r := NewRuns()
-	r.loaded = true
+	setRunsForTest(r)
 
 	_, right := r.Breadcrumb()
 	if strings.Contains(right, "traces") {
@@ -52,15 +51,14 @@ func TestRunsBreadcrumbRightMetaUsesRunsNotTraces(t *testing.T) {
 // Example: `runs / run 8af2f1c / span: retrieve (loop)` per S7.
 func TestRunsBreadcrumbSpanSegmentPrefixed(t *testing.T) {
 	r := NewRuns()
-	r.loaded = true
-	r.selRun = "8af2f1c0deadbeef"
+	selectRunForTest(r, "8af2f1c0deadbeef")
 	r.focus = focusSpanDetail
-	r.detail = &api.InspectRunDetailRecord{
+	setRunDiagnosisForTest(r, runDiagnosisFixture{
 		Spans: []api.InspectRunSpan{
 			{ID: "sp1", Name: "retrieve (loop)"},
 		},
-	}
-	r.selSpan = "sp1"
+	})
+	selectSpanForTest(r, "sp1")
 
 	path, _ := r.Breadcrumb()
 	last := path[len(path)-1]

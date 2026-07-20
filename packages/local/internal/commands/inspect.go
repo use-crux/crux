@@ -54,7 +54,7 @@ counts, dropped contexts).`,
 			}
 
 			if jsonOutput {
-				return output.JSON(detail)
+				return f.Streams().WriteJSON(detail)
 			}
 
 			printInspect(f.Streams(), promptID, found, detail)

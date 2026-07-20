@@ -3,15 +3,14 @@ package evalcmd
 import (
 	"bufio"
 	"fmt"
-	"os"
 	"strings"
 
-	"github.com/spf13/cobra"
+	"github.com/use-crux/crux/packages/local/internal/output"
 )
 
-func confirmUnknownCost(cmd *cobra.Command) (bool, error) {
-	_, _ = fmt.Fprint(cmd.ErrOrStderr(), "Eval has external actions with unknown maximum cost. Continue? [y/N] ")
-	answer, err := bufio.NewReader(os.Stdin).ReadString('\n')
+func confirmUnknownCost(streams *output.IO) (bool, error) {
+	_, _ = fmt.Fprint(streams.Err, "Eval has external actions with unknown maximum cost. Continue? [y/N] ")
+	answer, err := bufio.NewReader(streams.In).ReadString('\n')
 	if err != nil && len(answer) == 0 {
 		return false, err
 	}

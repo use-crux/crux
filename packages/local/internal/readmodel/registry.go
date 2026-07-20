@@ -2,7 +2,6 @@ package readmodel
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -54,7 +53,7 @@ func (r *Registry[D]) Endpoints() []endpoint[D] {
 
 type endpoint[D any] interface {
 	Pattern() string
-	Mount(*http.ServeMux, D)
+	Mount(*http.ServeMux, D, *slog.Logger)
 }
 
 type SnapshotSpec struct {
@@ -163,17 +162,6 @@ func (h *Handle[D, T]) SnapshotCall(ctx context.Context, deps D) (any, error) {
 	return h.Call(ctx, deps)
 }
 
-func (h *Handle[D, T]) Mount(mux *http.ServeMux, deps D) {
-	handler := func(w http.ResponseWriter, r *http.Request) {
-		value, err := h.Call(r.Context(), deps)
-		writeHTTPResponse(w, h.pattern, value, err)
-	}
-	mux.HandleFunc(h.pattern, handler)
-	for _, alias := range h.aliases {
-		mux.HandleFunc(alias, handler)
-	}
-}
-
 func GetP[D any, P Params, T any](reg *Registry[D], pattern string, newParams func() P, call func(context.Context, D, P) (T, error)) *ParamHandle[D, P, T] {
 	handle := &ParamHandle[D, P, T]{pattern: pattern, newParams: newParams, call: call}
 	reg.add(handle)
@@ -186,24 +174,6 @@ func (h *ParamHandle[D, P, T]) Pattern() string {
 
 func (h *ParamHandle[D, P, T]) Call(ctx context.Context, deps D, params P) (T, error) {
 	return h.call(ctx, deps, params)
-}
-
-func (h *ParamHandle[D, P, T]) Mount(mux *http.ServeMux, deps D) {
-	mux.HandleFunc(h.pattern, func(w http.ResponseWriter, r *http.Request) {
-		params := h.newParams()
-		err := params.Parse(Req{Path: r.URL.Path, PathValue: r.PathValue, Query: r.URL.Query()})
-		var value T
-		if err == nil {
-			value, err = h.Call(r.Context(), deps, params)
-		}
-		writeHTTPResponse(w, h.pattern, value, err)
-	})
-}
-
-func Mount[D any](mux *http.ServeMux, deps D, reg *Registry[D]) {
-	for _, endpoint := range reg.Endpoints() {
-		endpoint.Mount(mux, deps)
-	}
 }
 
 func (r *Registry[D]) Snapshots() []Snapshot {
@@ -262,28 +232,6 @@ func (r *Registry[D]) InvalidationMessages(event any) []map[string]any {
 		}
 	}
 	return out
-}
-
-func writeHTTPResponse(w http.ResponseWriter, pattern string, value any, err error) {
-	if err != nil {
-		status := http.StatusInternalServerError
-		if errors.Is(err, ErrNotFound) {
-			status = http.StatusNotFound
-		} else {
-			var badRequest badRequestError
-			if errors.As(err, &badRequest) {
-				status = http.StatusBadRequest
-			} else {
-				slog.Error("readmodel endpoint failed", "route", pattern, "error", err)
-			}
-		}
-		http.Error(w, err.Error(), status)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(value); err != nil {
-		slog.Error("readmodel JSON encode failed", "route", pattern, "error", err)
-	}
 }
 
 type Limit struct {

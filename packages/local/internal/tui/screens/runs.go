@@ -1,16 +1,17 @@
 package screens
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/colorprofile"
 	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/theme"
 	"github.com/use-crux/crux/packages/local/internal/tui/bridge"
 	"github.com/use-crux/crux/packages/local/internal/tui/kit"
-	"github.com/use-crux/crux/packages/local/internal/tui/shell"
+	"github.com/use-crux/crux/packages/local/internal/tui/resource"
 )
 
 var runsStyles = theme.NewStyles(theme.Resolve(colorprofile.TrueColor))
@@ -25,29 +26,29 @@ var runsStyles = theme.NewStyles(theme.Resolve(colorprofile.TrueColor))
 //	│   docs_agent │ ├ agent  retrieve(loop)  ━━━━━   9.80s  │ parent   8af2…f1c    │
 //	│   14.2s      │ ├ tool   rag.search …    │       0.54s  │ kind     agent.sub…  │
 //	│   18.4k tok  │ …                                       │ op       agent       │
-//	│              │ [↵] expand [o] open [f] flame chart …   │ TIMING   …           │
+//	│              │ [↵] span detail [i] inspect [e] export  │ TIMING   …           │
 //	└──────────────┴─────────────────────────────────────────┴──────────────────────┘
 //
 // Focus moves with h/l. j/k cycles within the focused pane; ↵ activates
 // (loads run detail from the list, drills into span detail from the
 // waterfall).
 type Runs struct {
-	runs    []api.InspectRunRecord
-	detail  *api.InspectRunDetailRecord
-	selRun  string
-	selSpan string
-	focus   runsFocus
-	loaded  bool
-	err     string
-	loading bool
+	runsResource    *resource.Resource[[]api.ObservabilityRunSummary]
+	detailResource  *resource.Resource[api.ObservabilityRunDetail]
+	routedRun       *api.ObservabilityRunSummary
+	pendingLocation *pendingRunsLocation
+	diagnosis       *RunDiagnosis
+	focus           runsFocus
 
-	runList        kit.VList[api.InspectRunRecord]
+	runList        *kit.ListPane[api.ObservabilityRunSummary]
+	spanList       *kit.ListPane[RunRow]
+	spanDocument   *kit.DocumentPane
+	size           Size
+	layout         runsLayout
 	filteringRuns  bool
 	runQuery       string
 	runStatusIndex int
-	expandedDups   map[string]bool
-	renderRev      uint64
-	memo           kit.Memo
+	expandedRows   map[string]bool
 }
 
 type runsFocus int
@@ -59,103 +60,162 @@ const (
 )
 
 func NewRuns() *Runs {
-	r := &Runs{}
-	r.runList.SetIdentity(func(run api.InspectRunRecord) string { return run.TraceID })
-	r.runList.SetRowHeight(func(api.InspectRunRecord) int { return 2 })
+	r := &Runs{
+		runsResource: resource.New(func(runs []api.ObservabilityRunSummary) bool {
+			return len(runs) == 0
+		}),
+		detailResource: resource.New(func(detail api.ObservabilityRunDetail) bool {
+			return detail.Run.RunID == ""
+		}),
+		runList: kit.NewListPane(func(run api.ObservabilityRunSummary) string {
+			return run.RunID
+		}),
+		spanList: kit.NewListPane(func(row RunRow) string {
+			return row.ID
+		}),
+		spanDocument: kit.NewDocumentPane(),
+	}
+	r.runList.SetRowHeight(func(api.ObservabilityRunSummary) int { return 2 })
+	r.runList.SetFocused(true)
+	r.spanList.SetRowHeight(func(RunRow) int { return 1 })
 	return r
 }
 
 func (s *Runs) ID() string { return "runs" }
 
-func (s *Runs) Interested(domains bridge.Domains) bool {
-	return domains.Has(bridge.DomainRuns)
+func (s *Runs) Editing() bool { return s.filteringRuns }
+
+// Focus selects the exact run identity carried by a navigation target. Runs
+// owns this route parameter; display names and legacy workspace selection do
+// not participate in resolving it.
+func (s *Runs) Focus(kind, id string) {
+	if kind != "run" || id == "" {
+		return
+	}
+	s.spanList.SetItems(nil)
+	s.detailResource.Cancel()
+	s.diagnosis = nil
+	s.routedRun = nil
+	s.pendingLocation = nil
+	s.filteringRuns = false
+	s.runQuery = ""
+	s.runStatusIndex = 0
+	s.ensureSelectedRunVisible(id)
+	s.runList.SetItems(s.selectableRuns())
+	s.runList.Select(id)
 }
 
-func (s *Runs) Init(c DataClient) tea.Cmd { return fetchRunsList(c) }
+// SelectedRunID returns the pane-owned stable identity of the active run.
+func (s *Runs) SelectedRunID() string {
+	selected, _, ok := s.runList.Selected()
+	if !ok {
+		return ""
+	}
+	return selected.RunID
+}
 
-func (s *Runs) Update(msg tea.Msg, c DataClient) tea.Cmd {
+// SelectedSpanID returns the hierarchy pane's selected stable span identity.
+func (s *Runs) SelectedSpanID() string {
+	selected, _, ok := s.spanList.Selected()
+	if !ok {
+		return ""
+	}
+	return selected.ID
+}
+
+func (s *Runs) Init(ctx context.Context, c DataClient) tea.Cmd { return s.fetchRunsList(ctx, c) }
+
+// Deactivate cancels in-flight list/detail reads and returns the exact names
+// that must be retried if Runs is opened again.
+func (s *Runs) Deactivate() bridge.Invalidations {
+	invalidations := bridge.Invalidations{}
+	cancelPendingResource(invalidations, bridge.RunsListResource, s.runsResource)
+	detail := s.detailResource.Snapshot()
+	if detail.Token.Owner.RecordID != "" {
+		cancelPendingResource(invalidations, bridge.RunsDetailResource(detail.Token.Owner.RecordID), s.detailResource)
+	}
+	s.resizeSpanDocument(s.layout.detail)
+	return invalidations
+}
+
+// Refresh schedules only invalidated Runs projections, plus resources that
+// have never been requested for the current owner.
+func (s *Runs) Refresh(ctx context.Context, c DataClient, invalidations bridge.Invalidations) tea.Cmd {
+	commands := make([]tea.Cmd, 0, 2)
+	listRevision, listInvalid := invalidations.Revision(bridge.RunsListResource)
+	if listInvalid || s.runsResource.Snapshot().State == resource.ResourceIdle {
+		commands = append(commands, s.fetchRunsListAtRevision(ctx, c, listRevision))
+	}
+
+	selectedID := s.SelectedRunID()
+	if selectedID != "" {
+		detailRevision, detailInvalid := invalidations.Revision(bridge.RunsDetailResource(selectedID))
+		if wildcardRevision, wildcard := invalidations.Revision(bridge.RunsAnyDetailResource); wildcard {
+			detailInvalid = true
+			detailRevision = maxRevisionFloor(detailRevision, wildcardRevision)
+		}
+		detailSnapshot := s.detailResource.Snapshot()
+		ownerChanged := detailSnapshot.Token.Owner != runsDetailOwner(selectedID)
+		if detailInvalid || detailSnapshot.State == resource.ResourceIdle || ownerChanged || !s.selectedDetailIsCurrent() {
+			commands = append(commands, s.fetchRunDetailAtRevision(ctx, c, selectedID, detailRevision))
+		}
+	}
+	s.resizeSpanDocument(s.layout.detail)
+	return tea.Batch(commands...)
+}
+
+func (s *Runs) Update(ctx context.Context, msg tea.Msg, c DataClient) tea.Cmd {
 	switch m := msg.(type) {
 	case runsListLoadedMsg:
-		s.runs = []api.InspectRunRecord(m)
-		s.runList.SetItems(s.runs)
-		s.loaded = true
-		s.bumpRenderRev()
-		if s.selRun == "" && len(s.runs) > 0 {
-			s.selRun = s.runs[0].TraceID
-			s.runList.SetCursorByIdentity(s.selRun)
-			return fetchRunDetail(c, s.selRun)
-		}
-		s.runList.SetCursorByIdentity(s.selRun)
-	case runDetailLoadedMsg:
-		d := api.InspectRunDetailRecord(m)
-		// Preserve the user's span selection across refetches when the
-		// span still exists.
-		prevSel := s.selSpan
-		s.detail = &d
-		s.loading = false
-		s.selSpan = ""
-		for _, sp := range d.Spans {
-			if sp.ID == prevSel {
-				s.selSpan = prevSel
-				break
-			}
-		}
-		if s.selSpan == "" && len(d.Spans) > 0 {
-			s.selSpan = d.Spans[0].ID
-		}
-		s.bumpRenderRev()
-	case dataErrMsg:
-		s.err = string(m)
-		s.loading = false
-		s.bumpRenderRev()
-	case api.InspectEvent:
-		// Typed live event from the bus (also used for the synthesized
-		// "store changed" signal — kind=="refresh"). Refresh the run list
-		// and refetch the active trace's detail when relevant.
-		return s.liveRefresh(c, m.RefID)
-	case tea.KeyPressMsg:
-		if s.filteringRuns {
-			return s.updateRunFilter(m, c)
-		}
-		switch m.String() {
-		case "j", "down":
-			return s.moveDown(c)
-		case "k", "up":
-			return s.moveUp(c)
-		case "h", "left":
-			s.shiftFocus(-1)
-		case "l", "right":
-			s.shiftFocus(+1)
-		case "enter":
-			return s.activateFocus(c)
-		case "/":
-			if s.focus == focusRuns {
-				s.filteringRuns = true
-			}
-		case "f":
-			if s.focus == focusRuns {
-				return s.cycleRunStatusFilter(c)
-			}
-		case "i":
-			// Raw-inspect overlay (in-TUI JSON pretty-printer). Layer-3
-			// per KEYBINDS.md; `o` is reserved for external viewer.
-			return s.openInspect()
-		case "o":
-			// Open in external React devtools UI — stub for now; S7 wires
-			// the actual handoff once the URL scheme is documented.
+		if !s.runsResource.Apply(resource.ResourceResult[[]api.ObservabilityRunSummary](m)) {
 			return nil
-		case "e":
-			// export: dump the focused run's JSON to
-			// ~/.crux/exports/run-{id}.json. No-op if nothing focused.
-			return s.exportRun()
 		}
+		snapshot := s.runsResource.Snapshot()
+		if !snapshot.HasValue {
+			return nil
+		}
+		selectedID := s.SelectedRunID()
+		if s.routedRun != nil {
+			s.ensureSelectedRunVisible(selectedID)
+		}
+		s.runList.SetItems(s.filteredRuns())
+		if selectedID != "" {
+			s.runList.Select(selectedID)
+		}
+		selectedID = s.SelectedRunID()
+		if selectedID == "" {
+			s.clearRunSelection()
+		}
+		if !s.selectedDetailIsCurrent() {
+			if selectedID == "" {
+				return nil
+			}
+			return s.fetchRunDetail(ctx, c, selectedID)
+		}
+	case runDetailLoadedMsg:
+		return s.applyRunDetail(ctx, resource.ResourceResult[api.ObservabilityRunDetail](m), c)
+	case tea.KeyPressMsg:
+		return s.updateKey(ctx, m, c)
+	case tea.MouseWheelMsg:
+		if s.filteringRuns {
+			return nil
+		}
+		cmd, _ := s.updateFocusedPaneInput(ctx, m, c)
+		return cmd
 	}
 	return nil
 }
 
 func (s *Runs) openInspect() tea.Cmd {
 	span := s.currentSpan()
-	if span == nil || len(span.Data) == 0 {
+	if span == nil {
+		return nil
+	}
+	payload := span.Data
+	if activity := s.currentActivity(); activity != nil {
+		payload, _ = json.Marshal(activity)
+	}
+	if len(payload) == 0 {
 		return nil
 	}
 	title := span.Name
@@ -166,7 +226,6 @@ func (s *Runs) openInspect() tea.Cmd {
 	if span.CompositionType != "" {
 		subtitle += " · " + span.CompositionType
 	}
-	payload := span.Data
 	return func() tea.Msg {
 		return InspectRequest{
 			Title:    title,
@@ -174,18 +233,6 @@ func (s *Runs) openInspect() tea.Cmd {
 			Payload:  []byte(payload),
 		}
 	}
-}
-
-// liveRefresh refetches the runs list and, if the event references the
-// currently-selected trace (or the refId is empty so we can't be sure),
-// also refetches that trace's detail. Returning batched commands keeps
-// the screen in sync without losing focus or selection state.
-func (s *Runs) liveRefresh(c DataClient, refID string) tea.Cmd {
-	cmds := []tea.Cmd{fetchRunsList(c)}
-	if s.selRun != "" && (refID == "" || refID == s.selRun) {
-		cmds = append(cmds, fetchRunDetail(c, s.selRun))
-	}
-	return tea.Batch(cmds...)
 }
 
 func (s *Runs) shiftFocus(delta int) {
@@ -196,78 +243,48 @@ func (s *Runs) shiftFocus(delta int) {
 	if next > int(focusSpanDetail) {
 		next = int(focusSpanDetail)
 	}
-	s.focus = runsFocus(next)
+	s.setFocus(runsFocus(next))
 }
 
-func (s *Runs) activateFocus(c DataClient) tea.Cmd {
+func (s *Runs) setFocus(focus runsFocus) {
+	s.focus = focus
+	s.runList.SetFocused(focus == focusRuns)
+	s.spanList.SetFocused(focus == focusWaterfall)
+	s.spanDocument.SetFocused(focus == focusSpanDetail)
+	s.Resize(s.size)
+}
+
+func (s *Runs) activateFocus(ctx context.Context, c DataClient) tea.Cmd {
 	switch s.focus {
 	case focusRuns:
-		if s.selRun == "" {
+		selectedID := s.SelectedRunID()
+		if selectedID == "" {
 			return nil
 		}
-		s.loading = true
-		s.detail = nil
-		return fetchRunDetail(c, s.selRun)
+		return s.fetchRunDetail(ctx, c, selectedID)
 	case focusWaterfall:
 		if s.toggleSelectedDuplicateGroup() {
 			return nil
 		}
-		s.focus = focusSpanDetail
+		s.setFocus(focusSpanDetail)
 	}
 	return nil
 }
 
 func (s *Runs) Breadcrumb() ([]string, string) {
 	path := []string{"runs"}
-	if s.selRun != "" {
-		path = append(path, "run "+truncate(s.selRun, 8))
+	if selectedID := s.SelectedRunID(); selectedID != "" {
+		path = append(path, "run "+truncateRunsInline(selectedID, 8))
 	}
 	if cur := s.currentSpan(); cur != nil && s.focus == focusSpanDetail {
-		path = append(path, "span: "+cur.Name)
+		path = append(path, "span: "+sanitizeRunsInline(cur.Name))
 	}
 	right := ""
-	if s.loaded {
-		right = fmt.Sprintf("%d runs · last 1h", len(s.runs))
+	listSnapshot := s.runsResource.Snapshot()
+	if listSnapshot.HasValue {
+		right = fmt.Sprintf("%d runs · last 1h", len(s.runSummaries()))
 	}
 	return path, right
 }
 
-func (s *Runs) Keybinds() []shell.Keybind {
-	jkLabel := "span"
-	if s.focus == focusRuns {
-		jkLabel = "run"
-	}
-	return []shell.Keybind{
-		shell.Bind("j/k", jkLabel),
-		shell.Bind("h/l", "pane"),
-		shell.Bind("↵", focusActionLabel(s.focus)),
-		shell.Bind("i", "inspect raw"),
-		shell.Bind("o", "open in viewer"),
-		shell.Bind(":", "cmd"),
-		shell.Bind("?", "help"),
-		shell.Bind("q", "quit"),
-	}
-}
-
-// focusTitle prefixes a teal `▸` accent + bold teal text to the pane title
-// when that pane is focused, so the user can see which pane j/k will affect.
-func focusTitle(title string, focused bool) string {
-	if focused {
-		return lipgloss.NewStyle().Foreground(shell.ColorTeal).Render("▸ ") +
-			lipgloss.NewStyle().Foreground(shell.ColorTeal).Bold(true).Render(title)
-	}
-	return title
-}
-
-func focusActionLabel(f runsFocus) string {
-	switch f {
-	case focusRuns:
-		return "load run"
-	case focusWaterfall:
-		return "span detail"
-	default:
-		return "open"
-	}
-}
-
-func (s *Runs) Counts() map[string]int { return map[string]int{"runs": len(s.runs)} }
+func (s *Runs) Counts() map[string]int { return map[string]int{"runs": len(s.runSummaries())} }

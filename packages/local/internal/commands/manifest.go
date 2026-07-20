@@ -2,7 +2,6 @@ package commands
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"path/filepath"
 
@@ -96,9 +95,7 @@ func runManifest(ctx context.Context, io *output.IO, opts manifestOptions, compi
 		Output:         outPath,
 	}
 	if opts.json {
-		encoder := json.NewEncoder(io.Out)
-		encoder.SetIndent("", "  ")
-		if err := encoder.Encode(summary); err != nil {
+		if err := io.WriteJSON(summary); err != nil {
 			return domain.ExitError{Code: 2}
 		}
 		return nil

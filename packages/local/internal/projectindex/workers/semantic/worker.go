@@ -8,6 +8,7 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/use-crux/crux/packages/local/internal/process/workerproc"
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/workers/node"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/workers/requestwire"
@@ -22,9 +23,10 @@ const (
 
 // Options configures the semantic worker process.
 type Options struct {
-	ScriptPath    string
-	ScriptContent []byte
-	MaxWorkers    int
+	ScriptPath     string
+	ScriptContent  []byte
+	MaxWorkers     int
+	ProcessOptions []workerproc.Option
 }
 
 // Worker runs semantic Project Index enrichment through its own V2 NDJSON
@@ -68,7 +70,7 @@ func newPhaseClient(options Options) source.Client {
 		Name:           "project-semantic-indexer",
 		ScriptContent:  options.ScriptContent,
 		ScriptPath:     options.ScriptPath,
-		Worker:         node.NewWorker("project-semantic-indexer", options.ScriptContent, options.ScriptPath, maxResponseLineBytes),
+		Worker:         node.NewWorker("project-semantic-indexer", options.ScriptContent, options.ScriptPath, maxResponseLineBytes, options.ProcessOptions...),
 		MaxLineBytes:   maxResponseLineBytes,
 		MaxStreamBytes: maxResponseStreamBytes,
 		Producer:       producer,

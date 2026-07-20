@@ -1,6 +1,8 @@
 package localserver
 
 import (
+	"io"
+	"log/slog"
 	"net/http"
 
 	"github.com/use-crux/crux/packages/local/internal/devtools"
@@ -28,11 +30,14 @@ type Hub interface {
 type SourceResolverOptions struct {
 	ScriptPath     string
 	EmbeddedScript []byte
+	Logger         *slog.Logger
+	Stderr         io.Writer
 }
 
 // Options contains the services and assets needed to mount Crux Local HTTP
 // routes. It intentionally has no listener, port, or shutdown ownership.
 type Options struct {
+	Logger                   *slog.Logger
 	Devtools                 *devtools.Service
 	Inspect                  *inspect.Service
 	Observability            *observability.Service
@@ -55,6 +60,10 @@ type Options struct {
 // New mounts the local runtime HTTP API and UI routes. Server lifecycle code
 // supplies dependencies; this package owns route grouping and URL preservation.
 func New(options Options) http.Handler {
+	logger := options.Logger
+	if logger == nil {
+		logger = discardLogger
+	}
 	runtimeBridge := options.RuntimeBridge
 	if runtimeBridge == nil {
 		runtimeBridge = runtimebridge.NewService(nil)
@@ -76,7 +85,7 @@ func New(options Options) http.Handler {
 		Eval:        evalfs.OpenProject(options.ProjectRoot),
 		EvalCatalog: options.EvalCatalog,
 		Reviews:     options.Review,
-	}, endpoints.Registry)
+	}, endpoints.Registry, logger)
 
 	registerInspectRoutes(mux, options.Inspect)
 	if options.Hub != nil {
@@ -95,13 +104,17 @@ func New(options Options) http.Handler {
 		http.NotFound(w, r)
 	})
 
-	registerSourceRoutes(mux, options.SourceResolver, options.ProjectRoot)
+	sourceResolver := options.SourceResolver
+	if sourceResolver.Logger == nil {
+		sourceResolver.Logger = logger
+	}
+	registerSourceRoutes(mux, sourceResolver, options.ProjectRoot)
 
 	if options.UI != nil {
 		mux.Handle("/", options.UI)
 	}
 
-	return corsMiddleware(mux, originAllowed)
+	return requestLoggerMiddleware(corsMiddleware(mux, originAllowed), logger)
 }
 
 func inspectEvents(service *inspect.Service) *inspect.EventBus {

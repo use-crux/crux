@@ -3,7 +3,6 @@ package bridge
 import (
 	"context"
 	"encoding/json"
-	"log/slog"
 	"net/http"
 	"sync"
 
@@ -20,7 +19,7 @@ func UpgradeHandler(bridge *runtimebridge.Service, checkOrigin func(*http.Reques
 		}
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
-			slog.Error("runtime bridge websocket upgrade failed", "error", err)
+			bridge.Logger().Error("runtime bridge websocket upgrade failed", "error", err)
 			return
 		}
 
@@ -62,7 +61,7 @@ func UpgradeHandler(bridge *runtimebridge.Service, checkOrigin func(*http.Reques
 				return
 			}
 			if err := bridge.HandlePeerMessage(peer.PeerID, data); err != nil {
-				slog.Debug("runtime bridge message ignored", "error", err, "peerId", peer.PeerID)
+				bridge.Logger().Debug("runtime bridge message ignored", "error", err, "peerId", peer.PeerID)
 			}
 		}
 	}

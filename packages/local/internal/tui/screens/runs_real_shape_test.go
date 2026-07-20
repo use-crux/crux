@@ -14,7 +14,7 @@ import (
 // SpanSummary like Model/ToolName/FlowID, metrics with inputTokens/
 // outputTokens, attached artifacts for args/result/hits) through the
 // FULL TUI projection path: ObservabilityRunDetail →
-// inspectRunDetailFromObservabilityDetail → renderSpanDetail.
+// DiagnoseRun → renderSpanDetail.
 //
 // The unit tests in runs_span_detail_test.go bypass the projector and
 // hand a synthetic Data blob straight to the renderer — they pass even
@@ -177,19 +177,18 @@ func TestRealShapeProjectionSurfacesPerPrimitiveFields(t *testing.T) {
 				},
 				Root: tc.node,
 			}
-			projected := inspectRunDetailFromObservabilityDetail(detail)
-			if len(projected.Spans) == 0 {
+			projected := DiagnoseRun(detail)
+			if len(projected.Timeline) == 0 {
 				t.Fatalf("projection produced no spans")
 			}
 
 			r := NewRuns()
-			r.loaded = true
-			r.selRun = projected.Run.TraceID
-			d := projected
-			r.detail = &d
-			r.selSpan = projected.Spans[0].ID
+			selectRunForTest(r, projected.Summary.RunID)
+			r.diagnosis = &projected
+			r.spanList.SetItems(projected.Timeline)
+			selectSpanForTest(r, projected.Timeline[0].ID)
 
-			plain := stripANSI(r.renderSpanDetail(80, 60))
+			plain := stripANSI(renderSpanDetailForTest(r, 80, 60))
 			for _, want := range tc.want {
 				if !strings.Contains(plain, want) {
 					t.Errorf("missing %q in rendered span detail.\n--- output ---\n%s\n--------------", want, plain)

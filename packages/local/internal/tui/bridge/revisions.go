@@ -102,7 +102,13 @@ type Revisions struct {
 
 // BumpInspect records the domains affected by ev and returns that domain set.
 func (r *Revisions) BumpInspect(ev api.InspectEvent) Domains {
-	return r.bump(domainsForInspectEvent(ev)...)
+	return r.bump(DomainsForInspectEvent(ev).List()...)
+}
+
+// DomainsForInspectEvent classifies one typed event into affected read-model
+// domains without advancing revision counters.
+func DomainsForInspectEvent(ev api.InspectEvent) Domains {
+	return NewDomains(domainsForInspectEvent(ev)...)
 }
 
 // BumpStore records a generic store change without forcing a context refetch.
@@ -138,6 +144,8 @@ func domainsForInspectEvent(ev api.InspectEvent) []Domain {
 	kind := strings.ToLower(ev.Kind)
 	action := strings.ToLower(ev.Action)
 	switch {
+	case strings.Contains(kind, "refresh") && strings.Contains(action, "observability"):
+		return []Domain{DomainRuns, DomainActivity}
 	case strings.Contains(kind, "observability"), strings.Contains(kind, "run"), strings.Contains(kind, "trace"):
 		return []Domain{DomainRuns, DomainActivity}
 	case strings.Contains(kind, "insight"):

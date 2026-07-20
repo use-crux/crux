@@ -13,54 +13,30 @@ import (
 // --- center pane: trace waterfall ------------------------------------------
 
 func (s *Runs) renderWaterfall(width, height int) string {
-	if s.detail == nil {
-		header := shell.PaneHeader(width, focusTitle("Trace", s.focus == focusWaterfall), "—", "")
-		body := centerMsg(Size{Width: width, Height: height - 2}, "loading trace…")
+	if s.diagnosis == nil {
+		header := s.waterfallHeaderBlock(width)
+		message := "loading trace…"
+		snapshot := s.detailResource.Snapshot()
+		if snapshot.Err != nil {
+			message = truncateRunsInline("error: "+snapshot.Err.Error(), width)
+		}
+		body := centerMsg(Size{Width: width, Height: height - 2}, message)
 		return header + "\n" + body
 	}
 
-	// Header — left: "Trace XXXX" (or "Run XXXX" when grouped) + sub
-	// "{target} · {dur} · {N} spans · {tok}". Per CONTEXT.md the
-	// canonical noun is "Run" — "Trace" is not a UI synonym. Multi-trace
-	// runs surface their trace count in the subtitle, not the title.
-	id := shortID(s.detail.Run.TraceID, 7)
-	title := focusTitle("Run "+id, s.focus == focusWaterfall)
-	tokStr := ""
-	if s.detail.Run.TokenCount > 0 {
-		tokStr = " · " + formatTokensShort(s.detail.Run.TokenCount) + " tok"
-	}
-	subParts := []string{
-		s.detail.Run.TargetID,
-		durStr(s.detail.Run.DurationMs),
-		fmt.Sprintf("%d spans", len(s.detail.Spans)),
-	}
-	if s.detail.Run.TraceCount > 1 {
-		subParts = append(subParts, fmt.Sprintf("%d traces", s.detail.Run.TraceCount))
-	}
-	sub := strings.Join(subParts, " · ") + tokStr
-	headerChips := renderTraceChips(s.detail)
-	if width < 88 {
-		headerChips = ""
-	}
-	header := shell.PaneHeader(width, title, sub, headerChips)
+	header := s.waterfallHeaderBlock(width)
 	hdrH := strings.Count(header, "\n") + 1
 
-	footer := shell.PaneFooter(width, []shell.Keybind{
-		shell.Bind("↵", "expand"),
-		shell.Bind("i", "inspect raw"),
-		shell.Bind("o", "open in viewer"),
-		shell.Bind("e", "export"),
-		// Note: `f flame chart` and `t timeline` are intentionally absent —
-		// they were aspirational footer labels that never had handlers. Per
-		// the KEYBINDS.md contract, footer/status hints must reflect what
-		// the screen actually does.
-	})
-	footerH := strings.Count(footer, "\n") + 1
+	footer := s.waterfallFooter(width)
+	footerH := 0
+	if footer != "" {
+		footerH = strings.Count(footer, "\n") + 1
+	}
 	bodyRows := height - hdrH - footerH
 
 	totalMs := 0.0
-	if s.detail.Run.DurationMs != nil {
-		totalMs = *s.detail.Run.DurationMs
+	if duration := s.runDurationPointer(); duration != nil {
+		totalMs = *duration
 	}
 
 	// Column geometry: glyph(2) + space + op(10) + space + name(26) + space
@@ -81,8 +57,27 @@ func (s *Runs) renderWaterfall(width, height int) string {
 	}
 	labelPrefix := glyphCol + 1 + opCol + 1 + nameCol + 1 // cols before the bar
 
-	rows := kit.FromAPISpans(s.visibleSpans(), s.detail.Trace.StartedAt, s.selSpan)
-	wfLines := renderWaterfallSpans(rows, totalMs, width, labelPrefix, barCol)
+	rows := s.flattenedSpanRows()
+	spans := make([]api.InspectRunSpan, len(rows))
+	for i, row := range rows {
+		span := row.Span
+		status := firstNonEmpty(row.Activity.Status, span.Status)
+		if isAbnormalOperationStatus(status) {
+			span.Name = status + " · " + span.Name
+		}
+		spans[i] = span
+	}
+	projected := kit.FromAPISpans(spans, s.runStartedAtMillis(), s.SelectedSpanID())
+	lastByParent := make(map[string]string)
+	for i := range projected {
+		projected[i].Indent = rows[i].Depth
+		lastByParent[projected[i].ParentID] = projected[i].ID
+	}
+	wfLines := s.spanList.Render(func(_ RunRow, index int, selected bool, rowWidth int) string {
+		span := projected[index]
+		span.Selected = selected
+		return renderWaterfallSpan(span, lastByParent[span.ParentID] == span.ID, totalMs, rowWidth, barCol)
+	})
 
 	rulerLine := renderTimeRuler(totalMs, labelPrefix, barCol, width)
 
@@ -113,7 +108,7 @@ func (s *Runs) renderWaterfall(width, height int) string {
 }
 
 func (s *Runs) renderTraceSummary(width, height int) string {
-	if s.detail == nil || height < 4 {
+	if s.diagnosis == nil || height < 4 {
 		return ""
 	}
 	var b strings.Builder
@@ -121,75 +116,17 @@ func (s *Runs) renderTraceSummary(width, height int) string {
 	b.WriteString("\n")
 	b.WriteString(" " + shell.SectionTag.Render("TRACE SUMMARY"))
 	b.WriteString("\n")
-	b.WriteString(kvRow("spans", fmt.Sprintf("%d", len(s.detail.Spans)), width))
-	if s.detail.Run.DurationMs != nil {
-		b.WriteString(kvRow("duration", formatSpanDuration(*s.detail.Run.DurationMs), width))
+	b.WriteString(kvRow("spans", fmt.Sprintf("%d", len(s.allTimelineRows())), width))
+	if duration := s.runDurationPointer(); duration != nil {
+		b.WriteString(kvRow("duration", formatSpanDuration(*duration), width))
 	}
-	if s.detail.Run.TokenCount > 0 {
-		b.WriteString(kvRow("tokens", commaInt(s.detail.Run.TokenCount), width))
+	if model := providerModel(s.diagnosis.Summary.Provider, s.diagnosis.Summary.Model); model != "" {
+		b.WriteString(kvRow("model", model, width))
 	}
-	if s.detail.Run.Model != "" {
-		b.WriteString(kvRow("model", fmt.Sprintf("%s/%s", s.detail.Run.Provider, s.detail.Run.Model), width))
-	}
-	if preview := truncate(stringifyJSON(s.detail.Run.Input), width-4); preview != "" {
-		b.WriteString("\n " + shell.SectionTag.Render("INPUT"))
-		b.WriteString("\n")
-		b.WriteString(boxedPre(preview, width-2))
-		b.WriteString("\n")
-	}
-	if preview := truncate(stringifyJSON(s.detail.Run.Output), width-4); preview != "" {
-		b.WriteString("\n " + shell.SectionTag.Render("OUTPUT"))
-		b.WriteString("\n")
-		b.WriteString(boxedPre(preview, width-2))
-		b.WriteString("\n")
+	if len(s.diagnosis.Diagnostics) > 0 {
+		b.WriteString(kvRow("diagnostics", fmt.Sprintf("%d", len(s.diagnosis.Diagnostics)), width))
 	}
 	return b.String()
-}
-
-func stringifyJSON(v any) string {
-	if v == nil {
-		return ""
-	}
-	switch t := v.(type) {
-	case string:
-		return t
-	case map[string]any:
-		if len(t) == 0 {
-			return ""
-		}
-	}
-	return jsonOrString(v)
-}
-
-// renderTraceChips builds the small chip cluster shown on the right of the
-// waterfall pane header (e.g. RETRIEVAL-LOOP, INS-014).
-func renderTraceChips(d *api.InspectRunDetailRecord) string {
-	if d == nil {
-		return ""
-	}
-	chips := []string{}
-	// Linked insight tags: take the first insight from the first span that
-	// has one, render as a rose chip; then list the insight IDs as dim.
-	seen := map[string]bool{}
-	for _, sp := range d.Spans {
-		for _, id := range sp.LinkedInsightIDs {
-			if seen[id] {
-				continue
-			}
-			seen[id] = true
-			chips = append(chips, kit.Chip(id, shell.ColorRose))
-			if len(chips) >= 2 {
-				break
-			}
-		}
-		if len(chips) >= 2 {
-			break
-		}
-	}
-	if len(chips) == 0 {
-		return ""
-	}
-	return strings.Join(chips, " ")
 }
 
 // renderTimeRuler renders the `0s 1s 2s … Ns` ruler row, using the same

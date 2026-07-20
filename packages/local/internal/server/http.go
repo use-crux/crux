@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -17,6 +18,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/localserver"
 	"github.com/use-crux/crux/packages/local/internal/observability"
 	"github.com/use-crux/crux/packages/local/internal/privacy"
+	"github.com/use-crux/crux/packages/local/internal/process/workerproc"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/manifeststore"
 	"github.com/use-crux/crux/packages/local/internal/resourceinspection"
 	"github.com/use-crux/crux/packages/local/internal/review"
@@ -48,6 +50,15 @@ type ServerOptions struct {
 	RuntimeBridge        *runtimebridge.Service
 	ProjectRoot          string
 	ConfigPath           string
+	// Logger receives handler and owned-service diagnostics. It defaults to
+	// slog.Default when omitted and remains scoped to this server instance.
+	Logger *slog.Logger
+	// Stderr receives diagnostic output written directly by owned subprocesses.
+	Stderr io.Writer
+	// webSocketHubCreated exposes the composed hub to DevServer so its
+	// lifecycle coordinator can wait for hijacked connections during shutdown.
+	webSocketHubCreated func(*WSHub)
+	workers             *devServerWorkers
 }
 
 // NewHTTPServer creates an HTTP handler that serves the devtools REST API.
@@ -76,17 +87,25 @@ func NewHTTPServerWithServices(devSvc *devtools.Service, opt ServerOptions) http
 // NewHTTPServerWithServicesContext composes local runtime services and returns
 // the HTTP route graph. Listener lifecycle remains owned by DevServer.
 func NewHTTPServerWithServicesContext(ctx context.Context, devSvc *devtools.Service, opt ServerOptions) http.Handler {
+	logger := opt.Logger
+	if logger == nil {
+		logger = slog.Default()
+	}
 	inspectSvc := devSvc.Inspect()
 	privacyProvider := privacy.Generated(opt.ProjectRoot)
 	if !devSvc.HasProjectIndexer() {
-		projectIndexer := assets.NewEmbeddedProjectIndexer(opt.ProjectIndexerScript)
+		workerOptions := []workerproc.Option{workerproc.WithLogger(logger)}
+		if opt.Stderr != nil {
+			workerOptions = append(workerOptions, workerproc.WithStderr(opt.Stderr))
+		}
+		projectIndexer := assets.NewEmbeddedProjectIndexer(opt.ProjectIndexerScript, workerOptions...)
 		devSvc.WithProjectIndexer(projectIndexer)
-		go func() {
+		opt.workers.Go(func() {
 			<-ctx.Done()
 			if err := projectIndexer.Close(); err != nil {
-				slog.Warn("project index worker close failed", "error", err)
+				logger.Warn("project index worker close failed", "error", err)
 			}
-		}()
+		})
 	}
 
 	observabilitySvc := opt.ObservabilityService
@@ -98,16 +117,16 @@ func NewHTTPServerWithServicesContext(ctx context.Context, devSvc *devtools.Serv
 		var err error
 		observabilitySvc, err = observability.OpenService(ctx, observabilityPath)
 		if err != nil {
-			slog.Error("observability service initialization failed", "error", err)
+			logger.Error("observability service initialization failed", "error", err)
 		}
 	}
 	if observabilitySvc != nil && opt.ObservabilityService == nil {
-		go func() {
+		opt.workers.Go(func() {
 			<-ctx.Done()
 			if err := observabilitySvc.Close(); err != nil {
-				slog.Warn("observability service close failed", "error", err)
+				logger.Warn("observability service close failed", "error", err)
 			}
-		}()
+		})
 	}
 	if opt.ProjectRoot != "" {
 		manifests := manifeststore.New(opt.ProjectRoot)
@@ -128,30 +147,34 @@ func NewHTTPServerWithServicesContext(ctx context.Context, devSvc *devtools.Serv
 		var err error
 		reviewSvc, err = review.OpenService(ctx, reviewPath, review.WithPrivacyProvider(privacyProvider))
 		if err != nil {
-			slog.Error("review service initialization failed", "error", err)
+			logger.Error("review service initialization failed", "error", err)
 		}
 	}
 	if reviewSvc != nil && opt.ReviewService == nil {
-		go func() {
+		opt.workers.Go(func() {
 			<-ctx.Done()
 			if err := reviewSvc.Close(); err != nil {
-				slog.Warn("review service close failed", "error", err)
+				logger.Warn("review service close failed", "error", err)
 			}
-		}()
+		})
 	}
 
 	runtimeBridge := opt.RuntimeBridge
 	if runtimeBridge == nil {
-		runtimeBridge = runtimebridge.NewService(nil)
+		runtimeBridge = runtimebridge.NewService(nil, runtimebridge.WithLogger(logger))
 	}
 	resourceInspection := resourceinspection.New(runtimeBridge)
 	devSvc.WithResourceInspection(resourceInspection)
 
-	wsHub := NewWSHub(ctx, devSvc, inspectSvc.Events(), observabilityEvents(observabilitySvc), runtimeBridge)
-	go bridge.DiscoverPeers(ctx, runtimeBridge, opt.ProjectRoot)
+	wsHub := NewWSHub(ctx, devSvc, inspectSvc.Events(), observabilityEvents(observabilitySvc), runtimeBridge, logger)
+	if opt.webSocketHubCreated != nil {
+		opt.webSocketHubCreated(wsHub)
+	}
+	opt.workers.Go(func() { bridge.DiscoverPeers(ctx, runtimeBridge, opt.ProjectRoot) })
 
 	reviewCaseWriter, reviewRepositoryWritable := reviewWriter(opt, privacyProvider)
 	return localserver.New(localserver.Options{
+		Logger:                   logger,
 		Devtools:                 devSvc,
 		Inspect:                  inspectSvc,
 		Observability:            observabilitySvc,
@@ -171,8 +194,10 @@ func NewHTTPServerWithServicesContext(ctx context.Context, devSvc *devtools.Serv
 		SourceResolver: localserver.SourceResolverOptions{
 			ScriptPath:     opt.SourceResolverScript,
 			EmbeddedScript: assets.EmbeddedSourceResolverScript(),
+			Logger:         logger,
+			Stderr:         opt.Stderr,
 		},
-		UI:            assets.EmbeddedUIHandler(),
+		UI:            assets.EmbeddedUIHandler(logger),
 		OriginAllowed: originAllowed,
 	})
 }
@@ -194,10 +219,10 @@ func observabilityEvents(service *observability.Service) *observability.EventBus
 	return service.Events()
 }
 
-func writeJSON(w http.ResponseWriter, v any) {
+func writeJSON(logger *slog.Logger, w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(v); err != nil {
-		slog.Error("JSON encode error", "error", err)
+		logger.Error("JSON encode error", "error", err)
 	}
 }
 

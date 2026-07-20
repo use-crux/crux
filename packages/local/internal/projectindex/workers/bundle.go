@@ -37,16 +37,18 @@ func New(options BundleOptions) *Bundle {
 	return &Bundle{
 		scriptPath:    options.ProjectIndexerScript,
 		scriptContent: options.Assets.ProjectIndexer,
-		worker:        node.NewWorker("project-indexer", options.Assets.ProjectIndexer, options.ProjectIndexerScript, workerMaxResponseLineBytes),
+		worker:        node.NewWorker("project-indexer", options.Assets.ProjectIndexer, options.ProjectIndexerScript, workerMaxResponseLineBytes, options.ProcessOptions...),
 		semanticWorker: semanticworker.New(semanticworker.Options{
-			ScriptPath:    options.ProjectSemanticIndexerScript,
-			ScriptContent: options.Assets.ProjectSemanticIndexer,
+			ScriptPath:     options.ProjectSemanticIndexerScript,
+			ScriptContent:  options.Assets.ProjectSemanticIndexer,
+			ProcessOptions: options.ProcessOptions,
 		}),
 		runtimeWorker: runtimeworker.New(runtimeworker.Options{
-			ScriptPath:    options.ProjectRuntimeIndexerScript,
-			ScriptContent: options.Assets.ProjectRuntimeIndexer,
+			ScriptPath:     options.ProjectRuntimeIndexerScript,
+			ScriptContent:  options.Assets.ProjectRuntimeIndexer,
+			ProcessOptions: options.ProcessOptions,
 		}),
-		syntaxParser: syntaxWorkerFromEnv(),
+		syntaxParser: syntaxWorkerFromEnv(options.ProcessOptions),
 	}
 }
 

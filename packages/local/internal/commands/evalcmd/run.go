@@ -6,11 +6,12 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/use-crux/crux/packages/local/internal/cli"
 	"github.com/use-crux/crux/packages/local/internal/domain"
+	"github.com/use-crux/crux/packages/local/internal/output"
 )
 
 func runEvals(cmd *cobra.Command, f *cli.Factory, opts runOptions, maxCostSet bool) error {
 	if err := validateRunOptions(opts, maxCostSet); err != nil {
-		return failBeforeExecution(cmd, err.Error())
+		return failBeforeExecution(f.Streams(), err.Error())
 	}
 	if opts.watch {
 		opts.watch = false
@@ -43,10 +44,10 @@ func runEvals(cmd *cobra.Command, f *cli.Factory, opts runOptions, maxCostSet bo
 			args = append(args, "--decline-unknown-cost-confirmation")
 		}
 	}
-	return runCoordinator(cmd, opts.cwd, args)
+	return runCoordinator(f.Streams(), opts.cwd, args)
 }
 
-func failBeforeExecution(cmd *cobra.Command, message string) error {
-	_, _ = fmt.Fprintln(cmd.Root().ErrOrStderr(), message)
+func failBeforeExecution(streams *output.IO, message string) error {
+	_, _ = fmt.Fprintln(streams.Err, message)
 	return domain.ExitError{Code: 2}
 }

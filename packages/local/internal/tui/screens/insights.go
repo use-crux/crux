@@ -53,25 +53,25 @@ func (s *Insights) Interested(domains bridge.Domains) bool {
 	return domains.Has(bridge.DomainInsights)
 }
 
-func (s *Insights) Init(client DataClient) tea.Cmd {
-	return fetchInsightsList(client)
+func (s *Insights) Init(ctx context.Context, client DataClient) tea.Cmd {
+	return fetchInsightsList(ctx, client)
 }
 
-func (s *Insights) Update(msg tea.Msg, client DataClient) tea.Cmd {
+func (s *Insights) Update(ctx context.Context, msg tea.Msg, client DataClient) tea.Cmd {
 	switch m := msg.(type) {
 	case insightsListLoadedMsg:
 		s.applyInsights([]api.InspectInsightRecord(m))
 	case api.InspectEvent:
-		return fetchInsightsList(client)
+		return fetchInsightsList(ctx, client)
 	case dataErrMsg:
 		s.err = string(m)
 	case tea.KeyPressMsg:
-		return s.updateKey(m, client)
+		return s.updateKey(ctx, m, client)
 	}
 	return nil
 }
 
-func (s *Insights) updateKey(msg tea.KeyPressMsg, client DataClient) tea.Cmd {
+func (s *Insights) updateKey(ctx context.Context, msg tea.KeyPressMsg, client DataClient) tea.Cmd {
 	switch msg.String() {
 	case "j", "down":
 		s.moveSelection(1)
@@ -88,15 +88,24 @@ func (s *Insights) updateKey(msg tea.KeyPressMsg, client DataClient) tea.Cmd {
 	case "tab", "]":
 		s.cycleTab(1)
 	case "x":
-		return s.dismiss(client)
+		return s.dismiss(ctx, client)
 	case "f":
-		return s.markFixed(client)
+		return s.markFixed(ctx, client)
 	case "t":
 		return s.openLinkedTrace()
 	case "e":
 		return s.exportInsight()
 	}
 	return nil
+}
+
+func (s *Insights) HandlesKey(msg tea.KeyPressMsg) bool {
+	switch msg.String() {
+	case "j", "down", "k", "up", "h", "left", "l", "right", "enter", "esc", "shift+tab", "[", "tab", "]", "x", "f", "t", "e":
+		return true
+	default:
+		return false
+	}
 }
 
 func (s *Insights) applyInsights(items []api.InspectInsightRecord) {
@@ -138,7 +147,7 @@ func (s *Insights) moveSelection(delta int) {
 }
 
 func (s *Insights) cycleTab(delta int) {
-	tabs := []string{"diagnosis", "traces", "cases", "compare", "fix"}
+	tabs := []string{"diagnosis", "traces", "cases", "fix"}
 	idx := 0
 	for i, tab := range tabs {
 		if tab == s.tab {
@@ -167,10 +176,16 @@ func (s *Insights) Keybinds() []shell.Keybind {
 		shell.Bind("j/k", "move"),
 		shell.Bind("h/l", "pane"),
 		shell.Bind("[/]", "tabs"),
-		shell.Bind("t", "linked traces"),
-		shell.Bind("f", "mark fixed"),
-		shell.Bind("x", "dismiss"),
-		shell.Bind("e", "export"),
+	}
+	if current := s.currentInsight(); current != nil {
+		if len(current.LinkedTraceIDs) > 0 {
+			binds = append(binds, shell.Bind("t", "linked traces"))
+		}
+		binds = append(binds,
+			shell.Bind("f", "mark fixed"),
+			shell.Bind("x", "dismiss"),
+			shell.Bind("e", "export"),
+		)
 	}
 	binds = append(binds, shell.Bind(":", "cmd"), shell.Bind("?", "help"))
 	return binds
@@ -221,22 +236,22 @@ func (s *Insights) openLinkedTrace() tea.Cmd {
 	}
 }
 
-func (s *Insights) dismiss(client DataClient) tea.Cmd {
-	return s.setInsightStatus(client, "dismissed")
+func (s *Insights) dismiss(ctx context.Context, client DataClient) tea.Cmd {
+	return s.setInsightStatus(ctx, client, "dismissed")
 }
 
-func (s *Insights) markFixed(client DataClient) tea.Cmd {
-	return s.setInsightStatus(client, "resolved")
+func (s *Insights) markFixed(ctx context.Context, client DataClient) tea.Cmd {
+	return s.setInsightStatus(ctx, client, "resolved")
 }
 
-func (s *Insights) setInsightStatus(client DataClient, status string) tea.Cmd {
+func (s *Insights) setInsightStatus(ctx context.Context, client DataClient, status string) tea.Cmd {
 	cur := s.currentInsight()
 	if cur == nil || client == nil {
 		return nil
 	}
 	id := cur.InsightID
 	return func() tea.Msg {
-		_, err := client.SetInsightStatus(context.Background(), id, api.InspectInsightStatusRequest{Status: status})
+		_, err := client.SetInsightStatus(ctx, id, api.InspectInsightStatusRequest{Status: status})
 		if err != nil {
 			return dataErrMsg(err.Error())
 		}

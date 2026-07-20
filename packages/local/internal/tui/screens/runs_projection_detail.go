@@ -7,33 +7,6 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/api"
 )
 
-func inspectRunDetailFromObservabilityDetail(detail api.ObservabilityRunDetail) api.InspectRunDetailRecord {
-	run := inspectRunFromObservability(detail.Run)
-	trace := api.InspectTraceRecord{
-		TraceID:    detail.Run.RunID,
-		StartedAt:  parseObservabilityTime(detail.Run.StartedAt),
-		Model:      detail.Run.Model,
-		Provider:   detail.Run.Provider,
-		DurationMs: durationPointer(detail.Run.DurationMs),
-		Status:     normalizeObservabilityStatus(detail.Run.Status),
-	}
-	spans := inspectSpansFromRunDetailNode(detail.Root)
-	events := make([]api.CorrelatedEvent, 0)
-	for _, span := range spans {
-		if len(span.Data) == 0 {
-			continue
-		}
-	}
-	return api.InspectRunDetailRecord{
-		Tag:       "InspectRunDetail",
-		Run:       run,
-		Trace:     trace,
-		Events:    events,
-		Spans:     spans,
-		Narrative: []api.InspectRunNarrativeEvent{},
-	}
-}
-
 func inspectSpansFromRunDetailNode(root api.ObservabilityRunDetailNode) []api.InspectRunSpan {
 	var spans []api.InspectRunSpan
 	var visit func(api.ObservabilityRunDetailNode)
@@ -55,15 +28,15 @@ func inspectSpansFromRunDetailNode(root api.ObservabilityRunDetailNode) []api.In
 		addStringAttr(attrs, "retriever_id", node.RetrieverID)
 		spans = append(spans, api.InspectRunSpan{
 			ID:         firstNonEmpty(node.SpanID, node.ID),
-			ParentID:   strings.TrimPrefix(node.ParentID, "span:"),
-			Kind:       node.Display.Kind,
+			ParentID:   strings.TrimPrefix(firstNonEmpty(node.ParentID, node.ParentSpanID), "span:"),
+			Kind:       firstNonEmpty(node.Display.Kind, node.Kind, node.Family),
 			Op:         node.Primitive,
 			Primitive:  inspectPrimitiveFromObservability(node.Family, node.Primitive),
-			Name:       node.Display.Label,
+			Name:       firstNonEmpty(node.Display.Label, node.Name, node.Primitive, node.SpanID, node.ID),
 			Status:     normalizeObservabilityStatus(node.Status),
-			StartedAt:  parseObservabilityTime(node.Timing.StartedAt),
-			EndedAt:    parseObservabilityTime(node.Timing.EndedAt),
-			DurationMs: durationPointer(node.Timing.DurationMs),
+			StartedAt:  parseObservabilityTime(firstNonEmpty(node.Timing.StartedAt, node.StartedAt)),
+			EndedAt:    parseObservabilityTime(firstNonEmpty(node.Timing.EndedAt, node.EndedAt)),
+			DurationMs: durationPointer(firstPositive(node.Timing.DurationMs, node.DurationMs)),
 			EventType:  node.Primitive,
 			Attributes: attrs,
 			Data:       data,
@@ -78,31 +51,26 @@ func inspectSpansFromRunDetailNode(root api.ObservabilityRunDetailNode) []api.In
 	return spans
 }
 
-// buildSpanDataPayload flattens the rich RunDetailNode into a map the
-// per-primitive renderers in payload.go can consume directly.
+func firstPositive(values ...float64) float64 {
+	for _, value := range values {
+		if value > 0 {
+			return value
+		}
+	}
+	return 0
+}
+
+// buildSpanDataPayload projects only curated fields consumed by the semantic
+// primitive renderers. Complete nodes remain available through RunDiagnosis.Raw
+// and the explicit inspect/export actions; storage-shaped objects never enter
+// the default detail document.
 //
 // Background: the SpanSummary embedded in RunDetailNode carries typed
 // columns (Model, Provider, ToolName, FlowID, StepID, RetrieverID,
-// MemoryID, AgentID, PromptID, ContextID) AND a free-form Attributes
-// JSON blob AND attached artifacts (tool.request, tool.response,
-// retrieval.hits, handoff.payload, messages, output, …). The pre-fix
-// projection threw the typed columns away — it only kept Attributes
-// (and shoved the whole node under a `node` key). That's why no
-// per-primitive renderer found its keys at runtime.
-//
-// The fix surfaces everything the renderers need at the top level of
-// the Data map, then layers on extras from artifacts/metrics/raw
-// attributes. We keep the `node`/`details`/`events`/`artifacts`/
-// `relations`/`diagnostics` keys for the inspect-raw overlay.
+// MemoryID, AgentID, PromptID, ContextID), bounded attribute values, metrics,
+// and canonical artifact previews are surfaced at the top level.
 func buildSpanDataPayload(node api.ObservabilityRunDetailNode) map[string]any {
-	p := map[string]any{
-		"node":        node,
-		"details":     node.Details,
-		"events":      node.Events,
-		"artifacts":   node.Artifacts,
-		"relations":   node.Relations,
-		"diagnostics": node.Diagnostics,
-	}
+	p := make(map[string]any)
 	// Typed columns from SpanSummary — only set when non-empty so the
 	// `_, ok := p[...]` checks in renderers cleanly skip absent fields.
 	setIfNonEmpty(p, "model", node.Model)
@@ -115,11 +83,10 @@ func buildSpanDataPayload(node api.ObservabilityRunDetailNode) map[string]any {
 	setIfNonEmpty(p, "agentId", node.AgentID)
 	setIfNonEmpty(p, "promptId", node.PromptID)
 	setIfNonEmpty(p, "contextId", node.ContextID)
-	// Raw Attributes overlay — primitives like generation.call carry
-	// finishReason, temperature, mode here. Merge LAST so typed
-	// columns win when both are present, except attributes that don't
-	// collide. Strategy: merge attributes first, then overwrite with
-	// typed columns above. We do it in the opposite order, so:
+	// Curated attributes — primitives like generation.call carry
+	// finishReason and temperature here. The closed semantic allowlist keeps
+	// unknown raw storage fields out of the default document. Typed columns
+	// win when both are present, so:
 	// 1. snapshot the typed values we just set,
 	// 2. merge attrs (may overwrite),
 	// 3. restore typed values.
@@ -130,7 +97,7 @@ func buildSpanDataPayload(node api.ObservabilityRunDetailNode) map[string]any {
 			typed[k] = v
 		}
 	}
-	mergeRawObject(p, node.Attributes)
+	mergeSemanticSpanAttributes(p, node.Attributes)
 	for k, v := range typed {
 		p[k] = v
 	}
@@ -245,16 +212,6 @@ func decodeRawObject(raw json.RawMessage) map[string]any {
 		return nil
 	}
 	return out
-}
-
-// mergeRawObject decodes a json.RawMessage object and merges its keys
-// into m (no-op when the message is empty/null/non-object). Used to
-// overlay free-form span.Attributes onto the structured Data map.
-func mergeRawObject(m map[string]any, raw json.RawMessage) {
-	src := decodeRawObject(raw)
-	for k, v := range src {
-		m[k] = v
-	}
 }
 
 // firstRawObject returns the first non-empty, non-null RawMessage in

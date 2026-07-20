@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"log/slog"
 	"net/http"
 
 	"github.com/use-crux/crux/packages/local/internal/privacy"
@@ -61,7 +60,7 @@ func registerReviewRoutes(mux *http.ServeMux, service *review.Service, writer re
 				RepositoryWritable: repositoryWritable && !preview,
 			})
 			if err != nil {
-				slog.Warn("Add-to-eval failed", "error", err)
+				requestLogger(r).Warn("Add-to-eval failed", "error", err)
 				if errors.Is(err, privacy.ErrPolicyUnavailable) {
 					http.Error(w, privacy.PolicyUnavailableMessage, http.StatusServiceUnavailable)
 					return
@@ -79,7 +78,7 @@ func registerReviewRoutes(mux *http.ServeMux, service *review.Service, writer re
 					return
 				}
 			}
-			writeJSON(w, result)
+			writeJSON(w, r, result)
 			return
 		}
 		projection, err := service.ApplyAction(r.Context(), review.Action{ReviewID: reviewID, Type: input.Type})
@@ -87,7 +86,7 @@ func registerReviewRoutes(mux *http.ServeMux, service *review.Service, writer re
 			writeReviewError(w, err)
 			return
 		}
-		writeJSON(w, projection)
+		writeJSON(w, r, projection)
 	})
 }
 

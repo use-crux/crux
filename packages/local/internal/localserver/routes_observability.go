@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -44,12 +43,12 @@ func registerObservabilityRoutesWithReview(mux *http.ServeMux, service *observab
 			return
 		}
 		if !observability.IsSupportedSchemaVersion(batch.SchemaVersion) {
-			writeUnsupportedObservabilitySchema(w, batch)
+			writeUnsupportedObservabilitySchema(w, r, batch)
 			return
 		}
 		if batch.SourceHealth != nil {
 			if err := service.RecordSourceHealth(r.Context(), *batch.SourceHealth); err != nil {
-				slog.Warn("observability source health rejected", "error", err)
+				requestLogger(r).Warn("observability source health rejected", "error", err)
 			}
 		}
 		dispositions := service.IngestWithDispositions(r.Context(), batch)
@@ -78,7 +77,7 @@ func registerObservabilityRoutesWithReview(mux *http.ServeMux, service *observab
 					continue
 				}
 				if err := reviews.LinkRunContext(r.Context(), feedbackContextSnapshot(r.Context(), service, run)); err != nil {
-					slog.Warn("feedback context reconciliation failed", "error", err)
+					requestLogger(r).Warn("feedback context reconciliation failed", "error", err)
 				}
 			}
 		}
@@ -99,7 +98,7 @@ func registerObservabilityRoutesWithReview(mux *http.ServeMux, service *observab
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusAccepted)
 		if err := json.NewEncoder(w).Encode(observabilityIngestResponse{Dispositions: dispositions}); err != nil {
-			slog.Error("JSON encode error", "error", err)
+			requestLogger(r).Error("JSON encode error", "error", err)
 		}
 	})
 
@@ -113,7 +112,7 @@ func registerObservabilityRoutesWithReview(mux *http.ServeMux, service *observab
 			return
 		}
 		page, err := service.RunsPage(r.Context(), parseObservabilityRunListOptions(r))
-		writeObservabilityRead(w, page, err)
+		writeObservabilityRead(w, r, page, err)
 	})
 
 	// GET /api/observability/runs/delta is the bounded catch-up endpoint for a
@@ -129,7 +128,7 @@ func registerObservabilityRoutesWithReview(mux *http.ServeMux, service *observab
 			return
 		}
 		delta, err := service.RunsSince(r.Context(), since)
-		writeObservabilityRead(w, delta, err)
+		writeObservabilityRead(w, r, delta, err)
 	})
 
 	// GET /api/observability/definitions/{definitionId}/runs is the
@@ -147,7 +146,7 @@ func registerObservabilityRoutesWithReview(mux *http.ServeMux, service *observab
 		opts := parseObservabilityRunListOptions(r)
 		opts.DefinitionID = r.PathValue("definitionId")
 		page, err := service.RunsPage(r.Context(), opts)
-		writeObservabilityRead(w, page, err)
+		writeObservabilityRead(w, r, page, err)
 	})
 
 	// GET /api/observability/definitions/{definitionId}/activity is the Catalog
@@ -161,7 +160,7 @@ func registerObservabilityRoutesWithReview(mux *http.ServeMux, service *observab
 			return
 		}
 		summary, err := service.DefinitionActivitySummary(r.Context(), r.PathValue("definitionId"))
-		writeObservabilityRead(w, summary, err)
+		writeObservabilityRead(w, r, summary, err)
 	})
 
 	mux.HandleFunc("GET /api/observability/runs/{runId}", func(w http.ResponseWriter, r *http.Request) {
@@ -175,7 +174,7 @@ func registerObservabilityRoutesWithReview(mux *http.ServeMux, service *observab
 			comparison := observability.CompareCurrentCatalog(detail.DefinitionRefs, index)
 			detail.CurrentCatalog = &comparison
 		}
-		writeObservabilityRead(w, detail, err)
+		writeObservabilityRead(w, r, detail, err)
 	})
 
 	mux.HandleFunc("GET /api/observability/runs/{runId}/spans/{spanId}/events", func(w http.ResponseWriter, r *http.Request) {
@@ -189,7 +188,7 @@ func registerObservabilityRoutesWithReview(mux *http.ServeMux, service *observab
 			r.PathValue("spanId"),
 			parseObservabilitySpanEventListOptions(r),
 		)
-		writeObservabilityRead(w, events, err)
+		writeObservabilityRead(w, r, events, err)
 	})
 
 	mux.HandleFunc("GET /api/observability/runs/{runId}/graph", func(w http.ResponseWriter, r *http.Request) {
@@ -198,7 +197,7 @@ func registerObservabilityRoutesWithReview(mux *http.ServeMux, service *observab
 			return
 		}
 		graph, err := service.Graph(r.Context(), r.PathValue("runId"))
-		writeObservabilityRead(w, graph, err)
+		writeObservabilityRead(w, r, graph, err)
 	})
 
 	mux.HandleFunc("GET /api/observability/resources/{family}", func(w http.ResponseWriter, r *http.Request) {
@@ -207,7 +206,7 @@ func registerObservabilityRoutesWithReview(mux *http.ServeMux, service *observab
 			return
 		}
 		activity, err := service.ResourceActivity(r.Context(), r.PathValue("family"))
-		writeObservabilityRead(w, activity, err)
+		writeObservabilityRead(w, r, activity, err)
 	})
 }
 
@@ -265,7 +264,7 @@ type observabilityIngestResponse struct {
 
 const maxObservabilityRequestBytes = 1024 * 1024
 
-func writeUnsupportedObservabilitySchema(w http.ResponseWriter, batch observability.Batch) {
+func writeUnsupportedObservabilitySchema(w http.ResponseWriter, r *http.Request, batch observability.Batch) {
 	dispositions := make([]observability.IngestDisposition, 0, len(batch.Records))
 	for index, record := range batch.Records {
 		dispositions = append(dispositions, observability.IngestDisposition{
@@ -275,7 +274,9 @@ func writeUnsupportedObservabilitySchema(w http.ResponseWriter, batch observabil
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusUnprocessableEntity)
-	_ = json.NewEncoder(w).Encode(observabilityIngestResponse{Dispositions: dispositions})
+	if err := json.NewEncoder(w).Encode(observabilityIngestResponse{Dispositions: dispositions}); err != nil {
+		requestLogger(r).Error("JSON encode error", "error", err)
+	}
 }
 
 func observabilityRefreshRefID(batch observability.Batch) string {
@@ -287,15 +288,15 @@ func observabilityRefreshRefID(batch observability.Batch) string {
 	return "observability"
 }
 
-func writeObservabilityRead(w http.ResponseWriter, value any, err error) {
+func writeObservabilityRead(w http.ResponseWriter, r *http.Request, value any, err error) {
 	if err != nil {
 		if errors.Is(err, observability.ErrNotFound) {
 			http.Error(w, "not found", http.StatusNotFound)
 			return
 		}
-		slog.Warn("observability read failed", "error", err)
+		requestLogger(r).Warn("observability read failed", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, value)
+	writeJSON(w, r, value)
 }

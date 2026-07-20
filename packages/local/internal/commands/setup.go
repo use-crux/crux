@@ -3,8 +3,6 @@ package commands
 import (
 	"encoding/json"
 	"fmt"
-	"io"
-	"log/slog"
 
 	"github.com/spf13/cobra"
 	"github.com/use-crux/crux/packages/local/internal/cli"
@@ -36,9 +34,6 @@ func NewSetupCmd(f *cli.Factory) *cobra.Command {
 			if check && apply {
 				return fmt.Errorf("choose at most one of --check or --apply")
 			}
-			if !startupDebugEnabled(false) {
-				slog.SetDefault(slog.New(slog.NewTextHandler(io.Discard, nil)))
-			}
 			return runSetupCommand(cmd, f, cwd, jsonOutput, apply)
 		},
 	}
@@ -50,6 +45,7 @@ func NewSetupCmd(f *cli.Factory) *cobra.Command {
 }
 
 func runSetupCommand(cmd *cobra.Command, f *cli.Factory, cwd string, jsonOutput, apply bool) error {
+	streams := f.Streams()
 	root, err := resolveRuntimeGenerateRoot(cwd)
 	if err != nil {
 		return err
@@ -58,7 +54,7 @@ func runSetupCommand(cmd *cobra.Command, f *cli.Factory, cwd string, jsonOutput,
 	if apply {
 		mode = "apply"
 	}
-	raw, err := runSetupOperationForCommand(cmd.Context(), root, mode)
+	raw, err := runSetupOperationForCommand(cmd.Context(), root, mode, newCommandWorkerProcess(streams))
 	if err != nil {
 		return err
 	}
@@ -67,9 +63,9 @@ func runSetupCommand(cmd *cobra.Command, f *cli.Factory, cwd string, jsonOutput,
 		return err
 	}
 	if jsonOutput {
-		err = writePrettyJSON(cmd.OutOrStdout(), raw)
+		err = writePrettyJSON(streams.Out, raw)
 	} else {
-		err = printSetupResult(f.Streams(), report)
+		err = printSetupResult(streams, report)
 	}
 	if err != nil {
 		return err

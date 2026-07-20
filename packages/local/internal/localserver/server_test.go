@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/devtools"
@@ -16,6 +19,93 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/runtimebridge"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
+
+func TestNewUsesItsScopedLoggerForRequestDiagnostics(t *testing.T) {
+	var scopedLogs bytes.Buffer
+	var defaultLogs bytes.Buffer
+	originalLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&defaultLogs, nil)))
+	t.Cleanup(func() { slog.SetDefault(originalLogger) })
+
+	s := store.NewStore()
+	inspectSvc := inspect.NewService(s, inspect.Dir(t.TempDir()))
+	devtoolsSvc := devtools.NewService(s, inspectSvc)
+	devtoolsSvc.WithProjectIndexer(failingRuntimeOperationIndexer{})
+	handler := New(Options{
+		Devtools:    devtoolsSvc,
+		ProjectRoot: t.TempDir(),
+		Logger:      slog.New(slog.NewTextHandler(&scopedLogs, nil)),
+	})
+
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/runtime", nil))
+
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusInternalServerError)
+	}
+	if got := scopedLogs.String(); !strings.Contains(got, "runtime operation failed") || !strings.Contains(got, "operation=status") {
+		t.Fatalf("scoped logs = %q, want runtime operation diagnostic", got)
+	}
+	if got := defaultLogs.String(); got != "" {
+		t.Fatalf("default logs = %q, want scoped logger isolation", got)
+	}
+}
+
+func TestNewUsesItsScopedLoggerForMountedReadModels(t *testing.T) {
+	var scopedLogs bytes.Buffer
+	var defaultLogs bytes.Buffer
+	originalLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&defaultLogs, nil)))
+	t.Cleanup(func() { slog.SetDefault(originalLogger) })
+
+	handler := New(Options{
+		EvalCatalog: failingEvalCatalog{},
+		ProjectRoot: t.TempDir(),
+		Logger:      slog.New(slog.NewTextHandler(&scopedLogs, nil)),
+	})
+
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/eval/catalog", nil))
+
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusInternalServerError)
+	}
+	if got := scopedLogs.String(); !strings.Contains(got, "readmodel endpoint failed") || !strings.Contains(got, "route=\"GET /api/eval/catalog\"") {
+		t.Fatalf("scoped logs = %q, want readmodel route diagnostic", got)
+	}
+	if got := defaultLogs.String(); got != "" {
+		t.Fatalf("default logs = %q, want scoped logger isolation", got)
+	}
+}
+
+func TestNewUsesItsScopedLoggerForResponseEncodingFailures(t *testing.T) {
+	var scopedLogs bytes.Buffer
+	var defaultLogs bytes.Buffer
+	originalLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&defaultLogs, nil)))
+	t.Cleanup(func() { slog.SetDefault(originalLogger) })
+
+	service, err := observability.OpenService(context.Background(), ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = service.Close() })
+	handler := New(Options{
+		Observability: service,
+		Logger:        slog.New(slog.NewTextHandler(&scopedLogs, nil)),
+	})
+	request := httptest.NewRequest(http.MethodPost, "/api/observability/records", strings.NewReader(`{"schemaVersion":2,"records":[]}`))
+	request.Header.Set("Content-Type", "application/json")
+
+	handler.ServeHTTP(&failingResponseWriter{header: make(http.Header)}, request)
+
+	if got := scopedLogs.String(); !strings.Contains(got, "JSON encode error") {
+		t.Fatalf("scoped logs = %q, want response encoding diagnostic", got)
+	}
+	if got := defaultLogs.String(); got != "" {
+		t.Fatalf("default logs = %q, want scoped logger isolation", got)
+	}
+}
 
 func TestNewMountsLocalRuntimeRouteGroups(t *testing.T) {
 	ctx := context.Background()
@@ -122,11 +212,39 @@ func (noopHub) BroadcastJSON(any) {}
 
 func (noopHub) HandleUpgrade(http.ResponseWriter, *http.Request) {}
 
+type failingResponseWriter struct {
+	header http.Header
+}
+
+func (w *failingResponseWriter) Header() http.Header { return w.header }
+
+func (*failingResponseWriter) Write([]byte) (int, error) {
+	return 0, errors.New("response write failed")
+}
+
+func (*failingResponseWriter) WriteHeader(int) {}
+
 type recordingRuntimeOperationIndexer struct {
 	root           string
 	operation      string
 	workID         string
 	includeDetails bool
+}
+
+type failingRuntimeOperationIndexer struct{}
+
+type failingEvalCatalog struct{}
+
+func (failingEvalCatalog) EvalManifests(context.Context) ([]json.RawMessage, error) {
+	return nil, errors.New("catalog unavailable")
+}
+
+func (failingRuntimeOperationIndexer) IndexProjectAstPatch(context.Context, string, string, string) (projectindex.IndexPatch, error) {
+	return projectindex.IndexPatch{}, nil
+}
+
+func (failingRuntimeOperationIndexer) RunRuntimeOperation(context.Context, string, string, string, bool) (json.RawMessage, error) {
+	return nil, errors.New("runtime unavailable")
 }
 
 func (i *recordingRuntimeOperationIndexer) IndexProjectAstPatch(context.Context, string, string, string) (projectindex.IndexPatch, error) {

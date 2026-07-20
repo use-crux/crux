@@ -19,10 +19,9 @@ func renderSpanWithPayload(t *testing.T, primitive string, payload map[string]an
 		t.Fatalf("marshal payload: %v", err)
 	}
 	r := NewRuns()
-	r.loaded = true
-	r.selRun = "run-x"
-	r.detail = &api.InspectRunDetailRecord{
-		Run: api.InspectRunRecord{TraceID: "run-x"},
+	selectRunForTest(r, "run-x")
+	setRunDiagnosisForTest(r, runDiagnosisFixture{
+		RunID: "run-x",
 		Spans: []api.InspectRunSpan{
 			{
 				ID:        "sp1",
@@ -33,10 +32,10 @@ func renderSpanWithPayload(t *testing.T, primitive string, payload map[string]an
 				Data:      json.RawMessage(body),
 			},
 		},
-		Trace: api.InspectTraceRecord{StartedAt: 1716730000000},
-	}
-	r.selSpan = "sp1"
-	return r.renderSpanDetail(80, 60)
+		StartedAt: 1716730000000,
+	})
+	selectSpanForTest(r, "sp1")
+	return renderSpanDetailForTest(r, 80, 60)
 }
 
 // TestSpanDetailToolShowsCuratedKVNotJSONDump asserts a tool span's
@@ -110,10 +109,9 @@ func TestQualitySpansFromRunDetailNodePreservesErrorInspection(t *testing.T) {
 func TestSpanDetailSurfacesObservedError(t *testing.T) {
 	errorJSON := json.RawMessage(`{"name":"ToolExecutionError","message":"tool exploded","stack":"Error: tool exploded\n    at search.ts:10:3","category":"tool","retryable":false}`)
 	r := NewRuns()
-	r.loaded = true
-	r.selRun = "run-error"
-	r.detail = &api.InspectRunDetailRecord{
-		Run: api.InspectRunRecord{TraceID: "run-error"},
+	selectRunForTest(r, "run-error")
+	setRunDiagnosisForTest(r, runDiagnosisFixture{
+		RunID: "run-error",
 		Spans: []api.InspectRunSpan{
 			{
 				ID:        "sp-error",
@@ -138,11 +136,11 @@ func TestSpanDetailSurfacesObservedError(t *testing.T) {
 				},
 			},
 		},
-		Trace: api.InspectTraceRecord{StartedAt: 1716730000000},
-	}
-	r.selSpan = "sp-error"
+		StartedAt: 1716730000000,
+	})
+	selectSpanForTest(r, "sp-error")
 
-	plain := stripANSI(r.renderSpanDetail(90, 60))
+	plain := stripANSI(renderSpanDetailForTest(r, 90, 60))
 	for _, want := range []string{"ERROR", "ToolExecutionError", "tool exploded", "category", "tool", "retryable", "false", "error.stack", "search.ts:10:3"} {
 		if !strings.Contains(plain, want) {
 			t.Errorf("rendered error span missing %q\nfull output:\n%s", want, plain)

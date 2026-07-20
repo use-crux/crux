@@ -65,7 +65,7 @@ func listTraces(io *output.IO, ctx context.Context, c *api.Client, promptFilter,
 	runs = filterObservabilityRuns(runs, promptFilter, sessionFilter)
 
 	if jsonOut {
-		return output.JSON(runs)
+		return io.WriteJSON(runs)
 	}
 
 	printTraces(io, runs)
@@ -90,75 +90,6 @@ func printTraces(io *output.IO, runs []api.ObservabilityRunSummary) {
 		tbl.Rows = append(tbl.Rows, observabilityRunRow(io, run))
 	}
 	fmt.Fprint(io.Out, io.RenderTable(tbl))
-}
-
-func tailTraces(io *output.IO, ctx context.Context, c *api.Client, promptFilter, sessionFilter string, jsonOut bool) error {
-	// Connect WebSocket for live updates.
-	ws, err := api.ConnectWS(c.BaseURL)
-	if err != nil {
-		return err
-	}
-	defer ws.Close()
-
-	// Print existing traces first (non-fatal if fetch fails).
-	existing, err := c.ObservabilityRuns(ctx)
-	if err != nil {
-		existing = nil
-	}
-	existing = filterObservabilityRuns(existing, promptFilter, sessionFilter)
-
-	seenIDs := map[string]bool{}
-	if !jsonOut {
-		fmt.Fprintln(io.Out, brandedHeader(io, "traces")+"  "+io.Sprint(output.Dim, "(tailing — Ctrl+C to stop)"))
-		fmt.Fprintln(io.Out)
-	}
-	for _, run := range existing {
-		seenIDs[run.RunID] = true
-		if jsonOut {
-			output.JSON(run)
-		} else {
-			printObservabilityRunLine(io, run)
-		}
-	}
-
-	// Listen for new events.
-	ch := make(chan json.RawMessage, 100)
-	go ws.ReadMessages(ch)
-
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		case _, ok := <-ch:
-			if !ok {
-				return nil
-			}
-			// On any event, re-fetch traces and print new ones.
-			runs, err := c.ObservabilityRuns(ctx)
-			if err != nil {
-				continue
-			}
-			runs = filterObservabilityRuns(runs, promptFilter, sessionFilter)
-
-			for _, run := range runs {
-				if seenIDs[run.RunID] {
-					continue
-				}
-				seenIDs[run.RunID] = true
-				if run.Status == "running" {
-					continue // Wait for completion.
-				}
-				if jsonOut {
-					output.JSON(run)
-				} else {
-					printObservabilityRunLine(io, run)
-				}
-			}
-
-			// Small debounce — events can arrive in bursts.
-			time.Sleep(100 * time.Millisecond)
-		}
-	}
 }
 
 func printObservabilityRunLine(io *output.IO, run api.ObservabilityRunSummary) {
@@ -188,98 +119,6 @@ func observabilityRunRow(io *output.IO, run api.ObservabilityRunSummary) []strin
 		tokens,
 		cost,
 	}
-}
-
-// showTraceDetail renders one trace under a branded header: identity, run
-// metadata, token/cost metrics, the span tree, and attachment counts. Every
-// styled span funnels through io.Sprint/io.Status so `--no-color`/non-TTY output
-// stays byte-clean; the --json branch returns the raw detail unchanged.
-func showTraceDetail(io *output.IO, ctx context.Context, c *api.Client, traceID string, jsonOut bool) error {
-	detail, found, err := c.ObservabilityRunDetail(ctx, traceID)
-	if err != nil {
-		return err
-	}
-	if !found {
-		return fmt.Errorf("not found")
-	}
-
-	if jsonOut {
-		return output.JSON(detail)
-	}
-
-	prompt := "(anonymous)"
-	if detail.Run.PromptID != "" {
-		prompt = detail.Run.PromptID
-	}
-	fmt.Fprintf(io.Out, "%s\n\n", brandedHeader(io, "traces"))
-	fmt.Fprintf(io.Out, "%s  %s  %s\n\n",
-		io.Status(normalizeObservabilityStatus(detail.Run.Status)),
-		io.Sprint(output.BoldCyan, prompt),
-		io.Sprint(output.Dim, detail.Run.Model),
-	)
-
-	fmt.Fprintf(io.Out, "  %s  %s\n", io.Sprint(output.Bold, "Run ID:"), detail.Run.RunID)
-	if detail.Run.TraceID != "" && detail.Run.TraceID != detail.Run.RunID {
-		fmt.Fprintf(io.Out, "  %s  %s\n", io.Sprint(output.Bold, "Trace ID:"), detail.Run.TraceID)
-	}
-	fmt.Fprintf(io.Out, "  %s  %s\n", io.Sprint(output.Bold, "Provider:"), detail.Run.Provider)
-	fmt.Fprintf(io.Out, "  %s  %s\n", io.Sprint(output.Bold, "Duration:"), output.FormatDuration(detail.Run.DurationMs))
-	if sessionID := stringAttribute(detail.Run.Attributes, "sessionId", "sessionID"); sessionID != "" {
-		fmt.Fprintf(io.Out, "  %s  %s\n", io.Sprint(output.Bold, "Session: "), sessionID)
-	}
-	if errMsg := errorMessage(detail.Run.Error); errMsg != "" {
-		fmt.Fprintf(io.Out, "  %s  %s\n", io.Sprint(output.Bold, "Error:   "), io.Sprint(output.Red, errMsg))
-	}
-
-	metrics := jsonObject(detail.Run.Metrics)
-	inputTokens := intMetric(metrics, "inputTokens")
-	outputTokens := intMetric(metrics, "outputTokens")
-	totalTokens := intMetric(metrics, "totalTokens")
-	if inputTokens > 0 || outputTokens > 0 || totalTokens > 0 {
-		fmt.Fprintf(io.Out, "\n  %s\n", io.Sprint(output.Bold, "Tokens"))
-		if inputTokens > 0 {
-			fmt.Fprintf(io.Out, "    Input:  %s\n", output.FormatTokens(inputTokens))
-		}
-		if outputTokens > 0 {
-			fmt.Fprintf(io.Out, "    Output: %s\n", output.FormatTokens(outputTokens))
-		}
-		if totalTokens == 0 {
-			totalTokens = inputTokens + outputTokens
-		}
-		fmt.Fprintf(io.Out, "    Total:  %s\n", output.FormatTokens(totalTokens))
-	}
-
-	if value, ok := floatMetric(metrics, "costUsd", "cost"); ok {
-		fmt.Fprintf(io.Out, "    Cost:   %s\n", output.FormatCost(value))
-	}
-
-	if len(detail.Rows) > 0 {
-		fmt.Fprintf(io.Out, "\n  %s\n", io.Sprint(output.Bold, "Spans"))
-		for _, row := range detail.Rows {
-			indent := strings.Repeat("  ", row.Depth)
-			kind := firstNonEmptyString(row.Display.Kind, "span")
-			fmt.Fprintf(io.Out, "    %s%s %-12s %-28s %8s\n",
-				indent,
-				io.Status(normalizeObservabilityStatus(row.Status)),
-				kind,
-				truncate(row.Display.Label, 28),
-				output.FormatDuration(row.Timing.DurationMs),
-			)
-		}
-	}
-
-	if detail.Counts.AttachedDetails > 0 {
-		fmt.Fprintf(io.Out, "\n  %s %d\n", io.Sprint(output.Bold, "Attached details:"), detail.Counts.AttachedDetails)
-	}
-	if len(detail.Diagnostics) > 0 {
-		fmt.Fprintf(io.Out, "  %s %d\n", io.Sprint(output.Bold, "Diagnostics:"), len(detail.Diagnostics))
-	}
-	if len(detail.Facets) > 0 {
-		fmt.Fprintf(io.Out, "  %s %d\n", io.Sprint(output.Bold, "Facet groups:"), len(detail.Facets))
-	}
-
-	fmt.Fprintln(io.Out)
-	return nil
 }
 
 func filterObservabilityRuns(runs []api.ObservabilityRunSummary, promptFilter, sessionFilter string) []api.ObservabilityRunSummary {

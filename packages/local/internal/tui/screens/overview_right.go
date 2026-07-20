@@ -27,13 +27,13 @@ func (o *Overview) renderRightColumn(width, height int) string {
 }
 
 func (o *Overview) renderPassRateChart(width, height int) string {
-	header := shell.PaneHeader(width, "Pass rate · last 14 days", "", shell.TextMuted.Render("run trend"))
+	header := overviewPaneHeader(width, "Pass rate · last 14 days", "", "run trend")
 	hdrH := strings.Count(header, "\n") + 1
 	bodyRows := height - hdrH - 1
 	if bodyRows < 3 {
 		bodyRows = 3
 	}
-	values := passRateHistory(o.overview)
+	values := passRateHistory(o.overviewSummary())
 	if len(values) == 0 {
 		return header + "\n" + shell.TextMuted.Render(" no history yet — collect more runs to populate")
 	}
@@ -104,7 +104,9 @@ func renderPassRateAxis(width int) string {
 }
 
 func (o *Overview) renderActivityBlock(width, height int) string {
-	header := shell.PaneHeader(width, "Activity", "", shell.TextMuted.Render("dev-server · live"))
+	snapshot := o.activityResource.Snapshot()
+	meta := appendResourceStatus("dev-server · live", resourceStatus(snapshot))
+	header := overviewPaneHeader(width, focusTitle("Activity", o.focusedPanel == panelActivity), "", meta)
 	hdrH := strings.Count(header, "\n") + 1
 	bodyRows := height - hdrH
 	if bodyRows < 1 {
@@ -113,20 +115,14 @@ func (o *Overview) renderActivityBlock(width, height int) string {
 
 	// Filter low-signal events so the feed reads like the design intent
 	// (one notable thing per row) rather than dumping every WS frame.
-	filtered := make([]api.InspectActivityEvent, 0, len(o.activity))
-	var lastKey string
-	for _, ev := range o.activity {
-		if isNoiseEvent(ev) {
-			continue
+	if !snapshot.HasValue {
+		rows := []string{" " + shell.TextMuted.Render(resourceStateMessage(snapshot.State, snapshot.Err, "activity"))}
+		for len(rows) < bodyRows {
+			rows = append(rows, strings.Repeat(" ", width))
 		}
-		// Collapse adjacent duplicates (same kind+refId).
-		key := ev.Kind + "|" + ev.RefID
-		if key != "" && key == lastKey {
-			continue
-		}
-		lastKey = key
-		filtered = append(filtered, ev)
+		return header + "\n" + strings.Join(rows, "\n")
 	}
+	filtered := o.projectedActivityRows()
 
 	rows := make([]string, 0, bodyRows)
 	// Empty-state hint when the activity feed has nothing yet — better

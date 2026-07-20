@@ -3,6 +3,7 @@ package bridge
 import (
 	"context"
 	"encoding/json"
+	"sync"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -47,22 +48,52 @@ type item struct {
 	indexChanged bool
 }
 
+// Session owns the goroutines draining and coalescing one bridge source set.
+type Session struct {
+	workers sync.WaitGroup
+}
+
+func (session *Session) goRun(run func()) {
+	session.workers.Add(1)
+	go func() {
+		defer session.workers.Done()
+		run()
+	}()
+}
+
+// Wait joins every collector and drain after its context is canceled.
+func (session *Session) Wait(ctx context.Context) error {
+	done := make(chan struct{})
+	go func() {
+		session.workers.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
 // Start drains every source bus into one coalescing collector and sends
 // revision-tagged batches into Bubble Tea. The first event after a quiet period
 // is delivered immediately; follow-up events are batched on an 80ms window.
-func Start(ctx context.Context, src Sources, send func(tea.Msg)) {
+func Start(ctx context.Context, src Sources, send func(tea.Msg)) *Session {
 	clock := src.Clock
 	if clock == nil {
 		clock = realClock{}
 	}
 	in := make(chan item, 256)
-	startDrains(ctx, src, in)
-	go collect(ctx, clock, in, send)
+	session := &Session{}
+	startDrains(ctx, src, in, session)
+	session.goRun(func() { collect(ctx, clock, in, send) })
+	return session
 }
 
-func startDrains(ctx context.Context, src Sources, in chan<- item) {
+func startDrains(ctx context.Context, src Sources, in chan<- item, session *Session) {
 	if src.Inspect != nil {
-		go func() {
+		session.goRun(func() {
 			for {
 				select {
 				case <-ctx.Done():
@@ -74,10 +105,10 @@ func startDrains(ctx context.Context, src Sources, in chan<- item) {
 					forward(ctx, in, item{inspect: &ev})
 				}
 			}
-		}()
+		})
 	}
 	if src.StoreChanged != nil {
-		go func() {
+		session.goRun(func() {
 			for {
 				select {
 				case <-ctx.Done():
@@ -89,10 +120,10 @@ func startDrains(ctx context.Context, src Sources, in chan<- item) {
 					forward(ctx, in, item{storeChanged: true})
 				}
 			}
-		}()
+		})
 	}
 	if src.IndexChanged != nil {
-		go func() {
+		session.goRun(func() {
 			for {
 				select {
 				case <-ctx.Done():
@@ -104,10 +135,10 @@ func startDrains(ctx context.Context, src Sources, in chan<- item) {
 					forward(ctx, in, item{indexChanged: true})
 				}
 			}
-		}()
+		})
 	}
 	if src.Observability != nil {
-		go func() {
+		session.goRun(func() {
 			for {
 				select {
 				case <-ctx.Done():
@@ -120,7 +151,7 @@ func startDrains(ctx context.Context, src Sources, in chan<- item) {
 					forward(ctx, in, item{inspect: &inspectEvent})
 				}
 			}
-		}()
+		})
 	}
 }
 

@@ -13,37 +13,36 @@ import (
 // the implementation plan.
 func TestOverviewCursorCyclesInsights(t *testing.T) {
 	o := NewOverview()
-	o.loaded = true
-	o.insights = []api.InspectInsightRecord{
+	applyOverviewInsightsForTest(o, []api.InspectInsightRecord{
 		{InsightID: "INS-1"},
 		{InsightID: "INS-2"},
 		{InsightID: "INS-3"},
-	}
+	})
 
 	if got := o.SelectedInsightID(); got != "INS-1" {
 		t.Fatalf("initial SelectedInsightID = %q, want %q", got, "INS-1")
 	}
 
 	// `j` moves down.
-	o.Update(tea.KeyPressMsg(tea.Key{Text: "j", Code: 'j'}), nil)
+	o.Update(testContext, tea.KeyPressMsg(tea.Key{Text: "j", Code: 'j'}), nil)
 	if got := o.SelectedInsightID(); got != "INS-2" {
 		t.Errorf("after j, SelectedInsightID = %q, want %q", got, "INS-2")
 	}
 
 	// `j` again → INS-3.
-	o.Update(tea.KeyPressMsg(tea.Key{Text: "j", Code: 'j'}), nil)
+	o.Update(testContext, tea.KeyPressMsg(tea.Key{Text: "j", Code: 'j'}), nil)
 	if got := o.SelectedInsightID(); got != "INS-3" {
 		t.Errorf("after second j, SelectedInsightID = %q, want %q", got, "INS-3")
 	}
 
 	// `j` at end stays at the last row (bounded).
-	o.Update(tea.KeyPressMsg(tea.Key{Text: "j", Code: 'j'}), nil)
+	o.Update(testContext, tea.KeyPressMsg(tea.Key{Text: "j", Code: 'j'}), nil)
 	if got := o.SelectedInsightID(); got != "INS-3" {
 		t.Errorf("j at end should clamp; SelectedInsightID = %q, want %q", got, "INS-3")
 	}
 
 	// `k` moves up.
-	o.Update(tea.KeyPressMsg(tea.Key{Text: "k", Code: 'k'}), nil)
+	o.Update(testContext, tea.KeyPressMsg(tea.Key{Text: "k", Code: 'k'}), nil)
 	if got := o.SelectedInsightID(); got != "INS-2" {
 		t.Errorf("after k, SelectedInsightID = %q, want %q", got, "INS-2")
 	}
@@ -54,22 +53,21 @@ func TestOverviewCursorCyclesInsights(t *testing.T) {
 // cursor (not the insights cursor).
 func TestOverviewLTogglesToRunsPanel(t *testing.T) {
 	o := NewOverview()
-	o.loaded = true
-	o.insights = []api.InspectInsightRecord{
+	applyOverviewInsightsForTest(o, []api.InspectInsightRecord{
 		{InsightID: "INS-1"}, {InsightID: "INS-2"},
-	}
-	o.runs = []api.InspectRunRecord{
+	})
+	applyOverviewRunsForTest(o, []api.InspectRunRecord{
 		{TraceID: "RUN-1"}, {TraceID: "RUN-2"}, {TraceID: "RUN-3"},
-	}
+	})
 
 	if got := o.SelectedRunID(); got != "RUN-1" {
 		t.Fatalf("initial SelectedRunID = %q, want %q", got, "RUN-1")
 	}
 
 	// `l` → focus runs.
-	o.Update(tea.KeyPressMsg(tea.Key{Text: "l", Code: 'l'}), nil)
+	o.Update(testContext, tea.KeyPressMsg(tea.Key{Text: "l", Code: 'l'}), nil)
 	// `j` should move the runs cursor now, NOT the insights cursor.
-	o.Update(tea.KeyPressMsg(tea.Key{Text: "j", Code: 'j'}), nil)
+	o.Update(testContext, tea.KeyPressMsg(tea.Key{Text: "j", Code: 'j'}), nil)
 
 	if got := o.SelectedRunID(); got != "RUN-2" {
 		t.Errorf("after l+j, SelectedRunID = %q, want %q", got, "RUN-2")
@@ -79,8 +77,8 @@ func TestOverviewLTogglesToRunsPanel(t *testing.T) {
 	}
 
 	// `h` → focus back to insights.
-	o.Update(tea.KeyPressMsg(tea.Key{Text: "h", Code: 'h'}), nil)
-	o.Update(tea.KeyPressMsg(tea.Key{Text: "j", Code: 'j'}), nil)
+	o.Update(testContext, tea.KeyPressMsg(tea.Key{Text: "h", Code: 'h'}), nil)
+	o.Update(testContext, tea.KeyPressMsg(tea.Key{Text: "j", Code: 'j'}), nil)
 
 	if got := o.SelectedInsightID(); got != "INS-2" {
 		t.Errorf("after h+j, SelectedInsightID = %q, want %q", got, "INS-2")
@@ -96,12 +94,11 @@ func TestOverviewLTogglesToRunsPanel(t *testing.T) {
 // screen.
 func TestOverviewEnterOnInsightEmitsNavigateRequest(t *testing.T) {
 	o := NewOverview()
-	o.loaded = true
-	o.insights = []api.InspectInsightRecord{
+	applyOverviewInsightsForTest(o, []api.InspectInsightRecord{
 		{InsightID: "INS-014"},
-	}
+	})
 
-	cmd := o.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}), nil)
+	cmd := o.Update(testContext, tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}), nil)
 	if cmd == nil {
 		t.Fatal("Enter on focused insight returned nil cmd — expected a NavigateRequest emitter")
 	}
@@ -125,13 +122,12 @@ func TestOverviewEnterOnInsightEmitsNavigateRequest(t *testing.T) {
 // panel focused emits a NavigateRequest carrying the focused run's id.
 func TestOverviewEnterOnRunEmitsNavigateRequest(t *testing.T) {
 	o := NewOverview()
-	o.loaded = true
-	o.runs = []api.InspectRunRecord{
+	applyOverviewRunsForTest(o, []api.InspectRunRecord{
 		{TraceID: "8af2f1c"},
-	}
-	o.Update(tea.KeyPressMsg(tea.Key{Text: "l", Code: 'l'}), nil)
+	})
+	o.Update(testContext, tea.KeyPressMsg(tea.Key{Text: "l", Code: 'l'}), nil)
 
-	cmd := o.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}), nil)
+	cmd := o.Update(testContext, tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}), nil)
 	if cmd == nil {
 		t.Fatal("Enter on focused run returned nil cmd")
 	}
@@ -146,21 +142,20 @@ func TestOverviewEnterOnRunEmitsNavigateRequest(t *testing.T) {
 
 func TestOverviewActivityScrollLatchKeepsHistoricalRowsVisible(t *testing.T) {
 	o := NewOverview()
-	o.loaded = true
-	o.focusedPanel = panelActivity
-	o.activity = []api.InspectActivityEvent{
-		{Timestamp: 4000, Kind: "run", Summary: "newest"},
-		{Timestamp: 3000, Kind: "run", Summary: "middle"},
-		{Timestamp: 2000, Kind: "run", Summary: "older"},
-		{Timestamp: 1000, Kind: "run", Summary: "oldest"},
-	}
+	o.setFocusedPanel(panelActivity)
+	applyOverviewActivityForTest(o, []api.InspectActivityEvent{
+		{Timestamp: 4000, Kind: "run", RefID: "newest", Summary: "newest"},
+		{Timestamp: 3000, Kind: "run", RefID: "middle", Summary: "middle"},
+		{Timestamp: 2000, Kind: "run", RefID: "older", Summary: "older"},
+		{Timestamp: 1000, Kind: "run", RefID: "oldest", Summary: "oldest"},
+	})
 
-	o.Update(tea.KeyPressMsg(tea.Key{Text: "j", Code: 'j'}), nil)
+	o.Update(testContext, tea.KeyPressMsg(tea.Key{Text: "j", Code: 'j'}), nil)
 	if o.activityScroll != 1 {
 		t.Fatalf("activity scroll after j = %d, want 1", o.activityScroll)
 	}
 
-	o.Update(api.InspectEvent{Timestamp: 5000, Kind: "run", RefID: "fresh", Action: "completed"}, nil)
+	o.Update(testContext, LiveEvents{Events: []api.InspectEvent{{Timestamp: 5000, Kind: "run", RefID: "fresh", Action: "completed"}}}, nil)
 	if o.activityScroll != 2 {
 		t.Fatalf("activity scroll after prepended event = %d, want 2 to preserve visible historical rows", o.activityScroll)
 	}

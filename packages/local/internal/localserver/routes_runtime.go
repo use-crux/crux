@@ -1,7 +1,6 @@
 package localserver
 
 import (
-	"log/slog"
 	"net/http"
 	"os"
 
@@ -46,7 +45,7 @@ func runRuntimeRouteOperation(
 	}
 	raw, err := devtoolsSvc.RunRuntimeOperation(r.Context(), root, operation, workID, includeDetails)
 	if err != nil {
-		slog.Warn("runtime operation failed", "operation", operation, "error", err)
+		requestLogger(r).Warn("runtime operation failed", "operation", operation, "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

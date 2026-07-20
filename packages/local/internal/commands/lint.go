@@ -2,7 +2,6 @@ package commands
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -88,9 +87,7 @@ func writeLintResult(io *output.IO, index api.IndexData, opts lintOptions) error
 		return err
 	}
 	if opts.json {
-		encoder := json.NewEncoder(io.Out)
-		encoder.SetIndent("", "  ")
-		if err := encoder.Encode(findings); err != nil {
+		if err := io.WriteJSON(findings); err != nil {
 			return err
 		}
 	} else {

@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"sync"
 	"sync/atomic"
+
+	"github.com/use-crux/crux/packages/local/internal/process/workerproc"
 )
 
 // Pool fans syntax parse requests out across multiple
@@ -27,23 +29,35 @@ type syntaxWorkerPoolBatchJob struct {
 // NewPool creates a fixed-size pool of command-backed
 // Rust/Oxc indexer workers. Non-positive sizes are normalized to one worker.
 func NewPool(size int, commandPath string, commandArgs ...string) *Pool {
-	return newPool(size, false, commandPath, commandArgs...)
+	return newPool(size, false, commandPath, nil, commandArgs...)
+}
+
+// NewPoolWithProcessOptions creates a fixed pool with explicit subprocess
+// diagnostic boundaries applied to every lazy worker.
+func NewPoolWithProcessOptions(size int, commandPath string, processOptions []workerproc.Option, commandArgs ...string) *Pool {
+	return newPool(size, false, commandPath, processOptions, commandArgs...)
 }
 
 // NewAdaptivePool creates a bounded pool that chooses the
 // active worker count per batch size. It keeps unused workers lazy, so small
 // projects do not pay process startup or RSS for the maximum pool size.
 func NewAdaptivePool(maxSize int, commandPath string, commandArgs ...string) *Pool {
-	return newPool(maxSize, true, commandPath, commandArgs...)
+	return newPool(maxSize, true, commandPath, nil, commandArgs...)
 }
 
-func newPool(size int, adaptive bool, commandPath string, commandArgs ...string) *Pool {
+// NewAdaptivePoolWithProcessOptions creates an adaptive pool with explicit
+// subprocess diagnostic boundaries applied to every lazy worker.
+func NewAdaptivePoolWithProcessOptions(maxSize int, commandPath string, processOptions []workerproc.Option, commandArgs ...string) *Pool {
+	return newPool(maxSize, true, commandPath, processOptions, commandArgs...)
+}
+
+func newPool(size int, adaptive bool, commandPath string, processOptions []workerproc.Option, commandArgs ...string) *Pool {
 	if size < 1 {
 		size = 1
 	}
 	workers := make([]*Worker, 0, size)
 	for i := 0; i < size; i++ {
-		workers = append(workers, New(commandPath, commandArgs...))
+		workers = append(workers, NewWithProcessOptions(commandPath, processOptions, commandArgs...))
 	}
 	return &Pool{workers: workers, adaptive: adaptive}
 }

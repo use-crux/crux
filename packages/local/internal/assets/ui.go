@@ -18,19 +18,25 @@ type UIOptions struct {
 	// StaticDir overrides embedded assets for local frontend development.
 	// It defaults to CRUX_STATIC_DIR.
 	StaticDir string
+	// Logger receives asset-source diagnostics. It defaults to slog.Default.
+	Logger *slog.Logger
 }
 
 // UIHandler serves the local devtools single-page app from CRUX_STATIC_DIR when
 // present, then falls back to the embedded UI filesystem. It returns nil only
 // when neither source is available.
 func UIHandler(options UIOptions) http.Handler {
+	logger := options.Logger
+	if logger == nil {
+		logger = slog.Default()
+	}
 	staticDir := options.StaticDir
 	if staticDir == "" {
 		staticDir = os.Getenv("CRUX_STATIC_DIR")
 	}
 	if staticDir != "" {
 		if info, err := os.Stat(staticDir); err == nil && info.IsDir() {
-			slog.Info("serving UI from disk", "path", staticDir)
+			logger.Info("serving UI from disk", "path", staticDir)
 			return spaHandler(http.FileServer(http.Dir(staticDir)))
 		}
 	}
@@ -44,11 +50,11 @@ func UIHandler(options UIOptions) http.Handler {
 	}
 	subFS, err := fs.Sub(options.EmbeddedFS, embeddedDir)
 	if err != nil {
-		slog.Warn("no embedded UI available")
+		logger.Warn("no embedded UI available")
 		return nil
 	}
 	if !hasEmbeddedContent(subFS) {
-		slog.Info("embedded UI is empty, serving fallback page")
+		logger.Info("embedded UI is empty, serving fallback page")
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "text/html")
 			_, _ = w.Write([]byte(`<!DOCTYPE html><html><body>
@@ -58,7 +64,7 @@ func UIHandler(options UIOptions) http.Handler {
 		})
 	}
 
-	slog.Info("serving embedded UI")
+	logger.Info("serving embedded UI")
 	return spaHandler(http.FileServer(http.FS(subFS)))
 }
 
