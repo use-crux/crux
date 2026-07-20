@@ -14,7 +14,10 @@ import type {
   DeferredScopeId,
   Lease,
 } from "../../runtime/ports";
-import { createCruxSpanId } from "../../observability";
+import {
+  createCruxSpanId,
+  type CapturedObservabilityContext,
+} from "../../observability";
 import { createRuntimeError } from "../../runtime/engine/errors";
 import { startLeaseExtensionHeartbeat } from "../../runtime/engine/kernel-leases";
 import {
@@ -65,8 +68,8 @@ export interface DurableDeferController {
 
 /** Optional evidence hooks so named durability can update public spans. */
 export interface DurableDeferEvidenceHooks {
-  /** Open/capture the public trace before durable acceptance. */
-  ensurePublicTraceId?(): string;
+  /** Open/capture the public operation parent before durable acceptance. */
+  ensurePublicParentContext?(): CapturedObservabilityContext;
   onStaged(input: {
     readonly sequence: number;
     readonly targetId: string;
@@ -225,10 +228,10 @@ export function createDurableDeferController(
       const sequence = nextIntent;
       nextIntent += 1;
       const scheduledAtMs = Date.now();
-      // Capture the public trace and a predetermined scheduled span id before
-      // durable acceptance so released work can emit `defer.run` with a
-      // triggered edge after restart / another process without Catalog noise.
-      const traceId = evidence?.ensurePublicTraceId?.();
+      // Capture the public operation parent and a predetermined scheduled span
+      // id before durable acceptance so released work can join the same family
+      // after restart / another process without Catalog noise.
+      const parentContext = evidence?.ensurePublicParentContext?.();
       const provisionalScheduledSpanId = createCruxSpanId();
       const provisionalProvenance: RuntimeNamedDeferProvenance = {
         mode: "named",
@@ -239,7 +242,20 @@ export function createDurableDeferController(
         targetId: target.targetId,
         scheduledAtMs,
         scheduledSpanId: provisionalScheduledSpanId,
-        ...(traceId ? { traceId } : {}),
+        ...(parentContext
+          ? {
+              operationId: parentContext.operationId,
+              runId: parentContext.runId,
+              ...(parentContext.parentRunId
+                ? { parentRunId: parentContext.parentRunId }
+                : {}),
+              traceId: parentContext.traceId,
+              segmentId: parentContext.segmentId,
+              ...(parentContext.deployment
+                ? { deployment: parentContext.deployment }
+                : {}),
+            }
+          : {}),
       };
       const intent = await session.runtime.kernel.stageDeferredIntent({
         namespace: session.runtime.namespace,

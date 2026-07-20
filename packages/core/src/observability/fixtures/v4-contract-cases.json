@@ -1,14 +1,15 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 4,
   "cases": [
     {
       "name": "one-segment-success",
       "records": [
         {
-          "schemaVersion": 2,
+          "schemaVersion": 4,
           "recordId": "rec_success_start",
           "type": "run:start",
           "runId": "run_success",
+          "operationId": "run_success",
           "segmentId": "seg_success_a",
           "segmentSeq": 1,
           "traceId": "11111111111111111111111111111111",
@@ -18,10 +19,11 @@
           "status": "running"
         },
         {
-          "schemaVersion": 2,
+          "schemaVersion": 4,
           "recordId": "rec_success_end",
           "type": "run:end",
           "runId": "run_success",
+          "operationId": "run_success",
           "segmentId": "seg_success_a",
           "segmentSeq": 2,
           "traceId": "11111111111111111111111111111111",
@@ -33,13 +35,13 @@
       "expected": [
         {
           "recordId": "rec_success_start",
-          "schemaVersion": 2,
+          "schemaVersion": 4,
           "segmentId": "seg_success_a",
           "segmentSeq": 1
         },
         {
           "recordId": "rec_success_end",
-          "schemaVersion": 2,
+          "schemaVersion": 4,
           "segmentId": "seg_success_a",
           "segmentSeq": 2
         }
@@ -49,10 +51,11 @@
       "name": "one-segment-error",
       "records": [
         {
-          "schemaVersion": 2,
+          "schemaVersion": 4,
           "recordId": "rec_error_start",
           "type": "run:start",
           "runId": "run_error",
+          "operationId": "run_error",
           "segmentId": "seg_error_a",
           "segmentSeq": 1,
           "traceId": "22222222222222222222222222222222",
@@ -62,10 +65,11 @@
           "status": "running"
         },
         {
-          "schemaVersion": 2,
+          "schemaVersion": 4,
           "recordId": "rec_error_end",
           "type": "run:end",
           "runId": "run_error",
+          "operationId": "run_error",
           "segmentId": "seg_error_a",
           "segmentSeq": 2,
           "traceId": "22222222222222222222222222222222",
@@ -80,13 +84,13 @@
       "expected": [
         {
           "recordId": "rec_error_start",
-          "schemaVersion": 2,
+          "schemaVersion": 4,
           "segmentId": "seg_error_a",
           "segmentSeq": 1
         },
         {
           "recordId": "rec_error_end",
-          "schemaVersion": 2,
+          "schemaVersion": 4,
           "segmentId": "seg_error_a",
           "segmentSeq": 2
         }
@@ -96,10 +100,11 @@
       "name": "one-segment-cancelled",
       "records": [
         {
-          "schemaVersion": 2,
+          "schemaVersion": 4,
           "recordId": "rec_cancel_start",
           "type": "run:start",
           "runId": "run_cancel",
+          "operationId": "run_cancel",
           "segmentId": "seg_cancel_a",
           "segmentSeq": 1,
           "traceId": "33333333333333333333333333333333",
@@ -109,10 +114,11 @@
           "status": "running"
         },
         {
-          "schemaVersion": 2,
+          "schemaVersion": 4,
           "recordId": "rec_cancel_end",
           "type": "run:end",
           "runId": "run_cancel",
+          "operationId": "run_cancel",
           "segmentId": "seg_cancel_a",
           "segmentSeq": 2,
           "traceId": "33333333333333333333333333333333",
@@ -124,13 +130,13 @@
       "expected": [
         {
           "recordId": "rec_cancel_start",
-          "schemaVersion": 2,
+          "schemaVersion": 4,
           "segmentId": "seg_cancel_a",
           "segmentSeq": 1
         },
         {
           "recordId": "rec_cancel_end",
-          "schemaVersion": 2,
+          "schemaVersion": 4,
           "segmentId": "seg_cancel_a",
           "segmentSeq": 2
         }
@@ -140,10 +146,11 @@
       "name": "suspend-resume-fresh-process",
       "records": [
         {
-          "schemaVersion": 2,
+          "schemaVersion": 4,
           "recordId": "rec_resume_start",
           "type": "run:start",
           "runId": "run_resume",
+          "operationId": "run_resume",
           "segmentId": "seg_resume_a",
           "segmentSeq": 1,
           "traceId": "44444444444444444444444444444444",
@@ -153,10 +160,11 @@
           "status": "running"
         },
         {
-          "schemaVersion": 2,
+          "schemaVersion": 4,
           "recordId": "rec_resume_suspend",
           "type": "run:suspend",
           "runId": "run_resume",
+          "operationId": "run_resume",
           "segmentId": "seg_resume_a",
           "segmentSeq": 2,
           "traceId": "44444444444444444444444444444444",
@@ -164,10 +172,11 @@
           "reason": "await-signal"
         },
         {
-          "schemaVersion": 2,
+          "schemaVersion": 4,
           "recordId": "rec_resume_resume",
           "type": "run:resume",
           "runId": "run_resume",
+          "operationId": "run_resume",
           "segmentId": "seg_resume_b",
           "segmentSeq": 1,
           "traceId": "44444444444444444444444444444444",
@@ -176,10 +185,11 @@
           "previousSegmentId": "seg_resume_a"
         },
         {
-          "schemaVersion": 2,
+          "schemaVersion": 4,
           "recordId": "rec_resume_end",
           "type": "run:end",
           "runId": "run_resume",
+          "operationId": "run_resume",
           "segmentId": "seg_resume_b",
           "segmentSeq": 2,
           "traceId": "44444444444444444444444444444444",
@@ -191,25 +201,25 @@
       "expected": [
         {
           "recordId": "rec_resume_start",
-          "schemaVersion": 2,
+          "schemaVersion": 4,
           "segmentId": "seg_resume_a",
           "segmentSeq": 1
         },
         {
           "recordId": "rec_resume_suspend",
-          "schemaVersion": 2,
+          "schemaVersion": 4,
           "segmentId": "seg_resume_a",
           "segmentSeq": 2
         },
         {
           "recordId": "rec_resume_resume",
-          "schemaVersion": 2,
+          "schemaVersion": 4,
           "segmentId": "seg_resume_b",
           "segmentSeq": 1
         },
         {
           "recordId": "rec_resume_end",
-          "schemaVersion": 2,
+          "schemaVersion": 4,
           "segmentId": "seg_resume_b",
           "segmentSeq": 2
         }
@@ -219,10 +229,11 @@
       "name": "concurrent-segments",
       "records": [
         {
-          "schemaVersion": 2,
+          "schemaVersion": 4,
           "recordId": "rec_concurrent_resume_a",
           "type": "run:resume",
           "runId": "run_concurrent",
+          "operationId": "run_concurrent",
           "segmentId": "seg_concurrent_a",
           "segmentSeq": 1,
           "traceId": "55555555555555555555555555555555",
@@ -230,10 +241,11 @@
           "reason": "parallel-a"
         },
         {
-          "schemaVersion": 2,
+          "schemaVersion": 4,
           "recordId": "rec_concurrent_resume_b",
           "type": "run:resume",
           "runId": "run_concurrent",
+          "operationId": "run_concurrent",
           "segmentId": "seg_concurrent_b",
           "segmentSeq": 1,
           "traceId": "55555555555555555555555555555555",
@@ -244,13 +256,13 @@
       "expected": [
         {
           "recordId": "rec_concurrent_resume_a",
-          "schemaVersion": 2,
+          "schemaVersion": 4,
           "segmentId": "seg_concurrent_a",
           "segmentSeq": 1
         },
         {
           "recordId": "rec_concurrent_resume_b",
-          "schemaVersion": 2,
+          "schemaVersion": 4,
           "segmentId": "seg_concurrent_b",
           "segmentSeq": 1
         }
@@ -260,10 +272,11 @@
       "name": "child-before-parent-and-terminal-before-start",
       "records": [
         {
-          "schemaVersion": 2,
+          "schemaVersion": 4,
           "recordId": "rec_out_span",
           "type": "span",
           "runId": "run_out_of_order",
+          "operationId": "run_out_of_order",
           "segmentId": "seg_out_a",
           "segmentSeq": 2,
           "traceId": "66666666666666666666666666666666",
@@ -278,10 +291,11 @@
           "status": "ok"
         },
         {
-          "schemaVersion": 2,
+          "schemaVersion": 4,
           "recordId": "rec_out_end",
           "type": "run:end",
           "runId": "run_out_of_order",
+          "operationId": "run_out_of_order",
           "segmentId": "seg_out_a",
           "segmentSeq": 3,
           "traceId": "66666666666666666666666666666666",
@@ -289,10 +303,11 @@
           "status": "ok"
         },
         {
-          "schemaVersion": 2,
+          "schemaVersion": 4,
           "recordId": "rec_out_start",
           "type": "run:start",
           "runId": "run_out_of_order",
+          "operationId": "run_out_of_order",
           "segmentId": "seg_out_a",
           "segmentSeq": 1,
           "traceId": "66666666666666666666666666666666",
@@ -305,19 +320,19 @@
       "expected": [
         {
           "recordId": "rec_out_span",
-          "schemaVersion": 2,
+          "schemaVersion": 4,
           "segmentId": "seg_out_a",
           "segmentSeq": 2
         },
         {
           "recordId": "rec_out_end",
-          "schemaVersion": 2,
+          "schemaVersion": 4,
           "segmentId": "seg_out_a",
           "segmentSeq": 3
         },
         {
           "recordId": "rec_out_start",
-          "schemaVersion": 2,
+          "schemaVersion": 4,
           "segmentId": "seg_out_a",
           "segmentSeq": 1
         }
@@ -327,10 +342,11 @@
       "name": "duplicate-identical-and-conflicting-record-id",
       "records": [
         {
-          "schemaVersion": 2,
+          "schemaVersion": 4,
           "recordId": "rec_dup",
           "type": "run:start",
           "runId": "run_dup",
+          "operationId": "run_dup",
           "segmentId": "seg_dup_a",
           "segmentSeq": 1,
           "traceId": "77777777777777777777777777777777",
@@ -340,10 +356,11 @@
           "status": "running"
         },
         {
-          "schemaVersion": 2,
+          "schemaVersion": 4,
           "recordId": "rec_dup",
           "type": "run:start",
           "runId": "run_dup",
+          "operationId": "run_dup",
           "segmentId": "seg_dup_a",
           "segmentSeq": 1,
           "traceId": "77777777777777777777777777777777",
@@ -353,10 +370,11 @@
           "status": "running"
         },
         {
-          "schemaVersion": 2,
+          "schemaVersion": 4,
           "recordId": "rec_dup",
           "type": "run:start",
           "runId": "run_dup",
+          "operationId": "run_dup",
           "segmentId": "seg_dup_a",
           "segmentSeq": 1,
           "traceId": "77777777777777777777777777777777",
@@ -369,19 +387,19 @@
       "expected": [
         {
           "recordId": "rec_dup",
-          "schemaVersion": 2,
+          "schemaVersion": 4,
           "segmentId": "seg_dup_a",
           "segmentSeq": 1
         },
         {
           "recordId": "rec_dup",
-          "schemaVersion": 2,
+          "schemaVersion": 4,
           "segmentId": "seg_dup_a",
           "segmentSeq": 1
         },
         {
           "recordId": "rec_dup",
-          "schemaVersion": 2,
+          "schemaVersion": 4,
           "segmentId": "seg_dup_a",
           "segmentSeq": 1
         }
@@ -391,10 +409,11 @@
       "name": "pre-v2-local-store-migration-reset",
       "records": [
         {
-          "schemaVersion": 2,
+          "schemaVersion": 4,
           "recordId": "rec_reset_start",
           "type": "run:start",
           "runId": "run_reset_v2",
+          "operationId": "run_reset_v2",
           "segmentId": "seg_reset_a",
           "segmentSeq": 1,
           "traceId": "88888888888888888888888888888888",
@@ -407,7 +426,7 @@
       "expected": [
         {
           "recordId": "rec_reset_start",
-          "schemaVersion": 2,
+          "schemaVersion": 4,
           "segmentId": "seg_reset_a",
           "segmentSeq": 1
         }
@@ -417,10 +436,11 @@
       "name": "missing-parent-segment-gap",
       "records": [
         {
-          "schemaVersion": 2,
+          "schemaVersion": 4,
           "recordId": "rec_gap_span",
           "type": "span",
           "runId": "run_gap",
+          "operationId": "run_gap",
           "segmentId": "seg_gap_b",
           "segmentSeq": 3,
           "traceId": "99999999999999999999999999999999",
@@ -438,7 +458,7 @@
       "expected": [
         {
           "recordId": "rec_gap_span",
-          "schemaVersion": 2,
+          "schemaVersion": 4,
           "segmentId": "seg_gap_b",
           "segmentSeq": 3
         }
@@ -448,10 +468,11 @@
       "name": "crash-incomplete-distinct-from-suspend-and-terminal",
       "records": [
         {
-          "schemaVersion": 2,
+          "schemaVersion": 4,
           "recordId": "rec_incomplete_start",
           "type": "run:start",
           "runId": "run_incomplete",
+          "operationId": "run_incomplete",
           "segmentId": "seg_incomplete_a",
           "segmentSeq": 1,
           "traceId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -461,10 +482,11 @@
           "status": "running"
         },
         {
-          "schemaVersion": 2,
+          "schemaVersion": 4,
           "recordId": "rec_suspended_start",
           "type": "run:start",
           "runId": "run_suspended",
+          "operationId": "run_suspended",
           "segmentId": "seg_suspended_a",
           "segmentSeq": 1,
           "traceId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
@@ -474,10 +496,11 @@
           "status": "running"
         },
         {
-          "schemaVersion": 2,
+          "schemaVersion": 4,
           "recordId": "rec_suspended_suspend",
           "type": "run:suspend",
           "runId": "run_suspended",
+          "operationId": "run_suspended",
           "segmentId": "seg_suspended_a",
           "segmentSeq": 2,
           "traceId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
@@ -485,10 +508,11 @@
           "reason": "await-signal"
         },
         {
-          "schemaVersion": 2,
+          "schemaVersion": 4,
           "recordId": "rec_terminal_start",
           "type": "run:start",
           "runId": "run_terminal",
+          "operationId": "run_terminal",
           "segmentId": "seg_terminal_a",
           "segmentSeq": 1,
           "traceId": "cccccccccccccccccccccccccccccccc",
@@ -498,10 +522,11 @@
           "status": "running"
         },
         {
-          "schemaVersion": 2,
+          "schemaVersion": 4,
           "recordId": "rec_terminal_end",
           "type": "run:end",
           "runId": "run_terminal",
+          "operationId": "run_terminal",
           "segmentId": "seg_terminal_a",
           "segmentSeq": 2,
           "traceId": "cccccccccccccccccccccccccccccccc",
@@ -512,31 +537,31 @@
       "expected": [
         {
           "recordId": "rec_incomplete_start",
-          "schemaVersion": 2,
+          "schemaVersion": 4,
           "segmentId": "seg_incomplete_a",
           "segmentSeq": 1
         },
         {
           "recordId": "rec_suspended_start",
-          "schemaVersion": 2,
+          "schemaVersion": 4,
           "segmentId": "seg_suspended_a",
           "segmentSeq": 1
         },
         {
           "recordId": "rec_suspended_suspend",
-          "schemaVersion": 2,
+          "schemaVersion": 4,
           "segmentId": "seg_suspended_a",
           "segmentSeq": 2
         },
         {
           "recordId": "rec_terminal_start",
-          "schemaVersion": 2,
+          "schemaVersion": 4,
           "segmentId": "seg_terminal_a",
           "segmentSeq": 1
         },
         {
           "recordId": "rec_terminal_end",
-          "schemaVersion": 2,
+          "schemaVersion": 4,
           "segmentId": "seg_terminal_a",
           "segmentSeq": 2
         }

@@ -16,7 +16,7 @@ func enrichInspectInsightsWithIndex(insights []inspectInsightRecord, index store
 
 	for _, run := range runs {
 		for _, defID := range knownDefinitionIDs(definitionByID, inspectTargetDefinitionIDs(run.TargetID)) {
-			traceToDefinitionIDs[run.TraceID] = appendInspectUniqueString(traceToDefinitionIDs[run.TraceID], defID)
+			traceToDefinitionIDs[inspectRunIdentity(run)] = appendInspectUniqueString(traceToDefinitionIDs[inspectRunIdentity(run)], defID)
 		}
 	}
 

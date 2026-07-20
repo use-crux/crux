@@ -214,6 +214,7 @@ export const CruxErrorSummarySchema = z.object({
 const CruxRecordBaseSchema = z.object({
   schemaVersion: z.literal(CRUX_OBSERVABILITY_SCHEMA_VERSION),
   recordId: CruxRecordIdSchema,
+  operationId: CruxRunIdSchema,
   runId: CruxRunIdSchema,
   segmentId: CruxSegmentIdSchema,
   segmentSeq: z.number().int().positive(),
@@ -225,6 +226,8 @@ const CruxRecordBaseSchema = z.object({
 
 export const CruxRunStartRecordSchema = CruxRecordBaseSchema.extend({
   type: z.literal("run:start"),
+  parentRunId: CruxRunIdSchema.optional(),
+  triggeredBySpanId: CruxSpanIdSchema.optional(),
   name: nonEmptyString,
   rootPrimitive: CruxPrimitiveNameSchema,
   startedAt: isoTimestamp,
@@ -232,9 +235,45 @@ export const CruxRunStartRecordSchema = CruxRecordBaseSchema.extend({
   attributes: CruxAttributesSchema.optional(),
   source: CruxSourceLocationSchema.optional(),
   definitionRefs: z.array(DefinitionRefSchema).optional(),
-}).refine((record) => record.segmentSeq === 1, {
-  message: "run:start must be the first record in its segment",
-  path: ["segmentSeq"],
+}).superRefine((record, context) => {
+  if (record.segmentSeq !== 1) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "run:start must be the first record in its segment",
+      path: ["segmentSeq"],
+    });
+  }
+  if (record.parentRunId === undefined && record.operationId !== record.runId) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "root run operationId must equal runId",
+      path: ["operationId"],
+    });
+  }
+  if (record.parentRunId !== undefined && record.operationId === record.runId) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "child run operationId must differ from runId",
+      path: ["operationId"],
+    });
+  }
+  if (record.parentRunId === record.runId) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "child run cannot parent itself",
+      path: ["parentRunId"],
+    });
+  }
+  if (
+    record.triggeredBySpanId !== undefined &&
+    record.parentRunId === undefined
+  ) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "triggeredBySpanId requires parentRunId",
+      path: ["triggeredBySpanId"],
+    });
+  }
 });
 
 export const CruxRunSuspendRecordSchema = CruxRecordBaseSchema.extend({
@@ -370,7 +409,7 @@ export const CruxArtifactRecordSchema = CruxRecordBaseSchema.extend({
   attributes: CruxAttributesSchema.optional(),
 });
 
-const CruxGraphRecordV3Schema = z.discriminatedUnion("type", [
+const CruxGraphRecordV4Schema = z.discriminatedUnion("type", [
   CruxRunStartRecordSchema,
   CruxRunSuspendRecordSchema,
   CruxRunResumeRecordSchema,
@@ -383,32 +422,11 @@ const CruxGraphRecordV3Schema = z.discriminatedUnion("type", [
   CruxArtifactRecordSchema,
 ]);
 
-const CruxGraphRecordV2Schema = z
-  .preprocess((value) => {
-    if (
-      typeof value !== "object" ||
-      value === null ||
-      !("schemaVersion" in value) ||
-      value.schemaVersion !== 2 ||
-      ("deployment" in value && value.deployment !== undefined)
-    ) {
-      return value;
-    }
-    return { ...value, schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION };
-  }, CruxGraphRecordV3Schema)
-  .transform((record) => ({ ...record, schemaVersion: 2 as const }));
-
 /**
- * Parse current v3 records and persisted deployment-unspecified v2 records.
- *
- * Named record schemas remain writer-current (v3) so compile-time emission
- * types cannot accidentally regress. Only this aggregate reader carries the
- * deliberate legacy compatibility branch.
+ * Parse current v4 records. Earlier graph versions cannot be assigned truthful
+ * operation-family identity and are intentionally rejected.
  */
-export const CruxGraphRecordSchema = z.union([
-  CruxGraphRecordV3Schema,
-  CruxGraphRecordV2Schema,
-]);
+export const CruxGraphRecordSchema = CruxGraphRecordV4Schema;
 
 export const CruxGraphRecordBatchSchema = z.object({
   records: z.array(CruxGraphRecordSchema),

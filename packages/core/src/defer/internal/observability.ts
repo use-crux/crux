@@ -87,8 +87,8 @@ export interface DeferScopeObservability {
     scope: ScopeDescriptor,
   ): DeferredScheduledObservation;
 
-  /** Ensure a public originating run exists and return its durable trace id. */
-  ensurePublicTraceId(): string;
+  /** Ensure a public originating run exists and capture its family identity. */
+  ensurePublicParentContext(): CapturedObservabilityContext;
 
   /**
    * Record durable named acceptance for one staged target.
@@ -183,7 +183,12 @@ export function createDeferScopeObservability(): DeferScopeObservability {
     const current = observe.captureContext();
     if (current) {
       baseContext = {
+        operationId: current.operationId,
         runId: current.runId,
+        ...(current.parentRunId ? { parentRunId: current.parentRunId } : {}),
+        ...(current.triggeredBySpanId
+          ? { triggeredBySpanId: current.triggeredBySpanId }
+          : {}),
         traceId: current.traceId,
         segmentId: current.segmentId,
         ...(current.startedAtMs !== undefined
@@ -191,6 +196,9 @@ export function createDeferScopeObservability(): DeferScopeObservability {
           : {}),
         ...(current.correlators !== undefined
           ? { correlators: current.correlators }
+          : {}),
+        ...(current.deployment !== undefined
+          ? { deployment: current.deployment }
           : {}),
         // Capture the active parent stack for scheduled emission, but keep the
         // run identity for later causal execution that must not nest under a
@@ -241,9 +249,8 @@ export function createDeferScopeObservability(): DeferScopeObservability {
       });
     },
 
-    ensurePublicTraceId() {
-      const context = ensurePublicContext();
-      return context.traceId;
+    ensurePublicParentContext() {
+      return ensurePublicContext();
     },
 
     recordInlineScheduled(sequence, policy, scope) {
@@ -261,7 +268,14 @@ export function createDeferScopeObservability(): DeferScopeObservability {
           ...(context
             ? {
                 context: {
+                  operationId: context.operationId,
                   runId: context.runId,
+                  ...(context.parentRunId
+                    ? { parentRunId: context.parentRunId }
+                    : {}),
+                  ...(context.triggeredBySpanId
+                    ? { triggeredBySpanId: context.triggeredBySpanId }
+                    : {}),
                   traceId: context.traceId,
                   segmentId: context.segmentId,
                   ...(context.startedAtMs !== undefined
@@ -310,7 +324,12 @@ export function createDeferScopeObservability(): DeferScopeObservability {
         scope,
         spanId,
         context: {
+          operationId: context.operationId,
           runId: context.runId,
+          ...(context.parentRunId ? { parentRunId: context.parentRunId } : {}),
+          ...(context.triggeredBySpanId
+            ? { triggeredBySpanId: context.triggeredBySpanId }
+            : {}),
           traceId: context.traceId,
           segmentId: context.segmentId,
           ...(context.startedAtMs !== undefined
@@ -382,7 +401,12 @@ export function createDeferScopeObservability(): DeferScopeObservability {
         ...(input.scopeId ? { scopeId: input.scopeId } : {}),
         ...(input.definitionId ? { definitionId: input.definitionId } : {}),
         context: {
+          operationId: context.operationId,
           runId: context.runId,
+          ...(context.parentRunId ? { parentRunId: context.parentRunId } : {}),
+          ...(context.triggeredBySpanId
+            ? { triggeredBySpanId: context.triggeredBySpanId }
+            : {}),
           traceId: context.traceId,
           segmentId: context.segmentId,
           ...(context.startedAtMs !== undefined
@@ -457,7 +481,12 @@ export function createDeferScopeObservability(): DeferScopeObservability {
       const context = observation.context ?? ensurePublicContext();
       const queueDelayMs = Math.max(0, Date.now() - observation.scheduledAtMs);
       const runContext: CapturedObservabilityContext = {
+        operationId: context.operationId,
         runId: context.runId,
+        ...(context.parentRunId ? { parentRunId: context.parentRunId } : {}),
+        ...(context.triggeredBySpanId
+          ? { triggeredBySpanId: context.triggeredBySpanId }
+          : {}),
         traceId: context.traceId,
         segmentId: context.segmentId,
         ...(context.startedAtMs !== undefined

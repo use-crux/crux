@@ -122,9 +122,9 @@ func observabilityRunListOptionsForInspect(opts api.InspectRunsOptions) observab
 	return observability.RunListOptions{}
 }
 
-func (s *Service) RunDetail(ctx context.Context, traceID string) (inspectRunDetailRecord, bool, error) {
+func (s *Service) RunDetail(ctx context.Context, operationID string) (inspectRunDetailRecord, bool, error) {
 	if s.obs != nil {
-		detail, found, err := buildInspectRunDetailFromObservability(ctx, s.obs, s.dir, projectRootFromStore(s.store), traceID)
+		detail, found, err := buildInspectRunDetailFromObservability(ctx, s.obs, s.dir, projectRootFromStore(s.store), operationID)
 		if err != nil || found {
 			return detail, found, err
 		}
@@ -132,8 +132,8 @@ func (s *Service) RunDetail(ctx context.Context, traceID string) (inspectRunDeta
 	return inspectRunDetailRecord{}, false, nil
 }
 
-func (s *Service) RunDetailAPI(ctx context.Context, traceID string) (api.InspectRunDetailRecord, bool, error) {
-	record, found, err := s.RunDetail(ctx, traceID)
+func (s *Service) RunDetailAPI(ctx context.Context, operationID string) (api.InspectRunDetailRecord, bool, error) {
+	record, found, err := s.RunDetail(ctx, operationID)
 	if err != nil {
 		return api.InspectRunDetailRecord{}, false, err
 	}
@@ -145,11 +145,11 @@ func (s *Service) RunDetailAPI(ctx context.Context, traceID string) (api.Inspect
 	return out, err == nil, err
 }
 
-func (s *Service) DeleteRuns(ctx context.Context, traceIDs []string) (api.InspectDeleteRunsRecord, error) {
-	requested := uniqueInspectIDs(traceIDs)
+func (s *Service) DeleteRuns(ctx context.Context, operationIDs []string) (api.InspectDeleteRunsRecord, error) {
+	requested := uniqueInspectIDs(operationIDs)
 	record := api.InspectDeleteRunsRecord{
-		Tag:      "InspectDeleteRuns",
-		TraceIDs: requested,
+		Tag:          "InspectDeleteRuns",
+		OperationIDs: requested,
 	}
 	if len(requested) == 0 {
 		return record, nil
@@ -172,33 +172,33 @@ func (s *Service) DeleteRuns(ctx context.Context, traceIDs []string) (api.Inspec
 		}
 	}
 
-	for _, traceID := range requested {
-		if _, matched := matchedRequested[traceID]; matched {
+	for _, operationID := range requested {
+		if _, matched := matchedRequested[operationID]; matched {
 			continue
 		}
 		found := false
-		for _, runID := range deleted {
-			if runID == traceID {
+		for _, deletedOperationID := range deleted {
+			if deletedOperationID == operationID {
 				found = true
 				break
 			}
 		}
 		if !found {
-			record.MissingTraceIDs = append(record.MissingTraceIDs, traceID)
+			record.MissingOperationIDs = append(record.MissingOperationIDs, operationID)
 		}
 	}
-	record.DeletedTraceIDs = deleted
+	record.DeletedOperationIDs = deleted
 
-	if len(record.DeletedTraceIDs) > 0 {
+	if len(record.DeletedOperationIDs) > 0 {
 		payload, _ := json.Marshal(record)
 		s.bus.Publish(api.InspectEvent{
 			Kind:     "run",
 			Action:   "deleted",
 			Severity: "info",
-			RefID:    record.DeletedTraceIDs[0],
+			RefID:    record.DeletedOperationIDs[0],
 			Payload:  payload,
 		})
-		s.publishWriteActivity("run", "run deleted", record.DeletedTraceIDs[0])
+		s.publishWriteActivity("run", "operation deleted", record.DeletedOperationIDs[0])
 	}
 	return record, nil
 }

@@ -27,11 +27,11 @@ func buildInspectRunsFromObservabilityWithOptions(ctx context.Context, obs *obse
 	if err != nil {
 		return nil, err
 	}
-	runIDs := make([]string, 0, len(summaries))
+	operationIDs := make([]string, 0, len(summaries))
 	for _, summary := range summaries {
-		runIDs = append(runIDs, summary.RunID)
+		operationIDs = append(operationIDs, summary.OperationID)
 	}
-	signals, err := obs.RunSignalsForRuns(ctx, runIDs)
+	signals, err := obs.RunSignalsForOperations(ctx, operationIDs)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
 			signals = map[string]observability.RunSignals{}
@@ -42,21 +42,17 @@ func buildInspectRunsFromObservabilityWithOptions(ctx context.Context, obs *obse
 	runs := make([]inspectRunRecord, 0, len(summaries))
 	for _, summary := range summaries {
 		run := inspectRunFromObservabilitySummary(summary)
-		run = applyObservabilityRunSignals(run, signals[summary.RunID])
+		run = applyObservabilityRunSignals(run, signals[summary.OperationID])
 		runs = append(runs, run)
 	}
 	return runs, nil
 }
 
-// inspectCorrelationKey is the one deterministic identifier used to join a
-// canonical observability run to Inspect's trace-keyed metadata: the run's
-// TraceID, or its RunID only when the run genuinely has no distinct trace
-// identity. It must not be tried as a second, unconditional lookup after a
-// present TraceID simply has no match — that previously let an unrelated
-// run's RunID collide with this run's TraceID key space.
+// inspectCorrelationKey uses explicit operation identity. A distributed trace
+// may contain several independent operations and cannot be a list-row key.
 func inspectCorrelationKey(summary observability.RunSummary) string {
-	if summary.TraceID != "" {
-		return summary.TraceID
+	if summary.OperationID != "" {
+		return summary.OperationID
 	}
 	return summary.RunID
 }

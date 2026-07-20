@@ -14,17 +14,18 @@ func registerInspectRoutes(mux *http.ServeMux, inspectSvc *inspect.Service) {
 			return
 		}
 		var req struct {
-			TraceIDs []string `json:"traceIds"`
+			OperationIDs []string `json:"operationIds"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "invalid JSON body", http.StatusBadRequest)
 			return
 		}
-		if len(req.TraceIDs) == 0 {
-			http.Error(w, "traceIds is required", http.StatusBadRequest)
+		ids := req.OperationIDs
+		if len(ids) == 0 {
+			http.Error(w, "operationIds is required", http.StatusBadRequest)
 			return
 		}
-		record, err := inspectSvc.DeleteRuns(r.Context(), req.TraceIDs)
+		record, err := inspectSvc.DeleteRuns(r.Context(), ids)
 		if err != nil {
 			requestLogger(r).Warn("Inspect runs delete failed", "error", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -33,19 +34,19 @@ func registerInspectRoutes(mux *http.ServeMux, inspectSvc *inspect.Service) {
 		writeJSON(w, r, record)
 	})
 
-	mux.HandleFunc("DELETE /api/inspect/runs/{traceId}", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("DELETE /api/inspect/runs/{operationId}", func(w http.ResponseWriter, r *http.Request) {
 		if inspectSvc == nil {
 			http.Error(w, "Inspect service unavailable", http.StatusServiceUnavailable)
 			return
 		}
-		traceID := r.PathValue("traceId")
-		record, err := inspectSvc.DeleteRuns(r.Context(), []string{traceID})
+		operationID := r.PathValue("operationId")
+		record, err := inspectSvc.DeleteRuns(r.Context(), []string{operationID})
 		if err != nil {
-			requestLogger(r).Warn("Inspect run delete failed", "error", err, "traceId", traceID)
+			requestLogger(r).Warn("Inspect run delete failed", "error", err, "operationId", operationID)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		if len(record.DeletedTraceIDs) == 0 {
+		if len(record.DeletedOperationIDs) == 0 {
 			http.Error(w, "not found", http.StatusNotFound)
 			return
 		}

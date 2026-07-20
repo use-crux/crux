@@ -125,7 +125,7 @@ func TestServiceIngestsSharedFixtureIntoGraphReadModel(t *testing.T) {
 	}
 }
 
-func TestServiceReadsRunGraphAndDetailByTraceID(t *testing.T) {
+func TestServiceReadsRunGraphAndDetailByOperationID(t *testing.T) {
 	ctx := context.Background()
 	service := newTestService(t)
 	batch := mustBatch(t,
@@ -138,7 +138,7 @@ func TestServiceReadsRunGraphAndDetailByTraceID(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	run, err := service.Run(ctx, "trace_trace_alias")
+	run, err := service.Run(ctx, "run_trace_alias")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,7 +146,7 @@ func TestServiceReadsRunGraphAndDetailByTraceID(t *testing.T) {
 		t.Fatalf("run = %#v", run)
 	}
 
-	graph, err := service.Graph(ctx, "trace_trace_alias")
+	graph, err := service.Graph(ctx, "run_trace_alias")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +154,7 @@ func TestServiceReadsRunGraphAndDetailByTraceID(t *testing.T) {
 		t.Fatalf("graph = %#v", graph)
 	}
 
-	detail, err := service.RunDetail(ctx, "trace_trace_alias")
+	detail, err := service.RunDetail(ctx, "run_trace_alias")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -375,6 +375,56 @@ func TestRunSignalsForRunsRestrictsRollupToSelectedRuns(t *testing.T) {
 	}
 	if _, ok := signals["run_other"]; ok {
 		t.Fatalf("unrequested run leaked into signals: %#v", signals)
+	}
+}
+
+func TestRunSignalsForOperationsIncludesChildRuns(t *testing.T) {
+	ctx := context.Background()
+	service := newTestService(t)
+	if err := service.Ingest(ctx, mustBatch(t,
+		`{"schemaVersion":4,"recordId":"operation-signal-root","type":"run:start","runId":"run_signal_operation","operationId":"run_signal_operation","segmentId":"seg_signal_root","segmentSeq":1,"traceId":"trace_signal_operation","name":"root","rootPrimitive":"agent.run","startedAt":"2026-07-20T12:00:00Z","status":"running"}`,
+		`{"schemaVersion":4,"recordId":"operation-signal-child","type":"run:start","runId":"run_signal_child","operationId":"run_signal_operation","parentRunId":"run_signal_operation","triggeredBySpanId":"span_signal_trigger","segmentId":"seg_signal_child","segmentSeq":1,"traceId":"trace_signal_operation","name":"child","rootPrimitive":"flow.run","startedAt":"2026-07-20T12:00:01Z","status":"running"}`,
+		`{"schemaVersion":4,"recordId":"operation-signal-tool","type":"span","runId":"run_signal_child","operationId":"run_signal_operation","segmentId":"seg_signal_child","segmentSeq":2,"traceId":"trace_signal_operation","spanId":"span_signal_tool","family":"tool","primitive":"tool.call","name":"search","toolName":"search","startedAt":"2026-07-20T12:00:01Z","endedAt":"2026-07-20T12:00:02Z","status":"error"}`,
+	)); err != nil {
+		t.Fatal(err)
+	}
+
+	signals, err := service.RunSignalsForOperations(ctx, []string{"run_signal_operation"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	operation := signals["run_signal_operation"]
+	if operation.ToolCallCount != 1 || operation.ToolErrorCount != 1 || operation.RepeatedToolName != "search" {
+		t.Fatalf("operation signals = %#v", operation)
+	}
+}
+
+func TestRunSignalsForOperationsAggregatesRepeatedToolsDeterministically(t *testing.T) {
+	ctx := context.Background()
+	service := newTestService(t)
+	records := []string{
+		`{"schemaVersion":4,"recordId":"repeat-root","type":"run:start","runId":"run_repeat_operation","operationId":"run_repeat_operation","segmentId":"seg_repeat_root","segmentSeq":1,"name":"root","rootPrimitive":"agent.run","startedAt":"2026-07-20T12:10:00Z","status":"running"}`,
+		`{"schemaVersion":4,"recordId":"repeat-child-a","type":"run:start","runId":"run_repeat_child_a","operationId":"run_repeat_operation","parentRunId":"run_repeat_operation","triggeredBySpanId":"repeat-trigger-a","segmentId":"seg_repeat_a","segmentSeq":1,"name":"a","rootPrimitive":"flow.run","startedAt":"2026-07-20T12:10:01Z","status":"running"}`,
+		`{"schemaVersion":4,"recordId":"repeat-child-b","type":"run:start","runId":"run_repeat_child_b","operationId":"run_repeat_operation","parentRunId":"run_repeat_operation","triggeredBySpanId":"repeat-trigger-b","segmentId":"seg_repeat_b","segmentSeq":1,"name":"b","rootPrimitive":"flow.run","startedAt":"2026-07-20T12:10:02Z","status":"running"}`,
+	}
+	for index := 0; index < 3; index++ {
+		records = append(records, fmt.Sprintf(`{"schemaVersion":4,"recordId":"repeat-root-search-%d","type":"span","runId":"run_repeat_operation","operationId":"run_repeat_operation","segmentId":"seg_repeat_root","segmentSeq":%d,"spanId":"repeat-root-search-%d","family":"tool","primitive":"tool.call","name":"search","toolName":"search","startedAt":"2026-07-20T12:10:03Z","endedAt":"2026-07-20T12:10:04Z","status":"ok"}`, index, index+2, index))
+		records = append(records, fmt.Sprintf(`{"schemaVersion":4,"recordId":"repeat-child-search-%d","type":"span","runId":"run_repeat_child_b","operationId":"run_repeat_operation","segmentId":"seg_repeat_b","segmentSeq":%d,"spanId":"repeat-child-search-%d","family":"tool","primitive":"tool.call","name":"search","toolName":"search","startedAt":"2026-07-20T12:10:03Z","endedAt":"2026-07-20T12:10:04Z","status":"ok"}`, index, index+2, index))
+	}
+	for index := 0; index < 4; index++ {
+		records = append(records, fmt.Sprintf(`{"schemaVersion":4,"recordId":"repeat-child-fetch-%d","type":"span","runId":"run_repeat_child_a","operationId":"run_repeat_operation","segmentId":"seg_repeat_a","segmentSeq":%d,"spanId":"repeat-child-fetch-%d","family":"tool","primitive":"tool.call","name":"fetch","toolName":"fetch","startedAt":"2026-07-20T12:10:03Z","endedAt":"2026-07-20T12:10:04Z","status":"ok"}`, index, index+2, index))
+	}
+	if err := service.Ingest(ctx, mustBatch(t, records...)); err != nil {
+		t.Fatal(err)
+	}
+
+	signals, err := service.RunSignalsForOperations(ctx, []string{"run_repeat_operation"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	operation := signals["run_repeat_operation"]
+	if operation.RepeatedToolName != "search" || operation.RepeatedToolCount != 6 {
+		t.Fatalf("operation repeated tools = %#v", operation)
 	}
 }
 
@@ -729,8 +779,8 @@ func TestServiceRunDetailDoesNotWarnOrSuppressDiagnosticsForSharedTrace(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !run.TraceAliasConflict {
-		t.Fatalf("run = %#v, want deterministic trace-alias ambiguity metadata preserved", run)
+	if run.TraceAliasConflict {
+		t.Fatalf("run = %#v, shared W3C trace must not be treated as an identity conflict", run)
 	}
 }
 
@@ -1971,7 +2021,7 @@ func TestServicePublishesIngestEvents(t *testing.T) {
 		if err := json.Unmarshal(event.Payload, &payload); err != nil {
 			t.Fatal(err)
 		}
-		if payload["runId"] != runID || payload["traceId"] != traceID {
+		if payload["operationId"] != runID || payload["traceId"] != traceID || payload["entity"] != "operation" {
 			t.Fatalf("payload = %#v", payload)
 		}
 	case <-time.After(time.Second):
@@ -2513,8 +2563,20 @@ func mustBatch(t *testing.T, records ...string) Batch {
 	t.Helper()
 	batch := Batch{Records: make([]Record, 0, len(records))}
 	for _, raw := range records {
+		var fields map[string]any
+		if err := json.Unmarshal([]byte(raw), &fields); err != nil {
+			t.Fatal(err)
+		}
+		fields["schemaVersion"] = SchemaVersion
+		if _, ok := fields["operationId"]; !ok {
+			fields["operationId"] = fields["runId"]
+		}
+		upgraded, err := json.Marshal(fields)
+		if err != nil {
+			t.Fatal(err)
+		}
 		var record Record
-		if err := json.Unmarshal([]byte(raw), &record); err != nil {
+		if err := json.Unmarshal(upgraded, &record); err != nil {
 			t.Fatal(err)
 		}
 		batch.Records = append(batch.Records, record)

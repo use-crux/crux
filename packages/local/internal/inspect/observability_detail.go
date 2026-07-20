@@ -43,13 +43,10 @@ func inspectRunFromObservabilitySummary(summary observability.RunSummary) inspec
 	promptID := optionalStringPtr(summary.PromptID)
 	cost := optionalFloatMetric(metrics, "costUsd", "cost")
 	spanCount := maxInt(summary.SpanCount, 0)
-	childCount := spanCount
-	if childCount == 0 {
-		childCount = 1
-	}
 	return inspectRunRecord{
 		Tag:           "InspectRun",
-		TraceID:       summary.RunID,
+		OperationID:   summary.OperationID,
+		TraceID:       summary.TraceID,
 		TargetID:      firstNonEmpty(summary.PromptID, summary.Name, summary.RootPrimitive, summary.RunID),
 		PromptID:      promptID,
 		FlowID:        stringMetric(attrs, "flowId", "flowID"),
@@ -65,8 +62,8 @@ func inspectRunFromObservabilitySummary(summary observability.RunSummary) inspec
 		Cost:          cost,
 		TokenCount:    intMetric(metrics, "totalTokens"),
 		SpanCount:     spanCount,
-		ChildCount:    childCount,
-		TraceCount:    childCount,
+		ChildCount:    summary.ChildRunCount,
+		TraceCount:    1,
 		SessionID:     stringMetric(attrs, "sessionId", "sessionID"),
 	}
 }
@@ -86,7 +83,7 @@ func traceFromObservabilityRunDetail(detail observability.RunDetail) inspectTrac
 	}
 	resultJSON, _ := json.Marshal(result)
 	return inspectTraceRecord{
-		TraceID:    run.RunID,
+		TraceID:    run.TraceID,
 		PromptID:   optionalStringPtr(run.PromptID),
 		StartedAt:  parseTimeMillis(run.StartedAt),
 		Input:      inputFromObservabilityRunDetail(detail),

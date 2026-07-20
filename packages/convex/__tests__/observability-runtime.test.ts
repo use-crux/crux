@@ -465,6 +465,10 @@ describe("@use-crux/convex observability runtime binding (Phase 8)", () => {
       const runId =
         swarmStart?.type === "run:start" ? swarmStart.runId : undefined;
       expect(runId).toBeDefined();
+      expect(swarmStart).toMatchObject({
+        operationId: actionRun1.operationId,
+        parentRunId: actionRun1.runId,
+      });
       expect(transport.records).toContainEqual(
         expect.objectContaining({ type: "run:suspend", runId }),
       );
@@ -494,6 +498,7 @@ describe("@use-crux/convex observability runtime binding (Phase 8)", () => {
         (record) => record.type === "run:resume" && record.runId === runId,
       );
       expect(resumeRecord).toBeDefined();
+      expect(resumeRecord?.operationId).toBe(actionRun1.operationId);
       expect(resumeRecord).toEqual(expect.objectContaining({ deployment }));
       expect(
         resumeRecord && "segmentId" in resumeRecord

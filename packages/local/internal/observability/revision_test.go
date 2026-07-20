@@ -31,8 +31,8 @@ func TestRunsSinceReturnsBoundedCatchUpDelta(t *testing.T) {
 	}
 	seen := map[string]bool{}
 	for _, change := range delta.Changes {
-		if change.Entity != "run" {
-			t.Fatalf("entity = %q, want run", change.Entity)
+		if change.Entity != "operation" {
+			t.Fatalf("entity = %q, want operation", change.Entity)
 		}
 		if change.Revision <= base {
 			t.Fatalf("change revision %d did not advance past base %d", change.Revision, base)
@@ -121,7 +121,7 @@ func TestDeleteRunsRecordsATombstoneRevisionInsteadOfErasingHistory(t *testing.T
 	}
 
 	var before int
-	if err := service.db.QueryRowContext(ctx, `SELECT count(*) FROM observability_run_revision_log WHERE run_id = ?`, "run_delete_tombstone").Scan(&before); err != nil {
+	if err := service.db.QueryRowContext(ctx, `SELECT count(*) FROM observability_run_revision_log WHERE operation_id = ?`, "run_delete_tombstone").Scan(&before); err != nil {
 		t.Fatal(err)
 	}
 	if before == 0 {
@@ -141,7 +141,7 @@ func TestDeleteRunsRecordsATombstoneRevisionInsteadOfErasingHistory(t *testing.T
 	}
 
 	var after int
-	if err := service.db.QueryRowContext(ctx, `SELECT count(*) FROM observability_run_revision_log WHERE run_id = ?`, "run_delete_tombstone").Scan(&after); err != nil {
+	if err := service.db.QueryRowContext(ctx, `SELECT count(*) FROM observability_run_revision_log WHERE operation_id = ?`, "run_delete_tombstone").Scan(&after); err != nil {
 		t.Fatal(err)
 	}
 	if after == 0 {
@@ -149,7 +149,7 @@ func TestDeleteRunsRecordsATombstoneRevisionInsteadOfErasingHistory(t *testing.T
 	}
 
 	var tombstoneCount int
-	if err := service.db.QueryRowContext(ctx, `SELECT count(*) FROM observability_run_revision_log WHERE run_id = ? AND revision = ?`, "run_delete_tombstone", postDeleteRevision).Scan(&tombstoneCount); err != nil {
+	if err := service.db.QueryRowContext(ctx, `SELECT count(*) FROM observability_run_revision_log WHERE operation_id = ? AND revision = ?`, "run_delete_tombstone", postDeleteRevision).Scan(&tombstoneCount); err != nil {
 		t.Fatal(err)
 	}
 	if tombstoneCount != 1 {

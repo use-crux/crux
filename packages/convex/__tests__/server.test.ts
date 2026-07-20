@@ -316,6 +316,28 @@ describe('@use-crux/convex/server', () => {
         }),
       }),
     )
+    const requested = transport.records.find(
+      (record) =>
+        record.type === 'span:event' &&
+        record.name === 'runtime.convex.boundary.requested',
+    )
+    const received = transport.records.find(
+      (record) =>
+        record.type === 'span:event' &&
+        record.name === 'runtime.convex.boundary.received',
+    )
+    expect(received).toMatchObject({
+      operationId: requested?.operationId,
+      runId: requested?.runId,
+      segmentSeq: 1,
+    })
+    expect(received?.segmentId).not.toBe(requested?.segmentId)
+    expect(
+      transport.records.some(
+        (record) =>
+          record.type === 'run:resume' || record.type === 'run:suspend',
+      ),
+    ).toBe(false)
   })
 
   it('keeps awaited action waterfalls nested and leased across every hop', async () => {

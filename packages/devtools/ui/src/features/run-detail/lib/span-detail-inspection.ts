@@ -1225,7 +1225,7 @@ export function resolveOutput(
   walk(node);
   if (best) return (best as { result: ResolvedOutput }).result;
 
-  // Fallback to the trace projection from /api/inspect/runs/{traceId}
+  // Fallback to the operation projection from /api/inspect/runs/{operationId}
   if (isRoot && trace?.result) {
     const r = trace.result as {
       text?: string;

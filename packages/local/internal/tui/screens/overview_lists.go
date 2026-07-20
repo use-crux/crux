@@ -123,7 +123,7 @@ func (o *Overview) renderRecentRunsBlock(width, height int) string {
 			prefix = shell.SelectionBar(shell.ColorTeal) + " "
 		}
 		dot := kit.StatusDot(r.Status)
-		id := shortID(r.TraceID, 7)
+		id := shortID(inspectOperationID(r), 7)
 		target := truncate(r.TargetID, 14)
 		lat := durStr(r.DurationMs)
 		tok := formatTokensShort(r.TokenCount)

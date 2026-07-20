@@ -9,11 +9,11 @@ export function useRunSelection(
 ) {
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
 
-  function toggleSelected(traceId: string) {
+  function toggleSelected(operationId: string) {
     setSelected((prev) => {
       const next = new Set(prev);
-      if (next.has(traceId)) next.delete(traceId);
-      else next.add(traceId);
+      if (next.has(operationId)) next.delete(operationId);
+      else next.add(operationId);
       return next;
     });
   }
@@ -24,7 +24,7 @@ export function useRunSelection(
 
   useEffect(() => {
     if (selected.size === 0) return;
-    const present = new Set(allRows.map((run) => run.traceId));
+    const present = new Set(allRows.map((run) => run.operationId));
     let drift = false;
     const next = new Set<string>();
     for (const id of selected) {
@@ -37,7 +37,7 @@ export function useRunSelection(
   const visibleSelectionState = useMemo<SelectionState>(() => {
     if (visibleRows.length === 0 || selected.size === 0) return "none";
     let count = 0;
-    for (const run of visibleRows) if (selected.has(run.traceId)) count++;
+    for (const run of visibleRows) if (selected.has(run.operationId)) count++;
     if (count === 0) return "none";
     return count === visibleRows.length ? "all" : "some";
   }, [selected, visibleRows]);
@@ -46,11 +46,11 @@ export function useRunSelection(
     setSelected((prev) => {
       if (visibleSelectionState === "all") {
         const next = new Set(prev);
-        for (const run of visibleRows) next.delete(run.traceId);
+        for (const run of visibleRows) next.delete(run.operationId);
         return next;
       }
       const next = new Set(prev);
-      for (const run of visibleRows) next.add(run.traceId);
+      for (const run of visibleRows) next.add(run.operationId);
       return next;
     });
   }

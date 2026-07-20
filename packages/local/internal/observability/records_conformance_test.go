@@ -95,9 +95,9 @@ func TestSharedTaxonomyFixtureMatchesGoTaxonomy(t *testing.T) {
 	}
 }
 
-func TestSharedV2ContractFixturesValidateSegmentView(t *testing.T) {
-	var corpus v2ContractCorpus
-	raw := readCoreObservabilityFixture(t, "v2-contract-cases.json")
+func TestSharedV4ContractFixturesValidateSegmentView(t *testing.T) {
+	var corpus v4ContractCorpus
+	raw := readCoreObservabilityFixture(t, "v4-contract-cases.json")
 	if err := json.Unmarshal(raw, &corpus); err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +129,7 @@ func TestSharedV2ContractFixturesValidateSegmentView(t *testing.T) {
 			if err := ValidateRecord(record); err != nil {
 				t.Fatalf("%s record %s failed validation: %v", testCase.Name, record.RecordID, err)
 			}
-			got := v2ContractExpected{
+			got := v4ContractExpected{
 				RecordID:      record.RecordID,
 				SchemaVersion: record.SchemaVersion,
 				SegmentID:     record.SegmentID,
@@ -153,17 +153,17 @@ type taxonomyFixture struct {
 	EdgeTypes         []string          `json:"edgeTypes"`
 }
 
-type v2ContractCorpus struct {
-	Cases []v2ContractCase `json:"cases"`
+type v4ContractCorpus struct {
+	Cases []v4ContractCase `json:"cases"`
 }
 
-type v2ContractCase struct {
+type v4ContractCase struct {
 	Name     string               `json:"name"`
 	Records  []Record             `json:"records"`
-	Expected []v2ContractExpected `json:"expected"`
+	Expected []v4ContractExpected `json:"expected"`
 }
 
-type v2ContractExpected struct {
+type v4ContractExpected struct {
 	RecordID      string `json:"recordId"`
 	SchemaVersion int    `json:"schemaVersion"`
 	SegmentID     string `json:"segmentId"`
@@ -179,7 +179,7 @@ func loadConformanceFixtures(t *testing.T) []conformanceFixture {
 		if name == "taxonomy.json" {
 			continue
 		}
-		if name == "v2-contract-cases.json" {
+		if name == "v4-contract-cases.json" {
 			continue
 		}
 		raw := readCoreObservabilityFixture(t, name)

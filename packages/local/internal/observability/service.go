@@ -116,34 +116,44 @@ func (b *EventBus) Publish(event Event) {
 }
 
 type RunSummary struct {
-	RunID              string              `json:"runId"`
-	TraceID            string              `json:"traceId"`
-	SessionID          string              `json:"sessionId,omitempty"`
-	UserID             string              `json:"userId,omitempty"`
-	Deployment         *DeploymentIdentity `json:"deployment,omitempty"`
-	Name               string              `json:"name"`
-	RootPrimitive      string              `json:"rootPrimitive"`
-	Status             string              `json:"status"`
-	StartedAt          string              `json:"startedAt"`
-	EndedAt            string              `json:"endedAt"`
-	DurationMs         float64             `json:"durationMs"`
-	Model              string              `json:"model"`
-	Provider           string              `json:"provider"`
-	PromptID           string              `json:"promptId"`
-	RecordCount        int                 `json:"recordCount"`
-	SpanCount          int                 `json:"spanCount"`
-	EventCount         int                 `json:"eventCount"`
-	ArtifactCount      int                 `json:"artifactCount"`
-	EdgeCount          int                 `json:"edgeCount"`
-	SegmentCount       int                 `json:"segmentCount"`
-	ActiveSegmentID    string              `json:"activeSegmentId,omitempty"`
-	OrderingConfidence string              `json:"orderingConfidence"`
-	GapCount           int                 `json:"gapCount"`
-	TraceAliasConflict bool                `json:"traceAliasConflict,omitempty"`
-	inputTokens        int                 `json:"-"`
-	outputTokens       int                 `json:"-"`
-	costUSD            float64             `json:"-"`
-	LastActivityAt     string              `json:"lastActivityAt,omitempty"`
+	RunID               string              `json:"runId"`
+	OperationID         string              `json:"operationId"`
+	RootRunID           string              `json:"rootRunId"`
+	RootPresent         bool                `json:"rootPresent"`
+	FirstSeenAt         string              `json:"firstSeenAt"`
+	ChildRunCount       int                 `json:"childRunCount"`
+	ActiveChildCount    int                 `json:"activeChildCount"`
+	SuspendedChildCount int                 `json:"suspendedChildCount"`
+	FailedChildCount    int                 `json:"failedChildCount"`
+	TopologyHealth      string              `json:"topologyHealth"`
+	TraceID             string              `json:"traceId"`
+	SessionID           string              `json:"sessionId,omitempty"`
+	UserID              string              `json:"userId,omitempty"`
+	Deployment          *DeploymentIdentity `json:"deployment,omitempty"`
+	Name                string              `json:"name"`
+	RootPrimitive       string              `json:"rootPrimitive"`
+	Status              string              `json:"status"`
+	StartedAt           string              `json:"startedAt"`
+	EndedAt             string              `json:"endedAt"`
+	DurationMs          float64             `json:"durationMs"`
+	Model               string              `json:"model"`
+	Provider            string              `json:"provider"`
+	PromptID            string              `json:"promptId"`
+	RecordCount         int                 `json:"recordCount"`
+	SpanCount           int                 `json:"spanCount"`
+	EventCount          int                 `json:"eventCount"`
+	ArtifactCount       int                 `json:"artifactCount"`
+	EdgeCount           int                 `json:"edgeCount"`
+	SegmentCount        int                 `json:"segmentCount"`
+	ActiveSegmentID     string              `json:"activeSegmentId,omitempty"`
+	OrderingConfidence  string              `json:"orderingConfidence"`
+	GapCount            int                 `json:"gapCount"`
+	// TraceAliasConflict is deprecated; operation identity is never inferred from TraceID.
+	TraceAliasConflict bool    `json:"traceAliasConflict,omitempty"`
+	inputTokens        int     `json:"-"`
+	outputTokens       int     `json:"-"`
+	costUSD            float64 `json:"-"`
+	LastActivityAt     string  `json:"lastActivityAt,omitempty"`
 	// Revision is the server-owned read-model revision this run last changed
 	// at. Zero means the run predates revision tracking (pre-Phase-11 rows
 	// before their next write).
@@ -307,6 +317,15 @@ type RunDetail struct {
 	Manifest       *RunManifestResolution        `json:"manifest,omitempty"`
 	CurrentCatalog *CurrentCatalogComparison     `json:"currentCatalog,omitempty"`
 	Debug          *Graph                        `json:"debug,omitempty"`
+	MemberRuns     []OperationRunDetail          `json:"memberRuns"`
+}
+
+type OperationRunDetail struct {
+	Run               RunSummary            `json:"run"`
+	ParentRunID       string                `json:"parentRunId,omitempty"`
+	TriggeredBySpanID string                `json:"triggeredBySpanId,omitempty"`
+	Root              RunDetailNode         `json:"root"`
+	Diagnostics       []RunDetailDiagnostic `json:"diagnostics"`
 }
 
 type RunDetailCounts struct {
@@ -562,6 +581,7 @@ type RunDetailPlacement struct {
 type StoredRecord struct {
 	RecordID    string     `json:"recordId"`
 	RunID       string     `json:"runId"`
+	OperationID string     `json:"operationId"`
 	TraceID     string     `json:"traceId"`
 	SegmentID   string     `json:"segmentId"`
 	SegmentSeq  int        `json:"segmentSeq"`
@@ -639,6 +659,7 @@ type RunEndRecord struct {
 	RecordID      string          `json:"recordId"`
 	Type          RecordType      `json:"type"`
 	RunID         string          `json:"runId"`
+	OperationID   string          `json:"operationId"`
 	SegmentID     string          `json:"segmentId,omitempty"`
 	SegmentSeq    int             `json:"segmentSeq,omitempty"`
 	TraceID       string          `json:"traceId,omitempty"`
@@ -655,6 +676,7 @@ type SpanEndRecord struct {
 	RecordID      string          `json:"recordId"`
 	Type          RecordType      `json:"type"`
 	RunID         string          `json:"runId"`
+	OperationID   string          `json:"operationId"`
 	SegmentID     string          `json:"segmentId,omitempty"`
 	SegmentSeq    int             `json:"segmentSeq,omitempty"`
 	TraceID       string          `json:"traceId,omitempty"`
@@ -672,6 +694,7 @@ type SpanEventRecord struct {
 	RecordID      string          `json:"recordId"`
 	Type          RecordType      `json:"type"`
 	RunID         string          `json:"runId"`
+	OperationID   string          `json:"operationId"`
 	SegmentID     string          `json:"segmentId,omitempty"`
 	SegmentSeq    int             `json:"segmentSeq,omitempty"`
 	TraceID       string          `json:"traceId,omitempty"`

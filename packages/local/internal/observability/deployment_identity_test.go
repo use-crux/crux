@@ -10,8 +10,8 @@ import (
 
 func TestRecordSchemaVersionsAndDeploymentIdentity(t *testing.T) {
 	v2 := mustRecord(t, `{"schemaVersion":2,"recordId":"rec_v2","type":"run:start","runId":"run_111111111111111111111111","segmentId":"seg_111111111111111111111111","segmentSeq":1,"name":"v2","rootPrimitive":"run","startedAt":"2026-07-14T12:00:00.000Z","status":"running"}`)
-	if err := ValidateRecord(v2); err != nil {
-		t.Fatalf("deployment-unspecified v2 record failed validation: %v", err)
+	if err := ValidateRecord(v2); err == nil {
+		t.Fatal("expected schema v2 record to be rejected after the operation-family cutover")
 	}
 
 	v2WithDeployment := mustRecord(t, `{"schemaVersion":2,"recordId":"rec_v2_deployment","type":"run:start","runId":"run_222222222222222222222222","segmentId":"seg_222222222222222222222222","segmentSeq":1,"name":"v2","rootPrimitive":"run","startedAt":"2026-07-14T12:00:00.000Z","status":"running","deployment":{"projectId":"checkout"}}`)
@@ -20,11 +20,16 @@ func TestRecordSchemaVersionsAndDeploymentIdentity(t *testing.T) {
 	}
 
 	v3 := mustRecord(t, `{"schemaVersion":3,"recordId":"rec_v3","type":"run:start","runId":"run_333333333333333333333333","segmentId":"seg_333333333333333333333333","segmentSeq":1,"name":"v3","rootPrimitive":"run","startedAt":"2026-07-14T12:00:00.000Z","status":"running","deployment":{"projectId":"checkout","manifestId":"pim_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","deploymentId":"production-42"}}`)
-	if err := ValidateRecord(v3); err != nil {
-		t.Fatalf("valid v3 deployment identity failed validation: %v", err)
+	if err := ValidateRecord(v3); err == nil {
+		t.Fatal("expected schema v3 record to be rejected after the operation-family cutover")
 	}
 
-	malformed := mustRecord(t, `{"schemaVersion":3,"recordId":"rec_v3_bad","type":"run:start","runId":"run_444444444444444444444444","segmentId":"seg_444444444444444444444444","segmentSeq":1,"name":"v3","rootPrimitive":"run","startedAt":"2026-07-14T12:00:00.000Z","status":"running","deployment":{"projectId":" checkout "}}`)
+	v4 := mustRecord(t, `{"schemaVersion":4,"recordId":"rec_v4","type":"run:start","runId":"run_333333333333333333333333","operationId":"run_333333333333333333333333","segmentId":"seg_333333333333333333333333","segmentSeq":1,"name":"v4","rootPrimitive":"run","startedAt":"2026-07-14T12:00:00.000Z","status":"running","deployment":{"projectId":"checkout","manifestId":"pim_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","deploymentId":"production-42"}}`)
+	if err := ValidateRecord(v4); err != nil {
+		t.Fatalf("valid v4 deployment identity failed validation: %v", err)
+	}
+
+	malformed := mustRecord(t, `{"schemaVersion":4,"recordId":"rec_v4_bad","type":"run:start","runId":"run_444444444444444444444444","operationId":"run_444444444444444444444444","segmentId":"seg_444444444444444444444444","segmentSeq":1,"name":"v4","rootPrimitive":"run","startedAt":"2026-07-14T12:00:00.000Z","status":"running","deployment":{"projectId":" checkout "}}`)
 	if err := ValidateRecord(malformed); err == nil {
 		t.Fatal("expected malformed v3 deployment identity to be rejected")
 	}

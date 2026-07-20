@@ -4,6 +4,7 @@ import { runWithDeferInvocation } from '@use-crux/core/internal/scope'
 import { durableTask } from '@use-crux/core/runtime'
 import { createTestRuntime } from '@use-crux/core/runtime/testing'
 import {
+  configureObservability,
   createInMemoryObservabilityTransport,
   observe,
   resetObservabilityRuntime,
@@ -772,6 +773,11 @@ describe('named evidence lifecycle vs drain settlement', () => {
       },
     })
     const testRuntime = createTestRuntime({ targets: [target] })
+    const deployment = {
+      projectId: 'named-defer-project',
+      deploymentId: 'origin-deployment',
+    }
+    configureObservability({ identity: deployment })
     const accept = transport.send.bind(transport)
     setObservabilityTransport(
       {
@@ -853,13 +859,11 @@ describe('named evidence lifecycle vs drain settlement', () => {
           scopeId: expect.any(String),
           sequence: 0,
           scheduledSpanId,
+          operationId: scheduledStart?.operationId,
+          runId: scheduledStart?.runId,
+          segmentId: scheduledStart?.segmentId,
+          deployment,
         }),
-      })
-      expect(work?.work).not.toMatchObject({
-        defer: expect.objectContaining({ segmentId: expect.any(String) }),
-      })
-      expect(work?.work).not.toMatchObject({
-        defer: expect.objectContaining({ runId: expect.any(String) }),
       })
 
       await testRuntime.settle()
@@ -883,6 +887,7 @@ describe('named evidence lifecycle vs drain settlement', () => {
         }),
       })
       expect(runStart?.runId).not.toBe(scheduledStart?.runId)
+      expect(runStart?.operationId).toBe(scheduledStart?.operationId)
       expect(runStart?.traceId).toBe(scheduledStart?.traceId)
       expect(runStart?.segmentId).not.toBe(scheduledStart?.segmentId)
       expect(transport.records).toContainEqual(
@@ -1096,15 +1101,12 @@ describe('named evidence lifecycle vs drain settlement', () => {
         kind: 'task.run',
         defer: expect.objectContaining({
           scheduledSpanId: scheduledStart?.spanId,
+          operationId: scheduledStart?.operationId,
+          runId: scheduledStart?.runId,
           traceId: scheduledStart?.traceId,
+          segmentId: scheduledStart?.segmentId,
           workId,
         }),
-      })
-      expect(work?.work).not.toMatchObject({
-        defer: expect.objectContaining({ segmentId: expect.any(String) }),
-      })
-      expect(work?.work).not.toMatchObject({
-        defer: expect.objectContaining({ runId: expect.any(String) }),
       })
 
       // Durable work can execute after the originating grouped run has ended.
@@ -1125,6 +1127,7 @@ describe('named evidence lifecycle vs drain settlement', () => {
       expect(runStarts).toHaveLength(1)
       const runStart = runStarts[0]!
       expect(runStart.runId).not.toBe(scheduledStart?.runId)
+      expect(runStart.operationId).toBe(scheduledStart?.operationId)
       expect(runStart.traceId).toBe(scheduledStart?.traceId)
       expect(runStart.segmentId).not.toBe(scheduledStart?.segmentId)
       const executionRunStartIndex = transport.records.findIndex(
@@ -1141,6 +1144,11 @@ describe('named evidence lifecycle vs drain settlement', () => {
       expect(executionRunEndIndex).toBeGreaterThan(
         transport.records.indexOf(runStart),
       )
+      expect(transport.records[executionRunStartIndex]).toMatchObject({
+        operationId: scheduledStart?.operationId,
+        parentRunId: scheduledStart?.runId,
+        triggeredBySpanId: scheduledStart?.spanId,
+      })
       expect(transport.records).toContainEqual(
         expect.objectContaining({
           type: 'edge',

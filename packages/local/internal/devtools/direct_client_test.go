@@ -21,12 +21,12 @@ func TestDirectClientInspectRunsGetJSONUsesRegisteredFilters(t *testing.T) {
 
 	var batch observability.Batch
 	if err := json.Unmarshal([]byte(`{"records":[
-		{"schemaVersion":2,"recordId":"run-gen-start","type":"run:start","runId":"run_filter_generation","segmentId":"seg_filter_generation","segmentSeq":1,"traceId":"trace_filter_generation","name":"support reply","rootPrimitive":"generation.call","startedAt":"2026-05-16T18:00:00.000Z","status":"running"},
-		{"schemaVersion":2,"recordId":"span-gen","type":"span","runId":"run_filter_generation","segmentId":"seg_filter_generation","segmentSeq":2,"traceId":"trace_filter_generation","spanId":"span_filter_generation","family":"generation","primitive":"generation.call","name":"support reply","startedAt":"2026-05-16T18:00:00.010Z","endedAt":"2026-05-16T18:00:00.100Z","durationMs":90,"status":"ok","model":"gpt-4o","provider":"openai"},
-		{"schemaVersion":2,"recordId":"run-gen-end","type":"run:end","runId":"run_filter_generation","segmentId":"seg_filter_generation","segmentSeq":3,"traceId":"trace_filter_generation","endedAt":"2026-05-16T18:00:00.120Z","durationMs":120,"status":"ok"},
-		{"schemaVersion":2,"recordId":"run-ret-start","type":"run:start","runId":"run_filter_retrieval","segmentId":"seg_filter_retrieval","segmentSeq":1,"traceId":"trace_filter_retrieval","name":"search docs","rootPrimitive":"retrieval.query","startedAt":"2026-05-16T18:01:00.000Z","status":"running"},
-		{"schemaVersion":2,"recordId":"span-ret","type":"span","runId":"run_filter_retrieval","segmentId":"seg_filter_retrieval","segmentSeq":2,"traceId":"trace_filter_retrieval","spanId":"span_filter_retrieval","family":"retrieval","primitive":"retrieval.query","name":"search docs","startedAt":"2026-05-16T18:01:00.010Z","endedAt":"2026-05-16T18:01:00.100Z","durationMs":90,"status":"ok","model":"claude-3-5-sonnet","provider":"anthropic"},
-		{"schemaVersion":2,"recordId":"run-ret-end","type":"run:end","runId":"run_filter_retrieval","segmentId":"seg_filter_retrieval","segmentSeq":3,"traceId":"trace_filter_retrieval","endedAt":"2026-05-16T18:01:00.120Z","durationMs":120,"status":"ok"}
+		{"schemaVersion":4,"recordId":"run-gen-start","type":"run:start","runId":"run_filter_generation","operationId":"run_filter_generation","segmentId":"seg_filter_generation","segmentSeq":1,"traceId":"trace_filter_generation","name":"support reply","rootPrimitive":"generation.call","startedAt":"2026-05-16T18:00:00.000Z","status":"running"},
+		{"schemaVersion":4,"recordId":"span-gen","type":"span","runId":"run_filter_generation","operationId":"run_filter_generation","segmentId":"seg_filter_generation","segmentSeq":2,"traceId":"trace_filter_generation","spanId":"span_filter_generation","family":"generation","primitive":"generation.call","name":"support reply","startedAt":"2026-05-16T18:00:00.010Z","endedAt":"2026-05-16T18:00:00.100Z","durationMs":90,"status":"ok","model":"gpt-4o","provider":"openai"},
+		{"schemaVersion":4,"recordId":"run-gen-end","type":"run:end","runId":"run_filter_generation","operationId":"run_filter_generation","segmentId":"seg_filter_generation","segmentSeq":3,"traceId":"trace_filter_generation","endedAt":"2026-05-16T18:00:00.120Z","durationMs":120,"status":"ok"},
+		{"schemaVersion":4,"recordId":"run-ret-start","type":"run:start","runId":"run_filter_retrieval","operationId":"run_filter_retrieval","segmentId":"seg_filter_retrieval","segmentSeq":1,"traceId":"trace_filter_retrieval","name":"search docs","rootPrimitive":"retrieval.query","startedAt":"2026-05-16T18:01:00.000Z","status":"running"},
+		{"schemaVersion":4,"recordId":"span-ret","type":"span","runId":"run_filter_retrieval","operationId":"run_filter_retrieval","segmentId":"seg_filter_retrieval","segmentSeq":2,"traceId":"trace_filter_retrieval","spanId":"span_filter_retrieval","family":"retrieval","primitive":"retrieval.query","name":"search docs","startedAt":"2026-05-16T18:01:00.010Z","endedAt":"2026-05-16T18:01:00.100Z","durationMs":90,"status":"ok","model":"claude-3-5-sonnet","provider":"anthropic"},
+		{"schemaVersion":4,"recordId":"run-ret-end","type":"run:end","runId":"run_filter_retrieval","operationId":"run_filter_retrieval","segmentId":"seg_filter_retrieval","segmentSeq":3,"traceId":"trace_filter_retrieval","endedAt":"2026-05-16T18:01:00.120Z","durationMs":120,"status":"ok"}
 	]}`), &batch); err != nil {
 		t.Fatal(err)
 	}
@@ -42,7 +42,7 @@ func TestDirectClientInspectRunsGetJSONUsesRegisteredFilters(t *testing.T) {
 	if err := client.GetJSON(ctx, "/api/inspect/runs?kind=generation&model=gpt-4o", &runs); err != nil {
 		t.Fatal(err)
 	}
-	if len(runs) != 1 || runs[0].TraceID != "run_filter_generation" {
+	if len(runs) != 1 || runs[0].OperationID != "run_filter_generation" || runs[0].TraceID != "trace_filter_generation" {
 		t.Fatalf("runs = %#v, want filtered generation run", runs)
 	}
 }

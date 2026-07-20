@@ -148,6 +148,23 @@ describe('Crux propagation carriers', () => {
     expect(headers.values.get('crux')).not.toContain('traceparent')
   })
 
+  it('falls back only when legacy operationId is omitted', () => {
+    const legacy = {
+      traceparent: '00-0123456789abcdef0123456789abcdef-0123456789abcdef-01',
+      crux: { runId: 'run_0123456789abcdef01234567' },
+    }
+
+    expect(sanitizePropagationCarrier(legacy).crux.operationId).toBe(
+      legacy.crux.runId,
+    )
+    expect(() =>
+      sanitizePropagationCarrier({
+        ...legacy,
+        crux: { ...legacy.crux, operationId: null },
+      }),
+    ).toThrow('crux.operationId is invalid')
+  })
+
   it('drops hostile inbound carrier data without throwing through the boundary', () => {
     const headers = new Headers()
     headers.set('traceparent', '00-00000000000000000000000000000000-0000000000000000-01')

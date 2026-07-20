@@ -131,7 +131,10 @@ export interface CruxObservabilityRecordsNotification {
   severity: "info";
   refId: CruxRunId | string;
   payload?: {
-    runId: CruxRunId | string;
+    operationId: CruxRunId | string;
+    entity: "operation";
+    traceId?: CruxTraceId | string;
+    revision?: number;
   };
 }
 
@@ -291,4 +294,14 @@ export interface CruxRunDetail {
   /** Separately labeled comparison against the current checkout, when known. */
   currentCatalog?: CruxCurrentCatalogComparison;
   debug?: unknown;
+  /** Per-lifecycle projections retained inside this operation family. */
+  memberRuns: CruxOperationRunDetail[];
+}
+
+export interface CruxOperationRunDetail {
+  run: CruxRunSummaryView;
+  parentRunId?: string;
+  triggeredBySpanId?: string;
+  root: CruxRunDetailNode;
+  diagnostics: CruxRunDetailDiagnostic[];
 }

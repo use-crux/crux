@@ -38,9 +38,11 @@ export function observabilityEventIds(messageOrEvent: unknown): string[] {
 
   const payload = payloadValue(event.payload);
   if (isRecord(payload)) {
+    addString(ids, payload.operationId);
     addString(ids, payload.runId);
     addString(ids, payload.traceId);
     addStringArray(ids, payload.runIds);
+    addStringArray(ids, payload.operationIds);
     addStringArray(ids, payload.traceIds);
   }
 

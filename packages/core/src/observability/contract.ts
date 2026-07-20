@@ -3,7 +3,7 @@ import type {
   ProjectDefinitionKind,
 } from "../project-index";
 
-export const CRUX_OBSERVABILITY_SCHEMA_VERSION = 3;
+export const CRUX_OBSERVABILITY_SCHEMA_VERSION = 4;
 
 export const CRUX_CONTENT_DEGRADED_EVENT = "content.degraded" as const;
 
@@ -1015,14 +1015,16 @@ export interface CruxErrorSummary {
 /**
  * Base identity carried by every newly written observability graph record.
  *
- * Persisted v2 records remain readable through the runtime schema, but writers
- * always use the current version and copy deployment identity at run creation.
+ * Writers and readers use the current version. Older records cannot be given
+ * truthful operation-family identity and are rejected at this boundary.
  * `segmentSeq` is monotonic only within `segmentId`; consumers must not treat
  * it as a distributed per-run order.
  */
 interface CruxRecordBase {
   schemaVersion: typeof CRUX_OBSERVABILITY_SCHEMA_VERSION;
   recordId: CruxRecordId;
+  /** Root run id for the user-visible operation family. */
+  operationId: CruxRunId;
   runId: CruxRunId;
   segmentId: CruxSegmentId;
   /** Positive monotonic sequence scoped only to segmentId. */
@@ -1036,6 +1038,10 @@ interface CruxRecordBase {
 
 export interface CruxRunStartRecord extends CruxRecordBase {
   type: "run:start";
+  /** Immediate lifecycle parent. Absent only on the operation root. */
+  parentRunId?: CruxRunId;
+  /** Exact parent span that caused this child lifecycle. */
+  triggeredBySpanId?: CruxSpanId;
   name: string;
   rootPrimitive: CruxPrimitiveName;
   startedAt: string;

@@ -72,8 +72,8 @@ func TestRunsPageRevisionOnlyPublishedAfterIngestCommits(t *testing.T) {
 			t.Fatalf("event kind = %q", event.Kind)
 		}
 		var payload struct {
-			Revision int64  `json:"revision"`
-			RunID    string `json:"runId"`
+			Revision    int64  `json:"revision"`
+			OperationID string `json:"operationId"`
 		}
 		if err := json.Unmarshal(event.Payload, &payload); err != nil {
 			t.Fatal(err)
@@ -81,8 +81,8 @@ func TestRunsPageRevisionOnlyPublishedAfterIngestCommits(t *testing.T) {
 		if payload.Revision == 0 {
 			t.Fatal("published event did not carry a post-commit revision")
 		}
-		if payload.RunID != "run_rev_publish" {
-			t.Fatalf("runId = %q", payload.RunID)
+		if payload.OperationID != "run_rev_publish" {
+			t.Fatalf("operationId = %q", payload.OperationID)
 		}
 	default:
 		t.Fatal("expected an ingest event to be published after commit")

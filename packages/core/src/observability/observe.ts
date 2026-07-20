@@ -111,7 +111,7 @@ export type { DeliveryDiagnostic } from "./delivery/engine";
 export interface ConfigureObservabilityOptions {
   transport?: CruxObservabilityTransport;
   /** Single durable destination for feedback mutations. */
-  feedbackDestination?: import('../feedback').CruxFeedbackDestination;
+  feedbackDestination?: import("../feedback").CruxFeedbackDestination;
   /** Data-only redaction paths shared by persisted Eval and feedback records. */
   redactPaths?: readonly string[];
   delivery?: ObservabilityDeliveryOptions;
@@ -159,6 +159,7 @@ export interface ObservabilityDiagnostics {
 }
 
 export interface OpenObservedSpan {
+  readonly operationId: CruxRunId;
   readonly runId: CruxRunId;
   readonly traceId: CruxTraceId;
   /** Segment that owns records emitted by this open span. */
@@ -191,7 +192,10 @@ export interface OpenObservedSpan {
 }
 
 export interface OpenObservedRun {
+  readonly operationId: CruxRunId;
   readonly runId: CruxRunId;
+  readonly parentRunId?: CruxRunId;
+  readonly triggeredBySpanId?: CruxSpanId;
   readonly traceId: CruxTraceId;
   /** Segment that owns records emitted by this open run. */
   readonly segmentId: CruxSegmentId;
@@ -232,6 +236,8 @@ export interface ObserveRunOptions {
   /** Authored definitions directly associated with this run boundary. */
   definitionRefs?: DefinitionRef[];
 }
+
+export type ObserveChildRunOptions = Omit<ObserveRunOptions, "traceId">;
 
 export interface EndObservedRunOptions {
   status?: Exclude<CruxRunStatus, "running" | "suspended">;
@@ -322,7 +328,9 @@ interface ObservabilityConfigurationLayer {
   readonly previousDeliveryOptions: ObservabilityDeliveryOptions | undefined;
   readonly previousDefaultCorrelators: CruxCorrelators | undefined;
   readonly previousDeploymentIdentity: CruxDeploymentIdentity | undefined;
-  readonly previousFeedbackDestination: import('../feedback').CruxFeedbackDestination | undefined;
+  readonly previousFeedbackDestination:
+    | import("../feedback").CruxFeedbackDestination
+    | undefined;
   readonly previousRedactPaths: readonly string[];
 }
 
@@ -336,6 +344,15 @@ const runDeploymentIdentities = new Map<
   CruxRunId,
   CruxDeploymentIdentity | null
 >();
+interface RunOperationIdentity {
+  readonly operationId: CruxRunId;
+  readonly parentRunId?: CruxRunId;
+}
+const runOperationIdentities = new Map<CruxRunId, RunOperationIdentity>();
+const childRunParent = Symbol("crux.childRunParent");
+type InternalObserveRunOptions = ObserveRunOptions & {
+  readonly [childRunParent]?: CapturedObservabilityContext;
+};
 
 function syncDeliveryEngineWithProcessRegistry(): void {
   if (
@@ -433,10 +450,19 @@ function emit(
   record: UnsequencedCruxGraphRecord,
   correlators = effectiveCorrelators(),
 ): void {
+  const runOperation = runOperationIdentities.get(record.runId);
+  const recordWithOperation = {
+    ...record,
+    ...(record.operationId
+      ? { operationId: record.operationId }
+      : runOperation
+        ? { operationId: runOperation.operationId }
+        : {}),
+  };
   const runDeployment = runDeploymentIdentities.get(record.runId);
   const recordWithDeployment = runDeployment
-    ? { ...record, deployment: runDeployment }
-    : record;
+    ? { ...recordWithOperation, deployment: runDeployment }
+    : recordWithOperation;
   const sequencedRecord = recordSequencer.assign(
     applyCruxCorrelators(recordWithDeployment, correlators),
   );
@@ -448,6 +474,16 @@ function emit(
   if (!sameDeploymentIdentity(sequencedRecord, privacy.record)) {
     recordRedactedRecord(
       new Error("Observability redaction cannot rewrite deployment identity"),
+    );
+    return;
+  }
+  if (
+    typeof privacy.record === "object" &&
+    privacy.record !== null &&
+    sequencedRecord.operationId !== privacy.record.operationId
+  ) {
+    recordRedactedRecord(
+      new Error("Observability redaction cannot rewrite operation identity"),
     );
     return;
   }
@@ -618,6 +654,7 @@ function emitObservedErrorEvidence(
         schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
         recordId: createCruxRecordId(),
         type: "span:event",
+        operationId: context.operationId,
         runId: context.runId,
         segmentId: context.segmentId,
         traceId: context.traceId,
@@ -636,6 +673,7 @@ function emitObservedErrorEvidence(
           schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
           recordId: createCruxRecordId(),
           type: "artifact",
+          operationId: context.operationId,
           runId: context.runId,
           segmentId: context.segmentId,
           traceId: context.traceId,
@@ -657,6 +695,7 @@ function emitObservedErrorEvidence(
         schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
         recordId: createCruxRecordId(),
         type: "artifact",
+        operationId: context.operationId,
         runId: context.runId,
         segmentId: context.segmentId,
         traceId: context.traceId,
@@ -693,7 +732,12 @@ function captureContextValue(
   currentSpanId?: CruxSpanId,
 ): CapturedObservabilityContext {
   return {
+    operationId: context.operationId,
     runId: context.runId,
+    ...(context.parentRunId ? { parentRunId: context.parentRunId } : {}),
+    ...(context.triggeredBySpanId
+      ? { triggeredBySpanId: context.triggeredBySpanId }
+      : {}),
     segmentId: context.segmentId,
     traceId: context.traceId,
     ...(context.startedAtMs !== undefined
@@ -751,7 +795,9 @@ export function configureObservability(
     observabilityRegistry.feedbackDestination = options.feedbackDestination;
   }
   if (Object.hasOwn(options, "redactPaths")) {
-    observabilityRegistry.redactPaths = normalizeRedactPaths(options.redactPaths);
+    observabilityRegistry.redactPaths = normalizeRedactPaths(
+      options.redactPaths,
+    );
   }
   markObservabilityConfigurationChanged();
   let restored = false;
@@ -769,7 +815,8 @@ export function configureObservability(
     observabilityRegistry.delivery = layer.previousDeliveryOptions;
     observabilityRegistry.defaultCorrelators = layer.previousDefaultCorrelators;
     observabilityRegistry.deploymentIdentity = layer.previousDeploymentIdentity;
-    observabilityRegistry.feedbackDestination = layer.previousFeedbackDestination;
+    observabilityRegistry.feedbackDestination =
+      layer.previousFeedbackDestination;
     observabilityRegistry.redactPaths = layer.previousRedactPaths;
     markObservabilityConfigurationChanged();
   };
@@ -912,6 +959,7 @@ function resetModuleObservabilityState(): void {
   warnedAboutContextlessRecord = false;
   endedRunStatuses.clear();
   runDeploymentIdentities.clear();
+  runOperationIdentities.clear();
   recordSequencer.reset();
   telemetryFlushFailures = 0;
 }
@@ -952,25 +1000,42 @@ export function observabilityDiagnostics(): ObservabilityDiagnostics {
 
 export const observe = {
   openRun(options: ObserveRunOptions): OpenObservedRun {
+    const parent = (options as InternalObserveRunOptions)[childRunParent];
+    const parentContext = parent ? validatedParentContext(parent) : undefined;
     const runId = createCruxRunId();
-    const traceId = options.traceId ?? createCruxTraceId();
+    const operationId = parentContext?.operationId ?? runId;
+    const traceId =
+      parentContext?.traceId ?? options.traceId ?? createCruxTraceId();
     const segmentId = createCruxSegmentId();
     const startedAtMs = Date.now();
+    const triggeredBySpanId = parentContext
+      ? (parentContext.currentSpanId ??
+        parentContext.spanStack[parentContext.spanStack.length - 1])
+      : undefined;
     const context: ObservabilityContext = {
+      operationId,
       runId,
+      ...(parentContext ? { parentRunId: parentContext.runId } : {}),
+      ...(triggeredBySpanId ? { triggeredBySpanId } : {}),
       traceId,
       segmentId,
       startedAtMs,
       spanStack: [],
-      correlators: effectiveCorrelators(),
+      correlators: parentContext?.correlators ?? effectiveCorrelators(),
       deployment: cloneDeploymentIdentity(
-        observabilityRegistry.deploymentIdentity,
+        parentContext?.deployment ?? observabilityRegistry.deploymentIdentity,
       ),
     };
+    rememberRunOperation(runId, {
+      operationId,
+      ...(parentContext ? { parentRunId: parentContext.runId } : {}),
+    });
     rememberRunDeployment(runId, context.deployment);
     let closed = false;
     const continuation = createPropagationCarrier({
+      operationId,
       runId,
+      ...(parentContext ? { parentRunId: parentContext.runId } : {}),
       traceId,
       previousSegmentId: segmentId,
       correlators: context.correlators,
@@ -982,7 +1047,10 @@ export const observe = {
         schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
         recordId: createCruxRecordId(),
         type: "run:start",
+        operationId,
         runId,
+        ...(parentContext ? { parentRunId: parentContext.runId } : {}),
+        ...(triggeredBySpanId ? { triggeredBySpanId } : {}),
         segmentId,
         traceId,
         name: options.name,
@@ -1008,6 +1076,7 @@ export const observe = {
           schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
           recordId: createCruxRecordId(),
           type: "run:end",
+          operationId,
           runId,
           segmentId,
           traceId,
@@ -1032,7 +1101,10 @@ export const observe = {
     };
 
     return {
+      operationId,
       runId,
+      ...(parentContext ? { parentRunId: parentContext.runId } : {}),
+      ...(triggeredBySpanId ? { triggeredBySpanId } : {}),
       traceId,
       segmentId,
       captureContext(): CapturedObservabilityContext {
@@ -1054,6 +1126,7 @@ export const observe = {
             schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
             recordId: createCruxRecordId(),
             type: "run:suspend",
+            operationId,
             runId,
             segmentId,
             traceId,
@@ -1077,6 +1150,17 @@ export const observe = {
     };
   },
 
+  openChildRun(
+    parentContext: CapturedObservabilityContext,
+    options: ObserveChildRunOptions,
+  ): OpenObservedRun {
+    const parent = validatedParentContext(parentContext);
+    return observe.openRun({
+      ...options,
+      [childRunParent]: parent,
+    } as InternalObserveRunOptions);
+  },
+
   resumeRun(
     carrier: CruxPropagationCarrier,
     options: ResumeObservedRunOptions,
@@ -1089,7 +1173,9 @@ export const observe = {
     const segmentId = createCruxSegmentId();
     const startedAtMs = Date.now();
     const context: ObservabilityContext = {
+      operationId: identity.operationId,
       runId: identity.runId,
+      ...(identity.parentRunId ? { parentRunId: identity.parentRunId } : {}),
       traceId: identity.traceId,
       segmentId,
       startedAtMs,
@@ -1097,10 +1183,16 @@ export const observe = {
       correlators: effectiveCorrelators(),
       deployment: cloneDeploymentIdentity(identity.deployment),
     };
+    rememberRunOperation(identity.runId, {
+      operationId: identity.operationId,
+      ...(identity.parentRunId ? { parentRunId: identity.parentRunId } : {}),
+    });
     rememberRunDeployment(identity.runId, context.deployment);
     let closed = false;
     const continuation = createPropagationCarrier({
+      operationId: identity.operationId,
       runId: identity.runId,
+      ...(identity.parentRunId ? { parentRunId: identity.parentRunId } : {}),
       traceId: identity.traceId,
       previousSegmentId: segmentId,
       correlators: context.correlators,
@@ -1113,6 +1205,7 @@ export const observe = {
         schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
         recordId: createCruxRecordId(),
         type: "run:resume",
+        operationId: identity.operationId,
         runId: identity.runId,
         segmentId,
         traceId: identity.traceId,
@@ -1137,6 +1230,7 @@ export const observe = {
           schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
           recordId: createCruxRecordId(),
           type: "run:end",
+          operationId: identity.operationId,
           runId: identity.runId,
           segmentId,
           traceId: identity.traceId,
@@ -1161,7 +1255,9 @@ export const observe = {
     };
 
     return {
+      operationId: identity.operationId,
       runId: identity.runId,
+      ...(identity.parentRunId ? { parentRunId: identity.parentRunId } : {}),
       traceId: identity.traceId,
       segmentId,
       captureContext: () => captureContextValue(context, []),
@@ -1179,6 +1275,7 @@ export const observe = {
             schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
             recordId: createCruxRecordId(),
             type: "run:suspend",
+            operationId: identity.operationId,
             runId: identity.runId,
             segmentId,
             traceId: identity.traceId,
@@ -1203,78 +1300,13 @@ export const observe = {
     options: ObserveRunOptions,
     fn: () => T | Promise<T>,
   ): Promise<T> {
-    const runId = createCruxRunId();
-    const traceId = options.traceId ?? createCruxTraceId();
-    const segmentId = createCruxSegmentId();
-    const startedAtMs = Date.now();
-    const context: ObservabilityContext = {
-      runId,
-      traceId,
-      segmentId,
-      startedAtMs,
-      spanStack: [],
-      correlators: effectiveCorrelators(),
-      deployment: cloneDeploymentIdentity(
-        observabilityRegistry.deploymentIdentity,
-      ),
-    };
-    rememberRunDeployment(runId, context.deployment);
-
-    emitObserved(
-      () => ({
-        schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
-        recordId: createCruxRecordId(),
-        type: "run:start",
-        runId,
-        segmentId,
-        traceId,
-        name: options.name,
-        rootPrimitive: options.rootPrimitive,
-        startedAt: now(),
-        status: "running",
-        ...(options.attributes ? { attributes: options.attributes } : {}),
-        ...(options.definitionRefs && options.definitionRefs.length > 0
-          ? { definitionRefs: options.definitionRefs }
-          : {}),
-      }),
-      context.correlators ?? null,
-    );
-
+    const run = observe.openRun(options);
     try {
-      const result = await withContext(context, fn);
-      if (!rememberEndedRun(runId, "ok")) return result;
-      emitObserved(
-        () => ({
-          schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
-          recordId: createCruxRecordId(),
-          type: "run:end",
-          runId,
-          segmentId,
-          traceId,
-          endedAt: now(),
-          durationMs: durationSince(startedAtMs),
-          status: "ok",
-        }),
-        context.correlators ?? null,
-      );
+      const result = await run.withContext(fn);
+      run.end();
       return result;
     } catch (error) {
-      if (!rememberEndedRun(runId, "error")) throw error;
-      emitObserved(
-        () => ({
-          schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
-          recordId: createCruxRecordId(),
-          type: "run:end",
-          runId,
-          segmentId,
-          traceId,
-          endedAt: now(),
-          durationMs: durationSince(startedAtMs),
-          status: "error",
-          error: observedErrorSummary(error, errorContext(options.attributes)),
-        }),
-        context.correlators ?? null,
-      );
+      run.error(error);
       throw error;
     }
   },
@@ -1314,6 +1346,7 @@ export const observe = {
         schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
         recordId: createCruxRecordId(),
         type: "span:start",
+        operationId: context.operationId,
         runId: context.runId,
         segmentId: context.segmentId,
         traceId: context.traceId,
@@ -1339,6 +1372,7 @@ export const observe = {
           schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
           recordId: createCruxRecordId(),
           type: "span:end",
+          operationId: context.operationId,
           runId: context.runId,
           segmentId: context.segmentId,
           traceId: context.traceId,
@@ -1357,6 +1391,7 @@ export const observe = {
           schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
           recordId: createCruxRecordId(),
           type: "span:end",
+          operationId: context.operationId,
           runId: context.runId,
           segmentId: context.segmentId,
           traceId: context.traceId,
@@ -1386,6 +1421,7 @@ export const observe = {
         const segmentId = createCruxSegmentId();
         const spanId = createCruxSpanId();
         return {
+          operationId: runId,
           runId,
           traceId,
           segmentId,
@@ -1401,8 +1437,10 @@ export const observe = {
       }
       openedImplicitRun = true;
       implicitRunStartedAtMs = Date.now();
+      const implicitRunId = createCruxRunId();
       const implicitContext: ObservabilityContext = {
-        runId: createCruxRunId(),
+        operationId: implicitRunId,
+        runId: implicitRunId,
         traceId: createCruxTraceId(),
         segmentId: createCruxSegmentId(),
         startedAtMs: implicitRunStartedAtMs,
@@ -1412,6 +1450,9 @@ export const observe = {
           observabilityRegistry.deploymentIdentity,
         ),
       };
+      rememberRunOperation(implicitContext.runId, {
+        operationId: implicitContext.operationId,
+      });
       rememberRunDeployment(implicitContext.runId, implicitContext.deployment);
       context = implicitContext;
       emitObserved(
@@ -1419,6 +1460,7 @@ export const observe = {
           schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
           recordId: createCruxRecordId(),
           type: "run:start",
+          operationId: implicitContext.operationId,
           runId: implicitContext.runId,
           segmentId: implicitContext.segmentId,
           traceId: implicitContext.traceId,
@@ -1448,6 +1490,7 @@ export const observe = {
         schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
         recordId: createCruxRecordId(),
         type: "span:start",
+        operationId: context.operationId,
         runId: context.runId,
         segmentId: context.segmentId,
         traceId: context.traceId,
@@ -1497,6 +1540,7 @@ export const observe = {
           schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
           recordId: createCruxRecordId(),
           type: "span:end",
+          operationId: spanContext.operationId,
           runId: spanContext.runId,
           segmentId: spanContext.segmentId,
           traceId: spanContext.traceId,
@@ -1525,6 +1569,7 @@ export const observe = {
             schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
             recordId: createCruxRecordId(),
             type: "run:end",
+            operationId: spanContext.operationId,
             runId: spanContext.runId,
             segmentId: spanContext.segmentId,
             traceId: spanContext.traceId,
@@ -1549,6 +1594,7 @@ export const observe = {
     };
 
     return {
+      operationId: spanContext.operationId,
       runId: spanContext.runId,
       traceId: spanContext.traceId,
       segmentId: spanContext.segmentId,
@@ -1587,6 +1633,7 @@ export const observe = {
         schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
         recordId: createCruxRecordId(),
         type: "span:event",
+        operationId: context.operationId,
         runId: context.runId,
         segmentId: context.segmentId,
         traceId: context.traceId,
@@ -1615,6 +1662,7 @@ export const observe = {
         schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
         recordId: createCruxRecordId(),
         type: "artifact",
+        operationId: context.operationId,
         runId: context.runId,
         segmentId: context.segmentId,
         traceId: context.traceId,
@@ -1649,6 +1697,7 @@ export const observe = {
         schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
         recordId: createCruxRecordId(),
         type: "edge",
+        operationId: context.operationId,
         runId: context.runId,
         segmentId: context.segmentId,
         traceId: context.traceId,
@@ -1677,13 +1726,47 @@ export const observe = {
     if (!context) return fn();
     return withContext(
       {
+        operationId: context.operationId,
         runId: context.runId,
+        ...(context.parentRunId ? { parentRunId: context.parentRunId } : {}),
+        ...(context.triggeredBySpanId
+          ? { triggeredBySpanId: context.triggeredBySpanId }
+          : {}),
         traceId: context.traceId,
         segmentId: context.segmentId,
         startedAtMs: context.startedAtMs,
         correlators: context.correlators,
         deployment: context.deployment,
         spanStack: [...context.spanStack],
+      },
+      fn,
+    );
+  },
+
+  continueInNewSegment<T>(
+    parentContext: CapturedObservabilityContext,
+    fn: () => T | Promise<T>,
+  ): T | Promise<T> {
+    const parent = validatedParentContext(parentContext);
+    rememberRunOperation(parent.runId, {
+      operationId: parent.operationId,
+      ...(parent.parentRunId ? { parentRunId: parent.parentRunId } : {}),
+    });
+    rememberRunDeployment(parent.runId, parent.deployment);
+    return withContext(
+      {
+        operationId: parent.operationId,
+        runId: parent.runId,
+        ...(parent.parentRunId ? { parentRunId: parent.parentRunId } : {}),
+        ...(parent.triggeredBySpanId
+          ? { triggeredBySpanId: parent.triggeredBySpanId }
+          : {}),
+        traceId: parent.traceId,
+        segmentId: createCruxSegmentId(),
+        startedAtMs: parent.startedAtMs,
+        correlators: parent.correlators,
+        deployment: parent.deployment,
+        spanStack: [...parent.spanStack],
       },
       fn,
     );
@@ -1777,8 +1860,74 @@ function rememberEndedRun(runId: CruxRunId, status: EndedRunStatus): boolean {
   if (oldestRunId) {
     endedRunStatuses.delete(oldestRunId);
     runDeploymentIdentities.delete(oldestRunId);
+    runOperationIdentities.delete(oldestRunId);
   }
   return true;
+}
+
+function rememberRunOperation(
+  runId: CruxRunId,
+  identity: RunOperationIdentity,
+): void {
+  const current = runOperationIdentities.get(runId);
+  if (current) {
+    if (
+      current.operationId !== identity.operationId ||
+      current.parentRunId !== identity.parentRunId
+    ) {
+      throw new Error("Cannot change an observed run operation identity");
+    }
+    return;
+  }
+  runOperationIdentities.set(runId, Object.freeze({ ...identity }));
+}
+
+function validatedParentContext(
+  value: CapturedObservabilityContext,
+): CapturedObservabilityContext {
+  if (!value || typeof value !== "object") {
+    throw new TypeError("A valid parent observability context is required");
+  }
+  if (!/^run_[0-9a-f]{24}$/u.test(value.operationId)) {
+    throw new TypeError("Parent observability operationId is invalid");
+  }
+  if (!/^run_[0-9a-f]{24}$/u.test(value.runId)) {
+    throw new TypeError("Parent observability runId is invalid");
+  }
+  if (!/^[0-9a-f]{32}$/u.test(value.traceId)) {
+    throw new TypeError("Parent observability traceId is invalid");
+  }
+  if (!/^seg_[0-9a-f]{24}$/u.test(value.segmentId)) {
+    throw new TypeError("Parent observability segmentId is invalid");
+  }
+  if (
+    value.parentRunId !== undefined &&
+    !/^run_[0-9a-f]{24}$/u.test(value.parentRunId)
+  ) {
+    throw new TypeError("Parent observability parentRunId is invalid");
+  }
+  if (value.parentRunId === undefined && value.operationId !== value.runId) {
+    throw new TypeError("Parent observability operation identity is inconsistent");
+  }
+  if (
+    value.parentRunId !== undefined &&
+    (value.operationId === value.runId || value.parentRunId === value.runId)
+  ) {
+    throw new TypeError("Parent observability operation identity is inconsistent");
+  }
+  if (
+    value.currentSpanId !== undefined &&
+    !/^[0-9a-f]{16}$/u.test(value.currentSpanId)
+  ) {
+    throw new TypeError("Parent observability currentSpanId is invalid");
+  }
+  if (!Array.isArray(value.spanStack)) {
+    throw new TypeError("Parent observability spanStack is invalid");
+  }
+  if (value.spanStack.some((spanId) => !/^[0-9a-f]{16}$/u.test(spanId))) {
+    throw new TypeError("Parent observability spanStack is invalid");
+  }
+  return value;
 }
 
 function rememberRunDeployment(

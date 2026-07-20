@@ -307,16 +307,25 @@ async function executeFlow<
         reason: "flow.resume",
         attributes: { flowId },
       })
-    : observe.openRun({
-        name,
-        rootPrimitive: "flow.run",
-        traceId: ambientContext?.traceId,
-        attributes: {
-          flowId,
-          parentFlowId: parentFlowId ?? null,
-          goal: options?.goal ?? null,
-        },
-      });
+    : ambientContext
+      ? observe.openChildRun(ambientContext, {
+          name,
+          rootPrimitive: "flow.run",
+          attributes: {
+            flowId,
+            parentFlowId: parentFlowId ?? null,
+            goal: options?.goal ?? null,
+          },
+        })
+      : observe.openRun({
+          name,
+          rootPrimitive: "flow.run",
+          attributes: {
+            flowId,
+            parentFlowId: parentFlowId ?? null,
+            goal: options?.goal ?? null,
+          },
+        });
 
   // A nested flow owns a distinct durable run, but remains causally linked to
   // the ambient operation that triggered it.

@@ -34,7 +34,7 @@ type DataClient interface {
 
 	// Writes.
 	SetInsightStatus(ctx context.Context, insightID string, req api.InspectInsightStatusRequest) (api.InspectInsightStatusRecord, error)
-	DeleteRuns(ctx context.Context, traceIDs []string) (api.InspectDeleteRunsRecord, error)
+	DeleteRuns(ctx context.Context, operationIDs []string) (api.InspectDeleteRunsRecord, error)
 	CreateInsightSilence(ctx context.Context, req api.InspectInsightSilenceRequest) (api.InspectInsightSilenceRecord, error)
 	DeleteInsightSilence(ctx context.Context, silenceID string) (api.InspectInsightSilenceRecord, error)
 }

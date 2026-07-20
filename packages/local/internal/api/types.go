@@ -333,6 +333,7 @@ type DevtoolsContext struct {
 
 type InspectRunRecord struct {
 	Tag           string         `json:"_tag"`
+	OperationID   string         `json:"operationId,omitempty"`
 	TraceID       string         `json:"traceId"`
 	TargetID      string         `json:"targetId,omitempty"`
 	PromptID      *string        `json:"promptId,omitempty"`
@@ -381,14 +382,14 @@ type InspectRunDetailRecord struct {
 }
 
 type InspectDeleteRunsRequest struct {
-	TraceIDs []string `json:"traceIds"`
+	OperationIDs []string `json:"operationIds"`
 }
 
 type InspectDeleteRunsRecord struct {
-	Tag             string   `json:"_tag"`
-	TraceIDs        []string `json:"traceIds"`
-	DeletedTraceIDs []string `json:"deletedTraceIds"`
-	MissingTraceIDs []string `json:"missingTraceIds"`
+	Tag                 string   `json:"_tag"`
+	OperationIDs        []string `json:"operationIds"`
+	DeletedOperationIDs []string `json:"deletedOperationIds"`
+	MissingOperationIDs []string `json:"missingOperationIds"`
 }
 
 // InspectRunSpan is one node in a Run's execution tree. The Primitive

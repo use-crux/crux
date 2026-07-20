@@ -45,11 +45,11 @@ export const evalsService = {
     const uniqueRunIds = [...new Set(runIds)];
     const entries = await Promise.all(
       uniqueRunIds.map(async (runId) => {
-        const rows = await fetchJson<readonly { traceId?: unknown }[]>(
+        const rows = await fetchJson<readonly { operationId?: unknown }[]>(
           `/api/inspect/runs?search=${encodeURIComponent(runId)}&limit=1`,
           signal,
         );
-        return [runId, rows.some((row) => row.traceId === runId)] as const;
+        return [runId, rows.some((row) => row.operationId === runId)] as const;
       }),
     );
     return new Map(entries);

@@ -125,6 +125,6 @@ export function useUnsilenceMutation() {
 
 // ─── Bulk delete runs ───────────────────────────────────────────────
 //
-// Backend: DELETE /api/inspect/runs with { traceIds: string[] }. The Go
+// Backend: DELETE /api/inspect/runs with { operationIds: string[] }. The Go
 // service deletes canonical observability rows (runs/spans/events/artifacts/
 // edges) and emits InspectEvent { kind: 'run', action: 'deleted' } over WS.

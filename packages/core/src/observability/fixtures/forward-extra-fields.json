@@ -1,10 +1,11 @@
 {
   "records": [
     {
-      "schemaVersion": 2,
+      "schemaVersion": 4,
       "recordId": "rec_aaaaaaaaaaaaaaaa_extra",
       "type": "run:start",
       "runId": "run_aaaaaaaaaaaaaaaaaaaaaaaa",
+      "operationId": "run_aaaaaaaaaaaaaaaaaaaaaaaa",
       "traceId": "11111111111111111111111111111111",
       "name": "forward extra fields",
       "rootPrimitive": "run",

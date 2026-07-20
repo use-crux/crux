@@ -13,7 +13,10 @@ import {
 } from "../async-scope/internal/carrier";
 
 export interface ObservabilityContext {
+  operationId: CruxRunId;
   runId: CruxRunId;
+  parentRunId?: CruxRunId;
+  triggeredBySpanId?: CruxSpanId;
   traceId: CruxTraceId;
   segmentId: CruxSegmentId;
   startedAtMs?: number;

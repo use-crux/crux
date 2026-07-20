@@ -5,15 +5,17 @@ import {
 } from "../observabilityEvents";
 
 describe("observabilityEventIds", () => {
-  it("extracts run and trace ids from observability WS events", () => {
+  it("extracts operation, run, and trace ids from observability WS events", () => {
     expect(
       observabilityEventIds({
         type: "observability:event",
         event: {
           refId: "run_ref",
           payload: {
+            operationId: "operation_payload",
             runId: "run_payload",
             traceId: "trace_payload",
+            operationIds: ["operation_deleted"],
             runIds: ["run_deleted"],
             traceIds: ["trace_deleted"],
           },
@@ -21,9 +23,11 @@ describe("observabilityEventIds", () => {
       }),
     ).toEqual([
       "run_ref",
+      "operation_payload",
       "run_payload",
       "trace_payload",
       "run_deleted",
+      "operation_deleted",
       "trace_deleted",
     ]);
   });

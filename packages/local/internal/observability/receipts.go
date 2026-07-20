@@ -142,6 +142,10 @@ func rejectedDisposition(index int, recordID, code string, retryable bool) Inges
 func classifyIngestDisposition(err error) (string, bool) {
 	message := strings.ToLower(err.Error())
 	switch {
+	case strings.Contains(message, "operation_deleted"):
+		return "operation_deleted", false
+	case strings.Contains(message, "operation_identity_conflict"), strings.Contains(message, "parent_run_identity_conflict"), strings.Contains(message, "trigger_span_identity_conflict"), strings.Contains(message, "trace_identity_conflict"):
+		return "operation_identity_conflict", false
 	case strings.Contains(message, "record_id_conflict"):
 		return "record_id_conflict", false
 	case strings.Contains(message, "segment_ownership_conflict"):
@@ -157,6 +161,10 @@ func classifyIngestDisposition(err error) (string, bool) {
 
 func dispositionMessage(code string) string {
 	switch code {
+	case "operation_deleted":
+		return "operation was explicitly deleted and cannot be resurrected"
+	case "operation_identity_conflict":
+		return "run operation topology conflicts with immutable stored identity"
 	case "record_id_conflict":
 		return "record ID reused with different canonical content"
 	case "segment_ownership_conflict":
