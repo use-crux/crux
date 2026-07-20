@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/use-crux/crux/packages/local/internal/tui/kit"
 	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
 
@@ -97,8 +98,8 @@ func (i *Inspect) View(viewportWidth, viewportHeight int) string {
 		h = 10
 	}
 
-	header := " " + shell.TealBold.Render("◧ inspect · "+i.title) +
-		"  " + shell.TextMuted.Render(i.subtitle)
+	header := " " + shell.TealBold.Render("◧ inspect · "+kit.SanitizeInline(i.title)) +
+		"  " + shell.TextMuted.Render(kit.SanitizeInline(i.subtitle))
 	header = padToWidth(header, w)
 
 	// Visible window into the body.
@@ -126,7 +127,7 @@ func (i *Inspect) View(viewportWidth, viewportHeight int) string {
 	rowStyle := lipgloss.NewStyle().Foreground(shell.ColorText)
 	body := make([]string, len(rows))
 	for j, r := range rows {
-		body[j] = padToWidth(" "+rowStyle.Render(truncateRight(r, w-2)), w)
+		body[j] = padToWidth(" "+rowStyle.Render(truncateRight(kit.SanitizeInline(r), w-2)), w)
 	}
 
 	footer := " " + shell.TextMuted.Render(
@@ -168,17 +169,7 @@ func padToWidth(s string, width int) string {
 }
 
 func truncateRight(s string, width int) string {
-	if lipgloss.Width(s) <= width {
-		return s
-	}
-	if width <= 1 {
-		return s[:width]
-	}
-	// Naive byte-truncation suffices for JSON which is ASCII-dominant.
-	if len(s) > width-1 {
-		s = s[:width-1] + "…"
-	}
-	return s
+	return kit.Truncate(s, width, "…")
 }
 
 func formatInt(n int) string {

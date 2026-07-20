@@ -63,7 +63,7 @@ func TestConfigInspectJSONPrintsEffectiveConfig(t *testing.T) {
 	defer func() { resolveProjectConfigForInspect = oldResolver }()
 
 	root := t.TempDir()
-	resolveProjectConfigForInspect = func(_ context.Context, gotRoot, configPath, projectName string) (json.RawMessage, error) {
+	resolveProjectConfigForInspect = func(_ context.Context, gotRoot, configPath, projectName string, _ commandWorkerProcess) (json.RawMessage, error) {
 		if gotRoot != root {
 			t.Fatalf("root = %q, want %q", gotRoot, root)
 		}
@@ -73,10 +73,9 @@ func TestConfigInspectJSONPrintsEffectiveConfig(t *testing.T) {
 		return loadedConfigFixture(root), nil
 	}
 
-	cmd := NewConfigCmd(&cli.Factory{})
 	var out, errOut strings.Builder
-	cmd.SetOut(&out)
-	cmd.SetErr(&errOut)
+	streams := output.NewTestIO(&out, &errOut, output.TestIOOptions{})
+	cmd := NewConfigCmd(cli.NewFactoryWithStreams(streams))
 	cmd.SetArgs([]string{"inspect", "--json", "--cwd", root})
 
 	if err := cmd.Execute(); err != nil {

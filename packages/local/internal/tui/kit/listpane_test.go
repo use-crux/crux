@@ -119,6 +119,41 @@ func TestListPaneRemovedSelectionChoosesDeterministicNeighbor(t *testing.T) {
 	}
 }
 
+func TestListPaneRenderDoesNotRepairSelectionVisibility(t *testing.T) {
+	type item struct {
+		id     string
+		height int
+	}
+	pane := NewListPane(func(item item) string { return item.id })
+	pane.SetRowHeight(func(item item) int { return item.height })
+	pane.SetItems([]item{
+		{id: "a", height: 1},
+		{id: "b", height: 1},
+		{id: "c", height: 1},
+		{id: "d", height: 1},
+		{id: "e", height: 1},
+	})
+	pane.SetSize(12, 3)
+	pane.Select("d")
+	pane.SetItems([]item{
+		{id: "a", height: 1},
+		{id: "b", height: 3},
+		{id: "c", height: 1},
+		{id: "neighbor", height: 1},
+		{id: "e", height: 1},
+	})
+	before := pane.Position()
+	if before.Offset != 2 {
+		t.Fatalf("SetItems left neighbor outside the visible budget: %+v", before)
+	}
+
+	pane.Render(func(item item, _ int, _ bool, _ int) string { return item.id })
+
+	if after := pane.Position(); after != before {
+		t.Fatalf("render mutated list position from %+v to %+v", before, after)
+	}
+}
+
 func TestListPaneResizePreservesSelectionAndVisibleOffset(t *testing.T) {
 	t.Parallel()
 
@@ -194,6 +229,26 @@ func TestListPaneMouseWheelFollowsFocus(t *testing.T) {
 	selected, _, _ = pane.Selected()
 	if selected != "a" {
 		t.Fatalf("selection = %q, want a after wheel up", selected)
+	}
+}
+
+func TestListPaneRestoresStableTopAnchorAfterReorder(t *testing.T) {
+	pane := NewListPane(func(item string) string { return item })
+	pane.SetItems([]string{"a", "b", "c", "d", "e"})
+	pane.SetSize(20, 2)
+	pane.SetFocused(true)
+	pane.Select("d")
+	anchor := pane.Anchor()
+	if anchor == "" {
+		t.Fatal("scrolled list did not expose a stable top anchor")
+	}
+
+	pane.SetItems([]string{"x", "a", "b", "c", "d", "e"})
+	if !pane.RestoreAnchor(anchor) {
+		t.Fatalf("failed to restore existing anchor %q", anchor)
+	}
+	if got := pane.Anchor(); got != anchor {
+		t.Fatalf("restored top anchor = %q, want %q", got, anchor)
 	}
 }
 

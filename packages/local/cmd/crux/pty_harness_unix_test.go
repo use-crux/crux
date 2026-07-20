@@ -16,13 +16,18 @@ import (
 
 func runCruxPTYHelp(t testing.TB) string {
 	t.Helper()
+	return runCruxPTY(t, []string{"--help"}, []string{"NO_COLOR=1", "TERM=dumb"})
+}
+
+func runCruxPTY(t testing.TB, args, environment []string) string {
+	t.Helper()
 
 	binary := buildCruxTestBinary(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 
-	command := exec.CommandContext(ctx, binary, "--help")
-	command.Env = []string{"NO_COLOR=1", "TERM=dumb"}
+	command := exec.CommandContext(ctx, binary, args...)
+	command.Env = environment
 	terminal, err := pty.StartWithSize(command, &pty.Winsize{Rows: 24, Cols: 80})
 	if err != nil {
 		t.Fatalf("start crux help in PTY: %v", err)

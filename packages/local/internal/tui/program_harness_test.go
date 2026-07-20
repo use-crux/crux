@@ -11,6 +11,10 @@ import (
 )
 
 func runTestProgram(t testing.TB, model tea.Model, input string) (tea.Model, string, error) {
+	return runTestProgramAtSize(t, model, input, 80, 24)
+}
+
+func runTestProgramAtSize(t testing.TB, model tea.Model, input string, width, height int) (tea.Model, string, error) {
 	t.Helper()
 
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
@@ -23,7 +27,7 @@ func runTestProgram(t testing.TB, model tea.Model, input string) (tea.Model, str
 		tea.WithInput(strings.NewReader(input)),
 		tea.WithOutput(&output),
 		tea.WithEnvironment([]string{"NO_COLOR=1", "TERM=dumb"}),
-		tea.WithWindowSize(80, 24),
+		tea.WithWindowSize(width, height),
 		tea.WithoutSignalHandler(),
 	)
 	final, err := program.Run()

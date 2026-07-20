@@ -15,10 +15,17 @@ var navIDByGoKey = map[string]string{
 	"p": "index", // `g p` = project index
 }
 
+func browserBinding() key.Binding {
+	return key.NewBinding(key.WithKeys("o"), key.WithHelp("o", "open browser"))
+}
+
 func (w *Workbench) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	keyName := msg.String()
 
 	// Overlays consume keys exclusively while open.
+	if w.definitionChooser.IsOpen() {
+		return w.definitionChooser.Update(msg)
+	}
 	if w.inspect.IsOpen() {
 		return w.inspect.Update(msg)
 	}
@@ -47,6 +54,12 @@ func (w *Workbench) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 			return w.gotoNav(id)
 		}
 		return nil
+	}
+
+	// Browser opening is a reserved workspace action. Editors and claimed
+	// prefixes above still own text, but workflow actions cannot shadow `o`.
+	if w.openBrowser != nil && key.Matches(msg, browserBinding()) {
+		return w.browserAction().Run()
 	}
 
 	// Migrated screens list focused-pane actions before workflow actions.
@@ -111,13 +124,16 @@ func (w *Workbench) workspaceActions() []interaction.Action {
 			ID:      "workspace.quit",
 			Binding: key.NewBinding(key.WithKeys("q"), key.WithHelp("q", "quit")),
 			Run: func() tea.Cmd {
-				if w.onQuitRequested != nil {
-					w.onQuitRequested()
+				if w.requestShutdown != nil {
+					return w.requestShutdown()
 				}
-				return tea.Quit
+				return nil
 			},
 		},
 	)
+	if w.openBrowser != nil {
+		actions = append(actions, w.browserAction())
+	}
 	for _, nav := range w.navigationItems() {
 		nav := nav
 		actions = append(actions, interaction.Action{

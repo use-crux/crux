@@ -1,10 +1,12 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -16,6 +18,45 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/privacy"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
+
+func TestQuietDevServerDoesNotReplaceProcessLogger(t *testing.T) {
+	root := t.TempDir()
+	t.Chdir(root)
+	started := make(chan struct{})
+	finish := make(chan struct{})
+	opts := devServerTestOptions(t, findFreePort())
+	opts.Quiet = true
+	opts.ProjectIndexer = fakeProjectIndexer{}
+	opts.RuntimeArtifacts = func(context.Context, string, []store.ProjectDefinition) error {
+		close(started)
+		<-finish
+		return nil
+	}
+
+	previous := slog.Default()
+	var processLogs bytes.Buffer
+	processLogger := slog.New(slog.NewTextHandler(&processLogs, nil))
+	slog.SetDefault(processLogger)
+	t.Cleanup(func() { slog.SetDefault(previous) })
+
+	serverReady := make(chan *DevServer, 1)
+	go func() { serverReady <- NewDevServer(opts) }()
+	<-started
+	slog.Info("concurrent process log")
+	close(finish)
+	srv := <-serverReady
+	t.Cleanup(func() { _ = srv.Shutdown(context.Background()) })
+
+	if slog.Default() != processLogger {
+		t.Fatal("quiet dev server replaced the process-global logger")
+	}
+	if !strings.Contains(processLogs.String(), "concurrent process log") {
+		t.Fatalf("concurrent process log was redirected by quiet server: %q", processLogs.String())
+	}
+	if strings.Contains(processLogs.String(), "serving embedded UI") {
+		t.Fatalf("quiet server diagnostics escaped to process logger: %q", processLogs.String())
+	}
+}
 
 func findFreePort() int {
 	for port := 14400; port < 14500; port++ {

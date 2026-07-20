@@ -11,6 +11,7 @@ import (
 func (w *Workbench) Resize(width, height int) {
 	w.width = max(0, width)
 	w.height = max(0, height)
+	w.definitionChooser.Resize(w.width, w.height)
 	w.resizeActiveScreen()
 }
 

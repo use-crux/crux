@@ -133,7 +133,10 @@ func TestWorkbenchLegacyWorkflowPrecedesWorkspaceActions(t *testing.T) {
 	w := newTestWorkbench(nil, nil, "http://localhost:4400")
 	w.screens["overview"] = screen
 	quitRequested := false
-	w.SetQuitRequestedCallback(func() { quitRequested = true })
+	w.setShutdownRequest(func() tea.Cmd {
+		quitRequested = true
+		return nil
+	})
 
 	w.Update(tea.KeyPressMsg(tea.Key{Text: "q", Code: 'q'}))
 

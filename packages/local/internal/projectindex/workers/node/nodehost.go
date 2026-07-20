@@ -16,11 +16,12 @@ type Script struct {
 }
 
 // NewWorker creates a lazy persistent Node worker for a Project Index phase.
-func NewWorker(name string, content []byte, scriptPath string, maxBytes int) *workerproc.Worker {
+func NewWorker(name string, content []byte, scriptPath string, maxBytes int, processOptions ...workerproc.Option) *workerproc.Worker {
 	options := []workerproc.Option{workerproc.WithMaxResponseBytes(maxBytes)}
 	if scriptPath != "" {
 		options = append(options, workerproc.WithScriptPath(scriptPath))
 	}
+	options = append(options, processOptions...)
 	return workerproc.New(workerproc.Script{Name: name, Content: content}, options...)
 }
 

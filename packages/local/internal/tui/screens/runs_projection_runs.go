@@ -8,29 +8,6 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/api"
 )
 
-// inspectRunFromObservability adapts only the run metadata consumed by the
-// temporary legacy waterfall renderers. Resource state keeps the source
-// ObservabilityRunSummary unchanged.
-func inspectRunFromObservability(run api.ObservabilityRunSummary) api.InspectRunRecord {
-	metrics := observabilityMetrics(run.Metrics)
-	cost := optionalFloatMetric(metrics, "costUsd")
-	return api.InspectRunRecord{
-		Tag:           "InspectRun",
-		TraceID:       run.RunID,
-		TargetID:      firstNonEmpty(run.Name, run.RootPrimitive, run.RunID),
-		PromptID:      optionalString(run.PromptID),
-		Status:        normalizeObservabilityStatus(run.Status),
-		StartedAt:     parseObservabilityTime(run.StartedAt),
-		DurationMs:    durationPointer(run.DurationMs),
-		Model:         run.Model,
-		Provider:      run.Provider,
-		TokenCount:    intMetric(metrics, "totalTokens"),
-		Cost:          cost,
-		TraceCount:    maxInt(1, run.SpanCount),
-		ToolCallCount: 0,
-	}
-}
-
 func observabilityMetrics(raw json.RawMessage) map[string]any {
 	if len(raw) == 0 {
 		return nil
@@ -51,25 +28,6 @@ func intMetric(metrics map[string]any, key string) int {
 	default:
 		return 0
 	}
-}
-
-func optionalFloatMetric(metrics map[string]any, key string) *float64 {
-	switch value := metrics[key].(type) {
-	case float64:
-		return &value
-	case int:
-		f := float64(value)
-		return &f
-	default:
-		return nil
-	}
-}
-
-func optionalString(value string) *string {
-	if value == "" {
-		return nil
-	}
-	return &value
 }
 
 func addStringAttr(attrs map[string]string, key string, value string) {

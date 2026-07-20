@@ -76,8 +76,8 @@ func TestRunsDetailRejectsLateResultFromPreviousSelection(t *testing.T) {
 	if !snapshot.HasValue || snapshot.Value.Run.RunID != "run-b" {
 		t.Fatalf("detail resource owner = %#v, want run-b", snapshot)
 	}
-	if runs.detail == nil || runs.detail.Run.TraceID != "run-b" {
-		t.Fatalf("rendered detail = %#v, want run-b", runs.detail)
+	if runs.diagnosis == nil || runs.diagnosis.Summary.RunID != "run-b" {
+		t.Fatalf("rendered diagnosis = %#v, want run-b", runs.diagnosis)
 	}
 }
 
@@ -107,8 +107,8 @@ func TestRunsDetailRejectsResultOlderThanSelectedSummary(t *testing.T) {
 	runs.Update(ctx, runs.fetchRunDetail(ctx, client, "run-b")(), client)
 
 	snapshot := runs.detailResource.Snapshot()
-	if snapshot.HasValue || runs.detail != nil {
-		t.Fatalf("stale detail was retained: resource=%#v view=%#v", snapshot, runs.detail)
+	if snapshot.HasValue || runs.diagnosis != nil {
+		t.Fatalf("stale detail was retained: resource=%#v view=%#v", snapshot, runs.diagnosis)
 	}
 }
 
@@ -119,14 +119,14 @@ func TestRunsSameOwnerRefreshKeepsLastGoodDetailVisible(t *testing.T) {
 		Run:  api.ObservabilityRunSummary{RunID: "run-b", Revision: 9},
 		Root: api.ObservabilityRunDetailNode{ID: "root"},
 	})
-	previous := runs.detail
+	previous := runs.diagnosis
 
 	cmd := runs.activateFocus(testContext, &detailRaceClient{FixtureClient: uitest.NewFixtureClient()})
 
 	if cmd == nil {
 		t.Fatal("same-owner refresh did not schedule a request")
 	}
-	if runs.detail != previous || runs.detail == nil {
+	if runs.diagnosis != previous || runs.diagnosis == nil {
 		t.Fatal("same-owner refresh hid the last-good rendered detail")
 	}
 	snapshot := runs.detailResource.Snapshot()
@@ -150,8 +150,8 @@ func TestRunsClearedSelectionRejectsPendingDetail(t *testing.T) {
 	if got := runs.SelectedRunID(); got != "" {
 		t.Fatalf("selection = %q, want cleared", got)
 	}
-	if snapshot := runs.detailResource.Snapshot(); snapshot.HasValue || runs.detail != nil {
-		t.Fatalf("cleared selection accepted pending detail: resource=%#v view=%#v", snapshot, runs.detail)
+	if snapshot := runs.detailResource.Snapshot(); snapshot.HasValue || runs.diagnosis != nil {
+		t.Fatalf("cleared selection accepted pending detail: resource=%#v view=%#v", snapshot, runs.diagnosis)
 	}
 }
 
@@ -174,8 +174,8 @@ func TestRunsRefreshToEmptyFilterClearsAndCancelsSelection(t *testing.T) {
 	), client)
 	runs.Update(ctx, pending(), client)
 
-	if selectedID := runs.SelectedRunID(); selectedID != "" || runs.SelectedSpanID() != "" || runs.detail != nil {
-		t.Fatalf("empty filtered refresh retained selection/detail: run=%q span=%q detail=%#v", selectedID, runs.SelectedSpanID(), runs.detail)
+	if selectedID := runs.SelectedRunID(); selectedID != "" || runs.SelectedSpanID() != "" || runs.diagnosis != nil {
+		t.Fatalf("empty filtered refresh retained selection/detail: run=%q span=%q detail=%#v", selectedID, runs.SelectedSpanID(), runs.diagnosis)
 	}
 	if snapshot := runs.detailResource.Snapshot(); snapshot.Refreshing {
 		t.Fatalf("empty filtered refresh left detail request active: %#v", snapshot)
@@ -196,8 +196,8 @@ func TestRunsRoutedDetailMetadataReconcilesActiveFilter(t *testing.T) {
 
 		runs.Update(testContext, runDetailLoadedForTest(runs, detail), nil)
 
-		if selectedID := runs.SelectedRunID(); selectedID != "" || runs.detail != nil {
-			t.Fatalf("resolved route retained filtered selection/detail: run=%q detail=%#v", selectedID, runs.detail)
+		if selectedID := runs.SelectedRunID(); selectedID != "" || runs.diagnosis != nil {
+			t.Fatalf("resolved route retained filtered selection/detail: run=%q detail=%#v", selectedID, runs.diagnosis)
 		}
 	})
 
@@ -214,8 +214,8 @@ func TestRunsRoutedDetailMetadataReconcilesActiveFilter(t *testing.T) {
 		if got := runs.SelectedRunID(); got != "neighbor" {
 			t.Fatalf("resolved route selected %q, want neighbor", got)
 		}
-		if runs.detail != nil {
-			t.Fatalf("resolved route retained stale detail: %#v", runs.detail)
+		if runs.diagnosis != nil {
+			t.Fatalf("resolved route retained stale detail: %#v", runs.diagnosis)
 		}
 		if cmd == nil {
 			t.Fatal("resolved route did not schedule neighbor detail fetch")
@@ -231,7 +231,7 @@ func TestRunsNewerListRevisionRefreshesOlderSelectedDetail(t *testing.T) {
 		Run:  api.ObservabilityRunSummary{RunID: "run-a", Revision: 5},
 		Root: api.ObservabilityRunDetailNode{ID: "root"},
 	})
-	previous := runs.detail
+	previous := runs.diagnosis
 
 	cmd := runs.Update(testContext, runsListLoadedForTest(runs,
 		api.ObservabilityRunSummary{RunID: "run-a", Revision: 6},
@@ -240,7 +240,7 @@ func TestRunsNewerListRevisionRefreshesOlderSelectedDetail(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("newer selected summary did not refresh older detail")
 	}
-	if runs.detail != previous || runs.detail == nil {
+	if runs.diagnosis != previous || runs.diagnosis == nil {
 		t.Fatal("revision refresh hid the last-good rendered detail")
 	}
 	snapshot := runs.detailResource.Snapshot()

@@ -64,11 +64,11 @@ func buildRunWithSpan() *Runs {
 	r := NewRuns()
 	setRunsForTest(r)
 	body, _ := json.Marshal(map[string]any{"hello": "world"})
-	r.detail = &api.InspectRunDetailRecord{
+	setRunDiagnosisForTest(r, runDiagnosisFixture{
 		Spans: []api.InspectRunSpan{
 			{ID: "sp1", Name: "agent.run", Data: json.RawMessage(body)},
 		},
-	}
+	})
 	selectRunForTest(r, "8af2f1c")
 	selectSpanForTest(r, "sp1")
 	return r

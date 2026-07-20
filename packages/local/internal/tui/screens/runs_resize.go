@@ -1,58 +1,88 @@
 package screens
 
-import "github.com/use-crux/crux/packages/local/internal/tui/kit"
+import (
+	"strings"
+
+	"github.com/use-crux/crux/packages/local/internal/tui/kit"
+)
+
+const (
+	runsMinimumBodyWidth  = 60
+	runsMinimumBodyHeight = 17
+
+	// runsMinimumTerminalLabel is the user-facing terminal contract matching
+	// the body minimum with the Workbench's current chrome. Layout decisions
+	// remain based solely on the received body rectangle.
+	runsMinimumTerminalLabel = "60×20"
+)
 
 // Resize distributes the concrete screen body size to Runs' stateful panes.
 // Workbench calls it before input, so navigation never depends on a prior
 // render pass.
 func (s *Runs) Resize(size Size) {
 	s.size = Size{Width: max(0, size.Width), Height: max(0, size.Height)}
-	listRect, documentRect := runsPaneRects(s.size)
-	s.runList.SetSize(listRect.W, max(0, listRect.H-3))
-	waterfallRect := runsWaterfallRect(s.size)
+	s.layout = prepareRunsLayout(s.size)
+	s.runList.SetSize(s.layout.list.W, max(0, s.layout.list.H-3))
 	s.syncSpanRows()
-	s.spanList.SetSize(waterfallRect.W, s.waterfallSpanHeight(waterfallRect.W, waterfallRect.H))
-	s.resizeSpanDocument(documentRect)
+	s.spanList.SetSize(s.layout.evidence.W, s.waterfallSpanHeight(s.layout.evidence.W, s.layout.evidence.H))
+	s.resizeSpanDocument(s.layout.detail)
 }
 
-func runsPaneRects(size Size) (list, document kit.Rect) {
-	root := kit.Rect{W: size.Width, H: size.Height}
-	switch kit.Classify(size.Width) {
-	case kit.LayoutFull:
-		panes := kit.SplitH(root, kit.Fixed(26), kit.Fill(), kit.Min(34))
-		return panes[0], panes[2]
-	case kit.LayoutTwo:
-		panes := kit.SplitH(root, kit.Fixed(26), kit.Fill())
-		return panes[0], panes[1]
-	default:
-		return root, root
-	}
+type runsLayoutMode uint8
+
+const (
+	runsLayoutTooSmall runsLayoutMode = iota
+	runsLayoutNarrow
+	runsLayoutMedium
+	runsLayoutWide
+)
+
+type runsLayout struct {
+	size     Size
+	mode     runsLayoutMode
+	list     kit.Rect
+	evidence kit.Rect
+	detail   kit.Rect
 }
 
-func runsWaterfallRect(size Size) kit.Rect {
+func prepareRunsLayout(size Size) runsLayout {
 	root := kit.Rect{W: size.Width, H: size.Height}
-	switch kit.Classify(size.Width) {
-	case kit.LayoutFull:
-		panes := kit.SplitH(root, kit.Fixed(26), kit.Fill(), kit.Min(34))
-		return panes[1]
-	case kit.LayoutTwo:
-		panes := kit.SplitH(root, kit.Fixed(26), kit.Fill())
-		return panes[1]
-	default:
-		return root
+	layout := runsLayout{size: size, mode: runsLayoutNarrow, list: root, evidence: root, detail: root}
+	const (
+		listWidth        = 26
+		evidenceMinWidth = 44
+		detailMinWidth   = 34
+	)
+	if root.W < runsMinimumBodyWidth || root.H < runsMinimumBodyHeight {
+		layout.mode = runsLayoutTooSmall
+		return layout
 	}
+	if root.W >= listWidth+evidenceMinWidth+detailMinWidth+2 {
+		panes := kit.SplitH(root, kit.Fixed(listWidth), kit.Fill(), kit.Min(detailMinWidth))
+		layout.mode = runsLayoutWide
+		layout.list, layout.evidence, layout.detail = panes[0], panes[1], panes[2]
+		return layout
+	}
+	if root.W >= listWidth+evidenceMinWidth+1 {
+		panes := kit.SplitH(root, kit.Fixed(listWidth), kit.Fill())
+		layout.mode = runsLayoutMedium
+		layout.list, layout.evidence, layout.detail = panes[0], panes[1], panes[1]
+	}
+	return layout
 }
 
 func (s *Runs) resizeSpanDocument(rect kit.Rect) {
-	s.spanDocument.SetSize(rect.W, max(0, rect.H-3))
+	headerHeight := strings.Count(s.spanDetailHeader(rect.W, rect.H), "\n") + 1
+	s.spanDocument.SetSize(rect.W, max(0, rect.H-headerHeight))
 	s.spanDocument.SetFocused(s.focus == focusSpanDetail)
-	if s.detail == nil || len(s.detail.Spans) == 0 {
-		s.spanDocument.SetContent("", "")
-		return
-	}
 	span := s.currentSpan()
 	if span == nil {
-		span = &s.detail.Spans[0]
+		if s.diagnosis == nil {
+			s.spanDocument.SetContent("", "")
+			return
+		}
+		s.spanDocument.SetContent(s.SelectedRunID()+":diagnosis", renderDiagnosisOverview(s.diagnosis, rect.W))
+		return
 	}
 	s.spanDocument.SetContent(s.SelectedRunID()+":"+span.ID, s.renderSpanDetailDocument(span, rect.W))
 }

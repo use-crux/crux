@@ -17,3 +17,17 @@ func TestPTYRootHelpExitsWithoutControlSequences(t *testing.T) {
 		t.Fatalf("PTY help contained a terminal escape sequence:\n%q", transcript)
 	}
 }
+
+func TestPTYRootHelpNoColorFlagDisablesControlSequences(t *testing.T) {
+	transcript := runCruxPTY(t,
+		[]string{"--no-color", "--help"},
+		[]string{"TERM=xterm-256color"},
+	)
+
+	if !strings.Contains(transcript, "crux <command> [flags]") {
+		t.Fatalf("PTY help missing usage:\n%s", transcript)
+	}
+	if strings.Contains(transcript, "\x1b") {
+		t.Fatalf("PTY help with --no-color contained a terminal escape sequence:\n%q", transcript)
+	}
+}

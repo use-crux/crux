@@ -58,7 +58,7 @@ func NewIndexCmd(f *cli.Factory) *cobra.Command {
 				return err
 			}
 			if jsonOutput {
-				return output.JSON(index)
+				return f.Streams().WriteJSON(index)
 			}
 			io := f.Streams()
 			fmt.Fprintf(io.Out, "%s indexed %d definitions, %d relations, %d diagnostics\n",
@@ -131,15 +131,15 @@ func runLegacyIndexCategory(ctx context.Context, f *cli.Factory, filter string, 
 	if jsonOutput {
 		switch filter {
 		case "prompts":
-			return output.JSON(index.Prompts)
+			return f.Streams().WriteJSON(index.Prompts)
 		case "contexts":
-			return output.JSON(index.Contexts)
+			return f.Streams().WriteJSON(index.Contexts)
 		case "tools":
-			return output.JSON(index.Tools)
+			return f.Streams().WriteJSON(index.Tools)
 		case "definitions":
-			return output.JSON(index.Definitions)
+			return f.Streams().WriteJSON(index.Definitions)
 		default:
-			return output.JSON(index.Diagnostics)
+			return f.Streams().WriteJSON(index.Diagnostics)
 		}
 	}
 	printIndex(f.Streams(), index, filter)

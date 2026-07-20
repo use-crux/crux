@@ -117,33 +117,17 @@ func (c *FixtureClient) fixtureRuns() []api.InspectRunRecord {
 func (c *FixtureClient) RunsWithOptions(ctx context.Context, _ api.InspectRunsOptions) ([]api.InspectRunRecord, error) {
 	return c.Runs(ctx)
 }
-func (c *FixtureClient) RunDetail(_ context.Context, traceID string) (api.InspectRunDetailRecord, bool, error) {
-	if traceID != "8af2f1c" {
-		return api.InspectRunDetailRecord{}, false, nil
-	}
-	run := c.fixtureRuns()[0]
-	return api.InspectRunDetailRecord{
-		Tag: "InspectRunDetailRecord",
-		Run: run,
-		Trace: api.InspectTraceRecord{
-			TraceID:    run.TraceID,
-			StartedAt:  c.Now.Add(-14 * time.Minute).UnixMilli(),
-			Model:      "gpt-5",
-			Provider:   "openai",
-			DurationMs: run.DurationMs,
-			Status:     run.Status,
-		},
-		Spans: c.fixtureRunSpans(run.TraceID),
-	}, true, nil
-}
 func (c *FixtureClient) ObservabilityRuns(context.Context) ([]api.ObservabilityRunSummary, error) {
 	return nil, nil
 }
 func (c *FixtureClient) ObservabilityRunsPage(context.Context) (api.ObservabilityRunsPage, error) {
 	return api.ObservabilityRunsPage{}, nil
 }
-func (c *FixtureClient) ObservabilityRunDetail(context.Context, string) (api.ObservabilityRunDetail, bool, error) {
-	return api.ObservabilityRunDetail{}, false, nil
+func (c *FixtureClient) ObservabilityRunDetail(_ context.Context, traceID string) (api.ObservabilityRunDetail, bool, error) {
+	if traceID != "8af2f1c" {
+		return api.ObservabilityRunDetail{}, false, nil
+	}
+	return c.fixtureRunDetail(traceID), true, nil
 }
 func (c *FixtureClient) ObservabilityResourceActivity(context.Context, string) ([]api.ObservabilityResourceActivity, error) {
 	return nil, nil
@@ -153,14 +137,6 @@ func (c *FixtureClient) ProjectIndex(context.Context) (api.IndexData, error) {
 }
 func (c *FixtureClient) DevtoolsContext(context.Context) (api.DevtoolsContext, error) {
 	return api.DevtoolsContext{}, nil
-}
-func (c *FixtureClient) SubscribeInspect(ctx context.Context) <-chan api.InspectEvent {
-	ch := make(chan api.InspectEvent)
-	go func() {
-		<-ctx.Done()
-		close(ch)
-	}()
-	return ch
 }
 func (c *FixtureClient) InsightSilences(context.Context, bool) ([]api.InspectInsightSilenceRecord, error) {
 	return nil, nil

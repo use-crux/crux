@@ -117,12 +117,22 @@ func TestWidthClamp(t *testing.T) {
 }
 
 func TestTestIOAccessors(t *testing.T) {
+	input := strings.NewReader("typed input")
 	io := NewTestIO(&bytes.Buffer{}, &bytes.Buffer{}, TestIOOptions{
+		In:           input,
+		StdinTTY:     true,
 		StdoutTTY:    true,
 		StderrTTY:    false,
 		ColorEnabled: true,
 		CI:           true,
+		Term:         "xterm-256color",
 	})
+	if io.In != input {
+		t.Fatal("NewTestIO did not retain injected input")
+	}
+	if !io.IsStdinTTY() {
+		t.Error("IsStdinTTY() = false, want true")
+	}
 	if !io.IsStdoutTTY() {
 		t.Error("IsStdoutTTY() = false, want true")
 	}
@@ -134,5 +144,8 @@ func TestTestIOAccessors(t *testing.T) {
 	}
 	if !io.IsCI() {
 		t.Error("IsCI() = false, want true")
+	}
+	if got := io.Terminal(); got != "xterm-256color" {
+		t.Errorf("Terminal() = %q, want xterm-256color", got)
 	}
 }

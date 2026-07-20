@@ -29,6 +29,8 @@ type config struct {
 	commandPath      string
 	commandArgs      []string
 	scriptPath       string
+	logger           *slog.Logger
+	stderr           io.Writer
 }
 
 // Option configures a Worker.
@@ -65,6 +67,22 @@ func WithScriptPath(path string) Option {
 	}
 }
 
+// WithLogger routes worker lifecycle diagnostics to logger. The process
+// default logger is used when this option is omitted.
+func WithLogger(logger *slog.Logger) Option {
+	return func(c *config) {
+		c.logger = logger
+	}
+}
+
+// WithStderr routes the child process diagnostic stream to stderr. The process
+// stderr is used when this option is omitted.
+func WithStderr(stderr io.Writer) Option {
+	return func(c *config) {
+		c.stderr = stderr
+	}
+}
+
 // Worker is a lazy, persistent JSON-line subprocess.
 type Worker struct {
 	mu      sync.Mutex
@@ -81,12 +99,20 @@ func New(script Script, opts ...Option) *Worker {
 	cfg := config{
 		maxResponseBytes: defaultMaxResponseBytes,
 		nodeResolver:     FindNodePath,
+		logger:           slog.Default(),
+		stderr:           os.Stderr,
 	}
 	for _, opt := range opts {
 		opt(&cfg)
 	}
 	if cfg.nodeResolver == nil {
 		cfg.nodeResolver = FindNodePath
+	}
+	if cfg.logger == nil {
+		cfg.logger = slog.Default()
+	}
+	if cfg.stderr == nil {
+		cfg.stderr = io.Discard
 	}
 	return &Worker{script: script, config: cfg}
 }
@@ -102,7 +128,7 @@ func (w *Worker) Close() error {
 	if !w.spawned || w.cmd == nil || w.cmd.Process == nil {
 		return nil
 	}
-	slog.Info("stopping worker process", "script", w.script.Name)
+	w.config.logger.Info("stopping worker process", "script", w.script.Name)
 	if w.stdin != nil {
 		_ = w.stdin.Close()
 	}
@@ -115,7 +141,7 @@ func (w *Worker) Close() error {
 	select {
 	case err = <-errCh:
 	case <-time.After(closeGracePeriod):
-		slog.Warn("worker process did not exit after stdin close; killing process group", "script", w.script.Name)
+		w.config.logger.Warn("worker process did not exit after stdin close; killing process group", "script", w.script.Name)
 		killProcessGroup(cmd)
 		err = <-errCh
 		if err != nil {
@@ -156,7 +182,7 @@ func (w *Worker) ensureSpawned() error {
 		nodePath = resolved
 		cmd = exec.Command(nodePath, scriptPath)
 	}
-	cmd.Stderr = os.Stderr
+	cmd.Stderr = w.config.stderr
 	configureProcessGroup(cmd)
 
 	stdin, err := cmd.StdinPipe()
@@ -181,7 +207,7 @@ func (w *Worker) ensureSpawned() error {
 	if nodePath != "" {
 		attrs = append(attrs, "node", nodePath, "nodeVersion", NodeVersion(nodePath))
 	}
-	slog.Info("worker process started", attrs...)
+	w.config.logger.Info("worker process started", attrs...)
 	return nil
 }
 
@@ -190,7 +216,7 @@ func (w *Worker) killLocked() {
 		w.resetLocked()
 		return
 	}
-	slog.Warn("stopping worker process after request failure", "script", w.script.Name)
+	w.config.logger.Warn("stopping worker process after request failure", "script", w.script.Name)
 	killProcessGroup(w.cmd)
 	if w.stdin != nil {
 		_ = w.stdin.Close()

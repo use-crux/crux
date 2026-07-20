@@ -2,12 +2,16 @@ package source
 
 import (
 	"encoding/json"
+	"io"
 	"log/slog"
 	"net/http"
 )
 
-func RegisterRoutes(mux *http.ServeMux, scriptPath string, embeddedScript []byte, projectRoot string) {
-	worker := New(scriptPath, embeddedScript, projectRoot)
+func RegisterRoutes(mux *http.ServeMux, scriptPath string, embeddedScript []byte, projectRoot string, logger *slog.Logger, stderr io.Writer) {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	worker := New(scriptPath, embeddedScript, projectRoot, WorkerOptions{Logger: logger, Stderr: stderr})
 	mux.HandleFunc("POST /api/resolve-source", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			Locations []Location `json:"locations"`
@@ -18,7 +22,7 @@ func RegisterRoutes(mux *http.ServeMux, scriptPath string, embeddedScript []byte
 		}
 		resolved, err := worker.ResolveLocations(r.Context(), req.Locations)
 		if err != nil {
-			slog.Error("source resolution failed", "error", err)
+			logger.Error("source resolution failed", "error", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -36,7 +40,7 @@ func RegisterRoutes(mux *http.ServeMux, scriptPath string, embeddedScript []byte
 		}
 		result, err := worker.ResolveFn(r.Context(), req.File, req.Line, req.Column)
 		if err != nil {
-			slog.Error("fn source resolution failed", "error", err)
+			logger.Error("fn source resolution failed", "error", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -50,7 +54,7 @@ func RegisterRoutes(mux *http.ServeMux, scriptPath string, embeddedScript []byte
 		}
 		result, err := worker.ResolveFrame(r.Context(), req)
 		if err != nil {
-			slog.Error("source frame resolution failed", "error", err)
+			logger.Error("source frame resolution failed", "error", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}

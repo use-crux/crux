@@ -61,10 +61,20 @@ func (w *Workbench) gotoNav(id string) tea.Cmd {
 		return nil
 	}
 	if id == w.activeNav {
+		rootTarget := NavTarget{NavID: id}
+		if root, ok := dest.(screens.RootScreen); ok && w.activeTarget != rootTarget {
+			w.rememberCurrentLocation(rootTarget)
+			root.FocusRoot()
+			w.activeTarget = rootTarget
+			w.resizeActiveScreen()
+		}
 		return nil
 	}
 	target := NavTarget{NavID: id}
 	w.rememberCurrentLocation(target)
+	if root, ok := dest.(screens.RootScreen); ok {
+		root.FocusRoot()
+	}
 	if kind, hasKind := navKind[id]; hasKind {
 		if recID := w.GetSelection(kind); recID != "" {
 			target.Kind = kind
@@ -82,16 +92,23 @@ func (w *Workbench) activateTarget(target NavTarget, forceInit bool) tea.Cmd {
 	if !ok {
 		return nil
 	}
-	stale := w.stale[target.NavID]
-	needsInit := forceInit || !w.initialized[target.NavID] || (stale != nil && !stale.Empty())
+	w.deactivateActiveResources(target.NavID)
 	w.activeNav = target.NavID
 	w.activeTarget = target
-	delete(w.stale, target.NavID)
+	if migrated, ok := dest.(screens.ResourceScreen); ok {
+		invalidations := w.invalidated[target.NavID]
+		delete(w.invalidated, target.NavID)
+		w.resizeActiveScreen()
+		return migrated.Refresh(w.ctx, w.client, invalidations)
+	}
+	stale := w.legacyStale[target.NavID]
+	needsInit := forceInit || !w.legacyInitialized[target.NavID] || (stale != nil && !stale.Empty())
+	delete(w.legacyStale, target.NavID)
 	w.resizeActiveScreen()
 	if !needsInit {
 		return nil
 	}
-	w.initialized[target.NavID] = true
+	w.legacyInitialized[target.NavID] = true
 	return dest.Init(w.ctx, w.client)
 }
 
@@ -125,11 +142,16 @@ func (w *Workbench) goBack() tea.Cmd {
 	w.history = w.history[:last]
 	cmd := w.activateTarget(location.Target, false)
 	if screen, ok := w.activeScreen().(screens.LocationScreen); ok {
-		screen.RestoreLocation(screens.ScreenLocation{
+		owned := screens.ScreenLocation{
 			FocusedPane: location.FocusedPane,
 			SelectedIDs: cloneStringMap(location.SelectedIDs),
 			Anchors:     cloneStringMap(location.Anchors),
-		})
+		}
+		if refreshing, ok := screen.(screens.RefreshingLocationScreen); ok {
+			cmd = tea.Batch(cmd, refreshing.RestoreLocationRefresh(w.ctx, owned, w.client))
+		} else {
+			screen.RestoreLocation(owned)
+		}
 	}
 	w.resizeActiveScreen()
 	return cmd

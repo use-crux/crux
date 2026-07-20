@@ -12,7 +12,7 @@ import (
 
 func TestRunsHierarchyKeepsFocusedSelectionVisibleAndDetailScrollIndependent(t *testing.T) {
 	runs := newScrollableHierarchyRuns()
-	size := Size{Width: 100, Height: 7}
+	size := Size{Width: 100, Height: 17}
 	runs.Resize(size)
 
 	for range 6 {
@@ -45,7 +45,7 @@ func TestRunsHierarchyRefreshPreservesSelectedSpanIdentity(t *testing.T) {
 		hierarchyNode("span-a", "span A"),
 		hierarchyNode("span-b", "span B"),
 	))
-	runs.Resize(Size{Width: 100, Height: 12})
+	runs.Resize(Size{Width: 100, Height: 17})
 	runs.setFocus(focusWaterfall)
 	runs.Update(testContext, tea.KeyPressMsg{Text: "j", Code: 'j'}, nil)
 	runs.Update(testContext, tea.KeyPressMsg{Text: "j", Code: 'j'}, nil)
@@ -62,7 +62,7 @@ func TestRunsHierarchyRefreshPreservesSelectedSpanIdentity(t *testing.T) {
 	if !ok || selected.ID != "span-b" || runs.spanList.Position().Total != 4 {
 		t.Fatalf("pane after refresh = selected %#v, position %#v; want span-b among four current rows", selected, runs.spanList.Position())
 	}
-	view := stripANSI(viewRunsForTest(runs, Size{Width: 100, Height: 12}))
+	view := stripANSI(viewRunsForTest(runs, Size{Width: 100, Height: 17}))
 	if !lineContaining(view, "span B refreshed", "▌") {
 		t.Fatalf("refresh did not retain the selection marker on span-b:\n%s", view)
 	}
@@ -124,10 +124,11 @@ func newScrollableHierarchyRuns() *Runs {
 			},
 		}
 	}
-	runs.detail = &api.InspectRunDetailRecord{
-		Run:   api.InspectRunRecord{TraceID: "run-hierarchy", DurationMs: &duration},
-		Spans: spans,
-	}
+	setRunDiagnosisForTest(runs, runDiagnosisFixture{
+		RunID:      "run-hierarchy",
+		DurationMs: duration,
+		Spans:      spans,
+	})
 	selectSpanForTest(runs, spans[0].ID)
 	runs.setFocus(focusWaterfall)
 	return runs

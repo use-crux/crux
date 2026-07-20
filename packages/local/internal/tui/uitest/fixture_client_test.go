@@ -1,33 +1,36 @@
 package uitest
 
-import "testing"
+import (
+	"testing"
 
-func TestFixtureClientRunDetail(t *testing.T) {
+	"github.com/use-crux/crux/packages/local/internal/api"
+)
+
+func TestFixtureClientObservabilityRunDetail(t *testing.T) {
 	client := NewFixtureClient()
-	detail, found, err := client.RunDetail(nil, "8af2f1c")
+	detail, found, err := client.ObservabilityRunDetail(nil, "8af2f1c")
 	if err != nil {
-		t.Fatalf("RunDetail returned error: %v", err)
+		t.Fatalf("ObservabilityRunDetail returned error: %v", err)
 	}
 	if !found {
-		t.Fatal("RunDetail did not find fixture trace 8af2f1c")
+		t.Fatal("ObservabilityRunDetail did not find fixture trace 8af2f1c")
 	}
-	if len(detail.Spans) < 8 {
-		t.Fatalf("RunDetail spans = %d, want a mockup-shaped trace", len(detail.Spans))
-	}
-	hasLinkedInsight := false
-	hasDuplicate := false
-	for _, span := range detail.Spans {
-		if len(span.LinkedInsightIDs) > 0 {
-			hasLinkedInsight = true
-		}
-		if span.Duplicate {
-			hasDuplicate = true
+	var nodes int
+	var visit func(api.ObservabilityRunDetailNode)
+	visit = func(node api.ObservabilityRunDetailNode) {
+		nodes++
+		for _, child := range node.Children {
+			visit(child)
 		}
 	}
-	if !hasLinkedInsight {
-		t.Fatal("RunDetail fixture has no linked insight span")
+	visit(detail.Root)
+	if nodes < 8 {
+		t.Fatalf("ObservabilityRunDetail nodes = %d, want a mockup-shaped trace", nodes)
 	}
-	if !hasDuplicate {
-		t.Fatal("RunDetail fixture has no duplicate span")
+	if detail.Root.SpanID != "root" || len(detail.Root.Children) != 4 {
+		t.Fatalf("ObservabilityRunDetail root = %#v, want nested production shape", detail.Root)
+	}
+	if detail.Run.SpanCount != nodes {
+		t.Fatalf("ObservabilityRunDetail spanCount = %d, nodes = %d", detail.Run.SpanCount, nodes)
 	}
 }

@@ -18,6 +18,13 @@ type DocumentPosition struct {
 	Offset     int
 }
 
+// DocumentAnchor identifies the source line and terminal cell at the top of a
+// document viewport independently of its current wrapped-line offset.
+type DocumentAnchor struct {
+	SourceLine int
+	SourceCell int
+}
+
 // DocumentPane owns focus, sizing, wrapping, and vertical scrolling for one
 // identified document. Callers retain ownership of the document's semantics.
 type DocumentPane struct {
@@ -102,6 +109,36 @@ func (p *DocumentPane) Position() DocumentPosition {
 		TotalLines: len(p.lines),
 		Offset:     p.offset,
 	}
+}
+
+// Anchor captures the logical source position at the top of the viewport.
+func (p *DocumentPane) Anchor() (DocumentAnchor, bool) {
+	anchor := p.topAnchor()
+	if !anchor.valid {
+		return DocumentAnchor{}, false
+	}
+	return DocumentAnchor{SourceLine: anchor.sourceLine, SourceCell: anchor.sourceCell}, true
+}
+
+// RestoreAnchor scrolls to the closest wrapped line at or before anchor's
+// source cell. It reports false when the source line is no longer present.
+func (p *DocumentPane) RestoreAnchor(anchor DocumentAnchor) bool {
+	best := -1
+	for index, line := range p.lines {
+		if line.sourceLine < anchor.SourceLine {
+			continue
+		}
+		if line.sourceLine > anchor.SourceLine || line.sourceCell > anchor.SourceCell {
+			break
+		}
+		best = index
+	}
+	if best < 0 {
+		return false
+	}
+	p.offset = best
+	p.clampOffset()
+	return true
 }
 
 // Update applies focused line navigation and reports whether the pane consumed

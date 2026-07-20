@@ -40,10 +40,11 @@ func runEvalWatch(cmd *cobra.Command, f *cli.Factory, opts runOptions, maxCostSe
 	if err := addEvalWatchDirs(watcher, root); err != nil {
 		return err
 	}
-	_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "watching %s; Ctrl-C to stop\n", root)
+	streams := f.Streams()
+	_, _ = fmt.Fprintf(streams.Err, "watching %s; Ctrl-C to stop\n", root)
 	for {
 		if err := runEvals(cmd, f, opts, maxCostSet); err != nil {
-			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Eval run failed: %v\n", err)
+			_, _ = fmt.Fprintf(streams.Err, "Eval run failed: %v\n", err)
 		}
 		if !awaitEvalChange(watcher) {
 			return nil
@@ -51,7 +52,7 @@ func runEvalWatch(cmd *cobra.Command, f *cli.Factory, opts runOptions, maxCostSe
 		if err := addEvalWatchDirs(watcher, root); err != nil {
 			return err
 		}
-		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "change detected; replanning affected selected Evals")
+		_, _ = fmt.Fprintln(streams.Err, "change detected; replanning affected selected Evals")
 	}
 }
 

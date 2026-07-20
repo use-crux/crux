@@ -49,9 +49,14 @@ func TestRuntimeOperationCommandsRouteToWorker(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			var out, errOut strings.Builder
+			streams := output.NewTestIO(&out, &errOut, output.TestIOOptions{})
 			called := false
-			runRuntimeOperationForCommand = func(_ context.Context, gotRoot, gotOperation, gotWorkID string) (json.RawMessage, error) {
+			runRuntimeOperationForCommand = func(_ context.Context, gotRoot, gotOperation, gotWorkID string, process commandWorkerProcess) (json.RawMessage, error) {
 				called = true
+				if process.stderr != streams.Err {
+					t.Fatal("runtime worker stderr did not use the factory IO")
+				}
 				if gotRoot != root {
 					t.Fatalf("root = %q, want %q", gotRoot, root)
 				}
@@ -64,10 +69,7 @@ func TestRuntimeOperationCommandsRouteToWorker(t *testing.T) {
 				return json.RawMessage(`{"operation":"` + tc.operation + `","ok":true}`), nil
 			}
 
-			cmd := NewRuntimeCmd(&cli.Factory{})
-			var out, errOut strings.Builder
-			cmd.SetOut(&out)
-			cmd.SetErr(&errOut)
+			cmd := NewRuntimeCmd(cli.NewFactoryWithStreams(streams))
 			cmd.SetArgs(tc.args)
 
 			if err := cmd.Execute(); err != nil {
@@ -135,7 +137,7 @@ func TestRuntimeGeneratePreflightReportsMissingNonTerminalTargets(t *testing.T) 
 	oldRunner := runRuntimeOperationForCommand
 	defer func() { runRuntimeOperationForCommand = oldRunner }()
 
-	runRuntimeOperationForCommand = func(_ context.Context, _, operation, _ string) (json.RawMessage, error) {
+	runRuntimeOperationForCommand = func(_ context.Context, _, operation, _ string, _ commandWorkerProcess) (json.RawMessage, error) {
 		switch operation {
 		case "preflight":
 			return json.RawMessage(`{
@@ -154,7 +156,7 @@ func TestRuntimeGeneratePreflightReportsMissingNonTerminalTargets(t *testing.T) 
 
 	var out, errOut bytes.Buffer
 	io := output.NewTestIO(&out, &errOut, output.TestIOOptions{ColorEnabled: false})
-	printRuntimeGeneratePreflight(io, t.TempDir(), json.RawMessage(`{
+	printRuntimeGeneratePreflight(context.Background(), io, t.TempDir(), json.RawMessage(`{
 	  "manifest": { "targets": [{ "name": "review", "kind": "flow" }] }
 	}`))
 
@@ -174,7 +176,7 @@ func TestRuntimeGeneratePreflightRendersPassingSetupWarnings(t *testing.T) {
 	oldRunner := runRuntimeOperationForCommand
 	defer func() { runRuntimeOperationForCommand = oldRunner }()
 
-	runRuntimeOperationForCommand = func(_ context.Context, _, operation, _ string) (json.RawMessage, error) {
+	runRuntimeOperationForCommand = func(_ context.Context, _, operation, _ string, _ commandWorkerProcess) (json.RawMessage, error) {
 		switch operation {
 		case "preflight":
 			return json.RawMessage(`{
@@ -201,7 +203,7 @@ func TestRuntimeGeneratePreflightRendersPassingSetupWarnings(t *testing.T) {
 
 	var out, errOut bytes.Buffer
 	io := output.NewTestIO(&out, &errOut, output.TestIOOptions{ColorEnabled: false})
-	printRuntimeGeneratePreflight(io, t.TempDir(), json.RawMessage(`{
+	printRuntimeGeneratePreflight(context.Background(), io, t.TempDir(), json.RawMessage(`{
 	  "manifest": { "targets": [] }
 	}`))
 

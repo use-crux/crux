@@ -11,6 +11,7 @@ import (
 )
 
 func (o *Overview) renderKPIStrip(width int) string {
+	summary := o.overviewSummary()
 	contentW := width - 3
 	if contentW < 4 {
 		contentW = 4
@@ -24,31 +25,31 @@ func (o *Overview) renderKPIStrip(width int) string {
 	//   Pass rate     → rose (going-down-is-bad)
 	//   Cost / latency → amber (going-up-is-bad)
 	o1 := o.kpiCell(cellW, "Open insights",
-		fmt.Sprintf("%d", o.overview.InsightCount),
+		fmt.Sprintf("%d", summary.InsightCount),
 		o.formatSeverityCounts(),
 		shell.ColorTextDim,
-		overviewSparkFromInts(o.overview.OpenInsightsHistory, o.overview.InsightCount),
+		overviewSparkFromInts(summary.OpenInsightsHistory, summary.InsightCount),
 		shell.ColorTeal,
 	)
 	o2 := o.kpiCell(cellW, "Pass rate",
-		percent(o.overview.PassRate),
+		percent(summary.PassRate),
 		"",
 		shell.ColorRose,
-		passRateSpark(o.overview),
+		passRateSpark(summary),
 		shell.ColorRose,
 	)
 	o3 := o.kpiCell(cellW, "Cost / 100 runs",
-		dollars(o.overview.CostPer100Runs),
-		fmtDeltaCost(o.overview.CostSpark),
+		dollars(summary.CostPer100Runs),
+		fmtDeltaCost(summary.CostSpark),
 		shell.ColorAmber,
-		metricSpark(o.overview.CostSpark, o.overview.CostPer100Runs),
+		metricSpark(summary.CostSpark, summary.CostPer100Runs),
 		shell.ColorAmber,
 	)
 	o4 := o.kpiCell(cellW+rem, "p95 latency",
-		latency(o.overview.P95LatencyMs),
-		fmtDeltaLatency(o.overview.LatencySpark),
+		latency(summary.P95LatencyMs),
+		fmtDeltaLatency(summary.LatencySpark),
 		shell.ColorAmber,
-		metricSpark(o.overview.LatencySpark, o.overview.P95LatencyMs),
+		metricSpark(summary.LatencySpark, summary.P95LatencyMs),
 		shell.ColorAmber,
 	)
 
@@ -93,7 +94,7 @@ func (o *Overview) kpiCell(width int, label, value, delta string, deltaColor col
 }
 
 func (o *Overview) formatSeverityCounts() string {
-	c := o.overview.OpenInsightSeverityCounts
+	c := o.overviewSummary().OpenInsightSeverityCounts
 	if len(c) == 0 {
 		return ""
 	}

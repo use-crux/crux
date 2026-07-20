@@ -26,7 +26,7 @@ func NewFlowsCmd(f *cli.Factory) *cobra.Command {
 			}
 
 			if jsonOutput {
-				return output.JSON(flows)
+				return f.Streams().WriteJSON(flows)
 			}
 
 			printFlows(f.Streams(), flows)

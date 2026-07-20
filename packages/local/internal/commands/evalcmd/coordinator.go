@@ -8,9 +8,9 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/spf13/cobra"
 	"github.com/use-crux/crux/packages/local/internal/assets"
 	"github.com/use-crux/crux/packages/local/internal/domain"
+	"github.com/use-crux/crux/packages/local/internal/output"
 	"github.com/use-crux/crux/packages/local/internal/projectroot"
 )
 
@@ -121,7 +121,7 @@ type evalRunEvent struct {
 	} `json:"cells"`
 }
 
-func runCoordinator(command *cobra.Command, cwd string, args []string) error {
+func runCoordinator(streams *output.IO, cwd string, args []string) error {
 	node, err := assets.FindNode()
 	if err != nil {
 		return err
@@ -151,9 +151,9 @@ func runCoordinator(command *cobra.Command, cwd string, args []string) error {
 	if err := child.Start(); err != nil {
 		return err
 	}
-	go func() { _, _ = io.Copy(command.Root().ErrOrStderr(), stderr) }()
-	exitCode, streamErr := consumeStreamWithConfirmation(command.Root().OutOrStdout(), stdout, func() error {
-		confirmed, confirmErr := confirmUnknownCost(command)
+	go func() { _, _ = io.Copy(streams.Err, stderr) }()
+	exitCode, streamErr := consumeStreamWithConfirmation(streams.Out, stdout, func() error {
+		confirmed, confirmErr := confirmUnknownCost(streams)
 		if confirmErr != nil {
 			return confirmErr
 		}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/use-crux/crux/packages/local/internal/process/workerproc"
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/workers/node"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/workers/requestwire"
@@ -18,8 +19,9 @@ const (
 
 // Options configures the runtime worker process.
 type Options struct {
-	ScriptPath    string
-	ScriptContent []byte
+	ScriptPath     string
+	ScriptContent  []byte
+	ProcessOptions []workerproc.Option
 }
 
 // Worker runs explicit runtime-rich Project Index evidence collection through
@@ -35,7 +37,7 @@ func New(options Options) *Worker {
 			Name:           "project-runtime-indexer",
 			ScriptContent:  options.ScriptContent,
 			ScriptPath:     options.ScriptPath,
-			Worker:         node.NewWorker("project-runtime-indexer", options.ScriptContent, options.ScriptPath, maxResponseLineBytes),
+			Worker:         node.NewWorker("project-runtime-indexer", options.ScriptContent, options.ScriptPath, maxResponseLineBytes, options.ProcessOptions...),
 			MaxLineBytes:   maxResponseLineBytes,
 			MaxStreamBytes: maxResponseStreamBytes,
 			Producer:       producer,

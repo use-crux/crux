@@ -9,3 +9,9 @@ func runCruxPTYHelp(t testing.TB) string {
 	t.Skip("Unix PTY acceptance is unavailable on this platform")
 	return ""
 }
+
+func runCruxPTY(t testing.TB, _ []string, _ []string) string {
+	t.Helper()
+	t.Skip("Unix PTY acceptance is unavailable on this platform")
+	return ""
+}

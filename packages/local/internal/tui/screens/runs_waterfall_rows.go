@@ -32,9 +32,9 @@ func renderWaterfallSpan(sp kit.WaterfallSpan, lastChild bool, totalMs float64, 
 		nameColW     = 26
 		indentPerLvl = 2
 	)
-	primitive := sp.Primitive
+	primitive := sanitizeRunsInline(sp.Primitive)
 	if primitive == "" {
-		primitive = sp.Op
+		primitive = sanitizeRunsInline(sp.Op)
 	}
 	color := kit.PrimitiveColor(primitive)
 	depthIndent := 0
@@ -50,14 +50,14 @@ func renderWaterfallSpan(sp kit.WaterfallSpan, lastChild bool, totalMs float64, 
 		treeGlyph = "└"
 	}
 	glyph := lipgloss.NewStyle().Foreground(shell.ColorTextMuted).Render(treeGlyph)
-	op := padString2(primitiveLabel(sp), opColW)
+	op := padRunsInline(primitiveLabel(sp), opColW)
 	opStyled := lipgloss.NewStyle().Foreground(color).Render(op)
 	nameWidth := max(10, nameColW-depthIndent)
-	name := sp.Name
+	name := sanitizeRunsInline(sp.Name)
 	if sp.Duplicate {
 		name += "  · dup"
 	}
-	nameStyled := lipgloss.NewStyle().Foreground(textColorFor(sp)).Render(padString2(truncate(name, nameWidth), nameWidth))
+	nameStyled := lipgloss.NewStyle().Foreground(textColorFor(sp)).Render(padRunsInline(name, nameWidth))
 	bar := makeSpanBar(barCol, sp.StartedMs/totalMs, sp.DurationMs/totalMs, color, sp.Selected)
 	durStyled := shell.TextDim.Render(padString2Right(formatSpanDuration(sp.DurationMs), 7))
 	left := " "

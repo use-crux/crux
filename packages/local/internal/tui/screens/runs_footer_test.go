@@ -15,12 +15,13 @@ import (
 func TestRunsFooterOmitsUnbuiltVerbs(t *testing.T) {
 	r := NewRuns()
 	setRunsForTest(r)
-	r.detail = &api.InspectRunDetailRecord{
-		Run: api.InspectRunRecord{TraceID: "8af2f1c", TargetID: "docs_agent"},
+	setRunDiagnosisForTest(r, runDiagnosisFixture{
+		RunID: "8af2f1c",
+		Name:  "docs_agent",
 		Spans: []api.InspectRunSpan{
 			{ID: "sp1", Name: "agent", Kind: "agent"},
 		},
-	}
+	})
 	selectRunForTest(r, "8af2f1c")
 	selectSpanForTest(r, "sp1")
 
@@ -45,12 +46,12 @@ func TestRunsFooterOmitsUnimplementedExternalViewer(t *testing.T) {
 func TestRunsFooterOmitsInspectWhenSelectedSpanHasNoRawPayload(t *testing.T) {
 	r := NewRuns()
 	setRunsForTest(r)
-	r.detail = &api.InspectRunDetailRecord{
-		Run: api.InspectRunRecord{TraceID: "run-1"},
+	setRunDiagnosisForTest(r, runDiagnosisFixture{
+		RunID: "run-1",
 		Spans: []api.InspectRunSpan{
 			{ID: "span-1", Name: "agent.run"},
 		},
-	}
+	})
 	selectRunForTest(r, "run-1")
 	selectSpanForTest(r, "span-1")
 	r.focus = focusWaterfall

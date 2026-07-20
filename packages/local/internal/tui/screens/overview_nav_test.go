@@ -13,12 +13,11 @@ import (
 // the implementation plan.
 func TestOverviewCursorCyclesInsights(t *testing.T) {
 	o := NewOverview()
-	o.loaded = true
-	o.insights = []api.InspectInsightRecord{
+	applyOverviewInsightsForTest(o, []api.InspectInsightRecord{
 		{InsightID: "INS-1"},
 		{InsightID: "INS-2"},
 		{InsightID: "INS-3"},
-	}
+	})
 
 	if got := o.SelectedInsightID(); got != "INS-1" {
 		t.Fatalf("initial SelectedInsightID = %q, want %q", got, "INS-1")
@@ -54,13 +53,12 @@ func TestOverviewCursorCyclesInsights(t *testing.T) {
 // cursor (not the insights cursor).
 func TestOverviewLTogglesToRunsPanel(t *testing.T) {
 	o := NewOverview()
-	o.loaded = true
-	o.insights = []api.InspectInsightRecord{
+	applyOverviewInsightsForTest(o, []api.InspectInsightRecord{
 		{InsightID: "INS-1"}, {InsightID: "INS-2"},
-	}
-	o.runs = []api.InspectRunRecord{
+	})
+	applyOverviewRunsForTest(o, []api.InspectRunRecord{
 		{TraceID: "RUN-1"}, {TraceID: "RUN-2"}, {TraceID: "RUN-3"},
-	}
+	})
 
 	if got := o.SelectedRunID(); got != "RUN-1" {
 		t.Fatalf("initial SelectedRunID = %q, want %q", got, "RUN-1")
@@ -96,10 +94,9 @@ func TestOverviewLTogglesToRunsPanel(t *testing.T) {
 // screen.
 func TestOverviewEnterOnInsightEmitsNavigateRequest(t *testing.T) {
 	o := NewOverview()
-	o.loaded = true
-	o.insights = []api.InspectInsightRecord{
+	applyOverviewInsightsForTest(o, []api.InspectInsightRecord{
 		{InsightID: "INS-014"},
-	}
+	})
 
 	cmd := o.Update(testContext, tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}), nil)
 	if cmd == nil {
@@ -125,10 +122,9 @@ func TestOverviewEnterOnInsightEmitsNavigateRequest(t *testing.T) {
 // panel focused emits a NavigateRequest carrying the focused run's id.
 func TestOverviewEnterOnRunEmitsNavigateRequest(t *testing.T) {
 	o := NewOverview()
-	o.loaded = true
-	o.runs = []api.InspectRunRecord{
+	applyOverviewRunsForTest(o, []api.InspectRunRecord{
 		{TraceID: "8af2f1c"},
-	}
+	})
 	o.Update(testContext, tea.KeyPressMsg(tea.Key{Text: "l", Code: 'l'}), nil)
 
 	cmd := o.Update(testContext, tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}), nil)
@@ -146,21 +142,20 @@ func TestOverviewEnterOnRunEmitsNavigateRequest(t *testing.T) {
 
 func TestOverviewActivityScrollLatchKeepsHistoricalRowsVisible(t *testing.T) {
 	o := NewOverview()
-	o.loaded = true
-	o.focusedPanel = panelActivity
-	o.activity = []api.InspectActivityEvent{
-		{Timestamp: 4000, Kind: "run", Summary: "newest"},
-		{Timestamp: 3000, Kind: "run", Summary: "middle"},
-		{Timestamp: 2000, Kind: "run", Summary: "older"},
-		{Timestamp: 1000, Kind: "run", Summary: "oldest"},
-	}
+	o.setFocusedPanel(panelActivity)
+	applyOverviewActivityForTest(o, []api.InspectActivityEvent{
+		{Timestamp: 4000, Kind: "run", RefID: "newest", Summary: "newest"},
+		{Timestamp: 3000, Kind: "run", RefID: "middle", Summary: "middle"},
+		{Timestamp: 2000, Kind: "run", RefID: "older", Summary: "older"},
+		{Timestamp: 1000, Kind: "run", RefID: "oldest", Summary: "oldest"},
+	})
 
 	o.Update(testContext, tea.KeyPressMsg(tea.Key{Text: "j", Code: 'j'}), nil)
 	if o.activityScroll != 1 {
 		t.Fatalf("activity scroll after j = %d, want 1", o.activityScroll)
 	}
 
-	o.Update(testContext, api.InspectEvent{Timestamp: 5000, Kind: "run", RefID: "fresh", Action: "completed"}, nil)
+	o.Update(testContext, LiveEvents{Events: []api.InspectEvent{{Timestamp: 5000, Kind: "run", RefID: "fresh", Action: "completed"}}}, nil)
 	if o.activityScroll != 2 {
 		t.Fatalf("activity scroll after prepended event = %d, want 2 to preserve visible historical rows", o.activityScroll)
 	}

@@ -2,9 +2,7 @@ package commands
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"sort"
 
 	"github.com/spf13/cobra"
@@ -91,7 +89,7 @@ func runCheck(ctx context.Context, ioStreams *output.IO, opts checkOptions, run 
 		return domain.ExitError{Code: 2}
 	}
 	if opts.json {
-		err = writeCheckJSON(ioStreams.Out, report)
+		err = ioStreams.WriteJSON(report)
 	} else {
 		printCheckReport(ioStreams, report, opts.profile)
 	}
@@ -151,12 +149,6 @@ func buildCheckReport(result oneshot.Result, opts checkOptions) (checkJSONV1, []
 		}
 	}
 	return report, failures, nil
-}
-
-func writeCheckJSON(writer io.Writer, report checkJSONV1) error {
-	encoder := json.NewEncoder(writer)
-	encoder.SetIndent("", "  ")
-	return encoder.Encode(report)
 }
 
 func sortIndexDiagnostics(diagnostics []api.IndexDiagnostic) {

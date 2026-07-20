@@ -28,10 +28,20 @@ func (s *Runs) toggleSelectedDuplicateGroup() bool {
 }
 
 func (s *Runs) flattenedSpanRows() []RunRow {
-	if s.detail == nil {
-		return nil
+	if s.diagnosis != nil {
+		spans := make([]api.InspectRunSpan, len(s.diagnosis.Timeline))
+		activities := make(map[string]api.ObservabilityRunDetailNode, len(s.diagnosis.Timeline))
+		for index, row := range s.diagnosis.Timeline {
+			spans[index] = row.Span
+			activities[row.ID] = row.Activity
+		}
+		rows := FlattenRun(spans, s.expandedRows)
+		for index := range rows {
+			rows[index].Activity = activities[rows[index].ID]
+		}
+		return rows
 	}
-	return FlattenRun(s.detail.Spans, s.expandedRows)
+	return nil
 }
 
 func (s *Runs) syncSpanRows() {

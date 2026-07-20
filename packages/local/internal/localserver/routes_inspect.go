@@ -2,7 +2,6 @@ package localserver
 
 import (
 	"encoding/json"
-	"log/slog"
 	"net/http"
 
 	"github.com/use-crux/crux/packages/local/internal/inspect"
@@ -27,11 +26,11 @@ func registerInspectRoutes(mux *http.ServeMux, inspectSvc *inspect.Service) {
 		}
 		record, err := inspectSvc.DeleteRuns(r.Context(), req.TraceIDs)
 		if err != nil {
-			slog.Warn("Inspect runs delete failed", "error", err)
+			requestLogger(r).Warn("Inspect runs delete failed", "error", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		writeJSON(w, record)
+		writeJSON(w, r, record)
 	})
 
 	mux.HandleFunc("DELETE /api/inspect/runs/{traceId}", func(w http.ResponseWriter, r *http.Request) {
@@ -42,7 +41,7 @@ func registerInspectRoutes(mux *http.ServeMux, inspectSvc *inspect.Service) {
 		traceID := r.PathValue("traceId")
 		record, err := inspectSvc.DeleteRuns(r.Context(), []string{traceID})
 		if err != nil {
-			slog.Warn("Inspect run delete failed", "error", err, "traceId", traceID)
+			requestLogger(r).Warn("Inspect run delete failed", "error", err, "traceId", traceID)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -50,7 +49,7 @@ func registerInspectRoutes(mux *http.ServeMux, inspectSvc *inspect.Service) {
 			http.Error(w, "not found", http.StatusNotFound)
 			return
 		}
-		writeJSON(w, record)
+		writeJSON(w, r, record)
 	})
 
 	mux.HandleFunc("POST /api/inspect/insights/silences", func(w http.ResponseWriter, r *http.Request) {
@@ -68,7 +67,7 @@ func registerInspectRoutes(mux *http.ServeMux, inspectSvc *inspect.Service) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		writeCreatedJSON(w, record)
+		writeCreatedJSON(w, r, record)
 	})
 
 	mux.HandleFunc("DELETE /api/inspect/insights/silences/{silenceId}", func(w http.ResponseWriter, r *http.Request) {
@@ -81,7 +80,7 @@ func registerInspectRoutes(mux *http.ServeMux, inspectSvc *inspect.Service) {
 			http.Error(w, err.Error(), http.StatusNotFound)
 			return
 		}
-		writeJSON(w, record)
+		writeJSON(w, r, record)
 	})
 
 	mux.HandleFunc("POST /api/inspect/insights/{insightId}/status", func(w http.ResponseWriter, r *http.Request) {
@@ -99,14 +98,14 @@ func registerInspectRoutes(mux *http.ServeMux, inspectSvc *inspect.Service) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		writeCreatedJSON(w, record)
+		writeCreatedJSON(w, r, record)
 	})
 }
 
-func writeCreatedJSON(w http.ResponseWriter, v any) {
+func writeCreatedJSON(w http.ResponseWriter, r *http.Request, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	if err := json.NewEncoder(w).Encode(v); err != nil {
-		slog.Error("JSON encode error", "error", err)
+		requestLogger(r).Error("JSON encode error", "error", err)
 	}
 }

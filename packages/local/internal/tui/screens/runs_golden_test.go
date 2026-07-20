@@ -63,25 +63,16 @@ func TestRunsScrollableDetailGolden(t *testing.T) {
 func fixtureRuns() (*Runs, time.Time) {
 	client := uitest.NewFixtureClient()
 	runs, _ := client.Runs(nil)
-	detail, _, _ := client.RunDetail(nil, runs[0].TraceID)
+	detail, _, _ := client.ObservabilityRunDetail(nil, runs[0].TraceID)
 	screen := NewRuns()
 	summaries := make([]api.ObservabilityRunSummary, len(runs))
 	for index, run := range runs {
 		summaries[index] = observabilityRunSummaryForTest(run)
 	}
 	setRunsForTest(screen, summaries...)
-	screen.detail = &detail
+	setRunDetailForTest(screen, detail)
 	selectRunForTest(screen, runs[0].TraceID)
-	if len(detail.Spans) > 0 {
-		selectedSpanID := detail.Spans[0].ID
-		for _, span := range detail.Spans {
-			if span.ID == "retrieve" {
-				selectedSpanID = span.ID
-				break
-			}
-		}
-		selectSpanForTest(screen, selectedSpanID)
-	}
+	selectSpanForTest(screen, "retrieve")
 	screen.runList.SetItems(summaries)
 	return screen, client.Now
 }
@@ -140,15 +131,17 @@ func TestRunsWaterfallCollapsesDuplicateGroups(t *testing.T) {
 	setRunsForTest(screen)
 	duration := 10_000.0
 	spanDuration := 100.0
-	screen.detail = &api.InspectRunDetailRecord{
-		Run: api.InspectRunRecord{TraceID: "run-dup", TargetID: "docs_agent", DurationMs: &duration},
+	setRunDiagnosisForTest(screen, runDiagnosisFixture{
+		RunID:      "run-dup",
+		Name:       "docs_agent",
+		DurationMs: duration,
 		Spans: []api.InspectRunSpan{
 			{ID: "root", Name: "docs_agent.run", Primitive: api.SpanPrimitiveAgent, DurationMs: &duration},
 			{ID: "dup-1", ParentID: "root", Name: "rag.search \"typed prompts\"", Primitive: api.SpanPrimitiveTool, Duplicate: true, DuplicateOfSpanID: "search", StartedAt: 100, DurationMs: &spanDuration},
 			{ID: "dup-2", ParentID: "root", Name: "rag.search \"typed prompts\"", Primitive: api.SpanPrimitiveTool, Duplicate: true, DuplicateOfSpanID: "search", StartedAt: 200, DurationMs: &spanDuration},
 			{ID: "dup-3", ParentID: "root", Name: "rag.search \"typed prompts\"", Primitive: api.SpanPrimitiveTool, Duplicate: true, DuplicateOfSpanID: "search", StartedAt: 300, DurationMs: &spanDuration},
 		},
-	}
+	})
 	selectRunForTest(screen, "run-dup")
 	selectSpanForTest(screen, "dup-1")
 	screen.focus = focusWaterfall

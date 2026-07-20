@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"time"
@@ -22,9 +20,9 @@ type runtimeGenerateOptions struct {
 	cwd        string
 }
 
-type runtimeArtifactGenerateFunc func(ctx context.Context, root string) (json.RawMessage, error)
-type runtimeOperationFunc func(ctx context.Context, root, operation, workID string) (json.RawMessage, error)
-type setupOperationFunc func(ctx context.Context, root, mode string) (json.RawMessage, error)
+type runtimeArtifactGenerateFunc func(ctx context.Context, root string, process commandWorkerProcess) (json.RawMessage, error)
+type runtimeOperationFunc func(ctx context.Context, root, operation, workID string, process commandWorkerProcess) (json.RawMessage, error)
+type setupOperationFunc func(ctx context.Context, root, mode string, process commandWorkerProcess) (json.RawMessage, error)
 
 var generateRuntimeArtifactsForCommand runtimeArtifactGenerateFunc = generateRuntimeArtifactsWithWorker
 var runRuntimeOperationForCommand runtimeOperationFunc = runRuntimeOperationWithWorker
@@ -56,24 +54,22 @@ entry files. It does not create infrastructure or mutate runtime state.`,
   crux runtime generate --json`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if !startupDebugEnabled(false) {
-				slog.SetDefault(slog.New(slog.NewTextHandler(io.Discard, nil)))
-			}
+			io := f.Streams()
 			root, err := resolveRuntimeGenerateRoot(opts.cwd)
 			if err != nil {
 				return err
 			}
-			result, err := generateRuntimeArtifactsForCommand(cmd.Context(), root)
+			result, err := generateRuntimeArtifactsForCommand(cmd.Context(), root, newCommandWorkerProcess(io))
 			if err != nil {
 				return err
 			}
 			if opts.jsonOutput {
-				return writePrettyJSON(cmd.OutOrStdout(), result)
+				return writePrettyJSON(io.Out, result)
 			}
-			if err := printRuntimeGenerateResult(f.Streams(), result); err != nil {
+			if err := printRuntimeGenerateResult(io, result); err != nil {
 				return err
 			}
-			printRuntimeGeneratePreflight(f.Streams(), root, result)
+			printRuntimeGeneratePreflight(cmd.Context(), io, root, result)
 			return nil
 		},
 	}
@@ -95,8 +91,8 @@ func resolveRuntimeGenerateRoot(cwd string) (string, error) {
 	return os.Getwd()
 }
 
-func generateRuntimeArtifactsWithWorker(ctx context.Context, root string) (json.RawMessage, error) {
-	worker := assets.NewEmbeddedProjectIndexer("")
+func generateRuntimeArtifactsWithWorker(ctx context.Context, root string, process commandWorkerProcess) (json.RawMessage, error) {
+	worker := assets.NewEmbeddedProjectIndexer("", process.options()...)
 	defer worker.Close()
 	if _, ok := ctx.Deadline(); !ok {
 		var cancel context.CancelFunc
@@ -111,8 +107,8 @@ func generateRuntimeArtifactsWithWorker(ctx context.Context, root string) (json.
 	return worker.GenerateRuntimeArtifacts(ctx, root, index.Definitions)
 }
 
-func runRuntimeOperationWithWorker(ctx context.Context, root, operation, workID string) (json.RawMessage, error) {
-	worker := assets.NewEmbeddedProjectIndexer("")
+func runRuntimeOperationWithWorker(ctx context.Context, root, operation, workID string, process commandWorkerProcess) (json.RawMessage, error) {
+	worker := assets.NewEmbeddedProjectIndexer("", process.options()...)
 	defer worker.Close()
 	if _, ok := ctx.Deadline(); !ok {
 		var cancel context.CancelFunc
@@ -122,8 +118,8 @@ func runRuntimeOperationWithWorker(ctx context.Context, root, operation, workID 
 	return worker.RunRuntimeOperation(ctx, root, operation, workID, false)
 }
 
-func runSetupOperationWithWorker(ctx context.Context, root, mode string) (json.RawMessage, error) {
-	worker := assets.NewEmbeddedProjectIndexer("")
+func runSetupOperationWithWorker(ctx context.Context, root, mode string, process commandWorkerProcess) (json.RawMessage, error) {
+	worker := assets.NewEmbeddedProjectIndexer("", process.options()...)
 	defer worker.Close()
 	if _, ok := ctx.Deadline(); !ok {
 		var cancel context.CancelFunc

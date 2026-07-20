@@ -3,14 +3,14 @@ package output
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 )
 
-// JSON prints data as pretty-printed JSON to stdout.
-func JSON(data any) error {
-	enc := json.NewEncoder(os.Stdout)
-	enc.SetIndent("", "  ")
-	return enc.Encode(data)
+// WriteJSON writes data as indented JSON to the primary injected output
+// stream. Encoding and write failures are returned to the command boundary.
+func (io *IO) WriteJSON(data any) error {
+	return writeJSON(io.Out, data)
 }
 
 // JSONToFile writes data as pretty-printed JSON to a file.
@@ -20,7 +20,11 @@ func JSONToFile(data any, path string) error {
 		return fmt.Errorf("failed to create %s: %w", path, err)
 	}
 	defer f.Close()
-	enc := json.NewEncoder(f)
+	return writeJSON(f, data)
+}
+
+func writeJSON(writer io.Writer, data any) error {
+	enc := json.NewEncoder(writer)
 	enc.SetIndent("", "  ")
 	return enc.Encode(data)
 }

@@ -8,30 +8,23 @@ import (
 )
 
 func (s *Runs) waterfallHeader(width int) string {
-	if s.detail == nil {
+	if s.diagnosis == nil {
 		return shell.PaneHeader(width, focusTitle("Trace", s.focus == focusWaterfall), "—", "")
 	}
-	// The canonical noun is Run. Multi-trace runs surface their trace count
-	// in the subtitle rather than changing the title.
-	id := shortID(s.detail.Run.TraceID, 7)
-	title := focusTitle("Run "+id, s.focus == focusWaterfall)
-	tokStr := ""
-	if s.detail.Run.TokenCount > 0 {
-		tokStr = " · " + formatTokensShort(s.detail.Run.TokenCount) + " tok"
+	summary := s.diagnosis.Summary
+	title := focusTitle("Run "+clipRunsInline(summary.RunID, 7), s.focus == focusWaterfall)
+	subParts := []string{sanitizeRunsInline(summary.Name), formatSpanDuration(summary.DurationMs), fmt.Sprintf("%d spans", len(s.diagnosis.Timeline))}
+	return shell.PaneHeader(width, title, strings.Join(subParts, " · "), "")
+}
+
+func (s *Runs) waterfallHeaderBlock(width int) string {
+	header := s.waterfallHeader(width)
+	snapshot := s.detailResource.Snapshot()
+	status := resourceLifecycleStatus(snapshot.State, snapshot.Refreshing, snapshot.Err)
+	if status == "" {
+		return header
 	}
-	subParts := []string{
-		s.detail.Run.TargetID,
-		durStr(s.detail.Run.DurationMs),
-		fmt.Sprintf("%d spans", len(s.detail.Spans)),
-	}
-	if s.detail.Run.TraceCount > 1 {
-		subParts = append(subParts, fmt.Sprintf("%d traces", s.detail.Run.TraceCount))
-	}
-	headerChips := renderTraceChips(s.detail)
-	if width < 88 {
-		headerChips = ""
-	}
-	return shell.PaneHeader(width, title, strings.Join(subParts, " · ")+tokStr, headerChips)
+	return header + "\n" + lifecycleStatusRow(status, width)
 }
 
 func (s *Runs) waterfallFooter(width int) string {
@@ -39,10 +32,10 @@ func (s *Runs) waterfallFooter(width int) string {
 }
 
 func (s *Runs) waterfallSpanHeight(width, height int) int {
-	if s.detail == nil {
+	if s.diagnosis == nil {
 		return 0
 	}
-	headerHeight := strings.Count(s.waterfallHeader(width), "\n") + 1
+	headerHeight := strings.Count(s.waterfallHeaderBlock(width), "\n") + 1
 	footerHeight := 0
 	if footer := s.waterfallFooter(width); footer != "" {
 		footerHeight = strings.Count(footer, "\n") + 1

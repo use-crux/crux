@@ -2,17 +2,15 @@ package screens
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/tui/bridge"
+	"github.com/use-crux/crux/packages/local/internal/tui/interaction"
 	"github.com/use-crux/crux/packages/local/internal/tui/kit"
+	"github.com/use-crux/crux/packages/local/internal/tui/resource"
 	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
 
@@ -26,157 +24,216 @@ import (
 //   - does NOT walk relations or compute fingerprints client-side
 //   - missing Inspect renders as no signal, not as an error
 type Index struct {
-	index  api.IndexData
-	cursor int
-	loaded bool
-	err    string
+	snapshot                      *resource.Resource[api.IndexData]
+	definitions                   *kit.ListPane[api.ProjectDefinition]
+	detail                        *kit.DocumentPane
+	focus                         indexFocus
+	size                          Size
+	layout                        indexLayout
+	exportRoot                    func() (string, error)
+	exportState                   indexExportState
+	routedDefinitionID            string
+	routedDefinitionAnchorPending bool
+	unavailableDefinitionID       string
 }
 
 // NewIndex constructs an empty Index screen.
-func NewIndex() *Index { return &Index{} }
+func NewIndex() *Index {
+	definitions := kit.NewListPane(func(definition api.ProjectDefinition) string {
+		return definition.ID
+	})
+	index := &Index{
+		snapshot: resource.New(func(index api.IndexData) bool {
+			return len(index.Definitions) == 0
+		}),
+		definitions: definitions,
+		detail:      kit.NewDocumentPane(),
+		exportRoot:  defaultIndexExportRoot,
+	}
+	index.setFocus(indexFocusDefinitions)
+	return index
+}
 
 // SetIndexForTest is a test-only seed used by workbench integration
 // tests to inject a index snapshot without going through Init's
-// async fetch. Production code reaches index data via Update's
-// indexLoadedMsg path.
+// async fetch. It seeds the same owned resource used by production fetches.
 func (s *Index) SetIndexForTest(data api.IndexData) {
-	s.index = data
-	s.loaded = true
-	s.clampCursor()
+	_, token := s.snapshot.Begin(context.TODO(), indexSnapshotOwner, 0)
+	s.applyIndexResult(resource.ResourceResult[api.IndexData]{Token: token, Value: data})
 }
 
 func (s *Index) ID() string { return "index" }
 
-func (s *Index) Init(_ context.Context, c DataClient) tea.Cmd { return fetchIndex(c) }
+// Focus selects the exact Project Index identity carried by a navigation
+// target. Display names never participate in route resolution.
+func (s *Index) Focus(kind, id string) {
+	if kind != "definition" || id == "" {
+		return
+	}
+	s.routedDefinitionID = id
+	s.routedDefinitionAnchorPending = true
+	s.resolveRoutedDefinition()
+}
 
-func (s *Index) Interested(domains bridge.Domains) bool {
-	return domains.Has(bridge.DomainIndex)
+// FocusRoot leaves the current list selection intact while clearing an exact
+// route miss that would otherwise obscure the root Project Index browser.
+func (s *Index) FocusRoot() {
+	s.routedDefinitionID = ""
+	s.routedDefinitionAnchorPending = false
+	s.unavailableDefinitionID = ""
+	s.syncDetail()
+}
+
+func (s *Index) Init(ctx context.Context, c DataClient) tea.Cmd { return s.fetchIndex(ctx, c) }
+
+// Deactivate cancels an in-flight snapshot and returns its exact retry name.
+func (s *Index) Deactivate() bridge.Invalidations {
+	invalidations := bridge.Invalidations{}
+	cancelPendingResource(invalidations, bridge.IndexSnapshotResource, s.snapshot)
+	return invalidations
+}
+
+// Refresh schedules the Project Index snapshot once when it is invalidated or
+// has not yet been loaded.
+func (s *Index) Refresh(ctx context.Context, c DataClient, invalidations bridge.Invalidations) tea.Cmd {
+	revision, invalid := invalidations.Revision(bridge.IndexSnapshotResource)
+	if !invalid && s.snapshot.Snapshot().State != resource.ResourceIdle {
+		return nil
+	}
+	return s.fetchIndexAtRevision(ctx, c, revision)
 }
 
 func (s *Index) Counts() map[string]int {
-	return map[string]int{"index": len(s.index.Definitions)}
+	return map[string]int{"index": len(s.indexData().Definitions)}
 }
 
-func (s *Index) Update(_ context.Context, msg tea.Msg, c DataClient) tea.Cmd {
+func (s *Index) Update(ctx context.Context, msg tea.Msg, c DataClient) tea.Cmd {
 	switch m := msg.(type) {
 	case indexLoadedMsg:
-		s.index = api.IndexData(m)
-		s.loaded = true
-		s.clampCursor()
-	case api.InspectEvent:
-		return fetchIndex(c)
-	case dataErrMsg:
-		s.err = string(m)
+		s.applyIndexResult(resource.ResourceResult[api.IndexData](m))
 	case tea.KeyPressMsg:
-		return s.handleKey(m, c)
+		cmd, _ := interaction.Dispatch(s.Actions(ctx, c), m)
+		return cmd
+	case tea.MouseWheelMsg:
+		s.updateFocusedPane(m)
+	case definitionExportedMsg:
+		if m.err != nil {
+			s.exportState = indexExportState{definitionID: m.defID, message: "export failed · " + sanitizeIndexInline(m.err.Error())}
+		} else {
+			s.exportState = indexExportState{definitionID: m.defID, message: "exported " + sanitizeIndexInline(m.filename)}
+		}
 	}
 	return nil
 }
 
-func (s *Index) handleKey(m tea.KeyPressMsg, c DataClient) tea.Cmd {
-	switch m.String() {
-	case "j", "down":
-		s.moveCursor(+1)
-	case "k", "up":
-		s.moveCursor(-1)
-	case "e":
-		return s.exportDefinition()
-	}
-	return nil
-}
-
-func (s *Index) HandlesKey(msg tea.KeyPressMsg) bool {
-	switch msg.String() {
-	case "j", "down", "k", "up", "e":
-		return true
-	default:
-		return false
+func (s *Index) applyIndexResult(result resource.ResourceResult[api.IndexData]) {
+	if s.snapshot.Apply(result) {
+		s.definitions.SetItems(s.indexData().Definitions)
+		if s.routedDefinitionID != "" {
+			s.resolveRoutedDefinition()
+		} else {
+			s.syncDetail()
+		}
 	}
 }
 
-func (s *Index) moveCursor(delta int) {
-	n := len(s.index.Definitions)
-	if n == 0 {
+func (s *Index) resolveRoutedDefinition() {
+	if s.routedDefinitionID == "" {
 		return
 	}
-	next := s.cursor + delta
-	if next < 0 {
-		next = 0
-	}
-	if next >= n {
-		next = n - 1
-	}
-	s.cursor = next
-}
-
-func (s *Index) clampCursor() {
-	n := len(s.index.Definitions)
-	if n == 0 {
-		s.cursor = 0
+	if s.definitions.Select(s.routedDefinitionID) {
+		s.unavailableDefinitionID = ""
+		document := s.syncDetail()
+		if s.routedDefinitionAnchorPending {
+			s.setFocus(indexFocusDetail)
+			if document.hasSourceLocation {
+				s.detail.RestoreAnchor(document.sourceLocationAnchor)
+			}
+			s.routedDefinitionAnchorPending = false
+		}
 		return
 	}
-	if s.cursor >= n {
-		s.cursor = n - 1
-	}
-	if s.cursor < 0 {
-		s.cursor = 0
-	}
+	s.routedDefinitionAnchorPending = true
+	s.unavailableDefinitionID = s.routedDefinitionID
+	s.detail.SetContent("", "")
+}
+
+func (s *Index) indexData() api.IndexData {
+	return s.snapshot.Snapshot().Value
 }
 
 // SelectedDefinitionID returns the id of the cursor-focused definition.
 func (s *Index) SelectedDefinitionID() string {
-	defs := s.index.Definitions
-	if s.cursor < 0 || s.cursor >= len(defs) {
+	if s.unavailableDefinitionID != "" {
 		return ""
 	}
-	return defs[s.cursor].ID
+	definition, _, ok := s.definitions.Selected()
+	if !ok {
+		return ""
+	}
+	return definition.ID
 }
 
 func (s *Index) Breadcrumb() ([]string, string) {
 	path := []string{"index"}
-	if id := s.SelectedDefinitionID(); id != "" {
-		path = append(path, id)
+	if id := firstNonEmpty(s.unavailableDefinitionID, s.SelectedDefinitionID()); id != "" {
+		path = append(path, sanitizeIndexInline(id))
 	}
-	right := fmt.Sprintf("%d definitions", len(s.index.Definitions))
+	right := fmt.Sprintf("%d definitions", len(s.indexData().Definitions))
 	return path, right
 }
 
-func (s *Index) Keybinds() []shell.Keybind {
-	if s.SelectedDefinitionID() == "" {
-		return nil
+func (s *Index) View(_ Size) string {
+	if s.layout.size.Width <= 0 || s.layout.size.Height <= 0 {
+		return ""
 	}
-	return []shell.Keybind{
-		shell.Bind("j/k", "move"),
-		shell.Bind("e", "export"),
+	if s.layout.mode == indexLayoutTooSmall {
+		return s.centerMessage("terminal too small — resize to at least " + indexMinimumLabel)
 	}
+	snapshot := s.snapshot.Snapshot()
+	if !snapshot.HasValue {
+		return s.centerMessage(resourceStateMessage(snapshot.State, snapshot.Err, "project index"))
+	}
+	if s.unavailableDefinitionID != "" {
+		return s.centerMessage("definition " + sanitizeIndexInline(s.unavailableDefinitionID) + " not in current index")
+	}
+	if len(snapshot.Value.Definitions) == 0 {
+		message := "no project definitions yet — open a file under your crux project to seed the index."
+		if snapshot.State == resource.ResourceDegraded {
+			message = "degraded project index"
+			if snapshot.Err != nil {
+				message += ": " + snapshot.Err.Error()
+			}
+			message += " · no project definitions"
+		} else if snapshot.Refreshing {
+			message = "refreshing project index · " + message
+		}
+		return s.centerMessage(message)
+	}
+	if s.layout.mode == indexLayoutNarrow {
+		if s.focus == indexFocusDetail {
+			return strings.Join(s.renderDetailLines(s.layout.detail), "\n")
+		}
+		return strings.Join(s.renderListLines(s.layout.list), "\n")
+	}
+	panes := []kit.Rect{s.layout.list, s.layout.detail}
+	return strings.Join(kit.Compose(panes, [][]string{
+		s.renderListLines(panes[0]),
+		s.renderDetailLines(panes[1]),
+	}), "\n")
 }
 
-func (s *Index) View(size Size) string {
-	if !s.loaded {
-		return centerMsg(size, "loading index…")
-	}
-	if s.err != "" {
-		return centerMsg(size, "error: "+s.err)
-	}
-	if len(s.index.Definitions) == 0 {
-		return centerMsg(size, "no project definitions yet — open a file under your crux project to seed the index.")
-	}
-	listW := size.Width * 38 / 100
-	if listW < 50 {
-		listW = 50
-	}
-	detailW := size.Width - listW - 1
-	list := s.renderList(listW, size.Height)
-	detail := s.renderDetail(detailW, size.Height)
-	return kit.ComposeColumns(
-		kit.PadBlock(list, listW, size.Height),
-		kit.PadBlock(detail, detailW, size.Height),
-	)
+func (s *Index) centerMessage(message string) string {
+	return kit.PadBlock(centerMsg(s.layout.size, sanitizeIndexInline(message)), s.layout.size.Width, s.layout.size.Height)
 }
 
 func (s *Index) renderList(width, height int) string {
-	header := shell.PaneHeader(width, "Definitions",
-		fmt.Sprintf("%d", len(s.index.Definitions)), "")
+	snapshot := s.snapshot.Snapshot()
+	status := sanitizeIndexInline(resourceStatus(snapshot))
+	meta := appendResourceStatus(indexListPosition(s.definitions.Position()), status)
+	meta = appendResourceStatus(meta, s.currentExportState())
+	header := overviewPaneHeader(width, focusTitle("Definitions", s.focus == indexFocusDefinitions),
+		fmt.Sprintf("%d", len(snapshot.Value.Definitions)), meta)
 	hdrH := strings.Count(header, "\n") + 1
 	bodyRows := height - hdrH
 
@@ -184,12 +241,15 @@ func (s *Index) renderList(width, height int) string {
 	b.WriteString(header)
 	b.WriteString("\n")
 
+	rows := s.definitions.Render(func(d api.ProjectDefinition, _ int, selected bool, rowWidth int) string {
+		return s.renderListRow(d, rowWidth, selected && s.focus == indexFocusDefinitions)
+	})
 	count := 0
-	for i, d := range s.index.Definitions {
+	for _, row := range rows {
 		if count >= bodyRows {
 			break
 		}
-		b.WriteString(s.renderListRow(d, width, i == s.cursor))
+		b.WriteString(row)
 		b.WriteString("\n")
 		count++
 	}
@@ -206,9 +266,9 @@ func (s *Index) renderListRow(d api.ProjectDefinition, width int, selected bool)
 		bar = shell.SelectionBar(shell.ColorTeal) + " "
 	}
 	kindGlyph := indexKindGlyph(d.Kind)
-	name := shell.Text.Render(d.Name)
+	name := shell.Text.Render(sanitizeIndexInline(d.Name))
 	if d.Name == "" {
-		name = shell.Text.Render(d.ID)
+		name = shell.Text.Render(sanitizeIndexInline(d.ID))
 	}
 	parts := []string{bar, kindGlyph, " ", name}
 	// Fidelity chip (only when not resolved — saves chrome).
@@ -220,195 +280,4 @@ func (s *Index) renderListRow(d api.ProjectDefinition, width int, selected bool)
 	}
 	row := strings.Join(parts, "")
 	return padRow(row, width)
-}
-
-func (s *Index) renderDetail(width, height int) string {
-	if s.cursor < 0 || s.cursor >= len(s.index.Definitions) {
-		return centerMsg(Size{Width: width, Height: height}, "no definition focused")
-	}
-	d := s.index.Definitions[s.cursor]
-
-	var b strings.Builder
-	header := shell.PaneHeader(width, d.Name, d.Kind, d.Fidelity)
-	b.WriteString(header)
-	b.WriteString("\n\n")
-
-	b.WriteString(" " + shell.SectionTag.Render("IDENTITY"))
-	b.WriteString("\n")
-	b.WriteString(kvRow("id", d.ID, width))
-	b.WriteString(kvRow("kind", d.Kind, width))
-	if d.Description != "" {
-		b.WriteString(kvRow("desc", truncate(d.Description, width-12), width))
-	}
-	if len(d.Tags) > 0 {
-		b.WriteString(kvRow("tags", strings.Join(d.Tags, ", "), width))
-	}
-	if d.Fingerprint != "" {
-		b.WriteString(kvRow("fingerprint", truncate(d.Fingerprint, 12), width))
-	}
-	b.WriteString("\n")
-
-	if d.Source != nil {
-		b.WriteString(" " + shell.SectionTag.Render("SOURCE"))
-		b.WriteString("\n")
-		b.WriteString(kvRow("file", d.Source.File, width))
-		if d.Source.Line > 0 {
-			b.WriteString(kvRow("line", fmt.Sprintf("%d", d.Source.Line), width))
-		}
-		b.WriteString("\n")
-	}
-
-	lintFindings := s.lintFindingsForDefinition(d.ID)
-	if len(lintFindings) > 0 {
-		b.WriteString(" " + shell.SectionTag.Render("LINT"))
-		b.WriteString("\n")
-		for _, finding := range lintFindings {
-			label := fmt.Sprintf("%s · %s", finding.Severity, finding.Title)
-			b.WriteString(kvRow(finding.RuleID, truncate(label, width-12), width))
-			if finding.Rationale != "" {
-				b.WriteString(kvRow("why", truncate(finding.Rationale, width-12), width))
-			}
-			if finding.DocsURL != "" {
-				b.WriteString(kvRow("docs", truncate(finding.DocsURL, width-12), width))
-			}
-		}
-		b.WriteString("\n")
-	}
-
-	return strings.TrimRight(b.String(), "\n")
-}
-
-func (s *Index) lintFindingsForDefinition(definitionID string) []api.IndexLintFinding {
-	if definitionID == "" || len(s.index.LintFindings) == 0 {
-		return nil
-	}
-	findings := make([]api.IndexLintFinding, 0)
-	for _, finding := range s.index.LintFindings {
-		if indexLintFindingReferencesDefinition(finding, definitionID) {
-			findings = append(findings, finding)
-		}
-	}
-	return findings
-}
-
-func indexLintFindingReferencesDefinition(finding api.IndexLintFinding, definitionID string) bool {
-	if finding.PrimaryDefinitionID == definitionID {
-		return true
-	}
-	return stringSliceContains(finding.RelatedDefinitionIDs, definitionID) ||
-		stringSliceContains(finding.AffectedDefinitionIDs, definitionID) ||
-		stringSliceContains(finding.PropagatedDefinitionIDs, definitionID)
-}
-
-func stringSliceContains(values []string, target string) bool {
-	for _, value := range values {
-		if value == target {
-			return true
-		}
-	}
-	return false
-}
-
-// indexKindGlyph picks a small one-rune-ish glyph by definition kind.
-// Stable colors keep scanning consistent at a glance.
-func indexKindGlyph(kind string) string {
-	switch kind {
-	case "prompt":
-		return shell.Teal.Render("⌬")
-	case "context":
-		return shell.Teal.Render("≣")
-	case "tool":
-		return shell.Teal.Render("⚒")
-	case "agent":
-		return shell.Teal.Render("◆")
-	case "flow":
-		return shell.Teal.Render("⇄")
-	case "flow.step":
-		return shell.Teal.Render("↳")
-	case "composition.parallel", "composition.parallel.branch":
-		return shell.Teal.Render("∥")
-	case "composition.pipeline", "composition.pipeline.stage":
-		return shell.Teal.Render("▸")
-	case "composition.consensus":
-		return shell.Teal.Render("◎")
-	case "composition.swarm":
-		return shell.Teal.Render("✦")
-	case "memory", "memory.block", "memory.store", "blackboard":
-		return shell.Teal.Render("▣")
-	case "rag.pipeline", "rag.pipeline.stage", "rag.retriever":
-		return shell.Teal.Render("⌁")
-	case "eval", "eval.case":
-		return shell.Teal.Render("✓")
-	default:
-		return shell.TextMuted.Render("·")
-	}
-}
-
-func indexFidelityChip(fidelity string) string {
-	switch fidelity {
-	case "partial":
-		return kit.ChipState("partial", shell.ColorAmber)
-	case "error":
-		return kit.ChipState("error", shell.ColorRose)
-	default:
-		return kit.ChipTag(fidelity)
-	}
-}
-
-// clipIDs joins ids with " · " and tail-truncates to fit width.
-func clipIDs(ids []string, width int) string {
-	joined := strings.Join(ids, " · ")
-	if lipgloss.Width(joined) <= width {
-		return joined
-	}
-	return truncate(joined, width)
-}
-
-// exportDefinition writes the focused definition to
-// ~/.crux/exports/definition-{id}.json.
-func (s *Index) exportDefinition() tea.Cmd {
-	if s.cursor < 0 || s.cursor >= len(s.index.Definitions) {
-		return nil
-	}
-	d := s.index.Definitions[s.cursor]
-	return func() tea.Msg {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return dataErrMsg(err.Error())
-		}
-		dir := filepath.Join(home, ".crux", "exports")
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return dataErrMsg(err.Error())
-		}
-		// Replace slashes in the id (e.g. "prompt:writer.prompt") so
-		// the filename is safe across platforms.
-		safe := strings.NewReplacer(":", "_", "/", "_").Replace(d.ID)
-		path := filepath.Join(dir, "definition-"+truncate(safe, 64)+".json")
-		body, err := json.MarshalIndent(d, "", "  ")
-		if err != nil {
-			return dataErrMsg(err.Error())
-		}
-		if err := os.WriteFile(path, body, 0o644); err != nil {
-			return dataErrMsg(err.Error())
-		}
-		return definitionExportedMsg{defID: d.ID, path: path}
-	}
-}
-
-type (
-	indexLoadedMsg        api.IndexData
-	definitionExportedMsg struct{ defID, path string }
-)
-
-func fetchIndex(c DataClient) tea.Cmd {
-	if c == nil {
-		return nil
-	}
-	return func() tea.Msg {
-		rec, err := c.ProjectIndex(context.Background())
-		if err != nil {
-			return dataErrMsg(err.Error())
-		}
-		return indexLoadedMsg(rec)
-	}
 }

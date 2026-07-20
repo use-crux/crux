@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // Keybind is one inline `key  label` hint shown in the status bar.
@@ -45,6 +46,7 @@ func StatusBar(width int, keybinds []Keybind, path string) string {
 	left := " " + strings.Join(hints, "  ")
 
 	right := lipgloss.NewStyle().Foreground(ColorTextMuted).Render(path)
+	right = ansi.Truncate(right, width, "…")
 
 	leftW := lipgloss.Width(left)
 	rightW := lipgloss.Width(right)
@@ -53,7 +55,7 @@ func StatusBar(width int, keybinds []Keybind, path string) string {
 		if maxLeft < 0 {
 			maxLeft = 0
 		}
-		left = lipgloss.NewStyle().MaxWidth(maxLeft).Render(left)
+		left = ansi.Truncate(left, maxLeft, "…")
 		leftW = lipgloss.Width(left)
 	}
 	pad := width - leftW - rightW
@@ -61,7 +63,7 @@ func StatusBar(width int, keybinds []Keybind, path string) string {
 		pad = 0
 	}
 
-	bar := left + strings.Repeat(" ", pad) + right
+	bar := ansi.Truncate(left+strings.Repeat(" ", pad)+right, width, "")
 	return lipgloss.NewStyle().
 		Background(ColorPanel).
 		Foreground(ColorTextMuted).

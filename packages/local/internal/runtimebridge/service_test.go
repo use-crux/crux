@@ -1,14 +1,36 @@
 package runtimebridge
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
+
+func TestServiceRoutesDiagnosticsToItsLogger(t *testing.T) {
+	previous := slog.Default()
+	var processLogs bytes.Buffer
+	slog.SetDefault(slog.New(slog.NewTextHandler(&processLogs, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+
+	var serviceLogs bytes.Buffer
+	service := NewService(nil, WithLogger(slog.New(slog.NewTextHandler(&serviceLogs, nil))))
+	service.RegisterPeer(Peer{PeerID: "peer_scoped_logger", Transport: TransportWS}, nil)
+
+	const diagnostic = "runtime bridge peer registered"
+	if !strings.Contains(serviceLogs.String(), diagnostic) {
+		t.Fatalf("service logs = %q, want %q", serviceLogs.String(), diagnostic)
+	}
+	if strings.Contains(processLogs.String(), diagnostic) {
+		t.Fatalf("runtime bridge diagnostic escaped to process logger: %q", processLogs.String())
+	}
+}
 
 func TestServiceRegistersPeerAndPublishesEvent(t *testing.T) {
 	svc := NewService(nil)

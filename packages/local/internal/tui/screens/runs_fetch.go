@@ -14,6 +14,14 @@ import (
 type runsListLoadedMsg resource.ResourceResult[[]api.ObservabilityRunSummary]
 type runDetailLoadedMsg resource.ResourceResult[api.ObservabilityRunDetail]
 
+func (m runsListLoadedMsg) ResourceOwner() resource.ResourceOwner {
+	return resource.ResourceResult[[]api.ObservabilityRunSummary](m).Token.Owner
+}
+
+func (m runDetailLoadedMsg) ResourceOwner() resource.ResourceOwner {
+	return resource.ResourceResult[api.ObservabilityRunDetail](m).Token.Owner
+}
+
 var runsListOwner = resource.ResourceOwner{Screen: "runs", Resource: "list"}
 
 func runsDetailOwner(runID string) resource.ResourceOwner {
@@ -21,8 +29,12 @@ func runsDetailOwner(runID string) resource.ResourceOwner {
 }
 
 func (s *Runs) fetchRunsList(parent context.Context, c DataClient) tea.Cmd {
+	return s.fetchRunsListAtRevision(parent, c, 0)
+}
+
+func (s *Runs) fetchRunsListAtRevision(parent context.Context, c DataClient, revision uint64) tea.Cmd {
 	snapshot := s.runsResource.Snapshot()
-	ctx, token := s.runsResource.Begin(parent, runsListOwner, snapshot.Token.Revision)
+	ctx, token := s.runsResource.Begin(parent, runsListOwner, maxRevisionFloor(snapshot.Token.Revision, revision))
 	return fetchRunsList(ctx, c, token)
 }
 
@@ -60,12 +72,31 @@ func maxRunRevision(floor uint64, runs []api.ObservabilityRunSummary) uint64 {
 	return maximum
 }
 
+func maxRevisionFloor(left, right uint64) uint64 {
+	if right > left {
+		return right
+	}
+	return left
+}
+
 func (s *Runs) fetchRunDetail(parent context.Context, c DataClient, runID string) tea.Cmd {
+	return s.fetchRunDetailAtRevision(parent, c, runID, 0)
+}
+
+func (s *Runs) fetchRunDetailAtRevision(parent context.Context, c DataClient, runID string, revision uint64) tea.Cmd {
+	cmd, _ := s.beginRunDetailFetchAtRevision(parent, c, runID, revision)
+	return cmd
+}
+
+func (s *Runs) beginRunDetailFetch(parent context.Context, c DataClient, runID string) (tea.Cmd, resource.RequestToken) {
+	return s.beginRunDetailFetchAtRevision(parent, c, runID, 0)
+}
+
+func (s *Runs) beginRunDetailFetchAtRevision(parent context.Context, c DataClient, runID string, revision uint64) (tea.Cmd, resource.RequestToken) {
 	snapshot := s.detailResource.Snapshot()
 	owner := runsDetailOwner(runID)
-	revision := uint64(0)
 	if snapshot.Token.Owner == owner {
-		revision = snapshot.Token.Revision
+		revision = maxRevisionFloor(revision, snapshot.Token.Revision)
 	}
 	for _, run := range s.runSummaries() {
 		if run.RunID == runID && run.Revision > 0 && uint64(run.Revision) > revision {
@@ -74,11 +105,11 @@ func (s *Runs) fetchRunDetail(parent context.Context, c DataClient, runID string
 		}
 	}
 	if snapshot.Token.Owner != owner {
-		s.detail = nil
+		s.diagnosis = nil
 		s.spanList.SetItems(nil)
 	}
 	ctx, token := s.detailResource.Begin(parent, owner, revision)
-	return fetchRunDetail(ctx, c, token)
+	return fetchRunDetail(ctx, c, token), token
 }
 
 func fetchRunDetail(ctx context.Context, c DataClient, token resource.RequestToken) tea.Cmd {

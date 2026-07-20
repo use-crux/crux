@@ -4,8 +4,14 @@ package resource
 
 import (
 	"context"
+	"errors"
 	"sync"
 )
+
+// ErrStaleRevision reports that a current request completed below its named
+// freshness floor. The result is terminal for that request but never replaces
+// the last-good value or lowers the retained floor.
+var ErrStaleRevision = errors.New("resource result is older than requested revision")
 
 // ResourceState is the presentation state of an asynchronous resource.
 type ResourceState uint8
@@ -118,10 +124,33 @@ func (r *Resource[T]) Begin(parent context.Context, owner ResourceOwner, revisio
 func (r *Resource[T]) Apply(result ResourceResult[T]) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if !r.active || result.Token.Request != r.token.Request || result.Token.Owner != r.token.Owner || result.Token.Revision < r.token.Revision {
+	if !r.active || result.Token.Request != r.token.Request || result.Token.Owner != r.token.Owner {
+		return false
+	}
+	if result.Token.Revision < r.token.Revision {
+		r.err = ErrStaleRevision
+		r.refreshing = false
+		r.state = ResourceFailed
+		if r.hasValue {
+			r.state = ResourceDegraded
+		}
+		r.finishRequest()
 		return false
 	}
 	r.token = result.Token
+	if errors.Is(result.Err, context.Canceled) {
+		r.err = nil
+		r.refreshing = false
+		r.state = ResourceIdle
+		if r.hasValue {
+			r.state = ResourceReady
+			if r.isEmpty(r.value) {
+				r.state = ResourceEmpty
+			}
+		}
+		r.finishRequest()
+		return false
+	}
 	if result.Err != nil {
 		r.err = result.Err
 		r.refreshing = false

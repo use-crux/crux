@@ -1,10 +1,33 @@
 package tui
 
 import (
+	"context"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
+	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/tui/screens"
 )
+
+type refreshingLocationTestScreen struct {
+	*fakeScreen
+	refreshCalls int
+}
+
+func (s *refreshingLocationTestScreen) CaptureLocation() screens.ScreenLocation {
+	return screens.ScreenLocation{SelectedIDs: map[string]string{"run": "run-a"}}
+}
+
+func (s *refreshingLocationTestScreen) RestoreLocation(screens.ScreenLocation) {}
+
+func (s *refreshingLocationTestScreen) RestoreLocationRefresh(
+	context.Context,
+	screens.ScreenLocation,
+	screens.DataClient,
+) tea.Cmd {
+	s.refreshCalls++
+	return func() tea.Msg { return struct{}{} }
+}
 
 // TestWorkbenchHandlesNavigateRequest asserts that a cross-screen drill sends
 // its exact route parameter directly to a destination that owns focus.
@@ -63,5 +86,46 @@ func TestGotoNavCurrentRoutePreservesExactTargetAndBackHistory(t *testing.T) {
 	w.goBack()
 	if w.activeNav != "overview" {
 		t.Fatalf("Back active nav = %q, want overview", w.activeNav)
+	}
+}
+
+func TestGotoIndexRootClearsAnExactMissingRouteEvenWhenAlreadyActive(t *testing.T) {
+	w := newTestWorkbench(nil, nil, "http://localhost:4400")
+	index := screens.NewIndex()
+	index.SetIndexForTest(api.IndexData{Definitions: []api.ProjectDefinition{{
+		ID: "agent:available", Kind: "agent", Name: "available",
+	}}})
+	w.screens["index"] = index
+
+	w.Update(screens.NavigateRequest{NavID: "index", Kind: "definition", ID: "agent:missing"})
+	if got := index.SelectedDefinitionID(); got != "" {
+		t.Fatalf("missing route selected substitute %q", got)
+	}
+
+	w.gotoNav("index")
+
+	if got := index.SelectedDefinitionID(); got != "agent:available" {
+		t.Fatalf("root Index retained missing route; selected %q", got)
+	}
+	if got, want := w.activeTarget, (NavTarget{NavID: "index"}); got != want {
+		t.Fatalf("root Index target = %#v, want %#v", got, want)
+	}
+}
+
+func TestWorkbenchBackUsesCurrentDataLocationRefreshCapability(t *testing.T) {
+	w := newTestWorkbench(nil, nil, "http://localhost:4400")
+	runs := &refreshingLocationTestScreen{fakeScreen: &fakeScreen{id: "runs"}}
+	w.screens["runs"] = runs
+	w.activeNav = "runs"
+	w.activeTarget = NavTarget{NavID: "runs"}
+	w.gotoNav("overview")
+
+	cmd := w.goBack()
+
+	if runs.refreshCalls != 1 {
+		t.Fatalf("Back location refresh calls = %d, want 1", runs.refreshCalls)
+	}
+	if cmd == nil {
+		t.Fatal("Back discarded the screen's current-data refresh command")
 	}
 }

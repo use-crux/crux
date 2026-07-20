@@ -2,6 +2,8 @@ package source
 
 import (
 	"context"
+	"io"
+	"log/slog"
 
 	"github.com/use-crux/crux/packages/local/internal/process/workerproc"
 )
@@ -12,6 +14,13 @@ const sourceWorkerMaxResponseBytes = 4 * 1024 * 1024
 type Worker struct {
 	worker      *workerproc.Worker
 	projectRoot string
+}
+
+// WorkerOptions scopes lifecycle logs and child diagnostics for a source
+// resolver process. Zero values preserve the process defaults.
+type WorkerOptions struct {
+	Logger *slog.Logger
+	Stderr io.Writer
 }
 
 // ResolveRequest is a request to resolve source locations.
@@ -90,8 +99,16 @@ type FrameLine struct {
 }
 
 // New creates a source worker. When scriptPath is empty, embeddedScript is used.
-func New(scriptPath string, embeddedScript []byte, projectRoot string) *Worker {
+func New(scriptPath string, embeddedScript []byte, projectRoot string, process ...WorkerOptions) *Worker {
 	opts := []workerproc.Option{workerproc.WithMaxResponseBytes(sourceWorkerMaxResponseBytes)}
+	if len(process) > 0 {
+		if process[0].Logger != nil {
+			opts = append(opts, workerproc.WithLogger(process[0].Logger))
+		}
+		if process[0].Stderr != nil {
+			opts = append(opts, workerproc.WithStderr(process[0].Stderr))
+		}
+	}
 	if scriptPath != "" {
 		opts = append(opts, workerproc.WithScriptPath(scriptPath))
 	}

@@ -26,16 +26,24 @@ func TestSetupCommandRoutesModesToWorker(t *testing.T) {
 		{"apply", []string{"--apply"}, "apply"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			runSetupOperationForCommand = func(_ context.Context, _, mode string) (json.RawMessage, error) {
+			var out, errOut bytes.Buffer
+			streams := output.NewTestIO(&out, &errOut, output.TestIOOptions{})
+			runSetupOperationForCommand = func(_ context.Context, _, mode string, process commandWorkerProcess) (json.RawMessage, error) {
+				if process.stderr != streams.Err {
+					t.Fatal("setup worker stderr did not use the factory IO")
+				}
 				if mode != tc.mode {
 					t.Fatalf("mode = %q", mode)
 				}
 				return json.RawMessage(`{"ok":true,"mode":"` + mode + `","findings":[],"actions":[],"applied":[]}`), nil
 			}
-			cmd := NewSetupCmd(&cli.Factory{})
+			cmd := NewSetupCmd(cli.NewFactoryWithStreams(streams))
 			cmd.SetArgs(append([]string{"--json"}, tc.args...))
 			if err := cmd.Execute(); err != nil {
 				t.Fatal(err)
+			}
+			if !strings.Contains(out.String(), `"mode": "`+tc.mode+`"`) {
+				t.Fatalf("setup JSON did not use factory output: %q", out.String())
 			}
 		})
 	}
@@ -81,14 +89,13 @@ func TestSetupHumanOutputGroupsContributorsAndShowsRemediation(t *testing.T) {
 func TestSetupReturnsExitOneAfterWritingAnUnhealthyReport(t *testing.T) {
 	old := runSetupOperationForCommand
 	defer func() { runSetupOperationForCommand = old }()
-	runSetupOperationForCommand = func(context.Context, string, string) (json.RawMessage, error) {
+	runSetupOperationForCommand = func(context.Context, string, string, commandWorkerProcess) (json.RawMessage, error) {
 		return json.RawMessage(`{"ok":false,"mode":"check","findings":[{"contributorId":"runtime","code":"TABLE_MISSING","resource":"work","severity":"error","message":"missing"}],"actions":[],"applied":[]}`), nil
 	}
 
-	cmd := NewSetupCmd(&cli.Factory{})
 	var out, errOut strings.Builder
-	cmd.SetOut(&out)
-	cmd.SetErr(&errOut)
+	streams := output.NewTestIO(&out, &errOut, output.TestIOOptions{})
+	cmd := NewSetupCmd(cli.NewFactoryWithStreams(streams))
 	cmd.SetArgs([]string{"--json"})
 	err := cmd.Execute()
 	var exitErr domain.ExitError

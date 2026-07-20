@@ -7,5 +7,5 @@ import (
 )
 
 func registerSourceRoutes(mux *http.ServeMux, options SourceResolverOptions, projectRoot string) {
-	source.RegisterRoutes(mux, options.ScriptPath, options.EmbeddedScript, projectRoot)
+	source.RegisterRoutes(mux, options.ScriptPath, options.EmbeddedScript, projectRoot, options.Logger, options.Stderr)
 }

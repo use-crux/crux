@@ -1,13 +1,55 @@
 package workerproc
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 )
+
+func TestWorkerUsesScopedLoggerAndStderr(t *testing.T) {
+	var workerLogs, processLogs, workerStderr bytes.Buffer
+	previous := slog.Default()
+	processLogger := slog.New(slog.NewTextHandler(&processLogs, nil))
+	slog.SetDefault(processLogger)
+	t.Cleanup(func() { slog.SetDefault(previous) })
+
+	worker := New(
+		Script{Name: "fake-scoped-output"},
+		WithCommand(shellPath(t), fakeDiagnosticWorker(t)),
+		WithLogger(slog.New(slog.NewTextHandler(&workerLogs, nil))),
+		WithStderr(&workerStderr),
+	)
+	if _, err := Call[map[string]any](context.Background(), worker, map[string]any{"mode": "ok"}); err != nil {
+		t.Fatalf("worker call: %v", err)
+	}
+	if err := worker.Close(); err != nil {
+		t.Fatalf("worker close: %v", err)
+	}
+
+	if got := workerLogs.String(); !strings.Contains(got, "worker process started") || !strings.Contains(got, "stopping worker process") {
+		t.Fatalf("scoped worker lifecycle logs = %q", got)
+	}
+	if got := processLogs.String(); strings.Contains(got, "worker process") {
+		t.Fatalf("worker lifecycle escaped to process logger: %q", got)
+	}
+	if got := workerStderr.String(); !strings.Contains(got, "worker diagnostic") {
+		t.Fatalf("injected worker stderr = %q", got)
+	}
+}
+
+func fakeDiagnosticWorker(t *testing.T) string {
+	t.Helper()
+	return writeShellScript(t, "diagnostic-worker.sh", `while IFS= read -r line; do
+  printf 'worker diagnostic\n' >&2
+  printf '{"value":"ok"}\n'
+done
+`)
+}
 
 func TestWorkerPrewarmStartsProcess(t *testing.T) {
 	marker := filepath.Join(t.TempDir(), "started")

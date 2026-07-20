@@ -27,7 +27,7 @@ func registerEvalRoutes(mux *http.ServeMux, writer evalwriter.BaselineWriter, ru
 			http.Error(response, err.Error(), http.StatusConflict)
 			return
 		}
-		writeJSON(response, result)
+		writeJSON(response, request, result)
 	})
 	mux.HandleFunc("POST /api/eval/baselines", func(response http.ResponseWriter, request *http.Request) {
 		if writer == nil {
@@ -43,7 +43,7 @@ func registerEvalRoutes(mux *http.ServeMux, writer evalwriter.BaselineWriter, ru
 			http.Error(response, err.Error(), http.StatusConflict)
 			return
 		}
-		writeJSON(response, result)
+		writeJSON(response, request, result)
 	})
 }
 

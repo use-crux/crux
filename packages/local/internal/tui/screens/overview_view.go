@@ -5,15 +5,14 @@ import (
 	"strings"
 
 	"github.com/use-crux/crux/packages/local/internal/tui/kit"
+	"github.com/use-crux/crux/packages/local/internal/tui/resource"
 	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
 
-func (o *Overview) View(size Size) string {
-	if !o.loaded {
-		return centerMsg(size, "loading overview…")
-	}
-	if o.err != "" {
-		return centerMsg(size, "error: "+o.err)
+func (o *Overview) View(_ Size) string {
+	size := o.size
+	if size.Width <= 0 || size.Height <= 0 {
+		return ""
 	}
 	if kit.Classify(size.Width) == kit.LayoutSingle {
 		return o.renderCompact(size)
@@ -29,15 +28,9 @@ func (o *Overview) View(size Size) string {
 	leftRect := cols[0]
 	rightRect := cols[1]
 
-	kpi := o.memoLines("kpi", kpiRect, func() string {
-		return panelRect(o.renderKPIStrip(kpiRect.W), kpiRect.W, kpiRect.H)
-	})
-	left := o.memoLines(o.leftMemoFocus(), leftRect, func() string {
-		return panelRect(o.renderLeftColumn(leftRect.W, leftRect.H), leftRect.W, leftRect.H)
-	})
-	right := o.memoLines(o.rightMemoFocus(), rightRect, func() string {
-		return panelRect(o.renderRightColumn(rightRect.W, rightRect.H), rightRect.W, rightRect.H)
-	})
+	kpi := strings.Split(panelRect(o.renderKPIState(kpiRect.W, kpiRect.H), kpiRect.W, kpiRect.H), "\n")
+	left := strings.Split(panelRect(o.renderLeftColumn(leftRect.W, leftRect.H), leftRect.W, leftRect.H), "\n")
+	right := strings.Split(panelRect(o.renderRightColumn(rightRect.W, rightRect.H), rightRect.W, rightRect.H), "\n")
 
 	bodyLines := kit.Compose(
 		[]kit.Rect{leftRect, rightRect},
@@ -48,35 +41,80 @@ func (o *Overview) View(size Size) string {
 }
 
 func (o *Overview) renderCompact(size Size) string {
+	snapshot := o.summaryResource.Snapshot()
+	summary := o.overviewSummary()
 	lines := make([]string, 0, size.Height)
 	appendBlock := func(block string) {
 		lines = append(lines, strings.Split(block, "\n")...)
 	}
-	appendBlock(shell.PaneHeader(size.Width, "Overview", "", shell.TextMuted.Render("compact")))
-	appendBlock(padRow(" "+shell.Text.Render(fmt.Sprintf("insights %d", o.overview.InsightCount))+"  "+shell.TextDim.Render(fmt.Sprintf("%dH %dM %dL", o.overview.OpenInsightSeverityCounts["high"], o.overview.OpenInsightSeverityCounts["medium"], o.overview.OpenInsightSeverityCounts["low"])), size.Width))
-	appendBlock(padRow(" "+shell.Text.Render("pass rate")+"  "+shell.Green.Render(percent(o.overview.PassRate)), size.Width))
-	appendBlock(padRow(" "+shell.Text.Render("cost / 100")+"  "+shell.Amber.Render(dollars(o.overview.CostPer100Runs)), size.Width))
-	appendBlock(padRow(" "+shell.Text.Render("p95 latency")+"  "+shell.Amber.Render(latency(o.overview.P95LatencyMs)), size.Width))
-	appendBlock(shell.PaneHeader(size.Width, "Top insight", "", ""))
-	if len(o.insights) == 0 {
-		appendBlock(padRow(" "+shell.TextMuted.Render("no insights"), size.Width))
+	meta := appendResourceStatus("compact · h/l pane", resourceStatus(snapshot))
+	appendBlock(overviewPaneHeader(size.Width, "Overview", "", meta))
+	if !snapshot.HasValue || snapshot.State == resource.ResourceEmpty {
+		appendBlock(padRow(" "+shell.TextMuted.Render(resourceStateMessage(snapshot.State, snapshot.Err, "overview summary")), size.Width))
 	} else {
-		ins := o.insights[0]
-		appendBlock(padRow(" "+kit.SeverityDot(ins.Severity)+" "+shell.Text.Render(truncate(ins.Title, size.Width-8)), size.Width))
-		appendBlock(padRow("   "+shell.TextDim.Render(truncate(ins.Summary, size.Width-4)), size.Width))
+		appendBlock(padRow(" "+shell.Text.Render(fmt.Sprintf("insights %d", summary.InsightCount))+"  "+shell.TextDim.Render(fmt.Sprintf("%dH %dM %dL", summary.OpenInsightSeverityCounts["high"], summary.OpenInsightSeverityCounts["medium"], summary.OpenInsightSeverityCounts["low"])), size.Width))
+		appendBlock(padRow(" "+shell.Text.Render("pass rate")+"  "+shell.Green.Render(percent(summary.PassRate)), size.Width))
+		appendBlock(padRow(" "+shell.Text.Render("cost / 100")+"  "+shell.Amber.Render(dollars(summary.CostPer100Runs)), size.Width))
+		appendBlock(padRow(" "+shell.Text.Render("p95 latency")+"  "+shell.Amber.Render(latency(summary.P95LatencyMs)), size.Width))
 	}
-	appendBlock(shell.PaneHeader(size.Width, "Recent run", "", ""))
-	if runs := o.recentRunsList(); len(runs) > 0 {
-		run := runs[0]
-		appendBlock(padRow(" "+kit.StatusDot(run.Status)+" "+shell.Text.Render(truncate(run.TraceID, 10))+"  "+shell.TextDim.Render(truncate(run.TargetID, size.Width-18)), size.Width))
-	} else {
-		appendBlock(padRow(" "+shell.TextMuted.Render("no runs"), size.Width))
+	remaining := max(1, size.Height-len(lines))
+	switch o.focusedPanel {
+	case panelRuns:
+		appendBlock(o.renderRecentRunsBlock(size.Width, remaining))
+	case panelActivity:
+		appendBlock(o.renderActivityBlock(size.Width, remaining))
+	default:
+		appendBlock(o.renderInsightsBlock(size.Width, remaining))
 	}
 	if len(lines) > size.Height {
 		lines = lines[:size.Height]
 	}
 	for len(lines) < size.Height {
 		lines = append(lines, strings.Repeat(" ", size.Width))
+	}
+	if len(lines) > 0 {
+		lines[len(lines)-1] = padRow(" "+shell.TextMuted.Render(o.compactPosition()), size.Width)
+	}
+	return kit.PadBlock(strings.Join(lines, "\n"), size.Width, size.Height)
+}
+
+func (o *Overview) compactPosition() string {
+	switch o.focusedPanel {
+	case panelRuns:
+		return overviewListPosition("run", o.runList.Position()) + " · j/k move · h/l pane"
+	case panelActivity:
+		total := len(o.projectedActivityRows())
+		current := 0
+		if total > 0 {
+			current = o.activityScroll + 1
+		}
+		return fmt.Sprintf("activity %d/%d · j/k scroll · h/l pane", current, total)
+	default:
+		return overviewListPosition("insight", o.insightList.Position()) + " · j/k move · h/l pane"
+	}
+}
+
+func overviewListPosition(label string, position kit.ListPosition) string {
+	current := 0
+	if position.Total > 0 && position.SelectedIndex >= 0 {
+		current = position.SelectedIndex + 1
+	}
+	return fmt.Sprintf("%s %d/%d", label, current, position.Total)
+}
+
+func (o *Overview) renderKPIState(width, height int) string {
+	snapshot := o.summaryResource.Snapshot()
+	if !snapshot.HasValue || snapshot.State == resource.ResourceEmpty {
+		return centerMsg(Size{Width: width, Height: height}, resourceStateMessage(snapshot.State, snapshot.Err, "overview summary"))
+	}
+	view := o.renderKPIStrip(width)
+	status := resourceStatus(snapshot)
+	if status == "" {
+		return view
+	}
+	lines := strings.Split(view, "\n")
+	if len(lines) > 0 {
+		lines[0] = padRow(" "+shell.Amber.Render(truncate(status, max(0, width-2))), width)
 	}
 	return strings.Join(lines, "\n")
 }

@@ -20,7 +20,7 @@ func (s *fakeActionScreen) Actions(context.Context, screens.DataClient) []intera
 	return s.actions
 }
 
-func TestWorkbenchHelpRendersExecutableWorkspaceActionsForLegacyScreen(t *testing.T) {
+func TestWorkbenchHelpRendersExecutableOverviewAndWorkspaceActions(t *testing.T) {
 	w := newTestWorkbench(nil, nil, "http://localhost:4400")
 	w.Resize(160, 40)
 	w.Update(tea.KeyPressMsg(tea.Key{Text: "?", Code: '?'}))
@@ -32,8 +32,8 @@ func TestWorkbenchHelpRendersExecutableWorkspaceActionsForLegacyScreen(t *testin
 	if !strings.Contains(strings.ToLower(out), "workspace") || !strings.Contains(out, "command palette") {
 		t.Errorf("help overlay omitted executable workspace actions:\n%s", out)
 	}
-	if strings.Contains(strings.ToLower(out), "act · overview") {
-		t.Errorf("help treated legacy Overview hints as executable actions:\n%s", out)
+	if !strings.Contains(strings.ToLower(out), "act · overview") || !strings.Contains(out, "next insight") {
+		t.Errorf("help omitted executable focused Overview actions:\n%s", out)
 	}
 }
 

@@ -3,8 +3,6 @@ package commands
 import (
 	"encoding/json"
 	"fmt"
-	"io"
-	"log/slog"
 
 	"github.com/spf13/cobra"
 	"github.com/use-crux/crux/packages/local/internal/cli"
@@ -56,21 +54,19 @@ func newRuntimeCancelCmd(f *cli.Factory, opts *runtimeGenerateOptions) *cobra.Co
 }
 
 func runAndPrintRuntimeOperation(cmd *cobra.Command, f *cli.Factory, opts *runtimeGenerateOptions, operation, workID string) error {
-	if !startupDebugEnabled(false) {
-		slog.SetDefault(slog.New(slog.NewTextHandler(io.Discard, nil)))
-	}
+	io := f.Streams()
 	root, err := resolveRuntimeGenerateRoot(opts.cwd)
 	if err != nil {
 		return err
 	}
-	result, err := runRuntimeOperationForCommand(cmd.Context(), root, operation, workID)
+	result, err := runRuntimeOperationForCommand(cmd.Context(), root, operation, workID, newCommandWorkerProcess(io))
 	if err != nil {
 		return err
 	}
 	if opts.jsonOutput {
-		return writePrettyJSON(cmd.OutOrStdout(), result)
+		return writePrettyJSON(io.Out, result)
 	}
-	return printRuntimeOperationResult(f.Streams(), result)
+	return printRuntimeOperationResult(io, result)
 }
 
 func printRuntimeOperationResult(io *output.IO, raw json.RawMessage) error {

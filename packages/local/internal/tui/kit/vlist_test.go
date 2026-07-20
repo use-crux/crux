@@ -91,6 +91,11 @@ func TestVListProperties(t *testing.T) {
 				list.End()
 			}
 			assertVListInvariants(t, &list)
+			beforeCursor, beforeOffset := list.cursor, list.offset
+			list.Render(20, func(item string, _ int, _ bool, _ int) string { return item })
+			if list.cursor != beforeCursor || list.offset != beforeOffset {
+				t.Fatalf("render mutated cursor/offset from %d/%d to %d/%d", beforeCursor, beforeOffset, list.cursor, list.offset)
+			}
 		}
 	}
 }

@@ -67,28 +67,29 @@ func TestRunsResizeInitializesDocumentBeforeInput(t *testing.T) {
 	}
 }
 
-func TestRunsCachedRectangleRestoresDocumentBoundsBeforeInput(t *testing.T) {
+func TestRunsResizeRestoresDocumentBoundsBeforeInput(t *testing.T) {
 	runs := newLongSpanRuns()
-	small := Size{Width: 70, Height: 10}
-	large := Size{Width: 100, Height: 20}
+	small := Size{Width: 70, Height: 17}
+	large := Size{Width: 100, Height: 24}
 
 	runs.Resize(small)
 	runs.View(small)
 	runs.Resize(large)
 	runs.View(large)
 	runs.Resize(small)
-	runs.View(small) // served from the first rectangle's memo entry
+	runs.View(small)
+	wantPage := runs.spanDocument.Position().LastLine
 	runs.Update(testContext, tea.KeyPressMsg{Code: tea.KeyPgDown}, nil)
 
-	if got := runs.spanDocument.Position().Offset; got != 7 {
-		t.Fatalf("offset after cached small view page down = %d, want small seven-line page", got)
+	if got := runs.spanDocument.Position().Offset; got != wantPage {
+		t.Fatalf("offset after resized small view page down = %d, want page size %d", got, wantPage)
 	}
 }
 
-func TestRunsCachedRectangleReflectsResizeClampedPosition(t *testing.T) {
+func TestRunsResizeReflectsClampedDocumentPosition(t *testing.T) {
 	runs := newLongSpanRuns()
-	small := Size{Width: 70, Height: 10}
-	large := Size{Width: 100, Height: 20}
+	small := Size{Width: 70, Height: 17}
+	large := Size{Width: 100, Height: 24}
 
 	viewRunsForTest(runs, small)
 	runs.Update(testContext, tea.KeyPressMsg{Code: tea.KeyEnd}, nil)
@@ -100,10 +101,10 @@ func TestRunsCachedRectangleReflectsResizeClampedPosition(t *testing.T) {
 	want := fmt.Sprintf("%d-%d/%d", position.FirstLine, position.LastLine, position.TotalLines)
 
 	if !strings.Contains(got, want) {
-		t.Fatalf("cached small view omitted current clamped position %q:\n%s", want, got)
+		t.Fatalf("resized small view omitted current clamped position %q:\n%s", want, got)
 	}
 	if got == endView {
-		t.Fatal("returning to the cached rectangle rendered its stale end-position lines")
+		t.Fatal("returning to the small rectangle rendered stale end-position lines")
 	}
 }
 
@@ -125,9 +126,9 @@ func TestRunsSpanDetailNeverCrossesItsRenderingBounds(t *testing.T) {
 func TestRunsSpanDetailWrapsLongAttributeWithoutLosingContent(t *testing.T) {
 	longValue := "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 	runs := NewRuns()
-	runs.detail = &api.InspectRunDetailRecord{
-		Run:   api.InspectRunRecord{TraceID: "run-long-value"},
-		Trace: api.InspectTraceRecord{StartedAt: 1},
+	setRunDiagnosisForTest(runs, runDiagnosisFixture{
+		RunID:     "run-long-value",
+		StartedAt: 1,
 		Spans: []api.InspectRunSpan{{
 			ID:         "span-long-value",
 			Name:       "long value",
@@ -135,7 +136,7 @@ func TestRunsSpanDetailWrapsLongAttributeWithoutLosingContent(t *testing.T) {
 			Op:         "tool.call",
 			Attributes: map[string]string{"long_value": longValue},
 		}},
-	}
+	})
 	selectSpanForTest(runs, "span-long-value")
 	runs.setFocus(focusSpanDetail)
 	renderSpanDetailForTest(runs, 24, 40)
@@ -157,9 +158,9 @@ func newLongSpanRuns() *Runs {
 	for i := range 20 {
 		attributes[fmt.Sprintf("attribute.%02d", i)] = strings.Repeat(fmt.Sprintf("value-%02d", i), 4)
 	}
-	runs.detail = &api.InspectRunDetailRecord{
-		Run:   api.InspectRunRecord{TraceID: "run-long"},
-		Trace: api.InspectTraceRecord{StartedAt: 1},
+	setRunDiagnosisForTest(runs, runDiagnosisFixture{
+		RunID:     "run-long",
+		StartedAt: 1,
 		Spans: []api.InspectRunSpan{{
 			ID:         "span-long",
 			Name:       "long span",
@@ -167,7 +168,7 @@ func newLongSpanRuns() *Runs {
 			Op:         "tool.call",
 			Attributes: attributes,
 		}},
-	}
+	})
 	selectSpanForTest(runs, "span-long")
 	runs.setFocus(focusSpanDetail)
 	return runs

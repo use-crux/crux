@@ -1,0 +1,30 @@
+[38;2;42;53;47m──────────────────────────────────[m│[38;2;42;53;47m─────────────────────────────────────────────────────────────────[m
+ [38;2;204;214;207m[38;2;95;227;200m▸ [m[1;38;2;95;227;200mDefinitions[m[m  [38;2;69;78;73m· 5[m           [38;2;69;78;73m1/5[m │ [38;2;204;214;207mwriter.prompt[m  [38;2;69;78;73m· prompt[m                                 [38;2;69;78;73m1–27/38[m
+[38;2;42;53;47m──────────────────────────────────[m│[38;2;42;53;47m─────────────────────────────────────────────────────────────────[m
+[38;2;95;227;200m▌[m [38;2;95;227;200m⌬[m [38;2;204;214;207mwriter.prompt[m [48;2;227;179;65m [m[1;38;2;11;15;14;48;2;227;179;65mlint 1[m[48;2;227;179;65m [m        │ [38;2;69;78;73mIDENTITY[m
+  [38;2;95;227;200m≣[m [38;2;204;214;207mdocs context[m                  │ id           prompt:writer.prompt
+  [38;2;95;227;200m⚒[m [38;2;204;214;207msearch[m [48;2;227;179;65m [m[1;38;2;11;15;14;48;2;227;179;65mpartial[m[48;2;227;179;65m [m              │ kind         prompt
+  [38;2;95;227;200m◆[m [38;2;204;214;207mdocs agent[m                    │ name         writer.prompt
+  [38;2;95;227;200m✓[m [38;2;204;214;207mgrounding eval[m [48;2;244;120;123m [m[1;38;2;11;15;14;48;2;244;120;123merror[m[48;2;244;120;123m [m        │ description  Writes a concise answer from retrieved evidence
+                                  │without losing exact citations.
+                                  │ path         agents › docs › writer
+                                  │ tags         production, documentation
+                                  │ status       active
+                                  │ fidelity     resolved
+                                  │ fingerprint  sha256:3d10d21e3ccda26024a3b95bacebe0f86d3ad55f
+                                  │ [38;2;69;78;73mSOURCE[m
+                                  │ location     src/agents/documentation/very-long-writer-prompt.
+                                  │ts:12:7 · writerPrompt
+                                  │ [38;2;69;78;73mSOURCE SNIPPET[m
+                                  │ language     typescript
+                                  │ range        src/agents/documentation/very-long-writer-prompt.
+                                  │ts:12–18
+                                  │ status       truncated by indexer
+                                  │export const writerPrompt = definePrompt({
+                                  │  name: 'writer.prompt',
+                                  │  system: 'Answer with grounded citations — never invent
+                                  │evidence.',
+                                  │})
+                                  │ [38;2;69;78;73mSOURCE REFERENCES[m
+                                  │ reference    ref:model
+                                  │ model        src/agents/documentation/models.ts:4 · model ·

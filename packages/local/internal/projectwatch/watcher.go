@@ -57,7 +57,12 @@ func (w *Watcher) Run(ctx context.Context) error {
 	}
 
 	events := make(chan classifiedEvent)
-	go w.dispatch(ctx, events)
+	dispatchDone := make(chan struct{})
+	go func() {
+		defer close(dispatchDone)
+		w.dispatch(ctx, events)
+	}()
+	defer func() { <-dispatchDone }()
 
 	for {
 		select {
@@ -187,6 +192,7 @@ func classifyFsEvent(root string, event fsnotify.Event) (classifiedEvent, bool) 
 // while a previous run is still executing.
 type Runner struct {
 	mu      sync.Mutex
+	workers sync.WaitGroup
 	state   queueState
 	handler func(context.Context, Run)
 }
@@ -198,14 +204,27 @@ func NewRunner(handler func(context.Context, Run)) *Runner {
 
 // Enqueue schedules delta processing. It returns immediately.
 func (r *Runner) Enqueue(ctx context.Context, delta Delta) {
+	if ctx.Err() != nil {
+		return
+	}
 	r.mu.Lock()
 	transition := enqueueDelta(r.state, delta)
 	r.state = transition.state
+	if transition.action == queueActionStart {
+		r.workers.Add(1)
+	}
 	r.mu.Unlock()
 	if transition.action == queueActionStart {
-		go r.run(ctx, transition.run)
+		go func() {
+			defer r.workers.Done()
+			r.run(ctx, transition.run)
+		}()
 	}
 }
+
+// Wait joins the active single-flight handler. Call it only after the source
+// feeding Enqueue has stopped.
+func (r *Runner) Wait() { r.workers.Wait() }
 
 func (r *Runner) run(ctx context.Context, run Run) {
 	for {

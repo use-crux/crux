@@ -144,6 +144,36 @@ func TestResourceInitialFailureHasNoValue(t *testing.T) {
 	}
 }
 
+func TestResourceExpectedCancellationIsSilent(t *testing.T) {
+	res := New(func(value string) bool { return value == "" })
+	owner := ResourceOwner{Screen: "overview", Resource: "summary"}
+	_, token := res.Begin(context.Background(), owner, 1)
+
+	if accepted := res.Apply(ResourceResult[string]{Token: token, Err: context.Canceled}); accepted {
+		t.Fatal("expected cancellation was accepted as a presentation result")
+	}
+	snapshot := res.Snapshot()
+	if snapshot.State != ResourceIdle || snapshot.HasValue || snapshot.Refreshing || snapshot.Err != nil {
+		t.Fatalf("state after expected cancellation = %#v, want silent idle resource", snapshot)
+	}
+}
+
+func TestResourceCanceledRefreshPreservesLastGoodValue(t *testing.T) {
+	res := New(func(value string) bool { return value == "" })
+	owner := ResourceOwner{Screen: "overview", Resource: "summary"}
+	_, initial := res.Begin(context.Background(), owner, 1)
+	res.Apply(ResourceResult[string]{Token: initial, Value: "last good"})
+	_, refresh := res.Begin(context.Background(), owner, 2)
+
+	if accepted := res.Apply(ResourceResult[string]{Token: refresh, Err: context.Canceled}); accepted {
+		t.Fatal("canceled refresh was accepted as a presentation result")
+	}
+	snapshot := res.Snapshot()
+	if snapshot.State != ResourceReady || !snapshot.HasValue || snapshot.Value != "last good" || snapshot.Refreshing || snapshot.Err != nil {
+		t.Fatalf("state after canceled refresh = %#v, want last-good ready resource", snapshot)
+	}
+}
+
 func TestResourceReplacementCancelsPreviousContext(t *testing.T) {
 	res := New(func(value string) bool { return value == "" })
 	owner := ResourceOwner{Screen: "runs", Resource: "detail", RecordID: "run-1"}
@@ -202,8 +232,8 @@ func TestResourceRejectsStaleRevision(t *testing.T) {
 	if accepted := res.Apply(ResourceResult[string]{Token: stale, Value: "stale"}); accepted {
 		t.Fatal("stale revision was accepted")
 	}
-	if snapshot := res.Snapshot(); snapshot.State != ResourceLoading || snapshot.HasValue {
-		t.Fatalf("state after stale revision = %#v, want loading without value", snapshot)
+	if snapshot := res.Snapshot(); snapshot.State != ResourceFailed || snapshot.HasValue || snapshot.Refreshing || !errors.Is(snapshot.Err, ErrStaleRevision) {
+		t.Fatalf("state after stale revision = %#v, want terminal stale failure", snapshot)
 	}
 }
 

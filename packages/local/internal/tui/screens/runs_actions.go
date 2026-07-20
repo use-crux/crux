@@ -9,6 +9,17 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
 
+func focusActionLabel(focus runsFocus) string {
+	switch focus {
+	case focusRuns:
+		return "load run"
+	case focusWaterfall:
+		return "span detail"
+	default:
+		return "open"
+	}
+}
+
 func (s *Runs) updateKey(ctx context.Context, msg tea.KeyPressMsg, client DataClient) tea.Cmd {
 	if !s.filteringRuns && s.focus == focusRuns {
 		if cmd, handled := s.updateRunListInput(ctx, msg, client); handled {
@@ -32,7 +43,7 @@ func (s *Runs) Actions(ctx context.Context, client DataClient) []interaction.Act
 	}
 
 	inspectReason := ""
-	if span := s.currentSpan(); span == nil || len(span.Data) == 0 {
+	if span := s.currentSpan(); span == nil || (s.currentActivity() == nil && len(span.Data) == 0) {
 		inspectReason = "selected span has no raw payload"
 	}
 	exportReason := ""
@@ -41,6 +52,7 @@ func (s *Runs) Actions(ctx context.Context, client DataClient) []interaction.Act
 	if !detailSnapshot.HasValue || selectedID == "" || detailSnapshot.Value.Run.RunID != selectedID {
 		exportReason = "load a run before exporting"
 	}
+	definitionReason := disabledUnless(len(s.definitionChoices()) > 0, "no definition references")
 	activateReason := ""
 	switch s.focus {
 	case focusRuns:
@@ -129,6 +141,12 @@ func (s *Runs) Actions(ctx context.Context, client DataClient) []interaction.Act
 			Binding:        key.NewBinding(key.WithKeys("f"), key.WithHelp("f", "status filter")),
 			DisabledReason: disabledUnless(s.focus == focusRuns, "focus the run list to filter"),
 			Run:            func() tea.Cmd { return s.cycleRunStatusFilter(ctx, client) },
+		},
+		{
+			ID:             "runs.definition",
+			Binding:        key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "open definition")),
+			DisabledReason: definitionReason,
+			Run:            s.openDefinition,
 		},
 		{
 			ID:             "runs.inspect",

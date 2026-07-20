@@ -43,7 +43,7 @@ preflight errors.`,
 		},
 	}
 	registerRunFlags(cmd, opts)
-	cmd.AddCommand(newRunCmd(f), newListCmd(), newShowCmd(), newDiffCmd(), newBaselineCmd())
+	cmd.AddCommand(newRunCmd(f), newListCmd(f), newShowCmd(f), newDiffCmd(f), newBaselineCmd(f))
 	return cmd
 }
 
@@ -74,7 +74,7 @@ func newRunCmd(f *cli.Factory) *cobra.Command {
 	return cmd
 }
 
-func newListCmd() *cobra.Command {
+func newListCmd(f *cli.Factory) *cobra.Command {
 	var cwd string
 	cmd := &cobra.Command{
 		Use:          "list",
@@ -82,14 +82,14 @@ func newListCmd() *cobra.Command {
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runCoordinator(cmd, cwd, []string{"--list"})
+			return runCoordinator(f.Streams(), cwd, []string{"--list"})
 		},
 	}
 	cmd.Flags().StringVar(&cwd, "cwd", "", "Working directory for Eval discovery")
 	return cmd
 }
 
-func newBaselineCmd() *cobra.Command {
+func newBaselineCmd(f *cli.Factory) *cobra.Command {
 	cmd := &cobra.Command{Use: "baseline", Short: "Manage accepted Eval Baselines"}
 	var cwd, variant string
 	var acceptFailing bool
@@ -106,7 +106,7 @@ func newBaselineCmd() *cobra.Command {
 			if acceptFailing {
 				workerArgs = append(workerArgs, "--accept-failing")
 			}
-			return runCoordinator(command, cwd, workerArgs)
+			return runCoordinator(f.Streams(), cwd, workerArgs)
 		},
 	}
 	set.Flags().StringVar(&cwd, "cwd", "", "Working directory containing the Eval run")

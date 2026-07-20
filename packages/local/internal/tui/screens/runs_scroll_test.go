@@ -170,13 +170,13 @@ func TestRunsListRenderingReflectsResizeAdjustedOffset(t *testing.T) {
 	short := Size{Width: 70, Height: 6}
 	runs.Resize(tall)
 	runs.Update(testContext, tea.KeyPressMsg{Code: tea.KeyEnd}, nil)
-	tallList, _ := runsPaneRects(tall)
-	runs.renderListLines(tallList) // populate the tall rectangle's memo entry
+	tallList := runs.layout.list
 
 	runs.Resize(short)
-	shortList, _ := runsPaneRects(short)
+	shortList := runs.layout.list
 	runs.renderListLines(shortList)
 	runs.Resize(tall)
+	tallList = runs.layout.list
 	got := runs.renderListLines(tallList)
 	want := blockLines(runs.renderList(tallList.W, tallList.H), tallList)
 

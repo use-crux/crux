@@ -8,29 +8,35 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/use-crux/crux/packages/local/internal/api"
+	"github.com/use-crux/crux/packages/local/internal/tui/kit"
 	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
 
 // --- helpers ---------------------------------------------------------------
 
 func (s *Runs) currentSpan() *api.InspectRunSpan {
-	if s.detail == nil {
-		return nil
-	}
-	selectedID := s.SelectedSpanID()
-	for i, sp := range s.detail.Spans {
-		if sp.ID == selectedID {
-			return &s.detail.Spans[i]
-		}
+	selected, _, ok := s.spanList.Selected()
+	if ok {
+		span := selected.Span
+		return &span
 	}
 	return nil
+}
+
+func (s *Runs) currentActivity() *api.ObservabilityRunDetailNode {
+	selected, _, ok := s.spanList.Selected()
+	if !ok || firstNonEmpty(selected.Activity.SpanID, selected.Activity.ID) == "" {
+		return nil
+	}
+	activity := selected.Activity
+	return &activity
 }
 
 func parentLabel(span *api.InspectRunSpan) string {
 	if span.ParentID == "" {
 		return "— (root)"
 	}
-	return truncate(span.ParentID, 16)
+	return truncateRunsInline(span.ParentID, 16)
 }
 
 func formatSpanStart(spanStart, traceStart int64) string {
@@ -83,9 +89,9 @@ func renderAttributes(attrs map[string]string, width int) string {
 
 	// Determine key column width (cap at half the pane).
 	keyW := 0
-	for _, k := range keys {
-		if len(k) > keyW {
-			keyW = len(k)
+	for _, key := range keys {
+		if width := lipgloss.Width(sanitizeRunsInline(key)); width > keyW {
+			keyW = width
 		}
 	}
 	if keyW > width/2 {
@@ -94,9 +100,10 @@ func renderAttributes(attrs map[string]string, width int) string {
 
 	var b strings.Builder
 	for _, k := range keys {
-		v := attrs[k]
+		v := sanitizeRunsInline(attrs[k])
+		k = sanitizeRunsInline(k)
 		row := fmt.Sprintf(" %s  %s",
-			shell.TextDim.Render(padString2(k+":", keyW+1)),
+			shell.TextDim.Render(padRunsInline(k+":", keyW+1)),
 			shell.Text.Render(v),
 		)
 		b.WriteString(row)
@@ -133,7 +140,9 @@ func commaInt(n int) string {
 // screens import it via the package.
 func kvRow(k, v string, _ int) string {
 	kCol := 14
-	key := lipgloss.NewStyle().Foreground(shell.ColorTextMuted).Render(padString2(k, kCol))
+	k = kit.SanitizeInline(k)
+	v = kit.SanitizeInline(v)
+	key := lipgloss.NewStyle().Foreground(shell.ColorTextMuted).Render(padRunsInline(k, kCol))
 	val := lipgloss.NewStyle().Foreground(shell.ColorText).Render(v)
 	row := fmt.Sprintf(" %s %s", key, val)
 	return row + "\n"
@@ -142,7 +151,9 @@ func kvRow(k, v string, _ int) string {
 // kvRowColored is kvRow with a colored value.
 func kvRowColored(k, v string, c color.Color, _ int) string {
 	kCol := 14
-	key := lipgloss.NewStyle().Foreground(shell.ColorTextMuted).Render(padString2(k, kCol))
+	k = kit.SanitizeInline(k)
+	v = kit.SanitizeInline(v)
+	key := lipgloss.NewStyle().Foreground(shell.ColorTextMuted).Render(padRunsInline(k, kCol))
 	val := lipgloss.NewStyle().Foreground(c).Render(v)
 	row := fmt.Sprintf(" %s %s", key, val)
 	return row + "\n"

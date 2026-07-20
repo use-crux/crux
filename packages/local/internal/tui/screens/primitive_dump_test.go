@@ -133,8 +133,8 @@ func TestDumpPrimitiveRenders(t *testing.T) {
 		body, _ := json.Marshal(tc.payload)
 		r := NewRuns()
 		selectRunForTest(r, "run-x")
-		r.detail = &api.InspectRunDetailRecord{
-			Run: api.InspectRunRecord{TraceID: "run-x"},
+		setRunDiagnosisForTest(r, runDiagnosisFixture{
+			RunID: "run-x",
 			Spans: []api.InspectRunSpan{
 				{
 					ID:        "sp1",
@@ -145,8 +145,8 @@ func TestDumpPrimitiveRenders(t *testing.T) {
 					Data:      json.RawMessage(body),
 				},
 			},
-			Trace: api.InspectTraceRecord{StartedAt: 1716730000000},
-		}
+			StartedAt: 1716730000000,
+		})
 		selectSpanForTest(r, "sp1")
 
 		out := stripANSI(renderSpanDetailForTest(r, 80, 60))

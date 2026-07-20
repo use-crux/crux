@@ -49,6 +49,7 @@ type Service struct {
 	peers      map[string]*peerState
 	subs       map[chan Event]struct{}
 	httpClient *http.Client
+	logger     *slog.Logger
 }
 
 type peerState struct {
@@ -62,15 +63,21 @@ type commandReply struct {
 	err    *CommandError
 }
 
-func NewService(client *http.Client) *Service {
+// NewService creates an isolated runtime bridge service.
+func NewService(client *http.Client, options ...Option) *Service {
 	if client == nil {
 		client = http.DefaultClient
 	}
-	return &Service{
+	service := &Service{
 		peers:      map[string]*peerState{},
 		subs:       map[chan Event]struct{}{},
 		httpClient: client,
+		logger:     slog.Default(),
 	}
+	for _, option := range options {
+		option(service)
+	}
+	return service
 }
 
 func (s *Service) Subscribe(ctx context.Context) <-chan Event {
@@ -101,7 +108,7 @@ func (s *Service) RegisterPeer(peer Peer, send Sender) Peer {
 	s.mu.Lock()
 	s.peers[peer.PeerID] = &peerState{peer: peer, send: send, pending: map[string]chan commandReply{}}
 	s.mu.Unlock()
-	slog.Info("runtime bridge peer registered", "peerId", peer.PeerID, "transport", peer.Transport, "runtimeName", peer.RuntimeName, "endpointUrl", peer.EndpointURL)
+	s.Logger().Info("runtime bridge peer registered", "peerId", peer.PeerID, "transport", peer.Transport, "runtimeName", peer.RuntimeName, "endpointUrl", peer.EndpointURL)
 	s.publish(Event{Type: "runtime_bridge:event", Action: "peer.connected", PeerID: peer.PeerID, Peer: &peer, Timestamp: time.Now().UTC()})
 	return peer
 }

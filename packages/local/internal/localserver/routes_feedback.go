@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"log/slog"
 	"net/http"
 
 	"github.com/use-crux/crux/packages/local/internal/observability"
@@ -54,7 +53,7 @@ func registerFeedbackRoutes(
 				runContext = feedbackContextSnapshot(r.Context(), observabilityService, run)
 			case errors.Is(err, observability.ErrNotFound):
 			default:
-				slog.Warn("feedback run lookup failed", "error", err)
+				requestLogger(r).Warn("feedback run lookup failed", "error", err)
 				http.Error(w, "feedback context lookup failed", http.StatusServiceUnavailable)
 				return
 			}
@@ -71,13 +70,13 @@ func registerFeedbackRoutes(
 				http.Error(w, validationError.Error(), http.StatusBadRequest)
 				return
 			}
-			slog.Warn("feedback submission failed", "error", err)
+			requestLogger(r).Warn("feedback submission failed", "error", err)
 			http.Error(w, "feedback submission failed", http.StatusInternalServerError)
 			return
 		}
 		if runExists {
 			if err := service.LinkRunContext(r.Context(), runContext); err != nil {
-				slog.Warn("feedback context snapshot failed", "error", err)
+				requestLogger(r).Warn("feedback context snapshot failed", "error", err)
 			}
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -85,7 +84,7 @@ func registerFeedbackRoutes(
 			w.WriteHeader(http.StatusCreated)
 		}
 		if err := json.NewEncoder(w).Encode(receipt); err != nil {
-			slog.Warn("feedback receipt encode failed", "error", err)
+			requestLogger(r).Warn("feedback receipt encode failed", "error", err)
 		}
 	})
 }

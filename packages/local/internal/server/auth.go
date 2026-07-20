@@ -17,12 +17,12 @@ const sessionCookieName = "crux_session"
 // when it is exposed beyond the loopback interface (tunnel or CRUX_HOST). It is
 // never shown to the local user: it is embedded in the auto-opened URL and
 // exchanged for an HttpOnly cookie on first load.
-func generateSessionToken() string {
+func generateSessionToken(logger *slog.Logger) string {
 	buf := make([]byte, 32)
 	if _, err := rand.Read(buf); err != nil {
 		// crypto/rand should never fail; if it does, fail closed with an empty
 		// token so the caller can decide not to expose the server.
-		slog.Error("failed to generate session token", "error", err)
+		logger.Error("failed to generate session token", "error", err)
 		return ""
 	}
 	return hex.EncodeToString(buf)

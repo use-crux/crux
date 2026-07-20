@@ -12,6 +12,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/tui/bridge"
 	"github.com/use-crux/crux/packages/local/internal/tui/interaction"
+	"github.com/use-crux/crux/packages/local/internal/tui/resource"
 	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
 
@@ -23,14 +24,12 @@ type DataClient interface {
 	Insights(ctx context.Context) ([]api.InspectInsightRecord, error)
 	Runs(ctx context.Context) ([]api.InspectRunRecord, error)
 	RunsWithOptions(ctx context.Context, opts api.InspectRunsOptions) ([]api.InspectRunRecord, error)
-	RunDetail(ctx context.Context, traceID string) (api.InspectRunDetailRecord, bool, error)
 	ObservabilityRunsPage(ctx context.Context) (api.ObservabilityRunsPage, error)
 	ObservabilityRunDetail(ctx context.Context, runID string) (api.ObservabilityRunDetail, bool, error)
 	ObservabilityResourceActivity(ctx context.Context, family string) ([]api.ObservabilityResourceActivity, error)
 	ProjectIndex(ctx context.Context) (api.IndexData, error)
 	Activity(ctx context.Context, limit int) ([]api.InspectActivityEvent, error)
 	DevtoolsContext(ctx context.Context) (api.DevtoolsContext, error)
-	SubscribeInspect(ctx context.Context) <-chan api.InspectEvent
 	InsightSilences(ctx context.Context, includeDeleted bool) ([]api.InspectInsightSilenceRecord, error)
 
 	// Writes.
@@ -90,10 +89,35 @@ type Screen interface {
 	// the Insights screen knows the insight count). Keys are nav IDs. Empty
 	// map = no contribution.
 	Counts() map[string]int
+}
 
-	// Interested reports whether a live batch touching domains should refetch
-	// this screen when it is active, or mark it stale while it is hidden.
-	Interested(domains bridge.Domains) bool
+// LegacyInvalidationScreen is the temporary domain-level refresh adapter for
+// screens that have not migrated to named resources.
+type LegacyInvalidationScreen interface {
+	Screen
+	Interested(bridge.Domains) bool
+}
+
+// ResourceScreen owns independently refreshable named projections. Refresh
+// receives one already-coalesced bridge batch and must schedule each affected
+// resource at most once.
+type ResourceScreen interface {
+	Screen
+	Refresh(context.Context, DataClient, bridge.Invalidations) tea.Cmd
+	Deactivate() bridge.Invalidations
+}
+
+// OwnedResourceResult identifies the screen that started an asynchronous
+// resource request. Workbench uses this ownership to deliver completions even
+// when navigation changed while the request was in flight.
+type OwnedResourceResult interface {
+	ResourceOwner() resource.ResourceOwner
+}
+
+// LiveEvents delivers one coalesced group for optimistic, presentation-only
+// reducers. Fetch scheduling remains exclusively ResourceScreen-owned.
+type LiveEvents struct {
+	Events []api.InspectEvent
 }
 
 // ResizableScreen is implemented by migrated screens that distribute their
@@ -108,6 +132,13 @@ type ResizableScreen interface {
 type FocusScreen interface {
 	Screen
 	Focus(kind, id string)
+}
+
+// RootScreen is implemented by routed screens that must discard route-only
+// state when the workspace explicitly opens their root destination.
+type RootScreen interface {
+	Screen
+	FocusRoot()
 }
 
 // ScreenLocation is the screen-owned portion of navigation history. It keeps
@@ -125,6 +156,13 @@ type LocationScreen interface {
 	Screen
 	CaptureLocation() ScreenLocation
 	RestoreLocation(ScreenLocation)
+}
+
+// RefreshingLocationScreen is implemented when restoring logical selection
+// can require a current record fetch before dependent pane anchors are valid.
+type RefreshingLocationScreen interface {
+	LocationScreen
+	RestoreLocationRefresh(context.Context, ScreenLocation, DataClient) tea.Cmd
 }
 
 // EditingScreen is an optional capability implemented by screens that own

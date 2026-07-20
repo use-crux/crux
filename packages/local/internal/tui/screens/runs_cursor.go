@@ -89,7 +89,7 @@ func (s *Runs) updateRunListInput(ctx context.Context, msg tea.Msg, c DataClient
 	if selectedID == "" || selectedID == previousID {
 		return nil, true
 	}
-	s.detail = nil
+	s.diagnosis = nil
 	return s.fetchRunDetail(ctx, c, selectedID), true
 }
 
@@ -116,7 +116,7 @@ func (s *Runs) ensureFilteredRunSelection(ctx context.Context, c DataClient) tea
 	if c == nil {
 		return nil
 	}
-	s.detail = nil
+	s.diagnosis = nil
 	return s.fetchRunDetail(ctx, c, selectedID)
 }
 
@@ -124,6 +124,7 @@ func (s *Runs) clearRunSelection() {
 	s.runList.SetItems(nil)
 	s.spanList.SetItems(nil)
 	s.routedRun = nil
-	s.detail = nil
+	s.pendingLocation = nil
+	s.diagnosis = nil
 	s.detailResource.Cancel()
 }

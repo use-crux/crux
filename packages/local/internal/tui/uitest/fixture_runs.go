@@ -5,109 +5,92 @@ import (
 	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/api"
+	"github.com/use-crux/crux/packages/local/internal/observability"
 )
 
-func (c *FixtureClient) fixtureRunSpans(traceID string) []api.InspectRunSpan {
-	start := c.Now.Add(-14 * time.Minute).UnixMilli()
-	cost := 0.044
-	return []api.InspectRunSpan{
-		{
-			ID:         "root",
-			Kind:       "agent",
-			Op:         "agent",
-			Primitive:  api.SpanPrimitiveAgent,
-			Name:       "docs_agent.run",
-			Status:     "failed",
-			StartedAt:  start,
-			DurationMs: floatPtr(14_200),
-			TokenCount: 18_400,
-			Cost:       &cost,
-			Attributes: map[string]string{
-				"agent.name":     "docs_agent",
-				"agent.iter.max": "16",
-			},
-			LinkedInsightIDs: []string{"INS-014"},
+func (c *FixtureClient) fixtureRunDetail(traceID string) api.ObservabilityRunDetail {
+	startedAt := c.Now.Add(-14 * time.Minute)
+	metrics, _ := json.Marshal(map[string]any{"totalTokens": 18_400, "costUsd": 0.044})
+	root := fixtureRunNode(traceID, "root", "", "agent", api.SpanPrimitiveAgent, "docs_agent.run", "failed", startedAt, 14_200)
+	root.AgentID = "docs_agent"
+	root.Model = "gpt-5"
+	root.Provider = "openai"
+	root.Metrics = metrics
+	root.Children = []api.ObservabilityRunDetailNode{
+		fixtureRunNode(traceID, "plan", "root", "llm", api.SpanPrimitiveGeneration, "plan", "ok", startedAt.Add(180*time.Millisecond), 620),
+		fixtureRetrieveNode(traceID, startedAt),
+		fixtureRunNode(traceID, "synthesize", "root", "llm", api.SpanPrimitiveGeneration, "synthesize", "ok", startedAt.Add(10_800*time.Millisecond), 3_200),
+		fixtureRunNode(traceID, "verify", "root", "tool", api.SpanPrimitiveTool, "verify_citations", "ok", startedAt.Add(13_900*time.Millisecond), 420),
+	}
+	return api.ObservabilityRunDetail{
+		SchemaVersion: 1,
+		Run: api.ObservabilityRunSummary{
+			RunID:         traceID,
+			TraceID:       traceID,
+			Name:          "docs_agent",
+			RootPrimitive: api.SpanPrimitiveAgent,
+			Status:        "failed",
+			StartedAt:     startedAt.Format(time.RFC3339Nano),
+			EndedAt:       startedAt.Add(14_200 * time.Millisecond).Format(time.RFC3339Nano),
+			DurationMs:    14_200,
+			Model:         "gpt-5",
+			Provider:      "openai",
+			SpanCount:     9,
+			Metrics:       metrics,
 		},
-		{
-			ID:         "plan",
-			ParentID:   "root",
-			Kind:       "llm",
-			Op:         "llm",
-			Primitive:  api.SpanPrimitiveGeneration,
-			Name:       "plan",
-			Status:     "ok",
-			StartedAt:  start + 180,
-			DurationMs: floatPtr(620),
-		},
-		{
-			ID:         "retrieve",
-			ParentID:   "root",
-			Kind:       "agent",
-			Op:         "agent",
-			Primitive:  api.SpanPrimitiveAgent,
-			Name:       "retrieve (loop · 16)",
-			Status:     "failed",
-			StartedAt:  start + 680,
-			DurationMs: floatPtr(9_800),
-			TokenCount: 14_820,
-			Cost:       &cost,
-			Attributes: map[string]string{
-				"agent.iter.actual": "16",
-				"agent.stop.reason": "novelty<0.05",
-				"retriever.k":       "4",
-			},
-			LinkedInsightIDs: []string{"INS-014", "INS-013"},
-		},
-		fixtureToolSpan("search-1", "retrieve", traceID, start+900, 540, false),
-		fixtureToolSpan("search-2", "retrieve", traceID, start+1_540, 580, true),
-		fixtureToolSpan("search-3", "retrieve", traceID, start+2_180, 620, true),
-		fixtureToolSpan("search-4", "retrieve", traceID, start+2_860, 600, true),
-		fixtureSpan("synthesize", "root", "llm", api.SpanPrimitiveGeneration, "synthesize", start+10_800, 3_200),
-		fixtureSpan("verify", "root", "tool", api.SpanPrimitiveTool, "verify_citations", start+13_900, 420),
+		Root:   root,
+		Counts: observability.RunDetailCounts{Primary: 9},
 	}
 }
 
-func fixtureSpan(id, parentID, op string, primitive string, name string, startedAt int64, duration float64) api.InspectRunSpan {
-	return api.InspectRunSpan{
-		ID:         id,
-		ParentID:   parentID,
-		Kind:       op,
-		Op:         op,
-		Primitive:  primitive,
-		Name:       name,
-		Status:     "ok",
-		StartedAt:  startedAt,
-		DurationMs: floatPtr(duration),
-	}
-}
-
-func fixtureToolSpan(id, parentID, traceID string, startedAt int64, duration float64, dup bool) api.InspectRunSpan {
-	data, _ := json.Marshal(map[string]any{
-		"toolName": "rag.search",
-		"args":     map[string]any{"query": "typed prompts", "k": 4},
-		"result":   map[string]any{"hits": []string{"typed-prompts-definition", "prompt-api"}},
+func fixtureRetrieveNode(traceID string, startedAt time.Time) api.ObservabilityRunDetailNode {
+	node := fixtureRunNode(traceID, "retrieve", "root", "agent", api.SpanPrimitiveAgent, "retrieve (loop · 16)", "failed", startedAt.Add(680*time.Millisecond), 9_800)
+	node.AgentID = "retrieve"
+	node.Attributes, _ = json.Marshal(map[string]any{
+		"agent.iter.actual": 16,
+		"agent.stop.reason": "novelty<0.05",
+		"retriever.k":       4,
 	})
-	span := api.InspectRunSpan{
-		ID:                id,
-		ParentID:          parentID,
-		Kind:              "tool",
-		Op:                "tool",
-		Primitive:         api.SpanPrimitiveTool,
-		Name:              `rag.search "typed prompts"`,
-		Status:            "ok",
-		StartedAt:         startedAt,
-		DurationMs:        &duration,
-		Duplicate:         dup,
-		DuplicateOfSpanID: "rag.search:typed-prompts",
-		Attributes:        map[string]string{"trace.id": traceID, "retriever.k": "4"},
-		Data:              data,
+	for index, offset := range []int{900, 1_540, 2_180, 2_860} {
+		id := "search-" + string(rune('1'+index))
+		child := fixtureRunNode(traceID, id, "retrieve", "tool", api.SpanPrimitiveTool, `rag.search "typed prompts"`, "ok", startedAt.Add(time.Duration(offset)*time.Millisecond), []float64{540, 580, 620, 600}[index])
+		child.ToolName = "rag.search"
+		child.Attributes, _ = json.Marshal(map[string]any{"retriever.k": 4})
+		child.Artifacts = []api.ObservabilityArtifactSummary{
+			{Kind: "tool.request", Preview: json.RawMessage(`{"args":{"query":"typed prompts","k":4}}`)},
+			{Kind: "tool.response", Preview: json.RawMessage(`{"result":{"hits":["typed-prompts-definition","prompt-api"]}}`)},
+		}
+		node.Children = append(node.Children, child)
 	}
-	if dup {
-		span.LinkedInsightIDs = []string{"INS-014"}
-	}
-	return span
+	return node
 }
 
-func floatPtr(v float64) *float64 {
-	return &v
+func fixtureRunNode(
+	traceID, id, parentID, family, primitive, name, status string,
+	startedAt time.Time,
+	durationMs float64,
+) api.ObservabilityRunDetailNode {
+	return api.ObservabilityRunDetailNode{
+		ID:       id,
+		ParentID: parentID,
+		SpanSummary: api.ObservabilitySpanSummary{
+			SpanID:       id,
+			ParentSpanID: parentID,
+			RunID:        traceID,
+			TraceID:      traceID,
+			Family:       family,
+			Primitive:    primitive,
+			Name:         name,
+			Status:       status,
+			StartedAt:    startedAt.Format(time.RFC3339Nano),
+			EndedAt:      startedAt.Add(time.Duration(durationMs) * time.Millisecond).Format(time.RFC3339Nano),
+			DurationMs:   durationMs,
+		},
+		Display: observability.RunDetailDisplay{Kind: family, Label: name},
+		Timing: observability.RunDetailTiming{
+			StartedAt:  startedAt.Format(time.RFC3339Nano),
+			EndedAt:    startedAt.Add(time.Duration(durationMs) * time.Millisecond).Format(time.RFC3339Nano),
+			DurationMs: durationMs,
+		},
+	}
 }

@@ -20,8 +20,8 @@ func renderSpanWithPayload(t *testing.T, primitive string, payload map[string]an
 	}
 	r := NewRuns()
 	selectRunForTest(r, "run-x")
-	r.detail = &api.InspectRunDetailRecord{
-		Run: api.InspectRunRecord{TraceID: "run-x"},
+	setRunDiagnosisForTest(r, runDiagnosisFixture{
+		RunID: "run-x",
 		Spans: []api.InspectRunSpan{
 			{
 				ID:        "sp1",
@@ -32,8 +32,8 @@ func renderSpanWithPayload(t *testing.T, primitive string, payload map[string]an
 				Data:      json.RawMessage(body),
 			},
 		},
-		Trace: api.InspectTraceRecord{StartedAt: 1716730000000},
-	}
+		StartedAt: 1716730000000,
+	})
 	selectSpanForTest(r, "sp1")
 	return renderSpanDetailForTest(r, 80, 60)
 }
@@ -110,8 +110,8 @@ func TestSpanDetailSurfacesObservedError(t *testing.T) {
 	errorJSON := json.RawMessage(`{"name":"ToolExecutionError","message":"tool exploded","stack":"Error: tool exploded\n    at search.ts:10:3","category":"tool","retryable":false}`)
 	r := NewRuns()
 	selectRunForTest(r, "run-error")
-	r.detail = &api.InspectRunDetailRecord{
-		Run: api.InspectRunRecord{TraceID: "run-error"},
+	setRunDiagnosisForTest(r, runDiagnosisFixture{
+		RunID: "run-error",
 		Spans: []api.InspectRunSpan{
 			{
 				ID:        "sp-error",
@@ -136,8 +136,8 @@ func TestSpanDetailSurfacesObservedError(t *testing.T) {
 				},
 			},
 		},
-		Trace: api.InspectTraceRecord{StartedAt: 1716730000000},
-	}
+		StartedAt: 1716730000000,
+	})
 	selectSpanForTest(r, "sp-error")
 
 	plain := stripANSI(renderSpanDetailForTest(r, 90, 60))

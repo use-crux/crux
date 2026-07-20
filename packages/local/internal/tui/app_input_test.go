@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -10,10 +9,6 @@ import (
 
 type programFixtureClient struct {
 	*uitest.FixtureClient
-}
-
-func (programFixtureClient) GetJSON(context.Context, string, any) error {
-	return nil
 }
 
 func TestAppRoutesQIntoRunsFilterBeforeWorkspaceQuit(t *testing.T) {

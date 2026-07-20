@@ -3,48 +3,48 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"os"
-	"os/signal"
 	"path/filepath"
-	"syscall"
 	"time"
 
-	tea "charm.land/bubbletea/v2"
 	"github.com/spf13/cobra"
 	"github.com/use-crux/crux/packages/local/internal/cli"
-	"github.com/use-crux/crux/packages/local/internal/devtools"
 	"github.com/use-crux/crux/packages/local/internal/output"
 	"github.com/use-crux/crux/packages/local/internal/server"
-	"github.com/use-crux/crux/packages/local/internal/tui"
-	"github.com/use-crux/crux/packages/local/internal/tui/bridge"
 )
 
 // NewDevCmd creates the "crux dev" command for starting the devtools server.
 func NewDevCmd(f *cli.Factory) *cobra.Command {
+	return newDevCmd(f, defaultDevDependencies())
+}
+
+func newDevCmd(f *cli.Factory, dependencies devDependencies) *cobra.Command {
 	if f == nil {
 		f = &cli.Factory{}
 	}
+	dependencies = dependencies.withDefaults()
 	var port int
 	var tunnel bool
-	var noOpen bool
+	var open bool
 	var noTUI bool
-	var tuiLegacy bool // deprecated no-op, retained for back-compat
 	var startupDebug bool
 
 	cmd := &cobra.Command{
 		Use:   "dev",
 		Short: "Start the devtools server",
-		Long:  "Start the crux devtools HTTP + WebSocket server and open the web UI.",
+		Long:  "Start the crux devtools HTTP + WebSocket server.",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_ = tuiLegacy // accepted for back-compat; TUI is now the default
 			ctx := cmd.Context()
 			io := f.Streams()
 			startup := newStartupTracker(startupDebugEnabled(startupDebug))
 			serverURL := fmt.Sprintf("http://localhost:%d", port)
-			alreadyRunning := server.IsServerRunning(port)
-			tuiMode := !noTUI
-			printRuntimeDevPreflight(ctx)
+			alreadyRunning := dependencies.serverRunning(port)
+			tuiMode := selectDevMode(devModeInput{
+				NoTUI: noTUI, StdinTTY: io.IsStdinTTY(), StdoutTTY: io.IsStdoutTTY(),
+				CI: io.IsCI(), Term: io.Terminal(),
+			}) == devModeTUI
+			dependencies.runtimePreflight(ctx, io)
 
 			if alreadyRunning {
 				startup.SetMode("existing-server")
@@ -52,6 +52,7 @@ func NewDevCmd(f *cli.Factory) *cobra.Command {
 				devStatusf(io, "%s Server already running at %s\n",
 					devOK(io),
 					devStrong(io, serverURL))
+				launchBrowser(ctx, io, open, serverURL, dependencies.browser)
 
 				if tuiMode {
 					// The TUI owns an in-process dev server (DirectClient
@@ -77,9 +78,6 @@ func NewDevCmd(f *cli.Factory) *cobra.Command {
 						devBullet(io), devAccent(io, "--no-tui"))
 					return fmt.Errorf("port %d already in use", port)
 				}
-				if !noOpen {
-					openBrowser(serverURL)
-				}
 				if startup.Enabled() {
 					devStatusf(io, "%s %s\n", devBullet(io), devText(io, startup.Summary()))
 				}
@@ -87,10 +85,10 @@ func NewDevCmd(f *cli.Factory) *cobra.Command {
 			}
 
 			// Check port availability and try next port if taken.
-			if !server.IsPortAvailable(port) {
+			if !dependencies.portAvailable(port) {
 				nextPort := port + 1
 				for ; nextPort < port+10; nextPort++ {
-					if server.IsPortAvailable(nextPort) {
+					if dependencies.portAvailable(nextPort) {
 						break
 					}
 				}
@@ -110,16 +108,21 @@ func NewDevCmd(f *cli.Factory) *cobra.Command {
 			inspectDir := filepath.Join(root, ".crux", "evals")
 
 			// Start the Go HTTP/WS server directly (no Node.js subprocess).
-			devSrv := server.NewDevServer(server.DevServerOptions{
+			sessionCtx, cancelSession := context.WithCancel(ctx)
+			process := newDevServerProcess(io.Err, startupDebugEnabled(startupDebug))
+			devSrv := dependencies.newServer(server.DevServerOptions{
+				Context:    sessionCtx,
 				Port:       port,
 				Tunnel:     tunnel,
 				Quiet:      tuiMode,
 				InspectDir: inspectDir,
+				Logger:     process.logger,
+				Stderr:     process.stderr,
 			})
+			shutdown := newShutdownCoordinator(cancelSession, 3*time.Second, devSrv.Shutdown)
 			if err := devSrv.Start(); err != nil {
-				return err
+				return errors.Join(err, shutdown.Shutdown())
 			}
-			defer devSrv.Shutdown(context.Background())
 
 			startup.SetMode("go-native")
 			startup.Mark("HTTP ready")
@@ -135,33 +138,49 @@ func NewDevCmd(f *cli.Factory) *cobra.Command {
 			if tuiMode {
 				// Start tunnel async — TUI receives URL via callback.
 				tunnelReady := make(chan string, 1)
-				devSrv.StartTunnel(ctx, func(url string) {
-					tunnelReady <- url
+				devSrv.StartTunnel(sessionCtx, func(result server.TunnelStartupResult) {
+					if result.Err == nil {
+						tunnelReady <- result.URL
+					}
 				})
-				// Open the browser alongside the TUI — they're independent
-				// surfaces against the same dev server and can run together.
-				if !noOpen {
-					openBrowser(devSrv.LocalURL())
+				launchBrowser(ctx, io, open, devSrv.LocalURL(), dependencies.browser)
+				runErr := dependencies.runTUI(sessionCtx, io, devSrv, serverURL, port, startup, tunnelReady, dependencies.browser, shutdown.Shutdown)
+				cleanupErr := shutdown.Shutdown()
+				if runErr != nil {
+					if cleanupErr != nil && !errors.Is(runErr, cleanupErr) {
+						return errors.Join(runErr, cleanupErr)
+					}
+					return runErr
 				}
-				return runTUI(ctx, io, devSrv, serverURL, port, startup, tunnelReady)
+				return cleanupErr
 			}
 
-			printIngestTokenHint(io, devSrv)
+			ingestToken, ingestTokenPath := devSrv.IngestCredentials()
+			printIngestTokenHint(io, ingestToken, ingestTokenPath)
 
 			// Non-TUI: start tunnel synchronously (blocks until ready).
 			if tunnel {
 				devStatusf(io, "%s Starting tunnel...\n", devBullet(io))
-				tunnelDone := make(chan string, 1)
-				devSrv.StartTunnel(ctx, func(url string) {
-					tunnelDone <- url
+				tunnelDone := make(chan server.TunnelStartupResult, 1)
+				devSrv.StartTunnel(sessionCtx, func(result server.TunnelStartupResult) {
+					tunnelDone <- result
 				})
 				select {
-				case url := <-tunnelDone:
-					devStatusf(io, "%s Tunnel: %s\n",
-						devOK(io),
-						devStrong(io, url))
-				case <-time.After(20 * time.Second):
-					devStatusf(io, "%s Tunnel failed to start within 20s\n", devBullet(io))
+				case result := <-tunnelDone:
+					if errors.Is(result.Err, context.Canceled) || errors.Is(result.Err, context.DeadlineExceeded) {
+						devStatusf(io, "\n%s Shutting down...\n", devBullet(io))
+						return shutdown.Shutdown()
+					}
+					if result.Err != nil {
+						devStatusf(io, "%s Tunnel failed to start: %v\n", devBullet(io), result.Err)
+					} else {
+						devStatusf(io, "%s Tunnel: %s\n",
+							devOK(io),
+							devStrong(io, result.URL))
+					}
+				case <-sessionCtx.Done():
+					devStatusf(io, "\n%s Shutting down...\n", devBullet(io))
+					return shutdown.Shutdown()
 				}
 			}
 
@@ -173,127 +192,20 @@ func NewDevCmd(f *cli.Factory) *cobra.Command {
 			if startup.Enabled() {
 				devStatusf(io, "%s %s\n", devBullet(io), devText(io, startup.Summary()))
 			}
-			if !noOpen {
-				openBrowser(devSrv.LocalURL())
-			}
+			launchBrowser(ctx, io, open, devSrv.LocalURL(), dependencies.browser)
 
 			// Wait for shutdown signal (context already wired from main).
-			<-ctx.Done()
+			<-sessionCtx.Done()
 			devStatusf(io, "\n%s Shutting down...\n", devBullet(io))
-			return nil
+			return shutdown.Shutdown()
 		},
 	}
 
 	cmd.Flags().IntVar(&port, "port", 4400, "Server port")
 	cmd.Flags().BoolVar(&tunnel, "tunnel", false, "Create a public tunnel")
-	cmd.Flags().BoolVar(&noOpen, "no-open", false, "Don't open the browser")
+	cmd.Flags().BoolVar(&open, "open", false, "Open browser devtools after startup")
 	cmd.Flags().BoolVar(&noTUI, "no-tui", false, "Skip the interactive terminal UI (server-only mode)")
-	cmd.Flags().BoolVar(&tuiLegacy, "tui", false, "Deprecated: TUI is now on by default")
-	if f := cmd.Flags().Lookup("tui"); f != nil {
-		f.Hidden = true
-	}
 	cmd.Flags().BoolVar(&startupDebug, "startup-debug", false, "Show startup timing diagnostics")
 
 	return cmd
-}
-
-func printIngestTokenHint(io *output.IO, devSrv *server.DevServer) {
-	if devSrv == nil || devSrv.IngestToken == "" {
-		return
-	}
-	suffix := ""
-	if devSrv.IngestTokenPath != "" {
-		suffix = fmt.Sprintf(" (saved at %s)", devText(io, devSrv.IngestTokenPath))
-	}
-	devStatusf(io, "%s Remote observability ingest: %s%s\n",
-		devBullet(io),
-		devStrong(io, "CRUX_DEVTOOLS_TOKEN="+devSrv.IngestToken),
-		suffix)
-}
-
-func newTUIApp(ctx context.Context, serverURL string, client tui.DataClient, startup *startupTracker) *tui.App {
-	return tui.NewApp(ctx, serverURL, client, startup.Mode(), startup.Enabled())
-}
-
-func runTUI(ctx context.Context, io *output.IO, devSrv *server.DevServer, serverURL string, port int, startup *startupTracker, tunnelReady <-chan string) error {
-	// Server is already running (Go native) — no boot wait needed.
-	if devSrv == nil {
-		return fmt.Errorf("native TUI requires an owned dev server")
-	}
-	io.NewStatusLine().Clear()
-
-	// Pre-alt-screen hint. Alt-screen swaps the terminal buffer, so this
-	// line will be visible after the TUI exits — useful for users who
-	// don't recognize they've entered a TUI and panic-^C immediately.
-	devStatusf(io, "%s Workbench starting at %s — %s to quit, %s for help · web UI also at %s\n",
-		devAccent(io, "◆"),
-		devStrong(io, serverURL),
-		devAccent(io, "q"),
-		devAccent(io, "?"),
-		devStrong(io, serverURL),
-	)
-	printIngestTokenHint(io, devSrv)
-
-	// Phase 3: Launch Bubbletea TUI (server is ready, WS connected).
-	c := devtools.NewDirectClientFromService(devSrv.Devtools).
-		WithObservability(devSrv.Observability)
-	app := newTUIApp(ctx, serverURL, c, startup)
-	app.SendIngestToken(devSrv.IngestToken, devSrv.IngestTokenPath)
-
-	// Mark boot as complete immediately — server is already up.
-	app.MarkBootComplete()
-
-	p := tea.NewProgram(app, tea.WithContext(ctx))
-	app.SetProgram(p)
-
-	// Pipe in-process event buses into the TUI without a WebSocket round-trip.
-	bridgeCtx, stopBridge := context.WithCancel(ctx)
-	sources := bridge.Sources{
-		StoreChanged: devSrv.Devtools.SubscribeChanges(),
-		Inspect:      devSrv.Devtools.Inspect().Events().Subscribe(bridgeCtx),
-		IndexChanged: devSrv.Devtools.IndexEvents().Subscribe(bridgeCtx),
-	}
-	if devSrv.Observability != nil {
-		sources.Observability = devSrv.Observability.Events().Subscribe(bridgeCtx)
-	}
-	bridge.Start(bridgeCtx, sources, app.SendMsg)
-
-	// Send tunnel URL to TUI when it's ready.
-	if tunnelReady != nil {
-		go func() {
-			select {
-			case url, ok := <-tunnelReady:
-				if ok && url != "" {
-					app.SendTunnelURL(url)
-				}
-			case <-ctx.Done():
-			}
-		}()
-	}
-
-	// Signal handler — kill TUI and trigger an explicit server shutdown so
-	// the listener releases the port before this process exits. Without
-	// this, pnpm/cobra can race the deferred Shutdown and leave a zombie
-	// listener on 4400 after ^C.
-	go func() {
-		sigCh := make(chan os.Signal, 1)
-		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-		<-sigCh
-		signal.Stop(sigCh)
-		if p != nil {
-			p.Kill()
-		}
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-		_ = devSrv.Shutdown(shutdownCtx)
-	}()
-
-	_, err := p.Run()
-	stopBridge()
-	// Make sure the listener is released even on a clean tea exit.
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	_ = devSrv.Shutdown(shutdownCtx)
-	devStatusf(io, "%s Workbench closed. Dev server stopped.\n", devBullet(io))
-	return err
 }

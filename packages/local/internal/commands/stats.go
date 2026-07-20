@@ -35,7 +35,7 @@ func NewStatsCmd(f *cli.Factory) *cobra.Command {
 			}
 
 			if jsonOutput {
-				return output.JSON(stats)
+				return f.Streams().WriteJSON(stats)
 			}
 
 			io := f.Streams()
@@ -66,7 +66,9 @@ func liveStats(ctx context.Context, c *api.Client, io *output.IO, jsonOut bool) 
 	go ws.ReadMessages(ch)
 
 	// Print initial stats.
-	refreshStats(ctx, c, io, jsonOut)
+	if err := refreshStats(ctx, c, io, jsonOut); err != nil {
+		return err
+	}
 
 	for {
 		select {
@@ -79,20 +81,21 @@ func liveStats(ctx context.Context, c *api.Client, io *output.IO, jsonOut bool) 
 			if !jsonOut && io.IsStdoutTTY() {
 				io.ClearScreen()
 			}
-			refreshStats(ctx, c, io, jsonOut)
+			if err := refreshStats(ctx, c, io, jsonOut); err != nil {
+				return err
+			}
 			time.Sleep(200 * time.Millisecond)
 		}
 	}
 }
 
-func refreshStats(ctx context.Context, c *api.Client, io *output.IO, jsonOut bool) {
+func refreshStats(ctx context.Context, c *api.Client, io *output.IO, jsonOut bool) error {
 	var stats api.Stats
 	if err := c.GetJSON(ctx, "/api/stats", &stats); err != nil {
-		return
+		return nil
 	}
 	if jsonOut {
-		output.JSON(stats)
-		return
+		return io.WriteJSON(stats)
 	}
 	printStats(io, stats)
 	var usage map[string]api.PromptUsageStat
@@ -100,6 +103,7 @@ func refreshStats(ctx context.Context, c *api.Client, io *output.IO, jsonOut boo
 		printPromptUsage(io, usage)
 	}
 	fmt.Fprintln(io.Out, io.Sprint(output.Dim, "  Live — updates on new events. Ctrl+C to stop."))
+	return nil
 }
 
 func printStats(io *output.IO, s api.Stats) {

@@ -14,16 +14,21 @@ import (
 
 func (s *Runs) renderList(width, height int) string {
 	right := shell.TextMuted.Render("sort: time ↓")
+	listSnapshot := s.runsResource.Snapshot()
 	if filter := s.activeRunStatusFilter(); filter.label != "" {
 		right = shell.TextMuted.Render("filter: " + filter.label)
 	}
 	if s.runQuery != "" {
-		right = shell.TextMuted.Render("/" + s.runQuery)
+		right = shell.TextMuted.Render("/" + sanitizeRunsInline(s.runQuery))
 	}
 	header := shell.PaneHeader(width,
 		focusTitle("Runs", s.focus == focusRuns),
 		"Last 1h", right)
 	hdrH := strings.Count(header, "\n") + 1
+	status := resourceLifecycleStatus(listSnapshot.State, listSnapshot.Refreshing, listSnapshot.Err)
+	if status != "" {
+		hdrH++
+	}
 	bodyRows := height - hdrH
 	if bodyRows < 1 {
 		bodyRows = 1
@@ -32,6 +37,10 @@ func (s *Runs) renderList(width, height int) string {
 	var b strings.Builder
 	b.WriteString(header)
 	b.WriteString("\n")
+	if status != "" {
+		b.WriteString(padRow(" "+shell.TextMuted.Render(truncateRunsInline(status, max(0, width-2))), width))
+		b.WriteString("\n")
+	}
 
 	runs := s.filteredRuns()
 	if len(runs) == 0 {
@@ -65,13 +74,13 @@ func (s *Runs) renderRunRow(r api.ObservabilityRunSummary, width int, selected b
 	}
 	dot := kit.StatusDot(normalizeObservabilityStatus(r.Status))
 
-	idCol := shell.Text.Render(padString2(shortID(r.RunID, 7), 7))
+	idCol := shell.Text.Render(padRunsInline(clipRunsInline(r.RunID, 7), 7))
 	ago := shell.TextMuted.Render(relTimeUnix(parseObservabilityTime(r.StartedAt)))
 
 	// Line 1: bar + dot + id + target + age (right).
 	line1Core := fmt.Sprintf("%s %s %s", bar, dot, idCol)
 	if width >= 32 {
-		targetCol := shell.TextDim.Render(truncate(firstNonEmpty(r.Name, r.RootPrimitive, r.RunID), 12))
+		targetCol := shell.TextDim.Render(truncateRunsInline(firstNonEmpty(r.Name, r.RootPrimitive, r.RunID), 12))
 		line1Core += "  " + targetCol
 	}
 	pad := width - lipgloss.Width(line1Core) - lipgloss.Width(ago) - 2

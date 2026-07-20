@@ -22,8 +22,9 @@ func NewApp(ctx context.Context, serverURL string, client DataClient, startupMod
 		bootPhase:      bootPhaseOrder[0],
 		startupMode:    startupMode,
 		startupDebug:   startupDebug,
+		rootDone:       ctx.Done(),
 	}
 	app.workbench = NewWorkbench(ctx, client, client, serverURL)
-	app.workbench.SetQuitRequestedCallback(app.requestQuit)
+	app.workbench.setShutdownRequest(func() tea.Cmd { return app.requestShutdown(ShutdownClean) })
 	return app
 }

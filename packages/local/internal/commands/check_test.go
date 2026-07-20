@@ -37,10 +37,10 @@ func TestCheckJSONV1IsDeterministicAndGatesSelectedFindings(t *testing.T) {
 	}
 
 	var first, second bytes.Buffer
-	if err := writeCheckJSON(&first, report); err != nil {
+	if err := output.NewTestIO(&first, &bytes.Buffer{}, output.TestIOOptions{}).WriteJSON(report); err != nil {
 		t.Fatal(err)
 	}
-	if err := writeCheckJSON(&second, report); err != nil {
+	if err := output.NewTestIO(&second, &bytes.Buffer{}, output.TestIOOptions{}).WriteJSON(report); err != nil {
 		t.Fatal(err)
 	}
 	if first.String() != second.String() {

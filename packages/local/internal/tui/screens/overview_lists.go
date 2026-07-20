@@ -29,8 +29,10 @@ func (o *Overview) renderLeftColumn(width, height int) string {
 }
 
 func (o *Overview) renderInsightsBlock(width, height int) string {
-	header := shell.PaneHeader(width, "Top insights", "",
-		shell.TextMuted.Render(fmt.Sprintf("%d open · sorted: severity ↓", len(o.insights))))
+	snapshot := o.insightsResource.Snapshot()
+	insights := o.insightRows()
+	meta := appendResourceStatus(fmt.Sprintf("%d open · sorted: severity ↓", len(insights)), resourceStatus(snapshot))
+	header := overviewPaneHeader(width, focusTitle("Top insights", o.focusedPanel == panelInsights), "", meta)
 	hdrH := strings.Count(header, "\n") + 1
 
 	bodyRows := height - hdrH
@@ -38,7 +40,14 @@ func (o *Overview) renderInsightsBlock(width, height int) string {
 		bodyRows = 1
 	}
 
-	if len(o.insights) == 0 {
+	if !snapshot.HasValue {
+		rows := []string{" " + shell.TextMuted.Render(resourceStateMessage(snapshot.State, snapshot.Err, "insights"))}
+		for len(rows) < bodyRows {
+			rows = append(rows, strings.Repeat(" ", width))
+		}
+		return header + "\n" + strings.Join(rows, "\n")
+	}
+	if len(insights) == 0 {
 		hint := " " + shell.TextMuted.Render("no insights yet — collect more runs or wait for the analyzer.")
 		rows := []string{hint}
 		for len(rows) < bodyRows {
@@ -47,13 +56,10 @@ func (o *Overview) renderInsightsBlock(width, height int) string {
 		return header + "\n" + strings.Join(rows, "\n")
 	}
 
-	o.insightList.SetItems(o.insights)
-	o.insightList.SetHeight(bodyRows)
-	o.insightList.SetCursorByIdentity(o.SelectedInsightID())
-	rows := o.insightList.Render(width, func(ins api.InspectInsightRecord, _ int, selected bool, rowW int) string {
+	rows := o.insightList.Render(func(ins api.InspectInsightRecord, _ int, selected bool, rowW int) string {
 		// Row 1: bar + severity dot + ID + tag chip + title + target + age.
 		bar := "  "
-		if selected {
+		if selected && o.focusedPanel == panelInsights {
 			bar = shell.SelectionBar(shell.SeverityColor(ins.Severity)) + " "
 		}
 		sev := kit.SeverityDot(ins.Severity)
@@ -95,21 +101,23 @@ func (o *Overview) renderInsightsBlock(width, height int) string {
 }
 
 func (o *Overview) renderRecentRunsBlock(width, height int) string {
-	runs := o.overview.RecentRuns
-	if len(runs) == 0 {
-		runs = o.runs
-	}
-	header := shell.PaneHeader(width, "Recent runs", "",
-		shell.TextMuted.Render(recentRunsMeta(runs)))
+	snapshot := o.runsResource.Snapshot()
+	runs := o.runRows()
+	meta := appendResourceStatus(recentRunsMeta(runs), resourceStatus(snapshot))
+	header := overviewPaneHeader(width, focusTitle("Recent runs", o.focusedPanel == panelRuns), "", meta)
 	hdrH := strings.Count(header, "\n") + 1
 	bodyRows := height - hdrH
 	if bodyRows < 1 {
 		bodyRows = 1
 	}
-	o.runList.SetItems(runs)
-	o.runList.SetHeight(bodyRows)
-	o.runList.SetCursorByIdentity(o.SelectedRunID())
-	rows := o.runList.Render(width, func(r api.InspectRunRecord, _ int, selected bool, rowW int) string {
+	if !snapshot.HasValue {
+		rows := []string{" " + shell.TextMuted.Render(resourceStateMessage(snapshot.State, snapshot.Err, "recent runs"))}
+		for len(rows) < bodyRows {
+			rows = append(rows, strings.Repeat(" ", width))
+		}
+		return header + "\n" + strings.Join(rows, "\n")
+	}
+	rows := o.runList.Render(func(r api.InspectRunRecord, _ int, selected bool, rowW int) string {
 		prefix := " "
 		if selected && o.focusedPanel == panelRuns {
 			prefix = shell.SelectionBar(shell.ColorTeal) + " "

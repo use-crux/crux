@@ -125,11 +125,21 @@ type syntaxWorkerSyntaxBatchEvent struct {
 
 // NewWorker creates a command-backed indexer worker.
 func New(commandPath string, commandArgs ...string) *Worker {
+	return NewWithProcessOptions(commandPath, nil, commandArgs...)
+}
+
+// NewWithProcessOptions creates a command-backed indexer worker with explicit
+// lifecycle-log and child-process diagnostic boundaries.
+func NewWithProcessOptions(commandPath string, processOptions []workerproc.Option, commandArgs ...string) *Worker {
+	options := []workerproc.Option{
+		workerproc.WithCommand(commandPath, commandArgs...),
+		workerproc.WithMaxResponseBytes(syntaxWorkerMaxResponseBytes),
+	}
+	options = append(options, processOptions...)
 	return &Worker{
 		worker: workerproc.New(
 			workerproc.Script{Name: "project-indexer-worker"},
-			workerproc.WithCommand(commandPath, commandArgs...),
-			workerproc.WithMaxResponseBytes(syntaxWorkerMaxResponseBytes),
+			options...,
 		),
 	}
 }

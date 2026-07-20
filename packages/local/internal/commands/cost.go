@@ -25,7 +25,7 @@ func NewCostCmd(f *cli.Factory) *cobra.Command {
 				return err
 			}
 			if jsonOutput {
-				return output.JSON(events)
+				return f.Streams().WriteJSON(events)
 			}
 			printCost(f.Streams(), events)
 			return nil

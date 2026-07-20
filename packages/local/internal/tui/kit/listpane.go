@@ -77,6 +77,32 @@ func (p *ListPane[T]) Position() ListPosition {
 	}
 }
 
+// Anchor returns the stable identity of the first visible item. An empty
+// string means the pane has no restorable row.
+func (p *ListPane[T]) Anchor() string {
+	if p.list.identity == nil || p.list.offset < 0 || p.list.offset >= len(p.list.items) {
+		return ""
+	}
+	return p.list.identity(p.list.items[p.list.offset])
+}
+
+// RestoreAnchor places the identified item at the top of the visible window
+// when possible while keeping the current selection visible.
+func (p *ListPane[T]) RestoreAnchor(id string) bool {
+	if p.list.identity == nil || id == "" {
+		return false
+	}
+	for index, item := range p.list.items {
+		if p.list.identity(item) != id {
+			continue
+		}
+		p.list.offset = index
+		p.list.ensureVisible()
+		return true
+	}
+	return false
+}
+
 // Update applies focused keyboard and mouse navigation and reports whether the
 // pane consumed the message.
 func (p *ListPane[T]) Update(msg tea.Msg) bool {

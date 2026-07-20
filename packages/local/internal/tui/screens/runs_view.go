@@ -7,31 +7,33 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/tui/resource"
 )
 
-func (s *Runs) View(size Size) string {
+func (s *Runs) View(_ Size) string {
+	if s.layout.size.Width <= 0 || s.layout.size.Height <= 0 {
+		return ""
+	}
+	if s.layout.mode == runsLayoutTooSmall {
+		return centerMsg(s.layout.size, "terminal too small — resize to at least "+runsMinimumTerminalLabel)
+	}
 	listSnapshot := s.runsResource.Snapshot()
 	if !listSnapshot.HasValue {
 		if listSnapshot.State == resource.ResourceFailed && listSnapshot.Err != nil {
-			return centerMsg(size, "error: "+listSnapshot.Err.Error())
+			return centerMsg(s.layout.size, truncateRunsInline("error: "+listSnapshot.Err.Error(), s.layout.size.Width))
 		}
-		return centerMsg(size, "loading runs…")
-	}
-	if size.Width <= 0 || size.Height <= 0 {
-		return ""
+		return centerMsg(s.layout.size, "loading runs…")
 	}
 
-	root := kit.Rect{W: size.Width, H: size.Height}
-	switch kit.Classify(size.Width) {
-	case kit.LayoutFull:
-		panes := kit.SplitH(root, kit.Fixed(26), kit.Fill(), kit.Min(34))
+	switch s.layout.mode {
+	case runsLayoutWide:
+		panes := []kit.Rect{s.layout.list, s.layout.evidence, s.layout.detail}
 		return strings.Join(kit.ComposeStyled(panes, [][]string{
 			s.renderListLines(panes[0]),
 			s.renderWaterfallLines(panes[1]),
 			s.renderSpanDetailLines(panes[2]),
 		}, runsStyles), "\n")
-	case kit.LayoutTwo:
-		panes := kit.SplitH(root, kit.Fixed(26), kit.Fill())
+	case runsLayoutMedium:
+		panes := []kit.Rect{s.layout.list, s.layout.evidence}
 		right := s.renderWaterfallLines(panes[1])
-		if s.focus == focusSpanDetail {
+		if s.diagnosis != nil && s.focus != focusWaterfall {
 			right = s.renderSpanDetailLines(panes[1])
 		}
 		return strings.Join(kit.ComposeStyled(panes, [][]string{
@@ -39,6 +41,7 @@ func (s *Runs) View(size Size) string {
 			right,
 		}, runsStyles), "\n")
 	default:
+		root := s.layout.list
 		switch s.focus {
 		case focusWaterfall:
 			return strings.Join(s.renderWaterfallLines(root), "\n")

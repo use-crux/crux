@@ -36,7 +36,7 @@ func (l *VList[T]) SetItems(items []T) {
 			}
 		}
 	}
-	l.clamp()
+	l.ensureVisible()
 }
 
 // SetIdentity sets the stable identity function used across SetItems calls.
@@ -128,7 +128,6 @@ func (l *VList[T]) Render(w int, row func(item T, i int, selected bool, w int) s
 	if w <= 0 || l.height <= 0 || len(l.items) == 0 {
 		return nil
 	}
-	l.ensureVisible()
 	var out []string
 	used := 0
 	for i := l.offset; i < len(l.items) && used < l.height; i++ {

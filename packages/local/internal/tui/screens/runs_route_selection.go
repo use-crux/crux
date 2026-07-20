@@ -83,7 +83,7 @@ func (s *Runs) selectedDetailIsCurrent() bool {
 		return false
 	}
 	if snapshot.HasValue {
-		return s.detail != nil && snapshot.Value.Run.RunID == selectedID
+		return s.diagnosis != nil && snapshot.Value.Run.RunID == selectedID
 	}
 	return false
 }

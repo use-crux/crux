@@ -3,7 +3,6 @@ package localserver
 import (
 	"encoding/json"
 	"errors"
-	"log/slog"
 	"net/http"
 	"os"
 
@@ -104,11 +103,11 @@ func registerIndexRoutes(mux *http.ServeMux, devtoolsSvc *devtools.Service) {
 			index, err = devtoolsSvc.ReindexProject(r.Context(), root, req.ConfigPath, req.ProjectName)
 		}
 		if err != nil {
-			slog.Error("project index reindex failed", "error", err)
+			requestLogger(r).Error("project index reindex failed", "error", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		writeJSON(w, index)
+		writeJSON(w, r, index)
 	}
 	mux.HandleFunc("POST /api/project/index/reindex", indexReindexHandler)
 	mux.HandleFunc("POST /api/index/reindex", indexReindexHandler)

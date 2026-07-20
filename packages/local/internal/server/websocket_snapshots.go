@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"encoding/json"
-	"log/slog"
 	"reflect"
 
 	"github.com/use-crux/crux/packages/local/internal/api"
@@ -32,7 +31,7 @@ func (h *WSHub) sendSnapshot(client *wsClient) {
 func registeredSnapshotMessage(h *WSHub, message string) (map[string]any, bool) {
 	out := map[string]any{"type": message}
 	hasPayload := false
-	for _, snapshot := range endpoints.Registry.SnapshotValues(context.Background(), endpoints.Deps{Devtools: h.devtools}, message) {
+	for _, snapshot := range endpoints.Registry.SnapshotValues(h.snapshotContext(), endpoints.Deps{Devtools: h.devtools}, message) {
 		if snapshot.Spec.Field == "" {
 			continue
 		}
@@ -50,7 +49,7 @@ func (h *WSHub) sendRegisteredIndexSnapshot(client *wsClient) bool {
 		if snapshot.Spec.Message != "index" {
 			continue
 		}
-		index, err := endpoints.ProjectIndex.Call(context.Background(), endpoints.Deps{Devtools: h.devtools})
+		index, err := endpoints.ProjectIndex.Call(h.snapshotContext(), endpoints.Deps{Devtools: h.devtools})
 		if err != nil {
 			if snapshot.Spec.AlwaysSend {
 				h.sendJSON(client, apiIndexMessage(api.IndexData{}))
@@ -62,6 +61,13 @@ func (h *WSHub) sendRegisteredIndexSnapshot(client *wsClient) bool {
 		return true
 	}
 	return false
+}
+
+func (h *WSHub) snapshotContext() context.Context {
+	if h != nil && h.ctx != nil {
+		return h.ctx
+	}
+	return context.Background()
 }
 
 type indexSnapshotMessage struct {
@@ -86,11 +92,11 @@ func apiIndexMessage(index api.IndexData) apiIndexSnapshotMessage {
 func (h *WSHub) sendJSON(client *wsClient, v any) {
 	data, err := json.Marshal(v)
 	if err != nil {
-		slog.Error("snapshot marshal failed", "error", err)
+		h.log().Error("snapshot marshal failed", "error", err)
 		return
 	}
 	if !client.enqueue(data) {
-		slog.Debug("snapshot enqueue failed, removing client")
+		h.log().Debug("snapshot enqueue failed, removing client")
 	}
 }
 

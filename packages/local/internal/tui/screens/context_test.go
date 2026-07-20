@@ -61,6 +61,41 @@ func setRunDetailForTest(runs *Runs, detail api.ObservabilityRunDetail) {
 	runs.Update(testContext, runDetailLoadedForTest(runs, detail), nil)
 }
 
+type runDiagnosisFixture struct {
+	RunID      string
+	Name       string
+	Status     string
+	StartedAt  int64
+	DurationMs float64
+	Model      string
+	Provider   string
+	Spans      []api.InspectRunSpan
+}
+
+func setRunDiagnosisForTest(runs *Runs, fixture runDiagnosisFixture) {
+	depths := runSpanDepths(fixture.Spans)
+	rows := make([]RunRow, len(fixture.Spans))
+	for index, span := range fixture.Spans {
+		rows[index] = runRow(span, depths[span.ID], "", false)
+	}
+	runs.diagnosis = &RunDiagnosis{
+		Summary: DiagnosisSummary{
+			RunID:      fixture.RunID,
+			Name:       fixture.Name,
+			Status:     fixture.Status,
+			DurationMs: fixture.DurationMs,
+			Model:      fixture.Model,
+			Provider:   fixture.Provider,
+			SpanCount:  len(fixture.Spans),
+		},
+		Timeline: rows,
+	}
+	if fixture.StartedAt != 0 {
+		runs.diagnosis.Summary.StartedAt = time.UnixMilli(fixture.StartedAt).UTC().Format(time.RFC3339Nano)
+	}
+	runs.spanList.SetItems(rows)
+}
+
 func runDetailLoadedForTest(runs *Runs, detail api.ObservabilityRunDetail) runDetailLoadedMsg {
 	_, token := runs.detailResource.Begin(testContext, runsDetailOwner(detail.Run.RunID), uint64(detail.Run.Revision))
 	return runDetailLoadedMsg(resource.ResourceResult[api.ObservabilityRunDetail]{

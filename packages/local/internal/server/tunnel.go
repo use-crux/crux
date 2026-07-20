@@ -18,6 +18,13 @@ type TunnelResult struct {
 	Listener ngrok.EndpointListener
 }
 
+// TunnelStartupResult reports the terminal result of starting a tunnel.
+// A canceled startup carries context.Canceled or context.DeadlineExceeded in Err.
+type TunnelStartupResult struct {
+	URL string
+	Err error
+}
+
 // Close stops the tunnel.
 func (t *TunnelResult) Close() error {
 	if t.Listener != nil {
@@ -31,9 +38,13 @@ func (t *TunnelResult) Close() error {
 // no TCP forwarding needed, the Go HTTP server handles tunnel connections directly.
 // Reads NGROK_AUTHTOKEN from environment or .env/.env.local files.
 func StartNgrokTunnel(ctx context.Context) (*TunnelResult, error) {
+	return startNgrokTunnel(ctx, slog.Default())
+}
+
+func startNgrokTunnel(ctx context.Context, logger *slog.Logger) (*TunnelResult, error) {
 	// Load .env.local if NGROK_AUTHTOKEN isn't already set.
 	if os.Getenv("NGROK_AUTHTOKEN") == "" {
-		loadEnvFiles()
+		loadEnvFiles(logger)
 	}
 
 	authtoken := os.Getenv("NGROK_AUTHTOKEN")
@@ -41,7 +52,7 @@ func StartNgrokTunnel(ctx context.Context) (*TunnelResult, error) {
 		return nil, fmt.Errorf("NGROK_AUTHTOKEN not set. Get one from https://dashboard.ngrok.com")
 	}
 
-	slog.Info("starting ngrok tunnel")
+	logger.Info("starting ngrok tunnel")
 
 	// Create agent with auth token.
 	agent, err := ngrok.NewAgent(ngrok.WithAuthtoken(authtoken))
@@ -57,13 +68,13 @@ func StartNgrokTunnel(ctx context.Context) (*TunnelResult, error) {
 	}
 
 	tunnelURL := listener.URL().String()
-	slog.Info("ngrok tunnel started", "url", tunnelURL)
+	logger.Info("ngrok tunnel started", "url", tunnelURL)
 
 	return &TunnelResult{URL: tunnelURL, Listener: listener}, nil
 }
 
 // loadEnvFiles loads .env and .env.local files from cwd and parent dirs.
-func loadEnvFiles() {
+func loadEnvFiles(logger *slog.Logger) {
 	dir, err := os.Getwd()
 	if err != nil {
 		return
@@ -71,7 +82,7 @@ func loadEnvFiles() {
 
 	for {
 		for _, name := range []string{".env", ".env.local"} {
-			loadSingleEnvFile(filepath.Join(dir, name))
+			loadSingleEnvFile(filepath.Join(dir, name), logger)
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
@@ -81,7 +92,7 @@ func loadEnvFiles() {
 	}
 }
 
-func loadSingleEnvFile(envFile string) {
+func loadSingleEnvFile(envFile string, logger *slog.Logger) {
 	f, err := os.Open(envFile)
 	if err != nil {
 		return
@@ -105,8 +116,8 @@ func loadSingleEnvFile(envFile string) {
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		slog.Debug("failed reading env file", "path", envFile, "error", err)
+		logger.Debug("failed reading env file", "path", envFile, "error", err)
 		return
 	}
-	slog.Debug("loaded env file", "path", envFile)
+	logger.Debug("loaded env file", "path", envFile)
 }

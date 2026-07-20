@@ -9,8 +9,11 @@ import (
 // RunRow is one stable, selectable row in the Runs span hierarchy. Runs owns
 // expansion policy; ListPane owns selection and viewport movement.
 type RunRow struct {
-	ID          string
-	Span        api.InspectRunSpan
+	ID   string
+	Span api.InspectRunSpan
+	// Activity retains the exact direct observability node behind this row.
+	// Synthetic legacy rows may leave it zero-valued.
+	Activity    api.ObservabilityRunDetailNode
 	Depth       int
 	Expandable  bool
 	Expanded    bool

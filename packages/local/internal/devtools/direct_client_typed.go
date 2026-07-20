@@ -2,7 +2,6 @@ package devtools
 
 import (
 	"context"
-	"errors"
 
 	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/observability"
@@ -42,17 +41,6 @@ func (c *DirectClient) RunsWithOptions(ctx context.Context, opts api.InspectRuns
 		return nil, errNoInspectService
 	}
 	return endpoints.InspectRuns.Call(ctx, endpoints.Deps{Inspect: c.inspect}, &endpoints.RunsParams{InspectRunsOptions: opts})
-}
-
-func (c *DirectClient) RunDetail(ctx context.Context, traceID string) (api.InspectRunDetailRecord, bool, error) {
-	if c.inspect == nil {
-		return api.InspectRunDetailRecord{}, false, errNoInspectService
-	}
-	record, err := endpoints.InspectRunDetail.Call(ctx, endpoints.Deps{Inspect: c.inspect}, &readmodel.PathID{ID: traceID})
-	if errors.Is(err, readmodel.ErrNotFound) {
-		return api.InspectRunDetailRecord{}, false, nil
-	}
-	return record, err == nil, err
 }
 
 // ObservabilityRunsPage loads the revisioned Runs read-model page.
@@ -106,13 +94,4 @@ func (c *DirectClient) Activity(ctx context.Context, limit int) ([]api.InspectAc
 
 func (c *DirectClient) DevtoolsContext(_ context.Context) (api.DevtoolsContext, error) {
 	return c.devtools.Context(), nil
-}
-
-func (c *DirectClient) SubscribeInspect(ctx context.Context) <-chan api.InspectEvent {
-	if c.inspect == nil {
-		ch := make(chan api.InspectEvent)
-		close(ch)
-		return ch
-	}
-	return c.inspect.Events().Subscribe(ctx)
 }

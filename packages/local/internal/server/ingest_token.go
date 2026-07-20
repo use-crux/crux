@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,6 +11,10 @@ import (
 const defaultIngestTokenPath = ".crux/devtools/ingest-token"
 
 func loadOrCreateIngestToken(path string) (string, string, error) {
+	return loadOrCreateIngestTokenWithLogger(path, slog.Default())
+}
+
+func loadOrCreateIngestTokenWithLogger(path string, logger *slog.Logger) (string, string, error) {
 	if strings.TrimSpace(path) == "" {
 		path = defaultIngestTokenPath
 	}
@@ -23,7 +28,7 @@ func loadOrCreateIngestToken(path string) (string, string, error) {
 		return "", path, fmt.Errorf("read ingest token: %w", err)
 	}
 
-	token := generateSessionToken()
+	token := generateSessionToken(logger)
 	if token == "" {
 		return "", path, fmt.Errorf("generate ingest token")
 	}

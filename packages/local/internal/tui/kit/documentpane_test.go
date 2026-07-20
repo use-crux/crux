@@ -237,3 +237,22 @@ func TestDocumentPaneHeightOnlyResizeKeepsExactWrappedOffset(t *testing.T) {
 		t.Fatalf("offset after height-only resize = %d, want exact wrapped offset 2", got)
 	}
 }
+
+func TestDocumentPaneRestoresCapturedSourceAnchor(t *testing.T) {
+	pane := NewDocumentPane()
+	pane.SetSize(18, 3)
+	pane.SetFocused(true)
+	pane.SetContent("doc", "first source line wraps across cells\nsecond source line wraps too\nthird")
+	pane.Update(tea.KeyPressMsg{Code: tea.KeyPgDown})
+	anchor, ok := pane.Anchor()
+	if !ok {
+		t.Fatal("scrolled document did not expose a source anchor")
+	}
+	pane.Update(tea.KeyPressMsg{Code: tea.KeyHome})
+	if !pane.RestoreAnchor(anchor) {
+		t.Fatalf("failed to restore source anchor %+v", anchor)
+	}
+	if got, ok := pane.Anchor(); !ok || got != anchor {
+		t.Fatalf("restored source anchor = %+v, %v; want %+v", got, ok, anchor)
+	}
+}

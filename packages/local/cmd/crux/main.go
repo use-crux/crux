@@ -2,36 +2,25 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
-	"os/signal"
-	"syscall"
 
 	"github.com/spf13/cobra"
 	"github.com/use-crux/crux/packages/local/internal/cli"
 	"github.com/use-crux/crux/packages/local/internal/commands"
-	"github.com/use-crux/crux/packages/local/internal/domain"
 	"github.com/use-crux/crux/packages/local/internal/output"
 )
 
 var version = "dev"
 
 func main() {
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
-
-	f := &cli.Factory{}
-	rootCmd := newRootCommand(f)
-
-	if err := rootCmd.ExecuteContext(ctx); err != nil {
-		var exitErr domain.ExitError
-		if errors.As(err, &exitErr) {
-			os.Exit(exitErr.Code)
-		}
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
+	factory := &cli.Factory{}
+	os.Exit(runCLI(
+		context.Background(),
+		factory,
+		processSignalNotifier{},
+		os.Args[1:],
+	))
 }
 
 func newRootCommand(f *cli.Factory) *cobra.Command {
@@ -48,12 +37,10 @@ func newRootCommand(f *cli.Factory) *cobra.Command {
 		CompletionOptions: cobra.CompletionOptions{
 			HiddenDefaultCmd: false,
 		},
-		PersistentPreRun: func(cmd *cobra.Command, args []string) {
-			if f.NoColor {
-				os.Setenv("NO_COLOR", "1")
-			}
-		},
 	}
+	rootCmd.SetIn(factoryInput{factory: f})
+	rootCmd.SetOut(factoryOutput{factory: f})
+	rootCmd.SetErr(factoryOutput{factory: f, diagnostic: true})
 
 	rootCmd.SetHelpFunc(rootHelpFunc(rootCmd, f))
 

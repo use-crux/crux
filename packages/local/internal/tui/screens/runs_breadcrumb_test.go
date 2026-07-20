@@ -53,11 +53,11 @@ func TestRunsBreadcrumbSpanSegmentPrefixed(t *testing.T) {
 	r := NewRuns()
 	selectRunForTest(r, "8af2f1c0deadbeef")
 	r.focus = focusSpanDetail
-	r.detail = &api.InspectRunDetailRecord{
+	setRunDiagnosisForTest(r, runDiagnosisFixture{
 		Spans: []api.InspectRunSpan{
 			{ID: "sp1", Name: "retrieve (loop)"},
 		},
-	}
+	})
 	selectSpanForTest(r, "sp1")
 
 	path, _ := r.Breadcrumb()
