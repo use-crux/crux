@@ -15,8 +15,10 @@ exists. These behaviors make a working process appear broken.
 
 - In a supported interactive terminal, `crux dev` renders a useful first TUI
   frame without waiting for Project Index or runtime-artifact initialization.
-  The release gate is a first-frame deadline of one second after the owned HTTP
-  listener is ready; tests use a blocked initializer to prove independence.
+  The release gate is a first-frame deadline of one second from entering the
+  dev command, so synchronous work before listener construction cannot evade
+  the test. Tests use blocked runtime-preflight and index initializers to prove
+  independence.
 - The TUI reports background initialization honestly with bounded phase and
   diagnostic state. Screens transition from loading/empty to live data through
   the existing event bridge without restarting the program.
@@ -40,29 +42,61 @@ behavior during real use.
 
 ### Cheap construction and owned warmup
 
+Interactive mode validates terminal capability and conflicting flags before
+starting any worker. The existing runtime preflight—which currently runs
+synchronously before server construction with a 20-second timeout—moves into
+the background startup pipeline. It cannot delay construction, listener
+binding, or the first frame. Plain mode consumes the same background result and
+prints it without terminal control sequences.
+
 `server.NewDevServer` constructs services, storage, handlers, and owned worker
 registries, but does not perform the initial Project Index reindex or runtime
 artifact generation synchronously. `DevServer.Start` binds the HTTP listener,
-then starts one server-owned warmup operation under the existing session
-context.
+then admits one long-lived startup/index lifecycle worker under the existing
+session context before `Start` returns. The worker registry is closed to new
+admission before shutdown begins waiting, so no `WaitGroup.Add` can race
+`Wait`. Tunnel and other optional lifetime workers must be admitted through the
+same closeable boundary or registered before `Start` returns.
 
-Warmup performs the current ordering—initial reindex, then runtime artifacts
-from the resulting definitions—and publishes phase/result state. The Project
-Index watcher starts only after the initial reindex handoff is established so
-startup cannot perform duplicate competing builds. Cancellation and shutdown
-join the warmup through the existing worker registry and timeout.
+The lifecycle worker installs filesystem watching before the baseline scan and
+buffers/coalesces deltas while the scan is in flight. Warmup performs the
+current ordering—initial full reindex, then runtime artifacts from the resulting
+definitions—and publishes phase/result state. After a successful baseline
+commit, buffered deltas run as one incremental refresh before normal watcher
+operation continues. This prevents both duplicate competing builds and a gap
+where edits can be lost.
+
+If the baseline fails, watching remains active and the next coalesced delta
+requests a full baseline retry; incremental refresh is never attempted without
+a committed baseline. Cancellation and shutdown join the lifecycle worker
+through the existing registry and timeout.
 
 Initialization failure does not stop the listener or TUI. Last-good Project
 Index data remains available where one exists; otherwise screens retain an
-explicit loading/degraded state.
+explicit loading/degraded state. “Last-good” means a committed in-memory
+snapshot. A validated persisted cache may be published as an initial committed
+snapshot before the asynchronous scan, but a failed scan must never claim an
+uncommitted cache load as last-good or clear a previously committed snapshot.
 
 ### Startup status boundary
 
-The dev server exposes a small read/subscribe startup-status boundary rather
-than coupling the TUI to indexer internals. Status contains a phase, whether
-work is active, and an optional structured diagnostic. The TUI receives it via
-the existing bridge/application message flow. Plain mode renders the same
-terminal result through its diagnostic reporter.
+An internal startup journal is shared by command-owned runtime preflight and
+server-owned warmup rather than coupling the TUI to indexer internals. Each
+immutable status has a monotonically increasing revision, phase, active and
+terminal flags, and zero or more structured diagnostics. Diagnostics retain a
+stable identity, code, severity, message, and remediation.
+
+`SnapshotAndSubscribe(ctx)` atomically returns the latest snapshot and a stream
+of strictly newer revisions. Terminal results remain replayable for the command
+lifetime. Diagnostics deduplicate by stable identity, including
+`RUNTIME_HOST_ONLY`, so a fast preflight or artifact result cannot be missed or
+shown twice when the TUI subscribes after warmup begins. Worker protocol
+collection preserves structured error codes instead of discarding them or
+requiring string parsing.
+
+The TUI receives journal revisions via the existing bridge/application message
+flow. Plain mode renders terminal results from the same journal through its
+diagnostic reporter.
 
 The initial frame depends only on cheap server construction, listener binding,
 and TUI program startup. It never awaits a warmup result or tunnel result.
@@ -77,12 +111,19 @@ construction.
 
 ### Launcher and shutdown
 
-The JavaScript launcher uses an asynchronous child-process lifecycle instead
-of `execFileSync`. It inherits stdio, remains installed as the foreground
-supervisor while the Go child restores the terminal, and exits only from the
-child's `close` result. Signal handling must avoid terminating the wrapper
-ahead of the child or delivering duplicate signals to a child that already
-received the terminal's process-group signal.
+On Unix, the Node 24 launcher resolves the platform binary and calls
+`process.execve`, replacing itself with the Go process. PID, process group,
+stdio, signal delivery, second-signal behavior, and final exit status therefore
+belong directly to Go; no JavaScript signal proxy remains to duplicate or race
+signals.
+
+Node does not provide `execve` on Windows. There the launcher uses a synchronous
+child with inherited stdio and temporary console-signal handlers that keep the
+wrapper alive while the Go child handles console Ctrl+C. It exits from the
+child status after cleanup. Windows process-tree termination remains forceful;
+graceful shutdown is guaranteed for TUI keys and console control events, not an
+arbitrary `TerminateProcess` targeted only at the wrapper. Exit-code/signal
+mapping is isolated as a pure function and covered for both platform policies.
 
 Inside raw TUI input, Ctrl+C is an application key and follows the same orderly
 shutdown path as `q`. Process signals continue through the command-root signal
@@ -92,18 +133,27 @@ coordinator and retain conventional statuses.
 
 Tests are added one behavior at a time using public boundaries:
 
-1. A command/PTTY test blocks server warmup indefinitely and proves the
-   Overview or startup frame arrives within the deadline, then releases cleanly.
+1. A command/PTTY test separately blocks runtime preflight and server warmup,
+   and proves the Overview or startup frame arrives within one second of command
+   entry, then releases cleanly.
 2. Command tests prove automatic mode, `--tui`, `--no-tui`, conflicting flags,
    and explicit-TUI capability errors.
 3. A real-program test proves a runtime-host-only warmup diagnostic is visible
    without suppressing the first frame and is not duplicated.
 4. PTY shutdown tests prove `q` and raw Ctrl+C exit 0, while process SIGINT and
    SIGTERM retain 130/143 and release the port.
-5. A launcher integration test runs the published npm wrapper around a
-   controllable child and proves it waits for cleanup, propagates status, and
-   does not leak terminal capability replies after the parent returns.
-6. Existing Go, integration, race, vet, cross-compile, and package checks remain
+5. A watcher test edits source while baseline reindex is blocked, then proves
+   the buffered delta is applied after commit. A failure variant proves a later
+   edit schedules a full retry and recovers from degraded startup.
+6. Startup-journal tests prove atomic snapshot/replay, monotonic revisions,
+   terminal retention, typed code preservation, and diagnostic deduplication.
+7. A launcher integration test runs the published npm wrapper around a
+   controllable child and proves Unix process replacement, Windows status
+   mapping, cleanup ordering, and no leaked terminal capability replies after
+   return.
+8. A shutdown race test cancels while baseline handoff is occurring and proves
+   no worker is admitted after registry closure and every admitted worker joins.
+9. Existing Go, integration, race, vet, cross-compile, and package checks remain
    green.
 
 Tests must not rely only on a passive PTY. At least one terminal harness answers
