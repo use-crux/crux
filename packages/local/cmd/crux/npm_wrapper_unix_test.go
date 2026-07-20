@@ -15,6 +15,16 @@ import (
 	"time"
 )
 
+func TestNPMWrapperSourceIsExecutable(t *testing.T) {
+	wrapperInfo, err := os.Stat(filepath.Join("..", "..", "npm", "local", "bin", "crux.cjs"))
+	if err != nil {
+		t.Fatalf("stat npm wrapper: %v", err)
+	}
+	if wrapperInfo.Mode().Perm()&0o111 == 0 {
+		t.Fatalf("npm wrapper mode = %04o, want executable", wrapperInfo.Mode().Perm())
+	}
+}
+
 func TestNPMWrapperReplacesItselfAndWaitsForCleanup(t *testing.T) {
 	wrapperSource, err := os.ReadFile(filepath.Join("..", "..", "npm", "local", "bin", "crux.cjs"))
 	if err != nil {
