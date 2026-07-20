@@ -349,7 +349,7 @@ describe("runtime artifacts", () => {
     ).resolves.toBe("export const userAuthored = true\n");
   });
 
-  it("preserves an existing Convex router and points to the generated route helper", async () => {
+  it("preserves an existing Convex router without writing sibling artifacts", async () => {
     const root = await fixtureRoot();
     await mkdir(join(root, "convex"), { recursive: true });
     await writeFile(
@@ -365,7 +365,58 @@ describe("runtime artifacts", () => {
     );
     await expect(
       readFile(join(root, "convex/_crux/http.ts"), "utf8"),
-    ).resolves.toContain("export function registerCruxEvalRoutes");
+    ).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("leaves every artifact byte-identical when the final protected destination conflicts", async () => {
+    const root = await fixtureRoot();
+    await generateRuntimeArtifacts({ root, host: "convex" });
+
+    const sourceFile = join(root, "src/review.ts");
+    await mkdir(dirname(sourceFile), { recursive: true });
+    await writeFile(
+      sourceFile,
+      [
+        "import { flow } from '@use-crux/core/flow'",
+        "export const reviewFlow = flow('review', async () => undefined)",
+      ].join("\n"),
+    );
+    const definitions = [
+      {
+        id: "flow:review",
+        kind: "flow",
+        name: "review",
+        fidelity: "resolved",
+        source: { file: sourceFile, line: 1 },
+        metadata: { exportName: "reviewFlow" },
+      },
+    ] satisfies readonly ProjectDefinition[];
+    const conflictFile = join(root, "convex/http.ts");
+    await writeFile(conflictFile, "export default { userAuthored: true }\n");
+
+    const artifactFiles = [
+      join(root, ".crux/generated/runtime/manifest.json"),
+      join(root, ".crux/generated/runtime/privacy.json"),
+      join(root, "convex/_crux/generated.ts"),
+      join(root, "convex/_crux/targets.ts"),
+      join(root, "convex/_crux/http.ts"),
+      conflictFile,
+    ];
+    const before = await Promise.all(
+      artifactFiles.map((file) => readFile(file, "utf8")),
+    );
+
+    await expect(
+      generateRuntimeArtifacts({
+        root,
+        host: "convex",
+        definitions,
+      }),
+    ).rejects.toMatchObject({ code: "ARTIFACTS_STALE" });
+
+    await expect(
+      Promise.all(artifactFiles.map((file) => readFile(file, "utf8"))),
+    ).resolves.toEqual(before);
   });
 
   it("overwrites entry files with the legacy generated marker during upgrades", async () => {
