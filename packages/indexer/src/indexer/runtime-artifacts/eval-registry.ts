@@ -80,7 +80,29 @@ function projectEntry(
     input.root,
     input.definitions,
   );
+  const executionArms = nodeRunner.projectEvalExecutionArms(entry.eval);
+  const invalid = executionArms.find((arm) => arm.status === "invalid");
+  if (invalid !== undefined) {
+    throw new TypeError(
+      `Eval '${entry.id}' arm '${invalid.name}' cannot be prepared for Runtime execution: ${invalid.reason}`,
+    );
+  }
   const variants = nodeRunner.projectDeployedEvalVariants(entry.eval);
+  const manifestVariants = variants.map((variant) => {
+    const arm = executionArms.find(
+      (candidate) => candidate.name === variant.name,
+    );
+    if (arm === undefined || arm.status !== "ready") {
+      throw new TypeError(
+        `Eval '${entry.id}' arm '${variant.name}' has inconsistent execution metadata.`,
+      );
+    }
+    return Object.freeze({
+      ...variant,
+      execution: arm.execution,
+      requiredHostCapabilities: arm.requiredHostCapabilities,
+    });
+  });
   const cases = entry.cases.map((evalCase) => ({
     id: evalCase.id,
     fingerprint: nodeRunner.fingerprintDeployedEvalCase(
@@ -91,6 +113,16 @@ function projectEntry(
   }));
   const requiredHostCapabilities =
     nodeRunner.projectDeployedEvalRequiredHostCapabilities(entry.eval);
+  const runtimeArms = executionArms.flatMap((arm) =>
+    arm.status === "ready" && arm.execution === "runtime"
+      ? [
+          {
+            name: arm.name,
+            requiredHostCapabilities: arm.requiredHostCapabilities,
+          },
+        ]
+      : [],
+  );
   if (
     JSON.stringify(requiredHostCapabilities) !==
     JSON.stringify(indexFacts.requiredHostCapabilities)
@@ -110,7 +142,7 @@ function projectEntry(
         .sort((left, right) => compareCodepoint(left.id, right.id)),
     ),
     variants: Object.freeze(
-      [...variants].sort((left, right) =>
+      [...manifestVariants].sort((left, right) =>
         compareCodepoint(left.name, right.name),
       ),
     ),
@@ -126,6 +158,7 @@ function projectEntry(
       evalFingerprint: entry.definitionFingerprint,
       cases,
       variants,
+      runtimeArms,
       requiredHostCapabilities,
       index: indexFacts,
     },
@@ -187,6 +220,7 @@ function registrySource(
         evalFingerprint: entry.evalFingerprint,
         cases: entry.cases,
         variants: entry.variants,
+        runtimeArms: entry.runtimeArms,
         requiredHostCapabilities: entry.requiredHostCapabilities,
         index: entry.index,
       });

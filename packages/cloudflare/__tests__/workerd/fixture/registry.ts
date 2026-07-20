@@ -21,7 +21,7 @@ export function fixtureRegistry() {
       operation: "generate",
       adapterId: "ai-sdk",
       capabilities: [],
-      requiredHostCapabilities: [],
+      requiredHostCapabilities: ["asset-store"],
       defaults: { prompt: "refund policy" },
       overrideKeys: [],
       projectIdentity: () => ({
@@ -81,11 +81,14 @@ export function fixtureRegistry() {
           },
         ],
         variants: projectDeployedEvalVariants(evalValue),
-        requiredHostCapabilities: [],
+        runtimeArms: [
+          { name: "current", requiredHostCapabilities: ["asset-store"] },
+        ],
+        requiredHostCapabilities: ["asset-store"],
         index: {
           id: "support",
           source: "evals/support.eval.ts",
-          requiredHostCapabilities: [],
+          requiredHostCapabilities: ["asset-store"],
         },
       },
     ],

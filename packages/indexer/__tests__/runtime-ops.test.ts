@@ -355,7 +355,7 @@ async function runtimeOpsFixtureRoot(options: {
     join(root, ".crux/generated/runtime/manifest.json"),
     `${JSON.stringify(
       {
-        version: 1,
+        version: 2,
         targets: [
           {
             name: "runtime-ops-review",

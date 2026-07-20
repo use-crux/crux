@@ -96,10 +96,17 @@ describe("generated deployed Eval registry", () => {
           expect.objectContaining({ id: "a-sidecar" }),
           expect.objectContaining({ id: "z-inline" }),
         ],
-        variants: [expect.objectContaining({ name: "current" })],
+        variants: [
+          expect.objectContaining({
+            name: "current",
+            execution: "runtime",
+            requiredHostCapabilities: ["asset-store"],
+          }),
+        ],
         requiredHostCapabilities: ["asset-store"],
       }),
     ]);
+    expect(result.manifest.version).toBe(2);
     expect(result.manifest.evalPrivacyFingerprint).toMatch(/^[a-f0-9]{64}$/);
     expect(privacy).toEqual({
       schemaVersion: 1,
@@ -131,7 +138,9 @@ describe("generated deployed Eval registry", () => {
       const generated = (await importUserModule(
         join(root, "crux.generated/next.ts"),
         4_000,
-      )) as { readonly GET: (request: Request) => Promise<Response> };
+      )) as {
+        readonly GET: (request: Request) => Promise<Response>;
+      };
       const response = await generated.GET(
         new Request("http://localhost/api/crux/manifest", {
           headers: {
@@ -309,7 +318,10 @@ describe("generated deployed Eval registry", () => {
           body: JSON.stringify(job),
         }),
       );
-      expect(accepted.status).toBe(202);
+      expect(accepted.status).toBe(409);
+      await expect(accepted.json()).resolves.toMatchObject({
+        error: { code: "EVAL_VARIANT_MISSING", phase: "admission" },
+      });
       const wake = (
         globalThis as typeof globalThis & {
           __generatedEvalWake?: {
@@ -318,29 +330,7 @@ describe("generated deployed Eval registry", () => {
           };
         }
       ).__generatedEvalWake;
-      expect(wake).toBeDefined();
-      const delivered = await generated.POST(
-        new Request("http://localhost/api/crux", {
-          method: "POST",
-          headers: wake!.headers,
-          body: wake!.body,
-        }),
-      );
-      expect(delivered.status).toBe(200);
-      const completed = await generated.GET(
-        new Request(`http://localhost/api/crux/jobs/${job.jobId}`, {
-          headers: {
-            authorization: "Bearer generated-eval-host-token-at-least-32-bytes",
-          },
-        }),
-      );
-      expect(completed.status).toBe(200);
-      const completedBody = await completed.json();
-      expect(completedBody).toMatchObject({
-        status: "succeeded",
-        jobId: job.jobId,
-        result: { output: { question: "refund?" } },
-      });
+      expect(wake).toBeUndefined();
     } finally {
       delete (
         globalThis as typeof globalThis & { __generatedEvalWake?: unknown }

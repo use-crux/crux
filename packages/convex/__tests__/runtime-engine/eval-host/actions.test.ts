@@ -76,6 +76,7 @@ describe("createConvexEvalHost()", () => {
       registry,
       deploymentId: "production-eu",
       token: TOKEN,
+      hostCapabilities: ["record-store"],
       now: () => NOW,
     });
     const body = jobBody(registry);

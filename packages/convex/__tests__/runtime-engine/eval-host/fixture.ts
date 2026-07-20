@@ -20,7 +20,9 @@ export function fixtureRegistry(
   execute: (input: unknown) => Promise<{ output: unknown }> = async (
     input,
   ) => ({ output: input }),
-  requiredHostCapabilities: readonly EvalRequiredHostCapability[] = [],
+  requiredHostCapabilities: readonly EvalRequiredHostCapability[] = [
+    "record-store",
+  ],
 ) {
   const task = attachEvalTaskDescriptorForInternalUse(
     async (input: { message: string }) => input.message,
@@ -80,6 +82,7 @@ export function fixtureRegistry(
           },
         ],
         variants: projectDeployedEvalVariants(evalValue),
+        runtimeArms: [{ name: "current", requiredHostCapabilities }],
         requiredHostCapabilities,
         index: {
           id: "support",

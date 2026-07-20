@@ -34,6 +34,7 @@ export { addReviewCase } from "./review";
 export type { AddReviewCaseInput, AddReviewCaseResult } from "./review";
 export {
   fingerprintDeployedEvalCase,
+  projectEvalExecutionArms,
   projectDeployedEvalRequiredHostCapabilities,
   projectDeployedEvalVariants,
 } from "../../runtime/eval-registry/projection";

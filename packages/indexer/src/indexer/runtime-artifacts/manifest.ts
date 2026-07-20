@@ -7,7 +7,7 @@ import type {
 import { createRuntimeError } from "@use-crux/core/runtime";
 import type { RuntimeArtifactDriftReport } from "./types";
 
-/** Project runtime definitions into the v1 runtime artifact manifest. */
+/** Project runtime definitions into the v2 runtime artifact manifest. */
 export function manifestFromDefinitions(input: {
   readonly root: string;
   readonly definitions: readonly ProjectDefinition[];
@@ -22,7 +22,7 @@ export function manifestFromDefinitions(input: {
     seen.add(target.name);
   }
   return {
-    version: 1,
+    version: 2,
     evalPrivacyFingerprint:
       input.evalPrivacyFingerprint ??
       "d2b7a3a9e0d3857b24b871ee585d118490dabd9edf81bcf10de9f5328e85cc29",

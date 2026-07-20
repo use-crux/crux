@@ -9,6 +9,7 @@ import { RUNTIME_RESULT_MAX_BYTES } from "../../../src/runtime/results/types";
 import {
   authorizedRequest,
   fixtureRegistry,
+  HOST_CAPABILITIES,
   jobBody,
   NOW,
   pollUntilTerminal,
@@ -22,6 +23,7 @@ describe("memory Eval host security and limits", () => {
       deploymentId: "production-eu",
       token: TOKEN,
       registry: fixtureRegistry(),
+      hostCapabilities: HOST_CAPABILITIES,
       now: () => NOW,
     });
     let readPastLimit = false;
@@ -63,6 +65,7 @@ describe("memory Eval host security and limits", () => {
       deploymentId: "production-eu",
       token: TOKEN,
       registry: fixtureRegistry(),
+      hostCapabilities: HOST_CAPABILITIES,
       now: () => now,
     });
 
@@ -88,6 +91,7 @@ describe("memory Eval host security and limits", () => {
       deploymentId: "production-eu",
       token: TOKEN,
       registry,
+      hostCapabilities: HOST_CAPABILITIES,
       now: () => NOW,
     });
     const body = jobBody(registry);
@@ -138,6 +142,7 @@ describe("memory Eval host security and limits", () => {
       deploymentId: "production-eu",
       token: TOKEN,
       registry,
+      hostCapabilities: HOST_CAPABILITIES,
       now: () => NOW,
       limits: { maxConcurrentJobs: 1, maxPollsPerSecond: 1 },
     });
@@ -166,6 +171,7 @@ describe("memory Eval host security and limits", () => {
       deploymentId: "production-eu",
       token: TOKEN,
       registry,
+      hostCapabilities: HOST_CAPABILITIES,
       now: () => NOW,
     });
     const body = jobBody(registry);
@@ -191,6 +197,7 @@ describe("memory Eval host security and limits", () => {
       deploymentId: "production-eu",
       token: TOKEN,
       registry,
+      hostCapabilities: HOST_CAPABILITIES,
       now: () => NOW,
     });
     const probe = jobBody(registry);
@@ -224,6 +231,7 @@ describe("memory Eval host security and limits", () => {
       deploymentId: "production-eu",
       token: TOKEN,
       registry,
+      hostCapabilities: HOST_CAPABILITIES,
       now: () => NOW,
     });
     const body = jobBody(registry);

@@ -4,7 +4,13 @@ import {
   createEvalHostClient,
   createNodeEvalHost,
 } from "../../../../src/runtime/eval-host";
-import { fixtureRegistry, jobBody, NOW, TOKEN } from "../fixture";
+import {
+  fixtureRegistry,
+  HOST_CAPABILITIES,
+  jobBody,
+  NOW,
+  TOKEN,
+} from "../fixture";
 
 describe("Node Eval host HTTP binding", () => {
   let server: Server | undefined;
@@ -23,6 +29,7 @@ describe("Node Eval host HTTP binding", () => {
       deploymentId: "production-eu",
       token: TOKEN,
       registry,
+      hostCapabilities: HOST_CAPABILITIES,
       now: () => NOW,
     });
     server = createServer(async (incoming, outgoing) => {

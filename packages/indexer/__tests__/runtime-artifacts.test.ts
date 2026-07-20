@@ -49,7 +49,7 @@ describe("runtime artifacts", () => {
     const second = await generateRuntimeArtifacts({ root, host: "next" });
 
     expect(result.manifest).toEqual({
-      version: 1,
+      version: 2,
       evalPrivacyFingerprint:
         "d2b7a3a9e0d3857b24b871ee585d118490dabd9edf81bcf10de9f5328e85cc29",
       targets: [],
@@ -415,14 +415,14 @@ describe("runtime artifacts", () => {
     await expect(
       generateRuntimeArtifacts({ root, host: "next" }),
     ).resolves.toMatchObject({
-      manifest: { version: 1, targets: [] },
+      manifest: { version: 2, targets: [] },
     });
   });
 
   it("reports non-terminal runtime work whose target disappeared from the manifest", () => {
     const drift = diffRuntimeArtifactDrift({
       manifest: {
-        version: 1,
+        version: 2,
         evalPrivacyFingerprint:
           "d2b7a3a9e0d3857b24b871ee585d118490dabd9edf81bcf10de9f5328e85cc29",
         targets: [

@@ -24,7 +24,6 @@ import type {
   RuntimePreflightMissingTarget,
   RuntimeStatusCount,
 } from './runtime-ops-types'
-import type { RuntimeArtifactManifest } from '@use-crux/core/runtime'
 
 export type {
   RuntimeCancelOperationResult,
@@ -256,14 +255,48 @@ function appendNamespaceFallbackFinding(
 
 async function readRuntimeArtifactManifest(
   root: string,
-): Promise<RuntimeArtifactManifest> {
-  return JSON.parse(
+): Promise<{ readonly targets: readonly { readonly name: string }[] }> {
+  const parsed: unknown = JSON.parse(
     await readFile(join(root, '.crux/generated/runtime/manifest.json'), 'utf8'),
-  ) as RuntimeArtifactManifest
+  )
+  if (!isRecord(parsed) || parsed.version !== 2) {
+    const version = isRecord(parsed) ? parsed.version : undefined
+    throw createRuntimeError({
+      code: 'RUNTIME_ARTIFACT_MANIFEST_INCOMPATIBLE',
+      whatFailed: `Runtime artifact manifest schema version ${String(version ?? 'unknown')} is not supported.`,
+      why: 'This Crux version requires the current generated Runtime file format.',
+      whatStillWorks:
+        'Authored Runtime targets and Eval definitions are unchanged.',
+      nextStep:
+        'Run `crux runtime generate` to refresh the generated Runtime files.',
+    })
+  }
+  const targets = Array.isArray(parsed.targets)
+    ? parsed.targets.flatMap((target) =>
+        isRecord(target) && typeof target.name === 'string'
+          ? [{ name: target.name }]
+          : [],
+      )
+    : []
+  if (
+    !Array.isArray(parsed.targets) ||
+    targets.length !== parsed.targets.length
+  ) {
+    throw createRuntimeError({
+      code: 'RUNTIME_ARTIFACT_MANIFEST_INVALID',
+      whatFailed: 'The generated Runtime artifact manifest is incomplete.',
+      why: 'Its target identity list is missing or malformed.',
+      whatStillWorks:
+        'Authored Runtime targets and Eval definitions are unchanged.',
+      nextStep:
+        'Run `crux runtime generate` to recreate the generated Runtime files.',
+    })
+  }
+  return { targets }
 }
 
 function missingRuntimeTargets(
-  manifest: RuntimeArtifactManifest,
+  manifest: { readonly targets: readonly { readonly name: string }[] },
   counts: readonly RuntimeStatusCount[],
 ): readonly RuntimePreflightMissingTarget[] {
   const known = new Set(manifest.targets.map((target) => target.name))
@@ -280,6 +313,10 @@ function missingRuntimeTargets(
   return [...missing]
     .map(([targetId, count]) => ({ targetId, count }))
     .sort((a, b) => codepointCompare(a.targetId, b.targetId))
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
 function isTerminalRuntimeStatus(

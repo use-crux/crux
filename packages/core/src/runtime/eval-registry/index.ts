@@ -21,6 +21,7 @@ export type {
   DeployedEvalRegistry,
   DeployedEvalRegistryEntry,
   DeployedEvalRegistryEntryInput,
+  DeployedEvalRuntimeArm,
   DeployedEvalVariant,
   ResolveDeployedEvalRequest,
   ResolvedDeployedEval,

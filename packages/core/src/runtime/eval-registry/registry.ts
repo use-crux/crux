@@ -8,6 +8,7 @@ import { resolveEvalArms } from "../../eval/internal/arm-policy";
 import { registryError } from "./error";
 import {
   fingerprintDeployedEvalCase,
+  projectEvalExecutionArms,
   projectDeployedEvalRequiredHostCapabilities,
 } from "./projection";
 import type {
@@ -91,7 +92,14 @@ export function resolveDeployedEval(
   const variant = entry.arms.find(
     (candidate) => candidate.name === request.variant,
   );
-  if (identity === undefined || variant === undefined) {
+  const runtimeArm = entry.runtimeArms.find(
+    (candidate) => candidate.name === request.variant,
+  );
+  if (
+    identity === undefined ||
+    variant === undefined ||
+    runtimeArm === undefined
+  ) {
     registryError(
       "variant_missing",
       `Variant '${request.variant}' is not registered for Eval '${request.evalId}'.`,
@@ -103,7 +111,12 @@ export function resolveDeployedEval(
       `Variant '${request.variant}' has a stale fingerprint.`,
     );
   }
-  return Object.freeze({ entry, case: evalCase, variant });
+  return Object.freeze({
+    entry,
+    case: evalCase,
+    variant,
+    requiredHostCapabilities: runtimeArm.requiredHostCapabilities,
+  });
 }
 
 function normalizeEntry(
@@ -166,13 +179,34 @@ function normalizeEntry(
     id: input.id,
     cases: cases.map((entry) => entry.authored),
   });
-  const arms = resolveEvalArms(getEvalDefinitionForInternalUse(evalValue));
-  if (!sameVariants(input.variants, arms)) {
+  const allArms = resolveEvalArms(getEvalDefinitionForInternalUse(evalValue));
+  if (!sameVariants(input.variants, allArms)) {
     registryError(
       "registry_invalid",
       `Generated Variant fingerprints for Eval '${input.id}' are incompatible with the imported definition.`,
     );
   }
+  const projectedArms = projectEvalExecutionArms(evalValue);
+  const expectedRuntimeArms = projectedArms.flatMap((arm) =>
+    arm.status === "ready" && arm.execution === "runtime"
+      ? [
+          {
+            name: arm.name,
+            requiredHostCapabilities: arm.requiredHostCapabilities,
+          },
+        ]
+      : [],
+  );
+  if (!sameRuntimeArms(input.runtimeArms, expectedRuntimeArms)) {
+    registryError(
+      "registry_invalid",
+      `Generated Runtime arm permissions for Eval '${input.id}' disagree with its task definitions.`,
+    );
+  }
+  const runtimeNames = new Set(input.runtimeArms.map((arm) => arm.name));
+  const arms = Object.freeze(
+    allArms.filter((arm) => runtimeNames.has(arm.name)),
+  );
   const taskSchemas = getEvalTaskSchemasForInternalUse(evalValue);
   return Object.freeze({
     eval: evalValue,
@@ -182,6 +216,16 @@ function normalizeEntry(
     cases,
     variants: Object.freeze(
       input.variants.map((entry) => Object.freeze({ ...entry })),
+    ),
+    runtimeArms: Object.freeze(
+      input.runtimeArms.map((entry) =>
+        Object.freeze({
+          name: entry.name,
+          requiredHostCapabilities: Object.freeze([
+            ...entry.requiredHostCapabilities,
+          ]),
+        }),
+      ),
     ),
     requiredHostCapabilities: Object.freeze([
       ...input.requiredHostCapabilities,
@@ -196,6 +240,24 @@ function normalizeEntry(
     }),
     arms,
   });
+}
+
+function sameRuntimeArms(
+  actual: DeployedEvalRegistryEntryInput["runtimeArms"],
+  expected: DeployedEvalRegistryEntryInput["runtimeArms"],
+): boolean {
+  return (
+    actual.length === expected.length &&
+    actual.every((arm, index) => {
+      const candidate = expected[index];
+      return (
+        candidate !== undefined &&
+        arm.name === candidate.name &&
+        JSON.stringify(sorted(arm.requiredHostCapabilities)) ===
+          JSON.stringify(sorted(candidate.requiredHostCapabilities))
+      );
+    })
+  );
 }
 
 function assertIndexAgreement(input: DeployedEvalRegistryEntryInput): void {

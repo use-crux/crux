@@ -10,13 +10,45 @@ import {
 import { preflightRuntime } from '../src/indexer/runtime-ops'
 
 describe('runtime namespace preflight', () => {
-  it('includes a fallback namespace warning without failing preflight', async () => {
+  it('rejects an obsolete local Runtime artifact manifest with a regeneration remedy', async () => {
     const root = await mkdtemp(join(tmpdir(), 'crux-runtime-ops-'))
     try {
       await mkdir(join(root, '.crux/generated/runtime'), { recursive: true })
       await writeFile(
         join(root, '.crux/generated/runtime/manifest.json'),
         `${JSON.stringify({ version: 1, targets: [] })}\n`,
+      )
+      const runtime = serverless({
+        store: {
+          ...inMemoryRuntimeStore(),
+          setup: {
+            check: async () => ({ ok: true, findings: [] }),
+            apply: async () => ({ ok: true, findings: [] }),
+          },
+        },
+        publicUrl: 'https://app.example.com',
+        env: {},
+        wake: genericQueue({ enqueue: async () => undefined }),
+      })
+
+      await expect(preflightRuntime(root, runtime)).rejects.toMatchObject({
+        code: 'RUNTIME_ARTIFACT_MANIFEST_INCOMPATIBLE',
+        message: expect.stringMatching(
+          /schema version 1[\s\S]*crux runtime generate/i,
+        ),
+      })
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('includes a fallback namespace warning without failing preflight', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'crux-runtime-ops-'))
+    try {
+      await mkdir(join(root, '.crux/generated/runtime'), { recursive: true })
+      await writeFile(
+        join(root, '.crux/generated/runtime/manifest.json'),
+        `${JSON.stringify({ version: 2, targets: [] })}\n`,
       )
       const runtime = serverless({
         store: {
