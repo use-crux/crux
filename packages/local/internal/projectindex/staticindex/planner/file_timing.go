@@ -1,6 +1,7 @@
 package planner
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -19,12 +20,16 @@ const (
 )
 
 func fileSelectionWithCallNamesTimed(
+	ctx context.Context,
 	root string,
 	configFile string,
 	callNames []string,
 ) (fileSelectionResult, []projectindex.ProjectIndexPhaseTiming, error) {
-	discoveryCache := loadDiscoveryCache(root)
-	defer discoveryCache.Save()
+	var discoveryCache *discoveryCache
+	if !projectindex.CacheDisabled(ctx) {
+		discoveryCache = loadDiscoveryCache(root)
+		defer discoveryCache.Save()
+	}
 
 	classified, skipped, timings, err := primaryCandidateFilesTimedWithCache(root, callNames, discoveryCache)
 	if err != nil {

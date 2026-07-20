@@ -219,6 +219,14 @@ export async function preflightRuntime(
   root: string,
   runtimeDefinition: RuntimeEngineDefinition,
 ): Promise<RuntimeOperationResult> {
+  if (runtimeDefinition.kind === 'host-bound') {
+    return {
+      operation: 'preflight',
+      ok: true,
+      setup: { ok: true, findings: [] },
+      missingTargets: [],
+    }
+  }
   const setup = appendNamespaceFallbackFinding(
     await setupPort(runtimeDefinition).check(),
     runtimeDefinition,

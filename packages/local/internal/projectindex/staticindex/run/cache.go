@@ -16,7 +16,7 @@ func writeCache(
 	preparePlan protocol.Plan,
 	patch projectindex.IndexPatch,
 ) {
-	if !cache.StatusEnabledFromEnv() {
+	if request.CacheDisabled || !cache.StatusEnabledFromEnv() {
 		return
 	}
 	cache.WriteFromPatch(

@@ -45,6 +45,7 @@ type SemanticWorkerRequest = {
   dependencyClosure?: readonly string[]
   sourceProfile?: SemanticSourceProfile
   sourceProfileFiles?: SemanticSourceProfile['files']
+  cacheDisabled?: boolean
 }
 
 const chunkedRequests = new Map<string, SemanticWorkerRequest>()
@@ -104,6 +105,7 @@ async function handleLine(line: string): Promise<void> {
               : undefined,
             sourceProfile: req.sourceProfile ? normalizeSourceProfile(req.root, req.sourceProfile) : undefined,
             semanticInstrumentation: semanticTimings.instrumentation,
+            semanticCache: req.cacheDisabled ? 'disabled' : undefined,
           })
         : await semanticService.indexProject({
             root: req.root,
@@ -113,6 +115,7 @@ async function handleLine(line: string): Promise<void> {
             semanticBackend: req.semanticBackend,
             previousIndex: req.previousIndex,
             semanticInstrumentation: semanticTimings.instrumentation,
+            semanticCache: req.cacheDisabled ? 'disabled' : undefined,
           })
     await writePatchEvents(writeResponse, 'indexProjectSemantic', patch, { timings: semanticTimings.summary() })
   } catch (error) {

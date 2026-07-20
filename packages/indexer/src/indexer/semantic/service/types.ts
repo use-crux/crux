@@ -120,6 +120,8 @@ export interface SemanticAnalyzeInput {
   readonly sourceProfile: SemanticSourceProfile
   /** Optional timing hook used by benchmarks and worker diagnostics. */
   readonly instrumentation?: SemanticIndexInstrumentation
+  /** Durable semantic fact-cache behavior for this request. */
+  readonly semanticCache?: 'read-write' | 'disabled'
 }
 
 /** Compiler-free evidence stream returned by a semantic backend. */
@@ -212,6 +214,8 @@ export interface SemanticIndexProjectInput {
   readonly previousIndex?: ProjectIndexSnapshot
   /** Optional AST/source handoff profile used to avoid duplicate source scanning. */
   readonly sourceProfile?: SemanticSourceProfile
+  /** Durable semantic fact-cache behavior for this request. */
+  readonly semanticCache?: 'read-write' | 'disabled'
 }
 
 /** Input for indexing a planner-selected semantic file set. */

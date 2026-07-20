@@ -16,6 +16,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/output"
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/eventwire"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/oneshot"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
@@ -29,6 +30,7 @@ type runtimeOperationFunc func(ctx context.Context, root, operation, workID stri
 type setupOperationFunc func(ctx context.Context, root, mode string, process commandWorkerProcess) (json.RawMessage, error)
 
 type setupOperationWorker interface {
+	projectindex.ProjectIndexer
 	RunSetupPlanningOperation(ctx context.Context, root, mode string) (json.RawMessage, error)
 	IndexProjectAstPatchWithResult(ctx context.Context, root, configPath, projectName string) (projectindex.ProjectAstIndexResult, error)
 	RunSetupOperation(ctx context.Context, root, mode string, setupReport json.RawMessage, definitions []store.ProjectDefinition, generationFindings []eventwire.RuntimeArtifactFinding) (json.RawMessage, error)
@@ -53,12 +55,13 @@ func NewRuntimeCmd(f *cli.Factory) *cobra.Command {
 
 	generateCmd := &cobra.Command{
 		Use:   "generate",
-		Short: "Generate Runtime Engine manifest and host entry files",
-		Long: `Generate the Runtime Engine manifest and host entry files for the current project.
+		Short: "Refresh generated Runtime files once",
+		Long: `Refresh the generated Runtime files for the current project once.
 
-The command discovers exported flow() handles and durableTask() targets, writes
-.crux/generated/runtime/manifest.json, and refreshes the default Next and Convex
-entry files. It does not create infrastructure or mutate runtime state.`,
+Crux dev keeps these files current while you work, and framework build plugins
+refresh them before a build. Use this one-shot command for CI, recovery, or to
+inspect generation directly. It discovers Runtime targets and Evals, writes the
+manifest and host entry files, and never creates infrastructure or credentials.`,
 		Example: `  crux runtime generate
   crux runtime generate --cwd packages/app
   crux runtime generate --json`,
@@ -152,12 +155,14 @@ func generateRuntimeArtifactsWithWorker(ctx context.Context, root string, proces
 		ctx, cancel = context.WithTimeout(ctx, runtimeGenerateTimeout)
 		defer cancel()
 	}
-	astResult, err := worker.IndexProjectAstPatchWithResult(ctx, root, "", "")
+	indexResult, err := oneshot.New(worker, nil).Run(ctx, oneshot.Options{
+		Root:        root,
+		RuntimeRich: true,
+	})
 	if err != nil {
 		return nil, err
 	}
-	index := projectindex.ApplyPatch(projectindex.EmptyPatchState(), astResult.Patch).Index
-	return worker.GenerateRuntimeArtifacts(ctx, root, index.Definitions)
+	return worker.GenerateRuntimeArtifacts(ctx, root, indexResult.Index.Definitions)
 }
 
 func runRuntimeOperationWithWorker(ctx context.Context, root, operation, workID string, process commandWorkerProcess) (json.RawMessage, error) {
@@ -193,7 +198,14 @@ func runSetupOperationWithPreparedWorker(ctx context.Context, root, mode string,
 	}
 	var definitions []store.ProjectDefinition
 	if decoded.OK {
-		astResult, err := worker.IndexProjectAstPatchWithResult(ctx, root, "", "")
+		indexRunner := oneshot.New(worker, nil)
+		if mode == "check" {
+			indexRunner = oneshot.NewReadOnly(worker)
+		}
+		indexResult, err := indexRunner.Run(ctx, oneshot.Options{
+			Root:        root,
+			RuntimeRich: true,
+		})
 		if err != nil {
 			return worker.RunSetupOperation(
 				ctx,
@@ -204,7 +216,7 @@ func runSetupOperationWithPreparedWorker(ctx context.Context, root, mode string,
 				setupIndexFailureFindings(err),
 			)
 		}
-		definitions = projectindex.ApplyPatch(projectindex.EmptyPatchState(), astResult.Patch).Index.Definitions
+		definitions = indexResult.Index.Definitions
 	}
 	return worker.RunSetupOperation(ctx, root, mode, setupReport, definitions, nil)
 }

@@ -167,7 +167,7 @@ describe('Runtime setup contributor', () => {
     expect(serialized).toContain('[REDACTED]')
   })
 
-  it('reports host-owned Runtime setup as an actionable finding', async () => {
+  it('treats host-owned Runtime setup as inert metadata', async () => {
     const capabilities = node({
       store: inMemoryRuntimeStore(),
       autoStartMaintenance: false,
@@ -181,13 +181,9 @@ describe('Runtime setup contributor', () => {
     })
     await expect(
       contributor.inspect({ root: '/project', mode: 'check' }),
-    ).resolves.toEqual([
-      expect.objectContaining({
-        contributorId: 'runtime',
-        severity: 'error',
-        resource: 'convex',
-        remediation: expect.stringContaining('createConvexRuntimeHandlers'),
-      }),
-    ])
+    ).resolves.toEqual([])
+    await expect(
+      contributor.plan({ root: '/project', mode: 'plan' }),
+    ).resolves.toEqual([])
   })
 })

@@ -19,6 +19,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/privacy"
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/eventwire"
+	"github.com/use-crux/crux/packages/local/internal/startup"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
@@ -135,6 +136,133 @@ func TestDevServerRetriesFullIndexAfterInitialFailureAndBufferedEdit(t *testing.
 	indexer.mu.Unlock()
 	if incrementalCalled {
 		t.Fatal("incremental Project Index ran without a successful baseline")
+	}
+}
+
+func TestDevServerRetriesFailedRuntimeArtifactsWithFreshIndexAfterNextEdit(t *testing.T) {
+	root := t.TempDir()
+	t.Chdir(root)
+	source := filepath.Join(root, "prompt.ts")
+	if err := os.WriteFile(source, []byte("export const prompt = 1\n"), 0o644); err != nil {
+		t.Fatalf("write initial source: %v", err)
+	}
+	indexer := &fakeIncrementalProjectIndexer{
+		fullIndex: store.IndexData{
+			Definitions: []store.ProjectDefinition{{ID: "prompt:baseline", Kind: "prompt", Name: "baseline"}},
+			Sources:     []store.IndexSourceFile{{File: source, Status: "indexed", ShardID: "."}},
+			SourceGraph: &store.ProjectIndexSourceGraph{
+				SchemaVersion: 1,
+				Capabilities:  []string{"project-shards"},
+				Shards:        []store.ProjectIndexShard{{ID: ".", Root: root}},
+			},
+		},
+		result: projectindex.ProjectIndexIncrementalResult{Patches: []projectindex.IndexPatch{{
+			SchemaVersion: 1,
+			Phase:         projectindex.PhaseAST,
+			Project:       store.ProjectIdentity{Root: root, Name: "project"},
+			Status:        "ok",
+			Invalidates:   &projectindex.IndexPatchInvalidation{All: true},
+			Facts: projectindex.IndexPatchFacts{
+				Definitions: []store.ProjectDefinition{{ID: "prompt:fresh", Kind: "prompt", Name: "fresh"}},
+				Sources:     []store.IndexSourceFile{{File: source, Status: "indexed", ShardID: "."}},
+			},
+		}}},
+	}
+	journal := startup.NewJournal([]startup.TaskSpec{
+		{ID: "project-index", Phase: "Indexing project"},
+		{ID: "runtime-artifacts", Phase: "Generating runtime artifacts"},
+	})
+	calls := make(chan string, 2)
+	callCount := 0
+	opts := devServerTestOptions(t, findFreePort())
+	opts.ProjectIndexer = indexer
+	opts.StartupJournal = journal
+	opts.RuntimeArtifacts = func(_ context.Context, _ string, definitions []store.ProjectDefinition) error {
+		callCount++
+		definitionID := ""
+		if len(definitions) > 0 {
+			definitionID = definitions[0].ID
+			var metadata struct {
+				RuntimeRich bool `json:"runtimeRich"`
+			}
+			if err := json.Unmarshal(definitions[0].Metadata, &metadata); err == nil && metadata.RuntimeRich {
+				definitionID += ":runtime-rich"
+			}
+		}
+		calls <- definitionID
+		if callCount == 1 {
+			return &eventwire.WorkerEventError{
+				Code: "RUNTIME_ARTIFACT_GENERATION_FAILED",
+				Findings: []eventwire.RuntimeArtifactFinding{{
+					Code: "RUNTIME_EVAL_INVALID", Category: "authored", Summary: "Eval source needs attention.", Reason: "The task is not callable.",
+				}},
+			}
+		}
+		return nil
+	}
+
+	srv := NewDevServer(opts)
+	if err := srv.Start(); err != nil {
+		t.Fatalf("start server: %v", err)
+	}
+	t.Cleanup(func() { _ = srv.Shutdown(context.Background()) })
+
+	select {
+	case got := <-calls:
+		if got != "prompt:baseline:runtime-rich" {
+			t.Fatalf("initial generation definition = %q, want runtime-rich baseline", got)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("initial runtime artifact generation did not run")
+	}
+
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	defer cancel()
+	snapshot, updates := journal.SnapshotAndSubscribe(ctx)
+	snapshot = awaitStartupTask(t, ctx, snapshot, updates, "runtime-artifacts", startup.Degraded)
+	if len(snapshot.Diagnostics) != 1 || len(snapshot.Diagnostics[0].Children) != 1 {
+		t.Fatalf("retained generation diagnostics = %#v, want aggregate and child", snapshot.Diagnostics)
+	}
+
+	if err := os.WriteFile(source, []byte("export const prompt = 2\n"), 0o644); err != nil {
+		t.Fatalf("write recovery edit: %v", err)
+	}
+	select {
+	case got := <-calls:
+		if got != "prompt:fresh:runtime-rich" {
+			t.Fatalf("retry generation definition = %q, want fresh runtime-rich incremental snapshot (incremental=%v runtime=%d files=%v)", got, indexer.calledIncrement, indexer.calledRuntime, indexer.files)
+		}
+	case <-ctx.Done():
+		t.Fatal("runtime artifact generation did not retry after the next edit")
+	}
+
+	snapshot = awaitStartupTask(t, ctx, snapshot, updates, "runtime-artifacts", startup.Succeeded)
+	if len(snapshot.Diagnostics) != 0 {
+		t.Fatalf("recovered generation diagnostics = %#v, want cleared", snapshot.Diagnostics)
+	}
+}
+
+func awaitStartupTask(
+	t *testing.T,
+	ctx context.Context,
+	snapshot startup.Snapshot,
+	updates <-chan startup.Snapshot,
+	taskID string,
+	want startup.Disposition,
+) startup.Snapshot {
+	t.Helper()
+	for {
+		for _, task := range snapshot.Tasks {
+			if task.ID == taskID && task.Disposition == want {
+				return snapshot
+			}
+		}
+		select {
+		case next := <-updates:
+			snapshot = next
+		case <-ctx.Done():
+			t.Fatalf("startup task %q did not reach %q", taskID, want)
+		}
 	}
 }
 

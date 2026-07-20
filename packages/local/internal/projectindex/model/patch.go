@@ -162,7 +162,10 @@ func ApplyPatch(state PatchState, patch IndexPatch) PatchState {
 	if patch.Facts.SourceGraph != nil {
 		next.Index.SourceGraph = patch.Facts.SourceGraph
 	}
-	if patch.Facts.Diagnostics != nil {
+	if patch.Phase == PhaseRuntime {
+		next.DiagnosticsByPhase[patch.Phase] = nil
+	}
+	if patch.Facts.Diagnostics != nil || patch.Phase == PhaseRuntime {
 		if patch.Phase == PhaseQuality {
 			next.DiagnosticsByPhase[patch.Phase] = nil
 		}

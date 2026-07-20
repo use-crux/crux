@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/service"
@@ -23,6 +24,8 @@ type Options struct {
 	ConfigPath string
 	// ProjectID scopes Project Index cache/display identity for this invocation.
 	ProjectID string
+	// RuntimeRich also imports runtime-only evidence such as Eval arm placement.
+	RuntimeRich bool
 }
 
 // Result is the canonical Project Index snapshot plus stable execution state.
@@ -35,12 +38,18 @@ type Result struct {
 type Runner struct {
 	indexer   projectindex.ProjectIndexer
 	factStore service.CacheStore
+	readOnly  bool
 }
 
 // New creates a runner around explicit phase clients, primarily for hosts and
 // parity tests. The caller retains ownership of indexer lifecycle.
 func New(indexer projectindex.ProjectIndexer, factStore service.CacheStore) *Runner {
 	return &Runner{indexer: indexer, factStore: factStore}
+}
+
+// NewReadOnly creates a runner that neither reads nor writes the project cache.
+func NewReadOnly(indexer projectindex.ProjectIndexer) *Runner {
+	return &Runner{indexer: indexer, factStore: readOnlyCacheStore{}, readOnly: true}
 }
 
 // Run performs one inline semantic Project Index refresh and returns only after
@@ -53,6 +62,9 @@ func (r *Runner) Run(ctx context.Context, options Options) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
+	if r.readOnly {
+		ctx = projectindex.WithoutCache(ctx)
+	}
 
 	indexStore := store.NewStore()
 	indexService := service.New(service.Options{
@@ -62,17 +74,41 @@ func (r *Runner) Run(ctx context.Context, options Options) (Result, error) {
 		FactStore:   r.factStore,
 		StrictCache: true,
 	})
-	index, err := indexService.ReindexProjectWithOptions(
-		ctx,
-		root,
-		options.ConfigPath,
-		options.ProjectID,
-		service.ProjectReindexOptions{Semantic: service.ProjectSemanticInline},
-	)
+	var index store.IndexData
+	if options.RuntimeRich {
+		index, err = indexService.ReindexProjectRuntimeRich(
+			ctx,
+			root,
+			options.ConfigPath,
+			options.ProjectID,
+		)
+	} else {
+		index, err = indexService.ReindexProjectWithOptions(
+			ctx,
+			root,
+			options.ConfigPath,
+			options.ProjectID,
+			service.ProjectReindexOptions{Semantic: service.ProjectSemanticInline},
+		)
+	}
 	if err != nil {
 		return Result{}, err
 	}
 	return Result{Index: index, Execution: executionFromIndex(index)}, nil
+}
+
+type readOnlyCacheStore struct{}
+
+func (readOnlyCacheStore) LoadSnapshot(context.Context, string, string, time.Time) (store.IndexData, bool, error) {
+	return store.IndexData{}, false, nil
+}
+
+func (readOnlyCacheStore) CommitPhase(context.Context, projectindex.IndexFactTransaction) error {
+	return nil
+}
+
+func (readOnlyCacheStore) ProjectSnapshot(context.Context, string, string) (store.IndexData, bool, error) {
+	return store.IndexData{}, false, nil
 }
 
 func absoluteProjectRoot(root string) (string, error) {

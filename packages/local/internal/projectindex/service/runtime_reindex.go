@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 
-	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
@@ -20,11 +19,5 @@ func (p projectIndexPipeline) reindexProjectRuntimeRich(
 	if err != nil {
 		return store.IndexData{}, err
 	}
-	return s.applyProjectRuntimePatch(ctx, projectindex.ProjectRuntimeIndexRequest{
-		Root:          root,
-		ConfigPath:    configPath,
-		ProjectName:   projectName,
-		Budget:        ProjectIndexRuntimeBudget,
-		PreviousIndex: index,
-	})
+	return s.EnrichProjectRuntime(ctx, root, configPath, projectName, index)
 }

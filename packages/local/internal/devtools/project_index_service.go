@@ -67,3 +67,13 @@ func (s *Service) ReindexProjectIncrementalWithOptions(
 func (s *Service) ReindexProjectRuntimeRich(ctx context.Context, root, configPath, projectName string) (store.IndexData, error) {
 	return s.indexService.ReindexProjectRuntimeRich(ctx, root, configPath, projectName)
 }
+
+func (s *Service) EnrichProjectRuntime(
+	ctx context.Context,
+	root string,
+	configPath string,
+	projectName string,
+	previousIndex store.IndexData,
+) (store.IndexData, error) {
+	return s.indexService.EnrichProjectRuntime(ctx, root, configPath, projectName, previousIndex)
+}

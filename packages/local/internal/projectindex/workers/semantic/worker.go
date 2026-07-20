@@ -99,6 +99,7 @@ func (w *Worker) indexProjectSemanticPatch(
 		PreviousIndex:  semanticRequest.PreviousIndex,
 		Files:          semanticRequest.Files,
 		SourceProfile:  semanticRequest.SourceProfile,
+		CacheDisabled:  projectindex.CacheDisabled(ctx),
 	}
 	if len(semanticRequest.DependencyClosure) > 0 {
 		req.DependencyClosure = semanticRequest.DependencyClosure

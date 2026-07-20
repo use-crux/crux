@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/compat"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/run"
 )
@@ -53,6 +54,7 @@ func (s *Session) Run(ctx context.Context) (Result, error) {
 		Evidence:         options.Evidence,
 		PatchOptions:     options.PatchOptions,
 		PatchInvalidates: options.PatchInvalidates,
+		CacheDisabled:    projectindex.CacheDisabled(ctx),
 	})
 	result.StaticTiming = runResult.Timing
 	addNodeReason(&result, runResult.NodeReason)

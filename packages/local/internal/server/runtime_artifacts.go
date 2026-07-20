@@ -12,8 +12,8 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/devtools"
 	"github.com/use-crux/crux/packages/local/internal/privacy"
 	"github.com/use-crux/crux/packages/local/internal/process/workerproc"
-	"github.com/use-crux/crux/packages/local/internal/projectindex/eventwire"
 	"github.com/use-crux/crux/packages/local/internal/projectwatch"
+	"github.com/use-crux/crux/packages/local/internal/runtimeartifact"
 	"github.com/use-crux/crux/packages/local/internal/startup"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
@@ -98,6 +98,12 @@ func (d *DevServer) refreshProjectIndex(ctx context.Context, root string) bool {
 		d.startup.Update("runtime-artifacts", "Generating runtime artifacts", startup.Degraded, nil)
 		return false
 	}
+	index, err = d.Devtools.EnrichProjectRuntime(ctx, root, "", "", index)
+	if err != nil {
+		d.logger.Warn("project runtime enrichment failed", "error", err)
+		d.startup.Update("runtime-artifacts", "Generating runtime artifacts", startup.Degraded, []startup.Diagnostic{runtimeArtifactStartupDiagnostic(err)})
+		return true
+	}
 	d.startup.Update("project-index", "Indexing project", startup.Succeeded, nil)
 	d.startup.Update("runtime-artifacts", "Generating runtime artifacts", startup.Active, nil)
 	if d.runtimeArtifacts != nil {
@@ -129,6 +135,12 @@ func (d *DevServer) refreshProjectIndexDelta(ctx context.Context, root string, r
 		d.logger.Warn("project index incremental reindex failed", "error", err, "watchRunId", run.ID, "files", len(run.Delta.Files), "deletedFiles", len(run.Delta.DeletedFiles))
 		return
 	}
+	index, err = d.Devtools.EnrichProjectRuntime(ctx, root, "", "", index)
+	if err != nil {
+		d.logger.Warn("project runtime enrichment failed", "error", err, "watchRunId", run.ID)
+		d.startup.Update("runtime-artifacts", "Generating runtime artifacts", startup.Degraded, []startup.Diagnostic{runtimeArtifactStartupDiagnostic(err)})
+		return
+	}
 	if d.runtimeArtifacts != nil {
 		d.startup.Update("runtime-artifacts", "Generating runtime artifacts", startup.Active, nil)
 		if err := d.runtimeArtifacts(ctx, root, index.Definitions); err != nil {
@@ -147,7 +159,7 @@ func runtimeArtifactStartupDiagnostic(err error) startup.Diagnostic {
 		Severity: "warning",
 		Message:  "Crux could not refresh the generated Runtime files. The last working files remain active.",
 	}
-	var workerErr *eventwire.WorkerEventError
+	var workerErr *runtimeartifact.WorkerError
 	if !errors.As(err, &workerErr) || len(workerErr.Findings) == 0 {
 		return diagnostic
 	}

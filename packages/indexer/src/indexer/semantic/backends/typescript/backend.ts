@@ -69,7 +69,7 @@ export function createTypeScriptSemanticBackend(
             backendIdentity: typescriptSemanticBackendIdentity,
             compilerRuntime: input.identity.compilerRuntime,
             instrumentation: analyzeInput.instrumentation,
-            cache: options.cache,
+            cache: analyzeInput.semanticCache ?? options.cache,
             produceEvidence: ({ cacheIdentity }) =>
               semanticIndexEvidenceBatches(analyzeInput.root, analyzeInput.files, {
                 instrumentation: analyzeInput.instrumentation,

@@ -36,11 +36,11 @@ and deployment id. Explicit Crux URL and deployment variables override that
 inference.
 
 `crux runtime generate` writes the Convex control entry, the Node target/Eval
-entry, and `convex/http.ts`. The HTTP router mounts the authenticated Eval
-protocol at `/manifest`, `/jobs`, and `/jobs/:id` on `CONVEX_SITE_URL`. The
-target entry imports the exact default-exported Evals and embeds validated Case
-and Variant identities; it never serializes prompts, models, functions, or
-credentials.
+entry, and an HTTP route helper. When the app has no router, it also creates
+`convex/http.ts`. The HTTP router mounts the authenticated Eval protocol at
+`/manifest`, `/jobs`, and `/jobs/:id` on `CONVEX_SITE_URL`. The target entry
+imports the exact default-exported Evals and embeds validated Case and Variant
+identities; it never serializes prompts, models, functions, or credentials.
 
 The generated registry also binds the normalized
 `observability.redactPaths` policy. Its authenticated manifest reveals only a
@@ -49,9 +49,12 @@ remote execution, and includes it in exact evidence identity; changing the
 policy therefore cannot reuse evidence or a deployment generated with the old
 policy. Run `crux runtime generate` and redeploy after a policy change.
 
-If the app already owns `convex/http.ts`, Crux preserves it and generates the
-composable helper at `convex/_crux/http.ts`. Register the reserved Eval routes
-on the existing router:
+If the app already calls `crux.bridge(http, cruxConfig)` on its exported router,
+Crux preserves the file byte-for-byte and the bridge registers these routes;
+no manual edit is needed.
+
+For a custom router that does not use `crux.bridge`, Crux preserves the file and
+generates the composable helper at `convex/_crux/http.ts`. Register it once:
 
 ```ts title="convex/http.ts"
 import { httpRouter } from "convex/server";
@@ -61,6 +64,9 @@ const http = registerCruxEvalRoutes(httpRouter());
 // Register the app's other routes on `http` as usual.
 export default http;
 ```
+
+Use either `crux.bridge(...)` or `registerCruxEvalRoutes(...)` for the Runtime
+Eval routes on a router, not both.
 
 Convex advertises `record-store` only when a deployed Eval requires it and the
 request context can bind the component service. Unsupported requirements such

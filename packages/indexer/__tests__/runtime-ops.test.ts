@@ -54,6 +54,33 @@ describe("runtime operations", () => {
     }
   });
 
+  it("treats host-bound runtime preflight as metadata-only", async () => {
+    const root = await mkdtemp(
+      join(dirname(fileURLToPath(import.meta.url)), ".tmp-runtime-host-"),
+    );
+    roots.push(root);
+    await writeFile(join(root, "package.json"), '{"type":"module"}\n');
+    await writeFile(
+      join(root, "crux.config.ts"),
+      [
+        "import { config } from '@use-crux/core'",
+        "export default config({ runtime: {",
+        "  kind: 'host-bound', id: 'convex', host: 'convex',",
+        "  entry: 'convex/_crux/generated.ts', capabilities: {},",
+        "} as never })",
+      ].join("\n"),
+    );
+
+    await expect(
+      runRuntimeOperation({ root, operation: "preflight" }),
+    ).resolves.toEqual({
+      operation: "preflight",
+      ok: true,
+      setup: { ok: true, findings: [] },
+      missingTargets: [],
+    });
+  });
+
   it("runs setup/status/inspect/retry/cancel against node({ store: postgres() })", async () => {
     const schema = `crux_runtime_ops_${Date.now()}`;
     schemas.push(schema);

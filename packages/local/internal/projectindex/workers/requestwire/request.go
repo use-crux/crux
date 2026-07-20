@@ -46,6 +46,7 @@ type Request struct {
 	Mode                          string                                   `json:"mode,omitempty"`
 	MaxAffectedFiles              int                                      `json:"maxAffectedFiles,omitempty"`
 	IncludeStaticCacheStatus      bool                                     `json:"includeStaticCacheStatus,omitempty"`
+	CacheDisabled                 bool                                     `json:"cacheDisabled,omitempty"`
 	RuntimeOperation              string                                   `json:"runtimeOperation,omitempty"`
 	RuntimeWorkID                 string                                   `json:"runtimeWorkId,omitempty"`
 	RuntimeIncludeDetails         bool                                     `json:"runtimeIncludeDetails,omitempty"`

@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { access, mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import ts from 'typescript'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -18,6 +18,27 @@ afterEach(async () => {
 })
 
 describe('typescript semantic index service', () => {
+  it('disables durable semantic cache reads and writes per request', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    const file = join(root, 'src/writer.ts')
+    await writeFile(file, `export const writer = 'writer'`)
+    const timingNames: string[] = []
+
+    const patch = await createSemanticIndexService().indexFiles({
+      root,
+      files: [file],
+      semanticCache: 'disabled',
+      semanticInstrumentation: {
+        onTiming: (timing) => timingNames.push(timing.name),
+      },
+    })
+
+    expect(patch.status).toBe('ok')
+    expect(timingNames).toContain('semantic.cache.disabled')
+    await expect(access(join(root, '.crux/cache/index'))).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
   it('reports the JavaScript TypeScript package as its compiler runtime identity', async () => {
     const root = await fixtureRoot()
     const backend = createTypeScriptSemanticBackend()

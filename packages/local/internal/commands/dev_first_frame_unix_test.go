@@ -100,7 +100,10 @@ func TestDevRendersRealTUIFrameBeforeWarmupCompletes(t *testing.T) {
 			returned := make(chan error, 1)
 			go func() { returned <- cmd.ExecuteContext(context.Background()) }()
 			waitForSignalBy(t, preflightStarted, startedAt.Add(time.Second), "runtime preflight")
-			waitForSignalBy(t, warmupStarted, startedAt.Add(time.Second), test.name)
+			// Runtime-rich enrichment may precede artifact rendering. It is
+			// background work; only the first interactive frame owns the
+			// one-second user-facing deadline.
+			waitForSignalBy(t, warmupStarted, startedAt.Add(3*time.Second), test.name)
 			transcript.waitForBy(t, "Overview", startedAt.Add(time.Second), returned)
 
 			close(releasePreflight)

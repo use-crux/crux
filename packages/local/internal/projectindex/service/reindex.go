@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
@@ -48,4 +49,22 @@ func (s *Service) ReindexProjectIncrementalWithOptions(
 func (s *Service) ReindexProjectRuntimeRich(ctx context.Context, root, configPath, projectName string) (store.IndexData, error) {
 	s.setSemanticMode(ProjectSemanticInline)
 	return s.pipeline().reindexProjectRuntimeRich(ctx, root, configPath, projectName)
+}
+
+// EnrichProjectRuntime adds runtime-only evidence to an already refreshed
+// source snapshot without repeating source or semantic indexing.
+func (s *Service) EnrichProjectRuntime(
+	ctx context.Context,
+	root string,
+	configPath string,
+	projectName string,
+	previousIndex store.IndexData,
+) (store.IndexData, error) {
+	return s.applyProjectRuntimePatch(ctx, projectindex.ProjectRuntimeIndexRequest{
+		Root:          root,
+		ConfigPath:    configPath,
+		ProjectName:   projectName,
+		Budget:        ProjectIndexRuntimeBudget,
+		PreviousIndex: previousIndex,
+	})
 }

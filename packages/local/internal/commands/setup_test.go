@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -177,8 +179,9 @@ func TestSetupHumanOutputRendersGenerationFindingsWithoutJSON(t *testing.T) {
 func TestSetupAppliesThenIndexesBeforeFinalGeneration(t *testing.T) {
 	report := json.RawMessage(`{"ok":true,"mode":"apply","findings":[],"actions":[],"applied":[]}`)
 	worker := &recordingSetupOperationWorker{planning: report}
+	root := t.TempDir()
 
-	if _, err := runSetupOperationWithPreparedWorker(context.Background(), "/repo", "apply", worker); err != nil {
+	if _, err := runSetupOperationWithPreparedWorker(context.Background(), root, "apply", worker); err != nil {
 		t.Fatal(err)
 	}
 	if got, want := strings.Join(worker.order, ","), "setup,index,generation"; got != want {
@@ -192,13 +195,32 @@ func TestSetupAppliesThenIndexesBeforeFinalGeneration(t *testing.T) {
 	}
 }
 
+func TestSetupCheckDoesNotWriteProjectIndexCache(t *testing.T) {
+	worker := &recordingSetupOperationWorker{
+		planning: json.RawMessage(`{"ok":true,"mode":"check","findings":[],"actions":[],"applied":[]}`),
+	}
+	root := t.TempDir()
+
+	if _, err := runSetupOperationWithPreparedWorker(context.Background(), root, "check", worker); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := os.Stat(filepath.Join(root, ".crux", "cache")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("setup --check cache stat error = %v, want no cache writes", err)
+	}
+	if !worker.cacheDisabled {
+		t.Fatal("setup --check did not disable caches for the indexing pipeline")
+	}
+}
+
 func TestSetupTurnsFreshIndexFailureIntoGenerationFinding(t *testing.T) {
 	worker := &recordingSetupOperationWorker{
 		planning: json.RawMessage(`{"ok":true,"mode":"check","findings":[],"actions":[],"applied":[]}`),
 		indexErr: errors.New("private compiler detail"),
 	}
 
-	if _, err := runSetupOperationWithPreparedWorker(context.Background(), "/repo", "check", worker); err != nil {
+	root := t.TempDir()
+	if _, err := runSetupOperationWithPreparedWorker(context.Background(), root, "check", worker); err != nil {
 		t.Fatal(err)
 	}
 	if got, want := strings.Join(worker.order, ","), "setup,index,generation"; got != want {
@@ -211,6 +233,9 @@ func TestSetupTurnsFreshIndexFailureIntoGenerationFinding(t *testing.T) {
 	if finding.Code != "PROJECT_INDEX_FAILED" || finding.Category != "internal" || strings.Contains(finding.Reason, "private compiler detail") || finding.Remediation != "" {
 		t.Fatalf("finding = %#v, want non-blaming internal index failure", finding)
 	}
+	if _, err := os.Stat(filepath.Join(root, ".crux", "cache")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("setup --check cache stat error = %v, want no cache writes", err)
+	}
 }
 
 type recordingSetupOperationWorker struct {
@@ -220,6 +245,7 @@ type recordingSetupOperationWorker struct {
 	finalReport      json.RawMessage
 	finalDefinitions []store.ProjectDefinition
 	finalFindings    []eventwire.RuntimeArtifactFinding
+	cacheDisabled    bool
 }
 
 func (w *recordingSetupOperationWorker) RunSetupPlanningOperation(context.Context, string, string) (json.RawMessage, error) {
@@ -227,15 +253,21 @@ func (w *recordingSetupOperationWorker) RunSetupPlanningOperation(context.Contex
 	return w.planning, nil
 }
 
-func (w *recordingSetupOperationWorker) IndexProjectAstPatchWithResult(context.Context, string, string, string) (projectindex.ProjectAstIndexResult, error) {
+func (w *recordingSetupOperationWorker) IndexProjectAstPatch(ctx context.Context, root, configPath, projectName string) (projectindex.IndexPatch, error) {
+	result, err := w.IndexProjectAstPatchWithResult(ctx, root, configPath, projectName)
+	return result.Patch, err
+}
+
+func (w *recordingSetupOperationWorker) IndexProjectAstPatchWithResult(ctx context.Context, root, _ string, _ string) (projectindex.ProjectAstIndexResult, error) {
 	w.order = append(w.order, "index")
+	w.cacheDisabled = projectindex.CacheDisabled(ctx)
 	if w.indexErr != nil {
 		return projectindex.ProjectAstIndexResult{}, w.indexErr
 	}
 	return projectindex.ProjectAstIndexResult{Patch: projectindex.IndexPatch{
 		SchemaVersion: 1,
 		Phase:         "ast",
-		Project:       store.ProjectIdentity{Root: "/repo"},
+		Project:       store.ProjectIdentity{Root: root},
 		Status:        "ok",
 		Facts: projectindex.IndexPatchFacts{Definitions: []store.ProjectDefinition{{
 			ID: "flow:fresh", Kind: "flow", Name: "fresh",

@@ -101,6 +101,33 @@ func TestApplyIndexPatchExactFileInvalidationRemovesOwnedFacts(t *testing.T) {
 	}
 }
 
+func TestSuccessfulRuntimePatchClearsPriorRuntimeDiagnostic(t *testing.T) {
+	state := ApplyPatch(EmptyPatchState(), IndexPatch{
+		SchemaVersion: 1,
+		Phase:         PhaseRuntime,
+		Project:       store.ProjectIdentity{Root: "/repo"},
+		Status:        "degraded",
+		Facts: IndexPatchFacts{Diagnostics: []store.IndexDiagnostic{{
+			ID: "diagnostic:runtime:degraded", Code: "index.runtime_degraded", Severity: "info",
+		}}},
+	})
+	if findTestDiagnostic(state.Index.Diagnostics, "diagnostic:runtime:degraded") == nil {
+		t.Fatal("degraded runtime diagnostic was not applied")
+	}
+
+	recovered := ApplyPatch(state, IndexPatch{
+		SchemaVersion: 1,
+		Phase:         PhaseRuntime,
+		Project:       store.ProjectIdentity{Root: "/repo"},
+		Status:        "ok",
+		Facts:         IndexPatchFacts{Diagnostics: []store.IndexDiagnostic{}},
+	})
+
+	if findTestDiagnostic(recovered.Index.Diagnostics, "diagnostic:runtime:degraded") != nil {
+		t.Fatalf("recovered diagnostics = %+v, want runtime degradation cleared", recovered.Index.Diagnostics)
+	}
+}
+
 func TestMergeIndexPatchesUsesExistingPatchMergeRules(t *testing.T) {
 	merged, err := MergeIndexPatches([]IndexPatch{
 		{

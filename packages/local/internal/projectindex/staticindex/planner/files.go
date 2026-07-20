@@ -1,6 +1,7 @@
 package planner
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"os"
@@ -36,7 +37,7 @@ func fileSelectionWithCallNames(
 	configFile string,
 	callNames []string,
 ) (fileSelectionResult, error) {
-	selection, _, err := fileSelectionWithCallNamesTimed(root, configFile, callNames)
+	selection, _, err := fileSelectionWithCallNamesTimed(context.Background(), root, configFile, callNames)
 	if err != nil {
 		return fileSelectionResult{}, err
 	}

@@ -1,6 +1,7 @@
 package planner
 
 import (
+	"context"
 	"encoding/json"
 	"time"
 
@@ -35,6 +36,16 @@ func BuildWithTimings(
 }
 
 func BuildWithExtensionManifest(
+	root string,
+	projectName string,
+	config projectindex.ProjectStaticIndexConfig,
+	extensionManifest *projectindex.StaticExtensionHostManifestResult,
+) (Result, error) {
+	return BuildWithExtensionManifestContext(context.Background(), root, projectName, config, extensionManifest)
+}
+
+func BuildWithExtensionManifestContext(
+	ctx context.Context,
 	root string,
 	projectName string,
 	config projectindex.ProjectStaticIndexConfig,
@@ -76,6 +87,7 @@ func BuildWithExtensionManifest(
 		fileSelectionCallNames = plan.CallNames
 	}
 	selection, selectionTimings, err := fileSelectionWithCallNamesTimed(
+		ctx,
 		root,
 		config.ConfigFile,
 		fileSelectionCallNames,
@@ -97,7 +109,7 @@ func BuildWithExtensionManifest(
 	timings = AppendTiming(timings, TimingSourceGraph, sourceGraphStarted, 1)
 	plan.SourceGraph = sourceGraph
 
-	if config.StaticSyntaxEnabled && cache.StatusEnabledFromEnv() {
+	if config.StaticSyntaxEnabled && cache.StatusEnabledFromEnv() && !projectindex.CacheDisabled(ctx) {
 		cacheStarted := time.Now()
 		applyCacheManifestStatus(&plan)
 		timings = AppendTiming(timings, TimingCacheStatus, cacheStarted, len(plan.PrimaryFiles))

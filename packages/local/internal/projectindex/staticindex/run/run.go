@@ -44,6 +44,9 @@ type Request struct {
 	// static runs leave this empty so Rust emits {all:true}; incremental runs
 	// pass exact file invalidation.
 	PatchInvalidates json.RawMessage
+	// CacheDisabled prevents both cache replay planning and finished extraction
+	// persistence for read-only indexing operations.
+	CacheDisabled bool
 }
 
 // Result is the outcome of a Static Index execution.

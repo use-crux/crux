@@ -97,6 +97,7 @@ export function createSemanticIndexService(options: SemanticIndexServiceOptions 
           dependencyClosure: preflight.dependencyClosure,
           sourceProfile: preflight.sourceProfile,
           instrumentation: input.semanticInstrumentation,
+          semanticCache: input.semanticCache,
         }),
       )
 
@@ -246,7 +247,10 @@ function semanticFilesForIndex(
 ): { readonly files: readonly string[]; readonly previousSourceExpansion: number } {
   const staticFileSet = new Set(staticFiles)
   const previousFiles = previousIndex?.sources.map((source) => source.file) ?? []
-  const files = semanticRootFilesFromSourceProfile([...new Set([...staticFiles, ...previousFiles])].sort(), sourceProfile)
+  const files = semanticRootFilesFromSourceProfile(
+    [...new Set([...staticFiles, ...previousFiles])].sort(),
+    sourceProfile,
+  )
   const selectedFileSet = new Set(files)
   const previousExpansion = new Set(previousFiles.filter((file) => !staticFileSet.has(file)))
   return {
