@@ -408,8 +408,8 @@ func (s *Service) enrichRunDeliveryHealth(ctx context.Context, runs []RunSummary
 }
 
 // isFullyDeliveredRun reports whether a run reached a terminal, non-conflict
-// lifecycle status with a fully causal segment chain (no gaps, no broken
-// chain, no trace-id aliasing) — the only truthful, positive basis for
+// lifecycle status with a fully causal segment chain (no gaps or broken
+// chain) — the only truthful, positive basis for
 // reporting "healthy" delivery. A run that is still running, was reconciled
 // as incomplete/conflicted, or whose segment ordering is only "partial"
 // stays "unknown": the server has no persisted signal proving delivery
@@ -420,8 +420,7 @@ func isFullyDeliveredRun(run *RunSummary) bool {
 		run.Status != "incomplete" &&
 		run.Status != "conflicted" &&
 		run.OrderingConfidence == "causal" &&
-		run.GapCount == 0 &&
-		!run.TraceAliasConflict
+		run.GapCount == 0
 }
 
 func (s *Service) enrichRunDeliveryHealthBatch(ctx context.Context, runIDs []string, byRunID map[string]*RunSummary) error {
@@ -613,8 +612,8 @@ func maxRevision(revisions map[string]int64) int64 {
 	return highest
 }
 
-// ResolveRunIDs resolves run ids or trace ids to canonical run ids without
-// loading full run summaries or presentation details.
+// ResolveRunIDs resolves exact member-run or operation ids to a member run
+// without inferring identity from W3C trace correlation.
 func (s *Service) ResolveRunIDs(ctx context.Context, ids []string) (map[string]string, error) {
 	requested := uniqueNonEmptyStrings(ids)
 	if len(requested) == 0 {
@@ -629,10 +628,10 @@ func (s *Service) ResolveRunIDs(ctx context.Context, ids []string) (map[string]s
 		args[i+len(requested)] = id
 	}
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT run_id, ifnull(trace_id, '')
+		SELECT run_id, operation_id
 		FROM runs
-		WHERE run_id IN (`+placeholders+`) OR trace_id IN (`+placeholders+`)
-		ORDER BY ifnull(started_at, '') DESC, run_id DESC
+		WHERE run_id IN (`+placeholders+`) OR operation_id IN (`+placeholders+`)
+		ORDER BY CASE WHEN run_id = operation_id THEN 0 ELSE 1 END, ifnull(started_at, ''), run_id
 	`, args...)
 	if err != nil {
 		return nil, err
@@ -640,16 +639,16 @@ func (s *Service) ResolveRunIDs(ctx context.Context, ids []string) (map[string]s
 	defer rows.Close()
 	resolved := map[string]string{}
 	for rows.Next() {
-		var runID, traceID string
-		if err := rows.Scan(&runID, &traceID); err != nil {
+		var runID, operationID string
+		if err := rows.Scan(&runID, &operationID); err != nil {
 			return nil, err
 		}
 		if _, ok := requestedSet[runID]; ok {
 			resolved[runID] = runID
 		}
-		if _, ok := requestedSet[traceID]; ok {
-			if _, alreadyResolved := resolved[traceID]; !alreadyResolved {
-				resolved[traceID] = runID
+		if _, ok := requestedSet[operationID]; ok {
+			if _, alreadyResolved := resolved[operationID]; !alreadyResolved {
+				resolved[operationID] = runID
 			}
 		}
 	}

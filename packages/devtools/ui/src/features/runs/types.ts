@@ -101,7 +101,7 @@ export interface RunRow {
   orderingConfidence?: "causal" | "partial" | string;
   /** Missing segment-local sequence values and unresolved parent references. */
   gapCount?: number;
-  /** True when a trace alias identifies more than one logical run. */
+  /** Deprecated compatibility field; operation identity is never inferred from traceId. */
   traceAliasConflict?: boolean;
   /** Delivery/export health; "unknown" is distinct from "healthy". */
   deliveryHealth?: "unknown" | "healthy" | "degraded" | string;

@@ -125,7 +125,7 @@ func TestServiceIngestsSharedFixtureIntoGraphReadModel(t *testing.T) {
 	}
 }
 
-func TestServiceReadsRunGraphAndDetailByTraceID(t *testing.T) {
+func TestServiceReadsRunGraphAndDetailByOperationID(t *testing.T) {
 	ctx := context.Background()
 	service := newTestService(t)
 	batch := mustBatch(t,
@@ -138,7 +138,7 @@ func TestServiceReadsRunGraphAndDetailByTraceID(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	run, err := service.Run(ctx, "trace_trace_alias")
+	run, err := service.Run(ctx, "run_trace_alias")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,7 +146,7 @@ func TestServiceReadsRunGraphAndDetailByTraceID(t *testing.T) {
 		t.Fatalf("run = %#v", run)
 	}
 
-	graph, err := service.Graph(ctx, "trace_trace_alias")
+	graph, err := service.Graph(ctx, "run_trace_alias")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +154,7 @@ func TestServiceReadsRunGraphAndDetailByTraceID(t *testing.T) {
 		t.Fatalf("graph = %#v", graph)
 	}
 
-	detail, err := service.RunDetail(ctx, "trace_trace_alias")
+	detail, err := service.RunDetail(ctx, "run_trace_alias")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -729,8 +729,8 @@ func TestServiceRunDetailDoesNotWarnOrSuppressDiagnosticsForSharedTrace(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !run.TraceAliasConflict {
-		t.Fatalf("run = %#v, want deterministic trace-alias ambiguity metadata preserved", run)
+	if run.TraceAliasConflict {
+		t.Fatalf("run = %#v, shared W3C trace must not be treated as an identity conflict", run)
 	}
 }
 

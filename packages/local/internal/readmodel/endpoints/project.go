@@ -97,8 +97,8 @@ var InspectRuns = readmodel.GetP[Deps, *RunsParams, []api.InspectRunRecord](Regi
 		return deps.Inspect.RunsWithOptionsAPI(ctx, params.InspectRunsOptions)
 	})
 
-var InspectRunDetail = readmodel.GetP[Deps, *readmodel.PathID, api.InspectRunDetailRecord](Registry, "GET /api/inspect/runs/{traceId}",
-	func() *readmodel.PathID { return &readmodel.PathID{Name: "traceId"} },
+var InspectRunDetail = readmodel.GetP[Deps, *readmodel.PathID, api.InspectRunDetailRecord](Registry, "GET /api/inspect/runs/{operationId}",
+	func() *readmodel.PathID { return &readmodel.PathID{Name: "operationId"} },
 	func(ctx context.Context, deps Deps, params *readmodel.PathID) (api.InspectRunDetailRecord, error) {
 		record, found, err := deps.Inspect.RunDetailAPI(ctx, params.ID)
 		if err != nil || found {

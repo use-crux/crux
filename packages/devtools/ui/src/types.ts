@@ -1145,7 +1145,7 @@ export interface ObservabilityRunSummary {
   orderingConfidence: "causal" | "partial" | string;
   /** Missing segment-local sequence values and unresolved parent references. */
   gapCount: number;
-  /** True when a trace alias identifies more than one logical run. */
+  /** Deprecated compatibility field; operation identity is never inferred from traceId. */
   traceAliasConflict?: boolean;
   /** Server-owned read-model revision this row was current as of. */
   revision: number;

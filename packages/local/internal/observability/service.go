@@ -148,11 +148,12 @@ type RunSummary struct {
 	ActiveSegmentID     string              `json:"activeSegmentId,omitempty"`
 	OrderingConfidence  string              `json:"orderingConfidence"`
 	GapCount            int                 `json:"gapCount"`
-	TraceAliasConflict  bool                `json:"traceAliasConflict,omitempty"`
-	inputTokens         int                 `json:"-"`
-	outputTokens        int                 `json:"-"`
-	costUSD             float64             `json:"-"`
-	LastActivityAt      string              `json:"lastActivityAt,omitempty"`
+	// TraceAliasConflict is deprecated; operation identity is never inferred from TraceID.
+	TraceAliasConflict bool    `json:"traceAliasConflict,omitempty"`
+	inputTokens        int     `json:"-"`
+	outputTokens       int     `json:"-"`
+	costUSD            float64 `json:"-"`
+	LastActivityAt     string  `json:"lastActivityAt,omitempty"`
 	// Revision is the server-owned read-model revision this run last changed
 	// at. Zero means the run predates revision tracking (pre-Phase-11 rows
 	// before their next write).

@@ -47,7 +47,7 @@ func TestServiceOrdersRawRecordsBySegmentCausalityBeforeSegmentID(t *testing.T) 
 	}
 }
 
-func TestResolveRunIDsKeepsNewestTraceAliasWinner(t *testing.T) {
+func TestResolveRunIDsNeverFallsBackToSharedTrace(t *testing.T) {
 	ctx := context.Background()
 	service := newTestService(t)
 	for _, row := range []struct{ runID, startedAt string }{{"run_alias_old", "2026-05-16T18:00:00.000Z"}, {"run_alias_new", "2026-05-16T18:01:00.000Z"}} {
@@ -62,15 +62,15 @@ func TestResolveRunIDsKeepsNewestTraceAliasWinner(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if resolved["trace_alias"] != "run_alias_new" {
-		t.Fatalf("trace alias winner = %q, want newest run", resolved["trace_alias"])
+	if len(resolved) != 0 {
+		t.Fatalf("shared trace resolved as identity: %#v", resolved)
 	}
 	run, err := service.Run(ctx, "run_alias_new")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !run.TraceAliasConflict {
-		t.Fatalf("run = %#v, want trace alias conflict diagnostic", run)
+	if run.TraceAliasConflict {
+		t.Fatalf("run = %#v, shared W3C trace must not be treated as an identity conflict", run)
 	}
 }
 

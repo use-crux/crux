@@ -4211,7 +4211,7 @@ export function SpanDetailPanel({
   const node = findNode(detail.root, selectedNodeId) ?? detail.root;
   const focusedSpanId = node.spanId || node.id;
   const focusedTokenEvents = useObservabilitySpanEvents(
-    detail.run.runId,
+    node.runId || detail.run.runId,
     focusedSpanId,
     {
       name: "token.chunk",

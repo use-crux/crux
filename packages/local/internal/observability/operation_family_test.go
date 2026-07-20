@@ -27,6 +27,10 @@ func TestOperationFamilyChildBeforeRootIsStableAndAggregated(t *testing.T) {
 		t.Fatalf("child-before-root shell = %#v", before.Rows)
 	}
 	firstSeenAt := before.Rows[0].FirstSeenAt
+	shellDetail, err := service.RunDetail(ctx, operationID)
+	if err != nil || shellDetail.Run.RootPresent || len(shellDetail.MemberRuns) != 1 {
+		t.Fatalf("child-before-root detail = %#v, err = %v", shellDetail, err)
+	}
 
 	if err := service.Ingest(ctx, mustBatch(t,
 		`{"schemaVersion":4,"recordId":"root-start","type":"run:start","runId":"`+operationID+`","operationId":"`+operationID+`","segmentId":"root-segment","segmentSeq":1,"traceId":"`+traceID+`","name":"request","rootPrimitive":"agent.run","startedAt":"2026-07-20T12:00:00Z","status":"running"}`,
@@ -165,7 +169,7 @@ func TestMalformedOperationTopologyIsBoundedAndVisible(t *testing.T) {
 	)); err != nil {
 		t.Fatal(err)
 	}
-	detail, err := service.RunDetail(ctx, "run_cycle_a")
+	detail, err := service.RunDetail(ctx, "run_cycle_root")
 	if err != nil {
 		t.Fatal(err)
 	}
