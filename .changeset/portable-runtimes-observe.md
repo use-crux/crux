@@ -37,11 +37,19 @@ Add portable deployment identity and privacy-safe Project Index manifest
 contracts to Core. The build-time Indexer now projects and verifies the same
 deterministic artifact internally.
 
-Carry immutable deployment identity through v3 observability graph records,
-suspend/resume propagation, and local run detail while retaining persisted v2
-reads as deployment-unspecified. `@use-crux/otel` now exports a portable
+Carry immutable deployment identity through observability graph records,
+suspend/resume propagation, and local run detail. `@use-crux/otel` now exports a portable
 Resource-attribute mapper, maps lightweight identity per span, and projects
 DefinitionRefs through bounded attributes and events.
+
+Advance observability to schema v4 with explicit operation-family identity.
+Root runs now own an `operationId`; independently durable nested Flow, named
+defer, and Convex swarm work opens causally linked child runs while ordinary
+pipeline, parallel, consensus, delegate, generation, and host continuations
+remain spans or fresh segments. Local Runs projects one row per operation with
+aggregate child/topology health, child-before-root shells, family-atomic
+retention, and deletion tombstones. Older observability storage resets in
+place because family membership cannot be reconstructed from trace IDs.
 
 Add daemon-free `crux check` with deterministic JSON and explicit CI exit
 codes. `crux lint` now uses the same one-shot Project Index service and embedded

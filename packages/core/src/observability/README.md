@@ -16,11 +16,13 @@ Built-in edge types and artifact kinds are closed canonical lists. User-defined 
 
 `createCruxTraceId()` returns a W3C trace ID: 32 lowercase hexadecimal characters, never all zeroes. `createCruxSpanId()` returns a W3C span ID: 16 lowercase hexadecimal characters, never all zeroes.
 
-Run, segment, record, event, edge, and artifact IDs keep Crux prefixes with crypto-random hex suffixes. Every graph record includes `segmentId` plus a positive `segmentSeq`; the sequence is monotonic only inside that execution segment.
+Operation, run, segment, record, event, edge, and artifact IDs keep Crux prefixes with crypto-random hex suffixes. Every graph record includes `operationId`. The root has `operationId === runId`; independently durable descendants get a distinct `runId`, retain the root operation ID, and declare immutable `parentRunId` plus `triggeredBySpanId` topology. A propagated host continuation stays in the same run and opens a fresh segment. `traceId` remains W3C correlation and is never used to infer operation membership.
+
+Every graph record also includes `segmentId` plus a positive `segmentSeq`; the sequence is monotonic only inside that execution segment.
 
 `config({ observability: { identity } })` captures a validated project,
 manifest, and optional host deployment identity when a logical run starts.
-Every v3 record for that run carries the same immutable `deployment` value,
+Every v4 record for that run carries the same immutable `deployment` value,
 including records emitted after configuration changes or suspend/resume. The
 owned continuation payload preserves it separately from untrusted W3C baggage.
 
