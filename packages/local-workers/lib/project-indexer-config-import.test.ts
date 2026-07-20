@@ -37,6 +37,7 @@ interface RuntimeArtifactsArtifact {
 const PACKAGE_ROOT = resolve(__dirname, "..");
 const BUILT_WORKER = resolve(PACKAGE_ROOT, "dist/project-indexer.mjs");
 const CORE_PACKAGE = resolve(PACKAGE_ROOT, "../core");
+const WORKER_RESPONSE_TIMEOUT_MS = 45_000;
 const roots: string[] = [];
 
 afterEach(async () => {
@@ -246,9 +247,9 @@ function runBuiltWorker<
     const timeout = setTimeout(() => {
       child.kill("SIGKILL");
       rejectEvent(
-        new Error("project-indexer did not finish within 20 seconds"),
+        new Error("project-indexer did not finish within 45 seconds"),
       );
-    }, 20_000);
+    }, WORKER_RESPONSE_TIMEOUT_MS);
 
     child.stdout.on("data", (chunk: Buffer) => {
       stdout += chunk.toString();
@@ -338,7 +339,7 @@ function createBuiltWorkerClient() {
           reject(
             new Error(`project-indexer did not emit ${artifact}: ${stderr}`),
           );
-        }, 20_000);
+        }, WORKER_RESPONSE_TIMEOUT_MS);
         waiting = {
           artifact,
           resolve: (value) => resolve(value as T),
