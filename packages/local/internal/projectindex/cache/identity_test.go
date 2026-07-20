@@ -10,16 +10,16 @@ import (
 )
 
 func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
-	if ProjectIndexSnapshotCacheEpoch != 40 {
-		t.Fatalf("ProjectIndexSnapshotCacheEpoch = %d, want canonical Eval schema epoch 40", ProjectIndexSnapshotCacheEpoch)
+	if ProjectIndexSnapshotCacheEpoch != 41 {
+		t.Fatalf("ProjectIndexSnapshotCacheEpoch = %d, want Eval arm placement epoch 41", ProjectIndexSnapshotCacheEpoch)
 	}
 
 	doc := exportedConstDoc(t, "identity.go", "ProjectIndexSnapshotCacheEpoch")
 	for _, phrase := range []string{
 		"persisted `.crux/cache/index-v2/epoch-*`",
 		"stale snapshot masking after restart",
-		"canonical Eval vocabulary",
-		"default Static Index scheduling",
+		"Eval arm placement metadata",
+		"Epoch 41",
 		"TS-owned AST and semantic fact cache identity",
 	} {
 		if !strings.Contains(doc, phrase) {
@@ -30,7 +30,7 @@ func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
 
 func TestProjectIndexFactStorePathIncludesSnapshotEpoch(t *testing.T) {
 	root := t.TempDir()
-	wantSuffix := filepath.Join(".crux", "cache", "index-v2", "epoch-40", "index.db")
+	wantSuffix := filepath.Join(".crux", "cache", "index-v2", "epoch-41", "index.db")
 
 	if got := projectIndexFactStoreDBFile(root); !strings.HasSuffix(got, wantSuffix) {
 		t.Fatalf("projectIndexFactStoreDBFile() = %q, want suffix %q", got, wantSuffix)

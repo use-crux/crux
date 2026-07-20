@@ -4,12 +4,15 @@ import type {
   ProjectDefinition,
   ProjectRelation,
 } from "@use-crux/core/project-index";
-import { moduleImportFailedDiagnostic } from "./diagnostics";
+import {
+  evalTaskInvalidDiagnostic,
+  moduleImportFailedDiagnostic,
+} from "./diagnostics";
 import {
   definitionFromAuthoredEval,
+  executionArmsFromAuthoredEval,
   type DiscoveredAuthoredEval,
   isAuthoredEval,
-  requiredHostCapabilitiesFromAuthoredEval,
 } from "./evals";
 import { codeFilesFromGlobs } from "./files";
 import { importUserModule, withCruxIndexMode } from "./imports";
@@ -34,6 +37,7 @@ export async function discoverRuntimeEvalDefinitions(
   const definitions: ProjectDefinition[] = [];
   const relations: ProjectRelation[] = [];
   const failedImportFiles: string[] = [];
+  const evalDiagnostics: IndexDiagnostic[] = [];
 
   const evalModules = await discoverModules(root, patterns, sources);
   for (const moduleResult of evalModules) {
@@ -46,13 +50,31 @@ export async function discoverRuntimeEvalDefinitions(
         isAuthoredEval(entry[1]),
     );
     if (authoredEvals.length === 1 && authoredEvals[0]![0] === "default") {
-      definitions.push(
-        await definitionFromAuthoredEval(
-          root,
-          moduleResult.file,
-          "default",
-          authoredEvals[0]![1],
-          requiredHostCapabilitiesFromAuthoredEval(authoredEvals[0]![1]),
+      const executionArms = executionArmsFromAuthoredEval(
+        authoredEvals[0]![1],
+      );
+      const projectDefinition = await definitionFromAuthoredEval(
+        root,
+        moduleResult.file,
+        "default",
+        authoredEvals[0]![1],
+        executionArms,
+      );
+      definitions.push(projectDefinition);
+      evalDiagnostics.push(
+        ...executionArms.flatMap((arm) =>
+          arm.status === "invalid"
+            ? [
+                evalTaskInvalidDiagnostic({
+                  root,
+                  file: moduleResult.file,
+                  evalId: projectDefinition.name,
+                  definitionId: projectDefinition.id,
+                  arm: arm.name,
+                  code: arm.code,
+                }),
+              ]
+            : [],
         ),
       );
     }
@@ -62,9 +84,10 @@ export async function discoverRuntimeEvalDefinitions(
     definitions,
     relations,
     failedImportFiles,
-    diagnostics: evalModules.flatMap(
-      (moduleResult) => moduleResult.diagnostics,
-    ),
+    diagnostics: [
+      ...evalModules.flatMap((moduleResult) => moduleResult.diagnostics),
+      ...evalDiagnostics,
+    ],
     sources: evalModules.at(-1)?.sources ?? sources,
   };
 }

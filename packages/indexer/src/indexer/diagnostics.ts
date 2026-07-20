@@ -14,6 +14,15 @@ type IndexDiagnosticInput =
   | { kind: 'static-parse-failed'; root: string; file: string; message: string }
   | { kind: 'static-record-integrity'; root: string; file: string; message: string }
   | { kind: 'source-too-large'; root: string; file: string; bytes: number }
+  | {
+      kind: 'eval-task-invalid'
+      root: string
+      file: string
+      evalId: string
+      definitionId: string
+      arm: string
+      code: 'task_not_callable' | 'task_contract_incompatible'
+    }
 
 function indexDiagnostic(input: IndexDiagnosticInput): IndexDiagnostic {
   switch (input.kind) {
@@ -109,6 +118,22 @@ function indexDiagnostic(input: IndexDiagnosticInput): IndexDiagnostic {
         suggestedFix:
           'Move generated artifacts out of authored source files, or split large Crux definitions into smaller import-safe modules.',
       }
+    case 'eval-task-invalid': {
+      const incompatible = input.code === 'task_contract_incompatible'
+      return {
+        id: `diagnostic:index:eval-task:${fingerprint(`${input.file}:${input.arm}:${input.code}`)}`,
+        severity: 'error',
+        code: incompatible ? 'index.eval_task_contract_incompatible' : 'index.eval_task_not_callable',
+        message: incompatible
+          ? `Eval '${input.evalId}' arm '${input.arm}' in ${relative(input.root, input.file)} uses Crux packages that do not share a compatible release.`
+          : `Eval '${input.evalId}' arm '${input.arm}' in ${relative(input.root, input.file)} does not provide a callable task.`,
+        source: sourceForFile(input.file),
+        relatedDefinitionIds: [input.definitionId],
+        suggestedFix: incompatible
+          ? 'Install @use-crux/core and the Eval task adapter from the same release, then retry.'
+          : 'Pass a function or supported adapter task to evaluate().',
+      }
+    }
   }
 }
 
@@ -150,4 +175,15 @@ export function staticRecordIntegrityDiagnostic(root: string, file: string, mess
 
 export function sourceTooLargeDiagnostic(root: string, file: string, bytes: number): IndexDiagnostic {
   return indexDiagnostic({ kind: 'source-too-large', root, file, bytes })
+}
+
+export function evalTaskInvalidDiagnostic(input: {
+  root: string
+  file: string
+  evalId: string
+  definitionId: string
+  arm: string
+  code: 'task_not_callable' | 'task_contract_incompatible'
+}): IndexDiagnostic {
+  return indexDiagnostic({ kind: 'eval-task-invalid', ...input })
 }
