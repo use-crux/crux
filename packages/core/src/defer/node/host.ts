@@ -3,18 +3,20 @@ import { runWithDeferInvocation } from "../host";
 import type {
   DeferHandlerSettlement,
   DeferInvocationOutcome,
-  DeferScheduledTask,
 } from "../host-types";
-import { createResponseFinishedDeferLifetime } from "../lifecycle";
+import type { CruxHostBinding } from "../../scope/types";
 import type { NodeDeferHost, NodeDeferWrapOptions } from "../node";
 import { handleNodeDeferError } from "./errors";
 import { NODE_DEFER_POLICY } from "./policy";
-import { NodeDeferRegistry, type NodeDeferRegistryEntry } from "./registry";
+import {
+  createNodeDeferRegistry,
+  type NodeDeferRegistryEntry,
+} from "./registry";
 import { subscribeNodeResponseTerminal } from "./response-terminal";
 
 /** Create the public Node host implementation. */
 export function createNodeDeferHostImplementation(): NodeDeferHost {
-  const registry = new NodeDeferRegistry(NODE_DEFER_POLICY.shutdownDrainMs);
+  const registry = createNodeDeferRegistry(NODE_DEFER_POLICY.shutdownDrainMs);
 
   return Object.freeze({
     wrap<TRequest extends IncomingMessage, TResponse extends ServerResponse>(
@@ -25,26 +27,57 @@ export function createNodeDeferHostImplementation(): NodeDeferHost {
       options?: NodeDeferWrapOptions<TRequest, TResponse>,
     ): (request: TRequest, response: TResponse) => void {
       return (request, response): void => {
-        let entry: NodeDeferRegistryEntry;
-        let cancelWaiting: (reason?: unknown) => void = () => {};
-        const lifetime = createResponseFinishedDeferLifetime({
-          limits: NODE_DEFER_POLICY,
-          supportsInline: true,
-          durableFinalization: false,
-          subscribe(terminal) {
-            cancelWaiting = terminal.cancel;
-            return subscribeNodeResponseTerminal(request, response, terminal);
-          },
-          start(task: DeferScheduledTask) {
-            registry.start(entry, task);
+        const abortController = new AbortController();
+        let entry: NodeDeferRegistryEntry | undefined;
+        let retainedWork: (() => Promise<void>) | undefined;
+        let finished = false;
+        let cancelled = false;
+        let unsubscribe = (): void => {};
+
+        const startIfReady = (): void => {
+          if (!finished || cancelled || !entry || !retainedWork) return;
+          const work = retainedWork;
+          retainedWork = undefined;
+          registry.start(entry, work);
+        };
+
+        unsubscribe = subscribeNodeResponseTerminal(request, response, {
+          finish(): void {
+            if (finished || cancelled) return;
+            finished = true;
+            unsubscribe();
+            startIfReady();
           },
         });
-        entry = registry.addWaiting((reason) => cancelWaiting(reason));
+        entry = registry.addWaiting((reason) => {
+          cancelled = true;
+          unsubscribe();
+          abortController.abort(reason);
+        });
+        startIfReady();
+
+        const binding = Object.freeze({
+          kind: "node",
+          invocationScope: false,
+          supportsInline: true,
+          durableFinalization: false,
+          limits: NODE_DEFER_POLICY,
+          retain(work): void {
+            if (retainedWork) {
+              throw new TypeError(
+                "A Node invocation may retain only one root drain.",
+              );
+            }
+            retainedWork = work;
+            startIfReady();
+          },
+        } satisfies CruxHostBinding);
 
         const invocation = runWithDeferInvocation(
           () => handler(request, response),
           {
-            lifetime,
+            binding,
+            abortController,
             classifyOutcome: (settlement) =>
               classifyNodeOutcome(request, response, settlement, options),
           },

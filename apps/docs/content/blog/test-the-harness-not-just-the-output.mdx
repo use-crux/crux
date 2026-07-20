@@ -1,0 +1,126 @@
+---
+title: "Test the harness, not just the output"
+description: "Output evals tell you that something regressed. They can't tell you what. Assert what your harness did (context decisions, routing, freshness) and CI starts failing with causes instead of symptoms."
+date: "2026-06-18"
+type: Engineering
+tags: [evals, testing, ci]
+authors: [henri]
+draft: false
+readTime: 9
+---
+
+LLM testing has converged on a sensible baseline: build a dataset, run your prompts against it, score the outputs with exact matches and LLM judges, fail CI below a threshold. Promptfoo, DeepEval, Braintrust, and friends all do this well. If you have no evals at all, start there today.
+
+But teams that run output evals seriously hit the same wall. A score drops from 0.91 to 0.84. CI fails, correctly. Then the debugging starts, because a score is a symptom, not a cause. Was it the prompt edit? The retriever change? A context block getting dropped? The eval told you *that* the system regressed. It cannot tell you *what* regressed, because it only saw the final text.
+
+There is a second, quieter problem: output evals can pass while the system is broken. If retrieval silently returns nothing and the model answers from its own knowledge, a fluent answer can still score fine. You are testing the model's ability to compensate for your harness. Not your harness.
+
+The fix for both is the same: test what the harness *did*, not only what the model *said*.
+
+## What does harness behavior look like as a test subject?
+
+Every model turn is preceded by decisions your code made. Which contexts were included. Which were dropped for budget. What memory was recalled. Whether cached evidence passed freshness. Which model the router picked.
+
+Each of those is deterministic given the same inputs and policies. That makes each of them a legitimate test subject, unlike model output, which you can only test statistically.
+
+In Crux, an Eval exercises the same callable task your application ships. Define the task once in production code:
+
+```ts title="src/support.ts"
+import { generate, stableModel } from '@use-crux/ai'
+import { openai } from '@ai-sdk/openai'
+import { supportPrompt } from './prompts/support'
+
+export const support = generate.task(supportPrompt, {
+  model: stableModel(openai('gpt-4o-mini')),
+})
+```
+
+Then assert the harness decisions it makes:
+
+```ts title="evals/support.eval.ts"
+import { evaluate } from '@use-crux/core/eval'
+import { support } from '../src/support'
+
+export default evaluate({
+  id: 'support-harness-contract',
+  task: support,
+  cases: [
+    { id: 'billing-question', input: { question: 'Why was I charged twice?', tier: 'free' } },
+    { id: 'enterprise-escalation', input: { question: 'SSO is broken', tier: 'enterprise' } },
+  ],
+  expect: (ctx) => {
+    // The customer-profile context must reach the model
+    ctx.expect.decisionReport.context.toHaveDisposition(
+      'context:customerProfile', 'active',
+      { reasonCode: 'context.active' },
+    )
+    // Enterprise traffic must route to the deep model
+    if (ctx.input.tier === 'enterprise') {
+      ctx.expect.decisionReport.routing.toHaveOutcome(
+        'route:deep', 'selected',
+        { reasonCode: 'routing.router.selected' },
+      )
+    }
+  },
+})
+```
+
+Read the checks as a contract: for these inputs, the harness assembles the turn this way. When a refactor changes a `when` predicate, or a new high-priority context evicts the profile block under budget, this fails in CI naming the exact decision that changed.
+
+One rule: assert stable machine fields (definition ids, dispositions, reason codes), never display strings. Readouts are copy, and copy changes.
+
+## What should I assert first?
+
+Not everything. Harness contracts earn their keep on the decisions with incident potential. A practical starting set:
+
+- **Presence of the load-bearing context.** The safety policy, the pricing source, the user's plan. Whatever would embarrass you if it silently vanished under budget pressure.
+- **Routing promises.** Any "tier X always gets model Y" commitment you have made to customers or to your own margin math.
+- **Freshness on decision-relevant evidence.** Assert stale rejections on sources where an outdated answer is worse than no answer.
+- **Safety outcomes on known-bad inputs.** Your incident regression cases: this input gets blocked, that one gets redacted.
+
+Four or five checks covering those categories catch more production regressions than fifty output scores, because they fail at the cause.
+
+## Where do output checks fit?
+
+Harness assertions complement output checks; they don't replace them. The layers adopt incrementally, by adding keys to the same Eval:
+
+1. **Typed Cases with output checks.** `evaluate({ task, cases, expect })`. The task drives input and output types; `expected` is Case data you compare explicitly.
+2. **Harness assertions.** The decision-report expectations above. Score drops become named causes.
+3. **Scorers and Gates.** Judges for the fuzzy qualities, with pass-rate gates instead of fail-on-any-case. Failing on a single flaky case gives you flaky builds; thresholds don't.
+4. **Variants and Baselines.** A Variant declares a candidate change (a different model, prompt, or setting); a Baseline is a run you explicitly accepted. Every later run compares against it, so "did my change make things worse?" becomes a diff instead of a feeling.
+
+And treat your judges with the same suspicion as any other model call: spot-check their verdicts against your own review before you let a Gate block deploys on them. A judge you have never disagreed with is a judge nobody has checked.
+
+## Isn't LLM CI slow, expensive, and flaky?
+
+Yes, if every run calls the model. Crux's answer is automatic evidence reuse. A repeated run reuses exact, safe task and managed-scorer evidence from earlier runs, while your deterministic checks and Gates rerun locally against it. Unchanged code plus unchanged Cases means zero model calls; CI spends tokens only on what actually changed.
+
+Reuse is identity-checked, not hopeful: Crux fingerprints the Eval file and its project-source dependency closure, so an edited prompt, task, or imported module misses old evidence instead of silently reusing it. And because checks rerun on reused evidence, a change in the decision report can only come from your code change. That is a real regression test, not a coin flip with a rubric.
+
+Two flags cover the edges:
+
+```bash
+crux eval support --offline   # no network at all; report any evidence miss
+crux eval support --fresh     # bypass reuse; re-run everything live
+```
+
+## What does this look like day to day?
+
+```bash
+crux eval                          # discover and run every Eval
+crux eval support                  # one Eval by id
+crux eval diff <run-a> <run-b>     # what actually changed between runs
+crux eval baseline set <run-id>    # accept a run as the shared comparison point
+```
+
+The Baseline pointer is a small file committed beside the Eval, so the whole team measures against the same accepted run. Failing cells link back to their Case, decision evidence, and the run in devtools, so the fix loop starts at the cause.
+
+For the dataset itself, skip the blank page: your best Cases are real production inputs. Pull the questions that caused support tickets, the weird edge inputs from your traces, the incidents you never want to repeat, and encode them as typed Cases.
+
+## Status and takeaway
+
+Crux is alpha. The Eval system's authoring surface is documented in the [Evals guide](/docs/guides/evals), and the decision-report matcher library is still growing.
+
+The shift itself doesn't wait for any particular tool. Stop treating your evals as a model-quality dashboard. Treat them as a test suite for the half of the system you control.
+
+Full guides on checks, scorers, gates, variants, and baselines: [cruxjs.dev/docs/guides/evals](https://cruxjs.dev/docs/guides/evals).

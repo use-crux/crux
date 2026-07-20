@@ -215,7 +215,7 @@ type _FinalStepUsage = Expect<
 type _StreamResultKeys = Expect<
   AssertEqual<
     keyof TargetStreamResult<{ readonly stream: true }>,
-    "runId" | "textStream" | "raw" | "completion"
+    "runId" | "textStream" | "raw" | "completion" | "_meta"
   >
 >;
 type _StreamRaw = Expect<

@@ -43,7 +43,7 @@ Public `defer()` failures use `CruxDeferError` from `@use-crux/core`.
 
 | Code                                                                      | Meaning                                            |
 | ------------------------------------------------------------------------- | -------------------------------------------------- |
-| [`DEFER_SCOPE_REQUIRED`](/docs/errors/DEFER_SCOPE_REQUIRED)               | No active invocation scope for `defer()`.          |
+| [`DEFER_SCOPE_REQUIRED`](/docs/errors/DEFER_SCOPE_REQUIRED)               | No active execution scope or ambient host binding. |
 | [`DEFER_CAPABILITY_MISSING`](/docs/errors/DEFER_CAPABILITY_MISSING)       | Active scope cannot honor this overload.           |
 | [`DEFER_SCOPE_SEALED`](/docs/errors/DEFER_SCOPE_SEALED)                   | Registration after the invocation sealed.          |
 | [`DEFER_LIMIT_EXCEEDED`](/docs/errors/DEFER_LIMIT_EXCEEDED)               | Host callback/nesting bounds exceeded.             |

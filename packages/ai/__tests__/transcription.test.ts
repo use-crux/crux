@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createCruxAi, transcribe } from "../src";
 import { transcriptionConformanceRow } from "@use-crux/core/adapter/testing";
 import { fallback } from "@use-crux/core";
+import { boundary, constraint, guardrail } from "@use-crux/core/safety";
 import type { TranscriptionModel } from "ai";
 import { scriptedGateway } from "./scripted-gateway";
 
@@ -10,6 +11,59 @@ const wav = new Uint8Array([
 ]);
 
 describe("AI SDK transcription", () => {
+  it("guards and constrains the canonical transcript around one SDK call", async () => {
+    const raw = {
+      text: "private transcript",
+      segments: [{ text: "private transcript", startSecond: 0, endSecond: 1 }],
+      warnings: [],
+      responses: [],
+      providerMetadata: {},
+    };
+    const scripted = scriptedGateway({ transcribe: [raw] });
+    const result = await createCruxAi({ gateway: scripted.gateway }).transcribe(
+      {
+        model: {} as TranscriptionModel,
+        audio: wav,
+        guardrails: [
+          guardrail({
+            id: "ai-transcript-output",
+            on: boundary.output.text(),
+            run: () => ({
+              action: "rewrite",
+              value: "guarded transcript",
+              rewrite: { kind: "redact" },
+            }),
+          }),
+        ],
+        constraints: [
+          constraint({
+            id: "ai-transcript-constraint",
+            on: boundary.output.text(),
+            run: (text) => {
+              expect(text).toBe("guarded transcript");
+              return { pass: true as const };
+            },
+          }),
+        ],
+        safety: { tune: { "ai-transcript-output": { mode: "enforce" } } },
+      },
+    );
+
+    expect(scripted.calls.transcribe).toHaveLength(1);
+    expect(scripted.calls.transcribe[0]).not.toHaveProperty("guardrails");
+    expect(scripted.calls.transcribe[0]).not.toHaveProperty("constraints");
+    expect(scripted.calls.transcribe[0]).not.toHaveProperty("safety");
+    expect(result.raw).toBe(raw);
+    expect(result).toMatchObject({
+      text: "guarded transcript",
+      segments: [],
+      safety: {
+        guardrails: { blocked: false },
+        constraints: { allPassed: true },
+      },
+    });
+  });
+
   it("accepts routing wrappers and sends only the selected leaf model", async () => {
     const scripted = scriptedGateway({
       transcribe: [

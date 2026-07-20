@@ -1,6 +1,6 @@
 /** Support preflight for every leaf model before completed-media I/O. */
 
-import type { CompletedOperationResult } from "../../completed-operation/contracts";
+import type { CompletedOperationProviderPayload } from "../../completed-operation/contracts";
 import { createUnsupportedCapabilityError } from "../../content/media-errors";
 import type { CompletedOperationDefinition } from "./definition";
 import { completedLifecycleContext, withSelectedModel } from "./lifecycle";
@@ -12,7 +12,7 @@ export async function preflightCompletedCandidates<
   TInput,
   TNormalized,
   TNative,
-  TResult extends CompletedOperationResult,
+  TResult extends CompletedOperationProviderPayload,
   TReport,
 >(
   options: Readonly<{
@@ -33,24 +33,58 @@ export async function preflightCompletedCandidates<
 ): Promise<ReadonlyMap<unknown, TNormalized>> {
   const prepared = new Map<unknown, TNormalized>();
   for (const candidate of unique(completedModelLeaves(options.model))) {
-    throwIfAborted(signal);
-    const context = completedLifecycleContext(options, candidate as TModel);
-    const candidateInput = withSelectedModel(options.input, candidate);
-    const normalized = await options.definition.normalize(
-      candidateInput,
-      context,
+    const normalized = await preflightCompletedCandidate(
+      options,
+      candidate,
+      signal,
     );
     prepared.set(candidate, normalized);
-    if (options.definition.support(normalized, context) === "unsupported") {
-      throw createUnsupportedCapabilityError({
-        adapter: options.provider,
-        model: describeModel(candidate),
-        issues: [{ capability: options.operation }],
-      });
-    }
   }
   throwIfAborted(signal);
   return prepared;
+}
+
+/** Normalize and support-check one concrete candidate before its native call. */
+export async function preflightCompletedCandidate<
+  TModel,
+  TInput,
+  TNormalized,
+  TNative,
+  TResult extends CompletedOperationProviderPayload,
+  TReport,
+>(
+  options: Readonly<{
+    definition: CompletedOperationDefinition<
+      TModel,
+      TInput,
+      TNormalized,
+      TNative,
+      TResult,
+      TReport
+    >;
+    provider: string;
+    operation: string;
+    input: TInput;
+  }>,
+  candidate: unknown,
+  signal: AbortSignal,
+): Promise<TNormalized> {
+  throwIfAborted(signal);
+  const context = completedLifecycleContext(options, candidate as TModel);
+  const candidateInput = withSelectedModel(options.input, candidate);
+  const normalized = await options.definition.normalize(
+    candidateInput,
+    context,
+  );
+  throwIfAborted(signal);
+  if (options.definition.support(normalized, context) === "unsupported") {
+    throw createUnsupportedCapabilityError({
+      adapter: options.provider,
+      model: describeModel(candidate),
+      issues: [{ capability: options.operation }],
+    });
+  }
+  return normalized;
 }
 
 function throwIfAborted(signal: AbortSignal | undefined): void {

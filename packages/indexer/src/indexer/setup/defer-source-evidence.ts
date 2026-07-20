@@ -4,14 +4,16 @@ import ts from 'typescript'
 export interface DeferSourceEvidence {
   readonly active: boolean
   readonly named: boolean
-  readonly inlineHostCapabilityMissing: boolean
+  readonly hostCapabilityMissing: boolean
   readonly namedDurabilityMissing: readonly string[]
 }
 
 const HOST_WRAPPERS = [
+  'withCrux',
   'withNextDefer',
   'withNodeDefer',
   'withAfterDefer',
+  'withServerlessDefer',
   'withWaitUntilDefer',
 ] as const
 
@@ -30,11 +32,15 @@ export async function inspectDeferSources(
   return {
     active: evidence.some(({ active }) => active),
     named: evidence.some(({ named }) => named),
-    inlineHostCapabilityMissing: evidence.some(
-      ({ inlineHostCapabilityMissing }) => inlineHostCapabilityMissing,
+    hostCapabilityMissing: evidence.some(
+      ({ hostCapabilityMissing }) => hostCapabilityMissing,
     ),
     namedDurabilityMissing: [
-      ...new Set(evidence.flatMap(({ namedDurabilityMissing }) => namedDurabilityMissing)),
+      ...new Set(
+        evidence.flatMap(
+          ({ namedDurabilityMissing }) => namedDurabilityMissing,
+        ),
+      ),
     ].sort(),
   }
 }
@@ -42,7 +48,7 @@ export async function inspectDeferSources(
 async function inspectFile(file: string): Promise<{
   readonly active: boolean
   readonly named: boolean
-  readonly inlineHostCapabilityMissing: boolean
+  readonly hostCapabilityMissing: boolean
   readonly namedDurabilityMissing: readonly string[]
 }> {
   const source = ts.createSourceFile(
@@ -55,7 +61,7 @@ async function inspectFile(file: string): Promise<{
   const hostBindings = importedBindingMap(source, new Set(HOST_WRAPPERS))
   let active = false
   let named = false
-  let inlineHostCapabilityMissing = false
+  let hostCapabilityMissing = false
   const namedDurabilityMissing = new Set<string>()
   const wrapped = wrappedFunctions(source, hostBindings)
 
@@ -66,15 +72,14 @@ async function inspectFile(file: string): Promise<{
         const namedCall = node.arguments.length >= 2
         named ||= namedCall
         const capabilities = containingCapabilities(node, wrapped)
-        if (!namedCall) {
-          inlineHostCapabilityMissing ||= capabilities.length === 0
-        } else if (!capabilities.some(({ namedDurable }) => namedDurable)) {
-          if (capabilities.length === 0) {
-            namedDurabilityMissing.add('host-lifetime')
-          } else {
-            for (const { wrapper } of capabilities) {
-              namedDurabilityMissing.add(wrapper)
-            }
+        hostCapabilityMissing ||= capabilities.length === 0
+        if (
+          namedCall &&
+          capabilities.length > 0 &&
+          !capabilities.some(({ namedDurable }) => namedDurable)
+        ) {
+          for (const { wrapper } of capabilities) {
+            namedDurabilityMissing.add(wrapper)
           }
         }
       }
@@ -85,7 +90,7 @@ async function inspectFile(file: string): Promise<{
   return {
     active,
     named,
-    inlineHostCapabilityMissing,
+    hostCapabilityMissing,
     namedDurabilityMissing: [...namedDurabilityMissing],
   }
 }
@@ -111,10 +116,7 @@ function wrappedFunctions(
     }
   }
 
-  const wrapped = new Map<
-    ts.FunctionLikeDeclaration,
-    WrapperCapability[]
-  >()
+  const wrapped = new Map<ts.FunctionLikeDeclaration, WrapperCapability[]>()
   function visit(node: ts.Node): void {
     if (
       ts.isCallExpression(node) &&

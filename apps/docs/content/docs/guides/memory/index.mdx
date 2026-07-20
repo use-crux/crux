@@ -11,7 +11,7 @@ import { z } from "zod";
 
 const userMemory = memory({
   id: "assistant",
-  store,
+  records,
   namespace: ({ input }) => `user:${input.userId}`,
   blocks: [
     recentMessages({ id: "recent", maxMessages: 12 }),
@@ -38,15 +38,13 @@ const assistantPrompt = prompt({
 });
 ```
 
-On every call, Crux renders each block into prompt context. After the model finishes, the adapter captures the user and assistant turn, runs each block's capture logic, and flushes pending writes. Streaming works the same way after `stream().completion()`.
+On every call, Crux renders each block into prompt context. After the model finishes, the adapter captures the user and assistant turn and forwards each tool call to blocks' `captureToolEvent` hooks, so `episodes()` records tool activity. Streaming works the same way after `stream().completion()`.
 
-`capture.mode` controls when capture work is awaited:
+`capture.mode` defaults to `afterResponse` and controls when capture work is awaited:
 
-- `inline` waits before `captureTurn()` or adapter generation resolves.
-- `afterResponse` starts capture after generation and hands the promise to `waitUntil` when one is configured.
-- `detached` starts capture in the background; call `flush()` when you need to await it.
-
-The older `processing` field is still accepted as a deprecated alias, but new code should use `capture`.
+- `inline` awaits capture before `captureTurn()` or adapter generation resolves.
+- `afterResponse` starts capture after generation. With `capture.waitUntil`, the work is handed to that hook and the response does not wait. Without `waitUntil`, the adapter awaits capture before resolving, which is the safe serverless default.
+- `detached` starts capture in the background and the adapter does not await it. Call `flush()` when you need to await the work.
 
 ## How to Think About Blocks
 
@@ -59,6 +57,8 @@ The older `processing` field is still accepted as a deprecated alias, but new co
 `facts()` is extracted knowledge. It is for conclusions such as user preferences or stable project details. By default facts are proposed before becoming active memory.
 
 `procedures()` is operating memory. It stores learned instructions and habits that should shape future behavior, such as "prefer direct answers before examples".
+
+`reflections()` is generated higher-order memory. Its `reflect()` method turns supplied memory text into a concise reflection and stores the result for later recall.
 
 `memoryBlock()` is the escape hatch. Use it when a product has its own memory domain, render format, tools, or approval workflow.
 
@@ -77,7 +77,7 @@ import { z } from "zod";
 
 const userMemory = memory({
   id: "assistant",
-  store,
+  records,
   namespace: ({ input }) => `user:${input.userId}`,
   capture: { mode: "afterResponse" },
   budget: { maxTokens: 1200 },
@@ -162,7 +162,7 @@ await userMemory.proposals.reject(pending[1].id, {
 
 Proposal transitions are strict. Only pending proposals can be approved, rejected, or edited; terminal proposals cannot be approved a second time and cannot create duplicate memory writes.
 
-If a memory is safe to write immediately, set `write: { mode: 'auto' }`. If a block should only be written by application code, keep the default block capture empty and call its direct methods yourself.
+If a memory is safe to write immediately, set `write: { mode: 'auto' }`. Set `write: { mode: 'manual' }` when capture should extract nothing automatically and writes should happen only through direct block method calls.
 
 ## Policies
 
@@ -190,12 +190,12 @@ Blocks are useful outside prompt execution. You can store state from route handl
 ```ts
 await state.patch(
   { goal: "Prepare launch plan" },
-  { store, namespace: "user:123", memoryId: "assistant" },
+  { records, namespace: "user:123", memoryId: "assistant" },
 );
 
 await episodesBlock.record(
   { content: "User accepted the launch plan", metadata: { source: "ui" } },
-  { store, namespace: "user:123", memoryId: "assistant" },
+  { records, namespace: "user:123", memoryId: "assistant" },
 );
 ```
 

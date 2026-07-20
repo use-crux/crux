@@ -58,6 +58,12 @@ Stable-beta rules are the default quality-gate set. They have rule-specific fixt
 
 Preview rules remain available through their configured profiles (including `recommended` and `strict`), but their policy wording, suppression guidance, or backend evidence may still change before the stable rule set adopts them. Treat preview findings as advisory until the rule is promoted.
 
+Bundled lints assert only properties decidable from authored source. Config-
+and environment-dependent checks belong to `crux setup`. For deferred work,
+the bundled rules cover replay safety (`defer.replay_unsafe`) and consumed named
+commit promises (`defer.floating_named_promise`); host-retention checks come
+from `crux setup --check`.
+
 ### Media rules
 
 Media rules are deterministic authored-source checks. They cover discarded specialized results, provably unsupported adapter/operation pairs, unsafe retained options (options that could expose raw payloads, locators, or provider identifiers), invalid image edit combinations, impossible transcription timing/diarization requests, speech configuration conflicts, and media sources without a derivation operation. They never inspect media bodies and never turn the private adapter truth table into a runtime API.

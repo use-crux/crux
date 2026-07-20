@@ -25,6 +25,7 @@
     "tasks",
     "skill",
     "safety",
+    "safety-content-primitives",
     "scoring",
     "eval",
     "storage",
@@ -33,6 +34,7 @@
     "lint",
     "index-lints",
     "runtime-bridge",
+    "operation-results",
     "observability",
     "devtools"
   ]

@@ -193,6 +193,18 @@ describe('runtime config transaction', () => {
     expect(plan.hooksPatch.runtimeEngine).toBe(runtime)
   })
 
+  it('plans the host binding into the same restorable hook layer', () => {
+    const host = {
+      kind: 'test',
+      invocationScope: true,
+      retain: vi.fn(),
+    } as const
+
+    const plan = planRuntimeConfig({ config: { host } })
+
+    expect(plan.hooksPatch.hostBinding).toBe(host)
+  })
+
   it('applies persistence and explicit observability before plugins run through ports', () => {
     const records = inMemoryRecordStore()
     const transport: CruxObservabilityTransport = { send: vi.fn() }

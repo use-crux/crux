@@ -401,12 +401,12 @@ Canonical response extracted by the adapter from the provider's raw response. Us
 Internal stream handle returned by `AdapterSpec.stream()`. Public
 `CruxAdapter.stream()` wraps this as `StreamResult<TRawStream>`.
 
-| Field              | Type                                      | Description                                                             |
-| ------------------ | ----------------------------------------- | ----------------------------------------------------------------------- |
-| `raw`              | `TRawStream?`                             | Original provider stream handle when distinct from the wrapped iterable |
-| `rawStream`        | `TRawStream & AsyncIterable<unknown>`     | Provider stream iterable, possibly wrapped for safety/observability     |
-| `extractTextDelta` | `(chunk: unknown) => string \| undefined` | Extract text delta from a stream chunk                                  |
-| `completion`       | `() => Promise<TraceMeta \| undefined>`   | Get completion metadata after stream ends                               |
+| Field              | Type                                                   | Description                                                                                                                                                                     |
+| ------------------ | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `raw`              | `TRawStream?`                                          | Original provider stream handle when distinct from the wrapped iterable                                                                                                         |
+| `rawStream`        | `TRawStream & AsyncIterable<unknown>`                  | Provider stream iterable, possibly wrapped for safety/observability                                                                                                             |
+| `extractTextDelta` | `(chunk: unknown) => string \| undefined`              | Extract text delta from a stream chunk                                                                                                                                          |
+| `completion`       | `() => Promise<StreamCompletionMetadata \| undefined>` | Get provider/policy completion facts after the stream ends; this extends `GenerationMeta` with buffered output facts, while Core adds operation identity at the public boundary |
 
 ## `AdapterGenerateOptions<TExtra>`
 
@@ -429,18 +429,18 @@ Options for adapter `generate()` calls.
 `AdapterGenerateResult<TRawResponse>` is the native adapter alias for this
 canonical envelope.
 
-| Field              | Type                              | Description                                                                    |
-| ------------------ | --------------------------------- | ------------------------------------------------------------------------------ |
-| `text`             | `string`                          | Assistant-visible text accumulated across provider-call steps                  |
-| `object`           | `TOutput?`                        | Parsed structured output when the prompt declares an output schema             |
-| `usage`            | `TokenUsage?`                     | Accumulated usage, present only when every provider-call step reported usage   |
-| `cost`             | `TraceMeta['cost']?`              | Provider-reported cost when available                                          |
-| `steps`            | `number`                          | Provider-call steps represented in this envelope                               |
-| `finalStep`        | `FinalStepInfo`                   | Final provider-call text, optional usage, finish reason, response id, model id |
-| `messages`         | `Message[]`                       | Provider-neutral Crux transcript                                               |
-| `pendingApprovals` | `readonly ApprovalRequestInfo[]?` | Pending approval requests when execution suspended                             |
-| `raw`              | `TRawResponse`                    | The raw SDK response                                                           |
-| `_meta`            | `TraceMeta`                       | Retained trace metadata for observability plumbing                             |
+| Field              | Type                              | Description                                                                                                   |
+| ------------------ | --------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `text`             | `string`                          | Assistant-visible text accumulated across provider-call steps                                                 |
+| `object`           | `TOutput?`                        | Parsed structured output when the prompt declares an output schema                                            |
+| `usage`            | `TokenUsage?`                     | Accumulated usage, present only when every provider-call step reported usage                                  |
+| `cost`             | `GenerationMeta['cost']?`         | Provider-reported cost when available                                                                         |
+| `steps`            | `number`                          | Provider-call steps represented in this envelope                                                              |
+| `finalStep`        | `FinalStepInfo`                   | Final provider-call text, optional usage, finish reason, response id, model id                                |
+| `messages`         | `Message[]`                       | Provider-neutral Crux transcript                                                                              |
+| `pendingApprovals` | `readonly ApprovalRequestInfo[]?` | Pending approval requests when execution suspended                                                            |
+| `raw`              | `TRawResponse`                    | The raw SDK response                                                                                          |
+| `_meta`            | `GenerateResultMeta`              | Provider/policy facts plus the exact `generation.call` trace and span; `responseId` remains provider identity |
 
 `usage` is omitted if any provider-call step omitted usage; Crux never reports a
 partial token sum as a total. `finalStep.usage` follows the provider's final
@@ -448,11 +448,17 @@ step exactly and is also omitted when the final step was unmetered.
 
 ## `StreamResult<TRawStream>`
 
-| Field        | Type                                 | Description                                                     |
-| ------------ | ------------------------------------ | --------------------------------------------------------------- |
-| `textStream` | `AsyncIterable<string>`              | Provider-neutral text deltas                                    |
-| `raw`        | `TRawStream`                         | Raw provider stream handle                                      |
-| `completion` | `Promise<StreamCompletion<TOutput>>` | Completion envelope: `GenerateResult` without `raw` and `_meta` |
+| Field        | Type                                 | Description                                                                             |
+| ------------ | ------------------------------------ | --------------------------------------------------------------------------------------- |
+| `textStream` | `AsyncIterable<string>`              | Provider-neutral plain-string text deltas                                               |
+| `raw`        | `TRawStream`                         | Raw provider stream handle                                                              |
+| `completion` | `Promise<StreamCompletion<TOutput>>` | Completion facts with the same operation pair as the immediate handle                   |
+| `_meta`      | `OperationResultMeta`                | Exact `generation.stream` identity, available immediately and stable through completion |
+
+Adapter payloads and provider stream handles do not manufacture Crux IDs. Core
+finalizes managed results after provider normalization. See
+[Operation Result Correlation](/docs/reference/crux-core/operation-results) for
+payload/result types, middleware timing, and streaming failure behavior.
 
 ## `ToolResultEntry`
 

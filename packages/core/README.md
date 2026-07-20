@@ -79,6 +79,16 @@ result.object.sentiment; // 'positive' | 'negative' | 'neutral'
 
 That is a complete Crux program: typed input, typed output, and your SDK still making the model call.
 
+## Operation result correlation
+
+Successful observed public operation envelopes expose readonly `_meta.traceId`
+and `_meta.spanId`, identifying the exact Core span that produced the result.
+That operation pair is distinct from a provider's `_meta.responseId`, a logical
+`runId`, and a physical execution `segmentId`. Streaming exposes the stable pair
+immediately and retains it on completion. See the
+[operation result correlation reference](https://cruxjs.dev/docs/reference/crux-core/operation-results)
+for ownership and compatibility details.
+
 ## Compose more as you need it
 
 Prompts declare what they need through the `use` array. Memory, retrieval, guardrails, skills, and custom blocks all plug into the same call, so you add capability without adopting a framework or runtime:
@@ -94,7 +104,7 @@ import { z } from "zod";
 
 const chat = memory({
   id: "assistant",
-  store,
+  records,
   namespace: ({ input }) => `user:${input.userId}`,
   blocks: [
     recentMessages({ id: "recent", maxMessages: 12 }),
@@ -182,6 +192,38 @@ export default evaluate({
 `crux eval` always includes Current, compares declared Variants, and reuses
 only exact safe evidence. Use `--offline` for zero network access, `--plan` to
 inspect admitted work, or explicitly accept a complete run as a Baseline.
+Each Eval cell is an isolated execution scope. Calls to `defer()` made by the
+task are captured as cell evidence instead of executing side effects or
+staging named Runtime work.
+
+## Background work
+
+Inside a Crux agent turn, adapter call, tool execution, or Safety session,
+`defer()` works without a wrapper or host configuration. Work registers on the
+nearest execution scope and starts when that scope closes, so a nested tool can
+begin its cleanup while the enclosing model call continues.
+
+On a freezing platform, the configured `host` capability applies to these
+primitive roots too: it keeps an already-started drain alive without delaying
+that drain until the response boundary.
+
+At a handler's root level, configure an explicit platform retention capability
+once, then call `defer()` without a route wrapper on ambient hosts:
+
+```ts
+import { config, defer } from "@use-crux/core";
+import { next } from "@use-crux/next";
+
+config({ host: next() });
+defer(() => flushAnalytics());
+```
+
+Each config-only call owns an ephemeral invocation. Crux primitives group
+registrations within their execution lifetime; use a wrapper when the handler
+needs outcome classification or a strict named-work commit barrier. Inline
+callbacks registered by failed or cancelled scopes are recorded as skipped and
+are not invoked. Replayable flow bodies remain special: use `flow.defer()`
+instead of public `defer()`.
 
 ## What's inside
 
@@ -190,7 +232,9 @@ inspect admitted work, or explicitly accept a complete run as a Baseline.
 | Import                         | Area                                                                                               |
 | ------------------------------ | -------------------------------------------------------------------------------------------------- |
 | `@use-crux/core`               | Prompts, contexts, config, injection-defense helpers (`safe`, `escapeXml`), and common types.      |
-| `@use-crux/core/memory`        | Memory blocks, stores, capture, recall, and compaction hooks.                                      |
+| `@use-crux/core/memory`        | Memory blocks, storage, capture, proposals, and recall.                                            |
+| `@use-crux/core/embedding`     | Dense/sparse embeddings, vector-semantic identity, governance, and per-text caching.               |
+| `@use-crux/core/indexing`      | Document/chunk indexing, corpus sync, and source-bundle embedding-stage caching.                    |
 | `@use-crux/core/retrieval`     | Retrievers, rerankers, grounding inputs, and RAG pipelines.                                        |
 | `@use-crux/core/safety`        | Guardrails, constraints, safety plugins, and validation retry.                                     |
 | `@use-crux/core/eval`          | Inert Evals, typed Cases, Variants, checks, scorers, and Gates.                                    |
@@ -203,9 +247,23 @@ inspect admitted work, or explicitly accept a complete run as a Baseline.
 | `@use-crux/core/skill`         | Skill authoring with inline and registry loaders.                                                  |
 
 Node-only/build-time subpaths are explicit: `eval/node`, `setup`,
-`runtime/next`, `defer/node`, `observability/node`, `transcription/node`,
+`runtime/next` (`withCruxBuild`), `defer/node`, `observability/node`, `transcription/node`,
 `skill/node`, and the Vitest testing helpers. Portable application code should
 not re-export them from a Workers or browser entrypoint.
+
+## Cache expensive indexing work
+
+`indexer({ cache: true })` caches both preparation stages and final dense/sparse
+embedding bundles per source. Identical content can therefore be reindexed—after
+an `indexVersion` change or a dry run—without another embedding provider call.
+Use `{ cache: "refresh" }` to recompute and replace entries, or
+`{ cache: "bypass" }` to read and write no stage entries for that call.
+
+Embeddings created with `embedding()` carry a vector-semantic `fingerprint`.
+Set `version` when provider behavior can change without changing the embedding
+name; hand-written structural embeddings without a fingerprint are deliberately
+never stage-cached. The optional `embeddingCache()` is a separate, finer-grained
+per-text cache and can be used together with the indexer cache.
 
 ## Documentation
 

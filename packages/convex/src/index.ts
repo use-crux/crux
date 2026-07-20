@@ -1,8 +1,8 @@
 /**
  * `@use-crux/convex` — Convex storage adapter for Crux.
  *
- * Provides Storage Beta factories (`convexRecordStore`, `convexVectorStore`,
- * and `convexStorage`) plus profile helpers for Convex request lifecycles.
+ * Provides Convex-backed records and asset storage plus profile helpers for
+ * Convex request lifecycles.
  *
  * **Setup:** Install the crux Convex component and use the component ref:
  *
@@ -61,12 +61,10 @@ export type {
   ConvexCruxStorageMemoryComponent,
   ConvexCruxStorageTransportComponent,
   ConvexStoreDocumentComponent,
-  ConvexStoreDocumentComponentIoOptions,
   ConvexStoreDocumentComponentReadOptions,
 } from "./store-component";
 export type {
   ComponentDocumentPort,
-  StoreDocDenseSearchQuery,
   StoreDocPage,
   StoreDocPageQuery,
   StoreDocRecord,
@@ -136,19 +134,10 @@ export {
 
 import type { z } from "zod";
 import type {
-  CompactionResult,
-  Message,
   Context,
   ContextEntry,
   Prompt,
 } from "@use-crux/core";
-import type {
-  CompactionMediaConfig,
-  GenerateTextFn,
-} from "@use-crux/core/compaction";
-import { summarizeMessages } from "@use-crux/core/compaction";
-import { countTokens, messageText as coreMessageText } from "@use-crux/core";
-import { observeConversationCompaction } from "./compaction-observability";
 import type { ConvexContext } from "./store";
 
 // ─────────────────────────────────────────────────────────────────
@@ -159,91 +148,8 @@ import type { ConvexContext } from "./store";
 // Stateless Conversation Compaction
 // ─────────────────────────────────────────────────────────────────
 
-/** Arguments for `compactConversation()`. */
-export interface CompactConversationArgs {
-  /** Messages that just fell out of the recent window. */
-  evictedMessages: Message[];
-  /** Existing running summary from thread metadata (empty string if none). */
-  existingSummary: string;
-  /** Text generation function. */
-  generate: GenerateTextFn;
-  /** Cheap/fast model for summarization. */
-  model: unknown;
-  /** Max tokens for the summary. Default: 1000. */
-  summaryBudget?: number;
-  /** Optional media-description overrides. */
-  media?: CompactionMediaConfig;
-}
-
-/**
- * Stateless conversation compaction for Convex.
- *
- * Takes evicted messages + existing summary, returns a merged summary.
- * No internal state — caller manages persistence (thread metadata).
- * Designed for Convex's action-per-message model where createSlidingWindow
- * would lose state between invocations.
- *
- * @param args - Evicted messages, existing summary, generate fn, model
- * @returns Merged summary and token metrics
- */
-export async function compactConversation(
-  args: CompactConversationArgs,
-): Promise<CompactionResult> {
-  const {
-    evictedMessages,
-    existingSummary,
-    generate,
-    model,
-    summaryBudget = 1000,
-    media,
-  } = args;
-
-  if (evictedMessages.length === 0 && !existingSummary) {
-    return { summary: "", tokensBefore: 0, tokensAfter: 0, ratio: 1 };
-  }
-
-  if (evictedMessages.length === 0) {
-    const tokens = countTokens(existingSummary);
-    return {
-      summary: existingSummary,
-      tokensBefore: tokens,
-      tokensAfter: tokens,
-      ratio: 1,
-    };
-  }
-
-  // Merge: prepend existing summary as context for the new evicted batch
-  const messagesToSummarize: Message[] = existingSummary
-    ? [
-        {
-          role: "system",
-          content: `Previous conversation summary:\n${existingSummary}`,
-        },
-        ...evictedMessages,
-      ]
-    : evictedMessages;
-
-  // Count only the actual evicted message tokens (exclude the summary wrapper)
-  const inputTokens =
-    evictedMessages.reduce(
-      (sum, m) => sum + countTokens(coreMessageText(m)),
-      0,
-    ) + (existingSummary ? countTokens(existingSummary) : 0);
-
-  return await observeConversationCompaction({
-    inputMessageCount: evictedMessages.length,
-    inputTokens,
-    run: () =>
-      summarizeMessages({
-        messages: messagesToSummarize,
-        generate,
-        model,
-        maxTokens: summaryBudget,
-        focus: ["decisions", "key_facts", "user_preferences"],
-        media,
-      }),
-  });
-}
+export { compactConversation } from "@use-crux/core/compaction";
+export type { CompactConversationArgs } from "@use-crux/core/compaction";
 
 // ─────────────────────────────────────────────────────────────────
 // Context Handler Helper

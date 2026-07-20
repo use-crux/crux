@@ -24,6 +24,7 @@ import {
   validateCorpusDocument,
 } from './source'
 import { observe } from '../observability'
+import { withOperationResultMeta } from '../observability/internal/result-meta'
 import { getHooks } from '../runtime/runtime'
 import type {
   Corpus,
@@ -349,25 +350,28 @@ export function corpus(config: CorpusConfig): Corpus {
           }
         }
 
-        const result = {
-          syncId,
-          corpusId: config.id,
-          namespace: config.namespace,
-          mode,
-          stalePolicy: stale,
-          sourceSet,
-          dryRun,
-          added,
-          changed,
-          unchanged,
-          stale: staleCount,
-          skipped,
-          deleted,
-          failed,
-          chunkCount,
-          durationMs: Date.now() - startedAt,
-          sources: sourceResults,
-        }
+        const result = withOperationResultMeta(
+          {
+            syncId,
+            corpusId: config.id,
+            namespace: config.namespace,
+            mode,
+            stalePolicy: stale,
+            sourceSet,
+            dryRun,
+            added,
+            changed,
+            unchanged,
+            stale: staleCount,
+            skipped,
+            deleted,
+            failed,
+            chunkCount,
+            durationMs: Date.now() - startedAt,
+            sources: sourceResults,
+          },
+          { traceId: span.traceId, spanId: span.spanId },
+        )
 
         emitCorpusSyncArtifact(span.spanId, result)
         span.end({

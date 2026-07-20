@@ -197,6 +197,13 @@ Discriminated union on `status`:
 | `cancelled` | `flowId`, `cancelReason?` | Flow cancelled via `flow.cancel()` or `cancelFlow()` |
 | `expired`   | `flowId`, `suspendedAt`   | Suspended flow timed out before a signal arrived     |
 
+Every variant also carries `_meta: OperationResultMeta` for the current
+`flow.run` invocation. Resume preserves the validated W3C trace and opens a
+fresh span, so a resumed result has the same `traceId` and a fresh `spanId`.
+Invocation-local result IDs are removed from persisted input, step output,
+signals, and scheduled work; continuation trace carriers remain intact. See
+[Operation Result Correlation](/docs/reference/crux-core/operation-results#media-and-higher-level-results).
+
 ## `FlowSnapshot`
 
 Persisted flow state stored in `RecordStore` under the `crux:flow:{flowId}` key.

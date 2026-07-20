@@ -21,7 +21,7 @@ const state = workingState({
 
 const agentMemory = memory({
   id: "research-agent",
-  store,
+  records,
   namespace: ({ input }) => `thread:${input.threadId}`,
   blocks: [state],
 });
@@ -32,16 +32,16 @@ The composed memory renders the current state into prompt context. The block als
 ```ts
 await state.set(
   { goal: "Compare vector databases", step: 1, findings: [] },
-  { store, namespace: "thread:abc", memoryId: "research-agent" },
+  { records, namespace: "thread:abc", memoryId: "research-agent" },
 );
 
 await state.patch(
   { step: 2, findings: ["Upstash supports hybrid search"] },
-  { store, namespace: "thread:abc", memoryId: "research-agent" },
+  { records, namespace: "thread:abc", memoryId: "research-agent" },
 );
 
 const current = await state.get({
-  store,
+  records,
   namespace: "thread:abc",
   memoryId: "research-agent",
 });
@@ -54,7 +54,7 @@ When this block is used inside `memory()`, it renders ahead of lower-priority bl
 ```ts
 const agentMemory = memory({
   id: "research-agent",
-  store,
+  records,
   namespace: ({ input }) => `thread:${input.threadId}`,
   budget: { maxTokens: 900 },
   blocks: [workingState({ id: "state", priority: 90, schema })],

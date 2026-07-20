@@ -18,10 +18,14 @@ import type {
   CorpusSyncResult,
   CruxDocument,
   CruxIngestLoadResultLike,
-  IndexDryRunResult,
-  IndexResult,
   SourceStageRecord,
 } from './types'
+
+interface IndexOperationSummary {
+  readonly sourceCount: number
+  readonly chunkCount: number
+  readonly stages?: SourceStageRecord[]
+}
 
 /** Forward a progress event to hooks/callback and strip transport fields. */
 export function emitProgress(options: CorpusSyncOptions, event: CorpusProgressEvent): CorpusSourceResult {
@@ -134,6 +138,7 @@ export function emitIndexingStageArtifact(
       stageKind: record.kind,
       stageName: record.name,
       stageVersion: record.version,
+      embeddingKind: record.embeddingKind,
       status: record.status,
       ...(record.cache ? { cache: record.cache } : {}),
       ...(record.chunkCount !== undefined ? { chunkCount: record.chunkCount } : {}),
@@ -293,6 +298,7 @@ export function stageRecordAttributes(record: SourceStageRecord): Record<string,
     stageKind: record.kind,
     stageName: record.name,
     stageVersion: record.version,
+    embeddingKind: record.embeddingKind,
     status: record.status,
     durationMs: record.durationMs,
     ...(record.cache ? { cache: record.cache } : {}),
@@ -304,7 +310,7 @@ export function stageRecordAttributes(record: SourceStageRecord): Record<string,
 let indexOperationCounter = 0
 
 /** Run an index operation inside a span, emitting start/end hooks + artifact. */
-export async function runIndexOperation<T extends IndexResult | IndexDryRunResult | number>(args: {
+export async function runIndexOperation<T extends IndexOperationSummary | number>(args: {
   indexerId: string
   namespace: string
   operation: 'indexDocuments' | 'indexChunks' | 'deleteSource' | 'clear'

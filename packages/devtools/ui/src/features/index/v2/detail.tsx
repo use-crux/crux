@@ -42,6 +42,7 @@ import { CatContributesSection, CatObservedSection } from "./observed";
 import { IndexHealthSection } from "./health";
 import { IndexStorage } from "./storage-section";
 import { IndexMedia } from "./media-section";
+import { IndexSafety } from "./safety-section";
 import { IndexMcpDetail } from "./mcp-detail";
 
 // ── relations block (two columns, full width) ────────────────────────────────
@@ -172,6 +173,7 @@ const INDEX_SECTION_COMP: Record<string, ComponentType<{ def: ViewDef }>> = {
   deps: IndexDependencies,
   storage: IndexStorage,
   media: IndexMedia,
+  safety: IndexSafety,
   mcp: IndexMcpDetail,
   // observed-injection layer (prompt/context) + injectable "Contributes";
   // each returns null without data, so they are inert for every other kind.
@@ -305,7 +307,17 @@ function indexSectionOrder(def: ViewDef): string[] {
       "health",
     ];
   if (k === "media.operation" || k === "ingest.source")
-    return ["hero", "media", "source", "observability", "relations", "health"];
+    return k === "media.operation"
+      ? [
+          "hero",
+          "media",
+          "safety",
+          "source",
+          "observability",
+          "relations",
+          "health",
+        ]
+      : ["hero", "media", "source", "observability", "relations", "health"];
   if (k === "eval.case")
     return ["hero", "config", "source", "relations", "health"];
   if (k === "memory" || k === "blackboard")
@@ -322,7 +334,15 @@ function indexSectionOrder(def: ViewDef): string[] {
   if (k === "workspace")
     return ["hero", "config", "data", "source", "relations", "health"];
   if (k === "guardrail" || k === "constraint")
-    return ["hero", "config", "source", "deps", "relations", "health"];
+    return [
+      "hero",
+      "safety",
+      "config",
+      "source",
+      "deps",
+      "relations",
+      "health",
+    ];
   if (k === "scorer") return ["hero", "config", "source", "relations"];
   return [
     "hero",

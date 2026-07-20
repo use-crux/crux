@@ -35,6 +35,10 @@ The package also exports native `generateImage()`, `transcribe()`, and
 transcription task union; requested timing/detail must match the selected
 endpoint. Returned image/audio assets are usable immediately and are never
 persisted implicitly. Typed `extra` records expose endpoint-specific controls.
+These operations also accept portable canonical Safety options: image and
+speech expose `guardrails`/`safety`, while transcription additionally exposes
+one-shot output-text `constraints`. Provider-native `raw` values remain
+unguarded; see the [content-primitive matrix](/docs/reference/crux-core/safety-content-primitives).
 
 | Field    | Type     | Description                |
 | -------- | -------- | -------------------------- |
@@ -264,10 +268,16 @@ Known OpenAI embedding models infer their default dimensions automatically. For 
 | `config.name`              | `string`  | Stable embedding identifier                                            |
 | `config.model`             | `string`  | OpenAI embedding model                                                 |
 | `config.dimensions`        | `number?` | Explicit vector dimensionality. Required for unknown/custom model IDs. |
+| `config.version`           | `string?` | Extra vector-semantic revision for cache invalidation.                 |
 | `config.maxInputTokens`    | `number?` | Per-input token ceiling. Defaults to `8192`.                           |
 | `config.batch.maxSize`     | `number?` | Top-level Crux batch size. Defaults to `100`.                          |
 | `config.batch.concurrency` | `number?` | Top-level Crux batch concurrency. Defaults to `1`.                     |
 | `config.user`              | `string?` | Optional OpenAI end-user identifier                                    |
+
+The helper fingerprint always includes the model, then appends `version` when
+supplied; resolved dimensions participate through the core embedding
+fingerprint. A user version never replaces model identity, so either change
+invalidates cached vectors.
 
 ### Types
 

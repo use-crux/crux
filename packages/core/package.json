@@ -57,13 +57,9 @@
       "types": "./src/async-scope/index.ts",
       "import": "./src/async-scope/index.ts"
     },
-    "./internal/defer-host": {
-      "types": "./src/defer/host.ts",
-      "import": "./src/defer/host.ts"
-    },
-    "./internal/defer-lifecycle": {
-      "types": "./src/defer/lifecycle.ts",
-      "import": "./src/defer/lifecycle.ts"
+    "./internal/scope": {
+      "types": "./src/scope/internal.ts",
+      "import": "./src/scope/internal.ts"
     },
     "./defer/node": {
       "types": "./src/defer/node.ts",
@@ -124,10 +120,6 @@
     "./observability/node": {
       "types": "./src/observability/node.ts",
       "import": "./src/observability/node.ts"
-    },
-    "./observability/workers": {
-      "types": "./src/observability/workers.ts",
-      "import": "./src/observability/workers.ts"
     },
     "./embedding": {
       "types": "./src/embedding/index.ts",
@@ -269,11 +261,8 @@
       "internal/async-scope": [
         "src/async-scope/index.ts"
       ],
-      "internal/defer-host": [
-        "src/defer/host.ts"
-      ],
-      "internal/defer-lifecycle": [
-        "src/defer/lifecycle.ts"
+      "internal/scope": [
+        "src/scope/internal.ts"
       ],
       "defer/node": [
         "src/defer/node.ts"
@@ -319,9 +308,6 @@
       ],
       "observability/node": [
         "src/observability/node.ts"
-      ],
-      "observability/workers": [
-        "src/observability/workers.ts"
       ],
       "embedding": [
         "src/embedding/index.ts"
@@ -417,7 +403,6 @@
   "scripts": {
     "test": "vitest run",
     "test:observability:serverless": "vitest run __tests__/observability/serverless-freeze.test.ts",
-    "test:observability:workers": "vitest run --config vitest.workers.config.ts",
     "typecheck": "node ./scripts/check-no-explicit-any.mjs && tsc -p tsconfig.json --noEmit",
     "typecheck:any:update": "node ./scripts/check-no-explicit-any.mjs --update-baseline"
   },

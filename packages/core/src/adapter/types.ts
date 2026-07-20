@@ -8,7 +8,7 @@
  */
 
 import type { z } from "zod";
-import type { TraceMeta, TokenUsage } from "../generation/types";
+import type { GenerationMeta, TokenUsage } from "../generation/types";
 import type { RoutingReceipt } from "../routing/receipt";
 import type { SystemBlock } from "../resolver/types";
 import type { Message } from "../generation/messages";
@@ -97,7 +97,7 @@ export interface StreamHandle<TRawStream> {
 }
 
 /** Exact buffered facts available after a provider-native stream completes. */
-export interface StreamCompletionMetadata extends TraceMeta {
+export interface StreamCompletionMetadata extends GenerationMeta {
   /** Final text projection, when supplied independently of stream deltas. */
   readonly text?: string;
   /** Exact ordered assistant output buffered while the stream ran. */

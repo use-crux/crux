@@ -426,10 +426,10 @@ function recordSafetyProtocol() {
 const needsShip = () =>
   makeConstraint({
     id: 'mentions-ship',
-    on: boundary.output.both(),
+    on: boundary.output.text(),
     maxRetries: 2,
-    run: async (output) =>
-      output.text.includes('ship') ? { pass: true as const } : { pass: false as const, feedback: 'must mention ship' },
+    run: async (text) =>
+      text.includes('ship') ? { pass: true as const } : { pass: false as const, feedback: 'must mention ship' },
   })
 
 describe('dialect parity — constraint retry protocol', () => {
@@ -520,7 +520,7 @@ describe('dialect parity — clean pass and blocks', () => {
     const passGuard = () =>
       makeGuardrail({ id: 'g-in', on: boundary.input.text(), run: async () => ({ action: 'allow' as const }) })
     const passConstraint = () =>
-      makeConstraint({ id: 'c-pass', on: boundary.output.both(), run: async () => ({ pass: true as const }) })
+      makeConstraint({ id: 'c-pass', on: boundary.output.text(), run: async () => ({ pass: true as const }) })
 
     const nativeEvents = recordSafetyProtocol()
     const native = scriptedAdapterSpec([{ text: 'a ship!' }])
@@ -647,7 +647,7 @@ describe('dialect parity — output guards and suspension', () => {
     expect(strip(executorResult._meta.guardrails?.applied)).toEqual(strip(nativeResult._meta.guardrails?.applied))
   })
 
-    it('tool-approval suspension skips output safety in BOTH dialects', async () => {
+    it('tool-approval suspension guards the retained step but skips terminal constraints in BOTH dialects', async () => {
     const guardSpy = vi.fn()
     const spyGuard = () =>
       makeGuardrail({
@@ -662,7 +662,7 @@ describe('dialect parity — output guards and suspension', () => {
     const spyConstraint = () =>
       makeConstraint({
         id: 'spy-c',
-        on: boundary.output.both(),
+        on: boundary.output.text(),
         run: async () => {
           checkSpy()
           return { pass: true as const }
@@ -694,9 +694,9 @@ describe('dialect parity — output guards and suspension', () => {
 
     expect(nativeResult._meta.finishReason).toBe('tool_approval_required')
     expect(executorResult._meta.finishReason).toBe('tool_approval_required')
-    // The suspension policy is decided once, in the session: no output
-    // guard and no constraint ran in either dialect.
-    expect(guardSpy).not.toHaveBeenCalled()
+    // Each provider-produced approval step is guarded before it can be
+    // retained. Suspension still skips terminal object/both constraints.
+    expect(guardSpy).toHaveBeenCalledTimes(2)
     expect(checkSpy).not.toHaveBeenCalled()
   })
 })

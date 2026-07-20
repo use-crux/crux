@@ -22,7 +22,6 @@ const NAMED_DEFER_OBSERVABILITY_FLUSH_TIMEOUT_MS = 3_000;
 export interface RuntimeNamedDeferProvenance {
   readonly mode: "named";
   readonly sequence: number;
-  readonly completion: "response-finished" | "handler-returned";
   readonly scopeId: string;
   readonly workId: string;
   readonly targetId: string;
@@ -41,8 +40,6 @@ export function isRuntimeNamedDeferProvenance(
   return (
     record.mode === "named" &&
     typeof record.sequence === "number" &&
-    (record.completion === "response-finished" ||
-      record.completion === "handler-returned") &&
     typeof record.scopeId === "string" &&
     typeof record.workId === "string" &&
     typeof record.targetId === "string" &&
@@ -57,7 +54,6 @@ export function cloneNamedDeferProvenance(
   return Object.freeze({
     mode: "named" as const,
     sequence: provenance.sequence,
-    completion: provenance.completion,
     scopeId: provenance.scopeId,
     workId: provenance.workId,
     targetId: provenance.targetId,
@@ -107,7 +103,6 @@ export async function executeWithNamedDeferEvidence<T>(
     rootPrimitive: "defer.run",
     attributes: {
       mode: "named",
-      completion: provenance.completion,
       sequence: provenance.sequence,
       targetId: provenance.targetId,
       workId: provenance.workId,
@@ -122,7 +117,6 @@ export async function executeWithNamedDeferEvidence<T>(
       primitive: "defer.run",
       attributes: {
         mode: "named",
-        completion: provenance.completion,
         sequence: provenance.sequence,
         targetId: provenance.targetId,
         workId: provenance.workId,
@@ -147,7 +141,6 @@ export async function executeWithNamedDeferEvidence<T>(
         error,
         attributes: {
           mode: "named",
-          completion: provenance.completion,
           sequence: provenance.sequence,
           targetId: provenance.targetId,
           workId: provenance.workId,
@@ -159,7 +152,6 @@ export async function executeWithNamedDeferEvidence<T>(
       run.error(error, {
         attributes: {
           mode: "named",
-          completion: provenance.completion,
           sequence: provenance.sequence,
           targetId: provenance.targetId,
           workId: provenance.workId,
@@ -175,7 +167,6 @@ export async function executeWithNamedDeferEvidence<T>(
       status: "ok",
       attributes: {
         mode: "named",
-        completion: provenance.completion,
         sequence: provenance.sequence,
         targetId: provenance.targetId,
         workId: provenance.workId,
@@ -188,7 +179,6 @@ export async function executeWithNamedDeferEvidence<T>(
       status: "ok",
       attributes: {
         mode: "named",
-        completion: provenance.completion,
         sequence: provenance.sequence,
         targetId: provenance.targetId,
         workId: provenance.workId,

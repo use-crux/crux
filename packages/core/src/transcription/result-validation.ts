@@ -1,6 +1,6 @@
 import { validateOperationExecution, validateOperationTimeout } from '../completed-operation/contracts'
 import type { OperationExecution, OperationTimeout } from '../completed-operation/contracts'
-import type { TranscriptInterval, TranscriptionResult } from './contracts'
+import type { TranscriptInterval, TranscriptionPayload } from './contracts'
 import { createNoTranscriptError } from './errors'
 
 /** Provider-neutral fields accepted before final transcription validation. */
@@ -37,11 +37,14 @@ export function validateTranscribeOptions(options: Readonly<{
   validateOperationTimeout(options.timeout)
 }
 
-/** Validate semantic success and construct an honest common transcription result. */
+/**
+ * Validate semantic success and construct an ID-free transcription payload.
+ * The shared media runner owns the eventual public operation metadata.
+ */
 export function validateTranscriptionResult<TRaw, TMetadata = unknown, TWarning = unknown>(
   result: NativeTranscriptionResult<TMetadata, TWarning>,
   raw: TRaw,
-): TranscriptionResult<TRaw, TMetadata, TWarning> {
+): TranscriptionPayload<TRaw, TMetadata, TWarning> {
   const text = typeof result.text === 'string' ? result.text.trim() : ''
   if (!text) throw createNoTranscriptError(raw)
   const segments = validateIntervals(result.segments ?? [], 'segment')

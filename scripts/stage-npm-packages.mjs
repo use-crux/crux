@@ -36,6 +36,7 @@ const tsPackages = [
   { name: '@use-crux/indexer', dir: 'packages/indexer', sourceRoot: 'src' },
   { name: '@use-crux/ingest', dir: 'packages/ingest', sourceRoot: 'src' },
   { name: '@use-crux/next', dir: 'packages/next', sourceRoot: 'src' },
+  { name: '@use-crux/vercel', dir: 'packages/vercel', sourceRoot: 'src' },
   { name: '@use-crux/mcp', dir: 'packages/mcp', sourceRoot: 'src' },
   { name: '@use-crux/openai', dir: 'packages/openai', sourceRoot: 'src' },
   { name: '@use-crux/otel', dir: 'packages/otel', sourceRoot: 'src' },

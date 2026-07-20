@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import "./completed-operation-routing-correlation.cases";
 import {
   bindCompletedOperation,
   defineCompletedOperation,

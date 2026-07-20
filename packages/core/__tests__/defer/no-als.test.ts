@@ -1,10 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { defer } from "@use-crux/core";
 import { __setAlsForTesting } from "@use-crux/core/observability";
-import {
-  runWithDeferInvocation,
-  type DeferLifetimeCapability,
-} from "@use-crux/core/internal/defer-host";
+import { runWithDeferInvocation } from "@use-crux/core/internal/scope";
+import { testBinding } from "./test-binding";
 
 describe("defer without AsyncLocalStorage", () => {
   afterEach(() => {
@@ -15,22 +13,11 @@ describe("defer without AsyncLocalStorage", () => {
     __setAlsForTesting(null);
     let scheduled: (() => Promise<void>) | undefined;
     const callback = vi.fn();
-    const lifetime: DeferLifetimeCapability = {
-      completion: "handler-returned",
-      limits: {
-        maxDrainMs: 1_000,
-        maxCallbacks: 10,
-        concurrency: 1,
-        maxNestingDepth: 2,
-      },
-      supportsInline: true,
-      durableFinalization: false,
-      schedule(task) {
-        scheduled = () => task.run();
-      },
-    };
+    const binding = testBinding((run) => {
+      scheduled = run;
+    });
     const options = {
-      lifetime,
+      binding,
       classifyOutcome: () => "success" as const,
     };
 

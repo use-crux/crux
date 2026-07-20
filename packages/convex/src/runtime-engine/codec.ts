@@ -2,6 +2,7 @@ import { DEFAULT_RUNTIME_MAX_ATTEMPTS, type WakeEnvelope } from '@use-crux/core/
 import type {
   EventCursor,
   FlowId,
+  FlowSnapshot,
   IdempotencyRecord,
   Lease,
   NewWorkItem,
@@ -60,17 +61,28 @@ export function decodeWork(value: unknown): WorkItem {
   )
 }
 
-export function encodeSnapshot(snapshot: object & { readonly updatedAt: Date }): Record<string, unknown> {
+/** Encode a flow snapshot and its nested deadlines for Convex persistence. */
+export function encodeSnapshot(snapshot: FlowSnapshot): Record<string, unknown> {
   return clean({
     ...snapshot,
+    pendingSuspends: snapshot.pendingSuspends.map((suspend) =>
+      clean({ ...suspend, timeoutAt: suspend.timeoutAt?.getTime() }),
+    ),
     updatedAt: snapshot.updatedAt.getTime(),
   })
 }
 
+/** Decode a flow snapshot and revive nested deadline timestamps. */
 export function decodeSnapshot<T>(value: unknown): T {
   const record = objectRecord(value)
   return clean({
     ...record,
+    pendingSuspends: Array.isArray(record.pendingSuspends)
+      ? record.pendingSuspends.map((value) => {
+          const suspend = objectRecord(value)
+          return clean({ ...suspend, timeoutAt: numberDate(suspend.timeoutAt) })
+        })
+      : [],
     updatedAt: requiredDate(record.updatedAt),
   }) as T
 }

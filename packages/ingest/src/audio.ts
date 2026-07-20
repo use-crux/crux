@@ -1,4 +1,5 @@
-import type { Asset, TranscriptInterval, TranscriptionResult } from '@use-crux/core'
+import type { Asset, TranscriptInterval } from '@use-crux/core'
+import type { TranscriptionPayload } from '@use-crux/core/adapter'
 import type { IngestParser, IngestPart, IngestWarning } from './types'
 import { observeIngestMediaCall } from './media-observation'
 
@@ -35,7 +36,7 @@ export const audioParser: IngestParser = {
   },
 }
 
-function validateSegments(segments: TranscriptionResult<unknown, unknown, unknown>['segments'], sourceId: string): readonly TranscriptInterval[] {
+function validateSegments(segments: TranscriptionPayload<unknown, unknown, unknown>['segments'], sourceId: string): readonly TranscriptInterval[] {
   if (!Array.isArray(segments)) throw new Error(`Audio source "${sourceId}" returned invalid segments from media.transcribe.`)
   let previousEnd = 0
   return segments.map((segment) => {
@@ -58,7 +59,7 @@ function segmentParts(segments: readonly TranscriptInterval[]): IngestPart[] {
   }))
 }
 
-function safeWarnings(result: TranscriptionResult<unknown, unknown, unknown>): IngestWarning[] {
+function safeWarnings(result: TranscriptionPayload<unknown, unknown, unknown>): IngestWarning[] {
   return (result.warnings ?? []).flatMap((warning) => {
     if (typeof warning === 'string') return [{ code: 'parser_warning' as const, message: warning.slice(0, 500) }]
     if (!warning || typeof warning !== 'object') return []

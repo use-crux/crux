@@ -535,6 +535,7 @@ Hybrid search uses both embeddings through `retriever()` or `VectorStore.search(
 | `batch`          | `{ maxSize?, concurrency? }?`                                      | Batch behavior                                 |
 | `preprocess`     | `EmbeddingPreprocessor \| EmbeddingPreprocessor[]?`                | Normalization before cache/provider calls      |
 | `truncate`       | `{ strategy: 'fail' } \| { strategy: 'chars'; maxChars: number }?` | Input-limit policy                             |
+| `version`        | `string?`                                                          | Vector-semantic revision for cache invalidation |
 | `retry`          | `{ maxAttempts; baseDelayMs?; maxDelayMs?; shouldRetry? }?`        | Provider batch retry policy                    |
 | `cache`          | `EmbeddingCache?`                                                  | Policy-aware per-text vector cache             |
 | `rateLimit`      | `{ concurrency: number }?`                                         | Cross-call provider concurrency cap            |
@@ -542,6 +543,11 @@ Hybrid search uses both embeddings through `retriever()` or `VectorStore.search(
 | `embed`          | `(texts) => Promise<{ embeddings }>`                               | Provider call                                  |
 
 Hybrid retrieval is composed _above_ this layer through stores or retrievers.
+
+Instances expose a readonly `fingerprint` derived from vector-producing policy.
+Operational batch, retry, rate-limit, and cache settings do not affect it.
+Indexer stage caching requires this identity; structural embeddings that omit it
+are computed on every indexing run.
 
 ```ts
 import {

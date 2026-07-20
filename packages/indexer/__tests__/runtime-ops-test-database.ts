@@ -52,6 +52,7 @@ export async function dropPostgresSchemas(
   schemas: readonly string[],
 ): Promise<void> {
   const cleanup = new Pool({ connectionString: database.url })
+  cleanup.on('error', () => undefined)
   try {
     for (const schema of schemas) {
       await cleanup.query(`DROP SCHEMA IF EXISTS ${quoteIdent(schema)} CASCADE`)

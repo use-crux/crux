@@ -93,7 +93,11 @@ export function registerStoreRecordTests<TStore extends RuntimeStoreAdapter>(
       completedSteps: { load: { ok: true } },
       fingerprint: ['step:load', 'suspend:approval'],
       pendingSuspends: [
-        { label: 'approval', waiterId: 'waiter_1' as WaiterId },
+        {
+          label: 'approval',
+          waiterId: 'waiter_1' as WaiterId,
+          timeoutAt: new Date('2026-07-02T01:00:00.000Z'),
+        },
       ],
       updatedAt: new Date('2026-07-02T00:00:00.000Z'),
     })
@@ -111,6 +115,7 @@ export function registerStoreRecordTests<TStore extends RuntimeStoreAdapter>(
       {
         label: 'approval',
         waiterId: 'waiter_1',
+        timeoutAt: new Date('2026-07-02T01:00:00.000Z'),
         delivered: {
           eventId: 'evt_1',
           payload: { decision: 'approved', nested: { score: 1 } },

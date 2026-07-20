@@ -1,11 +1,13 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/metadata";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: "Compare",
   description:
     "How Crux compares to raw SDK calls, LangChain, and other approaches to building the harness around your LLM call.",
-};
+  path: "/compare",
+});
 
 const comparisons: {
   id: string;

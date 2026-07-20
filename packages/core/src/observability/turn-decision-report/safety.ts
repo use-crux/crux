@@ -18,9 +18,9 @@ export interface SafetyDecisionProjectionOptions {
  * {@link TurnDecisionReport} decision row.
  *
  * The projection intentionally copies only safe read-model fields: policy id,
- * boundary, action, reason, finding counts, duration, capture size, and
- * evidence references. Raw content remains in Safety capture summaries and
- * never becomes turn-report text.
+ * boundary, action, reason, safe model id, media location, finding counts,
+ * duration, capture size, and evidence references. Raw content remains in
+ * Safety capture summaries and never becomes turn-report text.
  */
 export function safetyDecisionToTurnDecision(
   decision: SafetyDecision,
@@ -38,6 +38,9 @@ export function safetyDecisionToTurnDecision(
       source: 'artifact',
       evidenceLevel: 'declared',
     },
+    ...(decision.model ? { model: decision.model } : {}),
+    ...(decision.location ? { location: decision.location } : {}),
+    ...(decision.escalatedToBlock ? { escalatedToBlock: true as const } : {}),
     tab: tabForSafetyDecision(decision),
     evidence: evidenceForSafetyDecision(decision, options),
     metrics: {

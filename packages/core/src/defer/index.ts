@@ -1,6 +1,11 @@
 import { createDeferError } from "./errors";
 import { asyncScopeActive } from "../async-scope/internal/carrier";
-import { currentDeferRegistration } from "./internal/context";
+import { resolveDeferRegistration } from "./internal/registration";
+import { resolveConfiguredHost } from "../scope/kernel";
+import {
+  registerAmbientInlineDefer,
+  registerAmbientNamedDefer,
+} from "./internal/ambient";
 import { deferReplayActive } from "./internal/replay-guard";
 import {
   isRuntimeTaskTarget,
@@ -45,15 +50,24 @@ export function defer(
         "defer() cannot run inside replayable flow execution. Use flow.defer() for durable work with stable replay identity.",
     });
   }
-  const registration = currentDeferRegistration();
+  const registration = resolveDeferRegistration();
   if (isRuntimeTaskTarget(callbackOrTarget)) {
     if (registration) {
       return registration.scope.stageNamed(callbackOrTarget, input);
+    }
+    const binding = resolveConfiguredHost();
+    if (binding?.invocationScope) {
+      return registerAmbientNamedDefer(binding, callbackOrTarget, input);
     }
     throwMissingScope();
   }
   if (registration) {
     registration.scope.registerInline(callbackOrTarget, registration);
+    return;
+  }
+  const binding = resolveConfiguredHost();
+  if (binding?.invocationScope) {
+    registerAmbientInlineDefer(binding, callbackOrTarget);
     return;
   }
   throwMissingScope();
@@ -64,11 +78,12 @@ function throwMissingScope(): never {
     throw createDeferError({
       code: "DEFER_CAPABILITY_MISSING",
       message:
-        "The active Crux scope has no compatible host lifetime capability for inline defer().",
+        "The active Crux scope cannot retain deferred work. Call defer() inside a defer-capable Crux primitive, add host: to config(), or wrap the handler.",
     });
   }
   throw createDeferError({
     code: "DEFER_SCOPE_REQUIRED",
-    message: "defer() requires an active Crux invocation scope.",
+    message:
+      "defer() requires an execution scope. Call it inside a Crux primitive, add host: to config(), or wrap the handler.",
   });
 }

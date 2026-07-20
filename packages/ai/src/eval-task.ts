@@ -302,7 +302,7 @@ function schemaContract(schema: unknown): string | undefined {
 function normalizedResponse<TOutput>(
   result: GenerateResult<unknown, TOutput>,
 ): StreamCompletion<TOutput> {
-  const { raw: _raw, _meta: _meta, ...response } = result;
+  const { raw: _raw, ...response } = result;
   const projected = projectJson(response);
   return projected.ok
     ? (projected.value as unknown as StreamCompletion<TOutput>)

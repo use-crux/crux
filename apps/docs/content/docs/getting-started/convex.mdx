@@ -122,7 +122,7 @@ const assistantMemory = memory({
 });
 ```
 
-The component handles record operations (`get`, `put`, `create`, `delete`, `list`) automatically. Dense vector search uses `ctx.vectorSearch` from the action context through `convexVectorStore()` or `convexStorage()`.
+The component handles record operations (`get`, `put`, `create`, `delete`, `list`) automatically. Convex storage is records-only; for dense vector search, pair the record store with an explicit `VectorStore` such as `upstashVectorStore()`.
 
 ## With the Convex Agent SDK
 

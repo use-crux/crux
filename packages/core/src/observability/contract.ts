@@ -602,6 +602,17 @@ export interface CruxGuardrailReportPreview {
   kind: "guardrail.report";
   phase?: string;
   action: "pass" | "block" | "redact" | "transform" | "warn" | string;
+  boundary?: string;
+  mode?: "enforce" | "report" | string;
+  mediaPartType?: "image" | "audio" | "video" | "file" | string;
+  originKind?: "message" | "step" | "operation" | string;
+  messageIndex?: number;
+  stepIndex?: number;
+  operation?: string;
+  operationPhase?: "input" | "output" | string;
+  field?: string;
+  partIndex?: number;
+  escalatedToBlock?: true;
   matches?: readonly CruxGuardrailMatchPreview[];
   reason?: string;
   beforePreview?: string;
@@ -941,14 +952,15 @@ export interface CruxPromptResolveAttributes {
  * Runtime acceptance path does not invent a definition id when none is known.
  */
 export interface CruxDeferScheduledAttributes {
-  mode: "inline" | "named";
-  completion: "response-finished" | "handler-returned";
+  mode: "inline" | "named" | "inline-captured" | "named-captured";
   sequence: number;
   definitionId?: string;
   targetId?: string;
   workId?: string;
   intentState?: "staged" | "released" | "abandoned";
   scopeId?: string;
+  /** JSON snapshot retained only for named capture-policy evidence. */
+  input?: unknown;
 }
 
 /**
@@ -962,7 +974,6 @@ export interface CruxDeferScheduledAttributes {
  */
 export interface CruxDeferRunAttributes {
   mode: "inline" | "named";
-  completion: "response-finished" | "handler-returned";
   sequence: number;
   definitionId?: string;
   targetId?: string;

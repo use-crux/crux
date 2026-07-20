@@ -1,9 +1,17 @@
 import type { MediaSource } from "../types/content";
+import type { BoundaryDef } from "../safety/boundary";
 import type {
-  CompletedOperationResult,
+  CompletedOperationPayload,
   OperationTimeout,
 } from "../completed-operation/contracts";
-import type { CompletedOperationModelGuard, RoutingCallOptions } from "../routing/types";
+import type {
+  CompletedOperationModelGuard,
+  RoutingCallOptions,
+} from "../routing/types";
+import type { Constraint } from "../safety/constraint/types";
+import type { Guardrail } from "../safety/guardrail/types";
+import type { SafetyTuneOptions } from "../safety/tune";
+import type { WithOperationResultMeta } from "../observability/result-meta";
 
 /** Audio accepted by flat transcription operations without storage access. */
 export type AudioSource = MediaSource;
@@ -29,6 +37,28 @@ export interface TranscribeCommonOptions {
   readonly timestamps?: "none" | "segment" | "word" | "segment-and-word";
   readonly diarization?: boolean;
   readonly prompt?: string;
+  /**
+   * Canonical input and transcript policies applied around the provider call.
+   *
+   * Input-media callbacks receive the original audio source with an operation
+   * origin; narrow `part.type` and `origin.kind` before reading their fields.
+   * The stable audio index is always `0`. Enforced strip blocks because audio
+   * is required, while report mode records intent and preserves it. Output-text
+   * callbacks receive the validated top-level transcript string. Provider raw,
+   * metadata, and warnings remain unguarded and may repeat blocked content.
+   */
+  readonly guardrails?: readonly Guardrail[];
+  /**
+   * Terminal requirements evaluated once against guarded transcript text.
+   *
+   * Assert failures throw and suggest failures remain in `result.safety`.
+   * Transcription never retries the provider to repair a failed constraint.
+   */
+  readonly constraints?: readonly Constraint<
+    BoundaryDef<"model.output.text", string>
+  >[];
+  /** Per-call posture and tuning for attached Safety policies. */
+  readonly safety?: SafetyTuneOptions;
   readonly abortSignal?: AbortSignal;
   readonly timeout?: OperationTimeout;
 }
@@ -45,16 +75,18 @@ export type TranscribeOptions<
   }>;
 
 /**
- * Provider-neutral result of one transcription operation.
+ * Provider-authored transcription facts before Core adds correlation.
  *
  * Segment and word arrays always exist. Providers must leave unavailable
- * timing or speaker facts empty rather than estimating them.
+ * timing or speaker facts empty rather than estimating them. An enforced
+ * transcript rewrite clears both arrays so stale text cannot survive there.
+ * Provider-native `raw`, metadata, and warnings are preserved but unguarded.
  */
-export type TranscriptionResult<
+export type TranscriptionPayload<
   TRaw = unknown,
   TMetadata = unknown,
   TWarning = unknown,
-> = CompletedOperationResult<TRaw, TMetadata, TWarning> &
+> = CompletedOperationPayload<TRaw, TMetadata, TWarning> &
   Readonly<{
     text: string;
     segments: readonly TranscriptInterval[];
@@ -62,6 +94,15 @@ export type TranscriptionResult<
     language?: string;
     durationInSeconds?: number;
   }>;
+
+/** Public transcription result correlated to its exact media span. */
+export type TranscriptionResult<
+  TRaw = unknown,
+  TMetadata = unknown,
+  TWarning = unknown,
+> = WithOperationResultMeta<
+  TranscriptionPayload<TRaw, TMetadata, TWarning>
+>;
 
 /**
  * Flat stateless transcription function. Provider errors propagate unchanged.
@@ -80,9 +121,10 @@ export type Transcribe<
   TWarning = unknown,
 > = ((
   options: TranscribeOptions<TModel, TExtra>,
-) => Promise<TranscriptionResult<TRaw, TMetadata, TWarning>>) & (<TSelectedModel>(
-  options: Omit<TranscribeOptions<TModel, TExtra>, "model"> &
-    Readonly<{ model: TSelectedModel }> &
-    CompletedOperationModelGuard<TModel, TSelectedModel> &
-    RoutingCallOptions<TSelectedModel>,
-) => Promise<TranscriptionResult<TRaw, TMetadata, TWarning>>);
+) => Promise<TranscriptionResult<TRaw, TMetadata, TWarning>>) &
+  (<TSelectedModel>(
+    options: Omit<TranscribeOptions<TModel, TExtra>, "model"> &
+      Readonly<{ model: TSelectedModel }> &
+      CompletedOperationModelGuard<TModel, TSelectedModel> &
+      RoutingCallOptions<TSelectedModel>,
+  ) => Promise<TranscriptionResult<TRaw, TMetadata, TWarning>>);

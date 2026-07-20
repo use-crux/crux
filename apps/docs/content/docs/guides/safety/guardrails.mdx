@@ -53,14 +53,14 @@ const redactEmail = guardrail({
 
 Supported result actions:
 
-| Action    | Effect                                                                                |
-| --------- | ------------------------------------------------------------------------------------- |
-| `allow`   | Continue with the current subject.                                                    |
-| `block`   | Stop the call with `GuardrailBlockedError`.                                           |
-| `warn`    | Record a Safety decision without changing content.                                    |
-| `rewrite` | Replace the subject. Use `rewrite.kind` for `redact`, `mask`, `hash`, or `normalize`. |
-| `hold`    | Streaming only. Wait for more text before releasing the segment.                      |
-| `strip`   | Input media only. Remove the part in enforce mode; report intent in report mode.       |
+| Action    | Effect                                                                                                                                         |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `allow`   | Continue with the current subject.                                                                                                             |
+| `block`   | Stop the call with `GuardrailBlockedError`.                                                                                                    |
+| `warn`    | Record a Safety decision without changing content.                                                                                             |
+| `rewrite` | Replace the subject. Use `rewrite.kind` for `redact`, `mask`, `hash`, or `normalize`.                                                          |
+| `hold`    | Streaming only. Wait for more text before releasing the segment.                                                                               |
+| `strip`   | Media only. Remove an optional canonical part in enforce mode; report intent without mutation in report mode; block when the part is required. |
 
 Malformed or unknown results fail closed with `SafetyResultError`, including
 when JavaScript callers escape the TypeScript result type.
@@ -92,52 +92,53 @@ classifier calls are usually too expensive or stateful for every segment.
 
 Common boundaries:
 
-| Boundary                           | Subject                                       |
-| ---------------------------------- | --------------------------------------------- |
-| `boundary.input.text()`            | User input text before the provider call.     |
-| `boundary.input.media()`           | One canonical non-text input part.            |
-| `boundary.output.text()`           | Model output text before the caller sees it.  |
-| `boundary.output.object<T>()`      | Parsed structured output.                     |
-| `boundary.output.path<T>()('a.b')` | One typed structured-output path.             |
-| `boundary.tool.call()`             | Tool call name, id, and input.                |
-| `boundary.tool.result()`           | Tool result before it returns to the model.   |
-| `boundary.memory.write<T>()`       | Candidate memory write.                       |
-| `boundary.validation.feedback()`   | Corrective feedback before it is re-prompted. |
+| Boundary                           | Subject                                                                     |
+| ---------------------------------- | --------------------------------------------------------------------------- |
+| `boundary.input.text()`            | User input text before the provider call.                                   |
+| `boundary.input.media()`           | One canonical input-media part and its stable message/operation origin.     |
+| `boundary.output.text()`           | Model output text before the caller sees it.                                |
+| `boundary.output.media()`          | One canonical model/operation output-media part before public accumulation. |
+| `boundary.output.object<T>()`      | Parsed structured output.                                                   |
+| `boundary.output.path<T>()('a.b')` | One typed structured-output path.                                           |
+| `boundary.tool.call()`             | Tool call name, id, and input.                                              |
+| `boundary.tool.result()`           | Tool result before it returns to the model.                                 |
+| `boundary.memory.write<T>()`       | Candidate memory write.                                                     |
+| `boundary.validation.feedback()`   | Corrective feedback before it is re-prompted.                               |
 
 Guardrails can bind to several boundaries with `on: [...]`. A duplicate
 boundary in the same guardrail is a configuration error. Duplicate policy ids
 across attached policies are also invalid; use one policy with multiple
 boundaries when the same policy should apply in several places.
 
-## Multimodal Input
+## Multimodal Content
 
-Use `guardrail.media()` with `boundary.input.media()` for a declarative
-attachment policy. Crux checks the real canonical image, audio, video, or file
-part before provider normalization or provider I/O:
+Use `guardrail.media()` with either media boundary—or an input/output media
+tuple—for a declarative content policy. Crux checks the real canonical image,
+audio, video, or file part at its exact runtime boundary:
 
 ```ts title="safe-attachments.ts"
-import { boundary, guardrail } from '@use-crux/core/safety'
+import { boundary, guardrail } from "@use-crux/core/safety";
 
 export const safeAttachments = guardrail({
-  id: 'safe-attachments',
+  id: "safe-attachments",
   on: boundary.input.media(),
   run: guardrail.media({
     mediaTypes: {
-      allow: ['image/png', 'image/jpeg', 'application/pdf'],
+      allow: ["image/png", "image/jpeg", "application/pdf"],
     },
     size: {
       maxBytes: 10 * 1024 * 1024,
     },
     sources: {
-      allowHosts: ['cdn.example.com'],
+      allowHosts: ["cdn.example.com"],
       allowInline: true,
       allowProviderFiles: true,
       allowUrlUserInfo: false,
       allowUrlQuery: true,
     },
-    action: 'block',
+    action: "block",
   }),
-})
+});
 ```
 
 At least one of `mediaTypes`, `size`, or `sources` is required. MIME patterns
@@ -172,31 +173,30 @@ would happen while leaving the request unchanged:
 
 ```ts
 const attachmentRollout = guardrail({
-  id: 'attachment-rollout',
-  mode: 'report',
+  id: "attachment-rollout",
+  mode: "report",
   on: boundary.input.media(),
   run: guardrail.media({
     size: { maxBytes: 10 * 1024 * 1024 },
-    action: 'strip',
+    action: "strip",
   }),
-})
+});
 ```
 
 Use a guardrail here because attachments are caller input that must be accepted,
 blocked, or stripped before the first provider call. Constraints are retryable
 assertions about model output and cannot repair unsafe input. Input media
-rewrites remain tracked in [#212](https://github.com/use-crux/crux/issues/212),
-and model-produced media safety remains tracked in
-[#228](https://github.com/use-crux/crux/issues/228).
+rewrites remain tracked in [#212](https://github.com/use-crux/crux/issues/212).
 
 For policy logic beyond the built-in rules, provide a custom media callback.
 Narrowing `part.type` exposes that canonical variant's fields; the callback type
 is inferred from the boundary without type arguments.
 
-The callback also receives `messageIndex` and `partIndex`. These are coordinates
-in the caller's original arrays, before any earlier policy stripped a part, and
+The callback receives `{ part, origin }`. Narrow `origin.kind` before reading
+message, step, or completed-operation coordinates. Those indexes refer to the
+original canonical arrays before any earlier policy stripped a sibling, and
 the same coordinates appear in audit and safe observability records. The
-original part object is passed through unchanged for inspection.
+original part/source identity is passed through unchanged for inspection.
 
 In the default `mode: 'enforce'`, `strip` changes the messages sent to the
 provider. With `mode: 'report'`, it records a would-strip decision but sends the
@@ -207,6 +207,19 @@ original location.
 Media policies accept `allow`, `warn`, `block`, and `strip`. They cannot stream,
 return text actions such as `rewrite` or `hold`, or share an `on` tuple with a
 text boundary.
+
+Output media is guarded once per language step and on bounded-operation
+results. Reasoning remains output text and tool-call parts cannot be edited.
+For image generation, sibling strips reset `result.image` to the first retained
+entry and a final-image strip blocks. Speech audio is required, so an enforced
+strip blocks. Report mode preserves all result fields. Unmodified canonical
+parts, `raw`, provider metadata, warnings, and usage retain their identities;
+provider-native surfaces remain outside canonical Safety guarantees.
+
+For `stream()`, output media is completion-only. A block rejects `completion`,
+but text already emitted through `textStream` cannot be recalled, and the raw
+provider stream remains unguarded. See the complete
+[content-primitive matrix](/docs/reference/crux-core/safety-content-primitives).
 
 Use `boundary.input.text()` when a policy instead needs the `messageText()`
 projection. Text parts pass through verbatim and media parts become bounded

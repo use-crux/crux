@@ -1,11 +1,27 @@
 import { expectTypeOf, it } from "vitest";
 import { EditMode } from "@google/genai";
 import type {
+  GoogleGenerateImage,
+  GoogleGenerateSpeech,
   GoogleGeminiImageExtra,
   GoogleImageExtra,
   GoogleImagenEditExtra,
   GoogleImagenImageExtra,
+  GoogleTranscribe,
 } from "../src";
+import { createGoogleImageOperation } from "../src/image-generation";
+import { createGoogleSpeechOperation } from "../src/speech";
+import { createGoogleTranscriptionOperation } from "../src/transcription";
+
+type GoogleImagePayload = ReturnType<
+  ReturnType<typeof createGoogleImageOperation>["validate"]
+>;
+type GoogleTranscriptionPayload = ReturnType<
+  ReturnType<typeof createGoogleTranscriptionOperation>["validate"]
+>;
+type GoogleSpeechPayload = ReturnType<
+  ReturnType<typeof createGoogleSpeechOperation>["validate"]
+>;
 
 it("discriminates Google image endpoint extras", () => {
   const imagen = {
@@ -42,4 +58,19 @@ it("discriminates Google image endpoint extras", () => {
   expectTypeOf(shadowedCount).toMatchTypeOf<GoogleImagenEditExtra>();
   expectTypeOf(shadowedAspectRatio).toMatchTypeOf<GoogleImagenEditExtra>();
   expectTypeOf(shadowedSeed).toMatchTypeOf<GoogleImagenEditExtra>();
+
+  if (false) {
+    const imagePayload = {} as GoogleImagePayload;
+    const transcriptionPayload = {} as GoogleTranscriptionPayload;
+    const speechPayload = {} as GoogleSpeechPayload;
+    // @ts-expect-error provider image validation returns an ID-free payload.
+    imagePayload._meta;
+    // @ts-expect-error provider transcription validation returns an ID-free payload.
+    transcriptionPayload._meta;
+    // @ts-expect-error provider speech validation returns an ID-free payload.
+    speechPayload._meta;
+    void ({} as Awaited<ReturnType<GoogleGenerateImage>>)._meta.traceId;
+    void ({} as Awaited<ReturnType<GoogleTranscribe>>)._meta.spanId;
+    void ({} as Awaited<ReturnType<GoogleGenerateSpeech>>)._meta.traceId;
+  }
 });

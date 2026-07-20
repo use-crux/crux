@@ -1,7 +1,11 @@
 import { evaluate } from "../../../src/eval/evaluate";
 import { attachEvalTaskDescriptorForInternalUse } from "../../../src/eval/internal/task";
 import { createDeployedEvalRegistry } from "../../../src/runtime/eval-registry";
-import { createCruxRunId } from "../../../src/observability";
+import {
+  createCruxRunId,
+  createCruxSpanId,
+  createCruxTraceId,
+} from "../../../src/observability";
 import {
   fingerprintDeployedEvalCase,
   projectDeployedEvalVariants,
@@ -139,6 +143,10 @@ function remoteTask() {
       projectOutput: (result) => result.output,
       projectResponse: () => ({
         runId: createCruxRunId(),
+        _meta: {
+          traceId: createCruxTraceId(),
+          spanId: createCruxSpanId(),
+        },
         content: [],
         text: "yes",
         steps: [],

@@ -28,6 +28,7 @@ export function embedding(client: OpenAI, config: OpenAIEmbeddingConfig): DenseE
     name: config.name,
     dimensions,
     maxInputTokens: config.maxInputTokens ?? 8192,
+    version: embeddingVersion(config),
     batch: {
       maxSize: config.batch?.maxSize ?? 100,
       concurrency: config.batch?.concurrency ?? 1,
@@ -54,4 +55,12 @@ export function embedding(client: OpenAI, config: OpenAIEmbeddingConfig): DenseE
       }
     },
   })
+}
+
+/** Build a stable identity from vector-producing OpenAI request fields. */
+function embeddingVersion(config: OpenAIEmbeddingConfig): string {
+  return [
+    `openai:model=${JSON.stringify(config.model)}`,
+    ...(config.version === undefined ? [] : [`version=${JSON.stringify(config.version)}`]),
+  ].join(';')
 }

@@ -1,14 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 import { defer, type CruxDeferError } from "@use-crux/core";
-import { runWithDeferInvocation } from "@use-crux/core/internal/defer-host";
-import type { DeferLifetimeCapability } from "@use-crux/core/internal/defer-host";
-import { testLifetime } from "./test-lifetime";
+import { runWithDeferInvocation } from "@use-crux/core/internal/scope";
+import type { CruxHostBinding } from "@use-crux/core/internal/scope";
+import { testBinding } from "./test-binding";
 
 describe("host capability matrix", () => {
-  it("rejects inline registration when the lifetime marks supportsInline false", async () => {
+  it("rejects inline registration when the binding disables it", async () => {
     const callback = vi.fn();
-    const lifetime: DeferLifetimeCapability = {
-      ...testLifetime(() => {}),
+    const binding: CruxHostBinding = {
+      ...testBinding(() => {}),
       supportsInline: false,
       durableFinalization: true,
     };
@@ -20,7 +20,7 @@ describe("host capability matrix", () => {
           return "response";
         },
         {
-          lifetime,
+          binding,
           classifyOutcome: () => "success",
         },
       ),

@@ -5,6 +5,7 @@ import type {
   BoundaryInput,
   MediaPartLocation,
   MediaPartSubject,
+  MediaSafetyTargetId,
   SafetyTargetId,
   SubjectOf,
 } from '../boundary'
@@ -29,12 +30,16 @@ export type GuardrailRunResult<TValue = string> =
   | { readonly action: 'hold' }
 
 /**
- * Result returned by a guardrail attached to `boundary.input.media()` whose
- * callback receives a {@link MediaPartSubject}.
+ * Result returned by a guardrail attached to `boundary.input.media()` or
+ * `boundary.output.media()`. The callback receives a
+ * {@link MediaPartSubject}; narrow `subject.part.type` and
+ * `subject.origin.kind` before reading variant-specific fields.
  *
- * `strip` removes the current part only in enforce mode; report mode records
- * the decision without changing provider input. Warn, block, and strip
- * results require a reason.
+ * `strip` removes the current canonical part only in enforce mode. It escalates
+ * to a block when removal would violate a required group, such as the final
+ * generated image, speech audio, transcription audio, or an edit mask's image
+ * dependency. Report mode records intent without changing input or result.
+ * Warn, block, and strip results require a reason.
  */
 export type MediaGuardrailRunResult =
   | { readonly action: 'allow' }
@@ -42,29 +47,32 @@ export type MediaGuardrailRunResult =
   | { readonly action: 'block'; readonly reason: string }
   | { readonly action: 'strip'; readonly reason: string }
 
-type IsMediaBoundary<B extends BoundaryInput> = [BoundaryIdOf<B>] extends ['user.input.media'] ? true : false
+type IsMediaBoundary<B extends BoundaryInput> = [BoundaryIdOf<B>] extends [MediaSafetyTargetId] ? true : false
 
-type ContainsMediaBoundary<B extends BoundaryInput> = 'user.input.media' extends BoundaryIdOf<B> ? true : false
+type ContainsMediaBoundary<B extends BoundaryInput> = [Extract<BoundaryIdOf<B>, MediaSafetyTargetId>] extends [never]
+  ? false
+  : true
 
-type IsMixedMediaBoundary<B extends BoundaryInput> = ContainsMediaBoundary<B> extends true
-  ? Exclude<BoundaryIdOf<B>, 'user.input.media'> extends never
-    ? false
-    : true
-  : false
+type IsMixedMediaBoundary<B extends BoundaryInput> =
+  ContainsMediaBoundary<B> extends true
+    ? Exclude<BoundaryIdOf<B>, MediaSafetyTargetId> extends never
+      ? false
+      : true
+    : false
 
-type GuardrailBoundaryInput<B extends BoundaryInput> = IsMixedMediaBoundary<B> extends true
-  ? B & { readonly 'A media guardrail can target only boundary.input.media()': never }
-  : B
+type GuardrailBoundaryInput<B extends BoundaryInput> =
+  IsMixedMediaBoundary<B> extends true
+    ? B & {
+        readonly 'A media guardrail can target only media boundaries': never
+      }
+    : B
 
-type GuardrailRunResultFor<B extends BoundaryInput> = IsMediaBoundary<B> extends true
-  ? MediaGuardrailRunResult
-  : GuardrailRunResult<SubjectOf<B>>
+type GuardrailRunResultFor<B extends BoundaryInput> =
+  IsMediaBoundary<B> extends true ? MediaGuardrailRunResult : GuardrailRunResult<SubjectOf<B>>
 
 /** Callable guardrail body, optionally carrying first-party strategy metadata. */
 export interface GuardrailRun<B extends BoundaryInput> {
-  (subject: SubjectOf<B>, ctx: SafetyRunContext<B>):
-    | GuardrailRunResultFor<B>
-    | Promise<GuardrailRunResultFor<B>>
+  (subject: SubjectOf<B>, ctx: SafetyRunContext<B>): GuardrailRunResultFor<B> | Promise<GuardrailRunResultFor<B>>
   readonly strategy?: {
     readonly kind: string
     readonly config: Readonly<Record<string, unknown>>
@@ -123,10 +131,14 @@ export interface GuardrailAuditEntry {
   readonly phase: 'input' | 'output'
   readonly action: string
   readonly reason?: string
+  /** Safe model id for this media evaluation, when one is known. */
+  readonly model?: string
   /** Safe original coordinates for media-boundary entries. */
   readonly location?: MediaPartLocation
   /** Present only when stripping the part immediately became a terminal block. */
   readonly escalatedToBlock?: true
+  /** Present only when an enforced transcript rewrite removed segments and words. */
+  readonly timedTranscriptDetailRemoved?: true
   readonly durationMs: number
 }
 
@@ -224,10 +236,7 @@ function isRewriteKind(value: unknown): value is GuardrailRewriteKind {
 }
 
 function isSafetyFindings(value: unknown): value is readonly SafetyFinding[] {
-  return (
-    Array.isArray(value) &&
-    value.every((finding) => isRecord(finding) && typeof finding.type === 'string')
-  )
+  return Array.isArray(value) && value.every((finding) => isRecord(finding) && typeof finding.type === 'string')
 }
 
 function resultError(

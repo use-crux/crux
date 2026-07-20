@@ -313,6 +313,7 @@ export type {
   CruxExperimentalIndexerNativeConfig,
   CruxExperimentalIndexerNativeEngine,
   CruxGenerationConfig,
+  CruxHostBinding,
   CruxIndexerConfig,
   CruxIndexerExtensionReference,
   CruxIndexerExtensionTrustMode,
@@ -538,6 +539,7 @@ export type {
   SafetyStream,
   SafetyProtocolEvent,
 } from "./safety/session";
+export type { SafetyAudit } from "./safety/audit";
 export { createSafetyPlugin } from "./safety/plugin";
 export type { SafetyPolicy } from "./safety/plugin";
 
@@ -602,6 +604,8 @@ export type {
 // Type exports — generation lifecycle domain (settings, adaptation, usage)
 export type {
   GenerationSettings,
+  GenerationMeta,
+  GenerateResultMeta,
   HasToolCallStopCondition,
   MaxStepsStopCondition,
   PromptAdaptation,
@@ -905,6 +909,7 @@ export type {
   FinalStepInfo,
   GenerateResult,
   StreamCompletion,
+  StreamCompletionPayload,
   StreamResult,
 } from "./adapter/index";
 
@@ -917,12 +922,17 @@ export type {
   ExecutorRequest,
   StructuredRequest,
   ExecutorStep,
+  ExecutorModelStep,
+  StepContentEdit,
+  StepTransformer,
   StepDirective,
   StepObserver,
   ExecutorOutcome,
   ExecutorMeta,
   PendingToolApproval,
   StructuredAttempt,
+  ExecutorProviderStreamHandle,
+  ExecutorStreamCompletionPayload,
   ExecutorStreamHandle,
   ExecutorStreamMeta,
   CruxExecutor,

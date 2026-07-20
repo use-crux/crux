@@ -575,16 +575,29 @@ describe('runtime-backed flows', () => {
       autoStartMaintenance: false,
     })
     const crux = config({ runtime })
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
     const cancelledFlow = flow('cancel-from-handler', async (scope) => {
       scope.cancel('not needed')
     })
 
     const result = await cancelledFlow.run({ flowId: 'flow_cancel_from_handler' })
+    await observe.flush()
+    const owner = transport.records.find(
+      (record) =>
+        record.type === 'span:start' &&
+        record.primitive === 'flow.run' &&
+        record.attributes.flowId === 'flow_cancel_from_handler',
+    )
 
     expect(result).toEqual({
       status: 'cancelled',
       flowId: 'flow_cancel_from_handler',
       cancelReason: 'not needed',
+      _meta: {
+        traceId: owner?.traceId,
+        spanId: owner?.spanId,
+      },
     })
     const snapshot = await runtime.store.state.getSnapshot('flow_cancel_from_handler' as FlowId, {
       namespace: 'tenant-a',

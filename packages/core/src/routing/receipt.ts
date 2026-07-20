@@ -113,7 +113,7 @@ export function ensureRoutingResult<R>(result: R): RoutableResult<R> {
     const clone = Object.assign(Object.create(Object.getPrototypeOf(result)), result) as R & {
       _meta: Record<string, unknown>
     }
-    clone._meta = { ...meta }
+    clone._meta = cloneRoutingMetadata(meta)
     return clone as RoutableResult<R>
   }
 
@@ -138,7 +138,7 @@ export function withRoutingReceipt<R>(
     Object.create(Object.getPrototypeOf(normalized)),
     normalized,
   ) as R & { _meta: Record<string, unknown>; routing?: RoutingReceipt }
-  clone._meta = { ...normalized._meta }
+  clone._meta = cloneRoutingMetadata(normalized._meta)
   clone.routing = receipt
   return clone as RoutableResult<R>
 }
@@ -225,4 +225,13 @@ export function withRoutingFirstTokenAt(
 
 function isStringRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/** Clone metadata without discarding non-enumerable compatibility capabilities. */
+function cloneRoutingMetadata(
+  metadata: Record<string, unknown>,
+): Record<string, unknown> {
+  const clone = Object.create(Object.getPrototypeOf(metadata)) as object
+  Object.defineProperties(clone, Object.getOwnPropertyDescriptors(metadata))
+  return clone as Record<string, unknown>
 }

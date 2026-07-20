@@ -13,7 +13,8 @@
 
 import type { AnyPromptConfig } from '../prompt/prompt-types'
 import type { ResolvedPrompt } from '../resolver/types'
-import type { TraceMeta } from '../generation/types'
+import type { GenerationMeta } from '../generation/types'
+import type { CruxSpanId, CruxTraceId } from '../observability'
 
 // ─────────────────────────────────────────────────────────────────
 // Runtime Middleware
@@ -62,10 +63,11 @@ export interface PromptMiddlewareArgs {
 export interface MiddlewareResult {
   text?: string
   object?: unknown
-  _meta?: TraceMeta & {
+  _meta?: GenerationMeta & {
     streaming?: { ttftMs?: number; tokensPerSecond?: number; totalChunks?: number }
     fallback?: { attempts: number; failedModels: string[]; details: unknown[] }
-    traceId?: string
+    traceId?: CruxTraceId
+    spanId?: CruxSpanId
     _streamCompletion?: Promise<MiddlewareResult>
     semanticCache?: Record<string, unknown>
   }

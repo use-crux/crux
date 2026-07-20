@@ -40,3 +40,47 @@
   --color-fd-primary-foreground: oklch(15% 0.01 192);
   --color-fd-ring: oklch(75% 0.10 192 / 0.3);
 }
+
+/* ── Blog (Crux Blog design) ─────────────────────────── */
+
+.blog-type-badge {
+  color: oklch(42% 0.09 var(--hue));
+  border-color: oklch(45% 0.09 var(--hue) / 0.35);
+  background: oklch(45% 0.09 var(--hue) / 0.08);
+}
+
+.dark .blog-type-badge {
+  color: oklch(72% 0.09 var(--hue));
+  border-color: oklch(60% 0.09 var(--hue) / 0.35);
+  background: oklch(60% 0.09 var(--hue) / 0.08);
+}
+
+.blog-avatar {
+  color: oklch(38% 0.07 var(--hue));
+  background: oklch(70% 0.05 var(--hue) / 0.35);
+  border: 1px solid oklch(50% 0.08 var(--hue) / 0.4);
+}
+
+.dark .blog-avatar {
+  color: oklch(80% 0.07 var(--hue));
+  background: oklch(35% 0.05 var(--hue) / 0.35);
+  border-color: oklch(60% 0.08 var(--hue) / 0.4);
+}
+
+.blog-cover {
+  background-image: linear-gradient(to right, var(--color-fd-border) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--color-fd-border) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.blog-cover-glow {
+  background: radial-gradient(ellipse 80% 90% at 25% 100%, oklch(55% 0.09 var(--hue) / 0.14), transparent 65%);
+}
+
+.blog-cover-motif {
+  color: oklch(45% 0.09 var(--hue));
+}
+
+.dark .blog-cover-motif {
+  color: oklch(75% 0.09 var(--hue));
+}

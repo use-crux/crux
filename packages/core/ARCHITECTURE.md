@@ -46,6 +46,41 @@ Crux public APIs use names that describe the thing a user is declaring or doing:
 - Use `createX()` for runtime infrastructure factories that produce machinery rather than domain definitions: transports, middleware, plugins, reporters, stores, adapter clients, pipelines, and other operational helpers.
 - Use verbs for one-off operations: `generate()`, `stream()`, `retrieve()`, `indexDocuments()`, `signalFlow()`, `cancelFlow()`, and similar execution functions.
 - Avoid `defineX()` for new public Crux APIs. The project is pre-launch, so naming changes are breaking changes rather than deprecated aliases.
+- Keep platform names on Runtime composers, name host/retention bindings for their mechanism, reserve `withCrux` for framework lifecycle boundaries, and use `withCruxBuild`-style names for build plugins.
+
+### Host retention bindings
+
+`config({ host })` installs a provider-neutral `CruxHostBinding` in the same
+restorable hook layer as `runtime`. Every configured execution root lazily owns
+one functional retention gate: completion-gated invocation tasks queue until
+the platform callback runs, while primitive drains start immediately and extend
+the shared live pending set. The first pending signal calls
+`binding.retain(work)` exactly once. A retention-port failure propagates after
+deterministic sealing because Core could not establish the acceptance guarantee.
+
+Core exports `node()` from `/defer/node`; `@use-crux/next`,
+`@use-crux/cloudflare`, and `@use-crux/vercel` inject `after()`,
+`ExecutionContext.waitUntil()`, and Vercel `waitUntil()` respectively. Core does
+not detect platforms or import their SDKs.
+
+### Execution scope boundaries
+
+Core opens execution scopes at its real runtime boundaries: adapter calls,
+agent-member turns, tool executions, Safety sessions, and flow steps. The
+Convex runtime bridge adds the corresponding `bridge-run` boundary in its own
+package. Boundaries are descriptor-only until code calls `defer()`; the first
+registration lazily creates the exact scope's controller and shares
+invocation-global limits, durable staging, commit tracking, and evidence with
+the root.
+
+Call-shaped work uses `runScope()`. Streaming adapters use `openScope()` and
+restore one immutable carrier frame around setup, each Core-owned raw-stream
+iterator segment, and completion; provider-owned raw SDK objects are never
+wrapped. Inner scope drains start as soon as that scope closes and extend the
+root pending set, allowing tool cleanup to overlap later request work without
+losing root retention. Replayable flow steps still enforce
+`DEFER_REPLAY_UNSAFE`; their scope exists for attribution and internal work,
+not as an escape from replay rules.
 
 This keeps the SDK readable at call sites: users define nouns once, execute verbs when work happens, and reach for `createX()` only when building infrastructure.
 
@@ -140,10 +175,12 @@ compatibility shims, while every implementation lives in a domain folder.
 │   ├── plugin.ts / merge-runtime.ts   CruxPlugin, applyPlugins(), mergeHooks() layered composition
 │   ├── middleware.ts / instrumentation-hooks.ts   per-call hook function types + the graph-record subscribers contract
 │   ├── execution-context.ts   session/execution context helpers
+│   ├── internal/middleware-result-finalizer.ts   Private symbol-carried current-operation result finalizer for layered middleware
 │   └── types.ts        Runtime middleware contracts (PromptMiddleware, PromptMiddlewareArgs, MiddlewareResult)
 ├── generation/         Provider-neutral generation lifecycle policy
 │   ├── index.ts        Curated barrel: messages, fallback, retry, validation-retry, JSON repair + @internal orchestration
 │   ├── orchestrate.ts  Shared adapter orchestration (generic OrchestrationSpec<T>) split across observability/result-meta/timeout/stream-interception concern files
+│   ├── stream-observability.ts  Private descriptor-safe stream observation wrapper preserving one immediate/completion operation pair
 │   ├── fallback.ts / retry.ts / validation-retry.ts   fallback policy, retry-with-backoff, validation-feedback retry types
 │   ├── repair-json.ts  repairJsonText() — zero-cost JSON text repair (markdown fences, trailing commas, bracket extraction)
 │   ├── messages.ts     canonical Message type + helpers
@@ -161,6 +198,16 @@ compatibility shims, while every implementation lives in a domain folder.
 │   ├── sanitize.ts     Injection-defense helpers (escapeXml, safe, raw, limit, wrap, userContent, truncate, detectSuspiciousPatterns)
 │   ├── tokenizer.ts    Pluggable token counter (countTokens/setTokenizer; default chars/4)
 │   └── schema-compat.ts  sanitizeJsonSchema() — provider JSON-schema sanitization (@internal)
+├── scope/              Internal execution-scope kernel shared by Core and first-party integrations
+│   ├── internal.ts     Curated `@use-crux/core/internal/scope` SPI; not application-facing
+│   ├── kernel.ts       Scope lifecycle, nesting, close hooks, write routing, manual controllers, and root-idle waits
+│   ├── contracts.ts    Typed scope/controller/close-hook contracts and the sealed-write error
+│   ├── facets.ts       Nominal typed facet slots with nearest-ancestor resolution
+│   ├── lifecycle.ts    Settlement helpers shared by automatic and manual close paths
+│   ├── overrides.ts    Immutable execution-local facet overrides on the canonical carrier
+│   ├── pending.ts      Live root pending-set and drain-to-empty microtask re-check
+│   ├── state.ts        Functional scope state, facet writes, sealing, and reroute policy
+│   └── types.ts        Closed scope kinds, descriptors, policies, outcomes, state, and sealing reasons
 ├── observability/
 │   ├── index.ts        Barrel: canonical graph contract, presentation read models, schemas, ID helpers, observe runtime, transports
 │   ├── contract.ts     Wire-only canonical graph records; branded IDs; taxonomies
@@ -170,6 +217,8 @@ compatibility shims, while every implementation lives in a domain folder.
 │   ├── turn-decision-report/  Per-turn TurnDecisionReport explanation read model (report/items/evidence/source-coverage/targets/shared), barrelled by turn-decision-report.ts
 │   ├── schema.ts       Zod schemas for graph records and batches
 │   ├── ids.ts          Runtime-owned public graph ID helpers
+│   ├── result-meta.ts  Public operation-result metadata types and run-reference contract
+│   ├── internal/result-meta.ts  Private descriptor-preserving result finalization and persistence stripping
 │   ├── observe.ts      Non-blocking runtime emitters with a zero-listener fast path, manual/open run lifecycles for serverless resumes, AsyncLocalStorage context propagation with synchronous no-ALS degradation, flush/shutdown
 │   ├── context.ts      AsyncLocalStorage acquisition, synchronous fallback context frames, and the internal no-ALS test hook
 │   ├── delivery/       Functional delivery engine, option normalization, batching/chunking, retry timers, lifecycle hooks, and flush timeouts
@@ -179,7 +228,6 @@ compatibility shims, while every implementation lives in a domain folder.
 │   ├── continuation.ts W3C/Crux propagation carrier: create/sanitize/inject/extract, continuation identity
 │   ├── handler.ts       withObservableInvocation() — generic serverless wrapper: scoped host lifecycle, bounded final drain
 │   ├── node.ts (subpath `/observability/node`)     withNodeObservableInvocation() — Lambda-style (event, context) adapter over handler.ts
-│   ├── workers.ts (subpath `/observability/workers`)  withWorkersObservableInvocation() — structural ExecutionContext wrapper; registers the final drain with `ctx.waitUntil()` instead of awaiting it, so it never needs `observe.withHostLifecycle()`'s AsyncLocalStorage-dependent ambient scoping
 │   └── fixtures/       Shared TS/Go contract fixtures
 ├── routing/
 │   ├── index.ts        Barrel: router(), split(), retry(), cascade(), fallback(), resolveModel(), receipt helpers, and error types
@@ -224,11 +272,16 @@ compatibility shims, while every implementation lives in a domain folder.
 ├── indexing/
 │   └── index.ts        indexer() + corpus() + indexingPipeline() — document transforms, structured/parent-child/semantic chunkers, stage cache, generation-aware promotion, source ledger sync, dry runs, and store writes
 ├── cost/
-│   └── index.ts        withCostTracking(), modelPricing(), CostLimitError — per-call cost attribution and canonical budget spans
+│   ├── index.ts        withCostTracking(), modelPricing(), CostLimitError — per-call cost attribution and canonical budget spans
+│   └── internal/stream-completion.ts  Private legacy/current stream-completion capability detection for cost tracking
 ├── memory/
-│   ├── index.ts        Barrel: memory(), memoryBlock(), recentMessages(), workingState(), episodes(), facts(), procedures()
+│   ├── index.ts        Barrel: memory(), memoryBlock(), recentMessages(), workingState(), episodes(), facts(), procedures(), reflections()
 │   ├── block-system.ts Block memory implementation
-│   ├── types.ts        Memory types
+│   ├── contracts.ts    Composed memory contracts
+│   ├── block-contracts.ts Block, runtime, capture, and proposal contracts
+│   ├── namespace.ts    Shared sync/async namespace resolution
+│   ├── rendering.ts    Entry strategies and token-budget rendering
+│   ├── policy-safety.ts Candidate policy application and observability
 │   └── utils.ts        Memory helpers
 ├── plan/
 │   ├── index.ts        Barrel: plan, tasks, task specs, types
@@ -241,6 +294,7 @@ compatibility shims, while every implementation lives in a domain folder.
 │   └── index.ts        Barrel: canonical @use-crux/core/tasks import (re-exports task APIs and types, incl. TaskCompleteArgs, from plan/)
 ├── compaction/
 │   ├── types.ts        GenerateTextFn, GenerateObjectFn (SDK-agnostic)
+│   ├── compact-conversation.ts  Core-owned observed conversation compaction; Convex name-identically re-exports it
 │   ├── summarize.ts    summarizeMessages() — stateless batch LLM summarization
 │   ├── sliding-window.ts  createSlidingWindow() — rolling window with auto-eviction
 │   ├── budget.ts       createBudgetManager() — advisory pressure tracking
@@ -252,6 +306,7 @@ compatibility shims, while every implementation lives in a domain folder.
 │   └── types.ts        JudgeConfig, JudgeResult, JudgeInstance, JudgeScoreOptions
 ├── flow/
 │   ├── index.ts        Barrel — flow, signalFlow, cancelFlow, listFlows, createFlowId
+│   ├── result.ts       Private FlowResult construction, current-operation finalization, and persisted-result sanitization
 │   └── scope.ts        flow(name, handler), FlowHandle<T, TInput>, FlowRunOptions, FlowResumeOptions, FlowScope<TInput> — input inferred from the handler's second parameter, flow.input restored for scope-aware helpers, flow.results (auto-populated Record<string, unknown>), auto-pass (step fns accepting FlowScope receive it automatically), suspend/resume/cancel — throw-to-unwind pattern with RecordStore persistence
 ├── agent/
 │   ├── index.ts        Barrel: agent, AnyAgent, InferAgentInput, InferAgentOutput, composition utilities, blackboard, handoff, delegate
@@ -305,6 +360,9 @@ compatibility shims, while every implementation lives in a domain folder.
     ├── provider-runtime/   defineSingleTurnProviderBundle() and defineProviderRuntime() — public provider authoring compilers
     ├── spec.ts             AdapterSpec — provider contract for SDKs WITHOUT a tool loop (core drives)
     ├── types.ts            Canonical adapter types: AdapterResponse, CallArgs, StreamHandle, ToolResultEntry
+    ├── completed-operation/runner-types.ts  Provider payload versus observed completed-media result contracts
+    ├── executor-stream-types.ts  SDK-loop provider/public stream-handle type split
+    ├── stream-result-types.ts  Public stream result and completion projections
     ├── codec.ts            ResolvedPrompt → CallArgs helper for public adapter codec wrappers
     ├── call-handle.ts      Public CallHandle plus incomplete/stale handle errors
     ├── define-adapter.ts   adapter() factory — thin AdapterSpec wiring to the execution session, plus adapter-bound compositions
@@ -320,6 +378,7 @@ compatibility shims, while every implementation lives in a domain folder.
     │   ├── generate-core.ts / stream-core.ts   Crux-owned one-step provider loop
     │   ├── handle-core.ts   Manual pause/resume shell over generate-core for prepare/step/finish
     │   ├── generate-sdk.ts / stream-sdk.ts     SDK-owned loop boundary, timeout and replay wiring
+    │   ├── stream-legacy-completion.ts   Private compatibility bridge for legacy raw stream completion metadata
     │   └── shared helpers  Prompt resolution, message shaping, metadata/cache replay, stream safety, and structured retry helpers
     ├── testing.ts          Testing barrel: providerRuntimeConformance(), adapterSpecConformance(), transcriptCodecConformance(), fakeLoopRuntime(), loopRuntimePortConformance()
     ├── testing/
@@ -416,9 +475,17 @@ Built-in chunkers are intentionally separate strategies:
 
 Replacement is generation-aware. New chunks and parent records are written with a fresh `generationId` and `active: true`; only after the write succeeds does the indexed knowledge read-model boundary mark previous generations for the same source inactive. The same internal boundary owns chunk/parent key derivation, vector metadata projection, active chunk search filters, vector-hit hydration, parent lookup, source deletion, and namespace clearing so indexing, retrieval, and parent expansion share one persisted contract.
 
-Pipeline caching is stage-level, not whole-indexer caching. When `cache: true` is configured, document transforms, chunking, and chunk transforms are cached by source hash, previous stage hash, stage identity, and stage fingerprint. `cache: 'bypass'` skips reads/writes for one call, while `cache: 'refresh'` recomputes and replaces cached outputs.
+Pipeline caching is stage-level, not whole-indexer caching. When `cache: true` is configured, document transforms, chunking, and chunk transforms are cached by source hash, previous stage hash, stage identity, and stage fingerprint. Final dense and sparse vectors are cached separately as ordered source bundles keyed by source id, vector kind, embedding fingerprint, and a hash of ordered chunk content. Source metadata and generated chunk ids are deliberately absent: identical ordered provider input is safe to reuse even when an `indexVersion` change requests a new generation. Hits scatter back into invocation order; all misses for one kind flatten into one `embedMany()` call and are strictly validated before any cache or generation write.
+
+`cache: 'bypass'` skips reads/writes for one call, while `cache: 'refresh'` recomputes and replaces cached outputs. Dry runs may populate stage entries even though they do not write indexed chunks or corpus ledger records. Dense runs complete before sparse runs, preserving provider load characteristics and exact hybrid ordering.
 
 The source ledger stores the emitted `SourceStageRecord[]` for indexed sources. The same records flow through `index:end` and `corpus:source:*` instrumentation so devtools, CLI/TUI, and OTel can show stage counts, cache hits, chunk counts, parent counts, durations, and failures without inventing a parallel observability model.
+
+Embedding bundles emit one privacy-safe `embedding` stage record per source and
+vector kind. A full hit still produces its `indexing.pipeline` stage span and
+bounded `indexing.report`, but does not fabricate an `embedding.call` span.
+Artifacts contain counts and hashes, never chunk text, vector values, or raw
+fingerprints.
 
 ## Resolution Pipeline
 
@@ -500,7 +567,7 @@ The entry-resolution half of the pipeline lives in `resolver/` (use-crux/crux#29
 - **`resolver/driver.ts`** — `resolveUse()` walks lowered contributors: gate facts emit first, children merge before the entry's own contribution, `Contribution.use` re-enters the pipeline with branch-local indices, tool collisions throw with the owning entry attributed, and all `context.contribution` artifact emission happens at exactly two sites (gate steps + contribution facts).
 - **`resolver/skills.ts`** — the cross-entry collector for skills. The shared pass calls it from the post-merge phase before either `PromptResolution.args` or `PromptResolution.inspect()` is projected, so skill indexing, lazy registry fetches, and loaded-skill contexts cannot drift between resolve and inspect. Registry fetch, skill-index generation, and activation-session creation all flow through the `SkillSourcePort` (no direct skill-module imports in the pass). Resolve-mode skill tools are bound to a `SkillActivationSession` and the resolved prompt carries `_skillSession` as the explicit activation boundary.
 - **`resolver/ports.ts`** — the pipeline's ambient capabilities as injectable ports (pure contracts): `ObservabilityPort` (spans + artifact/edge choreography), `SkillSourcePort` (registry fetch + index + activation-session creation), `ContextCachePort`, `ClockPort`, `TokenizerPort` (every reported token count flows through it, so a deterministic counter pins budget behavior), `policy()` (auto-escape / security warnings), `DiagnosticsPort`, `InstrumentationPort`. The production adapters live in `resolver/default-ports.ts`; `withDefaultResolverPorts()` wraps the pre-existing globals lazily, so `setHooks()` / `configureObservability()` / `setTokenizer()` keep their install-takes-effect-immediately semantics. `compilePrompt(config, { ports })` binds the pipeline to explicit ports; in-memory fakes for every port — plus the one-call `createResolverFakes()` bundle — ship from `@use-crux/core` (`resolver/fakes.ts`).
-- Contributor-internal I/O (memory stores, retriever indexes, blackboard stores) deliberately has **no pipeline port** — those factories take their dependencies explicitly (`memory({ store })`), which is the correct seam.
+- Contributor-internal I/O (memory stores, retriever indexes, blackboard stores) deliberately has **no pipeline port** — those factories take their dependencies explicitly (`memory({ records })`), which is the correct seam.
 - The lowered `Contributor` contract types are exported from `@use-crux/core` as advanced API for adapter and primitive authors. The lowering, driver, and schema collection functions stay internal to the compiled prompt boundary. The everyday authoring surface is `contributor()` — a first-class `use:` entry with `when` gating, nested `use`, and full-channel contributions through the same channels as other entries.
 - Memory entries contribute their context (reported with family `memory`) and a memory binding; memory tools are opt-in via `memory.asTools()` and are neither merged nor reported as injected. The legacy sync `flattenContextEntries()` pass has been removed — the driver is the only gating code path.
 
@@ -645,7 +712,16 @@ Cache keys include:
 - `maxInputTokens`
 - preprocessor fingerprints
 - truncation policy
+- declared vector-semantic `version`
 - normalized input hash
+
+Every `embedding()` instance exposes the stable serialization of those
+vector-producing fields as `fingerprint`. Operational policy such as batching,
+retry, rate limiting, and cache placement is excluded. Provider helpers merge
+their model/request identity with an optional user `version`; untyped headers
+and provider options are never serialized. Structural embedding implementations
+may omit `fingerprint`, in which case indexing computes them on every run rather
+than guessing whether cached vectors remain compatible.
 
 Embedding cache access emits nested `cache.lookup` spans with cache namespace, hit/miss counts, write counts, and per-entry hit/miss events. Raw input text and raw vector values are never emitted to OTel. Devtools/CLI/TUI receive bounded embedding metadata such as cache hits, misses, retries, truncated counts, duration, dimensions, usage, and cost.
 
@@ -704,7 +780,12 @@ Loaders expose two read modes. `load()` yields `{ ok: true, document } | { ok: f
 
 `corpus()` sits next to `indexer()` because it is still write-side retrieval infrastructure. The indexer knows how to prepare and write chunks for a single operation. The corpus owns the source ledger around repeated operations: content hashes, metadata hashes, index-pipeline fingerprints, source status, stale-source policy, and dry-run planning. This keeps incremental sync explicit without pushing loader state into `@use-crux/ingest` or query semantics into `@use-crux/core/retrieval`.
 
-Corpus and indexing observability write the canonical graph directly. `indexer().chunk()`, `indexer().indexDocuments()`, and `indexer().indexChunks()` open `indexing.pipeline` spans; document transforms, chunkers, and chunk transforms open child `indexing.pipeline` stage spans and attach bounded `indexing.report` artifacts with cache status, hashes, counts, and timings. `corpus().sync()` opens `corpus.sync`, records loader results as `ingest.parse` with `ingest.report`, nests indexing work below the corpus span, and attaches a `corpus.report` source-ledger summary artifact. Parser execution opens `ingest.parse` spans with parser name, format, byte length, part count, warning count, and error status; devtools, subscribers, and `@use-crux/otel` consume those records from the same spine.
+In `appendOnly` mode, an index-fingerprint-only change is intentionally reported
+and skipped without updating the source ledger. The same source remains
+`indexChanged` on later syncs until a non-append-only sync accepts the new index
+identity.
+
+Corpus and indexing observability write the canonical graph directly. `indexer().chunk()`, `indexer().indexDocuments()`, and `indexer().indexChunks()` open `indexing.pipeline` spans; document transforms, chunkers, chunk transforms, and source-bundle embedding stages open child `indexing.pipeline` spans and attach bounded `indexing.report` artifacts with cache status, hashes, counts, and timings. `corpus().sync()` opens `corpus.sync`, records loader results as `ingest.parse` with `ingest.report`, nests indexing work below the corpus span, and attaches a `corpus.report` source-ledger summary artifact. Parser execution opens `ingest.parse` spans with parser name, format, byte length, part count, warning count, and error status; devtools, subscribers, and `@use-crux/otel` consume those records from the same spine.
 
 ## Durable Runtime Engine
 
@@ -1155,6 +1236,7 @@ memory()
   ├── episodes()        Append-only event memory with dense recall; optional `retention` policy + `evict()` GC telemetry
   ├── facts()           Extracted declarative knowledge, proposed by default
   ├── procedures()      Extracted operating memory, proposed by default
+  ├── reflections()     Generated higher-order memory with direct reflection
   └── memoryBlock()     Custom render/tools/capture/approval behavior
 ```
 
@@ -1180,27 +1262,15 @@ Crux public storage is split by capability:
 
 The in-memory implementations are Map-backed and suitable for testing and single-process development: `inMemoryRecordStore()`, `inMemoryVectorStore()`, `inMemoryAssetStore()`, and `inMemoryStorage()`.
 
-### Tool Description Override
-
-Memory primitives accept an optional `tool?: ToolConfig` in their config. For `blackboard()`, `tool.description` is appended as domain guidance to focused `.asTools()` descriptions. Focused blackboard tools can also be disambiguated with `tools.prefix` when multiple boards are injected into the same prompt.
-
-The `ToolConfig` type is exported from `@use-crux/core/memory`:
-
-```ts
-interface ToolConfig {
-  description: string;
-}
-```
-
 ### Working Memory Internals
 
-A thin wrapper around a single store key. Schema validation runs on every `set()` and `patch()`. TTL support uses `updatedAt` timestamp comparison against `Date.now()` — expired entries return `null` from `get()` but are only cleaned up lazily.
+A thin wrapper around a single block-scoped record key. Schema validation runs on every `set()` and `patch()`.
 
 `patch()` merges via `{ ...existing, ...partial }` then calls `set()` internally, so validation runs on the merged result.
 
 ### Episodic Memory Internals
 
-Keys are auto-generated as `episodic:{id}:{timestamp}-{counter}-{random}`. The `record()` method optionally embeds content via the provided `embed` function before storing.
+Keys use the standard block prefix plus an auto-generated episode ID. The `record()` method optionally embeds content via the provided `embed` function before storing.
 
 `recall()` has two paths:
 
@@ -1209,15 +1279,9 @@ Keys are auto-generated as `episodic:{id}:{timestamp}-{counter}-{random}`. The `
 
 Both paths respect `filter` for metadata matching.
 
-### Semantic Memory Internals
+### Extractive Memory Internals
 
-Like episodic but adds confidence scoring. Each entry stores `confidence` and `confirmedAt` in metadata. Time-based decay is computed on read:
-
-```
-effectiveConfidence = storedConfidence × 2^(-elapsed / decayMs)
-```
-
-`confirm()` resets confidence to 1.0 and updates `confirmedAt`. `prune()` evaluates decay for all entries and deletes those below the threshold.
+`facts()` and `procedures()` share the extractive block path. Capture extracts candidates, applies policy, then proposes them by default; `write.mode` can instead be `auto` for immediate writes or `manual`, where capture extracts nothing automatically and writes happen only through direct methods. Direct `add()`, `find()`, `list()`, `delete()`, and `render()` methods use `MemoryRuntimeOptions` with a required `records` store and optional `storage` and `vectors`.
 
 ## Compaction Primitives
 
@@ -1483,7 +1547,7 @@ The crux Convex component (`@use-crux/convex/convex.config`) provides persistenc
 
 - No manual schema or function references needed
 - Works with memory blocks, blackboards, plans, workspace metadata, and other `RecordStore` consumers
-- `convexVectorStore()` uses `ctx.vectorSearch()` for dense vector search when available
+- Convex storage is records-only; dense recall needs an explicit `VectorStore` such as `upstashVectorStore()`
 - `createConvexTransport({ api, useQuery })` uses the same document contract for React reads
 - Component `memory.list` owns only `by_key` prefix pagination and returns `{ docs, cursor }`
 - Store-document policy owns `_cruxDoc` decoding, TTL cleanup, top-level value filters, vector hit shaping, and filtered-page filling
@@ -1641,13 +1705,15 @@ result = {
 
 ### Convex (`convex/`)
 
-`convexRecordStore({ component, ctx })`, `convexVectorStore({ component, ctx })`, and `convexStorage({ component, ctx })` implement Convex-backed Crux storage. They use the crux Convex component's `memories` table and a structural `ConvexCtxPort`; vector storage delegates dense search to `ctx.vectorSearch()` where configured. `createConvexTransport({ api, useQuery })` reads through the same document contract for React hooks. The Convex component query boundary is intentionally small: `memory.list` reads the `by_key` index with `prefix`, `limit`, and `cursor`, then returns `{ docs, cursor }`. The Convex package keeps current `_cruxDoc` JSON decoding, TTL suppression/lazy deletion, top-level filters, filtered-list page filling, vector scores, and strict React transport reads behind one store-document boundary so server records and React transport cannot drift.
+`convexRecordStore({ component, ctx })` and `convexStorage({ component, ctx })` implement Convex-backed Crux record storage. They use the crux Convex component's `memories` table and a structural `ConvexCtxPort`; records mirror embeddings for a future schema-declared vector index, while dense search requires an explicit `VectorStore` (`convexVectorStore()` throws `unsupported_capability` with migration guidance). `createConvexTransport({ api, useQuery })` reads through the same document contract for React hooks. The Convex component query boundary is intentionally small: `memory.list` reads the `by_key` index with `prefix`, `limit`, and `cursor`, then returns `{ docs, cursor }`. The Convex package keeps current `_cruxDoc` JSON decoding, TTL suppression/lazy deletion, top-level filters, filtered-list page filling, and strict React transport reads behind one store-document boundary so server records and React transport cannot drift.
 
-`createCruxConvex({ components, storage })` is the request-scoped Convex runtime profile boundary. It owns the default component-backed storage resolver, optional `storage.create` override, namespace default, ctx/target runtime binding, profile-created Convex Agent wrappers, and HTTP bridge record reads. `crux.run(ctx, target, fn)`, `crux.convexAgent(config)`, and `crux.bridge(http, cruxConfig)` all normalize through the same storage resolver. The profile-backed Convex Agent facade keeps a Convex-Agent-compatible public shape while routing turn preparation through an internal lifecycle and `ConvexAgentDriver` port; only the production SDK adapter imports `@convex-dev/agent`, and boundary tests use a fake driver for request-scoped storage binding, prompt/use merging, tool adaptation, stream callbacks, persistence, and driver failures. Lower-level storage and transport helpers remain package-internal implementation details; application integrations should start from the profile or the Storage Beta factories. The store-doc module remains the document policy boundary for serialization, TTL cleanup, filters, dense vector result shaping, sparse/hybrid rejection, and capability reporting.
+`createCruxConvex({ components, storage })` is the request-scoped Convex runtime profile boundary. It owns the default component-backed storage resolver, optional `storage.create` override, namespace default, ctx/target runtime binding, profile-created Convex Agent wrappers, and HTTP bridge record reads. `crux.run(ctx, target, fn)`, `crux.convexAgent(config)`, and `crux.bridge(http, cruxConfig)` all normalize through the same storage resolver. The profile-backed Convex Agent facade keeps a Convex-Agent-compatible public shape while routing turn preparation through an internal lifecycle and `ConvexAgentDriver` port; only the production SDK adapter imports `@convex-dev/agent`, and boundary tests use a fake driver for request-scoped storage binding, prompt/use merging, tool adaptation, stream callbacks, persistence, and driver failures. Lower-level storage and transport helpers remain package-internal implementation details; application integrations should start from the profile or the Storage Beta factories. The store-doc module remains the document policy boundary for serialization, TTL cleanup, filters, and capability reporting.
 
-Also exports Convex-specific helpers:
-
-**`compactConversation(args)`** — Stateless conversation compaction for Convex's action-per-message model. Takes evicted messages + existing summary, returns a merged summary via `summarizeMessages()`. No internal state — the caller manages persistence (e.g., thread metadata). Emits `onCompactStart`/`onCompactEnd` instrumentation hooks.
+Conversation compaction is Core-owned in `compaction/compact-conversation.ts`.
+`@use-crux/convex` name-identically re-exports `compactConversation()` and its
+argument type for compatibility; it does not own a separate lifecycle or
+result finalizer. The operation takes evicted messages plus an existing summary
+and returns the outer `compaction.run` result while the caller owns persistence.
 
 ### Upstash (`upstash/`)
 
@@ -1694,15 +1760,17 @@ Tool primitives write the graph from the shared adapter loop. This keeps user-de
 
 Delivery is intentionally non-blocking for normal Node.js use. The first queued delivery starts immediately so devtools can show live span starts during long-running actions. Later records coalesce per microtask and are delivered FIFO behind the active transport send, so a later `span:end` cannot overtake its own `span:start` across HTTP delivery attempts. HTTP batches are JSON-normalized before transport: cyclic values, `bigint`, functions, non-finite numbers, deep objects, and oversized strings are converted into inspectable safe previews instead of poisoning the POST. If the Go backend rejects a multi-record batch, the transport isolates records and still delivers valid lifecycle records such as `span:end` / `run:end`, so one bad detail artifact cannot strand a successful run as visually running. The Go observability service still reconciles out-of-order lifecycle records by stable ids and timestamps defensively, so externally reordered records do not corrupt the read model. Streaming generation spans close through a single finalizer shared by raw stream drain, stream cancellation, and stream errors. Only the stream's own terminal signal ends the span, immediately, with stream-derived metrics - there is no grace timer and no terminal signal driven by provider completion when a raw stream is observed. Provider completion metadata that is still pending, or that arrives after, is attached by the caller as a linked `usage.observed` span event and output artifact and can never reopen the span or change its recorded duration/status; a late completion error is likewise linked as a diagnostic event rather than mutating the terminal record. When no raw stream is observed, provider completion is itself the sole terminal signal. Generation `timeout.totalMs` is enforced in core orchestration, not only in provider adapters: if a model call never settles, `generation.call` / `generation.stream` emits a terminal error span instead of relying on backend deadline reconciliation. For presentation only, terminal ancestor scopes such as suspended flows can close still-running descendants before operation deadline fallback marks them incomplete; output or usage evidence lets completed generations render as `ok` while the enclosing flow renders as `suspended`. Transport errors are collected by diagnostics and do not throw into user code. Failed batches requeue behind the delivery engine and retry on an unref'd capped backoff, so terminal records do not wait for an unrelated future emit before reaching devtools. Runtime reset and transport replacement advance the delivery epoch; stale in-flight failures are counted as dropped instead of being requeued into a later transport. Bounded `observe.flush({ timeoutMs })` and `observe.shutdown({ timeoutMs })` exist for serverless runtimes and Convex-style request lifecycles where queued writes must be awaited before the platform freezes or kills the process. Bounded flush uses a cancelable timeout primitive so a successful delivery does not leave a timer alive after the flush returns, and it also force-flushes an installed telemetry manager's exporter/processor work (see below), not only the delivery queue.
 
-Delivery success is per record, not per HTTP status: the v2 receipt carries one indexed disposition (`accepted` / `rejected`, with a `retryable` flag) per input record, a malformed or partial receipt retries every unaccounted record, and `recordId` identity is immutable — an exact duplicate is accepted idempotently, a conflicting payload under the same id is rejected permanently and diagnosed rather than overwriting the original. `packages/core/src/observability/delivery/{engine,retry,host-scope,drain}.ts` implement bounded batching/backoff/overflow accounting against a small provider-neutral host lifecycle port (`context`, `defer`, `deadline`) rather than a runtime import; `handler.ts` (generic serverless), `handler.ts`'s Node variant, and `workers.ts` (`/observability/workers`, `ExecutionContext.waitUntil`, no `nodejs_compat`) bind that port for their respective hosts and report a structured `ObservabilityFlushResult` instead of a boolean. `@use-crux/otel`'s `withTelemetry()` activates a real OTel span around the instrumented callback (not a span created after the fact), ends the segment's root span on `run:suspend`, starts a fresh root span sharing the original `traceId` on `run:resume`, and round-trips the same `CruxPropagationCarrier` through W3C `traceparent`/`tracestate`/an allowlisted baggage projection via `injectCruxPropagationCarrier()` / `extractCruxPropagationCarrier()`.
+Delivery success is per record, not per HTTP status: the v2 receipt carries one indexed disposition (`accepted` / `rejected`, with a `retryable` flag) per input record, a malformed or partial receipt retries every unaccounted record, and `recordId` identity is immutable — an exact duplicate is accepted idempotently, a conflicting payload under the same id is rejected permanently and diagnosed rather than overwriting the original. `packages/core/src/observability/delivery/{engine,retry,host-scope,drain}.ts` implement bounded batching/backoff/overflow accounting against a small provider-neutral host lifecycle port (`context`, `defer`, `deadline`) rather than a runtime import; `handler.ts` and the Node subpath bind that port for generic serverless hosts. Cloudflare's `withCrux` boundary lives in `@use-crux/cloudflare` and registers its structured drain on the execution-scope controller before retaining the whole root through `ExecutionContext.waitUntil()`. Every wrapper reports a structured `ObservabilityFlushResult` instead of a boolean. `@use-crux/otel`'s `withTelemetry()` activates a real OTel span around the instrumented callback (not a span created after the fact), ends the segment's root span on `run:suspend`, starts a fresh root span sharing the original `traceId` on `run:resume`, and round-trips the same `CruxPropagationCarrier` through W3C `traceparent`/`tracestate`/an allowlisted baggage projection via `injectCruxPropagationCarrier()` / `extractCruxPropagationCarrier()`.
 
 `config({ observability })` wires a custom transport or an HTTP transport as explicit export behavior.
 Default `config()` does not install telemetry, upload, raw-content capture, or delivery policy.
 `teeObservabilityTransport()` fans records to multiple sinks while isolating a failing leg.
-Evals capture per-cell signal records through the canonical run-scoped async context
-instead of swapping the process transport; configured devtools transports still receive records
-through the normal delivery engine. Token-guarded restore prevents nested config cleanup from
-resurrecting a disposed transport. The HTTP transport posts canonical `{ records }` batches to
+Evals open an `eval-run` execution scope with a persistent capture-session facet and one
+`eval-cell` scope per Case/Variant/trial. Cell scopes use `drain: "capture"` and
+`sealedWrites: "drop"`: inline defers become evidence without invoking their callbacks, named
+defers return captured references without resolving or writing to Runtime, and observability writes
+restored into a timed-out cell are dropped without affecting sibling work. Configured devtools
+transports still receive accepted records through the normal delivery engine. The HTTP transport posts canonical `{ records }` batches to
 `/api/observability/records`; HTTP, WebSocket, and SSE layers should remain adapters around Go
 services rather than owning graph semantics.
 
@@ -1742,6 +1810,8 @@ Eval run and Baseline records are versioned durable contracts. Reuse is automati
 prove exact task, input, Variant, trial, schema, and scorer identity. `--offline` performs no external
 work, `--fresh` bypasses reusable task and managed-scorer evidence, and incomplete runs never pass or
 become Baselines. The Go CLI reports plans and results but does not redefine those policies.
+Cell execution evidence stores ordered logical run IDs, while assertion outcomes
+store exact assertion span IDs; neither field is a substitute for W3C trace IDs.
 
 Production feedback uses the configured observability destination. `@use-crux/core/feedback` accepts
 the canonical run ID; `@use-crux/ai/feedback` extracts that identity from AI message metadata. Local

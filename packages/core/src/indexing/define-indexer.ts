@@ -12,6 +12,7 @@
 import { normalizePipelineCache, resolveCacheMode, runCachedStage } from './cache'
 import { collect, unique } from './collections'
 import { normalizeChunkingOptions } from './chunking-options'
+import { runEmbeddingStage } from './embedding-stage'
 import { stableHash } from './hash'
 import {
   emitIndexingOutputArtifact,
@@ -21,8 +22,10 @@ import { normalizeChunk, normalizeParentChunk, validateChunks, validateDocuments
 import { applyParentProvenanceConfidence, applyProvenanceConfidence } from './provenance'
 import { sourceFactsWithLocations } from './source-facts'
 import { indexingPipeline, stageFingerprint } from './pipeline'
+import { embeddingIdentity } from '../embedding'
 import { createIndexedKnowledgeStore } from '../indexed-knowledge'
 import { observe } from '../observability'
+import { withOperationResultMeta } from '../observability/internal/result-meta'
 import type { RecordStore, SparseVector } from '../storage'
 import type {
   ChunkingOptions,
@@ -39,6 +42,10 @@ import type {
   PipelineCacheMode,
   SourceStageRecord,
 } from './types'
+
+type IndexResultPayload = Omit<IndexResult, '_meta'>
+type IndexDryRunResultPayload = Omit<IndexDryRunResult, '_meta'>
+type IndexOperationPayload = IndexResultPayload | IndexDryRunResultPayload
 
 /**
  * Create an {@link Indexer} for a namespace.
@@ -154,6 +161,7 @@ export function indexer(config: IndexerConfig): Indexer {
             indexPreparedChunks(prepared, {
               replaceSources,
               dryRun: options?.dryRun === true,
+              cacheMode: resolveCacheMode(cacheConfig, options?.cache),
             }),
         })
         emitIndexingOutputArtifact(span.spanId, {
@@ -167,10 +175,14 @@ export function indexer(config: IndexerConfig): Indexer {
         })
         return result
       })
+      const observedResult = withOperationResultMeta(result, {
+        traceId: span.traceId,
+        spanId: span.spanId,
+      })
       span.end({
         attributes: { sourceCount: result.sourceCount, chunkCount: result.chunkCount, dryRun: options?.dryRun === true },
       })
-      return result
+      return observedResult
     } catch (error) {
       span.error(error)
       throw error
@@ -179,15 +191,15 @@ export function indexer(config: IndexerConfig): Indexer {
 
   function indexChunks(
     chunksInput: AsyncIterable<CruxChunk> | CruxChunk[],
-    options: { dryRun: true; replaceSources?: boolean },
+    options: { dryRun: true; replaceSources?: boolean; cache?: PipelineCacheMode },
   ): Promise<IndexDryRunResult>
   function indexChunks(
     chunksInput: AsyncIterable<CruxChunk> | CruxChunk[],
-    options?: { dryRun?: false; replaceSources?: boolean },
+    options?: { dryRun?: false; replaceSources?: boolean; cache?: PipelineCacheMode },
   ): Promise<IndexResult>
   async function indexChunks(
     chunksInput: AsyncIterable<CruxChunk> | CruxChunk[],
-    options?: { dryRun?: boolean; replaceSources?: boolean },
+    options?: { dryRun?: boolean; replaceSources?: boolean; cache?: PipelineCacheMode },
   ): Promise<IndexResult | IndexDryRunResult> {
     const chunks = (await collect(chunksInput)).map((inputChunk) => normalizeChunk(inputChunk, config.namespace))
     const sourceCount = unique(chunks.map((chunk) => chunk.sourceId)).length
@@ -202,6 +214,7 @@ export function indexer(config: IndexerConfig): Indexer {
         chunkCount: chunks.length,
         replaceSources: options?.replaceSources ?? false,
         dryRun: options?.dryRun === true,
+        cacheMode: options?.cache ?? 'default',
       },
     })
     try {
@@ -224,6 +237,7 @@ export function indexer(config: IndexerConfig): Indexer {
               {
                 replaceSources,
                 dryRun: options?.dryRun === true,
+                cacheMode: resolveCacheMode(cacheConfig, options?.cache),
               },
             ),
         })
@@ -234,13 +248,18 @@ export function indexer(config: IndexerConfig): Indexer {
           sourceCount,
           chunkCount: result.chunkCount,
           dryRun: options?.dryRun === true,
+          stages: 'stages' in result ? result.stages : undefined,
         })
         return result
+      })
+      const observedResult = withOperationResultMeta(result, {
+        traceId: span.traceId,
+        spanId: span.spanId,
       })
       span.end({
         attributes: { sourceCount: result.sourceCount, chunkCount: result.chunkCount, dryRun: options?.dryRun === true },
       })
-      return result
+      return observedResult
     } catch (error) {
       span.error(error)
       throw error
@@ -372,12 +391,13 @@ export function indexer(config: IndexerConfig): Indexer {
 
   async function indexPreparedChunks(
     prepared: Required<Pick<ChunkingResult, 'chunks' | 'parents'>> & { stages?: SourceStageRecord[] },
-    options: { replaceSources: boolean; dryRun: boolean },
-  ): Promise<IndexResult | IndexDryRunResult> {
+    options: { replaceSources: boolean; dryRun: boolean; cacheMode: PipelineCacheMode | 'disabled' },
+  ): Promise<IndexOperationPayload> {
     const chunks = prepared.chunks.map((inputChunk) => normalizeChunk(inputChunk, config.namespace))
     const parents = prepared.parents.map((inputParent) => normalizeParentChunk(inputParent, config.namespace))
     const sourceIds = unique(chunks.map((chunkItem) => chunkItem.sourceId))
-    const embeddings = await prepareEmbeddings(chunks)
+    const embeddings = await prepareEmbeddings(chunks, options.cacheMode)
+    const stages = [...(prepared.stages ?? []), ...embeddings.stages]
 
     if (options.dryRun) {
       return {
@@ -387,7 +407,7 @@ export function indexer(config: IndexerConfig): Indexer {
         dryRun: true,
         chunks,
         parents,
-        ...(prepared.stages ? { stages: prepared.stages } : {}),
+        ...(stages.length > 0 ? { stages } : {}),
         embeddings: {
           dense: embeddings.dense !== undefined,
           sparse: embeddings.sparse !== undefined,
@@ -407,20 +427,37 @@ export function indexer(config: IndexerConfig): Indexer {
       namespace: config.namespace,
       sourceCount: sourceIds.length,
       chunkCount: chunks.length,
-      ...(prepared.stages ? { stages: prepared.stages } : {}),
+      ...(stages.length > 0 ? { stages } : {}),
     }
   }
 
-  async function prepareEmbeddings(chunks: CruxChunk[]): Promise<{
+  async function prepareEmbeddings(chunks: CruxChunk[], cacheMode: PipelineCacheMode | 'disabled'): Promise<{
     dense?: number[][]
     sparse?: SparseVector[]
+    stages: SourceStageRecord[]
   }> {
-    const contents = chunks.map((chunkItem) => chunkItem.content)
-    const denseEmbeddings = config.dense ? await config.dense.embedMany(contents) : undefined
-    const sparseEmbeddings = config.sparse ? await config.sparse.embedMany(contents) : undefined
+    const denseResult = config.dense
+      ? await runEmbeddingStage({
+          embedding: config.dense,
+          chunks,
+          namespace: config.namespace,
+          cacheConfig,
+          cacheMode,
+        })
+      : undefined
+    const sparseResult = config.sparse
+      ? await runEmbeddingStage({
+          embedding: config.sparse,
+          chunks,
+          namespace: config.namespace,
+          cacheConfig,
+          cacheMode,
+        })
+      : undefined
     return {
-      ...(denseEmbeddings ? { dense: denseEmbeddings } : {}),
-      ...(sparseEmbeddings ? { sparse: sparseEmbeddings } : {}),
+      ...(denseResult ? { dense: denseResult.embeddings } : {}),
+      ...(sparseResult ? { sparse: sparseResult.embeddings } : {}),
+      stages: [...(denseResult?.stages ?? []), ...(sparseResult?.stages ?? [])],
     }
   }
 
@@ -430,10 +467,8 @@ export function indexer(config: IndexerConfig): Indexer {
       namespace: config.namespace,
       indexVersion: options?.indexVersion ?? 'default',
       chunking: normalizeChunkingOptions(options?.chunking),
-      dense: config.dense
-        ? { kind: config.dense.kind, name: config.dense.name, dimensions: config.dense.dimensions }
-        : null,
-      sparse: config.sparse ? { kind: config.sparse.kind, name: config.sparse.name } : null,
+      dense: config.dense ? embeddingIdentity(config.dense) : null,
+      sparse: config.sparse ? embeddingIdentity(config.sparse) : null,
       pipeline: pipeline.fingerprint(),
     })
   }

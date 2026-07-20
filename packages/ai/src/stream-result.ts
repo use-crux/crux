@@ -10,9 +10,11 @@
 
 import type {
   ExecutorStreamHandle,
+  ExecutorStreamCompletionPayload,
   ExecutorStreamMeta,
   StreamResult,
 } from "@use-crux/core/adapter";
+import type { GenerationMeta } from "@use-crux/core";
 import { createResultAccumulator } from "@use-crux/core/adapter";
 import { normalizeAdapterCallError } from "@use-crux/core/adapter";
 import {
@@ -47,6 +49,7 @@ export function createAiStreamResult<TRawStream>(
     runId: handle.runId,
     textStream,
     raw: handle.raw,
+    _meta: handle._meta,
     completion: (async () => {
       try {
         if (handle.routing !== undefined) {
@@ -54,7 +57,7 @@ export function createAiStreamResult<TRawStream>(
         }
         const meta = await handle.completion();
         return {
-          ...completionFromMeta(meta, handle.routing),
+          ...completionFromMeta(meta, handle.routing, handle._meta),
           runId: handle.runId,
         };
       } catch (error) {
@@ -114,6 +117,7 @@ function normalizeStreamError(
 function completionFromMeta(
   meta: ExecutorStreamMeta | undefined,
   routing: ExecutorStreamHandle<unknown>["routing"],
+  operation: ExecutorStreamHandle<unknown>["_meta"],
 ) {
   const accumulator = createResultAccumulator();
   const text = meta?.text ?? "";
@@ -129,10 +133,42 @@ function completionFromMeta(
       ? { providerMetadata: meta.providerMetadata }
       : {}),
   });
-  return accumulator.finalizeCompletion({
+  const payload = accumulator.finalizeCompletion({
     messages: meta?.messages ? [...meta.messages] : [],
     ...(meta?.object !== undefined ? { object: meta.object } : {}),
     ...(meta?.cost !== undefined ? { cost: meta.cost } : {}),
     ...(routing !== undefined ? { routing } : {}),
+    _meta: completionMetadata(meta),
   });
+  return {
+    ...payload,
+    _meta: Object.freeze({ ...payload._meta, ...operation }),
+  };
+}
+
+type CanonicalCompletionMeta = GenerationMeta &
+  Pick<ExecutorStreamCompletionPayload, "semanticCache" | "streaming">;
+
+const COMPLETION_ENVELOPE_FIELDS = new Set([
+  "_meta",
+  "runId",
+  "text",
+  "object",
+  "content",
+  "messages",
+  "warnings",
+  "providerMetadata",
+]);
+
+function completionMetadata(
+  meta: ExecutorStreamMeta | undefined,
+): CanonicalCompletionMeta {
+  if (!meta) return {};
+  const completion: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(meta)) {
+    if (!COMPLETION_ENVELOPE_FIELDS.has(key) && value !== undefined) {
+      completion[key] = value;
+    }
+  }
+  return completion as CanonicalCompletionMeta;
 }

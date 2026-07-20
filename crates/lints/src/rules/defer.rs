@@ -2,7 +2,7 @@
 
 use serde_json::Value;
 
-use crate::builder::{StaticIndexLintBuilder, StaticIndexLintFindingInput, definition_evidence};
+use crate::builder::{definition_evidence, StaticIndexLintBuilder, StaticIndexLintFindingInput};
 use crate::facts::{StaticIndexDefinition, StaticIndexLintFinding, StaticIndexPatchFacts};
 use crate::helpers::metadata_value;
 
@@ -35,15 +35,6 @@ pub(crate) fn defer_lint_findings(
                 "defer.floating_named_promise",
                 definition,
                 "Named defer() returns a commit promise that must be awaited, returned, or composed into a consumed promise.",
-            );
-        }
-        if metadata_value(definition, "eagerExecution").and_then(Value::as_bool) == Some(true) {
-            push_finding(
-                builder,
-                &mut findings,
-                "defer.missing_scope",
-                definition,
-                "This defer() call executes eagerly where no invocation scope can be active. Move it inside a supported host boundary.",
             );
         }
         if named && runtime_configured == Some(false) {

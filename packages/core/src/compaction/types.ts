@@ -78,6 +78,22 @@ export interface SummarizeConfig {
   media?: CompactionMediaConfig;
 }
 
+/** Options for `compactConversation()`. */
+export interface CompactConversationArgs {
+  /** Messages that just fell out of the recent window. */
+  evictedMessages: Message[];
+  /** Existing running summary from thread metadata, or an empty string. */
+  existingSummary: string;
+  /** Text generation function used only when messages need summarizing. */
+  generate: GenerateTextFn;
+  /** Model used for generated summaries. */
+  model: unknown;
+  /** Maximum generated summary size in tokens. Default: 1000. */
+  summaryBudget?: number;
+  /** Optional media-description overrides. */
+  media?: CompactionMediaConfig;
+}
+
 // Re-export CompactionResult — it's the return type of summarizeMessages
 export type { CompactionResult };
 

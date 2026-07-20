@@ -1,7 +1,7 @@
 use serde_json::json;
 
 use crate::finalizer::events::{
-    StaticIndexFinalizeEventOptions, StaticIndexFinalizeProject, project_patch_events,
+    project_patch_events, StaticIndexFinalizeEventOptions, StaticIndexFinalizeProject,
 };
 use crate::finalizer::run::finalize_static_index_values_with_policies;
 use crate::relation::model::built_in_relation_policy_table;
@@ -57,11 +57,11 @@ fn project_patch_events_chunks_fact_batches() {
     );
     assert_eq!(
         batches[2]["facts"].as_array().expect("batch facts").len(),
-        55
+        54
     );
     assert_eq!(
         events.last().expect("phase done")["summary"]["factCount"],
-        255
+        254
     );
     assert_eq!(
         events.last().expect("phase done")["summary"]["decision"]["staticIndexComplete"],
@@ -103,11 +103,9 @@ fn project_patch_events_can_materialize_quality_phase_without_invalidation() {
         events.last().expect("phase done")["patch"]["phase"],
         "quality"
     );
-    assert!(
-        events.last().expect("phase done")["patch"]
-            .get("invalidates")
-            .is_none()
-    );
+    assert!(events.last().expect("phase done")["patch"]
+        .get("invalidates")
+        .is_none());
     let batch = events
         .iter()
         .find(|event| event["type"] == "fact:batch")

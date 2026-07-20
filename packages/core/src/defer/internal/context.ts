@@ -1,8 +1,11 @@
-import { createAsyncScopeFacet } from "../../async-scope";
+import { createScopeFacetSlot } from "../../scope/facets";
+import { currentScopeFacet, runWithScopeFacet } from "../../scope/kernel";
+import type { ExecutionScope } from "../../scope/contracts";
 import type { DeferredCallback } from "../types";
 import type { DeferredWorkRef } from "../types";
 import type { RuntimeTaskTarget } from "../../runtime/api/task";
 import type { DeferEvidencePolicy } from "./observability";
+import type { ScopeDeferController } from "./invocation-scope";
 
 /** Internal phase in which a callback registration occurs. */
 export type DeferRegistrationPhase = "handler" | "drain";
@@ -33,15 +36,17 @@ export interface DeferRegistrationContext {
   readonly evidence?: DeferEvidencePolicy;
 }
 
-const deferRegistrationScope = createAsyncScopeFacet<DeferRegistrationContext>(
-  "core.defer-registration",
+const deferRegistrationSlot =
+  createScopeFacetSlot<DeferRegistrationContext>("core.defer-context");
+const deferControllerSlot = createScopeFacetSlot<ScopeDeferController>(
+  "core.defer-controller",
 );
 
 /** Return the nearest invocation capable of accepting deferred work. */
 export function currentDeferRegistration():
   | DeferRegistrationContext
   | undefined {
-  return deferRegistrationScope.current();
+  return currentScopeFacet(deferRegistrationSlot);
 }
 
 /** Run work with one defer registration context active. */
@@ -49,7 +54,43 @@ export function runWithDeferRegistration<R>(
   context: DeferRegistrationContext,
   callback: () => R,
 ): R {
-  return deferRegistrationScope.run(context, callback);
+  return runWithScopeFacet(deferRegistrationSlot, context, callback);
+}
+
+/** Attach the shared defer controller to its owning execution scope. */
+export function setScopeDeferController(
+  scope: ExecutionScope,
+  controller: ScopeDeferController,
+): void {
+  scope.setFacet(deferControllerSlot, controller);
+}
+
+/** Return the nearest persistent defer controller for the active scope. */
+export function currentScopeDeferController():
+  | ScopeDeferController
+  | undefined {
+  return currentScopeFacet(deferControllerSlot);
+}
+
+/** Register first-party work after callback settlement and before evidence flush. */
+export function onDeferDrainSettled(
+  hook: Parameters<ScopeDeferController["onDrainSettled"]>[0],
+): void {
+  const controller = currentScopeDeferController();
+  if (!controller) {
+    throw new TypeError(
+      "Cannot register a drain-settled hook without an active defer controller.",
+    );
+  }
+  controller.onDrainSettled(hook);
+}
+
+/** Resolve the nearest persistent defer controller from an explicit scope. */
+export function deferControllerForScope(
+  scope: ExecutionScope,
+): ScopeDeferController | undefined {
+  const controller = scope.facet(deferControllerSlot);
+  return controller?.executionScope === scope ? controller : undefined;
 }
 
 /** Track an operation in the owning invocation's strict commit barrier. */

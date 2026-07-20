@@ -70,8 +70,7 @@ export interface CreateCruxConvexOptions<TCtx extends ConvexCtxPort = ConvexCtxP
   /**
    * Storage options for the profile's request-scoped default storage.
    *
-   * This is the preferred home for vector index/cache options and the custom
-   * storage factory override.
+   * This is the preferred home for the custom storage factory override.
    */
   readonly storage?: CruxConvexProfileStorageOptions<TCtx>
 }

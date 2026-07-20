@@ -1,6 +1,6 @@
 ---
 title: defer()
-description: Request-scoped deferred work API, inline callbacks and named Runtime targets.
+description: Register inline or durable work on the nearest Crux execution scope.
 ---
 
 ```ts
@@ -8,45 +8,43 @@ import {
   defer,
   CruxDeferError,
   DEFER_ERROR_CODES,
-  type DeferredWorkRef,
   type DeferredCallback,
+  type DeferredWorkRef,
 } from "@use-crux/core";
 ```
 
-## Overview
+`defer()` has two overloads. It always registers on the nearest compatible
+execution scope.
 
-`defer` is a dual overload on the package root. Prefer overloads over casts:
-named targets come first; unbranded callbacks select the inline form.
-
-## `defer(callback)`
-
-| Parameter  | Type                              | Description                 |
-| ---------- | --------------------------------- | --------------------------- |
-| `callback` | `() => void \| PromiseLike<void>` | Lazy zero-argument callback |
-
-**Returns:** `void`
-
-Registers work on the nearest compatible invocation scope. The callback starts
-after the host’s declared completion class. Failures are contained and observed;
-they do not fail an already-committed response.
-
-Throws:
-
-- `DEFER_SCOPE_REQUIRED`: no active scope
-- `DEFER_CAPABILITY_MISSING`: scope lacks inline support
-- `DEFER_SCOPE_SEALED` / `DEFER_LIMIT_EXCEEDED`: lifecycle bounds
-- `DEFER_REPLAY_UNSAFE`: inside replayable flow execution
-
-## `defer(target, input)`
-
-| Parameter | Type                        | Description                                        |
-| --------- | --------------------------- | -------------------------------------------------- |
-| `target`  | branded `RuntimeTaskTarget` | Exported `durableTask(...)` (or compatible) target |
-| `input`   | inferred JSON-safe input    | Required for V1 targets constrained to `JsonValue` |
-
-**Returns:** `Promise<DeferredWorkRef>`
+## Inline callback
 
 ```ts
+function defer(callback: () => void | PromiseLike<void>): void;
+```
+
+The callback starts when its registering scope closes. Agent turns, adapter
+calls, tool executions, and Safety sessions install scopes automatically.
+Nested work therefore drains at its own primitive boundary rather than waiting
+for an enclosing request.
+
+```ts
+defer(async () => {
+  await flushAnalytics();
+});
+```
+
+The callback is process-local and best-effort. Callback failures are contained
+and observed. A retention-port failure is different: it propagates after the
+scope seals because the host failed to establish the acceptance guarantee.
+
+## Named Runtime target
+
+```ts
+function defer<TTarget extends RuntimeTaskTarget>(
+  target: TTarget,
+  input: RuntimeTaskInput<TTarget>,
+): Promise<DeferredWorkRef>;
+
 interface DeferredWorkRef {
   readonly kind: "deferred.work";
   readonly workId: string;
@@ -54,84 +52,65 @@ interface DeferredWorkRef {
 }
 ```
 
-Resolves after durable staging acceptance. Execution still waits for successful
-logical finalization and outbox release. Host adapters must await the scope
-`committed` barrier before committing the response.
+The promise resolves after Runtime durably accepts the JSON-safe input. Named
+execution waits for logical finalization and outbox release.
 
-Throws or poisons commit with:
+```ts
+const ref = await defer(sendReceipt, { orderId: order.id });
+```
 
-- `RUNTIME_REQUIRED` (cause) / `DEFER_COMMIT_FAILED` (host barrier)
-- `DEFER_CAPABILITY_MISSING` when the host cannot finalize named work
-- `DEFER_TARGET_INPUT_REQUIRED` for missing input at runtime
-- `DEFER_REPLAY_UNSAFE` inside replayable flows
+Inside an Eval cell, both overloads follow the cell's capture policy: callbacks
+do not execute, named work does not stage, and the attempted work becomes Eval
+evidence.
 
-## Host subpaths
+## Integration ladder
 
-| Import                            | Purpose                                                                                                           |
-| --------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `@use-crux/core/defer/node`       | Node HTTP `withNodeDefer` / `createNodeDeferHost`                                                                 |
-| `@use-crux/core/defer/serverless` | `withWaitUntilDefer`, `withAfterDefer`, `withNamedOnlyDefer`, factories                                           |
-| `@use-crux/next`                  | Next.js `withCrux` binding defer and observability to `after()`; `withNextDefer` remains the defer-only primitive |
+1. **Inside a Crux primitive:** no wrapper is required. Long-lived processes
+   need no host binding for process-local work.
+2. **On a freezing platform:** configure `host` once. The binding retains an
+   already-started primitive drain to root idle.
+3. **At handler root:** an ambient-capable binding gives each call a separate
+   ephemeral invocation.
+4. **Strict handler semantics:** use a platform wrapper for cross-call grouping,
+   outcome classification, strict response commit, and framework cleanup.
 
-Internal first-party SPI (not application API):
+Config-only ambient calls intentionally do not share limits or handler outcome.
+Each call owns one ephemeral root.
 
-- `@use-crux/core/internal/defer-host`
-- `@use-crux/core/internal/defer-lifecycle`
+## Scope outcome
 
-## Host lifetime semantics
+Inline work registered by a scope that closes with `error`, `cancelled`, or
+`timeout` is recorded as skipped and is not invoked. `success`, `redirect`, and
+`not-found` drain normally. The gate applies to the registering scope only.
 
-### Completion classes
+Replayable flow bodies reject public `defer()` with
+`DEFER_REPLAY_UNSAFE`; use `flow.defer()`.
 
-Each host lifetime declares a completion class describing when inline deferred
-callbacks may start relative to the response:
+## Host imports
 
-- `response-finished`: callbacks start only after the response has fully
-  finished (Node HTTP via `withNodeDefer`, Next.js via `after()`, per-process
-  multiprocess Node hosts).
-- `handler-returned`: callbacks may start as soon as the handler returns, and
-  may overlap a still-streaming response body (`waitUntil`-based hosts such as
-  Vercel Functions and Cloudflare Workers).
-- Named-only lifetimes (Lambda `withNamedOnlyDefer`, Convex bridge runs) have
-  no inline completion class; inline `defer(callback)` throws
-  `DEFER_CAPABILITY_MISSING`.
+| Import                            | Application use                                                   |
+| --------------------------------- | ----------------------------------------------------------------- |
+| `@use-crux/core/defer/node`       | Node HTTP boundaries and process shutdown                         |
+| `@use-crux/core/defer/serverless` | Provider-neutral strict wrappers, including `withServerlessDefer` |
+| `@use-crux/next`                  | Next `next()`, `withNextDefer`, and `withCrux`                    |
+| `@use-crux/vercel`                | Vercel `vercel()` retention binding                               |
+| `@use-crux/cloudflare`            | Workers `workers({ ctx })` and `withCrux`                         |
 
-### `durableFinalization` advertisement
+Platform and adapter authors should use the
+[host-adapter contract](/docs/guides/background-work/host-adapters), not infer
+capability from environment variables.
 
-A host lifetime advertises `durableFinalization: true` only when it can await
-the named-defer commit barrier before committing the response. Named
-`await defer(target, input)` requires a configured Runtime plus a lifetime
-advertising durable finalization; raw Node hosts advertise
-`durableFinalization: false` unless the wrapper opts in (for example
-`withNamedOnlyDefer(handler, { durableFinalization: true })`).
+## Errors
 
-### Capability is explicit, never inferred
+| Code                          | Cause                                                          |
+| ----------------------------- | -------------------------------------------------------------- |
+| `DEFER_SCOPE_REQUIRED`        | No active scope and no ambient host binding                    |
+| `DEFER_CAPABILITY_MISSING`    | The active host cannot honor the overload or retention request |
+| `DEFER_SCOPE_SEALED`          | Registration arrived after the accepting scope sealed          |
+| `DEFER_LIMIT_EXCEEDED`        | Callback or nesting bounds were exceeded                       |
+| `DEFER_REPLAY_UNSAFE`         | Public defer ran inside replayable flow execution              |
+| `DEFER_TARGET_INPUT_REQUIRED` | Required named input was missing                               |
+| `DEFER_COMMIT_FAILED`         | Strict named finalization failed before response commitment    |
 
-Never infer host correctness from environment variable names (`VERCEL`, etc.).
-Capability comes only from the wrapper or platform hook that is explicitly
-installed (`waitUntil`, `after`, a lifetime port); an installed package or a
-recognizable environment alone is not treated as proof of a working lifetime.
-
-## Diagnostics
-
-| Code                          | Docs                                                                                 |
-| ----------------------------- | ------------------------------------------------------------------------------------ |
-| `DEFER_SCOPE_REQUIRED`        | [/docs/errors/DEFER_SCOPE_REQUIRED](/docs/errors/DEFER_SCOPE_REQUIRED)               |
-| `DEFER_CAPABILITY_MISSING`    | [/docs/errors/DEFER_CAPABILITY_MISSING](/docs/errors/DEFER_CAPABILITY_MISSING)       |
-| `DEFER_SCOPE_SEALED`          | [/docs/errors/DEFER_SCOPE_SEALED](/docs/errors/DEFER_SCOPE_SEALED)                   |
-| `DEFER_LIMIT_EXCEEDED`        | [/docs/errors/DEFER_LIMIT_EXCEEDED](/docs/errors/DEFER_LIMIT_EXCEEDED)               |
-| `DEFER_REPLAY_UNSAFE`         | [/docs/errors/DEFER_REPLAY_UNSAFE](/docs/errors/DEFER_REPLAY_UNSAFE)                 |
-| `DEFER_TARGET_INPUT_REQUIRED` | [/docs/errors/DEFER_TARGET_INPUT_REQUIRED](/docs/errors/DEFER_TARGET_INPUT_REQUIRED) |
-| `DEFER_COMMIT_FAILED`         | [/docs/errors/DEFER_COMMIT_FAILED](/docs/errors/DEFER_COMMIT_FAILED)                 |
-
-Observed drain outcomes (not always thrown to the handler):
-
-- `DEFER_CALLBACK_FAILED`
-- `DEFER_TIMED_OUT`
-- `DEFER_CANCELLED`
-
-## Related
-
-- Guide: [Request-scoped defer](/docs/guides/background-work)
-- Guide: [Hosts](/docs/guides/background-work/hosts)
-- Reference: [Runtime Engine](/docs/reference/crux-core/runtime-engine)
-- Reference: [Flows](/docs/reference/crux-core/flow)
+See [Troubleshooting](/docs/guides/background-work/troubleshooting) for the
+decision checklist and exact remediations.

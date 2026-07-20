@@ -225,12 +225,12 @@ describe("Eval release readiness", () => {
     expect(guide).toContain("performs no network or external work");
   });
 
-  it("records the clean Eval replacement as a breaking release", async () => {
+  it("records the clean Eval replacement in the pending release", async () => {
     const changeset = await readRepoFile(".changeset/bright-evals-review.md");
     for (const [packageName, bump] of Object.entries({
-      "@use-crux/core": "major",
-      "@use-crux/local": "major",
-      "@use-crux/indexer": "major",
+      "@use-crux/core": "minor",
+      "@use-crux/local": "minor",
+      "@use-crux/indexer": "minor",
       "@use-crux/ai": "minor",
       "@use-crux/cloudflare": "minor",
       "@use-crux/convex": "minor",

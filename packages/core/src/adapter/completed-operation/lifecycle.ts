@@ -2,7 +2,7 @@
 
 import {
   validateOperationExecution,
-  type CompletedOperationResult,
+  type CompletedOperationProviderPayload,
 } from "../../completed-operation/contracts";
 import type {
   CompletedOperationContext,
@@ -11,7 +11,7 @@ import type {
 
 /** Add failed routed attempts without replacing provider-owned call facts. */
 export function finalizeCompletedResult<
-  TResult extends CompletedOperationResult,
+  TResult extends CompletedOperationProviderPayload,
 >(result: TResult, attemptedCalls: number): TResult {
   const execution = validateOperationExecution({
     ...result.execution,
@@ -42,7 +42,7 @@ export async function selectedCompletedInput<
   TInput,
   TNormalized,
   TNative,
-  TResult extends CompletedOperationResult,
+  TResult extends CompletedOperationProviderPayload,
   TReport,
 >(
   prepared: ReadonlyMap<unknown, TNormalized>,

@@ -31,6 +31,11 @@ export function baseOptions(): BaseLayoutProps {
         url: '/observability',
       },
       {
+        text: 'Blog',
+        url: '/blog',
+        active: 'nested-url',
+      },
+      {
         text: 'Docs',
         url: '/docs',
         active: 'nested-url',

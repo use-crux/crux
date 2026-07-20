@@ -12,6 +12,7 @@
  */
 
 import type { AssistantContentPart, MessageContent } from '../types/content'
+import type { OperationResultMeta } from '../observability'
 
 // ─────────────────────────────────────────────────────────────────
 // Canonical Message Type
@@ -56,4 +57,6 @@ export interface CompactionResult {
   tokensAfter: number
   /** Compression ratio (e.g., 0.15 = 85% reduction). */
   ratio: number
+  /** Exact `compaction.run` operation that produced this result. */
+  readonly _meta: OperationResultMeta
 }

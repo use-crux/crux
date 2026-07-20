@@ -15,6 +15,7 @@
 
 import type { ConstraintAudit } from "../safety/constraint/types";
 import type { GuardrailAudit } from "../safety/guardrail/types";
+import type { OperationResultMeta } from "../observability/result-meta";
 import type { StopCondition, ToolChoice } from "./tool-control";
 
 // ─────────────────────────────────────────────────────────────────
@@ -152,13 +153,13 @@ export interface TokenUsage {
 }
 
 /**
- * Normalized metadata attached to generate() results by each adapter.
+ * Provider-neutral facts accumulated by adapters while executing generation.
  *
  * Adapters set `result._meta` after SDK calls so devtools middleware,
  * evals and trace analysis can extract data without knowing which SDK
  * produced it.
  */
-export interface TraceMeta {
+export interface GenerationMeta {
   usage?: TokenUsage;
   /** Total cost in USD — only present when the provider returns it (e.g. OpenRouter). */
   cost?: number;
@@ -166,6 +167,7 @@ export interface TraceMeta {
   /** Neutral stop condition that ended a tool loop, when Crux stopped before provider completion. */
   stoppedBy?: StopCondition;
   toolCalls?: Array<{ id?: string; name: string; args: unknown }>;
+  /** Provider response identifier; distinct from Crux trace and span identity. */
   responseId?: string;
   actualModelId?: string;
   /** Constraint audit trail — present when constraints ran during generation. */
@@ -173,3 +175,16 @@ export interface TraceMeta {
   /** Guardrail audit trail — present when guardrails ran during generation. */
   guardrails?: GuardrailAudit;
 }
+
+/**
+ * Provider-neutral facts accumulated while executing a generation.
+ *
+ * @deprecated Use {@link GenerationMeta}. This alias preserves the previous
+ * generation metadata name for one compatibility cycle.
+ */
+export type TraceMeta = GenerationMeta;
+
+/** Provider facts and exact core-owned identity on a completed generation. */
+export type GenerateResultMeta = Readonly<
+  GenerationMeta & OperationResultMeta
+>;

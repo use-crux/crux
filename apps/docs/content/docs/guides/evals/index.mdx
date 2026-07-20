@@ -59,6 +59,11 @@ structured response, remote deployment, or maximum cost for arbitrary code.
 Use a managed task when you want automatic evidence reuse, file-backed Cases,
 typed Variants, or Runtime-hosted execution.
 
+Each Eval cell is an isolated execution scope. If task code calls `defer()`,
+Crux captures the registration as cell evidence instead of running the inline
+callback or staging named work in Runtime. This keeps evaluation from producing
+background side effects while preserving what the production task attempted.
+
 ## Add an Eval
 
 ```ts title="evals/support.eval.ts"

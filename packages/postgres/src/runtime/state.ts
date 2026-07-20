@@ -247,7 +247,10 @@ export function createPostgresStatePort(
       return await prunePostgresRows(db, {
         table: snapshotTable,
         filters,
-        values: [...values, ['completed', 'blocked', 'cancelled']],
+        values: [
+          ...values,
+          ['completed', 'blocked', 'expired', 'cancelled'],
+        ],
         orderBy: 'updated_at ASC, flow_id ASC',
         limit: options.limit,
       })

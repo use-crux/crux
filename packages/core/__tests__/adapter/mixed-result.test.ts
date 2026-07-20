@@ -3,6 +3,10 @@ import type { AssistantContentPart, Message } from "../../src";
 import { createResultAccumulator } from "../../src/adapter";
 import { createStreamResult } from "../../src/adapter/result-accumulator";
 import { createCruxRunId } from "../../src/observability";
+import {
+  createCruxSpanId,
+  createCruxTraceId,
+} from "../../src/observability";
 
 const firstContent = [
   { type: "reasoning", text: "Inspect the attachment." },
@@ -70,6 +74,10 @@ describe("authoritative mixed generation output", () => {
         messages,
         finishReason: "stop",
       }),
+      _meta: {
+        traceId: createCruxTraceId(),
+        spanId: createCruxSpanId(),
+      },
     });
 
     let streamed = "";

@@ -1,4 +1,9 @@
 export * from './contract'
+export type {
+  OperationResultMeta,
+  OperationRunRef,
+  WithOperationResultMeta,
+} from './result-meta'
 export * from './definition-ref'
 export * from './presentation'
 export * from './ids'

@@ -2,9 +2,6 @@
 
 import { expectTypeOf } from "vitest";
 import {
-  createAfterDeferLifetime,
-  createNamedOnlyDeferLifetime,
-  createWaitUntilDeferLifetime,
   withAfterDefer,
   withNamedOnlyDefer,
   withServerlessDefer,
@@ -15,24 +12,11 @@ import {
   type NamedOnlyDeferWrapOptions,
   type WaitUntilDeferWrapOptions,
 } from "@use-crux/core/defer/serverless";
-import type { DeferLifetimeCapability } from "@use-crux/core/internal/defer-host";
+import type { CruxHostBinding } from "@use-crux/core/internal/scope";
 
 declare const waitUntil: DeferWaitUntilPort;
 declare const after: DeferAfterPort;
 declare const handler: (id: string) => Promise<{ ok: true }>;
-
-const waitUntilLifetime = createWaitUntilDeferLifetime({ waitUntil });
-expectTypeOf(waitUntilLifetime).toMatchTypeOf<DeferLifetimeCapability>();
-expectTypeOf(waitUntilLifetime.completion).toEqualTypeOf<"handler-returned">();
-
-const afterLifetime = createAfterDeferLifetime({ after });
-expectTypeOf(afterLifetime).toMatchTypeOf<DeferLifetimeCapability>();
-expectTypeOf(afterLifetime.completion).toEqualTypeOf<"response-finished">();
-
-const namedOnly = createNamedOnlyDeferLifetime({ host: "lambda" });
-expectTypeOf(namedOnly).toMatchTypeOf<DeferLifetimeCapability>();
-expectTypeOf(namedOnly.supportsInline).toEqualTypeOf<false>();
-expectTypeOf(namedOnly.completion).toEqualTypeOf<"handler-returned">();
 
 const waitWrapped = withWaitUntilDefer(handler, { waitUntil });
 expectTypeOf(waitWrapped).toEqualTypeOf<
@@ -49,8 +33,9 @@ expectTypeOf(namedWrapped).toEqualTypeOf<
   (id: string) => Promise<{ ok: true }>
 >();
 
+declare const binding: CruxHostBinding;
 const generic = withServerlessDefer(handler, {
-  lifetime: waitUntilLifetime,
+  binding,
   classifyOutcome(settlement) {
     return settlement.kind === "returned" ? "success" : "error";
   },
@@ -62,7 +47,7 @@ const waitOpts: WaitUntilDeferWrapOptions<{ ok: true }> = {
   durableFinalization: true,
 };
 const afterOpts: AfterDeferWrapOptions<{ ok: true }> = { after };
-const namedOpts: NamedOnlyDeferWrapOptions<{ ok: true }> = { host: "lambda" };
+const namedOpts: NamedOnlyDeferWrapOptions = { host: "lambda" };
 void waitOpts;
 void afterOpts;
 void namedOpts;

@@ -21,6 +21,7 @@ const OUTER_KEYS = [
 ] as const;
 const RESPONSE_KEYS = [
   "runId",
+  "_meta",
   "content",
   "text",
   "object",
@@ -72,7 +73,7 @@ export function encodeEvalHostResult(input: {
   readonly evidence: EvalTaskHostResult;
 }): JsonValue {
   const payload = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     protocol: CRUX_EVAL_HOST_PROTOCOL,
     jobId: input.jobId,
     evalRunId: input.evalRunId,
@@ -98,7 +99,7 @@ export function decodeEvalHostResult(
     !OUTER_KEYS.every(
       (key) => key === "renderedPromptFingerprint" || key in value,
     ) ||
-    value.schemaVersion !== 1 ||
+    value.schemaVersion !== 2 ||
     value.protocol !== CRUX_EVAL_HOST_PROTOCOL ||
     value.jobId !== expected.jobId ||
     value.evalRunId !== expected.evalRunId ||
@@ -140,6 +141,7 @@ function isResponse(value: unknown): boolean {
     hasOnlyKeys(value, RESPONSE_KEYS) &&
     typeof value.runId === "string" &&
     value.runId.length > 0 &&
+    isOperationResultMeta(value._meta) &&
     Array.isArray(value.content) &&
     typeof value.text === "string" &&
     Array.isArray(value.steps) &&
@@ -148,6 +150,17 @@ function isResponse(value: unknown): boolean {
     Array.isArray(value.messages) &&
     Array.isArray(value.warnings) &&
     isJsonValue(value)
+  );
+}
+
+function isOperationResultMeta(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    isJsonValue(value) &&
+    typeof value.traceId === "string" &&
+    /^[0-9a-f]{32}$/u.test(value.traceId) &&
+    typeof value.spanId === "string" &&
+    /^[0-9a-f]{16}$/u.test(value.spanId)
   );
 }
 

@@ -54,6 +54,18 @@ export interface EmbeddingBase {
     maxSize: number
     concurrency: number
   }>
+  /**
+   * Stable identity for vector-producing semantics.
+   *
+   * Covers configuration that can change vector values for identical input
+   * (kind, name, dimensions, max input tokens, preprocessors, truncation,
+   * declared `version`) and excludes operational policy (batching, retry,
+   * rate limits, caching). Always present on instances created by
+   * {@link embedding}; optional so structurally-typed embeddings remain valid.
+   * Embeddings without a fingerprint are computed on every indexing run —
+   * the pipeline embedding-stage cache never guesses an identity.
+   */
+  readonly fingerprint?: string
 }
 
 /** A value that may be returned synchronously or as a promise. */
@@ -154,6 +166,13 @@ export interface EmbeddingGovernanceConfig {
   cache?: EmbeddingCache
   rateLimit?: EmbeddingRateLimitPolicy
   countTokens?: (text: string) => number
+  /**
+   * Model revision for cache invalidation.
+   *
+   * Bump when the provider changes vector output for identical input without
+   * changing the embedding `name`.
+   */
+  version?: string
 }
 
 /** Config for a dense {@link embedding}. Internal. */

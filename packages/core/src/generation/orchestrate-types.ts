@@ -57,6 +57,24 @@ export interface OrchestrationSpec<TPreparedArgs extends Record<string, unknown>
   timeout?: TimeoutOptions
 }
 
+/** Stream-specific subset consumed by the shared orchestration boundary. */
+export type StreamOrchestrationSpec<
+  TPreparedArgs extends Record<string, unknown>,
+> = Pick<
+  OrchestrationSpec<TPreparedArgs>,
+  | 'promptId'
+  | 'promptConfig'
+  | 'preparedArgs'
+  | 'input'
+  | 'provider'
+  | 'model'
+  | 'traceModel'
+  | 'resolved'
+  | 'outputMode'
+  | 'createCachedStreamResult'
+  | 'timeout'
+>
+
 /**
  * Callback that extracts a text delta string from an SDK-specific stream chunk.
  * Each adapter provides its own extractor since chunk formats differ by SDK.

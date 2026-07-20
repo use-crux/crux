@@ -8,6 +8,7 @@ import { isRetry, type RetryOptions } from "../../routing/retry";
 import { isRouter } from "../../routing/router";
 import { isSplit } from "../../routing/split";
 import { resolveCompletedFallback } from "./completed-fallback";
+import { isPolicyTerminal } from "../../safety/errors";
 
 export interface CompletedRoutingOptions {
   readonly input: unknown;
@@ -42,6 +43,7 @@ export async function resolveCompletedModel<TResult>(
       try {
         return await resolveCompletedModel(model.model, options, state, invoke);
       } catch (error) {
+        if (isPolicyTerminal(error)) throw error;
         lastError = error;
         if (
           attempt === model.options.attempts - 1 ||

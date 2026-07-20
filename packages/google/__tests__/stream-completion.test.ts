@@ -69,7 +69,13 @@ describe("Google stream completion", () => {
       role: "assistant",
       content: completion.content,
     });
-    expect(JSON.stringify(completion)).not.toContain("secret");
+    expect(
+      JSON.stringify({
+        text: completion.text,
+        content: completion.content,
+        messages: completion.messages,
+      }),
+    ).not.toContain("secret");
   });
 
   it("applies multiple independent slot rewrites without restoring provider text", async () => {

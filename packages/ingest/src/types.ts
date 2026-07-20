@@ -1,4 +1,5 @@
-import type { Asset, AssetRef, AudioSource, Message, TranscriptionResult } from '@use-crux/core'
+import type { Asset, AssetRef, AudioSource, Message } from '@use-crux/core'
+import type { TranscriptionPayload } from '@use-crux/core/adapter'
 
 export type IngestFormat = 'txt' | 'md' | 'html' | 'pdf' | 'image' | 'audio' | 'video' | 'csv' | 'json' | 'docx' | 'xlsx' | 'unknown'
 
@@ -132,9 +133,14 @@ export interface IngestMediaOperations {
     readonly maxOutputTokens?: number
     readonly abortSignal?: AbortSignal
   }>) => Promise<{ readonly text: string }>
-  /** Bound transcription operation used by audio ingestion. */
+  /**
+   * Application-owned transcription used by audio ingestion.
+   *
+   * The port requires provider payload facts only; a managed observed result is
+   * also accepted structurally, but custom callbacks never manufacture Crux IDs.
+   */
   readonly transcribe?: (input: Readonly<{ audio: AudioSource; abortSignal?: AbortSignal }>) => Promise<
-    TranscriptionResult<unknown, unknown, unknown>
+    TranscriptionPayload<unknown, unknown, unknown>
   >
 }
 

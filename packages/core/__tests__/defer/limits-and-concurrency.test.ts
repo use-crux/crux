@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { defer } from "@use-crux/core";
-import { runWithDeferInvocation } from "@use-crux/core/internal/defer-host";
-import { testLifetime } from "./test-lifetime";
+import { runWithDeferInvocation } from "@use-crux/core/internal/scope";
+import { testBinding } from "./test-binding";
 
 describe("defer limits and concurrency", () => {
   it("rejects registrations beyond the host callback limit before invocation", async () => {
@@ -15,7 +15,7 @@ describe("defer limits and concurrency", () => {
           defer(second);
         },
         {
-          lifetime: testLifetime(() => {}, { maxCallbacks: 1 }),
+          binding: testBinding(() => {}, { maxCallbacks: 1 }),
           classifyOutcome: (settlement) =>
             settlement.kind === "thrown" ? "error" : "success",
         },
@@ -48,7 +48,7 @@ describe("defer limits and concurrency", () => {
         });
       },
       {
-        lifetime: testLifetime(
+        binding: testBinding(
           (task) => {
             scheduled = task;
           },
@@ -82,7 +82,7 @@ describe("defer limits and concurrency", () => {
         });
       },
       {
-        lifetime: testLifetime(
+        binding: testBinding(
           (task) => {
             scheduled = task;
           },

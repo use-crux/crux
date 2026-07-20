@@ -1,12 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { defer, type CruxDeferError } from "@use-crux/core";
 import {
-  createAfterDeferLifetime,
-  createNamedOnlyDeferLifetime,
-  createWaitUntilDeferLifetime,
   withAfterDefer,
   withNamedOnlyDefer,
-  withServerlessDefer,
   withWaitUntilDefer,
   SERVERLESS_DEFER_POLICY,
 } from "@use-crux/core/defer/serverless";
@@ -17,7 +13,6 @@ import {
   resetObservabilityRuntime,
   setObservabilityTransport,
 } from "../../src/observability";
-import { withWorkersObservableInvocation } from "../../src/observability/workers";
 
 describe("serverless defer hosts", () => {
   afterEach(() => {
@@ -48,9 +43,6 @@ describe("serverless defer hosts", () => {
 
     const response = await handle();
     expect(response).toBeInstanceOf(Response);
-    expect(createWaitUntilDeferLifetime({ waitUntil }).completion).toBe(
-      "handler-returned",
-    );
     expect(waitUntil).toHaveBeenCalledOnce();
     // Handler-returned work may already have started while the Response is held.
     expect(started).toHaveBeenCalledOnce();
@@ -76,69 +68,9 @@ describe("serverless defer hosts", () => {
 
     await expect(handle()).resolves.toBe("ok");
     expect(started).not.toHaveBeenCalled();
-    expect(createAfterDeferLifetime({ after }).completion).toBe(
-      "response-finished",
-    );
 
     await runAfter?.();
     expect(started).toHaveBeenCalledOnce();
-  });
-
-  it("flushes deferred evidence from the retained waitUntil task after an earlier Workers drain", async () => {
-    const transport = createInMemoryObservabilityTransport();
-    setObservabilityTransport(transport, { scheduledDelayMs: 60_000 });
-
-    const retained: Promise<unknown>[] = [];
-    let releaseCallback!: () => void;
-    const callbackGate = new Promise<void>((resolve) => {
-      releaseCallback = resolve;
-    });
-    const context = {
-      waitUntil(promise: Promise<unknown>) {
-        retained.push(promise);
-      },
-    };
-    const deferredHandler = withWaitUntilDefer(
-      async () => {
-        defer(async () => {
-          await callbackGate;
-        });
-        return "ok";
-      },
-      { waitUntil: context.waitUntil.bind(context) },
-    );
-    const handler = withWorkersObservableInvocation(
-      deferredHandler,
-      () => context,
-    );
-
-    await expect(handler()).resolves.toBe("ok");
-    expect(retained).toHaveLength(2);
-
-    // The wrapper-level drain can finish before deferred execution emits.
-    await retained[1];
-    const deferredRunStart = transport.records.find(
-      (record) =>
-        record.type === "span:start" && record.primitive === "defer.run",
-    );
-    expect(deferredRunStart).toBeDefined();
-    expect(
-      transport.records.some(
-        (record) =>
-          record.type === "span:end" &&
-          record.spanId === deferredRunStart?.spanId,
-      ),
-    ).toBe(false);
-
-    releaseCallback();
-    await retained[0];
-    expect(
-      transport.records.some(
-        (record) =>
-          record.type === "span:end" &&
-          record.spanId === deferredRunStart?.spanId,
-      ),
-    ).toBe(true);
   });
 
   it("flushes response-finished deferred evidence inside the after task", async () => {
@@ -170,6 +102,7 @@ describe("serverless defer hosts", () => {
   });
 
   it("bounds the retained-task flush when delivery remains retryable", async () => {
+    vi.useFakeTimers();
     setObservabilityTransport(
       {
         send() {
@@ -193,32 +126,31 @@ describe("serverless defer hosts", () => {
         waitUntil(promise) {
           retained.push(promise);
         },
-        limits: {
-          ...SERVERLESS_DEFER_POLICY,
-          maxDrainMs: 20,
-        },
       },
     );
 
     await handler();
-    const startedAt = Date.now();
-    await retained[0];
-    expect(Date.now() - startedAt).toBeLessThan(500);
+    let settled = false;
+    void retained[0]?.then(() => {
+      settled = true;
+    });
+    await vi.advanceTimersByTimeAsync(2_999);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    await expect(retained[0]).resolves.toBeUndefined();
   });
 
-  it("never infers a lifetime from platform environment names", async () => {
+  it("never infers a binding from platform environment names", async () => {
     const previous = process.env.VERCEL;
     process.env.VERCEL = "1";
     try {
       await expect(
-        withServerlessDefer(
+        withNamedOnlyDefer(
           async () => {
             defer(() => {});
             return "ok";
           },
-          {
-            lifetime: createNamedOnlyDeferLifetime({ host: "generic" }),
-          },
+          { host: "generic" },
         )(),
       ).rejects.toMatchObject({
         code: "DEFER_CAPABILITY_MISSING",
@@ -270,19 +202,17 @@ describe("serverless defer hosts", () => {
 
   it("rejects missing waitUntil and after ports before registration", () => {
     expect(() =>
-      createWaitUntilDeferLifetime({
+      withWaitUntilDefer(async () => undefined, {
         waitUntil: undefined as unknown as (promise: Promise<void>) => void,
       }),
-    ).toThrow(
-      expect.objectContaining({ code: "DEFER_CAPABILITY_MISSING" }),
-    );
+    ).toThrow(expect.objectContaining({ code: "DEFER_CAPABILITY_MISSING" }));
     expect(() =>
-      createAfterDeferLifetime({
-        after: undefined as unknown as (task: () => void | Promise<void>) => void,
+      withAfterDefer(async () => undefined, {
+        after: undefined as unknown as (
+          task: () => void | Promise<void>,
+        ) => void,
       }),
-    ).toThrow(
-      expect.objectContaining({ code: "DEFER_CAPABILITY_MISSING" }),
-    );
+    ).toThrow(expect.objectContaining({ code: "DEFER_CAPABILITY_MISSING" }));
   });
 
   it("exposes fixed V1 serverless limits", () => {

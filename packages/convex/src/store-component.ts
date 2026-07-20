@@ -40,12 +40,6 @@ export interface ConvexCruxStorageTransportComponent {
   readonly memory: Pick<ConvexCruxStorageMemoryComponent, 'get' | 'list'>
 }
 
-/** Options passed when a normalized component creates server document I/O. */
-export interface ConvexStoreDocumentComponentIoOptions {
-  /** Vector index name used for dense vector search. */
-  readonly vectorIndexName: string
-}
-
 /** Options passed when a normalized component creates React document reads. */
 export interface ConvexStoreDocumentComponentReadOptions {
   /**
@@ -72,7 +66,7 @@ export interface ConvexStoreDocumentComponent<TCtx extends ConvexCtxPort = Conve
   /** Backing component table name. */
   readonly table: StoreDocComponentTable
   /** Create raw document I/O for a server-side Convex ctx. */
-  io(ctx: TCtx, options: ConvexStoreDocumentComponentIoOptions): ComponentDocumentPort<StoreDocRecord>
+  io(ctx: TCtx): ComponentDocumentPort<StoreDocRecord>
   /** Create React transport reads for the component. */
   reads(args: ConvexStoreDocumentComponentReadOptions): Pick<CruxTransport, 'useDocument' | 'useDocumentList'>
 }

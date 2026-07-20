@@ -12,32 +12,44 @@
  * @module
  */
 
-import type { ModelInfo } from '../../types'
-import type { GenerationSettings } from '../../generation/types'
-import type { Message } from '../../generation/messages'
-import type { AdapterResponse } from '../types'
-import type { LoopRuntimePort } from '../loop-runtime-port'
+import type { ModelInfo } from "../../types";
+import type { GenerationSettings } from "../../generation/types";
+import type { Message } from "../../generation/messages";
+import type { AdapterResponse } from "../types";
+import type { LoopRuntimePort } from "../loop-runtime-port";
 import type {
   ExecutorOutcome,
+  ExecutorProviderStreamHandle,
   ExecutorRequest,
-  ExecutorStreamHandle,
   PendingToolApproval,
   StepDirective,
+  StepTransformer,
   StructuredAttempt,
-} from '../executor-types'
-import { validateStructuredOutput } from '../policy/validation-retry'
-import { toJsonValue, renderToolModelOutput, createToolModelOutput, normalizeToolInput } from '../tool/emission'
+} from "../executor-types";
+import { validateStructuredOutput } from "../policy/validation-retry";
+import { responseContent, textFromAssistantContent } from "../assistant-output";
+import { transformCanonicalStep } from "../step-transform";
+import {
+  toJsonValue,
+  renderToolModelOutput,
+  createToolModelOutput,
+  normalizeToolInput,
+} from "../tool/emission";
 
 /** One scripted model emission inside a `runTextLoop` script. */
 export interface FakeLoopEmission {
   /** Assistant text for this step. */
-  readonly text?: string
+  readonly text?: string;
   /**
    * Tool calls the "model" requests this step. The fake executes them
    * against the request's (instrumented) tool map, exactly like a real
    * SDK loop would.
    */
-  readonly toolCalls?: ReadonlyArray<{ readonly id?: string; readonly name: string; readonly args: unknown }>
+  readonly toolCalls?: ReadonlyArray<{
+    readonly id?: string;
+    readonly name: string;
+    readonly args: unknown;
+  }>;
 }
 
 /** Configuration for {@link fakeLoopRuntime}. */
@@ -48,45 +60,45 @@ export interface FakeLoopRuntimeConfig {
    * call throw (for fallback/routing tests).
    * @defaultValue a single `[{ text: 'fake response' }]` script, reused
    */
-  readonly loops?: ReadonlyArray<readonly FakeLoopEmission[] | Error>
+  readonly loops?: ReadonlyArray<readonly FakeLoopEmission[] | Error>;
   /**
    * Raw model texts consumed one per `runStructuredAttempt()` call. The fake
    * validates each against the request's schema and returns `ok` or
    * `invalid` accordingly — script invalid JSON to drive retry policy.
    */
-  readonly structured?: ReadonlyArray<string | Error>
+  readonly structured?: ReadonlyArray<string | Error>;
   /** Chunk sequences consumed one per `runStream()` call. */
-  readonly streams?: ReadonlyArray<readonly string[]>
+  readonly streams?: ReadonlyArray<readonly string[]>;
   /** Cost reported in every outcome's meta, when set. */
-  readonly costUsd?: number
+  readonly costUsd?: number;
 }
 
 /** The raw "SDK result" type produced by the fake loop runtime. */
 export interface FakeRawResponse {
-  readonly kind: 'fake-loop' | 'fake-structured'
-  readonly text: string
-  readonly object?: unknown
+  readonly kind: "fake-loop" | "fake-structured";
+  readonly text: string;
+  readonly object?: unknown;
   /** The system prompt in effect for the FINAL step (observes `amend`). */
-  readonly system: string | undefined
+  readonly system: string | undefined;
 }
 
 /** The raw "SDK stream result" type produced by the fake loop runtime. */
 export interface FakeRawStream {
-  readonly kind: 'fake-stream'
-  readonly chunks: readonly string[]
-  readonly text: string
+  readonly kind: "fake-stream";
+  readonly chunks: readonly string[];
+  readonly text: string;
 }
 
 /** A scripted fake loop runtime plus its recorded calls. */
 export interface FakeLoopRuntime {
   /** The {@link LoopRuntimePort} to pass to `loopRuntimeAdapter()`. */
-  readonly runtime: LoopRuntimePort<string, FakeRawResponse, FakeRawStream>
+  readonly runtime: LoopRuntimePort<string, FakeRawResponse, FakeRawStream>;
   /** Every request each method received, in call order — assert on these. */
   readonly calls: {
-    readonly runTextLoop: Array<ExecutorRequest<string>>
-    readonly runStructuredAttempt: Array<ExecutorRequest<string>>
-    readonly runStream: Array<ExecutorRequest<string>>
-  }
+    readonly runTextLoop: Array<ExecutorRequest<string>>;
+    readonly runStructuredAttempt: Array<ExecutorRequest<string>>;
+    readonly runStream: Array<ExecutorRequest<string>>;
+  };
 }
 
 const FAKE_USAGE = {
@@ -95,15 +107,20 @@ const FAKE_USAGE = {
   totalTokens: 30,
   inputTokenDetails: {},
   outputTokenDetails: {},
-} as const
+} as const;
 
 interface FakeToolLike {
-  execute?: (input: unknown, options: { toolCallId?: string; messages?: readonly unknown[] }) => unknown
+  execute?: (
+    input: unknown,
+    options: { toolCallId?: string; messages?: readonly unknown[] },
+  ) => unknown;
   toModelOutput?: (args: {
-    toolCallId: string
-    input: Record<string, unknown>
-    output: unknown
-  }) => import('../../types/tool').ToolModelOutput | Promise<import('../../types/tool').ToolModelOutput>
+    toolCallId: string;
+    input: Record<string, unknown>;
+    output: unknown;
+  }) =>
+    | import("../../types/tool").ToolModelOutput
+    | Promise<import("../../types/tool").ToolModelOutput>;
 }
 
 /**
@@ -132,83 +149,116 @@ interface FakeToolLike {
  * expect(fake.calls.runStructuredAttempt).toHaveLength(2)
  * ```
  */
-export function fakeLoopRuntime(config: FakeLoopRuntimeConfig = {}): FakeLoopRuntime {
-  const loops = [...(config.loops ?? [])]
-  const structured = [...(config.structured ?? [])]
-  const streams = [...(config.streams ?? [])]
-  const calls: FakeLoopRuntime['calls'] = { runTextLoop: [], runStructuredAttempt: [], runStream: [] }
+export function fakeLoopRuntime(
+  config: FakeLoopRuntimeConfig = {},
+): FakeLoopRuntime {
+  const loops = [...(config.loops ?? [])];
+  const structured = [...(config.structured ?? [])];
+  const streams = [...(config.streams ?? [])];
+  const calls: FakeLoopRuntime["calls"] = {
+    runTextLoop: [],
+    runStructuredAttempt: [],
+    runStream: [],
+  };
+  const transformIndexes = new WeakMap<StepTransformer, number>();
+
+  const transformContent = async (
+    request: Pick<ExecutorRequest<string>, "stepTransformer">,
+    content: readonly import("../../types/content").AssistantContentPart[],
+  ) => {
+    const transformer = request.stepTransformer;
+    if (!transformer) return content;
+    const index = transformIndexes.get(transformer) ?? 0;
+    transformIndexes.set(transformer, index + 1);
+    return transformCanonicalStep(transformer, { index, content });
+  };
 
   const runtime: LoopRuntimePort<string, FakeRawResponse, FakeRawStream> = {
-    id: 'fake',
+    id: "fake",
+    capabilities: { stepTransform: "before-client-tools" },
 
     describeModel(model: string): ModelInfo {
-      const idx = model.indexOf(':')
-      if (idx > 0) return { provider: model.slice(0, idx), modelId: model.slice(idx + 1) }
-      return { provider: 'fake', modelId: model }
+      const idx = model.indexOf(":");
+      if (idx > 0)
+        return { provider: model.slice(0, idx), modelId: model.slice(idx + 1) };
+      return { provider: "fake", modelId: model };
     },
 
     mapSettings(settings: GenerationSettings): Record<string, unknown> {
-      return { ...settings }
+      return { ...settings };
     },
 
     async runTextLoop(request): Promise<ExecutorOutcome<FakeRawResponse>> {
-      calls.runTextLoop.push(request)
-      const script = loops.shift() ?? [{ text: 'fake response' }]
-      if (script instanceof Error) throw script
+      calls.runTextLoop.push(request);
+      const script = loops.shift() ?? [{ text: "fake response" }];
+      if (script instanceof Error) throw script;
 
-      let system = request.system
-      let tools = request.tools
-      let activeTools = request.activeTools
-      let messages: Message[] = [...(request.messages ?? [])]
+      let system = request.system;
+      let tools = request.tools;
+      let activeTools = request.activeTools;
+      let messages: Message[] = [...(request.messages ?? [])];
       if (messages.length === 0 && request.prompt) {
-        messages = [{ role: 'user', content: request.prompt }]
+        messages = [{ role: "user", content: request.prompt }];
       }
 
-      let steps = 0
+      let steps = 0;
       let lastResponse: AdapterResponse = {
-        text: '',
+        text: "",
         toolCalls: undefined,
         usage: { ...FAKE_USAGE },
-        finishReason: 'stop',
+        finishReason: "stop",
         responseId: undefined,
         actualModelId: request.modelInfo.modelId,
-      }
+      };
 
       for (let index = 0; index < script.length; index++) {
-        if (steps >= request.maxSteps) break
-        steps++
-        const emission = script[index]!
+        if (steps >= request.maxSteps) break;
+        steps++;
+        const emission = script[index]!;
         const toolCalls = (emission.toolCalls ?? []).map((tc, j) => ({
           id: tc.id ?? `tc_${index}_${j}`,
           name: tc.name,
           args: tc.args,
-        }))
+        }));
 
         lastResponse = {
-          text: emission.text ?? '',
+          text: emission.text ?? "",
           toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
           usage: { ...FAKE_USAGE },
-          finishReason: toolCalls.length > 0 ? 'tool-calls' : 'stop',
+          finishReason: toolCalls.length > 0 ? "tool-calls" : "stop",
           responseId: `fake_${index}`,
           actualModelId: request.modelInfo.modelId,
+        };
+        const canonicalContent = responseContent(lastResponse);
+        if (request.stepTransformer !== undefined) {
+          const content = await transformContent(request, canonicalContent);
+          lastResponse = {
+            ...lastResponse,
+            content,
+            text: textFromAssistantContent(content),
+          };
         }
 
         if (toolCalls.length === 0) {
-          messages = [...messages, { role: 'assistant', content: lastResponse.text }]
+          messages = [
+            ...messages,
+            { role: "assistant", content: lastResponse.text },
+          ];
           await request.observer?.onStepEnd({
             index: steps - 1,
             text: lastResponse.text,
+            content: lastResponse.content,
             toolCalls: [],
             toolResults: [],
-            finishReason: 'stop',
+            finishReason: "stop",
             usage: lastResponse.usage,
-          })
-          break
+          });
+          break;
         }
 
         // Approval scan first: a real SDK detects approval-gated tools before executing.
         for (const tc of toolCalls) {
-          const tool = lookupTool(tools, activeTools, tc.name)
+          const tool = lookupTool(tools, activeTools, tc.name);
           if (
             tool &&
             (await request.toolApproval?.({
@@ -222,131 +272,169 @@ export function fakeLoopRuntime(config: FakeLoopRuntimeConfig = {}): FakeLoopRun
               toolCallId: tc.id,
               toolName: tc.name,
               input: toJsonValue(tc.args),
-            }
+            };
             return {
-              status: 'suspended',
-              reason: 'tool-approval',
+              status: "suspended",
+              reason: "tool-approval",
               pendingApprovals: [pending],
               assistantResponse: lastResponse,
               messages,
               steps,
-            }
+            };
           }
         }
 
-        const toolResults: Array<{ toolCallId: string; toolName: string; output: unknown }> = []
-        const toolMessages: Message[] = []
+        const toolResults: Array<{
+          toolCallId: string;
+          toolName: string;
+          output: unknown;
+        }> = [];
+        const toolMessages: Message[] = [];
         for (const tc of toolCalls) {
-          const tool = lookupTool(tools, activeTools, tc.name)
-          let output: unknown
+          const tool = lookupTool(tools, activeTools, tc.name);
+          let output: unknown;
           try {
-            output = tool?.execute ? await tool.execute(tc.args, { toolCallId: tc.id, messages }) : undefined
+            output = tool?.execute
+              ? await tool.execute(tc.args, { toolCallId: tc.id, messages })
+              : undefined;
           } catch (error) {
-            output = { error: error instanceof Error ? error.message : String(error) }
+            output = {
+              error: error instanceof Error ? error.message : String(error),
+            };
           }
-          toolResults.push({ toolCallId: tc.id, toolName: tc.name, output })
+          toolResults.push({ toolCallId: tc.id, toolName: tc.name, output });
           const modelOutput = tool
-            ? await createToolModelOutput({ tool, toolCallId: tc.id, input: normalizeToolInput(tc.args), output })
-            : ({ type: 'error-json', value: { error: `Tool "${tc.name}" not found` } } as const)
+            ? await createToolModelOutput({
+                tool,
+                toolCallId: tc.id,
+                input: normalizeToolInput(tc.args),
+                output,
+              })
+            : ({
+                type: "error-json",
+                value: { error: `Tool "${tc.name}" not found` },
+              } as const);
           toolMessages.push({
-            role: 'tool',
+            role: "tool",
             content: renderToolModelOutput(modelOutput),
             metadata: { toolCallId: tc.id, toolName: tc.name },
-          })
+          });
         }
 
         messages = [
           ...messages,
-          { role: 'assistant', content: lastResponse.text, metadata: { toolCalls } },
+          {
+            role: "assistant",
+            content: lastResponse.text,
+            metadata: { toolCalls },
+          },
           ...toolMessages,
-        ]
+        ];
 
         const directive: StepDirective = (await request.observer?.onStepEnd({
           index: steps - 1,
           text: lastResponse.text,
+          content: lastResponse.content,
           toolCalls,
           toolResults,
-          finishReason: 'tool_calls',
+          finishReason: "tool_calls",
           usage: lastResponse.usage,
-        })) ?? { kind: 'continue' }
+        })) ?? { kind: "continue" };
 
-        if (directive.kind === 'stop') break
-        if (directive.kind === 'amend') {
-          if (directive.system !== undefined) system = directive.system
-          if (directive.tools !== undefined) tools = directive.tools
-          if (directive.activeTools !== undefined) activeTools = directive.activeTools
-          if (directive.refundStep) steps--
+        if (directive.kind === "stop") break;
+        if (directive.kind === "amend") {
+          if (directive.system !== undefined) system = directive.system;
+          if (directive.tools !== undefined) tools = directive.tools;
+          if (directive.activeTools !== undefined)
+            activeTools = directive.activeTools;
+          if (directive.refundStep) steps--;
         }
       }
 
       return {
-        status: 'complete',
-        raw: { kind: 'fake-loop', text: lastResponse.text, system },
+        status: "complete",
+        raw: { kind: "fake-loop", text: lastResponse.text, system },
         response: lastResponse,
         messages,
         steps,
         meta: config.costUsd !== undefined ? { costUsd: config.costUsd } : {},
-      }
+      };
     },
 
-    async runStructuredAttempt(request): Promise<StructuredAttempt<FakeRawResponse>> {
-      calls.runStructuredAttempt.push(request)
-      const scripted = structured.shift() ?? '{}'
-      if (scripted instanceof Error) throw scripted
+    async runStructuredAttempt(
+      request,
+    ): Promise<StructuredAttempt<FakeRawResponse>> {
+      calls.runStructuredAttempt.push(request);
+      const scripted = structured.shift() ?? "{}";
+      if (scripted instanceof Error) throw scripted;
 
-      const validation = validateStructuredOutput(scripted, request.schema)
+      const canonicalContent = await transformContent(request, [
+        { type: "text", text: scripted },
+      ]);
+      const guardedText = textFromAssistantContent(canonicalContent);
+      const validation = validateStructuredOutput(guardedText, request.schema);
       if (!validation.valid) {
-        return { status: 'invalid', rawText: scripted, error: validation.error! }
+        return {
+          status: "invalid",
+          rawText: guardedText,
+          error: validation.error!,
+        };
       }
-      const object: unknown = JSON.parse(validation.repairedText)
+      const object: unknown = JSON.parse(validation.repairedText);
       return {
-        status: 'ok',
-        raw: { kind: 'fake-structured', text: validation.repairedText, object, system: request.system },
+        status: "ok",
+        raw: {
+          kind: "fake-structured",
+          text: validation.repairedText,
+          object,
+          system: request.system,
+        },
         response: {
           text: validation.repairedText,
           toolCalls: undefined,
           usage: { ...FAKE_USAGE },
-          finishReason: 'stop',
-          responseId: 'fake_structured',
+          finishReason: "stop",
+          responseId: "fake_structured",
           actualModelId: request.modelInfo.modelId,
         },
         object,
-      }
+      };
     },
 
-    async runStream(request): Promise<ExecutorStreamHandle<FakeRawStream>> {
-      calls.runStream.push(request)
-      const scripted = streams.shift() ?? ['fake ', 'stream']
+    async runStream(request): Promise<ExecutorProviderStreamHandle<FakeRawStream>> {
+      calls.runStream.push(request);
+      const scripted = streams.shift() ?? ["fake ", "stream"];
 
       // Drive the safety streaming sub-protocol exactly as a real port must:
       // feed deltas, forward emits, swallow holds, append the seal's pending
       // tail. Blocks reject the stream.
-      let chunks: readonly string[] = scripted
+      let chunks: readonly string[] = scripted;
       if (request.safety) {
-        const emitted: string[] = []
+        const emitted: string[] = [];
         for (const chunk of scripted) {
-          const directive = await request.safety.feed(chunk)
-          if (directive.kind === 'emit' && directive.content.length > 0) emitted.push(directive.content)
+          const directive = await request.safety.feed(chunk);
+          if (directive.kind === "emit" && directive.content.length > 0)
+            emitted.push(directive.content);
         }
-        const seal = await request.safety.finish()
-        if (seal.pending.length > 0) emitted.push(seal.pending)
-        chunks = emitted
+        const seal = await request.safety.finish();
+        if (seal.pending.length > 0) emitted.push(seal.pending);
+        chunks = emitted;
       }
 
-      const text = chunks.join('')
+      const text = chunks.join("");
       return {
-        raw: { kind: 'fake-stream', chunks, text },
+        raw: { kind: "fake-stream", chunks, text },
         completion: async () => ({
           text,
           usage: FAKE_USAGE,
-          finishReason: 'stop',
+          finishReason: "stop",
           streaming: { totalChunks: chunks.length, ttftMs: 1 },
         }),
-      }
+      };
     },
-  }
+  };
 
-  return { runtime, calls }
+  return { runtime, calls };
 }
 
 function lookupTool(
@@ -354,8 +442,8 @@ function lookupTool(
   activeTools: readonly string[] | undefined,
   name: string,
 ): FakeToolLike | undefined {
-  if (!tools) return undefined
-  if (activeTools && !activeTools.includes(name)) return undefined
-  const tool = tools[name]
-  return tool && typeof tool === 'object' ? (tool as FakeToolLike) : undefined
+  if (!tools) return undefined;
+  if (activeTools && !activeTools.includes(name)) return undefined;
+  const tool = tools[name];
+  return tool && typeof tool === "object" ? (tool as FakeToolLike) : undefined;
 }

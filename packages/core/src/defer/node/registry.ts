@@ -1,95 +1,72 @@
-import type { DeferScheduledTask } from "../host-types";
-
 interface RegistryEntry {
   state: "waiting" | "running";
-  readonly cancelWaiting: (reason: unknown) => void;
-  task?: DeferScheduledTask;
+  readonly cancel: (reason: unknown) => void;
 }
 
-/** Per-host registry for response-bound and running Node callback drains. */
-export class NodeDeferRegistry {
-  private readonly entries = new Set<RegistryEntry>();
-  private readonly changeWaiters = new Set<() => void>();
-  private shutdownPromise:
-    | Promise<{
-        readonly completed: boolean;
-        readonly pending: number;
-      }>
-    | undefined;
-  private shuttingDown = false;
-
-  constructor(private readonly shutdownDrainMs: number) {}
-
-  addWaiting(cancelWaiting: (reason: unknown) => void): RegistryEntry {
-    const entry: RegistryEntry = { state: "waiting", cancelWaiting };
-    if (this.shuttingDown) {
-      cancelWaiting(new Error("The Node defer host is already shut down."));
-      return entry;
-    }
-    this.entries.add(entry);
-    this.notifyChange();
-    return entry;
-  }
-
-  start(entry: RegistryEntry, task: DeferScheduledTask): void {
-    if (!this.entries.has(entry)) {
-      task.cancel(new Error("The Node defer host is already shut down."));
-      return;
-    }
-    entry.state = "running";
-    entry.task = task;
-
-    let running: Promise<void>;
-    try {
-      running = task.run();
-    } catch (error) {
-      running = Promise.reject(error);
-    }
-    void running
-      .catch(() => undefined)
-      .finally(() => {
-        this.remove(entry);
-      });
-  }
-
+/** Closure-owned registry for response-bound and running Node drains. */
+export interface NodeDeferRegistry {
+  addWaiting(cancel: (reason: unknown) => void): NodeDeferRegistryEntry;
+  start(entry: NodeDeferRegistryEntry, work: () => Promise<void>): void;
   shutdown(): Promise<{
     readonly completed: boolean;
     readonly pending: number;
-  }> {
-    this.shuttingDown = true;
-    this.shutdownPromise ??= this.performShutdown();
-    return this.shutdownPromise;
-  }
+  }>;
+}
 
-  private async performShutdown(): Promise<{
+/** Create an isolated Node drain registry with bounded shutdown. */
+export function createNodeDeferRegistry(
+  shutdownDrainMs: number,
+): NodeDeferRegistry {
+  const entries = new Set<RegistryEntry>();
+  const changeWaiters = new Set<() => void>();
+  let shutdownPromise:
+    | Promise<{ readonly completed: boolean; readonly pending: number }>
+    | undefined;
+  let shuttingDown = false;
+
+  const notifyChange = (): void => {
+    for (const resolve of changeWaiters) resolve();
+    changeWaiters.clear();
+  };
+
+  const remove = (entry: RegistryEntry): void => {
+    if (!entries.delete(entry)) return;
+    notifyChange();
+  };
+
+  const waitForChange = (): Promise<void> =>
+    new Promise((resolve) => {
+      changeWaiters.add(resolve);
+    });
+
+  const performShutdown = async (): Promise<{
     readonly completed: boolean;
     readonly pending: number;
-  }> {
-    if (this.entries.size === 0) return { completed: true, pending: 0 };
+  }> => {
+    if (entries.size === 0) return { completed: true, pending: 0 };
 
     const deadlineToken = Symbol("node.defer.shutdown-deadline");
     let timeout: ReturnType<typeof setTimeout> | undefined;
     const deadline = new Promise<typeof deadlineToken>((resolve) => {
-      timeout = setTimeout(() => resolve(deadlineToken), this.shutdownDrainMs);
+      timeout = setTimeout(() => resolve(deadlineToken), shutdownDrainMs);
     });
 
-    while (this.entries.size > 0) {
+    while (entries.size > 0) {
       const result = await Promise.race([
-        this.waitForChange().then(() => undefined),
+        waitForChange().then(() => undefined),
         deadline,
       ]);
       if (result !== deadlineToken) continue;
 
       const reason = new Error("Node defer shutdown deadline exceeded.");
       let pending = 0;
-      for (const entry of [...this.entries]) {
+      for (const entry of [...entries]) {
+        entry.cancel(reason);
         if (entry.state === "waiting") {
-          entry.cancelWaiting(reason);
-          this.remove(entry);
-          continue;
+          remove(entry);
+        } else {
+          pending += 1;
         }
-        pending += 1;
-        entry.task?.cancel(reason);
       }
       await Promise.resolve();
       await Promise.resolve();
@@ -98,23 +75,39 @@ export class NodeDeferRegistry {
 
     if (timeout) clearTimeout(timeout);
     return { completed: true, pending: 0 };
-  }
+  };
 
-  private remove(entry: RegistryEntry): void {
-    if (!this.entries.delete(entry)) return;
-    this.notifyChange();
-  }
-
-  private waitForChange(): Promise<void> {
-    return new Promise((resolve) => {
-      this.changeWaiters.add(resolve);
-    });
-  }
-
-  private notifyChange(): void {
-    for (const resolve of this.changeWaiters) resolve();
-    this.changeWaiters.clear();
-  }
+  return Object.freeze({
+    addWaiting(cancel): RegistryEntry {
+      const entry: RegistryEntry = { state: "waiting", cancel };
+      if (shuttingDown) {
+        cancel(new Error("The Node defer host is already shut down."));
+        return entry;
+      }
+      entries.add(entry);
+      notifyChange();
+      return entry;
+    },
+    start(entry, work): void {
+      if (!entries.has(entry)) return;
+      entry.state = "running";
+      let running: Promise<void>;
+      try {
+        running = work();
+      } catch (error) {
+        running = Promise.reject(error);
+      }
+      void running.catch(() => undefined).finally(() => remove(entry));
+    },
+    shutdown(): Promise<{
+      readonly completed: boolean;
+      readonly pending: number;
+    }> {
+      shuttingDown = true;
+      shutdownPromise ??= performShutdown();
+      return shutdownPromise;
+    },
+  } satisfies NodeDeferRegistry);
 }
 
 export type NodeDeferRegistryEntry = RegistryEntry;

@@ -3,11 +3,15 @@ import type { AgentExecutor, AgentResult } from '../executor'
 import type { RetryOptions } from '../../generation/retry'
 import type { ValidationRetryOptions } from '../../generation/validation-retry'
 import type { CruxSpanId } from '../../observability'
+import type { WithOperationResultMeta } from '../../observability'
 import type { ExecutionContext } from '../../runtime/execution-context'
 import type { AnyModel, AnyToolSet } from '../../types'
 
 /** Composition modes supported by the shared agent composition runtime. */
 export type CompositionKind = 'parallel' | 'pipeline' | 'consensus' | 'swarm'
+
+type CompositionResultEnvelope<TResult extends object> =
+  TResult extends readonly unknown[] ? never : TResult
 
 /** Additional child execution-context fields for one composition step. */
 export interface CompositionStepContextInput {
@@ -120,6 +124,15 @@ export interface CompositionRuntime {
    * `composition.<kind>:<id>` format matching `store.ProjectDefinition.ID`.
    */
   readonly definitionId: string
-  /** Run mode-specific scheduling inside the shared lifecycle boundary. */
-  run<T>(body: (scope: CompositionScope) => Promise<T>): Promise<T>
+  /**
+   * Run mode-specific scheduling and finalize its public parent envelope.
+   *
+   * The returned `_meta` identifies this runtime's exact `composition.*`
+   * span; nested agent results retain their separate `agent.run` identities.
+   */
+  run<TResult extends object>(
+    body: (
+      scope: CompositionScope,
+    ) => Promise<CompositionResultEnvelope<TResult>>,
+  ): Promise<WithOperationResultMeta<CompositionResultEnvelope<TResult>>>
 }

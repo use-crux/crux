@@ -1,10 +1,14 @@
 /** Canonical stream-result assembly. @internal */
 
 import type { Message } from "../generation/messages";
+import type { GenerationMeta } from "../generation/types";
 import type { AssistantContentPart } from "../types/content";
 import type { ApprovalRequestInfo } from "./tool/approval";
-import type { StreamHandle } from "./types";
+import type { StreamCompletionMetadata, StreamHandle } from "./types";
 import type { CruxRunId } from "../observability";
+import type { WithOperationResultMeta } from "../observability";
+import { withOperationResultMeta } from "../observability/internal/result-meta";
+import { stampCruxRunId } from "../generation/run-id";
 import {
   attachRoutingToError,
   markRoutingMidStreamFailure,
@@ -12,13 +16,13 @@ import {
 } from "../routing/receipt";
 import {
   createResultAccumulator,
-  type StreamCompletion,
-  type StreamResult,
 } from "./result-accumulator";
+import type { StreamCompletion, StreamResult } from "./stream-result-types";
 
 /** Build the public stream envelope from an internal provider stream handle. */
 export function createStreamResult<TRawStream, TOutput = unknown>(
-  handle: StreamHandle<TRawStream> & { readonly runId: CruxRunId },
+  handle: WithOperationResultMeta<StreamHandle<TRawStream>> &
+    Readonly<{ runId: CruxRunId }>,
 ): StreamResult<TRawStream, TOutput> {
   let streamedText = "";
   let resolveStream: (() => void) | undefined;
@@ -50,7 +54,8 @@ export function createStreamResult<TRawStream, TOutput = unknown>(
     const text = typeof meta?.text === "string" ? meta.text : streamedText;
     const accumulator = createResultAccumulator();
     accumulator.addStep({
-      content: meta?.content?.length ? meta.content : [{ type: "text", text }],
+      content:
+        meta?.content !== undefined ? meta.content : [{ type: "text", text }],
       ...(meta?.usage !== undefined ? { usage: meta.usage } : {}),
       finishReason: meta?.finishReason,
       ...(meta?.toolCalls !== undefined ? { toolCalls: meta.toolCalls } : {}),
@@ -62,18 +67,20 @@ export function createStreamResult<TRawStream, TOutput = unknown>(
         : {}),
     });
     const extended = meta as typeof meta & StreamOutputMeta<TOutput>;
-    return {
-      ...accumulator.finalizeCompletion({
-        messages: meta?.messages ? [...meta.messages] : [],
-        ...(extended?.object !== undefined ? { object: extended.object } : {}),
-        ...(meta?.cost !== undefined ? { cost: meta.cost } : {}),
-        ...(extended?.pendingApprovals
-          ? { pendingApprovals: extended.pendingApprovals }
-          : {}),
-        ...(handle.routing !== undefined ? { routing: handle.routing } : {}),
-      }),
-      runId: handle.runId,
-    };
+    const payload = accumulator.finalizeCompletion({
+      messages: meta?.messages ? [...meta.messages] : [],
+      ...(extended?.object !== undefined ? { object: extended.object } : {}),
+      ...(meta?.cost !== undefined ? { cost: meta.cost } : {}),
+      ...(extended?.pendingApprovals
+        ? { pendingApprovals: extended.pendingApprovals }
+        : {}),
+      ...(handle.routing !== undefined ? { routing: handle.routing } : {}),
+      _meta: completionMetadata(meta),
+    });
+    return stampCruxRunId(
+      withOperationResultMeta(payload, handle._meta),
+      handle.runId,
+    );
   })();
   void completion.catch(() => undefined);
 
@@ -82,6 +89,7 @@ export function createStreamResult<TRawStream, TOutput = unknown>(
     textStream: textStream(),
     raw: handle.raw ?? handle.rawStream,
     completion,
+    _meta: handle._meta,
   };
 }
 
@@ -90,6 +98,23 @@ interface StreamOutputMeta<TOutput> {
   readonly messages?: readonly Message[];
   readonly content?: readonly AssistantContentPart[];
   readonly pendingApprovals?: readonly ApprovalRequestInfo[];
+}
+
+function completionMetadata(
+  meta: StreamCompletionMetadata | undefined,
+): GenerationMeta {
+  if (!meta) return {};
+  return {
+    ...(meta.usage !== undefined ? { usage: meta.usage } : {}),
+    ...(meta.cost !== undefined ? { cost: meta.cost } : {}),
+    ...(meta.finishReason !== undefined ? { finishReason: meta.finishReason } : {}),
+    ...(meta.stoppedBy !== undefined ? { stoppedBy: meta.stoppedBy } : {}),
+    ...(meta.toolCalls !== undefined ? { toolCalls: meta.toolCalls } : {}),
+    ...(meta.responseId !== undefined ? { responseId: meta.responseId } : {}),
+    ...(meta.actualModelId !== undefined ? { actualModelId: meta.actualModelId } : {}),
+    ...(meta.constraints !== undefined ? { constraints: meta.constraints } : {}),
+    ...(meta.guardrails !== undefined ? { guardrails: meta.guardrails } : {}),
+  };
 }
 
 function attachStreamRouting(

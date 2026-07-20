@@ -1136,35 +1136,6 @@
       "fidelity": "safe"
     },
     {
-      "id": "defer.missing_scope",
-      "source": "builtin",
-      "severity": "error",
-      "category": "runtime",
-      "maturity": "preview",
-      "confidence": "high",
-      "profiles": ["recommended", "strict"],
-      "title": "Deferred work executes without an invocation scope",
-      "description": "This eagerly executed defer() call is provably outside a supported invocation boundary.",
-      "rationale": "Deferred work needs the active host invocation scope and lifetime capability.",
-      "impact": "The call throws DEFER_SCOPE_REQUIRED when the module initializes.",
-      "docsUrl": "/docs/reference/crux-core/index-lints/defer-missing-scope",
-      "fixes": [
-        {
-          "title": "Move into a handler",
-          "description": "Move defer() inside a supported request or invocation handler.",
-          "kind": "manual"
-        }
-      ],
-      "suppression": {
-        "supported": true,
-        "scope": "next-line",
-        "directive": "// crux-lint-disable-next-line defer.missing_scope -- reason"
-      },
-      "phase": "index",
-      "requires": ["definitions"],
-      "fidelity": "safe"
-    },
-    {
       "id": "runtime.missing_runtime_config",
       "source": "builtin",
       "severity": "warning",

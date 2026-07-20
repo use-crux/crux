@@ -8,6 +8,7 @@
 
 import { KindTag } from "../../atoms";
 import { evidenceIsDegraded } from "@/features/run-detail/lib/explain/registries";
+import { decisionLocationLabel } from "@/features/run-detail/lib/explain/decision-location";
 import type { TurnDecision } from "@/types";
 import { EvidenceLevel, CoverageChip } from "../atoms";
 import { OpenTabLink } from "../band";
@@ -26,6 +27,12 @@ export function DecisionRow({
     decision.subject.kind;
   const degraded = evidenceIsDegraded(decision.reason.evidenceLevel);
   const uncovered = decision.coverage?.status === "none";
+  const evidence = [
+    decision.model,
+    decision.location ? decisionLocationLabel(decision.location) : undefined,
+    decision.escalatedToBlock ? "strip escalated to block" : undefined,
+  ].filter((value): value is string => value !== undefined);
+  const outcome = [decision.outcome, ...evidence].join(" · ");
   return (
     <div
       className="flex items-center gap-[11px] px-3.5 py-2.5"
@@ -45,7 +52,7 @@ export function DecisionRow({
           className="truncate text-[11px]"
           style={{ color: "var(--devtools-fg-muted)" }}
         >
-          {decision.outcome}
+          {outcome}
         </div>
       </div>
       <span

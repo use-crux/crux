@@ -21,12 +21,10 @@ export const STORE_DOC_COMPONENT_SPEC = {
     embedding: 'embedding',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt',
-    score: '_score',
     expiresAt: '_expiresAt',
     marker: '_cruxDoc',
   },
   defaultListLimit: 100,
-  defaultVectorIndexName: 'by_embedding',
 } as const
 
 /** Name of the component table used for Crux store documents. */

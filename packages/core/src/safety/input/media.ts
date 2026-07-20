@@ -1,21 +1,7 @@
 import type { Message } from '../../generation/messages'
-import { observe } from '../../observability'
-import { guardrailDefinitionRef } from '../../observability/definition-ref'
-import type { MediaPartLocation, MediaPartSubject } from '../boundary'
-import type { SafetyRunContext } from '../decision'
-import { safeCaptureSummary } from '../errors'
-import { GuardrailBlockedError } from '../guardrail/errors'
-import {
-  recordMediaGuardrailBlockedEdge,
-  recordMediaGuardrailReport,
-} from '../guardrail/observability'
-import type {
-  GuardrailAudit,
-  GuardrailAuditEntry,
-  GuardrailContext,
-  MediaGuardrailRunResult,
-} from '../guardrail/types'
-import { validateMediaGuardrailRunResult } from '../guardrail/types'
+import type { MediaPartSubject } from '../boundary'
+import type { GuardrailAudit, GuardrailContext } from '../guardrail/types'
+import { visitMedia, type MediaVisitGroup, type MediaVisitItem } from '../media/visit'
 import type { GuardrailBinding } from '../registry'
 
 interface GuardInputMediaOptions {
@@ -33,170 +19,57 @@ export interface MediaInputResult {
 
 /** Visit canonical user media in original order without provider projection. */
 export async function guardInputMedia(options: GuardInputMediaOptions): Promise<MediaInputResult> {
-  if (options.bindings.length === 0) {
-    return { messages: options.messages, actions: [], ran: false }
-  }
-
-  const actions: string[] = []
+  const projection = projectInputMedia(options.messages)
   const stripped = new Set<string>()
   let messages = options.messages
-  let ran = false
-
-  for (let messageIndex = 0; messageIndex < options.messages.length; messageIndex++) {
-    const message = options.messages[messageIndex]
-    if (!message || message.role !== 'user' || typeof message.content === 'string') continue
-
-    for (let partIndex = 0; partIndex < message.content.length; partIndex++) {
-      const part = message.content[partIndex]
-      if (!part || part.type === 'text') continue
-
-      for (const binding of options.bindings) {
-        ran = true
-        const start = performance.now()
-        const subject: MediaPartSubject = { part, messageIndex, partIndex }
-        const location: MediaPartLocation = {
-          messageIndex,
-          partIndex,
-          partType: part.type,
-        }
-        const context = options.context(messages)
-        const span = observe.openSpan({
-          name: binding.policy.id,
-          primitive: 'guardrail.run',
-          definitionRefs: [guardrailDefinitionRef(binding.policy.id)],
-          attributes: {
-            guardrailName: binding.policy.id,
-            category: binding.policy.category,
-            boundary: binding.boundary.id,
-            mode: binding.mode,
-            phase: 'input',
-            promptId: context.promptId,
-            model: context.model,
-            mediaPartType: location.partType,
-            messageIndex: location.messageIndex,
-            partIndex: location.partIndex,
-          },
-        })
-        let result: MediaGuardrailRunResult
-        try {
-          const value: unknown = await span.withContext(() =>
-            binding.policy.run(
-              subject as never,
-              mediaRunContext(binding, context) as never,
-            ),
-          )
-          result = validateMediaGuardrailRunResult(value, {
-            policyId: binding.policy.id,
-            boundary: binding.boundary.id,
-          })
-        } catch (error) {
-          span.error(error)
-          throw error
-        }
-        const escalatedToBlock =
-          result.action === 'strip' &&
-          binding.mode === 'enforce' &&
-          stripWouldEmptyMessage(message.content, messageIndex, partIndex, stripped)
-        const durationMs = performance.now() - start
-        span.withContext(() =>
-          recordMediaGuardrailReport(binding, result, location, durationMs, escalatedToBlock),
-        )
-        span.end({ attributes: { action: result.action, durationMs } })
-        const entry: GuardrailAuditEntry = {
-          guard: binding.policy.id,
-          ...(binding.policy.category !== undefined ? { category: binding.policy.category } : {}),
-          boundary: binding.boundary.id,
-          mode: binding.mode,
-          phase: 'input',
-          action: result.action,
-          ...(result.action === 'warn' || result.action === 'block' || result.action === 'strip'
-            ? { reason: result.reason }
-            : {}),
-          location,
-          ...(escalatedToBlock ? { escalatedToBlock: true as const } : {}),
-          durationMs,
-        }
-        actions.push(entry.action)
-        options.appendAudit({
-          applied: [entry],
-          blocked: (result.action === 'block' && binding.mode === 'enforce') || escalatedToBlock,
-        })
-
-        if (result.action === 'block' && binding.mode === 'enforce') {
-          span.withContext(() =>
-            recordMediaGuardrailBlockedEdge(binding, result.reason, location, false),
-          )
-          throw new GuardrailBlockedError({
-            guardrailId: binding.policy.id,
-            phase: 'input',
-            reason: result.reason,
-            decisions: [
-              {
-                policyId: binding.policy.id,
-                kind: 'guardrail',
-                boundary: binding.boundary.id,
-                mode: binding.mode,
-                action: 'block',
-                reason: result.reason,
-                location,
-                ...(binding.tuned ? { tuned: binding.tuned } : {}),
-                durationMs: entry.durationMs,
-                captured: safeCaptureSummary(''),
-              },
-            ],
-          })
-        }
-
-        if (result.action === 'strip' && binding.mode === 'enforce') {
-          if (escalatedToBlock) {
-            span.withContext(() =>
-              recordMediaGuardrailBlockedEdge(binding, result.reason, location, true),
-            )
-            throw new GuardrailBlockedError({
-              guardrailId: binding.policy.id,
-              phase: 'input',
-              reason: result.reason,
-              decisions: [
-                {
-                  policyId: binding.policy.id,
-                  kind: 'guardrail',
-                  boundary: binding.boundary.id,
-                  mode: binding.mode,
-                  action: 'block',
-                  reason: result.reason,
-                  location,
-                  ...(binding.tuned ? { tuned: binding.tuned } : {}),
-                  durationMs: entry.durationMs,
-                  captured: safeCaptureSummary(''),
-                },
-              ],
-            })
-          }
-          stripped.add(coordinateKey(messageIndex, partIndex))
-          messages = rebuildStrippedMessage(options.messages, messages, messageIndex, stripped)
-          break
-        }
-      }
-    }
-  }
+  const result = await visitMedia({
+    phase: 'input',
+    bindings: options.bindings,
+    items: projection.items,
+    groups: projection.groups,
+    context: () => options.context(messages),
+    appendAudit: options.appendAudit,
+    onStrip: ({ subject }) => {
+      if (subject.origin.kind !== 'message') throw new Error('Input media requires a message origin.')
+      stripped.add(coordinateKey(subject.origin.messageIndex, subject.origin.partIndex))
+      messages = rebuildStrippedMessage(options.messages, messages, subject.origin.messageIndex, stripped)
+    },
+  })
 
   return {
     messages,
-    actions,
-    ran,
+    actions: result.actions,
+    ran: result.ran,
   }
 }
 
-function stripWouldEmptyMessage(
-  content: readonly { readonly type: string }[],
-  messageIndex: number,
-  partIndex: number,
-  stripped: ReadonlySet<string>,
-): boolean {
-  return content.every(
-    (_part, originalPartIndex) =>
-      originalPartIndex === partIndex || stripped.has(coordinateKey(messageIndex, originalPartIndex)),
-  )
+function projectInputMedia(messages: readonly Message[]): {
+  readonly items: readonly MediaVisitItem[]
+  readonly groups: readonly MediaVisitGroup[]
+} {
+  const items: MediaVisitItem[] = []
+  const groups: MediaVisitGroup[] = []
+
+  for (let messageIndex = 0; messageIndex < messages.length; messageIndex++) {
+    const message = messages[messageIndex]
+    if (!message || message.role !== 'user' || typeof message.content === 'string') continue
+
+    const groupId = `message:${messageIndex}`
+    let hasMedia = false
+    for (let partIndex = 0; partIndex < message.content.length; partIndex++) {
+      const part = message.content[partIndex]
+      if (!part || part.type === 'text') continue
+      hasMedia = true
+      const origin = { kind: 'message' as const, messageIndex, partIndex }
+      const subject: MediaPartSubject = { part, origin }
+      items.push({ subject, groupId })
+    }
+    if (hasMedia) {
+      groups.push({ id: groupId, size: message.content.length, minimumRetained: 1 })
+    }
+  }
+
+  return { items, groups }
 }
 
 function rebuildStrippedMessage(
@@ -214,17 +87,4 @@ function rebuildStrippedMessage(
 
 function coordinateKey(messageIndex: number, partIndex: number): string {
   return `${messageIndex}:${partIndex}`
-}
-
-function mediaRunContext(binding: GuardrailBinding, context: GuardrailContext): SafetyRunContext {
-  return {
-    policy: { id: binding.policy.id, mode: binding.mode },
-    boundary: { id: binding.boundary.id, kind: binding.boundary.id },
-    prompt: { id: context.promptId },
-    model: { id: context.model },
-    trace: { id: context.traceId },
-    attempt: { index: 0, kind: 'initial' },
-    metadata: context.metadata,
-    findings: { add() {} },
-  }
 }

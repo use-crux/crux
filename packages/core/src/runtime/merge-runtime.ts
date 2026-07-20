@@ -23,6 +23,7 @@ import type {
   StreamProgressReporter,
 } from "./middleware";
 import type { PromptMiddleware } from "./types";
+import { finalizeMiddlewareResult } from "./internal/middleware-result-finalizer";
 
 /**
  * Merge a partial hook patch into a base hook store.
@@ -148,7 +149,9 @@ function chainMiddleware(
 ): PromptMiddleware {
   if (!base) return patch;
   return async (args, next) => {
-    return patch(args, (innerArgs) => base(innerArgs, next));
+    return patch(args, async (innerArgs) =>
+      finalizeMiddlewareResult(next, await base(innerArgs, next)),
+    );
   };
 }
 

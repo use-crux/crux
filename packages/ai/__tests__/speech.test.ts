@@ -1,10 +1,59 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 import type { SpeechModel } from "ai";
 import { speechConformanceRow } from "@use-crux/core/adapter/testing";
+import { boundary, guardrail } from "@use-crux/core/safety";
 import { createCruxAi, generateSpeech } from "../src";
 import { scriptedGateway } from "./scripted-gateway";
 
 describe("AI SDK speech", () => {
+  it("guards speech options without leaking policy controls into the SDK call", async () => {
+    const raw = {
+      audio: {
+        uint8Array: new Uint8Array([1, 2, 3]),
+        base64: "AQID",
+        mediaType: "audio/wav",
+        format: "wav",
+      },
+      warnings: [],
+      responses: [],
+      providerMetadata: {},
+    };
+    const scripted = scriptedGateway({ generateSpeech: [raw] });
+    const result = await createCruxAi({
+      gateway: scripted.gateway,
+    }).generateSpeech({
+      model: {} as SpeechModel,
+      text: "private speech",
+      guardrails: [
+        guardrail({
+          id: "ai-speech-input",
+          on: boundary.input.user(),
+          run: () => ({
+            action: "rewrite",
+            value: "guarded speech",
+            rewrite: { kind: "redact" },
+          }),
+        }),
+        guardrail({
+          id: "ai-speech-output",
+          on: boundary.output.media(),
+          run: () => ({ action: "allow" }),
+        }),
+      ],
+      safety: { tune: { "ai-speech-output": { mode: "report" } } },
+    });
+
+    expect(scripted.calls.generateSpeech[0]).toMatchObject({
+      text: "guarded speech",
+    });
+    expect(scripted.calls.generateSpeech[0]).not.toHaveProperty("guardrails");
+    expect(scripted.calls.generateSpeech[0]).not.toHaveProperty("safety");
+    expect(result.raw).toBe(raw);
+    expect(
+      result.safety?.guardrails?.applied.map((entry) => entry.guard),
+    ).toEqual(["ai-speech-input", "ai-speech-output"]);
+  });
+
   it("exports an unbound runner-backed native speech operation", async () => {
     expect(speechConformanceRow("ai-sdk").support).toBe("native");
     const raw = {

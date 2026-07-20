@@ -24,8 +24,8 @@ const MEDIA_PRIMITIVES = [
 
 export type MediaPrimitiveName = (typeof MEDIA_PRIMITIVES)[number];
 
-const OPERATION_ALIASES: Readonly<Record<string, MediaPrimitiveName>> = {
-  generateimage: "media.generate_image",
+const OPERATION_ALIASES = {
+  generateImage: "media.generate_image",
   "image.generate": "media.generate_image",
   "media.generate_image": "media.generate_image",
   generate_image: "media.generate_image",
@@ -33,7 +33,7 @@ const OPERATION_ALIASES: Readonly<Record<string, MediaPrimitiveName>> = {
   transcribe: "media.transcribe",
   "audio.transcribe": "media.transcribe",
   "media.transcribe": "media.transcribe",
-  generatespeech: "media.generate_speech",
+  generateSpeech: "media.generate_speech",
   "generate_speech": "media.generate_speech",
   "audio.speech": "media.generate_speech",
   "generation.speech": "media.generate_speech",
@@ -41,26 +41,29 @@ const OPERATION_ALIASES: Readonly<Record<string, MediaPrimitiveName>> = {
   speech: "media.generate_speech",
   describe: "media.describe",
   "media.describe": "media.describe",
-};
+} as const satisfies Readonly<Record<string, MediaPrimitiveName>>;
+
+/**
+ * Exact binding names whose shared runner guarantees a Core-owned media span.
+ *
+ * The union is derived from the runtime table so public result typing and
+ * runtime observation cannot disagree. Custom, normalized, or widened strings
+ * remain payload-only until explicitly added to this vocabulary.
+ */
+export type CompletedMediaOperationName = keyof typeof OPERATION_ALIASES;
 
 /**
  * Resolve the media primitive for a completed-operation binding name.
  *
- * Unknown names fall back to `media.describe` only when they clearly describe
- * media; otherwise the caller should treat the operation as non-media.
+ * Unknown or merely normalized names remain non-media. Adding an alias is an
+ * ownership decision and must update this single runtime/type vocabulary.
  */
 export function mediaPrimitiveForOperation(
   operation: string,
 ): MediaPrimitiveName | undefined {
-  const normalized = operation.trim().toLowerCase().replace(/[\s-]+/g, "");
-  const dotted = operation.trim().toLowerCase();
-  return (
-    OPERATION_ALIASES[dotted] ??
-    OPERATION_ALIASES[normalized] ??
-    (MEDIA_PRIMITIVES.includes(dotted as MediaPrimitiveName)
-      ? (dotted as MediaPrimitiveName)
-      : undefined)
-  );
+  return Object.hasOwn(OPERATION_ALIASES, operation)
+    ? OPERATION_ALIASES[operation as CompletedMediaOperationName]
+    : undefined;
 }
 
 /** Return whether `name` is a registered Crux primitive. */

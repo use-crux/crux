@@ -1,4 +1,5 @@
 import type { BoundaryDef, SafetyTargetId } from './boundary'
+import { isMediaSafetyTargetId } from './boundary'
 import { SafetyConfigError } from './errors'
 import type { Constraint } from './constraint/types'
 import { assertConstraintBoundary } from './constraint/boundary'
@@ -6,6 +7,7 @@ import type { Guardrail } from './guardrail/types'
 import type { GuardrailStreamOption } from './stream/types'
 import type { SafetyTuneOptions, SafetyTunePolicyOptions } from './tune'
 import { validateSafetyTuneOptions } from './tune'
+import { applyBindingApplicability, type SafetyBindingApplicability } from './applicability'
 
 export type SafetyPolicyKind = 'guardrail' | 'constraint' | 'toolPolicy'
 export type SafetyPolicyScope = 'global' | 'prompt' | 'call'
@@ -26,6 +28,8 @@ interface SafetyBindingBase {
   readonly scope: SafetyPolicyScope
   readonly mode: 'enforce' | 'report'
   readonly enabled: boolean
+  /** Safe explanation when a global binding cannot run for this primitive. */
+  readonly dormantReason?: string
   readonly tuned?: readonly ('mode' | 'stream' | 'enabled')[]
 }
 
@@ -63,6 +67,8 @@ export interface BuildSafetyRegistryOptions {
     readonly constraints?: readonly Constraint[]
   }
   readonly tune?: SafetyTuneOptions
+  /** @internal Primitive-owned classification applied after all registry validation. */
+  readonly applicability?: SafetyBindingApplicability
 }
 
 /** Build the effective per-call safety registry without applying precedence. */
@@ -78,7 +84,10 @@ export function buildSafetyRegistry(options: BuildSafetyRegistryOptions): Safety
   )
   assertValidMediaTune(sources, tune)
 
-  const bindings = sources.flatMap((source) => expandBindings(source, tune[source.policy.id]))
+  const expanded = sources.flatMap((source) => expandBindings(source, tune[source.policy.id]))
+  const bindings = options.applicability
+    ? expanded.map((binding) => applyBindingApplicability(binding, options.applicability!))
+    : expanded
   return {
     bindings,
     bindingsFor(targetId) {
@@ -142,14 +151,14 @@ function assertValidGuardrailBoundaryFamilies(sources: readonly PolicySource[]):
   for (const source of sources) {
     if (source.kind !== 'guardrail') continue
     const boundaries = boundariesFor(source.policy)
-    const hasMedia = boundaries.some((boundary) => boundary.id === 'user.input.media')
-    const hasOther = boundaries.some((boundary) => boundary.id !== 'user.input.media')
+    const hasMedia = boundaries.some((boundary) => isMediaSafetyTargetId(boundary.id))
+    const hasOther = boundaries.some((boundary) => !isMediaSafetyTargetId(boundary.id))
     const ids = boundaries.map((boundary) => boundary.id)
     if (hasMedia && hasOther) {
       throw new SafetyConfigError({
         message:
           `Safety policy "${source.policy.id}" mixes media and non-media boundaries (${ids.join(', ')}). ` +
-          'A media guardrail can target only boundary.input.media().',
+          'A media guardrail can target only media boundaries.',
         boundaries: ids,
         kinds: [source.kind],
         scopes: [source.scope],
@@ -158,8 +167,8 @@ function assertValidGuardrailBoundaryFamilies(sources: readonly PolicySource[]):
     if (hasMedia && source.policy.stream !== undefined) {
       throw new SafetyConfigError({
         message:
-          `Safety policy "${source.policy.id}" configures stream handling for boundary "user.input.media". ` +
-          'Media guardrails run once on canonical input parts and cannot stream.',
+          `Safety policy "${source.policy.id}" configures stream handling for media boundaries (${ids.join(', ')}). ` +
+          'Media guardrails run once on canonical parts and cannot stream.',
         boundaries: ids,
         kinds: [source.kind],
         scopes: [source.scope],
@@ -175,12 +184,12 @@ function assertValidMediaTune(
   for (const source of sources) {
     if (source.kind !== 'guardrail' || tune[source.policy.id]?.stream === undefined) continue
     const boundaries = boundariesFor(source.policy)
-    if (!boundaries.some((boundary) => boundary.id === 'user.input.media')) continue
+    if (!boundaries.some((boundary) => isMediaSafetyTargetId(boundary.id))) continue
 
     throw new SafetyConfigError({
       message:
         `Safety tune for media policy "${source.policy.id}" cannot set "stream". ` +
-        'Media guardrails run once on canonical input parts.',
+        'Media guardrails run once on canonical parts.',
       boundaries: boundaries.map((boundary) => boundary.id),
       kinds: [source.kind],
       scopes: [source.scope],

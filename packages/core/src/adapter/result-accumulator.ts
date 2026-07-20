@@ -10,16 +10,23 @@
  */
 
 import type { Message } from "../generation/messages";
-import type { TokenUsage, TraceMeta } from "../generation/types";
+import type { GenerationMeta, TokenUsage } from "../generation/types";
+import type { WithOperationResultMeta } from "../observability/result-meta";
 import type { AssistantContentPart } from "../types/content";
 import { textFromAssistantContent } from "./assistant-output";
 import type { ApprovalRequestInfo } from "./tool/approval";
 import type { RoutingReceipt } from "../routing/receipt";
 import { sumUsageWhenComplete } from "./result-usage";
 import type { CruxRunId } from "../observability";
+import type { StreamCompletionPayload } from "./stream-result-types";
 
 export { createStreamResult } from "./result-stream";
 export { sumUsageWhenComplete } from "./result-usage";
+export type {
+  StreamCompletion,
+  StreamCompletionPayload,
+  StreamResult,
+} from "./stream-result-types";
 
 /** Last provider-call step facts exposed next to accumulated result fields. */
 export interface FinalStepInfo {
@@ -35,7 +42,7 @@ export interface FinalStepInfo {
    */
   readonly usage?: TokenUsage;
   /** Fully assembled tool calls reported by the final provider step. */
-  readonly toolCalls?: TraceMeta["toolCalls"];
+  readonly toolCalls?: GenerationMeta["toolCalls"];
   /** Provider finish reason for the final step, when reported. */
   readonly finishReason: string | undefined;
   /** Provider response id for the final step, when reported. */
@@ -48,10 +55,13 @@ export interface FinalStepInfo {
   readonly providerMetadata?: unknown;
 }
 
-/** Canonical managed `generate()` result shared by provider adapters. */
-export interface GenerateResult<TRaw, TOutput = unknown> {
-  /** Authoritative Crux observability run opened for this generation. */
-  readonly runId: CruxRunId;
+/**
+ * Provider-neutral generation payload assembled before core operation stamping.
+ *
+ * Adapter execution owns provider facts such as `responseId`; it does not own
+ * or manufacture the enclosing Crux operation's `traceId` and `spanId`.
+ */
+export interface GenerateResultPayload<TRaw, TOutput = unknown> {
   /**
    * Exact ordered assistant output across all provider-call steps.
    *
@@ -80,7 +90,7 @@ export interface GenerateResult<TRaw, TOutput = unknown> {
    */
   readonly usage?: TokenUsage;
   /** Provider-reported cost shape, promoted from `_meta` for public access. */
-  readonly cost?: TraceMeta["cost"];
+  readonly cost?: GenerationMeta["cost"];
   /** Ordered provider-call facts represented in this envelope. */
   readonly steps: readonly FinalStepInfo[];
   /** Facts from the final provider-call step. */
@@ -97,39 +107,30 @@ export interface GenerateResult<TRaw, TOutput = unknown> {
   readonly pendingApprovals?: readonly ApprovalRequestInfo[];
   /** Raw provider or SDK response object. */
   readonly raw: TRaw;
-  /** Trace metadata retained for observability plumbing. */
-  readonly _meta: TraceMeta;
+  /** Provider-neutral facts accumulated during generation. */
+  readonly _meta: GenerationMeta;
 }
 
-/** Canonical completion payload resolved by managed `stream()` results. */
-export type StreamCompletion<TOutput = unknown> = Omit<
-  GenerateResult<never, TOutput>,
-  "raw" | "_meta"
->;
-
-/** Canonical generate envelope before orchestration stamps its run identity. */
-export type GenerateResultWithoutRunId<TRaw, TOutput = unknown> = Omit<
-  GenerateResult<TRaw, TOutput>,
-  "runId"
->;
-
-/** Canonical stream completion before its immediate stream identity is copied. */
-export type StreamCompletionWithoutRunId<TOutput = unknown> = Omit<
-  StreamCompletion<TOutput>,
-  "runId"
->;
-
-/** Canonical managed `stream()` result shared by provider adapters. */
-export interface StreamResult<TRawStream, TOutput = unknown> {
-  /** Authoritative Crux run, available before the first stream chunk. */
-  readonly runId: CruxRunId;
-  /** Provider-neutral text delta stream. */
-  readonly textStream: AsyncIterable<string>;
-  /** Raw provider or SDK stream handle. */
-  readonly raw: TRawStream;
-  /** Resolves to the canonical completion envelope when the stream finishes. */
-  readonly completion: Promise<StreamCompletion<TOutput>>;
-}
+/** Provider-neutral generate payload before run and operation stamping. */
+export type GenerateResultWithoutRunId<TRaw, TOutput = unknown> =
+  GenerateResultPayload<TRaw, TOutput>;
+/**
+ * Canonical managed generation result finalized by the core operation owner.
+ *
+ * Provider and adapter execution code creates a {@link GenerateResultPayload};
+ * the enclosing `generation.call` operation adds exact trace and span identity
+ * before hooks and callers observe the result.
+ *
+ * @example
+ * ```ts
+ * const result = await adapter.generate(prompt, options)
+ * console.log(result._meta.traceId, result._meta.spanId)
+ * console.log(result._meta.responseId) // provider identity, when supplied
+ * ```
+ */
+export type GenerateResult<TRaw, TOutput = unknown> =
+  WithOperationResultMeta<GenerateResultPayload<TRaw, TOutput>> &
+  Readonly<{ runId: CruxRunId }>;
 
 /** One provider-call step that participates in envelope accumulation. */
 export interface ResultStepFacts {
@@ -138,7 +139,7 @@ export interface ResultStepFacts {
   /** Usage reported by this step, if any. */
   readonly usage?: TokenUsage;
   /** Fully assembled tool calls reported by this step. */
-  readonly toolCalls?: TraceMeta["toolCalls"];
+  readonly toolCalls?: GenerationMeta["toolCalls"];
   /** Provider finish reason, if any. */
   readonly finishReason: string | undefined;
   /** Provider response id, if any. */
@@ -157,12 +158,12 @@ export interface ResultEnvelopeBase<TRaw, TOutput = unknown> {
   readonly raw: TRaw;
   /** Provider-agnostic Crux message history. */
   readonly messages: readonly Message[];
-  /** Trace metadata retained for observability plumbing. */
-  readonly _meta: TraceMeta;
+  /** Provider-neutral facts available before operation correlation. */
+  readonly _meta: GenerationMeta;
   /** Parsed structured output, when present. */
   readonly object?: TOutput;
   /** Public cost promoted from `_meta`. */
-  readonly cost?: TraceMeta["cost"];
+  readonly cost?: GenerationMeta["cost"];
   /** Approval requests when execution suspended. */
   readonly pendingApprovals?: readonly ApprovalRequestInfo[];
   /** Routing decisions for calls that used a routing wrapper. */
@@ -182,7 +183,7 @@ export function createResultAccumulator() {
     /** Finalize all recorded step facts into the canonical `generate()` envelope. */
     finalize<TRaw, TOutput = unknown>(
       base: ResultEnvelopeBase<TRaw, TOutput>,
-    ): GenerateResultWithoutRunId<TRaw, TOutput> {
+    ): GenerateResultPayload<TRaw, TOutput> {
       const usage = sumUsageWhenComplete(steps);
       const publicSteps = Object.freeze(steps.map(finalStepInfo));
       const finalStep = publicSteps.at(-1) ?? emptyStepInfo();
@@ -213,8 +214,8 @@ export function createResultAccumulator() {
 
     /** Finalize all recorded step facts into a canonical stream completion. */
     finalizeCompletion<TOutput = unknown>(
-      base: Omit<ResultEnvelopeBase<never, TOutput>, "raw" | "_meta">,
-    ): StreamCompletionWithoutRunId<TOutput> {
+      base: Omit<ResultEnvelopeBase<never, TOutput>, "raw">,
+    ): StreamCompletionPayload<TOutput> {
       const usage = sumUsageWhenComplete(steps);
       const publicSteps = Object.freeze(steps.map(finalStepInfo));
       const finalStep = publicSteps.at(-1) ?? emptyStepInfo();
@@ -238,6 +239,7 @@ export function createResultAccumulator() {
         ...(base.pendingApprovals
           ? { pendingApprovals: base.pendingApprovals }
           : {}),
+        _meta: base._meta,
       };
     },
   };

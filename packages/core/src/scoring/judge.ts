@@ -11,6 +11,7 @@ import { z } from 'zod'
 import type { JudgeConfig, JudgeInstance, JudgeInput, JudgeResult, JudgeScoreOptions } from './types'
 import type { GenerateObjectFn } from '../compaction/types'
 import { observe } from '../observability'
+import { withOperationResultMeta } from '../observability/internal/result-meta'
 import { scorerDefinitionRef } from '../observability/definition-ref'
 import { getHooks } from '../runtime/runtime'
 
@@ -199,13 +200,16 @@ export function judge<TDetail = unknown>(config: JudgeConfig<TDetail>): JudgeIns
       const clampedScore = Math.max(config.scale.min, Math.min(config.scale.max, rawScore))
       const cost = generated.routing?.cost
       const hasDetail = config.detailSchema !== undefined && 'detail' in object
-      const result = {
-        score: clampedScore,
-        reasoning: object.reasoning,
-        metricId: config.id,
-        ...(typeof cost === 'number' && Number.isFinite(cost) ? { cost } : {}),
-        ...(hasDetail ? { detail: object.detail as TDetail } : {}),
-      } satisfies JudgeResult<TDetail>
+      const result = withOperationResultMeta(
+        {
+          score: clampedScore,
+          reasoning: object.reasoning,
+          metricId: config.id,
+          ...(typeof cost === 'number' && Number.isFinite(cost) ? { cost } : {}),
+          ...(hasDetail ? { detail: object.detail as TDetail } : {}),
+        },
+        { traceId: span.traceId, spanId: span.spanId },
+      ) satisfies JudgeResult<TDetail>
 
       span.withContext(() => {
         emitJudgeArtifact(span.spanId, {

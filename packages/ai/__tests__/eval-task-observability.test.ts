@@ -43,6 +43,10 @@ describe.each(["generate", "stream"] as const)(
 
       expect(result.response).toBeDefined();
       expect(result.runIds).toEqual([result.response!.runId]);
+      expect(result.response?._meta).toMatchObject({
+        traceId: expect.stringMatching(/^[0-9a-f]{32}$/u),
+        spanId: expect.stringMatching(/^[0-9a-f]{16}$/u),
+      });
       expect(result.capturedSignals).toContain("modelCalls");
       expect(result.renderedPromptFingerprint).toMatch(/^[a-f0-9]{64}$/u);
     });

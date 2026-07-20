@@ -165,6 +165,48 @@ The behavior worth knowing day to day:
 
 For custom preprocessor fingerprints, the full cache-key composition, and the complete option table, see [Embedding governance](/docs/reference/crux-core/retrieval#embedding-governance) in the reference.
 
+## Choose the right cache layer
+
+Crux has two complementary vector caches:
+
+| Need | Configure | Reuse unit |
+| --- | --- | --- |
+| Reuse vectors anywhere the embedding primitive is called | `cache: embeddingCache(...)` on `embedding()` | One normalized text |
+| Reuse final embedding work across generations, retries, or dry runs | `cache: true` on `indexer()` | One ordered embedding bundle per source and dense/sparse kind |
+| Maximize reuse for both indexing and direct embedding calls | Configure both | Pipeline bundles first; per-text cache for remaining provider work |
+
+The indexer cache validates complete vector count and shape before reuse. It
+records one privacy-safe `embedding` stage per source and kind. A full bundle
+hit does not call `embedMany()` at all, though generation persistence and
+index-store writes still run; `refresh` recomputes and replaces the bundle,
+while `bypass` reads and writes no bundle.
+
+### Version vector-producing behavior
+
+An embedding fingerprint includes kind, name, dimensions, input limits,
+preprocessors, truncation, and the optional `version`. It deliberately excludes
+batch size, concurrency, retry, rate limiting, and cache placement because those
+policies do not change vector values.
+
+```ts
+const dense = embedding({
+  kind: "dense",
+  name: "docs-embedding",
+  dimensions: 1536,
+  maxInputTokens: 8191,
+  version: "provider-revision-2026-07",
+  embed: providerEmbedMany,
+});
+```
+
+Bump `version` when a provider-side setting can change vectors without changing
+the public model id. OpenAI, Google, and AI SDK helpers automatically include
+their typed model/vector request identity and append your `version` as a separate
+segment. They do not serialize headers or `providerOptions`; bump `version` when
+such an option changes vector semantics. A hand-written structural embedding
+without a `fingerprint` remains valid, but the indexer deliberately computes it
+on every run rather than guessing an identity.
+
 ## Where embeddings plug in
 
 ### Memory

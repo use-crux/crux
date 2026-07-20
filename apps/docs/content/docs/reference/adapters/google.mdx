@@ -9,6 +9,10 @@ Gemini `generateSpeech()` (including two-speaker configuration), and composed
 `transcribe()`. Composed transcription returns text with no word timing or
 diarization and rejects those requests before I/O. Endpoint-specific options
 stay separated in typed `extra` records.
+All three operations use the portable completed-operation Safety contract;
+canonical audits are returned in `result.safety`, while provider-native `raw`
+values remain unguarded. See the
+[content-primitive matrix](/docs/reference/crux-core/safety-content-primitives).
 
 Peer dependency: `@google/genai` (`^1.0.0 || ^2.0.0`)
 
@@ -318,6 +322,11 @@ This helper is dense-only. Google's SDK returns token counts per embedded input 
 | `config.title`             | `string?`     | Document title. Only applies to retrieval-document tasks. |
 | `config.mimeType`          | `string?`     | Optional input MIME type                                  |
 | `config.autoTruncate`      | `boolean?`    | Vertex-only truncation behavior                           |
+| `config.version`           | `string?`     | Extra vector-semantic revision for cache invalidation     |
+
+The helper fingerprint includes model, task type, title, MIME type, and
+auto-truncation behavior, then appends `version` when supplied. Operational
+batch settings do not change that identity.
 
 ### Types
 

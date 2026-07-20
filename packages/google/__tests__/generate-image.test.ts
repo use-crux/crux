@@ -2,6 +2,7 @@ import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import type { GoogleGenAI } from "@google/genai";
 import { imageGenerationConformanceRow } from "@use-crux/core/adapter/testing";
 import { fallback } from "@use-crux/core";
+import { boundary, guardrail } from "@use-crux/core/safety";
 import { createGoogle } from "../src";
 
 function clientWith(response: unknown) {
@@ -19,6 +20,48 @@ function clientWith(response: unknown) {
 }
 
 describe("Google image generation", () => {
+  it("guards image options without leaking policy controls into Google", async () => {
+    const raw = {
+      generatedImages: [
+        { image: { imageBytes: "AQI=", mimeType: "image/png" } },
+      ],
+    };
+    const { client, generateImages } = clientWith(raw);
+    const result = await createGoogle(client, {
+      cachedContent: false,
+    }).generateImage({
+      model: "imagen-4.0-generate-001",
+      prompt: "private prompt",
+      guardrails: [
+        guardrail({
+          id: "google-image-input",
+          on: boundary.input.user(),
+          run: () => ({
+            action: "rewrite",
+            value: "guarded prompt",
+            rewrite: { kind: "redact" },
+          }),
+        }),
+        guardrail({
+          id: "google-image-output",
+          on: boundary.output.media(),
+          run: () => ({ action: "warn", reason: "Review image." }),
+        }),
+      ],
+      safety: { tune: { "google-image-output": { mode: "report" } } },
+    });
+
+    expect(generateImages.mock.calls[0]?.[0]).toMatchObject({
+      prompt: "guarded prompt",
+    });
+    expect(generateImages.mock.calls[0]?.[0]).not.toHaveProperty("guardrails");
+    expect(generateImages.mock.calls[0]?.[0]).not.toHaveProperty("safety");
+    expect(result.raw).toBe(raw);
+    expect(
+      result.safety?.guardrails?.applied.map((entry) => entry.guard),
+    ).toEqual(["google-image-input", "google-image-output"]);
+  });
+
   it("accepts routing wrappers and sends only the selected leaf model", async () => {
     const { client, generateImages } = clientWith({
       generatedImages: [

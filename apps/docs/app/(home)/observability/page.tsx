@@ -1,13 +1,15 @@
 import type { Metadata } from 'next'
+import { pageMetadata } from '@/lib/metadata'
 import Link from 'next/link'
 import { CodePanel, type CodeLine, CruxFooter, DevWindow, SectionHead } from '../_components'
 import { TrackedLink } from '@/components/tracked-link'
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'Observability',
   description:
     'One canonical event graph. Crux instruments the whole harness: memory, retrieval, guardrails, routing, generation, evaluation. Render it in devtools or export it as OpenTelemetry.',
-}
+  path: '/observability',
+})
 
 // ─────────────────────────────────────────────────────────────────────
 // Hero trace rows.

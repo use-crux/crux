@@ -98,6 +98,7 @@ export function embedding(config: DenseEmbeddingConfig | SparseEmbeddingConfig):
       dimensions: config.dimensions,
       maxInputTokens: config.maxInputTokens,
       batch,
+      fingerprint: governance.fingerprint,
       embed,
       embedMany,
       asEmbedFn: () => embed,
@@ -141,6 +142,7 @@ export function embedding(config: DenseEmbeddingConfig | SparseEmbeddingConfig):
     name: config.name,
     maxInputTokens: config.maxInputTokens,
     batch,
+    fingerprint: governance.fingerprint,
     embed,
     embedMany,
   })
@@ -219,6 +221,7 @@ function normalizeGovernance(config: DenseEmbeddingConfig | SparseEmbeddingConfi
     maxInputTokens: config.maxInputTokens,
     preprocessors: preprocessors.map((preprocessor) => preprocessor.fingerprint),
     truncate,
+    version: config.version,
   })
 
   return {

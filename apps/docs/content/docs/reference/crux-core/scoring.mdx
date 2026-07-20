@@ -47,9 +47,14 @@ const result = await brandVoice.score({
 | `reasoning` | `string`   | Concise explanation for the score.                    |
 | `metricId`  | `string`   | Judge id.                                             |
 | `detail`    | `TDetail?` | Structured details when `detailSchema` is configured. |
+| `_meta`     | `OperationResultMeta` | Exact `scoring.judge` trace and span owned by Core. |
 
 Per-call `score(input, options)` can override `generate`, `model`, and
 `evalId`.
+
+The raw structured `generate` callback is an application/provider port and
+does not need to supply Crux IDs. See
+[Operation Result Correlation](/docs/reference/crux-core/operation-results#media-and-higher-level-results).
 
 ## `metrics`
 

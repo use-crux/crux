@@ -19,8 +19,8 @@ import type { AnyToolSet } from "../types";
 import type {
   ProviderAdaptations,
   GenerationSettings,
+  GenerateResultMeta,
   TokenUsage,
-  TraceMeta,
 } from "../generation/types";
 import type {
   DroppedContext,
@@ -267,7 +267,8 @@ export interface ErrorHookArgs {
 export type PromptResult<TOutput extends z.ZodType | undefined = undefined> = {
   text?: string;
   usage?: TokenUsage;
-  _meta?: TraceMeta;
+  /** Provider facts plus the exact core operation that produced the result. */
+  _meta: GenerateResultMeta;
   [key: string]: unknown;
 } & (TOutput extends z.ZodType<infer O> ? { object: O } : { text: string });
 

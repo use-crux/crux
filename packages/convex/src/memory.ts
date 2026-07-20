@@ -62,9 +62,9 @@ export type ConvexMemoryConfig = Omit<MemoryConfig, 'namespace'> & {
 }
 
 export function memory(config: ConvexMemoryConfig): Memory {
+  const resolved = config.storage || config.records ? config : { ...config, storage: convexRuntimeStorage }
   return coreMemory({
-    ...config,
-    storage: config.storage ?? convexRuntimeStorage,
+    ...resolved,
     namespace: config.namespace ?? ((args) => resolveConvexMemoryNamespace(args)),
   })
 }

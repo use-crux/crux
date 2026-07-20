@@ -11,19 +11,12 @@
 import type { RecordStore, Storage } from '@use-crux/core/storage'
 import type { ComponentApi } from './component/_generated/component'
 import { convexStorage } from './storage'
-import type { ConvexCtxPort, ConvexMemoryStoreConfig } from './store'
-
-/** Semantic-cache storage capability options. */
-export type ConvexSemanticCacheOptions = ConvexMemoryStoreConfig['semanticCache']
+import type { ConvexCtxPort } from './store'
 
 /** Defaults provided to a custom profile storage factory. */
 export interface CruxConvexProfileStorageDefaults {
   /** Crux persistence component ref from `components.crux`. */
   readonly component: ComponentApi
-  /** Vector index name used by the component-backed default storage. */
-  readonly vectorIndexName: string
-  /** Semantic-cache metadata for the default storage, when configured. */
-  readonly semanticCache?: ConvexSemanticCacheOptions
   /**
    * Build the standard component-backed storage bundle for a ctx.
    *
@@ -37,14 +30,6 @@ export type ConvexProfileStorageResult = Storage | RecordStore
 
 /** Optional advanced storage override accepted by `createCruxConvex()`. */
 export interface CruxConvexProfileStorageOptions<TCtx extends ConvexCtxPort = ConvexCtxPort> {
-  /**
-   * Vector index name for the default component-backed storage.
-   *
-   * @default 'by_embedding'
-   */
-  readonly vectorIndexName?: string
-  /** Semantic-cache metadata for the default component-backed storage. */
-  readonly semanticCache?: ConvexSemanticCacheOptions
   /**
    * Replace or wrap the default component-backed storage for this request.
    *
@@ -68,15 +53,11 @@ export function createDefaultConvexStorage<TCtx extends ConvexCtxPort>(
   ctx: TCtx,
   options: {
     readonly component: ComponentApi
-    readonly vectorIndexName?: string
-    readonly semanticCache?: ConvexSemanticCacheOptions
   },
 ): Storage {
   return convexStorage({
     component: options.component,
     ctx,
-    vectorIndexName: options.vectorIndexName,
-    semanticCache: options.semanticCache,
   })
 }
 
@@ -97,17 +78,12 @@ export function assertConvexCtxPort(ctx: unknown): asserts ctx is ConvexCtxPort 
 export function createCruxConvexStorageResolver<TCtx extends ConvexCtxPort>(
   options: CreateProfileStorageResolverOptions<TCtx>,
 ): (ctx: TCtx) => Storage | Promise<Storage> {
-  const vectorIndexName = options.vectorIndexName ?? 'by_embedding'
   const defaults: CruxConvexProfileStorageDefaults = Object.freeze({
     component: options.component,
-    vectorIndexName,
-    ...(options.semanticCache === undefined ? {} : { semanticCache: options.semanticCache }),
     createComponentStorage(ctx: ConvexCtxPort) {
       assertConvexCtxPort(ctx)
       return createDefaultConvexStorage(ctx, {
         component: options.component,
-        vectorIndexName,
-        semanticCache: options.semanticCache,
       })
     },
   })

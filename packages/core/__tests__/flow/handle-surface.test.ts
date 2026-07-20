@@ -237,7 +237,7 @@ describe('flow handle surface', () => {
 
     await expect(review.resume(completedSuspension.flowId)).rejects.toThrow(/cannot be resumed/)
     await expect(review.resume(cancelledSuspension.flowId)).rejects.toThrow(/cannot be resumed/)
-    await expect(expiringReview.resume(expiredSuspension.flowId)).rejects.toThrow(/cannot be resumed/)
+    await expect(expiringReview.resume(expiredSuspension.flowId)).rejects.toThrow(/is expired/)
     expect(executions).toEqual([])
   })
 

@@ -1,7 +1,7 @@
 /**
  * Next.js integration for Crux Runtime Engine artifacts.
  *
- * `withCrux()` keeps generated runtime entry files fresh inside the Next dev
+ * `withCruxBuild()` keeps generated runtime entry files fresh inside the Next dev
  * and build graph. It delegates actual discovery and writing to the `crux`
  * CLI, so this subpath stays lightweight and does not make `@use-crux/core`
  * depend on the Project Index compiler.
@@ -15,14 +15,17 @@ import { createRuntimeError } from './engine/errors'
 type NextWebpackConfig = Record<string, unknown>
 type NextWebpackContext = Record<string, unknown>
 
-/** Minimal Next config shape accepted by {@link withCrux}. */
+/** Minimal Next config shape accepted by {@link withCruxBuild}. */
 export interface CruxNextConfig {
-  webpack?: (config: NextWebpackConfig, context: NextWebpackContext) => NextWebpackConfig
+  webpack?: (
+    config: NextWebpackConfig,
+    context: NextWebpackContext,
+  ) => NextWebpackConfig
   [key: string]: unknown
 }
 
-/** Options for {@link withCrux}. */
-export interface WithCruxOptions {
+/** Options for {@link withCruxBuild}. */
+export interface WithCruxBuildOptions {
   /** Working directory for `crux runtime generate`. Defaults to `process.cwd()`. */
   readonly cwd?: string
   /** Command used to generate artifacts. Defaults to `crux runtime generate`. */
@@ -40,9 +43,9 @@ export interface WithCruxOptions {
  * throws `ARTIFACTS_STALE`, which fails CI/builds before stale runtime entry
  * files can deploy.
  */
-export function withCrux<TConfig extends CruxNextConfig>(
+export function withCruxBuild<TConfig extends CruxNextConfig>(
   nextConfig: TConfig = {} as TConfig,
-  options: WithCruxOptions = {},
+  options: WithCruxBuildOptions = {},
 ): TConfig {
   const command = options.command ?? ['crux', 'runtime', 'generate']
   runCruxRuntimeGenerate({
@@ -52,13 +55,18 @@ export function withCrux<TConfig extends CruxNextConfig>(
   })
   return {
     ...nextConfig,
-    webpack(config: NextWebpackConfig, context: NextWebpackContext): NextWebpackConfig {
+    webpack(
+      config: NextWebpackConfig,
+      context: NextWebpackContext,
+    ): NextWebpackConfig {
       return nextConfig.webpack ? nextConfig.webpack(config, context) : config
     },
   }
 }
 
-function runCruxRuntimeGenerate(input: Required<Pick<WithCruxOptions, 'command'>> & WithCruxOptions): void {
+function runCruxRuntimeGenerate(
+  input: Required<Pick<WithCruxBuildOptions, 'command'>> & WithCruxBuildOptions,
+): void {
   const [command, ...args] = input.command
   const result = spawnSync(command, args, {
     cwd: input.cwd ?? process.cwd(),
@@ -69,10 +77,15 @@ function runCruxRuntimeGenerate(input: Required<Pick<WithCruxOptions, 'command'>
   if (result.status === 0) return
   throw createRuntimeError({
     code: 'ARTIFACTS_STALE',
-    whatFailed: 'Crux runtime artifacts could not be generated during the Next build.',
-    why: result.error?.message ?? `\`${[command, ...args].join(' ')}\` exited with status ${result.status ?? 'unknown'}.`,
-    whatStillWorks: 'Hand-written runtime entries using createRuntimeHandler({ targets }) still work.',
-    nextStep: 'Run `crux runtime generate` locally, fix the reported issue, and rerun the Next build.',
+    whatFailed:
+      'Crux runtime artifacts could not be generated during the Next build.',
+    why:
+      result.error?.message ??
+      `\`${[command, ...args].join(' ')}\` exited with status ${result.status ?? 'unknown'}.`,
+    whatStillWorks:
+      'Hand-written runtime entries using createRuntimeHandler({ targets }) still work.',
+    nextStep:
+      'Run `crux runtime generate` locally, fix the reported issue, and rerun the Next build.',
     cause: result.error,
   })
 }

@@ -57,7 +57,10 @@ describe("generate.task()", () => {
     expect(evaluation.output).toEqual(second);
     expect(evaluation.response).toMatchObject({ object: second });
     expect(evaluation.response).not.toHaveProperty("raw");
-    expect(evaluation.response).not.toHaveProperty("_meta");
+    expect(evaluation.response?._meta).toMatchObject({
+      traceId: expect.stringMatching(/^[0-9a-f]{32}$/u),
+      spanId: expect.stringMatching(/^[0-9a-f]{16}$/u),
+    });
     expect(scripted.calls.generateObject).toHaveLength(2);
     expect(scripted.calls.generateObject).toEqual([
       expect.objectContaining({

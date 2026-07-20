@@ -1,5 +1,5 @@
 import { StorageError } from '@use-crux/core/storage'
-import type { ExactFilter, JsonObject, JsonValue, SparseVector } from '@use-crux/core/storage'
+import type { ExactFilter, JsonObject, JsonValue } from '@use-crux/core/storage'
 
 export function assertStorageKey(key: string): void {
   if (key.length === 0) {
@@ -26,11 +26,6 @@ export function assertExactFilter(filter: unknown): asserts filter is ExactFilte
   }
 }
 
-export function cloneExactFilter(filter: unknown): ExactFilter {
-  assertExactFilter(filter)
-  return { ...filter }
-}
-
 export function matchesExactFilter(value: JsonObject | ExactFilter | undefined, filter: ExactFilter): boolean {
   if (!value) return false
   return Object.entries(filter).every(([key, expected]) =>
@@ -44,44 +39,6 @@ export function normalizeTtlMs(ttlMs: number | undefined): number | undefined {
     throw new StorageError('invalid_value', 'Record TTL must be a positive integer number of milliseconds.')
   }
   return ttlMs
-}
-
-export function cloneDenseVector(value: unknown): readonly number[] {
-  if (!Array.isArray(value) || value.length === 0 || !value.every((item) => typeof item === 'number' && Number.isFinite(item))) {
-    throw new StorageError('invalid_value', 'Dense vectors must be non-empty finite number arrays.')
-  }
-  return [...value]
-}
-
-export function cloneSparseVector(value: unknown): SparseVector {
-  if (!value || typeof value !== 'object') {
-    throw new StorageError('invalid_value', 'Sparse vectors must include indices and values arrays.')
-  }
-  const candidate = value as { readonly indices?: unknown; readonly values?: unknown }
-  if (!Array.isArray(candidate.indices) || !Array.isArray(candidate.values)) {
-    throw new StorageError('invalid_value', 'Sparse vectors must include indices and values arrays.')
-  }
-  if (candidate.indices.length === 0 || candidate.indices.length !== candidate.values.length) {
-    throw new StorageError('invalid_value', 'Sparse vector indices and values must be non-empty and equal length.')
-  }
-  const seen = new Set<number>()
-  for (const index of candidate.indices) {
-    if (!Number.isInteger(index) || index < 0 || seen.has(index)) {
-      throw new StorageError('invalid_value', 'Sparse vector indices must be unique non-negative integers.')
-    }
-    seen.add(index)
-  }
-  if (!candidate.values.every((item) => typeof item === 'number' && Number.isFinite(item))) {
-    throw new StorageError('invalid_value', 'Sparse vector values must be finite numbers.')
-  }
-  return { indices: [...candidate.indices], values: [...candidate.values] }
-}
-
-export function exactMetadataFromJson(value: JsonObject): ExactFilter | undefined {
-  const entries = Object.entries(value).filter(
-    ([key, item]) => key !== 'embedding' && isFilterValue(item),
-  ) as [string, string | number | boolean | null][]
-  return entries.length > 0 ? Object.fromEntries(entries) : undefined
 }
 
 function assertJsonValue(value: unknown): asserts value is JsonValue {

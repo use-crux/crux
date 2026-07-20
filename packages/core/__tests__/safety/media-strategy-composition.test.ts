@@ -13,7 +13,7 @@ import {
 type MediaRun = ReturnType<typeof guardrail.media>
 
 function runOn(run: MediaRun, part: MediaPart) {
-  return run({ part, messageIndex: 0, partIndex: 0 }, {} as never)
+  return run({ part, origin: { kind: 'message', messageIndex: 0, partIndex: 0 } }, {} as never)
 }
 
 describe('guardrail.media — composition', () => {
@@ -79,7 +79,10 @@ describe('guardrail.media — composition', () => {
     expect(safety.audit.guardrails?.applied[0]).toMatchObject({
       action: 'strip',
       escalatedToBlock: true,
-      location: { messageIndex: 0, partIndex: 0, partType: 'image' },
+      location: {
+        origin: { kind: 'message', messageIndex: 0, partIndex: 0 },
+        partType: 'image',
+      },
     })
   })
 

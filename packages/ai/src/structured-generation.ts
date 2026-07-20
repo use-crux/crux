@@ -12,33 +12,36 @@
  * @module
  */
 
-import type { LanguageModel } from 'ai'
-import type { StructuredAttempt, StructuredRequest } from '@use-crux/core/adapter'
-import type { GenerateObjectFn } from '@use-crux/core/compaction'
-import { resolveModel } from '@use-crux/core/routing'
-import type { SdkGateway } from './gateway'
-import type { SdkLoopResultLike } from './sdk-codec'
-import { createAiSdkCodec } from './sdk-codec'
-import { extractModelInfo } from './provider-profile'
+import type { LanguageModel } from "ai";
+import type {
+  StructuredAttempt,
+  StructuredRequest,
+} from "@use-crux/core/adapter";
+import type { GenerateObjectFn } from "@use-crux/core/compaction";
+import { resolveModel } from "@use-crux/core/routing";
+import type { SdkGateway } from "./gateway";
+import type { SdkLoopResultLike } from "./sdk-codec";
+import { createAiSdkCodec } from "./sdk-codec";
+import { extractModelInfo } from "./provider-profile";
 
 /** The gateway surface required for one AI SDK structured-output attempt. */
-export type StructuredGateway = Pick<SdkGateway, 'generateObject'>
+export type StructuredGateway = Pick<SdkGateway, "generateObject">;
 
-type StructuredArgs = Parameters<StructuredGateway['generateObject']>[0]
+type StructuredArgs = Parameters<StructuredGateway["generateObject"]>[0];
 
 interface GenerateObjectOptions<T> {
-  readonly model: unknown
-  readonly system?: string
-  readonly prompt: string
-  readonly schema: import('zod').ZodType<T>
+  readonly model: unknown;
+  readonly system?: string;
+  readonly prompt: string;
+  readonly schema: import("zod").ZodType<T>;
 }
 
 interface StructuredObjectResult<T> {
-  readonly object: T
+  readonly object: T;
 }
 
 interface StructuredFallbackTryOptions {
-  readonly signal?: AbortSignal
+  readonly signal?: AbortSignal;
 }
 
 /**
@@ -52,14 +55,21 @@ export async function attemptStructuredGeneration(
   gateway: StructuredGateway,
   request: StructuredRequest<LanguageModel>,
 ): Promise<StructuredAttempt<SdkLoopResultLike>> {
-  const call = await createAiSdkCodec().structured(request)
+  const call = await createAiSdkCodec().structured(request);
+  if (call.method !== "generateObject") {
+    throw new Error(
+      "Standalone structured generation does not install a model-step transformer.",
+    );
+  }
 
   try {
-    return call.decode(await gateway[call.method](call.args as StructuredArgs))
+    return call.decode(
+      await gateway.generateObject(call.args as StructuredArgs),
+    );
   } catch (error) {
-    const invalid = await call.decodeError(error)
-    if (invalid) return invalid
-    throw error
+    const invalid = await call.decodeError(error);
+    if (invalid) return invalid;
+    throw error;
   }
 }
 
@@ -71,8 +81,12 @@ export async function attemptStructuredGeneration(
  * structured generation, while keeping the public `GenerateObjectFn` shape:
  * callers receive `{ object }`, not a `StructuredAttempt`.
  */
-export function createStructuredGenerateObjectFn(gateway: StructuredGateway): GenerateObjectFn {
-  return async <T>(options: GenerateObjectOptions<T>): Promise<StructuredObjectResult<T>> => {
+export function createStructuredGenerateObjectFn(
+  gateway: StructuredGateway,
+): GenerateObjectFn {
+  return async <T>(
+    options: GenerateObjectOptions<T>,
+  ): Promise<StructuredObjectResult<T>> => {
     const run = async (
       model: LanguageModel,
       attemptOptions: StructuredFallbackTryOptions = {},
@@ -80,19 +94,19 @@ export function createStructuredGenerateObjectFn(gateway: StructuredGateway): Ge
       const attempt = await attemptStructuredGeneration(
         gateway,
         requestFromGenerateObjectOptions(model, options, attemptOptions),
-      )
-      if (attempt.status === 'invalid') throw attempt.error
-      return { object: attempt.object as T }
-    }
+      );
+      if (attempt.status === "invalid") throw attempt.error;
+      return { object: attempt.object as T };
+    };
 
     return resolveModel<LanguageModel, StructuredObjectResult<T>>(
       options.model as LanguageModel,
       { prompt: options.prompt },
       run,
       modelLabel,
-      { mode: 'generate', preserveRawResult: true },
-    )
-  }
+      { mode: "generate", preserveRawResult: true },
+    );
+  };
 }
 
 function requestFromGenerateObjectOptions<T>(
@@ -115,10 +129,10 @@ function requestFromGenerateObjectOptions<T>(
     abortSignal: attemptOptions.signal,
     extra: undefined,
     schema: options.schema,
-  }
+  };
 }
 
 function modelLabel(model: LanguageModel): string {
-  const info = extractModelInfo(model)
-  return info.modelId || info.provider
+  const info = extractModelInfo(model);
+  return info.modelId || info.provider;
 }

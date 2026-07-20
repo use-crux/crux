@@ -8,6 +8,7 @@
  */
 
 import type { RetryOptions } from '../generation/retry'
+import type { WithOperationResultMeta } from '../observability'
 import type { JsonObject, JsonValue } from '../storage'
 import type { RuntimeTaskInput, RuntimeTaskTarget } from '../runtime/api/task'
 import type { ZodType } from 'zod'
@@ -166,12 +167,20 @@ export interface SuspendOptions<T = unknown> {
 /** Retry and fallback options for a flow step. Re-exported from shared retry module. */
 export type StepOptions = RetryOptions
 
-/** Result of a flow execution — discriminated union on `status`. */
-export type FlowResult<T> =
+/** @internal Unobserved business outcome produced inside a `flow.run` span. */
+export type FlowResultPayload<T> =
   | { status: 'completed'; output: T; flowId: string }
   | { status: 'suspended'; flowId: string; suspendedAt: string }
   | { status: 'cancelled'; flowId: string; cancelReason?: string }
   | { status: 'expired'; flowId: string; suspendedAt: string }
+
+/**
+ * Result of one flow invocation, discriminated by lifecycle `status`.
+ *
+ * Every member carries the exact `flow.run` span for the invocation that
+ * returned it. A resumed flow keeps its trace but receives a fresh span.
+ */
+export type FlowResult<T> = WithOperationResultMeta<FlowResultPayload<T>>
 
 /** Persisted, occurrence-keyed signal delivery record used for suspend replay. */
 export interface DeliveredFlowSignal extends JsonObject {

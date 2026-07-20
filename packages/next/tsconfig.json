@@ -16,7 +16,7 @@
     "paths": {
       "@use-crux/core": ["../core/src/index.ts"],
       "@use-crux/core/defer/serverless": ["../core/src/defer/serverless.ts"],
-      "@use-crux/core/internal/defer-host": ["../core/src/defer/host.ts"],
+      "@use-crux/core/internal/scope": ["../core/src/scope/internal.ts"],
       "@use-crux/next": ["./src/index.ts"]
     }
   },

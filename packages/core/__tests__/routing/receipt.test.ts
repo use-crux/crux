@@ -2,10 +2,30 @@ import { describe, expect, it } from 'vitest'
 import { cascade, fallback, router } from '../../src/routing'
 import { CascadeExhaustedError, FallbackExhaustedError } from '../../src/routing/errors'
 import { resolveModel } from '../../src/routing/resolve'
+import { ensureRoutingResult, withRoutingReceipt } from '../../src/routing/receipt'
 
 const extractModelId = (model: string) => model
 
 describe('RoutingReceipt', () => {
+  it('preserves non-enumerable metadata capabilities through normalization and receipts', () => {
+    const completion = Promise.resolve({ finishReason: 'stop' })
+    const metadata = { responseId: 'response-1' }
+    Object.defineProperty(metadata, '_streamCompletion', {
+      enumerable: false,
+      value: completion,
+    })
+
+    const normalized = ensureRoutingResult({ text: 'hello', _meta: metadata })
+    const routed = withRoutingReceipt(
+      normalized,
+      { model: 'model-1', cost: undefined, trace: [] },
+    )
+
+    expect(Reflect.get(normalized._meta, '_streamCompletion')).toBe(completion)
+    expect(Reflect.get(routed._meta, '_streamCompletion')).toBe(completion)
+    expect(Object.keys(routed._meta)).toEqual(['responseId'])
+  })
+
   it('records nested router and fallback decisions as one append-only receipt', async () => {
     const routed = router({
       id: 'intent-router',

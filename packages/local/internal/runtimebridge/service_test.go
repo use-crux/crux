@@ -101,6 +101,8 @@ func TestServiceDispatchesWebSocketCommand(t *testing.T) {
 		Type:      "command.result",
 		CommandID: req.CommandID,
 		Result:    json.RawMessage(`{"value":{"ok":true}}`),
+		RunIDs:    []string{"run_current"},
+		TraceIDs:  []string{"0123456789abcdef0123456789abcdef"},
 	}
 	data, _ := json.Marshal(result)
 	if err := svc.HandlePeerMessage("peer_ws", data); err != nil {
@@ -111,6 +113,9 @@ func TestServiceDispatchesWebSocketCommand(t *testing.T) {
 	case resp := <-done:
 		if string(resp.Result) != `{"value":{"ok":true}}` {
 			t.Fatalf("unexpected result: %s", resp.Result)
+		}
+		if len(resp.RunIDs) != 1 || resp.RunIDs[0] != "run_current" || len(resp.TraceIDs) != 1 || resp.TraceIDs[0] != "0123456789abcdef0123456789abcdef" {
+			t.Fatalf("run/trace references were not preserved distinctly: %#v", resp)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for dispatch result")

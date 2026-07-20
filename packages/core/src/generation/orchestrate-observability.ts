@@ -10,14 +10,13 @@
  * @internal
  */
 
-import { observe, observedErrorSummary } from '../observability'
+import { observe } from '../observability'
 import type { ResolvedPrompt } from '../resolver/types'
 import type { OrchestrationSpec } from './orchestrate-types'
-import { TimeoutError, normalizeBudgetMs, type TimeoutOptions } from './timeout'
+import { normalizeBudgetMs, type TimeoutOptions } from './timeout'
 import type { GenerationPerformanceTracker } from './performance-metrics'
 import { generationUsageAttributes } from './result-meta'
-import { createStreamSpanFinalizer, type StreamSpanFinalizer } from './stream-finalizer'
-import { createStreamTokenCoalescer } from './stream-token-coalescer'
+export { attachStreamObservability } from './stream-observability'
 
 export function generationAttributes(
   spec: Pick<
@@ -147,169 +146,4 @@ export function linkActiveSpanToArtifact(
     from: { kind: 'span', id: spanId },
     to: { kind: 'artifact', id: artifactId },
   })
-}
-
-export function attachStreamObservability(
-  result: unknown,
-  span: ReturnType<typeof observe.openSpan>,
-  performance: GenerationPerformanceTracker,
-  chunkMs?: number,
-): void {
-  if (!result || typeof result !== 'object') {
-    span.end({ attributes: { streamCompleted: true, streamObservable: false }, metrics: performance.metrics() })
-    return
-  }
-  const record = result as Record<string, unknown>
-  const rawStream = record.rawStream
-  const extractTextDelta = record.extractTextDelta
-  const observesRawStream = isAsyncIterable(rawStream) && typeof extractTextDelta === 'function'
-  const completion = record.completion
-  const observesCompletion = typeof completion === 'function'
-  const finalizer = createStreamSpanFinalizer({
-    span,
-    performance,
-    expectsStream: observesRawStream,
-    expectsCompletion: observesCompletion,
-  })
-
-  if (observesRawStream) {
-    record.rawStream = observedStream(
-      rawStream,
-      extractTextDelta as (chunk: unknown) => string | undefined,
-      span,
-      finalizer,
-      performance,
-      chunkMs,
-    )
-  }
-
-  if (!observesCompletion) {
-    if (!observesRawStream) {
-      span.end({
-        attributes: { streamCompleted: true, completionAvailable: false },
-        metrics: performance.metrics(),
-      })
-    }
-    return
-  }
-
-  // Provider completion may settle before or after the span's own terminal
-  // signal. Either way it is attached at most once: a linked usage
-  // event/artifact (or, on error, a linked diagnostic event) that never
-  // reopens or mutates the span's already-recorded duration/status.
-  let completionAttached = false
-  record.completion = async (...args: unknown[]) => {
-    try {
-      const meta = await span.withContext(() => (completion as (...inner: unknown[]) => Promise<unknown>)(...args))
-      if (!completionAttached) {
-        completionAttached = true
-        await span.withContext(() => {
-          if (meta && typeof meta === 'object') {
-            const metaRecord = meta as Record<string, unknown>
-            const usageAttributes = generationUsageAttributes(metaRecord)
-            if (usageAttributes) {
-              observe.event({ name: 'usage.observed', attributes: usageAttributes })
-            }
-            const outputArtifactId = observe.artifact({
-              kind: 'stream.timeline',
-              contentType: 'application/json',
-              encoding: 'json',
-              preview: metaRecord,
-            })
-            linkActiveSpanToArtifact('produced', outputArtifactId)
-          }
-        })
-      }
-      finalizer.completionSettled({
-        meta: meta && typeof meta === 'object' ? (meta as Record<string, unknown>) : undefined,
-      })
-      return meta
-    } catch (error) {
-      if (!completionAttached) {
-        completionAttached = true
-        span.withContext(() => {
-          observe.event({ name: 'completion.error', attributes: { ...observedErrorSummary(error) } })
-        })
-      }
-      finalizer.completionErrored(error)
-      throw error
-    }
-  }
-}
-
-async function* observedStream(
-  rawStream: AsyncIterable<unknown>,
-  extractTextDelta: (chunk: unknown) => string | undefined,
-  span: ReturnType<typeof observe.openSpan>,
-  finalizer: StreamSpanFinalizer,
-  performance: GenerationPerformanceTracker,
-  chunkMs?: number,
-): AsyncIterable<unknown> {
-  let completed = false
-  let failed = false
-  const normalizedChunkMs = normalizeBudgetMs(chunkMs)
-  const tokenChunks = createStreamTokenCoalescer({
-    emit: (attributes) => {
-      void span.withContext(() => {
-        observe.event({
-          name: 'token.chunk',
-          attributes,
-        })
-      })
-    },
-  })
-  try {
-    const iterator = rawStream[Symbol.asyncIterator]()
-    while (true) {
-      // Each provider chunk production runs under the operation span's
-      // context — not only the initial synchronous call into the provider —
-      // so an installed telemetry plugin's active-span/context activation
-      // (e.g. `trace.getActiveSpan()`) is correct for the actual work that
-      // produces each chunk, not just for the call that started the stream.
-      const next = await span.withContext(() => nextStreamChunk(iterator, normalizedChunkMs))
-      if (next.done) break
-      const chunk = next.value
-      const delta = extractTextDelta(chunk)
-      if (delta) {
-        performance.recordOutputChunk()
-        tokenChunks.add(delta)
-      }
-      yield chunk
-    }
-    completed = true
-    tokenChunks.flush()
-    finalizer.streamEnded({ tokenChunkCount: tokenChunks.chunkCount() })
-  } catch (error) {
-    failed = true
-    tokenChunks.flush()
-    finalizer.streamErrored({ tokenChunkCount: tokenChunks.chunkCount(), error })
-    throw error
-  } finally {
-    if (!completed && !failed) {
-      tokenChunks.flush()
-      finalizer.streamReturned({ tokenChunkCount: tokenChunks.chunkCount() })
-    }
-  }
-}
-
-async function nextStreamChunk(
-  iterator: AsyncIterator<unknown>,
-  chunkMs: number | undefined,
-): Promise<IteratorResult<unknown>> {
-  if (chunkMs === undefined) return iterator.next()
-  let timer: ReturnType<typeof setTimeout> | undefined
-  try {
-    return await Promise.race([
-      iterator.next(),
-      new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(new TimeoutError({ budget: 'chunk', limitMs: chunkMs })), chunkMs)
-      }),
-    ])
-  } finally {
-    if (timer !== undefined) clearTimeout(timer)
-  }
-}
-
-function isAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
-  return Boolean(value && typeof value === 'object' && Symbol.asyncIterator in value)
 }

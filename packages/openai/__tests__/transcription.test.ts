@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { isNoTranscriptError } from "@use-crux/core";
 import { fallback } from "@use-crux/core";
 import { transcriptionConformanceRow } from "@use-crux/core/adapter/testing";
+import { boundary, constraint, guardrail } from "@use-crux/core/safety";
 import { createOpenAI } from "../src";
 
 const wav = new Uint8Array([
@@ -9,6 +10,54 @@ const wav = new Uint8Array([
 ]);
 
 describe("OpenAI transcription", () => {
+  it("guards and constrains the canonical transcript around one native call", async () => {
+    const raw = {
+      text: "private transcript",
+      segments: [{ text: "private transcript", start: 0, end: 1 }],
+    };
+    const create = vi.fn(async (_body: unknown, _options?: unknown) => raw);
+    const result = await createOpenAI(client(create)).transcribe({
+      model: "whisper-1",
+      audio: wav,
+      guardrails: [
+        guardrail({
+          id: "openai-transcript-output",
+          on: boundary.output.text(),
+          run: () => ({
+            action: "rewrite",
+            value: "guarded transcript",
+            rewrite: { kind: "redact" },
+          }),
+        }),
+      ],
+      constraints: [
+        constraint({
+          id: "openai-transcript-constraint",
+          on: boundary.output.text(),
+          run: (text) => {
+            expect(text).toBe("guarded transcript");
+            return { pass: true as const };
+          },
+        }),
+      ],
+      safety: { tune: { "openai-transcript-output": { mode: "enforce" } } },
+    });
+
+    expect(create).toHaveBeenCalledOnce();
+    expect(create.mock.calls[0]?.[0]).not.toHaveProperty("guardrails");
+    expect(create.mock.calls[0]?.[0]).not.toHaveProperty("constraints");
+    expect(create.mock.calls[0]?.[0]).not.toHaveProperty("safety");
+    expect(result.raw).toBe(raw);
+    expect(result).toMatchObject({
+      text: "guarded transcript",
+      segments: [],
+      safety: {
+        guardrails: { blocked: false },
+        constraints: { allPassed: true },
+      },
+    });
+  });
+
   it("accepts routing wrappers and sends only the selected leaf model", async () => {
     const create = vi.fn(async (_body: unknown) => ({ text: "Hello" }));
     await createOpenAI(client(create)).transcribe({

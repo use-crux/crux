@@ -1,11 +1,11 @@
 ---
-"@use-crux/core": major
-"@use-crux/local": major
+"@use-crux/core": minor
+"@use-crux/local": minor
 "@use-crux/ai": minor
 "@use-crux/cloudflare": minor
 "@use-crux/convex": minor
 "@use-crux/devtools": minor
-"@use-crux/indexer": major
+"@use-crux/indexer": minor
 "@use-crux/anthropic": patch
 "@use-crux/google": patch
 "@use-crux/mcp": patch

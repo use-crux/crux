@@ -1,7 +1,26 @@
 import { expectTypeOf, it } from "vitest";
-import type { OpenAISpeechExtra, OpenAITranslationExtra } from "../src";
+import type {
+  OpenAIGenerateImage,
+  OpenAIGenerateSpeech,
+  OpenAISpeechExtra,
+  OpenAITranscribe,
+  OpenAITranslationExtra,
+} from "../src";
 import type OpenAI from "openai";
 import { createOpenAI } from "../src";
+import { createOpenAIImageOperation } from "../src/image-generation";
+import { createOpenAISpeechOperation } from "../src/speech";
+import { createOpenAITranscriptionOperation } from "../src/transcription";
+
+type OpenAIImagePayload = ReturnType<
+  ReturnType<typeof createOpenAIImageOperation>["validate"]
+>;
+type OpenAITranscriptionPayload = ReturnType<
+  ReturnType<typeof createOpenAITranscriptionOperation>["validate"]
+>;
+type OpenAISpeechPayload = ReturnType<
+  ReturnType<typeof createOpenAISpeechOperation>["validate"]
+>;
 
 it("keeps OpenAI completed-operation extras endpoint-specific", () => {
   const translation = { temperature: 0 } satisfies OpenAITranslationExtra;
@@ -29,5 +48,18 @@ it("keeps OpenAI completed-operation extras endpoint-specific", () => {
       // @ts-expect-error endpoint extras must use the translation/transcription keys.
       extra: { chunking_strategy: "auto" },
     });
+
+    const imagePayload = {} as OpenAIImagePayload;
+    const transcriptionPayload = {} as OpenAITranscriptionPayload;
+    const speechPayload = {} as OpenAISpeechPayload;
+    // @ts-expect-error provider image validation returns an ID-free payload.
+    imagePayload._meta;
+    // @ts-expect-error provider transcription validation returns an ID-free payload.
+    transcriptionPayload._meta;
+    // @ts-expect-error provider speech validation returns an ID-free payload.
+    speechPayload._meta;
+    void ({} as Awaited<ReturnType<OpenAIGenerateImage>>)._meta.traceId;
+    void ({} as Awaited<ReturnType<OpenAITranscribe>>)._meta.spanId;
+    void ({} as Awaited<ReturnType<OpenAIGenerateSpeech>>)._meta.traceId;
   }
 });

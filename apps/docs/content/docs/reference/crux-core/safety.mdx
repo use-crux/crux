@@ -26,45 +26,41 @@ policies and attaches them globally, to prompts/contexts, or per call.
 
 Policies bind to typed boundary descriptors:
 
-| Helper                                            | Boundary                                            |
-| ------------------------------------------------- | --------------------------------------------------- |
-| `boundary.input.text()`                           | User input text before provider execution.          |
-| `boundary.input.media()`                          | Each canonical non-text input part.                 |
-| `boundary.input.model()`                          | Model input text.                                   |
-| `boundary.output.text()`                          | Final model output text.                            |
-| `boundary.output.object<T>()`                     | Parsed structured output object.                    |
-| `boundary.output.both<T>()`                       | `{ text, object }` structured output pair.          |
-| `boundary.output.path<T>()('a.b')`                | Typed structured-output path.                       |
-| `boundary.tool.call()` / `boundary.tool.result()` | Tool arguments and results.                         |
-| `boundary.approval.request()`                     | Human approval request payloads.                    |
-| `boundary.retrieval.result()`                     | Retrieval hits before model consumption.            |
-| `boundary.memory.write<T>()`                      | Candidate memory writes.                            |
-| `boundary.validation.feedback()`                  | Corrective validation feedback before re-prompting. |
+| Helper                                            | Boundary                                                                     |
+| ------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `boundary.input.text()`                           | User input text before provider execution.                                   |
+| `boundary.input.media()`                          | Each canonical non-text part in user input before provider normalization.    |
+| `boundary.input.model()`                          | Model input text.                                                            |
+| `boundary.output.text()`                          | Final model output text.                                                     |
+| `boundary.output.media()`                         | Each canonical model/operation output media part before public accumulation. |
+| `boundary.output.object<T>()`                     | Parsed structured output object.                                             |
+| `boundary.output.both<T>()`                       | `{ text, object }` structured output pair.                                   |
+| `boundary.output.path<T>()('a.b')`                | Typed structured-output path.                                                |
+| `boundary.tool.call()` / `boundary.tool.result()` | Tool arguments and results.                                                  |
+| `boundary.approval.request()`                     | Human approval request payloads.                                             |
+| `boundary.retrieval.result()`                     | Retrieval hits before model consumption.                                     |
+| `boundary.memory.write<T>()`                      | Candidate memory writes.                                                     |
+| `boundary.validation.feedback()`                  | Corrective validation feedback before re-prompting.                          |
 
 Boundary ids are stable decision/config ids. `boundary.stream.*` is not a
 public boundary family; streaming is configured on output guardrails.
 
-### Multimodal messages
+### Multimodal content
 
-`boundary.input.media()` visits every non-text part of every user message in
-caller order. Its callback receives the original canonical part object plus
-`messageIndex` and `partIndex`; both indexes refer to the caller's arrays before
-any earlier strip. This happens before invocation validation converts media to
-a provider dialect and before the provider request begins.
+Both media helpers infer `{ part, origin }`. Narrow `part.type` for canonical
+variant fields and `origin.kind` for original message, step, or completed-
+operation coordinates. Indexes refer to the pre-strip canonical arrays and do
+not shift when an earlier policy removes a sibling.
 
-Media callbacks see the values the caller supplied. Crux does not infer a MIME
-type or size when that information is unavailable, so unknown values remain
-unknown. In enforce mode, `strip` removes only the current part while retaining
-sibling text and media. In report mode, the same result records a would-strip
-decision without changing provider input. Removing the final part of a
-media-only message blocks the call immediately instead of sending an empty
-message.
+Media policies support `allow`, `warn`, `block`, and `strip`; the latter three
+require a reason. Enforced strips remove optional canonical parts, while report
+mode records intent without mutation. Removing required media—such as the last
+generated image, generated speech audio, transcription audio, or an edit
+mask's final reference—escalates to a block.
 
-A media guardrail can target only `boundary.input.media()` and cannot enable
-streaming or mix media with text boundaries in one `on` tuple. It supports
-`allow`, `warn`, `block`, and `strip`; `warn`, `block`, and `strip` require a
-reason. Model-produced media is outside this input boundary; follow
-[#228](https://github.com/use-crux/crux/issues/228) for output-media safety.
+See [Safety for content primitives](/docs/reference/crux-core/safety-content-primitives)
+for the full primitive/boundary matrix, completed-operation write-back rules,
+step coverage, and stream temporal caveat.
 
 `boundary.input.text()` remains the projected-text boundary. Text parts remain
 verbatim while media becomes a bounded descriptor containing its kind and MIME
@@ -75,8 +71,8 @@ descriptors include the filename.
 ## Guardrails
 
 `guardrail(config)` creates a policy that can allow, block, warn, rewrite, or
-hold stream segments. Input media guardrails use `strip` instead of `rewrite`
-or `hold`.
+hold stream segments. Media guardrails use `strip` instead of `rewrite` or
+`hold`.
 
 ```ts
 const pii = guardrail({
@@ -100,37 +96,38 @@ object/path guardrails run at final output unless tuned.
 
 ### `guardrail.media(options)`
 
-Creates a callback restricted to `boundary.input.media()`. At least one rule
-group is required. Configured rules run in stable `mediaTypes` → `size` →
+Creates a callback restricted to media-only boundaries, including an ordered
+input/output media tuple. At least one rule group is required. Configured rules
+run in stable `mediaTypes` → `size` →
 `sources` order and aggregate all failures into one privacy-safe decision.
 
 Top-level options:
 
-| Option | Type | Default | Behavior |
-| --- | --- | --- | --- |
-| `mediaTypes` | `MediaTypeGuardrailRule` | omitted | MIME allowlist; exact essences and subtype wildcards such as `image/*`. |
-| `size` | `MediaSizeGuardrailRule` | omitted | Maximum locally known or explicitly declared payload size. |
-| `sources` | `MediaSourceGuardrailRule` | omitted | Source-category and remote-URL rules. Omitted means no source checks. |
-| `action` | `'block' \| 'strip'` | `'block'` | Result returned when any configured rule fails. |
+| Option       | Type                       | Default   | Behavior                                                                |
+| ------------ | -------------------------- | --------- | ----------------------------------------------------------------------- |
+| `mediaTypes` | `MediaTypeGuardrailRule`   | omitted   | MIME allowlist; exact essences and subtype wildcards such as `image/*`. |
+| `size`       | `MediaSizeGuardrailRule`   | omitted   | Maximum locally known or explicitly declared payload size.              |
+| `sources`    | `MediaSourceGuardrailRule` | omitted   | Source-category and remote-URL rules. Omitted means no source checks.   |
+| `action`     | `'block' \| 'strip'`       | `'block'` | Result returned when any configured rule fails.                         |
 
 MIME and size rules:
 
-| Option | Type | Default | Behavior |
-| --- | --- | --- | --- |
-| `mediaTypes.allow` | non-empty `readonly MediaTypePattern[]` | required | MIME essences such as `image/png` or `image/*`; matching is case-normalized and ignores parameters. |
-| `mediaTypes.allowUnknown` | `boolean` | `false` | Allows a part whose MIME type cannot be observed locally. |
-| `size.maxBytes` | `number` | required | Positive safe-integer byte ceiling. |
-| `size.allowUnknown` | `boolean` | `false` | Allows a part whose size cannot be observed without external I/O. |
+| Option                    | Type                                    | Default  | Behavior                                                                                            |
+| ------------------------- | --------------------------------------- | -------- | --------------------------------------------------------------------------------------------------- |
+| `mediaTypes.allow`        | non-empty `readonly MediaTypePattern[]` | required | MIME essences such as `image/png` or `image/*`; matching is case-normalized and ignores parameters. |
+| `mediaTypes.allowUnknown` | `boolean`                               | `false`  | Allows a part whose MIME type cannot be observed locally.                                           |
+| `size.maxBytes`           | `number`                                | required | Positive safe-integer byte ceiling.                                                                 |
+| `size.allowUnknown`       | `boolean`                               | `false`  | Allows a part whose size cannot be observed without external I/O.                                   |
 
 Source rules:
 
-| Option | Type | Default | Behavior |
-| --- | --- | --- | --- |
-| `sources.allowHosts` | `readonly string[]` | all hosts | Exact normalized hostnames. Schemes, ports, paths, queries, userinfo, and wildcards are invalid config. |
-| `sources.allowInline` | `boolean` | `true` | Allows bytes, Blobs, data assets, and data URLs. |
-| `sources.allowProviderFiles` | `boolean` | `true` | Allows provider-owned file references; URL rules do not apply to them. |
-| `sources.allowUrlUserInfo` | `boolean` | `false` | Allows username/password fields in a URL authority. |
-| `sources.allowUrlQuery` | `boolean` | `true` | Allows URL query strings, including signed-URL parameters. |
+| Option                       | Type                | Default   | Behavior                                                                                                |
+| ---------------------------- | ------------------- | --------- | ------------------------------------------------------------------------------------------------------- |
+| `sources.allowHosts`         | `readonly string[]` | all hosts | Exact normalized hostnames. Schemes, ports, paths, queries, userinfo, and wildcards are invalid config. |
+| `sources.allowInline`        | `boolean`           | `true`    | Allows bytes, Blobs, data assets, and data URLs.                                                        |
+| `sources.allowProviderFiles` | `boolean`           | `true`    | Allows provider-owned file references; URL rules do not apply to them.                                  |
+| `sources.allowUrlUserInfo`   | `boolean`           | `false`   | Allows username/password fields in a URL authority.                                                     |
+| `sources.allowUrlQuery`      | `boolean`           | `true`    | Allows URL query strings, including signed-URL parameters.                                              |
 
 `sources: {}` enables all source defaults in the table; omitting `sources`
 disables source evaluation entirely. Invalid configuration throws
@@ -152,8 +149,7 @@ argument is statically resolvable.
 
 Reasons and observability can contain MIME types and byte counts, but never raw
 media, URLs, observed hostnames, paths, queries, userinfo, filenames, or
-provider/file identifiers. Model-produced media is out of scope; see
-[#228](https://github.com/use-crux/crux/issues/228).
+provider/file identifiers.
 
 ## Constraints
 
@@ -290,15 +286,15 @@ the canonical part type and original pre-strip indexes, never the media source.
 
 ## Choosing The Primitive
 
-| Need                                                            | Use                                             |
-| --------------------------------------------------------------- | ----------------------------------------------- |
-| Block, redact, transform, or warn on raw input/output           | `guardrail()`                                   |
-| Enforce business rules on generated output and retry            | `constraint()`                                  |
-| Gate tool calls, tool results, or approvals as Safety decisions | `toolPolicy()`                                  |
-| Instrument or modify tool execution mechanics                   | `toolMiddleware()`                              |
-| Enforce a minimum LLM-judge score and retry                     | `constraint.judge(...)`                         |
+| Need                                                            | Use                                                       |
+| --------------------------------------------------------------- | --------------------------------------------------------- |
+| Block, redact, transform, or warn on raw input/output           | `guardrail()`                                             |
+| Enforce business rules on generated output and retry            | `constraint()`                                            |
+| Gate tool calls, tool results, or approvals as Safety decisions | `toolPolicy()`                                            |
+| Instrument or modify tool execution mechanics                   | `toolMiddleware()`                                        |
+| Enforce a minimum LLM-judge score and retry                     | `constraint.judge(...)`                                   |
 | Regression-test production Safety behavior in Evals             | `ctx.expect.safety` or `ctx.expect.decisionReport.safety` |
-| Repair JSON/schema parse failures                               | `validationRetry`                               |
+| Repair JSON/schema parse failures                               | `validationRetry`                                         |
 
 ## Testing
 

@@ -12,7 +12,11 @@ import { getHooks, resolveRecords } from '../runtime/runtime'
 import type { JsonValue, RecordStore } from '../storage'
 import { observe, sanitizePropagationCarrier } from '../observability'
 import type { FlowSnapshot, ListFlowsOptions, FlowSummary } from './types'
-import { assertFlowJsonValue, assertFlowSnapshotMetadata } from './serialization'
+import {
+  assertFlowJsonValue,
+  flowSnapshotForPersistence,
+  flowValueForPersistence,
+} from './serialization'
 
 // ─────────────────────────────────────────────────────────────────
 // Constants
@@ -104,9 +108,11 @@ export function assertFlowSnapshotResumable(snapshot: FlowSnapshot): void {
  */
 export async function signalFlow(flowId: string, name: string, payload: JsonValue = {}): Promise<void> {
   const store = resolveRecords()
-  assertFlowJsonValue(payload, { boundary: 'signal payload' })
+  const persistedPayload = flowValueForPersistence(payload, {
+    boundary: 'signal payload',
+  })
   await store.put(`${SIGNAL_KEY_PREFIX}${flowId}:${name}`, {
-    payload,
+    payload: persistedPayload,
     signaledAt: Date.now(),
     updatedAt: Date.now(),
   })
@@ -173,8 +179,7 @@ export async function cancelFlow(flowId: string, reason?: string): Promise<void>
     cancelledAt,
     updatedAt: cancelledAt,
   } as FlowSnapshot
-  assertFlowSnapshotMetadata(cancelledSnapshot)
-  await store.put(`${FLOW_KEY_PREFIX}${flowId}`, cancelledSnapshot)
+  await store.put(`${FLOW_KEY_PREFIX}${flowId}`, flowSnapshotForPersistence(cancelledSnapshot))
 
   if (snapshot.continuation) {
     const run = observe.resumeRun(sanitizePropagationCarrier(snapshot.continuation), {

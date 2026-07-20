@@ -13,7 +13,6 @@
 
 import type { z } from "zod";
 import type { ModelInfo } from "../types";
-import type { TraceMeta } from "../generation/types";
 import type { SystemBlock } from "../resolver/types";
 import type { DiagnosticsPort } from "../resolver/ports";
 import type { Message } from "../generation/messages";
@@ -21,7 +20,13 @@ import type { AssistantContentPart } from "../types/content";
 import type { JsonValue } from "../types/tool";
 import type { ResultStepFacts } from "./result-accumulator";
 import type { AdapterResponse } from "./types";
-import type { RoutingReceipt } from "../routing/receipt";
+
+export type {
+  ExecutorProviderStreamHandle,
+  ExecutorStreamCompletionPayload,
+  ExecutorStreamHandle,
+  ExecutorStreamMeta,
+} from "./executor-stream-types";
 
 // ─────────────────────────────────────────────────────────────────
 // Request
@@ -97,6 +102,18 @@ export interface ExecutorRequest<TModel> {
    * {@link StepObserver} for the buffering contract.
    */
   readonly observer: StepObserver | undefined;
+  /**
+   * Optional canonical step transformer for runtimes that declare
+   * `capabilities.stepTransform: 'before-client-tools'`.
+   *
+   * The runtime must await it once after each model response and before local
+   * tool approval/execution, assistant-history append, observation, or
+   * continuation. The transformer returns indexed edits; it never replaces the
+   * provider-shaped result wholesale. Provider-executed server tools have
+   * already run remotely when their response arrives; the guarantee covers
+   * canonical exposure and SDK/Crux-owned client tools, not undoing remote work.
+   */
+  readonly stepTransformer?: StepTransformer;
   /**
    * Cooperative cancellation from core's timeout policy. Pass to the SDK
    * (`abortSignal`) so a timed-out call stops consuming tokens.
@@ -229,6 +246,40 @@ export interface StepObserver {
   onStepEnd(step: ExecutorStep): Promise<StepDirective>;
 }
 
+/** Canonical model output available before an SDK-owned client tool runs. */
+export interface ExecutorModelStep {
+  /** Monotonic provider-response ordinal; refunded steps never reuse an index. */
+  readonly index: number;
+  /** Ordered canonical assistant content projected from the native response. */
+  readonly content: readonly AssistantContentPart[];
+}
+
+/**
+ * One immutable edit against the original canonical step projection.
+ *
+ * Text replacement applies only to text/reasoning parts; removal applies only
+ * to media parts. Tool-call parts are never editable.
+ */
+export type StepContentEdit =
+  | {
+      readonly kind: "replace-text";
+      readonly partIndex: number;
+      readonly text: string;
+    }
+  | {
+      readonly kind: "remove";
+      readonly partIndex: number;
+    };
+
+/** Core-owned pre-continuation policy hook implemented mechanically by loop runtimes. */
+export interface StepTransformer {
+  /**
+   * Guard one canonical model step and return strictly ordered indexed edits.
+   * A thrown error is terminal for all client-side continuation of this step.
+   */
+  transform(step: ExecutorModelStep): Promise<readonly StepContentEdit[]>;
+}
+
 // ─────────────────────────────────────────────────────────────────
 // Outcomes
 // ─────────────────────────────────────────────────────────────────
@@ -335,51 +386,3 @@ export type StructuredAttempt<TRawResponse> =
       /** Why validation failed. */
       readonly error: z.ZodError;
     };
-
-// ─────────────────────────────────────────────────────────────────
-// Streaming
-// ─────────────────────────────────────────────────────────────────
-
-/** Completion metadata resolved when an executor-driven stream finishes. */
-export interface ExecutorStreamMeta extends TraceMeta {
-  /** Final assistant text, when the stream produced text. */
-  readonly text?: string;
-  /** Parsed, schema-valid object produced by a structured stream. */
-  readonly object?: unknown;
-  /** Exact final assistant output buffered by the SDK stream. */
-  readonly content?: readonly AssistantContentPart[];
-  /** Complete canonical transcript buffered by the SDK stream. */
-  readonly messages?: readonly Message[];
-  /** Non-fatal native warnings reported when the stream completed. */
-  readonly warnings?: readonly unknown[];
-  /** Provider-owned completion metadata. */
-  readonly providerMetadata?: unknown;
-  /** Stream timing metrics measured by the executor. */
-  readonly streaming?: {
-    /** Time to first token in milliseconds. */
-    readonly ttftMs?: number;
-    /** Output tokens per second over the whole stream. */
-    readonly tokensPerSecond?: number;
-    /** Total chunks observed. */
-    readonly totalChunks?: number;
-  };
-}
-
-/**
- * Handle returned by `runStream()`.
- *
- * `raw` is the SDK's own stream result (e.g. AI SDK `StreamTextResult`) and
- * is what consumers ultimately receive — the factory never wraps or
- * re-streams it, so single-consumption semantics are preserved.
- * `completion()` resolves once the stream finishes, with usage, cost, and
- * timing metrics; it must be safe to call before, during, or after the
- * consumer drains the stream, and must not itself consume the stream.
- */
-export interface ExecutorStreamHandle<TRawStream> {
-  /** The SDK stream result object, untouched. */
-  readonly raw: TRawStream;
-  /** Routing receipt attached by core when a stream used routing wrappers. */
-  readonly routing?: RoutingReceipt;
-  /** Resolves with final metadata when the stream finishes. */
-  completion: () => Promise<ExecutorStreamMeta | undefined>;
-}
