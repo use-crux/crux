@@ -5,12 +5,12 @@
   "fileSelection": "staticDefinitionFiles(root)",
   "projection": "canonicalStaticExtractionJson(definitions,relations,diagnostics,dependencies)",
   "totals": {
-    "files": 737,
+    "files": 738,
     "definitions": 84,
     "relations": 7,
     "diagnostics": 25,
-    "dependencies": 1367,
-    "canonicalBytes": 204064
+    "dependencies": 1368,
+    "canonicalBytes": 204201
   },
   "files": [
     {
@@ -1419,12 +1419,12 @@
     },
     {
       "file": "packages/convex/src/runtime-bridge.ts",
-      "sha256": "d87b47e5717637db28846314b561bdbe5bf1a44802258d425a0b6f781422172b",
-      "bytes": 404,
+      "sha256": "7ff2ee5b72424bfe27cff3781659aa922cba637973ae9b004adae8447a5c5e8a",
+      "bytes": 473,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 7
+      "dependencies": 8
     },
     {
       "file": "packages/convex/src/runtime-engine/codec.ts",
@@ -1470,6 +1470,15 @@
       "relations": 0,
       "diagnostics": 0,
       "dependencies": 5
+    },
+    {
+      "file": "packages/convex/src/runtime-engine/eval-host/http-action.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
     },
     {
       "file": "packages/convex/src/runtime-engine/handlers.ts",
@@ -1518,7 +1527,7 @@
     },
     {
       "file": "packages/convex/src/runtime.ts",
-      "sha256": "ff794cbe762cc9669f438750fd1ec14cd70bf18c74d763e7dd720859e57ad919",
+      "sha256": "94d7fd5fcdc3323871f6d3cc19de36326723cc652a0e5dbfe516ac28a1a20f48",
       "bytes": 1503,
       "definitions": 1,
       "relations": 1,

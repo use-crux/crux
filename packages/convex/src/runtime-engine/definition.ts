@@ -45,11 +45,45 @@ export function convex(options: ConvexRuntimeEngineOptions = {}): ConvexRuntimeE
     ...(options.retention ? { retention: options.retention } : {}),
     options: Object.freeze({ ...options }),
   }, {
-    infer: (environment) => ({
-      ...(environment.CONVEX_SITE_URL ? { url: environment.CONVEX_SITE_URL } : {}),
-      ...(environment.CONVEX_DEPLOYMENT ? { deploymentId: environment.CONVEX_DEPLOYMENT } : {}),
-    }),
+    infer: (environment) => {
+      const url = firstEnvironmentValue(environment, CONVEX_SITE_URL_KEYS)
+      const deploymentId = firstEnvironmentValue(environment, CONVEX_CLOUD_URL_KEYS)
+      return {
+        ...(url ? { url } : {}),
+        ...(deploymentId ? { deploymentId } : {}),
+      }
+    },
   })
+}
+
+const CONVEX_CLOUD_URL_KEYS = [
+  'CONVEX_CLOUD_URL',
+  'CONVEX_URL',
+  'NEXT_PUBLIC_CONVEX_URL',
+  'EXPO_PUBLIC_CONVEX_URL',
+  'PUBLIC_CONVEX_URL',
+  'VITE_CONVEX_URL',
+  'REACT_APP_CONVEX_URL',
+] as const
+
+const CONVEX_SITE_URL_KEYS = [
+  'CONVEX_SITE_URL',
+  'NEXT_PUBLIC_CONVEX_SITE_URL',
+  'EXPO_PUBLIC_CONVEX_SITE_URL',
+  'PUBLIC_CONVEX_SITE_URL',
+  'VITE_CONVEX_SITE_URL',
+  'REACT_APP_CONVEX_SITE_URL',
+] as const
+
+function firstEnvironmentValue(
+  environment: Readonly<Record<string, string | undefined>>,
+  keys: readonly string[],
+): string | undefined {
+  for (const key of keys) {
+    const value = environment[key]?.trim()
+    if (value) return value
+  }
+  return undefined
 }
 
 const CONVEX_RUNTIME_CAPABILITIES: CruxEngineCapabilities = Object.freeze({

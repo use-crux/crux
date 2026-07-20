@@ -183,9 +183,10 @@ describe("runtime artifacts", () => {
     expect(targets).toContain("handleEvalRequest");
     expect(targets).toContain("executeEvalTarget");
     expect(targets).toContain("CRUX_EVAL_HOST_TOKEN");
-    expect(targets).toContain("CONVEX_DEPLOYMENT");
-    expect(targets).not.toContain("CONVEX_DEPLOYMENT ?? 'convex'");
-    expect(targets).not.toContain("CRUX_EVAL_HOST_TOKEN ?? ''");
+    expect(targets).toContain("CONVEX_CLOUD_URL");
+    expect(targets).not.toContain("CONVEX_DEPLOYMENT");
+    expect(targets).not.toContain("if (!evalHostToken)");
+    expect(targets).toContain("token: evalHostToken");
     expect(targets).toContain(
       "const supportedEvalHostCapabilities = ['record-store', 'vector-store']",
     );
@@ -196,8 +197,14 @@ describe("runtime artifacts", () => {
     );
     expect(http).toContain("registerCruxEvalRoutes(httpRouter())");
     expect(http).toContain("export default http");
-    expect(httpRoutes).toContain("import { api } from '../_generated/api'");
-    expect(httpRoutes).toContain("api._crux.targets.handleEvalRequest");
+    expect(httpRoutes).toContain(
+      "import { createConvexEvalHttpAction } from '@use-crux/convex/runtime'",
+    );
+    expect(httpRoutes).toContain(
+      "const handler = createConvexEvalHttpAction()",
+    );
+    expect(httpRoutes).not.toContain("from './targets'");
+    expect(httpRoutes).not.toContain("../_generated/api");
     expect(httpRoutes.match(/http\.route\(/g)).toHaveLength(4);
     expect(httpRoutes).toContain("path: '/manifest'");
     expect(httpRoutes).toContain("path: '/jobs'");

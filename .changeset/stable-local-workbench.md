@@ -75,6 +75,9 @@ continues serving while background generation reports and retries failures.
 Preserve existing Convex routers that already call `crux.bridge(...)`, with the
 bridge registering authenticated Eval routes automatically. The local Runtime
 artifact manifest moves to v2 while the authenticated host wire remains v1.
+Register those Eval routes as real default-runtime Convex HTTP actions and
+forward them across Convex's supported action boundary, so generated and
+existing routers deploy without invalid-module errors.
 Index Eval placement in a bounded runtime-rich pass for setup, one-shot
 generation, and watcher refreshes, and treat host-bound preflight as
 metadata-only instead of executing host-only functions from the local CLI.

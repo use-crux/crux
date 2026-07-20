@@ -12,6 +12,7 @@ import * as esbuild from 'esbuild'
 describe('Convex observability import graph has no unsupported Node imports', () => {
   it.each([
     ['@use-crux/convex/observability', '../src/observability.ts'],
+    ['@use-crux/convex/runtime', '../src/runtime.ts'],
     ['@use-crux/convex/server', '../src/server.ts'],
     ['@use-crux/convex/swarm', '../src/swarm.ts'],
   ])('%s bundles for the browser platform with no unresolved node: specifiers', async (_label, entry) => {
