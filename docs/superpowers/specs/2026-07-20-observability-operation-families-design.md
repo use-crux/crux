@@ -278,8 +278,11 @@ shows the root outcome plus background activity instead of changing the root
 status back to `running`.
 
 Operation membership counts cover every non-root descendant, not only direct
-children. `childRunCount` is therefore `memberRunCount - 1`; active, suspended,
-and failed child counts likewise include the complete descendant set.
+children. Once the root is present, `childRunCount` is
+`memberRunCount - 1`. Before root arrival, an incomplete shell counts observed
+runs whose `runId !== operationId`; it must not subtract an unobserved root.
+Active, suspended, and failed child counts likewise include the complete
+observed descendant set.
 
 ### Child-before-root presentation
 
