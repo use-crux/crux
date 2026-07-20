@@ -51,7 +51,7 @@ func (s *Service) ingest(ctx context.Context, batch Batch) (err error) {
 		}
 	}()
 
-	runTraceIDs := make(map[string]string)
+	operationTraceIDs := make(map[string]string)
 	tokenChunks := make([]SpanEventRecord, 0)
 	tokenChunkSpans := make(map[string]struct{})
 	for _, record := range batch.Records {
@@ -70,9 +70,9 @@ func (s *Service) ingest(ctx context.Context, batch Batch) (err error) {
 			return fmt.Errorf("ingest observability record %q: %w", record.RecordID, err)
 		}
 		if record.TraceID != "" {
-			runTraceIDs[record.RunID] = record.TraceID
-		} else if _, ok := runTraceIDs[record.RunID]; !ok {
-			runTraceIDs[record.RunID] = ""
+			operationTraceIDs[record.OperationID] = record.TraceID
+		} else if _, ok := operationTraceIDs[record.OperationID]; !ok {
+			operationTraceIDs[record.OperationID] = ""
 		}
 	}
 	for spanID := range tokenChunkSpans {
@@ -84,11 +84,11 @@ func (s *Service) ingest(ctx context.Context, batch Batch) (err error) {
 		return fmt.Errorf("reconcile observability run/segment lifecycle: %w", err)
 	}
 
-	affectedRunIDs := make([]string, 0, len(statements.affectedRuns))
-	for runID := range statements.affectedRuns {
-		affectedRunIDs = append(affectedRunIDs, runID)
+	affectedOperationIDs := make([]string, 0, len(statements.affectedOperations))
+	for operationID := range statements.affectedOperations {
+		affectedOperationIDs = append(affectedOperationIDs, operationID)
 	}
-	revisions, err := bumpRunRevisions(ctx, tx, affectedRunIDs, s.revisionLogRetentionOrDefault())
+	revisions, err := bumpRunRevisions(ctx, tx, affectedOperationIDs, s.revisionLogRetentionOrDefault())
 	if err != nil {
 		return fmt.Errorf("advance observability run revisions: %w", err)
 	}
@@ -97,7 +97,7 @@ func (s *Service) ingest(ctx context.Context, batch Batch) (err error) {
 		return fmt.Errorf("commit observability ingest transaction: %w", err)
 	}
 	committed = true
-	s.publishIngestEvents(runTraceIDs, tokenChunks, revisions)
+	s.publishIngestEvents(operationTraceIDs, tokenChunks, revisions)
 	return nil
 }
 
@@ -115,25 +115,25 @@ func tokenChunkRecord(record Record) (SpanEventRecord, bool) {
 // publishIngestEvents runs only after the ingest transaction has committed,
 // so a subscriber never observes a revision or run id that references
 // projections it cannot yet query.
-func (s *Service) publishIngestEvents(runTraceIDs map[string]string, tokenChunks []SpanEventRecord, revisions map[string]int64) {
+func (s *Service) publishIngestEvents(operationTraceIDs map[string]string, tokenChunks []SpanEventRecord, revisions map[string]int64) {
 	now := time.Now().UnixMilli()
-	for runID, traceID := range runTraceIDs {
-		payloadMap := map[string]any{"runId": runID, "entity": "run"}
+	for operationID, traceID := range operationTraceIDs {
+		payloadMap := map[string]any{"operationId": operationID, "entity": "operation"}
 		if traceID != "" {
 			payloadMap["traceId"] = traceID
 		}
-		if revision, ok := revisions[runID]; ok {
+		if revision, ok := revisions[operationID]; ok {
 			payloadMap["revision"] = revision
 		}
 		payload, _ := json.Marshal(payloadMap)
 		s.events.Publish(Event{
 			Tag:       "ObservabilityEvent",
-			ID:        fmt.Sprintf("observability:%s:%d", runID, now),
+			ID:        fmt.Sprintf("observability:%s:%d", operationID, now),
 			Timestamp: now,
 			Kind:      "observability.records",
 			Action:    "ingested",
 			Severity:  "info",
-			RefID:     runID,
+			RefID:     operationID,
 			Payload:   payload,
 		})
 	}

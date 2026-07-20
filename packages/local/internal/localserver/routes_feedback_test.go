@@ -60,7 +60,7 @@ func TestFeedbackRouteIsDurableIdempotentAndReconcilesOutOfOrderRun(t *testing.T
 		t.Fatalf("pending projection/history = %#v / %#v", projection, history)
 	}
 
-	ingest := []byte(`{"schemaVersion":3,"records":[{"schemaVersion":3,"recordId":"record-feedback-run","type":"run:start","runId":"run_0123456789abcdef01234567","segmentId":"segment_feedback_run","segmentSeq":1,"name":"feedback source","rootPrimitive":"generation.call","startedAt":"2026-07-16T20:00:00.000Z","status":"running"}]}`)
+	ingest := []byte(`{"schemaVersion":4,"records":[{"schemaVersion":4,"recordId":"record-feedback-run","type":"run:start","runId":"run_0123456789abcdef01234567","operationId":"run_0123456789abcdef01234567","segmentId":"segment_feedback_run","segmentSeq":1,"name":"feedback source","rootPrimitive":"generation.call","startedAt":"2026-07-16T20:00:00.000Z","status":"running"}]}`)
 	response := performObservabilityIngestRequest(mux, ingest)
 	if response.Code != http.StatusAccepted {
 		t.Fatalf("ingest status = %d, body = %s", response.Code, response.Body.String())

@@ -100,16 +100,19 @@ func insertRetentionRun(t *testing.T, service *Service, runID string, started ti
 func insertRetentionRunWithStatus(t *testing.T, service *Service, runID string, started time.Time, status string) {
 	t.Helper()
 	timestamp := started.Format(time.RFC3339Nano)
-	if _, err := service.db.Exec(`
-		INSERT INTO runs (run_id, trace_id, name, root_primitive, status, started_at, last_activity_at)
-		VALUES (?, ?, 'retained', 'agent.run', ?, ?, ?)
-	`, runID, "trace_"+runID, status, timestamp, timestamp); err != nil {
+	if _, err := service.db.Exec(`INSERT INTO operations (operation_id, first_seen_at, root_present) VALUES (?, ?, 1)`, runID, timestamp); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := service.db.Exec(`
-		INSERT INTO records (record_id, run_id, trace_id, segment_id, segment_seq, type, payload_json)
-		VALUES (?, ?, ?, ?, 1, 'run:start', '{}')
-	`, "record_"+runID, runID, "trace_"+runID, "seg_"+runID); err != nil {
+		INSERT INTO runs (run_id, operation_id, trace_id, name, root_primitive, status, started_at, last_activity_at)
+		VALUES (?, ?, ?, 'retained', 'agent.run', ?, ?, ?)
+	`, runID, runID, "trace_"+runID, status, timestamp, timestamp); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.db.Exec(`
+		INSERT INTO records (record_id, run_id, operation_id, trace_id, segment_id, segment_seq, type, payload_json)
+		VALUES (?, ?, ?, ?, ?, 1, 'run:start', '{}')
+	`, "record_"+runID, runID, runID, "trace_"+runID, "seg_"+runID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := service.db.Exec(`

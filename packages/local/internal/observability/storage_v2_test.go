@@ -47,7 +47,7 @@ func TestServiceRollsBackFailedPreV2ResetAndCanReopen(t *testing.T) {
 	}
 	failedService := &Service{db: failedDB}
 	err = failedService.migrateWithHook(ctx, func(step string) error {
-		if step == "after-pre-v2-reset" {
+		if step == "after-contract-reset" {
 			return injected
 		}
 		return nil
@@ -345,8 +345,8 @@ func TestServiceResetsV2ContractTablesWithExtraColumns(t *testing.T) {
 				t.Fatal(err)
 			}
 			if _, err := db.ExecContext(ctx, `
-				INSERT INTO records (record_id, run_id, trace_id, segment_id, segment_seq, type, payload_json)
-				VALUES ('rec_extra_v2', 'run_extra_v2', 'trace_extra_v2', 'seg_extra_v2_a', 1, 'run:start', '{}')
+				INSERT INTO records (record_id, run_id, operation_id, trace_id, segment_id, segment_seq, type, payload_json)
+				VALUES ('rec_extra_v2', 'run_extra_v2', 'run_extra_v2', 'trace_extra_v2', 'seg_extra_v2_a', 1, 'run:start', '{}')
 			`); err != nil {
 				t.Fatal(err)
 			}

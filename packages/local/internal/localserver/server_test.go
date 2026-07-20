@@ -94,7 +94,7 @@ func TestNewUsesItsScopedLoggerForResponseEncodingFailures(t *testing.T) {
 		Observability: service,
 		Logger:        slog.New(slog.NewTextHandler(&scopedLogs, nil)),
 	})
-	request := httptest.NewRequest(http.MethodPost, "/api/observability/records", strings.NewReader(`{"schemaVersion":2,"records":[]}`))
+	request := httptest.NewRequest(http.MethodPost, "/api/observability/records", strings.NewReader(`{"schemaVersion":4,"records":[]}`))
 	request.Header.Set("Content-Type", "application/json")
 
 	handler.ServeHTTP(&failingResponseWriter{header: make(http.Header)}, request)
@@ -155,7 +155,7 @@ func TestNewMountsLocalRuntimeRouteGroups(t *testing.T) {
 	if runtimeIndexer.root != "/repo/runtime-routes" || runtimeIndexer.operation != "status" || !runtimeIndexer.includeDetails {
 		t.Fatalf("runtime call = %+v, want detailed status for project root", runtimeIndexer)
 	}
-	assertStatusAndClose(t, http.MethodPost, ts.URL+"/api/observability/records", []byte(`{"schemaVersion":2,"records":[]}`), http.StatusAccepted)
+	assertStatusAndClose(t, http.MethodPost, ts.URL+"/api/observability/records", []byte(`{"schemaVersion":4,"records":[]}`), http.StatusAccepted)
 	assertStatusAndClose(t, http.MethodDelete, ts.URL+"/api/inspect/runs", []byte(`{"traceIds":[]}`), http.StatusBadRequest)
 	assertStatusAndClose(t, http.MethodPost, ts.URL+"/api/resolve-source", []byte(`{`), http.StatusBadRequest)
 	assertStatusAndClose(t, http.MethodGet, ts.URL+"/api/does-not-exist", nil, http.StatusNotFound)

@@ -11,6 +11,7 @@ type ingestStatements struct {
 	cache              map[string]*sql.Stmt
 	reservedRunRollups map[string]struct{}
 	affectedRuns       map[string]struct{}
+	affectedOperations map[string]struct{}
 	affectedSegments   map[string]struct{}
 }
 
@@ -20,6 +21,7 @@ func newIngestStatements(tx *sql.Tx) *ingestStatements {
 		cache:              make(map[string]*sql.Stmt),
 		reservedRunRollups: make(map[string]struct{}),
 		affectedRuns:       make(map[string]struct{}),
+		affectedOperations: make(map[string]struct{}),
 		affectedSegments:   make(map[string]struct{}),
 	}
 }
@@ -28,7 +30,10 @@ func newIngestStatements(tx *sql.Tx) *ingestStatements {
 // batch, deferring the (relatively expensive) lifecycle/gap-count
 // reconciliation for them to reconcileAffected instead of recomputing it
 // after every single record.
-func (s *ingestStatements) markAffected(runID, segmentID string) {
+func (s *ingestStatements) markAffected(operationID, runID, segmentID string) {
+	if operationID != "" {
+		s.affectedOperations[operationID] = struct{}{}
+	}
 	if runID != "" {
 		s.affectedRuns[runID] = struct{}{}
 	}

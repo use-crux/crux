@@ -194,10 +194,14 @@ func TestServiceLifecycleSkipsRunDetailForAlreadyReconciledRuns(t *testing.T) {
 	}
 	started := time.Now().Add(-2 * time.Minute).UTC().Format(time.RFC3339Nano)
 	for i := 0; i < 50; i++ {
+		runID := fmt.Sprintf("run_reconciled_%02d", i)
+		if _, err := service.db.ExecContext(ctx, `INSERT INTO operations (operation_id, first_seen_at, root_present) VALUES (?, ?, 1)`, runID, started); err != nil {
+			t.Fatal(err)
+		}
 		if _, err := service.db.ExecContext(ctx, `
-			INSERT INTO runs (run_id, trace_id, name, root_primitive, status, started_at, last_activity_at, lifecycle_status)
-			VALUES (?, ?, 'incomplete', 'agent.run', 'running', ?, ?, 'reconciled-incomplete')
-		`, fmt.Sprintf("run_reconciled_%02d", i), fmt.Sprintf("trace_reconciled_%02d", i), started, started); err != nil {
+			INSERT INTO runs (run_id, operation_id, trace_id, name, root_primitive, status, started_at, last_activity_at, lifecycle_status)
+			VALUES (?, ?, ?, 'incomplete', 'agent.run', 'running', ?, ?, 'reconciled-incomplete')
+		`, runID, runID, fmt.Sprintf("trace_reconciled_%02d", i), started, started); err != nil {
 			t.Fatal(err)
 		}
 	}

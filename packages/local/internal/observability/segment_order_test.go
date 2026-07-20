@@ -51,7 +51,10 @@ func TestResolveRunIDsKeepsNewestTraceAliasWinner(t *testing.T) {
 	ctx := context.Background()
 	service := newTestService(t)
 	for _, row := range []struct{ runID, startedAt string }{{"run_alias_old", "2026-05-16T18:00:00.000Z"}, {"run_alias_new", "2026-05-16T18:01:00.000Z"}} {
-		if _, err := service.db.ExecContext(ctx, `INSERT INTO runs (run_id, trace_id, started_at) VALUES (?, 'trace_alias', ?)`, row.runID, row.startedAt); err != nil {
+		if _, err := service.db.ExecContext(ctx, `INSERT INTO operations (operation_id, first_seen_at, root_present) VALUES (?, ?, 1)`, row.runID, row.startedAt); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := service.db.ExecContext(ctx, `INSERT INTO runs (run_id, operation_id, trace_id, started_at) VALUES (?, ?, 'trace_alias', ?)`, row.runID, row.runID, row.startedAt); err != nil {
 			t.Fatal(err)
 		}
 	}

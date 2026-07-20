@@ -51,7 +51,7 @@ describe('observability conformance fixture corpus', () => {
     }
 
     const lifecycleCorpus = JSON.parse(
-      await readFile(new URL('v2-contract-cases.json', fixturesDir), 'utf8'),
+      await readFile(new URL('v4-contract-cases.json', fixturesDir), 'utf8'),
     ) as V4ContractCorpus
     for (const testCase of lifecycleCorpus.cases) {
       for (const record of testCase.records) {
@@ -101,7 +101,7 @@ describe('observability conformance fixture corpus', () => {
 
   it('validates every shared v4 contract fixture with segment-local identity', async () => {
     const corpus = JSON.parse(
-      await readFile(new URL('v2-contract-cases.json', fixturesDir), 'utf8'),
+      await readFile(new URL('v4-contract-cases.json', fixturesDir), 'utf8'),
     ) as V4ContractCorpus
 
     expect(corpus.cases.map((testCase) => testCase.name)).toEqual([
@@ -151,7 +151,7 @@ async function readFixtureBatches(): Promise<
       (file) =>
         file.endsWith('.json') &&
         file !== 'taxonomy.json' &&
-        file !== 'v2-contract-cases.json',
+        file !== 'v4-contract-cases.json',
     )
     .sort()
   return Promise.all(

@@ -50,9 +50,9 @@ func drainSnapshot(t *testing.T, ws *websocket.Conn) {
 
 func postObservabilityRun(t *testing.T, client *http.Client, baseURL string, runID string) {
 	t.Helper()
-	body := `{"schemaVersion":2,"records":[
-		{"schemaVersion":2,"recordId":"rec_start_` + runID + `","type":"run:start","runId":"` + runID + `","segmentId":"seg_` + runID + `","segmentSeq":1,"traceId":"trace_` + runID + `","name":"ws","rootPrimitive":"generation.call","startedAt":"2026-05-16T18:00:00.000Z","status":"running"},
-		{"schemaVersion":2,"recordId":"rec_end_` + runID + `","type":"run:end","runId":"` + runID + `","segmentId":"seg_` + runID + `","segmentSeq":2,"traceId":"trace_` + runID + `","endedAt":"2026-05-16T18:00:00.010Z","durationMs":10,"status":"ok"}
+	body := `{"schemaVersion":4,"records":[
+		{"schemaVersion":4,"recordId":"rec_start_` + runID + `","type":"run:start","runId":"` + runID + `","operationId":"` + runID + `","segmentId":"seg_` + runID + `","segmentSeq":1,"traceId":"trace_` + runID + `","name":"ws","rootPrimitive":"generation.call","startedAt":"2026-05-16T18:00:00.000Z","status":"running"},
+		{"schemaVersion":4,"recordId":"rec_end_` + runID + `","type":"run:end","runId":"` + runID + `","operationId":"` + runID + `","segmentId":"seg_` + runID + `","segmentSeq":2,"traceId":"trace_` + runID + `","endedAt":"2026-05-16T18:00:00.010Z","durationMs":10,"status":"ok"}
 	]}`
 	resp, err := client.Post(baseURL+"/api/observability/records", "application/json", strings.NewReader(body))
 	if err != nil {
@@ -66,11 +66,11 @@ func postObservabilityRun(t *testing.T, client *http.Client, baseURL string, run
 
 func postObservabilityTokenChunk(t *testing.T, client *http.Client, baseURL string) {
 	t.Helper()
-	body := `{"schemaVersion":2,"records":[
-		{"schemaVersion":2,"recordId":"rec_token_run","type":"run:start","runId":"run_token_ws","segmentId":"seg_token_ws","segmentSeq":1,"traceId":"trace_token_ws","name":"ws tokens","rootPrimitive":"generation.stream","startedAt":"2026-05-16T18:00:00.000Z","status":"running"},
-		{"schemaVersion":2,"recordId":"rec_token_span","type":"span:start","runId":"run_token_ws","segmentId":"seg_token_ws","segmentSeq":2,"traceId":"trace_token_ws","spanId":"span_token_ws","family":"generation","primitive":"generation.stream","name":"stream","startedAt":"2026-05-16T18:00:00.001Z","status":"running"},
-		{"schemaVersion":2,"recordId":"rec_token_chunk_1","type":"span:event","runId":"run_token_ws","segmentId":"seg_token_ws","segmentSeq":3,"traceId":"trace_token_ws","spanId":"span_token_ws","eventId":"event_token_ws_1","name":"token.chunk","timestamp":"2026-05-16T18:00:00.100Z","attributes":{"chunkIndex":0,"charCount":2,"text":"Hi","firstDeltaAt":"2026-05-16T18:00:00.090Z","lastDeltaAt":"2026-05-16T18:00:00.100Z"}},
-		{"schemaVersion":2,"recordId":"rec_token_chunk_2","type":"span:event","runId":"run_token_ws","segmentId":"seg_token_ws","segmentSeq":4,"traceId":"trace_token_ws","spanId":"span_token_ws","eventId":"event_token_ws_2","name":"token.chunk","timestamp":"2026-05-16T18:00:00.200Z","attributes":{"chunkIndex":1,"charCount":1,"text":"!","firstDeltaAt":"2026-05-16T18:00:00.190Z","lastDeltaAt":"2026-05-16T18:00:00.200Z"}}
+	body := `{"schemaVersion":4,"records":[
+		{"schemaVersion":4,"recordId":"rec_token_run","type":"run:start","runId":"run_token_ws","operationId":"run_token_ws","segmentId":"seg_token_ws","segmentSeq":1,"traceId":"trace_token_ws","name":"ws tokens","rootPrimitive":"generation.stream","startedAt":"2026-05-16T18:00:00.000Z","status":"running"},
+		{"schemaVersion":4,"recordId":"rec_token_span","type":"span:start","runId":"run_token_ws","operationId":"run_token_ws","segmentId":"seg_token_ws","segmentSeq":2,"traceId":"trace_token_ws","spanId":"span_token_ws","family":"generation","primitive":"generation.stream","name":"stream","startedAt":"2026-05-16T18:00:00.001Z","status":"running"},
+		{"schemaVersion":4,"recordId":"rec_token_chunk_1","type":"span:event","runId":"run_token_ws","operationId":"run_token_ws","segmentId":"seg_token_ws","segmentSeq":3,"traceId":"trace_token_ws","spanId":"span_token_ws","eventId":"event_token_ws_1","name":"token.chunk","timestamp":"2026-05-16T18:00:00.100Z","attributes":{"chunkIndex":0,"charCount":2,"text":"Hi","firstDeltaAt":"2026-05-16T18:00:00.090Z","lastDeltaAt":"2026-05-16T18:00:00.100Z"}},
+		{"schemaVersion":4,"recordId":"rec_token_chunk_2","type":"span:event","runId":"run_token_ws","operationId":"run_token_ws","segmentId":"seg_token_ws","segmentSeq":4,"traceId":"trace_token_ws","spanId":"span_token_ws","eventId":"event_token_ws_2","name":"token.chunk","timestamp":"2026-05-16T18:00:00.200Z","attributes":{"chunkIndex":1,"charCount":1,"text":"!","firstDeltaAt":"2026-05-16T18:00:00.190Z","lastDeltaAt":"2026-05-16T18:00:00.200Z"}}
 	]}`
 	resp, err := client.Post(baseURL+"/api/observability/records", "application/json", strings.NewReader(body))
 	if err != nil {

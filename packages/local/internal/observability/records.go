@@ -11,8 +11,7 @@ import (
 )
 
 const (
-	LegacySchemaVersion = 2
-	SchemaVersion       = 3
+	SchemaVersion = 4
 )
 
 var deploymentManifestIDPattern = regexp.MustCompile(`^pim_[0-9a-f]{64}$`)
@@ -85,6 +84,7 @@ type Record struct {
 	RecordID          string              `json:"recordId"`
 	Type              RecordType          `json:"type"`
 	RunID             string              `json:"runId"`
+	OperationID       string              `json:"operationId"`
 	SegmentID         string              `json:"segmentId,omitempty"`
 	SegmentSeq        int                 `json:"segmentSeq,omitempty"`
 	TraceID           string              `json:"traceId,omitempty"`
@@ -110,20 +110,23 @@ func (r *Record) UnmarshalJSON(data []byte) error {
 }
 
 type RunStartRecord struct {
-	SchemaVersion int             `json:"schemaVersion"`
-	RecordID      string          `json:"recordId"`
-	Type          RecordType      `json:"type"`
-	RunID         string          `json:"runId"`
-	SegmentID     string          `json:"segmentId,omitempty"`
-	SegmentSeq    int             `json:"segmentSeq,omitempty"`
-	TraceID       string          `json:"traceId,omitempty"`
-	SessionID     string          `json:"sessionId,omitempty"`
-	UserID        string          `json:"userId,omitempty"`
-	Name          string          `json:"name"`
-	RootPrimitive string          `json:"rootPrimitive"`
-	StartedAt     string          `json:"startedAt"`
-	Status        string          `json:"status"`
-	Attributes    json.RawMessage `json:"attributes,omitempty"`
+	SchemaVersion     int             `json:"schemaVersion"`
+	RecordID          string          `json:"recordId"`
+	Type              RecordType      `json:"type"`
+	RunID             string          `json:"runId"`
+	OperationID       string          `json:"operationId"`
+	ParentRunID       string          `json:"parentRunId,omitempty"`
+	TriggeredBySpanID string          `json:"triggeredBySpanId,omitempty"`
+	SegmentID         string          `json:"segmentId,omitempty"`
+	SegmentSeq        int             `json:"segmentSeq,omitempty"`
+	TraceID           string          `json:"traceId,omitempty"`
+	SessionID         string          `json:"sessionId,omitempty"`
+	UserID            string          `json:"userId,omitempty"`
+	Name              string          `json:"name"`
+	RootPrimitive     string          `json:"rootPrimitive"`
+	StartedAt         string          `json:"startedAt"`
+	Status            string          `json:"status"`
+	Attributes        json.RawMessage `json:"attributes,omitempty"`
 }
 
 type RunSuspendRecord struct {
@@ -131,6 +134,7 @@ type RunSuspendRecord struct {
 	RecordID      string          `json:"recordId"`
 	Type          RecordType      `json:"type"`
 	RunID         string          `json:"runId"`
+	OperationID   string          `json:"operationId"`
 	SegmentID     string          `json:"segmentId"`
 	SegmentSeq    int             `json:"segmentSeq"`
 	TraceID       string          `json:"traceId,omitempty"`
@@ -144,6 +148,7 @@ type RunResumeRecord struct {
 	RecordID          string          `json:"recordId"`
 	Type              RecordType      `json:"type"`
 	RunID             string          `json:"runId"`
+	OperationID       string          `json:"operationId"`
 	SegmentID         string          `json:"segmentId"`
 	SegmentSeq        int             `json:"segmentSeq"`
 	TraceID           string          `json:"traceId,omitempty"`
@@ -158,6 +163,7 @@ type SpanStartRecord struct {
 	RecordID      string          `json:"recordId"`
 	Type          RecordType      `json:"type"`
 	RunID         string          `json:"runId"`
+	OperationID   string          `json:"operationId"`
 	SegmentID     string          `json:"segmentId,omitempty"`
 	SegmentSeq    int             `json:"segmentSeq,omitempty"`
 	TraceID       string          `json:"traceId,omitempty"`
@@ -186,6 +192,7 @@ type SpanRecord struct {
 	RecordID      string          `json:"recordId"`
 	Type          RecordType      `json:"type"`
 	RunID         string          `json:"runId"`
+	OperationID   string          `json:"operationId"`
 	SegmentID     string          `json:"segmentId,omitempty"`
 	SegmentSeq    int             `json:"segmentSeq,omitempty"`
 	TraceID       string          `json:"traceId,omitempty"`
@@ -218,6 +225,7 @@ type ArtifactRecord struct {
 	RecordID      string          `json:"recordId"`
 	Type          RecordType      `json:"type"`
 	RunID         string          `json:"runId"`
+	OperationID   string          `json:"operationId"`
 	SegmentID     string          `json:"segmentId,omitempty"`
 	SegmentSeq    int             `json:"segmentSeq,omitempty"`
 	TraceID       string          `json:"traceId,omitempty"`
@@ -239,6 +247,7 @@ type EdgeRecord struct {
 	RecordID      string          `json:"recordId"`
 	Type          RecordType      `json:"type"`
 	RunID         string          `json:"runId"`
+	OperationID   string          `json:"operationId"`
 	SegmentID     string          `json:"segmentId,omitempty"`
 	SegmentSeq    int             `json:"segmentSeq,omitempty"`
 	TraceID       string          `json:"traceId,omitempty"`
@@ -401,6 +410,13 @@ func ValidateRecord(record Record) error {
 		if err := json.Unmarshal(record.Payload, &run); err != nil {
 			return err
 		}
+		if run.OperationID == run.RunID {
+			if run.ParentRunID != "" || run.TriggeredBySpanID != "" {
+				return fmt.Errorf("root run %s cannot carry parent topology", run.RunID)
+			}
+		} else if run.ParentRunID == "" {
+			return fmt.Errorf("child run %s requires parentRunId", run.RunID)
+		}
 		if _, ok := primitiveFamilyByName[run.RootPrimitive]; !ok {
 			return fmt.Errorf("run %s has unknown rootPrimitive %q", run.RunID, run.RootPrimitive)
 		}
@@ -468,16 +484,13 @@ func ValidateRecordBase(record Record) error {
 	if !IsSupportedSchemaVersion(record.SchemaVersion) {
 		return fmt.Errorf("record %s schemaVersion %d is not supported", record.RecordID, record.SchemaVersion)
 	}
-	if record.SchemaVersion == LegacySchemaVersion && (record.deploymentPresent || record.Deployment != nil) {
-		return fmt.Errorf("record %s schemaVersion 2 cannot carry deployment identity", record.RecordID)
-	}
-	if record.SchemaVersion == SchemaVersion && record.deploymentPresent && record.Deployment == nil {
+	if record.deploymentPresent && record.Deployment == nil {
 		return fmt.Errorf("record %s deployment identity is invalid", record.RecordID)
 	}
 	if record.Deployment != nil && !validDeploymentIdentity(*record.Deployment) {
 		return fmt.Errorf("record %s deployment identity is invalid", record.RecordID)
 	}
-	if record.RecordID == "" || record.RunID == "" {
+	if record.RecordID == "" || record.RunID == "" || record.OperationID == "" {
 		return fmt.Errorf("record is missing required identity")
 	}
 	if record.SegmentID == "" || record.SegmentSeq <= 0 {
@@ -491,7 +504,7 @@ func ValidateRecordBase(record Record) error {
 
 // IsSupportedSchemaVersion reports whether persisted records can be ingested.
 func IsSupportedSchemaVersion(version int) bool {
-	return version == LegacySchemaVersion || version == SchemaVersion
+	return version == SchemaVersion
 }
 
 func validDeploymentIdentity(identity DeploymentIdentity) bool {

@@ -17,13 +17,11 @@ type inspectRunTabCounts struct {
 	Failures int `json:"failures"`
 }
 
-// inspectRunRecord represents one top-level execution. When the underlying
-// trace is a flow / pipeline that fanned out into multiple child traces,
-// all of them are folded into this one record (metrics aggregated, span
-// detail stitched together). TraceCount reports how many traces are in
-// the family (1 for a standalone trace).
+// inspectRunRecord represents one operation. Independently durable child runs
+// are folded into this record while TraceID remains the exact W3C trace.
 type inspectRunRecord struct {
 	Tag           string         `json:"_tag"`
+	OperationID   string         `json:"operationId"`
 	TraceID       string         `json:"traceId"`
 	TargetID      string         `json:"targetId,omitempty"`
 	PromptID      *string        `json:"promptId,omitempty"`
@@ -60,6 +58,13 @@ type inspectRunRecord struct {
 	InspectSignalIssueCount int      `json:"-"`
 	SuspensionSignalCount   int      `json:"-"`
 	BlockedSignalCount      int      `json:"-"`
+}
+
+func inspectRunIdentity(run inspectRunRecord) string {
+	if run.OperationID != "" {
+		return run.OperationID
+	}
+	return run.TraceID
 }
 
 type inspectRunDetailRecord struct {

@@ -30,7 +30,7 @@ func (s *Service) migrateWithHook(ctx context.Context, hook observabilityMigrati
 		}
 	}()
 
-	needsReset, err := needsPreV2ObservabilityReset(ctx, tx)
+	needsReset, err := needsCurrentObservabilityReset(ctx, tx)
 	if err != nil {
 		return err
 	}
@@ -39,7 +39,7 @@ func (s *Service) migrateWithHook(ctx context.Context, hook observabilityMigrati
 			return err
 		}
 		if hook != nil {
-			if err := hook("after-pre-v2-reset"); err != nil {
+			if err := hook("after-contract-reset"); err != nil {
 				return err
 			}
 		}
@@ -59,6 +59,7 @@ func observabilitySchemaStatements() []string {
 		`CREATE TABLE IF NOT EXISTS records (
 			record_id TEXT PRIMARY KEY,
 			run_id TEXT NOT NULL,
+			operation_id TEXT NOT NULL,
 			trace_id TEXT,
 			segment_id TEXT NOT NULL,
 			segment_seq INTEGER NOT NULL,
@@ -68,13 +69,18 @@ func observabilitySchemaStatements() []string {
 		)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_records_segment_seq_unique ON records(segment_id, segment_seq)`,
 		`CREATE INDEX IF NOT EXISTS idx_records_run_id ON records(run_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_records_operation_id ON records(operation_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_records_run_received ON records(run_id, received_at, record_id)`,
 		`CREATE TABLE IF NOT EXISTS runs (
 			run_id TEXT PRIMARY KEY,
+			operation_id TEXT NOT NULL,
+			parent_run_id TEXT,
+			triggered_by_span_id TEXT,
 			trace_id TEXT,
 			project_id TEXT,
 			manifest_id TEXT,
 			deployment_id TEXT,
+			deployment_observed INTEGER NOT NULL DEFAULT 0,
 			session_id TEXT,
 			user_id TEXT,
 			name TEXT,
@@ -98,6 +104,8 @@ func observabilitySchemaStatements() []string {
 			metrics_json TEXT,
 			error_json TEXT
 		)`,
+		`CREATE INDEX IF NOT EXISTS idx_runs_operation_id ON runs(operation_id, run_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_runs_parent_run_id ON runs(parent_run_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_runs_trace_id ON runs(trace_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_runs_started_at ON runs(started_at DESC, run_id DESC)`,
 		`CREATE INDEX IF NOT EXISTS idx_runs_status ON runs(status)`,
@@ -231,6 +239,18 @@ func observabilitySchemaStatements() []string {
 			id INTEGER PRIMARY KEY CHECK (id = 1),
 			value INTEGER NOT NULL DEFAULT 0
 		)`,
+		`CREATE TABLE IF NOT EXISTS operations (
+			operation_id TEXT PRIMARY KEY,
+			first_seen_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			root_present INTEGER NOT NULL DEFAULT 0,
+			revision INTEGER NOT NULL DEFAULT 0
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_operations_first_seen ON operations(first_seen_at DESC, operation_id DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_operations_revision ON operations(revision)`,
+		`CREATE TABLE IF NOT EXISTS operation_tombstones (
+			operation_id TEXT PRIMARY KEY,
+			deleted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
 		// observability_run_revision_log is a bounded change log used for
 		// server-owned delta/catch-up: reconnect clients present the last
 		// revision they applied and get back only the runs touched since,
@@ -238,10 +258,10 @@ func observabilitySchemaStatements() []string {
 		// their watermark.
 		`CREATE TABLE IF NOT EXISTS observability_run_revision_log (
 			revision INTEGER PRIMARY KEY,
-			run_id TEXT NOT NULL,
+			operation_id TEXT NOT NULL,
 			changed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)`,
-		`CREATE INDEX IF NOT EXISTS idx_run_revision_log_run ON observability_run_revision_log(run_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_run_revision_log_operation ON observability_run_revision_log(operation_id)`,
 		// run_definition_activity is a DERIVED projection of the runtime↔Project
 		// Index join: for each run, which authored definitions its records
 		// referenced (via DefinitionRef), in what role(s), how often, and when it
@@ -353,7 +373,7 @@ func createObservabilitySchema(ctx context.Context, runner sqliteRunner) error {
 	return nil
 }
 
-func needsPreV2ObservabilityReset(ctx context.Context, runner sqliteRunner) (bool, error) {
+func needsCurrentObservabilityReset(ctx context.Context, runner sqliteRunner) (bool, error) {
 	recordsColumns, exists, err := tableColumns(ctx, runner, "records")
 	if err != nil {
 		return false, err
@@ -364,6 +384,7 @@ func needsPreV2ObservabilityReset(ctx context.Context, runner sqliteRunner) (boo
 	if !hasExactColumns(recordsColumns, []string{
 		"record_id",
 		"run_id",
+		"operation_id",
 		"trace_id",
 		"segment_id",
 		"segment_seq",
@@ -378,6 +399,14 @@ func needsPreV2ObservabilityReset(ctx context.Context, runner sqliteRunner) (boo
 		return false, err
 	}
 	if !complete {
+		return true, nil
+	}
+
+	runColumns, runExists, err := tableColumns(ctx, runner, "runs")
+	if err != nil {
+		return false, err
+	}
+	if !runExists || !runColumns["operation_id"] || !runColumns["parent_run_id"] || !runColumns["triggered_by_span_id"] || !runColumns["deployment_observed"] {
 		return true, nil
 	}
 
@@ -434,6 +463,8 @@ func dropObservabilityTables(ctx context.Context, runner sqliteRunner) error {
 		"observability_source_health",
 		"observability_revision",
 		"observability_run_revision_log",
+		"operations",
+		"operation_tombstones",
 		"run_definition_activity",
 	} {
 		if _, err := runner.ExecContext(ctx, "DROP TABLE IF EXISTS "+table); err != nil {

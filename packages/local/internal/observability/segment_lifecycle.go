@@ -6,17 +6,17 @@ import (
 	"encoding/json"
 )
 
-func upsertRunBoundary(ctx context.Context, statements *ingestStatements, runID, traceID string, attributes json.RawMessage) error {
+func upsertRunBoundary(ctx context.Context, statements *ingestStatements, runID, operationID, traceID string, attributes json.RawMessage) error {
 	_, err := statements.exec(ctx, `
-		INSERT INTO runs (run_id, trace_id, attributes_json)
-		VALUES (?, ?, ?)
+		INSERT INTO runs (run_id, operation_id, trace_id, attributes_json)
+		VALUES (?, ?, ?, ?)
 		ON CONFLICT(run_id) DO UPDATE SET
 			trace_id = coalesce(excluded.trace_id, runs.trace_id),
 			attributes_json = CASE
 				WHEN runs.attributes_json IS NOT NULL AND excluded.attributes_json IS NOT NULL THEN json_patch(runs.attributes_json, excluded.attributes_json)
 				ELSE coalesce(excluded.attributes_json, runs.attributes_json)
 			END
-	`, runID, nullIfEmpty(traceID), nullJSON(attributes))
+	`, runID, operationID, nullIfEmpty(traceID), nullJSON(attributes))
 	return err
 }
 

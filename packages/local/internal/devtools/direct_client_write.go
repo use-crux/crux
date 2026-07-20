@@ -31,11 +31,11 @@ func (c *DirectClient) SetInsightStatus(ctx context.Context, insightID string, r
 // DeleteRuns removes one or more Inspect run projections and their canonical
 // observability records, then publishes the same Inspect event used by the HTTP
 // DELETE route.
-func (c *DirectClient) DeleteRuns(ctx context.Context, traceIDs []string) (api.InspectDeleteRunsRecord, error) {
+func (c *DirectClient) DeleteRuns(ctx context.Context, operationIDs []string) (api.InspectDeleteRunsRecord, error) {
 	if c.inspect == nil {
 		return api.InspectDeleteRunsRecord{}, errNoInspectService
 	}
-	return c.inspect.DeleteRuns(ctx, traceIDs)
+	return c.inspect.DeleteRuns(ctx, operationIDs)
 }
 
 func (c *DirectClient) InsightSilences(ctx context.Context, includeDeleted bool) ([]api.InspectInsightSilenceRecord, error) {

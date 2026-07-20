@@ -61,7 +61,7 @@ func (s *Service) loadRunSummary(ctx context.Context, runID string, includeCount
 	}
 	row := s.db.QueryRowContext(ctx, `
 		SELECT
-			r.run_id, ifnull(r.trace_id, ''), ifnull(r.session_id, ''), ifnull(r.user_id, ''),
+			r.run_id, r.operation_id, ifnull(r.trace_id, ''), ifnull(r.session_id, ''), ifnull(r.user_id, ''),
 			ifnull(r.project_id, ''), ifnull(r.manifest_id, ''), ifnull(r.deployment_id, ''),
 			ifnull(r.name, ''), ifnull(r.root_primitive, ''),
 			`+effectiveRunStatusSQL+`, ifnull(r.started_at, ''), ifnull(r.ended_at, ''),
@@ -76,6 +76,7 @@ func (s *Service) loadRunSummary(ctx context.Context, runID string, includeCount
 	var projectID, manifestID, deploymentID string
 	if err := row.Scan(
 		&run.RunID,
+		&run.OperationID,
 		&run.TraceID,
 		&run.SessionID,
 		&run.UserID,
@@ -111,6 +112,8 @@ func (s *Service) loadRunSummary(ctx context.Context, runID string, includeCount
 	run.Metrics = json.RawMessage(metrics)
 	run.Error = json.RawMessage(errorJSON)
 	run.Deployment = deploymentIdentityFromColumns(projectID, manifestID, deploymentID)
+	run.RootRunID = run.OperationID
+	run.RootPresent = run.RunID == run.OperationID && run.Name != ""
 	return run, nil
 }
 
@@ -139,22 +142,51 @@ func (s *Service) runsWithOptions(ctx context.Context, opts RunListOptions) ([]R
 		return nil, 0, err
 	}
 	query := `
+		WITH family AS (
+			SELECT m.operation_id,
+				sum(m.record_count) AS record_count,
+				sum(m.span_count) AS span_count,
+				sum(m.event_count) AS event_count,
+				sum(m.artifact_count) AS artifact_count,
+				sum(m.edge_count) AS edge_count,
+				sum(m.total_input_tokens) AS total_input_tokens,
+				sum(m.total_output_tokens) AS total_output_tokens,
+				sum(m.total_cost_usd) AS total_cost_usd,
+				max(ifnull(m.last_activity_at, '')) AS last_activity_at,
+				sum(CASE WHEN m.run_id != m.operation_id THEN 1 ELSE 0 END) AS child_run_count,
+				sum(CASE WHEN m.run_id != m.operation_id AND (` + strings.ReplaceAll(effectiveRunStatusSQL, "r.", "m.") + `) = 'running' THEN 1 ELSE 0 END) AS active_child_count,
+				sum(CASE WHEN m.run_id != m.operation_id AND (` + strings.ReplaceAll(effectiveRunStatusSQL, "r.", "m.") + `) = 'suspended' THEN 1 ELSE 0 END) AS suspended_child_count,
+				sum(CASE WHEN m.run_id != m.operation_id AND (` + strings.ReplaceAll(effectiveRunStatusSQL, "r.", "m.") + `) IN ('error', 'blocked', 'cancelled', 'conflicted', 'incomplete') THEN 1 ELSE 0 END) AS failed_child_count
+			FROM runs m GROUP BY m.operation_id
+		)
 		SELECT
-			r.run_id, ifnull(r.trace_id, ''), ifnull(r.session_id, ''), ifnull(r.user_id, ''),
+			o.operation_id, o.operation_id,
+			ifnull(r.trace_id, ''), ifnull(r.session_id, ''), ifnull(r.user_id, ''),
 			ifnull(r.project_id, ''), ifnull(r.manifest_id, ''), ifnull(r.deployment_id, ''),
-			ifnull(r.name, ''), ifnull(r.root_primitive, ''),
-			` + effectiveRunStatusSQL + `, ifnull(r.started_at, ''), ifnull(r.ended_at, ''),
-			ifnull(r.duration_ms, 0),
-			'', '', '',
-			r.record_count, r.span_count, r.event_count, r.artifact_count, r.edge_count,
-			r.total_input_tokens, r.total_output_tokens, r.total_cost_usd,
-			ifnull(r.last_activity_at, ''), r.revision,
-			r.attributes_json, r.metrics_json, r.error_json
-			FROM runs r`
+			CASE WHEN o.root_present != 0 THEN ifnull(r.name, '') ELSE 'Incomplete operation' END,
+			CASE WHEN o.root_present != 0 THEN ifnull(r.root_primitive, '') ELSE '' END,
+			CASE WHEN o.root_present != 0 THEN ` + effectiveRunStatusSQL + ` ELSE 'incomplete' END,
+			CASE WHEN o.root_present != 0 THEN ifnull(r.started_at, '') ELSE '' END,
+			CASE WHEN o.root_present != 0 THEN ifnull(r.ended_at, '') ELSE '' END,
+			CASE WHEN o.root_present != 0 THEN ifnull(r.duration_ms, 0) ELSE 0 END,
+			ifnull((SELECT sp.model FROM spans sp JOIN runs sm ON sm.run_id = sp.run_id WHERE sm.operation_id = o.operation_id AND sp.model IS NOT NULL AND sp.model != '' ORDER BY sp.started_at, sp.span_id LIMIT 1), ''),
+			ifnull((SELECT sp.provider FROM spans sp JOIN runs sm ON sm.run_id = sp.run_id WHERE sm.operation_id = o.operation_id AND sp.provider IS NOT NULL AND sp.provider != '' ORDER BY sp.started_at, sp.span_id LIMIT 1), ''),
+			ifnull((SELECT sp.prompt_id FROM spans sp JOIN runs sm ON sm.run_id = sp.run_id WHERE sm.operation_id = o.operation_id AND sp.prompt_id IS NOT NULL AND sp.prompt_id != '' ORDER BY sp.started_at, sp.span_id LIMIT 1), ''),
+			ifnull(f.record_count, 0), ifnull(f.span_count, 0), ifnull(f.event_count, 0), ifnull(f.artifact_count, 0), ifnull(f.edge_count, 0),
+			ifnull(f.total_input_tokens, 0), ifnull(f.total_output_tokens, 0), ifnull(f.total_cost_usd, 0),
+			ifnull(f.last_activity_at, ''), o.revision,
+			CASE WHEN o.root_present != 0 THEN r.attributes_json ELSE NULL END,
+			CASE WHEN o.root_present != 0 THEN r.metrics_json ELSE NULL END,
+			CASE WHEN o.root_present != 0 THEN r.error_json ELSE NULL END,
+			o.root_present, o.first_seen_at,
+			ifnull(f.child_run_count, 0), ifnull(f.active_child_count, 0), ifnull(f.suspended_child_count, 0), ifnull(f.failed_child_count, 0)
+		FROM operations o
+		LEFT JOIN runs r ON r.run_id = o.operation_id AND r.operation_id = o.operation_id
+		LEFT JOIN family f ON f.operation_id = o.operation_id`
 	if where != "" {
 		query += ` WHERE ` + where
 	}
-	query += ` ORDER BY r.started_at DESC, r.run_id DESC`
+	query += ` ORDER BY o.first_seen_at DESC, o.operation_id DESC`
 	appliedLimit := 0
 	if limited {
 		appliedLimit = limit
@@ -173,6 +205,7 @@ func (s *Service) runsWithOptions(ctx context.Context, opts RunListOptions) ([]R
 		var projectID, manifestID, deploymentID string
 		if err := rows.Scan(
 			&run.RunID,
+			&run.OperationID,
 			&run.TraceID,
 			&run.SessionID,
 			&run.UserID,
@@ -201,6 +234,12 @@ func (s *Service) runsWithOptions(ctx context.Context, opts RunListOptions) ([]R
 			&attributes,
 			&metrics,
 			&errorJSON,
+			&run.RootPresent,
+			&run.FirstSeenAt,
+			&run.ChildRunCount,
+			&run.ActiveChildCount,
+			&run.SuspendedChildCount,
+			&run.FailedChildCount,
 		); err != nil {
 			return nil, 0, fmt.Errorf("scan observability run: %w", err)
 		}
@@ -208,6 +247,23 @@ func (s *Service) runsWithOptions(ctx context.Context, opts RunListOptions) ([]R
 		run.Metrics = json.RawMessage(metrics)
 		run.Error = json.RawMessage(errorJSON)
 		run.Deployment = deploymentIdentityFromColumns(projectID, manifestID, deploymentID)
+		run.RootRunID = run.OperationID
+		run.TopologyHealth = "healthy"
+		if !run.RootPresent {
+			run.TopologyHealth = "incomplete"
+		}
+		totals := map[string]float64{}
+		if run.inputTokens != 0 {
+			totals["inputTokens"] = float64(run.inputTokens)
+		}
+		if run.outputTokens != 0 {
+			totals["outputTokens"] = float64(run.outputTokens)
+		}
+		if run.costUSD != 0 {
+			totals["costUsd"] = run.costUSD
+		}
+		normalizeUsageTotals(totals)
+		run.Metrics = metricsRawOrNil(totals)
 		runs = append(runs, run)
 	}
 	if err := rows.Err(); err != nil {
@@ -217,10 +273,7 @@ func (s *Service) runsWithOptions(ctx context.Context, opts RunListOptions) ([]R
 	if err := rows.Close(); err != nil {
 		return nil, 0, fmt.Errorf("close observability runs rows: %w", err)
 	}
-	if err := s.enrichRunSummaries(ctx, runs, opts.IncludeExpensiveRollups); err != nil {
-		return nil, 0, err
-	}
-	if err := s.enrichRunDeliveryHealth(ctx, runs); err != nil {
+	if err := s.enrichOperationSummaries(ctx, runs); err != nil {
 		return nil, 0, err
 	}
 	return runs, appliedLimit, nil
@@ -253,19 +306,19 @@ func runListWhereClause(opts RunListOptions) (string, []any, error) {
 		args = append(args, opts.SessionID)
 	}
 	if len(opts.Status) > 0 {
-		clauses = append(clauses, effectiveRunStatusSQL+` IN (`+queryPlaceholders(len(opts.Status))+`)`)
+		clauses = append(clauses, `(CASE WHEN o.root_present != 0 THEN `+effectiveRunStatusSQL+` ELSE 'incomplete' END) IN (`+queryPlaceholders(len(opts.Status))+`)`)
 		args = append(args, queryArgs(opts.Status)...)
 	}
 	if opts.Since != "" {
-		clauses = append(clauses, `ifnull(r.started_at, '') >= ?`)
+		clauses = append(clauses, `o.first_seen_at >= ?`)
 		args = append(args, opts.Since)
 	}
 	if opts.Until != "" {
-		clauses = append(clauses, `ifnull(r.started_at, '') <= ?`)
+		clauses = append(clauses, `o.first_seen_at <= ?`)
 		args = append(args, opts.Until)
 	}
 	if opts.DefinitionID != "" {
-		clauses = append(clauses, `r.run_id IN (SELECT run_id FROM run_definition_activity WHERE definition_id = ?)`)
+		clauses = append(clauses, `o.operation_id IN (SELECT m.operation_id FROM run_definition_activity a JOIN runs m ON m.run_id = a.run_id WHERE a.definition_id = ?)`)
 		args = append(args, opts.DefinitionID)
 	}
 	if opts.Cursor != "" {
@@ -273,7 +326,7 @@ func runListWhereClause(opts RunListOptions) (string, []any, error) {
 		if err != nil {
 			return "", nil, err
 		}
-		clauses = append(clauses, `(ifnull(r.started_at, '') < ? OR (ifnull(r.started_at, '') = ? AND r.run_id < ?))`)
+		clauses = append(clauses, `(o.first_seen_at < ? OR (o.first_seen_at = ? AND o.operation_id < ?))`)
 		args = append(args, startedAt, startedAt, runID)
 	}
 	if len(clauses) == 0 {
@@ -318,7 +371,7 @@ func (s *Service) RunsPage(ctx context.Context, opts RunListOptions) (RunsRespon
 	response := RunsResponse{Revision: revision, Rows: runs}
 	if appliedLimit > 0 && len(runs) == appliedLimit {
 		last := runs[len(runs)-1]
-		response.NextCursor = encodeRunListCursor(last.StartedAt, last.RunID)
+		response.NextCursor = encodeRunListCursor(last.FirstSeenAt, last.OperationID)
 	}
 	return response, nil
 }
@@ -435,12 +488,12 @@ func (s *Service) DeleteRuns(ctx context.Context, ids []string) ([]string, error
 		return []string{}, nil
 	}
 
-	resolved, err := s.ResolveRunIDs(ctx, requested)
+	resolved, err := s.resolveOperationIDs(ctx, requested)
 	if err != nil {
 		return nil, fmt.Errorf("resolve observability runs for deletion: %w", err)
 	}
-	deleted := uniqueMapValues(resolved)
-	if len(deleted) == 0 {
+	deletedOperations := uniqueMapValues(resolved)
+	if len(deletedOperations) == 0 {
 		return []string{}, nil
 	}
 
@@ -458,11 +511,25 @@ func (s *Service) DeleteRuns(ctx context.Context, ids []string) ([]string, error
 	// its rows: this is the only durable signal a reconnecting client (or
 	// one that missed the WS push) has that the run is gone, not merely
 	// unchanged. See the comment on deleteRunRows/observability_run_revision_log.
-	revisions, err := bumpRunRevisions(ctx, tx, deleted, s.revisionLogRetentionOrDefault())
+	revisions, err := bumpRunRevisions(ctx, tx, deletedOperations, s.revisionLogRetentionOrDefault())
 	if err != nil {
 		return nil, fmt.Errorf("advance observability revision for deleted runs: %w", err)
 	}
-	if err := deleteRunRows(ctx, tx, deleted); err != nil {
+	memberRunIDs, err := operationMemberRunIDs(ctx, tx, deletedOperations)
+	if err != nil {
+		return nil, err
+	}
+	for _, operationID := range deletedOperations {
+		if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO operation_tombstones (operation_id) VALUES (?)`, operationID); err != nil {
+			return nil, fmt.Errorf("write operation deletion tombstone: %w", err)
+		}
+	}
+	if len(memberRunIDs) > 0 {
+		if err := deleteRunRows(ctx, tx, memberRunIDs); err != nil {
+			return nil, err
+		}
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM operations WHERE operation_id IN (`+queryPlaceholders(len(deletedOperations))+`)`, queryArgs(deletedOperations)...); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(); err != nil {
@@ -470,16 +537,70 @@ func (s *Service) DeleteRuns(ctx context.Context, ids []string) ([]string, error
 	}
 	committed = true
 
-	payload, _ := json.Marshal(map[string]any{"runIds": deleted, "revision": maxRevision(revisions)})
+	payload, _ := json.Marshal(map[string]any{"operationIds": deletedOperations, "revision": maxRevision(revisions)})
 	s.events.Publish(Event{
 		Tag:      "ObservabilityEvent",
 		Kind:     "observability.records",
 		Action:   "deleted",
 		Severity: "info",
-		RefID:    deleted[0],
+		RefID:    deletedOperations[0],
 		Payload:  payload,
 	})
-	return deleted, nil
+	return deletedOperations, nil
+}
+
+func (s *Service) resolveOperationIDs(ctx context.Context, ids []string) (map[string]string, error) {
+	requested := uniqueNonEmptyStrings(ids)
+	if len(requested) == 0 {
+		return map[string]string{}, nil
+	}
+	placeholders := queryPlaceholders(len(requested))
+	args := append(queryArgs(requested), queryArgs(requested)...)
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT run_id, operation_id, ifnull(trace_id, '') FROM runs
+		WHERE run_id IN (`+placeholders+`) OR trace_id IN (`+placeholders+`)
+		ORDER BY ifnull(started_at, '') DESC, run_id DESC
+	`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	requestedSet := map[string]struct{}{}
+	for _, id := range requested {
+		requestedSet[id] = struct{}{}
+	}
+	resolved := map[string]string{}
+	for rows.Next() {
+		var runID, operationID, traceID string
+		if err := rows.Scan(&runID, &operationID, &traceID); err != nil {
+			return nil, err
+		}
+		for _, candidate := range []string{runID, operationID, traceID} {
+			if _, wanted := requestedSet[candidate]; wanted {
+				if _, exists := resolved[candidate]; !exists {
+					resolved[candidate] = operationID
+				}
+			}
+		}
+	}
+	return resolved, rows.Err()
+}
+
+func operationMemberRunIDs(ctx context.Context, tx *sql.Tx, operationIDs []string) ([]string, error) {
+	rows, err := tx.QueryContext(ctx, `SELECT run_id FROM runs WHERE operation_id IN (`+queryPlaceholders(len(operationIDs))+`)`, queryArgs(operationIDs)...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var runIDs []string
+	for rows.Next() {
+		var runID string
+		if err := rows.Scan(&runID); err != nil {
+			return nil, err
+		}
+		runIDs = append(runIDs, runID)
+	}
+	return runIDs, rows.Err()
 }
 
 func maxRevision(revisions map[string]int64) int64 {
@@ -1015,7 +1136,7 @@ func (s *Service) graph(ctx context.Context, runID string, includeRecords bool) 
 		return Graph{}, fmt.Errorf("resolve observability run %q: %w", runID, err)
 	}
 
-	run, err := s.loadRunSummary(ctx, canonicalRunID, false)
+	run, err := s.loadRunSummary(ctx, canonicalRunID, true)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return Graph{}, fmt.Errorf("run %q: %w", runID, ErrNotFound)
@@ -1073,23 +1194,231 @@ func (s *Service) RunDetail(ctx context.Context, runID string) (RunDetail, error
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
-	graph, err := s.graph(ctx, runID, false)
+	canonicalRunID, err := s.resolveRunID(ctx, runID)
 	if err != nil {
 		return RunDetail{}, err
 	}
-	detail := ProjectRunDetail(graph, DefaultProjectionOptions())
-	definitionRefs, err := s.projectRunDefinitionRefs(ctx, graph.Run.RunID)
+	selected, err := s.loadRunSummary(ctx, canonicalRunID, false)
 	if err != nil {
-		return RunDetail{}, fmt.Errorf("list definition refs for run %q: %w", runID, err)
+		if errors.Is(err, sql.ErrNoRows) {
+			return RunDetail{}, fmt.Errorf("run %q: %w", runID, ErrNotFound)
+		}
+		return RunDetail{}, err
 	}
-	detail.DefinitionRefs = definitionRefs.Run
-	attachRunDetailDefinitionRefs(&detail.Root, definitionRefs.BySpan)
-	resolution, err := s.resolveRunManifest(ctx, graph.Run, detail.DefinitionRefs, "")
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT run_id, ifnull(parent_run_id, ''), ifnull(triggered_by_span_id, '')
+		FROM runs WHERE operation_id = ?
+		ORDER BY CASE WHEN run_id = operation_id THEN 0 ELSE 1 END, ifnull(started_at, ''), run_id
+	`, selected.OperationID)
+	if err != nil {
+		return RunDetail{}, err
+	}
+	type memberRef struct{ runID, parentRunID, triggeredBySpanID string }
+	var memberRefs []memberRef
+	for rows.Next() {
+		var member memberRef
+		if err := rows.Scan(&member.runID, &member.parentRunID, &member.triggeredBySpanID); err != nil {
+			rows.Close()
+			return RunDetail{}, err
+		}
+		memberRefs = append(memberRefs, member)
+	}
+	if err := rows.Close(); err != nil {
+		return RunDetail{}, err
+	}
+
+	var detail RunDetail
+	allDefinitionRefs := []DefinitionRef{}
+	memberDetails := make([]RunDetail, 0, len(memberRefs))
+	memberProjections := make([]OperationRunDetail, 0, len(memberRefs))
+	for _, member := range memberRefs {
+		graph, err := s.graph(ctx, member.runID, false)
+		if err != nil {
+			return RunDetail{}, err
+		}
+		memberDetail := ProjectRunDetail(graph, DefaultProjectionOptions())
+		definitionRefs, err := s.projectRunDefinitionRefs(ctx, graph.Run.RunID)
+		if err != nil {
+			return RunDetail{}, fmt.Errorf("list definition refs for run %q: %w", member.runID, err)
+		}
+		attachRunDetailDefinitionRefs(&memberDetail.Root, definitionRefs.BySpan)
+		allDefinitionRefs = append(allDefinitionRefs, definitionRefs.Run...)
+		memberDetails = append(memberDetails, memberDetail)
+		memberProjection := OperationRunDetail{
+			Run:               memberDetail.Run,
+			ParentRunID:       member.parentRunID,
+			TriggeredBySpanID: member.triggeredBySpanID,
+			Root:              memberDetail.Root,
+			Diagnostics:       memberDetail.Diagnostics,
+		}
+		if member.runID == selected.OperationID {
+			detail = memberDetail
+		}
+		memberProjections = append(memberProjections, memberProjection)
+	}
+	if detail.Run.RunID == "" {
+		detail = ProjectRunDetail(Graph{Run: RunSummary{
+			RunID: selected.OperationID, OperationID: selected.OperationID, RootRunID: selected.OperationID,
+			Name: "Incomplete operation", Status: "incomplete",
+		}}, DefaultProjectionOptions())
+	}
+	detail.MemberRuns = memberProjections
+	aggregateOperationDetail(&detail, memberDetails)
+	mountOperationMemberRuns(&detail)
+	detail.DefinitionRefs = uniqueDefinitionRefs(allDefinitionRefs)
+	detail.Diagnostics = append(detail.Diagnostics, s.operationTopologyDiagnostics(ctx, selected.OperationID)...)
+	operationByID := map[string]*RunSummary{selected.OperationID: &detail.Run}
+	if err := s.enrichOperationTopologyBatch(ctx, []string{selected.OperationID}, operationByID); err != nil {
+		return RunDetail{}, err
+	}
+
+	resolution, err := s.resolveRunManifest(ctx, detail.Run, detail.DefinitionRefs, "")
 	if err != nil {
 		return RunDetail{}, err
 	}
 	detail.Manifest = &resolution
 	return detail, nil
+}
+
+func aggregateOperationDetail(detail *RunDetail, members []RunDetail) {
+	rootStatus := detail.Run.Status
+	detail.Counts = RunDetailCounts{}
+	detail.Facets = map[string]map[string]int{}
+	detail.Run.RecordCount = 0
+	detail.Run.SpanCount = 0
+	detail.Run.EventCount = 0
+	detail.Run.ArtifactCount = 0
+	detail.Run.EdgeCount = 0
+	detail.Run.ChildRunCount = 0
+	detail.Run.ActiveChildCount = 0
+	detail.Run.SuspendedChildCount = 0
+	detail.Run.FailedChildCount = 0
+	metrics := map[string]float64{}
+	for _, member := range members {
+		detail.Counts.Primary += member.Counts.Primary
+		detail.Counts.Detail += member.Counts.Detail
+		detail.Counts.Metadata += member.Counts.Metadata
+		detail.Counts.AttachedDetails += member.Counts.AttachedDetails
+		mergeRunDetailFacets(detail.Facets, member.Facets)
+		detail.Run.RecordCount += member.Run.RecordCount
+		detail.Run.SpanCount += member.Run.SpanCount
+		detail.Run.EventCount += member.Run.EventCount
+		detail.Run.ArtifactCount += member.Run.ArtifactCount
+		detail.Run.EdgeCount += member.Run.EdgeCount
+		addMetrics(metrics, numericMetricsFromRaw(member.Run.Metrics))
+		if member.Run.RunID == detail.Run.OperationID {
+			continue
+		}
+		detail.Run.ChildRunCount++
+		switch member.Run.Status {
+		case "running", "incomplete":
+			detail.Run.ActiveChildCount++
+		case "suspended":
+			detail.Run.SuspendedChildCount++
+		case "error", "failed", "cancelled", "conflicted":
+			detail.Run.FailedChildCount++
+		}
+	}
+	normalizeUsageTotals(metrics)
+	detail.Run.Metrics = metricsRawOrNil(metrics)
+	detail.Run.Status = rootStatus
+	detail.Run.RootRunID = detail.Run.OperationID
+	detail.Run.RootPresent = rootStatus != "incomplete" || detail.Run.Name != "Incomplete operation"
+}
+
+func mergeRunDetailFacets(target, source map[string]map[string]int) {
+	for facet, values := range source {
+		if target[facet] == nil {
+			target[facet] = map[string]int{}
+		}
+		for value, count := range values {
+			target[facet][value] += count
+		}
+	}
+}
+
+func mountOperationMemberRuns(detail *RunDetail) {
+	pending := make([]OperationRunDetail, 0, len(detail.MemberRuns))
+	for _, member := range detail.MemberRuns {
+		if member.Run.RunID != detail.Run.OperationID {
+			pending = append(pending, member)
+		}
+	}
+	for len(pending) > 0 {
+		progress := false
+		remaining := pending[:0]
+		for _, member := range pending {
+			parent := findOperationRunRoot(&detail.Root, member.ParentRunID)
+			if member.ParentRunID == detail.Run.OperationID {
+				parent = &detail.Root
+			}
+			if parent == nil {
+				remaining = append(remaining, member)
+				continue
+			}
+			target := findOperationTriggerNode(parent, member.TriggeredBySpanID, member.ParentRunID)
+			if target == nil {
+				target = parent
+			}
+			target.Children = append(target.Children, member.Root)
+			progress = true
+		}
+		pending = remaining
+		if progress {
+			continue
+		}
+		for _, member := range pending {
+			detail.Root.Children = append(detail.Root.Children, member.Root)
+		}
+		break
+	}
+	applyRunDetailRollups(&detail.Root)
+	resetRunDetailIndex(&detail.Root, detail.SpanIndex)
+	detail.Rows = flattenRunDetailRows(detail.Root)
+}
+
+func findOperationRunRoot(node *RunDetailNode, runID string) *RunDetailNode {
+	if runID == "" {
+		return nil
+	}
+	if node.Virtual && node.RunID == runID {
+		return node
+	}
+	for index := range node.Children {
+		if found := findOperationRunRoot(&node.Children[index], runID); found != nil {
+			return found
+		}
+	}
+	return nil
+}
+
+func findOperationTriggerNode(node *RunDetailNode, spanID, runID string) *RunDetailNode {
+	if spanID == "" {
+		return nil
+	}
+	if node.SpanID == spanID && node.RunID == runID {
+		return node
+	}
+	for index := range node.Children {
+		if found := findOperationTriggerNode(&node.Children[index], spanID, runID); found != nil {
+			return found
+		}
+	}
+	return nil
+}
+
+func uniqueDefinitionRefs(refs []DefinitionRef) []DefinitionRef {
+	seen := map[string]struct{}{}
+	out := make([]DefinitionRef, 0, len(refs))
+	for _, ref := range refs {
+		key := ref.ID + "\x00" + ref.Kind + "\x00" + ref.Role
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, ref)
+	}
+	return out
 }
 
 func attachRunDetailDefinitionRefs(node *RunDetailNode, refsBySpan map[string][]DefinitionRef) {
@@ -1286,7 +1615,7 @@ func (s *Service) listRecords(ctx context.Context, runID string) ([]StoredRecord
 			JOIN segment_order parent ON child.previous_segment_id = parent.segment_id
 			WHERE child.run_id = ? AND instr(parent.path, '|' || child.segment_id || '|') = 0
 		)
-		SELECT r.record_id, r.run_id, ifnull(r.trace_id, ''), r.segment_id, r.segment_seq, r.type, r.payload_json, r.received_at
+		SELECT r.record_id, r.run_id, r.operation_id, ifnull(r.trace_id, ''), r.segment_id, r.segment_seq, r.type, r.payload_json, r.received_at
 		FROM records r
 		LEFT JOIN segment_order ordering ON ordering.segment_id = r.segment_id
 		WHERE r.run_id = ?
@@ -1317,6 +1646,7 @@ func (s *Service) listRecords(ctx context.Context, runID string) ([]StoredRecord
 		if err := rows.Scan(
 			&record.RecordID,
 			&record.RunID,
+			&record.OperationID,
 			&record.TraceID,
 			&record.SegmentID,
 			&record.SegmentSeq,

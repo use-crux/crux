@@ -1971,7 +1971,7 @@ func TestServicePublishesIngestEvents(t *testing.T) {
 		if err := json.Unmarshal(event.Payload, &payload); err != nil {
 			t.Fatal(err)
 		}
-		if payload["runId"] != runID || payload["traceId"] != traceID {
+		if payload["operationId"] != runID || payload["traceId"] != traceID || payload["entity"] != "operation" {
 			t.Fatalf("payload = %#v", payload)
 		}
 	case <-time.After(time.Second):
@@ -2513,8 +2513,20 @@ func mustBatch(t *testing.T, records ...string) Batch {
 	t.Helper()
 	batch := Batch{Records: make([]Record, 0, len(records))}
 	for _, raw := range records {
+		var fields map[string]any
+		if err := json.Unmarshal([]byte(raw), &fields); err != nil {
+			t.Fatal(err)
+		}
+		fields["schemaVersion"] = SchemaVersion
+		if _, ok := fields["operationId"]; !ok {
+			fields["operationId"] = fields["runId"]
+		}
+		upgraded, err := json.Marshal(fields)
+		if err != nil {
+			t.Fatal(err)
+		}
 		var record Record
-		if err := json.Unmarshal([]byte(raw), &record); err != nil {
+		if err := json.Unmarshal(upgraded, &record); err != nil {
 			t.Fatal(err)
 		}
 		batch.Records = append(batch.Records, record)

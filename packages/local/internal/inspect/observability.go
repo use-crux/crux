@@ -48,15 +48,11 @@ func buildInspectRunsFromObservabilityWithOptions(ctx context.Context, obs *obse
 	return runs, nil
 }
 
-// inspectCorrelationKey is the one deterministic identifier used to join a
-// canonical observability run to Inspect's trace-keyed metadata: the run's
-// TraceID, or its RunID only when the run genuinely has no distinct trace
-// identity. It must not be tried as a second, unconditional lookup after a
-// present TraceID simply has no match — that previously let an unrelated
-// run's RunID collide with this run's TraceID key space.
+// inspectCorrelationKey uses explicit operation identity. A distributed trace
+// may contain several independent operations and cannot be a list-row key.
 func inspectCorrelationKey(summary observability.RunSummary) string {
-	if summary.TraceID != "" {
-		return summary.TraceID
+	if summary.OperationID != "" {
+		return summary.OperationID
 	}
 	return summary.RunID
 }
