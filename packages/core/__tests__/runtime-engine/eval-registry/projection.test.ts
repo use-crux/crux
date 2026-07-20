@@ -8,13 +8,24 @@ import {
   projectDeployedEvalRequiredHostCapabilities,
   projectEvalExecutionArms,
   projectEvalTaskExecution,
+  projectEvalVariantTaskExecution,
 } from "../../../src/runtime/eval-registry";
 
-function managedTask(requiredHostCapabilities: readonly (
-  | "asset-store"
-  | "record-store"
-  | "vector-store"
-)[] = []) {
+function managedTask(
+  requiredHostCapabilities: readonly (
+    | "asset-store"
+    | "record-store"
+    | "vector-store"
+  )[] = [],
+  callContractFingerprint = "projection-call-v1",
+  projectIdentity: () => {
+    readonly reusable: true;
+    readonly fingerprintMaterial: unknown;
+  } = () => ({
+    reusable: true,
+    fingerprintMaterial: { task: "projection-fixture" },
+  }),
+) {
   return attachEvalTaskDescriptorForInternalUse(
     async (input: string) => input,
     {
@@ -23,13 +34,10 @@ function managedTask(requiredHostCapabilities: readonly (
       adapterId: "ai-sdk",
       capabilities: [],
       requiredHostCapabilities,
-      callContractFingerprint: "projection-call-v1",
+      callContractFingerprint,
       defaults: {},
       overrideKeys: [],
-      projectIdentity: () => ({
-        reusable: true,
-        fingerprintMaterial: { task: "projection-fixture" },
-      }),
+      projectIdentity,
       execute: async (input) => ({ output: input }),
       projectOutput: (result) => result.output,
       projectResponse: (result) => ({ output: result.output }),
@@ -56,6 +64,51 @@ describe("Eval execution projection", () => {
       status: "invalid",
       code: "task_contract_incompatible",
       reason: expect.stringContaining("align both packages"),
+    });
+  });
+
+  it("classifies an incompatible managed replacement without throwing", () => {
+    const base = managedTask(["asset-store"]);
+    const replacement = managedTask(["record-store"], "incompatible-call-v2");
+
+    expect(
+      projectEvalVariantTaskExecution(base, "replacement", {
+        task: replacement,
+      }),
+    ).toMatchObject({
+      status: "invalid",
+      code: "variant_invalid",
+      reason: expect.stringContaining("incompatible call contract"),
+    });
+    const evalValue = evaluate({
+      id: "replacement",
+      task: base,
+      cases: [{ input: "hello" }],
+      variants: { replacement: { task: replacement } },
+    });
+    expect(projectEvalExecutionArms(evalValue)[1]).toMatchObject({
+      name: "replacement",
+      status: "invalid",
+      code: "variant_invalid",
+      reason: expect.stringContaining("incompatible call contract"),
+    });
+  });
+
+  it("classifies authored identity projection failures without blaming package versions", () => {
+    const task = managedTask(["asset-store"], "projection-call-v1", () => {
+      throw new TypeError("authored identity failed");
+    });
+    const evalValue = evaluate({
+      id: "identity-failure",
+      task,
+      cases: [{ input: "hello" }],
+    });
+
+    expect(projectEvalExecutionArms(evalValue)[0]).toMatchObject({
+      name: "current",
+      status: "invalid",
+      code: "variant_invalid",
+      reason: "authored identity failed",
     });
   });
 

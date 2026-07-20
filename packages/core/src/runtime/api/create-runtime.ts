@@ -207,7 +207,7 @@ function createMaintenanceController(options: {
       const interval = setInterval(() => {
         void tick()
       }, options.intervalMs ?? 1_000)
-      interval.unref?.()
+      ;(interval as { unref?: () => void }).unref?.()
       const handle = Object.freeze({
         stop() {
           clearInterval(interval)

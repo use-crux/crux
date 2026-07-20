@@ -83,7 +83,7 @@ export function createWorkspaceWatchHandle(
       timer = undefined;
       void poll();
     }, delayMs);
-    timer.unref?.();
+    (timer as { unref?: () => void }).unref?.();
   }
 
   async function poll(): Promise<void> {

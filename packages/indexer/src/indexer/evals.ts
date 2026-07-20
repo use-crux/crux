@@ -1,6 +1,7 @@
 import type { ProjectDefinition } from "@use-crux/core/project-index";
 import {
   projectEvalTaskExecution,
+  projectEvalVariantTaskExecution,
   type EvalTaskExecutionProjection,
 } from "@use-crux/core/runtime/internal/eval-registry";
 import { definition, safeId } from "./definitions";
@@ -44,16 +45,19 @@ export async function definitionFromAuthoredEval(
   executionArms: readonly AuthoredEvalExecutionArm[],
 ): Promise<ProjectDefinition> {
   const name = evalValue.id ?? derivedEvalId(root, file);
-  const readyArms = executionArms.flatMap((arm) =>
+  const projectedArms = executionArms.map((arm) =>
     arm.status === "ready"
-      ? [
-          Object.freeze({
-            name: arm.name,
-            execution: arm.execution,
-            requiredHostCapabilities: arm.requiredHostCapabilities,
-          }),
-        ]
-      : [],
+      ? Object.freeze({
+          name: arm.name,
+          execution: arm.execution,
+          requiredHostCapabilities: arm.requiredHostCapabilities,
+        })
+      : Object.freeze({
+          name: arm.name,
+          status: arm.status,
+          code: arm.code,
+          reason: arm.reason,
+        }),
   );
   const requiredHostCapabilities = runtimeCapabilityUnion(executionArms);
   return definition(
@@ -68,12 +72,12 @@ export async function definitionFromAuthoredEval(
       evalContract: "crux.eval",
       explicitId: evalValue.id !== undefined,
       requiredHostCapabilities,
-      evalExecutionArms: readyArms,
+      evalExecutionArms: projectedArms,
       facts: {
         kind: "eval",
         evalContract: "crux.eval",
         requiredHostCapabilities,
-        evalExecutionArms: readyArms,
+        evalExecutionArms: projectedArms,
       },
     },
   );
@@ -100,10 +104,15 @@ export function executionArmsFromAuthoredEval(
   return Object.freeze(
     names.map((name) => {
       const variant = name === "current" ? undefined : variants[name];
-      const task = isRecord(variant) && "task" in variant
-        ? variant.task
-        : definition.task;
-      return Object.freeze({ name, ...projectEvalTaskExecution(task) });
+      const execution =
+        name === "current"
+          ? projectEvalTaskExecution(definition.task)
+          : projectEvalVariantTaskExecution(
+              definition.task,
+              name,
+              isRecord(variant) ? variant : {},
+            );
+      return Object.freeze({ name, ...execution });
     }),
   );
 }
@@ -112,13 +121,15 @@ function runtimeCapabilityUnion(
   arms: readonly AuthoredEvalExecutionArm[],
 ): readonly string[] {
   return Object.freeze(
-    [...new Set(
-      arms.flatMap((arm) =>
-        arm.status === "ready" && arm.execution === "runtime"
-          ? arm.requiredHostCapabilities
-          : [],
+    [
+      ...new Set(
+        arms.flatMap((arm) =>
+          arm.status === "ready" && arm.execution === "runtime"
+            ? arm.requiredHostCapabilities
+            : [],
+        ),
       ),
-    )]
+    ]
       .filter((value) => REQUIRED_HOST_CAPABILITIES.has(value))
       .sort(compareCodepoint),
   );

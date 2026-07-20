@@ -356,6 +356,8 @@ async function runtimeOpsFixtureRoot(options: {
     `${JSON.stringify(
       {
         version: 2,
+        evalPrivacyFingerprint:
+          "d2b7a3a9e0d3857b24b871ee585d118490dabd9edf81bcf10de9f5328e85cc29",
         targets: [
           {
             name: "runtime-ops-review",
@@ -364,6 +366,7 @@ async function runtimeOpsFixtureRoot(options: {
             export: "reviewFlow",
           },
         ],
+        evals: [],
       },
       null,
       2,

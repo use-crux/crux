@@ -11,6 +11,7 @@ import { projectEvalExecutionArms } from "../../eval/internal/execution-placemen
 export {
   projectEvalExecutionArms,
   projectEvalTaskExecution,
+  projectEvalVariantTaskExecution,
 } from "../../eval/internal/execution-placement";
 export type {
   EvalExecutionArmProjection,
@@ -65,10 +66,7 @@ export function projectDeployedEvalRequiredHostCapabilities(
   const arms = projectEvalExecutionArms(evalValue);
   const invalid = arms.find((arm) => arm.status === "invalid");
   if (invalid !== undefined) {
-    throw new EvalTaskExecutionError(
-      "descriptor_incompatible",
-      invalid.reason,
-    );
+    throw new EvalTaskExecutionError("descriptor_incompatible", invalid.reason);
   }
   const capabilities = arms.flatMap((arm) =>
     arm.status === "ready" && arm.execution === "runtime"

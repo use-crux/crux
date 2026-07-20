@@ -21,7 +21,8 @@ type IndexDiagnosticInput =
       evalId: string
       definitionId: string
       arm: string
-      code: 'task_not_callable' | 'task_contract_incompatible'
+      code: 'task_not_callable' | 'task_contract_incompatible' | 'variant_invalid'
+      reason: string
     }
 
 function indexDiagnostic(input: IndexDiagnosticInput): IndexDiagnostic {
@@ -120,18 +121,27 @@ function indexDiagnostic(input: IndexDiagnosticInput): IndexDiagnostic {
       }
     case 'eval-task-invalid': {
       const incompatible = input.code === 'task_contract_incompatible'
+      const variantInvalid = input.code === 'variant_invalid'
       return {
         id: `diagnostic:index:eval-task:${fingerprint(`${input.file}:${input.arm}:${input.code}`)}`,
         severity: 'error',
-        code: incompatible ? 'index.eval_task_contract_incompatible' : 'index.eval_task_not_callable',
+        code: incompatible
+          ? 'index.eval_task_contract_incompatible'
+          : variantInvalid
+            ? 'index.eval_variant_invalid'
+            : 'index.eval_task_not_callable',
         message: incompatible
           ? `Eval '${input.evalId}' arm '${input.arm}' in ${relative(input.root, input.file)} uses Crux packages that do not share a compatible release.`
-          : `Eval '${input.evalId}' arm '${input.arm}' in ${relative(input.root, input.file)} does not provide a callable task.`,
+          : variantInvalid
+            ? `Eval '${input.evalId}' arm '${input.arm}' in ${relative(input.root, input.file)} is invalid: ${input.reason}`
+            : `Eval '${input.evalId}' arm '${input.arm}' in ${relative(input.root, input.file)} does not provide a callable task.`,
         source: sourceForFile(input.file),
         relatedDefinitionIds: [input.definitionId],
         suggestedFix: incompatible
           ? 'Install @use-crux/core and the Eval task adapter from the same release, then retry.'
-          : 'Pass a function or supported adapter task to evaluate().',
+          : variantInvalid
+            ? `Fix Variant '${input.arm}' so its task and overrides are compatible with the Eval's Current task.`
+            : 'Pass a function or supported adapter task to evaluate().',
       }
     }
   }
@@ -183,7 +193,8 @@ export function evalTaskInvalidDiagnostic(input: {
   evalId: string
   definitionId: string
   arm: string
-  code: 'task_not_callable' | 'task_contract_incompatible'
+  code: 'task_not_callable' | 'task_contract_incompatible' | 'variant_invalid'
+  reason: string
 }): IndexDiagnostic {
   return indexDiagnostic({ kind: 'eval-task-invalid', ...input })
 }

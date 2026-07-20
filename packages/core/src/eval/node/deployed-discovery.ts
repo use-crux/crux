@@ -14,10 +14,12 @@ import {
 /** Discover inert Evals while ignoring unrelated `*.eval.*` modules. */
 export async function discoverDeployableProjectEvals(
   projectRoot: string,
+  options: { readonly relativeFiles?: readonly string[] } = {},
 ): Promise<EvalDiscoveryResult> {
   const modules: EvalModule[] = [];
   const errors: EvalDiscoveryError[] = [];
-  for (const relativeFile of await findEvalFiles(projectRoot)) {
+  const files = options.relativeFiles ?? (await findEvalFiles(projectRoot));
+  for (const relativeFile of [...new Set(files)].sort()) {
     try {
       const exports = (await import(
         pathToFileURL(resolve(projectRoot, relativeFile)).href

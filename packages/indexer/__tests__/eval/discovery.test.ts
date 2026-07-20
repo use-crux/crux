@@ -192,6 +192,57 @@ describe("Eval Project Index discovery", () => {
     );
   });
 
+  it("reports an incompatible managed Variant replacement", async () => {
+    const root = await mkdtemp(join(workspaceRoot, ".tmp-eval-discovery-"));
+    roots.push(root);
+    const source = join(root, "evals/replacement.eval.ts");
+    await mkdir(dirname(source), { recursive: true });
+    await writeFile(
+      source,
+      [
+        "import { evaluate } from '@use-crux/core/eval'",
+        "import { attachEvalTaskDescriptorForInternalUse } from '@use-crux/core/eval/internal/task'",
+        "const task = (call: string) => attachEvalTaskDescriptorForInternalUse(async (input: unknown) => input, {",
+        "  _tag: 'CruxEvalTaskDescriptor', operation: 'generate', adapterId: 'ai-sdk', capabilities: [], requiredHostCapabilities: ['record-store'], defaults: {}, overrideKeys: [], callContractFingerprint: call,",
+        "  projectIdentity: () => ({ reusable: true, fingerprintMaterial: {} }), execute: async (input: unknown) => ({ output: input }),",
+        "  projectOutput: (result: { output: unknown }) => result.output, projectResponse: (result: { output: unknown }) => result,",
+        "})",
+        "export default evaluate({ id: 'replacement', task: task('call-v1'), cases: [{ input: {} }], variants: { broken: { task: task('call-v2') } } })",
+      ].join("\n"),
+    );
+
+    const result = await discoverRuntimeEvalDefinitions(
+      root,
+      ["**/*.eval.ts"],
+      [],
+    );
+
+    expect(result.definitions[0]?.metadata?.evalExecutionArms).toEqual([
+      {
+        name: "current",
+        execution: "runtime",
+        requiredHostCapabilities: ["record-store"],
+      },
+      {
+        name: "broken",
+        status: "invalid",
+        code: "variant_invalid",
+        reason:
+          "planEval(): Variant 'broken' replacement task has an incompatible call contract.",
+      },
+    ]);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "index.eval_variant_invalid",
+        message: expect.stringMatching(
+          /replacement.*broken.*incompatible call contract/i,
+        ),
+        source: expect.objectContaining({ file: source }),
+        suggestedFix: expect.stringMatching(/fix Variant 'broken'/i),
+      }),
+    );
+  });
+
   it("reports a non-callable task as an authored Eval error", async () => {
     const root = await mkdtemp(join(workspaceRoot, ".tmp-eval-discovery-"));
     roots.push(root);

@@ -184,6 +184,28 @@ describe("generated deployed Eval registry", () => {
         ],
       }),
     ).rejects.toThrow(/Project Index capability facts disagree.*support/i);
+
+    await expect(
+      generateRuntimeArtifacts({
+        root,
+        host: "next",
+        definitions: [
+          {
+            ...definitions[0],
+            metadata: {
+              ...definitions[0]!.metadata,
+              evalExecutionArms: [
+                {
+                  name: "renamed",
+                  execution: "runtime",
+                  requiredHostCapabilities: ["asset-store"],
+                },
+              ],
+            },
+          },
+        ],
+      }),
+    ).rejects.toThrow(/Project Index arm facts disagree.*support/i);
   });
 
   it("keeps ordinary Next Runtime requests usable when Eval host secrets are absent", async () => {
@@ -217,15 +239,8 @@ describe("generated deployed Eval registry", () => {
       source,
       [
         "import { evaluate } from '@use-crux/core/eval'",
-        "import { attachEvalTaskDescriptorForInternalUse } from '@use-crux/core/eval/internal/task'",
-        "import { createCruxSpanId, createCruxTraceId } from '@use-crux/core/observability'",
-        "const task = attachEvalTaskDescriptorForInternalUse(async (input: unknown) => input, {",
-        "  _tag: 'CruxEvalTaskDescriptor', operation: 'generate', adapterId: 'ai-sdk', capabilities: [], requiredHostCapabilities: [], overrideKeys: [], defaults: {},",
-        "  projectIdentity: () => ({ reusable: true, fingerprintMaterial: {} }), execute: async (input: unknown) => ({ output: input }),",
-        "  projectOutput: (result: { output: unknown }) => result.output,",
-        "  projectResponse: (result: { output: unknown }) => ({ runId: 'run_generated', _meta: { traceId: createCruxTraceId(), spanId: createCruxSpanId() }, content: [], text: JSON.stringify(result.output), steps: [], finalStep: { content: [], text: JSON.stringify(result.output), finishReason: 'stop', responseId: 'generated', modelId: 'fixture', warnings: [] }, messages: [], warnings: [] }),",
-        "})",
-        "export default evaluate({ id: 'support', task, cases: [{ id: 'refund', input: { question: 'refund?' } }] })",
+        "const localFixture = () => 'refund?'",
+        "export default evaluate({ id: 'support', task: async (input: unknown) => input, cases: [{ id: 'refund', input: { resolve: localFixture } }] })",
       ].join("\n"),
     );
     const evalDefinitions = (
@@ -242,104 +257,177 @@ describe("generated deployed Eval registry", () => {
         metadata: { exportName: "nested" },
       },
     ] satisfies readonly ProjectDefinition[];
-    await generateRuntimeArtifacts({ root, host: "next", definitions });
-    const deploymentId = process.env.CRUX_EVAL_HOST_DEPLOYMENT_ID;
-    const token = process.env.CRUX_EVAL_HOST_TOKEN;
-    delete process.env.CRUX_EVAL_HOST_DEPLOYMENT_ID;
-    delete process.env.CRUX_EVAL_HOST_TOKEN;
-    try {
-      const generated = (await importUserModule(
-        join(root, "crux.generated/next.ts"),
-        4_000,
-      )) as {
-        readonly GET: (request: Request) => Promise<Response>;
-        readonly POST: (request: Request) => Promise<Response>;
-      };
-      const health = await generated.GET(
-        new Request("http://localhost/api/crux"),
-      );
-      const manifest = await generated.GET(
-        new Request("http://localhost/api/crux/manifest"),
-      );
+    const result = await generateRuntimeArtifacts({
+      root,
+      host: "next",
+      definitions,
+    });
+    const entry = await readFile(join(root, "crux.generated/next.ts"), "utf8");
+    const generated = (await importUserModule(
+      join(root, "crux.generated/next.ts"),
+      4_000,
+    )) as { readonly GET: (request: Request) => Promise<Response> };
 
-      expect(health.status).toBe(200);
-      expect(manifest.status).toBe(503);
-      await expect(manifest.json()).resolves.toMatchObject({
-        error: {
-          code: "EVAL_HOST_SETUP_REQUIRED",
-          message: expect.stringContaining("CRUX_EVAL_HOST_DEPLOYMENT_ID"),
+    expect(result.manifest.evals).toEqual([]);
+    expect(entry).not.toContain("createServerlessEvalHost");
+    expect(entry).not.toContain("evals/support.eval");
+    await expect(
+      generated.GET(new Request("http://localhost/api/crux")),
+    ).resolves.toMatchObject({ status: 200 });
+  });
+
+  it("imports only mixed Evals and deploys only their Runtime arms", async () => {
+    const root = await mkdtemp(join(workspaceRoot, ".tmp-eval-registry-"));
+    roots.push(root);
+    const coordinatorSource = join(root, "evals/coordinator.eval.ts");
+    const mixedSource = join(root, "evals/mixed.eval.ts");
+    await mkdir(dirname(coordinatorSource), { recursive: true });
+    await writeFile(
+      coordinatorSource,
+      [
+        "import { evaluate } from '@use-crux/core/eval'",
+        "const nodeOnly = () => process.cwd()",
+        "export default evaluate({ id: 'coordinator', task: async (input: unknown) => input, cases: [{ id: 'local', input: { nodeOnly } }] })",
+      ].join("\n"),
+    );
+    await writeFile(
+      mixedSource,
+      [
+        "import { evaluate } from '@use-crux/core/eval'",
+        "import { attachEvalTaskDescriptorForInternalUse } from '@use-crux/core/eval/internal/task'",
+        "const hosted = attachEvalTaskDescriptorForInternalUse(async (input: unknown) => input, {",
+        "  _tag: 'CruxEvalTaskDescriptor', operation: 'generate', adapterId: 'ai-sdk', capabilities: [], requiredHostCapabilities: ['record-store'], overrideKeys: [], defaults: {},",
+        "  projectIdentity: () => ({ reusable: true, fingerprintMaterial: {} }), execute: async (input: unknown) => ({ output: input }),",
+        "  projectOutput: (result: { output: unknown }) => result.output, projectResponse: (() => ({})) as never,",
+        "})",
+        "export default evaluate({ id: 'mixed', task: async (input: unknown) => input, cases: [{ id: 'portable', input: { question: 'refund?' } }], variants: { hosted: { task: hosted } } })",
+      ].join("\n"),
+    );
+    const definitions = (
+      await discoverRuntimeEvalDefinitions(root, ["**/*.eval.ts"], [])
+    ).definitions;
+
+    const result = await generateRuntimeArtifacts({
+      root,
+      host: "convex",
+      definitions,
+    });
+    const entry = await readFile(join(root, "convex/_crux/targets.ts"), "utf8");
+
+    expect(result.manifest.evals).toEqual([
+      expect.objectContaining({
+        id: "mixed",
+        variants: [
+          expect.objectContaining({
+            name: "current",
+            execution: "coordinator",
+          }),
+          expect.objectContaining({
+            name: "hosted",
+            execution: "runtime",
+            requiredHostCapabilities: ["record-store"],
+          }),
+        ],
+      }),
+    ]);
+    expect(entry).toContain("evals/mixed.eval");
+    expect(entry).toContain(
+      '"runtimeArms":[{"name":"hosted","requiredHostCapabilities":["record-store"]}]',
+    );
+    expect(entry).not.toContain("evals/coordinator.eval");
+  });
+
+  it("adds Eval identity to Crux-owned deployment import failures", async () => {
+    const root = await mkdtemp(join(workspaceRoot, ".tmp-eval-registry-"));
+    roots.push(root);
+    const source = join(root, "evals/broken.eval.ts");
+    await mkdir(dirname(source), { recursive: true });
+    await writeFile(source, "throw new Error('native-import-boom')\n");
+    const definitions = [
+      {
+        id: "eval:broken",
+        kind: "eval",
+        name: "broken",
+        fidelity: "resolved",
+        source: { file: source, line: 1 },
+        metadata: {
+          exportName: "default",
+          evalContract: "crux.eval",
+          evalExecutionArms: [
+            {
+              name: "current",
+              execution: "runtime",
+              requiredHostCapabilities: ["record-store"],
+            },
+          ],
         },
-      });
-      process.env.CRUX_EVAL_HOST_DEPLOYMENT_ID = "generated-fixture";
-      process.env.CRUX_EVAL_HOST_TOKEN =
-        "generated-eval-host-token-at-least-32-bytes";
-      const ready = await generated.GET(
-        new Request("http://localhost/api/crux/manifest", {
-          headers: {
-            authorization: "Bearer generated-eval-host-token-at-least-32-bytes",
+      },
+    ] satisfies readonly ProjectDefinition[];
+
+    await expect(
+      generateRuntimeArtifacts({ root, host: "next", definitions }),
+    ).rejects.toThrow(
+      /Eval 'broken'.*evals\/broken\.eval\.ts.*native-import-boom/i,
+    );
+  });
+
+  it("fails invalid or missing execution facts before Case hydration", async () => {
+    const root = await mkdtemp(join(workspaceRoot, ".tmp-eval-registry-"));
+    roots.push(root);
+    const source = join(root, "evals/invalid.eval.ts");
+    await mkdir(dirname(source), { recursive: true });
+    await writeFile(
+      source,
+      [
+        "import { evaluate } from '@use-crux/core/eval'",
+        "const localFixture = () => 'not deployable'",
+        "export default evaluate({ id: 'invalid', task: 42 as never, cases: [{ id: 'local', input: { localFixture } }] })",
+      ].join("\n"),
+    );
+    const definition = (
+      await discoverRuntimeEvalDefinitions(root, ["**/*.eval.ts"], [])
+    ).definitions[0]!;
+
+    expect(definition.metadata?.evalExecutionArms).toEqual([
+      expect.objectContaining({
+        name: "current",
+        status: "invalid",
+        code: "task_not_callable",
+      }),
+    ]);
+    await expect(
+      generateRuntimeArtifacts({
+        root,
+        host: "next",
+        definitions: [definition],
+      }),
+    ).rejects.toThrow(/Eval 'invalid'.*current.*callable/i);
+    await expect(
+      readFile(join(root, ".crux/generated/runtime/manifest.json"), "utf8"),
+    ).rejects.toMatchObject({ code: "ENOENT" });
+
+    const { evalExecutionArms: _arms, ...metadataWithoutArms } =
+      definition.metadata!;
+    await expect(
+      generateRuntimeArtifacts({
+        root,
+        host: "next",
+        definitions: [
+          { ...definition, metadata: metadataWithoutArms },
+        ] satisfies readonly ProjectDefinition[],
+      }),
+    ).rejects.toThrow(/execution facts.*invalid.*missing or malformed/i);
+    await expect(
+      generateRuntimeArtifacts({
+        root,
+        host: "next",
+        definitions: [
+          {
+            ...definition,
+            metadata: { ...definition.metadata, evalExecutionArms: [{}] },
           },
-        }),
-      );
-      expect(ready.status).toBe(200);
-      const deployed = (await ready.json()) as {
-        protocol: "crux.eval-host.v1";
-        evals: readonly {
-          id: string;
-          evalFingerprint: string;
-          cases: Readonly<Record<string, string>>;
-          variants: Readonly<Record<string, string>>;
-        }[];
-      };
-      expect(deployed).toMatchObject({
-        deploymentId: "generated-fixture",
-        evals: [expect.objectContaining({ id: "support" })],
-      });
-      const support = deployed.evals[0]!;
-      const job = {
-        protocol: deployed.protocol,
-        jobId: "generated-next-refund",
-        evalRunId: "generated-next-run",
-        evalId: support.id,
-        evalFingerprint: support.evalFingerprint,
-        caseId: "refund",
-        caseFingerprint: support.cases.refund!,
-        variant: "current",
-        variantFingerprint: support.variants.current!,
-        trial: 0,
-        deadlineAt: new Date(Date.now() + 60_000).toISOString(),
-      };
-      const accepted = await generated.POST(
-        new Request("http://localhost/api/crux/jobs", {
-          method: "POST",
-          headers: {
-            authorization: "Bearer generated-eval-host-token-at-least-32-bytes",
-            "content-type": "application/json",
-          },
-          body: JSON.stringify(job),
-        }),
-      );
-      expect(accepted.status).toBe(409);
-      await expect(accepted.json()).resolves.toMatchObject({
-        error: { code: "EVAL_VARIANT_MISSING", phase: "admission" },
-      });
-      const wake = (
-        globalThis as typeof globalThis & {
-          __generatedEvalWake?: {
-            readonly body: string;
-            readonly headers: Readonly<Record<string, string>>;
-          };
-        }
-      ).__generatedEvalWake;
-      expect(wake).toBeUndefined();
-    } finally {
-      delete (
-        globalThis as typeof globalThis & { __generatedEvalWake?: unknown }
-      ).__generatedEvalWake;
-      if (deploymentId === undefined)
-        delete process.env.CRUX_EVAL_HOST_DEPLOYMENT_ID;
-      else process.env.CRUX_EVAL_HOST_DEPLOYMENT_ID = deploymentId;
-      if (token === undefined) delete process.env.CRUX_EVAL_HOST_TOKEN;
-      else process.env.CRUX_EVAL_HOST_TOKEN = token;
-    }
+        ],
+      }),
+    ).rejects.toThrow(/execution facts.*invalid.*missing or malformed/i);
   });
 });

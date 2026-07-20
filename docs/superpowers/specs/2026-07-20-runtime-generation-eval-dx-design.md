@@ -138,16 +138,28 @@ not need a placement flag to fix unrelated local-only Eval modules.
 Runtime-rich Eval facts gain deterministic arm metadata:
 
 ```ts
-type EvalExecutionArmFact = {
-  name: "current" | string;
-  execution: "coordinator" | "runtime";
-  requiredHostCapabilities: string[];
-};
+type EvalExecutionArmFact =
+  | {
+      name: "current" | string;
+      execution: "coordinator" | "runtime";
+      requiredHostCapabilities: string[];
+    }
+  | {
+      name: "current" | string;
+      status: "invalid";
+      code:
+        | "task_not_callable"
+        | "task_contract_incompatible"
+        | "variant_invalid";
+      reason: string;
+    };
 ```
 
-Every discovered Eval exposes all effective arms in
+Every discovered Eval exposes all authored arms in
 `metadata.evalExecutionArms`, sorted with `current` first and Variants by name.
-Capability arrays are normalized and sorted. Existing
+Valid arms carry placement and normalized, sorted capability arrays. Invalid
+arms retain their typed failure and reason so a downstream generator cannot
+mistake a missing arm for a coordinator-only Eval and fail open. Existing
 `metadata.requiredHostCapabilities` remains as the sorted union of runtime-arm
 requirements for compatible readers.
 

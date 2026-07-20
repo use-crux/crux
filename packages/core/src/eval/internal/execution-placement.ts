@@ -1,7 +1,10 @@
 /** Total provider-neutral execution placement for authored Eval tasks. @internal */
 
 import type { AnyEval } from "../evaluate";
-import { resolveEvalArms } from "./arm-policy";
+import {
+  resolveEvalArmForInternalUse,
+  validateEvalVariantForInternalUse,
+} from "./arm-policy";
 import { getEvalDefinitionForInternalUse } from "./definition";
 import {
   EvalTaskExecutionError,
@@ -19,7 +22,10 @@ export interface ReadyEvalTaskExecutionProjection {
 /** Authored task value that cannot participate in execution planning. */
 export interface InvalidEvalTaskExecutionProjection {
   readonly status: "invalid";
-  readonly code: "task_not_callable" | "task_contract_incompatible";
+  readonly code:
+    | "task_not_callable"
+    | "task_contract_incompatible"
+    | "variant_invalid";
   readonly reason: string;
 }
 
@@ -29,10 +35,14 @@ export type EvalTaskExecutionProjection =
   | InvalidEvalTaskExecutionProjection;
 
 /** One effective Eval arm plus its derived execution placement. */
-export type EvalExecutionArmProjection = Readonly<
-  { readonly name: string; readonly fingerprint: string } &
-    EvalTaskExecutionProjection
->;
+export type EvalExecutionArmProjection =
+  | Readonly<
+      {
+        readonly name: string;
+        readonly fingerprint: string;
+      } & ReadyEvalTaskExecutionProjection
+    >
+  | Readonly<{ readonly name: string } & InvalidEvalTaskExecutionProjection>;
 
 /** Derive placement without treating an ordinary callable as an error. */
 export function projectEvalTaskExecution(
@@ -50,10 +60,12 @@ export function projectEvalTaskExecution(
       return readyProjection([]);
     }
     const capabilities = Object.freeze(
-      [...new Set(
-        getEvalTaskDescriptorForInternalUse(task).requiredHostCapabilities ??
-          [],
-      )].sort(compareCodepoint),
+      [
+        ...new Set(
+          getEvalTaskDescriptorForInternalUse(task).requiredHostCapabilities ??
+            [],
+        ),
+      ].sort(compareCodepoint),
     );
     return readyProjection(capabilities);
   } catch (error) {
@@ -71,18 +83,66 @@ export function projectEvalTaskExecution(
   }
 }
 
+/** Validate one raw Variant and project its effective task without throwing. */
+export function projectEvalVariantTaskExecution(
+  baseTask: unknown,
+  name: string,
+  authored: Readonly<Record<string, unknown>>,
+): EvalTaskExecutionProjection {
+  try {
+    validateEvalVariantForInternalUse(baseTask, name, authored);
+  } catch (error) {
+    const incompatible =
+      error instanceof EvalTaskExecutionError &&
+      error.code === "descriptor_incompatible";
+    return Object.freeze({
+      status: "invalid" as const,
+      code: incompatible
+        ? ("task_contract_incompatible" as const)
+        : ("variant_invalid" as const),
+      reason: error instanceof Error ? error.message : String(error),
+    });
+  }
+  return projectEvalTaskExecution(authored.task ?? baseTask);
+}
+
 /** Project Current first and Variants in their canonical effective order. */
 export function projectEvalExecutionArms(
   evalValue: AnyEval,
 ): readonly EvalExecutionArmProjection[] {
+  const definition = getEvalDefinitionForInternalUse(evalValue);
   return Object.freeze(
-    resolveEvalArms(getEvalDefinitionForInternalUse(evalValue)).map((arm) =>
-      Object.freeze({
-        name: arm.name,
-        fingerprint: arm.fingerprint,
-        ...projectEvalTaskExecution(arm.task),
-      }),
-    ),
+    definition.arms.map((declaration) => {
+      const authored = definition.variants[declaration.name] ?? {};
+      const execution = projectEvalVariantTaskExecution(
+        definition.task,
+        declaration.name,
+        authored,
+      );
+      if (execution.status === "invalid") {
+        return Object.freeze({ name: declaration.name, ...execution });
+      }
+      try {
+        const arm = resolveEvalArmForInternalUse(definition, declaration.name);
+        return Object.freeze({
+          name: arm.name,
+          fingerprint: arm.fingerprint,
+          ...execution,
+        });
+      } catch (error) {
+        const incompatible =
+          error instanceof EvalTaskExecutionError &&
+          error.code === "descriptor_incompatible";
+        return Object.freeze({
+          name: declaration.name,
+          status: "invalid" as const,
+          code: incompatible
+            ? ("task_contract_incompatible" as const)
+            : ("variant_invalid" as const),
+          reason: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }),
   );
 }
 

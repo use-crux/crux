@@ -72,6 +72,7 @@ export async function discoverRuntimeEvalDefinitions(
                   definitionId: projectDefinition.id,
                   arm: arm.name,
                   code: arm.code,
+                  reason: arm.reason,
                 }),
               ]
             : [],

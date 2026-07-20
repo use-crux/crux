@@ -5,6 +5,7 @@ export {
   fingerprintDeployedEvalCase,
   projectEvalExecutionArms,
   projectEvalTaskExecution,
+  projectEvalVariantTaskExecution,
   projectDeployedEvalRequiredHostCapabilities,
   projectDeployedEvalVariants,
 } from "./projection";
