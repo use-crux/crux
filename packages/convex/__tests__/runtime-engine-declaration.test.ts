@@ -61,13 +61,29 @@ describe('convex() Runtime Engine declaration', () => {
     expect(
       inference?.infer({
         CONVEX_SITE_URL: 'https://example.convex.site',
+        CONVEX_URL: 'https://example.convex.cloud',
         CONVEX_DEPLOYMENT: 'dev:example',
         CRUX_EVAL_HOST_TOKEN: 'must-not-be-inferred',
       }),
     ).toEqual({
       url: 'https://example.convex.site',
-      deploymentId: 'dev:example',
+      deploymentId: 'https://example.convex.cloud',
     })
     crux.dispose()
+  })
+
+  it('infers Eval host fields from framework-prefixed Convex variables', () => {
+    const runtime = convex()
+    const inference = getEvalHostConnectionInference(runtime)
+
+    expect(
+      inference?.infer({
+        NEXT_PUBLIC_CONVEX_URL: 'https://example.convex.cloud',
+        NEXT_PUBLIC_CONVEX_SITE_URL: 'https://example.convex.site',
+      }),
+    ).toEqual({
+      url: 'https://example.convex.site',
+      deploymentId: 'https://example.convex.cloud',
+    })
   })
 })

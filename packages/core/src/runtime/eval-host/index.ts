@@ -34,7 +34,15 @@ export {
   EVAL_HOST_MAX_DEADLINE_HORIZON_MS,
   EvalHostProtocolError,
   decodeSubmitEvalJob,
+  readEvalHostRequestBytes,
 } from "./protocol";
+export { hasEvalHostAuthorization } from "./auth";
+export {
+  insecureTransportError,
+  isSecureRequest,
+  jsonResponse,
+  unauthorizedError,
+} from "./transport";
 export {
   CRUX_EVAL_HOST_PROTOCOL,
   type CreateMemoryEvalHostOptions,

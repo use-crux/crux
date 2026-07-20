@@ -7,7 +7,7 @@ import {
   type RuntimeHostBinder,
   type WakeEnvelope,
 } from "@use-crux/core/runtime";
-import { httpActionGeneric, internalActionGeneric } from "convex/server";
+import { internalActionGeneric } from "convex/server";
 import { v } from "convex/values";
 import { convex } from "../definition";
 import {
@@ -23,6 +23,10 @@ import type { ConvexCtxPort } from "../../store";
 import type { ConvexCruxStorageComponent } from "../../store-component";
 import { convexStorage } from "../../storage";
 import { runWithConvexCruxRuntime } from "../../runtime";
+import type {
+  ConvexEvalHttpRequest,
+  ConvexEvalHttpResponse,
+} from "./http-action";
 
 type ConvexEvalActionCtx = ConvexCtxPort & {
   scheduler: {
@@ -38,17 +42,13 @@ type RegisteredAction<TArgs extends Record<string, unknown>, TResult> = {
   _handler?: (ctx: ConvexEvalActionCtx, args: TArgs) => Promise<TResult>;
 };
 
-type RegisteredHttpAction = {
-  _handler?: (ctx: ConvexEvalActionCtx, request: Request) => Promise<Response>;
-};
-
 /** Options for the generated authenticated Convex Eval host actions. */
 export interface CreateConvexEvalHostOptions {
   readonly component: ConvexRuntimeComponent &
     Partial<ConvexCruxStorageComponent>;
   readonly registry: DeployedEvalRegistry;
   readonly deploymentId: string;
-  readonly token: string;
+  readonly token?: string;
   /** Registry-required storage services supported by this deployed Convex entry. */
   readonly hostCapabilities?: readonly string[];
   /** General generated target executor used by Runtime work created inside Eval tasks. */
@@ -58,7 +58,10 @@ export interface CreateConvexEvalHostOptions {
 
 /** Generated Convex actions serving and executing exact deployed Eval jobs. */
 export interface ConvexEvalHostActions {
-  readonly handleEvalRequest: RegisteredHttpAction;
+  readonly handleEvalRequest: RegisteredAction<
+    { request: ConvexEvalHttpRequest },
+    ConvexEvalHttpResponse
+  >;
   readonly executeEvalTarget: RegisteredAction<{ envelope: unknown }, unknown>;
 }
 
@@ -88,7 +91,7 @@ export function createConvexEvalHost(
       });
     return createResolvedEvalHost({
       deploymentId: options.deploymentId,
-      token: options.token,
+      token: options.token ?? "",
       registry: options.registry,
       now: options.now,
       runtime: runtime as InProcessRuntimeEngineDefinition<
@@ -123,14 +126,32 @@ export function createConvexEvalHost(
       });
 
   actions = {
-    handleEvalRequest: httpActionGeneric(async (ctx, request) => {
-      const actionCtx = ctx as unknown as ConvexEvalActionCtx;
-      const host = bind(actionCtx);
-      try {
-        return await host.fetch(request);
-      } finally {
-        host.runtime.dispose();
-      }
+    handleEvalRequest: internalActionGeneric({
+      args: {
+        request: v.object({
+          url: v.string(),
+          method: v.string(),
+          headers: v.array(v.object({ name: v.string(), value: v.string() })),
+          body: v.bytes(),
+        }),
+      },
+      returns: v.object({
+        status: v.number(),
+        statusText: v.string(),
+        headers: v.array(v.object({ name: v.string(), value: v.string() })),
+        body: v.bytes(),
+      }),
+      handler: async (ctx, { request }) => {
+        if (!options.token) return await evalHostSetupRequiredResponse();
+        const actionCtx = ctx as unknown as ConvexEvalActionCtx;
+        const host = bind(actionCtx);
+        try {
+          const response = await host.fetch(requestFromEnvelope(request));
+          return await responseEnvelope(response);
+        } finally {
+          host.runtime.dispose();
+        }
+      },
     }) as ConvexEvalHostActions["handleEvalRequest"],
     executeEvalTarget: internalActionGeneric({
       args: { envelope: v.any() },
@@ -164,15 +185,61 @@ export function createConvexEvalHost(
   return Object.freeze(actions);
 }
 
+async function evalHostSetupRequiredResponse(): Promise<ConvexEvalHttpResponse> {
+  return await responseEnvelope(
+    new Response(
+      JSON.stringify({
+        error: {
+          code: "EVAL_HOST_SETUP_REQUIRED",
+          message:
+            "Crux Eval hosting is not configured for this Convex deployment.",
+          nextStep:
+            "Set CRUX_EVAL_HOST_TOKEN in this Convex deployment and in the environment that runs Crux Evals.",
+        },
+      }),
+      {
+        status: 503,
+        headers: { "content-type": "application/json" },
+      },
+    ),
+  );
+}
+
+async function responseEnvelope(
+  response: Response,
+): Promise<ConvexEvalHttpResponse> {
+  return {
+    status: response.status,
+    statusText: response.statusText,
+    headers: [...response.headers.entries()].map(([name, value]) => ({
+      name,
+      value,
+    })),
+    body: await response.arrayBuffer(),
+  };
+}
+
+function requestFromEnvelope(request: ConvexEvalHttpRequest): Request {
+  return new Request(request.url, {
+    method: request.method,
+    headers: request.headers.map(({ name, value }): [string, string] => [
+      name,
+      value,
+    ]),
+    body:
+      request.method === "GET" || request.method === "HEAD"
+        ? undefined
+        : request.body,
+  });
+}
+
 function resolveHostCapabilities(
   options: CreateConvexEvalHostOptions,
 ): readonly string[] {
   const hasStorage = isStorageComponent(options.component);
   return Object.freeze(
     [...new Set(options.hostCapabilities ?? [])]
-      .filter(
-        (capability) => capability === "record-store" && hasStorage,
-      )
+      .filter((capability) => capability === "record-store" && hasStorage)
       .sort(),
   );
 }

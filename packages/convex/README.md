@@ -156,8 +156,9 @@ When no app router exists, `crux runtime generate` writes `convex/http.ts`. It
 mounts the separately authenticated Eval host at `/manifest`, `/jobs`, and
 `/jobs/:id`, which is why `CONVEX_SITE_URL` can be used directly as the inferred
 Eval host URL. The routes delegate to
-`api._crux.targets.handleEvalRequest`; the dedicated bearer remains in the
-HTTP `Authorization` header.
+a real default-runtime HTTP action, which forwards a byte-preserving envelope
+through `ctx.runAction()` to the generated Node action. The dedicated bearer
+remains in the HTTP `Authorization` header.
 
 If the app already calls `crux.bridge(http, cruxConfig)` on its exported router,
 no router change is needed: the bridge registers the Eval routes and generation
@@ -171,8 +172,9 @@ lease heartbeat timers and rely on `LEASE_LOST` fencing plus a lease TTL sized
 for the longest expected target action.
 
 The same selected Runtime executes host-required Evals from the generated
-registry. The Node coordinator infers its non-secret connection values from
-`CONVEX_SITE_URL` and `CONVEX_DEPLOYMENT`; set the dedicated bearer only in
+registry. The Node coordinator uses `CONVEX_SITE_URL` for the HTTP endpoint and
+`CONVEX_URL` for the deployment identity; the deployed host receives the same
+identity as `CONVEX_CLOUD_URL`. Set the dedicated bearer only in
 `CRUX_EVAL_HOST_TOKEN`. Explicit `CRUX_EVAL_HOST_URL` and
 `CRUX_EVAL_HOST_DEPLOYMENT_ID` override inference. The authenticated manifest
 must match the expected deployment before any paid work begins.

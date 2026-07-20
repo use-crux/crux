@@ -16,6 +16,12 @@ export { createConvexRuntimeHandlers } from './runtime-engine/handlers'
 export type { ConvexRuntimeHandlers, CreateConvexRuntimeHandlersOptions } from './runtime-engine/handlers'
 export { convexRuntimeStore } from './runtime-engine/store'
 export type { ConvexRuntimeComponent, ConvexRuntimeStore, ConvexRuntimeStoreOptions } from './runtime-engine/store'
+export { createConvexEvalHttpAction } from './runtime-engine/eval-host/http-action'
+export type {
+  ConvexEvalHttpActionReference,
+  ConvexEvalHttpRequest,
+  ConvexEvalHttpResponse,
+} from './runtime-engine/eval-host/http-action'
 
 export interface ConvexRuntimeTarget {
   threadId?: string

@@ -249,7 +249,17 @@ describe('Convex runtime bridge', () => {
       { path: undefined, pathPrefix: '/jobs/', method: 'GET' },
       { path: undefined, pathPrefix: '/jobs/', method: 'DELETE' },
     ])
+    expect(http.routes.every(({ handler }) => isHttpAction(handler))).toBe(true)
 
     crux.dispose()
   })
 })
+
+function isHttpAction(handler: unknown): boolean {
+  return (
+    typeof handler === 'function' &&
+    (handler as { isHttp?: unknown }).isHttp === true &&
+    typeof (handler as { invokeHttpAction?: unknown }).invokeHttpAction ===
+      'function'
+  )
+}

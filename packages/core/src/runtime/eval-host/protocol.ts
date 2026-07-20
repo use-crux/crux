@@ -78,6 +78,13 @@ export function decodeSubmitEvalJob(text: string, now: Date): SubmitEvalJobV1 {
 export async function readEvalHostRequestText(
   request: Request,
 ): Promise<string> {
+  return new TextDecoder().decode(await readEvalHostRequestBytes(request));
+}
+
+/** Read one request body as bytes without buffering beyond the protocol ceiling. */
+export async function readEvalHostRequestBytes(
+  request: Request,
+): Promise<ArrayBuffer> {
   const declaredLength = Number(request.headers.get("content-length"));
   if (
     Number.isFinite(declaredLength) &&
@@ -85,7 +92,7 @@ export async function readEvalHostRequestText(
   ) {
     throw protocolError("EVAL_HOST_BODY_TOO_LARGE");
   }
-  if (request.body === null) return "";
+  if (request.body === null) return new ArrayBuffer(0);
 
   const reader = request.body.getReader();
   const chunks: Uint8Array[] = [];
@@ -116,7 +123,7 @@ export async function readEvalHostRequestText(
     bytes.set(chunk, offset);
     offset += chunk.byteLength;
   }
-  return new TextDecoder().decode(bytes);
+  return bytes.buffer;
 }
 
 export class EvalHostProtocolError extends Error {
