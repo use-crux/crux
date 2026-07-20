@@ -6,6 +6,7 @@ import (
 	"errors"
 
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/eventwire"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/workers/requestwire"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
@@ -86,12 +87,32 @@ func (w *Bundle) RunRuntimeOperation(ctx context.Context, root, operation, workI
 	return w.streamArtifact(ctx, req, projectindex.ProjectIndexArtifactRuntimeOperation)
 }
 
-// RunSetupOperation executes aggregate project setup in the TypeScript worker.
-func (w *Bundle) RunSetupOperation(ctx context.Context, root, mode string) (json.RawMessage, error) {
+// RunSetupPlanningOperation applies/checks contributors before fresh indexing.
+func (w *Bundle) RunSetupPlanningOperation(ctx context.Context, root, mode string) (json.RawMessage, error) {
 	req := requestwire.Request{
-		Method:    "runSetupOperation",
+		Method:    "runSetupPlanningOperation",
 		Root:      root,
 		SetupMode: mode,
+	}
+	return w.streamArtifact(ctx, req, projectindex.ProjectIndexArtifactSetupReport)
+}
+
+// RunSetupOperation combines the final setup report with Runtime generation.
+func (w *Bundle) RunSetupOperation(
+	ctx context.Context,
+	root string,
+	mode string,
+	setupReport json.RawMessage,
+	definitions []store.ProjectDefinition,
+	generationFindings []eventwire.RuntimeArtifactFinding,
+) (json.RawMessage, error) {
+	req := requestwire.Request{
+		Method:             "runSetupOperation",
+		Root:               root,
+		SetupMode:          mode,
+		SetupReport:        setupReport,
+		Definitions:        definitions,
+		GenerationFindings: generationFindings,
 	}
 	return w.streamArtifact(ctx, req, projectindex.ProjectIndexArtifactSetupOperation)
 }

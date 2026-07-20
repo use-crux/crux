@@ -1,4 +1,6 @@
 import type { ProjectIndexSnapshot } from '@use-crux/core/project-index'
+import type { SetupReport } from '@use-crux/core/setup'
+import type { RuntimeArtifactFinding } from '@use-crux/indexer/contracts/worker-events'
 import type { SemanticBackendSelection } from '@use-crux/indexer'
 import type {
   CheckStaticRulesInput,
@@ -51,6 +53,10 @@ export interface ProjectIndexWorkerRequest {
   readonly runtimeIncludeDetails?: boolean
   /** Aggregate setup mode requested by `crux setup`. */
   readonly setupMode?: 'check' | 'apply'
+  /** Final post-apply report reused by the Runtime generation gate. */
+  readonly setupReport?: SetupReport
+  /** Typed failure from acquiring the fresh Runtime-rich Index snapshot. */
+  readonly generationFindings?: readonly RuntimeArtifactFinding[]
   /** Native compiler protocol version supported by a manifest-loading caller. */
   readonly nativeCompilerProtocolVersion?: LoadStaticExtensionHostManifestInput['nativeCompilerProtocolVersion']
   /** Static Index evidence jobs forwarded to the TypeScript compatibility host. */

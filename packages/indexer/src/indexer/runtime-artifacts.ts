@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { dirname, join } from "node:path";
 import type { RuntimeArtifactManifest } from "@use-crux/core/runtime";
+import ts from "typescript";
 import {
   cloudflareGeneratedEntryFile,
   convexGeneratedEntryFile,
@@ -20,6 +21,7 @@ import {
   commitRuntimeArtifactPlan,
   createRuntimeArtifactPlan,
   preflightRuntimeArtifactPlan,
+  type PreparedRuntimeArtifactPlan,
   type RuntimeArtifactPlanFile,
 } from "./runtime-artifacts/generated-files";
 import { resolveRuntimeArtifactHost } from "./runtime-artifacts/host";
@@ -53,15 +55,38 @@ export async function generateRuntimeArtifacts(
   options: GenerateRuntimeArtifactsOptions,
 ): Promise<RuntimeArtifactGenerationResult> {
   try {
-    return await generateRuntimeArtifactsUnchecked(options);
+    const prepared = await prepareRuntimeArtifactsUnchecked(options);
+    const writtenFiles = await commitRuntimeArtifactPlan(prepared.plan);
+    return {
+      manifest: prepared.manifest,
+      contentHash: prepared.contentHash,
+      writtenFiles,
+    };
   } catch (error) {
     throw runtimeArtifactGenerationError(error);
   }
 }
 
-async function generateRuntimeArtifactsUnchecked(
+export interface PreparedRuntimeArtifacts {
+  readonly manifest: RuntimeArtifactManifest;
+  readonly contentHash: string;
+  readonly plan: PreparedRuntimeArtifactPlan;
+}
+
+/** Plan and preflight canonical Runtime artifacts without writing them. */
+export async function prepareRuntimeArtifacts(
   options: GenerateRuntimeArtifactsOptions,
-): Promise<RuntimeArtifactGenerationResult> {
+): Promise<PreparedRuntimeArtifacts> {
+  try {
+    return await prepareRuntimeArtifactsUnchecked(options);
+  } catch (error) {
+    throw runtimeArtifactGenerationError(error);
+  }
+}
+
+async function prepareRuntimeArtifactsUnchecked(
+  options: GenerateRuntimeArtifactsOptions,
+): Promise<PreparedRuntimeArtifacts> {
   const host = await resolveRuntimeArtifactHost(options);
   const projectConfig = await loadProjectConfig(
     options.root,
@@ -217,8 +242,9 @@ async function generateRuntimeArtifactsUnchecked(
         contents: convexHttpEntryFile(),
         ownership: "generated-marker",
         activationOrder: 40,
+        acceptExisting: isConvexRouterUsingCruxBridge,
         conflictNextStep:
-          "Keep the existing router, import `registerCruxEvalRoutes` from `./_crux/http`, call it with that router, then run `crux runtime generate` again.",
+          "Keep the existing router and register Crux with `crux.bridge(http, cruxConfig)`, or import `registerCruxEvalRoutes` from `./_crux/http` and call it with that router. Then run `crux runtime generate` again.",
       },
     );
   }
@@ -238,11 +264,45 @@ async function generateRuntimeArtifactsUnchecked(
 
   const plan = createRuntimeArtifactPlan({ root: options.root, files });
   const prepared = await preflightRuntimeArtifactPlan(plan);
-  const writtenFiles = await commitRuntimeArtifactPlan(prepared);
 
   return {
     manifest,
     contentHash,
-    writtenFiles,
+    plan: prepared,
   };
+}
+
+function isConvexRouterUsingCruxBridge(source: string): boolean {
+  const sourceFile = ts.createSourceFile(
+    "convex/http.ts",
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const bridgedRouters = new Set<string>();
+  let defaultRouter: string | undefined;
+
+  function visit(node: ts.Node): void {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      node.expression.name.text === "bridge" &&
+      node.arguments.length >= 2 &&
+      ts.isIdentifier(node.arguments[0]!)
+    ) {
+      bridgedRouters.add(node.arguments[0]!.text);
+    }
+    if (
+      ts.isExportAssignment(node) &&
+      !node.isExportEquals &&
+      ts.isIdentifier(node.expression)
+    ) {
+      defaultRouter = node.expression.text;
+    }
+    ts.forEachChild(node, visit);
+  }
+
+  visit(sourceFile);
+  return defaultRouter !== undefined && bridgedRouters.has(defaultRouter);
 }

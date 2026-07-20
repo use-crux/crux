@@ -32,6 +32,8 @@ export interface RuntimeArtifactPlanFile {
   readonly ownership: "crux-owned" | "generated-marker";
   readonly activationOrder: number;
   readonly conflictNextStep?: string;
+  /** Preserve an existing user-owned file when it already composes Crux safely. */
+  readonly acceptExisting?: (contents: string) => boolean;
 }
 
 export interface RuntimeArtifactPlan {
@@ -39,7 +41,7 @@ export interface RuntimeArtifactPlan {
   readonly files: readonly RuntimeArtifactPlanFile[];
 }
 
-interface PreparedRuntimeArtifactFile extends RuntimeArtifactPlanFile {
+export interface PreparedRuntimeArtifactFile extends RuntimeArtifactPlanFile {
   readonly file: string;
   readonly existing: string | undefined;
   readonly changed: boolean;
@@ -48,6 +50,22 @@ interface PreparedRuntimeArtifactFile extends RuntimeArtifactPlanFile {
 export interface PreparedRuntimeArtifactPlan {
   readonly root: string;
   readonly files: readonly PreparedRuntimeArtifactFile[];
+}
+
+/** Root-relative destinations whose canonical contents differ on disk. */
+export function changedRuntimeArtifactDestinations(
+  plan: PreparedRuntimeArtifactPlan,
+): readonly string[] {
+  return Object.freeze(
+    plan.files
+      .filter((file) => file.changed)
+      .sort(
+        (left, right) =>
+          left.activationOrder - right.activationOrder ||
+          compareCodepoint(left.destination, right.destination),
+      )
+      .map((file) => file.destination),
+  );
 }
 
 /** Construct and validate the complete in-memory artifact plan. */
@@ -83,7 +101,9 @@ export async function preflightRuntimeArtifactPlan(
       assertWithinRoot(plan.root, file, planned.destination);
       await assertRealPathSafe(rootRealPath, file, planned.destination);
       const existing = await readExistingFile(file);
-      if (planned.ownership === "generated-marker") {
+      const acceptedExisting =
+        existing !== undefined && planned.acceptExisting?.(existing) === true;
+      if (planned.ownership === "generated-marker" && !acceptedExisting) {
         assertGeneratedFileContentsWritable(
           file,
           existing,
@@ -95,7 +115,7 @@ export async function preflightRuntimeArtifactPlan(
           ...planned,
           file,
           existing,
-          changed: existing !== planned.contents,
+          changed: !acceptedExisting && existing !== planned.contents,
         }),
       );
     } catch (error) {

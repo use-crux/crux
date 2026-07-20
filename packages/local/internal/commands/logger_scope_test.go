@@ -105,7 +105,7 @@ func TestSetupDoesNotReplaceProcessLogger(t *testing.T) {
 	runSetupOperationForCommand = func(context.Context, string, string, commandWorkerProcess) (json.RawMessage, error) {
 		close(started)
 		<-finish
-		return json.RawMessage(`{"ok":true,"findings":[]}`), nil
+		return json.RawMessage(`{"ok":true,"setup":{"ok":true,"mode":"check","findings":[],"actions":[],"applied":[]},"generation":{"status":"current","contentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","pendingFiles":[],"changedFiles":[],"findings":[]}}`), nil
 	}
 
 	assertCommandKeepsProcessLogger(t, started, finish, func() error {

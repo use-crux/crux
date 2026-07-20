@@ -87,6 +87,13 @@ Framework integrations generate before compiling or deploying. The existing
 entry files remain normal generated project files consumed by the Convex
 workflow.
 
+An existing user-owned `convex/http.ts` remains compatible when its exported
+router already calls `crux.bridge(http, cruxConfig)`: the bridge registers the
+authenticated Runtime Eval routes and generation preserves that router
+byte-for-byte. Crux recognizes the actual call syntax rather than matching
+comments or strings. Other user-owned routers remain protected from overwrite
+and receive an explicit composition remedy.
+
 `crux runtime generate` deterministically performs that generation once. It is
 appropriate for CI, build integrations, recovery, and inspection. It is not a
 prerequisite before every `crux dev` run.

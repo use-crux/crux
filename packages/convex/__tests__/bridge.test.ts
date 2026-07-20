@@ -6,8 +6,9 @@ import { createCruxConvex } from '../src'
 import { setup } from '../src/bridge'
 
 interface CapturedRoute {
-  path: string
-  method: 'GET' | 'POST' | 'OPTIONS'
+  path?: string
+  pathPrefix?: string
+  method: 'GET' | 'POST' | 'OPTIONS' | 'DELETE'
   handler: unknown
 }
 

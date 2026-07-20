@@ -169,6 +169,8 @@ export function errorContextForMethod(method: string | undefined): ProjectIndexW
       return { kind: 'artifact', method, artifact: 'deploymentManifest' }
     case 'runRuntimeOperation':
       return { kind: 'artifact', method, artifact: 'runtimeOperation' }
+    case 'runSetupPlanningOperation':
+      return { kind: 'artifact', method, artifact: 'setupReport' }
     case 'runSetupOperation':
       return { kind: 'artifact', method, artifact: 'setupOperation' }
     case 'indexProjectSemantic':

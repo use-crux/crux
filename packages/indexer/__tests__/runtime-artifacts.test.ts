@@ -370,6 +370,54 @@ describe("runtime artifacts", () => {
     ).rejects.toMatchObject({ code: "ENOENT" });
   });
 
+  it("preserves an existing Convex router that registers the Crux bridge", async () => {
+    const root = await fixtureRoot();
+    await mkdir(join(root, "convex"), { recursive: true });
+    const router = [
+      "import { httpRouter } from 'convex/server'",
+      "import cruxConfig from '../crux.config'",
+      "import { crux } from './_lib/cruxProfile'",
+      "",
+      "const http = httpRouter()",
+      "crux.bridge(http, cruxConfig)",
+      "export default http",
+      "",
+    ].join("\n");
+    await writeFile(join(root, "convex/http.ts"), router);
+
+    const first = await generateRuntimeArtifacts({ root, host: "convex" });
+    const second = await generateRuntimeArtifacts({ root, host: "convex" });
+
+    expect(first.writtenFiles).not.toContain(join(root, "convex/http.ts"));
+    expect(first.writtenFiles).toContain(join(root, "convex/_crux/http.ts"));
+    expect(second.writtenFiles).toEqual([]);
+    await expect(readFile(join(root, "convex/http.ts"), "utf8")).resolves.toBe(
+      router,
+    );
+  });
+
+  it.each([
+    "// crux.bridge(http, cruxConfig)\nexport default {}\n",
+    "const note = 'crux.bridge(http, cruxConfig)'\nexport default {}\n",
+  ])(
+    "does not mistake bridge text for a compatible Convex router",
+    async (router) => {
+      const root = await fixtureRoot();
+      await mkdir(join(root, "convex"), { recursive: true });
+      await writeFile(join(root, "convex/http.ts"), router);
+
+      await expect(
+        generateRuntimeArtifacts({ root, host: "convex" }),
+      ).rejects.toMatchObject({
+        code: "RUNTIME_ARTIFACT_GENERATION_FAILED",
+        findings: [expect.objectContaining({ code: "ARTIFACTS_STALE" })],
+      });
+      await expect(
+        readFile(join(root, "convex/http.ts"), "utf8"),
+      ).resolves.toBe(router);
+    },
+  );
+
   it("leaves every artifact byte-identical when the final protected destination conflicts", async () => {
     const root = await fixtureRoot();
     await generateRuntimeArtifacts({ root, host: "convex" });

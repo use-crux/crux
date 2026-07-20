@@ -16,6 +16,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/output"
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/eventwire"
+	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
 type runtimeGenerateOptions struct {
@@ -26,6 +27,12 @@ type runtimeGenerateOptions struct {
 type runtimeArtifactGenerateFunc func(ctx context.Context, root string, process commandWorkerProcess) (json.RawMessage, error)
 type runtimeOperationFunc func(ctx context.Context, root, operation, workID string, process commandWorkerProcess) (json.RawMessage, error)
 type setupOperationFunc func(ctx context.Context, root, mode string, process commandWorkerProcess) (json.RawMessage, error)
+
+type setupOperationWorker interface {
+	RunSetupPlanningOperation(ctx context.Context, root, mode string) (json.RawMessage, error)
+	IndexProjectAstPatchWithResult(ctx context.Context, root, configPath, projectName string) (projectindex.ProjectAstIndexResult, error)
+	RunSetupOperation(ctx context.Context, root, mode string, setupReport json.RawMessage, definitions []store.ProjectDefinition, generationFindings []eventwire.RuntimeArtifactFinding) (json.RawMessage, error)
+}
 
 var generateRuntimeArtifactsForCommand runtimeArtifactGenerateFunc = generateRuntimeArtifactsWithWorker
 var runRuntimeOperationForCommand runtimeOperationFunc = runRuntimeOperationWithWorker
@@ -172,7 +179,60 @@ func runSetupOperationWithWorker(ctx context.Context, root, mode string, process
 		ctx, cancel = context.WithTimeout(ctx, runtimeGenerateTimeout)
 		defer cancel()
 	}
-	return worker.RunSetupOperation(ctx, root, mode)
+	return runSetupOperationWithPreparedWorker(ctx, root, mode, worker)
+}
+
+func runSetupOperationWithPreparedWorker(ctx context.Context, root, mode string, worker setupOperationWorker) (json.RawMessage, error) {
+	setupReport, err := worker.RunSetupPlanningOperation(ctx, root, mode)
+	if err != nil {
+		return nil, err
+	}
+	decoded, err := decodeSetupPlanningReport(setupReport)
+	if err != nil {
+		return nil, err
+	}
+	var definitions []store.ProjectDefinition
+	if decoded.OK {
+		astResult, err := worker.IndexProjectAstPatchWithResult(ctx, root, "", "")
+		if err != nil {
+			return worker.RunSetupOperation(
+				ctx,
+				root,
+				mode,
+				setupReport,
+				nil,
+				setupIndexFailureFindings(err),
+			)
+		}
+		definitions = projectindex.ApplyPatch(projectindex.EmptyPatchState(), astResult.Patch).Index.Definitions
+	}
+	return worker.RunSetupOperation(ctx, root, mode, setupReport, definitions, nil)
+}
+
+func setupIndexFailureFindings(err error) []eventwire.RuntimeArtifactFinding {
+	var workerErr *eventwire.WorkerEventError
+	if errors.As(err, &workerErr) && len(workerErr.Findings) > 0 {
+		return append([]eventwire.RuntimeArtifactFinding(nil), workerErr.Findings...)
+	}
+	code := "PROJECT_INDEX_FAILED"
+	reason := "Project indexing did not complete."
+	if errors.As(err, &workerErr) {
+		if workerErr.Code != "" {
+			code = workerErr.Code
+		}
+		if workerErr.Message != "" {
+			reason = workerErr.Message
+		}
+	}
+	return []eventwire.RuntimeArtifactFinding{{
+		Code:           code,
+		Category:       "internal",
+		FeatureKind:    "runtime",
+		FeatureID:      "project-index",
+		Summary:        "Crux could not inspect the project before refreshing Runtime files.",
+		Reason:         reason,
+		WhatStillWorks: "Existing generated Runtime files are unchanged.",
+	}}
 }
 
 func printRuntimeGenerateResult(io *output.IO, raw json.RawMessage) error {

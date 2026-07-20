@@ -133,8 +133,14 @@ describe('project index worker errors', () => {
           error: expect.objectContaining({
             code: 'RUNTIME_ARTIFACT_GENERATION_FAILED',
             findings: [
-              expect.objectContaining({ featureId: 'alpha', code: 'RUNTIME_EVAL_INVALID' }),
-              expect.objectContaining({ featureId: 'zeta', code: 'RUNTIME_EVAL_INVALID' }),
+              expect.objectContaining({
+                featureId: 'alpha',
+                code: 'RUNTIME_EVAL_INVALID',
+              }),
+              expect.objectContaining({
+                featureId: 'zeta',
+                code: 'RUNTIME_EVAL_INVALID',
+              }),
             ],
           }),
         }),
@@ -143,9 +149,64 @@ describe('project index worker errors', () => {
       await rm(root, { recursive: true, force: true })
     }
   }, 30_000)
+
+  it('emits the exact setup envelope with generation children kept separate', async () => {
+    const root = await mkdtemp(join(packageRoot, '.tmp-worker-setup-'))
+    try {
+      const event = await runBuiltWorker(
+        {
+          method: 'runSetupOperation',
+          protocolVersion: 2,
+          root,
+          setupMode: 'apply',
+          setupReport: {
+            ok: true,
+            mode: 'apply',
+            findings: [],
+            actions: [],
+            applied: [],
+          },
+          generationFindings: [
+            {
+              code: 'PROJECT_INDEX_FAILED',
+              category: 'internal',
+              featureKind: 'runtime',
+              featureId: 'project-index',
+              summary: 'Crux could not inspect the project.',
+              reason: 'Project indexing did not complete.',
+            },
+          ],
+        },
+        'artifact:done',
+      )
+
+      expect(event).toMatchObject({
+        artifact: 'setupOperation',
+        payload: {
+          ok: false,
+          setup: {
+            findings: [
+              expect.objectContaining({
+                contributorId: 'runtime-artifacts',
+                code: 'RUNTIME_ARTIFACT_GENERATION_FAILED',
+              }),
+            ],
+          },
+          generation: {
+            status: 'failed',
+            pendingFiles: [],
+            changedFiles: [],
+            findings: [expect.objectContaining({ code: 'PROJECT_INDEX_FAILED' })],
+          },
+        },
+      })
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  }, 30_000)
 })
 
-function runBuiltWorker(request: unknown): Promise<Record<string, unknown>> {
+function runBuiltWorker(request: unknown, eventType = 'artifact:error'): Promise<Record<string, unknown>> {
   return new Promise((resolveEvent, rejectEvent) => {
     const child = spawn(process.execPath, [builtWorker], {
       cwd: packageRoot,
@@ -169,7 +230,7 @@ function runBuiltWorker(request: unknown): Promise<Record<string, unknown>> {
         .split('\n')
         .filter(Boolean)
         .map((line) => JSON.parse(line) as Record<string, unknown>)
-        .find((candidate) => candidate.type === 'artifact:error')
+        .find((candidate) => candidate.type === eventType)
       if (!event) {
         rejectEvent(new Error(`project-indexer did not emit an artifact error: ${stderr}`))
         return

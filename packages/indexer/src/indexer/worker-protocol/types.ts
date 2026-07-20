@@ -27,6 +27,7 @@ import type {
 import type { RuntimeArtifactFinding, RuntimeArtifactGenerationResult } from '../runtime-artifacts'
 import type { RuntimeOperationResult } from '../runtime-ops'
 import type { SetupReport } from '@use-crux/core/setup'
+import type { SetupCommandResult } from '../setup-ops'
 import type { ProjectIndexFactExtractorProvenance, ProjectIndexFactProvenance } from '../fact-provenance'
 
 export type { ProjectIndexFactExtractorProvenance, ProjectIndexFactProvenance } from '../fact-provenance'
@@ -138,8 +139,10 @@ export interface ProjectIndexArtifactMap {
   readonly runtimeArtifacts: RuntimeArtifactGenerationResult
   /** Runtime operation result emitted for Crux Local CLI commands. */
   readonly runtimeOperation: RuntimeOperationResult
-  /** Aggregate project setup result emitted for `crux setup`. */
-  readonly setupOperation: SetupReport
+  /** Contributor-only setup report used before a fresh Runtime-rich Index. */
+  readonly setupReport: SetupReport
+  /** Aggregate setup and Runtime generation result emitted for `crux setup`. */
+  readonly setupOperation: SetupCommandResult
   /** Privacy-safe content-addressed Catalog projection for deployment joins. */
   readonly deploymentManifest: ProjectIndexDeploymentManifestV1
 }

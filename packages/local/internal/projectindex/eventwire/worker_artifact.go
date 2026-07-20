@@ -32,6 +32,8 @@ const (
 	ProjectIndexArtifactRuntimeOperation ProjectIndexArtifactKind = "runtimeOperation"
 	// ProjectIndexArtifactSetupOperation is an aggregate project setup result.
 	ProjectIndexArtifactSetupOperation ProjectIndexArtifactKind = "setupOperation"
+	// ProjectIndexArtifactSetupReport is the contributor report acquired before generation.
+	ProjectIndexArtifactSetupReport ProjectIndexArtifactKind = "setupReport"
 	// ProjectIndexArtifactDeploymentManifest is a privacy-safe content-addressed Catalog projection.
 	ProjectIndexArtifactDeploymentManifest ProjectIndexArtifactKind = "deploymentManifest"
 )
@@ -210,7 +212,7 @@ func (c *ProjectIndexArtifactStreamCollector) handleArtifactError(raw json.RawMe
 		return fmt.Errorf("decode artifact:error: error.message is required")
 	}
 	for index, finding := range event.Error.Findings {
-		if err := validateRuntimeArtifactFinding(finding); err != nil {
+		if err := ValidateRuntimeArtifactFinding(finding); err != nil {
 			return fmt.Errorf("decode artifact:error finding %d: %w", index, err)
 		}
 	}
@@ -227,7 +229,8 @@ func (c *ProjectIndexArtifactStreamCollector) handleArtifactError(raw json.RawMe
 	return workerError
 }
 
-func validateRuntimeArtifactFinding(finding RuntimeArtifactFinding) error {
+// ValidateRuntimeArtifactFinding checks the exact cross-language finding contract.
+func ValidateRuntimeArtifactFinding(finding RuntimeArtifactFinding) error {
 	if finding.Code == "" || finding.Summary == "" || finding.Reason == "" {
 		return fmt.Errorf("code, summary, and reason are required")
 	}

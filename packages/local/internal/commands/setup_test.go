@@ -11,6 +11,9 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/cli"
 	"github.com/use-crux/crux/packages/local/internal/domain"
 	"github.com/use-crux/crux/packages/local/internal/output"
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/eventwire"
+	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
 func TestSetupCommandRoutesModesToWorker(t *testing.T) {
@@ -35,7 +38,7 @@ func TestSetupCommandRoutesModesToWorker(t *testing.T) {
 				if mode != tc.mode {
 					t.Fatalf("mode = %q", mode)
 				}
-				return json.RawMessage(`{"ok":true,"mode":"` + mode + `","findings":[],"actions":[],"applied":[]}`), nil
+				return json.RawMessage(`{"ok":true,"setup":{"ok":true,"mode":"` + mode + `","findings":[],"actions":[],"applied":[]},"generation":{"status":"current","contentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","pendingFiles":[],"changedFiles":[],"findings":[]}}`), nil
 			}
 			cmd := NewSetupCmd(cli.NewFactoryWithStreams(streams))
 			cmd.SetArgs(append([]string{"--json"}, tc.args...))
@@ -52,8 +55,12 @@ func TestSetupCommandRoutesModesToWorker(t *testing.T) {
 func TestSetupHumanOutputGroupsContributorsAndShowsRemediation(t *testing.T) {
 	var out, errOut bytes.Buffer
 	streams := output.NewTestIO(&out, &errOut, output.TestIOOptions{ColorEnabled: false})
-	report := setupReport{OK: false}
-	report.Findings = append(report.Findings,
+	report := setupCommandResult{
+		OK:         false,
+		Setup:      setupReport{OK: false, Mode: "check", Actions: []setupAction{}, Applied: []setupApplied{}},
+		Generation: setupGeneration{Status: "blocked", PendingFiles: []string{}, ChangedFiles: []string{}, Findings: []eventwire.RuntimeArtifactFinding{}},
+	}
+	report.Setup.Findings = append(report.Setup.Findings,
 		setupFinding{
 			ContributorID: "runtime",
 			Code:          "TABLE_MISSING",
@@ -90,7 +97,7 @@ func TestSetupReturnsExitOneAfterWritingAnUnhealthyReport(t *testing.T) {
 	old := runSetupOperationForCommand
 	defer func() { runSetupOperationForCommand = old }()
 	runSetupOperationForCommand = func(context.Context, string, string, commandWorkerProcess) (json.RawMessage, error) {
-		return json.RawMessage(`{"ok":false,"mode":"check","findings":[{"contributorId":"runtime","code":"TABLE_MISSING","resource":"work","severity":"error","message":"missing"}],"actions":[],"applied":[]}`), nil
+		return json.RawMessage(`{"ok":false,"setup":{"ok":false,"mode":"check","findings":[{"contributorId":"runtime","code":"TABLE_MISSING","resource":"work","severity":"error","message":"missing"}],"actions":[],"applied":[]},"generation":{"status":"blocked","pendingFiles":[],"changedFiles":[],"findings":[]}}`), nil
 	}
 
 	var out, errOut strings.Builder
@@ -116,4 +123,130 @@ func TestSetupRejectsCheckAndApply(t *testing.T) {
 	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "at most one") {
 		t.Fatalf("error = %v", err)
 	}
+}
+
+func TestDecodeSetupCommandResultEnforcesStatusMatrixAndPaths(t *testing.T) {
+	valid := `{"ok":false,"setup":{"ok":true,"mode":"check","findings":[{"contributorId":"runtime-artifacts","code":"RUNTIME_ARTIFACTS_STALE","resource":"generated-runtime-files","severity":"warning","message":"stale"}],"actions":[],"applied":[]},"generation":{"status":"would-generate","contentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","pendingFiles":[".crux/generated/runtime/manifest.json"],"changedFiles":[],"findings":[]}}`
+	if _, err := decodeSetupCommandResult(json.RawMessage(valid)); err != nil {
+		t.Fatalf("valid result: %v", err)
+	}
+
+	for name, raw := range map[string]string{
+		"unknown field":        strings.Replace(valid, `"ok":false`, `"ok":false,"future":true`, 1),
+		"apply would-generate": strings.Replace(valid, `"mode":"check"`, `"mode":"apply"`, 1),
+		"unsafe path":          strings.Replace(valid, `.crux/generated/runtime/manifest.json`, `..\\manifest.json`, 1),
+		"missing arrays":       `{"ok":false,"setup":{"ok":false,"mode":"check","findings":[{"contributorId":"x","code":"X","resource":"x","severity":"error","message":"x"}],"actions":[],"applied":[]},"generation":{"status":"blocked"}}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := decodeSetupCommandResult(json.RawMessage(raw)); err == nil {
+				t.Fatalf("decode succeeded for malformed result: %s", raw)
+			}
+		})
+	}
+}
+
+func TestSetupHumanOutputRendersGenerationFindingsWithoutJSON(t *testing.T) {
+	var out, errOut strings.Builder
+	streams := output.NewTestIO(&out, &errOut, output.TestIOOptions{})
+	result := setupCommandResult{
+		OK: false,
+		Setup: setupReport{
+			OK: false, Mode: "apply", Actions: []setupAction{}, Applied: []setupApplied{},
+			Findings: []setupFinding{{ContributorID: "runtime-artifacts", Code: "RUNTIME_ARTIFACT_GENERATION_FAILED", Resource: "generated-runtime-files", Severity: "error", Message: "Runtime files could not be prepared."}},
+		},
+		Generation: setupGeneration{
+			Status: "failed", PendingFiles: []string{}, ChangedFiles: []string{},
+			Findings: []eventwire.RuntimeArtifactFinding{{Code: "TARGET_NOT_EXPORTED", Category: "authored", Summary: "Target review is not exported.", Reason: "The named export is missing.", Remediation: "Export review and save the file."}},
+		},
+	}
+
+	if err := printSetupResult(streams, result); err != nil {
+		t.Fatal(err)
+	}
+	text := out.String()
+	for _, want := range []string{"Runtime files could not be prepared (1 issue)", "Target review is not exported", "Why: The named export is missing", "Fix: Export review"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("output missing %q:\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, `"findings"`) {
+		t.Fatalf("human output exposed JSON:\n%s", text)
+	}
+}
+
+func TestSetupAppliesThenIndexesBeforeFinalGeneration(t *testing.T) {
+	report := json.RawMessage(`{"ok":true,"mode":"apply","findings":[],"actions":[],"applied":[]}`)
+	worker := &recordingSetupOperationWorker{planning: report}
+
+	if _, err := runSetupOperationWithPreparedWorker(context.Background(), "/repo", "apply", worker); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := strings.Join(worker.order, ","), "setup,index,generation"; got != want {
+		t.Fatalf("order = %q, want %q", got, want)
+	}
+	if string(worker.finalReport) != string(report) || len(worker.finalDefinitions) != 1 || worker.finalDefinitions[0].ID != "flow:fresh" {
+		t.Fatalf("final input report=%s definitions=%#v", worker.finalReport, worker.finalDefinitions)
+	}
+	if len(worker.finalFindings) != 0 {
+		t.Fatalf("generation findings = %#v, want none", worker.finalFindings)
+	}
+}
+
+func TestSetupTurnsFreshIndexFailureIntoGenerationFinding(t *testing.T) {
+	worker := &recordingSetupOperationWorker{
+		planning: json.RawMessage(`{"ok":true,"mode":"check","findings":[],"actions":[],"applied":[]}`),
+		indexErr: errors.New("private compiler detail"),
+	}
+
+	if _, err := runSetupOperationWithPreparedWorker(context.Background(), "/repo", "check", worker); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := strings.Join(worker.order, ","), "setup,index,generation"; got != want {
+		t.Fatalf("order = %q, want %q", got, want)
+	}
+	if len(worker.finalDefinitions) != 0 || len(worker.finalFindings) != 1 {
+		t.Fatalf("definitions=%#v findings=%#v", worker.finalDefinitions, worker.finalFindings)
+	}
+	finding := worker.finalFindings[0]
+	if finding.Code != "PROJECT_INDEX_FAILED" || finding.Category != "internal" || strings.Contains(finding.Reason, "private compiler detail") || finding.Remediation != "" {
+		t.Fatalf("finding = %#v, want non-blaming internal index failure", finding)
+	}
+}
+
+type recordingSetupOperationWorker struct {
+	planning         json.RawMessage
+	indexErr         error
+	order            []string
+	finalReport      json.RawMessage
+	finalDefinitions []store.ProjectDefinition
+	finalFindings    []eventwire.RuntimeArtifactFinding
+}
+
+func (w *recordingSetupOperationWorker) RunSetupPlanningOperation(context.Context, string, string) (json.RawMessage, error) {
+	w.order = append(w.order, "setup")
+	return w.planning, nil
+}
+
+func (w *recordingSetupOperationWorker) IndexProjectAstPatchWithResult(context.Context, string, string, string) (projectindex.ProjectAstIndexResult, error) {
+	w.order = append(w.order, "index")
+	if w.indexErr != nil {
+		return projectindex.ProjectAstIndexResult{}, w.indexErr
+	}
+	return projectindex.ProjectAstIndexResult{Patch: projectindex.IndexPatch{
+		SchemaVersion: 1,
+		Phase:         "ast",
+		Project:       store.ProjectIdentity{Root: "/repo"},
+		Status:        "ok",
+		Facts: projectindex.IndexPatchFacts{Definitions: []store.ProjectDefinition{{
+			ID: "flow:fresh", Kind: "flow", Name: "fresh",
+		}}},
+	}}, nil
+}
+
+func (w *recordingSetupOperationWorker) RunSetupOperation(_ context.Context, _ string, _ string, setupReport json.RawMessage, definitions []store.ProjectDefinition, findings []eventwire.RuntimeArtifactFinding) (json.RawMessage, error) {
+	w.order = append(w.order, "generation")
+	w.finalReport = append(json.RawMessage(nil), setupReport...)
+	w.finalDefinitions = append([]store.ProjectDefinition(nil), definitions...)
+	w.finalFindings = append([]eventwire.RuntimeArtifactFinding(nil), findings...)
+	return json.RawMessage(`{"ok":true}`), nil
 }

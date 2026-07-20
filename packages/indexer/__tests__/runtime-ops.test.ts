@@ -62,20 +62,23 @@ describe("runtime operations", () => {
     await expect(
       runSetupOperation({ root, mode: "check" }),
     ).resolves.toMatchObject({
-      mode: "check",
       ok: false,
+      setup: { mode: "check", ok: false },
+      generation: { status: "blocked" },
     });
     await expect(
       runSetupOperation({ root, mode: "apply" }),
     ).resolves.toMatchObject({
-      mode: "apply",
       ok: true,
+      setup: { mode: "apply", ok: true },
+      generation: { status: "generated" },
     });
     await expect(
       runSetupOperation({ root, mode: "check" }),
     ).resolves.toMatchObject({
-      mode: "check",
       ok: true,
+      setup: { mode: "check", ok: true },
+      generation: { status: "current" },
     });
 
     const seedStore = postgres({
@@ -234,8 +237,9 @@ describe("runtime operations", () => {
     await expect(
       runSetupOperation({ root, mode: "apply" }),
     ).resolves.toMatchObject({
-      mode: "apply",
       ok: true,
+      setup: { mode: "apply", ok: true },
+      generation: { status: "generated" },
     });
 
     const seedStore = postgres({

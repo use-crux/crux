@@ -19,6 +19,7 @@ const (
 	ProjectIndexArtifactRuntimeArtifacts             = eventwire.ProjectIndexArtifactRuntimeArtifacts
 	ProjectIndexArtifactRuntimeOperation             = eventwire.ProjectIndexArtifactRuntimeOperation
 	ProjectIndexArtifactSetupOperation               = eventwire.ProjectIndexArtifactSetupOperation
+	ProjectIndexArtifactSetupReport                  = eventwire.ProjectIndexArtifactSetupReport
 	ProjectIndexArtifactDeploymentManifest           = eventwire.ProjectIndexArtifactDeploymentManifest
 )
 

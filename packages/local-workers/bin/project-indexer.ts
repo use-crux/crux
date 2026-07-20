@@ -15,6 +15,7 @@ import {
   resolveProjectModel,
   runRuntimeOperation,
   runSetupOperation,
+  runSetupPlanningOperation,
 } from '@use-crux/indexer/host'
 import { isProjectModelResolutionMode, type ProjectModelResolutionMode } from '@use-crux/core/project-index'
 import {
@@ -231,8 +232,24 @@ async function runAssembledRequest(
         const report = await runSetupOperation({
           root: req.root,
           mode: req.setupMode,
+          setup: req.setupReport,
+          definitions: req.definitions,
+          generationFindings: req.generationFindings,
         })
         await writeArtifactEvent(writeResponse, 'setupOperation', report, req.root)
+        break
+      }
+      case 'runSetupPlanningOperation': {
+        if (!req.root) throw new Error('runSetupPlanningOperation requires root')
+        if (req.setupMode !== 'check' && req.setupMode !== 'apply') {
+          throw new Error('runSetupPlanningOperation requires setupMode check or apply')
+        }
+        assertProjectIndexWorkerProtocolV2(req.protocolVersion)
+        const report = await runSetupPlanningOperation({
+          root: req.root,
+          mode: req.setupMode,
+        })
+        await writeArtifactEvent(writeResponse, 'setupReport', report, req.root)
         break
       }
       default:

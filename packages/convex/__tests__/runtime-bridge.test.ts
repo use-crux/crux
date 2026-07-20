@@ -16,8 +16,9 @@ interface TenantCtx extends ConvexCtxPort {
 }
 
 interface CapturedRoute {
-  path: string
-  method: 'GET' | 'POST' | 'OPTIONS'
+  path?: string
+  pathPrefix?: string
+  method: 'GET' | 'POST' | 'OPTIONS' | 'DELETE'
   handler: unknown
 }
 
@@ -220,6 +221,34 @@ describe('Convex runtime bridge', () => {
       },
     })
     expect(createStore).toHaveBeenCalledTimes(1)
+
+    crux.dispose()
+  })
+
+  it('registers generated Runtime Eval endpoints on an existing app router', () => {
+    const crux = config({})
+    const http = new FakeHttpRouter()
+    const bridge = createConvexRuntimeBridge<TenantCtx>({
+      component: { marker: 'crux' } as never,
+    })
+
+    bridge.bridge(http, crux)
+
+    expect(
+      http.routes.map(({ path, pathPrefix, method }) => ({
+        path,
+        pathPrefix,
+        method,
+      })),
+    ).toEqual([
+      { path: '/crux/bridge', pathPrefix: undefined, method: 'GET' },
+      { path: '/crux/bridge', pathPrefix: undefined, method: 'POST' },
+      { path: '/crux/bridge', pathPrefix: undefined, method: 'OPTIONS' },
+      { path: '/manifest', pathPrefix: undefined, method: 'GET' },
+      { path: '/jobs', pathPrefix: undefined, method: 'POST' },
+      { path: undefined, pathPrefix: '/jobs/', method: 'GET' },
+      { path: undefined, pathPrefix: '/jobs/', method: 'DELETE' },
+    ])
 
     crux.dispose()
   })

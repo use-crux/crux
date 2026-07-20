@@ -27,7 +27,19 @@ import {
 } from '@use-crux/core/runtime-bridge'
 
 export interface CruxConvexBridgeHttpRouter {
-  route(definition: { path: string; method: 'GET' | 'POST' | 'OPTIONS'; handler: PublicHttpAction }): void
+  route(
+    definition:
+      | {
+          path: string
+          method: 'GET' | 'POST' | 'OPTIONS' | 'DELETE'
+          handler: PublicHttpAction
+        }
+      | {
+          pathPrefix: string
+          method: 'GET' | 'POST' | 'OPTIONS' | 'DELETE'
+          handler: PublicHttpAction
+        },
+  ): void
 }
 
 export interface CruxConvexBridgeSetupOptions {
