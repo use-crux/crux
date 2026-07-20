@@ -20,7 +20,7 @@ func TestNPMWrapperSourceIsExecutable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stat npm wrapper: %v", err)
 	}
-	if wrapperInfo.Mode().Perm()&0o111 == 0 {
+	if wrapperInfo.Mode().Perm()&0o100 == 0 {
 		t.Fatalf("npm wrapper mode = %04o, want executable", wrapperInfo.Mode().Perm())
 	}
 }
