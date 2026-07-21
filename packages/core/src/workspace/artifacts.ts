@@ -14,6 +14,7 @@ import { mountForPath, normalizePath } from "./path";
 import { fileKey, getRequiredRecord, listFileRecords } from "./store";
 import { getVersionRecord } from "./version-store";
 import { workspaceSetOptions } from "./limits";
+import { withWorkspaceMutationLock } from "./mutation-coordinator";
 import { assertWorkspaceMountIsLocal } from "./virtual-source";
 import {
   shouldSuppressWorkspaceChangeEvents,
@@ -103,47 +104,56 @@ export function createWorkspaceArtifactOps(
         namespace,
         path,
       },
-      async () => {
-        const normalized = normalizePath(path);
-        const mount = mountForPath(normalized, config.mounts, "write");
-        assertWorkspaceMountIsLocal(mount, "finalize");
-        const current = await getRequiredRecord(
-          config.store,
-          config.workspaceId,
-          namespace,
-          normalized,
-        );
-        const kind = options?.kind ?? current.kind;
-        const finalized: WorkspaceFileRecord = {
-          ...current,
-          status: "final",
-          ...(kind !== undefined ? { kind } : {}),
-          // Pin the current revision as the published version.
-          finalVersion: current.headVersion ?? 1,
-          updatedAt: Date.now(),
-        };
-        await config.store.put(
-          fileKey(config.workspaceId, namespace, normalized),
-          finalized as unknown as JsonObject,
-          workspaceSetOptions(config.store, config.retention),
-        );
-        if (!shouldSuppressWorkspaceChangeEvents(options)) {
-          await config.emitChange?.({
-            type: "update",
-            workspaceId: config.workspaceId,
-            namespace,
-            path: normalized,
-            at: finalized.updatedAt,
-          });
-        }
-        return resolveArtifact({
-          record: finalized,
-          store: config.store,
-          workspaceId: config.workspaceId,
-          namespace,
-        });
-      },
+      () =>
+        withWorkspaceMutationLock(config.workspaceId, namespace, () =>
+          finalizeForNamespaceUnlocked(namespace, path, options),
+        ),
     );
+  }
+
+  async function finalizeForNamespaceUnlocked(
+    namespace: string,
+    path: string,
+    options?: WorkspaceFinalizeOptions,
+  ): Promise<WorkspaceArtifact> {
+    const normalized = normalizePath(path);
+    const mount = mountForPath(normalized, config.mounts, "write");
+    assertWorkspaceMountIsLocal(mount, "finalize");
+    const current = await getRequiredRecord(
+      config.store,
+      config.workspaceId,
+      namespace,
+      normalized,
+    );
+    const kind = options?.kind ?? current.kind;
+    const finalized: WorkspaceFileRecord = {
+      ...current,
+      status: "final",
+      ...(kind !== undefined ? { kind } : {}),
+      // Pin the current revision as the published version.
+      finalVersion: current.headVersion ?? 1,
+      updatedAt: Date.now(),
+    };
+    await config.store.put(
+      fileKey(config.workspaceId, namespace, normalized),
+      finalized as unknown as JsonObject,
+      workspaceSetOptions(config.store, config.retention),
+    );
+    if (!shouldSuppressWorkspaceChangeEvents(options)) {
+      await config.emitChange?.({
+        type: "update",
+        workspaceId: config.workspaceId,
+        namespace,
+        path: normalized,
+        at: finalized.updatedAt,
+      });
+    }
+    return resolveArtifact({
+      record: finalized,
+      store: config.store,
+      workspaceId: config.workspaceId,
+      namespace,
+    });
   }
 
   return { artifacts, finalize };
@@ -174,8 +184,27 @@ export async function resolveArtifact(input: {
   readonly workspaceId: string;
   readonly namespace: string;
 }): Promise<WorkspaceArtifact> {
+  const record = await resolvePublishedArtifactRecord(input);
+  return recordToArtifact(record, {
+    workspaceId: input.workspaceId,
+    namespace: input.namespace,
+  });
+}
+
+/**
+ * Resolve the observable published file record for a final artifact.
+ *
+ * Pinned content fields come from retained version history while lifecycle
+ * fields come from HEAD. A missing historical pin intentionally falls back to
+ * the original HEAD record, matching the public artifact projection.
+ */
+export async function resolvePublishedArtifactRecord(input: {
+  readonly record: WorkspaceFileRecord;
+  readonly store: RecordStore;
+  readonly workspaceId: string;
+  readonly namespace: string;
+}): Promise<WorkspaceFileRecord> {
   const { record, store, workspaceId, namespace } = input;
-  const scope = { workspaceId, namespace };
   const headVersion = record.headVersion ?? 1;
   if (
     record.status === "final" &&
@@ -191,21 +220,25 @@ export async function resolveArtifact(input: {
     );
     if (pinned) {
       // Pinned content fields come from the snapshot; lifecycle fields from HEAD.
-      return recordToArtifact(
-        {
-          ...pinned.snapshot,
-          createdAt: record.createdAt,
-          updatedAt: record.updatedAt,
-          status: "final",
-          kind: record.kind,
-          producedBy: record.producedBy,
-          finalVersion: record.finalVersion,
-        },
-        scope,
-      );
+      const {
+        kind: _pinnedKind,
+        producedBy: _pinnedProvenance,
+        ...pinnedContent
+      } = pinned.snapshot;
+      return {
+        ...pinnedContent,
+        createdAt: record.createdAt,
+        updatedAt: record.updatedAt,
+        status: "final",
+        ...(record.kind !== undefined ? { kind: record.kind } : {}),
+        ...(record.producedBy !== undefined
+          ? { producedBy: record.producedBy }
+          : {}),
+        finalVersion: record.finalVersion,
+      };
     }
   }
-  return recordToArtifact(record, scope);
+  return record;
 }
 
 /** Convert a stored workspace file into its artifact projection. */

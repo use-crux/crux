@@ -51,6 +51,7 @@ import type {
   WorkspaceVersion,
   WorkspaceVersioning,
 } from "./version-types";
+import type { WorkspaceSnapshotOperations } from "./snapshot/types";
 import type { WorkspaceRetrieverMountSource } from "./retriever-source-types";
 import type {
   WorkspaceWatchHandle,
@@ -87,6 +88,15 @@ export type {
   WorkspaceVersioning,
   WorkspaceVersionOperation,
 } from "./version-types";
+export type {
+  WorkspaceSnapshotErrorCode,
+  WorkspaceSnapshotListOptions,
+  WorkspaceSnapshotOperations,
+  WorkspaceSnapshotOptions,
+  WorkspaceSnapshotPage,
+  WorkspaceSnapshotRef,
+  WorkspaceSnapshotRestoreResult,
+} from "./snapshot/types";
 export type {
   WorkspaceChangeEvent,
   WorkspaceChangeType,
@@ -582,6 +592,8 @@ export interface Workspace<
     path: string,
     options?: WorkspaceFinalizeOptions,
   ): Promise<WorkspaceArtifact>;
+  /** Materialized exact-tree snapshot operations bound to this Workspace. */
+  readonly snapshot: WorkspaceSnapshotOperations;
   /**
    * Commit a coherent set of workspace mutations as one unit.
    *

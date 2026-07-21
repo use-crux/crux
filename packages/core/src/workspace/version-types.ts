@@ -1,16 +1,18 @@
 /**
  * Type contracts for the workspace versioning & history dimension.
  *
- * Every content mutation (`write` / `edit` / `append` / `undo`) appends an
- * immutable {@link WorkspaceVersionRecord} snapshot, giving each file a
- * newest-first {@link WorkspaceVersion} history that backs read-at-version,
- * {@link WorkspaceDiff}, and `undo`. The public projection types are exported
- * from `./types`; the persisted record and schema constant are internal.
+ * Every content mutation (`write` / `edit` / `append` / `undo` / `restore`)
+ * appends an immutable {@link WorkspaceVersionRecord} snapshot, giving each
+ * file a newest-first {@link WorkspaceVersion} history that backs
+ * read-at-version, {@link WorkspaceDiff}, and `undo`. The public projection
+ * types are exported from `./types`; the persisted record and schema constant
+ * are internal.
  *
  * @module
  */
 
 import type { JsonObject } from "../storage";
+import type { WorkspaceSnapshotOperations } from "./snapshot/types";
 import type { WorkspaceFileRecord, WorkspaceNamespaceOption } from "./types";
 
 /** Persisted schema version for a {@link WorkspaceVersionRecord}. */
@@ -24,8 +26,16 @@ export const VERSION_RECORD_SCHEMA = 1;
  * - `append` — an {@link Workspace.append}.
  * - `undo` — a restore appended by {@link Workspace.undo}; history is never
  *   rewritten, so reverting a change adds a new version rather than dropping one.
+ * - `restore` — a new version appended by
+ *   {@link WorkspaceSnapshotOperations.restore}; snapshot restore also preserves
+ *   history rather than rewinding it.
  */
-export type WorkspaceVersionOperation = "write" | "edit" | "append" | "undo";
+export type WorkspaceVersionOperation =
+  | "write"
+  | "edit"
+  | "append"
+  | "undo"
+  | "restore";
 
 /**
  * Versioning & retention policy for a workspace.

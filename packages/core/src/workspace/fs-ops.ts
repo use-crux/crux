@@ -35,11 +35,8 @@ import {
   type SourceBackedMount,
   statWorkspaceMountSource,
 } from "./virtual-source";
-import {
-  assertWorkspaceWriteAllowed,
-  withWorkspaceWriteLock,
-  workspaceSetOptions,
-} from "./limits";
+import { assertWorkspaceWriteAllowed, workspaceSetOptions } from "./limits";
+import { withWorkspaceMutationLock } from "./mutation-coordinator";
 import {
   shouldSuppressWorkspaceChangeEvents,
   type WorkspaceChangeEmitter,
@@ -178,7 +175,7 @@ export function createWorkspaceFilesystemOps(
     return instrument(
       { workspaceId: config.workspaceId, operation: "append", namespace, path },
       async () => {
-        return withWorkspaceWriteLock(
+        return withWorkspaceMutationLock(
           config.workspaceId,
           namespace,
           async () => {
@@ -321,7 +318,7 @@ export function createWorkspaceFilesystemOps(
         assertWorkspaceMountIsLocal(fromMount, operation);
         const toMount = mountForPath(toPath, config.mounts, "write");
         assertWorkspaceMountIsLocal(toMount, operation);
-        return withWorkspaceWriteLock(
+        return withWorkspaceMutationLock(
           config.workspaceId,
           namespace,
           async () => {
@@ -422,7 +419,7 @@ export function createWorkspaceFilesystemOps(
           ? toMount
           : undefined;
         if (!destinationMount) assertWorkspaceMountIsLocal(toMount, "copy");
-        return withWorkspaceWriteLock(
+        return withWorkspaceMutationLock(
           config.workspaceId,
           namespace,
           async () => {

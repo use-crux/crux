@@ -32,8 +32,6 @@ export interface WorkspaceRetention {
   readonly ttlMs?: number;
 }
 
-const namespaceLocks = new Map<string, Promise<void>>();
-
 /** Return store write options for the configured retention policy. */
 export function workspaceSetOptions(
   store: RecordStore,
@@ -43,31 +41,6 @@ export function workspaceSetOptions(
   if (ttl === undefined || ttl <= 0 || store.capabilities().ttl === false)
     return undefined;
   return { ttlMs: ttl };
-}
-
-/** Serialize quota validation and persistence per workspace namespace. */
-export async function withWorkspaceWriteLock<T>(
-  workspaceId: string,
-  namespace: string,
-  run: () => Promise<T>,
-): Promise<T> {
-  const key = `${workspaceId}\0${namespace}`;
-  const previous = namespaceLocks.get(key) ?? Promise.resolve();
-  let release: () => void = () => {};
-  const pending = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  const current = previous.catch(() => undefined).then(() => pending);
-  namespaceLocks.set(key, current);
-  await previous.catch(() => undefined);
-  try {
-    return await run();
-  } finally {
-    release();
-    if (namespaceLocks.get(key) === current) {
-      namespaceLocks.delete(key);
-    }
-  }
 }
 
 /** Enforce configured byte limits before a workspace record is persisted. */

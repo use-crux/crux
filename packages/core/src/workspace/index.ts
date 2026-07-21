@@ -9,6 +9,7 @@
  */
 
 export { workspace } from "./define-workspace";
+export { WorkspaceSnapshotError } from "./snapshot/types";
 export { retrieverWorkspaceMountSource } from "./retriever-source";
 export { workspaceToolNames } from "./tool-io";
 
@@ -78,6 +79,13 @@ export type {
   WorkspaceVersion,
   WorkspaceVersioning,
   WorkspaceVersionOperation,
+  WorkspaceSnapshotErrorCode,
+  WorkspaceSnapshotListOptions,
+  WorkspaceSnapshotOperations,
+  WorkspaceSnapshotOptions,
+  WorkspaceSnapshotPage,
+  WorkspaceSnapshotRef,
+  WorkspaceSnapshotRestoreResult,
 } from "./types";
 export type {
   WorkspaceChangeEvent,

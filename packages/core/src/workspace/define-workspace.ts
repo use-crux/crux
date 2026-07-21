@@ -31,6 +31,7 @@ import { createWorkspaceFilesystemOps } from "./fs-ops";
 import { createWorkspaceArtifactOps } from "./artifacts";
 import { createWorkspaceContextAdapters } from "./context-adapters";
 import { createWorkspaceTransaction } from "./transaction";
+import { createWorkspaceSnapshotOperations } from "./snapshot/ops";
 import {
   createWorkspaceChangeEmitter,
   createWorkspaceWatchHandle,
@@ -48,11 +49,8 @@ import {
   deleteWorkspaceMountSource,
   writeWorkspaceMountSource,
 } from "./source-write";
-import {
-  assertWorkspaceWriteAllowed,
-  withWorkspaceWriteLock,
-  workspaceSetOptions,
-} from "./limits";
+import { assertWorkspaceWriteAllowed, workspaceSetOptions } from "./limits";
+import { withWorkspaceMutationLock } from "./mutation-coordinator";
 import {
   DEFAULT_INLINE_TEXT_BYTES,
   type Workspace,
@@ -255,7 +253,7 @@ export function workspace<const Config extends WorkspaceConfig>(
     return instrument(
       { workspaceId: config.id, operation: "write", namespace, path },
       async () => {
-        return withWorkspaceWriteLock(config.id, namespace, async () => {
+        return withWorkspaceMutationLock(config.id, namespace, async () => {
           const normalized = normalizePath(path);
           const mount = mountForPath(normalized, mounts, "write");
           if (hasWorkspaceMountSource(mount)) {
@@ -422,43 +420,51 @@ export function workspace<const Config extends WorkspaceConfig>(
   ): Promise<void> {
     await instrument(
       { workspaceId: config.id, operation: "delete", namespace, path },
-      async () => {
-        const normalized = normalizePath(path);
-        const mount = mountForPath(normalized, mounts, "write");
-        if (hasWorkspaceMountSource(mount)) {
-          const shouldEmitChange =
-            !shouldSuppressWorkspaceChangeEvents(options);
-          const existed = shouldEmitChange
-            ? await existsWorkspaceMountSource(mount, normalized)
-            : false;
-          await deleteWorkspaceMountSource(mount, normalized);
-          if (shouldEmitChange && existed) {
-            await emitChange({
-              type: "delete",
-              workspaceId: config.id,
-              namespace,
-              path: normalized,
-            });
-          }
-          return;
-        }
-        assertWorkspaceMountIsLocal(mount, "delete");
-        const record = await getRecord(store, config.id, namespace, normalized);
-        await store.delete(fileKey(config.id, namespace, normalized));
-        await purgeVersions(store, assets, config.id, namespace, normalized, {
-          deleteAsset: options?.deleteAsset,
-          currentAssetUri: record?.assetRef?.uri,
-        });
-        if (record && !shouldSuppressWorkspaceChangeEvents(options)) {
-          await emitChange({
-            type: "delete",
-            workspaceId: config.id,
-            namespace,
-            path: normalized,
-          });
-        }
-      },
+      () =>
+        withWorkspaceMutationLock(config.id, namespace, () =>
+          removeForNamespaceUnlocked(namespace, path, options),
+        ),
     );
+  }
+
+  async function removeForNamespaceUnlocked(
+    namespace: string,
+    path: string,
+    options?: WorkspaceDeleteOptions,
+  ): Promise<void> {
+    const normalized = normalizePath(path);
+    const mount = mountForPath(normalized, mounts, "write");
+    if (hasWorkspaceMountSource(mount)) {
+      const shouldEmitChange = !shouldSuppressWorkspaceChangeEvents(options);
+      const existed = shouldEmitChange
+        ? await existsWorkspaceMountSource(mount, normalized)
+        : false;
+      await deleteWorkspaceMountSource(mount, normalized);
+      if (shouldEmitChange && existed) {
+        await emitChange({
+          type: "delete",
+          workspaceId: config.id,
+          namespace,
+          path: normalized,
+        });
+      }
+      return;
+    }
+    assertWorkspaceMountIsLocal(mount, "delete");
+    const record = await getRecord(store, config.id, namespace, normalized);
+    await store.delete(fileKey(config.id, namespace, normalized));
+    await purgeVersions(store, assets, config.id, namespace, normalized, {
+      deleteAsset: options?.deleteAsset,
+      currentAssetUri: record?.assetRef?.uri,
+    });
+    if (record && !shouldSuppressWorkspaceChangeEvents(options)) {
+      await emitChange({
+        type: "delete",
+        workspaceId: config.id,
+        namespace,
+        path: normalized,
+      });
+    }
   }
 
   function watch(options?: WorkspaceWatchOptions): WorkspaceWatchHandle;
@@ -517,6 +523,13 @@ export function workspace<const Config extends WorkspaceConfig>(
     retention: config.retention,
     resolveNamespace,
     emitChange,
+  });
+  const snapshot = createWorkspaceSnapshotOperations({
+    workspaceId: config.id,
+    store,
+    assets,
+    mounts,
+    resolveNamespace,
   });
   const transaction = createWorkspaceTransaction({
     workspaceId: config.id,
@@ -590,6 +603,7 @@ export function workspace<const Config extends WorkspaceConfig>(
     undo: versionOps.undo,
     artifacts: artifactOps.artifacts,
     finalize: artifactOps.finalize,
+    snapshot,
     transaction,
     asContext: contextAdapters.asContext,
     asTools: <
