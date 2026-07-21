@@ -5,12 +5,12 @@
   "fileSelection": "staticDefinitionFiles(root)",
   "projection": "canonicalStaticExtractionJson(definitions,relations,diagnostics,dependencies)",
   "totals": {
-    "files": 764,
+    "files": 762,
     "definitions": 88,
     "relations": 7,
     "diagnostics": 25,
-    "dependencies": 1457,
-    "canonicalBytes": 214284
+    "dependencies": 1444,
+    "canonicalBytes": 213360
   },
   "files": [
     {
@@ -5568,12 +5568,12 @@
     },
     {
       "file": "packages/indexer/src/indexer/static-index/extension-host/evidence/host.ts",
-      "sha256": "d46a9cc8ec1f1b4c64b6cad81fb856b032d8ce2d66ffb743372b894110c6c97d",
-      "bytes": 294,
+      "sha256": "f7c63bf7c2545a264d87ee5231b7949b51ab614649abcf257df8bf5d27419b36",
+      "bytes": 366,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 3
+      "dependencies": 4
     },
     {
       "file": "packages/indexer/src/indexer/static-index/extension-host/evidence/types.ts",
