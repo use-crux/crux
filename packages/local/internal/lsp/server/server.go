@@ -3,16 +3,11 @@ package server
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"io"
-	"net/url"
-	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/lsp/jsonrpc"
-	"github.com/use-crux/crux/packages/local/internal/lsp/mapping"
 	"github.com/use-crux/crux/packages/local/internal/lsp/protocol"
 )
 
@@ -41,6 +36,7 @@ type Server struct {
 	scopeCancel context.CancelFunc
 	outbound    chan protocol.Notification
 	settings    Settings
+	hoverFormat protocol.MarkupKind
 	workspace   workspaceController
 	documents   map[protocol.DocumentURI]documentStatus
 }
@@ -59,10 +55,11 @@ func New(options Options) *Server {
 		options.Now = time.Now
 	}
 	return &Server{
-		options:   options,
-		outbound:  make(chan protocol.Notification, 256),
-		settings:  defaultSettings(options.Port),
-		documents: make(map[protocol.DocumentURI]documentStatus),
+		options:     options,
+		outbound:    make(chan protocol.Notification, 256),
+		settings:    defaultSettings(options.Port),
+		hoverFormat: protocol.MarkupKindPlainText,
+		documents:   make(map[protocol.DocumentURI]documentStatus),
 	}
 }
 
@@ -125,6 +122,8 @@ func (s *Server) Handle(ctx context.Context, request protocol.Request) jsonrpc.H
 		return jsonrpc.HandlerResult{Stop: true}
 	case protocol.MethodCodeAction:
 		return s.codeAction(request.Params)
+	case protocol.MethodHover:
+		return s.hover(request.Params)
 	case protocol.MethodDidOpen:
 		s.didOpen(request.Params)
 		return jsonrpc.HandlerResult{}
@@ -134,11 +133,13 @@ func (s *Server) Handle(ctx context.Context, request protocol.Request) jsonrpc.H
 	case protocol.MethodDidClose:
 		s.didClose(request.Params)
 		return jsonrpc.HandlerResult{}
+	case protocol.MethodDidChange:
+		s.didChange(request.Params)
+		return jsonrpc.HandlerResult{}
 	case protocol.MethodDidChangeConfiguration:
 		s.didChangeConfiguration(request.Params)
 		return jsonrpc.HandlerResult{}
-	case protocol.MethodDidChange,
-		protocol.MethodCancelRequest:
+	case protocol.MethodCancelRequest:
 		return jsonrpc.HandlerResult{}
 	default:
 		if request.IsNotification() {
@@ -155,86 +156,10 @@ func (s *Server) ExitCode() int {
 	return s.exitCode
 }
 
-// WorkspaceFolders returns the initialize-time scope candidates.
-func (s *Server) WorkspaceFolders() []protocol.WorkspaceFolder {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return append([]protocol.WorkspaceFolder(nil), s.folders...)
-}
-
-func (s *Server) initialize(raw json.RawMessage) jsonrpc.HandlerResult {
-	params := protocol.InitializeParams{}
-	if len(raw) > 0 {
-		if err := json.Unmarshal(raw, &params); err != nil {
-			return jsonrpc.HandlerResult{Error: &protocol.ResponseError{
-				Code:    protocol.InvalidParamsCode,
-				Message: "Invalid initialize params",
-			}}
-		}
-	}
-
-	folders := initializeFolders(params, s.options.Root)
-	s.mu.Lock()
-	s.folders = folders
-	s.clientInfo = params.ClientInfo
-	s.settings = mergeSettings(s.settings, params.InitializationOptions)
-	s.mu.Unlock()
-
-	return jsonrpc.HandlerResult{Result: protocol.InitializeResult{
-		Capabilities: protocol.ServerCapabilities{
-			TextDocumentSync: protocol.TextDocumentSyncOptions{
-				OpenClose: true,
-				Change:    protocol.SyncNone,
-				Save:      protocol.SaveOptions{IncludeText: false},
-			},
-			CodeActionProvider: protocol.CodeActionOptions{
-				CodeActionKinds: []protocol.CodeActionKind{protocol.CodeActionQuickFix},
-			},
-			Workspace: protocol.WorkspaceOptions{
-				WorkspaceFolders: protocol.WorkspaceFoldersOptions{
-					Supported:           true,
-					ChangeNotifications: false,
-				},
-			},
-		},
-		ServerInfo: protocol.ServerInfo{Name: "crux-lsp", Version: s.options.Version},
-	}}
-}
-
-func (s *Server) initializedScopes(ctx context.Context) {
-	s.mu.Lock()
-	if s.initialized {
-		s.mu.Unlock()
-		return
-	}
-	scopeContext, cancel := context.WithCancel(ctx)
-	s.initialized = true
-	s.scopeCancel = cancel
-	folders := append([]protocol.WorkspaceFolder(nil), s.folders...)
-	settings := s.settings
-	workspace := s.workspace
-	if workspace == nil {
-		workspace = newWorkspaceRuntime(s)
-		s.workspace = workspace
-	}
-	s.mu.Unlock()
-
-	for _, folder := range folders {
-		fmt.Fprintf(s.options.Logs, "crux lsp: detected workspace folder %s\n", folder.URI)
-	}
-	workspace.Start(scopeContext, folders, settings)
-	go func() {
-		<-scopeContext.Done()
-		workspace.Close()
-	}()
-	if s.options.OnInitialized != nil {
-		s.options.OnInitialized(scopeContext, folders)
-	}
-}
-
 func methodDirectionMatches(request protocol.Request) bool {
 	requestMethod := request.Method == protocol.MethodInitialize ||
 		request.Method == protocol.MethodShutdown ||
+		request.Method == protocol.MethodHover ||
 		request.Method == protocol.MethodCodeAction
 	if requestMethod {
 		return !request.IsNotification()
@@ -258,37 +183,4 @@ func methodNotFound() jsonrpc.HandlerResult {
 		Code:    protocol.MethodNotFoundCode,
 		Message: "Method not found",
 	}}
-}
-
-func initializeFolders(params protocol.InitializeParams, fallbackRoot string) []protocol.WorkspaceFolder {
-	if len(params.WorkspaceFolders) > 0 {
-		return append([]protocol.WorkspaceFolder(nil), params.WorkspaceFolders...)
-	}
-	if params.RootURI != "" {
-		return []protocol.WorkspaceFolder{{URI: params.RootURI, Name: folderName(params.RootURI)}}
-	}
-	if fallbackRoot == "" {
-		return nil
-	}
-	absolute := fallbackRoot
-	if !mapping.IsAbsolutePath(absolute) {
-		var err error
-		absolute, err = filepath.Abs(fallbackRoot)
-		if err != nil {
-			absolute = fallbackRoot
-		}
-	}
-	uri := protocol.DocumentURI(mapping.FileURI("", absolute))
-	return []protocol.WorkspaceFolder{{
-		URI:  uri,
-		Name: folderName(uri),
-	}}
-}
-
-func folderName(uri protocol.DocumentURI) string {
-	parsed, err := url.Parse(string(uri))
-	if err != nil || parsed.Path == "" {
-		return string(uri)
-	}
-	return filepath.Base(parsed.Path)
 }

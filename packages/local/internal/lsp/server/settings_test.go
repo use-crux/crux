@@ -59,11 +59,26 @@ func TestServerRoutesWorkspaceEventsAndSettings(t *testing.T) {
 		Params: []byte(`{"textDocument":{"uri":"file:///repo/src/a.ts","languageId":"typescript","version":1,"text":""}}`),
 	})
 	server.Handle(ctx, protocol.Request{
+		JSONRPC: protocol.JSONRPCVersion, Method: protocol.MethodDidChange,
+		Params: []byte(`{
+			"textDocument":{"uri":"file:///repo/src/a.ts","version":2},
+			"contentChanges":[{"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":0}},"text":"x"}]
+		}`),
+	})
+	server.Handle(ctx, protocol.Request{
 		JSONRPC: protocol.JSONRPCVersion, Method: protocol.MethodDidSave,
 		Params: []byte(`{"textDocument":{"uri":"file:///repo/src/a.ts"}}`),
 	})
-	if workspace.opened != "file:///repo/src/a.ts" || workspace.saved != workspace.opened {
-		t.Fatalf("document events = open %q save %q", workspace.opened, workspace.saved)
+	if workspace.opened != "file:///repo/src/a.ts" || workspace.changedURI != workspace.opened ||
+		workspace.changedVersion != 2 || len(workspace.changes) != 1 || workspace.saved != workspace.opened {
+		t.Fatalf(
+			"document events = open %q change (%q, %d, %#v) save %q",
+			workspace.opened,
+			workspace.changedURI,
+			workspace.changedVersion,
+			workspace.changes,
+			workspace.saved,
+		)
 	}
 	state, ok := server.documentState(workspace.opened)
 	if !ok || !state.Open || !state.SavedAt.Equal(savedAt) {
@@ -73,6 +88,9 @@ func TestServerRoutesWorkspaceEventsAndSettings(t *testing.T) {
 		JSONRPC: protocol.JSONRPCVersion, Method: protocol.MethodDidClose,
 		Params: []byte(`{"textDocument":{"uri":"file:///repo/src/a.ts"}}`),
 	})
+	if workspace.closed != workspace.opened {
+		t.Fatalf("closed URI = %q, want %q", workspace.closed, workspace.opened)
+	}
 	state, ok = server.documentState(workspace.opened)
 	if !ok || state.Open || !state.SavedAt.Equal(savedAt) {
 		t.Fatalf("closed document state = (%#v, %v)", state, ok)
@@ -101,19 +119,32 @@ func TestTraceMessagesLogsOnlyMethodNames(t *testing.T) {
 }
 
 type recordingWorkspace struct {
-	started Settings
-	updated Settings
-	opened  protocol.DocumentURI
-	saved   protocol.DocumentURI
+	started        Settings
+	updated        Settings
+	opened         protocol.DocumentURI
+	changedURI     protocol.DocumentURI
+	changedVersion int
+	changes        []protocol.TextDocumentContentChangeEvent
+	saved          protocol.DocumentURI
+	closed         protocol.DocumentURI
 }
 
 func (w *recordingWorkspace) Start(_ context.Context, _ []protocol.WorkspaceFolder, settings Settings) {
 	w.started = settings
 }
 
-func (w *recordingWorkspace) UpdateSettings(settings Settings) { w.updated = settings }
-func (w *recordingWorkspace) DidOpen(uri protocol.DocumentURI) { w.opened = uri }
-func (w *recordingWorkspace) DidSave(uri protocol.DocumentURI) { w.saved = uri }
+func (w *recordingWorkspace) UpdateSettings(settings Settings)        { w.updated = settings }
+func (w *recordingWorkspace) DidOpen(uri protocol.DocumentURI, _ int) { w.opened = uri }
+func (w *recordingWorkspace) DidChange(uri protocol.DocumentURI, version int, changes []protocol.TextDocumentContentChangeEvent) {
+	w.changedURI = uri
+	w.changedVersion = version
+	w.changes = changes
+}
+func (w *recordingWorkspace) DidSave(uri protocol.DocumentURI)  { w.saved = uri }
+func (w *recordingWorkspace) DidClose(uri protocol.DocumentURI) { w.closed = uri }
+func (w *recordingWorkspace) DisplayedFindings(protocol.DocumentURI, protocol.Position) []displayedFinding {
+	return nil
+}
 func (w *recordingWorkspace) LeadingWhitespace(protocol.DocumentURI, uint32) (string, bool) {
 	return "", true
 }

@@ -95,7 +95,7 @@ func TestPublisherDidOpenForcesCurrentFileAndSettingsRefilter(t *testing.T) {
 		t.Fatalf("default diagnostic count = %d, want 2", got)
 	}
 
-	publisher.DidOpen(protocol.DocumentURI("file:///repo/src/a.ts"))
+	publisher.DidOpen(protocol.DocumentURI("file:///repo/src/a.ts"), 1)
 	if got := len(recorder.wait(t, 2)[1].Diagnostics); got != 2 {
 		t.Fatalf("didOpen diagnostic count = %d, want 2", got)
 	}
@@ -113,6 +113,53 @@ func TestPublisherDidOpenForcesCurrentFileAndSettingsRefilter(t *testing.T) {
 	cleared := recorder.wait(t, 4)[3]
 	if len(cleared.Diagnostics) != 0 || cleared.Diagnostics == nil {
 		t.Fatalf("profile off diagnostics = %#v, want non-nil empty clear", cleared.Diagnostics)
+	}
+}
+
+func TestPublisherHoldsNewestAuthoritativeViewAcrossDirtyHandover(t *testing.T) {
+	store := readmodel.NewStore()
+	generation := uint64(1)
+	initial := publisherFinding("initial", "src/a.ts", "recommended", false)
+	initial.Source.Line = 5
+	column := 3
+	initial.Source.Column = &column
+	store.ApplySnapshot("scope", readmodel.Snapshot{
+		Generation: &generation,
+		Findings:   []api.IndexLintFinding{initial},
+	})
+	recorder := newDiagnosticRecorder()
+	publisher := NewPublisher(PublisherOptions{
+		ScopeID: "scope", Root: "/repo", ConfigFile: "/repo/crux.config.ts",
+		Store: store, Notify: recorder.notify,
+	})
+	t.Cleanup(publisher.Close)
+	uri := protocol.DocumentURI("file:///repo/src/a.ts")
+
+	publisher.Change(readmodel.Change{Scope: "scope", Files: []string{"src/a.ts"}, Immediate: true})
+	recorder.wait(t, 1)
+	publisher.DidOpen(uri, 1)
+	recorder.wait(t, 2)
+	position := protocol.Position{Line: 0, Character: 0}
+	publisher.DidChange(uri, 2, []protocol.TextDocumentContentChangeEvent{{
+		Range: &protocol.Range{Start: position, End: position},
+		Text:  "\n",
+	}})
+	recorder.wait(t, 3)
+
+	for index, id := range []string{"held-old", "held-new"} {
+		nextGeneration := uint64(index + 2)
+		store.ApplySnapshot("scope", readmodel.Snapshot{
+			Generation: &nextGeneration,
+			Findings:   []api.IndexLintFinding{publisherFinding(id, "src/a.ts", "recommended", false)},
+		})
+		publisher.Change(readmodel.Change{Scope: "scope", Files: []string{"src/a.ts"}, Immediate: true})
+		recorder.assertCountAfter(t, 3, 20*time.Millisecond)
+	}
+
+	publisher.DidSave(uri)
+	published := recorder.wait(t, 4)[3]
+	if len(published.Diagnostics) != 1 || diagnosticID(t, published.Diagnostics[0]) != "held-new" {
+		t.Fatalf("saved diagnostics = %#v, want newest held authoritative view", published.Diagnostics)
 	}
 }
 

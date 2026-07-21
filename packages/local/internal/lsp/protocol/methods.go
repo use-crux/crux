@@ -9,6 +9,7 @@ const (
 	MethodDidClose               = "textDocument/didClose"
 	MethodDidSave                = "textDocument/didSave"
 	MethodDidChange              = "textDocument/didChange"
+	MethodHover                  = "textDocument/hover"
 	MethodCodeAction             = "textDocument/codeAction"
 	MethodDidChangeConfiguration = "workspace/didChangeConfiguration"
 	MethodPublishDiagnostics     = "textDocument/publishDiagnostics"

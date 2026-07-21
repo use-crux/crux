@@ -52,6 +52,7 @@ func TestManagerOwnAttachReconnectOwnWithoutEmptyView(t *testing.T) {
 	store := NewStore()
 	var modeMu sync.Mutex
 	var modes []Mode
+	modeChanges := make(chan Mode, 16)
 	emptyPublish := atomic.Bool{}
 	manager := NewManager(ManagerOptions{
 		ScopeID: root, Root: root, Version: "v-test",
@@ -62,6 +63,7 @@ func TestManagerOwnAttachReconnectOwnWithoutEmptyView(t *testing.T) {
 			modeMu.Lock()
 			modes = append(modes, mode)
 			modeMu.Unlock()
+			modeChanges <- mode
 		},
 		OnChange: func(Change) {
 			if len(store.Findings(root, file)) == 0 {
@@ -87,9 +89,10 @@ func TestManagerOwnAttachReconnectOwnWithoutEmptyView(t *testing.T) {
 
 	devAvailable.Store(false)
 	close(dropAttached)
-	waitFor(t, time.Second, func() bool {
-		return manager.Mode() == ModeOwn && len(store.Findings(root, file)) == 1
-	})
+	waitForModeCallbacks(t, modeChanges, ModeReconnect, ModeOwn)
+	if len(store.Findings(root, file)) != 1 {
+		t.Fatalf("own handover findings = %#v, want retained non-empty view", store.Findings(root, file))
+	}
 	if emptyPublish.Load() {
 		t.Fatal("handover emitted a changed event with an empty finding view")
 	}
@@ -141,4 +144,21 @@ func containsModesInOrder(values []Mode, wanted ...Mode) bool {
 		}
 	}
 	return index == len(wanted)
+}
+
+func waitForModeCallbacks(t *testing.T, changes <-chan Mode, wanted ...Mode) {
+	t.Helper()
+	deadline := time.NewTimer(time.Second)
+	defer deadline.Stop()
+	index := 0
+	for index < len(wanted) {
+		select {
+		case mode := <-changes:
+			if mode == wanted[index] {
+				index++
+			}
+		case <-deadline.C:
+			t.Fatalf("timed out waiting for mode callbacks %v at index %d", wanted, index)
+		}
+	}
 }

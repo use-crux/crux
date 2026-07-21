@@ -16,11 +16,12 @@ type WorkspaceFolder struct {
 }
 
 type InitializeParams struct {
-	ProcessID             *int              `json:"processId,omitempty"`
-	ClientInfo            *ClientInfo       `json:"clientInfo,omitempty"`
-	RootURI               DocumentURI       `json:"rootUri,omitempty"`
-	InitializationOptions json.RawMessage   `json:"initializationOptions,omitempty"`
-	WorkspaceFolders      []WorkspaceFolder `json:"workspaceFolders,omitempty"`
+	ProcessID             *int                `json:"processId,omitempty"`
+	ClientInfo            *ClientInfo         `json:"clientInfo,omitempty"`
+	Capabilities          *ClientCapabilities `json:"capabilities,omitempty"`
+	RootURI               DocumentURI         `json:"rootUri,omitempty"`
+	InitializationOptions json.RawMessage     `json:"initializationOptions,omitempty"`
+	WorkspaceFolders      []WorkspaceFolder   `json:"workspaceFolders,omitempty"`
 }
 
 type InitializeResult struct {
@@ -35,6 +36,7 @@ type ServerInfo struct {
 
 type ServerCapabilities struct {
 	TextDocumentSync   TextDocumentSyncOptions `json:"textDocumentSync"`
+	HoverProvider      bool                    `json:"hoverProvider"`
 	CodeActionProvider CodeActionOptions       `json:"codeActionProvider"`
 	Workspace          WorkspaceOptions        `json:"workspace"`
 }
@@ -47,7 +49,10 @@ type TextDocumentSyncOptions struct {
 
 type SyncKind int
 
-const SyncNone SyncKind = 0
+const (
+	SyncNone        SyncKind = 0
+	SyncIncremental SyncKind = 2
+)
 
 type SaveOptions struct {
 	IncludeText bool `json:"includeText"`
@@ -96,8 +101,16 @@ type DidSaveTextDocumentParams struct {
 }
 
 type DidChangeTextDocumentParams struct {
-	TextDocument   VersionedTextDocumentIdentifier `json:"textDocument"`
-	ContentChanges []json.RawMessage               `json:"contentChanges"`
+	TextDocument   VersionedTextDocumentIdentifier  `json:"textDocument"`
+	ContentChanges []TextDocumentContentChangeEvent `json:"contentChanges"`
+}
+
+// TextDocumentContentChangeEvent represents either an incremental edit when
+// Range is present or a full-document replacement when it is absent.
+type TextDocumentContentChangeEvent struct {
+	Range       *Range  `json:"range,omitempty"`
+	RangeLength *uint32 `json:"rangeLength,omitempty"`
+	Text        string  `json:"text"`
 }
 
 type DidChangeConfigurationParams struct {

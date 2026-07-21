@@ -43,7 +43,7 @@ func TestPublisherDidSaveInvalidatesUTF16LineCache(t *testing.T) {
 	}
 	uri := protocol.DocumentURI(mapping.FileURI(root, file))
 	publisher.DidSave(uri)
-	publisher.DidOpen(uri)
+	publisher.DidOpen(uri, 1)
 	if got := recorder.wait(t, 2)[1].Diagnostics[0].Range.Start.Character; got != 4 {
 		t.Fatalf("saved UTF-16 character = %d, want refreshed value 4", got)
 	}

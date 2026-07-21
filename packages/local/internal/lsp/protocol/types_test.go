@@ -39,6 +39,26 @@ func TestDiagnosticAndCodeActionRoundTripPinsWireNames(t *testing.T) {
 	}
 }
 
+func TestDidChangeParamsRoundTripPinsIncrementalAndFullDocumentChanges(t *testing.T) {
+	t.Parallel()
+
+	input := []byte(`{"textDocument":{"uri":"file:///repo/src/writer.ts","version":3},"contentChanges":[{"range":{"start":{"line":1,"character":2},"end":{"line":1,"character":4}},"rangeLength":2,"text":"😀"},{"text":"replacement"}]}`)
+	var params DidChangeTextDocumentParams
+	if err := json.Unmarshal(input, &params); err != nil {
+		t.Fatalf("unmarshal didChange params: %v", err)
+	}
+	if params.ContentChanges[0].Range == nil || params.ContentChanges[1].Range != nil {
+		t.Fatalf("content change ranges = %#v, want incremental then full-document", params.ContentChanges)
+	}
+	output, err := json.Marshal(params)
+	if err != nil {
+		t.Fatalf("marshal didChange params: %v", err)
+	}
+	if string(output) != string(input) {
+		t.Fatalf("didChange params = %s, want %s", output, input)
+	}
+}
+
 func TestJSONRPCRequestPreservesStringID(t *testing.T) {
 	t.Parallel()
 

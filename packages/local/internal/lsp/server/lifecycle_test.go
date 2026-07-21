@@ -135,6 +135,59 @@ func TestInitializeFolderPrecedence(t *testing.T) {
 	}
 }
 
+func TestInitializeAdvertisesIncrementalDocumentSync(t *testing.T) {
+	t.Parallel()
+
+	result := New(Options{}).Handle(context.Background(), protocol.Request{
+		JSONRPC: protocol.JSONRPCVersion,
+		ID:      []byte("1"),
+		Method:  protocol.MethodInitialize,
+		Params:  []byte(`{}`),
+	})
+	initialize, ok := result.Result.(protocol.InitializeResult)
+	if !ok {
+		t.Fatalf("initialize result = %#v, want protocol.InitializeResult", result.Result)
+	}
+	if got := initialize.Capabilities.TextDocumentSync.Change; got != protocol.SyncIncremental {
+		t.Fatalf("text document sync change = %d, want incremental (%d)", got, protocol.SyncIncremental)
+	}
+}
+
+func TestInitializeAdvertisesHoverAndNegotiatesContentFormat(t *testing.T) {
+	t.Parallel()
+
+	server := New(Options{})
+	result := server.Handle(context.Background(), protocol.Request{
+		JSONRPC: protocol.JSONRPCVersion,
+		ID:      []byte("1"),
+		Method:  protocol.MethodInitialize,
+		Params: []byte(`{
+			"capabilities":{"textDocument":{"hover":{"contentFormat":["plaintext","markdown"]}}}
+		}`),
+	})
+	initialize, ok := result.Result.(protocol.InitializeResult)
+	if !ok {
+		t.Fatalf("initialize result = %#v, want protocol.InitializeResult", result.Result)
+	}
+	if !initialize.Capabilities.HoverProvider {
+		t.Fatal("hover provider was not advertised")
+	}
+	if server.hoverFormat != protocol.MarkupKindMarkdown {
+		t.Fatalf("negotiated hover format = %q, want markdown", server.hoverFormat)
+	}
+
+	plaintext := New(Options{})
+	plaintext.Handle(context.Background(), protocol.Request{
+		JSONRPC: protocol.JSONRPCVersion,
+		ID:      []byte("1"),
+		Method:  protocol.MethodInitialize,
+		Params:  []byte(`{"capabilities":{"textDocument":{"hover":{"contentFormat":["plaintext"]}}}}`),
+	})
+	if plaintext.hoverFormat != protocol.MarkupKindPlainText {
+		t.Fatalf("plaintext hover format = %q, want plaintext", plaintext.hoverFormat)
+	}
+}
+
 func TestShutdownCancelsInitializedScopes(t *testing.T) {
 	t.Parallel()
 

@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"path/filepath"
 	"sync"
@@ -15,8 +16,11 @@ import (
 type workspaceController interface {
 	Start(context.Context, []protocol.WorkspaceFolder, Settings)
 	UpdateSettings(Settings)
-	DidOpen(protocol.DocumentURI)
+	DidOpen(protocol.DocumentURI, int)
+	DidChange(protocol.DocumentURI, int, []protocol.TextDocumentContentChangeEvent)
 	DidSave(protocol.DocumentURI)
+	DidClose(protocol.DocumentURI)
+	DisplayedFindings(protocol.DocumentURI, protocol.Position) []displayedFinding
 	LeadingWhitespace(protocol.DocumentURI, uint32) (string, bool)
 	Close()
 }
@@ -69,6 +73,12 @@ func (w *workspaceRuntime) Start(ctx context.Context, folders []protocol.Workspa
 			Notify: func(method string, params any) {
 				w.server.Notify(ctx, method, params)
 			},
+			Log: func(message string) {
+				fmt.Fprintf(w.logs, "crux lsp: %s\n", message)
+			},
+			Trace: func(message string) {
+				w.server.traceMessage(ctx, message)
+			},
 		})
 		session.publisher.UpdateFilter(mapping.FilterOptions{
 			Profile:           settings.Profile,
@@ -99,9 +109,15 @@ func (w *workspaceRuntime) UpdateSettings(settings Settings) {
 	}
 }
 
-func (w *workspaceRuntime) DidOpen(uri protocol.DocumentURI) {
+func (w *workspaceRuntime) DidOpen(uri protocol.DocumentURI, version int) {
 	for _, session := range w.sessionsForURI(uri) {
-		session.publisher.DidOpen(uri)
+		session.publisher.DidOpen(uri, version)
+	}
+}
+
+func (w *workspaceRuntime) DidChange(uri protocol.DocumentURI, version int, changes []protocol.TextDocumentContentChangeEvent) {
+	for _, session := range w.sessionsForURI(uri) {
+		session.publisher.DidChange(uri, version, changes)
 	}
 }
 
@@ -109,6 +125,21 @@ func (w *workspaceRuntime) DidSave(uri protocol.DocumentURI) {
 	for _, session := range w.sessionsForURI(uri) {
 		session.publisher.DidSave(uri)
 	}
+}
+
+func (w *workspaceRuntime) DidClose(uri protocol.DocumentURI) {
+	for _, session := range w.sessionsForURI(uri) {
+		session.publisher.DidClose(uri)
+	}
+}
+
+func (w *workspaceRuntime) DisplayedFindings(uri protocol.DocumentURI, position protocol.Position) []displayedFinding {
+	for _, session := range w.sessionsForURI(uri) {
+		if findings := session.publisher.DisplayedFindings(uri, position); len(findings) > 0 {
+			return findings
+		}
+	}
+	return nil
 }
 
 func (w *workspaceRuntime) LeadingWhitespace(uri protocol.DocumentURI, line uint32) (string, bool) {

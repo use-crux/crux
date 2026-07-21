@@ -83,9 +83,15 @@ func (w *snapshotWorkspace) Start(ctx context.Context, _ []protocol.WorkspaceFol
 	w.publisher.Change(readmodel.Change{Scope: "scope", Files: []string{"src/writer.ts"}, Immediate: true})
 }
 
-func (w *snapshotWorkspace) UpdateSettings(Settings)      {}
-func (w *snapshotWorkspace) DidOpen(protocol.DocumentURI) {}
-func (w *snapshotWorkspace) DidSave(protocol.DocumentURI) {}
+func (w *snapshotWorkspace) UpdateSettings(Settings)           {}
+func (w *snapshotWorkspace) DidOpen(protocol.DocumentURI, int) {}
+func (w *snapshotWorkspace) DidChange(protocol.DocumentURI, int, []protocol.TextDocumentContentChangeEvent) {
+}
+func (w *snapshotWorkspace) DidSave(protocol.DocumentURI)  {}
+func (w *snapshotWorkspace) DidClose(protocol.DocumentURI) {}
+func (w *snapshotWorkspace) DisplayedFindings(protocol.DocumentURI, protocol.Position) []displayedFinding {
+	return nil
+}
 func (w *snapshotWorkspace) LeadingWhitespace(protocol.DocumentURI, uint32) (string, bool) {
 	return "", true
 }

@@ -14,7 +14,17 @@ func (s *Server) didOpen(raw json.RawMessage) {
 	}
 	s.setDocumentOpen(params.TextDocument.URI, true)
 	if workspace := s.currentWorkspace(); workspace != nil {
-		workspace.DidOpen(params.TextDocument.URI)
+		workspace.DidOpen(params.TextDocument.URI, params.TextDocument.Version)
+	}
+}
+
+func (s *Server) didChange(raw json.RawMessage) {
+	var params protocol.DidChangeTextDocumentParams
+	if json.Unmarshal(raw, &params) != nil || params.TextDocument.URI == "" {
+		return
+	}
+	if workspace := s.currentWorkspace(); workspace != nil {
+		workspace.DidChange(params.TextDocument.URI, params.TextDocument.Version, params.ContentChanges)
 	}
 }
 
@@ -35,6 +45,9 @@ func (s *Server) didClose(raw json.RawMessage) {
 		return
 	}
 	s.setDocumentOpen(params.TextDocument.URI, false)
+	if workspace := s.currentWorkspace(); workspace != nil {
+		workspace.DidClose(params.TextDocument.URI)
+	}
 }
 
 func (s *Server) setDocumentOpen(uri protocol.DocumentURI, open bool) {
@@ -77,12 +90,16 @@ func (s *Server) didChangeConfiguration(raw json.RawMessage) {
 }
 
 func (s *Server) traceMethod(ctx context.Context, method string) {
+	s.traceMessage(ctx, method)
+}
+
+func (s *Server) traceMessage(ctx context.Context, message string) {
 	s.mu.Lock()
 	enabled := s.settings.Trace == "messages"
 	s.mu.Unlock()
 	if enabled {
 		s.Notify(ctx, protocol.MethodLogMessage, protocol.LogMessageParams{
-			Type: protocol.MessageTypeLog, Message: method,
+			Type: protocol.MessageTypeLog, Message: message,
 		})
 	}
 }

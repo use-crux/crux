@@ -152,9 +152,15 @@ type actionWorkspace struct{ indent string }
 
 func (w *actionWorkspace) Start(context.Context, []protocol.WorkspaceFolder, Settings) {}
 func (w *actionWorkspace) UpdateSettings(Settings)                                     {}
-func (w *actionWorkspace) DidOpen(protocol.DocumentURI)                                {}
-func (w *actionWorkspace) DidSave(protocol.DocumentURI)                                {}
-func (w *actionWorkspace) Close()                                                      {}
+func (w *actionWorkspace) DidOpen(protocol.DocumentURI, int)                           {}
+func (w *actionWorkspace) DidChange(protocol.DocumentURI, int, []protocol.TextDocumentContentChangeEvent) {
+}
+func (w *actionWorkspace) DidSave(protocol.DocumentURI)  {}
+func (w *actionWorkspace) DidClose(protocol.DocumentURI) {}
+func (w *actionWorkspace) DisplayedFindings(protocol.DocumentURI, protocol.Position) []displayedFinding {
+	return nil
+}
+func (w *actionWorkspace) Close() {}
 func (w *actionWorkspace) LeadingWhitespace(uri protocol.DocumentURI, _ uint32) (string, bool) {
 	return w.indent, uri == "file:///repo/source.ts"
 }
