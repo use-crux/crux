@@ -1,7 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { adapter as makeAdapter } from '../../src/adapter/define-adapter'
-import type { AdapterResponse } from '../../src/adapter/types'
 import { prompt as makePrompt } from '../../src/prompt/prompt'
 import { defaultTokenizer, setTokenizer } from '../../src/shared/tokenizer'
 import { inMemoryRecordStore, inMemoryVectorStore } from '../../src/storage'
@@ -14,6 +12,7 @@ import {
   recentMessages,
   workingState,
 } from '../../src/memory'
+import { testAdapter } from './capture/fixtures'
 
 const mockEmbed = async (text: string) => {
   const values = Array.from(text.slice(0, 8)).map((char) => char.charCodeAt(0) / 255)
@@ -24,52 +23,6 @@ const mockEmbed = async (text: string) => {
 afterEach(() => {
   setTokenizer(defaultTokenizer)
 })
-
-function mockResponse(text: string, toolCalls?: AdapterResponse['toolCalls']): AdapterResponse {
-  return {
-    text,
-    toolCalls,
-    usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2, inputTokenDetails: {}, outputTokenDetails: {} },
-    finishReason: 'stop',
-    responseId: 'response-1',
-    actualModelId: 'model-1',
-  }
-}
-
-function testAdapter(text = 'assistant answer', firstToolCalls?: AdapterResponse['toolCalls']) {
-  let callCount = 0
-  return makeAdapter({
-    providerId: 'test',
-    async call() {
-      return {
-        raw: { id: 'raw-1' },
-        extracted: callCount++ === 0 && firstToolCalls ? mockResponse('', firstToolCalls) : mockResponse(text),
-      }
-    },
-    async stream() {
-      async function* chunks() {
-        yield { text }
-      }
-      return {
-        rawStream: chunks(),
-        extractTextDelta: (chunk) => (chunk as { text: string }).text,
-        completion: async () => ({
-          usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2, inputTokenDetails: {}, outputTokenDetails: {} },
-        }),
-      }
-    },
-    appendToolRound(messages, response, toolResults) {
-      return [
-        ...messages,
-        { role: 'assistant' as const, content: response.text },
-        ...toolResults.map((result) => ({ role: 'tool' as const, content: result.content })),
-      ]
-    },
-    mapSettings(settings) {
-      return settings
-    },
-  })({})
-}
 
 describe('memory block system', () => {
   it('renders reusable custom blocks through memory().asContext()', async () => {
@@ -196,43 +149,6 @@ describe('memory block system', () => {
     expect(() => asyncToolsMemory.asTools()).toThrow(/returned async tools.*tool collection is synchronous/)
   })
 
-  it('awaits block capture work when capture mode is inline', async () => {
-    let releaseCapture!: () => void
-    const captureCanFinish = new Promise<void>((resolve) => {
-      releaseCapture = resolve
-    })
-    const capturedNamespaces: string[] = []
-    const mem = memory({
-      id: 'inline-capture',
-      namespace: ({ input }) => `thread:${input.threadId}`,
-      capture: { mode: 'inline' },
-      blocks: [
-        memoryBlock({
-          id: 'capture',
-          kind: 'custom',
-          captureTurn: async (_turn, ctx) => {
-            await captureCanFinish
-            capturedNamespaces.push(ctx.namespace)
-          },
-        }),
-      ],
-    })
-
-    let resolved = false
-    const capture = mem
-      .captureTurn({ messages: [{ role: 'user', content: 'hi' }] }, { input: { threadId: 't1' } })
-      .then(() => {
-        resolved = true
-      })
-
-    await Promise.resolve()
-    expect(resolved).toBe(false)
-
-    releaseCapture()
-    await capture
-    expect(capturedNamespaces).toEqual(['thread:t1'])
-  })
-
   it('allows memory() directly in prompt use and merges block tools', async () => {
     const mem = memory({
       id: 'prompt-memory',
@@ -296,192 +212,6 @@ describe('memory block system', () => {
     expect(rendered).toContain('alpha beta')
     expect(rendered).not.toContain('gamma')
     expect(rendered).not.toContain('low priority detail')
-  })
-
-  it('flushes afterResponse capture before generation resolves when waitUntil is absent', async () => {
-    const store = inMemoryRecordStore()
-    const recent = recentMessages({ id: 'recent', maxMessages: 5 })
-    const mem = memory({
-      id: 'capture',
-      records: store,
-      namespace: ({ input }) => `thread:${input.threadId}`,
-      blocks: [recent],
-    })
-    const p = makePrompt({
-      id: 'capture-prompt',
-      use: [mem],
-      input: z.object({ threadId: z.string(), message: z.string() }),
-      system: 'You are helpful.',
-      prompt: ({ input }) => input.message,
-    })
-
-    const adapter = testAdapter('stored answer')
-    await adapter.generate(p, {
-      model: 'model-1',
-      input: { threadId: 't1', message: 'Hello' },
-    })
-
-    const turns = await recent.list({ records: store, namespace: 'thread:t1', memoryId: 'capture' })
-    expect(turns.map((turn) => turn.role)).toEqual(['user', 'assistant'])
-    expect(turns[1].content).toBe('stored answer')
-  })
-
-  it('reports rejected afterResponse capture when the fallback flush is required', async () => {
-    const mem = memory({
-      id: 'rejected-after-response-capture',
-      namespace: 'thread:1',
-      blocks: [
-        memoryBlock({
-          id: 'rejected-capture',
-          kind: 'custom',
-          captureTurn: async () => {
-            throw new Error('capture failed')
-          },
-        }),
-      ],
-    })
-    const p = makePrompt({
-      id: 'rejected-after-response-capture-prompt',
-      use: [mem],
-      input: z.object({ message: z.string() }),
-      prompt: ({ input }) => input.message,
-    })
-
-    await expect(
-      testAdapter().generate(p, { model: 'model-1', input: { message: 'Hello' } }),
-    ).rejects.toThrow('capture failed')
-  })
-
-  it('hands afterResponse adapter capture to waitUntil without blocking generation', async () => {
-    let releaseCapture!: () => void
-    const captureCanFinish = new Promise<void>((resolve) => {
-      releaseCapture = resolve
-    })
-    const waitUntilTasks: Promise<unknown>[] = []
-    const store = inMemoryRecordStore()
-    const factBlock = facts({
-      id: 'facts',
-      extract: async () => {
-        await captureCanFinish
-        return [{ content: 'Capture completed' }]
-      },
-    })
-    const mem = memory({
-      id: 'after-response-wait-until',
-      records: store,
-      namespace: 'thread:1',
-      capture: {
-        mode: 'afterResponse',
-        waitUntil: (promise) => waitUntilTasks.push(promise),
-      },
-      blocks: [factBlock],
-    })
-    const p = makePrompt({
-      id: 'after-response-wait-until-prompt',
-      use: [mem],
-      input: z.object({ message: z.string() }),
-      prompt: ({ input }) => input.message,
-    })
-
-    await testAdapter().generate(p, { model: 'model-1', input: { message: 'Hello' } })
-
-    await expect(mem.proposals.list({ namespace: 'thread:1' })).resolves.toEqual([])
-    expect(waitUntilTasks).toHaveLength(1)
-
-    releaseCapture()
-    await waitUntilTasks[0]
-    const proposals = await mem.proposals.list({ namespace: 'thread:1' })
-    expect(proposals.map((proposal) => proposal.candidate)).toEqual([{ content: 'Capture completed' }])
-  })
-
-  it('leaves detached adapter capture pending until flush', async () => {
-    let releaseCapture!: () => void
-    const captureCanFinish = new Promise<void>((resolve) => {
-      releaseCapture = resolve
-    })
-    const writes: string[] = []
-    const mem = memory({
-      id: 'detached-capture',
-      namespace: 'thread:1',
-      capture: { mode: 'detached' },
-      blocks: [
-        memoryBlock({
-          id: 'slow-capture',
-          kind: 'custom',
-          captureTurn: async () => {
-            await captureCanFinish
-            writes.push('captured')
-          },
-        }),
-      ],
-    })
-    const p = makePrompt({
-      id: 'detached-capture-prompt',
-      use: [mem],
-      input: z.object({ message: z.string() }),
-      prompt: ({ input }) => input.message,
-    })
-
-    await testAdapter().generate(p, { model: 'model-1', input: { message: 'Hello' } })
-    expect(writes).toEqual([])
-
-    let flushed = false
-    const flush = mem.flush().then(() => {
-      flushed = true
-    })
-    await Promise.resolve()
-    expect(flushed).toBe(false)
-
-    releaseCapture()
-    await flush
-    expect(writes).toEqual(['captured'])
-  })
-
-  it('keeps inline adapter capture on the generation path', async () => {
-    let releaseCapture!: () => void
-    const captureCanFinish = new Promise<void>((resolve) => {
-      releaseCapture = resolve
-    })
-    let captureStarted!: () => void
-    const captureDidStart = new Promise<void>((resolve) => {
-      captureStarted = resolve
-    })
-    const writes: string[] = []
-    const mem = memory({
-      id: 'inline-adapter-capture',
-      namespace: 'thread:1',
-      capture: { mode: 'inline' },
-      blocks: [
-        memoryBlock({
-          id: 'slow-capture',
-          kind: 'custom',
-          captureTurn: async () => {
-            captureStarted()
-            await captureCanFinish
-            writes.push('captured')
-          },
-        }),
-      ],
-    })
-    const p = makePrompt({
-      id: 'inline-adapter-capture-prompt',
-      use: [mem],
-      input: z.object({ message: z.string() }),
-      prompt: ({ input }) => input.message,
-    })
-
-    let generated = false
-    const generation = testAdapter()
-      .generate(p, { model: 'model-1', input: { message: 'Hello' } })
-      .then(() => {
-        generated = true
-      })
-    await captureDidStart
-    expect(generated).toBe(false)
-
-    releaseCapture()
-    await generation
-    expect(writes).toEqual(['captured'])
   })
 
   it('forwards adapter tool events to episodes capture hooks', async () => {

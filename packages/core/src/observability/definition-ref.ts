@@ -356,7 +356,8 @@ export function skillDefinitionRef(
 }
 
 /**
- * Build the `invoked-memory` ref for a `memory.read`/`memory.write` span.
+ * Build the `invoked-memory` ref for a `memory.capture`, `memory.read`, or
+ * `memory.write` span.
  * Matches the indexer's `memory:<safeId(definitionKey)>`
  * (`crates/primitives/src/memory/facts.rs`). Pass the authored definition key
  * (the literal `id`), not a runtime-computed prefixed instance id.

@@ -118,6 +118,7 @@ export const primitiveSpanNames = {
   'retrieval.query': 'crux.retrieval.query',
   'retrieval.stage': 'crux.retrieval.stage',
   'retrieval.step': 'crux.retrieval.step',
+  'memory.capture': 'crux.memory.capture',
   'memory.read': 'crux.memory.read',
   'memory.write': 'crux.memory.write',
   'constraint.check': 'crux.constraint.check',

@@ -10,12 +10,16 @@ import type { ScopeDeferController } from "./invocation-scope";
 /** Internal phase in which a callback registration occurs. */
 export type DeferRegistrationPhase = "handler" | "drain";
 
+/** Outcome of accepting callback work into an execution-scope drain. */
+export type InlineDeferRegistrationStatus = "deferred" | "captured";
+
 /** Minimal registration boundary installed in the canonical async scope. */
 export interface DeferRegistrationScope {
+  readonly callbackRetention: "retained" | "unretained";
   registerInline(
     callback: DeferredCallback,
     registration: DeferRegistrationContext,
-  ): void;
+  ): InlineDeferRegistrationStatus;
   trackCommit(operation: PromiseLike<unknown>): void;
   stageNamed(
     target: RuntimeTaskTarget,

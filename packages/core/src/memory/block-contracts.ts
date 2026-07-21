@@ -28,21 +28,20 @@ export type MemoryWriteMode = 'propose' | 'auto' | 'manual'
 export type MemoryProposalStatus = 'pending' | 'approved' | 'rejected'
 
 /**
- * Capture scheduling mode for turn and tool-event memory writes.
+ * Controls when completed turns and tool events are captured.
  *
- * - `inline`: await capture before the caller continues.
- * - `afterResponse`: start capture after generation and hand it to `waitUntil`
- *   when available.
- * - `detached`: start capture in the background and let `flush()` await it.
+ * - `inline`: Waits for capture before the owning operation returns.
+ * - `deferred`: Runs capture as retained execution-scope work when supported.
+ *   When retained work is unavailable, capture runs inline instead.
+ *
+ * @default 'deferred'
  */
-export type MemoryCaptureMode = 'inline' | 'afterResponse' | 'detached'
+export type MemoryCaptureMode = 'inline' | 'deferred'
 
-/** Capture scheduling options for memory turn and tool-event writes. */
+/** Scheduling behavior for completed-turn and standalone tool-event capture. */
 export interface MemoryCaptureConfig {
-  /** Capture scheduling mode. Defaults to `afterResponse`. */
-  mode?: MemoryCaptureMode
-  /** Runtime hook for environments that keep background work alive after a response. */
-  waitUntil?: (promise: Promise<unknown>) => void
+  /** When memory capture runs. @default 'deferred' */
+  readonly mode?: MemoryCaptureMode
 }
 
 /**
@@ -53,60 +52,60 @@ export interface MemoryCaptureConfig {
  */
 export interface MemoryRuntimeOptions {
   /** Storage bundle used by direct block methods, when available. */
-  storage?: Storage
+  readonly storage?: Storage
   /** Record store used for block reads, writes, and listing. */
-  records: RecordStore
+  readonly records: RecordStore
   /** Optional vector store used by semantic block recall. */
-  vectors?: VectorStore
+  readonly vectors?: VectorStore
   /** Stable tenant, user, thread, session, or agent scope. */
-  namespace: string
+  readonly namespace: string
   /** Composed memory id used in storage keys. Defaults to `standalone`. */
-  memoryId?: string
+  readonly memoryId?: string
   /** Optional trace correlation id for observability. */
-  traceId?: string
+  readonly traceId?: string
   /** Optional prompt id for capture and proposal provenance. */
-  promptId?: string
+  readonly promptId?: string
 }
 
 /** Tool call data available to memory capture. */
 export interface MemoryToolEvent {
   /** Provider or runtime tool-call id, when available. */
-  toolCallId?: string
+  readonly toolCallId?: string
   /** Tool name as exposed to the model. */
-  toolName: string
+  readonly toolName: string
   /** Tool arguments captured before execution. */
-  args?: unknown
+  readonly args?: unknown
   /** Tool result captured after successful execution. */
-  result?: unknown
+  readonly result?: unknown
   /** Tool error message captured after failed execution. */
-  error?: string
+  readonly error?: string
 }
 
 /** A single message available to memory capture. */
 export interface MemoryMessage {
   /** Message role, such as `user`, `assistant`, `system`, or `tool`. */
-  role: string
+  readonly role: string
   /** Text content available for memory extraction. */
-  content: string
+  readonly content: string
   /** Product-specific metadata to preserve with captured memory. */
-  metadata?: Record<string, unknown>
+  readonly metadata?: Readonly<Record<string, unknown>>
 }
 
 /** Completed interaction data passed to block capture hooks. */
 export interface MemoryTurn {
   /** Optional stable turn id for provenance. */
-  id?: string
+  readonly id?: string
   /** Messages that should be considered for capture. */
-  messages: MemoryMessage[]
+  readonly messages: readonly MemoryMessage[]
   /** Tool events observed during the turn. */
-  toolEvents?: MemoryToolEvent[]
+  readonly toolEvents?: readonly MemoryToolEvent[]
   /** Trace and prompt provenance for writes or proposals. */
-  source?: {
-    traceId?: string
-    promptId?: string
+  readonly source?: {
+    readonly traceId?: string
+    readonly promptId?: string
   }
   /** Product-specific capture metadata. */
-  metadata?: Record<string, unknown>
+  readonly metadata?: Readonly<Record<string, unknown>>
 }
 
 /** Reviewable long-term memory candidate created by a block. */

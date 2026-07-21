@@ -14,6 +14,7 @@ import { createSafetyWithBindingApplicability } from "../../safety/session";
 import { languageBindingApplicability } from "../../safety/language-applicability";
 import type { LiveTextSlot } from "../../safety/output/completion";
 import { orchestrateStream } from "../../generation/orchestrate";
+import { runInStreamObservationContext } from "../../generation/stream-observability";
 import { composeAbortSignals, withBudget } from "../../generation/timeout";
 import { normalizeAdapterCallError } from "../normalized-outcome";
 import { normalizeInvocationMessages } from "../../content/invocation-message";
@@ -266,11 +267,13 @@ export async function streamCore<
             liveTextSlots,
             messages,
           });
-          await lifecycle.captureTurn({
-            messages,
-            assistantText: guarded?.text || undefined,
-            toolCalls: meta?.toolCalls,
-          });
+          await runInStreamObservationContext(handle, () =>
+            lifecycle.captureTurn({
+              messages,
+              assistantText: guarded?.text || undefined,
+              toolCalls: meta?.toolCalls,
+            }),
+          );
           return guarded;
         } finally {
           await closeSources();

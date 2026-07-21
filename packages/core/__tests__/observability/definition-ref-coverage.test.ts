@@ -20,6 +20,17 @@ const directlyObservedKinds = Object.entries(DEFINITION_KIND_COVERAGE)
   .map(([kind]) => kind as DirectlyObservedKind)
 
 describe('directly-observed kinds ↔ DefinitionRef role/builder mapping', () => {
+  it('joins memory.capture through the canonical invoked-memory role', () => {
+    expect(DEFINITION_KIND_COVERAGE.memory.runtimePrimitiveNames).toContain(
+      'memory.capture',
+    )
+    expect(definitionRef('memory', 'conversation')).toEqual({
+      id: 'memory:conversation',
+      kind: 'memory',
+      role: 'invoked-memory',
+    })
+  })
+
   it('covers every directly-observed manifest kind with exactly one role', () => {
     const mapped = Object.keys(DIRECTLY_OBSERVED_DEFINITION_REF_ROLES).sort()
     expect(mapped).toEqual([...directlyObservedKinds].sort())

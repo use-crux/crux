@@ -40,7 +40,7 @@ func TestMemoryStoreDetailJoinsIndexMetadataAndTrend(t *testing.T) {
 				Metadata: json.RawMessage(`{
 					"schema": {"name":"SessionState","fields":[{"name":"user_name","type":"string"}]},
 					"backend": "convexMemoryStore",
-					"captureMode": "afterResponse",
+					"captureMode": "deferred",
 					"budget": {"maxTokens": 1200},
 					"evictionPolicy": "on run.end",
 					"blocks": [
@@ -69,7 +69,7 @@ func TestMemoryStoreDetailJoinsIndexMetadataAndTrend(t *testing.T) {
 	if detail.Backend != "convexMemoryStore" || detail.EvictionPolicy != "on run.end" {
 		t.Fatalf("backend=%q eviction=%q", detail.Backend, detail.EvictionPolicy)
 	}
-	if detail.CaptureMode != "afterResponse" {
+	if detail.CaptureMode != "deferred" {
 		t.Fatalf("captureMode = %q", detail.CaptureMode)
 	}
 	if budget, ok := detail.Budget.(map[string]any); !ok || budget["maxTokens"] != float64(1200) {

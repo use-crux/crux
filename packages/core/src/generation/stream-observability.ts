@@ -10,6 +10,26 @@ import {
 import { createStreamTokenCoalescer } from "./stream-token-coalescer";
 import { TimeoutError, normalizeBudgetMs } from "./timeout";
 
+type ObservedStreamSpan = ReturnType<typeof observe.openSpan>;
+
+const streamObservationSpans = new WeakMap<object, ObservedStreamSpan>();
+
+/**
+ * Continue finalized adapter work in the owning `generation.stream` context.
+ *
+ * Stream completion may arrive after raw iteration has closed the parent span.
+ * This continuation preserves parent assignment without reopening or extending
+ * that span. Unobserved values run normally and never manufacture a Run.
+ *
+ * @internal
+ */
+export function runInStreamObservationContext<T>(
+  result: object,
+  work: () => T | Promise<T>,
+): T | Promise<T> {
+  return streamObservationSpans.get(result)?.withContext(work) ?? work();
+}
+
 /** Add stream lifecycle observation without mutating the provider handle. */
 export function attachStreamObservability<TResult>(
   result: TResult,
@@ -43,6 +63,7 @@ export function attachStreamObservability<TResult>(
       attributes: { streamCompleted: true, completionAvailable: false },
       metrics: performance.metrics(),
     });
+    streamObservationSpans.set(result, span);
     return result;
   }
 
@@ -66,7 +87,9 @@ export function attachStreamObservability<TResult>(
       observedCompletion(result, completion, span, finalizer),
     );
   }
-  return cloneWithReplacements(result, replacements);
+  const observed = cloneWithReplacements(result, replacements);
+  streamObservationSpans.set(observed, span);
+  return observed;
 }
 
 function observedCompletion(

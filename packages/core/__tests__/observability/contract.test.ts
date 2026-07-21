@@ -275,6 +275,7 @@ describe("Crux observability graph contract", () => {
         "tool.approval",
         "mcp.connect",
         "mcp.discover",
+        "memory.capture",
         "workspace.operation",
         "corpus.sync",
         "skill.load",

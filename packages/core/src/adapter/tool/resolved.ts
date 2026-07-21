@@ -25,8 +25,9 @@ export function readSkillActivationSession(resolved: ResolvedPrompt): SkillActiv
 }
 
 /**
- * Capture a completed generation turn into every memory bound to the
- * resolved prompt, then flush when required by its capture mode.
+ * Forward one completed generation turn to every memory bound to the resolved
+ * prompt. Each memory owns scheduling, ordered tool-event fan-out, and flush
+ * settlement for that turn.
  *
  * No-op when the prompt has no memory bindings. User messages are read
  * from the canonical history; the assistant turn comes from the final
@@ -72,15 +73,7 @@ export async function captureMemoryTurn(
         },
         options,
       )
-      for (const event of toolEvents ?? []) {
-        await binding.memory.captureToolEvent(event, options)
-      }
 
-      const mode = binding.memory.config?.capture?.mode ?? 'afterResponse'
-      const hasWaitUntil = typeof binding.memory.config?.capture?.waitUntil === 'function'
-      if (mode === 'inline' || (mode === 'afterResponse' && !hasWaitUntil)) {
-        await binding.memory.flush(options)
-      }
     }),
   )
 }

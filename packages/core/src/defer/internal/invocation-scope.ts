@@ -64,6 +64,7 @@ export interface DeferredDrainHandle {
 /** Per-execution-scope deferred-work controller. */
 export interface ScopeDeferController extends DeferRegistrationScope {
   readonly executionScope: ExecutionScope;
+  readonly callbackRetention: "retained" | "unretained";
   readonly signal: AbortSignal;
   readonly namedEvidenceHooks: DurableDeferEvidenceHooks;
   cancel(reason?: unknown): void;
@@ -90,6 +91,7 @@ export function createScopeDeferController(
 
   controller = Object.freeze({
     executionScope,
+    callbackRetention: services.callbackRetention,
     signal: services.signal,
     namedEvidenceHooks: services.namedEvidenceHooks,
     cancel: services.cancel,
@@ -118,8 +120,7 @@ export function createScopeDeferController(
           deferControllerForScope(writable) ??
           createScopeDeferController(writable, services);
         if (routed === controller) throwInlineScopeSealed();
-        routed.registerInline(callback, registration);
-        return;
+        return routed.registerInline(callback, registration);
       }
       assertInlineRegistrationAllowed(services, registration);
       const policy: DeferEvidencePolicy =
@@ -133,7 +134,7 @@ export function createScopeDeferController(
           executionScope.descriptor,
         );
         services.recordCallback();
-        return;
+        return "captured";
       }
       const observation = services.evidence.recordInlineScheduled(
         sequence,
@@ -148,6 +149,7 @@ export function createScopeDeferController(
         observation,
       });
       services.recordCallback();
+      return "deferred";
     },
     stageNamed(target, input) {
       const origin = currentScope() ?? executionScope;

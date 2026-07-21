@@ -20,7 +20,7 @@ import {
 import { languageBindingApplicability } from "../../safety/language-applicability";
 import type { Safety } from "../../safety/session";
 import { SafetyConfigError } from "../../safety/errors";
-import { orchestrateGenerate } from "../../generation/orchestrate";
+import { orchestrateGenerateWithCompletion } from "../../generation/orchestrate";
 import {
   composeAbortSignals,
   createBudgetSignal,
@@ -261,7 +261,7 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
 
   try {
     const generated = await sourceSession.withContext(async () =>
-      orchestrateGenerate<
+      orchestrateGenerateWithCompletion<
         Record<string, unknown>,
         AdapterExecutionGenerateResultWithoutRunId<TRawResponse>
       >(
@@ -315,14 +315,15 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
             stepBudget.dispose();
           }
         },
+        async (result) => {
+          await lifecycle.captureTurn({
+            messages: result.messages,
+            assistantText: result.text,
+            toolCalls: result._meta.toolCalls,
+          });
+        },
       ),
     );
-
-    await lifecycle.captureTurn({
-      messages: generated.messages,
-      assistantText: generated.text,
-      toolCalls: generated._meta.toolCalls,
-    });
 
     return generated;
   } finally {

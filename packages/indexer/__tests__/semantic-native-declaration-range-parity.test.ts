@@ -83,7 +83,7 @@ describe('native semantic declaration range parity', () => {
           })
           return memory({
             id: memoryId,
-            capture: { mode: 'afterResponse' },
+            capture: { mode: 'deferred' },
             budget: { maxTokens: 1200 },
             blocks: [state, tools, knowledge],
           })

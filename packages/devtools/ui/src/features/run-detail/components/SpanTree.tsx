@@ -512,7 +512,7 @@ type SemanticKind =
   | "security"
   | "other";
 
-function semanticKindFor(node: SpanNode): SemanticKind {
+export function semanticKindFor(node: SpanNode): SemanticKind {
   switch (node.primitive) {
     case "composition.pipeline":
     case "pipeline":

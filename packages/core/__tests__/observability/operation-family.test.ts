@@ -14,6 +14,45 @@ describe('observability operation families', () => {
     resetObservabilityRuntime()
   })
 
+  it('keeps memory capture inside its owning operation family', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+    const root = observe.openRun({
+      name: 'generation owner',
+      rootPrimitive: 'generation.call',
+    })
+    let capture!: ReturnType<typeof observe.openSpan>
+
+    root.withContext(() => {
+      capture = observe.openSpan({
+        name: 'memory.capture',
+        primitive: 'memory.capture',
+        implicitRun: false,
+        attributes: {
+          memoryId: 'conversation',
+          operation: 'turn',
+          requestedMode: 'inline',
+          disposition: 'inline',
+          sequence: 1,
+          blockCount: 1,
+          toolEventCount: 0,
+        },
+      })
+      capture.end({ attributes: { outcome: 'completed' } })
+    })
+    root.end()
+    await observe.flush()
+
+    expect(capture.operationId).toBe(root.operationId)
+    expect(capture.runId).toBe(root.runId)
+    expect(transport.records).not.toContainEqual(
+      expect.objectContaining({
+        type: 'run:start',
+        rootPrimitive: 'memory.capture',
+      }),
+    )
+  })
+
   it('opens roots and explicit children with immutable family topology', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)

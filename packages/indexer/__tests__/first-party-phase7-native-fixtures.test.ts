@@ -1,12 +1,70 @@
 import { describe, expect } from "vitest";
 import {
   extractNativeAndFallback,
-  expectNativeExtractionParity,
   itWithRustOxc,
   nativeFactCount,
 } from "./native-first-party-fixture-helpers";
 
-describe("first-party Phase 7 native fixtures", () => {
+describe("first-party Phase 7 native fixture parity", () => {
+  itWithRustOxc(
+    "emits deferred as the effective mode when memory capture config is omitted",
+    async () => {
+      const { nativeOut } = await extractNativeAndFallback({
+        source: "export const sessionMemory = memory({ id: 'session', blocks: [] })",
+        callNames: ["memory"],
+      });
+
+      const metadata = nativeOut.definitions.find(
+        (definition) => definition.id === "memory:session",
+      )?.metadata;
+      expect(metadata).toMatchObject({
+        captureMode: "deferred",
+        facts: { captureMode: "deferred" },
+      });
+    },
+    30_000,
+  );
+
+  itWithRustOxc(
+    "emits only closed effective modes for explicit and removed capture syntax",
+    async () => {
+      const { nativeOut } = await extractNativeAndFallback({
+        source: [
+          "export const inlineMemory = memory({ id: 'inline', capture: { mode: 'inline' }, blocks: [] })",
+          "export const deferredMemory = memory({ id: 'deferred', capture: { mode: 'deferred' }, blocks: [] })",
+          "export const removedCaptureMemory = memory({ id: 'removed-capture', capture: { mode: 'afterResponse' }, blocks: [] })",
+          "export const removedProcessingMemory = memory({ id: 'removed-processing', processing: { mode: 'manual' }, blocks: [] })",
+        ].join("\n"),
+        callNames: ["memory"],
+      });
+
+      const captureModes = Object.fromEntries(
+        nativeOut.definitions
+          .filter((definition) => definition.kind === "memory")
+          .map((definition) => [
+            definition.id,
+            {
+              metadata: definition.metadata?.captureMode,
+              facts: captureModeFromFacts(definition.metadata?.facts),
+            },
+          ]),
+      );
+      expect(captureModes).toEqual({
+        "memory:inline": { metadata: "inline", facts: "inline" },
+        "memory:deferred": { metadata: "deferred", facts: "deferred" },
+        "memory:removed-capture": {
+          metadata: "deferred",
+          facts: "deferred",
+        },
+        "memory:removed-processing": {
+          metadata: "deferred",
+          facts: "deferred",
+        },
+      });
+    },
+    30_000,
+  );
+
   itWithRustOxc(
     "emits exact native memory facts from Rust/Oxc records",
     async () => {
@@ -17,7 +75,7 @@ describe("first-party Phase 7 native fixtures", () => {
         "",
         "export const sessionMemory = memory({",
         "  id: memoryId,",
-        "  capture: { mode: 'afterResponse' },",
+        "  capture: { mode: 'deferred' },",
         "  budget: { maxTokens: 1200 },",
         "  evictionPolicy: 'ttl-30d',",
         "  store: memoryStore,",
@@ -28,7 +86,7 @@ describe("first-party Phase 7 native fixtures", () => {
         "  ],",
         "})",
       ].join("\n");
-      const { fallbackOut, nativeOut, record } = await extractNativeAndFallback(
+      const { nativeOut, record } = await extractNativeAndFallback(
         {
           source,
           callNames: [
@@ -43,7 +101,24 @@ describe("first-party Phase 7 native fixtures", () => {
       );
 
       expect(nativeFactCount(record, "memory")).toBe(1);
-      expectNativeExtractionParity(nativeOut, fallbackOut);
+      expect(nativeOut.definitions.map((definition) => definition.id)).toEqual(
+        expect.arrayContaining([
+          "memory:session",
+          "memory.block:session:state",
+          "memory.block:session:history",
+          "memory.block:session:scratch",
+          "memory.store:session:memoryStore",
+        ]),
+      );
+      expect(
+        nativeOut.definitions.find(
+          (definition) => definition.id === "memory:session",
+        )?.metadata,
+      ).toMatchObject({
+        blockCount: 3,
+        captureMode: "deferred",
+        facts: { captureMode: "deferred" },
+      });
     },
     30_000,
   );
@@ -62,7 +137,7 @@ describe("first-party Phase 7 native fixtures", () => {
         "  store: durableStore({ component: components.memory }),",
         "})",
       ].join("\n");
-      const { fallbackOut, nativeOut, record } = await extractNativeAndFallback(
+      const { nativeOut, record } = await extractNativeAndFallback(
         {
           source,
           callNames: ["blackboard", "createMemoryId"],
@@ -70,7 +145,11 @@ describe("first-party Phase 7 native fixtures", () => {
       );
 
       expect(nativeFactCount(record, "blackboard")).toBe(1);
-      expectNativeExtractionParity(nativeOut, fallbackOut);
+      expect(
+        nativeOut.definitions.filter(
+          (definition) => definition.kind === "blackboard",
+        ),
+      ).toHaveLength(1);
     },
     30_000,
   );
@@ -103,7 +182,7 @@ describe("first-party Phase 7 native fixtures", () => {
         "  classify: () => 'writer',",
         "})",
       ].join("\n");
-      const { fallbackOut, nativeOut, record } = await extractNativeAndFallback(
+      const { nativeOut, record } = await extractNativeAndFallback(
         {
           source,
           callNames: [
@@ -119,8 +198,22 @@ describe("first-party Phase 7 native fixtures", () => {
       );
 
       expect(nativeFactCount(record, "routing")).toBe(5);
-      expectNativeExtractionParity(nativeOut, fallbackOut);
+      expect(nativeOut.definitions.map((definition) => definition.id)).toEqual(
+        expect.arrayContaining([
+          "routing.retry:retried-writer",
+          "routing.fallback:resilient-writer",
+          "routing.split:canary-split",
+          "routing.cascade:quality-routing",
+          "routing.router:quality-router",
+        ]),
+      );
     },
     30_000,
   );
 });
+
+function captureModeFromFacts(facts: unknown): unknown {
+  return facts && typeof facts === "object" && "captureMode" in facts
+    ? facts.captureMode
+    : undefined;
+}

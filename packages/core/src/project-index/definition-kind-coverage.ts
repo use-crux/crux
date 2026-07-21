@@ -198,7 +198,7 @@ export const DEFINITION_KIND_COVERAGE = {
   },
   memory: {
     primary: "directly-observed",
-    runtimePrimitiveNames: ["memory.read", "memory.write"],
+    runtimePrimitiveNames: ["memory.capture", "memory.read", "memory.write"],
   },
   workspace: {
     primary: "directly-observed",

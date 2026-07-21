@@ -806,7 +806,7 @@ describe('createToolLifecycle — applySkillLoads', () => {
 // ─────────────────────────────────────────────────────────────────
 
 describe('createToolLifecycle — captureTurn', () => {
-  it('fans the turn into every binding then flushes, at most once per session', async () => {
+  it('fans one completed turn into every binding, at most once per session', async () => {
     const capture = vi.fn(async () => {})
     const captureToolEvent = vi.fn(async () => {})
     const flush = vi.fn(async () => {})
@@ -826,19 +826,14 @@ describe('createToolLifecycle — captureTurn', () => {
     await lifecycle.captureTurn(args) // double invocation — stream completion + consumption
 
     expect(capture).toHaveBeenCalledTimes(2) // two bindings, one capture each
-    expect(captureToolEvent).toHaveBeenCalledTimes(2)
-    expect(flush).toHaveBeenCalledTimes(2)
+    expect(captureToolEvent).not.toHaveBeenCalled()
+    expect(flush).not.toHaveBeenCalled()
     expect(capture.mock.calls[0]![0]).toMatchObject({
       messages: [
         { role: 'user', content: 'hi' },
         { role: 'assistant', content: 'hello' },
       ],
       toolEvents: [{ toolCallId: 'tc1', toolName: 'echo', args: {} }],
-    })
-    expect(captureToolEvent.mock.calls[0]![0]).toEqual({
-      toolCallId: 'tc1',
-      toolName: 'echo',
-      args: {},
     })
     expect(lifecycle.transcript.filter((e) => e.t === 'memory.capture')).toEqual([{ t: 'memory.capture', bindings: 2 }])
   })
@@ -931,6 +926,7 @@ describe('createToolLifecycle — captureTurn', () => {
         error: 'boom',
       },
     ])
-    expect(captureToolEvent.mock.calls.map(([event]) => event)).toEqual(capture.mock.calls[0]![0].toolEvents)
+    expect(captureToolEvent).not.toHaveBeenCalled()
+    expect(flush).not.toHaveBeenCalled()
   })
 })

@@ -38,13 +38,34 @@ const assistantPrompt = prompt({
 });
 ```
 
-On every call, Crux renders each block into prompt context. After the model finishes, the adapter captures the user and assistant turn and forwards each tool call to blocks' `captureToolEvent` hooks, so `episodes()` records tool activity. Streaming works the same way after `stream().completion()`.
+On every call, Crux renders each block into prompt context. After the model finishes, the adapter submits one completed turn to memory. Memory captures the turn across every block, then fans out each settled tool event in order, so `episodes()` records tool activity without duplicate events. Streaming schedules the same completed-turn capture after tokens have streamed.
 
-`capture.mode` defaults to `afterResponse` and controls when capture work is awaited:
+`capture.mode` defaults to `deferred`:
 
-- `inline` awaits capture before `captureTurn()` or adapter generation resolves.
-- `afterResponse` starts capture after generation. With `capture.waitUntil`, the work is handed to that hook and the response does not wait. Without `waitUntil`, the adapter awaits capture before resolving, which is the safe serverless default.
-- `detached` starts capture in the background and the adapter does not await it. Call `flush()` when you need to await the work.
+- `deferred` uses the active host binding to retain capture after the owning operation returns. If the environment cannot retain background work, Crux runs the same capture inline and waits, preserving memory at the cost of latency. Development builds warn once with a link to the [host setup guide](/docs/guides/background-work/hosts).
+- `inline` always waits for capture. Use it for explicit read-after-write behavior and tests.
+
+Configure background retention once through `config({ host })`; memory has no platform-specific lifecycle hook. `flush()` waits for capture accepted before the call, then runs each block's flush hook in declaration order. It also reports the first unobserved retained capture failure. Call it after generation returns, because retained work may start only when the owning scope closes.
+
+```ts
+const readAfterWriteMemory = memory({
+  // ...
+  capture: { mode: "inline" },
+});
+```
+
+In Evals, default deferred capture is recorded and suppressed so evaluation does not mutate memory. Use explicit `inline` with isolated storage when an Eval intentionally exercises real memory writes.
+
+## Inspect Capture
+
+Catalog and Runs answer different questions about capture:
+
+- In **Catalog → Memory**, select the memory and open **Binding** to see its effective configured mode. Catalog shows `deferred` when the mode is omitted because it describes source configuration, not whether a particular host accepted background work.
+- In **Runs**, open the owning generation and select its `memory.capture` child to see what happened for that invocation. The card reports the requested mode, actual disposition (`inline`, `inline-fallback`, `retained`, or `eval-captured`), outcome, counts, and duration.
+
+A configured `deferred` mode can therefore appear as `inline-fallback` in Runs. That means no retained host accepted the work, so Crux preserved the capture by running and awaiting it inline. `eval-captured` means Eval recorded the deferred intent without running memory hooks.
+
+Capture lifecycle evidence is deliberately payload-free. It retains the authored memory id, lifecycle enums, counts, duration, and an optional stable failure code—not messages, tool payloads, namespaces, raw errors, or stacks. Storage work remains visible in nested `memory.write` spans under `memory.capture`.
 
 ## How to Think About Blocks
 
@@ -79,7 +100,7 @@ const userMemory = memory({
   id: "assistant",
   records,
   namespace: ({ input }) => `user:${input.userId}`,
-  capture: { mode: "afterResponse" },
+  capture: { mode: "deferred" },
   budget: { maxTokens: 1200 },
   blocks: [
     recentMessages({ id: "recent", maxMessages: 12, priority: 80 }),
@@ -121,6 +142,13 @@ const userMemory = memory({
   ],
 });
 ```
+
+### Migrating capture configuration
+
+- Rename `afterResponse` to `deferred`.
+- Replace `detached` with `deferred`; retained work is tracked and observable through `flush()`.
+- Remove `capture.waitUntil`. Configure the supported host once with `config({ host })`.
+- Without a retained host, deferred capture remains correct and runs inline with a development warning.
 
 ## Rendering and Budgets
 

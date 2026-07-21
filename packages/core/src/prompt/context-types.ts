@@ -371,18 +371,31 @@ export interface MemoryEntry {
   readonly id: string
   readonly config?: {
     readonly capture?: {
-      readonly mode?: 'inline' | 'afterResponse' | 'detached'
-      readonly waitUntil?: (promise: Promise<unknown>) => void
+      /** @default 'deferred' */
+      readonly mode?: 'inline' | 'deferred'
     }
   }
   asContext(): Context<z.ZodType>
   asTools(options?: { input?: Record<string, unknown>; namespace?: string }): AnyToolSet
   captureTurn(
     turn: {
-      messages: Array<{ role: string; content: string; metadata?: Record<string, unknown> }>
-      toolEvents?: Array<{ toolCallId?: string; toolName: string; args?: unknown; result?: unknown; error?: string }>
-      source?: { traceId?: string; promptId?: string }
-      metadata?: Record<string, unknown>
+      readonly messages: readonly {
+        readonly role: string
+        readonly content: string
+        readonly metadata?: Readonly<Record<string, unknown>>
+      }[]
+      readonly toolEvents?: readonly {
+        readonly toolCallId?: string
+        readonly toolName: string
+        readonly args?: unknown
+        readonly result?: unknown
+        readonly error?: string
+      }[]
+      readonly source?: {
+        readonly traceId?: string
+        readonly promptId?: string
+      }
+      readonly metadata?: Readonly<Record<string, unknown>>
     },
     options?: Record<string, unknown>,
   ): Promise<void>

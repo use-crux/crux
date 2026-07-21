@@ -117,6 +117,7 @@ import {
 import { DeferredWorkCard } from "./DeferredWorkCard";
 import { EmbeddingEvidenceCard } from "./EmbeddingEvidenceCard";
 import { RetrievalMediaAttribution } from "./RetrievalMediaAttribution";
+import { MemoryCaptureNode } from "./MemoryCaptureCard";
 import { GenerationDetail } from "./GenerationDetail";
 import { MediaRunPanel } from "./MediaRunPanel";
 import { projectMediaRunFromNode } from "../lib/media-run-from-node";
@@ -4264,6 +4265,31 @@ export function SpanDetailPanel({
         <div className="flex-1 overflow-auto px-4 py-4">
           <SectionErrorBoundary title="Flow" compact resetKey={node.id}>
             <FlowCard node={node} onSelect={(id) => onSelectSpan?.(id)} />
+          </SectionErrorBoundary>
+        </div>
+      </div>
+    );
+  }
+
+  // Capture lifecycle is not a storage operation. Keep its disposition and
+  // host-boundary evidence on the dedicated card before generic memory tabs.
+  if (kind === "memory-capture") {
+    return (
+      <div className="flex h-full min-h-0 flex-col">
+        <SelectedSpanHeader
+          node={node}
+          detail={detail}
+          kind={kind}
+          isRoot={isRoot}
+          trace={trace}
+        />
+        <div className="flex-1 overflow-auto px-4 py-4">
+          <SectionErrorBoundary
+            title="Memory capture"
+            compact
+            resetKey={node.id}
+          >
+            <MemoryCaptureNode node={node} />
           </SectionErrorBoundary>
         </div>
       </div>

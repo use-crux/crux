@@ -7,8 +7,6 @@ import type {
   DeferLifetimeLimits,
   ScopeRetainedTask,
 } from "@use-crux/core/internal/scope";
-import { scheduleDiagnosticsOnlyDeferredCallback } from "../../src/defer/internal/port";
-import { runWithDeferRegistration } from "../../src/defer/internal/context";
 import { getHooks, setHooks } from "../../src/runtime/runtime";
 import { createTestScopeDeferController, testBinding } from "./test-binding";
 
@@ -186,22 +184,6 @@ describe("deferred callback boundary", () => {
     });
   });
 
-  it("schedules diagnostics-only callbacks through the same bounded parent drain", async () => {
-    const retained = retainedBinding();
-    const callback = vi.fn();
-    const parent = createTestScopeDeferController(retained.binding);
-    runWithDeferRegistration(handlerRegistration(parent), () => {
-      scheduleDiagnosticsOnlyDeferredCallback(callback);
-    });
-
-    const handle = parent.seal("success");
-    await retained.runOnlyTask();
-
-    expect(callback).toHaveBeenCalledOnce();
-    await expect(handle.settled).resolves.toMatchObject({
-      callbacks: [{ sequence: 0, outcome: "completed" }],
-    });
-  });
 });
 
 function callbackTarget(name: string) {

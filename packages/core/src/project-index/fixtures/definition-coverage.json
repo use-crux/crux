@@ -320,6 +320,7 @@
       "primary": "directly-observed",
       "secondary": [],
       "runtimePrimitiveNames": [
+        "memory.capture",
         "memory.read",
         "memory.write"
       ],

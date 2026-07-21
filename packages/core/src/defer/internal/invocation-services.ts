@@ -22,6 +22,7 @@ import {
 /** Invocation-owned services shared by every per-scope defer controller. */
 export interface InvocationDeferServices {
   readonly invocationScope: ExecutionScope;
+  readonly callbackRetention: "retained" | "unretained";
   readonly limits: DeferLifetimeLimits;
   readonly supportsInline: boolean;
   readonly durableFinalization: boolean;
@@ -53,6 +54,7 @@ export function createInvocationDeferServices(
   return createDeferServices(
     invocationScope,
     {
+      callbackRetention: "retained",
       limits: binding.limits ?? SERVERLESS_DEFER_POLICY,
       supportsInline: binding.supportsInline ?? true,
       durableFinalization: binding.durableFinalization ?? false,
@@ -76,6 +78,7 @@ export function createPrimitiveDeferServices(
   return createDeferServices(
     rootScope,
     {
+      callbackRetention: binding ? "retained" : "unretained",
       limits: binding?.limits ?? SERVERLESS_DEFER_POLICY,
       supportsInline: binding?.supportsInline ?? true,
       durableFinalization: binding?.durableFinalization ?? false,
@@ -93,6 +96,7 @@ export function createPrimitiveDeferServices(
 }
 
 interface DeferServiceCapabilities {
+  readonly callbackRetention: "retained" | "unretained";
   readonly limits: DeferLifetimeLimits;
   readonly supportsInline: boolean;
   readonly durableFinalization: boolean;
@@ -107,8 +111,13 @@ function createDeferServices(
     readonly abortController?: AbortController;
   },
 ): InvocationDeferServices {
-  const { limits, supportsInline, durableFinalization, schedule } =
-    capabilities;
+  const {
+    callbackRetention,
+    limits,
+    supportsInline,
+    durableFinalization,
+    schedule,
+  } = capabilities;
   let callbackCount = 0;
   const commitBarrier = createDeferCommitBarrier();
   const abortController = options.abortController ?? new AbortController();
@@ -122,6 +131,7 @@ function createDeferServices(
 
   return Object.freeze({
     invocationScope,
+    callbackRetention,
     limits,
     supportsInline,
     durableFinalization,
