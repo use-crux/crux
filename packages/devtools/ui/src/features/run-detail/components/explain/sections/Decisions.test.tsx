@@ -1,39 +1,75 @@
-import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
-import type { TurnDecision } from '@/types'
-import { DecisionRow } from './Decisions'
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it } from "vitest";
+import {
+  normalizeTurnDecisionReport,
+  type RuntimeTurnDecisionReport,
+} from "@/features/run-detail/lib/explain/report";
+import { DecisionRow } from "./Decisions";
 
-describe('DecisionRow Safety provenance', () => {
-  it('shows the semantic target, source badge, and safe retrieval id', () => {
-    const decision: TurnDecision = {
-      id: 'decision:safety:0:retrieval:model.input.text',
-      phase: 'checks',
-      kind: 'safety.guardrail',
-      subject: { kind: 'guardrail', id: 'retrieval-policy', label: 'retrieval-policy' },
-      outcome: 'rewrite',
-      reason: {
-        code: 'guardrail.redacted',
-        text: 'Unsafe instructions removed.',
-        source: 'artifact',
-        evidenceLevel: 'declared',
+describe("DecisionRow Safety provenance", () => {
+  it("renders the semantic facts from a normalized Go-shaped report", () => {
+    const report = {
+      schemaVersion: 1,
+      reportId: "tdr:run_guardrail_safety:span_generation",
+      runId: "run_guardrail_safety",
+      traceId: "trace_guardrail_safety",
+      turn: {
+        id: "span_generation",
+        kind: "generation.call",
+        name: "generate guarded answer",
+        status: "ok",
+        durMs: 500,
       },
-      safety: {
-        target: { id: 'model.input.text', label: 'Model input · Text' },
-        mode: 'enforce',
-        changed: true,
-        origin: {
-          source: 'retrieval',
-          kind: 'retrieval-context',
-          retrieverId: 'docs',
+      saw: [],
+      considered: [],
+      freshness: [],
+      cache: [],
+      decisions: [
+        {
+          id: "decision:span_generation:guardrail:span_guardrail",
+          phase: "checks",
+          kind: "guardrail.run",
+          subject: {
+            kind: "guardrail",
+            id: "span_guardrail",
+            name: "sanitize-retrieval",
+          },
+          outcome: "transform",
+          reason: {
+            code: "guardrail.redacted",
+            text: "guardrail decision was observed.",
+            source: "span-attribute",
+            evidenceLevel: "observed",
+          },
+          safety: {
+            target: { id: "model.input.text", label: "Model input · Text" },
+            mode: "enforce",
+            changed: true,
+            origin: {
+              source: "retrieval",
+              kind: "retrieval-context",
+              retrieverId: "docs",
+              blockIndex: 0,
+              segmentIndex: 3,
+            },
+          },
+          tab: { tab: "Guardrail", spanId: "span_guardrail" },
         },
-      },
-    }
+      ],
+      source: [],
+      coverage: { covered: 0, total: 6, areas: [] },
+      gaps: [],
+    } satisfies RuntimeTurnDecisionReport;
 
-    const html = renderToStaticMarkup(<DecisionRow decision={decision} />)
+    const normalized = normalizeTurnDecisionReport(report);
+    const decision = normalized?.decisions[0];
+    if (!decision) throw new Error("normalized Go report omitted its decision");
 
-    expect(html).toContain('Model input · Text')
-    expect(html).toContain('Retrieval')
-    expect(html).toContain('docs')
-    expect(html).toContain('enforce · changed')
-  })
-})
+    const html = renderToStaticMarkup(<DecisionRow decision={decision} />);
+
+    expect(html).toContain("Model input · Text");
+    expect(html).toContain("Retrieval");
+    expect(html).toContain("docs");
+    expect(html).toContain("enforce · changed");
+  });
+});

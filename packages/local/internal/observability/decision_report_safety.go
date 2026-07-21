@@ -9,6 +9,7 @@ func guardDecisionForSpan(turn SpanSummary, span SpanSummary, subjectKind string
 	outcome := strings.ToLower(firstNonEmpty(stringAttribute(span.Attributes, "action"), span.Status, "unknown"))
 	reasonCode := safetyReasonCode(subjectKind, outcome)
 	decision := runtimeDecision(turn, span, "checks", span.Primitive, subjectKind, outcome, observedReason(reasonCode, subjectKind+" decision was observed."), tab)
+	decision.Safety = safetyDecisionForAttributes(span.Attributes)
 	decision.Model = stringAttribute(span.Attributes, "model")
 	decision.Location = mediaDecisionLocation(span.Attributes)
 	decision.EscalatedToBlock = booleanAttribute(span.Attributes, "escalatedToBlock")

@@ -118,6 +118,7 @@ type TurnDecision struct {
 	Subject          TurnDecisionSubject    `json:"subject"`
 	Outcome          string                 `json:"outcome"`
 	Reason           TurnDecisionReason     `json:"reason"`
+	Safety           *TurnSafetyDecision    `json:"safety,omitempty"`
 	Model            string                 `json:"model,omitempty"`
 	Location         *TurnDecisionLocation  `json:"location,omitempty"`
 	EscalatedToBlock bool                   `json:"escalatedToBlock,omitempty"`
