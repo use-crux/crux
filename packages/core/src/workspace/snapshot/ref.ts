@@ -6,6 +6,7 @@
 
 import { normalizePath } from "../path";
 import type { WorkspacePath } from "../types";
+import type { WorkspaceSnapshotHeader } from "./records";
 import { WorkspaceSnapshotError, type WorkspaceSnapshotRef } from "./types";
 
 /** Validate an untrusted JSON-safe ref and copy it into a frozen trusted value. */
@@ -48,6 +49,22 @@ export function validateSnapshotRef(
     sizeBytes: ref.sizeBytes,
     createdAt: ref.createdAt,
   });
+}
+
+/** Return whether a committed private header exactly matches its public ref. */
+export function snapshotHeaderMatchesRef(
+  header: WorkspaceSnapshotHeader,
+  ref: WorkspaceSnapshotRef,
+): boolean {
+  return (
+    header.id === ref.id &&
+    header.workspaceId === ref.workspaceId &&
+    header.namespace === ref.namespace &&
+    header.path === ref.path &&
+    header.fileCount === ref.fileCount &&
+    header.sizeBytes === ref.sizeBytes &&
+    header.createdAt === ref.createdAt
+  );
 }
 
 function invalidReference(

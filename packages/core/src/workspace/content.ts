@@ -96,21 +96,34 @@ export async function createFileRecord(input: {
   readonly status: WorkspaceArtifactStatus | undefined;
   readonly artifactKind: string | undefined;
   readonly producedBy: WorkspaceProvenance | undefined;
+  /** Replace absent artifact fields instead of inheriting them from HEAD. */
+  readonly artifactMode?: "merge" | "replace";
+  /** Pin a restored final state to the version currently being written. */
+  readonly pinFinalVersionToCurrent?: boolean;
   readonly existing: WorkspaceFileRecord | null;
   readonly now: number;
+  /** Original creation time when recreating a captured, currently absent path. */
+  readonly createdAt?: number;
   /** The version number this record becomes; scopes the asset key so history is immutable. */
   readonly version: number;
   readonly inlineTextBelowBytes: number;
   readonly assets: AssetStore | undefined;
 }): Promise<WorkspaceFileRecord> {
-  const status = input.status ?? input.existing?.status;
-  const kind = input.artifactKind ?? input.existing?.kind;
-  const producedBy = input.producedBy ?? input.existing?.producedBy;
-  const finalVersion = pinnedFinalVersion(
-    status,
-    input.version,
-    input.existing,
-  );
+  const replaceArtifacts = input.artifactMode === "replace";
+  const status = replaceArtifacts
+    ? input.status
+    : (input.status ?? input.existing?.status);
+  const kind = replaceArtifacts
+    ? input.artifactKind
+    : (input.artifactKind ?? input.existing?.kind);
+  const producedBy = replaceArtifacts
+    ? input.producedBy
+    : (input.producedBy ?? input.existing?.producedBy);
+  const finalVersion = input.pinFinalVersionToCurrent
+    ? status === "final"
+      ? input.version
+      : undefined
+    : pinnedFinalVersion(status, input.version, input.existing);
   const base = {
     _cruxWorkspaceFile: true as const,
     version: FILE_RECORD_VERSION as typeof FILE_RECORD_VERSION,
@@ -126,7 +139,7 @@ export async function createFileRecord(input: {
     ...(producedBy !== undefined ? { producedBy } : {}),
     headVersion: input.version,
     ...(finalVersion !== undefined ? { finalVersion } : {}),
-    createdAt: input.existing?.createdAt ?? input.now,
+    createdAt: input.existing?.createdAt ?? input.createdAt ?? input.now,
     updatedAt: input.now,
   };
 

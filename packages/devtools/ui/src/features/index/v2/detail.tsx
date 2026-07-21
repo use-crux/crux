@@ -44,6 +44,7 @@ import { IndexStorage } from "./storage-section";
 import { IndexMedia } from "./media-section";
 import { IndexSafety } from "./safety-section";
 import { IndexMcpDetail } from "./mcp-detail";
+import { IndexWorkspaceSnapshotUsage } from "./workspace-snapshot/section";
 
 // ── relations block (two columns, full width) ────────────────────────────────
 function CatRelations({ def }: { def: ViewDef }) {
@@ -175,6 +176,7 @@ const INDEX_SECTION_COMP: Record<string, ComponentType<{ def: ViewDef }>> = {
   media: IndexMedia,
   safety: IndexSafety,
   mcp: IndexMcpDetail,
+  workspaceSnapshots: IndexWorkspaceSnapshotUsage,
   // observed-injection layer (prompt/context) + injectable "Contributes";
   // each returns null without data, so they are inert for every other kind.
   observed: CatObservedSection,
@@ -184,7 +186,7 @@ const INDEX_SECTION_COMP: Record<string, ComponentType<{ def: ViewDef }>> = {
   health: IndexHealthSection,
 };
 
-function indexSectionOrder(def: ViewDef): string[] {
+export function indexSectionOrder(def: ViewDef): string[] {
   const k = def.kind;
   const map: Record<string, string[]> = {
     prompt: [
@@ -332,7 +334,15 @@ function indexSectionOrder(def: ViewDef): string[] {
       "health",
     ];
   if (k === "workspace")
-    return ["hero", "config", "data", "source", "relations", "health"];
+    return [
+      "hero",
+      "workspaceSnapshots",
+      "config",
+      "data",
+      "source",
+      "relations",
+      "health",
+    ];
   if (k === "guardrail" || k === "constraint")
     return [
       "hero",

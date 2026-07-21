@@ -15,12 +15,27 @@ import {
   hashText,
 } from "./fingerprint";
 import type { WorkspaceSnapshotPayload } from "./records";
+import { snapshotAssetOwnershipFingerprint } from "./asset-ownership";
 
 /** Payload plus any new AssetStore ownership created while materializing it. */
 export interface MaterializedSnapshotPayload {
   readonly payload: WorkspaceSnapshotPayload;
   readonly ownedAssets: readonly AssetRef[];
 }
+
+/** A live payload projection plus bytes needed for independent asset ownership. */
+export type InspectedSnapshotPayload =
+  | {
+      readonly payload: WorkspaceSnapshotPayload;
+      readonly assetBytes?: undefined;
+    }
+  | {
+      readonly payload: Extract<
+        WorkspaceSnapshotPayload,
+        { readonly storage: "asset" }
+      >;
+      readonly assetBytes: Uint8Array;
+    };
 
 /** Copy one live payload into snapshot-owned storage. */
 export async function materializeSnapshotPayload(input: {
@@ -29,38 +44,65 @@ export async function materializeSnapshotPayload(input: {
   readonly role: "head" | "published";
   readonly assets?: AssetStore;
 }): Promise<MaterializedSnapshotPayload> {
-  if (input.record.storage === "inline") {
-    return { payload: materializeInlinePayload(input.record), ownedAssets: [] };
+  const inspected = await inspectSnapshotPayload(input.record, input.assets);
+  if (inspected.assetBytes === undefined) {
+    return { payload: inspected.payload, ownedAssets: [] };
   }
-  if (!input.assets || !input.record.assetRef) {
+  if (!input.assets) {
     throw new Error("Snapshot capture requires the file's owning AssetStore.");
   }
-  const live = await input.assets.get(input.record.assetRef);
-  if (live.type !== "data") {
-    throw new Error(
-      "Workspace snapshot capture requires AssetStore data assets.",
-    );
-  }
-  const bytes = await dataAssetBytes(live);
-  const kind = payloadKind(input.record.mimeType);
-  const contentHash = assetContentHash(bytes, kind);
   const stored = await input.assets.put(
     workspaceDataAsset({
-      data: bytes,
+      data: inspected.assetBytes,
       mediaType: input.record.mimeType,
-      size: bytes.byteLength,
+      size: inspected.assetBytes.byteLength,
     }),
     { key: snapshotAssetKey(input) },
   );
   return {
     payload: {
-      kind,
-      storage: "asset",
+      ...inspected.payload,
       assetUri: stored.ref.uri,
-      sizeBytes: bytes.byteLength,
-      contentHash,
+      ownershipFingerprint: snapshotAssetOwnershipFingerprint({
+        snapshotId: input.snapshotId,
+        path: input.record.path,
+        role: input.role,
+        assetUri: stored.ref.uri,
+      }),
     },
     ownedAssets: [stored.ref],
+  };
+}
+
+/** Inspect one live payload using the same logical rules as snapshot capture. */
+export async function inspectSnapshotPayload(
+  record: WorkspaceFileRecord,
+  assets: AssetStore | undefined,
+): Promise<InspectedSnapshotPayload> {
+  if (record.storage === "inline") {
+    return { payload: materializeInlinePayload(record) };
+  }
+  if (!assets || !record.assetRef) {
+    throw new Error(
+      "Snapshot payload inspection requires its owning AssetStore.",
+    );
+  }
+  const live = await assets.get(record.assetRef);
+  if (live.type !== "data") {
+    throw new Error("Workspace snapshots require AssetStore data assets.");
+  }
+  const assetBytes = await dataAssetBytes(live);
+  const kind = payloadKind(record.mimeType);
+  return {
+    payload: {
+      kind,
+      storage: "asset",
+      assetUri: record.assetRef.uri,
+      ownershipFingerprint: "live-state-not-persisted",
+      sizeBytes: assetBytes.byteLength,
+      contentHash: assetContentHash(assetBytes, kind),
+    },
+    assetBytes,
   };
 }
 

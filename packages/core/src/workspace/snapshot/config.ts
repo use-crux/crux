@@ -1,13 +1,12 @@
 /** Shared dependency contract for private snapshot operations. */
 
 import type { AssetStore, RecordStore } from "../../storage";
-import type { NormalizedMount } from "../types";
+import type { WorkspaceMutationBatchConfig } from "../mutation-batch";
 
-export interface WorkspaceSnapshotConfig {
+export interface WorkspaceSnapshotConfig extends WorkspaceMutationBatchConfig {
   readonly workspaceId: string;
   readonly store: RecordStore;
   readonly assets?: AssetStore;
-  readonly mounts: readonly NormalizedMount[];
   readonly resolveNamespace: () => Promise<string>;
 }
 

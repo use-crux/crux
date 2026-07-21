@@ -5,6 +5,7 @@ import {
   type Node,
 } from "@typescript/native-preview/unstable/ast";
 import { dataAccessKindForMethod } from "../../../data-access-manifest";
+import { workspaceSnapshotAccessForMethod } from "../../../workspace-snapshot-access";
 import type { NativeDefinition } from "./types";
 import type { NativeSourceBinding } from "./types";
 import { propertyInitializer } from "./object";
@@ -86,7 +87,8 @@ function containsDataAccessCall(
   if (isCallExpression(node)) {
     if (
       isPropertyAccessExpression(node.expression) &&
-      dataAccessKindForMethod(node.expression.name.text)
+      (dataAccessKindForMethod(node.expression.name.text) ||
+        isWorkspaceSnapshotFacetCall(node.expression))
     ) {
       return true;
     }
@@ -104,6 +106,15 @@ function containsDataAccessCall(
   };
   node.forEachChild(visit);
   return found;
+}
+
+function isWorkspaceSnapshotFacetCall(node: Node): boolean {
+  if (!isPropertyAccessExpression(node)) return false;
+  if (!workspaceSnapshotAccessForMethod(node.name.text)) return false;
+  return (
+    isPropertyAccessExpression(node.expression) &&
+    node.expression.name.text === "snapshot"
+  );
 }
 
 function containsDataAccessCallInBinding(

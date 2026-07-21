@@ -72,6 +72,7 @@ export function projectRelation(input: {
   readonly to: string;
   readonly fidelity: ProjectRelation["fidelity"];
   readonly source?: SourceLocation;
+  readonly metadata?: ProjectRelation["metadata"];
   readonly id?: string;
 }): ProjectRelation {
   return {
@@ -85,6 +86,7 @@ export function projectRelation(input: {
     to: input.to,
     fidelity: input.fidelity,
     ...(input.source ? { source: input.source } : {}),
+    ...(input.metadata ? { metadata: input.metadata } : {}),
   };
 }
 

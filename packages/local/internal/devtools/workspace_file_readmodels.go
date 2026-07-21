@@ -51,7 +51,7 @@ func workspaceFilesFromEvents(events []store.WorkspaceEventData) []workspaceFile
 	ordered := append([]store.WorkspaceEventData(nil), events...)
 	sort.SliceStable(ordered, func(i, j int) bool { return ordered[i].Timestamp < ordered[j].Timestamp })
 	for _, event := range ordered {
-		if event.Path == "" || event.Path == "/" || event.Operation == "list" {
+		if event.Path == "" || event.Path == "/" || !workspaceOperationAffectsFileCatalog(event.Operation) {
 			continue
 		}
 		counts[event.Path]++
@@ -125,15 +125,23 @@ func workspaceOpsFromEvents(events []store.WorkspaceEventData) []workspaceOpDeta
 			EventID:        eventID("workspace", event.TraceID, event.Timestamp, event.Path),
 			Op:             event.Operation,
 			Path:           event.Path,
+			PathHash:       event.PathHash,
 			DurationMs:     event.DurationMs,
 			Status:         workspaceStatus(event.Status),
 			Bytes:          event.Size,
+			FileCount:      event.FileCount,
+			SizeBytes:      event.SizeBytes,
+			SnapshotCount:  event.SnapshotCount,
+			RestoredFiles:  event.RestoredFiles,
+			DeletedFiles:   event.DeletedFiles,
+			UnchangedFiles: event.UnchangedFiles,
 			Mime:           event.MimeType,
 			ArtifactStatus: event.ArtifactStatus,
 			ArtifactKind:   event.ArtifactKind,
 			URI:            event.URI,
 			TraceID:        event.TraceID,
 			Error:          derefString(event.Error),
+			ErrorCode:      event.ErrorCode,
 			Timestamp:      event.Timestamp,
 		})
 	}

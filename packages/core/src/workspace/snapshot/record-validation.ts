@@ -1,6 +1,6 @@
 /** Structural validation for private Workspace snapshot records. */
 
-import type { JsonObject } from "../../storage";
+import type { JsonObject, JsonValue } from "../../storage";
 import { normalizePath } from "../path";
 import type { WorkspacePath } from "../types";
 import {
@@ -77,7 +77,7 @@ function isSnapshotDescriptor(
   if (!isJsonObject(value)) return false;
   return (
     isNonEmptyString(value.mimeType) &&
-    (value.metadata === undefined || isJsonObject(value.metadata)) &&
+    (value.metadata === undefined || isSnapshotJsonObject(value.metadata)) &&
     (value.status === undefined ||
       value.status === "draft" ||
       value.status === "final") &&
@@ -98,11 +98,41 @@ function isSnapshotPayload(value: unknown): value is WorkspaceSnapshotPayload {
     isNonNegativeSafeInteger(value.sizeBytes) &&
     isNonEmptyString(value.contentHash);
   if (!common) return false;
-  if (value.storage === "asset") return isNonEmptyString(value.assetUri);
+  if (value.storage === "asset") {
+    return (
+      isNonEmptyString(value.assetUri) &&
+      isNonEmptyString(value.ownershipFingerprint)
+    );
+  }
   if (value.storage !== "inline") return false;
   return (
     (value.kind === "text" && typeof value.content === "string") ||
-    (value.kind === "json" && value.content !== undefined)
+    (value.kind === "json" &&
+      typeof value.content !== "string" &&
+      isSnapshotJsonValue(value.content))
+  );
+}
+
+/** Return whether a value is recursively finite, undefined-free JSON. */
+export function isSnapshotJsonValue(value: unknown): value is JsonValue {
+  if (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "boolean"
+  ) {
+    return true;
+  }
+  if (typeof value === "number") return Number.isFinite(value);
+  if (Array.isArray(value)) return isDenseArray(value, isSnapshotJsonValue);
+  return isSnapshotJsonObject(value);
+}
+
+function isSnapshotJsonObject(value: unknown): value is JsonObject {
+  return (
+    isJsonObject(value) &&
+    Object.values(value).every(
+      (child) => child !== undefined && isSnapshotJsonValue(child),
+    )
   );
 }
 
@@ -115,8 +145,18 @@ function isSnapshotProvenance(
     (value.spanId === undefined || typeof value.spanId === "string") &&
     (value.sources === undefined ||
       (Array.isArray(value.sources) &&
-        value.sources.every((source) => typeof source === "string")))
+        isDenseArray(value.sources, (source) => typeof source === "string")))
   );
+}
+
+function isDenseArray<T>(
+  value: readonly T[],
+  predicate: (item: T) => boolean,
+): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    if (!(index in value) || !predicate(value[index]!)) return false;
+  }
+  return true;
 }
 
 function isSnapshotState(value: unknown): value is WorkspaceSnapshotState {

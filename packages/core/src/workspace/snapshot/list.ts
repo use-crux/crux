@@ -5,12 +5,14 @@ import { resolveSnapshotNamespace } from "./config";
 import { decodeSnapshotCursor, encodeSnapshotCursor } from "./cursor";
 import { snapshotBackendError } from "./errors";
 import { normalizePath } from "../path";
+import { instrument } from "../observability";
 import { snapshotHeaderToRef } from "./records";
-import { listSnapshotHeaders } from "./store";
+import { listSnapshotHeaderCandidates } from "./store";
 import type {
   WorkspaceSnapshotListOptions,
   WorkspaceSnapshotPage,
 } from "./types";
+import { WorkspaceSnapshotError } from "./types";
 
 /** List committed snapshots in newest-first order. */
 export async function listWorkspaceSnapshots(
@@ -20,49 +22,74 @@ export async function listWorkspaceSnapshots(
   const limit = validateListLimit(options?.limit);
   const path = options?.path === undefined ? null : normalizePath(options.path);
   const namespace = await resolveSnapshotNamespace(config, options?.namespace);
-  try {
-    const cursor =
-      options?.cursor === undefined
-        ? undefined
-        : decodeSnapshotCursor(options.cursor, {
-            workspaceId: config.workspaceId,
+  return instrument(
+    {
+      workspaceId: config.workspaceId,
+      operation: "snapshot.list",
+      namespace,
+      path: path ?? "/",
+    },
+    async () => {
+      try {
+        const cursor =
+          options?.cursor === undefined
+            ? undefined
+            : decodeSnapshotCursor(options.cursor, {
+                workspaceId: config.workspaceId,
+                namespace,
+                path,
+              });
+        const ordered = (
+          await listSnapshotHeaderCandidates(
+            config.store,
+            config.workspaceId,
             namespace,
-            path,
-          });
-    const ordered = (
-      await listSnapshotHeaders(config.store, config.workspaceId, namespace)
-    )
-      .filter(
-        (header) =>
-          header.state === "committed" &&
-          (path === null || header.path === path) &&
-          (cursor === undefined || isAfterCursor(header, cursor)),
-      )
-      .sort(
-        (left, right) =>
-          right.createdAt - left.createdAt || compareText(right.id, left.id),
-      );
-    const selected = ordered.slice(0, limit);
-    const snapshots = Object.freeze(selected.map(snapshotHeaderToRef));
-    const last = selected.at(-1);
-    const nextCursor =
-      ordered.length > limit && last
-        ? encodeSnapshotCursor({
-            version: 1,
-            workspaceId: config.workspaceId,
-            namespace,
-            path,
-            createdAt: last.createdAt,
-            id: last.id,
-          })
-        : undefined;
-    return Object.freeze({
-      snapshots,
-      ...(nextCursor !== undefined ? { cursor: nextCursor } : {}),
-    });
-  } catch (error) {
-    throw snapshotBackendError("list", error);
-  }
+          )
+        )
+          .filter(
+            (candidate) =>
+              (path === null || candidate.path === path) &&
+              (cursor === undefined || isAfterCursor(candidate, cursor)),
+          )
+          .sort(
+            (left, right) =>
+              right.createdAt - left.createdAt ||
+              compareText(right.id, left.id),
+          );
+        const selected = ordered.slice(0, limit);
+        const snapshots = Object.freeze(
+          selected.map((candidate) => {
+            if (candidate.kind === "corrupt") {
+              throw new WorkspaceSnapshotError(
+                "corrupt_snapshot",
+                "Snapshot listing contains a malformed committed header.",
+                { snapshotId: candidate.id },
+              );
+            }
+            return snapshotHeaderToRef(candidate.header);
+          }),
+        );
+        const last = selected.at(-1);
+        const nextCursor =
+          ordered.length > limit && last
+            ? encodeSnapshotCursor({
+                version: 1,
+                workspaceId: config.workspaceId,
+                namespace,
+                path,
+                createdAt: last.createdAt,
+                id: last.id,
+              })
+            : undefined;
+        return Object.freeze({
+          snapshots,
+          ...(nextCursor !== undefined ? { cursor: nextCursor } : {}),
+        });
+      } catch (error) {
+        throw snapshotBackendError("list", error);
+      }
+    },
+  );
 }
 
 function validateListLimit(limit: number | undefined): number {

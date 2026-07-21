@@ -13,7 +13,11 @@
 
 import type { JsonObject } from "../storage";
 import type { WorkspaceSnapshotOperations } from "./snapshot/types";
-import type { WorkspaceFileRecord, WorkspaceNamespaceOption } from "./types";
+import type {
+  WorkspaceFileRecord,
+  WorkspaceNamespaceOption,
+  WorkspacePath,
+} from "./types";
 
 /** Persisted schema version for a {@link WorkspaceVersionRecord}. */
 export const VERSION_RECORD_SCHEMA = 1;
@@ -37,6 +41,15 @@ export type WorkspaceVersionOperation =
   | "undo"
   | "restore";
 
+/** Internal marker emitted only after its version mutation commits. */
+export interface WorkspaceVersionEvent {
+  readonly workspaceId: string;
+  readonly namespace: string;
+  readonly path: WorkspacePath;
+  readonly version: number;
+  readonly operation: WorkspaceVersionOperation;
+}
+
 /**
  * Versioning & retention policy for a workspace.
  *
@@ -54,8 +67,8 @@ export interface WorkspaceVersioning {
   /**
    * Maximum number of recent versions to retain per file. An older revision
    * referenced by the file's active publication pin is retained in addition to
-   * this numeric cap until it is no longer published. Other older snapshots and
-   * their out-of-line assets are deleted. Defaults to unlimited.
+   * this numeric cap until it is no longer published. Other older file revisions
+   * and their out-of-line assets are deleted. Defaults to unlimited.
    */
   readonly maxVersions?: number;
 }
@@ -63,7 +76,7 @@ export interface WorkspaceVersioning {
 /**
  * One revision in a file's history, newest first.
  *
- * This is the public projection of a stored snapshot: enough to render a
+ * This is the public projection of a stored file revision: enough to render a
  * timeline and pick a revision to read or diff, with no file contents inlined.
  */
 export interface WorkspaceVersion {

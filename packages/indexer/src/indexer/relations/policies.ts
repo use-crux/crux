@@ -6,6 +6,7 @@ import {
   mcpRelationPolicies,
   promptContextAccessRelationPolicies,
   routingTargetRelationPolicies,
+  workspaceSnapshotAccessRelationPolicies,
 } from './policy-groups'
 import type { IndexRelationPolicy } from './types'
 
@@ -13,6 +14,7 @@ export const indexRelationPolicies = [
   ...injectableUseRelationPolicies,
   ...injectableContributionRelationPolicies,
   ...promptContextAccessRelationPolicies,
+  ...workspaceSnapshotAccessRelationPolicies,
   ...mediaRelationPolicies,
   ...mcpRelationPolicies,
   {

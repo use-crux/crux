@@ -4,17 +4,13 @@
  * @module
  */
 
-import {
-  StorageError,
-  type AssetStore,
-  type RecordEntry,
-  type RecordStore,
-} from "../../storage";
+import type { RecordEntry, RecordStore } from "../../storage";
+import { normalizePath } from "../path";
 import type { WorkspacePath } from "../types";
 import { snapshotManifestFingerprint } from "./fingerprint";
+import { listAllSnapshotRecords } from "./store-list";
 import {
   WORKSPACE_SNAPSHOT_SCHEMA,
-  snapshotEntryAssetRefs,
   type WorkspaceSnapshotHeader,
   type WorkspaceSnapshotEntry,
 } from "./records";
@@ -22,7 +18,6 @@ import {
   isWorkspaceSnapshotEntry,
   isWorkspaceSnapshotHeader,
 } from "./record-validation";
-import { WorkspaceSnapshotError } from "./types";
 
 function snapshotPrefix(workspaceId: string, namespace: string): string {
   return `workspace:${encodeURIComponent(workspaceId)}:${encodeURIComponent(namespace)}:snapshot:`;
@@ -168,129 +163,101 @@ export async function getSnapshotHeader(
   return isWorkspaceSnapshotHeader(value) ? value : "malformed";
 }
 
-/** List every structurally valid header in one Workspace namespace. */
-export async function listSnapshotHeaders(
+/** One safely orderable committed header candidate for logical pagination. */
+export type WorkspaceSnapshotHeaderCandidate =
+  | {
+      readonly kind: "valid";
+      readonly id: string;
+      readonly path: WorkspacePath;
+      readonly createdAt: number;
+      readonly header: WorkspaceSnapshotHeader;
+    }
+  | {
+      readonly kind: "corrupt";
+      readonly id: string;
+      readonly path: WorkspacePath;
+      readonly createdAt: number;
+    };
+
+/** List safely orderable committed header candidates in one namespace. */
+export async function listSnapshotHeaderCandidates(
   store: RecordStore,
   workspaceId: string,
   namespace: string,
-): Promise<readonly WorkspaceSnapshotHeader[]> {
-  const records = await listAllRecords(
-    store,
-    snapshotPrefix(workspaceId, namespace),
-  );
-  return records.flatMap((entry) => {
+): Promise<readonly WorkspaceSnapshotHeaderCandidate[]> {
+  const prefix = snapshotPrefix(workspaceId, namespace);
+  const records = await listAllSnapshotRecords(store, prefix);
+  const candidates: WorkspaceSnapshotHeaderCandidate[] = [];
+  for (const entry of records) {
     const header = entry.value;
-    return isWorkspaceSnapshotHeader(header) &&
+    if (
+      isWorkspaceSnapshotHeader(header) &&
       header.workspaceId === workspaceId &&
       header.namespace === namespace &&
       entry.key === snapshotHeaderKey(workspaceId, namespace, header.id)
-      ? [header]
-      : [];
-  });
-}
-
-/** Mark a snapshot deleting, remove its entries, then remove the header last. */
-export async function deleteSnapshotRecords(input: {
-  readonly store: RecordStore;
-  readonly assets?: AssetStore;
-  readonly header: WorkspaceSnapshotHeader;
-}): Promise<void> {
-  const deleting = {
-    ...input.header,
-    state: "deleting",
-  } satisfies WorkspaceSnapshotHeader;
-  await input.store.put(
-    snapshotHeaderKey(deleting.workspaceId, deleting.namespace, deleting.id),
-    deleting,
-  );
-  await deleteSnapshotOwnedData({
-    store: input.store,
-    ...(input.assets !== undefined ? { assets: input.assets } : {}),
-    snapshot: deleting,
-  });
-  await input.store.delete(
-    snapshotHeaderKey(deleting.workspaceId, deleting.namespace, deleting.id),
-  );
-}
-
-/** Clean residual entry records when an owned header is already absent. */
-export async function deleteSnapshotEntries(
-  store: RecordStore,
-  snapshot: Pick<WorkspaceSnapshotHeader, "workspaceId" | "namespace" | "id">,
-): Promise<void> {
-  const records = await listAllRecords(
-    store,
-    snapshotEntryPrefix(snapshot.workspaceId, snapshot.namespace, snapshot.id),
-  );
-  for (const record of records) {
-    await store.delete(record.key);
-  }
-}
-
-/** Delete snapshot-owned assets first, then their entry records. */
-export async function deleteSnapshotOwnedData(input: {
-  readonly store: RecordStore;
-  readonly assets?: AssetStore;
-  readonly snapshot: Pick<
-    WorkspaceSnapshotHeader,
-    "workspaceId" | "namespace" | "id"
-  >;
-}): Promise<void> {
-  const records = await listAllRecords(
-    input.store,
-    snapshotEntryPrefix(
-      input.snapshot.workspaceId,
-      input.snapshot.namespace,
-      input.snapshot.id,
-    ),
-  );
-  for (const record of records) {
-    if (
-      !isWorkspaceSnapshotEntry(record.value) ||
-      record.value.snapshotId !== input.snapshot.id
     ) {
-      throw new WorkspaceSnapshotError(
-        "corrupt_snapshot",
-        "Snapshot contains a malformed materialized entry.",
-        { snapshotId: input.snapshot.id },
-      );
+      if (header.state === "committed") {
+        candidates.push({
+          kind: "valid",
+          id: header.id,
+          path: header.path,
+          createdAt: header.createdAt,
+          header,
+        });
+      }
+      continue;
     }
-    const refs = snapshotEntryAssetRefs(record.value);
-    if (refs.length > 0 && !input.assets) {
-      throw new Error("Snapshot deletion requires the owning AssetStore.");
-    }
-    for (const ref of refs) await deleteOwnedAsset(input.assets!, ref);
+    const corrupt = corruptHeaderCandidate(
+      entry.key,
+      header,
+      workspaceId,
+      namespace,
+    );
+    if (corrupt) candidates.push(corrupt);
   }
-  for (const record of records) await input.store.delete(record.key);
+  return candidates;
 }
 
-async function deleteOwnedAsset(
-  assets: AssetStore,
-  ref: { readonly uri: string },
-): Promise<void> {
+function corruptHeaderCandidate(
+  key: string,
+  value: Record<string, unknown>,
+  workspaceId: string,
+  namespace: string,
+): Extract<
+  WorkspaceSnapshotHeaderCandidate,
+  { readonly kind: "corrupt" }
+> | null {
+  if (
+    value._cruxWorkspaceSnapshot !== true ||
+    value.state !== "committed" ||
+    typeof value.id !== "string" ||
+    !value.id.trim() ||
+    typeof value.path !== "string" ||
+    typeof value.createdAt !== "number" ||
+    !Number.isFinite(value.createdAt) ||
+    value.createdAt < 0 ||
+    key !== snapshotHeaderKey(workspaceId, namespace, value.id)
+  ) {
+    return null;
+  }
   try {
-    await assets.delete(ref);
-  } catch (error) {
-    if (error instanceof StorageError && error.code === "not_found") return;
-    throw error;
+    const path = normalizePath(value.path);
+    if (path !== value.path) return null;
+    return { kind: "corrupt", id: value.id, path, createdAt: value.createdAt };
+  } catch {
+    return null;
   }
 }
 
-async function listAllRecords(
+/** List every raw materialized entry record owned by one snapshot id. */
+export function listSnapshotEntryRecords(
   store: RecordStore,
-  prefix: string,
+  workspaceId: string,
+  namespace: string,
+  snapshotId: string,
 ): Promise<readonly RecordEntry[]> {
-  const records: RecordEntry[] = [];
-  let cursor: string | undefined;
-  const seen = new Set<string>();
-  do {
-    const page = await store.list(prefix, cursor ? { cursor } : undefined);
-    records.push(...page.entries);
-    cursor = page.cursor;
-    if (cursor && seen.has(cursor)) {
-      throw new Error("RecordStore returned a repeated pagination cursor.");
-    }
-    if (cursor) seen.add(cursor);
-  } while (cursor);
-  return records;
+  return listAllSnapshotRecords(
+    store,
+    snapshotEntryPrefix(workspaceId, namespace, snapshotId),
+  );
 }

@@ -137,6 +137,10 @@ export type WorkspaceOperation =
   | "undo"
   | "artifacts"
   | "finalize"
+  | "snapshot.create"
+  | "snapshot.list"
+  | "snapshot.restore"
+  | "snapshot.delete"
   | "transaction";
 
 /** Options passed to a source-backed mount when reading virtual file content. */
@@ -287,7 +291,7 @@ export interface WorkspaceToolOptions {
   readonly undo?: boolean;
 }
 
-/** Per-call namespace override accepted by every workspace operation. */
+/** Per-call namespace override for Workspace operations that select a namespace. */
 export interface WorkspaceNamespaceOption {
   readonly namespace?: string;
 }
@@ -592,7 +596,7 @@ export interface Workspace<
     path: string,
     options?: WorkspaceFinalizeOptions,
   ): Promise<WorkspaceArtifact>;
-  /** Materialized exact-tree snapshot operations bound to this Workspace. */
+  /** Materialized exact-tree operations from {@link WorkspaceSnapshotOperations}. */
   readonly snapshot: WorkspaceSnapshotOperations;
   /**
    * Commit a coherent set of workspace mutations as one unit.

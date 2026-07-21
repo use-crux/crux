@@ -1,16 +1,15 @@
-import { inMemoryAssetStore, inMemoryRecordStore } from "../../../src/storage";
-import type {
-  AssetRef,
-  AssetStore,
-  JsonObject,
-  RecordStore,
-} from "../../../src/storage";
+import { inMemoryRecordStore } from "../../../src/storage";
+import type { JsonObject, RecordStore } from "../../../src/storage";
+
+export { controlledAssetStore } from "./fixtures/controlled-asset-store";
 
 /** Controllable RecordStore boundary for snapshot failure tests. */
 export function controlledRecordStore(): {
   readonly store: RecordStore;
   failPutWhen(predicate: (value: JsonObject) => boolean, error: Error): void;
   clearPutFailure(): void;
+  failDeleteWhen(predicate: (key: string) => boolean, error: Error): void;
+  clearDeleteFailure(): void;
   failLists(error: Error): void;
   blockPutWhen(predicate: (value: JsonObject) => boolean): {
     readonly entered: Promise<void>;
@@ -32,6 +31,12 @@ export function controlledRecordStore(): {
       }
     | undefined;
   let listFailure: Error | undefined;
+  let deleteFailure:
+    | {
+        readonly predicate: (key: string) => boolean;
+        readonly error: Error;
+      }
+    | undefined;
   return {
     store: Object.freeze({
       get: inner.get,
@@ -47,7 +52,10 @@ export function controlledRecordStore(): {
       },
       putMany: inner.putMany,
       create: inner.create,
-      delete: inner.delete,
+      delete: async (key) => {
+        if (deleteFailure?.predicate(key)) throw deleteFailure.error;
+        await inner.delete(key);
+      },
       deleteMany: inner.deleteMany,
       list: async (prefix, options) => {
         if (listFailure) throw listFailure;
@@ -62,6 +70,12 @@ export function controlledRecordStore(): {
     },
     clearPutFailure: () => {
       putFailure = undefined;
+    },
+    failDeleteWhen: (predicate, error) => {
+      deleteFailure = { predicate, error };
+    },
+    clearDeleteFailure: () => {
+      deleteFailure = undefined;
     },
     failLists: (error) => {
       listFailure = error;
@@ -83,54 +97,6 @@ export function controlledRecordStore(): {
           release();
         },
       };
-    },
-  };
-}
-
-/** Controllable AssetStore boundary with successful ownership logs. */
-export function controlledAssetStore(): {
-  readonly store: AssetStore;
-  readonly putRefs: readonly AssetRef[];
-  readonly deletedRefs: readonly AssetRef[];
-  failGets(error: Error): void;
-  failDelete(ref: AssetRef, error: Error): void;
-  clearFailures(): void;
-} {
-  const inner = inMemoryAssetStore();
-  const putRefs: AssetRef[] = [];
-  const deletedRefs: AssetRef[] = [];
-  let getFailure: Error | undefined;
-  let deleteFailure:
-    | { readonly uri: string; readonly error: Error }
-    | undefined;
-  return {
-    store: Object.freeze({
-      put: async (asset, options) => {
-        const stored = await inner.put(asset, options);
-        putRefs.push(stored.ref);
-        return stored;
-      },
-      get: async (ref) => {
-        if (getFailure) throw getFailure;
-        return inner.get(ref);
-      },
-      delete: async (ref) => {
-        if (deleteFailure?.uri === ref.uri) throw deleteFailure.error;
-        await inner.delete(ref);
-        deletedRefs.push(ref);
-      },
-    }),
-    putRefs,
-    deletedRefs,
-    failGets: (error) => {
-      getFailure = error;
-    },
-    failDelete: (ref, error) => {
-      deleteFailure = { uri: ref.uri, error };
-    },
-    clearFailures: () => {
-      getFailure = undefined;
-      deleteFailure = undefined;
     },
   };
 }
@@ -245,6 +211,43 @@ export async function deleteStoredRecords(
     }
     cursor = page.cursor;
   } while (cursor);
+}
+
+/** Rewrite matching values only as they are listed to emulate backend corruption. */
+export function rewritableListedValues(inner: RecordStore): {
+  readonly store: RecordStore;
+  rewriteWhen(
+    predicate: (value: JsonObject) => boolean,
+    rewrite: (value: JsonObject) => JsonObject,
+  ): void;
+} {
+  let active:
+    | {
+        readonly predicate: (value: JsonObject) => boolean;
+        readonly rewrite: (value: JsonObject) => JsonObject;
+      }
+    | undefined;
+  return {
+    store: Object.freeze({
+      ...inner,
+      list: async (prefix, options) => {
+        const page = await inner.list(prefix, options);
+        return {
+          ...page,
+          entries: page.entries.map((entry) => ({
+            ...entry,
+            value:
+              active?.predicate(entry.value) === true
+                ? active.rewrite(entry.value)
+                : entry.value,
+          })),
+        };
+      },
+    }),
+    rewriteWhen: (predicate, rewrite) => {
+      active = { predicate, rewrite };
+    },
+  };
 }
 
 /** Limit backend pages independently from the caller's logical query. */

@@ -68,6 +68,8 @@ export interface WorkspaceSnapshotAssetPayload extends JsonObject {
   readonly kind: "text" | "json" | "binary";
   readonly storage: "asset";
   readonly assetUri: string;
+  /** Integrity proof binding this bearer ref to its snapshot entry and role. */
+  readonly ownershipFingerprint: string;
   readonly sizeBytes: number;
   readonly contentHash: string;
 }

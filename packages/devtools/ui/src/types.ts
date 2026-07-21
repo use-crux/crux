@@ -1802,6 +1802,10 @@ export interface WorkspaceOperationEvent {
     | "artifacts"
     | "finalize"
     | "transaction"
+    | "snapshot.create"
+    | "snapshot.list"
+    | "snapshot.restore"
+    | "snapshot.delete"
     | string;
   path: string;
   pathHash?: string;
@@ -1810,14 +1814,30 @@ export interface WorkspaceOperationEvent {
   mount?: string;
   mimeType?: string;
   size?: number;
+  fileCount?: number;
+  sizeBytes?: number;
+  snapshotCount?: number;
+  restoredFiles?: number;
+  deletedFiles?: number;
+  unchangedFiles?: number;
   artifactStatus?: string;
   artifactKind?: string;
   uri?: string;
   error?: string;
+  errorCode?: WorkspaceSnapshotErrorCode;
   traceId?: string;
   sessionId?: string;
   timestamp: number;
 }
+
+/** Privacy-safe Workspace snapshot error codes accepted by Devtools read models. */
+export type WorkspaceSnapshotErrorCode =
+  | "not_found"
+  | "invalid_reference"
+  | "invalid_cursor"
+  | "unsupported_mount"
+  | "corrupt_snapshot"
+  | "backend_error";
 
 export interface SourceStageEventRecord {
   name: string;
@@ -3078,9 +3098,16 @@ export interface WorkspaceOpRecord {
   eventId: string;
   op: "read" | "write" | "edit" | "delete" | "list" | string;
   path: string;
+  pathHash?: string;
   durationMs?: number;
   status?: "ok" | "err" | "denied" | string;
   bytes?: number;
+  fileCount?: number;
+  sizeBytes?: number;
+  snapshotCount?: number;
+  restoredFiles?: number;
+  deletedFiles?: number;
+  unchangedFiles?: number;
   mime?: string;
   artifactStatus?: string;
   artifactKind?: string;
@@ -3089,6 +3116,7 @@ export interface WorkspaceOpRecord {
   spanId?: string;
   actor?: string;
   error?: string;
+  errorCode?: WorkspaceSnapshotErrorCode;
   timestamp: number;
 }
 

@@ -11,8 +11,12 @@
 import { observe } from "../observability";
 import { workspaceDefinitionRef } from "../observability/definition-ref";
 import type { WorkspaceProvenance } from "./artifact-types";
+import {
+  snapshotObservationError,
+  snapshotResultAttributes,
+} from "./snapshot/observability";
 import type { WorkspaceOperation } from "./types";
-import type { WorkspaceVersionOperation } from "./version-types";
+import type { WorkspaceVersionEvent } from "./version-types";
 
 interface WorkspaceEvent {
   readonly workspaceId: string;
@@ -30,13 +34,7 @@ interface WorkspaceEvent {
  * version from the single persistence chokepoint — carrying the version number
  * and its true operation label, never the raw path or content.
  */
-export function emitWorkspaceVersion(event: {
-  readonly workspaceId: string;
-  readonly namespace: string;
-  readonly path: string;
-  readonly version: number;
-  readonly operation: WorkspaceVersionOperation;
-}): void {
+export function emitWorkspaceVersion(event: WorkspaceVersionEvent): void {
   const attributes = {
     primitive: "workspace.operation",
     workspaceId: event.workspaceId,
@@ -101,7 +99,7 @@ export async function instrument<T>(
     });
     return result;
   } catch (error) {
-    span.error(error, {
+    span.error(snapshotObservationError(event.operation, error), {
       primitive: "workspace.operation",
       workspaceId: event.workspaceId,
       operation: event.operation,
@@ -223,6 +221,8 @@ function workspaceResultAttributes(result: unknown): Record<string, unknown> {
   const record = result as Record<string, unknown>;
   if (Array.isArray(record.entries))
     return { resultKind: "list", entryCount: record.entries.length };
+  const snapshotAttributes = snapshotResultAttributes(result);
+  if (snapshotAttributes !== undefined) return snapshotAttributes;
   if (isWorkspaceArtifactRecord(record)) {
     return {
       resultKind: "artifact",

@@ -10,6 +10,7 @@
     "tool-middleware",
     "multimodal",
     "workspace",
+    "workspace-snapshots",
     "retrieval",
     "citations",
     "indexing",

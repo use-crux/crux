@@ -136,3 +136,35 @@ const ws = workspace({
   versioning: { maxVersions: 20 },
 });
 ```
+
+## Snapshot Storage And Lifetime
+
+`ws.snapshot.create()` materializes the selected local tree instead of retaining
+references to live files or their history. Small text and JSON payloads are copied
+into snapshot records. Binary and oversized payloads are copied into independently
+owned `AssetStore` objects. A final artifact whose published content differs from
+its working content owns both payloads.
+
+The returned `WorkspaceSnapshotRef.sizeBytes` reports these materialized payload
+bytes; it excludes record metadata. This makes snapshots reliable after live files,
+history, or live asset objects change, but each snapshot can consume storage close
+to the full captured tree size.
+
+Snapshots are not counted by `limits.maxNamespaceBytes` and are not bounded by
+`versioning.maxVersions`. They have no TTL, automatic pruning, or snapshot quota in
+this release. Keep the complete JSON-safe ref and release storage explicitly:
+
+```ts
+const checkpoint = await ws.snapshot.create({ path: "/outputs" });
+
+try {
+  await runRiskyWorkflow();
+} finally {
+  await ws.snapshot.delete(checkpoint);
+}
+```
+
+Deletion is idempotent for a valid ref owned by the Workspace. A process crash can
+still leave incomplete metadata or orphaned payload objects on generic stores;
+snapshots provide same-process consistency and observed-failure rollback, not
+backup, disaster recovery, or distributed transactions.

@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { inMemoryRecordStore } from "../../../src/storage";
 import { workspace } from "../../../src/workspace";
 import {
   controlledAssetStore,
@@ -9,6 +10,22 @@ import {
 } from "./fixtures";
 
 describe("workspace snapshot failures", () => {
+  it("preserves an initial header creation failure as the backend cause", async () => {
+    const records = inMemoryRecordStore();
+    const failure = new Error("header creation failed");
+    vi.spyOn(records, "create").mockRejectedValueOnce(failure);
+    const ws = workspace({ id: "research", namespace: "thread:1", records });
+
+    await expect(
+      ws.snapshot.create({ path: "/outputs" }),
+    ).rejects.toMatchObject({
+      code: "backend_error",
+      cause: failure,
+      snapshotId: expect.any(String),
+    });
+    await expect(ws.snapshot.list()).resolves.toEqual({ snapshots: [] });
+  });
+
   it("keeps a creating snapshot invisible until its header commits", async () => {
     const records = controlledRecordStore();
     const ws = workspace({
@@ -40,19 +57,13 @@ describe("workspace snapshot failures", () => {
       content: { inlineTextBelowBytes: 0 },
     });
     await ws.write("/outputs/image.bin", new Uint8Array([1, 2, 3]));
-    const barrier = records.blockPutWhen(
-      (value) => value._cruxWorkspaceSnapshotEntry === true,
-    );
+    const liveAsset = assets.putRefs[0];
+    if (!liveAsset) throw new Error("Expected an asset-backed live file.");
+    const barrier = assets.blockGetWhen((ref) => ref.uri === liveAsset.uri);
     const creating = ws.snapshot.create({ path: "/outputs/image.bin" });
     await barrier.entered;
 
-    let deleteCompleted = false;
-    const deleting = ws.delete("/outputs/image.bin").then(() => {
-      deleteCompleted = true;
-    });
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    expect(deleteCompleted).toBe(false);
+    const deleting = ws.delete("/outputs/image.bin");
     barrier.release();
     const snapshot = await creating;
     await deleting;

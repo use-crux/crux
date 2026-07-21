@@ -12,7 +12,7 @@ import {
   type WorkspaceLimits,
 } from "./limits";
 import { withWorkspaceMutationLock } from "./mutation-coordinator";
-import { instrument } from "./observability";
+import { emitWorkspaceVersion, instrument } from "./observability";
 import { mountForPath } from "./path";
 import {
   prepareWorkspaceMutations,
@@ -28,7 +28,10 @@ import {
   type WorkspaceMutationPreState,
 } from "./transaction-rollback";
 import { commitVersionedWorkspaceRecord } from "./versioned-record-persistence";
-import type { WorkspaceVersioning } from "./version-types";
+import type {
+  WorkspaceVersionEvent,
+  WorkspaceVersioning,
+} from "./version-types";
 import type { WorkspaceChangeEmitter, WorkspaceChangeInput } from "./watch";
 import type {
   NormalizedMount,
@@ -60,24 +63,42 @@ export interface WorkspaceMutationBatchConfig {
 export async function applyWorkspaceMutationBatch(
   config: WorkspaceMutationBatchConfig,
   namespace: string,
-  mutations: readonly WorkspaceMutation[],
+  mutations:
+    | readonly WorkspaceMutation[]
+    | (() => Promise<readonly WorkspaceMutation[]>),
 ): Promise<void> {
-  const prepared = await prepareWorkspaceMutations(mutations);
-  const events = await withWorkspaceMutationLock(
+  const createMutations =
+    typeof mutations === "function" ? mutations : async () => mutations;
+  const prepared =
+    typeof mutations === "function"
+      ? undefined
+      : await prepareWorkspaceMutations(mutations);
+  const committed = await withWorkspaceMutationLock(
     config.workspaceId,
     namespace,
-    () => applyLocked(config, namespace, prepared),
+    async () =>
+      applyLocked(
+        config,
+        namespace,
+        prepared ?? (await prepareWorkspaceMutations(await createMutations())),
+      ),
   );
-  for (const event of events) {
+  for (const event of committed.versionEvents) emitWorkspaceVersion(event);
+  for (const event of committed.changeEvents) {
     await config.emitChange(event).catch(() => undefined);
   }
+}
+
+interface CommittedWorkspaceMutationBatch {
+  readonly versionEvents: readonly WorkspaceVersionEvent[];
+  readonly changeEvents: readonly WorkspaceChangeInput[];
 }
 
 async function applyLocked(
   config: WorkspaceMutationBatchConfig,
   namespace: string,
   prepared: readonly PreparedWorkspaceMutation[],
-): Promise<readonly WorkspaceChangeInput[]> {
+): Promise<CommittedWorkspaceMutationBatch> {
   validateWorkspaceMutationMounts(config.mounts, prepared);
   await assertWorkspaceMutationBatchAllowed({
     store: config.store,
@@ -100,6 +121,7 @@ async function applyLocked(
   }
 
   const finalHeads = new Map<WorkspacePath, WorkspaceFileRecord>();
+  const versionEvents: WorkspaceVersionEvent[] = [];
   try {
     for (const item of prepared) {
       const apply = async (): Promise<void> => {
@@ -114,7 +136,9 @@ async function applyLocked(
         const previous = before.get(item.mutation.path)?.head ?? null;
         finalHeads.set(
           item.mutation.path,
-          await applyPut(config, namespace, item, previous),
+          await applyPut(config, namespace, item, previous, (event) =>
+            versionEvents.push(event),
+          ),
         );
       };
       await (config.instrumentMutations
@@ -144,7 +168,7 @@ async function applyLocked(
     before,
     finalHeads,
   );
-  return prepared.flatMap(({ mutation }) => {
+  const changeEvents = prepared.flatMap(({ mutation }) => {
     const previous = before.get(mutation.path)?.head ?? null;
     if (mutation.kind === "delete") {
       return previous
@@ -164,6 +188,7 @@ async function applyLocked(
         ]
       : [];
   });
+  return { versionEvents, changeEvents };
 }
 
 async function applyPut(
@@ -171,16 +196,31 @@ async function applyPut(
   namespace: string,
   item: Extract<PreparedWorkspaceMutation, { readonly kind: "put" }>,
   previous: WorkspaceFileRecord | null,
+  emitVersion: (event: WorkspaceVersionEvent) => void,
 ): Promise<WorkspaceFileRecord> {
   let current = previous;
   const published = item.mutation.published;
   const states =
     item.published && published
       ? [
-          { logical: published, analysis: item.published },
-          { logical: item.mutation.head, analysis: item.head },
+          {
+            logical: published,
+            analysis: item.published,
+            firstRestoreState: true,
+          },
+          {
+            logical: item.mutation.head,
+            analysis: item.head,
+            firstRestoreState: false,
+          },
         ]
-      : [{ logical: item.mutation.head, analysis: item.head }];
+      : [
+          {
+            logical: item.mutation.head,
+            analysis: item.head,
+            firstRestoreState: true,
+          },
+        ];
   for (const state of states) {
     const now = Date.now();
     const record = await createFileRecord({
@@ -193,8 +233,17 @@ async function applyPut(
       status: state.logical.status,
       artifactKind: state.logical.artifactKind,
       producedBy: state.logical.producedBy,
+      ...(item.mutation.operation === "restore"
+        ? { artifactMode: "replace" as const }
+        : {}),
+      ...(item.mutation.operation === "restore" && state.firstRestoreState
+        ? { pinFinalVersionToCurrent: true }
+        : {}),
       existing: current,
       now,
+      ...(state.logical.createdAt !== undefined
+        ? { createdAt: state.logical.createdAt }
+        : {}),
       version: (current?.headVersion ?? 0) + 1,
       inlineTextBelowBytes: config.inlineTextBelowBytes,
       assets: config.assets,
@@ -211,6 +260,7 @@ async function applyPut(
       versioning: config.versioning,
       setOptions: workspaceSetOptions(config.store, config.retention),
       deferRetention: true,
+      emitVersion,
     });
     current = record;
   }

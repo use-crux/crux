@@ -13,6 +13,7 @@ import { WorkspaceSnapshotError } from "./types";
 export function assertSnapshotSelectionSupported(
   path: WorkspacePath,
   mounts: readonly NormalizedMount[],
+  snapshotId?: string,
 ): void {
   const overlapping = mounts.filter((mount) => pathsOverlap(path, mount.path));
   const sourceMount = overlapping.find(hasWorkspaceMountSource);
@@ -20,6 +21,7 @@ export function assertSnapshotSelectionSupported(
     throw new WorkspaceSnapshotError(
       "unsupported_mount",
       `Workspace snapshot selection intersects source-backed mount "${sourceMount.path}".`,
+      { ...(snapshotId !== undefined ? { snapshotId } : {}) },
     );
   }
   if (overlapping.length === 0) {
@@ -45,7 +47,8 @@ function pathsOverlap(left: WorkspacePath, right: WorkspacePath): boolean {
   );
 }
 
-function isDescendant(path: string, ancestor: string): boolean {
+/** Return whether a path is strictly below an ancestor path. */
+export function isDescendant(path: string, ancestor: string): boolean {
   return ancestor === "/"
     ? path.startsWith("/")
     : path.startsWith(`${ancestor}/`);

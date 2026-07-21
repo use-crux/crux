@@ -115,7 +115,8 @@ async function materializeState(
   };
 }
 
-function snapshotEntryFingerprint(
+/** Recompute one entry's canonical logical fingerprint. */
+export function snapshotEntryFingerprint(
   path: string,
   head: WorkspaceSnapshotMaterializedState,
   published: WorkspaceSnapshotPublishedState | undefined,
@@ -135,7 +136,8 @@ function snapshotEntryFingerprint(
   });
 }
 
-function materializedStateFingerprint(
+/** Recompute one materialized state's canonical logical fingerprint. */
+export function materializedStateFingerprint(
   state: WorkspaceSnapshotMaterializedState,
 ): string {
   return hashCanonical(logicalState(state));
@@ -146,7 +148,6 @@ function logicalState(state: WorkspaceSnapshotMaterializedState): JsonObject {
     descriptor: logicalDescriptor(state.descriptor),
     payload: {
       kind: state.payload.kind,
-      sizeBytes: state.payload.sizeBytes,
       contentHash: state.payload.contentHash,
     },
   };
@@ -168,7 +169,8 @@ function logicalDescriptor(
   };
 }
 
-function snapshotDescriptor(
+/** Project a live file's user-observable descriptor into snapshot form. */
+export function snapshotDescriptor(
   record: WorkspaceFileRecord,
 ): WorkspaceSnapshotDescriptor {
   return {

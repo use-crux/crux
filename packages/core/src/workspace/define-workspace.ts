@@ -529,6 +529,11 @@ export function workspace<const Config extends WorkspaceConfig>(
     store,
     assets,
     mounts,
+    inlineTextBelowBytes,
+    limits: config.limits,
+    retention: config.retention,
+    versioning: config.versioning,
+    emitChange,
     resolveNamespace,
   });
   const transaction = createWorkspaceTransaction({

@@ -20,6 +20,8 @@ import type {
 export interface MaterializedWorkspaceState {
   readonly content: WorkspaceContent;
   readonly mimeType: string;
+  /** Captured creation time used only when restore recreates an absent path. */
+  readonly createdAt?: number;
   readonly metadata?: WorkspaceFileRecord["metadata"];
   readonly status?: WorkspaceArtifactStatus;
   readonly artifactKind?: string;

@@ -10,11 +10,11 @@
 
 import type { WorkspaceNamespaceOption } from "../types";
 
-/** A durable reference to one materialized Workspace subtree snapshot. */
+/** A JSON-safe, reusable reference to one materialized Workspace subtree snapshot. */
 export interface WorkspaceSnapshotRef {
   /** Discriminator for serialized Workspace snapshot references. */
   readonly kind: "workspace.snapshot";
-  /** Opaque snapshot identifier. */
+  /** Opaque snapshot identifier. Store it as-is; callers must not parse it. */
   readonly id: string;
   /** Workspace that owns this snapshot. */
   readonly workspaceId: string;
@@ -52,7 +52,7 @@ export interface WorkspaceSnapshotListOptions extends WorkspaceNamespaceOption {
   readonly path?: string;
   /** Page size. Defaults to 50 and must be an integer from 1 through 100. */
   readonly limit?: number;
-  /** Opaque cursor returned by the previous page. */
+  /** Opaque cursor returned by the previous page and bound to its listing scope. */
   readonly cursor?: string;
 }
 
@@ -74,13 +74,14 @@ export interface WorkspaceSnapshotRestoreResult {
   readonly unchangedFiles: number;
 }
 
-/** Snapshot operations bound to a Workspace instance. */
+/** Frozen snapshot operations bound to a Workspace instance. */
 export interface WorkspaceSnapshotOperations {
   /**
    * Materialize an exact point-in-time copy of a local Workspace subtree.
    *
    * The returned {@link WorkspaceSnapshotRef} is JSON-safe and remains reusable
-   * until explicitly deleted. Capture rejects trees that intersect a
+   * until explicitly deleted. Working and published artifact content is copied
+   * into snapshot-owned storage. Capture rejects trees that intersect a
    * source-backed mount.
    *
    * @param options - Namespace and required file or subtree path.
@@ -112,8 +113,10 @@ export interface WorkspaceSnapshotOperations {
   /**
    * Replace the captured subtree with its exact materialized state.
    *
-   * Restore appends new file history, deletes later files in the captured tree,
-   * and leaves the snapshot reusable.
+   * Restore appends new file history and leaves the snapshot reusable. It also
+   * deletes every live file at or below the capture root that was absent from
+   * the snapshot. Same-process operations are serialized and observed failures
+   * roll back, but restore is not crash-atomic or distributed-atomic.
    *
    * @param snapshot - A JSON-safe reference returned by `create()` or `list()`.
    * @returns Disjoint counts of restored, deleted, and unchanged files.

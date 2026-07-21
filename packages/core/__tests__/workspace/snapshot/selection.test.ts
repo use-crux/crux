@@ -46,4 +46,65 @@ describe("workspace snapshot selection", () => {
     }
     expect(put).not.toHaveBeenCalled();
   });
+
+  it("rejects every source-backed restore overlap before live mutation", async () => {
+    const records = inMemoryRecordStore();
+    const local = workspace({
+      id: "research",
+      namespace: "thread:1",
+      records,
+      mounts: [
+        { path: "/workspace", access: "readwrite" },
+        { path: "/outputs", access: "readwrite" },
+        { path: "/sources", access: "readwrite" },
+      ],
+    });
+    await local.write("/outputs/report.md", "captured");
+    const cases = [
+      {
+        snapshot: await local.snapshot.create({ path: "/outputs" }),
+        sourcePath: "/outputs",
+      },
+      {
+        snapshot: await local.snapshot.create({
+          path: "/outputs/report.md",
+        }),
+        sourcePath: "/outputs",
+      },
+      {
+        snapshot: await local.snapshot.create({ path: "/" }),
+        sourcePath: "/sources",
+      },
+    ] as const;
+    const put = vi.spyOn(records, "put");
+    const remove = vi.spyOn(records, "delete");
+
+    for (const overlap of cases) {
+      const sourceBacked = workspace({
+        id: "research",
+        namespace: "thread:1",
+        records,
+        mounts: [
+          { path: "/workspace", access: "readwrite" },
+          {
+            path: overlap.sourcePath,
+            access: "read",
+            source: {
+              kind: "custom",
+              list: () => ({ entries: [] }),
+              read: () => null,
+            },
+          },
+        ],
+      });
+      await expect(
+        sourceBacked.snapshot.restore(overlap.snapshot),
+      ).rejects.toMatchObject({
+        code: "unsupported_mount",
+        snapshotId: overlap.snapshot.id,
+      });
+    }
+    expect(put).not.toHaveBeenCalled();
+    expect(remove).not.toHaveBeenCalled();
+  });
 });

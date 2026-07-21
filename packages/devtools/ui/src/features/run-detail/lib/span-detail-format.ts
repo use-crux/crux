@@ -1,4 +1,8 @@
 import type { CorrelatedEvent } from "@/types";
+import {
+  projectWorkspaceSnapshotPresentation,
+  workspaceSnapshotRunSummary,
+} from "../workspace-snapshot/presentation";
 
 export function formatTime(ts: number): string {
   return new Date(ts).toLocaleTimeString();
@@ -82,6 +86,8 @@ export function summarizeEvent(event: CorrelatedEvent): string {
       return `${String(data.stageKind ?? "stage")} stage ${String(data.stageName ?? "stage")} ${input} -> ${output} in ${Number(data.durationMs ?? 0)}ms${error}`;
     }
     case "workspace:operation": {
+      const snapshot = projectWorkspaceSnapshotPresentation(data);
+      if (snapshot) return workspaceSnapshotRunSummary(snapshot);
       const error = data.error ? `: ${String(data.error)}` : "";
       const size = data.size != null ? `, ${Number(data.size)}B` : "";
       return `${String(data.operation ?? "workspace")} ${String(data.path ?? "")} ${String(data.status ?? "success")} in ${Number(data.durationMs ?? 0)}ms${size}${error}`;

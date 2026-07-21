@@ -21,6 +21,7 @@ import type { WorkspaceFileRecord, WorkspacePath } from "./types";
 import {
   VERSION_RECORD_SCHEMA,
   type WorkspaceVersion,
+  type WorkspaceVersionEvent,
   type WorkspaceVersionOperation,
   type WorkspaceVersionRecord,
   type WorkspaceVersioning,
@@ -65,6 +66,8 @@ export async function recordFileVersion(input: {
   readonly setOptions?: RecordWriteOptions;
   /** Defer destructive retention until a surrounding mutation batch commits. */
   readonly deferRetention?: boolean;
+  /** Buffer this marker when a surrounding mutation batch owns the commit. */
+  readonly emitVersion?: (event: WorkspaceVersionEvent) => void;
 }): Promise<void> {
   const version = input.record.headVersion ?? 1;
   const value: WorkspaceVersionRecord = {
@@ -80,7 +83,7 @@ export async function recordFileVersion(input: {
     value as unknown as JsonObject,
     input.setOptions,
   );
-  emitWorkspaceVersion({
+  (input.emitVersion ?? emitWorkspaceVersion)({
     workspaceId: input.workspaceId,
     namespace: input.namespace,
     path: input.path,

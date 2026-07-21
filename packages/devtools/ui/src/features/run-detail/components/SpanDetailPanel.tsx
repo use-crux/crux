@@ -115,6 +115,7 @@ import {
   OperationReportCard,
 } from "./PrimitiveCards";
 import { DeferredWorkCard } from "./DeferredWorkCard";
+import { WorkspaceSnapshotCard } from "../workspace-snapshot/card";
 import { EmbeddingEvidenceCard } from "./EmbeddingEvidenceCard";
 import { RetrievalMediaAttribution } from "./RetrievalMediaAttribution";
 import { MemoryCaptureNode } from "./MemoryCaptureCard";
@@ -129,6 +130,7 @@ import {
 } from "./ContextComposition";
 import { McpPreparationNode, McpToolOrigin } from "./McpPreparation";
 import { mcpToolOrigin } from "../lib/mcp";
+import { projectWorkspaceSnapshotRun } from "../workspace-snapshot/presentation";
 import { useProjectDefinitionIds } from "@/shared/query/useProjectDefinitionIds";
 
 // ─── Card primitives ────────────────────────────────────────────────
@@ -4226,6 +4228,32 @@ export function SpanDetailPanel({
         isRoot={isRoot}
         trace={trace}
       />
+    );
+  }
+
+  // Workspace snapshot lifecycle spans are aggregate operations, not file
+  // events. Keep their allowlisted counts and safe error code on one dedicated
+  // card instead of falling through to the raw operation report.
+  if (projectWorkspaceSnapshotRun(node)) {
+    return (
+      <div className="flex h-full min-h-0 flex-col">
+        <SelectedSpanHeader
+          node={node}
+          detail={detail}
+          kind={kind}
+          isRoot={isRoot}
+          trace={trace}
+        />
+        <div className="flex-1 overflow-auto px-4 py-4">
+          <SectionErrorBoundary
+            title="Workspace snapshot"
+            compact
+            resetKey={node.id}
+          >
+            <WorkspaceSnapshotCard node={node} />
+          </SectionErrorBoundary>
+        </div>
+      </div>
     );
   }
 
