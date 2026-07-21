@@ -225,18 +225,38 @@ describe("Eval release readiness", () => {
     expect(guide).toContain("performs no network or external work");
   });
 
-  it("records the clean Eval replacement in the pending release", async () => {
-    const changeset = await readRepoFile(".changeset/bright-evals-review.md");
-    for (const [packageName, bump] of Object.entries({
-      "@use-crux/core": "minor",
-      "@use-crux/local": "minor",
-      "@use-crux/indexer": "minor",
-      "@use-crux/ai": "minor",
-      "@use-crux/cloudflare": "minor",
-      "@use-crux/convex": "minor",
-      "@use-crux/devtools": "minor",
-    })) {
-      expect(changeset).toContain(`"${packageName}": ${bump}`);
+  it("records the clean Eval replacement in the pending or generated release", async () => {
+    const changesetPath = ".changeset/bright-evals-review.md";
+    const packageChangelogs = {
+      "@use-crux/core": "packages/core/CHANGELOG.md",
+      "@use-crux/local": "packages/local/npm/local/CHANGELOG.md",
+      "@use-crux/indexer": "packages/indexer/CHANGELOG.md",
+      "@use-crux/ai": "packages/ai/CHANGELOG.md",
+      "@use-crux/cloudflare": "packages/cloudflare/CHANGELOG.md",
+      "@use-crux/convex": "packages/convex/CHANGELOG.md",
+      "@use-crux/devtools": "packages/devtools/CHANGELOG.md",
+    } as const;
+
+    if (await fileExists(changesetPath)) {
+      const changeset = await readRepoFile(changesetPath);
+      for (const packageName of Object.keys(packageChangelogs))
+        expect(changeset).toContain(`"${packageName}": minor`);
+      return;
+    }
+
+    const evalReleaseLead =
+      "Replace the pre-release Quality authoring, execution, CLI, storage, and";
+    for (const changelogPath of Object.values(packageChangelogs)) {
+      const changelog = await readRepoFile(changelogPath);
+      const evalRelease =
+        changelog
+          .split(/^## /mu)
+          .find((release) => release.includes(evalReleaseLead)) ?? "";
+      const minorChanges =
+        evalRelease.split(/^### Minor Changes$/mu)[1]?.split(/^### /mu)[0] ??
+        "";
+      expect(minorChanges).toContain(evalReleaseLead);
+      expect(minorChanges).toContain("Devtools model with Crux Evals V1");
     }
   });
 });
