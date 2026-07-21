@@ -232,7 +232,11 @@ describe('@use-crux/ingest structured sources', () => {
     const vectors = inMemoryVectorStore()
     const dense = embedding({
       kind: 'dense', name: 'media-attribution', dimensions: 2, maxInputTokens: 100, batch: { maxSize: 8 },
-      embed: async (texts) => texts.map((text) => text.toLowerCase().includes('diagram') ? [1, 0] : [0, 1]),
+      modalities: ['text', 'audio', 'document'],
+      embed: async (inputs) => inputs.map((input) => {
+        if (input.type === 'text') return input.text.toLowerCase().includes('diagram') ? [1, 0] : [0, 1]
+        return input.type === 'document' ? [1, 0] : [0, 1]
+      }),
     })
     await indexer({ id: 'media', namespace: 'kb', records, vectors, dense })
       .indexDocuments([pdfDocument, audioDocument])
