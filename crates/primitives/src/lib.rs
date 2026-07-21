@@ -27,6 +27,17 @@ mod data {
 }
 mod defer;
 mod definition;
+mod embedding {
+    pub(crate) mod call;
+    pub(crate) mod core;
+    pub(crate) mod core_values;
+    pub(crate) mod facts;
+    pub(crate) mod identity;
+    pub(crate) mod provider;
+    pub(crate) mod provider_defaults;
+    pub(crate) mod provider_values;
+    pub(crate) mod safe_definition;
+}
 mod eval {
     pub(crate) mod assertions;
     pub(crate) mod facts;
@@ -64,6 +75,7 @@ mod prompt {
 pub mod projection;
 mod rag {
     pub(crate) mod facts;
+    pub(crate) mod indexer;
     pub(crate) mod metadata;
     pub(crate) mod recipe_steps;
 }

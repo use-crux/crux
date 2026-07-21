@@ -4,6 +4,7 @@ import { indexer as makeIndexer } from '../../src/indexing'
 import { prompt } from '../../src/prompt/prompt'
 import { RETRIEVAL_HITS_KIND, retriever as makeRetriever } from '../../src/retrieval'
 import { inMemoryRecordStore, inMemoryVectorStore } from '../../src/storage'
+import { textOf } from '../embedding/text-input'
 
 function createDenseEmbedding() {
   return makeEmbedding({
@@ -12,7 +13,7 @@ function createDenseEmbedding() {
     dimensions: 2,
     maxInputTokens: 100,
     batch: { maxSize: 8 },
-    embed: async (texts) => texts.map((text) => [text.length, text.length / 2]),
+    embed: async (inputs) => inputs.map((input) => [textOf(input).length, textOf(input).length / 2]),
   })
 }
 

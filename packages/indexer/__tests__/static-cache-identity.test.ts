@@ -1,10 +1,21 @@
-import { mkdir, mkdtemp, rename, rm, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ProjectDefinitionKind } from "@use-crux/core/project-index";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { readStaticIndexRuntimeSharedFixture } from "../src/contracts/fixtures";
-import { facts, type IndexerExtension } from "../src/indexer/extensions";
+import {
+  facts,
+  type IndexDependency,
+  type IndexerExtension,
+} from "../src/indexer/extensions";
 import {
   SEMANTIC_FACTS_CACHE_EPOCH,
   STATIC_PARSE_CACHE_EPOCH,
@@ -37,11 +48,11 @@ describe("static cache identity", () => {
     );
 
     expect(STATIC_PARSE_CACHE_EPOCH).toBe(identity.staticParseCacheEpoch);
-    expect(STATIC_PARSE_CACHE_EPOCH).toBe("static-parse-v71");
+    expect(STATIC_PARSE_CACHE_EPOCH).toBe("static-parse-v72");
   });
 
   it("takes the pre-launch semantic facts cache migration epoch", () => {
-    expect(SEMANTIC_FACTS_CACHE_EPOCH).toBe("semantic-facts-v30");
+    expect(SEMANTIC_FACTS_CACHE_EPOCH).toBe("semantic-facts-v31");
   });
 
   it("projects static host manifest facets into extraction identity", () => {
@@ -106,6 +117,40 @@ describe("static cache identity", () => {
         "runtime-relation-specs",
       ),
     );
+  });
+
+  it("keeps Go production planner manifest digests aligned", async () => {
+    const cacheInputs = createStaticExtraction({
+      root: "/fixture",
+      syntaxFrontend: createTypeScriptStaticSyntaxFrontend,
+      cache: "none",
+    }).identity.cacheInputs;
+    const goMirror = await readFile(
+      join(
+        testWorkspaceRoot,
+        "../local/internal/projectindex/staticindex/planner/cache_inputs.go",
+      ),
+      "utf8",
+    );
+    const mirroredNames = new Set([
+      "@use-crux/indexer/crux-core-media",
+      "crux-static-index-host",
+      "runtime-relation-specs",
+      "runtime-static-interests",
+    ]);
+    const missing = cacheInputs
+      .filter(
+        (
+          input,
+        ): input is Extract<
+          IndexDependency,
+          { readonly name: string; readonly digest: string }
+        > =>
+          "name" in input && "digest" in input && mirroredNames.has(input.name),
+      )
+      .filter((input) => !goMirror.includes(`"digest":"${input.digest}"`))
+      .map((input) => `${input.kind}:${input.name}:${input.digest}`);
+    expect(missing).toEqual([]);
   });
 
   it("keeps manifest cache inputs stable when locale collation changes", () => {

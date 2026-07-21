@@ -767,6 +767,22 @@ Sparse indexing uses:
 
 Hybrid indexing uses both.
 
+Dense indexing accepts text and any media modality declared by the embedding.
+`CruxDocument.asset` is single-media shorthand; explicit `kind: "media"` parts
+carry an asset, optional caption, inferred or explicit modality, and page/time
+source location. Each media part produces one chunk and one dense vector.
+Sparse embedding skips media chunks.
+
+When storage includes an `AssetStore`, media is materialized before provider
+execution and persisted records retain only its `AssetRef`, MIME type, source
+location, and allowlisted scalar attribution. Bytes and provider locators are
+never written to record/vector metadata or pipeline caches. Dry runs perform no
+asset, cache, record, vector, or namespace-space writes.
+
+Before any vector mutation, indexing compares the configured dense space with
+the namespace record. `EmbeddingSpaceMismatchError` requires `clear()` plus a
+full reindex, or a new namespace. `deleteSource()` preserves the space record.
+
 The important contract is that indexing batches by chunk content rather than making one provider call per chunk.
 
 That keeps indexing aligned with the batching, telemetry, and cost-accounting model from `embedding()`.

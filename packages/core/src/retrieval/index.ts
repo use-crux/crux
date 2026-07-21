@@ -32,7 +32,7 @@ export type {
 } from './knowledge-base'
 export type { RetrievalModel } from './model'
 export type { JudgeRerankerConfig, Reranker } from './reranker'
-export type { MetadataFilter, RetrieveOptions, RetrieveRequest } from './request'
+export type { MetadataFilter, RetrieveInput, RetrieveOptions, RetrieveRequest } from './request'
 export type {
   RecipeTrace,
   RetrievalRecipe,

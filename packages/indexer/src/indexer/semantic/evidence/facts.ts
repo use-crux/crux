@@ -29,6 +29,7 @@ import { semanticSourceRefCandidates } from "../source-ref-candidates";
 import type { SemanticAnalyzerResult } from "../types";
 import { measureSemanticTiming } from "../instrumentation";
 import { semanticMediaFacts } from "../media-facts";
+import { semanticEmbeddingFacts } from "../../embedding/semantic-facts";
 import { mediaArchitectureLintFindings } from "../media-lints";
 import {
   createTypeScriptSemanticFactInput,
@@ -129,7 +130,7 @@ export function* semanticIndexEvidenceBatches(
     return;
   }
   yield* semanticIndexEvidenceBatchesForSourceFiles(
-    createTypeScriptSemanticFactInput(files, options),
+    createTypeScriptSemanticFactInput(root, files, options),
     options,
   );
 }
@@ -154,16 +155,34 @@ export function* semanticIndexEvidenceBatchesForSourceFiles<
     options,
   );
   const media = semanticMediaFacts(input.sourceFiles, input.view);
-  const definitions = [...result.definitions, ...media.definitions];
-  const relations = [...result.relations, ...media.relations];
+  const embeddings = semanticEmbeddingFacts(
+    input.root,
+    input.sourceFiles,
+    input.view,
+  );
+  const definitions = [
+    ...result.definitions,
+    ...media.definitions,
+    ...embeddings.definitions,
+  ];
+  const relations = [
+    ...result.relations,
+    ...media.relations,
+    ...embeddings.relations,
+  ];
 
   yield* semanticEvidenceBatchesFromFacts({
     definitions,
-    sourceRefs: [...result.sourceRefs, ...media.sourceRefs],
+    sourceRefs: [
+      ...result.sourceRefs,
+      ...media.sourceRefs,
+      ...embeddings.sourceRefs,
+    ],
     relations,
     diagnostics: [],
     lintFindings: [
       ...media.lintFindings,
+      ...embeddings.lintFindings,
       ...mediaArchitectureLintFindings(definitions, relations),
     ],
   });
@@ -178,7 +197,7 @@ export function semanticSchemaIndexFacts(
 ): SemanticSchemaIndexFacts {
   if (files.length === 0)
     return { definitions: [], sourceRefs: [], diagnostics: [] };
-  const result = runSemanticAnalyzer(files, semanticSchemaAnalyzer);
+  const result = runSemanticAnalyzer(root, files, semanticSchemaAnalyzer);
 
   return {
     definitions: result.definitions,
@@ -195,7 +214,7 @@ export function semanticRelationIndexFacts(
   files: readonly string[],
 ): SemanticRelationIndexFacts {
   if (files.length === 0) return { relations: [], diagnostics: [] };
-  const result = runSemanticAnalyzer(files, semanticRelationAnalyzer);
+  const result = runSemanticAnalyzer(root, files, semanticRelationAnalyzer);
 
   return {
     relations: result.relations,
@@ -211,7 +230,7 @@ export function semanticSourceRefIndexFacts(
   files: readonly string[],
 ): SemanticSourceRefIndexFacts {
   if (files.length === 0) return { sourceRefs: [], diagnostics: [] };
-  const result = runSemanticAnalyzer(files, semanticSourceRefAnalyzer);
+  const result = runSemanticAnalyzer(root, files, semanticSourceRefAnalyzer);
 
   return {
     sourceRefs: result.sourceRefs,
@@ -229,6 +248,7 @@ export function semanticDefinitionEnrichmentIndexFacts(
   if (files.length === 0)
     return { definitions: [], sourceRefs: [], relations: [], diagnostics: [] };
   const result = runSemanticAnalyzer(
+    root,
     files,
     semanticDefinitionEnrichmentAnalyzer,
   );
@@ -245,10 +265,11 @@ export function semanticDefinitionEnrichmentIndexFacts(
  * Runs a single definition analyzer across all candidate definitions.
  */
 function runSemanticAnalyzer(
+  root: string,
   files: readonly string[],
   analyzer: SemanticDefinitionAnalyzer,
 ): Required<SemanticAnalyzerResult> {
-  const input = createTypeScriptSemanticFactInput(files);
+  const input = createTypeScriptSemanticFactInput(root, files);
   return runSemanticAnalyzers(input.sourceFiles, input.view, [analyzer]);
 }
 

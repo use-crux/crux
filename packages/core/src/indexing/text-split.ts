@@ -32,7 +32,7 @@ export async function embeddingBoundaries(
   options: { minChars: number; maxChars: number; similarityThreshold?: number },
 ): Promise<SemanticBoundary[]> {
   if (segments.length <= 1) {
-    return [{ start: 0, end: document.content.length, reason: 'single-segment' }]
+    return [{ start: 0, end: document.content?.length ?? 0, reason: 'single-segment' }]
   }
   const embeddings = await dense.embedMany(segments.map((segment) => segment.text))
   const boundaries: SemanticBoundary[] = []

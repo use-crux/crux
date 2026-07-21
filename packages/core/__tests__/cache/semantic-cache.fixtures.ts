@@ -4,6 +4,7 @@ import { embedding } from '../../src/embedding'
 import { prompt } from '../../src/prompt/prompt'
 import { applyPlugins, type CruxPlugin } from '../../src/runtime/plugin'
 import { getHooks, setHooks } from '../../src/runtime/runtime'
+import { textOf } from '../embedding/text-input'
 
 export function denseEmbedding() {
   return embedding({
@@ -12,8 +13,9 @@ export function denseEmbedding() {
     dimensions: 3,
     maxInputTokens: 8192,
     batch: { maxSize: 16 },
-    embed: async (texts) => ({
-      embeddings: texts.map((text) => {
+    embed: async (inputs) => ({
+      embeddings: inputs.map((input) => {
+        const text = textOf(input)
         if (text.includes('billing') || text.includes('invoice')) return [1, 0, 0]
         if (text.includes('refund')) return [0, 1, 0]
         return [0, 0, 1]

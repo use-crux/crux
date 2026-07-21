@@ -11,6 +11,7 @@
 import { observe } from '../observability'
 import type { JsonObject } from '../storage'
 import { isSparseVector } from './cache'
+import type { NormalizedEmbeddingInput } from './modality'
 import type { BatchExecutionResult, EmbeddingGovernanceMetrics } from './types'
 
 /** Emit the `embedding.report` artifact for an operation and link it to the span. */
@@ -20,13 +21,16 @@ export function emitEmbeddingOutputArtifact<T>(
     name: string
     kind: 'dense' | 'sparse'
     operation: 'embed' | 'embedMany'
-    texts: string[]
+    inputs: readonly NormalizedEmbeddingInput[]
+    role: 'query' | 'document'
+    modalityCounts: Readonly<Record<string, number>>
+    embeddingSpace?: string
     batch: Readonly<{ maxSize: number; concurrency: number }>
     dimensions?: number
   },
   result: BatchExecutionResult<T>,
 ): void {
-  const inputCount = args.texts.length
+  const inputCount = args.inputs.length
   const chunkCount = inputCount === 0 ? 0 : Math.ceil(inputCount / args.batch.maxSize)
   const artifactId = observe.artifact({
     kind: 'embedding.report',
@@ -37,6 +41,9 @@ export function emitEmbeddingOutputArtifact<T>(
       embeddingName: args.name,
       embeddingKind: args.kind,
       operation: args.operation,
+      role: args.role,
+      modalityCounts: args.modalityCounts,
+      ...(args.embeddingSpace ? { embeddingSpace: args.embeddingSpace } : {}),
       inputCount,
       chunkCount,
       embeddingCount: result.embeddings.length,
@@ -52,6 +59,9 @@ export function emitEmbeddingOutputArtifact<T>(
       embeddingName: args.name,
       embeddingKind: args.kind,
       operation: args.operation,
+      role: args.role,
+      modalityCounts: args.modalityCounts,
+      ...(args.embeddingSpace ? { embeddingSpace: args.embeddingSpace } : {}),
       embeddingCount: result.embeddings.length,
       vectorValuesStored: false,
       ...(args.dimensions !== undefined ? { dimensions: args.dimensions } : {}),

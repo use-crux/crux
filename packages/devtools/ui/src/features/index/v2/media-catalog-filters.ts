@@ -6,19 +6,27 @@ import type {
   MediaModality,
   MediaOperationCatalogView,
 } from "./media-catalog";
+import type { EmbeddingConsumerCatalogView } from "./embedding-catalog";
+
+type MediaCatalogView =
+  | MediaOperationCatalogView
+  | IngestSourceCatalogView
+  | EmbeddingConsumerCatalogView;
 
 /** Return true when a media Catalog card matches one or more filters. */
 export function matchesMediaCatalogFilter(
-  view: MediaOperationCatalogView | IngestSourceCatalogView,
+  view: MediaCatalogView,
   filter: MediaCatalogFilter,
 ): boolean {
   switch (filter) {
     case "media":
       return true;
+    case "embeddings":
+      return view.kind === "embedding.consumer";
     case "ingest-sources":
       return view.kind === "ingest.source";
     case "has-warnings":
-      return view.warningCount > 0;
+      return "warningCount" in view && view.warningCount > 0;
     case "images":
       return hasModality(view, "image");
     case "audio":
@@ -52,8 +60,14 @@ export function matchesMediaCatalogFilter(
 
 /** Stable badge labels for media Catalog cards (unknown ≠ unsupported). */
 export function mediaCatalogBadges(
-  view: MediaOperationCatalogView | IngestSourceCatalogView,
+  view: MediaCatalogView,
 ): readonly string[] {
+  if (view.kind === "embedding.consumer") {
+    return Object.freeze([
+      "embedding consumer",
+      ...new Set(view.embeddings.flatMap((embedding) => embedding.modalities)),
+    ]);
+  }
   if (view.kind === "ingest.source") {
     return Object.freeze([
       "ingest source",
@@ -74,10 +88,15 @@ export function mediaCatalogBadges(
 }
 
 function hasModality(
-  view: MediaOperationCatalogView | IngestSourceCatalogView,
+  view: MediaCatalogView,
   modality: MediaModality,
 ): boolean {
   if (view.kind === "ingest.source") return view.mediaKinds.includes(modality);
+  if (view.kind === "embedding.consumer") {
+    return view.embeddings.some((embedding) =>
+      embedding.modalities.includes(modality),
+    );
+  }
   return (
     view.inputModalities.includes(modality) ||
     view.outputModalities.includes(modality)

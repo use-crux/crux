@@ -4,6 +4,7 @@
   "pages": [
     "index",
     "embeddings",
+    "multimodal-search",
     "ingestion",
     "indexing",
     "chunkers",

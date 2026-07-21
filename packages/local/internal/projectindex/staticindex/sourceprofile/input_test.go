@@ -142,6 +142,13 @@ func TestCruxCallNamesIncludesRagBetaPrimitives(t *testing.T) {
 	}
 }
 
+func TestCruxCallNamesIncludesEmbeddingPrimitives(t *testing.T) {
+	source := []byte("embedding({}); model.embed('query'); model.embedMany(inputs); indexer({}); writer.index(docs); writer.reindex(docs); writer.indexDocuments(docs); writer.indexChunks(chunks)")
+	if got, want := fmt.Sprint(CruxCallNames(source)), "[embed embedMany embedding index indexChunks indexDocuments indexer reindex]"; got != want {
+		t.Fatalf("CruxCallNames = %s, want %s", got, want)
+	}
+}
+
 func TestProjectStaticIndexSourceInputKeepsPrimaryFilesSeparateFromSupportFiles(t *testing.T) {
 	root := t.TempDir()
 	files := []string{

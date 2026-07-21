@@ -9,6 +9,7 @@
  */
 
 import { StorageError } from '../storage'
+import { EmbeddingSpaceMismatchError } from '../embedding'
 import type { ExactFilter, JsonObject, VectorSearchQuery } from '../storage'
 import type { RetrieverHit } from '../retrieval/types'
 import { assertValidHydratedChunks, assertVectorHitsHydrated } from './hydration'
@@ -75,7 +76,7 @@ export function createIndexedKnowledgeStore(config: IndexedKnowledgeStoreConfig)
             key,
             ...(input.dense?.[index] ? { dense: [...input.dense[index]] } : {}),
             ...(input.sparse?.[index] ? { sparse: input.sparse[index] } : {}),
-            metadata: indexedVectorMetadata(record),
+            metadata: indexedVectorMetadata(record, input.dense?.[index] ? input.embeddingSpace : undefined),
           },
         ])
       }
@@ -184,6 +185,7 @@ export function createIndexedKnowledgeStore(config: IndexedKnowledgeStoreConfig)
     if (config.vectors) {
       assertPreFilteredVectors(config.vectors.capabilities().filter)
       const vectorHits = await config.vectors.search(vectorSearchQuery(query, filter))
+      assertMatchingVectorSpaces(vectorHits, query.embeddingSpace, config.namespace)
       const entries: ScoredEntry[] = []
       const hydrationFilter = activeChunkFilter(config.namespace)
       const misses: IndexedHydrationMiss[] = []
@@ -219,6 +221,24 @@ export function createIndexedKnowledgeStore(config: IndexedKnowledgeStoreConfig)
     deleteSource,
     clearNamespace,
   })
+}
+
+function assertMatchingVectorSpaces(
+  hits: readonly { readonly metadata?: ExactFilter }[],
+  actual: IndexedChunkSearchQuery['embeddingSpace'],
+  namespace: string,
+): void {
+  if (!actual) return
+  for (const hit of hits) {
+    const expected = hit.metadata?.embeddingSpace
+    if (typeof expected !== 'string' || expected === actual.digest) continue
+    throw new EmbeddingSpaceMismatchError({
+      namespace,
+      expected,
+      actual: actual.digest,
+      actualSpace: { name: actual.name, dimensions: actual.dimensions },
+    })
+  }
 }
 
 function vectorSearchQuery(query: IndexedChunkSearchQuery, filter: ExactFilter): VectorSearchQuery {

@@ -26,7 +26,12 @@ const dense = embedding({
   name: "text-embedding-3-small",
   dimensions: 1536,
   maxInputTokens: 8191,
-  embed: async (texts) => ({ embeddings: await embedDense(texts) }),
+  embed: async (inputs) => ({
+    embeddings: await embedDense(inputs.map((input) => {
+      if (input.type !== "text") throw new Error("text-only provider invariant");
+      return input.text;
+    })),
+  }),
 });
 const records = inMemoryRecordStore();
 const vectors = inMemoryVectorStore();

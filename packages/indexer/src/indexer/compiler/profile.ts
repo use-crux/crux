@@ -4,6 +4,7 @@ import type {
   ResolvedIndexerExtension,
 } from '../extensions'
 import { createIndexerExtensionRuntime } from '../extensions'
+import { embeddingPrimitiveManifest } from '../embedding/primitive-manifest'
 import { mediaPrimitiveManifest } from '../media/primitive-manifest'
 import { mcpPrimitiveManifest } from '../mcp/primitive-manifest'
 export { compilerProfileCacheInputs } from '../cache-identity'
@@ -63,7 +64,11 @@ export const cruxCoreCompilerProjections = [
 export const cruxCoreCompilerProfile = {
   name: '@use-crux/indexer/crux-core-profile',
   version: '3',
-  extensions: [mediaPrimitiveManifest, mcpPrimitiveManifest],
+  extensions: [
+    embeddingPrimitiveManifest,
+    mediaPrimitiveManifest,
+    mcpPrimitiveManifest,
+  ],
   projections: cruxCoreCompilerProjections,
 } as const satisfies ProjectIndexCompilerProfile
 

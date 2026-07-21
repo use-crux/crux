@@ -10,7 +10,7 @@
  * @module
  */
 
-import type { DenseEmbedding } from '../embedding'
+import type { DenseEmbedding, EmbeddingModality } from '../embedding'
 import type { JsonObject, RecordStore, Storage, VectorStore } from '../storage'
 import type { PromptMiddlewareArgs } from '../runtime/types'
 import type { SemanticCacheMode, SemanticCachePromptOptions } from '../prompt/prompt-types'
@@ -41,11 +41,13 @@ export interface SemanticCacheWriteContext extends SemanticCacheLookupContext {
 }
 
 /** Configuration for {@link createSemanticCache}. */
-export interface SemanticCacheConfig {
+export interface SemanticCacheConfig<
+  TModality extends EmbeddingModality = 'text',
+> {
   storage?: Storage
   records?: RecordStore
   vectors?: VectorStore
-  embedding: DenseEmbedding
+  embedding: DenseEmbedding<TModality>
   ttl: number
   threshold?: number
   namespace?: string

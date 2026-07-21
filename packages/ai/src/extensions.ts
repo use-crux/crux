@@ -53,7 +53,7 @@ export interface AIEmbeddingConfig {
 /** Extensions attached to a bound `aiSdkProviderRuntime`. */
 export interface AiSdkRuntimeExtensions {
   /** Create a dense Crux embedding backed by AI SDK `embedMany()`. */
-  embedding(config: AIEmbeddingConfig): DenseEmbedding;
+  embedding(config: AIEmbeddingConfig): DenseEmbedding<"text">;
   /** Create a bound retrieval model backed by AI SDK generation helpers. */
   retrievalModel(config: AIRetrievalModelConfig): RetrievalModel;
   /** Create a Crux retriever reranker backed by AI SDK `rerank()`. */
@@ -71,12 +71,21 @@ export function createAiSdkRuntimeExtensions(
         name: config.name,
         dimensions: config.dimensions,
         maxInputTokens: config.maxInputTokens,
+        modalities: ["text"],
         version: embeddingVersion(config),
         batch: {
           maxSize: config.batch?.maxSize ?? 100,
           concurrency: config.batch?.concurrency ?? 1,
         },
-        async embed(texts) {
+        async embed(inputs) {
+          const texts = inputs.map((input) => {
+            if (input.type !== "text") {
+              throw new TypeError(
+                "AI SDK embedding received non-text input after core modality validation.",
+              );
+            }
+            return input.text;
+          });
           const result = await gateway.embedMany({
             model: config.model,
             values: texts,

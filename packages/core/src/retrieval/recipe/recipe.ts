@@ -9,7 +9,9 @@
 import { grounding } from '../../citations'
 import type { Grounding, GroundingConfig } from '../../citations'
 import type { RetrievalModel } from '../model'
-import type { RetrievalToolConfig, Retriever, RetrieverHit, RetrieverTools, RetrieveOptions, RetrieveRequest } from '../types'
+import type { EmbeddingModality } from '../../embedding'
+import type { ExactFilter } from '../../storage'
+import type { RetrievalToolConfig, Retriever, RetrieverHit, RetrieverTools, RetrieveInput, RetrieveOptions } from '../types'
 import { createRetrieverTools } from '../tools'
 import { RetrievalConfigError, retrievalNotImplemented } from '../errors'
 import { normalizeRetrieveRequest } from '../request'
@@ -33,13 +35,13 @@ export interface RetrievalRecipeConfig<TSteps extends readonly RetrievalStep[] =
 export interface RetrievalRecipe {
   readonly _tag: 'RetrievalRecipe'
   readonly id: string
-  run(input: string | RetrieveRequest, options?: RetrieveOptions): Promise<readonly RetrieverHit[]>
-  retrieve(query: string | RetrieveRequest, options?: RetrieveOptions): Promise<RetrieverHit[]>
+  run(input: RetrieveInput, options?: RetrieveOptions): Promise<readonly RetrieverHit[]>
+  retrieve(query: RetrieveInput, options?: RetrieveOptions): Promise<RetrieverHit[]>
   retrieveWithTrace(
-    query: string | RetrieveRequest,
+    query: RetrieveInput,
     options?: RetrieveOptions,
   ): Promise<{ hits: RetrieverHit[]; trace: import('./trace').RecipeTrace }>
-  asRetriever(): Retriever
+  asRetriever(): Retriever<ExactFilter, EmbeddingModality> & Retriever
   asTools<const TConfig extends RetrievalToolConfig | undefined = undefined>(config?: TConfig): RetrieverTools<TConfig>
   asGrounding(config?: RetrievalRecipeGroundingConfig): Grounding
   inspect(): { id: string; stepCount: number; retrieverIds: readonly string[] }
@@ -88,7 +90,7 @@ export function retrievalRecipe<const TSteps extends readonly RetrievalStep[]>(
       grounding({
         ...(groundingConfig ?? {}),
         id: groundingConfig?.id ?? `grounding:${config.id}`,
-        retriever: recipeRetriever,
+        retriever: recipeRetriever as unknown as Retriever,
       }),
     inspect: () => ({
       id: config.id,
@@ -134,8 +136,12 @@ function validateStepOrder(steps: readonly RetrievalStep[]): void {
   }
 }
 
-function createRecipeRetriever(recipeId: string, base: Retriever, runRecipe: RetrievalRecipe['retrieve']): Retriever {
-  const retrieve: Retriever['retrieve'] = async (queryOrRequest, options = {}) => {
+function createRecipeRetriever(
+  recipeId: string,
+  base: Retriever<ExactFilter, EmbeddingModality>,
+  runRecipe: RetrievalRecipe['retrieve'],
+): Retriever<ExactFilter, EmbeddingModality> & Retriever {
+  const retrieve: Retriever<ExactFilter, EmbeddingModality>['retrieve'] = async (queryOrRequest, options = {}) => {
     const request = normalizeRetrieveRequest(queryOrRequest, options)
     return runRecipe(request)
   }
@@ -156,5 +162,5 @@ function createRecipeRetriever(recipeId: string, base: Retriever, runRecipe: Ret
         config: toolConfig,
       }) as RetrieverTools<TConfig>,
     inject: () => retrievalNotImplemented('phase 4', `retrievalRecipe("${recipeId}").asRetriever().inject()`),
-  })
+  }) as unknown as Retriever<ExactFilter, EmbeddingModality> & Retriever
 }

@@ -1,4 +1,5 @@
 import type { CruxAttributes, CruxErrorSummary } from './contract'
+import { projectErrorForObservation } from './error-projection'
 import { sanitizeMediaPreview } from './media-preview'
 
 const DEFAULT_MAX_DEPTH = 6
@@ -53,6 +54,7 @@ const defaultSafeJsonOptions: SafeJsonOptions = {
 }
 
 export function normalizeObservedError(error: unknown, context: ObservedErrorContext = {}): NormalizedObservedError {
+  error = projectErrorForObservation(error)
   if (error instanceof Error) {
     const summary = errorSummaryFromRecord(error, context)
     const stack = nonEmptyString(error.stack)
@@ -108,6 +110,7 @@ function errorSummaryFromRecord(error: unknown, context: ObservedErrorContext): 
 
 function normalizeCause(cause: unknown): NormalizedObservedCause | undefined {
   if (cause === undefined) return undefined
+  cause = projectErrorForObservation(cause)
   if (cause instanceof Error) {
     const stack = nonEmptyString(cause.stack)
     const name = nonEmptyString(cause.name)

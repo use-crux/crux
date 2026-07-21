@@ -204,9 +204,11 @@ fn shared_static_index_protocol_case_fixture_decodes() {
     assert!(!fixture.analyze_stream_error["ok"].as_bool().unwrap_or(true));
     assert_eq!(fixture.analyze_stream_error["type"], "error");
     assert_eq!(fixture.analyze_stream_error["error"], "analyze failed");
-    assert!(!fixture.finalize_stream_error["ok"]
-        .as_bool()
-        .unwrap_or(true));
+    assert!(
+        !fixture.finalize_stream_error["ok"]
+            .as_bool()
+            .unwrap_or(true)
+    );
     assert_eq!(fixture.finalize_stream_error["type"], "error");
     assert_eq!(fixture.finalize_stream_error["error"], "finalize failed");
     assert_eq!(fixture.invalid_analyze_stream_event["type"], "unknown");
@@ -349,18 +351,23 @@ fn shared_relation_rule_and_coverage_fixtures_decode() {
             "media.missing-derivation",
             "media.missing-attribution",
             "media.output-discarded",
-            "media.raw-retention"
+            "media.raw-retention",
+            "embedding.unsupported-modality",
+            "embedding.namespace-identity-mismatch",
+            "embedding.sparse-media"
         ]
     );
 
     let coverage: PrimitiveCoverageIdentitiesFixture =
         fixture_json("primitive-coverage-identities.json");
     assert_eq!(coverage.required_fixture_classes.len(), 10);
-    assert!(coverage
-        .required_fixture_classes
-        .iter()
-        .any(|class| class == "dependencies"));
-    assert_eq!(coverage.identities.len(), 23);
+    assert!(
+        coverage
+            .required_fixture_classes
+            .iter()
+            .any(|class| class == "dependencies")
+    );
+    assert_eq!(coverage.identities.len(), 26);
 
     // The Rust first-party projection manifest must cover exactly these
     // identities, with the same stable replacement identity it stamps when it

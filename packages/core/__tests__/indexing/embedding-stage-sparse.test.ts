@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { embedding } from '../../src/embedding'
 import { indexer } from '../../src/indexing'
 import { inMemoryRecordStore, inMemoryVectorStore } from '../../src/storage'
+import { textOf } from '../embedding/text-input'
 
 describe('indexer sparse embedding-stage cache', () => {
   it('reuses sparse vectors as validated source bundles', async () => {
@@ -69,7 +70,7 @@ describe('indexer sparse embedding-stage cache', () => {
     })
   })
 
-  it('preserves hybrid ordering when dense and sparse invalidate independently', async () => {
+  it('preserves hybrid ordering when sparse changes and rejects a dense space change', async () => {
     const records = inMemoryRecordStore()
     const vectors = inMemoryVectorStore()
     const input = [
@@ -112,7 +113,7 @@ describe('indexer sparse embedding-stage cache', () => {
     await expect(activeHybridRecords(records)).resolves.toEqual(expectedHybridRecords)
 
     const denseV2 = denseEmbedding('dense-v2')
-    const sparseHit = await indexer({
+    const denseMismatch = indexer({
       id: 'docs',
       namespace: 'kb',
       records,
@@ -122,34 +123,27 @@ describe('indexer sparse embedding-stage cache', () => {
       cache: true,
     }).indexDocuments(input)
 
-    expect(denseV2.embed).toHaveBeenCalledOnce()
+    await expect(denseMismatch).rejects.toThrow('Embedding space mismatch')
+    expect(denseV2.embed).not.toHaveBeenCalled()
     expect(sparseV2.embed).toHaveBeenCalledOnce()
-    expect(embeddingOutcomes(sparseHit)).toEqual([
-      ['dense', 'miss'],
-      ['dense', 'miss'],
-      ['sparse', 'hit'],
-      ['sparse', 'hit'],
-    ])
     await expect(activeHybridRecords(records)).resolves.toEqual(expectedHybridRecords)
 
     const cacheEntries = await records.list('indexer:docs:namespace:kb:embedding-cache:')
     expect(cacheEntries.entries.map((entry) => entry.value.kind).sort()).toEqual([
       'dense',
       'dense',
-      'dense',
-      'dense',
       'sparse',
       'sparse',
       'sparse',
       'sparse',
     ])
-    expect(new Set(cacheEntries.entries.map((entry) => entry.key)).size).toBe(8)
+    expect(new Set(cacheEntries.entries.map((entry) => entry.key)).size).toBe(6)
   })
 })
 
 function denseEmbedding(version: string) {
-  const embed = vi.fn(async (texts: string[]) =>
-    texts.map((text) => [text.length, text.charCodeAt(0)]),
+  const embed = vi.fn(async (inputs) =>
+    inputs.map((input) => [textOf(input).length, textOf(input).charCodeAt(0)]),
   )
   return {
     embed,

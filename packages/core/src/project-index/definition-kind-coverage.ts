@@ -182,6 +182,16 @@ export const DEFINITION_KIND_COVERAGE = {
     primary: "directly-observed",
     runtimePrimitiveNames: ["retrieval.retrieve", "retrieval.query"],
   },
+  "embedding.call": {
+    primary: "runtime-observed-unjoined",
+    runtimeIdentity: "none",
+    runtimePrimitiveNames: ["embedding.call"],
+  },
+  "rag.indexer": {
+    primary: "runtime-observed-unjoined",
+    runtimeIdentity: "none",
+    runtimePrimitiveNames: ["indexing.pipeline"],
+  },
   skill: {
     primary: "directly-observed",
     runtimePrimitiveNames: ["skill.load"],
@@ -216,6 +226,16 @@ export const DEFINITION_KIND_COVERAGE = {
     primary: "runtime-contributor",
     runtimeIdentity: "none",
     runtimePrimitiveNames: ["prompt.resolve", "context.resolve"],
+  },
+  embedding: {
+    primary: "runtime-contributor",
+    runtimeIdentity: "none",
+    runtimePrimitiveNames: [
+      "embedding.call",
+      "indexing.pipeline",
+      "retrieval.retrieve",
+      "retrieval.query",
+    ],
   },
   "rag.knowledgeBase": {
     primary: "runtime-contributor",

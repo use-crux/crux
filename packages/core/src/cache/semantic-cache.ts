@@ -10,6 +10,7 @@
  */
 
 import type { CruxPlugin } from '../runtime/plugin'
+import type { EmbeddingModality } from '../embedding'
 import type { SemanticCacheCall, SemanticCacheConfig, SemanticCacheLookupContext } from './types'
 import {
   DEFAULT_NAMESPACE,
@@ -37,7 +38,12 @@ import { performWrite } from './write'
  * config({ plugins: [createSemanticCache({ records, vectors, embedding, ttl: 86_400_000, scope: 'global' })] })
  * ```
  */
-export function createSemanticCache(config: SemanticCacheConfig): CruxPlugin {
+export function createSemanticCache<TModality extends EmbeddingModality>(
+  authoredConfig: SemanticCacheConfig<TModality>,
+): CruxPlugin {
+  // Capture the caller's supported modalities at the public boundary, then
+  // erase the existential parameter for text-only cache internals.
+  const config = authoredConfig as unknown as SemanticCacheConfig
   validateConfig(config)
 
   const namespace = config.namespace ?? DEFAULT_NAMESPACE

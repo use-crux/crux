@@ -10,12 +10,14 @@
  */
 
 import { observe } from '../observability'
+import { markErrorForObservation } from '../observability/error-projection'
 import { getHooks } from '../runtime/runtime'
-import { embeddingCacheKey } from './cache'
-import { combineGovernance, compactGovernance, eventGovernance } from './metrics'
+import { executeWithEmbeddingCache } from './execute-cache'
+import { combineGovernance, eventGovernance } from './metrics'
 import { emitEmbeddingOutputArtifact } from './observability'
 import { applyPreprocessors, applyTruncation } from './preprocess'
-import { hashString } from './hashing'
+import type { NormalizedEmbeddingInput } from './modality'
+import { embeddingSpaceDigest } from './space'
 import type {
   BatchExecutionResult,
   CacheCodec,
@@ -30,23 +32,28 @@ export async function runEmbeddingOperation<T>(args: {
   name: string
   kind: 'dense' | 'sparse'
   operation: 'embed' | 'embedMany'
-  texts: string[]
+  inputs: readonly NormalizedEmbeddingInput[]
+  role: 'query' | 'document'
   batch: Readonly<{ maxSize: number; concurrency: number }>
   governance: NormalizedGovernance
   cacheCodec: CacheCodec<T>
-  execute: (texts: string[]) => Promise<BatchExecutionResult<T>>
+  execute: (inputs: readonly NormalizedEmbeddingInput[]) => Promise<BatchExecutionResult<T>>
   dimensions?: number
 }): Promise<BatchExecutionResult<T>> {
   const startedAt = Date.now()
   const embedId = `${startedAt}-embed-${++embeddingOperationCounter}`
+  const modalityCounts = inputModalityCounts(args.inputs)
+  const embeddingSpace = args.kind === 'dense'
+    ? embeddingSpaceDigest(args.governance.fingerprint)
+    : undefined
   const eventBase = {
     embedId,
     name: args.name,
     kind: args.kind,
     operation: args.operation,
-    inputCount: args.texts.length,
-    chunkCount: args.texts.length === 0 ? 0 : Math.ceil(args.texts.length / args.batch.maxSize),
-    maxChunkSize: args.texts.length === 0 ? 0 : Math.min(args.batch.maxSize, args.texts.length),
+    inputCount: args.inputs.length,
+    chunkCount: args.inputs.length === 0 ? 0 : Math.ceil(args.inputs.length / args.batch.maxSize),
+    maxChunkSize: args.inputs.length === 0 ? 0 : Math.min(args.batch.maxSize, args.inputs.length),
     ...(args.dimensions !== undefined ? { dimensions: args.dimensions } : {}),
   }
   const span = observe.openSpan({
@@ -57,7 +64,10 @@ export async function runEmbeddingOperation<T>(args: {
       embeddingName: args.name,
       embeddingKind: args.kind,
       operation: args.operation,
-      inputCount: args.texts.length,
+      role: args.role,
+      modalityCounts,
+      ...(embeddingSpace ? { embeddingSpace } : {}),
+      inputCount: args.inputs.length,
       chunkCount: eventBase.chunkCount,
       maxChunkSize: eventBase.maxChunkSize,
       batchConcurrency: args.batch.concurrency,
@@ -74,7 +84,11 @@ export async function runEmbeddingOperation<T>(args: {
   try {
     const result = await span.withContext(async () => {
       const executionResult = await executeGovernedEmbedding(args)
-      emitEmbeddingOutputArtifact(span.spanId, args, executionResult)
+      emitEmbeddingOutputArtifact(span.spanId, {
+        ...args,
+        modalityCounts,
+        ...(embeddingSpace ? { embeddingSpace } : {}),
+      }, executionResult)
       return executionResult
     })
     span.end({
@@ -82,7 +96,10 @@ export async function runEmbeddingOperation<T>(args: {
         embeddingName: args.name,
         embeddingKind: args.kind,
         operation: args.operation,
-        inputCount: args.texts.length,
+        role: args.role,
+        modalityCounts,
+        ...(embeddingSpace ? { embeddingSpace } : {}),
+        inputCount: args.inputs.length,
         outputCount: result.embeddings.length,
         durationMs: Date.now() - startedAt,
         ...(result.usage?.inputTokens !== undefined ? { inputTokens: result.usage.inputTokens } : {}),
@@ -97,11 +114,20 @@ export async function runEmbeddingOperation<T>(args: {
       embeddingName: args.name,
       embeddingKind: args.kind,
       operation: args.operation,
-      inputCount: args.texts.length,
+      role: args.role,
+      modalityCounts,
+      ...(embeddingSpace ? { embeddingSpace } : {}),
+      inputCount: args.inputs.length,
       durationMs: Date.now() - startedAt,
     })
     throw error
   }
+}
+
+function inputModalityCounts(inputs: readonly NormalizedEmbeddingInput[]): Record<string, number> {
+  const counts: Record<string, number> = {}
+  for (const input of inputs) counts[input.type] = (counts[input.type] ?? 0) + 1
+  return counts
 }
 
 /** Preprocess + truncate inputs, then execute directly or via the cache. */
@@ -109,155 +135,49 @@ async function executeGovernedEmbedding<T>(args: {
   name: string
   kind: 'dense' | 'sparse'
   dimensions?: number
-  texts: string[]
+  inputs: readonly NormalizedEmbeddingInput[]
+  role: 'query' | 'document'
   governance: NormalizedGovernance
   cacheCodec: CacheCodec<T>
-  execute: (texts: string[]) => Promise<BatchExecutionResult<T>>
+  execute: (inputs: readonly NormalizedEmbeddingInput[]) => Promise<BatchExecutionResult<T>>
 }): Promise<BatchExecutionResult<T>> {
   const metrics: EmbeddingGovernanceMetrics = {}
-  const processedTexts = new Array<string>(args.texts.length)
+  const processedInputs = new Array<NormalizedEmbeddingInput>(args.inputs.length)
 
-  for (let index = 0; index < args.texts.length; index++) {
-    const preprocessed = await applyPreprocessors(args.texts[index], args.governance.preprocessors)
-    const truncated = applyTruncation(preprocessed, args.governance, metrics)
-    processedTexts[index] = truncated
+  for (let index = 0; index < args.inputs.length; index++) {
+    const input = args.inputs[index]
+    if (input.type !== 'text') {
+      processedInputs[index] = input
+      continue
+    }
+    const preprocessed = await applyPreprocessors(input.text, args.governance.preprocessors)
+    const text = applyTruncation(preprocessed, args.governance, metrics)
+    processedInputs[index] = { type: 'text', text }
+  }
+
+  const execute = async (inputs: readonly NormalizedEmbeddingInput[]) => {
+    try {
+      return await args.execute(inputs)
+    } catch (error) {
+      if (inputs.some((input) => input.type !== 'text')) {
+        markErrorForObservation(error, 'Embedding provider call failed for media input.')
+      }
+      throw error
+    }
   }
 
   if (!args.governance.cache) {
-    const result = await args.execute(processedTexts)
+    const result = await execute(processedInputs)
     return {
       ...result,
       governance: combineGovernance([metrics, result.governance]),
     }
   }
 
-  return executeWithCache({
+  return executeWithEmbeddingCache({
     ...args,
-    texts: processedTexts,
+    inputs: processedInputs,
+    execute,
     metrics,
   })
-}
-
-/** Resolve cache hits, execute misses, persist them, and merge into one result. */
-async function executeWithCache<T>(args: {
-  name: string
-  kind: 'dense' | 'sparse'
-  dimensions?: number
-  texts: string[]
-  governance: NormalizedGovernance
-  cacheCodec: CacheCodec<T>
-  execute: (texts: string[]) => Promise<BatchExecutionResult<T>>
-  metrics: EmbeddingGovernanceMetrics
-}): Promise<BatchExecutionResult<T>> {
-  const cache = args.governance.cache
-  if (!cache) {
-    return args.execute(args.texts)
-  }
-
-  const span = observe.openSpan({
-    name: `${args.name}.embedding-cache`,
-    primitive: 'cache.lookup',
-    attributes: {
-      cacheKind: 'embedding',
-      cacheOperation: 'lookup',
-      cacheNamespace: cache.namespace,
-      embeddingName: args.name,
-      embeddingKind: args.kind,
-      inputCount: args.texts.length,
-      fingerprintHash: hashString(args.governance.fingerprint),
-      ...(args.dimensions !== undefined ? { dimensions: args.dimensions } : {}),
-    },
-  })
-
-  try {
-    const result = await span.withContext(async () => {
-      const embeddings = new Array<T>(args.texts.length)
-      const misses = new Map<string, { key: string; text: string; indexes: number[] }>()
-
-      for (let index = 0; index < args.texts.length; index++) {
-        const text = args.texts[index]
-        const key = embeddingCacheKey(cache.namespace, args.governance.fingerprint, text)
-        const cached = args.cacheCodec.read(await cache.get(key))
-
-        if (cached !== undefined) {
-          embeddings[index] = cached
-          args.metrics.cacheHitCount = (args.metrics.cacheHitCount ?? 0) + 1
-          observe.event({
-            name: 'embedding-cache.entry',
-            attributes: { cacheKind: 'embedding', hit: true, inputIndex: index },
-          })
-          continue
-        }
-
-        args.metrics.cacheMissCount = (args.metrics.cacheMissCount ?? 0) + 1
-        observe.event({
-          name: 'embedding-cache.entry',
-          attributes: { cacheKind: 'embedding', hit: false, inputIndex: index },
-        })
-        const existing = misses.get(key)
-        if (existing) {
-          existing.indexes.push(index)
-        } else {
-          misses.set(key, { key, text, indexes: [index] })
-        }
-      }
-
-      if (misses.size === 0) {
-        return {
-          embeddings,
-          governance: compactGovernance(args.metrics),
-        }
-      }
-
-      const missEntries = [...misses.values()]
-      const result = await args.execute(missEntries.map((entry) => entry.text))
-
-      for (let index = 0; index < missEntries.length; index++) {
-        const entry = missEntries[index]
-        const embedding = result.embeddings[index]
-        await cache.set(entry.key, args.cacheCodec.write(embedding))
-        observe.event({
-          name: 'embedding-cache.write',
-          attributes: { cacheKind: 'embedding', outputIndexes: entry.indexes, cacheNamespace: cache.namespace },
-        })
-        for (const outputIndex of entry.indexes) {
-          embeddings[outputIndex] = embedding
-        }
-      }
-
-      return {
-        embeddings,
-        usage: result.usage,
-        cost: result.cost,
-        governance: combineGovernance([args.metrics, result.governance]),
-      }
-    })
-    span.end({
-      attributes: {
-        cacheKind: 'embedding',
-        cacheOperation: 'lookup',
-        cacheNamespace: cache.namespace,
-        embeddingName: args.name,
-        embeddingKind: args.kind,
-        inputCount: args.texts.length,
-        hitCount: args.metrics.cacheHitCount ?? 0,
-        missCount: args.metrics.cacheMissCount ?? 0,
-        allHit: (args.metrics.cacheHitCount ?? 0) === args.texts.length,
-        writeCount: args.metrics.cacheMissCount ?? 0,
-      },
-    })
-    return result
-  } catch (error) {
-    span.error(error, {
-      cacheKind: 'embedding',
-      cacheOperation: 'lookup',
-      cacheNamespace: cache.namespace,
-      embeddingName: args.name,
-      embeddingKind: args.kind,
-      inputCount: args.texts.length,
-      hitCount: args.metrics.cacheHitCount ?? 0,
-      missCount: args.metrics.cacheMissCount ?? 0,
-    })
-    throw error
-  }
 }

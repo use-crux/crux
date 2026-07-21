@@ -8,7 +8,17 @@
  * @module
  */
 
-export type MediaModality = "text" | "image" | "audio" | "video" | "document";
+/** Closed modality vocabulary shared by media and embedding Catalog views. */
+export const MEDIA_MODALITIES = [
+  "text",
+  "image",
+  "audio",
+  "video",
+  "document",
+] as const;
+
+/** A modality the Project Index Catalog can present and filter. */
+export type MediaModality = (typeof MEDIA_MODALITIES)[number];
 
 export type MediaExecutionSupport = "native" | "composed" | "unknown";
 
@@ -78,6 +88,7 @@ export type MediaCatalogRelation = Readonly<{
 
 export type MediaCatalogFilter =
   | "media"
+  | "embeddings"
   | "images"
   | "audio"
   | "video"
@@ -100,13 +111,7 @@ const MEDIA_OPS = new Set<string>([
   "describe",
 ]);
 
-const MODALITIES = new Set<string>([
-  "text",
-  "image",
-  "audio",
-  "video",
-  "document",
-]);
+const MODALITIES = new Set<string>(MEDIA_MODALITIES);
 
 /** Project a Project Index definition into a media-operation Catalog card. */
 export function projectMediaOperationCatalog(
@@ -134,8 +139,8 @@ export function projectMediaOperationCatalog(
       operation && MEDIA_OPS.has(operation)
         ? (operation as MediaOperationName)
         : "unknown",
-    inputModalities: modalityList(facts?.inputModalities),
-    outputModalities: modalityList(facts?.outputModalities),
+    inputModalities: mediaModalityList(facts?.inputModalities),
+    outputModalities: mediaModalityList(facts?.outputModalities),
     ...(stringValue(facts?.adapter)
       ? { adapter: stringValue(facts?.adapter) }
       : {}),
@@ -181,7 +186,7 @@ export function projectIngestSourceCatalog(
       sourceKind === "custom"
         ? sourceKind
         : "unknown",
-    mediaKinds: modalityList(facts?.mediaKinds),
+    mediaKinds: mediaModalityList(facts?.mediaKinds),
     ...(stringValue(facts?.namespace)
       ? { namespace: stringValue(facts?.namespace) }
       : {}),
@@ -226,7 +231,8 @@ function projectAuthoredOptions(value: unknown): MediaAuthoredOptions {
   });
 }
 
-function modalityList(value: unknown): readonly MediaModality[] {
+/** Project unknown input through the closed Catalog modality allowlist. */
+export function mediaModalityList(value: unknown): readonly MediaModality[] {
   return Object.freeze(
     arrayOf(value).filter((item): item is MediaModality =>
       MODALITIES.has(item),

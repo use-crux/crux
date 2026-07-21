@@ -11,12 +11,12 @@ func DefaultCacheCompilerInputs() []json.RawMessage {
 		`{"kind":"compiler-projection","name":"runtime-prepare-use-entries","version":"1","phase":"parse"}`,
 		`{"kind":"compiler-projection","name":"source-ref-projection","version":"1","phase":"parse"}`,
 		`{"kind":"extension","name":"@use-crux/indexer/crux-core-media","version":"1"}`,
-		`{"kind":"extension-manifest","name":"@use-crux/indexer/crux-core-media","version":"1","digest":"75d691347ead0e54768cf76ac52b510733db5bb02c5efb70ba2758a538fe83f5"}`,
+		`{"kind":"extension-manifest","name":"@use-crux/indexer/crux-core-media","version":"1","digest":"a08d4797cd75809ae55532ea453a961e8d3e5a740097a62249d51c38bfd20a9e"}`,
 		`{"kind":"extractor","extension":"@use-crux/indexer/crux-core-media","name":"ingest.source"}`,
 		`{"kind":"extractor","extension":"@use-crux/indexer/crux-core-media","name":"media.operation"}`,
-		`{"kind":"native-primitive-manifest","name":"crux-static-index-host","version":"1","digest":"457ae166c958a1063ceb6fe2632a8a8497eb59a4dd2298a2df11dba2f1ba5681"}`,
-		`{"kind":"relation-policy","name":"runtime-relation-specs","digest":"4a42c1822b901c3c1de519b7c4bc589fd4323e1ce6570304717f0670371a06a9"}`,
-		`{"kind":"static-evidence-manifest","name":"runtime-static-interests","digest":"4cba00d493051c155dc47bb8fe65e6946771484b30b1edf18cf181e573515001"}`,
+		`{"kind":"native-primitive-manifest","name":"crux-static-index-host","version":"1","digest":"43f3a919cc2aa07bd82d67bb0252df061198dd962e2badf9170b66a0053acdc2"}`,
+		`{"kind":"relation-policy","name":"runtime-relation-specs","digest":"1d926a5829362c8604833d257fc1210f15a3d71f139ebd286e695aa90be6ce5d"}`,
+		`{"kind":"static-evidence-manifest","name":"runtime-static-interests","digest":"ae0c9ede28482436294b1293ae7dfc6a1cebab57bde274fedb2b9a31eaa07e09"}`,
 		`{"kind":"syntax-frontend","name":"oxc-rust","version":"oxc_parser@0.139.0+crux_native_group3.8"}`,
 	}
 	out := make([]json.RawMessage, 0, len(inputs))

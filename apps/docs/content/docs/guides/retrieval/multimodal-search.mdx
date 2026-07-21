@@ -1,0 +1,170 @@
+---
+title: Multimodal Search
+description: Index media and text into one embedding space, then query it with text or media.
+---
+
+Native multimodal embeddings let one retriever compare text, images, audio,
+video, and documents in a shared vector space. The calling shape stays the same:
+index documents, then retrieve with a string or an asset.
+
+## Index And Retrieve An Image
+
+```ts
+import { readFile } from "node:fs/promises";
+import { GoogleGenAI } from "@google/genai";
+import type { Asset } from "@use-crux/core/asset";
+import { indexer } from "@use-crux/core/indexing";
+import {
+  retriever,
+  retrievalRecipe,
+  retrieve,
+} from "@use-crux/core/retrieval";
+import { inMemoryStorage } from "@use-crux/core/storage";
+import { embedding } from "@use-crux/google";
+
+const client = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY });
+const embed = embedding(client, { model: "gemini-embedding-2" });
+const storage = inMemoryStorage();
+
+const dogPhoto = {
+  type: "data",
+  data: await readFile("./rex.jpg"),
+  mediaType: "image/jpeg",
+} satisfies Asset;
+
+const productsIndexer = indexer({
+  id: "products",
+  namespace: "products",
+  storage,
+  dense: embed,
+});
+
+await productsIndexer.indexDocuments([
+  {
+    namespace: "products",
+    sourceId: "rex",
+    title: "Rex",
+    asset: dogPhoto,
+  },
+  {
+    namespace: "products",
+    sourceId: "faq",
+    content: "Our return policy allows returns within 30 days.",
+  },
+]);
+
+const products = retriever({
+  id: "products",
+  namespace: "products",
+  storage,
+  dense: embed,
+});
+
+const productRecipe = retrievalRecipe({
+  id: "product-search",
+  retriever: products,
+  steps: [retrieve()],
+});
+
+const textHits = await products.retrieve("dog");
+const imageHits = await products.retrieve(dogPhoto);
+
+const ref = textHits[0].source.assetRef;
+const storedPhoto = ref ? await storage.assets?.get(ref) : null;
+```
+
+`gemini-embedding-2` is a known model id, so the Google helper infers its text,
+image, audio, video, and document modalities and its published sizing defaults.
+For a custom or dynamic model id, declare `modalities`, `dimensions`, and
+`maxInputTokens` explicitly.
+
+Use a durable `Storage` adapter in production. The in-memory bundle keeps this
+example self-contained and includes the `AssetStore` needed to hydrate the
+returned `assetRef`.
+
+## Media Inputs
+
+Typed parts make the intended modality explicit:
+
+```ts
+await embed.embed({
+  type: "image",
+  source: dogPhoto,
+});
+
+await products.retrieve({
+  input: {
+    type: "document",
+    source: new URL("https://example.com/catalog.pdf"),
+  },
+  limit: 5,
+});
+```
+
+A bare `Asset` is shorthand when its `mediaType` identifies the modality.
+Strings are always text. `AssetRef` values are attribution, not model input;
+hydrate one through its owning asset store before embedding it again.
+
+Each media document part produces one independently retrievable chunk. Split a
+PDF into pages, an audio file into intervals, or a video into clips upstream
+when those units need independent hits and source locations.
+
+## Search Modes
+
+Media queries use the dense embedding. A hybrid retriever therefore runs its
+dense side only for media input; sparse embeddings remain text-only. Custom
+retrievers and model-backed query rewrite/fanout steps accept text queries only
+unless their own contract explicitly supports media.
+
+The direct path and a recipe containing only `retrieve()` can accept media:
+
+```ts
+const direct = await products.retrieve(dogPhoto);
+const throughRecipe = await productRecipe.retrieve(dogPhoto);
+```
+
+## Embedding-space Migrations
+
+An indexed namespace is bound to the dense embedding space that built it.
+Crux checks that identity before vector writes and before query embedding or
+search. Changing the model, dimensions, normalization, modalities, role-task
+mapping, or another vector-producing option changes the space digest.
+
+If `EmbeddingSpaceMismatchError` is thrown, either clear and fully reindex the
+namespace or write the new vectors to a new namespace. Do not mix old and new
+vectors. `deleteSource()` intentionally leaves the namespace identity intact;
+`clear()` removes it.
+
+## Safety And Reliability Boundary
+
+Crux stores media bytes in `AssetStore`, not in record payloads, vector
+metadata, caches, traces, or recipe artifacts. Vectors retain only an asset ref,
+MIME type, source location, and allowlisted scalar attribution.
+
+Similarity ranking is not an exact-duplicate guarantee. Use SHA-256 for exact
+asset identity. Text-to-image, image-to-image, and image-to-text quality are
+separate claims, and domains such as fashion, medical imagery, faces, and
+products need representative evaluations before production use.
+
+The accepted design and evaluation fixture contract are recorded in
+[RFC 0002](https://github.com/use-crux/crux/blob/main/docs/rfc/0002-native-multimodal-embeddings.md).
+
+## Related
+
+<Cards>
+  <Card
+    title="Embeddings"
+    description="Embedding inputs, governance, caching, and providers."
+    href="/docs/guides/retrieval/embeddings"
+  />
+  <Card
+    title="Indexing"
+    description="Prepare and store text and media documents."
+    href="/docs/guides/retrieval/indexing"
+  />
+  <Card
+    title="Querying"
+    description="Use store-backed retrievers and retrieval recipes."
+    href="/docs/guides/retrieval/querying"
+  />
+</Cards>

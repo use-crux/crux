@@ -1,0 +1,27 @@
+---
+title: embedding.sparse-media
+---
+
+## What it checks
+
+Crux emits this finding when resolved source combines media with a sparse embedding: a sparse definition declares media modalities, a sparse call receives media, or a sparse-only indexer receives media documents or chunks.
+
+## Why it matters
+
+Sparse embeddings are text-only. Media sent through a sparse-only indexing branch cannot become searchable, so silently accepting it would create unreachable content.
+
+## How to fix
+
+Route media through a compatible dense embedding. Hybrid retrieval may keep a sparse text branch, but media queries and media indexing must use the dense branch.
+
+## When to suppress
+
+Suppress only when a compiler-invisible transformation replaces every media part with text before the sparse boundary.
+
+## Rule metadata
+
+- Rule id: `embedding.sparse-media`
+- Category: `contracts`
+- Maturity: `experimental`
+- Default profiles: `recommended`, `strict`
+- Default severity: `error`

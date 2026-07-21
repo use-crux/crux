@@ -3,7 +3,7 @@ title: Embeddings
 description: Dense, sparse, and hybrid retrieval in Crux without mixing vector generation and search orchestration.
 ---
 
-You want to search your docs by meaning, so "docs about login problems" finds the SSO troubleshooting page even though it never says "login problems". That needs vectors, and `embedding()` is the Crux primitive that turns text into them:
+You want to search your docs by meaning, so "docs about login problems" finds the SSO troubleshooting page even though it never says "login problems". That needs vectors, and `embedding()` is the Crux primitive that turns text or native media into them:
 
 ```ts
 import { embedding } from "@use-crux/core/embedding";
@@ -18,13 +18,18 @@ const dense = embedding({
   dimensions: 1536,
   maxInputTokens: 8191,
   batch: { maxSize: 100, concurrency: 3 },
-  embed: async (texts) => ({
-    embeddings: await provider.embedMany(texts),
+  embed: async (inputs) => ({
+    embeddings: await provider.embedMany(
+      inputs.map((input) => {
+        if (input.type !== "text") throw new Error("text-only provider invariant");
+        return input.text;
+      }),
+    ),
   }),
 });
 ```
 
-Define it once and reuse it everywhere Crux needs to embed text:
+Define it once and reuse it everywhere Crux needs compatible vectors:
 
 ```ts
 indexer({ dense, sparse }); // write-time vectors
@@ -60,17 +65,49 @@ One note on the architecture: `embedding()` only generates vectors. Stores execu
 | `episodes()`, `facts()`, `procedures()`, or dense similarity search | One dense embedding                                                                                 |
 | Keyword-weighted or BM25-style retrieval                            | One sparse embedding plus `vectors.search({ mode: 'sparse', sparse })`                              |
 | Upstash hybrid retrieval                                            | One dense embedding, one sparse embedding, plus `vectors.search({ mode: 'hybrid', dense, sparse })` |
+| Cross-modal text/media search                                       | One native multimodal dense embedding and an `AssetStore`                                                    |
 | Store-specific or fully custom retrieval                            | Your own store or retriever logic                                                                   |
 
 ## Dense: semantic similarity
 
 Dense embeddings, like the one defined above, expose:
 
-- `embed(text)` for one query
-- `embedMany(texts)` for indexing or batch ingestion
+- `embed(input, { role? })` for one text or declared media input
+- `embedMany(inputs, { role? })` for indexing or batch ingestion
 - `asEmbedFn()` for dense-only compatibility with legacy callback APIs
 
 Use dense embeddings when meaning matters more than exact wording. They are the normal fit for semantic memory, semantic cache lookup, and document search over natural-language questions.
+
+## Multimodal: one declared space
+
+Dense embeddings declare the modalities they natively encode. Provider helpers
+infer known model facts when possible:
+
+```ts
+import { GoogleGenAI } from "@google/genai";
+import { embedding } from "@use-crux/google";
+
+const client = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY });
+const multimodal = embedding(client, { model: "gemini-embedding-2" });
+
+await multimodal.embed("a dog", { role: "query" });
+await multimodal.embed({ type: "image", source: dogPhoto });
+await multimodal.embed(dogPhoto); // bare Asset; modality inferred from mediaType
+```
+
+Strings are always text. Typed parts accept `image`, `audio`, `video`, or
+`document`; a bare asset requires a MIME type that identifies its modality.
+`AssetRef` is never model input. Text-only models reject media with
+`EmbeddingModalityError` before provider I/O, and literal configurations also
+reject undeclared modalities in TypeScript.
+
+Each dense instance exposes `space`, including dimensions, modalities,
+normalization, task mappings, and its vector-semantic fingerprint. Query and
+document roles may select provider task hints, but remain in one space. Sparse
+embeddings stay text-only and expose no dense space.
+
+See [Multimodal search](/docs/guides/retrieval/multimodal-search) for indexing,
+asset hydration, migration, and evaluation guidance.
 
 ## Sparse: exact terms and keywords
 
@@ -150,8 +187,11 @@ const dense = embedding({
   cache: embeddingCache({ store, namespace: "embed-cache" }),
   rateLimit: { concurrency: 3 },
 
-  embed: async (texts) => ({
-    embeddings: await provider.embedMany(texts),
+  embed: async (inputs) => ({
+    embeddings: await provider.embedMany(inputs.map((input) => {
+      if (input.type !== "text") throw new Error("text-only provider invariant");
+      return input.text;
+    })),
   }),
 });
 ```
@@ -171,7 +211,7 @@ Crux has two complementary vector caches:
 
 | Need | Configure | Reuse unit |
 | --- | --- | --- |
-| Reuse vectors anywhere the embedding primitive is called | `cache: embeddingCache(...)` on `embedding()` | One normalized text |
+| Reuse vectors anywhere the embedding primitive is called | `cache: embeddingCache(...)` on `embedding()` | One normalized text or safely identified media input |
 | Reuse final embedding work across generations, retries, or dry runs | `cache: true` on `indexer()` | One ordered embedding bundle per source and dense/sparse kind |
 | Maximize reuse for both indexing and direct embedding calls | Configure both | Pipeline bundles first; per-text cache for remaining provider work |
 
@@ -184,7 +224,8 @@ while `bypass` reads and writes no bundle.
 ### Version vector-producing behavior
 
 An embedding fingerprint includes kind, name, dimensions, input limits,
-preprocessors, truncation, and the optional `version`. It deliberately excludes
+preprocessors, truncation, modalities, normalization, role-task mappings, and
+the optional `version`. It deliberately excludes
 batch size, concurrency, retry, rate limiting, and cache placement because those
 policies do not change vector values.
 

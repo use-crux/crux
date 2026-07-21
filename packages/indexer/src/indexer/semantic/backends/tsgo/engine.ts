@@ -120,6 +120,7 @@ function* sharedAnalyzerEvidence(host: TsgoSemanticCompilerHost, analyzeInput: S
   try {
     yield* semanticIndexEvidenceBatchesForSourceFiles(
       {
+        root: analyzeInput.root,
         sourceFiles: session.sourceFiles,
         view: session.view,
       },

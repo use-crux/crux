@@ -82,11 +82,19 @@ pub fn callee_record_from_expression(
     imports: &SemanticImportIndex<'_>,
 ) -> StaticCalleeRecord {
     let direct = matches!(expression, Expression::Identifier(_));
+    let receiver_name = match expression {
+        Expression::StaticMemberExpression(member) => match &member.object {
+            Expression::Identifier(identifier) => Some(identifier.name.as_str().to_string()),
+            _ => None,
+        },
+        _ => None,
+    };
     let Some(local_name) = expression_name(expression) else {
         return StaticCalleeRecord {
             name: "<unknown>".to_string(),
             direct: Some(direct),
             local_name: None,
+            receiver_name: None,
             imported_name: None,
             module_specifier: None,
             resolved_file: None,
@@ -103,6 +111,7 @@ pub fn callee_record_from_expression(
             name: imported_name.clone(),
             direct: Some(direct),
             local_name: Some(imported.local_name.clone()),
+            receiver_name,
             imported_name: Some(imported_name),
             module_specifier: Some(imported.module_specifier.clone()),
             resolved_file: imported.resolved_file.clone(),
@@ -112,6 +121,7 @@ pub fn callee_record_from_expression(
         name: local_name.clone(),
         direct: Some(direct),
         local_name: Some(local_name),
+        receiver_name,
         imported_name: None,
         module_specifier: None,
         resolved_file: None,

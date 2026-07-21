@@ -347,6 +347,10 @@ const docsEmbedding = embedding({
 
 Use it with memory, indexers, or retrievers when you want the AI SDK model registry and provider abstraction, but still want a first-class Crux embedding object with batching and telemetry.
 
+The installed AI SDK Embedding Model V3 contract accepts `Array<string>`, so
+this helper declares `modalities: ['text']`. It does not caption or otherwise
+emulate native media embeddings.
+
 | Field               | Type                       | Description                                              |
 | ------------------- | -------------------------- | -------------------------------------------------------- |
 | `name`              | `string`                   | Stable embedding identifier                              |

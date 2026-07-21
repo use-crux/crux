@@ -93,7 +93,7 @@ export const INDEX_FAMILIES: Record<FamilyId, FamilyDef> = {
     label: "Media",
     tone: "blue",
     blurb:
-      "Authored multimodal operations and ingest sources — images, audio, video, documents, and derivation.",
+      "Authored embeddings, multimodal operations, and ingest sources — images, audio, video, documents, and derivation.",
   },
 };
 
@@ -244,6 +244,11 @@ export const INDEX_KINDS: Record<string, KindDef> = {
     family: "capability",
     glyph: "search",
   },
+  "rag.indexer": {
+    label: "Indexer",
+    family: "capability",
+    glyph: "db",
+  },
   memory: { label: "Memory", family: "state", glyph: "brain" },
   "memory.store": { label: "Store", family: "state", glyph: "db", child: true },
   "memory.block": {
@@ -282,6 +287,13 @@ export const INDEX_KINDS: Record<string, KindDef> = {
     label: "Media operation",
     family: "media",
     glyph: "doc",
+  },
+  embedding: { label: "Embedding", family: "media", glyph: "spark" },
+  "embedding.call": {
+    label: "Embedding call",
+    family: "media",
+    glyph: "spark",
+    child: true,
   },
   "ingest.source": {
     label: "Ingest source",

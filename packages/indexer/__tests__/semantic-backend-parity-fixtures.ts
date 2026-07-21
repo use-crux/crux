@@ -219,6 +219,75 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
       },
     },
     {
+      name: "authored-embedding-shared-analyzer",
+      workspacePackages: ["ai", "core", "google", "openai"],
+      files: {
+        "src/embedding.ts": `
+        import { embedding as coreEmbedding } from '@use-crux/core/embedding'
+        import type { DenseEmbedding } from '@use-crux/core/embedding'
+        import { indexer } from '@use-crux/core/indexing'
+        import { retriever, knowledgeBase } from '@use-crux/core/retrieval'
+        import { embedding as googleEmbedding } from '@use-crux/google'
+        import { embedding as openAIEmbedding } from '@use-crux/openai'
+        import { embedding as aiEmbedding } from '@use-crux/ai'
+
+        declare const records: never
+        declare const vectors: never
+        declare const googleClient: never
+        declare const openAIClient: never
+        declare const mediaBytes: Uint8Array
+        declare const dynamicModalities: readonly ['text']
+        declare const dynamicDense: DenseEmbedding<'image'>
+        const textConfig = { kind: 'dense' as const, name: 'text', dimensions: 3, maxInputTokens: 32, batch: { maxSize: 1 }, embed: async () => [] }
+        const text = coreEmbedding(textConfig)
+        const vision = coreEmbedding({ kind: 'dense', name: 'vision', dimensions: 4, maxInputTokens: 32, modalities: ['text', 'image'], batch: { maxSize: 1 }, embed: async () => [] })
+        const sparse = coreEmbedding({ kind: 'sparse', name: 'sparse', maxInputTokens: 32, modalities: ['text'], batch: { maxSize: 1 }, embed: async () => [] })
+        const dynamicSparse = coreEmbedding({ kind: 'sparse', name: 'dynamic', maxInputTokens: 32, modalities: dynamicModalities, batch: { maxSize: 1 }, embed: async () => [] })
+        const googleConfig = { model: 'gemini-embedding-2' as const }
+        const googleDense = googleEmbedding(googleClient, googleConfig)
+        const openAIDense = openAIEmbedding(openAIClient, { name: 'openai', model: 'text-embedding-3-small' })
+        const aiDense = aiEmbedding({ name: 'ai-sdk', model: 'provider:model', dimensions: 4, maxInputTokens: 32 })
+        const writer = indexer({ id: 'writer', namespace: 'shared', records, vectors, dense: text })
+        export const sparseWriter = indexer({ id: 'sparse-writer', namespace: 'sparse', records, vectors, sparse })
+        const dynamicWriter = indexer({ id: 'dynamic-writer', namespace: 'dynamic', records, vectors, dense: dynamicDense })
+        export const reader = retriever({ id: 'reader', namespace: 'shared', records, vectors, dense: vision })
+        export const kb = knowledgeBase({ id: 'kb', records, vectors, embeddings: vision, sparseEmbeddings: sparse })
+        export const providerKb = knowledgeBase({ id: 'provider-kb', records, vectors, embeddings: googleDense, sparseEmbeddings: dynamicSparse })
+        void text.embed({ type: 'image', source: mediaBytes, mediaType: 'image/png' })
+        void sparse.embed({ type: 'image', source: mediaBytes, mediaType: 'image/png' } as never)
+        void googleDense.embed({ type: 'image', source: mediaBytes, mediaType: 'image/png' })
+        void openAIDense.embed({ type: 'data', mediaType: 'image/png', data: mediaBytes } as never)
+        void aiDense.embed('text')
+        void dynamicDense.embed('PHASE7_PRIVATE_SENTINEL')
+      `,
+        "src/consumer-calls.ts": `
+        import { kb, sparseWriter } from './embedding'
+        declare const mediaBytes: Uint8Array
+        const documents = [{ id: 'dog', parts: [{ type: 'image', asset: { type: 'data', mediaType: 'image/png', data: mediaBytes } }] }]
+        void sparseWriter.indexDocuments(documents)
+        void sparseWriter.indexChunks(documents as never)
+        void kb.index(documents)
+        void kb.reindex(documents)
+      `,
+      },
+      expect: {
+        relationTypes: [
+          "embedding.call.uses_embedding",
+          "rag.indexer.uses_dense_embedding",
+          "rag.indexer.uses_sparse_embedding",
+          "rag.retriever.uses_dense_embedding",
+          "rag.knowledgeBase.uses_dense_embedding",
+          "rag.knowledgeBase.uses_sparse_embedding",
+        ],
+        lintRuleIds: [
+          "embedding.unsupported-modality",
+          "embedding.namespace-identity-mismatch",
+          "embedding.sparse-media",
+        ],
+        sourceRefRoles: ["config"],
+      },
+    },
+    {
       name: "direct-crux-no-zod-native-path",
       files: {
         "src/index.ts": `

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { embedding } from '../../src/embedding'
 import { corpus, indexer } from '../../src/indexing'
 import { inMemoryRecordStore, inMemoryVectorStore } from '../../src/storage'
+import { textOf } from '../embedding/text-input'
 
 const document = { namespace: 'kb', sourceId: 'intro', content: 'Hello corpus' }
 
@@ -52,7 +53,7 @@ function setup(
   vectors: ReturnType<typeof inMemoryVectorStore>,
   version: string,
 ) {
-  const embed = vi.fn(async (texts: string[]) => texts.map((text) => [text.length, 1]))
+  const embed = vi.fn(async (inputs) => inputs.map((input) => [textOf(input).length, 1]))
   const docsIndexer = indexer({
     id: 'docs',
     namespace: 'kb',

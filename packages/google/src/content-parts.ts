@@ -86,11 +86,18 @@ function googleMediaPart(
       ...fileDataPart(source.url.href, mediaType, displayName),
       ...options,
     };
-  if (isProviderFileAsset(source))
+  if (isProviderFileAsset(source)) {
+    if (source.provider !== "google") {
+      throw unsupported(
+        `input.${part.type}.provider-file`,
+        "Provider-file assets must belong to Google before request encoding.",
+      );
+    }
     return {
       ...fileDataPart(source.fileId, mediaType, displayName),
       ...options,
     };
+  }
   throw unsupported(
     `input.${part.type}.provider-file`,
     "Hydrate provider-file assets to a URL or byte source before calling Google.",

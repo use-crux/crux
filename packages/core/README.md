@@ -233,9 +233,9 @@ instead of public `defer()`.
 | ------------------------------ | -------------------------------------------------------------------------------------------------- |
 | `@use-crux/core`               | Prompts, contexts, config, injection-defense helpers (`safe`, `escapeXml`), and common types.      |
 | `@use-crux/core/memory`        | Memory blocks, storage, capture, proposals, and recall.                                            |
-| `@use-crux/core/embedding`     | Dense/sparse embeddings, vector-semantic identity, governance, and per-text caching.               |
-| `@use-crux/core/indexing`      | Document/chunk indexing, corpus sync, and source-bundle embedding-stage caching.                    |
-| `@use-crux/core/retrieval`     | Retrievers, rerankers, grounding inputs, and RAG pipelines.                                        |
+| `@use-crux/core/embedding`     | Dense/sparse embeddings, typed media inputs, vector-space identity, governance, and caching.        |
+| `@use-crux/core/indexing`      | Text/media document indexing, corpus sync, attribution, and embedding-stage caching.                |
+| `@use-crux/core/retrieval`     | Text/media retrievers, rerankers, grounding inputs, and RAG pipelines.                              |
 | `@use-crux/core/safety`        | Guardrails, constraints, safety plugins, and validation retry.                                     |
 | `@use-crux/core/eval`          | Inert Evals, typed Cases, Variants, checks, scorers, and Gates.                                    |
 | `@use-crux/core/eval/node`     | Node discovery, Case hydration, planning, execution, and `runEval()`.                              |
@@ -251,6 +251,57 @@ Node-only/build-time subpaths are explicit: `eval/node`, `setup`,
 `skill/node`, and the Vitest testing helpers. Portable application code should
 not re-export them from a Workers or browser entrypoint.
 
+## Search text and media in one space
+
+Native multimodal embeddings use the same indexing and retrieval API as text.
+The provider declares which inputs belong to its shared vector space:
+
+```ts
+import { GoogleGenAI } from "@google/genai";
+import { indexer } from "@use-crux/core/indexing";
+import { retriever } from "@use-crux/core/retrieval";
+import { inMemoryStorage } from "@use-crux/core/storage";
+import { embedding } from "@use-crux/google";
+
+const client = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY });
+const embed = embedding(client, { model: "gemini-embedding-2" });
+const storage = inMemoryStorage();
+
+const productsIndexer = indexer({
+  id: "products",
+  namespace: "products",
+  storage,
+  dense: embed,
+});
+
+await productsIndexer.indexDocuments([
+  { namespace: "products", sourceId: "rex", title: "Rex", asset: dogPhoto },
+  { namespace: "products", sourceId: "faq", content: "Our return policy…" },
+]);
+
+const products = retriever({
+  id: "products",
+  namespace: "products",
+  storage,
+  dense: embed,
+});
+
+const textHits = await products.retrieve("dog");
+const imageHits = await products.retrieve(dogPhoto);
+const photo = await storage.assets?.get(textHits[0].source.assetRef!);
+```
+
+An indexed namespace is bound to the dense embedding space that built it.
+Changing model, dimensions, normalization, or role-task semantics throws
+`EmbeddingSpaceMismatchError` before writes or search; clear and fully reindex
+the namespace, or use a new one.
+
+Media payloads live in `AssetStore`, never in vector metadata, records, caches,
+or traces. Similarity ranking is not an exact-duplicate guarantee—use SHA-256
+for exact identity, and evaluate text-to-image, image-to-image, and image-to-text
+quality separately on representative domain fixtures. See the
+[multimodal search guide](https://cruxjs.dev/docs/guides/retrieval/multimodal-search).
+
 ## Cache expensive indexing work
 
 `indexer({ cache: true })` caches both preparation stages and final dense/sparse
@@ -263,7 +314,7 @@ Embeddings created with `embedding()` carry a vector-semantic `fingerprint`.
 Set `version` when provider behavior can change without changing the embedding
 name; hand-written structural embeddings without a fingerprint are deliberately
 never stage-cached. The optional `embeddingCache()` is a separate, finer-grained
-per-text cache and can be used together with the indexer cache.
+per-input cache and can be used together with the indexer cache.
 
 ## Documentation
 

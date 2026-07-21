@@ -12,16 +12,17 @@
 import type { SparseVector } from '../storage'
 import { createBatchExecutor, createProviderBatchRunner } from './batch'
 import { denseCacheCodec, sparseCacheCodec } from './cache'
+import { resolveEmbeddingConfig } from './config'
 import { runEmbeddingOperation } from './execute'
-import { stableStringify } from './hashing'
-import { estimateTokens, normalizePreprocessors } from './preprocess'
+import { normalizeEmbeddingInput } from './input'
+import { deriveEmbeddingSpace } from './space'
+import type { EmbeddingModality, NormalizedEmbeddingInput } from './modality'
 import type {
   BatchExecutionResult,
   CruxEmbedding,
   DenseBatchResult,
   DenseEmbedding,
   DenseEmbeddingConfig,
-  NormalizedGovernance,
   SparseBatchResult,
   SparseEmbedding,
   SparseEmbeddingConfig,
@@ -32,70 +33,99 @@ import type {
  *
  * @param config - Dense or sparse embedding config (name, batch, governance, `embed`).
  * @returns A frozen {@link DenseEmbedding} or {@link SparseEmbedding} instance.
+ * @throws {@link EmbeddingModalityError} when a dense embedding receives an undeclared modality.
  *
  * @example
  * ```ts
  * const dense = embedding({
  *   kind: 'dense',
- *   name: 'text-embedding-3-small',
- *   dimensions: 1536,
+ *   name: 'native-multimodal',
+ *   dimensions: 1408,
  *   maxInputTokens: 8192,
+ *   modalities: ['text', 'image'],
  *   batch: { maxSize: 96 },
- *   embed: async (texts) => callProvider(texts),
+ *   embed: async (inputs, { role }) => callProvider(inputs, role),
  * })
- * const vector = await dense.embed('hello')
+ * const vector = await dense.embed({ type: 'image', source: imageBytes, mediaType: 'image/png' })
  * ```
  */
-export function embedding(config: DenseEmbeddingConfig): DenseEmbedding
+export function embedding<
+  const TModality extends EmbeddingModality = 'text',
+>(config: DenseEmbeddingConfig<TModality>): DenseEmbedding<TModality>
 export function embedding(config: SparseEmbeddingConfig): SparseEmbedding
-export function embedding(config: DenseEmbeddingConfig | SparseEmbeddingConfig): CruxEmbedding {
-  validateConfig(config)
+export function embedding(
+  config: DenseEmbeddingConfig<EmbeddingModality> | SparseEmbeddingConfig,
+): CruxEmbedding {
+  const resolved = resolveEmbeddingConfig(config)
 
   const batch = Object.freeze({
     maxSize: config.batch.maxSize,
     concurrency: config.batch.concurrency ?? 1,
   })
-  const governance = normalizeGovernance(config)
+  const modalities = Object.freeze([...resolved.modalities])
+  const governance = resolved.governance
 
   if (config.kind === 'dense') {
-    const execute = createBatchExecutor<number[]>(
+    const execute = createBatchExecutor<NormalizedEmbeddingInput, number[], EmbedContext>(
       batch,
-      createProviderBatchRunner(governance, async (texts) => normalizeDenseResult(await config.embed(texts))),
+      createProviderBatchRunner(governance, async (inputs, context: EmbedContext) =>
+        normalizeDenseResult(await config.embed(inputs, context))),
     )
-    const embedMany: DenseEmbedding['embedMany'] = async (texts) =>
-      (
+    const normalizeOptions = { embeddingName: config.name, supported: modalities }
+    const embedMany: DenseEmbedding['embedMany'] = async (inputs, options) => {
+      const normalized = await Promise.all(
+        inputs.map((input) => normalizeEmbeddingInput(input, normalizeOptions)),
+      )
+      const role = options?.role ?? 'document'
+      return (
         await runEmbeddingOperation({
           name: config.name,
           kind: config.kind,
           operation: 'embedMany',
           dimensions: config.dimensions,
-          texts,
+          inputs: normalized,
+          role,
           batch,
           governance,
           cacheCodec: denseCacheCodec,
-          execute,
+          execute: (batchInputs) => execute(batchInputs, { role }),
         })
       ).embeddings
-    const embed: DenseEmbedding['embed'] = async (text) =>
-      (
+    }
+    const embed: DenseEmbedding['embed'] = async (input, options) => {
+      const role = options?.role ?? 'document'
+      const normalized = await normalizeEmbeddingInput(input, normalizeOptions)
+      return (
         await runEmbeddingOperation({
           name: config.name,
           kind: config.kind,
           operation: 'embed',
           dimensions: config.dimensions,
-          texts: [text],
+          inputs: [normalized],
+          role,
           batch,
           governance,
           cacheCodec: denseCacheCodec,
-          execute,
+          execute: (batchInputs) => execute(batchInputs, { role }),
         })
       ).embeddings[0]
+    }
+    const space = Object.freeze(deriveEmbeddingSpace({
+      name: config.name,
+      version: config.version,
+      dimensions: config.dimensions,
+      modalities,
+      normalization: resolved.normalization ?? 'unknown',
+      tasks: resolved.tasks,
+    }, governance.fingerprint))
 
     return Object.freeze({
       _tag: 'Embedding' as const,
       kind: 'dense' as const,
       name: config.name,
       dimensions: config.dimensions,
+      modalities,
+      space,
       maxInputTokens: config.maxInputTokens,
       batch,
       fingerprint: governance.fingerprint,
@@ -105,9 +135,10 @@ export function embedding(config: DenseEmbeddingConfig | SparseEmbeddingConfig):
     })
   }
 
-  const execute = createBatchExecutor<SparseVector>(
+  const execute = createBatchExecutor<NormalizedEmbeddingInput, SparseVector, EmbedContext>(
     batch,
-    createProviderBatchRunner(governance, async (texts) => normalizeSparseResult(await config.embed(texts))),
+    createProviderBatchRunner(governance, async (inputs) =>
+      normalizeSparseResult(await config.embed(inputs.map(textFromNormalizedInput)))),
   )
   const embedMany: SparseEmbedding['embedMany'] = async (texts) =>
     (
@@ -115,11 +146,12 @@ export function embedding(config: DenseEmbeddingConfig | SparseEmbeddingConfig):
         name: config.name,
         kind: config.kind,
         operation: 'embedMany',
-        texts,
+        inputs: texts.map((text) => ({ type: 'text', text })),
+        role: 'document',
         batch,
         governance,
         cacheCodec: sparseCacheCodec,
-        execute,
+        execute: (inputs) => execute(inputs, { role: 'document' }),
       })
     ).embeddings
   const embed: SparseEmbedding['embed'] = async (text) =>
@@ -128,11 +160,12 @@ export function embedding(config: DenseEmbeddingConfig | SparseEmbeddingConfig):
         name: config.name,
         kind: config.kind,
         operation: 'embed',
-        texts: [text],
+        inputs: [{ type: 'text', text }],
+        role: 'document',
         batch,
         governance,
         cacheCodec: sparseCacheCodec,
-        execute,
+        execute: (inputs) => execute(inputs, { role: 'document' }),
       })
     ).embeddings[0]
 
@@ -140,63 +173,13 @@ export function embedding(config: DenseEmbeddingConfig | SparseEmbeddingConfig):
     _tag: 'Embedding' as const,
     kind: 'sparse' as const,
     name: config.name,
+    modalities: Object.freeze(['text'] as const),
     maxInputTokens: config.maxInputTokens,
     batch,
     fingerprint: governance.fingerprint,
     embed,
     embedMany,
   })
-}
-
-/** Validate embedding config invariants (name, token/batch/dimension bounds, policies). */
-function validateConfig(config: DenseEmbeddingConfig | SparseEmbeddingConfig): void {
-  if (!config.name.trim()) {
-    throw new Error('Embedding name must be non-empty.')
-  }
-  if (!Number.isFinite(config.maxInputTokens) || config.maxInputTokens <= 0) {
-    throw new Error('Embedding maxInputTokens must be greater than 0.')
-  }
-  if (!Number.isInteger(config.batch.maxSize) || config.batch.maxSize <= 0) {
-    throw new Error('Embedding batch.maxSize must be a positive integer.')
-  }
-  if (
-    config.batch.concurrency !== undefined &&
-    (!Number.isInteger(config.batch.concurrency) || config.batch.concurrency <= 0)
-  ) {
-    throw new Error('Embedding batch.concurrency must be a positive integer.')
-  }
-  if (config.kind === 'dense' && (!Number.isInteger(config.dimensions) || config.dimensions <= 0)) {
-    throw new Error('Dense embedding dimensions must be a positive integer.')
-  }
-  if (
-    config.truncate?.strategy === 'chars' &&
-    (!Number.isInteger(config.truncate.maxChars) || config.truncate.maxChars <= 0)
-  ) {
-    throw new Error('Embedding truncate.maxChars must be a positive integer.')
-  }
-  if (config.retry !== undefined) {
-    if (!Number.isInteger(config.retry.maxAttempts) || config.retry.maxAttempts <= 0) {
-      throw new Error('Embedding retry.maxAttempts must be a positive integer.')
-    }
-    if (
-      config.retry.baseDelayMs !== undefined &&
-      (!Number.isFinite(config.retry.baseDelayMs) || config.retry.baseDelayMs < 0)
-    ) {
-      throw new Error('Embedding retry.baseDelayMs must be greater than or equal to 0.')
-    }
-    if (
-      config.retry.maxDelayMs !== undefined &&
-      (!Number.isFinite(config.retry.maxDelayMs) || config.retry.maxDelayMs < 0)
-    ) {
-      throw new Error('Embedding retry.maxDelayMs must be greater than or equal to 0.')
-    }
-  }
-  if (
-    config.rateLimit !== undefined &&
-    (!Number.isInteger(config.rateLimit.concurrency) || config.rateLimit.concurrency <= 0)
-  ) {
-    throw new Error('Embedding rateLimit.concurrency must be a positive integer.')
-  }
 }
 
 /** Normalize a dense provider result into a {@link BatchExecutionResult}. */
@@ -209,29 +192,11 @@ function normalizeSparseResult(result: SparseBatchResult): BatchExecutionResult<
   return Array.isArray(result) ? { embeddings: result } : result
 }
 
-/** Resolve config governance fields into {@link NormalizedGovernance} with a fingerprint. */
-function normalizeGovernance(config: DenseEmbeddingConfig | SparseEmbeddingConfig): NormalizedGovernance {
-  const preprocessors = normalizePreprocessors(config.preprocess)
-  const truncate = config.truncate ?? { strategy: 'fail' as const }
-  const countTokens = config.countTokens ?? estimateTokens
-  const fingerprint = stableStringify({
-    kind: config.kind,
-    name: config.name,
-    dimensions: config.kind === 'dense' ? config.dimensions : undefined,
-    maxInputTokens: config.maxInputTokens,
-    preprocessors: preprocessors.map((preprocessor) => preprocessor.fingerprint),
-    truncate,
-    version: config.version,
-  })
+type EmbedContext = { readonly role: 'query' | 'document' }
 
-  return {
-    preprocessors,
-    truncate,
-    retry: config.retry,
-    cache: config.cache,
-    rateLimit: config.rateLimit,
-    countTokens,
-    maxInputTokens: config.maxInputTokens,
-    fingerprint,
+function textFromNormalizedInput(input: NormalizedEmbeddingInput): string {
+  if (input.type !== 'text') {
+    throw new Error('Sparse embedding execution received a non-text input.')
   }
+  return input.text
 }

@@ -9,8 +9,8 @@
  * @module
  */
 
-import type { DenseEmbedding, SparseEmbedding } from '../embedding'
-import type { AssetRef } from '../asset'
+import type { DenseEmbedding, EmbeddingModality, SparseEmbedding } from '../embedding'
+import type { Asset, AssetRef } from '../asset'
 import type { OperationResultMeta } from '../observability'
 import type { JsonObject, RecordStore, Storage, VectorStore } from '../storage'
 
@@ -20,7 +20,10 @@ export interface CruxDocument {
   sourceId: string
   /** Safe facts about the original source; never provider responses or bytes. */
   readonly source?: CruxSourceFacts
-  content: string
+  /** Aggregate text content. Media-only documents may omit it. */
+  content?: string
+  /** Single-media shorthand expanded to a media ingest part before chunking. */
+  asset?: Asset
   title?: string
   metadata?: Record<string, unknown>
   parts?: CruxIngestPart[]
@@ -38,6 +41,13 @@ export interface CruxChunk {
   active?: boolean
   ordinal: number
   content: string
+  /** Usable media for embedding only. This transient field is never persisted. */
+  media?: {
+    readonly asset: Asset
+    readonly modality: Exclude<EmbeddingModality, 'text'>
+    /** SHA-256 when bytes were available during normalization. */
+    readonly sha256?: string
+  }
   metadata: Record<string, unknown>
   parent?: {
     parentId?: string
@@ -130,6 +140,17 @@ export type CruxIngestPart = (
       content: string
       path: string
       valueType?: string
+      metadata?: Record<string, unknown>
+    }
+  | {
+      id: string
+      kind: 'media'
+      /** Usable media for embedding. Transient and never persisted. */
+      asset: Asset
+      /** Media modality, inferred from `asset.mediaType` when omitted. */
+      modality?: Exclude<EmbeddingModality, 'text'>
+      /** Optional text representation used by text renderers and retrieval tools. */
+      caption?: string
       metadata?: Record<string, unknown>
     }
 ) & { readonly sourceLocation?: CruxSourceLocation }
@@ -361,13 +382,15 @@ export interface Indexer {
 }
 
 /** Configuration for {@link indexer}. Internal. */
-export interface IndexerConfig {
+export interface IndexerConfig<
+  TModality extends EmbeddingModality = 'text',
+> {
   id: string
   namespace: string
   records?: RecordStore
   vectors?: VectorStore
   storage?: Storage
-  dense?: DenseEmbedding
+  dense?: DenseEmbedding<TModality>
   sparse?: SparseEmbedding
   pipeline?: IndexingPipeline
   cache?: PipelineCacheConfig
@@ -394,6 +417,12 @@ export interface SourceStageRecord {
   kind?: 'parser' | 'document-transform' | 'chunker' | 'chunk-transform' | 'embedding' | 'promotion' | 'sync'
   /** Distinguishes dense from sparse records when `kind` is `embedding`. */
   embeddingKind?: 'dense' | 'sparse'
+  /** Role passed to the embedding provider for embedding stages. */
+  role?: 'query' | 'document'
+  /** Privacy-safe counts of inputs by modality. */
+  modalityCounts?: Partial<Record<EmbeddingModality, number>>
+  /** Dense namespace-space digest, never the full fingerprint. */
+  embeddingSpace?: string
   version?: string
   status: 'pending' | 'success' | 'failed' | 'skipped'
   cache?: 'hit' | 'miss' | 'write' | 'refresh' | 'bypass'

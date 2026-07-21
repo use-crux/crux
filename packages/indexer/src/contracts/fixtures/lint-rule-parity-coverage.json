@@ -247,6 +247,21 @@
       "ruleId": "media.raw-retention",
       "positiveFixture": "media-lint-contract.test.ts",
       "negativeFixture": "media-lint-contract.test.ts"
+    },
+    {
+      "ruleId": "embedding.unsupported-modality",
+      "positiveFixture": "semantic-embedding-evidence.test.ts",
+      "negativeFixture": "semantic-embedding-evidence.test.ts"
+    },
+    {
+      "ruleId": "embedding.namespace-identity-mismatch",
+      "positiveFixture": "semantic-embedding-evidence.test.ts",
+      "negativeFixture": "semantic-embedding-evidence.test.ts"
+    },
+    {
+      "ruleId": "embedding.sparse-media",
+      "positiveFixture": "semantic-embedding-evidence.test.ts",
+      "negativeFixture": "semantic-embedding-evidence.test.ts"
     }
   ]
 }

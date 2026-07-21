@@ -3,7 +3,7 @@ title: Querying
 description: Query knowledge bases, store-backed retrievers, and custom retrieval backends.
 ---
 
-`retriever()` is the read side of a corpus. It turns a text query into scored hits and can also contribute prompt context or search tools.
+`retriever()` is the read side of a corpus. It turns a text or declared media query into scored hits and can also contribute prompt context or search tools.
 
 Most apps create retrievers through `knowledgeBase()`:
 
@@ -66,6 +66,27 @@ await docs.retrieve({
 ```
 
 Unsupported combinations fail clearly. Crux does not silently downgrade sparse or hybrid retrieval to dense-only search.
+
+Native media queries use the dense branch:
+
+```ts
+await docs.retrieve(dogPhoto);
+
+await docs.retrieve({
+  input: { type: "image", source: dogPhoto },
+  limit: 5,
+});
+```
+
+A hybrid retriever runs dense-only for media because sparse embeddings are
+text-only. Custom retrievers and text-producing recipe steps reject media unless
+their own contract supports it. See [Multimodal search](/docs/guides/retrieval/multimodal-search)
+for the complete path.
+
+Before embedding a query or searching vectors, store-backed retrievers compare
+their dense space with the namespace record. `EmbeddingSpaceMismatchError`
+means the namespace must be fully reindexed with the configured embedding, or
+queried with the embedding that built it.
 
 <Callout type="info">
 If the retriever `id` differs from the `indexer()` id that wrote the records, pass `indexerId` so hydration uses the correct read-model keys:

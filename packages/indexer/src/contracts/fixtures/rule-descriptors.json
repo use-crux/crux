@@ -1424,6 +1424,93 @@
       "phase": "index",
       "requires": ["definitions", "relations"],
       "fidelity": "safe"
+    },
+    {
+      "id": "embedding.unsupported-modality",
+      "source": "builtin",
+      "severity": "error",
+      "category": "contracts",
+      "maturity": "experimental",
+      "confidence": "high",
+      "profiles": ["recommended", "strict"],
+      "title": "Embedding does not support the authored modality",
+      "description": "Resolved embedding and consumer-call evidence proves that media input uses a modality the dense embedding does not declare.",
+      "rationale": "A text-only or narrower embedding cannot produce comparable vectors for unsupported media.",
+      "impact": "The embedding, indexing, knowledge-base, or retrieval call will fail before producing a usable vector.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/embedding-unsupported-modality",
+      "fixes": [
+        {
+          "title": "Choose a compatible embedding",
+          "description": "Use an embedding that declares the authored modality, or pass text input instead.",
+          "kind": "manual"
+        }
+      ],
+      "suppression": {
+        "supported": true,
+        "scope": "next-line",
+        "directive": "// crux-lint-disable-next-line embedding.unsupported-modality -- reason"
+      },
+      "phase": "semantic",
+      "requires": ["definitions", "sources"],
+      "fidelity": "safe"
+    },
+    {
+      "id": "embedding.namespace-identity-mismatch",
+      "source": "builtin",
+      "severity": "error",
+      "category": "contracts",
+      "maturity": "experimental",
+      "confidence": "high",
+      "profiles": ["recommended", "strict"],
+      "title": "Namespace uses incompatible embedding identities",
+      "description": "Resolved consumers share a namespace and vector storage but use different exact dense or sparse embedding identities.",
+      "rationale": "Similarity search is meaningful only when every vector in a namespace belongs to one embedding space.",
+      "impact": "Indexing or retrieval will reject the mixed space, or an existing mixed store will fail loudly at search time.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/embedding-namespace-identity-mismatch",
+      "fixes": [
+        {
+          "title": "Align the namespace embedding",
+          "description": "Use matching dense and sparse embedding identities for the namespace, or choose a distinct namespace.",
+          "kind": "manual"
+        }
+      ],
+      "suppression": {
+        "supported": true,
+        "scope": "next-line",
+        "directive": "// crux-lint-disable-next-line embedding.namespace-identity-mismatch -- reason"
+      },
+      "phase": "semantic",
+      "requires": ["definitions", "sources"],
+      "fidelity": "safe"
+    },
+    {
+      "id": "embedding.sparse-media",
+      "source": "builtin",
+      "severity": "error",
+      "category": "contracts",
+      "maturity": "experimental",
+      "confidence": "high",
+      "profiles": ["recommended", "strict"],
+      "title": "Sparse embedding is combined with media",
+      "description": "Resolved source evidence proves that media is declared, embedded, queried, or indexed through a sparse-only branch.",
+      "rationale": "Sparse embeddings are text-only and cannot make media chunks searchable.",
+      "impact": "The media input cannot produce a sparse vector and sparse-only indexed media is unreachable.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/embedding-sparse-media",
+      "fixes": [
+        {
+          "title": "Use a dense media embedding",
+          "description": "Route media through a compatible dense embedding and reserve sparse embeddings for text.",
+          "kind": "manual"
+        }
+      ],
+      "suppression": {
+        "supported": true,
+        "scope": "next-line",
+        "directive": "// crux-lint-disable-next-line embedding.sparse-media -- reason"
+      },
+      "phase": "semantic",
+      "requires": ["definitions", "sources"],
+      "fidelity": "safe"
     }
   ]
 }

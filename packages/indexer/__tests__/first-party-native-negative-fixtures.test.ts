@@ -13,6 +13,9 @@ interface NegativeFixtureCase {
 }
 
 const negativeFixtureCases: readonly NegativeFixtureCase[] = [
+  { family: "embedding", callNames: ["embedding"] },
+  { family: "embedding.call", callNames: ["embed", "embedMany"] },
+  { family: "rag.indexer", callNames: ["indexer"] },
   {
     family: "rag.retriever",
     callNames: [

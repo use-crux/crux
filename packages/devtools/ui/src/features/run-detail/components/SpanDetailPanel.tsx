@@ -98,6 +98,10 @@ import {
 } from "../lib/span-detail-inspection";
 import { retrievalEntries } from "../lib/span-detail-retrieval";
 import {
+  projectRetrievalMediaAttribution,
+  retrievalHitPreview,
+} from "../lib/retrieval-media-attribution";
+import {
   collectToolRequests,
   resolveToolPayload,
 } from "../lib/span-detail-tool";
@@ -111,6 +115,8 @@ import {
   OperationReportCard,
 } from "./PrimitiveCards";
 import { DeferredWorkCard } from "./DeferredWorkCard";
+import { EmbeddingEvidenceCard } from "./EmbeddingEvidenceCard";
+import { RetrievalMediaAttribution } from "./RetrievalMediaAttribution";
 import { GenerationDetail } from "./GenerationDetail";
 import { MediaRunPanel } from "./MediaRunPanel";
 import { projectMediaRunFromNode } from "../lib/media-run-from-node";
@@ -2822,123 +2828,6 @@ function HandoffTab({
   );
 }
 
-// ─── Embedding span panel (primitive === embedding.call) ────────────
-
-/** design `CardEmbedding` center: a Cache hit/fresh bar + a Run stats grid
- *  (model · dimensions · truncations · rate-limit wait). */
-function EmbeddingCard({ node }: { node: ObservabilityRunDetailNode }) {
-  const model = findAttribute(node, "model", "modelId") as string | undefined;
-  const dims = findAttribute(node, "dimensions", "dims", "dimension") as
-    | number
-    | undefined;
-  const total = findAttribute(node, "inputs", "inputCount", "count") as
-    | number
-    | undefined;
-  const hit = findAttribute(node, "cacheHits", "cachedInputs", "cached") as
-    | number
-    | undefined;
-  const truncations = findAttribute(node, "truncations", "truncated") as
-    | number
-    | undefined;
-  const retries = findAttribute(node, "retries", "retryCount") as
-    | number
-    | undefined;
-  const rateLimitWait = findAttribute(
-    node,
-    "rateLimitWaitMs",
-    "rateLimitWait",
-  ) as number | undefined;
-  const pct =
-    hit != null && total ? Math.round((hit / total) * 100) : undefined;
-
-  const cells: [string, string][] = [];
-  if (model) cells.push(["model", shortModelId(model) ?? model]);
-  if (dims != null) cells.push(["dimensions", dims.toLocaleString()]);
-  if (truncations != null) cells.push(["truncations", String(truncations)]);
-  if (rateLimitWait != null)
-    cells.push(["rate-limit wait", fmtDuration(rateLimitWait)]);
-  if (retries != null) cells.push(["retries", String(retries)]);
-
-  if (cells.length === 0 && hit == null) {
-    return <EmptyHint>No embedding metrics captured for this span.</EmptyHint>;
-  }
-
-  return (
-    <div className="flex flex-col gap-5">
-      {hit != null && total != null && total > 0 && (
-        <SpanSection
-          title={`Cache · ${hit} / ${total} hit`}
-          right={
-            pct != null ? (
-              <Chip tone="ok" mono>
-                {pct}% cached
-              </Chip>
-            ) : undefined
-          }
-        >
-          <div
-            className="flex h-6 overflow-hidden rounded-[6px]"
-            style={{ boxShadow: "inset 0 0 0 1px var(--devtools-border)" }}
-          >
-            <div
-              className="flex items-center justify-center font-mono text-[9.5px] font-semibold"
-              style={{
-                width: `${(hit / total) * 100}%`,
-                background: "var(--devtools-ok)",
-                opacity: 0.85,
-                color: "var(--devtools-bg)",
-              }}
-            >
-              cache {hit}
-            </div>
-            <div
-              className="flex flex-1 items-center justify-center font-mono text-[9.5px] font-semibold"
-              style={{
-                background: "var(--devtools-crux)",
-                opacity: 0.7,
-                color: "var(--devtools-bg)",
-              }}
-            >
-              fresh {total - hit}
-            </div>
-          </div>
-        </SpanSection>
-      )}
-      {cells.length > 0 && (
-        <SpanSection title="Run">
-          <div
-            className="grid gap-2.5"
-            style={{
-              gridTemplateColumns: `repeat(${Math.min(cells.length, 4)}, minmax(0, 1fr))`,
-            }}
-          >
-            {cells.map(([k, v]) => (
-              <div
-                key={k}
-                className="rounded-[8px] px-3 py-2.5"
-                style={{
-                  background: "var(--devtools-bg-elev)",
-                  border: "1px solid var(--devtools-border)",
-                }}
-              >
-                <div
-                  className="font-mono text-[10px] uppercase tracking-[0.04em]"
-                  style={{ color: "var(--devtools-fg-faint)" }}
-                >
-                  {k}
-                </div>
-                <div className="mt-0.5 font-mono text-[13px] font-semibold">
-                  {v}
-                </div>
-              </div>
-            ))}
-          </div>
-        </SpanSection>
-      )}
-    </div>
-  );
-}
-
 // ─── Retrieval span panel + Retrieval tab (for parent runs) ─────────
 
 /** design `CardRetrieval` center: Query (mode·fusion) · Stages funnel · ranked Hits.
@@ -3098,12 +2987,8 @@ function ChunkHitRow({
         : undefined;
   const score =
     typeof hit.score === "number" ? (hit.score as number) : undefined;
-  const preview =
-    (typeof hit.preview === "string" && hit.preview) ||
-    (typeof hit.contentPreview === "string" && hit.contentPreview) ||
-    (typeof hit.text === "string" && hit.text) ||
-    (typeof hit.content === "string" && hit.content) ||
-    "";
+  const mediaAttribution = projectRetrievalMediaAttribution(hit);
+  const preview = retrievalHitPreview(hit, mediaAttribution);
   const used = hit.used !== false && hit.grounded !== false;
   const scoreTone: ChipTone =
     score == null
@@ -3151,6 +3036,7 @@ function ChunkHitRow({
             </span>
           )}
         </div>
+        <RetrievalMediaAttribution attribution={mediaAttribution} />
         {preview && (
           <div
             className="text-[11.5px] leading-[1.5]"
@@ -4494,7 +4380,7 @@ export function SpanDetailPanel({
             )}
             {activeTab === "retrieval" &&
               (node.primitive.startsWith("embedding.") ? (
-                <EmbeddingCard node={node} />
+                <EmbeddingEvidenceCard node={node} />
               ) : kind === "retrieval" ? (
                 <RetrievalSpanTab node={node} />
               ) : (

@@ -78,8 +78,9 @@ async function retrieveTask(args: {
 }): Promise<RetrieveGroup> {
   const startedAt = Date.now()
   try {
+    const query = mediaInput(args.request) ?? args.task.planned.query
     const hits = await args.task.source.retriever.retrieve(
-      args.task.planned.query,
+      query,
       mergeRetrieveOptions(args.request, args.task.planned, args.stepConfig),
     )
     args.traces.recordSuccess(args.task.source, Date.now() - startedAt, hits.length)
@@ -103,6 +104,12 @@ async function retrieveTask(args: {
     }
     return args.config.sources.length > 1 ? { ...group, source: args.task.source } : group
   }
+}
+
+function mediaInput(request: RetrieveRequest): RetrieveRequest['input'] | undefined {
+  if (!('input' in request) || request.input === undefined) return undefined
+  if (typeof request.input === 'string' || request.input.type === 'text') return undefined
+  return request.input
 }
 
 class SourceTraceBuilder {

@@ -51,7 +51,9 @@ export interface PersistIndexedGenerationInput {
   /** Dense embeddings aligned by index with `chunks`. */
   readonly dense?: readonly number[][]
   /** Sparse embeddings aligned by index with `chunks`. */
-  readonly sparse?: readonly SparseVector[]
+  readonly sparse?: readonly (SparseVector | undefined)[]
+  /** Dense embedding-space digest stamped into every dense vector record. */
+  readonly embeddingSpace?: string
   /** Whether older active generations for these sources should be deactivated. */
   readonly replaceSources: boolean
   /** Optional write timestamp, mostly useful for deterministic tests. */
@@ -84,6 +86,12 @@ export interface IndexedChunkSearchQuery {
   readonly filter?: ExactFilter
   /** Optional fusion algorithm for hybrid-capable vector stores. */
   readonly fusion?: 'rrf' | 'dbsf'
+  /** Configured dense space checked against every returned vector hit. */
+  readonly embeddingSpace?: {
+    readonly digest: string
+    readonly name: string
+    readonly dimensions: number
+  }
 }
 
 /** Reference to an indexed parent record. */

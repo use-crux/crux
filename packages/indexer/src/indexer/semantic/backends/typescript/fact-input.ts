@@ -17,6 +17,8 @@ export interface SemanticIndexFactsOptions {
 }
 
 export interface SemanticSourceFileFactInput<TView extends SemanticAnalyzerView = TypeScriptSemanticCompilerView> {
+  /** Absolute Project Index root used for module-scoped definition ids. */
+  readonly root: string
   /** Source files selected for candidate discovery. */
   readonly sourceFiles: readonly SemanticAnalyzerSourceFile<TView>[]
   /** Backend-owned compiler view used for semantic resolution. */
@@ -25,6 +27,7 @@ export interface SemanticSourceFileFactInput<TView extends SemanticAnalyzerView 
 
 /** Creates source files and a compiler view for the JavaScript TypeScript backend. */
 export function createTypeScriptSemanticFactInput(
+  root: string,
   files: readonly string[],
   options: SemanticIndexFactsOptions = {},
 ): SemanticSourceFileFactInput {
@@ -46,6 +49,7 @@ export function createTypeScriptSemanticFactInput(
     checker,
   })
   return {
+    root,
     sourceFiles: view.sourceFiles(files),
     view,
   }

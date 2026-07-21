@@ -1,11 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import { embedding } from '../../src/embedding'
-import { indexer } from '../../src/indexing'
+import { indexer, indexingPipeline, transform } from '../../src/indexing'
 import { inMemoryRecordStore, inMemoryVectorStore } from '../../src/storage'
+import { textOf } from '../embedding/text-input'
 
 describe('indexer embedding-stage cache', () => {
   it('reuses dense vectors while still completing each indexing generation', async () => {
-    const embed = vi.fn(async (texts: string[]) => texts.map((text) => [text.length, 1]))
+    const embed = vi.fn(async (inputs) => inputs.map((input) => [textOf(input).length, 1]))
     const records = inMemoryRecordStore()
     const dense = embedding({
       kind: 'dense',
@@ -47,7 +48,7 @@ describe('indexer embedding-stage cache', () => {
       maxInputTokens: 100,
       batch: { maxSize: 8 },
       version: 'v1',
-      embed: async (texts) => texts.map((text) => [text.length, 1]),
+      embed: async (inputs) => inputs.map((input) => [textOf(input).length, 1]),
     })
     const docs = indexer({
       id: 'docs',
@@ -77,7 +78,7 @@ describe('indexer embedding-stage cache', () => {
   })
 
   it('invalidates only changed sources and batches all misses once', async () => {
-    const embed = vi.fn(async (texts: string[]) => texts.map((text) => [text.length, 1]))
+    const embed = vi.fn(async (inputs) => inputs.map((input) => [textOf(input).length, 1]))
     const docs = indexer({
       id: 'docs',
       namespace: 'kb',
@@ -105,8 +106,13 @@ describe('indexer embedding-stage cache', () => {
     ])
 
     expect(embed).toHaveBeenCalledTimes(2)
-    expect(embed).toHaveBeenNthCalledWith(1, ['alpha', 'beta'])
-    expect(embed).toHaveBeenNthCalledWith(2, ['alpha changed'])
+    expect(embed).toHaveBeenNthCalledWith(1, [
+      { type: 'text', text: 'alpha' },
+      { type: 'text', text: 'beta' },
+    ], { role: 'document' })
+    expect(embed).toHaveBeenNthCalledWith(2, [
+      { type: 'text', text: 'alpha changed' },
+    ], { role: 'document' })
     expect(second.stages?.filter((stage) => stage.kind === 'embedding').map((stage) => stage.cache)).toEqual([
       'miss',
       'hit',
@@ -114,7 +120,7 @@ describe('indexer embedding-stage cache', () => {
   })
 
   it('honors refresh and bypass without poisoning reusable entries', async () => {
-    const embed = vi.fn(async (texts: string[]) => texts.map((text) => [text.length, 1]))
+    const embed = vi.fn(async (inputs) => inputs.map((input) => [textOf(input).length, 1]))
     const docs = indexer({
       id: 'docs',
       namespace: 'kb',
@@ -148,7 +154,7 @@ describe('indexer embedding-stage cache', () => {
   })
 
   it('does not read, write, or report embedding cache state when caching is disabled', async () => {
-    const embed = vi.fn(async (texts: string[]) => texts.map((text) => [text.length, 1]))
+    const embed = vi.fn(async (inputs) => inputs.map((input) => [textOf(input).length, 1]))
     const docs = indexer({
       id: 'docs',
       namespace: 'kb',
@@ -175,8 +181,8 @@ describe('indexer embedding-stage cache', () => {
     expect(second.stages?.find((stage) => stage.kind === 'embedding')?.cache).toBeUndefined()
   })
 
-  it('lets a real indexing run reuse vectors computed by a dry run', async () => {
-    const embed = vi.fn(async (texts: string[]) => texts.map((text) => [text.length, 1]))
+  it('does not let a dry run populate the embedding-stage cache', async () => {
+    const embed = vi.fn(async (inputs) => inputs.map((input) => [textOf(input).length, 1]))
     const docs = indexer({
       id: 'docs',
       namespace: 'kb',
@@ -198,8 +204,24 @@ describe('indexer embedding-stage cache', () => {
     const dryRun = await docs.indexDocuments(input, { dryRun: true })
     const realRun = await docs.indexDocuments(input)
 
-    expect(embed).toHaveBeenCalledOnce()
+    expect(embed).toHaveBeenCalledTimes(2)
     expect(dryRun.stages?.find((stage) => stage.kind === 'embedding')?.cache).toBe('miss')
-    expect(realRun.stages?.find((stage) => stage.kind === 'embedding')?.cache).toBe('hit')
+    expect(realRun.stages?.find((stage) => stage.kind === 'embedding')?.cache).toBe('miss')
+  })
+
+  it('does not let a text dry run populate pre-embedding pipeline caches', async () => {
+    const records = inMemoryRecordStore()
+    const docs = indexer({
+      id: 'docs', namespace: 'kb', records, cache: true,
+      pipeline: indexingPipeline({
+        documents: [transform.document({
+          name: 'identity', version: '1', run: (document) => document,
+        })],
+      }),
+    })
+
+    await docs.indexDocuments([{ namespace: 'kb', sourceId: 'source-a', content: 'hello' }], { dryRun: true })
+
+    expect((await records.list('indexer:docs:namespace:kb:pipeline-cache:')).entries).toEqual([])
   })
 })

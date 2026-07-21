@@ -11,6 +11,12 @@
  */
 
 import type { JsonObject, RecordStore, SparseVector } from '../storage'
+import type {
+  EmbeddingInput,
+  EmbeddingModality,
+  NormalizedEmbeddingInput,
+} from './modality'
+import type { EmbeddingSpace } from './space'
 
 /** Token usage reported by an embedding provider. */
 export interface EmbeddingUsage {
@@ -57,10 +63,11 @@ export interface EmbeddingBase {
   /**
    * Stable identity for vector-producing semantics.
    *
-   * Covers configuration that can change vector values for identical input
-   * (kind, name, dimensions, max input tokens, preprocessors, truncation,
-   * declared `version`) and excludes operational policy (batching, retry,
-   * rate limits, caching). Always present on instances created by
+   * Covers configuration that can change vector values for identical input:
+   * kind, name, dimensions, modalities, normalization, query/document tasks,
+   * max input tokens, preprocessors, truncation, and declared `version`. It
+   * excludes operational policy (batching, retry, rate limits, caching).
+   * Always present on instances created by
    * {@link embedding}; optional so structurally-typed embeddings remain valid.
    * Embeddings without a fingerprint are computed on every indexing run —
    * the pipeline embedding-stage cache never guesses an identity.
@@ -99,6 +106,18 @@ export type EmbeddingPreprocessConfig = EmbeddingPreprocessor | readonly Embeddi
 /** Provider-independent dense embedding function. */
 export type EmbedFn = (text: string) => Promise<number[]>
 
+/** Options applied to one dense embedding operation. */
+export interface EmbedOptions {
+  /**
+   * Retrieval role for providers that encode queries and documents differently.
+   *
+   * Both roles belong to one vector space. The indexing and retrieval
+   * pipelines set this value; application callers normally leave it unset.
+   * @defaultValue `'document'`
+   */
+  readonly role?: 'query' | 'document'
+}
+
 /** Truncation policy: fail on overflow, or truncate to a character cap. */
 export type EmbeddingTruncatePolicy = { strategy?: 'fail' } | { strategy: 'chars'; maxChars: number }
 
@@ -132,19 +151,23 @@ export interface EmbeddingCacheOptions {
 }
 
 /** A dense (float-vector) embedding instance. */
-export interface DenseEmbedding extends EmbeddingBase {
+export interface DenseEmbedding<TModality extends EmbeddingModality = EmbeddingModality>
+  extends EmbeddingBase {
   readonly kind: 'dense'
   readonly dimensions: number
-  embed(text: string): Promise<number[]>
-  embedMany(texts: string[]): Promise<number[][]>
+  readonly modalities: readonly TModality[]
+  readonly space: EmbeddingSpace
+  embed(input: EmbeddingInput<TModality>, options?: EmbedOptions): Promise<number[]>
+  embedMany(inputs: readonly EmbeddingInput<TModality>[], options?: EmbedOptions): Promise<number[][]>
   asEmbedFn(): EmbedFn
 }
 
 /** A sparse (index/value) embedding instance. */
 export interface SparseEmbedding extends EmbeddingBase {
   readonly kind: 'sparse'
+  readonly modalities: readonly ['text']
   embed(text: string): Promise<SparseVector>
-  embedMany(texts: string[]): Promise<SparseVector[]>
+  embedMany(texts: readonly string[]): Promise<SparseVector[]>
 }
 
 /** A dense or sparse embedding instance. */
@@ -176,16 +199,27 @@ export interface EmbeddingGovernanceConfig {
 }
 
 /** Config for a dense {@link embedding}. Internal. */
-export interface DenseEmbeddingConfig extends EmbeddingGovernanceConfig {
+export interface DenseEmbeddingConfig<TModality extends EmbeddingModality = 'text'>
+  extends EmbeddingGovernanceConfig {
   kind: 'dense'
   name: string
   dimensions: number
   maxInputTokens: number
+  /** Modalities this model natively encodes. @defaultValue `['text']` */
+  modalities?: readonly TModality[]
+  /** Whether provider vectors are unit-normalized. @defaultValue `'unknown'` */
+  normalization?: 'unit' | 'none' | 'unknown'
+  /** Provider task identifiers for query/document role asymmetry. */
+  tasks?: { readonly query?: string; readonly document?: string }
   batch: {
     maxSize: number
     concurrency?: number
   }
-  embed(texts: string[]): Promise<DenseBatchResult>
+  /** Run one provider batch with validated, normalized inputs. */
+  embed(
+    inputs: readonly NormalizedEmbeddingInput[],
+    context: { readonly role: 'query' | 'document' },
+  ): Promise<DenseBatchResult>
 }
 
 /** Config for a sparse {@link embedding}. Internal. */
@@ -193,6 +227,8 @@ export interface SparseEmbeddingConfig extends EmbeddingGovernanceConfig {
   kind: 'sparse'
   name: string
   maxInputTokens: number
+  /** Sparse embeddings accept text only. @defaultValue `['text']` */
+  modalities?: readonly EmbeddingModality[]
   batch: {
     maxSize: number
     concurrency?: number
@@ -217,6 +253,9 @@ export interface NormalizedGovernance {
   countTokens: (text: string) => number
   maxInputTokens: number
   fingerprint: string
+  modalities: readonly EmbeddingModality[]
+  normalization?: 'unit' | 'none' | 'unknown'
+  tasks?: { readonly query?: string; readonly document?: string }
 }
 
 /** A concurrency limiter for provider batch calls. Internal. */

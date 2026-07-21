@@ -2,12 +2,13 @@ import { describe, expect, it, vi } from 'vitest'
 import { embedding } from '../../src/embedding'
 import { corpus, indexer, indexingPipeline, transform } from '../../src/indexing'
 import { inMemoryRecordStore, inMemoryVectorStore } from '../../src/storage'
+import { textOf } from '../embedding/text-input'
 
 describe('corpus', () => {
   function setup() {
     const records = inMemoryRecordStore()
     const vectors = inMemoryVectorStore()
-    const embed = vi.fn(async (texts: string[]) => texts.map((text) => [text.length, 1]))
+    const embed = vi.fn(async (inputs) => inputs.map((input) => [textOf(input).length, 1]))
     const dense = embedding({
       kind: 'dense',
       name: 'dense-test',
@@ -84,7 +85,7 @@ describe('corpus', () => {
       dimensions: 2,
       maxInputTokens: 100,
       batch: { maxSize: 8 },
-      embed: async (texts) => texts.map((text) => [text.length, 1]),
+      embed: async (inputs) => inputs.map((input) => [textOf(input).length, 1]),
     })
     const docsIndexer = indexer({
       id: 'docs',

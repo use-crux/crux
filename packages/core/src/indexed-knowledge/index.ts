@@ -9,6 +9,15 @@
  */
 
 export { createIndexedKnowledgeStore } from './store'
+export {
+  guardIndexedEmbeddingSpace,
+  guardRetrievedEmbeddingSpace,
+  indexedEmbeddingSpaceKey,
+  registerIndexedEmbeddingSpaceWriter,
+  releaseIndexedEmbeddingSpaceWriter,
+  resolveIndexedEmbeddingSpace,
+} from './embedding-space'
+export type { IndexedEmbeddingSpaceRecord } from './embedding-space'
 export type {
   IndexedChunkSearchQuery,
   IndexedKnowledgeStore,

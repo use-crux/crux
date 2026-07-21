@@ -262,7 +262,11 @@ compatibility shims, while every implementation lives in a domain folder.
 │   ├── commands.ts     Runtime bridge command execution for inspectable resources
 │   └── resources.ts    Inspectable resource registration for memory, blackboards, stores, and future runtime resources
 ├── embedding/
-│   └── index.ts        embedding() — dense/sparse embedding primitive with batching, governance, and instrumentation
+│   ├── index.ts        embedding() — dense/sparse embedding primitive with batching, governance, and instrumentation
+│   ├── modality.ts     Public modality and typed input unions
+│   ├── input.ts        Async canonical text/media normalization and byte hashing
+│   ├── space.ts        Dense vector-space identity and SHA-256 digest
+│   └── errors.ts       Unsupported-modality and incompatible-space errors
 ├── retrieval/
 │   └── index.ts        knowledgeBase(), retriever(), retrievalRecipe() — query-first retrieval, RAG facades, and traceable recipe composition
 ├── storage/
@@ -691,15 +695,15 @@ Provider-facing helpers sit above it:
 Execution model:
 
 1. Validate config once at definition time.
-2. Apply configured preprocessors in order.
-3. Enforce the truncation policy. The default is fail-fast on `maxInputTokens`; character truncation must be explicit.
-4. Check the embedding cache by policy-aware key when configured.
+2. Normalize every public text/media input through the canonical content boundary and reject undeclared modalities before provider I/O.
+3. Apply configured preprocessors, token counting, and truncation to text only. Media retains its native provider input.
+4. Check the embedding cache by role- and modality-aware key when configured. Data media uses SHA-256; unmaterialized remote media remains compute-only.
 5. Split cache misses into chunks of `batch.maxSize`.
-6. Run chunk requests with per-call `batch.concurrency` and optional cross-call `rateLimit.concurrency`.
+6. Run chunk requests with per-call `batch.concurrency` and optional cross-call `rateLimit.concurrency`, carrying query/document role in one shared runner.
 7. Retry failed provider batches according to the configured retry policy.
-8. Reassemble cached and provider results in original input order.
+8. Reassemble cached and provider results in original input order, preserving strict N-to-N cardinality.
 9. Aggregate optional `usage`, `cost`, cache, retry, truncation, and rate-limit metadata across chunks.
-10. Emit a canonical `embedding.call` span once per top-level `embed()` or `embedMany()` call, including bounded output metadata artifacts and produced edges.
+10. Emit a canonical `embedding.call` span once per top-level `embed()` or `embedMany()` call, including bounded modality/role/space metadata and produced edges.
 11. Emit legacy `embedding.call start records` and `embedding.call end records` instrumentation hooks for compatibility.
 
 Governance is intentionally on `embedding()` instead of retrievers/indexers. Preprocessing, truncation, retry, cache keys, and provider rate limits change the vectors being generated or the provider calls needed to generate them. Placing those policies on the primitive makes every consumer use the same behavior.
@@ -713,6 +717,7 @@ Cache keys include:
 - preprocessor fingerprints
 - truncation policy
 - declared vector-semantic `version`
+- sorted declared modalities, normalization, and role-task mappings
 - normalized input hash
 
 Every `embedding()` instance exposes the stable serialization of those
@@ -723,7 +728,10 @@ and provider options are never serialized. Structural embedding implementations
 may omit `fingerprint`, in which case indexing computes them on every run rather
 than guessing whether cached vectors remain compatible.
 
-Embedding cache access emits nested `cache.lookup` spans with cache namespace, hit/miss counts, write counts, and per-entry hit/miss events. Raw input text and raw vector values are never emitted to OTel. Devtools/CLI/TUI receive bounded embedding metadata such as cache hits, misses, retries, truncated counts, duration, dimensions, usage, and cost.
+Dense instances also expose `space`, derived from the same fingerprint. Sparse
+embeddings remain text-only and do not expose a dense-space contract.
+
+Embedding cache access emits nested `cache.lookup` spans with cache namespace, hit/miss counts, write counts, and per-entry hit/miss events. Raw input text, media bytes/locators, and raw vector values are never emitted to OTel. Devtools/CLI/TUI receive bounded embedding metadata such as modalities, role, space digest, cache hits, misses, retries, truncated counts, duration, dimensions, usage, and cost.
 
 Hybrid search lives above this layer:
 
@@ -745,12 +753,31 @@ Those boundaries are deliberate:
 
 - embeddings generate vectors
 - ingestion loads raw sources into documents
-- indexing turns documents into canonical stored chunks
+- indexing turns text and media documents into canonical stored chunks
 - corpus sync tracks source state across repeated ingestion jobs
-- retrieval turns text queries into scored hits, context, and tools
+- retrieval turns text or media queries into scored hits, context, and tools
 - reranking, when used, happens after raw retrieval and before context/tool rendering
 
 This keeps hybrid support in the correct layer. Dense and sparse are embedding kinds. Hybrid is a retrieval strategy composed through `VectorStore.search({ dense, sparse, fusion })`, not a third embedding kind.
+
+Media documents preserve one-input-one-vector semantics: each media part becomes
+one chunk, and page/time/region splitting stays upstream. The indexer stores
+media through `AssetStore` when configured, then persists only `AssetRef`, MIME
+type, source location, and allowlisted scalar attribution. Media sources bypass
+pre-embedding pipeline caches so transient bytes never enter stage records.
+
+The indexed-knowledge boundary owns vector-space enforcement. Before the first
+vector write it compares the dense embedding digest with the namespace space
+record; only a compatible write may stamp vectors and persist that record. The
+retriever performs the same namespace check before query embedding or vector
+search, with vector metadata as a legacy fallback. `clear()` removes both data
+and space identity, while `deleteSource()` preserves the namespace contract.
+Changing a space requires a full reindex or a new namespace.
+
+Media retrieval uses the dense branch only. Sparse embeddings and custom
+retrievers remain text-only. Recipes may pass media through a direct
+`retrieve()` step, but text-producing rewrite/fanout/model steps reject media
+instead of inventing a caption. Recipe traces retain only a safe modality label.
 
 Advanced query-time composition lives in `retrievalRecipe({ retriever, steps })`, not inside store adapters and not as more inline `retriever()` config. Recipes are named, traceable compositions over one or more retriever sources. Query steps such as `rewriteQuery()` and `fanout()` transform planned queries before federated retrieval; hit steps such as `rerank()`, `expandParents()`, and `compressToBudget()` operate on retrieved candidates before final rendering. Recipe handles expose `retrieve()`, `retrieveWithTrace()`, `asRetriever()`, `asTools()`, and `asGrounding()` so prompt composition can consume the same recipe through context, tools, or citation-aware grounding.
 

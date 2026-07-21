@@ -8,9 +8,9 @@
 import { expectTypeOf } from 'vitest'
 import { z } from 'zod'
 import type { Citation } from '../src/citations'
-import type { DenseEmbedding } from '../src/embedding'
+import type { DenseEmbedding, EmbeddingModality } from '../src/embedding'
 import type { Corpus, CorpusSyncResult, CruxDocument, IndexResult } from '../src/indexing'
-import { inMemoryRecordStore, inMemoryVectorStore } from '../src/storage'
+import { inMemoryRecordStore, inMemoryVectorStore, type ExactFilter } from '../src/storage'
 import * as retrieval from '../src/retrieval'
 import {
   compressToBudget,
@@ -53,7 +53,7 @@ const docs = knowledgeBase({
 
 expectTypeOf(docs).toEqualTypeOf<KnowledgeBase>()
 expectTypeOf(docs.id).toEqualTypeOf<string>()
-expectTypeOf(docs.retriever()).toEqualTypeOf<Retriever>()
+expectTypeOf(docs.retriever()).toEqualTypeOf<Retriever<ExactFilter, 'text'>>()
 expectTypeOf(docs.recipe()).toEqualTypeOf<RetrievalRecipe>()
 expectTypeOf(docs.grounding()).toEqualTypeOf<Grounding>()
 expectTypeOf(docs.tools()).toEqualTypeOf<RetrieverTools>()
@@ -103,7 +103,10 @@ expectTypeOf(configuredDocs.remove('guide.md')).resolves.toEqualTypeOf<{
 }>()
 
 expectTypeOf(configuredRetriever).toEqualTypeOf<
-  Retriever<{ readonly section?: 'guide' | 'reference' | 'api'; readonly public?: boolean; readonly rank?: number }>
+  Retriever<
+    { readonly section?: 'guide' | 'reference' | 'api'; readonly public?: boolean; readonly rank?: number },
+    EmbeddingModality
+  >
 >()
 
 configuredRetriever.retrieve({
@@ -176,7 +179,7 @@ const recipe = retrievalRecipe({
 })
 
 expectTypeOf(recipe).toEqualTypeOf<RetrievalRecipe>()
-expectTypeOf(recipe.asRetriever()).toEqualTypeOf<Retriever>()
+expectTypeOf(recipe.asRetriever()).toMatchTypeOf<Retriever<ExactFilter, EmbeddingModality>>()
 expectTypeOf(
   configuredDocs.recipe({
     id: 'configured-docs-recipe',
@@ -214,7 +217,7 @@ const weightedFederatedRecipe = retrievalRecipe({
 
 expectTypeOf(weightedFederatedRecipe.retrieve('refunds')).resolves.toEqualTypeOf<RetrieverHit[]>()
 expectTypeOf({ retriever: configuredRetriever, weight: 2 } satisfies RetrievalRecipeSource).toMatchTypeOf<{
-  retriever: Retriever
+  retriever: Retriever<ExactFilter, EmbeddingModality>
   weight?: number
 }>()
 expectTypeOf<RetrievalSourceTrace>().toMatchTypeOf<{

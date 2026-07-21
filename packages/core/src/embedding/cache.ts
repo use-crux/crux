@@ -11,6 +11,7 @@
 
 import type { JsonObject, SparseVector } from '../storage'
 import { hashString } from './hashing'
+import type { NormalizedEmbeddingInput } from './modality'
 import type { CacheCodec, EmbeddingCache, EmbeddingCacheOptions } from './types'
 
 /**
@@ -40,6 +41,21 @@ export function embeddingCache(options: EmbeddingCacheOptions): EmbeddingCache {
 /** Derive the deterministic cache key for a text under a governance fingerprint. */
 export function embeddingCacheKey(namespace: string, governanceFingerprint: string, text: string): string {
   return `${namespace}:v1:${hashString(governanceFingerprint)}:${hashString(text)}`
+}
+
+/** Derive a cache key for a normalized input, or skip unsafe media identities. */
+export function normalizedEmbeddingCacheKey(
+  namespace: string,
+  governanceFingerprint: string,
+  input: NormalizedEmbeddingInput,
+  options: { readonly role: 'query' | 'document'; readonly roleSensitive: boolean },
+): string | undefined {
+  const role = options.roleSensitive ? `:${options.role}` : ''
+  if (input.type === 'text') {
+    return `${embeddingCacheKey(namespace, governanceFingerprint, input.text)}${role}`
+  }
+  if (!input.sha256) return undefined
+  return `${namespace}:v1:${hashString(governanceFingerprint)}:media:${input.sha256}${role}`
 }
 
 /** Codec serializing dense vectors to/from cache entries. */

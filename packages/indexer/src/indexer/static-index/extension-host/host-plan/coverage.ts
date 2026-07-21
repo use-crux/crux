@@ -5,6 +5,18 @@ const CRUX_CORE_EXTENSION = '@use-crux/indexer/crux-core'
 const staticIndexExtractorIds = new Set([
   extractorKey({
     extension: { name: CRUX_CORE_EXTENSION, version: '*' },
+    name: 'embedding',
+  }),
+  extractorKey({
+    extension: { name: CRUX_CORE_EXTENSION, version: '*' },
+    name: 'embedding.call',
+  }),
+  extractorKey({
+    extension: { name: CRUX_CORE_EXTENSION, version: '*' },
+    name: 'rag.indexer',
+  }),
+  extractorKey({
+    extension: { name: CRUX_CORE_EXTENSION, version: '*' },
     name: 'rag.retriever',
   }),
   extractorKey({
