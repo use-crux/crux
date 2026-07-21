@@ -17,16 +17,14 @@ cruxTool({
 type CruxToModelOutput = NonNullable<
   CruxTool<Record<string, never>, string>['toModelOutput']
 >
+type CruxModelOutput = Awaited<ReturnType<CruxToModelOutput>>
+type CruxContentPart = Extract<CruxModelOutput, { type: 'content' }>['value'][number]
 
+// Keep this declaration on one line so supported TypeScript versions attach the diagnostic consistently.
 // @ts-expect-error Core callbacks reject AI SDK-native content parts.
-const invalidCruxOutput: CruxToModelOutput = () => ({
-  type: 'content',
-  value: [
-    { type: 'image-data', data: 'AQID', mediaType: 'image/png' },
-  ],
-})
+const invalidCruxPart: CruxContentPart = { type: 'image-data', data: 'AQID', mediaType: 'image/png' }
 
-void invalidCruxOutput
+void invalidCruxPart
 
 aiTool({
   description: 'AI SDK-native output',
@@ -41,13 +39,11 @@ aiTool({
 type AiToModelOutput = NonNullable<
   AiTool<unknown, string>['toModelOutput']
 >
+type AiModelOutput = Awaited<ReturnType<AiToModelOutput>>
+type AiContentPart = Extract<AiModelOutput, { type: 'content' }>['value'][number]
 
+// Keep this declaration on one line so supported TypeScript versions attach the diagnostic consistently.
 // @ts-expect-error AI SDK callbacks reject Core-native content parts.
-const invalidAiOutput: AiToModelOutput = () => ({
-  type: 'content',
-  value: [
-    { type: 'image', source: 'data:image/png;base64,AQID' },
-  ],
-})
+const invalidAiPart: AiContentPart = { type: 'image', source: 'data:image/png;base64,AQID' }
 
-void invalidAiOutput
+void invalidAiPart
