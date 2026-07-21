@@ -30,7 +30,7 @@ func TestWorkerStaticIndexLoadsConfiguredExtensionManifestWithoutNodeStaticPlan(
 		t.Fatalf("write source: %v", err)
 	}
 	configFile := filepath.Join(root, "crux.config.ts")
-	if err := os.WriteFile(configFile, []byte("import { config } from '@use-crux/core'\nexport default config({ experimental: { indexer: { nativeAst: true } }, indexer: { extensions: [{ package: '@acme/crux-indexer-extension' }] } })\n"), 0o600); err != nil {
+	if err := os.WriteFile(configFile, []byte("import { config } from '@use-crux/core'\nexport default config({ indexer: { extensions: [{ package: '@acme/crux-indexer-extension' }] } })\n"), 0o600); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
 	cacheKey := "static-cache-key:workflow-extension"
@@ -99,7 +99,7 @@ func staticIndexExtensionManifestIndexerScript(cacheInputs string) string {
 			const req = JSON.parse(line)
 			if (req.method === 'inspectProjectStaticSyntaxPlan') {
 				process.stdout.write(JSON.stringify({
-					protocolVersion: 2,
+					protocolVersion: 3,
 					type: 'artifact:error',
 					transactionId: 'artifact-static-plan',
 					artifact: 'projectStaticSyntaxPlan',
@@ -109,7 +109,7 @@ func staticIndexExtensionManifestIndexerScript(cacheInputs string) string {
 			}
 			if (req.method === 'inspectProjectStaticIndexConfig') {
 				process.stdout.write(JSON.stringify({
-					protocolVersion: 2,
+					protocolVersion: 3,
 					type: 'artifact:done',
 					transactionId: 'artifact-static-index-config',
 					artifact: 'projectStaticIndexConfig',
@@ -117,8 +117,6 @@ func staticIndexExtensionManifestIndexerScript(cacheInputs string) string {
 					payload: {
 						root: req.root,
 						configFile: req.root + '/crux.config.ts',
-						nativeAstEnabled: true,
-						nativeAstFrontend: 'oxc',
 						extensions: [{ package: '@acme/crux-indexer-extension' }],
 						diagnostics: []
 					}
@@ -127,7 +125,7 @@ func staticIndexExtensionManifestIndexerScript(cacheInputs string) string {
 			}
 			if (req.method === 'loadStaticExtensionHostManifest') {
 				process.stdout.write(JSON.stringify({
-					protocolVersion: 2,
+					protocolVersion: 3,
 					type: 'artifact:done',
 					transactionId: 'artifact-static-extension-host-manifest',
 					artifact: 'staticExtensionHostManifest',
@@ -167,7 +165,7 @@ func staticIndexExtensionManifestIndexerScript(cacheInputs string) string {
 			}
 			if (req.method === 'checkStaticRules') {
 				process.stdout.write(JSON.stringify({
-					protocolVersion: 2,
+					protocolVersion: 3,
 					type: 'artifact:done',
 					transactionId: 'artifact-rule-check',
 					artifact: 'staticRuleCheck',

@@ -24,7 +24,7 @@ func TestWorkerStaticIndexSchedulesTypeScriptRulesInLintPhase(t *testing.T) {
 	if err := os.WriteFile(sourceFile, []byte("export const writer = prompt({ id: 'rule-input' })"), 0o600); err != nil {
 		t.Fatalf("write source: %v", err)
 	}
-	writeStaticIndexEnabledConfig(t, root)
+	writeStaticIndexConfig(t, root)
 
 	script := filepath.Join(t.TempDir(), "static-index-rules-indexer.mjs")
 	if err := os.WriteFile(script, []byte(staticIndexRulesIndexerScript()), 0o600); err != nil {

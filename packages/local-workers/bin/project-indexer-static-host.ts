@@ -3,6 +3,7 @@ import {
   extractStaticEvidenceBatchForProject,
   loadStaticExtensionHostManifestForProject,
 } from '@use-crux/indexer/host/static-compat'
+import { STATIC_INDEX_COMPILER_PROTOCOL_VERSION } from '@use-crux/indexer/host/static-index'
 import { isProjectModelResolutionMode } from '@use-crux/core/project-index'
 import type { ProjectIndexWorkerRequest } from '../lib/project-indexer-request'
 import { writeArtifactEvent, type ProjectIndexWorkerWriter } from './project-indexer-protocol'
@@ -59,9 +60,13 @@ function requestResolutionMode(value: unknown) {
   return isProjectModelResolutionMode(value) ? value : undefined
 }
 
-function requiredNativeCompilerProtocolVersion(value: unknown): number {
-  if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) {
-    throw new Error('loadStaticExtensionHostManifest requires nativeCompilerProtocolVersion')
+function requiredNativeCompilerProtocolVersion(
+  value: unknown,
+): typeof STATIC_INDEX_COMPILER_PROTOCOL_VERSION {
+  if (value !== STATIC_INDEX_COMPILER_PROTOCOL_VERSION) {
+    throw new Error(
+      `loadStaticExtensionHostManifest requires nativeCompilerProtocolVersion ${STATIC_INDEX_COMPILER_PROTOCOL_VERSION}`,
+    )
   }
   return value
 }

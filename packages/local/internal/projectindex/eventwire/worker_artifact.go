@@ -7,7 +7,7 @@ import (
 	"fmt"
 )
 
-// ProjectIndexArtifactKind identifies JSON artifacts returned through the V2
+// ProjectIndexArtifactKind identifies JSON artifacts returned through the V3
 // Project Index worker stream.
 type ProjectIndexArtifactKind string
 
@@ -18,8 +18,6 @@ const (
 	ProjectIndexArtifactProjectConfig ProjectIndexArtifactKind = "projectConfig"
 	// ProjectIndexArtifactStaticIndexConfig is the config-only Static Index planning input.
 	ProjectIndexArtifactStaticIndexConfig ProjectIndexArtifactKind = "projectStaticIndexConfig"
-	// ProjectIndexArtifactStaticSyntaxPlan is the Static Index parser plan.
-	ProjectIndexArtifactStaticSyntaxPlan ProjectIndexArtifactKind = "projectStaticSyntaxPlan"
 	// ProjectIndexArtifactStaticExtensionHostManifest is a data-only TS extension runtime manifest.
 	ProjectIndexArtifactStaticExtensionHostManifest ProjectIndexArtifactKind = "staticExtensionHostManifest"
 	// ProjectIndexArtifactStaticExtensionEvidenceBatch is a TS compatibility extractor result.
@@ -47,7 +45,7 @@ type ProjectIndexArtifactStreamOptions struct {
 	AllowRoot bool
 }
 
-// ProjectIndexArtifactStreamCollector validates one V2 artifact stream and
+// ProjectIndexArtifactStreamCollector validates one V3 artifact stream and
 // exposes the payload only after a complete artifact:done event.
 type ProjectIndexArtifactStreamCollector struct {
 	options           ProjectIndexArtifactStreamOptions

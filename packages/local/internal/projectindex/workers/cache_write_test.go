@@ -28,7 +28,7 @@ func TestWorkerStaticIndexWritesWarmStaticCacheManifest(t *testing.T) {
 		"src/writer.ts",
 		"export const writer = prompt({ id: 'cache-write' })\n",
 	)
-	writeStaticIndexEnabledConfig(t, root)
+	writeStaticIndexConfig(t, root)
 
 	compiler := &staticIndexCacheWriteCompiler{root: root, sourceFile: sourceFile}
 	worker := newTestWorker(t)
@@ -83,7 +83,7 @@ func TestWorkerStaticIndexDoesNotReadOrWriteCachesWhenDisabled(t *testing.T) {
 		"src/writer.ts",
 		"export const writer = prompt({ id: 'cache-free' })\n",
 	)
-	writeStaticIndexEnabledConfig(t, root)
+	writeStaticIndexConfig(t, root)
 
 	compiler := &staticIndexCacheWriteCompiler{root: root, sourceFile: sourceFile}
 	worker := newTestWorker(t)
@@ -109,7 +109,7 @@ func TestReadOnlyRunnerWithRealWorkerBundleDoesNotCreateAnyIndexCache(t *testing
 		"src/writer.ts",
 		"export const writer = prompt({ id: 'runner-cache-free' })\n",
 	)
-	writeStaticIndexEnabledConfig(t, root)
+	writeStaticIndexConfig(t, root)
 
 	worker := newTestWorker(t)
 	worker.WithSyntaxParser(&staticIndexCacheWriteCompiler{root: root, sourceFile: sourceFile})
@@ -210,7 +210,7 @@ func staticIndexCacheWriteEvents(root, sourceFile string) ([]json.RawMessage, er
 	tx := "tx-static-index-cache-write"
 	values := []any{
 		map[string]any{
-			"protocolVersion": 2,
+			"protocolVersion": 3,
 			"type":            "phase:start",
 			"transactionId":   tx,
 			"phase":           "ast",
@@ -218,7 +218,7 @@ func staticIndexCacheWriteEvents(root, sourceFile string) ([]json.RawMessage, er
 			"startedAt":       "1970-01-01T00:00:00.000Z",
 		},
 		map[string]any{
-			"protocolVersion": 2,
+			"protocolVersion": 3,
 			"type":            "fact:batch",
 			"transactionId":   tx,
 			"sequence":        0,
@@ -260,7 +260,7 @@ func staticIndexCacheWriteEvents(root, sourceFile string) ([]json.RawMessage, er
 			},
 		},
 		map[string]any{
-			"protocolVersion": 2,
+			"protocolVersion": 3,
 			"type":            "phase:done",
 			"transactionId":   tx,
 			"phase":           "ast",

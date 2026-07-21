@@ -1,23 +1,21 @@
-# Native AST Beta Readiness
+# Static Index Readiness
 
-This report records the beta gate for `experimental.indexer.nativeAst`. It is a
-release-readiness artifact, not a default-switch approval. Rust/Oxc is now the
-only bundled first-party static path, and the beta gate checks it against the
-Rust-owned golden plus Go host behavior.
+This report records the release gate for the required Rust/Oxc Static Index
+path. Rust/Oxc is the only bundled first-party static compiler, and the gate
+checks it against the Rust-owned golden plus Go host behavior.
 
 ## Status
 
-Native AST is beta-ready behind `experimental.indexer.nativeAst` when the gate in
-this file is green on the release candidate. It must not become the default
-without completing the default-readiness checklist below and getting explicit
-approval for that switch.
+Static Index is release-ready when the gate in this file is green on the release
+candidate. A missing or incompatible worker is a setup failure; Crux must not
+publish an apparently healthy empty Project Index.
 
 ## Current Evidence
 
-Last Phase 5 verification run: 2026-07-07.
+Last release-gate verification run: 2026-07-21.
 
 ```bash
-node scripts/native-ast-parity-gate.mjs
+node scripts/static-index-parity-gate.mjs
 ```
 
 Observed gate coverage:
@@ -25,13 +23,13 @@ Observed gate coverage:
 | Surface                 | Evidence                                                                                                                                                             |
 | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Rust worker build       | `cargo build --package crux-static-index-worker --bin crux-static-index-worker` passed.                                                                              |
-| Rust tests              | `cargo test` passed, including `static-compiler` 68 tests, `worker` 19 tests, `syntax-oxc` 8 tests, and doc tests.                                                   |
+| Rust tests              | `cargo test` passed, including `static-compiler` 73 tests, `worker` 20 tests, `syntax-oxc` 8 tests, and doc tests.                                                   |
 | Rust first-party golden | `rust-first-party-static-golden.test.ts` compares Rust/Oxc output with `contracts/fixtures/rust-first-party-static-golden.json`.                                     |
-| Full indexer suite      | `CRUX_STATIC_INDEX_WORKER=target/debug/crux-static-index-worker pnpm --filter @use-crux/indexer test` passed with 73 files, 330 tests, and 1 skipped env-gated test. |
+| Full indexer suite      | `CRUX_STATIC_INDEX_WORKER=target/debug/crux-static-index-worker pnpm --filter @use-crux/indexer test` passed with 105 files, 494 tests, and 1 skipped test.          |
 | Go production path      | `go test ./internal/projectindex/... -count=1` passed from `packages/local` with the built Rust worker and embedded local worker bundle.                             |
 | Local worker embed path | The gate built `@use-crux/local-workers`, embedded the generated worker assets, and then ran the Go Project Index packages against those assets.                     |
 
-`pnpm test:native-ast-parity` is the release command because it builds the
+`pnpm test:static-index-parity` is the release command because it builds the
 current Rust/Oxc worker, points every worker-backed test at that binary, compares
 Rust output with the Rust-owned golden, builds and embeds the TypeScript worker
 assets that remain for extension/config/semantic host work, and runs the Go host
@@ -47,36 +45,36 @@ packages with required gate environment.
   refs, diagnostics, dependencies, source rows/source graph, runtime metadata,
   degraded behavior, and provided records where present.
 - TypeScript extension host coverage remains for an experimental third-party
-  extractor and mixed native plus extension output. Internal rule-slot fixtures
+  extractor and mixed Rust plus extension output. Internal rule-slot fixtures
   do not constitute a public third-party rule promise.
 - Warm cache, incremental source edits, config/lint-profile fallback, static
   cache identity, and the non-skipping CI parity command are covered.
 
 ## Cache Identity Review
 
-The current static cache namespace is `static-parse-v68`; semantic facts use
-`semantic-facts-v29`; and the Go Project Index snapshot cache lives under
-`.crux/cache/index-v2/epoch-39/`. These identities include main's scheduling
+The current static cache namespace is `static-parse-v72`; semantic facts use
+`semantic-facts-v31`; and the Go Project Index snapshot cache lives under
+`.crux/cache/index-v2/epoch-43/`. These identities include main's scheduling
 and owner-fact migrations plus root-stable fingerprints, backend state, and
 durable all-kind extractor provenance, so restart warm loads cannot mask
 changed Catalog evidence.
 
-`nativeAst` is the static AST/source frontend experiment and remains independent
-from `experimental.indexer.native`, which selects the semantic backend.
+Static Index always uses Rust/Oxc and remains independent from
+`experimental.indexer.native`, which selects the semantic backend.
 
 ## Release Checklist
 
-Run these before announcing or releasing the beta:
+Run these before releasing:
 
 ```bash
-node scripts/native-ast-parity-gate.mjs
+node scripts/static-index-parity-gate.mjs
 make local
 ```
 
 The release shortcut is:
 
 ```bash
-pnpm test:native-ast-parity
+pnpm test:static-index-parity
 make local
 ```
 
@@ -86,11 +84,10 @@ Rust/Oxc indexer worker, and build the current-platform Go binary.
 
 ## Benchmark Command
 
-Use the benchmark runner when collecting beta soak or default-promotion
-performance evidence:
+Use the benchmark runner when collecting performance evidence:
 
 ```bash
-pnpm benchmark:native-ast
+pnpm benchmark:static-index
 ```
 
 By default it benchmarks this repository through the production Go to Rust/Oxc
@@ -105,10 +102,10 @@ the Tier-A watch leaf path, which fails when p95 exceeds `100ms` unless
 Useful overrides:
 
 ```bash
-CRUX_INDEXER_BENCH_ROOT=/path/to/project pnpm benchmark:native-ast
-CRUX_INDEXER_BENCH_MODES=production-cold,production-warm pnpm benchmark:native-ast
-CRUX_INDEXER_BENCH_TIER_A_MS=100 pnpm benchmark:native-ast
-CRUX_INDEXER_BENCH_COUNT=5 CRUX_INDEXER_BENCH_BENCHTIME=10s pnpm benchmark:native-ast
+CRUX_INDEXER_BENCH_ROOT=/path/to/project pnpm benchmark:static-index
+CRUX_INDEXER_BENCH_MODES=production-cold,production-warm pnpm benchmark:static-index
+CRUX_INDEXER_BENCH_TIER_A_MS=100 pnpm benchmark:static-index
+CRUX_INDEXER_BENCH_COUNT=5 CRUX_INDEXER_BENCH_BENCHTIME=10s pnpm benchmark:static-index
 ```
 
 Archive the raw Go benchmark output and compare runs with `benchstat` when
@@ -134,53 +131,15 @@ Reproduce the same measurement shape with
 `CRUX_STATIC_INDEX_WORKER`. Fixture contents and machine identity must accompany
 future comparisons; these numbers are a baseline, not a cross-machine gate.
 
-## Future native direct-projector expansion
-
-Do not add another native direct projector merely because a source shape is
-available. Expansion requires all of the following in the same proposal:
-
-1. A measured user-visible bottleneck on a representative production path and
-   a written latency or memory target.
-2. An exact normalized parity fixture against the JavaScript TypeScript
-   correctness baseline for every supported shape.
-3. A complete fallback for unsupported syntax through the native shared
-   analyzer, never partial native-only facts.
-4. Cache-identity review and backend-neutral diagnostics proving users can tell
-   which path ran.
-
-The current native experiment must not be expanded or deleted without this
-evidence and a separate decision.
-
 ## Known Residual Risks
 
-- The current gate proves correctness parity, not a final performance target.
-  Preserve prior benchmark expectations before default promotion: native-only
-  cold indexing should show a material end-to-end win, with at least a `2x`
-  target on release corpora.
+- The current gate proves correctness and integration, not a final performance
+  target. Cold indexing should retain a material end-to-end win, with at least a
+  `2x` target on release corpora.
 - TypeScript extension compatibility is covered by a production fixture, but
-  broader ecosystem coverage should expand during beta soak as real extensions
-  appear.
-- Fallback or Node-start diagnostics must stay legible. Node may still start for
+  broader ecosystem coverage should expand as real extensions appear.
+- Worker-setup and Node-start diagnostics must stay legible. Node may still start for
   config inspection and TypeScript-authored extension work; native-only eligible
   projects should not pay for first-party TypeScript projection.
-- Cache incidents should be monitored during beta. Users should not need to
+- Cache incidents should be monitored. Users should not need to
   delete `.crux/cache` after normal cache identity migrations.
-
-## Default-readiness checklist
-
-Do not make native AST the default until all of these are true:
-
-- [ ] The beta gate stays green across multiple CI cycles or releases.
-- [ ] `make local` and `pnpm test:native-ast-parity` are required in the release
-      checklist for any native AST promotion.
-- [ ] Cold and warm benchmarks meet the documented performance thresholds on the
-      Crux repo and at least one large synthetic corpus.
-- [ ] Telemetry reports bounded fallback and Node-start reasons, including
-      config inspection, TypeScript extension extractor work, TypeScript
-      extension lint work, and native worker setup failures.
-- [ ] Extension ecosystem tests include more than the fixture extension and cover
-      package-version/trust diagnostics.
-- [ ] Cache identity monitoring confirms stale snapshots do not mask changed
-      static Project Index output.
-- [ ] User-facing docs describe rollback clearly: set
-      `experimental.indexer.nativeAst` to `false` or remove the flag.

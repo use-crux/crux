@@ -635,7 +635,7 @@ Implemented v1 behavior:
   merging, so runtime partial patches no longer require all-or-nothing invalidation.
 - The local Project Index service and TypeScript worker bundle have an incremental bridge. The service falls
   back to full reindex if no previous source graph or incremental-capable worker is available.
-- Incremental worker patches are streamed as bounded V2 events. Source-profile rows are carried as
+- Incremental worker patches are streamed as bounded V3 events. Source-profile rows are carried as
   `sourceProfile:batch` events rather than as one large patch payload, and semantic workers receive
   profile files in bounded batches from the Go runtime.
 - Incremental worker requests also chunk large `previousIndex` definition/source arrays into

@@ -8,7 +8,7 @@ func staticIndexGuardIndexerScript() string {
 			const req = JSON.parse(line)
 			if (req.method === 'inspectProjectStaticIndexConfig') {
 				process.stdout.write(JSON.stringify({
-					protocolVersion: 2,
+					protocolVersion: 3,
 					type: 'artifact:done',
 					transactionId: 'artifact-static-index-config',
 					artifact: 'projectStaticIndexConfig',
@@ -16,8 +16,6 @@ func staticIndexGuardIndexerScript() string {
 					payload: {
 						root: req.root,
 						configFile: req.root + '/crux.config.ts',
-						nativeAstEnabled: true,
-						nativeAstFrontend: 'oxc',
 						extensions: [],
 						diagnostics: []
 					}
@@ -27,7 +25,7 @@ func staticIndexGuardIndexerScript() string {
 			if (req.method === 'extractStaticEvidenceBatch') {
 				if ((req.jobs ?? []).length !== 1 || req.jobs[0]?.id !== 'extension-job') {
 					process.stdout.write(JSON.stringify({
-						protocolVersion: 2,
+						protocolVersion: 3,
 						type: 'artifact:error',
 						transactionId: 'artifact-extension-evidence',
 						artifact: 'staticExtensionEvidenceBatch',
@@ -36,7 +34,7 @@ func staticIndexGuardIndexerScript() string {
 					return
 				}
 				process.stdout.write(JSON.stringify({
-					protocolVersion: 2,
+					protocolVersion: 3,
 					type: 'artifact:done',
 					transactionId: 'artifact-extension-evidence',
 					artifact: 'staticExtensionEvidenceBatch',
@@ -61,7 +59,7 @@ func staticIndexGuardIndexerScript() string {
 			}
 			if (req.method === 'checkStaticRules') {
 				process.stdout.write(JSON.stringify({
-					protocolVersion: 2,
+					protocolVersion: 3,
 					type: 'artifact:done',
 					transactionId: 'artifact-rule-check',
 					artifact: 'staticRuleCheck',

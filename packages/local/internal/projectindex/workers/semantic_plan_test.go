@@ -14,7 +14,7 @@ import (
 
 func TestWorkerPlanProjectSemanticRequestUsesStaticIndexSourceProfile(t *testing.T) {
 	root := t.TempDir()
-	writeStaticIndexEnabledConfig(t, root)
+	writeStaticIndexConfig(t, root)
 	primary := writeStaticIndexPlanCacheFixtureFile(t, root, "src/writer.ts", "import './helper'\nexport const writer = prompt({ id: 'writer' })\n")
 	helper := writeStaticIndexPlanCacheFixtureFile(t, root, "src/helper.ts", "export const helper = 'writer'\n")
 

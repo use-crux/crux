@@ -7,7 +7,7 @@ func TestProjectIndexPatchStreamCollectorUsesTerminalSemanticSourceProfile(t *te
 
 	events := []map[string]any{
 		{
-			"protocolVersion": 2,
+			"protocolVersion": 3,
 			"type":            "phase:start",
 			"transactionId":   "tx-ast",
 			"phase":           "ast",
@@ -15,7 +15,7 @@ func TestProjectIndexPatchStreamCollectorUsesTerminalSemanticSourceProfile(t *te
 			"startedAt":       "2026-07-06T10:00:00.000Z",
 		},
 		{
-			"protocolVersion": 2,
+			"protocolVersion": 3,
 			"type":            "sourceProfile:batch",
 			"transactionId":   "tx-ast",
 			"sequence":        0,
@@ -28,7 +28,7 @@ func TestProjectIndexPatchStreamCollectorUsesTerminalSemanticSourceProfile(t *te
 			},
 		},
 		{
-			"protocolVersion": 2,
+			"protocolVersion": 3,
 			"type":            "phase:done",
 			"transactionId":   "tx-ast",
 			"phase":           "ast",

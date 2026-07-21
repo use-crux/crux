@@ -157,10 +157,7 @@ describe("indexer architecture boundaries", () => {
   it("homes TypeScript Static Index internals under static-index responsibility folders", () => {
     for (const file of [
       "indexer/static-index/index.ts",
-      "indexer/static-index/config/index.ts",
       "indexer/static-index/config/inspect.ts",
-      "indexer/static-index/plan/index.ts",
-      "indexer/static-index/plan/files.ts",
       "indexer/static-index/protocol/index.ts",
       "indexer/static-index/protocol/request.ts",
       "indexer/static-index/protocol/response.ts",

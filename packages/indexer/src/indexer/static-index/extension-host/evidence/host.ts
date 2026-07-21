@@ -30,6 +30,7 @@ import type {
   IndexerExtension,
   IndexerExtensionConfig,
 } from '../../../extensions/public-contract/types'
+import { STATIC_INDEX_COMPILER_PROTOCOL_VERSION } from '../../protocol/identity'
 
 /** Phase 8 TypeScript host method names. */
 export type StaticExtensionHostMethod =
@@ -59,7 +60,7 @@ export interface LoadStaticExtensionHostManifestInput {
   /** Already loaded trusted extension manifests for in-process callers and tests. */
   readonly extensions?: readonly IndexerExtension[]
   /** Native compiler protocol version supported by the caller. */
-  readonly nativeCompilerProtocolVersion: number
+  readonly nativeCompilerProtocolVersion: typeof STATIC_INDEX_COMPILER_PROTOCOL_VERSION
 }
 
 /** Common trusted-extension input accepted by in-process host methods. */
@@ -76,7 +77,7 @@ export interface StaticExtensionHostRuntimeInput {
 export interface LoadStaticExtensionHostManifestResult {
   readonly method: 'loadStaticExtensionHostManifest'
   readonly root: string
-  readonly nativeCompilerProtocolVersion: number
+  readonly nativeCompilerProtocolVersion: typeof STATIC_INDEX_COMPILER_PROTOCOL_VERSION
   readonly manifest: ExtensionRuntimeManifest
   /**
    * Complete static extraction cache identity for the Static Index compiler.

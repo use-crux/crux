@@ -6,7 +6,7 @@ import { canonicalParityJson } from './json'
  *
  * The normalizer compares every `IndexPatchFacts` surface and fails closed on
  * unknown semantic fields. It only removes ordering and path-separator noise
- * documented by the native AST parity contract.
+ * documented by the Static Index parity contract.
  */
 export function canonicalIndexPatchFactsJson(facts: IndexPatchFacts): string {
   return canonicalParityJson(facts, { root: 'indexPatchFacts' })
@@ -26,4 +26,3 @@ export function canonicalStaticExtractionJson(facts: {
 }): string {
   return canonicalParityJson(facts, { root: 'staticExtraction' })
 }
-

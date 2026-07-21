@@ -19,7 +19,7 @@ func TestSharedWorkerEventFixturesAreDeclaredByContractManifest(t *testing.T) {
 func TestArtifactErrorPreservesStructuredWorkerCode(t *testing.T) {
 	collector := NewProjectIndexArtifactStreamCollector(ProjectIndexArtifactStreamOptions{})
 	err := collector.Handle(json.RawMessage(`{
-		"protocolVersion":2,
+		"protocolVersion":3,
 		"type":"artifact:error",
 		"transactionId":"error:runRuntimeOperation:runtimeOperation",
 		"artifact":"runtimeOperation",
@@ -45,7 +45,7 @@ func TestArtifactErrorPreservesStructuredWorkerCode(t *testing.T) {
 
 func TestArtifactErrorRejectsMalformedFinding(t *testing.T) {
 	err := NewProjectIndexArtifactStreamCollector(ProjectIndexArtifactStreamOptions{}).Handle(json.RawMessage(`{
-		"protocolVersion":2,
+		"protocolVersion":3,
 		"type":"artifact:error",
 		"transactionId":"error:generateRuntimeArtifacts:runtimeArtifacts",
 		"artifact":"runtimeArtifacts",
@@ -58,8 +58,8 @@ func TestArtifactErrorRejectsMalformedFinding(t *testing.T) {
 
 func TestArtifactErrorRequiresErrorMessage(t *testing.T) {
 	for _, raw := range []string{
-		`{"protocolVersion":2,"type":"artifact:error","transactionId":"missing-error","artifact":"runtimeArtifacts"}`,
-		`{"protocolVersion":2,"type":"artifact:error","transactionId":"empty-message","artifact":"runtimeArtifacts","error":{"message":""}}`,
+		`{"protocolVersion":3,"type":"artifact:error","transactionId":"missing-error","artifact":"runtimeArtifacts"}`,
+		`{"protocolVersion":3,"type":"artifact:error","transactionId":"empty-message","artifact":"runtimeArtifacts","error":{"message":""}}`,
 	} {
 		err := NewProjectIndexArtifactStreamCollector(ProjectIndexArtifactStreamOptions{}).Handle(json.RawMessage(raw))
 		if err == nil || !strings.Contains(err.Error(), "error.message") {
@@ -115,7 +115,7 @@ func TestSharedWorkerEventCaseFixturesDecode(t *testing.T) {
 
 	artifactCollector := NewProjectIndexArtifactStreamCollector(ProjectIndexArtifactStreamOptions{
 		Root:     "/repo",
-		Artifact: ProjectIndexArtifactStaticSyntaxPlan,
+		Artifact: ProjectIndexArtifactStaticIndexConfig,
 	})
 	if err := artifactCollector.Handle(fixture.ArtifactDone); err != nil {
 		t.Fatalf("Handle artifactDone error = %v", err)
@@ -130,8 +130,8 @@ func TestSharedWorkerEventCaseFixturesDecode(t *testing.T) {
 
 	if err := NewProjectIndexArtifactStreamCollector(ProjectIndexArtifactStreamOptions{
 		Root:     "/repo",
-		Artifact: ProjectIndexArtifactStaticSyntaxPlan,
-	}).Handle(fixture.ArtifactError); err == nil || !strings.Contains(err.Error(), "static syntax plan failed") {
+		Artifact: ProjectIndexArtifactStaticIndexConfig,
+	}).Handle(fixture.ArtifactError); err == nil || !strings.Contains(err.Error(), "static index config failed") {
 		t.Fatalf("Handle artifactError error = %v, want fixture message", err)
 	}
 

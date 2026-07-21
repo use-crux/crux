@@ -17,7 +17,7 @@ func staticIndexRulesIndexerScript() string {
 			const req = JSON.parse(line)
 			if (req.method === 'inspectProjectStaticIndexConfig') {
 				process.stdout.write(JSON.stringify({
-					protocolVersion: 2,
+					protocolVersion: 3,
 					type: 'artifact:done',
 					transactionId: 'artifact-static-index-config',
 					artifact: 'projectStaticIndexConfig',
@@ -25,8 +25,6 @@ func staticIndexRulesIndexerScript() string {
 					payload: {
 						root: req.root,
 						configFile: req.root + '/crux.config.ts',
-						nativeAstEnabled: true,
-						nativeAstFrontend: 'oxc',
 						extensions: [{ package: '@acme/rules' }],
 						diagnostics: []
 					}
@@ -35,7 +33,7 @@ func staticIndexRulesIndexerScript() string {
 			}
 			if (req.method === 'loadStaticExtensionHostManifest') {
 				process.stdout.write(JSON.stringify({
-					protocolVersion: 2,
+					protocolVersion: 3,
 					type: 'artifact:done',
 					transactionId: 'artifact-extension-host',
 					artifact: 'staticExtensionHostManifest',
@@ -78,7 +76,7 @@ func staticIndexRulesIndexerScript() string {
 			if (req.method === 'checkStaticRules') {
 				if ('nativeLintFinalize' in req) {
 					process.stdout.write(JSON.stringify({
-						protocolVersion: 2,
+						protocolVersion: 3,
 						type: 'artifact:error',
 						transactionId: 'artifact-rule-check',
 						artifact: 'staticRuleCheck',
@@ -89,7 +87,7 @@ func staticIndexRulesIndexerScript() string {
 				const definition = req.graph?.definitions?.[0]
 				if (definition?.id !== 'prompt:native-rule-input') {
 					process.stdout.write(JSON.stringify({
-						protocolVersion: 2,
+						protocolVersion: 3,
 						type: 'artifact:error',
 						transactionId: 'artifact-rule-check',
 						artifact: 'staticRuleCheck',
@@ -98,7 +96,7 @@ func staticIndexRulesIndexerScript() string {
 					return
 				}
 				process.stdout.write(JSON.stringify({
-					protocolVersion: 2,
+					protocolVersion: 3,
 					type: 'artifact:done',
 					transactionId: 'artifact-rule-check',
 					artifact: 'staticRuleCheck',
@@ -236,10 +234,10 @@ func staticIndexRulePatchEvents(root string, phase string, facts []any) ([]json.
 		patch["invalidates"] = map[string]any{"all": true}
 	}
 	values := []any{
-		map[string]any{"protocolVersion": 2, "type": "phase:start", "transactionId": tx, "phase": phase, "root": root, "startedAt": "1970-01-01T00:00:00.000Z"},
-		map[string]any{"protocolVersion": 2, "type": "fact:batch", "transactionId": tx, "sequence": 0, "facts": facts},
+		map[string]any{"protocolVersion": 3, "type": "phase:start", "transactionId": tx, "phase": phase, "root": root, "startedAt": "1970-01-01T00:00:00.000Z"},
+		map[string]any{"protocolVersion": 3, "type": "fact:batch", "transactionId": tx, "sequence": 0, "facts": facts},
 		map[string]any{
-			"protocolVersion": 2,
+			"protocolVersion": 3,
 			"type":            "phase:done",
 			"transactionId":   tx,
 			"phase":           phase,

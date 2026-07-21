@@ -61,16 +61,6 @@ export interface CruxIndexerExtensionReference {
   readonly options?: unknown;
 }
 export type CruxExperimentalIndexerNativeEngine = "tsgo";
-export interface CruxExperimentalIndexerNativeAstConfig {
-  /**
-   * Native static syntax frontend.
-   *
-   * `oxc` is the first implementation and is hosted by the local Go runtime
-   * through the Rust/Oxc indexer worker. Future native frontends can graduate
-   * behind this unstable object without changing stable `indexer` config.
-   */
-  readonly frontend?: "oxc";
-}
 export interface CruxExperimentalIndexerNativeConfig {
   /**
    * Native semantic engine implementation.
@@ -94,16 +84,6 @@ export interface CruxExperimentalIndexerConfig {
    * TypeScript compiler API backend.
    */
   readonly native?: boolean | CruxExperimentalIndexerNativeConfig;
-  /**
-   * Enable the experimental native static AST compiler path.
-   *
-   * Set to `true` to let the local Go runtime use Rust/Oxc for the static
-   * Project Index pass when the native worker is available. Node may still be
-   * required for config loading, TypeScript-authored extensions, or rule
-   * compatibility work. This flag is deliberately separate from `native`,
-   * which controls semantic TypeScript-Go enrichment.
-   */
-  readonly nativeAst?: boolean | CruxExperimentalIndexerNativeAstConfig;
 }
 
 export interface CruxExperimentalConfig {

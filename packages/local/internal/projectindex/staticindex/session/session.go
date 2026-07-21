@@ -14,7 +14,7 @@ func Run(ctx context.Context, options Options) (Result, error) {
 	return New(options).Run(ctx)
 }
 
-// Run plans the project and, when enabled, attempts Static Index execution.
+// Run plans the project and attempts Static Index execution.
 func (s *Session) Run(ctx context.Context) (Result, error) {
 	if s == nil {
 		return Result{}, fmt.Errorf("Static Index session is not configured")
@@ -30,11 +30,6 @@ func (s *Session) Run(ctx context.Context) (Result, error) {
 	}
 	result := resultFromPlan(plan)
 	result.NativeOnlyEligible = compat.NativeOnlyEligible(plan.Plan)
-	if !plan.Plan.StaticSyntaxEnabled {
-		result.Status = StatusDisabled
-		return result, nil
-	}
-
 	if options.Compiler == nil {
 		result.Status = StatusMissingCompiler
 		return result, nil

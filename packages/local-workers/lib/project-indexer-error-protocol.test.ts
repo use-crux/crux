@@ -63,7 +63,7 @@ describe('project index worker errors', () => {
 
       const event = await runBuiltWorker({
         method: 'generateRuntimeArtifacts',
-        protocolVersion: 2,
+        protocolVersion: 3,
         root,
         definitions: [
           {
@@ -122,7 +122,7 @@ describe('project index worker errors', () => {
       })
       const event = await runBuiltWorker({
         method: 'generateRuntimeArtifacts',
-        protocolVersion: 2,
+        protocolVersion: 3,
         root,
         definitions: [invalidDefinition('zeta'), invalidDefinition('alpha')],
       })
@@ -156,7 +156,7 @@ describe('project index worker errors', () => {
       const event = await runBuiltWorker(
         {
           method: 'runSetupOperation',
-          protocolVersion: 2,
+          protocolVersion: 3,
           root,
           setupMode: 'apply',
           setupReport: {

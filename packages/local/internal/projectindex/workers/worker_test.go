@@ -99,7 +99,7 @@ func TestWorker_sourceOnlyFallbackAfterOversizedResponse(t *testing.T) {
 	if err := os.WriteFile(script, []byte(`
 		function configArtifact(req, status, diagnostics) {
 			return {
-				protocolVersion: 2,
+				protocolVersion: 3,
 				type: 'artifact:done',
 				transactionId: 'artifact-project-config',
 				artifact: 'projectConfig',
@@ -174,13 +174,13 @@ func TestWorker_inspectProjectConfigFallsBackToSourceOnlyAfterWorkerCrash(t *tes
 		process.stdin.setEncoding('utf8')
 		process.stdin.once('data', (chunk) => {
 			const req = JSON.parse(chunk.trim())
-			if (req.method !== 'inspectProjectConfig' || req.protocolVersion !== 2) {
+			if (req.method !== 'inspectProjectConfig' || req.protocolVersion !== 3) {
 				process.stdout.write(JSON.stringify({
-					protocolVersion: 2,
+					protocolVersion: 3,
 					type: 'artifact:error',
 					transactionId: 'artifact-error',
 					artifact: 'projectConfig',
-					error: { message: 'expected V2 inspectProjectConfig request' }
+					error: { message: 'expected V3 inspectProjectConfig request' }
 				}) + '\n')
 				return
 			}
@@ -189,7 +189,7 @@ func TestWorker_inspectProjectConfigFallsBackToSourceOnlyAfterWorkerCrash(t *tes
 				return
 			}
 			process.stdout.write(JSON.stringify({
-				protocolVersion: 2,
+				protocolVersion: 3,
 				type: 'artifact:done',
 				transactionId: 'artifact-project-config',
 				artifact: 'projectConfig',

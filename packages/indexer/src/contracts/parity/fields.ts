@@ -3,7 +3,7 @@ import type { IndexPatchFacts } from '../../indexer/patches'
 /**
  * `IndexPatchFacts` fields that are part of the native parity contract.
  *
- * Keep this list in lockstep with `IndexPatchFacts` and the V2 worker fact
+ * Keep this list in lockstep with `IndexPatchFacts` and the V3 worker fact
  * kinds. A missing field here means the beta gate is not comparing that surface.
  */
 export const indexPatchFactFields = [
@@ -34,4 +34,3 @@ export const parityFieldCoverage = {
   indexPatchFacts: indexPatchFactFields,
   staticExtraction: staticExtractionFields,
 } as const
-

@@ -1,40 +1,28 @@
 {
   "artifactDone": {
-    "protocolVersion": 2,
+    "protocolVersion": 3,
     "type": "artifact:done",
-    "transactionId": "artifact-static-syntax-plan",
-    "artifact": "projectStaticSyntaxPlan",
+    "transactionId": "artifact-static-index-config",
+    "artifact": "projectStaticIndexConfig",
     "root": "/repo",
     "payload": {
       "root": "/repo",
-      "files": [
-        {
-          "root": "/repo",
-          "file": "/repo/src/contract.ts",
-          "sourceHash": "sha256:contract",
-          "source": "export {}"
-        }
-      ],
-      "callNames": [
-        "prompt"
-      ],
-      "constructorNames": [
-        "Agent"
-      ]
+      "extensions": [],
+      "diagnostics": []
     }
   },
   "artifactError": {
-    "protocolVersion": 2,
+    "protocolVersion": 3,
     "type": "artifact:error",
-    "transactionId": "artifact-static-syntax-plan-error",
-    "artifact": "projectStaticSyntaxPlan",
+    "transactionId": "artifact-static-index-config-error",
+    "artifact": "projectStaticIndexConfig",
     "error": {
-      "message": "static syntax plan failed",
-      "code": "E_STATIC_SYNTAX_PLAN"
+      "message": "static index config failed",
+      "code": "E_STATIC_INDEX_CONFIG"
     }
   },
   "phaseError": {
-    "protocolVersion": 2,
+    "protocolVersion": 3,
     "type": "phase:error",
     "transactionId": "tx-static-index-error",
     "phase": "ast",
@@ -46,7 +34,7 @@
   },
   "outOfOrderEvents": [
     {
-      "protocolVersion": 2,
+      "protocolVersion": 3,
       "type": "phase:start",
       "transactionId": "tx-out-of-order",
       "phase": "ast",
@@ -54,7 +42,7 @@
       "startedAt": "1970-01-01T00:00:00.000Z"
     },
     {
-      "protocolVersion": 2,
+      "protocolVersion": 3,
       "type": "fact:batch",
       "transactionId": "tx-out-of-order",
       "sequence": 1,

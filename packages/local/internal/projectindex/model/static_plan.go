@@ -27,16 +27,13 @@ type ProjectStaticSyntaxPlan struct {
 	ConstructorInterests     []StaticConstructorInterest `json:"constructorInterests,omitempty"`
 	PruneNativeFactCallNames []string                    `json:"pruneNativeFactCallNames,omitempty"`
 	SyntaxFrontend           SyntaxFrontend              `json:"syntaxFrontend"`
-	// StaticSyntaxEnabled preserves the historical nativeAstEnabled JSON field
-	// while normalizing Go code to Static Syntax vocabulary.
-	StaticSyntaxEnabled bool              `json:"nativeAstEnabled,omitempty"`
-	StaticInterests     json.RawMessage   `json:"staticInterests,omitempty"`
-	RelationSpecs       json.RawMessage   `json:"relationSpecs,omitempty"`
-	RuleDescriptors     json.RawMessage   `json:"ruleDescriptors,omitempty"`
-	LintConfig          json.RawMessage   `json:"lintConfig,omitempty"`
-	CacheInputs         []json.RawMessage `json:"cacheInputs,omitempty"`
-	SourceGraph         json.RawMessage   `json:"sourceGraph,omitempty"`
-	StaticHost          json.RawMessage   `json:"staticHost,omitempty"`
+	StaticInterests          json.RawMessage             `json:"staticInterests,omitempty"`
+	RelationSpecs            json.RawMessage             `json:"relationSpecs,omitempty"`
+	RuleDescriptors          json.RawMessage             `json:"ruleDescriptors,omitempty"`
+	LintConfig               json.RawMessage             `json:"lintConfig,omitempty"`
+	CacheInputs              []json.RawMessage           `json:"cacheInputs,omitempty"`
+	SourceGraph              json.RawMessage             `json:"sourceGraph,omitempty"`
+	StaticHost               json.RawMessage             `json:"staticHost,omitempty"`
 }
 
 // StaticCallInterest is an import-aware native syntax parser call filter.

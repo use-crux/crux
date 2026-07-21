@@ -191,16 +191,10 @@ of falling back to the JavaScript TypeScript semantic backend. Both semantic bac
 Project Index facts, relations, diagnostics, lint findings, and source refs through the same read
 model.
 
-`experimental.indexer.nativeAst: true` or `{ frontend: 'oxc' }` is a separate static AST/source
-frontend experiment. It can accelerate the first source pass without selecting the native semantic
-backend.
-
-Native AST beta runs use Rust/Oxc for first-party Static Index work, but the Project Index contract
-does not change. TypeScript extension extractors and rules remain compatible through the trusted
-Node host, and their output must finalize into the same definitions, relations, diagnostics, lint
-findings, rule descriptors, sources, and source graph rows as the TypeScript Static Index baseline.
-Clients should treat fallback or Node-start diagnostics as indexing status: they explain why a beta
-run used TypeScript extension compatibility or degraded setup, not a different Project Index schema.
+Static Index always uses the Go-orchestrated Rust/Oxc compiler and is independent of semantic backend
+selection. TypeScript extension extractors remain compatible through the trusted Node host, and their
+output finalizes into the same definitions, relations, diagnostics, lint findings, rule descriptors,
+sources, and source graph rows.
 
 ## Full-Fidelity Definitions
 

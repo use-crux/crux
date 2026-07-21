@@ -17,9 +17,6 @@ const (
 	// ReasonIncomplete reports a finalize stream with an incomplete patch decision.
 	ReasonIncomplete = run.ReasonIncomplete
 
-	// StatusDisabled means planning completed, but Static Index execution was
-	// disabled by project config.
-	StatusDisabled Status = "disabled"
 	// StatusMissingCompiler means planning requested Static Index execution, but
 	// no compiler implementation was configured.
 	StatusMissingCompiler Status = "missing-compiler"

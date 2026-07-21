@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Native AST parity gate for CI and release checks.
+ * Static Index parity gate for CI and release checks.
  *
  * The gate builds the Rust/Oxc worker first and then passes its absolute path
  * to every parity command. It also builds and embeds the Node worker bundle
@@ -142,6 +142,6 @@ function run(item) {
 function assertWorkerExists() {
   if (existsSync(workerPath)) return;
   throw new Error(
-    `Native AST parity gate expected Rust worker at ${workerPath}`,
+    `Static Index parity gate expected Rust worker at ${workerPath}`,
   );
 }

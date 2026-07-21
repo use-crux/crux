@@ -21,7 +21,6 @@ import type { ProjectModelResolutionMode } from "@use-crux/core/project-index";
 import type { IndexDiagnostic } from "@use-crux/core/project-index";
 import { loadProjectConfig } from "./config";
 import { withUserImportSession } from "./imports";
-import { staticIndexSyntaxSelectionFromConfig } from "./static-index/config";
 import { resolveProjectModel } from "./project-model";
 import type {
   InspectProjectConfigOptions,
@@ -137,7 +136,6 @@ async function inspectProjectConfigInSession(
     experimental: {
       indexer: {
         native: experimentalIndexerNativeSetting(experimental),
-        nativeAst: experimentalIndexerNativeAstSetting(experimental),
         nativeEngine: experimentalIndexerNativeEngineSetting(experimental),
         tsserverPath: experimentalIndexerNativePathSetting(experimental),
       },
@@ -235,16 +233,6 @@ function experimentalIndexerNativeSetting(
 ): ProjectConfigSetting {
   const native = experimental?.indexer?.native;
   return native == null ? fromDefault(false) : explicit(native !== false);
-}
-
-function experimentalIndexerNativeAstSetting(
-  experimental: CruxConfig["experimental"],
-): ProjectConfigSetting {
-  if (experimental?.indexer?.nativeAst === false) return explicit(false);
-  const selection = staticIndexSyntaxSelectionFromConfig(experimental);
-  return selection.enabled
-    ? explicit(selection.frontend ?? "oxc")
-    : fromDefault(false);
 }
 
 function experimentalIndexerNativeEngineSetting(

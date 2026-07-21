@@ -11,15 +11,12 @@
 
 export {
   inspectProjectStaticIndexConfig,
-  inspectProjectStaticSyntaxPlan,
   staticDefinitionFiles,
 } from './static-index'
 export type {
   InspectProjectStaticIndexConfigOptions,
-  InspectProjectStaticSyntaxPlanOptions,
   ProjectStaticIndexConfig,
   ProjectStaticIndexExtensionReference,
-  ProjectStaticSyntaxPlan,
 } from './static-index'
 export {
   createNativeSemanticBackend,

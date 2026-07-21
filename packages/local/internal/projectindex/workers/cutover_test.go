@@ -28,7 +28,7 @@ func TestWorkerStaticIndexCutoverUsesFinalizePatchEvents(t *testing.T) {
 	if err := os.WriteFile(sourceFile, []byte("export const writer = prompt({ id: 'static-index-cutover' })"), 0o600); err != nil {
 		t.Fatalf("write source: %v", err)
 	}
-	writeStaticIndexEnabledConfig(t, root)
+	writeStaticIndexConfig(t, root)
 
 	dir := t.TempDir()
 	script := filepath.Join(dir, "static-index-cutover-indexer.mjs")
@@ -39,7 +39,7 @@ func TestWorkerStaticIndexCutoverUsesFinalizePatchEvents(t *testing.T) {
 			const req = JSON.parse(line)
 			if (req.method === 'inspectProjectStaticIndexConfig') {
 				process.stdout.write(JSON.stringify({
-					protocolVersion: 2,
+					protocolVersion: 3,
 					type: 'artifact:done',
 					transactionId: 'artifact-static-index-config',
 					artifact: 'projectStaticIndexConfig',
@@ -47,8 +47,6 @@ func TestWorkerStaticIndexCutoverUsesFinalizePatchEvents(t *testing.T) {
 					payload: {
 						root: req.root,
 						configFile: req.root + '/crux.config.ts',
-						nativeAstEnabled: true,
-						nativeAstFrontend: 'oxc',
 						extensions: [],
 						diagnostics: []
 					}
@@ -57,7 +55,7 @@ func TestWorkerStaticIndexCutoverUsesFinalizePatchEvents(t *testing.T) {
 			}
 			if (req.method === 'checkStaticRules') {
 				process.stdout.write(JSON.stringify({
-					protocolVersion: 2,
+					protocolVersion: 3,
 					type: 'artifact:done',
 					transactionId: 'artifact-rule-check',
 					artifact: 'staticRuleCheck',
@@ -105,8 +103,8 @@ func TestWorkerStaticIndexCutoverUsesFinalizePatchEvents(t *testing.T) {
 	}
 
 	timing := worker.LastAstTiming()
-	if containsTimingReason(timing.NodeReasons, projectIndexNodeReasonStaticIndexConfig) {
-		t.Fatalf("timing.NodeReasons = %v, want no %q for simple native config", timing.NodeReasons, projectIndexNodeReasonStaticIndexConfig)
+	if !containsTimingReason(timing.NodeReasons, projectIndexNodeReasonStaticIndexConfig) {
+		t.Fatalf("timing.NodeReasons = %v, want %q for executable config inspection", timing.NodeReasons, projectIndexNodeReasonStaticIndexConfig)
 	}
 	if containsTimingReason(timing.NodeReasons, projectIndexNodeReasonStaticPlanInspection) {
 		t.Fatalf("timing.NodeReasons = %v, want no %q", timing.NodeReasons, projectIndexNodeReasonStaticPlanInspection)
@@ -114,8 +112,8 @@ func TestWorkerStaticIndexCutoverUsesFinalizePatchEvents(t *testing.T) {
 	if !reflect.DeepEqual(timing.NativeOnlyReasons, timing.NodeReasons) {
 		t.Fatalf("timing.NativeOnlyReasons = %v, want NodeReasons %v", timing.NativeOnlyReasons, timing.NodeReasons)
 	}
-	if timing.NodeStarted || !timing.NativeOnlyEligible {
-		t.Fatalf("timing = %+v, want node-free native-only-eligible indexing", timing)
+	if !timing.NodeStarted || timing.NativeOnlyEligible || !timing.UsedStaticIndex {
+		t.Fatalf("timing = %+v, want config-hosted Static Index execution", timing)
 	}
 }
 

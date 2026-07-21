@@ -25,7 +25,7 @@ func TestWorkerStaticIndexReplaysWarmStaticCacheFacts(t *testing.T) {
 		"import { support } from './support'\nexport const writer = prompt({ id: support })\n",
 	)
 	supportFile := writeStaticIndexPlanCacheFixtureFile(t, root, "src/support.ts", "export const support = 'cached-writer'\n")
-	configFile := writeStaticIndexEnabledConfig(t, root)
+	configFile := writeStaticIndexConfig(t, root)
 
 	cacheKey := "static-cache-key:cached-writer"
 	writeStaticIndexReplayCacheFile(t, root, cacheKey, map[string]any{
@@ -211,7 +211,7 @@ func staticIndexCacheReplayEvents(root, projectName string) ([]json.RawMessage, 
 	tx := "tx-static-index-cache-replay"
 	values := []any{
 		map[string]any{
-			"protocolVersion": 2,
+			"protocolVersion": 3,
 			"type":            "phase:start",
 			"transactionId":   tx,
 			"phase":           "ast",
@@ -219,7 +219,7 @@ func staticIndexCacheReplayEvents(root, projectName string) ([]json.RawMessage, 
 			"startedAt":       "1970-01-01T00:00:00.000Z",
 		},
 		map[string]any{
-			"protocolVersion": 2,
+			"protocolVersion": 3,
 			"type":            "fact:batch",
 			"transactionId":   tx,
 			"sequence":        0,
@@ -244,7 +244,7 @@ func staticIndexCacheReplayEvents(root, projectName string) ([]json.RawMessage, 
 			},
 		},
 		map[string]any{
-			"protocolVersion": 2,
+			"protocolVersion": 3,
 			"type":            "phase:done",
 			"transactionId":   tx,
 			"phase":           "ast",

@@ -12,39 +12,39 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
-describe('project Static Index extension compatibility under nativeAst', () => {
+describe('project Static Index extension compatibility', () => {
   it.each([
     {
       name: 'trust deny',
-      packageName: '@acme/denied-native-ast-extension',
+      packageName: '@acme/denied-static-index-extension',
       packageVersion: '1.0.0',
       requestedVersion: undefined,
       source: 'throw new Error("denied extension package must not be imported")',
-      trust: { allow: [], deny: ['@acme/denied-native-ast-extension'] },
+      trust: { allow: [], deny: ['@acme/denied-static-index-extension'] },
       diagnosticCode: 'index.extension_not_allowed',
     },
     {
       name: 'package version mismatch',
-      packageName: '@acme/old-native-ast-extension',
+      packageName: '@acme/old-static-index-extension',
       packageVersion: '0.5.0',
       requestedVersion: '^1.0.0',
       source: manifestSource({
-        name: '@acme/old-native-ast-extension',
+        name: '@acme/old-static-index-extension',
         crux: '{ indexer: "^0.1.0", projectIndexSchema: 1 }',
       }),
-      trust: { allow: ['@acme/old-native-ast-extension'], deny: [] },
+      trust: { allow: ['@acme/old-static-index-extension'], deny: [] },
       diagnosticCode: 'index.extension_version_mismatch',
     },
     {
       name: 'manifest incompatibility',
-      packageName: '@acme/incompatible-native-ast-extension',
+      packageName: '@acme/incompatible-static-index-extension',
       packageVersion: '1.0.0',
       requestedVersion: '^1.0.0',
       source: manifestSource({
-        name: '@acme/incompatible-native-ast-extension',
+        name: '@acme/incompatible-static-index-extension',
         crux: '{ indexer: "^99.0.0", projectIndexSchema: 1 }',
       }),
-      trust: { allow: ['@acme/incompatible-native-ast-extension'], deny: [] },
+      trust: { allow: ['@acme/incompatible-static-index-extension'], deny: [] },
       diagnosticCode: 'index.extension_incompatible',
     },
   ])('reports $name diagnostics without enabling extension fallback', async (fixture) => {
@@ -54,7 +54,7 @@ describe('project Static Index extension compatibility under nativeAst', () => {
       packageVersion: fixture.packageVersion,
       source: fixture.source,
     })
-    await writeNativeAstExtensionConfig(root, {
+    await writeStaticIndexExtensionConfig(root, {
       packageName: fixture.packageName,
       requestedVersion: fixture.requestedVersion,
       allow: fixture.trust.allow,
@@ -63,7 +63,7 @@ describe('project Static Index extension compatibility under nativeAst', () => {
 
     const result = await loadStaticExtensionHostManifestForProject({
       root,
-      nativeCompilerProtocolVersion: 1,
+      nativeCompilerProtocolVersion: 2,
     })
 
     expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain(fixture.diagnosticCode)
@@ -72,23 +72,23 @@ describe('project Static Index extension compatibility under nativeAst', () => {
     expect(result.manifest.staticHost.nativeOnlyEligible).toBe(true)
   })
 
-  it('keeps compatible TypeScript extensions as nativeAst fallback host work', async () => {
+  it('keeps compatible TypeScript extensions as Static Index host work', async () => {
     const root = await fixtureRoot()
     await linkWorkspacePackage(root, '@use-crux/core', 'packages/core')
-    await writePackage(root, '@acme/native-ast-extension', {
+    await writePackage(root, '@acme/static-index-extension', {
       packageVersion: '1.0.0',
-      source: typeScriptExtractorManifestSource('@acme/native-ast-extension'),
+      source: typeScriptExtractorManifestSource('@acme/static-index-extension'),
     })
-    await writeNativeAstExtensionConfig(root, {
-      packageName: '@acme/native-ast-extension',
+    await writeStaticIndexExtensionConfig(root, {
+      packageName: '@acme/static-index-extension',
       requestedVersion: '^1.0.0',
-      allow: ['@acme/native-ast-extension'],
+      allow: ['@acme/static-index-extension'],
       deny: [],
     })
 
     const result = await loadStaticExtensionHostManifestForProject({
       root,
-      nativeCompilerProtocolVersion: 1,
+      nativeCompilerProtocolVersion: 2,
     })
 
     expect(result.diagnostics.filter((diagnostic) => diagnostic.code.startsWith('index.extension'))).toEqual([])
@@ -97,7 +97,7 @@ describe('project Static Index extension compatibility under nativeAst', () => {
     expect(result.manifest.callNames).toContain('defineWorkflow')
     expect(result.manifest.staticInterests.extractors).toEqual([
       expect.objectContaining({
-        extension: { name: '@acme/native-ast-extension', version: '1' },
+        extension: { name: '@acme/static-index-extension', version: '1' },
         name: 'workflow.define',
       }),
     ])
@@ -138,7 +138,7 @@ async function linkWorkspacePackage(root: string, name: string, workspaceRelativ
   await symlink(join(repoRoot, workspaceRelativePath), target, 'dir')
 }
 
-async function writeNativeAstExtensionConfig(
+async function writeStaticIndexExtensionConfig(
   root: string,
   input: {
     readonly packageName: string
@@ -154,7 +154,6 @@ async function writeNativeAstExtensionConfig(
       "import { config } from '@use-crux/core'",
       '',
       'export default config({',
-      '  experimental: { indexer: { nativeAst: true } },',
       '  indexer: {',
       `    extensions: [{ package: ${JSON.stringify(input.packageName)}${version} }],`,
       `    trust: { mode: 'allowlisted', allow: ${JSON.stringify(input.allow)}, deny: ${JSON.stringify(input.deny)} },`,

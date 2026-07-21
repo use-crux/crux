@@ -55,8 +55,7 @@ func TestProjectStaticIndexSourceInputUsesCachedProfileWithoutRereadingWarmHits(
 	})
 
 	plan, err := planner.Build(root, "warm-cache", projectindex.ProjectStaticIndexConfig{
-		Root:                root,
-		StaticSyntaxEnabled: true,
+		Root: root,
 	})
 	if err != nil {
 		t.Fatalf("planner.Build error = %v", err)

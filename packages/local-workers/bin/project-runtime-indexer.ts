@@ -3,7 +3,7 @@
 /**
  * Stdio wrapper for explicit runtime-rich Project Index evidence.
  *
- * Protocol: one JSON request per line on stdin, V2 NDJSON worker events on
+ * Protocol: one JSON request per line on stdin, V3 NDJSON worker events on
  * stdout. This worker intentionally exposes only runtime-rich indexing so
  * authored source imports remain isolated from source/config workers.
  */
@@ -13,7 +13,7 @@ import { indexProjectRuntimeForHost } from '@use-crux/indexer/host/runtime'
 import { isUserImportTimeoutError } from '@use-crux/indexer/internal/user-import'
 import type { ProjectIndexSnapshot } from '@use-crux/core/project-index'
 import {
-  assertProjectIndexWorkerProtocolV2,
+  assertProjectIndexWorkerProtocolV3,
   writePatchEvents,
   writeProjectIndexPhaseError,
   type ProjectIndexFactProducer,
@@ -82,7 +82,7 @@ async function handleLine(line: string): Promise<void> {
     }
     if (!req.root) throw new Error('indexProjectRuntime requires root')
     if (!req.previousIndex) throw new Error('indexProjectRuntime requires previousIndex')
-    assertProjectIndexWorkerProtocolV2(req.protocolVersion)
+    assertProjectIndexWorkerProtocolV3(req.protocolVersion)
 
     const patch = await indexProjectRuntimeForHost({
       root: req.root,

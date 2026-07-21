@@ -143,7 +143,7 @@ import {
 Crux-owned worker hosts use the published host and contract subpaths:
 
 ```ts
-import { inspectProjectStaticSyntaxPlan } from "@use-crux/indexer/host/static-index";
+import { inspectProjectStaticIndexConfig } from "@use-crux/indexer/host/static-index";
 import { extractStaticEvidenceBatchForProject } from "@use-crux/indexer/host/static-compat";
 import { indexPatchFromWorkerEvents } from "@use-crux/indexer/contracts/worker-events";
 ```

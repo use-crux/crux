@@ -14,7 +14,7 @@ func TestProjectIndexArtifactStreamCollectorBuildsPayload(t *testing.T) {
 	})
 
 	err := collector.Handle(mustMarshalWorkerEvent(t, map[string]any{
-		"protocolVersion": 2,
+		"protocolVersion": 3,
 		"type":            "artifact:done",
 		"transactionId":   "artifact-project-model",
 		"artifact":        "projectModel",
@@ -43,7 +43,7 @@ func TestProjectIndexArtifactStreamCollectorRejectsWrongArtifact(t *testing.T) {
 	})
 
 	err := collector.Handle(mustMarshalWorkerEvent(t, map[string]any{
-		"protocolVersion": 2,
+		"protocolVersion": 3,
 		"type":            "artifact:done",
 		"transactionId":   "artifact-project-model",
 		"artifact":        "projectModel",
@@ -65,7 +65,7 @@ func TestProjectIndexArtifactStreamCollectorAssemblesChunkedPayload(t *testing.T
 	chunks := []string{payload[:20], payload[20:]}
 	events := []map[string]any{
 		{
-			"protocolVersion": 2,
+			"protocolVersion": 3,
 			"type":            "artifact:chunk",
 			"transactionId":   "artifact-project-model",
 			"artifact":        "projectModel",
@@ -75,7 +75,7 @@ func TestProjectIndexArtifactStreamCollectorAssemblesChunkedPayload(t *testing.T
 			"payloadChunk":    base64.StdEncoding.EncodeToString([]byte(chunks[0])),
 		},
 		{
-			"protocolVersion": 2,
+			"protocolVersion": 3,
 			"type":            "artifact:chunk",
 			"transactionId":   "artifact-project-model",
 			"artifact":        "projectModel",
@@ -85,7 +85,7 @@ func TestProjectIndexArtifactStreamCollectorAssemblesChunkedPayload(t *testing.T
 			"payloadChunk":    base64.StdEncoding.EncodeToString([]byte(chunks[1])),
 		},
 		{
-			"protocolVersion": 2,
+			"protocolVersion": 3,
 			"type":            "artifact:done",
 			"transactionId":   "artifact-project-model",
 			"artifact":        "projectModel",

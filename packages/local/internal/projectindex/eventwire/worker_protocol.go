@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-const projectIndexWorkerProtocolVersion = 2
+const projectIndexWorkerProtocolVersion = 3
 
 // ProjectIndexPatchStreamOptions configures host-side validation for one worker
 // stream. The collector applies no patch until the corresponding phase has
@@ -20,7 +20,7 @@ type ProjectIndexPatchStreamOptions struct {
 	AllowRoot        bool
 }
 
-// ProjectIndexPatchStreamCollector validates V2 Project Index worker events and
+// ProjectIndexPatchStreamCollector validates V3 Project Index worker events and
 // reconstructs the existing IndexPatch read-model payload.
 type ProjectIndexPatchStreamCollector struct {
 	options      ProjectIndexPatchStreamOptions

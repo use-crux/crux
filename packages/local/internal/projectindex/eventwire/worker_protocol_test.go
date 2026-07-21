@@ -14,7 +14,7 @@ func TestProjectIndexPatchStreamCollectorBuildsPatchFromOrderedBatches(t *testin
 
 	events := []map[string]any{
 		{
-			"protocolVersion": 2,
+			"protocolVersion": 3,
 			"type":            "phase:start",
 			"transactionId":   "tx-ast",
 			"phase":           "ast",
@@ -22,7 +22,7 @@ func TestProjectIndexPatchStreamCollectorBuildsPatchFromOrderedBatches(t *testin
 			"startedAt":       "2026-06-18T10:00:00.000Z",
 		},
 		{
-			"protocolVersion": 2,
+			"protocolVersion": 3,
 			"type":            "fact:batch",
 			"transactionId":   "tx-ast",
 			"sequence":        0,
@@ -63,7 +63,7 @@ func TestProjectIndexPatchStreamCollectorBuildsPatchFromOrderedBatches(t *testin
 			},
 		},
 		{
-			"protocolVersion": 2,
+			"protocolVersion": 3,
 			"type":            "fact:batch",
 			"transactionId":   "tx-ast",
 			"sequence":        1,
@@ -106,7 +106,7 @@ func TestProjectIndexPatchStreamCollectorBuildsPatchFromOrderedBatches(t *testin
 			},
 		},
 		{
-			"protocolVersion": 2,
+			"protocolVersion": 3,
 			"type":            "phase:done",
 			"transactionId":   "tx-ast",
 			"phase":           "ast",
@@ -171,7 +171,7 @@ func TestProjectIndexPatchStreamCollectorBuildsSemanticSourceProfileFromBatches(
 
 	events := []map[string]any{
 		{
-			"protocolVersion": 2,
+			"protocolVersion": 3,
 			"type":            "phase:start",
 			"transactionId":   "tx-ast",
 			"phase":           "ast",
@@ -179,7 +179,7 @@ func TestProjectIndexPatchStreamCollectorBuildsSemanticSourceProfileFromBatches(
 			"startedAt":       "2026-06-18T10:00:00.000Z",
 		},
 		{
-			"protocolVersion": 2,
+			"protocolVersion": 3,
 			"type":            "sourceProfile:batch",
 			"transactionId":   "tx-ast",
 			"sequence":        0,
@@ -196,7 +196,7 @@ func TestProjectIndexPatchStreamCollectorBuildsSemanticSourceProfileFromBatches(
 			},
 		},
 		{
-			"protocolVersion": 2,
+			"protocolVersion": 3,
 			"type":            "phase:done",
 			"transactionId":   "tx-ast",
 			"phase":           "ast",
@@ -237,7 +237,7 @@ func TestProjectIndexPatchStreamCollectorRejectsSequenceGaps(t *testing.T) {
 	collector := NewProjectIndexPatchStreamCollector(ProjectIndexPatchStreamOptions{Root: "/repo"})
 
 	if err := collector.Handle(mustMarshalWorkerEvent(t, map[string]any{
-		"protocolVersion": 2,
+		"protocolVersion": 3,
 		"type":            "phase:start",
 		"transactionId":   "tx-ast",
 		"phase":           "ast",
@@ -248,7 +248,7 @@ func TestProjectIndexPatchStreamCollectorRejectsSequenceGaps(t *testing.T) {
 	}
 
 	err := collector.Handle(mustMarshalWorkerEvent(t, map[string]any{
-		"protocolVersion": 2,
+		"protocolVersion": 3,
 		"type":            "fact:batch",
 		"transactionId":   "tx-ast",
 		"sequence":        1,
@@ -264,7 +264,7 @@ func TestProjectIndexPatchStreamCollectorRejectsRootMismatch(t *testing.T) {
 	collector := NewProjectIndexPatchStreamCollector(ProjectIndexPatchStreamOptions{Root: "/repo"})
 
 	err := collector.Handle(mustMarshalWorkerEvent(t, map[string]any{
-		"protocolVersion": 2,
+		"protocolVersion": 3,
 		"type":            "phase:start",
 		"transactionId":   "tx-ast",
 		"phase":           "ast",
@@ -285,7 +285,7 @@ func TestProjectIndexPatchStreamCollectorRejectsPatchBudgetViolations(t *testing
 
 	events := []map[string]any{
 		{
-			"protocolVersion": 2,
+			"protocolVersion": 3,
 			"type":            "phase:start",
 			"transactionId":   "tx-ast",
 			"phase":           "ast",
@@ -293,7 +293,7 @@ func TestProjectIndexPatchStreamCollectorRejectsPatchBudgetViolations(t *testing
 			"startedAt":       "2026-06-18T10:00:00.000Z",
 		},
 		{
-			"protocolVersion": 2,
+			"protocolVersion": 3,
 			"type":            "fact:batch",
 			"transactionId":   "tx-ast",
 			"sequence":        0,
@@ -310,7 +310,7 @@ func TestProjectIndexPatchStreamCollectorRejectsPatchBudgetViolations(t *testing
 	}
 
 	err := collector.Handle(mustMarshalWorkerEvent(t, map[string]any{
-		"protocolVersion": 2,
+		"protocolVersion": 3,
 		"type":            "phase:done",
 		"transactionId":   "tx-ast",
 		"phase":           "ast",
@@ -337,7 +337,7 @@ func TestProjectIndexPatchStreamCollectorRejectsProducerMismatch(t *testing.T) {
 	})
 
 	if err := collector.Handle(mustMarshalWorkerEvent(t, map[string]any{
-		"protocolVersion": 2,
+		"protocolVersion": 3,
 		"type":            "phase:start",
 		"transactionId":   "tx-ast",
 		"phase":           "ast",
@@ -348,7 +348,7 @@ func TestProjectIndexPatchStreamCollectorRejectsProducerMismatch(t *testing.T) {
 	}
 
 	err := collector.Handle(mustMarshalWorkerEvent(t, map[string]any{
-		"protocolVersion": 2,
+		"protocolVersion": 3,
 		"type":            "fact:batch",
 		"transactionId":   "tx-ast",
 		"sequence":        0,
@@ -363,7 +363,7 @@ func TestProjectIndexPatchStreamCollectorRejectsProducerMismatch(t *testing.T) {
 func TestProjectIndexPatchStreamCollectorPreservesRuntimeObservedEnvelopeMetadata(t *testing.T) {
 	collector := NewProjectIndexPatchStreamCollector(ProjectIndexPatchStreamOptions{Root: "/repo"})
 	if err := collector.Handle(mustMarshalWorkerEvent(t, map[string]any{
-		"protocolVersion": 2,
+		"protocolVersion": 3,
 		"type":            "phase:start",
 		"transactionId":   "tx-runtime",
 		"phase":           "runtime",
@@ -373,7 +373,7 @@ func TestProjectIndexPatchStreamCollectorPreservesRuntimeObservedEnvelopeMetadat
 		t.Fatalf("Handle phase:start error = %v", err)
 	}
 	if err := collector.Handle(mustMarshalWorkerEvent(t, map[string]any{
-		"protocolVersion": 2,
+		"protocolVersion": 3,
 		"type":            "fact:batch",
 		"transactionId":   "tx-runtime",
 		"sequence":        0,
@@ -398,7 +398,7 @@ func TestProjectIndexPatchStreamCollectorPreservesRuntimeObservedEnvelopeMetadat
 		t.Fatalf("Handle fact:batch error = %v", err)
 	}
 	if err := collector.Handle(mustMarshalWorkerEvent(t, map[string]any{
-		"protocolVersion": 2,
+		"protocolVersion": 3,
 		"type":            "phase:done",
 		"transactionId":   "tx-runtime",
 		"phase":           "runtime",
@@ -463,7 +463,7 @@ func TestProjectIndexPatchStreamCollectorRejectsInvalidExtractorProvenance(t *te
 		t.Run(test.name, func(t *testing.T) {
 			collector := NewProjectIndexPatchStreamCollector(ProjectIndexPatchStreamOptions{Root: "/repo"})
 			if err := collector.Handle(mustMarshalWorkerEvent(t, map[string]any{
-				"protocolVersion": 2, "type": "phase:start", "transactionId": "tx-ast",
+				"protocolVersion": 3, "type": "phase:start", "transactionId": "tx-ast",
 				"phase": "ast", "root": "/repo", "startedAt": "2026-06-18T10:00:00.000Z",
 			})); err != nil {
 				t.Fatal(err)
@@ -471,7 +471,7 @@ func TestProjectIndexPatchStreamCollectorRejectsInvalidExtractorProvenance(t *te
 			fact := testDefinitionFact("prompt:writer")
 			fact["provenance"].(map[string]any)["extractors"] = test.extractors
 			err := collector.Handle(mustMarshalWorkerEvent(t, map[string]any{
-				"protocolVersion": 2, "type": "fact:batch", "transactionId": "tx-ast",
+				"protocolVersion": 3, "type": "fact:batch", "transactionId": "tx-ast",
 				"sequence": 0, "facts": []map[string]any{fact},
 			}))
 			if err == nil || !strings.Contains(err.Error(), "extractor") {

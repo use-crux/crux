@@ -106,8 +106,8 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
-      - name: Indexer integration
-        run: pnpm test:native-ast-parity
+      - name: Static Index parity gate
+        run: pnpm test:static-index-parity
 
       - name: Go observability conformance
         working-directory: packages/local

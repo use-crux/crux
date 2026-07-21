@@ -161,18 +161,18 @@ describe("project index worker protocol", () => {
     const fixture = readStaticIndexRuntimeSharedFixture("worker-event-cases");
 
     expect(fixture.artifactDone).toMatchObject({
-      protocolVersion: 2,
+      protocolVersion: 3,
       type: "artifact:done",
-      artifact: "projectStaticSyntaxPlan",
+      artifact: "projectStaticIndexConfig",
       root: "/repo",
     });
     expect(fixture.artifactError).toMatchObject({
-      protocolVersion: 2,
+      protocolVersion: 3,
       type: "artifact:error",
-      error: { message: "static syntax plan failed" },
+      error: { message: "static index config failed" },
     });
     expect(fixture.phaseError).toMatchObject({
-      protocolVersion: 2,
+      protocolVersion: 3,
       type: "phase:error",
       phase: "ast",
       error: { code: "E_STATIC_INDEX" },
@@ -274,7 +274,7 @@ describe("project index worker protocol", () => {
     expect(indexPatchFromWorkerEvents(events)).toEqual(patch);
   });
 
-  it("streams JSON artifacts through typed V2 artifact events", () => {
+  it("streams JSON artifacts through typed V3 artifact events", () => {
     const projectModel = {
       root: {
         value: "/repo",
@@ -309,7 +309,7 @@ describe("project index worker protocol", () => {
     );
 
     expect(event).toMatchObject({
-      protocolVersion: 2,
+      protocolVersion: 3,
       type: "artifact:done",
       artifact: "projectModel",
       root: "/repo",

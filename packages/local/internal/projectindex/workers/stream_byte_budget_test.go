@@ -27,7 +27,7 @@ func TestWorkerAcceptsPatchStreamsOverSingleLineByteLimit(t *testing.T) {
 			const req = JSON.parse(line)
 			const tx = 'tx-large-stream'
 			process.stdout.write(JSON.stringify({
-				protocolVersion: 2,
+				protocolVersion: 3,
 				type: 'phase:start',
 				transactionId: tx,
 				phase: 'ast',
@@ -37,7 +37,7 @@ func TestWorkerAcceptsPatchStreamsOverSingleLineByteLimit(t *testing.T) {
 
 			for (let index = 0; index < 10; index += 1) {
 				process.stdout.write(JSON.stringify({
-					protocolVersion: 2,
+					protocolVersion: 3,
 					type: 'fact:batch',
 					transactionId: tx,
 					sequence: index,
@@ -61,7 +61,7 @@ func TestWorkerAcceptsPatchStreamsOverSingleLineByteLimit(t *testing.T) {
 			}
 
 				process.stdout.write(JSON.stringify({
-					protocolVersion: 2,
+					protocolVersion: 3,
 					type: 'phase:done',
 					transactionId: tx,
 					phase: 'ast',

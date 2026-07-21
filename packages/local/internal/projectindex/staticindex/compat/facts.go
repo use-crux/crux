@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/protocol"
 )
 
 type evidenceBatchResult struct {
@@ -33,6 +34,13 @@ func DecodeManifest(raw json.RawMessage, root string) (projectindex.StaticExtens
 	}
 	if result.Root != "" && result.Root != root {
 		return projectindex.StaticExtensionHostManifestResult{}, fmt.Errorf("static extension host manifest root = %s, want %s", result.Root, root)
+	}
+	if result.NativeCompilerProtocolVersion != protocol.Version {
+		return projectindex.StaticExtensionHostManifestResult{}, fmt.Errorf(
+			"static extension host manifest compiler protocol version = %d, want %d",
+			result.NativeCompilerProtocolVersion,
+			protocol.Version,
+		)
 	}
 	return result, nil
 }

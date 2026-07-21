@@ -30,7 +30,7 @@ type IndexFactProvenance struct {
 	Extractors []IndexFactExtractorProvenance `json:"extractors,omitempty"`
 }
 
-// IndexFactEnvelope is the durable Go representation of a V2 worker fact.
+// IndexFactEnvelope is the durable Go representation of a V3 worker fact.
 //
 // The envelope intentionally stores the JSON payload beside provenance and
 // phase metadata. Projection can decode the fact into the compatibility read

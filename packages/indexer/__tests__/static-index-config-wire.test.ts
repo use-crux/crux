@@ -12,7 +12,7 @@ afterEach(async () => {
 })
 
 describe('Static Index config wire artifact', () => {
-  it('emits both static syntax and nativeAst config keys for Go compatibility', async () => {
+  it('emits only executable config policy needed by the Go planner', async () => {
     const root = await fixtureRoot()
     await writeFile(
       join(root, 'crux.config.ts'),
@@ -20,19 +20,15 @@ describe('Static Index config wire artifact', () => {
         "import { config } from '@use-crux/core'",
         '',
         'export default config({',
-        "  experimental: { indexer: { nativeAst: { frontend: 'oxc' } } },",
+        "  indexer: { trust: { mode: 'first-party-only' } },",
         '})',
       ].join('\n'),
     )
 
-    await expect(inspectProjectStaticIndexConfig({ root })).resolves.toMatchObject({
-      nativeAstEnabled: true,
-      nativeAstConfigured: true,
-      nativeAstFrontend: 'oxc',
-      staticSyntaxEnabled: true,
-      staticSyntaxConfigured: true,
-      staticSyntaxFrontend: 'oxc',
-    })
+    const result = await inspectProjectStaticIndexConfig({ root })
+    expect(result).toMatchObject({ root, extensions: [], diagnostics: [] })
+    expect(result).not.toHaveProperty('nativeAstEnabled')
+    expect(result).not.toHaveProperty('staticSyntaxEnabled')
   }, 30_000)
 })
 

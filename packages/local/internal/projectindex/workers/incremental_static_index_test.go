@@ -26,7 +26,7 @@ func TestWorkerIndexProjectIncrementalUsesStaticIndexCompiler(t *testing.T) {
 
 	script := writeShellScript(t, "incremental-node-should-not-run.sh", `#!/bin/sh
 while IFS= read -r line; do
-  printf '{"protocolVersion":2,"type":"phase:error","transactionId":"node","phase":"ast","error":{"message":"node incremental worker should not run"}}\n'
+  printf '{"protocolVersion":3,"type":"phase:error","transactionId":"node","phase":"ast","error":{"message":"node incremental worker should not run"}}\n'
 done
 `)
 	compiler := &incrementalStaticCompiler{root: root, sourceFile: sourceFile}
@@ -181,7 +181,7 @@ func incrementalStaticPatchEvents(root string, sourceFile string, invalidates js
 	}
 	patchJSON, _ := json.Marshal(patch)
 	return []json.RawMessage{
-		json.RawMessage(fmt.Sprintf(`{"protocolVersion":2,"type":"phase:start","transactionId":"incremental-static","phase":"ast","root":%q,"startedAt":"1970-01-01T00:00:00.000Z"}`, root)),
-		json.RawMessage(fmt.Sprintf(`{"protocolVersion":2,"type":"phase:done","transactionId":"incremental-static","phase":"ast","patch":%s,"summary":{"factCount":0,"decision":{"staticIndexComplete":true}}}`, patchJSON)),
+		json.RawMessage(fmt.Sprintf(`{"protocolVersion":3,"type":"phase:start","transactionId":"incremental-static","phase":"ast","root":%q,"startedAt":"1970-01-01T00:00:00.000Z"}`, root)),
+		json.RawMessage(fmt.Sprintf(`{"protocolVersion":3,"type":"phase:done","transactionId":"incremental-static","phase":"ast","patch":%s,"summary":{"factCount":0,"decision":{"staticIndexComplete":true}}}`, patchJSON)),
 	}
 }

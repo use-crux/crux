@@ -1,7 +1,7 @@
 import { createProjectIndexDeploymentManifest } from "@use-crux/indexer/host";
 import type { ProjectIndexWorkerRequest } from "../lib/project-indexer-request";
 import {
-  assertProjectIndexWorkerProtocolV2,
+  assertProjectIndexWorkerProtocolV3,
   writeArtifactEvent,
   type ProjectIndexWorkerWriter,
 } from "./project-indexer-protocol";
@@ -25,7 +25,7 @@ export async function writeDeploymentManifestArtifact(
   ) {
     throw new Error("createDeploymentManifest requires a valid semanticStatus");
   }
-  assertProjectIndexWorkerProtocolV2(req.protocolVersion);
+  assertProjectIndexWorkerProtocolV3(req.protocolVersion);
   const result = createProjectIndexDeploymentManifest({
     projectId: req.projectId,
     projectRoot: req.root,

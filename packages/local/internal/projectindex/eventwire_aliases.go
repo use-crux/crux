@@ -12,7 +12,6 @@ const (
 	ProjectIndexArtifactProjectModel                 = eventwire.ProjectIndexArtifactProjectModel
 	ProjectIndexArtifactProjectConfig                = eventwire.ProjectIndexArtifactProjectConfig
 	ProjectIndexArtifactStaticIndexConfig            = eventwire.ProjectIndexArtifactStaticIndexConfig
-	ProjectIndexArtifactStaticSyntaxPlan             = eventwire.ProjectIndexArtifactStaticSyntaxPlan
 	ProjectIndexArtifactStaticExtensionHostManifest  = eventwire.ProjectIndexArtifactStaticExtensionHostManifest
 	ProjectIndexArtifactStaticExtensionEvidenceBatch = eventwire.ProjectIndexArtifactStaticExtensionEvidenceBatch
 	ProjectIndexArtifactStaticRuleCheck              = eventwire.ProjectIndexArtifactStaticRuleCheck

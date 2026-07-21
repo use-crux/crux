@@ -23,9 +23,9 @@ func TestWorker_semanticPatchUsesDedicatedStreamProtocol(t *testing.T) {
 		process.stdin.setEncoding('utf8')
 		process.stdin.once('data', (chunk) => {
 			const req = JSON.parse(chunk.trim())
-			if (req.method !== 'indexProjectSemantic' || req.protocolVersion !== 2 || req.cacheDisabled !== true) {
+			if (req.method !== 'indexProjectSemantic' || req.protocolVersion !== 3 || req.cacheDisabled !== true) {
 				process.stdout.write(JSON.stringify({
-					protocolVersion: 2,
+					protocolVersion: 3,
 					type: 'phase:error',
 					transactionId: 'tx-error',
 					phase: 'semantic',
@@ -35,7 +35,7 @@ func TestWorker_semanticPatchUsesDedicatedStreamProtocol(t *testing.T) {
 			}
 			const events = [
 				{
-					protocolVersion: 2,
+					protocolVersion: 3,
 					type: 'phase:start',
 					transactionId: 'tx-semantic',
 					phase: 'semantic',
@@ -43,7 +43,7 @@ func TestWorker_semanticPatchUsesDedicatedStreamProtocol(t *testing.T) {
 					startedAt: new Date(0).toISOString()
 				},
 				{
-					protocolVersion: 2,
+					protocolVersion: 3,
 					type: 'fact:batch',
 					transactionId: 'tx-semantic',
 					sequence: 0,
@@ -60,7 +60,7 @@ func TestWorker_semanticPatchUsesDedicatedStreamProtocol(t *testing.T) {
 					}]
 				},
 				{
-					protocolVersion: 2,
+					protocolVersion: 3,
 					type: 'phase:done',
 					transactionId: 'tx-semantic',
 					phase: 'semantic',
@@ -123,7 +123,7 @@ func TestWorker_nativeBackendUsesSemanticWorker(t *testing.T) {
 				if (req.method !== 'indexProjectSemantic') throw new Error('unexpected method ' + req.method)
 				const events = [
 					{
-						protocolVersion: 2,
+						protocolVersion: 3,
 						type: 'phase:start',
 						transactionId: 'tx-semantic',
 						phase: 'semantic',
@@ -131,7 +131,7 @@ func TestWorker_nativeBackendUsesSemanticWorker(t *testing.T) {
 						startedAt: new Date(0).toISOString()
 					},
 					{
-						protocolVersion: 2,
+						protocolVersion: 3,
 						type: 'fact:batch',
 						transactionId: 'tx-semantic',
 						sequence: 0,
@@ -148,7 +148,7 @@ func TestWorker_nativeBackendUsesSemanticWorker(t *testing.T) {
 						}]
 					},
 					{
-						protocolVersion: 2,
+						protocolVersion: 3,
 						type: 'phase:done',
 						transactionId: 'tx-semantic',
 						phase: 'semantic',
@@ -220,7 +220,7 @@ func TestWorker_reusesProcessAcrossSemanticRequests(t *testing.T) {
 			const tx = 'tx-semantic-' + calls
 			if (!Array.isArray(req.files) || req.files[0] !== 'src/a.ts') {
 				process.stdout.write(JSON.stringify({
-					protocolVersion: 2,
+					protocolVersion: 3,
 					type: 'phase:error',
 					transactionId: tx,
 					phase: 'semantic',
@@ -230,7 +230,7 @@ func TestWorker_reusesProcessAcrossSemanticRequests(t *testing.T) {
 			}
 			const events = [
 				{
-					protocolVersion: 2,
+					protocolVersion: 3,
 					type: 'phase:start',
 					transactionId: tx,
 					phase: 'semantic',
@@ -238,7 +238,7 @@ func TestWorker_reusesProcessAcrossSemanticRequests(t *testing.T) {
 					startedAt: new Date(0).toISOString()
 				},
 				{
-					protocolVersion: 2,
+					protocolVersion: 3,
 					type: 'fact:batch',
 					transactionId: tx,
 					sequence: 0,
@@ -255,7 +255,7 @@ func TestWorker_reusesProcessAcrossSemanticRequests(t *testing.T) {
 					}]
 				},
 				{
-					protocolVersion: 2,
+					protocolVersion: 3,
 					type: 'phase:done',
 					transactionId: tx,
 					phase: 'semantic',
@@ -372,7 +372,7 @@ func TestWorker_shardsSemanticRequestsAcrossWorkerPool(t *testing.T) {
 			const tx = 'tx-' + name
 			const events = [
 				{
-					protocolVersion: 2,
+					protocolVersion: 3,
 					type: 'phase:start',
 					transactionId: tx,
 					phase: 'semantic',
@@ -380,7 +380,7 @@ func TestWorker_shardsSemanticRequestsAcrossWorkerPool(t *testing.T) {
 					startedAt: new Date(0).toISOString()
 				},
 				{
-					protocolVersion: 2,
+					protocolVersion: 3,
 					type: 'fact:batch',
 					transactionId: tx,
 					sequence: 0,
@@ -397,7 +397,7 @@ func TestWorker_shardsSemanticRequestsAcrossWorkerPool(t *testing.T) {
 					}]
 				},
 				{
-					protocolVersion: 2,
+					protocolVersion: 3,
 					type: 'phase:done',
 					transactionId: tx,
 					phase: 'semantic',

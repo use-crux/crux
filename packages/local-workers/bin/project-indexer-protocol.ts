@@ -29,7 +29,7 @@ export type ProjectIndexPatchMethod = 'indexProjectSemantic' | 'indexProjectRunt
 /** Async JSON-line writer used by the worker protocol helpers. */
 export type ProjectIndexWorkerWriter = (value: unknown) => Promise<void>
 
-/** Error context used to report request failures over the V2 stream. */
+/** Error context used to report request failures over the V3 stream. */
 export type ProjectIndexWorkerErrorContext =
   | { kind: 'phase'; method: string; phase?: IndexPatch['phase'] }
   | { kind: 'artifact'; method: string; artifact?: ProjectIndexArtifactKind }
@@ -45,7 +45,7 @@ export interface ProjectIndexPatchEventOptions {
   readonly timings?: readonly ProjectIndexPhaseTiming[]
 }
 
-/** Writes a complete V2 event sequence for one index patch. */
+/** Writes a complete V3 event sequence for one index patch. */
 export async function writePatchEvents(
   write: ProjectIndexWorkerWriter,
   method: string,
@@ -75,7 +75,7 @@ function withPatchEventTimings(
   }
 }
 
-/** Writes one typed JSON artifact through the V2 worker protocol. */
+/** Writes one typed JSON artifact through the V3 worker protocol. */
 export async function writeArtifactEvent<TKind extends ProjectIndexArtifactKind>(
   write: ProjectIndexWorkerWriter,
   artifact: TKind,
@@ -90,7 +90,7 @@ export async function writeArtifactEvent<TKind extends ProjectIndexArtifactKind>
   }
 }
 
-/** Writes a phase failure as a V2 worker event. */
+/** Writes a phase failure as a V3 worker event. */
 export async function writeProjectIndexPhaseError(
   write: ProjectIndexWorkerWriter,
   method: string,
@@ -113,7 +113,7 @@ export async function writeProjectIndexPhaseError(
   await write(event)
 }
 
-/** Writes an artifact failure as a V2 worker event. */
+/** Writes an artifact failure as a V3 worker event. */
 export async function writeProjectIndexArtifactError(
   write: ProjectIndexWorkerWriter,
   method: string,
@@ -138,7 +138,7 @@ export async function writeProjectIndexArtifactError(
   await write(event)
 }
 
-/** Returns the V2 error event context for a worker request method. */
+/** Returns the V3 error event context for a worker request method. */
 export function errorContextForMethod(method: string | undefined): ProjectIndexWorkerErrorContext | undefined {
   switch (method) {
     case 'resolveProjectModel':
@@ -147,8 +147,6 @@ export function errorContextForMethod(method: string | undefined): ProjectIndexW
       return { kind: 'artifact', method, artifact: 'projectConfig' }
     case 'inspectProjectStaticIndexConfig':
       return { kind: 'artifact', method, artifact: 'projectStaticIndexConfig' }
-    case 'inspectProjectStaticSyntaxPlan':
-      return { kind: 'artifact', method, artifact: 'projectStaticSyntaxPlan' }
     case 'loadStaticExtensionHostManifest':
       return {
         kind: 'artifact',
@@ -182,7 +180,7 @@ export function errorContextForMethod(method: string | undefined): ProjectIndexW
 }
 
 /** Asserts that the request uses the only supported Project Index worker protocol. */
-export function assertProjectIndexWorkerProtocolV2(
+export function assertProjectIndexWorkerProtocolV3(
   value: unknown,
 ): asserts value is typeof PROJECT_INDEX_WORKER_PROTOCOL_VERSION {
   if (value !== PROJECT_INDEX_WORKER_PROTOCOL_VERSION) {

@@ -164,8 +164,7 @@ allowlisted package is trusted code execution, not sandboxing.
 Unstable user-facing options belong under the top-level `experimental` object, following a
 Next.js-style graduation path. For Project Indexer native semantic experiments, use
 `experimental.indexer.native: true | { engine?: 'tsgo'; tsserverPath?: string }`. For Project
-Indexer native static AST experiments, use
-`experimental.indexer.nativeAst: true | { frontend?: 'oxc' }`.
+Indexing, the static source pass always uses the Go-orchestrated Rust/Oxc compiler.
 Do not add stable-looking `indexer.semantic` backend switches, public `unstableApi` config fields,
 or TypeScript-Go-specific public backend flags; `tsgo` is an internal native engine option.
 
@@ -178,10 +177,10 @@ the JavaScript TypeScript backend and the native backend. Do not add semantic
 capabilities to only one backend, and do not expose raw TypeScript or TypeScript-Go AST/checker
 objects to extensions.
 
-Static/source indexing is a separate syntax-frontend concern. It may move to a native Rust/Oxc-style
-frontend before semantic indexing moves further native, but it must keep emitting the same Project
-Index facts, source graph rows, and semantic scope handoff used by the semantic worker. Do not make
-semantic backends depend on a specific static parser implementation.
+Static/source indexing is a separate syntax-frontend concern. The local runtime uses the
+Go-orchestrated Rust/Oxc frontend, which must keep emitting the same Project Index facts, source graph
+rows, and semantic scope handoff used by the semantic worker. Do not make semantic backends depend on
+Rust/Oxc implementation details.
 
 The JavaScript TypeScript backend remains the default correctness baseline. The native backend is
 experimental while its upstream APIs and benchmark confidence mature; supported semantic output must

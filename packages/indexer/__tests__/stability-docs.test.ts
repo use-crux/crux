@@ -66,13 +66,13 @@ describe("stable beta docs", () => {
       readRepoFile(
         "packages/indexer/docs/adr/0011-semantic-evidence-native-backends.md",
       ),
-      readRepoFile("docs/NATIVE_AST_BETA_READINESS.md"),
+      readRepoFile("docs/STATIC_INDEX_READINESS.md"),
       readRepoFile("apps/docs/content/docs/reference/indexer.mdx"),
     ].join("\n");
 
     expect(docs).toContain(STATIC_PARSE_CACHE_EPOCH);
     expect(docs).toContain(SEMANTIC_FACTS_CACHE_EPOCH);
-    expect(docs).toContain("epoch-41");
+    expect(docs).toContain("epoch-43");
     expect(docs).not.toMatch(/static-parse-v(39|45|51|52)\b/);
     expect(docs).not.toMatch(/semantic-facts-v(15|17|20)\b/);
     expect(docs).not.toContain(
@@ -104,7 +104,7 @@ describe("stable beta docs", () => {
     ).toBe(true);
   });
 
-  it("documents semantic native config separately from Static Index syntax config", () => {
+  it("documents semantic native config separately from the required Static Index compiler", () => {
     const configReference = readRepoFile(
       "apps/docs/content/docs/reference/crux-core/config.mdx",
     );
@@ -113,16 +113,15 @@ describe("stable beta docs", () => {
     );
 
     expect(configReference).toContain(
-      "`experimental.indexer.native` and `experimental.indexer.nativeAst` are independent",
+      "`experimental.indexer.native` controls semantic enrichment only",
     );
-    expect(configReference).toContain("`native` controls semantic enrichment");
-    expect(configReference).toContain(
-      "`nativeAst` controls the first static AST/source pass",
+    expect(configReference).toMatch(/Static Index has no\s+frontend selector/);
+    expect(indexerReference).toMatch(
+      /Static Project Index extraction always runs through the Go-orchestrated Rust\/Oxc compiler/,
     );
     expect(indexerReference).toMatch(
-      /This flag does not select the native\s+semantic backend/,
+      /This is independent of semantic backend\s+selection/,
     );
-    expect(indexerReference).toContain("config/static-plan inspection");
   });
 
   it("documents the complete routing Project Index and catalog contract", () => {

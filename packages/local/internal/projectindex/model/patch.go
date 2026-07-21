@@ -26,7 +26,7 @@ type IndexPatch struct {
 	// indexing to semantic indexing. It is not applied to the read model.
 	SemanticSourceProfile *SemanticSourceProfile  `json:"semanticSourceProfile,omitempty"`
 	Invalidates           *IndexPatchInvalidation `json:"invalidates,omitempty"`
-	// FactEnvelopes carries validated V2 worker facts for durable storage.
+	// FactEnvelopes carries validated V3 worker facts for durable storage.
 	// It is intentionally excluded from JSON so IndexPatch keeps its existing
 	// wire shape for tests, API responses, and worker phase metadata.
 	FactEnvelopes []IndexFactEnvelope `json:"-"`

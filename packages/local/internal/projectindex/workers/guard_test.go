@@ -61,7 +61,7 @@ func runStaticIndexGuardFallback(t *testing.T, extensionEvidenceJobs bool) (proj
 	if err := os.WriteFile(sourceFile, []byte("export const writer = prompt({ id: 'guard' })"), 0o600); err != nil {
 		t.Fatalf("write source: %v", err)
 	}
-	writeStaticIndexEnabledConfig(t, root)
+	writeStaticIndexConfig(t, root)
 
 	script := filepath.Join(t.TempDir(), "static-index-guard-indexer.mjs")
 	if err := os.WriteFile(script, []byte(staticIndexGuardIndexerScript()), 0o600); err != nil {

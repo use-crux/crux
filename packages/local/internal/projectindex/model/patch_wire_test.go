@@ -22,8 +22,8 @@ func TestStreamedSuccessfulRuntimePatchClearsPriorDiagnostic(t *testing.T) {
 
 	collector := eventwire.NewProjectIndexPatchStreamCollector(eventwire.ProjectIndexPatchStreamOptions{Root: "/repo"})
 	events := []string{
-		`{"protocolVersion":2,"type":"phase:start","transactionId":"runtime-recovery","phase":"runtime","root":"/repo","startedAt":"2026-07-20T00:00:00Z"}`,
-		`{"protocolVersion":2,"type":"phase:done","transactionId":"runtime-recovery","phase":"runtime","patch":{"schemaVersion":1,"phase":"runtime","project":{"root":"/repo"},"startedAt":"2026-07-20T00:00:00Z","finishedAt":"2026-07-20T00:00:01Z","status":"ok"},"summary":{"factCount":0}}`,
+		`{"protocolVersion":3,"type":"phase:start","transactionId":"runtime-recovery","phase":"runtime","root":"/repo","startedAt":"2026-07-20T00:00:00Z"}`,
+		`{"protocolVersion":3,"type":"phase:done","transactionId":"runtime-recovery","phase":"runtime","patch":{"schemaVersion":1,"phase":"runtime","project":{"root":"/repo"},"startedAt":"2026-07-20T00:00:00Z","finishedAt":"2026-07-20T00:00:01Z","status":"ok"},"summary":{"factCount":0}}`,
 	}
 	for _, event := range events {
 		if err := collector.Handle(json.RawMessage(event)); err != nil {

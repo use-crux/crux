@@ -7,7 +7,7 @@ describe('createProjectIndexWorkerRequestAssembler', () => {
 
     await expect(
       assemble({
-        protocolVersion: 2,
+        protocolVersion: 3,
         method: 'indexProjectSemantic',
         requestId: 'semantic:1',
         requestKind: 'start',
@@ -35,7 +35,7 @@ describe('createProjectIndexWorkerRequestAssembler', () => {
 
     await expect(
       assemble({
-        protocolVersion: 2,
+        protocolVersion: 3,
         method: 'indexProjectSemantic',
         requestId: 'semantic:1',
         requestKind: 'previousIndex:definitions',
@@ -53,7 +53,7 @@ describe('createProjectIndexWorkerRequestAssembler', () => {
 
     await expect(
       assemble({
-        protocolVersion: 2,
+        protocolVersion: 3,
         method: 'indexProjectSemantic',
         requestId: 'semantic:1',
         requestKind: 'previousIndex:sources',
@@ -72,7 +72,7 @@ describe('createProjectIndexWorkerRequestAssembler', () => {
     ).resolves.toBeUndefined()
 
     const completed = await assemble({
-      protocolVersion: 2,
+      protocolVersion: 3,
       method: 'indexProjectSemantic',
       requestId: 'semantic:1',
       requestKind: 'done',

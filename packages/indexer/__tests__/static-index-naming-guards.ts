@@ -128,17 +128,7 @@ export const staticIndexVocabularyGuards = defineStaticIndexVocabularyGuards([
     replacements: ['staticIndex', 'staticSyntax', 'oxcSyntax'],
     targetedPhases: [2, 5, 7, 8],
     roots: ['packages/indexer/src/indexer', 'packages/local/internal'],
-    allowedPaths: [
-      'packages/indexer/src/indexer/project-config-inspect-types.ts',
-      'packages/indexer/src/indexer/project-config-inspect.ts',
-      'packages/indexer/src/indexer/static-index/config/index.ts',
-      'packages/indexer/src/indexer/static-index/config/inspect.ts',
-      'packages/local/internal/commands/config_inspect.go',
-      'packages/local/internal/projectindex/workers/syntax.go',
-      'packages/local/internal/projectindex/model/static_index_config.go',
-      'packages/local/internal/projectindex/model/static_plan.go',
-      'packages/local/internal/projectindex/staticindex/planner/simple_config.go',
-    ],
+    allowedPaths: [],
   },
   {
     term: 'projectindexer',

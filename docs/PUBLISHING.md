@@ -46,19 +46,19 @@ pnpm build
 pnpm changeset status
 ```
 
-## Native AST beta parity
+## Static Index parity
 
-Before releasing or promoting `experimental.indexer.nativeAst`, run the native
-AST beta parity gate and normal local build path:
+Before releasing, run the required Static Index parity gate and normal local
+build path:
 
 ```bash
-pnpm test:native-ast-parity
+pnpm test:static-index-parity
 make local
 ```
 
 The parity gate must not skip because a Rust worker or env var is missing. Keep
-the current evidence, residual risks, and default-readiness checklist in
-[`docs/NATIVE_AST_BETA_READINESS.md`](./NATIVE_AST_BETA_READINESS.md) up to date.
+the current evidence and residual risks in
+[`docs/STATIC_INDEX_READINESS.md`](./STATIC_INDEX_READINESS.md) up to date.
 
 Then run a tarball check for every publishable package:
 

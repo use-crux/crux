@@ -3,7 +3,7 @@
 /**
  * Stdio wrapper for semantic Project Index enrichment.
  *
- * Protocol: one JSON request per line on stdin, V2 NDJSON worker events on stdout.
+ * Protocol: one JSON request per line on stdin, V3 NDJSON worker events on stdout.
  */
 
 import { createInterface } from 'node:readline'
@@ -12,7 +12,7 @@ import { type IndexPatchBudget, type SemanticBackendSelection, type SemanticSour
 import type { ProjectIndexSnapshot } from '@use-crux/core/project-index'
 import { createSemanticIndexService } from '@use-crux/indexer/host/semantic'
 import {
-  assertProjectIndexWorkerProtocolV2,
+  assertProjectIndexWorkerProtocolV3,
   writePatchEvents,
   writeProjectIndexPhaseError,
   type ProjectIndexWorkerErrorContext,
@@ -87,7 +87,7 @@ async function handleLine(line: string): Promise<void> {
       throw new Error(`unknown semantic worker method: ${req.method}`)
     }
     if (!req.root) throw new Error('indexProjectSemantic requires root')
-    assertProjectIndexWorkerProtocolV2(req.protocolVersion)
+    assertProjectIndexWorkerProtocolV3(req.protocolVersion)
 
     const semanticTimings = createSemanticTimingCollector()
     const patch =

@@ -24,7 +24,7 @@ describe('built project-indexer provenance', () => {
 
     const event = await runBuiltWorker({
       method: 'createDeploymentManifest',
-      protocolVersion: 2,
+      protocolVersion: 3,
       root: PACKAGE_ROOT,
       projectId: 'producer-version-fixture',
       definitions: [],

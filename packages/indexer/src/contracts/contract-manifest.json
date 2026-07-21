@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "protocolVersions": {
-    "projectIndexWorkerEvents": 2,
+    "projectIndexWorkerEvents": 3,
     "staticIndexCompiler": 2
   },
   "protocolVersionChecks": [

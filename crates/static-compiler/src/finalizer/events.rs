@@ -47,7 +47,7 @@ pub(crate) fn project_patch_events(
 
     let fact_count = facts.len();
     let mut events = vec![json!({
-        "protocolVersion": 2,
+        "protocolVersion": 3,
         "type": "phase:start",
         "transactionId": TRANSACTION_ID,
         "phase": phase,
@@ -56,7 +56,7 @@ pub(crate) fn project_patch_events(
     })];
     for (sequence, batch) in facts.chunks(MAX_FACTS_PER_BATCH).enumerate() {
         events.push(json!({
-            "protocolVersion": 2,
+            "protocolVersion": 3,
             "type": "fact:batch",
             "transactionId": TRANSACTION_ID,
             "sequence": sequence,
@@ -76,7 +76,7 @@ pub(crate) fn project_patch_events(
     }
 
     events.push(json!({
-        "protocolVersion": 2,
+        "protocolVersion": 3,
         "type": "phase:done",
         "transactionId": TRANSACTION_ID,
         "phase": phase,

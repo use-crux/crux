@@ -61,7 +61,7 @@ async function runRuntimeWorker(root: string): Promise<{ code: number | null; st
   child.stdin.end(
     `${JSON.stringify({
       method: 'indexProjectRuntime',
-      protocolVersion: 2,
+      protocolVersion: 3,
       root,
       previousIndex: {
         schemaVersion: 1,

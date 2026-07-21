@@ -5,9 +5,10 @@ package cache
 //
 // Bump this when persisted `.crux/cache/index-v2/epoch-*` snapshot shape, cache
 // loading semantics, or client-visible Project Index metadata change in a way
-// that stale snapshot masking after restart could hide from crux dev. Epoch 42
-// preserves Eval arm placement metadata from epoch 41 and installs
-// embedding definition/call/indexer facts plus their semantic lint metadata.
+// that stale snapshot masking after restart could hide from crux dev. Epoch 43
+// preserves Eval arm placement and embedding facts from epoch 42 while making
+// Rust/Oxc Static Index scheduling unconditional after removal of the public
+// static frontend selector.
 // TS-owned AST and semantic fact cache identity remain versioned in
 // @use-crux/indexer.
-const ProjectIndexSnapshotCacheEpoch = 42
+const ProjectIndexSnapshotCacheEpoch = 43
