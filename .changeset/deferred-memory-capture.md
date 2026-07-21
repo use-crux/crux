@@ -1,5 +1,6 @@
 ---
 '@use-crux/core': minor
+'@use-crux/convex': patch
 '@use-crux/indexer': minor
 '@use-crux/local': minor
 '@use-crux/otel': minor
