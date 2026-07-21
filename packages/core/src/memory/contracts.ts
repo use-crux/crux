@@ -61,7 +61,10 @@ export interface MemoryConfig {
   /**
    * Capture scheduling behavior for turn and tool-event writes.
    *
-   * Defaults to `afterResponse`.
+   * Deferred capture uses retained execution-scope work when the active host
+   * supports it. Otherwise Crux captures inline and safely waits for the write.
+   *
+   * @default { mode: 'deferred' }
    */
   capture?: MemoryCaptureConfig
   /**
@@ -88,24 +91,46 @@ export interface Memory {
     input?: Record<string, unknown>
     namespace?: string
   }): AnyToolSet
-  /** Capture a completed turn using the configured capture mode. */
+  /**
+   * Capture one completed turn using the configured capture mode.
+   *
+   * Inline capture and the safe fallback for environments without retained
+   * work are awaited. Their failures reject this call. Retained deferred
+   * failures are reported by {@link Memory.flush} after the owning operation
+   * has already returned.
+   */
   captureTurn(
     turn: MemoryTurn,
-    options?: Partial<MemoryRuntimeOptions> & {
-      input?: Record<string, unknown>
+    options?: Readonly<Partial<MemoryRuntimeOptions>> & {
+      readonly input?: Record<string, unknown>
     },
   ): Promise<void>
-  /** Capture a completed tool event using the configured capture mode. */
+  /**
+   * Capture one standalone tool event using the configured capture mode.
+   *
+   * Tool events already included in a completed {@link MemoryTurn} are
+   * captured by {@link Memory.captureTurn} and must not be submitted again.
+   */
   captureToolEvent(
     event: MemoryToolEvent,
-    options?: Partial<MemoryRuntimeOptions> & {
-      input?: Record<string, unknown>
+    options?: Readonly<Partial<MemoryRuntimeOptions>> & {
+      readonly input?: Record<string, unknown>
     },
   ): Promise<void>
-  /** Await pending memory work for this namespace. */
+  /**
+   * Settle memory capture work accepted before this call.
+   *
+   * Capture work is awaited to a call-time cutoff, then each block's `flush`
+   * hook runs in declaration order. The promise rejects with the first
+   * unobserved deferred capture failure or block-flush failure.
+   *
+   * Call this after the owning generation has returned. Calling it from the
+   * same still-open scope can wait for work that starts only when that scope
+   * closes.
+   */
   flush(
-    options?: Partial<MemoryRuntimeOptions> & {
-      input?: Record<string, unknown>
+    options?: Readonly<Partial<MemoryRuntimeOptions>> & {
+      readonly input?: Record<string, unknown>
     },
   ): Promise<void>
   /** Review and manage proposed long-term memory writes. */

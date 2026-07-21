@@ -299,6 +299,7 @@ var primitiveFamilyByName = map[string]string{
 	"retrieval.stage":         "retrieval",
 	"retrieval.step":          "retrieval",
 	"embedding.call":          "embedding",
+	"memory.capture":          "memory",
 	"memory.read":             "memory",
 	"memory.write":            "memory",
 	"constraint.check":        "constraint",

@@ -1008,6 +1008,16 @@ func runDetailTiming(span SpanSummary) RunDetailTiming {
 
 func runDetailDisplay(span SpanSummary) RunDetailDisplay {
 	kind := runDetailKind(span.Family, span.Primitive)
+	if span.Primitive == "memory.capture" {
+		memoryID := firstNonEmpty(span.MemoryID, stringAttribute(span.Attributes, "memoryId"))
+		if memoryID != "" {
+			return RunDetailDisplay{
+				Kind:     kind,
+				Label:    "Memory capture · " + memoryID,
+				Severity: severityForStatus(span.Status),
+			}
+		}
+	}
 	label := presentationLabelOverride(span.Attributes)
 	if span.Family != "generation" && label != "" && label == span.Model {
 		label = ""

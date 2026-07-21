@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { defer } from "../../src/defer";
+import {
+  scheduleDiagnosticsOnlyDeferredCallback,
+  type DiagnosticsOnlyDeferredWorkHandle,
+} from "../../src/defer/internal/port";
 import type { DeferredWorkRef } from "../../src/defer/types";
 import { evaluate } from "../../src/eval/evaluate";
 import { executeEvalPlan } from "../../src/eval/internal/executor";
@@ -31,6 +35,24 @@ afterEach(() => {
 });
 
 describe("Eval defer capture", () => {
+  it("reports captured diagnostics-only work without invoking it", async () => {
+    const callback = vi.fn();
+    let scheduled: DiagnosticsOnlyDeferredWorkHandle | undefined;
+
+    await runEvalScope("diagnostics-capture", () =>
+      runEvalCellScope(
+        { caseId: "diagnostics", variant: "current", trial: 0 },
+        () => {
+          scheduled = scheduleDiagnosticsOnlyDeferredCallback(callback);
+        },
+      ),
+    );
+
+    expect(scheduled?.status).toBe("captured");
+    await expect(scheduled?.settled).resolves.toBeUndefined();
+    expect(callback).not.toHaveBeenCalled();
+  });
+
   it("captures inline defer evidence at the cell boundary without invoking it", async () => {
     const callback = vi.fn();
     const transport = createInMemoryObservabilityTransport();

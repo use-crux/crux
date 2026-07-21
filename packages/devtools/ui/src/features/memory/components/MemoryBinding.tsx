@@ -46,9 +46,28 @@ export function DefinitionBindingCard({
     ]);
   }
   if (store.captureMode) {
+    const description =
+      store.captureMode === "deferred"
+        ? "Retained by the active host when available; otherwise waits inline."
+        : store.captureMode === "inline"
+          ? "Always completes before the owning operation returns."
+          : undefined;
     rows.push([
       "capture",
-      <span style={{ color: "var(--devtools-fg)" }}>{store.captureMode}</span>,
+      <span className="flex flex-wrap items-center gap-2">
+        <Chip
+          tone="muted"
+          mono
+          data-memory-capture-mode={store.captureMode}
+        >
+          {store.captureMode}
+        </Chip>
+        {description && (
+          <span style={{ color: "var(--devtools-fg-muted)" }}>
+            {description}
+          </span>
+        )}
+      </span>,
     ]);
   }
   if (store.budget) {

@@ -14,6 +14,7 @@ import type { MiddlewareResult } from "../../runtime/types";
 import { createSafetyWithBindingApplicability } from "../../safety/session";
 import { languageBindingApplicability } from "../../safety/language-applicability";
 import { orchestrateStream } from "../../generation/orchestrate";
+import { runInStreamObservationContext } from "../../generation/stream-observability";
 import {
   composeAbortSignals,
   createBudgetSignal,
@@ -287,11 +288,13 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
         representedText: trackedSafety ? meta?.text : undefined,
         messages,
       });
-      await lifecycle.captureTurn({
-        messages,
-        assistantText: guarded?.text,
-        toolCalls: guarded?.toolCalls,
-      });
+      await runInStreamObservationContext(handle, () =>
+        lifecycle.captureTurn({
+          messages,
+          assistantText: guarded?.text,
+          toolCalls: guarded?.toolCalls,
+        }),
+      );
       return guarded
         ? stampCruxRunId(
             withOperationResultMeta(

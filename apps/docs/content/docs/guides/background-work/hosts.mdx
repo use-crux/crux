@@ -7,6 +7,13 @@ Application code always imports `defer` from `@use-crux/core`. A host binding
 describes how the platform retains the root pending set; it never changes where
 an inner primitive drain starts.
 
+Memory uses the same binding. Its default `capture.mode: "deferred"` retains a
+completed-turn capture when the active scope and host can keep it alive. If
+retention is unavailable, memory falls back to awaited inline capture: the
+write remains correct, but the operation may take longer and development
+builds warn once. Use `capture.mode: "inline"` for intentional read-after-write
+behavior. Memory does not accept a separate `waitUntil` hook.
+
 ## Binding matrix
 
 | Environment                  | Retention binding                           | Recommended setup                         | Inline work                        | Strict boundary                                         |

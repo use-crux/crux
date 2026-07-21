@@ -174,14 +174,13 @@ fn normalized_capture_mode(
     config: &StaticSyntaxValue,
     context: &PrimitiveContext<'_>,
 ) -> Option<String> {
-    nested_string_property(config, &["capture", "mode"], context).or_else(|| {
-        match nested_string_property(config, &["processing", "mode"], context).as_deref() {
-            Some("deferred") => Some("afterResponse".to_string()),
-            Some("manual") => Some("detached".to_string()),
-            Some("inline") => Some("inline".to_string()),
-            _ => None,
+    Some(
+        match nested_string_property(config, &["capture", "mode"], context).as_deref() {
+            Some("inline") => "inline",
+            _ => "deferred",
         }
-    })
+        .to_string(),
+    )
 }
 
 fn nested_string_property(

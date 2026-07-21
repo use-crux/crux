@@ -25,7 +25,7 @@ import {
   guardSafetySessionLanguageStep,
 } from "../../safety/session";
 import { languageBindingApplicability } from "../../safety/language-applicability";
-import { orchestrateGenerate } from "../../generation/orchestrate";
+import { orchestrateGenerateWithCompletion } from "../../generation/orchestrate";
 import { composeAbortSignals, withBudget } from "../../generation/timeout";
 import { normalizeAdapterCallError } from "../normalized-outcome";
 import { normalizeInvocationMessages } from "../../content/invocation-message";
@@ -217,7 +217,7 @@ export async function generateCore<
 
   const generated = await sourceSession
     .withContext(() =>
-      orchestrateGenerate(
+      orchestrateGenerateWithCompletion(
         {
           promptId: prompt.id,
           promptConfig: prompt.config ?? ({} as typeof prompt.config),
@@ -497,6 +497,13 @@ export async function generateCore<
             ...(pendingApprovals ? { pendingApprovals } : {}),
           });
         },
+        async (result) => {
+          await lifecycle.captureTurn({
+            messages,
+            assistantText: result.text,
+            toolCalls: stepFacts.flatMap((step) => step.toolCalls ?? []),
+          });
+        },
       ),
     )
     .catch(async (error: unknown) => {
@@ -505,11 +512,6 @@ export async function generateCore<
     });
 
   try {
-    await lifecycle.captureTurn({
-      messages,
-      assistantText: generated.text,
-      toolCalls: stepFacts.flatMap((step) => step.toolCalls ?? []),
-    });
     return generated;
   } finally {
     await sourceSession.close();

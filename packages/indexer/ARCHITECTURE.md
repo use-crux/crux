@@ -196,6 +196,12 @@ those facts are visible in code. If a relationship is authored in code, such as 
 memory that was constructed with a store, a local tooling config must not also require the user to
 register that prompt, memory, and store in a registry list.
 
+Memory definitions include the effective closed capture mode (`inline | deferred`) in their static
+Project Index facts. Omitted mode is normalized to `deferred` by the compiler, so Catalog can explain
+configuration without guessing whether a runtime host will retain a particular capture. Because this
+changes output for unchanged source, the static parse cache identity must advance with the compiler
+projection; runtime capture disposition remains observability evidence and never becomes an Index fact.
+
 Config remains valid for policy, trust, and overrides:
 
 - source include/exclude overrides;

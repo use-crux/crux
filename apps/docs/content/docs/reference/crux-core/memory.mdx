@@ -25,7 +25,7 @@ const mem = memory({
   id: "assistant",
   records,
   namespace: ({ input }) => `user:${input.userId}`,
-  capture: { mode: "afterResponse" },
+  capture: { mode: "deferred" },
   budget: { maxTokens: 1200 },
   blocks: [
     recentMessages({ id: "recent" }),
@@ -153,9 +153,9 @@ Use the same `memoryId` as the composed `memory()` object when direct block call
 
 ## Capture
 
-`captureTurn(turn, options)` captures completed user/assistant turns. `captureToolEvent(event, options)` captures tool calls with available `toolCallId`, `toolName`, `args`, `result`, and `error`.
+`captureTurn(turn, options)` captures a completed user/assistant turn and its settled tool events. Memory invokes every block's turn hook first, then each event's block hooks in event order. `captureToolEvent(event, options)` remains available for standalone tool events with `toolCallId`, `toolName`, `args`, `result`, and `error`.
 
-Adapters also forward each tool call to blocks' `captureToolEvent` hooks, so `episodes()` records tool activity.
+Adapters submit each completed turn once. Memory owns tool-event fan-out, scheduling, and settlement.
 
 ```ts
 await mem.captureToolEvent({
@@ -166,11 +166,27 @@ await mem.captureToolEvent({
 });
 ```
 
-`capture.mode` defaults to `afterResponse`:
+`capture.mode` defaults to `deferred`:
 
-- `inline` awaits capture before `captureTurn()` or adapter generation resolves.
-- `afterResponse` starts capture after generation. With `capture.waitUntil`, the work is handed to that hook and the response does not wait. Without `waitUntil`, the adapter awaits capture before resolving, which is the safe serverless default.
-- `detached` starts capture in the background and the adapter does not await it. Call `flush()` to await the work.
+- `deferred` uses retained execution-scope work when the active host supports it. Without retained capability, the same capture runs inline and is awaited; development builds warn once with host-setup guidance.
+- `inline` always awaits capture and propagates capture errors to the caller.
+
+Configure retention once through `config({ host })`. A retained capture failure cannot reject an operation that has already returned. `flush()` waits for work accepted before its call-time cutoff, reports the first unobserved deferred failure, then runs block flush hooks in declaration order. Later captures belong to the next flush.
+
+Eval cells suppress default deferred capture. Use `inline` with isolated storage when an Eval intentionally needs real writes.
+
+Migration: rename `afterResponse` to `deferred`, replace `detached` with `deferred`, and remove `capture.waitUntil` in favor of the shared host binding.
+
+### Inspecting capture
+
+The two Devtools surfaces expose separate parts of the contract:
+
+- **Catalog → Memory → Binding** shows the effective configured mode. An omitted mode appears as `deferred`; Catalog cannot predict runtime host retention.
+- **Runs → `memory.capture`** shows the requested mode, actual disposition, outcome, operation, sequence, block/tool-event counts, and duration for one invocation. The capture span belongs to the owning generation Run.
+
+Runtime disposition is one of `inline`, `inline-fallback`, `retained`, or `eval-captured`. `inline-fallback` means `deferred` was requested but no retained host accepted the work, so capture ran inline. `eval-captured` records deferred intent without invoking memory hooks.
+
+`memory.capture` lifecycle evidence never retains messages, tool payloads, namespaces, raw errors, or stacks. Failures expose only explicit failure state and, when available, a sanitized stable machine code. Nested `memory.write` spans remain the evidence for storage work.
 
 ## Proposals
 

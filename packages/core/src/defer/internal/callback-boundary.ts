@@ -76,8 +76,12 @@ function createCallbackCommitScope(
   )
 
   const child: CallbackCommitScope = {
+    callbackRetention: parent.callbackRetention,
     registerInline(callback, registration) {
-      parent.registerInline(callback, parentRegistration(parent, registration))
+      return parent.registerInline(
+        callback,
+        parentRegistration(parent, registration),
+      )
     },
     stageNamed(
       target: RuntimeTaskTarget,

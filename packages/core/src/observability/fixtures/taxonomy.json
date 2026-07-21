@@ -41,6 +41,7 @@
     "media.generate_image": "media",
     "media.generate_speech": "media",
     "media.transcribe": "media",
+    "memory.capture": "memory",
     "memory.read": "memory",
     "memory.write": "memory",
     "plan.operation": "plan",

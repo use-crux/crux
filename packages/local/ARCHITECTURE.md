@@ -76,6 +76,14 @@ The former `staticindex/syntax` and `staticindex/client` packages were renamed t
 `staticindex/frontend` and `staticindex/compiler`. New code should use the target vocabulary and
 should not add compatibility aliases for the old package names.
 
+Catalog presents the compiler-owned effective memory capture mode from the Project Index. It does
+not infer host capability or runtime disposition. Runs presents that separate runtime truth from the
+canonical `memory.capture` span: Local preserves its attributes, definition ref, status, duration,
+owning-generation parent, and nested `memory.write` evidence. The run-detail projection keeps capture
+as a primary memory node labeled `Memory capture · <memory id>` while contextual storage operations
+retain their normal folding rules. Lifecycle records are payload-free; Local must not recover capture
+messages, tool payloads, namespaces, or raw errors from another source.
+
 ## TUI Architecture
 
 The local TUI is an in-process Bubble Tea surface over the same services that power the browser

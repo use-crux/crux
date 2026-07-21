@@ -81,6 +81,7 @@ export const CRUX_PRIMITIVE_NAMES = [
   "retrieval.stage",
   "retrieval.step",
   "embedding.call",
+  "memory.capture",
   "memory.read",
   "memory.write",
   "constraint.check",
@@ -217,6 +218,7 @@ export const CRUX_PRIMITIVE_FAMILY_BY_NAME = {
   "retrieval.stage": "retrieval",
   "retrieval.step": "retrieval",
   "embedding.call": "embedding",
+  "memory.capture": "memory",
   "memory.read": "memory",
   "memory.write": "memory",
   "constraint.check": "constraint",
@@ -942,6 +944,38 @@ export interface CruxPromptResolveAttributes {
   excludedContextCount?: number;
 }
 
+/** Payload-free lifecycle evidence for one accepted memory capture. */
+export interface CruxMemoryCaptureAttributes {
+  readonly memoryId: string;
+  readonly operation: "turn" | "tool-event";
+  readonly requestedMode: "inline" | "deferred";
+  readonly disposition:
+    | "inline"
+    | "inline-fallback"
+    | "retained"
+    | "eval-captured";
+  readonly sequence: number;
+  readonly blockCount: number;
+  readonly toolEventCount: number;
+  readonly outcome?: "completed" | "failed" | "captured";
+  readonly code?: string;
+}
+
+/** Attributes known before the capture scheduler returns its disposition. */
+export type CruxMemoryCaptureStartAttributes = Omit<
+  CruxMemoryCaptureAttributes,
+  "disposition" | "outcome" | "code"
+> & {
+  readonly disposition?: never;
+  readonly outcome?: never;
+  readonly code?: never;
+};
+
+/** Valid attribute states across a `memory.capture` span lifecycle. */
+export type CruxMemoryCaptureSpanAttributes =
+  | CruxMemoryCaptureStartAttributes
+  | CruxMemoryCaptureAttributes;
+
 /**
  * Attributes recorded when public deferred work is accepted.
  *
@@ -987,6 +1021,7 @@ export type CruxSpanAttributesByPrimitive = {
   "generation.call": CruxGenerationCallAttributes;
   "generation.stream": CruxGenerationStreamAttributes;
   "prompt.resolve": CruxPromptResolveAttributes;
+  "memory.capture": CruxMemoryCaptureSpanAttributes;
   "defer.scheduled": CruxDeferScheduledAttributes;
   "defer.run": CruxDeferRunAttributes;
   "custom.operation": CruxAttributes;

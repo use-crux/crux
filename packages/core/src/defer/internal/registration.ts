@@ -37,14 +37,58 @@ export function resolveDeferRegistration():
   })
 }
 
+/**
+ * Resolve callback registration only when execution is safely retained or
+ * intentionally captured by the active scope.
+ *
+ * Unlike {@link resolveDeferRegistration}, this diagnostics-only boundary
+ * never bootstraps an unretained callback controller. Callers can therefore
+ * use absence as the signal to execute correctness-critical work inline.
+ */
+export function resolveDiagnosticsOnlyDeferRegistration():
+  | DeferRegistrationContext
+  | undefined {
+  const explicit = currentDeferRegistration()
+  const scope = currentScope()
+  const capturesCallbacks = scope?.policies.drain === 'capture'
+
+  if (explicit) {
+    return explicit.scope.callbackRetention === 'retained' || capturesCallbacks
+      ? explicit
+      : undefined
+  }
+  if (!scope) return undefined
+
+  const inheritedController = currentScopeDeferController()
+  if (inheritedController) {
+    return inheritedController.callbackRetention === 'retained' || capturesCallbacks
+      ? registrationFor(inheritedController)
+      : undefined
+  }
+
+  if (capturesCallbacks) {
+    return registrationFor(createPrimitiveRootController(scope.root))
+  }
+
+  const binding = resolveConfiguredHost()
+  if (!binding || binding.supportsInline === false) return undefined
+  return registrationFor(createPrimitiveRootController(scope.root, binding))
+}
+
 /** Attach configured capabilities and lazily create one primitive-root controller. */
 function createPrimitiveRootController(
   rootScope: ExecutionScope,
+  binding = resolveConfiguredHost(),
 ): ScopeDeferController {
-  const binding = resolveConfiguredHost()
   if (binding) bindRootRetention(rootScope, binding)
   return createScopeDeferController(
     rootScope,
     createPrimitiveDeferServices(rootScope, binding),
   )
+}
+
+function registrationFor(
+  scope: ScopeDeferController,
+): DeferRegistrationContext {
+  return Object.freeze({ scope, phase: 'handler' as const, depth: 0 })
 }

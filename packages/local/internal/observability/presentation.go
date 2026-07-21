@@ -318,6 +318,9 @@ func presentationDisplay(span SpanSummary, spansByID map[string]SpanSummary) str
 	if span.Primitive == "flow.suspension" {
 		return "primary"
 	}
+	if span.Primitive == "memory.capture" {
+		return "primary"
+	}
 	if span.Primitive == "retrieval.stage" && span.Status == "ok" {
 		return "detail"
 	}

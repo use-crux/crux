@@ -21,7 +21,6 @@
 
 import { observe, type OperationResultMeta, type WithOperationResultMeta } from '../observability'
 import { withOperationResultMeta } from '../observability/internal/result-meta'
-import { warnMissingSemanticCachePlugin } from '../cache'
 import { getHooks } from '../runtime/runtime'
 import type { AnyPromptConfig } from '../prompt/prompt-types'
 import type { OrchestrationSpec, StreamOrchestrationSpec } from './orchestrate-types'
@@ -43,10 +42,7 @@ import {
 import { createGenerationPerformanceTracker } from './performance-metrics'
 import type { CruxRunId } from '../observability'
 import { stampCruxRunId } from './run-id'
-
-// ─────────────────────────────────────────────────────────────────
-// orchestrateGenerate
-// ─────────────────────────────────────────────────────────────────
+import { maybeWarnMissingSemanticCache } from './orchestrate-cache'
 
 /**
  * Shared generate orchestration. Wraps an adapter's SDK-specific `doGenerate`
@@ -76,6 +72,31 @@ import { stampCruxRunId } from './run-id'
 export async function orchestrateGenerate<TArgs extends Record<string, unknown>, TResult extends object>(
   spec: OrchestrationSpec<TArgs>,
   doGenerate: (args: TArgs) => Promise<TResult>,
+): Promise<WithOperationResultMeta<TResult> & { readonly runId: CruxRunId }> {
+  return orchestrateGenerateWithCompletion(spec, doGenerate)
+}
+
+/**
+ * Run generation with an internal post-result completion boundary.
+ *
+ * The completion runs after middleware, hooks, usage, and output evidence, but
+ * before `generation.call` closes. It is intentionally not re-exported from
+ * the generation barrel; adapter execution uses it for lifecycle work that
+ * must inherit the generation observation without extending public options.
+ *
+ * @param spec - Provider-neutral generation orchestration inputs.
+ * @param doGenerate - Adapter-owned generation implementation.
+ * @param complete - Internal finalized-result lifecycle callback.
+ * @returns The observed result after the completion boundary settles.
+ * @internal
+ */
+export async function orchestrateGenerateWithCompletion<
+  TArgs extends Record<string, unknown>,
+  TResult extends object,
+>(
+  spec: OrchestrationSpec<TArgs>,
+  doGenerate: (args: TArgs) => Promise<TResult>,
+  complete?: (result: WithOperationResultMeta<TResult>) => void | Promise<void>,
 ): Promise<WithOperationResultMeta<TResult> & { readonly runId: CruxRunId }> {
   const span = observe.openSpan({
     name: spec.promptId ? `generate ${spec.promptId}` : 'generate',
@@ -116,6 +137,7 @@ export async function orchestrateGenerate<TArgs extends Record<string, unknown>,
         preview: generationOutputPreview(result),
       })
       linkActiveSpanToArtifact('produced', outputArtifactId)
+      await complete?.(result)
       return result
     })
     span.end({ metrics: performance.metrics(getMeta(result)) })
@@ -181,9 +203,7 @@ async function orchestrateGenerateInner<
   }
 }
 
-// ─────────────────────────────────────────────────────────────────
 // orchestrateStream
-// ─────────────────────────────────────────────────────────────────
 
 /**
  * Shared stream orchestration. Wraps an adapter's SDK-specific `doStream`
@@ -274,14 +294,5 @@ async function orchestrateStreamInner<TArgs extends Record<string, unknown>, TRe
       spec.promptConfig.hooks.onError({ promptId: spec.promptId, error })
     }
     throw error
-  }
-}
-
-function maybeWarnMissingSemanticCache(
-  spec: Pick<OrchestrationSpec<Record<string, unknown>>, 'promptId' | 'promptConfig'>,
-): void {
-  const semantic = (spec.promptConfig as { cache?: { semantic?: unknown } }).cache?.semantic
-  if (semantic !== undefined && semantic !== false && !getHooks().semanticCacheInstalled) {
-    warnMissingSemanticCachePlugin(spec.promptId)
   }
 }

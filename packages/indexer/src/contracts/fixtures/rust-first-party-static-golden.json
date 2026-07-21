@@ -5,12 +5,12 @@
   "fileSelection": "staticDefinitionFiles(root)",
   "projection": "canonicalStaticExtractionJson(definitions,relations,diagnostics,dependencies)",
   "totals": {
-    "files": 757,
+    "files": 758,
     "definitions": 88,
     "relations": 7,
     "diagnostics": 25,
-    "dependencies": 1433,
-    "canonicalBytes": 212419
+    "dependencies": 1437,
+    "canonicalBytes": 212714
   },
   "files": [
     {
@@ -2598,12 +2598,12 @@
     },
     {
       "file": "packages/core/src/defer/internal/port.ts",
-      "sha256": "1d12b5e7c5074ad618199baa2a2517f73f348c6f149057aa9db14427631857ac",
-      "bytes": 125,
+      "sha256": "6c8d88aaff6c6d14a42188d3a4b32d1f5ab0c58c7d18279acb2030769c43c91d",
+      "bytes": 168,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 1
+      "dependencies": 2
     },
     {
       "file": "packages/core/src/defer/node.ts",
@@ -2868,8 +2868,8 @@
     },
     {
       "file": "packages/core/src/generation/orchestrate.ts",
-      "sha256": "ff568ede17ed2aeae68f83fbda6fd73f1457f2d181e88503c7915def9322ba66",
-      "bytes": 623,
+      "sha256": "fb8d0a6b603d2ffc115a7f40899487626923ad5fd0606fa262b387778870d584",
+      "bytes": 640,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
@@ -2913,12 +2913,21 @@
     },
     {
       "file": "packages/core/src/memory/block-system.ts",
-      "sha256": "62dc668b94974e192ce55860c4fc02cfc248e03f1ddd0e6cf569589e9728e9f5",
-      "bytes": 647,
+      "sha256": "aeb070c46613015a80c7fb7e1db2d378db020285e3db12960e27d8687f7c51fe",
+      "bytes": 700,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 12
+      "dependencies": 13
+    },
+    {
+      "file": "packages/core/src/memory/capture/runtime.ts",
+      "sha256": "4b8abe427be48561ab97f4f0fe3314905814e793d729d839ef3e7057a60e4e40",
+      "bytes": 182,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
     },
     {
       "file": "packages/core/src/memory/contracts.ts",

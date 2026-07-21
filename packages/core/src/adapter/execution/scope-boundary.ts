@@ -106,11 +106,12 @@ function scopedRawStream(
   return {
     async *[Symbol.asyncIterator]() {
       const iterator = await run(() => source[Symbol.asyncIterator]())
+      let exhausted = false
       try {
         for (;;) {
           const result = await run(() => iterator.next())
           if (result.done) {
-            seal('success')
+            exhausted = true
             return
           }
           yield result.value
@@ -121,7 +122,9 @@ function scopedRawStream(
       } finally {
         try {
           if (iterator.return) await run(() => iterator.return!())
-          seal('success')
+          // Normal exhaustion keeps the scope open for completion metadata,
+          // where completed-turn memory capture and final policies run.
+          if (!exhausted) seal('success')
         } catch (error) {
           seal('error')
           throw error

@@ -28,6 +28,7 @@ import {
   type MemoryNamespace,
 } from './namespace'
 import { applyMemoryPolicy, type MemoryPolicyDecisionEvent } from './policy-safety'
+import { createMemoryCaptureRuntime } from './capture/runtime'
 import type {
   Memory,
   MemoryBlock,
@@ -88,11 +89,6 @@ export interface MemoryEntryApi {
   score?: number
   createdAt: number
   updatedAt: number
-}
-
-interface ResolvedCaptureConfig {
-  mode: MemoryCaptureMode
-  waitUntil?: (promise: Promise<unknown>) => void
 }
 
 interface ResolvedMemoryStorage {
@@ -760,7 +756,6 @@ export function memoryBlock(config: MemoryBlockConfig): MemoryBlock {
 }
 
 export function memory(config: MemoryConfig): Memory {
-  const pending = new Set<Promise<unknown>>()
   const memoryStorage = resolveMemoryStorage(config)
   const records = memoryStorage.records
 
@@ -852,43 +847,12 @@ export function memory(config: MemoryConfig): Memory {
     return proposalId
   }
 
-  function captureConfig(): ResolvedCaptureConfig {
-    return {
-      mode: config.capture?.mode ?? 'afterResponse',
-      waitUntil: config.capture?.waitUntil,
-    }
-  }
-
-  function schedule(task: Promise<unknown>) {
-    const tracked = task.finally(() => pending.delete(tracked))
-    pending.add(tracked)
-    const capture = captureConfig()
-    if (capture.mode === 'afterResponse' && capture.waitUntil) {
-      capture.waitUntil(tracked)
-      return tracked
-    }
-    return tracked
-  }
-
-  async function runCaptureTurn(
-    turn: MemoryTurn,
-    options: Partial<MemoryRuntimeOptions> & { input?: Record<string, unknown> } = {},
-  ) {
-    const ctx = await createContext(options.input, options)
-    for (const block of config.blocks) {
-      await block.captureTurn?.(turn, ctx)
-    }
-  }
-
-  async function runCaptureToolEvent(
-    event: MemoryToolEvent,
-    options: Partial<MemoryRuntimeOptions> & { input?: Record<string, unknown> } = {},
-  ) {
-    const ctx = await createContext(options.input, options)
-    for (const block of config.blocks) {
-      await block.captureToolEvent?.(event, ctx)
-    }
-  }
+  const captureRuntime = createMemoryCaptureRuntime({
+    memoryId: config.id,
+    mode: config.capture?.mode ?? 'deferred',
+    blocks: config.blocks,
+    createContext: (options) => createContext(options.input, options),
+  })
 
   const api: Memory = {
     _tag: 'Memory',
@@ -954,27 +918,13 @@ export function memory(config: MemoryConfig): Memory {
       return tools
     },
     async captureTurn(turn, options = {}) {
-      const task = runCaptureTurn(turn, options)
-      if (captureConfig().mode === 'inline') {
-        await task
-      } else {
-        schedule(task)
-      }
+      await captureRuntime.captureTurn(turn, options)
     },
     async captureToolEvent(event, options = {}) {
-      const task = runCaptureToolEvent(event, options)
-      if (captureConfig().mode === 'inline') {
-        await task
-      } else {
-        schedule(task)
-      }
+      await captureRuntime.captureToolEvent(event, options)
     },
     async flush(options = {}) {
-      const ctx = await createContext(options.input, options)
-      await Promise.all([...pending])
-      for (const block of config.blocks) {
-        await block.flush?.(ctx)
-      }
+      await captureRuntime.flush(options)
     },
     proposals: {
       async list(options = {}) {
