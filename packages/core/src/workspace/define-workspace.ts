@@ -536,11 +536,15 @@ export function workspace<const Config extends WorkspaceConfig>(
     store,
     assets,
     mounts,
+    inlineTextBelowBytes,
+    limits: config.limits,
     retention: config.retention,
+    versioning: config.versioning,
+    emitChange,
+    instrumentMutations: true,
     resolveNamespace,
     write: (namespace, path, content, options, producedBy) =>
       writeForNamespace(namespace, path, content, options, producedBy),
-    remove: removeForNamespace,
     ops: {
       list,
       read,

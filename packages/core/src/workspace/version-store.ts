@@ -63,6 +63,8 @@ export async function recordFileVersion(input: {
   readonly operation: WorkspaceVersionOperation;
   readonly versioning?: WorkspaceVersioning;
   readonly setOptions?: RecordWriteOptions;
+  /** Defer destructive retention until a surrounding mutation batch commits. */
+  readonly deferRetention?: boolean;
 }): Promise<void> {
   const version = input.record.headVersion ?? 1;
   const value: WorkspaceVersionRecord = {
@@ -87,14 +89,15 @@ export async function recordFileVersion(input: {
   });
 
   const maxVersions = input.versioning?.maxVersions;
-  if (maxVersions !== undefined && maxVersions > 0) {
-    await gcVersions({
+  if (!input.deferRetention && maxVersions !== undefined && maxVersions > 0) {
+    await retainFileVersions({
       store: input.store,
       assets: input.assets,
       workspaceId: input.workspaceId,
       namespace: input.namespace,
       path: input.path,
       maxVersions,
+      preserveVersion: input.record.finalVersion,
     });
   }
 }
@@ -176,14 +179,18 @@ export async function purgeVersions(
   }
 }
 
-/** Drop the oldest snapshots (and their assets) beyond `maxVersions`. */
-async function gcVersions(input: {
+/**
+ * Drop old snapshots after a successful mutation while retaining an active
+ * published version even when it falls outside the numeric history cap.
+ */
+export async function retainFileVersions(input: {
   readonly store: RecordStore;
   readonly assets?: AssetStore;
   readonly workspaceId: string;
   readonly namespace: string;
   readonly path: WorkspacePath;
   readonly maxVersions: number;
+  readonly preserveVersion?: number;
 }): Promise<void> {
   const records = await listVersionRecords(
     input.store,
@@ -191,7 +198,13 @@ async function gcVersions(input: {
     input.namespace,
     input.path,
   );
-  for (const stale of records.slice(input.maxVersions)) {
+  const newest = new Set(
+    records.slice(0, input.maxVersions).map((record) => record.version),
+  );
+  for (const stale of records) {
+    if (newest.has(stale.version) || stale.version === input.preserveVersion) {
+      continue;
+    }
     await deleteVersion(
       input.store,
       input.assets,

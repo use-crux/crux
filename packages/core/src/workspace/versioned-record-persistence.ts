@@ -41,6 +41,8 @@ export interface CommitVersionedWorkspaceRecordInput {
   readonly operation: WorkspaceVersionOperation;
   readonly versioning?: WorkspaceVersioning;
   readonly setOptions?: RecordWriteOptions;
+  /** Defer version retention until a surrounding mutation batch commits. */
+  readonly deferRetention?: boolean;
   /**
    * Start destination history over at this record after a successful copy/move.
    * The previous HEAD and version-owned assets are cleaned up after the new
@@ -83,6 +85,7 @@ export async function commitVersionedWorkspaceRecord(
       operation: input.operation,
       versioning: input.versioning,
       setOptions: input.setOptions,
+      deferRetention: input.deferRetention,
     });
   } catch (error) {
     await restoreVersionedState(input, previousVersions).catch(() => undefined);
@@ -154,12 +157,7 @@ async function restoreVersionRecord(
   version: WorkspaceVersionRecord,
 ): Promise<void> {
   await input.store.put(
-    versionKey(
-      input.workspaceId,
-      input.namespace,
-      input.path,
-      version.version,
-    ),
+    versionKey(input.workspaceId, input.namespace, input.path, version.version),
     version as unknown as JsonObject,
     input.setOptions,
   );

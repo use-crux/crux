@@ -46,16 +46,16 @@ export type WorkspaceVersionOperation =
  *
  * @example
  * ```ts
- * // Keep the 20 most recent versions per file; older snapshots are GC'd.
+ * // Keep the 20 most recent versions plus any older active publication pin.
  * workspace({ id: 'research', namespace, versioning: { maxVersions: 20 } })
  * ```
  */
 export interface WorkspaceVersioning {
   /**
-   * Maximum number of versions to retain per file. When a write would exceed
-   * this count, the oldest snapshots (and their out-of-line assets) are deleted.
-   * Defaults to unlimited — history is kept until explicitly bounded, so a file
-   * never silently loses revisions.
+   * Maximum number of recent versions to retain per file. An older revision
+   * referenced by the file's active publication pin is retained in addition to
+   * this numeric cap until it is no longer published. Other older snapshots and
+   * their out-of-line assets are deleted. Defaults to unlimited.
    */
   readonly maxVersions?: number;
 }
