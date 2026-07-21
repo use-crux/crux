@@ -12,7 +12,7 @@
 import type { MiddlewareResult } from "../../runtime/types";
 import {
   createSafetyWithBindingApplicability,
-  guardSafetySessionModelIngress,
+  safetySessionModelIngressGuard,
 } from "../../safety/session";
 import { languageBindingApplicability } from "../../safety/language-applicability";
 import type { LiveTextSlot } from "../../safety/output/completion";
@@ -130,7 +130,7 @@ export async function streamCore<
       input: args.input ?? {},
       timeout: args.timeout,
       abortSignal: args.signal,
-      modelIngress: (input) => guardSafetySessionModelIngress(safety, input),
+      modelIngress: safetySessionModelIngressGuard(safety, "tool"),
       appendToolRound: dialect.appendToolRound,
       sanitizeToolSchema: dialect.sanitizeToolSchema,
     });

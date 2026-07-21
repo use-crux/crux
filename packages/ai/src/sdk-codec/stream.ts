@@ -66,6 +66,9 @@ export async function createStreamCallPlan(
   const callerOnFinish = request.extra?.onFinish as
     | ((event: SdkStreamFinishEvent) => unknown)
     | undefined;
+  const callerOnError = request.extra?.onError as
+    | ((event: { readonly error: unknown }) => unknown)
+    | undefined;
 
   let resolveCompletion!: (meta: ExecutorStreamCompletionPayload) => void;
   let rejectCompletion!: (error: unknown) => void;
@@ -157,6 +160,11 @@ export async function createStreamCallPlan(
       event.chunk?.type === "text-delta" ? event.chunk.textDelta : undefined;
     progress?.onChunk(textDelta);
     await callerOnChunk?.(event);
+  };
+  args.onError = async (event: { readonly error: unknown }) => {
+    progress?.dispose();
+    rejectCompletion(event.error);
+    await callerOnError?.(event);
   };
   args.onFinish = async (event: SdkStreamFinishEvent) => {
     try {

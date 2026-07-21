@@ -37,6 +37,7 @@ import {
   outputOperationTextGuard,
   streamCompletionGuard,
   modelIngressGuard,
+  modelIngressSources,
   type SafetySession,
 } from "./session-bridge";
 import { guardModelIngress } from "./input/model-ingress";
@@ -84,15 +85,24 @@ export function createSafetySessionMethods(
   state: SessionMethodOptions,
 ): SafetySession {
   const outputBindings = () => state.phaseBindings("output");
+  const guardIngress = (input: Parameters<SafetySession[typeof modelIngressGuard]>[0]) =>
+    guardModelIngress({
+      bindings: state.phaseBindings("input"),
+      input,
+      context: state.guardContext("input", state.messages.get()),
+      appendAudit: state.appendGuardrailAudit,
+    });
+  const ingressSources = (['user', 'tool', 'retrieval'] as const).filter((source) => {
+    const inputBindings = state.phaseBindings("input");
+    const matchesText = inputBindingsFor(inputBindings, "model.input.text", source).length > 0;
+    const matchesMedia =
+      source !== "retrieval" && inputBindingsFor(inputBindings, "model.input.media", source).length > 0;
+    return matchesText || matchesMedia;
+  });
   return {
     enabled: state.enabled,
-    [modelIngressGuard]: (input) =>
-      guardModelIngress({
-        bindings: state.phaseBindings("input"),
-        input,
-        context: state.guardContext("input", state.messages.get()),
-        appendAudit: state.appendGuardrailAudit,
-      }),
+    [modelIngressGuard]: guardIngress,
+    [modelIngressSources]: Object.freeze(ingressSources),
     [languageStepGuardEnabled]: outputBindings().some(
       (binding) =>
         binding.boundary.id === "model.output.text" ||

@@ -15,6 +15,7 @@ import {
   createSafetyWithBindingApplicability,
   createSafetyLanguageStepTransformer,
   finalizeSafetySessionLanguageOutput,
+  safetySessionModelIngressGuard,
   safetyRequiresLanguageStepTransform,
 } from "../../safety/session";
 import { languageBindingApplicability } from "../../safety/language-applicability";
@@ -60,6 +61,7 @@ import {
 import { generateSdkStructured } from "./generate-sdk-structured";
 import { emitInputTokenEstimate } from "./media-token-budget";
 import { materializeToolSources } from "./tool-sources";
+import { toolModelIngressDialect } from "../tool/model-ingress-port";
 
 /** Regeneration is deliberately unavailable after tool-approval suspension. */
 const unreachableRegenerate = (): Promise<never> => {
@@ -170,6 +172,10 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
       promptId: prompt.id,
       input: args.input ?? {},
       timeout: args.timeout,
+      abortSignal: args.signal,
+      modelIngress: safetySessionModelIngressGuard(safety, "tool"),
+      sdkModelIngress: dialect[toolModelIngressDialect],
+      modelIngressProvider: modelInfo.provider,
       reresolve: (skillSession) =>
         prompt.resolve(withSkillActivationInput(resolveOpts, skillSession)),
     });

@@ -34,6 +34,10 @@ import type {
   StructuredAttempt,
   StructuredRequest,
 } from "./executor-types";
+import {
+  toolModelIngressDialect,
+  type ToolModelIngressDialect,
+} from "./tool/model-ingress-port";
 
 /**
  * A cached generation payload captured from a prior run, used to recreate a
@@ -104,6 +108,9 @@ export interface LoopRuntimePort<
 
   /** Materialize an inert prompt tool source for one SDK-loop invocation. */
   readonly materializeToolSource?: ToolSourceMaterializer;
+
+  /** @internal Guard client-tool output through the runtime's native dialect. */
+  readonly [toolModelIngressDialect]?: ToolModelIngressDialect;
 
   /**
    * Extract provider/model identity from an SDK model reference.

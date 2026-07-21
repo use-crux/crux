@@ -11,6 +11,8 @@ import type { MediaPartLocation, MediaPartSubject } from './types'
 export interface MediaVisitItem {
   readonly subject: MediaPartSubject
   readonly groupId: string
+  /** @internal Shared native position when several semantic subjects map to one removable slot. */
+  readonly retentionKey?: string
 }
 
 export interface MediaVisitGroup {
@@ -50,10 +52,12 @@ export async function visitMedia(options: VisitMediaOptions): Promise<MediaVisit
   const retainedByGroup = new Map(options.groups.map((group) => [group.id, group.size]))
   const minimumByGroup = new Map(options.groups.map((group) => [group.id, group.minimumRetained]))
   const actions: string[] = []
-  const stripped = new Set<MediaPartSubject>()
+  const stripped = new Set<string | MediaPartSubject>()
   const evaluations: MediaEvaluation[] = []
 
   for (const item of options.items) {
+    const retentionKey = item.retentionKey ?? item.subject
+    if (stripped.has(retentionKey)) continue
     const location: MediaPartLocation = {
       origin: item.subject.origin,
       partType: item.subject.part.type,
@@ -122,7 +126,7 @@ export async function visitMedia(options: VisitMediaOptions): Promise<MediaVisit
           throw mediaBlockedError(options.phase, binding, result.reason, location, durationMs, true, context.model)
         }
         retainedByGroup.set(item.groupId, groupCount(retainedByGroup, item.groupId) - 1)
-        stripped.add(item.subject)
+        stripped.add(retentionKey)
         options.onStrip?.(item)
         break
       }
@@ -152,7 +156,9 @@ export async function visitMedia(options: VisitMediaOptions): Promise<MediaVisit
   finalizeMediaEvaluations(options, evaluations)
 
   return {
-    subjects: options.items.map(({ subject }) => subject).filter((subject) => !stripped.has(subject)),
+    subjects: options.items
+      .filter((item) => !stripped.has(item.retentionKey ?? item.subject))
+      .map(({ subject }) => subject),
     actions,
     ran: true,
   }

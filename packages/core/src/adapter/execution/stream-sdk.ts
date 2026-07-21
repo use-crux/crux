@@ -11,7 +11,10 @@
 
 import type { z } from "zod";
 import type { MiddlewareResult } from "../../runtime/types";
-import { createSafetyWithBindingApplicability } from "../../safety/session";
+import {
+  createSafetyWithBindingApplicability,
+  safetySessionModelIngressGuard,
+} from "../../safety/session";
 import { languageBindingApplicability } from "../../safety/language-applicability";
 import { orchestrateStream } from "../../generation/orchestrate";
 import { runInStreamObservationContext } from "../../generation/stream-observability";
@@ -44,6 +47,7 @@ import {
 import { emitInputTokenEstimate } from "./media-token-budget";
 import { materializeToolSources } from "./tool-sources";
 import { createStreamSourceCleanup } from "./stream-source-cleanup";
+import { toolModelIngressDialect } from "../tool/model-ingress-port";
 import {
   guardStreamCompletion,
   trackSafetyStreamSeal,
@@ -143,6 +147,10 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
       promptId: prompt.id,
       input: args.input ?? {},
       timeout: args.timeout,
+      abortSignal: args.signal,
+      modelIngress: safetySessionModelIngressGuard(safety, "tool"),
+      sdkModelIngress: dialect[toolModelIngressDialect],
+      modelIngressProvider: modelInfo.provider,
       reresolve: (skillSession) =>
         prompt.resolve(withSkillActivationInput(resolveOpts, skillSession)),
     });

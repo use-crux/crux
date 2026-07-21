@@ -46,6 +46,8 @@ export type UrlAsset = AssetInfo & {
  *
  * The provider and file id are adapter-scoped locators. Stores may record them,
  * but must not dereference or upload provider files as part of `put()`.
+ * Model-ingress Safety callbacks can instead receive a callback-only view with
+ * `fileId: '<redacted>'`; that sentinel is not a usable provider locator.
  */
 export type ProviderFileAsset = AssetInfo & {
   readonly type: "provider-file";

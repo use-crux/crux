@@ -17,7 +17,9 @@ import type { Safety, SafetyOutput } from "./session-contract";
 import type {
   CanonicalModelIngress,
   CanonicalModelIngressResult,
+  ModelIngressGuard,
 } from "./input/model-ingress";
+import type { InputSource } from "./input-origin";
 
 export const outputMediaGuard: unique symbol = Symbol(
   "crux.safety.outputMediaGuard",
@@ -52,11 +54,15 @@ export const streamCompletionGuard: unique symbol = Symbol(
 export const modelIngressGuard: unique symbol = Symbol(
   "crux.safety.modelIngressGuard",
 );
+export const modelIngressSources: unique symbol = Symbol(
+  "crux.safety.modelIngressSources",
+);
 
 export interface SafetySession extends Safety {
   [modelIngressGuard](
     input: CanonicalModelIngress,
   ): Promise<CanonicalModelIngressResult>;
+  readonly [modelIngressSources]: readonly InputSource[];
   readonly [languageStepGuardEnabled]: boolean;
   [languageStepGuard](
     stepIndex: number,
@@ -108,6 +114,16 @@ export function guardSafetySessionModelIngress(
   input: CanonicalModelIngress,
 ): Promise<CanonicalModelIngressResult> {
   return (safety as SafetySession)[modelIngressGuard](input);
+}
+
+/** @internal Return the shared ingress gate only when one policy matches the source. */
+export function safetySessionModelIngressGuard(
+  safety: Safety,
+  source: InputSource,
+): ModelIngressGuard | undefined {
+  const session = safety as SafetySession;
+  if (!session[modelIngressSources].includes(source)) return undefined;
+  return (input) => session[modelIngressGuard](input);
 }
 
 /** @internal Whether this session has an applicable per-step output guard. */

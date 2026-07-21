@@ -12,7 +12,10 @@
  */
 
 import type { LanguageModel } from "ai";
-import { normalizeAdapterCallError } from "@use-crux/core/adapter";
+import {
+  normalizeAdapterCallError,
+  toolModelIngressDialect,
+} from "@use-crux/core/adapter";
 import type { ExecutorRequest, LoopRuntimePort } from "@use-crux/core/adapter";
 import { isPolicyTerminal } from "@use-crux/core/safety";
 import type { SdkGateway } from "./gateway";
@@ -20,6 +23,7 @@ import { mapAiSdkError } from "./normalized-outcome";
 import { createAiSdkCodec } from "./sdk-codec";
 import type { SdkLoopResultLike, SdkStreamResultLike } from "./sdk-codec";
 import { materializeAiSdkToolSource } from "./mcp-materializer";
+import { withAiSdkToolModelIngress } from "./sdk-codec/tool-model-ingress";
 
 export type { SdkLoopResultLike, SdkStreamResultLike } from "./sdk-codec";
 
@@ -49,6 +53,8 @@ export function createAiSdkLoopRuntime(gateway: SdkGateway): AiSdkLoopRuntime {
     capabilities: { stepTransform: "before-client-tools" },
 
     materializeToolSource: materializeAiSdkToolSource,
+
+    [toolModelIngressDialect]: withAiSdkToolModelIngress,
 
     describeModel: codec.describeModel,
 

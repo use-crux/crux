@@ -1,6 +1,7 @@
 import type { ModelIngressGuard, ToolModelInputOrigin } from '../../safety/input/model-ingress'
 import type { ToolModelOutput } from '../../types/tool'
 import { renderToolModelOutput } from './emission'
+import { applyCoreToolContentPatch, coreToolContentDocument } from './core-content-ingress'
 
 /** Inputs required to guard one post-conversion tool result. */
 export interface GuardToolModelOutputOptions {
@@ -26,13 +27,11 @@ export async function guardToolModelOutput(options: GuardToolModelOutputOptions)
       return guarded.value === options.output.value ? options.output : { ...options.output, value: guarded.value }
     }
     case 'content': {
-      const guarded = await options.guard({
-        kind: 'content',
-        value: options.output.value,
-        origin: toolOrigin(options),
-      })
-      if (guarded.kind !== 'content') throw new Error('Content model ingress returned non-content text.')
-      return guarded.value === options.output.value ? options.output : { ...options.output, value: guarded.value }
+      const value = options.output.value
+      const guarded = await options.guard(coreToolContentDocument(value, toolOrigin(options)))
+      if (guarded.kind !== 'patch') throw new Error('Structured model ingress returned non-patch text.')
+      const patched = applyCoreToolContentPatch(value, guarded)
+      return patched === value ? options.output : { ...options.output, value: patched }
     }
     case 'json':
     case 'error-json': {

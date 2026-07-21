@@ -75,7 +75,13 @@ export type MediaPartOrigin =
       readonly partIndex: 0
     }
 
-/** A canonical media part together with its stable pre-write-back origin. */
+/**
+ * A canonical media part together with its stable pre-write-back origin.
+ *
+ * Adapter codecs may expose a callback-only `provider-file` source whose
+ * `fileId` is `'<redacted>'`. That sentinel protects the native provider ID
+ * during Safety evaluation and is never a usable asset locator.
+ */
 export interface MediaPartSubject {
   /** Canonical image, audio, video, or file part under evaluation. */
   readonly part: MediaPart

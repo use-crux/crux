@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest'
 import { contentText } from '../../src/content'
 import { boundary, createSafety, guardrail } from '../../src/safety'
-import { guardSafetySessionModelIngress } from '../../src/safety/session'
+import { safetySessionModelIngressGuard } from '../../src/safety/session'
 
 describe('model ingress', () => {
   it('strips media before text projection and preserves retained part identity', async () => {
@@ -50,8 +50,11 @@ describe('model ingress', () => {
       },
     })
 
-    const guarded = await guardSafetySessionModelIngress(safety, {
-      kind: 'content',
+    const modelIngress = safetySessionModelIngressGuard(safety, 'tool')
+    expect(typeof modelIngress).toBe('function')
+    if (!modelIngress) throw new Error('expected tool model ingress')
+    const guarded = await modelIngress({
+      kind: 'document',
       value: [text, removed, retained],
       origin: {
         source: 'tool',
@@ -59,13 +62,47 @@ describe('model ingress', () => {
         toolName: 'lookup',
         toolCallId: 'call-1',
       },
+      slots: [
+        { key: 'part:0', kind: 'text', value: text.text },
+        {
+          key: 'part:1',
+          kind: 'media',
+          descriptor: contentText([removed]),
+          subjects: [
+            {
+              part: removed,
+              origin: {
+                kind: 'tool-result',
+                toolName: 'lookup',
+                toolCallId: 'call-1',
+                partIndex: 1,
+              },
+            },
+          ],
+        },
+        {
+          key: 'part:2',
+          kind: 'media',
+          descriptor: contentText([retained]),
+          subjects: [
+            {
+              part: retained,
+              origin: {
+                kind: 'tool-result',
+                toolName: 'lookup',
+                toolCallId: 'call-1',
+                partIndex: 2,
+              },
+            },
+          ],
+        },
+      ],
     })
 
     expect(order).toEqual(['media:removed', 'media:retained', 'text'])
-    expect(guarded.kind).toBe('content')
-    if (guarded.kind !== 'content') throw new Error('expected content')
-    expect(guarded.value).toHaveLength(2)
-    expect(guarded.value[0]).toEqual({ type: 'text', text: 'safe summary' })
-    expect(guarded.value[1]).toBe(retained)
+    expect(guarded.kind).toBe('patch')
+    if (guarded.kind !== 'patch') throw new Error('expected patch')
+    expect(guarded.removed).toEqual(new Set(['part:1']))
+    expect(guarded.text).toEqual(new Map([['part:0', 'safe summary']]))
   })
 })

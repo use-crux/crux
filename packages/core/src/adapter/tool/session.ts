@@ -123,6 +123,7 @@ import { runToolScope } from "./scope";
 import type { ModelIngressGuard } from "../../safety/input/model-ingress";
 import { isPolicyTerminal } from "../../safety/errors";
 import { guardToolModelOutput } from "./model-ingress";
+import type { ToolModelIngressDialect } from "./model-ingress-port";
 
 // ─────────────────────────────────────────────────────────────────
 // Public types
@@ -173,6 +174,10 @@ export interface ToolLifecycleOptions {
   readonly abortSignal?: AbortSignal;
   /** @internal Guards post-conversion canonical tool output before writeback. */
   readonly modelIngress?: ModelIngressGuard;
+  /** @internal Wraps SDK-owned tools in their native model-output dialect. */
+  readonly sdkModelIngress?: ToolModelIngressDialect;
+  /** @internal Active provider used for dialect-native semantic projections. */
+  readonly modelIngressProvider?: string;
   /**
    * Dialect-owned re-resolution closure: how to resolve the prompt again
    * after `LoadSkill` activates a skill. The session owns everything else
@@ -632,15 +637,32 @@ export function createToolLifecycle(
       descriptors = convertTools(wrappedTools, options.sanitizeToolSchema);
     } else {
       const keys = Object.keys(wrappedTools);
-      armedTools =
-        keys.length > 0
-          ? instrumentToolSet(
-              withToolLifecycleExecutionOptions(
-                wrappedTools,
-                executionOptionsForSdkTool,
-              ),
-            )
-          : undefined;
+      if (keys.length === 0) {
+        armedTools = undefined;
+      } else {
+        let executable = withToolLifecycleExecutionOptions(
+          wrappedTools,
+          executionOptionsForSdkTool,
+        );
+        if (options.modelIngress) {
+          if (!options.sdkModelIngress) {
+            throw new Error(
+              "The loop runtime cannot guard native tool model output because it does not provide a model-ingress dialect hook.",
+            );
+          }
+          const guard = options.abortSignal
+            ? (input: Parameters<ModelIngressGuard>[0]) =>
+                withAbortSignal(
+                  () => options.modelIngress!(input),
+                  options.abortSignal,
+                )
+            : options.modelIngress;
+          executable = options.sdkModelIngress(executable, guard, {
+            provider: options.modelIngressProvider,
+          });
+        }
+        armedTools = instrumentToolSet(executable);
+      }
     }
   }
 

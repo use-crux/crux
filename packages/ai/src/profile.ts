@@ -4,7 +4,10 @@
  * @module
  */
 
-import { defineProviderRuntime } from "@use-crux/core/adapter";
+import {
+  defineProviderRuntime,
+  toolModelIngressDialect,
+} from "@use-crux/core/adapter";
 import { createAiSdkLoopRuntime } from "./executor";
 import { createAiSdkRuntimeExtensions } from "./extensions";
 import type { SdkGateway } from "./gateway";
@@ -32,6 +35,7 @@ export const aiSdkProviderRuntime = defineProviderRuntime({
     settings: mapAiSdkSettings,
     media: aiSdkMediaHooks,
     bind: (gateway: SdkGateway) => {
+      const runtime = createAiSdkLoopRuntime(gateway);
       const {
         capabilities,
         materializeToolSource,
@@ -39,10 +43,11 @@ export const aiSdkProviderRuntime = defineProviderRuntime({
         runStructuredAttempt,
         runStream,
         replayStream,
-      } = createAiSdkLoopRuntime(gateway);
+      } = runtime;
       return {
         capabilities,
         materializeToolSource,
+        [toolModelIngressDialect]: runtime[toolModelIngressDialect],
         runTextLoop,
         runStructuredAttempt,
         runStream,

@@ -20,6 +20,7 @@ export {
   guardSafetySessionInputOperationText,
   guardSafetySessionLanguageStep,
   guardSafetySessionModelIngress,
+  safetySessionModelIngressGuard,
   guardSafetySessionOutputMedia,
   guardSafetySessionOutputOperationText,
   guardSafetySessionStreamCompletion,
