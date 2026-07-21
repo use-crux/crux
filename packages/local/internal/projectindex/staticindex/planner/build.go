@@ -52,10 +52,7 @@ func BuildWithExtensionManifestContext(
 	extensionManifest *projectindex.StaticExtensionHostManifestResult,
 ) (Result, error) {
 	timings := []projectindex.ProjectIndexPhaseTiming{}
-	var cacheInputs []json.RawMessage
-	if config.StaticSyntaxEnabled {
-		cacheInputs = DefaultCacheCompilerInputs()
-	}
+	cacheInputs := DefaultCacheCompilerInputs()
 	plan := projectindex.ProjectStaticSyntaxPlan{
 		Root:                     root,
 		ProjectName:              projectName,
@@ -67,7 +64,6 @@ func BuildWithExtensionManifestContext(
 		ConstructorInterests:     defaultConstructorInterests(),
 		PruneNativeFactCallNames: []string{"cascade", "fallback", "router"},
 		SyntaxFrontend:           syntaxFrontend(),
-		StaticSyntaxEnabled:      config.StaticSyntaxEnabled,
 		StaticInterests:          defaultStaticInterests(),
 		RelationSpecs:            nil,
 		RuleDescriptors:          nil,
@@ -75,7 +71,7 @@ func BuildWithExtensionManifestContext(
 		CacheInputs:              cacheInputs,
 		StaticHost:               defaultHost(),
 	}
-	if config.StaticSyntaxEnabled && extensionManifest != nil {
+	if extensionManifest != nil {
 		if err := mergeExtensionHostManifest(&plan, *extensionManifest); err != nil {
 			return Result{}, err
 		}
@@ -109,7 +105,7 @@ func BuildWithExtensionManifestContext(
 	timings = AppendTiming(timings, TimingSourceGraph, sourceGraphStarted, 1)
 	plan.SourceGraph = sourceGraph
 
-	if config.StaticSyntaxEnabled && cache.StatusEnabledFromEnv() && !projectindex.CacheDisabled(ctx) {
+	if cache.StatusEnabledFromEnv() && !projectindex.CacheDisabled(ctx) {
 		cacheStarted := time.Now()
 		applyCacheManifestStatus(&plan)
 		timings = AppendTiming(timings, TimingCacheStatus, cacheStarted, len(plan.PrimaryFiles))

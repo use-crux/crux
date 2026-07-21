@@ -54,7 +54,7 @@ func TestPreviousBatchesUseWireBatchSize(t *testing.T) {
 func TestBatchSemanticRequestCompactsPreviousAndSourceProfile(t *testing.T) {
 	profile := projectSemanticProfile(BatchSize + 1)
 	req := Request{
-		ProtocolVersion: 2,
+		ProtocolVersion: ProtocolVersion,
 		Method:          "indexProjectSemantic",
 		Root:            "/repo",
 		PreviousIndex: &store.IndexData{
@@ -98,7 +98,7 @@ func TestBatchSemanticRequestCompactsPreviousAndSourceProfile(t *testing.T) {
 
 func TestBatchRuntimeRequestUsesSharedPreviousIndexBatches(t *testing.T) {
 	events, err := Batch(Request{
-		ProtocolVersion: 2,
+		ProtocolVersion: ProtocolVersion,
 		Method:          "indexProjectRuntime",
 		Root:            "/repo",
 		PreviousIndex: &store.IndexData{

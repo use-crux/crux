@@ -30,18 +30,17 @@ func TestWorkerStaticIndexCompilerUsesCompileStreamWhenNativeOnly(t *testing.T) 
 	}
 	worker := &Bundle{}
 	plan := projectindex.ProjectStaticSyntaxPlan{
-		Root:                root,
-		ProjectName:         "static-index-cutover",
-		Files:               []string{sourceFile},
-		PrimaryFiles:        []string{sourceFile},
-		FilesToParse:        []string{sourceFile},
-		CacheMisses:         []string{sourceFile},
-		CallNames:           []string{"prompt"},
-		ConstructorNames:    []string{"Agent"},
-		StaticSyntaxEnabled: true,
-		StaticHost:          json.RawMessage(`{"nativeOnlyEligible":true}`),
-		StaticInterests:     json.RawMessage(`{"extractors":[]}`),
-		SourceGraph:         json.RawMessage(`{"schemaVersion":1,"producedBy":"@use-crux/indexer","capabilities":[],"shards":[]}`),
+		Root:             root,
+		ProjectName:      "static-index-cutover",
+		Files:            []string{sourceFile},
+		PrimaryFiles:     []string{sourceFile},
+		FilesToParse:     []string{sourceFile},
+		CacheMisses:      []string{sourceFile},
+		CallNames:        []string{"prompt"},
+		ConstructorNames: []string{"Agent"},
+		StaticHost:       json.RawMessage(`{"nativeOnlyEligible":true}`),
+		StaticInterests:  json.RawMessage(`{"extractors":[]}`),
+		SourceGraph:      json.RawMessage(`{"schemaVersion":1,"producedBy":"@use-crux/indexer","capabilities":[],"shards":[]}`),
 	}
 
 	patch, _, usedStaticIndex, err := worker.indexProjectAstPatchFromStaticIndexCompiler(context.Background(), root, "", "static-index-cutover", plan, compiler)

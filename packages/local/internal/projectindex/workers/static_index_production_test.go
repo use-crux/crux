@@ -9,14 +9,14 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
 )
 
-func writeStaticIndexNativeConfig(t testing.TB, root string) string {
+func writeStaticIndexConfigAtNestedPath(t testing.TB, root string) string {
 	t.Helper()
 	configPath := filepath.Join("packages", "indexer", ".crux", "cache", "static-index-native.config.ts")
 	absoluteConfigPath := filepath.Join(root, configPath)
 	if err := os.MkdirAll(filepath.Dir(absoluteConfigPath), 0o755); err != nil {
 		t.Fatalf("create Static Index native config dir: %v", err)
 	}
-	source := []byte("import { config } from '@use-crux/core'\n\nexport default config({\n  experimental: { indexer: { nativeAst: { frontend: 'oxc' } } },\n})\n")
+	source := []byte("import { config } from '@use-crux/core'\n\nexport default config({})\n")
 	if err := os.WriteFile(absoluteConfigPath, source, 0o600); err != nil {
 		t.Fatalf("write Static Index native config: %v", err)
 	}

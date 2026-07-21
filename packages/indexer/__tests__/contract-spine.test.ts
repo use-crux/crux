@@ -89,7 +89,7 @@ describe('Static Index runtime contract spine', () => {
       'typescript-only',
     ])
     expect(staticIndexRuntimeContractManifest.protocolVersions).toEqual({
-      projectIndexWorkerEvents: 2,
+      projectIndexWorkerEvents: 3,
       staticIndexCompiler: 2,
     })
   })

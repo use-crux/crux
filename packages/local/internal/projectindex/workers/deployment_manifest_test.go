@@ -30,7 +30,7 @@ func TestCreateDeploymentManifestUsesTypedWorkerArtifact(t *testing.T) {
 				return
 			}
 			process.stdout.write(JSON.stringify({
-				protocolVersion: 2,
+				protocolVersion: 3,
 				type: 'artifact:done',
 				transactionId: 'artifact:deploymentManifest',
 				artifact: 'deploymentManifest',

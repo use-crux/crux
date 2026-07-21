@@ -23,7 +23,7 @@ export interface ProjectIndexArtifactToWorkerEventOptions {
 }
 
 /**
- * Wraps a JSON artifact in a typed V2 worker event.
+ * Wraps a JSON artifact in a typed V3 worker event.
  *
  * The generic artifact kind narrows the payload type, so callers cannot emit a
  * project config body as a project model response or vice versa.

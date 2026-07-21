@@ -16,7 +16,6 @@ import type {
 import type { IndexPatch, IndexPatchFacts, IndexPatchPhase } from '../patches'
 import type { ProjectConfigInspect } from '../project-config-inspect'
 import type { ProjectStaticIndexConfig } from '../static-index/config/inspect'
-import type { ProjectStaticSyntaxPlan } from '../static-index/plan'
 import type { StaticExtractionTimingName } from '../static/instrumentation'
 import type { SemanticSourceProfileFile } from '../semantic/source-profile'
 import type {
@@ -34,7 +33,7 @@ export type { ProjectIndexFactExtractorProvenance, ProjectIndexFactProvenance } 
 export type { RuntimeArtifactFinding } from '../runtime-artifacts'
 
 /** Current Project Index worker stream protocol version. */
-export const PROJECT_INDEX_WORKER_PROTOCOL_VERSION = 2 as const
+export const PROJECT_INDEX_WORKER_PROTOCOL_VERSION = 3 as const
 
 type ArrayItem<T> = T extends readonly (infer TItem)[] ? TItem : never
 
@@ -75,7 +74,7 @@ export interface ProjectIndexPatchFactMap {
   readonly sourceGraph: NonNullable<IndexPatchFacts['sourceGraph']>
 }
 
-/** Fact kinds supported by the V2 patch stream. */
+/** Fact kinds supported by the V3 patch stream. */
 export type ProjectIndexPatchFactKind = keyof ProjectIndexPatchFactMap
 
 /**
@@ -114,7 +113,7 @@ export type ProjectIndexFactEnvelope = {
 export type ProjectIndexPatchMetadata = Omit<IndexPatch, 'facts'>
 
 /**
- * JSON artifact payloads emitted through the V2 worker protocol.
+ * JSON artifact payloads emitted through the V3 worker protocol.
  *
  * These are not durable index facts and are therefore kept separate from
  * `ProjectIndexPatchFactMap`; callers still receive them through the same
@@ -127,8 +126,6 @@ export interface ProjectIndexArtifactMap {
   readonly projectConfig: ProjectConfigInspect
   /** Executable-config fragment used before Go/Rust-owned Static Index planning. */
   readonly projectStaticIndexConfig: ProjectStaticIndexConfig
-  /** Static syntax parsing plan consumed by native parser hosts. */
-  readonly projectStaticSyntaxPlan: ProjectStaticSyntaxPlan
   /** Data-only extension runtime manifest loaded by the TypeScript static host. */
   readonly staticExtensionHostManifest: LoadStaticExtensionHostManifestResult
   /** TypeScript extractor facts produced from Static Index evidence jobs. */
@@ -147,7 +144,7 @@ export interface ProjectIndexArtifactMap {
   readonly deploymentManifest: ProjectIndexDeploymentManifestV1
 }
 
-/** JSON artifact kinds supported by the V2 worker stream. */
+/** JSON artifact kinds supported by the V3 worker stream. */
 export type ProjectIndexArtifactKind = keyof ProjectIndexArtifactMap
 
 /** Base fields shared by every worker stream event. */
@@ -289,7 +286,7 @@ export interface ProjectIndexArtifactErrorEvent extends ProjectIndexWorkerEventB
   }
 }
 
-/** All events emitted by the Project Index worker V2 stream. */
+/** All events emitted by the Project Index worker V3 stream. */
 export type ProjectIndexWorkerEvent =
   | ProjectIndexPhaseStartEvent
   | ProjectIndexFactBatchEvent

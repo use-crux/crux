@@ -29,7 +29,7 @@ func TestWorker_streamsSemanticSourceProfileRequestBatches(t *testing.T) {
 			if (req.requestKind !== 'done') return
 			if (seen[0] !== 'start' || !seen.includes('sourceProfile:batch')) {
 				process.stdout.write(JSON.stringify({
-					protocolVersion: 2,
+					protocolVersion: 3,
 					type: 'phase:error',
 					transactionId: 'tx-error',
 					phase: 'semantic',
@@ -39,7 +39,7 @@ func TestWorker_streamsSemanticSourceProfileRequestBatches(t *testing.T) {
 			}
 			const tx = 'tx-semantic'
 			process.stdout.write(JSON.stringify({
-				protocolVersion: 2,
+				protocolVersion: 3,
 				type: 'phase:start',
 				transactionId: tx,
 				phase: 'semantic',
@@ -47,7 +47,7 @@ func TestWorker_streamsSemanticSourceProfileRequestBatches(t *testing.T) {
 				startedAt: new Date(0).toISOString()
 			}) + '\n')
 			process.stdout.write(JSON.stringify({
-				protocolVersion: 2,
+				protocolVersion: 3,
 				type: 'phase:done',
 				transactionId: tx,
 				phase: 'semantic',
@@ -125,7 +125,7 @@ func TestWorker_streamsPreviousIndexRequestBatches(t *testing.T) {
 			if (req.requestKind !== 'done') return
 			if (!startWasCompact || definitions !== 150 || sources !== 129) {
 				process.stdout.write(JSON.stringify({
-					protocolVersion: 2,
+					protocolVersion: 3,
 					type: 'phase:error',
 					transactionId: 'tx-error',
 					phase: 'semantic',
@@ -135,7 +135,7 @@ func TestWorker_streamsPreviousIndexRequestBatches(t *testing.T) {
 			}
 			const tx = 'tx-semantic'
 			process.stdout.write(JSON.stringify({
-				protocolVersion: 2,
+				protocolVersion: 3,
 				type: 'phase:start',
 				transactionId: tx,
 				phase: 'semantic',
@@ -143,7 +143,7 @@ func TestWorker_streamsPreviousIndexRequestBatches(t *testing.T) {
 				startedAt: new Date(0).toISOString()
 			}) + '\n')
 			process.stdout.write(JSON.stringify({
-				protocolVersion: 2,
+				protocolVersion: 3,
 				type: 'phase:done',
 				transactionId: tx,
 				phase: 'semantic',

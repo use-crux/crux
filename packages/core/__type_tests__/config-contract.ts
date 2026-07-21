@@ -106,21 +106,11 @@ const experimentalNativeIndexerWithPath = {
   },
 } satisfies CruxConfig
 
-const experimentalNativeAstIndexer = {
+const experimentalNativeAstIsRemoved = {
   experimental: {
     indexer: {
+      // @ts-expect-error Static Index always uses Rust/Oxc and has no config switch.
       nativeAst: true,
-    },
-  },
-} satisfies CruxConfig
-
-const experimentalNativeAstAndSemanticIndexer = {
-  experimental: {
-    indexer: {
-      nativeAst: { frontend: 'oxc' },
-      native: {
-        engine: 'tsgo',
-      },
     },
   },
 } satisfies CruxConfig
@@ -142,7 +132,7 @@ const experimentalNativeIndexerRejectsNestedAst = {
     indexer: {
       native: {
         engine: 'tsgo',
-        // @ts-expect-error Native static AST is configured with sibling `nativeAst`.
+        // @ts-expect-error Static frontend selection is not part of semantic config.
         ast: true,
       },
     },
@@ -233,8 +223,7 @@ void observabilityCapturePolicy
 void observabilityRedactRecordMisspelling
 void experimentalNativeIndexer
 void experimentalNativeIndexerWithPath
-void experimentalNativeAstIndexer
-void experimentalNativeAstAndSemanticIndexer
+void experimentalNativeAstIsRemoved
 void experimentalTsgoConfigIsRemoved
 void legacySemanticBackendConfigIsRemoved
 void promptsStayInSource

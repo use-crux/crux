@@ -5,12 +5,12 @@
   "fileSelection": "staticDefinitionFiles(root)",
   "projection": "canonicalStaticExtractionJson(definitions,relations,diagnostics,dependencies)",
   "totals": {
-    "files": 764,
+    "files": 762,
     "definitions": 88,
     "relations": 7,
     "diagnostics": 25,
-    "dependencies": 1457,
-    "canonicalBytes": 214284
+    "dependencies": 1444,
+    "canonicalBytes": 213360
   },
   "files": [
     {
@@ -4929,12 +4929,12 @@
     },
     {
       "file": "packages/indexer/src/indexer/project-config-inspect.ts",
-      "sha256": "098c438c0d57bc830561329d3f1870d8efc128f42e97c3059abaf2385903b14e",
-      "bytes": 343,
+      "sha256": "87a3dd31907ba8e35eb35226e395fcd55a37d46d21d1cd3dfe9624478ab5ffc5",
+      "bytes": 276,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 5
+      "dependencies": 4
     },
     {
       "file": "packages/indexer/src/indexer/project-model-diagnostics.ts",
@@ -5549,22 +5549,13 @@
       "dependencies": 0
     },
     {
-      "file": "packages/indexer/src/indexer/static-index/config/index.ts",
-      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
-      "bytes": 68,
-      "definitions": 0,
-      "relations": 0,
-      "diagnostics": 0,
-      "dependencies": 0
-    },
-    {
       "file": "packages/indexer/src/indexer/static-index/config/inspect.ts",
-      "sha256": "fb5644e9f88a30dbdccb81c40659659260a8958860786edf07a9eff7487945f4",
-      "bytes": 182,
+      "sha256": "9ecb027f596641762d523c6a2ed6a3e728b7e1d1b9107b86462e02228775ba6d",
+      "bytes": 115,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 2
+      "dependencies": 1
     },
     {
       "file": "packages/indexer/src/indexer/static-index/extension-host/evidence/host-facts.ts",
@@ -5577,12 +5568,12 @@
     },
     {
       "file": "packages/indexer/src/indexer/static-index/extension-host/evidence/host.ts",
-      "sha256": "d46a9cc8ec1f1b4c64b6cad81fb856b032d8ce2d66ffb743372b894110c6c97d",
-      "bytes": 294,
+      "sha256": "f7c63bf7c2545a264d87ee5231b7949b51ab614649abcf257df8bf5d27419b36",
+      "bytes": 366,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 3
+      "dependencies": 4
     },
     {
       "file": "packages/indexer/src/indexer/static-index/extension-host/evidence/types.ts",
@@ -5619,15 +5610,6 @@
       "relations": 0,
       "diagnostics": 0,
       "dependencies": 6
-    },
-    {
-      "file": "packages/indexer/src/indexer/static-index/plan/index.ts",
-      "sha256": "a12e0d15c99d25a194c141476df378b34756136006dceb5e0bf21df02a87d56c",
-      "bytes": 794,
-      "definitions": 0,
-      "relations": 0,
-      "diagnostics": 0,
-      "dependencies": 12
     },
     {
       "file": "packages/indexer/src/indexer/static-index/syntax/record/defer-native-facts.ts",
@@ -6836,24 +6818,6 @@
       "dependencies": 1
     },
     {
-      "file": "scripts/native-ast-benchmark.mjs",
-      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
-      "bytes": 68,
-      "definitions": 0,
-      "relations": 0,
-      "diagnostics": 0,
-      "dependencies": 0
-    },
-    {
-      "file": "scripts/native-ast-parity-gate.mjs",
-      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
-      "bytes": 68,
-      "definitions": 0,
-      "relations": 0,
-      "diagnostics": 0,
-      "dependencies": 0
-    },
-    {
       "file": "scripts/portability/check.mjs",
       "sha256": "d48396dd50a8d210fa02aa48b1c6c22a718a45829cf39b2f023023c42c3a34ea",
       "bytes": 107,
@@ -6864,6 +6828,24 @@
     },
     {
       "file": "scripts/stage-npm-packages.mjs",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "scripts/static-index-benchmark.mjs",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "scripts/static-index-parity-gate.mjs",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
       "definitions": 0,

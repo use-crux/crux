@@ -25,7 +25,7 @@ type Options struct {
 }
 
 // Worker runs explicit runtime-rich Project Index evidence collection through
-// its own V2 NDJSON worker process.
+// its own V3 NDJSON worker process.
 type Worker struct {
 	phase source.Client
 }

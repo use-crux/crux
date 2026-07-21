@@ -11,10 +11,11 @@ import (
 )
 
 const (
-	BatchSize = 128
+	BatchSize       = 128
+	ProtocolVersion = 3
 )
 
-// Request is the V2 NDJSON envelope exchanged with TypeScript worker
+// Request is the V3 NDJSON envelope exchanged with TypeScript worker
 // entrypoints. Keep this package focused on wire shape and transport batching.
 type Request struct {
 	ProtocolVersion               int                                      `json:"protocolVersion,omitempty"`
@@ -45,7 +46,6 @@ type Request struct {
 	SourceProfileFiles            []projectindex.SemanticSourceProfileFile `json:"sourceProfileFiles,omitempty"`
 	Mode                          string                                   `json:"mode,omitempty"`
 	MaxAffectedFiles              int                                      `json:"maxAffectedFiles,omitempty"`
-	IncludeStaticCacheStatus      bool                                     `json:"includeStaticCacheStatus,omitempty"`
 	CacheDisabled                 bool                                     `json:"cacheDisabled,omitempty"`
 	RuntimeOperation              string                                   `json:"runtimeOperation,omitempty"`
 	RuntimeWorkID                 string                                   `json:"runtimeWorkId,omitempty"`

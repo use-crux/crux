@@ -17,7 +17,7 @@ const staticFallbackTimeout = 30 * time.Second
 // Client is the shared Project Index phase client for TypeScript worker lanes.
 //
 // Each phase supplies its worker name, script, producer identity, and transport
-// limits, while Client owns the common V2 JSON-line batching, stream
+// limits, while Client owns the common V3 JSON-line batching, stream
 // collection, artifact handling, and source-only fallback behavior.
 type Client struct {
 	Name           string
@@ -112,7 +112,7 @@ func (c Client) Artifact(ctx context.Context, req requestwire.Request, artifact 
 
 // Stream sends a single JSON-line request to a one-shot TypeScript worker.
 func (c Client) Stream(ctx context.Context, req requestwire.Request, handle func(json.RawMessage) error) (workerproc.StreamResult, error) {
-	req.ProtocolVersion = 2
+	req.ProtocolVersion = requestwire.ProtocolVersion
 	data, err := json.Marshal(req)
 	if err != nil {
 		return workerproc.StreamResult{}, fmt.Errorf("marshal streamed project index request: %w", err)
@@ -134,7 +134,7 @@ func (c Client) PatchRequest(
 	handle func(json.RawMessage) error,
 	done func() bool,
 ) error {
-	req.ProtocolVersion = 2
+	req.ProtocolVersion = requestwire.ProtocolVersion
 	requests, err := requestwire.Batch(req)
 	if err != nil {
 		return err

@@ -2,7 +2,7 @@ package eventwire
 
 import "github.com/use-crux/crux/packages/local/internal/runtimeartifact"
 
-// WorkerEventError preserves the typed failure fields carried by the V2
+// WorkerEventError preserves the typed failure fields carried by the V3
 // Project Index worker protocol.
 type WorkerEventError = runtimeartifact.WorkerError
 

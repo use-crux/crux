@@ -149,8 +149,8 @@ func (c *recordingStaticIndexCompiler) StaticIndexFinalize(_ context.Context, re
 		ProtocolVersion: protocol.Version,
 		Method:          protocol.FinalizeMethod,
 		Events: []json.RawMessage{
-			json.RawMessage(`{"protocolVersion":2,"type":"phase:start","transactionId":"static-index-skeleton","phase":"ast","root":"/repo","startedAt":"1970-01-01T00:00:00.000Z"}`),
-			json.RawMessage(`{"protocolVersion":2,"type":"phase:done","transactionId":"static-index-skeleton","phase":"ast","patch":{"schemaVersion":1,"phase":"ast","project":{"root":"/repo"},"startedAt":"1970-01-01T00:00:00.000Z","finishedAt":"1970-01-01T00:00:00.000Z","status":"ok"},"summary":{"factCount":0}}`),
+			json.RawMessage(`{"protocolVersion":3,"type":"phase:start","transactionId":"static-index-skeleton","phase":"ast","root":"/repo","startedAt":"1970-01-01T00:00:00.000Z"}`),
+			json.RawMessage(`{"protocolVersion":3,"type":"phase:done","transactionId":"static-index-skeleton","phase":"ast","patch":{"schemaVersion":1,"phase":"ast","project":{"root":"/repo"},"startedAt":"1970-01-01T00:00:00.000Z","finishedAt":"1970-01-01T00:00:00.000Z","status":"ok"},"summary":{"factCount":0}}`),
 		},
 		Telemetry: staticIndexTestTelemetry(0, 0, 0, 0),
 	}, nil

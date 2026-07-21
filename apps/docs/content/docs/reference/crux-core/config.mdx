@@ -187,22 +187,11 @@ release. Stable-looking backend switches do not belong under `indexer`.
 | `experimental.indexer.native`              | `boolean \| CruxExperimentalIndexerNativeConfig`    | `false`                            | Selects the experimental native semantic backend.           |
 | `experimental.indexer.native.engine`       | `'tsgo'`                                            | `tsgo`                             | TypeScript-Go native-preview semantic engine.               |
 | `experimental.indexer.native.tsserverPath` | `string`                                            | resolved from project dependencies | Optional TypeScript-Go executable path.                     |
-| `experimental.indexer.nativeAst`           | `boolean \| CruxExperimentalIndexerNativeAstConfig` | `false`                            | Selects the experimental native static AST/source frontend. |
-| `experimental.indexer.nativeAst.frontend`  | `'oxc'`                                             | `oxc`                              | Rust/Oxc static frontend hosted by the local Go runtime.    |
 
-`experimental.indexer.native` and `experimental.indexer.nativeAst` are independent:
-
-- `native` controls semantic enrichment. When enabled, TypeScript-Go owns semantic project setup,
-  checker calls, declaration lookup, and AST traversal.
-- `nativeAst` controls the first static AST/source pass. It can use Rust/Oxc without selecting the
-  native semantic backend.
-
-`experimental.indexer.nativeAst` is covered by the native AST beta gate before release promotion:
-Rust/Oxc output must match the TypeScript Static Index baseline after canonical normalization,
-including lint findings, source graph rows, cache behavior, and TypeScript extension fallback. Node
-can still start for config inspection or trusted TypeScript extension work. If native AST
-diagnostics report worker startup, fallback, or Node-start failures, remove the flag or set it to
-`false` to return to the TypeScript baseline.
+`experimental.indexer.native` controls semantic enrichment only. When enabled, TypeScript-Go owns
+semantic project setup, checker calls, declaration lookup, and AST traversal. Static Index has no
+frontend selector: the local runtime always uses its Go-orchestrated Rust/Oxc compiler. Node can
+still start for config inspection or trusted TypeScript extension work.
 
 ```ts title="crux.config.ts"
 export default config({
@@ -211,9 +200,6 @@ export default config({
       native: {
         engine: "tsgo",
         tsserverPath: "/path/to/tsgo",
-      },
-      nativeAst: {
-        frontend: "oxc",
       },
     },
   },

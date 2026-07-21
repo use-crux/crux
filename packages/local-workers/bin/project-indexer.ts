@@ -3,14 +3,13 @@
 /**
  * Stdio wrapper for Project Index indexing.
  *
- * Protocol: one JSON request per line on stdin, V2 NDJSON worker events on stdout.
+ * Protocol: one JSON request per line on stdin, V3 NDJSON worker events on stdout.
  */
 
 import { createInterface } from 'node:readline'
 import {
   generateRuntimeArtifacts,
   inspectProjectStaticIndexConfig,
-  inspectProjectStaticSyntaxPlan,
   inspectProjectConfig,
   resolveProjectModel,
   runRuntimeOperation,
@@ -23,7 +22,7 @@ import {
   type ProjectIndexWorkerRequest,
 } from '../lib/project-indexer-request'
 import {
-  assertProjectIndexWorkerProtocolV2,
+  assertProjectIndexWorkerProtocolV3,
   errorContextForMethod,
   writeArtifactEvent,
   writeProjectIndexArtifactError,
@@ -141,7 +140,7 @@ async function runAssembledRequest(
     switch (req.method) {
       case 'resolveProjectModel': {
         if (!req.root) throw new Error('resolveProjectModel requires root')
-        assertProjectIndexWorkerProtocolV2(req.protocolVersion)
+        assertProjectIndexWorkerProtocolV3(req.protocolVersion)
         const projectModel = await resolveProjectModel({
           root: req.root,
           configPath: req.configPath,
@@ -153,7 +152,7 @@ async function runAssembledRequest(
       }
       case 'inspectProjectConfig': {
         if (!req.root) throw new Error('inspectProjectConfig requires root')
-        assertProjectIndexWorkerProtocolV2(req.protocolVersion)
+        assertProjectIndexWorkerProtocolV3(req.protocolVersion)
         const config = await inspectProjectConfig({
           root: req.root,
           configPath: req.configPath,
@@ -165,7 +164,7 @@ async function runAssembledRequest(
       }
       case 'inspectProjectStaticIndexConfig': {
         if (!req.root) throw new Error('inspectProjectStaticIndexConfig requires root')
-        assertProjectIndexWorkerProtocolV2(req.protocolVersion)
+        assertProjectIndexWorkerProtocolV3(req.protocolVersion)
         const config = await inspectProjectStaticIndexConfig({
           root: req.root,
           configPath: req.configPath,
@@ -173,29 +172,16 @@ async function runAssembledRequest(
         await writeArtifactEvent(writeResponse, 'projectStaticIndexConfig', config, req.root)
         break
       }
-      case 'inspectProjectStaticSyntaxPlan': {
-        if (!req.root) throw new Error('inspectProjectStaticSyntaxPlan requires root')
-        assertProjectIndexWorkerProtocolV2(req.protocolVersion)
-        const plan = await inspectProjectStaticSyntaxPlan({
-          root: req.root,
-          configPath: req.configPath,
-          projectName: req.projectName,
-          resolutionMode: requestResolutionMode(req.resolutionMode),
-          includeCacheStatus: req.includeStaticCacheStatus,
-        })
-        await writeArtifactEvent(writeResponse, 'projectStaticSyntaxPlan', plan, req.root)
-        break
-      }
       case 'loadStaticExtensionHostManifest':
       case 'extractStaticEvidenceBatch':
       case 'checkStaticRules': {
-        assertProjectIndexWorkerProtocolV2(req.protocolVersion)
+        assertProjectIndexWorkerProtocolV3(req.protocolVersion)
         await writeStaticHostArtifactRequest(writeResponse, req)
         break
       }
       case 'generateRuntimeArtifacts': {
         if (!req.root) throw new Error('generateRuntimeArtifacts requires root')
-        assertProjectIndexWorkerProtocolV2(req.protocolVersion)
+        assertProjectIndexWorkerProtocolV3(req.protocolVersion)
         const result = await generateRuntimeArtifacts({
           root: req.root,
           definitions: req.definitions,
@@ -213,7 +199,7 @@ async function runAssembledRequest(
         if (!isRuntimeOperationKind(req.runtimeOperation)) {
           throw new Error(`unknown runtime operation: ${req.runtimeOperation}`)
         }
-        assertProjectIndexWorkerProtocolV2(req.protocolVersion)
+        assertProjectIndexWorkerProtocolV3(req.protocolVersion)
         const result = await runRuntimeOperation({
           root: req.root,
           operation: req.runtimeOperation,
@@ -228,7 +214,7 @@ async function runAssembledRequest(
         if (req.setupMode !== 'check' && req.setupMode !== 'apply') {
           throw new Error('runSetupOperation requires setupMode check or apply')
         }
-        assertProjectIndexWorkerProtocolV2(req.protocolVersion)
+        assertProjectIndexWorkerProtocolV3(req.protocolVersion)
         const report = await runSetupOperation({
           root: req.root,
           mode: req.setupMode,
@@ -244,7 +230,7 @@ async function runAssembledRequest(
         if (req.setupMode !== 'check' && req.setupMode !== 'apply') {
           throw new Error('runSetupPlanningOperation requires setupMode check or apply')
         }
-        assertProjectIndexWorkerProtocolV2(req.protocolVersion)
+        assertProjectIndexWorkerProtocolV3(req.protocolVersion)
         const report = await runSetupPlanningOperation({
           root: req.root,
           mode: req.setupMode,

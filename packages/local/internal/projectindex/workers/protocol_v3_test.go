@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/devtools"
-	staticcompiler "github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/compiler"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
@@ -23,19 +22,19 @@ func TestWorker_resolveProjectModelUsesArtifactStreamProtocol(t *testing.T) {
 		process.stdin.setEncoding('utf8')
 		process.stdin.once('data', (chunk) => {
 			const req = JSON.parse(chunk.trim())
-			if (req.method !== 'resolveProjectModel' || req.protocolVersion !== 2) {
+			if (req.method !== 'resolveProjectModel' || req.protocolVersion !== 3) {
 				process.stdout.write(JSON.stringify({
-					protocolVersion: 2,
+					protocolVersion: 3,
 					type: 'artifact:error',
 					transactionId: 'artifact-error',
 					artifact: 'projectModel',
-					error: { message: 'expected V2 resolveProjectModel request' }
+					error: { message: 'expected V3 resolveProjectModel request' }
 				}) + '\n')
 				return
 			}
 			if (req.staticOnly !== undefined) {
 				process.stdout.write(JSON.stringify({
-					protocolVersion: 2,
+					protocolVersion: 3,
 					type: 'artifact:error',
 					transactionId: 'artifact-error',
 					artifact: 'projectModel',
@@ -45,7 +44,7 @@ func TestWorker_resolveProjectModelUsesArtifactStreamProtocol(t *testing.T) {
 			}
 			if (req.resolutionMode !== 'config-policy') {
 				process.stdout.write(JSON.stringify({
-					protocolVersion: 2,
+					protocolVersion: 3,
 					type: 'artifact:error',
 					transactionId: 'artifact-error',
 					artifact: 'projectModel',
@@ -54,7 +53,7 @@ func TestWorker_resolveProjectModelUsesArtifactStreamProtocol(t *testing.T) {
 				return
 			}
 			process.stdout.write(JSON.stringify({
-				protocolVersion: 2,
+				protocolVersion: 3,
 				type: 'artifact:done',
 				transactionId: 'artifact-project-model',
 				artifact: 'projectModel',
@@ -87,7 +86,7 @@ func TestWorker_resolveProjectModelUsesArtifactStreamProtocol(t *testing.T) {
 	}
 }
 
-func TestWorker_indexProjectAstPatchErrorsWhenStaticSyntaxEnabledWithoutStaticIndexCompiler(t *testing.T) {
+func TestWorker_indexProjectAstPatchErrorsWithoutStaticIndexCompiler(t *testing.T) {
 	if _, err := findNodePath(); err != nil {
 		t.Skipf("node unavailable: %v", err)
 	}
@@ -99,7 +98,7 @@ func TestWorker_indexProjectAstPatchErrorsWhenStaticSyntaxEnabledWithoutStaticIn
 	if err := os.WriteFile(filepath.Join(root, "src", "writer.ts"), []byte("export const writer = prompt({ id: 'native' })"), 0o600); err != nil {
 		t.Fatalf("write source: %v", err)
 	}
-	writeStaticIndexEnabledConfig(t, root)
+	writeStaticIndexConfig(t, root)
 
 	dir := t.TempDir()
 	script := filepath.Join(dir, "native-project-indexer.mjs")
@@ -110,7 +109,7 @@ func TestWorker_indexProjectAstPatchErrorsWhenStaticSyntaxEnabledWithoutStaticIn
 				const req = JSON.parse(line)
 				if (req.method === 'inspectProjectStaticIndexConfig') {
 					process.stdout.write(JSON.stringify({
-					protocolVersion: 2,
+					protocolVersion: 3,
 					type: 'artifact:done',
 					transactionId: 'artifact-static-index-config',
 					artifact: 'projectStaticIndexConfig',
@@ -118,8 +117,6 @@ func TestWorker_indexProjectAstPatchErrorsWhenStaticSyntaxEnabledWithoutStaticIn
 					payload: {
 						root: req.root,
 						configFile: req.root + '/crux.config.ts',
-						nativeAstEnabled: true,
-						nativeAstFrontend: 'oxc',
 						extensions: [],
 						diagnostics: []
 					}
@@ -144,72 +141,14 @@ func TestWorker_indexProjectAstPatchErrorsWhenStaticSyntaxEnabledWithoutStaticIn
 		t.Fatalf("IndexProjectAstPatch error = %v, want Static Index compiler requirement error", err)
 	}
 	timing := worker.LastAstTiming()
-	if timing.NodeStarted || len(timing.NodeReasons) != 0 {
-		t.Fatalf("timing NodeStarted=%v NodeReasons=%v, want no Node start for native worker setup failure", timing.NodeStarted, timing.NodeReasons)
+	if !timing.NodeStarted || !containsTimingReason(timing.NodeReasons, projectIndexNodeReasonStaticIndexConfig) {
+		t.Fatalf("timing NodeStarted=%v NodeReasons=%v, want config inspection before compiler setup failure", timing.NodeStarted, timing.NodeReasons)
 	}
 	if timing.NativeOnlyEligible {
 		t.Fatalf("timing.NativeOnlyEligible = true, want false when Static Index compiler setup fails")
 	}
 	if !containsTimingReason(timing.NativeOnlyReasons, projectIndexNativeOnlyReasonStaticIndexCompilerSetup) {
 		t.Fatalf("timing.NativeOnlyReasons = %v, want %q", timing.NativeOnlyReasons, projectIndexNativeOnlyReasonStaticIndexCompilerSetup)
-	}
-}
-
-func TestWorker_indexProjectAstPatchErrorsWhenNativeAstConfigDisabled(t *testing.T) {
-	if _, err := findNodePath(); err != nil {
-		t.Skipf("node unavailable: %v", err)
-	}
-
-	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, "crux.config.ts"), []byte("export default config({ experimental: { indexer: { nativeAst: false } } })"), 0o600); err != nil {
-		t.Fatalf("write config: %v", err)
-	}
-	dir := t.TempDir()
-	script := filepath.Join(dir, "native-disabled-indexer.mjs")
-	if err := os.WriteFile(script, []byte(`
-		import readline from 'node:readline'
-		const rl = readline.createInterface({ input: process.stdin, terminal: false })
-		rl.on('line', (line) => {
-			const req = JSON.parse(line)
-			if (req.method === 'inspectProjectStaticIndexConfig') {
-				process.stdout.write(JSON.stringify({
-					protocolVersion: 2,
-					type: 'artifact:done',
-					transactionId: 'artifact-static-index-config',
-					artifact: 'projectStaticIndexConfig',
-					root: req.root,
-					payload: {
-						root: req.root,
-						nativeAstConfigured: true,
-						nativeAstEnabled: false,
-						extensions: [],
-						diagnostics: []
-					}
-				}) + '\n')
-				return
-			}
-			process.stdout.write(JSON.stringify({ error: 'unexpected method: ' + req.method }) + '\n')
-		})
-	`), 0o600); err != nil {
-		t.Fatalf("write script: %v", err)
-	}
-
-	syntaxParser := staticcompiler.New(shellPath(t), fakeIndexerWorker(t))
-	defer syntaxParser.Close()
-	worker := newTestWorkerWithProjectScript(t, script)
-	worker.WithSyntaxParser(syntaxParser)
-	defer worker.Close()
-
-	_, err := worker.IndexProjectAstPatch(context.Background(), root, "", "native-disabled")
-	if err == nil {
-		t.Fatal("IndexProjectAstPatch error = nil, want disabled Static Index error")
-	}
-	if !strings.Contains(err.Error(), "TypeScript bundled fallback has been removed") {
-		t.Fatalf("IndexProjectAstPatch error = %v, want removed fallback error", err)
-	}
-	timing := worker.LastAstTiming()
-	if timing.NodeStarted {
-		t.Fatalf("timing = %+v, want disabled native config to avoid Node projection", timing)
 	}
 }
 
@@ -227,7 +166,7 @@ func TestWorker_corruptAstStreamDoesNotUpdateServiceStore(t *testing.T) {
 			const req = JSON.parse(chunk.trim())
 			const events = [
 				{
-					protocolVersion: 2,
+					protocolVersion: 3,
 					type: 'phase:start',
 					transactionId: 'tx-ast',
 					phase: 'ast',
@@ -235,7 +174,7 @@ func TestWorker_corruptAstStreamDoesNotUpdateServiceStore(t *testing.T) {
 					startedAt: new Date(0).toISOString()
 				},
 				{
-					protocolVersion: 2,
+					protocolVersion: 3,
 					type: 'fact:batch',
 					transactionId: 'tx-ast',
 					sequence: 0,
@@ -250,7 +189,7 @@ func TestWorker_corruptAstStreamDoesNotUpdateServiceStore(t *testing.T) {
 					}]
 				},
 				{
-					protocolVersion: 2,
+					protocolVersion: 3,
 					type: 'phase:done',
 					transactionId: 'tx-ast',
 					phase: 'ast',

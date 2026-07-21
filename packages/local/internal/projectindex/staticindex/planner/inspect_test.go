@@ -14,7 +14,7 @@ import (
 
 func TestLoadConfigBuildsStaticIndexConfigRequest(t *testing.T) {
 	reader := &recordingReader{
-		responses: []json.RawMessage{json.RawMessage(`{"root":"/repo","nativeAstEnabled":true,"extensions":[]}`)},
+		responses: []json.RawMessage{json.RawMessage(`{"root":"/repo","extensions":[]}`)},
 	}
 
 	config, err := LoadConfig(context.Background(), reader, "/repo", "/repo/crux.config.ts")
@@ -22,8 +22,8 @@ func TestLoadConfigBuildsStaticIndexConfigRequest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig error = %v", err)
 	}
-	if !config.StaticSyntaxEnabled {
-		t.Fatalf("config = %+v, want decoded native AST config", config)
+	if config.Root != "/repo" || len(config.Extensions) != 0 {
+		t.Fatalf("config = %+v, want root and empty extensions", config)
 	}
 	if len(reader.requests) != 1 {
 		t.Fatalf("requests = %d, want 1", len(reader.requests))
@@ -34,21 +34,6 @@ func TestLoadConfigBuildsStaticIndexConfigRequest(t *testing.T) {
 	}
 	if reader.artifacts[0] != projectindex.ProjectIndexArtifactStaticIndexConfig {
 		t.Fatalf("artifact = %q, want Static Index config", reader.artifacts[0])
-	}
-}
-
-func TestLoadConfigAcceptsStaticSyntaxConfigWireNames(t *testing.T) {
-	reader := &recordingReader{
-		responses: []json.RawMessage{json.RawMessage(`{"root":"/repo","staticSyntaxEnabled":true,"staticSyntaxFrontend":"oxc","extensions":[]}`)},
-	}
-
-	config, err := LoadConfig(context.Background(), reader, "/repo", "/repo/crux.config.ts")
-
-	if err != nil {
-		t.Fatalf("LoadConfig error = %v", err)
-	}
-	if !config.StaticSyntaxEnabled || config.StaticSyntaxFrontend != "oxc" {
-		t.Fatalf("config = %+v, want decoded static syntax config", config)
 	}
 }
 
@@ -65,8 +50,8 @@ func TestInspectLoadsNodeConfigAndExtensionManifest(t *testing.T) {
 	configFile := filepath.Join(root, "crux.config.ts")
 	reader := &recordingReader{
 		responses: []json.RawMessage{
-			json.RawMessage(`{"root":` + quote(root) + `,"configFile":` + quote(configFile) + `,"nativeAstEnabled":true,"extensions":[{"package":"@acme/indexer"}]}`),
-			json.RawMessage(`{"method":"loadStaticExtensionHostManifest","root":` + quote(root) + `,"nativeCompilerProtocolVersion":1,"manifest":{"callNames":["workflow"],"staticInterests":{"extractors":[{"extension":{"name":"@acme/indexer","version":"1"},"name":"workflow.define","calls":[{"name":"workflow"}]}]},"staticHost":{"nativeOnlyEligible":false,"requiresTypeScriptHostForExtensions":true}},"node":{"started":true},"nativeOnlyEligible":false}`),
+			json.RawMessage(`{"root":` + quote(root) + `,"configFile":` + quote(configFile) + `,"extensions":[{"package":"@acme/indexer"}]}`),
+			json.RawMessage(`{"method":"loadStaticExtensionHostManifest","root":` + quote(root) + `,"nativeCompilerProtocolVersion":2,"manifest":{"callNames":["workflow"],"staticInterests":{"extractors":[{"extension":{"name":"@acme/indexer","version":"1"},"name":"workflow.define","calls":[{"name":"workflow"}]}]},"staticHost":{"nativeOnlyEligible":false,"requiresTypeScriptHostForExtensions":true}},"node":{"started":true},"nativeOnlyEligible":false}`),
 		},
 	}
 
@@ -106,7 +91,7 @@ func TestInspectDefaultManifestIncludesRuntimeTaskInterest(t *testing.T) {
 		t.Fatalf("write source: %v", err)
 	}
 	reader := &recordingReader{
-		responses: []json.RawMessage{json.RawMessage(`{"root":` + quote(root) + `,"nativeAstEnabled":true,"extensions":[]}`)},
+		responses: []json.RawMessage{json.RawMessage(`{"root":` + quote(root) + `,"extensions":[]}`)},
 	}
 
 	result, err := Inspect(context.Background(), reader, root, "", "project")

@@ -9,7 +9,7 @@ func Batch(req Request) ([]any, error) {
 	events = appendPreviousIndexBatches(events, req, requestID)
 	events = appendSourceProfileBatches(events, req, requestID)
 	events = append(events, Request{
-		ProtocolVersion: 2,
+		ProtocolVersion: ProtocolVersion,
 		Method:          req.Method,
 		RequestID:       requestID,
 		RequestKind:     RequestKindDone,
@@ -50,7 +50,7 @@ func appendPreviousIndexBatches(events []any, req Request, requestID string) []a
 	}
 	for _, batch := range DefinitionBatches(req.PreviousIndex) {
 		events = append(events, Request{
-			ProtocolVersion:     2,
+			ProtocolVersion:     ProtocolVersion,
 			Method:              req.Method,
 			RequestID:           requestID,
 			RequestKind:         RequestKindPreviousDefinitions,
@@ -59,7 +59,7 @@ func appendPreviousIndexBatches(events []any, req Request, requestID string) []a
 	}
 	for _, batch := range SourceBatches(req.PreviousIndex) {
 		events = append(events, Request{
-			ProtocolVersion: 2,
+			ProtocolVersion: ProtocolVersion,
 			Method:          req.Method,
 			RequestID:       requestID,
 			RequestKind:     RequestKindPreviousSources,
@@ -75,7 +75,7 @@ func appendSourceProfileBatches(events []any, req Request, requestID string) []a
 	}
 	for _, batch := range Chunk(req.SourceProfile.Files, BatchSize) {
 		events = append(events, Request{
-			ProtocolVersion:    2,
+			ProtocolVersion:    ProtocolVersion,
 			Method:             req.Method,
 			RequestID:          requestID,
 			RequestKind:        RequestKindSourceProfileBatch,

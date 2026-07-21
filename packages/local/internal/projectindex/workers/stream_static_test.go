@@ -149,18 +149,17 @@ func TestWorkerStaticIndexCompilerUsesStreamingAnalyze(t *testing.T) {
 	}
 	worker := &Bundle{}
 	plan := projectindex.ProjectStaticSyntaxPlan{
-		Root:                root,
-		ProjectName:         "static-index-cutover",
-		Files:               []string{sourceFile},
-		PrimaryFiles:        []string{sourceFile},
-		FilesToParse:        []string{sourceFile},
-		CacheMisses:         []string{sourceFile},
-		CallNames:           []string{"prompt"},
-		ConstructorNames:    []string{"Agent"},
-		StaticSyntaxEnabled: true,
-		StaticHost:          json.RawMessage(`{}`),
-		StaticInterests:     json.RawMessage(`{"extractors":[]}`),
-		SourceGraph:         json.RawMessage(`{"schemaVersion":1,"producedBy":"@use-crux/indexer","capabilities":[],"shards":[]}`),
+		Root:             root,
+		ProjectName:      "static-index-cutover",
+		Files:            []string{sourceFile},
+		PrimaryFiles:     []string{sourceFile},
+		FilesToParse:     []string{sourceFile},
+		CacheMisses:      []string{sourceFile},
+		CallNames:        []string{"prompt"},
+		ConstructorNames: []string{"Agent"},
+		StaticHost:       json.RawMessage(`{}`),
+		StaticInterests:  json.RawMessage(`{"extractors":[]}`),
+		SourceGraph:      json.RawMessage(`{"schemaVersion":1,"producedBy":"@use-crux/indexer","capabilities":[],"shards":[]}`),
 	}
 
 	patch, _, usedStaticIndex, err := worker.indexProjectAstPatchFromStaticIndexCompiler(context.Background(), root, "", "static-index-cutover", plan, compiler)
@@ -185,9 +184,9 @@ func fakeStaticIndexFinalizeStreamWorker(t *testing.T) string {
 id=$(printf '%s' "$line" | sed -n 's/.*"id":\([0-9][0-9]*\).*/\1/p')
 case "$line" in
   *staticIndexFinalize*)
-    printf '{"id":%s,"ok":true,"type":"event","event":{"protocolVersion":2,"type":"phase:start","transactionId":"tx-static-index-finalize-stream","phase":"ast","root":"/repo","startedAt":"1970-01-01T00:00:00.000Z"}}\n' "$id"
-    printf '{"id":%s,"ok":true,"type":"event","event":{"protocolVersion":2,"type":"fact:batch","transactionId":"tx-static-index-finalize-stream","sequence":0,"facts":[]}}\n' "$id"
-    printf '{"id":%s,"ok":true,"type":"event","event":{"protocolVersion":2,"type":"phase:done","transactionId":"tx-static-index-finalize-stream","phase":"ast","patch":{"schemaVersion":1,"phase":"ast","project":{"root":"/repo"},"startedAt":"1970-01-01T00:00:00.000Z","finishedAt":"1970-01-01T00:00:00.000Z","status":"ok"},"summary":{"factCount":0,"decision":{"staticIndexComplete":true}}}}\n' "$id"
+    printf '{"id":%s,"ok":true,"type":"event","event":{"protocolVersion":3,"type":"phase:start","transactionId":"tx-static-index-finalize-stream","phase":"ast","root":"/repo","startedAt":"1970-01-01T00:00:00.000Z"}}\n' "$id"
+    printf '{"id":%s,"ok":true,"type":"event","event":{"protocolVersion":3,"type":"fact:batch","transactionId":"tx-static-index-finalize-stream","sequence":0,"facts":[]}}\n' "$id"
+    printf '{"id":%s,"ok":true,"type":"event","event":{"protocolVersion":3,"type":"phase:done","transactionId":"tx-static-index-finalize-stream","phase":"ast","patch":{"schemaVersion":1,"phase":"ast","project":{"root":"/repo"},"startedAt":"1970-01-01T00:00:00.000Z","finishedAt":"1970-01-01T00:00:00.000Z","status":"ok"},"summary":{"factCount":0,"decision":{"staticIndexComplete":true}}}}\n' "$id"
     printf '{"id":%s,"ok":true,"type":"done","response":{"protocolVersion":2,"method":"staticIndexFinalize","events":[{"fixture":true}],$TELEMETRY}}\n' "$id"
     ;;
   *) printf '{"error":"unexpected Static Index request"}\n' ;;

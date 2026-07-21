@@ -118,15 +118,16 @@ _Avoid_: static hook, lifecycle phase
 
 **Static Index**:
 The source-only Project Index lane that produces source graph rows, definitions, references,
-diagnostics, lint facts, and semantic source-profile handoff without TypeScript type checking. It is
-the product responsibility that may be implemented by TypeScript today and Rust/Oxc later.
+diagnostics, lint facts, and semantic source-profile handoff without TypeScript type checking. The
+local runtime implements this lane with its Go-orchestrated Rust/Oxc compiler; the internal
+TypeScript engine remains only for extension fixtures and compatibility tests.
 _Avoid_: static-index, AST phase, native AST compiler
 
 **Static Syntax**:
 File-local parser evidence consumed by the Static Index lane before facts are projected into the
-Project Index. Static Syntax may come from a TypeScript parser or an Oxc Syntax Frontend, but callers
-should not couple to either parser's raw AST objects.
-_Avoid_: raw AST, nativeAst, parser plugin payload
+Project Index. Production Static Syntax comes from Rust/Oxc; testing fixtures may use the in-process
+TypeScript syntax-record producer. Callers should not couple to either parser's raw AST objects.
+_Avoid_: raw AST, parser selection, parser plugin payload
 
 **Semantic Read Model**:
 A stable read-only facade for type/program-aware analysis.
@@ -141,9 +142,9 @@ _Avoid_: TypeScript mode, checker plugin
 
 **Static Syntax Frontend**:
 The implementation-specific parser frontend that emits **Static Syntax** for the **Static Index**.
-It is JavaScript today and can move to Rust/Oxc later without changing semantic backend or extension
-contracts.
-_Avoid_: semantic backend, type checker, nativeAst
+Production uses Rust/Oxc, while the in-process TypeScript producer is limited to fixtures and
+compatibility tests. Neither is a user-selectable backend.
+_Avoid_: semantic backend, type checker, static frontend selector
 
 **TypeScript Local Worker Package**:
 The private package that owns Local's TypeScript worker bundle entrypoints for Project Index source,
@@ -218,8 +219,7 @@ _Avoid_: native plugin manifest, tsgo primitive registry
 **Experimental Indexer Config**:
 The top-level `experimental.indexer` config bucket for unstable Crux Indexer behavior, currently
 `experimental.indexer.native: true | { engine?: 'tsgo'; tsserverPath?: string }` for semantic
-backend experiments and `experimental.indexer.nativeAst: true | { frontend?: 'oxc' }` for Static
-Syntax experiments.
+backend experiments. Static Index always uses Rust/Oxc and has no frontend selector.
 _Avoid_: indexer.semantic backend config, public unstableApi flag
 
 **Internal Traversal Helper**:
@@ -295,7 +295,7 @@ _Avoid_: hints, assumptions
   `indexer` policy config, so unstable backend experiments have an obvious graduation path.
 - The **Extension Runtime** executes **Compiler Slots** and owns deterministic extension ordering, contribution identity, result policy, and cache identity inputs.
 - **Index Rule** identities participate in **Extension Runtime** cache identity inputs.
-- **Cache Identity** means structured input plus an explicit epoch. Structured inputs cover source/config hashes, extension/extractor/rule identity, compiler profile identity, compiler-owned projection identity, TypeScript version, and semantic compiler options. Current hard migration epochs are `static-parse-v74`, `semantic-facts-v31`, and Go snapshot `epoch-41` under `.crux/cache/index-v2/`. Epochs live in `indexer/cache-identity.ts` and `@use-crux/local`'s `projectindex/cache/identity.go`; they are migration levers, not hidden magic constants.
+- **Cache Identity** means structured input plus an explicit epoch. Structured inputs cover source/config hashes, extension/extractor/rule identity, compiler profile identity, compiler-owned projection identity, TypeScript version, and semantic compiler options. Current hard migration epochs are `static-parse-v74`, `semantic-facts-v31`, and Go snapshot `epoch-43` under `.crux/cache/index-v2/`. Epochs live in `indexer/cache-identity.ts` and `@use-crux/local`'s `projectindex/cache/identity.go`; they are migration levers, not hidden magic constants.
 - **Index Rule** metadata provides docs, option schema, and message declarations before a rule can run.
 - An **Indexer Extension** contributes **Extracted Facts** through the **Extension Boundary**.
 - First-party static primitive call names are owned by the Rust/Oxc Static Index primitive manifest. Bundled primitives do not have a TypeScript implementation.

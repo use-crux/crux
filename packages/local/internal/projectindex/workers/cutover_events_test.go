@@ -6,7 +6,7 @@ func staticIndexCutoverEvents(root string) ([]json.RawMessage, error) {
 	tx := "tx-static-index-cutover"
 	values := []any{
 		map[string]any{
-			"protocolVersion": 2,
+			"protocolVersion": 3,
 			"type":            "phase:start",
 			"transactionId":   tx,
 			"phase":           "ast",
@@ -14,7 +14,7 @@ func staticIndexCutoverEvents(root string) ([]json.RawMessage, error) {
 			"startedAt":       "1970-01-01T00:00:00.000Z",
 		},
 		map[string]any{
-			"protocolVersion": 2,
+			"protocolVersion": 3,
 			"type":            "fact:batch",
 			"transactionId":   tx,
 			"sequence":        0,
@@ -39,7 +39,7 @@ func staticIndexCutoverEvents(root string) ([]json.RawMessage, error) {
 			},
 		},
 		map[string]any{
-			"protocolVersion": 2,
+			"protocolVersion": 3,
 			"type":            "phase:done",
 			"transactionId":   tx,
 			"phase":           "ast",

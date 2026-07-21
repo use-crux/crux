@@ -16,7 +16,6 @@ export const architectureBaselineRequiredTokens = [
   'packages/indexer/src/contracts/static-index',
   'packages/indexer/src/contracts/semantic',
   'packages/indexer/src/indexer/static-index/config',
-  'packages/indexer/src/indexer/static-index/plan',
   'packages/indexer/src/indexer/static-index/protocol',
   'packages/indexer/src/indexer/static-index/syntax',
   'packages/indexer/src/indexer/static-index/extension-host',

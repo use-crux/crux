@@ -222,7 +222,6 @@ type configExperimentalInspect struct {
 
 type configExperimentalIndexerInspect struct {
 	Native       configSetting `json:"native"`
-	NativeAst    configSetting `json:"nativeAst"`
 	NativeEngine configSetting `json:"nativeEngine"`
 	TSServerPath configSetting `json:"tsserverPath"`
 }
@@ -317,7 +316,6 @@ func printConfigInspect(io *output.IO, raw json.RawMessage) error {
 	fmt.Fprintln(out)
 	printConfigDomain(io, "experimental:", []configRow{
 		settingRow(io, "indexer.native", model.Experimental.Indexer.Native),
-		settingRow(io, "indexer.nativeAst", model.Experimental.Indexer.NativeAst),
 		settingRow(io, "indexer.nativeEngine", model.Experimental.Indexer.NativeEngine),
 		pathSettingRow(io, "indexer.tsserverPath", model.Experimental.Indexer.TSServerPath, root),
 	})

@@ -2,7 +2,6 @@ import { resolve } from 'node:path'
 import type { CruxLintConfig } from '@use-crux/core'
 import type { IndexDiagnostic } from '@use-crux/core/project-index'
 import { loadConfigPolicyProjectConfig } from '../../config'
-import { staticIndexSyntaxSelectionFromConfig } from './index'
 
 /** Options for inspecting only executable config needed by Static Index planning. */
 export interface InspectProjectStaticIndexConfigOptions {
@@ -33,23 +32,6 @@ export interface ProjectStaticIndexConfig {
   readonly root: string
   /** Config file imported for policy, if one was discovered. */
   readonly configFile?: string
-  /**
-   * Historical Go wire field for Static Index syntax enablement.
-   *
-   * Keep emitting the old key until every embedded local runtime can consume
-   * `staticSyntaxEnabled`.
-   */
-  readonly nativeAstEnabled: boolean
-  /** Whether `nativeAst` was explicitly authored in project config. */
-  readonly nativeAstConfigured: boolean
-  /** Historical Go wire field for the selected Static Index syntax frontend. */
-  readonly nativeAstFrontend?: 'oxc'
-  /** Whether config opted into the experimental Static Index syntax path. */
-  readonly staticSyntaxEnabled: boolean
-  /** Whether Static Index syntax selection was explicitly authored. */
-  readonly staticSyntaxConfigured: boolean
-  /** Optional Static Index syntax frontend selected by config. */
-  readonly staticSyntaxFrontend?: 'oxc'
   /** Configured Indexer Extension references. */
   readonly extensions: readonly ProjectStaticIndexExtensionReference[]
   /** Authored lint policy used by first-party graph lints. */
@@ -73,16 +55,9 @@ export async function inspectProjectStaticIndexConfig(
 ): Promise<ProjectStaticIndexConfig> {
   const root = resolve(options.root)
   const result = await loadConfigPolicyProjectConfig(root, options.configPath)
-  const selection = staticIndexSyntaxSelectionFromConfig(result.loaded.experimental)
   return {
     root,
     ...(result.loaded.configFile ? { configFile: result.loaded.configFile } : {}),
-    nativeAstEnabled: selection.enabled,
-    nativeAstConfigured: selection.configured,
-    ...(selection.frontend ? { nativeAstFrontend: selection.frontend } : {}),
-    staticSyntaxEnabled: selection.enabled,
-    staticSyntaxConfigured: selection.configured,
-    ...(selection.frontend ? { staticSyntaxFrontend: selection.frontend } : {}),
     extensions: (result.loaded.indexer?.extensions ?? []).map((extension) => ({
       package: extension.package,
       ...(extension.export ? { export: extension.export } : {}),

@@ -45,26 +45,17 @@ func Inspect(
 	nodeReasons := []string{}
 	if ConfigMayRequireNode(root, configPath) {
 		configStarted := time.Now()
-		if loaded, ok, err := InspectSimpleConfig(root, configPath); err != nil {
+		loaded, err := LoadConfig(ctx, reader, root, configPath)
+		if err != nil {
 			return InspectResult{}, err
-		} else if ok {
-			config = loaded
-		} else {
-			loaded, err := LoadConfig(ctx, reader, root, configPath)
-			if err != nil {
-				return InspectResult{}, err
-			}
-			config = loaded
-			nodeReasons = append(nodeReasons, ReasonConfig)
 		}
+		config = loaded
+		nodeReasons = append(nodeReasons, ReasonConfig)
 		timings = AppendTiming(timings, TimingConfig, configStarted, 1)
-	}
-	if !config.StaticSyntaxConfigured {
-		config.StaticSyntaxEnabled = true
 	}
 
 	var extensionManifest *projectindex.StaticExtensionHostManifestResult
-	if len(config.Extensions) > 0 && config.StaticSyntaxEnabled {
+	if len(config.Extensions) > 0 {
 		manifestStarted := time.Now()
 		manifest, err := compat.LoadManifest(ctx, compat.ArtifactReaderFunc(reader.ReadArtifact), root, configPath)
 		if err != nil {

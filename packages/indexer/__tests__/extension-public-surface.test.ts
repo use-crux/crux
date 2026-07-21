@@ -156,14 +156,12 @@ describe("public indexer extension surface", () => {
     expect(namedValueExports(staticIndex)).toEqual([
       "staticDefinitionFiles",
       "inspectProjectStaticIndexConfig",
-      "inspectProjectStaticSyntaxPlan",
+      "STATIC_INDEX_COMPILER_PROTOCOL_VERSION",
     ]);
     expect(namedTypeExports(staticIndex)).toEqual([
       "InspectProjectStaticIndexConfigOptions",
       "ProjectStaticIndexConfig",
       "ProjectStaticIndexExtensionReference",
-      "InspectProjectStaticSyntaxPlanOptions",
-      "ProjectStaticSyntaxPlan",
     ]);
     expect(staticIndex).not.toContain("compileProjectIndex");
     expect(staticIndex).not.toContain("createStaticExtraction");

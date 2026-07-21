@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
@@ -13,7 +14,7 @@ import (
 )
 
 func TestLoadManifestBuildsStaticHostManifestRequest(t *testing.T) {
-	reader := &recordingReader{response: json.RawMessage(`{"method":"loadStaticExtensionHostManifest","root":"/repo","nativeCompilerProtocolVersion":1,"manifest":{},"node":{"started":true},"nativeOnlyEligible":true}`)}
+	reader := &recordingReader{response: json.RawMessage(`{"method":"loadStaticExtensionHostManifest","root":"/repo","nativeCompilerProtocolVersion":2,"manifest":{},"node":{"started":true},"nativeOnlyEligible":true}`)}
 
 	manifest, err := LoadManifest(context.Background(), reader, "/repo", "/repo/crux.config.ts")
 
@@ -31,6 +32,16 @@ func TestLoadManifestBuildsStaticHostManifestRequest(t *testing.T) {
 	}
 	if !manifest.NativeOnlyEligible {
 		t.Fatalf("manifest = %+v, want decoded response", manifest)
+	}
+}
+
+func TestDecodeManifestRejectsCompilerProtocolMismatch(t *testing.T) {
+	_, err := DecodeManifest(
+		json.RawMessage(`{"method":"loadStaticExtensionHostManifest","root":"/repo","nativeCompilerProtocolVersion":1,"manifest":{},"node":{"started":true},"nativeOnlyEligible":true}`),
+		"/repo",
+	)
+	if err == nil || !strings.Contains(err.Error(), "compiler protocol version = 1, want 2") {
+		t.Fatalf("DecodeManifest error = %v, want compiler protocol mismatch", err)
 	}
 }
 

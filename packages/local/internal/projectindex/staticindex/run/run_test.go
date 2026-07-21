@@ -254,16 +254,15 @@ func writeSource(t *testing.T) (string, string) {
 
 func testPlan(root, sourceFile string) projectindex.ProjectStaticSyntaxPlan {
 	return projectindex.ProjectStaticSyntaxPlan{
-		Root:                root,
-		ProjectName:         "static-run",
-		Files:               []string{sourceFile},
-		PrimaryFiles:        []string{sourceFile},
-		FilesToParse:        []string{sourceFile},
-		CacheMisses:         []string{sourceFile},
-		StaticSyntaxEnabled: true,
-		StaticInterests:     json.RawMessage(`{"extractors":[]}`),
-		SourceGraph:         json.RawMessage(`{"schemaVersion":1,"producedBy":"@use-crux/indexer","capabilities":[],"shards":[]}`),
-		StaticHost:          json.RawMessage(`{"nativeOnlyEligible":true}`),
+		Root:            root,
+		ProjectName:     "static-run",
+		Files:           []string{sourceFile},
+		PrimaryFiles:    []string{sourceFile},
+		FilesToParse:    []string{sourceFile},
+		CacheMisses:     []string{sourceFile},
+		StaticInterests: json.RawMessage(`{"extractors":[]}`),
+		SourceGraph:     json.RawMessage(`{"schemaVersion":1,"producedBy":"@use-crux/indexer","capabilities":[],"shards":[]}`),
+		StaticHost:      json.RawMessage(`{"nativeOnlyEligible":true}`),
 	}
 }
 
@@ -282,7 +281,7 @@ func completePatchEvents(root string) []json.RawMessage {
 
 func completePatchEventsWithInvalidates(root string, invalidates json.RawMessage) []json.RawMessage {
 	return []json.RawMessage{
-		json.RawMessage(fmt.Sprintf(`{"protocolVersion":2,"type":"phase:start","transactionId":"tx","phase":"ast","root":%q,"startedAt":"1970-01-01T00:00:00.000Z"}`, root)),
-		json.RawMessage(fmt.Sprintf(`{"protocolVersion":2,"type":"phase:done","transactionId":"tx","phase":"ast","patch":{"schemaVersion":1,"phase":"ast","project":{"root":%q},"startedAt":"1970-01-01T00:00:00.000Z","finishedAt":"1970-01-01T00:00:00.000Z","status":"ok","invalidates":%s},"summary":{"factCount":0,"decision":{"staticIndexComplete":true}}}`, root, invalidates)),
+		json.RawMessage(fmt.Sprintf(`{"protocolVersion":3,"type":"phase:start","transactionId":"tx","phase":"ast","root":%q,"startedAt":"1970-01-01T00:00:00.000Z"}`, root)),
+		json.RawMessage(fmt.Sprintf(`{"protocolVersion":3,"type":"phase:done","transactionId":"tx","phase":"ast","patch":{"schemaVersion":1,"phase":"ast","project":{"root":%q},"startedAt":"1970-01-01T00:00:00.000Z","finishedAt":"1970-01-01T00:00:00.000Z","status":"ok","invalidates":%s},"summary":{"factCount":0,"decision":{"staticIndexComplete":true}}}`, root, invalidates)),
 	}
 }

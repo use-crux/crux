@@ -80,45 +80,28 @@ native-only facts. This applies to first-party and extension-authored primitives
 is optional, but backend parity is required.
 
 Use `crux config inspect` to verify the selected config. The Project Model includes
-`experimental.indexer.nativeAst`, `experimental.indexer.native`, `experimental.indexer.nativeEngine`,
-and `experimental.indexer.tsserverPath` provenance when those flags are present.
+`experimental.indexer.native`, `experimental.indexer.nativeEngine`, and
+`experimental.indexer.tsserverPath` provenance when those flags are present.
 
-## Experimental native static AST compiler
+## Static Index compiler
 
-Static Project Index extraction has a separate native beta:
+Static Project Index extraction always runs through the Go-orchestrated Rust/Oxc compiler. The
+compiler emits Project Index patch facts directly; Node may still start for config inspection and
+TypeScript-authored extension or rule compatibility work. This is independent of semantic backend
+selection: use `experimental.indexer.native` only for TypeScript-Go semantic enrichment.
 
-```ts
-import { config } from "@use-crux/core";
-
-export default config({
-  experimental: {
-    indexer: {
-      nativeAst: true,
-    },
-  },
-});
-```
-
-`experimental.indexer.nativeAst: true` or `{ frontend: 'oxc' }` lets `@use-crux/local` run the
-Go-orchestrated Rust/Oxc native static compiler for the AST/source pass. When the beta gates pass,
-the native compiler emits Project Index patch facts directly instead of sending Rust/Oxc syntax
-records through TypeScript projection. Node can still start for config/static-plan inspection and
-for TypeScript-authored extension or rule compatibility work. This flag does not select the native
-semantic backend; use `experimental.indexer.native` separately for TypeScript-Go semantic
-enrichment.
-
-Native AST beta readiness is gated by exact normalized parity with the TypeScript Static Index
-baseline. The release gate builds the Rust/Oxc worker, runs Rust tests, runs the full
+Static Index release readiness is gated by the Rust-owned golden and Go host behavior. The release
+gate builds the Rust/Oxc worker, runs Rust tests, runs the full
 `@use-crux/indexer` suite with `CRUX_STATIC_INDEX_WORKER`, runs repository static parity, runs Go
 production parity with `CRUX_INDEXER_PARITY_REQUIRED=1`, and verifies `make local`. TypeScript
-extension fallback is part of that gate: a configured TypeScript extension extractor or rule may
-run through the trusted Node host, but its facts still finalize through the same Project Index patch
-contract as native first-party output.
+extension compatibility is part of that gate: a configured TypeScript extension extractor may run
+through the trusted Node host, but its facts still finalize through the same Project Index patch
+contract as Rust first-party output.
 
-If a native AST run is degraded, inspect the indexing diagnostics before treating missing source
+If a Static Index run fails or degrades, inspect the indexing diagnostics before treating missing source
 facts as absent code. Common causes are a missing Rust worker binary, failed worker startup,
-configured TypeScript extension work that requires Node, or config import failures. Remove the flag
-or set `experimental.indexer.nativeAst: false` to return to the TypeScript Static Index baseline.
+configured TypeScript extension work that requires Node, or config import failures. A missing worker
+is a setup error; Crux does not publish an apparently healthy empty index.
 
 ## Responsibilities
 
@@ -222,7 +205,7 @@ Known fact fields are typed in `@use-crux/core/project-index`. Future integratio
 
 ## Cache Versioning
 
-Project Index caches are local implementation details, but their identities are part of Crux's migration discipline. Static cache keys include source hashes, direct import dependency hashes, config boundary hashes, extension/extractor/rule identity, compiler profile/intrinsic identity, and the TypeScript syntax frontend version. Semantic cache keys include the analyzed source closure, config boundary hashes, selected compiler runtime identity, and the semantic compiler-options identity. If indexer code would produce different facts for unchanged user source and those structured inputs do not already change, the matching cache epoch must change in the same patch.
+Project Index caches are local implementation details, but their identities are part of Crux's migration discipline. Static cache keys include source hashes, direct import dependency hashes, config boundary hashes, extension/extractor/rule identity, compiler profile/intrinsic identity, and the Rust/Oxc compiler identity. Semantic cache keys include the analyzed source closure, config boundary hashes, selected compiler runtime identity, and the semantic compiler-options identity. If indexer code would produce different facts for unchanged user source and those structured inputs do not already change, the matching cache epoch must change in the same patch.
 
 - Bump `packages/indexer/src/indexer/cache-identity.ts` `STATIC_PARSE_CACHE_EPOCH` when static AST extraction changes definition, relation, metadata, schema, source-ref, diagnostic, path/source, file-classification, or presentation-hint output.
 - Bump `packages/indexer/src/indexer/cache-identity.ts` `SEMANTIC_FACTS_CACHE_EPOCH` when semantic enrichment changes schema/callback/source-ref resolution, runtime joins, intelligence metadata, relations, lint facts, compiler runtime identity, or compiler-option meaning.

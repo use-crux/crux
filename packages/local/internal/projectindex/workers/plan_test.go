@@ -11,7 +11,6 @@ import (
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/frontend"
-	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/planner"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/protocol"
 )
 
@@ -29,7 +28,7 @@ func TestWorkerStaticIndexBuildsPlanWithoutNodeStaticPlan(t *testing.T) {
 		t.Fatalf("write source: %v", err)
 	}
 	configFile := filepath.Join(root, "crux.config.ts")
-	if err := os.WriteFile(configFile, []byte("import { config } from '@use-crux/core'\nexport default config({ experimental: { indexer: { nativeAst: true } } })\n"), 0o600); err != nil {
+	if err := os.WriteFile(configFile, []byte("import { config } from '@use-crux/core'\nexport default config({})\n"), 0o600); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
 
@@ -60,8 +59,8 @@ func TestWorkerStaticIndexBuildsPlanWithoutNodeStaticPlan(t *testing.T) {
 	if containsTimingReason(timing.NodeReasons, projectIndexNodeReasonStaticPlanInspection) {
 		t.Fatalf("timing.NodeReasons = %v, want no full static plan inspection", timing.NodeReasons)
 	}
-	if containsTimingReason(timing.NodeReasons, projectIndexNodeReasonStaticIndexConfig) {
-		t.Fatalf("timing.NodeReasons = %v, want simple nativeAst config parsed without Node", timing.NodeReasons)
+	if !containsTimingReason(timing.NodeReasons, projectIndexNodeReasonStaticIndexConfig) {
+		t.Fatalf("timing.NodeReasons = %v, want executable config inspection", timing.NodeReasons)
 	}
 	if containsTimingReason(timing.NodeReasons, projectIndexNodeReasonStaticIndexRules) {
 		t.Fatalf("timing.NodeReasons = %v, want no first-party rule worker", timing.NodeReasons)
@@ -106,31 +105,6 @@ func TestWorkerStaticIndexDefaultFailsWhenCompilerIsUnavailable(t *testing.T) {
 	}
 }
 
-func TestProjectStaticIndexSimpleConfigParser(t *testing.T) {
-	root := t.TempDir()
-	configFile := filepath.Join(root, "crux.config.ts")
-
-	config, ok := planner.ParseSimpleConfig(root, configFile, "export default config({ experimental: { indexer: { nativeAst: { frontend: 'oxc' } } } })")
-	if !ok {
-		t.Fatal("simple nativeAst object config was not parsed")
-	}
-	if !config.StaticSyntaxEnabled || config.StaticSyntaxFrontend != "oxc" || config.ConfigFile != configFile {
-		t.Fatalf("config = %+v, want static syntax oxc config", config)
-	}
-
-	config, ok = planner.ParseSimpleConfig(root, configFile, "export default config({ experimental: { indexer: { nativeAst: false } } })")
-	if !ok || config.StaticSyntaxEnabled {
-		t.Fatalf("config = %+v ok=%v, want explicit nativeAst false", config, ok)
-	}
-
-	if _, ok := planner.ParseSimpleConfig(root, configFile, "export default config({ experimental: { indexer: { nativeAst: true } }, indexer: { extensions: [{ package: '@acme/ext' }] } })"); ok {
-		t.Fatal("extension config should fall back to executable Node config")
-	}
-	if _, ok := planner.ParseSimpleConfig(root, configFile, "export default config({ experimental: { indexer: { nativeAst: true } }, lint: { profile: 'strict' } })"); ok {
-		t.Fatal("lint config should fall back to executable Node config")
-	}
-}
-
 func staticIndexConfigOnlyIndexerScript() string {
 	return `
 		import readline from 'node:readline'
@@ -139,7 +113,7 @@ func staticIndexConfigOnlyIndexerScript() string {
 			const req = JSON.parse(line)
 			if (req.method === 'inspectProjectStaticSyntaxPlan') {
 				process.stdout.write(JSON.stringify({
-					protocolVersion: 2,
+					protocolVersion: 3,
 					type: 'artifact:error',
 					transactionId: 'artifact-static-plan',
 					artifact: 'projectStaticSyntaxPlan',
@@ -149,7 +123,7 @@ func staticIndexConfigOnlyIndexerScript() string {
 			}
 			if (req.method === 'inspectProjectStaticIndexConfig') {
 				process.stdout.write(JSON.stringify({
-					protocolVersion: 2,
+					protocolVersion: 3,
 					type: 'artifact:done',
 					transactionId: 'artifact-static-index-config',
 					artifact: 'projectStaticIndexConfig',
@@ -157,8 +131,6 @@ func staticIndexConfigOnlyIndexerScript() string {
 					payload: {
 						root: req.root,
 						configFile: req.root + '/crux.config.ts',
-						nativeAstEnabled: true,
-						nativeAstFrontend: 'oxc',
 						extensions: [],
 						diagnostics: []
 					}
@@ -167,7 +139,7 @@ func staticIndexConfigOnlyIndexerScript() string {
 			}
 			if (req.method === 'checkStaticRules') {
 				process.stdout.write(JSON.stringify({
-					protocolVersion: 2,
+					protocolVersion: 3,
 					type: 'artifact:done',
 					transactionId: 'artifact-rule-check',
 					artifact: 'staticRuleCheck',

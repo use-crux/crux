@@ -29,7 +29,7 @@ type Options struct {
 	ProcessOptions []workerproc.Option
 }
 
-// Worker runs semantic Project Index enrichment through its own V2 NDJSON
+// Worker runs semantic Project Index enrichment through its own V3 NDJSON
 // worker process.
 type Worker struct {
 	phases      []source.Client

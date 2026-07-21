@@ -34,9 +34,9 @@ func TestWorker_runtimePatchUsesDedicatedStreamProtocol(t *testing.T) {
 					continue
 				}
 				if (req.requestKind === 'done') {
-					if (!header || header.method !== 'indexProjectRuntime' || header.protocolVersion !== 2) {
+					if (!header || header.method !== 'indexProjectRuntime' || header.protocolVersion !== 3) {
 						process.stdout.write(JSON.stringify({
-							protocolVersion: 2,
+							protocolVersion: 3,
 							type: 'phase:error',
 							transactionId: 'tx-error',
 							phase: 'runtime',
@@ -46,7 +46,7 @@ func TestWorker_runtimePatchUsesDedicatedStreamProtocol(t *testing.T) {
 					}
 					if (!definitions.some((definition) => definition.id === 'prompt:previous')) {
 						process.stdout.write(JSON.stringify({
-							protocolVersion: 2,
+							protocolVersion: 3,
 							type: 'phase:error',
 							transactionId: 'tx-error',
 							phase: 'runtime',
@@ -56,7 +56,7 @@ func TestWorker_runtimePatchUsesDedicatedStreamProtocol(t *testing.T) {
 					}
 					const events = [
 						{
-							protocolVersion: 2,
+							protocolVersion: 3,
 							type: 'phase:start',
 							transactionId: 'tx-runtime',
 							phase: 'runtime',
@@ -64,7 +64,7 @@ func TestWorker_runtimePatchUsesDedicatedStreamProtocol(t *testing.T) {
 							startedAt: new Date(0).toISOString()
 						},
 						{
-							protocolVersion: 2,
+							protocolVersion: 3,
 							type: 'fact:batch',
 							transactionId: 'tx-runtime',
 							sequence: 0,
@@ -81,7 +81,7 @@ func TestWorker_runtimePatchUsesDedicatedStreamProtocol(t *testing.T) {
 							}]
 						},
 						{
-							protocolVersion: 2,
+							protocolVersion: 3,
 							type: 'phase:done',
 							transactionId: 'tx-runtime',
 							phase: 'runtime',

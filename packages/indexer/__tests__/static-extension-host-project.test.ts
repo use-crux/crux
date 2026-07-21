@@ -94,7 +94,6 @@ describe('project Static Index extension host manifest', () => {
         "import { config } from '@use-crux/core'",
         '',
         'export default config({',
-        "  experimental: { indexer: { nativeAst: true } },",
         "  indexer: {",
         "    extensions: [{ package: '@acme/crux-indexer-extension', version: '^1.0.0' }],",
         "    trust: { mode: 'allowlisted', allow: ['@acme/crux-indexer-extension'] },",
@@ -105,7 +104,7 @@ describe('project Static Index extension host manifest', () => {
 
     const result = await loadStaticExtensionHostManifestForProject({
       root,
-      nativeCompilerProtocolVersion: 1,
+      nativeCompilerProtocolVersion: 2,
     })
 
     expect(result.diagnostics).toEqual([])

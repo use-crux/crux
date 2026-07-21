@@ -194,9 +194,9 @@ var _ StaticCompiler = (*staticIndexLintCompiler)(nil)
 func staticIndexLintPatchEvents(root string) ([]json.RawMessage, error) {
 	tx := "tx-static-index-lint"
 	values := []any{
-		map[string]any{"protocolVersion": 2, "type": "phase:start", "transactionId": tx, "phase": "quality", "root": root, "startedAt": "1970-01-01T00:00:00.000Z"},
+		map[string]any{"protocolVersion": 3, "type": "phase:start", "transactionId": tx, "phase": "quality", "root": root, "startedAt": "1970-01-01T00:00:00.000Z"},
 		map[string]any{
-			"protocolVersion": 2,
+			"protocolVersion": 3,
 			"type":            "fact:batch",
 			"transactionId":   tx,
 			"sequence":        0,
@@ -228,7 +228,7 @@ func staticIndexLintPatchEvents(root string) ([]json.RawMessage, error) {
 			},
 		},
 		map[string]any{
-			"protocolVersion": 2,
+			"protocolVersion": 3,
 			"type":            "phase:done",
 			"transactionId":   tx,
 			"phase":           "quality",

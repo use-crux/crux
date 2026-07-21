@@ -12,7 +12,6 @@ describe('API freeze guardrails', () => {
     expect(source).not.toMatch(/export\s+\*\s+from/)
     expect(namedValueExports(source)).toEqual([
       'inspectProjectStaticIndexConfig',
-      'inspectProjectStaticSyntaxPlan',
       'staticDefinitionFiles',
       'createNativeSemanticBackend',
       'createSemanticIndexService',

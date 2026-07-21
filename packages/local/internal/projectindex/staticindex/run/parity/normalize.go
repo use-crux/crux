@@ -54,9 +54,9 @@ func StaticGraphFacts(facts projectindex.IndexPatchFacts) projectindex.IndexPatc
 }
 
 // ProductionFinalFacts returns the final read-model fact surface used by the
-// native AST production parity gate.
+// Static Index production parity gate.
 //
-// It keeps every beta parity fact field, including final lint findings, while
+// It keeps every Static Index parity fact field, including final lint findings, while
 // removing the legacy TypeScript source-only mode diagnostic emitted by the
 // AST worker path. That diagnostic describes how the baseline worker was run;
 // it is not Static Index semantic output and has already been excluded from

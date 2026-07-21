@@ -45,7 +45,6 @@ func BuildIncremental(input IncrementalPlanInput) projectindex.ProjectStaticSynt
 		ConstructorInterests:     defaultConstructorInterests(),
 		PruneNativeFactCallNames: []string{"cascade", "fallback", "router"},
 		SyntaxFrontend:           syntaxFrontend(),
-		StaticSyntaxEnabled:      true,
 		StaticInterests:          defaultStaticInterests(),
 		LintConfig:               append(json.RawMessage(nil), input.LintConfig...),
 		SourceGraph:              append(json.RawMessage(nil), input.SourceGraph...),

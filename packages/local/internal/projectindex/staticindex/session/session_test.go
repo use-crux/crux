@@ -7,78 +7,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"reflect"
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/planner"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/protocol"
 )
-
-func TestRunPlansDisabledStaticIndexWithoutCompiler(t *testing.T) {
-	t.Parallel()
-
-	root := t.TempDir()
-	wantPlan := projectindex.ProjectStaticSyntaxPlan{
-		Root:                root,
-		ProjectName:         "demo",
-		StaticSyntaxEnabled: false,
-	}
-	wantTimings := []projectindex.ProjectIndexPhaseTiming{{
-		Name:       planner.TimingConfig,
-		DurationMs: 2.5,
-		Count:      1,
-	}}
-	plannerCalls := 0
-	evidenceCalls := 0
-
-	result, err := Run(context.Background(), Options{
-		Root:        root,
-		ConfigPath:  "crux.config.ts",
-		ProjectName: "demo",
-		Planner: PlannerFunc(func(ctx context.Context, gotRoot, gotConfigPath, gotProjectName string) (planner.InspectResult, error) {
-			plannerCalls++
-			if gotRoot != root || gotConfigPath != "crux.config.ts" || gotProjectName != "demo" {
-				t.Fatalf("planner args = (%q, %q, %q), want (%q, %q, %q)", gotRoot, gotConfigPath, gotProjectName, root, "crux.config.ts", "demo")
-			}
-			return planner.InspectResult{
-				Plan:        wantPlan,
-				Timings:     wantTimings,
-				NodeStarted: true,
-				NodeReasons: []string{planner.ReasonConfig},
-			}, nil
-		}),
-		Evidence: func(context.Context, []json.RawMessage) ([]json.RawMessage, error) {
-			evidenceCalls++
-			return nil, nil
-		},
-	})
-
-	if err != nil {
-		t.Fatalf("Run error = %v", err)
-	}
-	if result.Status != StatusDisabled {
-		t.Fatalf("Status = %q, want %q", result.Status, StatusDisabled)
-	}
-	if plannerCalls != 1 {
-		t.Fatalf("planner calls = %d, want 1", plannerCalls)
-	}
-	if evidenceCalls != 0 {
-		t.Fatalf("evidence calls = %d, want 0", evidenceCalls)
-	}
-	if !reflect.DeepEqual(result.Plan, wantPlan) {
-		t.Fatalf("Plan = %+v, want %+v", result.Plan, wantPlan)
-	}
-	if !reflect.DeepEqual(result.PlanTimings, wantTimings) {
-		t.Fatalf("PlanTimings = %+v, want %+v", result.PlanTimings, wantTimings)
-	}
-	if !reflect.DeepEqual(result.NodeReasons, []string{planner.ReasonConfig}) {
-		t.Fatalf("NodeReasons = %v, want [%s]", result.NodeReasons, planner.ReasonConfig)
-	}
-	if result.UsedStaticIndex {
-		t.Fatal("UsedStaticIndex = true, want false")
-	}
-}
 
 func TestRunExecutesSchedulableStaticIndexPlan(t *testing.T) {
 	t.Parallel()
@@ -192,22 +126,21 @@ func writeSessionSource(t *testing.T) (string, string) {
 
 func sessionPlan(root, sourceFile string) projectindex.ProjectStaticSyntaxPlan {
 	return projectindex.ProjectStaticSyntaxPlan{
-		Root:                root,
-		ProjectName:         "demo",
-		Files:               []string{sourceFile},
-		PrimaryFiles:        []string{sourceFile},
-		FilesToParse:        []string{sourceFile},
-		CacheMisses:         []string{sourceFile},
-		StaticSyntaxEnabled: true,
-		StaticHost:          json.RawMessage(`{"nativeOnlyEligible":false}`),
-		StaticInterests:     json.RawMessage(`{"extractors":[]}`),
-		SourceGraph:         json.RawMessage(`{"schemaVersion":1,"producedBy":"@use-crux/indexer","capabilities":[],"shards":[]}`),
+		Root:            root,
+		ProjectName:     "demo",
+		Files:           []string{sourceFile},
+		PrimaryFiles:    []string{sourceFile},
+		FilesToParse:    []string{sourceFile},
+		CacheMisses:     []string{sourceFile},
+		StaticHost:      json.RawMessage(`{"nativeOnlyEligible":false}`),
+		StaticInterests: json.RawMessage(`{"extractors":[]}`),
+		SourceGraph:     json.RawMessage(`{"schemaVersion":1,"producedBy":"@use-crux/indexer","capabilities":[],"shards":[]}`),
 	}
 }
 
 func sessionPatchEvents(root string) []json.RawMessage {
 	return []json.RawMessage{
-		json.RawMessage(fmt.Sprintf(`{"protocolVersion":2,"type":"phase:start","transactionId":"tx","phase":"ast","root":%q,"startedAt":"1970-01-01T00:00:00.000Z"}`, root)),
-		json.RawMessage(fmt.Sprintf(`{"protocolVersion":2,"type":"phase:done","transactionId":"tx","phase":"ast","patch":{"schemaVersion":1,"phase":"ast","project":{"root":%q},"startedAt":"1970-01-01T00:00:00.000Z","finishedAt":"1970-01-01T00:00:00.000Z","status":"ok","invalidates":{"all":true}},"summary":{"factCount":0,"decision":{"staticIndexComplete":true}}}`, root)),
+		json.RawMessage(fmt.Sprintf(`{"protocolVersion":3,"type":"phase:start","transactionId":"tx","phase":"ast","root":%q,"startedAt":"1970-01-01T00:00:00.000Z"}`, root)),
+		json.RawMessage(fmt.Sprintf(`{"protocolVersion":3,"type":"phase:done","transactionId":"tx","phase":"ast","patch":{"schemaVersion":1,"phase":"ast","project":{"root":%q},"startedAt":"1970-01-01T00:00:00.000Z","finishedAt":"1970-01-01T00:00:00.000Z","status":"ok","invalidates":{"all":true}},"summary":{"factCount":0,"decision":{"staticIndexComplete":true}}}`, root)),
 	}
 }

@@ -44,7 +44,6 @@ export interface ProjectIndexWorkerRequest {
   readonly deletedFiles?: readonly string[]
   readonly mode?: string
   readonly semanticBackend?: SemanticBackendSelection
-  readonly includeStaticCacheStatus?: boolean
   /** Runtime operation requested by `crux runtime` CLI commands. */
   readonly runtimeOperation?: string
   /** Runtime work id used by inspect/retry/cancel operations. */

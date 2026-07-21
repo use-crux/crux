@@ -11,11 +11,10 @@
 
 export { staticDefinitionFiles } from '../indexer/files'
 export { inspectProjectStaticIndexConfig } from '../indexer/static-index/config/inspect'
-export { inspectProjectStaticSyntaxPlan } from '../indexer/static-index/plan'
+export { STATIC_INDEX_COMPILER_PROTOCOL_VERSION } from '../indexer/static-index/protocol/identity'
 
 export type {
   InspectProjectStaticIndexConfigOptions,
   ProjectStaticIndexConfig,
   ProjectStaticIndexExtensionReference,
 } from '../indexer/static-index/config/inspect'
-export type { InspectProjectStaticSyntaxPlanOptions, ProjectStaticSyntaxPlan } from '../indexer/static-index/plan'

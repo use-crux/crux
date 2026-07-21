@@ -29,8 +29,8 @@ func TestWorkerNativeStaticIndexUsesTypeScriptExtensionHostInProductionPath(t *t
 	if err != nil {
 		t.Fatalf("inspect static index config: %v", err)
 	}
-	if !config.StaticSyntaxEnabled || len(config.Extensions) != 1 || len(config.Diagnostics) != 0 {
-		t.Fatalf("static index config = %+v, want nativeAst enabled with one extension and no diagnostics", config)
+	if len(config.Extensions) != 1 || len(config.Diagnostics) != 0 {
+		t.Fatalf("static index config = %+v, want one extension and no diagnostics", config)
 	}
 
 	plan, err := worker.InspectProjectStaticSyntaxPlan(context.Background(), root, "crux.config.ts", "parity-extension-fallback")
@@ -64,10 +64,7 @@ func writeExtensionParityProject(t testing.TB, root string) {
 		filepath.Join(root, "crux.config.ts"),
 		`import { config } from '@use-crux/core'
 
-const nativeAst = true
-
 export default config({
-  experimental: { indexer: { nativeAst } },
   lint: { profile: 'recommended' },
   indexer: {
     extensions: [{ package: '@acme/crux-indexer-extension', version: '^1.0.0' }],

@@ -59,7 +59,7 @@ export interface IndexPatchToWorkerEventsOptions {
 }
 
 /**
- * Converts an `IndexPatch` into a complete V2 worker event sequence.
+ * Converts an `IndexPatch` into a complete V3 worker event sequence.
  *
  * The returned sequence always starts with `phase:start`, emits zero or more
  * ordered `fact:batch` events, and ends with `phase:done`.
@@ -72,7 +72,7 @@ export function indexPatchToWorkerEvents(
 }
 
 /**
- * Streams V2 worker events for an index patch without materializing every
+ * Streams V3 worker events for an index patch without materializing every
  * envelope and event at once.
  */
 export function* indexPatchToWorkerEventStream(
@@ -131,7 +131,7 @@ export function* indexPatchToWorkerEventStream(
 }
 
 /**
- * Reconstructs one `IndexPatch` from a V2 worker event sequence.
+ * Reconstructs one `IndexPatch` from a V3 worker event sequence.
  *
  * This helper is intentionally small and test-oriented. The Go host performs
  * the production validation before applying streamed patches.

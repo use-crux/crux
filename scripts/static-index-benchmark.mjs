@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Native AST production benchmark runner.
+ * Static Index production benchmark runner.
  *
  * The runner builds the release Rust/Oxc worker and fresh embedded TypeScript
  * worker assets before invoking the Go Project Index benchmarks via `go test`.
@@ -86,7 +86,7 @@ if (!existsSync(benchmarkRoot)) {
   throw new Error(`CRUX_INDEXER_BENCH_ROOT does not exist: ${benchmarkRoot}`);
 }
 
-console.log(`Native AST benchmark root: ${benchmarkRoot}`);
+console.log(`Static Index benchmark root: ${benchmarkRoot}`);
 console.log(`Go benchmark pattern: ${benchmarkPattern}`);
 console.log(
   `Profiles: ${selectedProfiles.map((profile) => profile.name).join(", ")}`,
@@ -211,5 +211,5 @@ function run(item) {
 /** Throws if the release worker binary expected by the benchmarks was not produced. */
 function assertWorkerExists() {
   if (existsSync(workerPath)) return;
-  throw new Error(`Native AST benchmark expected Rust worker at ${workerPath}`);
+  throw new Error(`Static Index benchmark expected Rust worker at ${workerPath}`);
 }

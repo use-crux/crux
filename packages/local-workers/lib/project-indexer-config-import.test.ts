@@ -13,7 +13,7 @@ interface ProjectConfigArtifact {
     };
     readonly experimental: {
       readonly indexer: {
-        readonly nativeAst: {
+        readonly native: {
           readonly value: string;
         };
       };
@@ -87,7 +87,7 @@ describe("built project-indexer TypeScript imports", () => {
         "}",
         'const marker = <span data-crux="loaded" />',
         "void marker",
-        "export const nativeAst = new Setting(",
+        "export const native = new Setting(",
         "  Defaults.mode === NativeMode.Enabled,",
         ").enabled",
       ].join("\n"),
@@ -96,22 +96,22 @@ describe("built project-indexer TypeScript imports", () => {
       join(root, "crux.config.ts"),
       [
         'import { config } from "@use-crux/core"',
-        'import { nativeAst } from "./settings"',
+        'import { native } from "./settings"',
         "export default config({",
-        "  experimental: { indexer: { nativeAst } },",
+        "  experimental: { indexer: { native } },",
         "})",
       ].join("\n"),
     );
 
     const event = await runBuiltWorker({
       method: "inspectProjectConfig",
-      protocolVersion: 2,
+      protocolVersion: 3,
       root,
       resolutionMode: "config-policy",
     });
 
     expect(event.payload.configFile.status).toBe("loaded");
-    expect(event.payload.experimental.indexer.nativeAst.value).toBe("oxc");
+    expect(event.payload.experimental.indexer.native.value).toBe("true");
   }, 60_000);
 
   it("shares Core identity between a public Eval and the internal collector", async () => {
@@ -141,7 +141,7 @@ describe("built project-indexer TypeScript imports", () => {
     const event = await runBuiltWorker<RuntimeArtifactsArtifact>(
       {
         method: "generateRuntimeArtifacts",
-        protocolVersion: 2,
+        protocolVersion: 3,
         root,
         definitions: [
           {
@@ -181,13 +181,13 @@ describe("built project-indexer TypeScript imports", () => {
     roots.push(root);
     await writeFile(join(root, "package.json"), '{"type":"module"}\n');
     const setting = join(root, "setting.json");
-    await writeFile(setting, '{"nativeAst":true}\n');
+    await writeFile(setting, '{"native":true}\n');
     await writeFile(
       join(root, "crux.config.ts"),
       [
         'import setting from "./setting.json" with { type: "json" }',
         "export default {",
-        "  config: { experimental: { indexer: { nativeAst: setting.nativeAst } } },",
+        "  config: { experimental: { indexer: { native: setting.native } } },",
         "  prompts: [], contexts: [], get() {},",
         "}",
       ].join("\n"),
@@ -195,7 +195,7 @@ describe("built project-indexer TypeScript imports", () => {
     const worker = createBuiltWorkerClient();
     const request = {
       method: "inspectProjectConfig",
-      protocolVersion: 2,
+      protocolVersion: 3,
       root,
       resolutionMode: "config-policy",
     };
@@ -204,14 +204,14 @@ describe("built project-indexer TypeScript imports", () => {
         request,
         "projectConfig",
       );
-      expect(first.payload.experimental.indexer.nativeAst.value).toBe("oxc");
+      expect(first.payload.experimental.indexer.native.value).toBe("true");
 
-      await writeFile(setting, '{"nativeAst":false}\n');
+      await writeFile(setting, '{"native":false}\n');
       const second = await worker.request<ProjectConfigArtifact>(
         request,
         "projectConfig",
       );
-      expect(second.payload.experimental.indexer.nativeAst.value).toBe("false");
+      expect(second.payload.experimental.indexer.native.value).toBe("false");
     } finally {
       await worker.close();
     }
