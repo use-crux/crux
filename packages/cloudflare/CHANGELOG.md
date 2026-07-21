@@ -1,8 +1,74 @@
-# @use-crux/react
+# @use-crux/cloudflare
 
 ## 0.6.0
 
-### Patch Changes
+### Minor Changes
+
+- efbed7f: Replace the pre-release Quality authoring, execution, CLI, storage, and
+  Devtools model with Crux Evals V1. Applications now bind ordinary callable
+  production tasks with `generate.task()` or `stream.task()`, define inert typed
+  Cases and Variants through `@use-crux/core/eval`, run them with `crux eval`,
+  reuse exact safe evidence automatically, and explicitly accept complete Eval
+  run arms as Baselines. The old `@use-crux/core/quality` exports and
+  `crux quality` commands are removed without compatibility aliases.
+
+  Add `stableModel()` to attest a standard or custom AI SDK model's secret-free
+  versioned identity for safe automatic Eval reuse. Unattested model objects keep
+  working fresh and receive one actionable CLI and Devtools remedy.
+
+  Reuse function-form prompt, system, and message renderers through their tracked
+  literal-ESM source closure and an exact one-way fingerprint captured from the
+  real normalized generate/stream request. The comparison projects only fields
+  that can affect the provider request, excluding per-resolution observability
+  IDs while retaining Context text and cache boundaries. Evidence candidates are locally
+  re-rendered before reuse; mismatches execute fresh with actionable
+  `nondeterministic_renderer` CLI and Devtools guidance, and raw prompt material
+  never crosses the evidence boundary. Unresolved source dependencies remain
+  fresh.
+
+  Fingerprint callback-free Crux router, split, retry, fallback, and cascade
+  trees by recursively projecting attested model leaves and structural options,
+  then include the resolved model target in observed identity. `stableModel()`
+  rejects whole route trees. Static contexts, inline skills, and schema-only
+  tools can reuse exact evidence; dynamic context renderers/selectors, executable tools,
+  function-produced tools, memoized or effectful context families execute fresh.
+  Route-tree evidence remains fresh when its resolved target was not covered at
+  planning.
+
+  Fail closed for inline managed-task bindings and callback-bearing Variant
+  prompt overrides, report the distinct `task_binding_untracked` remedy, and
+  derive deployed Variant fingerprints from adapter semantic projections so
+  schema-backed prompt changes cannot collide. Fingerprint Current and imported
+  replacement task bindings independently so an unrelated candidate edit does
+  not invalidate Current evidence.
+
+  Add Runtime-hosted Eval execution with generated identity-only registries,
+  strict offline and pre-spend planning, Node/serverless/Convex conformance, and
+  the first-party `@use-crux/cloudflare` Durable Object host. Explicit fresh
+  executions use a new durable admission identity while retries reconnect to the
+  same admitted action. Strict offline runs load the generated data-only privacy
+  policy without importing Runtime code or touching the network, and fail closed
+  when that projection is missing or stale. Add awaited
+  run-linked feedback through `@use-crux/core/feedback` and AI message metadata
+  through `@use-crux/ai/feedback`, plus durable Review and explicit Add-to-eval
+  workflows in Crux Local and Devtools.
+
+  Add first-class Eval catalog and run views to Devtools, including same-origin
+  run triggering, exact run comparisons, Baseline promotion, Eval search, reuse
+  and invalidation reasons, cost and score evidence, feedback, and Review links.
+  Keep the CLI coordinator protocol bounded by sending diagnostic run summaries
+  instead of duplicating stored inputs and outputs over NDJSON.
+
+  Keep durable result writes type-safe and bounded: reject non-JSON media before
+  redaction, preserve supported structured values exactly, and omit oversized
+  provider response envelopes from the stored run while retaining their linked
+  trace references. Align privacy-policy fingerprints across TypeScript and Go,
+  including HTML-sensitive keys and JavaScript UTF-16 key ordering.
+
+  Make `--max-cost` fail closed on conservative per-call USD ceilings. Managed AI
+  tasks, routing trees, bounded tool loops, and judges estimate from
+  `experimental.eval.pricing`; unknown paths report missing model keys and an
+  actionable remedy before any billable work.
 
 - fa12d14: Make portable application entrypoints verifiable in both source and staged npm
   packages, remove package-wide Node engine restrictions where the primary graph
@@ -127,6 +193,8 @@
   Postgres Runtime snapshot decoding now revives nested suspend deadlines, and
   terminal retention recognizes expired flow snapshots.
 
+### Patch Changes
+
 - Updated dependencies [efbed7f]
 - Updated dependencies [fac9733]
 - Updated dependencies [aa067eb]
@@ -140,87 +208,3 @@
 - Updated dependencies [ed6626b]
 - Updated dependencies [21bba63]
   - @use-crux/core@0.6.0
-
-## 0.5.0
-
-### Patch Changes
-
-- Updated dependencies [fd6edcc]
-- Updated dependencies [37ebe22]
-- Updated dependencies [cd3e235]
-- Updated dependencies [0c3ba08]
-- Updated dependencies [64a716b]
-- Updated dependencies [74f27bf]
-- Updated dependencies [2ab4bd9]
-- Updated dependencies [58edfa9]
-- Updated dependencies [089ba6f]
-- Updated dependencies [aa37b64]
-  - @use-crux/core@0.5.0
-
-## 0.4.0
-
-### Patch Changes
-
-- Updated dependencies [01ce116]
-- Updated dependencies [cdc9c16]
-- Updated dependencies [d2b64b4]
-- Updated dependencies [78592f0]
-- Updated dependencies [3b0fb37]
-- Updated dependencies [643751b]
-- Updated dependencies [dcee4fa]
-- Updated dependencies [0ba939b]
-- Updated dependencies [4b29d0c]
-- Updated dependencies [fa1c979]
-- Updated dependencies [41cf753]
-- Updated dependencies [8927775]
-  - @use-crux/core@0.4.0
-
-## 0.3.0
-
-### Minor Changes
-
-- 5a164be: Stabilize Plan & Tasks task-list state handling: duplicate IDs, removed tasks, discarded lists, terminal transitions, pending/cancelled status derivation, and stale counter repair now resolve through typed lifecycle errors and row-derived state.
-
-  Cut over the experimental Plans & Tasks API to the canonical `plan()`, `tasks()`, and `task()` surface. Plan and task handles are command handles with `get()`/`list()` reads, existing entities are bound with `plan.ref()` and `tasks.ref()`, creation tools live at `plan.tool()` and `tasks.tool()` with safe `created()` accessors, and the old `tasklist`, top-level agent/tool factories, and first-match task-list lookup exports are removed from public entrypoints.
-
-  Add typed task definitions for `tasks({ items })`: keyed `task()` specs now infer literal task IDs for reads, lifecycle methods, and workers, infer schema-backed `complete()` result payloads, validate completed results at runtime, and reject non-JSON plan/task metadata, list metadata filters, and task results before persistence.
-
-  Tighten the final beta contract with root-level task lifecycle error exports, schema-input completion typing for transforming result schemas, JSON guard coverage for dropped object properties, and consistent plan-list metadata filtering.
-
-  Align React and devtools with the canonical beta surface: React hooks now expose `usePlan()` and `useTasks()` with ID-or-handle inputs and no public `useTaskList()` alias, while local/devtools plan details project canonical task activity with core task statuses and separate progress messages.
-
-  Rewrite the public Plans & Tasks docs around the final beta API, including `plan()`, `tasks()`, `task()`, handle methods, dynamic vs defined ledgers, status derivation, lifecycle errors, React hooks, and guidance on when to use `flow()` or an external durable runner.
-
-### Patch Changes
-
-- 53b04a3: Refresh npm-facing package documentation and homepage metadata so package pages point users to cruxjs.dev and the core package README presents a concise onboarding path.
-
-  Allow `@use-crux/google` consumers to use either `@google/genai` 1.x or 2.x.
-
-  Document the single-turn provider bundle authoring path in adapter package READMEs.
-
-- Updated dependencies [2cd8c52]
-- Updated dependencies [890d660]
-- Updated dependencies [53b04a3]
-- Updated dependencies [5477724]
-- Updated dependencies [a9fd8f9]
-- Updated dependencies [fd4b17f]
-- Updated dependencies [5a164be]
-  - @use-crux/core@0.3.0
-
-## 0.2.0
-
-### Minor Changes
-
-- 96fb6b7: Prepare the first npm release under the `@use-crux` package scope.
-
-  Document the native AST beta parity gate, release checklist, and `experimental.indexer.nativeAst`
-  troubleshooting guidance.
-
-  Fix `make local` so the current-platform Rust/Oxc worker binary is replaced atomically when an old
-  worker process is still running.
-
-### Patch Changes
-
-- Updated dependencies [96fb6b7]
-  - @use-crux/core@0.2.0

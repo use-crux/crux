@@ -1,5 +1,454 @@
 # @use-crux/core
 
+## 0.6.0
+
+### Minor Changes
+
+- efbed7f: Replace the pre-release Quality authoring, execution, CLI, storage, and
+  Devtools model with Crux Evals V1. Applications now bind ordinary callable
+  production tasks with `generate.task()` or `stream.task()`, define inert typed
+  Cases and Variants through `@use-crux/core/eval`, run them with `crux eval`,
+  reuse exact safe evidence automatically, and explicitly accept complete Eval
+  run arms as Baselines. The old `@use-crux/core/quality` exports and
+  `crux quality` commands are removed without compatibility aliases.
+
+  Add `stableModel()` to attest a standard or custom AI SDK model's secret-free
+  versioned identity for safe automatic Eval reuse. Unattested model objects keep
+  working fresh and receive one actionable CLI and Devtools remedy.
+
+  Reuse function-form prompt, system, and message renderers through their tracked
+  literal-ESM source closure and an exact one-way fingerprint captured from the
+  real normalized generate/stream request. The comparison projects only fields
+  that can affect the provider request, excluding per-resolution observability
+  IDs while retaining Context text and cache boundaries. Evidence candidates are locally
+  re-rendered before reuse; mismatches execute fresh with actionable
+  `nondeterministic_renderer` CLI and Devtools guidance, and raw prompt material
+  never crosses the evidence boundary. Unresolved source dependencies remain
+  fresh.
+
+  Fingerprint callback-free Crux router, split, retry, fallback, and cascade
+  trees by recursively projecting attested model leaves and structural options,
+  then include the resolved model target in observed identity. `stableModel()`
+  rejects whole route trees. Static contexts, inline skills, and schema-only
+  tools can reuse exact evidence; dynamic context renderers/selectors, executable tools,
+  function-produced tools, memoized or effectful context families execute fresh.
+  Route-tree evidence remains fresh when its resolved target was not covered at
+  planning.
+
+  Fail closed for inline managed-task bindings and callback-bearing Variant
+  prompt overrides, report the distinct `task_binding_untracked` remedy, and
+  derive deployed Variant fingerprints from adapter semantic projections so
+  schema-backed prompt changes cannot collide. Fingerprint Current and imported
+  replacement task bindings independently so an unrelated candidate edit does
+  not invalidate Current evidence.
+
+  Add Runtime-hosted Eval execution with generated identity-only registries,
+  strict offline and pre-spend planning, Node/serverless/Convex conformance, and
+  the first-party `@use-crux/cloudflare` Durable Object host. Explicit fresh
+  executions use a new durable admission identity while retries reconnect to the
+  same admitted action. Strict offline runs load the generated data-only privacy
+  policy without importing Runtime code or touching the network, and fail closed
+  when that projection is missing or stale. Add awaited
+  run-linked feedback through `@use-crux/core/feedback` and AI message metadata
+  through `@use-crux/ai/feedback`, plus durable Review and explicit Add-to-eval
+  workflows in Crux Local and Devtools.
+
+  Add first-class Eval catalog and run views to Devtools, including same-origin
+  run triggering, exact run comparisons, Baseline promotion, Eval search, reuse
+  and invalidation reasons, cost and score evidence, feedback, and Review links.
+  Keep the CLI coordinator protocol bounded by sending diagnostic run summaries
+  instead of duplicating stored inputs and outputs over NDJSON.
+
+  Keep durable result writes type-safe and bounded: reject non-JSON media before
+  redaction, preserve supported structured values exactly, and omit oversized
+  provider response envelopes from the stored run while retaining their linked
+  trace references. Align privacy-policy fingerprints across TypeScript and Go,
+  including HTML-sensitive keys and JavaScript UTF-16 key ordering.
+
+  Make `--max-cost` fail closed on conservative per-call USD ceilings. Managed AI
+  tasks, routing trees, bounded tool loops, and judges estimate from
+  `experimental.eval.pricing`; unknown paths report missing model keys and an
+  actionable remedy before any billable work.
+
+- fac9733: Add object-bound `FlowHandle.cancel(flowId)` with consistent idempotent behavior
+  with and without a Runtime Engine. Runtime cancellation now atomically marks
+  both durable work and its flow snapshot cancelled, including through
+  `crux.flows.cancel()`, while leaving independently deferred or scheduled child
+  work running.
+
+  Correct missing-runtime guidance to use `handle.resume(flowId)` and document
+  the positional, barrier-buffered durability contract for `flow.defer()` and
+  `flow.after()`.
+
+- aa067eb: `serverless()` now infers distinct Vercel production and preview Runtime Engine namespaces and records their provenance. Production serverless configurations without an explicit namespace, `CRUX_RUNTIME_NAMESPACE`, or supported Vercel signal now throw `NAMESPACE_AMBIGUOUS` at composition instead of silently using `local`; set `CRUX_RUNTIME_NAMESPACE=production` or pass `serverless({ namespace: "..." })`.
+
+  Runtime setup and preflight now warn when a serverless definition legitimately falls back to `local` in development, and the `crux` CLI renders passing-setup warnings in `crux runtime generate` and `crux dev` preflight output.
+
+- b22f00a: Memory capture modes are now honored end to end, and Convex memory storage is records-only.
+
+  Adapters previously awaited memory flush unconditionally, so `capture.mode: 'afterResponse'` and `'detached'` behaved like `'inline'` for prompt-bound memory. Adapters now only await capture when the mode is `'inline'`, or when it is `'afterResponse'` without a configured `capture.waitUntil` hook (the serverless-safe fallback). Adapters also forward each tool call to memory blocks' `captureToolEvent` hooks, so `episodes()` records tool activity, and the Convex agent lifecycle retains tool results and errors. Extractive blocks with `write: { mode: 'manual' }` no longer run their extract callback during capture.
+
+  Breaking for `@use-crux/convex` (pre-1.0 minor): the bundled Convex vector path was unusable (no schema vector index, wrong search result hydration) and its same-key vector upsert corrupted memory records, so it has been removed, including the `vectorIndexName` and `semanticCache` profile-storage options, the `ConvexSemanticCacheOptions` type, and the store-doc dense-search contract types. `convexStorage()` and the ambient Convex runtime storage now provide records only; embeddings remain mirrored on records. Semantic memory blocks fall back to recency listing on Convex unless an explicit `VectorStore` (for example `upstashVectorStore()` from `@use-crux/upstash`) is configured, and `convexVectorStore()` now throws `unsupported_capability` with migration guidance. `memory({ records })` from `@use-crux/convex` no longer injects ambient runtime storage when explicit stores are passed.
+
+- e24f46c: Add portable MCP tool sources over Streamable HTTP and stdio. MCP tools now
+  materialize lazily across every first-party generation adapter and retain the
+  ordinary Crux middleware, Safety, approval, Eval, observability, and
+  cleanup contracts.
+
+  Project Index and Devtools now connect authored MCP servers with
+  runtime-discovered tools, safe schemas and fingerprints, health and lifecycle state,
+  Run Detail preparation evidence, and exact Catalog activity. The new
+  `@use-crux/mcp` package owns both supported client paths and keeps MCP optional
+  for Core and adapter installations.
+
+  The release also validates widened runtime transport and selection values at
+  the public boundary, keeps opaque dependency failures out of errors and
+  evidence, preserves every accepted portable tool name, closes materialized
+  sessions when lifecycle preparation fails, and bounds Project Index runtime
+  delivery and ingestion.
+
+- fa12d14: Make portable application entrypoints verifiable in both source and staged npm
+  packages, remove package-wide Node engine restrictions where the primary graph
+  is portable, and include the Next integration in TypeScript release staging.
+
+  The `@use-crux/ai` root no longer downloads HTTPS transcription input
+  implicitly. Portable callers must provide materialized audio; Node callers can
+  import `transcribe` or `createAiSdkTranscribe` from the new
+  `@use-crux/ai/transcription/node` subpath to retain the bounded, DNS-pinned
+  download behavior. Portable data-URL transcription no longer relies on the
+  Node `Buffer` global.
+
+  Unify observability and host-lifecycle async scoping on Core's canonical
+  carrier so no-AsyncLocalStorage runtimes retain synchronous fallback behavior
+  while unsafe asynchronous ambient host scopes fail closed.
+
+  Add portable deployment identity and privacy-safe Project Index manifest
+  contracts to Core. The build-time Indexer now projects and verifies the same
+  deterministic artifact internally.
+
+  Carry immutable deployment identity through observability graph records,
+  suspend/resume propagation, and local run detail. `@use-crux/otel` now exports a portable
+  Resource-attribute mapper, maps lightweight identity per span, and projects
+  DefinitionRefs through bounded attributes and events.
+
+  Advance observability to schema v4 with explicit operation-family identity.
+  Root runs now own an `operationId`; independently durable nested Flow, named
+  defer, and Convex swarm work opens causally linked child runs while ordinary
+  pipeline, parallel, consensus, delegate, generation, and host continuations
+  remain spans or fresh segments. Local Runs projects one row per operation with
+  aggregate child/topology health, child-before-root shells, family-atomic
+  retention, and deletion tombstones. Older observability storage resets in
+  place because family membership cannot be reconstructed from trace IDs. Run
+  lookup and deletion now require an operation or member-run ID; W3C trace IDs
+  remain correlation data and never select an operation implicitly.
+
+  Add daemon-free `crux check` with deterministic JSON and explicit CI exit
+  codes. `crux lint` now uses the same one-shot Project Index service and embedded
+  worker pipeline by default while retaining its no-gate compatibility behavior
+  and an explicit `--server` path.
+
+  Add daemon-free `crux manifest` artifact generation and verified, idempotent
+  `crux catalog import`. Local observability now resolves runtime definition
+  references only against the exact immutable deployment manifest named by a run
+  and labels current-checkout comparisons separately.
+  Definition fingerprints now use normalized project-relative source identity so
+  identical checkouts produce the same manifest ID; static, semantic, and Go
+  snapshot cache epochs invalidate root-dependent historical fingerprints.
+
+  Add deterministic `crux catalog` list, show, status, and explain projections
+  with compiler provenance, safe source paths, Health/Eval/runtime joins, and
+  truthful partial or unknown state. The beta `crux index` list/show paths now
+  delegate to Catalog while category keywords and explicit reindex remain.
+  Durable definition evidence now retains canonical extractor and resolved
+  extension provenance, and Catalog explanations name every actual contributor
+  without changing the public evidence shape or phase producer identity.
+  Durable relation, source-reference, and diagnostic evidence now retains the
+  same exact extractor contributors across worker, cache, and restart boundaries.
+
+  Add opinionated `withCrux` lifecycle boundaries for Cloudflare Workers and
+  Next.js while retaining their low-level adapters. Workers and Next now compose
+  deferred work with contained, bounded post-response observability drains;
+  `createCruxConvex().run()` owns the corresponding bounded terminal drain and
+  preserves deployment identity across durable continuation boundaries.
+  Rejected promises returned by advisory drain reporters are contained without
+  delaying or replacing handler results or host-owned drain work.
+  Rename the Next Runtime artifact build plugin to `withCruxBuild`, reserving
+  `withCrux` for framework lifecycle boundaries without a compatibility alias.
+  Add explicit `config({ host })` retention bindings for Node, Next.js,
+  Cloudflare Workers, and Vercel. Config-only ambient defer uses an ephemeral
+  invocation per call; failed or cancelled scopes now record and skip inline
+  callbacks instead of running them.
+  Remove defer completion classes and lifetime factories in favor of the scope
+  kernel's host bindings. Serverless and Node wrappers now enqueue retained work
+  through the root gate. Move the Workers `withCrux` lifecycle boundary from
+  Core's deleted `/observability/workers` subpath to `@use-crux/cloudflare`,
+  where its structured drain runs before the kernel flush.
+  Open lazy execution scopes at Crux agent, adapter, tool, Safety, flow-step, and
+  Convex bridge boundaries. Inline `defer()` now works with zero host setup inside
+  defer-capable primitives on long-lived processes; nested work drains at its
+  nearest boundary and streaming adapters restore one scope across Core-owned
+  iteration and completion segments.
+  Configured host retention now applies uniformly when any Crux primitive is the
+  execution root. Primitive drains still start immediately, while retention-port
+  failures propagate after deterministic sealing instead of silently accepting
+  work the host cannot keep alive.
+  Run Evals and their cells as execution scopes. Deferred work registered by an
+  Eval task is captured as cell evidence instead of invoking inline callbacks or
+  staging named Runtime work, and expired remote cells drop late observability
+  writes through the shared scope-sealing policy.
+  Teach setup diagnostics, the built-in defer lint, and public documentation the
+  same primitive-first host-retention ladder, including exact Next, Vercel, and
+  Workers remediations and the generic serverless adapter contract.
+  Remove the config-dependent `defer.missing_scope` bundled lint; `crux setup`
+  now owns host-retention diagnostics using selected config and platform evidence.
+  Portable MCP entrypoints now fail closed when stdio is selected, while Node
+  runtimes resolve their lazy stdio adapters through private conditional imports.
+
+  Align public documentation around Catalog, Runs, Evals, and Health. Narrow
+  the published Indexer root to Crux-owned compiler contracts; third-party
+  authoring stays on the experimental `/extensions` subpath and is declarative,
+  limited to extractors plus relation declarations.
+
+  Correlate successful managed operation results with the exact Core-owned W3C
+  trace and producing span. Generation hooks and middleware receive finalized
+  results; stream handles expose identity immediately and repeat it on
+  completion; completed media, agent/composition, flow, scoring, compaction,
+  citation, and content-indexing summary envelopes follow the same exact-owner
+  contract while provider payloads and raw values remain ID-free.
+  Completed-operation bindings now use the documented exact media-operation
+  vocabulary; formerly normalized spellings such as `generate-image` or
+  `generateimage` no longer imply a Core-owned media span.
+
+  Managed AI Eval tasks retain correlated response metadata after removing raw
+  provider values. Eval cells continue to store logical task `runIds`, while
+  assertion outcomes store exact related span IDs; neither is relabelled as a W3C
+  trace ID. Semantic-cache and flow persistence boundaries prevent
+  invocation-local IDs from leaking across replay or durable execution. The
+  private deployed-Eval result wire advances to schema version 2 so retained task
+  responses require the same correlation contract across hosts.
+
+  Postgres Runtime snapshot decoding now revives nested suspend deadlines, and
+  terminal retention recognizes expired flow snapshots.
+
+- 048b397: Export `detectSuspiciousPatterns` from `@use-crux/core` (alongside the existing
+  `safe`, `escapeXml`, and other prompt-injection defense helpers) and export the
+  `TaskCompleteArgs` type from `@use-crux/core/tasks`. Both were already documented
+  in the reference but were not part of the public export surface.
+
+  Also corrects the documentation URLs emitted in a few packages after the docs
+  site reorganized its guide routes (`defer` → `background-work`, `runtime` →
+  `durable-execution`).
+
+- d943c41: Safety input guardrail rewrites now fail closed on multimodal messages: a rewrite that cannot be
+  faithfully re-applied to the message's text parts (mutated or spoofed media placeholders,
+  media-only messages) throws `SafetyResultError` instead of being silently dropped or duplicating
+  placeholder text into the prompt. `boundary.output.both()` guards now receive the parsed object
+  alongside the output text.
+
+  Add `boundary.input.media()` for inspecting canonical non-text input parts before provider
+  normalization with fully inferred callback types and stable original indexes. Enforced `strip`
+  decisions remove only the current part, while report-mode strips record intent without changing
+  provider input; Project Index now records the exact media boundary on authored guardrails. Input
+  media remains guardrail-only: constraints reject `boundary.input.media()` in TypeScript and fail
+  closed on bypassed configurations.
+
+  Add `guardrail.media()` as a declarative, provider-neutral attachment policy for MIME allowlists,
+  byte limits, exact remote hosts, inline/provider-file categories, and URL userinfo/query posture.
+  It inspects only caller-supplied metadata and local bytes, supports block or strip enforcement, and
+  keeps locator and payload details out of decisions. Project Index now records complete literal
+  guardrail helper strategy config through the bundled native Safety extractor and retains kind-only
+  facts for dynamic config.
+
+  Add `boundary.output.media()` and completed image Safety. Generated images now run output policies
+  once after routing selects a result; enforce-mode strips preserve image order, reset the `image`
+  alias, and block on the final image, while report mode preserves the result. Direct image-edit
+  references and masks run input media policies before provider normalization with immutable
+  write-back and a fail-closed retained-mask dependency. Canonical write-back preserves provider
+  `raw` and metadata identities.
+
+  Add completed speech Safety options and runtime coverage. Speech `text` and optional
+  `instructions` now run through their exact input boundaries before provider normalization, and
+  generated audio runs output-media policies before reporting or return. Enforced audio strip blocks
+  because audio is required; report mode preserves it. Canonical audit write-back retains provider
+  facts and works identically through direct bindings and provider runtimes.
+
+  Add completed transcription Safety options and runtime enforcement. Prompt hints and required
+  audio are guarded before normalization or materialization, while validated transcript text is
+  guarded once before reporting or return. Enforced transcript rewrites clear timed segments and
+  words without changing provider-native facts. Transcript constraints run exactly once with no
+  provider retry: assert failures throw and suggest/report failures remain in canonical audit.
+
+  Completed operations now validate every exact Safety binding against their primitive before
+  provider work. Inapplicable call and prompt bindings fail closed, while global tuple members remain
+  auditable as dormant without suppressing applicable members; duplicate IDs and invalid media tuning
+  still fail before dormancy classification. Guarded completed-operation results expose canonical
+  decisions through the new optional `result.safety` field and exported `SafetyAudit` type.
+
+  Typed image prompts now merge prompt guardrails with global and call policies, guard resolved user
+  and system text at their exact boundaries, and hand providers a direct prepared prompt without a
+  second resolution. Routed prompts require one candidate-stable ordered policy set, lazily guard only
+  attempted candidates, and treat candidate input Safety failures as terminal rather than eligible for
+  fallback.
+
+  Language generation now guards every provider-produced step before client tools, history append,
+  observation, continuation, or public accumulation. The loop-runtime contract exposes an optional
+  pre-client-tool transform capability with Core-owned indexed text/media edits; incapable runtimes
+  fail before provider I/O when step policies apply. Core and AI SDK dialects preserve tool calls,
+  raw/provider identities, and guarded step/envelope consistency across reasoning, media, structured
+  validation, and constraint regeneration. Text-only language prompts reject local structured-output
+  bindings before provider I/O while keeping equivalent global bindings auditable as dormant.
+
+  Stream completion now guards buffered reasoning and media through one shared Core gate before
+  completion resolves in both adapter dialects. Live text retains its existing staged stream Safety
+  and is not re-guarded at completion; completion-only text is guarded once, stripped media is
+  removed consistently from content and assistant messages, and buffered blocks may reject after
+  already emitted safe text. Raw provider and SDK stream handles remain unchanged and explicitly
+  unguarded.
+
+  Project Index now recognizes output-media boundaries, ordered input/output media tuples, media
+  strategy metadata, and completed-operation Safety policy/options references in both static lanes.
+  The static cache namespace advances so existing checkouts cannot reuse facts produced before the
+  expanded boundary vocabulary. Devtools Catalog renders those authored boundaries, strategy/action
+  configuration, and operation attachments, while Runs explains privacy-safe model, origin, and
+  required-media escalation evidence.
+
+- 4d51ecf: Make TUI input routing deterministic so focused filters consume text before
+  workspace shortcuts, each key dispatches at most one action, and help plus pane
+  footers show only executable actions. Derive optional Dataset support from the
+  injected production client and keep unsupported screens out of navigation.
+  Preserve exact record identities across Overview drills and restore logical
+  route, pane focus, and stable selections when navigating Back.
+  Cancel in-flight Overview and Runs fetches and actions when the owning dev
+  command ends instead of leaving workflow work detached from shutdown.
+  Keep Runs list and detail reads revision-aware and selection-owned, preserve
+  complete observability detail when exporting, and reject late detail responses
+  from a previously selected run.
+  Keep the Runs list selection visible across paging, filtering, refresh, and
+  terminal resize, with keyboard and mouse-wheel navigation gated by pane focus.
+  Wrap and scroll long Runs span details with stable resize anchors, focused
+  line/page navigation, and a visible document position indicator.
+  Keep the selected Runs span visible while navigating or refreshing its
+  hierarchy, with focused line/page movement independent from detail scrolling.
+  Render a direct, diagnosis-oriented Runs detail with failure evidence,
+  diagnostics, activity, artifacts, events, and exact definition references;
+  keep complete raw observability records behind explicit inspect and export
+  actions.
+  Keep Runs readable across narrow, medium, and wide terminals using its actual
+  Workbench body bounds, prioritize diagnosis at medium widths, and show an
+  actionable resize message below the supported 60x20 terminal minimum.
+  Keep Overview insight and run selections visible across paging, refresh, and
+  resize; expose focused-pane actions and readable narrow navigation; and retain
+  pane-scoped last-good data when independent summary, insight, run, or activity
+  refreshes fail.
+  Make Project Index definitions and structured source details independently
+  scrollable, preserve exact selection and detail anchors across refreshes, and
+  retain last-good index data with an explicit degraded state when refresh fails.
+  Support tab-based pane traversal and control-key paging, sanitize indexed text
+  before terminal rendering, and report definition exports with portable names
+  without replacing usable Index data on export failure.
+  Open exact runtime definition references from Runs with `d`: navigate directly
+  for one destination or choose among multiple exact IDs in a bounded scrollable
+  modal. Show missing references explicitly in Project Index, never substitute a
+  same-named definition, and restore run, span, definition, pane, and viewport
+  location when navigating Back.
+  Select the interactive workbench only when stdin and stdout are capable
+  terminals outside CI and `TERM=dumb`, while keeping plain output free of
+  terminal control sequences. Browser launch is now explicit: use `--open` at
+  startup or `o` inside the workbench; the legacy `--no-open` flag is removed,
+  while `--tui` and `--no-tui` explicitly select a mode and reject conflicts.
+  Route command input, JSON output, diagnostics, worker logs, and subprocess
+  stderr through scoped injectable boundaries, propagating JSON write failures
+  without mutating the process-wide logger.
+  Unify dev-command, TUI, event-bridge, server, WebSocket, tunnel, watcher, and
+  worker shutdown under one cancelable session with idempotent bounded cleanup.
+  Clean `q` and raw TUI Ctrl+C exit `0`, process SIGINT exits `130`, and SIGTERM
+  exits `143`; signal status wins
+  over reported cleanup failures, expected cancellation stays silent, and a
+  second signal terminates immediately.
+  Render the TUI immediately after listener binding while runtime preflight,
+  Project Index, and runtime-artifact warmup continue under owned cancellation.
+  Replay typed startup diagnostics such as `RUNTIME_HOST_ONLY` in the workbench,
+  buffer edits made during the initial index, retry a failed baseline on the next
+  edit, and prevent delayed terminal capability replies from leaking into the
+  shell. Preserve graceful cleanup and exit status through the npm launcher.
+  Allow ordinary callable Evals and adapter-managed Evals to coexist without
+  placement flags: Crux derives execution per Current/Variant arm, keeps
+  coordinator-only Evals out of deployed host artifacts, and validates exact
+  host requirements before paid work. Generate Runtime files through one
+  preflighted, atomic, manifest-last pipeline with complete structured findings.
+  Make `crux setup` dry-run generated-file freshness and make
+  `crux setup --apply` re-inspect before safely refreshing files; `crux dev`
+  continues serving while background generation reports and retries failures.
+  Preserve existing Convex routers that already call `crux.bridge(...)`, with the
+  bridge registering authenticated Eval routes automatically. The local Runtime
+  artifact manifest moves to v2 while the authenticated host wire remains v1.
+  Register those Eval routes as real default-runtime Convex HTTP actions and
+  forward them across Convex's supported action boundary, so generated and
+  existing routers deploy without invalid-module errors.
+  Index Eval placement in a bounded runtime-rich pass for setup, one-shot
+  generation, and watcher refreshes, and treat host-bound preflight as
+  metadata-only instead of executing host-only functions from the local CLI.
+- 21bba63: Cache validated dense and sparse embedding bundles per source when an indexer
+  uses `cache: true`, including dry-run reuse and cache modes for `indexChunks()`.
+  Embedding instances now expose vector-semantic fingerprints, and provider
+  helpers derive model/request identity while accepting an additional `version`
+  for explicit invalidation.
+
+  The first sync after an embedding identity change intentionally classifies
+  unchanged source content as `indexChanged`; cached vectors are reused when the
+  ordered chunk content remains compatible. In `appendOnly` mode that source is
+  skipped without updating its index identity, so later append-only syncs keep
+  reporting the same skip until a replace-mode sync accepts the change.
+
+  Index results and source ledgers now include `embedding` stage records with
+  `embeddingKind` and cache outcomes. Consumers that match stage objects by exact
+  shape should accept these new records and field.
+
+  Add native multimodal dense embeddings with declared, const-inferred
+  `modalities`, typed text/image/audio/video/document inputs, and query/document
+  roles. Google `gemini-embedding-2` maps those inputs natively and has a
+  zero-config model-aware path; OpenAI and the installed AI SDK embedding surface
+  remain explicitly text-only and reject media before provider I/O.
+
+  Indexers can store media documents through `AssetStore`, stamp vectors with a
+  SHA-256 embedding-space digest, and retrieve the same namespace with text or
+  media while retaining `RetrieverHit.source.assetRef` attribution. Namespace
+  guards reject incompatible model, dimension, normalization, modality, or task
+  spaces before writes or search and require a full reindex or new namespace.
+  Media bytes and provider locators never enter record/vector metadata, pipeline
+  caches, observability artifacts, or retrieval traces.
+
+  Breaking (pre-1.0 minor): custom dense provider batch functions now receive
+  validated `NormalizedEmbeddingInput[]` plus `{ role }` instead of `string[]`.
+  Embedding fingerprints now include modality/space semantics, invalidating old
+  embedding and indexing cache entries once so they are safely re-embedded.
+
+  Project Index now emits module-scoped embedding definitions, embedding-call
+  facts, vector-indexer facts, and consumer-to-embedding relations. Semantic
+  lints reject proven unsupported media modalities, sparse/media combinations,
+  and exact embedding-identity mismatches within a shared vector namespace.
+
+  The embedded Devtools catalog now shows each retriever and knowledge base's
+  resolved embedding modalities and dense vector-space identity, with the new
+  embedding lints presented through the standard Health view. Run Detail now
+  presents embedding roles, modality counts, and space digests, plus byte-safe
+  asset, media-type, and page/time attribution on media retrieval hits.
+
+### Patch Changes
+
+- 692e538: Reshape the `@use-crux/core` README (npm page) to orient rather than document:
+  keep the intro, install, examples, subpaths table, and links, and route deep
+  reference topics to the docs site. Also fix stale example APIs (guardrails and
+  constraints now use the boundary-based `{ id, on, run }` shape; the retriever
+  example uses the real `records` field).
+- ed6626b: Restore observability configuration across bundled server module copies and
+  reconcile abandoned activity without treating it as currently running.
+
+  Also preserve provider model metadata and grounded prompt types, and make
+  omitted Static Index configuration use the documented default. Reject malformed
+  shared runtime registry ancestry and hook layers before duplicate module copies
+  adopt them.
+
 ## 0.5.0
 
 ### Minor Changes
