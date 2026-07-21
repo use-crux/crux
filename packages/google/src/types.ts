@@ -1,4 +1,5 @@
 import type { Content } from '@google/genai'
+import type { EmbeddingModality } from '@use-crux/core/embedding'
 import type { GoogleCachedContentCallOptions } from './cached-content'
 
 /** Google GenAI function declaration for tool use. */
@@ -38,25 +39,28 @@ export interface GoogleRequest extends Record<string, unknown> {
   readonly config?: Record<string, unknown>
 }
 
-/** Configuration for a Crux dense embedding backed by Google embeddings. */
-export interface GoogleEmbeddingConfig {
-  /** Crux embedding name. */
-  readonly name: string
+interface GoogleEmbeddingConfigBase<
+  TModel extends string = string,
+  TModalities extends readonly EmbeddingModality[] | undefined =
+    | readonly EmbeddingModality[]
+    | undefined,
+> {
   /** Google embedding model id. */
-  readonly model: string
+  readonly model: TModel
+  /** Native input modalities. Known literal model ids receive verified defaults. */
+  readonly modalities?: TModalities
   /** Additional vector-semantic revision appended to the derived request identity. */
   readonly version?: string
-  /** Output vector dimensionality. */
-  readonly dimensions: number
-  /** Maximum input tokens advertised to Crux callers. */
-  readonly maxInputTokens: number
   /** Batch sizing and concurrency hints for Crux embedding calls. */
   readonly batch?: {
     readonly maxSize?: number
     readonly concurrency?: number
   }
-  /** Google embedding task type. */
-  readonly taskType?: string
+  /**
+   * Role-specific Google task types for models that support `taskType`.
+   * Gemini Embedding 2 does not; encode its text task instructions in input.
+   */
+  readonly tasks?: { readonly query?: string; readonly document?: string }
   /** Optional title for retrieval-document embeddings. */
   readonly title?: string
   /** Optional MIME type hint. */
@@ -64,3 +68,24 @@ export interface GoogleEmbeddingConfig {
   /** Whether Google may truncate inputs automatically. */
   readonly autoTruncate?: boolean
 }
+
+interface GoogleEmbeddingSizing {
+  /** Crux embedding name. */
+  readonly name: string
+  /** Output vector dimensionality. */
+  readonly dimensions: number
+  /** Maximum input tokens advertised to Crux callers. */
+  readonly maxInputTokens: number
+}
+
+/** Configuration for a Crux dense embedding backed by Google embeddings. */
+export type GoogleEmbeddingConfig<
+  TModel extends string = string,
+  TModalities extends readonly EmbeddingModality[] | undefined =
+    | readonly EmbeddingModality[]
+    | undefined,
+> = GoogleEmbeddingConfigBase<TModel, TModalities> & (
+  TModel extends 'gemini-embedding-2'
+    ? Partial<GoogleEmbeddingSizing>
+    : GoogleEmbeddingSizing
+)

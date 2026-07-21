@@ -2,6 +2,7 @@ import { describe, expect, expectTypeOf, it, vi } from 'vitest'
 import { embedding } from '../../src/embedding'
 import { indexer, type CruxChunk } from '../../src/indexing'
 import { inMemoryRecordStore, inMemoryVectorStore } from '../../src/storage'
+import { textOf } from '../embedding/text-input'
 
 const chunks: CruxChunk[] = [
   {
@@ -16,7 +17,7 @@ const chunks: CruxChunk[] = [
 
 describe('indexChunks embedding-stage cache', () => {
   it('supports default, refresh, and bypass cache modes', async () => {
-    const embed = vi.fn(async (texts: string[]) => texts.map((text) => [text.length, 1]))
+    const embed = vi.fn(async (inputs) => inputs.map((input) => [textOf(input).length, 1]))
     const docs = indexer({
       id: 'docs',
       namespace: 'kb',
@@ -62,7 +63,7 @@ describe('indexChunks embedding-stage cache', () => {
         maxInputTokens: 100,
         batch: { maxSize: 8 },
         version: 'v1',
-        embed: async (texts) => texts.map((text) => [text.length, 1]),
+        embed: async (inputs) => inputs.map((input) => [textOf(input).length, 1]),
       }),
       cache: true,
     })

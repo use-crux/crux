@@ -34,8 +34,8 @@ export function computeSourceHashes(
   sourceHash: string
 } {
   const normalizedContent = options?.normalizeContent
-    ? options.normalizeContent(document.content)
-    : normalizeContentForHash(document.content)
+    ? options.normalizeContent(document.content ?? '')
+    : normalizeContentForHash(document.content ?? '')
   const stableMetadata = selectMetadataForHash(document.metadata ?? {}, options)
   const input = options?.hashDocument
     ? options.hashDocument(document, { normalizedContent, stableMetadata })

@@ -62,3 +62,23 @@ fn extension_relation_specs_are_added_after_built_ins() {
     assert!(table.policy_for("prompt.uses_context").is_some());
     assert!(table.policy_for("@acme/workflow/uses_tool").is_some());
 }
+
+#[test]
+fn built_ins_cover_embedding_dependency_relations() {
+    let table = relation_policy_table_from_value_with_builtins(None);
+    for relation_type in [
+        "embedding.call.uses_embedding",
+        "rag.indexer.uses_dense_embedding",
+        "rag.indexer.uses_sparse_embedding",
+        "rag.retriever.uses_dense_embedding",
+        "rag.retriever.uses_sparse_embedding",
+        "rag.knowledgeBase.uses_dense_embedding",
+        "rag.knowledgeBase.uses_sparse_embedding",
+    ] {
+        let policy = table
+            .policy_for(relation_type)
+            .unwrap_or_else(|| panic!("missing built-in policy for {relation_type}"));
+        assert_eq!(policy.to_kinds, vec!["embedding"]);
+        assert!(!policy.runtime_join);
+    }
+}

@@ -299,34 +299,40 @@ import { embedding } from "@use-crux/google";
 const client = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY });
 
 const docsEmbedding = embedding(client, {
-  name: "docs-embedding",
-  model: "text-embedding-004",
-  dimensions: 768,
-  maxInputTokens: 2048,
-  taskType: "RETRIEVAL_DOCUMENT",
+  model: "gemini-embedding-2",
 });
+
+await docsEmbedding.embed("dog", { role: "query" });
+await docsEmbedding.embed({ type: "image", source: dogPhoto });
 ```
 
-This helper is dense-only. Google's SDK returns token counts per embedded input when available, and the Crux helper aggregates them into embedding usage metadata automatically.
+Known literal model ids infer verified modality tuples. `gemini-embedding-2`
+defaults to text, image, audio, video, and document inputs, the model id as its
+Crux name, 3072 dimensions, and an 8192-token text limit. Unknown or dynamic
+model ids conservatively default to text-only and require explicit sizing.
+Google's SDK returns token counts per embedded input when available, and the
+Crux helper aggregates them into embedding usage metadata automatically.
 
 | Field                      | Type          | Description                                               |
 | -------------------------- | ------------- | --------------------------------------------------------- |
 | `client`                   | `GoogleGenAI` | Google GenAI client instance                              |
-| `config.name`              | `string`      | Stable embedding identifier                               |
+| `config.name`              | `string?`     | Stable embedding identifier; Gemini Embedding 2 defaults to the model id. |
 | `config.model`             | `string`      | Google embedding model                                    |
-| `config.dimensions`        | `number`      | Output vector dimensionality                              |
-| `config.maxInputTokens`    | `number`      | Per-input token ceiling                                   |
+| `config.modalities`        | `EmbeddingModality[]?` | Explicit native modalities; overrides known-model defaults. |
+| `config.dimensions`        | `number?`     | Output dimensions; Gemini Embedding 2 defaults to `3072`. |
+| `config.maxInputTokens`    | `number?`     | Text token ceiling; Gemini Embedding 2 defaults to `8192`. |
 | `config.batch.maxSize`     | `number?`     | Top-level Crux batch size. Defaults to `100`.             |
 | `config.batch.concurrency` | `number?`     | Top-level Crux batch concurrency. Defaults to `1`.        |
-| `config.taskType`          | `string?`     | Retrieval/task hint for Google embedding models           |
+| `config.tasks`             | `{ query?: string; document?: string }?` | Role-specific task types for models that support them. |
 | `config.title`             | `string?`     | Document title. Only applies to retrieval-document tasks. |
 | `config.mimeType`          | `string?`     | Optional input MIME type                                  |
 | `config.autoTruncate`      | `boolean?`    | Vertex-only truncation behavior                           |
 | `config.version`           | `string?`     | Extra vector-semantic revision for cache invalidation     |
 
-The helper fingerprint includes model, task type, title, MIME type, and
-auto-truncation behavior, then appends `version` when supplied. Operational
-batch settings do not change that identity.
+The helper fingerprint includes model, both role task types, title, MIME type,
+and auto-truncation behavior, then appends `version` when supplied. Operational
+batch settings do not change that identity. Gemini Embedding 2 does not accept
+`taskType`; put its text retrieval instruction in the input instead.
 
 ### Types
 

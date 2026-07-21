@@ -13,6 +13,7 @@ import { orchestrateGenerate } from '../../src/generation/orchestrate'
 import { applyPlugins } from '../../src/runtime/plugin'
 import { getHooks, resetHooks, setHooks } from '../../src/runtime/runtime'
 import { inMemoryRecordStore, inMemoryStorage } from '../../src/storage'
+import { textOf } from '../embedding/text-input'
 
 function install(plugin: ReturnType<typeof createSemanticCache>) {
   const applied = applyPlugins([plugin], getHooks())
@@ -40,10 +41,10 @@ describe('canonical embedding and cache observability', () => {
     it('records embedding calls with bounded output artifacts and embedding cache hit/miss spans', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
-    const provider = vi.fn(async (texts: string[]) => ({
-      embeddings: texts.map((text) => [text.length, text.length + 1]),
-      usage: { inputTokens: texts.length, totalTokens: texts.length },
-      cost: texts.length * 0.01,
+    const provider = vi.fn(async (inputs) => ({
+      embeddings: inputs.map((input) => [textOf(input).length, textOf(input).length + 1]),
+      usage: { inputTokens: inputs.length, totalTokens: inputs.length },
+      cost: inputs.length * 0.01,
     }))
     const embed = embedding({
       kind: 'dense',
@@ -144,8 +145,9 @@ describe('canonical embedding and cache observability', () => {
       dimensions: 3,
       maxInputTokens: 8192,
       batch: { maxSize: 16 },
-      embed: async (texts) => ({
-        embeddings: texts.map((text) => {
+      embed: async (inputs) => ({
+        embeddings: inputs.map((input) => {
+          const text = textOf(input)
           if (text.includes('billing') || text.includes('invoice')) return [1, 0, 0]
           return [0, 1, 0]
         }),

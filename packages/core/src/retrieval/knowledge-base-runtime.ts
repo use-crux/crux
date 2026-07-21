@@ -9,7 +9,7 @@ import type {
   CruxIngestLoadResultLike,
   IndexResult,
 } from '../indexing'
-import type { DenseEmbedding, SparseEmbedding } from '../embedding'
+import type { DenseEmbedding, EmbeddingModality, SparseEmbedding } from '../embedding'
 import type { ExactFilter, JsonObject, RecordStore, Storage, VectorStore } from '../storage'
 import type { ChunkingOptions, PipelineCacheConfig } from '../indexing'
 import type { KnowledgeBaseRetrieverConfig } from './knowledge-base'
@@ -51,7 +51,9 @@ export interface KnowledgeBaseLifecycleState {
   lastIndexedAt?: number
 }
 
-export interface KnowledgeBaseRuntimeConfig {
+export interface KnowledgeBaseRuntimeConfig<
+  TModality extends EmbeddingModality = 'text',
+> {
   /** Stable knowledge base and indexer id. */
   id: string
   /** Structural namespace bound to this handle. */
@@ -67,7 +69,7 @@ export interface KnowledgeBaseRuntimeConfig {
   /** Explicit vector store override. */
   vectors?: VectorStore
   /** Dense embedding model for dense or hybrid retrieval. */
-  embeddings?: DenseEmbedding
+  embeddings?: DenseEmbedding<TModality>
   /** Sparse embedding model for sparse or hybrid retrieval. */
   sparseEmbeddings?: SparseEmbedding
   /** Chunking options forwarded to the indexing pipeline. */
@@ -78,7 +80,7 @@ export interface KnowledgeBaseRuntimeConfig {
   lifecycle?: { retention?: 'cleanup' | 'retain-inactive' }
 }
 
-export interface KnowledgeBaseRuntime {
+export interface KnowledgeBaseRuntime<TModality extends EmbeddingModality = EmbeddingModality> {
   readonly sourceKind: 'corpus' | 'direct'
   readonly storage: { records: boolean; vectors: boolean }
   readonly capabilities: {
@@ -92,11 +94,13 @@ export interface KnowledgeBaseRuntime {
   index(input?: KnowledgeBaseIndexInput): Promise<IndexResult | CorpusSyncResult>
   reindex(input?: KnowledgeBaseIndexInput): Promise<IndexResult | CorpusSyncResult>
   remove(sourceId: string): Promise<KnowledgeBaseRemoveResult>
-  retriever<TFilter extends ExactFilter>(config?: KnowledgeBaseRetrieverConfig<TFilter>): Retriever<TFilter>
+  retriever<TFilter extends ExactFilter>(config?: KnowledgeBaseRetrieverConfig<TFilter>): Retriever<TFilter, TModality>
 }
 
 /** Create the runtime backing a public `knowledgeBase` facade. */
-export function createKnowledgeBaseRuntime(config: KnowledgeBaseRuntimeConfig): KnowledgeBaseRuntime {
+export function createKnowledgeBaseRuntime<TModality extends EmbeddingModality>(
+  config: KnowledgeBaseRuntimeConfig<TModality>,
+): KnowledgeBaseRuntime<TModality> {
   const records = config.records ?? config.storage?.records
   const vectors = config.vectors ?? config.storage?.vectors
   const retention = config.lifecycle?.retention ?? 'cleanup'
@@ -158,7 +162,7 @@ export function createKnowledgeBaseRuntime(config: KnowledgeBaseRuntimeConfig): 
 
   function createRetriever<TFilter extends ExactFilter>(
     retrieverConfig?: KnowledgeBaseRetrieverConfig<TFilter>,
-  ): Retriever<TFilter> {
+  ): Retriever<TFilter, TModality> {
     return retriever({
       id: config.id,
       knowledgeBaseId: config.id,
@@ -175,7 +179,7 @@ export function createKnowledgeBaseRuntime(config: KnowledgeBaseRuntimeConfig): 
         threshold: retrieverConfig?.threshold,
         filter: retrieverConfig?.filter,
       },
-    }) as Retriever<TFilter>
+    }) as Retriever<TFilter, TModality>
   }
 
   return Object.freeze({
@@ -212,7 +216,11 @@ async function resolveInput(
   return [...resolved]
 }
 
-function createIndexer(config: KnowledgeBaseRuntimeConfig, records: RecordStore | undefined, vectors: VectorStore | undefined) {
+function createIndexer<TModality extends EmbeddingModality>(
+  config: KnowledgeBaseRuntimeConfig<TModality>,
+  records: RecordStore | undefined,
+  vectors: VectorStore | undefined,
+) {
   return indexer({
     id: config.id,
     namespace: config.namespace,

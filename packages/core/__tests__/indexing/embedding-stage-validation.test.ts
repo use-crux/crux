@@ -2,10 +2,11 @@ import { describe, expect, it, vi } from 'vitest'
 import { embedding, type DenseEmbedding } from '../../src/embedding'
 import { indexer } from '../../src/indexing'
 import { inMemoryRecordStore, inMemoryVectorStore } from '../../src/storage'
+import { textOf } from '../embedding/text-input'
 
 describe('indexer embedding-stage validation', () => {
   it('recomputes and replaces malformed dense cache entries', async () => {
-    const embed = vi.fn(async (texts: string[]) => texts.map((text) => [text.length, 1]))
+    const embed = vi.fn(async (inputs) => inputs.map((input) => [textOf(input).length, 1]))
     const storedRecords = inMemoryRecordStore()
     let injected: { key: string; value: Awaited<ReturnType<typeof storedRecords.get>> } | undefined
     const records = {
@@ -62,9 +63,9 @@ describe('indexer embedding-stage validation', () => {
         maxInputTokens: 100,
         batch: { maxSize: 8 },
         version: 'v1',
-        embed: async (texts) => {
+        embed: async (inputs) => {
           if (shouldFail) throw new Error('provider unavailable')
-          return texts.map((text) => [text.length, 1])
+          return inputs.map((input) => [textOf(input).length, 1])
         },
       }),
       cache: true,
@@ -100,8 +101,8 @@ describe('indexer embedding-stage validation', () => {
         maxInputTokens: 100,
         batch: { maxSize: 8 },
         version: 'v1',
-        embed: async (texts) =>
-          returnIncompleteOutput ? [] : texts.map((text) => [text.length, 1]),
+        embed: async (inputs) =>
+          returnIncompleteOutput ? [] : inputs.map((input) => [textOf(input).length, 1]),
       }),
       cache: true,
     })
@@ -122,7 +123,7 @@ describe('indexer embedding-stage validation', () => {
   })
 
   it('never caches a structural embedding whose vector semantics have no fingerprint', async () => {
-    const embedMany = vi.fn(async (texts: string[]) => texts.map((text) => [text.length, 1]))
+    const embedMany = vi.fn(async (inputs) => inputs.map((input) => [textOf(input).length, 1]))
     const dense: DenseEmbedding = {
       _tag: 'Embedding',
       kind: 'dense',
@@ -130,7 +131,7 @@ describe('indexer embedding-stage validation', () => {
       dimensions: 2,
       maxInputTokens: 100,
       batch: { maxSize: 8, concurrency: 1 },
-      embed: async (text) => [text.length, 1],
+      embed: async (input) => [textOf(input).length, 1],
       embedMany,
       asEmbedFn: () => async (text) => [text.length, 1],
     }

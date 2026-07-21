@@ -20,6 +20,9 @@ export function validateDocuments(documents: CruxDocument[], namespace: string):
     if (!document.sourceId.trim()) {
       throw new Error('Document sourceId must be non-empty.')
     }
+    if (document.content === undefined && !document.parts?.length && document.asset === undefined) {
+      throw new Error('Document must provide content, parts, or asset.')
+    }
     if (document.source && !projectSourceFacts(document.source)) {
       throw new Error('Document source facts must contain at least one valid allowlisted field.')
     }
@@ -56,6 +59,7 @@ export function normalizeChunk(chunk: CruxChunk, namespace: string): CruxChunk {
     ...(chunk.active !== undefined ? { active: chunk.active } : {}),
     ordinal: chunk.ordinal,
     content: chunk.content,
+    ...(chunk.media ? { media: chunk.media } : {}),
     metadata: chunk.metadata ?? {},
     ...(source ? { source } : {}),
     ...(chunk.parent ? { parent: chunk.parent } : {}),

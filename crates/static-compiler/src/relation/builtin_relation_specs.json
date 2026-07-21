@@ -1397,5 +1397,61 @@
     "presentation": "detail",
     "fidelity": "partial",
     "runtimeJoin": true
+  },
+  {
+    "type": "embedding.call.uses_embedding",
+    "fromKinds": ["embedding.call"],
+    "toKinds": ["embedding"],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": false
+  },
+  {
+    "type": "rag.indexer.uses_dense_embedding",
+    "fromKinds": ["rag.indexer"],
+    "toKinds": ["embedding"],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": false
+  },
+  {
+    "type": "rag.indexer.uses_sparse_embedding",
+    "fromKinds": ["rag.indexer"],
+    "toKinds": ["embedding"],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": false
+  },
+  {
+    "type": "rag.retriever.uses_dense_embedding",
+    "fromKinds": ["rag.retriever"],
+    "toKinds": ["embedding"],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": false
+  },
+  {
+    "type": "rag.retriever.uses_sparse_embedding",
+    "fromKinds": ["rag.retriever"],
+    "toKinds": ["embedding"],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": false
+  },
+  {
+    "type": "rag.knowledgeBase.uses_dense_embedding",
+    "fromKinds": ["rag.knowledgeBase"],
+    "toKinds": ["embedding"],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": false
+  },
+  {
+    "type": "rag.knowledgeBase.uses_sparse_embedding",
+    "fromKinds": ["rag.knowledgeBase"],
+    "toKinds": ["embedding"],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": false
   }
 ]

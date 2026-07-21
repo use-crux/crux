@@ -137,7 +137,10 @@ const denseEmbedding = embedding({
   retry: { maxAttempts: 2, baseDelayMs: 0 },
   cache,
   rateLimit: { concurrency: 1 },
-  embed: async (texts) => texts.map((text) => [text.length, text.length]),
+  embed: async (inputs) => inputs.map((input) => {
+    if (input.type !== 'text') throw new Error('Expected text input.')
+    return [input.text.length, input.text.length]
+  }),
 })
 
 expectTypeOf(denseEmbedding.embed('x')).toEqualTypeOf<Promise<number[]>>()

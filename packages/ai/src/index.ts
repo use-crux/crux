@@ -356,7 +356,7 @@ export interface CruxAi {
   /** See the package-level {@link generateObjectFn}. */
   generateObjectFn: GenerateObjectFn;
   /** See the package-level {@link embedding}. */
-  embedding(config: AIEmbeddingConfig): DenseEmbedding;
+  embedding(config: AIEmbeddingConfig): DenseEmbedding<"text">;
   /** See the package-level {@link retrievalModel}. */
   retrievalModel(config: AIRetrievalModelConfig): RetrievalModel;
   /** See the package-level {@link reranker}. */
@@ -797,7 +797,7 @@ export const generateObjectFn = defaultAi.generateObjectFn;
  * Use this when you want retrieval/indexing to share the same provider
  * registry and model objects that power `generate()` / `stream()`.
  */
-export function embedding(config: AIEmbeddingConfig): DenseEmbedding {
+export function embedding(config: AIEmbeddingConfig): DenseEmbedding<"text"> {
   return defaultAi.embedding(config);
 }
 

@@ -21,6 +21,9 @@ interface DenseOverrides {
   cache?: EmbeddingCache
   rateLimit?: { concurrency: number }
   version?: string
+  modalities?: readonly ('text' | 'image')[]
+  normalization?: 'unit' | 'none' | 'unknown'
+  tasks?: { query?: string; document?: string }
 }
 
 function denseEmbedding(overrides: DenseOverrides = {}) {
@@ -30,7 +33,7 @@ function denseEmbedding(overrides: DenseOverrides = {}) {
     dimensions: 2,
     maxInputTokens: 100,
     batch: { maxSize: 8 },
-    embed: async (texts) => texts.map(() => [1, 2]),
+    embed: async (inputs) => inputs.map(() => [1, 2]),
     ...overrides,
   })
 }
@@ -52,6 +55,11 @@ describe('embedding identity', () => {
       base.fingerprint,
     )
     expect(denseEmbedding({ version: 'model-v2' }).fingerprint).not.toBe(base.fingerprint)
+    expect(denseEmbedding({ modalities: ['text', 'image'] }).fingerprint).not.toBe(base.fingerprint)
+    expect(denseEmbedding({ normalization: 'unit' }).fingerprint).not.toBe(base.fingerprint)
+    expect(denseEmbedding({ tasks: { query: 'QUERY', document: 'DOCUMENT' } }).fingerprint).not.toBe(
+      base.fingerprint,
+    )
 
     expect(denseEmbedding({ batch: { maxSize: 2, concurrency: 2 } }).fingerprint).toBe(base.fingerprint)
     expect(denseEmbedding({ retry: { maxAttempts: 3, baseDelayMs: 1 } }).fingerprint).toBe(base.fingerprint)
@@ -79,6 +87,27 @@ describe('embedding identity', () => {
     })
 
     expect(sparse.fingerprint).toEqual(expect.any(String))
+    expect(sparse.modalities).toEqual(['text'])
+  })
+
+  it('exposes the resolved dense space with the governance fingerprint', () => {
+    const dense = denseEmbedding({
+      version: 'model-v1',
+      modalities: ['image', 'text'],
+      normalization: 'unit',
+      tasks: { query: 'QUERY', document: 'DOCUMENT' },
+    })
+
+    expect(dense.space).toEqual({
+      name: 'dense-test',
+      version: 'model-v1',
+      dimensions: 2,
+      modalities: ['image', 'text'],
+      normalization: 'unit',
+      tasks: { query: 'QUERY', document: 'DOCUMENT' },
+      fingerprint: dense.fingerprint,
+    })
+    expect(dense.space.fingerprint).toBe(dense.fingerprint)
   })
 
   it('keeps per-text cache entries separate across declared versions', async () => {

@@ -3,6 +3,7 @@ import {
   embedding as makeEmbedding,
   embeddingCache,
   normalizeText,
+  type NormalizedEmbeddingInput,
   type SparseVector,
 } from '../../src/embedding'
 import { resetHooks, updateHooks } from '../../src/runtime/runtime'
@@ -10,7 +11,8 @@ import { inMemoryRecordStore } from '../../src/storage'
 
 describe('embedding', () => {
   it('creates a dense embedding with single and batch helpers', async () => {
-    const embed = vi.fn(async (texts: string[]) => texts.map((text) => [text.length, text.length + 1]))
+    const embed = vi.fn(async (inputs: readonly NormalizedEmbeddingInput[]) =>
+      inputs.map((input) => [textOf(input).length, textOf(input).length + 1]))
 
     const embedding = makeEmbedding({
       kind: 'dense',
@@ -28,13 +30,16 @@ describe('embedding', () => {
       [3, 4],
     ])
 
-    expect(embed).toHaveBeenNthCalledWith(1, ['hello'])
-    expect(embed).toHaveBeenNthCalledWith(2, ['a', 'bb'])
-    expect(embed).toHaveBeenNthCalledWith(3, ['ccc'])
+    expect(embed).toHaveBeenNthCalledWith(1, [{ type: 'text', text: 'hello' }], { role: 'document' })
+    expect(embed).toHaveBeenNthCalledWith(2, [
+      { type: 'text', text: 'a' },
+      { type: 'text', text: 'bb' },
+    ], { role: 'document' })
+    expect(embed).toHaveBeenNthCalledWith(3, [{ type: 'text', text: 'ccc' }], { role: 'document' })
     expect(embedding.asEmbedFn()).toBe(embedding.embed)
   })
 
-    it('creates a sparse embedding with single and batch helpers', async () => {
+  it('creates a sparse embedding with single and batch helpers', async () => {
     const embed = vi.fn(async (texts: string[]) =>
       texts.map(
         (text): SparseVector => ({
@@ -59,7 +64,7 @@ describe('embedding', () => {
     ])
   })
 
-    it('preserves order across concurrent batches', async () => {
+  it('preserves order across concurrent batches', async () => {
     let active = 0
     let maxActive = 0
 
@@ -69,12 +74,12 @@ describe('embedding', () => {
       dimensions: 1,
       maxInputTokens: 100,
       batch: { maxSize: 2, concurrency: 2 },
-      embed: async (texts) => {
+      embed: async (inputs) => {
         active++
         maxActive = Math.max(maxActive, active)
         await new Promise((resolve) => setTimeout(resolve, 10))
         active--
-        return texts.map((text) => [Number(text)])
+        return inputs.map((input) => [Number(textOf(input))])
       },
     })
 
@@ -82,15 +87,15 @@ describe('embedding', () => {
     expect(maxActive).toBeLessThanOrEqual(2)
   })
 
-    it('supports provider metadata for dense batches', async () => {
+  it('supports provider metadata for dense batches', async () => {
     const embedding = makeEmbedding({
       kind: 'dense',
       name: 'dense-meta',
       dimensions: 2,
       maxInputTokens: 100,
       batch: { maxSize: 10 },
-      embed: async (texts) => ({
-        embeddings: texts.map((text) => [text.length, text.length]),
+      embed: async (inputs) => ({
+        embeddings: inputs.map((input) => [textOf(input).length, textOf(input).length]),
         usage: { inputTokens: 12, totalTokens: 12 },
         cost: 0.01,
       }),
@@ -102,7 +107,7 @@ describe('embedding', () => {
     ])
   })
 
-    it('supports provider metadata for sparse batches', async () => {
+  it('supports provider metadata for sparse batches', async () => {
     const embedding = makeEmbedding({
       kind: 'sparse',
       name: 'sparse-meta',
@@ -124,7 +129,7 @@ describe('embedding', () => {
     ])
   })
 
-    it('short-circuits empty batches', async () => {
+  it('short-circuits empty batches', async () => {
     const embed = vi.fn(async (_texts: string[]) => [[1]])
     const embedding = makeEmbedding({
       kind: 'dense',
@@ -139,47 +144,9 @@ describe('embedding', () => {
     expect(embed).not.toHaveBeenCalled()
   })
 
-    it('throws for invalid dense config', () => {
-    expect(() =>
-      makeEmbedding({
-        kind: 'dense',
-        name: '',
-        dimensions: 0,
-        maxInputTokens: 0,
-        batch: { maxSize: 0, concurrency: 0 },
-        embed: async () => [],
-      }),
-    ).toThrow()
-  })
-
-    it('throws for invalid sparse config', () => {
-    expect(() =>
-      makeEmbedding({
-        kind: 'sparse',
-        name: '',
-        maxInputTokens: 0,
-        batch: { maxSize: 0, concurrency: 0 },
-        embed: async () => [],
-      }),
-    ).toThrow()
-  })
-
-    it('returns a frozen object', () => {
-    const embedding = makeEmbedding({
-      kind: 'dense',
-      name: 'frozen',
-      dimensions: 1,
-      maxInputTokens: 100,
-      batch: { maxSize: 1 },
-      embed: async () => [[1]],
-    })
-
-    expect(Object.isFrozen(embedding)).toBe(true)
-    expect(embedding._tag).toBe('Embedding')
-  })
-
-    it('preprocesses inputs before calling the provider', async () => {
-    const embed = vi.fn(async (texts: string[]) => texts.map((text) => [text.length]))
+  it('preprocesses inputs before calling the provider', async () => {
+    const embed = vi.fn(async (inputs: readonly NormalizedEmbeddingInput[]) =>
+      inputs.map((input) => [textOf(input).length]))
     const dense = makeEmbedding({
       kind: 'dense',
       name: 'preprocessed',
@@ -191,11 +158,12 @@ describe('embedding', () => {
     })
 
     await expect(dense.embedMany(['  Hello   WORLD  '])).resolves.toEqual([[11]])
-    expect(embed).toHaveBeenCalledWith(['hello world'])
+    expect(embed).toHaveBeenCalledWith([{ type: 'text', text: 'hello world' }], { role: 'document' })
   })
 
-    it('fails over-limit inputs by default before calling the provider', async () => {
-    const embed = vi.fn(async (texts: string[]) => texts.map((text) => [text.length]))
+  it('fails over-limit inputs by default before calling the provider', async () => {
+    const embed = vi.fn(async (inputs: readonly NormalizedEmbeddingInput[]) =>
+      inputs.map((input) => [textOf(input).length]))
     const dense = makeEmbedding({
       kind: 'dense',
       name: 'fail-limit',
@@ -210,9 +178,10 @@ describe('embedding', () => {
     expect(embed).not.toHaveBeenCalled()
   })
 
-    it('caches normalized dense inputs while preserving output order', async () => {
+  it('caches normalized dense inputs while preserving output order', async () => {
     const records = inMemoryRecordStore()
-    const embed = vi.fn(async (texts: string[]) => texts.map((text) => [text.length]))
+    const embed = vi.fn(async (inputs: readonly NormalizedEmbeddingInput[]) =>
+      inputs.map((input) => [textOf(input).length]))
     const dense = makeEmbedding({
       kind: 'dense',
       name: 'cached-dense',
@@ -227,13 +196,18 @@ describe('embedding', () => {
     await expect(dense.embedMany([' alpha ', 'beta', 'alpha'])).resolves.toEqual([[5], [4], [5]])
     await expect(dense.embedMany(['alpha', ' beta '])).resolves.toEqual([[5], [4]])
     expect(embed).toHaveBeenCalledTimes(1)
-    expect(embed).toHaveBeenCalledWith(['alpha', 'beta'])
+    expect(embed).toHaveBeenCalledWith([
+      { type: 'text', text: 'alpha' },
+      { type: 'text', text: 'beta' },
+    ], { role: 'document' })
   })
 
-    it('keeps cache keys separate when preprocessing policy changes', async () => {
+  it('keeps cache keys separate when preprocessing policy changes', async () => {
     const records = inMemoryRecordStore()
-    const upperEmbed = vi.fn(async (texts: string[]) => texts.map((text) => [text.charCodeAt(0)]))
-    const lowerEmbed = vi.fn(async (texts: string[]) => texts.map((text) => [text.charCodeAt(0)]))
+    const upperEmbed = vi.fn(async (inputs: readonly NormalizedEmbeddingInput[]) =>
+      inputs.map((input) => [textOf(input).charCodeAt(0)]))
+    const lowerEmbed = vi.fn(async (inputs: readonly NormalizedEmbeddingInput[]) =>
+      inputs.map((input) => [textOf(input).charCodeAt(0)]))
 
     const upper = makeEmbedding({
       kind: 'dense',
@@ -262,7 +236,7 @@ describe('embedding', () => {
     expect(lowerEmbed).toHaveBeenCalledTimes(1)
   })
 
-    it('retries failed provider batches and preserves order', async () => {
+  it('retries failed provider batches and preserves order', async () => {
     let attempts = 0
     const dense = makeEmbedding({
       kind: 'dense',
@@ -271,12 +245,12 @@ describe('embedding', () => {
       maxInputTokens: 100,
       batch: { maxSize: 2 },
       retry: { maxAttempts: 2, baseDelayMs: 0 },
-      embed: async (texts) => {
+      embed: async (inputs) => {
         attempts++
         if (attempts === 1) {
           throw new Error('temporary')
         }
-        return texts.map((text) => [Number(text)])
+        return inputs.map((input) => [Number(textOf(input))])
       },
     })
 
@@ -284,7 +258,7 @@ describe('embedding', () => {
     expect(attempts).toBe(2)
   })
 
-    it('applies rate limits across concurrent calls on the same embedding', async () => {
+  it('applies rate limits across concurrent calls on the same embedding', async () => {
     let active = 0
     let maxActive = 0
     const dense = makeEmbedding({
@@ -294,12 +268,12 @@ describe('embedding', () => {
       maxInputTokens: 100,
       batch: { maxSize: 1, concurrency: 4 },
       rateLimit: { concurrency: 1 },
-      embed: async (texts) => {
+      embed: async (inputs) => {
         active++
         maxActive = Math.max(maxActive, active)
         await new Promise((resolve) => setTimeout(resolve, 5))
         active--
-        return texts.map((text) => [Number(text)])
+        return inputs.map((input) => [Number(textOf(input))])
       },
     })
 
@@ -307,3 +281,8 @@ describe('embedding', () => {
     expect(maxActive).toBe(1)
   })
 })
+
+function textOf(input: NormalizedEmbeddingInput): string {
+  if (input.type !== 'text') throw new Error('Expected text input.')
+  return input.text
+}

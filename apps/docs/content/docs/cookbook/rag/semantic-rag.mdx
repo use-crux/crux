@@ -32,11 +32,14 @@ export const dense = embedding({
   name: "text-embedding-3-small",
   dimensions: 1536,
   maxInputTokens: 8191,
-  embed: async (texts) => {
+  embed: async (inputs) => {
     const { embedMany } = await import("ai");
     const { embeddings } = await embedMany({
       model: openai.embedding("text-embedding-3-small"),
-      values: texts,
+      values: inputs.map((input) => {
+        if (input.type !== "text") throw new Error("text-only provider invariant");
+        return input.text;
+      }),
     });
     return { embeddings };
   },

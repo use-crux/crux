@@ -2,7 +2,7 @@
 
 use serde_json::Value;
 
-use crate::builder::{definition_evidence, StaticIndexLintBuilder, StaticIndexLintFindingInput};
+use crate::builder::{StaticIndexLintBuilder, StaticIndexLintFindingInput, definition_evidence};
 use crate::facts::{StaticIndexDefinition, StaticIndexLintFinding, StaticIndexPatchFacts};
 use crate::helpers::metadata_value;
 

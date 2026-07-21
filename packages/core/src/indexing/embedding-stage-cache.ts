@@ -13,7 +13,7 @@ import { stableStringify } from './hash'
 import type { CruxChunk } from './types'
 
 /** Cache-format epoch for embedding-stage bundle keys and records. */
-export const EMBEDDING_STAGE_CACHE_EPOCH = 2
+export const EMBEDDING_STAGE_CACHE_EPOCH = 3
 
 /** Collision-resistant digest of a JSON-serializable value. */
 function digest(value: unknown): string {
@@ -66,11 +66,25 @@ interface DenseEntryExpectation {
 
 type SparseEntryExpectation = Omit<DenseEntryExpectation, 'dimensions'>
 
-/** Derive an input hash from ordered chunk content only. */
+/**
+ * Derive an input hash from ordered text and byte-addressed media chunks.
+ *
+ * Returns `undefined` when any media content lacks a locally provable digest,
+ * making that source compute-only for this run.
+ */
 export function embeddingStageInputHash(
-  orderedChunks: readonly Pick<CruxChunk, 'content'>[],
-): string {
-  return digest(orderedChunks.map((chunk) => chunk.content))
+  orderedChunks: readonly Pick<CruxChunk, 'content' | 'media'>[],
+): string | undefined {
+  const identities: string[] = []
+  for (const chunk of orderedChunks) {
+    if (!chunk.media) {
+      identities.push(chunk.content)
+      continue
+    }
+    if (!chunk.media.sha256) return undefined
+    identities.push(`media:${chunk.media.sha256}`)
+  }
+  return digest(identities)
 }
 
 /** Build the record-store key for one source and embedding kind. */

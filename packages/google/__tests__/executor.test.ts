@@ -187,7 +187,7 @@ describe('embedding', () => {
       model: 'text-embedding-004',
       dimensions: 3,
       maxInputTokens: 2048,
-      taskType: 'RETRIEVAL_DOCUMENT',
+      tasks: { document: 'RETRIEVAL_DOCUMENT' },
       title: 'Docs',
     })
 
@@ -195,7 +195,10 @@ describe('embedding', () => {
 
     expect(mockEmbedContent).toHaveBeenCalledWith({
       model: 'text-embedding-004',
-      contents: ['First', 'Second'],
+      contents: [
+        { role: 'user', parts: [{ text: 'First' }] },
+        { role: 'user', parts: [{ text: 'Second' }] },
+      ],
       config: {
         taskType: 'RETRIEVAL_DOCUMENT',
         title: 'Docs',

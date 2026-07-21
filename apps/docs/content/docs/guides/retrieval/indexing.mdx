@@ -27,7 +27,12 @@ const dense = embedding({
   name: "text-embedding-3-small",
   dimensions: 1536,
   maxInputTokens: 8191,
-  embed: async (texts) => ({ embeddings: await embedDense(texts) }),
+  embed: async (inputs) => ({
+    embeddings: await embedDense(inputs.map((input) => {
+      if (input.type !== "text") throw new Error("text-only provider invariant");
+      return input.text;
+    })),
+  }),
 });
 const records = inMemoryRecordStore();
 const vectors = inMemoryVectorStore();
@@ -84,6 +89,51 @@ const docs = retriever({
 ```
 
 The rule is simple: index the vector types you want to query later.
+
+## Index Media Documents
+
+A media document uses `asset` shorthand or explicit media parts. The dense
+embedding must declare the matching modality, and storage must provide an
+`AssetStore` when the source needs a durable retrievable ref:
+
+```ts
+await productsIndexer.indexDocuments([
+  {
+    namespace: "products",
+    sourceId: "rex",
+    title: "Rex",
+    asset: dogPhoto,
+  },
+  {
+    namespace: "products",
+    sourceId: "setup-pdf",
+    parts: [
+      {
+        id: "page:1",
+        kind: "media",
+        modality: "document",
+        asset: manualPdf,
+        sourceLocation: { type: "page", pageNumber: 1 },
+      },
+    ],
+  },
+]);
+```
+
+Each media part becomes one chunk and one vector. Split pages, image regions,
+audio intervals, or video intervals before indexing when they need independent
+hits. Direct `indexDocuments()` is the supported authored-media path; corpus
+source hashing for arbitrary authored `Blob` media remains deferred.
+
+The record and vector stores receive only allowlisted attribution. Bytes remain
+in `AssetStore`; signed URLs, provider file ids, filenames, and base64 never
+enter indexed records, vector metadata, stage caches, or traces. Media sources
+bypass pre-embedding pipeline caches.
+
+The first vector write records the namespace's dense embedding space. A later
+write with a different model, dimensions, normalization, modalities, or role
+tasks throws before any vector mutation. Use `clear()` and reindex, or choose a
+new namespace.
 
 ## Add A Pipeline
 
@@ -205,10 +255,10 @@ await docsIndexer.indexChunks(chunks, { cache: "refresh" });
 
 Use `readwrite` for normal jobs, `refresh` when you want to recompute and replace cached stages, and `bypass` when you are debugging the pipeline itself.
 
-Dry runs read and populate stage entries even though they do not write indexed
-chunks or corpus ledger records. This makes a later real run reusable. Cache
-hits and misses appear as `embedding` stages with `embeddingKind: "dense"` or
-`"sparse"`.
+Dry runs may read existing safe stage entries, but mutate nothing: no cache
+writes, asset puts, vector writes, indexed records, namespace-space records, or
+corpus ledger records. Cache hits and misses appear as `embedding` stages with
+`embeddingKind: "dense"` or `"sparse"`.
 
 Embedding-stage reuse requires a vector-semantic fingerprint. Built-in
 `embedding()` instances and provider helpers supply one; a hand-written

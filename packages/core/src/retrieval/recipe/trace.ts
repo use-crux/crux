@@ -5,6 +5,7 @@
  */
 
 import type { RetrieveRequest } from '../request'
+import { projectErrorForObservation } from '../../observability/error-projection'
 import type { RetrievalSourceTrace, RetrievalStepKind } from './step'
 
 /** Serializable error details captured on failed recipe steps. */
@@ -45,6 +46,7 @@ export interface RecipeTrace {
 
 /** Convert an arbitrary thrown value into serializable recipe trace details. */
 export function serializeRecipeError(error: unknown): RecipeTraceError {
+  error = projectErrorForObservation(error)
   if (error instanceof Error) {
     return {
       message: error.message,

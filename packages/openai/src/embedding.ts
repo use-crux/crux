@@ -15,7 +15,7 @@ const OPENAI_EMBEDDING_DIMENSIONS: Record<string, number> = {
  * Known OpenAI embedding models infer their default dimensions automatically.
  * For custom model IDs, pass `dimensions` explicitly.
  */
-export function embedding(client: OpenAI, config: OpenAIEmbeddingConfig): DenseEmbedding {
+export function embedding(client: OpenAI, config: OpenAIEmbeddingConfig): DenseEmbedding<'text'> {
   const dimensions = config.dimensions ?? OPENAI_EMBEDDING_DIMENSIONS[config.model]
   if (!dimensions) {
     throw new Error(
@@ -28,12 +28,19 @@ export function embedding(client: OpenAI, config: OpenAIEmbeddingConfig): DenseE
     name: config.name,
     dimensions,
     maxInputTokens: config.maxInputTokens ?? 8192,
+    modalities: ['text'],
     version: embeddingVersion(config),
     batch: {
       maxSize: config.batch?.maxSize ?? 100,
       concurrency: config.batch?.concurrency ?? 1,
     },
-    async embed(texts) {
+    async embed(inputs) {
+      const texts = inputs.map((input) => {
+        if (input.type !== 'text') {
+          throw new TypeError('OpenAI embedding received non-text input after core modality validation.')
+        }
+        return input.text
+      })
       const response = await client.embeddings.create({
         model: config.model,
         input: texts,

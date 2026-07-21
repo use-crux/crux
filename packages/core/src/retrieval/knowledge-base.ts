@@ -11,7 +11,7 @@
 
 import type { z } from 'zod'
 import type { ChunkingOptions, Corpus, IndexResult, PipelineCacheConfig } from '../indexing'
-import type { DenseEmbedding, SparseEmbedding } from '../embedding'
+import type { DenseEmbedding, EmbeddingModality, SparseEmbedding } from '../embedding'
 import type { RecordStore, Storage, VectorStore } from '../storage'
 import { grounding } from '../citations'
 import type { Grounding, GroundingConfig } from '../citations'
@@ -90,7 +90,10 @@ export type KnowledgeBaseGroundingConfig = Omit<GroundingConfig, 'id' | 'retriev
   id?: string
 }
 
-export interface KnowledgeBaseConfig<TMetadataSchema extends z.ZodType<unknown> | undefined = undefined> {
+export interface KnowledgeBaseConfig<
+  TMetadataSchema extends z.ZodType<unknown> | undefined = undefined,
+  TModality extends EmbeddingModality = 'text',
+> {
   /** Stable knowledge base id used for indexer, retriever, and trace identity. */
   id: string
   /** Optional deferred source input used when `index()` is called without arguments. */
@@ -104,7 +107,7 @@ export interface KnowledgeBaseConfig<TMetadataSchema extends z.ZodType<unknown> 
   /** Explicit vector store override. */
   vectors?: VectorStore
   /** Dense embedding model used for dense or hybrid search. */
-  embeddings?: DenseEmbedding
+  embeddings?: DenseEmbedding<TModality>
   /** Sparse embedding model used for sparse or hybrid search. */
   sparseEmbeddings?: SparseEmbedding
   /** Chunking options forwarded to the indexing pipeline. */
@@ -118,10 +121,16 @@ export interface KnowledgeBaseConfig<TMetadataSchema extends z.ZodType<unknown> 
 }
 
 /** Tenant-scoped knowledge base handle. */
-export type ScopedKnowledgeBase = Omit<KnowledgeBase, 'scope'>
+export type ScopedKnowledgeBase<
+  TMetadataSchema extends z.ZodType<unknown> | undefined = undefined,
+  TModality extends EmbeddingModality = 'text',
+> = Omit<KnowledgeBase<TMetadataSchema, TModality>, 'scope'>
 
 /** Public knowledge base facade. */
-export interface KnowledgeBase<TMetadataSchema extends z.ZodType<unknown> | undefined = undefined> {
+export interface KnowledgeBase<
+  TMetadataSchema extends z.ZodType<unknown> | undefined = undefined,
+  TModality extends EmbeddingModality = 'text',
+> {
   /** Stable knowledge base id. */
   readonly id: string
   /** Structural namespace bound to this handle. */
@@ -133,9 +142,9 @@ export interface KnowledgeBase<TMetadataSchema extends z.ZodType<unknown> | unde
   /** Remove a source from active retrieval immediately. */
   remove(sourceId: string): Promise<KnowledgeBaseRemoveResult>
   /** Return a tenant-scoped handle with structural key-level isolation. */
-  scope(config: KnowledgeBaseScopeConfig): ScopedKnowledgeBase
+  scope(config: KnowledgeBaseScopeConfig): ScopedKnowledgeBase<TMetadataSchema, TModality>
   /** Return this knowledge base as a retriever. */
-  retriever(config?: KnowledgeBaseRetrieverConfig<KnowledgeBaseFilter<TMetadataSchema>>): Retriever<KnowledgeBaseFilter<TMetadataSchema>>
+  retriever(config?: KnowledgeBaseRetrieverConfig<KnowledgeBaseFilter<TMetadataSchema>>): Retriever<KnowledgeBaseFilter<TMetadataSchema>, TModality>
   /** Return this knowledge base as a retrieval recipe. */
   recipe<const TSteps extends readonly RetrievalStep[] = readonly [ReturnType<typeof retrieve>]>(
     config?: KnowledgeBaseRecipeConfig<TSteps>,
@@ -149,9 +158,12 @@ export interface KnowledgeBase<TMetadataSchema extends z.ZodType<unknown> | unde
 }
 
 /** Create a Retrieval & RAG beta knowledge base facade. */
-export function knowledgeBase<const TMetadataSchema extends z.ZodType<unknown> | undefined = undefined>(
-  config: KnowledgeBaseConfig<TMetadataSchema>,
-): KnowledgeBase<TMetadataSchema> {
+export function knowledgeBase<
+  const TMetadataSchema extends z.ZodType<unknown> | undefined = undefined,
+  const TModality extends EmbeddingModality = 'text',
+>(
+  config: KnowledgeBaseConfig<TMetadataSchema, TModality>,
+): KnowledgeBase<TMetadataSchema, TModality> {
   if (config.corpus && config.corpus.id !== config.id) {
     throw new Error(`knowledgeBase("${config.id}") requires corpus.id to match the knowledge base id.`)
   }
@@ -159,10 +171,13 @@ export function knowledgeBase<const TMetadataSchema extends z.ZodType<unknown> |
   return createKnowledgeBaseHandle({ ...config, namespace }, true)
 }
 
-function createKnowledgeBaseHandle<const TMetadataSchema extends z.ZodType<unknown> | undefined>(
-  config: KnowledgeBaseConfig<TMetadataSchema> & { namespace: string },
+function createKnowledgeBaseHandle<
+  const TMetadataSchema extends z.ZodType<unknown> | undefined,
+  const TModality extends EmbeddingModality,
+>(
+  config: KnowledgeBaseConfig<TMetadataSchema, TModality> & { namespace: string },
   includeScope: boolean,
-): KnowledgeBase<TMetadataSchema> {
+): KnowledgeBase<TMetadataSchema, TModality> {
   const runtime = createKnowledgeBaseRuntime(config)
 
   const handle = {
@@ -187,14 +202,14 @@ function createKnowledgeBaseHandle<const TMetadataSchema extends z.ZodType<unkno
       }
       return retrievalRecipe({
         ...recipeConfig,
-        retriever: runtime.retriever(),
+        retriever: runtime.retriever() as unknown as Retriever,
       })
     },
     grounding: (groundingConfig?: KnowledgeBaseGroundingConfig): Grounding =>
       grounding({
         ...(groundingConfig ?? {}),
         id: groundingConfig?.id ?? `grounding:${config.id}`,
-        retriever: runtime.retriever(),
+        retriever: runtime.retriever() as unknown as Retriever,
       }),
     tools: <const TConfig extends RetrievalToolConfig | undefined = undefined>(
       toolConfig?: TConfig,
@@ -209,7 +224,7 @@ function createKnowledgeBaseHandle<const TMetadataSchema extends z.ZodType<unkno
     }),
   }
   if (!includeScope) {
-    delete (handle as Partial<Pick<KnowledgeBase<TMetadataSchema>, 'scope'>>).scope
+    delete (handle as Partial<Pick<KnowledgeBase<TMetadataSchema, TModality>, 'scope'>>).scope
   }
-  return Object.freeze(handle) as KnowledgeBase<TMetadataSchema>
+  return Object.freeze(handle) as KnowledgeBase<TMetadataSchema, TModality>
 }

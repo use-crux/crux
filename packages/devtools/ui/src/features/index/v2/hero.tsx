@@ -26,6 +26,7 @@ import {
 } from "./kit";
 import type { IndexIndex, IndexFacts, ViewDef } from "./adapt";
 import { RoutingCatalogFacts } from "./routing-catalog";
+import { EmbeddingCatalogHero } from "./embedding-hero";
 import { useIndexIndex, useIndexOpenEval, useIndexSelect } from "./context";
 
 /** A single authored `use`/injection reference (a `facts.useEntries[]` item). */
@@ -1933,22 +1934,21 @@ export function IndexHero({ def }: { def: ViewDef }) {
     return <AuthoringHero def={def} />;
   }
 
-  // RETRIEVER
-  if (k === "rag.retriever") {
+  // RETRIEVER / KNOWLEDGE BASE
+  if (k === "rag.retriever" || k === "rag.knowledgeBase") {
     return (
       <HeroFrame
-        title="Retriever"
+        title={k === "rag.retriever" ? "Retriever" : "Knowledge base"}
         tone="ok"
         right={
-          <Chip tone="muted" mono>
-            topK · {f.topK}
-          </Chip>
+          k === "rag.retriever" && f.topK !== undefined ? (
+            <Chip tone="muted" mono>
+              topK · {f.topK}
+            </Chip>
+          ) : undefined
         }
       >
-        <div style={{ fontFamily: T.mono, fontSize: 11.5, color: T.fgMuted }}>
-          Vector retriever · index health, embedding model and query log appear
-          here when captured.
-        </div>
+        <EmbeddingCatalogHero def={def} />
       </HeroFrame>
     );
   }

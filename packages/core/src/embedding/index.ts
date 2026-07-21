@@ -11,6 +11,7 @@
 
 export type {
   EmbeddingUsage,
+  EmbedOptions,
   EmbeddingGovernanceMetrics,
   DenseBatchResult,
   SparseBatchResult,
@@ -29,7 +30,21 @@ export type {
   CruxEmbedding,
 } from './types'
 
+export type {
+  EmbeddingInput,
+  EmbeddingInputByModality,
+  EmbeddingModality,
+  NormalizedEmbeddingInput,
+} from './modality'
+export type { NormalizeEmbeddingInputOptions } from './input'
+export type { EmbeddingSpace } from './space'
+
 export { embedding } from './define-embedding'
 export { embeddingIdentity } from './identity'
 export { embeddingPreprocessor, normalizeText } from './preprocess'
 export { embeddingCache } from './cache'
+export { normalizeEmbeddingInput } from './input'
+export { inferModality } from './modality'
+export { deriveEmbeddingSpace, embeddingSpaceDigest } from './space'
+export { EmbeddingModalityError, EmbeddingSpaceMismatchError } from './errors'
+export type { EmbeddingSpaceDescriptor } from './errors'

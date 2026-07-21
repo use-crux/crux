@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::builder::StaticIndexLintBuilder;
 use crate::facts::{StaticIndexLintFinding, StaticIndexPatchFacts};
-use crate::filter::{apply_lint_filters, StaticIndexLintOptions};
+use crate::filter::{StaticIndexLintOptions, apply_lint_filters};
 use crate::injection::rules::injection_lint_findings;
 use crate::propagation::propagate_findings;
 use crate::rules::core::core_lint_findings;

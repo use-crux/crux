@@ -14,8 +14,8 @@ import type { CruxEmbedding } from './types'
  * Resolve the vector-semantic identity of an embedding.
  *
  * Prefers the instance's own fingerprint. Structural implementations fall
- * back to their kind, name, and dense dimensions, where renaming remains the
- * documented invalidation mechanism.
+ * back to their kind, name, dense dimensions, and declared modalities, where
+ * renaming remains the documented invalidation mechanism.
  *
  * @param embedding - Dense or sparse embedding to identify.
  * @returns A deterministic identity string.
@@ -31,7 +31,12 @@ export function embeddingIdentity(embedding: CruxEmbedding): string {
   }
   return stableStringify(
     embedding.kind === 'dense'
-      ? { kind: embedding.kind, name: embedding.name, dimensions: embedding.dimensions }
-      : { kind: embedding.kind, name: embedding.name },
+      ? {
+          kind: embedding.kind,
+          name: embedding.name,
+          dimensions: embedding.dimensions,
+          modalities: embedding.modalities ?? ['text'],
+        }
+      : { kind: embedding.kind, name: embedding.name, modalities: embedding.modalities ?? ['text'] },
   )
 }

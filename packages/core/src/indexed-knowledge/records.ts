@@ -124,7 +124,7 @@ export function createIndexedParentRecord(input: {
 }
 
 /** Project the persisted fields copied into vector metadata. */
-export function indexedVectorMetadata(value: IndexedChunkRecord): ExactFilter {
+export function indexedVectorMetadata(value: IndexedChunkRecord, embeddingSpace?: string): ExactFilter {
   return {
     _cruxRecordType: value._cruxRecordType,
     namespace: value.namespace,
@@ -132,6 +132,7 @@ export function indexedVectorMetadata(value: IndexedChunkRecord): ExactFilter {
     chunkId: value.chunkId,
     generationId: value.generationId,
     active: value.active,
+    ...(embeddingSpace ? { embeddingSpace } : {}),
     ...scalarMetadata(value.metadata),
   }
 }

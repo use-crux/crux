@@ -3,6 +3,7 @@ import { embedding } from '../../src/embedding'
 import { corpus as createCorpus, indexer as createIndexer } from '../../src/indexing'
 import { knowledgeBase } from '../../src/retrieval'
 import { inMemoryRecordStore, inMemoryStorage, inMemoryVectorStore } from '../../src/storage'
+import { textOf } from '../embedding/text-input'
 
 function createTopicEmbedding() {
   return embedding({
@@ -11,8 +12,8 @@ function createTopicEmbedding() {
     dimensions: 2,
     maxInputTokens: 100,
     batch: { maxSize: 8 },
-    embed: async (texts) =>
-      texts.map((text) => (text.toLowerCase().includes('pricing') ? [1, 0] : [0, 1])),
+    embed: async (inputs) =>
+      inputs.map((input) => (textOf(input).toLowerCase().includes('pricing') ? [1, 0] : [0, 1])),
   })
 }
 

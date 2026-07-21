@@ -10,6 +10,7 @@
 
 import { DEFAULT_MAX_CHARS, normalizeChunkingOptions } from './chunking-options'
 import { createStableId } from './hash'
+import { createMediaPartChunk, mediaParts } from './media-chunks'
 import {
   coarseProvenance,
   mergeProvenance,
@@ -45,11 +46,15 @@ export function chunkDocumentStructured(
   })
   const parts = document.parts?.length
     ? document.parts
-    : [{ id: 'text:1', kind: 'text' as const, content: document.content }]
+    : [{ id: 'text:1', kind: 'text' as const, content: document.content ?? '' }]
   const chunks: CruxChunk[] = []
   const tableRowsPerChunk = 'tableRowsPerChunk' in options ? (options.tableRowsPerChunk ?? 25) : 25
 
   for (const part of parts) {
+    if (part.kind === 'media') {
+      chunks.push(createMediaPartChunk(document, part, chunks.length))
+      continue
+    }
     if (part.kind === 'table') {
       chunks.push(...chunkTablePart(document, part, tableRowsPerChunk))
       continue
@@ -138,6 +143,11 @@ export function chunkDocumentParentChild(
   let currentParentChunks: CruxChunk[] = []
 
   for (const sourceChunk of structured.chunks) {
+    if (sourceChunk.media) {
+      flushParent()
+      children.push({ ...sourceChunk, ordinal: children.length })
+      continue
+    }
     const candidate = currentParentContent ? `${currentParentContent}\n\n${sourceChunk.content}` : sourceChunk.content
     if (candidate.length > options.parentMaxChars && currentParentChunks.length > 0) {
       flushParent()
@@ -209,9 +219,20 @@ export async function chunkDocumentSemantic(
   document: CruxDocument,
   options: SemanticChunkerOptions,
 ): Promise<ChunkingResult> {
+  const content = document.content ?? document.parts
+    ?.filter((part) => part.kind !== 'media')
+    .map((part) => part.content)
+    .join('\n\n') ?? ''
+  if (!content) {
+    return {
+      chunks: mediaParts(document).map((part, ordinal) =>
+        createMediaPartChunk(document, part, ordinal)),
+    }
+  }
+  const textDocument = { ...document, content }
   const maxChars = options.maxChars ?? DEFAULT_MAX_CHARS
   const minChars = 'minChars' in options ? (options.minChars ?? 200) : 200
-  const segments = sentenceSegments(document.content)
+  const segments = sentenceSegments(content)
   let boundaries: SemanticBoundary[] = []
 
   if (options.strategy === 'model' || options.strategy === 'custom') {
@@ -219,29 +240,29 @@ export async function chunkDocumentSemantic(
   } else if (options.strategy === 'hybrid') {
     boundaries = await options.segment({ document, segments }, { maxChars, minChars })
     if (!boundaries.length) {
-      boundaries = await embeddingBoundaries(document, segments, options.dense, {
+      boundaries = await embeddingBoundaries(textDocument, segments, options.dense, {
         maxChars,
         minChars,
         similarityThreshold: options.similarityThreshold,
       })
     }
   } else if (options.strategy === 'embedding') {
-    boundaries = await embeddingBoundaries(document, segments, options.dense, {
+    boundaries = await embeddingBoundaries(textDocument, segments, options.dense, {
       maxChars,
       minChars,
       similarityThreshold: options.similarityThreshold,
     })
   }
 
-  const normalized = normalizeBoundaries(boundaries, document.content.length)
-  const chunks = normalized.map((boundary, ordinal) => {
-    const content = document.content.slice(boundary.start, boundary.end).trim()
+  const normalized = content ? normalizeBoundaries(boundaries, content.length) : []
+  const chunks: CruxChunk[] = normalized.map((boundary, ordinal) => {
+    const chunkContent = content.slice(boundary.start, boundary.end).trim()
     return {
       namespace: document.namespace,
       sourceId: document.sourceId,
-      chunkId: createStableId('chunk', { sourceId: document.sourceId, boundary, content }),
+      chunkId: createStableId('chunk', { sourceId: document.sourceId, boundary, content: chunkContent }),
       ordinal,
-      content,
+      content: chunkContent,
       metadata: {
         ...(document.metadata ?? {}),
         semanticReason: boundary.reason ?? options.strategy,
@@ -255,6 +276,9 @@ export async function chunkDocumentSemantic(
       },
     }
   })
+  for (const part of mediaParts(document)) {
+    chunks.push(createMediaPartChunk(document, part, chunks.length))
+  }
   return { chunks }
 }
 

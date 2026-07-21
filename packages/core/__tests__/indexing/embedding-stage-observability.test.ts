@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { embedding } from '../../src/embedding'
+import { embedding, embeddingSpaceDigest } from '../../src/embedding'
 import { indexer } from '../../src/indexing'
 import {
   createInMemoryObservabilityTransport,
@@ -87,6 +87,44 @@ describe('embedding-stage observability', () => {
     expect(serialized).not.toContain(privateVersion)
     expect(serialized).not.toContain('[73191,28463]')
   })
+
+  it('records modality counts, document role, and the dense space digest without media payloads', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+    const records = inMemoryRecordStore()
+    const dense = embedding({
+      kind: 'dense', name: 'multimodal-test', dimensions: 2, maxInputTokens: 100,
+      modalities: ['text', 'image'], batch: { maxSize: 8 },
+      embed: async (inputs) => inputs.map(() => [1, 0]),
+    })
+    const docs = indexer({
+      id: 'media', namespace: 'kb', records, vectors: inMemoryVectorStore(), dense,
+    })
+
+    await docs.indexDocuments([{
+      namespace: 'kb', sourceId: 'rex', content: 'A dog',
+      asset: { type: 'data', data: new Uint8Array([91, 92, 93]), mediaType: 'image/png' },
+    }])
+    await observe.flush()
+
+    const digest = embeddingSpaceDigest(dense.space.fingerprint)
+    const embeddingStart = transport.records.find(
+      (record) => record.type === 'span:start' && record.primitive === 'embedding.call',
+    )
+    expect(embeddingStart?.attributes).toMatchObject({
+      role: 'document',
+      embeddingSpace: digest,
+      modalityCounts: { text: 1, image: 1 },
+    })
+    expect(stageArtifact(transport.records)?.attributes).toMatchObject({
+      role: 'document',
+      embeddingSpace: digest,
+      modalityCounts: { text: 1, image: 1 },
+    })
+    const serialized = JSON.stringify(transport.records)
+    expect(serialized).not.toContain('91,92,93')
+    expect(serialized).not.toContain('Uint8Array')
+  })
 })
 
 function setup() {
@@ -102,7 +140,7 @@ function setup() {
       maxInputTokens: 100,
       batch: { maxSize: 8 },
       version: privateVersion,
-      embed: async (texts) => texts.map(() => [73191, 28463]),
+      embed: async (inputs) => inputs.map(() => [73191, 28463]),
     }),
     cache: true,
   })

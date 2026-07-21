@@ -261,6 +261,9 @@ const docsEmbedding = embedding(client, {
 ```
 
 Known OpenAI embedding models infer their default dimensions automatically. For custom model IDs, pass `dimensions` explicitly.
+The hosted OpenAI embedding surface is text-only. The helper declares
+`modalities: ['text']`; media input throws `EmbeddingModalityError` before an
+OpenAI client call.
 
 | Field                      | Type      | Description                                                            |
 | -------------------------- | --------- | ---------------------------------------------------------------------- |

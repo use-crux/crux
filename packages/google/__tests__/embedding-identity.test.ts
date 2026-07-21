@@ -20,7 +20,8 @@ describe('Google embedding identity', () => {
     const base = fingerprint()
 
     expect(fingerprint({ model: 'model-b' })).not.toBe(base)
-    expect(fingerprint({ taskType: 'RETRIEVAL_DOCUMENT' })).not.toBe(base)
+    expect(fingerprint({ tasks: { document: 'RETRIEVAL_DOCUMENT' } })).not.toBe(base)
+    expect(fingerprint({ tasks: { query: 'RETRIEVAL_QUERY' } })).not.toBe(base)
     expect(fingerprint({ title: 'Document title' })).not.toBe(base)
     expect(fingerprint({ mimeType: 'text/markdown' })).not.toBe(base)
     expect(fingerprint({ autoTruncate: true })).not.toBe(base)

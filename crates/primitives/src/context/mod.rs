@@ -40,6 +40,7 @@ pub(crate) struct CallParts<'a> {
     pub eager_execution: bool,
     pub callee_name: &'a str,
     pub callee_local_name: Option<&'a str>,
+    pub receiver_name: Option<&'a str>,
     pub callee_module_specifier: Option<&'a str>,
     pub callee_direct: Option<bool>,
     pub args: &'a [StaticSyntaxValue],
@@ -51,6 +52,8 @@ pub(crate) struct CallParts<'a> {
 
 pub(crate) struct ResolvedSource<'a> {
     pub symbol: String,
+    pub definition_symbol: String,
+    pub fingerprint_file: String,
     pub value: &'a StaticSyntaxValue,
     pub source: SourceLocation,
     pub snippet: Option<SourceSnippet>,
@@ -174,7 +177,12 @@ impl<'a> PrimitiveContext<'a> {
                 return ResolveOutcome::Unresolved;
             }
             let value = resolve_static_value(&initializer.value, &self.initializers, seen);
-            return ResolveOutcome::Resolved(resolved_from_initializer(symbol, initializer, value));
+            return ResolveOutcome::Resolved(resolved_from_initializer(
+                symbol,
+                self.fingerprint_file,
+                initializer,
+                value,
+            ));
         }
         let Some(import) = self.imports.iter().find(|item| {
             item.local_name == symbol
@@ -209,6 +217,7 @@ impl<'a> PrimitiveContext<'a> {
         let value = resolve_static_value(&imported_initializer.value, &imported_initializers, seen);
         Some(resolved_from_initializer(
             symbol,
+            &imported_record.relative_path,
             imported_initializer,
             value,
         ))
@@ -240,6 +249,8 @@ impl<'a> PrimitiveContext<'a> {
         };
         ResolveOutcome::Resolved(ResolvedSource {
             symbol: path.join("."),
+            definition_symbol: root_source.definition_symbol,
+            fingerprint_file: root_source.fingerprint_file,
             value: current,
             source: source_for_value(current, property),
             snippet: snippet_for_value(current, None),
@@ -290,6 +301,7 @@ pub(crate) fn call_parts(source_match: &StaticSourceMatch) -> Option<CallParts<'
             eager_execution: *eager_execution,
             callee_name: &callee.name,
             callee_local_name: callee.local_name.as_deref(),
+            receiver_name: callee.receiver_name.as_deref(),
             callee_module_specifier: callee.module_specifier.as_deref(),
             callee_direct: callee.direct,
             args,
@@ -319,6 +331,7 @@ pub(crate) fn call_parts(source_match: &StaticSourceMatch) -> Option<CallParts<'
             eager_execution: false,
             callee_name: &callee.name,
             callee_local_name: callee.local_name.as_deref(),
+            receiver_name: callee.receiver_name.as_deref(),
             callee_module_specifier: callee.module_specifier.as_deref(),
             callee_direct: callee.direct,
             args,
@@ -333,11 +346,14 @@ pub(crate) fn call_parts(source_match: &StaticSourceMatch) -> Option<CallParts<'
 
 fn resolved_from_initializer<'a>(
     symbol: &str,
+    fingerprint_file: &str,
     initializer: &'a StaticInitializerRecord,
     value: &'a StaticSyntaxValue,
 ) -> ResolvedSource<'a> {
     ResolvedSource {
         symbol: symbol.to_string(),
+        definition_symbol: initializer.name.clone(),
+        fingerprint_file: fingerprint_file.to_string(),
         value,
         source: initializer.source.clone(),
         snippet: snippet_for_value(value, Some(initializer)),

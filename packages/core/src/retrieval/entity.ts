@@ -12,8 +12,11 @@ import { contextWithFamily, contextWithFullPromptInput } from '../prompt/context
 import type { AnyToolSet } from '../types'
 import type { Context, ContextSystemContent, ContextTextSegment } from '../prompt/context-types'
 import type { InternalPromptInjection } from '../prompt/internal-injection'
+import type { EmbeddingModality } from '../embedding'
+import type { ExactFilter } from '../storage'
 import { createRetrieverTools } from './tools'
 import { normalizeRetrieveRequest } from './request'
+import type { RetrieveInput } from './request'
 import type {
   RetrievalInjectMode,
   RetrievalToolConfig,
@@ -22,24 +25,26 @@ import type {
   RetrieverHit,
   RetrieverMode,
   RetrieverTools,
-  RetrieveOptions,
+  RetrieveRequest,
 } from './types'
 
 /** Build a frozen {@link Retriever} from a bound `retrieve` and injection defaults. */
-export function createRetrieverEntity(args: {
+export function createRetrieverEntity<
+  TFilter extends ExactFilter = ExactFilter,
+  TModality extends EmbeddingModality = EmbeddingModality,
+>(args: {
   id: string
   namespace: string
   mode: RetrieverMode
-  retrieve: (query: string, options?: RetrieveOptions) => Promise<RetrieverHit[]>
+  retrieve: (request: RetrieveRequest<TFilter, TModality>) => Promise<RetrieverHit[]>
   getSource?: (lookup: { namespace: string; sourceId: string; chunkId: string }) => Promise<RetrieverHit | null>
   defaultContext?: RetrieverContextConfig
   defaultInject?: RetrievalInjectMode
   defaultTools?: false | RetrievalToolConfig
-}): Retriever {
-  const retrieve: Retriever['retrieve'] = (queryOrRequest, options) => {
+}): Retriever<TFilter, TModality> {
+  const retrieve: Retriever<TFilter, TModality>['retrieve'] = (queryOrRequest, options) => {
     const request = normalizeRetrieveRequest(queryOrRequest, options)
-    const { query, ...retrieveOptions } = request
-    return args.retrieve(query, retrieveOptions)
+    return args.retrieve(request)
   }
 
   return Object.freeze({
@@ -73,7 +78,7 @@ export function createRetrieverEntity(args: {
             )
           }
 
-          const hits = await retrieve(query, { limit })
+          const hits = await retrieve(query as RetrieveInput<TFilter, TModality>, { limit })
           if (hits.length === 0) return ''
           const meta = { query, mode: args.mode, namespace: args.namespace }
           return renderContext === defaultRenderContext && hits.some(hasRetrieverHitFreshness)
@@ -89,7 +94,7 @@ export function createRetrieverEntity(args: {
       return createRetrieverTools({
         id: args.id,
         namespace: args.namespace,
-        retrieve,
+        retrieve: retrieve as Retriever['retrieve'],
         getSource: args.getSource,
         config: options,
       }) as RetrieverTools<TConfig>
@@ -106,7 +111,10 @@ export function createRetrieverEntity(args: {
         if (!query) {
           throw new Error(`Retriever "${args.id}" inject:${injectMode} requires context.query.`)
         }
-        initialHits = await retrieve(query, { limit: args.defaultContext?.limit })
+        initialHits = await retrieve(
+          query as RetrieveInput<TFilter, TModality>,
+          { limit: args.defaultContext?.limit },
+        )
         const renderContext = args.defaultContext?.renderContext ?? defaultRenderContext
         const meta = { query, mode: args.mode, namespace: args.namespace }
         const rendered = initialHits.length
@@ -130,7 +138,7 @@ export function createRetrieverEntity(args: {
           tools = createRetrieverTools({
             id: args.id,
             namespace: args.namespace,
-            retrieve,
+            retrieve: retrieve as Retriever['retrieve'],
             getSource: args.getSource,
             config: { ...(toolConfig ?? {}), initialHits },
           })
@@ -157,7 +165,7 @@ function defaultRenderContext(
   hits: RetrieverHit[],
   meta: { query: string; mode: RetrieverMode; namespace: string },
 ): string {
-  const lines = hits.map((hit) => `- [${hit.source.id}/${hit.chunkId}] (score: ${hit.score.toFixed(2)}) ${hit.content}`)
+  const lines = hits.map(renderHitLine)
   return `## Retrieved Context (${meta.query})\n${lines.join('\n')}`
 }
 
@@ -169,13 +177,18 @@ function defaultRenderContextContent(
     segments: [
       { text: `## Retrieved Context (${meta.query})\n`, dynamic: false },
       ...hits.map((hit, index) => ({
-        text: `${index > 0 ? '\n' : ''}- [${hit.source.id}/${hit.chunkId}] (score: ${hit.score.toFixed(2)}) ${hit.content}`,
+        text: `${index > 0 ? '\n' : ''}${renderHitLine(hit)}`,
         dynamic: true,
         source: `${meta.namespace}:${hit.source.id}/${hit.chunkId}`,
         ...retrieverHitFreshness(hit),
       })),
     ],
   }
+}
+
+function renderHitLine(hit: RetrieverHit): string {
+  const attribution = `- [${hit.source.id}/${hit.chunkId}] (score: ${hit.score.toFixed(2)})`
+  return hit.content ? `${attribution} ${hit.content}` : attribution
 }
 
 function retrieverHitFreshness(hit: RetrieverHit): Pick<ContextTextSegment, 'observedAt' | 'sourceVersion'> {

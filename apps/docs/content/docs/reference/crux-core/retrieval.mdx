@@ -353,6 +353,17 @@ managed scorers. See the [Eval reference](/docs/reference/crux-core/eval).
 
 `embedding()` (from `@use-crux/core/embedding`) owns the policies that affect how vectors are generated. The core option table lives in the [core reference](/docs/reference/crux-core#embedding); the governance options are:
 
+Store-backed retrievers accept a string, typed `EmbeddingInput`, bare media
+asset, or an exact `{ query }` / `{ input }` request object. Text queries may run
+dense, sparse, or hybrid search. Media queries run the dense branch only;
+sparse/custom retrieval and text-producing recipe query steps reject them.
+
+The retriever checks the namespace's dense space before query embedding or
+vector search. A mismatch throws `EmbeddingSpaceMismatchError` with stored and
+configured name/dimension descriptors and directs the caller to reindex or use
+the embedding that built the namespace. Returned media hits keep the existing
+`RetrieverHit` shape and expose `source.assetRef` for explicit asset hydration.
+
 | Option       | Type                                                              | Behavior                                                                    |
 | ------------ | ----------------------------------------------------------------- | --------------------------------------------------------------------------- |
 | `batch`      | `{ maxSize?, concurrency? }`                                      | Chunking and parallelism inside one `embedMany()` call                      |
@@ -360,7 +371,7 @@ managed scorers. See the [Eval reference](/docs/reference/crux-core/eval).
 | `truncate`   | `{ strategy: 'fail' } \| { strategy: 'chars'; maxChars: number }` | Input-limit policy; `'fail'` is the default so truncation is never silent   |
 | `version`    | `string`                                                          | Vector-semantic revision folded into fingerprints and cache identity        |
 | `retry`      | `{ maxAttempts; baseDelayMs?; maxDelayMs?; shouldRetry? }`        | Provider batch retry policy                                                 |
-| `cache`      | `EmbeddingCache`                                                  | Policy-aware per-text vector cache                                          |
+| `cache`      | `EmbeddingCache`                                                  | Policy-aware per-input vector cache                                         |
 | `rateLimit`  | `{ concurrency: number }`                                         | Caps provider calls across overlapping calls on the same embedding instance |
 
 `batch.concurrency` and `rateLimit.concurrency` differ in scope: `batch.concurrency` controls how many chunks one `embedMany()` call can run at once, while `rateLimit.concurrency` is stricter and caps provider calls across all concurrent callers of the same embedding instance.

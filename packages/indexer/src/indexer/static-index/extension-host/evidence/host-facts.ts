@@ -18,9 +18,10 @@ import {
   type ProjectIndexFactExtractors,
 } from "../../../fact-provenance";
 import { mediaPrimitiveManifest } from "../../../media/primitive-manifest";
+import { embeddingPrimitiveManifest } from "../../../embedding/primitive-manifest";
 
 const FIRST_PARTY_EXTENSIONS = new Set([
-  "@use-crux/indexer/crux-core",
+  embeddingPrimitiveManifest.name,
   "@use-crux/indexer/crux-core-mcp",
   mediaPrimitiveManifest.name,
 ]);

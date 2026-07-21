@@ -133,6 +133,8 @@ pub struct StaticCalleeRecord {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub local_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub receiver_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub imported_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub module_specifier: Option<String>,

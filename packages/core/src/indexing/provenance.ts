@@ -45,7 +45,7 @@ export function coarseProvenance(parts: CruxIngestPart[]): ChunkProvenance {
 export function provenanceForPart(
   document: CruxDocument,
   part: CruxIngestPart,
-  content: string = part.content,
+  content: string = part.kind === 'media' ? (part.caption ?? '') : part.content,
 ): ChunkProvenance {
   const base = coarseProvenance([part])
   const sourceSpans = sourceSpanForContent(document, content, part.id)
@@ -64,7 +64,7 @@ export function sourceSpanForContent(
   partId?: string,
 ): Array<{ start: number; end: number; partId?: string }> {
   if (!content) return []
-  const start = document.content.indexOf(content)
+  const start = document.content?.indexOf(content) ?? -1
   if (start < 0) return []
   return [
     {

@@ -9,17 +9,17 @@
  */
 
 import type { z } from 'zod'
-import type { DenseEmbedding, SparseEmbedding } from '../embedding'
+import type { DenseEmbedding, EmbeddingModality, SparseEmbedding } from '../embedding'
 import type { ExactFilter, RecordStore, Storage, VectorStore } from '../storage'
 import type { Context } from '../prompt/context-types'
 import type { InternalPromptInjection } from '../prompt/internal-injection'
 import type { QueryableCruxEntity } from '../tools/entity'
-import type { RetrieveOptions, RetrieveRequest } from './request'
+import type { RetrieveInput, RetrieveOptions, RetrieveRequest } from './request'
 import type { RetrievalToolDef } from './tools'
 import type { CruxSourceFacts } from '../indexing'
 import type { AssetRef } from '../asset'
 
-export type { RetrieveOptions, RetrieveRequest } from './request'
+export type { RetrieveInput, RetrieveOptions, RetrieveRequest } from './request'
 
 /** How a retriever resolves queries to hits. */
 export type RetrieverMode = 'dense' | 'sparse' | 'hybrid' | 'custom'
@@ -99,13 +99,27 @@ export interface HitProvenance {
   compression?: { originalLength: number; compressedLength: number }
 }
 
+/** A modality-aware retrieval call retained as bivariant for legacy handle assignment. */
+type RetrieverRetrieve<
+  TFilter extends ExactFilter,
+  TModality extends EmbeddingModality,
+> = {
+  bivarianceHack(
+    queryOrRequest: RetrieveInput<TFilter, TModality>,
+    options?: RetrieveOptions<TFilter>,
+  ): Promise<RetrieverHit[]>
+}['bivarianceHack']
+
 /** A retriever: a queryable knowledge source with context/tool/injection adapters. */
-export interface Retriever<TFilter extends ExactFilter = ExactFilter> extends QueryableCruxEntity {
+export interface Retriever<
+  TFilter extends ExactFilter = ExactFilter,
+  TModality extends EmbeddingModality = 'text',
+> extends QueryableCruxEntity {
   readonly _tag: 'Retriever'
   readonly id: string
   readonly namespace: string
   readonly mode: RetrieverMode
-  retrieve(queryOrRequest: string | RetrieveRequest<TFilter>, options?: RetrieveOptions<TFilter>): Promise<RetrieverHit[]>
+  readonly retrieve: RetrieverRetrieve<TFilter, TModality>
   asContext(options?: {
     priority?: number
     query?: string | ((input: Record<string, unknown>) => string)
@@ -131,7 +145,9 @@ export interface RetrievalInjectionConfig {
 }
 
 /** Configuration for a store-backed dense/sparse/hybrid retriever. Internal. */
-export interface DenseStoreBackedRetrieverConfig {
+export interface DenseStoreBackedRetrieverConfig<
+  TModality extends EmbeddingModality = 'text',
+> {
   id: string
   /** Authored knowledge-base owner identity when this retriever was derived from one. @internal */
   knowledgeBaseId?: string
@@ -141,7 +157,7 @@ export interface DenseStoreBackedRetrieverConfig {
   records?: RecordStore
   vectors?: VectorStore
   storage?: Storage
-  dense?: DenseEmbedding
+  dense?: DenseEmbedding<TModality>
   sparse?: SparseEmbedding
   search?: {
     mode?: 'dense' | 'sparse' | 'hybrid'

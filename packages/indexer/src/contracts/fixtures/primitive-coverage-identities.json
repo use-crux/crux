@@ -517,6 +517,72 @@
         "positive": "first-party-phase7-flow-native-fixtures.ts",
         "negative": "first-party-native-negative-fixtures.test.ts"
       }
+    },
+    {
+      "extension": "@use-crux/indexer/crux-core",
+      "extractor": "embedding",
+      "family": "embedding",
+      "nativeCovered": true,
+      "fixtureClasses": {
+        "definitions": "embedding-native-static.test.ts",
+        "relations": "embedding-native-static.test.ts",
+        "sourceRefs": "embedding-native-static.test.ts",
+        "diagnostics": "embedding-native-static.test.ts",
+        "dependencies": "embedding-native-static.test.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "sources": "embedding-native-static.test.ts",
+        "sourceGraph": "embedding-native-static.test.ts",
+        "runtimeMetadata": "embedding-native-static.test.ts",
+        "degradedBehavior": "embedding-native-static.test.ts"
+      },
+      "parityFixtures": {
+        "positive": "embedding-native-static.test.ts",
+        "negative": "first-party-native-negative-fixtures.test.ts"
+      }
+    },
+    {
+      "extension": "@use-crux/indexer/crux-core",
+      "extractor": "embedding.call",
+      "family": "embedding.call",
+      "nativeCovered": true,
+      "fixtureClasses": {
+        "definitions": "embedding-native-static.test.ts",
+        "relations": "embedding-native-static.test.ts",
+        "sourceRefs": "embedding-native-static.test.ts",
+        "diagnostics": "embedding-native-static.test.ts",
+        "dependencies": "embedding-native-static.test.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "sources": "embedding-native-static.test.ts",
+        "sourceGraph": "embedding-native-static.test.ts",
+        "runtimeMetadata": "embedding-native-static.test.ts",
+        "degradedBehavior": "embedding-native-static.test.ts"
+      },
+      "parityFixtures": {
+        "positive": "embedding-native-static.test.ts",
+        "negative": "first-party-native-negative-fixtures.test.ts"
+      }
+    },
+    {
+      "extension": "@use-crux/indexer/crux-core",
+      "extractor": "rag.indexer",
+      "family": "rag.indexer",
+      "nativeCovered": true,
+      "fixtureClasses": {
+        "definitions": "embedding-native-static.test.ts",
+        "relations": "embedding-native-static.test.ts",
+        "sourceRefs": "embedding-native-static.test.ts",
+        "diagnostics": "embedding-native-static.test.ts",
+        "dependencies": "embedding-native-static.test.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "sources": "embedding-native-static.test.ts",
+        "sourceGraph": "embedding-native-static.test.ts",
+        "runtimeMetadata": "embedding-native-static.test.ts",
+        "degradedBehavior": "embedding-native-static.test.ts"
+      },
+      "parityFixtures": {
+        "positive": "embedding-native-static.test.ts",
+        "negative": "first-party-native-negative-fixtures.test.ts"
+      }
     }
   ]
 }

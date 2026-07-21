@@ -14,24 +14,24 @@ import { createRateLimiter, runWithRetry } from './retry'
 import type { BatchExecutionResult, EmbeddingGovernanceMetrics, NormalizedGovernance } from './types'
 
 /** Wrap a provider batch call with retry + rate limiting and metric capture. */
-export function createProviderBatchRunner<T>(
+export function createProviderBatchRunner<TInput, TOutput, TContext>(
   governance: NormalizedGovernance,
-  runBatch: (texts: string[]) => Promise<BatchExecutionResult<T>>,
-): (texts: string[]) => Promise<BatchExecutionResult<T>> {
+  runBatch: (inputs: readonly TInput[], context: TContext) => Promise<BatchExecutionResult<TOutput>>,
+): (inputs: readonly TInput[], context: TContext) => Promise<BatchExecutionResult<TOutput>> {
   const limiter = governance.rateLimit ? createRateLimiter(governance.rateLimit.concurrency) : undefined
 
-  return async (texts) => {
+  return async (inputs, context) => {
     const metrics: EmbeddingGovernanceMetrics = {}
     const result = await runWithRetry(
       () =>
         limiter
           ? limiter.run(
-              () => runBatch(texts),
+              () => runBatch(inputs, context),
               (durationMs) => {
                 metrics.rateLimitWaitMs = (metrics.rateLimitWaitMs ?? 0) + durationMs
               },
             )
-          : runBatch(texts),
+          : runBatch(inputs, context),
       governance.retry,
       metrics,
     )
@@ -43,17 +43,17 @@ export function createProviderBatchRunner<T>(
 }
 
 /** Split inputs into chunks, run with bounded concurrency, and combine results. */
-export function createBatchExecutor<T>(
+export function createBatchExecutor<TInput, TOutput, TContext>(
   batch: Readonly<{ maxSize: number; concurrency: number }>,
-  runBatch: (texts: string[]) => Promise<BatchExecutionResult<T>>,
-): (texts: string[]) => Promise<BatchExecutionResult<T>> {
-  return async (texts: string[]): Promise<BatchExecutionResult<T>> => {
-    if (texts.length === 0) {
+  runBatch: (inputs: readonly TInput[], context: TContext) => Promise<BatchExecutionResult<TOutput>>,
+): (inputs: readonly TInput[], context: TContext) => Promise<BatchExecutionResult<TOutput>> {
+  return async (inputs, context): Promise<BatchExecutionResult<TOutput>> => {
+    if (inputs.length === 0) {
       return { embeddings: [] }
     }
 
-    const chunks = chunk(texts, batch.maxSize)
-    const results = new Array<BatchExecutionResult<T>>(chunks.length)
+    const chunks = chunk(inputs, batch.maxSize)
+    const results = new Array<BatchExecutionResult<TOutput>>(chunks.length)
     let nextIndex = 0
 
     const workers = Array.from({ length: Math.min(batch.concurrency, chunks.length) }, async () => {
@@ -63,14 +63,14 @@ export function createBatchExecutor<T>(
         if (current >= chunks.length) {
           return
         }
-        results[current] = await runBatch(chunks[current])
+        results[current] = await runBatch(chunks[current], context)
       }
     })
 
     await Promise.all(workers)
     const embeddings = results.flatMap((result) => result.embeddings)
-    if (embeddings.length !== texts.length) {
-      throw new Error(`Embedding provider returned ${embeddings.length} embeddings for ${texts.length} inputs.`)
+    if (embeddings.length !== inputs.length) {
+      throw new Error(`Embedding provider returned ${embeddings.length} embeddings for ${inputs.length} inputs.`)
     }
 
     return {
@@ -83,7 +83,7 @@ export function createBatchExecutor<T>(
 }
 
 /** Split an array into fixed-size chunks. */
-function chunk<T>(items: T[], size: number): T[][] {
+function chunk<T>(items: readonly T[], size: number): T[][] {
   const chunks: T[][] = []
   for (let index = 0; index < items.length; index += size) {
     chunks.push(items.slice(index, index + size))

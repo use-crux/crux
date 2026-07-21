@@ -21,12 +21,19 @@ import type {
   SourceStageRecord,
 } from './types'
 
+/** Resolved stage-cache capability shared by indexing internals. */
+export interface ResolvedPipelineCache {
+  readonly enabled: boolean
+  readonly records: RecordStore
+  readonly scope: string
+}
+
 /** Resolve a pipeline cache config from user input + indexer defaults. */
 export function normalizePipelineCache(
   cache: PipelineCacheConfig | undefined,
   indexStore: RecordStore,
   indexerId: string,
-): { enabled: boolean; records: RecordStore; scope: string } {
+): ResolvedPipelineCache {
   if (!cache) {
     return { enabled: false, records: indexStore, scope: indexerId }
   }
@@ -63,6 +70,10 @@ export async function runCachedStage<T extends JsonObject | CruxDocument | Chunk
   stageFingerprint: unknown
   summarize?: (value: T) => Partial<Pick<SourceStageRecord, 'chunkCount' | 'parentCount'>>
   onStage?: (record: SourceStageRecord) => void
+  /** Whether a computed miss may be persisted. */
+  writeCache?: boolean
+  /** Whether a stage value is safe and valid for this persistent cache. */
+  cacheable?: (value: T) => boolean
   run: () => Promise<T> | T
 }): Promise<T> {
   const startedAt = Date.now()
@@ -112,29 +123,33 @@ export async function runCachedStage<T extends JsonObject | CruxDocument | Chunk
     const cached = await args.cacheConfig.records.get(key)
     if (cached && cached._cruxRecordType === 'pipeline-cache' && 'value' in cached) {
       const value = cached.value as T
-      const record = baseRecord(value, 'success', 'hit')
-      args.onStage?.(record)
-      span.withContext(() => emitIndexingStageArtifact(span.spanId, record))
-      span.end({ attributes: stageRecordAttributes(record) })
-      return value
+      if (args.cacheable?.(value) !== false) {
+        const record = baseRecord(value, 'success', 'hit')
+        args.onStage?.(record)
+        span.withContext(() => emitIndexingStageArtifact(span.spanId, record))
+        span.end({ attributes: stageRecordAttributes(record) })
+        return value
+      }
     }
   }
 
   try {
     const value = await span.withContext(args.run)
-    await args.cacheConfig.records.put(key, {
-      _cruxRecordType: 'pipeline-cache',
-      namespace: args.namespace,
-      sourceId: args.sourceId,
-      stageKind: args.stageKind,
-      stageName: args.stageName,
-      stageVersion: args.stageVersion,
-      inputHash: args.previousHash,
-      outputHash: stableHash(value),
-      value: value as JsonObject,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    })
+    if (args.writeCache !== false && args.cacheable?.(value) !== false) {
+      await args.cacheConfig.records.put(key, {
+        _cruxRecordType: 'pipeline-cache',
+        namespace: args.namespace,
+        sourceId: args.sourceId,
+        stageKind: args.stageKind,
+        stageName: args.stageName,
+        stageVersion: args.stageVersion,
+        inputHash: args.previousHash,
+        outputHash: stableHash(value),
+        value: value as JsonObject,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      })
+    }
     const record = baseRecord(value, 'success', args.cacheMode === 'refresh' ? 'refresh' : 'miss')
     args.onStage?.(record)
     span.withContext(() => emitIndexingStageArtifact(span.spanId, record))

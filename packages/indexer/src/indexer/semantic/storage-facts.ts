@@ -152,14 +152,33 @@ function primitiveStorageDefinitionEnrichment(
   view: SemanticAnalyzerView,
 ): SemanticDefinitionEnrichment {
   const dependencies = storageDependencies(refs);
+  const indexerId = semanticStringLiteralProperty(
+    candidate.object,
+    "indexerId",
+    view,
+  );
+  const namespace = semanticStringLiteralProperty(
+    candidate.object,
+    "namespace",
+    view,
+  );
+  const retrieverFacts =
+    candidate.kind === "rag.retriever"
+      ? {
+          kind: "rag.retriever" as const,
+          retrieverId: candidate.name,
+          ...(indexerId ? { indexerId } : {}),
+          ...(namespace ? { namespace } : {}),
+        }
+      : undefined;
   return {
     definition: {
       ...semanticDefinitionPatchBase(candidate),
       metadata: {
-        facts:
-          candidate.kind === "rag.retriever"
-            ? { kind: "rag.retriever", retrieverId: candidate.name }
-            : { kind: "workspace", workspaceId: candidate.name },
+        facts: retrieverFacts ?? {
+          kind: "workspace",
+          workspaceId: candidate.name,
+        },
         intelligence: {
           confidence: "semantic",
           dependencies,

@@ -195,13 +195,25 @@ export function staticCalleeRecordFromExpression(
 ): StaticCalleeRecord {
   const localName = expressionName(expression);
   const direct = ts.isIdentifier(expression);
+  const receiverName =
+    ts.isPropertyAccessExpression(expression) &&
+    ts.isIdentifier(expression.expression)
+      ? expression.expression.text
+      : undefined;
   if (!localName) return { name: "<unknown>", direct };
   const imported = importsByLocalName.get(localName);
-  if (!imported) return { name: localName, localName, direct };
+  if (!imported)
+    return {
+      name: localName,
+      localName,
+      direct,
+      ...(receiverName ? { receiverName } : {}),
+    };
   return {
     name: imported.importedName,
     direct,
     localName,
+    ...(receiverName ? { receiverName } : {}),
     importedName: imported.importedName,
     moduleSpecifier: imported.moduleSpecifier,
     ...(imported.resolvedFile ? { resolvedFile: imported.resolvedFile } : {}),

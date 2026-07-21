@@ -16,7 +16,7 @@ function indexerFingerprint(options: {
     batch: options.batch ?? { maxSize: 8 },
     retry: options.retry,
     version: options.version,
-    embed: async (texts) => texts.map(() => [1, 2]),
+    embed: async (inputs) => inputs.map(() => [1, 2]),
   })
   return indexer({
     id: 'docs',

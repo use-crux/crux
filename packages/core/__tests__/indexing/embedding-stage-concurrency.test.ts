@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { embedding } from '../../src/embedding'
+import { embedding, type NormalizedEmbeddingInput } from '../../src/embedding'
 import { indexer } from '../../src/indexing'
 import { inMemoryRecordStore, inMemoryVectorStore } from '../../src/storage'
+import { textOf } from '../embedding/text-input'
 
 describe('indexer embedding-stage cache concurrency', () => {
   it('keeps two identical concurrent runs valid when both compute the same misses', async () => {
@@ -10,11 +11,11 @@ describe('indexer embedding-stage cache concurrency', () => {
     const gate = new Promise<void>((resolve) => {
       release = resolve
     })
-    const embed = vi.fn(async (texts: string[]) => {
+    const embed = vi.fn(async (inputs: readonly NormalizedEmbeddingInput[]) => {
       waiting++
       if (waiting === 2) release()
       await gate
-      return texts.map(denseVector)
+      return inputs.map((input) => denseVector(textOf(input)))
     })
     const records = inMemoryRecordStore()
     const storedVectors = inMemoryVectorStore()
@@ -53,7 +54,8 @@ describe('indexer embedding-stage cache concurrency', () => {
 
   it('never cross-contaminates concurrently cached sources', async () => {
     const records = inMemoryRecordStore()
-    const embed = vi.fn(async (texts: string[]) => texts.map(denseVector))
+    const embed = vi.fn(async (inputs: readonly NormalizedEmbeddingInput[]) =>
+      inputs.map((input) => denseVector(textOf(input))))
     const docs = cachedDenseIndexer(records, embed)
 
     await Promise.all([
@@ -80,12 +82,12 @@ describe('indexer embedding-stage cache concurrency', () => {
       signalStarted = resolve
     })
     const records = inMemoryRecordStore()
-    const embed = vi.fn(async (texts: string[]) => {
+    const embed = vi.fn(async (inputs: readonly NormalizedEmbeddingInput[]) => {
       if (delayProvider) {
         signalStarted()
         await gate
       }
-      return texts.map(denseVector)
+      return inputs.map((input) => denseVector(textOf(input)))
     })
     const docs = cachedDenseIndexer(records, embed)
     const input = [{ namespace: 'kb', sourceId: 'source-alpha', content: 'alpha' }]
@@ -108,7 +110,7 @@ describe('indexer embedding-stage cache concurrency', () => {
 
 function cachedDenseIndexer(
   records: ReturnType<typeof inMemoryRecordStore>,
-  embed: (texts: string[]) => Promise<number[][]>,
+  embed: (inputs: readonly NormalizedEmbeddingInput[]) => Promise<number[][]>,
   vectors = inMemoryVectorStore(),
 ) {
   return indexer({

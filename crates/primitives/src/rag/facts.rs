@@ -145,6 +145,16 @@ fn retriever_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>) -> Opt
                 .unwrap_or_else(|| parts.variable_name.to_string()),
         ),
     );
+    insert_string(
+        &mut facts,
+        "indexerId",
+        direct_string_property(config, "indexerId"),
+    );
+    insert_string(
+        &mut facts,
+        "namespace",
+        direct_string_property(config, "namespace"),
+    );
 
     let mut metadata = Map::new();
     metadata.insert(

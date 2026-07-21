@@ -24,7 +24,7 @@ describe('knowledge-base contributor evidence', () => {
         dimensions: 2,
         maxInputTokens: 20,
         batch: { maxSize: 4 },
-        embed: async (texts) => texts.map(() => [1, 0]),
+        embed: async (inputs) => inputs.map(() => [1, 0]),
       }),
     })
     await docs.index([{ namespace: 'docs', sourceId: 'one', content: 'One' }])

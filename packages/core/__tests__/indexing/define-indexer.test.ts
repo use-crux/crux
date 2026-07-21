@@ -4,6 +4,7 @@ import { chunker, indexer as makeIndexer, indexingPipeline, transform } from '..
 import { expandParents, retrievalRecipe, retrieve, retriever as makeRetriever } from '../../src/retrieval'
 import { inMemoryRecordStore, inMemoryVectorStore } from '../../src/storage'
 import type { JsonObject, RecordPage, RecordStore } from '../../src/storage'
+import { textOf } from '../embedding/text-input'
 
 describe('indexer', () => {
   it('uses indexingPipeline() document transforms before structured default chunking', async () => {
@@ -110,7 +111,7 @@ describe('indexer', () => {
       dimensions: 2,
       maxInputTokens: 100,
       batch: { maxSize: 8 },
-      embed: async (texts) => texts.map((text) => (/Alpha|beta/.test(text) ? [1, 0] : [0, 1])),
+      embed: async (inputs) => inputs.map((input) => (/Alpha|beta/.test(textOf(input)) ? [1, 0] : [0, 1])),
     })
     const indexer = makeIndexer({
       id: 'docs',
@@ -180,7 +181,7 @@ describe('indexer', () => {
       dimensions: 2,
       maxInputTokens: 100,
       batch: { maxSize: 8 },
-      embed: async (texts) => texts.map((text) => (text.includes('First') ? [1, 0] : [0, 1])),
+      embed: async (inputs) => inputs.map((input) => (textOf(input).includes('First') ? [1, 0] : [0, 1])),
     })
     const indexer = makeIndexer({
       id: 'docs',
@@ -366,7 +367,7 @@ describe('indexer', () => {
       dimensions: 2,
       maxInputTokens: 100,
       batch: { maxSize: 8 },
-      embed: async (texts) => texts.map((text) => [text.length, 1]),
+      embed: async (inputs) => inputs.map((input) => [textOf(input).length, 1]),
     })
     const indexer = makeIndexer({
       id: 'docs',
@@ -418,7 +419,7 @@ describe('indexer', () => {
       dimensions: 2,
       maxInputTokens: 100,
       batch: { maxSize: 8 },
-      embed: async (texts) => texts.map((text) => [text.length, 1]),
+      embed: async (inputs) => inputs.map((input) => [textOf(input).length, 1]),
     })
     const indexer = makeIndexer({
       id: 'docs',
@@ -450,7 +451,7 @@ describe('indexer', () => {
     it('dry-runs document indexing without mutating the store', async () => {
     const records = inMemoryRecordStore()
     const vectors = inMemoryVectorStore()
-    const embed = vi.fn(async (texts: string[]) => texts.map((text) => [text.length, 1]))
+    const embed = vi.fn(async (inputs) => inputs.map((input) => [textOf(input).length, 1]))
     const dense = makeEmbedding({
       kind: 'dense',
       name: 'dense-test',
@@ -549,7 +550,7 @@ describe('indexer', () => {
       dimensions: 2,
       maxInputTokens: 100,
       batch: { maxSize: 8 },
-      embed: async (texts) => texts.map((text) => [text.length, 1]),
+      embed: async (inputs) => inputs.map((input) => [textOf(input).length, 1]),
     })
     const sparse = makeEmbedding({
       kind: 'sparse',

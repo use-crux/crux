@@ -9,6 +9,19 @@
  */
 
 import { z } from "zod";
+import type {
+  EmbeddingCallFacts,
+  EmbeddingFacts,
+  RagIndexerFacts,
+} from './embedding-facts'
+
+export type {
+  EmbeddingCallFacts,
+  EmbeddingFacts,
+  EmbeddingIdentityInputs,
+  EmbeddingSpaceFacts,
+  RagIndexerFacts,
+} from './embedding-facts'
 import {
   IndexFactKindSchema,
   IndexRuleBudgetSchema,
@@ -411,6 +424,8 @@ export interface ProjectDefinitionMetadata extends Record<string, unknown> {
 }
 
 export type ProjectDefinitionKind =
+  | "embedding"
+  | "embedding.call"
   | "prompt"
   | "context"
   | "injectable"
@@ -444,6 +459,7 @@ export type ProjectDefinitionKind =
   | "rag.pipeline.stage"
   | "rag.reranker"
   | "rag.retriever"
+  | "rag.indexer"
   | "registry"
   | "skill"
   | "memory"
@@ -801,6 +817,8 @@ export interface RagFacts {
   stepId?: string;
   rerankerId?: string;
   retrieverId?: string;
+  indexerId?: string;
+  namespace?: string;
   stageId?: string;
   stageKind?: string;
   topK?: number;
@@ -942,6 +960,9 @@ export interface EvalFacts {
 }
 
 export type PrimitiveSpecificFacts =
+  | EmbeddingFacts
+  | EmbeddingCallFacts
+  | RagIndexerFacts
   | PromptFacts
   | ContextFacts
   | InjectableFacts
@@ -1318,6 +1339,8 @@ export const ProjectIdentitySchema = z.object({
 }) satisfies z.ZodType<ProjectIdentity>;
 
 export const ProjectDefinitionKindSchema = z.enum([
+  "embedding",
+  "embedding.call",
   "prompt",
   "context",
   "injectable",
@@ -1351,6 +1374,7 @@ export const ProjectDefinitionKindSchema = z.enum([
   "rag.pipeline.stage",
   "rag.reranker",
   "rag.retriever",
+  "rag.indexer",
   "registry",
   "skill",
   "memory",

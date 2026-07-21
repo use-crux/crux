@@ -35,7 +35,7 @@ describe('embedding stage cache contract', () => {
     }
     const key = embeddingStageCacheKey(base)
 
-    expect(EMBEDDING_STAGE_CACHE_EPOCH).toBe(2)
+    expect(EMBEDDING_STAGE_CACHE_EPOCH).toBe(3)
     expect(renamedInputHash).toBe(inputHash)
     expect(key).toMatch(/^indexer:docs:namespace:kb:embedding-cache:[0-9a-f]{64}$/)
     expect(embeddingStageCacheKey({ ...base, inputHash: renamedInputHash })).toBe(key)
@@ -46,6 +46,22 @@ describe('embedding stage cache contract', () => {
     expect(embeddingStageCacheKey({ ...base, sourceId: 'source-b' })).not.toBe(key)
     expect(embeddingStageCacheKey({ ...base, kind: 'sparse' })).not.toBe(key)
     expect(embeddingStageCacheKey({ ...base, embeddingFingerprint: 'dense:v2' })).not.toBe(key)
+  })
+
+  it('keys media by byte digest and marks media without one uncacheable', () => {
+    const mediaChunk = (sha256?: string) => ({
+      content: 'same caption',
+      media: {
+        asset: { type: 'data' as const, data: new Uint8Array([1]), mediaType: 'image/png' },
+        modality: 'image' as const,
+        ...(sha256 ? { sha256 } : {}),
+      },
+    })
+
+    expect(embeddingStageInputHash([mediaChunk('a'.repeat(64))])).not.toBe(
+      embeddingStageInputHash([mediaChunk('b'.repeat(64))]),
+    )
+    expect(embeddingStageInputHash([mediaChunk()])).toBeUndefined()
   })
 
   it('accepts only complete finite dense bundles with matching identity and dimensions', () => {

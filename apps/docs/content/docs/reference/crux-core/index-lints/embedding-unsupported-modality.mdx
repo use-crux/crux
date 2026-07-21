@@ -1,0 +1,27 @@
+---
+title: embedding.unsupported-modality
+---
+
+## What it checks
+
+Crux emits this finding when resolved source proves that an embedding, indexing, knowledge-base, or retrieval call contains media whose modality is absent from the configured dense embedding.
+
+## Why it matters
+
+A text-only or narrower embedding cannot produce comparable vectors for unsupported image, audio, video, or document input. The same mismatch would otherwise fail at runtime before a usable vector is produced.
+
+## How to fix
+
+Use a dense embedding that declares the authored modality, or convert the input to text before embedding it. Keep the indexer and retriever on the same embedding definition when they share a namespace.
+
+## When to suppress
+
+Suppress only when the compiler-visible literal is replaced before the embedding boundary and that transformation is outside the indexed source graph.
+
+## Rule metadata
+
+- Rule id: `embedding.unsupported-modality`
+- Category: `contracts`
+- Maturity: `experimental`
+- Default profiles: `recommended`, `strict`
+- Default severity: `error`

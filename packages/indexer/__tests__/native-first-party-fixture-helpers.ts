@@ -27,6 +27,8 @@ export function itWithRustOxc(name: string, fn: () => Promise<void>, timeout?: n
 interface NativeFirstPartyFixtureInput {
   /** Source text for the single TypeScript fixture file. */
   readonly source: string
+  /** Root-relative primary fixture path. */
+  readonly primaryPath?: string
   /** Additional project files available to import/source-ref resolution. */
   readonly additionalFiles?: readonly {
     /** Root-relative path for the support file. */
@@ -43,7 +45,7 @@ interface NativeFirstPartyFixtureInput {
 /** Extracts one fixture through native packets and the TypeScript fallback baseline. */
 export async function extractNativeAndFallback(input: NativeFirstPartyFixtureInput) {
   const root = await mkdtemp(join(tmpdir(), 'crux-native-fixture-'))
-  const file = join(root, 'src/fixture.ts')
+  const file = join(root, input.primaryPath ?? 'src/fixture.ts')
   await mkdir(dirname(file), { recursive: true })
   await writeFile(file, input.source)
   const fileSources: Record<string, string> = { [file]: input.source }

@@ -282,6 +282,26 @@
       }
     },
     {
+      "kind": "embedding.call",
+      "primary": "runtime-observed-unjoined",
+      "secondary": [],
+      "runtimePrimitiveNames": [
+        "embedding.call"
+      ],
+      "expectedTreatment": "runtime-unjoined",
+      "definitionRef": null
+    },
+    {
+      "kind": "rag.indexer",
+      "primary": "runtime-observed-unjoined",
+      "secondary": [],
+      "runtimePrimitiveNames": [
+        "indexing.pipeline"
+      ],
+      "expectedTreatment": "runtime-unjoined",
+      "definitionRef": null
+    },
+    {
       "kind": "skill",
       "primary": "directly-observed",
       "secondary": [],
@@ -375,6 +395,19 @@
       "runtimePrimitiveNames": [
         "prompt.resolve",
         "context.resolve"
+      ],
+      "expectedTreatment": "none",
+      "definitionRef": null
+    },
+    {
+      "kind": "embedding",
+      "primary": "runtime-contributor",
+      "secondary": [],
+      "runtimePrimitiveNames": [
+        "embedding.call",
+        "indexing.pipeline",
+        "retrieval.retrieve",
+        "retrieval.query"
       ],
       "expectedTreatment": "none",
       "definitionRef": null

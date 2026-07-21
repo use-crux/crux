@@ -1,0 +1,27 @@
+---
+title: embedding.namespace-identity-mismatch
+---
+
+## What it checks
+
+Crux emits this finding only when it can prove that two vector consumers share both a namespace and vector-storage identity while their exact dense or sparse embedding identity digests differ.
+
+## Why it matters
+
+Similarity search is meaningful only inside one embedding space. Crux also guards this invariant at write and read time, but the lint makes a conclusive configuration error visible before indexing runs.
+
+## How to fix
+
+Configure the indexer, retriever, and knowledge base with matching dense and sparse embedding definitions. If the embeddings intentionally differ, give them distinct namespaces.
+
+## When to suppress
+
+Suppress only when deployment wiring replaces one of the compiler-visible storage or embedding bindings. Dynamic or incomplete identity evidence does not produce this lint.
+
+## Rule metadata
+
+- Rule id: `embedding.namespace-identity-mismatch`
+- Category: `contracts`
+- Maturity: `experimental`
+- Default profiles: `recommended`, `strict`
+- Default severity: `error`

@@ -76,4 +76,20 @@ describe("kindMeta", () => {
       family: "media",
     });
   });
+
+  it("registers embedding and vector-indexer Project Index definitions", () => {
+    expect(kindMeta("embedding")).toMatchObject({
+      label: "Embedding",
+      family: "media",
+    });
+    expect(kindMeta("embedding.call")).toMatchObject({
+      label: "Embedding call",
+      family: "media",
+      child: true,
+    });
+    expect(kindMeta("rag.indexer")).toMatchObject({
+      label: "Indexer",
+      family: "capability",
+    });
+  });
 });

@@ -528,23 +528,28 @@ Hybrid search uses both embeddings through `retriever()` or `VectorStore.search(
 
 | Field            | Type                                                               | Description                                    |
 | ---------------- | ------------------------------------------------------------------ | ---------------------------------------------- |
-| `kind`           | `'dense' \| 'sparse'`                                              | Vector type                                    |
-| `name`           | `string`                                                           | Embedding model name                           |
-| `dimensions`     | `number?`                                                          | Required for `'dense'`                         |
-| `maxInputTokens` | `number`                                                           | Hard limit per text                            |
-| `batch`          | `{ maxSize?, concurrency? }?`                                      | Batch behavior                                 |
-| `preprocess`     | `EmbeddingPreprocessor \| EmbeddingPreprocessor[]?`                | Normalization before cache/provider calls      |
-| `truncate`       | `{ strategy: 'fail' } \| { strategy: 'chars'; maxChars: number }?` | Input-limit policy                             |
-| `version`        | `string?`                                                          | Vector-semantic revision for cache invalidation |
-| `retry`          | `{ maxAttempts; baseDelayMs?; maxDelayMs?; shouldRetry? }?`        | Provider batch retry policy                    |
-| `cache`          | `EmbeddingCache?`                                                  | Policy-aware per-text vector cache             |
-| `rateLimit`      | `{ concurrency: number }?`                                         | Cross-call provider concurrency cap            |
-| `countTokens`    | `(text) => number`                                                 | Optional tokenizer for `maxInputTokens` checks |
-| `embed`          | `(texts) => Promise<{ embeddings }>`                               | Provider call                                  |
+| `kind`           | `'dense' \| 'sparse'`                                                        | Vector type                                              |
+| `name`           | `string`                                                                     | Embedding model name                                     |
+| `dimensions`     | `number?`                                                                    | Required for `'dense'`                                   |
+| `modalities`     | `EmbeddingModality[]?`                                                       | Native inputs; defaults to `['text']`                    |
+| `normalization`  | `'unit' \| 'none' \| 'unknown'?`                                           | Dense-vector normalization identity                      |
+| `tasks`          | `{ query?: string; document?: string }?`                                     | Provider role-task identity                              |
+| `maxInputTokens` | `number`                                                                     | Hard limit per text                                      |
+| `batch`          | `{ maxSize?, concurrency? }?`                                                | Batch behavior                                           |
+| `preprocess`     | `EmbeddingPreprocessor \| EmbeddingPreprocessor[]?`                          | Text normalization before cache/provider calls           |
+| `truncate`       | `{ strategy: 'fail' } \| { strategy: 'chars'; maxChars: number }?`           | Text input-limit policy                                  |
+| `version`        | `string?`                                                                    | Vector-semantic revision for cache invalidation           |
+| `retry`          | `{ maxAttempts; baseDelayMs?; maxDelayMs?; shouldRetry? }?`                  | Provider batch retry policy                              |
+| `cache`          | `EmbeddingCache?`                                                            | Policy-aware text/media vector cache                     |
+| `rateLimit`      | `{ concurrency: number }?`                                                   | Cross-call provider concurrency cap                      |
+| `countTokens`    | `(text) => number`                                                           | Optional tokenizer for `maxInputTokens` checks           |
+| `embed`          | `(inputs: NormalizedEmbeddingInput[], { role }) => Promise<{ embeddings }>` | Validated provider batch call                            |
 
 Hybrid retrieval is composed _above_ this layer through stores or retrievers.
 
-Instances expose a readonly `fingerprint` derived from vector-producing policy.
+Dense instances expose readonly `modalities`, `fingerprint`, and `space`
+derived from vector-producing policy. Sparse instances expose
+`modalities: ['text']` and no dense space.
 Operational batch, retry, rate-limit, and cache settings do not affect it.
 Indexer stage caching requires this identity; structural embeddings that omit it
 are computed on every indexing run.
@@ -567,7 +572,12 @@ const dense = embedding({
   retry: { maxAttempts: 3, baseDelayMs: 250 },
   cache: embeddingCache({ store, namespace: "embed-cache" }),
   rateLimit: { concurrency: 3 },
-  embed: async (texts) => ({ embeddings: await provider.embedMany(texts) }),
+  embed: async (inputs) => ({
+    embeddings: await provider.embedMany(inputs.map((input) => {
+      if (input.type !== "text") throw new Error("text-only provider invariant");
+      return input.text;
+    })),
+  }),
 });
 ```
 
@@ -583,7 +593,7 @@ import {
 } from "@use-crux/core/retrieval";
 ```
 
-Creates a query-first retriever that turns text into scored hits, prompt context, and query tools. See the [Retrieval guide](/docs/guides/retrieval) for the full architecture.
+Creates a query-first retriever that turns text or declared media into scored hits, prompt context, and query tools. See the [Retrieval guide](/docs/guides/retrieval) for the full architecture.
 
 Use `retriever()` as the app-facing search object:
 
@@ -619,7 +629,7 @@ const answer = prompt({
 
 Retrievers expose:
 
-- `retrieve(query, options?)`
+- `retrieve(string | EmbeddingInput | { query } | { input }, options?)`
 - `inject: 'context' | 'tool' | 'both'` when used in `prompt({ use })`
 - `asContext()` and `asTools()` for advanced/manual integrations
 
@@ -634,6 +644,11 @@ import { indexer } from "@use-crux/core/indexing";
 ```
 
 Creates the write-time document indexing primitive. It owns chunking, transforms, embedding at write time, and store writes.
+
+Documents may provide text, `asset` shorthand, or explicit media parts. Each
+media part becomes one chunk; media bytes are stored through `AssetStore` and
+never persisted in records or vector metadata. The namespace's dense embedding
+space is guarded before writes.
 
 | Field        | Type                | Description                              |
 | ------------ | ------------------- | ---------------------------------------- |
