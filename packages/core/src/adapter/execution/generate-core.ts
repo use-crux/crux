@@ -23,6 +23,7 @@ import {
   createSafetyWithBindingApplicability,
   finalizeSafetySessionLanguageOutput,
   guardSafetySessionLanguageStep,
+  guardSafetySessionModelIngress,
 } from "../../safety/session";
 import { languageBindingApplicability } from "../../safety/language-applicability";
 import { orchestrateGenerateWithCompletion } from "../../generation/orchestrate";
@@ -184,6 +185,8 @@ export async function generateCore<
       promptId: prompt.id,
       input: args.input ?? {},
       timeout: args.timeout,
+      abortSignal: args.signal,
+      modelIngress: (input) => guardSafetySessionModelIngress(safety, input),
       reresolve: (skillSession) =>
         prompt.resolve(withSkillActivationInput(resolveOpts, skillSession)),
       appendToolRound: dialect.appendToolRound,

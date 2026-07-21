@@ -36,8 +36,10 @@ import {
   outputMediaGuard,
   outputOperationTextGuard,
   streamCompletionGuard,
+  modelIngressGuard,
   type SafetySession,
 } from "./session-bridge";
+import { guardModelIngress } from "./input/model-ingress";
 
 interface SessionMethodOptions {
   readonly options: SafetyCallOptions;
@@ -84,6 +86,13 @@ export function createSafetySessionMethods(
   const outputBindings = () => state.phaseBindings("output");
   return {
     enabled: state.enabled,
+    [modelIngressGuard]: (input) =>
+      guardModelIngress({
+        bindings: state.phaseBindings("input"),
+        input,
+        context: state.guardContext("input", state.messages.get()),
+        appendAudit: state.appendGuardrailAudit,
+      }),
     [languageStepGuardEnabled]: outputBindings().some(
       (binding) =>
         binding.boundary.id === "model.output.text" ||

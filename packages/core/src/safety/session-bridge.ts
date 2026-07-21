@@ -14,6 +14,10 @@ import type { MediaOutputResult } from "./output/media";
 import type { LiveTextSlot } from "./output/completion";
 import type { OperationInputTextSlot } from "./input/operation-text";
 import type { Safety, SafetyOutput } from "./session-contract";
+import type {
+  CanonicalModelIngress,
+  CanonicalModelIngressResult,
+} from "./input/model-ingress";
 
 export const outputMediaGuard: unique symbol = Symbol(
   "crux.safety.outputMediaGuard",
@@ -45,8 +49,14 @@ export const languageTerminalFinalize: unique symbol = Symbol(
 export const streamCompletionGuard: unique symbol = Symbol(
   "crux.safety.streamCompletionGuard",
 );
+export const modelIngressGuard: unique symbol = Symbol(
+  "crux.safety.modelIngressGuard",
+);
 
 export interface SafetySession extends Safety {
+  [modelIngressGuard](
+    input: CanonicalModelIngress,
+  ): Promise<CanonicalModelIngressResult>;
   readonly [languageStepGuardEnabled]: boolean;
   [languageStepGuard](
     stepIndex: number,
@@ -90,6 +100,14 @@ export interface SafetySession extends Safety {
   ): Promise<MediaOutputResult>;
   [outputOperationTextGuard](text: string, model?: string): Promise<string>;
   [oneShotOutputConstraints](text: string, model?: string): Promise<void>;
+}
+
+/** @internal Guard one post-conversion canonical model-ingress value. */
+export function guardSafetySessionModelIngress(
+  safety: Safety,
+  input: CanonicalModelIngress,
+): Promise<CanonicalModelIngressResult> {
+  return (safety as SafetySession)[modelIngressGuard](input);
 }
 
 /** @internal Whether this session has an applicable per-step output guard. */

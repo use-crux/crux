@@ -88,16 +88,15 @@ describe("MCP policy conformance", () => {
       input: { id: "record-1" },
     });
 
-    await fixture.adapter.generate(assistant, { model: "fixture-model" });
+    await expect(
+      fixture.adapter.generate(assistant, { model: "fixture-model" }),
+    ).rejects.toMatchObject({
+      name: "ToolPolicyBlockedError",
+      policyId: "block-delete",
+    });
 
     expect(transport).not.toHaveBeenCalled();
-    expect(fixture.results()).toEqual([
-      expect.objectContaining({
-        name: "delete_record",
-        isError: true,
-        modelOutputError: "Deletion is blocked.",
-      }),
-    ]);
+    expect(fixture.results()).toEqual([]);
   });
 
   it("rewrites materialized results before model-output conversion", async () => {
@@ -187,16 +186,16 @@ describe("MCP policy conformance", () => {
       input: { id: "secret-1" },
     });
 
-    await fixture.adapter.generate(assistant, { model: "fixture-model" });
+    await expect(
+      fixture.adapter.generate(assistant, { model: "fixture-model" }),
+    ).rejects.toMatchObject({
+      name: "ToolPolicyBlockedError",
+      policyId: "block-secret",
+    });
 
     expect(transport).toHaveBeenCalledOnce();
     expect(toModelOutput).not.toHaveBeenCalled();
-    expect(fixture.results()).toEqual([
-      expect.objectContaining({
-        isError: true,
-        modelOutputError: "Secret result blocked.",
-      }),
-    ]);
+    expect(fixture.results()).toEqual([]);
   });
 
   it("requires declarative approval despite permissive MCP annotations", async () => {
@@ -286,14 +285,14 @@ describe("MCP policy conformance", () => {
       input: { id: "record-1" },
     });
 
-    await fixture.adapter.generate(assistant, { model: "fixture-model" });
+    await expect(
+      fixture.adapter.generate(assistant, { model: "fixture-model" }),
+    ).rejects.toMatchObject({
+      name: "ToolPolicyBlockedError",
+      policyId: "block-external-read",
+    });
 
     expect(transport).not.toHaveBeenCalled();
-    expect(fixture.results()).toEqual([
-      expect.objectContaining({
-        isError: true,
-        modelOutputError: "External reads are disabled.",
-      }),
-    ]);
+    expect(fixture.results()).toEqual([]);
   });
 });

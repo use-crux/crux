@@ -177,7 +177,12 @@ export function registerMcpToolPolicyObservabilityConformanceTests(): void {
       input: { id: "record-1" },
     });
 
-    await fixture.adapter.generate(assistant, { model: "fixture-model" });
+    await expect(
+      fixture.adapter.generate(assistant, { model: "fixture-model" }),
+    ).rejects.toMatchObject({
+      name: "ToolPolicyBlockedError",
+      policyId: "block-inspection",
+    });
     await observe.flush();
 
     expect(execute).not.toHaveBeenCalled();

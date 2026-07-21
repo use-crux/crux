@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest'
+import { adapter } from '../../src/adapter/define-adapter'
+import type { AdapterSpec } from '../../src/adapter/spec'
 import { embedding as makeEmbedding } from '../../src/embedding'
 import { indexer as makeIndexer } from '../../src/indexing'
 import { prompt } from '../../src/prompt/prompt'
 import { RETRIEVAL_HITS_KIND, retriever as makeRetriever } from '../../src/retrieval'
 import { inMemoryRecordStore, inMemoryVectorStore } from '../../src/storage'
+import { boundary, guardrail } from '../../src/safety'
+import type { Message } from '../../src/generation/messages'
 import { textOf } from '../embedding/text-input'
 
 function createDenseEmbedding() {
@@ -18,6 +22,104 @@ function createDenseEmbedding() {
 }
 
 describe('retriever tools', () => {
+  it('guards rendered retrieval-tool output exactly once as tool text', async () => {
+    const retriever = makeRetriever({
+      id: 'private-docs',
+      namespace: 'docs',
+      retrieve: async () => [
+        {
+          namespace: 'docs',
+          source: {
+            id: 'doc-1',
+            assetRef: { uri: 'memory://asset/private' },
+            mediaType: 'image/png',
+            url: 'https://private.example/doc-1.png',
+            location: { type: 'page' as const, pageNumber: 7 },
+          },
+          chunkId: '0',
+          content: 'Private retrieval text',
+          metadata: {},
+          score: 0.93,
+        },
+      ],
+    })
+    const assistant = prompt({ id: 'retrieval-tool-ingress', use: [retriever], prompt: 'Search.' })
+    const providerMessages: Array<readonly Message[]> = []
+    let calls = 0
+    const client = {}
+    const spec: AdapterSpec<typeof client, { readonly call: number }, never> = {
+      providerId: 'retrieval-tool-ingress',
+      async call(_client, args) {
+        calls++
+        providerMessages.push(args.messages)
+        return {
+          raw: { call: calls },
+          extracted: {
+            text: calls === 1 ? '' : 'done',
+            toolCalls: calls === 1 ? [{ id: 'call-search', name: 'search', args: { query: 'private' } }] : undefined,
+            usage: undefined,
+            finishReason: calls === 1 ? 'tool_calls' : 'stop',
+            responseId: undefined,
+            actualModelId: undefined,
+          },
+        }
+      },
+      async stream() {
+        throw new Error('not used')
+      },
+      appendToolRound(messages, assistantResponse, results) {
+        return [
+          ...messages,
+          { role: 'assistant', content: assistantResponse.text, metadata: { toolCalls: assistantResponse.toolCalls } },
+          ...results.map((result) => ({
+            role: 'tool' as const,
+            content: result.content,
+            metadata: { toolCallId: result.toolCallId, toolName: result.name },
+          })),
+        ]
+      },
+      mapSettings: (settings) => ({ ...settings }),
+    }
+    let toolEvaluations = 0
+    let retrievalEvaluations = 0
+
+    await adapter(spec)(client).generate(assistant, {
+      model: 'test-model',
+      guardrails: [
+        guardrail({
+          id: 'guard-retrieval-tool-text',
+          on: boundary.input.text({ from: 'tool' }),
+          run: (text, context) => {
+            toolEvaluations++
+            expect(context.origin).toEqual({
+              source: 'tool',
+              kind: 'tool-result',
+              toolName: 'search',
+              toolCallId: 'call-search',
+            })
+            expect(text).toBe('[doc-1/0] (0.93) Private retrieval text')
+            expect(text).not.toMatch(/asset|image\/png|private\.example|page/i)
+            return { action: 'rewrite', value: 'safe search result', rewrite: { kind: 'redact' } }
+          },
+        }),
+        guardrail({
+          id: 'do-not-route-tool-as-retrieval',
+          on: boundary.input.text({ from: 'retrieval' }),
+          run: () => {
+            retrievalEvaluations++
+            return { action: 'allow' }
+          },
+        }),
+      ],
+    })
+
+    expect(toolEvaluations).toBe(1)
+    expect(retrievalEvaluations).toBe(0)
+    expect(providerMessages[1]).toContainEqual(
+      expect.objectContaining({ role: 'tool', content: 'safe search result' }),
+    )
+  })
+
   it('injects a typed search tool by default when used directly in a prompt', async () => {
     const retriever = makeRetriever({
       id: 'docs',

@@ -38,6 +38,7 @@ import type { TimeoutOptions } from "../../generation/timeout";
 import {
   TimeoutError,
   toolBudgetMs,
+  withAbortSignal,
   withBudget,
 } from "../../generation/timeout";
 import type { Message } from "../../generation/messages";
@@ -119,6 +120,9 @@ import {
   type ToolLifecycleExecutionOptions,
 } from "./execution-options";
 import { runToolScope } from "./scope";
+import type { ModelIngressGuard } from "../../safety/input/model-ingress";
+import { isPolicyTerminal } from "../../safety/errors";
+import { guardToolModelOutput } from "./model-ingress";
 
 // ─────────────────────────────────────────────────────────────────
 // Public types
@@ -165,6 +169,10 @@ export interface ToolLifecycleOptions {
   readonly input?: Record<string, unknown>;
   /** Structured timeout budgets for tool execution in this session. */
   readonly timeout?: TimeoutOptions;
+  /** @internal Caller cancellation propagated through execution and ingress. */
+  readonly abortSignal?: AbortSignal;
+  /** @internal Guards post-conversion canonical tool output before writeback. */
+  readonly modelIngress?: ModelIngressGuard;
   /**
    * Dialect-owned re-resolution closure: how to resolve the prompt again
    * after `LoadSkill` activates a skill. The session owns everything else
@@ -672,6 +680,7 @@ export function createToolLifecycle(
       toolCallId: toolCall.id,
       messages,
       runtimeContext: options.call?.runtimeContext,
+      ...(options.abortSignal ? { abortSignal: options.abortSignal } : {}),
     };
     return Object.prototype.hasOwnProperty.call(toolContexts, toolCall.name)
       ? { ...base, context: toolContexts[toolCall.name] }
@@ -694,16 +703,36 @@ export function createToolLifecycle(
 
   // ── The kernel: gate → execute → settle ─────────────────────────
 
-  function settleNotFound(
+  function guardCanonicalToolOutput(
+    output: ToolModelOutput,
+    toolName: string,
+    toolCallId: string,
+  ): Promise<ToolModelOutput> {
+    return withAbortSignal(
+      () =>
+        guardToolModelOutput({
+          output,
+          toolName,
+          toolCallId,
+          guard: options.modelIngress,
+        }),
+      options.abortSignal,
+    );
+  }
+
+  async function settleNotFound(
     toolCall: SessionToolCall,
     traceId: string | undefined,
-  ): ToolResultEntry {
+  ): Promise<ToolResultEntry> {
     const startedAt = now();
     const span = openToolCallSpan(toolCall.name, toolCall.id, toolCall.args);
-    const modelOutput: ToolModelOutput = {
+    const convertedModelOutput: ToolModelOutput = {
       type: "error-json",
       value: { error: `Tool "${toolCall.name}" not found` },
     };
+    const modelOutput = await span.withContext(() =>
+      guardCanonicalToolOutput(convertedModelOutput, toolCall.name, toolCall.id),
+    );
     const modelOutputSize = measureModelOutput(modelOutput);
     span.withContext(() => {
       emitToolArgsArtifact(
@@ -745,14 +774,14 @@ export function createToolLifecycle(
     };
   }
 
-  function settleInvalidApproval(toolCall: {
+  async function settleInvalidApproval(toolCall: {
     readonly id: string;
     readonly name: string;
     readonly args: unknown;
     readonly approvalId: string;
     readonly message: string;
-  }): ToolResultEntry {
-    const modelOutput: ToolModelOutput = {
+  }): Promise<ToolResultEntry> {
+    const convertedModelOutput: ToolModelOutput = {
       type: "error-json",
       value: {
         status: "error",
@@ -760,6 +789,11 @@ export function createToolLifecycle(
         message: toolCall.message,
       },
     };
+    const modelOutput = await guardCanonicalToolOutput(
+      convertedModelOutput,
+      toolCall.name,
+      toolCall.id,
+    );
     const modelOutputSize = measureModelOutput(modelOutput);
     emitToolApprovalObservation("token-mismatch", {
       approvalId: toolCall.approvalId,
@@ -832,13 +866,16 @@ export function createToolLifecycle(
             },
           ),
         );
-        const modelOutput = await span.withContext(() =>
+        const convertedModelOutput = await span.withContext(() =>
           createToolModelOutput({
             tool,
             toolCallId: toolCall.id,
             input: normalizeToolInput(toolCall.args),
             output: result,
           }),
+        );
+        const modelOutput = await span.withContext(() =>
+          guardCanonicalToolOutput(convertedModelOutput, toolCall.name, toolCall.id),
         );
         const outputSize = measureUnknown(result);
         const modelOutputSize = measureModelOutput(modelOutput);
@@ -895,6 +932,11 @@ export function createToolLifecycle(
           modelOutputSize,
         };
       } catch (err) {
+        if (options.abortSignal?.aborted) {
+          throw options.abortSignal.reason ?? err;
+        }
+        if (err instanceof Error && err.name === "AbortError") throw err;
+        if (isPolicyTerminal(err)) throw err;
         if (err instanceof TimeoutError) {
           span.error(err, {
             ...provenance?.errorAttributes,
@@ -904,10 +946,13 @@ export function createToolLifecycle(
           });
           throw err;
         }
-        const modelOutput: ToolModelOutput = {
+        const convertedModelOutput: ToolModelOutput = {
           type: "error-json",
           value: { error: err instanceof Error ? err.message : String(err) },
         };
+        const modelOutput = await span.withContext(() =>
+          guardCanonicalToolOutput(convertedModelOutput, toolCall.name, toolCall.id),
+        );
         const modelOutputSize = measureModelOutput(modelOutput);
         span.withContext(() => {
           emitToolResultArtifact(
@@ -1048,12 +1093,12 @@ export function createToolLifecycle(
         request.replay,
       )
     ) {
-      return changedApprovalVerdict(toolCall, approvalId);
+      return await changedApprovalVerdict(toolCall, approvalId);
     }
     const tool = wrappedTools[toolCall.name];
     if (!tool || typeof tool !== "object") {
       if (decision && request?.replay) {
-        return changedApprovalVerdict(toolCall, approvalId);
+        return await changedApprovalVerdict(toolCall, approvalId);
       }
       transcript.push({
         t: "gate",
@@ -1062,7 +1107,7 @@ export function createToolLifecycle(
         verdict: "not-found",
         origin,
       });
-      return { kind: "not-found", settled: settleNotFound(toolCall, traceId) };
+      return { kind: "not-found", settled: await settleNotFound(toolCall, traceId) };
     }
     const shaped = tool as SessionToolShape;
 
@@ -1080,7 +1125,7 @@ export function createToolLifecycle(
             currentRequirement.policies,
           )
         ) {
-          return changedApprovalVerdict(toolCall, approvalId);
+          return await changedApprovalVerdict(toolCall, approvalId);
         }
       }
       if (!decision.approved) {
@@ -1175,13 +1220,13 @@ export function createToolLifecycle(
     };
   }
 
-  function changedApprovalVerdict(
+  async function changedApprovalVerdict(
     toolCall: SessionToolCall,
     approvalId: string,
-  ): Extract<ToolGateVerdict, { kind: "denied" }> {
+  ): Promise<Extract<ToolGateVerdict, { kind: "denied" }>> {
     return {
       kind: "denied",
-      settled: settleInvalidApproval({
+      settled: await settleInvalidApproval({
         id: toolCall.id,
         name: toolCall.name,
         args: toolCall.args,
@@ -1238,7 +1283,7 @@ export function createToolLifecycle(
 
       const results: ToolResultEntry[] = [];
       for (const toolCall of invalidApprovalCalls) {
-        results.push(settleInvalidApproval(toolCall));
+        results.push(await settleInvalidApproval(toolCall));
       }
       for (const toolCall of replayCalls) {
         const verdict = await gate(toolCall, messages, "replay");

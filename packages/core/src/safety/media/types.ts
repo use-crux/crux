@@ -29,6 +29,12 @@ export type MediaPartOrigin =
       readonly partIndex: number
     }
   | {
+      readonly kind: 'tool-result'
+      readonly toolName: string
+      readonly toolCallId?: string
+      readonly partIndex: number
+    }
+  | {
       readonly kind: 'step'
       readonly stepIndex: number
       readonly partIndex: number

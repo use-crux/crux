@@ -79,6 +79,11 @@ function inspectMediaNarrowing(subject: MediaPartSubject): void {
       expectTypeOf(origin.stepIndex).toEqualTypeOf<number>()
       expectTypeOf(origin.partIndex).toEqualTypeOf<number>()
       return
+    case 'tool-result':
+      expectTypeOf(origin.toolName).toEqualTypeOf<string>()
+      expectTypeOf(origin.toolCallId).toEqualTypeOf<string | undefined>()
+      expectTypeOf(origin.partIndex).toEqualTypeOf<number>()
+      return
     case 'operation':
       break
   }
