@@ -27,7 +27,7 @@ describe("AI SDK speech", () => {
       guardrails: [
         guardrail({
           id: "ai-speech-input",
-          on: boundary.input.user(),
+          on: boundary.input.text(),
           run: () => ({
             action: "rewrite",
             value: "guarded speech",

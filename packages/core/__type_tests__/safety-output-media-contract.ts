@@ -34,7 +34,7 @@ guardrail({
   on: [boundary.input.media(), boundary.output.media()] as const,
   run: (subject, context) => {
     expectTypeOf(subject).toEqualTypeOf<MediaPartSubject>()
-    expectTypeOf(context.boundary.id).toEqualTypeOf<'user.input.media' | 'model.output.media'>()
+    expectTypeOf(context.boundary.id).toEqualTypeOf<'model.input.media' | 'model.output.media'>()
     return { action: 'strip', reason: 'Unsupported media.' }
   },
 })

@@ -16,6 +16,8 @@ import { guardStreamCompletionContent } from "./output/completion";
 import type { ConstraintContext } from "./constraint/types";
 import type { GuardrailAudit, GuardrailContext } from "./guardrail/types";
 import type { GuardrailBinding } from "./registry";
+import type { ModelInputOrigin } from "./input-origin";
+import { inputBindingsFor } from "./input/source";
 import type { SessionConstraintRunner } from "./session-constraints";
 import type {
   SafetyCallOptions,
@@ -49,6 +51,7 @@ interface SessionMethodOptions {
     phase: "input" | "output",
     messages: readonly Message[],
     override?: { readonly model?: string; readonly systemPrompt?: string },
+    origin?: ModelInputOrigin,
   ) => GuardrailContext;
   readonly constraintContext: () => ConstraintContext;
   readonly appendGuardrailAudit: (audit: GuardrailAudit) => void;
@@ -154,7 +157,7 @@ export function createSafetySessionMethods(
       const result = await guardSafetyInput({
         bindings: state.phaseBindings("input"),
         input,
-        context: (messages) => state.guardContext("input", messages),
+        context: (messages, origin) => state.guardContext("input", messages, undefined, origin),
         appendAudit: state.appendGuardrailAudit,
         transcript: state.transcript,
       });
@@ -184,9 +187,11 @@ export function createSafetySessionMethods(
 
     [inputOperationMediaGuard]: (items, groups, dependencies) =>
       guardInputOperationMedia({
-        bindings: state
-          .phaseBindings("input")
-          .filter((binding) => binding.boundary.id === "user.input.media"),
+        bindings: inputBindingsFor(
+          state.phaseBindings("input"),
+          "model.input.media",
+          "user",
+        ),
         items,
         groups,
         dependencies,

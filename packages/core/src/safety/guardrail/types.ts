@@ -10,6 +10,7 @@ import type {
   SubjectOf,
 } from '../boundary'
 import type { SafetyFinding, SafetyRunContext } from '../decision'
+import type { ModelInputOrigin } from '../input-origin'
 import { SafetyResultError } from '../errors'
 import type { GuardrailStreamOption } from '../stream/types'
 
@@ -113,6 +114,7 @@ export interface GuardrailContext {
   readonly systemPrompt: string | undefined
   readonly traceId: string | undefined
   readonly metadata: Readonly<Record<string, unknown>>
+  readonly origin?: ModelInputOrigin
   readonly stream?: {
     readonly segment: true
     readonly last: boolean

@@ -46,7 +46,7 @@ describe('input media guardrail validation', () => {
     await expect(safety.guardInput({ messages: mediaMessages })).rejects.toMatchObject({
       name: SafetyResultError.name,
       policyId: 'invalid-strip-reason',
-      boundary: 'user.input.media',
+      boundary: 'model.input.media',
     })
     expect(laterCalls).toBe(0)
   })
@@ -70,7 +70,7 @@ describe('input media guardrail validation', () => {
     await expect(safety.guardInput({ messages: mediaMessages })).rejects.toMatchObject({
       name: SafetyResultError.name,
       policyId: 'invalid-media-rewrite-result',
-      boundary: 'user.input.media',
+      boundary: 'model.input.media',
       problem: expect.stringMatching(/rewrite/),
     })
   })
@@ -90,7 +90,7 @@ describe('input media guardrail validation', () => {
     await expect(safety.guardInput({ messages: mediaMessages })).rejects.toMatchObject({
       name: SafetyResultError.name,
       policyId: 'invalid-media-hold-result',
-      boundary: 'user.input.media',
+      boundary: 'model.input.media',
       problem: expect.stringMatching(/hold/),
     })
   })
@@ -112,7 +112,7 @@ describe('input media guardrail validation', () => {
     ).rejects.toMatchObject({
       name: SafetyResultError.name,
       policyId: 'invalid-text-strip-result',
-      boundary: 'user.input',
+      boundary: 'model.input.text',
       problem: expect.stringMatching(/strip/),
     })
   })
@@ -132,7 +132,7 @@ describe('input media guardrail validation', () => {
     await expect(safety.guardInput({ messages: mediaMessages })).rejects.toMatchObject({
       name: SafetyResultError.name,
       policyId: 'unknown-media-result',
-      boundary: 'user.input.media',
+      boundary: 'model.input.media',
       problem: expect.stringMatching(/replace/),
     })
   })

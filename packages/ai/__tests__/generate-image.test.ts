@@ -57,7 +57,7 @@ describe("AI SDK image generation", () => {
       guardrails: [
         guardrail({
           id: "ai-image-input",
-          on: boundary.input.user(),
+          on: boundary.input.text(),
           run: () => ({
             action: "rewrite",
             value: "guarded prompt",

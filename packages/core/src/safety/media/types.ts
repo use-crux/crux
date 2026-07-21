@@ -1,11 +1,11 @@
 import type { ContentPart } from '../../types/content'
 
 /** Canonical Safety targets whose subjects are individual media parts. */
-export type MediaSafetyTargetId = 'user.input.media' | 'model.output.media'
+export type MediaSafetyTargetId = 'model.input.media' | 'model.output.media'
 
 /** Narrow an unknown boundary id to the canonical media target vocabulary. */
 export function isMediaSafetyTargetId(value: unknown): value is MediaSafetyTargetId {
-  return value === 'user.input.media' || value === 'model.output.media'
+  return value === 'model.input.media' || value === 'model.output.media'
 }
 
 /**

@@ -1,5 +1,6 @@
 import { observe } from '../../observability'
 import type { SafetyRunContext } from '../decision'
+import type { ModelInputOrigin } from '../input-origin'
 import { safeCaptureSummary } from '../errors'
 import { GuardrailBlockedError } from '../guardrail/errors'
 import { recordMediaGuardrailBlockedEdge, recordMediaGuardrailReport } from '../guardrail/observability'
@@ -84,7 +85,10 @@ export function mediaBlockedError(
 }
 
 /** Project the private session context into one public media callback context. */
-export function mediaRunContext(binding: GuardrailBinding, context: GuardrailContext): SafetyRunContext {
+export function mediaRunContext(
+  binding: GuardrailBinding,
+  context: GuardrailContext,
+): Omit<SafetyRunContext, 'origin'> & { readonly origin?: ModelInputOrigin } {
   return {
     policy: { id: binding.policy.id, mode: binding.mode },
     boundary: { id: binding.boundary.id, kind: binding.boundary.id },
@@ -94,6 +98,7 @@ export function mediaRunContext(binding: GuardrailBinding, context: GuardrailCon
     attempt: { index: 0, kind: 'initial' },
     metadata: context.metadata,
     findings: { add() {} },
+    ...(context.origin ? { origin: context.origin } : {}),
   }
 }
 

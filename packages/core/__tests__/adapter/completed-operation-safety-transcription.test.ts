@@ -35,7 +35,7 @@ describe('completed operation Safety — transcription input', () => {
     expect(events.slice(0, 2)).toEqual(['guard:audio', 'normalize'])
     expect(result.safety?.guardrails?.applied[0]).toMatchObject({
       guard: 'transcription-audio-allow-policy',
-      boundary: 'user.input.media',
+      boundary: 'model.input.media',
       phase: 'input',
       action: 'allow',
     })
@@ -165,11 +165,12 @@ describe('completed operation Safety — transcription input', () => {
     let normalizedPrompt: string | undefined
     const userPolicy = guardrail({
       id: 'transcription-prompt-policy',
-      on: boundary.input.user(),
+      on: boundary.input.text(),
       run: vi.fn((text, context) => {
         events.push('guard:user')
         expect(text).toBe('Names include a private person')
-        expect(context.boundary.id).toBe('user.input')
+        expect(context.boundary.id).toBe('model.input.text')
+        expect(context.origin).toEqual({ source: 'user', kind: 'operation' })
         return {
           action: 'rewrite' as const,
           value: 'Names are redacted',

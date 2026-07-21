@@ -77,7 +77,7 @@ describe('Safety decisions in TurnDecisionReport', () => {
     const decision = safetyDecision({
       policyId: 'strip-image',
       kind: 'guardrail',
-      boundary: 'user.input.media',
+      boundary: 'model.input.media',
       action: 'strip',
       reason: 'Image removed.',
       location: {

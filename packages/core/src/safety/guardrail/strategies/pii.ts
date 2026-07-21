@@ -8,7 +8,10 @@ import type { BoundaryDef } from '../../boundary'
 import type { GuardrailRun, GuardrailRunResult, GuardrailRewriteKind } from '../types'
 import { hashPatterns, maskPatterns, PII_PATTERNS, rewritePatterns } from './patterns'
 
-type TextBoundary = BoundaryDef<'user.input' | 'model.input' | 'model.output.text' | 'validation.feedback', string>
+type TextBoundary = BoundaryDef<
+  'model.input.text' | 'model.instructions' | 'model.output.text' | 'validation.feedback',
+  string
+>
 
 export interface PiiGuardrailOptions {
   /** Rewrite strategy to apply when PII is found. Defaults to `'redact'`. */

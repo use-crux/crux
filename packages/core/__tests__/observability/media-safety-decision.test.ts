@@ -48,7 +48,7 @@ describe('input media safety observability', () => {
         primitive: 'guardrail.run',
         name: 'strip-observed-image',
         attributes: expect.objectContaining({
-          boundary: 'user.input.media',
+          boundary: 'model.input.media',
           mode: 'enforce',
           mediaPartType: 'image',
           messageIndex: 0,
@@ -62,7 +62,7 @@ describe('input media safety observability', () => {
         kind: 'guardrail.report',
         attributes: expect.objectContaining({
           guardrailName: 'strip-observed-image',
-          boundary: 'user.input.media',
+          boundary: 'model.input.media',
           mode: 'enforce',
           action: 'strip',
           mediaPartType: 'image',
@@ -131,7 +131,7 @@ describe('input media safety observability', () => {
     expect(error).toBeInstanceOf(GuardrailBlockedError)
     expect((error as GuardrailBlockedError).decisions[0]).toMatchObject({
       policyId: 'strip-only-observed-part',
-      boundary: 'user.input.media',
+      boundary: 'model.input.media',
       action: 'block',
       reason: 'Only image is outside policy.',
       location: {
@@ -236,7 +236,7 @@ describe('input media safety observability', () => {
     expect(reportActions).toHaveLength(cases.length)
     for (const action of reportActions) {
       expect(action.attributes).toMatchObject({
-        boundary: 'user.input.media',
+        boundary: 'model.input.media',
         mode: 'report',
         action: 'strip',
       })

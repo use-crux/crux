@@ -9,6 +9,7 @@ import { generatedImage, imageInputOperation, secondGeneratedImage } from './com
 describe('completed operation Safety — generated-image input text', () => {
   it('guards references and mask before exact prompt text and normalization', async () => {
     const events: string[] = []
+    const origins: unknown[] = []
     let normalized: GenerateImageOptions<string> | undefined
     const generateImage = bindCompletedOperation({
       definition: imageInputOperation(events, (input) => {
@@ -29,16 +30,18 @@ describe('completed operation Safety — generated-image input text', () => {
         guardrail({
           id: 'ordered-image-media',
           on: boundary.input.media(),
-          run: (subject) => {
+          run: (subject, context) => {
             if (subject.origin.kind !== 'operation') return { action: 'allow' }
+            origins.push(context.origin)
             events.push(`media:${subject.origin.field}:${subject.origin.partIndex}`)
             return { action: 'allow' }
           },
         }),
         guardrail({
           id: 'ordered-image-text',
-          on: boundary.input.user(),
+          on: boundary.input.text(),
           run: (text, context) => {
+            origins.push(context.origin)
             events.push(`text:${context.boundary.id}:${text}`)
             return {
               action: 'rewrite',
@@ -54,11 +57,17 @@ describe('completed operation Safety — generated-image input text', () => {
       'media:images:0',
       'media:images:1',
       'media:mask:0',
-      'text:user.input:original prompt',
+      'text:model.input.text:original prompt',
       'normalize',
       'invoke',
     ])
     expect(normalized?.prompt).toMatchObject({ text: 'guarded prompt' })
+    expect(origins).toEqual([
+      { source: 'user', kind: 'operation', partIndex: 0 },
+      { source: 'user', kind: 'operation', partIndex: 1 },
+      { source: 'user', kind: 'operation', partIndex: 0 },
+      { source: 'user', kind: 'operation' },
+    ])
   })
 
   it('dispatches a direct string only to user input', async () => {
@@ -75,7 +84,7 @@ describe('completed operation Safety — generated-image input text', () => {
       guardrails: [
         guardrail({
           id: 'direct-image-text-boundaries',
-          on: [boundary.input.user(), boundary.input.model()] as const,
+          on: [boundary.input.text(), boundary.input.instructions()] as const,
           run: (_text, context) => {
             boundaries.push(context.boundary.id)
             return { action: 'allow' }
@@ -84,6 +93,32 @@ describe('completed operation Safety — generated-image input text', () => {
       ],
     })
 
-    expect(boundaries).toEqual(['user.input'])
+    expect(boundaries).toEqual(['model.input.text'])
+  })
+
+  it('does not run tool-filtered text policies for caller-owned operations', async () => {
+    const calls: string[] = []
+    const generateImage = bindCompletedOperation({
+      definition: imageInputOperation([], () => {}),
+      provider: 'test',
+      operation: 'generateImage',
+    })
+
+    await generateImage({
+      model: 'image-model',
+      prompt: 'A quiet canal',
+      guardrails: [
+        guardrail({
+          id: 'tool-only-image-text',
+          on: boundary.input.text({ from: 'tool' }),
+          run: () => {
+            calls.push('tool')
+            return { action: 'allow' }
+          },
+        }),
+      ],
+    })
+
+    expect(calls).toEqual([])
   })
 })

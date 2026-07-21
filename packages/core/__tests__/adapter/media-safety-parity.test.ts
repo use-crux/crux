@@ -32,7 +32,7 @@ describe('adapter media safety parity', () => {
         expect(result.audit?.applied, result.path).toHaveLength(1)
         expect(result.audit?.applied[0], result.path).toMatchObject({
           guard: `media-${scenario}`,
-          boundary: 'user.input.media',
+          boundary: 'model.input.media',
           mode: scenario === 'report-strip' ? 'report' : 'enforce',
           action: scenario === 'allow' ? 'allow' : 'strip',
           location: {

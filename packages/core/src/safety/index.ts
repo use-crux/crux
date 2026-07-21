@@ -19,7 +19,6 @@
 // ── Boundary and shared decision types ─────────────────────────────
 export { boundary, isBoundaryDef, isMediaSafetyTargetId } from './boundary'
 export type {
-  ApprovalRequestSubject,
   BoundaryDef,
   BoundaryIdOf,
   BoundaryInput,
@@ -29,13 +28,18 @@ export type {
   MediaPartOrigin,
   MediaPartSubject,
   MediaSafetyTargetId,
+  OriginOf,
   PathValue,
-  RetrievalResultSubject,
   SafetyTargetId,
   SubjectOf,
-  ToolCallSubject,
-  ToolResultSubject,
 } from './boundary'
+export type {
+  InputBoundaryOptions,
+  InputSource,
+  MediaInputSource,
+  ModelInputOrigin,
+  TextInputSource,
+} from './input-origin'
 export type {
   SafetyCaptureSummary,
   SafetyDecision,

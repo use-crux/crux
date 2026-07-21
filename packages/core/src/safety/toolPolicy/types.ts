@@ -10,7 +10,25 @@
 
 import type { ToolMatcher } from '../../tools/types'
 import type { GuardrailRun } from '../guardrail/types'
-import type { BoundaryDef, ToolCallSubject, ToolResultSubject } from '../boundary'
+import type { BoundaryDef } from '../boundary'
+
+/** Internal raw tool-call payload used by `toolPolicy.args()`. */
+export interface ToolCallSubject {
+  readonly toolCallId?: string
+  readonly toolName: string
+  readonly input: unknown
+}
+
+/** Internal raw tool-result payload used by `toolPolicy.result()`. */
+export interface ToolResultSubject {
+  readonly toolCallId?: string
+  readonly toolName: string
+  readonly input?: unknown
+  readonly output: unknown
+}
+
+export type ToolCallBoundary = BoundaryDef<'tool.call', ToolCallSubject>
+export type ToolResultBoundary = BoundaryDef<'tool.result', ToolResultSubject>
 
 export type ToolPolicyAction = 'allow' | 'block' | 'requestApproval' | 'report'
 
@@ -45,7 +63,7 @@ export interface ToolPolicyArgsOptions {
   /** Tool matcher. Omit to apply to every tool. */
   readonly match?: ToolPolicyMatch
   /** Guardrail strategy run over the `tool.call` boundary subject. */
-  readonly run: GuardrailRun<BoundaryDef<'tool.call', ToolCallSubject>>
+  readonly run: GuardrailRun<ToolCallBoundary>
 }
 
 export interface ToolPolicyResultOptions {
@@ -54,5 +72,5 @@ export interface ToolPolicyResultOptions {
   /** Tool matcher. Omit to apply to every tool. */
   readonly match?: ToolPolicyMatch
   /** Guardrail strategy run over the `tool.result` boundary subject. */
-  readonly run: GuardrailRun<BoundaryDef<'tool.result', ToolResultSubject>>
+  readonly run: GuardrailRun<ToolResultBoundary>
 }

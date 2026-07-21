@@ -3,11 +3,12 @@ import type { MediaPartSubject } from '../boundary'
 import type { GuardrailAudit, GuardrailContext } from '../guardrail/types'
 import { visitMedia, type MediaVisitGroup, type MediaVisitItem } from '../media/visit'
 import type { GuardrailBinding } from '../registry'
+import type { ModelInputOrigin } from '../input-origin'
 
 interface GuardInputMediaOptions {
   readonly bindings: readonly GuardrailBinding[]
   readonly messages: readonly Message[]
-  readonly context: (messages: readonly Message[]) => GuardrailContext
+  readonly context: (messages: readonly Message[], origin?: ModelInputOrigin) => GuardrailContext
   readonly appendAudit: (audit: GuardrailAudit) => void
 }
 
@@ -27,7 +28,15 @@ export async function guardInputMedia(options: GuardInputMediaOptions): Promise<
     bindings: options.bindings,
     items: projection.items,
     groups: projection.groups,
-    context: () => options.context(messages),
+    context: ({ subject }) => {
+      if (subject.origin.kind !== 'message') throw new Error('Input media requires a message origin.')
+      return options.context(messages, {
+        source: 'user',
+        kind: 'message',
+        messageIndex: subject.origin.messageIndex,
+        partIndex: subject.origin.partIndex,
+      })
+    },
     appendAudit: options.appendAudit,
     onStrip: ({ subject }) => {
       if (subject.origin.kind !== 'message') throw new Error('Input media requires a message origin.')

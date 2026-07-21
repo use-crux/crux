@@ -25,7 +25,7 @@ interface VisitMediaOptions {
   readonly items: readonly MediaVisitItem[]
   readonly groups: readonly MediaVisitGroup[]
   readonly dependencies?: readonly MediaGroupDependency[]
-  readonly context: () => GuardrailContext
+  readonly context: (item: MediaVisitItem) => GuardrailContext
   readonly appendAudit: (audit: GuardrailAudit) => void
   readonly onStrip?: (item: MediaVisitItem) => void
 }
@@ -61,7 +61,7 @@ export async function visitMedia(options: VisitMediaOptions): Promise<MediaVisit
 
     for (const binding of options.bindings) {
       const start = performance.now()
-      const context = options.context()
+      const context = options.context(item)
       const span = observe.openSpan({
         name: binding.policy.id,
         primitive: 'guardrail.run',

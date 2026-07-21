@@ -1,6 +1,6 @@
-import type { ApprovalRequestInfo } from '../adapter/tool/approval'
-import type { RetrieverHit } from '../retrieval/types'
 import type { MediaPartSubject, MediaSafetyTargetId } from './media/types'
+import type { InputSource } from './input-origin'
+import { inputBoundary } from './input-boundary'
 
 export type {
   MediaPart,
@@ -13,54 +13,36 @@ export { isMediaSafetyTargetId } from './media/types'
 
 /** Canonical safety boundary ids used in decisions, traces, and config serialization. */
 export type SafetyTargetId =
-  | 'user.input'
   | MediaSafetyTargetId
-  | 'model.input'
+  | 'model.input.text'
+  | 'model.instructions'
   | 'model.output.text'
   | 'model.output.object'
   | 'model.output'
   | 'tool.call'
   | 'tool.result'
   | 'approval.request'
-  | 'retrieval.result'
   | 'memory.write'
   | 'validation.feedback'
 
 /**
  * Frozen public boundary descriptor.
  *
- * The optional `__subject` member is a phantom carrier for TypeScript
- * inference. It is never assigned at runtime.
+ * `__subject` and `__origin` are phantom inference carriers and are never
+ * assigned at runtime. `from` is present only for an explicit semantic source
+ * filter; omitted filters retain the helper's semantic default.
  */
-export interface BoundaryDef<TId extends SafetyTargetId = SafetyTargetId, TSubject = unknown> {
+export interface BoundaryDef<TId extends SafetyTargetId = SafetyTargetId, TSubject = unknown, TOrigin = unknown> {
   readonly _tag: 'Boundary'
   readonly id: TId
+  /** Optional structured-output property path. */
   readonly path?: string
+  /** @internal Compile-time policy subject carrier. */
   readonly __subject?: TSubject
-}
-
-/** Tool call payload passed to `tool.call` policies. */
-export interface ToolCallSubject {
-  readonly toolCallId?: string
-  readonly toolName: string
-  readonly input: unknown
-}
-
-/** Tool result payload passed to `tool.result` policies. */
-export interface ToolResultSubject {
-  readonly toolCallId?: string
-  readonly toolName: string
-  readonly input?: unknown
-  readonly output: unknown
-}
-
-/** Human-approval payload passed to `approval.request` policies. */
-export type ApprovalRequestSubject = ApprovalRequestInfo
-
-/** Retrieval result payload passed to `retrieval.result` policies. */
-export interface RetrievalResultSubject {
-  readonly query?: string
-  readonly hits: readonly RetrieverHit[]
+  /** @internal Compile-time model-ingress origin carrier. */
+  readonly __origin?: TOrigin
+  /** Frozen, de-duplicated semantic source filter when explicitly supplied. */
+  readonly from?: readonly InputSource[]
 }
 
 type Prev = [never, 0, 1, 2, 3, 4]
@@ -109,6 +91,26 @@ export type BoundaryIdOf<B> = B extends readonly (infer TBoundary)[]
     ? TId
     : never
 
+type BoundaryMember<B> = B extends readonly (infer TBoundary)[] ? TBoundary : B
+
+/** Infer the semantic origin exposed by a boundary input. */
+export type OriginOf<B> =
+  BoundaryMember<B> extends BoundaryDef<SafetyTargetId, unknown, infer TOrigin>
+    ? unknown extends TOrigin
+      ? never
+      : TOrigin
+    : never
+
+/** Infer boundary members that do not expose semantic origin. */
+export type OriginlessBoundaryOf<B> =
+  BoundaryMember<B> extends infer TBoundary
+    ? TBoundary extends BoundaryDef<SafetyTargetId, unknown, infer TOrigin>
+      ? unknown extends TOrigin
+        ? TBoundary
+        : never
+      : never
+    : never
+
 /** Runtime type guard for frozen boundary descriptors. */
 export function isBoundaryDef(value: unknown): value is BoundaryDef {
   return (
@@ -121,14 +123,8 @@ export function isBoundaryDef(value: unknown): value is BoundaryDef {
   )
 }
 
-function makeBoundary<TId extends SafetyTargetId, TSubject>(
-  id: TId,
-  path?: string,
-): BoundaryDef<TId, TSubject> {
-  const boundaryDef =
-    path === undefined
-      ? { _tag: 'Boundary' as const, id }
-      : { _tag: 'Boundary' as const, id, path }
+function makeBoundary<TId extends SafetyTargetId, TSubject>(id: TId, path?: string): BoundaryDef<TId, TSubject> {
+  const boundaryDef = path === undefined ? { _tag: 'Boundary' as const, id } : { _tag: 'Boundary' as const, id, path }
   return Object.freeze(boundaryDef) as BoundaryDef<TId, TSubject>
 }
 
@@ -138,38 +134,7 @@ function makeBoundary<TId extends SafetyTargetId, TSubject>(
  * ids structurally without depending on object identity.
  */
 export const boundary = Object.freeze({
-  input: Object.freeze({
-    user: (): BoundaryDef<'user.input', string> => makeBoundary('user.input'),
-    model: (): BoundaryDef<'model.input', string> => makeBoundary('model.input'),
-    text: (): BoundaryDef<'user.input', string> => makeBoundary('user.input'),
-    /**
-     * Target each canonical non-text part in user input before provider normalization.
-     *
-     * The callback receives the caller's original part identity and a stable
-     * message or completed-operation origin. Narrow `subject.part.type` for
-     * media-specific fields and `subject.origin.kind` before reading its
-     * coordinates. Enforced `strip` removes the selected optional part and
-     * blocks when the retained media would violate a required group or
-     * dependency; report mode records intent without changing provider input.
-     *
-     * @returns A boundary whose guardrail subject is a {@link MediaPartSubject}.
-     *
-     * @example
-     * ```ts
-     * const pngOnly = guardrail({
-     *   id: 'png-only',
-     *   on: boundary.input.media(),
-     *   run: (subject) => {
-     *     if (subject.part.type !== 'image') return { action: 'allow' }
-     *     return subject.part.mediaType === 'image/png'
-     *       ? { action: 'allow' }
-     *       : { action: 'strip', reason: 'Only PNG images are accepted.' }
-     *   },
-     * })
-     * ```
-     */
-    media: (): BoundaryDef<'user.input.media', MediaPartSubject> => makeBoundary('user.input.media'),
-  }),
+  input: inputBoundary,
   output: Object.freeze({
     text: (): BoundaryDef<'model.output.text', string> => makeBoundary('model.output.text'),
     /**
@@ -208,16 +173,6 @@ export const boundary = Object.freeze({
       <T>() =>
       <P extends DotPath<T>>(path: P): BoundaryDef<'model.output.object', PathValue<T, P>> =>
         makeBoundary('model.output.object', path),
-  }),
-  tool: Object.freeze({
-    call: (): BoundaryDef<'tool.call', ToolCallSubject> => makeBoundary('tool.call'),
-    result: (): BoundaryDef<'tool.result', ToolResultSubject> => makeBoundary('tool.result'),
-  }),
-  approval: Object.freeze({
-    request: (): BoundaryDef<'approval.request', ApprovalRequestSubject> => makeBoundary('approval.request'),
-  }),
-  retrieval: Object.freeze({
-    result: (): BoundaryDef<'retrieval.result', RetrievalResultSubject> => makeBoundary('retrieval.result'),
   }),
   memory: Object.freeze({
     write: <T = unknown>(): BoundaryDef<'memory.write', T> => makeBoundary('memory.write'),

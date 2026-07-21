@@ -3,9 +3,9 @@ import type { SafetyBindingApplicability } from '../../../safety/applicability'
 import type { SafetyCompletedOperation } from './operation'
 
 const applicableBoundaries = {
-  generateImage: new Set(['user.input', 'model.input', 'user.input.media', 'model.output.media']),
-  generateSpeech: new Set(['user.input', 'model.input', 'model.output.media']),
-  transcribe: new Set(['user.input', 'user.input.media', 'model.output.text']),
+  generateImage: new Set(['model.input.text', 'model.instructions', 'model.input.media', 'model.output.media']),
+  generateSpeech: new Set(['model.input.text', 'model.instructions', 'model.output.media']),
+  transcribe: new Set(['model.input.text', 'model.input.media', 'model.output.text']),
 } satisfies Record<SafetyCompletedOperation, ReadonlySet<string>>
 
 /** Classify exact bindings for one closed completed-operation primitive. */

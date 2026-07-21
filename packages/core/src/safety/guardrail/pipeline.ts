@@ -264,7 +264,11 @@ function safetyAction(result: GuardrailRunResult<unknown>): SafetyDecision['acti
 }
 
 function boundaryPhase(boundary: BoundaryDef): 'input' | 'output' {
-  return boundary.id === 'user.input' || boundary.id === 'model.input' ? 'input' : 'output'
+  return boundary.id === 'model.input.text' ||
+    boundary.id === 'model.input.media' ||
+    boundary.id === 'model.instructions'
+    ? 'input'
+    : 'output'
 }
 
 function runContext<B extends BoundaryDef>(
@@ -284,7 +288,8 @@ function runContext<B extends BoundaryDef>(
     findings: { add() {} },
     ...(ctx.stream ? { stream: ctx.stream } : {}),
     ...(boundary.path ? { path: boundary.path } : {}),
-  }
+    ...(ctx.origin ? { origin: ctx.origin } : {}),
+  } as SafetyRunContext<B>
 }
 
 function auditAction(result: GuardrailRunResult<unknown>): string {

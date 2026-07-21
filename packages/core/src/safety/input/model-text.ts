@@ -77,7 +77,7 @@ export async function guardModelTextInput(
       const policyId = latestRewritePolicyId(result.audit.applied) ?? "unknown";
       throw new SafetyResultError({
         policyId,
-        boundary: "model.input",
+        boundary: "model.instructions",
         problem:
           "rewrite could not be faithfully applied to multimodal system message content",
         message:

@@ -15,7 +15,7 @@ describe("OpenAI speech", () => {
       guardrails: [
         guardrail({
           id: "openai-speech-input",
-          on: boundary.input.user(),
+          on: boundary.input.text(),
           run: () => ({
             action: "rewrite",
             value: "guarded speech",

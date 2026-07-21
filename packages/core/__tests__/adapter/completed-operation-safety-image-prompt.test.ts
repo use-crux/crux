@@ -14,7 +14,7 @@ describe('completed operation Safety — typed image prompts', () => {
     const calls: string[] = []
     const global = guardrail({
       id: 'global-image-user',
-      on: boundary.input.user(),
+      on: boundary.input.text(),
       run: (text, context) => {
         calls.push(`global:${context.boundary.id}:${context.model.id}:${text}`)
         return { action: 'allow' }
@@ -22,7 +22,7 @@ describe('completed operation Safety — typed image prompts', () => {
     })
     const promptUser = guardrail({
       id: 'prompt-image-user',
-      on: boundary.input.user(),
+      on: boundary.input.text(),
       run: (text, context) => {
         calls.push(`prompt:${context.boundary.id}:${context.model.id}:${text}`)
         return {
@@ -34,7 +34,7 @@ describe('completed operation Safety — typed image prompts', () => {
     })
     const promptSystem = guardrail({
       id: 'prompt-image-system',
-      on: boundary.input.model(),
+      on: boundary.input.instructions(),
       run: (text, context) => {
         calls.push(`prompt:${context.boundary.id}:${context.model.id}:${text}`)
         return {
@@ -46,7 +46,7 @@ describe('completed operation Safety — typed image prompts', () => {
     })
     const call = guardrail({
       id: 'call-image-user',
-      on: boundary.input.user(),
+      on: boundary.input.text(),
       run: (text, context) => {
         calls.push(`call:${context.boundary.id}:${context.model.id}:${text}`)
         return { action: 'allow' }
@@ -80,10 +80,10 @@ describe('completed operation Safety — typed image prompts', () => {
 
     expect(resolution).toHaveBeenCalledOnce()
     expect(calls).toEqual([
-      'global:user.input:image-model:original user',
-      'prompt:user.input:image-model:original user',
-      'call:user.input:image-model:guarded user',
-      'prompt:model.input:image-model:original system',
+      'global:model.input.text:image-model:original user',
+      'prompt:model.input.text:image-model:original user',
+      'call:model.input.text:image-model:guarded user',
+      'prompt:model.instructions:image-model:original system',
     ])
     expect(normalizedPrompt).toBe('guarded system\nguarded user')
     expect(normalizedText).toBe('guarded system\nguarded user')

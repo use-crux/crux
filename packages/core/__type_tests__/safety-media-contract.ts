@@ -31,7 +31,7 @@ const mediaPolicy = guardrail({
   on: boundary.input.media(),
   run: (subject, context) => {
     expectTypeOf(subject).toEqualTypeOf<MediaPartSubject>()
-    expectTypeOf(context.boundary.id).toEqualTypeOf<'user.input.media'>()
+    expectTypeOf(context.boundary.id).toEqualTypeOf<'model.input.media'>()
     return { action: 'allow' }
   },
 })
@@ -109,7 +109,7 @@ guardrail({
   on: [boundary.input.text(), boundary.output.text()] as const,
   run: (subject, context) => {
     expectTypeOf(subject).toEqualTypeOf<string>()
-    expectTypeOf(context.boundary.id).toEqualTypeOf<'user.input' | 'model.output.text'>()
+    expectTypeOf(context.boundary.id).toEqualTypeOf<'model.input.text' | 'model.output.text'>()
     return { action: 'allow' }
   },
 })

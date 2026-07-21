@@ -10,6 +10,7 @@ import type {
   GuardrailContext,
 } from "../guardrail/types";
 import type { GuardrailBinding } from "../registry";
+import type { ModelInputOrigin } from "../input-origin";
 
 interface GuardProjectedTextInputOptions {
   readonly bindings: readonly GuardrailBinding[];
@@ -17,7 +18,10 @@ interface GuardProjectedTextInputOptions {
     readonly messages: readonly Message[];
     readonly prompt?: string;
   };
-  readonly context: (messages: readonly Message[]) => GuardrailContext;
+  readonly context: (
+    messages: readonly Message[],
+    origin?: ModelInputOrigin,
+  ) => GuardrailContext;
 }
 
 export interface ProjectedTextInputResult {
@@ -49,7 +53,7 @@ export async function guardProjectedTextInput(
     const originalContent = messageText(message);
     const result = await pipeline.runInput(
       originalContent,
-      options.context(messages),
+      options.context(messages, { source: "user", kind: "message", messageIndex: index }),
     );
     applied.push(...result.audit.applied);
     actions.push(...result.audit.applied.map((entry) => entry.action));
@@ -65,7 +69,7 @@ export async function guardProjectedTextInput(
           latestRewritePolicyId(result.audit.applied) ?? "unknown";
         throw new SafetyResultError({
           policyId,
-          boundary: "user.input",
+          boundary: "model.input.text",
           problem:
             "rewrite could not be faithfully applied to multimodal message content",
           message:
@@ -93,7 +97,7 @@ export async function guardProjectedTextInput(
 
   const result = await pipeline.runInput(
     input.prompt,
-    options.context(input.messages),
+    options.context(input.messages, { source: "user", kind: "prompt" }),
   );
   return {
     messages: input.messages,

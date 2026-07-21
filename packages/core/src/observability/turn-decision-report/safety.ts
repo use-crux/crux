@@ -70,7 +70,7 @@ function phaseForSafetyDecision(decision: SafetyDecision): TurnDecisionPhase {
   ) {
     return 'tool-use'
   }
-  if (decision.boundary === 'retrieval.result' || decision.boundary === 'memory.write') {
+  if (decision.boundary === 'memory.write') {
     return 'data'
   }
   if (decision.boundary === 'validation.feedback') return 'recovery'
@@ -90,7 +90,6 @@ function subjectKindForSafetyDecision(decision: SafetyDecision): TurnDecisionSub
   if (decision.kind === 'guardrail') return 'guardrail'
   if (decision.kind === 'constraint') return 'constraint'
   if (decision.boundary === 'memory.write') return 'memory'
-  if (decision.boundary === 'retrieval.result') return 'retrieval'
   if (
     decision.boundary === 'tool.call' ||
     decision.boundary === 'tool.result' ||

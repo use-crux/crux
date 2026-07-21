@@ -73,7 +73,7 @@ describe('completed-operation Safety applicability', () => {
       guardrails: [
         guardrail({
           id: 'transcription-model-input',
-          on: boundary.input.model(),
+          on: boundary.input.instructions(),
           run: () => ({ action: 'allow' }),
         }),
       ],
@@ -81,12 +81,12 @@ describe('completed-operation Safety applicability', () => {
 
     expect(speechError).toMatchObject({
       name: 'SafetyConfigError',
-      boundaries: ['user.input.media'],
+      boundaries: ['model.input.media'],
       scopes: ['call'],
     })
     expect(transcriptionError).toMatchObject({
       name: 'SafetyConfigError',
-      boundaries: ['model.input'],
+      boundaries: ['model.instructions'],
       scopes: ['call'],
     })
     expect(speechEvents).toEqual([])
@@ -99,7 +99,7 @@ describe('completed-operation Safety applicability', () => {
       globalGuardrails: [
         guardrail({
           id: 'global-image-text-policy',
-          on: [boundary.input.user(), boundary.output.text()] as const,
+          on: [boundary.input.text(), boundary.output.text()] as const,
           run: callback,
         }),
       ],
@@ -126,7 +126,7 @@ describe('completed-operation Safety applicability', () => {
         }),
         expect.objectContaining({
           guard: 'global-image-text-policy',
-          boundary: 'user.input',
+          boundary: 'model.input.text',
           action: 'allow',
         }),
       ]),

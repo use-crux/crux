@@ -105,7 +105,9 @@ function lastEnforcedTranscriptRewrite(entries: readonly GuardrailAuditEntry[]):
 async function guardPromptHint(input: TranscriptionInput, safety: Safety): Promise<TranscriptionInput> {
   if (input.prompt === undefined) return input
 
-  const [slot] = await guardSafetySessionInputOperationText(safety, [{ boundary: 'user.input', value: input.prompt }])
+  const [slot] = await guardSafetySessionInputOperationText(safety, [
+    { boundary: 'model.input.text', value: input.prompt },
+  ])
   if (!slot || slot.value === input.prompt) return input
   return Object.freeze({ ...input, prompt: slot.value })
 }

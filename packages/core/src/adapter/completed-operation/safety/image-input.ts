@@ -35,13 +35,15 @@ export async function guardGeneratedImageInput<TInput>(
   const slots = await guardSafetySessionInputOperationText(
     safety,
     [
-      ...(userText === undefined ? [] : [{ boundary: 'user.input' as const, value: userText }]),
-      ...(context?.systemText === undefined ? [] : [{ boundary: 'model.input' as const, value: context.systemText }]),
+      ...(userText === undefined ? [] : [{ boundary: 'model.input.text' as const, value: userText }]),
+      ...(context?.systemText === undefined
+        ? []
+        : [{ boundary: 'model.instructions' as const, value: context.systemText }]),
     ],
     context ? { model: context.model, systemPrompt: context.systemText } : undefined,
   )
-  const guardedUser = slots.find((slot) => slot.boundary === 'user.input')?.value
-  const guardedSystem = slots.find((slot) => slot.boundary === 'model.input')?.value
+  const guardedUser = slots.find((slot) => slot.boundary === 'model.input.text')?.value
+  const guardedSystem = slots.find((slot) => slot.boundary === 'model.instructions')?.value
 
   if (context) {
     const guardedPrompt = [guardedSystem, guardedUser].filter((part): part is string => Boolean(part)).join('\n')
