@@ -30,6 +30,10 @@ import { validateStructuredOutput } from "../policy/validation-retry";
 import { responseContent, textFromAssistantContent } from "../assistant-output";
 import { transformCanonicalStep } from "../step-transform";
 import {
+  applySystemMessagePrefixPatch,
+  systemMessagePrefixPatch,
+} from "../execution/system-prefix-patch";
+import {
   toJsonValue,
   renderToolModelOutput,
   createToolModelOutput,
@@ -344,6 +348,12 @@ export function fakeLoopRuntime(
         if (directive.kind === "stop") break;
         if (directive.kind === "amend") {
           if (directive.system !== undefined) system = directive.system;
+          if (directive[systemMessagePrefixPatch] !== undefined) {
+            messages = applySystemMessagePrefixPatch(
+              messages,
+              directive[systemMessagePrefixPatch],
+            );
+          }
           if (directive.tools !== undefined) tools = directive.tools;
           if (directive.activeTools !== undefined)
             activeTools = directive.activeTools;

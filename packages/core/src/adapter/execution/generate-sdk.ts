@@ -15,6 +15,7 @@ import {
   createSafetyWithBindingApplicability,
   createSafetyLanguageStepTransformer,
   finalizeSafetySessionLanguageOutput,
+  guardSafetySessionResolvedInput,
   safetySessionModelIngressGuard,
   safetyRequiresLanguageStepTransform,
 } from "../../safety/session";
@@ -62,6 +63,8 @@ import { generateSdkStructured } from "./generate-sdk-structured";
 import { emitInputTokenEstimate } from "./media-token-budget";
 import { materializeToolSources } from "./tool-sources";
 import { toolModelIngressDialect } from "../tool/model-ingress-port";
+import { createSkillIngressAmendmentGuard } from "./skill-ingress-amendment";
+import { systemMessagePrefixPatch } from "./system-prefix-patch";
 
 /** Regeneration is deliberately unavailable after tool-approval suspension. */
 const unreachableRegenerate = (): Promise<never> => {
@@ -95,7 +98,12 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
   });
   let resolved = await prompt.resolve(resolveOpts);
   const mappedSettings = dialect.mapSettings(resolved.settings, modelInfo);
-  let { messages, promptText } = initialMessageState(resolved, args.messages);
+  const initialMessages = initialMessageState(
+    resolved,
+    args.messages,
+    args.nativeMessages,
+  );
+  let { messages, promptText } = initialMessages;
   let nativeMessages = args.nativeMessages;
   let currentSystem = resolved.system;
   let currentSystemBlocks = resolved.systemBlocks;
@@ -134,10 +142,13 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
     safety,
     resolved.schema,
   );
-  const guardedInput = await safety.guardInput({
+  const guardedInput = await guardSafetySessionResolvedInput(safety, resolved, {
     messages,
     prompt: promptText,
     system: currentSystem,
+  }, {
+    resolvedMessages:
+      initialMessages.source === "resolved-messages" ? "selected" : "discarded",
   });
   if (
     guardedInput.messages !== messages ||
@@ -148,6 +159,12 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
   promptText = guardedInput.prompt;
   if (guardedInput.system !== currentSystem) currentSystemBlocks = undefined;
   currentSystem = guardedInput.system;
+  const guardSkillAmendment = createSkillIngressAmendmentGuard({
+    safety,
+    source: initialMessages.source,
+    messages,
+    systemIngress: guardedInput.systemIngress,
+  });
 
   const sourceSession = await materializeToolSources({
     dialect: dialect.id,
@@ -178,6 +195,7 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
       modelIngressProvider: modelInfo.provider,
       reresolve: (skillSession) =>
         prompt.resolve(withSkillActivationInput(resolveOpts, skillSession)),
+      guardSkillAmendment,
     });
     const resumed = await lifecycle.resume(messages);
     messages = resumed.messages;
@@ -198,8 +216,10 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
       const amendment = await lifecycle.applySkillLoads(step.toolCalls);
       let factoryDirective: StepDirective = { kind: "continue" };
       if (amendment) {
-        currentSystem = amendment.system;
-        currentSystemBlocks = amendment.systemBlocks;
+        if ("system" in amendment) {
+          currentSystem = amendment.system;
+          currentSystemBlocks = amendment.systemBlocks;
+        }
         factoryDirective = {
           kind: "amend",
           ...(amendment.system !== undefined
@@ -209,6 +229,12 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
             ? { systemBlocks: amendment.systemBlocks }
             : {}),
           ...(lifecycle.tools !== undefined ? { tools: lifecycle.tools } : {}),
+          ...(amendment[systemMessagePrefixPatch] !== undefined
+            ? {
+                [systemMessagePrefixPatch]:
+                  amendment[systemMessagePrefixPatch],
+              }
+            : {}),
           refundStep: true,
         };
       }

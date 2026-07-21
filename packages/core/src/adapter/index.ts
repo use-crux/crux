@@ -202,6 +202,10 @@ export type {
 } from "./executor-types";
 export { toolModelIngressDialect } from "./tool/model-ingress-port";
 export type { ToolModelIngressDialect } from "./tool/model-ingress-port";
+/** @internal Private dialect hook for guarded active-history amendments. */
+export { systemMessagePrefixPatch } from "./execution/system-prefix-patch";
+/** @internal Private dialect contract for guarded active-history amendments. */
+export type { SystemMessagePrefixPatch } from "./execution/system-prefix-patch";
 export type {
   ModelIngressDocument,
   ModelIngressMediaSlot,

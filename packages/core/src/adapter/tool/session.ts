@@ -124,6 +124,14 @@ import type { ModelIngressGuard } from "../../safety/input/model-ingress";
 import { isPolicyTerminal } from "../../safety/errors";
 import { guardToolModelOutput } from "./model-ingress";
 import type { ToolModelIngressDialect } from "./model-ingress-port";
+import type {
+  GuardedSkillIngressAmendment,
+  GuardSkillIngressAmendment,
+} from "../execution/skill-ingress-amendment";
+import {
+  systemMessagePrefixPatch,
+  type SystemMessagePrefixPatch,
+} from "../execution/system-prefix-patch";
 
 // ─────────────────────────────────────────────────────────────────
 // Public types
@@ -186,6 +194,8 @@ export interface ToolLifecycleOptions {
   readonly reresolve?: (
     skillSession: SkillActivationSession,
   ) => Promise<ResolvedPrompt>;
+  /** @internal Guards and exactly shapes post-skill model-input amendments. */
+  readonly guardSkillAmendment?: GuardSkillIngressAmendment;
   /**
    * Provider message-shape for a tool round (from `AdapterSpec`). Core
    * regime; the sdk regime always uses the canonical default.
@@ -234,12 +244,14 @@ export type ToolRoundOutcome =
 
 /** A skill amendment reported by {@link ToolLifecycle.applySkillLoads}. */
 export interface SkillAmendment {
-  /** The re-resolved system prompt with loaded skill instructions appended. */
-  readonly system: string | undefined;
-  /** The re-resolved system blocks. */
-  readonly systemBlocks: readonly SystemBlock[] | undefined;
+  /** Replacement standalone system; absent when active history receives a patch. */
+  readonly system?: string;
+  /** Fresh system blocks when their text still matches the replacement system. */
+  readonly systemBlocks?: readonly SystemBlock[];
   /** Always `true` — `LoadSkill` never consumes loop budget. */
   readonly refundStep: true;
+  /** @internal One-shot active-history amendment for the loop owner. */
+  readonly [systemMessagePrefixPatch]?: SystemMessagePrefixPatch;
 }
 
 /** A sealed SDK suspension from {@link ToolLifecycle.suspend}. */
@@ -1394,11 +1406,20 @@ export function createToolLifecycle(
         transcript.push({ t: "skill.load", skillId: loadedSkill.id });
       }
 
+      if (newSkills.length === 0) return { refundStep: true };
+
       // Re-resolve — activated skills now contribute their full instructions.
       const reResolved = await options.reresolve(skillSession);
-      const updatedSystem = reResolved.system ?? "";
-      for (const loadedSkill of newSkills) {
-      }
+      const guarded: GuardedSkillIngressAmendment = options.guardSkillAmendment
+        ? await options.guardSkillAmendment({
+            resolved: reResolved,
+            newlyLoadedSkillIds: newSkills.map((entry) => entry.id),
+          })
+        : {
+            system: reResolved.system ?? "",
+            systemBlocks: reResolved.systemBlocks,
+          };
+      const { prefixPatch, ...amendment } = guarded;
       skillSession.markInjected(newSkills.map((entry) => entry.id));
 
       // Re-arm the surface and re-notify approval middleware against the
@@ -1407,8 +1428,10 @@ export function createToolLifecycle(
       await notifyToolApprovalResponses(wrappedTools, lastMessages);
 
       return {
-        system: updatedSystem,
-        systemBlocks: reResolved.systemBlocks,
+        ...amendment,
+        ...(prefixPatch
+          ? { [systemMessagePrefixPatch]: prefixPatch }
+          : {}),
         refundStep: true,
       };
     },

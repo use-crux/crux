@@ -15,6 +15,15 @@ import type { SystemBlock } from "./types";
 import { contentText } from "../content";
 import { isMessageContent } from "../content/guards";
 
+/** Exact boundary created while folding composed system text into messages. */
+export interface FoldedSystemBoundary {
+  readonly messages: AnyMessage[];
+  readonly targetMessageIndex: number;
+  readonly foldedPrefix: string;
+  readonly prefixLength: number;
+  readonly hasTrustedSuffix: boolean;
+}
+
 /** Apply provider-specific system text around the composed system message. */
 export function applySystemAdaptationText(
   system: string,
@@ -67,24 +76,49 @@ export function foldSystemIntoMessages(
   system: string,
   messages: readonly AnyMessage[],
 ): AnyMessage[] {
-  if (!system) return [...messages];
+  return (
+    foldSystemIntoMessagesWithBoundary(system, messages)?.messages ?? [
+      ...messages,
+    ]
+  );
+}
+
+/** Fold system text and retain the exact private prefix writeback boundary. */
+export function foldSystemIntoMessagesWithBoundary(
+  system: string,
+  messages: readonly AnyMessage[],
+): FoldedSystemBoundary | undefined {
+  if (!system) return undefined;
 
   const firstSystemIdx = messages.findIndex(
     (message) => message.role === "system",
   );
   if (firstSystemIdx < 0) {
-    return [{ role: "system", content: system }, ...messages];
+    return {
+      messages: [{ role: "system", content: system }, ...messages],
+      targetMessageIndex: 0,
+      foldedPrefix: system,
+      prefixLength: system.length,
+      hasTrustedSuffix: false,
+    };
   }
 
   const first = messages[firstSystemIdx]!;
   const firstContent =
     isMessageContent(first.content) ? contentText(first.content) : unknownText(first.content);
+  const foldedPrefix = firstContent ? `${system}\n\n` : system;
   const folded = [...messages];
   folded[firstSystemIdx] = {
     ...first,
     content: joinSystemText([system, firstContent]),
   };
-  return folded;
+  return {
+    messages: folded,
+    targetMessageIndex: firstSystemIdx,
+    foldedPrefix,
+    prefixLength: foldedPrefix.length,
+    hasTrustedSuffix: firstContent.length > 0,
+  };
 }
 
 function unknownText(value: unknown): string {

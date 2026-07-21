@@ -38,10 +38,10 @@ import {
   streamCompletionGuard,
   modelIngressGuard,
   modelIngressSources,
+  resolvedInputGuard,
   type SafetySession,
 } from "./session-bridge";
 import { guardModelIngress } from "./input/model-ingress";
-
 interface SessionMethodOptions {
   readonly options: SafetyCallOptions;
   readonly enabled: boolean;
@@ -79,7 +79,6 @@ interface SessionMethodOptions {
   ) => Promise<SafetyOutput>;
   readonly openStream: () => SafetyStream;
 }
-
 /** Build the method table after session state and runners are initialized. */
 export function createSafetySessionMethods(
   state: SessionMethodOptions,
@@ -99,10 +98,29 @@ export function createSafetySessionMethods(
       source !== "retrieval" && inputBindingsFor(inputBindings, "model.input.media", source).length > 0;
     return matchesText || matchesMedia;
   });
+  const guardInput = async (
+    input: Parameters<SafetySession["guardInput"]>[0],
+    systemIngress?: Parameters<SafetySession[typeof resolvedInputGuard]>[1],
+    systemIngressScope?: Parameters<SafetySession[typeof resolvedInputGuard]>[2],
+  ) => {
+    state.messages.set(input.messages);
+    const result = await guardSafetyInput({
+      bindings: state.phaseBindings("input"),
+      input,
+      ...(systemIngress ? { systemIngress } : {}),
+      ...(systemIngressScope ? { systemIngressScope } : {}),
+      context: (messages, origin) => state.guardContext("input", messages, undefined, origin),
+      appendAudit: state.appendGuardrailAudit,
+      transcript: state.transcript,
+    });
+    state.messages.set(result.messages);
+    return result;
+  };
   return {
     enabled: state.enabled,
     [modelIngressGuard]: guardIngress,
     [modelIngressSources]: Object.freeze(ingressSources),
+    [resolvedInputGuard]: guardInput,
     [languageStepGuardEnabled]: outputBindings().some(
       (binding) =>
         binding.boundary.id === "model.output.text" ||
@@ -171,18 +189,7 @@ export function createSafetySessionMethods(
         transcript: state.transcript,
       }),
 
-    async guardInput(input) {
-      state.messages.set(input.messages);
-      const result = await guardSafetyInput({
-        bindings: state.phaseBindings("input"),
-        input,
-        context: (messages, origin) => state.guardContext("input", messages, undefined, origin),
-        appendAudit: state.appendGuardrailAudit,
-        transcript: state.transcript,
-      });
-      state.messages.set(result.messages);
-      return result;
-    },
+    guardInput,
 
     finalizeOutput: (output, regenerate, opts) =>
       state.finalizeLanguageOutput(output, regenerate, opts, false),

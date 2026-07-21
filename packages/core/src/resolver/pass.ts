@@ -22,7 +22,7 @@ import {
   applyPromptAdaptationText,
   applySystemAdaptationBlocks,
   applySystemAdaptationText,
-  foldSystemIntoMessages,
+  foldSystemIntoMessagesWithBoundary,
   joinSystemText,
 } from "./adaptation";
 import { detectSuspiciousPatterns, escapeXml } from "../shared/sanitize";
@@ -61,6 +61,10 @@ import {
 import { safeParseSchema } from "./schema";
 import { createSkillToolSurface } from "./skills";
 import { buildSystemMessage } from "./system-message";
+import {
+  alignSystemIngressBlocks,
+  attachSystemIngressCarrier,
+} from "./system-ingress-provenance";
 import { renderPromptText, resolveSystemContent } from "./system-content";
 import { createToolMergeAccumulator, type ToolOwnerLabel } from "./tool-merge";
 import type {
@@ -220,6 +224,11 @@ export async function runPromptPass(
   };
   const adaptation = selectAdaptation(config.adapt, modelInfo);
   systemBlocks = applySystemAdaptationBlocks(systemBlocks, adaptation);
+  const systemIngressBlocks = alignSystemIngressBlocks(
+    systemBlocks,
+    composed.blocks,
+    composed.ingressBlocks,
+  );
   system =
     systemBlocks.length > 0
       ? joinSystemText(systemBlocks.map((block) => block.text))
@@ -228,6 +237,9 @@ export async function runPromptPass(
 
   let promptText: string | undefined;
   let messages: AnyMessage[] | undefined;
+  let foldedSystem:
+    | ReturnType<typeof foldSystemIntoMessagesWithBoundary>
+    | undefined;
 
   if (config.messages) {
     messages = (
@@ -237,7 +249,8 @@ export async function runPromptPass(
     )({ input: guardedInput });
     assertNoObjectMessageContent(messages);
 
-    messages = foldSystemIntoMessages(system, messages);
+    foldedSystem = foldSystemIntoMessagesWithBoundary(system, messages);
+    messages = foldedSystem?.messages ?? messages;
     system = "";
   } else {
     promptText = await renderPromptText(config.prompt, guardedInput);
@@ -277,6 +290,23 @@ export async function runPromptPass(
     ...(config.output ? { schema: config.output } : {}),
     settings,
   };
+  if (systemIngressBlocks.length > 0) {
+    if (foldedSystem) {
+      attachSystemIngressCarrier(resolved, {
+        mode: "messages",
+        blocks: systemIngressBlocks,
+        targetMessageIndex: foldedSystem.targetMessageIndex,
+        foldedPrefix: foldedSystem.foldedPrefix,
+        prefixLength: foldedSystem.prefixLength,
+        hasTrustedSuffix: foldedSystem.hasTrustedSuffix,
+      });
+    } else if (system) {
+      attachSystemIngressCarrier(resolved, {
+        mode: "system",
+        blocks: systemIngressBlocks,
+      });
+    }
+  }
 
   const configTools = config.tools;
   const toolMerge = createToolMergeAccumulator();

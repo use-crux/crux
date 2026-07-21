@@ -28,6 +28,11 @@ export {
   safetyRequiresLanguageStepTransform,
 } from "./session-bridge";
 
+export {
+  guardSafetySessionIngressCarrier,
+  guardSafetySessionResolvedInput,
+} from "./session-resolved-input";
+
 export type {
   ConstraintFeedbackFormatter,
   Safety,

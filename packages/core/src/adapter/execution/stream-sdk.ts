@@ -13,6 +13,7 @@ import type { z } from "zod";
 import type { MiddlewareResult } from "../../runtime/types";
 import {
   createSafetyWithBindingApplicability,
+  guardSafetySessionResolvedInput,
   safetySessionModelIngressGuard,
 } from "../../safety/session";
 import { languageBindingApplicability } from "../../safety/language-applicability";
@@ -85,7 +86,12 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
   let resolved = await prompt.resolve(resolveOpts);
   const diagnostics = withDefaultResolverPorts().diagnostics;
   const mappedSettings = dialect.mapSettings(resolved.settings, modelInfo);
-  let { messages, promptText } = initialMessageState(resolved, args.messages);
+  const initialMessages = initialMessageState(
+    resolved,
+    args.messages,
+    args.nativeMessages,
+  );
+  let { messages, promptText } = initialMessages;
   let nativeMessages = args.nativeMessages;
   let currentSystem = resolved.system;
   let currentSystemBlocks = resolved.systemBlocks;
@@ -108,10 +114,13 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     },
     languageBindingApplicability(resolved.schema !== undefined),
   );
-  const guardedInput = await safety.guardInput({
+  const guardedInput = await guardSafetySessionResolvedInput(safety, resolved, {
     messages,
     prompt: promptText,
     system: currentSystem,
+  }, {
+    resolvedMessages:
+      initialMessages.source === "resolved-messages" ? "selected" : "discarded",
   });
   if (
     guardedInput.messages !== messages ||

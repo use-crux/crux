@@ -12,6 +12,7 @@
 import type { MiddlewareResult } from "../../runtime/types";
 import {
   createSafetyWithBindingApplicability,
+  guardSafetySessionResolvedInput,
   safetySessionModelIngressGuard,
 } from "../../safety/session";
 import { languageBindingApplicability } from "../../safety/language-applicability";
@@ -25,7 +26,7 @@ import { assertProviderMediaSupported } from "../native-chat/media-hooks";
 import type { CallArgs, StreamHandle } from "../types";
 import { createToolLifecycle } from "../tool/session";
 import type { AdapterExecutionStreamArgs, CoreStepDialect } from "./types";
-import { initialCoreMessages } from "./messages";
+import { initialCoreMessageState } from "./messages";
 import { createCachedStreamHandle } from "./metadata";
 import { buildResolveOpts } from "./shared";
 import { isSafetyTextChunk } from "./stream-safety";
@@ -77,7 +78,8 @@ export async function streamCore<
   });
   let resolved = await prompt.resolve(resolveOpts);
   const mappedSettings = dialect.mapSettings(resolved.settings);
-  let messages = initialCoreMessages(resolved, args.messages);
+  const initialMessages = initialCoreMessageState(resolved, args.messages);
+  let messages = initialMessages.messages;
   let currentSystem = resolved.system;
   let currentSystemBlocks = resolved.systemBlocks;
   const safety = createSafetyWithBindingApplicability(
@@ -99,9 +101,12 @@ export async function streamCore<
     },
     languageBindingApplicability(resolved.schema !== undefined),
   );
-  const guardedInput = await safety.guardInput({
+  const guardedInput = await guardSafetySessionResolvedInput(safety, resolved, {
     messages,
     system: currentSystem,
+  }, {
+    resolvedMessages:
+      initialMessages.source === "resolved-messages" ? "selected" : "discarded",
   });
   messages = [...guardedInput.messages];
   if (guardedInput.system !== currentSystem) currentSystemBlocks = undefined;

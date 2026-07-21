@@ -20,6 +20,8 @@ import type {
   ModelIngressGuard,
 } from "./input/model-ingress";
 import type { InputSource } from "./input-origin";
+import type { ResolvedSystemIngressCarrier } from "../resolver/system-ingress-provenance";
+import type { ResolvedSystemIngressDelivery } from "./input/resolved-system";
 
 export const outputMediaGuard: unique symbol = Symbol(
   "crux.safety.outputMediaGuard",
@@ -57,12 +59,25 @@ export const modelIngressGuard: unique symbol = Symbol(
 export const modelIngressSources: unique symbol = Symbol(
   "crux.safety.modelIngressSources",
 );
+export const resolvedInputGuard: unique symbol = Symbol(
+  "crux.safety.resolvedInputGuard",
+);
+
+type SafetyInput = Parameters<Safety["guardInput"]>[0];
+type SafetyInputResult = Awaited<ReturnType<Safety["guardInput"]>> & {
+  readonly systemIngress?: ResolvedSystemIngressDelivery;
+};
 
 export interface SafetySession extends Safety {
   [modelIngressGuard](
     input: CanonicalModelIngress,
   ): Promise<CanonicalModelIngressResult>;
   readonly [modelIngressSources]: readonly InputSource[];
+  [resolvedInputGuard](
+    input: SafetyInput,
+    provenance: ResolvedSystemIngressCarrier | undefined,
+    scope?: "full" | "carrier",
+  ): Promise<SafetyInputResult>;
   readonly [languageStepGuardEnabled]: boolean;
   [languageStepGuard](
     stepIndex: number,

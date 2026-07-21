@@ -1,6 +1,13 @@
 import type { LanguageModel, StopCondition, ToolSet } from "ai";
-import type { ExecutorOutcome, ExecutorRequest } from "@use-crux/core/adapter";
-import { toJsonValue } from "@use-crux/core/adapter";
+import type {
+  ExecutorOutcome,
+  ExecutorRequest,
+  SystemMessagePrefixPatch,
+} from "@use-crux/core/adapter";
+import {
+  systemMessagePrefixPatch,
+  toJsonValue,
+} from "@use-crux/core/adapter";
 import type { SdkGateway } from "../gateway";
 import type { SdkUsageLike } from "../meta";
 import { extractCost, normalizeUsage } from "../meta";
@@ -12,6 +19,7 @@ import { canonicalBase, buildBaseArgs } from "./request-args";
 import { withToolCallRepair } from "./tool-call-repair";
 import { decodeAssistantContentFromAiSdkParts } from "../assistant-content";
 import { createStepTransformModelWrapper } from "./step-transform";
+import { applyAiSdkSystemMessagePrefixPatch } from "./system-prefix-patch";
 import type {
   AiSdkCallPlan,
   SdkLoopResultLike,
@@ -54,6 +62,7 @@ export function createLoopCallPlan(
     | {
         system?: ReturnType<typeof buildSystemArg>;
         activeTools?: readonly string[];
+        [systemMessagePrefixPatch]?: SystemMessagePrefixPatch;
       }
     | undefined;
 
@@ -137,6 +146,12 @@ export function createLoopCallPlan(
           ...(directive.activeTools !== undefined
             ? { activeTools: directive.activeTools }
             : {}),
+          ...(directive[systemMessagePrefixPatch] !== undefined
+            ? {
+                [systemMessagePrefixPatch]:
+                  directive[systemMessagePrefixPatch],
+              }
+            : {}),
         };
       }
     };
@@ -144,15 +159,38 @@ export function createLoopCallPlan(
   if (request.observer || wrapStepModel) {
     args.prepareStep = ({
       model,
+      messages,
     }: {
       model: Parameters<NonNullable<typeof wrapStepModel>>[0];
-    }) => ({
-      ...(wrapStepModel ? { model: wrapStepModel(model) } : {}),
-      ...(overrides?.system !== undefined ? { system: overrides.system } : {}),
-      ...(overrides?.activeTools !== undefined
-        ? { activeTools: [...overrides.activeTools] }
-        : {}),
-    });
+      messages: readonly unknown[];
+    }) => {
+      const prefixPatch = overrides?.[systemMessagePrefixPatch];
+      const patchedMessages = prefixPatch
+        ? applyAiSdkSystemMessagePrefixPatch(messages, prefixPatch)
+        : undefined;
+      if (prefixPatch && overrides) {
+        overrides = {
+          ...(overrides.system !== undefined
+            ? { system: overrides.system }
+            : {}),
+          ...(overrides.activeTools !== undefined
+            ? { activeTools: overrides.activeTools }
+            : {}),
+        };
+      }
+      return {
+        ...(wrapStepModel ? { model: wrapStepModel(model) } : {}),
+        ...(overrides?.system !== undefined
+          ? { system: overrides.system }
+          : {}),
+        ...(overrides?.activeTools !== undefined
+          ? { activeTools: [...overrides.activeTools] }
+          : {}),
+        ...(patchedMessages !== undefined
+          ? { messages: patchedMessages }
+          : {}),
+      };
+    };
   }
 
   return {
