@@ -1,4 +1,4 @@
-import type { BoundaryDef } from './boundary'
+import type { BoundaryDef } from "./boundary";
 import type {
   InputBoundaryOptions,
   InputSource,
@@ -7,11 +7,11 @@ import type {
   ModelInputOriginFor,
   NonEmptyInputBoundaryOptions,
   TextInputSource,
-} from './input-origin'
-import type { MediaPartSubject } from './media/types'
+} from "./input-origin";
+import type { MediaPartSubject } from "./media/types";
 
-const TEXT_SOURCES = ['user', 'tool', 'retrieval'] as const
-const MEDIA_SOURCES = ['user', 'tool'] as const
+const TEXT_SOURCES = ["user", "tool", "retrieval"] as const;
+const MEDIA_SOURCES = ["user", "tool"] as const;
 
 /**
  * Target untrusted text immediately before it enters a governed model.
@@ -33,10 +33,20 @@ const MEDIA_SOURCES = ['user', 'tool'] as const
  * const toolText = boundary.input.text({ from: 'tool' })
  * ```
  */
-function text<const TOptions extends InputBoundaryOptions<TextInputSource> = InputBoundaryOptions<TextInputSource>>(
+function text<
+  const TOptions extends InputBoundaryOptions<TextInputSource> =
+    InputBoundaryOptions<TextInputSource>,
+>(
   options?: NonEmptyInputBoundaryOptions<TOptions>,
-): BoundaryDef<'model.input.text', string, ModelInputOriginFor<InputSourcesFromOptions<TOptions, TextInputSource>>> {
-  return createInputBoundary('model.input.text', normalizeInputSources(options?.from, TEXT_SOURCES))
+): BoundaryDef<
+  "model.input.text",
+  string,
+  ModelInputOriginFor<InputSourcesFromOptions<TOptions, TextInputSource>>
+> {
+  return createInputBoundary(
+    "model.input.text",
+    normalizeInputSources(options?.from, TEXT_SOURCES),
+  );
 }
 
 /**
@@ -59,21 +69,28 @@ function text<const TOptions extends InputBoundaryOptions<TextInputSource> = Inp
  * const toolMedia = boundary.input.media({ from: 'tool' })
  * ```
  */
-function media<const TOptions extends InputBoundaryOptions<MediaInputSource> = InputBoundaryOptions<MediaInputSource>>(
+function media<
+  const TOptions extends InputBoundaryOptions<MediaInputSource> =
+    InputBoundaryOptions<MediaInputSource>,
+>(
   options?: NonEmptyInputBoundaryOptions<TOptions>,
 ): BoundaryDef<
-  'model.input.media',
+  "model.input.media",
   MediaPartSubject,
   ModelInputOriginFor<InputSourcesFromOptions<TOptions, MediaInputSource>>
 > {
-  return createInputBoundary('model.input.media', normalizeInputSources(options?.from, MEDIA_SOURCES))
+  return createInputBoundary(
+    "model.input.media",
+    normalizeInputSources(options?.from, MEDIA_SOURCES),
+  );
 }
 
 /**
  * Target trusted developer and system instructions sent to a governed model.
  *
- * This boundary has no source filter. Untrusted user, tool, and retrieval text
- * belongs on {@link text}; raw tool values belong in {@link toolPolicy}.
+ * This boundary has no source filter. A system message is not trusted merely
+ * because of its role: rendered retrieval text remains on {@link text} with
+ * source `retrieval`. Raw tool values belong in {@link toolPolicy}.
  *
  * @returns A frozen trusted-instructions boundary.
  *
@@ -82,34 +99,40 @@ function media<const TOptions extends InputBoundaryOptions<MediaInputSource> = I
  * const trustedInstructions = boundary.input.instructions()
  * ```
  */
-function instructions(): BoundaryDef<'model.instructions', string> {
-  return createInputBoundary('model.instructions')
+function instructions(): BoundaryDef<"model.instructions", string> {
+  return createInputBoundary("model.instructions");
 }
 
 /** @internal Public input helper group mounted at `boundary.input`. */
-export const inputBoundary = Object.freeze({ text, media, instructions })
+export const inputBoundary = Object.freeze({ text, media, instructions });
 
 function createInputBoundary<
-  TId extends 'model.input.text' | 'model.input.media' | 'model.instructions',
+  TId extends "model.input.text" | "model.input.media" | "model.instructions",
   TSubject,
   TOrigin = unknown,
 >(id: TId, from?: readonly InputSource[]): BoundaryDef<TId, TSubject, TOrigin> {
-  const descriptor = from === undefined ? { _tag: 'Boundary' as const, id } : { _tag: 'Boundary' as const, id, from }
-  return Object.freeze(descriptor) as BoundaryDef<TId, TSubject, TOrigin>
+  const descriptor =
+    from === undefined
+      ? { _tag: "Boundary" as const, id }
+      : { _tag: "Boundary" as const, id, from };
+  return Object.freeze(descriptor) as BoundaryDef<TId, TSubject, TOrigin>;
 }
 
 function normalizeInputSources<TSource extends InputSource>(
   selected: TSource | readonly TSource[] | undefined,
   supported: readonly TSource[],
 ): readonly TSource[] | undefined {
-  if (selected === undefined) return undefined
-  const values = Array.isArray(selected) ? selected : [selected]
-  if (values.length === 0) throw new TypeError('Input boundary source filters cannot be empty.')
-  const normalized = [...new Set(values)]
+  if (selected === undefined) return undefined;
+  const values = Array.isArray(selected) ? selected : [selected];
+  if (values.length === 0)
+    throw new TypeError("Input boundary source filters cannot be empty.");
+  const normalized = [...new Set(values)];
   for (const source of normalized) {
     if (!supported.includes(source)) {
-      throw new TypeError(`Unsupported input boundary source: ${String(source)}`)
+      throw new TypeError(
+        `Unsupported input boundary source: ${String(source)}`,
+      );
     }
   }
-  return Object.freeze(normalized)
+  return Object.freeze(normalized);
 }

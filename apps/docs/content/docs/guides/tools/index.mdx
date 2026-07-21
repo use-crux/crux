@@ -105,6 +105,16 @@ result.toolResults[0].output; // full raw object from execute()
 // The next model step receives the compact text from toModelOutput().
 ```
 
+Safety evaluates the two shapes at different layers:
+
+```text
+toolPolicy.result(raw) → toModelOutput → boundary.input.* → model
+```
+
+Use `toolPolicy.result()` when a decision needs the raw application value. The
+converted model-facing text/media then passes through semantic input guardrails,
+so a custom `toModelOutput()` cannot bypass Safety.
+
 Return `json` when the model should receive structured data:
 
 ```ts
@@ -155,7 +165,14 @@ const renderChart = tool({
 });
 ```
 
-If `toModelOutput()` is omitted, Crux uses the standard default: strings become `{ type: 'text' }`, everything else becomes JSON. `@use-crux/ai` passes model output through to the AI SDK. Native adapters preserve supported media natively where the provider allows it: Google uses function-response media parts, Anthropic uses native `tool_result` content blocks, and OpenAI Chat Completions receives deterministic text references for non-text parts because that API only accepts text tool results.
+If `toModelOutput()` is omitted, Crux uses the standard default: strings become
+`{ type: 'text' }`, everything else becomes JSON. JSON is guarded through its
+deterministic model-facing text representation; Crux does not recursively scan
+arbitrary JSON for media-like fields. `@use-crux/ai` keeps AI SDK output native.
+Native adapters preserve supported media where the provider allows it: Google
+uses function-response media parts, Anthropic uses native `tool_result` content
+blocks, and OpenAI Chat Completions receives deterministic text references for
+non-text parts because that API only accepts text tool results.
 
 ## Tool merging order
 

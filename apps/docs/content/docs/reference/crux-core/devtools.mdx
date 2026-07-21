@@ -19,6 +19,12 @@ can see `RecordStore`, `VectorStore`, `AssetStore`, `storage()`, and `storage.sc
 shows record/vector capabilities and warnings without exposing record values, vector contents, or asset
 bodies by default.
 
+Safety decisions use semantic target labels: `Model input · Text`, `Model input
+· Media`, and `Model instructions`. Runs Explain may show a privacy-safe source
+badge (`User`, `Tool`, or `Retrieval`) plus a tool/retriever identifier, but never
+the guarded content. Catalog stores canonical boundary ids; runtime-only `from`
+filters are not Project Index facts.
+
 ## `withDevtools(options)`
 
 Creates a `CruxPlugin` that installs the canonical local observability transport.

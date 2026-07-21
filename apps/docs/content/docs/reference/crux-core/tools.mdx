@@ -45,6 +45,18 @@ Index discovers statically visible `tool(...)` definitions from source; do not r
 
 If neither `input` nor `parameters` is provided, the tool receives an empty object.
 
+Tool-result Safety is deliberately layered:
+
+```text
+toolPolicy.result(raw) → toModelOutput → boundary.input.* → model
+```
+
+Raw-value decisions use `toolPolicy.result()`. After the optional mapper runs,
+semantic model-ingress guardrails inspect the exact text/media representation
+that will reach the provider. Custom conversion therefore cannot bypass Safety.
+JSON uses deterministic model-facing text and is not recursively interpreted as
+media.
+
 ```ts
 const now = tool({
   name: "now",

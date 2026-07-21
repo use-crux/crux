@@ -26,24 +26,65 @@ policies and attaches them globally, to prompts/contexts, or per call.
 
 Policies bind to typed boundary descriptors:
 
-| Helper                                            | Boundary                                                                     |
-| ------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `boundary.input.text()`                           | User input text before provider execution.                                   |
-| `boundary.input.media()`                          | Each canonical non-text part in user input before provider normalization.    |
-| `boundary.input.model()`                          | Model input text.                                                            |
-| `boundary.output.text()`                          | Final model output text.                                                     |
-| `boundary.output.media()`                         | Each canonical model/operation output media part before public accumulation. |
-| `boundary.output.object<T>()`                     | Parsed structured output object.                                             |
-| `boundary.output.both<T>()`                       | `{ text, object }` structured output pair.                                   |
-| `boundary.output.path<T>()('a.b')`                | Typed structured-output path.                                                |
-| `boundary.tool.call()` / `boundary.tool.result()` | Tool arguments and results.                                                  |
-| `boundary.approval.request()`                     | Human approval request payloads.                                             |
-| `boundary.retrieval.result()`                     | Retrieval hits before model consumption.                                     |
-| `boundary.memory.write<T>()`                      | Candidate memory writes.                                                     |
-| `boundary.validation.feedback()`                  | Corrective validation feedback before re-prompting.                          |
+| Helper                             | Boundary                                                                        |
+| ---------------------------------- | ------------------------------------------------------------------------------- |
+| `boundary.input.text()`            | Untrusted user, tool, and rendered retrieval text immediately before the model. |
+| `boundary.input.media()`           | Canonical user and tool media immediately before provider normalization.        |
+| `boundary.input.instructions()`    | Trusted developer and system instructions.                                      |
+| `boundary.output.text()`           | Final model output text.                                                        |
+| `boundary.output.media()`          | Each canonical model/operation output media part before public accumulation.    |
+| `boundary.output.object<T>()`      | Parsed structured output object.                                                |
+| `boundary.output.both<T>()`        | `{ text, object }` structured output pair.                                      |
+| `boundary.output.path<T>()('a.b')` | Typed structured-output path.                                                   |
+| `boundary.memory.write<T>()`       | Candidate memory writes.                                                        |
+| `boundary.validation.feedback()`   | Corrective validation feedback before re-prompting.                             |
 
 Boundary ids are stable decision/config ids. `boundary.stream.*` is not a
 public boundary family; streaming is configured on output guardrails.
+
+### Semantic model ingress
+
+The optionless helpers are the normal choice. They cover every supported
+semantic source:
+
+```ts
+const textIngress = boundary.input.text();
+const mediaIngress = boundary.input.media();
+```
+
+Filter by source only when a policy genuinely differs by owner. The callback's
+`ctx.origin` narrows with the filter:
+
+```ts
+const retrievalText = boundary.input.text({ from: "retrieval" });
+const toolContent = [
+  boundary.input.text({ from: "tool" }),
+  boundary.input.media({ from: "tool" }),
+] as const;
+```
+
+Text supports `user`, `tool`, and `retrieval`; media supports `user` and `tool`.
+`boundary.input.media({ from: "retrieval" })` is intentionally invalid because
+retrieval results do not yet have canonical media ingress. Crux never hydrates
+retrieved `assetRef` values automatically.
+
+Tool policy and model-input policy are separate, ordered layers:
+
+```text
+toolPolicy.result(raw) → toModelOutput → boundary.input.* → model
+```
+
+`toolPolicy.result()` sees the raw application result. After `toModelOutput()`
+(or default conversion), canonical text and media are guarded immediately before
+the next model call. A custom converter cannot bypass input Safety. JSON output
+is checked through its deterministic model-facing text representation; Crux does
+not recursively search arbitrary JSON for media-like values.
+
+Direct retrieval contributions are guarded after rendering with source
+`retrieval`. A retrieval tool is ordinary tool output at ingress and therefore
+has source `tool`. System role does not establish trust: when retrieval text is
+folded into a system message, that prefix remains untrusted retrieval text while
+the adjacent authored system instructions use `boundary.input.instructions()`.
 
 ### Multimodal content
 
@@ -62,7 +103,7 @@ See [Safety for content primitives](/docs/reference/crux-core/safety-content-pri
 for the full primitive/boundary matrix, completed-operation write-back rules,
 step coverage, and stream temporal caveat.
 
-`boundary.input.text()` remains the projected-text boundary. Text parts remain
+`boundary.input.text()` is the projected-text boundary. Text parts remain
 verbatim while media becomes a bounded descriptor containing its kind and MIME
 type plus the full URL or byte size and a 12-character SHA-256 prefix. Payloads
 over 256KB use `sha256:omitted`, Blob hashes use `sha256:unavailable`, and file
@@ -202,6 +243,11 @@ const screenResults = toolPolicy.result({
 Use `toolMiddleware()` instead for execution plumbing such as logging, timing,
 caching, retry wrapping, or argument normalization.
 
+Result policies run on the raw value before `toModelOutput()`. Model-input
+guardrails then inspect the converted representation, so raw lifecycle controls
+and model-ingress controls can be composed without evaluating either layer
+twice.
+
 ## Registration
 
 Global policies are installed with `createSafetyPlugin()`:
@@ -283,6 +329,9 @@ Safety artifacts participate in `observability.capture`. Use capture presets
 and per-artifact overrides when traces leave a trusted boundary. Public audit,
 errors, and observability records are safe-by-default. Media audit entries add
 the canonical part type and original pre-strip indexes, never the media source.
+Model-input decisions use semantic target labels (`Model input · Text`, `Model
+input · Media`, or `Model instructions`) plus privacy-safe source provenance;
+they never store guarded content.
 
 ## Choosing The Primitive
 

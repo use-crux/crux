@@ -3,10 +3,11 @@ title: Guardrails
 description: Boundary-targeted policies that allow, block, warn, or rewrite content before unsafe data crosses a runtime boundary.
 ---
 
-Guardrails protect runtime boundaries. They run before content moves into or out
-of the model, tools, retrieval, memory, validation feedback, or other Safety
-surfaces. Use a guardrail when you need to block, redact, mask, hash, normalize,
-or report on content without re-calling the model.
+Guardrails protect runtime boundaries. They run on semantic model ingress,
+model output, memory writes, validation feedback, and other Safety surfaces. Use
+a guardrail when you need to block, redact, mask, hash, normalize, or report on
+content without re-calling the model. Raw tool call/result policy belongs in
+`toolPolicy`.
 
 ```ts title="guardrails.ts"
 import { boundary, guardrail } from "@use-crux/core/safety";
@@ -94,14 +95,13 @@ Common boundaries:
 
 | Boundary                           | Subject                                                                     |
 | ---------------------------------- | --------------------------------------------------------------------------- |
-| `boundary.input.text()`            | User input text before the provider call.                                   |
-| `boundary.input.media()`           | One canonical input-media part and its stable message/operation origin.     |
+| `boundary.input.text()`            | User, converted tool, and rendered retrieval text before the provider call. |
+| `boundary.input.media()`           | One canonical user/tool media part and its stable origin.                   |
+| `boundary.input.instructions()`    | Trusted developer/system instructions before the provider call.             |
 | `boundary.output.text()`           | Model output text before the caller sees it.                                |
 | `boundary.output.media()`          | One canonical model/operation output-media part before public accumulation. |
 | `boundary.output.object<T>()`      | Parsed structured output.                                                   |
 | `boundary.output.path<T>()('a.b')` | One typed structured-output path.                                           |
-| `boundary.tool.call()`             | Tool call name, id, and input.                                              |
-| `boundary.tool.result()`           | Tool result before it returns to the model.                                 |
 | `boundary.memory.write<T>()`       | Candidate memory write.                                                     |
 | `boundary.validation.feedback()`   | Corrective feedback before it is re-prompted.                               |
 
@@ -109,6 +109,23 @@ Guardrails can bind to several boundaries with `on: [...]`. A duplicate
 boundary in the same guardrail is a configuration error. Duplicate policy ids
 across attached policies are also invalid; use one policy with multiple
 boundaries when the same policy should apply in several places.
+
+The optionless input helpers are the default and match every supported semantic
+source. Use `from` only for source-specific policy:
+
+```ts
+const retrievalInjection = guardrail({
+  id: "retrieval-injection",
+  on: boundary.input.text({ from: "retrieval" }),
+  run: guardrail.injection({ action: "block" }),
+});
+```
+
+Text accepts `user`, `tool`, or `retrieval`; media accepts `user` or `tool`.
+Retrieved assets are never hydrated automatically, so retrieval media has no
+canonical model-ingress boundary yet. A system-role carrier does not make
+retrieval trusted: rendered retrieval prefixes stay source `retrieval`, while
+authored system content is checked as `boundary.input.instructions()`.
 
 ## Multimodal Content
 
@@ -262,7 +279,9 @@ rewriting its text placeholder.
 Adapters create one Safety session per `generate()` or `stream()` call. The
 session:
 
-1. Runs input guardrails over every user message, in order.
+1. Runs input guardrails exactly once over each applicable user, converted tool,
+   rendered retrieval, and trusted-instruction contribution before every model
+   call.
 2. Applies output guardrails before constraints, validation feedback,
    observability, memory, tools, and final caller access consume generated
    content.
