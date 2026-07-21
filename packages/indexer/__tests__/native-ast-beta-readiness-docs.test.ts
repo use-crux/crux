@@ -97,7 +97,7 @@ describe("native AST beta readiness docs", () => {
       ]);
 
     expect(workflow).toMatch(
-      /name: Native AST parity gate\s+run: pnpm test:native-ast-parity/,
+      /name: Indexer integration\s+run: pnpm test:native-ast-parity/,
     );
     expect(packageJson.scripts?.["test:native-ast-parity"]).toBe(
       "node ./scripts/native-ast-parity-gate.mjs",
