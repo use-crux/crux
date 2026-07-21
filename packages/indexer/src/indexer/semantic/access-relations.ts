@@ -23,12 +23,26 @@ import {
   unwrapExpression,
 } from "./model";
 import { semanticSourceForNode } from "./syntax-readers";
+import {
+  workspaceSnapshotAccessForMethod,
+  type WorkspaceSnapshotAccessSpec,
+} from "./workspace-snapshot-access";
 
-interface SemanticAccess {
-  readonly kind: "read" | "write" | "query" | "score" | "eval";
-  readonly target: SemanticTarget;
-  readonly node: SemanticAnalyzerNode<SemanticAnalyzerView>;
-}
+type SemanticInvocationKind = "read" | "write" | "query" | "score" | "eval";
+
+type SemanticAccess =
+  | {
+      readonly kind: SemanticInvocationKind;
+      readonly target: SemanticTarget;
+      readonly node: SemanticAnalyzerNode<SemanticAnalyzerView>;
+      readonly workspaceSnapshot?: never;
+    }
+  | {
+      readonly kind: "workspaceSnapshot";
+      readonly target: SemanticTarget;
+      readonly node: SemanticAnalyzerNode<SemanticAnalyzerView>;
+      readonly workspaceSnapshot: WorkspaceSnapshotAccessSpec;
+    };
 
 /**
  * Resolves resource, retriever, scorer, and eval accesses from callback-style
@@ -225,6 +239,17 @@ function semanticAccessesForCall(
     if (isEvalKind(target?.kind)) return [{ kind: "eval", target, node: call }];
     return [];
   }
+  const snapshotAccess = semanticWorkspaceSnapshotAccess(expression, view);
+  if (snapshotAccess) {
+    return [
+      {
+        kind: "workspaceSnapshot",
+        target: snapshotAccess.target,
+        node: call,
+        workspaceSnapshot: snapshotAccess.spec,
+      },
+    ];
+  }
   const receiver = view.syntax.propertyAccessExpression(expression);
   const target = receiver
     ? semanticTargetForExpression(receiver, view)
@@ -237,13 +262,36 @@ function semanticAccessesForCall(
   return [{ kind, target, node: call }];
 }
 
+/** Resolves `workspace.snapshot.<operation>()` without flattening the facet. */
+function semanticWorkspaceSnapshotAccess(
+  expression: SemanticAnalyzerNode<SemanticAnalyzerView>,
+  view: SemanticAnalyzerView,
+):
+  | {
+      readonly target: SemanticTarget;
+      readonly spec: WorkspaceSnapshotAccessSpec;
+    }
+  | undefined {
+  const method = view.syntax.propertyAccessName(expression);
+  const spec = method ? workspaceSnapshotAccessForMethod(method) : undefined;
+  const facet = view.syntax.propertyAccessExpression(expression);
+  if (!spec || !facet || !view.syntax.isKind(facet, "propertyAccessExpression"))
+    return undefined;
+  if (view.syntax.propertyAccessName(facet) !== "snapshot") return undefined;
+  const receiver = view.syntax.propertyAccessExpression(facet);
+  const target = receiver
+    ? semanticTargetForExpression(receiver, view)
+    : undefined;
+  return target?.kind === "workspace" ? { target, spec } : undefined;
+}
+
 /**
  * Maps target method names to semantic access kinds for resolved target kinds.
  */
 function semanticInvocationKind(
   method: string,
   targetKind: ProjectDefinitionKind,
-): SemanticAccess["kind"] | undefined {
+): SemanticInvocationKind | undefined {
   if (
     targetKind === "memory" ||
     targetKind === "blackboard" ||
@@ -294,6 +342,23 @@ function semanticAccessRelation(
   access: SemanticAccess,
   view: SemanticAnalyzerView,
 ): ProjectRelation[] {
+  if (access.kind === "workspaceSnapshot") {
+    return [
+      projectRelation({
+        type: `${fromKind}.${access.workspaceSnapshot.relation}`,
+        from,
+        to: access.target.id,
+        fidelity: "resolved",
+        source: semanticSourceForNode(access.node, view.syntax),
+        metadata: {
+          workspaceSnapshot: {
+            operation: access.workspaceSnapshot.operation,
+            effect: access.workspaceSnapshot.effect,
+          },
+        },
+      }),
+    ];
+  }
   const type = semanticAccessRelationType(
     fromKind,
     access.kind,

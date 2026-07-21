@@ -44,7 +44,7 @@ Common guide pages:
 - [Files and artifacts](/docs/guides/workspaces/files-and-artifacts)
 - [Tools and safety](/docs/guides/workspaces/tools-and-safety)
 - [Sources and mounts](/docs/guides/workspaces/sources-and-mounts)
-- [Versions and transactions](/docs/guides/workspaces/versions-and-transactions)
+- [Versions, snapshots, and transactions](/docs/guides/workspaces/versions-and-transactions)
 - [Watching changes](/docs/guides/workspaces/watching)
 - [Storage and limits](/docs/guides/workspaces/storage-and-limits)
 
@@ -67,6 +67,8 @@ await ws.history("/outputs/report.md");
 await ws.read("/outputs/report.md", { version: 1 });
 await ws.diff("/outputs/report.md", { from: 1, to: 2 });
 await ws.undo("/outputs/report.md");
+const checkpoint = await ws.snapshot.create({ path: "/outputs" });
+await ws.snapshot.delete(checkpoint);
 await ws.finalize("/workspace/final-report.md", { kind: "report" });
 await ws.artifacts({ status: "final" });
 await ws.transaction(async (tx) => {
@@ -76,9 +78,10 @@ await ws.transaction(async (tx) => {
 await ws.delete("/outputs/report.md");
 ```
 
-Every method accepts a `{ namespace }` option. Use it for direct calls or
-manually created tools when the workspace namespace normally resolves from
-prompt input:
+Most methods accept a `{ namespace }` option. Snapshot `create()` and `list()` do
+too; snapshot `restore()` and `delete()` instead use the authoritative namespace
+stored in their complete ref. Use direct-call overrides or manually created tools
+when the workspace namespace normally resolves from prompt input:
 
 ```ts
 await ws.write("/workspace/notes.md", "# Notes", { namespace: "thread:123" });
@@ -239,6 +242,27 @@ mounts, so it works with in-memory stores, Convex record stores, Upstash Redis
 record stores, and custom conforming stores. Crash-proof multi-key durability
 depends on the backing store/runtime; `transaction()` is not a distributed
 transaction across stores.
+
+## Snapshots
+
+<Callout type="warn">
+  Restore is an exact-tree replacement. It deletes every later live file inside
+  the captured tree when that path is absent from the snapshot.
+</Callout>
+
+```ts
+const checkpoint = await ws.snapshot.create({ path: "/outputs" });
+const page = await ws.snapshot.list({ path: "/outputs", limit: 20 });
+const result = await ws.snapshot.restore(checkpoint);
+await ws.snapshot.delete(checkpoint);
+```
+
+Snapshots are explicit, materialized, reusable exact-tree checkpoints. Restore
+can delete later files inside the captured tree. Snapshot methods are intentionally
+absent from `WorkspaceTransaction`.
+
+See the [Workspace snapshot API reference](/docs/reference/crux-core/workspace-snapshots)
+for types, pagination, errors, and guarantees.
 
 ## Source-Backed Mounts
 

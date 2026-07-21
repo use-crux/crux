@@ -10,8 +10,8 @@ import (
 )
 
 func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
-	if ProjectIndexSnapshotCacheEpoch != 43 {
-		t.Fatalf("ProjectIndexSnapshotCacheEpoch = %d, want unconditional Static Index epoch 43", ProjectIndexSnapshotCacheEpoch)
+	if ProjectIndexSnapshotCacheEpoch != 44 {
+		t.Fatalf("ProjectIndexSnapshotCacheEpoch = %d, want Workspace snapshot relation epoch 44", ProjectIndexSnapshotCacheEpoch)
 	}
 
 	doc := exportedConstDoc(t, "identity.go", "ProjectIndexSnapshotCacheEpoch")
@@ -19,8 +19,9 @@ func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
 		"persisted `.crux/cache/index-v2/epoch-*`",
 		"stale snapshot masking after restart",
 		"Eval arm placement and embedding facts",
-		"Rust/Oxc Static Index scheduling unconditional",
-		"Epoch 43",
+		"unconditional Rust/Oxc Static Index scheduling",
+		"Workspace snapshot usage relations",
+		"Epoch 44",
 		"TS-owned AST and semantic fact cache identity",
 	} {
 		if !strings.Contains(doc, phrase) {
@@ -31,7 +32,7 @@ func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
 
 func TestProjectIndexFactStorePathIncludesSnapshotEpoch(t *testing.T) {
 	root := t.TempDir()
-	wantSuffix := filepath.Join(".crux", "cache", "index-v2", "epoch-43", "index.db")
+	wantSuffix := filepath.Join(".crux", "cache", "index-v2", "epoch-44", "index.db")
 
 	if got := projectIndexFactStoreDBFile(root); !strings.HasSuffix(got, wantSuffix) {
 		t.Fatalf("projectIndexFactStoreDBFile() = %q, want suffix %q", got, wantSuffix)

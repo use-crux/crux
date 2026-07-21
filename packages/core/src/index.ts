@@ -161,6 +161,7 @@ export type {
   SchemaContribution,
 } from "./resolver/contract";
 export {
+  WorkspaceSnapshotError,
   workspace,
   workspaceToolNames,
   retrieverWorkspaceMountSource,
@@ -230,6 +231,13 @@ export type {
   WorkspaceRetrieverMountQueryInput,
   WorkspaceRetrieverMountSource,
   WorkspaceRetrieverMountSourceOptions,
+  WorkspaceSnapshotErrorCode,
+  WorkspaceSnapshotListOptions,
+  WorkspaceSnapshotOperations,
+  WorkspaceSnapshotOptions,
+  WorkspaceSnapshotPage,
+  WorkspaceSnapshotRef,
+  WorkspaceSnapshotRestoreResult,
 } from "./workspace";
 export type {
   Asset,

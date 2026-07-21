@@ -11,19 +11,19 @@
 
 import type { AssetStore, RecordStore } from "../storage";
 import { snapshotContent } from "./version-content";
-import { fileKey, listFileRecords } from "./store";
+import { fileKey, getRecord, listFileRecords } from "./store";
 import { normalizePath } from "./path";
 import { purgeVersions } from "./version-store";
 import { instrument } from "./observability";
 import { assertLocalTransactionMutationPath } from "./transaction-mounts";
 import { suppressWorkspaceChangeEvents } from "./watch";
+import type { WorkspaceChangeEmitter } from "./watch";
 import {
-  captureRollbackState,
-  currentRecord,
-  deleteCapturedAssets,
-  rollbackTouchedPaths,
-  type TransactionRollbackState,
-} from "./transaction-rollback";
+  applyWorkspaceMutationBatch,
+  type WorkspaceMutation,
+} from "./mutation-batch";
+import type { WorkspaceLimits } from "./limits";
+import type { WorkspaceVersioning } from "./version-types";
 import type {
   Workspace,
   WorkspaceContent,
@@ -41,7 +41,12 @@ export interface WorkspaceTransactionConfig {
   readonly store: RecordStore;
   readonly assets?: AssetStore;
   readonly mounts: readonly NormalizedMount[];
+  readonly inlineTextBelowBytes: number;
+  readonly limits?: WorkspaceLimits;
   readonly retention?: WorkspaceRetention;
+  readonly versioning?: WorkspaceVersioning;
+  readonly emitChange: WorkspaceChangeEmitter;
+  readonly instrumentMutations: true;
   readonly resolveNamespace: () => Promise<string>;
   readonly write: (
     namespace: string,
@@ -50,11 +55,6 @@ export interface WorkspaceTransactionConfig {
     options?: WorkspaceWriteOptions,
     producedBy?: WorkspaceFileRecord["producedBy"],
   ) => Promise<unknown>;
-  readonly remove: (
-    namespace: string,
-    path: string,
-    options?: { readonly deleteAsset?: boolean },
-  ) => Promise<void>;
   readonly ops: Pick<
     Workspace,
     | "list"
@@ -202,36 +202,36 @@ async function commitTouchedPaths(
   stagingNamespace: string,
   touched: ReadonlySet<string>,
 ): Promise<void> {
-  const before = new Map<string, TransactionRollbackState>();
-  const deletedStates: TransactionRollbackState[] = [];
+  const mutations: WorkspaceMutation[] = [];
   for (const path of touched) {
-    before.set(path, await captureRollbackState(config, namespace, path));
-  }
-  try {
-    for (const path of touched) {
-      const staged = await currentRecord(config, stagingNamespace, path);
-      if (!staged) {
-        await config.remove(namespace, path, { deleteAsset: false });
-        const state = before.get(path);
-        if (state) deletedStates.push(state);
-        continue;
-      }
-      await config.write(
-        namespace,
-        path,
-        await snapshotContent(staged, config.assets),
-        writeOptionsFromRecord(staged),
-        staged.producedBy,
-      );
+    const normalized = normalizePath(path);
+    const staged = await getRecord(
+      config.store,
+      config.workspaceId,
+      stagingNamespace,
+      normalized,
+    );
+    if (!staged) {
+      mutations.push({ kind: "delete", path: normalized });
+      continue;
     }
-  } catch (error) {
-    await rollbackTouchedPaths(config, namespace, before);
-    throw error;
+    mutations.push({
+      kind: "put",
+      path: normalized,
+      head: {
+        content: await snapshotContent(staged, config.assets),
+        mimeType: staged.mimeType,
+        ...(staged.metadata !== undefined ? { metadata: staged.metadata } : {}),
+        ...(staged.status !== undefined ? { status: staged.status } : {}),
+        ...(staged.kind !== undefined ? { artifactKind: staged.kind } : {}),
+        ...(staged.producedBy !== undefined
+          ? { producedBy: staged.producedBy }
+          : {}),
+      },
+      operation: "write",
+    });
   }
-  const deletedAssetUris = new Set<string>();
-  for (const state of deletedStates) {
-    await deleteCapturedAssets(config, state, deletedAssetUris);
-  }
+  await applyWorkspaceMutationBatch(config, namespace, mutations);
 }
 
 async function clearNamespace(

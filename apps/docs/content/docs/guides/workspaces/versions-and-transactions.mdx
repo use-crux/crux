@@ -1,11 +1,21 @@
 ---
-title: Versions and Transactions
-description: Use workspace history, diff, undo, pinned artifact versions, and staged multi-file writes.
+title: Versions, Snapshots, and Transactions
+description: Choose file history, explicit subtree snapshots, or staged multi-file writes.
 ---
 
-Workspaces keep a version history for local files. They also support staged
-multi-file transactions for deliverables that should commit as one coherent
-change.
+Workspaces keep a version history for local files, materialize explicit subtree
+snapshots, and support staged multi-file transactions.
+
+## Choose The Recovery Boundary
+
+| Need                                                    | Use             |
+| ------------------------------------------------------- | --------------- |
+| Revert one file to an earlier version                   | `undo()`        |
+| Publish several new file changes as one coherent update | `transaction()` |
+| Preserve and later restore an existing file or subtree  | `ws.snapshot`   |
+
+`undo()` is file history. A transaction protects a change you are about to make.
+A snapshot is an explicit, reusable checkpoint of state that already exists.
 
 ## Versioning And History
 
@@ -67,6 +77,81 @@ await ws.read("/outputs/report.md", { version: published.version }); // publishe
 
 Use this when the user needs a stable final output while the agent continues
 iterating.
+
+## Snapshots
+
+Capture a local file or subtree through the singular `snapshot` facet. `path` is
+required; `namespace` is optional when the Workspace already resolves one:
+
+```ts
+const checkpoint = await ws.snapshot.create({
+  path: "/outputs",
+  namespace: "thread:123",
+});
+```
+
+<Callout type="warn">
+  Restore is an exact-tree replacement. It creates or replaces captured files
+  and deletes every later live file at or below the captured path that is absent
+  from the snapshot. Files outside the captured tree are untouched.
+</Callout>
+
+The returned reference is JSON-safe and reusable. Persist the complete value,
+not only its opaque `id`:
+
+```ts
+const stored = JSON.stringify(checkpoint);
+const loaded = JSON.parse(stored) as typeof checkpoint;
+
+const result = await ws.snapshot.restore(loaded);
+// { restoredFiles, deletedFiles, unchangedFiles }
+```
+
+Restore appends fresh file versions with operation `"restore"`; it never rewinds
+history. It preserves artifact metadata plus both the working content and a
+distinct published version when one was pinned at capture time. The snapshot
+remains listable and reusable after restore.
+
+List committed snapshots newest first. A path filter matches the exact normalized
+capture path, not descendants. `limit` defaults to 50 and accepts integers from 1
+through 100; pass the returned opaque cursor to continue the same Workspace,
+namespace, and path-filtered listing:
+
+```ts
+let page = await ws.snapshot.list({ path: "/outputs", limit: 20 });
+
+if (page.cursor) {
+  page = await ws.snapshot.list({
+    path: "/outputs",
+    limit: 20,
+    cursor: page.cursor,
+  });
+}
+```
+
+Snapshots own materialized payload copies and live until explicitly deleted:
+
+```ts
+await ws.snapshot.delete(checkpoint);
+```
+
+Capture and restore reject any tree that intersects a source-backed mount; copy
+provider-owned files into a local mount first. Within one process, mutations for
+the same Workspace namespace are serialized and observed restore failures roll
+back. Generic stores do not provide process-crash, cross-process, or distributed
+atomicity, and snapshots are not a backup system.
+
+Snapshots are explicit in this release. Automatic Effects checkpoints and
+conflict policy belong to the later [#258 integration](https://github.com/use-crux/crux/issues/258)
+and are not performed by `workspace.snapshot`.
+
+In Devtools, the Project Index Catalog lists where application definitions author
+these snapshot operations. Workspace activity and Run detail show operations that
+actually executed, with snapshot-specific aggregate summaries. Runtime snapshot
+instances remain runtime data and do not appear as static Catalog definitions.
+
+See the [snapshot API reference](/docs/reference/crux-core/workspace-snapshots)
+and [storage costs and lifetime](/docs/guides/workspaces/storage-and-limits#snapshot-storage-and-lifetime).
 
 ## Transactions
 

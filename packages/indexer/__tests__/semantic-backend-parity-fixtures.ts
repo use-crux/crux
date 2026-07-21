@@ -780,6 +780,40 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
       },
     },
     {
+      name: "workspace-snapshot-grouped-facet-relations",
+      files: {
+        "src/resources.ts": `
+        import { workspace } from '@use-crux/core'
+
+        export const scratch = workspace({ id: 'scratch' })
+      `,
+        "src/app.ts": `
+        import { tool } from '@use-crux/core'
+        import { scratch } from './resources'
+
+        async function manageSnapshots() {
+          const ref = await scratch.snapshot.create({ path: '/drafts' })
+          await scratch.snapshot.list({ path: '/drafts' })
+          await scratch.snapshot.restore(ref)
+          await scratch.snapshot.delete(ref)
+        }
+
+        export const snapshotTool = tool({
+          name: 'snapshotTool',
+          execute: manageSnapshots,
+        })
+      `,
+      },
+      expect: {
+        relationTypes: [
+          "tool.creates_workspace_snapshot",
+          "tool.lists_workspace_snapshots",
+          "tool.restores_workspace_snapshot",
+          "tool.deletes_workspace_snapshot",
+        ],
+      },
+    },
+    {
       name: "workspace-history-read-relation",
       files: {
         "src/resources.ts": `

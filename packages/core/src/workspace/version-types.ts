@@ -1,17 +1,23 @@
 /**
  * Type contracts for the workspace versioning & history dimension.
  *
- * Every content mutation (`write` / `edit` / `append` / `undo`) appends an
- * immutable {@link WorkspaceVersionRecord} snapshot, giving each file a
- * newest-first {@link WorkspaceVersion} history that backs read-at-version,
- * {@link WorkspaceDiff}, and `undo`. The public projection types are exported
- * from `./types`; the persisted record and schema constant are internal.
+ * Every content mutation (`write` / `edit` / `append` / `undo` / `restore`)
+ * appends an immutable {@link WorkspaceVersionRecord} snapshot, giving each
+ * file a newest-first {@link WorkspaceVersion} history that backs
+ * read-at-version, {@link WorkspaceDiff}, and `undo`. The public projection
+ * types are exported from `./types`; the persisted record and schema constant
+ * are internal.
  *
  * @module
  */
 
 import type { JsonObject } from "../storage";
-import type { WorkspaceFileRecord, WorkspaceNamespaceOption } from "./types";
+import type { WorkspaceSnapshotOperations } from "./snapshot/types";
+import type {
+  WorkspaceFileRecord,
+  WorkspaceNamespaceOption,
+  WorkspacePath,
+} from "./types";
 
 /** Persisted schema version for a {@link WorkspaceVersionRecord}. */
 export const VERSION_RECORD_SCHEMA = 1;
@@ -24,8 +30,25 @@ export const VERSION_RECORD_SCHEMA = 1;
  * - `append` — an {@link Workspace.append}.
  * - `undo` — a restore appended by {@link Workspace.undo}; history is never
  *   rewritten, so reverting a change adds a new version rather than dropping one.
+ * - `restore` — a new version appended by
+ *   {@link WorkspaceSnapshotOperations.restore}; snapshot restore also preserves
+ *   history rather than rewinding it.
  */
-export type WorkspaceVersionOperation = "write" | "edit" | "append" | "undo";
+export type WorkspaceVersionOperation =
+  | "write"
+  | "edit"
+  | "append"
+  | "undo"
+  | "restore";
+
+/** Internal marker emitted only after its version mutation commits. */
+export interface WorkspaceVersionEvent {
+  readonly workspaceId: string;
+  readonly namespace: string;
+  readonly path: WorkspacePath;
+  readonly version: number;
+  readonly operation: WorkspaceVersionOperation;
+}
 
 /**
  * Versioning & retention policy for a workspace.
@@ -36,16 +59,16 @@ export type WorkspaceVersionOperation = "write" | "edit" | "append" | "undo";
  *
  * @example
  * ```ts
- * // Keep the 20 most recent versions per file; older snapshots are GC'd.
+ * // Keep the 20 most recent versions plus any older active publication pin.
  * workspace({ id: 'research', namespace, versioning: { maxVersions: 20 } })
  * ```
  */
 export interface WorkspaceVersioning {
   /**
-   * Maximum number of versions to retain per file. When a write would exceed
-   * this count, the oldest snapshots (and their out-of-line assets) are deleted.
-   * Defaults to unlimited — history is kept until explicitly bounded, so a file
-   * never silently loses revisions.
+   * Maximum number of recent versions to retain per file. An older revision
+   * referenced by the file's active publication pin is retained in addition to
+   * this numeric cap until it is no longer published. Other older file revisions
+   * and their out-of-line assets are deleted. Defaults to unlimited.
    */
   readonly maxVersions?: number;
 }
@@ -53,7 +76,7 @@ export interface WorkspaceVersioning {
 /**
  * One revision in a file's history, newest first.
  *
- * This is the public projection of a stored snapshot: enough to render a
+ * This is the public projection of a stored file revision: enough to render a
  * timeline and pick a revision to read or diff, with no file contents inlined.
  */
 export interface WorkspaceVersion {

@@ -1,187 +1,240 @@
 /**
- * Rollback helpers for workspace transactions.
- *
- * Rollback restores both live file records and version records for touched
- * paths. Asset cleanup is careful to delete only assets introduced by the failed
- * commit while preserving assets referenced by the pre-transaction state.
+ * Exact metadata and asset rollback for Workspace mutation batches.
  *
  * @module
  */
 
-import type { JsonObject } from "../storage";
+import type { AssetStore, JsonObject, RecordStore } from "../storage";
 import { workspaceSetOptions } from "./limits";
-import { normalizePath } from "./path";
-import { fileKey, listFileRecords } from "./store";
-import { listVersionRecords, purgeVersions, versionKey } from "./version-store";
-import type { WorkspaceVersionRecord } from "./version-types";
-import type { WorkspaceFileRecord } from "./types";
-import type { WorkspaceTransactionConfig } from "./transaction";
+import { fileKey, getRecord } from "./store";
+import {
+  listVersionRecords,
+  purgeVersions,
+  retainFileVersions,
+  versionKey,
+} from "./version-store";
+import type {
+  WorkspaceVersioning,
+  WorkspaceVersionRecord,
+} from "./version-types";
+import type {
+  WorkspaceFileRecord,
+  WorkspacePath,
+  WorkspaceRetention,
+} from "./types";
 
-/** Pre-commit state for one touched path. */
-export interface TransactionRollbackState {
-  readonly head: WorkspaceFileRecord | null;
-  readonly versions: readonly WorkspaceVersionRecord[];
+/** Storage dependencies needed to capture and restore a mutation batch. */
+export interface WorkspaceRollbackConfig {
+  readonly workspaceId: string;
+  readonly store: RecordStore;
+  readonly assets?: AssetStore;
+  readonly retention?: WorkspaceRetention;
+  readonly versioning?: WorkspaceVersioning;
 }
 
-/** Capture the live state needed to roll one path back after a commit failure. */
-export async function captureRollbackState(
-  config: WorkspaceTransactionConfig,
+/** Exact pre-commit state for one touched path. */
+export interface WorkspaceMutationPreState {
+  readonly head: WorkspaceFileRecord | null;
+  readonly versions: readonly WorkspaceVersionRecord[];
+  readonly assetUris: ReadonlySet<string>;
+}
+
+/** Capture the live state needed to restore one path without a public write. */
+export async function captureMutationPreState(
+  config: WorkspaceRollbackConfig,
   namespace: string,
-  path: string,
-): Promise<TransactionRollbackState> {
-  const normalized = normalizePath(path);
+  path: WorkspacePath,
+): Promise<WorkspaceMutationPreState> {
+  const head = await getRecord(
+    config.store,
+    config.workspaceId,
+    namespace,
+    path,
+  );
+  const versions = await listVersionRecords(
+    config.store,
+    config.workspaceId,
+    namespace,
+    path,
+  );
   return {
-    head: await currentRecord(config, namespace, normalized),
-    versions: await listVersionRecords(
-      config.store,
-      config.workspaceId,
-      namespace,
-      normalized,
-    ),
+    head,
+    versions,
+    assetUris: referencedAssetUris(head, versions),
   };
 }
 
-/** Read the current live file record for a path, or `null` when absent. */
-export async function currentRecord(
-  config: WorkspaceTransactionConfig,
+/**
+ * Best-effort restore every touched path and return any rollback failures.
+ *
+ * All paths are attempted so a secondary cleanup failure cannot prevent other
+ * pre-state from being restored or replace the original mutation error.
+ */
+export async function rollbackMutationBatch(
+  config: WorkspaceRollbackConfig,
   namespace: string,
-  path: string,
-): Promise<WorkspaceFileRecord | null> {
-  return (
-    (
-      await listFileRecords(config.store, config.workspaceId, namespace, {
-        filter: { path: normalizePath(path) },
-      })
-    )[0] ?? null
+  before: ReadonlyMap<WorkspacePath, WorkspaceMutationPreState>,
+): Promise<readonly unknown[]> {
+  const failures: unknown[] = [];
+  for (const [path, state] of before) {
+    await rollbackPath(config, namespace, path, state).catch((error) => {
+      failures.push(error);
+    });
+  }
+  return failures;
+}
+
+/** Delete assets owned by a successfully deleted path's captured state. */
+async function deletePreStateAssets(
+  assets: AssetStore | undefined,
+  state: WorkspaceMutationPreState,
+  deletedUris: Set<string>,
+): Promise<void> {
+  if (!assets) return;
+  for (const uri of state.assetUris) {
+    if (deletedUris.has(uri)) continue;
+    await assets.delete({ uri });
+    deletedUris.add(uri);
+  }
+}
+
+/** Remove one path's metadata without destroying rollback-owned assets. */
+export async function deleteMutationPathMetadata(
+  config: WorkspaceRollbackConfig,
+  namespace: string,
+  path: WorkspacePath,
+): Promise<void> {
+  await config.store.delete(fileKey(config.workspaceId, namespace, path));
+  await purgeVersions(
+    config.store,
+    undefined,
+    config.workspaceId,
+    namespace,
+    path,
+    { deleteAsset: false },
   );
 }
 
-/** Restore all touched paths to their captured pre-commit state. */
-export async function rollbackTouchedPaths(
-  config: WorkspaceTransactionConfig,
+/** Run destructive retention and deleted-path asset cleanup after commit. */
+export async function cleanupCommittedMutationBatch(
+  config: WorkspaceRollbackConfig,
   namespace: string,
-  before: ReadonlyMap<string, TransactionRollbackState>,
+  deletedPaths: readonly WorkspacePath[],
+  before: ReadonlyMap<WorkspacePath, WorkspaceMutationPreState>,
+  finalHeads: ReadonlyMap<WorkspacePath, WorkspaceFileRecord>,
 ): Promise<void> {
-  const setOptions = workspaceSetOptions(config.store, config.retention);
-  for (const [path, state] of before) {
-    const normalized = normalizePath(path);
-    const deletedAssetUris = new Set<string>();
-    await deleteNewVersionAssets(
-      config,
-      namespace,
-      normalized,
-      state,
-      deletedAssetUris,
+  const deletedUris = new Set<string>();
+  for (const path of deletedPaths) {
+    const state = before.get(path);
+    if (!state) continue;
+    await deletePreStateAssets(config.assets, state, deletedUris).catch(
+      (error) => logMaintenanceFailure("post-commit asset cleanup", error),
     );
-    await deleteNewHeadAsset(
-      config,
+  }
+
+  const maxVersions = config.versioning?.maxVersions;
+  if (maxVersions === undefined || maxVersions <= 0) return;
+  for (const [path, head] of finalHeads) {
+    await retainFileVersions({
+      store: config.store,
+      assets: config.assets,
+      workspaceId: config.workspaceId,
       namespace,
-      normalized,
-      state,
-      deletedAssetUris,
-    );
-    await purgeVersions(
-      config.store,
-      undefined,
-      config.workspaceId,
-      namespace,
-      normalized,
-    );
-    if (state.head) {
-      await config.store.put(
-        fileKey(config.workspaceId, namespace, normalized),
-        state.head as unknown as JsonObject,
-        setOptions,
-      );
-    } else {
-      await config.store.delete(
-        fileKey(config.workspaceId, namespace, normalized),
-      );
-    }
-    for (const version of state.versions) {
-      await config.store.put(
-        versionKey(config.workspaceId, namespace, normalized, version.version),
-        version as unknown as JsonObject,
-        setOptions,
-      );
-    }
+      path,
+      maxVersions,
+      preserveVersion: head.finalVersion,
+    }).catch((error) => logMaintenanceFailure("post-commit retention", error));
   }
 }
 
-/** Delete assets referenced by captured pre-commit state after a successful delete. */
-export async function deleteCapturedAssets(
-  config: WorkspaceTransactionConfig,
-  state: TransactionRollbackState,
-  deletedAssetUris: Set<string>,
-): Promise<void> {
-  if (!config.assets) return;
-  for (const uri of retainedAssetUris(state)) {
-    if (deletedAssetUris.has(uri)) continue;
-    await config.assets.delete({ uri });
-    deletedAssetUris.add(uri);
-  }
-}
-
-async function deleteNewVersionAssets(
-  config: WorkspaceTransactionConfig,
+async function rollbackPath(
+  config: WorkspaceRollbackConfig,
   namespace: string,
-  path: string,
-  state: TransactionRollbackState,
-  deletedAssetUris: Set<string>,
+  path: WorkspacePath,
+  state: WorkspaceMutationPreState,
 ): Promise<void> {
-  if (!config.assets) return;
-  const beforeVersions = new Set(
-    state.versions.map((version) => version.version),
+  const currentHead = await getRecord(
+    config.store,
+    config.workspaceId,
+    namespace,
+    path,
   );
   const currentVersions = await listVersionRecords(
     config.store,
     config.workspaceId,
     namespace,
-    normalizePath(path),
+    path,
   );
+  const introducedUris = difference(
+    referencedAssetUris(currentHead, currentVersions),
+    state.assetUris,
+  );
+  const failures: unknown[] = [];
+  const attempt = async (run: () => Promise<void>): Promise<void> => {
+    await run().catch((error) => failures.push(error));
+  };
+
   for (const version of currentVersions) {
-    const uri = version.snapshot.assetRef?.uri;
-    if (
-      !beforeVersions.has(version.version) &&
-      version.snapshot.storage === "asset" &&
-      uri &&
-      !deletedAssetUris.has(uri)
-    ) {
-      await config.assets.delete({ uri });
-      deletedAssetUris.add(uri);
+    await attempt(() =>
+      config.store.delete(
+        versionKey(config.workspaceId, namespace, path, version.version),
+      ),
+    );
+  }
+
+  const setOptions = workspaceSetOptions(config.store, config.retention);
+  await attempt(() =>
+    state.head
+      ? config.store.put(
+          fileKey(config.workspaceId, namespace, path),
+          state.head as unknown as JsonObject,
+          setOptions,
+        )
+      : config.store.delete(fileKey(config.workspaceId, namespace, path)),
+  );
+  for (const version of state.versions) {
+    await attempt(() =>
+      config.store.put(
+        versionKey(config.workspaceId, namespace, path, version.version),
+        version as unknown as JsonObject,
+        setOptions,
+      ),
+    );
+  }
+  const assets = config.assets;
+  if (assets) {
+    for (const uri of introducedUris) {
+      await attempt(() => assets.delete({ uri }));
     }
   }
+  if (failures.length > 0) throw new AggregateError(failures);
 }
 
-async function deleteNewHeadAsset(
-  config: WorkspaceTransactionConfig,
-  namespace: string,
-  path: string,
-  state: TransactionRollbackState,
-  deletedAssetUris: Set<string>,
-): Promise<void> {
-  if (!config.assets) return;
-  const current = await currentRecord(config, namespace, path);
-  const uri = current?.assetRef?.uri;
-  if (
-    current?.storage === "asset" &&
-    uri &&
-    uri !== state.head?.assetRef?.uri &&
-    !retainedAssetUris(state).has(uri) &&
-    !deletedAssetUris.has(uri)
-  ) {
-    await config.assets.delete({ uri });
-    deletedAssetUris.add(uri);
-  }
-}
-
-function retainedAssetUris(
-  state: TransactionRollbackState,
+function referencedAssetUris(
+  head: WorkspaceFileRecord | null,
+  versions: readonly WorkspaceVersionRecord[],
 ): ReadonlySet<string> {
   const uris = new Set<string>();
-  if (state.head?.assetRef?.uri) uris.add(state.head.assetRef.uri);
-  for (const version of state.versions) {
-    if (version.snapshot.assetRef?.uri) uris.add(version.snapshot.assetRef.uri);
+  if (head?.storage === "asset" && head.assetRef) uris.add(head.assetRef.uri);
+  for (const version of versions) {
+    const snapshot = version.snapshot;
+    if (snapshot.storage === "asset" && snapshot.assetRef) {
+      uris.add(snapshot.assetRef.uri);
+    }
   }
   return uris;
+}
+
+function difference(
+  values: ReadonlySet<string>,
+  excluded: ReadonlySet<string>,
+): ReadonlySet<string> {
+  return new Set([...values].filter((value) => !excluded.has(value)));
+}
+
+function logMaintenanceFailure(phase: string, error: unknown): void {
+  console.warn(
+    `[crux] workspace mutation batch ${phase} failed; continuing.`,
+    error,
+  );
 }

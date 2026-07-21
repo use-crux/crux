@@ -18,9 +18,16 @@ func (s *Store) WorkspaceOperation(event WorkspaceOperationEvent) {
 		Mount:          event.Mount,
 		MimeType:       event.MimeType,
 		Size:           event.Size,
+		FileCount:      event.FileCount,
+		SizeBytes:      event.SizeBytes,
+		SnapshotCount:  event.SnapshotCount,
+		RestoredFiles:  event.RestoredFiles,
+		DeletedFiles:   event.DeletedFiles,
+		UnchangedFiles: event.UnchangedFiles,
 		ArtifactStatus: event.ArtifactStatus,
 		ArtifactKind:   event.ArtifactKind,
 		URI:            event.URI,
+		ErrorCode:      event.ErrorCode,
 	}
 	if event.Error != "" {
 		entry.Error = &event.Error
@@ -36,10 +43,17 @@ func (s *Store) WorkspaceOperation(event WorkspaceOperationEvent) {
 		"durationMs":     event.DurationMs,
 		"mimeType":       event.MimeType,
 		"size":           event.Size,
+		"fileCount":      event.FileCount,
+		"sizeBytes":      event.SizeBytes,
+		"snapshotCount":  event.SnapshotCount,
+		"restoredFiles":  event.RestoredFiles,
+		"deletedFiles":   event.DeletedFiles,
+		"unchangedFiles": event.UnchangedFiles,
 		"artifactStatus": event.ArtifactStatus,
 		"artifactKind":   event.ArtifactKind,
 		"uri":            event.URI,
 		"error":          event.Error,
+		"errorCode":      event.ErrorCode,
 	})
 
 	s.mu.Unlock()

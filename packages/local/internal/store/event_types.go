@@ -357,10 +357,17 @@ type WorkspaceOperationEvent struct {
 	Mount          string  `json:"mount,omitempty"`
 	MimeType       string  `json:"mimeType,omitempty"`
 	Size           *int    `json:"size,omitempty"`
+	FileCount      *int    `json:"fileCount,omitempty"`
+	SizeBytes      *int    `json:"sizeBytes,omitempty"`
+	SnapshotCount  *int    `json:"snapshotCount,omitempty"`
+	RestoredFiles  *int    `json:"restoredFiles,omitempty"`
+	DeletedFiles   *int    `json:"deletedFiles,omitempty"`
+	UnchangedFiles *int    `json:"unchangedFiles,omitempty"`
 	ArtifactStatus string  `json:"artifactStatus,omitempty"`
 	ArtifactKind   string  `json:"artifactKind,omitempty"`
 	URI            string  `json:"uri,omitempty"`
 	Error          string  `json:"error,omitempty"`
+	ErrorCode      string  `json:"errorCode,omitempty"`
 	TraceID        string  `json:"traceId,omitempty"`
 	SessionID      string  `json:"sessionId,omitempty"`
 	Timestamp      int64   `json:"timestamp"`

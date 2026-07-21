@@ -1030,6 +1030,7 @@ export interface ProjectRelation {
   to: string;
   fidelity: ProjectRelationFidelity;
   source?: SourceLocation;
+  /** Compiler-owned normalized facts that refine the relation without changing its graph identity. */
   metadata?: Record<string, unknown>;
 }
 

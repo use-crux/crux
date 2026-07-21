@@ -10,7 +10,7 @@
 
 import type { RecordStore, RecordWriteOptions } from "../storage";
 import { listFileRecords } from "./store";
-import type { WorkspaceFileRecord } from "./types";
+import type { WorkspaceFileRecord, WorkspacePath } from "./types";
 
 /** Write-time byte limits for a workspace. */
 export interface WorkspaceLimits {
@@ -32,8 +32,6 @@ export interface WorkspaceRetention {
   readonly ttlMs?: number;
 }
 
-const namespaceLocks = new Map<string, Promise<void>>();
-
 /** Return store write options for the configured retention policy. */
 export function workspaceSetOptions(
   store: RecordStore,
@@ -43,31 +41,6 @@ export function workspaceSetOptions(
   if (ttl === undefined || ttl <= 0 || store.capabilities().ttl === false)
     return undefined;
   return { ttlMs: ttl };
-}
-
-/** Serialize quota validation and persistence per workspace namespace. */
-export async function withWorkspaceWriteLock<T>(
-  workspaceId: string,
-  namespace: string,
-  run: () => Promise<T>,
-): Promise<T> {
-  const key = `${workspaceId}\0${namespace}`;
-  const previous = namespaceLocks.get(key) ?? Promise.resolve();
-  let release: () => void = () => {};
-  const pending = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  const current = previous.catch(() => undefined).then(() => pending);
-  namespaceLocks.set(key, current);
-  await previous.catch(() => undefined);
-  try {
-    return await run();
-  } finally {
-    release();
-    if (namespaceLocks.get(key) === current) {
-      namespaceLocks.delete(key);
-    }
-  }
 }
 
 /** Enforce configured byte limits before a workspace record is persisted. */
@@ -108,6 +81,58 @@ export async function assertWorkspaceWriteAllowed(input: {
   const nextTotal =
     currentTotal - existingSize - (input.releasedBytes ?? 0) + input.nextSize;
 
+  if (nextTotal > limits.maxNamespaceBytes) {
+    throw new Error(
+      `workspace.write(): namespace "${input.namespace}" would use ${nextTotal} bytes, which exceeds limits.maxNamespaceBytes (${limits.maxNamespaceBytes}).`,
+    );
+  }
+}
+
+/** Validate file and namespace limits against a batch's final planned state. */
+export async function assertWorkspaceMutationBatchAllowed(input: {
+  readonly store: RecordStore;
+  readonly workspaceId: string;
+  readonly namespace: string;
+  readonly mutations: readonly (
+    | {
+        readonly kind: "put";
+        readonly path: WorkspacePath;
+        readonly size: number;
+      }
+    | { readonly kind: "delete"; readonly path: WorkspacePath }
+  )[];
+  readonly limits: WorkspaceLimits | undefined;
+}): Promise<void> {
+  const { limits } = input;
+  if (!limits) return;
+
+  for (const mutation of input.mutations) {
+    if (
+      mutation.kind === "put" &&
+      limits.maxFileBytes !== undefined &&
+      mutation.size > limits.maxFileBytes
+    ) {
+      throw new Error(
+        `workspace.write(): file "${mutation.path}" is ${mutation.size} bytes, which exceeds limits.maxFileBytes (${limits.maxFileBytes}).`,
+      );
+    }
+  }
+  if (limits.maxNamespaceBytes === undefined) return;
+
+  const records = await listFileRecords(
+    input.store,
+    input.workspaceId,
+    input.namespace,
+  );
+  const sizes = new Map(records.map((record) => [record.path, record.size]));
+  for (const mutation of input.mutations) {
+    if (mutation.kind === "put") sizes.set(mutation.path, mutation.size);
+    else sizes.delete(mutation.path);
+  }
+  const nextTotal = [...sizes.values()].reduce(
+    (total, size) => total + size,
+    0,
+  );
   if (nextTotal > limits.maxNamespaceBytes) {
     throw new Error(
       `workspace.write(): namespace "${input.namespace}" would use ${nextTotal} bytes, which exceeds limits.maxNamespaceBytes (${limits.maxNamespaceBytes}).`,

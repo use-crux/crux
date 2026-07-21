@@ -140,13 +140,30 @@ export async function listFileRecords(
     readonly limit?: number;
   } = {},
 ): Promise<readonly WorkspaceFileRecord[]> {
-  const listed = await store.list(filePrefix(workspaceId, namespace), {
-    ...(options.filter ? { filter: options.filter } : {}),
-    ...(options.limit !== undefined ? { limit: options.limit } : {}),
-  });
-  return listed.entries.flatMap((entry) =>
-    isFileRecord(entry.value) ? [entry.value] : [],
-  );
+  const records: WorkspaceFileRecord[] = [];
+  let cursor: string | undefined;
+  const seen = new Set<string>();
+  do {
+    const remaining =
+      options.limit === undefined ? undefined : options.limit - records.length;
+    if (remaining !== undefined && remaining <= 0) break;
+    const listed = await store.list(filePrefix(workspaceId, namespace), {
+      ...(options.filter ? { filter: options.filter } : {}),
+      ...(remaining !== undefined ? { limit: remaining } : {}),
+      ...(cursor !== undefined ? { cursor } : {}),
+    });
+    records.push(
+      ...listed.entries.flatMap((entry) =>
+        isFileRecord(entry.value) ? [entry.value] : [],
+      ),
+    );
+    cursor = listed.cursor;
+    if (cursor && seen.has(cursor)) {
+      throw new Error("RecordStore returned a repeated pagination cursor.");
+    }
+    if (cursor) seen.add(cursor);
+  } while (cursor);
+  return records;
 }
 
 function isReadableRecord(
@@ -201,7 +218,11 @@ function directoryEntries(
 
 function isFileRecord(value: unknown): value is WorkspaceFileRecord {
   if (!value || typeof value !== "object") return false;
-  const record = value as { _cruxWorkspaceFile?: unknown; version?: unknown; path?: unknown };
+  const record = value as {
+    _cruxWorkspaceFile?: unknown;
+    version?: unknown;
+    path?: unknown;
+  };
   return (
     record._cruxWorkspaceFile === true &&
     record.version === FILE_RECORD_VERSION &&

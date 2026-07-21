@@ -5,12 +5,12 @@
   "fileSelection": "staticDefinitionFiles(root)",
   "projection": "canonicalStaticExtractionJson(definitions,relations,diagnostics,dependencies)",
   "totals": {
-    "files": 762,
+    "files": 763,
     "definitions": 88,
     "relations": 7,
     "diagnostics": 25,
-    "dependencies": 1444,
-    "canonicalBytes": 213360
+    "dependencies": 1450,
+    "canonicalBytes": 213797
   },
   "files": [
     {
@@ -3867,12 +3867,12 @@
     },
     {
       "file": "packages/core/src/workspace/artifacts.ts",
-      "sha256": "036d7468fa5c65350e6e196c3eed47d2d1c5585446e5db36b98b45d792316023",
-      "bytes": 420,
+      "sha256": "96f01ba93e8fac43a4cc90842e0d612935c7eb9f3df48cf3de2ba97869b1a91a",
+      "bytes": 481,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 7
+      "dependencies": 8
     },
     {
       "file": "packages/core/src/workspace/context-adapters.ts",
@@ -3885,30 +3885,30 @@
     },
     {
       "file": "packages/core/src/workspace/define-workspace.ts",
-      "sha256": "e005138fc935fe04f7ade09a09a2a9fe511544b90891f8d9985c955e9979959c",
-      "bytes": 1132,
+      "sha256": "b0c720922eacf6ca4b920ab04d2bd916b25e6039d01dc977e1be06c40dad6edc",
+      "bytes": 1246,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 21
+      "dependencies": 23
     },
     {
       "file": "packages/core/src/workspace/fs-ops.ts",
-      "sha256": "2e4499775337160c81b97261dcb52cb9d49bd89424ceceb73bd811fe5f594dcb",
-      "bytes": 899,
+      "sha256": "0c570b5716c05a09132c3671050b39ec48614e45dbf701ceb13cef2a5b4a7b92",
+      "bytes": 960,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 16
+      "dependencies": 17
     },
     {
       "file": "packages/core/src/workspace/observability.ts",
-      "sha256": "a2881461ec206b23cb172b0d02828e9a855e9540263b77595bc95f3c5a199d37",
-      "bytes": 176,
+      "sha256": "8f0b7b0bd53d1c9edc28f132658ab686386f10e699c353ebc667670d266a6d59",
+      "bytes": 239,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 2
+      "dependencies": 3
     },
     {
       "file": "packages/core/src/workspace/path.ts",
@@ -3929,9 +3929,18 @@
       "dependencies": 5
     },
     {
+      "file": "packages/core/src/workspace/snapshot/config.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
       "file": "packages/core/src/workspace/transaction.ts",
-      "sha256": "aad6826eb6e101e4b857cc9f3c5766f53c16fae44b3c319175f06ed595c8ac3f",
-      "bytes": 494,
+      "sha256": "eba60c95604978d0e7ee1580ad9a742bd0523539e2e6959ddafaacbae1a10810",
+      "bytes": 488,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
@@ -5100,12 +5109,12 @@
     },
     {
       "file": "packages/indexer/src/indexer/semantic/access-relations.ts",
-      "sha256": "d4e4405327190c15d03f41a43aed97d97a2db0973054289489ccb431c743364b",
-      "bytes": 369,
+      "sha256": "c3506fe4e99e16298efd2446df87bacdd8d8379f5172c02caca6774c3730ea67",
+      "bytes": 445,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 5
+      "dependencies": 6
     },
     {
       "file": "packages/indexer/src/indexer/semantic/agent-handoff-relations.ts",

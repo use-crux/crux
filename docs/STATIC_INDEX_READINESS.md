@@ -52,12 +52,12 @@ packages with required gate environment.
 
 ## Cache Identity Review
 
-The current static cache namespace is `static-parse-v72`; semantic facts use
-`semantic-facts-v31`; and the Go Project Index snapshot cache lives under
-`.crux/cache/index-v2/epoch-43/`. These identities include main's scheduling
-and owner-fact migrations plus root-stable fingerprints, backend state, and
-durable all-kind extractor provenance, so restart warm loads cannot mask
-changed Catalog evidence.
+The current static cache namespace is `static-parse-v74`; semantic facts use
+`semantic-facts-v32`; and the Go Project Index snapshot cache lives under
+`.crux/cache/index-v2/epoch-44/`. These identities include unconditional
+Rust/Oxc scheduling, Workspace snapshot usage relations, root-stable
+fingerprints, backend state, and durable all-kind extractor provenance, so
+restart warm loads cannot mask changed Catalog evidence.
 
 Static Index always uses Rust/Oxc and remains independent from
 `experimental.indexer.native`, which selects the semantic backend.

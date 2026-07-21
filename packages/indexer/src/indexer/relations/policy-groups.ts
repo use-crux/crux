@@ -1,4 +1,22 @@
 import type { IndexRelationPolicy } from "./types";
+import { workspaceSnapshotAccessRelationSuffixes } from "../semantic/workspace-snapshot-access";
+
+/** Authored grouped-facet relations from executable definitions to Workspaces. */
+export const workspaceSnapshotAccessRelationPolicies = (
+  ["prompt", "context", "tool", "agent", "flow.step"] as const
+).flatMap((owner) =>
+  workspaceSnapshotAccessRelationSuffixes.map(
+    (relation) =>
+      ({
+        type: `${owner}.${relation}`,
+        fromKinds: [owner],
+        toKinds: ["workspace"],
+        presentation: "both",
+        partial: true,
+        runtimeJoin: true,
+      }) satisfies IndexRelationPolicy,
+  ),
+);
 
 export const promptContextAccessRelationPolicies = (
   ["prompt", "context"] as const

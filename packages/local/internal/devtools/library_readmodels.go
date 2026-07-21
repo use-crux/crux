@@ -137,9 +137,16 @@ type workspaceOpDetail struct {
 	EventID        string  `json:"eventId"`
 	Op             string  `json:"op"`
 	Path           string  `json:"path"`
+	PathHash       string  `json:"pathHash,omitempty"`
 	DurationMs     float64 `json:"durationMs"`
 	Status         string  `json:"status"`
 	Bytes          *int    `json:"bytes,omitempty"`
+	FileCount      *int    `json:"fileCount,omitempty"`
+	SizeBytes      *int    `json:"sizeBytes,omitempty"`
+	SnapshotCount  *int    `json:"snapshotCount,omitempty"`
+	RestoredFiles  *int    `json:"restoredFiles,omitempty"`
+	DeletedFiles   *int    `json:"deletedFiles,omitempty"`
+	UnchangedFiles *int    `json:"unchangedFiles,omitempty"`
 	Mime           string  `json:"mime,omitempty"`
 	ArtifactStatus string  `json:"artifactStatus,omitempty"`
 	ArtifactKind   string  `json:"artifactKind,omitempty"`
@@ -148,6 +155,7 @@ type workspaceOpDetail struct {
 	SpanID         string  `json:"spanId,omitempty"`
 	Actor          string  `json:"actor,omitempty"`
 	Error          string  `json:"error,omitempty"`
+	ErrorCode      string  `json:"errorCode,omitempty"`
 	Timestamp      int64   `json:"timestamp"`
 }
 

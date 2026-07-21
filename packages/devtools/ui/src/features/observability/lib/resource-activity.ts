@@ -8,6 +8,8 @@ import type {
   TaskListEventData,
   WorkspaceOperationEvent,
 } from "@/types";
+import { workspaceSnapshotEventFromResourceActivity } from "./workspace-snapshot-activity";
+import { workspaceSnapshotOperation } from "@/features/workspace-snapshot/contract";
 
 function attrs(
   activity: ObservabilityResourceActivity,
@@ -115,6 +117,15 @@ export function workspaceEventsFromResourceActivity(
         item,
       ) as WorkspaceOperationEvent["operation"];
       const pathHash = stringValue(a.pathHash) ?? stringValue(aa.pathHash);
+      const snapshotOperation = workspaceSnapshotOperation(operation);
+      if (snapshotOperation) {
+        return workspaceSnapshotEventFromResourceActivity({
+          activity: item,
+          operation: snapshotOperation,
+          attributes: a,
+          pathHash,
+        });
+      }
       return {
         type: "workspace:operation",
         workspaceId:

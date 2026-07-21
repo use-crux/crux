@@ -1,6 +1,7 @@
 package devtools
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 
@@ -30,9 +31,14 @@ func workspaceEventsFromActivity(activity []observability.ResourceActivity) []st
 		pathHash := stringValue(attrs, "pathHash", stringValue(artifactAttrs, "pathHash", ""))
 		sourcePath := workspaceActivitySourcePathLabel(attrs, pathHash)
 		operation := stringValue(attrs, "operation", operationFromActivity(item))
+		isSnapshotOperation := isWorkspaceSnapshotOperation(operation)
 		status := "success"
 		if item.Status == "error" || len(item.Error) > 0 && string(item.Error) != "null" {
 			status = "error"
+		}
+		path := workspaceActivityPathLabel(attrs, artifactPreview, pathHash)
+		if isSnapshotOperation {
+			path = ""
 		}
 		event := store.WorkspaceEventData{
 			TraceID:        item.TraceID,
@@ -40,7 +46,7 @@ func workspaceEventsFromActivity(activity []observability.ResourceActivity) []st
 			WorkspaceID:    stringValue(attrs, "workspaceId", item.ResourceID),
 			Namespace:      stringValue(attrs, "namespaceHash", stringValue(attrs, "namespace", "")),
 			Operation:      operation,
-			Path:           workspaceActivityPathLabel(attrs, artifactPreview, pathHash),
+			Path:           path,
 			PathHash:       pathHash,
 			Status:         status,
 			DurationMs:     item.DurationMs,
@@ -50,6 +56,25 @@ func workspaceEventsFromActivity(activity []observability.ResourceActivity) []st
 			ArtifactKind:   stringValue(attrs, "artifactKind", stringValue(artifactAttrs, "artifactKind", "")),
 			URI:            stringValue(attrs, "uri", stringValue(artifactAttrs, "uri", firstWorkspaceArtifactURI(item.Artifacts))),
 		}
+		if isSnapshotOperation {
+			// Snapshot lifecycle spans are aggregate operations, not file artifacts.
+			// Keep this projection closed even when old or hostile spans carry
+			// generic Workspace file attributes.
+			event.Namespace = stringValue(attrs, "namespaceHash", "")
+			event.FromPath = ""
+			event.Mount = ""
+			event.MimeType = ""
+			event.ArtifactStatus = ""
+			event.ArtifactKind = ""
+			event.URI = ""
+			event.FileCount = optionalIntPointer(attrs, "fileCount")
+			event.SizeBytes = optionalIntPointer(attrs, "sizeBytes")
+			event.SnapshotCount = optionalIntPointer(attrs, "snapshotCount")
+			event.RestoredFiles = optionalIntPointer(attrs, "restoredFiles")
+			event.DeletedFiles = optionalIntPointer(attrs, "deletedFiles")
+			event.UnchangedFiles = optionalIntPointer(attrs, "unchangedFiles")
+			event.ErrorCode = workspaceSnapshotErrorCode(item.Error)
+		}
 		if operation == "rename" || operation == "move" {
 			if destination := stringValue(artifactPreview, "path", ""); destination != "" && destination != sourcePath {
 				event.FromPath = sourcePath
@@ -57,23 +82,46 @@ func workspaceEventsFromActivity(activity []observability.ResourceActivity) []st
 				event.Path = destination
 			}
 		}
-		if size, ok := optionalIntValue(attrs, "size"); ok {
-			event.Size = &size
-		} else if size, ok := optionalIntValue(attrs, "sizeBytes"); ok {
-			event.Size = &size
-		} else if size, ok := optionalIntValue(artifactAttrs, "size"); ok {
-			event.Size = &size
-		} else if size, ok := optionalIntValue(artifactAttrs, "sizeBytes"); ok {
-			event.Size = &size
-		} else if size, ok := firstWorkspaceArtifactSize(item.Artifacts); ok {
-			event.Size = &size
+		if !isSnapshotOperation {
+			if size, ok := optionalIntValue(attrs, "size"); ok {
+				event.Size = &size
+			} else if size, ok := optionalIntValue(attrs, "sizeBytes"); ok {
+				event.Size = &size
+			} else if size, ok := optionalIntValue(artifactAttrs, "size"); ok {
+				event.Size = &size
+			} else if size, ok := optionalIntValue(artifactAttrs, "sizeBytes"); ok {
+				event.Size = &size
+			} else if size, ok := firstWorkspaceArtifactSize(item.Artifacts); ok {
+				event.Size = &size
+			}
 		}
 		if msg := errorMessage(item.Error); msg != "" {
+			if isSnapshotOperation {
+				msg = "Workspace snapshot operation failed."
+			}
 			event.Error = &msg
 		}
 		out = append(out, event)
 	}
 	return out
+}
+
+func optionalIntPointer(values map[string]any, key string) *int {
+	value, ok := optionalIntValue(values, key)
+	if !ok {
+		return nil
+	}
+	return &value
+}
+
+func workspaceSnapshotErrorCode(raw json.RawMessage) string {
+	category := stringValue(rawMap(raw), "category", "")
+	switch category {
+	case "not_found", "invalid_reference", "invalid_cursor", "unsupported_mount", "corrupt_snapshot", "backend_error":
+		return category
+	default:
+		return ""
+	}
 }
 
 func workspaceActivityPathLabel(attrs map[string]any, preview map[string]any, pathHash string) string {

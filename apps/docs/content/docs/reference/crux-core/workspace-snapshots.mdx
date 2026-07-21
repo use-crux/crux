@@ -1,0 +1,188 @@
+---
+title: Workspace Snapshots
+description: Materialize, list, restore, and delete reusable Workspace subtree checkpoints.
+---
+
+Workspace snapshots are available from the singular `ws.snapshot` facet. They are
+explicit, materialized checkpoints for local files and subtrees.
+
+<Callout type="warn">
+  Restore is an unconditional exact-tree replacement. It creates or replaces
+  captured files and deletes later live files inside the captured tree when they
+  were absent from the snapshot.
+</Callout>
+
+```ts
+const checkpoint = await ws.snapshot.create({ path: "/outputs" });
+const page = await ws.snapshot.list({ path: "/outputs", limit: 20 });
+const result = await ws.snapshot.restore(checkpoint);
+await ws.snapshot.delete(checkpoint);
+```
+
+For workflow guidance, destructive restore warnings, and comparisons with `undo()`
+and `transaction()`, see [Versions, snapshots, and transactions](/docs/guides/workspaces/versions-and-transactions).
+
+## Imports
+
+```ts
+import { WorkspaceSnapshotError } from "@use-crux/core/workspace";
+
+import type {
+  WorkspaceSnapshotErrorCode,
+  WorkspaceSnapshotListOptions,
+  WorkspaceSnapshotOperations,
+  WorkspaceSnapshotOptions,
+  WorkspaceSnapshotPage,
+  WorkspaceSnapshotRef,
+  WorkspaceSnapshotRestoreResult,
+} from "@use-crux/core/workspace";
+```
+
+## `snapshot.create()`
+
+```ts
+create(options: {
+  path: string;
+  namespace?: string;
+}): Promise<WorkspaceSnapshotRef>;
+```
+
+`path` is required and is normalized with the Workspace's absolute path rules. It
+can select one file, a subtree, or `/` for the whole local namespace. Empty captures
+are valid. An optional namespace overrides the Workspace's normal resolution.
+
+Capture copies the working state and any distinct pinned published artifact state.
+It rejects the entire selection when the path intersects a source-backed mount.
+
+## `snapshot.list()`
+
+```ts
+list(options?: {
+  path?: string;
+  namespace?: string;
+  limit?: number;
+  cursor?: string;
+}): Promise<WorkspaceSnapshotPage>;
+```
+
+Committed snapshots are ordered by creation time and opaque id, newest first. The
+optional path filter is exact after normalization. `limit` defaults to 50 and must
+be an integer from 1 through 100.
+
+The cursor is opaque and bound to the Workspace, namespace, normalized path filter,
+and logical page position. Reuse it only with the same listing scope. The final page
+does not include a cursor.
+
+## `snapshot.restore()`
+
+```ts
+restore(
+  snapshot: WorkspaceSnapshotRef,
+): Promise<WorkspaceSnapshotRestoreResult>;
+```
+
+Files outside the captured root are untouched. Identical files are skipped. Changed
+files receive fresh history entries with operation `"restore"`; existing history is
+never rewound. The snapshot stays committed, listable, and reusable.
+
+The result counts logical paths, not storage objects:
+
+```ts
+interface WorkspaceSnapshotRestoreResult {
+  readonly restoredFiles: number;
+  readonly deletedFiles: number;
+  readonly unchangedFiles: number;
+}
+```
+
+Metadata, artifact lifecycle, provenance, working content, and observable published
+content participate in equality. A published-only change counts as one restored
+file even when restoring it writes two fresh versions.
+
+## `snapshot.delete()`
+
+```ts
+delete(snapshot: WorkspaceSnapshotRef): Promise<void>;
+```
+
+Delete releases snapshot metadata and every independently owned payload. It is
+idempotent for a structurally valid ref owned by the Workspace when storage is
+already absent or deletion is being retried.
+
+## Snapshot References
+
+```ts
+interface WorkspaceSnapshotRef {
+  readonly kind: "workspace.snapshot";
+  readonly id: string;
+  readonly workspaceId: string;
+  readonly namespace: string;
+  readonly path: string;
+  readonly fileCount: number;
+  readonly sizeBytes: number;
+  readonly createdAt: number;
+}
+```
+
+The complete ref is a JSON-safe value object. Its `id` is opaque; do not parse it or
+persist only the id. The ref's Workspace and namespace identify its ownership and
+restore/delete scope:
+
+```ts
+const stored = JSON.stringify(checkpoint);
+const loaded = JSON.parse(stored) as WorkspaceSnapshotRef;
+
+await ws.snapshot.restore(loaded);
+```
+
+`fileCount` counts captured logical files. `sizeBytes` counts materialized payload
+ownership, including distinct published bytes, and excludes persistence metadata.
+
+## Errors
+
+```ts
+type WorkspaceSnapshotErrorCode =
+  | "not_found"
+  | "invalid_reference"
+  | "invalid_cursor"
+  | "unsupported_mount"
+  | "corrupt_snapshot"
+  | "backend_error";
+```
+
+Failures use `WorkspaceSnapshotError`. Inspect `code` for programmatic handling;
+`snapshotId` and the original backend `cause` are present when known.
+
+Malformed or cross-Workspace refs reject before snapshot lookup. Restore of an
+absent, otherwise valid snapshot is `not_found`. Repeating delete with a valid owned
+ref is safe.
+
+## Devtools
+
+The Project Index Catalog shows authored `ws.snapshot.create/list/restore/delete`
+usage on the resolved Workspace definition, including the owning definition and
+source location. It does not create static definitions for the runtime snapshots
+or expose their ids.
+
+After the application runs, Workspace activity and Run detail show the observed
+snapshot operations. Their purpose-built summaries include only aggregate counts,
+bytes, and privacy-safe error codes; raw paths, refs, content, manifests, and asset
+URIs are not presented. Authored Catalog usage and observed runtime activity are
+separate views of the same explicit API.
+
+## Consistency And Lifetime
+
+Snapshot create and restore share the Workspace's same-process namespace mutation
+boundary. Capture sees a complete before-or-after state, and failures observed while
+applying restore roll live files, history, and newly introduced assets back before
+events are emitted.
+
+Generic stores do not provide cross-process locking, distributed transactions, or
+process-crash atomicity. Snapshots have no TTL, automatic pruning, snapshot quota,
+or backup/disaster-recovery guarantee. They live until explicit deletion. See
+[Storage and limits](/docs/guides/workspaces/storage-and-limits#snapshot-storage-and-lifetime)
+for ownership and cost details.
+
+Snapshots are explicit in this release. Automatic Effects checkpoints, receipts,
+and conflict policy belong to the later [#258 integration](https://github.com/use-crux/crux/issues/258)
+and are not part of this API.
