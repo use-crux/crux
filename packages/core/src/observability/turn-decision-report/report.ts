@@ -20,6 +20,22 @@ import type {
   TurnEvidenceRef,
 } from "./targets";
 import type { MediaPartLocation } from "../../safety/media/types";
+import type { ModelInputOrigin } from "../../safety/input-origin";
+
+/** Safety-specific facts that explain one decision without retaining content. */
+export interface TurnSafetyDecisionDetails {
+  /** Canonical boundary identity and render-safe display label. */
+  target: {
+    id: string;
+    label: string;
+  };
+  /** Effective policy posture for this evaluation. */
+  mode: "enforce" | "report";
+  /** Whether enforcement changed canonical content before delivery. */
+  changed: boolean;
+  /** Privacy-safe model-ingress provenance, when the target has one. */
+  origin?: ModelInputOrigin;
+}
 
 /** One canonical explanation report for a model call or stream turn. */
 export interface TurnDecisionReport {
@@ -71,6 +87,8 @@ export interface TurnDecision {
   subject: TurnDecisionSubject;
   outcome: string;
   reason: TurnDecisionReason;
+  /** Safety target, posture, mutation outcome, and safe ingress provenance. */
+  safety?: TurnSafetyDecisionDetails;
   /** Safe model id for this media decision, when one is known. */
   model?: string;
   /** Safe original coordinates when the decision evaluated canonical media. */

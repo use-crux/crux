@@ -26,7 +26,7 @@ describe('guardrail strategy indexing', () => {
 
     expect(nativeOut.definitions.find((definition) => definition.id === 'guardrail:safe-attachments')).toMatchObject({
       metadata: {
-        boundary: 'user.input.media',
+        boundary: 'model.input.media',
         strategy: {
           kind: 'media',
           config: {

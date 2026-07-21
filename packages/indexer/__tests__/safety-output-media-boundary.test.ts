@@ -67,11 +67,11 @@ describe("output media safety boundary indexing", () => {
         ),
       ).toMatchObject({
         metadata: {
-          boundary: "user.input.media",
-          boundaries: ["user.input.media", "model.output.media"],
+          boundary: "model.input.media",
+          boundaries: ["model.input.media", "model.output.media"],
           facts: {
-            boundary: "user.input.media",
-            boundaries: ["user.input.media", "model.output.media"],
+            boundary: "model.input.media",
+            boundaries: ["model.input.media", "model.output.media"],
           },
         },
       });

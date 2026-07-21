@@ -7,6 +7,7 @@ import { finalizeMediaEvaluations, mediaBlockedError, mediaRunContext, type Medi
 import { findMediaGroupDependencyViolation, type MediaGroupDependency } from './groups'
 import { mediaLocationAttributes } from './location'
 import type { MediaPartLocation, MediaPartSubject } from './types'
+import { inputOriginAttributes } from '../input-origin-observability'
 
 export interface MediaVisitItem {
   readonly subject: MediaPartSubject
@@ -79,6 +80,7 @@ export async function visitMedia(options: VisitMediaOptions): Promise<MediaVisit
           promptId: context.promptId,
           model: context.model,
           ...mediaLocationAttributes(location),
+          ...inputOriginAttributes(context.origin),
         },
       })
 
@@ -108,6 +110,7 @@ export async function visitMedia(options: VisitMediaOptions): Promise<MediaVisit
         result,
         location,
         model: context.model,
+        origin: context.origin,
         durationMs,
         span,
         escalatedToBlock,
@@ -117,7 +120,7 @@ export async function visitMedia(options: VisitMediaOptions): Promise<MediaVisit
 
       if (result.action === 'block' && binding.mode === 'enforce') {
         finalizeMediaEvaluations(options, evaluations, evaluation)
-        throw mediaBlockedError(options.phase, binding, result.reason, location, durationMs, false, context.model)
+        throw mediaBlockedError(options.phase, binding, result.reason, location, durationMs, false, context.model, context.origin)
       }
 
       if (result.action === 'strip' && binding.mode === 'enforce') {
@@ -150,6 +153,7 @@ export async function visitMedia(options: VisitMediaOptions): Promise<MediaVisit
       evaluation.durationMs,
       true,
       evaluation.model,
+      evaluation.origin,
     )
   }
 

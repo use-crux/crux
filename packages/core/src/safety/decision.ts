@@ -7,6 +7,7 @@ import type {
   SafetyTargetId,
 } from './boundary'
 import type { GuardrailStreamOption } from './stream/types'
+import type { ModelInputOrigin } from './input-origin'
 
 /** Safe, structured finding metadata emitted by safety policies. */
 export interface SafetyFinding {
@@ -40,6 +41,8 @@ export interface SafetyDecision {
   readonly policyId: string
   readonly kind: 'guardrail' | 'constraint' | 'toolPolicy'
   readonly boundary: SafetyTargetId
+  /** Privacy-safe semantic provenance for model-ingress decisions. */
+  readonly origin?: ModelInputOrigin
   readonly stage?: 'stream.segment' | 'stream.final'
   readonly mode: 'enforce' | 'report'
   readonly action: SafetyDecisionAction

@@ -3,6 +3,94 @@ import type { SafetyDecision } from '../../src/safety'
 import { safetyDecisionToTurnDecision } from '../../src/observability/turn-decision-report'
 
 describe('Safety decisions in TurnDecisionReport', () => {
+  it('serializes tool-sourced model input provenance without content fields', () => {
+    const decision = safetyDecision({
+      policyId: 'sanitize-tool-result',
+      kind: 'guardrail',
+      boundary: 'model.input.text',
+      action: 'rewrite',
+      origin: {
+        source: 'tool',
+        kind: 'tool-result',
+        toolName: 'search',
+        toolCallId: 'call-safe-1',
+        partIndex: 2,
+      },
+      captured: {
+        level: 'safe',
+        sizeBytes: 18,
+        hash: 'fnv1a64:private',
+        preview: 'SECRET_TOOL_RESULT',
+        raw: 'SECRET_TOOL_RESULT',
+      },
+    })
+
+    const row = safetyDecisionToTurnDecision(decision)
+
+    expect(row).toMatchObject({
+      safety: {
+        target: { id: 'model.input.text', label: 'Model input · Text' },
+        mode: 'enforce',
+        changed: true,
+        origin: {
+          source: 'tool',
+          kind: 'tool-result',
+          toolName: 'search',
+          toolCallId: 'call-safe-1',
+          partIndex: 2,
+        },
+      },
+    })
+    const serialized = JSON.stringify(row)
+    expect(serialized).not.toContain('SECRET_TOOL_RESULT')
+    expect(serialized).not.toMatch(/"(?:content|raw|preview|args|result)":/)
+  })
+
+  it('labels semantic input targets and safely falls back for unknown targets', () => {
+    const labels = [
+      'model.input.text',
+      'model.input.media',
+      'model.instructions',
+      'future.model.input',
+    ].map((boundary) =>
+      safetyDecisionToTurnDecision(
+        safetyDecision({
+          policyId: `policy-${boundary}`,
+          kind: 'guardrail',
+          boundary: boundary as SafetyDecision['boundary'],
+          action: 'allow',
+        }),
+      ).safety?.target.label,
+    )
+
+    expect(labels).toEqual([
+      'Model input · Text',
+      'Model input · Media',
+      'Model instructions',
+      'future.model.input',
+    ])
+  })
+
+  it('reports intended rewrites without claiming canonical content changed', () => {
+    const row = safetyDecisionToTurnDecision(
+      safetyDecision({
+        policyId: 'report-only-rewrite',
+        kind: 'guardrail',
+        boundary: 'model.input.text',
+        mode: 'report',
+        action: 'rewrite',
+        origin: { source: 'retrieval', kind: 'retrieval-context', retrieverId: 'docs', blockIndex: 1 },
+      }),
+    )
+
+    expect(row.safety).toEqual({
+      target: { id: 'model.input.text', label: 'Model input · Text' },
+      mode: 'report',
+      changed: false,
+      origin: { source: 'retrieval', kind: 'retrieval-context', retrieverId: 'docs', blockIndex: 1 },
+    })
+  })
+
   it('projects guardrail decisions into canonical turn decision rows', () => {
     const decision = safetyDecision({
       policyId: 'pii-output',

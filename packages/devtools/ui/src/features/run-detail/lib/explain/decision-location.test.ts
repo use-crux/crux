@@ -12,6 +12,17 @@ describe('decisionLocationLabel', () => {
     ).toBe('message 2 · part 1 · image')
     expect(
       decisionLocationLabel({
+        origin: {
+          kind: 'tool-result',
+          toolName: 'search',
+          toolCallId: 'call-1',
+          partIndex: 0,
+        },
+        partType: 'image',
+      }),
+    ).toBe('search · call-1 · part 0 · image')
+    expect(
+      decisionLocationLabel({
         origin: { kind: 'step', stepIndex: 3, partIndex: 2 },
         partType: 'file',
       }),
@@ -50,5 +61,30 @@ describe('decisionLocationLabel', () => {
         ['escalation', 'strip to block', 'var(--devtools-danger)'],
       ]),
     )
+  })
+
+  it('renders semantic target and tool provenance without content', () => {
+    const rows = guardrailReportRows({
+      kind: 'guardrail.report',
+      phase: 'input',
+      action: 'rewrite',
+      mode: 'report',
+      target: { id: 'model.input.text', label: 'Model input · Text' },
+      origin: {
+        source: 'tool',
+        kind: 'tool-result',
+        toolName: 'search',
+        toolCallId: 'call-1',
+      },
+    })
+
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        ['target', 'Model input · Text'],
+        ['source', 'Tool · search · call-1'],
+        ['mode', 'report'],
+      ]),
+    )
+    expect(JSON.stringify(rows)).not.toMatch(/content|arguments|result/i)
   })
 })

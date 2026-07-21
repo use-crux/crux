@@ -1,11 +1,75 @@
 /** Core-owned semantic model-ingress capability behavior. */
 
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { contentText } from '../../src/content'
 import { boundary, createSafety, guardrail } from '../../src/safety'
 import { safetySessionModelIngressGuard } from '../../src/safety/session'
+import {
+  createInMemoryObservabilityTransport,
+  observe,
+  resetObservabilityRuntime,
+  setObservabilityTransport,
+} from '../../src/observability'
+
+afterEach(() => {
+  resetObservabilityRuntime()
+})
 
 describe('model ingress', () => {
+  it('observes tool provenance without serializing canonical tool text', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport, { scheduledDelayMs: 0 })
+    const safety = createSafety({
+      call: {
+        guardrails: [
+          guardrail({
+            id: 'report-tool-ingress',
+            on: boundary.input.text({ from: 'tool' }),
+            mode: 'report',
+            run: () => ({
+              action: 'rewrite',
+              value: 'safe replacement',
+              rewrite: { kind: 'redact' },
+            }),
+          }),
+        ],
+      },
+    })
+    const modelIngress = safetySessionModelIngressGuard(safety, 'tool')
+    if (!modelIngress) throw new Error('expected tool model ingress')
+
+    const guarded = await modelIngress({
+      kind: 'text',
+      value: 'SECRET_TOOL_TEXT',
+      origin: {
+        source: 'tool',
+        kind: 'tool-result',
+        toolName: 'search',
+        toolCallId: 'call-safe-1',
+      },
+    })
+    await observe.flush()
+
+    expect(guarded).toEqual({ kind: 'text', value: 'SECRET_TOOL_TEXT' })
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({
+        type: 'artifact',
+        kind: 'guardrail.report',
+        preview: expect.objectContaining({
+          target: { id: 'model.input.text', label: 'Model input · Text' },
+          mode: 'report',
+          origin: {
+            source: 'tool',
+            kind: 'tool-result',
+            toolName: 'search',
+            toolCallId: 'call-safe-1',
+          },
+        }),
+      }),
+    )
+    expect(JSON.stringify(transport.records)).not.toContain('SECRET_TOOL_TEXT')
+  })
+
   it('strips media before text projection and preserves retained part identity', async () => {
     const text = Object.freeze({ type: 'text' as const, text: 'private summary' })
     const removed = Object.freeze({

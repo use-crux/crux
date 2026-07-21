@@ -2,6 +2,7 @@ import type {
   CruxDeploymentIdentity,
   ProjectDefinitionKind,
 } from "../project-index";
+import type { ModelInputOrigin } from "../safety/input-origin";
 
 export const CRUX_OBSERVABILITY_SCHEMA_VERSION = 4;
 
@@ -600,12 +601,19 @@ export interface CruxGuardrailMatchPreview {
   note?: string;
 }
 
+/** Privacy-safe semantic model-ingress provenance carried by guardrail reports. */
+export type CruxModelInputOriginPreview = ModelInputOrigin;
+
 export interface CruxGuardrailReportPreview {
   kind: "guardrail.report";
+  /** Canonical Safety target and render-safe display label. */
+  target?: { id: string; label: string };
   phase?: string;
   action: "pass" | "block" | "redact" | "transform" | "warn" | string;
   boundary?: string;
   mode?: "enforce" | "report" | string;
+  /** Safe semantic ingress provenance; never input or provider content. */
+  origin?: CruxModelInputOriginPreview;
   mediaPartType?: "image" | "audio" | "video" | "file" | string;
   originKind?: "message" | "step" | "operation" | string;
   messageIndex?: number;

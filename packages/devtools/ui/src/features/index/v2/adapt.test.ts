@@ -26,7 +26,7 @@ describe("indexFactChips", () => {
       fidelity: "resolved",
       confidence: "static",
       facts: {
-        boundaries: ["user.input.media", "model.output.media"],
+        boundaries: ["model.input.media", "model.output.media"],
         strategy: { kind: "media", config: { action: "strip" } },
       },
       lint: [],

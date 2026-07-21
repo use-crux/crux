@@ -128,6 +128,8 @@ export interface GuardrailAuditEntry {
   readonly category?: string
   /** Exact boundary evaluated for this entry. */
   readonly boundary: SafetyTargetId
+  /** Privacy-safe semantic provenance for model-ingress evaluations. */
+  readonly origin?: ModelInputOrigin
   /** Effective enforcement posture after per-call tuning. */
   readonly mode: GuardrailMode
   readonly phase: 'input' | 'output'

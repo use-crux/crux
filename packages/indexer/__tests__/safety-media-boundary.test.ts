@@ -32,13 +32,13 @@ describe('input media safety boundary indexing', () => {
         kind: 'guardrail',
         name: 'media-upload',
         metadata: {
-          boundary: 'user.input.media',
-          boundaries: ['user.input.media'],
+          boundary: 'model.input.media',
+          boundaries: ['model.input.media'],
           facts: {
             kind: 'guardrail',
             policyId: 'media-upload',
-            boundary: 'user.input.media',
-            boundaries: ['user.input.media'],
+            boundary: 'model.input.media',
+            boundaries: ['model.input.media'],
           },
         },
       })

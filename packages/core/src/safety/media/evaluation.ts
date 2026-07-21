@@ -15,6 +15,8 @@ export interface MediaEvaluation {
   readonly result: MediaGuardrailRunResult
   readonly location: MediaPartLocation
   readonly model?: string
+  /** Privacy-safe semantic provenance shared across media projections. */
+  readonly origin?: ModelInputOrigin
   readonly durationMs: number
   readonly span: ReturnType<typeof observe.openSpan>
   escalatedToBlock: boolean
@@ -30,11 +32,11 @@ export function finalizeMediaEvaluations(
   terminal?: MediaEvaluation,
 ): void {
   for (const evaluation of evaluations) {
-    const { binding, result, location, model, durationMs, escalatedToBlock, span } = evaluation
+    const { binding, result, location, model, origin, durationMs, escalatedToBlock, span } = evaluation
     span.withContext(() => {
-      recordMediaGuardrailReport(binding, result, location, durationMs, escalatedToBlock)
+      recordMediaGuardrailReport(binding, result, location, durationMs, escalatedToBlock, origin)
       if (evaluation === terminal && result.action !== 'allow') {
-        recordMediaGuardrailBlockedEdge(binding, result.reason, location, escalatedToBlock)
+        recordMediaGuardrailBlockedEdge(binding, result.reason, location, escalatedToBlock, origin)
       }
     })
     span.end({
@@ -45,7 +47,7 @@ export function finalizeMediaEvaluations(
       },
     })
     options.appendAudit({
-      applied: [auditEntry(options.phase, binding, result, location, model, durationMs, escalatedToBlock)],
+      applied: [auditEntry(options.phase, binding, result, location, model, origin, durationMs, escalatedToBlock)],
       blocked: (result.action === 'block' && binding.mode === 'enforce') || escalatedToBlock,
     })
   }
@@ -60,6 +62,7 @@ export function mediaBlockedError(
   durationMs: number,
   escalatedToBlock = false,
   model?: string,
+  origin?: ModelInputOrigin,
 ): GuardrailBlockedError {
   return new GuardrailBlockedError({
     guardrailId: binding.policy.id,
@@ -70,6 +73,7 @@ export function mediaBlockedError(
         policyId: binding.policy.id,
         kind: 'guardrail',
         boundary: binding.boundary.id,
+        ...(origin ? { origin } : {}),
         mode: binding.mode,
         action: 'block',
         reason,
@@ -108,6 +112,7 @@ function auditEntry(
   result: MediaGuardrailRunResult,
   location: MediaPartLocation,
   model: string | undefined,
+  origin: ModelInputOrigin | undefined,
   durationMs: number,
   escalatedToBlock: boolean,
 ): GuardrailAuditEntry {
@@ -115,6 +120,7 @@ function auditEntry(
     guard: binding.policy.id,
     ...(binding.policy.category !== undefined ? { category: binding.policy.category } : {}),
     boundary: binding.boundary.id,
+    ...(origin ? { origin } : {}),
     mode: binding.mode,
     phase,
     action: result.action,

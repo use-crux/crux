@@ -11,8 +11,8 @@ describe("Safety Catalog projection", () => {
       name: "portableMedia",
       kind: "guardrail",
       facts: {
-        boundary: "user.input.media",
-        boundaries: ["user.input.media", "model.output.media"],
+        boundary: "model.input.media",
+        boundaries: ["model.input.media", "model.output.media"],
         strategy: {
           kind: "media",
           config: {
@@ -34,7 +34,7 @@ describe("Safety Catalog projection", () => {
       kind: "guardrail",
       id: "guardrail:portable-media",
       name: "portableMedia",
-      boundaries: ["user.input.media", "model.output.media"],
+      boundaries: ["model.input.media", "model.output.media"],
       strategy: {
         kind: "media",
         action: "strip",

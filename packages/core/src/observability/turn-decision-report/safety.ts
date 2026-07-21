@@ -2,6 +2,7 @@ import type { SafetyDecision } from '../../safety/decision'
 import type { TurnDecision, TurnDecisionPhase } from './report'
 import type { TurnDecisionReasonCode } from './shared'
 import type { TurnDecisionSubject, TurnDeepTabTarget, TurnEvidenceRef } from './targets'
+import { safetyTarget } from '../safety-presentation'
 
 /** Options for projecting one Safety decision into a turn report row. */
 export interface SafetyDecisionProjectionOptions {
@@ -37,6 +38,14 @@ export function safetyDecisionToTurnDecision(
       text: decision.reason ?? defaultReasonText(decision),
       source: 'artifact',
       evidenceLevel: 'declared',
+    },
+    safety: {
+      target: safetyTarget(decision.boundary),
+      mode: decision.mode,
+      changed:
+        decision.mode === 'enforce' &&
+        (decision.action === 'rewrite' || decision.action === 'strip'),
+      ...(decision.origin ? { origin: decision.origin } : {}),
     },
     ...(decision.model ? { model: decision.model } : {}),
     ...(decision.location ? { location: decision.location } : {}),
