@@ -1,0 +1,1 @@
+{"id":"data","severity":"info","ruleId":"rule.data","category":"quality","title":"Data","docsUrl":"/docs/rules/data","source":{"file":"src/file.ts","line":2,"column":3},"evidence":[],"fixes":[{"title":"Fix","description":"Apply fix","kind":"manual"}],"suppression":{"supported":true,"directive":"// crux-lint-disable-next-line rule.data -- reason","scope":"next-line"}}

@@ -1,0 +1,1 @@
+{"range":{"start":{"line":2,"character":0},"end":{"line":3,"character":0}},"severity":3,"code":"rule.line","source":"crux","message":"Whole line","data":{"id":"no-column","ruleId":"rule.line","category":"quality","fixes":[],"suppression":null}}

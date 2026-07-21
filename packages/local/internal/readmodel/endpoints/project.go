@@ -46,27 +46,35 @@ type ReviewReads interface {
 }
 
 type Deps struct {
-	Devtools    DevtoolsReads
-	Catalog     CatalogReads
-	Inspect     InspectReads
-	Eval        EvalReads
-	EvalCatalog EvalCatalogReads
-	Reviews     ReviewReads
+	Devtools     DevtoolsReads
+	ProjectIndex DevtoolsReads
+	Catalog      CatalogReads
+	Inspect      InspectReads
+	Eval         EvalReads
+	EvalCatalog  EvalCatalogReads
+	Reviews      ReviewReads
 }
 
 var Registry = readmodel.NewRegistry[Deps]()
 
 var ProjectIndex = readmodel.Get(Registry, "GET /api/project/index",
 	func(ctx context.Context, deps Deps) (api.IndexData, error) {
-		return deps.Devtools.ProjectIndex(ctx)
+		return projectIndexReads(deps).ProjectIndex(ctx)
 	},
 	readmodel.Alias[Deps, api.IndexData]("GET /api/index"),
 	readmodel.SnapshotAlways[Deps, api.IndexData]("index", ""))
 
 var ProjectIndexWatch = readmodel.Get(Registry, "GET /api/project/index/watch",
 	func(ctx context.Context, deps Deps) (api.ProjectIndexWatchStatus, error) {
-		return deps.Devtools.ProjectIndexWatchStatus(ctx)
+		return projectIndexReads(deps).ProjectIndexWatchStatus(ctx)
 	})
+
+func projectIndexReads(deps Deps) DevtoolsReads {
+	if deps.ProjectIndex != nil {
+		return deps.ProjectIndex
+	}
+	return deps.Devtools
+}
 
 var InspectActivity = readmodel.GetP[Deps, *readmodel.Limit, []api.InspectActivityEvent](Registry, "GET /api/inspect/activity",
 	func() *readmodel.Limit { return &readmodel.Limit{} },

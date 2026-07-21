@@ -45,10 +45,22 @@ type WSHub struct {
 	lastIndex           store.IndexData
 	hasLastIndex        bool
 	indexGeneration     uint64
+	projectRoot         string
+	serverVersion       string
+}
+
+// IndexSnapshotOptions identifies Project Index snapshots served during this
+// hub process. These values describe process/session identity, not cached index
+// content.
+type IndexSnapshotOptions struct {
+	// ProjectRoot is the absolute root represented by Project Index snapshots.
+	ProjectRoot string
+	// ServerVersion is the explicit Cobra version of the running Crux server.
+	ServerVersion string
 }
 
 // NewWSHub creates a WebSocket hub and routes its diagnostics to logger.
-func NewWSHub(ctx context.Context, devtoolsSvc *devtools.Service, inspectEvents *inspect.EventBus, observabilityEvents *observability.EventBus, runtimeBridge *runtimebridge.Service, logger *slog.Logger) *WSHub {
+func NewWSHub(ctx context.Context, devtoolsSvc *devtools.Service, inspectEvents *inspect.EventBus, observabilityEvents *observability.EventBus, runtimeBridge *runtimebridge.Service, logger *slog.Logger, indexOptions IndexSnapshotOptions) *WSHub {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -64,6 +76,8 @@ func NewWSHub(ctx context.Context, devtoolsSvc *devtools.Service, inspectEvents 
 		devtools:      devtoolsSvc,
 		runtimeBridge: runtimeBridge,
 		logger:        logger,
+		projectRoot:   indexOptions.ProjectRoot,
+		serverVersion: indexOptions.ServerVersion,
 	}
 	if inspectEvents != nil {
 		h.inspectEvents = inspectEvents
@@ -74,7 +88,6 @@ func NewWSHub(ctx context.Context, devtoolsSvc *devtools.Service, inspectEvents 
 		h.startWorker(func() { h.forwardObservabilityEvents(observabilityEvents.Subscribe(hubCtx)) })
 	}
 	if devtoolsSvc != nil && devtoolsSvc.IndexEvents() != nil {
-		h.rememberIndex(devtoolsSvc.ProjectIndexSnapshot())
 		h.startWorker(func() { h.forwardIndexEvents(devtoolsSvc.IndexEvents().Subscribe(hubCtx)) })
 	}
 	if runtimeBridge != nil {
@@ -96,37 +109,20 @@ func (h *WSHub) HandleUpgrade(w http.ResponseWriter, r *http.Request) {
 	}
 
 	client := newWSClient(h, conn)
-	h.mu.Lock()
-	if h.closed {
-		h.mu.Unlock()
+	clientCount, registered := h.registerClientAndSendSnapshot(client)
+	if !registered {
 		_ = conn.Close()
 		return
 	}
-	h.clients[client] = struct{}{}
-	clientCount := len(h.clients)
-	h.workers.Add(1)
-	h.mu.Unlock()
 
 	go func() {
 		defer h.workers.Done()
 		client.writePump()
 	}()
 
-	// Register before the snapshot so a caller that mutates immediately after
-	// receiving the snapshot cannot miss the live event.
-	h.sendSnapshot(client)
-
 	h.log().Info("websocket client connected", "clients", clientCount)
 
 	// Read pump — just drain messages (we don't expect client→server messages)
-	h.mu.Lock()
-	if h.closed {
-		h.mu.Unlock()
-		client.close()
-		return
-	}
-	h.workers.Add(1)
-	h.mu.Unlock()
 	go func() {
 		defer h.workers.Done()
 		defer func() {
@@ -139,6 +135,41 @@ func (h *WSHub) HandleUpgrade(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}()
+}
+
+func (h *WSHub) registerClientAndSendSnapshot(client *wsClient) (int, bool) {
+	// Queue the coherent snapshot before making the client visible to any
+	// broadcast. Holding indexMu prevents an index update from overtaking the
+	// snapshot. Reserve both connection pumps before releasing mu so shutdown
+	// cannot begin waiting while registration is still in flight.
+	h.indexMu.Lock()
+	defer h.indexMu.Unlock()
+	h.mu.Lock()
+	if h.closed {
+		clientCount := len(h.clients)
+		h.mu.Unlock()
+		return clientCount, false
+	}
+	h.workers.Add(2)
+	h.mu.Unlock()
+
+	h.sendSnapshotLocked(client)
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	select {
+	case <-client.done:
+		h.workers.Done()
+		h.workers.Done()
+		return len(h.clients), false
+	default:
+	}
+	if h.closed {
+		h.workers.Done()
+		h.workers.Done()
+		return len(h.clients), false
+	}
+	h.clients[client] = struct{}{}
+	return len(h.clients), true
 }
 
 func (h *WSHub) startWorker(run func()) {

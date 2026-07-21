@@ -1,0 +1,1 @@
+{"id":"propagation","severity":"info","ruleId":"rule.propagation","category":"quality","title":"Propagation","source":{"file":"src/file.ts","line":2,"column":3},"evidence":[],"fixes":[],"propagationPaths":[{"fromDefinitionId":"a","toDefinitionId":"b","relationTypes":["uses","calls"]}]}

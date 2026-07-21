@@ -52,6 +52,7 @@ func newRootCommand(f *cli.Factory) *cobra.Command {
 	rootCmd.AddCommand(commands.NewTracesCmd(f))
 	rootCmd.AddCommand(commands.NewIndexCmd(f))
 	rootCmd.AddCommand(commands.NewLintCmd(f))
+	rootCmd.AddCommand(commands.NewLSPCmd(f))
 	rootCmd.AddCommand(commands.NewCheckCmd(f))
 	rootCmd.AddCommand(commands.NewManifestCmd(f))
 	rootCmd.AddCommand(commands.NewCatalogCmd(f))

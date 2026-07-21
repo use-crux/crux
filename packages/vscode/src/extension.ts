@@ -1,0 +1,162 @@
+import { constants } from 'node:fs'
+import { access } from 'node:fs/promises'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
+import * as vscode from 'vscode'
+import {
+  LanguageClient,
+  type LanguageClientOptions,
+} from 'vscode-languageclient/node'
+import { ClientSlot } from './client-slot.js'
+import { discoverBinary, type DiscoveryHost } from './discovery.js'
+import { RestartQueue } from './restart-queue.js'
+import { createServerOptions } from './server-options.js'
+
+const execFileAsync = promisify(execFile)
+const versionTimeoutMs = 2_000
+const stopTimeoutMs = 3_000
+
+let output: vscode.OutputChannel | undefined
+const clientSlot = new ClientSlot<LanguageClient>()
+const restartQueue = new RestartQueue()
+
+export async function activate(context: vscode.ExtensionContext): Promise<void> {
+  output = vscode.window.createOutputChannel('Crux')
+  context.subscriptions.push(
+    output,
+    vscode.commands.registerCommand('crux.openDocs', async (href: unknown) => {
+      if (typeof href === 'string') {
+        await vscode.env.openExternal(vscode.Uri.parse(href))
+      }
+    }),
+    vscode.commands.registerCommand('crux.restartServer', () => queueRestart()),
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration('crux.port') || event.affectsConfiguration('crux.binaryPath')) {
+        void queueRestart()
+      }
+    }),
+  )
+  await startClient()
+}
+
+export async function deactivate(): Promise<void> {
+  const current = clientSlot.take()
+  if (current === undefined) return
+  await Promise.race([
+    current.stop(),
+    new Promise<void>((resolve) => setTimeout(resolve, stopTimeoutMs)),
+  ])
+}
+
+async function queueRestart(): Promise<void> {
+  try {
+    await restartQueue.enqueue(async () => {
+      await clientSlot.stop()
+      await startClient()
+    })
+  } catch (error) {
+    await vscode.window.showErrorMessage(
+      `Unable to restart Crux language server: ${error instanceof Error ? error.message : String(error)}`,
+    )
+  }
+}
+
+async function startClient(): Promise<void> {
+  const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+  const configuration = vscode.workspace.getConfiguration('crux')
+  const configuredPath = configuration.get<string>('binaryPath', '')
+  let discovered
+  try {
+    discovered = await discoverBinary(configuredPath, workspaceRoot, nodeDiscoveryHost)
+  } catch (error) {
+    await vscode.window.showErrorMessage(error instanceof Error ? error.message : String(error))
+    return
+  }
+  if (discovered === undefined) {
+    const action = await vscode.window.showWarningMessage(
+      'Crux binary not found — set crux.binaryPath or install the crux CLI',
+      'Open Settings',
+    )
+    if (action === 'Open Settings') {
+      await vscode.commands.executeCommand('workbench.action.openSettings', 'crux.binaryPath')
+    }
+    return
+  }
+
+  let version: string
+  try {
+    version = await validateBinary(discovered.path)
+  } catch (error) {
+    await vscode.window.showErrorMessage(error instanceof Error ? error.message : String(error))
+    return
+  }
+  output?.appendLine(`Using Crux ${version} (${discovered.path})`)
+  const port = configuration.get<number>('port', 4400)
+  const serverOptions = createServerOptions({
+    binaryPath: discovered.path,
+    port,
+    workspaceRoot,
+  })
+  const clientOptions: LanguageClientOptions = {
+    documentSelector: [
+      { scheme: 'file', language: 'typescript' },
+      { scheme: 'file', language: 'javascript' },
+      { scheme: 'file', language: 'typescriptreact' },
+      { scheme: 'file', language: 'javascriptreact' },
+    ],
+    initializationOptions: currentSettings(configuration),
+    outputChannel: output,
+    synchronize: { configurationSection: 'crux' },
+  }
+  const next = new LanguageClient('crux', 'Crux', serverOptions, clientOptions)
+  await clientSlot.start(next)
+}
+
+function currentSettings(configuration: vscode.WorkspaceConfiguration): object {
+  return {
+    crux: {
+      port: configuration.get<number>('port', 4400),
+      lint: {
+        profile: configuration.get<string>('lint.profile', ''),
+        includeSuppressed: configuration.get<boolean>('lint.includeSuppressed', false),
+      },
+      trace: configuration.get<string>('trace', 'off'),
+    },
+  }
+}
+
+async function validateBinary(path: string): Promise<string> {
+  try {
+    const { stdout, stderr } = await execFileAsync(path, ['--version'], {
+      timeout: versionTimeoutMs,
+      windowsHide: true,
+    })
+    const version = `${stdout}${stderr}`.trim()
+    if (version === '') throw new Error('empty version output')
+    return version
+  } catch (error) {
+    throw new Error(`Unable to run Crux binary ${path}: ${error instanceof Error ? error.message : String(error)}`)
+  }
+}
+
+const nodeDiscoveryHost: DiscoveryHost = {
+  platform: process.platform,
+  arch: process.arch,
+  async isExecutable(path) {
+    try {
+      await access(path, process.platform === 'win32' ? constants.F_OK : constants.X_OK)
+      return true
+    } catch {
+      return false
+    }
+  },
+  async findOnPath(command) {
+    try {
+      const executable = process.platform === 'win32' ? 'where' : 'which'
+      const { stdout } = await execFileAsync(executable, [command], { timeout: versionTimeoutMs })
+      return stdout.split(/\r?\n/, 1)[0]?.trim() || undefined
+    } catch {
+      return undefined
+    }
+  },
+}

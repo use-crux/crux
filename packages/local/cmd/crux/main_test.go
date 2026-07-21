@@ -108,6 +108,23 @@ func TestRootCommandRegistersDaemonFreeCheck(t *testing.T) {
 	}
 }
 
+func TestRootCommandRegistersLSPCommandSurface(t *testing.T) {
+	root := newRootCommand(&cli.Factory{})
+	lsp, _, err := root.Find([]string{"lsp"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lsp == nil || lsp.Name() != "lsp" {
+		t.Fatalf("lsp command = %#v", lsp)
+	}
+	if lsp.Flags().Lookup("root") == nil {
+		t.Fatal("lsp command is missing --root")
+	}
+	if lsp.InheritedFlags().Lookup("port") == nil {
+		t.Fatal("lsp command is missing inherited --port")
+	}
+}
+
 func TestRootCompletionCommandIsDiscoverable(t *testing.T) {
 	root := newRootCommand(&cli.Factory{})
 	// Cobra adds the completion command lazily; materialize it the same way

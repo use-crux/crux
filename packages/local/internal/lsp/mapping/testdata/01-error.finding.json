@@ -1,0 +1,1 @@
+{"id":"error","severity":"error","ruleId":"rule.error","category":"quality","maturity":"stable","title":"Error title","message":"Error detail","source":{"file":"src/file.ts","line":2,"column":3},"evidence":[],"fixes":[]}

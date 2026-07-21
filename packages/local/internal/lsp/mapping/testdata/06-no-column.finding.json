@@ -1,0 +1,1 @@
+{"id":"no-column","severity":"info","ruleId":"rule.line","category":"quality","title":"Whole line","source":{"file":"src/file.ts","line":3},"evidence":[],"fixes":[]}

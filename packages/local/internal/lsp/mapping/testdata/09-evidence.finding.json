@@ -1,0 +1,1 @@
+{"id":"evidence","severity":"info","ruleId":"rule.evidence","category":"quality","title":"Evidence","source":{"file":"src/file.ts","line":2,"column":3},"evidence":[{"kind":"source","label":"Related source","description":"details","source":{"file":"src/related.ts","line":1,"column":1}}],"fixes":[]}

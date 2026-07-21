@@ -1,0 +1,1 @@
+{"id":"definition-range","severity":"warning","ruleId":"rule.definition","category":"quality","title":"Definition range","source":{"file":"src/file.ts","line":3,"column":9},"primaryDefinitionId":"prompt:def","evidence":[],"fixes":[]}

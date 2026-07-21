@@ -6,6 +6,7 @@ dist
 coverage
 *.tsbuildinfo
 *.log
+*.vsix
 .env
 .env.*
 !.env.example

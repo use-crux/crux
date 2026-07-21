@@ -10,6 +10,9 @@ export async function fetchProjectIndex(
     signal,
   );
   return {
+    projectRoot: payload?.projectRoot,
+    serverVersion: payload?.serverVersion,
+    generation: payload?.generation,
     schemaVersion: payload?.schemaVersion ?? 1,
     prompts: payload?.prompts ?? [],
     contexts: payload?.contexts ?? [],

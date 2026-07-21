@@ -55,9 +55,11 @@ type DevServer struct {
 type DevServerOptions struct {
 	// Context is the parent of every server-owned worker and subscription. It
 	// defaults to context.Background when omitted.
-	Context              context.Context
-	Port                 int
-	Tunnel               bool
+	Context context.Context
+	Port    int
+	Tunnel  bool
+	// ServerVersion is passed explicitly from the Cobra root command.
+	ServerVersion        string
 	SourceResolverScript string
 	ProjectIndexerScript string
 	InspectDir           string
@@ -77,6 +79,7 @@ type DevServerOptions struct {
 }
 
 // RuntimeArtifactGenerator refreshes Runtime Engine generated files from the
+// native Project Index definitions for root.
 type RuntimeArtifactGenerator func(ctx context.Context, root string, definitions []store.ProjectDefinition) error
 
 const runtimeArtifactGenerationTimeout = 120 * time.Second
@@ -113,6 +116,7 @@ func NewDevServer(opts DevServerOptions) *DevServer {
 		InspectDir:           opts.InspectDir,
 		ObservabilityDBPath:  opts.ObservabilityDBPath,
 		ReviewDBPath:         ".crux/review.sqlite",
+		ServerVersion:        opts.ServerVersion,
 		Logger:               logger,
 		Stderr:               stderr,
 		workers:              workers,

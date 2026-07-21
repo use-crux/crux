@@ -1,11 +1,66 @@
 package projectroot
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
 )
 
 var ConfigNames = []string{"crux.config.ts", "crux.config.js", "crux.config.mjs"}
+
+var ignoredConfigDirs = map[string]bool{
+	"node_modules": true,
+	".git":         true,
+	".next":        true,
+	".turbo":       true,
+	".tmp":         true,
+	"dist":         true,
+	"build":        true,
+	"coverage":     true,
+	"generated":    true,
+	".venv":        true,
+	".cache":       true,
+}
+
+// ConfigFileFrom returns the compiler-supported config selected within root.
+// Root-level names use compiler preference order, followed by a deterministic
+// bounded recursive search for monorepo workspace folders.
+func ConfigFileFrom(root string) string {
+	for _, name := range ConfigNames {
+		candidate := filepath.Join(root, name)
+		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+			return candidate
+		}
+	}
+
+	configName := make(map[string]bool, len(ConfigNames))
+	for _, name := range ConfigNames {
+		configName[name] = true
+	}
+	visited := 0
+	found := ""
+	_ = filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil || found != "" {
+			return nil
+		}
+		if entry.IsDir() {
+			if path != root && ignoredConfigDirs[entry.Name()] {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		visited++
+		if visited > 5000 {
+			return filepath.SkipAll
+		}
+		if configName[entry.Name()] {
+			found = path
+			return filepath.SkipAll
+		}
+		return nil
+	})
+	return found
+}
 
 func NearestConfigDirFrom(start string) string {
 	dir := start

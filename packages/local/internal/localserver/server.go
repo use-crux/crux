@@ -50,6 +50,7 @@ type Options struct {
 	RuntimeBridge            *runtimebridge.Service
 	ResourceInspection       *resourceinspection.Service
 	Hub                      Hub
+	ProjectIndex             endpoints.DevtoolsReads
 	ProjectRoot              string
 	ConfigPath               string
 	SourceResolver           SourceResolverOptions
@@ -77,14 +78,20 @@ func New(options Options) http.Handler {
 		originAllowed = allowSameOriginOrLoopback
 	}
 
+	projectIndex := options.ProjectIndex
+	if projectIndex == nil {
+		projectIndex = options.Devtools
+	}
+
 	mux := http.NewServeMux()
 	readmodel.Mount(mux, endpoints.Deps{
-		Devtools:    options.Devtools,
-		Catalog:     options.Devtools,
-		Inspect:     options.Inspect,
-		Eval:        evalfs.OpenProject(options.ProjectRoot),
-		EvalCatalog: options.EvalCatalog,
-		Reviews:     options.Review,
+		Devtools:     options.Devtools,
+		ProjectIndex: projectIndex,
+		Catalog:      options.Devtools,
+		Inspect:      options.Inspect,
+		Eval:         evalfs.OpenProject(options.ProjectRoot),
+		EvalCatalog:  options.EvalCatalog,
+		Reviews:      options.Review,
 	}, endpoints.Registry, logger)
 
 	registerInspectRoutes(mux, options.Inspect)

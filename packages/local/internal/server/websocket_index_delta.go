@@ -14,19 +14,13 @@ type indexDeltaMessage struct {
 	Definitions indexDeltaDefinitions   `json:"definitions"`
 	Diagnostics []store.IndexDiagnostic `json:"diagnostics"`
 	SourceRow   *store.IndexSourceFile  `json:"sourceRow"`
+	Lints       *indexDeltaLints        `json:"lints,omitempty"`
 }
 
 type indexDeltaDefinitions struct {
 	Added      []store.ProjectDefinition `json:"added"`
 	Changed    []store.ProjectDefinition `json:"changed"`
 	RemovedIDs []string                  `json:"removedIds"`
-}
-
-func (h *WSHub) rememberIndex(index store.IndexData) {
-	h.indexMu.Lock()
-	defer h.indexMu.Unlock()
-	h.lastIndex = index
-	h.hasLastIndex = true
 }
 
 func (h *WSHub) indexUpdateMessages(index store.IndexData) []any {
@@ -40,20 +34,35 @@ func (h *WSHub) indexUpdateMessages(index store.IndexData) []any {
 	h.indexMu.Unlock()
 
 	if !hasPrevious {
-		return []any{indexMessage(index)}
+		return []any{h.indexMessage(index, generation)}
 	}
 	deltas := indexDeltaMessages(previous, index, generation)
 	if len(deltas) == 0 {
 		if reflect.DeepEqual(previous, index) {
 			return nil
 		}
-		return []any{indexMessage(index)}
+		return []any{h.indexMessage(index, generation)}
+	}
+	if !indexDeltaCoversChange(previous, index) {
+		return []any{h.indexMessage(index, generation)}
 	}
 	messages := make([]any, 0, len(deltas))
 	for _, delta := range deltas {
 		messages = append(messages, delta)
 	}
 	return messages
+}
+
+func indexDeltaCoversChange(previous store.IndexData, current store.IndexData) bool {
+	previous.Sources = nil
+	previous.Definitions = nil
+	previous.Diagnostics = nil
+	previous.LintFindings = nil
+	current.Sources = nil
+	current.Definitions = nil
+	current.Diagnostics = nil
+	current.LintFindings = nil
+	return reflect.DeepEqual(previous, current)
 }
 
 func indexDeltaMessages(previous store.IndexData, current store.IndexData, generation uint64) []indexDeltaMessage {
@@ -67,6 +76,7 @@ func indexDeltaMessages(previous store.IndexData, current store.IndexData, gener
 			Definitions: indexDefinitionDeltaForFile(file, previous.Definitions, current.Definitions),
 			Diagnostics: diagnosticsForFile(file, current.Diagnostics),
 			SourceRow:   sourceRowForFile(file, current.Sources),
+			Lints:       lintDeltaForFile(file, previous.LintFindings, current.LintFindings),
 		})
 	}
 	return messages
@@ -92,11 +102,12 @@ func changedIndexFiles(previous store.IndexData, current store.IndexData) []stri
 	for _, file := range changedDiagnosticFiles(previous.Diagnostics, current.Diagnostics) {
 		files[file] = true
 	}
+	for _, file := range changedLintFiles(previous.LintFindings, current.LintFindings) {
+		files[file] = true
+	}
 	out := make([]string, 0, len(files))
 	for file := range files {
-		if file != "" {
-			out = append(out, file)
-		}
+		out = append(out, file)
 	}
 	sort.Strings(out)
 	return out

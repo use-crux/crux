@@ -1,0 +1,1 @@
+{"range":{"start":{"line":1,"character":2},"end":{"line":1,"character":2}},"severity":2,"code":"rule.suppressed","source":"crux","message":"Suppressed","tags":[1],"data":{"id":"suppressed-included","ruleId":"rule.suppressed","category":"quality","fixes":[],"suppression":null}}

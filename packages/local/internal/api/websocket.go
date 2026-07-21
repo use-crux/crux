@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -17,6 +18,14 @@ type WSClient struct {
 
 // ConnectWS connects to the devtools WebSocket endpoint.
 func ConnectWS(baseURL string) (*WSClient, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return ConnectWSContext(ctx, baseURL)
+}
+
+// ConnectWSContext connects to the devtools WebSocket within the caller's
+// lifecycle and deadline budget.
+func ConnectWSContext(ctx context.Context, baseURL string) (*WSClient, error) {
 	u, err := url.Parse(baseURL)
 	if err != nil {
 		return nil, err
@@ -28,7 +37,7 @@ func ConnectWS(baseURL string) (*WSClient, error) {
 		HandshakeTimeout: 5 * time.Second,
 	}
 
-	conn, _, err := dialer.Dial(u.String(), nil)
+	conn, _, err := dialer.DialContext(ctx, u.String(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("cannot connect to devtools WebSocket at %s: %w", u.String(), err)
 	}

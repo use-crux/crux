@@ -1,0 +1,124 @@
+---
+title: "crux lsp"
+description: Language Server Protocol diagnostics and suppression actions for Crux projects.
+---
+
+`crux lsp` brings Project Index lint findings into editors that support the
+Language Server Protocol. It publishes diagnostics for TypeScript and
+JavaScript files, links each finding to its rule documentation, and offers a
+quick fix when the rule supports a source-comment suppression.
+
+## Command
+
+```bash
+crux lsp
+crux lsp --port 4500
+crux lsp --root packages/app
+```
+
+| Flag            | Default | Description |
+| --------------- | ------- | ----------- |
+| `--port <port>` | `4400`  | Local `crux dev` port to discover for attach mode. |
+| `--root <dir>`  | `.`     | Fallback project root when the editor sends no workspace folder or root URI. |
+
+The command speaks JSON-RPC over stdio. Editors should start it directly as
+`crux lsp`; do not wrap it in a shell or add a transport flag. Human-readable
+logs go to stderr so stdout remains an LSP-only stream.
+
+## Attach and own modes
+
+The language server chooses the read model independently for each Crux
+workspace folder:
+
+- When a `crux dev` server on the configured port reports the same project
+  root, the language server attaches to its live Project Index.
+- When no matching server is available, it runs the same Project Index watcher
+  in its own process.
+- If an attached server disconnects, existing diagnostics stay visible while
+  the language server reconnects. It falls back to its own watcher after the
+  reconnect grace period.
+- While indexing on its own, it periodically checks for a matching dev server
+  and hands over without clearing diagnostics first.
+
+A dev server for another project on the same port is never attached. A version
+mismatch produces a warning but keeps the server attached because the dev
+server's read model is authoritative.
+
+The P1 server is save-based: edits are reindexed after they reach disk. Unsaved
+buffer changes do not move diagnostic ranges or change Project Index results.
+
+## Visual Studio Code and compatible editors
+
+The private P1 extension starts one language client for the window, discovers
+the Crux binary, forwards the settings below, and registers **Crux: Restart
+Language Server**. It activates in workspaces containing `crux.config.ts`,
+`crux.config.js`, or `crux.config.mjs`.
+
+For a repository build, package and install the VSIX:
+
+```bash
+pnpm install
+pnpm --filter crux-vscode package
+code --install-extension packages/vscode/crux-vscode-0.1.0.vsix
+```
+
+VS Code-compatible editors that accept VSIX extensions can install the same
+artifact with their normal extension-install flow. If the extension cannot
+find the CLI, set `crux.binaryPath` to an absolute path or a path relative to
+the first workspace folder.
+
+Without an explicit path, discovery checks the current Crux repository's
+platform build, `packages/local/crux`, a workspace-root `crux`, and finally
+`PATH`. The selected binary must be executable and return a version.
+
+## Other LSP editors
+
+Use the editor's custom language-server configuration with this equivalent
+shape:
+
+```yaml
+command: crux
+args: [lsp]
+transport: stdio
+languages: [typescript, typescriptreact, javascript, javascriptreact]
+root_markers: [crux.config.ts, crux.config.js, crux.config.mjs]
+```
+
+Pass `--port <port>` in `args` when `crux dev` does not use port 4400. Pass
+`--root <dir>` only for clients that do not send `workspaceFolders` or
+`rootUri`; editor-provided roots take precedence.
+
+## Settings
+
+VS Code settings use the names below. Other clients can send the same nested
+`crux` object in `initializationOptions` or
+`workspace/didChangeConfiguration`.
+
+| Setting | Type / default | Effect |
+| ------- | -------------- | ------ |
+| `crux.binaryPath` | string, `""` | VS Code extension only. Explicit CLI path; an invalid configured path is an error. |
+| `crux.port` | number, `4400` | Port used to discover and attach to a matching local dev server. |
+| `crux.lint.profile` | `""`, `"off"`, `"recommended"`, `"strict"`, or `"experimental"`; default `""` | Overrides presentation filtering. Empty follows the project's configured output; `off` publishes no findings. |
+| `crux.lint.includeSuppressed` | boolean, `false` | Reserved for retained suppressed findings. It has no visible effect until the indexing engine retains them ([#251](https://github.com/use-crux/crux/issues/251)). |
+| `crux.trace` | `"off"` or `"messages"`; default `"off"` | Logs LSP method names without logging request or response payloads. |
+
+Changing the lint profile or reserved suppression setting re-filters the
+current read model without reindexing. Changing the port or binary path makes
+the VS Code extension restart the language client.
+
+## Diagnostics and actions
+
+Diagnostics appear under the `crux` source and retain the rule's severity,
+except experimental findings are shown as hints. Rule codes link to the rule
+reference when the editor supports diagnostic code links.
+
+For rules with next-line suppression support, **Quick Fix** inserts the rule's
+exact `// crux-lint-disable-next-line ...` directive above the affected line
+while preserving indentation. Save the file to reindex it. P1 does not execute
+rule fix commands or provide fix-all actions.
+
+## Related
+
+- [`@use-crux/local`](/docs/reference/local)
+- [Project Index](/docs/reference/crux-core/project-index)
+- [Lint](/docs/reference/crux-core/lint)
