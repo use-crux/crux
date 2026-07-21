@@ -5,8 +5,36 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
-  verify:
+  typecheck:
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+  test:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     services:
       postgres:
@@ -38,6 +66,31 @@ jobs:
           node-version: 24
           cache: pnpm
 
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Test
+        run: pnpm turbo run test --filter='!@use-crux/indexer'
+
+  indexer:
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
@@ -53,29 +106,70 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
-      - name: Typecheck
-        run: pnpm typecheck
-
-      - name: Build Rust/Oxc worker for tests
-        run: cargo build --package crux-static-index-worker --bin crux-static-index-worker
-
-      - name: Test
-        env:
-          CRUX_STATIC_INDEX_WORKER: ${{ github.workspace }}/target/debug/crux-static-index-worker
-        run: pnpm test
+      - name: Indexer integration
+        run: pnpm test:native-ast-parity
 
       - name: Go observability conformance
         working-directory: packages/local
         run: go test ./internal/observability/...
 
-      - name: Native AST parity gate
-        run: pnpm test:native-ast-parity
+  build_package:
+    name: build-package
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: packages/local/go.mod
+          cache-dependency-path: packages/local/go.sum
+
+      - name: Setup Rust
+        run: |
+          rustup toolchain install 1.96.1 --profile minimal
+          rustup default 1.96.1
+          rustc --version
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
 
       - name: Build
         run: pnpm build
 
       - name: Validate npm package staging
         run: pnpm release:stage:ts && pnpm release:validate
+
+  verify:
+    if: ${{ always() }}
+    needs: [typecheck, test, indexer, build_package]
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    steps:
+      - name: Require successful verification jobs
+        env:
+          TYPECHECK_RESULT: ${{ needs.typecheck.result }}
+          TEST_RESULT: ${{ needs.test.result }}
+          INDEXER_RESULT: ${{ needs.indexer.result }}
+          BUILD_PACKAGE_RESULT: ${{ needs.build_package.result }}
+        run: |
+          test "$TYPECHECK_RESULT" = success
+          test "$TEST_RESULT" = success
+          test "$INDEXER_RESULT" = success
+          test "$BUILD_PACKAGE_RESULT" = success
 
   typescript-compat:
     runs-on: blacksmith-4vcpu-ubuntu-2404
