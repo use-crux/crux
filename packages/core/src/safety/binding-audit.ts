@@ -75,7 +75,9 @@ export function recordBindingAuditEntries(entries: readonly GuardrailAuditEntry[
 }
 
 function boundaryPhase(boundary: BoundaryDef): 'input' | 'output' {
-  return boundary.id === 'user.input' || boundary.id === 'user.input.media' || boundary.id === 'model.input'
+  return boundary.id === 'model.input.text' ||
+    boundary.id === 'model.input.media' ||
+    boundary.id === 'model.instructions'
     ? 'input'
     : 'output'
 }

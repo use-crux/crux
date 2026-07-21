@@ -27,7 +27,7 @@ describe("OpenAI image generation", () => {
       guardrails: [
         guardrail({
           id: "openai-image-input",
-          on: boundary.input.user(),
+          on: boundary.input.text(),
           run: () => ({
             action: "rewrite",
             value: "guarded prompt",

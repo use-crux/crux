@@ -82,8 +82,8 @@ export type GenerateImageCommonOptions = Readonly<{
    * Guardrails applied to canonical prompt text, typed-prompt system text,
    * prompt references, masks, and generated images.
    *
-   * Direct and resolved prompt text targets `boundary.input.user()`; a typed
-   * prompt's resolved system text targets `boundary.input.model()`. Resolved
+   * Direct and resolved prompt text targets `boundary.input.text()`; a typed
+   * prompt's resolved system text targets `boundary.input.instructions()`. Resolved
    * prompt guardrails merge with global and call policies before candidate
    * normalization. Media callbacks receive the original asset as
    * `subject.part.source` and a stable operation origin. Input strips are

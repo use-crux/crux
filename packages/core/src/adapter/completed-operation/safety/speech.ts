@@ -21,8 +21,10 @@ export async function guardGeneratedSpeechInput<TInput>(input: TInput, safety: S
   if (!isSpeechInput(input)) return input
 
   const slots = await guardSafetySessionInputOperationText(safety, [
-    { boundary: 'user.input', value: input.text },
-    ...(input.instructions === undefined ? [] : [{ boundary: 'model.input' as const, value: input.instructions }]),
+    { boundary: 'model.input.text', value: input.text },
+    ...(input.instructions === undefined
+      ? []
+      : [{ boundary: 'model.instructions' as const, value: input.instructions }]),
   ])
   const text = slots[0]?.value ?? input.text
   const instructions = slots[1]?.value ?? input.instructions

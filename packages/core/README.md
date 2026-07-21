@@ -164,6 +164,18 @@ const result = await generate(reply, {
 
 Now the same call has memory, retrieval, input screening, structured output, retryable constraints, and traceable events. The SDK still makes the model call; Crux makes the harness around it deliberate.
 
+Input Safety is semantic model ingress. `boundary.input.text()` covers user,
+converted tool, and rendered retrieval text by default;
+`boundary.input.media()` covers user and tool media. Source-specific policy can
+use `{ from: "tool" }` or `{ from: "retrieval" }`. Trusted authored instructions
+use `boundary.input.instructions()`, but retrieval folded into a system message
+remains untrusted retrieval text.
+
+Tool results pass through two explicit layers:
+`toolPolicy.result(raw) → toModelOutput → boundary.input.* → model`. Crux never
+auto-hydrates retrieved media, and custom model-output conversion cannot bypass
+the input guardrails.
+
 ## Test the production task
 
 Create a normal callable task with your adapter, then point an inert Eval at
@@ -233,9 +245,9 @@ instead of public `defer()`.
 | ------------------------------ | -------------------------------------------------------------------------------------------------- |
 | `@use-crux/core`               | Prompts, contexts, config, injection-defense helpers (`safe`, `escapeXml`), and common types.      |
 | `@use-crux/core/memory`        | Memory blocks, storage, capture, proposals, and recall.                                            |
-| `@use-crux/core/embedding`     | Dense/sparse embeddings, typed media inputs, vector-space identity, governance, and caching.        |
-| `@use-crux/core/indexing`      | Text/media document indexing, corpus sync, attribution, and embedding-stage caching.                |
-| `@use-crux/core/retrieval`     | Text/media retrievers, rerankers, grounding inputs, and RAG pipelines.                              |
+| `@use-crux/core/embedding`     | Dense/sparse embeddings, typed media inputs, vector-space identity, governance, and caching.       |
+| `@use-crux/core/indexing`      | Text/media document indexing, corpus sync, attribution, and embedding-stage caching.               |
+| `@use-crux/core/retrieval`     | Text/media retrievers, rerankers, grounding inputs, and RAG pipelines.                             |
 | `@use-crux/core/safety`        | Guardrails, constraints, safety plugins, and validation retry.                                     |
 | `@use-crux/core/eval`          | Inert Evals, typed Cases, Variants, checks, scorers, and Gates.                                    |
 | `@use-crux/core/eval/node`     | Node discovery, Case hydration, planning, execution, and `runEval()`.                              |

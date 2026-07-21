@@ -123,6 +123,59 @@ export function capturingEmissionModel(emissions: readonly MockEmission[]): {
   return { model, prompts };
 }
 
+/**
+ * Stream scripted step emissions while recording the exact provider prompts.
+ * Tool-call emissions finish with `tool-calls`, allowing the real AI SDK loop
+ * to execute client tools and build the next provider request.
+ */
+export function capturingStreamingEmissionModel(
+  emissions: readonly MockEmission[],
+): { model: LanguageModel; prompts: unknown[][] } {
+  const queue = [...emissions];
+  const prompts: unknown[][] = [];
+  let sequence = 0;
+  const model = new MockLanguageModelV3({
+    doStream: async (options: { prompt: unknown[] }) => {
+      prompts.push(options.prompt);
+      const result = v3Result(
+        queue.shift() ?? { text: "exhausted" },
+        sequence++,
+      );
+      const content = result.content as LanguageModelV3Content[];
+      const streamedContent = content.flatMap((part, partIndex) => {
+        if (part.type === "text") {
+          const id = `text_${sequence}_${partIndex}`;
+          return [
+            { type: "text-start", id },
+            { type: "text-delta", id, delta: part.text },
+            { type: "text-end", id },
+          ] as LanguageModelV3StreamPart[];
+        }
+        if (part.type === "reasoning") {
+          const id = `reasoning_${sequence}_${partIndex}`;
+          return [
+            { type: "reasoning-start", id },
+            { type: "reasoning-delta", id, delta: part.text },
+            { type: "reasoning-end", id },
+          ] as LanguageModelV3StreamPart[];
+        }
+        return [part as LanguageModelV3StreamPart];
+      });
+      const chunks: LanguageModelV3StreamPart[] = [
+        { type: "stream-start", warnings: [] },
+        ...streamedContent,
+        {
+          type: "finish",
+          finishReason: result.finishReason,
+          usage: result.usage,
+        },
+      ] as LanguageModelV3StreamPart[];
+      return { stream: simulateReadableStream({ chunks }) };
+    },
+  }) as unknown as LanguageModel;
+  return { model, prompts };
+}
+
 /** A V3 mock model that streams the given text deltas as one text block. */
 export function streamingModel(deltas: readonly string[]): LanguageModel {
   return new MockLanguageModelV3({

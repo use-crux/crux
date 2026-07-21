@@ -99,10 +99,12 @@ describe.each<TransportKind>(["http", "stdio"])(
         lifecyclePrompt(fixture.source),
         { model: "fixture-model", signal: controller.signal },
       );
+      const reason = new Error("caller aborted");
+      const rejection = expect(generation).rejects.toBe(reason);
 
       await fixture.waitForCall();
-      controller.abort(new Error("caller aborted"));
-      await generation;
+      controller.abort(reason);
+      await rejection;
 
       expect(close).toHaveBeenCalledOnce();
       await fixture.waitForTransportClose();

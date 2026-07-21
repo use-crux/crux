@@ -13,6 +13,21 @@ import type { Message } from '../../generation/messages'
 import type { AdapterResponse } from '../types'
 import { responseContent } from '../assistant-output'
 
+/** Internal ownership of the canonical messages selected for initial delivery. */
+export type InitialMessageSource =
+  | 'explicit-history'
+  | 'native-history'
+  | 'resolved-messages'
+  | 'resolved-prompt'
+  | 'empty'
+
+/** Initial canonical input selected together with its resolver ownership. */
+export interface InitialMessageState {
+  readonly messages: Message[]
+  readonly promptText: string | undefined
+  readonly source: InitialMessageSource
+}
+
 /**
  * Append the final assistant response to a provider-agnostic Crux transcript.
  *
@@ -40,15 +55,26 @@ export function appendAssistantResultMessage(messages: Message[], response: Adap
 export function initialMessageState(
   resolved: { readonly prompt?: string; readonly messages?: readonly unknown[] },
   messages?: Message[],
-): { messages: Message[]; promptText: string | undefined } {
+  nativeMessages?: readonly unknown[],
+): InitialMessageState {
   const history: Message[] = [...(messages ?? [])]
+  if (nativeMessages && nativeMessages.length > 0) {
+    return {
+      messages: history,
+      promptText: undefined,
+      source: 'native-history',
+    }
+  }
   let promptText: string | undefined
+  let source: InitialMessageSource = history.length ? 'explicit-history' : 'empty'
   if (history.length === 0 && resolved.prompt) {
     promptText = resolved.prompt
+    source = 'resolved-prompt'
   } else if (history.length === 0 && resolved.messages) {
     history.push(...(resolved.messages as Message[]))
+    source = 'resolved-messages'
   }
-  return { messages: history, promptText }
+  return { messages: history, promptText, source }
 }
 
 /**
@@ -57,17 +83,20 @@ export function initialMessageState(
  * Core-step providers always receive messages, so a resolved prompt string is
  * converted into a first user message when no history exists.
  */
-export function initialCoreMessages(
+export function initialCoreMessageState(
   resolved: { readonly prompt?: string; readonly messages?: readonly unknown[] },
   messages?: Message[],
-): Message[] {
+): InitialMessageState {
   const history: Message[] = [...(messages ?? [])]
+  let source: InitialMessageSource = history.length ? 'explicit-history' : 'empty'
   if (history.length === 0 && resolved.prompt) {
     history.push({ role: 'user', content: resolved.prompt })
+    source = 'resolved-prompt'
   } else if (history.length === 0 && resolved.messages) {
     history.push(...(resolved.messages as Message[]))
+    source = 'resolved-messages'
   }
-  return history
+  return { messages: history, promptText: undefined, source }
 }
 
 /**

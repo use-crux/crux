@@ -134,6 +134,12 @@ The Go backend promotes `span.error`, `error.stack`, and `error.raw` into `RunDe
 
 Crux only uses exception evidence for actual thrown failures. Non-throwing outcomes stay in their domain-specific records: approval denial is `tool.approval` plus model-facing tool output, guardrail blocks are `guardrail.report` / `guardrail.blocked`, constraint retries are `constraint.retry`, retrieval zero hits are result counts and `retrieval.hits`, invalid citations are `citation.report`, cascade tier rejection is routing metadata, flow suspension/cancellation is flow status, and stream `length` or `content_filter` is a finish reason.
 
+Model-ingress guardrail records identify the semantic target and privacy-safe
+origin only: source `user`, `tool`, or `retrieval`, plus stable coordinates or a
+safe tool/retriever identifier when available. They do not contain original or
+rewritten text, raw tool values, retrieval hits/queries, media sources, provider
+objects, or the private retrieval-fold carrier.
+
 Runtime bridge and eval-runner failures can happen outside a normal span. Those responses carry the same normalized details under `command.error.details`, so UI and TUI surfaces can show name, message, stack, phase, kind, and raw details even when no span exists.
 
 ## Exports

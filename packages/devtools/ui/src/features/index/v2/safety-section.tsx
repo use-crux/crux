@@ -9,6 +9,7 @@ import {
   projectSafetyPolicyCatalog,
   type SafetyPolicyCatalogView,
 } from "./safety-catalog";
+import { safetyTargetLabel } from "@/shared/lib/safety-presentation";
 
 /** Render indexed Safety boundaries, strategies, and completed-operation links. */
 export function IndexSafety({ def }: { readonly def: ViewDef }) {
@@ -77,8 +78,8 @@ function SafetyPolicySection({
             {view.kind}
           </Chip>
           {view.boundaries.map((boundary) => (
-            <Chip key={boundary} tone="iris" mono>
-              {boundary}
+            <Chip key={boundary} tone="iris">
+              {safetyTargetLabel(boundary)}
             </Chip>
           ))}
           {view.strategy ? (
@@ -155,8 +156,8 @@ function OperationSafetySection({
                 {policy.kind}
               </Chip>
               {policy.boundaries.map((boundary) => (
-                <Chip key={boundary} tone="iris" mono>
-                  {boundary}
+                <Chip key={boundary} tone="iris">
+                  {safetyTargetLabel(boundary)}
                 </Chip>
               ))}
               {policy.strategy ? (

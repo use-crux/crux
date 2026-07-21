@@ -179,6 +179,28 @@ describe('createSafety — guardInput', () => {
     )
   })
 
+  it('retains only privacy-safe user provenance in blocked input decisions', async () => {
+    const blocker = guardrail({
+      id: 'origin-aware-block',
+      on: boundary.input.text(),
+      run: async () => ({ action: 'block' as const, reason: 'blocked' }),
+    })
+    const safety = identity({ call: { guardrails: [blocker] } })
+
+    const error = await safety
+      .guardInput({ messages: [userMessage('SECRET_INPUT')] })
+      .then(() => undefined)
+      .catch((caught: unknown) => caught)
+
+    expect(error).toBeInstanceOf(GuardrailBlockedError)
+    expect((error as GuardrailBlockedError).decisions[0]?.origin).toEqual({
+      source: 'user',
+      kind: 'message',
+      messageIndex: 0,
+    })
+    expect(JSON.stringify({ error, audit: safety.audit })).not.toContain('SECRET_INPUT')
+  })
+
   it('writes redacted content back into the returned messages', async () => {
     const redactor = guardrail({
       id: 'pii',
@@ -199,12 +221,16 @@ describe('createSafety — guardInput', () => {
     // Earlier messages untouched.
     expect(result.messages[0]?.content).toBe('first')
     // Safe-by-default audit must not expose the raw pre-redaction input.
-    expect(safety.audit.guardrails?.applied[0]).toMatchObject({
+    const rewriteAudit = safety.audit.guardrails?.applied.find(
+      (entry) => entry.origin?.source === 'user' && entry.origin.messageIndex === 2,
+    )
+    expect(rewriteAudit).toMatchObject({
       guard: 'pii',
       phase: 'input',
       action: 'redact',
+      origin: { source: 'user', kind: 'message', messageIndex: 2 },
     })
-    expect(safety.audit.guardrails?.applied[0]).not.toHaveProperty('original')
+    expect(rewriteAudit).not.toHaveProperty('original')
   })
 
   it('falls back to prompt text when history has no user message', async () => {

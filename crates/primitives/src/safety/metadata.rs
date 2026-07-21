@@ -11,8 +11,9 @@ const SAFETY_API_MODULES: &[&str] = &["@use-crux/core", "@use-crux/core/safety"]
 const GUARDRAIL_STRATEGY_KINDS: &[&str] = &["classifier", "injection", "media", "pii", "secrets"];
 
 const SAFETY_BOUNDARY_IDS: &[&str] = &[
-    "user.input",
-    "model.input",
+    "model.input.text",
+    "model.input.media",
+    "model.instructions",
     "model.output.text",
     "model.output.media",
     "model.output.object",
@@ -20,25 +21,19 @@ const SAFETY_BOUNDARY_IDS: &[&str] = &[
     "tool.call",
     "tool.result",
     "approval.request",
-    "retrieval.result",
     "memory.write",
     "validation.feedback",
 ];
 
 const HELPER_BOUNDARY_IDS: &[(&str, &str)] = &[
-    ("boundary.input.user", "user.input"),
-    ("boundary.input.text", "user.input"),
-    ("boundary.input.media", "user.input.media"),
-    ("boundary.input.model", "model.input"),
+    ("boundary.input.text", "model.input.text"),
+    ("boundary.input.media", "model.input.media"),
+    ("boundary.input.instructions", "model.instructions"),
     ("boundary.output.text", "model.output.text"),
     ("boundary.output.media", "model.output.media"),
     ("boundary.output.object", "model.output.object"),
     ("boundary.output.both", "model.output"),
     ("boundary.output.path", "model.output.object"),
-    ("boundary.tool.call", "tool.call"),
-    ("boundary.tool.result", "tool.result"),
-    ("boundary.approval.request", "approval.request"),
-    ("boundary.retrieval.result", "retrieval.result"),
     ("boundary.memory.write", "memory.write"),
     ("boundary.validation.feedback", "validation.feedback"),
 ];

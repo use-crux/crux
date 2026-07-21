@@ -7,10 +7,13 @@ import { finalizeMediaEvaluations, mediaBlockedError, mediaRunContext, type Medi
 import { findMediaGroupDependencyViolation, type MediaGroupDependency } from './groups'
 import { mediaLocationAttributes } from './location'
 import type { MediaPartLocation, MediaPartSubject } from './types'
+import { inputOriginAttributes } from '../input-origin-observability'
 
 export interface MediaVisitItem {
   readonly subject: MediaPartSubject
   readonly groupId: string
+  /** @internal Shared native position when several semantic subjects map to one removable slot. */
+  readonly retentionKey?: string
 }
 
 export interface MediaVisitGroup {
@@ -25,7 +28,7 @@ interface VisitMediaOptions {
   readonly items: readonly MediaVisitItem[]
   readonly groups: readonly MediaVisitGroup[]
   readonly dependencies?: readonly MediaGroupDependency[]
-  readonly context: () => GuardrailContext
+  readonly context: (item: MediaVisitItem) => GuardrailContext
   readonly appendAudit: (audit: GuardrailAudit) => void
   readonly onStrip?: (item: MediaVisitItem) => void
 }
@@ -50,10 +53,12 @@ export async function visitMedia(options: VisitMediaOptions): Promise<MediaVisit
   const retainedByGroup = new Map(options.groups.map((group) => [group.id, group.size]))
   const minimumByGroup = new Map(options.groups.map((group) => [group.id, group.minimumRetained]))
   const actions: string[] = []
-  const stripped = new Set<MediaPartSubject>()
+  const stripped = new Set<string | MediaPartSubject>()
   const evaluations: MediaEvaluation[] = []
 
   for (const item of options.items) {
+    const retentionKey = item.retentionKey ?? item.subject
+    if (stripped.has(retentionKey)) continue
     const location: MediaPartLocation = {
       origin: item.subject.origin,
       partType: item.subject.part.type,
@@ -61,7 +66,7 @@ export async function visitMedia(options: VisitMediaOptions): Promise<MediaVisit
 
     for (const binding of options.bindings) {
       const start = performance.now()
-      const context = options.context()
+      const context = options.context(item)
       const span = observe.openSpan({
         name: binding.policy.id,
         primitive: 'guardrail.run',
@@ -75,6 +80,7 @@ export async function visitMedia(options: VisitMediaOptions): Promise<MediaVisit
           promptId: context.promptId,
           model: context.model,
           ...mediaLocationAttributes(location),
+          ...inputOriginAttributes(context.origin),
         },
       })
 
@@ -104,6 +110,7 @@ export async function visitMedia(options: VisitMediaOptions): Promise<MediaVisit
         result,
         location,
         model: context.model,
+        origin: context.origin,
         durationMs,
         span,
         escalatedToBlock,
@@ -113,7 +120,7 @@ export async function visitMedia(options: VisitMediaOptions): Promise<MediaVisit
 
       if (result.action === 'block' && binding.mode === 'enforce') {
         finalizeMediaEvaluations(options, evaluations, evaluation)
-        throw mediaBlockedError(options.phase, binding, result.reason, location, durationMs, false, context.model)
+        throw mediaBlockedError(options.phase, binding, result.reason, location, durationMs, false, context.model, context.origin)
       }
 
       if (result.action === 'strip' && binding.mode === 'enforce') {
@@ -122,7 +129,7 @@ export async function visitMedia(options: VisitMediaOptions): Promise<MediaVisit
           throw mediaBlockedError(options.phase, binding, result.reason, location, durationMs, true, context.model)
         }
         retainedByGroup.set(item.groupId, groupCount(retainedByGroup, item.groupId) - 1)
-        stripped.add(item.subject)
+        stripped.add(retentionKey)
         options.onStrip?.(item)
         break
       }
@@ -146,13 +153,16 @@ export async function visitMedia(options: VisitMediaOptions): Promise<MediaVisit
       evaluation.durationMs,
       true,
       evaluation.model,
+      evaluation.origin,
     )
   }
 
   finalizeMediaEvaluations(options, evaluations)
 
   return {
-    subjects: options.items.map(({ subject }) => subject).filter((subject) => !stripped.has(subject)),
+    subjects: options.items
+      .filter((item) => !stripped.has(item.retentionKey ?? item.subject))
+      .map(({ subject }) => subject),
     actions,
     ran: true,
   }

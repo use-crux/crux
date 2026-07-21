@@ -36,6 +36,7 @@ import {
   recountSystemContent,
 } from "./system-content";
 import { freshnessProjection, markLive, markMemo } from "./freshness";
+import type { SystemIngressBlock } from "./system-ingress-provenance";
 
 /** Result returned by {@link buildSystemMessage}. */
 export interface BuiltSystemMessage {
@@ -43,12 +44,15 @@ export interface BuiltSystemMessage {
   parts: InspectPart[];
   droppedContexts: DroppedContext[];
   blocks: SystemBlock[];
+  /** Exact ordered semantic ownership retained for managed model ingress. */
+  ingressBlocks: readonly SystemIngressBlock[];
   promptBudgetArtifactId?: CruxArtifactId;
 }
 
 /** Internal representation of a resolved context contribution. */
 interface ResolvedContextPart extends BudgetContextPart {
   providerCache: boolean;
+  contextId?: string;
   artifactId?: CruxArtifactId;
 }
 
@@ -259,6 +263,7 @@ export async function buildSystemMessage(
     resolved.push({
       source,
       injectableKind: contextContributionKind(ctx),
+      ...(ctx.id ? { contextId: ctx.id } : {}),
       text: text.text,
       tokens,
       priority: ctx.priority,
@@ -344,12 +349,28 @@ export async function buildSystemMessage(
     ];
   });
   markCacheBoundary(blocks);
+  const ingressBlocks = blocks.map((block): SystemIngressBlock => {
+    const resolvedPart = resolved.find((part) => part.source === block.source);
+    return {
+      source: block.source,
+      text: block.text,
+      ...(resolvedPart
+        ? {
+            family: resolvedPart.injectableKind,
+            ...(resolvedPart.contextId
+              ? { contextId: resolvedPart.contextId }
+              : {}),
+          }
+        : {}),
+    };
+  });
 
   return {
     system,
     parts,
     droppedContexts,
     blocks,
+    ingressBlocks,
     ...(promptBudgetArtifactId ? { promptBudgetArtifactId } : {}),
   };
 }

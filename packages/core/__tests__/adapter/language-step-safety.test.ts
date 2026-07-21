@@ -29,7 +29,7 @@ describe("language step Safety — exact input dispatch", () => {
       guardrails: exactInputGuardrails(seen, "core"),
     });
 
-    expect(seen).toEqual(["user.input:raw user", "model.input:raw system"]);
+    expect(seen).toEqual(["model.input.text:raw user", "model.instructions:raw system"]);
     expect(calls).toEqual([
       {
         messages: [{ role: "user", content: "guarded user" }],
@@ -50,7 +50,7 @@ describe("language step Safety — exact input dispatch", () => {
       guardrails: exactInputGuardrails(seen, "sdk"),
     });
 
-    expect(seen).toEqual(["user.input:raw user", "model.input:raw system"]);
+    expect(seen).toEqual(["model.input.text:raw user", "model.instructions:raw system"]);
     expect(fake.calls.runTextLoop[0]).toMatchObject({
       prompt: "guarded user",
       system: "guarded system",
@@ -78,7 +78,7 @@ describe("language step Safety — exact input dispatch", () => {
       },
     );
 
-    expect(seen).toEqual(["user.input:raw user", "model.input:raw system"]);
+    expect(seen).toEqual(["model.input.text:raw user", "model.instructions:raw system"]);
     expect(calls[0]?.messages).toEqual([
       { role: "system", content: "guarded system" },
       { role: "user", content: "guarded user" },
@@ -99,7 +99,7 @@ describe("language step Safety — exact input dispatch", () => {
       },
     );
 
-    expect(seen).toEqual(["user.input:raw user", "model.input:raw system"]);
+    expect(seen).toEqual(["model.input.text:raw user", "model.instructions:raw system"]);
     expect(fake.calls.runTextLoop[0]?.messages).toEqual([
       { role: "system", content: "guarded system" },
       { role: "user", content: "guarded user" },
@@ -123,7 +123,7 @@ describe("language step Safety — exact input dispatch", () => {
       guardrails: exactInputGuardrails(seen, "core-stream"),
     });
 
-    expect(seen).toEqual(["user.input:raw user", "model.input:raw system"]);
+    expect(seen).toEqual(["model.input.text:raw user", "model.instructions:raw system"]);
     expect(calls).toEqual([
       {
         messages: [{ role: "user", content: "guarded user" }],
@@ -144,7 +144,7 @@ describe("language step Safety — exact input dispatch", () => {
       guardrails: exactInputGuardrails(seen, "sdk-stream"),
     });
 
-    expect(seen).toEqual(["user.input:raw user", "model.input:raw system"]);
+    expect(seen).toEqual(["model.input.text:raw user", "model.instructions:raw system"]);
     expect(fake.calls.runStream[0]).toMatchObject({
       prompt: "guarded user",
       system: "guarded system",
@@ -202,7 +202,7 @@ function exactInputGuardrails(seen: string[], suffix: string) {
   return [
     guardrail({
       id: `guard-${suffix}-user`,
-      on: boundary.input.user(),
+      on: boundary.input.text(),
       run: (text, context) => {
         seen.push(`${context.boundary.id}:${text}`);
         return {
@@ -214,7 +214,7 @@ function exactInputGuardrails(seen: string[], suffix: string) {
     }),
     guardrail({
       id: `guard-${suffix}-model`,
-      on: boundary.input.model(),
+      on: boundary.input.instructions(),
       run: (text, context) => {
         seen.push(`${context.boundary.id}:${text}`);
         return {

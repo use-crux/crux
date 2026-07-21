@@ -2,6 +2,7 @@ import type { SafetyDecision } from '../../safety/decision'
 import type { TurnDecision, TurnDecisionPhase } from './report'
 import type { TurnDecisionReasonCode } from './shared'
 import type { TurnDecisionSubject, TurnDeepTabTarget, TurnEvidenceRef } from './targets'
+import { safetyTarget } from '../safety-presentation'
 
 /** Options for projecting one Safety decision into a turn report row. */
 export interface SafetyDecisionProjectionOptions {
@@ -38,6 +39,14 @@ export function safetyDecisionToTurnDecision(
       source: 'artifact',
       evidenceLevel: 'declared',
     },
+    safety: {
+      target: safetyTarget(decision.boundary),
+      mode: decision.mode,
+      changed:
+        decision.mode === 'enforce' &&
+        (decision.action === 'rewrite' || decision.action === 'strip'),
+      ...(decision.origin ? { origin: decision.origin } : {}),
+    },
     ...(decision.model ? { model: decision.model } : {}),
     ...(decision.location ? { location: decision.location } : {}),
     ...(decision.escalatedToBlock ? { escalatedToBlock: true as const } : {}),
@@ -70,7 +79,7 @@ function phaseForSafetyDecision(decision: SafetyDecision): TurnDecisionPhase {
   ) {
     return 'tool-use'
   }
-  if (decision.boundary === 'retrieval.result' || decision.boundary === 'memory.write') {
+  if (decision.boundary === 'memory.write') {
     return 'data'
   }
   if (decision.boundary === 'validation.feedback') return 'recovery'
@@ -90,7 +99,6 @@ function subjectKindForSafetyDecision(decision: SafetyDecision): TurnDecisionSub
   if (decision.kind === 'guardrail') return 'guardrail'
   if (decision.kind === 'constraint') return 'constraint'
   if (decision.boundary === 'memory.write') return 'memory'
-  if (decision.boundary === 'retrieval.result') return 'retrieval'
   if (
     decision.boundary === 'tool.call' ||
     decision.boundary === 'tool.result' ||

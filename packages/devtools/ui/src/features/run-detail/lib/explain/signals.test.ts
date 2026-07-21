@@ -143,7 +143,7 @@ describe("turnHasWarningSignal", () => {
     const r = cleanReport();
     r.decisions = [
       {
-        id: "decision:safety:1:media:user.input.media",
+        id: "decision:safety:1:media:model.input.media",
         phase: "checks",
         kind: "safety.guardrail",
         subject: { kind: "guardrail", id: "media", name: "media" },

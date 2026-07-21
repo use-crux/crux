@@ -14,6 +14,7 @@ import type { GenerationSettings } from '../../generation/types'
 import type { SkillActivationSession } from '../../skill/session'
 import type { StepDirective } from '../executor-types'
 import type { ExecutionResolveOpts } from './types'
+import { systemMessagePrefixPatch } from './system-prefix-patch'
 
 /** Default maximum model/tool loop steps for both adapter dialects. */
 export const DEFAULT_MAX_STEPS = 10
@@ -63,12 +64,14 @@ export function mergeDirectives(factory: StepDirective, caller: StepDirective | 
   if (caller.kind === 'stop') return caller
   if (factory.kind === 'stop') return factory
   if (factory.kind === 'amend' && caller.kind === 'amend') {
+    const prefixPatch = factory[systemMessagePrefixPatch]
     return {
       kind: 'amend',
-      system: caller.system ?? factory.system,
-      systemBlocks: caller.systemBlocks ?? factory.systemBlocks,
+      system: prefixPatch ? undefined : (caller.system ?? factory.system),
+      systemBlocks: prefixPatch ? undefined : (caller.systemBlocks ?? factory.systemBlocks),
       tools: caller.tools ?? factory.tools,
       activeTools: caller.activeTools ?? factory.activeTools,
+      [systemMessagePrefixPatch]: prefixPatch,
       refundStep: Boolean(caller.refundStep || factory.refundStep),
     }
   }

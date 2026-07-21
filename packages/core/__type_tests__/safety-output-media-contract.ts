@@ -34,7 +34,7 @@ guardrail({
   on: [boundary.input.media(), boundary.output.media()] as const,
   run: (subject, context) => {
     expectTypeOf(subject).toEqualTypeOf<MediaPartSubject>()
-    expectTypeOf(context.boundary.id).toEqualTypeOf<'user.input.media' | 'model.output.media'>()
+    expectTypeOf(context.boundary.id).toEqualTypeOf<'model.input.media' | 'model.output.media'>()
     return { action: 'strip', reason: 'Unsupported media.' }
   },
 })
@@ -77,6 +77,11 @@ function inspectMediaNarrowing(subject: MediaPartSubject): void {
       return
     case 'step':
       expectTypeOf(origin.stepIndex).toEqualTypeOf<number>()
+      expectTypeOf(origin.partIndex).toEqualTypeOf<number>()
+      return
+    case 'tool-result':
+      expectTypeOf(origin.toolName).toEqualTypeOf<string>()
+      expectTypeOf(origin.toolCallId).toEqualTypeOf<string | undefined>()
       expectTypeOf(origin.partIndex).toEqualTypeOf<number>()
       return
     case 'operation':

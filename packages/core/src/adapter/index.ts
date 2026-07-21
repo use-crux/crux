@@ -200,6 +200,29 @@ export type {
   ExecutorStreamHandle,
   ExecutorStreamMeta,
 } from "./executor-types";
+export { toolModelIngressDialect } from "./tool/model-ingress-port";
+export type { ToolModelIngressDialect } from "./tool/model-ingress-port";
+/** @internal Private dialect hook for guarded active-history amendments. */
+export { systemMessagePrefixPatch } from "./execution/system-prefix-patch";
+/** @internal Private dialect contract for guarded active-history amendments. */
+export type { SystemMessagePrefixPatch } from "./execution/system-prefix-patch";
+export type {
+  ModelIngressDocument,
+  ModelIngressMediaSlot,
+  ModelIngressOpaqueSlot,
+  ModelIngressPatch,
+  ModelIngressSlot,
+  ModelIngressSlotKey,
+  ModelIngressTextSlot,
+} from "../safety/input/model-ingress-document";
+export type {
+  CanonicalModelIngress,
+  CanonicalModelIngressResult,
+  CanonicalTextIngress,
+  CanonicalTextIngressResult,
+  ModelIngressGuard,
+  ToolModelInputOrigin,
+} from "../safety/input/model-ingress";
 
 // Factory + result/option types (SDK-driven loop)
 export { loopRuntimeAdapter } from "./define-executor";

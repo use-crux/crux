@@ -14,6 +14,14 @@ import type { MediaOutputResult } from "./output/media";
 import type { LiveTextSlot } from "./output/completion";
 import type { OperationInputTextSlot } from "./input/operation-text";
 import type { Safety, SafetyOutput } from "./session-contract";
+import type {
+  CanonicalModelIngress,
+  CanonicalModelIngressResult,
+  ModelIngressGuard,
+} from "./input/model-ingress";
+import type { InputSource } from "./input-origin";
+import type { ResolvedSystemIngressCarrier } from "../resolver/system-ingress-provenance";
+import type { ResolvedSystemIngressDelivery } from "./input/resolved-system";
 
 export const outputMediaGuard: unique symbol = Symbol(
   "crux.safety.outputMediaGuard",
@@ -45,8 +53,31 @@ export const languageTerminalFinalize: unique symbol = Symbol(
 export const streamCompletionGuard: unique symbol = Symbol(
   "crux.safety.streamCompletionGuard",
 );
+export const modelIngressGuard: unique symbol = Symbol(
+  "crux.safety.modelIngressGuard",
+);
+export const modelIngressSources: unique symbol = Symbol(
+  "crux.safety.modelIngressSources",
+);
+export const resolvedInputGuard: unique symbol = Symbol(
+  "crux.safety.resolvedInputGuard",
+);
+
+type SafetyInput = Parameters<Safety["guardInput"]>[0];
+type SafetyInputResult = Awaited<ReturnType<Safety["guardInput"]>> & {
+  readonly systemIngress?: ResolvedSystemIngressDelivery;
+};
 
 export interface SafetySession extends Safety {
+  [modelIngressGuard](
+    input: CanonicalModelIngress,
+  ): Promise<CanonicalModelIngressResult>;
+  readonly [modelIngressSources]: readonly InputSource[];
+  [resolvedInputGuard](
+    input: SafetyInput,
+    provenance: ResolvedSystemIngressCarrier | undefined,
+    scope?: "full" | "carrier",
+  ): Promise<SafetyInputResult>;
   readonly [languageStepGuardEnabled]: boolean;
   [languageStepGuard](
     stepIndex: number,
@@ -90,6 +121,24 @@ export interface SafetySession extends Safety {
   ): Promise<MediaOutputResult>;
   [outputOperationTextGuard](text: string, model?: string): Promise<string>;
   [oneShotOutputConstraints](text: string, model?: string): Promise<void>;
+}
+
+/** @internal Guard one post-conversion canonical model-ingress value. */
+export function guardSafetySessionModelIngress(
+  safety: Safety,
+  input: CanonicalModelIngress,
+): Promise<CanonicalModelIngressResult> {
+  return (safety as SafetySession)[modelIngressGuard](input);
+}
+
+/** @internal Return the shared ingress gate only when one policy matches the source. */
+export function safetySessionModelIngressGuard(
+  safety: Safety,
+  source: InputSource,
+): ModelIngressGuard | undefined {
+  const session = safety as SafetySession;
+  if (!session[modelIngressSources].includes(source)) return undefined;
+  return (input) => session[modelIngressGuard](input);
 }
 
 /** @internal Whether this session has an applicable per-step output guard. */

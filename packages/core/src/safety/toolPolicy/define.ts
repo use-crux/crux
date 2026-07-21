@@ -15,7 +15,6 @@ import {
   withToolMiddlewareDefinitionRef,
 } from '../../tools/middleware'
 import type { ToolCallContext, ToolMatcher, ToolMiddleware, ToolMiddlewareNext } from '../../tools/types'
-import { boundary } from '../boundary'
 import type { SafetyFinding, SafetyRunContext } from '../decision'
 import { validateGuardrailRunResult } from '../guardrail/types'
 import { blockedToolPolicy, createToolPolicyDecision } from './decision'
@@ -27,7 +26,12 @@ import type {
   ToolPolicyConfig,
   ToolPolicyMatch,
   ToolPolicyResultOptions,
+  ToolCallBoundary,
+  ToolResultBoundary,
 } from './types'
+
+const TOOL_CALL_BOUNDARY = Object.freeze({ _tag: 'Boundary', id: 'tool.call' } as const)
+const TOOL_RESULT_BOUNDARY = Object.freeze({ _tag: 'Boundary', id: 'tool.result' } as const)
 
 interface ToolPolicyFactory {
   (config: ToolPolicyConfig): ToolMiddleware
@@ -134,7 +138,7 @@ function args(options: ToolPolicyArgsOptions): ToolMiddleware {
         input: call.input,
       }
       const findings: SafetyFinding[] = []
-      const ctx = toolContext(options.id, boundary.tool.call(), call, findings)
+      const ctx = toolContext(options.id, TOOL_CALL_BOUNDARY, call, findings)
       const result = validateGuardrailRunResult(await options.run(subject, ctx), {
         streaming: false,
         last: true,
@@ -176,7 +180,7 @@ function result(options: ToolPolicyResultOptions): ToolMiddleware {
         output,
       }
       const findings: SafetyFinding[] = []
-      const ctx = toolContext(options.id, boundary.tool.result(), call, findings)
+      const ctx = toolContext(options.id, TOOL_RESULT_BOUNDARY, call, findings)
       const decision = validateGuardrailRunResult(await options.run(subject, ctx), {
         streaming: false,
         last: true,
@@ -216,7 +220,7 @@ function isToolMatcherArray(match: ToolPolicyMatch): match is readonly ToolMatch
   return Array.isArray(match)
 }
 
-function toolContext<B extends ReturnType<typeof boundary.tool.call> | ReturnType<typeof boundary.tool.result>>(
+function toolContext<B extends ToolCallBoundary | ToolResultBoundary>(
   id: string,
   on: B,
   call: ToolCallContext,

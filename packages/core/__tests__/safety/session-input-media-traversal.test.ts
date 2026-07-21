@@ -40,7 +40,7 @@ describe('guardInput — media traversal', () => {
           part: image,
           origin: { kind: 'message', messageIndex: 1, partIndex: 1 },
         },
-        boundary: 'user.input.media',
+        boundary: 'model.input.media',
       },
     ])
     expect(seen[0]?.subject.part).toBe(image)

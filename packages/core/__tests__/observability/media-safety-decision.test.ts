@@ -48,8 +48,10 @@ describe('input media safety observability', () => {
         primitive: 'guardrail.run',
         name: 'strip-observed-image',
         attributes: expect.objectContaining({
-          boundary: 'user.input.media',
+          boundary: 'model.input.media',
           mode: 'enforce',
+          inputSource: 'user',
+          inputOriginKind: 'message',
           mediaPartType: 'image',
           messageIndex: 0,
           partIndex: 1,
@@ -62,18 +64,23 @@ describe('input media safety observability', () => {
         kind: 'guardrail.report',
         attributes: expect.objectContaining({
           guardrailName: 'strip-observed-image',
-          boundary: 'user.input.media',
+          boundary: 'model.input.media',
           mode: 'enforce',
           action: 'strip',
+          inputSource: 'user',
+          inputOriginKind: 'message',
           mediaPartType: 'image',
           messageIndex: 0,
           partIndex: 1,
         }),
         preview: {
           kind: 'guardrail.report',
+          target: { id: 'model.input.media', label: 'Model input · Media' },
+          mode: 'enforce',
           phase: 'input',
           action: 'strip',
           reason: 'Image is outside policy.',
+          origin: { source: 'user', kind: 'message', messageIndex: 0, partIndex: 1 },
           mediaPartType: 'image',
           originKind: 'message',
           messageIndex: 0,
@@ -88,12 +95,20 @@ describe('input media safety observability', () => {
         attributes: expect.objectContaining({
           guardrailName: 'strip-observed-image',
           action: 'strip',
+          inputSource: 'user',
+          inputOriginKind: 'message',
           mediaPartType: 'image',
           messageIndex: 0,
           partIndex: 1,
         }),
       }),
     )
+    expect(safety.audit.guardrails?.applied[0]?.origin).toEqual({
+      source: 'user',
+      kind: 'message',
+      messageIndex: 0,
+      partIndex: 1,
+    })
     const serialized = JSON.stringify(transport.records)
     expect(serialized).not.toContain('SECRET_MEDIA_PATH')
     expect(serialized).not.toContain('SECRET_QUERY')
@@ -131,7 +146,7 @@ describe('input media safety observability', () => {
     expect(error).toBeInstanceOf(GuardrailBlockedError)
     expect((error as GuardrailBlockedError).decisions[0]).toMatchObject({
       policyId: 'strip-only-observed-part',
-      boundary: 'user.input.media',
+      boundary: 'model.input.media',
       action: 'block',
       reason: 'Only image is outside policy.',
       location: {
@@ -236,7 +251,7 @@ describe('input media safety observability', () => {
     expect(reportActions).toHaveLength(cases.length)
     for (const action of reportActions) {
       expect(action.attributes).toMatchObject({
-        boundary: 'user.input.media',
+        boundary: 'model.input.media',
         mode: 'report',
         action: 'strip',
       })

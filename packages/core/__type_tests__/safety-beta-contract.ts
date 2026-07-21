@@ -55,7 +55,7 @@ guardrail({
   on: [boundary.input.text(), boundary.output.text()] as const,
   run: (subject, ctx) => {
     expectTypeOf(subject).toEqualTypeOf<string>()
-    expectTypeOf(ctx.boundary.id).toEqualTypeOf<'user.input' | 'model.output.text'>()
+    expectTypeOf(ctx.boundary.id).toEqualTypeOf<'model.input.text' | 'model.output.text'>()
     return { action: 'allow' }
   },
 })

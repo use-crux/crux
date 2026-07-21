@@ -19,12 +19,19 @@ export {
   guardSafetySessionInputOperationMedia,
   guardSafetySessionInputOperationText,
   guardSafetySessionLanguageStep,
+  guardSafetySessionModelIngress,
+  safetySessionModelIngressGuard,
   guardSafetySessionOutputMedia,
   guardSafetySessionOutputOperationText,
   guardSafetySessionStreamCompletion,
   runSafetySessionOneShotOutputConstraints,
   safetyRequiresLanguageStepTransform,
 } from "./session-bridge";
+
+export {
+  guardSafetySessionIngressCarrier,
+  guardSafetySessionResolvedInput,
+} from "./session-resolved-input";
 
 export type {
   ConstraintFeedbackFormatter,

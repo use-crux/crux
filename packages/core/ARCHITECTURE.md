@@ -416,7 +416,36 @@ Adapters project one immutable completed turn per memory binding; they do not in
 
 ### Safety internals
 
-`guardInput()` projects each user message through `messageText()` and runs input guardrails over that string. When a guard rewrites a multimodal projection, the session uses the unchanged media placeholders as ordered anchors and redistributes only the rewritten text across the original text parts. A changed or missing anchor, a media-only message, or an ambiguous placeholder makes redistribution unfaithful, so the session throws `SafetyResultError`. This is fail-closed: the original multimodal message never proceeds after an unapplied rewrite, and the audit never claims that rewrite was applied.
+Core owns one provider-neutral semantic model-ingress capability. Its private
+slot document represents guardable text, semantic media, and opaque protected
+parts; the guard returns slot patches rather than a reconstructed canonical
+output. Core tool outputs and package-native dialects such as AI SDK output each
+apply the patch to their original value, preserving untouched bytes and object
+identity. Opaque/custom slots and bounded media sentinels are structural anchors:
+a text rewrite that changes them fails closed.
+
+The lifecycle is `toolPolicy.result(raw) → toModelOutput → boundary.input.* →
+model`. Raw tool policy executes before canonical model-output conversion;
+semantic ingress policy executes exactly once afterward. Deterministic JSON is
+projected as model-facing text and is not recursively searched for media. This
+ordering means custom `toModelOutput()` implementations cannot bypass Safety.
+
+Prompt resolution carries private, non-serializable retrieval fold provenance
+with the resolved value. In system mode the fresh resolved system is guarded
+before replacing the active system. In messages mode Core verifies and patches
+the one folded system prefix, preserving its trusted suffix and every later
+assistant/tool turn. Resolver-owned family—not a spoofable source string—marks
+retrieval text. Prefix mismatch or failed writeback terminates before another
+provider call, and the carrier never enters public types, metadata, provider
+requests, audit, or observability. With no applicable policy, request bytes and
+identities remain unchanged.
+
+For ordinary canonical messages, `guardInput()` projects text through
+`messageText()`. When a guard rewrites a multimodal projection, the session uses
+unchanged media placeholders as ordered anchors and redistributes only rewritten
+text across the original text parts. A changed or missing anchor, media-only
+message, or ambiguous placeholder throws `SafetyResultError`; audit never claims
+an unapplied rewrite.
 
 ### Two adapter dialects
 

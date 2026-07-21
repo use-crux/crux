@@ -172,11 +172,12 @@ describe('completed operation Safety — speech', () => {
 
     const policy = guardrail({
       id: 'speech-user-input-policy',
-      on: boundary.input.user(),
+      on: boundary.input.text(),
       run: vi.fn((text, context) => {
         events.push('guard:user')
         expect(text).toBe('Read secret aloud')
-        expect(context.boundary.id).toBe('user.input')
+        expect(context.boundary.id).toBe('model.input.text')
+        expect(context.origin).toEqual({ source: 'user', kind: 'operation' })
         return {
           action: 'rewrite',
           value: 'Read [REDACTED] aloud',
@@ -198,7 +199,7 @@ describe('completed operation Safety — speech', () => {
     expect(normalized?.instructions).toBe('Speak slowly')
     expect(result.safety?.guardrails?.applied[0]).toMatchObject({
       guard: 'speech-user-input-policy',
-      boundary: 'user.input',
+      boundary: 'model.input.text',
       phase: 'input',
       action: 'redact',
     })
@@ -219,11 +220,11 @@ describe('completed operation Safety — speech', () => {
 
     const policy = guardrail({
       id: 'speech-model-input-policy',
-      on: boundary.input.model(),
+      on: boundary.input.instructions(),
       run: vi.fn((instructions, context) => {
         events.push('guard:model')
         expect(instructions).toBe('Imitate a secret voice')
-        expect(context.boundary.id).toBe('model.input')
+        expect(context.boundary.id).toBe('model.instructions')
         return {
           action: 'rewrite',
           value: 'Use a neutral voice',

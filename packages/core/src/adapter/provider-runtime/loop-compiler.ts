@@ -17,6 +17,7 @@ import {
   bindProviderCompletedOperations,
   type ProviderCompletedOperationFactory,
 } from "./completed-operations";
+import { toolModelIngressDialect } from "../tool/model-ingress-port";
 
 type AnyLoopOwnedRuntimeSpec = LoopOwnedProviderRuntimeSpec<
   unknown,
@@ -77,6 +78,7 @@ function portForBoundLoop(
     capabilities: bound.capabilities,
     media: loop.media,
     materializeToolSource: bound.materializeToolSource,
+    [toolModelIngressDialect]: bound[toolModelIngressDialect],
     describeModel:
       loop.describeModel ?? ((model) => describeModelFallback(id, model)),
     mapSettings: loop.settings ?? (() => ({})),

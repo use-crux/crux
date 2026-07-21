@@ -1,5 +1,13 @@
-import type { BoundaryDef, BoundaryIdOf, MediaPartLocation, SafetyTargetId } from './boundary'
+import type {
+  BoundaryDef,
+  BoundaryIdOf,
+  MediaPartLocation,
+  OriginlessBoundaryOf,
+  OriginOf,
+  SafetyTargetId,
+} from './boundary'
 import type { GuardrailStreamOption } from './stream/types'
+import type { ModelInputOrigin } from './input-origin'
 
 /** Safe, structured finding metadata emitted by safety policies. */
 export interface SafetyFinding {
@@ -33,6 +41,8 @@ export interface SafetyDecision {
   readonly policyId: string
   readonly kind: 'guardrail' | 'constraint' | 'toolPolicy'
   readonly boundary: SafetyTargetId
+  /** Privacy-safe semantic provenance for model-ingress decisions. */
+  readonly origin?: ModelInputOrigin
   readonly stage?: 'stream.segment' | 'stream.final'
   readonly mode: 'enforce' | 'report'
   readonly action: SafetyDecisionAction
@@ -56,7 +66,7 @@ export interface SafetyFindingCollector {
 }
 
 /** Safe metadata available to guardrail and constraint callbacks. */
-export interface SafetyRunContext<B extends BoundaryDef | readonly BoundaryDef[] = BoundaryDef> {
+interface SafetyRunContextBase<B extends BoundaryDef | readonly BoundaryDef[]> {
   readonly policy: {
     readonly id: string
     readonly mode: 'enforce' | 'report'
@@ -91,6 +101,22 @@ export interface SafetyRunContext<B extends BoundaryDef | readonly BoundaryDef[]
     readonly name: string
   }
 }
+
+type SafetyRunOrigin<B extends BoundaryDef | readonly BoundaryDef[]> = [OriginOf<B>] extends [never]
+  ? { readonly origin?: never }
+  : [OriginlessBoundaryOf<B>] extends [never]
+    ? { readonly origin: OriginOf<B> }
+    : { readonly origin?: OriginOf<B> }
+
+/**
+ * Safe metadata available to guardrail and constraint callbacks.
+ *
+ * Model-ingress boundaries expose a typed `origin`. It is required when every
+ * selected boundary has semantic ingress provenance and optional for mixed
+ * input/output boundary tuples.
+ */
+export type SafetyRunContext<B extends BoundaryDef | readonly BoundaryDef[] = BoundaryDef> = SafetyRunContextBase<B> &
+  SafetyRunOrigin<B>
 
 /** Inspectable strategy callback used by first-party helpers. */
 export interface StrategyRun<TSubject, TResult> {

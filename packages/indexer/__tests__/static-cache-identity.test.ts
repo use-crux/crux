@@ -42,14 +42,14 @@ afterEach(async () => {
 });
 
 describe("static cache identity", () => {
-  it("advances the static cache namespace for effective memory capture defaults", () => {
+  it("advances the static cache namespace for the combined static contract", () => {
     const identity = readStaticIndexRuntimeSharedFixture(
       "static-index-cache-identity",
     );
 
     expect(STATIC_PARSE_CACHE_EPOCH).toBe(identity.staticParseCacheEpoch);
-    expect(STATIC_PARSE_CACHE_EPOCH).toBe("static-parse-v73");
-    expect(STATIC_PARSE_CACHE_EPOCH).not.toBe("static-parse-v72");
+    expect(STATIC_PARSE_CACHE_EPOCH).toBe("static-parse-v74");
+    expect(STATIC_PARSE_CACHE_EPOCH).not.toBe("static-parse-v73");
   });
 
   it("takes the pre-launch semantic facts cache migration epoch", () => {

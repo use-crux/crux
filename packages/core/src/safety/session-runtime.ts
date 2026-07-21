@@ -23,6 +23,7 @@ import type { GuardrailAudit, GuardrailContext } from "./guardrail/types";
 import { createSafetyStream } from "./stream/engine";
 import { finalizeLanguageTerminal } from "./output/terminal";
 import type { OperationInputGuardContext } from "./session-bridge";
+import type { ModelInputOrigin } from "./input-origin";
 import type {
   Safety,
   SafetyCallOptions,
@@ -150,6 +151,7 @@ function createSafetySession(
     _phase: "input" | "output",
     messages: readonly Message[],
     override?: OperationInputGuardContext,
+    origin?: ModelInputOrigin,
   ): GuardrailContext => ({
     promptId: options.promptId,
     model: override ? override.model : options.model,
@@ -157,6 +159,7 @@ function createSafetySession(
     systemPrompt: override ? override.systemPrompt : options.systemPrompt,
     traceId,
     metadata,
+    ...(origin ? { origin } : {}),
   });
 
   const constraintContext = (): ConstraintContext => ({
@@ -277,8 +280,8 @@ function boundaryPhase(boundary: BoundaryDef): "input" | "output" {
 
 function isInputBoundary(boundary: BoundaryDef): boolean {
   return (
-    boundary.id === "user.input" ||
-    boundary.id === "user.input.media" ||
-    boundary.id === "model.input"
+    boundary.id === "model.input.text" ||
+    boundary.id === "model.input.media" ||
+    boundary.id === "model.instructions"
   );
 }

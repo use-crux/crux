@@ -9,7 +9,10 @@ import type { SafetyFinding } from '../../decision'
 import type { SafetyRunContext } from '../../decision'
 import type { GuardrailRun, GuardrailRunResult } from '../types'
 
-type TextBoundary = BoundaryDef<'user.input' | 'model.input' | 'model.output.text' | 'validation.feedback', string>
+type TextBoundary = BoundaryDef<
+  'model.input.text' | 'model.instructions' | 'model.output.text' | 'validation.feedback',
+  string
+>
 
 export interface ClassifierGuardrailOptions<TResult> {
   /** User-supplied classifier. Provider-specific clients stay outside core. */

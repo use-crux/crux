@@ -84,9 +84,9 @@ function expectMediaConstraintError(error: unknown, id: string): void {
   expect(error).toBeInstanceOf(SafetyConfigError)
   expect(error).toMatchObject({
     name: 'SafetyConfigError',
-    boundaries: ['user.input.media'],
+    boundaries: ['model.input.media'],
     kinds: ['constraint'],
   })
   expect((error as Error).message).toContain(`"${id}"`)
-  expect((error as Error).message).toContain('"user.input.media"')
+  expect((error as Error).message).toContain('"model.input.media"')
 }

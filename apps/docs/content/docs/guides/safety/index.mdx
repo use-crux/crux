@@ -41,10 +41,13 @@ export const grounded = constraint({
 ```
 
 Useful targets include `boundary.input.text()`, `boundary.input.media()`,
-`boundary.output.text()`, `boundary.output.media()`,
-`boundary.output.object<T>()`, `boundary.tool.call()`, `boundary.tool.result()`,
-`boundary.approval.request()`, `boundary.retrieval.result()`,
+`boundary.input.instructions()`, `boundary.output.text()`,
+`boundary.output.media()`, `boundary.output.object<T>()`,
 `boundary.memory.write<T>()`, and `boundary.validation.feedback()`.
+The optionless input helpers cover all supported sources. Advanced policies can
+filter with `boundary.input.text({ from: "retrieval" })` or
+`boundary.input.media({ from: "tool" })`. Use `toolPolicy.args()` and
+`toolPolicy.result()` for raw tool lifecycle decisions.
 
 See [Safety for content primitives](/docs/reference/crux-core/safety-content-primitives)
 for the exact language, structured, stream, image, speech, and transcription
@@ -74,13 +77,13 @@ guardrails and object/path guardrails run at final output unless you tune them.
 
 A recap of the four primitives side by side:
 
-|                           | Guardrail                                                                       | Constraint                             | Tool policy                                                     | Validation retry                                   |
-| ------------------------- | ------------------------------------------------------------------------------- | -------------------------------------- | --------------------------------------------------------------- | -------------------------------------------------- |
-| **Runs on**               | `boundary.input.*`, `boundary.output.*`, retrieval, memory, validation feedback | One output boundary                    | Tool call, tool result, approval request                        | Structured output parse/validation                 |
-| **What it catches**       | Forbidden content, PII, secrets, injection, formatting                          | Semantic / business-rule violations    | Unsafe tool execution or unsafe tool I/O                        | Schema-parse failures, wrong types                 |
-| **What happens on a hit** | Block, rewrite, warn, or report                                                 | Re-call the model with custom feedback | Block, request approval, report, or rewrite tool I/O            | Text-repair first, then re-call with the Zod error |
-| **Knows about retries**   | No: it is a policy pass                                                         | Yes: retry is the purpose              | No, except approval suspension                                  | Yes: bounded by `maxRetries` and `maxSteps`        |
-| **You write**             | `guardrail({ id, on, run })`                                                    | `constraint({ id, on, run })`          | `toolPolicy({ id, match, action })` or `toolPolicy.args/result` | `validationRetry: { maxRetries }`                  |
+|                           | Guardrail                                                    | Constraint                             | Tool policy                                                     | Validation retry                                   |
+| ------------------------- | ------------------------------------------------------------ | -------------------------------------- | --------------------------------------------------------------- | -------------------------------------------------- |
+| **Runs on**               | Semantic model input/output, memory, and validation feedback | One output boundary                    | Raw tool call, result, or approval lifecycle                    | Structured output parse/validation                 |
+| **What it catches**       | Forbidden content, PII, secrets, injection, formatting       | Semantic / business-rule violations    | Unsafe tool execution or unsafe tool I/O                        | Schema-parse failures, wrong types                 |
+| **What happens on a hit** | Block, rewrite, warn, or report                              | Re-call the model with custom feedback | Block, request approval, report, or rewrite tool I/O            | Text-repair first, then re-call with the Zod error |
+| **Knows about retries**   | No: it is a policy pass                                      | Yes: retry is the purpose              | No, except approval suspension                                  | Yes: bounded by `maxRetries` and `maxSteps`        |
+| **You write**             | `guardrail({ id, on, run })`                                 | `constraint({ id, on, run })`          | `toolPolicy({ id, match, action })` or `toolPolicy.args/result` | `validationRetry: { maxRetries }`                  |
 
 Rules of thumb:
 
@@ -112,10 +115,12 @@ Rules of thumb:
 
 Safety decisions emit observability artifacts, Turn Decision Report rows, and
 Project Index definitions. Devtools opens runtime interventions in Runs Explain
-with model, action, original content coordinates, and strip escalation. Catalog
-shows authored boundary tuples, strategy helper configuration and action, links
-from policies to completed operations, operation-side Safety attachments, and
-duplicate policy-id lints.
+with model, action, semantic target, source (`User`, `Tool`, or `Retrieval`),
+privacy-safe origin coordinates, and strip escalation. Catalog shows authored
+canonical boundary tuples, strategy helper configuration and action, links from
+policies to completed operations, operation-side Safety attachments, and
+duplicate policy-id lints. Source filters affect runtime matching but are not
+stored as Project Index facts.
 
 In Evals, use safety signal assertions for guardrail/constraint audits or the
 decision report matcher for the canonical safety read model:

@@ -19,8 +19,8 @@ const data = {
       metadata: {
         facts: {
           kind: "guardrail",
-          boundary: "user.input.media",
-          boundaries: ["user.input.media", "model.output.media"],
+          boundary: "model.input.media",
+          boundaries: ["model.input.media", "model.output.media"],
           strategy: {
             kind: "media",
             config: {
@@ -84,7 +84,8 @@ describe("Safety Catalog detail", () => {
   it("renders policy boundaries, strategy, action, config, and target", () => {
     const html = render("guardrail:portable-media");
     expect(html).toContain("Safety policy");
-    expect(html).toContain("user.input.media");
+    expect(html).toContain("Model input · Media");
+    expect(html).not.toContain(">model.input.media<");
     expect(html).toContain("model.output.media");
     expect(html).toContain("guardrail.media");
     expect(html).toContain("strip");

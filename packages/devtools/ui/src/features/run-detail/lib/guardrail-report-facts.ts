@@ -1,4 +1,5 @@
 import type { CruxGuardrailReportPreview } from "@use-crux/core/observability";
+import { inputOriginFacts } from "@/shared/lib/safety-presentation";
 
 export type GuardrailFactRow = [label: string, value: string, color?: string];
 
@@ -7,6 +8,15 @@ export function guardrailReportRows(
   report: CruxGuardrailReportPreview,
 ): GuardrailFactRow[] {
   const rows: GuardrailFactRow[] = [];
+  if (report.target)
+    rows.push(["target", report.target.label || report.target.id]);
+  const origin = inputOriginFacts(report.origin);
+  if (origin.source)
+    rows.push([
+      "source",
+      [origin.source, origin.identifier].filter(Boolean).join(" · "),
+    ]);
+  if (report.mode) rows.push(["mode", report.mode]);
   if (report.phase) rows.push(["phase", report.phase]);
   rows.push(["action", report.action, actionColor(report.action)]);
   const location = guardrailLocation(report);

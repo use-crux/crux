@@ -14,11 +14,7 @@ import { readFile } from "node:fs/promises";
 import { GoogleGenAI } from "@google/genai";
 import type { Asset } from "@use-crux/core/asset";
 import { indexer } from "@use-crux/core/indexing";
-import {
-  retriever,
-  retrievalRecipe,
-  retrieve,
-} from "@use-crux/core/retrieval";
+import { retriever, retrievalRecipe, retrieve } from "@use-crux/core/retrieval";
 import { inMemoryStorage } from "@use-crux/core/storage";
 import { embedding } from "@use-crux/google";
 
@@ -104,6 +100,13 @@ await products.retrieve({
 A bare `Asset` is shorthand when its `mediaType` identifies the modality.
 Strings are always text. `AssetRef` values are attribution, not model input;
 hydrate one through its owning asset store before embedding it again.
+
+Media passed to `retriever.retrieve()` is an embedding query outside generative
+model-input Safety. Retrieved `assetRef` values are never hydrated into a model
+request automatically. If application code explicitly hydrates one and places
+it in user or tool content, normal `boundary.input.media()` policy applies at
+that later model-ingress boundary. Retrieval is not currently a supported media
+source filter.
 
 Each media document part produces one independently retrievable chunk. Split a
 PDF into pages, an audio file into intervals, or a video into clips upstream

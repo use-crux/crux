@@ -26,7 +26,7 @@ describe('guardrail', () => {
 
     expect(guard._tag).toBe('Guardrail')
     expect(guard.id).toBe('test-guard')
-    expect(guard.on).toMatchObject({ id: 'user.input' })
+    expect(guard.on).toMatchObject({ id: 'model.input.text' })
     expect(typeof guard.run).toBe('function')
     expect(Object.isFrozen(guard)).toBe(true)
   })
@@ -40,7 +40,7 @@ describe('guardrail', () => {
       run: async () => ({ action: 'allow' as const }),
     })
 
-    expect(guard.on).toMatchObject({ id: 'user.input' })
+    expect(guard.on).toMatchObject({ id: 'model.input.text' })
   })
 
   it('creates output guard with the accepted action vocabulary', () => {
@@ -106,8 +106,8 @@ describe('stable beta boundary authoring', () => {
       readonly boundary?: {
         readonly input: {
           readonly text: () => unknown
-          readonly user: () => unknown
-          readonly model: () => unknown
+          readonly media: () => unknown
+          readonly instructions: () => unknown
         }
         readonly output: {
           readonly text: () => unknown
@@ -115,12 +115,6 @@ describe('stable beta boundary authoring', () => {
           readonly both: <T>() => unknown
           readonly path: <T>() => (path: string) => unknown
         }
-        readonly tool: {
-          readonly call: () => unknown
-          readonly result: () => unknown
-        }
-        readonly approval: { readonly request: () => unknown }
-        readonly retrieval: { readonly result: () => unknown }
         readonly memory: { readonly write: <T = unknown>() => unknown }
         readonly validation: { readonly feedback: () => unknown }
       }
@@ -131,11 +125,15 @@ describe('stable beta boundary authoring', () => {
 
     expect(boundary.input.text()).toMatchObject({
       _tag: 'Boundary',
-      id: 'user.input',
+      id: 'model.input.text',
     })
-    expect(boundary.input.model()).toMatchObject({
+    expect(boundary.input.media()).toMatchObject({
       _tag: 'Boundary',
-      id: 'model.input',
+      id: 'model.input.media',
+    })
+    expect(boundary.input.instructions()).toMatchObject({
+      _tag: 'Boundary',
+      id: 'model.instructions',
     })
     expect(boundary.output.text()).toMatchObject({
       _tag: 'Boundary',
@@ -153,22 +151,6 @@ describe('stable beta boundary authoring', () => {
       _tag: 'Boundary',
       id: 'model.output.object',
       path: 'customer.email',
-    })
-    expect(boundary.tool.call()).toMatchObject({
-      _tag: 'Boundary',
-      id: 'tool.call',
-    })
-    expect(boundary.tool.result()).toMatchObject({
-      _tag: 'Boundary',
-      id: 'tool.result',
-    })
-    expect(boundary.approval.request()).toMatchObject({
-      _tag: 'Boundary',
-      id: 'approval.request',
-    })
-    expect(boundary.retrieval.result()).toMatchObject({
-      _tag: 'Boundary',
-      id: 'retrieval.result',
     })
     expect(boundary.memory.write()).toMatchObject({
       _tag: 'Boundary',
@@ -198,7 +180,7 @@ describe('stable beta boundary authoring', () => {
     expect(guard).toMatchObject({
       _tag: 'Guardrail',
       id: 'input-or-output-pii',
-      on: [expect.objectContaining({ id: 'user.input' }), expect.objectContaining({ id: 'model.output.text' })],
+      on: [expect.objectContaining({ id: 'model.input.text' }), expect.objectContaining({ id: 'model.output.text' })],
     })
     expect(Object.isFrozen(guard)).toBe(true)
   })

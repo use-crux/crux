@@ -23,6 +23,8 @@ import {
   createSafetyWithBindingApplicability,
   finalizeSafetySessionLanguageOutput,
   guardSafetySessionLanguageStep,
+  guardSafetySessionResolvedInput,
+  safetySessionModelIngressGuard,
 } from "../../safety/session";
 import { languageBindingApplicability } from "../../safety/language-applicability";
 import { orchestrateGenerateWithCompletion } from "../../generation/orchestrate";
@@ -49,7 +51,7 @@ import type {
   CoreStepDialect,
   ObservedAdapterExecutionGenerateResult,
 } from "./types";
-import { appendAssistantResultMessage, initialCoreMessages } from "./messages";
+import { appendAssistantResultMessage, initialCoreMessageState } from "./messages";
 import {
   buildResolveOpts,
   DEFAULT_MAX_STEPS,
@@ -57,6 +59,11 @@ import {
 } from "./shared";
 import { materializeToolSources } from "./tool-sources";
 import { replaceResponseContent, replaceResponseText } from "./response-text";
+import { createSkillIngressAmendmentGuard } from "./skill-ingress-amendment";
+import {
+  applySystemMessagePrefixPatch,
+  systemMessagePrefixPatch,
+} from "./system-prefix-patch";
 
 /**
  * Execute one prompt through the core-owned provider loop.
@@ -94,7 +101,8 @@ export async function generateCore<
   let resolved = await prompt.resolve(resolveOpts);
   const mappedSettings = dialect.mapSettings(resolved.settings);
 
-  let messages = initialCoreMessages(resolved, args.messages);
+  const initialMessages = initialCoreMessageState(resolved, args.messages);
+  let messages = initialMessages.messages;
   let schemaParams: Record<string, unknown> | undefined;
   if (resolved.schema && dialect.wrapOutputSchema) {
     schemaParams = dialect.wrapOutputSchema(resolved.schema);
@@ -154,13 +162,22 @@ export async function generateCore<
     );
     return normalized;
   };
-  const guardedInput = await safety.guardInput({
+  const guardedInput = await guardSafetySessionResolvedInput(safety, resolved, {
     messages,
     system: currentSystem,
+  }, {
+    resolvedMessages:
+      initialMessages.source === "resolved-messages" ? "selected" : "discarded",
   });
   messages = [...guardedInput.messages];
   if (guardedInput.system !== currentSystem) currentSystemBlocks = undefined;
   currentSystem = guardedInput.system;
+  const guardSkillAmendment = createSkillIngressAmendmentGuard({
+    safety,
+    source: initialMessages.source,
+    messages,
+    systemIngress: guardedInput.systemIngress,
+  });
   const sourceSession = await materializeToolSources({
     dialect: dialect.id,
     resolved,
@@ -184,8 +201,11 @@ export async function generateCore<
       promptId: prompt.id,
       input: args.input ?? {},
       timeout: args.timeout,
+      abortSignal: args.signal,
+      modelIngress: safetySessionModelIngressGuard(safety, "tool"),
       reresolve: (skillSession) =>
         prompt.resolve(withSkillActivationInput(resolveOpts, skillSession)),
+      guardSkillAmendment,
       appendToolRound: dialect.appendToolRound,
       sanitizeToolSchema: dialect.sanitizeToolSchema,
     });
@@ -359,8 +379,16 @@ export async function generateCore<
               lastExtracted.toolCalls,
             );
             if (amendment) {
-              currentSystem = amendment.system;
-              currentSystemBlocks = amendment.systemBlocks;
+              if ("system" in amendment) {
+                currentSystem = amendment.system;
+                currentSystemBlocks = amendment.systemBlocks;
+              }
+              if (amendment[systemMessagePrefixPatch]) {
+                messages = applySystemMessagePrefixPatch(
+                  messages,
+                  amendment[systemMessagePrefixPatch],
+                );
+              }
               steps--;
               step--;
               continue;

@@ -8,6 +8,10 @@ export function decisionLocationLabel(location: DecisionLocation): string {
   switch (origin.kind) {
     case 'message':
       return `message ${origin.messageIndex} · part ${origin.partIndex} · ${partType}`
+    case 'tool-result':
+      return `${[origin.toolName, origin.toolCallId].filter(Boolean).join(' · ')} · part ${
+        origin.partIndex
+      } · ${partType}`
     case 'step':
       return `step ${origin.stepIndex} · part ${origin.partIndex} · ${partType}`
     case 'operation':

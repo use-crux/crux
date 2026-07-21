@@ -35,7 +35,7 @@ describe("Google image generation", () => {
       guardrails: [
         guardrail({
           id: "google-image-input",
-          on: boundary.input.user(),
+          on: boundary.input.text(),
           run: () => ({
             action: "rewrite",
             value: "guarded prompt",

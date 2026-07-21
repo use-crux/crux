@@ -1,15 +1,52 @@
 /** Input media guardrail behavior through the public safety session. */
 
 import { describe, expect, it } from 'vitest'
-import {
-  boundary,
-  createSafety,
-  guardrail,
-  GuardrailBlockedError,
-  type MediaPart,
-} from '../../src/safety'
+import { boundary, createSafety, guardrail, GuardrailBlockedError, type MediaPart } from '../../src/safety'
 
 describe('guardInput — media boundaries', () => {
+  it('dispatches user source and coordinates before applying media filters', async () => {
+    const seen: unknown[] = []
+    const user = guardrail({
+      id: 'user-media-origin',
+      on: boundary.input.media({ from: 'user' }),
+      run: (subject, context) => {
+        seen.push({ callback: context.origin, subject: subject.origin })
+        return { action: 'allow' }
+      },
+    })
+    const tool = guardrail({
+      id: 'tool-media-origin',
+      on: boundary.input.media({ from: 'tool' }),
+      run: () => {
+        seen.push('unexpected-tool')
+        return { action: 'allow' }
+      },
+    })
+    const safety = createSafety({ call: { guardrails: [user, tool] } })
+
+    await safety.guardInput({
+      messages: [
+        { role: 'assistant', content: 'prior' },
+        {
+          role: 'user',
+          content: [{ type: 'image', source: 'https://example.com/chart.png' }],
+        },
+      ],
+    })
+
+    expect(seen).toEqual([
+      {
+        callback: {
+          source: 'user',
+          kind: 'message',
+          messageIndex: 1,
+          partIndex: 0,
+        },
+        subject: { kind: 'message', messageIndex: 1, partIndex: 0 },
+      },
+    ])
+  })
+
   it('audits media warnings with their reason and continues to later bindings', async () => {
     const order: string[] = []
     const warn = guardrail({
@@ -35,13 +72,18 @@ describe('guardInput — media boundaries', () => {
     })
 
     await safety.guardInput({
-      messages: [{ role: 'user', content: [{ type: 'image', source: 'https://example.com/chart.png' }] }],
+      messages: [
+        {
+          role: 'user',
+          content: [{ type: 'image', source: 'https://example.com/chart.png' }],
+        },
+      ],
     })
 
     expect(order).toEqual(['warn', 'later'])
     expect(safety.audit.guardrails?.applied[0]).toMatchObject({
       guard: 'warn-media',
-      boundary: 'user.input.media',
+      boundary: 'model.input.media',
       action: 'warn',
       reason: 'Review this image.',
     })
@@ -78,7 +120,12 @@ describe('guardInput — media boundaries', () => {
 
     const error = await safety
       .guardInput({
-        messages: [{ role: 'user', content: [{ type: 'image', source: 'https://example.com/chart.png' }] }],
+        messages: [
+          {
+            role: 'user',
+            content: [{ type: 'image', source: 'https://example.com/chart.png' }],
+          },
+        ],
       })
       .then(() => undefined)
       .catch((caught: unknown) => caught)
@@ -86,7 +133,7 @@ describe('guardInput — media boundaries', () => {
     expect(error).toBeInstanceOf(GuardrailBlockedError)
     expect((error as GuardrailBlockedError).decisions[0]).toMatchObject({
       policyId: 'block-media',
-      boundary: 'user.input.media',
+      boundary: 'model.input.media',
       mode: 'enforce',
       action: 'block',
       reason: 'Unsupported image.',
@@ -95,16 +142,20 @@ describe('guardInput — media boundaries', () => {
   })
 
   it('immutably strips one media part and skips later bindings only for that part', async () => {
-    const image = { type: 'image', source: 'https://example.com/chart.png' } satisfies MediaPart
-    const file = { type: 'file', source: 'https://example.com/report.pdf' } satisfies MediaPart
+    const image = {
+      type: 'image',
+      source: 'https://example.com/chart.png',
+    } satisfies MediaPart
+    const file = {
+      type: 'file',
+      source: 'https://example.com/report.pdf',
+    } satisfies MediaPart
     const seenLater: string[] = []
     const stripImages = guardrail({
       id: 'strip-images',
       on: boundary.input.media(),
       run: (subject) =>
-        subject.part.type === 'image'
-          ? { action: 'strip', reason: 'Images are not accepted.' }
-          : { action: 'allow' },
+        subject.part.type === 'image' ? { action: 'strip', reason: 'Images are not accepted.' } : { action: 'allow' },
     })
     const inspectLater = guardrail({
       id: 'inspect-after-strip',
@@ -114,7 +165,10 @@ describe('guardInput — media boundaries', () => {
         return { action: 'allow' }
       },
     })
-    const untouched = { role: 'assistant' as const, content: 'Prior response.' }
+    const untouched = {
+      role: 'assistant' as const,
+      content: 'Prior response.',
+    }
     const user = {
       role: 'user' as const,
       content: [{ type: 'text' as const, text: 'Review these.' }, image, file],
@@ -143,9 +197,7 @@ describe('guardInput — media boundaries', () => {
       id: 'strip-files-before-text',
       on: boundary.input.media(),
       run: (subject) =>
-        subject.part.type === 'file'
-          ? { action: 'strip', reason: 'Files are not accepted.' }
-          : { action: 'allow' },
+        subject.part.type === 'file' ? { action: 'strip', reason: 'Files are not accepted.' } : { action: 'allow' },
     })
     const inspectText = guardrail({
       id: 'inspect-post-strip-text',
@@ -167,7 +219,11 @@ describe('guardInput — media boundaries', () => {
           role: 'user',
           content: [
             { type: 'text', text: 'Keep this text.' },
-            { type: 'file', source: 'https://example.com/report.pdf', mediaType: 'application/pdf' },
+            {
+              type: 'file',
+              source: 'https://example.com/report.pdf',
+              mediaType: 'application/pdf',
+            },
           ],
         },
       ],
@@ -201,7 +257,10 @@ describe('guardInput — media boundaries', () => {
       .guardInput({
         messages: [
           { role: 'system', content: 'system' },
-          { role: 'user', content: [{ type: 'image', source: 'https://example.com/chart.png' }] },
+          {
+            role: 'user',
+            content: [{ type: 'image', source: 'https://example.com/chart.png' }],
+          },
         ],
       })
       .then(() => undefined)
@@ -210,7 +269,7 @@ describe('guardInput — media boundaries', () => {
     expect(error).toBeInstanceOf(GuardrailBlockedError)
     expect((error as GuardrailBlockedError).decisions[0]).toMatchObject({
       policyId: 'strip-only-part',
-      boundary: 'user.input.media',
+      boundary: 'model.input.media',
       action: 'block',
       reason: 'The only part is disallowed.',
       location: {

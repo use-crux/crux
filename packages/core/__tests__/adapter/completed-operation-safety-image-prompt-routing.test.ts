@@ -13,7 +13,7 @@ describe('completed operation Safety — routed typed image prompts', () => {
     const guards: string[] = []
     const policy = guardrail({
       id: 'stable-candidate-policy',
-      on: [boundary.input.user(), boundary.input.model()] as const,
+      on: [boundary.input.text(), boundary.input.instructions()] as const,
       run: (text, context) => {
         guards.push(`${context.model.id}:${context.boundary.id}:${text}`)
         return { action: 'allow' }
@@ -45,8 +45,8 @@ describe('completed operation Safety — routed typed image prompts', () => {
 
     expect(resolutions).toEqual(['selected/model', 'unused/model'])
     expect(guards).toEqual([
-      'selected/model:user.input:user for selected/model',
-      'selected/model:model.input:system for selected/model',
+      'selected/model:model.input.text:user for selected/model',
+      'selected/model:model.instructions:system for selected/model',
     ])
     expect(events).toEqual(['normalize:selected/model', 'invoke:selected/model'])
   })
@@ -54,12 +54,12 @@ describe('completed operation Safety — routed typed image prompts', () => {
   it('rejects conflicting candidate policy definitions before normalization or native I/O', async () => {
     const first = guardrail({
       id: 'candidate-policy',
-      on: boundary.input.user(),
+      on: boundary.input.text(),
       run: () => ({ action: 'allow' }),
     })
     const second = guardrail({
       id: 'candidate-policy',
-      on: boundary.input.user(),
+      on: boundary.input.text(),
       run: () => ({ action: 'allow' }),
     })
     const resolutions: string[] = []
@@ -94,7 +94,7 @@ describe('completed operation Safety — routed typed image prompts', () => {
     const transitions: string[] = []
     const policy = guardrail({
       id: 'terminal-candidate-policy',
-      on: boundary.input.user(),
+      on: boundary.input.text(),
       run: (_text, context) => {
         guardedModels.push(context.model.id ?? 'unknown')
         return context.model.id === 'first/model'

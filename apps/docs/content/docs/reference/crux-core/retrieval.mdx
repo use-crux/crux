@@ -309,7 +309,20 @@ type RetrievalToolPayload = {
 };
 ```
 
-The model-facing output is lean text. Full provenance stays in programmatic traces and hits.
+The model-facing output is lean text. Full provenance stays in programmatic
+traces and hits. Because this path is a tool result, semantic input Safety sees
+the converted text as source `tool`; raw payload policy belongs in
+`toolPolicy.result()`.
+
+Direct prompt retrieval follows a different provenance path. Crux renders each
+retrieval contribution, then guards that text with
+`boundary.input.text({ from: "retrieval" })` before the provider call. If it is
+folded into a system message, the retrieval prefix remains untrusted retrieval
+text; the adjacent authored suffix remains trusted model instructions.
+
+Neither path hydrates `source.assetRef` automatically. Hydrate an asset
+explicitly through its owning `AssetStore` before deliberately placing it in a
+model input or tool output.
 
 ## Grounding
 
@@ -357,6 +370,11 @@ Store-backed retrievers accept a string, typed `EmbeddingInput`, bare media
 asset, or an exact `{ query }` / `{ input }` request object. Text queries may run
 dense, sparse, or hybrid search. Media queries run the dense branch only;
 sparse/custom retrieval and text-producing recipe query steps reject them.
+
+Media supplied to `retriever.retrieve()` is an embedding query, not generative
+model ingress, so `boundary.input.media()` does not run on that query.
+`boundary.input.media({ from: "retrieval" })` is intentionally invalid until a
+retrieval result has a real canonical media-ingress path.
 
 The retriever checks the namespace's dense space before query embedding or
 vector search. A mismatch throws `EmbeddingSpaceMismatchError` with stored and

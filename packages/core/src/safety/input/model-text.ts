@@ -16,6 +16,8 @@ interface GuardModelTextInputOptions {
   readonly bindings: readonly GuardrailBinding[];
   readonly messages: readonly Message[];
   readonly system?: string;
+  /** @internal Message already governed through resolver contribution provenance. */
+  readonly skipMessageIndex?: number;
   readonly context: (messages: readonly Message[]) => GuardrailContext;
 }
 
@@ -55,6 +57,7 @@ export async function guardModelTextInput(
   }
 
   for (let index = 0; index < messages.length; index++) {
+    if (index === options.skipMessageIndex) continue;
     const message = messages[index];
     if (!message || message.role !== "system") continue;
 
@@ -77,7 +80,7 @@ export async function guardModelTextInput(
       const policyId = latestRewritePolicyId(result.audit.applied) ?? "unknown";
       throw new SafetyResultError({
         policyId,
-        boundary: "model.input",
+        boundary: "model.instructions",
         problem:
           "rewrite could not be faithfully applied to multimodal system message content",
         message:

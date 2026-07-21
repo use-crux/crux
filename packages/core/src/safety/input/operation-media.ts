@@ -20,7 +20,14 @@ export function guardInputOperationMedia(options: GuardInputOperationMediaOption
     items: options.items,
     groups: options.groups,
     dependencies: options.dependencies,
-    context: () => options.context,
+    context: ({ subject }) => ({
+      ...options.context,
+      origin: {
+        source: 'user',
+        kind: 'operation',
+        partIndex: subject.origin.partIndex,
+      },
+    }),
     appendAudit: options.appendAudit,
   })
 }

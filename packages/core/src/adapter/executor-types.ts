@@ -20,6 +20,10 @@ import type { AssistantContentPart } from "../types/content";
 import type { JsonValue } from "../types/tool";
 import type { ResultStepFacts } from "./result-accumulator";
 import type { AdapterResponse } from "./types";
+import {
+  systemMessagePrefixPatch,
+  type SystemMessagePrefixPatch,
+} from "./execution/system-prefix-patch";
 
 export type {
   ExecutorProviderStreamHandle,
@@ -220,6 +224,8 @@ export type StepDirective =
       readonly tools?: Record<string, unknown>;
       /** Replacement active-tool restriction for subsequent steps. */
       readonly activeTools?: readonly string[];
+      /** @internal One-shot exact amendment applied by the loop-owning dialect. */
+      readonly [systemMessagePrefixPatch]?: SystemMessagePrefixPatch;
       /**
        * When `true`, the step that produced this directive does not count
        * against `maxSteps` — used for bookkeeping steps like `LoadSkill`

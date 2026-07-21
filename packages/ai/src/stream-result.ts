@@ -17,6 +17,7 @@ import type {
 import type { GenerationMeta } from "@use-crux/core";
 import { createResultAccumulator } from "@use-crux/core/adapter";
 import { normalizeAdapterCallError } from "@use-crux/core/adapter";
+import { isPolicyTerminal } from "@use-crux/core/safety";
 import {
   attachRoutingToError,
   markRoutingMidStreamFailure,
@@ -39,31 +40,40 @@ export function createAiStreamResult<TRawStream>(
     rejectStream = reject;
   });
   void streamFinished.catch(() => undefined);
+  const streamFailure = streamFinished.then<never>(
+    () => new Promise<never>(() => undefined),
+  );
+  void streamFailure.catch(() => undefined);
   const textStream = trackTextStream(readTextStream(handle.raw), {
     routing: handle.routing,
     resolveStream: () => resolveStream?.(),
     rejectStream: (error) => rejectStream?.(error),
   });
+  const completion = (async () => {
+    try {
+      if (handle.routing !== undefined) {
+        await streamFinished;
+      }
+      const meta = await Promise.race([
+        handle.completion(),
+        streamFailure,
+      ]);
+      return {
+        ...completionFromMeta(meta, handle.routing, handle._meta),
+        runId: handle.runId,
+      };
+    } catch (error) {
+      throw normalizeStreamError(error, handle.routing);
+    }
+  })();
+  void completion.catch(() => undefined);
 
   return {
     runId: handle.runId,
     textStream,
     raw: handle.raw,
     _meta: handle._meta,
-    completion: (async () => {
-      try {
-        if (handle.routing !== undefined) {
-          await streamFinished;
-        }
-        const meta = await handle.completion();
-        return {
-          ...completionFromMeta(meta, handle.routing, handle._meta),
-          runId: handle.runId,
-        };
-      } catch (error) {
-        throw normalizeStreamError(error, handle.routing);
-      }
-    })(),
+    completion,
   };
 }
 
@@ -106,6 +116,7 @@ function normalizeStreamError(
   error: unknown,
   routing: ExecutorStreamHandle<unknown>["routing"],
 ): Error {
+  if (isPolicyTerminal(error)) return error;
   const normalized = normalizeAdapterCallError(error, {
     providerId: "ai-sdk",
     mapError: mapAiSdkError,

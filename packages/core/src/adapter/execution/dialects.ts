@@ -12,6 +12,7 @@ import type { AdapterSpec } from "../spec";
 import type { LoopRuntimePort } from "../loop-runtime-port";
 import type { CoreStepDialect, SdkLoopDialect } from "./types";
 import { providerMediaHooksFor } from "../native-chat/media-hooks";
+import { toolModelIngressDialect } from "../tool/model-ingress-port";
 
 /**
  * Convert an `AdapterSpec` and bound client into the core-step dialect.
@@ -73,6 +74,7 @@ export function sdkLoopDialect<TModel, TRawResponse, TRawStream>(
     capabilities: port.capabilities,
     media: port.media,
     materializeToolSource: port.materializeToolSource,
+    [toolModelIngressDialect]: port[toolModelIngressDialect],
     describeModel: (model) => port.describeModel(model),
     mapSettings: (settings, model) => port.mapSettings(settings, model),
     runTextLoop: (request) => port.runTextLoop(request),

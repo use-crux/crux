@@ -16,6 +16,7 @@ import { guardrailDefinitionRef } from '../../observability/definition-ref'
 import { recordGuardrailBlockedEdge, recordGuardrailReport } from './observability'
 import type { z } from 'zod'
 import { applyTerminalRewrite, terminalSubject } from '../output/guardrail-state'
+import { inputOriginAttributes } from '../input-origin-observability'
 
 // ── Pipeline Config ────────────────────────────────────────────────
 
@@ -144,6 +145,7 @@ async function runGuardsInternal(
           phase,
           promptId: ctx.promptId,
           model: ctx.model,
+          ...inputOriginAttributes(ctx.origin),
         },
       },
     )
@@ -166,7 +168,7 @@ async function runGuardsInternal(
       )
       durationMs = performance.now() - start
       span.withContext(() =>
-        recordGuardrailReport(binding, auditAction(result), phase, durationMs, result),
+        recordGuardrailReport(binding, auditAction(result), phase, durationMs, result, ctx.origin),
       )
       span.end({ attributes: { action: auditAction(result), durationMs } })
     } catch (error) {
@@ -178,6 +180,7 @@ async function runGuardsInternal(
       guard: guard.id,
       ...(guard.category !== undefined ? { category: guard.category } : {}),
       boundary: boundary.id,
+      ...(ctx.origin ? { origin: ctx.origin } : {}),
       mode: binding.mode,
       phase,
       action: auditAction(result),
@@ -194,12 +197,12 @@ async function runGuardsInternal(
         entries.push(entry)
         if (binding.mode === 'report') break
         config?.onBlock?.(guard, { reason: result.reason })
-        span.withContext(() => recordGuardrailBlockedEdge(binding, result.reason))
+        span.withContext(() => recordGuardrailBlockedEdge(binding, result.reason, ctx.origin))
         throw new GuardrailBlockedError({
           guardrailId: guard.id,
           phase,
           reason: result.reason,
-          decisions: [guardDecision(binding, result, current.text, durationMs)],
+          decisions: [guardDecision(binding, result, current.text, durationMs, ctx)],
         })
 
       case 'rewrite': {
@@ -242,12 +245,14 @@ function guardDecision(
   result: GuardrailRunResult<unknown>,
   content: string,
   durationMs: number,
+  context: GuardrailContext,
 ): SafetyDecision {
   const guard = binding.policy
   return {
     policyId: guard.id,
     kind: 'guardrail',
     boundary: binding.boundary.id,
+    ...(context.origin ? { origin: context.origin } : {}),
     mode: binding.mode,
     action: safetyAction(result),
     ...(result.action === 'block' || result.action === 'warn' ? { reason: result.reason } : {}),
@@ -264,7 +269,11 @@ function safetyAction(result: GuardrailRunResult<unknown>): SafetyDecision['acti
 }
 
 function boundaryPhase(boundary: BoundaryDef): 'input' | 'output' {
-  return boundary.id === 'user.input' || boundary.id === 'model.input' ? 'input' : 'output'
+  return boundary.id === 'model.input.text' ||
+    boundary.id === 'model.input.media' ||
+    boundary.id === 'model.instructions'
+    ? 'input'
+    : 'output'
 }
 
 function runContext<B extends BoundaryDef>(
@@ -284,7 +293,8 @@ function runContext<B extends BoundaryDef>(
     findings: { add() {} },
     ...(ctx.stream ? { stream: ctx.stream } : {}),
     ...(boundary.path ? { path: boundary.path } : {}),
-  }
+    ...(ctx.origin ? { origin: ctx.origin } : {}),
+  } as SafetyRunContext<B>
 }
 
 function auditAction(result: GuardrailRunResult<unknown>): string {

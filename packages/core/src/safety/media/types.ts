@@ -1,11 +1,11 @@
 import type { ContentPart } from '../../types/content'
 
 /** Canonical Safety targets whose subjects are individual media parts. */
-export type MediaSafetyTargetId = 'user.input.media' | 'model.output.media'
+export type MediaSafetyTargetId = 'model.input.media' | 'model.output.media'
 
 /** Narrow an unknown boundary id to the canonical media target vocabulary. */
 export function isMediaSafetyTargetId(value: unknown): value is MediaSafetyTargetId {
-  return value === 'user.input.media' || value === 'model.output.media'
+  return value === 'model.input.media' || value === 'model.output.media'
 }
 
 /**
@@ -26,6 +26,12 @@ export type MediaPartOrigin =
   | {
       readonly kind: 'message'
       readonly messageIndex: number
+      readonly partIndex: number
+    }
+  | {
+      readonly kind: 'tool-result'
+      readonly toolName: string
+      readonly toolCallId?: string
       readonly partIndex: number
     }
   | {
@@ -69,7 +75,13 @@ export type MediaPartOrigin =
       readonly partIndex: 0
     }
 
-/** A canonical media part together with its stable pre-write-back origin. */
+/**
+ * A canonical media part together with its stable pre-write-back origin.
+ *
+ * Adapter codecs may expose a callback-only `provider-file` source whose
+ * `fileId` is `'<redacted>'`. That sentinel protects the native provider ID
+ * during Safety evaluation and is never a usable asset locator.
+ */
 export interface MediaPartSubject {
   /** Canonical image, audio, video, or file part under evaluation. */
   readonly part: MediaPart

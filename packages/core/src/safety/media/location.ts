@@ -20,6 +20,13 @@ export function mediaLocationAttributes(location: MediaPartLocation): Readonly<R
         stepIndex: location.origin.stepIndex,
         partIndex: location.origin.partIndex,
       }
+    case 'tool-result':
+      return {
+        ...common,
+        toolName: location.origin.toolName,
+        ...(location.origin.toolCallId ? { toolCallId: location.origin.toolCallId } : {}),
+        partIndex: location.origin.partIndex,
+      }
     case 'operation':
       return {
         ...common,

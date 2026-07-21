@@ -12,6 +12,7 @@ import { decisionLocationLabel } from "@/features/run-detail/lib/explain/decisio
 import type { TurnDecision } from "@/types";
 import { EvidenceLevel, CoverageChip } from "../atoms";
 import { OpenTabLink } from "../band";
+import { safetyDecisionFacts } from "@/features/run-detail/lib/explain/safety-decision-facts";
 
 export function DecisionRow({
   decision,
@@ -27,7 +28,13 @@ export function DecisionRow({
     decision.subject.kind;
   const degraded = evidenceIsDegraded(decision.reason.evidenceLevel);
   const uncovered = decision.coverage?.status === "none";
+  const safety = safetyDecisionFacts(decision);
   const evidence = [
+    safety?.target,
+    safety?.source
+      ? [safety.source, safety.identifier].filter(Boolean).join(" · ")
+      : undefined,
+    safety?.posture,
     decision.model,
     decision.location ? decisionLocationLabel(decision.location) : undefined,
     decision.escalatedToBlock ? "strip escalated to block" : undefined,

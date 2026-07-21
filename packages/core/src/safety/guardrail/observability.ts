@@ -3,6 +3,9 @@ import type { MediaGuardrailRunResult } from './types'
 import type { MediaPartLocation } from '../boundary'
 import { mediaLocationAttributes } from '../media/location'
 import type { GuardrailBinding } from '../registry'
+import type { ModelInputOrigin } from '../input-origin'
+import { inputOriginAttributes } from '../input-origin-observability'
+import { safetyTarget } from '../../observability/safety-presentation'
 
 /** Record the safe observability projection for one guardrail result. */
 export function recordGuardrailReport(
@@ -11,6 +14,7 @@ export function recordGuardrailReport(
   phase: 'input' | 'output',
   durationMs: number,
   result: unknown,
+  origin?: ModelInputOrigin,
 ): void {
   const guard = binding.policy
   const guardrailName = guard.id
@@ -19,7 +23,7 @@ export function recordGuardrailReport(
     kind: 'guardrail.report',
     contentType: 'application/json',
     encoding: 'json',
-    preview: guardrailReportPreview(phase, action, result),
+    preview: guardrailReportPreview(binding.boundary.id, binding.mode, phase, action, result, origin),
     attributes: {
       guardrailName,
       category: guard.category,
@@ -27,6 +31,7 @@ export function recordGuardrailReport(
       mode: binding.mode,
       phase,
       action,
+      ...inputOriginAttributes(origin),
       durationMs,
     },
   })
@@ -40,6 +45,7 @@ export function recordGuardrailReport(
         boundary: binding.boundary.id,
         mode: binding.mode,
         action,
+        ...inputOriginAttributes(origin),
       },
     })
   }
@@ -51,14 +57,19 @@ export function recordGuardrailReport(
       mode: binding.mode,
       phase,
       action,
+      ...inputOriginAttributes(origin),
       durationMs,
     },
   })
 }
 
 /** Record the terminal blocked edge for an enforcing guardrail result. */
-export function recordGuardrailBlockedEdge(binding: GuardrailBinding, reason: string): void {
-  recordBlockedEdge(binding, reason)
+export function recordGuardrailBlockedEdge(
+  binding: GuardrailBinding,
+  reason: string,
+  origin?: ModelInputOrigin,
+): void {
+  recordBlockedEdge(binding, reason, origin)
 }
 
 /** Record one media result without retaining its canonical source. */
@@ -68,6 +79,7 @@ export function recordMediaGuardrailReport(
   location: MediaPartLocation,
   durationMs: number,
   escalatedToBlock: boolean,
+  origin?: ModelInputOrigin,
 ): void {
   const guardrailName = binding.policy.id
   const media = mediaAttributes(location, escalatedToBlock)
@@ -80,9 +92,12 @@ export function recordMediaGuardrailReport(
     encoding: 'json',
     preview: {
       kind: 'guardrail.report',
+      target: safetyTarget(binding.boundary.id),
+      mode: binding.mode,
       phase,
       action: result.action,
       ...reason,
+      ...(origin ? { origin } : {}),
       ...media,
     },
     attributes: {
@@ -93,6 +108,7 @@ export function recordMediaGuardrailReport(
       phase,
       action: result.action,
       ...reason,
+      ...inputOriginAttributes(origin),
       ...media,
       durationMs,
     },
@@ -107,6 +123,7 @@ export function recordMediaGuardrailReport(
         boundary: binding.boundary.id,
         mode: binding.mode,
         action: result.action,
+        ...inputOriginAttributes(origin),
         ...media,
       },
     })
@@ -119,6 +136,7 @@ export function recordMediaGuardrailReport(
       mode: binding.mode,
       phase,
       action: result.action,
+      ...inputOriginAttributes(origin),
       ...reason,
       ...media,
       durationMs,
@@ -132,13 +150,15 @@ export function recordMediaGuardrailBlockedEdge(
   reason: string,
   location: MediaPartLocation,
   escalatedToBlock: boolean,
+  origin?: ModelInputOrigin,
 ): void {
-  recordBlockedEdge(binding, reason, mediaAttributes(location, escalatedToBlock))
+  recordBlockedEdge(binding, reason, origin, mediaAttributes(location, escalatedToBlock))
 }
 
 function recordBlockedEdge(
   binding: GuardrailBinding,
   reason: string,
+  origin?: ModelInputOrigin,
   details: Readonly<Record<string, string | number | true>> = {},
 ): void {
   const guardrailName = binding.policy.id
@@ -147,13 +167,22 @@ function recordBlockedEdge(
     kind: 'guardrail.report',
     contentType: 'application/json',
     encoding: 'json',
-    preview: { kind: 'guardrail.report', action: 'block', reason, ...details },
+    preview: {
+      kind: 'guardrail.report',
+      target: safetyTarget(binding.boundary.id),
+      mode: binding.mode,
+      action: 'block',
+      reason,
+      ...(origin ? { origin } : {}),
+      ...details,
+    },
     attributes: {
       guardrailName,
       boundary: binding.boundary.id,
       mode: binding.mode,
       action: 'block',
       reason,
+      ...inputOriginAttributes(origin),
       ...details,
     },
   })
@@ -167,6 +196,7 @@ function recordBlockedEdge(
         boundary: binding.boundary.id,
         mode: binding.mode,
         reason,
+        ...inputOriginAttributes(origin),
         ...details,
       },
     })
@@ -183,11 +213,21 @@ function mediaAttributes(
   }
 }
 
-function guardrailReportPreview(phase: 'input' | 'output', action: string, result: unknown): Record<string, unknown> {
+function guardrailReportPreview(
+  boundary: string,
+  mode: 'enforce' | 'report',
+  phase: 'input' | 'output',
+  action: string,
+  result: unknown,
+  origin?: ModelInputOrigin,
+): Record<string, unknown> {
   const base = {
     kind: 'guardrail.report',
     phase,
     action,
+    target: safetyTarget(boundary),
+    mode,
+    ...(origin ? { origin } : {}),
   }
   if (!result || typeof result !== 'object') return base
 

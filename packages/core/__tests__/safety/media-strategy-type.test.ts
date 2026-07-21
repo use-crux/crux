@@ -77,7 +77,7 @@ describe('guardrail.media — media types', () => {
       decisions: [
         expect.objectContaining({
           action: 'block',
-          boundary: 'user.input.media',
+          boundary: 'model.input.media',
           policyId: 'png-only',
           reason: expect.stringContaining('application/pdf'),
         }),
