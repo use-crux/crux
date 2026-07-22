@@ -12,6 +12,7 @@ const (
 	MethodHover                  = "textDocument/hover"
 	MethodCodeAction             = "textDocument/codeAction"
 	MethodDidChangeConfiguration = "workspace/didChangeConfiguration"
+	MethodExecuteCommand         = "workspace/executeCommand"
 	MethodPublishDiagnostics     = "textDocument/publishDiagnostics"
 	MethodLogMessage             = "window/logMessage"
 	MethodShowMessage            = "window/showMessage"

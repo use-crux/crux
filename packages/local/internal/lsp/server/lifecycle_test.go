@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -150,6 +151,25 @@ func TestInitializeAdvertisesIncrementalDocumentSync(t *testing.T) {
 	}
 	if got := initialize.Capabilities.TextDocumentSync.Change; got != protocol.SyncIncremental {
 		t.Fatalf("text document sync change = %d, want incremental (%d)", got, protocol.SyncIncremental)
+	}
+}
+
+func TestInitializeAdvertisesRunFixCommand(t *testing.T) {
+	t.Parallel()
+
+	result := New(Options{}).Handle(context.Background(), protocol.Request{
+		JSONRPC: protocol.JSONRPCVersion,
+		ID:      []byte("1"),
+		Method:  protocol.MethodInitialize,
+		Params:  []byte(`{}`),
+	})
+	initialize, ok := result.Result.(protocol.InitializeResult)
+	if !ok {
+		t.Fatalf("initialize result = %#v, want protocol.InitializeResult", result.Result)
+	}
+	want := []string{"crux.runFix"}
+	if !reflect.DeepEqual(initialize.Capabilities.ExecuteCommandProvider.Commands, want) {
+		t.Fatalf("execute commands = %v, want %v", initialize.Capabilities.ExecuteCommandProvider.Commands, want)
 	}
 }
 

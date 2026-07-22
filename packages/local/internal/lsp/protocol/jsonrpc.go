@@ -12,6 +12,7 @@ const (
 	MethodNotFoundCode = -32601
 	InvalidParamsCode  = -32602
 	InternalErrorCode  = -32603
+	RequestFailedCode  = -32803
 )
 
 // Request is an inbound JSON-RPC request or notification. ID remains raw so

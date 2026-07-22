@@ -25,6 +25,14 @@ type workspaceController interface {
 	Close()
 }
 
+type fixCommandWorkspace interface {
+	FindingForScope(string, string) (api.IndexLintFinding, bool)
+}
+
+type fixActionWorkspace interface {
+	FindingForURI(protocol.DocumentURI, string) (string, api.IndexLintFinding, bool)
+}
+
 type scopeSession struct {
 	scope     readmodel.Scope
 	publisher *Publisher
@@ -148,6 +156,27 @@ func (w *workspaceRuntime) LeadingWhitespace(uri protocol.DocumentURI, line uint
 		return "", false
 	}
 	return sessions[0].publisher.LeadingWhitespace(uri, line), true
+}
+
+func (w *workspaceRuntime) FindingForScope(root, id string) (api.IndexLintFinding, bool) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	for _, session := range w.sessions {
+		if session.scope.Root == root {
+			return w.store.Finding(session.scope.ID, id)
+		}
+	}
+	return api.IndexLintFinding{}, false
+}
+
+func (w *workspaceRuntime) FindingForURI(uri protocol.DocumentURI, id string) (string, api.IndexLintFinding, bool) {
+	sessions := w.sessionsForURI(uri)
+	if len(sessions) == 0 {
+		return "", api.IndexLintFinding{}, false
+	}
+	session := sessions[0]
+	finding, ok := w.store.Finding(session.scope.ID, id)
+	return session.scope.Root, finding, ok
 }
 
 func (w *workspaceRuntime) Close() {

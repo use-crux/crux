@@ -9,21 +9,29 @@ import {
 } from 'vscode-languageclient/node'
 import { ClientSlot } from './client-slot.js'
 import { discoverBinary, type DiscoveryHost } from './discovery.js'
+import {
+  createInitializationOptions,
+  serverConfigurationSections,
+} from './initialization-options.js'
 import { RestartQueue } from './restart-queue.js'
 import { createServerOptions } from './server-options.js'
+import { activateDecorations } from './vscode-decorations.js'
 
 const execFileAsync = promisify(execFile)
 const versionTimeoutMs = 2_000
 const stopTimeoutMs = 3_000
 
 let output: vscode.OutputChannel | undefined
+let decorations: vscode.Disposable | undefined
 const clientSlot = new ClientSlot<LanguageClient>()
 const restartQueue = new RestartQueue()
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   output = vscode.window.createOutputChannel('Crux')
+  decorations = activateDecorations(output)
   context.subscriptions.push(
     output,
+    decorations,
     vscode.commands.registerCommand('crux.openDocs', async (href: unknown) => {
       if (typeof href === 'string') {
         await vscode.env.openExternal(vscode.Uri.parse(href))
@@ -40,6 +48,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 }
 
 export async function deactivate(): Promise<void> {
+  decorations?.dispose()
+  decorations = undefined
   const current = clientSlot.take()
   if (current === undefined) return
   await Promise.race([
@@ -104,25 +114,19 @@ async function startClient(): Promise<void> {
       { scheme: 'file', language: 'typescriptreact' },
       { scheme: 'file', language: 'javascriptreact' },
     ],
-    initializationOptions: currentSettings(configuration),
+    initializationOptions: createInitializationOptions({
+      port,
+      profile: configuration.get<string>('lint.profile', ''),
+      includeSuppressed: configuration.get<boolean>('lint.includeSuppressed', false),
+      trace: configuration.get<string>('trace', 'off'),
+      // The extension host never activates this extension before trust.
+      workspaceTrust: true,
+    }),
     outputChannel: output,
-    synchronize: { configurationSection: 'crux' },
+    synchronize: { configurationSection: [...serverConfigurationSections] },
   }
   const next = new LanguageClient('crux', 'Crux', serverOptions, clientOptions)
   await clientSlot.start(next)
-}
-
-function currentSettings(configuration: vscode.WorkspaceConfiguration): object {
-  return {
-    crux: {
-      port: configuration.get<number>('port', 4400),
-      lint: {
-        profile: configuration.get<string>('lint.profile', ''),
-        includeSuppressed: configuration.get<boolean>('lint.includeSuppressed', false),
-      },
-      trace: configuration.get<string>('trace', 'off'),
-    },
-  }
 }
 
 async function validateBinary(path: string): Promise<string> {

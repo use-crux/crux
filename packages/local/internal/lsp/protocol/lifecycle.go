@@ -35,10 +35,11 @@ type ServerInfo struct {
 }
 
 type ServerCapabilities struct {
-	TextDocumentSync   TextDocumentSyncOptions `json:"textDocumentSync"`
-	HoverProvider      bool                    `json:"hoverProvider"`
-	CodeActionProvider CodeActionOptions       `json:"codeActionProvider"`
-	Workspace          WorkspaceOptions        `json:"workspace"`
+	TextDocumentSync       TextDocumentSyncOptions `json:"textDocumentSync"`
+	HoverProvider          bool                    `json:"hoverProvider"`
+	CodeActionProvider     CodeActionOptions       `json:"codeActionProvider"`
+	ExecuteCommandProvider ExecuteCommandOptions   `json:"executeCommandProvider"`
+	Workspace              WorkspaceOptions        `json:"workspace"`
 }
 
 type TextDocumentSyncOptions struct {
@@ -60,6 +61,10 @@ type SaveOptions struct {
 
 type CodeActionOptions struct {
 	CodeActionKinds []CodeActionKind `json:"codeActionKinds"`
+}
+
+type ExecuteCommandOptions struct {
+	Commands []string `json:"commands"`
 }
 
 type WorkspaceOptions struct {

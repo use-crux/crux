@@ -36,6 +36,7 @@ func (s *Server) initialize(raw json.RawMessage) jsonrpc.HandlerResult {
 	s.clientInfo = params.ClientInfo
 	s.hoverFormat = preferredHoverFormat(params.Capabilities)
 	s.settings = mergeSettings(s.settings, params.InitializationOptions)
+	s.trusted = initializationWorkspaceTrusted(params.InitializationOptions)
 	s.mu.Unlock()
 
 	return jsonrpc.HandlerResult{Result: protocol.InitializeResult{
@@ -49,6 +50,9 @@ func (s *Server) initialize(raw json.RawMessage) jsonrpc.HandlerResult {
 			CodeActionProvider: protocol.CodeActionOptions{
 				CodeActionKinds: []protocol.CodeActionKind{protocol.CodeActionQuickFix},
 			},
+			ExecuteCommandProvider: protocol.ExecuteCommandOptions{
+				Commands: []string{runFixCommand},
+			},
 			Workspace: protocol.WorkspaceOptions{
 				WorkspaceFolders: protocol.WorkspaceFoldersOptions{
 					Supported:           true,
@@ -58,6 +62,19 @@ func (s *Server) initialize(raw json.RawMessage) jsonrpc.HandlerResult {
 		},
 		ServerInfo: protocol.ServerInfo{Name: "crux-lsp", Version: s.options.Version},
 	}}
+}
+
+func initializationWorkspaceTrusted(raw json.RawMessage) bool {
+	if len(raw) == 0 {
+		return true
+	}
+	var options struct {
+		WorkspaceTrust *bool `json:"workspaceTrust"`
+	}
+	if json.Unmarshal(raw, &options) != nil || options.WorkspaceTrust == nil {
+		return true
+	}
+	return *options.WorkspaceTrust
 }
 
 func (s *Server) initializedScopes(ctx context.Context) {

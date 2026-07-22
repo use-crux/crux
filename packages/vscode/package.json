@@ -19,6 +19,9 @@
     "workspaceContains:**/crux.config.js",
     "workspaceContains:**/crux.config.mjs"
   ],
+  "capabilities": {
+    "untrustedWorkspaces": { "supported": false }
+  },
   "contributes": {
     "commands": [
       { "command": "crux.openDocs", "title": "Crux: Open Rule Documentation" },
@@ -31,6 +34,8 @@
         "crux.port": { "type": "number", "default": 4400, "minimum": 1, "maximum": 65535, "description": "Port used to discover a running Crux dev server." },
         "crux.lint.profile": { "type": "string", "default": "", "enum": ["", "off", "recommended", "strict", "experimental"], "description": "Lint profile override. Empty follows the project configuration." },
         "crux.lint.includeSuppressed": { "type": "boolean", "default": false, "description": "Reserved: include findings retained as suppressed when engine support is available." },
+        "crux.decorations.mode": { "type": "string", "default": "auto", "enum": ["auto", "on", "off"], "description": "Controls client-side inline diagnostic decorations. This extension-only setting is not sent to the language server." },
+        "crux.decorations.maxLength": { "type": "number", "default": 80, "minimum": 1, "description": "Maximum client-side inline decoration length. This extension-only setting is not sent to the language server." },
         "crux.trace": { "type": "string", "default": "off", "enum": ["off", "messages"], "description": "Log LSP method names without payloads." }
       }
     }

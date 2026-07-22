@@ -28,6 +28,27 @@ func TestStoreAppliesSnapshotsPerScopeAndAnchor(t *testing.T) {
 	assertFindingIDs(t, store.Findings("scope-a", "/repo/a.ts"), nil)
 }
 
+func TestStoreFindingReturnsDetachedCopyByID(t *testing.T) {
+	store := NewStore()
+	store.ApplySnapshot("scope", Snapshot{Findings: []api.IndexLintFinding{{
+		ID: "finding", Source: &api.SourceLoc{File: "a.ts"},
+		Fixes: []api.IndexLintFix{{Title: "Original"}},
+	}}})
+
+	finding, ok := store.Finding("scope", "finding")
+	if !ok {
+		t.Fatal("finding was not found")
+	}
+	finding.Fixes[0].Title = "Mutated"
+	again, ok := store.Finding("scope", "finding")
+	if !ok || again.Fixes[0].Title != "Original" {
+		t.Fatalf("stored finding changed through returned copy: %#v", again)
+	}
+	if _, ok := store.Finding("scope", "missing"); ok {
+		t.Fatal("missing finding was reported as present")
+	}
+}
+
 func TestStoreAppliesReplacementDeltasAndPreservesOmittedLints(t *testing.T) {
 	store := NewStore()
 	generation := uint64(8)

@@ -13,6 +13,7 @@ import (
 type diagnosticActionData struct {
 	ID          string                    `json:"id"`
 	RuleID      string                    `json:"ruleId"`
+	Fixes       []api.IndexLintFix        `json:"fixes"`
 	Suppression *api.IndexLintSuppression `json:"suppression"`
 }
 
@@ -33,7 +34,9 @@ func (s *Server) codeAction(raw json.RawMessage) jsonrpc.HandlerResult {
 
 	s.mu.Lock()
 	isVSCode := s.clientInfo != nil && strings.Contains(s.clientInfo.Name, "Visual Studio Code")
+	trusted := s.trusted
 	s.mu.Unlock()
+	fixWorkspace, supportsFixes := workspace.(fixActionWorkspace)
 	actions := make([]protocol.CodeAction, 0)
 	for _, diagnostic := range params.Context.Diagnostics {
 		if diagnostic.Source != "crux" {
@@ -61,6 +64,33 @@ func (s *Server) codeAction(raw json.RawMessage) jsonrpc.HandlerResult {
 					}},
 				}},
 			})
+		}
+		if trusted && supportsFixes && len(data.Fixes) > 0 {
+			scopeRoot, finding, found := fixWorkspace.FindingForURI(params.TextDocument.URI, data.ID)
+			if found {
+				for fixIndex, diagnosticFix := range data.Fixes {
+					if diagnosticFix.Command == "" || fixIndex >= len(finding.Fixes) {
+						continue
+					}
+					fix := finding.Fixes[fixIndex]
+					if _, allowed := allowedFixCommand(fix.Command); !allowed {
+						continue
+					}
+					title := "Run `" + fix.Command + "` — " + fix.Title
+					index := fixIndex
+					actions = append(actions, protocol.CodeAction{
+						Title:       title,
+						Kind:        protocol.CodeActionQuickFix,
+						Diagnostics: []protocol.Diagnostic{diagnostic},
+						Command: &protocol.Command{
+							Title: title, Command: runFixCommand,
+							Arguments: []any{runFixArguments{
+								ScopeRoot: scopeRoot, FindingID: data.ID, FixIndex: &index,
+							}},
+						},
+					})
+				}
+			}
 		}
 		if isVSCode && diagnostic.CodeDescription != nil && diagnostic.CodeDescription.Href != "" {
 			href := string(diagnostic.CodeDescription.Href)

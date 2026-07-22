@@ -4,6 +4,7 @@ package server
 import (
 	"context"
 	"io"
+	"os"
 	"sync"
 	"time"
 
@@ -21,6 +22,9 @@ type Options struct {
 	Now func() time.Time
 	// OnInitialized observes scope startup after the workspace runtime begins.
 	OnInitialized func(context.Context, []protocol.WorkspaceFolder)
+	// FixExecutable resolves the binary spawned for an allowlisted fix. It
+	// defaults to os.Executable; tests may substitute a controlled executable.
+	FixExecutable func() (string, error)
 }
 
 // Server handles the P1 LSP method surface.
@@ -37,8 +41,12 @@ type Server struct {
 	outbound    chan protocol.Notification
 	settings    Settings
 	hoverFormat protocol.MarkupKind
+	trusted     bool
 	workspace   workspaceController
 	documents   map[protocol.DocumentURI]documentStatus
+
+	fixMu      sync.Mutex
+	fixRunning map[string]struct{}
 }
 
 type documentStatus struct {
@@ -54,12 +62,17 @@ func New(options Options) *Server {
 	if options.Now == nil {
 		options.Now = time.Now
 	}
+	if options.FixExecutable == nil {
+		options.FixExecutable = os.Executable
+	}
 	return &Server{
 		options:     options,
 		outbound:    make(chan protocol.Notification, 256),
 		settings:    defaultSettings(options.Port),
 		hoverFormat: protocol.MarkupKindPlainText,
+		trusted:     true,
 		documents:   make(map[protocol.DocumentURI]documentStatus),
+		fixRunning:  make(map[string]struct{}),
 	}
 }
 
@@ -122,6 +135,8 @@ func (s *Server) Handle(ctx context.Context, request protocol.Request) jsonrpc.H
 		return jsonrpc.HandlerResult{Stop: true}
 	case protocol.MethodCodeAction:
 		return s.codeAction(request.Params)
+	case protocol.MethodExecuteCommand:
+		return s.executeCommand(ctx, request.Params)
 	case protocol.MethodHover:
 		return s.hover(request.Params)
 	case protocol.MethodDidOpen:
@@ -160,7 +175,8 @@ func methodDirectionMatches(request protocol.Request) bool {
 	requestMethod := request.Method == protocol.MethodInitialize ||
 		request.Method == protocol.MethodShutdown ||
 		request.Method == protocol.MethodHover ||
-		request.Method == protocol.MethodCodeAction
+		request.Method == protocol.MethodCodeAction ||
+		request.Method == protocol.MethodExecuteCommand
 	if requestMethod {
 		return !request.IsNotification()
 	}

@@ -13,6 +13,9 @@ func applyDocumentChanges(
 	changes []protocol.TextDocumentContentChangeEvent,
 ) ([]protocol.Diagnostic, bool) {
 	transformed := cloneDiagnostics(diagnostics)
+	if hasFullDocumentChange(changes) {
+		return transformed, false
+	}
 	changed := false
 	for _, change := range changes {
 		if change.Range == nil {

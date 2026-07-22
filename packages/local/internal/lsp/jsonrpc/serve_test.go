@@ -191,6 +191,56 @@ func TestServeSerializesAsynchronousOutboundNotification(t *testing.T) {
 	}
 }
 
+func TestServeDeferredResultDoesNotBlockLaterRequests(t *testing.T) {
+	inputReader, inputWriter := io.Pipe()
+	outputReader, outputWriter := io.Pipe()
+	release := make(chan struct{})
+	handler := HandlerFunc(func(_ context.Context, request protocol.Request) HandlerResult {
+		if request.Method == "slow" {
+			return HandlerResult{Deferred: func() HandlerResult {
+				<-release
+				return HandlerResult{Result: "slow"}
+			}}
+		}
+		return HandlerResult{Result: "fast"}
+	})
+	done := make(chan error, 1)
+	go func() {
+		done <- Serve(context.Background(), inputReader, outputWriter, io.Discard, handler)
+	}()
+
+	writer := NewWriter(inputWriter)
+	if err := writer.Write([]byte(`{"jsonrpc":"2.0","id":1,"method":"slow"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Write([]byte(`{"jsonrpc":"2.0","id":2,"method":"fast"}`)); err != nil {
+		t.Fatal(err)
+	}
+	reader := NewReader(outputReader)
+	fastPayload, err := reader.Read()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fast protocol.Response
+	if json.Unmarshal(fastPayload, &fast) != nil || string(fast.ID) != "2" || string(fast.Result) != `"fast"` {
+		t.Fatalf("first response = %s, want fast id 2", fastPayload)
+	}
+
+	close(release)
+	slowPayload, err := reader.Read()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var slow protocol.Response
+	if json.Unmarshal(slowPayload, &slow) != nil || string(slow.ID) != "1" || string(slow.Result) != `"slow"` {
+		t.Fatalf("second response = %s, want slow id 1", slowPayload)
+	}
+	_ = inputWriter.Close()
+	if err := <-done; err != nil {
+		t.Fatalf("serve deferred responses: %v", err)
+	}
+}
+
 func readSingleFrame(t *testing.T, framed []byte) []byte {
 	t.Helper()
 	payload, err := NewReader(bytes.NewReader(framed)).Read()

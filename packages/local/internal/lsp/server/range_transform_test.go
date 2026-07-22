@@ -206,6 +206,16 @@ func TestApplyDocumentChangesPositionMatrix(t *testing.T) {
 			},
 			want: rangeBetween(4, 5, 4, 8), changed: false,
 		},
+		{
+			name:   "full document replacement invalidates every ranged edit in its batch",
+			target: rangeBetween(4, 5, 4, 8),
+			changes: []protocol.TextDocumentContentChangeEvent{
+				change(rangeBetween(1, 0, 1, 0), "\n"),
+				{Text: "replacement"},
+				change(rangeBetween(5, 0, 5, 0), "later"),
+			},
+			want: rangeBetween(4, 5, 4, 8), changed: false,
+		},
 	}
 
 	for _, test := range tests {

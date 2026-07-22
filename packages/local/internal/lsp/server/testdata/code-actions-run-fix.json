@@ -1,0 +1,125 @@
+[
+  {
+    "title": "Suppress test.rule for this line",
+    "kind": "quickfix",
+    "diagnostics": [
+      {
+        "range": {
+          "start": {
+            "line": 2,
+            "character": 4
+          },
+          "end": {
+            "line": 2,
+            "character": 8
+          }
+        },
+        "code": "test.rule",
+        "codeDescription": {
+          "href": "https://usecrux.dev/rule"
+        },
+        "source": "crux",
+        "message": "Finding",
+        "data": {
+          "id": "finding",
+          "ruleId": "test.rule",
+          "fixes": [
+            {
+              "title": "Regenerate runtime artifacts",
+              "description": "",
+              "kind": "",
+              "command": "crux runtime generate"
+            }
+          ],
+          "suppression": {
+            "supported": true,
+            "directive": "// exact test directive",
+            "scope": "next-line"
+          }
+        }
+      }
+    ],
+    "edit": {
+      "changes": {
+        "file:///repo/source.ts": [
+          {
+            "range": {
+              "start": {
+                "line": 2,
+                "character": 0
+              },
+              "end": {
+                "line": 2,
+                "character": 0
+              }
+            },
+            "newText": "  // exact test directive\n"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "title": "Run `crux runtime generate` — Regenerate runtime artifacts",
+    "kind": "quickfix",
+    "diagnostics": [
+      {
+        "range": {
+          "start": {
+            "line": 2,
+            "character": 4
+          },
+          "end": {
+            "line": 2,
+            "character": 8
+          }
+        },
+        "code": "test.rule",
+        "codeDescription": {
+          "href": "https://usecrux.dev/rule"
+        },
+        "source": "crux",
+        "message": "Finding",
+        "data": {
+          "id": "finding",
+          "ruleId": "test.rule",
+          "fixes": [
+            {
+              "title": "Regenerate runtime artifacts",
+              "description": "",
+              "kind": "",
+              "command": "crux runtime generate"
+            }
+          ],
+          "suppression": {
+            "supported": true,
+            "directive": "// exact test directive",
+            "scope": "next-line"
+          }
+        }
+      }
+    ],
+    "command": {
+      "title": "Run `crux runtime generate` — Regenerate runtime artifacts",
+      "command": "crux.runFix",
+      "arguments": [
+        {
+          "scopeRoot": "/repo",
+          "findingId": "finding",
+          "fixIndex": 0
+        }
+      ]
+    }
+  },
+  {
+    "title": "Open test.rule documentation",
+    "kind": "quickfix",
+    "command": {
+      "title": "Open docs",
+      "command": "crux.openDocs",
+      "arguments": [
+        "https://usecrux.dev/rule"
+      ]
+    }
+  }
+]

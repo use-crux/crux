@@ -17,6 +17,9 @@ type HandlerResult struct {
 	Result any
 	Error  *protocol.ResponseError
 	Stop   bool
+	// Deferred completes authorized long-running work after serial preflight.
+	// The transport may write its response out of request order.
+	Deferred func() HandlerResult
 }
 
 // Handler processes decoded JSON-RPC requests and notifications.
@@ -43,8 +46,8 @@ type readEvent struct {
 }
 
 // Serve runs a framed JSON-RPC connection until EOF, cancellation, or a
-// handler-requested stop. Dispatch and writes each have a single owner
-// goroutine, preserving message and response ordering.
+// handler-requested stop. Preflight stays serial and framed writes have one
+// owner; explicitly deferred responses may complete out of request order.
 func Serve(ctx context.Context, input io.Reader, output io.Writer, logs io.Writer, handler Handler) error {
 	if logs == nil {
 		logs = io.Discard
@@ -132,6 +135,7 @@ running:
 		}
 	}
 
+	cancel()
 	close(requests)
 	<-workerDone
 	close(responses)
@@ -166,26 +170,6 @@ func writeFrames(writer *Writer, responses <-chan []byte, done chan<- error) {
 		}
 	}
 	done <- nil
-}
-
-func dispatch(ctx context.Context, handler Handler, requests <-chan protocol.Request, responses chan<- []byte, stop chan<- struct{}, done chan<- struct{}) {
-	defer close(done)
-	for request := range requests {
-		result := handler.Handle(ctx, request)
-		if !request.IsNotification() {
-			response, err := resultResponse(request.ID, result)
-			if err != nil {
-				response = errorResponse(request.ID, protocol.InternalErrorCode, "Internal error")
-			}
-			if err := queueResponse(ctx, responses, response); err != nil {
-				return
-			}
-		}
-		if result.Stop {
-			stop <- struct{}{}
-			return
-		}
-	}
 }
 
 type requestDecodeError struct {

@@ -59,6 +59,33 @@ func TestDidChangeParamsRoundTripPinsIncrementalAndFullDocumentChanges(t *testin
 	}
 }
 
+func TestExecuteCommandParamsAndResultPinWireNames(t *testing.T) {
+	t.Parallel()
+
+	params := ExecuteCommandParams{
+		Command: "crux.runFix",
+		Arguments: []any{map[string]any{
+			"scopeRoot": "/repo", "findingId": "finding", "fixIndex": 0,
+		}},
+	}
+	encodedParams, err := json.Marshal(params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := string(encodedParams), `{"command":"crux.runFix","arguments":[{"findingId":"finding","fixIndex":0,"scopeRoot":"/repo"}]}`; got != want {
+		t.Fatalf("execute command params = %s, want %s", got, want)
+	}
+
+	result := ExecuteCommandResult{OK: false, ExitCode: 7, DurationMS: 25, StderrTail: "failed"}
+	encodedResult, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := string(encodedResult), `{"ok":false,"exitCode":7,"durationMs":25,"stderrTail":"failed"}`; got != want {
+		t.Fatalf("execute command result = %s, want %s", got, want)
+	}
+}
+
 func TestJSONRPCRequestPreservesStringID(t *testing.T) {
 	t.Parallel()
 

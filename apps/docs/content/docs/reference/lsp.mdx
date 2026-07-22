@@ -1,12 +1,12 @@
 ---
 title: "crux lsp"
-description: Language Server Protocol diagnostics and suppression actions for Crux projects.
+description: Language Server Protocol diagnostics, hover, and code actions for Crux projects.
 ---
 
 `crux lsp` brings Project Index lint findings into editors that support the
 Language Server Protocol. It publishes diagnostics for TypeScript and
-JavaScript files, links each finding to its rule documentation, and offers a
-quick fix when the rule supports a source-comment suppression.
+JavaScript files, keeps their ranges aligned with unsaved edits, explains each
+finding on hover, and offers the actions declared by its rule.
 
 ## Command
 
@@ -44,15 +44,26 @@ A dev server for another project on the same port is never attached. A version
 mismatch produces a warning but keeps the server attached because the dev
 server's read model is authoritative.
 
-The P1 server is save-based: edits are reindexed after they reach disk. Unsaved
-buffer changes do not move diagnostic ranges or change Project Index results.
+Indexing remains save-based: unsaved content never changes Project Index
+results. The language server consumes incremental document changes to keep
+published ranges aligned with the edited buffer. While a document is dirty,
+new disk-derived positions are held until save so an authoritative reindex
+cannot move a squiggle back to stale buffer coordinates. Closing the document
+ends buffer tracking; the next authoritative update restores disk positions.
+Authoritative clears still apply immediately.
 
 ## Visual Studio Code and compatible editors
 
-The private P1 extension starts one language client for the window, discovers
-the Crux binary, forwards the settings below, and registers **Crux: Restart
-Language Server**. It activates in workspaces containing `crux.config.ts`,
-`crux.config.js`, or `crux.config.mjs`.
+The private extension starts one language client for the window, discovers the
+Crux binary, renders optional inline finding text, forwards server settings,
+and registers **Crux: Restart Language Server**. It activates in workspaces
+containing `crux.config.ts`, `crux.config.js`, or `crux.config.mjs`.
+
+The extension requires workspace trust. In Restricted Mode, the editor host
+does not activate it: no binary is discovered or started, and no workspace
+configuration is loaded. Granting trust activates the extension normally.
+The language server independently validates command actions and accepts only
+its fixed command allowlist as defense in depth.
 
 For a repository build, package and install the VSIX:
 
@@ -100,11 +111,14 @@ VS Code settings use the names below. Other clients can send the same nested
 | `crux.port` | number, `4400` | Port used to discover and attach to a matching local dev server. |
 | `crux.lint.profile` | `""`, `"off"`, `"recommended"`, `"strict"`, or `"experimental"`; default `""` | Overrides presentation filtering. Empty follows the project's configured output; `off` publishes no findings. |
 | `crux.lint.includeSuppressed` | boolean, `false` | Reserved for retained suppressed findings. It has no visible effect until the indexing engine retains them ([#251](https://github.com/use-crux/crux/issues/251)). |
+| `crux.decorations.mode` | `"auto"`, `"on"`, or `"off"`; default `"auto"` | VS Code extension only. Controls inline diagnostic text; `auto` disables it when a supported general inline-diagnostics extension is active. |
+| `crux.decorations.maxLength` | number, `80` | VS Code extension only. Maximum inline decoration length, including its severity glyph, rule code, message, and additional-finding count. |
 | `crux.trace` | `"off"` or `"messages"`; default `"off"` | Logs LSP method names without logging request or response payloads. |
 
 Changing the lint profile or reserved suppression setting re-filters the
 current read model without reindexing. Changing the port or binary path makes
-the VS Code extension restart the language client.
+the VS Code extension restart the language client. Decoration settings are
+client-side presentation settings and are never sent to the language server.
 
 ## Diagnostics and actions
 
@@ -112,10 +126,47 @@ Diagnostics appear under the `crux` source and retain the rule's severity,
 except experimental findings are shown as hints. Rule codes link to the rule
 reference when the editor supports diagnostic code links.
 
+Hovering a Crux diagnostic shows its title, rule id, severity, maturity,
+confidence, instance-specific message, rationale, impact, suppression details
+when available, and rule-documentation link. When several findings overlap,
+the hover includes up to three and reports the remaining count.
+
 For rules with next-line suppression support, **Quick Fix** inserts the rule's
 exact `// crux-lint-disable-next-line ...` directive above the affected line
-while preserving indentation. Save the file to reindex it. P1 does not execute
-rule fix commands or provide fix-all actions.
+while preserving indentation. Save the file to reindex it.
+
+Some manual fixes also declare `crux runtime generate` as a companion command.
+In a trusted VS Code workspace, their quick fix is titled
+**Run `crux runtime generate` — _fix title_**. The server resolves the current
+finding and fix from its read model, accepts only the exact built-in command,
+and starts its own binary directly without a shell. It reports command success
+or failure in the editor.
+
+The command regenerates runtime artifacts; it does not rewrite the authored
+source that caused the finding. Make the documented source correction, run the
+command when appropriate, and save to clear the finding through normal
+reindexing. Command actions are unavailable in untrusted workspaces. Fix-all
+actions are not supported.
+
+## Inline decorations
+
+The VS Code extension can render one compact annotation after each affected
+line. It selects the most severe Crux diagnostic on that line, appends `+N`
+when more findings share it, and uses the editor theme's diagnostic color at a
+subdued opacity. Decorations read the editor's published diagnostics directly;
+they add no language-server traffic and follow the same live range shifts.
+
+`crux.decorations.mode` controls coexistence with general inline-diagnostics
+extensions:
+
+- `auto` enables Crux decorations unless Error Lens
+  (`usernamehw.errorlens`) or Reason Error Lens
+  (`PolyMeilex.reason-error-lens`) is installed and active.
+- `on` always enables them.
+- `off` clears them immediately.
+
+Only visible editors are decorated. Suppressing a finding and saving removes
+its annotation after the normal reindex.
 
 ## Related
 

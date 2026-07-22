@@ -132,7 +132,9 @@ func (p *Publisher) DidOpen(uri protocol.DocumentURI, version int) {
 	document.held = nil
 	document.heldFindings = nil
 	document.hasHeld = false
-	p.publishLocked(uri, false)
+	// Recompute every URI as an authoritative view while forcing only the
+	// opened document. Other dirty documents must retain buffer-space ranges.
+	p.publishLocked(uri, true)
 }
 
 // DidChange shifts the currently displayed diagnostics without consulting disk

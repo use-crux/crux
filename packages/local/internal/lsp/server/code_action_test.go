@@ -3,12 +3,73 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/lsp/protocol"
 )
+
+func TestCodeActionRunFixOrderingMatchesGolden(t *testing.T) {
+	server := New(Options{})
+	server.clientInfo = &protocol.ClientInfo{Name: "Visual Studio Code"}
+	server.workspace = &commandWorkspace{
+		actionWorkspace: actionWorkspace{indent: "  "},
+		root:            "/repo",
+		finding:         commandFindingWithSuppression(),
+		present:         true,
+	}
+	diagnostic := commandActionDiagnostic(allowedRuntimeGenerateCommand)
+	actions := requestActions(t, server, diagnostic)
+	encoded, err := json.MarshalIndent(actions, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := os.ReadFile(filepath.Join("testdata", "code-actions-run-fix.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(encoded)+"\n" != string(want) {
+		t.Fatalf("code actions mismatch\n--- got ---\n%s\n--- want ---\n%s", encoded, want)
+	}
+}
+
+func TestCodeActionRunFixPreflightUsesTrustedStoreCopy(t *testing.T) {
+	for _, test := range []struct {
+		name           string
+		trusted        bool
+		diagnosticCmd  string
+		storeCmd       string
+		present        bool
+		wantRunActions int
+	}{
+		{name: "allowed", trusted: true, diagnosticCmd: allowedRuntimeGenerateCommand, storeCmd: allowedRuntimeGenerateCommand, present: true, wantRunActions: 1},
+		{name: "untrusted", diagnosticCmd: allowedRuntimeGenerateCommand, storeCmd: allowedRuntimeGenerateCommand, present: true},
+		{name: "wire fix has no command", trusted: true, storeCmd: allowedRuntimeGenerateCommand, present: true},
+		{name: "store fix has no command", trusted: true, diagnosticCmd: allowedRuntimeGenerateCommand, present: true},
+		{name: "store command rejected", trusted: true, diagnosticCmd: allowedRuntimeGenerateCommand, storeCmd: "crux runtime inspect", present: true},
+		{name: "finding stale", trusted: true, diagnosticCmd: allowedRuntimeGenerateCommand, storeCmd: allowedRuntimeGenerateCommand},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			finding := commandFinding()
+			finding.Fixes[0].Command = test.storeCmd
+			workspace := &commandWorkspace{root: "/repo", finding: finding, present: test.present}
+			server := initializedCommandServer(t, workspace, test.trusted, Options{})
+			actions := requestActions(t, server, commandActionDiagnostic(test.diagnosticCmd))
+			count := 0
+			for _, action := range actions {
+				if action.Command != nil && action.Command.Command == runFixCommand {
+					count++
+				}
+			}
+			if count != test.wantRunActions {
+				t.Fatalf("run-fix actions = %d, want %d; actions = %#v", count, test.wantRunActions, actions)
+			}
+		})
+	}
+}
 
 func TestCodeActionReturnsIndentedSuppressThenVSCodeDocs(t *testing.T) {
 	for _, test := range []struct {
@@ -116,6 +177,33 @@ func actionDiagnostic(supported bool, scope string, suppressed bool, source stri
 	if suppressed {
 		diagnostic.Tags = []protocol.DiagnosticTag{protocol.DiagnosticTagUnnecessary}
 	}
+	return diagnostic
+}
+
+func commandFindingWithSuppression() api.IndexLintFinding {
+	finding := commandFinding()
+	finding.RuleID = "test.rule"
+	finding.Suppression = &api.IndexLintSuppression{
+		Supported: true, Scope: "next-line", Directive: "// exact test directive",
+	}
+	return finding
+}
+
+func commandActionDiagnostic(command string) protocol.Diagnostic {
+	diagnostic := actionDiagnostic(true, "next-line", false, "crux")
+	data, _ := json.Marshal(struct {
+		ID          string                    `json:"id"`
+		RuleID      string                    `json:"ruleId"`
+		Fixes       []api.IndexLintFix        `json:"fixes"`
+		Suppression *api.IndexLintSuppression `json:"suppression"`
+	}{
+		ID: "finding", RuleID: "test.rule",
+		Fixes: []api.IndexLintFix{{Title: "Regenerate runtime artifacts", Command: command}},
+		Suppression: &api.IndexLintSuppression{
+			Supported: true, Scope: "next-line", Directive: "// exact test directive",
+		},
+	})
+	diagnostic.Data = data
 	return diagnostic
 }
 
