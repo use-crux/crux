@@ -93,6 +93,9 @@ func formatLintSuppressionEvidence(evidence *api.IndexLintSuppressedBy) string {
 func countLintSeverities(findings []api.IndexLintFinding) map[string]int {
 	counts := map[string]int{}
 	for _, finding := range findings {
+		if finding.Suppressed {
+			continue
+		}
 		counts[finding.Severity]++
 	}
 	return counts

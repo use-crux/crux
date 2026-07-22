@@ -17,6 +17,9 @@ func TestCompareCurrentProjectHealthPrimaryDefinition(t *testing.T) {
 				ID: "lint:writer", RuleID: "prompt.missing_context", Severity: "warning",
 				Title: "Writer has no context", Message: "Add authored context.",
 				PrimaryDefinitionID: "prompt:writer",
+				SuppressedBy: &store.IndexLintSuppressedBy{
+					Source: &store.SourceLoc{File: "src/writer.ts", Line: 1}, Scope: "line",
+				},
 			}},
 		},
 	)
@@ -33,6 +36,9 @@ func TestCompareCurrentProjectHealthPrimaryDefinition(t *testing.T) {
 	finding := health.Findings[0]
 	if finding.ID != "lint:writer" || finding.RuleID != "prompt.missing_context" {
 		t.Fatalf("finding = %#v", finding)
+	}
+	if finding.SuppressedBy != nil {
+		t.Fatalf("active finding leaked suppression evidence: %#v", finding.SuppressedBy)
 	}
 	wantMatches := []CurrentProjectHealthMatch{{
 		DefinitionID: "prompt:writer",

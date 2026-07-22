@@ -548,7 +548,7 @@
           "relations": 0,
           "sourceRefs": 1,
           "diagnostics": 1,
-          "lintFindings": 1,
+          "lintFindings": 2,
           "ruleDescriptors": 0,
           "sources": 1,
           "sourceGraph": 1

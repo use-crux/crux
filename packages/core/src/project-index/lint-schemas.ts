@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type {
+  AnalysisTier,
   CruxLintConfig,
   CruxLintRuleConfig,
   IndexLintEvidence,
@@ -138,7 +139,11 @@ export const IndexLintFindingSchema = z.union([
   }),
 ]) satisfies z.ZodType<IndexLintFinding>;
 
-export const AnalysisTierSchema = z.enum(["syntax", "index", "semantic"]);
+export const AnalysisTierSchema = z.enum([
+  "syntax",
+  "index",
+  "semantic",
+]) satisfies z.ZodType<AnalysisTier>;
 
 export const IndexRuleDescriptorSchema = z.object({
   id: z.string(),

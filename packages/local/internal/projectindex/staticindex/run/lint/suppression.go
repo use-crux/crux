@@ -10,6 +10,12 @@ import (
 
 const suppressionPrefix = "crux-lint-disable-"
 
+var suppressionScopeCandidates = []protocol.LintSuppressionScope{
+	protocol.LintSuppressionNextLine,
+	protocol.LintSuppressionLine,
+	protocol.LintSuppressionFile,
+}
+
 // SuppressionsFromFiles returns prepared lint suppressions from source files.
 func SuppressionsFromFiles(files []string) []protocol.LintSuppression {
 	files = append([]string(nil), files...)
@@ -43,11 +49,7 @@ func parseSuppressionLine(file string, lineNumber int, line string) (protocol.Li
 	}
 	rest := strings.TrimLeft(line[column+len(suppressionPrefix):], " \t")
 	var scope protocol.LintSuppressionScope
-	for _, candidate := range []protocol.LintSuppressionScope{
-		protocol.LintSuppressionNextLine,
-		protocol.LintSuppressionLine,
-		protocol.LintSuppressionFile,
-	} {
+	for _, candidate := range suppressionScopeCandidates {
 		token := string(candidate)
 		if strings.HasPrefix(rest, token) && hasScopeDelimiter(rest[len(token):]) {
 			scope = candidate

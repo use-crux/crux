@@ -104,6 +104,9 @@ func CompareCurrentProjectHealth(refs []DefinitionRef, index store.IndexData) *C
 		if finding.Suppressed && suppressedBy == nil {
 			continue
 		}
+		if !finding.Suppressed {
+			suppressedBy = nil
+		}
 		health.Findings = append(health.Findings, CurrentProjectHealthFinding{
 			ID: finding.ID, RuleID: finding.RuleID, Severity: finding.Severity,
 			Title: finding.Title, Message: finding.Message, Source: source,

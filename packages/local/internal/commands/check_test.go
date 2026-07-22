@@ -65,6 +65,9 @@ func TestCheckSummaryAndGateIgnoreDisplayedSuppressedFindings(t *testing.T) {
 	report, failures, err := buildCheckReport(oneshot.Result{Index: store.IndexData{
 		LintFindings: []store.IndexLintFinding{{
 			ID: "suppressed", Severity: "error", Profiles: []string{"recommended"}, Suppressed: true,
+			SuppressedBy: &store.IndexLintSuppressedBy{
+				Source: &store.SourceLoc{File: "src/workflow.ts", Line: 7}, Scope: "next-line",
+			},
 		}},
 	}}, checkOptions{profile: "recommended", includeSuppressed: true, failOn: "error"})
 	if err != nil {

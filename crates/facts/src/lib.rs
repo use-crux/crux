@@ -334,20 +334,87 @@ pub enum StaticIndexDiagnosticSeverity {
 }
 
 /// Lint finding fact with typed identity and JSON-owned descriptor fields.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 pub struct StaticIndexLintFinding {
     pub id: String,
     pub severity: StaticIndexDiagnosticSeverity,
     pub rule_id: String,
     pub title: String,
     pub message: String,
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub suppressed: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub suppressed_by: Option<StaticIndexLintSuppressedBy>,
-    #[serde(flatten, default, skip_serializing_if = "BTreeMap::is_empty")]
     pub extra: BTreeMap<String, Value>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct StaticIndexLintFindingWire {
+    id: String,
+    severity: StaticIndexDiagnosticSeverity,
+    rule_id: String,
+    title: String,
+    message: String,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    suppressed: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    suppressed_by: Option<StaticIndexLintSuppressedBy>,
+    #[serde(flatten, default, skip_serializing_if = "BTreeMap::is_empty")]
+    extra: BTreeMap<String, Value>,
+}
+
+const INVALID_LINT_SUPPRESSION_STATE: &str =
+    "lint finding suppression state must pair suppressed=true with suppressedBy evidence";
+
+fn validate_lint_suppression_state(
+    suppressed: bool,
+    suppressed_by: &Option<StaticIndexLintSuppressedBy>,
+) -> Result<(), &'static str> {
+    match (suppressed, suppressed_by.is_some()) {
+        (true, true) | (false, false) => Ok(()),
+        _ => Err(INVALID_LINT_SUPPRESSION_STATE),
+    }
+}
+
+impl Serialize for StaticIndexLintFinding {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        validate_lint_suppression_state(self.suppressed, &self.suppressed_by)
+            .map_err(serde::ser::Error::custom)?;
+        StaticIndexLintFindingWire {
+            id: self.id.clone(),
+            severity: self.severity,
+            rule_id: self.rule_id.clone(),
+            title: self.title.clone(),
+            message: self.message.clone(),
+            suppressed: self.suppressed,
+            suppressed_by: self.suppressed_by.clone(),
+            extra: self.extra.clone(),
+        }
+        .serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for StaticIndexLintFinding {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let wire = StaticIndexLintFindingWire::deserialize(deserializer)?;
+        validate_lint_suppression_state(wire.suppressed, &wire.suppressed_by)
+            .map_err(serde::de::Error::custom)?;
+        Ok(Self {
+            id: wire.id,
+            severity: wire.severity,
+            rule_id: wire.rule_id,
+            title: wire.title,
+            message: wire.message,
+            suppressed: wire.suppressed,
+            suppressed_by: wire.suppressed_by,
+            extra: wire.extra,
+        })
+    }
 }
 
 /// Scope of the source directive that suppressed a lint finding.
@@ -517,6 +584,67 @@ mod tests {
         .expect_err("unknown suppression scope must be rejected");
 
         assert!(error.to_string().contains("next-lineage"));
+    }
+
+    #[test]
+    fn lint_finding_rejects_inconsistent_suppression_payloads() {
+        let suppressed_without_evidence = serde_json::from_value::<StaticIndexLintFinding>(json!({
+            "id": "lint:example",
+            "severity": "warning",
+            "ruleId": "example.rule",
+            "title": "Example rule",
+            "message": "Example finding",
+            "suppressed": true
+        }))
+        .expect_err("suppressed findings require directive evidence");
+        assert!(
+            suppressed_without_evidence
+                .to_string()
+                .contains("suppression state")
+        );
+
+        let active_with_evidence = serde_json::from_value::<StaticIndexLintFinding>(json!({
+            "id": "lint:example",
+            "severity": "warning",
+            "ruleId": "example.rule",
+            "title": "Example rule",
+            "message": "Example finding",
+            "suppressed": false,
+            "suppressedBy": {
+                "source": { "file": "src/workflow.ts", "line": 7 },
+                "scope": "line"
+            }
+        }))
+        .expect_err("active findings cannot carry directive evidence");
+        assert!(
+            active_with_evidence
+                .to_string()
+                .contains("suppression state")
+        );
+    }
+
+    #[test]
+    fn lint_finding_rejects_inconsistent_suppression_state_on_encode() {
+        let mut suppressed_without_evidence = active_lint_finding();
+        suppressed_without_evidence.suppressed = true;
+        let error = serde_json::to_value(suppressed_without_evidence)
+            .expect_err("suppressed findings require directive evidence");
+        assert!(error.to_string().contains("suppression state"));
+
+        let mut active_with_evidence = active_lint_finding();
+        active_with_evidence.suppressed_by = Some(StaticIndexLintSuppressedBy {
+            source: StaticIndexSourceLocation {
+                file: "src/workflow.ts".to_string(),
+                line: 7,
+                column: None,
+                function_name: None,
+            },
+            scope: StaticIndexLintSuppressionScope::Line,
+            reason: None,
+        });
+        let error = serde_json::to_value(active_with_evidence)
+            .expect_err("active findings cannot carry directive evidence");
+        assert!(error.to_string().contains("suppression state"));
     }
 
     #[test]

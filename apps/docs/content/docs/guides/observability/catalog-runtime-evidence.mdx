@@ -39,8 +39,10 @@ current authored context, not historical run evidence: it does not claim that
 a suppression happened during execution, does not create a suppression span,
 and cannot change the run's success or failure status.
 
-The card preserves matched definition roles and relationships, keeps active
-and suppressed totals separate, and links each definition back to Catalog.
+The card preserves matched definition roles and relationships and keeps active
+and suppressed totals separate. A definition links back to Catalog only when
+it resolves in the current Catalog and has a supported Catalog kind;
+unresolved or unsupported definitions remain plain, non-navigable evidence.
 Suppressed rows remain visibly tagged and show the finding source separately
 from the directive location, scope, and optional reason. A reasonless directive
 still renders as **no reason recorded**. If no Project Index is available, the

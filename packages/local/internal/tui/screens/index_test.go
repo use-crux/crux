@@ -166,7 +166,12 @@ func TestIndexViewOmitsSuppressedFindingsFromBadgesAndLists(t *testing.T) {
 	data := sampleIndex()
 	data.LintFindings = []api.IndexLintFinding{
 		{ID: "active", RuleID: "active.rule", PrimaryDefinitionID: "agent:docs_agent"},
-		{ID: "suppressed", RuleID: "suppressed.rule", PrimaryDefinitionID: "agent:docs_agent", Suppressed: true},
+		{
+			ID: "suppressed", RuleID: "suppressed.rule", PrimaryDefinitionID: "agent:docs_agent", Suppressed: true,
+			SuppressedBy: &api.IndexLintSuppressedBy{
+				Source: &api.SourceLoc{File: "src/workflow.ts", Line: 7}, Scope: "next-line",
+			},
+		},
 	}
 	c.SetIndexForTest(data)
 	c.definitions.Select("agent:docs_agent")

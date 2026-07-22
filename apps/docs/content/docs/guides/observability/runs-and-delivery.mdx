@@ -48,9 +48,11 @@ Catalog **View N runs** opens Runs pre-filtered to one definition id. See [Catal
 When a run contains `DefinitionRef` identities, Run Detail correlates them at
 read time with lint findings in the currently materialized Project Index. The
 **Current project health** card separates active and suppressed findings and
-links matched definitions back to Catalog. Suppressed rows are explicitly
-tagged and include directive location, scope, and an authored reason when one
-exists; finding source and directive source remain distinct.
+links matched definitions back to Catalog only when they resolve in the current
+Catalog with a supported kind. Unresolved or unsupported definitions remain
+plain, non-navigable evidence. Suppressed rows are explicitly tagged and
+include directive location, scope, and an authored reason when one exists;
+finding source and directive source remain distinct.
 
 This card describes current authored state, not historical run evidence. It
 does not prove that a finding or suppression existed when the run executed,

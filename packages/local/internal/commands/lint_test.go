@@ -178,6 +178,9 @@ func TestPrintLintFindingsLabelsSuppressedDirectiveEvidence(t *testing.T) {
 			t.Fatalf("output = %q, want %q", stdout.String(), want)
 		}
 	}
+	if !strings.Contains(stdout.String(), "0 warning") {
+		t.Fatalf("output = %q, want active-only severity summary", stdout.String())
+	}
 }
 
 func TestLintGateFailuresRejectsUnknownSeverity(t *testing.T) {
