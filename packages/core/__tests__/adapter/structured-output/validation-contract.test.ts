@@ -1,9 +1,9 @@
 /**
- * Phase 1 characterization — structured-output validation contract (RFC #224).
+ * Structured-output validation contract (characterization).
  *
- * These tests encode the DESIRED post-normalization contract and are expected to
- * FAIL against current behavior. They document, executably, the two gaps the
- * rollout closes:
+ * These tests encode the DESIRED normalization contract and are expected to FAIL
+ * against current behavior. They document, executably, the two gaps this work
+ * closes:
  *
  *  1. Validation currently runs only when `validationRetry` is configured
  *     (`generate-core.ts`: `else if (resolved.schema && validationRetry)`).
@@ -11,9 +11,9 @@
  *     (`generate-core.ts`: `parsed = JSON.parse(lastExtracted.text)`), so authored
  *     Zod defaults, coercions, and transforms never reach `result.object`.
  *
- * Phase 4 ("always validate structured output") turns these green by routing
- * every completed candidate through decode → Safety → one `safeParse` and
- * returning `safeParse.data`. Do not "fix" them by weakening the assertions.
+ * They turn green once every completed candidate is routed through
+ * decode → Safety → one `safeParse` and returns `safeParse.data`. Do not "fix"
+ * them by weakening the assertions.
  *
  * @module
  */

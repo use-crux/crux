@@ -1,12 +1,10 @@
 /**
  * Import-boundary guard — `@use-crux/core` stays provider-agnostic (RFC #224).
  *
- * A binding rule of the rollout is that the structured-output compiler lives in
- * core and owns finite, provider-neutral lowering rules; no provider SDK may be
- * imported by core. This scanner fails if any core source module imports a known
- * provider SDK, guarding the invariant as compiler modules land in later phases.
- *
- * This test is expected to PASS today and must keep passing every phase.
+ * A binding rule is that the structured-output compiler lives in core and owns
+ * finite, provider-neutral lowering rules; no provider SDK may be imported by
+ * core. This scanner fails if any core source module imports a known provider
+ * SDK, guarding the invariant as compiler modules land.
  *
  * @module
  */

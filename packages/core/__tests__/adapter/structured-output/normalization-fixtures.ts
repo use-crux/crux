@@ -1,15 +1,15 @@
 /**
- * Reusable structured-output fixtures for the RFC #224 normalization rollout.
+ * Reusable structured-output fixtures for the normalization work.
  *
- * These schemas and the fake structured adapter are authored once in phase 1 so
- * every later phase (capability compiler, optional lowering, decode manifest,
- * validation ordering, provider slices) can drive the exact same authored Zod
- * shapes and provider payloads instead of re-deriving them per test.
+ * These schemas and the fake structured adapter are authored once so the
+ * capability compiler, optional lowering, decode manifest, validation ordering,
+ * and provider slices can all drive the exact same authored Zod shapes and
+ * provider payloads instead of re-deriving them per test.
  *
- * The fixtures intentionally cover the schema matrix from `05-test-matrix.md`:
- * required primitives, optional-only, genuine nullable, nullish, nested optional
- * objects, optional array elements, and the default/coerce/transform cases that
- * prove `result.object === safeParse.data`.
+ * The fixtures cover the structured schema matrix: required primitives,
+ * optional-only, genuine nullable, nullish, nested optional objects, optional
+ * array elements, and the default/coerce/transform cases that prove
+ * `result.object === safeParse.data`.
  *
  * @module
  */

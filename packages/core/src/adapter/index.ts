@@ -92,6 +92,14 @@ export type {
   NativeTranscriptCodec,
 } from "./native-chat";
 
+// Structured-output capability profiles. Provider packages declare which JSON
+// Schema behavior they accept; core owns the finite lowering rules. Inert data
+// only — no executable rewrite hooks.
+export type {
+  AdditionalPropertiesSupport,
+  StructuredOutputCapabilities,
+} from "./structured-output";
+
 // Canonical transcript IR and the codec compiler built on it
 export {
   appendCanonicalToolRound,
