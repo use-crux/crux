@@ -36,6 +36,11 @@ import {
 } from "./kit";
 import type { HealthFinding, ViewDef } from "./adapt";
 import { useIndexIndex } from "./context";
+import {
+  SuppressedFindingTag,
+  SuppressionEvidence,
+  SuppressionSummary,
+} from "./suppression";
 
 const SEV_ORDER: Record<string, number> = { error: 3, warning: 2, info: 1 };
 
@@ -90,7 +95,7 @@ function HealthTally({ counts }: { counts: Record<string, number> }) {
 }
 
 // ── the expanded detail of one finding ───────────────────────────────────────
-function FindingDetail({ fnd }: { fnd: HealthFinding }) {
+export function FindingDetail({ fnd }: { fnd: HealthFinding }) {
   const ev = fnd.evidence ?? [];
   const paths = fnd.propagationPaths ?? [];
   const Eyebrow = ({ children }: { children: ReactNode }) => (
@@ -254,17 +259,8 @@ function FindingDetail({ fnd }: { fnd: HealthFinding }) {
           <LintFixKind key={i} kind={fx.kind} />
         ))}
         <span style={{ fontSize: 12, color: T.fg }}>{fnd.fix}</span>
-        {fnd.suppressedBy?.reason ? (
-          <span
-            style={{
-              marginLeft: "auto",
-              fontFamily: T.mono,
-              fontSize: 10,
-              color: T.fgFaint,
-            }}
-          >
-            suppressed · {fnd.suppressedBy.reason}
-          </span>
+        {fnd.suppressed ? (
+          <SuppressionSummary finding={fnd} />
         ) : fnd.suppression?.directive ? (
           <span
             style={{
@@ -278,6 +274,7 @@ function FindingDetail({ fnd }: { fnd: HealthFinding }) {
           </span>
         ) : null}
       </div>
+      <SuppressionEvidence finding={fnd} />
     </div>
   );
 }
@@ -345,6 +342,7 @@ function FindingRow({
         <LintMetaTag tone={fnd.category === "safety" ? "danger" : undefined}>
           {fnd.category}
         </LintMetaTag>
+        <SuppressedFindingTag suppressed={fnd.suppressed} />
         {fnd.source === "extension" ? (
           <LintExtBadge extension={fnd.extension} />
         ) : null}
@@ -402,8 +400,20 @@ export function IndexHealthSection({
 }) {
   const idx = useIndexIndex();
   const lints = idx.healthForDef(def.id);
-  const direct = lints.filter((f) => f.primaryDefinitionId === def.id);
-  const transitive = lints.filter((f) => f.primaryDefinitionId !== def.id);
+  const active = lints.filter((finding) => !finding.suppressed);
+  const suppressed = lints.filter((finding) => finding.suppressed);
+  const activeDirect = active.filter(
+    (finding) => finding.primaryDefinitionId === def.id,
+  );
+  const activeTransitive = active.filter(
+    (finding) => finding.primaryDefinitionId !== def.id,
+  );
+  const suppressedDirect = suppressed.filter(
+    (finding) => finding.primaryDefinitionId === def.id,
+  );
+  const suppressedTransitive = suppressed.filter(
+    (finding) => finding.primaryDefinitionId !== def.id,
+  );
 
   const sorted = [...lints].sort((a, b) => {
     const da = a.primaryDefinitionId === def.id ? 1 : 0;
@@ -411,8 +421,8 @@ export function IndexHealthSection({
     if (da !== db) return db - da; // direct before transitive
     return (SEV_ORDER[b.severity] ?? 0) - (SEV_ORDER[a.severity] ?? 0); // then severity desc
   });
-  const counts = byKind(lints, "severity");
-  const ruleCount = Object.keys(byKind(lints, "ruleId")).length;
+  const counts = byKind(active, "severity");
+  const ruleCount = Object.keys(byKind(active, "ruleId")).length;
   const [open, setOpen] = useState<Set<string>>(
     () => new Set(startOpen && sorted[0] ? [sorted[0].id] : []),
   );
@@ -425,7 +435,7 @@ export function IndexHealthSection({
     });
 
   // clean verdict — Backstage/SonarQube both surface "passing", not silence.
-  if (!direct.length && !transitive.length) {
+  if (!lints.length) {
     return (
       <>
         <SectionHead
@@ -468,7 +478,9 @@ export function IndexHealthSection({
         eyebrow="Health"
         right={
           <span style={{ fontFamily: T.mono, fontSize: 11, color: T.fgFaint }}>
-            {direct.length} direct · {transitive.length} via deps
+            {activeDirect.length} active direct · {activeTransitive.length}{" "}
+            active via deps · {suppressedDirect.length} suppressed direct ·{" "}
+            {suppressedTransitive.length} suppressed via deps
           </span>
         }
       />
@@ -488,8 +500,9 @@ export function IndexHealthSection({
         <HealthTally counts={counts} />
         <span style={{ width: 1, height: 16, background: T.border }} />
         <span style={{ fontFamily: T.mono, fontSize: 11, color: T.fgFaint }}>
-          {lints.length} finding{lints.length > 1 ? "s" : ""} across {ruleCount}{" "}
-          rule{ruleCount > 1 ? "s" : ""}
+          {active.length} active finding{active.length === 1 ? "" : "s"} across{" "}
+          {ruleCount} rule{ruleCount === 1 ? "" : "s"} · {suppressed.length}{" "}
+          suppressed
         </span>
         <span style={{ marginLeft: "auto", display: "inline-flex", gap: 8 }}>
           <Btn
@@ -531,6 +544,7 @@ export function IndexHealthSection({
 export function IndexHealthOverview() {
   const idx = useIndexIndex();
   const all = idx.healthFindings.filter((f) => !f.suppressed);
+  const suppressedCount = idx.healthFindings.length - all.length;
   const rules = idx.ruleDescriptors;
   const bySev = byKind(all, "severity");
   const byCat = byKind(all, "category");
@@ -642,8 +656,9 @@ export function IndexHealthOverview() {
             color: T.fgFaint,
           }}
         >
-          {all.length} finding{all.length === 1 ? "" : "s"} · {rules.length}{" "}
-          rule{rules.length === 1 ? "" : "s"} firing
+          {all.length} active finding{all.length === 1 ? "" : "s"} ·{" "}
+          {suppressedCount} suppressed · {rules.length} rule
+          {rules.length === 1 ? "" : "s"} firing
         </span>
       </div>
       {/* verdict row */}
@@ -699,8 +714,10 @@ export function IndexHealthOverview() {
           />
           <div style={{ marginTop: 8, fontSize: 11.5, color: T.fgMuted }}>
             {rules.length
-              ? `${rules.length} distinct rule${rules.length === 1 ? "" : "s"} matched`
-              : "no rules matched — clean"}
+              ? `${rules.length} distinct active rule${rules.length === 1 ? "" : "s"} firing`
+              : suppressedCount > 0
+                ? `no active rules firing · ${suppressedCount} suppressed`
+                : "no active rules firing"}
           </div>
         </div>
       </div>
@@ -761,7 +778,7 @@ export function IndexHealthOverview() {
             <span
               style={{ fontFamily: T.mono, fontSize: 11, color: T.fgFaint }}
             >
-              no findings
+              no active findings
             </span>
           )}
         </div>
@@ -807,7 +824,7 @@ export function IndexHealthOverview() {
             <span
               style={{ fontFamily: T.mono, fontSize: 11, color: T.fgFaint }}
             >
-              no findings
+              no active findings
             </span>
           )}
         </div>
@@ -880,6 +897,7 @@ function TargetFindingRow({
         <LintMetaTag tone={fnd.category === "safety" ? "danger" : undefined}>
           {fnd.category}
         </LintMetaTag>
+        <SuppressedFindingTag suppressed={fnd.suppressed} />
         {fnd.source === "extension" ? (
           <LintExtBadge extension={fnd.extension} />
         ) : null}
@@ -913,14 +931,43 @@ function TargetFindingRow({
   );
 }
 
-type SevFilter = "all" | LintSeverity;
+export type IndexHealthFilter = "all" | LintSeverity | "suppressed";
+
+/** Counts the exact retained-finding population selected by each filter. */
+export function indexHealthFilterCounts(
+  findings: readonly HealthFinding[],
+): Record<IndexHealthFilter, number> {
+  const active = findings.filter((finding) => !finding.suppressed);
+  const severity = byKind(active, "severity");
+  return {
+    all: findings.length,
+    error: severity.error ?? 0,
+    warning: severity.warning ?? 0,
+    info: severity.info ?? 0,
+    suppressed: findings.length - active.length,
+  };
+}
+
+/** Selects the same retained-finding population described by a filter count. */
+export function filterIndexHealthFindings(
+  findings: readonly HealthFinding[],
+  filter: IndexHealthFilter,
+): HealthFinding[] {
+  if (filter === "all") return [...findings];
+  if (filter === "suppressed") {
+    return findings.filter((finding) => finding.suppressed);
+  }
+  return findings.filter(
+    (finding) => !finding.suppressed && finding.severity === filter,
+  );
+}
 
 // ── Index-wide findings list (overview + filterable triage) ──────────────────
 // Mounted inside the Health screen's DevtoolsShell (see `IndexHealth`).
 export function IndexHealthList() {
   const idx = useIndexIndex();
   const all = idx.healthFindings;
-  const [sev, setSev] = useState<SevFilter>("all");
+  const [sev, setSev] = useState<IndexHealthFilter>("all");
   const [open, setOpen] = useState<Set<string>>(() => new Set());
   const toggle = (id: string) =>
     setOpen((s) => {
@@ -929,24 +976,19 @@ export function IndexHealthList() {
       else n.add(id);
       return n;
     });
-  const counts = byKind(
-    all.filter((f) => !f.suppressed),
-    "severity",
+  const counts = indexHealthFilterCounts(all);
+  const filtered = filterIndexHealthFindings(all, sev).sort(
+    (a, b) =>
+      (SEV_ORDER[b.severity] ?? 0) - (SEV_ORDER[a.severity] ?? 0) ||
+      a.category.localeCompare(b.category),
   );
-  const filtered = all
-    .filter((f) => sev === "all" || f.severity === sev)
-    .sort(
-      (a, b) =>
-        (SEV_ORDER[b.severity] ?? 0) - (SEV_ORDER[a.severity] ?? 0) ||
-        a.category.localeCompare(b.category),
-    );
 
   const Filter = ({
     id,
     label,
     n,
   }: {
-    id: SevFilter;
+    id: IndexHealthFilter;
     label: string;
     n: number;
   }) => {
@@ -972,7 +1014,9 @@ export function IndexHealthList() {
             : `inset 0 0 0 1px ${T.border}`,
         }}
       >
-        {id !== "all" && <LintSevDot severity={id} size={6} />}
+        {id !== "all" && id !== "suppressed" ? (
+          <LintSevDot severity={id} size={6} />
+        ) : null}
         {label}
         <span style={{ color: on ? T.crux : T.fgFaint }}>{n}</span>
       </button>
@@ -993,12 +1037,13 @@ export function IndexHealthList() {
       >
         <span style={{ fontSize: 15, fontWeight: 600 }}>All findings</span>
         <span style={{ display: "inline-flex", gap: 7, marginLeft: "auto" }}>
-          <Filter id="all" label="all" n={all.length} />
+          <Filter id="all" label="all" n={counts.all} />
           {counts.error ? (
             <Filter id="error" label="errors" n={counts.error} />
           ) : null}
           <Filter id="warning" label="warnings" n={counts.warning || 0} />
           <Filter id="info" label="info" n={counts.info || 0} />
+          <Filter id="suppressed" label="suppressed" n={counts.suppressed} />
         </span>
       </div>
       {filtered.length ? (

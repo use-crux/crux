@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { indexFactChips, type ViewDef } from "./adapt";
+import type { ProjectIndexData } from "@/types";
+import { buildIndex, indexFactChips, type ViewDef } from "./adapt";
 import { kindMeta } from "./kit";
 
 describe("indexFactChips", () => {
@@ -90,6 +91,52 @@ describe("kindMeta", () => {
     expect(kindMeta("rag.indexer")).toMatchObject({
       label: "Indexer",
       family: "capability",
+    });
+  });
+});
+
+describe("lint suppression projection", () => {
+  it("retains typed directive evidence in the all-findings health view", () => {
+    const index = buildIndex({
+      prompts: [],
+      contexts: [],
+      tools: [],
+      definitions: [],
+      relations: [],
+      diagnostics: [],
+      sources: [],
+      lintFindings: [
+        {
+          id: "lint:example",
+          severity: "warning",
+          ruleId: "example.rule",
+          category: "quality",
+          maturity: "stable",
+          confidence: "high",
+          profiles: ["recommended"],
+          title: "Example rule",
+          message: "Example finding",
+          rationale: "Example rationale",
+          relatedDefinitionIds: [],
+          evidence: [],
+          fixes: [],
+          docsUrl: "https://use-crux.dev/lint/example.rule",
+          suppressed: true,
+          suppressedBy: {
+            source: { file: "src/workflow.ts", line: 7, column: 3 },
+            scope: "next-line",
+            reason: "intentional handoff",
+          },
+        },
+      ],
+    } satisfies ProjectIndexData);
+
+    expect(index.lintCount).toBe(0);
+    expect(index.healthFindings).toHaveLength(1);
+    expect(index.healthFindings[0].suppressedBy).toEqual({
+      source: { file: "src/workflow.ts", line: 7, column: 3 },
+      scope: "next-line",
+      reason: "intentional handoff",
     });
   });
 });

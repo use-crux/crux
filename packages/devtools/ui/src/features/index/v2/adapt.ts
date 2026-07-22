@@ -15,6 +15,7 @@
 
 import type {
   IndexLintFinding,
+  IndexLintSuppressedBy,
   ContractFacts,
   ControlFacts,
   DataFacts,
@@ -685,10 +686,10 @@ export function toViewDef(
 }
 
 // ── lint view (adds a single-string `fix` over the fixes[] array) ────────────
-export interface LintView extends IndexLintFinding {
+export type LintView = IndexLintFinding & {
   /** First non-suppress fix description — the design's `finding.fix`. */
   fix: string;
-}
+};
 
 function toLintView(f: IndexLintFinding): LintView {
   const primaryFix = f.fixes.find((x) => x.kind !== "suppress") ?? f.fixes[0];
@@ -753,9 +754,9 @@ export interface HealthFinding {
   fixes: HealthFix[];
   suppression?: IndexLintFinding["suppression"];
   suppressed?: boolean;
-  suppressedBy?: { reason?: string } | null;
+  suppressedBy?: IndexLintSuppressedBy | null;
   docsUrl?: string;
-  sourceLoc?: { file: string; line: number };
+  sourceLoc?: IndexLintFinding["source"];
 }
 
 /** Rule descriptor derived from firing findings until the backend ships
@@ -978,7 +979,7 @@ export function buildIndex(index: ProjectIndexData): IndexIndex {
       fixes: f.fixes,
       suppression: f.suppression,
       suppressed: f.suppressed,
-      suppressedBy: f.suppressedBy ? { reason: f.suppressedBy.reason } : null,
+      suppressedBy: f.suppressedBy ?? null,
       docsUrl: f.docsUrl,
       sourceLoc: f.source,
     };

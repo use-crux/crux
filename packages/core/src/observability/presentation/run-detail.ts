@@ -29,6 +29,7 @@ import type {
   CruxCurrentCatalogComparison,
   CruxRunManifestResolution,
 } from "./manifest-resolution";
+import type { CruxCurrentProjectHealth } from "./project-health";
 
 /** Display metadata for a projected run-detail node or attached detail. */
 export interface CruxRunDetailDisplay {
@@ -293,6 +294,8 @@ export interface CruxRunDetail {
   manifest?: CruxRunManifestResolution;
   /** Separately labeled comparison against the current checkout, when known. */
   currentCatalog?: CruxCurrentCatalogComparison;
+  /** Current authored lint context; never historical evidence or run status. */
+  currentProjectHealth?: CruxCurrentProjectHealth;
   debug?: unknown;
   /** Per-lifecycle projections retained inside this operation family. */
   memberRuns: CruxOperationRunDetail[];

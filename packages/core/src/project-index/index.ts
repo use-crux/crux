@@ -13,7 +13,25 @@ import type {
   EmbeddingCallFacts,
   EmbeddingFacts,
   RagIndexerFacts,
-} from './embedding-facts'
+} from "./embedding-facts";
+import {
+  CruxLintConfigSchema,
+  IndexLintFindingSchema,
+  IndexRuleDescriptorSchema,
+} from "./lint-schemas";
+import type {
+  CruxLintConfig,
+  IndexLintFinding,
+  IndexRuleDescriptor,
+} from "./lint-types";
+import {
+  SourceLocationSchema,
+  SourceRangeSchema,
+  SourceSnippetSchema,
+  type SourceLocation,
+  type SourceRange,
+  type SourceSnippet,
+} from "./source";
 
 export type {
   EmbeddingCallFacts,
@@ -21,48 +39,17 @@ export type {
   EmbeddingIdentityInputs,
   EmbeddingSpaceFacts,
   RagIndexerFacts,
-} from './embedding-facts'
-import {
-  IndexFactKindSchema,
-  IndexRuleBudgetSchema,
-  IndexRuleFidelitySchema,
-  IndexRulePhaseSchema,
-  type IndexFactKind,
-  type IndexRuleBudget,
-  type IndexRuleFidelity,
-  type IndexRulePhase,
-} from "./rule-manifest";
-
-export { captureSource } from "./source";
+} from "./embedding-facts";
 export * from "./definition-kind-coverage";
+export * from "./lint-schemas";
+export * from "./lint-types";
 export * from "./manifest";
 export * from "./project-model";
 export * from "./rule-manifest";
+export * from "./source";
 
 /** JSON Schema representation of a Zod schema. */
 export type JsonSchema = Record<string, unknown>;
-
-export interface SourceLocation {
-  file: string;
-  line: number;
-  column?: number;
-  function?: string;
-}
-
-export interface SourceRange {
-  file: string;
-  startLine: number;
-  endLine?: number;
-  startColumn?: number;
-  endColumn?: number;
-}
-
-export interface SourceSnippet {
-  source: string;
-  language?: string;
-  range: SourceRange;
-  truncated?: boolean;
-}
 
 export type DefinitionFidelity = "resolved" | "partial" | "error";
 
@@ -1044,128 +1031,6 @@ export interface IndexDiagnostic {
   suggestedFix?: string;
 }
 
-export type CruxLintCategory =
-  | "contracts"
-  | "observability"
-  | "evals"
-  | "safety"
-  | "memory"
-  | "runtime"
-  | "composition"
-  | "quality";
-
-export type CruxLintMaturity = "stable" | "preview" | "experimental";
-
-export type CruxLintConfidence = "high" | "medium" | "low";
-
-export type CruxLintProfile = "recommended" | "strict" | "experimental";
-
-export type CruxLintSelectedProfile = "off" | CruxLintProfile;
-
-export interface CruxLintRuleConfig {
-  /** Disable a rule for this project. Prefer source suppressions for one-off exceptions. */
-  enabled?: boolean;
-  /** Override a rule's displayed severity for this project. */
-  severity?: IndexLintFinding["severity"];
-}
-
-export interface CruxLintConfig {
-  /** Which rule profile the dev server and index health views should expose. @default 'recommended' */
-  profile?: CruxLintSelectedProfile;
-  /** Project-level rule overrides keyed by rule id. */
-  rules?: Record<string, CruxLintRuleConfig>;
-}
-
-export interface IndexLintEvidence {
-  kind: "definition" | "relation" | "quality" | "runtime" | "source";
-  label: string;
-  description?: string;
-  definitionId?: string;
-  relationId?: string;
-  source?: SourceLocation;
-  data?: Record<string, unknown>;
-}
-
-export interface IndexLintFix {
-  title: string;
-  description: string;
-  kind: "manual" | "docs" | "config" | "suppress" | "code-action";
-  docsUrl?: string;
-  command?: string;
-  suppression?: string;
-}
-
-export interface IndexLintFinding {
-  id: string;
-  severity: "info" | "warning" | "error";
-  ruleId: string;
-  category: CruxLintCategory;
-  maturity: CruxLintMaturity;
-  confidence: CruxLintConfidence;
-  profiles: CruxLintProfile[];
-  title: string;
-  message: string;
-  rationale: string;
-  impact?: string;
-  source?: SourceLocation;
-  primaryDefinitionId?: string;
-  relatedDefinitionIds: string[];
-  affectedDefinitionIds?: string[];
-  evidence: IndexLintEvidence[];
-  fixes: IndexLintFix[];
-  docsUrl: string;
-  suppression?: {
-    supported: boolean;
-    directive: string;
-    scope: "next-line" | "line" | "file";
-  };
-  suppressed?: boolean;
-  suppressedBy?: {
-    source: SourceLocation;
-    reason?: string;
-  };
-  propagatedDefinitionIds?: string[];
-  propagationPaths?: Array<{
-    fromDefinitionId: string;
-    toDefinitionId: string;
-    relationTypes: string[];
-  }>;
-}
-
-export type AnalysisTier = "syntax" | "index" | "semantic";
-
-export interface IndexRuleDescriptor {
-  id: string;
-  source: "builtin" | "extension";
-  extension?: {
-    name: string;
-    version?: string;
-  };
-  severity?: IndexLintFinding["severity"];
-  category?: CruxLintCategory;
-  maturity?: CruxLintMaturity;
-  confidence?: CruxLintConfidence;
-  profiles?: CruxLintProfile[];
-  title: string;
-  description: string;
-  rationale?: string;
-  impact?: string;
-  docsUrl?: string;
-  fixes?: IndexLintFix[];
-  suppression?: {
-    supported: boolean;
-    scope: "next-line" | "line" | "file";
-    directive?: string;
-  };
-  phase?: IndexRulePhase;
-  requires?: IndexFactKind[];
-  fidelity?: IndexRuleFidelity;
-  optionSchema?: unknown;
-  messageIds?: string[];
-  defaultOptions?: unknown;
-  budget?: IndexRuleBudget;
-}
-
 export interface IndexSourceFile {
   /** Absolute source file path represented by this Project Index row. */
   file: string;
@@ -1309,28 +1174,6 @@ export interface ProjectIndexShard {
 }
 
 export const JsonSchemaSchema = z.record(z.string(), z.unknown());
-
-export const SourceLocationSchema = z.object({
-  file: z.string(),
-  line: z.number(),
-  column: z.number().optional(),
-  function: z.string().optional(),
-});
-
-export const SourceRangeSchema = z.object({
-  file: z.string(),
-  startLine: z.number(),
-  endLine: z.number().optional(),
-  startColumn: z.number().optional(),
-  endColumn: z.number().optional(),
-});
-
-export const SourceSnippetSchema = z.object({
-  source: z.string(),
-  language: z.string().optional(),
-  range: SourceRangeSchema,
-  truncated: z.boolean().optional(),
-});
 
 export const ProjectIdentitySchema = z.object({
   root: z.string(),
@@ -1839,150 +1682,6 @@ export const IndexDiagnosticSchema = z.object({
   relatedDefinitionIds: z.array(z.string()).optional(),
   suggestedFix: z.string().optional(),
 }) satisfies z.ZodType<IndexDiagnostic>;
-
-export const CruxLintCategorySchema = z.enum([
-  "contracts",
-  "observability",
-  "evals",
-  "safety",
-  "memory",
-  "runtime",
-  "composition",
-  "quality",
-]);
-
-export const CruxLintMaturitySchema = z.enum([
-  "stable",
-  "preview",
-  "experimental",
-]);
-
-export const CruxLintConfidenceSchema = z.enum(["high", "medium", "low"]);
-
-export const CruxLintProfileSchema = z.enum([
-  "recommended",
-  "strict",
-  "experimental",
-]);
-
-export const CruxLintSelectedProfileSchema = z.enum([
-  "off",
-  "recommended",
-  "strict",
-  "experimental",
-]);
-
-export const CruxLintRuleConfigSchema = z.object({
-  enabled: z.boolean().optional(),
-  severity: z.enum(["info", "warning", "error"]).optional(),
-}) satisfies z.ZodType<CruxLintRuleConfig>;
-
-export const CruxLintConfigSchema = z.object({
-  profile: CruxLintSelectedProfileSchema.optional(),
-  rules: z.record(z.string(), CruxLintRuleConfigSchema).optional(),
-}) satisfies z.ZodType<CruxLintConfig>;
-
-export const IndexLintEvidenceSchema = z.object({
-  kind: z.enum(["definition", "relation", "quality", "runtime", "source"]),
-  label: z.string(),
-  description: z.string().optional(),
-  definitionId: z.string().optional(),
-  relationId: z.string().optional(),
-  source: SourceLocationSchema.optional(),
-  data: z.record(z.string(), z.unknown()).optional(),
-}) satisfies z.ZodType<IndexLintEvidence>;
-
-export const IndexLintFixSchema = z.object({
-  title: z.string(),
-  description: z.string(),
-  kind: z.enum(["manual", "docs", "config", "suppress", "code-action"]),
-  docsUrl: z.string().optional(),
-  command: z.string().optional(),
-  suppression: z.string().optional(),
-}) satisfies z.ZodType<IndexLintFix>;
-
-export const IndexLintFindingSchema = z.object({
-  id: z.string(),
-  severity: z.enum(["info", "warning", "error"]),
-  ruleId: z.string(),
-  category: CruxLintCategorySchema,
-  maturity: CruxLintMaturitySchema,
-  confidence: CruxLintConfidenceSchema,
-  profiles: z.array(CruxLintProfileSchema),
-  title: z.string(),
-  message: z.string(),
-  rationale: z.string(),
-  impact: z.string().optional(),
-  source: SourceLocationSchema.optional(),
-  primaryDefinitionId: z.string().optional(),
-  relatedDefinitionIds: z.array(z.string()),
-  affectedDefinitionIds: z.array(z.string()).optional(),
-  evidence: z.array(IndexLintEvidenceSchema),
-  fixes: z.array(IndexLintFixSchema),
-  docsUrl: z.string(),
-  suppression: z
-    .object({
-      supported: z.boolean(),
-      directive: z.string(),
-      scope: z.enum(["next-line", "line", "file"]),
-    })
-    .optional(),
-  suppressed: z.boolean().optional(),
-  suppressedBy: z
-    .object({
-      source: SourceLocationSchema,
-      reason: z.string().optional(),
-    })
-    .optional(),
-  propagatedDefinitionIds: z.array(z.string()).optional(),
-  propagationPaths: z
-    .array(
-      z.object({
-        fromDefinitionId: z.string(),
-        toDefinitionId: z.string(),
-        relationTypes: z.array(z.string()),
-      }),
-    )
-    .optional(),
-}) satisfies z.ZodType<IndexLintFinding>;
-
-export const AnalysisTierSchema = z.enum(["syntax", "index", "semantic"]);
-
-export const IndexRuleDescriptorSchema = z.object({
-  id: z.string(),
-  source: z.enum(["builtin", "extension"]),
-  extension: z
-    .object({
-      name: z.string(),
-      version: z.string().optional(),
-    })
-    .optional(),
-  severity: z.enum(["info", "warning", "error"]).optional(),
-  category: CruxLintCategorySchema.optional(),
-  maturity: CruxLintMaturitySchema.optional(),
-  confidence: CruxLintConfidenceSchema.optional(),
-  profiles: z.array(CruxLintProfileSchema).optional(),
-  title: z.string(),
-  description: z.string(),
-  rationale: z.string().optional(),
-  impact: z.string().optional(),
-  docsUrl: z.string().optional(),
-  fixes: z.array(IndexLintFixSchema).optional(),
-  suppression: z
-    .object({
-      supported: z.boolean(),
-      scope: z.enum(["next-line", "line", "file"]),
-      directive: z.string().optional(),
-    })
-    .optional(),
-  phase: IndexRulePhaseSchema.optional(),
-  requires: z.array(IndexFactKindSchema).optional(),
-  fidelity: IndexRuleFidelitySchema.optional(),
-  optionSchema: z.unknown().optional(),
-  messageIds: z.array(z.string()).optional(),
-  defaultOptions: z.unknown().optional(),
-  budget: IndexRuleBudgetSchema.optional(),
-}) satisfies z.ZodType<IndexRuleDescriptor>;
 
 export const IndexSourceFileSchema = z.object({
   file: z.string(),

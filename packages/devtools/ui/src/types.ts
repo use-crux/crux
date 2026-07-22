@@ -812,7 +812,7 @@ export interface IndexDiagnostic {
   suggestedFix?: string;
 }
 
-export interface IndexLintFinding {
+interface IndexLintFindingBase {
   id: string;
   severity: "info" | "warning" | "error";
   ruleId: string;
@@ -865,11 +865,6 @@ export interface IndexLintFinding {
     directive: string;
     scope: "next-line" | "line" | "file";
   };
-  suppressed?: boolean;
-  suppressedBy?: {
-    source: { file: string; line: number; column?: number; function?: string };
-    reason?: string;
-  };
   propagatedDefinitionIds?: string[];
   propagationPaths?: Array<{
     fromDefinitionId: string;
@@ -877,6 +872,24 @@ export interface IndexLintFinding {
     relationTypes: string[];
   }>;
 }
+
+export type IndexLintSuppressionScope = "next-line" | "line" | "file";
+
+export interface IndexLintSuppressedBy {
+  source: { file: string; line: number; column?: number; function?: string };
+  scope: IndexLintSuppressionScope;
+  reason?: string;
+}
+
+export type IndexLintFinding =
+  | (IndexLintFindingBase & {
+      suppressed?: false;
+      suppressedBy?: never;
+    })
+  | (IndexLintFindingBase & {
+      suppressed: true;
+      suppressedBy: IndexLintSuppressedBy;
+    });
 
 export interface IndexSourceFile {
   file: string;

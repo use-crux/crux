@@ -3,7 +3,9 @@ use serde_json::json;
 use crate::finalizer::run::{
     finalize_static_index_values_with_lint_facts, finalize_static_index_values_with_lint_options,
 };
-use crate::lints::filter::{StaticIndexLintOptions, StaticIndexLintSuppression};
+use crate::lints::filter::{
+    StaticIndexLintOptions, StaticIndexLintSuppression, StaticIndexLintSuppressionScope,
+};
 use crate::relation::model::built_in_relation_policy_table;
 
 #[test]
@@ -145,14 +147,29 @@ fn finalize_suppresses_extension_lint_findings_with_rule_descriptors() {
                 file: file.to_string(),
                 line: 1,
                 column: 4,
-                scope: "next-line".to_string(),
+                scope: StaticIndexLintSuppressionScope::NextLine,
                 rule_id: "@acme/rules/require-owner".to_string(),
+                reason: Some("intentional reason".to_string()),
             }],
             ..StaticIndexLintOptions::default()
         },
     );
 
-    assert_eq!(output.counts.lint_findings, 0);
+    assert_eq!(output.counts.lint_findings, 1);
+    let finding = &output.model.facts.lint_findings[0];
+    assert!(finding.suppressed);
+    let suppressed_by = finding
+        .suppressed_by
+        .as_ref()
+        .expect("matched finding has suppression metadata");
+    assert_eq!(suppressed_by.source.file, file);
+    assert_eq!(suppressed_by.source.line, 1);
+    assert_eq!(suppressed_by.source.column, Some(4));
+    assert_eq!(
+        suppressed_by.scope,
+        crux_indexer_facts::StaticIndexLintSuppressionScope::NextLine
+    );
+    assert_eq!(suppressed_by.reason.as_deref(), Some("intentional reason"));
     assert!(
         output
             .model

@@ -90,6 +90,9 @@ func (w *Worker) StaticIndexFinalizeStream(
 	request protocol.FinalizeRequest,
 	handle protocol.FinalizeStreamHandler,
 ) (protocol.FinalizeResponse, error) {
+	if err := protocol.ValidateLintSuppressions(request.LintSuppressions); err != nil {
+		return protocol.FinalizeResponse{}, err
+	}
 	if w == nil || w.Process() == nil {
 		return protocol.FinalizeResponse{}, fmt.Errorf("project Static Index compiler is not configured")
 	}
@@ -162,6 +165,9 @@ func (w *Worker) StaticIndexCompileStream(
 	request protocol.CompileRequest,
 	handle protocol.FinalizeStreamHandler,
 ) (protocol.FinalizeResponse, error) {
+	if err := protocol.ValidateLintSuppressions(request.LintSuppressions); err != nil {
+		return protocol.FinalizeResponse{}, err
+	}
 	if w == nil || w.Process() == nil {
 		return protocol.FinalizeResponse{}, fmt.Errorf("project Static Index compiler is not configured")
 	}

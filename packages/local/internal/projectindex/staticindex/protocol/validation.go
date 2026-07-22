@@ -24,3 +24,14 @@ func ValidateResponse(protocolVersion int, method, wantMethod string) error {
 	}
 	return nil
 }
+
+func ValidateLintSuppressions(suppressions []LintSuppression) error {
+	for index, suppression := range suppressions {
+		switch suppression.Scope {
+		case LintSuppressionNextLine, LintSuppressionLine, LintSuppressionFile:
+		default:
+			return fmt.Errorf("Static Index lint suppression %d uses unsupported scope %q", index, suppression.Scope)
+		}
+	}
+	return nil
+}

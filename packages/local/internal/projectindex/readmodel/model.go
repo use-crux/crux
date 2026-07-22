@@ -60,7 +60,6 @@ func (m *Model) Index() store.IndexData {
 		return store.IndexData{}
 	}
 	index := m.index.Snapshot()
-	applyIndexLintPolicy(&index)
 	index = enrichDefinitionUpdated(index, m.stat)
 	index = enrichSafetyTargets(index)
 	return enrichStorage(index)

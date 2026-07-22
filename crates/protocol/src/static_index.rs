@@ -196,14 +196,25 @@ pub struct StaticIndexAnalyzeFile {
 }
 
 /// Prepared Static Index lint suppression directive.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum StaticIndexLintSuppressionScope {
+    NextLine,
+    Line,
+    File,
+}
+
+/// Prepared Static Index lint suppression directive.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StaticIndexLintSuppression {
     pub file: String,
     pub line: usize,
     pub column: usize,
-    pub scope: String,
+    pub scope: StaticIndexLintSuppressionScope,
     pub rule_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
 }
 
 /// `staticIndexPrepare` request.
@@ -343,4 +354,38 @@ pub struct StaticIndexFinalizeResponse {
     pub method: StaticIndexMethod,
     pub events: Vec<Value>,
     pub telemetry: StaticIndexTelemetry,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{StaticIndexLintSuppression, StaticIndexLintSuppressionScope};
+    use serde_json::json;
+
+    #[test]
+    fn lint_suppression_rejects_unknown_scope() {
+        let result = serde_json::from_value::<StaticIndexLintSuppression>(json!({
+            "file": "/repo/src/workflow.ts",
+            "line": 1,
+            "column": 4,
+            "scope": "next-lineage",
+            "ruleId": "rule.id"
+        }));
+
+        assert!(result.is_err(), "unknown scope decoded as {result:?}");
+    }
+
+    #[test]
+    fn lint_suppression_accepts_omitted_reason() {
+        let suppression = serde_json::from_value::<StaticIndexLintSuppression>(json!({
+            "file": "/repo/src/workflow.ts",
+            "line": 1,
+            "column": 4,
+            "scope": "next-line",
+            "ruleId": "rule.id"
+        }))
+        .expect("suppression without reason should decode");
+
+        assert_eq!(suppression.scope, StaticIndexLintSuppressionScope::NextLine);
+        assert_eq!(suppression.reason, None);
+    }
 }

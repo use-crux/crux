@@ -174,6 +174,9 @@ func lintGateFailures(findings []api.IndexLintFinding, failOn string) ([]api.Ind
 	}
 	failures := make([]api.IndexLintFinding, 0)
 	for _, finding := range findings {
+		if finding.Suppressed {
+			continue
+		}
 		rank, ok := lintSeverityRank[finding.Severity]
 		if !ok {
 			continue

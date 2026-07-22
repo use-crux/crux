@@ -10,24 +10,16 @@ import (
 
 const suppressionPrefix = "crux-lint-disable-"
 
-// SuppressionsFromSourceText returns prepared lint suppressions from source
-// text that the Static Index source profile already loaded.
-func SuppressionsFromSourceText(sourceTextByFile map[string]string) []protocol.LintSuppression {
-	files := make([]string, 0, len(sourceTextByFile))
-	for file := range sourceTextByFile {
-		files = append(files, file)
-	}
-	sort.Strings(files)
-
-	out := []protocol.LintSuppression{}
-	for _, file := range files {
-		out = append(out, ParseSuppressions(file, sourceTextByFile[file])...)
-	}
-	return out
+var suppressionScopeCandidates = []protocol.LintSuppressionScope{
+	protocol.LintSuppressionNextLine,
+	protocol.LintSuppressionLine,
+	protocol.LintSuppressionFile,
 }
 
 // SuppressionsFromFiles returns prepared lint suppressions from source files.
 func SuppressionsFromFiles(files []string) []protocol.LintSuppression {
+	files = append([]string(nil), files...)
+	sort.Strings(files)
 	out := []protocol.LintSuppression{}
 	for _, file := range files {
 		source, err := os.ReadFile(file)
@@ -56,11 +48,12 @@ func parseSuppressionLine(file string, lineNumber int, line string) (protocol.Li
 		return protocol.LintSuppression{}, false
 	}
 	rest := strings.TrimLeft(line[column+len(suppressionPrefix):], " \t")
-	scope := ""
-	for _, candidate := range []string{"next-line", "line", "file"} {
-		if strings.HasPrefix(rest, candidate) {
+	var scope protocol.LintSuppressionScope
+	for _, candidate := range suppressionScopeCandidates {
+		token := string(candidate)
+		if strings.HasPrefix(rest, token) && hasScopeDelimiter(rest[len(token):]) {
 			scope = candidate
-			rest = strings.TrimLeft(rest[len(candidate):], " \t")
+			rest = strings.TrimLeft(rest[len(token):], " \t")
 			break
 		}
 	}
@@ -77,13 +70,23 @@ func parseSuppressionLine(file string, lineNumber int, line string) (protocol.Li
 	if ruleLength == 0 {
 		return protocol.LintSuppression{}, false
 	}
+	reason := ""
+	tail := strings.TrimSpace(rest[ruleLength:])
+	if strings.HasPrefix(tail, "--") {
+		reason = strings.TrimSpace(tail[2:])
+	}
 	return protocol.LintSuppression{
 		File:   file,
 		Line:   lineNumber,
 		Column: column + 1,
 		Scope:  scope,
 		RuleID: rest[:ruleLength],
+		Reason: reason,
 	}, true
+}
+
+func hasScopeDelimiter(rest string) bool {
+	return len(rest) > 0 && (rest[0] == ' ' || rest[0] == '\t')
 }
 
 func isRuleCharacter(character rune) bool {

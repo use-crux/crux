@@ -102,6 +102,8 @@ impl StaticIndexLintBuilder {
             rule_id: input.rule_id.to_string(),
             title: descriptor.title.clone(),
             message: input.message,
+            suppressed: false,
+            suppressed_by: None,
             extra,
         })
     }

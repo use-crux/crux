@@ -3,12 +3,18 @@ package screens
 import "github.com/use-crux/crux/packages/local/internal/api"
 
 func (s *Index) lintFindingsForDefinition(definitionID string) []api.IndexLintFinding {
-	index := s.indexData()
+	return activeLintFindingsForDefinition(s.indexData(), definitionID)
+}
+
+func activeLintFindingsForDefinition(index api.IndexData, definitionID string) []api.IndexLintFinding {
 	if definitionID == "" || len(index.LintFindings) == 0 {
 		return nil
 	}
 	findings := make([]api.IndexLintFinding, 0)
 	for _, finding := range index.LintFindings {
+		if finding.Suppressed {
+			continue
+		}
 		if indexLintFindingReferencesDefinition(finding, definitionID) {
 			findings = append(findings, finding)
 		}

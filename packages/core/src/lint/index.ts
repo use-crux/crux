@@ -9,7 +9,9 @@ export type {
   IndexLintEvidence,
   IndexLintFix,
   IndexLintFinding,
-} from '../project-index'
+  IndexLintSuppressedBy,
+  IndexLintSuppressionScope,
+} from "../project-index";
 
 export {
   CruxLintCategorySchema,
@@ -22,4 +24,6 @@ export {
   IndexLintEvidenceSchema,
   IndexLintFixSchema,
   IndexLintFindingSchema,
-} from '../project-index'
+  IndexLintSuppressedBySchema,
+  IndexLintSuppressionScopeSchema,
+} from "../project-index";

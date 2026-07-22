@@ -14,12 +14,13 @@ use crate::finalizer::events::{
 use crate::finalizer::run::finalize_static_index_values_with_lint_facts;
 use crate::lints::filter::{
     StaticIndexLintOptions, StaticIndexLintSuppression as PreparedLintSuppression,
+    StaticIndexLintSuppressionScope as PreparedLintSuppressionScope,
 };
 use crate::protocol::static_index::{
     STATIC_INDEX_PROTOCOL_VERSION, StaticIndexAnalyzeRequest, StaticIndexAnalyzeResponse,
     StaticIndexCompileRequest, StaticIndexFactTelemetry, StaticIndexFinalizeRequest,
-    StaticIndexFinalizeResponse, StaticIndexMethod, StaticIndexPlan, StaticIndexPrepareRequest,
-    StaticIndexPrepareResponse,
+    StaticIndexFinalizeResponse, StaticIndexLintSuppressionScope as ProtocolLintSuppressionScope,
+    StaticIndexMethod, StaticIndexPlan, StaticIndexPrepareRequest, StaticIndexPrepareResponse,
 };
 use crate::relation::model::relation_policy_table_from_value_with_builtins;
 use crate::telemetry::{
@@ -132,8 +133,15 @@ pub fn finalize(request: StaticIndexFinalizeRequest) -> StaticIndexFinalizeRespo
                 file: suppression.file.clone(),
                 line: suppression.line,
                 column: suppression.column,
-                scope: suppression.scope.clone(),
+                scope: match suppression.scope {
+                    ProtocolLintSuppressionScope::NextLine => {
+                        PreparedLintSuppressionScope::NextLine
+                    }
+                    ProtocolLintSuppressionScope::Line => PreparedLintSuppressionScope::Line,
+                    ProtocolLintSuppressionScope::File => PreparedLintSuppressionScope::File,
+                },
                 rule_id: suppression.rule_id.clone(),
+                reason: suppression.reason.clone(),
             })
             .collect(),
     };

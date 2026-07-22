@@ -173,6 +173,7 @@ func registerObservabilityRoutesWithReview(mux *http.ServeMux, service *observab
 			index := catalog.ProjectIndexSnapshot()
 			comparison := observability.CompareCurrentCatalog(detail.DefinitionRefs, index)
 			detail.CurrentCatalog = &comparison
+			detail.CurrentProjectHealth = observability.CompareCurrentProjectHealth(detail.DefinitionRefs, index)
 		}
 		writeObservabilityRead(w, r, detail, err)
 	})

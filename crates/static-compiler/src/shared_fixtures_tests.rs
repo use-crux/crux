@@ -6,7 +6,8 @@ use crate::pipeline;
 use crate::protocol::static_index::{
     StaticIndexAnalyzeRequest, StaticIndexAnalyzeResponse, StaticIndexCompileRequest,
     StaticIndexFinalizeRequest, StaticIndexFinalizeResponse, StaticIndexIdentityManifest,
-    StaticIndexMethod, StaticIndexPrepareRequest, StaticIndexPrepareResponse,
+    StaticIndexLintSuppressionScope, StaticIndexMethod, StaticIndexPrepareRequest,
+    StaticIndexPrepareResponse,
 };
 use crate::protocol::{StaticSourceMatch, StaticSyntaxFileRecord, StaticSyntaxValue};
 use crate::relation::policy::{StaticIndexRelationPolicy, StaticIndexRelationPolicyTable};
@@ -129,12 +130,33 @@ fn shared_static_index_protocol_fixture_decodes_and_finalizes() {
 
     let finalize: StaticIndexFinalizeRequest = serde_json::from_value(fixture.requests[2].clone())
         .expect("shared finalize request should decode");
+    assert_eq!(finalize.lint_suppressions.len(), 1);
+    assert_eq!(
+        finalize.lint_suppressions[0].scope,
+        StaticIndexLintSuppressionScope::Line
+    );
+    assert_eq!(
+        finalize.lint_suppressions[0].reason.as_deref(),
+        Some("shared fixture reason")
+    );
     let finalize_response = pipeline::finalize(finalize);
     assert_eq!(finalize_response.method, StaticIndexMethod::Finalize);
     assert_eq!(finalize_response.telemetry.facts.definitions, 1);
     assert_eq!(finalize_response.telemetry.facts.source_refs, 1);
     assert_eq!(finalize_response.telemetry.facts.diagnostics, 1);
-    assert_eq!(finalize_response.telemetry.facts.lint_findings, 1);
+    assert_eq!(finalize_response.telemetry.facts.lint_findings, 2);
+    let suppressed = event_fact(
+        &finalize_response.events,
+        "lintFindings",
+        "lint:prompt.missing_input_schema:suppressed-contract",
+    );
+    assert_eq!(suppressed["suppressed"], true);
+    assert_eq!(suppressed["suppressedBy"]["scope"], "line");
+    assert_eq!(
+        suppressed["suppressedBy"]["reason"],
+        "shared fixture reason"
+    );
+    assert_eq!(suppressed["suppressedBy"]["source"]["line"], 1);
     assert_eq!(finalize_response.telemetry.facts.sources, 1);
     assert_eq!(finalize_response.telemetry.facts.source_graph, 1);
     assert_eq!(definition_source_ref_count(&finalize_response.events), 1);
@@ -510,4 +532,21 @@ fn definition_source_ref_count(events: &[Value]) -> usize {
         .and_then(Value::as_array)
         .map(Vec::len)
         .unwrap_or(0)
+}
+
+fn event_fact<'a>(events: &'a [Value], kind: &str, id: &str) -> &'a Value {
+    events
+        .iter()
+        .filter_map(|event| event.get("facts").and_then(Value::as_array))
+        .flatten()
+        .find(|envelope| {
+            envelope.get("kind").and_then(Value::as_str) == Some(kind)
+                && envelope
+                    .get("fact")
+                    .and_then(|fact| fact.get("id"))
+                    .and_then(Value::as_str)
+                    == Some(id)
+        })
+        .and_then(|envelope| envelope.get("fact"))
+        .unwrap_or_else(|| panic!("missing {kind} fact {id}"))
 }

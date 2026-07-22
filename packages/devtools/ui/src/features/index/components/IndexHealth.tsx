@@ -41,36 +41,54 @@ function fmtIndexedAt(iso: string | undefined): string | undefined {
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
+export function indexHealthSubtitle(
+  index: IndexIndex,
+  indexedAt: string | undefined,
+): string {
+  const active = index.healthFindings.filter((finding) => !finding.suppressed);
+  const suppressedCount = index.healthFindings.length - active.length;
+  const indexed = fmtIndexedAt(indexedAt);
+
+  if (active.length === 0) {
+    return [
+      suppressedCount > 0
+        ? "0 active findings"
+        : "No active findings — every indexed definition passes its applicable rules.",
+      suppressedCount > 0 && `${suppressedCount} suppressed`,
+      indexed && `indexed ${indexed}`,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  }
+
+  const affected = new Set(
+    active.map((finding) => finding.primaryDefinitionId).filter(Boolean),
+  ).size;
+  const warnCount = active.filter(
+    (finding) => finding.severity === "warning" || finding.severity === "error",
+  ).length;
+  const infoCount = active.filter(
+    (finding) => finding.severity === "info",
+  ).length;
+
+  return [
+    `${active.length} active finding${active.length === 1 ? "" : "s"} across ${affected} definition${affected === 1 ? "" : "s"}`,
+    warnCount > 0 && `${warnCount} warning${warnCount === 1 ? "" : "s"}`,
+    infoCount > 0 && `${infoCount} info`,
+    suppressedCount > 0 && `${suppressedCount} suppressed`,
+    indexed && `indexed ${indexed}`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
 export function IndexHealth({
   index,
   indexedAt,
   connected,
   tabs,
 }: IndexHealthProps) {
-  const findings = index.healthFindings;
-  const active = findings.filter((f) => !f.suppressed);
-  const suppressedCount = findings.length - active.length;
-  const affected = new Set(
-    active.map((f) => f.primaryDefinitionId).filter(Boolean),
-  ).size;
-  const warnCount = active.filter(
-    (f) => f.severity === "warning" || f.severity === "error",
-  ).length;
-  const infoCount = active.filter((f) => f.severity === "info").length;
-  const indexed = fmtIndexedAt(indexedAt);
-
-  const subtitle =
-    active.length === 0
-      ? "No findings — every indexed definition passes its applicable rules."
-      : [
-          `${active.length} finding${active.length === 1 ? "" : "s"} across ${affected} definition${affected === 1 ? "" : "s"}`,
-          warnCount > 0 && `${warnCount} warning${warnCount === 1 ? "" : "s"}`,
-          infoCount > 0 && `${infoCount} info`,
-          suppressedCount > 0 && `${suppressedCount} suppressed`,
-          indexed && `indexed ${indexed}`,
-        ]
-          .filter(Boolean)
-          .join(" · ");
+  const subtitle = indexHealthSubtitle(index, indexedAt);
 
   return (
     <DevtoolsShell

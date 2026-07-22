@@ -253,11 +253,18 @@ func TestHTTPServer_cors_headers(t *testing.T) {
 
 func TestHTTPServer_index_endpoint(t *testing.T) {
 	s := store.NewStore()
-	s.SetIndex(
-		[]store.PromptMeta{{ID: "p1"}},
-		[]store.ContextMeta{{ID: "c1"}},
-		[]store.ToolMeta{{Name: "tool1"}},
-	)
+	s.SetIndexData(store.IndexData{
+		SchemaVersion: 1,
+		Prompts:       []store.PromptMeta{{ID: "p1"}},
+		Contexts:      []store.ContextMeta{{ID: "c1"}},
+		Tools:         []store.ToolMeta{{Name: "tool1"}},
+		LintFindings: []store.IndexLintFinding{{
+			ID: "suppressed", Suppressed: true,
+			SuppressedBy: &store.IndexLintSuppressedBy{
+				Source: &store.SourceLoc{File: "src/workflow.ts", Line: 7}, Scope: "next-line", Reason: "intentional handoff",
+			},
+		}},
+	})
 
 	srv := newTestHTTPServer(t, s)
 	ts := httptest.NewServer(srv)
@@ -275,6 +282,9 @@ func TestHTTPServer_index_endpoint(t *testing.T) {
 	}
 	if len(index.Prompts) != 1 {
 		t.Errorf("Prompts = %d, want 1", len(index.Prompts))
+	}
+	if len(index.LintFindings) != 1 || index.LintFindings[0].SuppressedBy == nil || index.LintFindings[0].SuppressedBy.Scope != "next-line" {
+		t.Errorf("LintFindings = %+v, want retained suppression metadata", index.LintFindings)
 	}
 }
 

@@ -61,6 +61,26 @@ func TestCheckJSONV1IsDeterministicAndGatesSelectedFindings(t *testing.T) {
 	}
 }
 
+func TestCheckSummaryAndGateIgnoreDisplayedSuppressedFindings(t *testing.T) {
+	report, failures, err := buildCheckReport(oneshot.Result{Index: store.IndexData{
+		LintFindings: []store.IndexLintFinding{{
+			ID: "suppressed", Severity: "error", Profiles: []string{"recommended"}, Suppressed: true,
+			SuppressedBy: &store.IndexLintSuppressedBy{
+				Source: &store.SourceLoc{File: "src/workflow.ts", Line: 7}, Scope: "next-line",
+			},
+		}},
+	}}, checkOptions{profile: "recommended", includeSuppressed: true, failOn: "error"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(report.Findings) != 1 {
+		t.Fatalf("displayed findings = %+v, want retained suppressed row", report.Findings)
+	}
+	if len(failures) != 0 || report.Summary.GateFailed || report.Summary.Findings != 0 || report.Summary.Errors != 0 {
+		t.Fatalf("failures/summary = %+v/%+v, want active-only summary and gate", failures, report.Summary)
+	}
+}
+
 func TestRunCheckUsesExitZeroOneAndTwoContract(t *testing.T) {
 	for _, tc := range []struct {
 		name       string

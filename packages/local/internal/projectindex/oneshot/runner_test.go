@@ -48,7 +48,7 @@ func TestRunnerMatchesDaemonServicePipeline(t *testing.T) {
 			if !reflect.DeepEqual(normalizedIndex(t, daemonIndex), normalizedIndex(t, result.Index)) {
 				t.Fatalf("daemon and one-shot normalized indexes differ\ndaemon=%#v\none-shot=%#v", normalizedIndex(t, daemonIndex), normalizedIndex(t, result.Index))
 			}
-			if tc.semanticErr == nil && (len(result.Index.LintFindings) != 2 || !result.Index.LintFindings[1].Suppressed) {
+			if tc.semanticErr == nil && (len(result.Index.LintFindings) != 2 || !result.Index.LintFindings[1].Suppressed || result.Index.LintFindings[1].SuppressedBy == nil || result.Index.LintFindings[1].SuppressedBy.Scope != "next-line") {
 				t.Fatalf("lint findings = %#v, want suppressed finding preserved", result.Index.LintFindings)
 			}
 			wantStatus := "complete"
@@ -190,7 +190,12 @@ func (i *parityIndexer) IndexProjectLintPatch(_ context.Context, request project
 	return parityPatch(request.Root, request.ConfigPath, request.ProjectName, projectindex.PhaseQuality, projectindex.IndexPatchFacts{
 		LintFindings: []store.IndexLintFinding{
 			{ID: "lint:visible", Severity: "warning", RuleID: "fixture.visible", Category: "fixture", Profiles: []string{"recommended"}},
-			{ID: "lint:suppressed", Severity: "info", RuleID: "fixture.suppressed", Category: "fixture", Profiles: []string{"recommended"}, Suppressed: true},
+			{
+				ID: "lint:suppressed", Severity: "info", RuleID: "fixture.suppressed", Category: "fixture", Profiles: []string{"recommended"}, Suppressed: true,
+				SuppressedBy: &store.IndexLintSuppressedBy{
+					Source: &store.SourceLoc{File: "src/writer.ts", Line: 1}, Scope: "next-line", Reason: "intentional handoff",
+				},
+			},
 		},
 	}), nil
 }

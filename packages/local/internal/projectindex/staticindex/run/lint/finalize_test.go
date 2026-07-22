@@ -37,6 +37,19 @@ func TestFinalizePatchBuildsQualityFinalizeRequest(t *testing.T) {
 	if patch.Phase != projectindex.PhaseQuality {
 		t.Fatalf("patch phase = %q, want quality", patch.Phase)
 	}
+	if len(patch.Facts.LintFindings) != 1 {
+		t.Fatalf("lint findings = %+v, want one retained suppressed finding", patch.Facts.LintFindings)
+	}
+	finding := patch.Facts.LintFindings[0]
+	if !finding.Suppressed || finding.SuppressedBy == nil {
+		t.Fatalf("lint finding = %+v, want suppression metadata", finding)
+	}
+	if finding.SuppressedBy.Source == nil || finding.SuppressedBy.Source.File != "src/workflow.ts" || finding.SuppressedBy.Source.Line != 1 {
+		t.Fatalf("suppressedBy source = %+v, want directive source", finding.SuppressedBy.Source)
+	}
+	if finding.SuppressedBy.Scope != "next-line" || finding.SuppressedBy.Reason != "intentional reason" {
+		t.Fatalf("suppressedBy = %+v, want exact scope and reason", finding.SuppressedBy)
+	}
 	if compiler.request.PatchPhase != string(projectindex.PhaseQuality) {
 		t.Fatalf("request patch phase = %q, want quality", compiler.request.PatchPhase)
 	}
@@ -127,6 +140,37 @@ func completeLintEvents(root string) ([]json.RawMessage, error) {
 		},
 		map[string]any{
 			"protocolVersion": 3,
+			"type":            "fact:batch",
+			"transactionId":   tx,
+			"sequence":        0,
+			"facts": []any{map[string]any{
+				"schemaVersion": 1,
+				"factId":        "lintFindings:rule:owner:workflow",
+				"kind":          "lintFindings",
+				"phase":         "quality",
+				"projectRoot":   root,
+				"producer":      map[string]any{"name": "test", "version": "test"},
+				"fidelity":      "inferred",
+				"provenance":    map[string]any{"kind": "source", "file": "src/workflow.ts"},
+				"fact": map[string]any{
+					"id":         "rule:owner:workflow",
+					"ruleId":     "@acme/rules/require-owner",
+					"severity":   "warning",
+					"title":      "Require owner",
+					"message":    "Workflow is missing an owner.",
+					"evidence":   []any{},
+					"fixes":      []any{},
+					"suppressed": true,
+					"suppressedBy": map[string]any{
+						"source": map[string]any{"file": "src/workflow.ts", "line": 1, "column": 4},
+						"scope":  "next-line",
+						"reason": "intentional reason",
+					},
+				},
+			}},
+		},
+		map[string]any{
+			"protocolVersion": 3,
 			"type":            "phase:done",
 			"transactionId":   tx,
 			"phase":           "quality",
@@ -139,7 +183,7 @@ func completeLintEvents(root string) ([]json.RawMessage, error) {
 				"status":        "ok",
 			},
 			"summary": map[string]any{
-				"factCount": 0,
+				"factCount": 1,
 				"decision":  map[string]any{"staticIndexComplete": true},
 			},
 		},

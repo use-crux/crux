@@ -7,11 +7,14 @@
  * @module
  */
 
-import { z } from 'zod'
-import { STATIC_INDEX_COMPILER_PROTOCOL_VERSION, StaticIndexRunIdentitySchema } from './identity'
-import { staticIndexParserInterestFields } from './interests'
+import { z } from "zod";
+import {
+  STATIC_INDEX_COMPILER_PROTOCOL_VERSION,
+  StaticIndexRunIdentitySchema,
+} from "./identity";
+import { staticIndexParserInterestFields } from "./interests";
 
-const unknownArraySchema = z.array(z.unknown())
+const unknownArraySchema = z.array(z.unknown());
 
 /**
  * Prepared lint suppression directive parsed from source before the Rust
@@ -22,20 +25,23 @@ export const StaticIndexLintSuppressionSchema = z
     file: z.string().min(1),
     line: z.number().int().positive(),
     column: z.number().int().positive(),
-    scope: z.enum(['next-line', 'line', 'file']),
+    scope: z.enum(["next-line", "line", "file"]),
     ruleId: z.string().min(1),
+    reason: z.string().min(1).optional(),
   })
-  .strict()
+  .strict();
 
 /** Prepared Static Index lint suppression directive. */
-export type StaticIndexLintSuppression = z.infer<typeof StaticIndexLintSuppressionSchema>
+export type StaticIndexLintSuppression = z.infer<
+  typeof StaticIndexLintSuppressionSchema
+>;
 
 /** Static Index compiler method names used on the JSON-lines boundary. */
 export type StaticIndexCompilerMethod =
-  | 'staticIndexPrepare'
-  | 'staticIndexAnalyze'
-  | 'staticIndexFinalize'
-  | 'staticIndexCompile'
+  | "staticIndexPrepare"
+  | "staticIndexAnalyze"
+  | "staticIndexFinalize"
+  | "staticIndexCompile";
 
 /** Source file identity selected for Static Index planning. */
 export const StaticIndexSourceFileSchema = z
@@ -44,10 +50,10 @@ export const StaticIndexSourceFileSchema = z
     sourceHash: z.string().min(1),
     cacheKey: z.string().min(1).optional(),
   })
-  .strict()
+  .strict();
 
 /** Source file selected for Static Index planning. */
-export type StaticIndexSourceFile = z.infer<typeof StaticIndexSourceFileSchema>
+export type StaticIndexSourceFile = z.infer<typeof StaticIndexSourceFileSchema>;
 
 /** Source file selected for Static Index analysis. */
 export const StaticIndexFileInputSchema = z
@@ -56,10 +62,10 @@ export const StaticIndexFileInputSchema = z
     sourceHash: z.string().min(1),
     sourceText: z.string().optional(),
   })
-  .strict()
+  .strict();
 
 /** Source file input supplied to Static Index analysis. */
-export type StaticIndexFileInput = z.infer<typeof StaticIndexFileInputSchema>
+export type StaticIndexFileInput = z.infer<typeof StaticIndexFileInputSchema>;
 
 /** Normalized Static Index source plan shared by prepare and analyze. */
 export const StaticIndexPreparedPlanSchema = z
@@ -73,21 +79,23 @@ export const StaticIndexPreparedPlanSchema = z
     cacheMisses: z.array(StaticIndexSourceFileSchema),
     ...staticIndexParserInterestFields,
   })
-  .strict()
+  .strict();
 
 /** Static Index source plan shared by compiler stages. */
-export type StaticIndexPreparedPlan = z.infer<typeof StaticIndexPreparedPlanSchema>
+export type StaticIndexPreparedPlan = z.infer<
+  typeof StaticIndexPreparedPlanSchema
+>;
 
 const staticIndexRequestBase = {
   protocolVersion: z.literal(STATIC_INDEX_COMPILER_PROTOCOL_VERSION),
   identity: StaticIndexRunIdentitySchema,
-} as const
+} as const;
 
 /** Request for the Rust compiler to normalize source/cache planning input. */
 export const StaticIndexPrepareRequestSchema = z
   .object({
     ...staticIndexRequestBase,
-    method: z.literal('staticIndexPrepare'),
+    method: z.literal("staticIndexPrepare"),
     root: z.string().min(1),
     projectName: z.string().min(1).optional(),
     configPath: z.string().min(1).optional(),
@@ -98,25 +106,25 @@ export const StaticIndexPrepareRequestSchema = z
     cacheInputs: unknownArraySchema.optional(),
     extensionHost: z.unknown().optional(),
   })
-  .strict()
+  .strict();
 
 /** Request for the Rust compiler to parse selected cache misses and emit facts/evidence. */
 export const StaticIndexAnalyzeRequestSchema = z
   .object({
     ...staticIndexRequestBase,
-    method: z.literal('staticIndexAnalyze'),
+    method: z.literal("staticIndexAnalyze"),
     stream: z.literal(true),
     plan: StaticIndexPreparedPlanSchema,
     files: z.array(StaticIndexFileInputSchema),
     extensionEvidenceInterests: z.unknown().optional(),
   })
-  .strict()
+  .strict();
 
 /** Request for Static Index relation/rule/cache finalization. */
 export const StaticIndexFinalizeRequestSchema = z
   .object({
     ...staticIndexRequestBase,
-    method: z.literal('staticIndexFinalize'),
+    method: z.literal("staticIndexFinalize"),
     stream: z.literal(true).optional(),
     nativeFacts: unknownArraySchema,
     extensionFacts: unknownArraySchema,
@@ -127,17 +135,17 @@ export const StaticIndexFinalizeRequestSchema = z
     lintConfig: z.unknown().optional(),
     lintSuppressions: z.array(StaticIndexLintSuppressionSchema).optional(),
     emitBuiltinLints: z.boolean().optional(),
-    patchPhase: z.enum(['ast', 'semantic', 'runtime', 'quality']).optional(),
+    patchPhase: z.enum(["ast", "semantic", "runtime", "quality"]).optional(),
     patchInvalidates: z.unknown().optional(),
     cache: z.unknown().optional(),
   })
-  .strict()
+  .strict();
 
 /** Request for parse, relation/rule finalization, and streamed patch events. */
 export const StaticIndexCompileRequestSchema = z
   .object({
     ...staticIndexRequestBase,
-    method: z.literal('staticIndexCompile'),
+    method: z.literal("staticIndexCompile"),
     stream: z.literal(true),
     plan: StaticIndexPreparedPlanSchema,
     files: z.array(StaticIndexFileInputSchema),
@@ -148,23 +156,25 @@ export const StaticIndexCompileRequestSchema = z
     lintSuppressions: z.array(StaticIndexLintSuppressionSchema).optional(),
     emitBuiltinLints: z.boolean().optional(),
   })
-  .strict()
+  .strict();
 
 /** Static Index compiler request union. */
-export const StaticIndexCompilerRequestSchema = z.discriminatedUnion('method', [
+export const StaticIndexCompilerRequestSchema = z.discriminatedUnion("method", [
   StaticIndexPrepareRequestSchema,
   StaticIndexAnalyzeRequestSchema,
   StaticIndexFinalizeRequestSchema,
   StaticIndexCompileRequestSchema,
-])
+]);
 
 /** Static Index compiler request. */
-export type StaticIndexCompilerRequest = z.infer<typeof StaticIndexCompilerRequestSchema>
+export type StaticIndexCompilerRequest = z.infer<
+  typeof StaticIndexCompilerRequestSchema
+>;
 
 /** Parsed Static Index request or a JSON-safe validation error. */
 export type ParsedStaticIndexCompilerRequest =
   | { readonly ok: true; readonly request: StaticIndexCompilerRequest }
-  | { readonly ok: false; readonly error: string }
+  | { readonly ok: false; readonly error: string };
 
 /**
  * Parse one JSON-line Static Index compiler request into a typed command.
@@ -172,17 +182,22 @@ export type ParsedStaticIndexCompilerRequest =
  * @param line - One JSONL request line from a compiler host.
  * @returns The parsed request or a compact validation error.
  */
-export function parseStaticIndexCompilerRequest(line: string): ParsedStaticIndexCompilerRequest {
-  let value: unknown
+export function parseStaticIndexCompilerRequest(
+  line: string,
+): ParsedStaticIndexCompilerRequest {
+  let value: unknown;
   try {
-    value = JSON.parse(line)
+    value = JSON.parse(line);
   } catch {
-    return { ok: false, error: 'invalid JSON' }
+    return { ok: false, error: "invalid JSON" };
   }
 
-  const parsed = StaticIndexCompilerRequestSchema.safeParse(value)
+  const parsed = StaticIndexCompilerRequestSchema.safeParse(value);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? 'invalid Static Index request' }
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "invalid Static Index request",
+    };
   }
-  return { ok: true, request: parsed.data }
+  return { ok: true, request: parsed.data };
 }

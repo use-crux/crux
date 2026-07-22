@@ -21,6 +21,7 @@ mod injection {
     pub(crate) mod rules;
 }
 mod propagation;
+mod suppression;
 mod rules {
     pub(crate) mod core;
     pub(crate) mod defer;
