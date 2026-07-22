@@ -1,10 +1,45 @@
 package commands
 
 import (
+	"bytes"
+	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/api"
+	"github.com/use-crux/crux/packages/local/internal/output"
+	"github.com/use-crux/crux/packages/local/internal/store"
 )
+
+func TestProjectIndexAPIPreservesLintSuppressionMetadata(t *testing.T) {
+	index, err := projectIndexAPI(store.IndexData{LintFindings: []store.IndexLintFinding{{
+		ID:         "suppressed",
+		Suppressed: true,
+		SuppressedBy: &store.IndexLintSuppressedBy{
+			Source: &store.SourceLoc{File: "src/workflow.ts", Line: 7},
+			Scope:  "next-line",
+			Reason: "intentional handoff",
+		},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(index.LintFindings) != 1 || index.LintFindings[0].SuppressedBy == nil {
+		t.Fatalf("lint findings = %+v, want suppression metadata", index.LintFindings)
+	}
+	suppressedBy := index.LintFindings[0].SuppressedBy
+	if suppressedBy.Scope != "next-line" || suppressedBy.Reason != "intentional handoff" || suppressedBy.Source == nil {
+		t.Fatalf("suppressedBy = %+v, want complete metadata", suppressedBy)
+	}
+
+	activeJSON, err := json.Marshal(api.IndexLintFinding{ID: "active"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(activeJSON), "suppressed") {
+		t.Fatalf("active JSON = %s, want canonical omission", activeJSON)
+	}
+}
 
 func TestSelectLintFindingsFiltersByProfileAndSuppression(t *testing.T) {
 	findings := []api.IndexLintFinding{
@@ -75,6 +110,73 @@ func TestLintGateFailuresIsExplicitAndSeverityThresholded(t *testing.T) {
 	}
 	if got := lintFindingIDs(failures); len(got) != 1 || got[0] != "error" {
 		t.Fatalf("error gate failures = %#v", got)
+	}
+}
+
+func TestLintGateFailuresNeverGateSuppressedFindings(t *testing.T) {
+	findings := []api.IndexLintFinding{
+		{ID: "suppressed-error", Severity: "error", Suppressed: true},
+		{ID: "suppressed-warning", Severity: "warning", Suppressed: true},
+		{ID: "active-warning", Severity: "warning"},
+	}
+
+	for _, threshold := range []string{"error", "warning", "info"} {
+		failures, err := lintGateFailures(findings, threshold)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := []string{}
+		if threshold != "error" {
+			want = []string{"active-warning"}
+		}
+		if got := lintFindingIDs(failures); strings.Join(got, ",") != strings.Join(want, ",") {
+			t.Fatalf("%s failures = %v, want %v", threshold, got, want)
+		}
+	}
+}
+
+func TestWriteLintResultIncludesSuppressedWithoutFailingGate(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	io := output.NewTestIO(&stdout, &stderr, output.TestIOOptions{})
+	finding := api.IndexLintFinding{
+		ID: "suppressed", Severity: "error", Profiles: []string{"recommended"}, Suppressed: true,
+		SuppressedBy: &api.IndexLintSuppressedBy{
+			Source: &api.SourceLoc{File: "src/workflow.ts", Line: 7},
+			Scope:  "next-line", Reason: "intentional handoff",
+		},
+	}
+
+	err := writeLintResult(io, api.IndexData{LintFindings: []api.IndexLintFinding{finding}}, lintOptions{
+		profile: "recommended", includeSuppressed: true, failOn: "error", json: true,
+	})
+	if err != nil {
+		t.Fatalf("writeLintResult error = %v, want suppressed-only exit success", err)
+	}
+	var got []api.IndexLintFinding
+	if err := json.Unmarshal(stdout.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].SuppressedBy == nil || got[0].SuppressedBy.Scope != "next-line" {
+		t.Fatalf("JSON findings = %+v, want complete retained suppression", got)
+	}
+}
+
+func TestPrintLintFindingsLabelsSuppressedDirectiveEvidence(t *testing.T) {
+	var stdout bytes.Buffer
+	io := output.NewTestIO(&stdout, &bytes.Buffer{}, output.TestIOOptions{})
+	printLintFindings(io, []api.IndexLintFinding{{
+		ID: "suppressed", Severity: "warning", RuleID: "example.rule", Title: "Example rule",
+		Suppressed: true,
+		SuppressedBy: &api.IndexLintSuppressedBy{
+			Source: &api.SourceLoc{File: "src/workflow.ts", Line: 7},
+			Scope:  "next-line", Reason: "intentional handoff",
+		},
+	}}, "recommended", true)
+
+	for _, want := range []string{"suppressed", "intentional handoff", "src/workflow.ts:7", "next-line"} {
+		if !strings.Contains(stdout.String(), want) {
+			t.Fatalf("output = %q, want %q", stdout.String(), want)
+		}
 	}
 }
 

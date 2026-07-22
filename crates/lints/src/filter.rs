@@ -6,9 +6,10 @@ use serde_json::Value;
 
 use crate::facts::{
     StaticIndexDiagnostic, StaticIndexDiagnosticSeverity, StaticIndexLintFinding,
-    StaticIndexRuleDescriptor, StaticIndexSourceLocation,
+    StaticIndexRuleDescriptor,
 };
 use crate::rules::filter::{finding_profiles, known_rule_ids};
+use crate::suppression::annotate_suppressions;
 
 #[derive(Debug, Clone)]
 pub struct StaticIndexLintOptions {
@@ -23,8 +24,26 @@ pub struct StaticIndexLintSuppression {
     pub file: String,
     pub line: usize,
     pub column: usize,
-    pub scope: String,
+    pub scope: StaticIndexLintSuppressionScope,
     pub rule_id: String,
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum StaticIndexLintSuppressionScope {
+    NextLine,
+    Line,
+    File,
+}
+
+impl StaticIndexLintSuppressionScope {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::NextLine => "next-line",
+            Self::Line => "line",
+            Self::File => "file",
+        }
+    }
 }
 
 impl Default for StaticIndexLintOptions {
@@ -44,7 +63,7 @@ pub(crate) fn apply_lint_filters(
     rule_descriptors: &[StaticIndexRuleDescriptor],
 ) -> Vec<StaticIndexLintFinding> {
     let known = known_rule_ids(rule_descriptors);
-    let suppressed = apply_suppressions(findings, diagnostics, &options.suppressions, &known);
+    let suppressed = annotate_suppressions(findings, diagnostics, &options.suppressions, &known);
     apply_config(suppressed, diagnostics, options.config.as_ref(), &known)
 }
 
@@ -95,90 +114,6 @@ fn apply_config(
         .collect()
 }
 
-fn apply_suppressions(
-    findings: Vec<StaticIndexLintFinding>,
-    diagnostics: &mut Vec<StaticIndexDiagnostic>,
-    suppressions: &[StaticIndexLintSuppression],
-    known: &BTreeSet<String>,
-) -> Vec<StaticIndexLintFinding> {
-    let mut suppressions = suppressions
-        .iter()
-        .map(LintSuppression::from)
-        .collect::<Vec<_>>();
-    for suppression in &suppressions {
-        if !known.contains(&suppression.rule_id) {
-            diagnostics.push(unknown_suppression_rule_diagnostic(suppression));
-        }
-    }
-    let mut kept = Vec::new();
-    for finding in findings {
-        let matched = suppressions.iter_mut().find(|suppression| {
-            known.contains(&suppression.rule_id) && suppresses(suppression, &finding)
-        });
-        if let Some(suppression) = matched {
-            suppression.used = true;
-        } else {
-            kept.push(finding);
-        }
-    }
-    for suppression in suppressions {
-        if known.contains(&suppression.rule_id) && !suppression.used {
-            diagnostics.push(unused_suppression_diagnostic(&suppression));
-        }
-    }
-    kept
-}
-
-#[derive(Debug, Clone)]
-struct LintSuppression {
-    id: String,
-    file: String,
-    line: usize,
-    column: usize,
-    scope: String,
-    rule_id: String,
-    used: bool,
-}
-
-impl From<&StaticIndexLintSuppression> for LintSuppression {
-    fn from(input: &StaticIndexLintSuppression) -> Self {
-        Self {
-            id: format!(
-                "{}:{}:{}:{}",
-                input.file, input.line, input.scope, input.rule_id
-            ),
-            file: input.file.clone(),
-            line: input.line,
-            column: input.column,
-            scope: input.scope.clone(),
-            rule_id: input.rule_id.clone(),
-            used: false,
-        }
-    }
-}
-
-fn suppresses(suppression: &LintSuppression, finding: &StaticIndexLintFinding) -> bool {
-    if finding.rule_id != suppression.rule_id {
-        return false;
-    }
-    let Some(source) = finding_source(finding) else {
-        return false;
-    };
-    if source.file != suppression.file {
-        return false;
-    }
-    match suppression.scope.as_str() {
-        "file" => true,
-        "line" => source.line == suppression.line,
-        "next-line" => source.line == suppression.line + 1,
-        _ => false,
-    }
-}
-
-fn finding_source(finding: &StaticIndexLintFinding) -> Option<StaticIndexSourceLocation> {
-    serde_json::from_value(finding.extra.get("source")?.clone()).ok()
-}
-
 fn parse_severity(value: &str) -> Option<StaticIndexDiagnosticSeverity> {
     match value {
         "info" => Some(StaticIndexDiagnosticSeverity::Info),
@@ -202,64 +137,5 @@ fn unknown_configured_rule_diagnostic(rule_id: &str) -> StaticIndexDiagnostic {
     }
 }
 
-fn unknown_suppression_rule_diagnostic(suppression: &LintSuppression) -> StaticIndexDiagnostic {
-    suppression_diagnostic(
-        "index.lint_unknown_suppression_rule",
-        &format!(
-            "Unknown Crux lint rule \"{}\" in suppression comment.",
-            suppression.rule_id
-        ),
-        "Use a known Crux lint rule id or remove the suppression comment.",
-        suppression,
-        StaticIndexDiagnosticSeverity::Warning,
-    )
-}
-
-fn unused_suppression_diagnostic(suppression: &LintSuppression) -> StaticIndexDiagnostic {
-    suppression_diagnostic(
-        "index.lint_unused_suppression",
-        &format!(
-            "Crux lint suppression for \"{}\" did not match any finding.",
-            suppression.rule_id
-        ),
-        "Remove the stale suppression or move it to the finding it is intended to suppress.",
-        suppression,
-        StaticIndexDiagnosticSeverity::Info,
-    )
-}
-
-fn suppression_diagnostic(
-    code: &str,
-    message: &str,
-    fix: &str,
-    suppression: &LintSuppression,
-    severity: StaticIndexDiagnosticSeverity,
-) -> StaticIndexDiagnostic {
-    StaticIndexDiagnostic {
-        id: format!("{code}:{}", sanitize_key(&suppression.id)),
-        severity,
-        code: code.to_string(),
-        message: message.to_string(),
-        source: Some(StaticIndexSourceLocation {
-            file: suppression.file.clone(),
-            line: suppression.line,
-            column: Some(suppression.column),
-            function_name: None,
-        }),
-        related_definition_ids: Vec::new(),
-        suggested_fix: Some(fix.to_string()),
-    }
-}
-
-fn sanitize_key(value: &str) -> String {
-    value
-        .chars()
-        .map(|character| {
-            if character.is_ascii_alphanumeric() || matches!(character, '_' | '.' | ':' | '-') {
-                character
-            } else {
-                '-'
-            }
-        })
-        .collect()
-}
+#[cfg(test)]
+mod tests;

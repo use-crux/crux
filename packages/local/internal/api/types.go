@@ -913,6 +913,7 @@ type IndexLintSuppression struct {
 
 type IndexLintSuppressedBy struct {
 	Source *SourceLoc `json:"source,omitempty"`
+	Scope  string     `json:"scope"`
 	Reason string     `json:"reason,omitempty"`
 }
 

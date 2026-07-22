@@ -5,9 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"testing"
 
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/frontend"
 
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/protocol"

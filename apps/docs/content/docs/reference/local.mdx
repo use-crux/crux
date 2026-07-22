@@ -29,14 +29,14 @@ crux dev --open           # Open browser devtools after startup
 crux dev --tunnel         # Create a public tunnel
 ```
 
-| Flag              | Default | Description                                      |
-| ----------------- | ------- | ------------------------------------------------ |
-| `--port`          | `4400`  | Server port                                      |
-| `--tunnel`        | `false` | Create a public tunnel for remote access         |
-| `--open`          | `false` | Open browser devtools after startup              |
-| `--tui`           | auto    | Require the interactive terminal workbench       |
-| `--no-tui`        | `false` | Skip the TUI and use plain server output         |
-| `--startup-debug` | `false` | Show startup timing diagnostics                  |
+| Flag              | Default | Description                                |
+| ----------------- | ------- | ------------------------------------------ |
+| `--port`          | `4400`  | Server port                                |
+| `--tunnel`        | `false` | Create a public tunnel for remote access   |
+| `--open`          | `false` | Open browser devtools after startup        |
+| `--tui`           | auto    | Require the interactive terminal workbench |
+| `--no-tui`        | `false` | Skip the TUI and use plain server output   |
+| `--startup-debug` | `false` | Show startup timing diagnostics            |
 
 The Go server owns HTTP, WebSocket/SSE, read models, and UI serving. If the port is already in use, it automatically tries the next available port (up to +9).
 
@@ -53,6 +53,14 @@ be refreshed, preserves the last working generated files, and retries after the
 next relevant save.
 
 The local HTTP API, in-process DirectClient, and WebSocket snapshot payloads share the same backend read-model registry. This keeps route parameters, query parsing, not-found handling, live invalidation messages, and initial snapshot payloads aligned between custom tooling and the embedded devtools UI.
+
+Run-detail reads also expose optional `currentProjectHealth` context. Crux Local
+correlates the run's recorded definition references with materialized lint
+findings from the current Project Index snapshot, preserving active/suppressed
+state and complete directive evidence. The context is deliberately read-time:
+it is not historical run telemetry, creates no suppression span, and does not
+change run status. No available Index omits the field; an available Index with
+no related findings returns zero counts and an empty list.
 
 Observability and Eval run lists are newest-first pages by default so live web/TUI refreshes stay responsive on large local histories. Observability lists read ingest-time count and usage rollups from SQLite; the web devtools runs table groups by root `sessionId` and displays those token, cost, and graph-count rollups directly. Single-run detail endpoints remain exact, while focused streaming spans read `token.chunk` text through the lazy span-events endpoint instead of loading every chunk into the run-detail graph. Use explicit `limit`/`offset` query parameters on the HTTP list endpoints when building custom local tooling that needs a different page size.
 
@@ -243,6 +251,12 @@ producer continues to identify the phase worker/backend. It never exposes raw
 AST/checker objects. Source paths are repository-relative and fail
 closed when they are outside the project.
 
+Catalog and Index Health present active and suppressed lint findings as
+separate totals. Active-only severity, rule, affected-definition, badge, and
+default verdict counts never include suppressed rows. Retained suppressed rows
+remain auditable with an explicit state plus distinct finding source and
+directive location, scope, and optional reason.
+
 `catalog status` reports indexing phases, semantic execution mode, cache hit
 and age, watch plan/fallback and changed/affected counts, last indexing error,
 manifest count, and a current identity when a verified default artifact or one
@@ -331,7 +345,9 @@ crux lint --server                 # Read the running devtools snapshot
 Lists findings sorted by severity (`error` · `warning` · `info`), each with its
 rule id, target definition, source `file:line`, and (when available) the
 problem, rationale, suggested fix, and docs link. With `--fail-on`, a matching
-finding sets exit code `1` so the command can gate CI.
+active finding sets exit code `1` so the command can gate CI. Suppressed
+findings are hidden by default; `--include-suppressed` shows their directive
+scope, location, and optional reason without allowing them to fail the gate.
 
 ## `crux check`
 
@@ -361,7 +377,9 @@ Exit `0` means compilation completed without a selected finding meeting the
 gate. Exit `1` means the gate matched. Exit `2` means configuration, compiler,
 protocol, cache integrity, or another operational failure prevented a
 trustworthy check. JSON v1 excludes timestamps and durations; incidental
-worker diagnostics remain on stderr.
+worker diagnostics remain on stderr. Check summaries and gates count active
+findings only, even when `--include-suppressed` adds retained rows to the
+displayed finding list.
 
 ## `crux manifest`
 

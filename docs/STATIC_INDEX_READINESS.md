@@ -20,14 +20,14 @@ node scripts/static-index-parity-gate.mjs
 
 Observed gate coverage:
 
-| Surface                 | Evidence                                                                                                                                                             |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Rust worker build       | `cargo build --package crux-static-index-worker --bin crux-static-index-worker` passed.                                                                              |
-| Rust tests              | `cargo test` passed, including `static-compiler` 73 tests, `worker` 20 tests, `syntax-oxc` 8 tests, and doc tests.                                                   |
-| Rust first-party golden | `rust-first-party-static-golden.test.ts` compares Rust/Oxc output with `contracts/fixtures/rust-first-party-static-golden.json`.                                     |
-| Full indexer suite      | `CRUX_STATIC_INDEX_WORKER=target/debug/crux-static-index-worker pnpm --filter @use-crux/indexer test` passed with 105 files, 494 tests, and 1 skipped test.          |
-| Go production path      | `go test ./internal/projectindex/... -count=1` passed from `packages/local` with the built Rust worker and embedded local worker bundle.                             |
-| Local worker embed path | The gate built `@use-crux/local-workers`, embedded the generated worker assets, and then ran the Go Project Index packages against those assets.                     |
+| Surface                 | Evidence                                                                                                                                                    |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Rust worker build       | `cargo build --package crux-static-index-worker --bin crux-static-index-worker` passed.                                                                     |
+| Rust tests              | `cargo test` passed, including `static-compiler` 73 tests, `worker` 20 tests, `syntax-oxc` 8 tests, and doc tests.                                          |
+| Rust first-party golden | `rust-first-party-static-golden.test.ts` compares Rust/Oxc output with `contracts/fixtures/rust-first-party-static-golden.json`.                            |
+| Full indexer suite      | `CRUX_STATIC_INDEX_WORKER=target/debug/crux-static-index-worker pnpm --filter @use-crux/indexer test` passed with 105 files, 494 tests, and 1 skipped test. |
+| Go production path      | `go test ./internal/projectindex/... -count=1` passed from `packages/local` with the built Rust worker and embedded local worker bundle.                    |
+| Local worker embed path | The gate built `@use-crux/local-workers`, embedded the generated worker assets, and then ran the Go Project Index packages against those assets.            |
 
 `pnpm test:static-index-parity` is the release command because it builds the
 current Rust/Oxc worker, points every worker-backed test at that binary, compares
@@ -52,12 +52,13 @@ packages with required gate environment.
 
 ## Cache Identity Review
 
-The current static cache namespace is `static-parse-v74`; semantic facts use
+The current static cache namespace is `static-parse-v75`; semantic facts use
 `semantic-facts-v32`; and the Go Project Index snapshot cache lives under
-`.crux/cache/index-v2/epoch-44/`. These identities include unconditional
-Rust/Oxc scheduling, Workspace snapshot usage relations, root-stable
-fingerprints, backend state, and durable all-kind extractor provenance, so
-restart warm loads cannot mask changed Catalog evidence.
+`.crux/cache/index-v2/epoch-45/`. These identities include unconditional
+Rust/Oxc scheduling, retained lint suppression evidence, Workspace snapshot
+usage relations, root-stable fingerprints, backend state, and durable all-kind
+extractor provenance, so restart warm loads cannot mask changed Catalog
+evidence.
 
 Static Index always uses Rust/Oxc and remains independent from
 `experimental.indexer.native`, which selects the semantic backend.

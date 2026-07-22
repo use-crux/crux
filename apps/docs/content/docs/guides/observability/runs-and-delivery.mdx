@@ -43,6 +43,22 @@ A still-running run stays `unknown`; a process that never connected stays `unkno
 
 Catalog **View N runs** opens Runs pre-filtered to one definition id. See [Catalog runtime evidence](/docs/guides/observability/catalog-runtime-evidence).
 
+## Current project health
+
+When a run contains `DefinitionRef` identities, Run Detail correlates them at
+read time with lint findings in the currently materialized Project Index. The
+**Current project health** card separates active and suppressed findings and
+links matched definitions back to Catalog. Suppressed rows are explicitly
+tagged and include directive location, scope, and an authored reason when one
+exists; finding source and directive source remain distinct.
+
+This card describes current authored state, not historical run evidence. It
+does not prove that a finding or suppression existed when the run executed,
+does not manufacture an observability span, and does not affect run status or
+lint/check gates. With no current Project Index the context is simply absent.
+See [Catalog runtime evidence](/docs/guides/observability/catalog-runtime-evidence#run-detail-links-back)
+and [Index Lint](/docs/guides/project-health/lint#fix-before-suppressing).
+
 ## Host lifecycle and incomplete runs
 
 Ephemeral hosts that return before flushing the delivery queue commonly produce `incomplete` or long-lived `running` presentation until reconciliation. Use the host wrappers documented under [Runtime setup](/docs/guides/observability/runtime-setup) so `run:end` / `span:end` actually land.

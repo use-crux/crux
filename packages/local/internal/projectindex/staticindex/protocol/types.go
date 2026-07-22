@@ -123,12 +123,21 @@ type AnalyzeFile struct {
 	SourceText string `json:"sourceText,omitempty"`
 }
 
+type LintSuppressionScope string
+
+const (
+	LintSuppressionNextLine LintSuppressionScope = "next-line"
+	LintSuppressionLine     LintSuppressionScope = "line"
+	LintSuppressionFile     LintSuppressionScope = "file"
+)
+
 type LintSuppression struct {
-	File   string `json:"file"`
-	Line   int    `json:"line"`
-	Column int    `json:"column"`
-	Scope  string `json:"scope"`
-	RuleID string `json:"ruleId"`
+	File   string               `json:"file"`
+	Line   int                  `json:"line"`
+	Column int                  `json:"column"`
+	Scope  LintSuppressionScope `json:"scope"`
+	RuleID string               `json:"ruleId"`
+	Reason string               `json:"reason,omitempty"`
 }
 
 type PrepareRequest struct {

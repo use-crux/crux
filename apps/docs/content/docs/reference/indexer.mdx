@@ -112,7 +112,7 @@ is a setup error; Crux does not publish an apparently healthy empty index.
 - emit source locations, `sourceRefs`, authored paths, relations, runtime join hints, foldable-child index presentation hints, and intelligence metadata
 - connect routing children to their parents with `router.includes_route`, `split.includes_route`, `retry.uses_target`, `cascade.includes_tier`, and `fallback.includes_option`, and enrich them with compiler-resolved target relations such as `router.route.uses_cascade`, `split.route.uses_prompt`, `retry.target.uses_prompt`, `cascade.tier.uses_fallback`, and `fallback.option.uses_agent`; when proven, child definitions also expose `metadata.targetKind` and `metadata.targetDefinitionId`
 - project `RouteArgs` context evidence from router `classify` and split `seed` callbacks as `routingContextType` plus `routingContextRequired`, and preserve JSON-safe literal call-profile settings other than `model` as route-child `profile` facts; context-free callbacks and raw-model routes omit fields the compiler cannot prove
-- emit authored-graph lint findings, suppression metadata, and available rule descriptor metadata through the index snapshot
+- emit authored-graph lint findings, retained source-suppression evidence, and available rule descriptor metadata through the index snapshot
 - classify candidate files before AST parsing so generated bundles, base64 artifacts, and oversized non-authored files do not consume the local devtools heap
 
 ## Boundary

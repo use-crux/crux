@@ -71,7 +71,7 @@ Media rules are deterministic authored-source checks. They cover discarded speci
 ## `IndexLintFinding`
 
 ```ts
-interface IndexLintFinding {
+interface IndexLintFindingBase {
   id: string;
   severity: "info" | "warning" | "error";
   ruleId: string;
@@ -94,19 +94,53 @@ interface IndexLintFinding {
   propagatedDefinitionIds?: string[];
   propagationPaths?: IndexLintPropagationPath[];
 }
+
+type IndexLintSuppressionScope = "next-line" | "line" | "file";
+
+interface IndexLintSuppressedBy {
+  source: SourceLocation;
+  scope: IndexLintSuppressionScope;
+  reason?: string;
+}
+
+type IndexLintFinding = IndexLintFindingBase &
+  (
+    | {
+        suppressed?: false;
+        suppressedBy?: never;
+      }
+    | {
+        suppressed: true;
+        suppressedBy: IndexLintSuppressedBy;
+      }
+  );
 ```
 
-| Field         | Description                                                   |
-| ------------- | ------------------------------------------------------------- |
-| `message`     | Concrete "what happened" text.                                |
-| `rationale`   | Per-rule "why it matters" text.                               |
-| `impact`      | Optional user/system consequence.                             |
-| `evidence`    | Backend-owned evidence explaining why the finding exists.     |
-| `fixes`       | Actionable fix paths, docs links, or suppression affordances. |
-| `docsUrl`     | Rule reference page.                                          |
-| `suppression` | Exact suppression comment the UI can show.                    |
+| Field          | Description                                                   |
+| -------------- | ------------------------------------------------------------- |
+| `message`      | Concrete "what happened" text.                                |
+| `rationale`    | Per-rule "why it matters" text.                               |
+| `impact`       | Optional user/system consequence.                             |
+| `evidence`     | Backend-owned evidence explaining why the finding exists.     |
+| `fixes`        | Actionable fix paths, docs links, or suppression affordances. |
+| `docsUrl`      | Rule reference page.                                          |
+| `suppression`  | Rule-authored suppression affordance the UI can show.         |
+| `suppressed`   | `true` only when a source directive matched this finding.     |
+| `suppressedBy` | Matched directive source, exact scope, and optional reason.   |
 
 Clients should render findings directly. Do not recompute rules client-side by walking index relations.
+
+Suppression is a retained-evidence state, not a deletion. Active findings omit
+both state fields in canonical JSON (an authored TypeScript value may use
+`suppressed: false`). A suppressed finding always carries `suppressedBy`.
+Truthiness narrowing exposes that metadata without a cast:
+
+```ts
+function suppressionReason(finding: IndexLintFinding) {
+  if (!finding.suppressed) return undefined;
+  return finding.suppressedBy.reason;
+}
+```
 
 Injection-aware lint rules use the Project Index injection read model. They can point at prompt input fields contributed by contexts or injectables, explain conditional branches, and mark runtime-dependent dependencies or tool surfaces when static source cannot fully describe the composition.
 
@@ -121,6 +155,16 @@ Rule-specific source suppressions use comments:
 ```
 
 Unknown rule ids and unused suppressions are index diagnostics.
+
+The reason begins after `--`, is trimmed at its outer edges, and otherwise
+retains authored punctuation. Crux records the directive source separately
+from the finding source because `next-line` and `file` directives can live at a
+different location.
+
+Full Project Index snapshots retain suppressed findings and their metadata.
+Default lint/check presentation hides them, while `--include-suppressed`
+displays them. Suppressed findings never contribute to `--fail-on` gates,
+including when they are displayed.
 
 ## Rule References
 

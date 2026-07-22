@@ -21,6 +21,7 @@ import { useInspectRunDetailSuspense } from "@/shared/hooks/useInspectApi";
 import { qk } from "@/shared/query/queryClient";
 import { ReplayPlayer } from "./ReplayPlayer";
 import { RunContextStrip } from "./RunContextStrip";
+import { ProjectHealthCard } from "./ProjectHealthCard";
 import { FlowSuspendedBanner } from "./FlowSuspendedBanner";
 import { RunShareButton, buildRunPermalink } from "./RunShareButton";
 import { LensSwitch } from "./atoms";
@@ -357,6 +358,11 @@ export function RunDetailShell({
         {status === "suspended" && (
           <FlowSuspendedBanner root={runDetail?.root} />
         )}
+        <ProjectHealthCard
+          health={runDetail?.currentProjectHealth}
+          currentCatalog={runDetail?.currentCatalog}
+          onNavigate={navigate}
+        />
         <div
           className="relative min-h-0 flex-1 overflow-hidden"
           style={{ background: "var(--devtools-bg)" }}

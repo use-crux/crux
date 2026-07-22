@@ -305,19 +305,20 @@ type presentationDetail struct {
 }
 
 type RunDetail struct {
-	SchemaVersion  int                           `json:"schemaVersion"`
-	Run            RunSummary                    `json:"run"`
-	Root           RunDetailNode                 `json:"root"`
-	Rows           []RunDetailRow                `json:"rows"`
-	SpanIndex      map[string]RunDetailPlacement `json:"spanIndex"`
-	Facets         map[string]map[string]int     `json:"facets"`
-	Diagnostics    []RunDetailDiagnostic         `json:"diagnostics"`
-	Counts         RunDetailCounts               `json:"counts"`
-	DefinitionRefs []DefinitionRef               `json:"definitionRefs"`
-	Manifest       *RunManifestResolution        `json:"manifest,omitempty"`
-	CurrentCatalog *CurrentCatalogComparison     `json:"currentCatalog,omitempty"`
-	Debug          *Graph                        `json:"debug,omitempty"`
-	MemberRuns     []OperationRunDetail          `json:"memberRuns"`
+	SchemaVersion        int                           `json:"schemaVersion"`
+	Run                  RunSummary                    `json:"run"`
+	Root                 RunDetailNode                 `json:"root"`
+	Rows                 []RunDetailRow                `json:"rows"`
+	SpanIndex            map[string]RunDetailPlacement `json:"spanIndex"`
+	Facets               map[string]map[string]int     `json:"facets"`
+	Diagnostics          []RunDetailDiagnostic         `json:"diagnostics"`
+	Counts               RunDetailCounts               `json:"counts"`
+	DefinitionRefs       []DefinitionRef               `json:"definitionRefs"`
+	Manifest             *RunManifestResolution        `json:"manifest,omitempty"`
+	CurrentCatalog       *CurrentCatalogComparison     `json:"currentCatalog,omitempty"`
+	CurrentProjectHealth *CurrentProjectHealth         `json:"currentProjectHealth,omitempty"`
+	Debug                *Graph                        `json:"debug,omitempty"`
+	MemberRuns           []OperationRunDetail          `json:"memberRuns"`
 }
 
 type OperationRunDetail struct {

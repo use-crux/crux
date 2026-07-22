@@ -120,6 +120,12 @@ func buildCheckReport(result oneshot.Result, opts checkOptions) (checkJSONV1, []
 	}
 	diagnostics := append([]api.IndexDiagnostic{}, index.Diagnostics...)
 	sortIndexDiagnostics(diagnostics)
+	activeFindings := make([]api.IndexLintFinding, 0, len(findings))
+	for _, finding := range findings {
+		if !finding.Suppressed {
+			activeFindings = append(activeFindings, finding)
+		}
+	}
 	root := opts.root
 	if index.Project != nil && index.Project.Root != "" {
 		root = index.Project.Root
@@ -135,10 +141,10 @@ func buildCheckReport(result oneshot.Result, opts checkOptions) (checkJSONV1, []
 		Findings:    findings,
 		Summary: checkSummary{
 			Definitions: len(index.Definitions), Relations: len(index.Relations),
-			Diagnostics: len(diagnostics), Findings: len(findings), GateFailed: len(failures) > 0,
+			Diagnostics: len(diagnostics), Findings: len(activeFindings), GateFailed: len(failures) > 0,
 		},
 	}
-	for _, severity := range append(checkDiagnosticSeverities(diagnostics), checkFindingSeverities(findings)...) {
+	for _, severity := range append(checkDiagnosticSeverities(diagnostics), checkFindingSeverities(activeFindings)...) {
 		switch severity {
 		case "error":
 			report.Summary.Errors++

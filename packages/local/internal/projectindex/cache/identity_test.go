@@ -4,27 +4,30 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
 
 func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
-	if ProjectIndexSnapshotCacheEpoch != 44 {
-		t.Fatalf("ProjectIndexSnapshotCacheEpoch = %d, want Workspace snapshot relation epoch 44", ProjectIndexSnapshotCacheEpoch)
+	if ProjectIndexSnapshotCacheEpoch != 45 {
+		t.Fatalf("ProjectIndexSnapshotCacheEpoch = %d, want retained lint suppression epoch 45", ProjectIndexSnapshotCacheEpoch)
 	}
 
 	doc := exportedConstDoc(t, "identity.go", "ProjectIndexSnapshotCacheEpoch")
+	normalizedDoc := strings.Join(strings.Fields(doc), " ")
 	for _, phrase := range []string{
 		"persisted `.crux/cache/index-v2/epoch-*`",
 		"stale snapshot masking after restart",
 		"Eval arm placement and embedding facts",
 		"unconditional Rust/Oxc Static Index scheduling",
 		"Workspace snapshot usage relations",
-		"Epoch 44",
+		"Epoch 45",
+		"retained lint suppression evidence",
 		"TS-owned AST and semantic fact cache identity",
 	} {
-		if !strings.Contains(doc, phrase) {
+		if !strings.Contains(normalizedDoc, phrase) {
 			t.Fatalf("ProjectIndexSnapshotCacheEpoch doc = %q, missing %q", doc, phrase)
 		}
 	}
@@ -32,10 +35,29 @@ func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
 
 func TestProjectIndexFactStorePathIncludesSnapshotEpoch(t *testing.T) {
 	root := t.TempDir()
-	wantSuffix := filepath.Join(".crux", "cache", "index-v2", "epoch-44", "index.db")
+	wantSuffix := filepath.Join(".crux", "cache", "index-v2", "epoch-45", "index.db")
 
 	if got := projectIndexFactStoreDBFile(root); !strings.HasSuffix(got, wantSuffix) {
 		t.Fatalf("projectIndexFactStoreDBFile() = %q, want suffix %q", got, wantSuffix)
+	}
+}
+
+func TestProjectIndexFactStoreMissesPreSuppressionSnapshotEpoch(t *testing.T) {
+	root := t.TempDir()
+	oldPath := filepath.Join(root, ".crux", "cache", "index-v2", "epoch-44", "index.db")
+	if err := os.MkdirAll(filepath.Dir(oldPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(oldPath, []byte("pre-suppression snapshot"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	currentPath := projectIndexFactStoreDBFile(root)
+	if currentPath == oldPath {
+		t.Fatalf("current snapshot path = old epoch path %q", currentPath)
+	}
+	if _, err := os.Stat(currentPath); !os.IsNotExist(err) {
+		t.Fatalf("current snapshot path stat error = %v, want cache miss", err)
 	}
 }
 

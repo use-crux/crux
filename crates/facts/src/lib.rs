@@ -342,8 +342,31 @@ pub struct StaticIndexLintFinding {
     pub rule_id: String,
     pub title: String,
     pub message: String,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub suppressed: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub suppressed_by: Option<StaticIndexLintSuppressedBy>,
     #[serde(flatten, default, skip_serializing_if = "BTreeMap::is_empty")]
     pub extra: BTreeMap<String, Value>,
+}
+
+/// Scope of the source directive that suppressed a lint finding.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum StaticIndexLintSuppressionScope {
+    NextLine,
+    Line,
+    File,
+}
+
+/// Source directive responsible for suppressing a lint finding.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StaticIndexLintSuppressedBy {
+    pub source: StaticIndexSourceLocation,
+    pub scope: StaticIndexLintSuppressionScope,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
 }
 
 /// Descriptor for a lint or graph rule available during static finalization.
@@ -411,9 +434,90 @@ pub struct StaticIndexSourceGraphShard {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
     use serde_json::json;
 
     use super::*;
+
+    fn active_lint_finding() -> StaticIndexLintFinding {
+        StaticIndexLintFinding {
+            id: "lint:example".to_string(),
+            severity: StaticIndexDiagnosticSeverity::Warning,
+            rule_id: "example.rule".to_string(),
+            title: "Example rule".to_string(),
+            message: "Example finding".to_string(),
+            suppressed: false,
+            suppressed_by: None,
+            extra: BTreeMap::new(),
+        }
+    }
+
+    #[test]
+    fn active_lint_finding_omits_suppression_fields() {
+        let encoded = serde_json::to_value(active_lint_finding()).expect("encoded finding");
+
+        assert_eq!(encoded.get("suppressed"), None);
+        assert_eq!(encoded.get("suppressedBy"), None);
+    }
+
+    #[test]
+    fn lint_finding_defaults_missing_suppressed_to_false() {
+        let decoded: StaticIndexLintFinding = serde_json::from_value(json!({
+            "id": "lint:example",
+            "severity": "warning",
+            "ruleId": "example.rule",
+            "title": "Example rule",
+            "message": "Example finding"
+        }))
+        .expect("decoded finding");
+
+        assert!(!decoded.suppressed);
+        assert_eq!(decoded.suppressed_by, None);
+    }
+
+    #[test]
+    fn suppressed_lint_finding_serializes_typed_metadata() {
+        let mut finding = active_lint_finding();
+        finding.suppressed = true;
+        finding.suppressed_by = Some(StaticIndexLintSuppressedBy {
+            source: StaticIndexSourceLocation {
+                file: "src/workflow.ts".to_string(),
+                line: 7,
+                column: Some(3),
+                function_name: None,
+            },
+            scope: StaticIndexLintSuppressionScope::NextLine,
+            reason: Some("intentional handoff".to_string()),
+        });
+
+        let encoded = serde_json::to_value(finding).expect("encoded finding");
+
+        assert_eq!(encoded["suppressed"], true);
+        assert_eq!(encoded["suppressedBy"]["scope"], "next-line");
+        assert_eq!(encoded["suppressedBy"]["reason"], "intentional handoff");
+        assert_eq!(encoded["suppressedBy"]["source"]["line"], 7);
+        assert_eq!(encoded.get("suppressed_by"), None);
+    }
+
+    #[test]
+    fn lint_finding_rejects_unknown_suppression_scope() {
+        let error = serde_json::from_value::<StaticIndexLintFinding>(json!({
+            "id": "lint:example",
+            "severity": "warning",
+            "ruleId": "example.rule",
+            "title": "Example rule",
+            "message": "Example finding",
+            "suppressed": true,
+            "suppressedBy": {
+                "source": { "file": "src/workflow.ts", "line": 7 },
+                "scope": "next-lineage"
+            }
+        }))
+        .expect_err("unknown suppression scope must be rejected");
+
+        assert!(error.to_string().contains("next-lineage"));
+    }
 
     #[test]
     fn definition_source_snippet_is_a_typed_contract_surface() {

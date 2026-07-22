@@ -74,6 +74,9 @@ func (w *Worker) StaticIndexPrepare(ctx context.Context, request protocol.Prepar
 }
 
 func (w *Worker) StaticIndexFinalize(ctx context.Context, request protocol.FinalizeRequest) (protocol.FinalizeResponse, error) {
+	if err := protocol.ValidateLintSuppressions(request.LintSuppressions); err != nil {
+		return protocol.FinalizeResponse{}, err
+	}
 	id := w.NextID()
 	request.ID = id
 	envelope, err := call[protocol.WorkerResponse[protocol.FinalizeResponse]](ctx, w, request)

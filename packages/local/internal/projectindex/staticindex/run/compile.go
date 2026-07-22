@@ -8,7 +8,6 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/cache"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/compat"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/protocol"
-	runlint "github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/run/lint"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/run/patch"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/sourceprofile"
 )
@@ -45,7 +44,6 @@ func runCompile(
 		ExtensionFacts:   extensionFacts,
 		RelationSpecs:    request.Plan.RelationSpecs,
 		LintConfig:       request.Plan.LintConfig,
-		LintSuppressions: runlint.SuppressionsFromSourceText(sourceInput.SourceTextByFile),
 		EmitBuiltinLints: &emitBuiltinLints,
 		PatchInvalidates: request.PatchInvalidates,
 	})

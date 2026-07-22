@@ -177,6 +177,7 @@ func writeExtensionParityPackage(t testing.TB, root string) {
             confidence: 'high',
             title: 'Workflow owner is missing',
             message: 'Workflow "' + definition.name + '" is missing owner metadata.',
+            source: definition.source,
             relatedDefinitionIds: [definition.id],
             affectedDefinitionIds: [definition.id],
             evidence: [{ kind: 'definition', definitionId: definition.id, label: 'Workflow without owner metadata' }],

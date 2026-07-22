@@ -229,11 +229,18 @@ func TestWebSocketIndexMessagesStayTyped(t *testing.T) {
 
 func TestWebSocket_connect_and_receive_snapshot(t *testing.T) {
 	s := store.NewStore()
-	s.SetIndex(
-		[]store.PromptMeta{{ID: "p1"}},
-		[]store.ContextMeta{{ID: "c1"}},
-		[]store.ToolMeta{{Name: "t1"}},
-	)
+	s.SetIndexData(store.IndexData{
+		SchemaVersion: 1,
+		Prompts:       []store.PromptMeta{{ID: "p1"}},
+		Contexts:      []store.ContextMeta{{ID: "c1"}},
+		Tools:         []store.ToolMeta{{Name: "t1"}},
+		LintFindings: []store.IndexLintFinding{{
+			ID: "suppressed", Suppressed: true,
+			SuppressedBy: &store.IndexLintSuppressedBy{
+				Source: &store.SourceLoc{File: "src/workflow.ts", Line: 7}, Scope: "next-line", Reason: "intentional handoff",
+			},
+		}},
+	})
 	srv := newTestWSServer(t, s)
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
@@ -259,6 +266,16 @@ func TestWebSocket_connect_and_receive_snapshot(t *testing.T) {
 					prompts, _ := envelope["prompts"].([]any)
 					if len(prompts) != 1 {
 						t.Errorf("index prompts = %d, want 1", len(prompts))
+					}
+					findings, _ := envelope["lintFindings"].([]any)
+					if len(findings) != 1 {
+						t.Errorf("index lint findings = %d, want 1", len(findings))
+					} else {
+						finding, _ := findings[0].(map[string]any)
+						suppressedBy, _ := finding["suppressedBy"].(map[string]any)
+						if suppressedBy["scope"] != "next-line" || suppressedBy["reason"] != "intentional handoff" {
+							t.Errorf("suppressedBy = %#v, want complete metadata", suppressedBy)
+						}
 					}
 				}
 			}

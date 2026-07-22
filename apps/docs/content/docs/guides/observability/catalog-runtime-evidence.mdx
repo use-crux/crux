@@ -32,6 +32,24 @@ manifest or missing definition remains explicitly unresolved; Crux never
 substitutes the current checkout. Current-Catalog comparison is shown
 separately, and historical ids still filter the Runs list.
 
+Run Detail also has a separate **Current project health** card. At read time,
+Crux Local correlates the run's recorded `DefinitionRef` values with active and
+suppressed lint findings in the currently materialized Project Index. This is
+current authored context, not historical run evidence: it does not claim that
+a suppression happened during execution, does not create a suppression span,
+and cannot change the run's success or failure status.
+
+The card preserves matched definition roles and relationships, keeps active
+and suppressed totals separate, and links each definition back to Catalog.
+Suppressed rows remain visibly tagged and show the finding source separately
+from the directive location, scope, and optional reason. A reasonless directive
+still renders as **no reason recorded**. If no Project Index is available, the
+context is absent rather than treated as a run error.
+
+Catalog Health uses the same active-versus-suppressed distinction. Its badges,
+severity, rule, affected-definition, and default verdict counts are active-only,
+while suppressed rows remain available for audit. See [Index Lint](/docs/guides/project-health/lint#fix-before-suppressing).
+
 ## Honest gaps
 
 Crux only joins when the runtime already holds a real compiled definition handle; it never invents an id from a stack trace, so a few kinds stay truthfully uncounted:

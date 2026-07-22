@@ -161,6 +161,27 @@ func TestIndexViewShowsBackendLintFindings(t *testing.T) {
 	}
 }
 
+func TestIndexViewOmitsSuppressedFindingsFromBadgesAndLists(t *testing.T) {
+	c := NewIndex()
+	data := sampleIndex()
+	data.LintFindings = []api.IndexLintFinding{
+		{ID: "active", RuleID: "active.rule", PrimaryDefinitionID: "agent:docs_agent"},
+		{ID: "suppressed", RuleID: "suppressed.rule", PrimaryDefinitionID: "agent:docs_agent", Suppressed: true},
+	}
+	c.SetIndexForTest(data)
+	c.definitions.Select("agent:docs_agent")
+	c.Resize(Size{Width: 160, Height: 40})
+
+	findings := c.lintFindingsForDefinition("agent:docs_agent")
+	if len(findings) != 1 || findings[0].ID != "active" {
+		t.Fatalf("lint findings = %+v, want active-only list", findings)
+	}
+	out := c.View(Size{Width: 160, Height: 40})
+	if !strings.Contains(out, "lint 1") || strings.Contains(out, "suppressed.rule") {
+		t.Fatalf("index View() = %q, want active-only badge and detail", out)
+	}
+}
+
 // TestIndexExportEmitsCmd asserts `e` returns a non-nil cmd that
 // exports the focused definition as JSON.
 func TestIndexExportEmitsCmd(t *testing.T) {

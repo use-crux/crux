@@ -39,7 +39,13 @@ func printLintFinding(io *output.IO, finding api.IndexLintFinding) {
 	severity := renderLintSeverity(io, finding.Severity)
 	target := lintFindingTarget(finding)
 	source := formatLintSource(finding.Source)
-	fmt.Fprintf(io.Out, "  %s %s %s\n", severity, io.Sprint(output.Bold, finding.Title), io.Sprint(output.Dim, finding.RuleID))
+	title := io.Sprint(output.Bold, finding.Title)
+	state := ""
+	if finding.Suppressed {
+		title = io.Sprint(output.Dim, finding.Title)
+		state = " " + io.Sprint(output.Dim, "suppressed")
+	}
+	fmt.Fprintf(io.Out, "  %s %s %s%s\n", severity, title, io.Sprint(output.Dim, finding.RuleID), state)
 	if target != "" || source != "" {
 		fmt.Fprintf(io.Out, "     %s", io.Sprint(output.Cyan, target))
 		if source != "" {
@@ -53,6 +59,14 @@ func printLintFinding(io *output.IO, finding api.IndexLintFinding) {
 	if finding.Rationale != "" {
 		fmt.Fprintf(io.Out, "     %s %s\n", io.Sprint(output.Dim, "why:"), finding.Rationale)
 	}
+	if finding.Suppressed && finding.SuppressedBy != nil {
+		directive := formatLintSuppressionEvidence(finding.SuppressedBy)
+		fmt.Fprintf(io.Out, "     %s %s", io.Sprint(output.Dim, "suppressed:"), directive)
+		if finding.SuppressedBy.Reason != "" {
+			fmt.Fprintf(io.Out, " — %s", finding.SuppressedBy.Reason)
+		}
+		fmt.Fprintln(io.Out)
+	}
 	if len(finding.Fixes) > 0 {
 		fmt.Fprintf(io.Out, "     %s %s\n", io.Sprint(output.Dim, "fix:"), finding.Fixes[0].Description)
 	}
@@ -60,6 +74,20 @@ func printLintFinding(io *output.IO, finding api.IndexLintFinding) {
 		fmt.Fprintf(io.Out, "     %s %s\n", io.Sprint(output.Dim, "docs:"), finding.DocsURL)
 	}
 	fmt.Fprintln(io.Out)
+}
+
+func formatLintSuppressionEvidence(evidence *api.IndexLintSuppressedBy) string {
+	if evidence == nil {
+		return ""
+	}
+	source := formatLintSource(evidence.Source)
+	if evidence.Scope == "" {
+		return source
+	}
+	if source == "" {
+		return evidence.Scope
+	}
+	return evidence.Scope + " at " + source
 }
 
 func countLintSeverities(findings []api.IndexLintFinding) map[string]int {

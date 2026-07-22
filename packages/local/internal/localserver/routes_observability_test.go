@@ -45,7 +45,7 @@ func TestObservabilityBareRunsListRouteIsNotRegistered(t *testing.T) {
 	}
 }
 
-func TestRunDetailSeparatesHistoricalManifestAndCurrentCatalog(t *testing.T) {
+func TestRunDetailSeparatesHistoricalManifestAndCurrentIndexContext(t *testing.T) {
 	ctx := context.Background()
 	manifestRoot := t.TempDir()
 	manifestBytes, err := os.ReadFile(filepath.Join("..", "observability", "testdata", "manifest-v1.json"))
@@ -70,9 +70,23 @@ func TestRunDetailSeparatesHistoricalManifestAndCurrentCatalog(t *testing.T) {
 		t.Fatal(err)
 	}
 	indexStore := store.NewStore()
+	projectRoot := t.TempDir()
+	findingColumn := 2
+	directiveColumn := 4
 	indexStore.SetIndexData(store.IndexData{
-		Project:     &store.ProjectIdentity{Name: "fixture"},
+		IndexedAt:   "2026-07-22T12:00:00Z",
+		Project:     &store.ProjectIdentity{Root: projectRoot, Name: "fixture"},
 		Definitions: []store.ProjectDefinition{{ID: "prompt:writer", Kind: "prompt", Name: "writer", Description: "API_SECRET_MUST_NOT_LEAK"}},
+		LintFindings: []store.IndexLintFinding{{
+			ID: "lint:writer", RuleID: "prompt.missing_context", Severity: "warning",
+			Title: "Writer has no context", Message: "Add authored context.",
+			Source:              &store.SourceLoc{File: filepath.Join(projectRoot, "src", "writer.ts"), Line: 8, Column: &findingColumn},
+			PrimaryDefinitionID: "prompt:writer", Suppressed: true,
+			SuppressedBy: &store.IndexLintSuppressedBy{
+				Source: &store.SourceLoc{File: filepath.Join(projectRoot, "src", "writer.ts"), Line: 7, Column: &directiveColumn},
+				Scope:  "next-line", Reason: "validated externally",
+			},
+		}},
 	})
 	catalog := devtools.NewService(indexStore, nil)
 	t.Cleanup(catalog.Shutdown)
@@ -84,13 +98,41 @@ func TestRunDetailSeparatesHistoricalManifestAndCurrentCatalog(t *testing.T) {
 		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
 	}
 	body := response.Body.String()
-	for _, want := range []string{`"manifest":`, `"resolution":"resolved"`, `"currentCatalog":`, `"label":"current-catalog"`} {
+	for _, want := range []string{
+		`"manifest":`, `"resolution":"resolved"`, `"currentCatalog":`, `"label":"current-catalog"`,
+		`"currentProjectHealth":`, `"label":"current-project-health"`, `"activeCount":0`, `"suppressedCount":1`,
+		`"scope":"next-line"`, `"reason":"validated externally"`,
+		`"source":{"file":"src/writer.ts","line":8,"column":2}`,
+	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("body missing %s: %s", want, body)
 		}
 	}
 	if strings.Contains(body, "API_SECRET_MUST_NOT_LEAK") {
 		t.Fatalf("current Catalog authored content leaked: %s", body)
+	}
+	if strings.Contains(body, projectRoot) {
+		t.Fatalf("absolute Project root leaked through current health: %s", body)
+	}
+	var projected observability.RunDetail
+	if err := json.Unmarshal(response.Body.Bytes(), &projected); err != nil {
+		t.Fatal(err)
+	}
+	if projected.Run.Status != "incomplete" || projected.Counts.Primary != 0 || len(projected.Diagnostics) == 0 {
+		t.Fatalf("current Project Health changed run status/counts/diagnostics: %#v", projected)
+	}
+	if projected.CurrentProjectHealth == nil || projected.CurrentProjectHealth.SuppressedCount != 1 {
+		t.Fatalf("current Project Health projection = %#v", projected.CurrentProjectHealth)
+	}
+
+	indexStore.SetIndexData(store.IndexData{})
+	absentResponse := httptest.NewRecorder()
+	mux.ServeHTTP(absentResponse, httptest.NewRequest(http.MethodGet, "/api/observability/runs/run-manifest-api", nil))
+	if absentResponse.Code != http.StatusOK {
+		t.Fatalf("absent-index status = %d, body = %s", absentResponse.Code, absentResponse.Body.String())
+	}
+	if strings.Contains(absentResponse.Body.String(), `"currentProjectHealth"`) {
+		t.Fatalf("absent Index emitted current Project Health: %s", absentResponse.Body.String())
 	}
 }
 

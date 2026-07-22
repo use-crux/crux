@@ -121,6 +121,20 @@ instead of becoming dead links. The projection stores runtime-emitted identity o
 validated against the current index at write time, and runs whose refs point at a since-deleted
 definition still appear in the filtered Runs list.
 
+`RunDetail.currentProjectHealth` is a separate optional read-time projection.
+Crux Local compares the run's primary, related, affected, and propagated
+definition refs with lint findings in one current Project Index snapshot. Each
+projected finding preserves its id, rule, severity, title/message, finding
+source, matched definition ids/kinds/roles, relationship kinds, and strict
+active/suppressed state. Suppressed findings retain directive source, scope,
+and optional reason. The projection is omitted when no materialized Index is
+available; a present Index with no matches returns an empty findings list.
+
+This field is current authored context, not a runtime record or historical
+claim. It does not add a span, alter stored observability evidence, or affect
+the run status. Consumers should label it **Current project health** or
+**Current Index context** and keep active and suppressed counts separate.
+
 ## Error evidence
 
 Thrown errors are represented with a shared normalized shape. `observe.span()` and `observe.openSpan().error()` attach:

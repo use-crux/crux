@@ -75,10 +75,7 @@ func buildIndexDefinitionDocument(index api.IndexData, definition api.ProjectDef
 		}
 	}
 
-	for _, finding := range index.LintFindings {
-		if !indexLintFindingReferencesDefinition(finding, definition.ID) {
-			continue
-		}
+	for _, finding := range activeLintFindingsForDefinition(index, definition.ID) {
 		section("LINT")
 		field(finding.RuleID, strings.TrimSpace(finding.Severity+" · "+finding.Title))
 		field("message", finding.Message)

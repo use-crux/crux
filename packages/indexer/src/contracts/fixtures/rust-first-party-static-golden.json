@@ -5,12 +5,12 @@
   "fileSelection": "staticDefinitionFiles(root)",
   "projection": "canonicalStaticExtractionJson(definitions,relations,diagnostics,dependencies)",
   "totals": {
-    "files": 763,
+    "files": 766,
     "definitions": 88,
     "relations": 7,
     "diagnostics": 25,
-    "dependencies": 1450,
-    "canonicalBytes": 213797
+    "dependencies": 1451,
+    "canonicalBytes": 214051
   },
   "files": [
     {
@@ -2039,6 +2039,15 @@
       "dependencies": 3
     },
     {
+      "file": "packages/core/__type_tests__/project-index-lint-suppression.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
       "file": "packages/core/__type_tests__/prompt-compiler-contract.ts",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
@@ -3111,12 +3120,12 @@
     },
     {
       "file": "packages/core/src/project-index/index.ts",
-      "sha256": "0b5a06d0b61e3763089c10340fe480947a02fcde68f0b93488b32d47d9f83ede",
-      "bytes": 125,
+      "sha256": "955aa3574c433cf28ec036b4c35a46c3adb97a7f56237c302e437a25ecada3ba",
+      "bytes": 175,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 1
+      "dependencies": 2
     },
     {
       "file": "packages/core/src/project-index/manifest.ts",
@@ -4064,6 +4073,15 @@
       "dependencies": 7
     },
     {
+      "file": "packages/devtools/ui/src/features/run-detail/components/ProjectHealthCard.tsx",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
       "file": "packages/devtools/ui/src/features/run-detail/components/RoutingReceiptReport.tsx",
       "sha256": "cc760b56ea1a422726d5354a43dfe8ef725d2bb9695dbb96f1ad2b01e4f72022",
       "bytes": 407,
@@ -4119,6 +4137,15 @@
     },
     {
       "file": "packages/devtools/ui/src/features/run-detail/lib/guardrail-report-facts.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/devtools/ui/src/features/run-detail/lib/project-health.ts",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
       "definitions": 0,

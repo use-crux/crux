@@ -102,6 +102,35 @@ File-level suppressions should be rare:
 
 Unknown rule ids and unused suppressions are reported as index diagnostics so stale comments do not silently accumulate.
 
+A matched suppression does not delete the finding. Crux retains it in the
+Project Index with the directive location, exact `line`, `next-line`, or `file`
+scope, and the optional authored reason. This makes a cached snapshot
+self-describing even if the source later changes or is unavailable.
+
+In Devtools, **Index Health** and each Catalog definition keep those retained
+rows available for audit. Active and suppressed totals are shown separately;
+severity, rule, affected-definition, badge, and default Health verdicts count
+active findings only. A suppressed-only project therefore reports `0 active`
+and its suppressed total instead of claiming that no findings exist.
+
+Every retained row is explicitly tagged **suppressed**. Its expanded evidence
+labels the finding source separately from the suppressing directive source and
+shows the directive scope and location. Reasons are optional: a directive with
+no reason still shows its suppression state and evidence as **no reason
+recorded**.
+
+Default `crux lint`, `crux check`, and TUI views hide suppressed findings. Use
+`--include-suppressed` when you want to audit the retained rows. Displaying a
+suppressed row never makes it participate in a `--fail-on` gate; gates always
+consider active findings only.
+
+Run Detail can also show these rows under **Current project health** when the
+run recorded matching definition references. That card is a read-time view of
+the currently materialized Project Index—not proof of which findings or
+directives existed when the run executed. It separates active and suppressed
+rows, does not change the run status or any lint/check gate, and links each
+matched definition back to Catalog.
+
 ## Tune A Rule
 
 Use per-rule config when a project needs a different severity or when a rule is not relevant yet:
@@ -140,4 +169,6 @@ If Crux can see the project and the finding is still wrong, suppress it with a r
 - Reference: [Index Lint](/docs/reference/crux-core/lint)
 - Reference: [Index Lints](/docs/reference/crux-core/index-lints)
 - Reference: [Project Index](/docs/reference/crux-core/project-index)
+- Guide: [Catalog runtime evidence](/docs/guides/observability/catalog-runtime-evidence)
+- Guide: [Runs and delivery health](/docs/guides/observability/runs-and-delivery)
 - Advanced: [Writing an Indexer Extension](/docs/guides/advanced/writing-indexer-extension)
