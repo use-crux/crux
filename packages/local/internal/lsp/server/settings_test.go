@@ -15,10 +15,12 @@ func TestSettingsMergeValidNestedValues(t *testing.T) {
 		"crux": {
 			"port": 4500,
 			"lint": {"profile": "strict", "includeSuppressed": true},
+			"inlayHints": {"enabled": false},
+			"codeLens": {"enabled": false},
 			"trace": "messages"
 		}
 	}`))
-	want := Settings{Port: 4500, Profile: "strict", IncludeSuppressed: true, Trace: "messages"}
+	want := Settings{Port: 4500, Profile: "strict", IncludeSuppressed: true, Trace: "messages", InlayHintsEnabled: false}
 	if !reflect.DeepEqual(current, want) {
 		t.Fatalf("settings = %#v, want %#v", current, want)
 	}
@@ -32,6 +34,17 @@ func TestSettingsMergeValidNestedValues(t *testing.T) {
 	}`))
 	if !reflect.DeepEqual(current, want) {
 		t.Fatalf("invalid values changed settings to %#v", current)
+	}
+}
+
+func TestSettingsDefaultEnablesInlayHintsAndCodeLens(t *testing.T) {
+	t.Parallel()
+
+	if settings := defaultSettings(4400); !settings.InlayHintsEnabled {
+		t.Fatalf("default settings = %#v, want inlay hints enabled", settings)
+	}
+	if settings := defaultSettings(4400); !settings.CodeLensEnabled {
+		t.Fatalf("default settings = %#v, want code lens enabled", settings)
 	}
 }
 

@@ -120,6 +120,7 @@ func snapshotFromIndex(index api.IndexData) Snapshot {
 		ProjectRoot: root,
 		Findings:    index.LintFindings,
 		Definitions: index.Definitions,
+		Relations:   index.Relations,
 		Sources:     index.Sources,
 	}
 }

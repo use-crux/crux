@@ -11,6 +11,19 @@ const (
 // ClientCapabilities contains the initialize-time capabilities used by Crux.
 type ClientCapabilities struct {
 	TextDocument *TextDocumentClientCapabilities `json:"textDocument,omitempty"`
+	Workspace    *WorkspaceClientCapabilities    `json:"workspace,omitempty"`
+}
+
+// WorkspaceClientCapabilities contains workspace-wide refresh support.
+type WorkspaceClientCapabilities struct {
+	InlayHint *RefreshSupportClientCapabilities `json:"inlayHint,omitempty"`
+	CodeLens  *RefreshSupportClientCapabilities `json:"codeLens,omitempty"`
+}
+
+// RefreshSupportClientCapabilities declares support for a global refresh
+// request initiated by the language server.
+type RefreshSupportClientCapabilities struct {
+	RefreshSupport bool `json:"refreshSupport,omitempty"`
 }
 
 // TextDocumentClientCapabilities contains document-oriented client support.

@@ -7,6 +7,8 @@ type Settings struct {
 	Port              int
 	Profile           string
 	IncludeSuppressed bool
+	InlayHintsEnabled bool
+	CodeLensEnabled   bool
 	Trace             string
 }
 
@@ -14,7 +16,7 @@ func defaultSettings(port int) Settings {
 	if port == 0 {
 		port = 4400
 	}
-	return Settings{Port: port, Trace: "off"}
+	return Settings{Port: port, InlayHintsEnabled: true, CodeLensEnabled: true, Trace: "off"}
 }
 
 func mergeSettings(current Settings, raw json.RawMessage) Settings {
@@ -23,9 +25,15 @@ func mergeSettings(current Settings, raw json.RawMessage) Settings {
 	}
 	var input struct {
 		Crux struct {
-			Port  json.RawMessage `json:"port"`
-			Trace json.RawMessage `json:"trace"`
-			Lint  struct {
+			Port       json.RawMessage `json:"port"`
+			Trace      json.RawMessage `json:"trace"`
+			InlayHints struct {
+				Enabled json.RawMessage `json:"enabled"`
+			} `json:"inlayHints"`
+			CodeLens struct {
+				Enabled json.RawMessage `json:"enabled"`
+			} `json:"codeLens"`
+			Lint struct {
 				Profile           json.RawMessage `json:"profile"`
 				IncludeSuppressed json.RawMessage `json:"includeSuppressed"`
 			} `json:"lint"`
@@ -42,6 +50,12 @@ func mergeSettings(current Settings, raw json.RawMessage) Settings {
 	}
 	if value, ok := decodeBool(input.Crux.Lint.IncludeSuppressed); ok {
 		current.IncludeSuppressed = value
+	}
+	if value, ok := decodeBool(input.Crux.InlayHints.Enabled); ok {
+		current.InlayHintsEnabled = value
+	}
+	if value, ok := decodeBool(input.Crux.CodeLens.Enabled); ok {
+		current.CodeLensEnabled = value
 	}
 	if value, ok := decodeString(input.Crux.Trace); ok && (value == "off" || value == "messages") {
 		current.Trace = value

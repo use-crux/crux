@@ -48,6 +48,7 @@ func decodeSnapshot(data []byte) (Snapshot, error) {
 		Generation:    metadata.Generation,
 		Findings:      index.LintFindings,
 		Definitions:   index.Definitions,
+		Relations:     index.Relations,
 		Sources:       index.Sources,
 	}, nil
 }

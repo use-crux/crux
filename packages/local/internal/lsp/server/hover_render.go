@@ -13,11 +13,24 @@ import (
 const maxHoverFindings = 3
 
 func buildHover(findings []displayedFinding, format protocol.MarkupKind) *protocol.Hover {
+	return buildHoverWithDefinition(findings, nil, format)
+}
+
+func buildHoverWithDefinition(
+	findings []displayedFinding,
+	definition *definitionSummary,
+	format protocol.MarkupKind,
+) *protocol.Hover {
 	ordered := append([]displayedFinding(nil), findings...)
 	sort.SliceStable(ordered, func(left, right int) bool {
 		return displayedFindingLess(ordered[left], ordered[right])
 	})
-	diagnosticRange := ordered[0].Diagnostic.Range
+	var hoverRange protocol.Range
+	if len(ordered) > 0 {
+		hoverRange = ordered[0].Diagnostic.Range
+	} else if definition != nil {
+		hoverRange = definition.Definition.Range
+	}
 	if len(ordered) > maxHoverFindings {
 		ordered = ordered[:maxHoverFindings]
 	}
@@ -48,10 +61,82 @@ func buildHover(findings []displayedFinding, format protocol.MarkupKind) *protoc
 		}
 		writer.append(hoverSection{content: footer, atomic: true}, "\n\n")
 	}
+	if !writer.truncated && definition != nil {
+		for index, section := range definitionHoverSections(*definition, format) {
+			separator := "\n\n"
+			if index == 0 {
+				separator = ""
+				if writer.units > 0 {
+					separator = "\n\n---\n\n"
+				}
+			}
+			if !writer.append(section, separator) {
+				break
+			}
+		}
+	}
 	return &protocol.Hover{
 		Contents: protocol.MarkupContent{Kind: format, Value: writer.String()},
-		Range:    &diagnosticRange,
+		Range:    &hoverRange,
 	}
+}
+
+func definitionHoverSections(
+	summary definitionSummary,
+	format protocol.MarkupKind,
+) []hoverSection {
+	markdown := format == protocol.MarkupKindMarkdown
+	escape := normalizeEngineText
+	if markdown {
+		escape = escapeMarkdown
+	}
+	definition := summary.Definition.Definition
+	name, kind := escape(definition.Name), escape(definition.Kind)
+	sections := make([]hoverSection, 0, 3)
+	if markdown && name != "" {
+		suffix := "**"
+		if kind != "" {
+			suffix += " — " + kind
+		}
+		sections = append(sections, hoverSection{prefix: "**", content: name, suffix: suffix})
+	} else if title := definitionTitle(name, kind); title != "" {
+		sections = append(sections, hoverSection{content: title})
+	}
+	if description := escape(definition.Description); description != "" {
+		sections = append(sections, hoverSection{content: description})
+	}
+	sections = append(sections, hoverSection{content: definitionCountSummary(summary)})
+	return sections
+}
+
+func definitionTitle(name, kind string) string {
+	if name == "" {
+		return kind
+	}
+	if kind == "" {
+		return name
+	}
+	return name + " — " + kind
+}
+
+func definitionCountSummary(summary definitionSummary) string {
+	parts := make([]string, 0, 3)
+	if summary.FindingCount > 0 {
+		parts = append(parts, countLabel(summary.FindingCount, "finding", "findings"))
+	}
+	parts = append(parts,
+		strconv.Itoa(summary.IncomingRelations)+" incoming",
+		countLabel(summary.OutgoingRelations, "outgoing relation", "outgoing relations"),
+	)
+	return strings.Join(parts, " · ")
+}
+
+func countLabel(count int, singular, plural string) string {
+	label := plural
+	if count == 1 {
+		label = singular
+	}
+	return strconv.Itoa(count) + " " + label
 }
 
 func displayedFindingLess(left, right displayedFinding) bool {

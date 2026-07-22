@@ -25,28 +25,38 @@ type Options struct {
 	// FixExecutable resolves the binary spawned for an allowlisted fix. It
 	// defaults to os.Executable; tests may substitute a controlled executable.
 	FixExecutable func() (string, error)
+	// ClientRequestTimeout bounds best-effort server-to-client requests. Zero
+	// uses the default timeout.
+	ClientRequestTimeout time.Duration
 }
 
-// Server handles the P1 LSP method surface.
+// Server handles the Crux LSP method surface.
 type Server struct {
 	options Options
 
-	mu          sync.Mutex
-	shutdown    bool
-	exitCode    int
-	folders     []protocol.WorkspaceFolder
-	clientInfo  *protocol.ClientInfo
-	initialized bool
-	scopeCancel context.CancelFunc
-	outbound    chan protocol.Notification
-	settings    Settings
-	hoverFormat protocol.MarkupKind
-	trusted     bool
-	workspace   workspaceController
-	documents   map[protocol.DocumentURI]documentStatus
+	mu                      sync.Mutex
+	shutdown                bool
+	exitCode                int
+	folders                 []protocol.WorkspaceFolder
+	clientInfo              *protocol.ClientInfo
+	initialized             bool
+	scopeCancel             context.CancelFunc
+	outbound                chan protocol.OutboundMessage
+	settings                Settings
+	hoverFormat             protocol.MarkupKind
+	inlayHintRefreshSupport bool
+	codeLensRefreshSupport  bool
+	openDevtoolsCommand     bool
+	trusted                 bool
+	workspace               workspaceController
+	documents               map[protocol.DocumentURI]documentStatus
 
 	fixMu      sync.Mutex
 	fixRunning map[string]struct{}
+
+	clientRequestMu       sync.Mutex
+	nextClientRequestID   uint64
+	pendingClientRequests map[string]*pendingClientRequest
 }
 
 type documentStatus struct {
@@ -66,24 +76,26 @@ func New(options Options) *Server {
 		options.FixExecutable = os.Executable
 	}
 	return &Server{
-		options:     options,
-		outbound:    make(chan protocol.Notification, 256),
-		settings:    defaultSettings(options.Port),
-		hoverFormat: protocol.MarkupKindPlainText,
-		trusted:     true,
-		documents:   make(map[protocol.DocumentURI]documentStatus),
-		fixRunning:  make(map[string]struct{}),
+		options:               options,
+		outbound:              make(chan protocol.OutboundMessage, 256),
+		settings:              defaultSettings(options.Port),
+		hoverFormat:           protocol.MarkupKindPlainText,
+		trusted:               true,
+		documents:             make(map[protocol.DocumentURI]documentStatus),
+		fixRunning:            make(map[string]struct{}),
+		pendingClientRequests: make(map[string]*pendingClientRequest),
 	}
 }
 
-// Outbound returns asynchronous LSP notifications for the JSON-RPC writer.
-func (s *Server) Outbound() <-chan protocol.Notification { return s.outbound }
+// Outbound returns asynchronous LSP requests and notifications for the
+// JSON-RPC writer.
+func (s *Server) Outbound() <-chan protocol.OutboundMessage { return s.outbound }
 
 // Notify queues one server-to-client notification without writing to stdout
 // directly. The JSON-RPC transport remains the sole write owner.
 func (s *Server) Notify(ctx context.Context, method string, params any) bool {
 	select {
-	case s.outbound <- protocol.Notification{JSONRPC: protocol.JSONRPCVersion, Method: method, Params: params}:
+	case s.outbound <- protocol.OutboundMessage{JSONRPC: protocol.JSONRPCVersion, Method: method, Params: params}:
 		return true
 	case <-ctx.Done():
 		return false
@@ -116,6 +128,7 @@ func (s *Server) Handle(ctx context.Context, request protocol.Request) jsonrpc.H
 		s.scopeCancel = nil
 		s.mu.Unlock()
 		s.closeWorkspace()
+		s.closeClientRequests()
 		if cancel != nil {
 			cancel()
 		}
@@ -129,6 +142,7 @@ func (s *Server) Handle(ctx context.Context, request protocol.Request) jsonrpc.H
 		s.scopeCancel = nil
 		s.mu.Unlock()
 		s.closeWorkspace()
+		s.closeClientRequests()
 		if cancel != nil {
 			cancel()
 		}
@@ -139,6 +153,18 @@ func (s *Server) Handle(ctx context.Context, request protocol.Request) jsonrpc.H
 		return s.executeCommand(ctx, request.Params)
 	case protocol.MethodHover:
 		return s.hover(request.Params)
+	case protocol.MethodDefinition:
+		return s.definition(request.Params)
+	case protocol.MethodReferences:
+		return s.references(request.Params)
+	case protocol.MethodDocumentSymbol:
+		return s.documentSymbol(request.Params)
+	case protocol.MethodInlayHint:
+		return s.inlayHint(request.Params)
+	case protocol.MethodCodeLens:
+		return s.codeLens(request.Params)
+	case protocol.MethodWorkspaceSymbol:
+		return s.workspaceSymbol(ctx, request.Params)
 	case protocol.MethodDidOpen:
 		s.didOpen(request.Params)
 		return jsonrpc.HandlerResult{}
@@ -175,7 +201,13 @@ func methodDirectionMatches(request protocol.Request) bool {
 	requestMethod := request.Method == protocol.MethodInitialize ||
 		request.Method == protocol.MethodShutdown ||
 		request.Method == protocol.MethodHover ||
+		request.Method == protocol.MethodDefinition ||
+		request.Method == protocol.MethodReferences ||
+		request.Method == protocol.MethodDocumentSymbol ||
+		request.Method == protocol.MethodInlayHint ||
+		request.Method == protocol.MethodCodeLens ||
 		request.Method == protocol.MethodCodeAction ||
+		request.Method == protocol.MethodWorkspaceSymbol ||
 		request.Method == protocol.MethodExecuteCommand
 	if requestMethod {
 		return !request.IsNotification()

@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/lsp/jsonrpc"
 	"github.com/use-crux/crux/packages/local/internal/lsp/protocol"
@@ -57,26 +58,47 @@ func TestExitWithoutShutdownRequestsFailureExitCode(t *testing.T) {
 func TestUnknownRequestGetsMethodNotFoundAndUnknownNotificationIsIgnored(t *testing.T) {
 	t.Parallel()
 
-	var input bytes.Buffer
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	input, inputWriter := io.Pipe()
+	outputReader, output := io.Pipe()
+	defer input.Close()
+	defer inputWriter.Close()
+	defer outputReader.Close()
+	defer output.Close()
+
+	done := make(chan error, 1)
+	server := New(Options{})
+	go func() {
+		done <- jsonrpc.Serve(ctx, input, output, io.Discard, server)
+	}()
+
+	writer := jsonrpc.NewWriter(inputWriter)
 	for _, payload := range [][]byte{
 		[]byte(`{"jsonrpc":"2.0","method":"crux/unknownNotification"}`),
 		[]byte(`{"jsonrpc":"2.0","id":7,"method":"crux/unknownRequest"}`),
 	} {
-		if err := jsonrpc.NewWriter(&input).Write(payload); err != nil {
+		if err := writer.Write(payload); err != nil {
 			t.Fatal(err)
 		}
 	}
-	var output bytes.Buffer
-	server := New(Options{})
-	if err := jsonrpc.Serve(context.Background(), &input, &output, io.Discard, server); err != nil {
-		t.Fatalf("serve unknown methods: %v", err)
-	}
-	payload, err := jsonrpc.NewReader(&output).Read()
+	payload, err := jsonrpc.NewReader(outputReader).Read()
 	if err != nil {
 		t.Fatalf("read unknown request response: %v", err)
 	}
 	if got := string(payload); got != `{"jsonrpc":"2.0","id":7,"error":{"code":-32601,"message":"Method not found"}}` {
 		t.Fatalf("unknown request response = %s", got)
+	}
+	if err := inputWriter.Close(); err != nil {
+		t.Fatalf("close unknown-method input: %v", err)
+	}
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("serve unknown methods: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("unknown-method server did not stop after EOF")
 	}
 }
 

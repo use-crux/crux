@@ -35,6 +35,8 @@ func (s *Server) initialize(raw json.RawMessage) jsonrpc.HandlerResult {
 	s.folders = folders
 	s.clientInfo = params.ClientInfo
 	s.hoverFormat = preferredHoverFormat(params.Capabilities)
+	s.inlayHintRefreshSupport, s.codeLensRefreshSupport = refreshSupport(params.Capabilities)
+	s.openDevtoolsCommand = initializationClientCommands(params.InitializationOptions).OpenDevtools
 	s.settings = mergeSettings(s.settings, params.InitializationOptions)
 	s.trusted = initializationWorkspaceTrusted(params.InitializationOptions)
 	s.mu.Unlock()
@@ -46,13 +48,19 @@ func (s *Server) initialize(raw json.RawMessage) jsonrpc.HandlerResult {
 				Change:    protocol.SyncIncremental,
 				Save:      protocol.SaveOptions{IncludeText: false},
 			},
-			HoverProvider: true,
+			HoverProvider:          true,
+			DefinitionProvider:     true,
+			ReferencesProvider:     true,
+			DocumentSymbolProvider: true,
 			CodeActionProvider: protocol.CodeActionOptions{
 				CodeActionKinds: []protocol.CodeActionKind{protocol.CodeActionQuickFix},
 			},
 			ExecuteCommandProvider: protocol.ExecuteCommandOptions{
 				Commands: []string{runFixCommand},
 			},
+			WorkspaceSymbolProvider: true,
+			InlayHintProvider:       true,
+			CodeLensProvider:        protocol.CodeLensOptions{ResolveProvider: false},
 			Workspace: protocol.WorkspaceOptions{
 				WorkspaceFolders: protocol.WorkspaceFoldersOptions{
 					Supported:           true,
@@ -62,6 +70,34 @@ func (s *Server) initialize(raw json.RawMessage) jsonrpc.HandlerResult {
 		},
 		ServerInfo: protocol.ServerInfo{Name: "crux-lsp", Version: s.options.Version},
 	}}
+}
+
+type clientCommands struct {
+	OpenDevtools bool `json:"openDevtools"`
+}
+
+func initializationClientCommands(raw json.RawMessage) clientCommands {
+	var options struct {
+		ClientCommands clientCommands `json:"clientCommands"`
+	}
+	if len(raw) == 0 || json.Unmarshal(raw, &options) != nil {
+		return clientCommands{}
+	}
+	return options.ClientCommands
+}
+
+func refreshSupport(capabilities *protocol.ClientCapabilities) (inlayHint, codeLens bool) {
+	if capabilities == nil || capabilities.Workspace == nil {
+		return false, false
+	}
+	workspace := capabilities.Workspace
+	if workspace.InlayHint != nil {
+		inlayHint = workspace.InlayHint.RefreshSupport
+	}
+	if workspace.CodeLens != nil {
+		codeLens = workspace.CodeLens.RefreshSupport
+	}
+	return inlayHint, codeLens
 }
 
 func initializationWorkspaceTrusted(raw json.RawMessage) bool {

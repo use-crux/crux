@@ -34,9 +34,11 @@ type fixActionWorkspace interface {
 }
 
 type scopeSession struct {
-	scope     readmodel.Scope
-	publisher *Publisher
-	cancel    context.CancelFunc
+	scope      readmodel.Scope
+	folderName string
+	publisher  *Publisher
+	mode       readmodel.Mode
+	cancel     context.CancelFunc
 }
 
 type workspaceRuntime struct {
@@ -71,7 +73,7 @@ func (w *workspaceRuntime) Start(ctx context.Context, folders []protocol.Workspa
 	w.settings = settings
 	for _, scope := range readmodel.DetectScopes(folders) {
 		lines := mapping.NewLineIndex()
-		session := &scopeSession{scope: scope}
+		session := &scopeSession{scope: scope, folderName: workspaceFolderName(scope.Root, folders)}
 		session.publisher = NewPublisher(PublisherOptions{
 			ScopeID:    scope.ID,
 			Root:       scope.Root,
@@ -81,6 +83,7 @@ func (w *workspaceRuntime) Start(ctx context.Context, folders []protocol.Workspa
 			Notify: func(method string, params any) {
 				w.server.Notify(ctx, method, params)
 			},
+			OnPublish: w.server.requestEditorAnnotationsRefreshIfEnabled,
 			Log: func(message string) {
 				fmt.Fprintf(w.logs, "crux lsp: %s\n", message)
 			},
@@ -210,7 +213,12 @@ func (w *workspaceRuntime) startManagerLocked(session *scopeSession) {
 		Transport: readmodel.NewAttachTransport(api.NewDefault(w.settings.Port)),
 		Store:     w.store,
 		Logs:      w.logs,
-		OnChange:  session.publisher.Change,
+		OnChange: func(change readmodel.Change) {
+			w.handleScopeChange(session, change)
+		},
+		OnModeChange: func(mode readmodel.Mode) {
+			w.setSessionMode(session, mode)
+		},
 		OnWarning: func(message string) {
 			w.server.Notify(ctx, protocol.MethodLogMessage, protocol.LogMessageParams{
 				Type: protocol.MessageTypeWarning, Message: message,

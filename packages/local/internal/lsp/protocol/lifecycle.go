@@ -35,11 +35,22 @@ type ServerInfo struct {
 }
 
 type ServerCapabilities struct {
-	TextDocumentSync       TextDocumentSyncOptions `json:"textDocumentSync"`
-	HoverProvider          bool                    `json:"hoverProvider"`
-	CodeActionProvider     CodeActionOptions       `json:"codeActionProvider"`
-	ExecuteCommandProvider ExecuteCommandOptions   `json:"executeCommandProvider"`
-	Workspace              WorkspaceOptions        `json:"workspace"`
+	TextDocumentSync        TextDocumentSyncOptions `json:"textDocumentSync"`
+	HoverProvider           bool                    `json:"hoverProvider"`
+	DefinitionProvider      bool                    `json:"definitionProvider"`
+	ReferencesProvider      bool                    `json:"referencesProvider"`
+	DocumentSymbolProvider  bool                    `json:"documentSymbolProvider"`
+	CodeActionProvider      CodeActionOptions       `json:"codeActionProvider"`
+	ExecuteCommandProvider  ExecuteCommandOptions   `json:"executeCommandProvider"`
+	WorkspaceSymbolProvider bool                    `json:"workspaceSymbolProvider"`
+	InlayHintProvider       bool                    `json:"inlayHintProvider"`
+	CodeLensProvider        CodeLensOptions         `json:"codeLensProvider"`
+	Workspace               WorkspaceOptions        `json:"workspace"`
+}
+
+// CodeLensOptions declares eager code lenses without a resolve round trip.
+type CodeLensOptions struct {
+	ResolveProvider bool `json:"resolveProvider"`
 }
 
 type TextDocumentSyncOptions struct {

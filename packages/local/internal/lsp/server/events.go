@@ -80,12 +80,23 @@ func (s *Server) didChangeConfiguration(raw json.RawMessage) {
 		return
 	}
 	s.mu.Lock()
+	previous := s.settings
 	s.settings = mergeSettings(s.settings, params.Settings)
 	settings := s.settings
+	refreshInlayHints := previous.InlayHintsEnabled != settings.InlayHintsEnabled &&
+		s.inlayHintRefreshSupport
+	refreshCodeLens := previous.CodeLensEnabled != settings.CodeLensEnabled &&
+		s.codeLensRefreshSupport
 	workspace := s.workspace
 	s.mu.Unlock()
 	if workspace != nil {
 		workspace.UpdateSettings(settings)
+	}
+	if refreshInlayHints {
+		s.RequestClient(protocol.MethodInlayHintRefresh, nil)
+	}
+	if refreshCodeLens {
+		s.requestCodeLensRefresh()
 	}
 }
 

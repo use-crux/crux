@@ -91,6 +91,12 @@ func (m *Mapper) MapFindings(findings []api.IndexLintFinding) map[protocol.Docum
 	return result
 }
 
+// MapSourceLoc converts a Project Index source location to its document URI
+// and UTF-16 LSP range. Locations without a column cover the whole line.
+func (m *Mapper) MapSourceLoc(source api.SourceLoc) (protocol.DocumentURI, protocol.Range) {
+	return protocol.DocumentURI(FileURI(m.options.Root, source.File)), m.sourceLocRange(source)
+}
+
 // ResolveDocsURL makes site-relative docs links absolute and preserves valid
 // absolute HTTP(S) links.
 func ResolveDocsURL(value string) string {

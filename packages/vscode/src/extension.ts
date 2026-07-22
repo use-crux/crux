@@ -9,6 +9,7 @@ import {
 } from 'vscode-languageclient/node'
 import { ClientSlot } from './client-slot.js'
 import { discoverBinary, type DiscoveryHost } from './discovery.js'
+import { registerExtensionCommands } from './extension-commands.js'
 import {
   createInitializationOptions,
   serverConfigurationSections,
@@ -32,12 +33,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(
     output,
     decorations,
-    vscode.commands.registerCommand('crux.openDocs', async (href: unknown) => {
-      if (typeof href === 'string') {
-        await vscode.env.openExternal(vscode.Uri.parse(href))
-      }
+    ...registerExtensionCommands({
+      registerCommand: (command, handler) => vscode.commands.registerCommand(command, handler),
+      getPort: () => vscode.workspace.getConfiguration('crux').get<number>('port', 4400),
+      openExternal: (url) => vscode.env.openExternal(vscode.Uri.parse(url)),
+      restart: () => queueRestart(),
     }),
-    vscode.commands.registerCommand('crux.restartServer', () => queueRestart()),
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration('crux.port') || event.affectsConfiguration('crux.binaryPath')) {
         void queueRestart()

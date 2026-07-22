@@ -7,6 +7,14 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/lsp/protocol"
 )
 
+type definitionHoverWorkspace interface {
+	DefinitionSummaryAt(protocol.DocumentURI, protocol.Position) (definitionSummary, bool)
+}
+
+type coherentHoverWorkspace interface {
+	HoverAt(protocol.DocumentURI, protocol.Position) ([]displayedFinding, *definitionSummary)
+}
+
 func (s *Server) hover(raw json.RawMessage) jsonrpc.HandlerResult {
 	var params protocol.HoverParams
 	if err := json.Unmarshal(raw, &params); err != nil || params.TextDocument.URI == "" {
@@ -18,14 +26,25 @@ func (s *Server) hover(raw json.RawMessage) jsonrpc.HandlerResult {
 	if workspace == nil {
 		return jsonrpc.HandlerResult{Result: nil}
 	}
-	findings := workspace.DisplayedFindings(params.TextDocument.URI, params.Position)
-	if len(findings) == 0 {
+	var findings []displayedFinding
+	var definition *definitionSummary
+	if provider, ok := workspace.(coherentHoverWorkspace); ok {
+		findings, definition = provider.HoverAt(params.TextDocument.URI, params.Position)
+	} else {
+		findings = workspace.DisplayedFindings(params.TextDocument.URI, params.Position)
+		if provider, supported := workspace.(definitionHoverWorkspace); supported {
+			if summary, found := provider.DefinitionSummaryAt(params.TextDocument.URI, params.Position); found {
+				definition = &summary
+			}
+		}
+	}
+	if len(findings) == 0 && definition == nil {
 		return jsonrpc.HandlerResult{Result: nil}
 	}
 	s.mu.Lock()
 	format := s.hoverFormat
 	s.mu.Unlock()
-	return jsonrpc.HandlerResult{Result: buildHover(findings, format)}
+	return jsonrpc.HandlerResult{Result: buildHoverWithDefinition(findings, definition, format)}
 }
 
 func preferredHoverFormat(capabilities *protocol.ClientCapabilities) protocol.MarkupKind {

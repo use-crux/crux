@@ -7,36 +7,53 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/lsp/protocol"
 )
 
+func applyRangeChanges(
+	ranges []protocol.Range,
+	changes []protocol.TextDocumentContentChangeEvent,
+) ([]protocol.Range, bool) {
+	transformed := append([]protocol.Range(nil), ranges...)
+	if hasFullDocumentChange(changes) {
+		return transformed, false
+	}
+	changed := false
+	for _, change := range changes {
+		for index := range transformed {
+			next, moved := transformRange(transformed[index], *change.Range, change.Text)
+			if moved {
+				transformed[index] = next
+				changed = true
+			}
+		}
+	}
+	return transformed, changed
+}
+
 func applyDocumentChanges(
 	uri protocol.DocumentURI,
 	diagnostics []protocol.Diagnostic,
 	changes []protocol.TextDocumentContentChangeEvent,
 ) ([]protocol.Diagnostic, bool) {
 	transformed := cloneDiagnostics(diagnostics)
-	if hasFullDocumentChange(changes) {
-		return transformed, false
-	}
-	changed := false
-	for _, change := range changes {
-		if change.Range == nil {
-			continue
-		}
-		for index := range transformed {
-			next, moved := transformRange(transformed[index].Range, *change.Range, change.Text)
-			if moved {
-				transformed[index].Range = next
-				changed = true
+	ranges := make([]protocol.Range, 0, len(transformed))
+	for index := range transformed {
+		ranges = append(ranges, transformed[index].Range)
+		for _, related := range transformed[index].RelatedInformation {
+			if related.Location.URI == uri {
+				ranges = append(ranges, related.Location.Range)
 			}
-			for relatedIndex := range transformed[index].RelatedInformation {
-				related := &transformed[index].RelatedInformation[relatedIndex]
-				if related.Location.URI != uri {
-					continue
-				}
-				next, moved := transformRange(related.Location.Range, *change.Range, change.Text)
-				if moved {
-					related.Location.Range = next
-					changed = true
-				}
+		}
+	}
+
+	ranges, changed := applyRangeChanges(ranges, changes)
+	rangeIndex := 0
+	for index := range transformed {
+		transformed[index].Range = ranges[rangeIndex]
+		rangeIndex++
+		for relatedIndex := range transformed[index].RelatedInformation {
+			related := &transformed[index].RelatedInformation[relatedIndex]
+			if related.Location.URI == uri {
+				related.Location.Range = ranges[rangeIndex]
+				rangeIndex++
 			}
 		}
 	}

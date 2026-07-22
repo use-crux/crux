@@ -7,6 +7,12 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/lsp/protocol"
 )
 
+// MapSourceRange converts a Project Index source range to its document URI
+// and UTF-16 LSP range.
+func (m *Mapper) MapSourceRange(source api.SourceRange) (protocol.DocumentURI, protocol.Range) {
+	return protocol.DocumentURI(FileURI(m.options.Root, source.File)), m.sourceRange(source)
+}
+
 func (m *Mapper) sourceRange(source api.SourceRange) protocol.Range {
 	file := resolveFile(m.options.Root, source.File)
 	start := protocol.Position{Line: zeroLine(source.StartLine)}

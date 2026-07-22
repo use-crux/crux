@@ -10,17 +10,14 @@ import (
 )
 
 type publishedDocument struct {
-	diagnostics  []protocol.Diagnostic
-	findings     map[string]api.IndexLintFinding
+	view         documentView
 	hash         [sha256.Size]byte
 	hasPublished bool
 	open         bool
 	version      int
 	hasVersion   bool
 	dirty        bool
-	held         []protocol.Diagnostic
-	heldFindings map[string]api.IndexLintFinding
-	hasHeld      bool
+	held         *documentView
 }
 
 type displayedFinding struct {
@@ -29,7 +26,8 @@ type displayedFinding struct {
 }
 
 func (p *Publisher) publishLocked(force protocol.DocumentURI, authoritative bool) {
-	diagnostics, findings := p.currentDiagnostics()
+	publication := p.options.Store.PublicationSnapshot(p.options.ScopeID)
+	diagnostics, findings := p.currentDiagnostics(publication)
 	uris := make(map[protocol.DocumentURI]struct{}, len(diagnostics)+len(p.documents)+1)
 	for uri := range diagnostics {
 		uris[uri] = struct{}{}
@@ -53,38 +51,46 @@ func (p *Publisher) publishLocked(force protocol.DocumentURI, authoritative bool
 		}
 		document := p.documentLocked(uri)
 		currentFindings := findingsForDiagnostics(current, findings)
+		view := documentView{diagnostics: current, findings: currentFindings}
+		if document.open {
+			view = p.currentDocumentView(uri, publication, current, currentFindings)
+		}
 		if authoritative && document.open && document.dirty && len(current) > 0 {
-			document.held = cloneDiagnostics(current)
-			document.heldFindings = cloneFindingMap(currentFindings)
-			document.hasHeld = true
+			held := cloneDocumentView(view)
+			document.held = &held
 			continue
 		}
-		if authoritative && len(current) == 0 {
-			document.held = nil
-			document.heldFindings = nil
-			document.hasHeld = false
+		if authoritative && document.open && document.dirty {
+			held := cloneDocumentView(view)
+			document.held = &held
+			cleared := cloneDocumentView(document.view)
+			cleared.diagnostics = []protocol.Diagnostic{}
+			cleared.findings = nil
+			p.setDisplayedLocked(uri, cleared, uri == force)
+			continue
 		}
-		p.setDisplayedLocked(uri, current, currentFindings, uri == force)
+		document.held = nil
+		p.setDisplayedLocked(uri, view, uri == force)
 	}
+	p.options.OnPublish()
 }
 
 func (p *Publisher) setDisplayedLocked(
 	uri protocol.DocumentURI,
-	diagnostics []protocol.Diagnostic,
-	findings map[string]api.IndexLintFinding,
+	view documentView,
 	force bool,
 ) {
 	document := p.documentLocked(uri)
+	diagnostics := view.diagnostics
 	hash := diagnosticHash(diagnostics)
 	if !force {
 		if document.hasPublished && document.hash == hash {
-			document.diagnostics = cloneDiagnostics(diagnostics)
-			document.findings = cloneFindingMap(findings)
+			document.view = cloneDocumentView(view)
 			return
 		}
 		if !document.hasPublished && len(diagnostics) == 0 {
-			document.diagnostics = []protocol.Diagnostic{}
-			document.findings = nil
+			document.view = cloneDocumentView(view)
+			document.view.diagnostics = []protocol.Diagnostic{}
 			p.deleteDocumentIfIdleLocked(uri, document)
 			return
 		}
@@ -96,8 +102,8 @@ func (p *Publisher) setDisplayedLocked(
 	p.options.Notify(protocol.MethodPublishDiagnostics, protocol.PublishDiagnosticsParams{
 		URI: uri, Diagnostics: current,
 	})
-	document.diagnostics = current
-	document.findings = cloneFindingMap(findings)
+	document.view = cloneDocumentView(view)
+	document.view.diagnostics = current
 	document.hash = hash
 	document.hasPublished = len(current) > 0
 	p.deleteDocumentIfIdleLocked(uri, document)
@@ -112,12 +118,16 @@ func (p *Publisher) DisplayedFindings(uri protocol.DocumentURI, position protoco
 	if p.closed || document == nil {
 		return nil
 	}
+	return displayedFindingsAt(document.view, position)
+}
+
+func displayedFindingsAt(view documentView, position protocol.Position) []displayedFinding {
 	result := make([]displayedFinding, 0)
-	for _, diagnostic := range document.diagnostics {
+	for _, diagnostic := range view.diagnostics {
 		if !rangeContainsPosition(diagnostic.Range, position) {
 			continue
 		}
-		finding, ok := document.findings[diagnosticFindingID(diagnostic)]
+		finding, ok := view.findings[diagnosticFindingID(diagnostic)]
 		if !ok {
 			continue
 		}
@@ -137,7 +147,7 @@ func (p *Publisher) documentLocked(uri protocol.DocumentURI) *publishedDocument 
 }
 
 func (p *Publisher) deleteDocumentIfIdleLocked(uri protocol.DocumentURI, document *publishedDocument) {
-	if !document.hasPublished && !document.open && !document.hasHeld {
+	if !document.hasPublished && !document.open && document.held == nil {
 		delete(p.documents, uri)
 	}
 }

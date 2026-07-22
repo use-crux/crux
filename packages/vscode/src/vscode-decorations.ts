@@ -6,6 +6,10 @@ import {
   type ScheduledDecoration,
 } from './decoration-controller.js'
 import {
+  DecorationTypeRegistry,
+  handleDecorationConfigurationChange,
+} from './decoration-types.js'
+import {
   decorationSeverities,
   inlineDiagnosticsExtensionIds,
   type DecorationDiagnostic,
@@ -18,7 +22,11 @@ type DecorationTypes = Readonly<Record<DecorationSeverity, vscode.TextEditorDeco
 
 /** Activates client-only inline diagnostic decorations for visible editors. */
 export function activateDecorations(output: vscode.OutputChannel): vscode.Disposable {
-  const types = createDecorationTypes()
+  const configuration = vscode.workspace.getConfiguration('crux')
+  const types = new DecorationTypeRegistry(
+    createDecorationTypes,
+    configuration.get<number>('decorations.opacity', 0.65),
+  )
   const host = new VSCodeDecorationHost(output, types)
   const controller = new DecorationController(host)
   const events = [
@@ -27,12 +35,17 @@ export function activateDecorations(output: vscode.OutputChannel): vscode.Dispos
     }),
     vscode.window.onDidChangeVisibleTextEditors(() => controller.visibleEditorsChanged()),
     vscode.workspace.onDidChangeConfiguration((event) => {
-      if (event.affectsConfiguration('crux.decorations')) controller.settingsChanged()
+      handleDecorationConfigurationChange(
+        (section) => event.affectsConfiguration(section),
+        types,
+        host.opacity,
+        () => controller.settingsChanged(),
+      )
     }),
     vscode.extensions.onDidChange(() => controller.extensionsChanged()),
   ]
   controller.start()
-  return vscode.Disposable.from(controller, ...events, ...Object.values(types))
+  return vscode.Disposable.from(controller, types, ...events)
 }
 
 class VSCodeDecorationHost implements DecorationControllerHost {
@@ -41,7 +54,7 @@ class VSCodeDecorationHost implements DecorationControllerHost {
 
   constructor(
     private readonly output: vscode.OutputChannel,
-    private readonly types: DecorationTypes,
+    private readonly types: DecorationTypeRegistry<vscode.TextEditorDecorationType>,
   ) {}
 
   get mode(): DecorationMode {
@@ -50,6 +63,10 @@ class VSCodeDecorationHost implements DecorationControllerHost {
 
   get maxLength(): number {
     return vscode.workspace.getConfiguration('crux').get<number>('decorations.maxLength', 80)
+  }
+
+  get opacity(): number {
+    return vscode.workspace.getConfiguration('crux').get<number>('decorations.opacity', 0.65)
   }
 
   get activeExtensionIds(): readonly string[] {
@@ -87,7 +104,7 @@ class VSCodeDecorationHost implements DecorationControllerHost {
       })
     }
     for (const severity of decorationSeverities) {
-      textEditor.setDecorations(this.types[severity], options[severity])
+      textEditor.setDecorations(this.types.current[severity], options[severity])
     }
   }
 
@@ -95,7 +112,7 @@ class VSCodeDecorationHost implements DecorationControllerHost {
     const textEditor = this.#findEditor(editor.id)
     if (textEditor === undefined) return
     for (const severity of decorationSeverities) {
-      textEditor.setDecorations(this.types[severity], [])
+      textEditor.setDecorations(this.types.current[severity], [])
     }
   }
 
@@ -121,18 +138,18 @@ class VSCodeDecorationHost implements DecorationControllerHost {
   }
 }
 
-function createDecorationTypes(): DecorationTypes {
+function createDecorationTypes(opacity: number): DecorationTypes {
   return {
-    error: createDecorationType('editorError.foreground'),
-    warning: createDecorationType('editorWarning.foreground'),
-    information: createDecorationType('editorInfo.foreground'),
-    hint: createDecorationType('editorHint.foreground'),
+    error: createDecorationType('editorError.foreground', opacity),
+    warning: createDecorationType('editorWarning.foreground', opacity),
+    information: createDecorationType('editorInfo.foreground', opacity),
+    hint: createDecorationType('editorHint.foreground', opacity),
   }
 }
 
-function createDecorationType(color: string): vscode.TextEditorDecorationType {
+function createDecorationType(color: string, opacity: number): vscode.TextEditorDecorationType {
   return vscode.window.createTextEditorDecorationType({
-    opacity: '0.65',
+    opacity: String(opacity),
     after: {
       color: new vscode.ThemeColor(color),
       fontStyle: 'italic',

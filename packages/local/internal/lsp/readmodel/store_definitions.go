@@ -2,14 +2,87 @@ package readmodel
 
 import (
 	"reflect"
+	"sort"
 
 	"github.com/use-crux/crux/packages/local/internal/api"
 )
+
+// DefinitionsInFile returns detached definitions bound to one authored file.
+// Binding prefers a SourceSnippet range with a nonempty file and positive line,
+// then falls back to Source with the same requirements. Definitions without a
+// usable binding are omitted. Results are ordered by file, line, column
+// (missing is zero), then ID.
+func (s *Store) DefinitionsInFile(scope, file string) []api.ProjectDefinition {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	current := s.scopes[scope]
+	if current == nil {
+		return nil
+	}
+	return cloneDefinitions(current.definitionsByFile[file])
+}
 
 func definitionsByID(definitions []api.ProjectDefinition) map[string]api.ProjectDefinition {
 	result := make(map[string]api.ProjectDefinition, len(definitions))
 	for _, definition := range definitions {
 		result[definition.ID] = cloneDefinition(definition)
+	}
+	return result
+}
+
+func definitionLookupsByFile(definitions map[string]api.ProjectDefinition) map[string][]api.ProjectDefinition {
+	result := make(map[string][]api.ProjectDefinition)
+	for _, definition := range definitions {
+		file, _, _, ok := definitionBinding(definition)
+		if !ok {
+			continue
+		}
+		result[file] = append(result[file], definition)
+	}
+	for _, definitions := range result {
+		sort.Slice(definitions, func(left, right int) bool {
+			leftFile, leftLine, leftColumn, _ := definitionBinding(definitions[left])
+			rightFile, rightLine, rightColumn, _ := definitionBinding(definitions[right])
+			switch {
+			case leftFile != rightFile:
+				return leftFile < rightFile
+			case leftLine != rightLine:
+				return leftLine < rightLine
+			case leftColumn != rightColumn:
+				return leftColumn < rightColumn
+			default:
+				return definitions[left].ID < definitions[right].ID
+			}
+		})
+	}
+	return result
+}
+
+func definitionBinding(definition api.ProjectDefinition) (file string, line, column int, ok bool) {
+	if definition.SourceSnippet != nil && definition.SourceSnippet.Range.File != "" &&
+		definition.SourceSnippet.Range.StartLine > 0 {
+		range_ := definition.SourceSnippet.Range
+		if range_.StartColumn != nil {
+			column = *range_.StartColumn
+		}
+		return range_.File, range_.StartLine, column, true
+	}
+	if definition.Source == nil || definition.Source.File == "" || definition.Source.Line <= 0 {
+		return "", 0, 0, false
+	}
+	if definition.Source.Column != nil {
+		column = *definition.Source.Column
+	}
+	return definition.Source.File, definition.Source.Line, column, true
+}
+
+func cloneDefinitions(definitions []api.ProjectDefinition) []api.ProjectDefinition {
+	if definitions == nil {
+		return nil
+	}
+	result := make([]api.ProjectDefinition, len(definitions))
+	for index, definition := range definitions {
+		result[index] = cloneDefinition(definition)
 	}
 	return result
 }

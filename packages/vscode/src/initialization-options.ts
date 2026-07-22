@@ -10,6 +10,9 @@ export interface InitializationOptionsInput {
 /** Initialization payload understood by the Crux language server. */
 export interface CruxInitializationOptions {
   readonly workspaceTrust: boolean
+  readonly clientCommands: {
+    readonly openDevtools: true
+  }
   readonly crux: {
     readonly port: number
     readonly lint: {
@@ -24,6 +27,8 @@ export interface CruxInitializationOptions {
 export const serverConfigurationSections = [
   'crux.port',
   'crux.lint',
+  'crux.inlayHints',
+  'crux.codeLens',
   'crux.trace',
 ] as const
 
@@ -44,6 +49,7 @@ export function createInitializationOptions({
 }: InitializationOptionsInput): CruxInitializationOptions {
   return {
     workspaceTrust,
+    clientCommands: { openDevtools: true },
     crux: {
       port,
       lint: { profile, includeSuppressed },

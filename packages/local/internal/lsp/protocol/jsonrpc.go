@@ -42,9 +42,15 @@ type ResponseError struct {
 	Data    json.RawMessage `json:"data,omitempty"`
 }
 
-// Notification is an outbound JSON-RPC notification.
-type Notification struct {
-	JSONRPC string `json:"jsonrpc"`
-	Method  string `json:"method"`
-	Params  any    `json:"params,omitempty"`
+// OutboundMessage is a server-to-client JSON-RPC request or notification.
+// Requests carry an ID; notifications omit it.
+type OutboundMessage struct {
+	JSONRPC string          `json:"jsonrpc"`
+	ID      json.RawMessage `json:"id,omitempty"`
+	Method  string          `json:"method"`
+	Params  any             `json:"params,omitempty"`
 }
+
+// Notification is retained as the notification-only spelling used by older
+// callers. It has the same wire shape as OutboundMessage with an omitted ID.
+type Notification = OutboundMessage

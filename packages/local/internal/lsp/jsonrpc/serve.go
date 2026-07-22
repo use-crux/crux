@@ -27,10 +27,22 @@ type Handler interface {
 	Handle(context.Context, protocol.Request) HandlerResult
 }
 
-// OutboundHandler exposes asynchronous server-to-client notifications. Serve
-// funnels them through the same single writer as request responses.
+// OutboundHandler exposes asynchronous server-to-client requests and
+// notifications. Serve funnels them through the same single writer as
+// request responses.
 type OutboundHandler interface {
-	Outbound() <-chan protocol.Notification
+	Outbound() <-chan protocol.OutboundMessage
+}
+
+// ClientResponseHandler accepts responses to server-to-client requests.
+type ClientResponseHandler interface {
+	HandleClientResponse(protocol.Response)
+}
+
+// ClientRequestCloser releases pending server-to-client request state when
+// the stdio session ends without an explicit LSP shutdown.
+type ClientRequestCloser interface {
+	CloseClientRequests()
 }
 
 // HandlerFunc adapts a function into a Handler.
@@ -54,6 +66,9 @@ func Serve(ctx context.Context, input io.Reader, output io.Writer, logs io.Write
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	if closer, ok := handler.(ClientRequestCloser); ok {
+		defer closer.CloseClientRequests()
+	}
 
 	reads := make(chan readEvent)
 	go readFrames(ctx, NewReader(input), reads)
@@ -66,7 +81,7 @@ func Serve(ctx context.Context, input io.Reader, output io.Writer, logs io.Write
 	stop := make(chan struct{}, 1)
 	workerDone := make(chan struct{})
 	go dispatch(ctx, handler, requests, responses, stop, workerDone)
-	var outbound <-chan protocol.Notification
+	var outbound <-chan protocol.OutboundMessage
 	if source, ok := handler.(OutboundHandler); ok {
 		outbound = source.Outbound()
 	}
@@ -80,14 +95,14 @@ running:
 			break running
 		case <-stop:
 			break running
-		case notification, ok := <-outbound:
+		case message, ok := <-outbound:
 			if !ok {
 				outbound = nil
 				continue
 			}
-			encoded, err := json.Marshal(notification)
+			encoded, err := json.Marshal(message)
 			if err != nil {
-				fmt.Fprintf(logs, "crux lsp: encode outbound notification: %v\n", err)
+				fmt.Fprintf(logs, "crux lsp: encode outbound message: %v\n", err)
 				continue
 			}
 			if err := queueResponse(ctx, responses, encoded); err != nil {
@@ -106,6 +121,16 @@ running:
 				}
 				serveErr = event.err
 				break running
+			}
+			if response, recognized, responseErr := decodeClientResponse(event.payload); recognized {
+				if responseErr != nil {
+					fmt.Fprintf(logs, "crux lsp: invalid client response: %v\n", responseErr)
+					continue
+				}
+				if sink, ok := handler.(ClientResponseHandler); ok {
+					sink.HandleClientResponse(response)
+				}
+				continue
 			}
 			request, parseErr := decodeRequest(event.payload)
 			if parseErr != nil {

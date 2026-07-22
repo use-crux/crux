@@ -14,6 +14,7 @@ describe('createInitializationOptions', () => {
       workspaceTrust: false,
     })).toEqual({
       workspaceTrust: false,
+      clientCommands: { openDevtools: true },
       crux: {
         port: 4599,
         lint: { profile: 'strict', includeSuppressed: true },
@@ -28,6 +29,8 @@ describe('serverConfigurationSections', () => {
     expect(serverConfigurationSections).toEqual([
       'crux.port',
       'crux.lint',
+      'crux.inlayHints',
+      'crux.codeLens',
       'crux.trace',
     ])
     expect(serverConfigurationSections).not.toContain('crux.decorations')

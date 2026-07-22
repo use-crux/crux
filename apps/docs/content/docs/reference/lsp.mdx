@@ -1,12 +1,14 @@
 ---
 title: "crux lsp"
-description: Language Server Protocol diagnostics, hover, and code actions for Crux projects.
+description: Language Server Protocol diagnostics, navigation, hover, hints, and code actions for Crux projects.
 ---
 
 `crux lsp` brings Project Index lint findings into editors that support the
 Language Server Protocol. It publishes diagnostics for TypeScript and
 JavaScript files, keeps their ranges aligned with unsaved edits, explains each
 finding on hover, and offers the actions declared by its rule.
+It also projects indexed definitions and relations into editor navigation,
+symbols, definition hover, inlay hints, and code lenses.
 
 ## Command
 
@@ -56,8 +58,9 @@ Authoritative clears still apply immediately.
 
 The private extension starts one language client for the window, discovers the
 Crux binary, renders optional inline finding text, forwards server settings,
-and registers **Crux: Restart Language Server**. It activates in workspaces
-containing `crux.config.ts`, `crux.config.js`, or `crux.config.mjs`.
+and registers **Crux: Open Devtools** and **Crux: Restart Language Server**.
+It activates in workspaces containing `crux.config.ts`, `crux.config.js`, or
+`crux.config.mjs`.
 
 The extension requires workspace trust. In Restricted Mode, the editor host
 does not activate it: no binary is discovered or started, and no workspace
@@ -110,15 +113,52 @@ VS Code settings use the names below. Other clients can send the same nested
 | `crux.binaryPath` | string, `""` | VS Code extension only. Explicit CLI path; an invalid configured path is an error. |
 | `crux.port` | number, `4400` | Port used to discover and attach to a matching local dev server. |
 | `crux.lint.profile` | `""`, `"off"`, `"recommended"`, `"strict"`, or `"experimental"`; default `""` | Overrides presentation filtering. Empty follows the project's configured output; `off` publishes no findings. |
-| `crux.lint.includeSuppressed` | boolean, `false` | Reserved for retained suppressed findings. It has no visible effect until the indexing engine retains them ([#251](https://github.com/use-crux/crux/issues/251)). |
+| `crux.lint.includeSuppressed` | boolean, `false` | Includes findings retained with suppression evidence. They are hidden by default and shown as unnecessary when enabled. |
+| `crux.inlayHints.enabled` | boolean, `true` | Shows a finding-count hint on each indexed definition with current findings. |
+| `crux.codeLens.enabled` | boolean, `true` | Shows a finding-count code lens above each indexed definition with current findings. |
 | `crux.decorations.mode` | `"auto"`, `"on"`, or `"off"`; default `"auto"` | VS Code extension only. Controls inline diagnostic text; `auto` disables it when a supported general inline-diagnostics extension is active. |
 | `crux.decorations.maxLength` | number, `80` | VS Code extension only. Maximum inline decoration length, including its severity glyph, rule code, message, and additional-finding count. |
+| `crux.decorations.opacity` | number, `0.65` | VS Code extension only. Opacity from `0.1` to `1` for inline diagnostic decorations. |
 | `crux.trace` | `"off"` or `"messages"`; default `"off"` | Logs LSP method names without logging request or response payloads. |
 
-Changing the lint profile or reserved suppression setting re-filters the
-current read model without reindexing. Changing the port or binary path makes
-the VS Code extension restart the language client. Decoration settings are
-client-side presentation settings and are never sent to the language server.
+Changing the lint profile or suppression setting re-filters the current read
+model without reindexing. Inlay-hint and code-lens changes apply live. Changing
+the port or binary path makes the VS Code extension restart the language
+client. Decoration settings are client-side presentation settings and are
+never sent to the language server.
+
+## Navigation and definition context
+
+Crux navigation reads the same indexed definitions, source references, and
+relations as diagnostics:
+
+- **Go to Definition** follows indexed source references and relation sites to
+  their owning prompt, context, tool, agent, or other Crux definition.
+- **Find All References** returns indexed relation and source-reference sites,
+  with the declaration included when the client requests it.
+- **Document Symbols** adds the file's Crux definitions to Outline.
+- **Workspace Symbols** searches definition names and ids across Crux workspace
+  folders. Results identify their folder in multi-root workspaces.
+
+Navigation ranges use the displayed document view. They follow unsaved edits
+without reindexing, while newer disk-derived positions remain held until save
+just like diagnostic ranges.
+
+Hovering an indexed definition shows its name, kind, description when present,
+current finding count, and incoming/outgoing relation counts. When a diagnostic
+also matches the position, the definition section follows the finding details.
+
+Definitions with current findings receive two independent, live-configurable
+signals:
+
+- An inlay hint such as `⚑ 2 findings` at the end of the definition's first
+  source line.
+- A code lens such as `Crux: 2 findings` above the definition. While attached
+  to `crux dev`, the VS Code extension makes it clickable and opens that exact
+  definition in the Devtools Catalog. In own mode, or in clients that do not
+  declare the client-side command, the count remains visible but informational.
+
+Definitions without findings receive neither signal.
 
 ## Diagnostics and actions
 
@@ -166,7 +206,9 @@ extensions:
 - `off` clears them immediately.
 
 Only visible editors are decorated. Suppressing a finding and saving removes
-its annotation after the normal reindex.
+its annotation after the normal reindex unless suppressed findings are
+included. Changing `crux.decorations.opacity` rebuilds the editor decoration
+types and refreshes visible editors without restarting the language server.
 
 ## Related
 

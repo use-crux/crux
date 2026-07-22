@@ -1,10 +1,75 @@
 package server
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/lsp/protocol"
 )
+
+func TestApplyRangeChangesTransformsDetachedCollectionOrRejectsWholeBatch(t *testing.T) {
+	t.Parallel()
+
+	ranges := []protocol.Range{
+		{
+			Start: protocol.Position{Line: 4, Character: 5},
+			End:   protocol.Position{Line: 4, Character: 8},
+		},
+		{
+			Start: protocol.Position{Line: 8, Character: 1},
+			End:   protocol.Position{Line: 8, Character: 3},
+		},
+	}
+	insertLine := protocol.Range{
+		Start: protocol.Position{Line: 1, Character: 0},
+		End:   protocol.Position{Line: 1, Character: 0},
+	}
+	insertCharacters := protocol.Range{
+		Start: protocol.Position{Line: 5, Character: 2},
+		End:   protocol.Position{Line: 5, Character: 2},
+	}
+	changes := []protocol.TextDocumentContentChangeEvent{
+		{Range: &insertLine, Text: "\n"},
+		{Range: &insertCharacters, Text: "ab"},
+	}
+
+	before := append([]protocol.Range(nil), ranges...)
+	got, changed := applyRangeChanges(ranges, changes)
+	if !reflect.DeepEqual(ranges, before) {
+		t.Fatalf("input ranges mutated: got %#v, want %#v", ranges, before)
+	}
+	want := []protocol.Range{
+		{
+			Start: protocol.Position{Line: 5, Character: 7},
+			End:   protocol.Position{Line: 5, Character: 10},
+		},
+		{
+			Start: protocol.Position{Line: 9, Character: 1},
+			End:   protocol.Position{Line: 9, Character: 3},
+		},
+	}
+	if !changed || !reflect.DeepEqual(got, want) {
+		t.Fatalf("transformed ranges = %#v, changed %v; want %#v, true", got, changed, want)
+	}
+	got[0] = protocol.Range{}
+	if ranges[0] == (protocol.Range{}) {
+		t.Fatal("transformed ranges alias the input")
+	}
+
+	fullDocumentChanges := []protocol.TextDocumentContentChangeEvent{
+		changes[0],
+		{Text: "replacement"},
+		changes[1],
+	}
+	got, changed = applyRangeChanges(ranges, fullDocumentChanges)
+	if changed || !reflect.DeepEqual(got, ranges) {
+		t.Fatalf("full-document batch ranges = %#v, changed %v; want %#v, false", got, changed, ranges)
+	}
+	got[0] = protocol.Range{}
+	if ranges[0] == (protocol.Range{}) {
+		t.Fatal("full-document ranges alias the input")
+	}
+}
 
 func TestApplyDocumentChangesMovesDiagnosticAfterInsertedLines(t *testing.T) {
 	t.Parallel()

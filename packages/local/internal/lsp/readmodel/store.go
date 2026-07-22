@@ -1,4 +1,4 @@
-// Package readmodel owns the LSP process's per-scope lint finding view.
+// Package readmodel owns the LSP process's per-scope Project Index view.
 package readmodel
 
 import (
@@ -9,7 +9,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/api"
 )
 
-// Snapshot is the lint subset of a full Project Index snapshot. A nil
+// Snapshot is the LSP-owned subset of a full Project Index snapshot. A nil
 // Generation identifies a pre-Phase-1 server whose first delta establishes the
 // generation baseline.
 type Snapshot struct {
@@ -18,6 +18,7 @@ type Snapshot struct {
 	Generation    *uint64
 	Findings      []api.IndexLintFinding
 	Definitions   []api.ProjectDefinition
+	Relations     []api.ProjectRelation
 	Sources       []api.IndexSourceFile
 }
 
@@ -65,12 +66,19 @@ type DeltaResult struct {
 }
 
 type scopeState struct {
-	anchors         map[string][]api.IndexLintFinding
-	definitions     map[string]api.ProjectDefinition
-	sources         map[string]api.IndexSourceFile
-	initialized     bool
-	generation      uint64
-	generationKnown bool
+	anchors           map[string][]api.IndexLintFinding
+	definitions       map[string]api.ProjectDefinition
+	definitionsByFile map[string][]api.ProjectDefinition
+	sitesByFile       map[string][]NavigationSite
+	sitesByTarget     map[string][]NavigationSite
+	relations         []api.ProjectRelation
+	relationsByTo     map[string][]api.ProjectRelation
+	relationsByFile   map[string][]api.ProjectRelation
+	sources           map[string]api.IndexSourceFile
+	initialized       bool
+	generation        uint64
+	generationKnown   bool
+	revision          uint64
 }
 
 // Store is a concurrency-safe collection of independent workspace scopes.
@@ -79,7 +87,7 @@ type Store struct {
 	scopes map[string]*scopeState
 }
 
-// NewStore creates an empty per-scope finding store.
+// NewStore creates an empty per-scope Project Index store.
 func NewStore() *Store {
 	return &Store{scopes: make(map[string]*scopeState)}
 }
@@ -88,18 +96,31 @@ func NewStore() *Store {
 func (s *Store) ApplySnapshot(scope string, snapshot Snapshot) []string {
 	next := findingsByAnchor(snapshot.Findings)
 	nextDefinitions := definitionsByID(snapshot.Definitions)
+	nextDefinitionsByFile := definitionLookupsByFile(nextDefinitions)
+	nextRelations, nextRelationsByTo, nextRelationsByFile := relationLookups(snapshot.Relations)
+	nextSitesByFile, nextSitesByTarget := navigationSiteLookups(nextRelations, nextDefinitions)
 	nextSources := sourcesByFile(snapshot.Sources)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	current := s.scope(scope)
+	current.revision++
 	changed := changedAnchors(current.anchors, next)
 	changed = append(changed, definitionAffectedAnchors(current, next, nextDefinitions)...)
+	changed = append(changed, changedIndexFiles(current.definitionsByFile, nextDefinitionsByFile)...)
+	changed = append(changed, changedIndexFiles(current.sitesByFile, nextSitesByFile)...)
+	changed = append(changed, changedRelationFiles(current.relationsByFile, nextRelationsByFile)...)
 	changed = append(changed, changedSources(current.sources, nextSources)...)
 	sort.Strings(changed)
 	changed = compactStrings(changed)
 	current.anchors = next
 	current.definitions = nextDefinitions
+	current.definitionsByFile = nextDefinitionsByFile
+	current.sitesByFile = nextSitesByFile
+	current.sitesByTarget = nextSitesByTarget
+	current.relations = nextRelations
+	current.relationsByTo = nextRelationsByTo
+	current.relationsByFile = nextRelationsByFile
 	current.sources = nextSources
 	current.initialized = true
 	current.generationKnown = snapshot.Generation != nil
@@ -131,11 +152,14 @@ func (s *Store) ApplyDelta(scope string, delta Delta) DeltaResult {
 		current.generationKnown = true
 	}
 	current.generation = delta.Generation
+	current.revision++
 	changedFiles := make([]string, 0, 2)
 	if delta.SourceChanged {
 		changedFiles = append(changedFiles, delta.File)
 	}
 	if applyDefinitionChanges(current.definitions, delta.Definitions) {
+		current.definitionsByFile = definitionLookupsByFile(current.definitions)
+		current.sitesByFile, current.sitesByTarget = navigationSiteLookups(current.relations, current.definitions)
 		changedFiles = append(changedFiles, delta.File)
 	}
 
@@ -217,9 +241,14 @@ func (s *Store) scope(id string) *scopeState {
 	current := s.scopes[id]
 	if current == nil {
 		current = &scopeState{
-			anchors:     make(map[string][]api.IndexLintFinding),
-			definitions: make(map[string]api.ProjectDefinition),
-			sources:     make(map[string]api.IndexSourceFile),
+			anchors:           make(map[string][]api.IndexLintFinding),
+			definitions:       make(map[string]api.ProjectDefinition),
+			definitionsByFile: make(map[string][]api.ProjectDefinition),
+			sitesByFile:       make(map[string][]NavigationSite),
+			sitesByTarget:     make(map[string][]NavigationSite),
+			relationsByTo:     make(map[string][]api.ProjectRelation),
+			relationsByFile:   make(map[string][]api.ProjectRelation),
+			sources:           make(map[string]api.IndexSourceFile),
 		}
 		s.scopes[id] = current
 	}

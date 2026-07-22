@@ -2,6 +2,8 @@ package readmodel
 
 import (
 	"testing"
+
+	"github.com/use-crux/crux/packages/local/internal/api"
 )
 
 func TestDecodeSnapshotPreservesGenerationPresence(t *testing.T) {
@@ -36,6 +38,13 @@ func TestDecodeSnapshotPreservesGenerationPresence(t *testing.T) {
 	}
 	if legacy.ProjectRoot != "/repo" {
 		t.Fatalf("legacy project root = %q, want project.root fallback", legacy.ProjectRoot)
+	}
+}
+
+func TestSnapshotFromIndexRetainsRelations(t *testing.T) {
+	snapshot := snapshotFromIndex(api.IndexData{Relations: []api.ProjectRelation{{ID: "relation:one"}}})
+	if len(snapshot.Relations) != 1 || snapshot.Relations[0].ID != "relation:one" {
+		t.Fatalf("relations = %#v, want relation:one", snapshot.Relations)
 	}
 }
 

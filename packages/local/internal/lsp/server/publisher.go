@@ -22,6 +22,8 @@ type PublisherOptions struct {
 	Store      *readmodel.Store
 	Lines      *mapping.LineIndex
 	Notify     func(string, any)
+	// OnPublish runs after the displayed document views become coherent.
+	OnPublish func()
 	// Log records malformed or out-of-order client behavior.
 	Log func(string)
 	// Trace records expected compatibility fallbacks when tracing is enabled.
@@ -55,6 +57,9 @@ func NewPublisher(options PublisherOptions) *Publisher {
 	if options.Notify == nil {
 		options.Notify = func(string, any) {}
 	}
+	if options.OnPublish == nil {
+		options.OnPublish = func() {}
+	}
 	if options.Log == nil {
 		options.Log = func(string) {}
 	}
@@ -73,9 +78,6 @@ func NewPublisher(options PublisherOptions) *Publisher {
 		Root:       options.Root,
 		ConfigFile: options.ConfigFile,
 		Lines:      options.Lines,
-		Definition: func(id string) (api.ProjectDefinition, bool) {
-			return options.Store.Definition(options.ScopeID, id)
-		},
 	})
 	return publisher
 }
@@ -117,7 +119,8 @@ func (p *Publisher) UpdateFilter(filter mapping.FilterOptions) {
 	p.publishLocked("", true)
 }
 
-// DidOpen immediately republishes a document, even when its hash is unchanged.
+// DidOpen rebuilds the document's authoritative view and immediately
+// republishes its diagnostics, even when their hash is unchanged.
 func (p *Publisher) DidOpen(uri protocol.DocumentURI, version int) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -130,16 +133,14 @@ func (p *Publisher) DidOpen(uri protocol.DocumentURI, version int) {
 	document.hasVersion = true
 	document.dirty = false
 	document.held = nil
-	document.heldFindings = nil
-	document.hasHeld = false
 	// Recompute every URI as an authoritative view while forcing only the
 	// opened document. Other dirty documents must retain buffer-space ranges.
 	p.publishLocked(uri, true)
 }
 
-// DidChange shifts the currently displayed diagnostics without consulting disk
-// or the Project Index. Regressive versions and changes for closed documents
-// are ignored.
+// DidChange shifts the currently displayed diagnostics and navigation view
+// without consulting disk or the Project Index. Regressive versions and
+// changes for closed documents are ignored.
 func (p *Publisher) DidChange(uri protocol.DocumentURI, version int, changes []protocol.TextDocumentContentChangeEvent) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -171,14 +172,16 @@ func (p *Publisher) DidChange(uri protocol.DocumentURI, version int, changes []p
 			))
 		}
 	}
-	transformed, changed := applyDocumentChanges(uri, document.diagnostics, changes)
-	if changed {
-		p.setDisplayedLocked(uri, transformed, document.findings, true)
+	transformed, diagnosticsChanged, navigationChanged := transformDocumentView(uri, document.view, changes)
+	if diagnosticsChanged {
+		p.setDisplayedLocked(uri, transformed, true)
+	} else if navigationChanged {
+		document.view = transformed
 	}
 }
 
-// DidSave invalidates cached source lines and applies the newest authoritative
-// view held while the document was dirty.
+// DidSave invalidates cached source lines, applies the newest held
+// authoritative view, or resets navigation positions to current disk truth.
 func (p *Publisher) DidSave(uri protocol.DocumentURI) {
 	if file, err := mapping.URIToPath(string(uri)); err == nil {
 		p.options.Lines.Invalidate(file)
@@ -190,14 +193,18 @@ func (p *Publisher) DidSave(uri protocol.DocumentURI) {
 		return
 	}
 	document.dirty = false
-	if document.hasHeld {
-		held := document.held
-		heldFindings := document.heldFindings
+	if document.held != nil {
+		held := cloneDocumentView(*document.held)
 		document.held = nil
-		document.heldFindings = nil
-		document.hasHeld = false
-		p.setDisplayedLocked(uri, held, heldFindings, false)
+		p.setDisplayedLocked(uri, held, false)
+		p.options.OnPublish()
+		return
 	}
+	publication := p.options.Store.PublicationSnapshot(p.options.ScopeID)
+	diskView := p.currentDocumentView(uri, publication, document.view.diagnostics, document.view.findings)
+	document.view.definitions = diskView.definitions
+	document.view.relationCounts = diskView.relationCounts
+	document.view.sites = diskView.sites
 }
 
 // DidClose drops buffer-tracking metadata while leaving workspace diagnostics
@@ -214,8 +221,9 @@ func (p *Publisher) DidClose(uri protocol.DocumentURI) {
 	document.hasVersion = false
 	document.dirty = false
 	document.held = nil
-	document.heldFindings = nil
-	document.hasHeld = false
+	document.view.definitions = nil
+	document.view.relationCounts = nil
+	document.view.sites = nil
 	p.deleteDocumentIfIdleLocked(uri, document)
 }
 
@@ -246,13 +254,12 @@ func (p *Publisher) publishDebounced() {
 	p.publishLocked("", true)
 }
 
-func (p *Publisher) currentDiagnostics() (
+func (p *Publisher) currentDiagnostics(publication readmodel.Publication) (
 	map[protocol.DocumentURI][]protocol.Diagnostic,
 	map[string]api.IndexLintFinding,
 ) {
-	anchors := p.options.Store.AllFindings(p.options.ScopeID)
 	findings := make([]api.IndexLintFinding, 0)
-	for _, values := range anchors {
+	for _, values := range publication.Findings {
 		findings = append(findings, values...)
 	}
 	filtered := mapping.FilterFindings(findings, p.filter)
@@ -260,7 +267,16 @@ func (p *Publisher) currentDiagnostics() (
 	for _, finding := range filtered {
 		byID[finding.ID] = finding
 	}
-	return p.mapper.MapFindings(filtered), byID
+	mapper := mapping.New(mapping.Options{
+		Root:       p.options.Root,
+		ConfigFile: p.options.ConfigFile,
+		Lines:      p.options.Lines,
+		Definition: func(id string) (api.ProjectDefinition, bool) {
+			definition, ok := publication.DefinitionsByID[id]
+			return definition, ok
+		},
+	})
+	return mapper.MapFindings(filtered), byID
 }
 
 func (p *Publisher) stopTimerLocked() {

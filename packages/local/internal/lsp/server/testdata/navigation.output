@@ -1,0 +1,13 @@
+{"jsonrpc":"2.0","id":2,"result":{"uri":"file://<ROOT>/src/primitives.ts","range":{"start":{"line":4,"character":28},"end":{"line":8,"character":2}}}}
+{"jsonrpc":"2.0","id":3,"result":{"uri":"file://<ROOT>/src/primitives.ts","range":{"start":{"line":4,"character":28},"end":{"line":8,"character":2}}}}
+{"jsonrpc":"2.0","id":4,"result":null}
+{"jsonrpc":"2.0","id":5,"result":null}
+{"jsonrpc":"2.0","id":6,"result":[{"uri":"file://<ROOT>/src/agent.ts","range":{"start":{"line":4,"character":0},"end":{"line":5,"character":0}}},{"uri":"file://<ROOT>/src/schema.ts","range":{"start":{"line":3,"character":0},"end":{"line":4,"character":0}}}]}
+{"jsonrpc":"2.0","id":7,"result":[{"uri":"file://<ROOT>/src/primitives.ts","range":{"start":{"line":4,"character":28},"end":{"line":8,"character":2}}},{"uri":"file://<ROOT>/src/agent.ts","range":{"start":{"line":4,"character":0},"end":{"line":5,"character":0}}},{"uri":"file://<ROOT>/src/schema.ts","range":{"start":{"line":3,"character":0},"end":{"line":4,"character":0}}}]}
+{"jsonrpc":"2.0","id":8,"result":[]}
+{"jsonrpc":"2.0","id":9,"result":[{"uri":"file://<ROOT>/src/agent.ts","range":{"start":{"line":4,"character":0},"end":{"line":5,"character":0}}},{"uri":"file://<ROOT>/src/schema.ts","range":{"start":{"line":3,"character":0},"end":{"line":4,"character":0}}}]}
+{"jsonrpc":"2.0","id":10,"result":[{"name":"lsp-navigation-writer","kind":12,"location":{"uri":"file://<ROOT>/src/primitives.ts","range":{"start":{"line":4,"character":28},"end":{"line":8,"character":2}}},"containerName":"navigation-project"}]}
+{"jsonrpc":"2.0","id":11,"result":[]}
+{"jsonrpc":"2.0","id":12,"result":[{"name":"writerAgent","kind":5,"location":{"uri":"file://<ROOT>/src/agent.ts","range":{"start":{"line":4,"character":27},"end":{"line":8,"character":2}}},"containerName":"navigation-project"},{"name":"lsp-navigation-writer","kind":12,"location":{"uri":"file://<ROOT>/src/primitives.ts","range":{"start":{"line":4,"character":28},"end":{"line":8,"character":2}}},"containerName":"navigation-project"},{"name":"lsp-navigation-outline","kind":6,"location":{"uri":"file://<ROOT>/src/primitives.ts","range":{"start":{"line":11,"character":27},"end":{"line":15,"character":2}}},"containerName":"navigation-project"}]}
+{"jsonrpc":"2.0","id":13,"result":[{"name":"lsp-navigation-writer","detail":"prompt","kind":12,"range":{"start":{"line":4,"character":28},"end":{"line":8,"character":2}},"selectionRange":{"start":{"line":4,"character":28},"end":{"line":4,"character":28}}},{"name":"lsp-navigation-outline","detail":"tool","kind":6,"range":{"start":{"line":11,"character":27},"end":{"line":15,"character":2}},"selectionRange":{"start":{"line":11,"character":27},"end":{"line":11,"character":27}}}]}
+{"jsonrpc":"2.0","id":14,"result":[]}

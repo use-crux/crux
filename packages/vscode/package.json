@@ -25,6 +25,7 @@
   "contributes": {
     "commands": [
       { "command": "crux.openDocs", "title": "Crux: Open Rule Documentation" },
+      { "command": "crux.openDevtools", "title": "Crux: Open Devtools" },
       { "command": "crux.restartServer", "title": "Crux: Restart Language Server" }
     ],
     "configuration": {
@@ -33,9 +34,12 @@
         "crux.binaryPath": { "type": "string", "default": "", "description": "Absolute or workspace-relative path to the Crux CLI." },
         "crux.port": { "type": "number", "default": 4400, "minimum": 1, "maximum": 65535, "description": "Port used to discover a running Crux dev server." },
         "crux.lint.profile": { "type": "string", "default": "", "enum": ["", "off", "recommended", "strict", "experimental"], "description": "Lint profile override. Empty follows the project configuration." },
-        "crux.lint.includeSuppressed": { "type": "boolean", "default": false, "description": "Reserved: include findings retained as suppressed when engine support is available." },
+        "crux.lint.includeSuppressed": { "type": "boolean", "default": false, "description": "Includes findings retained with suppression evidence." },
+        "crux.inlayHints.enabled": { "type": "boolean", "default": true, "description": "Controls Crux inlay hint finding badges." },
+        "crux.codeLens.enabled": { "type": "boolean", "default": true, "description": "Controls Crux code lens finding counts." },
         "crux.decorations.mode": { "type": "string", "default": "auto", "enum": ["auto", "on", "off"], "description": "Controls client-side inline diagnostic decorations. This extension-only setting is not sent to the language server." },
         "crux.decorations.maxLength": { "type": "number", "default": 80, "minimum": 1, "description": "Maximum client-side inline decoration length. This extension-only setting is not sent to the language server." },
+        "crux.decorations.opacity": { "type": "number", "default": 0.65, "minimum": 0.1, "maximum": 1, "description": "Controls the opacity of client-side inline diagnostic decorations. This extension-only setting is not sent to the language server." },
         "crux.trace": { "type": "string", "default": "off", "enum": ["off", "messages"], "description": "Log LSP method names without payloads." }
       }
     }
