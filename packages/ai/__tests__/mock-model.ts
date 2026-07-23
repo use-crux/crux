@@ -94,6 +94,8 @@ export function emissionModel(
   const queue = [...emissions];
   let sequence = 0;
   return new MockLanguageModelV3({
+    provider: "openai",
+    modelId: "gpt-4o",
     doGenerate: async () =>
       v3Result(queue.shift() ?? { text: "exhausted" }, sequence++) as never,
   }) as unknown as LanguageModel;
@@ -112,6 +114,8 @@ export function capturingEmissionModel(emissions: readonly MockEmission[]): {
   const prompts: unknown[][] = [];
   let sequence = 0;
   const model = new MockLanguageModelV3({
+    provider: "openai",
+    modelId: "gpt-4o",
     doGenerate: async (options: { prompt: unknown[] }) => {
       prompts.push(options.prompt);
       return v3Result(
@@ -135,6 +139,8 @@ export function capturingStreamingEmissionModel(
   const prompts: unknown[][] = [];
   let sequence = 0;
   const model = new MockLanguageModelV3({
+    provider: "openai",
+    modelId: "gpt-4o",
     doStream: async (options: { prompt: unknown[] }) => {
       prompts.push(options.prompt);
       const result = v3Result(
@@ -243,6 +249,10 @@ export function structuredModel(texts: readonly string[]): LanguageModel {
   const queue = [...texts];
   let sequence = 0;
   return new MockLanguageModelV3({
+    // A recognized provider so core resolves structured-output capabilities and
+    // compiles the wire schema the codec installs.
+    provider: "openai",
+    modelId: "gpt-4o",
     doGenerate: async () =>
       v3Result({ text: queue.shift() ?? "{}" }, sequence++) as never,
   }) as unknown as LanguageModel;

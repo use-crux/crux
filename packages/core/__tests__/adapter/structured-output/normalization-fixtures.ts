@@ -21,6 +21,7 @@ import type {
   AdapterSpec,
   StreamHandle,
 } from "@use-crux/core/adapter";
+import { permissiveCapabilities } from "./capability-fixtures";
 
 // ─────────────────────────────────────────────────────────────────
 // Authored Zod schema matrix (canonical inputs for the compiler)
@@ -101,9 +102,7 @@ export function createStructuredFakeAdapter(responseText: string) {
     mapSettings() {
       return {};
     },
-    wrapOutputSchema() {
-      return { response_format: "json" };
-    },
+    structuredOutput: { accepts: permissiveCapabilities },
   };
 
   return adapter(spec)({});

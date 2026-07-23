@@ -33,6 +33,14 @@ import type {
   ExecutorStreamHandle,
   ExecutorStreamMeta,
 } from "../executor-types";
+import {
+  compileStructuredOutputForRequest,
+  CruxUnsupportedStructuredOutputError,
+} from "../structured-output";
+import type {
+  JsonSchemaObject,
+  StructuredOutputDecodeManifest,
+} from "../structured-output";
 import { withOperationResultMeta } from "../../observability/internal/result-meta";
 import type { CruxRunId, WithOperationResultMeta } from "../../observability";
 import { stampCruxRunId } from "../../generation/run-id";
@@ -43,6 +51,7 @@ import {
   buildResolveOpts,
   DEFAULT_MAX_STEPS,
   inspectForDevtools,
+  resolveToolInputCapabilities,
   withSkillActivationInput,
 } from "./shared";
 import { emitInputTokenEstimate } from "./media-token-budget";
@@ -153,6 +162,10 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
         toolMiddleware: args.toolMiddleware,
         toolApproval: args.toolApproval,
       },
+      // Compile tool input schemas against the selected model's verified profile.
+      // An unknown model (resolver present, returns undefined) fails before
+      // transport for any schema'd tool rather than silently going permissive.
+      toolInputCapabilities: resolveToolInputCapabilities(dialect, modelInfo),
       promptId: prompt.id,
       input: args.input ?? {},
       timeout: args.timeout,
@@ -203,7 +216,38 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     await closeSources();
     throw error;
   }
-  const request: ExecutorRequest<TModel> & { schema?: z.ZodType } = {
+
+  // Core owns compilation: resolve the model's inert capabilities and compile
+  // the wire schema before transport. An unknown model fails here rather than
+  // sending the authored schema. The SDK validates against `outputSchema`; core
+  // owns the authored parse of the completed stream value.
+  let structuredOutputSchema: JsonSchemaObject | undefined;
+  let structuredDecodeManifest: StructuredOutputDecodeManifest | undefined;
+  if (resolved.schema) {
+    const capabilities = dialect.structuredOutput?.capabilities(modelInfo);
+    if (!capabilities) {
+      stepBudget.dispose();
+      await closeSources();
+      throw new CruxUnsupportedStructuredOutputError(
+        dialect.id,
+        `the selected model "${
+          modelInfo.provider || modelInfo.modelId || "unknown"
+        }" has no verified structured-output capability profile`,
+      );
+    }
+    const plan = compileStructuredOutputForRequest(
+      resolved.schema,
+      capabilities,
+      { diagnostics, promptId: prompt.id },
+    );
+    structuredOutputSchema = plan.outputSchema;
+    structuredDecodeManifest = plan.decodeManifest;
+  }
+
+  const request: ExecutorRequest<TModel> & {
+    schema?: z.ZodType;
+    outputSchema?: JsonSchemaObject;
+  } = {
     model: args.model,
     modelInfo,
     system: currentSystem,
@@ -213,6 +257,9 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     nativeMessages,
     settings: mappedSettings,
     tools,
+    ...(lifecycle.toolWireSchemas
+      ? { toolWireSchemas: lifecycle.toolWireSchemas }
+      : {}),
     toolApproval: (call) =>
       lifecycle.requiresApproval(
         { id: call.toolCallId, name: call.toolName, args: call.input },
@@ -226,6 +273,7 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     diagnostics,
     ...(trackedSafety ? { safety: trackedSafety.stream } : {}),
     ...(resolved.schema ? { schema: resolved.schema } : {}),
+    ...(structuredOutputSchema ? { outputSchema: structuredOutputSchema } : {}),
   };
 
   let handle: WithOperationResultMeta<
@@ -304,6 +352,13 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
           : undefined,
         representedText: trackedSafety ? meta?.text : undefined,
         messages,
+        ...(resolved.schema
+          ? {
+              schema: resolved.schema,
+              decodeManifest: structuredDecodeManifest,
+              promptId: prompt.id,
+            }
+          : {}),
       });
       await runInStreamObservationContext(handle, () =>
         lifecycle.captureTurn({

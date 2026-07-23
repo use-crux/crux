@@ -31,7 +31,7 @@ import { googleMediaHooks } from "./media-preflight";
 import {
   asGoogleGenerateContentParams,
   asGoogleGenerateContentStreamParams,
-  googleOutputSchema,
+  googleStructuredCapabilities,
   googleRequest,
   googleSettings,
 } from "./request";
@@ -106,7 +106,7 @@ const google = defineSingleTurnProviderBundle({
     },
     mapError: mapGoogleError,
     settings: googleSettings,
-    outputSchema: googleOutputSchema,
+    structuredOutput: { accepts: googleStructuredCapabilities },
     transcript: googleTranscript,
     media: googleMediaHooks,
   } satisfies SingleTurnProviderBundleSpec<

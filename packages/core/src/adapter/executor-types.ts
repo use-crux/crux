@@ -24,6 +24,7 @@ import {
   systemMessagePrefixPatch,
   type SystemMessagePrefixPatch,
 } from "./execution/system-prefix-patch";
+import type { JsonSchemaObject } from "./structured-output";
 
 export type {
   ExecutorProviderStreamHandle,
@@ -80,6 +81,13 @@ export interface ExecutorRequest<TModel> {
    * only wraps `execute`/`toModelOutput` for devtools.
    */
   readonly tools: Record<string, unknown> | undefined;
+  /**
+   * Compiled wire schemas for tools whose authored schema core owns, keyed by
+   * tool name. SDK-loop runtimes install these as the provider tool's
+   * `inputSchema` (never the authored Zod), so structural validation runs on the
+   * SDK and the sole authored parse runs in the wrapped `execute`.
+   */
+  readonly toolWireSchemas?: Record<string, JsonSchemaObject>;
   /**
    * Backend-neutral approval evaluator for SDK-owned tool loops.
    *
@@ -157,6 +165,14 @@ export interface ExecutorRequest<TModel> {
 export interface StructuredRequest<TModel> extends ExecutorRequest<TModel> {
   /** The Zod schema the prompt declared as its `output`. */
   readonly schema: z.ZodType;
+  /**
+   * The provider-compatible lowered wire schema core compiled from `schema`.
+   *
+   * SDK-loop runtimes install this — never the authored Zod schema — as the AI
+   * SDK's structured-output validator. Core owns the sole authored parse of the
+   * completed candidate, so the runtime must not run the authored schema.
+   */
+  readonly outputSchema?: JsonSchemaObject;
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -382,8 +398,13 @@ export type StructuredAttempt<TRawResponse> =
       readonly raw: TRawResponse;
       /** Canonical extraction of the response. */
       readonly response: AdapterResponse;
-      /** The parsed, schema-valid object. */
-      readonly object: unknown;
+      /**
+       * Parsed provider wire value: structurally valid against the installed
+       * wire `outputSchema`, but NOT manifest-decoded and NOT authored-Zod
+       * validated. Core decodes it to canonical `z.input`, runs Safety, then
+       * runs the authored schema exactly once to produce the public object.
+       */
+      readonly wireValue: unknown;
     }
   | {
       readonly status: "invalid";

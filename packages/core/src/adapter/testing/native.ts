@@ -15,6 +15,7 @@ import type { Message } from '../../generation/messages'
 import type { AdapterSpec } from '../spec'
 import type { AdapterResponse, CallArgs, ToolResultEntry } from '../types'
 import type { ConformanceViolation } from '../testing'
+import { compileStructuredOutput } from '../structured-output'
 import type {
   AdapterConformanceCapabilities,
   AdapterConformanceHarness,
@@ -141,16 +142,16 @@ export async function adapterSpecConformance<
   })
 
   await run('structured output request wiring', async () => {
-    if (!spec.wrapOutputSchema) {
+    if (!spec.structuredOutput) {
       if (harness.capabilities?.structuredOutput === 'required') {
-        fail('structured output request wiring', 'wrapOutputSchema is required but missing')
+        fail('structured output request wiring', 'structuredOutput capability is required but missing')
       }
       return
     }
     const schema = z.object({ ok: z.boolean() })
-    const schemaParams = spec.wrapOutputSchema(schema)
+    const outputSchema = compileStructuredOutput(schema, spec.structuredOutput.accepts).outputSchema
     const prepared = await harness.prepare({ structuredTexts: ['{"ok":true}'] })
-    const result = await spec.call(prepared.client, baseCallArgs(prepared, { schema, schemaParams }))
+    const result = await spec.call(prepared.client, baseCallArgs(prepared, { schema, outputSchema }))
     if (prepared.inspect.bodyForCall(0) === undefined) {
       fail('structured output request wiring', 'structured request body was not captured')
     }
@@ -187,7 +188,7 @@ function baseCallArgs<TClient, TExtra extends Record<string, unknown>>(
     messages: [...BASE_MESSAGES],
     settings: {},
     schema: undefined,
-    schemaParams: undefined,
+    outputSchema: undefined,
     tools: undefined,
     extra: prepared.extra ?? ({} as TExtra),
     ...overrides,

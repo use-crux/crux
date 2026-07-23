@@ -254,7 +254,7 @@ describe('AI SDK tool model ingress', () => {
     }
 
     await createCruxAi({ gateway: scripted.gateway }).generate(toolPrompt, {
-      model: 'test:model' as never,
+      model: 'openai:gpt-4o' as never,
       tools: { lookup: authored },
     })
 

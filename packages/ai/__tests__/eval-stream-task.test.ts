@@ -2,7 +2,7 @@ import type { LanguageModel } from "ai";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { z } from "zod";
 
-import { prompt } from "@use-crux/core";
+import { prompt, ValidationExhaustedError } from "@use-crux/core";
 import { CruxAdapterError } from "@use-crux/core/adapter";
 import {
   executeEvalTaskForInternalUse,
@@ -13,8 +13,8 @@ import { createCruxAi, stream } from "../src";
 import { scriptedGateway } from "./scripted-gateway";
 
 const model = {
-  provider: "test",
-  modelId: "stream-model",
+  provider: "openai",
+  modelId: "gpt-4o",
   specificationVersion: "v3",
 } as unknown as LanguageModel;
 
@@ -68,7 +68,7 @@ describe("stream.task()", () => {
     const productionObject = { answer: "Production" };
     const evalObject = { answer: "Evaluation" };
     const scripted = scriptedGateway({
-      streamObject: [
+      streamText: [
         {
           chunks: ['{"answer":"Production"}'],
           finish: { object: productionObject },
@@ -109,8 +109,9 @@ describe("stream.task()", () => {
 
   it("rejects absent structured output and partial stream failures", async () => {
     const scripted = scriptedGateway({
-      streamObject: [{ chunks: ["{}"], finish: {} }],
       streamText: [
+        // structuredTask: an empty object cannot satisfy the schema.
+        { chunks: ["{}"], finish: { output: {} } },
         {
           chunks: ["partial"],
           errorAfterChunks: new Error("connection reset"),
@@ -148,13 +149,12 @@ describe("stream.task()", () => {
       { model },
     );
 
+    // The completed structured stream now runs the same terminal invariant as
+    // generation: an empty object cannot satisfy the schema, so the stream
+    // throws its validation failure rather than returning an absent object.
     await expect(
       executeEvalTaskForInternalUse(structuredTask, { topic: "missing" }),
-    ).rejects.toMatchObject({
-      code: "structured_output_missing",
-      operation: "stream",
-      promptId: "missing-stream-object",
-    });
+    ).rejects.toBeInstanceOf(ValidationExhaustedError);
     await expect(
       executeEvalTaskForInternalUse(textTask, { topic: "partial" }),
     ).rejects.toBeInstanceOf(CruxAdapterError);
@@ -163,7 +163,7 @@ describe("stream.task()", () => {
     ).rejects.toMatchObject({
       providerError: { kind: "aborted", retryable: false },
     });
-    expect(scripted.calls.streamText).toHaveLength(2);
+    expect(scripted.calls.streamText).toHaveLength(3);
   });
 
   it("retains complete content and tool-call evidence", async () => {

@@ -78,12 +78,13 @@ interface AiSdkStructuredPlanBase {
   ): Promise<StructuredAttempt<SdkLoopResultLike> | undefined>;
 }
 
-/** One legacy or guarded structured attempt, selected by codec capability. */
+/**
+ * One structured attempt, planned as a single-step `generateText()` +
+ * `Output.object()` call. `generateObject()` is not used: it exposes neither the
+ * completed structured text nor an unlowered wire value, and is deprecated.
+ */
 export type AiSdkStructuredPlan = AiSdkStructuredPlanBase &
-  (
-    | AiSdkCallPlan<"generateObject", StructuredAttempt<SdkLoopResultLike>>
-    | AiSdkCallPlan<"generateText", StructuredAttempt<SdkLoopResultLike>>
-  );
+  AiSdkCallPlan<"generateText", StructuredAttempt<SdkLoopResultLike>>;
 
 /** A cached stream payload captured by core's semantic-cache middleware. */
 export interface CachedStreamPayload {

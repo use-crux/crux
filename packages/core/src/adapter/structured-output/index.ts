@@ -25,6 +25,8 @@ export type {
 } from "./diagnostics";
 export {
   CruxInvalidCapabilityProfileError,
+  CruxStructuredOutputDecodeError,
+  CruxUnsupportedSchemaError,
   CruxUnsupportedStructuredOutputError,
 } from "./errors";
 export type { StructuredOutputErrorCode } from "./errors";
@@ -37,4 +39,9 @@ export {
 } from "./identity";
 export type { StructuredOutputFingerprintInput } from "./identity";
 export { decodeStructuredValue } from "./decode";
-export { compileStructuredOutput } from "./compile";
+export { compileCanonicalSchema, compileStructuredOutput } from "./compile";
+export { compileStructuredOutputForRequest } from "./compile-for-request";
+export type {
+  StructuredOutputDiagnosticsSink,
+  StructuredOutputRequestContext,
+} from "./compile-for-request";

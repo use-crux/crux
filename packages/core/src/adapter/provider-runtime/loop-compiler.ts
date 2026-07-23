@@ -76,6 +76,9 @@ function portForBoundLoop(
   const port: LoopRuntimePort<unknown, unknown, unknown> = {
     id,
     capabilities: bound.capabilities,
+    ...(loop.structuredOutput
+      ? { structuredOutput: loop.structuredOutput }
+      : {}),
     media: loop.media,
     materializeToolSource: bound.materializeToolSource,
     [toolModelIngressDialect]: bound[toolModelIngressDialect],

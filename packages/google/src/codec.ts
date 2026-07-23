@@ -9,10 +9,11 @@ import {
 } from './cached-content'
 import {
   asGoogleGenerateContentParams,
-  googleOutputSchema,
+  googleStructuredCapabilities,
   googleRequest,
   googleSettings,
 } from './request'
+import { compileStructuredOutput } from '@use-crux/core/adapter'
 import { googleTranscript } from './message-codec'
 import { googleResponse } from './response'
 import type { GoogleExtra } from './types'
@@ -62,7 +63,9 @@ export async function toParams(
       extra: options.extra,
       messages: options.messages,
       tools: options.tools ? [...options.tools] : undefined,
-      schemaParams: resolved.schema ? googleOutputSchema(resolved.schema) : undefined,
+      outputSchema: resolved.schema
+        ? compileStructuredOutput(resolved.schema, googleStructuredCapabilities).outputSchema
+        : undefined,
     })
   const request = await googleRequest(
     {

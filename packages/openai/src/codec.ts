@@ -1,12 +1,12 @@
 import type OpenAI from 'openai'
 import type { ChatCompletion } from 'openai/resources/chat/completions'
 import type { GenerationSettings, Message, ResolvedPrompt } from '@use-crux/core'
-import { callArgsFromResolvedPrompt, type AdapterResponse, type ToolDescriptor } from '@use-crux/core/adapter'
+import { callArgsFromResolvedPrompt, compileStructuredOutput, type AdapterResponse, type ToolDescriptor } from '@use-crux/core/adapter'
 import {
   asOpenAINonStreamingParams,
-  openAIOutputSchema,
   openAIRequest,
   openAISettings,
+  openAIStructuredCapabilities,
 } from './request'
 import { openAITranscript } from './message-codec'
 import { openAIResponse } from './response'
@@ -42,7 +42,9 @@ export function toParams(
       extra: options.extra,
       messages: options.messages,
       tools: options.tools ? [...options.tools] : undefined,
-      schemaParams: resolved.schema ? openAIOutputSchema(resolved.schema) : undefined,
+      outputSchema: resolved.schema
+        ? compileStructuredOutput(resolved.schema, openAIStructuredCapabilities).outputSchema
+        : undefined,
     })
   const request = openAIRequest({
     ...callArgs,

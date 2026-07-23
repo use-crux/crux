@@ -18,7 +18,6 @@ import {
   type StopCondition,
 } from "../../generation/tool-control";
 import { getHooks } from "../../runtime/runtime";
-import { ValidationExhaustedError } from "../../generation/validation-retry";
 import {
   createSafetyWithBindingApplicability,
   finalizeSafetySessionLanguageOutput,
@@ -26,6 +25,17 @@ import {
   guardSafetySessionResolvedInput,
   safetySessionModelIngressGuard,
 } from "../../safety/session";
+import type { SafetyOutput } from "../../safety/session";
+import {
+  compileStructuredOutputForRequest,
+  CruxUnsupportedStructuredOutputError,
+} from "../structured-output";
+import { withDefaultResolverPorts } from "../../resolver/ports";
+import type {
+  JsonSchemaObject,
+  StructuredOutputDecodeManifest,
+} from "../structured-output";
+import { createStructuredCompletion } from "./structured-completion";
 import { languageBindingApplicability } from "../../safety/language-applicability";
 import { orchestrateGenerateWithCompletion } from "../../generation/orchestrate";
 import { composeAbortSignals, withBudget } from "../../generation/timeout";
@@ -39,10 +49,6 @@ import {
   createResultAccumulator,
   type ResultStepFacts,
 } from "../result-accumulator";
-import {
-  formatValidationFeedback,
-  validateStructuredOutput,
-} from "../policy/validation-retry";
 import { createToolLifecycle } from "../tool/session";
 import type { ApprovalRequestInfo } from "../tool/approval";
 import type {
@@ -103,9 +109,22 @@ export async function generateCore<
 
   const initialMessages = initialCoreMessageState(resolved, args.messages);
   let messages = initialMessages.messages;
-  let schemaParams: Record<string, unknown> | undefined;
-  if (resolved.schema && dialect.wrapOutputSchema) {
-    schemaParams = dialect.wrapOutputSchema(resolved.schema);
+  let outputSchema: JsonSchemaObject | undefined;
+  let decodeManifest: StructuredOutputDecodeManifest | undefined;
+  if (resolved.schema) {
+    if (!dialect.structuredOutput) {
+      throw new CruxUnsupportedStructuredOutputError(dialect.id);
+    }
+    const plan = compileStructuredOutputForRequest(
+      resolved.schema,
+      dialect.structuredOutput.accepts,
+      {
+        diagnostics: withDefaultResolverPorts().diagnostics,
+        promptId: prompt.id,
+      },
+    );
+    outputSchema = plan.outputSchema;
+    decodeManifest = plan.decodeManifest;
   }
 
   const maxSteps =
@@ -208,6 +227,9 @@ export async function generateCore<
       guardSkillAmendment,
       appendToolRound: dialect.appendToolRound,
       sanitizeToolSchema: dialect.sanitizeToolSchema,
+      ...(dialect.structuredOutput
+        ? { structuredOutputCapabilities: dialect.structuredOutput.accepts }
+        : {}),
     });
     messages = (await lifecycle.resume(messages)).messages;
   } catch (error) {
@@ -248,7 +270,7 @@ export async function generateCore<
             messages,
             settings: mappedSettings,
             schema: resolved.schema,
-            schemaParams,
+            outputSchema,
             tools: lifecycle.descriptors,
             extra: (args.extra ?? {}) as TExtra,
             input: args.input ?? {},
@@ -281,7 +303,7 @@ export async function generateCore<
               messages: providerMessages,
               settings: mappedSettings,
               schema: resolved.schema,
-              schemaParams,
+              outputSchema,
               tools: lifecycle.descriptors
                 ? [...lifecycle.descriptors]
                 : undefined,
@@ -306,56 +328,11 @@ export async function generateCore<
               : replaceResponseContent(extracted, guardedStep.content);
 
             if (lastExtracted.toolCalls && lastExtracted.toolCalls.length > 0) {
-              // Tool calls are handled below after validation-only exits.
-            } else if (resolved.schema && validationRetry) {
-              const validationResult = validateStructuredOutput(
-                lastExtracted.text,
-                resolved.schema,
-              );
-              if (validationResult.valid) {
-                const validText =
-                  validationResult.repairedText ?? lastExtracted.text;
-                if (validText !== lastExtracted.text) {
-                  lastExtracted = replaceResponseText(lastExtracted, validText);
-                }
-                rememberStep(lastExtracted);
-                break;
-              }
-              if (
-                validationRetries < maxValidationRetries &&
-                step < maxSteps - 1
-              ) {
-                validationRetries++;
-                validationRetry.onRetry?.(
-                  validationRetries,
-                  validationResult.error!,
-                );
-                messages = dialect.appendToolRound(messages, lastExtracted, []);
-                messages = [
-                  ...messages,
-                  {
-                    role: "user" as const,
-                    content: formatValidationFeedback(
-                      lastExtracted.text,
-                      validationResult.error!,
-                    ),
-                  },
-                ];
-                rememberStep(replaceResponseText(lastExtracted, ""));
-                continue;
-              }
-              validationRetry.onExhausted?.(
-                validationRetries,
-                validationResult.error!,
-              );
-              throw new ValidationExhaustedError({
-                lastRawOutput: lastExtracted.text,
-                zodErrors: validationResult.error!,
-                attempts: validationRetries,
-                maxAttempts: maxValidationRetries,
-                promptId: prompt.id ?? "unknown",
-              });
+              // Tool calls are handled below.
             } else {
+              // A completed candidate. Structured validation is unconditional and
+              // runs once, after terminal guardrails, in the finalize step below —
+              // never gated on validation-retry configuration.
               rememberStep(lastExtracted);
               break;
             }
@@ -406,92 +383,88 @@ export async function generateCore<
 
           if (lastExtracted) {
             const suspended = suspendedApproval;
-            let parsed: unknown;
-            if (resolved.schema && !suspended) {
-              try {
-                parsed = JSON.parse(lastExtracted.text);
-              } catch {
-                parsed = undefined;
-              }
-            }
-            const finalOutput = await finalizeSafetySessionLanguageOutput(
-              safety,
-              { text: lastExtracted.text, parsed },
-              async (corrective) => {
-                replaceLastStep(replaceResponseText(lastExtracted!, ""));
-                messages = dialect.appendToolRound(
-                  messages,
-                  lastExtracted!,
-                  [],
-                );
-                messages = [...messages, ...corrective];
-                const providerMessages =
-                  await prepareProviderMessages(messages);
-                const regen = await callProvider({
-                  ...lastCallArgs!,
-                  messages: providerMessages,
-                });
-                lastRaw = regen.raw;
-                steps++;
-                const providerRegenStep = stepFactsFromResponse(
-                  regen.extracted,
-                );
-                const guardedRegen = await guardSafetySessionLanguageStep(
-                  safety,
-                  providerResponseOrdinal++,
-                  providerRegenStep,
-                  resolved.schema,
-                );
-                lastExtracted = sameStepContent(
-                  providerRegenStep.content,
-                  guardedRegen.content,
-                )
-                  ? regen.extracted
-                  : replaceResponseContent(
-                      regen.extracted,
-                      guardedRegen.content,
-                    );
-                rememberStep(lastExtracted);
-                if (resolved.schema) {
-                  const reVal = validateStructuredOutput(
-                    lastExtracted.text,
-                    resolved.schema,
-                  );
-                  if (!reVal.valid) {
-                    validationRetry?.onExhausted?.(0, reVal.error!);
-                    throw new ValidationExhaustedError({
-                      lastRawOutput: lastExtracted.text,
-                      zodErrors: reVal.error!,
-                      attempts: 0,
-                      maxAttempts: 0,
-                      promptId: prompt.id ?? "unknown",
-                    });
-                  }
-                  const reText = reVal.repairedText ?? lastExtracted.text;
-                  if (reText !== lastExtracted.text) {
-                    lastExtracted = replaceResponseText(lastExtracted, reText);
-                    replaceLastStep(lastExtracted);
-                  }
-                  let reParsed: unknown;
-                  try {
-                    reParsed = JSON.parse(reText);
-                  } catch {
-                    reParsed = undefined;
-                  }
-                  return { text: reText, parsed: reParsed };
-                }
-                return { text: lastExtracted.text, parsed: undefined };
-              },
-              { suspended, messages, schema: resolved.schema },
-            );
-            if (finalOutput.text !== lastExtracted.text) {
-              lastExtracted = replaceResponseText(
-                lastExtracted,
-                finalOutput.text,
+            const schema = resolved.schema;
+
+            // Re-call the provider with corrective messages, step-guard it, and
+            // accumulate the result step; returns the new candidate text. Shared
+            // by validation retry and constraint regeneration.
+            const repromptProvider = async (
+              corrective: readonly Message[],
+            ): Promise<string> => {
+              replaceLastStep(replaceResponseText(lastExtracted!, ""));
+              messages = dialect.appendToolRound(messages, lastExtracted!, []);
+              messages = [...messages, ...corrective];
+              const providerMessages = await prepareProviderMessages(messages);
+              const regen = await callProvider({
+                ...lastCallArgs!,
+                messages: providerMessages,
+              });
+              lastRaw = regen.raw;
+              steps++;
+              const providerRegenStep = stepFactsFromResponse(regen.extracted);
+              const guardedRegen = await guardSafetySessionLanguageStep(
+                safety,
+                providerResponseOrdinal++,
+                providerRegenStep,
+                schema,
               );
-              replaceLastStep(lastExtracted);
+              lastExtracted = sameStepContent(
+                providerRegenStep.content,
+                guardedRegen.content,
+              )
+                ? regen.extracted
+                : replaceResponseContent(regen.extracted, guardedRegen.content);
+              rememberStep(lastExtracted);
+              return lastExtracted.text;
+            };
+
+            const applyFinalText = (text: string): void => {
+              if (text !== lastExtracted!.text) {
+                lastExtracted = replaceResponseText(lastExtracted!, text);
+                replaceLastStep(lastExtracted);
+              }
+            };
+
+            if (schema) {
+              const completion = createStructuredCompletion({
+                safety,
+                schema,
+                decodeManifest,
+                promptId: prompt.id ?? "unknown",
+                validationRetry,
+                maxSteps,
+                steps: () => steps,
+                messages: () => messages,
+                reprompt: repromptProvider,
+              });
+              const initial = suspended
+                ? { text: lastExtracted.text, parsed: undefined }
+                : completion.buildFromText(lastExtracted.text);
+              if (!suspended) applyFinalText(initial.text);
+              const result = await completion.finalize(initial, { suspended });
+              applyFinalText(result.text);
+              parsedObject = result.object;
+            } else {
+              // Non-structured text path: constraint regeneration shares the same
+              // maxSteps budget; once exhausted, no further provider call is made.
+              const textRegenerate = async (
+                corrective: readonly Message[],
+              ): Promise<SafetyOutput> =>
+                steps >= maxSteps
+                  ? { text: lastExtracted!.text, parsed: undefined }
+                  : {
+                      text: await repromptProvider(corrective),
+                      parsed: undefined,
+                    };
+              const finalOutput = await finalizeSafetySessionLanguageOutput(
+                safety,
+                { text: lastExtracted.text, parsed: undefined },
+                textRegenerate,
+                { suspended, messages },
+              );
+              applyFinalText(finalOutput.text);
+              parsedObject = undefined;
             }
-            parsedObject = finalOutput.parsed;
           }
 
           const meta: GenerationMeta = safety.stamp({

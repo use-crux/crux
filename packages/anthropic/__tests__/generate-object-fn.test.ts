@@ -87,10 +87,9 @@ describe('createGenerateObjectFn', () => {
         "model": "claude-sonnet-4-5-20250929",
         "output_config": {
           "format": {
-            "name": undefined,
+            "name": "output",
             "schema": {
-              "additionalProperties": false,
-              "description": "{$schema: "https://json-schema.org/draft/2020-12/schema"}",
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
               "properties": {
                 "ok": {
                   "type": "boolean",

@@ -9,6 +9,7 @@ import {
   type NativeResponseMetadata,
 } from "../../src/adapter";
 import type { Message } from "../../src/generation/messages";
+import { permissiveCapabilities } from "./structured-output/capability-fixtures";
 import type { GenerationSettings, TokenUsage, TraceMeta } from "../../src/generation/types";
 
 const RUNTIME_USAGE = {
@@ -37,7 +38,7 @@ export interface RuntimeRequest {
   readonly system: string | undefined;
   readonly messages: readonly RuntimeProviderMessage[];
   readonly settings: Record<string, unknown>;
-  readonly schemaParams: Record<string, unknown> | undefined;
+  readonly outputSchema: Record<string, unknown> | undefined;
   readonly tools: readonly string[] | undefined;
   readonly stream?: true;
 }
@@ -124,7 +125,7 @@ export function createSingleTurnTestRuntime(
           system: args.system,
           messages: args.providerMessages,
           settings: args.settings,
-          schemaParams: args.schemaParams,
+          outputSchema: ctx.outputSchema,
           tools: args.tools?.map((tool) => tool.name),
         };
       },
@@ -163,9 +164,7 @@ export function createSingleTurnTestRuntime(
             : {}),
         };
       },
-      outputSchema(schema) {
-        return { json_schema: z.toJSONSchema(schema) };
-      },
+      structuredOutput: { accepts: permissiveCapabilities },
       transcript: {
         fromMessages: (messages) =>
           messages.map((message) => ({

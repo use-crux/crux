@@ -1,4 +1,4 @@
-import type { LanguageModel } from 'ai'
+import { jsonSchema, type LanguageModel } from 'ai'
 import type { Message } from '@use-crux/core'
 import type { ExecutorRequest } from '@use-crux/core/adapter'
 import { buildSystemArg } from '../provider-profile'
@@ -38,7 +38,10 @@ export function buildBaseArgs(request: ExecutorRequest<LanguageModel>, options: 
 
   if (options.includeTools) {
     if (request.tools && Object.keys(request.tools).length > 0) {
-      args.tools = request.toolApproval ? withSdkToolApproval(request.tools, request.toolApproval) : request.tools
+      const approvalTools = request.toolApproval
+        ? withSdkToolApproval(request.tools, request.toolApproval)
+        : request.tools
+      args.tools = installToolWireSchemas(approvalTools, request.toolWireSchemas)
     }
     if (request.activeTools && request.activeTools.length > 0) args.activeTools = [...request.activeTools]
     const toolChoice = request.extra?.toolChoice
@@ -84,6 +87,30 @@ function withSdkToolApproval(
       : tool
   }
   return wrapped
+}
+
+/**
+ * Install core's compiled wire schema as each tool's SDK `inputSchema`.
+ *
+ * Core owns tool-argument compilation and the sole authored validation; the SDK
+ * must receive only the structural wire schema so it never runs the tool's
+ * authored validator (a Zod schema or an AI SDK schema's own `validate`), which
+ * the wrapped `execute` applies exactly once, after decoding and middleware.
+ */
+function installToolWireSchemas(
+  tools: Record<string, unknown>,
+  wireSchemas: Record<string, unknown> | undefined,
+): Record<string, unknown> {
+  if (!wireSchemas) return tools
+  const result: Record<string, unknown> = {}
+  for (const [name, tool] of Object.entries(tools)) {
+    const wire = wireSchemas[name]
+    result[name] =
+      wire && isRecord(tool)
+        ? { ...tool, inputSchema: jsonSchema(wire as Parameters<typeof jsonSchema>[0]) }
+        : tool
+  }
+  return result
 }
 
 function mergeProviderOptions(current: unknown, next: unknown): unknown {

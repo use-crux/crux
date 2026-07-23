@@ -88,7 +88,7 @@ describe("AI SDK-native MCP policy conformance", () => {
     });
 
     await createCruxAi({ gateway }).generate(assistant, {
-      model: "test:model" as never,
+      model: "openai:gpt-4o" as never,
     });
     await observe.flush();
 
@@ -145,7 +145,7 @@ describe("AI SDK-native MCP policy conformance", () => {
         prompt: "Use lookup only.",
       }),
       {
-        model: "test:model" as never,
+        model: "openai:gpt-4o" as never,
         activeTools: ["lookup"],
       },
     );
@@ -199,7 +199,7 @@ describe("AI SDK-native MCP policy conformance", () => {
         toolMiddleware: rewrite("prompt", "P"),
       }),
       {
-        model: "test:model" as never,
+        model: "openai:gpt-4o" as never,
         toolMiddleware: rewrite("call", "C"),
       },
     );
@@ -248,7 +248,7 @@ describe("AI SDK-native MCP policy conformance", () => {
           }),
         }),
       }),
-      { model: "test:model" as never },
+      { model: "openai:gpt-4o" as never },
     );
 
     expect(execute).toHaveBeenCalledWith(

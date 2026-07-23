@@ -33,8 +33,8 @@ export interface ResolvedPromptCodecOptions<
    * the tool lifecycle.
    */
   readonly tools?: CallArgs<TExtra>["tools"];
-  /** Provider-native structured-output params, when the adapter supports them. */
-  readonly schemaParams?: Record<string, unknown>;
+  /** Provider-compatible compiled JSON Schema, when the request is structured. */
+  readonly outputSchema?: CallArgs<TExtra>["outputSchema"];
 }
 
 /** Build canonical provider call args from a resolved prompt. */
@@ -51,7 +51,7 @@ export function callArgsFromResolvedPrompt<
     messages: initialMessages(resolved, options.messages),
     settings: options.settings ?? {},
     schema: resolved.schema,
-    schemaParams: options.schemaParams,
+    outputSchema: options.outputSchema,
     tools: options.tools ? [...options.tools] : undefined,
     extra: options.extra ?? ({} as TExtra),
   };

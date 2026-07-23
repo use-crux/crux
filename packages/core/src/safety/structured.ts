@@ -1,5 +1,4 @@
 import { SafetyStructuredSyncError } from './errors'
-import type { z } from 'zod'
 
 /** Output pair that must stay synchronized after safety rewrites. */
 export interface StructuredSafetyOutput {
@@ -8,18 +7,21 @@ export interface StructuredSafetyOutput {
 }
 
 /**
- * Reparse structured JSON text after a text-boundary guard rewrites it.
+ * Resynchronize the canonical `z.input` after a text-boundary guard rewrites
+ * structured output text.
  *
- * Structured adapters already validate provider output before safety. This
- * helper keeps the returned `text` and `parsed` pair from diverging after a
- * guardrail rewrite; schema revalidation is owned by adapter integration in
- * later slices.
+ * This is JSON resynchronization only: it keeps the returned `text` and `parsed`
+ * pair from diverging after a rewrite by reparsing the rewritten JSON back into
+ * canonical `z.input`. It never runs Zod — the authoritative `safeParse` and all
+ * schema-validation, error, and retry handling are owned by adapter execution,
+ * which parses the guarded canonical input exactly once after guardrails and
+ * before constraints. Invalid JSON is still a synchronization failure; a
+ * schema-invalid-but-valid-JSON rewrite flows to normal validation handling.
  */
 export function resyncStructuredText(
   output: StructuredSafetyOutput,
   rewrittenText: string,
   opts: {
-    readonly schema?: z.ZodType
     readonly policyId?: string
   } = {},
 ): StructuredSafetyOutput {
@@ -31,20 +33,8 @@ export function resyncStructuredText(
 
   try {
     const parsed = JSON.parse(rewrittenText) as unknown
-    if (opts.schema) {
-      const validation = opts.schema.safeParse(parsed)
-      if (!validation.success) {
-        throw new SafetyStructuredSyncError({
-          message: 'Safety rewrote structured output text, but the rewritten object does not match the schema.',
-          policyId,
-          parseError: validation.error.message,
-        })
-      }
-      return { text: rewrittenText, parsed: validation.data }
-    }
     return { text: rewrittenText, parsed }
   } catch (error) {
-    if (error instanceof SafetyStructuredSyncError) throw error
     throw new SafetyStructuredSyncError({
       message: 'Safety rewrote structured output text, but the rewritten text is not valid JSON.',
       policyId,

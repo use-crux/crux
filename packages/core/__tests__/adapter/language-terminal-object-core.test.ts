@@ -7,6 +7,7 @@ import type { AdapterSpec } from "../../src/adapter/spec";
 import type { AdapterResponse } from "../../src/adapter/types";
 import { prompt } from "../../src/prompt/prompt";
 import { boundary, guardrail } from "../../src/safety";
+import { permissiveCapabilities } from "./structured-output/capability-fixtures";
 
 const outputSchema = z.object({
   profile: z.object({ label: z.string(), count: z.number() }),
@@ -87,6 +88,7 @@ function structuredAdapter(
 > {
   return {
     providerId: "terminal-object-core",
+    structuredOutput: { accepts: permissiveCapabilities },
     async call() {
       return { raw, extracted };
     },

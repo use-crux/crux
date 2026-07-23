@@ -9,11 +9,106 @@
  * @module
  */
 
-import { jsonSchema as wrapJsonSchema } from "ai";
 import type { LanguageModel } from "ai";
-import type { z } from "zod";
 import type { GenerationSettings, ModelInfo, SystemBlock } from "@use-crux/core";
-import { sanitizeJsonSchema } from "@use-crux/core";
+import type { StructuredOutputCapabilities } from "@use-crux/core/adapter";
+
+/**
+ * The JSON Schema behavior Anthropic accepts through the AI SDK.
+ *
+ * Anthropic rejects several validation keywords; core drops those during
+ * lowering. Declared here because the AI SDK meta-provider cannot depend on the
+ * `@use-crux/anthropic` package.
+ */
+const AI_SDK_ANTHROPIC_CAPABILITIES = {
+  id: "ai-sdk.anthropic",
+  supportsJsonSchema: true,
+  requiresAllProperties: false,
+  supportsOptionalProperties: true,
+  supportsNullable: true,
+  supportsBooleanSchemas: false,
+  supportsReferences: true,
+  supportsUnions: true,
+  supportsRecursiveSchemas: true,
+  additionalProperties: "supported",
+  unsupportedKeywords: [
+    "minItems",
+    "maxItems",
+    "minimum",
+    "maximum",
+    "exclusiveMinimum",
+    "exclusiveMaximum",
+    "multipleOf",
+    "minLength",
+    "maxLength",
+    "pattern",
+  ],
+} satisfies StructuredOutputCapabilities;
+
+/**
+ * The JSON Schema behavior OpenAI and Google accept through the AI SDK.
+ *
+ * Both providers accept the canonical `z.input` JSON Schema the compiler emits;
+ * the AI SDK forwards the compiled schema to the provider unchanged, so core
+ * must apply the provider's real lowering rather than assume the SDK reverses
+ * it. These profiles mirror the native `@use-crux/openai` / `@use-crux/google`
+ * declarations (the AI SDK meta-provider cannot depend on those packages).
+ */
+
+/**
+ * OpenAI strict mode: `@ai-sdk/openai` sends the response schema unchanged with
+ * `strict: true`, so core owns the strict lowering — every property required,
+ * optional-only properties encoded as required+nullable, and
+ * `additionalProperties: false`. Mirrors `openAIStructuredCapabilities`.
+ */
+const AI_SDK_OPENAI_CAPABILITIES = {
+  id: "ai-sdk.openai",
+  supportsJsonSchema: true,
+  requiresAllProperties: true,
+  supportsOptionalProperties: false,
+  supportsNullable: true,
+  supportsBooleanSchemas: false,
+  supportsReferences: true,
+  supportsUnions: true,
+  supportsRecursiveSchemas: true,
+  additionalProperties: "must-be-false",
+  unsupportedKeywords: [],
+} satisfies StructuredOutputCapabilities;
+
+/** Google Generative AI response schema. Mirrors `googleStructuredCapabilities`. */
+const AI_SDK_GOOGLE_CAPABILITIES = {
+  id: "ai-sdk.google",
+  supportsJsonSchema: true,
+  requiresAllProperties: false,
+  supportsOptionalProperties: true,
+  supportsNullable: true,
+  supportsBooleanSchemas: false,
+  supportsReferences: true,
+  supportsUnions: true,
+  supportsRecursiveSchemas: true,
+  additionalProperties: "supported",
+  unsupportedKeywords: [],
+} satisfies StructuredOutputCapabilities;
+
+/**
+ * Resolve the inert structured-output capabilities a selected AI SDK model
+ * accepts, or `undefined` when the model's semantics cannot be guaranteed.
+ *
+ * This is the `LoopRuntimePort.structuredOutput.capabilities` resolver: it only
+ * selects declared capability data. Core compiles the plan from the result and
+ * installs the wire schema; an `undefined` result makes core fail before
+ * transport rather than inventing a default for an unknown model.
+ */
+export function aiSdkStructuredCapabilities(
+  modelInfo: ModelInfo,
+): StructuredOutputCapabilities | undefined {
+  if (isAnthropicModel(modelInfo)) return AI_SDK_ANTHROPIC_CAPABILITIES;
+  if (isOpenAIModel(modelInfo)) return AI_SDK_OPENAI_CAPABILITIES;
+  if (isGoogleVertexModel(modelInfo) || isGoogleModel(modelInfo)) {
+    return AI_SDK_GOOGLE_CAPABILITIES;
+  }
+  return undefined;
+}
 
 /**
  * Extract provider and model ID from an AI SDK `LanguageModel`.
@@ -114,26 +209,6 @@ const ANTHROPIC_REASONING_BUDGET_TOKENS = {
   medium: 8000,
   high: 24000,
 } as const satisfies Record<NonNullable<GenerationSettings["reasoning"]>, number>;
-
-/**
- * For Anthropic models: convert Zod schema → JSON Schema, strip
- * unsupported properties (maxItems, minimum, etc.), and wrap in
- * the AI SDK's `jsonSchema()`. Other providers get the Zod schema as-is.
- *
- * Returns `unknown` because the result is either the original Zod schema
- * or the AI SDK's opaque jsonSchema wrapper — both valid `schema` inputs
- * to `generateObject`/`streamObject`.
- */
-export async function sanitizeSchemaForProvider(
-  schema: z.ZodType,
-  modelInfo: ModelInfo,
-): Promise<unknown> {
-  if (!isAnthropicModel(modelInfo)) return schema;
-  const { z: zod } = await import("zod");
-  const raw = zod.toJSONSchema(schema) as Record<string, unknown>;
-  const sanitized = sanitizeJsonSchema(raw, "anthropic");
-  return wrapJsonSchema(sanitized);
-}
 
 /** A system message with optional provider-specific cache options. */
 export interface SystemMessageWithOptions {

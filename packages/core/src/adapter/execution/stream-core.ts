@@ -40,6 +40,15 @@ import { materializeToolSources } from "./tool-sources";
 import { createStreamSourceCleanup } from "./stream-source-cleanup";
 import { trackRawStream } from "./stream-tracking";
 import type { CruxRunId } from "../../observability";
+import {
+  compileStructuredOutputForRequest,
+  CruxUnsupportedStructuredOutputError,
+} from "../structured-output";
+import type {
+  JsonSchemaObject,
+  StructuredOutputDecodeManifest,
+} from "../structured-output";
+import { withDefaultResolverPorts } from "../../resolver/ports";
 
 /**
  * Start one provider stream through the core-owned adapter dialect.
@@ -138,15 +147,31 @@ export async function streamCore<
       modelIngress: safetySessionModelIngressGuard(safety, "tool"),
       appendToolRound: dialect.appendToolRound,
       sanitizeToolSchema: dialect.sanitizeToolSchema,
+      ...(dialect.structuredOutput
+        ? { structuredOutputCapabilities: dialect.structuredOutput.accepts }
+        : {}),
     });
     const tools = lifecycle.descriptors
       ? [...lifecycle.descriptors]
       : undefined;
     messages = (await lifecycle.resume(messages)).messages;
 
-    let schemaParams: Record<string, unknown> | undefined;
-    if (resolved.schema && dialect.wrapOutputSchema) {
-      schemaParams = dialect.wrapOutputSchema(resolved.schema);
+    let outputSchema: JsonSchemaObject | undefined;
+    let structuredDecodeManifest: StructuredOutputDecodeManifest | undefined;
+    if (resolved.schema) {
+      if (!dialect.structuredOutput) {
+        throw new CruxUnsupportedStructuredOutputError(dialect.id);
+      }
+      const plan = compileStructuredOutputForRequest(
+        resolved.schema,
+        dialect.structuredOutput.accepts,
+        {
+          diagnostics: withDefaultResolverPorts().diagnostics,
+          promptId: prompt.id,
+        },
+      );
+      outputSchema = plan.outputSchema;
+      structuredDecodeManifest = plan.decodeManifest;
     }
     const providerMessages = await normalizeInvocationMessages(messages, {
       provider: modelInfo.provider,
@@ -167,7 +192,7 @@ export async function streamCore<
       messages: providerMessages,
       settings: mappedSettings,
       schema: resolved.schema,
-      schemaParams,
+      outputSchema,
       tools,
       extra: (args.extra ?? {}) as TExtra,
     };
@@ -276,6 +301,13 @@ export async function streamCore<
             representedText: streamedAssistant.providerText || undefined,
             liveTextSlots,
             messages,
+            ...(resolved.schema
+              ? {
+                  schema: resolved.schema,
+                  decodeManifest: structuredDecodeManifest,
+                  promptId: prompt.id,
+                }
+              : {}),
           });
           await runInStreamObservationContext(handle, () =>
             lifecycle.captureTurn({

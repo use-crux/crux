@@ -21,6 +21,7 @@ import { CruxAdapterError } from "../../src/adapter/normalized-outcome";
 import { isInvalidMediaSourceError } from "../../src/content";
 import { hasToolCall } from "../../src/generation/tool-control";
 import { prompt as makePrompt } from "../../src/prompt/prompt";
+import { permissiveCapabilities } from "./structured-output/capability-fixtures";
 import { agent as makeAgent } from "../../src/agent";
 import { z } from "zod";
 import { ValidationExhaustedError } from "../../src/generation/validation-retry";
@@ -80,6 +81,7 @@ function createMockSpec(
 ): AdapterSpec<MockClient, MockResponse, MockStream> {
   return {
     providerId: "test",
+    structuredOutput: { accepts: permissiveCapabilities },
 
     async call(_client, _args) {
       return {
@@ -1245,7 +1247,7 @@ describe("adapter", () => {
       expect(onExhausted.mock.calls[0]![0]).toBe(2); // attempts
     });
 
-    it("does not retry when validationRetry is not configured", async () => {
+    it("validates unconditionally and does not retry when validationRetry is absent", async () => {
       const callSpy = vi.fn().mockResolvedValue({
         raw: { id: "raw", content: "" },
         extracted: createMockResponse('{"name":"Alice","age":"bad"}'),
@@ -1254,14 +1256,21 @@ describe("adapter", () => {
       const spec = createMockSpec({ call: callSpy });
       const adapter = makeAdapter(spec)(mockClient);
 
-      // No validationRetry — should return invalid output without retry
-      const result = await adapter.generate(createSchemaPrompt(), {
-        model: "test-model",
-        input: { instruction: "give me a person" },
+      // No validationRetry — validation is still unconditional. The invalid
+      // output fails closed after one provider call (zero validation retries)
+      // rather than surfacing an unvalidated object.
+      await expect(
+        adapter.generate(createSchemaPrompt(), {
+          model: "test-model",
+          input: { instruction: "give me a person" },
+        }),
+      ).rejects.toMatchObject({
+        name: "ValidationExhaustedError",
+        attempts: 0,
+        maxAttempts: 0,
       });
 
       expect(callSpy).toHaveBeenCalledOnce();
-      expect(result.text).toBe('{"name":"Alice","age":"bad"}');
     });
 
     it("uses repairJsonText before LLM retry", async () => {

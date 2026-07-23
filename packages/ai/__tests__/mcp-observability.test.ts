@@ -95,7 +95,7 @@ describe("AI SDK MCP observability", () => {
         use: [source],
         prompt: "Look it up.",
       }),
-      { model: "test:model" as never },
+      { model: "openai:gpt-4o" as never },
     );
     await observe.flush();
 

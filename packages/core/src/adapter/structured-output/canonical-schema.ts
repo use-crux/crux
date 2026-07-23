@@ -24,5 +24,8 @@ import type { JsonSchemaObject } from "./plan";
  * transform it without affecting the authored schema.
  */
 export function toCanonicalJsonSchema(schema: z.ZodType): JsonSchemaObject {
-  return z.toJSONSchema(schema) as JsonSchemaObject;
+  // Use the input view: the provider produces the pre-transform `z.input`, and
+  // transforms/preprocessors/defaults apply later during original Zod parsing.
+  // This also makes transform/pipe schemas representable on the wire.
+  return z.toJSONSchema(schema, { io: "input" }) as JsonSchemaObject;
 }

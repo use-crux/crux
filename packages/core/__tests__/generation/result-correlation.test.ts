@@ -17,6 +17,7 @@ import type {
   StreamHandle,
 } from "@use-crux/core/adapter";
 import { __setAlsForTesting } from "../../src/observability/observe";
+import { permissiveCapabilities } from "../adapter/structured-output/capability-fixtures";
 
 describe("managed generation result correlation", () => {
   afterEach(() => {
@@ -185,8 +186,8 @@ function createFakeAdapter() {
     providerId: "fake-correlation",
     async call(_client, args) {
       const raw = {
-        id: args.schemaParams ? "structured-response" : "provider-response",
-        text: args.schemaParams ? '{"answer":42}' : "hello",
+        id: args.outputSchema ? "structured-response" : "provider-response",
+        text: args.outputSchema ? '{"answer":42}' : "hello",
       };
       return { raw, extracted: responseFrom(raw) };
     },
@@ -204,9 +205,7 @@ function createFakeAdapter() {
     mapSettings() {
       return {};
     },
-    wrapOutputSchema() {
-      return { response_format: "json" };
-    },
+    structuredOutput: { accepts: permissiveCapabilities },
   };
 
   return adapter(spec)({});

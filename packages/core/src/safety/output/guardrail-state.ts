@@ -42,7 +42,7 @@ export function applyTerminalRewrite(
   } else {
     text = typeof value === "string" ? value : serialize(value, options.policyId);
   }
-  return resyncStructuredText(state, text, options);
+  return resyncStructuredText(state, text, { policyId: options.policyId });
 }
 
 function valueAtPath(value: unknown, path: string): unknown {

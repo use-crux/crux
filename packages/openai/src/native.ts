@@ -20,10 +20,10 @@ import { openAIMediaHooks } from "./media-preflight";
 import {
   asOpenAINonStreamingParams,
   asOpenAIStreamingParams,
-  openAIOutputSchema,
   openAIRequest,
   openAISettings,
   openAIStreamRequest,
+  openAIStructuredCapabilities,
 } from "./request";
 import { openAIResponseMeta, openAIResponseText } from "./response";
 import {
@@ -69,7 +69,7 @@ const openAI = defineSingleTurnProviderBundle({
     },
     mapError: mapOpenAIError,
     settings: openAISettings,
-    outputSchema: openAIOutputSchema,
+    structuredOutput: { accepts: openAIStructuredCapabilities },
     transcript: openAITranscript,
     media: openAIMediaHooks,
   } satisfies SingleTurnProviderBundleSpec<

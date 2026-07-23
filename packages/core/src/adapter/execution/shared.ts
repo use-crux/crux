@@ -10,14 +10,39 @@
  */
 
 import type { AnyPrompt } from '../../prompt/prompt-types'
+import type { ModelInfo } from '../../types'
 import type { GenerationSettings } from '../../generation/types'
 import type { SkillActivationSession } from '../../skill/session'
 import type { StepDirective } from '../executor-types'
+import type { StructuredOutputCapabilities } from '../structured-output'
+import type { ToolInputCapabilitiesResolution } from '../tool/session'
 import type { ExecutionResolveOpts } from './types'
 import { systemMessagePrefixPatch } from './system-prefix-patch'
 
 /** Default maximum model/tool loop steps for both adapter dialects. */
 export const DEFAULT_MAX_STEPS = 10
+
+/**
+ * Resolve how an SDK-loop dialect compiles tool input schemas for one model: the
+ * model's verified profile, `unverified` (resolver present, model unknown → fail
+ * before transport for schema'd tools), or the permissive `default` when the
+ * runtime declares no structured-output resolver.
+ */
+export function resolveToolInputCapabilities(
+  dialect: {
+    readonly id: string
+    readonly structuredOutput?: {
+      capabilities(model: ModelInfo): StructuredOutputCapabilities | undefined
+    }
+  },
+  modelInfo: ModelInfo,
+): ToolInputCapabilitiesResolution {
+  if (!dialect.structuredOutput) return { kind: 'default' }
+  const capabilities = dialect.structuredOutput.capabilities(modelInfo)
+  return capabilities
+    ? { kind: 'verified', capabilities }
+    : { kind: 'unverified', providerId: dialect.id, modelId: modelInfo.modelId }
+}
 
 /**
  * Build the loosely typed prompt resolve options used at the adapter boundary.

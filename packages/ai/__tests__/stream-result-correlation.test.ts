@@ -77,7 +77,7 @@ describe("AI SDK stream result correlation", () => {
     const transport = createInMemoryObservabilityTransport();
     setObservabilityTransport(transport);
     const scripted = scriptedGateway({
-      streamObject: [
+      streamText: [
         {
           chunks: ['{"answer":', "42}"],
           finish: {
@@ -211,7 +211,7 @@ describe("AI SDK stream result correlation", () => {
   it("preserves structured output through SDK cache replay", async () => {
     installSemanticCache();
     const scripted = scriptedGateway({
-      generateObject: [{ object: { answer: 42 }, finishReason: "stop" }],
+      generateText: [{ output: { answer: 42 }, finishReason: "stop" }],
     });
     const ai = createCruxAi({ gateway: scripted.gateway });
     await ai.generate(cachedStructuredPrompt, {
@@ -230,7 +230,7 @@ describe("AI SDK stream result correlation", () => {
     expect(chunks.join("")).toBe('{"answer":42}');
     expect(completion.object).toEqual({ answer: 42 });
     expect(completion._meta).toMatchObject(replay._meta);
-    expect(scripted.calls.streamObject).toHaveLength(0);
+    expect(scripted.calls.streamText).toHaveLength(0);
   });
 
   it("keeps immutable raw legacy metadata from breaking the public stream", async () => {

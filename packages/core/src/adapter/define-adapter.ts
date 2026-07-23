@@ -29,6 +29,7 @@ import type { AdapterSpec } from "./spec";
 import { createCompositions } from "../agent/create-compositions";
 import type { AgentExecutor } from "../agent/executor";
 import { coreStepDialect, createAdapterExecution } from "./execution/session";
+import { validateStructuredOutputCapabilities } from "./structured-output";
 import { assertStreamHandle } from "./execution/stream-handle-guard";
 import { transportDialect } from "./execution/transport-dialect";
 import { CruxTransportStreamUnsupportedError } from "./transport";
@@ -111,6 +112,11 @@ export function adapter<
 >(
   spec: AdapterSpec<TClient, TRawResponse, TRawStream, TExtra, TParams>,
 ): (client: TClient) => CruxAdapter<TClient, TRawResponse, TRawStream, TExtra, TParams> {
+  // Reject a contradictory structured-output capability profile when the
+  // adapter is defined, not on the first structured request.
+  if (spec.structuredOutput) {
+    validateStructuredOutputCapabilities(spec.structuredOutput.accepts);
+  }
   return (
     client: TClient,
   ): CruxAdapter<TClient, TRawResponse, TRawStream, TExtra, TParams> => {

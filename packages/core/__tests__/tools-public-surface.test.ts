@@ -34,7 +34,6 @@ import {
   raw,
   limit,
   wrap,
-  sanitizeJsonSchema,
 } from '@use-crux/core'
 
 // ─────────────────────────────────────────────────────────────────
@@ -225,21 +224,5 @@ describe('@use-crux/core — sanitize', () => {
     expect(safe`i=${wrap('a<b>')}`).toBe('i=<user-input>a&lt;b&gt;</user-input>')
     expect(truncate('abcdef', 4)).toBe('abc…')
     expect(userContent('a<b>')).toBe('<user-input>a&lt;b&gt;</user-input>')
-  })
-})
-
-// ─────────────────────────────────────────────────────────────────
-// shared/schema-compat — provider schema sanitization (root @internal)
-// ─────────────────────────────────────────────────────────────────
-
-describe('@use-crux/core — sanitizeJsonSchema', () => {
-  it('strips Anthropic-unsupported keys and passes other providers through', () => {
-    const schema = { type: 'array', maxItems: 3, items: { type: 'string', minLength: 1 } }
-
-    expect(sanitizeJsonSchema(schema, 'anthropic')).toEqual({
-      type: 'array',
-      items: { type: 'string' },
-    })
-    expect(sanitizeJsonSchema(schema, 'openai')).toBe(schema)
   })
 })

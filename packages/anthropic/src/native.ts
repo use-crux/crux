@@ -19,7 +19,7 @@ import {
 import { anthropicTranscript } from "./message-codec";
 import { anthropicMediaHooks } from "./media-preflight";
 import {
-  anthropicOutputSchema,
+  anthropicStructuredCapabilities,
   anthropicRequest,
   asAnthropicNonStreamingParams,
   asAnthropicStreamingParams,
@@ -100,7 +100,7 @@ const anthropic = defineSingleTurnProviderBundle({
     },
     mapError: mapAnthropicError,
     settings: mapAnthropicSettings,
-    outputSchema: anthropicOutputSchema,
+    structuredOutput: { accepts: anthropicStructuredCapabilities },
     sanitizeToolSchema: stripDescriptions,
     transcript: anthropicTranscript,
     media: anthropicMediaHooks,

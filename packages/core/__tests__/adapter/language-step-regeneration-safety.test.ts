@@ -9,6 +9,7 @@ import { fakeLoopRuntime } from "../../src/adapter/testing";
 import type { AdapterResponse } from "../../src/adapter/types";
 import { prompt } from "../../src/prompt/prompt";
 import { boundary, constraint, guardrail } from "../../src/safety";
+import { permissiveCapabilities } from "./structured-output/capability-fixtures";
 
 const textPrompt = prompt({
   id: "language-step-regeneration",
@@ -193,6 +194,7 @@ function coreScript(responses: readonly AdapterResponse[]) {
   const client = { kind: "constraint-regeneration" as const };
   const spec: AdapterSpec<typeof client, { readonly call: number }, never> = {
     providerId: "constraint-regeneration",
+    structuredOutput: { accepts: permissiveCapabilities },
     async call() {
       return {
         raw: { call: responses.length - queue.length },

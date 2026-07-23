@@ -143,16 +143,23 @@ export function assertStructuredStepRewrite(options: {
   );
   if (originalText === null) return;
 
-  const originalValue = JSON.parse(originalText) as unknown;
-  const originalValidation = options.schema.safeParse(originalValue);
-  if (!originalValidation.success) return;
+  // Only guard rewrites of valid-JSON structured output. Schema validity belongs
+  // to the single authoritative post-Safety parse — never run the authored Zod
+  // schema here (that would double-run preprocessors/transforms/effects). This
+  // check stays fail-closed for a rewrite that produces invalid JSON.
+  let originalValue: unknown;
+  try {
+    originalValue = JSON.parse(originalText) as unknown;
+  } catch {
+    return;
+  }
 
   const guardedText = textFromAssistantContent(options.guarded.content);
   const repairedGuardedText = repairJsonText(guardedText) ?? guardedText;
   resyncStructuredText(
-    { text: originalText, parsed: originalValidation.data },
+    { text: originalText, parsed: originalValue },
     repairedGuardedText,
-    { schema: options.schema, policyId: options.policyId },
+    { policyId: options.policyId },
   );
 }
 

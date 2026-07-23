@@ -24,6 +24,7 @@ import { createAiSdkCodec } from "./sdk-codec";
 import type { SdkLoopResultLike, SdkStreamResultLike } from "./sdk-codec";
 import { materializeAiSdkToolSource } from "./mcp-materializer";
 import { withAiSdkToolModelIngress } from "./sdk-codec/tool-model-ingress";
+import { aiSdkStructuredCapabilities } from "./provider-profile";
 
 export type { SdkLoopResultLike, SdkStreamResultLike } from "./sdk-codec";
 
@@ -51,6 +52,7 @@ export function createAiSdkLoopRuntime(gateway: SdkGateway): AiSdkLoopRuntime {
   return {
     id: codec.executorId,
     capabilities: { stepTransform: "before-client-tools" },
+    structuredOutput: { capabilities: aiSdkStructuredCapabilities },
 
     materializeToolSource: materializeAiSdkToolSource,
 
@@ -69,9 +71,7 @@ export function createAiSdkLoopRuntime(gateway: SdkGateway): AiSdkLoopRuntime {
     async runStructuredAttempt(request) {
       const call = await codec.structured(request);
       try {
-        return call.method === "generateObject"
-          ? call.decode(await gateway.generateObject(call.args))
-          : call.decode(await gateway.generateText(call.args));
+        return call.decode(await gateway.generateText(call.args));
       } catch (error) {
         const invalid = await call.decodeError(error);
         if (invalid) return invalid;

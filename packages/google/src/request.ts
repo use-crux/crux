@@ -1,8 +1,10 @@
 import type { Content, GoogleGenAI } from '@google/genai'
-import { z } from 'zod'
 import type { GenerationSettings } from '@use-crux/core'
 import type { CallArgs } from '@use-crux/core/adapter'
-import type { NativeChatRequestArgs } from '@use-crux/core/adapter'
+import type {
+  NativeChatRequestArgs,
+  StructuredOutputCapabilities,
+} from '@use-crux/core/adapter'
 import type { GoogleCachedContentLifecycle } from './cached-content'
 import type { GoogleExtra, GoogleRequest } from './types'
 
@@ -22,7 +24,10 @@ export async function googleRequest(
 
   const toolsConfig = googleToolsConfig(args)
   if (toolsConfig) Object.assign(config, toolsConfig)
-  if (args.schemaParams) Object.assign(config, args.schemaParams)
+  if (args.outputSchema) {
+    config.responseMimeType = 'application/json'
+    config.responseJsonSchema = args.outputSchema
+  }
 
   return {
     model: args.model,
@@ -82,12 +87,25 @@ function googleThinkingLevel(reasoning: NonNullable<GenerationSettings['reasonin
 }
 
 /** Convert a Zod schema into Google structured JSON-output params. */
-export function googleOutputSchema(schema: z.ZodType): Record<string, unknown> {
-  return {
-    responseMimeType: 'application/json',
-    responseJsonSchema: z.toJSONSchema(schema) as Record<string, unknown>,
-  }
-}
+/**
+ * The JSON Schema behavior Gemini's `responseJsonSchema` structured output accepts.
+ *
+ * Exact per-keyword and envelope conformance is finalized in the Google provider
+ * slice; core supplies the compiled schema via `responseJsonSchema`.
+ */
+export const googleStructuredCapabilities = {
+  id: 'google.genai.response-json-schema',
+  supportsJsonSchema: true,
+  requiresAllProperties: false,
+  supportsOptionalProperties: true,
+  supportsNullable: true,
+  supportsBooleanSchemas: false,
+  supportsReferences: true,
+  supportsUnions: true,
+  supportsRecursiveSchemas: true,
+  additionalProperties: 'supported',
+  unsupportedKeywords: [],
+} satisfies StructuredOutputCapabilities
 
 /** Narrow a generated request to Google `generateContent()` parameters. */
 export function asGoogleGenerateContentParams(

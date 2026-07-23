@@ -24,7 +24,7 @@ export interface AdapterConformanceEmission {
 export interface AdapterConformanceScript {
   /** Non-streaming responses, consumed one per `spec.call()` invocation. */
   readonly emissions?: readonly AdapterConformanceEmission[]
-  /** Structured-output raw texts, consumed by cases that pass `schemaParams`. */
+  /** Structured-output raw texts, consumed by cases that pass `outputSchema`. */
   readonly structuredTexts?: readonly string[]
   /** Streaming text chunks consumed by `spec.stream()`. */
   readonly streamChunks?: readonly string[]
@@ -46,7 +46,7 @@ export interface AdapterConformanceCapabilities {
   readonly responseId?: 'required' | 'optional'
   /** Whether a provider exposes a concrete model ID/version in responses. */
   readonly actualModelId?: 'required' | 'optional'
-  /** Whether the adapter supports structured output through `wrapOutputSchema`. */
+  /** Whether the adapter supports structured output through `structuredOutput`. */
   readonly structuredOutput?: 'required' | 'optional' | 'unsupported'
   /** Whether stream handles can report completion metadata without consuming the stream. */
   readonly streamCompletion?: 'required' | 'optional'

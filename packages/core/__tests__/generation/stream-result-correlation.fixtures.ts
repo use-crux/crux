@@ -6,6 +6,7 @@ import type {
   StreamHandle,
 } from "@use-crux/core/adapter";
 import { z } from "zod";
+import { permissiveCapabilities } from "../adapter/structured-output/capability-fixtures";
 
 export interface StreamFixtureOptions {
   readonly chunks?: readonly string[];
@@ -27,7 +28,7 @@ export function createFakeAdapter(options: StreamFixtureOptions = {}) {
       return { raw, extracted: responseFrom(raw) };
     },
     async stream(_client, args): Promise<StreamHandle<AsyncIterable<string>>> {
-      const structured = args.schemaParams !== undefined;
+      const structured = args.outputSchema !== undefined;
       const values =
         options.chunks ??
         (structured ? ['{"answer":', "42}"] : ["Hello", " stream"]);
@@ -50,9 +51,7 @@ export function createFakeAdapter(options: StreamFixtureOptions = {}) {
     mapSettings() {
       return {};
     },
-    wrapOutputSchema() {
-      return { response_format: "json" };
-    },
+    structuredOutput: { accepts: permissiveCapabilities },
   };
   return adapter(spec)({});
 }

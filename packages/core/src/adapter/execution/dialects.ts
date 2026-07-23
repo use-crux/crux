@@ -49,7 +49,7 @@ export function coreStepDialect<
     fromResponse: spec.fromResponse,
     appendToolRound: spec.appendToolRound,
     sanitizeToolSchema: spec.sanitizeToolSchema,
-    wrapOutputSchema: spec.wrapOutputSchema,
+    structuredOutput: spec.structuredOutput,
   };
 }
 
@@ -72,6 +72,7 @@ export function sdkLoopDialect<TModel, TRawResponse, TRawStream>(
     kind: "sdk-loop",
     id: port.id,
     capabilities: port.capabilities,
+    structuredOutput: port.structuredOutput,
     media: port.media,
     materializeToolSource: port.materializeToolSource,
     [toolModelIngressDialect]: port[toolModelIngressDialect],

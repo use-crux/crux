@@ -7,6 +7,7 @@
 import type { ModelInfo } from "../../types";
 import type { GenerationSettings } from "../../generation/types";
 import type { BoundLoopRuntime } from "../loop-runtime-port";
+import type { StructuredOutputCapabilities } from "../structured-output";
 import type { ProviderRuntimeExtender } from "./extension-types";
 import type { LoopOwnedProviderRuntime } from "./runtime-types";
 import type { ProviderMediaHooks } from "../native-chat/media-hooks";
@@ -46,6 +47,14 @@ export interface LoopOwnedRuntimeContract<
   ) => Record<string, unknown>;
   /** Provider-authored media validation consumed privately before SDK I/O. */
   media?: ProviderMediaHooks;
+  /**
+   * Resolve the inert structured-output capabilities a selected model accepts,
+   * or `undefined` when its semantics cannot be guaranteed. Core compiles the
+   * wire schema from the result; this resolver never compiles or rewrites.
+   */
+  structuredOutput?: {
+    capabilities(model: ModelInfo): StructuredOutputCapabilities | undefined;
+  };
   /** Bind a concrete SDK client to the SDK-owned generation loop. */
   bind(
     client: TClient,

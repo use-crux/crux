@@ -52,6 +52,9 @@ function createLoopRuntime(fake: FakeLoopRuntime, id = 'provider-runtime-loop-ow
     loop: {
       describeModel: fake.runtime.describeModel,
       settings: fake.runtime.mapSettings,
+      ...(fake.runtime.structuredOutput
+        ? { structuredOutput: fake.runtime.structuredOutput }
+        : {}),
       bind: () => ({
         runTextLoop: fake.runtime.runTextLoop,
         runStructuredAttempt: fake.runtime.runStructuredAttempt,

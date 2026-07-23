@@ -1,22 +1,21 @@
 /**
- * Desired-contract type assertions for structured-output compilation.
+ * Public type contract for structured-output request wiring.
  *
- * These assertions pin the target public shape and compile GREEN today. Each
- * `@ts-expect-error` marks a member that does NOT yet exist; when it is added,
- * the directive becomes "unused" and TypeScript fails, forcing the change that
- * adds the member to also delete the directive and replace it with a positive
- * assertion.
- *
- *  - `NativeChatProfile.structuredOutput.accepts` — inert capability record that
- *    replaces the executable placement hook.
- *  - Native request-context `outputSchema` — the core-compiled, provider-
- *    compatible lowered JSON Schema supplied to the request builder.
+ * The executable placement hook has been replaced by inert capability data:
+ *  - `NativeChatProfile.structuredOutput.accepts` is a capability record.
+ *  - The native request context carries the core-compiled, provider-compatible
+ *    lowered JSON Schema as `outputSchema`.
  */
 
+import { expectTypeOf } from "vitest";
 import type {
   NativeChatProfile,
   NativeChatRequestContext,
 } from "../src/adapter/native-chat/types";
+import type {
+  JsonSchemaObject,
+  StructuredOutputCapabilities,
+} from "../src/adapter";
 
 // A concrete profile instance to probe. The last two type parameters default.
 declare const profile: NativeChatProfile<
@@ -26,20 +25,16 @@ declare const profile: NativeChatProfile<
   Record<string, never>
 >;
 
-// The current placement hook is an executable method that this work removes in
-// favor of inert capability data. It still exists today.
-type CurrentPlacementHook = NonNullable<typeof profile.outputSchema>;
-const _placementIsFunction: CurrentPlacementHook = (_schema) => ({});
-void _placementIsFunction;
-
-// Remove this directive once `profile.structuredOutput.accepts` (inert
-// StructuredOutputCapabilities) replaces the placement hook.
-// @ts-expect-error desired-contract: profile.structuredOutput does not exist yet.
-void profile.structuredOutput;
+// The profile exposes inert capability data, not an executable placement hook.
+expectTypeOf(profile.structuredOutput).toEqualTypeOf<
+  { readonly accepts: StructuredOutputCapabilities } | undefined
+>();
+// @ts-expect-error the executable placement hook has been removed.
+void profile.outputSchema;
 
 declare const requestContext: NativeChatRequestContext<Record<string, never>>;
 
-// Remove this directive once the request context carries the core-compiled,
-// provider-compatible lowered JSON Schema.
-// @ts-expect-error desired-contract: request-context outputSchema does not exist yet.
-void requestContext.outputSchema;
+// The request context carries the compiled, provider-compatible lowered schema.
+expectTypeOf(requestContext.outputSchema).toEqualTypeOf<
+  JsonSchemaObject | undefined
+>();

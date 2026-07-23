@@ -14,20 +14,29 @@
 
 import type { LanguageModel } from "ai";
 import type {
+  JsonSchemaObject,
   StructuredAttempt,
   StructuredRequest,
+} from "@use-crux/core/adapter";
+import {
+  compileStructuredOutput,
+  CruxUnsupportedStructuredOutputError,
+  decodeStructuredValue,
 } from "@use-crux/core/adapter";
 import type { GenerateObjectFn } from "@use-crux/core/compaction";
 import { resolveModel } from "@use-crux/core/routing";
 import type { SdkGateway } from "./gateway";
 import type { SdkLoopResultLike } from "./sdk-codec";
 import { createAiSdkCodec } from "./sdk-codec";
-import { extractModelInfo } from "./provider-profile";
+import {
+  aiSdkStructuredCapabilities,
+  extractModelInfo,
+} from "./provider-profile";
 
 /** The gateway surface required for one AI SDK structured-output attempt. */
-export type StructuredGateway = Pick<SdkGateway, "generateObject">;
+export type StructuredGateway = Pick<SdkGateway, "generateText">;
 
-type StructuredArgs = Parameters<StructuredGateway["generateObject"]>[0];
+type StructuredArgs = Parameters<StructuredGateway["generateText"]>[0];
 
 interface GenerateObjectOptions<T> {
   readonly model: unknown;
@@ -56,15 +65,10 @@ export async function attemptStructuredGeneration(
   request: StructuredRequest<LanguageModel>,
 ): Promise<StructuredAttempt<SdkLoopResultLike>> {
   const call = await createAiSdkCodec().structured(request);
-  if (call.method !== "generateObject") {
-    throw new Error(
-      "Standalone structured generation does not install a model-step transformer.",
-    );
-  }
 
   try {
     return call.decode(
-      await gateway.generateObject(call.args as StructuredArgs),
+      await gateway.generateText(call.args as StructuredArgs),
     );
   } catch (error) {
     const invalid = await call.decodeError(error);
@@ -91,12 +95,32 @@ export function createStructuredGenerateObjectFn(
       model: LanguageModel,
       attemptOptions: StructuredFallbackTryOptions = {},
     ): Promise<StructuredObjectResult<T>> => {
+      // Core owns compilation and the authored parse even for this standalone
+      // helper: compile a wire schema the SDK validates structurally, then
+      // decode + authored-parse the wire value here.
+      const capabilities = aiSdkStructuredCapabilities(extractModelInfo(model));
+      if (!capabilities) {
+        throw new CruxUnsupportedStructuredOutputError(
+          "ai-sdk",
+          `the selected model has no verified structured-output capability profile`,
+        );
+      }
+      const plan = compileStructuredOutput(options.schema, capabilities);
       const attempt = await attemptStructuredGeneration(
         gateway,
-        requestFromGenerateObjectOptions(model, options, attemptOptions),
+        requestFromGenerateObjectOptions(
+          model,
+          options,
+          plan.outputSchema,
+          attemptOptions,
+        ),
       );
       if (attempt.status === "invalid") throw attempt.error;
-      return { object: attempt.object as T };
+      const decoded = decodeStructuredValue(
+        attempt.wireValue,
+        plan.decodeManifest,
+      );
+      return { object: options.schema.parse(decoded) as T };
     };
 
     return resolveModel<LanguageModel, StructuredObjectResult<T>>(
@@ -112,6 +136,7 @@ export function createStructuredGenerateObjectFn(
 function requestFromGenerateObjectOptions<T>(
   model: LanguageModel,
   options: GenerateObjectOptions<T>,
+  outputSchema: JsonSchemaObject,
   attemptOptions: StructuredFallbackTryOptions = {},
 ): StructuredRequest<LanguageModel> {
   return {
@@ -129,6 +154,7 @@ function requestFromGenerateObjectOptions<T>(
     abortSignal: attemptOptions.signal,
     extra: undefined,
     schema: options.schema,
+    outputSchema,
   };
 }
 

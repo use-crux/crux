@@ -48,10 +48,13 @@ export interface ValidationExhaustedErrorInit {
 }
 
 /**
- * Thrown when all validation retries are exhausted and the model's
- * structured output still fails Zod schema validation.
+ * Thrown when structured output fails Zod schema validation and no further
+ * validation retry is available.
  *
- * Carries safe failure evidence, the Zod errors, attempt count, prompt
+ * Validation is unconditional: this is thrown even when `validationRetry` was
+ * never configured, in which case `attempts` and `maxAttempts` are both `0` —
+ * `attempts` counts validation *retries* performed, not the initial provider
+ * attempt. Carries safe failure evidence, the Zod errors, attempt count, prompt
  * identifier, and a `validation.feedback` Safety decision. Raw failed model
  * output is intentionally not exposed on the public error.
  */
@@ -65,10 +68,13 @@ export class ValidationExhaustedError extends Error implements PolicyTerminalErr
   /** The Zod validation errors from the last attempt. */
   readonly zodErrors: z.ZodError
 
-  /** Number of validation retry attempts made. */
+  /**
+   * Number of validation retries performed, not counting the initial provider
+   * attempt. `0` when validation fails and no retry was configured.
+   */
   readonly attempts: number
 
-  /** Maximum validation retries that were configured. */
+  /** Maximum validation retries configured; `0` when `validationRetry` is absent. */
   readonly maxAttempts: number
 
   /** Identifier of the prompt that was being generated. */

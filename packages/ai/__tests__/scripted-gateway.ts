@@ -12,6 +12,8 @@ import type { SdkGateway } from "../src/gateway";
 export interface ScriptedResult {
   text?: string;
   object?: unknown;
+  /** Parsed structured wire value exposed as `result.output` (generateText + Output.object). */
+  output?: unknown;
   toolCalls?: Array<{ toolCallId: string; toolName: string; input?: unknown }>;
   content?: Array<Record<string, unknown>>;
   steps?: number;
@@ -60,9 +62,10 @@ function materialize(
   scripted: ScriptedResult,
   kind: "text" | "object",
 ): Record<string, unknown> {
+  const structuredValue = scripted.output ?? scripted.object;
   const text =
     scripted.text ??
-    (scripted.object !== undefined ? JSON.stringify(scripted.object) : "");
+    (structuredValue !== undefined ? JSON.stringify(structuredValue) : "");
   const usage = {
     inputTokens: scripted.usage?.inputTokens ?? 10,
     outputTokens: scripted.usage?.outputTokens ?? 20,
@@ -76,6 +79,7 @@ function materialize(
   return {
     text,
     ...(scripted.object !== undefined ? { object: scripted.object } : {}),
+    ...(structuredValue !== undefined ? { output: structuredValue } : {}),
     content: scripted.content ?? [],
     steps: Array.from({ length: scripted.steps ?? 1 }, () => ({})),
     toolCalls: scripted.toolCalls ?? [],

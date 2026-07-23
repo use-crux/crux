@@ -48,6 +48,15 @@ export function validateStructuredOutputCapabilities(
     );
   }
 
+  // Recursion is expressed with `$ref`, so a profile that supports recursive
+  // schemas must also support references.
+  if (capabilities.supportsRecursiveSchemas && !capabilities.supportsReferences) {
+    conflicts.push(
+      "supportsRecursiveSchemas needs supportsReferences: a recursive schema is " +
+        "represented with a $ref cycle",
+    );
+  }
+
   if (conflicts.length > 0) {
     throw new CruxInvalidCapabilityProfileError(
       typeof capabilities.id === "string" ? capabilities.id : "<invalid-id>",

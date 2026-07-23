@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { z } from 'zod'
+import { z, ZodError } from 'zod'
 import { prompt as makePrompt } from '../../../src/prompt/prompt'
-import { validateStructuredOutput } from '../../../src/adapter/policy/validation-retry'
 import type { Message } from '../../../src/generation/messages'
 import type { ModelInfo } from '../../../src/types'
+import { permissiveCapabilities } from '../structured-output/capability-fixtures'
 import type { AdapterResponse, CallArgs, StreamHandle } from '../../../src/adapter/types'
 import type { AdapterSpec } from '../../../src/adapter/spec'
 import type { LoopRuntimePort } from '../../../src/adapter/loop-runtime-port'
@@ -49,6 +49,7 @@ function scriptedCoreStep(texts: readonly string[]) {
     kind: 'core-step',
     id: 'mock-core',
     client,
+    structuredOutput: { accepts: permissiveCapabilities },
     mapSettings: (settings) => ({ ...settings }),
     call: async (_client, args) => {
       calls.push({ messages: [...args.messages] })
@@ -77,6 +78,7 @@ function scriptedSdkLoop(texts: readonly string[]) {
   const dialect: AdapterExecutionDialect<unknown, string, { readonly text: string }, never> = {
     kind: 'sdk-loop',
     id: 'mock-sdk',
+    structuredOutput: { capabilities: () => permissiveCapabilities },
     describeModel: (model): ModelInfo => ({ provider: 'mock-sdk', modelId: model }),
     mapSettings: (settings) => ({ ...settings }),
     runTextLoop: async () => {
@@ -85,16 +87,23 @@ function scriptedSdkLoop(texts: readonly string[]) {
     runStructuredAttempt: async (request) => {
       calls.push({ messages: request.messages })
       const text = queue.shift() ?? ''
-      const validation = validateStructuredOutput(text, request.schema)
-      if (!validation.valid) {
-        return { status: 'invalid' as const, rawText: text, error: validation.error! }
+      // A real SDK validates the wire value structurally, not the authored Zod
+      // schema; core owns the authored parse.
+      let wireValue: unknown
+      try {
+        wireValue = JSON.parse(text) as unknown
+      } catch {
+        return {
+          status: 'invalid' as const,
+          rawText: text,
+          error: new ZodError([{ code: 'custom', path: [], message: 'Invalid JSON' }]),
+        }
       }
-      const repaired = validation.repairedText ?? text
       return {
         status: 'ok' as const,
         raw: { text },
-        response: adapterResponse(repaired),
-        object: JSON.parse(repaired) as unknown,
+        response: adapterResponse(text),
+        wireValue,
       }
     },
     runStream: async () => {
@@ -164,7 +173,7 @@ describe('adapter execution session', () => {
       appendToolRound: (messages, response) => [...messages, { role: 'assistant' as const, content: response.text }],
       mapSettings: (settings) => ({ temperature: settings.temperature, mapped: true }),
       sanitizeToolSchema: (schema) => ({ ...schema, sanitized: true }),
-      wrapOutputSchema: () => ({ wrapped: true }),
+      structuredOutput: { accepts: permissiveCapabilities },
     }
 
     const dialect = coreStepDialect(spec, client)
@@ -175,7 +184,7 @@ describe('adapter execution session', () => {
       messages: [],
       settings: {},
       schema: undefined,
-      schemaParams: undefined,
+      outputSchema: undefined,
       tools: undefined,
       extra: { mode: 'fast' },
     })
@@ -186,7 +195,7 @@ describe('adapter execution session', () => {
     expect(dialect.mapSettings({ temperature: 0.2 })).toEqual({ temperature: 0.2, mapped: true })
     expect(result.raw).toEqual({ provider: 'raw', mode: 'fast' })
     expect(dialect.sanitizeToolSchema?.({ type: 'object' })).toEqual({ type: 'object', sanitized: true })
-    expect(dialect.wrapOutputSchema?.(z.object({ ok: z.boolean() }))).toEqual({ wrapped: true })
+    expect(dialect.structuredOutput?.accepts).toBe(permissiveCapabilities)
     expect(dialect.appendToolRound([], adapterResponse('assistant'), [])).toEqual([
       { role: 'assistant', content: 'assistant' },
     ])

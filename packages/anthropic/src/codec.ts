@@ -2,11 +2,12 @@ import type Anthropic from '@anthropic-ai/sdk'
 import type { Message, ResolvedPrompt, GenerationSettings } from '@use-crux/core'
 import { callArgsFromResolvedPrompt, type AdapterResponse, type ToolDescriptor } from '@use-crux/core/adapter'
 import {
-  anthropicOutputSchema,
+  anthropicStructuredCapabilities,
   anthropicRequest,
   asAnthropicNonStreamingParams,
   mapAnthropicSettings,
 } from './request-params'
+import { compileStructuredOutput } from '@use-crux/core/adapter'
 import { anthropicTranscript } from './message-codec'
 import { extractAdapterResponse, type AnthropicParsedMessage } from './response'
 import type { AnthropicExtra } from './types'
@@ -41,7 +42,9 @@ export function toParams(
       extra: options.extra,
       messages: options.messages,
       tools: options.tools ? [...options.tools] : undefined,
-      schemaParams: resolved.schema ? anthropicOutputSchema(resolved.schema) : undefined,
+      outputSchema: resolved.schema
+        ? compileStructuredOutput(resolved.schema, anthropicStructuredCapabilities).outputSchema
+        : undefined,
     })
   const request = anthropicRequest({
     ...callArgs,

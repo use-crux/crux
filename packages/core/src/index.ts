@@ -879,7 +879,6 @@ export type {
 } from "./plan/types";
 
 // Adapter internals — used by @use-crux/ai, @use-crux/openai, @use-crux/google, @use-crux/convex
-/** @internal */ export { sanitizeJsonSchema } from "./shared/schema-compat";
 /** @internal */ export {
   orchestrateGenerate,
   orchestrateStream,
