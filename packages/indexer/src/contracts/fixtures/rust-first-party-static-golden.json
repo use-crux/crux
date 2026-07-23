@@ -5,12 +5,12 @@
   "fileSelection": "staticDefinitionFiles(root)",
   "projection": "canonicalStaticExtractionJson(definitions,relations,diagnostics,dependencies)",
   "totals": {
-    "files": 779,
+    "files": 780,
     "definitions": 88,
     "relations": 7,
     "diagnostics": 25,
-    "dependencies": 1463,
-    "canonicalBytes": 215539
+    "dependencies": 1464,
+    "canonicalBytes": 215701
   },
   "files": [
     {
@@ -411,12 +411,12 @@
     },
     {
       "file": "packages/ai/src/executor.ts",
-      "sha256": "58f3a8b2bacb55283c1d8c3fe1e9b5c0354ed3d5352bd051a7cf0f9046e4adac",
-      "bytes": 254,
+      "sha256": "5935214bf660a5d4f4ac8ce2bf44c53fd3dce7699a059b725b65087fc62ab38b",
+      "bytes": 299,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 4
+      "dependencies": 5
     },
     {
       "file": "packages/ai/src/extensions.ts",
@@ -618,21 +618,21 @@
     },
     {
       "file": "packages/ai/src/sdk-codec/stream.ts",
-      "sha256": "f3535b300ac0d32d743b5be92192586fd086f2746aff6a6280f9a8401e7b6dab",
-      "bytes": 436,
+      "sha256": "777b6c18d7dafde7ae19dc29655661f080eaf7dd52e424915a9f6ba6ea787eb5",
+      "bytes": 391,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 8
+      "dependencies": 7
     },
     {
       "file": "packages/ai/src/sdk-codec/structured.ts",
-      "sha256": "03e32761a6feb6c1f65b241d9e7f8c1d22139da484c2bf3def21ec50605ad5d8",
-      "bytes": 290,
+      "sha256": "6d587702d8788d5e45ee3fe075178896c50ff53a06e2ef1688abc1dc4ed4cc94",
+      "bytes": 245,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 5
+      "dependencies": 4
     },
     {
       "file": "packages/ai/src/sdk-codec/system-prefix-patch.ts",
@@ -2237,6 +2237,15 @@
       "dependencies": 0
     },
     {
+      "file": "packages/core/__type_tests__/structured-output-capabilities-contract.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
       "file": "packages/core/__type_tests__/tool-context-contract.ts",
       "sha256": "f4d0af6e24556ccb68ec58ff5978186d0a9ce1f6269d635d617eea4fdd33eea9",
       "bytes": 159,
@@ -2355,8 +2364,8 @@
     },
     {
       "file": "packages/core/src/adapter/testing/fake-loop-runtime.ts",
-      "sha256": "4df43c0502e236e0bf3a12e4d69b90bde56b12807849987c6b303a2c12d45375",
-      "bytes": 357,
+      "sha256": "d8656815e3cc0385e44723cbc548bea26f6c73439ff10c3804765d984090f75e",
+      "bytes": 348,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
@@ -2364,12 +2373,12 @@
     },
     {
       "file": "packages/core/src/adapter/testing/loop-runtime-conformance.ts",
-      "sha256": "fb9de0c675e4472ca70f0617042b96bf515024e2c47db2a9535fc8e9af3e8c8b",
-      "bytes": 153,
+      "sha256": "afee5824f12163e80ea04847427f32e28b18498ba0e971cf971df4b3616284cd",
+      "bytes": 215,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 1
+      "dependencies": 2
     },
     {
       "file": "packages/core/src/adapter/testing/normalized-outcome-conformance.ts",
@@ -2418,12 +2427,12 @@
     },
     {
       "file": "packages/core/src/adapter/tool/session.ts",
-      "sha256": "acbfbe645e1ca416725b74b1c1dcf48bbfa68839c135c2c0b57e7a120adbb7bd",
-      "bytes": 1269,
+      "sha256": "50e4127c003a045e46dc763172f8792c0d75a89ecf9e204106fb7901f1e8784e",
+      "bytes": 1355,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 23
+      "dependencies": 24
     },
     {
       "file": "packages/core/src/agent/agent.ts",
