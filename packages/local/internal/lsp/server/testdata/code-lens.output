@@ -1,0 +1,5 @@
+{"jsonrpc":"2.0","id":2,"result":[{"range":{"start":{"line":4,"character":0},"end":{"line":4,"character":0}},"command":{"title":"Crux: 1 finding","command":"crux.openDevtools","arguments":["http://localhost:4603/library/index/prompt%3Awriter"]}}]}
+{"jsonrpc":"2.0","id":1,"method":"workspace/codeLens/refresh"}
+{"jsonrpc":"2.0","id":3,"result":[{"range":{"start":{"line":4,"character":0},"end":{"line":4,"character":0}},"command":{"title":"Crux: 1 finding","command":""}}]}
+{"jsonrpc":"2.0","id":2,"method":"workspace/codeLens/refresh"}
+{"jsonrpc":"2.0","id":4,"result":[]}

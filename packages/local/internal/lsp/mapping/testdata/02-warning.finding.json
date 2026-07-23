@@ -1,0 +1,1 @@
+{"id":"warning","severity":"warning","ruleId":"rule.warning","category":"quality","title":"Warning","message":"Warning","source":{"file":"src/file.ts","line":2,"column":3},"evidence":[],"fixes":[]}

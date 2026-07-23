@@ -52,9 +52,11 @@ mod injection {
     pub(crate) mod model;
     pub(crate) mod tools;
 }
+pub mod completion;
 pub mod manifest;
 #[cfg(test)]
 mod manifest_tests;
+pub mod producer_identity;
 mod media {
     pub(crate) mod facts;
     pub(crate) mod ingest;

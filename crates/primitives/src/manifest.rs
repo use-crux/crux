@@ -30,6 +30,7 @@ use sha2::{Digest, Sha256};
 
 use crate::{
     context::{CallParts, PrimitiveContext},
+    producer_identity::producer_identity_manifest,
     protocol::{
         StaticImportRecord, StaticInitializerRecord, StaticNativeFactExtractorIdentity,
         StaticSourceMatch, StaticSyntaxFileRecord,
@@ -51,7 +52,7 @@ pub const FIRST_PARTY_PRIMITIVE_MANIFEST_NAME: &str = "crux-first-party-primitiv
 ///
 /// Bump this whenever the declared first-party projection contract changes and
 /// update the Static Index primitive-manifest cache identity in the same change.
-pub const FIRST_PARTY_PRIMITIVE_MANIFEST_VERSION: &str = "14";
+pub const FIRST_PARTY_PRIMITIVE_MANIFEST_VERSION: &str = "15";
 
 const CRUX_CORE_EXTENSION: &str = "@use-crux/indexer/crux-core";
 const CRUX_MEDIA_EXTENSION: &str = "@use-crux/indexer/crux-core-media";
@@ -258,6 +259,14 @@ pub fn first_party_primitive_manifest_digest() -> String {
         } else {
             b"0"
         });
+    }
+    for identity in producer_identity_manifest() {
+        hasher.update(b"\nproducer|");
+        hasher.update(identity.match_kind.as_bytes());
+        hasher.update(b"|");
+        hasher.update(identity.name.as_bytes());
+        hasher.update(b"|");
+        hasher.update(identity.import_from.join(",").as_bytes());
     }
     format!("sha256:{}", hex_lower(&hasher.finalize()))
 }

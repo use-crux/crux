@@ -1,0 +1,1 @@
+{"id":"info","severity":"info","ruleId":"rule.info","category":"quality","title":"Information","source":{"file":"src/file.ts","line":2,"column":3},"evidence":[],"fixes":[]}

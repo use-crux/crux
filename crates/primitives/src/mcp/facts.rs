@@ -35,6 +35,7 @@ pub(crate) fn mcp_server_facts(
     if parts.exported {
         metadata.insert("exportName".into(), json!(parts.variable_name));
     }
+    parts.add_direct_export_evidence(&mut metadata);
     metadata.insert("facts".into(), Value::Object(facts));
     let mut definition = static_index_definition(NativeDefinitionInput {
         id: definition_id.clone(),

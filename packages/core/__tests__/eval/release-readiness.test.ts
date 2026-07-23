@@ -178,6 +178,9 @@ describe("Eval release readiness", () => {
     );
     await expect(
       readRepoFile("scripts/stage-npm-packages.mjs"),
+    ).resolves.toContain("RELEASE_TYPESCRIPT_PACKAGES");
+    await expect(
+      readRepoFile("scripts/release/npm-packages.mjs"),
     ).resolves.toContain("@use-crux/cloudflare");
     expect(cloudflare.scripts?.["test:workerd"]).toBe(
       "vitest run --config vitest.workerd.config.ts",

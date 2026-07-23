@@ -1,0 +1,5 @@
+{"jsonrpc":"2.0","id":2,"result":{"contents":{"kind":"markdown","value":"**Missing eval** — `test.rule`\n\n⚠ warning\n\n---\n\n**Writer** — prompt\n\nWrites carefully.\n\n1 finding · 1 incoming · 1 outgoing relation"},"range":{"start":{"line":0,"character":0},"end":{"line":1,"character":1}}}}
+{"jsonrpc":"2.0","id":3,"result":[{"position":{"line":0,"character":8},"label":"⚑ 1 finding","tooltip":{"kind":"markdown","value":"**Writer** — prompt\n\nWrites carefully.\n\n1 finding · 1 incoming · 1 outgoing relation"},"paddingLeft":true}]}
+{"jsonrpc":"2.0","id":4,"result":[{"position":{"line":0,"character":10},"label":"⚑ 1 finding","tooltip":{"kind":"markdown","value":"**Writer** — prompt\n\nWrites carefully.\n\n1 finding · 1 incoming · 1 outgoing relation"},"paddingLeft":true}]}
+{"jsonrpc":"2.0","id":1,"method":"workspace/inlayHint/refresh"}
+{"jsonrpc":"2.0","id":5,"result":[]}

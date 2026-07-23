@@ -10,13 +10,14 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
-// sendSnapshot sends the full store state to a newly connected client.
+// sendSnapshotLocked sends the full store state to a newly connected client.
 // Sends multiple separate messages matching the Node.js server format expected
 // by the UI reducer: index, snapshot, eval:snapshot, and related messages.
-func (h *WSHub) sendSnapshot(client *wsClient) {
+// The caller holds indexMu so the index message is queued before any delta.
+func (h *WSHub) sendSnapshotLocked(client *wsClient) {
 	// Index is always sent so the UI can mark indexReceived=true.
-	if !h.sendRegisteredIndexSnapshot(client) {
-		h.sendJSON(client, apiIndexMessage(api.IndexData{}))
+	if !h.sendRegisteredIndexSnapshotLocked(client) {
+		h.sendJSON(client, apiIndexMessage(h.emptyProjectIndexLocked()))
 	}
 
 	if message, ok := registeredSnapshotMessage(h, "flow:snapshot"); ok {
@@ -44,15 +45,15 @@ func registeredSnapshotMessage(h *WSHub, message string) (map[string]any, bool) 
 	return out, hasPayload
 }
 
-func (h *WSHub) sendRegisteredIndexSnapshot(client *wsClient) bool {
+func (h *WSHub) sendRegisteredIndexSnapshotLocked(client *wsClient) bool {
 	for _, snapshot := range endpoints.Registry.Snapshots() {
 		if snapshot.Spec.Message != "index" {
 			continue
 		}
-		index, err := endpoints.ProjectIndex.Call(h.snapshotContext(), endpoints.Deps{Devtools: h.devtools})
+		index, err := h.projectIndexLocked()
 		if err != nil {
 			if snapshot.Spec.AlwaysSend {
-				h.sendJSON(client, apiIndexMessage(api.IndexData{}))
+				h.sendJSON(client, apiIndexMessage(h.emptyProjectIndexLocked()))
 				return true
 			}
 			return false
@@ -71,7 +72,10 @@ func (h *WSHub) snapshotContext() context.Context {
 }
 
 type indexSnapshotMessage struct {
-	Type string `json:"type"`
+	Type          string `json:"type"`
+	ProjectRoot   string `json:"projectRoot"`
+	ServerVersion string `json:"serverVersion"`
+	Generation    uint64 `json:"generation"`
 	store.IndexData
 }
 
@@ -80,8 +84,14 @@ type apiIndexSnapshotMessage struct {
 	api.IndexData
 }
 
-func indexMessage(index store.IndexData) indexSnapshotMessage {
-	return indexSnapshotMessage{Type: "index", IndexData: index}
+func (h *WSHub) indexMessage(index store.IndexData, generation uint64) indexSnapshotMessage {
+	return indexSnapshotMessage{
+		Type:          "index",
+		ProjectRoot:   h.projectRoot,
+		ServerVersion: h.serverVersion,
+		Generation:    generation,
+		IndexData:     index,
+	}
 }
 
 func apiIndexMessage(index api.IndexData) apiIndexSnapshotMessage {

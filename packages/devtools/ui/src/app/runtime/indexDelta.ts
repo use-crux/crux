@@ -1,10 +1,12 @@
 import type {
   IndexDiagnostic,
+  IndexLintFinding,
   IndexSourceFile,
   ProjectDefinition,
   ProjectIndexData,
 } from "@/types";
 
+/** A generation-stamped, per-anchor replacement from the local index hub. */
 export interface IndexDeltaMessage {
   readonly type: "index:delta";
   readonly generation: number;
@@ -16,6 +18,10 @@ export interface IndexDeltaMessage {
   };
   readonly diagnostics?: readonly IndexDiagnostic[];
   readonly sourceRow?: IndexSourceFile | null;
+  /** Complete replacement for lint findings anchored to the delta's `file`. */
+  readonly lints?: {
+    readonly findings: readonly IndexLintFinding[];
+  };
 }
 
 /** Normalizes Project Index snapshots from REST or WebSocket payloads. */
@@ -23,6 +29,9 @@ export function normalizeProjectIndexData(
   index: Partial<ProjectIndexData>,
 ): ProjectIndexData {
   return {
+    projectRoot: index.projectRoot,
+    serverVersion: index.serverVersion,
+    generation: index.generation,
     schemaVersion: index.schemaVersion ?? 1,
     prompts: index.prompts ?? [],
     contexts: index.contexts ?? [],
@@ -49,12 +58,29 @@ export function applyIndexDelta(
     definitions: applyDefinitionDelta(current.definitions, delta.definitions),
     diagnostics: [
       ...current.diagnostics.filter(
-        (diagnostic) => diagnostic.source?.file !== delta.file,
+        (diagnostic) => (diagnostic.source?.file ?? "") !== delta.file,
       ),
       ...(delta.diagnostics ?? []),
     ],
+    lintFindings: applyLintDelta(
+      current.lintFindings,
+      delta.file,
+      delta.lints,
+    ),
     sources: applySourceDelta(current.sources, delta.file, delta.sourceRow),
   };
+}
+
+function applyLintDelta(
+  current: readonly IndexLintFinding[],
+  file: string,
+  lints: IndexDeltaMessage["lints"],
+): IndexLintFinding[] {
+  if (!lints) return [...current];
+  return [
+    ...current.filter((finding) => (finding.source?.file ?? "") !== file),
+    ...lints.findings,
+  ];
 }
 
 function applyDefinitionDelta(

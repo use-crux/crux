@@ -1,0 +1,2 @@
+{"isIncomplete":false,"items":[{"label":"writer","kind":18,"detail":"prompt · prompt:writer","sortText":"0000:writer:prompt:writer","filterText":"writer","textEdit":{"range":{"start":{"line":0,"character":16},"end":{"line":0,"character":18}},"newText":"writer"},"data":{"documentVersion":21,"indexGeneration":0,"definitionId":"prompt:writer"}}]}
+{"isIncomplete":true,"items":[]}

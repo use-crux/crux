@@ -24,7 +24,7 @@ func TestRequireSessionAuth_protectsApiAndWs(t *testing.T) {
 	}
 
 	// Protected surfaces require a session.
-	for _, path := range []string{"/api/stats", "/ws/ui"} {
+	for _, path := range []string{"/api/stats", "/api/project/index/completions", "/ws/ui"} {
 		if code := getStatus(t, srv.Client(), srv.URL+path, nil); code != http.StatusUnauthorized {
 			t.Errorf("GET %s without session = %d, want 401", path, code)
 		}
@@ -127,6 +127,7 @@ func TestRequireSessionAuth_ingestBearerCanOnlyIngestRecordsAndSubmitFeedback(t 
 		{method: http.MethodGet, path: "/api/observability/runs/page"},
 		{method: http.MethodGet, path: "/api/feedback"},
 		{method: http.MethodPost, path: "/api/inspect/run"},
+		{method: http.MethodPost, path: "/api/project/index/completions"},
 		{method: http.MethodPost, path: "/api/reviews/review_1/actions"},
 		{method: http.MethodGet, path: "/ws/ui"},
 	} {

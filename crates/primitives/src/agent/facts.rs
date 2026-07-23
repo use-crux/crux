@@ -59,6 +59,7 @@ pub(crate) fn agent_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>)
         "exportName".to_string(),
         Value::String(parts.variable_name.to_string()),
     );
+    parts.add_direct_export_evidence(&mut metadata);
     if let Some(tool_names) = tool_names_for_property(context, config, "tools") {
         metadata.insert("toolNames".to_string(), json!(tool_names));
     }

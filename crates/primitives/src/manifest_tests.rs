@@ -10,10 +10,12 @@ use std::collections::BTreeSet;
 
 use serde::Deserialize;
 
+use crate::completion::{CompletionInsertion, CompletionSlot, completion_site_manifest};
 use crate::manifest::{
     FIRST_PARTY_PRIMITIVE_MANIFEST, FIRST_PARTY_PRIMITIVE_MANIFEST_NAME,
     FIRST_PARTY_PRIMITIVE_MANIFEST_VERSION, first_party_primitive_manifest_digest,
 };
+use crate::producer_identity::producer_identity_manifest;
 
 const COVERAGE_FIXTURE: &str = include_str!(
     "../../../packages/indexer/src/contracts/fixtures/primitive-coverage-identities.json"
@@ -117,7 +119,7 @@ fn manifest_identity_is_aligned_with_static_index_cache_identity() {
         FIRST_PARTY_PRIMITIVE_MANIFEST_NAME,
         "crux-first-party-primitives"
     );
-    assert_eq!(FIRST_PARTY_PRIMITIVE_MANIFEST_VERSION, "14");
+    assert_eq!(FIRST_PARTY_PRIMITIVE_MANIFEST_VERSION, "15");
 }
 
 #[test]
@@ -127,6 +129,85 @@ fn manifest_digest_is_stable() {
     // Static Index primitive-manifest cache identity in the same change.
     assert_eq!(
         first_party_primitive_manifest_digest(),
-        "sha256:16658be571a70826f6e09c4f8dfe093553d31656f381fc480a0f428dfe2255f3"
+        "sha256:65ef66f141f52a363ec9f5a561c6a043d0f6811e2d89f389977b99024abf4400"
     );
+}
+
+#[test]
+fn completion_manifest_covers_all_admitted_shapes() {
+    let sites = completion_site_manifest();
+    assert_eq!(sites.len(), 17);
+    let site = sites
+        .iter()
+        .find(|site| site.call_names == ["agent"] && site.property_path == ["prompt"])
+        .expect("agent prompt completion site");
+    assert_eq!(site.call_names, ["agent"]);
+    assert_eq!(site.property_path, ["prompt"]);
+    assert_eq!(site.slot, CompletionSlot::ScalarIdentifier);
+    assert_eq!(site.accepted_kinds, ["prompt"]);
+    assert_eq!(site.insertion, CompletionInsertion::Identifier);
+    assert!(!site.exclude_self);
+    assert!(sites.iter().any(|site| {
+        site.call_names == ["prompt"]
+            && site.property_path == ["tools", "*"]
+            && site.slot == CompletionSlot::ToolMapMember
+            && site.insertion == CompletionInsertion::ToolMapMember
+    }));
+    assert!(sites.iter().any(|site| {
+        site.call_names == ["agent"]
+            && site.property_path == ["handoffs", "*", "id"]
+            && site.slot == CompletionSlot::StaticId
+            && site.insertion == CompletionInsertion::StaticId
+            && site.exclude_self
+    }));
+    assert!(sites.iter().any(|site| {
+        site.call_names == ["fallback"]
+            && site.property_path == ["$args", "0", "*"]
+            && site.slot == CompletionSlot::RoutingTarget
+            && site.exclude_self
+    }));
+
+    assert_eq!(FIRST_PARTY_PRIMITIVE_MANIFEST_VERSION, "15");
+    assert_eq!(
+        first_party_primitive_manifest_digest(),
+        "sha256:65ef66f141f52a363ec9f5a561c6a043d0f6811e2d89f389977b99024abf4400"
+    );
+}
+
+#[test]
+fn producer_identity_manifest_is_unique_and_covers_completion_calls() {
+    let identities = producer_identity_manifest();
+    let mut seen = BTreeSet::new();
+    for identity in identities {
+        assert!(
+            matches!(identity.match_kind.as_str(), "call" | "new"),
+            "unsupported producer match kind {}",
+            identity.match_kind
+        );
+        assert!(
+            !identity.import_from.is_empty(),
+            "{} has no declaring module",
+            identity.name
+        );
+        assert!(
+            seen.insert((identity.match_kind.as_str(), identity.name.as_str())),
+            "duplicate producer identity {} {}",
+            identity.match_kind,
+            identity.name
+        );
+    }
+
+    let admitted_calls = identities
+        .iter()
+        .filter(|identity| identity.match_kind == "call")
+        .map(|identity| identity.name.as_str())
+        .collect::<BTreeSet<_>>();
+    for site in completion_site_manifest() {
+        for call_name in &site.call_names {
+            assert!(
+                admitted_calls.contains(call_name.as_str()),
+                "completion site {call_name} lacks producer identity"
+            );
+        }
+    }
 }

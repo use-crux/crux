@@ -55,6 +55,7 @@ pub(crate) fn prompt_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>
         "exportName".to_string(),
         Value::String(parts.variable_name.to_string()),
     );
+    parts.add_direct_export_evidence(&mut metadata);
     if let Some(schema) = input_schema.schema.clone() {
         metadata.insert("inputSchema".to_string(), schema);
     }

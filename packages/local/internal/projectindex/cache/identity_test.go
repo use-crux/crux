@@ -11,8 +11,8 @@ import (
 )
 
 func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
-	if ProjectIndexSnapshotCacheEpoch != 45 {
-		t.Fatalf("ProjectIndexSnapshotCacheEpoch = %d, want retained lint suppression epoch 45", ProjectIndexSnapshotCacheEpoch)
+	if ProjectIndexSnapshotCacheEpoch != 46 {
+		t.Fatalf("ProjectIndexSnapshotCacheEpoch = %d, want direct export evidence epoch 46", ProjectIndexSnapshotCacheEpoch)
 	}
 
 	doc := exportedConstDoc(t, "identity.go", "ProjectIndexSnapshotCacheEpoch")
@@ -23,8 +23,9 @@ func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
 		"Eval arm placement and embedding facts",
 		"unconditional Rust/Oxc Static Index scheduling",
 		"Workspace snapshot usage relations",
-		"Epoch 45",
+		"Epoch 46",
 		"retained lint suppression evidence",
+		"direct named-export evidence",
 		"TS-owned AST and semantic fact cache identity",
 	} {
 		if !strings.Contains(normalizedDoc, phrase) {
@@ -35,20 +36,20 @@ func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
 
 func TestProjectIndexFactStorePathIncludesSnapshotEpoch(t *testing.T) {
 	root := t.TempDir()
-	wantSuffix := filepath.Join(".crux", "cache", "index-v2", "epoch-45", "index.db")
+	wantSuffix := filepath.Join(".crux", "cache", "index-v2", "epoch-46", "index.db")
 
 	if got := projectIndexFactStoreDBFile(root); !strings.HasSuffix(got, wantSuffix) {
 		t.Fatalf("projectIndexFactStoreDBFile() = %q, want suffix %q", got, wantSuffix)
 	}
 }
 
-func TestProjectIndexFactStoreMissesPreSuppressionSnapshotEpoch(t *testing.T) {
+func TestProjectIndexFactStoreMissesPreExportEvidenceSnapshotEpoch(t *testing.T) {
 	root := t.TempDir()
-	oldPath := filepath.Join(root, ".crux", "cache", "index-v2", "epoch-44", "index.db")
+	oldPath := filepath.Join(root, ".crux", "cache", "index-v2", "epoch-45", "index.db")
 	if err := os.MkdirAll(filepath.Dir(oldPath), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(oldPath, []byte("pre-suppression snapshot"), 0o600); err != nil {
+	if err := os.WriteFile(oldPath, []byte("pre-export-evidence snapshot"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 

@@ -1,0 +1,1 @@
+{"id":"suppressed-included","severity":"warning","ruleId":"rule.suppressed","category":"quality","title":"Suppressed","suppressed":true,"source":{"file":"src/file.ts","line":2,"column":3},"evidence":[],"fixes":[]}

@@ -1,0 +1,23 @@
+{"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":0}},"severity":3,"code":"rule.cap","source":"crux","message":"Evidence cap","relatedInformation":[
+{"location":{"uri":"file:///workspace/src/e.ts","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":0}}},"message":"E01"},
+{"location":{"uri":"file:///workspace/src/e.ts","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":0}}},"message":"E02"},
+{"location":{"uri":"file:///workspace/src/e.ts","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":0}}},"message":"E03"},
+{"location":{"uri":"file:///workspace/src/e.ts","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":0}}},"message":"E04"},
+{"location":{"uri":"file:///workspace/src/e.ts","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":0}}},"message":"E05"},
+{"location":{"uri":"file:///workspace/src/e.ts","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":0}}},"message":"E06"},
+{"location":{"uri":"file:///workspace/src/e.ts","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":0}}},"message":"E07"},
+{"location":{"uri":"file:///workspace/src/e.ts","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":0}}},"message":"E08"},
+{"location":{"uri":"file:///workspace/src/e.ts","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":0}}},"message":"E09"},
+{"location":{"uri":"file:///workspace/src/e.ts","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":0}}},"message":"E10"},
+{"location":{"uri":"file:///workspace/src/e.ts","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":0}}},"message":"E11"},
+{"location":{"uri":"file:///workspace/src/e.ts","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":0}}},"message":"E12"},
+{"location":{"uri":"file:///workspace/src/e.ts","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":0}}},"message":"E13"},
+{"location":{"uri":"file:///workspace/src/e.ts","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":0}}},"message":"E14"},
+{"location":{"uri":"file:///workspace/src/e.ts","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":0}}},"message":"E15"},
+{"location":{"uri":"file:///workspace/src/e.ts","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":0}}},"message":"E16"},
+{"location":{"uri":"file:///workspace/src/e.ts","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":0}}},"message":"E17"},
+{"location":{"uri":"file:///workspace/src/e.ts","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":0}}},"message":"E18"},
+{"location":{"uri":"file:///workspace/src/e.ts","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":0}}},"message":"E19"},
+{"location":{"uri":"file:///workspace/src/e.ts","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":0}}},"message":"E20"},
+{"location":{"uri":"file:///workspace/src/file.ts","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":0}}},"message":"…and 1 more evidence entries (see crux devtools)"}
+],"data":{"id":"evidence-cap","ruleId":"rule.cap","category":"quality","fixes":[],"suppression":null}}

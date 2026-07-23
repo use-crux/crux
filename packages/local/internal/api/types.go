@@ -681,6 +681,9 @@ type InspectInsightStatusRequest struct {
 
 // IndexData holds all registered prompts, contexts, and tools.
 type IndexData struct {
+	ProjectRoot     string                   `json:"projectRoot"`
+	ServerVersion   string                   `json:"serverVersion"`
+	Generation      uint64                   `json:"generation"`
 	SchemaVersion   int                      `json:"schemaVersion,omitempty"`
 	Prompts         []PromptMeta             `json:"prompts"`
 	Contexts        []ContextMeta            `json:"contexts"`

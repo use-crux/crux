@@ -206,6 +206,12 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
+      - name: Test, typecheck, and build editor extension
+        run: |
+          pnpm --filter crux-vscode test
+          pnpm --filter crux-vscode typecheck
+          pnpm --filter crux-vscode build
+
       - name: Download local binary bundles
         uses: actions/download-artifact@v7
         with:
@@ -229,34 +235,46 @@ jobs:
       - name: Stage and validate npm packages
         run: pnpm release:stage && pnpm release:validate
 
+      - name: Decide stable npm publication
+        id: npm-state
+        run: pnpm release:npm:decide-stable
+
+      - name: Stage and validate GitHub Release assets
+        run: |
+          pnpm release:assets:stage --version "${{ steps.npm-state.outputs.version }}" --source-commit "$GITHUB_SHA"
+          pnpm release:assets:validate --version "${{ steps.npm-state.outputs.version }}" --source-commit "$GITHUB_SHA"
+
       - name: Publish staged npm packages
-        run: pnpm release:publish-staged -- --git-tag --git-push-tags
+        if: steps.npm-state.outputs.action == 'publish'
+        run: pnpm release:publish-staged -- --no-skip-existing --git-tag --git-push-tags
 
       - name: Prepare GitHub release notes
         id: release-notes
         run: pnpm release:notes -- --out .tmp/github-release-notes.md
 
-      - name: Create GitHub Release
+      - name: Reconcile GitHub Release and immutable assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ steps.release-notes.outputs.tag }}
           RELEASE_TITLE: Crux ${{ steps.release-notes.outputs.tag }}
           RELEASE_NOTES: ${{ steps.release-notes.outputs.notes_file }}
-        run: |
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release edit "$RELEASE_TAG" --title "$RELEASE_TITLE" --notes-file "$RELEASE_NOTES"
-          else
-            gh release create "$RELEASE_TAG" --title "$RELEASE_TITLE" --notes-file "$RELEASE_NOTES" --target "$GITHUB_SHA"
-          fi
+        run: >-
+          pnpm release:assets:reconcile --
+          --tag "$RELEASE_TAG"
+          --title "$RELEASE_TITLE"
+          --notes-file "$RELEASE_NOTES"
+          --source-commit "$GITHUB_SHA"
 
   nightly:
     name: Nightly
     if: github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.publish_nightly))
     runs-on: ubuntu-latest
     outputs:
-      shouldPublish: ${{ steps.should-publish.outputs.should_publish }}
-      version: ${{ steps.should-publish.outputs.release_version }}
-      sha: ${{ steps.version.outputs.sha }}
+      action: ${{ steps.decision.outputs.action }}
+      shouldBuild: ${{ steps.decision.outputs.should_build }}
+      publishNpm: ${{ steps.decision.outputs.publish_npm }}
+      version: ${{ steps.decision.outputs.version }}
+      sourceSha: ${{ steps.decision.outputs.source_commit }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -272,81 +290,27 @@ jobs:
         id: version
         run: node ./scripts/create-nightly-version.mjs
 
-      - name: Decide whether to publish
-        id: should-publish
+      - name: Decide whether to publish, repair, or stop
+        id: decision
         env:
-          NIGHTLY_SHA: ${{ steps.version.outputs.sha }}
-          EVENT_NAME: ${{ github.event_name }}
-          CREATED_VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          should_publish=true
-          latest_nightly=''
-          complete_nightly=false
-          release_version="$CREATED_VERSION"
-
-          if [ "$EVENT_NAME" = "schedule" ]; then
-            latest_nightly="$(npm view @use-crux/core@nightly version --json 2>/dev/null | tr -d '"' || true)"
-            if [[ "$latest_nightly" == *"sha${NIGHTLY_SHA}"* ]]; then
-              complete_nightly=true
-              nightly_packages=(
-                @use-crux/core
-                @use-crux/ai
-                @use-crux/anthropic
-                @use-crux/cloudflare
-                @use-crux/convex
-                @use-crux/google
-                @use-crux/indexer
-                @use-crux/ingest
-                @use-crux/next
-                @use-crux/vercel
-                @use-crux/mcp
-                @use-crux/openai
-                @use-crux/otel
-                @use-crux/postgres
-                @use-crux/react
-                @use-crux/upstash
-                @use-crux/local
-                @use-crux/local-linux-x64
-                @use-crux/local-linux-arm64
-                @use-crux/local-darwin-x64
-                @use-crux/local-darwin-arm64
-                @use-crux/local-win32-x64
-                @use-crux/local-win32-arm64
-              )
-
-              for package in "${nightly_packages[@]}"; do
-                published_version="$(npm view "${package}@nightly" version --json 2>/dev/null | tr -d '"' || true)"
-                if [ "$published_version" != "$latest_nightly" ]; then
-                  complete_nightly=false
-                  break
-                fi
-              done
-
-              if [ "$complete_nightly" = "true" ]; then
-                should_publish=false
-                release_version="$latest_nightly"
-              fi
-            fi
-          fi
-
-          echo "should_publish=$should_publish" >> "$GITHUB_OUTPUT"
-          echo "release_version=$release_version" >> "$GITHUB_OUTPUT"
-          echo "latest_nightly=$latest_nightly" >> "$GITHUB_OUTPUT"
-          {
-            echo "Nightly version: $CREATED_VERSION"
-            echo "Latest published nightly: ${latest_nightly:-none}"
-            echo "Complete published nightly: $complete_nightly"
-            echo "Should publish: $should_publish"
-          } >> "$GITHUB_STEP_SUMMARY"
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >-
+          node ./scripts/decide-nightly-publication.mjs
+          --event-name "${{ github.event_name }}"
+          --created-version "${{ steps.version.outputs.version }}"
+          --source-commit "$GITHUB_SHA"
 
   nightly-build-embed-assets:
     name: Nightly Build Embed Assets
     needs: nightly
-    if: needs.nightly.outputs.shouldPublish == 'true'
+    if: needs.nightly.outputs.shouldBuild == 'true'
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.nightly.outputs.sourceSha }}
+          fetch-depth: 0
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -375,7 +339,7 @@ jobs:
   nightly-build-local-binary:
     name: Nightly Build ${{ matrix.target }}
     needs: [nightly, nightly-build-embed-assets]
-    if: needs.nightly.outputs.shouldPublish == 'true'
+    if: needs.nightly.outputs.shouldBuild == 'true'
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -408,6 +372,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.nightly.outputs.sourceSha }}
+          fetch-depth: 0
 
       - name: Download embed assets
         uses: actions/download-artifact@v7
@@ -466,13 +433,16 @@ jobs:
           compression-level: 0
 
   nightly-publish:
-    name: Nightly Publish
+    name: Nightly Publish or Repair
     needs: [nightly, nightly-build-local-binary]
-    if: needs.nightly.outputs.shouldPublish == 'true'
+    if: needs.nightly.outputs.shouldBuild == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.nightly.outputs.sourceSha }}
+          fetch-depth: 0
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -488,6 +458,12 @@ jobs:
 
       - name: Install
         run: pnpm install --frozen-lockfile
+
+      - name: Test, typecheck, and build editor extension
+        run: |
+          pnpm --filter crux-vscode test
+          pnpm --filter crux-vscode typecheck
+          pnpm --filter crux-vscode build
 
       - name: Download local binary bundles
         uses: actions/download-artifact@v7
@@ -505,54 +481,44 @@ jobs:
           done
 
       - name: Stage and validate nightly npm packages
+        if: needs.nightly.outputs.publishNpm == 'true'
         env:
           NIGHTLY_VERSION: ${{ needs.nightly.outputs.version }}
         run: pnpm release:stage -- --version "$NIGHTLY_VERSION" && pnpm release:validate
 
+      - name: Stage and validate nightly GitHub Release assets
+        env:
+          NIGHTLY_VERSION: ${{ needs.nightly.outputs.version }}
+          NIGHTLY_SOURCE: ${{ needs.nightly.outputs.sourceSha }}
+        run: |
+          pnpm release:assets:stage --version "$NIGHTLY_VERSION" --source-commit "$NIGHTLY_SOURCE"
+          pnpm release:assets:validate --version "$NIGHTLY_VERSION" --source-commit "$NIGHTLY_SOURCE"
+
       - name: Publish nightly npm packages
-        run: pnpm release:publish-staged -- --npm-tag nightly
+        if: needs.nightly.outputs.publishNpm == 'true'
+        run: pnpm release:publish-staged -- --no-skip-existing --npm-tag nightly
 
-      - name: Summary
-        run: echo "Published @use-crux packages at ${{ needs.nightly.outputs.version }} with npm tag nightly." >> "$GITHUB_STEP_SUMMARY"
+      - name: Prepare nightly release notes
+        env:
+          NIGHTLY_VERSION: ${{ needs.nightly.outputs.version }}
+          NIGHTLY_SOURCE: ${{ needs.nightly.outputs.sourceSha }}
+        run: >-
+          pnpm release:nightly:notes --
+          --version "$NIGHTLY_VERSION"
+          --source-commit "$NIGHTLY_SOURCE"
 
-  nightly-github-release:
-    name: Nightly GitHub Release
-    needs: [nightly, nightly-publish]
-    if: always() && needs.nightly.result == 'success' && (needs.nightly.outputs.shouldPublish == 'false' || needs.nightly-publish.result == 'success')
-    runs-on: ubuntu-latest
-    steps:
-      - name: Reconcile GitHub nightly pre-release
+      - name: Reconcile GitHub nightly prerelease and immutable assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NIGHTLY_VERSION: ${{ needs.nightly.outputs.version }}
-        run: |
-          tag="v${NIGHTLY_VERSION}"
-          title="Crux ${NIGHTLY_VERSION}"
-          notes="Automated nightly build from main at ${GITHUB_SHA}. Install from npm with: npm install @use-crux/local@nightly"
-
-          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            prerelease="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json isPrerelease --jq .isPrerelease)"
-            draft="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)"
-            tag_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${tag}" --jq .object.sha)"
-
-            if [ "$prerelease" != "true" ] || [ "$draft" != "false" ] || [ "$tag_sha" != "$GITHUB_SHA" ]; then
-              echo "GitHub release $tag does not match nightly source $GITHUB_SHA." >&2
-              exit 1
-            fi
-          else
-            if ! tag_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${tag}" --jq .object.sha 2>/dev/null)"; then
-              tag_sha=''
-            fi
-            if [ -n "$tag_sha" ] && [ "$tag_sha" != "$GITHUB_SHA" ]; then
-              echo "Git tag $tag does not match nightly source $GITHUB_SHA." >&2
-              exit 1
-            fi
-
-            gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$title" --notes "$notes" --prerelease --latest=false
-          fi
+          NIGHTLY_SOURCE: ${{ needs.nightly.outputs.sourceSha }}
+        run: >-
+          pnpm release:assets:reconcile --
+          --tag "v${NIGHTLY_VERSION}"
+          --title "Crux ${NIGHTLY_VERSION}"
+          --notes-file .tmp/github-nightly-release-notes.md
+          --source-commit "$NIGHTLY_SOURCE"
+          --prerelease
 
       - name: Summary
-        env:
-          NIGHTLY_VERSION: ${{ needs.nightly.outputs.version }}
-        run: |
-          echo "GitHub pre-release: v${NIGHTLY_VERSION}." >> "$GITHUB_STEP_SUMMARY"
+        run: echo "Nightly ${{ needs.nightly.outputs.action }} completed for ${{ needs.nightly.outputs.version }}." >> "$GITHUB_STEP_SUMMARY"

@@ -43,6 +43,7 @@ pub(crate) fn convex_agent_facts(
         "exportName".to_string(),
         Value::String(parts.variable_name.to_string()),
     );
+    parts.add_direct_export_evidence(&mut metadata);
     metadata.insert(
         "runtime".to_string(),
         Value::String("convex-agent".to_string()),

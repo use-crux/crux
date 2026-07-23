@@ -153,6 +153,7 @@ func newDevCmd(f *cli.Factory, dependencies devDependencies) *cobra.Command {
 				Context:        sessionCtx,
 				Port:           port,
 				Tunnel:         tunnel,
+				ServerVersion:  cmd.Root().Version,
 				Quiet:          tuiMode,
 				InspectDir:     inspectDir,
 				Logger:         process.logger,

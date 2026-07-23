@@ -1,0 +1,1 @@
+{"id":"experimental","severity":"error","ruleId":"rule.experimental","category":"quality","maturity":"experimental","title":"Experimental","source":{"file":"src/file.ts","line":2,"column":3},"evidence":[],"fixes":[]}

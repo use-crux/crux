@@ -49,6 +49,7 @@ type ServerOptions struct {
 	ReviewWriter         review.RepositoryWriter
 	RuntimeBridge        *runtimebridge.Service
 	ProjectRoot          string
+	ServerVersion        string
 	ConfigPath           string
 	// Logger receives handler and owned-service diagnostics. It defaults to
 	// slog.Default when omitted and remains scoped to this server instance.
@@ -166,7 +167,10 @@ func NewHTTPServerWithServicesContext(ctx context.Context, devSvc *devtools.Serv
 	resourceInspection := resourceinspection.New(runtimeBridge)
 	devSvc.WithResourceInspection(resourceInspection)
 
-	wsHub := NewWSHub(ctx, devSvc, inspectSvc.Events(), observabilityEvents(observabilitySvc), runtimeBridge, logger)
+	wsHub := NewWSHub(ctx, devSvc, inspectSvc.Events(), observabilityEvents(observabilitySvc), runtimeBridge, logger, IndexSnapshotOptions{
+		ProjectRoot:   opt.ProjectRoot,
+		ServerVersion: opt.ServerVersion,
+	})
 	if opt.webSocketHubCreated != nil {
 		opt.webSocketHubCreated(wsHub)
 	}
@@ -189,6 +193,8 @@ func NewHTTPServerWithServicesContext(ctx context.Context, devSvc *devtools.Serv
 		RuntimeBridge:      runtimeBridge,
 		ResourceInspection: resourceInspection,
 		Hub:                wsHub,
+		ProjectIndex:       wsHub,
+		Completion:         wsHub,
 		ProjectRoot:        opt.ProjectRoot,
 		ConfigPath:         opt.ConfigPath,
 		SourceResolver: localserver.SourceResolverOptions{

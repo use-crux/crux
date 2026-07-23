@@ -64,6 +64,14 @@ no related findings returns zero counts and an empty list.
 
 Observability and Eval run lists are newest-first pages by default so live web/TUI refreshes stay responsive on large local histories. Observability lists read ingest-time count and usage rollups from SQLite; the web devtools runs table groups by root `sessionId` and displays those token, cost, and graph-count rollups directly. Single-run detail endpoints remain exact, while focused streaming spans read `token.chunk` text through the lazy span-events endpoint instead of loading every chunk into the run-detail graph. Use explicit `limit`/`offset` query parameters on the HTTP list endpoints when building custom local tooling that needs a different page size.
 
+## `crux lsp`
+
+Run Crux lint diagnostics and suppression actions in editors over the Language
+Server Protocol. The server uses stdio and either attaches to a matching
+`crux dev` process or indexes the workspace itself. See the dedicated
+[`crux lsp` reference](/docs/reference/lsp) for editor setup, settings, and
+handover behavior.
+
 ## `crux traces`
 
 List recent traces or show trace detail.

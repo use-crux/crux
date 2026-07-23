@@ -200,7 +200,7 @@ func TestWebSocketIndexMessagesStayTyped(t *testing.T) {
 	for _, needle := range []string{
 		"type indexSnapshotMessage struct",
 		"type apiIndexSnapshotMessage struct",
-		"func indexMessage(index store.IndexData) indexSnapshotMessage",
+		"func (h *WSHub) indexMessage(index store.IndexData, generation uint64) indexSnapshotMessage",
 		"func apiIndexMessage(index api.IndexData) apiIndexSnapshotMessage",
 	} {
 		if !strings.Contains(snapshots, needle) {

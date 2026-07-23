@@ -8,12 +8,16 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"time"
 )
+
+// ErrNotFound identifies a 404 response without exposing the response body.
+var ErrNotFound = errors.New("not found")
 
 // Client talks to a running crux devtools server over HTTP.
 // Create one with [New] or [NewDefault]. All request methods are safe
@@ -80,7 +84,7 @@ func (c *Client) GetJSON(ctx context.Context, path string, target any) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode == 404 {
-		return fmt.Errorf("not found")
+		return ErrNotFound
 	}
 	if resp.StatusCode != 200 {
 		body, _ := io.ReadAll(resp.Body)
@@ -108,7 +112,7 @@ func (c *Client) PostJSON(ctx context.Context, path string, body any, target any
 	defer resp.Body.Close()
 
 	if resp.StatusCode == 404 {
-		return fmt.Errorf("not found")
+		return ErrNotFound
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		data, _ := io.ReadAll(resp.Body)
@@ -142,7 +146,7 @@ func (c *Client) DeleteJSON(ctx context.Context, path string, body any, target a
 	defer resp.Body.Close()
 
 	if resp.StatusCode == 404 {
-		return fmt.Errorf("not found")
+		return ErrNotFound
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		data, _ := io.ReadAll(resp.Body)
@@ -164,7 +168,7 @@ func (c *Client) GetRaw(ctx context.Context, path string) (json.RawMessage, erro
 	defer resp.Body.Close()
 
 	if resp.StatusCode == 404 {
-		return nil, fmt.Errorf("not found")
+		return nil, ErrNotFound
 	}
 	if resp.StatusCode != 200 {
 		body, _ := io.ReadAll(resp.Body)

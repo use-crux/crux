@@ -9,6 +9,7 @@ publish = false
 
 [dependencies]
 crux-indexer-protocol.workspace = true
+crux-indexer-primitives.workspace = true
 oxc_allocator.workspace = true
 oxc_ast.workspace = true
 oxc_parser.workspace = true

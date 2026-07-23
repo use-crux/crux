@@ -11,6 +11,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/evalwriter"
 	"github.com/use-crux/crux/packages/local/internal/inspect"
 	"github.com/use-crux/crux/packages/local/internal/observability"
+	indexcompletion "github.com/use-crux/crux/packages/local/internal/projectindex/completion"
 	"github.com/use-crux/crux/packages/local/internal/readmodel"
 	"github.com/use-crux/crux/packages/local/internal/readmodel/endpoints"
 	"github.com/use-crux/crux/packages/local/internal/resourceinspection"
@@ -50,6 +51,8 @@ type Options struct {
 	RuntimeBridge            *runtimebridge.Service
 	ResourceInspection       *resourceinspection.Service
 	Hub                      Hub
+	ProjectIndex             endpoints.DevtoolsReads
+	Completion               indexcompletion.Provider
 	ProjectRoot              string
 	ConfigPath               string
 	SourceResolver           SourceResolverOptions
@@ -77,14 +80,20 @@ func New(options Options) http.Handler {
 		originAllowed = allowSameOriginOrLoopback
 	}
 
+	projectIndex := options.ProjectIndex
+	if projectIndex == nil {
+		projectIndex = options.Devtools
+	}
+
 	mux := http.NewServeMux()
 	readmodel.Mount(mux, endpoints.Deps{
-		Devtools:    options.Devtools,
-		Catalog:     options.Devtools,
-		Inspect:     options.Inspect,
-		Eval:        evalfs.OpenProject(options.ProjectRoot),
-		EvalCatalog: options.EvalCatalog,
-		Reviews:     options.Review,
+		Devtools:     options.Devtools,
+		ProjectIndex: projectIndex,
+		Catalog:      options.Devtools,
+		Inspect:      options.Inspect,
+		Eval:         evalfs.OpenProject(options.ProjectRoot),
+		EvalCatalog:  options.EvalCatalog,
+		Reviews:      options.Review,
 	}, endpoints.Registry, logger)
 
 	registerInspectRoutes(mux, options.Inspect)
@@ -98,6 +107,7 @@ func New(options Options) http.Handler {
 	registerReviewRoutes(mux, options.Review, options.ReviewWriter, options.ReviewRepositoryWritable)
 	registerEvalRoutes(mux, options.BaselineWriter, options.EvalRunner)
 	registerIndexRoutes(mux, options.Devtools)
+	registerCompletionRoutes(mux, options.Completion)
 	registerRuntimeRoutes(mux, options.Devtools, options.ProjectRoot)
 
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {

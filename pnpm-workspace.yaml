@@ -15,8 +15,10 @@ allowBuilds:
   '@embedded-postgres/linux-x64': true
   '@embedded-postgres/windows-x64': true
   '@google/genai': true
+  '@vscode/vsce-sign': false
   core-js: false
   esbuild: true
+  keytar: false
   protobufjs: true
   sharp: true
   workerd: true

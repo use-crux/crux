@@ -3,6 +3,7 @@ import {
   promptDefinitionRef,
   retrieverDefinitionRef,
 } from "@use-crux/core/observability";
+import { completionSemanticParityFixture } from "./completion-semantic-parity-fixture";
 
 export interface SemanticBackendParityFixture {
   readonly name: string;
@@ -128,6 +129,7 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
         ],
       },
     },
+    completionSemanticParityFixture,
     {
       name: "authored-media-shared-analyzer",
       workspacePackages: ["ai", "core", "openai"],

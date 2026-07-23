@@ -14,6 +14,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/inspect"
 	"github.com/use-crux/crux/packages/local/internal/observability"
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
+	indexcompletion "github.com/use-crux/crux/packages/local/internal/projectindex/completion"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/readmodel"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/service"
 	"github.com/use-crux/crux/packages/local/internal/store"
@@ -29,6 +30,7 @@ type Service struct {
 	indexEvents   *IndexEventBus
 	indexService  *service.Service
 	indexModel    *readmodel.Model
+	completion    *indexcompletion.Service
 	manifestStore catalogManifestCounter
 
 	publishMu          sync.Mutex
@@ -81,7 +83,22 @@ func (s *Service) WithResourceInspection(inspector ResourceInspector) *Service {
 
 func (s *Service) WithProjectIndexer(indexer projectindex.ProjectIndexer) *Service {
 	s.indexService.WithProjectIndexer(indexer)
+	if compiler, ok := indexer.(indexcompletion.Compiler); ok {
+		s.completion = indexcompletion.New(compiler)
+	} else {
+		s.completion = nil
+	}
 	return s
+}
+
+// CompleteProjectIndex runs one cache-bypassing completion query through the
+// same persistent compiler configured for Project Index work.
+func (s *Service) CompleteProjectIndex(
+	ctx context.Context,
+	view indexcompletion.View,
+	request indexcompletion.Request,
+) (indexcompletion.Result, error) {
+	return s.completion.Complete(ctx, view, request)
 }
 
 func (s *Service) WithFactStore(facts service.CacheStore) *Service {

@@ -1,0 +1,94 @@
+---
+title: "Semantic completion"
+description: Project Index-aware completion for first-party Crux dependency slots.
+---
+
+Crux semantic completion suggests compatible authored definitions in
+first-party dependency slots. It combines the current unsaved document with the
+save-based Project Index, so it can understand that `agent({ prompt: ... })`
+expects a prompt while leaving TypeScript's normal completion available.
+
+## Supported slots
+
+Completion is available for these indexed reference shapes:
+
+| Definition | Slot | Candidates |
+| ---------- | ---- | ---------- |
+| `agent` | `prompt` | Prompts |
+| `agent` | `model`, `languageModel` | Routers, splits, retries, cascades, and fallbacks |
+| `agent` | `tools` | Tools |
+| `agent` | `handoffs` | Agent IDs |
+| `prompt`, `context` | `use` | Contexts and MCP servers |
+| `prompt`, `context` | `tools` | Tools |
+| `router` | Direct routes and route-profile `model` values | Routing definitions, agents, and prompts |
+| `split` | Route `model` values | Routing definitions, agents, and prompts |
+| `retry` | First target argument | Routing definitions, agents, and prompts |
+| `cascade` | Tier `model` values | Routing definitions, agents, and prompts |
+| `fallback` | Array or positional targets | Routing definitions, agents, and prompts |
+
+Items reuse a binding already in scope when possible. For an importable
+cross-file definition, Crux can reuse an alias, merge a compatible named
+import, or add one relative named import. It omits a candidate when the import,
+binding, declaration order, or compatibility is ambiguous.
+
+Cross-file completion currently recognizes direct named exports such as
+`export const writer = prompt(...)`. A local declaration later exported through
+`export { writer }`, a re-export, or a default export is not offered from other
+files. Same-file completion does not require export proof.
+
+Tool-map completion chooses safe shorthand or an explicit key/value member.
+Handoff completion inserts an ID string into a new array position and only the
+ID value inside an existing string or `{ id: ... }` slot; it never rewrites
+the surrounding syntax.
+
+## Unsaved text and the Project Index
+
+The open document is a bounded, completion-only overlay. Crux retains supported
+TypeScript and JavaScript buffers up to 2 MiB per document and 32 MiB per
+language-server process. It parses that transient text only when completion is
+requested.
+
+The overlay never updates diagnostics, navigation, hover, hints, lenses, lint
+results, Project Index generation, or cache files. Those features remain based
+on saved source. Save the document to make authored definitions and relations
+authoritative for the rest of the language server.
+
+Each query pins the document version, Project Index generation, and current
+ATTACHED or OWN source. A document edit, reindex, reconnect, or mode handover
+makes an older result stale and returns no Crux items.
+
+## Trust, privacy, and failures
+
+Completion runs only for trusted workspaces. In Restricted Mode the extension
+does not activate, discover a binary, or start the language server. Bare LSP
+clients must also declare workspace trust.
+
+Unsaved source can contain secrets that have never been written to disk. Crux
+does not log, persist, trace, or attach buffer text to errors. ATTACHED requests
+use the dev server's existing local authentication boundary.
+
+Cancellation, timeouts, stale results, incomplete or unsupported syntax,
+unsafe imports, and buffer limits fail softly with no Crux items; native editor
+completion remains available. After three consecutive compiler or transport
+failures in one workspace scope, Crux may show one generic warning. That
+warning is limited to once every five minutes for the whole language-server
+process and contains no source or compiler-error detail.
+
+## Initial limitations
+
+The first release intentionally excludes:
+
+- third-party Indexer Extension completion declarations;
+- indirect export lists and re-exports for cross-file candidates;
+- non-dependency properties, including unindexed `cascade.prompt`;
+- raw provider model identifiers;
+- project-specific path-alias or barrel import preferences;
+- default-only and ambiguous imports;
+- full dirty-buffer indexing; and
+- semantic rename.
+
+Completion items are eager and capped at 100. Use normal typing or the editor's
+manual completion command; `:` is the only explicit Crux trigger character.
+
+See [`crux lsp`](/docs/reference/lsp) for installation, ATTACHED/OWN behavior,
+settings, diagnostics, navigation, and editor configuration.

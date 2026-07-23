@@ -1,0 +1,23 @@
+{"id":"evidence-cap","severity":"info","ruleId":"rule.cap","category":"quality","title":"Evidence cap","source":{"file":"src/file.ts","line":1,"column":1},"evidence":[
+{"kind":"source","label":"E01","source":{"file":"src/e.ts","line":1,"column":1}},
+{"kind":"source","label":"E02","source":{"file":"src/e.ts","line":1,"column":1}},
+{"kind":"source","label":"E03","source":{"file":"src/e.ts","line":1,"column":1}},
+{"kind":"source","label":"E04","source":{"file":"src/e.ts","line":1,"column":1}},
+{"kind":"source","label":"E05","source":{"file":"src/e.ts","line":1,"column":1}},
+{"kind":"source","label":"E06","source":{"file":"src/e.ts","line":1,"column":1}},
+{"kind":"source","label":"E07","source":{"file":"src/e.ts","line":1,"column":1}},
+{"kind":"source","label":"E08","source":{"file":"src/e.ts","line":1,"column":1}},
+{"kind":"source","label":"E09","source":{"file":"src/e.ts","line":1,"column":1}},
+{"kind":"source","label":"E10","source":{"file":"src/e.ts","line":1,"column":1}},
+{"kind":"source","label":"E11","source":{"file":"src/e.ts","line":1,"column":1}},
+{"kind":"source","label":"E12","source":{"file":"src/e.ts","line":1,"column":1}},
+{"kind":"source","label":"E13","source":{"file":"src/e.ts","line":1,"column":1}},
+{"kind":"source","label":"E14","source":{"file":"src/e.ts","line":1,"column":1}},
+{"kind":"source","label":"E15","source":{"file":"src/e.ts","line":1,"column":1}},
+{"kind":"source","label":"E16","source":{"file":"src/e.ts","line":1,"column":1}},
+{"kind":"source","label":"E17","source":{"file":"src/e.ts","line":1,"column":1}},
+{"kind":"source","label":"E18","source":{"file":"src/e.ts","line":1,"column":1}},
+{"kind":"source","label":"E19","source":{"file":"src/e.ts","line":1,"column":1}},
+{"kind":"source","label":"E20","source":{"file":"src/e.ts","line":1,"column":1}},
+{"kind":"source","label":"E21","source":{"file":"src/e.ts","line":1,"column":1}}
+],"fixes":[]}

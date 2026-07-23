@@ -1,0 +1,1 @@
+{"range":{"start":{"line":1,"character":1},"end":{"line":3,"character":4}},"severity":2,"code":"rule.definition","source":"crux","message":"Definition range","data":{"id":"definition-range","ruleId":"rule.definition","category":"quality","fixes":[],"suppression":null}}

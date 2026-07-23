@@ -1,0 +1,1 @@
+{"range":{"start":{"line":1,"character":2},"end":{"line":1,"character":2}},"severity":2,"code":"rule.warning","source":"crux","message":"Warning","data":{"id":"warning","ruleId":"rule.warning","category":"quality","fixes":[],"suppression":null}}

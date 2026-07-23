@@ -54,7 +54,9 @@ function extractMcpServer(ctx: ExtractContext) {
       kind: "mcp.server",
       name: serverId,
       metadata: {
-        ...(ctx.source.exported ? { exportName: ctx.source.variableName } : {}),
+        ...(ctx.source.exported
+          ? { exportName: ctx.source.variableName, exported: true }
+          : {}),
         facts: {
           kind: "mcp.server",
           serverId,

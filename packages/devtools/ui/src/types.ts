@@ -954,6 +954,12 @@ export interface ProjectIndexWatchRunInfo {
 }
 
 export interface ProjectIndexData {
+  /** Absolute root of the project represented by this server snapshot. */
+  projectRoot?: string;
+  /** Version of the Crux Local server that produced this snapshot. */
+  serverVersion?: string;
+  /** Monotonic snapshot generation within the current server process. */
+  generation?: number;
   schemaVersion?: number;
   prompts: PromptMeta[];
   contexts: ContextMeta[];
