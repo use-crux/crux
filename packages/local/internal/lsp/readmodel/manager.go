@@ -51,9 +51,17 @@ type ManagerOptions struct {
 	Connect       func(context.Context, string) (MessageStream, error)
 	StartOwn      func(context.Context, OwnOptions) (OwnSource, error)
 	OnChange      func(Change)
+	// OnIndexChange invalidates transient queries whenever a snapshot replaces
+	// the source or an accepted delta advances its generation, even when no
+	// publication file changed.
+	OnIndexChange func()
 	OnModeChange  func(Mode)
-	OnWarning     func(string)
-	OnShowWarning func(string)
+	// OnCompletionSource swaps the optional transient query source as OWN or
+	// ATTACHED mode starts, stops, reconnects, or hands over. A nil source makes
+	// completion unavailable.
+	OnCompletionSource func(CompletionSource)
+	OnWarning          func(string)
+	OnShowWarning      func(string)
 }
 
 // Manager owns discovery, attachment, and reconnect for one scope.
@@ -108,6 +116,8 @@ func (m *Manager) Mode() Mode {
 
 // Run blocks until cancellation after driving this scope's attach lifecycle.
 func (m *Manager) Run(ctx context.Context) {
+	m.setCompletionSource(nil)
+	defer m.setCompletionSource(nil)
 	m.setMode(ModeDiscovering)
 	discoveryContext, cancelDiscovery := context.WithTimeout(ctx, m.options.InitialBudget)
 	probe, err := m.options.Transport.Probe(discoveryContext, m.options.Root, m.options.Version, m.options.ProbeBudget)
@@ -154,6 +164,7 @@ func (m *Manager) consume(ctx, readyContext context.Context, stream MessageStrea
 			return fmt.Errorf("resync Project Index identity: %w", err)
 		}
 		m.applySnapshot(snapshot)
+		m.setAttachedCompletionSource(snapshot)
 		m.setMode(ModeAttached)
 	} else if err := m.awaitInitialSnapshot(readyContext, messages); err != nil {
 		return err
@@ -187,6 +198,7 @@ func (m *Manager) consumeMessages(ctx context.Context, messages <-chan json.RawM
 					continue
 				}
 				m.applySnapshot(*message.Snapshot)
+				m.setAttachedCompletionSource(*message.Snapshot)
 				continue
 			}
 			if err := m.applyDelta(ctx, *message.Delta); err != nil {
@@ -205,10 +217,13 @@ func (m *Manager) awaitInitialSnapshot(ctx context.Context, messages <-chan json
 		return fmt.Errorf("initial Project Index identity: %w", err)
 	}
 	m.applySnapshot(snapshot)
-	m.setMode(ModeAttached)
 	if delta != nil {
-		return m.applyDelta(ctx, *delta)
+		if err := m.applyDelta(ctx, *delta); err != nil {
+			return err
+		}
 	}
+	m.setAttachedCompletionSource(snapshot)
+	m.setMode(ModeAttached)
 	return nil
 }
 
@@ -241,39 +256,6 @@ func startMessages(stream MessageStream) <-chan json.RawMessage {
 	messages := make(chan json.RawMessage, 256)
 	go stream.ReadMessages(messages)
 	return messages
-}
-
-func (m *Manager) applyDelta(ctx context.Context, delta Delta) error {
-	result := m.options.Store.ApplyDelta(m.options.ScopeID, delta)
-	if result.Status == DeltaNeedsResync {
-		snapshot, err := m.options.Transport.Snapshot(ctx)
-		if err != nil {
-			return fmt.Errorf("generation-gap resync: %w", err)
-		}
-		if err := m.validateRemoteSnapshot(snapshot); err != nil {
-			return fmt.Errorf("generation-gap resync identity: %w", err)
-		}
-		m.applySnapshot(snapshot)
-		return nil
-	}
-	m.changed(result.ChangedFiles, false)
-	return nil
-}
-
-func (m *Manager) applySnapshot(snapshot Snapshot) {
-	m.changed(m.options.Store.ApplySnapshot(m.options.ScopeID, snapshot), true)
-	findings := m.options.Store.AllFindings(m.options.ScopeID)
-	for _, entries := range findings {
-		for _, finding := range entries {
-			fmt.Fprintf(m.options.Logs, "crux lsp: scope %s finding %s\n", m.options.ScopeID, finding.ID)
-		}
-	}
-}
-
-func (m *Manager) changed(files []string, immediate bool) {
-	if len(files) > 0 && m.options.OnChange != nil {
-		m.options.OnChange(Change{Scope: m.options.ScopeID, Files: files, Immediate: immediate})
-	}
 }
 
 func (m *Manager) connect(ctx context.Context) (MessageStream, error) {

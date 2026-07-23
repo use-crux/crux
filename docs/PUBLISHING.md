@@ -101,6 +101,12 @@ pnpm init
 pnpm add @use-crux/core @use-crux/ai ai @ai-sdk/openai zod
 ```
 
+Stable GitHub Releases also contain the lockstep VSIX, six native archives,
+and `SHA256SUMS`. The workflow stages and validates the full matrix before npm
+publication, then reconciles only missing or byte-identical release assets.
+Run the [editor release asset smoke checklist](./RELEASE_ASSET_SMOKE_CHECKLIST.md)
+against the resulting release.
+
 ## Nightly releases
 
 Nightly releases are generated snapshots from `main`, not Changesets releases. The `Release` workflow
@@ -120,6 +126,9 @@ pnpm add @use-crux/core@nightly
 pnpm add @use-crux/local@nightly
 ```
 
-Nightly releases must not update changelogs, create GitHub Releases, create git tags, or publish with
-the `latest` dist-tag. Internal `@use-crux/*` dependencies are pinned exactly to the same nightly
-version so the package set remains coherent.
+Nightly releases must not update changelogs or publish with the `latest`
+dist-tag. Internal `@use-crux/*` dependencies are pinned exactly to the same
+nightly version so the package set remains coherent. Each immutable nightly
+tag also has a GitHub prerelease containing the same VSIX, six native archives,
+and checksum manifest as stable. A rerun may repair missing identical assets
+from that tag's exact source commit, but never replace conflicting bytes.

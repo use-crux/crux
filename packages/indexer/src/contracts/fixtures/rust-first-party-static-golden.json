@@ -5,12 +5,12 @@
   "fileSelection": "staticDefinitionFiles(root)",
   "projection": "canonicalStaticExtractionJson(definitions,relations,diagnostics,dependencies)",
   "totals": {
-    "files": 766,
+    "files": 779,
     "definitions": 88,
     "relations": 7,
     "diagnostics": 25,
-    "dependencies": 1451,
-    "canonicalBytes": 214051
+    "dependencies": 1463,
+    "canonicalBytes": 215539
   },
   "files": [
     {
@@ -5180,6 +5180,15 @@
       "dependencies": 0
     },
     {
+      "file": "packages/indexer/src/indexer/semantic/backends/tsgo/direct-projectors/completion-sites.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
       "file": "packages/indexer/src/indexer/semantic/backends/tsgo/direct-projectors/dependencies.ts",
       "sha256": "9244db58689558701bacfcd22bfcb803f3421878cb9893c1a16637ed6c3865aa",
       "bytes": 353,
@@ -6107,6 +6116,60 @@
       "dependencies": 0
     },
     {
+      "file": "packages/local/internal/lsp/testdata/fixture-project/crux.config.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/local/internal/lsp/testdata/fixture-project/src/suppressed.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/local/internal/lsp/testdata/fixture-project/src/writer.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/local/internal/lsp/testdata/navigation-project/crux.config.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/local/internal/lsp/testdata/navigation-project/src/agent.ts",
+      "sha256": "d35a264e885058ccdca55d3286ef41993b05e4510fc9959ee39f8ca4c8fb9e0d",
+      "bytes": 150,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/local/internal/lsp/testdata/navigation-project/src/primitives.ts",
+      "sha256": "24f66d17caf2e944072a612246e55a4101632f6b4d383b23d12261934c47b1bf",
+      "bytes": 146,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
       "file": "packages/local/npm/local/bin/crux.cjs",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
@@ -6827,6 +6890,33 @@
       "dependencies": 0
     },
     {
+      "file": "packages/vscode/src/install-help.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "scripts/check-stable-npm-publication.mjs",
+      "sha256": "36fe192432cde787f107f079e7f5ce3056204df0d3d47d3d37c640d6812e876d",
+      "bytes": 161,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "scripts/decide-nightly-publication.mjs",
+      "sha256": "3f7b2c631749ad6b75aa4d3cbb366e7a34e14b77a933516681e4e344bcb43018",
+      "bytes": 263,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 4
+    },
+    {
       "file": "scripts/fixtures/portability/core-guarded-fallbacks.ts",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
@@ -6863,13 +6953,40 @@
       "dependencies": 1
     },
     {
-      "file": "scripts/stage-npm-packages.mjs",
+      "file": "scripts/release/npm-packages.mjs",
+      "sha256": "e8d900440c886e3cccc85748f297918792e46a685fa3a91fc4e6de764fb12395",
+      "bytes": 106,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "scripts/release/platforms.mjs",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
       "dependencies": 0
+    },
+    {
+      "file": "scripts/release/release-notes.mjs",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "scripts/stage-npm-packages.mjs",
+      "sha256": "37a8e1b11b213289ed487b94977998655408f60015858a23d157f23eddd54503",
+      "bytes": 148,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
     },
     {
       "file": "scripts/static-index-benchmark.mjs",
@@ -6900,12 +7017,12 @@
     },
     {
       "file": "scripts/validate-staged-npm-packages.mjs",
-      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
-      "bytes": 68,
+      "sha256": "e8d900440c886e3cccc85748f297918792e46a685fa3a91fc4e6de764fb12395",
+      "bytes": 106,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 0
+      "dependencies": 1
     }
   ]
 }

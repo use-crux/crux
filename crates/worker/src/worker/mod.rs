@@ -6,6 +6,7 @@ use crate::protocol::WorkerRequest;
 
 mod analyze_stream;
 mod compile_stream;
+mod completion;
 mod finalize_stream;
 mod io;
 mod parse;
@@ -14,6 +15,9 @@ mod static_syntax;
 
 #[cfg(test)]
 pub(crate) mod static_index_tests;
+
+#[cfg(test)]
+mod completion_tests;
 
 #[cfg(test)]
 mod stream_tests;
@@ -42,12 +46,16 @@ fn serve() -> Result<(), String> {
 
 #[derive(Debug)]
 pub(crate) enum ServeRequest {
+    Completion(crate::protocol::completion::CompletionWorkerRequest),
     Syntax(WorkerRequest),
     StaticIndex(static_index::StaticIndexWorkerRequest),
 }
 
 pub(crate) fn parse_serve_request(line: &str) -> Result<ServeRequest, String> {
     let value: Value = serde_json::from_str(line).map_err(|error| error.to_string())?;
+    if parse::has_completion_method(&value) {
+        return parse::parse_completion_worker_request(value).map(ServeRequest::Completion);
+    }
     if parse::has_worker_method(&value) {
         return parse::parse_static_index_worker_request(value).map(ServeRequest::StaticIndex);
     }
@@ -61,6 +69,7 @@ pub(crate) fn write_serve_response<W: Write>(
     request: ServeRequest,
 ) -> Result<(), String> {
     match request {
+        ServeRequest::Completion(request) => completion::write_response(stdout, request),
         ServeRequest::Syntax(request) => static_syntax::write_response(stdout, request),
         ServeRequest::StaticIndex(request) => {
             static_index::write_static_index_worker_response(stdout, request)

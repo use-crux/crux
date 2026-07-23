@@ -14,6 +14,7 @@ import (
 
 func TestCodeActionRunFixOrderingMatchesGolden(t *testing.T) {
 	server := New(Options{})
+	server.trusted = true
 	server.clientInfo = &protocol.ClientInfo{Name: "Visual Studio Code"}
 	server.workspace = &commandWorkspace{
 		actionWorkspace: actionWorkspace{indent: "  "},

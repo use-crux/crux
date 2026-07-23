@@ -50,6 +50,7 @@ type Server struct {
 	trusted                 bool
 	workspace               workspaceController
 	documents               map[protocol.DocumentURI]documentStatus
+	buffers                 *documentBuffers
 
 	fixMu      sync.Mutex
 	fixRunning map[string]struct{}
@@ -57,6 +58,11 @@ type Server struct {
 	clientRequestMu       sync.Mutex
 	nextClientRequestID   uint64
 	pendingClientRequests map[string]*pendingClientRequest
+
+	completionMu          sync.Mutex
+	pendingCompletions    map[string]*pendingCompletion
+	completionByURI       map[protocol.DocumentURI]*pendingCompletion
+	lastCompletionWarning time.Time
 }
 
 type documentStatus struct {
@@ -76,14 +82,19 @@ func New(options Options) *Server {
 		options.FixExecutable = os.Executable
 	}
 	return &Server{
-		options:               options,
-		outbound:              make(chan protocol.OutboundMessage, 256),
-		settings:              defaultSettings(options.Port),
-		hoverFormat:           protocol.MarkupKindPlainText,
-		trusted:               true,
-		documents:             make(map[protocol.DocumentURI]documentStatus),
+		options:     options,
+		outbound:    make(chan protocol.OutboundMessage, 256),
+		settings:    defaultSettings(options.Port),
+		hoverFormat: protocol.MarkupKindPlainText,
+		documents:   make(map[protocol.DocumentURI]documentStatus),
+		buffers: newDocumentBuffers(documentBufferLimits{
+			DocumentBytes: defaultDocumentBufferBytes,
+			ProcessBytes:  defaultProcessBufferBytes,
+		}),
 		fixRunning:            make(map[string]struct{}),
 		pendingClientRequests: make(map[string]*pendingClientRequest),
+		pendingCompletions:    make(map[string]*pendingCompletion),
+		completionByURI:       make(map[protocol.DocumentURI]*pendingCompletion),
 	}
 }
 
@@ -128,7 +139,9 @@ func (s *Server) Handle(ctx context.Context, request protocol.Request) jsonrpc.H
 		s.scopeCancel = nil
 		s.mu.Unlock()
 		s.closeWorkspace()
+		s.buffers.Clear()
 		s.closeClientRequests()
+		s.closeCompletionRequests()
 		if cancel != nil {
 			cancel()
 		}
@@ -142,7 +155,9 @@ func (s *Server) Handle(ctx context.Context, request protocol.Request) jsonrpc.H
 		s.scopeCancel = nil
 		s.mu.Unlock()
 		s.closeWorkspace()
+		s.buffers.Clear()
 		s.closeClientRequests()
+		s.closeCompletionRequests()
 		if cancel != nil {
 			cancel()
 		}
@@ -163,6 +178,8 @@ func (s *Server) Handle(ctx context.Context, request protocol.Request) jsonrpc.H
 		return s.inlayHint(request.Params)
 	case protocol.MethodCodeLens:
 		return s.codeLens(request.Params)
+	case protocol.MethodCompletion:
+		return s.completion(ctx, request.ID, request.Params)
 	case protocol.MethodWorkspaceSymbol:
 		return s.workspaceSymbol(ctx, request.Params)
 	case protocol.MethodDidOpen:
@@ -181,6 +198,7 @@ func (s *Server) Handle(ctx context.Context, request protocol.Request) jsonrpc.H
 		s.didChangeConfiguration(request.Params)
 		return jsonrpc.HandlerResult{}
 	case protocol.MethodCancelRequest:
+		s.cancelRequest(request.Params)
 		return jsonrpc.HandlerResult{}
 	default:
 		if request.IsNotification() {
@@ -206,6 +224,7 @@ func methodDirectionMatches(request protocol.Request) bool {
 		request.Method == protocol.MethodDocumentSymbol ||
 		request.Method == protocol.MethodInlayHint ||
 		request.Method == protocol.MethodCodeLens ||
+		request.Method == protocol.MethodCompletion ||
 		request.Method == protocol.MethodCodeAction ||
 		request.Method == protocol.MethodWorkspaceSymbol ||
 		request.Method == protocol.MethodExecuteCommand

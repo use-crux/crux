@@ -11,6 +11,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/evalwriter"
 	"github.com/use-crux/crux/packages/local/internal/inspect"
 	"github.com/use-crux/crux/packages/local/internal/observability"
+	indexcompletion "github.com/use-crux/crux/packages/local/internal/projectindex/completion"
 	"github.com/use-crux/crux/packages/local/internal/readmodel"
 	"github.com/use-crux/crux/packages/local/internal/readmodel/endpoints"
 	"github.com/use-crux/crux/packages/local/internal/resourceinspection"
@@ -51,6 +52,7 @@ type Options struct {
 	ResourceInspection       *resourceinspection.Service
 	Hub                      Hub
 	ProjectIndex             endpoints.DevtoolsReads
+	Completion               indexcompletion.Provider
 	ProjectRoot              string
 	ConfigPath               string
 	SourceResolver           SourceResolverOptions
@@ -105,6 +107,7 @@ func New(options Options) http.Handler {
 	registerReviewRoutes(mux, options.Review, options.ReviewWriter, options.ReviewRepositoryWritable)
 	registerEvalRoutes(mux, options.BaselineWriter, options.EvalRunner)
 	registerIndexRoutes(mux, options.Devtools)
+	registerCompletionRoutes(mux, options.Completion)
 	registerRuntimeRoutes(mux, options.Devtools, options.ProjectRoot)
 
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {

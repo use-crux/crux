@@ -1,8 +1,9 @@
 import type { Executable } from 'vscode-languageclient/node'
+import type { BinaryInvocation } from './binary-runtime.js'
 
 /** Values used to construct the language-server process invocation. */
 export interface ServerOptionsInput {
-  readonly binaryPath: string
+  readonly invocation: BinaryInvocation
   readonly port: number
   readonly workspaceRoot: string | undefined
 }
@@ -15,13 +16,13 @@ export interface ServerOptionsInput {
  * `--stdio` argument to the Crux CLI invocation.
  */
 export function createServerOptions({
-  binaryPath,
+  invocation,
   port,
   workspaceRoot,
 }: ServerOptionsInput): Executable {
   return {
-    command: binaryPath,
-    args: ['lsp', '--port', String(port)],
+    command: invocation.command,
+    args: [...invocation.argsPrefix, 'lsp', '--port', String(port)],
     ...(workspaceRoot === undefined ? {} : { options: { cwd: workspaceRoot } }),
   }
 }

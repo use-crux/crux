@@ -23,6 +23,12 @@ type CompileStreamer interface {
 	StaticIndexCompileStream(context.Context, protocol.CompileRequest, protocol.FinalizeStreamHandler) (protocol.FinalizeResponse, error)
 }
 
+// Completer runs transient, cache-bypassing compiler queries on the persistent
+// worker process.
+type Completer interface {
+	Completion(context.Context, protocol.CompletionQuery) (protocol.CompletionResponse, error)
+}
+
 type Worker struct {
 	*frontend.Worker
 }
@@ -104,6 +110,34 @@ func (p *Pool) StaticIndexFinalize(ctx context.Context, request protocol.Finaliz
 		return protocol.FinalizeResponse{}, err
 	}
 	return worker.StaticIndexFinalize(ctx, request)
+}
+
+// Completion runs one transient query without entering the Static Index stage
+// pipeline or changing its cache identity.
+func (w *Worker) Completion(ctx context.Context, query protocol.CompletionQuery) (protocol.CompletionResponse, error) {
+	id := w.NextID()
+	request := protocol.CompletionWorkerRequest{
+		ID:     id,
+		Method: protocol.CompletionMethod,
+		Query:  query,
+	}
+	envelope, err := call[protocol.WorkerResponse[protocol.CompletionResponse]](ctx, w, request)
+	if err != nil {
+		return protocol.CompletionResponse{}, err
+	}
+	if err := protocol.ValidateWorkerResponse(envelope.ID, envelope.OK, envelope.Error, id); err != nil {
+		return protocol.CompletionResponse{}, err
+	}
+	return envelope.Response, nil
+}
+
+// Completion borrows one already-running worker from the compiler pool.
+func (p *Pool) Completion(ctx context.Context, query protocol.CompletionQuery) (protocol.CompletionResponse, error) {
+	worker, err := p.staticIndexWorker()
+	if err != nil {
+		return protocol.CompletionResponse{}, err
+	}
+	return worker.Completion(ctx, query)
 }
 
 func call[Resp any](ctx context.Context, worker *Worker, request any) (Resp, error) {

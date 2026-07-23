@@ -50,13 +50,16 @@ func TestManagerOwnAttachReconnectOwnWithoutEmptyView(t *testing.T) {
 	}
 
 	store := NewStore()
+	transport := NewAttachTransport(api.New(httpServer.URL))
 	var modeMu sync.Mutex
 	var modes []Mode
+	var completionMu sync.Mutex
+	var completionSources []CompletionSource
 	modeChanges := make(chan Mode, 16)
 	emptyPublish := atomic.Bool{}
 	manager := NewManager(ManagerOptions{
 		ScopeID: root, Root: root, Version: "v-test",
-		Transport: NewAttachTransport(api.New(httpServer.URL)), Store: store, Logs: io.Discard,
+		Transport: transport, Store: store, Logs: io.Discard,
 		Connect: connect, StartOwn: startOwn, Reprobe: 2 * time.Millisecond,
 		Grace: 20 * time.Millisecond, Backoffs: []time.Duration{time.Millisecond},
 		OnModeChange: func(mode Mode) {
@@ -64,6 +67,11 @@ func TestManagerOwnAttachReconnectOwnWithoutEmptyView(t *testing.T) {
 			modes = append(modes, mode)
 			modeMu.Unlock()
 			modeChanges <- mode
+		},
+		OnCompletionSource: func(source CompletionSource) {
+			completionMu.Lock()
+			completionSources = append(completionSources, source)
+			completionMu.Unlock()
 		},
 		OnChange: func(Change) {
 			if len(store.Findings(root, file)) == 0 {
@@ -79,7 +87,11 @@ func TestManagerOwnAttachReconnectOwnWithoutEmptyView(t *testing.T) {
 	})
 
 	devAvailable.Store(true)
-	waitFor(t, time.Second, func() bool { return manager.Mode() == ModeAttached })
+	waitFor(t, time.Second, func() bool {
+		completionMu.Lock()
+		defer completionMu.Unlock()
+		return manager.Mode() == ModeAttached && len(completionSources) > 0 && completionSources[len(completionSources)-1] == transport
+	})
 	ownMu.Lock()
 	firstOwnClosed := len(ownSources) > 0 && ownSources[0].isClosed()
 	ownMu.Unlock()
@@ -90,6 +102,11 @@ func TestManagerOwnAttachReconnectOwnWithoutEmptyView(t *testing.T) {
 	devAvailable.Store(false)
 	close(dropAttached)
 	waitForModeCallbacks(t, modeChanges, ModeReconnect, ModeOwn)
+	waitFor(t, time.Second, func() bool {
+		completionMu.Lock()
+		defer completionMu.Unlock()
+		return len(completionSources) > 0 && completionSources[len(completionSources)-1] == nil
+	})
 	if len(store.Findings(root, file)) != 1 {
 		t.Fatalf("own handover findings = %#v, want retained non-empty view", store.Findings(root, file))
 	}

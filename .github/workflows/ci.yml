@@ -148,6 +148,9 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
+      - name: Validate GitHub release asset staging
+        run: pnpm release:assets:test
+
       - name: Build
         run: pnpm build
 

@@ -34,7 +34,7 @@ afterEach(async () => {
 
 describe("semantic facts cache", () => {
   it("uses the Workspace snapshot relation semantic epoch", () => {
-    expect(SEMANTIC_FACTS_CACHE_EPOCH).toBe("semantic-facts-v32");
+    expect(SEMANTIC_FACTS_CACHE_EPOCH).toBe("semantic-facts-v33");
   });
 
   it("does not reuse a valid cache artifact from the pre-integration v28 namespace", async () => {

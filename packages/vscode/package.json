@@ -1,7 +1,6 @@
 {
   "name": "crux-vscode",
   "version": "0.1.0",
-  "private": true,
   "displayName": "Crux",
   "description": "Crux language support for Visual Studio Code",
   "publisher": "use-crux",
@@ -11,6 +10,8 @@
     "url": "https://github.com/use-crux/crux.git",
     "directory": "packages/vscode"
   },
+  "bugs": { "url": "https://github.com/use-crux/crux/issues" },
+  "homepage": "https://cruxjs.dev/docs/reference/lsp",
   "files": ["dist/extension.js", "README.md", "LICENSE"],
   "main": "./dist/extension.js",
   "engines": { "vscode": "^1.90.0" },

@@ -45,12 +45,19 @@ type ServerCapabilities struct {
 	WorkspaceSymbolProvider bool                    `json:"workspaceSymbolProvider"`
 	InlayHintProvider       bool                    `json:"inlayHintProvider"`
 	CodeLensProvider        CodeLensOptions         `json:"codeLensProvider"`
+	CompletionProvider      CompletionOptions       `json:"completionProvider"`
 	Workspace               WorkspaceOptions        `json:"workspace"`
 }
 
 // CodeLensOptions declares eager code lenses without a resolve round trip.
 type CodeLensOptions struct {
 	ResolveProvider bool `json:"resolveProvider"`
+}
+
+// CompletionOptions declares eager completion and its explicit triggers.
+type CompletionOptions struct {
+	ResolveProvider   bool     `json:"resolveProvider"`
+	TriggerCharacters []string `json:"triggerCharacters,omitempty"`
 }
 
 type TextDocumentSyncOptions struct {

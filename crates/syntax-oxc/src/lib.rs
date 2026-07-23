@@ -12,6 +12,15 @@ pub const FRONTEND_NAME: &str = "oxc-rust";
 /// Frontend identity version emitted in static syntax records.
 pub const FRONTEND_VERSION: &str = "oxc_parser@0.139.0+crux_native_group3.8";
 
+pub mod completion;
+mod completion_ast;
+mod completion_classify;
+mod completion_existing;
+mod completion_import_edits;
+mod completion_import_paths;
+mod completion_imports;
+mod completion_items;
+
 pub mod frontend {
     //! Public parser entry points.
 
@@ -43,5 +52,19 @@ mod syntax {
 
 pub use frontend::parse_source;
 
+#[cfg(test)]
+mod completion_declarative_tests;
+#[cfg(test)]
+mod completion_identity_tests;
+#[cfg(test)]
+mod completion_import_safety_tests;
+#[cfg(test)]
+mod completion_import_tests;
+#[cfg(test)]
+mod completion_ranking_tests;
+#[cfg(test)]
+mod completion_slots_tests;
+#[cfg(test)]
+mod completion_tests;
 #[cfg(test)]
 mod tests;

@@ -15,6 +15,7 @@ const (
 	MethodDocumentSymbol         = "textDocument/documentSymbol"
 	MethodInlayHint              = "textDocument/inlayHint"
 	MethodCodeLens               = "textDocument/codeLens"
+	MethodCompletion             = "textDocument/completion"
 	MethodCodeAction             = "textDocument/codeAction"
 	MethodDidChangeConfiguration = "workspace/didChangeConfiguration"
 	MethodWorkspaceSymbol        = "workspace/symbol"

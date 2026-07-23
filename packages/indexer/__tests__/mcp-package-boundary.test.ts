@@ -71,26 +71,27 @@ describe("MCP package boundary", () => {
       },
     });
 
-    const stagingScript = readRepoFile("scripts/stage-npm-packages.mjs");
-    expect(stagingScript).toMatch(
+    const releasePackages = readRepoFile("scripts/release/npm-packages.mjs");
+    expect(releasePackages).toMatch(
       /\{ name: ["']@use-crux\/mcp["'], dir: ["']packages\/mcp["'], sourceRoot: ["']src["'] \}/,
     );
+    const stagingScript = readRepoFile("scripts/stage-npm-packages.mjs");
+    expect(stagingScript).toMatch(
+      /import \{ RELEASE_TYPESCRIPT_PACKAGES \} from ["']\.\/release\/npm-packages\.mjs["']/,
+    );
+    expect(stagingScript).toMatch(/for \(const pkg of RELEASE_TYPESCRIPT_PACKAGES\)/);
     expect(readRepoFile("scripts/typecheck-typescript-compat.mjs")).toMatch(
       /["']packages\/mcp["']/,
     );
     expect(manifest.engines).toBeUndefined();
 
-    const releaseWorkflow = readRepoFile(".github/workflows/release.yml");
-    const nightlyPackages = releaseWorkflow.match(
-      /nightly_packages=\([\s\S]*?\n\s*\)/,
-    )?.[0];
-    expect(nightlyPackages).toBeDefined();
-    const stagedPackageNames = [
-      ...stagingScript.matchAll(/\{ name: ["'](@use-crux\/[^"']+)["']/g),
-    ].map((match) => match[1]);
-    for (const packageName of stagedPackageNames) {
-      expect(nightlyPackages, packageName).toContain(packageName);
-    }
+    const nightlyDecision = readRepoFile(
+      "scripts/decide-nightly-publication.mjs",
+    );
+    expect(nightlyDecision).toMatch(
+      /import \{ releaseNpmPackageNames \} from ["']\.\/release\/npm-packages\.mjs["']/,
+    );
+    expect(nightlyDecision).toMatch(/releaseNpmPackageNames\(\)/);
     expect(productionFilesWithExplicitAny("mcp")).toEqual([]);
   });
 });

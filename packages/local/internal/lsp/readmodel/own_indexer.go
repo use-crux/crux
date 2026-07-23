@@ -10,6 +10,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/devtools"
 	"github.com/use-crux/crux/packages/local/internal/inspect"
 	"github.com/use-crux/crux/packages/local/internal/privacy"
+	indexcompletion "github.com/use-crux/crux/packages/local/internal/projectindex/completion"
 	projectwatchhost "github.com/use-crux/crux/packages/local/internal/projectwatch/host"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
@@ -21,6 +22,11 @@ type ownIndexerSource struct {
 	closeWork func() error
 	snapshots chan Snapshot
 	once      sync.Once
+
+	snapshotMu         sync.RWMutex
+	latestSnapshot     Snapshot
+	nextGeneration     uint64
+	completionCompiler indexcompletion.Compiler
 }
 
 // StartOwnIndexer starts the same devtools indexing service and filesystem
@@ -36,7 +42,7 @@ func StartOwnIndexer(ctx context.Context, options OwnOptions) (OwnSource, error)
 	service.WithProjectIndexer(worker)
 	source := &ownIndexerSource{
 		context: ownContext, cancel: cancel, devtools: service,
-		closeWork: worker.Close, snapshots: make(chan Snapshot, 16),
+		closeWork: worker.Close, snapshots: make(chan Snapshot, 16), completionCompiler: worker,
 	}
 	fail := func(err error) (OwnSource, error) {
 		source.Close()
@@ -64,7 +70,7 @@ func StartOwnIndexer(ctx context.Context, options OwnOptions) (OwnSource, error)
 	if err != nil {
 		return fail(err)
 	}
-	source.snapshots <- initial
+	source.snapshots <- source.stampSnapshot(initial)
 	go source.run(changes)
 	go func() {
 		<-ownContext.Done()
@@ -94,6 +100,7 @@ func (s *ownIndexerSource) run(changes <-chan struct{}) {
 			if err != nil {
 				continue
 			}
+			snapshot = s.stampSnapshot(snapshot)
 			select {
 			case s.snapshots <- snapshot:
 			case <-s.context.Done():
@@ -101,6 +108,23 @@ func (s *ownIndexerSource) run(changes <-chan struct{}) {
 			}
 		}
 	}
+}
+
+func (s *ownIndexerSource) Completion(ctx context.Context, request CompletionRequest) (CompletionResult, error) {
+	s.snapshotMu.RLock()
+	snapshot := s.latestSnapshot
+	s.snapshotMu.RUnlock()
+	return completeOwn(ctx, s.completionCompiler, snapshot, request)
+}
+
+func (s *ownIndexerSource) stampSnapshot(snapshot Snapshot) Snapshot {
+	s.snapshotMu.Lock()
+	s.nextGeneration++
+	generation := s.nextGeneration
+	snapshot.Generation = &generation
+	s.latestSnapshot = snapshot
+	s.snapshotMu.Unlock()
+	return snapshot
 }
 
 func ownSnapshot(ctx context.Context, service *devtools.Service) (Snapshot, error) {

@@ -6,6 +6,8 @@
 
 use std::collections::{HashMap, HashSet};
 
+use serde_json::{Map, Value};
+
 use crate::{
     protocol::{
         SourceLocation, SourceSnippet, StaticImportRecord, StaticInitializerRecord,
@@ -48,6 +50,28 @@ pub(crate) struct CallParts<'a> {
     pub source: &'a SourceLocation,
     pub snippet: Option<&'a SourceSnippet>,
     local_initializers: &'a [StaticInitializerRecord],
+}
+
+impl CallParts<'_> {
+    /// Records proof that the definition is authored by a direct named export.
+    ///
+    /// Absence is intentional for local declarations and indirect export
+    /// statements, whose cross-file visibility cannot be proven by this pass.
+    pub(crate) fn add_direct_export_evidence(&self, metadata: &mut Map<String, Value>) {
+        if self.has_direct_export_evidence() {
+            metadata.insert("exported".to_string(), Value::Bool(true));
+        }
+    }
+
+    /// Whether this call or constructor has module-qualified export proof.
+    pub(crate) fn has_direct_export_evidence(&self) -> bool {
+        self.exported
+            && crate::producer_identity::is_first_party_producer(
+                self.match_kind,
+                self.callee_name,
+                self.callee_module_specifier,
+            )
+    }
 }
 
 pub(crate) struct ResolvedSource<'a> {

@@ -19,6 +19,7 @@ const CALLBACK_PROPERTIES: [&str; 3] = ["execute", "run", "handler"];
 
 struct ToolParts<'a> {
     variable_name: &'a str,
+    exported: bool,
     object: &'a StaticSyntaxValue,
     source: &'a SourceLocation,
     snippet: Option<&'a SourceSnippet>,
@@ -49,6 +50,7 @@ pub(crate) fn tool_native_facts(input: &CustomProjectionInput<'_>) -> Option<Val
                 context,
                 ToolParts {
                     variable_name: call.variable_name,
+                    exported: call.has_direct_export_evidence(),
                     object,
                     source: call.source,
                     snippet: call.snippet,
@@ -57,6 +59,7 @@ pub(crate) fn tool_native_facts(input: &CustomProjectionInput<'_>) -> Option<Val
         }
         StaticSourceMatch::Object {
             variable_name,
+            exported,
             local_name: _,
             object,
             source,
@@ -79,6 +82,7 @@ pub(crate) fn tool_native_facts(input: &CustomProjectionInput<'_>) -> Option<Val
                 context,
                 ToolParts {
                     variable_name,
+                    exported: *exported,
                     object,
                     source,
                     snippet: snippet.as_ref(),
@@ -123,6 +127,9 @@ fn tool_facts(context: &PrimitiveContext<'_>, parts: &ToolParts<'_>) -> Option<V
         "exportName".to_string(),
         Value::String(parts.variable_name.to_string()),
     );
+    if parts.exported {
+        metadata.insert("exported".to_string(), Value::Bool(true));
+    }
     if let Some(schema) = selected_schema.cloned() {
         metadata.insert("inputSchema".to_string(), schema);
     }

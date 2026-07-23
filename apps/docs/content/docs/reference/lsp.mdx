@@ -1,6 +1,6 @@
 ---
 title: "crux lsp"
-description: Language Server Protocol diagnostics, navigation, hover, hints, and code actions for Crux projects.
+description: Language Server Protocol diagnostics, completion, navigation, hover, hints, and code actions for Crux projects.
 ---
 
 `crux lsp` brings Project Index lint findings into editors that support the
@@ -8,7 +8,9 @@ Language Server Protocol. It publishes diagnostics for TypeScript and
 JavaScript files, keeps their ranges aligned with unsaved edits, explains each
 finding on hover, and offers the actions declared by its rule.
 It also projects indexed definitions and relations into editor navigation,
-symbols, definition hover, inlay hints, and code lenses.
+symbols, definition hover, inlay hints, and code lenses. In supported
+first-party dependency slots, it adds
+[Project Index-aware semantic completion](/docs/reference/lsp-completion).
 
 ## Command
 
@@ -54,9 +56,14 @@ cannot move a squiggle back to stale buffer coordinates. Closing the document
 ends buffer tracking; the next authoritative update restores disk positions.
 Authoritative clears still apply immediately.
 
+Semantic completion is the one feature that parses current unsaved text. Its
+bounded overlay is request-only and never becomes Project Index or cache
+state. See [Semantic completion](/docs/reference/lsp-completion) for supported
+slots, import behavior, privacy, limits, and exclusions.
+
 ## Visual Studio Code and compatible editors
 
-The private extension starts one language client for the window, discovers the
+The Crux extension starts one language client for the window, discovers the
 Crux binary, renders optional inline finding text, forwards server settings,
 and registers **Crux: Open Devtools** and **Crux: Restart Language Server**.
 It activates in workspaces containing `crux.config.ts`, `crux.config.js`, or
@@ -68,22 +75,81 @@ configuration is loaded. Granting trust activates the extension normally.
 The language server independently validates command actions and accepts only
 its fixed command allowlist as defense in depth.
 
-For a repository build, package and install the VSIX:
+## Install the extension and CLI
+
+Crux currently distributes its editor extension and native archives through
+[GitHub Releases](https://github.com/use-crux/crux/releases). The extension and
+CLI are versioned in lockstep. Choose the latest stable release for normal use;
+entries marked **Pre-release** are nightly builds from the exact source commit
+named in their release notes.
+
+The recommended installation is the npm CLI plus the VSIX from the same
+release:
 
 ```bash
-pnpm install
-pnpm --filter crux-vscode package
-code --install-extension packages/vscode/crux-vscode-0.1.0.vsix
+npm install -g @use-crux/local
+code --install-extension crux-vscode-<version>.vsix
 ```
 
-VS Code-compatible editors that accept VSIX extensions can install the same
-artifact with their normal extension-install flow. If the extension cannot
-find the CLI, set `crux.binaryPath` to an absolute path or a path relative to
-the first workspace folder.
+In VS Code, Cursor, or another compatible editor, you can instead run
+**Extensions: Install from VSIX...** and select the downloaded file. A VSIX
+installed from GitHub does not update automatically; download and install the
+new VSIX when changing Crux versions.
 
-Without an explicit path, discovery checks the current Crux repository's
-platform build, `packages/local/crux`, a workspace-root `crux`, and finally
-`PATH`. The selected binary must be executable and return a version.
+For a project-local CLI, install the package in the workspace:
+
+```bash
+npm install --save-dev @use-crux/local
+```
+
+Without an explicit path, discovery checks repository build outputs, the
+project-local `node_modules/.bin/crux` shim (`crux.cmd` on Windows), native
+workspace executables including `crux.exe`, a workspace-root binary, and
+finally `PATH`. The selected candidate must be executable and return a
+non-empty version from `--version`. An invalid explicit `crux.binaryPath` is an
+error and never silently falls through.
+
+### Direct download
+
+As an npm-free alternative, download the VSIX, `SHA256SUMS`, and the archive
+for your system from the same release:
+
+| System              | Archive                              |
+| ------------------- | ------------------------------------ |
+| Linux x64           | `crux-<version>-linux-x64.tar.gz`    |
+| Linux arm64         | `crux-<version>-linux-arm64.tar.gz`  |
+| macOS Intel         | `crux-<version>-darwin-x64.tar.gz`   |
+| macOS Apple silicon | `crux-<version>-darwin-arm64.tar.gz` |
+| Windows x64         | `crux-<version>-win32-x64.zip`       |
+| Windows arm64       | `crux-<version>-win32-arm64.zip`     |
+
+Verify the downloaded archive and VSIX against their exact rows before
+extracting them:
+
+```bash title="Linux"
+grep '  crux-<version>-linux-x64.tar.gz$' SHA256SUMS | sha256sum -c -
+grep '  crux-vscode-<version>.vsix$' SHA256SUMS | sha256sum -c -
+```
+
+```bash title="macOS"
+grep '  crux-<version>-darwin-arm64.tar.gz$' SHA256SUMS | shasum -a 256 -c -
+grep '  crux-vscode-<version>.vsix$' SHA256SUMS | shasum -a 256 -c -
+```
+
+```powershell title="Windows PowerShell"
+$file = "crux-<version>-win32-x64.zip"
+$expected = ((Select-String -Path SHA256SUMS -Pattern "  $file$").Line -split "  ")[0]
+(Get-FileHash -Algorithm SHA256 $file).Hash.ToLower() -eq $expected
+```
+
+Checksums protect download integrity; the GitHub repository and release are the
+publisher-identity boundary. Extract the archive and keep `crux` (or
+`crux.exe`) beside `crux-static-index-worker` (or its `.exe`). Set
+`crux.binaryPath` to the extracted CLI. Direct-download binaries do not update
+automatically.
+
+For a repository build instead, run `pnpm install`, build the extension, and
+package it with `pnpm --filter crux-vscode package`.
 
 ## Other LSP editors
 

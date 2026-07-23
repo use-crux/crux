@@ -6,6 +6,9 @@ import { chmod, cp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/prom
 import { dirname, extname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { LOCAL_PLATFORMS, localPlatformPackageName } from './release/platforms.mjs'
+import { RELEASE_TYPESCRIPT_PACKAGES } from './release/npm-packages.mjs'
+
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const localScope = '@use-crux'
 const publishScope = '@use-crux'
@@ -26,34 +29,6 @@ const publishScope = '@use-crux'
  * - Phase 2 of the layout workplan migrates it
  * - stager must emit its dist/ for full release staging to be correct
  */
-const tsPackages = [
-  { name: '@use-crux/core', dir: 'packages/core', sourceRoot: 'src' },
-  { name: '@use-crux/ai', dir: 'packages/ai', sourceRoot: 'src' },
-  { name: '@use-crux/anthropic', dir: 'packages/anthropic', sourceRoot: 'src' },
-  { name: '@use-crux/cloudflare', dir: 'packages/cloudflare', sourceRoot: 'src' },
-  { name: '@use-crux/convex', dir: 'packages/convex', sourceRoot: 'src' },
-  { name: '@use-crux/google', dir: 'packages/google', sourceRoot: 'src' },
-  { name: '@use-crux/indexer', dir: 'packages/indexer', sourceRoot: 'src' },
-  { name: '@use-crux/ingest', dir: 'packages/ingest', sourceRoot: 'src' },
-  { name: '@use-crux/next', dir: 'packages/next', sourceRoot: 'src' },
-  { name: '@use-crux/vercel', dir: 'packages/vercel', sourceRoot: 'src' },
-  { name: '@use-crux/mcp', dir: 'packages/mcp', sourceRoot: 'src' },
-  { name: '@use-crux/openai', dir: 'packages/openai', sourceRoot: 'src' },
-  { name: '@use-crux/otel', dir: 'packages/otel', sourceRoot: 'src' },
-  { name: '@use-crux/postgres', dir: 'packages/postgres', sourceRoot: 'src' },
-  { name: '@use-crux/react', dir: 'packages/react', sourceRoot: 'src' },
-  { name: '@use-crux/upstash', dir: 'packages/upstash', sourceRoot: 'src' },
-]
-
-const localPlatforms = [
-  { id: 'linux-x64', os: 'linux', cpu: 'x64', crux: 'crux', worker: 'crux-static-index-worker' },
-  { id: 'linux-arm64', os: 'linux', cpu: 'arm64', crux: 'crux', worker: 'crux-static-index-worker' },
-  { id: 'darwin-x64', os: 'darwin', cpu: 'x64', crux: 'crux', worker: 'crux-static-index-worker' },
-  { id: 'darwin-arm64', os: 'darwin', cpu: 'arm64', crux: 'crux', worker: 'crux-static-index-worker' },
-  { id: 'win32-x64', os: 'win32', cpu: 'x64', crux: 'crux.exe', worker: 'crux-static-index-worker.exe' },
-  { id: 'win32-arm64', os: 'win32', cpu: 'arm64', crux: 'crux.exe', worker: 'crux-static-index-worker.exe' },
-]
-
 const options = parseArgs(process.argv.slice(2))
 const stageRoot = resolve(repoRoot, options.out)
 const buildRoot = resolve(repoRoot, '.tmp/npm-build/ts')
@@ -70,14 +45,14 @@ const stagedPackages = []
 
 if (!options.skipTs) {
   await buildTypeScriptPackages()
-  for (const pkg of tsPackages) {
+  for (const pkg of RELEASE_TYPESCRIPT_PACKAGES) {
     stagedPackages.push(await stageTypeScriptPackage(pkg))
   }
 }
 
 if (!options.skipLocal) {
   stagedPackages.push(await stageLocalWrapper())
-  for (const platform of localPlatforms) {
+  for (const platform of LOCAL_PLATFORMS) {
     const staged = await stageLocalPlatform(platform)
     if (staged) stagedPackages.push(staged)
   }
@@ -143,7 +118,7 @@ async function buildTypeScriptPackages() {
 
   run('pnpm', ['exec', 'tsc', '-p', releaseTsconfig], { cwd: repoRoot })
 
-  for (const pkg of tsPackages) {
+  for (const pkg of RELEASE_TYPESCRIPT_PACKAGES) {
     const packageOut = packageBuildOutput(pkg)
     // After src/ unification, every pkg emits under its sourceRoot prefix (packageOut).
     // We assert the prefix dir exists (tsc processed the package's mapped sources).
@@ -162,7 +137,7 @@ async function buildTypeScriptPackages() {
 
 async function createReleaseTsconfig() {
   const paths = {}
-  for (const pkg of tsPackages) {
+  for (const pkg of RELEASE_TYPESCRIPT_PACKAGES) {
     const sourcePrefix = pkg.sourceRoot === '.' ? pkg.dir : `${pkg.dir}/${pkg.sourceRoot}`
     const manifest = await readJson(join(repoRoot, pkg.dir, 'package.json'))
     Object.assign(paths, releasePathMappings(pkg, manifest))
@@ -240,7 +215,7 @@ function normalizeReleaseExportTarget(pkg, target) {
 }
 
 async function collectReleaseSourceFiles() {
-  const packageRoots = tsPackages.map((pkg) => join(repoRoot, pkg.dir))
+  const packageRoots = RELEASE_TYPESCRIPT_PACKAGES.map((pkg) => join(repoRoot, pkg.dir))
   const files = []
   for (const root of packageRoots) {
     files.push(...(await listFiles(root)))
@@ -391,7 +366,10 @@ async function stageLocalWrapper() {
   manifest.name = toPublishedPackageName(manifest.name)
   manifest.version = packageVersion('@use-crux/local')
   manifest.optionalDependencies = Object.fromEntries(
-    localPlatforms.map((platform) => [toPublishedPackageName(`@use-crux/local-${platform.id}`), manifest.version]),
+    LOCAL_PLATFORMS.map((platform) => [
+      toPublishedPackageName(localPlatformPackageName(platform)),
+      manifest.version,
+    ]),
   )
   manifest.files = ['bin', 'README.md', 'LICENSE']
   manifest.repository = repositoryFor('packages/local/npm/local')
@@ -408,7 +386,7 @@ async function stageLocalPlatform(platform) {
   if (missing.length > 0) {
     const message = `Missing ${platform.id} binary artifact(s): ${missing.join(', ')} in ${relative(repoRoot, sourceBinDir)}`
     if (options.allowMissingPlatforms) {
-      console.warn(`Skipping ${toPublishedPackageName(`@use-crux/local-${platform.id}`)}: ${message}`)
+      console.warn(`Skipping ${toPublishedPackageName(localPlatformPackageName(platform))}: ${message}`)
       return undefined
     }
     throw new Error(
@@ -416,7 +394,7 @@ async function stageLocalPlatform(platform) {
     )
   }
 
-  const packageName = toPublishedPackageName(`@use-crux/local-${platform.id}`)
+  const packageName = toPublishedPackageName(localPlatformPackageName(platform))
   const stageDir = packageStageDir(packageName)
   await mkdir(join(stageDir, 'bin'), { recursive: true })
   await cp(sourceBinDir, join(stageDir, 'bin'), { recursive: true })
@@ -551,7 +529,7 @@ function ensureJsExtension(specifier) {
 
 async function readWorkspaceVersions() {
   const versions = new Map()
-  for (const pkg of tsPackages) {
+  for (const pkg of RELEASE_TYPESCRIPT_PACKAGES) {
     const manifest = await readJson(join(repoRoot, pkg.dir, 'package.json'))
     versions.set(manifest.name, manifest.version)
   }

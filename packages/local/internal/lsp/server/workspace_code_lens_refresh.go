@@ -13,11 +13,26 @@ func (w *workspaceRuntime) setSessionMode(session *scopeSession, mode readmodel.
 	}
 	previous := session.mode
 	session.mode = mode
+	if previous != mode {
+		session.sourceEpoch++
+		session.completionFailures = 0
+	}
 	enabled := w.settings.CodeLensEnabled
 	w.mu.Unlock()
 	if enabled && (previous == readmodel.ModeAttached) != (mode == readmodel.ModeAttached) {
 		w.server.requestCodeLensRefresh()
 	}
+}
+
+func (w *workspaceRuntime) setSessionCompletionSource(session *scopeSession, source readmodel.CompletionSource) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.closed {
+		return
+	}
+	session.completion = source
+	session.sourceEpoch++
+	session.completionFailures = 0
 }
 
 func (w *workspaceRuntime) handleScopeChange(session *scopeSession, change readmodel.Change) {
@@ -27,6 +42,16 @@ func (w *workspaceRuntime) handleScopeChange(session *scopeSession, change readm
 		return
 	}
 	session.publisher.Change(change)
+}
+
+func (w *workspaceRuntime) invalidateCompletionSource(session *scopeSession) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.closed {
+		return
+	}
+	session.sourceEpoch++
+	session.completionFailures = 0
 }
 
 func (s *Server) requestCodeLensRefresh() {

@@ -7,6 +7,7 @@ import (
 )
 
 func (m *Manager) reconnect(ctx context.Context, cause error) bool {
+	m.setCompletionSource(nil)
 	m.setMode(ModeReconnect)
 	fmt.Fprintf(m.options.Logs, "crux lsp: scope %s reconnecting after %v\n", m.options.ScopeID, cause)
 	deadline := time.Now().Add(m.options.Grace)
@@ -29,6 +30,7 @@ func (m *Manager) reconnect(ctx context.Context, cause error) bool {
 			// A successful reconnect gets a fresh grace window after its next drop.
 			return true
 		}
+		m.setCompletionSource(nil)
 		m.setMode(ModeReconnect)
 	}
 	return false

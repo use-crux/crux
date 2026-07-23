@@ -1,4 +1,4 @@
-import { isAbsolute, resolve } from 'node:path'
+import { isAbsolute, posix, resolve, win32 } from 'node:path'
 
 /** Filesystem and process lookups used to discover a runnable Crux CLI. */
 export interface DiscoveryHost {
@@ -42,7 +42,7 @@ export async function discoverBinary(
     }
   }
 
-  const pathBinary = await host.findOnPath(host.platform === 'win32' ? 'crux.exe' : 'crux')
+  const pathBinary = await host.findOnPath('crux')
   if (pathBinary !== undefined && await host.isExecutable(pathBinary)) {
     return { path: pathBinary, source: 'path' }
   }
@@ -55,12 +55,33 @@ export function workspaceCandidates(
   platform: NodeJS.Platform,
   arch: string,
 ): readonly string[] {
+  const path = platform === 'win32' ? win32 : posix
   const executable = platform === 'win32' ? 'crux.exe' : 'crux'
+  const npmExecutables =
+    platform === 'win32' ? ['crux.cmd', 'crux.exe'] : ['crux']
   const platformID = `${platform}-${arch}`
   return [
-    resolve(workspaceRoot, 'packages', 'local', 'dist', platformID, executable),
-    resolve(workspaceRoot, 'packages', 'local', 'dist', `crux-${platformID}`, 'bin', executable),
-    resolve(workspaceRoot, 'packages', 'local', executable),
-    resolve(workspaceRoot, executable),
+    path.resolve(
+      workspaceRoot,
+      'packages',
+      'local',
+      'dist',
+      platformID,
+      executable,
+    ),
+    path.resolve(
+      workspaceRoot,
+      'packages',
+      'local',
+      'dist',
+      `crux-${platformID}`,
+      'bin',
+      executable,
+    ),
+    path.resolve(workspaceRoot, 'packages', 'local', executable),
+    ...npmExecutables.map((name) =>
+      path.resolve(workspaceRoot, 'node_modules', '.bin', name),
+    ),
+    path.resolve(workspaceRoot, executable),
   ]
 }

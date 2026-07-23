@@ -36,9 +36,15 @@ func (m *Manager) runOwn(ctx context.Context) {
 		}
 		source = started
 		snapshots = started.Snapshots()
+		if completion, ok := started.(CompletionSource); ok {
+			m.setCompletionSource(completion)
+		} else {
+			m.setCompletionSource(nil)
+		}
 	}
 	start()
 	defer func() {
+		m.setCompletionSource(nil)
 		if source != nil {
 			source.Close()
 		}
@@ -52,6 +58,7 @@ func (m *Manager) runOwn(ctx context.Context) {
 			return
 		case snapshot, ok := <-snapshots:
 			if !ok {
+				m.setCompletionSource(nil)
 				source = nil
 				snapshots = nil
 				continue
@@ -93,6 +100,7 @@ func (m *Manager) handoverToAttached(ctx context.Context, stopOwn context.Cancel
 	}
 
 	stopOwn()
+	m.setCompletionSource(nil)
 	if source != nil {
 		source.Close()
 	}
@@ -104,10 +112,25 @@ func (m *Manager) handoverToAttached(ctx context.Context, stopOwn context.Cancel
 		}
 	}
 	m.setMode(ModeAttached)
+	m.setAttachedCompletionSource(snapshot)
 	err = m.consumeMessages(ctx, messages, false)
 	stream.Close()
 	for ctx.Err() == nil && m.reconnect(ctx, err) {
 		err = errors.New("dev server WebSocket disconnected")
 	}
 	return true
+}
+
+func (m *Manager) setCompletionSource(source CompletionSource) {
+	if m.options.OnCompletionSource != nil {
+		m.options.OnCompletionSource(source)
+	}
+}
+
+func (m *Manager) setAttachedCompletionSource(snapshot Snapshot) {
+	if m.options.Transport == nil || snapshot.Generation == nil || snapshot.ServerVersion == "" || snapshot.ServerVersion != m.options.Version {
+		m.setCompletionSource(nil)
+		return
+	}
+	m.setCompletionSource(m.options.Transport)
 }

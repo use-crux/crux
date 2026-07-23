@@ -1,11 +1,33 @@
 use serde_json::Value;
 
+use crate::protocol::completion::{COMPLETION_QUERY_METHOD, CompletionWorkerRequest};
+
 use crate::protocol::static_index::{
     STATIC_INDEX_ANALYZE_METHOD, STATIC_INDEX_COMPILE_METHOD, STATIC_INDEX_FINALIZE_METHOD,
     STATIC_INDEX_PREPARE_METHOD, STATIC_INDEX_PROTOCOL_VERSION, StaticIndexAnalyzeRequest,
     StaticIndexCompileRequest, StaticIndexFinalizeRequest, StaticIndexPrepareRequest,
 };
 use crate::worker::static_index::StaticIndexWorkerRequest;
+
+/// Return whether a JSON value is a completion query.
+pub(crate) fn has_completion_method(value: &Value) -> bool {
+    value.get("method").and_then(Value::as_str) == Some(COMPLETION_QUERY_METHOD)
+}
+
+/// Parses the private completion branch of the persistent worker protocol.
+pub(crate) fn parse_completion_worker_request(
+    value: Value,
+) -> Result<CompletionWorkerRequest, String> {
+    let request: CompletionWorkerRequest =
+        serde_json::from_value(value).map_err(|error| error.to_string())?;
+    if request.method != COMPLETION_QUERY_METHOD {
+        return Err(format!(
+            "unknown completion worker method {}",
+            request.method
+        ));
+    }
+    Ok(request)
+}
 
 /// Return whether a JSON value looks like an internal Static Index request.
 pub(crate) fn has_worker_method(value: &Value) -> bool {

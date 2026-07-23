@@ -7,6 +7,8 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { LOCAL_PLATFORMS, localPlatformPackageBinaries, localPlatformPackageName } from './release/platforms.mjs'
+
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const stageRoot = resolve(repoRoot, process.argv[2] ?? '.tmp/npm-stage')
 const indexPath = join(stageRoot, 'packages.json')
@@ -20,32 +22,16 @@ const deprecatedScope = `${'@'}crux`
  * Each platform package must carry the Go CLI plus the sibling Rust Static
  * Index worker, because the Go runtime discovers that worker beside itself.
  */
-const localPlatformPackages = new Map([
-  [
-    '@use-crux/local-linux-x64',
-    { os: 'linux', cpu: 'x64', binaries: ['bin/crux', 'bin/crux-static-index-worker'] },
-  ],
-  [
-    '@use-crux/local-linux-arm64',
-    { os: 'linux', cpu: 'arm64', binaries: ['bin/crux', 'bin/crux-static-index-worker'] },
-  ],
-  [
-    '@use-crux/local-darwin-x64',
-    { os: 'darwin', cpu: 'x64', binaries: ['bin/crux', 'bin/crux-static-index-worker'] },
-  ],
-  [
-    '@use-crux/local-darwin-arm64',
-    { os: 'darwin', cpu: 'arm64', binaries: ['bin/crux', 'bin/crux-static-index-worker'] },
-  ],
-  [
-    '@use-crux/local-win32-x64',
-    { os: 'win32', cpu: 'x64', binaries: ['bin/crux.exe', 'bin/crux-static-index-worker.exe'] },
-  ],
-  [
-    '@use-crux/local-win32-arm64',
-    { os: 'win32', cpu: 'arm64', binaries: ['bin/crux.exe', 'bin/crux-static-index-worker.exe'] },
-  ],
-])
+const localPlatformPackages = new Map(
+  LOCAL_PLATFORMS.map((platform) => [
+    localPlatformPackageName(platform),
+    {
+      os: platform.os,
+      cpu: platform.cpu,
+      binaries: localPlatformPackageBinaries(platform),
+    },
+  ]),
+)
 
 const failures = []
 const stagedPackages = new Map()
@@ -141,14 +127,9 @@ for (const staged of index.packages) {
 
   if (staged.name === '@use-crux/local') {
     const optional = manifest.optionalDependencies ?? {}
-    const missing = [
-      '@use-crux/local-linux-x64',
-      '@use-crux/local-linux-arm64',
-      '@use-crux/local-darwin-x64',
-      '@use-crux/local-darwin-arm64',
-      '@use-crux/local-win32-x64',
-      '@use-crux/local-win32-arm64',
-    ].filter((name) => optional[name] !== manifest.version)
+    const missing = LOCAL_PLATFORMS.map(localPlatformPackageName).filter(
+      (name) => optional[name] !== manifest.version,
+    )
     if (missing.length > 0) {
       failures.push(
         `${staged.name}: optionalDependencies missing exact platform package versions for ${missing.join(', ')}`,

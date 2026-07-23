@@ -3,6 +3,7 @@
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { stableReleaseNotes } from './release/release-notes.mjs'
 
 const scriptRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const options = parseArgs(process.argv.slice(2))
@@ -16,7 +17,7 @@ if (!notes) throw new Error(`CHANGELOG.md does not contain a ${version} release 
 
 const notesPath = resolve(repoRoot, options.out)
 await mkdir(dirname(notesPath), { recursive: true })
-await writeFile(notesPath, `${notes.trim()}\n`)
+await writeFile(notesPath, stableReleaseNotes(notes))
 await writeGitHubOutput({ version, tag, notes_file: options.out })
 
 console.log(`Wrote GitHub release notes for ${tag} to ${options.out}`)

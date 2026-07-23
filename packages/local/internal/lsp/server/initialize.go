@@ -61,6 +61,9 @@ func (s *Server) initialize(raw json.RawMessage) jsonrpc.HandlerResult {
 			WorkspaceSymbolProvider: true,
 			InlayHintProvider:       true,
 			CodeLensProvider:        protocol.CodeLensOptions{ResolveProvider: false},
+			CompletionProvider: protocol.CompletionOptions{
+				ResolveProvider: false, TriggerCharacters: []string{":"},
+			},
 			Workspace: protocol.WorkspaceOptions{
 				WorkspaceFolders: protocol.WorkspaceFoldersOptions{
 					Supported:           true,
@@ -102,13 +105,13 @@ func refreshSupport(capabilities *protocol.ClientCapabilities) (inlayHint, codeL
 
 func initializationWorkspaceTrusted(raw json.RawMessage) bool {
 	if len(raw) == 0 {
-		return true
+		return false
 	}
 	var options struct {
 		WorkspaceTrust *bool `json:"workspaceTrust"`
 	}
 	if json.Unmarshal(raw, &options) != nil || options.WorkspaceTrust == nil {
-		return true
+		return false
 	}
 	return *options.WorkspaceTrust
 }

@@ -2,7 +2,9 @@ package server
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 
 	"github.com/use-crux/crux/packages/local/internal/lsp/protocol"
 )
@@ -12,6 +14,7 @@ func (s *Server) didOpen(raw json.RawMessage) {
 	if json.Unmarshal(raw, &params) != nil || params.TextDocument.URI == "" {
 		return
 	}
+	s.traceDocumentBufferLimit(context.Background(), s.buffers.Open(params.TextDocument))
 	s.setDocumentOpen(params.TextDocument.URI, true)
 	if workspace := s.currentWorkspace(); workspace != nil {
 		workspace.DidOpen(params.TextDocument.URI, params.TextDocument.Version)
@@ -23,6 +26,13 @@ func (s *Server) didChange(raw json.RawMessage) {
 	if json.Unmarshal(raw, &params) != nil || params.TextDocument.URI == "" {
 		return
 	}
+	s.cancelDocumentCompletion(params.TextDocument.URI)
+	_, notice := s.buffers.ApplyChanges(
+		params.TextDocument.URI,
+		params.TextDocument.Version,
+		params.ContentChanges,
+	)
+	s.traceDocumentBufferLimit(context.Background(), notice)
 	if workspace := s.currentWorkspace(); workspace != nil {
 		workspace.DidChange(params.TextDocument.URI, params.TextDocument.Version, params.ContentChanges)
 	}
@@ -44,6 +54,8 @@ func (s *Server) didClose(raw json.RawMessage) {
 	if json.Unmarshal(raw, &params) != nil || params.TextDocument.URI == "" {
 		return
 	}
+	s.cancelDocumentCompletion(params.TextDocument.URI)
+	s.buffers.Close(params.TextDocument.URI)
 	s.setDocumentOpen(params.TextDocument.URI, false)
 	if workspace := s.currentWorkspace(); workspace != nil {
 		workspace.DidClose(params.TextDocument.URI)
@@ -113,6 +125,21 @@ func (s *Server) traceMessage(ctx context.Context, message string) {
 			Type: protocol.MessageTypeLog, Message: message,
 		})
 	}
+}
+
+func (s *Server) traceDocumentBufferLimit(ctx context.Context, notice *documentBufferLimitNotice) {
+	if notice == nil {
+		return
+	}
+	uriHash := sha256.Sum256([]byte(notice.URI))
+	s.traceMessage(ctx, fmt.Sprintf(
+		"completion buffer unavailable uriHash=%x reason=%s documentBytes=%d processBytes=%d limitBytes=%d",
+		uriHash[:8],
+		notice.Reason,
+		notice.DocumentBytes,
+		notice.ProcessBytes,
+		notice.LimitBytes,
+	))
 }
 
 func (s *Server) currentWorkspace() workspaceController {

@@ -8,8 +8,10 @@ import {
   type LanguageClientOptions,
 } from 'vscode-languageclient/node'
 import { ClientSlot } from './client-slot.js'
+import { createBinaryInvocation, validateBinary } from './binary-runtime.js'
 import { discoverBinary, type DiscoveryHost } from './discovery.js'
 import { registerExtensionCommands } from './extension-commands.js'
+import { offerInstallHelp } from './install-help.js'
 import {
   createInitializationOptions,
   serverConfigurationSections,
@@ -84,19 +86,23 @@ async function startClient(): Promise<void> {
     return
   }
   if (discovered === undefined) {
-    const action = await vscode.window.showWarningMessage(
-      'Crux binary not found — set crux.binaryPath or install the crux CLI',
-      'Open Settings',
-    )
-    if (action === 'Open Settings') {
-      await vscode.commands.executeCommand('workbench.action.openSettings', 'crux.binaryPath')
-    }
+    await offerInstallHelp({
+      showWarning: (message, ...actions) =>
+        vscode.window.showWarningMessage(message, ...actions),
+      openExternal: (url) => vscode.env.openExternal(vscode.Uri.parse(url)),
+      openSettings: () =>
+        vscode.commands.executeCommand(
+          'workbench.action.openSettings',
+          'crux.binaryPath',
+        ),
+    })
     return
   }
 
+  const invocation = createBinaryInvocation(discovered.path, process.platform)
   let version: string
   try {
-    version = await validateBinary(discovered.path)
+    version = await validateBinary(invocation, runBinaryProbe)
   } catch (error) {
     await vscode.window.showErrorMessage(error instanceof Error ? error.message : String(error))
     return
@@ -104,7 +110,7 @@ async function startClient(): Promise<void> {
   output?.appendLine(`Using Crux ${version} (${discovered.path})`)
   const port = configuration.get<number>('port', 4400)
   const serverOptions = createServerOptions({
-    binaryPath: discovered.path,
+    invocation,
     port,
     workspaceRoot,
   })
@@ -130,18 +136,11 @@ async function startClient(): Promise<void> {
   await clientSlot.start(next)
 }
 
-async function validateBinary(path: string): Promise<string> {
-  try {
-    const { stdout, stderr } = await execFileAsync(path, ['--version'], {
-      timeout: versionTimeoutMs,
-      windowsHide: true,
-    })
-    const version = `${stdout}${stderr}`.trim()
-    if (version === '') throw new Error('empty version output')
-    return version
-  } catch (error) {
-    throw new Error(`Unable to run Crux binary ${path}: ${error instanceof Error ? error.message : String(error)}`)
-  }
+async function runBinaryProbe(command: string, args: readonly string[]) {
+  return execFileAsync(command, [...args], {
+    timeout: versionTimeoutMs,
+    windowsHide: true,
+  })
 }
 
 const nodeDiscoveryHost: DiscoveryHost = {

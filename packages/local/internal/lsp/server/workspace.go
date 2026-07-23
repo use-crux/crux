@@ -34,11 +34,14 @@ type fixActionWorkspace interface {
 }
 
 type scopeSession struct {
-	scope      readmodel.Scope
-	folderName string
-	publisher  *Publisher
-	mode       readmodel.Mode
-	cancel     context.CancelFunc
+	scope              readmodel.Scope
+	folderName         string
+	publisher          *Publisher
+	mode               readmodel.Mode
+	completion         readmodel.CompletionSource
+	sourceEpoch        uint64
+	completionFailures int
+	cancel             context.CancelFunc
 }
 
 type workspaceRuntime struct {
@@ -140,6 +143,7 @@ func (w *workspaceRuntime) DidSave(uri protocol.DocumentURI) {
 
 func (w *workspaceRuntime) DidClose(uri protocol.DocumentURI) {
 	for _, session := range w.sessionsForURI(uri) {
+		w.resetCompletionFailures(session)
 		session.publisher.DidClose(uri)
 	}
 }
@@ -190,6 +194,7 @@ func (w *workspaceRuntime) Close() {
 	}
 	w.closed = true
 	for _, session := range w.sessions {
+		session.completionFailures = 0
 		if session.cancel != nil {
 			session.cancel()
 		}
@@ -216,8 +221,14 @@ func (w *workspaceRuntime) startManagerLocked(session *scopeSession) {
 		OnChange: func(change readmodel.Change) {
 			w.handleScopeChange(session, change)
 		},
+		OnIndexChange: func() {
+			w.invalidateCompletionSource(session)
+		},
 		OnModeChange: func(mode readmodel.Mode) {
 			w.setSessionMode(session, mode)
+		},
+		OnCompletionSource: func(source readmodel.CompletionSource) {
+			w.setSessionCompletionSource(session, source)
 		},
 		OnWarning: func(message string) {
 			w.server.Notify(ctx, protocol.MethodLogMessage, protocol.LogMessageParams{

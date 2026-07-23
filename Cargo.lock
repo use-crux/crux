@@ -159,6 +159,7 @@ dependencies = [
 name = "crux-indexer-syntax-oxc"
 version = "0.1.0"
 dependencies = [
+ "crux-indexer-primitives",
  "crux-indexer-protocol",
  "oxc_allocator",
  "oxc_ast",

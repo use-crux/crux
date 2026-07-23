@@ -194,6 +194,7 @@ func NewHTTPServerWithServicesContext(ctx context.Context, devSvc *devtools.Serv
 		ResourceInspection: resourceInspection,
 		Hub:                wsHub,
 		ProjectIndex:       wsHub,
+		Completion:         wsHub,
 		ProjectRoot:        opt.ProjectRoot,
 		ConfigPath:         opt.ConfigPath,
 		SourceResolver: localserver.SourceResolverOptions{
