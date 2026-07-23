@@ -31,7 +31,7 @@ describe("generate.task()", () => {
     const first = { answer: "Production" };
     const second = { answer: "Eval" };
     const scripted = scriptedGateway({
-      generateObject: [{ object: first }, { object: second }],
+      generateText: [{ object: first }, { object: second }],
     });
     const ai = createCruxAi({ gateway: scripted.gateway });
     const supportPrompt = prompt({
@@ -61,8 +61,8 @@ describe("generate.task()", () => {
       traceId: expect.stringMatching(/^[0-9a-f]{32}$/u),
       spanId: expect.stringMatching(/^[0-9a-f]{16}$/u),
     });
-    expect(scripted.calls.generateObject).toHaveLength(2);
-    expect(scripted.calls.generateObject).toEqual([
+    expect(scripted.calls.generateText).toHaveLength(2);
+    expect(scripted.calls.generateText).toEqual([
       expect.objectContaining({
         model: expect.objectContaining({ modelId: "gpt-4o" }),
         prompt: "Refund?",
@@ -362,7 +362,7 @@ describe("generate.task()", () => {
 
   it("merges per-call overrides over bound defaults without accepting call input", async () => {
     const scripted = scriptedGateway({
-      generateObject: [{ object: { answer: "Done" } }],
+      generateText: [{ object: { answer: "Done" } }],
     });
     const ai = createCruxAi({ gateway: scripted.gateway });
     const supportPrompt = prompt({
@@ -380,8 +380,8 @@ describe("generate.task()", () => {
       { model: model("override"), temperature: 0.7 },
     );
 
-    expect(scripted.calls.generateObject).toHaveLength(1);
-    expect(scripted.calls.generateObject[0]).toMatchObject({
+    expect(scripted.calls.generateText).toHaveLength(1);
+    expect(scripted.calls.generateText[0]).toMatchObject({
       model: { modelId: "override" },
       prompt: "Override?",
       temperature: 0.7,
@@ -390,7 +390,7 @@ describe("generate.task()", () => {
 
   it("snapshots bound defaults without cloning nested provider values", async () => {
     const scripted = scriptedGateway({
-      generateObject: [
+      generateText: [
         { object: { answer: "Production" } },
         { object: { answer: "Eval" } },
       ],
@@ -423,8 +423,8 @@ describe("generate.task()", () => {
     expect(descriptor.defaults).not.toBe(defaults);
     expect(Object.isFrozen(descriptor.defaults)).toBe(true);
     expect(Object.isFrozen(boundModel)).toBe(false);
-    expect(scripted.calls.generateObject).toHaveLength(2);
-    for (const call of scripted.calls.generateObject) {
+    expect(scripted.calls.generateText).toHaveLength(2);
+    for (const call of scripted.calls.generateText) {
       expect(call).toMatchObject({
         model: { modelId: "bound" },
         temperature: 0.2,
@@ -433,8 +433,12 @@ describe("generate.task()", () => {
     }
   });
 
-  it("raises the precise protocol error when structured output is absent", async () => {
-    const scripted = scriptedGateway({ generateObject: [{ text: "{}" }] });
+  it("throws the adapter's validation failure when structured output cannot be produced", async () => {
+    // The SDK adapter now always validates the completed candidate: a response
+    // that cannot satisfy the authored schema throws its validation failure
+    // rather than returning an absent object, so the eval task surfaces that
+    // failure directly instead of the defensive `structured_output_missing`.
+    const scripted = scriptedGateway({ generateText: [{ output: {} }] });
     const ai = createCruxAi({ gateway: scripted.gateway });
     const supportPrompt = prompt({
       id: "missing-object",
@@ -448,17 +452,8 @@ describe("generate.task()", () => {
       question: "Refund?",
     });
 
-    await expect(execution).rejects.toMatchObject({
-      name: "EvalTaskExecutionError",
-      code: "structured_output_missing",
-      operation: "generate",
-      adapterId: "ai-sdk",
-      promptId: "missing-object",
-    });
-    await expect(execution).rejects.toThrowError(
-      /generate.*prompt "missing-object".*validated object.*validation failure/i,
-    );
-    expect(scripted.calls.generateObject).toHaveLength(1);
+    await expect(execution).rejects.toBeInstanceOf(ValidationExhaustedError);
+    expect(scripted.calls.generateText).toHaveLength(1);
   });
 
   it.each(["provider-error", "aborted", "timeout"] as const)(
@@ -471,7 +466,7 @@ describe("generate.task()", () => {
           retryable: kind !== "aborted",
         }),
       );
-      const scripted = scriptedGateway({ generateObject: [error] });
+      const scripted = scriptedGateway({ generateText: [error] });
       const ai = createCruxAi({ gateway: scripted.gateway });
       const task = ai.generate.task(
         prompt({
@@ -490,7 +485,7 @@ describe("generate.task()", () => {
 
   it("passes ValidationExhaustedError through without an Eval wrapper", async () => {
     const scripted = scriptedGateway({
-      generateObject: [
+      generateText: [
         objectGenerationError("bad"),
         objectGenerationError("still bad"),
       ],
@@ -512,6 +507,6 @@ describe("generate.task()", () => {
     await expect(execution).rejects.not.toMatchObject({
       name: "EvalTaskExecutionError",
     });
-    expect(scripted.calls.generateObject).toHaveLength(2);
+    expect(scripted.calls.generateText).toHaveLength(2);
   });
 });

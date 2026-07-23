@@ -2,9 +2,21 @@
  * Structured-output execution for SDK-loop adapters.
  *
  * SDK executors perform exactly one structured attempt at a time. This module
- * owns the Crux corrective-retry loop around those attempts so schema failure,
- * instrumentation hooks, exhaustion errors, output safety, and result shaping
- * stay identical across SDK-loop providers.
+ * owns the Crux corrective-retry loop around those attempts and routes every
+ * completed candidate through the shared completed-candidate pipeline, so the
+ * SDK route enforces the same invariant as the native route:
+ *
+ * ```text
+ * provider wire value
+ *   -> decode compilation manifest to canonical z.input
+ *   -> completed-output Safety over z.input
+ *   -> authored Zod safeParse exactly once
+ *   -> constraints -> expose safeParse.data as z.output
+ * ```
+ *
+ * Core owns compilation: it resolves the model's inert capabilities from the
+ * runtime, compiles one plan, installs `plan.outputSchema` as the SDK's wire
+ * validator (never the authored Zod schema), and retains the manifest.
  *
  * @internal
  * @module
@@ -16,26 +28,26 @@ import {
   composeAbortSignals,
   createBudgetSignal,
 } from "../../generation/timeout";
-import { getHooks } from "../../runtime/runtime";
 import {
-  finalizeSafetySessionLanguageOutput,
   type Safety,
 } from "../../safety/session";
-import { ValidationExhaustedError } from "../../generation/validation-retry";
 import type { ExecutorRequest, StructuredRequest } from "../executor-types";
-import { formatValidationFeedback } from "../policy/validation-retry";
+import {
+  compileStructuredOutputForRequest,
+  CruxUnsupportedStructuredOutputError,
+} from "../structured-output";
+import { withDefaultResolverPorts } from "../../resolver/ports";
 import type { ResultStepFacts } from "../result-accumulator";
+import type { AdapterResponse } from "../types";
 import type {
   AdapterExecutionGenerateArgs,
   AdapterExecutionGenerateResultWithoutRunId,
   SdkLoopDialect,
 } from "./types";
-import { appendCorrectiveExchange, appendCorrectiveMessages } from "./messages";
+import { appendCorrectiveMessages } from "./messages";
 import { buildTraceMeta } from "./metadata";
-import {
-  finalizeSdkResultEnvelope,
-  sdkResponseFacts,
-} from "./sdk-result-envelope";
+import { createStructuredCompletion } from "./structured-completion";
+import { finalizeSdkResultEnvelope } from "./sdk-result-envelope";
 
 /** Inputs shared by the SDK-loop structured retry helper. */
 interface GenerateSdkStructuredContext<TModel, TRawResponse, TRawStream> {
@@ -53,6 +65,8 @@ interface GenerateSdkStructuredContext<TModel, TRawResponse, TRawStream> {
   readonly retryId: string;
   /** Prompt id for exhaustion diagnostics. */
   readonly promptId: string | undefined;
+  /** Shared provider-call budget for validation and constraint retries. */
+  readonly maxSteps: number;
   /** Step facts collected by the parent SDK-loop execution. */
   readonly stepFacts: ResultStepFacts[];
 }
@@ -60,9 +74,10 @@ interface GenerateSdkStructuredContext<TModel, TRawResponse, TRawStream> {
 /**
  * Run the SDK structured-output corrective retry loop.
  *
- * Each iteration calls `attemptStructured()` once. Invalid schema output is
- * folded into a corrective exchange until the retry budget is exhausted; valid
- * output is still passed through final-output safety before returning.
+ * The first attempt is issued here; validation retry and constraint
+ * regeneration are owned by the shared completed-candidate pipeline, which
+ * re-calls the provider through the `reprompt` seam under one shared
+ * `maxSteps` budget.
  *
  * @param ctx - Structured retry context prepared by `generateSdk()`.
  * @returns The normalized structured generation result.
@@ -70,25 +85,45 @@ interface GenerateSdkStructuredContext<TModel, TRawResponse, TRawStream> {
 export async function generateSdkStructured<TModel, TRawResponse, TRawStream>(
   ctx: GenerateSdkStructuredContext<TModel, TRawResponse, TRawStream>,
 ): Promise<AdapterExecutionGenerateResultWithoutRunId<TRawResponse>> {
-  const {
-    dialect,
-    args,
-    request,
-    schema,
-    safety,
-    retryId,
+  const { dialect, args, request, schema, safety, promptId, stepFacts } = ctx;
+
+  // Core owns compilation. Resolve the model's inert capabilities and compile
+  // one plan before any provider I/O. An unknown/unsupported model fails here
+  // rather than sending the authored schema over the wire.
+  const capabilities = dialect.structuredOutput?.capabilities(
+    request.modelInfo,
+  );
+  if (!capabilities) {
+    throw new CruxUnsupportedStructuredOutputError(
+      dialect.id,
+      `the selected model "${
+        request.modelInfo.provider || request.modelInfo.modelId || "unknown"
+      }" has no verified structured-output capability profile`,
+    );
+  }
+  const plan = compileStructuredOutputForRequest(schema, capabilities, {
+    diagnostics: request.diagnostics ?? withDefaultResolverPorts().diagnostics,
     promptId,
-    stepFacts,
-  } = ctx;
+  });
+
   const validationRetry = args.validationRetry;
-  const maxRetries = validationRetry?.maxRetries ?? 0;
-  let attempts = 0;
+  let steps = 0;
   let currentMessages = request.messages ? [...request.messages] : [];
   let currentPrompt = request.prompt;
+  let lastText = "";
+  let lastRaw: TRawResponse | undefined;
+  let lastResponse: AdapterResponse = {
+    text: "",
+    toolCalls: undefined,
+    usage: undefined,
+    finishReason: "stop",
+    responseId: undefined,
+    actualModelId: request.modelInfo.modelId,
+  };
 
-  const runStructuredAttempt = async (
-    attemptRequest: StructuredRequest<TModel>,
-  ) => {
+  // One structured attempt: installs the wire schema, applies the per-attempt
+  // step budget, and counts one provider call against the shared budget.
+  const attemptOnce = async (attemptRequest: StructuredRequest<TModel>) => {
     const attemptBudget = createBudgetSignal({
       budget: "step",
       limitMs: args.timeout?.stepMs,
@@ -100,6 +135,7 @@ export async function generateSdkStructured<TModel, TRawResponse, TRawStream>(
         attemptBudget.signal,
       ),
     };
+    steps++;
     try {
       return await dialect.runStructuredAttempt(requestWithSignal);
     } finally {
@@ -107,116 +143,95 @@ export async function generateSdkStructured<TModel, TRawResponse, TRawStream>(
     }
   };
 
-  for (;;) {
-    const attemptRequest = {
-      ...request,
-      prompt: currentPrompt,
-      messages: currentMessages,
-      schema,
-    };
-    const attempt = await runStructuredAttempt(attemptRequest);
+  const buildAttemptRequest = (): StructuredRequest<TModel> => ({
+    ...request,
+    prompt: currentPrompt,
+    messages: currentMessages,
+    schema,
+    outputSchema: plan.outputSchema,
+  });
 
-    if (attempt.status === "ok") {
-      let steps = 1 + attempts;
-      let finalText = attempt.response.text;
-      let finalObject = attempt.object;
-      let finalRaw = attempt.raw;
-      let finalResponse = attempt.response;
-      const finalOutput = await finalizeSafetySessionLanguageOutput(
-        safety,
-        { text: finalText, parsed: finalObject },
-        async (corrective) => {
-          const regenMessages = appendCorrectiveMessages(
-            currentPrompt,
-            currentMessages,
-            finalText,
-            corrective,
-          );
-          currentPrompt = undefined;
-          currentMessages = regenMessages;
-          const regenRequest = {
-            ...request,
-            prompt: undefined,
-            messages: regenMessages,
-            schema,
-          };
-          const regen = await runStructuredAttempt(regenRequest);
-          steps++;
-          if (regen.status === "ok") {
-            if (stepFacts.length > 0) {
-              const previous = stepFacts[stepFacts.length - 1]!;
-              stepFacts[stepFacts.length - 1] = { ...previous, content: [] };
-            }
-            finalText = regen.response.text;
-            finalObject = regen.object;
-            finalRaw = regen.raw;
-            finalResponse = regen.response;
-            stepFacts.push(sdkResponseFacts(regen.response));
-            return { text: regen.response.text, parsed: regen.object };
-          }
-          validationRetry?.onExhausted?.(0, regen.error);
-          throw new ValidationExhaustedError({
-            lastRawOutput: regen.rawText,
-            zodErrors: regen.error,
-            attempts: 0,
-            maxAttempts: 0,
-            promptId: promptId ?? "unknown",
-          });
-        },
-        { messages: currentMessages, schema },
+  const first = await attemptOnce(buildAttemptRequest());
+  if (first.status === "ok") {
+    lastRaw = first.raw;
+    lastResponse = first.response;
+    lastText = first.response.text;
+  } else {
+    lastText = first.rawText;
+    lastResponse = { ...lastResponse, text: first.rawText };
+  }
+
+  const completion = createStructuredCompletion({
+    safety,
+    schema,
+    decodeManifest: plan.decodeManifest,
+    promptId: promptId ?? "unknown",
+    validationRetry,
+    maxSteps: ctx.maxSteps,
+    steps: () => steps,
+    messages: () => currentMessages,
+    // Re-call the provider with corrective messages, shared by validation retry
+    // and constraint regeneration. Owns SDK step-fact accounting and returns the
+    // new candidate text; the pipeline decodes and re-validates it.
+    reprompt: async (corrective: readonly Message[]): Promise<string> => {
+      currentMessages = appendCorrectiveMessages(
+        currentPrompt,
+        currentMessages,
+        lastText,
+        corrective,
       );
-      finalText = finalOutput.text;
-      finalObject = finalOutput.parsed;
-
-      const resultMessages: Message[] = [
-        ...(currentMessages.length > 0
-          ? currentMessages
-          : currentPrompt
-            ? [{ role: "user" as const, content: currentPrompt }]
-            : []),
-        { role: "assistant" as const, content: finalText },
-      ];
-
-      return finalizeSdkResultEnvelope({
-        raw: finalRaw,
-        response: finalResponse,
-        text: finalText,
-        object: finalObject,
-        _meta: buildTraceMeta({
-          response: { ...finalResponse, text: finalText },
-        }),
-        messages: resultMessages,
-        stepFacts,
-        finalStepMode: stepFacts.length < steps ? "append" : "replace",
-      });
-    }
-
-    if (attempts < maxRetries) {
-      attempts++;
-      validationRetry?.onRetry?.(attempts, attempt.error);
+      currentPrompt = undefined;
+      // The candidate being corrected is superseded: record it as an empty
+      // step. The winning candidate becomes the final step via the envelope.
       stepFacts.push({
         content: [],
         finishReason: undefined,
         responseId: undefined,
         modelId: undefined,
       });
-      currentMessages = appendCorrectiveExchange(
-        currentPrompt,
-        currentMessages,
-        attempt.rawText,
-        formatValidationFeedback(attempt.rawText, attempt.error),
-      );
-      currentPrompt = undefined;
-      continue;
-    }
+      const regen = await attemptOnce(buildAttemptRequest());
+      if (regen.status === "ok") {
+        lastRaw = regen.raw;
+        lastResponse = regen.response;
+        lastText = regen.response.text;
+        return regen.response.text;
+      }
+      lastText = regen.rawText;
+      lastResponse = { ...lastResponse, text: regen.rawText };
+      return regen.rawText;
+    },
+  });
 
-    validationRetry?.onExhausted?.(attempts, attempt.error);
-    throw new ValidationExhaustedError({
-      lastRawOutput: attempt.rawText,
-      zodErrors: attempt.error,
-      attempts,
-      maxAttempts: maxRetries,
-      promptId: promptId ?? "unknown",
-    });
-  }
+  const initial =
+    first.status === "ok"
+      ? completion.buildFromWireValue({
+          text: first.response.text,
+          value: first.wireValue,
+        })
+      : completion.buildFromText(first.rawText);
+
+  const result = await completion.finalize(initial, { suspended: false });
+  const finalText = result.text;
+
+  const resultMessages: Message[] = [
+    ...(currentMessages.length > 0
+      ? currentMessages
+      : currentPrompt
+        ? [{ role: "user" as const, content: currentPrompt }]
+        : []),
+    { role: "assistant" as const, content: finalText },
+  ];
+
+  return finalizeSdkResultEnvelope({
+    raw: lastRaw,
+    response: lastResponse,
+    text: finalText,
+    object: result.object,
+    _meta: buildTraceMeta({
+      response: { ...lastResponse, text: finalText },
+    }),
+    messages: resultMessages,
+    stepFacts,
+    finalStepMode: stepFacts.length < steps ? "append" : "replace",
+  });
 }

@@ -23,6 +23,10 @@ import type {
   ToolResultEntry,
 } from "../types";
 import type { ProviderMediaHooks } from "./media-hooks";
+import type {
+  JsonSchemaObject,
+  StructuredOutputCapabilities,
+} from "../structured-output";
 
 /** Native call surface selected from canonical Crux call arguments. */
 export type NativeCallMode = "text" | "structured";
@@ -151,6 +155,15 @@ export interface NativeChatRequestContext<
   readonly mode: NativeCallMode;
   /** Provider-owned collaborators such as cache managers or resolvers. */
   readonly deps: TDeps;
+  /**
+   * Provider-compatible JSON Schema compiled from the authored schema.
+   *
+   * Core lowers the authored Zod schema against this profile's
+   * {@link StructuredOutputCapabilities} and supplies the result here. Place it
+   * into the provider's native structured-output envelope. Undefined when the
+   * request does not ask for structured output.
+   */
+  readonly outputSchema?: JsonSchemaObject;
 }
 
 /**
@@ -237,8 +250,18 @@ export interface NativeChatProfile<
    */
   mapError?(error: unknown): CruxProviderError | undefined;
 
-  /** Convert a Zod output schema to provider-native structured-output params. */
-  outputSchema?(schema: z.ZodType): Record<string, unknown>;
+  /**
+   * The JSON Schema behavior this provider accepts for structured output.
+   *
+   * Inert capability data only. Core owns the finite lowering rules and compiles
+   * the authored schema against `accepts`, then supplies the lowered schema to
+   * `request()` via `context.outputSchema`. Absent means structured output is
+   * unsupported and fails before a network request.
+   */
+  readonly structuredOutput?: {
+    /** Describes the JSON Schema dialect accepted by this provider. */
+    readonly accepts: StructuredOutputCapabilities;
+  };
 
   /** Post-process tool schemas before provider request assembly. */
   sanitizeToolSchema?(schema: Record<string, unknown>): Record<string, unknown>;

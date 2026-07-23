@@ -211,6 +211,10 @@ function createSafetySession(
           readonly suspended?: boolean;
           readonly messages?: readonly Message[];
           readonly schema?: z.ZodType;
+          readonly prepareValidated?: (
+            guarded: SafetyOutput,
+            guardCandidate: (candidate: SafetyOutput) => Promise<SafetyOutput>,
+          ) => Promise<SafetyOutput>;
         }
       | undefined,
     terminalOnly: boolean,
@@ -225,6 +229,9 @@ function createSafetySession(
       suspended: opts?.suspended,
       messages: lastMessages,
       schema: opts?.schema,
+      ...(opts?.prepareValidated
+        ? { prepareValidated: opts.prepareValidated }
+        : {}),
       context: guardContext("output", lastMessages),
       appendAudit: appendGuardrailAudit,
       transcript,

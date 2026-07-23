@@ -100,7 +100,7 @@ describe('AI SDK managed/headless/transport equivalence', () => {
       validationRetry: { maxRetries: 1 },
     } as const
 
-    const managed = await createCruxAi({ gateway: gatewayFor('generateObject', [invalid, fixed]) }).generate(p, options)
+    const managed = await createCruxAi({ gateway: gatewayFor('generateText', [invalid, fixed]) }).generate(p, options)
     const transported = await runTransport(p, [invalid, fixed], options)
 
     expect(expectComparable(transported)).toEqual(expectComparable(managed))
@@ -202,7 +202,9 @@ function sdkResponse(args: {
   ]
   return {
     text: args.text,
-    ...(args.object !== undefined ? { object: args.object } : {}),
+    ...(args.object !== undefined
+      ? { object: args.object, output: args.object }
+      : {}),
     content: args.content ?? [],
     steps,
     finishReason: 'stop',

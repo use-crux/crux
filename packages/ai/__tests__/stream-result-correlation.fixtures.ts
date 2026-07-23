@@ -27,8 +27,8 @@ export function generationStreamSpan(
 
 export function model(): LanguageModel {
   return {
-    provider: "test",
-    modelId: "stream-model",
+    provider: "openai",
+    modelId: "gpt-4o",
     specificationVersion: "v3",
   } as unknown as LanguageModel;
 }

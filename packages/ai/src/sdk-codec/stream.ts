@@ -1,3 +1,4 @@
+import { jsonSchema, Output, stepCountIs } from "ai";
 import type { LanguageModel, StopCondition, ToolSet } from "ai";
 import type { z } from "zod";
 import { getHooks } from "@use-crux/core";
@@ -5,10 +6,10 @@ import { observe } from "@use-crux/core/observability";
 import type {
   ExecutorRequest,
   ExecutorStreamCompletionPayload,
+  JsonSchemaObject,
 } from "@use-crux/core/adapter";
 import type { SdkGateway } from "../gateway";
 import { extractCost, normalizeUsage } from "../meta";
-import { sanitizeSchemaForProvider } from "../provider-profile";
 import { buildBaseArgs } from "./request-args";
 import { withLegacyStreamMeta } from "./stream-meta";
 import { createSafetyStreamTransform } from "./stream-safety";
@@ -39,7 +40,10 @@ let warnedStructuredStreamToolsConsole = false;
  * @internal
  */
 export async function createStreamCallPlan(
-  request: ExecutorRequest<LanguageModel> & { readonly schema?: z.ZodType },
+  request: ExecutorRequest<LanguageModel> & {
+    readonly schema?: z.ZodType;
+    readonly outputSchema?: JsonSchemaObject;
+  },
   deps: StreamPlanDeps,
 ): Promise<AiSdkStreamPlan> {
   const args = buildBaseArgs(request, { includeTools: !request.schema });
@@ -86,24 +90,34 @@ export async function createStreamCallPlan(
 
   if (request.schema) {
     warnForStructuredStreamTools(request);
-    args.schema = await sanitizeSchemaForProvider(
-      request.schema,
-      request.modelInfo,
-    );
+    if (!request.outputSchema) {
+      throw new Error(
+        "Structured streaming requires a compiled wire outputSchema; core installs it before transport.",
+      );
+    }
+    // Structured streaming uses `streamText` + `Output.object` (not the
+    // deprecated `streamObject`, whose finish event exposes no completion text):
+    // the finish event carries both the streamed `text` and the parsed wire
+    // `output`. Core owns the sole authored parse over that wire value.
+    args.output = Output.object({
+      schema: jsonSchema(request.outputSchema) as never,
+    });
+    args.stopWhen = stepCountIs(1);
     args.onFinish = async (event: SdkStreamFinishEvent) => {
       try {
         const content = event.content
           ? decodeAssistantContentFromAiSdkParts(event.content)
           : undefined;
         resolveCompletion({
-          ...(event.object !== undefined ? { object: event.object } : {}),
+          // `output` is the parsed provider wire value; core decodes, guards,
+          // and runs the authored schema over it exactly once.
+          ...(event.output !== undefined ? { object: event.output } : {}),
           usage: normalizeUsage(event.usage),
           finishReason: event.finishReason,
           responseId: event.response?.id,
           actualModelId: event.response?.modelId,
           cost: extractCost(event.providerMetadata),
           text: event.text,
-          ...(event.object !== undefined ? { object: event.object } : {}),
           ...(content !== undefined && (content.length > 0 || !event.text)
             ? { content }
             : {}),
@@ -128,8 +142,8 @@ export async function createStreamCallPlan(
       }
     };
     return {
-      method: "streamObject",
-      args: args as Parameters<SdkGateway["streamObject"]>[0],
+      method: "streamText",
+      args: args as Parameters<SdkGateway["streamText"]>[0],
       attach(raw) {
         return attachStreamResult(
           raw as unknown as SdkStreamResultLike,
@@ -236,20 +250,23 @@ export async function createStreamCallPlan(
 /**
  * Warn when a structured stream declares tools.
  *
- * AI SDK v6 `streamObject()` does not expose the text-loop tool event surface
- * (`tools`, `onStepFinish`, tool-call callbacks). Crux therefore cannot offer
- * the same tool observability guarantees for structured streams that it offers
- * for text streams. The call still proceeds without advertising tools.
- * Request diagnostics are emitted for every affected request; the raw console
- * fallback is deduplicated only to avoid repeated process-global noise.
+ * A structured stream is a single-step `streamText` + `Output.object` call and
+ * does not advertise tools, so Crux cannot offer the tool observability
+ * guarantees it offers for text streams. The call still proceeds without
+ * advertising tools. Request diagnostics are emitted for every affected request;
+ * the raw console fallback is deduplicated only to avoid repeated process-global
+ * noise.
  */
 function warnForStructuredStreamTools(
-  request: ExecutorRequest<LanguageModel> & { readonly schema?: z.ZodType },
+  request: ExecutorRequest<LanguageModel> & {
+    readonly schema?: z.ZodType;
+    readonly outputSchema?: JsonSchemaObject;
+  },
 ): void {
   if (!request.tools || Object.keys(request.tools).length === 0) return;
 
   const message =
-    "[@use-crux/ai] streaming structured output with tools is not observable in AI SDK streamObject(); tools are omitted for this stream. Use generate() for structured tool loops or stream() without an output schema.";
+    "[@use-crux/ai] streaming structured output with tools is not observable; tools are omitted for this stream. Use generate() for structured tool loops or stream() without an output schema.";
   if (request.diagnostics) {
     request.diagnostics.warn(message);
     return;

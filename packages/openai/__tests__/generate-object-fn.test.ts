@@ -98,7 +98,7 @@ describe('createGenerateObjectFn', () => {
           "json_schema": {
             "name": "output",
             "schema": {
-              "$schema": "http://json-schema.org/draft-07/schema#",
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
               "additionalProperties": false,
               "properties": {
                 "ok": {

@@ -57,6 +57,7 @@ import {
   DEFAULT_MAX_STEPS,
   inspectForDevtools,
   mergeDirectives,
+  resolveToolInputCapabilities,
   withSkillActivationInput,
 } from "./shared";
 import { generateSdkStructured } from "./generate-sdk-structured";
@@ -186,6 +187,10 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
         toolMiddleware: args.toolMiddleware,
         toolApproval: args.toolApproval,
       },
+      // Compile tool input schemas against the selected model's verified profile.
+      // An unknown model (resolver present, returns undefined) fails before
+      // transport for any schema'd tool rather than silently going permissive.
+      toolInputCapabilities: resolveToolInputCapabilities(dialect, modelInfo),
       promptId: prompt.id,
       input: args.input ?? {},
       timeout: args.timeout,
@@ -277,6 +282,9 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
       nativeMessages,
       settings: mappedSettings,
       tools: lifecycle.tools,
+      ...(lifecycle.toolWireSchemas
+        ? { toolWireSchemas: lifecycle.toolWireSchemas }
+        : {}),
       toolApproval: (call) =>
         lifecycle.requiresApproval(
           { id: call.toolCallId, name: call.toolName, args: call.input },
@@ -332,6 +340,7 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
                   safety,
                   retryId,
                   promptId: prompt.id,
+                  maxSteps,
                   stepFacts,
                 })
               : await (async () => {

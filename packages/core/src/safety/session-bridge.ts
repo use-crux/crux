@@ -91,11 +91,7 @@ export interface SafetySession extends Safety {
   [languageTerminalFinalize](
     output: SafetyOutput,
     regenerate: (corrective: readonly Message[]) => Promise<SafetyOutput>,
-    opts?: {
-      readonly suspended?: boolean;
-      readonly messages?: readonly Message[];
-      readonly schema?: z.ZodType;
-    },
+    opts?: TerminalFinalizeOptions,
   ): Promise<SafetyOutput>;
   [streamCompletionGuard](
     content: readonly AssistantContentPart[],
@@ -169,16 +165,32 @@ export function createSafetyLanguageStepTransformer(
   });
 }
 
+/**
+ * Options for finalizing a terminal language candidate.
+ *
+ * @internal
+ */
+export interface TerminalFinalizeOptions {
+  readonly suspended?: boolean;
+  readonly messages?: readonly Message[];
+  readonly schema?: z.ZodType;
+  /**
+   * Adapter-owned candidate validator run between terminal guardrails and
+   * constraints: the single authoritative Zod `safeParse` plus any validation
+   * retry. Given the guard function so a re-prompt can re-run terminal guardrails.
+   */
+  readonly prepareValidated?: (
+    guarded: SafetyOutput,
+    guardCandidate: (candidate: SafetyOutput) => Promise<SafetyOutput>,
+  ) => Promise<SafetyOutput>;
+}
+
 /** @internal Finalize an already step-guarded language terminal candidate. */
 export function finalizeSafetySessionLanguageOutput(
   safety: Safety,
   output: SafetyOutput,
   regenerate: (corrective: readonly Message[]) => Promise<SafetyOutput>,
-  opts?: {
-    readonly suspended?: boolean;
-    readonly messages?: readonly Message[];
-    readonly schema?: z.ZodType;
-  },
+  opts?: TerminalFinalizeOptions,
 ): Promise<SafetyOutput> {
   return (safety as SafetySession)[languageTerminalFinalize](
     output,

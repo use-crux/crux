@@ -26,6 +26,7 @@ import type { GenerationSettings } from "../generation/types";
 import type { AdapterSpec } from "./spec";
 import type { ProviderMediaHooks } from "./native-chat/media-hooks";
 import type { ToolSourceMaterializer } from "../tools/tool-source";
+import type { StructuredOutputCapabilities } from "./structured-output";
 import type {
   ExecutorOutcome,
   ExecutorRequest,
@@ -111,6 +112,21 @@ export interface LoopRuntimePort<
 
   /** @internal Guard client-tool output through the runtime's native dialect. */
   readonly [toolModelIngressDialect]?: ToolModelIngressDialect;
+
+  /**
+   * Resolve the inert structured-output capabilities the selected model
+   * accepts. The resolver only selects declared capability data — it must not
+   * compile or rewrite schemas. Core resolves capabilities for the request's
+   * model, compiles the plan once, and installs `plan.outputSchema` as the
+   * runtime's wire schema.
+   *
+   * Return `undefined` for a model whose structured-output semantics cannot be
+   * guaranteed; core then fails before transport with an actionable
+   * unsupported-structured-output error rather than inventing a default.
+   */
+  readonly structuredOutput?: {
+    capabilities(model: ModelInfo): StructuredOutputCapabilities | undefined;
+  };
 
   /**
    * Extract provider/model identity from an SDK model reference.

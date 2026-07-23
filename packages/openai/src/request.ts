@@ -1,10 +1,33 @@
 import type OpenAI from "openai";
-import { zodResponseFormat } from "openai/helpers/zod";
-import type { z } from "zod";
 import type { CallArgs } from "@use-crux/core/adapter";
-import type { NativeChatRequestArgs } from "@use-crux/core/adapter";
+import type {
+  NativeChatRequestArgs,
+  StructuredOutputCapabilities,
+} from "@use-crux/core/adapter";
 import type { GenerationSettings, ToolChoice } from "@use-crux/core";
 import type { OpenAIChatRequest, OpenAIExtra } from "./types";
+
+/**
+ * The JSON Schema behavior OpenAI's structured-output (strict) mode accepts.
+ *
+ * OpenAI strict mode requires every property in `required`, rejects extra
+ * properties, and expresses optionality with a `null` union. Core lowers the
+ * authored schema against these capabilities and supplies the result to the
+ * request builder.
+ */
+export const openAIStructuredCapabilities = {
+  id: "openai.chat-completions.strict",
+  supportsJsonSchema: true,
+  requiresAllProperties: true,
+  supportsOptionalProperties: false,
+  supportsNullable: true,
+  supportsBooleanSchemas: false,
+  supportsReferences: true,
+  supportsUnions: true,
+  supportsRecursiveSchemas: true,
+  additionalProperties: "must-be-false",
+  unsupportedKeywords: [],
+} satisfies StructuredOutputCapabilities;
 
 /** Build the OpenAI chat-completion request body from canonical Crux args. */
 export function openAIRequest(
@@ -21,7 +44,18 @@ export function openAIRequest(
     messages,
     ...args.settings,
     ...openAIToolParams(args),
-    ...(args.schemaParams ?? {}),
+    ...(args.outputSchema
+      ? {
+          response_format: {
+            type: "json_schema" as const,
+            json_schema: {
+              name: "output",
+              strict: true,
+              schema: args.outputSchema,
+            },
+          },
+        }
+      : {}),
   };
 }
 
@@ -83,18 +117,6 @@ function openAIToolChoice(
 ): OpenAI.ChatCompletionToolChoiceOption {
   if (typeof toolChoice === "string") return toolChoice;
   return { type: "function", function: { name: toolChoice.tool } };
-}
-
-/** Convert a Zod schema into OpenAI's structured-output response format. */
-export function openAIOutputSchema(schema: z.ZodType): Record<string, unknown> {
-  return {
-    // OpenAI's helper ships with its own bundled Zod typings. Cross-version
-    // `z.ZodType` shapes do not structurally align, so widen at this boundary.
-    response_format: zodResponseFormat(
-      schema as Parameters<typeof zodResponseFormat>[0],
-      "output",
-    ),
-  };
 }
 
 /** Narrow OpenAI request body for non-streaming create/parse SDK calls. */

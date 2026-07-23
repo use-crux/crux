@@ -29,7 +29,7 @@ export function registerAiMcpSafetyPolicyCases(): void {
           prompt: "Unsafe input.",
         }),
         {
-          model: "test:model" as never,
+          model: "openai:gpt-4o" as never,
           guardrails: [
             guardrail({
               id: "block-input",
@@ -92,7 +92,7 @@ export function registerAiMcpSafetyPolicyCases(): void {
         prompt: "Use the tool.",
       }),
       {
-        model: "test:model" as never,
+        model: "openai:gpt-4o" as never,
         guardrails: [
           guardrail({
             id: "redact-private",

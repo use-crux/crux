@@ -12,6 +12,13 @@ import type { AdapterSpec } from "../spec";
 import type { AdapterResponse, CallArgs, StreamHandle } from "../types";
 import { appendNativeToolRound } from "./tool-round";
 import {
+  compileStructuredOutput,
+  CruxUnsupportedStructuredOutputError,
+  decodeStructuredValue,
+  validateStructuredOutputCapabilities,
+} from "../structured-output";
+import type { JsonSchemaObject } from "../structured-output";
+import {
   assertProviderMediaSupported,
   attachProviderMediaHooks,
 } from "./media-hooks";
@@ -33,7 +40,7 @@ interface HelperCallArgs<TExtra extends Record<string, unknown>> {
   readonly messages?: readonly Message[];
   readonly maxOutputTokens?: number;
   readonly schema: z.ZodType | undefined;
-  readonly schemaParams: Record<string, unknown> | undefined;
+  readonly outputSchema: JsonSchemaObject | undefined;
   readonly extra: TExtra;
 }
 
@@ -110,6 +117,7 @@ export function defineNativeChatProvider<
         const request = await profile.request(requestArgsFor(profile, args), {
           mode,
           deps,
+          outputSchema: args.outputSchema,
         });
         const raw = await bind(client).call(request, mode, {
           signal: context?.signal,
@@ -122,6 +130,7 @@ export function defineNativeChatProvider<
         const request = await profile.request(requestArgsFor(profile, args), {
           mode,
           deps,
+          outputSchema: args.outputSchema,
         });
         const streamRequest = profile.stream.request?.(request) ?? request;
         const rawStream = await bind(client).stream(streamRequest, {
@@ -141,6 +150,7 @@ export function defineNativeChatProvider<
         return profile.request(requestArgsFor(profile, args), {
           mode: callModeFor(args),
           deps,
+          outputSchema: args.outputSchema,
         });
       },
       fromResponse(raw) {
@@ -158,7 +168,12 @@ export function defineNativeChatProvider<
 
     if (profile.sanitizeToolSchema)
       spec.sanitizeToolSchema = profile.sanitizeToolSchema;
-    if (profile.outputSchema) spec.wrapOutputSchema = profile.outputSchema;
+    if (profile.structuredOutput) {
+      // Reject a contradictory capability profile at definition, not on the
+      // first structured request that happens to reach it.
+      validateStructuredOutputCapabilities(profile.structuredOutput.accepts);
+      spec.structuredOutput = profile.structuredOutput;
+    }
     if (profile.mapError) spec.mapError = profile.mapError;
     return attachProviderMediaHooks(spec, profile.media);
   }
@@ -192,7 +207,7 @@ export function defineNativeChatProvider<
               : { messages: options.messages }),
             maxOutputTokens: options.maxOutputTokens,
             schema: undefined,
-            schemaParams: undefined,
+            outputSchema: undefined,
             extra: {} as TExtra,
           });
           const request = await profile.request(requestArgsFor(profile, args), {
@@ -207,30 +222,33 @@ export function defineNativeChatProvider<
       createGenerateObjectFn(client: TClient, model: string): GenerateObjectFn {
         const port = bind(client);
         return async (options) => {
-          if (!profile.outputSchema) {
-            throw new TypeError(
-              `Native chat profile "${profile.providerId}" cannot create GenerateObjectFn without outputSchema().`,
-            );
+          if (!profile.structuredOutput) {
+            throw new CruxUnsupportedStructuredOutputError(profile.providerId);
           }
 
-          const schemaParams = profile.outputSchema(options.schema);
+          const plan = compileStructuredOutput(
+            options.schema,
+            profile.structuredOutput.accepts,
+          );
           const args = helperCallArgs<TExtra>({
             model,
             system: options.system,
             prompt: options.prompt,
             schema: options.schema,
-            schemaParams,
+            outputSchema: plan.outputSchema,
             extra: {} as TExtra,
           });
           const request = await profile.request(requestArgsFor(profile, args), {
             mode: "structured",
             deps,
+            outputSchema: plan.outputSchema,
           });
           const raw = await port.call(request, "structured");
-          const parsed =
+          const provided =
             profile.structuredObject?.(raw) ??
             parseJson(responseFor(profile, raw).text, profile.providerId);
-          return { object: options.schema.parse(parsed) };
+          const decoded = decodeStructuredValue(provided, plan.decodeManifest);
+          return { object: options.schema.parse(decoded) };
         };
       },
     });
@@ -256,7 +274,7 @@ function trackStream<TStream extends AsyncIterable<unknown>>(
 function callModeFor<TExtra extends Record<string, unknown>>(
   args: CallArgs<TExtra>,
 ): NativeCallMode {
-  return args.schema || args.schemaParams ? "structured" : "text";
+  return args.schema || args.outputSchema ? "structured" : "text";
 }
 
 function resolveDeps<TDeps extends Record<string, unknown>>(
@@ -281,7 +299,7 @@ function helperCallArgs<TExtra extends Record<string, unknown>>(
         ? {}
         : { maxTokens: args.maxOutputTokens },
     schema: args.schema,
-    schemaParams: args.schemaParams,
+    outputSchema: args.outputSchema,
     tools: undefined,
     extra: args.extra,
   };

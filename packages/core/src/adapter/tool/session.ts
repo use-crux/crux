@@ -45,7 +45,29 @@ import type { Message } from "../../generation/messages";
 import type { JsonValue, ToolModelOutput } from "../../types/tool";
 import type { SystemBlock } from "../../resolver/types";
 import type { AdapterResponse, CallArgs, ToolResultEntry } from "../types";
-import { responseContent } from "../assistant-output";
+import type { StructuredOutputCapabilities } from "../structured-output";
+import {
+  CruxStructuredOutputDecodeError,
+  CruxUnsupportedStructuredOutputError,
+} from "../structured-output";
+import type { JsonSchemaObject } from "../structured-output";
+import {
+  CruxToolInputValidationError,
+  decodeToolArgs,
+  isZodParameters,
+  DEFAULT_TOOL_INPUT_CAPABILITIES,
+  type ToolInputPlan,
+} from "./tool-input";
+import {
+  canonicalAppendToolRound,
+  canonicalToolResultMessage,
+  convertTools,
+  inheritMockSourceProvenance,
+  normalizeMiddlewareChain,
+  prepareToolInputPlans,
+  registryHasAuthoredToolSchema,
+  withToolInputDecode,
+} from "./tool-schema-projection";
 import {
   applyToolMiddleware,
   notifyToolApprovalResponses,
@@ -84,11 +106,6 @@ import {
   enrichToolCallsWithResults,
 } from "./memory-capture";
 import type { SkillActivationSession } from "../../skill/session";
-import {
-  toolSourceProvenance,
-  withToolSourceProvenance,
-} from "../../tools/tool-source";
-import { isToolExecutionMock } from "../../tools/mock";
 import { createToolRegistry } from "../../tools/tool-registry";
 import { LOAD_SKILL_TOOL_NAME } from "../../skill/tools";
 import {
@@ -146,6 +163,21 @@ export type AppendToolRound = (
   assistantResponse: AdapterResponse,
   toolResults: ToolResultEntry[],
 ) => Message[];
+
+/**
+ * How tool input schemas are compiled for the selected model.
+ *
+ * - `verified` — the model's declared capability profile is used to lower every
+ *   tool schema.
+ * - `unverified` — the runtime declares a capability resolver but cannot vouch
+ *   for the selected model; any authored tool schema fails before provider I/O.
+ * - `default` — no capability resolver applies (e.g. a runtime without
+ *   structured-output semantics); the permissive default is used.
+ */
+export type ToolInputCapabilitiesResolution =
+  | { readonly kind: "verified"; readonly capabilities: StructuredOutputCapabilities }
+  | { readonly kind: "unverified"; readonly providerId: string; readonly modelId?: string }
+  | { readonly kind: "default" };
 
 /** Options for {@link createToolLifecycle} — one session per generate/stream call. */
 export interface ToolLifecycleOptions {
@@ -205,6 +237,20 @@ export interface ToolLifecycleOptions {
   readonly sanitizeToolSchema?: (
     schema: Record<string, unknown>,
   ) => Record<string, unknown>;
+  /**
+   * Provider structured-output capabilities used to compile tool input schemas.
+   * Shorthand for `{ kind: 'verified' }`; absent (and no {@link
+   * toolInputCapabilities}) means the permissive default.
+   */
+  readonly structuredOutputCapabilities?: StructuredOutputCapabilities;
+  /**
+   * How tool input schemas are compiled for the selected model. Distinguishes an
+   * explicitly supported permissive default from a model whose semantics cannot
+   * be verified: an `unverified` model with any authored tool schema fails before
+   * transport rather than silently receiving permissive capabilities. Takes
+   * precedence over {@link structuredOutputCapabilities}.
+   */
+  readonly toolInputCapabilities?: ToolInputCapabilitiesResolution;
   /** Determinism seam for golden transcript tests. @defaultValue `Date.now` */
   readonly now?: () => number;
   /** Determinism seam for golden transcript tests. @defaultValue crypto random */
@@ -326,6 +372,14 @@ export interface ToolLifecycle {
   readonly tools: Record<string, unknown> | undefined;
 
   /**
+   * SDK regime: the compiled wire schema for each tool whose authored schema
+   * core owns and validates, keyed by tool name. The loop runtime installs
+   * these as the SDK's tool `inputSchema` so the SDK never runs the authored
+   * validator. `undefined` when no such tool applies.
+   */
+  readonly toolWireSchemas: Record<string, JsonSchemaObject> | undefined;
+
+  /**
    * Core regime: the canonical, schema-sanitized descriptor array for the
    * provider call. Always current — re-read after each round instead of
    * keeping a dialect-local copy. `undefined` in the sdk regime or when no
@@ -422,71 +476,6 @@ export interface ToolLifecycle {
   readonly transcript: readonly ToolProtocolEvent[];
 }
 
-// ─────────────────────────────────────────────────────────────────
-// Internal: descriptor conversion (core regime)
-// ─────────────────────────────────────────────────────────────────
-
-/**
- * Convert a (middleware-wrapped) tool map to the canonical descriptor array
- * the core regime hands to providers. Applies optional schema sanitization
- * from the adapter spec.
- */
-function convertTools(
-  resolvedTools: Record<string, unknown> | undefined,
-  sanitizeToolSchema?: (
-    schema: Record<string, unknown>,
-  ) => Record<string, unknown>,
-): ToolDescriptor[] | undefined {
-  if (!resolvedTools || Object.keys(resolvedTools).length === 0)
-    return undefined;
-
-  return Object.entries(resolvedTools).map(([name, tool]) => {
-    const t = tool as {
-      description?: string;
-      parameters?: unknown;
-      execute?: ToolDescriptor["execute"];
-      toModelOutput?: ToolDescriptor["toModelOutput"];
-    };
-
-    // Convert Zod schema to JSON Schema if present
-    let parameters: Record<string, unknown> = {};
-    if (
-      t.parameters &&
-      typeof t.parameters === "object" &&
-      "_zod" in (t.parameters as object)
-    ) {
-      // Zod v4 schema -- use z.toJSONSchema(). Fail closed: an empty `{}`
-      // fallback would advertise a wrong tool contract to the provider.
-      try {
-        parameters = z.toJSONSchema(t.parameters as z.ZodType) as Record<
-          string,
-          unknown
-        >;
-      } catch (error) {
-        throw new Error(
-          `Tool "${name}": failed to convert Zod parameters to JSON Schema`,
-          { cause: error },
-        );
-      }
-    } else if (t.parameters && typeof t.parameters === "object") {
-      parameters = t.parameters as Record<string, unknown>;
-    }
-
-    // Apply provider-specific schema sanitization
-    if (sanitizeToolSchema) {
-      parameters = sanitizeToolSchema(parameters);
-    }
-
-    return {
-      name,
-      description: t.description ?? "",
-      parameters,
-      execute: t.execute ?? (() => undefined),
-      toModelOutput: t.toModelOutput,
-    };
-  });
-}
-
 /**
  * Structural shape of a (middleware-wrapped) tool as the kernel consumes
  * it. Tool objects are heavily generic in SDK land; the kernel only needs
@@ -504,40 +493,6 @@ interface SessionToolShape {
   }) => ToolModelOutput | Promise<ToolModelOutput>;
 }
 
-/** The canonical tool-round message shape (the sdk regime's only shape). */
-function canonicalAppendToolRound(
-  messages: Message[],
-  response: AdapterResponse,
-  results: ToolResultEntry[],
-): Message[] {
-  return [
-    ...messages,
-    {
-      role: "assistant" as const,
-      content: responseContent(response),
-      ...(response.toolCalls
-        ? { metadata: { toolCalls: response.toolCalls } }
-        : {}),
-    },
-    ...results.map(canonicalToolResultMessage),
-  ];
-}
-
-function canonicalToolResultMessage(result: ToolResultEntry): Message {
-  return {
-    role: "tool" as const,
-    content: result.content,
-    metadata: {
-      toolCallId: result.toolCallId,
-      toolName: result.name,
-      modelOutput: result.modelOutput,
-      ...(result.modelOutputError !== undefined
-        ? { modelOutputError: result.modelOutputError }
-        : {}),
-      ...(result.isError !== undefined ? { isError: result.isError } : {}),
-    },
-  };
-}
 
 /**
  * The private verdict kernel: `gate()` returns a capability-carrying
@@ -550,51 +505,13 @@ type ToolGateVerdict =
   | { readonly kind: "execute"; readonly run: () => Promise<ToolResultEntry> }
   | { readonly kind: "denied"; readonly settled: ToolResultEntry }
   | { readonly kind: "suspend"; readonly request: ApprovalRequestInfo }
-  | { readonly kind: "not-found"; readonly settled: ToolResultEntry };
+  | { readonly kind: "not-found"; readonly settled: ToolResultEntry }
+  | { readonly kind: "decode-error"; readonly settled: ToolResultEntry };
 
 interface SessionToolCall {
   readonly id: string;
   readonly name: string;
   readonly args: unknown;
-}
-
-function normalizeMiddlewareChain(
-  promptMiddleware: ToolMiddleware | readonly ToolMiddleware[] | undefined,
-  callMiddleware: ToolMiddleware | readonly ToolMiddleware[] | undefined,
-): readonly ToolMiddleware[] {
-  return [
-    ...(Array.isArray(promptMiddleware)
-      ? promptMiddleware
-      : promptMiddleware
-        ? [promptMiddleware]
-        : []),
-    ...(Array.isArray(callMiddleware)
-      ? callMiddleware
-      : callMiddleware
-        ? [callMiddleware]
-        : []),
-  ];
-}
-
-/** Preserve discovered origin when an explicit Eval mock shadows execution. */
-function inheritMockSourceProvenance(
-  resolvedTools: Readonly<Record<string, unknown>> | undefined,
-  callTools: Readonly<Record<string, unknown>> | undefined,
-): Record<string, unknown> | undefined {
-  if (!callTools) return undefined;
-  const inherited = { ...callTools };
-  for (const [name, callTool] of Object.entries(inherited)) {
-    if (
-      !isToolExecutionMock(callTool) ||
-      typeof callTool !== "object" ||
-      callTool === null
-    ) {
-      continue;
-    }
-    const provenance = toolSourceProvenance(resolvedTools?.[name]);
-    if (provenance) withToolSourceProvenance(callTool, provenance);
-  }
-  return inherited;
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -617,6 +534,14 @@ export function createToolLifecycle(
   let armedTools: Record<string, unknown> | undefined;
   let descriptors: ToolDescriptor[] | undefined;
   let middlewareCount = 0;
+  const capabilityResolution: ToolInputCapabilitiesResolution =
+    options.toolInputCapabilities ??
+    (options.structuredOutputCapabilities
+      ? { kind: "verified", capabilities: options.structuredOutputCapabilities }
+      : { kind: "default" });
+  // Per-tool compiled input plans (wire schema + decode manifest + Zod), rebuilt
+  // on every arm() alongside the tool registry.
+  const toolInputPlans = new Map<string, ToolInputPlan>();
   let skillSession: SkillActivationSession | undefined;
   let approvalDeclarations: readonly ApprovalDeclaration[] = [];
   let toolContexts: ResolvedToolsContext = {};
@@ -636,7 +561,33 @@ export function createToolLifecycle(
       options.call?.tools,
     );
     const merged = createToolRegistry(resolved.tools, callTools);
-    wrappedTools = applyToolMiddleware(merged, middleware);
+    // Resolve the profile that lowers tool input schemas. An unverified model
+    // (resolver present, semantics unknown) with any authored tool schema fails
+    // before provider I/O rather than silently receiving permissive lowering.
+    if (
+      capabilityResolution.kind === "unverified" &&
+      registryHasAuthoredToolSchema(merged)
+    ) {
+      throw new CruxUnsupportedStructuredOutputError(
+        capabilityResolution.providerId,
+        `the selected model "${
+          capabilityResolution.modelId || "unknown"
+        }" has no verified structured-output capability profile for tool schemas`,
+      );
+    }
+    const toolCapabilities =
+      capabilityResolution.kind === "verified"
+        ? capabilityResolution.capabilities
+        : DEFAULT_TOOL_INPUT_CAPABILITIES;
+    // Compile each tool's input schema and wrap the authored execute with a
+    // authored `safeParse` boundary, then middleware, then the outer decode
+    // boundary — so the execution order is: wire args → decode → middleware over
+    // canonical z.input → authored safeParse exactly once → execute(safeParse.data).
+    const prepared = prepareToolInputPlans(merged, toolCapabilities, toolInputPlans);
+    wrappedTools = withToolInputDecode(
+      applyToolMiddleware(prepared, middleware),
+      toolInputPlans,
+    );
     toolContexts = resolveToolsContext(
       wrappedTools,
       options.call?.toolsContext,
@@ -646,7 +597,11 @@ export function createToolLifecycle(
       ...callApprovalDeclarations(options.call?.toolApproval),
     ];
     if (options.regime === "core") {
-      descriptors = convertTools(wrappedTools, options.sanitizeToolSchema);
+      descriptors = convertTools(
+        wrappedTools,
+        toolInputPlans,
+        options.sanitizeToolSchema,
+      );
     } else {
       const keys = Object.keys(wrappedTools);
       if (keys.length === 0) {
@@ -804,6 +759,87 @@ export function createToolLifecycle(
       outputSize: 0,
       modelOutputSize,
       modelOutputError: `Tool "${toolCall.name}" not found`,
+      isError: true,
+    };
+  }
+
+  /**
+   * Decode a tool call's wire arguments to canonical z.input against its exact
+   * plan. Fails closed: a decode error is returned as a value so the caller can
+   * settle it before any policy, middleware, validation, or execution runs.
+   */
+  function decodeToolCallArgs(
+    toolCall: SessionToolCall,
+  ):
+    | { readonly ok: true; readonly args: unknown }
+    | { readonly ok: false; readonly error: CruxStructuredOutputDecodeError } {
+    const plan = toolInputPlans.get(toolCall.name);
+    if (!plan || plan.manifest.operations.length === 0) {
+      return { ok: true, args: toolCall.args };
+    }
+    try {
+      return { ok: true, args: decodeToolArgs(toolCall.args, plan) };
+    } catch (error) {
+      return {
+        ok: false,
+        error:
+          error instanceof CruxStructuredOutputDecodeError
+            ? error
+            : new CruxStructuredOutputDecodeError(
+                [],
+                error instanceof Error ? error.message : String(error),
+              ),
+      };
+    }
+  }
+
+  /** Settle a decode failure as a sanitized, model-visible tool error. */
+  async function settleDecodeError(
+    toolCall: SessionToolCall,
+    error: CruxStructuredOutputDecodeError,
+    traceId: string | undefined,
+  ): Promise<ToolResultEntry> {
+    void traceId;
+    const span = openToolCallSpan(toolCall.name, toolCall.id, toolCall.args);
+    // The error message is already sanitized (path + reason, never raw args).
+    const convertedModelOutput: ToolModelOutput = {
+      type: "error-json",
+      value: { error: error.message },
+    };
+    const modelOutput = await span.withContext(() =>
+      guardCanonicalToolOutput(convertedModelOutput, toolCall.name, toolCall.id),
+    );
+    const modelOutputSize = measureModelOutput(modelOutput);
+    span.withContext(() => {
+      emitToolResultArtifact(
+        span.spanId,
+        toolCall.name,
+        toolCall.id,
+        modelOutput,
+        {
+          resultKind: "model",
+          modelOutputType: modelOutput.type,
+          modelOutputSize,
+          isError: true,
+          errorKind: "tool_input_decode",
+        },
+      );
+    });
+    span.error(error, {
+      isError: true,
+      phase: "tool.decode",
+      errorKind: "tool_input_decode",
+      outputSize: 0,
+      modelOutputSize,
+    });
+    return {
+      toolCallId: toolCall.id,
+      name: toolCall.name,
+      modelOutput,
+      content: renderToolModelOutput(modelOutput),
+      outputSize: 0,
+      modelOutputSize,
+      modelOutputError: error.message,
       isError: true,
     };
   }
@@ -980,6 +1016,15 @@ export function createToolLifecycle(
           });
           throw err;
         }
+        // Tool-input decode/validation failures settle as a distinct,
+        // model-visible tool error (never re-thrown, never failing the whole
+        // generation). Their messages are already sanitized (no raw arguments).
+        const errorKind =
+          err instanceof CruxToolInputValidationError
+            ? "tool_input_validation"
+            : err instanceof CruxStructuredOutputDecodeError
+              ? "tool_input_decode"
+              : "execute_error";
         const convertedModelOutput: ToolModelOutput = {
           type: "error-json",
           value: { error: err instanceof Error ? err.message : String(err) },
@@ -1000,7 +1045,7 @@ export function createToolLifecycle(
               modelOutputSize,
               tokenSavingsEstimate: 0,
               isError: true,
-              errorKind: "execute_error",
+              errorKind,
             },
             sourceResultPreview(provenance, modelOutput),
           );
@@ -1009,7 +1054,7 @@ export function createToolLifecycle(
           ...provenance?.errorAttributes,
           isError: true,
           phase: "tool.execute",
-          errorKind: "execute_error",
+          errorKind,
           outputSize: 0,
           modelOutputSize,
           modelOutputType: modelOutput.type,
@@ -1033,6 +1078,7 @@ export function createToolLifecycle(
       }
     });
   }
+
 
   async function approvalRequirement(
     toolCall: SessionToolCall,
@@ -1095,7 +1141,21 @@ export function createToolLifecycle(
     messages: readonly Message[],
     origin: "live" | "replay",
   ): Promise<ToolGateVerdict> {
+    // Decode transport sentinels to canonical z.input so the gate, approval, and
+    // middleware operate on canonical input. Fails closed: a decode error settles
+    // as a model-visible decode error here, before any approval policy, history
+    // decision, middleware, validation, or execution runs.
     const traceId = currentTraceId();
+    const decode = decodeToolCallArgs(toolCall);
+    if (!decode.ok) {
+      return {
+        kind: "decode-error",
+        settled: await settleDecodeError(toolCall, decode.error, traceId),
+      };
+    }
+    if (decode.args !== toolCall.args) {
+      toolCall = { ...toolCall, args: decode.args };
+    }
     const approvalId = createApprovalId(toolCall.id);
     const request = findToolApprovalRequests(messages).find(
       (candidate) => candidate.approvalId === approvalId,
@@ -1293,12 +1353,37 @@ export function createToolLifecycle(
       return armedTools;
     },
 
+    get toolWireSchemas() {
+      // Every tool that declared an input schema gets its SDK-installed schema
+      // set to the compiled wire schema: Zod tools so the SDK never runs the
+      // authored validator, non-Zod tools so an AI SDK `jsonSchema(...)` wrapper
+      // is unwrapped and a raw JSON Schema is installed correctly. Tools with no
+      // schema are left untouched. Undefined when no such tool exists.
+      let result: Record<string, JsonSchemaObject> | undefined;
+      for (const [name, plan] of toolInputPlans) {
+        if (!plan.hasAuthoredSchema) continue;
+        (result ??= {})[name] = plan.wireSchema;
+      }
+      return result;
+    },
+
     get descriptors() {
       return descriptors;
     },
 
     requiresApproval: async (toolCall, messages) => {
-      const requirement = await approvalRequirement(toolCall, messages);
+      // SDK-owned tool loops evaluate approval outside the core gate, so decode
+      // the model's wire arguments to canonical z.input here before approval
+      // policies observe them. Fails closed: on a decode error no approval policy
+      // runs and the tool is not gated — the execution decode boundary settles
+      // the sanitized model-visible decode error without executing.
+      const decode = decodeToolCallArgs(toolCall);
+      if (!decode.ok) return false;
+      const decodedCall =
+        decode.args !== toolCall.args
+          ? { ...toolCall, args: decode.args }
+          : toolCall;
+      const requirement = await approvalRequirement(decodedCall, messages);
       if (requirement.requiresApproval)
         pendingApprovalRequirements.set(toolCall.id, requirement);
       return requirement.requiresApproval;

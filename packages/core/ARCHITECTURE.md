@@ -196,8 +196,7 @@ compatibility shims, while every implementation lives in a domain folder.
 │   └── internal/       private message parsers + stateless middleware helpers
 ├── shared/             Genuinely cross-domain, provider-agnostic utilities (kept small)
 │   ├── sanitize.ts     Injection-defense helpers (escapeXml, safe, raw, limit, wrap, userContent, truncate, detectSuspiciousPatterns)
-│   ├── tokenizer.ts    Pluggable token counter (countTokens/setTokenizer; default chars/4)
-│   └── schema-compat.ts  sanitizeJsonSchema() — provider JSON-schema sanitization (@internal)
+│   └── tokenizer.ts    Pluggable token counter (countTokens/setTokenizer; default chars/4)
 ├── scope/              Internal execution-scope kernel shared by Core and first-party integrations
 │   ├── internal.ts     Curated `@use-crux/core/internal/scope` SPI; not application-facing
 │   ├── kernel.ts       Scope lifecycle, nesting, close hooks, write routing, manual controllers, and root-idle waits

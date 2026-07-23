@@ -76,13 +76,13 @@ describe("AI SDK MCP approval resume", () => {
     });
     const ai = createCruxAi({ gateway });
     const suspended = await ai.generate(assistant, {
-      model: "test:model" as never,
+      model: "openai:gpt-4o" as never,
       toolApproval: { lookup: "always" },
     });
     const request = suspended.pendingApprovals![0]!;
     expect(request.replay).toBeDefined();
     const resumed = await ai.generate(assistant, {
-      model: "test:model" as never,
+      model: "openai:gpt-4o" as never,
       toolApproval: { lookup: "always" },
       messages: appendToolApprovalResponse(suspended.messages, {
         approvalId: request.approvalId,

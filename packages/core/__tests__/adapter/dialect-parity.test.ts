@@ -17,6 +17,7 @@ import { fakeLoopRuntime } from '../../src/adapter/testing'
 import type { AdapterSpec } from '../../src/adapter/spec'
 import type { AdapterResponse } from '../../src/adapter/types'
 import { prompt as makePrompt } from '../../src/prompt/prompt'
+import { permissiveCapabilities } from './structured-output/capability-fixtures'
 import { guardrail as makeGuardrail, GuardrailBlockedError } from '../../src/safety/guardrail'
 import { constraint as makeConstraint } from '../../src/safety/constraint'
 import { boundary } from '../../src/safety'
@@ -56,6 +57,7 @@ function scriptedAdapterSpec(script: ScriptedCall[]) {
   const queue = [...script]
   const spec: AdapterSpec<{ kind: 'mock' }, { raw: true }, never> = {
     providerId: 'mock',
+    structuredOutput: { accepts: permissiveCapabilities },
     async call(_client, args) {
       calls.push({ messages: args.messages, system: args.system })
       const scripted = queue.shift() ?? { text: 'exhausted' }

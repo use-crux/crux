@@ -62,7 +62,7 @@ describeMcpAdapterConformance("AI SDK", {
       },
     };
     const result = await createCruxAi({ gateway }).generate(mcpPrompt(), {
-      model: "test:model" as never,
+      model: "openai:gpt-4o" as never,
     });
 
     return {
@@ -78,7 +78,7 @@ describeMcpAdapterConformance("AI SDK", {
     const scripted = scriptedGateway({ generateText: [{ text: "done" }] });
     await createCruxAi({ gateway: scripted.gateway }).generate(
       prompt({ id: "ai-sdk-ordinary", prompt: "Answer directly." }),
-      { model: "test:model" as never },
+      { model: "openai:gpt-4o" as never },
     );
     return { materializeCount: materializeMock.mock.calls.length };
   },
@@ -94,7 +94,7 @@ describeMcpAdapterConformance("AI SDK", {
     let rejected = false;
     try {
       await createCruxAi({ gateway: scripted.gateway }).generate(mcpPrompt(), {
-        model: "test:model" as never,
+        model: "openai:gpt-4o" as never,
       });
     } catch {
       rejected = true;
@@ -119,8 +119,8 @@ describe("AI SDK MCP invocation freshness", () => {
     });
     const ai = createCruxAi({ gateway: scripted.gateway });
 
-    await ai.generate(mcpPrompt(), { model: "test:model" as never });
-    await ai.generate(mcpPrompt(), { model: "test:model" as never });
+    await ai.generate(mcpPrompt(), { model: "openai:gpt-4o" as never });
+    await ai.generate(mcpPrompt(), { model: "openai:gpt-4o" as never });
 
     const firstTools = Object.keys(
       scripted.calls.generateText[0]!.tools as object,

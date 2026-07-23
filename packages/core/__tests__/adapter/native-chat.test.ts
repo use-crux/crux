@@ -16,6 +16,7 @@ import { defineNativeChatProvider } from '../../src/adapter/native-chat'
 import type { NativeAssistantTurn, NativeProviderPort, NativeResponseMetadata } from '../../src/adapter/native-chat'
 import type { CallArgs } from '../../src/adapter/types'
 import type { Message } from '../../src/generation/messages'
+import { permissiveCapabilities } from './structured-output/capability-fixtures'
 import type { TokenUsage } from '../../src/generation/types'
 
 interface NativeTestProviderMessage {
@@ -29,7 +30,7 @@ interface NativeTestRequest {
   readonly system: string | undefined
   readonly messages: readonly NativeTestProviderMessage[]
   readonly settings: Record<string, unknown>
-  readonly schemaParams: Record<string, unknown> | undefined
+  readonly outputSchema: Record<string, unknown> | undefined
   readonly stream?: true
 }
 
@@ -73,7 +74,7 @@ const nativeTestProfile = defineNativeChatProvider<
       system: args.system,
       messages: args.providerMessages,
       settings: args.settings,
-      schemaParams: args.schemaParams,
+      outputSchema: ctx.outputSchema,
     }
   },
 
@@ -110,9 +111,7 @@ const nativeTestProfile = defineNativeChatProvider<
     }
   },
 
-  outputSchema(schema: z.ZodType) {
-    return { response_schema: z.toJSONSchema(schema) }
-  },
+  structuredOutput: { accepts: permissiveCapabilities },
 
   transcript: {
     fromMessages: (messages) => messages.map((message) => ({ role: message.role, text: message.content })),
@@ -253,7 +252,7 @@ describe('native-chat compiler', () => {
       model: 'native-test-model',
       messages: [{ role: 'user', text: 'Write JSON' }],
     })
-    expect(objectClient.calls[0]?.schemaParams).toHaveProperty('response_schema')
+    expect(objectClient.calls[0]?.outputSchema).toMatchObject({ type: 'object' })
   })
 
     it('lets helper provider errors surface unchanged', async () => {

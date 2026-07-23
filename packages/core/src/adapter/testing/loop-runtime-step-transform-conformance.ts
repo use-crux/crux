@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { isPolicyTerminal } from "../../safety/errors";
+import { compileStructuredOutput } from "../structured-output";
 import type { ExecutorRequest } from "../executor-types";
 import type { LoopRuntimePort } from "../loop-runtime-port";
 import type {
@@ -174,6 +175,10 @@ export async function stepTransformConformance<TModel>(
     const { runtime, model } = await harness.prepare({
       structuredTexts: ["unsafe invalid json"],
     });
+    const schema = z.object({ ok: z.boolean() });
+    const caps = runtime.structuredOutput?.capabilities(
+      runtime.describeModel(model),
+    );
     const attempt = await runtime.runStructuredAttempt({
       ...request(runtime, model, {
         stepTransformer: {
@@ -182,7 +187,10 @@ export async function stepTransformConformance<TModel>(
           ],
         },
       }),
-      schema: z.object({ ok: z.boolean() }),
+      schema,
+      outputSchema: caps
+        ? compileStructuredOutput(schema, caps).outputSchema
+        : undefined,
     });
     if (attempt.status !== "invalid") {
       fail("guarded structured correction", "expected invalid structured output");

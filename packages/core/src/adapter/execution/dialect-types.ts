@@ -9,10 +9,10 @@
  * @module
  */
 
-import type { z } from "zod";
 import type { GenerationSettings } from "../../generation/types";
 import type { Message } from "../../generation/messages";
 import type { LoopRuntimePort } from "../loop-runtime-port";
+import type { StructuredOutputCapabilities } from "../structured-output";
 import type { ProviderMediaHooks } from '../native-chat/media-hooks'
 import type {
   AdapterResponse,
@@ -111,8 +111,10 @@ export interface CoreStepDialect<
     schema: Record<string, unknown>,
   ) => Record<string, unknown>;
 
-  /** Optionally wrap a Zod output schema into provider-native structured output params. */
-  wrapOutputSchema?: (schema: z.ZodType) => Record<string, unknown>;
+  /** Inert JSON Schema capabilities the provider accepts for structured output. */
+  structuredOutput?: {
+    readonly accepts: StructuredOutputCapabilities;
+  };
 }
 
 /**

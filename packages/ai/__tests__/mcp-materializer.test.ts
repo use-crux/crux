@@ -55,7 +55,7 @@ describe("AI SDK-native MCP materialization", () => {
     });
 
     await createCruxAi({ gateway: scripted.gateway }).generate(assistant, {
-      model: "test:model" as never,
+      model: "openai:gpt-4o" as never,
     });
 
     expect(materializeMcpMock).toHaveBeenCalledTimes(1);
@@ -99,7 +99,7 @@ describe("AI SDK-native MCP materialization", () => {
 
       await expect(
         crux[method](assistant, {
-          model: "test:model" as never,
+          model: "openai:gpt-4o" as never,
           toolsContext: { lookup: { opaque: true } } as never,
         }),
       ).rejects.toThrow(

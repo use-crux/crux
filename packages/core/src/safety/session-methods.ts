@@ -73,6 +73,10 @@ interface SessionMethodOptions {
           readonly suspended?: boolean;
           readonly messages?: readonly Message[];
           readonly schema?: z.ZodType;
+          readonly prepareValidated?: (
+            guarded: SafetyOutput,
+            guardCandidate: (candidate: SafetyOutput) => Promise<SafetyOutput>,
+          ) => Promise<SafetyOutput>;
         }
       | undefined,
     terminalOnly: boolean,

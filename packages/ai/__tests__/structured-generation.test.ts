@@ -1,23 +1,34 @@
 import { describe, expect, it } from 'vitest'
 import type { LanguageModel } from 'ai'
 import { z } from 'zod'
+import type { ModelInfo } from '@use-crux/core'
 import type { StructuredAttempt, StructuredRequest } from '@use-crux/core/adapter'
+import { compileStructuredOutput } from '@use-crux/core/adapter'
 import { cascade, fallback, router } from '@use-crux/core/routing'
 import type { SdkLoopResultLike } from '../src/executor'
 import { attemptStructuredGeneration, createStructuredGenerateObjectFn } from '../src/structured-generation'
+import { aiSdkStructuredCapabilities } from '../src/provider-profile'
 import { objectGenerationError, scriptedGateway } from './scripted-gateway'
 
 function model(modelId = 'gpt-4o', provider = 'openai'): LanguageModel {
   return { provider, modelId, specificationVersion: 'v3' } as unknown as LanguageModel
 }
 
+/** Compile the wire schema core would install for a model, as the codec expects. */
+function wireSchema(schema: z.ZodType, modelInfo: ModelInfo) {
+  const caps = aiSdkStructuredCapabilities(modelInfo)
+  if (!caps) throw new Error('expected capabilities for test model')
+  return compileStructuredOutput(schema, caps).outputSchema
+}
+
 function structuredRequest(
   schema: z.ZodType,
   overrides: Partial<StructuredRequest<LanguageModel>> = {},
 ): StructuredRequest<LanguageModel> {
+  const modelInfo = overrides.modelInfo ?? { provider: 'openai', modelId: 'gpt-4o' }
   return {
     model: model(),
-    modelInfo: { provider: 'openai', modelId: 'gpt-4o' },
+    modelInfo,
     system: 'Return JSON.',
     systemBlocks: undefined,
     prompt: 'json please',
@@ -30,6 +41,7 @@ function structuredRequest(
     abortSignal: undefined,
     extra: undefined,
     schema,
+    outputSchema: wireSchema(schema, modelInfo),
     ...overrides,
   }
 }
@@ -50,13 +62,6 @@ function expectInvalid(
   }
 }
 
-type RepairText = (event: { readonly text: string }) => string | null | Promise<string | null>
-
-function requireRepairText(value: unknown): RepairText {
-  if (typeof value !== 'function') throw new Error('Expected experimental_repairText to be installed')
-  return value as RepairText
-}
-
 function modelIdFromArg(value: unknown): string | undefined {
   if (value === null || typeof value !== 'object') return undefined
   if (!('modelId' in value)) return undefined
@@ -71,13 +76,13 @@ function acceptedResult(value: unknown): value is { readonly object: { readonly 
 }
 
 describe('attemptStructuredGeneration', () => {
-  it('returns ok with normalized response, raw result, and parsed object', async () => {
+  it('returns ok with normalized response and the parsed wire value', async () => {
     const output = { title: 'ok', count: 1 }
     const scripted = scriptedGateway({
-      generateObject: [
+      generateText: [
         {
           text: JSON.stringify(output),
-          object: output,
+          output,
           usage: { inputTokens: 3, outputTokens: 5, totalTokens: 8 },
           finishReason: 'stop',
         },
@@ -90,8 +95,8 @@ describe('attemptStructuredGeneration', () => {
     )
 
     expectOk(attempt)
-    expect(attempt.object).toEqual(output)
-    expect(attempt.raw.object).toEqual(output)
+    expect(attempt.wireValue).toEqual(output)
+    expect(attempt.raw.output).toEqual(output)
     expect(attempt.response).toMatchObject({
       text: JSON.stringify(output),
       usage: { inputTokens: 3, outputTokens: 5, totalTokens: 8 },
@@ -102,7 +107,7 @@ describe('attemptStructuredGeneration', () => {
   })
 
   it('returns invalid with raw text and a ZodError for AI SDK structured validation errors', async () => {
-    const scripted = scriptedGateway({ generateObject: [objectGenerationError('{"title":1}')] })
+    const scripted = scriptedGateway({ generateText: [objectGenerationError('{"title":1}')] })
 
     const attempt = await attemptStructuredGeneration(
       scripted.gateway,
@@ -116,37 +121,37 @@ describe('attemptStructuredGeneration', () => {
 
   it('throws non-validation provider errors unchanged', async () => {
     const providerError = Object.assign(new Error('provider unavailable'), { status: 503 })
-    const scripted = scriptedGateway({ generateObject: [providerError] })
+    const scripted = scriptedGateway({ generateText: [providerError] })
 
     await expect(
       attemptStructuredGeneration(scripted.gateway, structuredRequest(z.object({ title: z.string() }))),
     ).rejects.toBe(providerError)
   })
 
-  it('installs core JSON repair and sends provider-sanitized schemas to the gateway', async () => {
+  it('installs the compiled wire schema as an Output, never the authored Zod validator', async () => {
     const schema = z.object({ items: z.array(z.string()).max(2) })
-    const scripted = scriptedGateway({ generateObject: [{ object: { items: ['a'] } }] })
+    const scripted = scriptedGateway({ generateText: [{ output: { items: ['a'] } }] })
 
-    await attemptStructuredGeneration(
-      scripted.gateway,
-      structuredRequest(schema, {
-        model: model('anthropic/claude-sonnet-4-5', 'openrouter'),
-        modelInfo: { provider: 'openrouter', modelId: 'anthropic/claude-sonnet-4-5' },
-      }),
-    )
+    const request = structuredRequest(schema, {
+      model: model('anthropic/claude-sonnet-4-5', 'openrouter'),
+      modelInfo: { provider: 'openrouter', modelId: 'anthropic/claude-sonnet-4-5' },
+    })
+    await attemptStructuredGeneration(scripted.gateway, request)
 
-    const args = scripted.calls.generateObject[0]!
-    const repairText = requireRepairText(args.experimental_repairText)
-    await expect(repairText({ text: '```json\n{"items":["a"]}\n```' })).resolves.toBe('{"items":["a"]}')
-    expect(args.schema).not.toBe(schema)
-    expect(JSON.stringify(args.schema)).not.toContain('maxItems')
+    // The structured attempt is a single-step generateText + Output.object; the
+    // authored Zod schema is never handed to the SDK as a validator.
+    const args = scripted.calls.generateText[0]!
+    expect(args.output).toBeDefined()
+    expect(args.schema).toBeUndefined()
+    // The Anthropic-lowered wire schema drops the array bound the provider rejects.
+    expect(JSON.stringify(request.outputSchema)).not.toContain('maxItems')
   })
 })
 
 describe('createStructuredGenerateObjectFn', () => {
-  it('reuses structured attempt mechanics and returns only the parsed object', async () => {
+  it('compiles the wire schema, decodes and authored-parses, returns only the object', async () => {
     const schema = z.object({ items: z.array(z.string()).max(2) })
-    const scripted = scriptedGateway({ generateObject: [{ object: { items: ['a'] } }] })
+    const scripted = scriptedGateway({ generateText: [{ output: { items: ['a'] } }] })
     const generateObject = createStructuredGenerateObjectFn(scripted.gateway)
 
     const result = await generateObject({
@@ -157,19 +162,20 @@ describe('createStructuredGenerateObjectFn', () => {
     })
 
     expect(result).toEqual({ object: { items: ['a'] } })
-    const args = scripted.calls.generateObject[0]!
-    expect(requireRepairText(args.experimental_repairText)).toBeTypeOf('function')
-    expect(args.schema).not.toBe(schema)
-    expect(JSON.stringify(args.schema)).not.toContain('maxItems')
+    const args = scripted.calls.generateText[0]!
+    // Wire schema installed as an Output; the authored Zod schema is not the
+    // SDK validator, and the Anthropic-rejected array bound is lowered away.
+    expect(args.output).toBeDefined()
+    expect(args.schema).toBeUndefined()
   })
 
   it('preserves router and cascade model resolution for standalone helper calls', async () => {
     const schema = z.object({ accepted: z.boolean() })
     const scripted = scriptedGateway({
-      generateObject: [
-        { object: { accepted: false } },
-        { object: { accepted: false } },
-        { object: { accepted: true } },
+      generateText: [
+        { output: { accepted: false } },
+        { output: { accepted: false } },
+        { output: { accepted: true } },
       ],
     })
     const generateObject = createStructuredGenerateObjectFn(scripted.gateway)
@@ -206,15 +212,15 @@ describe('createStructuredGenerateObjectFn', () => {
 
     expect(routed).toMatchObject({ object: { accepted: false } })
     expect(cascaded).toMatchObject({ object: { accepted: true } })
-    expect(scripted.calls.generateObject.map((args) => modelIdFromArg(args.model))).toEqual(['fast', 'cheap', 'strong'])
+    expect(scripted.calls.generateText.map((args) => modelIdFromArg(args.model))).toEqual(['fast', 'cheap', 'strong'])
   })
 
   it('falls back to the next model and preserves fallback meta', async () => {
     const schema = z.object({ accepted: z.boolean() })
     const scripted = scriptedGateway({
-      generateObject: [
+      generateText: [
         Object.assign(new Error('rate limited'), { status: 429 }),
-        { object: { accepted: true } },
+        { output: { accepted: true } },
       ],
     })
     const generateObject = createStructuredGenerateObjectFn(scripted.gateway)
@@ -226,7 +232,7 @@ describe('createStructuredGenerateObjectFn', () => {
     })
 
     expect(result.object).toEqual({ accepted: true })
-    expect(scripted.calls.generateObject.map((args) => modelIdFromArg(args.model))).toEqual(['primary', 'backup'])
+    expect(scripted.calls.generateText.map((args) => modelIdFromArg(args.model))).toEqual(['primary', 'backup'])
     expect(result.routing?.trace).toMatchObject([
       {
         kind: 'fallback',

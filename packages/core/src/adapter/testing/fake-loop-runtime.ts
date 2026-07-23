@@ -12,6 +12,7 @@
  * @module
  */
 
+import { ZodError } from "zod";
 import type { ModelInfo } from "../../types";
 import type { GenerationSettings } from "../../generation/types";
 import type { Message } from "../../generation/messages";
@@ -26,7 +27,8 @@ import type {
   StepTransformer,
   StructuredAttempt,
 } from "../executor-types";
-import { validateStructuredOutput } from "../policy/validation-retry";
+import type { StructuredOutputCapabilities } from "../structured-output";
+import { repairJsonText } from "../../generation/repair-json";
 import { responseContent, textFromAssistantContent } from "../assistant-output";
 import { transformCanonicalStep } from "../step-transform";
 import {
@@ -81,10 +83,32 @@ export interface FakeLoopRuntimeConfig {
 export interface FakeRawResponse {
   readonly kind: "fake-loop" | "fake-structured";
   readonly text: string;
-  readonly object?: unknown;
+  /** Parsed provider wire value (not manifest-decoded or authored-validated). */
+  readonly wireValue?: unknown;
   /** The system prompt in effect for the FINAL step (observes `amend`). */
   readonly system: string | undefined;
 }
+
+/**
+ * The fake accepts every JSON Schema semantic the compiler can emit, so its
+ * compiled wire schema equals the authored `z.input` shape and its decode
+ * manifest is empty. Core still owns the sole authored parse — the fake only
+ * performs the structural (JSON) validation a real SDK does against a wire
+ * schema.
+ */
+const FAKE_STRUCTURED_CAPABILITIES: StructuredOutputCapabilities = {
+  id: "fake",
+  supportsJsonSchema: true,
+  requiresAllProperties: false,
+  supportsOptionalProperties: true,
+  supportsNullable: true,
+  supportsBooleanSchemas: true,
+  supportsReferences: true,
+  supportsUnions: true,
+  supportsRecursiveSchemas: true,
+  additionalProperties: "supported",
+  unsupportedKeywords: [],
+};
 
 /** The raw "SDK stream result" type produced by the fake loop runtime. */
 export interface FakeRawStream {
@@ -180,6 +204,7 @@ export function fakeLoopRuntime(
   const runtime: LoopRuntimePort<string, FakeRawResponse, FakeRawStream> = {
     id: "fake",
     capabilities: { stepTransform: "before-client-tools" },
+    structuredOutput: { capabilities: () => FAKE_STRUCTURED_CAPABILITIES },
 
     describeModel(model: string): ModelInfo {
       const idx = model.indexOf(":");
@@ -382,32 +407,43 @@ export function fakeLoopRuntime(
         { type: "text", text: scripted },
       ]);
       const guardedText = textFromAssistantContent(canonicalContent);
-      const validation = validateStructuredOutput(guardedText, request.schema);
-      if (!validation.valid) {
+      // A real SDK validates the completed text structurally against the
+      // installed wire schema, not the authored Zod schema. The fake accepts
+      // any well-formed JSON as its wire value; core owns the authored parse.
+      const repaired = repairJsonText(guardedText) ?? guardedText;
+      let wireValue: unknown;
+      try {
+        wireValue = JSON.parse(repaired);
+      } catch (error) {
         return {
           status: "invalid",
           rawText: guardedText,
-          error: validation.error!,
+          error: new ZodError([
+            {
+              code: "custom",
+              path: [],
+              message: error instanceof Error ? error.message : "Invalid JSON",
+            },
+          ]),
         };
       }
-      const object: unknown = JSON.parse(validation.repairedText);
       return {
         status: "ok",
         raw: {
           kind: "fake-structured",
-          text: validation.repairedText,
-          object,
+          text: repaired,
+          wireValue,
           system: request.system,
         },
         response: {
-          text: validation.repairedText,
+          text: repaired,
           toolCalls: undefined,
           usage: { ...FAKE_USAGE },
           finishReason: "stop",
           responseId: "fake_structured",
           actualModelId: request.modelInfo.modelId,
         },
-        object,
+        wireValue,
       };
     },
 
@@ -432,10 +468,24 @@ export function fakeLoopRuntime(
       }
 
       const text = chunks.join("");
+      // A structured stream (real `streamText` + `Output.object`) exposes the
+      // parsed wire value as `output` on completion; the fake mirrors that by
+      // structurally parsing the completed text. Core owns the authored parse.
+      const structured = (request as { schema?: unknown }).schema !== undefined;
+      let wireValue: unknown;
+      if (structured) {
+        const repaired = repairJsonText(text) ?? text;
+        try {
+          wireValue = JSON.parse(repaired);
+        } catch {
+          wireValue = undefined;
+        }
+      }
       return {
         raw: { kind: "fake-stream", chunks, text },
         completion: async () => ({
           text,
+          ...(structured ? { object: wireValue } : {}),
           usage: FAKE_USAGE,
           finishReason: "stop",
           streaming: { totalChunks: chunks.length, ttftMs: 1 },

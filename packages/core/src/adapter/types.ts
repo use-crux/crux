@@ -10,6 +10,7 @@
 import type { z } from "zod";
 import type { GenerationMeta, TokenUsage } from "../generation/types";
 import type { RoutingReceipt } from "../routing/receipt";
+import type { JsonSchemaObject } from "./structured-output";
 import type { SystemBlock } from "../resolver/types";
 import type { Message } from "../generation/messages";
 import type { ToolModelOutput } from "../types/tool";
@@ -58,7 +59,11 @@ export interface CallArgs<
   messages: Message[];
   settings: Record<string, unknown>;
   schema: z.ZodType | undefined;
-  schemaParams: Record<string, unknown> | undefined;
+  /**
+   * Provider-compatible JSON Schema compiled from the authored schema, supplied
+   * to the request builder. Undefined for non-structured requests.
+   */
+  outputSchema: JsonSchemaObject | undefined;
   tools:
     | Array<{
         name: string;

@@ -11,7 +11,10 @@ import {
 import { createAiSdkLoopRuntime } from "./executor";
 import { createAiSdkRuntimeExtensions } from "./extensions";
 import type { SdkGateway } from "./gateway";
-import { extractModelInfo } from "./provider-profile";
+import {
+  aiSdkStructuredCapabilities,
+  extractModelInfo,
+} from "./provider-profile";
 import { mapAiSdkSettings } from "./sdk-codec";
 import { aiSdkMediaHooks } from "./media-preflight";
 import { createAiSdkImageOperation } from "./image-generation";
@@ -34,6 +37,7 @@ export const aiSdkProviderRuntime = defineProviderRuntime({
     describeModel: extractModelInfo,
     settings: mapAiSdkSettings,
     media: aiSdkMediaHooks,
+    structuredOutput: { capabilities: aiSdkStructuredCapabilities },
     bind: (gateway: SdkGateway) => {
       const runtime = createAiSdkLoopRuntime(gateway);
       const {

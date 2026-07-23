@@ -1,13 +1,14 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import type { z } from "zod";
 import type {
   GenerationSettings,
   SystemBlock,
   ToolChoice,
 } from "@use-crux/core";
 import type { CallArgs } from "@use-crux/core/adapter";
-import type { NativeChatRequestArgs } from "@use-crux/core/adapter";
+import type {
+  NativeChatRequestArgs,
+  StructuredOutputCapabilities,
+} from "@use-crux/core/adapter";
 import type { AnthropicExtra, AnthropicRequest } from "./types";
 
 /** Default `max_tokens` when a call site does not provide one. */
@@ -50,7 +51,17 @@ export function anthropicRequest(
     ...args.settings,
     ...anthropicToolParams(args.tools, args.extra),
     max_tokens: anthropicMaxTokens(args.settings),
-    ...(args.schemaParams ?? {}),
+    ...(args.outputSchema
+      ? {
+          output_config: {
+            format: {
+              type: "json_schema" as const,
+              name: "output",
+              schema: args.outputSchema,
+            },
+          },
+        }
+      : {}),
   };
 }
 
@@ -189,18 +200,37 @@ function anthropicToolChoice(toolChoice: ToolChoice): Anthropic.ToolChoice {
   return { type: "tool", name: toolChoice.tool };
 }
 
-/** Convert a Zod schema into Anthropic's structured-output params. */
-export function anthropicOutputSchema(
-  schema: z.ZodType,
-): Record<string, unknown> {
-  return {
-    // Anthropic's helper ships with its own Zod typings; cross-version
-    // `z.ZodType` shapes do not structurally align, so widen at this boundary.
-    output_config: {
-      format: zodOutputFormat(schema as Parameters<typeof zodOutputFormat>[0]),
-    },
-  };
-}
+/**
+ * The JSON Schema behavior Anthropic's structured-output format accepts.
+ *
+ * Anthropic rejects several JSON Schema validation keywords; core drops those
+ * during lowering rather than the adapter sanitizing them. Exact per-keyword and
+ * envelope conformance is finalized in the Anthropic provider slice.
+ */
+export const anthropicStructuredCapabilities = {
+  id: "anthropic.messages.output-format",
+  supportsJsonSchema: true,
+  requiresAllProperties: false,
+  supportsOptionalProperties: true,
+  supportsNullable: true,
+  supportsBooleanSchemas: false,
+  supportsReferences: true,
+  supportsUnions: true,
+  supportsRecursiveSchemas: true,
+  additionalProperties: "supported",
+  unsupportedKeywords: [
+    "minItems",
+    "maxItems",
+    "minimum",
+    "maximum",
+    "exclusiveMinimum",
+    "exclusiveMaximum",
+    "multipleOf",
+    "minLength",
+    "maxLength",
+    "pattern",
+  ],
+} satisfies StructuredOutputCapabilities;
 
 /**
  * Strip `description` fields from a JSON schema.

@@ -26,7 +26,7 @@ import { createUIMessageStreamResponse } from "../src";
 import { scriptedGateway, objectGenerationError } from "./scripted-gateway";
 import {
   buildSystemArg,
-  sanitizeSchemaForProvider,
+  aiSdkStructuredCapabilities,
   isAnthropicModel,
 } from "../src/provider-profile";
 
@@ -244,9 +244,9 @@ describe("generate — text mapping", () => {
 });
 
 describe("generate — structured output + validation retry", () => {
-  it("returns the typed object from generateObject", async () => {
+  it("returns the typed object from a single-step generateText + Output.object", async () => {
     const scripted = scriptedGateway({
-      generateObject: [{ object: { title: "ok", count: 1 } }],
+      generateText: [{ output: { title: "ok", count: 1 } }],
     });
     const ai = createCruxAi({ gateway: scripted.gateway });
 
@@ -256,19 +256,18 @@ describe("generate — structured output + validation retry", () => {
     });
 
     expect(result.object).toEqual({ title: "ok", count: 1 });
-    expect(scripted.calls.generateObject).toHaveLength(1);
-    // Tier-1 repair is always wired for structured attempts.
-    expect(
-      typeof scripted.calls.generateObject[0]!.experimental_repairText,
-    ).toBe("function");
+    expect(scripted.calls.generateText).toHaveLength(1);
+    // The compiled wire schema is installed as an Output, never authored Zod.
+    expect(scripted.calls.generateText[0]!.output).toBeDefined();
+    expect(scripted.calls.generateText[0]!.schema).toBeUndefined();
   });
 
   it("retries with corrective messages when the SDK throws a validation error", async () => {
     const onRetry = vi.fn();
     const scripted = scriptedGateway({
-      generateObject: [
+      generateText: [
         objectGenerationError('{"title":1}'),
-        { object: { title: "fixed", count: 2 } },
+        { output: { title: "fixed", count: 2 } },
       ],
     });
     const ai = createCruxAi({ gateway: scripted.gateway });
@@ -282,7 +281,7 @@ describe("generate — structured output + validation retry", () => {
     expect(result.object).toEqual({ title: "fixed", count: 2 });
     expect(onRetry).toHaveBeenCalledTimes(1);
 
-    const retryArgs = scripted.calls.generateObject[1]!;
+    const retryArgs = scripted.calls.generateText[1]!;
     const messages = retryArgs.messages as Array<{
       role: string;
       content: unknown;
@@ -305,7 +304,7 @@ describe("generate — structured output + validation retry", () => {
 
   it("throws ValidationExhaustedError when retries run out", async () => {
     const scripted = scriptedGateway({
-      generateObject: [
+      generateText: [
         objectGenerationError("bad"),
         objectGenerationError("still bad"),
       ],
@@ -319,12 +318,12 @@ describe("generate — structured output + validation retry", () => {
         validationRetry: { maxRetries: 1 },
       }),
     ).rejects.toThrow(ValidationExhaustedError);
-    expect(scripted.calls.generateObject).toHaveLength(2);
+    expect(scripted.calls.generateText).toHaveLength(2);
   });
 
   it("rethrows non-validation provider errors untouched", async () => {
     const scripted = scriptedGateway({
-      generateObject: [Object.assign(new Error("boom"), { status: 500 })],
+      generateText: [Object.assign(new Error("boom"), { status: 500 })],
     });
     const ai = createCruxAi({ gateway: scripted.gateway });
 
@@ -335,7 +334,7 @@ describe("generate — structured output + validation retry", () => {
         validationRetry: { maxRetries: 3 },
       }),
     ).rejects.toThrow("boom");
-    expect(scripted.calls.generateObject).toHaveLength(1);
+    expect(scripted.calls.generateText).toHaveLength(1);
   });
 });
 
@@ -590,7 +589,7 @@ describe("stream — metrics and completion", () => {
   it("warns for each structured stream request whose tools cannot be observed", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const scripted = scriptedGateway({
-      streamObject: [
+      streamText: [
         { chunks: ['{"title":"ok","count":1}'], finish: { object: { title: "ok", count: 1 } } },
         { chunks: ['{"title":"again","count":2}'], finish: { object: { title: "again", count: 2 } } },
       ],
@@ -616,9 +615,9 @@ describe("stream — metrics and completion", () => {
       });
       await second.completion;
 
-      expect(scripted.calls.streamObject).toHaveLength(2);
-      expect(scripted.calls.streamObject[0]!.tools).toBeUndefined();
-      expect(scripted.calls.streamObject[1]!.tools).toBeUndefined();
+      expect(scripted.calls.streamText).toHaveLength(2);
+      expect(scripted.calls.streamText[0]!.tools).toBeUndefined();
+      expect(scripted.calls.streamText[1]!.tools).toBeUndefined();
       expect(warn).toHaveBeenCalledTimes(2);
       expect(warn.mock.calls[0]![0]).toContain(
         "streaming structured output with tools is not observable",
@@ -794,19 +793,27 @@ describe("provider profile (pure quirks)", () => {
     expect(result).toBe("joined");
   });
 
-  it("sanitizes schemas for Anthropic and passes Zod through for others", async () => {
-    const schema = z.object({ items: z.array(z.string()).max(3) });
-    const passthrough = await sanitizeSchemaForProvider(schema, {
+  it("resolves per-provider structured-output capabilities, undefined when unverified", () => {
+    const openai = aiSdkStructuredCapabilities({
       provider: "openai",
       modelId: "gpt-4o",
     });
-    expect(passthrough).toBe(schema);
+    expect(openai?.id).toBe("ai-sdk.openai");
+    // OpenAI accepts array bounds; nothing is dropped from the wire schema.
+    expect(openai?.unsupportedKeywords).toEqual([]);
 
-    const wrapped = await sanitizeSchemaForProvider(schema, {
+    const anthropic = aiSdkStructuredCapabilities({
       provider: "anthropic",
       modelId: "claude",
     });
-    expect(wrapped).not.toBe(schema);
-    expect(JSON.stringify(wrapped)).not.toContain("maxItems");
+    expect(anthropic?.id).toBe("ai-sdk.anthropic");
+    // Anthropic rejects several validation keywords; the compiler drops them.
+    expect(anthropic?.unsupportedKeywords).toContain("maxItems");
+
+    // A model whose structured-output semantics are not verified resolves to
+    // undefined so core fails before transport instead of inventing a default.
+    expect(
+      aiSdkStructuredCapabilities({ provider: "cohere", modelId: "command" }),
+    ).toBeUndefined();
   });
 });

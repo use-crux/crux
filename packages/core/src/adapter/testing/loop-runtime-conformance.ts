@@ -11,6 +11,7 @@
 
 import { z } from "zod";
 import type { LoopRuntimePort } from "../loop-runtime-port";
+import { compileStructuredOutput } from "../structured-output";
 import type { ExecutorRequest } from "../executor-types";
 import type { FakeLoopEmission } from "./fake-loop-runtime";
 import { stepTransformConformance } from "./loop-runtime-step-transform-conformance";
@@ -306,9 +307,23 @@ export async function loopRuntimePortConformance<TModel>(
     }
   }
 
-  // 7. runStructuredAttempt: invalid is a value; valid yields the object.
+  // 7. runStructuredAttempt: invalid is a value; valid yields the wire value.
+  //    Core installs the compiled wire schema as `outputSchema`; the runtime
+  //    validates the completed text structurally against it, never the authored
+  //    Zod schema.
   {
     const schema = z.object({ ok: z.boolean() });
+    const wireSchema = (
+      port: LoopRuntimePort<unknown>,
+      modelRef: unknown,
+    ) => {
+      const caps = port.structuredOutput?.capabilities(
+        port.describeModel(modelRef),
+      );
+      return caps
+        ? compileStructuredOutput(schema, caps).outputSchema
+        : undefined;
+    };
     const { runtime, model } = await harness.prepare({
       structuredTexts: ["definitely not json"],
     });
@@ -316,6 +331,7 @@ export async function loopRuntimePortConformance<TModel>(
       const attempt = await runtime.runStructuredAttempt({
         ...baseRequest(runtime, model, {}),
         schema,
+        outputSchema: wireSchema(runtime, model),
       });
       if (attempt.status !== "invalid")
         fail(
@@ -333,13 +349,14 @@ export async function loopRuntimePortConformance<TModel>(
     const attempt = await valid.runtime.runStructuredAttempt({
       ...baseRequest(valid.runtime, valid.model, {}),
       schema,
+      outputSchema: wireSchema(valid.runtime, valid.model),
     });
     if (attempt.status !== "ok")
       fail("structured ok", `expected ok, got ${attempt.status}`);
-    else if (JSON.stringify(attempt.object) !== '{"ok":true}') {
+    else if (JSON.stringify(attempt.wireValue) !== '{"ok":true}') {
       fail(
         "structured ok",
-        `expected parsed object {"ok":true}, got ${JSON.stringify(attempt.object)}`,
+        `expected wire value {"ok":true}, got ${JSON.stringify(attempt.wireValue)}`,
       );
     }
   }

@@ -27,6 +27,18 @@ interface FinalizeLanguageTerminalOptions {
   readonly suspended?: boolean;
   readonly messages: readonly Message[];
   readonly schema?: z.ZodType;
+  /**
+   * Adapter-owned candidate validator injected between terminal guardrails and
+   * constraints. It runs the single authoritative Zod `safeParse` (and any
+   * validation retry) over the guarded canonical `z.input`, so constraints only
+   * ever evaluate schema-valid candidates. Receives the guard function so a
+   * validation-retry re-prompt can re-run terminal guardrails on the new output.
+   * Absent for the text (non-structured) path, where guardrails are the candidate.
+   */
+  readonly prepareValidated?: (
+    guarded: SafetyOutput,
+    guardCandidate: (candidate: SafetyOutput) => Promise<SafetyOutput>,
+  ) => Promise<SafetyOutput>;
   readonly context: GuardrailContext;
   readonly appendAudit: (audit: GuardrailAudit) => void;
   readonly transcript: SafetyProtocolEvent[];
@@ -43,33 +55,47 @@ interface FinalizeLanguageTerminalOptions {
 export async function finalizeLanguageTerminal(
   options: FinalizeLanguageTerminalOptions,
 ): Promise<SafetyOutput> {
-  if (!options.enabled) return options.output;
   if (options.suspended) {
-    options.transcript.push({ t: "suspend" });
+    if (options.enabled) options.transcript.push({ t: "suspend" });
     return options.output;
   }
 
-  const bindings = options.terminalOnly
-    ? options.bindings.filter(
-        (binding) =>
-          binding.boundary.id === "model.output.object" ||
-          binding.boundary.id === "model.output",
-      )
-    : options.bindings;
+  // Guardrails and constraints are gated on whether Safety is enabled, but the
+  // adapter-owned validator (unconditional Zod validation) must always run — even
+  // when no guardrails or constraints are configured.
+  const bindings = !options.enabled
+    ? []
+    : options.terminalOnly
+      ? options.bindings.filter(
+          (binding) =>
+            binding.boundary.id === "model.output.object" ||
+            binding.boundary.id === "model.output",
+        )
+      : options.bindings;
   const guardCandidate = (candidate: SafetyOutput) =>
     bindings.length > 0
       ? applyTerminalGuards(options, bindings, candidate)
       : Promise.resolve(candidate);
 
-  let current = await guardCandidate(options.output);
-  if (options.constraintsEnabled) {
+  // Terminal guardrails run first, then the adapter-owned validator (one Zod
+  // `safeParse` + validation retry). Constraints only ever see a schema-valid
+  // candidate, and a regenerated candidate repeats this pipeline before recheck.
+  const prepareCandidate = async (candidate: SafetyOutput) => {
+    const guarded = await guardCandidate(candidate);
+    return options.prepareValidated
+      ? options.prepareValidated(guarded, guardCandidate)
+      : guarded;
+  };
+
+  let current = await prepareCandidate(options.output);
+  if (options.enabled && options.constraintsEnabled) {
     current = await options.applyConstraints(
       current,
       options.regenerate,
-      guardCandidate,
+      prepareCandidate,
     );
   }
-  await options.applyReportConstraints(current);
+  if (options.enabled) await options.applyReportConstraints(current);
   return current;
 }
 
@@ -93,7 +119,6 @@ async function applyTerminalGuards(
     { text: output.text, parsed: result.parsed ?? output.parsed },
     result.content,
     {
-      schema: options.schema,
       policyId: latestRewritePolicyId(result.audit.applied),
     },
   );

@@ -18,6 +18,7 @@ import type { AdapterSpec } from '../../src/adapter/spec'
 import type { AdapterResponse, CallArgs, StreamHandle, ToolResultEntry } from '../../src/adapter/types'
 import type { GenerationSettings, TokenUsage } from '../../src/generation/types'
 import type { Message } from '../../src/generation/messages'
+import { permissiveCapabilities } from './structured-output/capability-fixtures'
 
 interface FakeNativeClient {
   readonly calls: FakeNativeBody[]
@@ -29,7 +30,7 @@ interface FakeNativeBody {
   readonly system: string | undefined
   readonly messages: readonly Message[]
   readonly settings: Record<string, unknown>
-  readonly schemaParams: Record<string, unknown> | undefined
+  readonly outputSchema: Record<string, unknown> | undefined
 }
 
 interface FakeNativeRawResponse {
@@ -55,10 +56,10 @@ function createFakeNativeSpec(): AdapterSpec<FakeNativeClient, FakeNativeRawResp
         system: args.system,
         messages: args.messages,
         settings: args.settings,
-        schemaParams: args.schemaParams,
+        outputSchema: args.outputSchema,
       })
 
-      const emission = args.schemaParams
+      const emission = args.outputSchema
         ? { text: client.script.structuredTexts?.[client.calls.length - 1] ?? '{"ok":true}' }
         : (client.script.emissions?.[client.calls.length - 1] ?? { text: 'ok' })
 
@@ -87,7 +88,7 @@ function createFakeNativeSpec(): AdapterSpec<FakeNativeClient, FakeNativeRawResp
         system: args.system,
         messages: args.messages,
         settings: args.settings,
-        schemaParams: args.schemaParams,
+        outputSchema: args.outputSchema,
       })
       const rawStream = streamFrom(client.script.streamChunks ?? ['he', 'llo'])
       return {
@@ -123,9 +124,7 @@ function createFakeNativeSpec(): AdapterSpec<FakeNativeClient, FakeNativeRawResp
       }
     },
 
-    wrapOutputSchema(schema: z.ZodType): Record<string, unknown> {
-      return { response_schema: z.toJSONSchema(schema) }
-    },
+    structuredOutput: { accepts: permissiveCapabilities },
   }
 }
 

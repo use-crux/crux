@@ -17,7 +17,7 @@ import { router, type RouteArgs } from "../../src/routing";
 import { ValidationExhaustedError } from "../../src/generation/validation-retry";
 import { appendToolApprovalResponse } from "../../src/tools/approvals";
 import { resetHooks } from "../../src/runtime/runtime";
-import { boundary, guardrail, SafetyStructuredSyncError } from "../../src/safety";
+import { boundary, guardrail } from "../../src/safety";
 import type { Message } from "../../src/generation/messages";
 import type {
   StepDirective,
@@ -178,12 +178,15 @@ describe("loopRuntimeAdapter — structured output + validation retry", () => {
     expect(result.object).toEqual({ title: "[redacted]", count: 2 });
   });
 
-  it("fails closed with the rewriting policy id when structured safety violates the schema", async () => {
+  it("fails closed as a validation failure when a safety rewrite breaks the schema", async () => {
     const fake = fakeLoopRuntime({
       structured: ['{"title":"private","count":2}'],
     });
     const executor = loopRuntimeAdapter(fake.runtime);
 
+    // A guardrail rewrite that produces valid JSON but a schema-invalid object is
+    // no longer a Safety-specific sync error: validation is unconditional and the
+    // rewritten candidate follows normal validation-failure handling.
     const error = await executor
       .generate(structuredPrompt(), {
         model: "fake:m-1",
@@ -213,8 +216,8 @@ describe("loopRuntimeAdapter — structured output + validation retry", () => {
       .then(() => undefined)
       .catch((caught: unknown) => caught);
 
-    expect(error).toBeInstanceOf(SafetyStructuredSyncError);
-    expect(error).toMatchObject({ policyId: "break-count" });
+    expect(error).toBeInstanceOf(ValidationExhaustedError);
+    expect(error).toMatchObject({ attempts: 0, maxAttempts: 0 });
     expect(fake.calls.runStructuredAttempt).toHaveLength(1);
   });
 

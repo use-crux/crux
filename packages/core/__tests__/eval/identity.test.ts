@@ -22,9 +22,9 @@ describe("portable Eval evidence identity", () => {
       occurrence: "root",
     });
 
-    expect(TASK_EVIDENCE_CACHE_EPOCH).toBe(9);
+    expect(TASK_EVIDENCE_CACHE_EPOCH).toBe(10);
     expect(identity.key).toBe(
-      "5ce3f8b4cef740f7f077d43b6476a9df30dab4c9befde5490911d52f1781546b",
+      "bd2b0168fcc64c74f7bb261f3c17d36153800ed1582a9cd4ff7de052957b7699",
     );
     expect(identity.fingerprint).toBe(identity.key);
     expect(Object.isFrozen(identity)).toBe(true);

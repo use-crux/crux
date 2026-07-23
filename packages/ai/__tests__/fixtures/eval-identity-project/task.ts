@@ -17,7 +17,13 @@ const result = {
 
 function model() {
   return stableModel(
-    new MockLanguageModelV3({ doGenerate: async () => result as never }),
+    new MockLanguageModelV3({
+      // A recognized provider so tool schemas compile; the stable key below
+      // (not the provider/model id) is what fixes this model's Eval identity.
+      provider: "openai",
+      modelId: "gpt-4o",
+      doGenerate: async () => result as never,
+    }),
     "fixture:identity-model:v1",
   );
 }

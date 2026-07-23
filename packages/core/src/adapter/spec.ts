@@ -8,7 +8,6 @@
  * @module
  */
 
-import type { z } from "zod";
 import type { GenerationSettings } from "../generation/types";
 import type { Message } from "../generation/messages";
 import type {
@@ -19,6 +18,7 @@ import type {
 } from "./types";
 import type { CruxProviderError } from "./normalized-outcome";
 import type { ToolSourceMaterializer } from "../tools/tool-source";
+import type { StructuredOutputCapabilities } from "./structured-output";
 
 // ─────────────────────────────────────────────────────────────────
 // AdapterSpec Interface
@@ -95,6 +95,14 @@ export interface AdapterSpec<
   /** Post-process z.toJSONSchema() output for this provider (optional). */
   sanitizeToolSchema?(schema: Record<string, unknown>): Record<string, unknown>;
 
-  /** Convert structured output schema to provider-native params (optional). */
-  wrapOutputSchema?(schema: z.ZodType): Record<string, unknown>;
+  /**
+   * The JSON Schema behavior this provider accepts for structured output.
+   *
+   * Inert capability data; core compiles the authored schema against `accepts`
+   * and supplies the lowered schema through the call args. Absent means
+   * structured output is unsupported and fails before a network request.
+   */
+  structuredOutput?: {
+    readonly accepts: StructuredOutputCapabilities;
+  };
 }
