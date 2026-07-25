@@ -37,13 +37,13 @@ export type {
   StaticSyntaxFrontendName,
   StaticSyntaxFrontendOptions,
   StaticSyntaxValue,
+  StaticTaggedTemplateExpression,
+  StaticTaggedTemplateValue,
   StaticTemplateValue,
   StaticUnsupportedValue,
-} from '../../indexer/static-index/syntax'
-export {
-  OXC_STATIC_SYNTAX_FRONTEND_IDENTITY,
-} from '../../indexer/static-index/syntax'
+} from "../../indexer/static-index/syntax";
+export { OXC_STATIC_SYNTAX_FRONTEND_IDENTITY } from "../../indexer/static-index/syntax";
 export {
   staticRecordSchemaProperty,
   staticSyntaxValueToJsonSchema,
-} from '../../indexer/static-index/syntax/record/schema'
+} from "../../indexer/static-index/syntax/record/schema";

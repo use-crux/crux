@@ -1,16 +1,24 @@
 import ts from "typescript";
 import type {
   StaticArrayValue,
-  StaticCalleeRecord,
   StaticFunctionParameterBinding,
   StaticInitializerRecord,
   StaticImportRecord,
   StaticObjectProperty,
   StaticObjectValue,
   StaticSyntaxValue,
+  StaticTaggedTemplateValue,
 } from "./types";
 import { propertyName } from "../../../ast/literals";
-import { sourceForNode, sourceSnippetForNode } from "../../../ast/snippets";
+import {
+  exactSourceSnippetForNode,
+  sourceForNode,
+  sourceSnippetForNode,
+} from "../../../ast/snippets";
+import {
+  expressionName,
+  staticCalleeRecordFromExpression,
+} from "./typescript-callee";
 import { staticFunctionValueFromNode } from "./typescript-function-values";
 
 /**
@@ -82,6 +90,13 @@ export function staticSyntaxValueFromExpression(
       snippet: sourceSnippetForNode(sourceFile, expression),
     };
   }
+  if (ts.isTaggedTemplateExpression(expression)) {
+    return staticTaggedTemplateValueFromExpression(
+      sourceFile,
+      expression,
+      importsByLocalName,
+    );
+  }
   if (ts.isTemplateExpression(expression)) {
     return {
       kind: "template",
@@ -126,6 +141,32 @@ export function staticSyntaxValueFromExpression(
     kind: "unsupported",
     syntaxKind: ts.SyntaxKind[expression.kind] ?? String(expression.kind),
     source: sourceForNode(sourceFile, expression),
+  };
+}
+
+/** Converts a tagged template into exact, tag-neutral static syntax evidence. */
+export function staticTaggedTemplateValueFromExpression(
+  sourceFile: ts.SourceFile,
+  expression: ts.TaggedTemplateExpression,
+  importsByLocalName: ReadonlyMap<string, StaticImportRecord>,
+): StaticTaggedTemplateValue {
+  const expressions = ts.isTemplateExpression(expression.template)
+    ? expression.template.templateSpans.map((span) => ({
+        value: staticSyntaxValueFromExpression(
+          sourceFile,
+          span.expression,
+          importsByLocalName,
+        ),
+        source: sourceForNode(sourceFile, span.expression),
+      }))
+    : [];
+  return {
+    kind: "tagged-template",
+    tag: staticCalleeRecordFromExpression(expression.tag, importsByLocalName),
+    text: expression.template.getText(sourceFile),
+    expressions,
+    source: sourceForNode(sourceFile, expression),
+    snippet: exactSourceSnippetForNode(sourceFile, expression),
   };
 }
 
@@ -186,45 +227,6 @@ export function staticObjectValueFromExpression(
     source: sourceForNode(sourceFile, object),
     snippet: sourceSnippetForNode(sourceFile, object),
   };
-}
-
-/** Normalizes a call or constructor expression into a stable callee record. */
-export function staticCalleeRecordFromExpression(
-  expression: ts.Expression,
-  importsByLocalName: ReadonlyMap<string, StaticImportRecord>,
-): StaticCalleeRecord {
-  const localName = expressionName(expression);
-  const direct = ts.isIdentifier(expression);
-  const receiverName =
-    ts.isPropertyAccessExpression(expression) &&
-    ts.isIdentifier(expression.expression)
-      ? expression.expression.text
-      : undefined;
-  if (!localName) return { name: "<unknown>", direct };
-  const imported = importsByLocalName.get(localName);
-  if (!imported)
-    return {
-      name: localName,
-      localName,
-      direct,
-      ...(receiverName ? { receiverName } : {}),
-    };
-  return {
-    name: imported.importedName,
-    direct,
-    localName,
-    ...(receiverName ? { receiverName } : {}),
-    importedName: imported.importedName,
-    moduleSpecifier: imported.moduleSpecifier,
-    ...(imported.resolvedFile ? { resolvedFile: imported.resolvedFile } : {}),
-  };
-}
-
-/** Returns the final user-facing expression name for simple callable expressions. */
-export function expressionName(expression: ts.Expression): string | undefined {
-  if (ts.isIdentifier(expression)) return expression.text;
-  if (ts.isPropertyAccessExpression(expression)) return expression.name.text;
-  return undefined;
 }
 
 function propertyAccessPath(

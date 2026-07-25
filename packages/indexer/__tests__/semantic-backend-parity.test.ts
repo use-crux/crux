@@ -1,8 +1,9 @@
 import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, describe, expect, it } from "vitest";
 import type { IndexPatchFacts } from "../src/indexer/patches";
+import { definitionFingerprintFile } from "../src/indexer/definitions";
 import {
   createNativeSemanticBackend,
   createSemanticIndexService,
@@ -16,21 +17,15 @@ import {
 const roots: string[] = [];
 
 async function fixtureRoot(externalRoot = false): Promise<string> {
-  const root = await mkdtemp(
-    join(
-      externalRoot ? tmpdir() : process.cwd(),
-      ".tmp-semantic-backend-parity-",
-    ),
-  );
+  const base = externalRoot ? tmpdir() : join(process.cwd(), ".tmp");
+  if (!externalRoot) await mkdir(base, { recursive: true });
+  const root = await mkdtemp(join(base, "semantic-backend-parity-"));
   roots.push(root);
   return root;
 }
 
-afterEach(async () => {
-  await Promise.all(
-    roots.splice(0).map((root) => rm(root, { recursive: true, force: true })),
-  );
-});
+afterEach(cleanupRoots);
+afterAll(cleanupRoots);
 
 describe("semantic backend parity", () => {
   for (const fixture of semanticBackendParityFixtures) {
@@ -47,7 +42,7 @@ describe("semantic backend parity", () => {
       expect(nativePatch.status).toBe("ok");
       expect(typescriptPatch.semanticBackend).toBe("typescript");
       expect(nativePatch.semanticBackend).toBe("native");
-      assertFixtureCoverage(fixture, typescriptPatch.facts);
+      assertFixtureCoverage(fixture, root, typescriptPatch.facts);
       expect(normalizedFacts(nativePatch.facts)).toEqual(
         normalizedFacts(typescriptPatch.facts),
       );
@@ -88,7 +83,7 @@ describe("semantic backend parity", () => {
       expect(nativePatch.semanticBackend).toBe("native");
       expect(cachedTypescriptPatch.status).toBe("ok");
       expect(cachedNativePatch.status).toBe("ok");
-      assertFixtureCoverage(fixture, typescriptPatch.facts);
+      assertFixtureCoverage(fixture, root, typescriptPatch.facts);
       expect(normalizedFacts(nativePatch.facts)).toEqual(
         normalizedFacts(typescriptPatch.facts),
       );
@@ -138,12 +133,15 @@ async function writeFixture(
         target: "ES2022",
         noEmit: true,
         skipLibCheck: true,
+        ...fixture.compilerOptions,
       },
       include: ["src/**/*.ts"],
     }),
   );
 
-  const files = Object.keys(fixture.files).map((path) => join(root, path));
+  const files = Object.keys(fixture.files)
+    .filter((path) => !path.includes("/node_modules/"))
+    .map((path) => join(root, path));
   for (const [path, source] of Object.entries(fixture.files)) {
     const file = join(root, path);
     await mkdir(dirname(file), { recursive: true });
@@ -154,6 +152,7 @@ async function writeFixture(
 
 function assertFixtureCoverage(
   fixture: SemanticBackendParityFixture,
+  root: string,
   facts: IndexPatchFacts,
 ): void {
   const coverage = semanticFactCoverage(facts);
@@ -193,6 +192,35 @@ function assertFixtureCoverage(
       (candidate) => candidate.id === definitionId,
     );
     expect(definition?.metadata?.profile).toEqual(profile);
+  }
+  if (fixture.expect.promptTextSourceRefs) {
+    const promptTextSourceRefs = (facts.sourceRefs ?? [])
+      .filter((sourceRef) => sourceRef.ref.metadata?.promptText)
+      .map((sourceRef) => ({
+        ...sourceRef,
+        ref: {
+          ...sourceRef.ref,
+          source: {
+            ...sourceRef.ref.source,
+            file: definitionFingerprintFile(root, sourceRef.ref.source.file),
+          },
+          ...(sourceRef.ref.snippet
+            ? {
+                snippet: {
+                  ...sourceRef.ref.snippet,
+                  range: {
+                    ...sourceRef.ref.snippet.range,
+                    file: definitionFingerprintFile(
+                      root,
+                      sourceRef.ref.snippet.range.file,
+                    ),
+                  },
+                },
+              }
+            : {}),
+        },
+      }));
+    expect(promptTextSourceRefs).toEqual(fixture.expect.promptTextSourceRefs);
   }
 }
 
@@ -236,4 +264,11 @@ function sortJsonRows<T>(rows: readonly T[] | undefined): T[] | undefined {
         JSON.stringify(left).localeCompare(JSON.stringify(right)),
       )
     : undefined;
+}
+
+async function cleanupRoots(): Promise<void> {
+  await Promise.all(
+    roots.map((root) => rm(root, { recursive: true, force: true })),
+  );
+  roots.splice(0);
 }

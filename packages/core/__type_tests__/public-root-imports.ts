@@ -22,9 +22,16 @@
  * - the surface uses TypeScript 5.5-compatible syntax.
  */
 
-import { expectTypeOf } from 'vitest'
-import { z } from 'zod'
-import { context, when, match, createContexts, prompt } from '@use-crux/core'
+import { expectTypeOf } from "vitest";
+import { z } from "zod";
+import {
+  context,
+  when,
+  match,
+  createContexts,
+  prompt,
+  md,
+} from "@use-crux/core";
 import type {
   AnyPrompt,
   ConditionalContext,
@@ -35,149 +42,185 @@ import type {
   Prompt,
   PromptMiddleware,
   PromptMiddlewareArgs,
+  PromptText,
   ResolvedPrompt,
   Simplify,
-} from '@use-crux/core'
+} from "@use-crux/core";
 
 // ─────────────────────────────────────────────────────────────────
 // Shared fixtures (authored through the public barrel)
 // ─────────────────────────────────────────────────────────────────
 
 const localeCtx = context({
-  id: 'locale',
-  input: z.object({ locale: z.enum(['en', 'nl']) }),
+  id: "locale",
+  input: z.object({ locale: z.enum(["en", "nl"]) }),
   system: ({ input }) => `Reply in ${input.locale}.`,
-})
+});
 
 const brandCtx = context({
-  id: 'brand',
+  id: "brand",
   input: z.object({ brand: z.string() }),
   system: ({ input }) => `Brand: ${input.brand}`,
-})
+});
 
-const tone = context({ id: 'tone', system: '## Tone\nFriendly.' })
+const tone = context({ id: "tone", system: "## Tone\nFriendly." });
+const structured = md`Structured ${"text"}`;
+expectTypeOf(structured).toEqualTypeOf<PromptText>();
+
+prompt({
+  id: "public-structured-text",
+  system: structured,
+  prompt: ({ input }) => md`Input: ${String(input)}`,
+});
 
 // ─────────────────────────────────────────────────────────────────
 // createContexts / when / match keep their narrow result types
 // ─────────────────────────────────────────────────────────────────
 
-const tree = createContexts({ base: { tone }, locale: localeCtx })
-expectTypeOf(tree.base.tone).toEqualTypeOf<typeof tone>()
-expectTypeOf(tree.locale).toEqualTypeOf<typeof localeCtx>()
-expectTypeOf(tree._all).toMatchTypeOf<Context<z.ZodType>[]>()
+const tree = createContexts({ base: { tone }, locale: localeCtx });
+expectTypeOf(tree.base.tone).toEqualTypeOf<typeof tone>();
+expectTypeOf(tree.locale).toEqualTypeOf<typeof localeCtx>();
+expectTypeOf(tree._all).toMatchTypeOf<Context<z.ZodType>[]>();
 
-const conditional = when(({ locale }) => locale === 'en', localeCtx)
-expectTypeOf(conditional).toMatchTypeOf<ConditionalContext<typeof localeCtx>>()
+const conditional = when(({ locale }) => locale === "en", localeCtx);
+expectTypeOf(conditional).toMatchTypeOf<ConditionalContext<typeof localeCtx>>();
 
 const branch = match({
-  on: (input: { mode: 'terse' | 'verbose' }) => input.mode,
+  on: (input: { mode: "terse" | "verbose" }) => input.mode,
   cases: { terse: localeCtx, verbose: [localeCtx, brandCtx] },
   default: tone,
-})
-expectTypeOf(branch).toExtend<MatchSpec>()
+});
+expectTypeOf(branch).toExtend<MatchSpec>();
 
 // `use[]` accepts every legal member shape through the public `ContextEntry`.
-const entries: readonly ContextEntry[] = [localeCtx, brandCtx, conditional, branch, tone, false, null, undefined]
-void entries
+const entries: readonly ContextEntry[] = [
+  localeCtx,
+  brandCtx,
+  conditional,
+  branch,
+  tone,
+  false,
+  null,
+  undefined,
+];
+void entries;
 
 // ─────────────────────────────────────────────────────────────────
 // Context input schemas merge into the prompt input (required fields)
 // ─────────────────────────────────────────────────────────────────
 
 const answer = prompt({
-  id: 'public-barrel-answer',
+  id: "public-barrel-answer",
   use: [localeCtx, brandCtx, tone],
   input: z.object({ question: z.string() }),
-  system: ({ input }) => `${input.brand} answering in ${input.locale}: ${input.question}`,
+  system: ({ input }) =>
+    `${input.brand} answering in ${input.locale}: ${input.question}`,
   prompt: ({ input }) => input.question,
-})
+});
 
-expectTypeOf(answer).toMatchTypeOf<AnyPrompt>()
+expectTypeOf(answer).toMatchTypeOf<AnyPrompt>();
 
-void answer.resolve({ input: { question: 'q', locale: 'en', brand: 'Acme' } })
+void answer.resolve({ input: { question: "q", locale: "en", brand: "Acme" } });
 
 void answer.resolve({
   // @ts-expect-error — locale and brand are required by the merged context schemas.
-  input: { question: 'q' },
-})
+  input: { question: "q" },
+});
 
 // `.resolve()` resolves through the public `ResolvedPrompt` contract.
-expectTypeOf(answer.resolve).returns.resolves.toMatchTypeOf<ResolvedPrompt>()
+expectTypeOf(answer.resolve).returns.resolves.toMatchTypeOf<ResolvedPrompt>();
 
 // ─────────────────────────────────────────────────────────────────
 // Conditional contexts contribute *optional* input fields
 // ─────────────────────────────────────────────────────────────────
 
 const optional = prompt({
-  id: 'public-barrel-optional',
-  use: [when(({ locale }) => locale === 'nl', localeCtx), brandCtx],
+  id: "public-barrel-optional",
+  use: [when(({ locale }) => locale === "nl", localeCtx), brandCtx],
   input: z.object({ question: z.string() }),
   system: ({ input }) => `${input.brand}: ${input.question}`,
   prompt: ({ input }) => input.question,
-})
+});
 
-void optional.resolve({ input: { question: 'q', brand: 'Acme' } }) // locale omitted — allowed
-void optional.resolve({ input: { question: 'q', brand: 'Acme', locale: 'en' } })
+void optional.resolve({ input: { question: "q", brand: "Acme" } }); // locale omitted — allowed
+void optional.resolve({
+  input: { question: "q", brand: "Acme", locale: "en" },
+});
 
 // ─────────────────────────────────────────────────────────────────
 // The prompt output schema determines result typing
 // ─────────────────────────────────────────────────────────────────
 
-const ScoreSchema = z.object({ score: z.number(), label: z.enum(['ok', 'bad']) })
+const ScoreSchema = z.object({
+  score: z.number(),
+  label: z.enum(["ok", "bad"]),
+});
 
 prompt({
-  id: 'public-barrel-structured',
+  id: "public-barrel-structured",
   input: z.object({ q: z.string() }),
   output: ScoreSchema,
   prompt: ({ input }) => input.q,
   hooks: {
     onGenerate: (_args, result) => {
       // Result object is inferred from the output schema with zero annotations.
-      expectTypeOf(result.object).toEqualTypeOf<{ score: number; label: 'ok' | 'bad' }>()
+      expectTypeOf(result.object).toEqualTypeOf<{
+        score: number;
+        label: "ok" | "bad";
+      }>();
     },
   },
-})
+});
 
 prompt({
-  id: 'text-only',
+  id: "text-only",
   input: z.object({ q: z.string() }),
   prompt: ({ input }) => input.q,
   hooks: {
     onGenerate: (_args, result) => {
       // Text-only prompts expose a required `text`, no typed `object`.
-      expectTypeOf(result.text).toEqualTypeOf<string>()
+      expectTypeOf(result.text).toEqualTypeOf<string>();
     },
   },
-})
+});
 
 // ─────────────────────────────────────────────────────────────────
 // Public re-exported helper types stay strongly typed (no `any` leak)
 // ─────────────────────────────────────────────────────────────────
 
 // `MergedInput` over a context tuple keeps each field's literal type.
-type AnswerInput = Simplify<MergedInput<z.ZodObject<{ question: z.ZodString }>, readonly [typeof localeCtx, typeof brandCtx]>>
-expectTypeOf<AnswerInput['question']>().toEqualTypeOf<string>()
-expectTypeOf<AnswerInput['locale']>().toEqualTypeOf<'en' | 'nl'>()
-expectTypeOf<AnswerInput['brand']>().toEqualTypeOf<string>()
+type AnswerInput = Simplify<
+  MergedInput<
+    z.ZodObject<{ question: z.ZodString }>,
+    readonly [typeof localeCtx, typeof brandCtx]
+  >
+>;
+expectTypeOf<AnswerInput["question"]>().toEqualTypeOf<string>();
+expectTypeOf<AnswerInput["locale"]>().toEqualTypeOf<"en" | "nl">();
+expectTypeOf<AnswerInput["brand"]>().toEqualTypeOf<string>();
 
 // `Prompt<...>` is assignable to the catch-all `AnyPrompt` without widening to `any`.
-declare const concrete: Prompt<z.ZodObject<{ q: z.ZodString }>, undefined, readonly [typeof localeCtx]>
-expectTypeOf(concrete).toMatchTypeOf<AnyPrompt>()
-expectTypeOf(concrete).not.toBeAny()
+declare const concrete: Prompt<
+  z.ZodObject<{ q: z.ZodString }>,
+  undefined,
+  readonly [typeof localeCtx]
+>;
+expectTypeOf(concrete).toMatchTypeOf<AnyPrompt>();
+expectTypeOf(concrete).not.toBeAny();
 
 // Middleware result stays structurally readable — `text` is `string | undefined`,
 // `object` is `unknown`, never `any`.
 const middleware: PromptMiddleware = async (args, next) => {
-  expectTypeOf(args).toMatchTypeOf<PromptMiddlewareArgs>()
-  const result = await next(args)
-  expectTypeOf(result.text).toEqualTypeOf<string | undefined>()
-  expectTypeOf(result.object).toEqualTypeOf<unknown>()
-  expectTypeOf(result.object).not.toBeAny()
-  return result
-}
-void middleware
+  expectTypeOf(args).toMatchTypeOf<PromptMiddlewareArgs>();
+  const result = await next(args);
+  expectTypeOf(result.text).toEqualTypeOf<string | undefined>();
+  expectTypeOf(result.object).toEqualTypeOf<unknown>();
+  expectTypeOf(result.object).not.toBeAny();
+  return result;
+};
+void middleware;
 
 // `ResolvedPrompt.system` is a precise optional string, not `any`.
-declare const resolved: ResolvedPrompt
-expectTypeOf(resolved.system).toEqualTypeOf<string | undefined>()
-expectTypeOf(resolved.system).not.toBeAny()
+declare const resolved: ResolvedPrompt;
+expectTypeOf(resolved.system).toEqualTypeOf<string | undefined>();
+expectTypeOf(resolved.system).not.toBeAny();

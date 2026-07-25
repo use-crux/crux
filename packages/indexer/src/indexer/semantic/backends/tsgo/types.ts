@@ -1,40 +1,51 @@
-import type { SemanticAnalyzeInput, SemanticBackendIdentity } from '../../service/types'
-import type { SemanticEvidenceBatchSource } from '../../evidence/projection'
+import type {
+  SemanticAnalyzeInput,
+  SemanticBackendIdentity,
+} from "../../service/types";
+import type { SemanticEvidenceBatchSource } from "../../evidence/projection";
+import type { SemanticCacheValidationDependencyCollector } from "../../cache-validation";
+
+/** Analysis input enriched with semantic cache validation collection. */
+export interface NativeSemanticEngineAnalyzeInput extends SemanticAnalyzeInput {
+  readonly validationDependencies: SemanticCacheValidationDependencyCollector;
+}
 
 /** Native semantic engine implementations available behind the native backend. */
-export type NativeSemanticEngineName = 'tsgo'
+export type NativeSemanticEngineName = "tsgo";
 
 /** Stable identity for one native engine implementation. */
-export interface NativeSemanticEngineIdentity<TName extends NativeSemanticEngineName = NativeSemanticEngineName> {
+export interface NativeSemanticEngineIdentity<
+  TName extends NativeSemanticEngineName = NativeSemanticEngineName,
+> {
   /** Native engine implementation name. */
-  readonly name: TName
+  readonly name: TName;
   /** Engine implementation or protocol version. */
-  readonly version: string
+  readonly version: string;
 }
 
 /** Native semantic coverage reported by an engine for one analysis. */
 export type NativeSemanticCoverage = {
-  readonly kind: 'complete-native'
-  readonly engine: NativeSemanticEngineIdentity
+  readonly kind: "complete-native";
+  readonly engine: NativeSemanticEngineIdentity;
   /** Structural traversal frontend used for shared semantic analyzer evidence. */
-  readonly syntaxTraversal: NativeSemanticEngineCapabilities['syntaxTraversal']
-  readonly extractors: readonly string[]
-}
+  readonly syntaxTraversal: NativeSemanticEngineCapabilities["syntaxTraversal"];
+  readonly extractors: readonly string[];
+};
 
 /** Operational characteristics for a native semantic engine. */
 export interface NativeSemanticEngineCapabilities {
   /** Whether the native engine can produce complete Project Index semantic evidence. */
-  readonly nativeEvidence: 'complete'
+  readonly nativeEvidence: "complete";
   /** Structural traversal frontend used by the native engine while lowering evidence. */
-  readonly syntaxTraversal: 'native-ast'
+  readonly syntaxTraversal: "native-ast";
 }
 
 /** Result of one native semantic engine analysis. */
 export interface NativeSemanticAnalyzeResult {
   /** Backend-neutral semantic evidence produced by the native engine. */
-  readonly evidence: SemanticEvidenceBatchSource
+  readonly evidence: SemanticEvidenceBatchSource;
   /** Coverage path used for this analysis. */
-  readonly coverage: NativeSemanticCoverage
+  readonly coverage: NativeSemanticCoverage;
 }
 
 /**
@@ -46,13 +57,13 @@ export interface NativeSemanticAnalyzeResult {
  */
 export interface NativeSemanticEngine {
   /** Stable native engine identity. */
-  readonly identity: NativeSemanticEngineIdentity
+  readonly identity: NativeSemanticEngineIdentity;
   /** Parent semantic backend identity used for cache/session ownership. */
-  readonly backendIdentity: SemanticBackendIdentity<'native'>
+  readonly backendIdentity: SemanticBackendIdentity<"native">;
   /** Engine capabilities used by diagnostics and benchmark planning. */
-  readonly capabilities: NativeSemanticEngineCapabilities
+  readonly capabilities: NativeSemanticEngineCapabilities;
   /** Analyze files and return compiler-free semantic evidence. */
-  analyze(input: SemanticAnalyzeInput): NativeSemanticAnalyzeResult
+  analyze(input: NativeSemanticEngineAnalyzeInput): NativeSemanticAnalyzeResult;
   /** Dispose native compiler resources owned by the engine. */
-  close(): void
+  close(): void;
 }

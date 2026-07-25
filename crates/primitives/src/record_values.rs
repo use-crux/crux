@@ -245,6 +245,7 @@ pub(crate) fn source_for_value(
         StaticSyntaxValue::Object { source, .. }
         | StaticSyntaxValue::Call { source, .. }
         | StaticSyntaxValue::Function { source, .. }
+        | StaticSyntaxValue::TaggedTemplate { source, .. }
         | StaticSyntaxValue::Unsupported { source, .. } => source.clone(),
         _ => property.source.clone(),
     }
@@ -257,7 +258,8 @@ pub(crate) fn snippet_for_value(
     match value {
         StaticSyntaxValue::Object { snippet, .. }
         | StaticSyntaxValue::Call { snippet, .. }
-        | StaticSyntaxValue::Function { snippet, .. } => snippet
+        | StaticSyntaxValue::Function { snippet, .. }
+        | StaticSyntaxValue::TaggedTemplate { snippet, .. } => snippet
             .clone()
             .or_else(|| initializer.and_then(|item| item.snippet.clone())),
         _ => initializer.and_then(|item| item.snippet.clone()),

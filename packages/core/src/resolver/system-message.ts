@@ -37,6 +37,7 @@ import {
 } from "./system-content";
 import { freshnessProjection, markLive, markMemo } from "./freshness";
 import type { SystemIngressBlock } from "./system-ingress-provenance";
+import { contextualizePromptTextError } from "../prompt-text/internal";
 
 /** Result returned by {@link buildSystemMessage}. */
 export interface BuiltSystemMessage {
@@ -76,6 +77,29 @@ function computeCacheKey(
     relevant[key] = input[key];
   }
   return `cache:ctx:${contextId}:${JSON.stringify(relevant)}`;
+}
+
+/** Evaluate and normalize one context while retaining stable owner diagnostics. */
+async function resolveContextContent(
+  ctx: Context<z.ZodType>,
+  input: Record<string, unknown>,
+  count: (text: string) => number,
+  source: string,
+): Promise<ResolvedSystemContent> {
+  try {
+    return normalizeSystemContent(
+      await ctx.systemFn(input),
+      ctx.systemKind !== "static",
+      count,
+      `Context "${source}" system function`,
+      inputForSourceKeys(input, ctx.inputKeys),
+    );
+  } catch (error) {
+    throw contextualizePromptTextError(
+      error,
+      `in context "${ctx.id ?? source}" field "system"`,
+    );
+  }
 }
 
 /** Compose prompt and context system text into final call-ready structures. */
@@ -138,24 +162,24 @@ export async function buildSystemMessage(
         // Only authored context ids reconstruct the indexer's canonical
         // `context:<safeId(id)>`; anonymous contexts fall back to the
         // compile-time local name we cannot observe, so we omit the ref.
-        ...(ctx.id
-          ? { definitionRefs: [contextDefinitionRef(ctx.id)] }
-          : {}),
+        ...(ctx.id ? { definitionRefs: [contextDefinitionRef(ctx.id)] } : {}),
       },
       async () => {
         let resolvedContent: ResolvedSystemContent;
         let cacheStatus: "hit" | "miss" | "disabled" = "disabled";
-        const contextInferenceInput = inputForSourceKeys(input, ctx.inputKeys);
         if (ctx.memoTtl > 0 && ctx.id) {
           const cacheKey = computeCacheKey(ctx.id, input, ctx.inputKeys);
           const cached = ports.cache.get(cacheKey);
           if (cached !== null) {
             // Segments are cached tokenizer-independently; refresh the token
             // split so it matches the active tokenizer on this hit.
-            resolvedContent = markMemo(recountSystemContent(cached.content, count), {
-              ageMs: cached.ageMs,
-              now: ports.clock.now(),
-            });
+            resolvedContent = markMemo(
+              recountSystemContent(cached.content, count),
+              {
+                ageMs: cached.ageMs,
+                now: ports.clock.now(),
+              },
+            );
             cacheStatus = "hit";
             ports.instrumentation.contextCacheHit({
               contextId: ctx.id,
@@ -165,13 +189,7 @@ export async function buildSystemMessage(
           } else {
             const start = ports.clock.now();
             resolvedContent = markLive(
-              normalizeSystemContent(
-                await ctx.systemFn(input),
-                ctx.systemKind !== "static",
-                count,
-                `Context "${source}" system function`,
-                contextInferenceInput,
-              ),
+              await resolveContextContent(ctx, input, count, source),
               start,
             );
             cacheStatus = "miss";
@@ -188,13 +206,7 @@ export async function buildSystemMessage(
         } else {
           const resolvedAt = ports.clock.now();
           resolvedContent = markLive(
-            normalizeSystemContent(
-              await ctx.systemFn(input),
-              ctx.systemKind !== "static",
-              count,
-              `Context "${source}" system function`,
-              contextInferenceInput,
-            ),
+            await resolveContextContent(ctx, input, count, source),
             resolvedAt,
           );
         }

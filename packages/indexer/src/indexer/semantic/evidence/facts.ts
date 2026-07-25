@@ -47,6 +47,7 @@ import {
   semanticTemplateInterpolationSourceRefs,
   semanticToolMapSourceRefs,
 } from "../model";
+import { semanticPromptTextSourceRefs } from "../model/prompt-text-source-refs";
 
 interface SemanticSchemaIndexFacts {
   readonly definitions: readonly ProjectDefinition[];
@@ -94,6 +95,7 @@ const semanticAnalyzers = createSemanticAnalyzers({
   templateInterpolationSourceRefs: semanticTemplateInterpolationSourceRefs,
   toolMapSourceRefs: semanticToolMapSourceRefs,
   injectionConditionSourceRefs: semanticInjectionConditionSourceRefs,
+  promptTextSourceRefs: semanticPromptTextSourceRefs,
   relationsForCandidate: semanticRelationsForCandidate,
   definitionEnrichments: semanticDefinitionEnrichments,
 });
@@ -149,6 +151,7 @@ export function* semanticIndexEvidenceBatchesForSourceFiles<
     return;
   }
   const result = runSemanticAnalyzers(
+    input.root,
     input.sourceFiles,
     input.view,
     semanticAnalyzers,
@@ -270,19 +273,20 @@ function runSemanticAnalyzer(
   analyzer: SemanticDefinitionAnalyzer,
 ): Required<SemanticAnalyzerResult> {
   const input = createTypeScriptSemanticFactInput(root, files);
-  return runSemanticAnalyzers(input.sourceFiles, input.view, [analyzer]);
+  return runSemanticAnalyzers(root, input.sourceFiles, input.view, [analyzer]);
 }
 
 /**
  * Runs all definition analyzers against all candidate definitions.
  */
 function runSemanticAnalyzers<TView extends SemanticAnalyzerView>(
+  root: string,
   sourceFiles: readonly SemanticAnalyzerSourceFile<TView>[],
   view: TView,
   analyzers: readonly SemanticDefinitionAnalyzer[],
   options: Pick<SemanticIndexFactsOptions, "instrumentation"> = {},
 ): Required<SemanticAnalyzerResult> {
-  const context: SemanticAnalyzerContext = { view };
+  const context: SemanticAnalyzerContext = { root, view };
   const results = measureSemanticTiming(
     options.instrumentation,
     "semantic.analyzer.execution",

@@ -26,7 +26,7 @@ import {
   newMatch,
   type TypeScriptStaticSyntaxMatchInput,
 } from "./typescript-matches";
-import { staticCalleeRecordFromExpression } from "./typescript-values";
+import { staticCalleeRecordFromExpression } from "./typescript-callee";
 import { typeScriptDeferNativeFacts } from "./defer-native-facts";
 
 const DEFAULT_CONSTRUCTOR_NAMES = ["Agent"] as const;

@@ -125,7 +125,11 @@ fn prompt_callback_refs(
     config: &crate::protocol::StaticSyntaxValue,
 ) -> Option<Vec<Value>> {
     let mut refs = Vec::new();
-    if let Some(ref_value) =
+    let prompt_property =
+        property_source_ref(context, id, config, "prompt", "prompt", None, false)?;
+    if let Some(ref_value) = prompt_property {
+        refs.push(ref_value);
+    } else if let Some(ref_value) =
         source_ref_for_callback_property(context, id, config, "prompt", "prompt")?
     {
         refs.push(ref_value);

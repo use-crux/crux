@@ -36,17 +36,31 @@ export type {
   StaticSyntaxFrontendName,
   StaticSyntaxFrontendOptions,
   StaticSyntaxValue,
+  StaticTaggedTemplateExpression,
+  StaticTaggedTemplateValue,
   StaticTemplateValue,
   StaticUnsupportedValue,
-} from './types'
-export { parseStaticFactsFromSyntaxRecords, type StaticRecordFactParseInput } from './file'
-export type { NativeFactProjectionMode } from './native-facts'
+} from "./types";
+export {
+  parseStaticFactsFromSyntaxRecords,
+  type StaticRecordFactParseInput,
+} from "./file";
+export type { NativeFactProjectionMode } from "./native-facts";
 export {
   createProvidedStaticSyntaxFrontend,
   type ProvidedStaticSyntaxFrontendOptions,
   type ProvidedStaticSyntaxRecordProvider,
-} from './provided-frontend'
-export { createStaticRecordProjectionCache, type StaticRecordProjectionCache } from './projection-cache'
-export { createStaticRecordArgumentReader, createStaticRecordObjectReader } from './readers'
-export { createStaticSyntaxInitializerMap, resolveStaticSyntaxValue } from './value'
-export { createTypeScriptStaticSyntaxFrontend } from './typescript-frontend'
+} from "./provided-frontend";
+export {
+  createStaticRecordProjectionCache,
+  type StaticRecordProjectionCache,
+} from "./projection-cache";
+export {
+  createStaticRecordArgumentReader,
+  createStaticRecordObjectReader,
+} from "./readers";
+export {
+  createStaticSyntaxInitializerMap,
+  resolveStaticSyntaxValue,
+} from "./value";
+export { createTypeScriptStaticSyntaxFrontend } from "./typescript-frontend";

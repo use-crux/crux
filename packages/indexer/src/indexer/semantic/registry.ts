@@ -1,8 +1,13 @@
-import type { JsonSchema, ProjectDefinition, ProjectRelation, ProjectSourceRef } from '@use-crux/core/project-index'
-import { createSemanticDefinitionEnrichmentAnalyzer } from './analyzers/definition-enrichment'
-import { createSemanticRelationAnalyzer } from './analyzers/relation'
-import { createSemanticSchemaAnalyzer } from './analyzers/schema'
-import { createSemanticSourceRefAnalyzer } from './analyzers/source-ref'
+import type {
+  JsonSchema,
+  ProjectDefinition,
+  ProjectRelation,
+  ProjectSourceRef,
+} from "@use-crux/core/project-index";
+import { createSemanticDefinitionEnrichmentAnalyzer } from "./analyzers/definition-enrichment";
+import { createSemanticRelationAnalyzer } from "./analyzers/relation";
+import { createSemanticSchemaAnalyzer } from "./analyzers/schema";
+import { createSemanticSourceRefAnalyzer } from "./analyzers/source-ref";
 import type {
   SemanticAnalyzerContext,
   SemanticAnalyzerView,
@@ -11,11 +16,14 @@ import type {
   SemanticResolvedSource,
   SemanticSchemaCandidate,
   SemanticSourceRefCandidate,
-} from './candidates'
-import type { SemanticSyntaxNode } from './syntax-view'
-import type { SemanticAnalyzer } from './types'
+} from "./candidates";
+import type { SemanticSyntaxNode } from "./syntax-view";
+import type { SemanticAnalyzer } from "./types";
 
-export type SemanticDefinitionAnalyzer = SemanticAnalyzer<SemanticDefinitionCandidate, SemanticAnalyzerContext>
+export type SemanticDefinitionAnalyzer = SemanticAnalyzer<
+  SemanticDefinitionCandidate,
+  SemanticAnalyzerContext
+>;
 
 /**
  * Runtime hooks required to build the semantic analyzer registry.
@@ -27,53 +35,63 @@ export interface SemanticAnalyzerRegistryDeps {
   readonly toolMapSourceRefs: (
     candidate: SemanticDefinitionCandidate,
     view: SemanticAnalyzerView,
-  ) => readonly ProjectSourceRef[]
+  ) => readonly ProjectSourceRef[];
   readonly injectionConditionSourceRefs: (
     candidate: SemanticDefinitionCandidate,
     view: SemanticAnalyzerView,
-  ) => readonly ProjectSourceRef[]
+  ) => readonly ProjectSourceRef[];
   readonly definitionEnrichments: (
     candidate: SemanticDefinitionCandidate,
     view: SemanticAnalyzerView,
-  ) => readonly SemanticDefinitionEnrichment[]
-  readonly definitionPatchBase: (candidate: SemanticDefinitionCandidate) => ProjectDefinition
-  readonly expressionToJsonSchema: (resolved: SemanticResolvedSource, view: SemanticAnalyzerView) => JsonSchema | undefined
+  ) => readonly SemanticDefinitionEnrichment[];
+  readonly definitionPatchBase: (
+    candidate: SemanticDefinitionCandidate,
+  ) => ProjectDefinition;
+  readonly expressionToJsonSchema: (
+    resolved: SemanticResolvedSource,
+    view: SemanticAnalyzerView,
+  ) => JsonSchema | undefined;
   readonly nestedSchemaSourceRefs: (
     candidate: SemanticSchemaCandidate,
     resolved: SemanticResolvedSource,
     view: SemanticAnalyzerView,
-  ) => readonly ProjectSourceRef[]
+  ) => readonly ProjectSourceRef[];
   readonly relationsForCandidate: (
     candidate: SemanticDefinitionCandidate,
     view: SemanticAnalyzerView,
-  ) => readonly ProjectRelation[]
+  ) => readonly ProjectRelation[];
   readonly resolveExpression: (
     expression: SemanticSyntaxNode,
     view: SemanticAnalyzerView,
-  ) => SemanticResolvedSource | undefined
+  ) => SemanticResolvedSource | undefined;
   readonly schemaCandidates: (
     candidate: SemanticDefinitionCandidate,
     view: SemanticAnalyzerView,
-  ) => readonly SemanticSchemaCandidate[]
+  ) => readonly SemanticSchemaCandidate[];
   readonly schemaSourceRef: (
     candidate: SemanticSchemaCandidate,
     resolved: SemanticResolvedSource,
     parsedSchema: boolean,
     view: SemanticAnalyzerView,
-  ) => ProjectSourceRef
+  ) => ProjectSourceRef;
   readonly sourceRef: (
     candidate: SemanticSourceRefCandidate,
     resolved: SemanticResolvedSource,
     view: SemanticAnalyzerView,
-  ) => ProjectSourceRef
+  ) => ProjectSourceRef;
   readonly sourceRefCandidates: (
     candidate: SemanticDefinitionCandidate,
     view: SemanticAnalyzerView,
-  ) => readonly SemanticSourceRefCandidate[]
+  ) => readonly SemanticSourceRefCandidate[];
   readonly templateInterpolationSourceRefs: (
     candidate: SemanticDefinitionCandidate,
     view: SemanticAnalyzerView,
-  ) => readonly ProjectSourceRef[]
+  ) => readonly ProjectSourceRef[];
+  readonly promptTextSourceRefs: (
+    root: string,
+    candidate: SemanticDefinitionCandidate,
+    view: SemanticAnalyzerView,
+  ) => readonly ProjectSourceRef[];
 }
 
 /**
@@ -106,6 +124,7 @@ export function createSemanticAnalyzers(
       templateInterpolationSourceRefs: deps.templateInterpolationSourceRefs,
       toolMapSourceRefs: deps.toolMapSourceRefs,
       injectionConditionSourceRefs: deps.injectionConditionSourceRefs,
+      promptTextSourceRefs: deps.promptTextSourceRefs,
     }),
     createSemanticRelationAnalyzer({
       relationsForCandidate: deps.relationsForCandidate,
@@ -113,5 +132,5 @@ export function createSemanticAnalyzers(
     createSemanticDefinitionEnrichmentAnalyzer({
       definitionEnrichments: deps.definitionEnrichments,
     }),
-  ]
+  ];
 }

@@ -1,5 +1,5 @@
-import { SyntaxKind, type Node } from '@typescript/native-preview/unstable/ast'
-import type { SemanticSyntaxKind } from '../../syntax-view'
+import { SyntaxKind, type Node } from "@typescript/native-preview/unstable/ast";
+import type { SemanticSyntaxKind } from "../../syntax-view";
 
 /**
  * Converts a native-preview syntax kind into the normalized Crux syntax kind
@@ -8,61 +8,63 @@ import type { SemanticSyntaxKind } from '../../syntax-view'
 export function semanticSyntaxKindForTsgoNode(node: Node): SemanticSyntaxKind {
   switch (node.kind) {
     case SyntaxKind.SourceFile:
-      return 'sourceFile'
+      return "sourceFile";
     case SyntaxKind.Identifier:
-      return 'identifier'
+      return "identifier";
     case SyntaxKind.StringLiteral:
     case SyntaxKind.NoSubstitutionTemplateLiteral:
-      return 'stringLiteral'
+      return "stringLiteral";
     case SyntaxKind.NumericLiteral:
-      return 'numericLiteral'
+      return "numericLiteral";
     case SyntaxKind.ObjectLiteralExpression:
-      return 'objectLiteral'
+      return "objectLiteral";
     case SyntaxKind.ArrayLiteralExpression:
-      return 'arrayLiteral'
+      return "arrayLiteral";
     case SyntaxKind.PropertyAssignment:
-      return 'propertyAssignment'
+      return "propertyAssignment";
     case SyntaxKind.ShorthandPropertyAssignment:
-      return 'shorthandPropertyAssignment'
+      return "shorthandPropertyAssignment";
     case SyntaxKind.MethodDeclaration:
-      return 'methodDeclaration'
+      return "methodDeclaration";
+    case SyntaxKind.TaggedTemplateExpression:
+      return "taggedTemplate";
     case SyntaxKind.CallExpression:
-      return 'callExpression'
+      return "callExpression";
     case SyntaxKind.NewExpression:
-      return 'newExpression'
+      return "newExpression";
     case SyntaxKind.PropertyAccessExpression:
-      return 'propertyAccessExpression'
+      return "propertyAccessExpression";
     case SyntaxKind.ElementAccessExpression:
-      return 'elementAccessExpression'
+      return "elementAccessExpression";
     case SyntaxKind.VariableDeclaration:
-      return 'variableDeclaration'
+      return "variableDeclaration";
     case SyntaxKind.VariableStatement:
-      return 'variableStatement'
+      return "variableStatement";
     case SyntaxKind.FunctionDeclaration:
-      return 'functionDeclaration'
+      return "functionDeclaration";
     case SyntaxKind.FunctionExpression:
-      return 'functionExpression'
+      return "functionExpression";
     case SyntaxKind.ArrowFunction:
-      return 'arrowFunction'
+      return "arrowFunction";
     case SyntaxKind.ImportDeclaration:
-      return 'importDeclaration'
+      return "importDeclaration";
     case SyntaxKind.ImportSpecifier:
-      return 'importSpecifier'
+      return "importSpecifier";
     case SyntaxKind.NamespaceImport:
-      return 'namespaceImport'
+      return "namespaceImport";
     case SyntaxKind.ExportDeclaration:
-      return 'exportDeclaration'
+      return "exportDeclaration";
     case SyntaxKind.ClassDeclaration:
-      return 'classDeclaration'
+      return "classDeclaration";
     case SyntaxKind.InterfaceDeclaration:
-      return 'interfaceDeclaration'
+      return "interfaceDeclaration";
     case SyntaxKind.TypeAliasDeclaration:
-      return 'typeAliasDeclaration'
+      return "typeAliasDeclaration";
     case SyntaxKind.EnumDeclaration:
-      return 'enumDeclaration'
+      return "enumDeclaration";
     case SyntaxKind.Parameter:
-      return 'parameter'
+      return "parameter";
     default:
-      return 'unknown'
+      return "unknown";
   }
 }

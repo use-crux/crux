@@ -1,0 +1,48 @@
+---
+title: CLI & TUI
+description: Run Crux locally, inspect projects in the terminal, and automate checks with machine-readable output.
+---
+
+The `crux` CLI is the entry point for local development and automation.
+`crux dev` also provides an interactive terminal workbench when it runs in a
+capable terminal.
+
+```bash
+npm install -g @use-crux/local
+
+crux dev
+crux index status
+crux lint
+crux eval --offline
+```
+
+Use the CLI when you need a scriptable command or exact JSON output. Use the TUI
+when you want a live terminal view of runs, Evals, project health, and local
+runtime status. Use browser Devtools for deeper visual inspection.
+
+<Cards>
+  <Card
+    title="Local runtime reference"
+    description="Every crux command, flag, TUI behavior, JSON contract, and exit code."
+    href="/docs/reference/local"
+  />
+  <Card
+    title="Devtools"
+    description="Open the browser UI backed by the same local server."
+    href="/docs/developer-tools/devtools"
+  />
+  <Card
+    title="Index Lint"
+    description="Configure lint profiles, suppressions, and CI checks."
+    href="/docs/guides/project-health/lint"
+  />
+  <Card
+    title="VS Code & LSP"
+    description="Use the CLI's language server through an editor."
+    href="/docs/developer-tools/vscode"
+  />
+</Cards>
+
+The complete command contract lives in the
+[`@use-crux/local` reference](/docs/reference/local); this page is the
+task-oriented starting point.

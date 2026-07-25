@@ -73,6 +73,8 @@ mod mcp {
 }
 mod prompt {
     pub(crate) mod facts;
+    #[cfg(test)]
+    mod tests;
 }
 pub mod projection;
 mod rag {

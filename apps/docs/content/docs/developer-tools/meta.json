@@ -1,0 +1,5 @@
+{
+  "title": "Developer Tools",
+  "description": "Choose the Crux interface that fits your workflow: browser Devtools, CLI and TUI, VS Code and LSP, or machine-readable docs for coding agents.",
+  "pages": ["index", "devtools", "cli", "vscode", "ai-assistants"]
+}

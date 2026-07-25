@@ -5,6 +5,7 @@ import {
   IndexLintFindingSchema,
   ProjectDefinitionKindSchema,
   ProjectIndexSnapshotSchema,
+  ProjectSourceRefSchema,
 } from "../../src/project-index";
 
 const finding = {
@@ -64,6 +65,29 @@ describe("Project Index schemas", () => {
       DependencyFactsSchema.parse({ injectables: ["injectable:safety"] }),
     ).toEqual({
       injectables: ["injectable:safety"],
+    });
+  });
+
+  it("preserves canonical prompt-text metadata during source-ref parsing", () => {
+    expect(
+      ProjectSourceRefSchema.parse({
+        id: "prompt:support:source:prompt:prompt:prompt-text:src-support:1:1",
+        role: "prompt",
+        property: "prompt",
+        source: { file: "src/support.ts", line: 1, column: 1 },
+        fidelity: "resolved",
+        metadata: {
+          promptText: {
+            tag: "md",
+            language: "markdown",
+            lifecycle: "static",
+          },
+        },
+      }).metadata?.promptText,
+    ).toEqual({
+      tag: "md",
+      language: "markdown",
+      lifecycle: "static",
     });
   });
 

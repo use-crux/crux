@@ -1,6 +1,6 @@
 # Crux Core (@use-crux/core)
 
-SDK-agnostic AI orchestration toolkit for TypeScript. See README.md for full API docs, ARCHITECTURE.md for internal module map.
+SDK-agnostic AI orchestration toolkit for TypeScript. See README.md for the npm package overview, apps/docs for user-facing documentation, and ARCHITECTURE.md for the internal module map.
 
 ## Key APIs by Subpath
 
@@ -51,17 +51,22 @@ React bindings live in **`@use-crux/react`** (`CruxProvider`, hooks, transports,
 - `mergeHooks()` for composing plugin state
 - `withDevtools()` is the reference plugin implementation
 
-## Documentation Requirement
+## Documentation Policy
 
-Any API change MUST update:
+- **apps/docs/content/docs/** is the canonical home for detailed user-facing
+  guides and API reference. Update the corresponding MDX pages when public
+  behavior or APIs change.
+- **README.md** is the npm landing page: package positioning, installation,
+  a concise quick start, and links into the full docs. Update it only when that
+  landing-page story changes, not for every API change.
+- **ARCHITECTURE.md** documents implementation boundaries, the internal module
+  map, and resolution pipelines. Update it when those architectural contracts
+  change, not as a routine API-change checklist item.
 
-1. **README.md** — public docs (88 sections)
-2. **ARCHITECTURE.md** — internal module map and resolution pipeline
-3. **apps/docs/content/docs/** — corresponding MDX reference/guide pages
-
-These are NOT auto-generated. Manual sync is required.
+These files are not auto-generated. Keep each one current for the role it owns.
 
 ## For Deep Details
 
-- `README.md` — complete API reference with examples
+- `README.md` — npm package overview and quick start
 - `ARCHITECTURE.md` — internal module map, resolution pipeline, memory stores, plan/task graph
+- `apps/docs/content/docs/` — detailed user guides and API reference

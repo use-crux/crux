@@ -21,6 +21,11 @@ const config = {
         destination: '/docs/foundations',
         permanent: false,
       },
+      {
+        source: '/docs/guides/advanced/llms-txt',
+        destination: '/docs/developer-tools/ai-assistants',
+        permanent: true,
+      },
     ]
   },
   async rewrites() {

@@ -65,6 +65,8 @@ export {
 } from "./prompt";
 export type { ContributorConfig } from "./prompt";
 export type { Contribution, ContributorEntry } from "./prompt";
+export { md } from "./prompt-text";
+export type { PromptText } from "./prompt-text";
 export { compilePrompt } from "./resolver/compile";
 export type {
   CompiledPrompt,

@@ -1,0 +1,50 @@
+---
+title: Devtools
+description: Inspect Crux runs, authored definitions, Evals, and project health in the browser.
+---
+
+The browser Devtools is the visual workspace for understanding what Crux
+authored and what actually ran. It combines runtime traces with Project Index
+source evidence so you can move between a prompt, its code, and the runs that
+used it.
+
+Start it locally:
+
+```bash
+crux dev --open
+```
+
+Use Devtools when you want to:
+
+- inspect the exact messages, contexts, tools, and model settings used by a run;
+- browse prompts, agents, tools, flows, and their source relationships in
+  Catalog;
+- run and compare Evals and review their evidence; or
+- see Project Health diagnostics and lint findings.
+
+<Cards>
+  <Card
+    title="Devtools guide"
+    description="Set up local observability and learn the browser workflow."
+    href="/docs/guides/observability/devtools"
+  />
+  <Card
+    title="Project Health"
+    description="Understand Catalog coverage, source evidence, diagnostics, and lints."
+    href="/docs/guides/project-health"
+  />
+  <Card
+    title="Cloud runtimes"
+    description="Send development telemetry back from remote and serverless runtimes."
+    href="/docs/guides/observability/devtools-cloud"
+  />
+  <Card
+    title="Devtools API"
+    description="Configure the Core plugin and runtime bridge."
+    href="/docs/reference/crux-core/devtools"
+  />
+</Cards>
+
+The Devtools UI is distinct from the terminal TUI and from the VS Code
+extension. They can all connect to the same local process without becoming
+runtime requirements for your application.

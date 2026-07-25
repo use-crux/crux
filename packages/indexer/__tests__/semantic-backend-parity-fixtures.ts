@@ -3,7 +3,14 @@ import {
   promptDefinitionRef,
   retrieverDefinitionRef,
 } from "@use-crux/core/observability";
+import type { ProjectSourceRef } from "@use-crux/core/project-index";
 import { completionSemanticParityFixture } from "./completion-semantic-parity-fixture";
+import { promptTextSemanticParityFixtures } from "./prompt-text-semantic-parity-fixtures";
+
+export interface ExpectedPromptTextSourceRef {
+  readonly definitionId: string;
+  readonly ref: ProjectSourceRef;
+}
 
 export interface SemanticBackendParityFixture {
   readonly name: string;
@@ -11,6 +18,8 @@ export interface SemanticBackendParityFixture {
   readonly externalRoot?: boolean;
   /** Workspace packages linked into the fixture for real public import resolution. */
   readonly workspacePackages?: readonly string[];
+  /** Additional compiler options written to the fixture tsconfig. */
+  readonly compilerOptions?: Readonly<Record<string, unknown>>;
   readonly files: Readonly<Record<string, string>>;
   readonly expect: {
     readonly definitionIds?: readonly string[];
@@ -29,12 +38,15 @@ export interface SemanticBackendParityFixture {
     readonly relationTypes?: readonly string[];
     readonly sourceRefRoles?: readonly string[];
     readonly lintRuleIds?: readonly string[];
+    /** Exact prompt-text refs with project-relative source paths. */
+    readonly promptTextSourceRefs?: readonly ExpectedPromptTextSourceRef[];
   };
 }
 
 /** Semantic fixtures that must produce identical facts for every backend. */
 export const semanticBackendParityFixtures: readonly SemanticBackendParityFixture[] =
   [
+    ...promptTextSemanticParityFixtures,
     {
       // Locks the semantic-backend-emitted DefinitionRef kinds — prompt,
       // context, and rag.retriever, the config-bearing primitives that produce

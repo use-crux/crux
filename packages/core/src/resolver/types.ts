@@ -267,6 +267,12 @@ export interface InspectResult {
     | {
         text: string;
         tokens: number;
+        /** Structural PromptText segments, when the prompt was authored with `md`. */
+        segments?: readonly ContextTextSegment[];
+        /** Estimated tokens in authored literal segments. */
+        staticTokens?: number;
+        /** Estimated tokens in interpolated segments. */
+        dynamicTokens?: number;
       }
     | undefined;
   /** Total estimated tokens across system + prompt. */

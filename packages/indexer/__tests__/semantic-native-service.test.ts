@@ -31,6 +31,10 @@ describe("native semantic index service", () => {
       tsserverPath: "/opt/bin/tsgo",
     });
 
+    expect(backend.identity).toEqual({
+      name: "native",
+      version: "tsgo-native-preview-v4",
+    });
     expect(backend.compilerRuntimeIdentity).toBeTypeOf("function");
     await expect(
       Promise.resolve(
@@ -38,7 +42,7 @@ describe("native semantic index service", () => {
       ),
     ).resolves.toEqual({
       name: "tsgo",
-      version: "native-preview-v3",
+      version: "native-preview-v4",
       executable: "/opt/bin/tsgo",
     });
   });

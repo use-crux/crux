@@ -12,8 +12,10 @@
 import type { AnyMessage } from "../types";
 import type { SelectedPromptAdaptation } from "./prompt-settings";
 import type { SystemBlock } from "./types";
+import type { ResolvedPromptText } from "./prompt-content";
 import { contentText } from "../content";
 import { isMessageContent } from "../content/guards";
+import { coalescePromptTextSegments } from "../prompt-text/render";
 
 /** Exact boundary created while folding composed system text into messages. */
 export interface FoldedSystemBoundary {
@@ -61,14 +63,25 @@ export function applySystemAdaptationBlocks(
   return adapted;
 }
 
-/** Apply provider-specific prompt text around the rendered prompt string. */
-export function applyPromptAdaptationText(
-  promptText: string | undefined,
+/** Apply provider-specific prompt text while retaining structural segments. */
+export function applyPromptAdaptation(
+  promptText: ResolvedPromptText | undefined,
   selected: SelectedPromptAdaptation | undefined,
-): string | undefined {
+): ResolvedPromptText | undefined {
   if (promptText === undefined || !selected) return promptText;
   const { adaptation } = selected;
-  return `${adaptation.prependPrompt ?? ""}${promptText}${adaptation.appendPrompt ?? ""}`;
+  const prefix = adaptation.prependPrompt ?? "";
+  const suffix = adaptation.appendPrompt ?? "";
+  const text = `${prefix}${promptText.text}${suffix}`;
+  if (!promptText.segments) return { text };
+  return {
+    text,
+    segments: coalescePromptTextSegments([
+      ...(prefix ? [{ text: prefix, dynamic: false }] : []),
+      ...promptText.segments,
+      ...(suffix ? [{ text: suffix, dynamic: false }] : []),
+    ]),
+  };
 }
 
 /** Fold final system text into messages mode without returning a parallel `system` field. */
@@ -104,8 +117,9 @@ export function foldSystemIntoMessagesWithBoundary(
   }
 
   const first = messages[firstSystemIdx]!;
-  const firstContent =
-    isMessageContent(first.content) ? contentText(first.content) : unknownText(first.content);
+  const firstContent = isMessageContent(first.content)
+    ? contentText(first.content)
+    : unknownText(first.content);
   const foldedPrefix = firstContent ? `${system}\n\n` : system;
   const folded = [...messages];
   folded[firstSystemIdx] = {
@@ -122,7 +136,7 @@ export function foldSystemIntoMessagesWithBoundary(
 }
 
 function unknownText(value: unknown): string {
-  return String(value)
+  return String(value);
 }
 
 /** Join system fragments with the resolver's canonical separator, omitting empty fragments. */
