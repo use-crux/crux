@@ -1,5 +1,5 @@
 ---
-"@use-crux/core": major
+"@use-crux/core": minor
 "@use-crux/ai": minor
 "@use-crux/indexer": patch
 "@use-crux/devtools": patch

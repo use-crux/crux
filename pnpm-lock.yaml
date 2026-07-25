@@ -137,7 +137,7 @@ importers:
         specifier: workspace:*
         version: link:../core
       '@use-crux/mcp':
-        specifier: workspace:^0.5.0 || ^0.6.0
+        specifier: workspace:^0.5.0 || ^0.6.0 || ^0.7.0
         version: link:../mcp
       '@use-crux/react':
         specifier: workspace:*
@@ -183,7 +183,7 @@ importers:
         specifier: workspace:*
         version: link:../core
       '@use-crux/mcp':
-        specifier: workspace:^0.5.0 || ^0.6.0
+        specifier: workspace:^0.5.0 || ^0.6.0 || ^0.7.0
         version: link:../mcp
       zod:
         specifier: ^4.4.3
@@ -452,7 +452,7 @@ importers:
         specifier: workspace:*
         version: link:../core
       '@use-crux/mcp':
-        specifier: workspace:^0.5.0 || ^0.6.0
+        specifier: workspace:^0.5.0 || ^0.6.0 || ^0.7.0
         version: link:../mcp
       zod:
         specifier: ^4.4.3
@@ -640,7 +640,7 @@ importers:
         specifier: workspace:*
         version: link:../core
       '@use-crux/mcp':
-        specifier: workspace:^0.5.0 || ^0.6.0
+        specifier: workspace:^0.5.0 || ^0.6.0 || ^0.7.0
         version: link:../mcp
       openai:
         specifier: ^5.0.0||^6.0.0
