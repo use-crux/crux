@@ -164,15 +164,19 @@ describe("managed stream result correlation", () => {
     });
     const operation = result._meta;
 
-    for await (const _chunk of result.textStream) {
-      // Drain before releasing provider completion metadata.
-    }
+    // A logical stream ends when the OPERATION ends, so its surfaces close on the
+    // logical `finish` — which carries the operation's finish reason and usage.
+    // Draining therefore runs concurrently with the late provider facts rather
+    // than strictly before them.
+    const drained = drain(result.textStream);
     expect(result._meta).toBe(operation);
     late.resolve({
       text: "stream first",
       responseId: "late-response",
       finishReason: "stop",
     });
+    await drained;
+    expect(result._meta).toBe(operation);
 
     expect((await result.completion)._meta).toMatchObject({
       ...operation,
@@ -231,7 +235,8 @@ describe("managed stream result correlation", () => {
       model: "model-1",
       input: { message: "Hello" },
     });
-    await drain(completing.textStream);
+    // The failure reaches every surface with one identity, not just `completion`.
+    await expect(drain(completing.textStream)).rejects.toBe(completionError);
     await expect(completing.completion).rejects.toBe(completionError);
     expect(completing._meta).toEqual({
       traceId: expect.any(String),

@@ -73,7 +73,16 @@ export type StreamOrchestrationSpec<
   | 'outputMode'
   | 'createCachedStreamResult'
   | 'timeout'
->
+> & {
+  /**
+   * Whether a commit gate can still discard the attempt these deltas belong to.
+   *
+   * When true, `token.chunk` events carry timing and size but not text, so an
+   * attempt the consumer never saw cannot be reconstructed from telemetry
+   * (RFC #173).
+   */
+  readonly discardableAttempt?: boolean
+}
 
 /**
  * Callback that extracts a text delta string from an SDK-specific stream chunk.

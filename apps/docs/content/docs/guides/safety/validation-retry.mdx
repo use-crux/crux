@@ -21,6 +21,13 @@ If the model returns `{"name": "Alice", "age": "thirty"}` but the schema expects
 - **Complex schemas**: enums, nested objects, and strict constraints that models sometimes violate
 - **Production reliability**: automatic recovery without manual error handling
 
+<Callout type="warn">
+  Structured output is **always validated**, with or without `validationRetry`.
+  The option controls only whether Crux asks the model to try again. Without it,
+  output that fails your schema throws `ValidationExhaustedError` — it is never
+  returned unvalidated.
+</Callout>
+
 If your prompts always produce valid output or you don't use output schemas, you don't need `validationRetry`.
 
 ## How it works
@@ -36,9 +43,13 @@ Validation retry follows a 3-tier approach, from cheapest to most expensive:
 - Fixes trailing commas (`{"a": 1,}` becomes `{"a": 1}`)
 - Extracts JSON from surrounding text by bracket matching
 
-### Tier 2: Schema validation
+### Tier 2: Decode and schema validation
 
-After text repair, the output is parsed as JSON and validated against your Zod schema using `safeParse()`.
+After text repair, the output is parsed as JSON, any transport encoding the schema
+compiler introduced is reversed (see
+[optional and nullable fields](/docs/guides/prompts#optional-and-nullable-fields)),
+output guardrails run, and the canonical value is validated against **your authored**
+Zod schema with `safeParse()` — exactly once, on the value you wrote the schema for.
 
 ### Tier 3: LLM retry (uses a step)
 
@@ -58,6 +69,57 @@ await adapter.generate(prompt, {
 ```
 
 If `maxSteps` is exhausted before `maxRetries`, the retry stops early.
+
+## Streaming
+
+Retrying a stream means the first attempt must never have been shown. So on a
+structured stream, a positive `maxRetries` installs a **commit gate**: Crux buffers
+the candidate, validates it at end-of-stream, and only then releases it.
+
+```ts
+// Streams incrementally: validation still runs, but there is nothing to retry.
+await adapter.stream(prompt, { input });
+
+// Buffers the candidate so a failed attempt can be discarded and retried.
+await adapter.stream(prompt, { input, validationRetry: { maxRetries: 2 } });
+```
+
+That is a deliberate trade: `maxRetries: 0` (or omitting `validationRetry`)
+installs no gate and streams incrementally, but an invalid candidate can only
+throw, because part of it has already been published. Choose per call whether you
+want time-to-first-token or a retryable stream.
+
+While the gate holds, the stream directive carries a content-free
+`bufferedBy: 'validation-retry'` so the pause can be explained without seeing the
+held bytes. A rejected attempt is discarded and re-streamed with corrective
+feedback; the consumer never saw it. If retries run out, `ValidationExhaustedError`
+is thrown having published nothing.
+
+### Budget arithmetic
+
+Three limits apply, and the tightest one wins:
+
+| Limit                         | Bounds                                                    |
+| ----------------------------- | ---------------------------------------------------------- |
+| `maxSteps`                    | every provider call on the request — tool rounds, validation re-streams, and constraint re-streams together |
+| `validationRetry.maxRetries`  | how many of those may be validation retries                |
+| a constraint's `maxRetries`   | how many may be retries for that constraint                |
+
+So `maxSteps: 5` with `validationRetry: { maxRetries: 3 }` allows at most three
+validation re-streams and never more than five provider calls in total; if tool
+rounds consume the budget first, retrying stops early even though `maxRetries`
+remains. When both an `assert` constraint and validation retry gate the same stream
+the errors stay distinct — a constraint failure throws `ConstraintViolationError`, a
+validation failure throws `ValidationExhaustedError`. They are never combined.
+
+<Callout>
+  A managed stream has no bypass surface. There is no `result.raw`: a provider
+  stream resolves before terminal Safety and describes only one attempt, so
+  reading it would expose content a commit gate withheld — including a rejected
+  attempt Crux discarded and re-streamed. Everything published on `textStream`,
+  `fullStream`, and `partialOutputStream` has cleared every gate that could still
+  block or change it.
+</Callout>
 
 ## Feedback sanitization
 

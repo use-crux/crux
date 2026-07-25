@@ -36,7 +36,7 @@ describe("stream completion media Safety — SDK runtime", () => {
     expect(completionCalls).toBe(1);
   });
 
-  it("guards buffered structured text when no live Safety stream exists", async () => {
+  it("guards structured completion text over the live structured stream (canonical, per delta)", async () => {
     const unsafe = '{"value":"unsafe"}';
     const safe = '{"value":"safe"}';
     const seen: string[] = [];
@@ -45,12 +45,20 @@ describe("stream completion media Safety — SDK runtime", () => {
     const runtime = loopRuntimeAdapter({
       ...fake.runtime,
       async runStream(request) {
-        expect(request.safety).toBeUndefined();
+        // A transport drives the structured stream with provider wire JSON: the
+        // text boundary guard observes the canonical serialized text and rewrites
+        // it; the sealed text is the completion text.
+        expect(request.safety).toBeDefined();
+        let released = "";
+        const directive = await request.safety!.feed(unsafe);
+        if (directive.kind === "emit") released += directive.content;
+        const seal = await request.safety!.finish();
+        released += seal.pending;
         return {
           raw,
           completion: async () => ({
-            text: unsafe,
-            content: [{ type: "text" as const, text: unsafe }],
+            text: released,
+            content: [{ type: "text" as const, text: released }],
             finishReason: "stop",
           }),
         };

@@ -111,6 +111,7 @@ export async function generateCore<
   let messages = initialMessages.messages;
   let outputSchema: JsonSchemaObject | undefined;
   let decodeManifest: StructuredOutputDecodeManifest | undefined;
+  let canonicalSchema: JsonSchemaObject | undefined;
   if (resolved.schema) {
     if (!dialect.structuredOutput) {
       throw new CruxUnsupportedStructuredOutputError(dialect.id);
@@ -125,6 +126,7 @@ export async function generateCore<
     );
     outputSchema = plan.outputSchema;
     decodeManifest = plan.decodeManifest;
+    canonicalSchema = plan.canonicalSchema;
   }
 
   const maxSteps =
@@ -430,6 +432,9 @@ export async function generateCore<
                 safety,
                 schema,
                 decodeManifest,
+                ...(canonicalSchema
+                  ? { structuredContext: { canonicalSchema, decodeManifest } }
+                  : {}),
                 promptId: prompt.id ?? "unknown",
                 validationRetry,
                 maxSteps,

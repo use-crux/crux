@@ -1,6 +1,8 @@
+import { selectedPath } from '../boundary'
 import type { SafetyRunContext } from '../decision'
 import { assertConstraintBoundary, type ConstraintBoundary } from './boundary'
-import type { Constraint, ConstraintContext, ConstraintOutput } from './types'
+import { constraintOccurrences } from './occurrences'
+import type { Constraint, ConstraintContext } from './types'
 import { validateConstraintRunResult } from './types'
 
 // ── Types ──────────────────────────────────────────────────────────
@@ -69,10 +71,7 @@ export async function evaluateConstraint(
 
     try {
       const output = { text: evalCase.input.text, parsed: evalCase.input.parsed }
-      const result = validateConstraintRunResult(
-        await constraint.run(subjectForBoundary(constraint.on, output) as never, runContext(constraint, ctx) as never),
-        { policyId: constraint.id, boundary: constraint.on.id },
-      )
+      const result = await checkCase(constraint, output, ctx)
       const durationMs = performance.now() - start
 
       results.push({
@@ -110,6 +109,23 @@ export async function evaluateConstraint(
   }
 }
 
+/** Check one eval case over the constraint's selected occurrences (first failure fails). */
+async function checkCase(
+  constraint: Constraint,
+  output: { readonly text: string; readonly parsed?: unknown },
+  ctx: ConstraintContext,
+): Promise<ReturnType<typeof validateConstraintRunResult>> {
+  const occurrences = constraintOccurrences(constraint.on, output)
+  for (const subject of occurrences) {
+    const result = validateConstraintRunResult(
+      await constraint.run(subject as never, runContext(constraint, ctx) as never),
+      { policyId: constraint.id, boundary: constraint.on.id },
+    )
+    if (!result.pass) return result
+  }
+  return { pass: true }
+}
+
 function runContext<B extends ConstraintBoundary>(
   constraint: Constraint,
   ctx: ConstraintContext,
@@ -124,20 +140,6 @@ function runContext<B extends ConstraintBoundary>(
     attempt: { index: ctx.attempt, kind: 'initial' },
     metadata: ctx.metadata,
     findings: { add() {} },
-    ...(boundary.path ? { path: boundary.path } : {}),
+    ...(selectedPath(boundary) ? { path: selectedPath(boundary) } : {}),
   }
-}
-
-function subjectForBoundary(boundary: ConstraintBoundary, output: ConstraintOutput): unknown {
-  if (boundary.id === 'model.output.text') return output.text
-  if (boundary.id === 'model.output.object') return boundary.path ? valueAtPath(output.parsed, boundary.path) : output.parsed
-  if (boundary.id === 'model.output') return { text: output.text, object: output.parsed }
-  return output.text
-}
-
-function valueAtPath(value: unknown, path: string): unknown {
-  return path.split('.').reduce<unknown>((current, segment) => {
-    if (typeof current !== 'object' || current === null) return undefined
-    return (current as Readonly<Record<string, unknown>>)[segment]
-  }, value)
 }

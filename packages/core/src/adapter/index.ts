@@ -28,6 +28,7 @@ export type {
   CallArgs,
   StreamHandle,
   StreamCompletionMetadata,
+  LogicalBillingTotals,
   ToolResultEntry,
   StatusDelta,
 } from "./types";
@@ -64,6 +65,7 @@ export type {
   AdapterGenerateOptions,
   AdapterStreamOptions,
   AdapterGenerateResult,
+  AdapterStreamResult,
   AdapterTransport,
   AdapterTransportInfo,
 } from "./define-adapter";
@@ -73,7 +75,6 @@ export type {
   GenerateResultPayload,
   StreamCompletion,
   StreamCompletionPayload,
-  StreamResult,
 } from "./result-accumulator";
 export type {
   CallHandle,
@@ -223,6 +224,22 @@ export type {
   ExecutorStreamHandle,
   ExecutorStreamMeta,
 } from "./executor-types";
+/**
+ * The coordinated-stream attempt port (RFC #173). A loop-owning runtime executes this
+ * core-owned plan to discard and restream a rejected attempt; core owns retry policy.
+ * @internal
+ */
+export type {
+  CoordinatedStreamPlan,
+  SdkStreamAttempt,
+  SdkAttemptOutcome,
+} from "./execution/stream-attempt-plan";
+/**
+ * @internal Type-guarded classification of an internal non-terminal attempt rejection,
+ * so a loop-owning runtime never has to compare `error.name` (which a provider error can
+ * spoof) to decide whether a failure is a policy decision.
+ */
+export { isStreamAttemptRejection } from "./execution/stream-rejection";
 export { toolModelIngressDialect } from "./tool/model-ingress-port";
 export type { ToolModelIngressDialect } from "./tool/model-ingress-port";
 /** @internal Private dialect hook for guarded active-history amendments. */
@@ -334,3 +351,24 @@ export type {
   TranscriptConformanceScenario,
   TranscriptWrapperExpectation,
 } from "./testing";
+
+/**
+ * The managed logical stream contract (RFC #173): one provider-neutral `stream()` result
+ * whose physical attempts, provider framing, and rejected content are never observable.
+ */
+export type {
+  AsyncIterableStream,
+  DeepPartial,
+  PublishedStreamEvent,
+  StreamEvent,
+  StreamResult,
+  StreamSource,
+} from "./logical-stream";
+export { createCanonicalPartialProjector } from "./execution/canonical-partials";
+export { publishOrdinaryStream } from "./execution/logical-stream-mapping";
+export type { PublishOrdinaryStreamOptions } from "./execution/logical-stream-mapping";
+/**
+ * Caller callbacks over the PUBLISHED logical sequence. None is ever installed on
+ * a physical provider attempt, so a discarded attempt invokes none of them.
+ */
+export type { LogicalStreamCallbacks } from "./logical-stream-publisher";

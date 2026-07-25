@@ -191,8 +191,7 @@ describe('provider-runtime parity — streaming safety', () => {
   const importFixer = () =>
     makeGuardrail({
       id: 'provider-runtime-import-fixer',
-      on: boundary.output.text(),
-      stream: 'chunk',
+      on: boundary.output.text().deltas(),
       run: async (chunk) => {
         if (chunk.includes('@/comps/')) {
           return {

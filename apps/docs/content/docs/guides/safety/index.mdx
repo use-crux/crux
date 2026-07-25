@@ -43,7 +43,8 @@ export const grounded = constraint({
 Useful targets include `boundary.input.text()`, `boundary.input.media()`,
 `boundary.input.instructions()`, `boundary.output.text()`,
 `boundary.output.media()`, `boundary.output.object<T>()`,
-`boundary.memory.write<T>()`, and `boundary.validation.feedback()`.
+`boundary.output.object<T>().path('a.b')`, `boundary.memory.write<T>()`, and
+`boundary.validation.feedback()`.
 The optionless input helpers cover all supported sources. Advanced policies can
 filter with `boundary.input.text({ from: "retrieval" })` or
 `boundary.input.media({ from: "tool" })`. Use `toolPolicy.args()` and
@@ -55,7 +56,7 @@ coverage matrix.
 
 ## Report mode and streaming
 
-Use `safety.tune` at a call site to shadow a policy, disable it, or override stream behavior:
+Use `safety.tune` at a call site to shadow a policy or disable it:
 
 ```ts
 await adapter.generate(prompt, {
@@ -69,9 +70,21 @@ await adapter.generate(prompt, {
 });
 ```
 
+Tune changes only `mode` and `enabled`. The streaming unit is not tunable: it is
+part of the policy's boundary, so a call site cannot widen what a policy sees.
+
 Built-in text guardrails such as `guardrail.pii()`, `guardrail.secrets()`, and
-`guardrail.injection()` default to sentence-level streaming checks. Classifier
-guardrails and object/path guardrails run at final output unless you tune them.
+`guardrail.injection()` check sentences by default; `guardrail.classifier()`
+checks the complete subject. Refine the boundary — `.sentences()`, `.lines()`,
+`.deltas()`, `.complete()` — to override that.
+
+**Guardrails and constraints do different things on a stream.** A guardrail is a
+pass over content: it holds a unit, clears or rewrites it, and releases it — it
+never re-calls the model. An `assert` constraint is transactional: while it is
+unresolved the stream withholds output, and if it fails the whole attempt is
+discarded — the consumer saw none of it — and Crux re-streams with corrective
+feedback. That is why a guardrail can act per sentence while a constraint acts per
+attempt.
 
 ## The boundary, plainly
 

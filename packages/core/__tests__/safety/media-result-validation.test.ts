@@ -158,28 +158,6 @@ describe('input media guardrail validation', () => {
     expect(calls).toBe(0)
   })
 
-  it('rejects authored stream configuration on a media guardrail before callbacks run', () => {
-    let calls = 0
-    const malformed = guardrail({
-      id: 'media-stream-runtime',
-      on: boundary.input.media(),
-      stream: 'sentence',
-      run: () => {
-        calls++
-        return { action: 'allow' }
-      },
-    } as never)
-
-    expect(() =>
-      createSafety({
-        call: { guardrails: [malformed] },
-        promptId: 'prompt-1',
-        model: 'model-1',
-      }),
-    ).toThrow(SafetyConfigError)
-    expect(calls).toBe(0)
-  })
-
   it('rejects per-call stream tuning on a media guardrail before callbacks run', () => {
     let calls = 0
     const policy = guardrail({
@@ -196,7 +174,9 @@ describe('input media guardrail validation', () => {
         call: { guardrails: [policy] },
         promptId: 'prompt-1',
         model: 'model-1',
-        safety: { tune: { 'tuned-media-stream-runtime': { stream: 'final' } } },
+        // `stream` is not a tune field; the cast models an untyped JavaScript
+        // caller so the runtime rejection stays covered.
+        safety: { tune: { 'tuned-media-stream-runtime': { stream: 'final' } } } as never,
       }),
     ).toThrow(SafetyConfigError)
     expect(calls).toBe(0)

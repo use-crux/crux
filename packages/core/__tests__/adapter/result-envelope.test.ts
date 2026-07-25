@@ -144,7 +144,7 @@ describe("adapter result envelope", () => {
     expect(result._meta.usage).toEqual(finalUsage);
   });
 
-  it("returns a canonical stream result with textStream, raw, and completion envelope", async () => {
+  it("returns a canonical logical stream result with no provider handle", async () => {
     const rawStream = Object.assign(streamFrom(["he", "llo"]), {
       providerHandle: "envelope-stream",
     } as const);
@@ -177,8 +177,19 @@ describe("adapter result envelope", () => {
       messages: expect.any(Array),
     });
     expect(chunks).toEqual(["he", "llo"]);
-    expect(result.raw).toBe(rawStream);
-    expect(typeof result.raw[Symbol.asyncIterator]).toBe("function");
+    // The provider stream is not reachable from a managed result: exposing it
+    // would reopen the Safety bypass this contract removes (RFC #173).
+    expect(rawStream).toBeDefined();
+    expect("raw" in result).toBe(false);
+    expect(Object.keys(result).sort()).toEqual([
+      "_meta",
+      "cancel",
+      "completion",
+      "fullStream",
+      "partialOutputStream",
+      "runId",
+      "textStream",
+    ]);
   });
 });
 

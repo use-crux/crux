@@ -12,7 +12,7 @@ ownership of provider normalization and provider-native response objects.
 | Primitive          | Guardrail input boundaries                                                                                                                     | Guardrail output boundaries                                                                 | Constraints                                                |
 | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
 | `generate()`       | `model.input.text`, `model.input.media`, `model.instructions`                                                                                  | `model.output.text`, `model.output.media`, and structured object/both/path boundaries       | Text and structured output, with regeneration              |
-| `stream()`         | `model.input.text`, `model.input.media`, `model.instructions`                                                                                  | Live `model.output.text`; completion-only `model.output.media`; final structured boundaries | Completion/report semantics; live output cannot regenerate |
+| `stream()`         | `model.input.text`, `model.input.media`, `model.instructions`                                                                                  | Live `model.output.text`; completion-only `model.output.media`; live structured occurrence boundaries | Text and structured output, with regeneration: an `assert` gates release and discards a failed attempt |
 | `generateImage()`  | `model.input.text` prompt, `model.instructions` typed-prompt system text, `model.input.media` references/mask                                  | `model.output.media` images                                                                 | Unsupported                                                |
 | `generateSpeech()` | `model.input.text` speech text, `model.instructions`                                                                                           | `model.output.media` audio                                                                  | Unsupported                                                |
 | `transcribe()`     | `model.input.text` prompt hint, `model.input.media` audio                                                                                       | `model.output.text` transcript                                                              | Output text only, evaluated once without provider retry    |
@@ -132,10 +132,21 @@ derived from the guarded step values. A loop-owning runtime that cannot apply
 step Safety before client tools fails before provider I/O when such policies
 are applicable.
 
-For `stream()`, live deltas remain text-only. Media is buffered and guarded when
-`completion` settles. A completion media block rejects `completion`, but text
-already emitted from `textStream` cannot be recalled. The provider-native raw
-stream is an explicitly unguarded escape surface.
+For `stream()`, `fullStream` publishes text, reasoning, tool, source, media, and
+partial-output events. Anything a terminal stage could still rewrite or remove is
+held until that stage has run: media waits on a composite `model.output` or
+output-media guard, and reasoning waits on `model.output.text`, because the live
+text transform gates only text deltas. Without such a binding they release
+progressively.
+
+A managed stream has no unguarded escape surface. There is no `result.raw`: a
+provider stream resolves before terminal Safety and describes only one physical
+attempt, so reading it would expose content a commit gate withheld — including an
+attempt Crux rejected and re-streamed. Everything published has cleared every
+stage that could block or change it.
+
+Text that has already been published still cannot be recalled, which is why a
+terminal block rejects every surface rather than only `completion`.
 
 ## Canonical versus provider-native surfaces
 

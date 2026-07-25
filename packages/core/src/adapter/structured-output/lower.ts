@@ -24,6 +24,9 @@ import { assertSupportedRawVocabulary } from "./raw-schema-vocabulary";
 
 type PathSegment = string | number | "*";
 
+/** The decode manifest's array-wildcard segment; a property with this name is ambiguous. */
+const WILDCARD = "*";
+
 /** The result of lowering one canonical schema for one capability profile. */
 export interface LoweringResult {
   readonly outputSchema: JsonSchemaObject;
@@ -229,6 +232,20 @@ function lowerObject(
       // Record the ancestor operation before descending so ancestor operations
       // precede descendant operations in document order.
       if (optionalOnly) {
+        if (key === WILDCARD) {
+          throw new CruxUnsupportedSchemaError(
+            context.capabilities.id,
+            `an optional property named "${WILDCARD}" collides with the decode manifest's array wildcard`,
+            childPath,
+          );
+        }
+        if (hasUnwalkedComposite(rawChild)) {
+          throw new CruxUnsupportedSchemaError(
+            context.capabilities.id,
+            "an optional property whose schema contains allOf/prefixItems cannot be reversibly encoded",
+            childPath,
+          );
+        }
         context.operations.push({
           kind: "delete-null-sentinel",
           path: childPath,
@@ -322,7 +339,29 @@ function acceptsNull(node: unknown): boolean {
   if (Array.isArray(record.enum) && record.enum.includes(null)) return true;
   if ("const" in record && record.const === null) return true;
   if (Array.isArray(record.anyOf) && record.anyOf.some(acceptsNull)) return true;
+  // `allOf` is a conjunction: the value is null-accepting only when EVERY branch is.
+  if (Array.isArray(record.allOf) && record.allOf.every(acceptsNull)) return true;
   return Array.isArray(record.oneOf) && record.oneOf.some(acceptsNull);
+}
+
+/**
+ * Whether this node contains a composite the lowering walker does not traverse.
+ *
+ * The optional-to-nullable encoding is only reversible if we can see every place a
+ * `null` could legitimately come from. `allOf` and tuple `prefixItems` are not walked,
+ * so recording a delete-null-sentinel under one could silently delete an authored
+ * `null` (or leave an optional property inside a tuple unlowered for a provider that
+ * requires all properties). Fail closed instead — over-reject, never silently corrupt.
+ */
+function hasUnwalkedComposite(node: unknown): boolean {
+  const record = asRecord(node);
+  if (!record) return false;
+  if (Array.isArray(record.allOf) || Array.isArray(record.prefixItems)) return true;
+  for (const key of ["anyOf", "oneOf"] as const) {
+    const branches = record[key];
+    if (Array.isArray(branches) && branches.some(hasUnwalkedComposite)) return true;
+  }
+  return false;
 }
 
 /**

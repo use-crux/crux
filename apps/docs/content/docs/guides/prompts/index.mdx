@@ -213,6 +213,16 @@ result.text;
 
 Add `output` when downstream code needs typed data. Adapters switch to structured generation and validate the result with Zod.
 
+**You write one schema.** Crux compiles a provider-compatible wire schema from it, decodes anything that compilation introduced, and validates the response against the schema you actually authored. You never maintain a second provider-shaped copy, and `result.object` is typed from your Zod type on every provider.
+
+```
+your Zod schema ──compile──▶ provider wire schema ──▶ model
+                                                       │
+your Zod schema ◀──validate── decoded response ◀───────┘
+```
+
+Because providers disagree about JSON Schema, the compiler lowers your schema to what the target accepts: inlining references, dropping keywords the provider rejects, and setting `additionalProperties` per its rules. If a provider cannot express structured output at all, the call fails before any network request instead of silently returning text.
+
 ```ts twoslash title="structured-prompt.ts"
 import { prompt } from "@use-crux/core";
 import { z } from "zod";
@@ -245,6 +255,41 @@ const result = await generate(classifyTicket, {
 result.object.category;
 result.object.urgency;
 ```
+
+### Optional And Nullable Fields
+
+Some providers require every property to be listed as required. Rather than making
+you flatten your schema, Crux lowers an **optional-only** field (`.optional()`, not
+`.nullable()`) to required-and-nullable on the wire, then deletes the property again
+when the model returns `null`:
+
+```ts
+output: z.object({
+  title: z.string(),
+  subtitle: z.string().optional(),
+});
+```
+
+| You wrote                    | On the wire (strict provider) | Model returns   | You receive         |
+| ---------------------------- | ----------------------------- | --------------- | ------------------- |
+| `z.string().optional()`      | required, `string \| null`    | `null`          | property absent     |
+| `z.string().optional()`      | required, `string \| null`    | `"Hi"`          | `"Hi"`              |
+| `z.string().nullable()`      | required, `string \| null`    | `null`          | `null`              |
+
+`.optional()` therefore still means "may be absent", and `.nullable()` still means
+"may be null" — the two never collapse into each other. A field that is *both*
+optional and nullable is left alone, so an authored `null` is never mistaken for
+the transport sentinel.
+
+<Callout type="info">
+  This encoding must be reversible, so Crux refuses to apply it where it cannot prove
+  a returned `null` came from the encoding rather than from your schema. An optional
+  property throws `CruxUnsupportedSchemaError` at compile time — before any request,
+  naming the offending path — when it sits inside a recursive schema, a union branch,
+  or an intersection/tuple, or when it is literally named `"*"` (which collides with
+  the decode manifest's array wildcard). Make the field required, or give it an
+  explicit `.nullable()` meaning.
+</Callout>
 
 ## Compose Capabilities With `use`
 

@@ -6,7 +6,7 @@
 
 import type { BoundaryDef } from '../../boundary'
 import { detectSuspiciousPatterns, escapeXml } from '../../../shared/sanitize'
-import type { GuardrailRun, GuardrailRunResult } from '../types'
+import type { GuardrailRun, ClosedGuardrailRunResult } from '../types'
 
 type TextBoundary = BoundaryDef<
   'model.input.text' | 'model.instructions' | 'model.output.text' | 'validation.feedback',
@@ -21,7 +21,7 @@ export interface InjectionGuardrailOptions {
 /** Create a heuristic prompt-injection strategy for text boundaries. */
 export function injection(options: InjectionGuardrailOptions = {}): GuardrailRun<TextBoundary> {
   const action = options.action ?? 'block'
-  const run = async (subject: string): Promise<GuardrailRunResult<string>> => {
+  const run = async (subject: string): Promise<ClosedGuardrailRunResult<string>> => {
     const warnings = detectSuspiciousPatterns(subject, 'subject')
     if (warnings.length === 0) return { action: 'allow' }
 
@@ -44,6 +44,8 @@ export function injection(options: InjectionGuardrailOptions = {}): GuardrailRun
     strategy: {
       kind: 'guardrail.injection',
       config: { action },
+      // Evaluate whole sentences so an injection split across deltas is not missed.
+      defaultUnit: 'sentence' as const,
     },
   })
 }

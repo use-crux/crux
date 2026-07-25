@@ -1,3 +1,4 @@
+import { selectedPath } from '../boundary'
 import type { z } from "zod";
 import type { BoundaryDef } from "../boundary";
 import { SafetyStructuredSyncError } from "../errors";
@@ -12,7 +13,7 @@ export function terminalSubject(
   state: StructuredSafetyOutput,
 ): unknown {
   if (boundary.id === "model.output.object") {
-    return boundary.path ? valueAtPath(state.parsed, boundary.path) : state.parsed;
+    return selectedPath(boundary) ? valueAtPath(state.parsed, selectedPath(boundary)!) : state.parsed;
   }
   if (boundary.id === "model.output") {
     return { text: state.text, object: state.parsed };
@@ -29,8 +30,8 @@ export function applyTerminalRewrite(
 ): StructuredSafetyOutput {
   let text: string;
   if (boundary.id === "model.output.object") {
-    const parsed = boundary.path
-      ? replaceAtPath(state.parsed, boundary.path, value, options.policyId)
+    const parsed = selectedPath(boundary)
+      ? replaceAtPath(state.parsed, selectedPath(boundary)!, value, options.policyId)
       : value;
     text = serialize(parsed, options.policyId);
   } else if (

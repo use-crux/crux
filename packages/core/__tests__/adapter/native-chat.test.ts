@@ -6,6 +6,9 @@
 
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
+import { adapter } from '../../src/adapter/define-adapter'
+import { prompt } from '../../src/prompt/prompt'
+import { boundary, guardrail } from '../../src/safety'
 import { adapterSpecConformance } from '../../src/adapter/testing'
 import type {
   AdapterConformanceHarness,
@@ -200,6 +203,48 @@ describe('native-chat compiler', () => {
     const violations = await adapterSpecConformance(spec, harness)
 
     expect(violations).toEqual([])
+  })
+
+  it('gates structured object + text over the live native stream (parity with the SDK route)', async () => {
+    const client: NativeTestClient = {
+      script: { streamChunks: ['{"name":"ra', 'w"}'] },
+      calls: [],
+      streams: [],
+    }
+    const runtime = adapter(nativeTestProfile.specFor(bindNativeTest))(client)
+    const seen: string[] = []
+    const structured = prompt({
+      id: 'native-structured-stream',
+      prompt: 'json',
+      output: z.object({ name: z.string() }),
+    })
+    const handle = await runtime.stream(structured, {
+      model: 'native-test-model',
+      guardrails: [
+        guardrail({
+          id: 'obj',
+          on: boundary.output.object<{ name: string }>().path('name'),
+          run: () => ({ action: 'rewrite', value: 'X', rewrite: { kind: 'redact' } }),
+        }),
+        guardrail({
+          id: 'text',
+          on: boundary.output.text(),
+          run: (text: string) => {
+            seen.push(text)
+            return { action: 'allow' as const }
+          },
+        }),
+      ],
+    })
+    let streamed = ''
+    for await (const chunk of handle.textStream) streamed += chunk
+    const meta = await handle.completion
+    // Object occurrence gated (name → X); the text guard observed the canonical,
+    // object-gated JSON — never the provider wire text.
+    expect(streamed).toBe('{"name":"X"}')
+    expect(seen.join('')).toContain('{"name":"X"}')
+    expect(seen.join('')).not.toContain('raw')
+    expect(meta.object).toEqual({ name: 'X' })
   })
 
     it('creates lightweight helpers from the same profile request path', async () => {

@@ -8,11 +8,13 @@
  * @module
  */
 
+import type { z } from "zod";
+import type { ContextEntry } from "../prompt/context-types";
 import type { createCompositions } from "../agent/create-compositions";
 import type { Message } from "../generation/messages";
 import type { TimeoutOptions } from "../generation/timeout";
 import type { GenerationSettings } from "../generation/types";
-import type { AnyPrompt } from "../prompt/prompt-types";
+import type { AnyPrompt, Prompt } from "../prompt/prompt-types";
 import type { Constraint } from "../safety/constraint/types";
 import type { Guardrail } from "../safety/guardrail/types";
 import type { SafetyTuneOptions } from "../safety/tune";
@@ -25,6 +27,7 @@ import type { ToolApprovalMap } from "../tools/approval-policy";
 import type { AnyToolSet } from "../types";
 import type { ValidationRetryOptions } from "../generation/validation-retry";
 import type { GenerateResult, StreamResult } from "./result-accumulator";
+import type { DeepPartial } from "./logical-stream";
 import type { CallHandle } from "./call-handle";
 
 /** Metadata passed to an adapter `transport` callback for one provider step. */
@@ -148,6 +151,28 @@ export type AdapterGenerateResult<
   TOutput = unknown,
 > = GenerateResult<TRawResponse, TOutput>;
 
+/**
+ * The managed stream result for one prompt.
+ *
+ * @remarks
+ * The result SHAPE never varies (RFC #173); only the value types do. A prompt
+ * with an authored schema yields `z.output` on `completion.object` and partial
+ * canonical `z.input` on `partialOutputStream`; a text-only prompt yields
+ * neither, which is why its parameters are `never` rather than `unknown`.
+ */
+export type AdapterStreamResult<TPrompt extends AnyPrompt> =
+  StreamResultForSchema<PromptOutputSchema<TPrompt>>;
+
+/** The authored output schema a prompt declares, or `undefined`. */
+type PromptOutputSchema<TPrompt> =
+  TPrompt extends Prompt<z.ZodType, infer TOutput, readonly ContextEntry[], AnyToolSet | undefined>
+    ? TOutput
+    : undefined;
+
+type StreamResultForSchema<TSchema> = TSchema extends z.ZodType
+  ? StreamResult<z.output<TSchema>, DeepPartial<z.input<TSchema>>>
+  : StreamResult<never, never>;
+
 /** The adapter interface returned by the factory. */
 export interface CruxAdapter<
   TClient,
@@ -177,7 +202,7 @@ export interface CruxAdapter<
   >(
     prompt: TPrompt,
     opts: AdapterStreamOptions<TExtra, TCallTools, TPrompt, TRuntimeContext, TParams, TRawResponse>,
-  ): Promise<StreamResult<TRawStream>>;
+  ): Promise<AdapterStreamResult<TPrompt>>;
 
   /** Prepare a sans-I/O provider call handle when the adapter exposes public codecs. */
   prepare?<

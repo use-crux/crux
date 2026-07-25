@@ -17,8 +17,15 @@ const DEFAULT_TOKEN_CHUNK_MAX_CHARS = 512
 
 /** Attributes emitted on each canonical `token.chunk` span event. */
 export interface StreamTokenChunkAttributes extends CruxAttributes {
-  /** Merged token text for this observability chunk. */
-  readonly text: string
+  /**
+   * Merged token text for this observability chunk.
+   *
+   * Omitted when the stream can still discard the attempt these deltas belong to
+   * (a commit gate is armed, RFC #173): telemetry must never carry bytes the
+   * consumer was never allowed to see. Timing and size attributes are still
+   * emitted so TTFT and throughput stay measurable.
+   */
+  readonly text?: string
   /** Zero-based index of this coalesced chunk within the stream span. */
   readonly chunkIndex: number
   /** Number of UTF-16 code units in {@link text}. */
@@ -48,6 +55,13 @@ interface StreamTokenCoalescerOptions {
   readonly flushIntervalMs?: number
   readonly maxChars?: number
   readonly now?: () => Date
+  /**
+   * Emit chunk timing and size without the text itself.
+   *
+   * Set when a commit gate can still discard the attempt these deltas belong to,
+   * so an attempt the consumer never saw cannot be reconstructed from telemetry.
+   */
+  readonly omitText?: boolean
 }
 
 /**
@@ -97,7 +111,7 @@ export function createStreamTokenCoalescer(options: StreamTokenCoalescerOptions)
     firstDeltaAt = undefined
     lastDeltaAt = undefined
     options.emit({
-      text,
+      ...(options.omitText ? {} : { text }),
       chunkIndex,
       charCount: text.length,
       firstDeltaAt: emittedFirstDeltaAt,

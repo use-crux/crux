@@ -239,6 +239,12 @@ describe('Google native media input', () => {
 
     expect(prepared.params).toEqual(managedCalls[0])
     expect(transportCalls[0]).toEqual(managedCalls[0])
-    expect(streamCalls[0]).toEqual(managedCalls[0])
+    // A managed stream always carries a cancellation signal so `result.cancel()`
+    // can reach the provider (RFC #173). That is transport wiring, not media
+    // lowering, so it is excluded from the lowering comparison.
+    const streamed = streamCalls[0] as { config?: Record<string, unknown> }
+    const { abortSignal, ...streamConfig } = streamed.config ?? {}
+    expect(abortSignal).toBeInstanceOf(AbortSignal)
+    expect({ ...streamed, config: streamConfig }).toEqual(managedCalls[0])
   })
 })

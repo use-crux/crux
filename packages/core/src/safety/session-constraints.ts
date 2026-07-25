@@ -6,6 +6,7 @@ import type {
   ConstraintAuditEntry,
   ConstraintContext,
 } from "./constraint/types";
+import type { ConstraintOccurrenceSettlement } from "./constraint/settlement";
 import type {
   ConstraintFeedbackFormatter,
   SafetyContext,
@@ -19,6 +20,7 @@ export interface SessionConstraintRunner {
     output: SafetyOutput,
     regenerate: (corrective: readonly Message[]) => Promise<SafetyOutput>,
     guardCandidate: (candidate: SafetyOutput) => Promise<SafetyOutput>,
+    settled?: readonly ConstraintOccurrenceSettlement[],
   ): Promise<SafetyOutput>;
   report(output: SafetyOutput): Promise<void>;
   replaceAudit(audit: ConstraintAudit | undefined): void;
@@ -43,7 +45,7 @@ export function createSessionConstraintRunner(
       return audit;
     },
 
-    async apply(output, regenerate, guardCandidate) {
+    async apply(output, regenerate, guardCandidate, settled) {
       let rounds = 0;
       const result = await runConstraints(
         options.constraints,
@@ -67,6 +69,7 @@ export function createSessionConstraintRunner(
         },
         {
           constraintMaxRetries: options.constraintMaxRetries,
+          ...(settled && settled.length > 0 ? { settled } : {}),
           onCheck: () => {},
           onRetry: (_failed, attempt) => {
             rounds = attempt;

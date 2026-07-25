@@ -17,8 +17,7 @@ it("uses authoritative final-seal text without recalling already emitted text", 
     guardrails: [
       guardrail({
         id: "final-seal-rewrite",
-        on: boundary.output.text(),
-        stream: "final",
+        on: boundary.output.text().complete(),
         run: (text) => {
           seen.push(text);
           return {
@@ -50,8 +49,7 @@ it("keeps final-seal text created from an empty provider stream", async () => {
     guardrails: [
       guardrail({
         id: "empty-final-seal-rewrite",
-        on: boundary.output.text(),
-        stream: "final",
+        on: boundary.output.text().complete(),
         run: (text) => {
           seen.push(text);
           return {

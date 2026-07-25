@@ -60,7 +60,7 @@ Supported result actions:
 | `block`   | Stop the call with `GuardrailBlockedError`.                                                                                                    |
 | `warn`    | Record a Safety decision without changing content.                                                                                             |
 | `rewrite` | Replace the subject. Use `rewrite.kind` for `redact`, `mask`, `hash`, or `normalize`.                                                          |
-| `hold`    | Streaming only. Wait for more text before releasing the segment.                                                                               |
+| `hold`    | Growing text units only (`.deltas()`/`.sentences()`/`.lines()`/`.segments()`). Wait for more text before releasing the segment.                |
 | `strip`   | Media only. Remove an optional canonical part in enforce mode; report intent without mutation in report mode; block when the part is required. |
 
 Malformed or unknown results fail closed with `SafetyResultError`, including
@@ -101,7 +101,7 @@ Common boundaries:
 | `boundary.output.text()`           | Model output text before the caller sees it.                                |
 | `boundary.output.media()`          | One canonical model/operation output-media part before public accumulation. |
 | `boundary.output.object<T>()`      | Parsed structured output.                                                   |
-| `boundary.output.path<T>()('a.b')` | One typed structured-output path.                                           |
+| `boundary.output.object<T>().path('a.b')` | One typed structured-output path.                                    |
 | `boundary.memory.write<T>()`       | Candidate memory write.                                                     |
 | `boundary.validation.feedback()`   | Corrective feedback before it is re-prompted.                               |
 
@@ -319,38 +319,110 @@ await adapter.generate(prompt, {
 });
 ```
 
-Tune can change only `mode`, `stream`, and `enabled`. Unknown policy ids throw
-so accidental misspellings do not silently weaken policy.
+Tune can change only `mode` and `enabled`. Unknown policy ids throw so accidental
+misspellings do not silently weaken policy. Tune cannot change the streaming unit:
+the unit is part of the policy's own definition, so a call site cannot quietly
+widen what a guardrail is allowed to see.
 
 ## Streaming
 
-Ordinary text guardrails apply to streams. By default, Crux gates text by
-sentence, runs each guardrail stage, then releases only the cleared segment.
-Later guardrails see earlier rewrites.
+A guardrail does not have a separate streaming mode. The **boundary** decides the
+unit of text the policy sees, and that same unit is used on `generate()` and
+`stream()`. One policy, one mental model — a call site cannot widen it.
 
 ```ts
 const pii = guardrail({
   id: "pii",
-  on: boundary.output.text(),
-  stream: "sentence",
+  on: boundary.output.text().sentences(),
   run: guardrail.pii({ strategy: "mask" }),
 });
 ```
 
-Streaming options:
+Crux gates the stream at that unit, runs each guardrail stage over the completed
+unit, then releases only the cleared text. Later guardrails see earlier rewrites.
 
-| Option                              | Behavior                                                       |
-| ----------------------------------- | -------------------------------------------------------------- |
-| `false`                             | Skip the guardrail for streaming calls and audit the skip.     |
-| `'final'`                           | Let live chunks flow and run the guardrail once at completion. |
-| `'sentence'`                        | Gate and check complete sentence segments.                     |
-| `'line'`                            | Gate and check complete line segments.                         |
-| `'chunk'`                           | Check each provider text chunk.                                |
-| `{ segment, maxHold, onHoldLimit }` | Custom segmenter and hold bounds.                              |
+### Choosing the unit
 
-`hold` is valid only for non-final stream segments. If held text exceeds the
-configured `maxHold`, Crux fails closed by default with `StreamHoldLimitError`.
-Object and path guardrails run at final output for streams.
+| Refinement                      | Unit evaluated                                            |
+| ------------------------------- | ---------------------------------------------------------- |
+| _(none)_                        | Adaptive: one complete result on generate, one canonical delta on stream. |
+| `.deltas()`                     | Each canonical text delta, explicitly.                     |
+| `.sentences(opts?)`             | Each complete sentence.                                    |
+| `.lines(opts?)`                 | Each newline-delimited line; a trailing line completes at EOF. |
+| `.segments({ maxCharacters, next })` | Your own deterministic segmenter.                     |
+| `.complete()`                   | The whole text once, at completion — on a stream this releases nothing until EOF. |
+
+The effective unit resolves in a fixed order: an **explicit refinement** wins,
+then a **bundled strategy's semantic default**, then the **adaptive default**.
+
+| Bundled strategy                                | Semantic default     |
+| ----------------------------------------------- | -------------------- |
+| `guardrail.pii()`, `.secrets()`, `.injection()`  | sentence             |
+| `guardrail.classifier()`                         | the complete subject |
+
+Media boundaries are not text and take no refinement: each canonical media part
+is one atomic occurrence.
+
+So `guardrail.pii()` on an unrefined `boundary.output.text()` already checks
+sentences — you do not need to spell it out. Refine explicitly to override:
+
+```ts
+// Strategy default (sentence) applies.
+guardrail({ id: "pii", on: boundary.output.text(), run: guardrail.pii() });
+
+// Explicit refinement wins over the strategy default.
+guardrail({
+  id: "pii-lines",
+  on: boundary.output.text().lines(),
+  run: guardrail.pii(),
+});
+```
+
+A **custom** guardrail (no bundled strategy) on an unrefined streaming text
+boundary falls through to the adaptive per-delta default, so a multi-character
+match can straddle a provider delta. Crux emits a one-time development notice
+saying so; any explicit refinement — including `.deltas()` — silences it, and
+production emits nothing.
+
+### Holding
+
+`hold` retains the current unit, coalesces the next fragment, and reruns the
+policy from the start for that occurrence. It is available only on **growing**
+units (`.deltas()`, `.sentences()`, `.lines()`, `.segments()`); closed units
+(`.complete()`, the root object, a scalar path, an array item) exclude `hold` at
+the type level, so an illegal `hold` is a compile error rather than a runtime
+surprise.
+
+Choosing `.complete()` therefore turns a stream into an all-or-nothing response: the
+guardrail cannot judge the text until the text exists, so nothing is released until
+the model finishes. Pick a growing unit when tokens should flow.
+
+Held text is bounded: 2,000 characters per growing unit by default, tunable via
+`maxHold`. `maxHold.ms` is measured on a monotonic clock and has no implicit
+default.
+
+```ts
+guardrail({
+  id: "policy-phrase",
+  on: boundary.output.text().sentences({ maxHold: { chars: 500, ms: 2_000 } }),
+  run: (text) =>
+    isTruncatedPhrase(text)
+      ? { action: "hold" }
+      : { action: "allow" },
+});
+```
+
+Reaching a character or time limit — or hitting EOF while still held — fails
+closed with `StreamHoldLimitError`. Held content is never emitted, logged as
+public output, or made observable before release.
+
+### Structured output
+
+Object and path guardrails run as their unit closes rather than only at the end
+of the stream: a scalar path is checked when that value completes, `.items()` as
+each array item closes, and an unrefined `object()` at completion. Text released
+before a rewrite is never taken back, because it is not released until its
+guardrail has cleared it.
 
 ## Errors And Audit
 

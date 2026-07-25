@@ -6,7 +6,6 @@ import type {
   OriginOf,
   SafetyTargetId,
 } from './boundary'
-import type { GuardrailStreamOption } from './stream/types'
 import type { ModelInputOrigin } from './input-origin'
 
 /** Safe, structured finding metadata emitted by safety policies. */
@@ -55,7 +54,7 @@ export interface SafetyDecision {
   /** Present only when an enforced strip could not preserve a required invariant. */
   readonly escalatedToBlock?: true
   readonly findings?: readonly SafetyFinding[]
-  readonly tuned?: readonly ('mode' | 'stream' | 'enabled')[]
+  readonly tuned?: readonly ('mode' | 'enabled')[]
   readonly durationMs: number
   readonly captured: SafetyCaptureSummary
 }
@@ -130,7 +129,6 @@ export interface StrategyRun<TSubject, TResult> {
 /** Effective posture fields that may be tuned per call. */
 export interface SafetyEffectivePolicyOptions {
   readonly mode: 'enforce' | 'report'
-  readonly stream?: GuardrailStreamOption
   readonly enabled: boolean
-  readonly tuned?: readonly ('mode' | 'stream' | 'enabled')[]
+  readonly tuned?: readonly ('mode' | 'enabled')[]
 }

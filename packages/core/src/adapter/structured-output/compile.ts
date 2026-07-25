@@ -96,6 +96,7 @@ export function compileCanonicalSchema(
   });
 
   return deepFreeze({
+    canonicalSchema,
     outputSchema: lowered.outputSchema,
     decodeManifest,
     diagnostics: lowered.diagnostics,

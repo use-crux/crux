@@ -92,17 +92,60 @@ export interface CallArgs<
 
 /** Stream handle returned by the adapter's stream method. */
 export interface StreamHandle<TRawStream> {
-  /** Original provider stream handle, when distinct from the wrapped iterable. */
+  /**
+   * Unsafe: the original provider stream handle, when distinct from the wrapped
+   * iterable. Reading it BYPASSES Crux Safety entirely — guardrail holds and
+   * rewrites, structured occurrence gating, transactional `assert` commit gates,
+   * and validation-retry gates all act on {@link rawStream}, not here. Content a
+   * commit gate would have withheld (including a rejected attempt that Crux
+   * discarded and restreamed) is observable through this property.
+   *
+   * Use {@link rawStream} for anything user-visible; reach for `raw` only for
+   * provider-specific transport concerns that carry no model output.
+   */
   raw?: TRawStream;
+  /** The Safety-gated provider stream: the only release-guaranteed surface. */
   rawStream: TRawStream & AsyncIterable<unknown>;
   extractTextDelta: (chunk: unknown) => string | undefined;
   /** Routing receipt attached by core when a stream used routing wrappers. */
   routing?: RoutingReceipt;
+  /**
+   * Whether this operation has an authored output schema.
+   *
+   * Set by execution, which resolved the prompt. The public seam needs it before
+   * the first delta to know that released text is canonical `z.input` JSON and
+   * therefore projects into `partialOutputStream`.
+   */
+  structured?: boolean;
+  /**
+   * Abort the physical attempt, so `result.cancel()` reaches the provider rather
+   * than only detaching readers.
+   */
+  abort?: (reason: unknown) => void;
+  /** The caller signal, which has whole-operation authority over the result. */
+  signal?: AbortSignal;
   completion: () => Promise<StreamCompletionMetadata | undefined>;
+}
+
+/**
+ * Scalar totals across every billable physical attempt (RFC #173, law 7).
+ *
+ * Present only when an operation ran more than one billable attempt. Carried
+ * separately from `usage`/`cost` because those describe the ACCEPTED attempt and
+ * feed the public step facts: a discarded attempt contributes money but no step,
+ * so the two must not be conflated. A field is `undefined` when some billable
+ * attempt did not report it, which makes the total unknowable — omitted rather
+ * than under-reported.
+ */
+export interface LogicalBillingTotals {
+  readonly usage?: TokenUsage;
+  readonly cost?: number;
 }
 
 /** Exact buffered facts available after a provider-native stream completes. */
 export interface StreamCompletionMetadata extends GenerationMeta {
+  /** Logical totals when this stream spanned several billable attempts. */
+  readonly logicalTotals?: LogicalBillingTotals;
   /** Final text projection, when supplied independently of stream deltas. */
   readonly text?: string;
   /** Exact ordered assistant output buffered while the stream ran. */

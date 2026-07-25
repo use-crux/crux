@@ -3,6 +3,13 @@
 import type { TraceMeta } from "../generation/types";
 import { currentScope, openScope } from "../scope/kernel";
 import type { Safety, SafetyStream } from "./session";
+import {
+  structuredStreamOpen,
+  structuredStreamOpenRaw,
+  streamOpenRaw,
+  type SafetySession,
+  type StructuredSafetyContext,
+} from "./session-bridge";
 
 /** Restore one safety-session frame across every asynchronous segment. */
 export function createScopedSafetySession(
@@ -90,6 +97,51 @@ export function createScopedSafetySession(
       return session.transcript;
     },
   };
+
+  // The structured stream returns a `SafetyStream` synchronously (like the public
+  // `openStream`), so it must be scoped like one — not wrapped as an async segment
+  // by the generic symbol forwarding below. The raw (coordinated) variant is scoped
+  // identically.
+  const defineScopedStructuredStream = (key: symbol): void => {
+    Object.defineProperty(scoped, key, {
+      configurable: false,
+      enumerable: false,
+      value: (structuredContext?: StructuredSafetyContext): SafetyStream => {
+        try {
+          return scopedStream(
+            controller.run(() =>
+              (session as unknown as Record<symbol, (ctx?: StructuredSafetyContext) => SafetyStream>)[
+                key
+              ](structuredContext),
+            ) as SafetyStream,
+          );
+        } catch (error) {
+          controller.seal("error");
+          throw error;
+        }
+      },
+    });
+  };
+  defineScopedStructuredStream(structuredStreamOpen);
+  defineScopedStructuredStream(structuredStreamOpenRaw);
+
+  // The coordinated text stream takes no structured context but is scoped identically.
+  Object.defineProperty(scoped, streamOpenRaw, {
+    configurable: false,
+    enumerable: false,
+    value: (): SafetyStream => {
+      try {
+        return scopedStream(
+          controller.run(() =>
+            (session as unknown as Record<symbol, () => SafetyStream>)[streamOpenRaw](),
+          ) as SafetyStream,
+        );
+      } catch (error) {
+        controller.seal("error");
+        throw error;
+      }
+    },
+  });
 
   // Internal adapter bridges use symbol-keyed methods. Preserve them without
   // making the public Safety contract aware of executor-only capabilities.

@@ -85,6 +85,7 @@ export const primitiveSpanNames = {
   run: 'crux.run',
   'generation.call': 'crux.generation.call',
   'generation.stream': 'crux.generation.stream',
+  'generation.stream.attempt': 'crux.generation.stream.attempt',
   'media.generate_image': 'crux.media.generate_image',
   'media.transcribe': 'crux.media.transcribe',
   'media.generate_speech': 'crux.media.generate_speech',
@@ -160,6 +161,9 @@ export const primitiveSpanNames = {
 export function genAiOperationName(
   primitive: CruxPrimitiveName,
 ): GenAiOperationName | undefined {
+  // `generation.stream.attempt` is deliberately absent: it is a Crux policy-attribution
+  // child of the one logical `generation.stream` chat operation (RFC #173), not a second
+  // GenAI operation. Mapping it to `chat` would double-count attempts in GenAI dashboards.
   if (primitive === 'generation.call' || primitive === 'generation.stream')
     return 'chat'
   if (primitive === 'media.generate_image') return 'generate_image'

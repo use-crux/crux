@@ -32,13 +32,21 @@ export function replayStream(cached: CachedStreamPayload): ExecutorProviderStrea
   async function* textIterator(): AsyncGenerator<string> {
     yield* chunkText()
   }
+  // A replayed `fullStream` must speak the SDK's PART protocol, not raw strings:
+  // it is translated into logical events exactly like a live stream, so emitting
+  // bare text here would replay a cached stream as zero published events.
+  async function* partIterator(): AsyncGenerator<Record<string, unknown>> {
+    yield { type: 'start' }
+    for (const chunk of chunkText()) yield { type: 'text-delta', text: chunk }
+    yield { type: 'finish' }
+  }
 
   const completionPromise = Promise.resolve(completionMeta)
   const raw: SdkStreamResultLike = {
     ...(cached.object !== undefined ? { object: Promise.resolve(cached.object) } : {}),
     text: Promise.resolve(text),
     textStream: textIterator(),
-    fullStream: textIterator(),
+    fullStream: partIterator(),
     _meta: { ...cachedMeta, _streamCompletion: completionPromise },
   }
   return withLegacyStreamMeta({ raw, completion: () => completionPromise }, completionPromise)

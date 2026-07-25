@@ -78,7 +78,11 @@ describe('finalizeOutput — constraints', () => {
 
     expect(error).toBeInstanceOf(ConstraintViolationError)
     const violation = error as ConstraintViolationError
-    expect(violation.failedConstraints).toEqual([{ name: 'strict', feedback: 'must mention unicorn' }])
+    // Identity + shape only: feedback can echo the rejected candidate, so a public
+    // terminal error carries its length rather than its text.
+    expect(violation.failedConstraints).toEqual([
+      { name: 'strict', feedbackLength: 'must mention unicorn'.length },
+    ])
     expect(violation.audit.entries.length).toBeGreaterThan(0)
     expect(regenerate).toHaveBeenCalledTimes(1)
   })

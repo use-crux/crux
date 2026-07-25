@@ -104,6 +104,52 @@ describe("completed structured stream invariant", () => {
     expect(completion.object).toEqual({ name: "REWRITTEN" });
   });
 
+  it("streams canonical JSON (sentinel deleted, path rewritten) and parses once", async () => {
+    // A strict profile (openai) lowers the optional-only `note` to required+nullable
+    // and records a `delete-null-sentinel` op; the provider emits the null sentinel.
+    let authoredParses = 0;
+    const structured = prompt({
+      id: "stream-sentinel-rewrite",
+      prompt: "return json",
+      output: z.object({
+        name: z.string().transform((value) => {
+          authoredParses += 1;
+          return value.toUpperCase();
+        }),
+        note: z.string().optional(),
+      }),
+    });
+    const guardrails = [
+      guardrail({
+        id: "redact-name",
+        on: boundary.output.object<{ name: string }>().path("name"),
+        run: () => ({
+          action: "rewrite" as const,
+          value: "safe",
+          rewrite: { kind: "redact" as const },
+        }),
+      }),
+    ];
+
+    const stream = await createCruxAi().stream(structured, {
+      model: capturingStreamingEmissionModel([{ text: '{"name":"raw","note":null}' }]).model,
+      guardrails,
+    });
+
+    let releasedText = "";
+    for await (const chunk of stream.textStream) releasedText += chunk;
+    const completion = await stream.completion;
+
+    // The structured transform releases canonical JSON: the null sentinel is gone
+    // (Output.object still parses it) and the path guard's rewrite is applied.
+    expect(JSON.parse(releasedText)).toEqual({ name: "safe" });
+    expect(releasedText).not.toContain("note");
+    // Core consumes the sealed canonical object without re-decoding; the authored
+    // schema (its transform) runs exactly once over it.
+    expect(completion.object).toEqual({ name: "SAFE" });
+    expect(authoredParses).toBe(1);
+  });
+
   it("fails closed when an object rewrite breaks the schema", async () => {
     const structured = prompt({
       id: "stream-invalid-rewrite",

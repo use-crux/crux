@@ -14,43 +14,74 @@ import {
   markRoutingMidStreamFailure,
   type RoutingReceipt,
 } from "../routing/receipt";
-import {
-  createResultAccumulator,
-} from "./result-accumulator";
-import type { StreamCompletion, StreamResult } from "./stream-result-types";
+import { createResultAccumulator } from "./result-accumulator";
+import { createCanonicalPartialProjector } from "./execution/canonical-partials";
+import { publishOrdinaryStream } from "./execution/logical-stream-mapping";
+import type { PublishedStreamEvent, StreamResult } from "./logical-stream";
+import type { StreamCompletion } from "./stream-result-types";
 
-/** Build the public stream envelope from an internal provider stream handle. */
-export function createStreamResult<TRawStream, TOutput = unknown>(
+/**
+ * Build the public logical stream from an internal provider stream handle.
+ *
+ * @remarks
+ * This is the single place the native route becomes a logical stream, so the
+ * publication laws are enforced once rather than per provider. The handle's
+ * physical chunk protocol stops here: nothing downstream of this function can
+ * observe provider framing or the provider stream object.
+ */
+export function createStreamResult<
+  TRawStream,
+  TOutput = unknown,
+  TPartial = unknown,
+>(
   handle: WithOperationResultMeta<StreamHandle<TRawStream>> &
     Readonly<{ runId: CruxRunId }>,
-): StreamResult<TRawStream, TOutput> {
+): StreamResult<TOutput, TPartial> {
   let streamedText = "";
-  let resolveStream: (() => void) | undefined;
-  let rejectStream: ((error: unknown) => void) | undefined;
-  const streamFinished = new Promise<void>((resolve, reject) => {
-    resolveStream = resolve;
-    rejectStream = reject;
-  });
 
-  async function* textStream(): AsyncIterable<string> {
+  // Memoized so the event source and the completion envelope observe ONE
+  // provider completion: the derived terminal events and the envelope must
+  // describe the same finished attempt.
+  let metaPromise: Promise<StreamCompletionMetadata | undefined> | undefined;
+  const getMeta = (): Promise<StreamCompletionMetadata | undefined> => {
+    metaPromise ??= handle.completion();
+    void metaPromise.catch(() => undefined);
+    return metaPromise;
+  };
+
+  async function* events(): AsyncIterable<PublishedStreamEvent<TPartial>> {
+    const partials = handle.structured
+      ? createCanonicalPartialProjector()
+      : undefined;
     try {
       for await (const chunk of handle.rawStream as AsyncIterable<unknown>) {
         const delta = handle.extractTextDelta(chunk);
         if (delta === undefined || delta === "") continue;
         streamedText += delta;
-        yield delta;
+        yield { type: "text-delta", text: delta };
+        const partial = partials?.push(delta);
+        if (partial) {
+          yield { type: "partial-output", value: partial.value as TPartial };
+        }
       }
-      resolveStream?.();
     } catch (error) {
-      const routedError = attachStreamRouting(error, handle.routing);
-      rejectStream?.(routedError);
-      throw routedError;
+      throw attachStreamRouting(error, handle.routing);
     }
+    // A native provider's only progressive channel is text, so its non-text output
+    // becomes observable when the attempt's buffered content does. Publishing it
+    // here — after the deltas, before the logical `finish` — keeps the contract's
+    // rule that tool inputs and media appear only once structurally complete,
+    // without inventing progressive framing the provider never gave us.
+    //
+    // Because this content is the GUARDED completion, the native route needs no
+    // `deferMedia` decision: a part a terminal `model.output` or output-media
+    // guard stripped is simply absent here. The SDK route, which does have a
+    // progressive media channel, makes that choice explicitly.
+    yield* terminalEvents<TPartial>(await getMeta());
   }
 
-  const completion = (async (): Promise<StreamCompletion<TOutput>> => {
-    await streamFinished;
-    const meta = await handle.completion();
+  const completion = async (): Promise<StreamCompletion<TOutput>> => {
+    const meta = await getMeta();
     const text = typeof meta?.text === "string" ? meta.text : streamedText;
     const accumulator = createResultAccumulator();
     accumulator.addStep({
@@ -75,22 +106,70 @@ export function createStreamResult<TRawStream, TOutput = unknown>(
         ? { pendingApprovals: extended.pendingApprovals }
         : {}),
       ...(handle.routing !== undefined ? { routing: handle.routing } : {}),
+      // Present only when the operation spanned several billable attempts; it
+      // then replaces the step-derived totals (RFC #173, law 7).
+      ...(meta?.logicalTotals !== undefined
+        ? { logicalTotals: meta.logicalTotals }
+        : {}),
       _meta: completionMetadata(meta),
     });
     return stampCruxRunId(
       withOperationResultMeta(payload, handle._meta),
       handle.runId,
-    );
-  })();
-  void completion.catch(() => undefined);
-
-  return {
-    runId: handle.runId,
-    textStream: textStream(),
-    raw: handle.raw ?? handle.rawStream,
-    completion,
-    _meta: handle._meta,
+    ) as StreamCompletion<TOutput>;
   };
+
+  return publishOrdinaryStream<TOutput, TPartial>({
+    runId: handle.runId,
+    meta: handle._meta,
+    events: events(),
+    completion,
+    ...(handle.abort ? { onCancel: handle.abort } : {}),
+    ...(handle.signal ? { signal: handle.signal } : {}),
+  });
+}
+
+/**
+ * Derive the non-text logical events a completed native attempt carries.
+ *
+ * @remarks
+ * Text parts are deliberately skipped: they were already published as deltas,
+ * and republishing them would duplicate the operation's output.
+ */
+function* terminalEvents<TPartial>(
+  meta: StreamCompletionMetadata | undefined,
+): Generator<PublishedStreamEvent<TPartial>> {
+  const extended = meta as (typeof meta & StreamOutputMeta<unknown>) | undefined;
+  for (const part of meta?.content ?? []) {
+    const event = contentEvent<TPartial>(part);
+    if (event) yield event;
+  }
+  for (const approval of extended?.pendingApprovals ?? []) {
+    yield {
+      type: "tool-approval-request",
+      toolCallId: approval.toolCallId,
+      toolName: approval.toolName,
+      input: approval.input,
+    };
+  }
+}
+
+function contentEvent<TPartial>(
+  part: AssistantContentPart,
+): PublishedStreamEvent<TPartial> | undefined {
+  if (part.type === "text") return undefined;
+  if (part.type === "reasoning") {
+    return { type: "reasoning-delta", text: part.text };
+  }
+  if (part.type === "tool-call") {
+    return {
+      type: "tool-call",
+      toolCallId: part.toolCallId,
+      toolName: part.toolName,
+      input: part.input,
+    };
+  }
+  return { type: "media", part };
 }
 
 interface StreamOutputMeta<TOutput> {

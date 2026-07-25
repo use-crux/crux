@@ -91,17 +91,6 @@ describe('constraint', () => {
     expect(constraint.maxRetries).toBe(5)
   })
 
-  it('includes onChunk when provided', () => {
-    const constraint = makeConstraint({
-      id: 'streaming',
-      on: boundary.output.text(),
-      run: async () => ({ pass: true }),
-      onChunk: async () => ({ abort: false }),
-    })
-
-    expect(constraint.onChunk).toBeDefined()
-  })
-
   it('carries an optional risk category', () => {
     const constraint = makeConstraint({
       id: 'grounded',
@@ -160,6 +149,51 @@ describe('evaluateConstraint', () => {
     expect(report.summary.total).toBe(3)
     expect(report.summary.passed).toBe(2) // first two match
     expect(report.summary.failed).toBe(1) // third doesn't match
+  })
+
+  it('checks each item of an .items() constraint and fails on a later item', async () => {
+    const seen: string[] = []
+    const c = makeConstraint({
+      id: 'short-items',
+      on: boundary.output.object<{ items: readonly string[] }>().path('items').items(),
+      run: async (item: string) => {
+        seen.push(item)
+        return item.length <= 3 ? { pass: true } : { pass: false, feedback: `too long: ${item}` }
+      },
+    })
+
+    const report = await evaluateConstraint(c, [
+      { input: { text: '', parsed: { items: ['ok', 'fine'] } }, expect: false },
+      { input: { text: '', parsed: { items: ['a', 'bb'] } }, expect: true },
+    ])
+
+    expect(report.summary.passed).toBe(2) // both cases matched their expectation
+    // The first case stopped at the failing item ('fine'); the second checked both.
+    expect(seen).toEqual(['ok', 'fine', 'a', 'bb'])
+  })
+
+  it('resolves a scalar object path and is vacuously satisfied by a missing optional path', async () => {
+    const scalar = makeConstraint({
+      id: 'name-nonempty',
+      on: boundary.output.object<{ account: { name: string } }>().path('account.name'),
+      run: async (name: string) => (name.length > 0 ? { pass: true } : { pass: false, feedback: 'empty' }),
+    })
+    const optional = makeConstraint({
+      id: 'note-optional',
+      on: boundary.output.object<{ note?: string }>().path('note'),
+      run: async () => ({ pass: false, feedback: 'should not run' }),
+    })
+
+    const scalarReport = await evaluateConstraint(scalar, [
+      { input: { text: '', parsed: { account: { name: 'ok' } } }, expect: true },
+      { input: { text: '', parsed: { account: { name: '' } } }, expect: false },
+    ])
+    const optionalReport = await evaluateConstraint(optional, [
+      { input: { text: '', parsed: { present: 1 } }, expect: true }, // absent path → vacuous pass
+    ])
+
+    expect(scalarReport.summary.passed).toBe(2)
+    expect(optionalReport.results[0]?.actualPass).toBe(true)
   })
 
   it('handles errors in check function', async () => {
@@ -337,11 +371,11 @@ describe('ConstraintViolationError', () => {
 
     expect(err.name).toBe('ConstraintViolationError')
     expect(err.failedConstraints).toHaveLength(2)
-    expect(err.lastOutput).toMatchObject({
-      level: 'safe',
-      preview: 'bad output',
-      sizeBytes: 10,
-    })
+    // Evidence only: a public terminal error carries size and hash for correlation,
+    // never a preview of the rejected candidate.
+    expect(err.lastOutput).toMatchObject({ level: 'safe', sizeBytes: 10 })
+    expect(err.lastOutput.preview).toBeUndefined()
+    expect(err.lastOutput.hash).toEqual(expect.any(String))
     expect(err.lastOutput.raw).toBeUndefined()
     expect(err.totalAttempts).toBe(3)
     expect(err.message).toContain('a')
@@ -367,23 +401,5 @@ describe('discriminated union check results', () => {
 
     const result = await runConstraint(c, { text: 'good', object: undefined })
     expect(result.pass).toBe(true)
-  })
-
-  it('onChunk returning abort:true requires feedback', async () => {
-    const c = makeConstraint({
-      id: 'stream-check',
-      on: boundary.output.text(),
-      run: async () => ({ pass: true }),
-      onChunk: async (_chunk, accumulated) => {
-        if (accumulated.length > 10) return { abort: true, feedback: 'Too long already' }
-        return { abort: false }
-      },
-    })
-
-    const result = await c.onChunk!('a'.repeat(20), 'a'.repeat(20), makeCtx())
-    expect(result.abort).toBe(true)
-    if (result.abort) {
-      expect(result.feedback).toBe('Too long already')
-    }
   })
 })

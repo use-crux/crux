@@ -1,12 +1,13 @@
 {
   "title": "Advanced",
-  "description": "Type system, multimodal content, custom adapters, headless environments, extensions, and error categories.",
+  "description": "Type system, multimodal content, custom adapters, headless environments, extensions, error categories, and removed APIs.",
   "pages": [
     "type-system",
     "multimodal",
     "building-adapters",
     "headless",
     "writing-indexer-extension",
-    "errors"
+    "errors",
+    "migrations"
   ]
 }

@@ -248,6 +248,7 @@ export async function orchestrateStream<TArgs extends Record<string, unknown>, T
         span,
         performance,
         spec.timeout?.chunkMs,
+        spec.discardableAttempt === true,
       )
       return stampCruxRunId(observed, span.runId)
     })

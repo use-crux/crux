@@ -52,6 +52,14 @@ export interface StructuredOutputDecodeManifest {
  * lowering decisions — never over request-local or non-semantic object identity.
  */
 export interface StructuredOutputPlan {
+  /**
+   * Compiler-owned pre-lowering canonical JSON Schema — the structural shape of
+   * the canonical `z.input` that object Safety operates on, before any provider
+   * lowering artifacts (provider-forced `required`, `additionalProperties`,
+   * optional-to-nullable). It is the authority for per-occurrence structural
+   * validation; provider lowering never bleeds into Safety semantics.
+   */
+  readonly canonicalSchema: JsonSchemaObject;
   /** Provider-compatible JSON Schema compiled from the authored schema. */
   readonly outputSchema: JsonSchemaObject;
   /** Reversible decode operations applied to a provider value before Safety. */

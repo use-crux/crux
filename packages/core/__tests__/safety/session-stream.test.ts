@@ -6,6 +6,7 @@
 
 import { afterEach, describe, it, expect } from 'vitest'
 import { boundary, createSafety, GuardrailBlockedError, ConstraintViolationError } from '../../src/safety'
+import { openSafetySessionStructuredStream } from '../../src/safety/session'
 import type { SafetyCallOptions } from '../../src/safety'
 import { guardrail } from '../../src/safety/guardrail'
 import { constraint } from '../../src/safety/constraint'
@@ -25,7 +26,6 @@ describe('openStream — hold and release', () => {
     const sentenceGuard = guardrail({
       id: 'sentence',
       on: boundary.output.text(),
-      stream: 'chunk',
       run: async (chunk) => (chunk.endsWith(' ') ? { action: 'allow' as const } : { action: 'hold' as const }),
     })
     const stream = session({
@@ -39,13 +39,12 @@ describe('openStream — hold and release', () => {
     })
   })
 
-  it('an async onChunk fix round-trips: hold, then release corrected content', async () => {
+  it('an async per-delta fix round-trips: hold, then release corrected content', async () => {
     // The v0 LLM Suspense pattern: hold a suspicious import line, look up
     // the real path "asynchronously", release the corrected content.
     const importFixer = guardrail({
       id: 'import-fixer',
       on: boundary.output.text(),
-      stream: 'chunk',
       run: async (chunk) => {
         if (chunk.includes('@/comps/')) {
           await new Promise((resolve) => setTimeout(resolve, 1))
@@ -82,7 +81,6 @@ describe('openStream — hold and release', () => {
     const holdAll = guardrail({
       id: 'hold-all',
       on: boundary.output.text(),
-      stream: 'chunk',
       run: async () => ({ action: 'hold' as const }),
     })
     const stream = session({ call: { guardrails: [holdAll] } }).openStream()
@@ -125,7 +123,6 @@ describe('openStream — chunk rewrites', () => {
     const redactor = guardrail({
       id: 'key-redactor',
       on: boundary.output.text(),
-      stream: 'chunk',
       run: async (chunk) =>
         chunk.includes('sk-123')
           ? {
@@ -165,20 +162,19 @@ describe('openStream — stable beta stream contract', () => {
     })
     const stream = session({ call: { guardrails: [redactor] } }).openStream()
 
-    expect(await stream.feed('key sk-')).toEqual({ kind: 'hold' })
-    expect(await stream.feed('123. ')).toEqual({
+    // Adaptive default is per canonical delta: each delta is evaluated and rewritten.
+    expect(await stream.feed('key sk-123 ok')).toEqual({
       kind: 'emit',
-      content: 'key [KEY]. ',
+      content: 'key [KEY] ok',
     })
-    expect((await stream.finish()).text).toBe('key [KEY]. ')
+    expect((await stream.finish()).text).toBe('key [KEY] ok')
   })
 
-  it('runs stream:"final" guardrails exactly once at finish', async () => {
+  it('runs `.complete()` guardrails exactly once at finish', async () => {
     const seen: string[] = []
     const finalOnly = guardrail({
       id: 'final-only',
-      on: boundary.output.text(),
-      stream: 'final',
+      on: boundary.output.text().complete(),
       run: async (content) => {
         seen.push(content)
         return { action: 'allow' as const }
@@ -197,36 +193,10 @@ describe('openStream — stable beta stream contract', () => {
     expect(seal.pending).toBe('')
   })
 
-  it('applies safety.tune stream overrides before opening the stream', async () => {
-    const seen: string[] = []
-    const guard = guardrail({
-      id: 'tuned-final',
-      on: boundary.output.text(),
-      run: async (content) => {
-        seen.push(content)
-        return { action: 'allow' as const }
-      },
-    })
-    const stream = session({
-      call: { guardrails: [guard] },
-      safety: { tune: { 'tuned-final': { stream: 'final' } } },
-    }).openStream()
-
-    expect(await stream.feed('raw segment. ')).toEqual({
-      kind: 'emit',
-      content: 'raw segment. ',
-    })
-    expect(seen).toEqual([])
-
-    await stream.finish()
-    expect(seen).toEqual(['raw segment. '])
-  })
-
   it('records report-mode stream guardrail findings without changing released text', async () => {
     const reporter = guardrail({
       id: 'shadow-stream',
       on: boundary.output.text(),
-      stream: 'chunk',
       run: async (content) => ({
         action: 'rewrite' as const,
         value: content.replace('secret', '[REDACTED]'),
@@ -275,35 +245,11 @@ describe('openStream — stable beta stream contract', () => {
     )
   })
 
-  it('records an audited skip for stream:false guardrails', async () => {
-    const disabled = guardrail({
-      id: 'skip-stream',
-      on: boundary.output.text(),
-      stream: false,
-      run: async () => {
-        throw new Error('stream:false guard must not run')
-      },
-    })
-    const safety = session({ call: { guardrails: [disabled] } })
-    const stream = safety.openStream()
-
-    expect(await stream.feed('raw')).toEqual({ kind: 'emit', content: 'raw' })
-    expect((await stream.finish()).text).toBe('raw')
-    expect(safety.audit.guardrails?.applied ?? []).toContainEqual(
-      expect.objectContaining({
-        guard: 'skip-stream',
-        action: 'allow',
-        reason: 'stream: false',
-      }),
-    )
-  })
-
   it('cascades multiple stream guards so later guards see earlier rewrites', async () => {
     const seen: string[] = []
     const redactor = guardrail({
       id: 'redactor',
       on: boundary.output.text(),
-      stream: 'chunk',
       run: async (content) => ({
         action: 'rewrite' as const,
         value: content.replace('secret', '[X]'),
@@ -313,7 +259,6 @@ describe('openStream — stable beta stream contract', () => {
     const inspector = guardrail({
       id: 'inspector',
       on: boundary.output.text(),
-      stream: 'chunk',
       run: async (content) => {
         seen.push(content)
         return { action: 'allow' as const }
@@ -334,7 +279,6 @@ describe('openStream — stable beta stream contract', () => {
     const blocker = guardrail({
       id: 'shadow-stream-block',
       on: boundary.output.text(),
-      stream: 'chunk',
       run: async () => ({ action: 'block' as const, reason: 'shadow block' }),
     })
     const safety = session({
@@ -359,12 +303,12 @@ describe('openStream — stable beta stream contract', () => {
   it('fails closed when a held segment exceeds maxHold and remains held', async () => {
     const holdUntilLimit = guardrail({
       id: 'hold-limit',
-      on: boundary.output.text(),
-      stream: {
-        segment: 'chunk',
+      // A whole-buffer segmenter with a 3-char hold limit; the guard always holds.
+      on: boundary.output.text().segments({
+        maxCharacters: 10_000,
+        next: (buffer) => (buffer.length > 0 ? buffer.length : undefined),
         maxHold: { chars: 3 },
-        onHoldLimit: 'block',
-      },
+      }),
       run: async () => ({ action: 'hold' as const }),
     })
     const stream = session({
@@ -378,8 +322,8 @@ describe('openStream — stable beta stream contract', () => {
     const seen: Array<{ content: string; last: unknown }> = []
     const finalSegmenter = guardrail({
       id: 'null-segmenter',
-      on: boundary.output.text(),
-      stream: { segment: () => null },
+      // A segmenter that never emits: the whole text is one unit completed at EOF.
+      on: boundary.output.text().segments({ maxCharacters: 10_000, next: (buffer, { final }) => (final ? buffer.length : undefined) }),
       run: async (content, ctx) => {
         seen.push({
           content,
@@ -400,32 +344,30 @@ describe('openStream — stable beta stream contract', () => {
     expect(seen).toEqual([{ content: 'partial', last: true }])
   })
 
-  it('runs output object/path guardrails only at stream finalization', async () => {
+  it('gates object/path occurrences through the structured stream and seals the value', async () => {
     const seen: Array<{ subject: unknown; last: unknown }> = []
     const pathGuard = guardrail({
       id: 'customer-email',
-      on: boundary.output.path<{ customer: { email: string } }>()('customer.email'),
-      stream: 'chunk',
+      on: boundary.output.object<{ customer: { email: string } }>().path('customer.email'),
       run: async (subject, ctx) => {
         seen.push({ subject, last: ctx.stream?.last })
         return { action: 'allow' as const }
       },
     })
-    const stream = session({
-      call: { guardrails: [pathGuard] },
-    }).openStream()
+    // Object output uses the structured stream (public openStream stays text-only).
+    const stream = openSafetySessionStructuredStream(session({ call: { guardrails: [pathGuard] } }))
 
-    expect(await stream.feed('{"customer":')).toEqual({
-      kind: 'emit',
-      content: '{"customer":',
-    })
-    expect(await stream.feed('{"email":"a@b.c"}}')).toEqual({
-      kind: 'emit',
-      content: '{"email":"a@b.c"}}',
-    })
-    expect(await stream.finish()).toMatchObject({
-      text: '{"customer":{"email":"a@b.c"}}',
-    })
+    let released = ''
+    for (const chunk of ['{"customer":', '{"email":"a@b.c"}}']) {
+      const directive = await stream.feed(chunk)
+      if (directive.kind === 'emit') released += directive.content
+    }
+    const seal = await stream.finish()
+    released += seal.pending
+
+    expect(seal.text).toBe('{"customer":{"email":"a@b.c"}}')
+    expect(seal.parsed).toEqual({ customer: { email: 'a@b.c' } })
+    expect(released).toBe(seal.text)
     expect(seen).toEqual([{ subject: 'a@b.c', last: true }])
   })
 })
@@ -436,13 +378,12 @@ describe('openStream — null segmenter buffering', () => {
   it('holds every chunk and validates the accumulated text at finish', async () => {
     const finalCheck = guardrail({
       id: 'final-transform',
-      on: boundary.output.text(),
+      on: boundary.output.text().segments({ maxCharacters: 10_000, next: (buffer, { final }) => (final ? buffer.length : undefined) }),
       run: async (content) => ({
         action: 'rewrite' as const,
         value: content.toUpperCase(),
         rewrite: { kind: 'normalize' as const },
       }),
-      stream: { segment: () => null },
     })
     const stream = session({ call: { guardrails: [finalCheck] } }).openStream()
 
@@ -458,12 +399,11 @@ describe('openStream — null segmenter buffering', () => {
   it('a full-buffer block at finish throws GuardrailBlockedError', async () => {
     const blocker = guardrail({
       id: 'final-block',
-      on: boundary.output.text(),
+      on: boundary.output.text().segments({ maxCharacters: 10_000, next: (buffer, { final }) => (final ? buffer.length : undefined) }),
       run: async () => ({
         action: 'block' as const,
         reason: 'unacceptable',
       }),
-      stream: { segment: () => null },
     })
     const stream = session({ call: { guardrails: [blocker] } }).openStream()
 
@@ -479,7 +419,6 @@ describe('openStream — block', () => {
     const blocker = guardrail({
       id: 'live-block',
       on: boundary.output.text(),
-      stream: 'chunk',
       run: async (chunk) =>
         chunk.includes('forbidden')
           ? { action: 'block' as const, reason: 'forbidden token' }
@@ -498,7 +437,7 @@ describe('openStream — block', () => {
 // ── constraints on streams ─────────────────────────────────────────
 
 describe('openStream — constraints', () => {
-  it('constraints run report-only at finish — failing asserts audit without throwing', async () => {
+  it('an assert commits the attempt: a standalone stream buffers then fails closed', async () => {
     const neverPasses = constraint({
       id: 'impossible',
       on: boundary.output.both(),
@@ -510,39 +449,46 @@ describe('openStream — constraints', () => {
     const safety = session({ call: { constraints: [neverPasses] } })
     const stream = safety.openStream()
 
-    expect(await stream.feed('streamed ')).toEqual({
-      kind: 'emit',
-      content: 'streamed ',
-    })
-    const seal = await stream.finish()
-
-    expect(seal.text).toBe('streamed ')
-    expect(safety.audit.constraints?.allPassed).toBe(false)
-    expect(safety.audit.constraints?.entries[0]).toMatchObject({
-      constraint: 'impossible',
-      pass: false,
-      feedback: 'cannot satisfy on a live stream',
-    })
+    // The assert holds every byte to completion (the whole attempt is buffered).
+    expect(await stream.feed('streamed ')).toEqual({ kind: 'hold', bufferedBy: 'constraint' })
+    // A standalone stream has no regeneration authority, so it fails closed.
+    await expect(stream.finish()).rejects.toBeInstanceOf(ConstraintViolationError)
   })
 
-  it('a constraint onChunk abort stops the stream early with ConstraintViolationError', async () => {
-    const abortOnRamble = constraint({
-      id: 'no-ramble',
+  it('a passing assert releases the buffered attempt at completion', async () => {
+    const alwaysPasses = constraint({
+      id: 'ok',
       on: boundary.output.both(),
       run: async () => ({ pass: true as const }),
-      onChunk: async (_chunk, accumulated) =>
-        accumulated.length > 10 ? { abort: true as const, feedback: 'rambling' } : { abort: false as const },
     })
-    const stream = session({
-      call: { constraints: [abortOnRamble] },
-    }).openStream()
+    const safety = session({ call: { constraints: [alwaysPasses] } })
+    const stream = safety.openStream()
 
-    expect(await stream.feed('short')).toEqual({
-      kind: 'emit',
-      content: 'short',
-    })
-    await expect(stream.feed(' and much much longer')).rejects.toBeInstanceOf(ConstraintViolationError)
+    expect(await stream.feed('streamed ')).toEqual({ kind: 'hold', bufferedBy: 'constraint' })
+    const seal = await stream.finish()
+    // Nothing released during feed; the whole guarded text is the pending tail.
+    expect(seal.pending).toBe('streamed ')
+    expect(seal.text).toBe('streamed ')
   })
+
+  it('a report-mode constraint never gates release', async () => {
+    const reportOnly = constraint({
+      id: 'observe-only',
+      on: boundary.output.both(),
+      run: async () => ({ pass: false as const, feedback: 'noted' }),
+    })
+    const safety = session({
+      call: { constraints: [reportOnly] },
+      safety: { tune: { 'observe-only': { mode: 'report' } } },
+    })
+    const stream = safety.openStream()
+    // Report mode: output flows progressively, the finding is only recorded.
+    expect(await stream.feed('streamed ')).toEqual({ kind: 'emit', content: 'streamed ' })
+    const seal = await stream.finish()
+    expect(seal.text).toBe('streamed ')
+    expect(safety.audit.constraints?.entries[0]).toMatchObject({ constraint: 'observe-only', pass: false })
+  })
+
 })
 
 // ── transcript + transform() pipe ──────────────────────────────────
@@ -552,7 +498,6 @@ describe('openStream — transcript and transform()', () => {
     const holdFirst = guardrail({
       id: 'hold-first',
       on: boundary.output.text(),
-      stream: 'chunk',
       run: async (chunk) => (chunk.length < 4 ? { action: 'hold' as const } : { action: 'allow' as const }),
     })
     const safety = session({ call: { guardrails: [holdFirst] } })
@@ -572,13 +517,12 @@ describe('openStream — transcript and transform()', () => {
   it('transform() pipes chunks through the protocol, releasing pending content at flush', async () => {
     const upper = guardrail({
       id: 'upper',
-      on: boundary.output.text(),
+      on: boundary.output.text().segments({ maxCharacters: 10_000, next: (buffer, { final }) => (final ? buffer.length : undefined) }),
       run: async (content) => ({
         action: 'rewrite' as const,
         value: content.toUpperCase(),
         rewrite: { kind: 'normalize' as const },
       }),
-      stream: { segment: () => null },
     })
     const stream = session({ call: { guardrails: [upper] } }).openStream()
 

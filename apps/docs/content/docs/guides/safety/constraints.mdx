@@ -45,13 +45,13 @@ const grounded = constraint({
 });
 ```
 
-Use `boundary.output.path<T>()('field.path')` when one structured field owns
-the rule:
+Use `boundary.output.object<T>().path('field.path')` when one structured field
+owns the rule:
 
 ```ts
 const titleLength = constraint({
   id: "title-length",
-  on: boundary.output.path<Answer>()("answer"),
+  on: boundary.output.object<Answer>().path("answer"),
   run: async (answer) =>
     answer.length <= 280
       ? { pass: true }
@@ -180,13 +180,65 @@ change output. Unknown tune ids throw.
 
 ## Streaming
 
-Live streams cannot regenerate earlier text, so constraints run in report mode
-at end-of-stream. If a constraint must enforce before text is visible, write a
-guardrail for that streaming boundary instead.
+An `assert` constraint is transactional on a stream: it **commits the attempt**.
+While it is unresolved the stream withholds output, so nothing you would have to
+take back is ever shown. When it passes, the buffered prefix releases and the rest
+of that same response continues streaming. When it fails, the attempt is discarded
+— the consumer saw none of it — and Crux re-streams with corrective feedback,
+sharing the `maxSteps` budget with validation retry. If retries run out,
+`ConstraintViolationError` is thrown having published nothing.
 
-Object and path constraints on streams are final-output checks. Incremental
-path constraints over partially parsed object streams are tracked as a
-post-beta roadmap item.
+Release is held only as long as the gate needs, and **the boundary decides how long
+that is**:
+
+| Boundary                                    | Unlocks                                        |
+| ------------------------------------------- | ---------------------------------------------- |
+| `.object<T>().path('x')` (scalar)           | as soon as that value completes — the prefix flows well before the response ends |
+| `.object<T>().path('xs').items()`           | as each array item closes                      |
+| `.object<T>()` (root)                       | at completion                                  |
+| a missing optional path                     | never holds — vacuously satisfied              |
+| `boundary.output.text()` / `.both<T>()`     | **only at end-of-stream**                      |
+
+<Callout type="warn">
+A text or composite `assert` can only be judged on the finished text, so while one is
+attached **nothing streams**: every delta is withheld and the whole response is
+released at once when the constraint passes. If you need tokens to flow early, put the
+`assert` on a scalar path and use a `suggest` constraint (or a guardrail) for
+whole-text rules.
+</Callout>
+
+`suggest` constraints never gate: they run report-only and audit their decision.
+
+```ts
+const title = constraint({
+  id: "title-nonempty",
+  on: boundary.output.object<Article>().path("title"),
+  // Holds the stream until `title` completes, then releases or retries.
+  run: (value) =>
+    value.length > 0 ? { pass: true } : { pass: false, feedback: "Title required." },
+});
+```
+
+When output is being withheld, the stream directive carries a content-free
+`bufferedBy` reason so a pause can be explained without ever seeing the held bytes.
+It is one of six values — `'boundary'`, `'guardrail'`, `'serialization'`,
+`'constraint'`, `'validation-retry'`, `'adapter'` — and when several gates are active
+the highest-precedence one is reported, in that order, so an attempt-level gate never
+hides behind a local one. It is absent when a hold names no reason.
+
+This travels on the `openStream().feed()` directive, which is the adapter-author
+protocol; it is not yet surfaced as an application-level stream event.
+
+<Callout type="warn">
+Crux never puts model output into telemetry, but your `feedback` string is recorded
+on the constraint's span — it is the policy's own prose and is needed to explain a
+retry. Write feedback as instructions ("Title must not be empty"), and do not
+interpolate the model's output into it.
+</Callout>
+
+A constraint the stream already settled is not re-run at completion, so a
+`constraint.judge()` costs exactly one call — unless a later rewrite changed the
+value it checked, in which case it is re-evaluated on the new value.
 
 ## Errors And Audit
 

@@ -1,3 +1,4 @@
+import { selectedPath } from '../boundary'
 import type { BoundaryDef } from '../boundary'
 import { isMediaSafetyTargetId } from '../boundary'
 import type { SafetyRunContext } from '../decision'
@@ -134,7 +135,7 @@ function evaluationContext<B extends BoundaryDef>(guard: Guardrail, boundary: B)
     attempt: { index: 0, kind: 'initial' },
     metadata: {},
     findings: { add() {} },
-    ...(boundary.path ? { path: boundary.path } : {}),
+    ...(selectedPath(boundary) ? { path: selectedPath(boundary) } : {}),
   }
 }
 

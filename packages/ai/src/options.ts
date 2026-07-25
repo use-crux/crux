@@ -31,6 +31,7 @@ import type {
   ValidationRetryOptions,
 } from "@use-crux/core";
 import type { AnyRoutable, RoutingCallOptions } from "@use-crux/core/routing";
+import type { StreamCompletion, StreamEvent } from "@use-crux/core/adapter";
 import type {
   Constraint,
   Guardrail,
@@ -160,6 +161,32 @@ interface AIGenerateBaseOptions<
   guardrails?: Guardrail[];
   /** Per-call safety posture overrides keyed by policy id. */
   safety?: SafetyTuneOptions;
+}
+
+/**
+ * Caller callbacks for a managed `stream()` (RFC #173).
+ *
+ * @remarks
+ * These are LOGICAL. They observe the published event sequence and the logical
+ * completion — never a provider attempt. Crux installs no caller callback on a
+ * physical SDK call, so a discarded attempt invokes none of them and `onFinish`
+ * cannot observe content that terminal Safety has not cleared.
+ *
+ * They run through one serial queue in published order. Publishing does not wait
+ * for that queue, so a slow callback never delays stream release; awaiting
+ * `completion` does, so the terminal callback is guaranteed to have finished by
+ * then. An exception is reported diagnostically and cannot become the
+ * operation's outcome, error a surface, or invoke `onError` recursively.
+ */
+export interface AIStreamCallbacks<TOutput = unknown, TPartial = unknown> {
+  /** Invoked for each published event, in order. */
+  readonly onChunk?: (event: StreamEvent<TPartial>) => void | Promise<void>;
+  /** Invoked at most once, after successful logical completion. */
+  readonly onFinish?: (
+    completion: StreamCompletion<TOutput>,
+  ) => void | Promise<void>;
+  /** Invoked at most once for any terminal rejection, including cancellation. */
+  readonly onError?: (error: unknown) => void | Promise<void>;
 }
 
 /** Options for `generate()` and `stream()` with AI SDK models. */

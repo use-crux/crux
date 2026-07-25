@@ -1,3 +1,4 @@
+import { selectedPath } from '../boundary'
 import type {
   Constraint,
   ConstraintContext,
@@ -7,6 +8,9 @@ import type {
   ConstraintOutput,
 } from './types'
 import { validateConstraintRunResult } from './types'
+import { constraintOccurrenceEntries } from './occurrences'
+import { subjectFingerprint } from './fingerprint'
+import type { ConstraintOccurrenceSettlement } from './settlement'
 import { ConstraintViolationError } from './errors'
 import { observe } from '../../observability'
 import { constraintDefinitionRef } from '../../observability/definition-ref'
@@ -18,6 +22,12 @@ import type { ConstraintBoundary } from './boundary'
 export interface ConstraintRunnerOptions {
   /** Shared cap on total constraint retries across all constraints. */
   readonly constraintMaxRetries?: number
+  /**
+   * Occurrence-precise settlement evidence from an accepted stream attempt. A
+   * settled occurrence whose subject value is unchanged is not re-evaluated, so a
+   * `constraint.judge()` the stream already ran is not run again at completion.
+   */
+  readonly settled?: readonly ConstraintOccurrenceSettlement[]
   /** Called when a single constraint check completes. */
   readonly onCheck?: (constraint: Constraint, entry: ConstraintAuditEntry) => void
   /** Called when constraints trigger a combined retry. */
@@ -52,6 +62,7 @@ export async function observeConstraintCheck(
   c: Constraint,
   output: ConstraintOutput,
   ctx: ConstraintContext,
+  settled?: readonly ConstraintOccurrenceSettlement[],
 ): Promise<ObservedConstraintCheck> {
   const span = observe.openSpan(
     {
@@ -73,10 +84,7 @@ export async function observeConstraintCheck(
   try {
     return await span.withContext(async () => {
       const start = performance.now()
-      const result = validateConstraintRunResult(await c.run(subjectForBoundary(c.on, output) as never, runContext(c, ctx) as never), {
-        policyId: c.id,
-        boundary: c.on.id,
-      })
+      const result = await checkConstraintOccurrences(c, output, ctx, settled)
       const durationMs = performance.now() - start
       const activeSpanId = observe.captureContext()?.currentSpanId
       const artifactId = observe.artifact({
@@ -90,15 +98,18 @@ export async function observeConstraintCheck(
           category: c.category,
           severity: c.severity,
           pass: result.pass,
-          feedback: result.pass ? undefined : result.feedback,
+          // Feedback and metadata are policy-authored free text that commonly echoes the
+          // selected model output, and this record is written while the attempt is still
+          // uncommitted. Observability stays content-free: identity, verdict, timing, and
+          // counts only. Corrective feedback still reaches the next model attempt.
+          feedbackLength: result.pass ? undefined : (result.feedback?.length ?? 0),
           attempts: [
             {
               n: ctx.attempt + 1,
               status: result.pass ? 'pass' : 'fail',
-              feedback: result.pass ? undefined : result.feedback,
             },
           ],
-          metadata: result.metadata,
+          metadataCount: metadataCount(result.metadata),
         },
         attributes: {
           constraintName: c.id,
@@ -122,15 +133,15 @@ export async function observeConstraintCheck(
           constraintName: c.id,
           pass: result.pass,
           durationMs,
-          feedback: result.pass ? undefined : result.feedback,
+          feedbackLength: result.pass ? undefined : (result.feedback?.length ?? 0),
         },
       })
       span.end({
         attributes: {
           pass: result.pass,
           durationMs,
-          feedback: result.pass ? undefined : result.feedback,
-          metadata: result.metadata,
+          feedbackLength: result.pass ? undefined : (result.feedback?.length ?? 0),
+          metadataCount: metadataCount(result.metadata),
         },
       })
       return { constraint: c, result, durationMs }
@@ -139,6 +150,75 @@ export async function observeConstraintCheck(
     span.error(error)
     throw error
   }
+}
+
+/**
+ * Check a constraint over every selected occurrence (shared selection model): the
+ * constraint passes only when all occurrences pass, and fails on the first that
+ * fails — so a later array item cannot leak past a constraint an earlier item
+ * already failed. A boundary selecting no occurrence is vacuously satisfied.
+ */
+async function checkConstraintOccurrences(
+  constraint: Constraint,
+  output: ConstraintOutput,
+  ctx: ConstraintContext,
+  settled?: readonly ConstraintOccurrenceSettlement[],
+): Promise<ReturnType<typeof validateConstraintRunResult>> {
+  const entries = constraintOccurrenceEntries(constraint.on, output)
+  for (const entry of entries) {
+    // Occurrence-precise settlement suppression: a stream-settled occurrence whose
+    // subject value is unchanged is not re-evaluated (the same exact value already
+    // passed). A changed subject, a new occurrence, or an unclosed set re-evaluates.
+    if (isOccurrenceSettled(settled, constraint.id, entry.occurrence, entry.subject)) continue
+    const result = validateConstraintRunResult(
+      await constraint.run(entry.subject as never, runContext(constraint, ctx) as never),
+      { policyId: constraint.id, boundary: constraint.on.id },
+    )
+    if (!result.pass) return result
+  }
+  return { pass: true }
+}
+
+/**
+ * How many metadata entries a constraint returned, or undefined when there is none.
+ *
+ * @remarks
+ * Only a COUNT. Key names are not safe either: a policy can build a key from the very
+ * content it rejected (`{ [offendingValue]: true }`), so recording keys would leak the
+ * candidate exactly as recording values would.
+ */
+function metadataCount(metadata: unknown): number | undefined {
+  if (metadata === null || typeof metadata !== 'object') return undefined
+  const entries = Array.isArray(metadata)
+    ? metadata.length
+    : Object.keys(metadata as Record<string, unknown>).length
+  return entries > 0 ? entries : undefined
+}
+
+/** Whether an evaluated occurrence value already passed on the accepted attempt. */
+export function isOccurrenceSettled(
+  settled: readonly ConstraintOccurrenceSettlement[] | undefined,
+  constraintId: string,
+  occurrence: readonly (string | number)[],
+  subject: unknown,
+): boolean {
+  if (!settled || settled.length === 0) return false
+  const fingerprint = subjectFingerprint(subject)
+  return settled.some(
+    (entry) =>
+      entry.pass &&
+      entry.closed &&
+      entry.constraint === constraintId &&
+      entry.subjectFingerprint === fingerprint &&
+      sameOccurrence(entry.occurrence, occurrence),
+  )
+}
+
+function sameOccurrence(
+  a: readonly (string | number)[],
+  b: readonly (string | number)[],
+): boolean {
+  return a.length === b.length && a.every((segment, index) => segment === b[index])
 }
 
 function runContext<B extends ConstraintBoundary>(
@@ -155,22 +235,8 @@ function runContext<B extends ConstraintBoundary>(
     attempt: { index: ctx.attempt, kind: ctx.attempt === 0 ? 'initial' : 'retry' },
     metadata: ctx.metadata,
     findings: { add() {} },
-    ...(boundary.path ? { path: boundary.path } : {}),
+    ...(selectedPath(boundary) ? { path: selectedPath(boundary) } : {}),
   }
-}
-
-function subjectForBoundary(boundary: ConstraintBoundary, output: ConstraintOutput): unknown {
-  if (boundary.id === 'model.output.text') return output.text
-  if (boundary.id === 'model.output.object') return boundary.path ? valueAtPath(output.parsed, boundary.path) : output.parsed
-  if (boundary.id === 'model.output') return { text: output.text, object: output.parsed }
-  return output.text
-}
-
-function valueAtPath(value: unknown, path: string): unknown {
-  return path.split('.').reduce<unknown>((current, segment) => {
-    if (typeof current !== 'object' || current === null) return undefined
-    return (current as Readonly<Record<string, unknown>>)[segment]
-  }, value)
 }
 
 // ── Runner ────────────────────────────────────────────────────────
@@ -228,8 +294,12 @@ async function runConstraintsInternal(
   while (true) {
     const currentCtx: ConstraintContext = { ...ctx, attempt: totalRetries }
 
-    // 1. Parallel check all constraints
-    const results = await Promise.all(constraints.map(async (c) => observeConstraintCheck(c, currentOutput, currentCtx)))
+    // 1. Parallel check all constraints. Settlement evidence lets an unchanged
+    // occurrence that already passed on the accepted stream attempt skip its
+    // (potentially side-effectful) re-evaluation here.
+    const results = await Promise.all(
+      constraints.map(async (c) => observeConstraintCheck(c, currentOutput, currentCtx, options?.settled)),
+    )
 
     // 2. Build audit entries and separate failures
     const roundEntries: ConstraintAuditEntry[] = []
@@ -346,13 +416,17 @@ async function runConstraintsInternal(
           encoding: 'json',
           preview: {
             kind: 'constraint.report',
-            feedback: combinedFeedback,
+            // Content-free, for the same reason as `constraint.check`: feedback is
+            // policy-authored prose that commonly echoes the candidate, and this record
+            // is written while the attempt is still uncommitted. Length keeps the retry
+            // explainable; the text itself still reaches the model, not telemetry.
+            feedbackLength: combinedFeedback.length,
             failedConstraints: failures.map((f) => f.constraint.id),
             nextAttempt: totalRetries,
             attempts: failures.map((f) => ({
               n: totalRetries,
               status: 'retry',
-              feedback: f.result.pass ? undefined : f.result.feedback,
+              feedbackLength: f.result.pass ? undefined : (f.result.feedback?.length ?? 0),
             })),
           },
           attributes: {

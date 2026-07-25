@@ -36,6 +36,7 @@ export function attachStreamObservability<TResult>(
   span: ReturnType<typeof observe.openSpan>,
   performance: GenerationPerformanceTracker,
   chunkMs?: number,
+  discardableAttempt = false,
 ): TResult {
   if (!result || typeof result !== "object") {
     span.end({
@@ -78,6 +79,7 @@ export function attachStreamObservability<TResult>(
         finalizer,
         performance,
         chunkMs,
+        discardableAttempt,
       ),
     );
   }
@@ -162,22 +164,29 @@ async function* observedStream(
   finalizer: StreamSpanFinalizer,
   performance: GenerationPerformanceTracker,
   chunkMs?: number,
+  discardableAttempt = false,
 ): AsyncIterable<unknown> {
   let completed = false;
   let failed = false;
   const normalizedChunkMs = normalizeBudgetMs(chunkMs);
   const tokenChunks = createStreamTokenCoalescer({
+    omitText: discardableAttempt,
     emit: (attributes) => {
       void span.withContext(() => {
         observe.event({ name: "token.chunk", attributes });
       });
     },
   });
+  // Hoisted so the `finally` can close it: this is a manual iterator loop, so unlike
+  // `for await` nothing closes the provider stream automatically when this generator
+  // is returned early (a discarded attempt, or a consumer that stopped reading).
+  let iterator: AsyncIterator<unknown> | undefined;
   try {
-    const iterator = rawStream[Symbol.asyncIterator]();
+    const source = rawStream[Symbol.asyncIterator]();
+    iterator = source;
     while (true) {
       const next = await span.withContext(() =>
-        nextStreamChunk(iterator, normalizedChunkMs),
+        nextStreamChunk(source, normalizedChunkMs),
       );
       if (next.done) break;
       const chunk = next.value;
@@ -203,6 +212,13 @@ async function* observedStream(
     if (!completed && !failed) {
       tokenChunks.flush();
       finalizer.streamReturned({ tokenChunkCount: tokenChunks.chunkCount() });
+      // Cascade cancellation to the provider so an abandoned stream does not stay
+      // live and billable. Fail-open: cleanup must not mask the original outcome.
+      try {
+        await iterator?.return?.(undefined);
+      } catch {
+        // ignored
+      }
     }
   }
 }

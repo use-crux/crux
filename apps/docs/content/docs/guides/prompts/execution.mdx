@@ -31,7 +31,7 @@ const result = await stream(editDraft, {
   model: openai('gpt-4o'),
   input: { instruction: 'Fix the intro' },
 })
-for await (const partial of result.partialObjectStream) { ... }
+for await (const partial of result.partialOutputStream) { ... }
 ```
 
 Use `tool()` from `@use-crux/ai` for AI SDK tools. Portable loop controls such as `maxSteps()` and `hasToolCall()` come from `@use-crux/core`.

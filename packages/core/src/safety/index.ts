@@ -23,15 +23,25 @@ export type {
   BoundaryIdOf,
   BoundaryInput,
   DotPath,
+  HoldLimits,
+  ItemsBoundary,
+  LineOptions,
   MediaPart,
   MediaPartLocation,
   MediaPartOrigin,
   MediaPartSubject,
   MediaSafetyTargetId,
+  ObjectBoundary,
   OriginOf,
+  PathBoundary,
   PathValue,
   SafetyTargetId,
+  SafetyUnitKind,
+  SegmentOptions,
+  SentenceOptions,
+  StringPathSentencesBoundary,
   SubjectOf,
+  TextBoundary,
 } from './boundary'
 export type {
   InputBoundaryOptions,
@@ -49,7 +59,6 @@ export type {
   SafetyRunContext,
   StrategyRun,
 } from './decision'
-export type { GuardrailStreamOption, StreamSegmenter } from './stream/types'
 export type { SafetyTuneOptions, SafetyTunePolicyOptions } from './tune'
 export type { SafetyAudit } from './audit'
 

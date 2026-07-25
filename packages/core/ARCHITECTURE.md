@@ -397,6 +397,11 @@ packages/core/src/       Published as @use-crux/core
     │   ├── handle-core.ts   Manual pause/resume shell over generate-core for prepare/step/finish
     │   ├── generate-sdk.ts / stream-sdk.ts     SDK-owned loop boundary, timeout and replay wiring
     │   ├── stream-legacy-completion.ts   Private compatibility bridge for legacy raw stream completion metadata
+    │   ├── stream-retry-policy.ts   createStreamRetryPolicy() — the single source of stream retry policy (budget, eligibility, typed terminal error) shared by both routes
+    │   ├── stream-rejection.ts      StreamValidationRejection — typed non-terminal validation cause (no terminal-error factory)
+    │   ├── stream-attempt.ts        runCoordinatedStream() — native buffer-until-commitment attempt loop (early unlock preserved)
+    │   ├── stream-coordinated-route.ts   openCoordinatedStructuredStream() — the native transactional structured route (gate detection, per-attempt provider stream, attempt spans, sealed completion)
+    │   ├── stream-attempt-plan.ts / stream-attempt-plan-factory.ts   CoordinatedStreamPlan — the provider-neutral attempt port a loop-owning SDK runtime executes
     │   └── shared helpers  Prompt resolution, message shaping, metadata/cache replay, stream safety, and structured retry helpers
     ├── testing.ts          Testing barrel: providerRuntimeConformance(), adapterSpecConformance(), transcriptCodecConformance(), fakeLoopRuntime(), loopRuntimePortConformance()
     ├── testing/
@@ -424,6 +429,51 @@ packages/core/src/       Published as @use-crux/core
 Adapters project one immutable completed turn per memory binding; they do not inspect capture mode, fan out tool events, or flush blocks. The memory capture runtime invokes every block's `captureTurn` hook in declaration order, then fans out each tool event across the same ordered blocks. It owns settlement sequence numbers, flush epochs, bounded deferred-failure observation, and block flush ordering.
 
 `inline` capture is awaited. The default `deferred` mode uses the source-internal diagnostics-only defer port, which distinguishes retained execution, Eval capture, and absence of retention. Missing retention is a latency downgrade: memory runs the same callback inline and awaits it. Configured host failures and unknown registration errors remain errors and are never retried. Eval cells capture deferred intent without executing memory hooks; explicit inline capture still runs for isolated memory-path Evals.
+
+### Coordinated streams (commit gates and attempt retry)
+
+A streaming attempt can be **rejected** after bytes have started arriving: an enforce
+`assert` constraint commits the whole attempt, and a positive `validationRetry` is an
+attempt-wide EOF-and-validate gate. The coordinated-stream machinery lets such an attempt
+be discarded and restreamed without ever leaking output.
+
+The invariant is **buffer until commitment, not until completion**. A commit gate releases
+nothing while it is unresolved, so any byte the Safety stream emits is already committed;
+released content therefore flows immediately (a scalar-path assert unlocks its prefix
+before provider EOF) while a rejected attempt provably published nothing. A validation
+gate is the exception: it holds the whole candidate until the authored `safeParse`
+succeeds.
+
+Retry policy lives in exactly one place — `createStreamRetryPolicy` — which owns the
+shared `maxSteps` budget, per-constraint and per-validation eligibility, corrective
+messages, and conversion of a typed non-terminal rejection into the stable public error.
+The typed cause that rejects the current attempt and cannot obtain another step decides
+that error deterministically: validation → `ValidationExhaustedError` (its `attempts`
+counts validation retries, not provider calls), constraint → `ConstraintViolationError`.
+There is never a combined error.
+
+Two routes consume that one policy. The native route owns its provider loop and drives
+`runCoordinatedStream` directly; `stream-core.ts` detects the gates and delegates to
+`stream-coordinated-route.ts`, keeping the ordinary progressive stream — which publishes
+provider deltas as they clear — separate from the transactional one, which publishes
+nothing until an attempt has committed. Loop-owning SDK runtimes receive a
+provider-neutral `CoordinatedStreamPlan` instead and execute it: **core decides why and
+whether to retry; the runtime decides how an SDK stream is physically represented.** A
+runtime opts in with `capabilities.coordinatedStream`; without it the untouched
+single-attempt path is preserved and a rejection simply fails closed. On a coordinated
+stream the returned `raw` is SDK-shaped but may be a runtime-composed logical stream
+spanning attempts rather than object-identical to one provider attempt.
+
+Constraint settlement is occurrence- and value-precise: the streaming gate records which
+occurrence *value* passed (identity path plus a canonical subject fingerprint), and
+completion suppresses a terminal re-check only when the same occurrence still carries the
+same subject. A rewrite of the constrained path invalidates its settlement; a rewrite
+elsewhere preserves it. This is what keeps a `constraint.judge()` from running twice.
+
+Each physical provider stream opens one `generation.stream.attempt` child span under the
+single logical `generation.stream`, carrying `attemptIndex`, `cause`, and an `outcome`
+where a policy rejection is `discarded` rather than a provider error. `constraint.retry`
+remains the separate policy-decision span.
 
 ### Safety internals
 

@@ -10,9 +10,11 @@
  */
 
 import type { MiddlewareResult } from "../../runtime/types";
+import type { Message } from "../../generation/messages";
 import {
   createSafetyWithBindingApplicability,
   guardSafetySessionResolvedInput,
+  openSafetySessionStructuredStream,
   safetySessionModelIngressGuard,
 } from "../../safety/session";
 import { languageBindingApplicability } from "../../safety/language-applicability";
@@ -24,17 +26,22 @@ import { normalizeAdapterCallError } from "../normalized-outcome";
 import { normalizeInvocationMessages } from "../../content/invocation-message";
 import { assertProviderMediaSupported } from "../native-chat/media-hooks";
 import type { CallArgs, StreamHandle } from "../types";
+import {
+  openCoordinatedStructuredStream,
+  resolveCommitGates,
+} from "./stream-coordinated-route";
 import { createToolLifecycle } from "../tool/session";
 import type { AdapterExecutionStreamArgs, CoreStepDialect } from "./types";
 import { initialCoreMessageState } from "./messages";
 import { createCachedStreamHandle } from "./metadata";
-import { buildResolveOpts } from "./shared";
-import { isSafetyTextChunk } from "./stream-safety";
+import { buildResolveOpts, DEFAULT_MAX_STEPS } from "./shared";
+import { createSafetyTextChunk, isSafetyTextChunk } from "./stream-safety";
 import { emitInputTokenEstimate } from "./media-token-budget";
 import {
   guardStreamCompletion,
   trackSafetyStreamSeal,
 } from "./stream-completion";
+import { observe } from "../../observability";
 import type { WithOperationResultMeta } from "../../observability";
 import { materializeToolSources } from "./tool-sources";
 import { createStreamSourceCleanup } from "./stream-source-cleanup";
@@ -158,6 +165,7 @@ export async function streamCore<
 
     let outputSchema: JsonSchemaObject | undefined;
     let structuredDecodeManifest: StructuredOutputDecodeManifest | undefined;
+    let structuredCanonicalSchema: JsonSchemaObject | undefined;
     if (resolved.schema) {
       if (!dialect.structuredOutput) {
         throw new CruxUnsupportedStructuredOutputError(dialect.id);
@@ -172,6 +180,7 @@ export async function streamCore<
       );
       outputSchema = plan.outputSchema;
       structuredDecodeManifest = plan.decodeManifest;
+      structuredCanonicalSchema = plan.canonicalSchema;
     }
     const providerMessages = await normalizeInvocationMessages(messages, {
       provider: modelInfo.provider,
@@ -197,10 +206,25 @@ export async function streamCore<
       extra: (args.extra ?? {}) as TExtra,
     };
 
+    // Resolved BEFORE the provider stream is observed: `token.chunk` telemetry must
+    // know whether these deltas belong to an attempt a gate can still discard.
+    const gates = resolveCommitGates(
+      safety,
+      resolved.schema !== undefined,
+      args.validationRetry?.maxRetries,
+    );
+
+    // `result.cancel()` must reach the provider, not merely detach readers. The
+    // caller's own signal already flows into the call; this controller gives the
+    // published result the same authority without inventing a second one.
+    const cancellation = new AbortController();
+    const callerSignal = composeAbortSignals(args.signal, cancellation.signal);
+
     let providerRawStream: TRawStream | undefined;
     const handle = await sourceSession.withContext(() =>
       orchestrateStream(
         {
+          discardableAttempt: gates.coordinated,
           promptId: prompt.id,
           promptConfig: prompt.config ?? ({} as typeof prompt.config),
           preparedArgs: { ...callArgs, input: args.input ?? {} },
@@ -224,7 +248,7 @@ export async function streamCore<
           const providerHandle = await withBudget(
             (signal) =>
               dialect.stream(dialect.client, callArgs, {
-                signal: composeAbortSignals(args.signal, signal),
+                signal: composeAbortSignals(callerSignal, signal),
               }),
             {
               budget: "step",
@@ -243,19 +267,98 @@ export async function streamCore<
       ),
     );
 
-    const trackedSafety = safety.enabled
-      ? trackSafetyStreamSeal(safety.openStream())
-      : undefined;
+    const closeSources = createStreamSourceCleanup(sourceSession, args.signal);
+
+    // A live enforce `assert` commit gate on a structured stream can reject an
+    // attempt (RFC #173). Route it through the coordinated route so a rejected
+    // attempt is discarded and restreamed (buffer-until-commitment: no leaked
+    // bytes) — while any stream with no commit gate keeps the byte-for-byte
+    // progressive path below unchanged.
+    if (gates.coordinated) {
+      return {
+        ...openCoordinatedStructuredStream(
+          {
+            dialect,
+            handle,
+            providerRawStream,
+            callArgs,
+            safety,
+            ...(resolved.schema ? { schema: resolved.schema } : {}),
+            messages,
+            promptId: prompt.id,
+            modelInfo,
+            maxSteps:
+              args.maxSteps ?? resolved.settings.maxSteps ?? DEFAULT_MAX_STEPS,
+            ...(callerSignal ? { signal: callerSignal } : {}),
+            ...(args.timeout?.stepMs !== undefined
+              ? { stepTimeoutMs: args.timeout.stepMs }
+              : {}),
+            ...(args.validationRetry
+              ? { validationRetry: args.validationRetry }
+              : {}),
+            ...(structuredCanonicalSchema
+              ? { structuredCanonicalSchema }
+              : {}),
+            ...(structuredDecodeManifest
+              ? { structuredDecodeManifest }
+              : {}),
+            closeSources,
+            captureTurn: (turn) =>
+              lifecycle.captureTurn({
+                messages: [...turn.messages],
+                assistantText: turn.assistantText,
+                toolCalls: turn.toolCalls as never,
+              }),
+          },
+          gates.validationGate,
+        ),
+        _meta: handle._meta,
+        runId: handle.runId,
+        structured: resolved.schema !== undefined,
+        abort: (reason: unknown) => cancellation.abort(reason),
+        ...(callerSignal ? { signal: callerSignal } : {}),
+      } as WithOperationResultMeta<StreamHandle<TRawStream>> &
+        Readonly<{ runId: CruxRunId }>;
+    }
+
+    // Structured output drives the scanner-fed occurrence stream (progressive
+    // object gating + release cursor); plain text uses the text stream.
+    //
+    // A structured stream is opened even when Safety has no applicable policy, as
+    // long as the decode manifest has work to do: canonicalization is what turns
+    // provider wire JSON into `z.input`, and `textStream`/`partialOutputStream`
+    // must never carry a lowering sentinel. Gating this on `safety.enabled` alone
+    // published raw wire JSON — including sentinel nulls the manifest deletes —
+    // for an unguarded structured prompt (RFC #173).
+    const canonicalizes =
+      (structuredDecodeManifest?.operations.length ?? 0) > 0;
+    const trackedSafety =
+      resolved.schema && (safety.enabled || canonicalizes)
+        ? trackSafetyStreamSeal(
+            openSafetySessionStructuredStream(safety, {
+              ...(structuredCanonicalSchema
+                ? { canonicalSchema: structuredCanonicalSchema }
+                : {}),
+              ...(structuredDecodeManifest
+                ? { decodeManifest: structuredDecodeManifest }
+                : {}),
+            }),
+          )
+        : safety.enabled
+          ? trackSafetyStreamSeal(safety.openStream())
+          : undefined;
     const streamedAssistant: {
       text: string;
       providerText: string;
       exactSlots: boolean;
       slots: LiveTextSlot[];
     } = { text: "", providerText: "", exactSlots: true, slots: [] };
-    const closeSources = createStreamSourceCleanup(sourceSession, args.signal);
 
     return {
       ...handle,
+      structured: resolved.schema !== undefined,
+      abort: (reason: unknown) => cancellation.abort(reason),
+      ...(callerSignal ? { signal: callerSignal } : {}),
       raw: handle.raw ?? providerRawStream ?? handle.rawStream,
       rawStream: trackRawStream<TRawStream>({
         rawStream: handle.rawStream as AsyncIterable<unknown>,
@@ -305,6 +408,22 @@ export async function streamCore<
               ? {
                   schema: resolved.schema,
                   decodeManifest: structuredDecodeManifest,
+                  ...(structuredCanonicalSchema
+                    ? {
+                        structuredContext: {
+                          canonicalSchema: structuredCanonicalSchema,
+                          decodeManifest: structuredDecodeManifest,
+                        },
+                      }
+                    : {}),
+                  // The live structured stream already object-gated + sealed the
+                  // canonical value: consume it directly (no re-decode/re-gate).
+                  ...(trackedSafety?.sealed()
+                    ? {
+                        sealedCanonicalValue: trackedSafety.sealedObject(),
+                        objectOccurrencesAlreadyGated: true,
+                      }
+                    : {}),
                   promptId: prompt.id,
                 }
               : {}),

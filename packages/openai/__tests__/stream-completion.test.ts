@@ -75,8 +75,7 @@ describe("OpenAI stream completion", () => {
         guardrails: [
           guardrail({
             id: "replace-unsafe",
-            on: boundary.output.text(),
-            stream: "chunk",
+            on: boundary.output.text().deltas(),
             run: async (text) => ({
               action: "rewrite" as const,
               value: text.replace("Listen", "Safe"),

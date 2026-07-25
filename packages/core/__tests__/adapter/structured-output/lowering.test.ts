@@ -189,3 +189,51 @@ describe("optional lowering — determinism", () => {
     expect(a.fingerprint).toBe(b.fingerprint);
   });
 });
+
+// The optional-to-nullable encoding is reversible only when every source of a
+// legitimate `null` is visible to the walker. `allOf` and tuple `prefixItems` are not
+// traversed, so recording a sentinel under one silently deleted authored data or left
+// an optional property unlowered for a strict provider. Fail closed instead.
+describe("optional lowering — unwalkable composites fail closed", () => {
+  it("does not sentinel an optional allOf whose branches all accept null", () => {
+    // Both intersection branches accept null, so `{ x: null }` is authored-valid.
+    // `acceptsNull` used to ignore `allOf`, mark this optional-only, and decode a
+    // genuine null away to `{}` — silent data loss.
+    const plan = compileStructuredOutput(
+      z.object({
+        x: z.intersection(z.string().nullable(), z.string().nullable()).optional(),
+      }),
+      strictCapabilities,
+    );
+    expect(plan.decodeManifest.operations).toEqual([]);
+  });
+
+  it("rejects an optional property under an allOf it cannot analyze", () => {
+    // Here the allOf branches do NOT accept null, so a sentinel would be required —
+    // but the walker cannot descend allOf to prove reversibility. Fail closed.
+    const schema = z.object({
+      x: z.intersection(z.object({ a: z.string() }), z.object({ b: z.string() })).optional(),
+    });
+    expect(() => compileStructuredOutput(schema, strictCapabilities)).toThrow(
+      CruxUnsupportedSchemaError,
+    );
+  });
+
+  it("rejects an optional property named exactly the manifest wildcard", () => {
+    // Manifest path `["*"]` is indistinguishable from "every element of this array",
+    // so decoding threw instead of deleting the property.
+    const schema = z.object({ "*": z.string().optional() });
+    expect(() => compileStructuredOutput(schema, strictCapabilities)).toThrow(
+      CruxUnsupportedSchemaError,
+    );
+  });
+
+  it("treats an allOf whose branches all accept null as null-accepting", () => {
+    // Not optional-only, so no sentinel is needed and compilation succeeds.
+    const plan = compileStructuredOutput(
+      z.object({ x: z.intersection(z.string().nullable(), z.string().nullable()) }),
+      strictCapabilities,
+    );
+    expect(plan.decodeManifest.operations).toEqual([]);
+  });
+});

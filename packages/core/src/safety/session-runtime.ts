@@ -21,8 +21,12 @@ import {
 import type { Constraint, ConstraintContext } from "./constraint/types";
 import type { GuardrailAudit, GuardrailContext } from "./guardrail/types";
 import { createSafetyStream } from "./stream/engine";
+import { failClosedOnRejection } from "./stream/fail-closed";
 import { finalizeLanguageTerminal } from "./output/terminal";
-import type { OperationInputGuardContext } from "./session-bridge";
+import type {
+  OperationInputGuardContext,
+  StructuredSafetyContext,
+} from "./session-bridge";
 import type { ModelInputOrigin } from "./input-origin";
 import type {
   Safety,
@@ -215,6 +219,9 @@ function createSafetySession(
             guarded: SafetyOutput,
             guardCandidate: (candidate: SafetyOutput) => Promise<SafetyOutput>,
           ) => Promise<SafetyOutput>;
+          readonly structuredContext?: StructuredSafetyContext;
+          readonly objectOccurrencesAlreadyGated?: boolean;
+          readonly settled?: readonly import("./constraint/settlement").ConstraintOccurrenceSettlement[];
         }
       | undefined,
     terminalOnly: boolean,
@@ -232,6 +239,11 @@ function createSafetySession(
       ...(opts?.prepareValidated
         ? { prepareValidated: opts.prepareValidated }
         : {}),
+      ...(opts?.structuredContext
+        ? { structuredContext: opts.structuredContext }
+        : {}),
+      objectOccurrencesAlreadyGated: opts?.objectOccurrencesAlreadyGated ?? false,
+      ...(opts?.settled ? { settled: opts.settled } : {}),
       context: guardContext("output", lastMessages),
       appendAudit: appendGuardrailAudit,
       transcript,
@@ -243,10 +255,13 @@ function createSafetySession(
 
   // ── Streaming sub-protocol ─────────────────────────────────────
 
-  function openStream(): SafetyStream {
+  function buildTextStream(): SafetyStream {
     return createSafetyStream({
       outputBindings: phaseBindings("output"),
-      constraints: [...constraints, ...reportConstraints],
+      // Enforce-mode constraints can gate (an `assert` commits the attempt);
+      // report-mode constraints are always report-only.
+      constraints,
+      reportConstraints,
       messages: () => lastMessages,
       guardContext: () => guardContext("output", lastMessages),
       constraintContext,
@@ -255,6 +270,19 @@ function createSafetySession(
       setConstraintAudit: constraintRunner.replaceAudit,
       transcript,
     });
+  }
+
+  function openStream(): SafetyStream {
+    // Standalone stream: a non-terminal assert rejection has no retry authority, so
+    // it fails closed as the public `ConstraintViolationError`.
+    return failClosedOnRejection(buildTextStream());
+  }
+
+  // Adapter (coordinated) text stream: the raw commit gate raises the non-terminal
+  // rejection so the shared attempt coordinator can discard the attempt and retry,
+  // exactly as the structured raw stream does (RFC #173).
+  function openStreamRawForAdapter(): SafetyStream {
+    return buildTextStream();
   }
 
   const session = createSafetySessionMethods({
@@ -277,6 +305,7 @@ function createSafetySession(
     },
     finalizeLanguageOutput,
     openStream,
+    openStreamRaw: openStreamRawForAdapter,
   });
   return createScopedSafetySession(options.promptId, session);
 }

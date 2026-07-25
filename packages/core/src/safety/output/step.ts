@@ -7,8 +7,8 @@ import { repairJsonText } from "../../generation/repair-json";
 import type { AssistantContentPart } from "../../types/content";
 import type { z } from "zod";
 import { latestRewritePolicyId } from "../audit";
-import { createGuardrailPipeline } from "../guardrail/pipeline";
 import type { GuardrailAudit, GuardrailContext } from "../guardrail/types";
+import { createTextReplayEngine } from "../stream/text-replay";
 import type { GuardrailBinding } from "../registry";
 import type { SafetyProtocolEvent } from "../session";
 import { resyncStructuredText } from "../structured";
@@ -63,7 +63,6 @@ export async function guardLanguageStepWithEdits(
     };
   }
 
-  const pipeline = createGuardrailPipeline(textBindings);
   const content: AssistantContentPart[] = [];
   const edits: StepContentEdit[] = [];
   const actions: string[] = [];
@@ -78,18 +77,30 @@ export async function guardLanguageStepWithEdits(
         content.push(part);
         continue;
       }
-      const result = await pipeline.runOutput(part.text, options.context);
-      options.appendAudit(result.audit);
-      actions.push(...result.audit.applied.map((entry) => entry.action));
-      if (result.content !== part.text) {
-        edits.push({ kind: "replace-text", partIndex, text: result.content });
-        rewritePolicyId =
-          latestRewritePolicyId(result.audit.applied) ?? rewritePolicyId;
+      // Generate feeds the complete text once through the shared replay engine, so
+      // adaptive/`.complete()` guards evaluate the whole text once while
+      // `.sentences()`/`.lines()`/`.segments()` segment it exactly as on a stream.
+      const applied: GuardrailAudit["applied"][number][] = [];
+      const engine = createTextReplayEngine({
+        textBindings,
+        mode: "generate",
+        guardContext: () => options.context,
+        appendGuardrailAudit: (audit) => {
+          options.appendAudit(audit);
+          applied.push(...audit.applied);
+        },
+      });
+      await engine.feed(part.text);
+      const { text: guardedText } = await engine.finish();
+      actions.push(...applied.map((entry) => entry.action));
+      if (guardedText !== part.text) {
+        edits.push({ kind: "replace-text", partIndex, text: guardedText });
+        rewritePolicyId = latestRewritePolicyId(applied) ?? rewritePolicyId;
       }
       content.push(
-        result.content === part.text
+        guardedText === part.text
           ? part
-          : Object.freeze({ ...part, text: result.content }),
+          : Object.freeze({ ...part, text: guardedText }),
       );
       continue;
     }

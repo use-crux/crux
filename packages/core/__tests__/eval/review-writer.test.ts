@@ -5,8 +5,10 @@ import {
   open,
   readFile,
   rm,
+  writeFile,
   symlink,
 } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
@@ -24,16 +26,25 @@ let sidecar: string;
 
 describe.sequential("Review repository writer", () => {
   beforeAll(async () => {
-    temporaryRoot = await mkdtemp(join(dirname(fixtureRoot), "review-writer-"));
+    // Created under the OS temp dir, never inside the repo: an interrupted run
+    // (killed process, crashed worker) skips `afterAll` and would otherwise leave an
+    // untracked fixture directory dirtying the worktree.
+    temporaryRoot = await mkdtemp(join(tmpdir(), "crux-review-writer-"));
     root = temporaryRoot;
     await mkdir(join(root, "evals"), { recursive: true });
-    await Promise.all([
-      cp(
-        join(fixtureRoot, "evals/review.eval.ts"),
-        join(root, "evals/review.eval.ts"),
-      ),
-      cp(join(fixtureRoot, "task.ts"), join(root, "task.ts")),
-    ]);
+    // The fixtures import core through repo-relative paths, which only resolve at
+    // their original depth. Rewrite those specifiers to absolute paths on copy so the
+    // project is location-independent and can live outside the repo.
+    const srcRoot = join(fixtureRoot, "../../../../src");
+    const relocate = async (name: string): Promise<void> => {
+      const source = await readFile(join(fixtureRoot, name), "utf8");
+      await writeFile(
+        join(root, name),
+        source.replace(/(["'])(?:\.\.\/)+src\//g, `$1${srcRoot}/`),
+        "utf8",
+      );
+    };
+    await Promise.all([relocate("evals/review.eval.ts"), relocate("task.ts")]);
     sidecar = join(root, "evals/review.cases.jsonl");
   });
 

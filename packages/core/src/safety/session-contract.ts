@@ -3,8 +3,10 @@ import type { TraceMeta } from "../generation/types";
 import type { z } from "zod";
 import type { SafetyTuneOptions } from "./tune";
 import type { Constraint, ConstraintFailure } from "./constraint/types";
+import type { ConstraintSettlement } from "./constraint/settlement";
 import type { Guardrail } from "./guardrail/types";
 import type { SafetyAudit } from "./audit";
+import type { ReleaseGateKind } from "./stream/gates";
 
 // Public types
 // ─────────────────────────────────────────────────────────────────
@@ -99,14 +101,27 @@ export type SafetyProtocolEvent =
       readonly guards: number;
       readonly actions: readonly string[];
     }
-  | { readonly t: "stream.chunk"; readonly directive: "emit" | "hold" }
+  | {
+      readonly t: "stream.chunk";
+      readonly directive: "emit" | "hold";
+      /** The highest-precedence active release gate holding a `hold`; content-free. */
+      readonly bufferedBy?: ReleaseGateKind;
+    }
   | { readonly t: "stream.finish" }
   | { readonly t: "stamp" };
 
 /** Verdict for one fed stream chunk. */
 export type SafetyStreamDirective =
   | { readonly kind: "emit"; readonly content: string }
-  | { readonly kind: "hold" };
+  | {
+      readonly kind: "hold";
+      /**
+       * Why this chunk is buffered — the single highest-precedence active gate
+       * (e.g. `'constraint'` while an `assert` commit gate is unresolved). Stable
+       * and content-free: never carries constraint feedback or held bytes.
+       */
+      readonly bufferedBy?: ReleaseGateKind;
+    };
 
 /**
  * Final seal of a guarded stream. `text` is the complete guarded output
@@ -115,6 +130,14 @@ export type SafetyStreamDirective =
  */
 export interface SafetyStreamSeal extends SafetyOutput {
   readonly pending: string;
+  /**
+   * Occurrence-precise constraint settlement recorded while gating this stream (an
+   * `attemptId` of `''` until the adapter binds the accepted attempt id). The
+   * adapter threads it into completion so an unchanged settled occurrence is not
+   * re-evaluated. Absent for text streams and standalone structured streams.
+   * @internal
+   */
+  readonly settlement?: ConstraintSettlement;
 }
 
 /**

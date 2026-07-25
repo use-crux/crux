@@ -1,7 +1,7 @@
 import type { SafetyProtocolEvent } from './session'
-import { createGuardrailPipeline } from './guardrail/pipeline'
 import type { GuardrailAudit, GuardrailContext } from './guardrail/types'
 import type { GuardrailBinding } from './registry'
+import { createTextReplayEngine } from './stream/text-replay'
 
 /**
  * Run output-text guardrails independently for provider completion slots.
@@ -20,14 +20,21 @@ export async function guardOutputTextParts(
   const bindings = options.bindings.filter(bindingGuardsTextOutput)
   if (bindings.length === 0) return [...options.parts]
 
-  const pipeline = createGuardrailPipeline(bindings)
   const guarded: string[] = []
   const actions: string[] = []
   for (const part of options.parts) {
-    const result = await pipeline.runOutput(part, options.context)
-    options.appendAudit(result.audit)
-    actions.push(...result.audit.applied.map((entry) => entry.action))
-    guarded.push(result.content)
+    // Complete-source generate feed through the shared replay engine.
+    const engine = createTextReplayEngine({
+      textBindings: bindings,
+      mode: 'generate',
+      guardContext: () => options.context,
+      appendGuardrailAudit: (audit) => {
+        options.appendAudit(audit)
+        actions.push(...audit.applied.map((entry) => entry.action))
+      },
+    })
+    await engine.feed(part)
+    guarded.push((await engine.finish()).text)
   }
   options.transcript.push({
     t: 'output.guard',

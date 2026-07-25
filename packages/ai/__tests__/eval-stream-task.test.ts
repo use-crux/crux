@@ -35,7 +35,7 @@ describe("stream.task()", () => {
     );
 
     const production = await task({ topic: "production" });
-    expect(production.raw).toMatchObject({ kind: "scripted-text-stream" });
+    expect("raw" in production).toBe(false);
     expect(scripted.calls.streamText).toHaveLength(1);
 
     let productionText = "";

@@ -917,8 +917,9 @@ describe("adapter", () => {
       });
 
       expect(streamSpy).toHaveBeenCalledOnce();
-      expect(handle.raw).toBeDefined();
+      expect("raw" in handle).toBe(false);
       expect(typeof handle.textStream[Symbol.asyncIterator]).toBe("function");
+      expect(typeof handle.fullStream[Symbol.asyncIterator]).toBe("function");
       expect(typeof handle.completion.then).toBe("function");
     });
 

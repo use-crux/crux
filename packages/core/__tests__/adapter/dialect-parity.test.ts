@@ -711,8 +711,7 @@ describe('dialect parity — streamed run with holds and transforms', () => {
   const importFixer = () =>
     makeGuardrail({
       id: 'import-fixer',
-      on: boundary.output.text(),
-      stream: 'chunk',
+      on: boundary.output.text().deltas(),
       run: async (chunk) => {
         if (chunk.includes('@/comps/')) {
           return {

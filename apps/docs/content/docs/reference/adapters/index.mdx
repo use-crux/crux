@@ -195,7 +195,7 @@ const myProvider = defineSingleTurnProviderBundle({
       textDelta: (chunk) => chunk.delta?.text,
     },
     settings: mapSettings,
-    outputSchema: wrapOutputSchema,
+    structuredOutput: { accepts: myStructuredCapabilities },
   },
 });
 
@@ -350,7 +350,7 @@ The core-step execution IR produced by the `turn` provider-runtime branch.
 | `appendToolRound`     | `(messages, response, results) => Message[]`                            | Format tool results for the next tool loop turn                               |
 | `mapSettings`         | `(settings: GenerationSettings) => Record<string, unknown>`             | Map canonical settings to provider-native field names                         |
 | `sanitizeToolSchema?` | `(schema) => Record<string, unknown>`                                   | Optional. Post-process JSON Schema output for this provider.                  |
-| `wrapOutputSchema?`   | `(schema: ZodType) => Record<string, unknown>`                          | Optional. Convert structured output schema to provider-native params.         |
+| `structuredOutput?`   | `{ accepts: StructuredOutputCapabilities }`                             | Inert description of the JSON Schema dialect this provider accepts. Core compiles the authored schema against it and supplies the result as `ctx.outputSchema`. Absent means structured output is unsupported and fails before I/O. |
 
 ## `CruxAdapter<TClient, TRawResponse, TRawStream, TExtra>`
 
@@ -360,7 +360,7 @@ The adapter interface returned by the factory.
 | ------------------------ | ---------------------------------------------- | ------------------------------------------------------------------------ |
 | `providerId`             | `string`                                       | Provider identifier from the spec                                        |
 | `generate(prompt, opts)` | `Promise<AdapterGenerateResult<TRawResponse>>` | Execute a prompt (non-streaming) with automatic tool loop                |
-| `stream(prompt, opts)`   | `Promise<StreamResult<TRawStream>>`            | Execute a prompt and return canonical text deltas plus raw stream access |
+| `stream(prompt, opts)`   | `Promise<StreamResult<TOutput, TPartial>>`     | Execute a prompt and return one managed logical stream                   |
 | `prepare(prompt, opts)`  | `Promise<CallHandle<...>>`                     | Headless handle: prepare params, then feed provider or SDK responses     |
 | `parallel`               | `function`                                     | Run multiple agents concurrently                                         |
 | `pipeline`               | `function`                                     | Chain agents sequentially                                                |
@@ -399,7 +399,8 @@ Canonical response extracted by the adapter from the provider's raw response. Us
 ## `StreamHandle<TRawStream>`
 
 Internal stream handle returned by `AdapterSpec.stream()`. Public
-`CruxAdapter.stream()` wraps this as `StreamResult<TRawStream>`.
+`CruxAdapter.stream()` publishes it as `StreamResult<TOutput, TPartial>`; the
+provider chunk protocol stops at that boundary.
 
 | Field              | Type                                                   | Description                                                                                                                                                                     |
 | ------------------ | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -446,14 +447,30 @@ canonical envelope.
 partial token sum as a total. `finalStep.usage` follows the provider's final
 step exactly and is also omitted when the final step was unmetered.
 
-## `StreamResult<TRawStream>`
+## `StreamResult<TOutput, TPartial>`
 
-| Field        | Type                                 | Description                                                                             |
-| ------------ | ------------------------------------ | --------------------------------------------------------------------------------------- |
-| `textStream` | `AsyncIterable<string>`              | Provider-neutral plain-string text deltas                                               |
-| `raw`        | `TRawStream`                         | Raw provider stream handle                                                              |
-| `completion` | `Promise<StreamCompletion<TOutput>>` | Completion facts with the same operation pair as the immediate handle                   |
-| `_meta`      | `OperationResultMeta`                | Exact `generation.stream` identity, available immediately and stable through completion |
+One managed logical stream. A logical stream may use several physical provider
+attempts, but that is never observable: provider framing, discarded attempts,
+and the provider stream object are all private.
+
+| Field                 | Type                                        | Description                                                                              |
+| --------------------- | ------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `runId`               | `CruxRunId`                                 | Authoritative logical run, stable across physical attempts                               |
+| `textStream`          | `AsyncIterableStream<string>`               | Published, Safety-final text; canonical `z.input` JSON for a structured prompt           |
+| `fullStream`          | `AsyncIterableStream<StreamEvent<TPartial>>`| Every published logical event in canonical order                                         |
+| `partialOutputStream` | `AsyncIterableStream<TPartial>`             | Canonical partial `z.input`; closes empty for a text prompt                              |
+| `completion`          | `Promise<StreamCompletion<TOutput>>`        | Completion facts with the same operation pair as the immediate handle                    |
+| `cancel`              | `(reason?: unknown) => void`                | Abort the whole logical operation, including the active provider attempt                 |
+| `_meta`               | `OperationResultMeta`                       | Exact `generation.stream` identity, available immediately and stable through completion  |
+
+All three streams project one shared append-only event log: each has an
+independent cursor, they may be read concurrently, and a surface first read late
+replays from logical `start`. Retention never delays publication, so `completion`
+settles without any stream being drained.
+
+There is deliberately no `raw`, `acceptedRaw`, `providerResult`, or `unsafe`
+escape hatch. Provider-specific request options remain supported, and
+provider-specific terminal facts belong on `completion.providerMetadata`.
 
 Adapter payloads and provider stream handles do not manufacture Crux IDs. Core
 finalizes managed results after provider normalization. See
