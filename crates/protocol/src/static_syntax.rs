@@ -143,6 +143,13 @@ pub struct StaticCalleeRecord {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StaticTaggedTemplateExpression {
+    pub value: StaticSyntaxValue,
+    pub source: SourceLocation,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(
     tag = "kind",
     rename_all = "kebab-case",
@@ -236,6 +243,14 @@ pub enum StaticSyntaxValue {
     Template {
         text: String,
         expressions: Vec<StaticSyntaxValue>,
+    },
+    TaggedTemplate {
+        tag: StaticCalleeRecord,
+        text: String,
+        expressions: Vec<StaticTaggedTemplateExpression>,
+        source: SourceLocation,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        snippet: Option<SourceSnippet>,
     },
     Function {
         #[serde(default, skip_serializing_if = "Vec::is_empty")]

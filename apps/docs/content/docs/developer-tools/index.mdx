@@ -1,0 +1,50 @@
+---
+title: Developer Tools
+description: Choose the Crux interface that fits how you build, inspect, and maintain an AI system.
+---
+
+Crux has several development interfaces over the same authored definitions,
+Project Index, and runtime evidence. Start with the one that matches the task in
+front of you.
+
+<Cards>
+  <Card
+    title="Devtools"
+    description="Inspect runs, prompts, Catalog definitions, Evals, and project health in the browser."
+    href="/docs/developer-tools/devtools"
+  />
+  <Card
+    title="CLI & TUI"
+    description="Run the local server, use the terminal workbench, query JSON, and automate project checks."
+    href="/docs/developer-tools/cli"
+  />
+  <Card
+    title="VS Code & LSP"
+    description="Get diagnostics, navigation, hover, hints, actions, and Crux-aware completion in your editor."
+    href="/docs/developer-tools/vscode"
+  />
+  <Card
+    title="AI coding assistants"
+    description="Give coding agents a machine-readable map of Crux and fetch individual documentation pages as Markdown."
+    href="/docs/developer-tools/ai-assistants"
+  />
+</Cards>
+
+These are development tools, not required runtime dependencies. In particular,
+an [AI coding assistant](/docs/developer-tools/ai-assistants) that helps you
+write Crux code is separate from an [`agent()` built with
+Crux](/docs/guides/agents).
+
+## A common local workflow
+
+```bash
+crux dev
+```
+
+`crux dev` starts the local runtime and its Project Index. Use the TUI in your
+terminal, open the browser Devtools with `--open`, or let the VS Code extension
+attach to the same live index. Each interface has its own job, but they share
+the same source and runtime read models.
+
+For exact commands, flags, settings, and protocol behavior, follow the reference
+links from each page.

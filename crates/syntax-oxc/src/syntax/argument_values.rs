@@ -8,7 +8,8 @@ use crate::{
     syntax::source::SourceView,
     syntax::values::{
         call_args, call_receiver, callee_record_from_expression, object_value,
-        property_access_value, syntax_value_from_expression, unsupported_value,
+        property_access_value, syntax_value_from_expression, tagged_template_value,
+        unsupported_value,
     },
 };
 
@@ -51,6 +52,7 @@ pub(crate) fn argument_value(
                 .map(|expression| syntax_value_from_expression(view, expression, imports))
                 .collect(),
         },
+        Argument::TaggedTemplateExpression(tagged) => tagged_template_value(view, tagged, imports),
         Argument::AwaitExpression(await_expression) => {
             syntax_value_from_expression(view, &await_expression.argument, imports)
         }
@@ -117,6 +119,9 @@ pub(crate) fn array_element_value(
                 .map(|expression| syntax_value_from_expression(view, expression, imports))
                 .collect(),
         }),
+        ArrayExpressionElement::TaggedTemplateExpression(tagged) => {
+            Some(tagged_template_value(view, tagged, imports))
+        }
         ArrayExpressionElement::AwaitExpression(await_expression) => Some(
             syntax_value_from_expression(view, &await_expression.argument, imports),
         ),

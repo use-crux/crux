@@ -11,8 +11,8 @@ import (
 )
 
 func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
-	if ProjectIndexSnapshotCacheEpoch != 46 {
-		t.Fatalf("ProjectIndexSnapshotCacheEpoch = %d, want direct export evidence epoch 46", ProjectIndexSnapshotCacheEpoch)
+	if ProjectIndexSnapshotCacheEpoch != 47 {
+		t.Fatalf("ProjectIndexSnapshotCacheEpoch = %d, want prompt-text source-ref epoch 47", ProjectIndexSnapshotCacheEpoch)
 	}
 
 	doc := exportedConstDoc(t, "identity.go", "ProjectIndexSnapshotCacheEpoch")
@@ -26,6 +26,8 @@ func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
 		"Epoch 46",
 		"retained lint suppression evidence",
 		"direct named-export evidence",
+		"Epoch 47",
+		"prompt-text source-ref metadata",
 		"TS-owned AST and semantic fact cache identity",
 	} {
 		if !strings.Contains(normalizedDoc, phrase) {
@@ -36,20 +38,20 @@ func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
 
 func TestProjectIndexFactStorePathIncludesSnapshotEpoch(t *testing.T) {
 	root := t.TempDir()
-	wantSuffix := filepath.Join(".crux", "cache", "index-v2", "epoch-46", "index.db")
+	wantSuffix := filepath.Join(".crux", "cache", "index-v2", "epoch-47", "index.db")
 
 	if got := projectIndexFactStoreDBFile(root); !strings.HasSuffix(got, wantSuffix) {
 		t.Fatalf("projectIndexFactStoreDBFile() = %q, want suffix %q", got, wantSuffix)
 	}
 }
 
-func TestProjectIndexFactStoreMissesPreExportEvidenceSnapshotEpoch(t *testing.T) {
+func TestProjectIndexFactStoreMissesPrePromptTextSnapshotEpoch(t *testing.T) {
 	root := t.TempDir()
-	oldPath := filepath.Join(root, ".crux", "cache", "index-v2", "epoch-45", "index.db")
+	oldPath := filepath.Join(root, ".crux", "cache", "index-v2", "epoch-46", "index.db")
 	if err := os.MkdirAll(filepath.Dir(oldPath), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(oldPath, []byte("pre-export-evidence snapshot"), 0o600); err != nil {
+	if err := os.WriteFile(oldPath, []byte("pre-prompt-text snapshot"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 

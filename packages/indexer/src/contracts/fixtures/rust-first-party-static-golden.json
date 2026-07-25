@@ -5,12 +5,12 @@
   "fileSelection": "staticDefinitionFiles(root)",
   "projection": "canonicalStaticExtractionJson(definitions,relations,diagnostics,dependencies)",
   "totals": {
-    "files": 780,
+    "files": 786,
     "definitions": 88,
     "relations": 7,
     "diagnostics": 25,
-    "dependencies": 1464,
-    "canonicalBytes": 215701
+    "dependencies": 1484,
+    "canonicalBytes": 217434
   },
   "files": [
     {
@@ -2075,6 +2075,15 @@
       "dependencies": 1
     },
     {
+      "file": "packages/core/__type_tests__/prompt-text.test-d.ts",
+      "sha256": "94b0a0fbda18f10cf2c35876ccc232140f4f8a28a27323c5541d3fbd2dd98c33",
+      "bytes": 194,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
       "file": "packages/core/__type_tests__/provider-runtime-public-surface.ts",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
@@ -3156,12 +3165,12 @@
     },
     {
       "file": "packages/core/src/prompt/context.ts",
-      "sha256": "88f547d40108e1f3158d55df2f17ed7f22aa7d7ed222851b9381fd2b3a7cea22",
-      "bytes": 225,
+      "sha256": "8033d50383b102f79d248f6317b71992d70c7a3ca616be1836f84b8df548f715",
+      "bytes": 276,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 3
+      "dependencies": 4
     },
     {
       "file": "packages/core/src/prompt/contributor.ts",
@@ -3246,12 +3255,12 @@
     },
     {
       "file": "packages/core/src/resolver/pass.ts",
-      "sha256": "16c6776b5baf9fc761fb836ca96ded02b501320f7980d07b5997557e46731b2d",
-      "bytes": 1061,
+      "sha256": "acd0627a97b83510f4a58f32f002031e20de52544d474d7912c5603bc7ddaa5f",
+      "bytes": 1115,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 19
+      "dependencies": 20
     },
     {
       "file": "packages/core/src/resolver/ports.ts",
@@ -5189,6 +5198,15 @@
       "dependencies": 0
     },
     {
+      "file": "packages/indexer/src/indexer/semantic/backends/tsgo/compiler-session.ts",
+      "sha256": "52bee8afb671c57eec59a99e6640a0210b614fb36610864eaa39cca700537b7c",
+      "bytes": 535,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 6
+    },
+    {
       "file": "packages/indexer/src/indexer/semantic/backends/tsgo/direct-projectors/completion-sites.ts",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
@@ -5261,6 +5279,24 @@
       "dependencies": 1
     },
     {
+      "file": "packages/indexer/src/indexer/semantic/backends/typescript/backend.ts",
+      "sha256": "8b56946baad72ef85cdcec24500b904c7ea33f7ca0710c911085845f446baeac",
+      "bytes": 333,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 4
+    },
+    {
+      "file": "packages/indexer/src/indexer/semantic/backends/typescript/package-export-identity.ts",
+      "sha256": "530aca2263ea56e14ae37bc68ead7dc6485093177fd6cc13b8b1ededa8bef8cd",
+      "bytes": 152,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
       "file": "packages/indexer/src/indexer/semantic/candidates.ts",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
@@ -5298,12 +5334,12 @@
     },
     {
       "file": "packages/indexer/src/indexer/semantic/evidence/facts.ts",
-      "sha256": "e7cd54d8045a5c05e583d424a1bd11d1c139998452f7bc362e01efe20a1e8925",
-      "bytes": 978,
+      "sha256": "6b25cd75930d91f506ec0aa42dea1481f6901465fc1c50260c70ec653ffedfed",
+      "bytes": 1058,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 14
+      "dependencies": 15
     },
     {
       "file": "packages/indexer/src/indexer/semantic/media-call-evidence.ts",
@@ -5340,6 +5376,24 @@
       "relations": 0,
       "diagnostics": 0,
       "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/src/indexer/semantic/model/prompt-text-identity.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/src/indexer/semantic/model/prompt-text-source-refs.ts",
+      "sha256": "342c2f4356dd5f8fb40a5d74b2648f496b90e169912b0ab4bcd8820f286affa7",
+      "bytes": 266,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
     },
     {
       "file": "packages/indexer/src/indexer/semantic/model/relation-types.ts",

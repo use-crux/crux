@@ -379,7 +379,10 @@ fn resolved_from_initializer<'a>(
         definition_symbol: initializer.name.clone(),
         fingerprint_file: fingerprint_file.to_string(),
         value,
-        source: initializer.source.clone(),
+        source: match value {
+            StaticSyntaxValue::TaggedTemplate { source, .. } => source.clone(),
+            _ => initializer.source.clone(),
+        },
         snippet: snippet_for_value(value, Some(initializer)),
         function_name: function_name_for_value(value, Some(symbol)),
     }

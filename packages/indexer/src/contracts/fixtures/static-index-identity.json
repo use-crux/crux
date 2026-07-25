@@ -6,7 +6,7 @@
   },
   "oxcFrontend": {
     "name": "oxc-rust",
-    "version": "oxc_parser@0.139.0+crux_native_group3.8"
+    "version": "oxc_parser@0.139.0+crux_native_group3.9"
   },
   "primitiveManifest": {
     "name": "crux-first-party-primitives",

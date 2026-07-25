@@ -1,6 +1,13 @@
 import {
+  SyntaxKind,
+  isArrowFunction,
   isCallExpression,
+  isClassDeclaration,
+  isClassExpression,
+  isFunctionDeclaration,
+  isFunctionExpression,
   isIdentifier,
+  isMethodDeclaration,
   isPropertyAccessExpression,
   type Node,
 } from "@typescript/native-preview/unstable/ast";
@@ -8,7 +15,8 @@ import { dataAccessKindForMethod } from "../../../data-access-manifest";
 import { workspaceSnapshotAccessForMethod } from "../../../workspace-snapshot-access";
 import type { NativeDefinition } from "./types";
 import type { NativeSourceBinding } from "./types";
-import { propertyInitializer } from "./object";
+import { nativeNodeList } from "../source";
+import { propertyInitializer, propertyName } from "./object";
 
 /**
  * Returns whether a direct-native definition uses semantic shapes the direct
@@ -28,7 +36,81 @@ export function hasUnsupportedSemanticProperty(
       return initializer
         ? callbackRequiresSharedAnalyzer(initializer, bindings)
         : false;
-    })
+    }) ||
+    promptTextRequiresSharedAnalyzer(definition, bindings)
+  );
+}
+
+function promptTextRequiresSharedAnalyzer(
+  definition: NativeDefinition,
+  bindings: ReadonlyMap<string, NativeSourceBinding>,
+): boolean {
+  return (definition.primitive.promptText ?? []).some((spec) => {
+    const property = nativeNodeList(definition.object.properties).find(
+      (candidate) =>
+        "name" in candidate && propertyName(candidate.name) === spec.property,
+    );
+    if (!property) return false;
+    if (isMethodDeclaration(property)) {
+      return containsBroadCallbackControlFlow(property);
+    }
+    const initializer = propertyInitializer(definition.object, spec.property);
+    const callback = initializer && callbackNode(initializer, bindings);
+    return callback ? containsBroadCallbackControlFlow(callback) : false;
+  });
+}
+
+function callbackNode(
+  node: Node,
+  bindings: ReadonlyMap<string, NativeSourceBinding>,
+): Node | undefined {
+  if (isArrowFunction(node) || isFunctionExpression(node)) return node;
+  if (!isIdentifier(node)) return undefined;
+  const binding = bindings.get(node.text);
+  if (!binding) return undefined;
+  if (isFunctionDeclaration(binding.declaration)) return binding.declaration;
+  return binding.initializer &&
+    (isArrowFunction(binding.initializer) ||
+      isFunctionExpression(binding.initializer))
+    ? binding.initializer
+    : undefined;
+}
+
+function containsBroadCallbackControlFlow(callback: Node): boolean {
+  let unsupported = false;
+  const visit = (node: Node): void => {
+    if (unsupported) return;
+    if (node !== callback && isNestedExecutionBoundary(node)) return;
+    if (broadControlFlowKinds.has(node.kind)) {
+      unsupported = true;
+      return;
+    }
+    node.forEachChild(visit);
+  };
+  visit(callback);
+  return unsupported;
+}
+
+const broadControlFlowKinds: ReadonlySet<SyntaxKind> = new Set([
+  SyntaxKind.DoStatement,
+  SyntaxKind.WhileStatement,
+  SyntaxKind.ForStatement,
+  SyntaxKind.ForInStatement,
+  SyntaxKind.ForOfStatement,
+  SyntaxKind.SwitchStatement,
+  SyntaxKind.TryStatement,
+]);
+
+function isNestedExecutionBoundary(node: Node): boolean {
+  return (
+    isArrowFunction(node) ||
+    isFunctionExpression(node) ||
+    isFunctionDeclaration(node) ||
+    isMethodDeclaration(node) ||
+    isClassDeclaration(node) ||
+    isClassExpression(node) ||
+    node.kind === SyntaxKind.GetAccessor ||
+    node.kind === SyntaxKind.SetAccessor
   );
 }
 

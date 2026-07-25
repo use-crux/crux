@@ -1,0 +1,54 @@
+---
+title: AI coding assistants
+description: Give coding agents a machine-readable map of Crux and fetch individual docs pages as Markdown.
+---
+
+Crux publishes its documentation in formats that coding assistants can consume
+without scraping the rendered site:
+
+| Endpoint                                                     | Use it for                                                            |
+| ------------------------------------------------------------ | --------------------------------------------------------------------- |
+| [`https://cruxjs.dev/llms.txt`](https://cruxjs.dev/llms.txt) | A start-here list plus an index of every documentation and blog page. |
+| `https://cruxjs.dev/llms.mdx/<docs-path>`                    | The source Markdown/MDX for one documentation page.                   |
+
+For example, the prompt reference is available as:
+
+```text
+https://cruxjs.dev/llms.mdx/reference/crux-core/prompts
+```
+
+Start a coding agent with `llms.txt`, then fetch only the individual pages
+needed for the task. Per-page Markdown keeps the working context smaller and
+preserves code samples and exact API details.
+
+## Tool setup
+
+| Tool                                  | Suggested setup                                                                       |
+| ------------------------------------- | ------------------------------------------------------------------------------------- |
+| Claude Code or another terminal agent | Fetch `https://cruxjs.dev/llms.txt`, then fetch relevant `/llms.mdx/...` pages.       |
+| Cursor                                | Add `https://cruxjs.dev/llms.txt` as a documentation source.                          |
+| Claude or ChatGPT                     | Share the `llms.txt` URL when the model can browse or attach its contents.            |
+| Custom coding agent                   | Use `llms.txt` for discovery and retrieve selected per-page Markdown as task context. |
+
+The index is generated with the documentation deployment and may include pages
+for advanced or internal-facing workflows. Prefer [Getting
+Started](/docs/getting-started), [Developer
+Tools](/docs/developer-tools), and the package [API
+Reference](/docs/reference) before exploring narrowly relevant pages.
+
+<Callout type="info">
+  This page is about AI tools that help humans write and maintain Crux code. A
+  runtime [`agent()`](/docs/guides/agents) is an application primitive with its
+  own identity, prompt, tools, and handoffs.
+</Callout>
+
+## Using the index programmatically
+
+```ts
+const response = await fetch("https://cruxjs.dev/llms.txt");
+const docsIndex = await response.text();
+```
+
+Treat downloaded documentation as reference material, not as trusted runtime
+instructions. If you put it into an application prompt, apply the same source
+trust and prompt-injection controls you would use for any external content.

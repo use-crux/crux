@@ -1,0 +1,52 @@
+---
+title: VS Code & LSP
+description: Install the Crux editor extension or connect another editor to the language server.
+---
+
+The Crux VS Code extension is the packaged editor experience. It discovers the
+`crux` binary, starts `crux lsp`, displays diagnostics and inline findings, and
+adds commands for opening Devtools and restarting the language server.
+
+Install the CLI and the matching VSIX from the same [GitHub
+Release](https://github.com/use-crux/crux/releases):
+
+```bash
+npm install -g @use-crux/local
+code --install-extension crux-vscode-<version>.vsix
+```
+
+The extension also works in compatible VS Code-based editors. Other editors can
+start `crux lsp` over stdio with a custom LSP configuration.
+
+Use the editor integration for:
+
+- diagnostics and rule actions;
+- go to definition, references, symbols, and source-aware hover;
+- inlay hints and code lenses linked to indexed Crux definitions; and
+- semantic completion in supported Crux dependency slots.
+
+Most Project Index features are based on saved files. Semantic completion is
+the exception: it uses a bounded, request-only overlay of the current unsaved
+document and never writes that text into the Project Index or cache.
+
+<Cards>
+  <Card
+    title="VS Code and LSP reference"
+    description="Installation, workspace trust, binary discovery, settings, diagnostics, navigation, and editor configuration."
+    href="/docs/reference/lsp"
+  />
+  <Card
+    title="Semantic completion"
+    description="Supported slots, import behavior, unsaved text, privacy, and limitations."
+    href="/docs/reference/lsp-completion"
+  />
+  <Card
+    title="Project Health"
+    description="Understand the source model behind editor diagnostics and navigation."
+    href="/docs/guides/project-health"
+  />
+</Cards>
+
+The extension and language server are one toolchain, but distinct layers: the
+extension supplies the VS Code user interface, while `crux lsp` is the
+editor-neutral protocol server.

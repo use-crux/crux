@@ -1,47 +1,38 @@
 import type { IndexPatchFacts } from "../../../../patches";
-import { safeId } from "../../../../definitions";
 import type { Project } from "@typescript/native-preview/unstable/sync";
 import {
   isCallExpression,
-  isIdentifier,
-  type Expression,
   type SourceFile,
 } from "@typescript/native-preview/unstable/ast";
-import {
-  nativeNodeList,
-  nativeSourceForNode,
-  nativeSourceSnippetForNode,
-} from "../source";
 import type { SemanticSourceProfile } from "../../../source-profile";
 import {
   collectNativeDirectFileScope,
   nativeBindingMapsByFile,
 } from "./bindings";
 import { dependencyEvidenceForDefinition } from "./dependencies";
-import {
-  isNativeDirectCandidateCallSet,
-  type NativeDirectSchemaSpec,
-} from "./manifest";
-import { hasUnsupportedSemanticProperty } from "./guards";
-import { definitionName, nativeCruxCall, propertyInitializer } from "./object";
+import { isNativeDirectCandidateCallSet } from "./manifest";
+import { nativeCruxCall } from "./object";
 import { routingEvidenceForDefinition } from "./routing";
 import type { TsgoSemanticCompilerView } from "../compiler-view";
+import type { TsgoNativeSourceLookup } from "../source-lookup";
 import {
   isNativeDirectStorageInitializer,
   nativeDirectStorageEvidence,
 } from "./storage";
 import { nativeDefinitionMapsByFile, nativeVariableMapsByFile } from "./scope";
-import { sourceRefEvidenceForDefinition } from "./source-refs";
-import type {
-  DefinitionFact,
-  DefinitionSourceEvidence,
-  NativeDefinition,
-  NativeDependencyEvidence,
-  NativeSourceBinding,
-  NativeVariable,
-  SourceRefFact,
-} from "./types";
+import { nativeDirectPromptTextSourceRefs } from "./prompt-text";
+import type { NativeVariable, SourceRefFact } from "./types";
 import { nativeZodExpressionToJsonSchema } from "../zod-schema";
+import {
+  definitionFact,
+  definitionSourceEvidence,
+  nativeDefinition,
+} from "./definition-evidence";
+import {
+  mergeNativeDirectFacts,
+  presentValues,
+  zipDefinitions,
+} from "./evidence-collections";
 
 export interface NativeDirectEvidenceResult {
   readonly facts: IndexPatchFacts;
@@ -78,16 +69,24 @@ export function nativeDirectCandidateFiles(
 
 /** Projects direct-native facts file by file, preserving unsupported files for the shared analyzer. */
 export function nativeDirectEvidenceForFiles(
+  root: string,
   project: Project,
   files: readonly string[],
   view: TsgoSemanticCompilerView,
+  sourceLookup: TsgoNativeSourceLookup,
 ): NativeDirectEvidenceResult | undefined {
   const supported: string[] = [];
   const unsupported: string[] = [];
   const facts: IndexPatchFacts[] = [];
 
   for (const file of files) {
-    const directFacts = nativeDirectEvidence(project, [file], view);
+    const directFacts = nativeDirectEvidence(
+      root,
+      project,
+      [file],
+      view,
+      sourceLookup,
+    );
     if (directFacts) {
       supported.push(file);
       facts.push(directFacts);
@@ -111,9 +110,11 @@ export function nativeDirectEvidenceForFiles(
  * back to the complete shared semantic analyzer without producing partial facts.
  */
 export function nativeDirectEvidence(
+  root: string,
   project: Project,
   files: readonly string[],
   view: TsgoSemanticCompilerView,
+  sourceLookup: TsgoNativeSourceLookup,
 ): IndexPatchFacts | undefined {
   const sources = presentValues(
     files.map((file) => project.program.getSourceFile(file)),
@@ -202,6 +203,17 @@ export function nativeDirectEvidence(
   });
   const routingEvidencePairs = zipDefinitions(definitions, routingEvidence);
   if (!routingEvidencePairs) return undefined;
+  const promptTextEvidence = definitions.map((definition) =>
+    nativeDirectPromptTextSourceRefs(root, definition, view, sourceLookup),
+  );
+  if (
+    !promptTextEvidence.every((entry): entry is readonly SourceRefFact[] =>
+      Boolean(entry),
+    )
+  ) {
+    return undefined;
+  }
+  const promptTextSourceRefs = promptTextEvidence.flat();
 
   const emittedDefinitions = definitions.filter((definition) =>
     definition.primitive.emitDefinition === "always"
@@ -239,6 +251,7 @@ export function nativeDirectEvidence(
       ...dependencyEvidencePairs.flatMap(({ value }) => value.sourceRefs),
       ...storageEvidence.sourceRefs,
       ...routingEvidencePairs.flatMap(({ value }) => value.sourceRefs),
+      ...promptTextSourceRefs,
     ],
     diagnostics: [],
   };
@@ -255,23 +268,6 @@ function isNativeDirectProfile(
     : false;
 }
 
-function nativeDefinition(
-  variable: NativeVariable,
-): NativeDefinition | undefined {
-  const call = nativeCruxCall(variable.initializer);
-  if (!call) return undefined;
-  const name = definitionName(call.primitive, call.object, variable.name);
-  if (!name) return undefined;
-  return {
-    variable,
-    primitive: call.primitive,
-    object: call.object,
-    kind: call.primitive.definitionKind,
-    name,
-    id: `${call.primitive.definitionKind}:${safeId(name)}`,
-  };
-}
-
 function hasUnsupportedTopLevelInitializer(
   variable: NativeVariable,
   variablesByFile: ReadonlyMap<SourceFile, ReadonlyMap<string, NativeVariable>>,
@@ -286,126 +282,4 @@ function hasUnsupportedTopLevelInitializer(
     variable.initializer,
     (name) => variables.get(name)?.initializer,
   );
-}
-
-function definitionSourceEvidence(
-  definition: NativeDefinition,
-  variables: ReadonlyMap<string, NativeVariable>,
-  bindings: ReadonlyMap<string, NativeSourceBinding>,
-): DefinitionSourceEvidence | undefined {
-  if (hasUnsupportedSemanticProperty(definition, bindings)) return undefined;
-  const entries: Array<NonNullable<ReturnType<typeof schemaEvidence>>> = [];
-  for (const spec of definition.primitive.schema) {
-    const expression = propertyInitializer(definition.object, spec.property);
-    if (!expression) continue;
-    const entry = schemaEvidence(definition, spec, variables, expression);
-    if (!entry) return undefined;
-    entries.push(entry);
-  }
-  const sourceRefs = sourceRefEvidenceForDefinition(definition, bindings);
-  if (!sourceRefs) return undefined;
-  return {
-    metadata: Object.fromEntries(
-      entries.map((entry) => [entry.metadataKey, entry.schema]),
-    ),
-    sourceRefs: [...entries.map((entry) => entry.sourceRef), ...sourceRefs],
-  };
-}
-
-function schemaEvidence(
-  definition: NativeDefinition,
-  spec: NativeDirectSchemaSpec,
-  variables: ReadonlyMap<string, NativeVariable>,
-  expression: Expression,
-):
-  | {
-      readonly metadataKey: string;
-      readonly schema: unknown;
-      readonly sourceRef: SourceRefFact;
-    }
-  | undefined {
-  if (!isIdentifier(expression)) return undefined;
-  const schemaVariable = variables.get(expression.text);
-  if (!schemaVariable) return undefined;
-  const schema = nativeZodExpressionToJsonSchema(
-    schemaVariable.file,
-    schemaVariable.initializer,
-    (name) => variables.get(name)?.initializer,
-  );
-  if (!schema) return undefined;
-  return {
-    metadataKey: spec.metadataKey,
-    schema,
-    sourceRef: {
-      definitionId: definition.id,
-      ref: {
-        id: `${definition.id}:source:schema:${spec.property}:${schemaVariable.name}`,
-        role: "schema",
-        property: spec.property,
-        symbol: schemaVariable.name,
-        source: nativeSourceForNode(
-          schemaVariable.file,
-          schemaVariable.declaration,
-        ),
-        snippet: nativeSourceSnippetForNode(
-          schemaVariable.file,
-          schemaVariable.declaration,
-        ),
-        fidelity: "resolved",
-        metadata: { schemaKind: "zod", parsedSchema: true },
-      },
-    },
-  };
-}
-
-function definitionFact(
-  definition: NativeDefinition,
-  sourceEvidence: DefinitionSourceEvidence | undefined,
-  dependencyEvidence: NativeDependencyEvidence | undefined,
-): DefinitionFact {
-  return {
-    id: definition.id,
-    kind: definition.kind,
-    name: definition.name,
-    fidelity: "resolved",
-    status: "active",
-    metadata: {
-      ...(sourceEvidence?.metadata ?? {}),
-      ...(dependencyEvidence?.facts ? { facts: dependencyEvidence.facts } : {}),
-    },
-    sourceRefs: [],
-  };
-}
-
-function zipDefinitions<TValue>(
-  definitions: readonly NativeDefinition[],
-  values: readonly (TValue | undefined)[],
-):
-  | readonly { readonly definition: NativeDefinition; readonly value: TValue }[]
-  | undefined {
-  if (definitions.length !== values.length) return undefined;
-  const pairs = definitions.map((definition, index) => {
-    const value = values[index];
-    return value ? { definition, value } : undefined;
-  });
-  return presentValues(pairs);
-}
-
-function presentValues<TValue>(
-  values: readonly (TValue | undefined)[],
-): readonly TValue[] | undefined {
-  return values.every((value): value is TValue => value !== undefined)
-    ? values
-    : undefined;
-}
-
-function mergeNativeDirectFacts(
-  facts: readonly IndexPatchFacts[],
-): IndexPatchFacts {
-  return {
-    definitions: facts.flatMap((entry) => entry.definitions ?? []),
-    relations: facts.flatMap((entry) => entry.relations ?? []),
-    sourceRefs: facts.flatMap((entry) => entry.sourceRefs ?? []),
-    diagnostics: facts.flatMap((entry) => entry.diagnostics ?? []),
-  };
 }

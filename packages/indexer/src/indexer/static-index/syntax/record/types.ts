@@ -22,6 +22,8 @@ export type {
   StaticSourceMatch,
   StaticSourceMatchBase,
   StaticSyntaxValue,
+  StaticTaggedTemplateExpression,
+  StaticTaggedTemplateValue,
   StaticTemplateValue,
   StaticUnsupportedValue,
 } from "./value-types";

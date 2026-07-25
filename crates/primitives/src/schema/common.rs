@@ -62,6 +62,10 @@ pub(crate) fn child_values(value: &StaticSyntaxValue) -> Vec<&StaticSyntaxValue>
             .chain(args.iter())
             .collect(),
         StaticSyntaxValue::Template { expressions, .. } => expressions.iter().collect(),
+        StaticSyntaxValue::TaggedTemplate { expressions, .. } => expressions
+            .iter()
+            .map(|expression| &expression.value)
+            .collect(),
         _ => Vec::new(),
     }
 }

@@ -194,6 +194,8 @@ export interface SemanticDefinitionEnrichment {
  * Shared semantic analyzer context for candidate-level analyzers.
  */
 export interface SemanticAnalyzerContext {
+  /** Absolute Project Index root used for stable project-relative evidence. */
+  readonly root: string;
   /** Backend-neutral compiler view for source, symbol, and type queries. */
   readonly view: SemanticAnalyzerView;
 }

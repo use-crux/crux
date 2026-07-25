@@ -8,12 +8,16 @@ Prompt strings, input shapes, output schemas, and model settings tend to scatter
 The prompt does not call a model by itself. Adapters such as `@use-crux/ai`, `@use-crux/openai`, `@use-crux/google`, and `@use-crux/anthropic` execute the same prompt definition against their SDKs.
 
 ```ts twoslash title="support-prompt.ts"
-import { context, prompt } from "@use-crux/core";
+import { context, md, prompt } from "@use-crux/core";
 import { z } from "zod";
 
 const brand = context({
   id: "brand",
-  system: "Use a concise, helpful support tone.",
+  system: md`
+    ## Voice
+
+    Be concise and helpful.
+  `,
 });
 
 export const answerSupport = prompt({
@@ -22,11 +26,120 @@ export const answerSupport = prompt({
   input: z.object({
     question: z.string(),
   }),
-  system: "You are a product support assistant.",
-  prompt: ({ input }) => input.question,
+  system: md`
+    # Role
+
+    You are a product support assistant.
+  `,
+  prompt: ({ input }) => md`
+    ## Question
+
+    ${input.question}
+  `,
   settings: { temperature: 0.2 },
 });
 ```
+
+`md` is optional Markdown-oriented text composition. It uses ordinary TypeScript expressions and resolves to plain text; Crux does not parse or render Markdown. Existing strings remain fully supported and keep their exact behavior:
+
+```ts
+prompt({
+  system: "You are concise.",
+  prompt: ({ input }) => input.question,
+});
+```
+
+## Compose Prompt Text With `md`
+
+Put a multiline value on its own interpolation line when it should inherit that line's indentation. Keep scalar values inline when no continuation indentation is wanted.
+
+```ts
+const audience = "support";
+const evidence = md`
+  1. Account is active.
+  2. Invoice is overdue.
+`;
+
+const instructions = md`
+  # Review
+
+  - Evidence:
+    ${evidence}
+
+  Audience: ${audience}
+`;
+```
+
+The block interpolation above renders as:
+
+```md
+# Review
+
+- Evidence:
+  1. Account is active.
+  2. Invoice is overdue.
+
+Audience: support
+```
+
+Use TypeScript for conditions and repetition. `false`, `null`, and `undefined` omit content; when one is alone on a block line, its carrier line disappears without leaving an extra blank line. Arrays of fragments render one item per line in block position.
+
+```ts
+const warning = input.warning && md`> Warning: ${input.warning}`;
+
+const report = md`
+  # Report
+
+  ${warning}
+
+  ## Events
+
+  ${input.events.map((event) => md`- **${event.type}:** ${event.summary}`)}
+`;
+```
+
+Objects are rejected as ordinary interpolations so they cannot silently become `[object Object]`. Make intentional JSON explicit:
+
+````ts
+const account = md`
+  ## Account
+
+  ```json
+  ${md.json(input.account)}
+  ```
+`;
+````
+
+Extract a named fragment when nesting starts to obscure the prompt:
+
+```ts
+const outputRules = md`
+  ## Output
+
+  - State uncertainty.
+  - Cite the relevant event.
+`;
+
+const supportSystem = md`
+  # Role
+
+  You are a support specialist.
+
+  ${outputRules}
+`;
+```
+
+Structured text does not change capability placement. Contexts, memory, retrieval, skills, and other contributors still belong in `use: []`; a context's `md` value only formats that context's own contribution.
+
+Crux-aware developer tools can recognize canonical `md` tags through supported
+imports, aliases, and re-exports. The Project Index records source authoring
+evidence as `metadata.promptText` with `tag: "md"`, `language: "markdown"`, and
+a `static` or `dynamic` lifecycle; this does not render Markdown or mark text
+trusted. If `tsconfig.paths` can intercept the exact `@use-crux/core` package
+root, source attribution fails closed, while runtime prompt behavior remains
+unchanged. See the [prompt
+reference](/docs/reference/crux-core/prompts#inspection-and-project-index-evidence)
+for the exact shape.
 
 ## The Mental Model
 

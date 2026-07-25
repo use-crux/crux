@@ -113,6 +113,10 @@ fn calls_for_value(value: &StaticSyntaxValue) -> Vec<StaticFunctionCallValue> {
         StaticSyntaxValue::Template { expressions, .. } => {
             expressions.iter().flat_map(calls_for_value).collect()
         }
+        StaticSyntaxValue::TaggedTemplate { expressions, .. } => expressions
+            .iter()
+            .flat_map(|expression| calls_for_value(&expression.value))
+            .collect(),
         _ => Vec::new(),
     }
 }

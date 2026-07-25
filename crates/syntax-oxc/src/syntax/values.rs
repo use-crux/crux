@@ -2,7 +2,10 @@ use oxc_ast::ast::*;
 use oxc_span::{GetSpan, Span};
 
 use crate::{
-    protocol::{LiteralValue, StaticCalleeRecord, StaticInitializerRecord, StaticSyntaxValue},
+    protocol::{
+        LiteralValue, StaticCalleeRecord, StaticInitializerRecord, StaticSyntaxValue,
+        StaticTaggedTemplateExpression,
+    },
     syntax::argument_values::{argument_value, array_element_value, call_value},
     syntax::function_values::{function_value_from_arrow, function_value_from_function},
     syntax::semantic_imports::SemanticImportIndex,
@@ -51,6 +54,9 @@ pub fn syntax_value_from_expression(
                 .map(|expression| syntax_value_from_expression(view, expression, imports))
                 .collect(),
         },
+        Expression::TaggedTemplateExpression(tagged) => {
+            tagged_template_value(view, tagged, imports)
+        }
         Expression::AwaitExpression(await_expression) => {
             syntax_value_from_expression(view, &await_expression.argument, imports)
         }
@@ -74,6 +80,28 @@ pub fn syntax_value_from_expression(
             expression.span(),
             syntax_kind_for_expression(expression),
         ),
+    }
+}
+
+pub(crate) fn tagged_template_value(
+    view: &SourceView<'_>,
+    tagged: &TaggedTemplateExpression<'_>,
+    imports: &SemanticImportIndex<'_>,
+) -> StaticSyntaxValue {
+    StaticSyntaxValue::TaggedTemplate {
+        tag: callee_record_from_expression(&tagged.tag, imports),
+        text: view.text_for_span(&tagged.quasi),
+        expressions: tagged
+            .quasi
+            .expressions
+            .iter()
+            .map(|expression| StaticTaggedTemplateExpression {
+                value: syntax_value_from_expression(view, expression, imports),
+                source: view.location_for_span(expression),
+            })
+            .collect(),
+        source: view.location_for_span(tagged),
+        snippet: Some(view.snippet_for_span(tagged)),
     }
 }
 

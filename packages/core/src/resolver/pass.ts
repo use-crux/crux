@@ -19,7 +19,7 @@ import type { ResolvedPrompt } from "./types";
 import type { ToolMiddleware } from "../tools/types";
 import { LOAD_REFERENCE_TOOL_NAME, LOAD_SKILL_TOOL_NAME } from "../skill/tools";
 import {
-  applyPromptAdaptationText,
+  applyPromptAdaptation,
   applySystemAdaptationBlocks,
   applySystemAdaptationText,
   foldSystemIntoMessagesWithBoundary,
@@ -65,7 +65,8 @@ import {
   alignSystemIngressBlocks,
   attachSystemIngressCarrier,
 } from "./system-ingress-provenance";
-import { renderPromptText, resolveSystemContent } from "./system-content";
+import { resolveSystemContent } from "./system-content";
+import { inspectPromptText, resolvePromptText } from "./prompt-content";
 import { createToolMergeAccumulator, type ToolOwnerLabel } from "./tool-merge";
 import type {
   PromptResolutionPass,
@@ -73,9 +74,15 @@ import type {
   ResolveCallOptions,
 } from "./compiler-types";
 
-function promptApprovalDeclarations(map: ToolApprovalMap | undefined): ApprovalDeclaration[] {
+function promptApprovalDeclarations(
+  map: ToolApprovalMap | undefined,
+): ApprovalDeclaration[] {
   if (!map) return [];
-  return Object.entries(map).map(([key, policy]) => ({ layer: "prompt" as const, key, policy }));
+  return Object.entries(map).map(([key, policy]) => ({
+    layer: "prompt" as const,
+    key,
+    policy,
+  }));
 }
 
 /** Validate prompt config invariants that the compiler depends on. */
@@ -201,6 +208,7 @@ export async function runPromptPass(
     config.system,
     guardedInput,
     ports.tokenizer.count,
+    config.id,
   );
   const composed = await buildSystemMessage(
     ownSystem,
@@ -210,7 +218,8 @@ export async function runPromptPass(
     ports,
     {
       ownProviderCache: config.cache?.provider === true,
-      ownSystemIsStatic: typeof config.system === "string",
+      ownSystemIsStatic:
+        config.system !== undefined && typeof config.system !== "function",
       ownSystemIsDynamic: typeof config.system === "function",
       promptId: config.id,
     },
@@ -236,6 +245,7 @@ export async function runPromptPass(
   const inspectionSystem = system;
 
   let promptText: string | undefined;
+  let promptInfo: ReturnType<typeof inspectPromptText> = undefined;
   let messages: AnyMessage[] | undefined;
   let foldedSystem:
     | ReturnType<typeof foldSystemIntoMessagesWithBoundary>
@@ -253,13 +263,14 @@ export async function runPromptPass(
     messages = foldedSystem?.messages ?? messages;
     system = "";
   } else {
-    promptText = await renderPromptText(config.prompt, guardedInput);
-    promptText = applyPromptAdaptationText(promptText, adaptation);
+    const resolvedPromptText = applyPromptAdaptation(
+      resolvePromptText(config.prompt, guardedInput, config.id),
+      adaptation,
+    );
+    promptText = resolvedPromptText?.text;
+    promptInfo = inspectPromptText(resolvedPromptText, ports.tokenizer.count);
   }
 
-  const promptInfo = promptText
-    ? { text: promptText, tokens: ports.tokenizer.count(promptText) }
-    : undefined;
   assertNoObjectPromptText(promptText, config.id);
 
   const {
@@ -335,8 +346,10 @@ export async function runPromptPass(
 
   const merged = toolMerge.tools;
   if (Object.keys(merged).length > 0) resolved.tools = merged;
-  if (postMerge.toolSources.length > 0) resolved.toolSources = postMerge.toolSources;
-  if (toolApprovalDeclarations.length > 0) resolved.toolApprovalDeclarations = toolApprovalDeclarations;
+  if (postMerge.toolSources.length > 0)
+    resolved.toolSources = postMerge.toolSources;
+  if (toolApprovalDeclarations.length > 0)
+    resolved.toolApprovalDeclarations = toolApprovalDeclarations;
   const toolMiddleware = mergeToolMiddleware(
     postMerge.injectedToolMiddleware,
     config.toolMiddleware,
@@ -397,7 +410,12 @@ export async function runPromptPass(
       tokenBudget: opts.tokenBudget,
       tools: toolNames.length > 0 ? toolNames : undefined,
       ...(toolNames.length > 0
-        ? { toolApprovals: inspectToolApprovalPolicies(toolNames, toolApprovalDeclarations) }
+        ? {
+            toolApprovals: inspectToolApprovalPolicies(
+              toolNames,
+              toolApprovalDeclarations,
+            ),
+          }
         : {}),
     },
   };

@@ -37,11 +37,13 @@ export type {
   StaticSyntaxFrontendName,
   StaticSyntaxFrontendOptions,
   StaticSyntaxValue,
+  StaticTaggedTemplateExpression,
+  StaticTaggedTemplateValue,
   StaticTemplateValue,
   StaticUnsupportedValue,
-} from './schema'
+} from "./schema";
 export {
   OXC_STATIC_SYNTAX_FRONTEND_IDENTITY,
   staticRecordSchemaProperty,
   staticSyntaxValueToJsonSchema,
-} from './schema'
+} from "./schema";

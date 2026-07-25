@@ -88,6 +88,14 @@ export interface ProjectSourceRef {
     argumentName?: string;
     toolMapContributor?: "spread" | "property";
     routingTarget?: boolean;
+    promptText?: {
+      /** Canonical Crux export, independent of the local alias. */
+      tag: "md";
+      /** Editor language for literal regions; Crux does not parse or render it. */
+      language: "markdown";
+      /** Direct authored field versus value produced through a callback. */
+      lifecycle: "static" | "dynamic";
+    };
     extensions?: Record<string, unknown>;
   };
 }
@@ -1285,6 +1293,13 @@ export const ProjectSourceRefSchema = z.object({
       argumentName: z.string().optional(),
       toolMapContributor: z.enum(["spread", "property"]).optional(),
       routingTarget: z.boolean().optional(),
+      promptText: z
+        .object({
+          tag: z.literal("md"),
+          language: z.literal("markdown"),
+          lifecycle: z.enum(["static", "dynamic"]),
+        })
+        .optional(),
       extensions: z.record(z.string(), z.unknown()).optional(),
     })
     .optional(),

@@ -1,49 +1,55 @@
-import type { SourceLocation, SourceSnippet } from '@use-crux/core/project-index'
-import type { StaticCalleeRecord, StaticInitializerRecord } from './types'
+import type {
+  SourceLocation,
+  SourceSnippet,
+} from "@use-crux/core/project-index";
+import type { StaticCalleeRecord, StaticInitializerRecord } from "./types";
 
 /** Source match emitted for a Project Index extractor candidate. */
-export type StaticSourceMatch = StaticCallSourceMatch | StaticNewSourceMatch | StaticObjectSourceMatch
+export type StaticSourceMatch =
+  | StaticCallSourceMatch
+  | StaticNewSourceMatch
+  | StaticObjectSourceMatch;
 
 /** Fields shared by source matches. */
 export interface StaticSourceMatchBase {
   /** Authored binding name or deterministic fallback for call-site matches. */
-  readonly variableName: string
+  readonly variableName: string;
   /** Authored variable whose initializer lexically contains this nested match. */
-  readonly ownerVariableName?: string
+  readonly ownerVariableName?: string;
   /** Project-relative deterministic fallback name. */
-  readonly localName: string
+  readonly localName: string;
   /** Whether the declaration was exported from this source file. */
-  readonly exported: boolean
+  readonly exported: boolean;
   /** Source location of the matched expression. */
-  readonly source: SourceLocation
+  readonly source: SourceLocation;
   /** Source snippet for the matched expression. */
-  readonly snippet?: SourceSnippet
+  readonly snippet?: SourceSnippet;
   /** Additional local initializers visible at this match, such as constants inside a factory function. */
-  readonly localInitializers?: readonly StaticInitializerRecord[]
+  readonly localInitializers?: readonly StaticInitializerRecord[];
 }
 
 /** Factory call match such as `prompt({ ... })`. */
 export interface StaticCallSourceMatch extends StaticSourceMatchBase {
-  readonly kind: 'call'
+  readonly kind: "call";
   /** Whether syntax proves the call runs during eager module/class initialization. */
-  readonly eagerExecution?: boolean
-  readonly callee: StaticCalleeRecord
-  readonly args: readonly StaticSyntaxValue[]
-  readonly objectArg?: StaticObjectValue
+  readonly eagerExecution?: boolean;
+  readonly callee: StaticCalleeRecord;
+  readonly args: readonly StaticSyntaxValue[];
+  readonly objectArg?: StaticObjectValue;
 }
 
 /** Constructor match such as `new Agent({ ... })`. */
 export interface StaticNewSourceMatch extends StaticSourceMatchBase {
-  readonly kind: 'new'
-  readonly callee: StaticCalleeRecord
-  readonly args: readonly StaticSyntaxValue[]
-  readonly objectArg?: StaticObjectValue
+  readonly kind: "new";
+  readonly callee: StaticCalleeRecord;
+  readonly args: readonly StaticSyntaxValue[];
+  readonly objectArg?: StaticObjectValue;
 }
 
 /** Object literal match, usually for first-party compatibility object schemas. */
 export interface StaticObjectSourceMatch extends StaticSourceMatchBase {
-  readonly kind: 'object'
-  readonly object: StaticObjectValue
+  readonly kind: "object";
+  readonly object: StaticObjectValue;
 }
 
 /** JSON-safe expression value understood by record-backed extractor readers. */
@@ -55,117 +61,138 @@ export type StaticSyntaxValue =
   | StaticArrayValue
   | StaticCallValue
   | StaticTemplateValue
+  | StaticTaggedTemplateValue
   | StaticFunctionValue
-  | StaticUnsupportedValue
+  | StaticUnsupportedValue;
 
 /** Literal values that can be represented without evaluation. */
 export interface StaticLiteralValue {
-  readonly kind: 'literal'
-  readonly value: string | number | boolean | null
+  readonly kind: "literal";
+  readonly value: string | number | boolean | null;
 }
 
 /** Identifier reference value. */
 export interface StaticIdentifierValue {
-  readonly kind: 'identifier'
-  readonly name: string
+  readonly kind: "identifier";
+  readonly name: string;
 }
 
 /** Property access reference value such as `components.crux`. */
 export interface StaticPropertyAccessValue {
-  readonly kind: 'property-access'
-  readonly name: string
-  readonly path: readonly string[]
+  readonly kind: "property-access";
+  readonly name: string;
+  readonly path: readonly string[];
 }
 
 /** Object literal value. */
 export interface StaticObjectValue {
-  readonly kind: 'object'
-  readonly properties: readonly StaticObjectProperty[]
-  readonly source: SourceLocation
-  readonly snippet?: SourceSnippet
+  readonly kind: "object";
+  readonly properties: readonly StaticObjectProperty[];
+  readonly source: SourceLocation;
+  readonly snippet?: SourceSnippet;
 }
 
 /** Object property projected into a stable name/value pair. */
 export interface StaticObjectProperty {
-  readonly name: string
-  readonly value: StaticSyntaxValue
-  readonly shorthand: boolean
+  readonly name: string;
+  readonly value: StaticSyntaxValue;
+  readonly shorthand: boolean;
   /** Whether this property represents an object spread such as `{ ...tools }`. */
-  readonly spread?: boolean
-  readonly source: SourceLocation
+  readonly spread?: boolean;
+  readonly source: SourceLocation;
 }
 
 /** Array literal value. */
 export interface StaticArrayValue {
-  readonly kind: 'array'
-  readonly elements: readonly StaticSyntaxValue[]
+  readonly kind: "array";
+  readonly elements: readonly StaticSyntaxValue[];
 }
 
 /** Nested call expression value. */
 export interface StaticCallValue {
-  readonly kind: 'call'
-  readonly callee: StaticCalleeRecord
+  readonly kind: "call";
+  readonly callee: StaticCalleeRecord;
   /** Receiver expression for method calls such as `z.string().describe(...)`. */
-  readonly receiver?: StaticSyntaxValue
-  readonly args: readonly StaticSyntaxValue[]
-  readonly source: SourceLocation
-  readonly snippet?: SourceSnippet
+  readonly receiver?: StaticSyntaxValue;
+  readonly args: readonly StaticSyntaxValue[];
+  readonly source: SourceLocation;
+  readonly snippet?: SourceSnippet;
 }
 
 /** Template literal value with conservative expression placeholders. */
 export interface StaticTemplateValue {
-  readonly kind: 'template'
-  readonly text: string
-  readonly expressions: readonly StaticSyntaxValue[]
+  readonly kind: "template";
+  readonly text: string;
+  readonly expressions: readonly StaticSyntaxValue[];
+}
+
+/** One expression embedded in a tagged template, with its exact authored start. */
+export interface StaticTaggedTemplateExpression {
+  readonly value: StaticSyntaxValue;
+  readonly source: SourceLocation;
+}
+
+/** Tag-neutral template expression retained as exact static syntax evidence. */
+export interface StaticTaggedTemplateValue {
+  readonly kind: "tagged-template";
+  readonly tag: StaticCalleeRecord;
+  /** Exact template-literal text excluding the tag, including backticks. */
+  readonly text: string;
+  /** Expressions in source order with ranges excluding the `${` and `}` delimiters. */
+  readonly expressions: readonly StaticTaggedTemplateExpression[];
+  /** Full tagged-expression start, beginning at the tag. */
+  readonly source: SourceLocation;
+  /** Full tagged-expression source and range, including the tag and template. */
+  readonly snippet?: SourceSnippet;
 }
 
 /** Function-like value retained as source evidence without executable details. */
 export interface StaticFunctionValue {
-  readonly kind: 'function'
+  readonly kind: "function";
   /** Parameter names visible on this function, in declaration order. */
-  readonly parameterNames?: readonly string[]
+  readonly parameterNames?: readonly string[];
   /** Bindings introduced by the first parameter, preserving object-pattern source property names. */
-  readonly firstParameterBindings?: readonly StaticFunctionParameterBinding[]
+  readonly firstParameterBindings?: readonly StaticFunctionParameterBinding[];
   /** Ordered call expressions visible inside the function body. */
-  readonly calls: readonly StaticFunctionCallValue[]
+  readonly calls: readonly StaticFunctionCallValue[];
   /**
    * Return values visible inside the function body.
    *
    * Native frontends resolve direct identifier returns at record-production time using their binding graph.
    * Consumers must not reinterpret `localInitializers` as a lazy scope database for return-site resolution.
    */
-  readonly returns: readonly StaticSyntaxValue[]
+  readonly returns: readonly StaticSyntaxValue[];
   /** Function-scoped initializer evidence retained for display and compatibility, not lazy binding resolution. */
-  readonly localInitializers: readonly StaticInitializerRecord[]
-  readonly source: SourceLocation
-  readonly snippet?: SourceSnippet
+  readonly localInitializers: readonly StaticInitializerRecord[];
+  readonly source: SourceLocation;
+  readonly snippet?: SourceSnippet;
 }
 
 /** One binding introduced by a function parameter pattern. */
 export interface StaticFunctionParameterBinding {
   /** Local identifier name visible inside the function body. */
-  readonly name: string
+  readonly name: string;
   /** Source object property name when this binding came from object destructuring. */
-  readonly propertyName?: string
+  readonly propertyName?: string;
 }
 
 /** Function-body call evidence normalized without exposing parser AST nodes. */
 export interface StaticFunctionCallValue {
   /** Callee or method identity. */
-  readonly callee: StaticCalleeRecord
+  readonly callee: StaticCalleeRecord;
   /** Receiver expression for method calls such as `flow.step(...)`. */
-  readonly receiver?: StaticSyntaxValue
+  readonly receiver?: StaticSyntaxValue;
   /** Normalized arguments supplied to the call. */
-  readonly args: readonly StaticSyntaxValue[]
+  readonly args: readonly StaticSyntaxValue[];
   /** Source location of the call expression. */
-  readonly source: SourceLocation
+  readonly source: SourceLocation;
   /** Source snippet for the call expression. */
-  readonly snippet?: SourceSnippet
+  readonly snippet?: SourceSnippet;
 }
 
 /** Expression shape the syntax record cannot safely model yet. */
 export interface StaticUnsupportedValue {
-  readonly kind: 'unsupported'
-  readonly syntaxKind: string
-  readonly source: SourceLocation
+  readonly kind: "unsupported";
+  readonly syntaxKind: string;
+  readonly source: SourceLocation;
 }

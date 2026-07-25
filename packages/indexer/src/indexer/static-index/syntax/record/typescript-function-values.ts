@@ -10,10 +10,10 @@ import { sourceForNode, sourceSnippetForNode } from "../../../ast/snippets";
 import {
   bindingEntries,
   bindingNames,
-  staticCalleeRecordFromExpression,
   staticInitializerRecordsFromDeclaration,
   staticSyntaxValueFromExpression,
 } from "./typescript-values";
+import { staticCalleeRecordFromExpression } from "./typescript-callee";
 import {
   createStaticSyntaxInitializerMap,
   resolveStaticSyntaxValue,

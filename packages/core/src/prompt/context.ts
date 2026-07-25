@@ -1,4 +1,4 @@
-import type { z } from 'zod'
+import type { z } from "zod";
 import type {
   Context,
   ContextDef,
@@ -10,22 +10,32 @@ import type {
   MatchSpec,
   MatchCases,
   ContextDefinitionWarning,
-} from './context-types'
-import type { DeepReadonly, InferContextInput } from './type-utils'
-import type { AnyToolSet } from '../types'
-import type { ToolApprovalMap } from '../tools/approval-policy'
-import { captureSource } from '../project-index/source'
-import type { CruxContextInjectableKind } from '../observability/contract'
-import { getInputShapeKeys } from './schema-shape'
-import { consumesFullPromptInput, withFullPromptInput } from './internal-full-input'
+} from "./context-types";
+import type { DeepReadonly, InferContextInput } from "./type-utils";
+import type { AnyToolSet } from "../types";
+import type { ToolApprovalMap } from "../tools/approval-policy";
+import { captureSource } from "../project-index/source";
+import type { CruxContextInjectableKind } from "../observability/contract";
+import { getInputShapeKeys } from "./schema-shape";
+import {
+  consumesFullPromptInput,
+  withFullPromptInput,
+} from "./internal-full-input";
+import type { PromptText } from "../prompt-text";
+import { isPromptText } from "../prompt-text/internal";
 
 /** Module-scoped map: frozen context → definition-site source location. */
-const definitionSourceMap = new WeakMap<object, { file: string; line: number; column?: number }>()
-const CONTEXT_IDENTITY = Symbol.for('@use-crux/core/context-identity')
+const definitionSourceMap = new WeakMap<
+  object,
+  { file: string; line: number; column?: number }
+>();
+const CONTEXT_IDENTITY = Symbol.for("@use-crux/core/context-identity");
 
 /** Retrieve the definition-site source location for a context instance. */
-export function getContextDefinitionSource(ctx: object): { file: string; line: number; column?: number } | undefined {
-  return definitionSourceMap.get(ctx)
+export function getContextDefinitionSource(
+  ctx: object,
+): { file: string; line: number; column?: number } | undefined {
+  return definitionSourceMap.get(ctx);
 }
 
 /**
@@ -38,53 +48,59 @@ export type LeafContextOf<T> =
     ? T
     : T extends Record<string, unknown>
       ? { [K in keyof T]: LeafContextOf<T[K]> }[keyof T]
-      : never
+      : never;
 
 /** The return type of `createContexts()` — a frozen tree with a hidden `_all` flat accessor. */
-export type ContextTreeResult<T> = DeepReadonly<T> & { readonly _all: LeafContextOf<T>[] }
+export type ContextTreeResult<T> = DeepReadonly<T> & {
+  readonly _all: LeafContextOf<T>[];
+};
 
 /** Static context config (no input schema). */
 interface StaticContextDef {
   /** Unique identifier for introspection and debugging. */
-  id?: string
+  id?: string;
   /** Human-readable description (surfaces in IDE hover). */
-  description?: string
-  /** Static system message text — always contributes the same content. */
-  system: string | ContextSystemContent
+  description?: string;
+  /** Static system content — always contributes the same authored value. */
+  system: string | ContextSystemContent | PromptText;
   /** Nested entries resolved before this context's own system text. */
-  use?: readonly import('./context-types').ContextEntry[]
+  use?: readonly import("./context-types").ContextEntry[];
   /** Priority for token-aware rendering (0–100). Default: `50`. */
-  priority?: number
+  priority?: number;
   /** Static tools to contribute to prompts that `use` this context. */
-  tools?: AnyToolSet
+  tools?: AnyToolSet;
   /**
    * Approval policy for tools contributed by this context.
    *
    * Exact keys must name this context's own tools. The `'*'` key applies only
    * to this context's own tools.
    */
-  toolApproval?: ToolApprovalMap
+  toolApproval?: ToolApprovalMap;
   /**
    * Predicate evaluated at resolve time. When false, context is excluded.
    * For static contexts, the predicate receives an empty input object.
    */
-  when?: (arg: { input: {} }) => boolean
+  when?: (arg: { input: {} }) => boolean;
   /** Provider cache hint: request a prompt-cache breakpoint for this block. Nothing app-side. */
-  cache?: boolean
+  cache?: boolean;
   /** Memoize this context's resolution app-side. Requires `id`. Dynamic `system` only. */
-  memo?: { ttl: number }
+  memo?: { ttl: number };
   /** Constraints contributed by this context. */
-  constraints?: import('../safety/constraint/types').Constraint[]
+  constraints?: import("../safety/constraint/types").Constraint[];
   /** Guardrails contributed by this context. */
-  guardrails?: import('../safety/guardrail/types').Guardrail[]
+  guardrails?: import("../safety/guardrail/types").Guardrail[];
 }
 
 /** Provider prompt-cache window used to detect contradictory short memo TTLs. */
-const PROVIDER_CACHE_WINDOW_MS = 300_000
-const contextFamilyMap = new WeakMap<object, CruxContextInjectableKind>()
+const PROVIDER_CACHE_WINDOW_MS = 300_000;
+const contextFamilyMap = new WeakMap<object, CruxContextInjectableKind>();
 
 function isContextSystemContent(value: unknown): value is ContextSystemContent {
-  return typeof value === 'object' && value !== null && Array.isArray((value as { segments?: unknown }).segments)
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    Array.isArray((value as { segments?: unknown }).segments)
+  );
 }
 
 function declaredInputFor(
@@ -92,13 +108,13 @@ function declaredInputFor(
   inputKeys: readonly string[],
   fullPromptInput: boolean,
 ): Record<string, unknown> {
-  if (fullPromptInput) return input
+  if (fullPromptInput) return input;
 
-  const declaredInput: Record<string, unknown> = {}
+  const declaredInput: Record<string, unknown> = {};
   for (const key of inputKeys) {
-    declaredInput[key] = input[key]
+    declaredInput[key] = input[key];
   }
-  return declaredInput
+  return declaredInput;
 }
 
 /**
@@ -130,87 +146,112 @@ function declaredInputFor(
  * @param def - Context configuration (static or dynamic).
  * @returns A frozen `Context` instance.
  */
-export function context(def: StaticContextDef): Context<z.ZodType<{}>>
-export function context<TInput extends z.ZodType>(def: ContextDef<TInput>): Context<TInput>
-export function context(def: StaticContextDef | ContextDef<z.ZodType>): Context<z.ZodType> {
-  const defSource = captureSource()
-  const { id, description, system } = def
-  const useEntries = 'use' in def && Array.isArray(def.use) ? [...def.use] : []
-  const inputSchema = 'input' in def ? def.input : undefined
-  const priority = 'priority' in def && def.priority !== undefined ? def.priority : 50
-  const isStaticSystem = typeof system === 'string' || isContextSystemContent(system)
-  const fullPromptInput = consumesFullPromptInput(def)
+export function context(def: StaticContextDef): Context<z.ZodType<{}>>;
+export function context<TInput extends z.ZodType>(
+  def: ContextDef<TInput>,
+): Context<TInput>;
+export function context(
+  def: StaticContextDef | ContextDef<z.ZodType>,
+): Context<z.ZodType> {
+  const defSource = captureSource();
+  const { id, description, system } = def;
+  const useEntries = "use" in def && Array.isArray(def.use) ? [...def.use] : [];
+  const inputSchema = "input" in def ? def.input : undefined;
+  const priority =
+    "priority" in def && def.priority !== undefined ? def.priority : 50;
+  const isStaticSystem =
+    typeof system === "string" ||
+    isPromptText(system) ||
+    isContextSystemContent(system);
+  const fullPromptInput = consumesFullPromptInput(def);
 
   // Extract input keys from the Zod schema shape (used for conflict detection)
-  const inputKeys: string[] = []
-  if (inputSchema) inputKeys.push(...getInputShapeKeys(inputSchema))
+  const inputKeys: string[] = [];
+  if (inputSchema) inputKeys.push(...getInputShapeKeys(inputSchema));
 
-  const systemFn: (input: Record<string, unknown>) => ContextSystemResult | Promise<ContextSystemResult> =
-    typeof system === 'string'
+  const systemFn: (
+    input: Record<string, unknown>,
+  ) => ContextSystemResult | Promise<ContextSystemResult> =
+    typeof system === "string"
       ? () => system
-      : isContextSystemContent(system)
+      : isPromptText(system)
         ? () => system
-        : (input) =>
-            (system as (arg: ContextSystemArg<unknown>) => ContextSystemResult | Promise<ContextSystemResult>)({
-              input: declaredInputFor(input, inputKeys, fullPromptInput),
-            })
+        : isContextSystemContent(system)
+          ? () => system
+          : (input) =>
+              (
+                system as (
+                  arg: ContextSystemArg<unknown>,
+                ) => ContextSystemResult | Promise<ContextSystemResult>
+              )({
+                input: declaredInputFor(input, inputKeys, fullPromptInput),
+              });
 
-  const toolsValue: unknown = 'tools' in def ? def.tools : undefined
-  const toolApproval = 'toolApproval' in def ? def.toolApproval : undefined
+  const toolsValue: unknown = "tools" in def ? def.tools : undefined;
+  const toolApproval = "toolApproval" in def ? def.toolApproval : undefined;
   const toolsFn: ((input: Record<string, unknown>) => AnyToolSet) | undefined =
     toolsValue === undefined
       ? undefined
-      : typeof toolsValue === 'function'
+      : typeof toolsValue === "function"
         ? (input) =>
             (toolsValue as (arg: ContextSystemArg<unknown>) => AnyToolSet)({
               input: declaredInputFor(input, inputKeys, fullPromptInput),
             })
-        : () => toolsValue as AnyToolSet
+        : () => toolsValue as AnyToolSet;
 
-  const rawFields: string[] = 'rawFields' in def && Array.isArray(def.rawFields) ? [...def.rawFields] : []
+  const rawFields: string[] =
+    "rawFields" in def && Array.isArray(def.rawFields)
+      ? [...def.rawFields]
+      : [];
 
   // Process context-level `when` predicate
-  const whenDef = 'when' in def ? (def as ContextDef<z.ZodType>).when : undefined
-  const whenFn: ((input: Record<string, unknown>) => boolean) | undefined = whenDef
-    ? (input) => whenDef({ input: declaredInputFor(input, inputKeys, fullPromptInput) } as ContextSystemArg<unknown>)
-    : undefined
+  const whenDef =
+    "when" in def ? (def as ContextDef<z.ZodType>).when : undefined;
+  const whenFn: ((input: Record<string, unknown>) => boolean) | undefined =
+    whenDef
+      ? (input) =>
+          whenDef({
+            input: declaredInputFor(input, inputKeys, fullPromptInput),
+          } as ContextSystemArg<unknown>)
+      : undefined;
 
-  const providerCache = 'cache' in def && def.cache === true
-  const memoTtl = 'memo' in def && def.memo ? def.memo.ttl : 0
+  const providerCache = "cache" in def && def.cache === true;
+  const memoTtl = "memo" in def && def.memo ? def.memo.ttl : 0;
 
   if (memoTtl > 0 && !id) {
     throw new Error(
-      'context(): memo requires an id for cache key derivation. ' + 'Add an `id` field to your context definition.',
-    )
+      "context(): memo requires an id for cache key derivation. " +
+        "Add an `id` field to your context definition.",
+    );
   }
 
   if (memoTtl > 0 && isStaticSystem) {
     throw new Error(
-      `context(${id ?? 'unknown'}): memo has no effect on a static context — remove memo or make \`system\` a function.`,
-    )
+      `context(${id ?? "unknown"}): memo has no effect on a static context — remove memo or make \`system\` a function.`,
+    );
   }
 
   const definitionWarnings: ContextDefinitionWarning[] =
     providerCache && memoTtl > 0 && memoTtl < PROVIDER_CACHE_WINDOW_MS
       ? [
           {
-            code: 'memo-cache-contradiction',
+            code: "memo-cache-contradiction",
             message:
               `context "${id}": cache: true asks the provider to reuse this block for ~5 minutes, ` +
               `but memo.ttl (${memoTtl}ms) declares it stale sooner. ` +
               `Raise memo.ttl to ≥300000 or drop the provider cache hint.`,
           },
         ]
-      : []
+      : [];
 
   const ctx = Object.freeze({
-    _tag: 'Context' as const,
+    _tag: "Context" as const,
     id,
     description,
     inputSchema,
     inputKeys: Object.freeze(inputKeys),
     systemFn,
-    systemKind: isStaticSystem ? 'static' : 'dynamic',
+    systemKind: isStaticSystem ? "static" : "dynamic",
     useEntries: Object.freeze(useEntries),
     priority,
     toolsFn,
@@ -220,15 +261,23 @@ export function context(def: StaticContextDef | ContextDef<z.ZodType>): Context<
     memoTtl,
     providerCache,
     definitionWarnings: Object.freeze(definitionWarnings),
-    constraints: Object.freeze([...('constraints' in def && Array.isArray(def.constraints) ? def.constraints : [])]),
-    guardrails: Object.freeze([...('guardrails' in def && Array.isArray(def.guardrails) ? def.guardrails : [])]),
+    constraints: Object.freeze([
+      ...("constraints" in def && Array.isArray(def.constraints)
+        ? def.constraints
+        : []),
+    ]),
+    guardrails: Object.freeze([
+      ...("guardrails" in def && Array.isArray(def.guardrails)
+        ? def.guardrails
+        : []),
+    ]),
     family: contextFamilyMap.get(def),
     [CONTEXT_IDENTITY]: Object.freeze({ ...def }),
-  })
+  });
 
-  if (defSource) definitionSourceMap.set(ctx, defSource)
+  if (defSource) definitionSourceMap.set(ctx, defSource);
 
-  return ctx
+  return ctx;
 }
 
 /**
@@ -238,12 +287,15 @@ export function context(def: StaticContextDef | ContextDef<z.ZodType>): Context<
  * `context()` with an explicit `input` schema instead.
  */
 export function contextWithFullPromptInput(
-  def: Omit<ContextDef<z.ZodType<Record<string, unknown>>>, 'input' | 'rawFields' | 'memo'>,
+  def: Omit<
+    ContextDef<z.ZodType<Record<string, unknown>>>,
+    "input" | "rawFields" | "memo"
+  >,
   family?: CruxContextInjectableKind,
 ): Context<z.ZodType<{}>> {
-  const fullInputDef = withFullPromptInput(def)
-  if (family) contextFamilyMap.set(fullInputDef, family)
-  return context(fullInputDef) as Context<z.ZodType<{}>>
+  const fullInputDef = withFullPromptInput(def);
+  if (family) contextFamilyMap.set(fullInputDef, family);
+  return context(fullInputDef) as Context<z.ZodType<{}>>;
 }
 
 /**
@@ -256,15 +308,20 @@ export function contextWithFullPromptInput(
 export function contextWithFamily<TInput extends z.ZodType>(
   def: ContextDef<TInput>,
   family: CruxContextInjectableKind,
-): Context<TInput>
-export function contextWithFamily(def: StaticContextDef, family: CruxContextInjectableKind): Context<z.ZodType<{}>>
+): Context<TInput>;
+export function contextWithFamily(
+  def: StaticContextDef,
+  family: CruxContextInjectableKind,
+): Context<z.ZodType<{}>>;
 export function contextWithFamily(
   def: StaticContextDef | ContextDef<z.ZodType>,
   family: CruxContextInjectableKind,
 ): Context<z.ZodType> {
-  contextFamilyMap.set(def, family)
-  const createContext = context as (contextDef: StaticContextDef | ContextDef<z.ZodType>) => Context<z.ZodType>
-  return createContext(def)
+  contextFamilyMap.set(def, family);
+  const createContext = context as (
+    contextDef: StaticContextDef | ContextDef<z.ZodType>,
+  ) => Context<z.ZodType>;
+  return createContext(def);
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -294,28 +351,30 @@ export function contextWithFamily(
  * ```
  */
 export function when<TCtx extends Context<z.ZodType>>(
-  predicate: (input: Partial<InferContextInput<TCtx>> & Record<string, unknown>) => boolean,
+  predicate: (
+    input: Partial<InferContextInput<TCtx>> & Record<string, unknown>,
+  ) => boolean,
   ctx: TCtx,
-): ConditionalContext<TCtx>
-export function when<TInput extends Record<string, unknown>, TCtx extends Context<z.ZodType> = Context<z.ZodType>>(
-  predicate: (input: TInput) => boolean,
-  ctx: TCtx,
-): ConditionalContext<TCtx>
+): ConditionalContext<TCtx>;
+export function when<
+  TInput extends Record<string, unknown>,
+  TCtx extends Context<z.ZodType> = Context<z.ZodType>,
+>(predicate: (input: TInput) => boolean, ctx: TCtx): ConditionalContext<TCtx>;
 export function when(
   predicate: (input: Record<string, unknown>) => boolean,
   ctx: Context<z.ZodType>,
 ): ConditionalContext<Context<z.ZodType>> {
-  const defSource = captureSource()
+  const defSource = captureSource();
 
   const wrapped = Object.freeze({
-    _tag: 'ConditionalContext' as const,
+    _tag: "ConditionalContext" as const,
     context: ctx,
     predicate: predicate as (input: Record<string, unknown>) => boolean,
-  })
+  });
 
-  if (defSource) definitionSourceMap.set(wrapped, defSource)
+  if (defSource) definitionSourceMap.set(wrapped, defSource);
 
-  return wrapped
+  return wrapped;
 }
 
 /**
@@ -344,35 +403,35 @@ export function when(
  * ```
  */
 export function match<const TCases extends MatchCases>(opts: {
-  on: () => Extract<keyof TCases, string>
-  cases: TCases
-  default?: Context<z.ZodType> | readonly Context<z.ZodType>[]
-}): MatchSpec<TCases>
+  on: () => Extract<keyof TCases, string>;
+  cases: TCases;
+  default?: Context<z.ZodType> | readonly Context<z.ZodType>[];
+}): MatchSpec<TCases>;
 export function match<
   const TCases extends MatchCases,
   TInput extends Record<string, unknown> = Record<string, unknown>,
 >(opts: {
-  on: (input: TInput) => Extract<keyof TCases, string>
-  cases: TCases
-  default?: Context<z.ZodType> | readonly Context<z.ZodType>[]
-}): MatchSpec<TCases>
+  on: (input: TInput) => Extract<keyof TCases, string>;
+  cases: TCases;
+  default?: Context<z.ZodType> | readonly Context<z.ZodType>[];
+}): MatchSpec<TCases>;
 export function match(opts: {
-  on: (input: Record<string, unknown>) => string
-  cases: MatchCases
-  default?: Context<z.ZodType> | readonly Context<z.ZodType>[]
+  on: (input: Record<string, unknown>) => string;
+  cases: MatchCases;
+  default?: Context<z.ZodType> | readonly Context<z.ZodType>[];
 }): MatchSpec<MatchCases> {
-  const defSource = captureSource()
+  const defSource = captureSource();
 
   const spec = Object.freeze({
-    _tag: 'MatchSpec' as const,
+    _tag: "MatchSpec" as const,
     on: opts.on as (input: Record<string, unknown>) => string,
     cases: Object.freeze({ ...opts.cases }),
     default: opts.default,
-  }) satisfies MatchSpec<MatchCases>
+  }) satisfies MatchSpec<MatchCases>;
 
-  if (defSource) definitionSourceMap.set(spec, defSource)
+  if (defSource) definitionSourceMap.set(spec, defSource);
 
-  return spec
+  return spec;
 }
 
 /**
@@ -406,51 +465,62 @@ export function match(opts: {
  * @param tree - Nested object of contexts and context groups.
  * @returns A deep-frozen tree with `_all` flat accessor.
  */
-export function createContexts<const T extends ContextTree>(tree: T): ContextTreeResult<T> {
-  const all: Context<z.ZodType>[] = []
-  const seenIds = new Map<string, string>()
+export function createContexts<const T extends ContextTree>(
+  tree: T,
+): ContextTreeResult<T> {
+  const all: Context<z.ZodType>[] = [];
+  const seenIds = new Map<string, string>();
 
   function validate(node: unknown, path: string): void {
-    if (node && typeof node === 'object' && '_tag' in node && (node as { _tag: unknown })._tag === 'Context') {
-      const ctx = node as Context<z.ZodType>
+    if (
+      node &&
+      typeof node === "object" &&
+      "_tag" in node &&
+      (node as { _tag: unknown })._tag === "Context"
+    ) {
+      const ctx = node as Context<z.ZodType>;
       if (ctx.id) {
-        const existingPath = seenIds.get(ctx.id)
+        const existingPath = seenIds.get(ctx.id);
         if (existingPath) {
-          throw new Error(`createContexts: duplicate context id "${ctx.id}" at "${existingPath}" and "${path}".`)
+          throw new Error(
+            `createContexts: duplicate context id "${ctx.id}" at "${existingPath}" and "${path}".`,
+          );
         }
-        seenIds.set(ctx.id, path)
+        seenIds.set(ctx.id, path);
       }
-      all.push(ctx)
-      return
+      all.push(ctx);
+      return;
     }
-    if (node && typeof node === 'object' && !Array.isArray(node)) {
+    if (node && typeof node === "object" && !Array.isArray(node)) {
       for (const [key, value] of Object.entries(node)) {
-        validate(value, path ? `${path}.${key}` : key)
+        validate(value, path ? `${path}.${key}` : key);
       }
-      return
+      return;
     }
-    throw new Error(`createContexts: invalid value at "${path}" — expected Context or nested object`)
+    throw new Error(
+      `createContexts: invalid value at "${path}" — expected Context or nested object`,
+    );
   }
 
-  validate(tree, '')
+  validate(tree, "");
 
   function deepFreeze<O extends object>(obj: O): O {
-    Object.freeze(obj)
+    Object.freeze(obj);
     for (const value of Object.values(obj)) {
-      if (value && typeof value === 'object' && !Object.isFrozen(value)) {
-        deepFreeze(value as object)
+      if (value && typeof value === "object" && !Object.isFrozen(value)) {
+        deepFreeze(value as object);
       }
     }
-    return obj
+    return obj;
   }
 
-  const result = { ...tree }
-  Object.defineProperty(result, '_all', {
+  const result = { ...tree };
+  Object.defineProperty(result, "_all", {
     value: Object.freeze(all),
     enumerable: false,
     configurable: false,
     writable: false,
-  })
+  });
 
-  return deepFreeze(result) as ContextTreeResult<T>
+  return deepFreeze(result) as ContextTreeResult<T>;
 }

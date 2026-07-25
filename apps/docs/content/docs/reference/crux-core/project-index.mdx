@@ -257,11 +257,29 @@ interface ProjectSourceRef {
     toolMapContributor?: "spread" | "property";
     referencedDefinitionIds?: string[];
     dataAccess?: boolean;
+    promptText?: {
+      tag: "md";
+      language: "markdown";
+      lifecycle: "static" | "dynamic";
+    };
   };
 }
 ```
 
 Clients should render `sourceRefs` as supporting source locations and should not use them as runtime graph edges. Authored graph links still come from `relations`; parsed schemas and primitive intelligence still live on `metadata`. Source file entries can include dependency/dependent edges derived from source refs so file maps can show "this prompt depends on that schema/fragment file" without turning those source dependencies into Crux runtime relations.
+
+`metadata.promptText` marks compiler-proven
+[`md` prompt text](/docs/reference/crux-core/prompts#md-and-prompttext).
+`static` means the value is authored directly and `dynamic` means it is returned
+by a callback. The metadata is source authoring evidence, not Markdown
+rendering, sanitization, trust, or a runtime security boundary.
+
+Semantic attribution follows supported alias and re-export chains to the
+canonical root `md` export. It rejects local lookalikes. If the active
+`tsconfig.paths` can intercept the exact `@use-crux/core` package root, Crux
+fails closed and omits prompt-text evidence rather than accepting ambiguous
+package identity. This does not change runtime prompt behavior; it only limits
+Project Index and editor features that depend on the omitted source evidence.
 
 Definitions include `metadata.runtimeJoin` hints where Crux can derive stable runtime identifiers. The object is typed as `ProjectRuntimeJoin` from `@use-crux/core/project-index`. These hints are for the Go read models to join spans/resources back to authored definitions without UI-side inference.
 

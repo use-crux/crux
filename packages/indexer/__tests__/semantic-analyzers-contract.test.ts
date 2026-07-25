@@ -1,313 +1,381 @@
-import { describe, expect, it } from 'vitest'
-import { semanticDefinitionCandidates } from '../src/indexer/semantic/discovery'
+import { describe, expect, it } from "vitest";
+import { semanticDefinitionCandidates } from "../src/indexer/semantic/discovery";
 import type {
   SemanticSyntaxKind,
   SemanticSyntaxNode,
   SemanticSyntaxSourceFile,
   SemanticSyntaxView,
-} from '../src/indexer/semantic/syntax-view'
+} from "../src/indexer/semantic/syntax-view";
 
-type FakeSyntaxKind = SemanticSyntaxKind | 'fake'
+type FakeSyntaxKind = SemanticSyntaxKind | "fake";
 
 interface FakeNode extends SemanticSyntaxNode {
-  readonly kind: FakeSyntaxKind
-  readonly text?: string
-  readonly children?: readonly FakeNode[]
-  readonly arguments?: readonly FakeNode[]
-  readonly properties?: readonly FakeNode[]
-  readonly name?: FakeNode
-  readonly initializer?: FakeNode
-  readonly parent?: FakeNode
-  readonly sourceFile?: FakeSourceFile
+  readonly kind: FakeSyntaxKind;
+  readonly text?: string;
+  readonly children?: readonly FakeNode[];
+  readonly arguments?: readonly FakeNode[];
+  readonly properties?: readonly FakeNode[];
+  readonly name?: FakeNode;
+  readonly initializer?: FakeNode;
+  readonly parent?: FakeNode;
+  readonly sourceFile?: FakeSourceFile;
 }
 
 interface FakeSourceFile extends FakeNode, SemanticSyntaxSourceFile<FakeNode> {
-  readonly kind: 'sourceFile'
-  readonly fileName: '/virtual/semantic.ts'
-  readonly text: string
+  readonly kind: "sourceFile";
+  readonly fileName: "/virtual/semantic.ts";
+  readonly text: string;
 }
 
-describe('semantic analyzer syntax contract', () => {
-  it('discovers authored definitions through a backend-neutral syntax view', () => {
-    const sourceFile = fakeSourceFile()
-    const idName = node({ kind: 'identifier', text: 'id', parent: sourceFile })
-    const idValue = node({ kind: 'stringLiteral', text: 'support', parent: sourceFile })
+describe("semantic analyzer syntax contract", () => {
+  it("discovers authored definitions through a backend-neutral syntax view", () => {
+    const sourceFile = fakeSourceFile();
+    const idName = node({ kind: "identifier", text: "id", parent: sourceFile });
+    const idValue = node({
+      kind: "stringLiteral",
+      text: "support",
+      parent: sourceFile,
+    });
     const idProperty = node({
-      kind: 'propertyAssignment',
+      kind: "propertyAssignment",
       name: idName,
       initializer: idValue,
       parent: sourceFile,
-    })
-    const object = node({ kind: 'objectLiteral', properties: [idProperty], parent: sourceFile })
-    const call = node({ kind: 'callExpression', text: 'prompt', arguments: [object], parent: sourceFile })
-    link(sourceFile, { children: [call] })
+    });
+    const object = node({
+      kind: "objectLiteral",
+      properties: [idProperty],
+      parent: sourceFile,
+    });
+    const call = node({
+      kind: "callExpression",
+      text: "prompt",
+      arguments: [object],
+      parent: sourceFile,
+    });
+    link(sourceFile, { children: [call] });
 
-    const candidates = semanticDefinitionCandidates(sourceFile, fakeSyntaxView)
+    const candidates = semanticDefinitionCandidates(sourceFile, fakeSyntaxView);
 
     expect(candidates).toEqual([
       expect.objectContaining({
-        definitionId: 'prompt:support',
-        kind: 'prompt',
-        name: 'support',
+        definitionId: "prompt:support",
+        kind: "prompt",
+        name: "support",
         object,
         call,
       }),
-    ])
-  })
+    ]);
+  });
 
-  it('discovers retrieval beta definitions through semantic candidates', () => {
-    const sourceFile = fakeSourceFile()
-    const knowledgeBaseObject = objectWithStringId(sourceFile, 'docs')
-    const recipeObject = objectWithStringId(sourceFile, 'docs-answer')
-    const retrieverObject = objectWithStringId(sourceFile, 'docs-retriever')
+  it("discovers retrieval beta definitions through semantic candidates", () => {
+    const sourceFile = fakeSourceFile();
+    const knowledgeBaseObject = objectWithStringId(sourceFile, "docs");
+    const recipeObject = objectWithStringId(sourceFile, "docs-answer");
+    const retrieverObject = objectWithStringId(sourceFile, "docs-retriever");
     const knowledgeBaseCall = node({
-      kind: 'callExpression',
-      text: 'knowledgeBase',
+      kind: "callExpression",
+      text: "knowledgeBase",
       arguments: [knowledgeBaseObject],
       parent: sourceFile,
-    })
+    });
     const recipeCall = node({
-      kind: 'callExpression',
-      text: 'retrievalRecipe',
+      kind: "callExpression",
+      text: "retrievalRecipe",
       arguments: [recipeObject],
       parent: sourceFile,
-    })
+    });
     const retrieverCall = node({
-      kind: 'callExpression',
-      text: 'retriever',
+      kind: "callExpression",
+      text: "retriever",
       arguments: [retrieverObject],
       parent: sourceFile,
-    })
-    link(sourceFile, { children: [knowledgeBaseCall, recipeCall, retrieverCall] })
+    });
+    link(sourceFile, {
+      children: [knowledgeBaseCall, recipeCall, retrieverCall],
+    });
 
-    const candidates = semanticDefinitionCandidates(sourceFile, fakeSyntaxView)
+    const candidates = semanticDefinitionCandidates(sourceFile, fakeSyntaxView);
 
     expect(candidates).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ definitionId: 'rag.knowledgeBase:docs', kind: 'rag.knowledgeBase' }),
-        expect.objectContaining({ definitionId: 'rag.recipe:docs-answer', kind: 'rag.recipe' }),
-        expect.objectContaining({ definitionId: 'rag.retriever:docs-retriever', kind: 'rag.retriever' }),
+        expect.objectContaining({
+          definitionId: "rag.knowledgeBase:docs",
+          kind: "rag.knowledgeBase",
+        }),
+        expect.objectContaining({
+          definitionId: "rag.recipe:docs-answer",
+          kind: "rag.recipe",
+        }),
+        expect.objectContaining({
+          definitionId: "rag.retriever:docs-retriever",
+          kind: "rag.retriever",
+        }),
       ]),
-    )
-  })
+    );
+  });
 
-  it('discovers judgeReranker as the same rag.reranker definition primitive as reranker', () => {
-    const sourceFile = fakeSourceFile()
-    const providerObject = objectWithStringNameProperty(sourceFile, 'answer-ranker')
-    const judgeObject = objectWithStringNameProperty(sourceFile, 'Docs Judge!')
+  it("discovers judgeReranker as the same rag.reranker definition primitive as reranker", () => {
+    const sourceFile = fakeSourceFile();
+    const providerObject = objectWithStringNameProperty(
+      sourceFile,
+      "answer-ranker",
+    );
+    const judgeObject = objectWithStringNameProperty(sourceFile, "Docs Judge!");
     const providerCall = node({
-      kind: 'callExpression',
-      text: 'reranker',
+      kind: "callExpression",
+      text: "reranker",
       arguments: [providerObject],
       parent: sourceFile,
-    })
+    });
     const judgeCall = node({
-      kind: 'callExpression',
-      text: 'judgeReranker',
+      kind: "callExpression",
+      text: "judgeReranker",
       arguments: [judgeObject],
       parent: sourceFile,
-    })
-    link(sourceFile, { children: [providerCall, judgeCall] })
+    });
+    link(sourceFile, { children: [providerCall, judgeCall] });
 
-    const candidates = semanticDefinitionCandidates(sourceFile, fakeSyntaxView)
+    const candidates = semanticDefinitionCandidates(sourceFile, fakeSyntaxView);
 
     expect(candidates).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          definitionId: 'rag.reranker:answer-ranker',
-          kind: 'rag.reranker',
-          name: 'answer-ranker',
+          definitionId: "rag.reranker:answer-ranker",
+          kind: "rag.reranker",
+          name: "answer-ranker",
         }),
         expect.objectContaining({
-          definitionId: 'rag.reranker:Docs-Judge',
-          kind: 'rag.reranker',
-          name: 'Docs Judge!',
+          definitionId: "rag.reranker:Docs-Judge",
+          kind: "rag.reranker",
+          name: "Docs Judge!",
         }),
       ]),
-    )
-  })
-})
+    );
+  });
+});
 
 const fakeSyntaxView: SemanticSyntaxView<FakeNode, FakeSourceFile> = {
   sourceFiles() {
-    return []
+    return [];
   },
   sourceFile(node) {
-    return isFakeSourceFile(node) ? node : node.sourceFile ?? fakeSourceFile()
+    return isFakeSourceFile(node)
+      ? node
+      : (node.sourceFile ?? fakeSourceFile());
   },
   parent(node) {
-    return node.parent
+    return node.parent;
   },
   children(node) {
-    return node.children ?? []
+    return node.children ?? [];
   },
   text(node) {
-    return node.text ?? ''
+    return node.text ?? "";
   },
   kind(node) {
-    return isSemanticKind(node.kind) ? node.kind : 'unknown'
+    return isSemanticKind(node.kind) ? node.kind : "unknown";
   },
-  isKind<TKind extends SemanticSyntaxKind>(node: FakeNode, kind: TKind): node is FakeNode & SemanticSyntaxNode<TKind> {
-    return fakeSyntaxView.kind(node) === kind
+  isKind<TKind extends SemanticSyntaxKind>(
+    node: FakeNode,
+    kind: TKind,
+  ): node is FakeNode & SemanticSyntaxNode<TKind> {
+    return fakeSyntaxView.kind(node) === kind;
   },
   callArguments(node) {
-    return fakeSyntaxView.kind(node) === 'callExpression' ? (node.arguments ?? []) : []
+    return fakeSyntaxView.kind(node) === "callExpression"
+      ? (node.arguments ?? [])
+      : [];
   },
   callExpressionTarget() {
-    return undefined
+    return undefined;
   },
   newArguments(node) {
-    return fakeSyntaxView.kind(node) === 'newExpression' ? (node.arguments ?? []) : []
+    return fakeSyntaxView.kind(node) === "newExpression"
+      ? (node.arguments ?? [])
+      : [];
   },
   callExpressionName(node) {
-    return fakeSyntaxView.kind(node) === 'callExpression' || fakeSyntaxView.kind(node) === 'newExpression'
+    return fakeSyntaxView.kind(node) === "callExpression" ||
+      fakeSyntaxView.kind(node) === "newExpression"
       ? node.text
-      : undefined
+      : undefined;
   },
   propertyAccessName() {
-    return undefined
+    return undefined;
   },
   propertyAccessNameNode() {
-    return undefined
+    return undefined;
   },
   propertyAccessExpression() {
-    return undefined
+    return undefined;
   },
   objectProperties(node) {
-    return fakeSyntaxView.kind(node) === 'objectLiteral' ? (node.properties ?? []) : []
+    return fakeSyntaxView.kind(node) === "objectLiteral"
+      ? (node.properties ?? [])
+      : [];
   },
   propertyName(node) {
-    return node.name
+    return node.name;
   },
   propertyInitializer(node) {
-    return node.initializer
+    return node.initializer;
   },
   arrayElements() {
-    return []
+    return [];
   },
   spreadExpression() {
-    return undefined
+    return undefined;
   },
   logicalAndOperands() {
-    return undefined
+    return undefined;
   },
   templateExpressions() {
-    return []
+    return [];
   },
   functionReturnExpressions() {
-    return []
+    return [];
+  },
+  promptTextReturnExpressions() {
+    return [];
+  },
+  taggedTemplateTag() {
+    return undefined;
+  },
+  taggedTemplateBody() {
+    return undefined;
+  },
+  conditionalBranches() {
+    return undefined;
   },
   literalValue(node) {
-    return node.text
+    return node.text;
   },
   identifierText(node) {
-    return fakeSyntaxView.kind(node) === 'identifier' ? node.text : undefined
+    return fakeSyntaxView.kind(node) === "identifier" ? node.text : undefined;
   },
   stringLiteralText(node) {
-    return fakeSyntaxView.kind(node) === 'stringLiteral' ? node.text : undefined
+    return fakeSyntaxView.kind(node) === "stringLiteral"
+      ? node.text
+      : undefined;
   },
   numericLiteralText() {
-    return undefined
+    return undefined;
   },
   unwrapExpression(node) {
-    return node
+    return node;
   },
   variableDeclarationName() {
-    return undefined
+    return undefined;
   },
   variableDeclarationInitializer() {
-    return undefined
+    return undefined;
+  },
+  variableDeclarationKind() {
+    return undefined;
   },
   variableStatementDeclarations() {
-    return []
+    return [];
   },
   parameterTypeReference() {
-    return undefined
+    return undefined;
   },
   importModuleSpecifier() {
-    return undefined
+    return undefined;
   },
   namedImportSpecifiers() {
-    return []
+    return [];
   },
   namespaceImportName() {
-    return undefined
+    return undefined;
   },
   exportSpecifiers() {
-    return []
+    return [];
   },
   declarationName() {
-    return undefined
+    return undefined;
   },
   hasExportModifier() {
-    return false
+    return false;
   },
   isFunctionLike() {
-    return false
+    return false;
   },
-}
+};
 
 function fakeSourceFile(): FakeSourceFile {
   return {
-    kind: 'sourceFile',
-    fileName: '/virtual/semantic.ts',
-    text: '',
+    kind: "sourceFile",
+    fileName: "/virtual/semantic.ts",
+    text: "",
     pos: 0,
     end: 0,
-  }
+  };
 }
 
-function node(input: Omit<FakeNode, 'pos' | 'end'> & Partial<Pick<FakeNode, 'pos' | 'end'>>): FakeNode {
+function node(
+  input: Omit<FakeNode, "pos" | "end"> & Partial<Pick<FakeNode, "pos" | "end">>,
+): FakeNode {
   return {
     pos: 0,
     end: 0,
-    sourceFile: input.parent && isFakeSourceFile(input.parent) ? input.parent : input.parent?.sourceFile,
+    sourceFile:
+      input.parent && isFakeSourceFile(input.parent)
+        ? input.parent
+        : input.parent?.sourceFile,
     ...input,
-  }
+  };
 }
 
 function objectWithStringId(parent: FakeNode, id: string): FakeNode {
-  const idName = node({ kind: 'identifier', text: 'id', parent })
-  const idValue = node({ kind: 'stringLiteral', text: id, parent })
+  const idName = node({ kind: "identifier", text: "id", parent });
+  const idValue = node({ kind: "stringLiteral", text: id, parent });
   const idProperty = node({
-    kind: 'propertyAssignment',
+    kind: "propertyAssignment",
     name: idName,
     initializer: idValue,
     parent,
-  })
-  return node({ kind: 'objectLiteral', properties: [idProperty], parent })
+  });
+  return node({ kind: "objectLiteral", properties: [idProperty], parent });
 }
 
-function objectWithStringNameProperty(parent: FakeNode, name: string): FakeNode {
-  const nameName = node({ kind: 'identifier', text: 'name', parent })
-  const nameValue = node({ kind: 'stringLiteral', text: name, parent })
+function objectWithStringNameProperty(
+  parent: FakeNode,
+  name: string,
+): FakeNode {
+  const nameName = node({ kind: "identifier", text: "name", parent });
+  const nameValue = node({ kind: "stringLiteral", text: name, parent });
   const nameProperty = node({
-    kind: 'propertyAssignment',
+    kind: "propertyAssignment",
     name: nameName,
     initializer: nameValue,
     parent,
-  })
-  return node({ kind: 'objectLiteral', properties: [nameProperty], parent })
+  });
+  return node({ kind: "objectLiteral", properties: [nameProperty], parent });
 }
 
 function link(target: FakeSourceFile, updates: Partial<FakeSourceFile>): void {
-  Object.assign(target, updates)
-  for (const child of target.children ?? []) assignSourceFile(child, target)
+  Object.assign(target, updates);
+  for (const child of target.children ?? []) assignSourceFile(child, target);
 }
 
 function assignSourceFile(target: FakeNode, sourceFile: FakeSourceFile): void {
-  Object.assign(target, { sourceFile })
-  for (const child of [...(target.children ?? []), ...(target.arguments ?? []), ...(target.properties ?? [])]) {
-    assignSourceFile(child, sourceFile)
+  Object.assign(target, { sourceFile });
+  for (const child of [
+    ...(target.children ?? []),
+    ...(target.arguments ?? []),
+    ...(target.properties ?? []),
+  ]) {
+    assignSourceFile(child, sourceFile);
   }
-  if (target.name) assignSourceFile(target.name, sourceFile)
-  if (target.initializer) assignSourceFile(target.initializer, sourceFile)
+  if (target.name) assignSourceFile(target.name, sourceFile);
+  if (target.initializer) assignSourceFile(target.initializer, sourceFile);
 }
 
 function isSemanticKind(kind: FakeSyntaxKind): kind is SemanticSyntaxKind {
-  return kind !== 'fake'
+  return kind !== "fake";
 }
 
 function isFakeSourceFile(node: FakeNode): node is FakeSourceFile {
-  return node.kind === 'sourceFile'
+  return node.kind === "sourceFile";
 }

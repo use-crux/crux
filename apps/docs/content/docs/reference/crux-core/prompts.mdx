@@ -4,7 +4,7 @@ description: prompt(), createPrompts(), Prompt, and prompt resolution.
 ---
 
 ```ts
-import { prompt, createPrompts } from "@use-crux/core";
+import { createPrompts, md, prompt, type PromptText } from "@use-crux/core";
 ```
 
 `prompt()` creates a frozen, SDK-agnostic prompt definition. It is the contract adapters execute and the object Crux inspects, tests, caches, and instruments.
@@ -23,26 +23,26 @@ const summarize = prompt({
 
 ### Config
 
-| Field            | Type                                                 | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| ---------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`             | `string?`                                            | Stable identifier for registry lookup, logs, devtools, evals, and cache keys.                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `description`    | `string?`                                            | Human-readable description.                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `tags`           | `readonly string[]?`                                 | Tags for filtering, discovery, and eval grouping.                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| `use`            | `readonly ContextEntry[]?`                           | Composition entries. Accepts [`context()`](/docs/reference/crux-core/contexts), [`when()`](/docs/reference/crux-core/contexts), [`match()`](/docs/reference/crux-core/contexts), [skills](/docs/reference/crux-core/skill), [memory](/docs/reference/crux-core/memory), [blackboards](/docs/reference/crux-core/agent), [retrievers, retrieval pipelines, grounding](/docs/reference/crux-core/retrieval), [custom `contributor()` entries](#custom-contributor-entries), and falsy values. |
-| `input`          | `ZodType?`                                           | Prompt-owned input schema. Merged with context and contributor input schemas.                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `output`         | `ZodType?`                                           | Structured output schema. Omit for text generation.                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `system`         | `string \| ({ input }) => string \| Promise<string>` | Role, policy, and high-level instructions. Rendered first and never dropped by token budgeting. Mutually exclusive with `messages`.                                                                                                                                                                                                                                                                                                                                                         |
-| `prompt`         | `string \| ({ input }) => string`                    | Single-turn user/task message. Mutually exclusive with `messages`.                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `messages`       | `({ input }) => Message[]`                           | Message-list mode for chat transcripts, few-shot examples, and multi-turn prompts. Mutually exclusive with `system` and `prompt`.                                                                                                                                                                                                                                                                                                                                                           |
-| `settings`       | `GenerationSettings?`                                | SDK-agnostic defaults such as `temperature`, `maxTokens`, `topP`, `topK`, `reasoning`, `toolChoice`, `stopWhen`, and `maxSteps`. Provider-specific options belong in each adapter's typed `extra` option.                                                                                                                                                                                                                                                                                   |
-| `adapt`          | `ProviderAdaptations?`                               | Provider/model-specific system, prompt, and settings overrides.                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `hooks`          | `PromptHooks?`                                       | Per-prompt lifecycle hooks.                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `tools`          | `ToolSet?`                                           | Prompt-local tools. Prompt-time tool names must be unique across skills, contexts, contributors, blackboards, and prompt config; collisions throw with both owners named. Call-site `generate()`/`stream()` tools intentionally override after resolution.                                                                                                                                                                                                                                  |
-| `toolMiddleware` | `ToolMiddleware \| readonly ToolMiddleware[]?`       | Server-side wrappers for prompt tools, including audit hooks and [human approval](/docs/reference/crux-core/tool-middleware).                                                                                                                                                                                                                                                                                                                                                               |
-| `tests`          | `EvalCase[]?`                                        | Inline eval cases discovered by the eval runner.                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| `constraints`    | `ConstraintDef[]?`                                   | Semantic constraints evaluated around generation.                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| `guardrails`     | `GuardrailDef[]?`                                    | Pre/post generation guardrails.                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `cache`          | `PromptCacheOptions?`                                | Prompt cache hints. `semantic` configures semantic response caching; `provider: true` requests a provider cache breakpoint for the prompt-owned system block.                                                                                                                                                                                                                                                                                                                               |
+| Field            | Type                                                       | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ---------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`             | `string?`                                                  | Stable identifier for registry lookup, logs, devtools, evals, and cache keys.                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `description`    | `string?`                                                  | Human-readable description.                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `tags`           | `readonly string[]?`                                       | Tags for filtering, discovery, and eval grouping.                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `use`            | `readonly ContextEntry[]?`                                 | Composition entries. Accepts [`context()`](/docs/reference/crux-core/contexts), [`when()`](/docs/reference/crux-core/contexts), [`match()`](/docs/reference/crux-core/contexts), [skills](/docs/reference/crux-core/skill), [memory](/docs/reference/crux-core/memory), [blackboards](/docs/reference/crux-core/agent), [retrievers, retrieval pipelines, grounding](/docs/reference/crux-core/retrieval), [custom `contributor()` entries](#custom-contributor-entries), and falsy values. |
+| `input`          | `ZodType?`                                                 | Prompt-owned input schema. Merged with context and contributor input schemas.                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `output`         | `ZodType?`                                                 | Structured output schema. Omit for text generation.                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `system`         | `string \| ContextSystemContent \| PromptText \| callback` | Role, policy, and high-level instructions. Synchronous or asynchronous callbacks may return the existing system-content union or `PromptText`. Rendered first and never dropped by token budgeting. Mutually exclusive with `messages`.                                                                                                                                                                                                                                                     |
+| `prompt`         | `string \| PromptText \| synchronous callback`             | Single-turn user/task message. Its existing callback remains synchronous and may return `string` or `PromptText`. Mutually exclusive with `messages`.                                                                                                                                                                                                                                                                                                                                       |
+| `messages`       | `({ input }) => Message[]`                                 | Message-list mode for chat transcripts, few-shot examples, and multi-turn prompts. Mutually exclusive with `system` and `prompt`.                                                                                                                                                                                                                                                                                                                                                           |
+| `settings`       | `GenerationSettings?`                                      | SDK-agnostic defaults such as `temperature`, `maxTokens`, `topP`, `topK`, `reasoning`, `toolChoice`, `stopWhen`, and `maxSteps`. Provider-specific options belong in each adapter's typed `extra` option.                                                                                                                                                                                                                                                                                   |
+| `adapt`          | `ProviderAdaptations?`                                     | Provider/model-specific system, prompt, and settings overrides.                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `hooks`          | `PromptHooks?`                                             | Per-prompt lifecycle hooks.                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `tools`          | `ToolSet?`                                                 | Prompt-local tools. Prompt-time tool names must be unique across skills, contexts, contributors, blackboards, and prompt config; collisions throw with both owners named. Call-site `generate()`/`stream()` tools intentionally override after resolution.                                                                                                                                                                                                                                  |
+| `toolMiddleware` | `ToolMiddleware \| readonly ToolMiddleware[]?`             | Server-side wrappers for prompt tools, including audit hooks and [human approval](/docs/reference/crux-core/tool-middleware).                                                                                                                                                                                                                                                                                                                                                               |
+| `tests`          | `EvalCase[]?`                                              | Inline eval cases discovered by the eval runner.                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `constraints`    | `ConstraintDef[]?`                                         | Semantic constraints evaluated around generation.                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `guardrails`     | `GuardrailDef[]?`                                          | Pre/post generation guardrails.                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `cache`          | `PromptCacheOptions?`                                      | Prompt cache hints. `semantic` configures semantic response caching; `provider: true` requests a provider cache breakpoint for the prompt-owned system block.                                                                                                                                                                                                                                                                                                                               |
 
 ### Return Value
 
@@ -64,6 +64,199 @@ const summarize = prompt({
 | ------------------- | ---------------------------------------------------------------------------------- |
 | `.resolve(options)` | Validates input and returns the composed `ResolvedPrompt` without calling a model. |
 | `.inspect(options)` | Returns token/count/source breakdowns for debugging composition and token budgets. |
+
+## `md` and `PromptText`
+
+`md` builds an opaque, immutable `PromptText` value with native tagged-template syntax. The name describes the Markdown-oriented authoring convention; Crux does not parse, validate, or render Markdown. Resolution lowers the value to provider-neutral plain text before adapters, caches, and RPC boundaries.
+
+The root package exports exactly the `md` value and nominal `PromptText` type for this feature:
+
+```ts twoslash title="prompt-text.ts"
+import { md, prompt, type PromptText } from "@use-crux/core";
+import { z } from "zod";
+
+const rules: PromptText = md`
+  ## Rules
+
+  - Be concise.
+`;
+
+const answer = prompt({
+  id: "answer",
+  use: [],
+  input: z.object({ question: z.string() }),
+  system: rules,
+  prompt: ({ input }) => md`
+    ## Question
+
+    ${input.question}
+  `,
+});
+```
+
+`PromptText` is structurally distinct from `string` and cannot be coerced to text directly. Crux accepts it only in these authored fields:
+
+| Field            | Direct value                                    | Callback result                                            |
+| ---------------- | ----------------------------------------------- | ---------------------------------------------------------- |
+| `prompt.system`  | Existing system union plus `PromptText`         | Existing sync/async system-result union plus `PromptText`  |
+| `prompt.prompt`  | `string \| PromptText`                          | Synchronous `string \| PromptText`                         |
+| `context.system` | Existing context-system union plus `PromptText` | Existing sync/async context-result union plus `PromptText` |
+
+Canonical `Message` and `MessageContent` do not accept `PromptText`. `messages` mode has no PromptText-specific lowering or runtime guard.
+
+A direct `PromptText` context contribution is static for lifecycle, memo, and provider-cache classification, like a direct string. A callback returning `PromptText` remains dynamic. Existing async timing for `system` and `context.system` callbacks is unchanged.
+
+### Interpolation Values
+
+The interpolation contract is recursive, but its helper types are not exported:
+
+```ts
+type PromptTextValue =
+  | string
+  | number
+  | PromptText
+  | false
+  | null
+  | undefined
+  | readonly PromptTextValue[];
+```
+
+Numbers must be finite. `false`, `null`, and `undefined` omit content. Arrays are snapshotted recursively and are valid only in block position, where items are joined with one newline. Nested `PromptText` values retain their structural boundaries until resolution. Mutating an input array later cannot change an already-created fragment.
+
+General booleans, `true`, non-finite numbers, bigint, symbols, functions, Promises, and arbitrary objects are invalid. Use native `.join()` for an inline scalar list and [`md.json()`](#mdjsonvalue) for intentional object serialization. The tag does not accept asynchronous interpolation; use an already-supported outer async `system` or `context.system` callback instead.
+
+### Whitespace and Position
+
+Each tagged template is normalized independently:
+
+1. Leading and trailing blank lines are removed.
+2. The common source-whitespace prefix is removed from nonblank lines.
+3. Relative indentation and intentional internal blank lines are retained.
+
+An interpolation alone on its line is a block interpolation. Later lines of its rendered value inherit the carrier line's indentation. An empty block removes its carrier without combining the blank-line runs around it; the larger run survives, and an equal-size tie keeps the earlier run exactly.
+
+```ts
+const evidence = md`
+  1. First
+  2. Second
+`;
+
+md`
+  - Evidence:
+    ${evidence}
+`;
+```
+
+resolves exactly to:
+
+```md
+- Evidence:
+  1. First
+  2. Second
+```
+
+Every other interpolation is inline. Inline scalar or fragment text is inserted verbatim, including multiline continuation lines; inline arrays are rejected.
+
+```ts
+md`Enabled regions: ${regions.join(", ")}`;
+```
+
+Strings do not pass through this normalization. Existing direct strings and string-returning callbacks preserve their current bytes and inspection shape.
+
+### Conditions, Sequences, and Named Fragments
+
+Control flow stays in TypeScript:
+
+```ts
+const warning = input.warning && md`> Warning: ${input.warning}`;
+const details = md`
+  ## Details
+
+  ${warning}
+
+  ${input.events.map((event) => md`- ${event.summary}`)}
+`;
+```
+
+Extract a named fragment or helper function before deeply nested inline tags make the prompt difficult to read. V1 does not add filters, loops, includes, macros, `md.join`, or a fragment registry.
+
+### `md.json(value)`
+
+`md.json(value)` snapshots the result of `JSON.stringify(value, null, 2)` as a `PromptText`. It adds no Markdown fence:
+
+````ts
+md`
+  ```json
+  ${md.json(input.account)}
+  ```
+`;
+````
+
+Native JSON treatment of unsupported object properties and array entries is preserved. A top-level value for which `JSON.stringify` returns `undefined`, a cycle, or bigint fails with a stable Crux error. The serialized result is snapshotted, so later object mutation cannot change it. `md.json()` is not a sanitizer, redactor, canonical key sorter, or security escape hatch.
+
+### Inspection and Project Index Evidence
+
+`.resolve()` continues to expose plain `system` and `prompt` strings. `.inspect()` retains structural provenance where available:
+
+```ts
+const inspection = await answer.inspect({
+  input: { question: "How do I rotate credentials?" },
+});
+
+inspection.prompt?.text;
+inspection.prompt?.segments;
+inspection.prompt?.staticTokens;
+inspection.prompt?.dynamicTokens;
+inspection.system.parts[0]?.segments;
+```
+
+Prompt-text segments distinguish authored literal text from interpolated scalar, JSON, nested-fragment, and sequence content. Concatenating segment text reproduces the exact resolved text. Ordinary user-prompt strings keep the legacy `{ text, tokens }` inspection shape without inferred segments.
+
+The Project Index records compiler-proven `md` regions as source refs with this
+exact `metadata.promptText` shape:
+
+```ts
+metadata: {
+  promptText: {
+    tag: "md";
+    language: "markdown";
+    lifecycle: "static" | "dynamic";
+  }
+}
+```
+
+`lifecycle: "static"` identifies directly authored prompt text;
+`lifecycle: "dynamic"` identifies prompt text returned by a callback. This is
+authoring evidence for source-aware tools. It does not render Markdown or mark
+the content trusted, sanitized, or safe.
+
+Crux follows supported imports, aliases, and re-exports back to the canonical
+`md` export from `@use-crux/core`; local lookalike tags do not receive this
+metadata. If an active `tsconfig.paths` mapping can intercept the exact
+`@use-crux/core` package root, semantic prompt-text attribution fails closed
+and omits the evidence instead of accepting an ambiguous package identity.
+Runtime prompt construction and resolution are unaffected; only Project Index
+and editor features that depend on this source evidence lose the attribution.
+
+### Errors
+
+Runtime validation remains authoritative for JavaScript, `any`, non-finite values, cyclic arrays, and position-dependent arrays.
+
+| Code                                     | Condition                            | Remedy                                                                |
+| ---------------------------------------- | ------------------------------------ | --------------------------------------------------------------------- |
+| `CRUX_PROMPT_TEXT_INVALID_INTERPOLATION` | Unsupported interpolation value      | Select a scalar field, return a fragment, or use `md.json()` for JSON |
+| `CRUX_PROMPT_TEXT_INLINE_SEQUENCE`       | Array interpolated inline            | Move it to a block line or join scalar values with native `.join()`   |
+| `CRUX_PROMPT_TEXT_JSON_SERIALIZATION`    | `md.json()` cannot produce JSON text | Remove cycles/bigint or serialize explicitly before interpolation     |
+
+Interpolation errors include the zero-based interpolation index and nested array path. When resolution knows the owning prompt/context field, it appends that owner without replacing the stable code. Error formatting does not stringify rejected values or expose secret content.
+
+### Security and Non-goals
+
+`md` composes text only. It does not mark content trusted, sanitize nested JSON, bypass schema validation or auto-escape, suppress diagnostics, or change `rawFields`. There is no `md.raw`, `md.trusted`, or `md.safe`.
+
+Resolution keeps the existing safety order: schema validation, configured sanitization, automatic escaping and security diagnostics, callback evaluation and `md` construction, then model-ingress safety.
+
+V1 does not include Markdown parsing/rendering, a prompt DSL or compiler transform, standalone prompt files, asynchronous interpolation, message/multimodal construction, editor runtime behavior, semantic section tags, `md.use`, or context-placement placeholders. Context authority and placement remain declared by `use: []`.
 
 ## Tool Model Output
 

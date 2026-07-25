@@ -1,9 +1,22 @@
-import { copyFile, mkdir, readdir, rm, writeFile } from "node:fs/promises";
+import {
+  copyFile,
+  mkdir,
+  readFile,
+  readdir,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { SEMANTIC_FACTS_CACHE_EPOCH } from "../src/indexer/cache-identity";
+import {
+  SEMANTIC_FACTS_CACHE_EPOCH,
+  sha256,
+} from "../src/indexer/cache-identity";
 import type { IndexPatch, IndexPatchFacts } from "../src/indexer/patches";
-import { semanticIndexFactsCached } from "../src/indexer/semantic-cache";
+import {
+  semanticIndexFactsCached,
+  type SemanticFactsProducerContext,
+} from "../src/indexer/semantic-cache";
 import type {
   SemanticBackendIdentity,
   SemanticCompilerRuntimeIdentity,
@@ -34,10 +47,10 @@ afterEach(async () => {
 
 describe("semantic facts cache", () => {
   it("uses the Workspace snapshot relation semantic epoch", () => {
-    expect(SEMANTIC_FACTS_CACHE_EPOCH).toBe("semantic-facts-v33");
+    expect(SEMANTIC_FACTS_CACHE_EPOCH).toBe("semantic-facts-v34");
   });
 
-  it("does not reuse a valid cache artifact from the pre-integration v28 namespace", async () => {
+  it("does not reuse a valid cache artifact from the pre-prompt-text v33 namespace", async () => {
     const root = await fixtureRoot();
     const file = join(root, "src/writer.ts");
     await writeFile(file, `export const writer = true`);
@@ -65,7 +78,7 @@ describe("semantic facts cache", () => {
       ".crux/cache/index",
       SEMANTIC_FACTS_CACHE_EPOCH,
     );
-    const staleDir = join(root, ".crux/cache/index", "semantic-facts-v28");
+    const staleDir = join(root, ".crux/cache/index", "semantic-facts-v33");
     await mkdir(staleDir, { recursive: true });
     await copyFile(join(currentDir, cacheName), join(staleDir, cacheName));
     await rm(currentDir, { recursive: true, force: true });
@@ -122,6 +135,64 @@ describe("semantic facts cache", () => {
     expect(producerCalls).toBe(1);
     expect(timingNames).toContain("semantic.cache.miss");
     expect(timingNames).toContain("semantic.cache.hit");
+  });
+
+  it("misses a warm cache when a recorded package manifest changes", async () => {
+    const root = await fixtureRoot();
+    const file = join(root, "src/writer.ts");
+    const manifest = join(root, "node_modules/@use-crux/core/package.json");
+    await mkdir(join(root, "node_modules/@use-crux/core"), {
+      recursive: true,
+    });
+    await writeFile(file, `export const writer = true`);
+    await writeFile(manifest, JSON.stringify({ name: "@use-crux/core" }));
+    const backendIdentity: SemanticBackendIdentity = {
+      name: "test-cache-manifest-dependency",
+      version: "v1",
+    };
+    let producerCalls = 0;
+    const timingNames: string[] = [];
+
+    const produce = () => ({
+      async *produceEvidence(context: SemanticFactsProducerContext) {
+        producerCalls += 1;
+        context.validationDependencies.record({
+          file: manifest,
+          digest: sha256(await readFile(manifest)),
+        });
+        yield {
+          kind: "definitions" as const,
+          facts: cachedFacts().definitions ?? [],
+        };
+      },
+    });
+
+    await semanticIndexFactsCached(root, [file], {
+      backendIdentity,
+      instrumentation: { onTiming: (timing) => timingNames.push(timing.name) },
+      ...produce(),
+    });
+    await semanticIndexFactsCached(root, [file], {
+      backendIdentity,
+      instrumentation: { onTiming: (timing) => timingNames.push(timing.name) },
+      ...produce(),
+    });
+    expect(producerCalls).toBe(1);
+
+    await writeFile(manifest, JSON.stringify({ name: "@use-crux/lookalike" }));
+    await semanticIndexFactsCached(root, [file], {
+      backendIdentity,
+      instrumentation: { onTiming: (timing) => timingNames.push(timing.name) },
+      ...produce(),
+    });
+
+    expect(producerCalls).toBe(2);
+    expect(
+      timingNames.filter((name) => name === "semantic.cache.hit"),
+    ).toHaveLength(1);
+    expect(
+      timingNames.filter((name) => name === "semantic.cache.miss"),
+    ).toHaveLength(2);
   });
 
   it("ignores JSON semantic fact caches after the hard binary cache migration", async () => {
@@ -333,7 +404,7 @@ describe("semantic facts cache", () => {
     };
     const secondRuntime: SemanticCompilerRuntimeIdentity = {
       name: "tsgo",
-      version: "native-preview-v3",
+      version: "native-preview-v4",
       executable: "/opt/tsgo",
     };
     let producerCalls = 0;

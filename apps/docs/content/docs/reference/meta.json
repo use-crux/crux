@@ -10,6 +10,7 @@
     "indexer-extensions",
     "local",
     "lsp",
+    "lsp-completion",
     "mcp",
     "postgres",
     "adapters",

@@ -11,3 +11,6 @@ pub mod static_index;
 pub mod static_syntax;
 
 pub use static_syntax::*;
+
+#[cfg(test)]
+mod static_syntax_tests;

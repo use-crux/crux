@@ -1,6 +1,8 @@
 # Architecture
 
-Internal implementation details of `@use-crux/core`. For usage documentation, see [README.md](./README.md).
+Internal implementation details of `@use-crux/core`. For usage documentation,
+see the [Crux docs](../../apps/docs/content/docs); the
+[package README](./README.md) is the concise npm landing page.
 
 ## Tool-source boundary
 
@@ -107,41 +109,44 @@ Project Index workspace facts include mounts, generated tool names, asset-storag
 
 ## Package Structure Policy
 
-`@use-crux/core` is a **package-root source package**: the package root is the public source
-root, and domain folders own implementation depth. Core is not migrating to a `src/` layout —
-most Crux TypeScript packages publish from package root, and `scripts/stage-npm-packages.mjs`
-maps Core with `sourceRoot: '.'`.
+`@use-crux/core` uses the repository's conventional **`src/` source root**.
+`packages/core/` owns package metadata, documentation, tests, and project
+configuration; `packages/core/src/` owns public entrypoints and implementation.
+The npm release manifest records Core with `sourceRoot: "src"` and stages that
+tree as the published package root.
 
 The rules:
 
-- **Package root = public source root.** Keep only public entrypoints/shims and project files at
-  `packages/core/`: `index.ts` (the main barrel), `package.json`, `tsconfig.json`,
-  `vitest.config.ts`, docs/legal files, and root compatibility shims that exist solely to preserve
-  an existing `package.json` subpath (for example `./tools` and `./tool-middleware`).
-- **Domain folders own implementation.** Product domains — `prompt/`, `resolver/`, `runtime/`,
-  `generation/`, `tools/`, `shared/`, plus the existing `adapter/`, `agent/`, `safety/`,
-  `eval/`, `observability/`, `retrieval/`, `indexing/`, `memory/`, and the rest — hold the real
-  code behind curated domain barrels. New root _implementation_ files are not added.
+- **`src/` = public source root.** Keep curated package and subpath entrypoints
+  at `packages/core/src/`: `index.ts`, the base `types.ts`, and compatibility
+  shims such as `tools.ts` and `tool-middleware.ts`. Package metadata,
+  documentation, tests, and compiler/test configuration stay at
+  `packages/core/`.
+- **Domain folders own implementation.** Product domains —
+  `src/prompt/`, `src/prompt-text/`, `src/resolver/`, `src/runtime/`,
+  `src/generation/`, `src/tools/`, and the rest — hold the real code behind
+  curated domain barrels. New implementation files do not accumulate directly
+  under `src/`.
 - **Curated barrels, not dumping grounds.** Each domain `index.ts` is a curated barrel or public
   entrypoint, never substantial implementation. Avoid broad `export *` over internals, and put
   implementation that is not a stable intra-package contract under a domain-local `internal/`
-  folder. Do not add a package-wide `packages/core/internal/`.
+  folder. Do not add a package-wide `packages/core/src/internal/`.
 - **Provider-agnostic.** Core must not depend on provider SDKs, React, Convex, or app packages;
   provider packages depend on Core, never the reverse.
 - **Public contract is verified through imports, not file paths.** Behavior and inference are
   pinned through the published `@use-crux/core` barrel and its subpaths
   (`__tests__/public-import-surface.test.ts` at runtime, `__type_tests__/public-root-imports.ts`
-  under `tsc`). Implementation files stay free to move between domains as long as those public
-  imports keep resolving and keep their documented shape.
+  under `tsc`). Implementation files stay free to move between domains as long
+  as those public imports keep resolving and retain their documented shape.
 
-The Module Map below reflects the completed package structure: the package root holds only
-`index.ts`, the base `types.ts`, project/config files, and the two `./tools` / `./tool-middleware`
-compatibility shims, while every implementation lives in a domain folder.
+The Module Map below is rooted at `packages/core/src/`. The surrounding package
+root owns `package.json`, TypeScript/Vitest config, docs/legal files,
+`__tests__/`, `__type_tests__/`, and package scripts.
 
 ## Module Map
 
 ```
-@use-crux/core
+packages/core/src/       Published as @use-crux/core
 ├── index.ts            Main public barrel — curated re-exports of every domain's public surface
 ├── types.ts            SDK-agnostic base contracts only: AnyModel/AnyToolSet/AnyMessage, FlowToolDef, ModelInfo
 ├── tools.ts            Compatibility shim for the ./tools subpath (re-exports tools/define-tool + tool types)
@@ -157,9 +162,16 @@ compatibility shims, while every implementation lives in a domain folder.
 │   ├── prompt-types.ts   prompt() config/instance/hooks/result + semantic-cache intent types
 │   ├── type-utils.ts     Prompt/context inference helpers (Simplify, DeepReadonly, MergeContextInputs, MergedInput)
 │   └── types.ts          Curated type barrel over context-types + prompt-types
+├── prompt-text/        Markdown-oriented PromptText authoring + private structured-text kernel
+│   ├── index.ts        Public md tagged template, md.json(), and opaque PromptText contract
+│   ├── internal.ts     Nominal shell registry, immutable interpolation snapshots, stable errors, and resolver-only lowering boundary
+│   └── render.ts       Whitespace-aware private tree renderer preserving static/dynamic segment provenance
 ├── resolver/           Prompt compilation + resolution internals (single compile boundary)
 │   ├── compile.ts      compilePrompt() — THE public prompt compiler entrypoint (thin boundary)
 │   ├── plan.ts         createPromptResolverPlan() — the private pass primitive (binds config+schema+ports once, run(opts, mode))
+│   ├── prompt-content.ts  Lowers user-prompt strings/PromptText into provider-neutral text plus optional inspection segments
+│   ├── system-content.ts  Normalizes system strings, PromptText, and explicit segments while preserving token/freshness attribution
+│   ├── system-segment-inference.ts  Best-effort input provenance for dynamic plain-string system callbacks
 │   ├── types.ts        Resolution/inspection output contracts (ResolvedPrompt, ResolveOptions, SystemBlock, InspectResult, DroppedContext, …)
 │   ├── ports.ts        Resolver port contracts (ObservabilityPort, SkillSourcePort, TokenizerPort, …) — pure types
 │   ├── default-ports.ts  Production port adapters + withDefaultResolverPorts() (wrap ambient globals lazily)
@@ -564,9 +576,9 @@ Internal post-merge collectors
   └── Blackboard tool-dedupe checks run against the merged tool surface
   ↓
 System message assembly (with return type validation on systemFn)
-  ├── Prompt's own system text (always included)
+  ├── Prompt's own string, PromptText, or explicit segmented system content (always included)
   ├── Active context contributions (resolved in `use` array order)
-  │     ├── Normalize string or segmented `{ segments }` content
+  │     ├── Normalize string, PromptText, or segmented `{ segments }` content
   │     └── Context memo cache: skip systemFn() on memo hit (by contextId + declared input hash)
   ├── Token budget enforcement (drop lowest-priority contexts)
   └── SystemBlock[] construction (per-block providerCache hints for adapters)
@@ -576,7 +588,8 @@ Provider system adaptation
   └── Insert prepend/append system text as `SystemBlock { source: "adaptation:<key>", providerCache: false }`
   ↓
 Prompt text / messages resolution (with [object Object] safety net)
-  ├── String prompt: resolve static or dynamic
+  ├── String prompt: resolve static or dynamic without changing its existing bytes/inspection shape
+  ├── PromptText: lower once to provider-neutral text plus structural inspection segments
   └── Messages array: fold the final post-adaptation system text, then scan for [object Object]
   ↓
 Provider prompt/settings adaptation

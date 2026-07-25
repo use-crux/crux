@@ -1,68 +1,72 @@
-import ts from 'typescript'
-import type { SemanticSyntaxKind } from '../../syntax-view'
+import ts from "typescript";
+import type { SemanticSyntaxKind } from "../../syntax-view";
 
 /**
  * Converts a TypeScript compiler syntax kind into the normalized Crux syntax
  * kind consumed by backend-neutral semantic analyzers.
  */
-export function semanticSyntaxKindForTypeScriptNode(node: ts.Node): SemanticSyntaxKind {
+export function semanticSyntaxKindForTypeScriptNode(
+  node: ts.Node,
+): SemanticSyntaxKind {
   switch (node.kind) {
     case ts.SyntaxKind.SourceFile:
-      return 'sourceFile'
+      return "sourceFile";
     case ts.SyntaxKind.Identifier:
-      return 'identifier'
+      return "identifier";
     case ts.SyntaxKind.StringLiteral:
     case ts.SyntaxKind.NoSubstitutionTemplateLiteral:
-      return 'stringLiteral'
+      return "stringLiteral";
     case ts.SyntaxKind.NumericLiteral:
-      return 'numericLiteral'
+      return "numericLiteral";
     case ts.SyntaxKind.ObjectLiteralExpression:
-      return 'objectLiteral'
+      return "objectLiteral";
     case ts.SyntaxKind.ArrayLiteralExpression:
-      return 'arrayLiteral'
+      return "arrayLiteral";
     case ts.SyntaxKind.PropertyAssignment:
-      return 'propertyAssignment'
+      return "propertyAssignment";
     case ts.SyntaxKind.ShorthandPropertyAssignment:
-      return 'shorthandPropertyAssignment'
+      return "shorthandPropertyAssignment";
     case ts.SyntaxKind.MethodDeclaration:
-      return 'methodDeclaration'
+      return "methodDeclaration";
+    case ts.SyntaxKind.TaggedTemplateExpression:
+      return "taggedTemplate";
     case ts.SyntaxKind.CallExpression:
-      return 'callExpression'
+      return "callExpression";
     case ts.SyntaxKind.NewExpression:
-      return 'newExpression'
+      return "newExpression";
     case ts.SyntaxKind.PropertyAccessExpression:
-      return 'propertyAccessExpression'
+      return "propertyAccessExpression";
     case ts.SyntaxKind.ElementAccessExpression:
-      return 'elementAccessExpression'
+      return "elementAccessExpression";
     case ts.SyntaxKind.VariableDeclaration:
-      return 'variableDeclaration'
+      return "variableDeclaration";
     case ts.SyntaxKind.VariableStatement:
-      return 'variableStatement'
+      return "variableStatement";
     case ts.SyntaxKind.FunctionDeclaration:
-      return 'functionDeclaration'
+      return "functionDeclaration";
     case ts.SyntaxKind.FunctionExpression:
-      return 'functionExpression'
+      return "functionExpression";
     case ts.SyntaxKind.ArrowFunction:
-      return 'arrowFunction'
+      return "arrowFunction";
     case ts.SyntaxKind.ImportDeclaration:
-      return 'importDeclaration'
+      return "importDeclaration";
     case ts.SyntaxKind.ImportSpecifier:
-      return 'importSpecifier'
+      return "importSpecifier";
     case ts.SyntaxKind.NamespaceImport:
-      return 'namespaceImport'
+      return "namespaceImport";
     case ts.SyntaxKind.ExportDeclaration:
-      return 'exportDeclaration'
+      return "exportDeclaration";
     case ts.SyntaxKind.ClassDeclaration:
-      return 'classDeclaration'
+      return "classDeclaration";
     case ts.SyntaxKind.InterfaceDeclaration:
-      return 'interfaceDeclaration'
+      return "interfaceDeclaration";
     case ts.SyntaxKind.TypeAliasDeclaration:
-      return 'typeAliasDeclaration'
+      return "typeAliasDeclaration";
     case ts.SyntaxKind.EnumDeclaration:
-      return 'enumDeclaration'
+      return "enumDeclaration";
     case ts.SyntaxKind.Parameter:
-      return 'parameter'
+      return "parameter";
     default:
-      return 'unknown'
+      return "unknown";
   }
 }
