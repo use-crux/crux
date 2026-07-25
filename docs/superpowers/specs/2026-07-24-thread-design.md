@@ -532,9 +532,13 @@ Rules:
 - A deleted Thread produces a terminal deleted outcome rather than appearing
   empty.
 
-Model execution should not use unbounded public `read()` as its default context
-policy. The subsequent recent-messages and compaction designs own bounded model
-projections.
+Model execution never uses unbounded public `read()` as its default context
+policy. The subsequent
+[Message History Projection](./2026-07-25-message-history-projection-design.md)
+design applies an observable implicit ten-message, group-safe projection when
+a Thread is bound without an explicit policy. Explicit recent-message,
+compaction, and future context-control policies may replace that default under
+their own contracts.
 
 ## Edit
 
