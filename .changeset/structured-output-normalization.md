@@ -14,3 +14,4 @@ Structured outputs are now always validated. `validationRetry` controls whether
 another attempt is made; without it, invalid structured output throws instead of
 being returned. Adapter authors must declare their structured-output
 capabilities and use the prepared `outputSchema` supplied to request builders.
+AI SDK and provider adapters now accept `@use-crux/mcp` 0.7 peers.

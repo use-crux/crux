@@ -1,7 +1,7 @@
 ---
-"@use-crux/core": major
-"@use-crux/indexer": major
-"@use-crux/local": major
+"@use-crux/core": minor
+"@use-crux/indexer": minor
+"@use-crux/local": minor
 ---
 
 Make Rust/Oxc the required Static Index path, remove the obsolete
